@@ -41,11 +41,27 @@ open Alarms
  *         | _ -> next fmt tk);
  *     } *)
 
+let name = "python.flows.exceptions"
+
+let opt_unprecise_exn = ref []
+(* Be unprecise on some exceptions *)
+
+let () =
+  register_domain_option name {
+    key = "-unprecise-exn";
+    category = "Python";
+    doc = " raised exceptions passed to this arguments will be collapsed into one environment. Useful for exceptions the analysis is unprecise on (for example, IndexError for the smashing abstraction of lists).";
+    spec = ArgExt.Set_string_list opt_unprecise_exn;
+    default = "";
+  }
+
+
+
 
 module Domain =
   struct
 
-    let name = "python.flows.exceptions"
+    let name = name
     let debug fmt = Debug.debug ~channel:name fmt
 
     let interface = {
@@ -118,7 +134,15 @@ module Domain =
                    let cur = Flow.get T_cur man.lattice true_flow in
                    let cs = Callstack.get true_flow in
                    let str = man.ask (Types.Typing.Q_exn_string_query exp) flow in
-                   let a = mk_alarm (APyException (exp, str)) range ~cs ~level:ERROR in
+                   let a =
+                     if List.mem str !opt_unprecise_exn then
+                       let range = tag_range (R_fresh 0) "unprecise exn" in
+                       let cs = [] in
+                       (* FIXME: re-computation of exp is ugly *)
+                       let exp = mk_py_object (find_builtin str) range in
+                       mk_alarm (APyException (exp, str)) range ~cs ~level:ERROR
+                     else
+                       mk_alarm (APyException (exp, str)) range ~cs ~level:ERROR in
                    let flow' = Flow.add (T_alarm a) cur man.lattice true_flow |>
                                Flow.set T_cur man.lattice.bottom man.lattice
                    in
@@ -145,21 +169,21 @@ module Domain =
       | S_py_raise None ->
         panic_at stmt.srange "exceptions: re-raise previous caught exception not supported"
 
-      | S_py_unprecise_raise e ->
-        (* todo: cleaners first ? *)
-        let addr = match ekind e with
-          | E_py_object (a, _) -> a
-          | _ -> Exceptions.panic "In %a, argument should be E_py_object@\n" pp_stmt stmt in
-        let cur = Flow.get T_cur man.lattice flow in
-        let cs = [] in
-        let str = match akind addr with
-          | A_py_class (C_builtin c, _) -> c
-          | _ -> assert false in
-        let a = mk_alarm (APyException (e, str)) range ~cs ~level:ERROR in
-        Flow.add (T_alarm a) cur man.lattice flow |>
-        Flow.set T_cur man.lattice.bottom man.lattice |>
-        Post.return |>
-        Option.return
+      (* | S_py_unprecise_raise e ->
+       *   (\* todo: cleaners first ? *\)
+       *   let addr = match ekind e with
+       *     | E_py_object (a, _) -> a
+       *     | _ -> Exceptions.panic "In %a, argument should be E_py_object@\n" pp_stmt stmt in
+       *   let cur = Flow.get T_cur man.lattice flow in
+       *   let cs = [] in
+       *   let str = match akind addr with
+       *     | A_py_class (C_builtin c, _) -> c
+       *     | _ -> assert false in
+       *   let a = mk_alarm (APyException (e, str)) range ~cs ~level:ERROR in
+       *   Flow.add (T_alarm a) cur man.lattice flow |>
+       *   Flow.set T_cur man.lattice.bottom man.lattice |>
+       *   Post.return |>
+       *   Option.return *)
 
       | _ -> None
 

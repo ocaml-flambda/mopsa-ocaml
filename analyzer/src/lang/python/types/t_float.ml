@@ -103,7 +103,7 @@ module Domain =
                           ~fthen:(fun flow ->
                               (* Exceptions.panic_at range "eurk %a@\n" man.pri(Flow.print man.lattice) flow; *)
                               let res = man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_bool range) flow in
-                              let overflow = man.exec (Utils.mk_builtin_unprecise_raise "OverflowError") flow |> Eval.empty_singleton in
+                              let overflow = man.exec (Utils.mk_builtin_raise "OverflowError" range) flow |> Eval.empty_singleton in
                               Eval.join_list (Eval.copy_ctx overflow res :: overflow :: [])
                             )
                           ~felse:(fun flow ->

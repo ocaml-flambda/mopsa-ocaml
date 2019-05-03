@@ -212,7 +212,7 @@ struct
         (fun args flow ->
            let var_k, var_v = extract_vars (List.hd args) in
 
-           let keyerror_f = man.exec (Utils.mk_builtin_unprecise_raise "KeyError") flow in
+           let keyerror_f = man.exec (Utils.mk_builtin_raise "KeyError" range) flow in
            let keyerror = Eval.empty_singleton keyerror_f in
 
            let flow = Flow.copy_ctx keyerror_f flow in
@@ -251,7 +251,7 @@ struct
 
            let flow = Flow.set_ctx (Eval.choose_ctx eval_r) flow in
 
-           let empty = man.exec (Utils.mk_builtin_unprecise_raise "KeyError") flow |> Eval.empty_singleton in
+           let empty = man.exec (Utils.mk_builtin_raise "KeyError" range) flow |> Eval.empty_singleton in
 
            Eval.join_list ( empty ::  Eval.copy_ctx empty eval_r :: [])
         )

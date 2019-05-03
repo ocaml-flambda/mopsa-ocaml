@@ -262,9 +262,6 @@ type stmt_kind +=
   (** exception instance *)
   | S_py_raise of expr option
 
-  (** exception instance during unprecise analyses *)
-  | S_py_unprecise_raise of expr
-
   (** if condition *)
   | S_py_if of expr (*t test *) * stmt (* then *) * stmt (* else *)
 

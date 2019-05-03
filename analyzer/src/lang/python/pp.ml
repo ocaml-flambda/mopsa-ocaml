@@ -216,9 +216,6 @@ let () =
       | S_py_raise e ->
         fprintf fmt "raise %a" (fun fmt -> function None -> () | Some e -> pp_expr fmt e) e
 
-      | S_py_unprecise_raise e ->
-        fprintf fmt "unprecise_raise %a" pp_expr e
-
       | S_py_while(test, body, orelse) ->
         fprintf fmt "while %a:@\n@[<h 2>  %a@]@\nelse:@\n@[<h 2>  %a@]"
           pp_expr test
