@@ -478,7 +478,8 @@ and find_lvals_in_excepts handlers =
   handlers |> List.fold_left (fun acc -> function
       | ExceptHandler(_, Some id, body) ->
         id :: find_lvals_in_block body @ acc
-      | _ -> acc
+      | ExceptHandler(_, None, body) ->
+        find_lvals_in_block body @ acc
     ) []
 
 and find_lvals_in_expr expr =
