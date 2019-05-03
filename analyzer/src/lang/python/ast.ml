@@ -68,6 +68,7 @@ type operator +=
   | O_py_in (** in *)
   | O_py_not_in (** not in *)
   | O_py_mat_mult (** @ *)
+  | O_py_not
 
 
 let is_arith_op = function

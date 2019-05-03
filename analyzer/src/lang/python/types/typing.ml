@@ -409,7 +409,7 @@ struct
               let old_inst = match old_inst with
                 | Instance i -> i
                 | _ -> assert false in
-              assert (not (StringMap.mem attr old_inst.uattrs));
+              (* assert (not (StringMap.mem attr old_inst.uattrs)); *)
               Instance {classn = old_inst.classn;
                         uattrs = old_inst.uattrs;
                         oattrs = StringMap.add attr arval old_inst.oattrs}) (TMap.find alval cur.abs_heap) in
@@ -589,7 +589,8 @@ struct
              man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_true range) flow
            | E_py_object (a, _) when compare_addr a addr_bool_top = 0 ->
              Eval.singleton exp flow
-           | _ -> failwith "not: ni"
+           | _ ->
+             Exceptions.panic "not ni on %a@\n" pp_expr exp
         )
       |> Option.return
 

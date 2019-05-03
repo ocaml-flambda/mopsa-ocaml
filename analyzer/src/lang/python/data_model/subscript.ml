@@ -53,6 +53,7 @@ module Domain =
                      assume_eval
                        (Utils.mk_hasattr cls "__getitem__" range)
                        ~fthen:(fun true_flow ->
+                           (* we need to keep the unevaluated index here for the type analysis *)
                          let exp' = mk_py_call (mk_py_attr cls "__getitem__" range) [eobj; index] range in
                          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) exp' true_flow
                        )
@@ -106,6 +107,7 @@ module Domain =
                        (Utils.mk_hasattr cls "__setitem__" range)
                        man
                        ~fthen:(fun true_flow ->
+                           (* we need to keep the unevaluated index here for the type analysis *)
                          let exp' = mk_py_call (mk_py_attr cls "__setitem__" range) [obj; index; exp] range in
                          man.exec {stmt with skind = S_expression(exp')} true_flow |> Post.return
                        )

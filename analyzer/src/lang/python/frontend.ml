@@ -393,7 +393,7 @@ and from_comparison_op : Py_parser.Cst.cmpop -> operator = function
   | NotIn -> O_py_not_in
 
 and from_unop = function
-  | Not -> O_log_not
+  | Not -> O_py_not
   | USub -> Universal.Ast.O_minus
   | UAdd -> Universal.Ast.O_plus
   | Invert -> Universal.Ast.O_bit_invert
