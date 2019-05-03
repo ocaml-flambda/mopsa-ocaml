@@ -104,6 +104,10 @@ struct
     match ekind exp with
     | E_call({ekind = E_function (User_defined f)}, args) ->
       debug "calling function %s" f.fun_name;
+      (* Check that no recursion is happening *)
+      let cs = Callstack.get flow in
+      if List.exists (fun cs -> cs.call_fun = f.fun_name) cs then
+        Exceptions.panic_at range "Recursive call on function %s detected...@\nCallstack = %a@\n" f.fun_name Callstack.print cs;
 
       (* Clear all return flows *)
       let flow0 = Flow.filter (fun tk env ->
