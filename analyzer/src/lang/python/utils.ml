@@ -36,6 +36,11 @@ let rec partition_list_by_length n l =
 let mk_builtin_raise exn range =
   mk_stmt (S_py_raise (Some (mk_py_object (Addr.find_builtin exn) range))) range
 
+let mk_builtin_unprecise_raise exn =
+  let obj = Addr.find_builtin exn in
+  let range = R_tagged ("unprecise_raise", R_fresh 0) in
+  mk_stmt (S_py_unprecise_raise (mk_py_object obj range)) range
+
 let mk_builtin_call f params range =
   mk_py_call (mk_py_object (Addr.find_builtin f) range) params range
 

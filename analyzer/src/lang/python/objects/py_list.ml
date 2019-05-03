@@ -299,7 +299,7 @@ struct
       Utils.check_instances ~arguments_after_check:1 man flow range args
         ["list"]
         (fun args flow ->
-           let eval_verror_f = man.exec (Utils.mk_builtin_raise "ValueError" range) flow in
+           let eval_verror_f = man.exec (Utils.mk_builtin_unprecise_raise "ValueError") flow in
            let flow = Flow.copy_ctx eval_verror_f flow in
            let eval_verror = Eval.empty_singleton eval_verror_f in
            let eval_res = man.eval (mk_py_top T_int range) flow in
@@ -319,7 +319,7 @@ struct
            let var_els = match ekind list with
              | E_py_object ({addr_kind = A_py_list a}, _) -> a
              | _ -> assert false in
-           let eval_indexerror = man.exec (Utils.mk_builtin_raise "IndexError" range) flow
+           let eval_indexerror = man.exec (Utils.mk_builtin_unprecise_raise "IndexError") flow
                                  |> Eval.empty_singleton in
            let eval_el = man.eval (mk_var ~mode:WEAK var_els range) flow in
            Eval.join_list (Eval.copy_ctx eval_indexerror eval_el :: eval_indexerror :: [])
@@ -331,7 +331,7 @@ struct
       Utils.check_instances ~arguments_after_check:1 man flow range args
         ["list"]
         (fun args flow ->
-           let eval_verror_f = man.exec (Utils.mk_builtin_raise "ValueError" range) flow in
+           let eval_verror_f = man.exec (Utils.mk_builtin_unprecise_raise "ValueError") flow in
            let eval_verror = Eval.empty_singleton eval_verror_f in
            let flow = Flow.copy_ctx eval_verror_f flow in
            let eval_none = man.eval (mk_py_none range) flow in
@@ -360,7 +360,7 @@ struct
                   | _ -> assert false in
                 assume_eval (mk_py_isinstance_builtin index "int" range) man flow
                   ~fthen:(fun flow ->
-                      let indexerror_f = man.exec (Utils.mk_builtin_raise "IndexError" range) flow in
+                      let indexerror_f = man.exec (Utils.mk_builtin_unprecise_raise "IndexError") flow in
                       let indexerror = Eval.empty_singleton indexerror_f in
                       let flow = Flow.copy_ctx indexerror_f flow in
                       let evals = man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var var_els range) flow in
@@ -398,7 +398,7 @@ struct
                  let var_els = match ekind list with
                    | E_py_object ({addr_kind = A_py_list a}, _) -> a
                    | _ -> assert false in
-                 let indexerror_f = man.exec (Utils.mk_builtin_raise "IndexError" range) flow in
+                 let indexerror_f = man.exec (Utils.mk_builtin_unprecise_raise "IndexError") flow in
                  let flow = Flow.copy_ctx indexerror_f flow in
 
                  let assignment_f = man.exec (mk_assign (mk_var ~mode:WEAK var_els range) value range) flow in
