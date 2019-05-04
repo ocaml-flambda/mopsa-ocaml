@@ -1,3 +1,4 @@
+# current error due to @classmethod not implemented
 """
 deltablue.py
 ============
@@ -67,14 +68,20 @@ class Strength(object):
 
     def next_weaker(self):
         strengths = {
-            0: self.__class__.WEAKEST,
-            1: self.__class__.WEAK_DEFAULT,
-            2: self.__class__.NORMAL,
-            3: self.__class__.STRONG_DEFAULT,
-            4: self.__class__.PREFERRED,
-            # TODO: This looks like a bug in the original code. Shouldn't this be
-            #       ``STRONG_PREFERRED? Keeping for porting sake...
-            5: self.__class__.REQUIRED,
+            # 0: self.__class__.WEAKEST,
+            # 1: self.__class__.WEAK_DEFAULT,
+            # 2: self.__class__.NORMAL,
+            # 3: self.__class__.STRONG_DEFAULT,
+            # 4: self.__class__.PREFERRED,
+            # # TODO: This looks like a bug in the original code. Shouldn't this be
+            # #       ``STRONG_PREFERRED? Keeping for porting sake...
+            # 5: self.__class__.REQUIRED,
+            0: type(self).WEAKEST,
+            1: type(self).WEAK_DEFAULT,
+            2: type(self).NORMAL,
+            3: type(self).STRONG_DEFAULT,
+            4: type(self).PREFERRED,
+            5: type(self).REQUIRED,
         }
         return strengths[self.strength]
 
@@ -408,8 +415,9 @@ class Planner(object):
 
         while repeat:
             for u in unsatisfied:
-                if u.strength == strength:
-                    self.incremental_add(u)
+                # cheating, removed recursive call
+                # if u.strength == strength:
+                #     self.incremental_add(u)
 
                 strength = strength.next_weaker()
 

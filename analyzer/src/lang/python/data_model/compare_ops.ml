@@ -101,13 +101,13 @@ module Domain = struct
                                   (mk_expr (E_binop(O_py_is, e1, e2)) range)
                                   ~fthen:(fun flow ->
                                       match op with
-                                      | O_eq -> Eval.singleton (mk_py_true range) flow
-                                      | O_ne -> Eval.singleton (mk_py_false range) flow
+                                      | O_eq -> man.eval (mk_py_true range) flow
+                                      | O_ne -> man.eval (mk_py_false range) flow
                                       | _ -> assert false)
                                   ~felse:(fun flow ->
                                       match op with
-                                      | O_eq -> Eval.singleton (mk_py_false range) flow
-                                      | O_ne -> Eval.singleton (mk_py_true range) flow
+                                      | O_eq -> man.eval (mk_py_false range) flow
+                                      | O_ne -> man.eval (mk_py_true range) flow
                                       | _ -> assert false)
                                   (* TODO *)
                                   (* ~fboth:(fun flow1 flow2 -> Eval.singleton (mk_py_top T_bool range) flow) *)

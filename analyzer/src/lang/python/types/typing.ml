@@ -765,7 +765,11 @@ struct
              let mc, mb = get_builtin "module" in
              proceed a (mc, mb, cur)
 
-           | _ -> Exceptions.panic_at range "type: todo"
+           | E_py_object ({addr_kind = A_py_method _} as a, _) ->
+             let mc, mb = get_builtin "module" in
+             proceed a (mc, mb, cur)
+
+           | _ -> Exceptions.panic_at range "type: todo: %a@\n" pp_expr arg
 
 
         )
@@ -874,6 +878,9 @@ struct
 
           | A_py_module _, A_py_class (C_builtin c, _) ->
             man.eval (mk_py_bool (c = "module" || c = "object") range) flow
+
+          | A_py_method _, A_py_class (C_builtin c, _) ->
+            man.eval (mk_py_bool (c = "method" || c = "object") range) flow
 
           | _ -> assert false
         )

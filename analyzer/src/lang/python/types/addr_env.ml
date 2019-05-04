@@ -143,7 +143,7 @@ struct
                 assign_addr man v (PyAddr.Def addr) mode flow |>
                 man.exec ~zone:Zone.Z_py_obj (mk_assign (mk_addr addr range) expr range) |>  Post.return
 
-              | _ -> debug "%a@\n" pp_expr e; assert false
+              | _ -> Exceptions.panic_at range "%a@\n" pp_expr e
           )
       |> Option.return
 
@@ -175,7 +175,6 @@ struct
       (* Post.return flow *)
 
     | S_assume e ->
-      debug "S_assume %a in flow@\n%a@\n" pp_expr e (Flow.print man.lattice) flow;
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
       post_eval man (fun expr flow ->
         match ekind expr with
@@ -196,7 +195,6 @@ struct
     | S_rename ({ekind = E_addr a}, {ekind = E_addr a'}) ->
       let cur = get_domain_env T_cur man flow in
       let ncur = AMap.map (ASet.map (fun addr -> if addr = Def a then Def a' else addr)) cur in
-      debug "ncur = %a@\n" print ncur;
       let flow = set_domain_env T_cur ncur man flow in
       let annot = Flow.get_ctx flow in
       let to_rename = Flow.fold (fun acc tk d ->
@@ -220,7 +218,6 @@ struct
     | _ -> None
 
   and assign_addr man v av mode flow =
-    debug "assign_addr %a %a@\n" pp_var v PyAddr.print av;
     let cur = get_domain_env T_cur man flow in
     let aset = match mode with
       | STRONG -> ASet.singleton av
@@ -251,12 +248,12 @@ struct
               (Eval.singleton (mk_py_object (find_builtin v.org_vname) range) flow :: acc, annots)
 
             | Undef_global ->
-              debug "Incoming NameError, on var %a, cs = %a @\n" pp_var v Callstack.print (Callstack.get flow);
+              debug "Incoming NameError, on var %a, range %a, cs = %a @\n" pp_var v pp_range range Callstack.print (Callstack.get flow);
               let flow = man.exec (Utils.mk_builtin_raise "NameError" range) flow in
               (Eval.empty_singleton flow :: acc, Flow.get_ctx flow)
 
             | Undef_local ->
-              debug "Incoming UnboundLocalError, on var %a, cs = %a @\n" pp_var v Callstack.print (Callstack.get flow);
+              debug "Incoming UnboundLocalError, on var %a, range %a, cs = %a @\n" pp_var v pp_range range Callstack.print (Callstack.get flow);
               let flow = man.exec (Utils.mk_builtin_raise "UnboundLocalError" range) flow in
               (Eval.empty_singleton flow :: acc, Flow.get_ctx flow)
 

@@ -2,6 +2,8 @@
 # signatures de fonction pour gagner du temps.
 # il y a aussi beaucoup trop de flots d'erreur (~100aine), à abstraire
 # en commentant quelques appels de fonction on arrive à faire terminer
+# avec l'abstraction des flots de 03d6dd4e887b1a4444ae928c757fd3b6d3a9b6a5, on termine l'analyse en 230s, et on detecte 8 alarmes (quelques typerrors fausses dues aux "%s" % bla), et 3 alarmes sur lesquelles on est imprécis
+# sans, l'analyse prend 1497s, et on détecte 160 alarmes
 """create chaosgame-like fractals
 
 Copyright (C) 2005 Carl Friedrich Bolz
@@ -124,7 +126,7 @@ degree of the Spline."""
                 co2 = (u - ub) / (ua - ub)
                 index = ii - I + self.degree - ik - 1
                 # cheat
-                # d[index] = d[index].linear_combination(d[index + 1], co1, co2)
+                d[index] = d[index].linear_combination(d[index + 1], co1, co2)
         return d[0]
 
     def GetIndex(self, u):

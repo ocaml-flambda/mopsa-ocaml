@@ -160,29 +160,12 @@ module Domain =
                      false_flow
                  )
                flow
-               (* | _ -> debug "%a@\n" pp_expr exp; assert false *)
            )
         )
         |> Option.return
 
       | S_py_raise None ->
         panic_at stmt.srange "exceptions: re-raise previous caught exception not supported"
-
-      (* | S_py_unprecise_raise e ->
-       *   (\* todo: cleaners first ? *\)
-       *   let addr = match ekind e with
-       *     | E_py_object (a, _) -> a
-       *     | _ -> Exceptions.panic "In %a, argument should be E_py_object@\n" pp_stmt stmt in
-       *   let cur = Flow.get T_cur man.lattice flow in
-       *   let cs = [] in
-       *   let str = match akind addr with
-       *     | A_py_class (C_builtin c, _) -> c
-       *     | _ -> assert false in
-       *   let a = mk_alarm (APyException (e, str)) range ~cs ~level:ERROR in
-       *   Flow.add (T_alarm a) cur man.lattice flow |>
-       *   Flow.set T_cur man.lattice.bottom man.lattice |>
-       *   Post.return |>
-       *   Option.return *)
 
       | _ -> None
 
