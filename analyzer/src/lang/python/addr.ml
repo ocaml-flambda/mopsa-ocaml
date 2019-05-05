@@ -81,10 +81,10 @@ let eval_alloc ?(mode=STRONG) man kind range flow =
 
 
 (** Lists of built-ins *)
-let classes : py_object list ref = ref []
-let functions : py_object list ref = ref []
-let modules : py_object list ref = ref []
-let all () = !classes @ !functions @ !modules
+let classes = Hashtbl.create 100
+let functions = Hashtbl.create 100
+let modules = Hashtbl.create 10
+(* let all () = !classes @ !functions @ !modules *)
 
 (** Name of a builtin with an optional dot notation in case of
    sub-objects (methods of classes, etc.) *)
@@ -120,19 +120,23 @@ let object_name obj =
   | _ -> panic "builtin_name: %a is not a builtin" pp_addr (addr_of_object obj)
 
 let add_builtin_class obj () =
-  classes := obj :: !classes
+  Hashtbl.add classes (object_name obj) obj
 
 let add_builtin_function obj () =
-  functions := obj :: !functions
+  Hashtbl.add functions (object_name obj) obj
 
 let add_builtin_module obj () =
-  modules := obj :: !modules
+  Hashtbl.add modules (object_name obj) obj
 
 (** Search for the address of a builtin given its name *)
 let find_builtin name =
-  List.find (fun obj ->
-      name = object_name obj
-    ) (all ())
+  let search = fun tbl -> Hashtbl.find tbl name in
+  try
+    search classes
+  with Not_found ->
+  try search functions
+  with Not_found ->
+    search modules
 
 let is_object_unsupported obj =
   match kind_of_object obj with
@@ -141,9 +145,9 @@ let is_object_unsupported obj =
   | _ -> false
 
 (** Check whether a built-in exists given its name *)
-let is_builtin_name name = List.exists (fun obj -> name = object_name obj) (all ())
-
-let is_builtin obj = List.mem obj (all ())
+let is_builtin_name name =
+  let exists = fun tbl -> Hashtbl.mem tbl name in
+  exists classes || exists functions || exists modules
 
 (** Check whether an attribute of a built-in object exists, given its name *)
 let is_builtin_attribute base attr =
@@ -213,15 +217,15 @@ let mro (obj: py_object) : py_object list =
   | _ -> assert false
 
 (** Return the closest non-heap (i.e. non-user defined) base class *)
-let most_derive_builtin_base (obj: py_object) : py_object =
-  let rec aux =
-    function
-    | [o] when is_builtin o -> o
-    | o :: tl when is_builtin o -> o
-    | o :: tl -> aux tl
-    | [] -> assert false
-  in
-  aux (mro obj)
+(* let most_derive_builtin_base (obj: py_object) : py_object =
+ *   let rec aux =
+ *     function
+ *     | [o] when is_builtin o -> o
+ *     | o :: tl when is_builtin o -> o
+ *     | o :: tl -> aux tl
+ *     | [] -> assert false
+ *   in
+ *   aux (mro obj) *)
 
 (* (\** Return the closest non-heap (i.e. non-user defined) base class *\)
  * let most_derive_builtin_base (obj: py_object) : py_object =

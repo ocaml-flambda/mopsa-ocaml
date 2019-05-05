@@ -148,8 +148,7 @@ module Domain =
                                      (mk_expr (E_py_ll_hasattr (mk_py_object cls range, c_attr)) range)
                                      ~fthen:(fun flow ->
                                          (* FIXME: disjunction between instances an non-instances *)
-                                         (* FIXME: perf: optim this into a get_attr? *)
-                                         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_object_attr cls attr range) flow |>
+                                         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_getattr (mk_py_object cls range, c_attr)) range) flow |>
                                          Eval.bind (fun obj' flow ->
                                              assume_eval
                                                (mk_py_isinstance_builtin obj' "function" range) man flow
@@ -188,7 +187,7 @@ module Domain =
                         can do is to search for builtins attributes and
                         resolve them statically *)
                      let oexp = object_of_expr exp in
-                     if is_builtin oexp && is_builtin_attribute oexp attr then
+                     if is_builtin_name (object_name oexp) && is_builtin_attribute oexp attr then
                        let rese = mk_py_object (find_builtin_attribute oexp attr) range in
                        Eval.singleton rese flow
                      else

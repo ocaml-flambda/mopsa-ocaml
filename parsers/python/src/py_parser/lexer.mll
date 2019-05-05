@@ -32,47 +32,45 @@
 
     exception LexingError of string
 
-    let keywords = [
-        "False", FALSE;
-        "None", NONE;
-	"NotImplemented", NOTIMPLEMENTED;
-        "True", TRUE;
-        "and", AND;
-        "as", AS;
-        "assert", ASSERT;
-        "break", BREAK;
-        "class", CLASS;
-        "continue", CONTINUE;
-        "def", DEF;
-        "del", DEL;
-        "elif", ELIF;
-        "else", ELSE;
-        "except", EXCEPT;
-        "finally", FINALLY;
-        "for", FOR;
-        "from", FROM;
-        "global", GLOBAL;
-        "if", IF;
-        "import", IMPORT;
-        "in", IN;
-        "is", IS;
-        "lambda", LAMBDA;
-        "nonlocal", NONLOCAL;
-        "not", NOT;
-        "or", OR;
-        "pass", PASS;
-        "raise", RAISE;
-        "return", RETURN;
-        "try", TRY;
-        "while", WHILE;
-        "with", WITH;
-        "yield", YIELD;
-        (* We consider that the next two are keywords *)
-        "async", ASYNC;
-        "await", AWAIT;
-    ]
-
-    let id_or_kwd s = try List.assoc s keywords with _ -> IDENT s
+    let id_or_kwd s = match s with
+    | "False" -> FALSE
+    | "None" -> NONE
+    | "NotImplemented" -> NOTIMPLEMENTED
+    | "True" -> TRUE
+    | "and" -> AND
+    | "as" -> AS
+    | "assert" -> ASSERT
+    | "break" -> BREAK
+    | "class" -> CLASS
+    | "continue" -> CONTINUE
+    | "def" -> DEF
+    | "del" -> DEL
+    | "elif" -> ELIF
+    | "else" -> ELSE
+    | "except" -> EXCEPT
+    | "finally" -> FINALLY
+    | "for" -> FOR
+    | "from" -> FROM
+    | "global" -> GLOBAL
+    | "if" -> IF
+    | "import" -> IMPORT
+    | "in" -> IN
+    | "is" -> IS
+    | "lambda" -> LAMBDA
+    | "nonlocal" -> NONLOCAL
+    | "not" -> NOT
+    | "or" -> OR
+    | "pass" -> PASS
+    | "raise" -> RAISE
+    | "return" -> RETURN
+    | "try" -> TRY
+    | "while" -> WHILE
+    | "with" -> WITH
+    | "yield" -> YIELD
+    (* We consider that the next two are keywords *)
+    | "async" -> ASYNC
+    | "await" -> AWAIT
+    | _ -> IDENT s
 
     let newline lexbuf =
         let pos = lexbuf.lex_curr_p in
