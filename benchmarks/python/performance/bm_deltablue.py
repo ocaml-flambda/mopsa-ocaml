@@ -1,4 +1,4 @@
-# current error due to @classmethod not implemented
+# remove recursive call line 420
 """
 deltablue.py
 ============

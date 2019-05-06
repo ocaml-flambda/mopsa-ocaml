@@ -326,6 +326,7 @@ class list(object):
     def __rmul__(self, o): pass
     def __setitem__(self, k, v): pass
     def __sizeof__(self, o): pass
+    def __reversed__(self): pass
     def append(self): pass
     def clear(self): pass
     def copy(self): pass
@@ -342,6 +343,11 @@ class list(object):
 class list_iterator(object):
     def __next__(self): pass
     def __iter__(self): pass
+
+class list_reverseiterator(object):
+    def __next__(self): pass
+    def __iter__(self): pass
+
 
 class enumerate(object):
     def __new__(self): pass
@@ -461,7 +467,6 @@ class memoryview(object): pass
 @mopsa.unsupported
 class property(object): pass
 
-@mopsa.unsupported
 class reversed(object): pass
 
 @mopsa.unsupported

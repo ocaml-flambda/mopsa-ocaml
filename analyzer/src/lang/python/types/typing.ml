@@ -292,7 +292,7 @@ struct
           let ptys' = TMap.find absaddr d'.abs_heap in
           debug "absaddr = %a, ptys' = %a@\n" pp_addr absaddr Polytypeset.print ptys';
           (* acc && polytype_leq (pty, d.typevar_env) (pty', d'.typevar_env) *)
-          acc && Polytypeset.for_all (fun pty -> Polytypeset.exists (fun pty' -> polytype_leq (pty, d.typevar_env) (pty', d'.typevar_env)) ptys') ptys
+          acc && (Polytypeset.is_top ptys' || Polytypeset.for_all (fun pty -> Polytypeset.exists (fun pty' -> polytype_leq (pty, d.typevar_env) (pty', d'.typevar_env)) ptys') ptys)
         else false
       )
         d.abs_heap true
@@ -791,7 +791,7 @@ struct
       Eval.eval_list (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) [obj; attr] flow |>
       Eval.bind (fun evals flow ->
           let eobj, eattr = match evals with [e1; e2] -> e1, e2 | _ -> assert false in
-          debug "now isinstance(%a, %a) at range %a@\n" pp_expr eobj pp_expr eattr pp_range range;
+          debug "now isinstance(%a, %a) at range %a, flow %a@\n" pp_expr eobj pp_expr eattr pp_range range (Flow.print man.lattice) flow;
           let addr_obj = match ekind eobj with
             | E_py_object (a, _) -> a
             | _ -> assert false in
