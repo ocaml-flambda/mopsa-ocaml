@@ -102,7 +102,11 @@ let () =
         let res = Engine.exec stmt flow in
         let t = Timing.stop t in
 
+        (* Debug_tree.store_times (); *)
+
         Output.Factory.report Engine.man res t files
+
+
 
       with
         e -> Output.Factory.panic ~btrace:(Printexc.get_backtrace()) e files; 2

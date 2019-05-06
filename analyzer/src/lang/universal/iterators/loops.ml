@@ -182,7 +182,7 @@ struct
 
   and unroll cond body man flow =
     let rec loop i flow =
-      debug "unrolling iteration %d" i;
+      debug "unrolling iteration %d in %a" i pp_range (srange body);
       let annot = Flow.get_ctx flow in
       if i = 0 then (flow, Flow.bottom annot)
       else

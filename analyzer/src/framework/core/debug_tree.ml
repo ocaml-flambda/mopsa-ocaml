@@ -37,6 +37,47 @@ let opt_short_log = ref false
 (** Current log level *)
 let cur_level = ref 0
 
+(* module StmtTimes = MapExt.Make(struct
+ *     type t = stmt
+ *     let compare = compare_stmt
+ *   end)
+ *
+ * let stmtimes = ref StmtTimes.empty
+ *
+ * let add_time_stmt stmt time =
+ *   let to_store = time ::
+ *                  (try StmtTimes.find stmt !stmtimes
+ *                  with Not_found -> []) in
+ *   stmtimes := StmtTimes.add stmt to_store !stmtimes
+ *
+ * let store_times () =
+ *   let pp_list fmt =
+ *     Format.fprintf fmt "[%a]" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") Format.pp_print_float) in
+ *   let file = Format.formatter_of_out_channel @@ open_out "profiling" in
+ *   let write = Format.fprintf file in
+ *   StmtTimes.iter (fun stmt times ->
+ *       write "@[{@\n\"stmt\": \"%a\",@\n\"times\": %a@\n},@]@\n" pp_stmt stmt pp_list times
+ *     ) !stmtimes *)
+
+module RangeTimes = MapExt.Make(struct type t = range
+    let compare = compare_range end)
+
+let rangetimes = ref RangeTimes.empty
+
+let add_time_range stmt time =
+  let range = untag_range @@ srange stmt in
+  let to_store = max (try RangeTimes.find range !rangetimes with Not_found -> 0.) time in
+  if to_store > 0.01 then
+    rangetimes := RangeTimes.add range to_store !rangetimes
+
+let store_times () =
+  let file = Format.formatter_of_out_channel @@ open_out "profiling" in
+  let write = Format.fprintf file in
+  RangeTimes.iter (fun range times ->
+      write "@[{@\n\"range\": \"%a\",@\n\"time\": %.4f@\n},@]@\n" pp_range range times
+    ) !rangetimes
+
+
 let color level s =
   let code = (level mod 16) * 16 + 10 in
   if !Debug.print_color then
@@ -135,6 +176,7 @@ let exec stmt zone man flow =
 
 let exec_done stmt zone time man post =
   decr cur_level;
+  (* add_time_range stmt time; *)
   if !opt_short_log then
     indent "%a done in zone %a [%.4fs]"
       pp_S stmt

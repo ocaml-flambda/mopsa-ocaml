@@ -86,12 +86,10 @@ struct
   let exec zone stmt man flow =
     match skind stmt with
     | S_return e ->
-      Some (
-        let cur = Flow.get T_cur man.lattice flow in
-        Flow.add (T_return (stmt.srange, e)) cur man.lattice flow |>
-        Flow.remove T_cur |>
-        Post.return
-      )
+      let cur = Flow.get T_cur man.lattice flow in
+      Flow.add (T_return (stmt.srange, e)) cur man.lattice flow |>
+      Flow.remove T_cur |>
+      Post.return |> Option.return
 
     | _ -> None
 
@@ -103,6 +101,7 @@ struct
     let range = erange exp in
     match ekind exp with
     | E_call({ekind = E_function (User_defined f)}, args) ->
+      let start_time = Timing.start () in
       debug "calling function %s" f.fun_name;
       (* Check that no recursion is happening *)
       let cs = Callstack.get flow in
@@ -174,6 +173,7 @@ struct
 
       let flow4 = man.exec ignore_block flow3 in
 
+      debug "Analysis of %s took %.4f seconds.@\n" f.fun_name (Timing.stop start_time);
       Eval.singleton (mk_var ret range) flow4 ~cleaners:[mk_remove_var ret range] |>
       Option.return
 
