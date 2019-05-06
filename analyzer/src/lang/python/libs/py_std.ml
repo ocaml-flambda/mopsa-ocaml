@@ -227,6 +227,10 @@ module Domain =
         debug "Rewriting %a into %a@\n" pp_expr exp pp_expr expr;
         man.eval expr flow |> Option.return
 
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "print")}, _)}, [], [])  ->
+        man.eval (mk_py_none range) flow
+        |> Option.return
+
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "print")}, _)}, [obj], [])  ->
         man.eval obj flow |>
         Eval.bind (fun eobj flow ->
@@ -260,6 +264,13 @@ module Domain =
             man.eval (mk_var seq range) flow |>
             Eval.add_cleaners [mk_remove_var seq range]
           )
+        |> Option.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_class (C_builtin "reversed", _)}, _)}, args, [])  ->
+        (* Utils.check_instances man flow range args ["list"]
+         *   (fun eargs flow ->
+         *      let hd = List.hd eargs in *)
+        man.eval (Utils.mk_builtin_call "list.__reversed__" args range) flow
         |> Option.return
 
 

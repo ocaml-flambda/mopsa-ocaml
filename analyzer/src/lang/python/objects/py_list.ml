@@ -248,12 +248,13 @@ struct
       Utils.check_instances ~arguments_after_check:1 man flow range args
         ["list"]
         (fun eargs flow ->
+           (* FIXME: check manually (with ekind list) that we have a list or list_iterator as we are in the same abstract domain? *)
            let list, other = match eargs with e1::e2::[] -> e1, e2 | _ -> assert false in
+           let var_els = match ekind list with
+             | E_py_object ({addr_kind = A_py_list a}, _) -> a
+             | _ -> Exceptions.panic_at range "%a@\n" pp_expr list in
            assume_eval (mk_py_isinstance_builtin other "list" range) man flow
              ~fthen:(fun flow ->
-                 let var_els = match ekind list with
-                   | E_py_object ({addr_kind = A_py_list a}, _) -> a
-                   | _ -> Exceptions.panic_at range "%a@\n" pp_expr list in
                  let var_sndels = match ekind other with
                    | E_py_object ({addr_kind = A_py_list a}, _) -> a
                    | _ -> assert false in
@@ -263,15 +264,23 @@ struct
              ~felse:(fun flow ->
                  assume_eval (mk_py_isinstance_builtin other "range" range) man flow
                    ~fthen:(fun flow ->
-                       let var_els = match ekind list with
-                         | E_py_object ({addr_kind = A_py_list a}, _) -> a
-                         | _ -> Exceptions.panic_at range "%a@\n" pp_expr list in
                        (* TODO: more precision on top (for range) *)
                        man.exec (mk_assign (mk_var var_els ~mode:WEAK range) (mk_py_top T_int range) range) flow  |>
                        man.eval (mk_py_none range)
                      )
                    (* TODO: if object has iter field call it and then call next *)
-                   ~felse:(fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton)
+                   ~felse:(fun flow ->
+                       assume_eval (mk_py_isinstance_builtin other "list_reverseiterator" range) man flow
+                         ~fthen:(fun flow ->
+                             let var_sndels = match ekind other with
+                               | E_py_object ({addr_kind = A_py_iterator (_, [{addr_kind = A_py_list a}], _)}, _) -> a
+                               | _ -> assert false in
+                             man.exec (mk_assign (mk_var var_els ~mode:WEAK range) (mk_var var_sndels ~mode:WEAK range) range) flow |>
+                             man.eval (mk_py_none range)
+                           )
+                         ~felse:(fun flow ->
+                             man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton)
+                     )
                )
         )
       |> Option.return
@@ -436,12 +445,14 @@ struct
         )
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list_iterator.__next__")}, _)}, [iterator], []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list_reverseiterator.__next__" as s))}, _)}, [iterator], [])
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list_iterator.__next__" as s))}, _)}, [iterator], []) ->
       (* todo: checks ? *)
+      let it_name = String.sub s 0 (String.index s '.') in
       man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) iterator flow |>
       Eval.bind (fun iterator flow ->
           let list_addr = match ekind iterator with
-            | E_py_object ({addr_kind = A_py_iterator (s, [a], _)}, _) when s = "list_iterator" -> a
+            | E_py_object ({addr_kind = A_py_iterator (s, [a], _)}, _) when s = it_name -> a
             | _ -> assert false in
           let var_els = match akind list_addr with
             | A_py_list a -> a
@@ -453,9 +464,28 @@ struct
         )
       |> Option.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list_reverseiterator.__iter__")}, _)}, [iterator], [])
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list_iterator.__iter__")}, _)}, [iterator], []) ->
       (* todo: checks ? *)
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) iterator flow |> Option.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__reversed__")}, _)}, args, []) ->
+      Utils.check_instances man flow range args
+        ["list"]
+        (fun args flow ->
+           let list = match args with | [l] -> l | _ -> assert false in
+           let list_addr = match ekind list with
+             | E_py_object ({addr_kind = A_py_list _} as a, _) -> a
+             | _ -> assert false in
+           let a = mk_alloc_addr (A_py_iterator ("list_reverseiterator", [list_addr], None)) range in
+           man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) a flow |>
+           Eval.bind (fun eaddr_it flow ->
+               let addr_it = match ekind eaddr_it with | E_addr a -> a | _ -> assert false in
+               Eval.singleton (mk_py_object (addr_it, None) range) flow
+             )
+        )
+      |> Option.return
+
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__len__")}, _)}, args, []) ->
       Utils.check_instances man flow range args
