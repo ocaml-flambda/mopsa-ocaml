@@ -171,6 +171,30 @@ struct
       in
 
       let init_list = flatten_init (Some init) v.vtyp in
+
+      (* Evaluate C expressions into low-level expressions *)
+      let rec aux l flow =
+        match l with
+        | [] -> Eval.singleton [] flow
+        | C_flat_expr e :: tl ->
+          man.eval ~zone:(Z_c,Z_c_low_level) e flow |>
+          Eval.bind @@ fun e flow ->
+
+          aux tl flow |>
+          Eval.bind @@ fun tl flow ->
+
+          Eval.singleton (C_flat_expr e :: tl) flow
+
+        | x :: tl ->
+          aux tl flow |>
+          Eval.bind @@ fun tl flow ->
+
+          Eval.singleton (x :: tl) flow
+      in
+
+      aux init_list flow |>
+      post_eval man @@ fun init_list flow ->
+
       let init = C_init_flat init_list in
       let v = { v with vkind = V_c { cvar with var_init = Some init } } in
       man.exec_sub ~zone:Z_c_low_level (mk_c_declaration v range) flow

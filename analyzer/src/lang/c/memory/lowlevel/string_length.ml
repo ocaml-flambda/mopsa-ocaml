@@ -171,7 +171,7 @@ struct
     man.eval ~zone:(Z_c_scalar, Z_u_num) size flow |>
     post_eval man @@ fun size flow ->
 
-    man.eval ~zone:(Z_c, Z_u_num) offset flow |>
+    man.eval ~zone:(Z_c_low_level, Z_u_num) offset flow |>
     post_eval man @@ fun offset flow ->
 
     (* Compute the offset in bytes *)
@@ -337,10 +337,10 @@ struct
     man.eval ~zone:(Z_c_scalar, Z_u_num) size flow |>
     post_eval man @@ fun size flow ->
 
-    man.eval ~zone:(Z_c, Z_u_num) min flow |>
+    man.eval ~zone:(Z_c_low_level, Z_u_num) min flow |>
     post_eval man @@ fun min flow ->
 
-    man.eval ~zone:(Z_c, Z_u_num) max flow |>
+    man.eval ~zone:(Z_c_low_level, Z_u_num) max flow |>
     post_eval man @@ fun max flow ->
 
     let length = mk_length_var base range in
@@ -452,7 +452,7 @@ struct
             Eval.singleton v flow
 
           | V_c ({ var_init = Some (C_init_expr e) } as info) ->
-            man.eval ~zone:(Z_c,Z_c_scalar) e flow |>
+            man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow |>
             Eval.bind @@ fun e flow ->
 
             let init = Some (C_init_expr e) in
@@ -491,7 +491,7 @@ struct
 
     | S_assign({ ekind = E_var _} as lval, rval) when is_c_scalar_type lval.etyp ->
       Some (
-        man.eval ~zone:(Z_c,Z_c_scalar) rval flow |>
+        man.eval ~zone:(Z_c_low_level,Z_c_scalar) rval flow |>
         post_eval man @@ fun rval flow ->
 
         let stmt = { stmt with skind = S_assign (lval, rval) } in
@@ -501,10 +501,10 @@ struct
 
     | S_assign(lval, rval) when is_c_scalar_type lval.etyp ->
       Some (
-        man.eval ~zone:(Z_c,Z_c_low_level) lval flow |>
+        man.eval ~zone:(Z_c_low_level,Z_c_low_level) lval flow |>
         post_eval man @@ fun lval flow ->
 
-        man.eval ~zone:(Z_c,Z_u_num) rval flow |>
+        man.eval ~zone:(Z_c_low_level,Z_u_num) rval flow |>
         post_eval man @@ fun rval flow ->
 
         assign lval rval stmt.srange man flow
@@ -517,7 +517,7 @@ struct
            Z.equal n Z.zero
       ->
       Some (
-        man.eval ~zone:(Z_c,Z_c_low_level) lval flow |>
+        man.eval ~zone:(Z_c_low_level,Z_c_low_level) lval flow |>
         post_eval man @@ fun lval flow ->
 
         assume_quantified_zero O_ne lval stmt.srange man flow
@@ -530,7 +530,7 @@ struct
            Z.equal n Z.zero
       ->
       Some (
-        man.eval ~zone:(Z_c,Z_c_low_level) lval flow |>
+        man.eval ~zone:(Z_c_low_level,Z_c_low_level) lval flow |>
         post_eval man @@ fun lval flow ->
 
         assume_quantified_zero O_eq lval stmt.srange man flow
@@ -538,7 +538,7 @@ struct
 
     | S_assume(e) ->
       Some (
-        man.eval ~zone:(Z_c,Z_c_scalar) e flow |>
+        man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow |>
         post_eval man @@ fun e flow ->
 
         let stmt = { stmt with skind = S_assume (e) } in
@@ -562,7 +562,7 @@ struct
     man.eval ~zone:(Z_c_scalar, Z_u_num) size flow |>
     Eval.bind @@ fun size flow ->
 
-    man.eval ~zone:(Z_c, Z_u_num) offset flow |>
+    man.eval ~zone:(Z_c_low_level, Z_u_num) offset flow |>
     Eval.bind @@ fun offset flow ->
 
     (* Compute the offset in bytes *)
