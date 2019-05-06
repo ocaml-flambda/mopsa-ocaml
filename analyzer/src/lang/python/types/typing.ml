@@ -839,7 +839,8 @@ struct
                   | _ ->
                     Exceptions.panic_at range "wtf @ %a@\n" pp_addr addr_obj
                 else
-                  Exceptions.panic_at range "wtf @ %a@\n" pp_addr addr_obj
+                  (* Exceptions.panic_at range "wtf @ %a %a@\n" pp_addr addr_obj (Flow.print man.lattice) flow *)
+                  Polytypeset.empty
             in
             Polytypeset.fold (fun pty acc ->
                 begin match pty with
@@ -847,7 +848,7 @@ struct
                     man.eval (mk_py_bool (class_le (ci, mroi) (c, mro)) range) flow :: acc
                   | _ -> Exceptions.panic "todo@\n"
                 end) ptys []
-            |> Eval.join_list
+            |> (Eval.join_list ~empty:(Eval.empty_singleton flow))
 
           | Objects.Py_list.A_py_list _, A_py_class (C_builtin "list", _)
           | Objects.Py_set.A_py_set _, A_py_class (C_builtin "set", _)

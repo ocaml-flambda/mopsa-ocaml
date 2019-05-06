@@ -232,7 +232,7 @@ module Domain =
         |> Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "print")}, _)}, [obj], [])  ->
-        man.eval obj flow |>
+        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) obj flow |>
         Eval.bind (fun eobj flow ->
             man.eval (mk_py_none range) flow)
         |> Option.return

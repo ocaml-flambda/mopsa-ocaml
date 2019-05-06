@@ -430,7 +430,7 @@ and find_lvals_in_stmt stmt =
     find_lvals_in_expr target @ find_lvals_in_block body @ find_lvals_in_block orelse
 
   | If (test, body, orelse) ->
-    find_lvals_in_block body @ find_lvals_in_block orelse
+    find_lvals_in_expr test @ find_lvals_in_block body @ find_lvals_in_block orelse
 
   | Try (body, handlers, orelse, finalbody) ->
     find_lvals_in_block body @ find_lvals_in_excepts handlers @ find_lvals_in_block orelse @ find_lvals_in_block finalbody
