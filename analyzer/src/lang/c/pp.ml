@@ -30,6 +30,17 @@ let rec pp_c_init fmt = function
                            (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_c_init) l
   | C_init_implicit t -> assert false
   | C_init_stub stub -> fprintf fmt "/*$@,@[  %a@]@,*/" Stubs.Ast.pp_stub_init stub
+  | C_init_flat l ->
+    fprintf fmt "{|%a|}"
+      (pp_print_list
+         ~pp_sep:(fun fmt () -> fprintf fmt ", ")
+         (fun fmt init ->
+            match init with
+            | C_flat_expr (e) -> pp_expr fmt e
+            | C_flat_none n -> fprintf fmt "None * %a" Z.pp_print n
+            | C_flat_fill (e,t,n) -> fprintf fmt "%a * %a" pp_expr e Z.pp_print n
+         )
+      ) l
 
 let rec pp_c_type_short fmt =
   function

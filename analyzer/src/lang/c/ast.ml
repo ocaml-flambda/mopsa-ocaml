@@ -191,12 +191,19 @@ type c_var_scope =
   | Variable_func_static of c_fundec (** restricted to a function *)
 
 
+(** Flat variable initialization *)
+type c_flat_init =
+  | C_flat_expr of expr
+  | C_flat_none of Z.t (** Uninitialized bytes *)
+  | C_flat_fill of expr * typ * Z.t (** Filler expression *)
+
 (** Variable initialization. *)
 type c_var_init =
   | C_init_expr of expr
   | C_init_list of c_var_init list (** specified elements *) * c_var_init option (** filler *)
   | C_init_implicit of typ
   | C_init_stub of Stubs.Ast.stub_init
+  | C_init_flat of c_flat_init list
 
 
 type c_var = {
@@ -760,7 +767,7 @@ let under_type (t: typ) : typ =
 
 let get_array_constant_length t =
   match remove_typedef_qual t with
-  | T_c_array(_, C_array_length_cst n) -> Z.to_int n
+  | T_c_array(_, C_array_length_cst n) -> n
   | _ -> assert false
 
 let align_byte t i =
@@ -833,6 +840,9 @@ let mk_c_cast e t range =
 
 let mk_c_null range =
   mk_c_cast (mk_zero ~typ:u8 range) (pointer_type void) range
+
+let mk_c_declaration v range =
+  mk_stmt (S_c_declaration v) range
 
 
 let () =

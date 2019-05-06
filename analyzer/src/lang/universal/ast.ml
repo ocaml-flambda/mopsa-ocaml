@@ -378,7 +378,7 @@ let () =
         | E_call(f, args) ->
           fprintf fmt "%a(%a)"
             pp_expr f
-            (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") pp_expr) args
+            (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_expr) args
         | E_alloc_addr(akind, amode) -> fprintf fmt "alloc(%a, %a)" pp_addr_kind akind pp_mode amode
         | E_addr (addr) -> fprintf fmt "%a" pp_addr addr
         | E_len exp -> Format.fprintf fmt "|%a|" pp_expr exp
