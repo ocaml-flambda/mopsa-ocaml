@@ -200,7 +200,7 @@ struct
   let subset = Value.subset
   let join = Value.join
   let meet = Value.meet
-  let widen ctx = Value.widen
+  let widen = Value.widen
   let print = Value.print
 
   let get man id a = leaf_get man Value.id id a

@@ -54,7 +54,7 @@ struct
 end
 
 let mk_avar ?(vtyp = T_any) addr_uid =
-  mkfresh (fun uid -> "$addr@" ^ (string_of_int addr_uid) ^ "_" ^ (string_of_int uid)) vtyp ()
+  mkfresh (fun uid -> "$addr@" ^ (string_of_int addr_uid), "$addr@" ^ (string_of_int addr_uid) ^ "_" ^ (string_of_int uid)) vtyp ()
 
 
 module Domain =
@@ -78,6 +78,8 @@ struct
   }
 
   let merge _ _ _ = assert false
+
+  let widen ctx = widen
 
   let print fmt m =
     Format.fprintf fmt "addrs: @[%a@]@\n" AMap.print m

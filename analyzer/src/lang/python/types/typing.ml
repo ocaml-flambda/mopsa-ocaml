@@ -238,8 +238,8 @@ struct
   let meet _ _ =  Exceptions.panic "todo meet "
 
   let widen annot d d' =
-    {abs_heap = TMap.widen annot d.abs_heap d'.abs_heap;
-     typevar_env = TypeVarMap.widen annot d.typevar_env d'.typevar_env}
+    {abs_heap = TMap.widen d.abs_heap d'.abs_heap;
+     typevar_env = TypeVarMap.widen d.typevar_env d'.typevar_env}
 
   let top = {abs_heap = TMap.top; typevar_env = TypeVarMap.top}
   let bottom = {abs_heap = TMap.bottom; typevar_env = TypeVarMap.bottom}

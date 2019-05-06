@@ -446,6 +446,30 @@ struct
       init_ctx
     )
 
+
+  (** {2 Abstract transformers} *)
+  (** ************************* *)
+
+  let exec zone stmt man flow =
+    assert false
+
+
+  (** {2 Abstract evaluations} *)
+  (** ************************ *)
+
+  let eval zone exp man flow =
+    assert false
+
+
+  (** {2 Communication handlers} *)
+  (** ************************** *)
+
+  let ask query man flow =
+    assert false
+
+  let refine channel man flow =
+    assert false
+
 end
 
 let () =

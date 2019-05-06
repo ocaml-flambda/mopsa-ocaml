@@ -86,7 +86,10 @@ struct
   let fresh_expanded_vars range d =
     let rec gen_aux pos acc =
       if pos < 0 then acc else
-        gen_aux (pos-1) ((mkfresh (fun uid -> Format.asprintf "$t:%a:%d" pp_range range pos) T_any ())::acc)
+        gen_aux (pos-1) ((mkfresh (fun uid ->
+            let name = Format.asprintf "$t:%a:%d" pp_range range pos in
+            name, name
+          ) T_any ())::acc)
     in gen_aux (d-1) []
 
   let get_var_equiv ((cs, range, size) as info: TupleInfo.t) (e: Equiv.t) =

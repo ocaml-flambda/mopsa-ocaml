@@ -120,9 +120,9 @@ struct
     others = Table.meet  a1.others a2.others;
   }
 
-  let widen annot a1 a2 = {
+  let widen ctx a1 a2 = {
     first = List.map2 Slot.join a1.first a2.first;
-    others = Table.widen annot a1.others a2.others;
+    others = Table.widen a1.others a2.others;
   }
 
   let merge pre (post,log) (post',log') =

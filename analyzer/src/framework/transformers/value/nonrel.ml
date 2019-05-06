@@ -94,7 +94,7 @@ struct
   let print fmt a =
     Format.fprintf fmt "%s:@,@[   %a@]@\n" Value.display VarMap.print a
 
-
+  let widen ctx = VarMap.widen
 
   (** {2 Evaluation of expressions} *)
   (** ***************************** *)

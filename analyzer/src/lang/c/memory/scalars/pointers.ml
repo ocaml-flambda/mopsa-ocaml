@@ -160,13 +160,13 @@ struct
 
   let is_bottom a = Map.is_bottom a
 
-  let subset man (a,s) (a',s') =
+  let subset man ctx (a,s) (a',s') =
     Map.subset a a', s, s'
 
-  let join man (a,s) (a',s') =
+  let join man ctx (a,s) (a',s') =
     Map.join a a', s, s'
 
-  let meet man (a,s) (a',s') =
+  let meet man ctx (a,s) (a',s') =
     Map.meet a a', s, s'
 
   let widen man ctx (a,s) (a',s') =

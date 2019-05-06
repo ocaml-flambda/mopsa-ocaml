@@ -63,7 +63,7 @@ struct
     let flow1 = man.exec stmt flow in
 
     (** Initialize special variable __name__ *)
-    let v = mkfresh (fun uid -> "__name__" ^ (string_of_int uid)) T_any () in
+    let v = mkfresh (fun uid -> "__name__", "__name__" ^ (string_of_int uid)) T_any () in
     let stmt =
       let range = tag_range range "__name__ assignment" in
       mk_assign
@@ -74,7 +74,7 @@ struct
     let flow2 = man.exec stmt flow1 in
 
     (** Initialize special variable __file__ *)
-    let v = mkfresh (fun uid -> "__file__" ^ (string_of_int uid)) T_any () in
+    let v = mkfresh (fun uid -> "__file__", "__file__" ^ (string_of_int uid)) T_any () in
     let stmt =
       let range = tag_range range "__file__ assignment" in
         mk_assign
