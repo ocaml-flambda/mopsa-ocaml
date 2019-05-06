@@ -367,7 +367,7 @@ struct
               else
                 None, ctx
 
-  (** Add a cell in the sub-tree abstract state *)
+  (** Add a cell in the underlying domain *)
   let add_cell c a range man ctx s =
     if CellSet.mem c a.cells ||
        not (is_c_scalar_type c.typ) ||
@@ -434,6 +434,17 @@ struct
 
   let merge pre (a,log) (a',log') =
     assert false
+
+
+  (** {2 Initial state} *)
+  (** ***************** *)
+
+  let init prog man flow =
+    set_domain_env T_cur { cells = CellSet.empty; bases = BaseSet.empty } man flow |>
+    Flow.set_unit_ctx (
+      Flow.get_unit_ctx flow |>
+      init_ctx
+    )
 
 end
 
