@@ -129,11 +129,11 @@ def bench_nbody(loops, reference, iterations):
     # t0 = perf.perf_counter()
 
     for _ in range_it:
-        report_energy()
+        a = report_energy()
         advance(0.01, iterations)
         report_energy()
 
-    return 0 # perf.perf_counter() - t0
+    return a # perf.perf_counter() - t0
 
 
 # def add_cmdline_args(cmd, args):
@@ -155,4 +155,4 @@ if __name__ == '__main__':
     # args = runner.parse_args()
     # runner.bench_time_func('nbody', bench_nbody,
     #                        args.reference, args.iterations)
-    bench_nbody(100, DEFAULT_REFERENCE, DEFAULT_ITERATIONS)
+    res = bench_nbody(100, DEFAULT_REFERENCE, DEFAULT_ITERATIONS)
