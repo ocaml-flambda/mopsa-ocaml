@@ -99,25 +99,25 @@ struct
   (** {2 Lattice operators} *)
   (** ********************* *)
 
-  let subset sman (a1,s1) (a2,s2) =
+  let subset sman ctx (a1,s1) (a2,s2) =
     let f = fun (type a) (m: a smodule) acc (a1,s1) (a2,s2) ->
       let module S = (val m) in
-      let b, s1, s2 = S.subset sman (a1,s1) (a2,s2) in
+      let b, s1, s2 = S.subset sman ctx (a1,s1) (a2,s2) in
       b && acc, s1, s2
     in
     slist_fold_sub2 { f } Spec.pool true (a1,s1) (a2,s2)
 
-  let join sman (a1,s1) (a2,s2) =
+  let join sman ctx (a1,s1) (a2,s2) =
     let f = fun (type a) (m: a smodule) (a1,s1) (a2,s2) ->
       let module S = (val m) in
-      S.join sman (a1,s1) (a2,s2)
+      S.join sman ctx (a1,s1) (a2,s2)
     in
     slist_apply_sub2 { f } Spec.pool (a1,s1) (a2,s2)
 
-  let meet sman (a1,s1) (a2,s2) =
+  let meet sman ctx (a1,s1) (a2,s2) =
     let f = fun (type a) (m: a smodule) (a1,s1) (a2,s2) ->
       let module S = (val m) in
-      S.meet sman (a1,s1) (a2,s2)
+      S.meet sman ctx (a1,s1) (a2,s2)
     in
     slist_apply_sub2 { f } Spec.pool (a1,s1) (a2,s2)
 
@@ -177,7 +177,7 @@ struct
              (Some post' :: acc, ctx')
        in
 
-       let pointwise_posts, _ = slist_man_fold_combined { f } Spec.pool coverage man ([], Flow.get_ctx flow) in
+       let pointwise_posts, ctx = slist_man_fold_combined { f } Spec.pool coverage man ([], Flow.get_ctx flow) in
 
        (* Merge post-conditions *)
        let f = fun (type a) (m:a smodule) post (man:('a,a,'s) man) acc ->
@@ -215,7 +215,7 @@ struct
 
                  debug "merge@, a = %a@, a' = %a" man.lattice.print a man.lattice.print a';
 
-                 let aa = man.lattice.meet a a' in
+                 let aa = man.lattice.meet (Context.get_unit ctx) a a' in
                  debug "meet@, aa = %a" man.lattice.print aa;
 
                  aa, man.set_sub_log (Log.concat slog slog') log'

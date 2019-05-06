@@ -79,9 +79,9 @@ type 'a lattice = {
   bottom:    'a;
   top:       'a;
   is_bottom: 'a -> bool;
-  subset:    'a -> 'a -> bool;
-  join:      'a -> 'a -> 'a;
-  meet:      'a -> 'a -> 'a;
+  subset:    uctx -> 'a -> 'a -> bool;
+  join:      uctx -> 'a -> 'a -> 'a;
+  meet:      uctx -> 'a -> 'a -> 'a;
   widen:     uctx -> 'a -> 'a -> 'a;
   print:     Format.formatter -> 'a -> unit;
 }

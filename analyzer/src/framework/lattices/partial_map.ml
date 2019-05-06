@@ -278,7 +278,7 @@ struct
 
   let empty : t = Map.empty
 
-  let subset  (a1:t) (a2:t) : bool = Map.subset a1 a2 ~subsetv:Value.subset
+  let subset (a1:t) (a2:t) : bool = Map.subset a1 a2 ~subsetv:Value.subset
 
   let join (a1:t) (a2:t) : t = Map.join a1 a2 ~joinv:Value.join
 

@@ -112,7 +112,11 @@ let mk_alarm kind ?(cs = Callstack.empty) ?(level = WARNING) range =
 let raise_alarm akind range ?(level = WARNING) ?(bottom=true) (lattice:'a lattice) flow =
   let cs = Callstack.get flow in
   let alarm = mk_alarm akind range ~cs in
-  let flow' = Flow.add (alarm_token alarm) (Flow.get T_cur lattice flow) lattice flow in
+  let tk = alarm_token alarm in
+  let a1 = Flow.get tk lattice flow in
+  let a2 = Flow.get T_cur lattice flow in
+  let aa = lattice.join (Flow.get_ctx flow |> Context.get_unit) a1 a2 in
+  let flow' = Flow.set tk aa lattice flow in
   if bottom then
     Flow.set T_cur lattice.bottom lattice flow'
   else

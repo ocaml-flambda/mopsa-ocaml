@@ -114,15 +114,15 @@ sig
   (** {2 Lattice operators} *)
   (** ********************* *)
 
-  val subset: ('a,t) man -> 'a -> 'a -> bool
+  val subset: ('a,t) man -> uctx -> 'a -> 'a -> bool
   (** [subset man a1 a2] provides a partial order relation over
       elements of the domain by testing whether [a1] is related to (or
      included in) [a2]. *)
 
-  val join: ('a,t) man -> 'a -> 'a -> t
+  val join: ('a,t) man -> uctx -> 'a -> 'a -> t
   (** [join man a1 a2] computes an upper bound of [a1] and [a2]. *)
 
-  val meet: ('a,t) man -> 'a -> 'a -> t
+  val meet: ('a,t) man -> uctx -> 'a -> 'a -> t
   (** [meet man a1 a2] computes a lower bound of [a1] and [a2]. *)
 
   val widen: ('a,t) man -> uctx -> 'a -> 'a -> t

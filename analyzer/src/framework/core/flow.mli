@@ -104,6 +104,10 @@ val merge : (token -> 'a option -> 'a option -> 'a option) -> 'a lattice -> 'a f
 val get_ctx : 'a flow -> 'a ctx
 (** [get_all_ctx flow] retrieves the context pool from [flow] *)
 
+val get_unit_ctx : 'a flow -> uctx
+
+val set_unit_ctx : uctx -> 'a flow -> 'a flow
+
 val set_ctx : 'a ctx -> 'a flow -> 'a flow
 (** [set_all_ctx ctx flow] set the context pool of [flow] to
    [ctx] *)

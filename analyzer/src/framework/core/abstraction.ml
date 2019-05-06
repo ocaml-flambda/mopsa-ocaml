@@ -81,11 +81,11 @@ sig
   (** {2 Lattice operators} *)
   (** ********************* *)
 
-  val subset: (t, t) man -> t -> t -> bool
+  val subset: (t, t) man -> uctx -> t -> t -> bool
 
-  val join: (t, t) man -> t -> t -> t
+  val join: (t, t) man -> uctx -> t -> t -> t
 
-  val meet: (t, t) man -> t -> t -> t
+  val meet: (t, t) man -> uctx -> t -> t -> t
 
   val widen: (t, t) man -> uctx -> t -> t -> t
 

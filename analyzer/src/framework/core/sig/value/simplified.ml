@@ -78,7 +78,7 @@ sig
   val meet: t -> t -> t
   (** [meet a1 a2] computes a lower bound of [a1] and [a2]. *)
 
-  val widen: uctx -> t -> t -> t
+  val widen: t -> t -> t
   (** [widen ctx a1 a2] computes an upper bound of [a1] and [a2] that
       ensures stabilization of ascending chains. *)
 
@@ -200,7 +200,7 @@ struct
   let subset = Value.subset
   let join = Value.join
   let meet = Value.meet
-  let widen = Value.widen
+  let widen ctx = Value.widen
   let print = Value.print
 
   let get man id a = leaf_get man Value.id id a

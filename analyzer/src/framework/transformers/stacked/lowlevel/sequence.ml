@@ -95,19 +95,19 @@ struct
   (**                      {2 Lattice operators}                            *)
   (**************************************************************************)
 
-  let subset man a a' =
-    let b1, a, a' = S1.subset (s1_man man) a a' in
-    let b2, a, a' = S2.subset (s2_man man) a a' in
+  let subset man ctx a a' =
+    let b1, a, a' = S1.subset (s1_man man) ctx a a' in
+    let b2, a, a' = S2.subset (s2_man man) ctx a a' in
     b1 && b2, a, a'
 
-  let join man a a' =
-    let a1, a, a' = S1.join (s1_man man) a a' in
-    let a2, a, a' = S2.join (s2_man man) a a' in
+  let join man ctx a a' =
+    let a1, a, a' = S1.join (s1_man man) ctx a a' in
+    let a2, a, a' = S2.join (s2_man man) ctx a a' in
     (a1,a2), a, a'
 
-  let meet man a a' =
-    let a1, a, a' = S1.meet (s1_man man) a a' in
-    let a2, a, a' = S2.meet (s2_man man) a a' in
+  let meet man ctx a a' =
+    let a1, a, a' = S1.meet (s1_man man) ctx a a' in
+    let a2, a, a' = S2.meet (s2_man man) ctx a a' in
     (a1,a2), a, a'
 
   let widen man ctx a a' =

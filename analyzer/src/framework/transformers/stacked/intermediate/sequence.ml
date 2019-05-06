@@ -100,19 +100,19 @@ struct
       S1.print a1
       S2.print a2
 
-  let subset sman ((a1,a2),s) ((a1',a2'),s') =
-    let b1, s, s' = S1.subset sman (a1,s) (a1',s') in
-    let b2, s, s' = S2.subset sman (a2,s) (a2',s') in
+  let subset sman ctx ((a1,a2),s) ((a1',a2'),s') =
+    let b1, s, s' = S1.subset sman ctx (a1,s) (a1',s') in
+    let b2, s, s' = S2.subset sman ctx (a2,s) (a2',s') in
     b1 && b2, s, s'
 
-  let join sman ((a1,a2),s) ((a1',a2'),s') =
-    let a1, s, s' = S1.join sman (a1,s) (a1',s') in
-    let a2, s, s' = S2.join sman (a2,s) (a2',s') in
+  let join sman ctx ((a1,a2),s) ((a1',a2'),s') =
+    let a1, s, s' = S1.join sman ctx (a1,s) (a1',s') in
+    let a2, s, s' = S2.join sman ctx (a2,s) (a2',s') in
     (a1,a2), s, s'
 
-  let meet sman ((a1,a2),s) ((a1',a2'),s') =
-    let a1, s, s' = S1.meet sman (a1,s) (a1',s') in
-    let a2, s, s' = S2.meet sman (a2,s) (a2',s') in
+  let meet sman ctx ((a1,a2),s) ((a1',a2'),s') =
+    let a1, s, s' = S1.meet sman ctx (a1,s) (a1',s') in
+    let a2, s, s' = S2.meet sman ctx (a2,s) (a2',s') in
     (a1,a2), s, s'
 
   let widen ctx sman ((a1,a2),s) ((a1',a2'),s') =

@@ -204,7 +204,7 @@ struct
         match tk with
         | T_cur ->
           let cont = Flow.get T_continue man.lattice flow in
-          man.lattice.join eabs cont
+          man.lattice.join (Flow.get_unit_ctx flow) eabs cont
         | T_continue -> man.lattice.bottom
         | _ -> eabs
       ) flow

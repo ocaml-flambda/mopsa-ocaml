@@ -123,11 +123,11 @@ sig
   (** {2 Lattice operators} *)
   (** ********************* *)
 
-  val subset: ('a,t,'s) man -> 'a -> 'a -> bool * 'a * 'a
+  val subset: ('a,t,'s) man -> uctx -> 'a -> 'a -> bool * 'a * 'a
 
-  val join: ('a,t,'s) man -> 'a -> 'a -> t * 'a * 'a
+  val join: ('a,t,'s) man -> uctx -> 'a -> 'a -> t * 'a * 'a
 
-  val meet: ('a,t,'s) man -> 'a -> 'a -> t * 'a * 'a
+  val meet: ('a,t,'s) man -> uctx -> 'a -> 'a -> t * 'a * 'a
 
   val widen: ('a,t,'s) man -> uctx -> 'a -> 'a -> t * 'a * 'a * bool
 

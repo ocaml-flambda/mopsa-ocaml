@@ -100,17 +100,17 @@ struct
   (**                      {2 Lattice operators}                            *)
   (**************************************************************************)
 
-  let subset man a a' =
-    D1.subset (d1_man man) a a' &&
-    D2.subset (d2_man man) a a'
+  let subset man ctx a a' =
+    D1.subset (d1_man man) ctx a a' &&
+    D2.subset (d2_man man) ctx a a'
 
-  let join man a a' =
-    D1.join (d1_man man) a a',
-    D2.join (d2_man man) a a'
+  let join man ctx a a' =
+    D1.join (d1_man man) ctx a a',
+    D2.join (d2_man man) ctx a a'
 
-  let meet man a a' =
-    D1.meet (d1_man man) a a',
-    D2.meet (d2_man man) a a'
+  let meet man ctx a a' =
+    D1.meet (d1_man man) ctx a a',
+    D2.meet (d2_man man) ctx a a'
 
   let widen man ctx a a' =
     D1.widen (d1_man man) ctx a a',

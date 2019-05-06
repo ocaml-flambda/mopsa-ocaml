@@ -70,12 +70,9 @@ struct
       | _ -> assert false
     in
 
-    match cvar.var_init with
-    | None ->
-      (* Uninitialized variable => let low level domains do the work *)
+    if cvar.var_init = None || is_c_scalar_type v.vtyp then
       man.exec_sub ~zone:Z_c_low_level (mk_c_declaration v range) flow
-
-    | Some init ->
+    else
       (* Otherwise, flatten the structured initialization into a list of scalar values *)
 
       let flatten_scalar_init init typ : c_flat_init =
@@ -170,7 +167,7 @@ struct
             (Option.print Pp.pp_c_init) init pp_typ typ
       in
 
-      let init_list = flatten_init (Some init) v.vtyp in
+      let init_list = flatten_init cvar.var_init v.vtyp in
 
       (* Evaluate C expressions into low-level expressions *)
       let rec aux l flow =

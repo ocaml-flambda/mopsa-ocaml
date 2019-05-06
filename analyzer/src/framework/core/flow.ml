@@ -59,32 +59,39 @@ let is_top (lattice: 'a lattice) (flow: 'a flow) : bool =
   TokenMap.is_top lattice flow.tmap
 
 let subset (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : bool =
-  TokenMap.subset lattice flow1.tmap flow2.tmap
+  TokenMap.subset lattice (Context.get_unit flow2.ctx) flow1.tmap flow2.tmap
 
 let join (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
-  { tmap = TokenMap.join lattice flow1.tmap flow2.tmap; ctx = flow2.ctx }
+  { tmap = TokenMap.join lattice (Context.get_unit flow2.ctx) flow1.tmap flow2.tmap; ctx = flow2.ctx }
 
 let join_list lattice ?(ctx=Context.empty) l =
   match l with
   | [] -> bottom ctx
-  | l -> {
-      tmap = TokenMap.join_list lattice (List.map (function {tmap} -> tmap) l);
-      ctx  =
-        let last = List.nth l (List.length l - 1) in
-        last.ctx
+  | l ->
+    let ctx  =
+      let last = List.nth l (List.length l - 1) in
+      last.ctx
+    in
+
+    {
+      tmap = TokenMap.join_list lattice (Context.get_unit ctx) (List.map (function {tmap} -> tmap) l);
+      ctx;
     }
 
 let meet (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
-  { tmap = TokenMap.meet lattice flow1.tmap flow2.tmap; ctx = flow2.ctx }
+  { tmap = TokenMap.meet lattice (Context.get_unit flow2.ctx) flow1.tmap flow2.tmap; ctx = flow2.ctx }
 
 let meet_list lattice ?(ctx=Context.empty) l =
   match l with
   | [] -> bottom ctx
-  | l -> {
-      tmap = TokenMap.meet_list lattice (List.map (function {tmap} -> tmap) l);
-      ctx  =
-        let last = List.nth l (List.length l - 1) in
-        last.ctx
+  | l ->
+    let ctx  =
+      let last = List.nth l (List.length l - 1) in
+      last.ctx
+    in
+    {
+      tmap = TokenMap.meet_list lattice (Context.get_unit ctx) (List.map (function {tmap} -> tmap) l);
+      ctx;
     }
 
 let widen (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
@@ -106,7 +113,9 @@ let copy (tk1:token) (tk2:token) (lattice:'a lattice) (flow1:'a flow) (flow2:'a 
   }
 
 let add (tk: token) (a: 'a) (lattice: 'a lattice) (flow: 'a flow) : 'a flow =
-  { flow with tmap = TokenMap.add tk a lattice flow.tmap }
+  let a' = get tk lattice flow in
+  let aa = lattice.join (Context.get_unit flow.ctx) a a' in
+  set tk aa lattice flow
 
 let remove (tk: token) (flow: 'a flow) : 'a flow =
   { flow with tmap = TokenMap.remove tk flow.tmap }
@@ -129,6 +138,10 @@ let merge (f: token -> 'a option -> 'a option -> 'a option) (lattice: 'a lattice
 let get_ctx flow = flow.ctx
 
 let set_ctx ctx flow = {flow with ctx}
+
+let get_unit_ctx flow = Context.get_unit flow.ctx
+
+let set_unit_ctx ctx flow = { flow with ctx = Context.set_unit ctx flow.ctx }
 
 let map_ctx f flow = set_ctx (f @@ get_ctx flow) flow
 

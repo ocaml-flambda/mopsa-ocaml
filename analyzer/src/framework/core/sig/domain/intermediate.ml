@@ -170,9 +170,11 @@ end
 (**                        {2 Low-level lifters}                            *)
 (*==========================================================================*)
 
-let lift_unop f man a = f (man.get a)
+let lift_unop f man ctx a = f (man.get a)
 
-let lift_binop f man a a' = f (man.get a) (man.get a')
+let lift_binop f man ctx a a' = f (man.get a) (man.get a')
+
+let lift_widen f man ctx a a' = f ctx (man.get a) (man.get a')
 
 
 (** Cast a unified signature into a low-level signature *)
@@ -202,13 +204,13 @@ struct
   (** {2 Lattice operators} *)
   (** ********************* *)
 
-  let subset man a a' = lift_binop D.subset man a a'
+  let subset man ctx a a' = lift_binop D.subset man ctx a a'
 
-  let join man a a' = lift_binop D.join man a a'
+  let join man ctx a a' = lift_binop D.join man ctx a a'
 
-  let meet man a a' = lift_binop D.meet man a a'
+  let meet man ctx a a' = lift_binop D.meet man ctx a a'
 
-  let widen man ctx a a' = lift_binop (D.widen ctx) man a a'
+  let widen man ctx a a' = lift_widen D.widen man ctx a a'
 
   let merge = D.merge
 

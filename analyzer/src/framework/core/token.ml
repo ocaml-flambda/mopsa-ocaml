@@ -79,44 +79,44 @@ struct
     top_dfl1 true (fun _ -> false) tmap
 
 
-  let subset (lattice: 'a lattice) (tmap1: 'a t) (tmap2: 'a t) : bool =
+  let subset (lattice: 'a lattice) ctx (tmap1: 'a t) (tmap2: 'a t) : bool =
     top_included
       (Map.for_all2zo
          (fun _ v1 -> lattice.is_bottom v1) (* non-⊥ ⊈ ⊥ *)
          (fun _ v2 -> true)  (* ⊥ ⊆ non-⊥ *)
-         (fun _ v1 v2 -> lattice.subset v1 v2)
+         (fun _ v1 v2 -> lattice.subset ctx v1 v2)
       )
       tmap1 tmap2
 
-  let join (lattice: 'a lattice) (tmap1: 'a t) (tmap2: 'a t) : 'a t =
+  let join (lattice: 'a lattice) ctx (tmap1: 'a t) (tmap2: 'a t) : 'a t =
     top_lift2
       (Map.map2zo
          (fun _ v1 -> v1)
          (fun _ v2 -> v2)
-         (fun _ v1 v2 -> lattice.join v1 v2)
+         (fun _ v1 v2 -> lattice.join ctx v1 v2)
       )
       tmap1 tmap2
 
-  let join_list lattice l =
+  let join_list lattice ctx l =
     match l with
     | [] -> bottom
-    | hd :: tl -> List.fold_left (join lattice) hd tl
+    | hd :: tl -> List.fold_left (join lattice ctx) hd tl
 
-  let meet (lattice: 'a lattice) (tmap1: 'a t) (tmap2: 'a t) : 'a t =
+  let meet (lattice: 'a lattice) ctx (tmap1: 'a t) (tmap2: 'a t) : 'a t =
     top_neutral2
       (fun b1 b2 ->
          Map.map2zo
            (fun _ v1 -> lattice.bottom)
            (fun _ v2 -> lattice.bottom)
-           (fun _ v1 v2 -> lattice.meet v1 v2)
+           (fun _ v1 v2 -> lattice.meet ctx v1 v2)
            b1 b2
       )
       tmap1 tmap2
 
-  let meet_list lattice l =
+  let meet_list lattice ctx l =
     match l with
     | [] -> bottom
-    | hd :: tl -> List.fold_left (meet lattice) hd tl
+    | hd :: tl -> List.fold_left (meet lattice ctx) hd tl
 
   let widen (lattice: 'a lattice) (ctx: Context.uctx) (tmap1: 'a t) (tmap2: 'a t) : 'a t =
     top_lift2
@@ -163,20 +163,6 @@ struct
 
   let copy (tk1:token) (tk2:token) (lattice:'a lattice) (tmap1:'a t) (tmap2:'a t) : 'a t =
     set tk2 (get tk1 lattice tmap1) lattice tmap2
-
-  let add (tk: token) (a: 'a) (lattice: 'a lattice) (tmap: 'a t) : 'a t =
-    top_lift1 (fun m ->
-        if lattice.is_bottom a then m
-        else
-          let a' =
-            try
-              let old = Map.find tk m in
-              lattice.join a old
-            with Not_found ->
-              a
-          in
-          Map.add tk a' m
-      ) tmap
 
   let remove (tk: token) (tmap: 'a t) : 'a t =
     top_lift1 (Map.remove tk) tmap

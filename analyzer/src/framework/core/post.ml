@@ -63,6 +63,14 @@ let print (lattice:'a lattice) fmt (post:'a post) : unit =
 let join (post1:'a post) (post2:'a post) =
   post1 @ post2
 
+let choose_ctx post =
+  match post with
+  | [] -> Context.empty
+  | hd :: _ -> hd.ctx
+
+let set_ctx (ctx:'a ctx) (post:'a post) =
+  List.map (fun case -> { case with ctx }) post
+
 
 let merge (f:token -> ('a*log) -> ('a*log) -> ('a*log)) (post1:'a post) (post2:'a post) : 'a post =
   List.fold_left (fun acc case1 ->
@@ -76,18 +84,11 @@ let merge (f:token -> ('a*log) -> ('a*log) -> ('a*log)) (post1:'a post) (post2:'
 
 
 let meet (lattice:'a lattice) (post1:'a post) (post2:'a post) : 'a post =
+  let ctx = choose_ctx post2 in
   merge (fun token (a1,log1) (a2,log2) ->
-      lattice.meet a1 a2, Log.concat log1 log2
+      lattice.meet (Context.get_unit ctx) a1 a2, Log.concat log1 log2
     ) post1 post2
 
-
-let choose_ctx post =
-  match post with
-  | [] -> Context.empty
-  | hd :: _ -> hd.ctx
-
-let set_ctx (ctx:'a ctx) (post:'a post) =
-  List.map (fun case -> { case with ctx }) post
 
 let concat_logs (case: 'a case) (post:'b post) : 'b post =
   post |> List.map

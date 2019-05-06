@@ -125,10 +125,10 @@ struct
   let interface = S.interface
 
 
-  let subset _ ((),s) ((),s') = true,s,s'
-  let join _ ((),s) ((),s') = (),s,s'
-  let meet _ ((),s) ((),s') = (),s,s'
-  let widen _ _ ((),s) ((),s') = (),s,s',true
+  let subset _ ctx ((),s) ((),s') = true,s,s'
+  let join _ ctx ((),s) ((),s') = (),s,s'
+  let meet _ ctx ((),s) ((),s') = (),s,s'
+  let widen _ ctx ((),s) ((),s') = (),s,s',true
 
   let init = S.init
   let exec = S.exec

@@ -501,9 +501,6 @@ struct
 
     | S_assign(lval, rval) when is_c_scalar_type lval.etyp ->
       Some (
-        man.eval ~zone:(Z_c_low_level,Z_c_low_level) lval flow |>
-        post_eval man @@ fun lval flow ->
-
         man.eval ~zone:(Z_c_low_level,Z_u_num) rval flow |>
         post_eval man @@ fun rval flow ->
 
@@ -517,9 +514,6 @@ struct
            Z.equal n Z.zero
       ->
       Some (
-        man.eval ~zone:(Z_c_low_level,Z_c_low_level) lval flow |>
-        post_eval man @@ fun lval flow ->
-
         assume_quantified_zero O_ne lval stmt.srange man flow
       )
 
@@ -530,9 +524,6 @@ struct
            Z.equal n Z.zero
       ->
       Some (
-        man.eval ~zone:(Z_c_low_level,Z_c_low_level) lval flow |>
-        post_eval man @@ fun lval flow ->
-
         assume_quantified_zero O_eq lval stmt.srange man flow
       )
 

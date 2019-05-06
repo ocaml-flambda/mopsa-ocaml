@@ -118,24 +118,24 @@ struct
   (**                      {2 Lattice operators}                            *)
   (**************************************************************************)
 
-  let subset man a a' =
-    let b1, a, a' = S.subset (s_man man) a a' in
-    b1 && D.subset (d_man man) a a'
+  let subset man ctx a a' =
+    let b1, a, a' = S.subset (s_man man) ctx a a' in
+    b1 && D.subset (d_man man) ctx a a'
 
-  let join man a a' =
-    let a1, a, a' = S.join (s_man man) a a' in
-    let a2 = D.join (d_man man) a a' in
+  let join man ctx a a' =
+    let a1, a, a' = S.join (s_man man) ctx a a' in
+    let a2 = D.join (d_man man) ctx a a' in
     (a1,a2)
 
-  let meet man a a' =
-    let a1, a, a' = S.meet (s_man man) a a' in
-    let a2 = D.meet (d_man man) a a' in
+  let meet man ctx a a' =
+    let a1, a, a' = S.meet (s_man man) ctx a a' in
+    let a2 = D.meet (d_man man) ctx a a' in
     (a1,a2)
 
   let widen man ctx a a' =
     let a1, a, a', stable = S.widen (s_man man) ctx a a' in
     if not stable then
-      let a2 = D.join (d_man man) a a' in
+      let a2 = D.join (d_man man) ctx a a' in
       (a1,a2)
     else
       let a2 = D.widen (d_man man) ctx a a' in

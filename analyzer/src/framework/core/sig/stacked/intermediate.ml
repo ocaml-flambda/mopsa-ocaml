@@ -90,8 +90,8 @@ type ('a, 't, 's) man = ('a,'t,'s) Lowlevel.man = {
     to modify the state of the parameter abstraction during unification.
 *)
 type 's sman = {
-  sexec: ?zone:zone -> stmt -> 's -> 's;
-  sask: 'r. 'r query -> 's -> 'r;
+  sexec: ?zone:zone -> stmt -> uctx -> 's -> 's;
+  sask: 'r. 'r query -> uctx -> 's -> 'r;
 }
 
 
@@ -134,17 +134,17 @@ sig
   (** {2 Lattice operators} *)
   (** ********************* *)
 
-  val subset: 's sman -> t * 's -> t * 's -> bool * 's * 's
+  val subset: 's sman -> uctx -> t * 's -> t * 's -> bool * 's * 's
   (** [subset (a1, s1) (a2, s2) sman] tests whether [a1] is related to
       (or included in) [a2] and unifies the sub-tree elements [s1] and
       [s2]. *)
 
 
-  val join: 's sman -> t * 's -> t * 's -> t * 's * 's
+  val join: 's sman -> uctx -> t * 's -> t * 's -> t * 's * 's
   (** [join (a1, s1) (a2, s2) sman] computes an upper bound of [a1]
       and [a2] and unifies the sub-tree elements [s1] and [s2]. *)
 
-  val meet: 's sman -> t * 's -> t * 's -> t * 's * 's
+  val meet: 's sman -> uctx -> t * 's -> t * 's -> t * 's * 's
   (** [meet (a1, s1) (a2, s2) sman] computes a lower bound of [a1] and
       [a2] and unifies the sub-tree elements [s1] and [s2]. *)
 
@@ -268,10 +268,10 @@ struct
 
   (** Create a simplified stack manager from a global manager *)
   let simplified_man (man:('a,t,'s) man) : 's sman = {
-    sexec = (fun ?(zone=any_zone) stmt s ->
+    sexec = (fun ?(zone=any_zone) stmt ctx s ->
         (* Create a singleton flow with the given environment *)
         let flow = Flow.singleton
-            Context.empty
+            (Context.empty |> Context.set_unit ctx)
             T_cur
             (man.set_sub s man.lattice.top)
         in
@@ -281,10 +281,10 @@ struct
         get_sub_env T_cur man flow'
       );
 
-    sask = (fun query s ->
+    sask = (fun query ctx s ->
         (* Create a singleton flow with the given environment *)
         let flow = Flow.singleton
-            Context.empty
+            (Context.empty |> Context.set_unit ctx)
             T_cur
             (man.set_sub s man.lattice.top)
         in
@@ -297,29 +297,37 @@ struct
   (** {2 Lattice operators} *)
   (** ********************* *)
 
-  let subset man a a' =
-    let b, s, s' = S.subset (simplified_man man)
+  let subset man ctx a a' =
+    let b, s, s' = S.subset
+        (simplified_man man)
+        ctx
         (man.get a, man.get_sub a)
         (man.get a', man.get_sub a')
     in
     b, man.set_sub s a, man.set_sub s' a'
 
-  let join man a a' =
-    let x, s, s' = S.join (simplified_man man)
+  let join man ctx a a' =
+    let x, s, s' = S.join
+        (simplified_man man)
+        ctx
         (man.get a, man.get_sub a)
         (man.get a', man.get_sub a')
     in
     x, man.set_sub s a, man.set_sub s' a'
 
-  let meet man a a' =
-    let x, s, s' = S.meet (simplified_man man)
+  let meet man ctx a a' =
+    let x, s, s' = S.meet
+        (simplified_man man)
+        ctx
         (man.get a, man.get_sub a)
         (man.get a', man.get_sub a')
     in
     x, man.set_sub s a, man.set_sub s' a'
 
   let widen man ctx a a' =
-    let x, s, s', stable = S.widen (simplified_man man) ctx
+    let x, s, s', stable = S.widen
+        (simplified_man man)
+        ctx
         (man.get a, man.get_sub a)
         (man.get a', man.get_sub a')
     in
