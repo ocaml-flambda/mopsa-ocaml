@@ -271,11 +271,10 @@ struct
   (** ======================== *)
 
   (** [phi c a range] returns a constraint expression over cell [c] found in [a] *)
-  let phi (c:cell) (a:t) ctx range : expr option * Context.uctx =
+  let phi (c:cell) (a:t) ctx range : (expr * Context.uctx) option =
     match find_cell_opt (fun c' -> compare_cell c c' = 0) a with
     | Some c ->
-      let v, ctx = mk_cell_var c ctx in
-      Some (mk_var v range), ctx
+      None
 
     | None ->
       match find_cell_opt
@@ -289,12 +288,14 @@ struct
       with
       | Some (c') ->
         let v, ctx= mk_cell_var c' ctx in
-        Some (wrap_expr
-                (mk_var v range)
-                (int_rangeof c.typ)
-                range
-             ),
-        ctx
+        Some (
+          (wrap_expr
+             (mk_var v range)
+             (int_rangeof c.typ)
+             range
+          ),
+          ctx
+        )
 
       | None ->
         match
@@ -312,12 +313,14 @@ struct
           let b = Z.sub c.offset c'.offset in
           let base = (Z.pow (Z.of_int 2) (8 * Z.to_int b))  in
           let v, ctx = mk_cell_var c' ctx in
-          Some (_mod
-                  (div (mk_var v range) (mk_z base range) range)
-                  (mk_int 256 range)
-                  range
-               ),
-          ctx
+          Some (
+            (_mod
+               (div (mk_var v range) (mk_z base range) range)
+               (mk_int 256 range)
+               range
+            ),
+            ctx
+          )
 
         | None ->
           let exception NotPossible in
@@ -355,7 +358,7 @@ struct
                   time',res',ctx
                 ) (Z.of_int 1,(mk_int 0 range),ctx) ll
               in
-              Some e,ctx
+              Some (e,ctx)
             else
               raise NotPossible
           with
@@ -364,24 +367,24 @@ struct
             | S s ->
               let len = String.length s in
               if Z.equal c.offset (Z.of_int len) then
-                Some (mk_zero range), ctx
+                Some (mk_zero range, ctx)
               else
-                Some (mk_int (String.get s (Z.to_int c.offset) |> int_of_char) range), ctx
+                Some (mk_int (String.get s (Z.to_int c.offset) |> int_of_char) range, ctx)
 
             | _ ->
               if is_c_int_type c.typ then
                 let a,b = rangeof c.typ in
-                Some (mk_z_interval a b range), ctx
+                Some (mk_z_interval a b range, ctx)
               else if is_c_float_type c.typ then
                 let prec = get_c_float_precision c.typ in
-                Some (mk_top (T_float prec) range), ctx
+                Some (mk_top (T_float prec) range, ctx)
               else if is_c_pointer_type c.typ then
                 panic_at range ~loc:__LOC__ "phi called on a pointer cell %a" pp_cell c
               else
-                None, ctx
+                None
 
-  (** Add a cell in the underlying domain *)
-  let add_cell c a range man ctx s =
+  (** Add a cell in the underlying domain using the simplified manager *)
+  let add_cell_simplified c a range man ctx s =
     if CellSet.mem c a.cells ||
        not (is_c_scalar_type c.typ) ||
        not (BaseSet.mem c.base a.bases)
@@ -392,11 +395,11 @@ struct
       if is_c_pointer_type c.typ then s'
       else
         match phi c a ctx range with
-        | Some e, _ ->
+        | Some (e, _) ->
           let stmt = mk_assume (mk_binop (mk_var v range) O_eq e ~etyp:u8 range) range in
           man.sexec ~zone:Z_c_scalar stmt ctx s'
 
-        | None, _ ->
+        | None ->
           s'
 
 
@@ -410,11 +413,11 @@ struct
         let diff' = CellSet.diff a.cells a'.cells in
         let diff = CellSet.diff a'.cells a.cells in
         CellSet.fold (fun c s ->
-            add_cell c a range man ctx s
+            add_cell_simplified c a range man ctx s
           ) diff s
         ,
         CellSet.fold (fun c s' ->
-            add_cell c a' range man ctx s'
+            add_cell_simplified c a' range man ctx s'
           ) diff' s'
       with Top.Found_TOP ->
         s, s'
@@ -540,6 +543,31 @@ struct
     | _ -> assert false
 
 
+  (** Add a cell and its constraints *)
+  let add_cell c range man flow =
+    let a = get_domain_env T_cur man flow in
+    let aa = { a with bases = BaseSet.add c.base a.bases } in
+    let flow = set_domain_env T_cur aa man flow in
+
+    if CellSet.mem c a.cells || not (is_c_scalar_type c.typ)
+    then flow
+    else
+      let v, flow = mk_cell_var_with_flow c flow in
+      let flow = man.exec ~zone:Z_c_scalar (mk_add (mk_var v range) range) flow in
+
+      if is_c_pointer_type c.typ
+      then flow
+      else
+        let flow = match phi c aa (Flow.get_unit_ctx flow) range with
+          | Some (e, ctx) ->
+            let flow' = Flow.set_unit_ctx ctx flow in
+            let stmt = mk_assume (mk_binop (mk_var v range) O_eq e ~etyp:u8 range) range in
+            man.exec ~zone:Z_c_scalar stmt flow'
+
+          | None -> flow
+
+        in
+        set_domain_env T_cur { aa with cells = CellSet.add c aa.cells } man flow
 
 
   (** {2 Initial state} *)
@@ -702,6 +730,7 @@ struct
       Eval.singleton (mk_top (under_pointer_type p.etyp) range) flow
 
     | Some c ->
+      let flow = add_cell c range man flow in
       let v, flow = mk_cell_var_with_flow c flow in
       Eval.singleton (mk_var v ~mode range) flow
 
@@ -711,6 +740,7 @@ struct
     match ekind exp with
     | E_var (v,mode) when is_c_scalar_type v.vtyp ->
       let c = mk_cell (V v) Z.zero v.vtyp in
+      let flow = add_cell c exp.erange man flow in
       let vv, flow = mk_cell_var_with_flow c flow in
       Eval.singleton (mk_var vv ~mode exp.erange) flow |>
       Option.return
