@@ -698,11 +698,15 @@ struct
       Option.return
 
     | S_assign(({ekind = E_var(v, mode)} as lval), e) when is_c_scalar_type v.vtyp ->
-      let c = mk_cell (V v) Z.zero v.vtyp in
-      let vv, flow = mk_cell_var_with_flow c flow in
-      let stmt = mk_assign (mk_var vv ~mode lval.erange) e stmt.srange in
-      man.exec_sub ~zone:Z_c_scalar stmt flow |>
-      Option.return
+      Some (
+        let c = mk_cell (V v) Z.zero v.vtyp in
+        let vv, flow = mk_cell_var_with_flow c flow in
+        man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow |>
+        post_eval man @@ fun e flow ->
+
+        let stmt = mk_assign (mk_var vv ~mode lval.erange) e stmt.srange in
+        man.exec_sub ~zone:Z_c_scalar stmt flow
+      )
 
     | S_assign(({ekind = E_c_deref(p)}), e) when is_c_scalar_type @@ under_type p.etyp ->
       assign p e STRONG stmt.srange man flow |>
