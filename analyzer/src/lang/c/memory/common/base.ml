@@ -88,7 +88,7 @@ let eval_base_size base ?(via=Z_any) range (man:('a,'t,'s) Core.Sig.Stacked.Lowl
   | S str -> Eval.singleton (mk_int (String.length str + 1) range ~typ:ul) flow
   | A addr ->
     let size_expr = mk_expr (Stubs.Ast.E_stub_builtin_call (SIZE, mk_addr addr range)) range ~etyp:ul in
-    man.eval ~zone:(Z_c, Z_c_scalar) ~via size_expr flow
+    man.eval ~zone:(Z_c_low_level, Z_c_scalar) ~via size_expr flow
   | Z -> panic ~loc:__LOC__ "eval_base_size: addresses not supported"
 
 module Base =
