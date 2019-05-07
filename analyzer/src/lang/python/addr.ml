@@ -213,7 +213,7 @@ let class_of_object (obj: py_object) : py_object =
 
 let mro (obj: py_object) : py_object list =
   match kind_of_object obj with
-  | A_py_class (c, b) -> obj::b
+  | A_py_class (c, b) -> b
   | _ -> assert false
 
 (** Return the closest non-heap (i.e. non-user defined) base class *)
@@ -514,7 +514,7 @@ and merge (l: py_object list list) : py_object list =
   match search_c l with
   | Some c ->
      let l' = List.filter (fun x -> x <> [])
-                (List.map (fun li -> List.filter (fun x -> compare_addr (fst c) (fst x) <> 0) li)
+                (List.map (fun li -> List.filter (fun x -> compare_addr_kind (akind @@ fst c) (akind @@ fst x) <> 0) li)
                    l) in
      (* l' is l with all c removed *)
      begin match l' with
@@ -540,7 +540,7 @@ and search_c (l: py_object list list) : py_object option =
 let create_builtin_class kind name cls bases range =
   let mro = c3_lin ({
       addr_kind= (A_py_class (kind, bases));
-      addr_uid=(-1);
+      addr_uid= 0;
       addr_mode = STRONG
     }, None)
   in

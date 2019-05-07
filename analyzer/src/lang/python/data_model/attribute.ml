@@ -86,6 +86,19 @@ module Domain =
         | E_py_attribute(obj, ("__subclass__" as attr)) ->
          panic_at range "Access to special attribute %s not supported" attr
 
+      (* Attributes of builtins classes are static, so we can be much more efficient *)
+      | E_py_attribute ({ekind = E_py_object ({addr_kind = A_py_class (C_builtin c, mro)}, _)}, attr) ->
+        let rec search_mro mro = match mro with
+          | [] ->
+            man.exec (Utils.mk_builtin_raise "AttributeError" range) flow |>
+            Eval.empty_singleton
+          | cls::tl ->
+            if is_builtin_attribute cls attr then
+              Eval.singleton (mk_py_object (find_builtin_attribute cls attr) range) flow
+            else
+              search_mro tl in
+        search_mro mro |> Option.return
+
       (* Other attributes *)
       | E_py_attribute (e, attr) ->
          debug "%a@\n" pp_expr expr;
@@ -119,6 +132,7 @@ module Domain =
                        (mk_py_isinstance_builtin exp "type" range)
                        ~fthen:(fun flow ->
                            let mro = mro (object_of_expr exp) in
+                           debug "mro = %a@\n" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_expr) (List.map (fun x -> mk_py_object x range) mro);
                            let rec search_mro flow mro = match mro with
                              | [] ->
                                debug "No attribute found for %a@\n" pp_expr expr;
