@@ -656,7 +656,12 @@ struct
 
   (** 𝕊⟦ ?e ⟧ *)
   let assume e range man flow =
-    assert false
+    man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow |>
+    post_eval man @@ fun e flow ->
+
+    let stmt = mk_assume e range in
+    man.exec_sub ~zone:Z_c_scalar stmt flow
+
 
   let exec zone stmt man flow =
     match skind stmt with
