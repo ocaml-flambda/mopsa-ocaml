@@ -85,19 +85,21 @@ struct
 
     | Some (C_init_list (l, filler)) ->
       let rec aux i =
-        if Z.equal (Z.of_int i) n then []
+        if Z.equal (Z.of_int i) n
+        then [] else
+        if i < List.length l
+        then flatten_init (Some (List.nth l i)) under_typ range @ aux (i + 1)
         else
-          let init =
-            if i < List.length l
-            then flatten_init (Some (List.nth l i)) under_typ range
-            else
-              let nn = Z.mul (Z.sub n (Z.of_int i)) (sizeof_type under_typ) in
-              match filler with
-              | None -> [C_flat_none nn]
-              | Some (C_init_expr e) -> [C_flat_fill (e, under_typ, nn)]
-              | _ -> assert false
-          in
-          init @ aux (i + 1)
+          let nn = Z.mul (Z.sub n (Z.of_int i)) (sizeof_type under_typ) in
+          match filler with
+          | None ->
+            [C_flat_none nn]
+
+          | Some (C_init_list([], Some (C_init_expr e)))
+          | Some (C_init_expr e) ->
+            [C_flat_fill (e, under_typ, nn)]
+
+          | Some x -> panic_at range "initialization filler %a not supported" Pp.pp_c_init x
       in
       aux 0
 
