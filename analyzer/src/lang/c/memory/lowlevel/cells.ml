@@ -264,93 +264,6 @@ struct
     let flow' = Flow.set_unit_ctx ctx' flow in
     v, flow'
 
-  (** Expand a pointer dereference into a finite set of cells. Return
-      None if pointer is ⊤ *)
-  let expand p range man flow : (cell option, 'a) eval =
-    (* Get the base and offset of the pointed block *)
-    man.eval ~zone:(Z_c_low_level, Z_c_points_to) p flow |>
-    Eval.bind @@ fun pt flow ->
-
-    match ekind pt with
-    | E_c_points_to P_top ->
-      Eval.singleton None flow
-
-    | E_c_points_to P_null ->
-      let flow = raise_alarm Alarms.ANullDeref range ~bottom:true man.lattice flow in
-      Eval.empty_singleton flow
-
-    | E_c_points_to P_invalid ->
-      let flow = raise_alarm Alarms.AInvalidDeref range ~bottom:true man.lattice flow in
-      Eval.empty_singleton flow
-
-    | E_c_points_to (P_fun f) ->
-      panic_at range "%a can not be dereferenced to a cell; it points to function %s"
-        pp_expr p
-        f.c_func_org_name
-
-    | E_c_points_to P_block (base, offset) ->
-      (* Get the size of the base *)
-      eval_base_size base range man flow |>
-      Eval.bind @@ fun size flow ->
-
-      (* Convert the size and the offset to numeric *)
-      man.eval ~zone:(Z_c_scalar,Z_u_num) size flow |>
-      Eval.bind @@ fun size flow ->
-
-      man.eval ~zone:(Z_c_low_level,Z_u_num) offset flow |>
-      Eval.bind @@ fun offset flow ->
-
-      (* Check the bounds: offset ∈ [0, size - |typ|] *)
-      let typ = under_pointer_type p.etyp in
-      let elm = sizeof_type typ in
-      let cond = mk_in offset (mk_zero range)
-          (sub size (mk_z elm range) range ~typ:T_int)
-          range
-      in
-      assume_eval ~zone:Z_u_num cond
-        ~fthen:(fun flow ->
-            (* Compute the interval and create a finite number of cells *)
-            let itv = man.ask (Itv.Q_interval offset) flow in
-            let step = Z.one in
-
-            let l, u = Itv.bounds_opt itv in
-
-            (* l >= 0 *)
-            let l =
-              match l with
-              | None -> Z.zero
-              | Some l -> Z.max l Z.zero
-            in
-
-            (* u <= l + !opt_expand *)
-            let u =
-              match u with
-              | None -> Z.add l (Z.of_int !opt_expand)
-              | Some u -> Z.min u (Z.add l (Z.of_int !opt_expand))
-            in
-
-            (* Iterate over [l, u] *)
-            let rec aux i o =
-              if Z.gt o u
-              then []
-              else
-                let flow' = man.exec ~zone:Z_u_num (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow in
-                let c = mk_cell base o typ in
-                Eval.singleton (Some c) flow' :: aux (i + 1) (Z.add o step)
-            in
-            let evals = aux 0 l in
-            Eval.join_list evals
-          )
-        ~felse:(fun flow ->
-            let flow = raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow in
-            Eval.empty_singleton flow
-          )
-        man flow
-
-
-
-    | _ -> assert false
-
 
   (** {2 Unification of cells} *)
   (** ======================== *)
@@ -534,6 +447,99 @@ struct
     assert false
 
 
+  (** {2 Cell expansion} *)
+  (** ****************** *)
+
+  (** Expand a pointer dereference into a finite set of cells. Return
+      None if pointer is ⊤ *)
+  let expand p range man flow : (cell option, 'a) eval =
+    (* Get the base and offset of the pointed block *)
+    man.eval ~zone:(Z_c_low_level, Z_c_points_to) p flow |>
+    Eval.bind @@ fun pt flow ->
+
+    match ekind pt with
+    | E_c_points_to P_top ->
+      Eval.singleton None flow
+
+    | E_c_points_to P_null ->
+      let flow = raise_alarm Alarms.ANullDeref range ~bottom:true man.lattice flow in
+      Eval.empty_singleton flow
+
+    | E_c_points_to P_invalid ->
+      let flow = raise_alarm Alarms.AInvalidDeref range ~bottom:true man.lattice flow in
+      Eval.empty_singleton flow
+
+    | E_c_points_to (P_fun f) ->
+      panic_at range "%a can not be dereferenced to a cell; it points to function %s"
+        pp_expr p
+        f.c_func_org_name
+
+    | E_c_points_to P_block (base, offset) ->
+      (* Get the size of the base *)
+      eval_base_size base range man flow |>
+      Eval.bind @@ fun size flow ->
+
+      (* Convert the size and the offset to numeric *)
+      man.eval ~zone:(Z_c_scalar,Z_u_num) size flow |>
+      Eval.bind @@ fun size flow ->
+
+      man.eval ~zone:(Z_c_low_level,Z_u_num) offset flow |>
+      Eval.bind @@ fun offset flow ->
+
+      (* Check the bounds: offset ∈ [0, size - |typ|] *)
+      let typ = under_pointer_type p.etyp in
+      let elm = sizeof_type typ in
+      let cond = mk_in offset (mk_zero range)
+          (sub size (mk_z elm range) range ~typ:T_int)
+          range
+      in
+      assume_eval ~zone:Z_u_num cond
+        ~fthen:(fun flow ->
+            (* Compute the interval and create a finite number of cells *)
+            let itv = man.ask (Itv.Q_interval offset) flow in
+            let step = Z.one in
+
+            let l, u = Itv.bounds_opt itv in
+
+            (* l >= 0 *)
+            let l =
+              match l with
+              | None -> Z.zero
+              | Some l -> Z.max l Z.zero
+            in
+
+            (* u <= l + !opt_expand *)
+            let u =
+              match u with
+              | None -> Z.add l (Z.of_int !opt_expand)
+              | Some u -> Z.min u (Z.add l (Z.of_int !opt_expand))
+            in
+
+            (* Iterate over [l, u] *)
+            let rec aux i o =
+              if Z.gt o u
+              then []
+              else
+                let flow' = man.exec ~zone:Z_u_num (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow in
+                let c = mk_cell base o typ in
+                Eval.singleton (Some c) flow' :: aux (i + 1) (Z.add o step)
+            in
+            let evals = aux 0 l in
+            Eval.join_list evals
+          )
+        ~felse:(fun flow ->
+            let flow = raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow in
+            Eval.empty_singleton flow
+          )
+        man flow
+
+
+
+    | _ -> assert false
+
+
+
+
   (** {2 Initial state} *)
   (** ***************** *)
 
@@ -670,13 +676,27 @@ struct
 
   (** 𝔼⟦ *p ⟧ *)
   let deref p mode range man flow =
-    assert false
+    (* Expand *p into cells *)
+    expand p range man flow |>
+    Eval.bind @@ fun c flow ->
+
+    match c with
+    | None ->
+      (* ⊤ pointer => use the whole value interval *)
+      Eval.singleton (mk_top (under_pointer_type p.etyp) range) flow
+
+    | Some c ->
+      let v, flow = mk_cell_var_with_flow c flow in
+      Eval.singleton (mk_var v ~mode range) flow
+
 
 
   let eval zone exp man flow =
     match ekind exp with
-    | E_var (v,mode) ->
-      deref (mk_c_address_of exp exp.erange) mode exp.erange man flow |>
+    | E_var (v,mode) when is_c_scalar_type v.vtyp ->
+      let c = mk_cell (V v) Z.zero v.vtyp in
+      let vv, flow = mk_cell_var_with_flow c flow in
+      Eval.singleton (mk_var vv ~mode exp.erange) flow |>
       Option.return
 
     | E_c_deref p ->

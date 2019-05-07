@@ -80,6 +80,8 @@ struct
 
   let name = Value.name
 
+  let debug fmt = Debug.debug ~channel:name fmt
+
   let merge pre (a1, log1) (a2, log2) =
     let patch stmt a acc =
       match skind stmt with

@@ -113,7 +113,11 @@ let to_universal_type t =
     | _ -> panic ~loc:__LOC__ "non integer type %a" pp_typ t
 
 let to_universal_var v =
-  {v with vtyp = to_universal_type v.vtyp}
+  {
+    v with
+    vtyp = to_universal_type v.vtyp;
+    vkind = V_common
+  }
 
 let to_universal_expr e =
   match ekind e with
