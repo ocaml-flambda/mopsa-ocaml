@@ -208,7 +208,6 @@ type c_var_init =
 
 type c_var = {
   var_scope: c_var_scope; (** life-time scope of the variable *)
-  mutable var_init: c_var_init option; (** initialization *)
   var_range: range; (** declaration range *)
 }
 
@@ -326,7 +325,7 @@ type stmt_kind +=
   | S_c_goto_stab of stmt
   (** stabilization point for goto statement *)
 
-  | S_c_declaration of var
+  | S_c_declaration of var * c_var_init option
   (** declaration of a variable *)
 
   | S_c_do_while of
@@ -359,7 +358,7 @@ type stmt_kind +=
 
 
 type c_program = {
-  c_globals : var list;        (** global variables of the program *)
+  c_globals : (var * c_var_init option) list;        (** global variables of the program *)
   c_functions : c_fundec list; (** functions of the program *)
 }
 
@@ -841,9 +840,13 @@ let mk_c_cast e t range =
 let mk_c_null range =
   mk_c_cast (mk_zero ~typ:u8 range) (pointer_type void) range
 
-let mk_c_declaration v range =
-  mk_stmt (S_c_declaration v) range
+let mk_c_declaration v init range =
+  mk_stmt (S_c_declaration (v, init)) range
 
+let var_scope v =
+  match v.vkind with
+  | V_c { var_scope } -> var_scope
+  | _ -> assert false
 
 let () =
   register_typ_compare (fun next t1 t2 ->

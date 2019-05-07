@@ -85,7 +85,6 @@ let () =
         | E_constant _
         | E_addr _
         | E_var _
-        | E_c_address_of _
         | E_c_function _                     -> Keep
         (* ------------------------------------------- *)
         | E_stub_quantified _
@@ -95,6 +94,7 @@ let () =
         | E_binop _
         | E_c_cast _                         -> Visit
         (* ------------------------------------------- *)
+        | E_c_address_of _
         | E_c_deref _                        -> Visit
         (* ------------------------------------------- *)
         | _                                  -> Process
@@ -112,7 +112,6 @@ let () =
         (* ------------------------------------------- *)
         | E_constant _
         | E_addr _
-        | E_c_address_of _
         | E_c_function _                     -> Keep
         (* ------------------------------------------- *)
         | E_var _
@@ -120,6 +119,7 @@ let () =
         | E_stub_builtin_call _
         | E_unop _
         | E_binop _
+        | E_c_address_of _
         | E_c_cast _                         -> Visit
         (* ------------------------------------------- *)
         | E_c_deref p

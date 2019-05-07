@@ -84,7 +84,7 @@ struct
   (** Initialize global variables *)
   let init_globals globals range man flow =
     globals |>
-    List.fold_left (fun flow v ->
+    List.fold_left (fun flow (v, init) ->
         let cvar =
           match v.vkind with
           | V_c cvar -> cvar
@@ -92,7 +92,7 @@ struct
         in
         if cvar.var_scope = Variable_extern then flow
         else
-          let stmt = mk_stmt (S_c_declaration v) cvar.var_range in
+          let stmt = mk_c_declaration v init cvar.var_range in
           man.exec stmt flow
       ) flow
 
@@ -102,7 +102,7 @@ struct
       ) functions
 
   let find_global v globals =
-    List.find (fun v' -> v'.org_vname = v) globals
+    List.find (fun (v',_) -> v'.org_vname = v) globals |> fst
 
   let call f args man flow =
     let stmt = mk_c_call_stmt f args f.c_func_range in

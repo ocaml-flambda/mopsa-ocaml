@@ -368,16 +368,10 @@ struct
 
 
   (* Declaration of a scalar numeric variable *)
-  let declare_var v range man flow =
-    let init, scope =
-      match v.vkind with
-      | V_c { var_init; var_scope } -> var_init, var_scope
-      | _ -> assert false
-    in
-
+  let declare_var v init range man flow =
     let vv = mk_var (to_universal_var v) range in
 
-    match scope, init with
+    match var_scope v, init with
     (** Uninitialized global variable *)
     | Variable_global, None | Variable_file_static _, None ->
       (* The variable is initialized with 0 (C99 6.7.8.10) *)
@@ -400,8 +394,8 @@ struct
 
   let exec zone stmt man flow =
     match skind stmt with
-    | S_c_declaration v when is_c_num_type v.vtyp ->
-      declare_var v stmt.srange man flow |>
+    | S_c_declaration (v,init) when is_c_num_type v.vtyp ->
+      declare_var v init stmt.srange man flow |>
       Option.return
 
     | S_assign(lval, rval) when etyp lval |> is_c_num_type ->

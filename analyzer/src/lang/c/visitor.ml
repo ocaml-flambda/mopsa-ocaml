@@ -187,17 +187,12 @@ let () =
       | S_program { prog_kind = C_program _ } ->
         Exceptions.panic "visitor of C_program not yet implemented"
 
-      | S_c_declaration(v) ->
-        let vv, init = match vkind v with
-          | V_c ({ var_init } as vv) -> vv, var_init
-          | _ -> assert false
-        in
+      | S_c_declaration(v, init) ->
         let exprs = exprs_in_init_option init in
         {exprs; stmts = []},
         (function {exprs} ->
            let init, _ = init_option_from_exprs exprs init in
-           let v = { v with vkind = V_c { vv with var_init = init } } in
-           {stmt with skind = S_c_declaration v}
+           {stmt with skind = S_c_declaration (v,init)}
         )
 
 

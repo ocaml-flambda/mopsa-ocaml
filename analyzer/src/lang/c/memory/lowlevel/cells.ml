@@ -252,11 +252,13 @@ struct
           (fun fmt () -> if c.primed then Format.pp_print_string fmt "'" else ()) ()
       in
       let name = Format.flush_str_formatter () in
+      let vkind = V_c { var_range = base_range c.base; var_scope = base_scope c.base } in
       let v = mkfresh (fun uid ->
           name, name ^ ":" ^ (string_of_int uid)
-        ) c.typ ()
+        ) c.typ ~vkind ()
       in
       v, set_ctx (CellEquiv.add (c,v) bindings) ctx
+
 
   let mk_cell_var_with_flow c flow =
     let ctx = Flow.get_unit_ctx flow in
@@ -555,13 +557,13 @@ struct
   (** ************************* *)
 
   (** 𝕊⟦ type v = init; ⟧  *)
-  let declare v range man flow =
+  let declare v init range man flow =
     (* Since we are in the Z_low_level zone, we assume that init has
        been translated by a structured domain into a flatten
        initialization *)
-    let vinfo, flat_init =
-      match v.vkind with
-      | V_c ({ var_init = Some (C_init_flat l) } as vinfo) -> vinfo, l
+    let flat_init =
+      match init with
+      | Some (C_init_flat l) -> l
       | _ -> assert false
     in
 
@@ -570,6 +572,7 @@ struct
         { a with bases = BaseSet.add (V v) a.bases }
       ) man flow
     in
+
 
     (* Initialize cells, but expand at most !opt_expand cells, as
        defined by the option -cell-expand *)
@@ -590,6 +593,12 @@ struct
             let c = mk_cell (V v) o v.vtyp in
             let init = None in
             c, init, tl, Z.add o n
+
+          | C_flat_none(n) :: tl ->
+            let c = mk_cell (V v) o u8 in
+            let init = None in
+            let tl' = if Z.equal n Z.one then tl else C_flat_none(Z.pred n) :: tl in
+            c, init, tl', Z.succ o
 
           | _ -> assert false
         in
@@ -616,8 +625,7 @@ struct
 
         (* Initialize the associated variable *)
         let v, flow = mk_cell_var_with_flow c flow in
-        let v = { v with vkind = V_c { vinfo with var_init = init } } in
-        let stmt = mk_c_declaration v range in
+        let stmt = mk_c_declaration v init range in
         man.exec_sub ~zone:Z_c_scalar stmt flow |>
 
         Post.bind @@ fun flow ->
@@ -652,15 +660,18 @@ struct
 
   let exec zone stmt man flow =
     match skind stmt with
-    | S_c_declaration v ->
-      declare v stmt.srange man flow |>
+    | S_c_declaration (v,init) ->
+      declare v init stmt.srange man flow |>
       Option.return
 
-    | S_assign(({ekind = E_var(var, mode)} as lval), e) ->
-      assign (mk_c_address_of lval lval.erange) e mode stmt.srange man flow |>
+    | S_assign(({ekind = E_var(v, mode)} as lval), e) when is_c_scalar_type v.vtyp ->
+      let c = mk_cell (V v) Z.zero v.vtyp in
+      let vv, flow = mk_cell_var_with_flow c flow in
+      let stmt = mk_assign (mk_var vv ~mode lval.erange) e stmt.srange in
+      man.exec_sub ~zone:Z_c_scalar stmt flow |>
       Option.return
 
-    | S_assign(({ekind = E_c_deref(p)}), e) ->
+    | S_assign(({ekind = E_c_deref(p)}), e) when is_c_scalar_type @@ under_type p.etyp ->
       assign p e STRONG stmt.srange man flow |>
       Option.return
 
@@ -699,8 +710,12 @@ struct
       Eval.singleton (mk_var vv ~mode exp.erange) flow |>
       Option.return
 
-    | E_c_deref p ->
+    | E_c_deref p when is_c_scalar_type @@ under_type p.etyp ->
       deref p STRONG exp.erange man flow |>
+      Option.return
+
+    | E_c_address_of {ekind = E_c_deref p} ->
+      man.eval ~zone:(Z_c_low_level,Z_c_scalar) p flow |>
       Option.return
 
     | _ -> None

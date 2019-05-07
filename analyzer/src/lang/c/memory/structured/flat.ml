@@ -156,14 +156,8 @@ struct
 
 
   (** 𝕊⟦ type v = init; ⟧ *)
-  let declare v range man flow =
-    let cvar =
-      match v.vkind with
-      | V_c cvar -> cvar
-      | _ -> assert false
-    in
-
-    let flat_init = flatten_init cvar.var_init v.vtyp range in
+  let declare v init range man flow =
+    let flat_init = flatten_init init v.vtyp range in
 
     (* Evaluate C expressions into low-level expressions *)
     let rec aux l flow =
@@ -189,8 +183,7 @@ struct
     post_eval man @@ fun init_list flow ->
 
     let init = C_init_flat init_list in
-    let v = { v with vkind = V_c { cvar with var_init = Some init } } in
-    man.exec_sub ~zone:Z_c_low_level (mk_c_declaration v range) flow
+    man.exec_sub ~zone:Z_c_low_level (mk_c_declaration v (Some init) range) flow
 
 
   (** 𝕊⟦ lval = e; ⟧ *)
@@ -215,7 +208,7 @@ struct
 
   let exec zone stmt man flow =
     match skind stmt with
-    | S_c_declaration(v) -> declare v stmt.srange man flow |> Option.return
+    | S_c_declaration(v, init) -> declare v init stmt.srange man flow |> Option.return
     | S_assign(lval, e) -> assign lval e stmt.srange man flow |> Option.return
     | S_assume(e) -> assume e stmt.srange man flow |> Option.return
     | _ -> None
@@ -236,9 +229,10 @@ struct
 
   (** 𝔼⟦ s.f ⟧ -> *(( typeof(s.f)* )(( char* )(&s) + alignof(s.f))) *)
   let member_access s i f exp range man flow =
+    man.eval ~zone:(Z_c, Z_c_low_level) s flow |>
+    Eval.bind @@ fun s flow ->
+
     let ss = mk_c_address_of s range in
-    man.eval ~zone:(Z_c, Z_c_low_level) ss flow |>
-    Eval.bind @@ fun ss flow ->
 
     let st = etyp s in
     let t = etyp exp in

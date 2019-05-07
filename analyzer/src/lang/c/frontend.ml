@@ -283,15 +283,11 @@ and from_project prj =
 
   let globals = StringMap.bindings prj.proj_vars |>
                 List.map snd |>
-                List.map (from_var ctx)
+                List.map (fun v ->
+                    from_var ctx v, from_var_init ctx v
+                  )
   in
 
-  Hashtbl.iter (fun _ (v, o) ->
-      match vkind v with
-      | V_c vv ->
-        vv.var_init <- from_var_init ctx o
-      | _ -> assert false
-    ) ctx.ctx_vars;
 
   Ast.C_program { c_globals = globals; c_functions = StringMap.bindings funcs |> List.split |> snd }
 
@@ -330,8 +326,9 @@ and from_stmt ctx ((skind, range): C_AST.statement) : stmt =
   let srange = from_range range in
   let skind = match skind with
     | C_AST.S_local_declaration v ->
-      let v = from_var ctx v in
-      Ast.S_c_declaration v
+      let vv = from_var ctx v in
+      let init = from_init_option ctx v.var_init in
+      Ast.S_c_declaration (vv, init)
     | C_AST.S_expression e -> Universal.Ast.S_expression (from_expr ctx e)
     | C_AST.S_block block -> from_block ctx srange block |> Framework.Ast.Stmt.skind
     | C_AST.S_if (cond, body, orelse) -> Universal.Ast.S_if (from_expr ctx cond, from_block ctx srange body, from_block ctx srange orelse)
@@ -452,7 +449,6 @@ and from_var ctx (v: C_AST.variable) : var =
       uniq_vname = v.var_unique_name;
       vkind = V_c {
           var_scope = from_var_scope ctx v.var_kind;
-          var_init = None;
           var_range = from_range v.var_range;
         };
       vuid = v.var_uid;

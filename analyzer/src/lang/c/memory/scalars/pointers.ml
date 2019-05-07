@@ -737,14 +737,8 @@ struct
 
 
   (* Declaration of a scalar pointer variable *)
-  let declare_var v range man flow =
-    let init, scope =
-      match v.vkind with
-      | V_c { var_init; var_scope } -> var_init, var_scope
-      | _ -> assert false
-    in
-
-    match scope, init with
+  let declare_var v init range man flow =
+    match var_scope v, init with
     (** Uninitialized global variable *)
     | Variable_global, None | Variable_file_static _, None ->
       (* The variable is initialized with NULL (C99 6.7.8.10) *)
@@ -766,8 +760,8 @@ struct
   let exec zone stmt man flow =
     let range = srange stmt in
     match skind stmt with
-    | S_c_declaration(p) when is_c_pointer_type p.vtyp ->
-      declare_var p stmt.srange man flow |>
+    | S_c_declaration(p,init) when is_c_pointer_type p.vtyp ->
+      declare_var p init stmt.srange man flow |>
       Option.return
 
     | S_assign({ekind = E_var(p, _)}, q) when is_c_pointer_type p.vtyp ->

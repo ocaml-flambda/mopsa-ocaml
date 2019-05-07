@@ -127,10 +127,10 @@ struct
 
 
   (** Declaration of a C variable *)
-  let declare_variable v man flow =
-    let scope, init, range =
+  let declare_variable v init man flow =
+    let scope, range =
       match v.vkind with
-      | V_c { var_scope; var_init; var_range } -> var_scope, var_init, var_range
+      | V_c { var_scope; var_range } -> var_scope, var_range
       | _ -> assert false
     in
 
@@ -442,35 +442,10 @@ struct
   (** Transformers entry point *)
   let exec zone stmt man flow =
     match skind stmt with
-    | S_c_declaration v when is_c_scalar_type v.vtyp ->
+    | S_c_declaration (v,init) ->
       (* We need to simplify initialization expression before passing
          the statement to the underlying scalar domains *)
-      Some (
-        begin
-          match v.vkind with
-          | V_c { var_init = None} ->
-            Eval.singleton v flow
-
-          | V_c ({ var_init = Some (C_init_expr e) } as info) ->
-            man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow |>
-            Eval.bind @@ fun e flow ->
-
-            let init = Some (C_init_expr e) in
-            let v = { v with vkind = V_c { info with var_init = init } } in
-            Eval.singleton v flow
-
-          | _ -> assert false
-        end |>
-        post_eval man @@ fun v flow ->
-
-        let stmt = {stmt with skind = S_c_declaration v} in
-
-        man.exec_sub ~zone:Z_c_scalar stmt flow
-      )
-
-    | S_c_declaration v when is_c_array_type v.vtyp ->
-      declare_variable v man flow |>
-      Option.return
+      assert false
 
     | S_add { ekind = E_addr addr } ->
       (* Add the length of the address @ to the numeric domain and
