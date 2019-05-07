@@ -587,11 +587,27 @@ struct
 
           | _ -> assert false
         in
+        (* Evaluate the initialization into a scalar expression *)
+        (
+          match init with
+          | None -> Eval.singleton None flow
+
+          | Some (C_init_expr e) ->
+            man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow |>
+            Eval.bind @@ fun e flow ->
+            Eval.singleton (Some (C_init_expr e)) flow
+
+          | _ -> assert false
+        )
+        |>
+        post_eval man @@ fun init flow ->
+
         (* Add the cell *)
         let flow = map_domain_env T_cur (fun a ->
             { a with cells = CellSet.add c a.cells }
           ) man flow
         in
+
         (* Initialize the associated variable *)
         let v, flow = mk_cell_var_with_flow c flow in
         let v = { v with vkind = V_c { vinfo with var_init = init } } in
