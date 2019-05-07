@@ -36,7 +36,7 @@ let rec pp_c_init fmt = function
          ~pp_sep:(fun fmt () -> fprintf fmt ", ")
          (fun fmt init ->
             match init with
-            | C_flat_expr (e) -> pp_expr fmt e
+            | C_flat_expr (e,t) -> pp_expr fmt e
             | C_flat_none n -> fprintf fmt "None * %a" Z.pp_print n
             | C_flat_fill (e,t,n) -> fprintf fmt "%a * %a" pp_expr e Z.pp_print n
          )

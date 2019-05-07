@@ -34,7 +34,7 @@ let rec exprs_in_init = function
   | C_init_flat l ->
     List.fold_left (fun acc init ->
         match init with
-        | C_flat_expr e -> e :: acc
+        | C_flat_expr (e,_) -> e :: acc
         | C_flat_fill (e,_,_) -> e :: acc
         | _ -> acc
       ) [] l

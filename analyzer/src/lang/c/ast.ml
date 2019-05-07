@@ -193,7 +193,7 @@ type c_var_scope =
 
 (** Flat variable initialization *)
 type c_flat_init =
-  | C_flat_expr of expr
+  | C_flat_expr of expr * typ
   | C_flat_none of Z.t (** Uninitialized bytes *)
   | C_flat_fill of expr * typ * Z.t (** Filler expression *)
 

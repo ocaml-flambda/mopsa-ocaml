@@ -74,7 +74,7 @@ struct
   and flatten_scalar_init init typ range =
     match init with
     | None                 -> [C_flat_none (sizeof_type typ)]
-    | Some (C_init_expr e) -> [C_flat_expr (e)]
+    | Some (C_init_expr e) -> [C_flat_expr (e,typ)]
     | _ -> assert false
 
   and flatten_array_init init typ range =
@@ -109,8 +109,8 @@ struct
         else
           let init =
             if i < String.length s
-            then C_flat_expr (mk_c_character (String.get s i) range)
-            else C_flat_expr (mk_c_character (char_of_int 0) range)
+            then C_flat_expr (mk_c_character (String.get s i) range, under_typ)
+            else C_flat_expr (mk_c_character (char_of_int 0) range, under_typ)
           in
           init :: aux (i + 1)
       in
@@ -165,14 +165,14 @@ struct
     let rec aux l flow =
       match l with
       | [] -> Eval.singleton [] flow
-      | C_flat_expr e :: tl ->
+      | C_flat_expr (e,t) :: tl ->
         man.eval ~zone:(Z_c,Z_c_low_level) e flow |>
         Eval.bind @@ fun e flow ->
 
         aux tl flow |>
         Eval.bind @@ fun tl flow ->
 
-        Eval.singleton (C_flat_expr e :: tl) flow
+        Eval.singleton (C_flat_expr (e,t) :: tl) flow
 
       | x :: tl ->
         aux tl flow |>

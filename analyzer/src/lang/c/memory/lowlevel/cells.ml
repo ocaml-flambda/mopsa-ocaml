@@ -619,8 +619,8 @@ struct
       else
         let c, init, tl, o' =
           match l with
-          | C_flat_expr e :: tl ->
-            let c = mk_cell (V v) o e.etyp in
+          | C_flat_expr (e,t) :: tl ->
+            let c = mk_cell (V v) o t in
             let init = Some (C_init_expr e) in
             c, init, tl, Z.add o (sizeof_type e.etyp)
 
