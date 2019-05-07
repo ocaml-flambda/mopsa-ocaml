@@ -104,7 +104,21 @@ module Domain =
          debug "%a@\n" pp_expr expr;
          let c_attr = mk_constant T_string (C_string attr) range in
          man.eval e ~zone:(Zone.Z_py, Zone.Z_py_obj) flow |>
-           Eval.bind (fun exp flow ->
+         Eval.bind (fun exp flow ->
+             match ekind exp with
+             | E_py_object ({addr_kind = A_py_class (C_builtin c, mro)}, _) ->
+               let rec search_mro mro = match mro with
+                 | [] ->
+                   man.exec (Utils.mk_builtin_raise "AttributeError" range) flow |>
+                   Eval.empty_singleton
+                 | cls::tl ->
+                   if is_builtin_attribute cls attr then
+                     Eval.singleton (mk_py_object (find_builtin_attribute cls attr) range) flow
+                   else
+                     search_mro tl in
+               search_mro mro
+             | _ ->
+               debug "other: %a@\n" pp_expr exp;
                assume_eval (mk_expr (E_py_ll_hasattr (exp, c_attr)) range)
                  ~fthen:(fun flow ->
                    debug "instance attribute found locally@\n";
@@ -214,6 +228,21 @@ module Domain =
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "hasattr")}, _)}, [obj; attr], []) ->
          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) obj flow |>
            Eval.bind (fun eobj flow ->
+             match ekind eobj with
+             | E_py_object ({addr_kind = A_py_class (C_builtin c, mro)}, _) ->
+               let attr = match ekind attr with
+                 | E_constant (C_string s) -> s
+                 | _ -> assert false in
+               let rec search_mro mro = match mro with
+                 | [] ->
+                   man.eval (mk_py_false range) flow
+                 | cls::tl ->
+                   if is_builtin_attribute cls attr then
+                     man.eval (mk_py_true range) flow
+                   else
+                     search_mro tl in
+               search_mro mro
+             | _ ->
                assume_eval (mk_expr (E_py_ll_hasattr (eobj, attr)) range)
                  ~fthen:(fun flow -> man.eval (mk_py_true range) flow)
                  ~felse:(fun flow ->
