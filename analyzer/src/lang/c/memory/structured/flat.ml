@@ -36,7 +36,7 @@ struct
   (** {2 Domain header *)
   (** ================ *)
 
-  let name = "c.memory.structured.destruct"
+  let name = "c.memory.structured.flat"
 
   let debug fmt = Debug.debug ~channel:name fmt
 

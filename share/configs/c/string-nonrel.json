@@ -35,7 +35,7 @@
 	    {
                 "apply": {
                     "compose": [
-                        "c.memory.structured.destruct",
+                        "c.memory.structured.flat",
                         "c.memory.lowlevel.string_length",
                         {
                             "seq": [
