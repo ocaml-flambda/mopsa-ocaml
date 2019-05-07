@@ -252,7 +252,10 @@ struct
           (fun fmt () -> if c.primed then Format.pp_print_string fmt "'" else ()) ()
       in
       let name = Format.flush_str_formatter () in
-      let vkind = V_c { var_range = base_range c.base; var_scope = base_scope c.base } in
+      let vkind = match c.base with
+        | V { vkind } -> vkind
+        | _ -> V_common
+      in
       let v = mkfresh (fun uid ->
           name, name ^ ":" ^ (string_of_int uid)
         ) c.typ ~vkind ()
@@ -543,11 +546,16 @@ struct
     | _ -> assert false
 
 
+  let add_base b man flow =
+    let a = get_domain_env T_cur man flow in
+    let aa = { a with bases = BaseSet.add b a.bases } in
+    set_domain_env T_cur aa man flow
+
+
   (** Add a cell and its constraints *)
   let add_cell c range man flow =
+    let flow = add_base c.base man flow in
     let a = get_domain_env T_cur man flow in
-    let aa = { a with bases = BaseSet.add c.base a.bases } in
-    let flow = set_domain_env T_cur aa man flow in
 
     if CellSet.mem c a.cells || not (is_c_scalar_type c.typ)
     then flow
@@ -558,7 +566,7 @@ struct
       if is_c_pointer_type c.typ
       then flow
       else
-        let flow = match phi c aa (Flow.get_unit_ctx flow) range with
+        let flow = match phi c a (Flow.get_unit_ctx flow) range with
           | Some (e, ctx) ->
             let flow' = Flow.set_unit_ctx ctx flow in
             let stmt = mk_assume (mk_binop (mk_var v range) O_eq e ~etyp:u8 range) range in
@@ -567,7 +575,8 @@ struct
           | None -> flow
 
         in
-        set_domain_env T_cur { aa with cells = CellSet.add c aa.cells } man flow
+        set_domain_env T_cur { a with cells = CellSet.add c a.cells } man flow
+
 
 
   (** {2 Initial state} *)
@@ -691,6 +700,23 @@ struct
     man.exec_sub ~zone:Z_c_scalar stmt flow
 
 
+  let remove_var v range man flow =
+    let a = get_domain_env T_cur man flow in
+    let cells = find_cells (fun c -> compare_base c.base (V v) = 0) a in
+    let a = List.fold_left (fun acc c ->
+        { acc with cells = CellSet.remove c a.cells }
+      ) a cells
+    in
+    let a = { a with bases = BaseSet.remove (V v) a.bases } in
+    let flow = set_domain_env T_cur a man flow in
+
+    List.fold_left (fun post c ->
+        let v, flow = mk_cell_var_with_flow c flow in
+        let stmt = mk_remove_var v range in
+        Post.bind (man.exec_sub ~zone:Z_c_scalar stmt) post
+      ) (Post.return flow) cells
+
+
   let exec zone stmt man flow =
     match skind stmt with
     | S_c_declaration (v,init) ->
@@ -715,6 +741,27 @@ struct
     | S_assume(e) ->
       assume e stmt.srange man flow |>
       Option.return
+
+    | S_add { ekind = E_var (v, _) } when is_c_scalar_type v.vtyp ->
+      let c = mk_cell (V v) Z.zero v.vtyp in
+      let flow = add_cell c stmt.srange man flow in
+      let vv, flow = mk_cell_var_with_flow c flow in
+      man.exec_sub ~zone:Z_c_scalar (mk_add_var vv stmt.srange) flow |>
+      Option.return
+
+    | S_add { ekind = E_var (v, _) } when not (is_c_scalar_type v.vtyp) ->
+      add_base (V v) man flow |>
+      Post.return |> Option.return
+
+    | S_add { ekind = E_addr addr } ->
+      add_base (A addr) man flow |>
+      Post.return  |> Option.return
+
+    | S_remove { ekind = E_var (v, _) } when is_c_type v.vtyp ->
+      remove_var v stmt.srange man flow |>
+      Option.return
+
+
 
     | _ -> None
 
