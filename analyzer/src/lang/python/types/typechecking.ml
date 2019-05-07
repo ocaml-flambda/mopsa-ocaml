@@ -40,8 +40,7 @@ struct
         | Def addr ->
           let to_join = match addr.addr_kind with
             (* | A_py_var _ (\* TODO: est-ce que c'est ok? *\) *)
-            | A_py_instance _ ->
-  (TD.TMap.find addr t.abs_heap)
+            | A_py_instance _ -> (TD.TMap.find addr t)
             | A_py_class (c, b) ->
               let ty = Class (c, b) in
               TD.Polytypeset.singleton ty
@@ -159,8 +158,8 @@ struct
                 AD.ASet.iter (fun addr ->
                     match addr with
                     | Def addr ->
-                      if TD.TMap.mem addr tmap.abs_heap then
-                        let ty = TD.TMap.find addr tmap.abs_heap in
+                      if TD.TMap.mem addr tmap then
+                        let ty = TD.TMap.find addr tmap in
                         ret := (fun fmt -> Format.fprintf fmt "%s ⇝ %a ⇝ %a" var.uniq_vname pp_addr addr TD.Polytypeset.print ty) :: !ret
                       else
                         ret := (fun fmt -> Format.fprintf fmt "%s ⇝ %a ⇝ notinmap" var.uniq_vname pp_addr addr) :: !ret
