@@ -31,7 +31,7 @@ let rec pp_c_init fmt = function
   | C_init_implicit t -> assert false
   | C_init_stub stub -> fprintf fmt "/*$@,@[  %a@]@,*/" Stubs.Ast.pp_stub_init stub
   | C_init_flat l ->
-    fprintf fmt "{|%a|}"
+    fprintf fmt "{| %a |}"
       (pp_print_list
          ~pp_sep:(fun fmt () -> fprintf fmt ", ")
          (fun fmt init ->

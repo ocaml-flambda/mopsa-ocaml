@@ -196,6 +196,9 @@ struct
         )
       ) a
 
+  let mk_cell base offset ?(primed=false) typ =
+    { base; offset; typ = remove_typedef_qual typ; primed }
+
   (** {2 Cell-variable binding} *)
   (** ************************* *)
 
@@ -231,6 +234,7 @@ struct
   let init_ctx ctx =
     set_ctx CellEquiv.empty ctx
 
+
   (** Create a scalar variable corresponding to a cell *)
   let mk_cell_var (c:cell) ctx : var * Context.uctx =
     let bindings = get_ctx ctx in
@@ -252,6 +256,11 @@ struct
       in
       v, set_ctx (CellEquiv.add (c,v) bindings) ctx
 
+  let mk_cell_var_with_flow c flow =
+    let ctx = Flow.get_unit_ctx flow in
+    let v, ctx' = mk_cell_var c ctx in
+    let flow' = Flow.set_unit_ctx ctx' flow in
+    v, flow'
 
 
   (** {2 Unification of cells} *)
@@ -450,15 +459,105 @@ struct
   (** {2 Abstract transformers} *)
   (** ************************* *)
 
-  let exec zone stmt man flow =
+  (** 𝕊⟦ type v = init; ⟧  *)
+  let declare v range man flow =
+    (* Since we are in the Z_low_level zone, we assume that init has
+       been translated by a structured domain into a flatten
+       initialization *)
+    let vinfo, flat_init =
+      match v.vkind with
+      | V_c ({ var_init = Some (C_init_flat l) } as vinfo) -> vinfo, l
+      | _ -> assert false
+    in
+
+    (* Add the base *)
+    let flow = map_domain_env T_cur (fun a ->
+        { a with bases = BaseSet.add (V v) a.bases }
+      ) man flow
+    in
+
+    (* Initialize cells, but expand at most !opt_expand cells, as
+       defined by the option -cell-expand *)
+    let rec aux o i l flow =
+      if i = !opt_expand
+      then Post.return flow
+      else
+        let c, init, tl, o' =
+          match l with
+          | C_flat_expr e :: tl ->
+            let c = mk_cell (V v) o e.etyp in
+            let init = Some (C_init_expr e) in
+            c, init, tl, Z.add o (sizeof_type e.etyp)
+
+          | C_flat_none(n) :: tl when is_c_scalar_type v.vtyp &&
+                                      Z.equal n (sizeof_type v.vtyp)
+            ->
+            let c = mk_cell (V v) o v.vtyp in
+            let init = None in
+            c, init, tl, Z.add o n
+
+          | _ -> assert false
+        in
+        (* Add the cell *)
+        let flow = map_domain_env T_cur (fun a ->
+            { a with cells = CellSet.add c a.cells }
+          ) man flow
+        in
+        (* Initialize the associated variable *)
+        let v, flow = mk_cell_var_with_flow c flow in
+        let v = { v with vkind = V_c { vinfo with var_init = init } } in
+        let stmt = mk_c_declaration v range in
+        man.exec_sub ~zone:Z_c_scalar stmt flow |>
+
+        Post.bind @@ fun flow ->
+        aux o' (i + 1) tl flow
+    in
+    aux Z.zero 0 flat_init flow
+
+  (** 𝕊⟦ lval = e; ⟧ *)
+  let assign lval e range man flow =
     assert false
+
+  (** 𝕊⟦ ?e ⟧ *)
+  let assume e range man flow =
+    assert false
+
+  let exec zone stmt man flow =
+    match skind stmt with
+    | S_c_declaration v ->
+      declare v stmt.srange man flow |>
+      Option.return
+
+    | S_assign(lval, e) ->
+      assign lval e stmt.srange man flow |>
+      Option.return
+
+    | S_assume(e) ->
+      assume e stmt.srange man flow |>
+      Option.return
+
+    | _ -> None
 
 
   (** {2 Abstract evaluations} *)
   (** ************************ *)
 
-  let eval zone exp man flow =
+  (** 𝔼⟦ *p ⟧ *)
+  let deref p mode range man flow =
     assert false
+
+
+  let eval zone exp man flow =
+    match ekind exp with
+    | E_var (v,mode) ->
+      deref (mk_c_address_of exp exp.erange) mode exp.erange man flow |>
+      Option.return
+
+    | E_c_deref p ->
+      deref p STRONG exp.erange man flow |>
+      Option.return
+
+    | _ -> None
 
 
   (** {2 Communication handlers} *)

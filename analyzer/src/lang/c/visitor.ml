@@ -31,6 +31,13 @@ let rec exprs_in_init = function
     let el2 = exprs_in_init_option filler in
     el1 @ el2
   | C_init_stub stub -> []
+  | C_init_flat l ->
+    List.fold_left (fun acc init ->
+        match init with
+        | C_flat_expr e -> e :: acc
+        | C_flat_fill (e,_,_) -> e :: acc
+        | _ -> acc
+      ) [] l
 
 and exprs_in_init_option = function
   | None -> []

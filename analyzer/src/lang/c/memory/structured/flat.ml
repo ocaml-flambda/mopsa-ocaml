@@ -19,8 +19,8 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Abstract domain for destructing data structures into arrays of scalars
-    using pointer arithmetic
+(** This abstract domain destructs the structured C memory into a flat memory
+    containing only scalars.
 *)
 
 open Mopsa
@@ -62,7 +62,100 @@ struct
   (** {2 Abstract transformers} *)
   (** ========================= *)
 
-  (** Declare a variable and initialize its value *)
+  (** The following functions flatten the initialization expression into a list of scalar initializations *)
+  let rec flatten_init init typ range =
+    if is_c_scalar_type typ then flatten_scalar_init init typ range else
+    if is_c_array_type typ  then flatten_array_init init typ range else
+    if is_c_record_type typ then flatten_record_init init typ range
+    else panic_at ~loc:__LOC__ range
+        "init %a of type %a not supported"
+        (Option.print Pp.pp_c_init) init pp_typ typ
+
+  and flatten_scalar_init init typ range =
+    match init with
+    | None                 -> [C_flat_none (sizeof_type typ)]
+    | Some (C_init_expr e) -> [C_flat_expr (e)]
+    | _ -> assert false
+
+  and flatten_array_init init typ range =
+    let n = get_array_constant_length typ in
+    let under_typ = under_array_type typ in
+    match init with
+    | None -> [C_flat_none (Z.mul n (sizeof_type under_typ))]
+
+    | Some (C_init_list (l, filler)) ->
+      let rec aux i =
+        if Z.equal (Z.of_int i) n then []
+        else
+          let init =
+            if i < List.length l
+            then flatten_init (Some (List.nth l i)) under_typ range
+            else
+              let nn = Z.mul (Z.sub n (Z.of_int i)) (sizeof_type under_typ) in
+              match filler with
+              | None -> [C_flat_none nn]
+              | Some (C_init_expr e) -> [C_flat_fill (e, under_typ, nn)]
+              | _ -> assert false
+          in
+          init @ aux (i + 1)
+      in
+      aux 0
+
+    | Some (Ast.C_init_expr {ekind = E_constant(C_c_string (s, _))}) ->
+      let rec aux i =
+        if Z.equal (Z.of_int i) n then []
+        else
+          let init =
+            if i < String.length s
+            then C_flat_expr (mk_c_character (String.get s i) range)
+            else C_flat_expr (mk_c_character (char_of_int 0) range)
+          in
+          init :: aux (i + 1)
+      in
+      aux 0
+
+    | _ -> panic_at range ~loc:__LOC__
+             "flatten_array_init: %a is not supported"
+             Pp.pp_c_init (Option.none_to_exn init)
+
+
+  and flatten_record_init init typ range =
+    let records =
+      match remove_typedef_qual typ with
+      | T_c_record{c_record_fields} -> c_record_fields
+      | t -> panic_at ~loc:__LOC__ range "type %a is not a record" pp_typ t
+    in
+    match init with
+    | None ->
+      let rec aux = function
+        | [] -> []
+        | record :: tl ->
+          let init = flatten_init None record.c_field_type range in
+          init @ aux tl
+      in
+      aux records
+
+    | Some (C_init_list(l, None)) ->
+      let rec aux l records =
+        match records with
+        | [] -> []
+        | record :: tl ->
+          match l with
+          | [] ->
+            let init = flatten_init None record.c_field_type range in
+            init @ aux l tl
+          | init :: tll ->
+            let init = flatten_init (Some init) record.c_field_type range in
+            init @ aux tll tl
+      in
+      aux l records
+
+    | _ -> panic_at ~loc:__LOC__ range "%a is not supported"
+             Pp.pp_c_init (Option.none_to_exn init)
+
+
+
+  (** 𝕊⟦ type v = init; ⟧ *)
   let declare v range man flow =
     let cvar =
       match v.vkind with
@@ -70,133 +163,37 @@ struct
       | _ -> assert false
     in
 
-    if cvar.var_init = None || is_c_scalar_type v.vtyp then
-      man.exec_sub ~zone:Z_c_low_level (mk_c_declaration v range) flow
-    else
-      (* Otherwise, flatten the structured initialization into a list of scalar values *)
+    let flat_init = flatten_init cvar.var_init v.vtyp range in
 
-      let flatten_scalar_init init typ : c_flat_init =
-        match init with
-        | None -> C_flat_none (sizeof_type typ)
-        | Some (C_init_expr e) -> C_flat_expr (e)
-        | _ -> assert false
-      in
+    (* Evaluate C expressions into low-level expressions *)
+    let rec aux l flow =
+      match l with
+      | [] -> Eval.singleton [] flow
+      | C_flat_expr e :: tl ->
+        man.eval ~zone:(Z_c,Z_c_low_level) e flow |>
+        Eval.bind @@ fun e flow ->
 
-      let rec flatten_array_init init typ  : c_flat_init list =
-        let n = get_array_constant_length typ in
-        let under_typ = under_array_type typ in
-        match init with
-        | None -> [C_flat_none (Z.mul n (sizeof_type under_typ))]
+        aux tl flow |>
+        Eval.bind @@ fun tl flow ->
 
-        | Some (C_init_list (l, filler)) ->
-          let rec aux i =
-            if Z.equal (Z.of_int i) n then []
-            else
-              let init =
-                if i < List.length l
-                then flatten_init (Some (List.nth l i)) under_typ
-                else
-                  let nn = Z.mul (Z.sub n (Z.of_int i)) (sizeof_type under_typ) in
-                  match filler with
-                  | None -> [C_flat_none nn]
-                  | Some (C_init_expr e) -> [C_flat_fill (e, under_typ, nn)]
-                  | _ -> assert false
-              in
-              init @ aux (i + 1)
-          in
-          aux 0
+        Eval.singleton (C_flat_expr e :: tl) flow
 
-        | Some (Ast.C_init_expr {ekind = E_constant(C_c_string (s, _))}) ->
-          let rec aux i =
-            if Z.equal (Z.of_int i) n then []
-            else
-              let init =
-                if i < String.length s
-                then C_flat_expr (mk_c_character (String.get s i) range)
-                else C_flat_expr (mk_c_character (char_of_int 0) range)
-              in
-              init :: aux (i + 1)
-          in
-          aux 0
+      | x :: tl ->
+        aux tl flow |>
+        Eval.bind @@ fun tl flow ->
 
-        | _ -> panic_at range ~loc:__LOC__
-                 "flatten_array_init: %a is not supported"
-                 Pp.pp_c_init (Option.none_to_exn init)
+        Eval.singleton (x :: tl) flow
+    in
+
+    aux flat_init flow |>
+    post_eval man @@ fun init_list flow ->
+
+    let init = C_init_flat init_list in
+    let v = { v with vkind = V_c { cvar with var_init = Some init } } in
+    man.exec_sub ~zone:Z_c_low_level (mk_c_declaration v range) flow
 
 
-      and flatten_record_init init typ : c_flat_init list =
-        let records =
-          match remove_typedef_qual typ with
-          | T_c_record{c_record_fields} -> c_record_fields
-          | t -> panic_at ~loc:__LOC__ range "type %a is not a record" pp_typ t
-        in
-        match init with
-        | None ->
-          let rec aux = function
-            | [] -> []
-            | record :: tl ->
-              let init = flatten_init None record.c_field_type in
-              init @ aux tl
-          in
-          aux records
-
-        | Some (C_init_list(l, None)) ->
-          let rec aux l records =
-            match records with
-            | [] -> []
-            | record :: tl ->
-              match l with
-              | [] ->
-                let init = flatten_init None record.c_field_type in
-                init @ aux l tl
-              | init :: tll ->
-                let init = flatten_init (Some init) record.c_field_type in
-                init @ aux tll tl
-          in
-          aux l records
-
-        | _ -> panic_at ~loc:__LOC__ range "%a is not supported" Pp.pp_c_init (Option.none_to_exn init)
-
-
-      and flatten_init init typ =
-        if is_c_scalar_type typ then [flatten_scalar_init init typ] else
-        if is_c_array_type typ  then flatten_array_init init typ else
-        if is_c_record_type typ then flatten_record_init init typ
-        else panic_at ~loc:__LOC__ range
-            "init %a of type %a not supported"
-            (Option.print Pp.pp_c_init) init pp_typ typ
-      in
-
-      let init_list = flatten_init cvar.var_init v.vtyp in
-
-      (* Evaluate C expressions into low-level expressions *)
-      let rec aux l flow =
-        match l with
-        | [] -> Eval.singleton [] flow
-        | C_flat_expr e :: tl ->
-          man.eval ~zone:(Z_c,Z_c_low_level) e flow |>
-          Eval.bind @@ fun e flow ->
-
-          aux tl flow |>
-          Eval.bind @@ fun tl flow ->
-
-          Eval.singleton (C_flat_expr e :: tl) flow
-
-        | x :: tl ->
-          aux tl flow |>
-          Eval.bind @@ fun tl flow ->
-
-          Eval.singleton (x :: tl) flow
-      in
-
-      aux init_list flow |>
-      post_eval man @@ fun init_list flow ->
-
-      let init = C_init_flat init_list in
-      let v = { v with vkind = V_c { cvar with var_init = Some init } } in
-      man.exec_sub ~zone:Z_c_low_level (mk_c_declaration v range) flow
-
-
+  (** 𝕊⟦ lval = e; ⟧ *)
   let assign lval e range man flow =
     man.eval ~zone:(Z_c,Z_c_low_level) lval flow |>
     post_eval man @@ fun lval flow ->
@@ -207,6 +204,7 @@ struct
     let stmt = mk_assign lval e range in
     man.exec_sub ~zone:Z_c_low_level stmt flow
 
+  (** 𝕊⟦ ?e ⟧ *)
   let assume e range man flow =
     man.eval ~zone:(Z_c,Z_c_low_level) e flow |>
     post_eval man @@ fun e flow ->
