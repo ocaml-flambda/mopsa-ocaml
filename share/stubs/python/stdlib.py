@@ -314,6 +314,7 @@ class list(object):
     def __gt__(self, o): pass
     def __iadd__(self, o): pass
     def __imul__(self, o): pass
+    def __new__(self, o): pass
     def __init__(self, itr): pass
     def __iter__(self): pass
     def __le__(self, o): pass
@@ -325,6 +326,7 @@ class list(object):
     def __rmul__(self, o): pass
     def __setitem__(self, k, v): pass
     def __sizeof__(self, o): pass
+    def __reversed__(self): pass
     def append(self): pass
     def clear(self): pass
     def copy(self): pass
@@ -339,6 +341,21 @@ class list(object):
 
 
 class list_iterator(object):
+    def __next__(self): pass
+    def __iter__(self): pass
+
+class list_reverseiterator(object):
+    def __next__(self): pass
+    def __iter__(self): pass
+
+
+class enumerate(object):
+    def __new__(self): pass
+    def __next__(self): pass
+    def __iter__(self): pass
+
+class zip(object):
+    def __new__(self): pass
     def __next__(self): pass
     def __iter__(self): pass
 
@@ -391,6 +408,7 @@ class range_iterator(object):
     def __iter__(self): pass
 
 class set(object):
+    def __new__(self): pass
     def __init__(self, start, stop): pass
     def __len__(self): pass
     def __iter__(self): pass
@@ -449,7 +467,6 @@ class memoryview(object): pass
 @mopsa.unsupported
 class property(object): pass
 
-@mopsa.unsupported
 class reversed(object): pass
 
 @mopsa.unsupported
@@ -458,8 +475,6 @@ class staticmethod(object): pass
 @mopsa.unsupported
 class super(object): pass
 
-@mopsa.unsupported
-class zip(object): pass
 
 
 ##################

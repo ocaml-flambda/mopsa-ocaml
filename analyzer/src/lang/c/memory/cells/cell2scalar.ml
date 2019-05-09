@@ -34,7 +34,7 @@ let cell_scalar_ctx =
     struct
       type t = CellScalarEquiv.t
       let print fmt m =
-        Format.fprintf fmt "Cells vars: @[%a@]" CellScalarEquiv.print m
+        Format.fprintf fmt "Cells vars: @[%a@]" (CellScalarEquiv.print ?pp_sep:None) m
     end
     )
   in
@@ -68,7 +68,7 @@ let get_cell flow v =
     Exceptions.panic
       "Cell2Scalar get_cell could not find binding of %a in ctx:@\n @[%a@]"
       pp_var v
-      CellScalarEquiv.print ctx
+      (CellScalarEquiv.print ?pp_sep:None) ctx
 
 let get_scalar_and_remove flow c =
   let ctx = get_ctx flow in

@@ -86,97 +86,163 @@ module Domain =
         | E_py_attribute(obj, ("__subclass__" as attr)) ->
          panic_at range "Access to special attribute %s not supported" attr
 
+      (* Attributes of builtins classes are static, so we can be much more efficient *)
+      | E_py_attribute ({ekind = E_py_object ({addr_kind = A_py_class (C_builtin c, mro)}, _)}, attr) ->
+        let rec search_mro mro = match mro with
+          | [] ->
+            man.exec (Utils.mk_builtin_raise "AttributeError" range) flow |>
+            Eval.empty_singleton
+          | cls::tl ->
+            if is_builtin_attribute cls attr then
+              Eval.singleton (mk_py_object (find_builtin_attribute cls attr) range) flow
+            else
+              search_mro tl in
+        search_mro mro |> Option.return
+
       (* Other attributes *)
       | E_py_attribute (e, attr) ->
          debug "%a@\n" pp_expr expr;
          let c_attr = mk_constant T_string (C_string attr) range in
          man.eval e ~zone:(Zone.Z_py, Zone.Z_py_obj) flow |>
-           Eval.bind (fun exp flow ->
+         Eval.bind (fun exp flow ->
+             match ekind exp with
+             | E_py_object ({addr_kind = A_py_class (C_builtin c, mro)}, _) ->
+               let rec search_mro mro = match mro with
+                 | [] ->
+                   man.exec (Utils.mk_builtin_raise "AttributeError" range) flow |>
+                   Eval.empty_singleton
+                 | cls::tl ->
+                   if is_builtin_attribute cls attr then
+                     Eval.singleton (mk_py_object (find_builtin_attribute cls attr) range) flow
+                   else
+                     search_mro tl in
+               search_mro mro
+             | _ ->
+               debug "other: %a@\n" pp_expr exp;
                assume_eval (mk_expr (E_py_ll_hasattr (exp, c_attr)) range)
                  ~fthen:(fun flow ->
                    debug "instance attribute found locally@\n";
-                   man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_getattr(exp, c_attr)) range) flow
-                 )
+                   man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_getattr(exp, c_attr)) range) flow |>
+                   Eval.bind (fun exp flow ->
+                       match akind @@ fst @@ object_of_expr exp with
+                       | A_py_function (F_user f) when List.exists (fun x -> match ekind x with E_var (v, _) -> v.org_vname = "classmethod" | _ -> false) f.py_func_decors ->
+                         eval_alloc ~mode:WEAK man (A_py_method (object_of_expr exp, e)) range flow |>
+                         Eval.bind (fun addr flow ->
+                             let obj = (addr, None) in
+                             Eval.singleton (mk_py_object obj range) flow
+                           )
+                       | _ ->
+                         Eval.singleton exp flow
+                     )
+                   )
                  ~felse:(fun flow ->
-                   (* if exp is a class, we just call the attribute
-                      (after searching in the mro). if exp is an
-                      instance, we take its class, search in the mro
-                      and create a method *)
-                   (* to test if an object o is a class, we call isinstance(o, type) *)
-                   assume_eval
-                     (mk_py_isinstance_builtin exp "type" range)
-                     ~fthen:(fun flow ->
-                       let mro = mro (object_of_expr exp) in
-                       let rec search_mro flow mro = match mro with
-                         | [] ->
-                            debug "No attribute found for %a@\n" pp_expr expr;
-                            let flow = man.exec (Utils.mk_builtin_raise "AttributeError" range) flow in
-                            Eval.empty_singleton flow
-                         | cls::tl ->
-                            assume_eval
-                              (mk_expr (E_py_ll_hasattr (mk_py_object cls range, c_attr)) range)
-                              ~fthen:(fun flow ->
-                                man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_getattr (mk_py_object cls range, c_attr)) range) flow)
-                              ~felse:(fun flow -> search_mro flow tl)
-                              man flow
-                       in search_mro flow mro
-                     )
-                     ~felse:(fun flow ->
-                       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type exp range) flow |>
-                         Eval.bind (fun class_of_exp flow ->
-                             let mro = mro (object_of_expr class_of_exp) in
-                             let rec search_mro flow mro = match mro with
-                               | [] ->
-                                  debug "No attribute found for %a@\n" pp_expr expr;
-                                  let flow = man.exec (Utils.mk_builtin_raise "AttributeError" range) flow in
-                                  Eval.empty_singleton flow
-                               | cls::tl ->
-                                  assume_eval
-                                    (mk_expr (E_py_ll_hasattr (mk_py_object cls range, c_attr)) range)
-                                    ~fthen:(fun flow ->
-                                      (* FIXME: disjunction between instances an non-instances *)
-                                      (* FIXME: perf: optim this into a get_attr? *)
-                                      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_object_attr cls attr range) flow |>
-                                        Eval.bind (fun obj' flow ->
-                                            assume_eval
-                                              (mk_py_isinstance_builtin obj' "function" range)
-                                              ~fthen:(fun flow ->
-                                                  debug "obj'=%a; exp=%a@\n" pp_expr obj' pp_expr exp;
-                                                  eval_alloc man (A_py_method (object_of_expr obj', e)) range flow |>
-                                                  Eval.bind (fun addr flow ->
-                                                      let obj = (addr, None) in
-                                                      Eval.singleton (mk_py_object obj range) flow)
-                                               )
-                                              ~felse:(fun flow ->
-                                                Eval.singleton obj' flow
-                                              )
-                                              man flow
-                                          )
-                                    )
-                                    ~felse:(fun flow -> search_mro flow tl)
-                                    man flow
-                             in search_mro flow mro)
-                     )
-                     man flow
-                 )
+                     debug "searching in the classes now@\n";
+                     (* if exp is a class, we just call the attribute
+                        (after searching in the mro). if exp is an
+                        instance, we take its class, search in the mro
+                        and create a method *)
+                     (* to test if an object o is a class, we call isinstance(o, type) *)
+                     assume_eval
+                       (mk_py_isinstance_builtin exp "type" range)
+                       ~fthen:(fun flow ->
+                           let mro = mro (object_of_expr exp) in
+                           debug "mro = %a@\n" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_expr) (List.map (fun x -> mk_py_object x range) mro);
+                           let rec search_mro flow mro = match mro with
+                             | [] ->
+                               debug "No attribute found for %a@\n" pp_expr expr;
+                               let flow = man.exec (Utils.mk_builtin_raise "AttributeError" range) flow in
+                               Eval.empty_singleton flow
+                             | cls::tl ->
+                               assume_eval
+                                 (mk_expr (E_py_ll_hasattr (mk_py_object cls range, c_attr)) range)
+                                 ~fthen:(fun flow ->
+                                     man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_getattr (mk_py_object cls range, c_attr)) range) flow
+                                   )
+                                 ~felse:(fun flow -> search_mro flow tl)
+                                 man flow
+                           in search_mro flow mro
+                         )
+                       ~felse:(fun flow ->
+                           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type exp range) flow |>
+                           Eval.bind (fun class_of_exp flow ->
+                               let mro = mro (object_of_expr class_of_exp) in
+                               let rec search_mro flow mro = match mro with
+                                 | [] ->
+                                   debug "No attribute found for %a@\n" pp_expr expr;
+                                   let flow = man.exec (Utils.mk_builtin_raise "AttributeError" range) flow in
+                                   Eval.empty_singleton flow
+                                 | cls::tl ->
+                                   assume_eval
+                                     (mk_expr (E_py_ll_hasattr (mk_py_object cls range, c_attr)) range)
+                                     ~fthen:(fun flow ->
+                                         (* FIXME: disjunction between instances an non-instances *)
+                                         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_getattr (mk_py_object cls range, c_attr)) range) flow |>
+                                         Eval.bind (fun obj' flow ->
+                                             assume_eval
+                                               (mk_py_isinstance_builtin obj' "function" range) man flow
+                                               ~fthen:(fun flow ->
+                                                   debug "obj'=%a; exp=%a@\n" pp_expr obj' pp_expr exp;
+                                                   eval_alloc ~mode:WEAK man (A_py_method (object_of_expr obj', e)) range flow |>
+                                                   Eval.bind (fun addr flow ->
+                                                       let obj = (addr, None) in
+                                                       Eval.singleton (mk_py_object obj range) flow)
+                                                 )
+                                               ~felse:(fun flow ->
+                                                   (* assume_eval
+                                                    *   (mk_py_isinstance_builtin obj' "method" range) man flow
+                                                    *   ~fthen:(fun flow ->
+                                                    *       match akind @@ fst @@ object_of_expr obj' with
+                                                    *       | A_py_method (({addr_kind = A_py_function (F_user f)}, _), _) when List.exists (fun x -> match ekind x with E_var (v, _) -> v.org_vname = "classmethod" | _ -> false) f.py_func_decors ->
+                                                    *         eval_alloc ~mode:WEAK man (A_py_method (object_of_expr obj', class_of_exp)) range flow |>
+                                                    *       Eval.bind (fun addr flow ->
+                                                    *           let obj = (addr, None) in
+                                                    *           Eval.singleton (mk_py_object obj range) flow)
+                                                    *       | _ -> Exceptions.panic "%a@\n" pp_expr obj'
+                                                    *     )
+                                                    *   ~felse:(Eval.singleton obj') *)
+                                                   Eval.singleton obj' flow
+                                                 )
+                                           )
+                                       )
+                                     ~felse:(fun flow -> search_mro flow tl)
+                                     man flow
+                               in search_mro flow mro)
+                         )
+                       man flow
+                   )
                  ~fnone:(fun flow ->
-                   (* In a bottom environment, the only thing that we
-                      can do is to search for builtins attributes and
-                      resolve them statically *)
-                   let oexp = object_of_expr exp in
-                   if is_builtin oexp && is_builtin_attribute oexp attr then
-                     let rese = mk_py_object (find_builtin_attribute oexp attr) range in
-                     Eval.singleton rese flow
-                   else
-                     Eval.empty_singleton flow
-                 )
+                     (* In a bottom environment, the only thing that we
+                        can do is to search for builtins attributes and
+                        resolve them statically *)
+                     let oexp = object_of_expr exp in
+                     if is_builtin_name (object_name oexp) && is_builtin_attribute oexp attr then
+                       let rese = mk_py_object (find_builtin_attribute oexp attr) range in
+                       Eval.singleton rese flow
+                     else
+                       Eval.empty_singleton flow
+                   )
                  man flow
-             )
+           )
          |> Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "hasattr")}, _)}, [obj; attr], []) ->
          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) obj flow |>
            Eval.bind (fun eobj flow ->
+             match ekind eobj with
+             | E_py_object ({addr_kind = A_py_class (C_builtin c, mro)}, _) ->
+               let attr = match ekind attr with
+                 | E_constant (C_string s) -> s
+                 | _ -> assert false in
+               let rec search_mro mro = match mro with
+                 | [] ->
+                   man.eval (mk_py_false range) flow
+                 | cls::tl ->
+                   if is_builtin_attribute cls attr then
+                     man.eval (mk_py_true range) flow
+                   else
+                     search_mro tl in
+               search_mro mro
+             | _ ->
                assume_eval (mk_expr (E_py_ll_hasattr (eobj, attr)) range)
                  ~fthen:(fun flow -> man.eval (mk_py_true range) flow)
                  ~felse:(fun flow ->

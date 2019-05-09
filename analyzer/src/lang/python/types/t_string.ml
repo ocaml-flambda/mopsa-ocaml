@@ -97,11 +97,12 @@ module Domain =
     let init _ _ flow = flow
 
     let is_str_binop_fun = function
+      (* FIXME: clean *)
       | "str.__add__"
-        | "str.__mod__"
+        (* | "str.__mod__" *)
         (* | "str.__mul__" *)
-        | "str.__rmod__"
-      (* | "str.__rmul__" *)
+        (* | "str.__rmod__" *)
+        (* | "str.__rmul__" *)
             -> true
       | _ -> false
 
@@ -169,6 +170,19 @@ module Domain =
           )
         |>  Option.return
 
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.__mod__")}, _)}, args, []) ->
+        Utils.check_instances ~arguments_after_check:1 man flow range args ["str"]
+          (fun eargs flow ->
+             (* TODO: constant strings are kept in the objects, so we could raise less alarms *)
+             let tyerror_f = man.exec (Utils.mk_builtin_raise "TypeError" range) flow in
+             let flow = Flow.copy_ctx tyerror_f flow in
+             let res = man.eval (mk_py_top T_string range) flow in
+             let tyerror = tyerror_f |> Eval.empty_singleton in
+             Eval.join_list (Eval.copy_ctx res tyerror :: res :: [])
+          )
+        |> Option.return
+
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.__getitem__")}, _)}, args, []) ->
         Utils.check_instances_disj man flow range args
           [["str"]; ["int"; "slice"]]
@@ -189,7 +203,7 @@ module Domain =
              let str_addr = match ekind str with
                | E_py_object (a, _) -> a
                | _ -> assert false in
-             let it_addr = mk_alloc_addr (Objects.Py_list.A_py_iterator ("str_iterator", str_addr, None)) range in
+             let it_addr = mk_alloc_addr (Objects.Py_list.A_py_iterator ("str_iterator", [str_addr], None)) range in
              man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) it_addr flow |>
              Eval.bind (fun eit_addr flow ->
                  let it_addr = match ekind eit_addr with E_addr a -> a | _ -> assert false in

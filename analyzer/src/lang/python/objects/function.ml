@@ -78,11 +78,15 @@ module Domain =
                    else
                      (* Remove the first default parameters that are already specified *)
                      let default_args =
+                       let to_remove = List.length args - List.length nondefault_args in
                        let rec remove_first n l =
                          match n with
                          | 0 -> l
-                         | _ -> remove_first (n-1) (ListExt.tl l)
-                       in remove_first (List.length args - List.length nondefault_args) default_args in
+                         | _ -> remove_first (n-1) (List.tl l)
+                       in
+                       let () = debug "%d %d" (List.length default_args) to_remove in
+                       if to_remove < 0 || List.length default_args < to_remove then [] else remove_first to_remove default_args
+                     in
                      (* Fill missing args with default parameters *)
                      let default_args = List.map (function Some e -> e | None -> assert false) default_args in
                      let rec fill_with_default dfs ndfs args =
@@ -113,7 +117,9 @@ module Domain =
                  else
                    (* Initialize local variables to undefined value and give the call to {!Universal} *)
                    (
-                     let flow = man.exec
+                     let flow =
+                       if pyfundec.py_func_locals = [] then flow else
+                       man.exec
                                   (mk_block (List.mapi (fun i v ->
                                                  let e =
                                                    (* Initialize locals with the same name of a builtin with its address *)
@@ -142,8 +148,8 @@ module Domain =
                )
       (* 𝔼⟦ f() | isinstance(f, method) ⟧ *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_method(f, e)}, _)}, args, []) ->
-         let exp' = mk_py_call (mk_py_object f range) (e :: args) range in
-         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) exp' flow |> Option.return
+        let exp' = mk_py_call (mk_py_object f range) (e :: args) range in
+        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) exp' flow |> Option.return
 
       | _ -> None
 

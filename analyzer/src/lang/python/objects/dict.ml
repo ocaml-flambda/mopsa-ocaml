@@ -93,7 +93,7 @@ struct
       struct
         type t = Equiv.t
         let print fmt m =
-          Format.fprintf fmt "Dict annots: @[%a@]" Equiv.print m
+          Format.fprintf fmt "Dict annots: @[%a@]" (Equiv.print ?pp_sep:None) m
       end
       )
     in
@@ -270,7 +270,7 @@ struct
            let dict_addr = match ekind dict with
              | E_py_object ({addr_kind = A_py_dict _} as a, _) -> a
              | _ -> assert false in
-           let a = mk_alloc_addr (Py_list.A_py_iterator ("dict_keyiterator", dict_addr, None)) range in
+           let a = mk_alloc_addr (Py_list.A_py_iterator ("dict_keyiterator", [dict_addr], None)) range in
            man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) a flow |>
            Eval.bind (fun addr_it flow ->
                let addr_it = match ekind addr_it with E_addr a -> a | _ -> assert false in
@@ -315,7 +315,7 @@ struct
            let dict_addr = match ekind @@ List.hd args with
              | E_py_object ({addr_kind = A_py_dict_view (case, a)}, _) -> a
              | _ -> assert false in
-           let a = mk_alloc_addr (Py_list.A_py_iterator (itname, dict_addr, None)) range in
+           let a = mk_alloc_addr (Py_list.A_py_iterator (itname, [dict_addr], None)) range in
            man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) a flow |>
            Eval.bind (fun addr_it flow ->
                let addr_it = match ekind addr_it with E_addr a -> a | _ -> assert false in
@@ -329,7 +329,7 @@ struct
       Utils.check_instances man flow range args ["dict_keyiterator"]
         (fun args flow ->
            let dict_addr = match ekind @@ List.hd args with
-             | E_py_object ({addr_kind = Py_list.A_py_iterator ("dict_keyiterator", a, _)}, _) -> a
+             | E_py_object ({addr_kind = Py_list.A_py_iterator ("dict_keyiterator", [a], _)}, _) -> a
              | _ -> assert false in
            let var_k = match akind dict_addr with
              | A_py_dict (k, v) -> k
@@ -346,7 +346,7 @@ struct
       Utils.check_instances man flow range args ["dict_valueiterator"]
         (fun args flow ->
            let dict_addr = match ekind @@ List.hd args with
-             | E_py_object ({addr_kind = Py_list.A_py_iterator ("dict_valueiterator", a, _)}, _) -> a
+             | E_py_object ({addr_kind = Py_list.A_py_iterator ("dict_valueiterator", [a], _)}, _) -> a
              | _ -> assert false in
            let var_v = match akind dict_addr with
              | A_py_dict (k, v) -> v
@@ -363,7 +363,7 @@ struct
       Utils.check_instances man flow range args ["dict_itemiterator"]
         (fun args flow ->
            let dict_addr = match ekind @@ List.hd args with
-             | E_py_object ({addr_kind = Py_list.A_py_iterator ("dict_itemiterator", a, _)}, _) -> a
+             | E_py_object ({addr_kind = Py_list.A_py_iterator ("dict_itemiterator", [a], _)}, _) -> a
              | _ -> assert false in
            let var_k, var_v = match akind dict_addr with
              | A_py_dict (k, v) -> k, v

@@ -35,6 +35,10 @@ let () =
         {exprs = elts; stmts = [];},
         (fun parts -> {exp with ekind = E_py_list(parts.exprs)})
 
+      | E_py_set elts ->
+        {exprs = elts; stmts = [];},
+        (fun parts -> {exp with ekind = E_py_set(parts.exprs)})
+
       | E_py_tuple elts ->
         {exprs = elts; stmts = [];},
         (fun parts -> {exp with ekind = E_py_tuple(parts.exprs)})

@@ -47,7 +47,8 @@ module Domain =
     let eval zs exp man flow =
       let range = erange exp in
       match ekind exp with
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "bool.__new__")}, _)}, [cls; arg], []) ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_class (C_builtin "bool", _)}, _)}, [arg], [])
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "bool.__new__")}, _)}, [_; arg], []) ->
          (* FIXME: check: According to the documentation: By default,
             an object is considered true unless its class defines
             either a __bool__() method that returns False or a __l

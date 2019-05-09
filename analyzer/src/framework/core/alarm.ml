@@ -123,7 +123,7 @@ let () =
   register_token {
     compare = (fun next tk1 tk2 ->
         match tk1, tk2 with
-        | T_alarm a1, T_alarm a2 -> compare a1 a2
+        | T_alarm a1, T_alarm a2 -> compare_alarm a1 a2
         | _ -> next tk1 tk2
       );
     print = (fun next fmt tk ->

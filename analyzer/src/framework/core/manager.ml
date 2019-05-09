@@ -204,7 +204,9 @@ let exec_eval
       (fun ctx e flow cleaners ->
          let flow = Flow.set_ctx ctx flow in
          match e with
-         | None -> ctx, flow
+         | None ->
+           let flow' = exec_block_on_all_flows cleaners man flow in
+           Flow.get_ctx flow', flow'
          | Some ee ->
            let flow' = f ee flow in
            let flow'' = exec_block_on_all_flows cleaners man flow' in
@@ -227,7 +229,9 @@ let post_eval
       (fun ctx e flow cleaners ->
          let flow = Flow.set_ctx ctx flow in
          match e with
-         | None -> ctx, Post.return flow
+         | None ->
+           let post' = exec_block_on_all_flows cleaners man flow |> Post.return in
+           Post.choose_ctx post', post'
          | Some ee ->
            let post = f ee flow in
            let post' = Post.bind (fun flow ->
@@ -249,14 +253,18 @@ let post_eval_with_cleaners
     (evl:('e, 'a) Eval.eval)
   : 'a post
   =
+  let f' e flow cleaners  =
+    match e with
+    | None ->
+      exec_block_on_all_flows cleaners man flow |> Post.return
+    | Some e ->
+      f e flow cleaners
+  in
   let ctx, ret = Eval.fold_apply
       (fun ctx e flow cleaners ->
          let flow = Flow.set_ctx ctx flow in
-         match e with
-         | None -> ctx, Post.return flow
-         | Some ee ->
-           let post = f ee flow cleaners in
-           Post.choose_ctx post, post
+         let post = f' e flow cleaners in
+         Post.choose_ctx post, post
       )
       Post.join
       (Post.meet man.lattice)

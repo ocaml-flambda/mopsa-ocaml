@@ -32,7 +32,7 @@ module Domain =
     let debug fmt = Debug.debug ~channel:name fmt
 
     let interface = {
-      iexec = {provides = [Zone.Z_py]; uses = []};
+      iexec = {provides = [Zone.Z_py]; uses = [Zone.Z_py]};
       ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
     }
 
@@ -63,8 +63,11 @@ module Domain =
       let range = srange stmt in
       match skind stmt with
       | S_py_if (test, sthen, selse) ->
-        man.exec (mk_if (Utils.mk_builtin_call "bool" [test] range) sthen selse range) flow
-        |> Post.return |> Option.return
+        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (Utils.mk_builtin_call "bool" [test] range) flow |>
+        post_eval man (fun exp flow ->
+            man.exec ~zone:Zone.Z_py (mk_if exp sthen selse range) flow |> Post.return
+          )
+        |> Option.return
 
       | _ -> None
 

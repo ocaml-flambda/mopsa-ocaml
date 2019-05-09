@@ -52,42 +52,45 @@ module Domain =
        *   panic_at range "call %a can not be resolved" pp_expr exp *)
 
       | E_py_call(f, args, []) ->
+        let start = Timing.start () in
         debug "Calling %a from %a" pp_expr exp pp_range exp.erange;
-        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) f flow |>
-        Eval.bind
-          (fun f flow ->
-             debug "f is now %a" pp_expr f;
-             match ekind f with
-             (* Calls on non-object variables and constants is not allowed *)
-             | E_var _ | E_constant _ ->
-               let stmt = Utils.mk_builtin_raise "TypeError" range in
-               let flow = man.exec stmt flow in
-               Eval.empty_singleton flow
+        let res =
+          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) f flow |>
+          Eval.bind
+            (fun f flow ->
+               debug "f is now %a" pp_expr f;
+               match ekind f with
+               (* Calls on non-object variables and constants is not allowed *)
+               | E_var _ | E_constant _ ->
+                 let stmt = Utils.mk_builtin_raise "TypeError" range in
+                 let flow = man.exec stmt flow in
+                 Eval.empty_singleton flow
 
-             (* Calls on other kinds of addresses is handled by other domains *)
-             | E_py_object ({addr_kind = A_py_class _}, _)
-             | E_py_object ({addr_kind = A_py_function _}, _)
-             | E_py_object ({addr_kind = A_py_method _}, _)
-             | E_py_object ({addr_kind = A_py_module _}, _) ->
+               (* Calls on other kinds of addresses is handled by other domains *)
+               | E_py_object ({addr_kind = A_py_class _}, _)
+               | E_py_object ({addr_kind = A_py_function _}, _)
+               | E_py_object ({addr_kind = A_py_method _}, _)
+               | E_py_object ({addr_kind = A_py_module _}, _) ->
 
-               (* Eval.eval_list args (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
-                * Eval.bind (fun args flow -> *)
-                   let exp = {exp with ekind = E_py_call(f, args, [])} in
-                   man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) exp flow
-                 (* ) *)
+                 (* Eval.eval_list args (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+                  * Eval.bind (fun args flow -> *)
+                 let exp = {exp with ekind = E_py_call(f, args, [])} in
+                 man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) exp flow
+               (* ) *)
 
-             | _ ->
-               (* if f has attribute call, restart with that *)
-               assume_eval
-                 (mk_py_hasattr f "__call__" range)
-                 ~fthen:(fun flow ->
-                     man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_attr f "__call__" range) args range) flow)
-                 ~felse:(fun flow ->
-                     debug "callable/E_py_call, on %a@\n" pp_expr f; assert false
-                   )
-                 man flow
-          )
-        |> Option.return
+               | _ ->
+                 (* if f has attribute call, restart with that *)
+                 assume_eval
+                   (mk_py_hasattr f "__call__" range)
+                   ~fthen:(fun flow ->
+                       man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_attr f "__call__" range) args range) flow)
+                   ~felse:(fun flow ->
+                       debug "callable/E_py_call, on %a@\n" pp_expr f; assert false
+                     )
+                   man flow
+            ) in
+        Debug.debug ~channel:"profiling" "Call %a: %.4f" pp_expr f (Timing.stop start);
+        res |> Option.return
 
       | E_py_call(f, args, _) ->
         panic_at range "calls with keyword arguments not supported"

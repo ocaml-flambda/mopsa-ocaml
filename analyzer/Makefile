@@ -72,7 +72,7 @@ lang.c.libs = libmopsa libc
 lang.c.resources = common file
 lang.c.resources.file = slot table domain
 
-lang.python = ast addr utils visitor operators pp frontend zone		\
+lang.python = ast addr utils visitor  operators pp ast_compare frontend zone		\
               alarms libs desugar objects data_model types flows program
 lang.python.objects = class function range nones py_list tuple dict py_set
 lang.python.data_model = callable arith_ops compare_ops aug_assign	\
