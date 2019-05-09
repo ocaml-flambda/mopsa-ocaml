@@ -312,7 +312,7 @@ def main():#runner, args):
 #         cmd.extend(("--filename", args.filename))
 
 
-if __name__ == "__main__":
+# if __name__ == "__main__":
     # runner = perf.Runner(add_cmdline_args=add_cmdline_args)
     # runner.metadata['description'] = "Create chaosgame-like fractals"
     # cmd = runner.argparser
@@ -338,4 +338,12 @@ if __name__ == "__main__":
 
     # args = runner.parse_args()
     # main(runner, args)
+def test_main():
+    import mopsa
     main()
+    mopsa.ignore_exception(ValueError)
+    mopsa.ignore_exception(OverflowError)
+    mopsa.ignore_exception(IndexError)
+    mopsa.assert_exception_exists(TypeError)
+    mopsa.ignore_exception(TypeError)
+    mopsa.assert_safe()

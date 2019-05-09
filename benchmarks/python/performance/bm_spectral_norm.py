@@ -68,10 +68,15 @@ def bench_spectral_norm(loops):
     return 0 #perf.perf_counter() - t0
 
 
-if __name__ == "__main__":
+#if __name__ == "__main__":
     # runner = perf.Runner()
     # runner.metadata['description'] = (
     #     'MathWorld: "Hundred-Dollar, Hundred-Digit Challenge Problems", '
     #     'Challenge #3.')
     # runner.bench_time_func('spectral_norm', bench_spectral_norm)
+def test_main():
+    import mopsa
     bench_spectral_norm(50)
+    mopsa.assert_exception_exists(UnboundLocalError)
+    mopsa.ignore_exception(UnboundLocalError)
+    mopsa.assert_safe()

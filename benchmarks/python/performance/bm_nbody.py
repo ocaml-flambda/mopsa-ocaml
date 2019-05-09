@@ -16,6 +16,8 @@ Modified by Tupteq, Fredrik Johansson, and Daniel Nanz.
 
 # import perf
 # from six.moves import xrange
+import mopsa
+
 
 __contact__ = "collinwinter@google.com (Collin Winter)"
 DEFAULT_ITERATIONS = 20000
@@ -74,6 +76,7 @@ BODIES = {
 
 SYSTEM = [x for x in BODIES.values()] #list(BODIES.values())
 PAIRS = combinations(SYSTEM)
+mopsa.ignore_exception(IndexError)
 
 
 def advance(dt, n, bodies=SYSTEM, pairs=PAIRS):
@@ -140,7 +143,7 @@ def bench_nbody(loops, reference, iterations):
 #     cmd.extend(("--iterations", str(args.iterations)))
 
 
-if __name__ == '__main__':
+# if __name__ == '__main__':
     # runner = perf.Runner(add_cmdline_args=add_cmdline_args)
     # runner.metadata['description'] = "n-body benchmark"
     # runner.argparser.add_argument("--iterations",
@@ -155,4 +158,11 @@ if __name__ == '__main__':
     # args = runner.parse_args()
     # runner.bench_time_func('nbody', bench_nbody,
     #                        args.reference, args.iterations)
+def test_main():
     res = bench_nbody(100, DEFAULT_REFERENCE, DEFAULT_ITERATIONS)
+    mopsa.ignore_exception(ValueError)
+    mopsa.ignore_exception(KeyError)
+    mopsa.assert_exception_exists(UnboundLocalError)
+    mopsa.ignore_exception(UnboundLocalError)
+    mopsa.ignore_exception(IndexError)
+    mopsa.assert_safe()

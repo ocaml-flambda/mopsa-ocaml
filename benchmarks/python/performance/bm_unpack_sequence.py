@@ -4,6 +4,7 @@
 # import perf
 # from six.moves import xrange
 
+import mopsa
 
 def do_unpacking(loops, to_unpack):
     range_it = range(loops)
@@ -429,7 +430,11 @@ def bench_list_unpacking(loops):
 
 def bench_all(loops):
     dt2 = bench_list_unpacking(loops)
+    mopsa.assert_exception_exists(ValueError)
+    mopsa.ignore_exception(ValueError)
+    mopsa.assert_safe()
     dt1 = bench_tuple_unpacking(loops)
+    mopsa.assert_safe()
     # on perd 20s en changeant l'ordre
     # j'ai l'impression que les tuples prennent moins de temps que les listes aussi (de manière non négligeable)
     return 0 # dt1 + dt2
@@ -440,7 +445,7 @@ def bench_all(loops):
 #         cmd.append(args.benchmark)
 
 
-if __name__ == "__main__":
+# if __name__ == "__main__":
     # benchmarks = {"tuple": bench_tuple_unpacking,
     #               "list": bench_list_unpacking}
 
@@ -460,4 +465,5 @@ if __name__ == "__main__":
     #     func = bench_all
 
     # runner.bench_time_func(name, func, inner_loops=400)
+def test_main():
     bench_all(400)
