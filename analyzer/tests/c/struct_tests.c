@@ -1,14 +1,9 @@
 #include "mopsa.h"
 
 typedef struct {
-  int x;
-  int y;
+  char x;
+  char y;
 } point;
-
-typedef struct {
-  point p1;
-  point p2;
-} segment;
 
 
 void test_struct_field_in_lval() {
@@ -31,12 +26,9 @@ void test_initialization_with_expression_list() {
 }
 
 point global_point;
-segment global_segment;
-
 
 void test_initialization_uninitialized_global_struct() {
   _mopsa_assert(global_point.x == 0);
-  _mopsa_assert(global_segment.p1.y == 0);
 }
 
 void test_initialization_with_designated_names() {

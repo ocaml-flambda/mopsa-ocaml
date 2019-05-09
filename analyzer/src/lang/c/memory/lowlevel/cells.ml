@@ -634,7 +634,7 @@ struct
     (* Initialize cells, but expand at most !opt_expand cells, as
        defined by the option -cell-expand *)
     let rec aux o i l flow =
-      if i = !opt_expand
+      if i = !opt_expand || List.length l = 0
       then Post.return flow
       else
         let c, init, tl, o' =
@@ -797,8 +797,8 @@ struct
   (** {2 Abstract evaluations} *)
   (** ************************ *)
 
-  (** 𝔼⟦ *p ⟧ *)
-  let deref p mode range man flow =
+  (** 𝔼⟦ *p ⟧ where p is a pointer to a scalar *)
+  let deref_scalar_pointer p mode range man flow =
     (* Expand *p into cells *)
     expand p range man flow |>
     Eval.bind @@ fun c flow ->
@@ -814,6 +814,20 @@ struct
       Eval.singleton (mk_var v ~mode range) flow
 
 
+  (* 𝔼⟦ *p ⟧ where p is a pointer to a function *)
+  let deref_function_pointer p range man flow =
+    man.eval ~zone:(Z_c_low_level,Z_c_points_to) p flow |>
+    Eval.bind @@ fun pt flow ->
+
+    match ekind pt with
+    | E_c_points_to (P_fun f) ->
+      Eval.singleton (mk_expr (E_c_function f) ~etyp:(under_type p.etyp) range) flow
+
+    | _ -> panic_at range "deref_function_pointer: pointer %a points to a non-function object %a"
+             pp_expr p
+             pp_expr pt
+
+
 
   let eval zone exp man flow =
     match ekind exp with
@@ -824,8 +838,12 @@ struct
       Eval.singleton (mk_var vv ~mode exp.erange) flow |>
       Option.return
 
-    | E_c_deref p when is_c_scalar_type @@ under_type p.etyp ->
-      deref p STRONG exp.erange man flow |>
+    | E_c_deref p when under_type p.etyp |> is_c_scalar_type  ->
+      deref_scalar_pointer p STRONG exp.erange man flow |>
+      Option.return
+
+    | E_c_deref p when under_type p.etyp |> is_c_function_type ->
+      deref_function_pointer p exp.erange man flow |>
       Option.return
 
     | E_c_address_of {ekind = E_c_deref p} ->
