@@ -148,8 +148,6 @@ let print ~(pp: Format.formatter -> 'e -> unit) fmt (evl: ('e, 'a) eval) : unit 
          | Some x -> pp fmt x
         )
         case.eval_result
-        (* (Format.pp_print_list pp_stmt)
-         * case.eval_cleaners *)
     )
     fmt evl
 

@@ -179,7 +179,7 @@ struct
       ) map
 
   let post ?(zone = any_zone) (stmt: stmt) man (flow: Domain.t flow) : Domain.t post =
-    Debug_tree.reach stmt.srange (*(Location.untag_range stmt.srange)*);
+    Debug_tree.reach stmt.srange;
     Debug_tree.exec stmt zone man flow;
 
     let timer = Timing.start () in

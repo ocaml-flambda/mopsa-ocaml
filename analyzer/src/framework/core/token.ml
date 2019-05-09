@@ -83,13 +83,9 @@ struct
     top_included
       (Map.for_all2zo
          (fun tk v1 ->
-            (* Format.printf "%a exists only left@\n" pp_token tk; *)
             lattice.is_bottom v1) (* non-⊥ ⊈ ⊥ *)
          (fun _ v2 -> true)  (* ⊥ ⊆ non-⊥ *)
          (fun tk v1 v2 ->
-            (* let res = lattice.subset v1 v2 in
-             * Format.printf "%a -> subset? %b@\n" pp_token tk res;
-             * res) *)
             lattice.subset v1 v2)
       )
       tmap1 tmap2
