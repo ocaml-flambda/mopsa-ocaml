@@ -130,7 +130,7 @@ let () =
         match a.alarm_kind with
         | A_fail_assert(cond) -> Format.fprintf fmt "Assertion fail"
         | A_may_assert(cond) -> Format.fprintf fmt "Assertion unproven"
-        | A_panic_test(msg, f, loc) -> Format.fprintf fmt "Panic"
+        | A_panic_test(msg, f, loc) -> Format.fprintf fmt "Panic in test %s: %s" f msg
         | _ -> next fmt a
       );
     pp_report = (fun next fmt a ->
@@ -267,6 +267,8 @@ struct
     List.fold_left (fun (acc, nb_ok, nb_fail, nb_may_fail, nb_panic) (name, test) ->
         debug "Executing %s" name;
         try
+          (* Fold the context *)
+          let flow = Flow.copy_ctx acc flow in
           (* Call the function *)
           let flow1 = man.exec test flow in
           let ok, fail, may_fail = Flow.fold (fun (ok, fail, may_fail) tk env ->
