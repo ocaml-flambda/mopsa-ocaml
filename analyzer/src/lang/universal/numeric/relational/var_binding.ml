@@ -32,7 +32,7 @@ let vars_ctx_key =
     struct
       type t = VarEquiv.t
       let print fmt m =
-        Format.fprintf fmt "Apron vars: @[%a@]" VarEquiv.print m
+        Format.fprintf fmt "Apron vars: @[%a@]" (VarEquiv.print ?pp_sep:None) m
     end
     )
   in
@@ -65,7 +65,7 @@ let vars_to_apron ctx (l:var list) =
   List.fold_left (fun (accv,ctx) v ->
       let vv, ctx = var_to_apron ctx v in
       (vv::accv),ctx
-    ) ([],ctx) l 
+    ) ([],ctx) l
 
 let apron_to_var ctx v =
   let bindings = get_ctx ctx in
