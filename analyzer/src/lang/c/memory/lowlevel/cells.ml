@@ -578,6 +578,26 @@ struct
         set_domain_env T_cur { a with cells = CellSet.add c a.cells } man flow
 
 
+  (** Remove cells overlapping with cell [c] *)
+  let remove_overlappings c range man flow =
+    let a = get_domain_env T_cur man flow in
+    let overlappings = get_overlappings c a in
+
+    let a' =
+      overlappings |>
+      List.fold_left (fun a c' -> {a with cells = CellSet.remove c' a.cells}) a
+    in
+
+    let flow' = set_domain_env T_cur a' man flow in
+
+    List.fold_left (fun acc c' ->
+        acc |> Post.bind @@ fun flow ->
+        let v', flow = mk_cell_var_with_flow c' flow in
+        let stmt = mk_remove_var v' range in
+        man.exec_sub ~zone:Z_c_scalar stmt flow
+      ) (Post.return flow') overlappings
+
+
 
   (** {2 Initial state} *)
   (** ***************** *)
@@ -682,13 +702,16 @@ struct
       panic_at range "lval *%a can not be expanded" pp_expr p
 
     | Some c ->
-      let v, flow = mk_cell_var_with_flow c flow in
+      let flow = map_domain_env T_cur (fun a -> { a with cells = CellSet.add c a.cells }) man flow in
 
+      let v, flow = mk_cell_var_with_flow c flow in
       man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow |>
       post_eval man @@ fun e flow ->
 
       let stmt = mk_assign (mk_var v ~mode range) e range in
-      man.exec_sub ~zone:Z_c_scalar stmt flow
+      man.exec_sub ~zone:Z_c_scalar stmt flow |>
+
+      Post.bind @@ remove_overlappings c range man
 
 
   (** 𝕊⟦ ?e ⟧ *)
@@ -700,6 +723,7 @@ struct
     man.exec_sub ~zone:Z_c_scalar stmt flow
 
 
+  (* 𝕊⟦ remove v ⟧ *)
   let remove_var v range man flow =
     let a = get_domain_env T_cur man flow in
     let cells = find_cells (fun c -> compare_base c.base (V v) = 0) a in
@@ -726,12 +750,16 @@ struct
     | S_assign(({ekind = E_var(v, mode)} as lval), e) when is_c_scalar_type v.vtyp ->
       Some (
         let c = mk_cell (V v) Z.zero v.vtyp in
+        let flow = map_domain_env T_cur (fun a -> { a with cells = CellSet.add c a.cells }) man flow in
+
         let vv, flow = mk_cell_var_with_flow c flow in
         man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow |>
         post_eval man @@ fun e flow ->
 
         let stmt = mk_assign (mk_var vv ~mode lval.erange) e stmt.srange in
-        man.exec_sub ~zone:Z_c_scalar stmt flow
+        man.exec_sub ~zone:Z_c_scalar stmt flow |>
+
+        Post.bind @@ remove_overlappings c stmt.srange man
       )
 
     | S_assign(({ekind = E_c_deref(p)}), e) when is_c_scalar_type @@ under_type p.etyp ->
@@ -802,6 +830,10 @@ struct
 
     | E_c_address_of {ekind = E_c_deref p} ->
       man.eval ~zone:(Z_c_low_level,Z_c_scalar) p flow |>
+      Option.return
+
+    | E_c_address_of _ ->
+      Eval.singleton exp flow |>
       Option.return
 
     | _ -> None

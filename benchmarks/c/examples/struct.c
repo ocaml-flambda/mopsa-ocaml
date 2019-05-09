@@ -13,7 +13,7 @@ typedef struct {
 
 
 int main() {
-  toto e = { .a = { .x = 1, .y = 10 }, .b = { .x = 2 } };
+  toto e = { .a = { .x = 1 }, .b = { .x = 2 } };
   e.a.x = 1;
   e.b.x = 3;
   e.a.y = 2;

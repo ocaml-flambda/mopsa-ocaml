@@ -62,7 +62,8 @@ struct
   (** {2 Abstract transformers} *)
   (** ========================= *)
 
-  (** The following functions flatten the initialization expression into a list of scalar initializations *)
+  (** The following functions flatten the initialization expression
+      into a list of scalar initializations *)
   let rec flatten_init init typ range =
     if is_c_scalar_type typ then flatten_scalar_init init typ range else
     if is_c_array_type typ  then flatten_array_init init typ range else
@@ -107,12 +108,11 @@ struct
       let rec aux i =
         if Z.equal (Z.of_int i) n then []
         else
-          let init =
-            if i < String.length s
-            then C_flat_expr (mk_c_character (String.get s i) range, under_typ)
-            else C_flat_expr (mk_c_character (char_of_int 0) range, under_typ)
-          in
-          init :: aux (i + 1)
+        if i < String.length s
+        then C_flat_expr (mk_c_character (String.get s i) range, under_typ) :: aux (i + 1)
+        else if i = String.length s
+        then C_flat_expr (mk_c_character (char_of_int 0) range, under_typ) :: aux (i + 1)
+        else [C_flat_none (Z.sub n (Z.of_int i))]
       in
       aux 0
 
@@ -315,14 +315,6 @@ struct
     in
     Eval.singleton exp' flow
 
-  (** 𝔼⟦ &*x ⟧ = x *)
-  let address_of_deref x exp range man flow =
-    man.eval ~zone:(Z_c, Z_c_low_level) x flow
-
-  (** 𝔼⟦ *&x ⟧ = x *)
-  let deref_address_of x exp range man flow =
-    man.eval ~zone:(Z_c, Z_c_low_level) x flow
-
 
   let eval zone exp man flow =
     match ekind exp with
@@ -344,14 +336,6 @@ struct
 
     | E_c_address_of { ekind = E_c_arrow_access(p, i, f) } ->
       address_of_arrow_access p i f exp exp.erange man flow |>
-      Option.return
-
-    | E_c_address_of { ekind = E_c_deref x } ->
-      address_of_deref x exp exp.erange man flow |>
-      Option.return
-
-    | E_c_deref { ekind = E_c_address_of x } ->
-      deref_address_of x exp exp.erange man flow |>
       Option.return
 
     | E_c_assign(lval, rval) ->

@@ -92,8 +92,7 @@ let () =
         | E_stub_primed _
         | E_unop _
         | E_binop _
-        | E_c_cast _                         -> Visit
-        (* ------------------------------------------- *)
+        | E_c_cast _
         | E_c_address_of _
         | E_c_deref _                        -> Visit
         (* ------------------------------------------- *)
