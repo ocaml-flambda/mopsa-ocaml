@@ -50,5 +50,8 @@ include Lattice
 include Id
 
 include Interface
+module Interface = Interface
 
 module Sig = Sig
+
+module Channel = Channel

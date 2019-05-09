@@ -40,7 +40,7 @@ struct
   let interface = {
     iexec = {
       provides = [];
-      uses = [Z_c]
+      uses = []
     };
 
     ieval = {
@@ -168,7 +168,7 @@ struct
       man.eval rval ~zone:(Z_c, Z_c_low_level) flow |>
       Eval.bind_some @@ fun rval flow ->
 
-      let flow = man.exec ~zone:Z_c (mk_assign lval rval exp.erange) flow in
+      let flow = man.exec (mk_assign lval rval exp.erange) flow in
       Eval.singleton rval flow
 
     | E_c_statement {skind = S_block l} ->
@@ -177,7 +177,7 @@ struct
         | {skind = S_expression e}::q ->
           let q' = List.rev q in
           let stmt' = mk_block q' (erange exp) in
-          let flow' = man.exec ~zone:Z_c stmt' flow in
+          let flow' = man.exec stmt' flow in
           man.eval ~zone:(Z_c, Z_c_low_level) e flow' |>
           Option.return
 
@@ -196,4 +196,4 @@ struct
 end
 
 let () =
-  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)
+  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)

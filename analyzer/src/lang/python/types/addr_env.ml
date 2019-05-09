@@ -279,7 +279,9 @@ struct
 
   let ask _ _ _ = None
 
+  let refine channel man flow = Channel.return flow
+
 end
 
 let () =
-  Framework.Core.Sig.Intermediate.Domain.register_domain (module Domain);
+  Framework.Core.Sig.Domain.Intermediate.register_domain (module Domain);

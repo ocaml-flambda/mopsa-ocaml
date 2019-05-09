@@ -14,9 +14,9 @@ struct
   module AD = Addr_env.Domain
   module TD = Typing.Domain
 
-  module Iter = Framework.Combiners.Domain.Sequence.Make
-      (Framework.Core.Sig.Intermediate.Domain.MakeLowlevelDomain(AD))
-      (Framework.Core.Sig.Intermediate.Domain.MakeLowlevelDomain(TD))
+  module Iter = Framework.Transformers.Domain.Lowlevel.Sequence.Make
+      (Framework.Core.Sig.Domain.Intermediate.MakeLowlevelDomain(AD))
+      (Framework.Core.Sig.Domain.Intermediate.MakeLowlevelDomain(TD))
 
   include Iter
 
@@ -176,6 +176,7 @@ struct
       )
     | _ -> Iter.ask query man flow
 
+
 end
 
-let () = Framework.Core.Sig.Lowlevel.Domain.register_domain (module Domain)
+let () = Framework.Core.Sig.Domain.Lowlevel.register_domain (module Domain)

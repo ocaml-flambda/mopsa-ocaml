@@ -25,12 +25,23 @@
 open Eq
 
 
-type _ domain
+type _ domain = ..
 (** Domain identifier *)
 
 
-val deq : 'a domain -> 'b domain -> ('a,'b) eq option
+type 'a domain_info = {
+  eq :  'b. 'b domain -> ('b,'a) eq option;
+}
+(** Descriptor of a domain identifier *)
+
+
+val register_domain_id : 'a domain_info -> unit
+(** Register a new descriptor *)
+
+
+val domain_id_eq : 'a domain -> 'b domain -> ('a,'b) eq option
 (** Equality witness of domain identifiers *)
+
 
 (** Generator of a new domain identifier *)
 module GenDomainId(
@@ -51,11 +62,24 @@ end
 (****************************************************************************)
 
 
-type _ value
+type _ value = ..
 (** Value identifier *)
 
+type 'a value_info = {
+  eq :  'b. 'b value -> ('b,'a) eq option;
+}
+(** Descriptor of a value identifier *)
 
-val veq : 'a value -> 'b value -> ('a,'b) eq option
+
+val register_value_id : 'a value_info -> unit
+(** Register a new descriptor *)
+
+
+val value_id_eq : 'a value -> 'b value -> ('a,'b) eq option
+(** Equality witness of value identifiers *)
+
+
+val value_id_eq : 'a value -> 'b value -> ('a,'b) eq option
 (** Equality witness of value identifiers *)
 
 (** Generator of a new value identifier *)
@@ -72,4 +96,3 @@ sig
   val display : string
   val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
 end
-

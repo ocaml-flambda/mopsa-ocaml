@@ -26,15 +26,20 @@ TARGET_NATIVES = mopsa
 mopsa = framework mopsa lang main
 
 # Framework
-framework = ast core lattices engines utils combiners output config
+framework = ast core lattices engines transformers output config
 framework.ast = program typ operator constant var expr stmt visitor all
 framework.core = query context zone token log lattice flow eval post manager \
-	         id interface sig callstack alarm debug_tree cache abstraction all
-framework.core.sig = lowlevel intermediate simplified stateless reduction
+	         id interface channel sig callstack alarm debug_tree cache \
+		 abstraction all
+framework.core.sig = value domain stacked
+framework.core.sig.value = lowlevel simplified reduction
+framework.core.sig.domain = lowlevel intermediate simplified stateless reduction
+framework.core.sig.stacked = lowlevel intermediate stateless reduction
 framework.lattices = partial_map powerset total_map
 framework.engines = engine automatic interactive
+framework.transformers = value domain stacked
 framework.output = text json factory
-framework.config = paths parser options
+framework.config = paths visitor typer parser options
 
 lang = universal repl stubs c python
 
@@ -47,7 +52,8 @@ lang.universal.heap = pool recency
 lang.universal.numeric = rounding values relational reductions
 lang.universal.numeric.values = intervals congruences
 lang.universal.numeric.values.intervals = integer float
-lang.universal.numeric.reductions = intervals_congruences
+lang.universal.numeric.relational = apron_manager var_binding apron_transformer factory octagon polyhedra
+lang.universal.numeric.reductions = intervals_congruences intervals
 
 lang.repl = frontend
 
@@ -57,10 +63,11 @@ lang.stubs = ast zone alarms iterator
 lang.c = ast pp visitor zone frontend alarms desugar memory libs iterators resources
 lang.c.iterators = program switch goto interproc
 lang.c.desugar = low_level record_copy loops stub_init cond_expr
-lang.c.memory = common cells pointers machine_numbers
+lang.c.memory = common cells strings scalars
 lang.c.memory.common = base points_to init_visitor
 lang.c.memory.cells = cell expand cell2scalar
-lang.c.memory.pointers = bases nonrel
+lang.c.memory.scalars = pointers machine_numbers
+lang.c.memory.scalars.pointers = bases nonrel
 lang.c.libs = libmopsa libc
 lang.c.resources = common file
 lang.c.resources.file = slot table domain

@@ -28,6 +28,7 @@ open Log
 open Context
 open Lattice
 
+
 (** Disjunction case of a post-state *)
 type 'a case = {
   tmap: ('a * log) TokenMap.t;
@@ -36,6 +37,10 @@ type 'a case = {
 
 (** Disjunction of journaling flows *)
 type 'a post = 'a case list
+
+
+let debug fmt = Debug.debug ~channel:"framework.core.post" fmt
+
 
 let return flow : 'a post =
   [
@@ -58,19 +63,23 @@ let print (lattice:'a lattice) fmt (post:'a post) : unit =
 let join (post1:'a post) (post2:'a post) =
   post1 @ post2
 
-let meet (lattice:'a lattice) (post1:'a post) (post2:'a post) : 'a post =
+
+let merge (f:token -> ('a*log) -> ('a*log) -> ('a*log)) (post1:'a post) (post2:'a post) : 'a post =
   List.fold_left (fun acc case1 ->
       acc @ List.map (fun case2 ->
           {
-            tmap = TokenMap.absorb2
-                (fun tk (e1,log1) (e2,log2) ->
-                   lattice.meet e1 e2, Log.concat log1 log2
-                )
-                case1.tmap case2.tmap;
+            tmap = TokenMap.absorb2 f case1.tmap case2.tmap;
             ctx = case2.ctx
           }
         ) post2
     ) [] post1
+
+
+let meet (lattice:'a lattice) (post1:'a post) (post2:'a post) : 'a post =
+  merge (fun token (a1,log1) (a2,log2) ->
+      lattice.meet a1 a2, Log.concat log1 log2
+    ) post1 post2
+
 
 let choose_ctx post =
   match post with

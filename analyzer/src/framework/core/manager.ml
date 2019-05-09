@@ -82,23 +82,12 @@ type 's sman = {
 }
 
 
-(*==========================================================================*)
-(**                         {2 Value manager}                              *)
-(*==========================================================================*)
-
-
-(** Manager for value abstractions *)
-type ('a, 't) vman = {
-  vget : 'a -> 't;
-  vset : 't -> 'a -> 'a;
-  veval : expr -> 'a;
-  vcast : 'r. 'r Id.value -> 'a -> 'r;
-}
-
 
 (*==========================================================================*)
 (**                        {2 Utility functions}                            *)
 (*==========================================================================*)
+
+let debug fmt = Debug.debug ~channel:"framework.core.manager" fmt
 
 let log_post_stmt stmt man post =
   Post.map_log (fun tk log ->

@@ -1,0 +1,163 @@
+(****************************************************************************)
+(*                                                                          *)
+(* This file is part of MOPSA, a Modular Open Platform for Static Analysis. *)
+(*                                                                          *)
+(* Copyright (C) 2017-2019 The MOPSA Project.                               *)
+(*                                                                          *)
+(* This program is free software: you can redistribute it and/or modify     *)
+(* it under the terms of the GNU Lesser General Public License as published *)
+(* by the Free Software Foundation, either version 3 of the License, or     *)
+(* (at your option) any later version.                                      *)
+(*                                                                          *)
+(* This program is distributed in the hope that it will be useful,          *)
+(* but WITHOUT ANY WARRANTY; without even the implied warranty of           *)
+(* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            *)
+(* GNU Lesser General Public License for more details.                      *)
+(*                                                                          *)
+(* You should have received a copy of the GNU Lesser General Public License *)
+(* along with this program.  If not, see <http://www.gnu.org/licenses/>.    *)
+(*                                                                          *)
+(****************************************************************************)
+
+
+open Ast.All
+open Core.All
+open Sig.Stacked.Intermediate
+open Sig.Stacked.Reduction
+open Core.Manager
+open Log
+
+(** The [Sequence.Product ∈ (𝒮 × ... × 𝒮) × (𝓡 × ... × 𝓡) → 𝒮] creates a
+    reduced product of stack domains, refined by a set of reduction rules.
+*)
+
+
+(** Specification of a reduced product *)
+module type SPEC =
+sig
+  type t
+  val pool : t slist
+  val rules : (module REDUCTION) list
+end
+
+
+module Make(Spec:SPEC) : STACK with type t = Spec.t =
+struct
+
+  type t = Spec.t
+
+  include Core.Id.GenDomainId(
+    struct
+      type typ = t
+      let name = "transformers.stacked.intermediate.product"
+    end
+    )
+
+  let interface =
+    let f = fun (type a) (m:a smodule) acc ->
+      let module S = (val m) in
+      Interface.concat acc S.interface
+    in
+    slist_fold { f } Spec.pool Interface.empty
+
+  let bottom : t =
+    let f = fun (type a) (m:a smodule) ->
+      let module S = (val m) in
+      S.bottom
+    in
+    slist_create { f } Spec.pool
+
+  let top : t =
+    let f = fun (type a) (m:a smodule) ->
+      let module S = (val m) in
+      S.top
+    in
+    slist_create { f } Spec.pool
+
+
+  let print fmt a =
+    let f = fun (type a) (m: a smodule) fmt aa ->
+      let module S = (val m) in
+      S.print fmt aa
+    in
+    slist_print { f } Spec.pool "" fmt a
+
+  let is_bottom a =
+    let f = fun (type a) (m: a smodule) aa ->
+      let module S = (val m) in
+      S.is_bottom aa
+    in
+    slist_exists { f } Spec.pool a
+
+
+  (** {2 Lattice operators} *)
+  (** ********************* *)
+
+  let subset sman (a1,s1) (a2,s2) =
+    let f = fun (type a) (m: a smodule) acc (a1,s1) (a2,s2) ->
+      let module S = (val m) in
+      let b, s1, s2 = S.subset sman (a1,s1) (a2,s2) in
+      b && acc, s1, s2
+    in
+    slist_fold_sub2 { f } Spec.pool true (a1,s1) (a2,s2)
+
+  let join sman (a1,s1) (a2,s2) =
+    let f = fun (type a) (m: a smodule) (a1,s1) (a2,s2) ->
+      let module S = (val m) in
+      S.join sman (a1,s1) (a2,s2)
+    in
+    slist_apply_sub2 { f } Spec.pool (a1,s1) (a2,s2)
+
+  let meet sman (a1,s1) (a2,s2) =
+    let f = fun (type a) (m: a smodule) (a1,s1) (a2,s2) ->
+      let module S = (val m) in
+      S.meet sman (a1,s1) (a2,s2)
+    in
+    slist_apply_sub2 { f } Spec.pool (a1,s1) (a2,s2)
+
+  let widen sman ctx (a1,s1) (a2,s2) =
+    let f = fun (type a) (m: a smodule) (a1,s1) (a2,s2) stable ->
+      let module S = (val m) in
+      let a, s1, s2, stable' = S.widen sman ctx (a1,s1) (a2,s2) in
+      a, s1, s2, stable && stable'
+    in
+    slist_fold_apply_sub_ext2 { f } Spec.pool (a1,s1) (a2,s2) true
+
+  let merge pre (a1,log1) (a2,log2) =
+    Exceptions.panic ~loc:__LOC__ "merge not implemented"
+
+
+  (** {2 Transfer functions} *)
+  (** ********************** *)
+
+  let init prog man flow =
+    let f = fun (type a) (m:a smodule) (man:('a,a) man) flow ->
+      let module S = (val m) in
+      S.init prog man flow
+    in
+    slist_man_fold { f } Spec.pool man flow
+
+
+  let exec zone stmt man flow =
+    Exceptions.panic ~loc:__LOC__ "exec not implemented"
+
+
+  let eval zone exp man flow =
+    Exceptions.panic ~loc:__LOC__ "eval not implemented"
+
+
+  let ask query man flow =
+    let f = fun (type a) (m:a smodule) (man:('a,a) man) acc ->
+      let module S = (val m) in
+      S.ask query man flow |>
+      Option.neutral2 (fun ret1 ret2 ->
+          Query.meet query ret1 ret2
+        ) acc
+    in
+    slist_man_fold { f } Spec.pool man None
+
+  let refine channel man flow =
+    Exceptions.panic ~loc:__LOC__ "refine not implemented"
+
+
+end

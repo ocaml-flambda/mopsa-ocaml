@@ -66,7 +66,6 @@ let report ?(flow=None) man alarms states time files out =
     match states with
     | [] -> ()
     | _ ->
-      let open Combiners.Value.Nonrel in
       print out "reachable states:@.";
       List.iter (fun (range, (pre,post)) ->
           print out "%a:@\n  pre:@\n    @[%a@]@\n  post:@\n    @[%a@]@."

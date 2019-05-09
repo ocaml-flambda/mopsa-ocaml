@@ -613,35 +613,39 @@ let mk_float_interval ?(prec=F_DOUBLE) a b range =
 let mk_string s =
   mk_constant ~etyp:T_string (C_string s)
 
-let mk_in ?(strict = false) ?(left_strict = false) ?(right_strict = false) v e1 e2 erange =
+let mk_in ?(strict = false) ?(left_strict = false) ?(right_strict = false) ?(etyp=T_bool) v e1 e2 erange =
   match strict, left_strict, right_strict with
   | true, _, _
   | false, true, true ->
     mk_binop
-      (mk_binop e1 O_lt v erange)
+      (mk_binop e1 O_lt v ~etyp erange)
       O_log_and
-      (mk_binop v O_lt e2 erange)
+      (mk_binop v O_lt e2 ~etyp erange)
+      ~etyp
       erange
 
   | false, true, false ->
     mk_binop
-      (mk_binop e1 O_lt v erange)
+      (mk_binop e1 O_lt v ~etyp erange)
       O_log_and
-      (mk_binop v O_le e2 erange)
+      (mk_binop v O_le e2 ~etyp erange)
+      ~etyp
       erange
 
   | false, false, true ->
     mk_binop
-      (mk_binop e1 O_le v erange)
+      (mk_binop e1 O_le v ~etyp erange)
       O_log_and
-      (mk_binop v O_lt e2 erange)
+      (mk_binop v O_lt e2 ~etyp erange)
+      ~etyp
       erange
 
   | false, false, false ->
     mk_binop
-      (mk_binop e1 O_le v erange)
+      (mk_binop e1 O_le v ~etyp erange)
       O_log_and
-      (mk_binop v O_le e2 erange)
+      (mk_binop v O_le e2 ~etyp erange)
+      ~etyp
       erange
 
 let mk_zero = mk_int 0
@@ -669,8 +673,7 @@ let mk_alloc_addr addr_kind ?(mode=STRONG) range =
   mk_expr (E_alloc_addr (addr_kind, mode)) ~etyp:T_addr range
 
 let is_int_type = function
-  | T_int -> true
-  | T_bool -> true
+  | T_int | T_bool -> true
   | _ -> false
 
 let is_float_type = function
@@ -678,7 +681,7 @@ let is_float_type = function
   | _ -> false
 
 let is_numeric_type = function
-  | T_int | T_float _ -> true
+  | T_bool | T_int | T_float _ -> true
   | _ -> false
 
 let is_math_type = function

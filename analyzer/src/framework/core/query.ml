@@ -41,16 +41,16 @@ let join : type r. r query -> r -> r -> r = fun q a b ->
   !chain.join q a b
 
 let meet : type r. r query -> r -> r -> r = fun q a b ->
-  !chain.join q a b
+  !chain.meet q a b
 
 type query_info = {
   query_join : 'r. query_pool -> 'r query -> 'r -> 'r -> 'r;
   query_meet : 'r. query_pool -> 'r query -> 'r -> 'r -> 'r;
 }
 
-let register_query info = 
+let register_query info =
   let next = !chain in
   chain := {
     join = (fun q a b -> info.query_join next q a b);
-    meet = (fun q a b -> info.query_meet next q a b)               
+    meet = (fun q a b -> info.query_meet next q a b);
   }

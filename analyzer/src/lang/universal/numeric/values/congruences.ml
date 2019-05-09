@@ -22,7 +22,7 @@
 (** Congruence abstraction of integer values. *)
 
 open Mopsa
-open Core.Sig.Simplified.Value
+open Core.Sig.Value.Simplified
 open Ast
 open Bot
 
@@ -144,6 +144,8 @@ struct
       bottom, bottom
 
   let ask query eval = None
+
+  let refine channel v = Channel.return v
 
 end
 

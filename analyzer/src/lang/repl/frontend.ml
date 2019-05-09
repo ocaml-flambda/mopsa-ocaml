@@ -30,37 +30,37 @@ open Universal.Ast
 open Universal.Frontend
 open Universal.Zone
 open Debug
-   
-   
-          
+
+
+
 (** {2 Interpreter state} *)
 (** ********************* *)
 
-   
+
 type ctx = {
     ctx_var: var_context;
     ctx_fun: fun_context;
   }
 
-          
+
 let init_ctx () = {
     ctx_var = MS.empty;
     ctx_fun = MS.empty;
   }
 
 
-                
+
 (** {2 Parsing} *)
 (** *********** *)
-                
+
 
 let range_of_string ?(org=0) (str:string) : range =
   mk_orig_range
     (mk_pos "<input>" 0 org)
     (mk_pos "<input>" 0 (org + String.length str))
-  
 
-(** Helper to parse a string using a menhir parser entry point. *)  
+
+(** Helper to parse a string using a menhir parser entry point. *)
 let parse_string ?(org=0) parser str =
   let lex = from_string str in
   try
@@ -69,12 +69,12 @@ let parse_string ?(org=0) parser str =
   with
   | U_parser.Error ->
      let range = from_lexing_range (Lexing.lexeme_start_p lex) (Lexing.lexeme_end_p lex) in
-     Exceptions.syntax_error range "Syntax error" str     
+     Exceptions.syntax_error range "Syntax error" str
   | Failure s ->
      let range = from_lexing_range (Lexing.lexeme_start_p lex) (Lexing.lexeme_end_p lex) in
      Exceptions.syntax_error range "%s" str
 
-(** Parse an expression. *)          
+(** Parse an expression. *)
 let parse_expr ?org (ctx:ctx) (str:string) : expr =
   let ast = parse_string ?org U_parser.expr_eof str in
   from_expr ast (range_of_string ?org str) ctx.ctx_var (Some ctx.ctx_fun)
@@ -84,7 +84,7 @@ let parse_stmt ?org (ctx:ctx) (str:string) : stmt =
   let ast = parse_string ?org U_parser.stat_eof str in
   from_stmt ast (range_of_string ?org str) ctx.ctx_var (Some ctx.ctx_fun)
 
-(** Parse a variable declaration. *)  
+(** Parse a variable declaration. *)
 let parse_vardec ?org (ctx:ctx) (str:string) : ctx * stmt list * var list =
   let ast = parse_string ?org U_parser.declaration_eof str in
   let range = range_of_string ?org str in
@@ -93,7 +93,7 @@ let parse_vardec ?org (ctx:ctx) (str:string) : ctx * stmt list * var list =
   in
   { ctx with ctx_var = var_ctx; }, init, gvar
 
-(** Parse a function declaration. *)  
+(** Parse a function declaration. *)
 let parse_fundec ?org (ctx:ctx) (str:string) : ctx * fundec =
   let ast = parse_string ?org U_parser.fundec_eof str in
   let range = range_of_string ?org str in
@@ -103,35 +103,35 @@ let parse_fundec ?org (ctx:ctx) (str:string) : ctx * fundec =
   let body = from_stmt (fst ast.body) (snd ast.body) var_ctx2 (Some fun_ctx) in
   f.fun_body <- mk_block (init @ [body]) range;
   { ctx with ctx_fun = fun_ctx }, f
-  
+
 (** Parse a variable. *)
 let parse_var ?org (ctx:ctx) (str:string) : var =
   from_var str (range_of_string ?org str) ctx.ctx_var
 
-    
+
 type input_class =
   | VarDecl | FunDecl | Stmt
 
 let vardecl_str =
-  Str.regexp "\\(int\\|real\\|string\\|char\\)[ \t\r\n]+[a-zA-Z0-9]+[ \t\r\n]*[,;=].*" 
+  Str.regexp "\\(int\\|real\\|string\\|char\\)[ \t\r\n]+[a-zA-Z0-9]+[ \t\r\n]*[,;=].*"
 
 let fundecl_str =
-  Str.regexp "\\(int\\|real\\|string\\|char\\|void\\)[ \t\r\n]+[a-zA-Z0-9]+[ \t\r\n]*(.*" 
+  Str.regexp "\\(int\\|real\\|string\\|char\\|void\\)[ \t\r\n]+[a-zA-Z0-9]+[ \t\r\n]*(.*"
 
 (** Try to guess the nature of the input. *)
 let classify_input str =
   if Str.string_match vardecl_str str 0 then VarDecl
   else if Str.string_match fundecl_str str 0 then FunDecl
   else Stmt
-  
 
-              
+
+
 (** {2 Printing} *)
 (** ************ *)
 
 
 let eol = Str.regexp "\n\\|\r\\|\r\n"
-  
+
 (** Prints a string with some locations highlighted. *)
 let print_highlight (str:string) (range:range) =
   (* coloring *)
@@ -162,9 +162,9 @@ let print_highlight (str:string) (range:range) =
        doit (i+1) rest
   in
   doit 1 lines
-  
 
-      
+
+
 (** {2 Main loop} *)
 (** ************* *)
 
@@ -188,9 +188,9 @@ let print_usage () =
   pf "  <statement>;@.";
   pf "  <declaration>;@.";
   ()
-  
-              
-let rec repl_loop ctx man flow =  
+
+
+let rec repl_loop ctx man flow =
   pf "%s@?" prompt;
   let str = LineEdit.read_line repl_ctx in
   let quit = ref false in
@@ -201,11 +201,11 @@ let rec repl_loop ctx man flow =
       | [] | ["h"] | ["help"] | ["?"] ->
          print_usage ();
          ctx, flow
-        
+
       | ["quit"] | ["q"] ->
          quit := true;
          ctx, flow
-                  
+
       | ("print" | "p")::vars ->
          List.iter
            (fun v ->
@@ -213,7 +213,7 @@ let rec repl_loop ctx man flow =
              pf "%a@." (man.ask Framework.Engines.Interactive.Q_print_var flow) (uniq_vname var)
            ) vars;
          ctx, flow
-         
+
       | _ ->
          (* autodetect the command *)
          match classify_input str with
@@ -224,7 +224,7 @@ let rec repl_loop ctx man flow =
             let flow = man.exec stmt flow in
             pf "%s@[<v 4>%a@]%s@." col_out (Flow.print man.lattice) flow col_reset;
             ctx, flow
-            
+
          | VarDecl ->
             let ctx, stmts, vars = parse_vardec ctx str in
             let flow =
@@ -237,7 +237,7 @@ let rec repl_loop ctx man flow =
             pf "%s@[<v 4>X♯ ≜%s@." col_out col_reset;
             pf "%s%a%s@." col_out (Flow.print man.lattice) flow col_reset;
             ctx, flow
-            
+
          | FunDecl ->
             let ctx, fdec = parse_fundec ctx str in
             pf "function %s declared@." fdec.fun_name;
@@ -262,13 +262,13 @@ let rec repl_loop ctx man flow =
   if !quit then flow
   else repl_loop ctx man flow
 
-  
+
 (** Main loop. *)
 let enter_repl man flow =
   repl_loop (init_ctx ()) man flow
 
-          
-          
+
+
 (** {2 Interactive "program"} *)
 (*  ************************* *)
 
@@ -286,14 +286,14 @@ let () =
       );
     }
 
-(** Ignore files and return the constant P_REPL program. *)  
+(** Ignore files and return the constant P_REPL program. *)
 let parse_program files : program =
   if files <> [] then Exceptions.warn "File arguments in REPL are ignored";
   { prog_kind = P_REPL;
     prog_range = range_of_string "";
   }
 
-  
+
 module Domain = struct
 
   let name = "universal.repl"
@@ -311,15 +311,14 @@ module Domain = struct
     match skind stmt with
     | S_program { prog_kind = P_REPL } ->
        Some (Post.return (enter_repl man flow))
-      
+
     | _ -> None
 
   let eval zone exp man flow = None
 
   let ask query man flow = None
-  
+
 end
 
 let () =
-  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)
-  
+  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)

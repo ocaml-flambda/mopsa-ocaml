@@ -60,7 +60,7 @@ struct
       (man:('a, unit) man)
       (flow:'a flow)
     : 'a flow * 'a flow option =
-    debug "eval formula %a@\n%a" pp_formula f (Flow.print man.lattice) flow;
+    debug "eval formula@, %a@, in@, %a" pp_formula f (Flow.print man.lattice) flow;
     match f.content with
     | F_expr e ->
       man.exec (mk_assume e f.range) flow,
@@ -125,9 +125,10 @@ struct
         else Some (
             man.exec (mk_assume (
                 mk_binop
-                  (mk_binop e O_lt l f.range)
+                  (mk_binop e O_lt l ~etyp:T_bool f.range)
                   O_log_or
-                  (mk_binop e O_gt u f.range)
+                  (mk_binop e O_gt u ~etyp:T_bool f.range)
+                  ~etyp:T_bool
                   f.range
               ) f.range) flow
           )
@@ -154,24 +155,27 @@ struct
     let flow =
       match s, q with
       | S_interval (l, u), EXISTS ->
-        man.exec (mk_assume (mk_binop (mk_var v range) O_ge l range) range) flow |>
-        man.exec (mk_assume (mk_binop (mk_var v range) O_le u range) range)
+        man.exec (mk_assume (mk_binop (mk_var v range) O_ge l ~etyp:T_bool range) range) flow |>
+        man.exec (mk_assume (mk_binop (mk_var v range) O_le u ~etyp:T_bool range) range)
 
       | _ -> flow
     in
 
 
-    (* Replace [v] in [ff] with a quantified expression *)
+    (* Replace [v] in [ff] with a quantified expression in case of ∀ quantifier *)
     let ff1 =
-      visit_expr_in_formula
-        (fun e ->
-           match ekind e with
-           | E_var (vv, _) when compare_var v vv = 0 ->
-             Keep { e with ekind = E_stub_quantified (q, v, s) }
+      match q with
+      | EXISTS -> f
+      | FORALL ->
+        visit_expr_in_formula
+          (fun e ->
+             match ekind e with
+             | E_var (vv, _) when compare_var v vv = 0 ->
+               Keep { e with ekind = E_stub_quantified (FORALL, v, s) }
 
-           | _ -> VisitParts e
-        )
-        f
+             | _ -> VisitParts e
+          )
+          f
     in
 
     let ftrue, _ = eval_formula ff1 ~negate:false man flow in
@@ -191,9 +195,9 @@ struct
             (fun e ->
                match ekind e with
                | E_stub_quantified(FORALL, vv, s) when compare_var v vv = 0 ->
-                 VisitParts { e with ekind = E_stub_quantified(EXISTS, v, s) }
+                 VisitParts { e with ekind = E_var(vv, STRONG) }
 
-               | E_stub_quantified(EXISTS, vv, s) when compare_var v vv = 0 ->
+               | E_stub_quantified(EXISTS, vv, _) when compare_var v vv = 0 ->
                  VisitParts { e with ekind = E_stub_quantified(FORALL, v, s) }
 
                | _ -> VisitParts e
@@ -272,9 +276,20 @@ struct
 
   (** Execute an allocation of a new resource *)
   let exec_local_new v res range man flow =
+    (* Evaluation the allocation request *)
     man.eval (mk_stub_alloc_resource res range) flow |>
     exec_eval man @@ fun addr flow ->
+
+    (* Add the address dimension before doing the assignment *)
+    let flow =
+      match ekind addr with
+      | E_addr _ -> man.exec (mk_add addr range) flow
+      | _ -> flow
+    in
+
+    (* Assign the address to the variable *)
     man.exec (mk_assign (mk_var v range) addr range) flow
+
 
   (** Execute a function call *)
   (* FIXME: check the purity of f *)
@@ -467,4 +482,4 @@ struct
 end
 
 let () =
-  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)
+  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)

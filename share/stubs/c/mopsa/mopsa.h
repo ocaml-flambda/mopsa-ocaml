@@ -22,9 +22,6 @@
 #ifndef _MOPSA_H
 #define _MOPSA_H
 
-// Initialize argc and argv with symbolic values
-extern void _mopsa_init_symbolic_argc_argv();
-
 // Abstract values
 extern int _mopsa_rand();
 extern long int _mopsa_rand_int(long int l, long int u);

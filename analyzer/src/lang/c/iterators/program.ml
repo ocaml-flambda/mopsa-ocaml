@@ -141,8 +141,9 @@ struct
           panic "entry function %s not found" !opt_entry_function
       in
       debug "entering %s" !opt_entry_function;
+
       (* Special processing for main for initializing argc and argv*)
-      if !opt_entry_function = "main" then
+      if !opt_entry_function = "main" && List.length entry.c_func_parameters = 2 then
         exec_main entry c_globals c_functions man flow1 |>
         Post.return |>
         Option.return
@@ -201,4 +202,4 @@ struct
 end
 
 let () =
-  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)
+  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
