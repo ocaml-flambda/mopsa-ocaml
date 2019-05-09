@@ -261,20 +261,21 @@ struct
   let print fmt d =
     TMap.print fmt d
 
-  let subset d d' =
-    debug "subset %a %a..." print d print d';
-    let res = TMap.fold (fun absaddr ptys acc ->
-        if TMap.mem absaddr d' then
-          let ptys' = TMap.find absaddr d' in
-          debug "absaddr = %a, ptys' = %a@\n" pp_addr absaddr Polytypeset.print ptys';
-          (* acc && polytype_leq (pty, d.typevar_env) (pty', d'.typevar_env) *)
-          acc && (Polytypeset.is_top ptys' || Polytypeset.for_all (fun pty -> Polytypeset.exists (fun pty' -> polytype_leq pty pty') ptys') ptys)
-        else false
-      )
-        d true
-    in
-    debug "= %b@\n" res;
-    res
+  (* let subset d d' =
+   * (* not supporting correctly top and bottom *)
+   *   debug "subset %a %a..." print d print d';
+   *   let res = TMap.fold (fun absaddr ptys acc ->
+   *       if TMap.mem absaddr d' then
+   *         let ptys' = TMap.find absaddr d' in
+   *         debug "absaddr = %a, ptys' = %a@\n" pp_addr absaddr Polytypeset.print ptys';
+   *         (\* acc && polytype_leq (pty, d.typevar_env) (pty', d'.typevar_env) *\)
+   *         acc && (Polytypeset.is_top ptys' || Polytypeset.for_all (fun pty -> Polytypeset.exists (fun pty' -> polytype_leq pty pty') ptys') ptys)
+   *       else false
+   *     )
+   *       d true
+   *   in
+   *   debug "= %b@\n" res;
+   *   res *)
 
 
   let merge _ _ _ = assert false
