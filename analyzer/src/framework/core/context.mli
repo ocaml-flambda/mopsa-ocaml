@@ -99,3 +99,5 @@ val remove_unit : 'v ukey -> 'a ctx -> 'a ctx
 val remove_poly : ('a,'v) pkey -> 'a ctx -> 'a ctx
 
 val print : Format.formatter -> 'a ctx -> unit
+
+val get_most_recent : 'a ctx -> 'a ctx -> 'a ctx

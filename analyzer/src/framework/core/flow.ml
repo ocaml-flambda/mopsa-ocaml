@@ -62,15 +62,17 @@ let subset (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : bool =
   TokenMap.subset lattice (Context.get_unit flow2.ctx) flow1.tmap flow2.tmap
 
 let join (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
-  { tmap = TokenMap.join lattice (Context.get_unit flow2.ctx) flow1.tmap flow2.tmap; ctx = flow2.ctx }
+  let ctx = Context.get_most_recent flow1.ctx flow2.ctx in
+  { tmap = TokenMap.join lattice (Context.get_unit ctx) flow1.tmap flow2.tmap; ctx }
 
 let join_list lattice ?(ctx=Context.empty) l =
   match l with
   | [] -> bottom ctx
-  | l ->
-    let ctx  =
-      let last = List.nth l (List.length l - 1) in
-      last.ctx
+  | [f] -> f
+  | hd :: tl ->
+    let ctx  = List.fold_left (fun acc f ->
+        Context.get_most_recent acc f.ctx
+      ) hd.ctx tl
     in
 
     {
@@ -79,15 +81,17 @@ let join_list lattice ?(ctx=Context.empty) l =
     }
 
 let meet (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
-  { tmap = TokenMap.meet lattice (Context.get_unit flow2.ctx) flow1.tmap flow2.tmap; ctx = flow2.ctx }
+  let ctx = Context.get_most_recent flow1.ctx flow2.ctx in
+  { tmap = TokenMap.meet lattice (Context.get_unit ctx) flow1.tmap flow2.tmap; ctx }
 
 let meet_list lattice ?(ctx=Context.empty) l =
   match l with
   | [] -> bottom ctx
-  | l ->
-    let ctx  =
-      let last = List.nth l (List.length l - 1) in
-      last.ctx
+  | [f] -> f
+  | hd :: tl ->
+    let ctx  = List.fold_left (fun acc f ->
+        Context.get_most_recent acc f.ctx
+      ) hd.ctx tl
     in
     {
       tmap = TokenMap.meet_list lattice (Context.get_unit ctx) (List.map (function {tmap} -> tmap) l);
@@ -95,7 +99,8 @@ let meet_list lattice ?(ctx=Context.empty) l =
     }
 
 let widen (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
-  { tmap = TokenMap.widen lattice (Context.get_unit flow2.ctx) flow1.tmap flow2.tmap; ctx = flow2.ctx }
+    let ctx = Context.get_most_recent flow1.ctx flow2.ctx in
+    { tmap = TokenMap.widen lattice (Context.get_unit ctx) flow1.tmap flow2.tmap; ctx }
 
 let print (lattice: 'a lattice) fmt (flow : 'a flow) : unit =
   TokenMap.print lattice fmt flow.tmap
@@ -107,9 +112,10 @@ let set (tk: token) (a: 'a) (lattice:'a lattice) (flow: 'a flow) : 'a flow =
   { flow with tmap = TokenMap.set tk a lattice flow.tmap }
 
 let copy (tk1:token) (tk2:token) (lattice:'a lattice) (flow1:'a flow) (flow2:'a flow) : 'a flow =
+  let ctx = Context.get_most_recent flow1.ctx flow2.ctx in
   {
     tmap = TokenMap.copy tk1 tk2 lattice flow1.tmap flow2.tmap;
-    ctx = flow2.ctx;
+    ctx;
   }
 
 let add (tk: token) (a: 'a) (lattice: 'a lattice) (flow: 'a flow) : 'a flow =
@@ -130,9 +136,10 @@ let fold (f: 'b -> token -> 'a -> 'b) (init: 'b) (flow: 'a flow) : 'b =
   TokenMap.fold f init flow.tmap
 
 let merge (f: token -> 'a option -> 'a option -> 'a option) (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
+  let ctx = Context.get_most_recent flow1.ctx flow2.ctx in
   {
     tmap = TokenMap.merge f lattice flow1.tmap flow2.tmap;
-    ctx = flow2.ctx;
+    ctx;
   }
 
 let get_ctx flow = flow.ctx
