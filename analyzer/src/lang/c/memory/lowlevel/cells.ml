@@ -604,6 +604,44 @@ struct
       ) (Post.return flow') overlappings
 
 
+  (** Rename a cell and its associated scalar variable *)
+  let rename_cell old_cell new_cell range man flow =
+    (* Add the old cell in case it has not been accessed before so
+       that its constraints are added in the sub domain
+    *)
+    let flow =
+      add_cell old_cell range man flow |>
+      (* Remove the old cell and add the new one *)
+      map_domain_env T_cur (fun a ->
+          { a with cells = CellSet.remove old_cell a.cells |>
+                           CellSet.add new_cell
+          }
+        ) man
+    in
+    let oldv, flow = mk_cell_var_with_flow old_cell flow in
+    let newv, flow = mk_cell_var_with_flow new_cell flow in
+    let stmt = mk_rename_var oldv newv range in
+    man.exec_sub ~zone:Z_c_scalar stmt flow
+
+
+  (* Remove a cell and its associated scalar variable *)
+  let remove_cell c range man flow =
+    let flow = map_domain_env T_cur (fun a -> { a with cells = CellSet.remove c a.cells }) man flow in
+    let v, flow = mk_cell_var_with_flow c flow in
+    let stmt = mk_remove_var v range in
+    man.exec_sub ~zone:Z_c_scalar stmt flow
+
+
+  (** Compute the interval of a C expression *)
+  let compute_bound e man flow =
+    let evl = man.eval ~zone:(Z_c_low_level, Z_u_num) e flow in
+    Eval.apply
+      (fun ee flow ->
+         man.ask (Itv.Q_interval ee) flow
+      )
+      Itv.join Itv.meet Itv.bottom
+      evl
+
 
   (** {2 Initial state} *)
   (** ***************** *)
@@ -736,19 +774,100 @@ struct
   (* 𝕊⟦ remove v ⟧ *)
   let remove_var v range man flow =
     let a = get_domain_env T_cur man flow in
+    let flow = set_domain_env T_cur { a with bases = BaseSet.remove (V v) a.bases } man flow in
     let cells = find_cells (fun c -> compare_base c.base (V v) = 0) a in
-    let a = List.fold_left (fun acc c ->
-        { acc with cells = CellSet.remove c a.cells }
-      ) a cells
-    in
-    let a = { a with bases = BaseSet.remove (V v) a.bases } in
-    let flow = set_domain_env T_cur a man flow in
-
-    List.fold_left (fun post c ->
-        let v, flow = mk_cell_var_with_flow c flow in
-        let stmt = mk_remove_var v range in
-        Post.bind (man.exec_sub ~zone:Z_c_scalar stmt) post
+    List.fold_left (fun acc c ->
+        Post.bind (remove_cell c range man) acc
       ) (Post.return flow) cells
+
+
+  (* 𝕊⟦ rename target[i1][i2]...[in]' into target[i1][i2]...[in],
+     ∀ i1 ∈ [l1,u1], ..., in ∈ [ln,un] ⟧
+  *)
+  let rename_primed target bounds range man flow =
+    match bounds with
+    | [] when not (is_c_scalar_type target.etyp) ->
+      panic_at range
+        "non-scalar %a' can not be unprimed without specifying the assigned offsets"
+        pp_expr target
+
+    | [] ->
+      (* target should be a scalar lval *)
+      begin
+        expand (mk_c_address_of target range) range man flow |>
+        post_eval man @@ fun c flow ->
+        match c with
+        | None ->
+          (* ⊤ pointer *)
+          Post.return flow
+
+        | Some c ->
+          rename_cell { c with primed = true } c range man flow
+      end
+
+    | _ :: _ ->
+      (* target is pointer, so resolve it and compute the affected offsets *)
+      man.eval ~zone:(Z_c_low_level, Z_c_points_to) target flow |>
+      post_eval man @@ fun pt flow ->
+      match ekind pt with
+      | E_c_points_to P_top ->
+        Post.return flow
+
+      | E_c_points_to (P_block(base, offset)) ->
+        (* Get cells with the same base *)
+        let a = get_domain_env T_cur man flow in
+        let same_base_cells = CellSet.filter (fun c ->
+            compare_base base c.base = 0
+          ) a.cells
+        in
+
+        (* Compute the offset interval *)
+        let itv =
+          (* First, get the flattened expressions of the lower and upper bounds *)
+          let l, u =
+            let rec doit accl accu t =
+            function
+            | [] -> accl, accu
+            | [(l, u)] ->
+              (mk_offset_bound accl l t), (mk_offset_bound accu u t)
+            | (l, u) :: tl ->
+              doit (mk_offset_bound accl l t) (mk_offset_bound accu u t) (under_type t) tl
+
+            (* Utility function that returns the expression of an offset bound *)
+            and mk_offset_bound before bound t =
+              let elem_size = sizeof_type t in
+              add before (
+                mul bound (mk_z elem_size range) range ~typ:T_int
+              ) range ~typ:T_int
+            in
+            doit offset offset (under_type target.etyp) bounds
+          in
+
+          (* Compute the interval of the bounds *)
+          let itv1 = compute_bound l man flow in
+          let itv2 = compute_bound u man flow in
+
+          (* Compute the interval of the assigned cells *)
+          Itv.join itv1 itv2
+        in
+
+
+        (* Search for primed cells that reside withing the assigned offsets and rename them *)
+        CellSet.fold (fun c acc ->
+            if not (Itv.mem c.offset itv)
+            then acc
+            else if c.primed then
+              (* Primed cells are unprimed by renaming them *)
+              Post.bind (rename_cell c { c with primed = false } range man) acc
+            else if not (CellSet.mem { c with primed = true } same_base_cells) then
+              (* Remove unprimed cells that have no primed version *)
+              Post.bind (remove_cell c range man) acc
+            else
+              acc
+          ) same_base_cells (Post.return flow)
+
+      | _ -> assert false
+
 
 
   let exec zone stmt man flow =
@@ -798,6 +917,9 @@ struct
       remove_var v stmt.srange man flow |>
       Option.return
 
+    | S_stub_rename_primed(lval, bounds) ->
+      rename_primed lval bounds stmt.srange man flow |>
+      Option.return
 
 
     | _ -> None
@@ -842,20 +964,6 @@ struct
              pp_expr p
              pp_expr pt
 
-  (** 𝔼⟦ &lval ⟧ *)
-  let address_of lval range man flow =
-    match ekind lval with
-    | E_var _ ->
-      Eval.singleton (mk_c_address_of lval range) flow
-
-    | E_c_deref p ->
-      man.eval ~zone:(Z_c_low_level,Z_c_scalar) p flow
-
-    | _ ->
-      panic_at range ~loc:__LOC__
-        "evaluation of &%a not supported"
-        pp_expr lval
-
   (** 𝔼⟦ lval' ⟧ *)
   let primed lval range man flow =
     expand (mk_c_address_of lval range) range man flow |>
@@ -871,6 +979,21 @@ struct
       let flow = add_cell c' range man flow in
       let v', flow = mk_cell_var_with_flow c' flow in
       Eval.singleton (mk_var v' range) flow
+
+
+  (** 𝔼⟦ &lval ⟧ *)
+  let address_of lval range man flow =
+    match ekind lval with
+    | E_var _ ->
+      Eval.singleton (mk_c_address_of lval range) flow
+
+    | E_c_deref p ->
+      man.eval ~zone:(Z_c_low_level,Z_c_scalar) p flow
+
+    | _ ->
+      panic_at range ~loc:__LOC__
+        "evaluation of &%a not supported"
+        pp_expr lval
 
 
   let eval zone exp man flow =
