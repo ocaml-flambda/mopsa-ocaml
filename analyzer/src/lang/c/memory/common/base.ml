@@ -80,6 +80,10 @@ let base_range =
   | V { vkind = V_c {var_range} } -> var_range
   | _ -> assert false
 
+let is_base_readonly = function
+  | S _ -> true
+  | _ -> false
+
 
 (** Evaluate the size of a base *)
 let eval_base_size base ?(via=Z_any) range (man:('a,'t,'s) Core.Sig.Stacked.Lowlevel.man) flow =

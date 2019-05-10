@@ -478,7 +478,8 @@ struct
       Eval.empty_singleton flow
 
     | E_c_points_to (P_fun f) ->
-      panic_at range "%a can not be dereferenced to a cell; it points to function %s"
+      panic_at range
+        "%a can not be dereferenced to a cell; it points to function %s"
         pp_expr p
         f.c_func_org_name
 
@@ -491,7 +492,7 @@ struct
       man.eval ~zone:(Z_c_scalar,Z_u_num) size flow |>
       Eval.bind @@ fun size flow ->
 
-      man.eval ~zone:(Z_c_low_level,Z_u_num) offset flow |>
+      man.eval ~zone:(Z_c_scalar,Z_u_num) offset flow |>
       Eval.bind @@ fun offset flow ->
 
       (* Check the bounds: offset ∈ [0, size - |typ|] *)
@@ -543,7 +544,8 @@ struct
 
 
 
-    | _ -> panic_at range ~loc:__LOC__ "expand: %a points to unsupported object %a"
+    | _ -> panic_at range ~loc:__LOC__
+             "expand: %a points to unsupported object %a"
              pp_expr p
              pp_expr pt
 
@@ -703,6 +705,10 @@ struct
       (* ⊤ pointer !!! *)
       panic_at range "lval *%a can not be expanded" pp_expr p
 
+    | Some { base } when is_base_readonly base ->
+      let flow = raise_alarm Alarms.AReadOnlyModification ~bottom:true range man.lattice flow in
+      Post.return flow
+
     | Some c ->
       let flow = map_domain_env T_cur (fun a -> { a with cells = CellSet.add c a.cells }) man flow in
 
@@ -810,6 +816,11 @@ struct
       (* ⊤ pointer => use the whole value interval *)
       Eval.singleton (mk_top (under_pointer_type p.etyp) range) flow
 
+    | Some { base = S str; offset } ->
+      let chr = String.get str (Z.to_int offset) in
+      let e = mk_c_character chr range in
+      Eval.singleton e flow
+
     | Some c ->
       let flow = add_cell c range man flow in
       let v, flow = mk_cell_var_with_flow c flow in
@@ -825,10 +836,24 @@ struct
     | E_c_points_to (P_fun f) ->
       Eval.singleton (mk_expr (E_c_function f) ~etyp:(under_type p.etyp) range) flow
 
-    | _ -> panic_at range "deref_function_pointer: pointer %a points to a non-function object %a"
+    | _ -> panic_at range
+             "deref_function_pointer: pointer %a points to a non-function object %a"
              pp_expr p
              pp_expr pt
 
+  (** 𝔼⟦ &lval ⟧ *)
+  let address_of lval range man flow =
+    match ekind lval with
+    | E_var _ ->
+      Eval.singleton (mk_c_address_of lval range) flow
+
+    | E_c_deref p ->
+      man.eval ~zone:(Z_c_low_level,Z_c_scalar) p flow
+
+    | _ ->
+      panic_at range ~loc:__LOC__
+        "evaluation of &%a not supported"
+        pp_expr lval
 
 
   let eval zone exp man flow =
@@ -848,12 +873,8 @@ struct
       deref_function_pointer p exp.erange man flow |>
       Option.return
 
-    | E_c_address_of {ekind = E_c_deref p} ->
-      man.eval ~zone:(Z_c_low_level,Z_c_scalar) p flow |>
-      Option.return
-
-    | E_c_address_of _ ->
-      Eval.singleton exp flow |>
+    | E_c_address_of lval ->
+      address_of lval exp.erange man flow |>
       Option.return
 
     | _ -> None

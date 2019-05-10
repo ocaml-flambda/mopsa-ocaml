@@ -5,14 +5,10 @@
 /* Array initialization */
 /************************/
 
-int glob1[5];
-int glob2[5][5];
-int glob3[5] = {1, 2};
+unsigned char glob[5];
 
 void test_global_init_with_zero() {
-  _mopsa_assert(glob1[0] == 0);
-  _mopsa_assert(glob2[0][0] == 0);
-  _mopsa_assert(glob3[0] == 1);
+  _mopsa_assert(glob[0] == 0);
 }
 
 void test_initialization() {
