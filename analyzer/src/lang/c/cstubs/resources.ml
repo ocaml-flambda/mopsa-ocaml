@@ -43,12 +43,12 @@ struct
   let interface= {
     iexec = {
       provides = [Z_c];
-      uses = [Z_c]
+      uses = [Z_c; Z_c_scalar]
     };
 
     ieval = {
-      provides = [Z_c, Z_c_low_level];
-      uses = [Z_c, Z_c_points_to]
+      provides = [Z_c_low_level, Z_c_scalar];
+      uses = [Z_c_low_level, Z_c_points_to]
     }
   }
 
@@ -88,7 +88,7 @@ struct
         | E_c_points_to (P_block (A ({ addr_kind = A_stub_resource _ } as addr), _)) ->
           (* Remove the size attribute before removing the address *)
           let stmt' = mk_remove (mk_size_var addr stmt.srange) stmt.srange in
-          let flow' = man.exec stmt' flow in
+          let flow' = man.exec ~zone:Z_c_scalar stmt' flow in
 
           let stmt' = mk_free_addr addr stmt.srange in
           let flow' = man.exec stmt' flow' in
@@ -108,7 +108,7 @@ struct
       ->
       let size1 = mk_size_var addr1 stmt.srange in
       let size2 = mk_size_var addr2 stmt.srange in
-      man.exec ~zone:Z_c (mk_rename size1 size2 stmt.srange) flow |>
+      man.exec ~zone:Z_c_scalar (mk_rename size1 size2 stmt.srange) flow |>
       man.exec ~zone:Z_c stmt |>
       Post.return |>
       Option.return
@@ -133,7 +133,7 @@ struct
       | E_addr addr ->
         (* Add size attribute *)
         let size = mk_size_var addr exp.erange in
-        let flow' = man.exec (mk_add size exp.erange) flow in
+        let flow' = man.exec ~zone:Z_c_scalar (mk_add size exp.erange) flow in
         Eval.singleton exp flow'
 
       | _ -> assert false

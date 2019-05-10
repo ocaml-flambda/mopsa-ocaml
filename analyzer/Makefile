@@ -62,7 +62,7 @@ lang.stubs = ast zone alarms iterator
 # C
 lang.c = ast pp visitor zone frontend alarms desugar memory libs iterators cstubs
 lang.c.iterators = program switch loops goto interproc
-lang.c.desugar = cond_expr stub_init
+lang.c.desugar = cond_expr
 lang.c.memory = common structured lowlevel scalars
 lang.c.memory.common = base points_to
 lang.c.memory.structured = flat

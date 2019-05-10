@@ -47,6 +47,7 @@ let () =
         | E_stub_quantified _
         | E_stub_builtin_call _
         | E_stub_primed _
+        | E_stub_resource_mem _
         | E_unop _
         | E_binop _                          -> Visit
         (* ------------------------------------------- *)
@@ -87,6 +88,7 @@ let () =
         | E_var _
         | E_c_function _                     -> Keep
         (* ------------------------------------------- *)
+        | E_stub_resource_mem _
         | E_stub_quantified _
         | E_stub_builtin_call _
         | E_stub_primed _
