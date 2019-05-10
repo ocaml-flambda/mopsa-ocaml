@@ -1081,7 +1081,12 @@ struct
       Eval.singleton (mk_top (under_pointer_type p.etyp) range) flow
 
     | Some { base = S str; offset } ->
-      let chr = String.get str (Z.to_int offset) in
+      let o = Z.to_int offset in
+      let chr =
+        if o = String.length str
+        then Char.chr 0
+        else String.get str o
+      in
       let e = mk_c_character chr range in
       Eval.singleton e flow
 
