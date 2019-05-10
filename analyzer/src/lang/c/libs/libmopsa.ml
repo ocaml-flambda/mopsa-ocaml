@@ -235,6 +235,13 @@ struct
       Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
       Option.return
 
+    | E_c_builtin_call("_mopsa_assert_exists", [cond]) ->
+      let stmt = {skind = S_simple_assert(cond,false,true); srange = exp.erange} in
+      let flow = man.exec stmt flow in
+      Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
+      Option.return
+
+
     | E_c_builtin_call("_mopsa_assert_false", [cond]) ->
       assert false
 

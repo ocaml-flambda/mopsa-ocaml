@@ -435,9 +435,11 @@ type stmt_kind +=
    (** Unit tests suite *)
 
    | S_simple_assert of expr * bool * bool
-   (** Unit tests simple assertions : S_simple_assert(e,b,b') = b
-       is_bottom(assume(b' cond)) where b exp is understood as exp if b
-      = true and not exp otherwise *)
+   (** Unit tests simple assertions :
+       S_simple_assert(cond,b,b') = b is_bottom(assume(b' cond))
+       where b exp is understood as:
+        f b = true then exp else not exp
+   *)
 
    | S_assert of expr
    (** Unit tests assertions *)
