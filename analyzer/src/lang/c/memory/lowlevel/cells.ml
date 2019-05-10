@@ -38,6 +38,7 @@
 open Mopsa
 open Core.Sig.Stacked.Intermediate
 open Universal.Ast
+open Stubs.Ast
 open Ast
 open Universal.Zone
 open Zone
@@ -855,14 +856,27 @@ struct
         "evaluation of &%a not supported"
         pp_expr lval
 
+  (** 𝔼⟦ lval' ⟧ *)
+  let primed lval range man flow =
+    expand (mk_c_address_of lval range) range man flow |>
+    Eval.bind @@ fun c flow ->
+
+    match c with
+    | None ->
+      (* &lval points to ⊤ *)
+      Eval.singleton (mk_top lval.etyp range) flow
+
+    | Some c ->
+      let c' = { c with primed = true } in
+      let flow = add_cell c' range man flow in
+      let v', flow = mk_cell_var_with_flow c' flow in
+      Eval.singleton (mk_var v' range) flow
+
 
   let eval zone exp man flow =
     match ekind exp with
     | E_var (v,mode) when is_c_scalar_type v.vtyp ->
-      let c = mk_cell (V v) Z.zero v.vtyp in
-      let flow = add_cell c exp.erange man flow in
-      let vv, flow = mk_cell_var_with_flow c flow in
-      Eval.singleton (mk_var vv ~mode exp.erange) flow |>
+      deref_scalar_pointer (mk_c_address_of exp exp.erange) mode exp.erange man flow |>
       Option.return
 
     | E_c_deref p when under_type p.etyp |> is_c_scalar_type  ->
@@ -875,6 +889,10 @@ struct
 
     | E_c_address_of lval ->
       address_of lval exp.erange man flow |>
+      Option.return
+
+    | E_stub_primed lval ->
+      primed lval exp.erange man flow |>
       Option.return
 
     | _ -> None
