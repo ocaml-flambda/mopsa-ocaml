@@ -58,7 +58,7 @@ struct
   let interface = {
     iexec = {
       provides = [];
-      uses = [Universal.Zone.Z_u_num]
+      uses = [Z_c_low_level; Universal.Zone.Z_u_num]
     };
     ieval = {
       provides = [
@@ -161,7 +161,7 @@ struct
     Eval.map_flow (fun flow ->
         let flow =
           List.fold_left (fun flow unnamed ->
-              man.exec ~zone:Z_c (mk_remove_var unnamed range) flow
+              man.exec ~zone:Z_c_low_level (mk_remove_var unnamed range) flow
             ) flow vars
         in
         remove_unnamed_args flow
