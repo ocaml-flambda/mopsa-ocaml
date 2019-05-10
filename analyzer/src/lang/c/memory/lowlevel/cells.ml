@@ -771,6 +771,85 @@ struct
     man.exec_sub ~zone:Z_c_scalar stmt flow
 
 
+  (* 𝕊⟦ ?e ⟧ when e contains quantified variables *)
+  let assume_quantified e range man flow =
+    (* Get the bounds the quantified variables *)
+    let bounds = fold_expr
+        (fun acc e ->
+           match ekind e with
+           | E_stub_quantified(FORALL, v, S_interval(l,u)) ->
+             Keep ((v, l, u) :: acc)
+
+           | _ -> VisitParts acc
+        )
+        (fun acc stmt -> VisitParts acc)
+        [] e
+    in
+    (* Compute an under-approximation of each bound *)
+    let exception NotPossible in
+    try
+      let under = List.map (fun (v,l,u) ->
+          let itv1 = compute_bound l man flow in
+          let itv2 = compute_bound u man flow in
+          match Itv.bounds_opt itv1, Itv.bounds_opt itv2 with
+          | (_, Some a), (Some b, _) when Z.leq a b -> (v, a, b)
+          | _ -> raise NotPossible
+        ) bounds
+      in
+      (* Iterate over some sample valuations in the under-approximation *)
+      let rec get_samples space =
+        match space with
+        | [] -> [[]]
+        | (var, l, u) :: tl ->
+          let after = get_samples tl in
+
+          (** Iterate on values in [i, u] and add them to the result vectors *)
+          let rec iter_on_space_dim ret i =
+            if Z.gt i u then ret
+            else iter_on_space_dim (add_sample i after ret) (Z.succ i)
+
+          (** and a sample value i to the result *)
+          and add_sample i after ret =
+            if List.length ret == !opt_expand then
+              ret
+            else
+              match after with
+              | [] -> ret
+              | hd :: tl ->
+                add_sample i tl (((var, i) :: hd)  :: ret)
+          in
+          iter_on_space_dim [] l
+      in
+      let samples = get_samples under in
+
+      (* Replace quantified variables with the samples and compute the meet *)
+      (* NOTE: since quantified expressions are pure expressions, we
+         fold the result to compute the meet *)
+      List.fold_left (fun acc sample ->
+          let e' = e |> map_expr
+              (fun ee ->
+                 match ekind ee with
+                 | E_stub_quantified(FORALL, var, _) ->
+                   let _, i = List.find (fun (var', _) ->
+                       compare_var var var' = 0
+                     ) sample
+                   in
+                   Keep { ee with ekind = E_constant (C_int i) }
+
+                 | _ -> VisitParts ee
+              )
+              (fun s -> VisitParts s)
+          in
+          man.exec ~zone:Z_c_low_level (mk_assume e' range) acc
+        ) flow samples |>
+      Post.return
+
+
+    with NotPossible ->
+      Post.return flow
+
+
+
   (* 𝕊⟦ remove v ⟧ *)
   let remove_var v range man flow =
     let a = get_domain_env T_cur man flow in
@@ -893,6 +972,10 @@ struct
 
     | S_assign(({ekind = E_c_deref(p)}), e) when is_c_scalar_type @@ under_type p.etyp ->
       assign p e STRONG stmt.srange man flow |>
+      Option.return
+
+    | S_assume(e) when is_expr_quantified e ->
+      assume_quantified e stmt.srange man flow |>
       Option.return
 
     | S_assume(e) ->
