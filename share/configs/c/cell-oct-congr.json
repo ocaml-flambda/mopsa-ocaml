@@ -20,7 +20,6 @@
             "c.iterators.loops",
 
             // C desugar
-            "c.desugar.stub_init",
             "c.desugar.cond_expr",
 
 	    // Heap

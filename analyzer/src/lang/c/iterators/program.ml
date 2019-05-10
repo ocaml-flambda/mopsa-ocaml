@@ -92,7 +92,17 @@ struct
         in
         if cvar.var_scope = Variable_extern then flow
         else
-          let stmt = mk_c_declaration v init cvar.var_range in
+          let stmt =
+            match init with
+            | Some (C_init_stub stub)->
+              mk_block [
+                mk_add_var v cvar.var_range;
+                Stubs.Ast.mk_stub_init v stub cvar.var_range
+              ] cvar.var_range
+
+            | _ ->
+              mk_c_declaration v init cvar.var_range
+          in
           man.exec stmt flow
       ) flow
 
