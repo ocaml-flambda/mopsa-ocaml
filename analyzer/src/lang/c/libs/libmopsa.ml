@@ -288,16 +288,16 @@ struct
           | true, true -> mk_zero
         in
         let stmt = mk_assert (cond ~typ:u8 exp.erange) exp.erange in
-        let flow' = Flow.set T_cur man.lattice.top man.lattice flow in
-        let flow'' = man.exec stmt flow' |>
-                     (* Since the unsafe here is "normal", so we remove all alarms *)
-                     Flow.fold (fun flow tk _ ->
-                       match tk with
-                       | T_alarm _ -> Flow.remove tk flow
-                       | _ -> flow
-                     ) flow
+        let flow1 = Flow.set T_cur man.lattice.top man.lattice flow in
+        let flow2 = man.exec stmt flow1 in
+        (* Since the unsafe here is "normal", so we remove all alarms *)
+        let flow3 = Flow.filter (fun tk _ ->
+            match tk with
+            | T_alarm _ -> false
+            | _ -> true
+          ) flow2
         in
-        Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow'' |>
+        Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow3 |>
         Option.return
       end
 
