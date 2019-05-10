@@ -543,7 +543,9 @@ struct
 
 
 
-    | _ -> assert false
+    | _ -> panic_at range ~loc:__LOC__ "expand: %a points to unsupported object %a"
+             pp_expr p
+             pp_expr pt
 
 
   let add_base b man flow =

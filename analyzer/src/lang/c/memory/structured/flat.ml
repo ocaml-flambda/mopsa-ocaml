@@ -43,7 +43,10 @@ struct
   let interface = {
     iexec = {
       provides = [Z_c];
-      uses = [Z_c_low_level]
+      uses = [
+        Z_c_low_level;
+        Z_c
+      ]
     };
 
     ieval = {
@@ -122,7 +125,7 @@ struct
 
 
   and flatten_record_init init typ range =
-    let records =
+    let fields =
       match remove_typedef_qual typ with
       | T_c_record{c_record_fields} -> c_record_fields
       | t -> panic_at ~loc:__LOC__ range "type %a is not a record" pp_typ t
@@ -131,28 +134,49 @@ struct
     | None ->
       let rec aux = function
         | [] -> []
-        | record :: tl ->
-          let init = flatten_init None record.c_field_type range in
+        | field :: tl ->
+          let init = flatten_init None field.c_field_type range in
           init @ aux tl
       in
-      aux records
+      aux fields
 
     | Some (C_init_list(l, None)) ->
       let rec aux l records =
         match records with
         | [] -> []
-        | record :: tl ->
+        | field :: tl ->
           match l with
           | [] ->
-            let init = flatten_init None record.c_field_type range in
+            let init = flatten_init None field.c_field_type range in
             init @ aux l tl
           | init :: tll ->
-            let init = flatten_init (Some init) record.c_field_type range in
+            let init = flatten_init (Some init) field.c_field_type range in
             init @ aux tll tl
       in
-      aux l records
+      aux l fields
 
-    | _ -> panic_at ~loc:__LOC__ range "%a is not supported"
+    | Some (C_init_expr e) when is_c_record_type e.etyp ->
+      (* Remove unnecessary casts in e *)
+      let e =
+        let rec aux ee =
+          match ekind ee with
+          | E_c_cast (eee, false) -> eee
+          | _ -> ee
+        in
+        aux e
+      in
+
+      let fields' = match remove_typedef_qual typ with
+        | T_c_record{c_record_fields} -> c_record_fields
+        | _ -> assert false
+      in
+      fields' |> List.fold_left (fun acc field ->
+          let init = Some (C_init_expr (mk_c_member_access e field range)) in
+          acc @ flatten_init init field.c_field_type range
+        ) []
+
+
+    | _ -> panic_at ~loc:__LOC__ range "initialization %a is not supported"
              Pp.pp_c_init (Option.none_to_exn init)
 
 
@@ -188,8 +212,8 @@ struct
     man.exec_sub ~zone:Z_c_low_level (mk_c_declaration v (Some init) range) flow
 
 
-  (** 𝕊⟦ lval = e; ⟧ *)
-  let assign lval e range man flow =
+  (** 𝕊⟦ lval = e; ⟧ when lval is scalar *)
+  let assign_scalar lval e range man flow =
     man.eval ~zone:(Z_c,Z_c_low_level) lval flow |>
     post_eval man @@ fun lval flow ->
 
@@ -198,6 +222,48 @@ struct
 
     let stmt = mk_assign lval e range in
     man.exec_sub ~zone:Z_c_low_level stmt flow
+
+  (** 𝕊⟦ lval = rval; ⟧ when lval is a record *)
+  let assign_record lval rval range man flow =
+    let rval = remove_casts rval in
+
+    let t1 = lval |> etyp |> remove_typedef_qual
+    and t2 = rval |> etyp |> remove_typedef_qual in
+
+    if compare_typ t1 t2 <> 0 then
+      panic_at range "[%s] assignment of records with uncompatible \
+                      types: %a %a" name pp_typ t1 pp_typ t2
+    else
+      let fields, record_kind = match t1 with
+        | T_c_record{c_record_fields; c_record_kind} -> c_record_fields, c_record_kind
+        | _ -> assert false
+      in
+      match record_kind with
+      | C_struct ->
+        fields |> List.fold_left (fun acc field ->
+            let lval = mk_c_member_access lval field range in
+            let rval = mk_c_member_access rval field range in
+            let stmt = mk_assign lval rval range in
+            Post.bind (man.exec_sub ~zone:Z_c stmt) acc
+          ) (Post.return flow)
+
+      | C_union ->
+        let fieldopt, _ = List.fold_left (fun (accfield, accsize) field ->
+            let size = field.c_field_type |> sizeof_type in
+            if Z.geq size accsize then
+              (Some field, size)
+            else (accfield, accsize)
+          ) (None, Z.zero) fields
+        in
+        match fieldopt with
+        | Some field ->
+          let lval = mk_c_member_access lval field range in
+          let rval = mk_c_member_access rval field range in
+          let stmt = mk_assign lval rval range in
+          man.exec_sub ~zone:Z_c stmt flow
+
+        | None -> panic_at range "[%s] all fields have size 0" name
+
 
   (** 𝕊⟦ ?e ⟧ *)
   let assume e range man flow =
@@ -210,9 +276,22 @@ struct
 
   let exec zone stmt man flow =
     match skind stmt with
-    | S_c_declaration(v, init) -> declare v init stmt.srange man flow |> Option.return
-    | S_assign(lval, e) -> assign lval e stmt.srange man flow |> Option.return
-    | S_assume(e) -> assume e stmt.srange man flow |> Option.return
+    | S_c_declaration(v, init) ->
+      declare v init stmt.srange man flow |>
+      Option.return
+
+    | S_assign(lval, e) when is_c_scalar_type lval.etyp ->
+      assign_scalar lval e stmt.srange man flow |>
+      Option.return
+
+    | S_assign(lval, e) when is_c_record_type lval.etyp ->
+      assign_record lval e stmt.srange man flow |>
+      Option.return
+
+    | S_assume(e) ->
+      assume e stmt.srange man flow |>
+      Option.return
+
     | _ -> None
 
 
@@ -355,8 +434,7 @@ struct
           man.eval ~zone:(Z_c, Z_c_low_level) e flow' |>
           Option.return
 
-        | _ ->
-          panic "E_c_statement %a" pp_expr exp
+        | _ -> panic "E_c_statement %a not supported" pp_expr exp
       end
 
     | E_c_statement {skind = S_expression e} ->

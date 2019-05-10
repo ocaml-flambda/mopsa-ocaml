@@ -203,7 +203,6 @@ struct
   (** ================== *)
 
   let init prog man flow =
-    debug "init";
     set_domain_env T_cur Map.empty man flow
 
 
@@ -369,7 +368,9 @@ struct
     | x when is_c_int_type exp.etyp ->
       ADDROF(Common.Base.Z, exp) |> Option.return
 
-    | _ -> None
+    | _ ->
+      warn_at exp.erange "eval_pointer_opt: %a not supported" pp_expr exp;
+      None
 
   let eval_pointer exp : ptr =
     match eval_pointer_opt exp with
@@ -624,7 +625,6 @@ struct
            is_c_int_type t1 &&
            compare_typ t1 t2 = 0
       ->
-      debug "pointer byte diff";
       let diff = mk_c_cast (sub p q ~typ:s32 exp.erange) t1 exp.erange in
       let exp' = mul (mk_z (pointed_size p.etyp) ~typ:t1 exp.erange) diff ~typ:t1 exp.erange in
       man.eval ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) exp' flow |>
