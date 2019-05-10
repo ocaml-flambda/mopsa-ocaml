@@ -568,7 +568,8 @@ struct
       let flow = man.exec ~zone:Z_c_scalar (mk_add (mk_var v range) range) flow in
 
       if is_c_pointer_type c.typ
-      then flow
+      then
+        set_domain_env T_cur { a with cells = CellSet.add c a.cells } man flow
       else
         let flow = match phi c a (Flow.get_unit_ctx flow) range with
           | Some (e, ctx) ->
@@ -781,8 +782,7 @@ struct
     | S_add { ekind = E_var (v, _) } when is_c_scalar_type v.vtyp ->
       let c = mk_cell (V v) Z.zero v.vtyp in
       let flow = add_cell c stmt.srange man flow in
-      let vv, flow = mk_cell_var_with_flow c flow in
-      man.exec_sub ~zone:Z_c_scalar (mk_add_var vv stmt.srange) flow |>
+      Post.return flow |>
       Option.return
 
     | S_add { ekind = E_var (v, _) } when not (is_c_scalar_type v.vtyp) ->
