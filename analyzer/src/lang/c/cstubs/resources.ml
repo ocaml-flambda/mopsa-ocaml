@@ -43,7 +43,7 @@ struct
   let interface= {
     iexec = {
       provides = [Z_c];
-      uses = [Z_c; Z_c_scalar]
+      uses = [Z_c; Z_c_scalar; Z_c_low_level]
     };
 
     ieval = {
@@ -109,7 +109,7 @@ struct
       let size1 = mk_size_var addr1 stmt.srange in
       let size2 = mk_size_var addr2 stmt.srange in
       man.exec ~zone:Z_c_scalar (mk_rename size1 size2 stmt.srange) flow |>
-      man.exec ~zone:Z_c stmt |>
+      man.exec ~zone:Z_c_low_level stmt |>
       Post.return |>
       Option.return
 

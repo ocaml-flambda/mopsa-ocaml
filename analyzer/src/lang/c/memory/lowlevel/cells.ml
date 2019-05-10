@@ -604,6 +604,17 @@ struct
       ) (Post.return flow') overlappings
 
 
+  let assign_cell c e mode range man flow =
+    let flow = map_domain_env T_cur (fun a -> { a with cells = CellSet.add c a.cells }) man flow in
+
+    let v, flow = mk_cell_var_with_flow c flow in
+
+    let stmt = mk_assign (mk_var v ~mode range) e range in
+    man.exec_sub ~zone:Z_c_scalar stmt flow |>
+
+    Post.bind @@ remove_overlappings c range man
+
+
   (** Rename a cell and its associated scalar variable *)
   let rename_cell old_cell new_cell range man flow =
     (* Add the old cell in case it has not been accessed before so
@@ -630,6 +641,49 @@ struct
     let v, flow = mk_cell_var_with_flow c flow in
     let stmt = mk_remove_var v range in
     man.exec_sub ~zone:Z_c_scalar stmt flow
+
+
+  (** Rename bases and their cells *)
+  let rename_base base1 base2 range man flow =
+    let a = get_domain_env T_cur man flow in
+    (* Cells of base1 *)
+    let cells1 = CellSet.filter (fun c ->
+        compare_base c.base base1 = 0
+      ) a.cells
+    in
+
+    (* Cell renaming *)
+    let to_base2 c = { c with base = base2 } in
+
+    (* Content copy, depends on the presence of base2 *)
+    let copy =
+      if not (BaseSet.mem base2 a.bases) then
+        (* If base2 is not already present => rename the cells *)
+        fun c flow ->
+          rename_cell c (to_base2 c) range man flow
+      else
+        (* Otherwise, assign with weak update *)
+        fun c flow ->
+          let v, flow = mk_cell_var_with_flow c flow in
+          assign_cell (to_base2 c) (mk_var v range) WEAK range man flow |>
+          Post.bind @@ remove_cell c range man
+    in
+
+    (* Apply copy function *)
+    CellSet.fold (fun c acc -> Post.bind (copy c) acc) cells1 (Post.return flow) |>
+    Post.bind @@ fun flow ->
+
+    (* Remove base1 and add base2 *)
+    map_domain_env T_cur (fun a ->
+        {
+          a with
+          bases = BaseSet.remove base1 a.bases |>
+                  BaseSet.add base2;
+        }
+      ) man flow
+    |>
+    Post.return
+
 
 
   (** Compute the interval of a C expression *)
@@ -750,16 +804,10 @@ struct
       Post.return flow
 
     | Some c ->
-      let flow = map_domain_env T_cur (fun a -> { a with cells = CellSet.add c a.cells }) man flow in
-
-      let v, flow = mk_cell_var_with_flow c flow in
       man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow |>
       post_eval man @@ fun e flow ->
 
-      let stmt = mk_assign (mk_var v ~mode range) e range in
-      man.exec_sub ~zone:Z_c_scalar stmt flow |>
-
-      Post.bind @@ remove_overlappings c range man
+      assign_cell c e mode range man flow
 
 
   (** 𝕊⟦ ?e ⟧ *)
@@ -999,6 +1047,16 @@ struct
     | S_remove { ekind = E_var (v, _) } when is_c_type v.vtyp ->
       remove_var v stmt.srange man flow |>
       Option.return
+
+    | S_rename({ ekind = E_var (v1, _) }, { ekind = E_var (v2, _) }) ->
+      rename_base (V v1) (V v2) stmt.srange man flow |>
+      Option.return
+
+    | S_rename({ ekind = E_addr addr1 }, { ekind = E_addr addr2 }) ->
+      rename_base (A addr1) (A addr2) stmt.srange man flow |>
+      Post.bind (man.exec_sub ~zone:Z_c_scalar stmt) |>
+      Option.return
+
 
     | S_stub_rename_primed(lval, bounds) ->
       rename_primed lval bounds stmt.srange man flow |>
