@@ -66,8 +66,8 @@ type addr_kind +=
 
 
 (** Allocate an object on the heap and return its address as an evaluation *)
-let eval_alloc man kind range flow =
-  let exp = mk_alloc_addr kind range in
+let eval_alloc ?(mode=STRONG) man kind range flow =
+  let exp = mk_alloc_addr kind ~mode range in
   man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) exp flow |>
   Eval.bind (fun exp flow ->
       match ekind exp with
@@ -81,10 +81,10 @@ let eval_alloc man kind range flow =
 
 
 (** Lists of built-ins *)
-let classes : py_object list ref = ref []
-let functions : py_object list ref = ref []
-let modules : py_object list ref = ref []
-let all () = !classes @ !functions @ !modules
+let classes = Hashtbl.create 100
+let functions = Hashtbl.create 100
+let modules = Hashtbl.create 10
+(* let all () = !classes @ !functions @ !modules *)
 
 (** Name of a builtin with an optional dot notation in case of
    sub-objects (methods of classes, etc.) *)
@@ -120,19 +120,23 @@ let object_name obj =
   | _ -> panic "builtin_name: %a is not a builtin" pp_addr (addr_of_object obj)
 
 let add_builtin_class obj () =
-  classes := obj :: !classes
+  Hashtbl.add classes (object_name obj) obj
 
 let add_builtin_function obj () =
-  functions := obj :: !functions
+  Hashtbl.add functions (object_name obj) obj
 
 let add_builtin_module obj () =
-  modules := obj :: !modules
+  Hashtbl.add modules (object_name obj) obj
 
 (** Search for the address of a builtin given its name *)
 let find_builtin name =
-  List.find (fun obj ->
-      name = object_name obj
-    ) (all ())
+  let search = fun tbl -> Hashtbl.find tbl name in
+  try
+    search classes
+  with Not_found ->
+  try search functions
+  with Not_found ->
+    search modules
 
 let is_object_unsupported obj =
   match kind_of_object obj with
@@ -141,9 +145,9 @@ let is_object_unsupported obj =
   | _ -> false
 
 (** Check whether a built-in exists given its name *)
-let is_builtin_name name = List.exists (fun obj -> name = object_name obj) (all ())
-
-let is_builtin obj = List.mem obj (all ())
+let is_builtin_name name =
+  let exists = fun tbl -> Hashtbl.mem tbl name in
+  exists classes || exists functions || exists modules
 
 (** Check whether an attribute of a built-in object exists, given its name *)
 let is_builtin_attribute base attr =
@@ -209,19 +213,19 @@ let class_of_object (obj: py_object) : py_object =
 
 let mro (obj: py_object) : py_object list =
   match kind_of_object obj with
-  | A_py_class (c, b) -> obj::b
+  | A_py_class (c, b) -> b
   | _ -> assert false
 
 (** Return the closest non-heap (i.e. non-user defined) base class *)
-let most_derive_builtin_base (obj: py_object) : py_object =
-  let rec aux =
-    function
-    | [o] when is_builtin o -> o
-    | o :: tl when is_builtin o -> o
-    | o :: tl -> aux tl
-    | [] -> assert false
-  in
-  aux (mro obj)
+(* let most_derive_builtin_base (obj: py_object) : py_object =
+ *   let rec aux =
+ *     function
+ *     | [o] when is_builtin o -> o
+ *     | o :: tl when is_builtin o -> o
+ *     | o :: tl -> aux tl
+ *     | [] -> assert false
+ *   in
+ *   aux (mro obj) *)
 
 (* (\** Return the closest non-heap (i.e. non-user defined) base class *\)
  * let most_derive_builtin_base (obj: py_object) : py_object =
@@ -312,6 +316,23 @@ let mk_py_float_interval l u range =
  *   let uniq = vname ^ ":" ^ (string_of_int addr.addr_uid) in
  *   let v = mkv vname uniq addr.addr_uid T_any in
  *   mk_var v range *)
+
+let mk_py_issubclass e1 e2 range =
+  mk_py_call (mk_py_object (find_builtin "issubclass") range) [e1; e2] range
+
+let mk_py_issubclass_builtin_r e builtin range =
+  let obj = find_builtin builtin in
+  mk_py_issubclass e (mk_py_object obj range) range
+
+let mk_py_issubclass_builtin_l builtin e range =
+  let obj = find_builtin builtin in
+  mk_py_issubclass (mk_py_object obj range) e range
+
+
+let mk_py_issubclass_builtin2 blt1 blt2 range =
+  let obj1 = find_builtin blt1 in
+  let obj2 = find_builtin blt2 in
+  mk_py_issubclass (mk_py_object obj1 range) (mk_py_object obj2 range) range
 
 let mk_py_hasattr e attr range =
   mk_py_call (mk_py_object (find_builtin "hasattr") range) [e; mk_constant ~etyp:T_string (C_string attr) range] range
@@ -493,7 +514,7 @@ and merge (l: py_object list list) : py_object list =
   match search_c l with
   | Some c ->
      let l' = List.filter (fun x -> x <> [])
-                (List.map (fun li -> List.filter (fun x -> compare_addr (fst c) (fst x) <> 0) li)
+                (List.map (fun li -> List.filter (fun x -> compare_addr_kind (akind @@ fst c) (akind @@ fst x) <> 0) li)
                    l) in
      (* l' is l with all c removed *)
      begin match l' with
@@ -519,7 +540,7 @@ and search_c (l: py_object list list) : py_object option =
 let create_builtin_class kind name cls bases range =
   let mro = c3_lin ({
       addr_kind= (A_py_class (kind, bases));
-      addr_uid=(-1);
+      addr_uid= 0;
       addr_mode = STRONG
     }, None)
   in
@@ -569,6 +590,11 @@ let () =
                | M_builtin s1, M_builtin s2 -> Pervasives.compare s1 s2
                | _, _ -> default a1 a2
              end
+           | A_py_method ((addr1, oexpr1), expr1), A_py_method ((addr2, oexpr2), expr2) ->
+             Compare.compose
+               [ (fun () -> compare_addr addr1 addr2);
+                 (fun () -> Compare.option compare_expr oexpr1 oexpr2);
+                 (fun () -> compare_expr expr1 expr2); ]
            | _ -> default a1 a2)
     }
   )

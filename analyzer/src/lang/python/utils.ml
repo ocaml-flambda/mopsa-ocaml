@@ -111,3 +111,11 @@ let check_instances_disj ?(arguments_after_check=0) man flow range exprs instanc
   in
   Eval.eval_list man.eval exprs flow |>
   Eval.bind (fun exprs flow -> aux exprs exprs instances flow)
+
+let strip_object (e:expr) =
+  let ekind = match ekind e with
+    | E_py_object (addr, oe) ->
+      let addr = {addr with addr_uid = 0} in
+      E_py_object (addr, oe)
+    | _ -> assert false in
+  {e with ekind}

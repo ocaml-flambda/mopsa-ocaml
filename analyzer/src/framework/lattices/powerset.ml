@@ -105,6 +105,13 @@ struct
   let filter f (abs:t) : t =
     top_lift1 (Set.filter f) abs
 
+  let partition f (abs:t) : t * t =
+    match abs with
+    | TOP -> TOP, TOP
+    | Nt a ->
+      let r1, r2 = Set.partition f a in
+      Nt r1, Nt r2
+
   let exists f (abs:t) : bool =
     top_to_exn abs |> (fun s -> Set.exists f s)
 

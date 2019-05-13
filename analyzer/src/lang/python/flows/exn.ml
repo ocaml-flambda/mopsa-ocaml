@@ -42,11 +42,27 @@ open Alarms
  *         | _ -> next fmt tk);
  *     } *)
 
+let name = "python.flows.exceptions"
+
+let opt_unprecise_exn = ref []
+(* Be unprecise on some exceptions *)
+
+let () =
+  register_domain_option name {
+    key = "-unprecise-exn";
+    category = "Python";
+    doc = " raised exceptions passed to this arguments will be collapsed into one environment. Useful for exceptions the analysis is unprecise on (for example, IndexError for the smashing abstraction of lists).";
+    spec = ArgExt.Set_string_list opt_unprecise_exn;
+    default = "";
+  }
+
+
+
 
 module Domain =
   struct
 
-    let name = "python.flows.exceptions"
+    let name = name
     let debug fmt = Debug.debug ~channel:name fmt
 
     let interface = {
@@ -119,7 +135,14 @@ module Domain =
                    let cur = Flow.get T_cur man.lattice true_flow in
                    let cs = Callstack.get true_flow in
                    let str = man.ask (Types.Typing.Q_exn_string_query exp) flow in
-                   let a = mk_alarm (APyException (exp, str)) range ~cs ~level:ERROR in
+                   let a =
+                     if List.exists (fun x -> Pervasives.compare x str = 0) !opt_unprecise_exn then
+                       let range = tag_range (R_fresh 0) "unprecise exn" in
+                       let cs = [] in
+                       let exp = Utils.strip_object exp in
+                       mk_alarm (APyException (exp, str)) range ~cs ~level:ERROR
+                     else
+                       mk_alarm (APyException (exp, str)) range ~cs ~level:ERROR in
                    let flow' = Flow.add (T_alarm a) cur man.lattice true_flow |>
                                Flow.set T_cur man.lattice.bottom man.lattice
                    in
@@ -138,11 +161,9 @@ module Domain =
                      false_flow
                  )
                flow
-               (* | _ -> debug "%a@\n" pp_expr exp; assert false *)
            )
         )
         |> Option.return
-
 
       | S_py_raise None ->
         panic_at stmt.srange "exceptions: re-raise previous caught exception not supported"
@@ -259,7 +280,14 @@ module Domain =
                               ~fthen:(fun true_flow -> Post.return true_flow)
                               ~felse:(fun false_flow ->
                                   let cs = Callstack.get false_flow in
-                                  let a = mk_alarm (APyException (exn, s)) range ~cs ~level:ERROR in
+                                  let a =
+                                    if List.mem s !opt_unprecise_exn then
+                                      let range = tag_range (R_fresh 0) "unprecise exn" in
+                                      let cs = [] in
+                                      let exp = Utils.strip_object exn in
+                                      mk_alarm (APyException (exp, s)) range ~cs ~level:ERROR
+                                    else
+                                      mk_alarm (APyException (exn, s)) range ~cs ~level:ERROR in
                                   Flow.add (T_alarm a) env man.lattice false_flow |> Post.return)
                               true_flow)
                         ~felse:(fun false_flow -> Post.return false_flow)

@@ -73,7 +73,7 @@ struct
       struct
         type t = Equiv.t
         let print fmt m =
-          Format.fprintf fmt "Set annots: @[%a@]" Equiv.print m
+          Format.fprintf fmt "Set annots: @[%a@]" (Equiv.print ?pp_sep:None) m
       end
       )
     in
@@ -127,6 +127,39 @@ struct
         )
       |> Option.return
 
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "set.__new__")}, _)}, args, []) ->
+      (* todo: check that first arg is set class *)
+      man.eval (mk_expr (E_py_set []) range) flow
+      |> Option.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "set.__init__")}, _)}, args, []) ->
+      Utils.check_instances man flow range args
+        ["set"]
+        (fun eargs flow ->
+           man.eval (mk_py_none range) flow
+        )
+      |> Option.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "set.clear")}, _)}, args, []) ->
+      Utils.check_instances man flow range args ["set"]
+        (fun args flow ->
+           let list = List.hd args in
+           let var_els = match ekind list with
+             | E_py_object ({addr_kind = A_py_set a}, _) ->a
+             | _ -> Exceptions.panic_at range "%a@\n" pp_expr list in
+           man.exec (mk_remove_var var_els range) flow |>
+           man.eval (mk_py_none range)
+        )
+      |> Option.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "set.__contains__")}, _)}, args, []) ->
+      Utils.check_instances ~arguments_after_check:1 man flow range args ["set"]
+        (fun args flow ->
+           man.eval (mk_py_top T_bool range) flow)
+      |> Option.return
+
+
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, args, [])
       when is_compare_op_fun "set" f ->
       Utils.check_instances ~arguments_after_check:1 man flow range args ["set"]
@@ -140,6 +173,7 @@ struct
         )
       |> Option.return
 
+
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "set.__iter__")}, _)}, args, []) ->
       Utils.check_instances man flow range args
         ["set"]
@@ -148,7 +182,7 @@ struct
            let set_addr = match ekind set with
              | E_py_object ({addr_kind = A_py_set _} as a, _) -> a
              | _ -> assert false in
-           let a = mk_alloc_addr (Py_list.A_py_iterator ("set_iterator", set_addr, None)) range in
+           let a = mk_alloc_addr (Py_list.A_py_iterator ("set_iterator", [set_addr], None)) range in
            man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) a flow |>
            Eval.bind (fun eaddr_it flow ->
                let addr_it = match ekind eaddr_it with | E_addr a -> a | _ -> assert false in
@@ -162,7 +196,7 @@ struct
       man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) iterator flow |>
       Eval.bind (fun iterator flow ->
           let set_addr = match ekind iterator with
-            | E_py_object ({addr_kind = Py_list.A_py_iterator (s, a, _)}, _) when s = "set_iterator" -> a
+            | E_py_object ({addr_kind = Py_list.A_py_iterator (s, [a], _)}, _) when s = "set_iterator" -> a
             | _ -> assert false in
           let var_els = match akind set_addr with
             | A_py_set a -> a

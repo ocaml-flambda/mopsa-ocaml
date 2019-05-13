@@ -63,7 +63,9 @@ struct
     let flow1 = man.exec stmt flow in
 
     (** Initialize special variable __name__ *)
-    let v = mkfresh (fun uid -> "__name__", "__name__" ^ (string_of_int uid)) T_any () in
+    (* TODO: FIXME: __name__/__file__ is in gc, but not globals, so we're a bit stuck here. 140/141 seems to be the right constants **for now** *)
+    let v = Frontend.from_var {name="__name__"; uid=140} in
+    (* mkfresh (fun uid -> "__name__" ^ (string_of_int uid)) T_any () in *)
     let stmt =
       let range = tag_range range "__name__ assignment" in
       mk_assign
@@ -74,7 +76,8 @@ struct
     let flow2 = man.exec stmt flow1 in
 
     (** Initialize special variable __file__ *)
-    let v = mkfresh (fun uid -> "__file__", "__file__" ^ (string_of_int uid)) T_any () in
+    (* let v = mkfresh (fun uid -> "__file__" ^ (string_of_int uid)) T_any () in *)
+    let v = Frontend.from_var {name="__file__"; uid=141} in
     let stmt =
       let range = tag_range range "__file__ assignment" in
         mk_assign

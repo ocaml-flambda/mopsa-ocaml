@@ -82,7 +82,8 @@ struct
   let subset (lattice: 'a lattice) ctx (tmap1: 'a t) (tmap2: 'a t) : bool =
     top_included
       (Map.for_all2zo
-         (fun _ v1 -> lattice.is_bottom v1) (* non-⊥ ⊈ ⊥ *)
+         (fun tk v1 ->
+            lattice.is_bottom v1) (* non-⊥ ⊈ ⊥ *)
          (fun _ v2 -> true)  (* ⊥ ⊆ non-⊥ *)
          (fun _ v1 v2 -> lattice.subset ctx v1 v2)
       )
@@ -206,5 +207,5 @@ struct
       )
       tmap1 tmap2
 
-  
+
 end

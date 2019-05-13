@@ -44,7 +44,13 @@ module Domain =
     let eval zs exp (man:('a, unit) man) (flow:'a flow) : (expr,'a) eval option =
       let range = erange exp in
       match ekind exp with
-      (* E⟦ e1 and e2 ⟧ *)
+      | E_unop(O_py_not, e) ->
+        man.eval (Utils.mk_builtin_call "bool" [e] range) flow |>
+        Eval.bind (fun ee flow ->
+            man.eval (mk_not ee range) flow)
+        |> Option.return
+
+        (* E⟦ e1 and e2 ⟧ *)
       | E_binop(O_py_and, {ekind = E_constant (C_bool true)}, e2) ->
          man.eval e2 flow |> Option.return
 

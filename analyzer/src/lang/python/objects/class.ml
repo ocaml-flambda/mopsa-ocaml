@@ -89,7 +89,7 @@ module Domain =
                let bases' =
                  match bases with
                  | [] -> [find_builtin "object"]
-                 | _ -> List.map object_of_expr  bases
+                 | _ -> List.map (fun x -> let a, e = object_of_expr x in (a, None))  bases
                in
                if Libs.Py_mopsa.is_builtin_clsdec cls then
                  let name = Libs.Py_mopsa.builtin_clsdec_name cls in
@@ -102,7 +102,8 @@ module Domain =
                    Post.return flow
                  else
                    try
-                     let mro = c3_lin ({addr_kind= (A_py_class (C_user cls, bases')); addr_uid=(-1); addr_mode = STRONG}, None) in
+                     debug "bases' = %a@\n" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_expr) (List.map (fun x -> mk_py_object x range) bases');
+                     let mro = c3_lin ({addr_kind= (A_py_class (C_user cls, bases')); addr_uid=0; addr_mode = STRONG}, None) in
                      debug "MRO of %a: %a@\n" pp_var cls.py_cls_var
                        (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
                           (fun fmt x -> Format.fprintf fmt "%a" pp_expr (mk_py_object x (srange stmt))))

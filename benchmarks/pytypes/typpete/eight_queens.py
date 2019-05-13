@@ -7,6 +7,7 @@ class BailOut(Exception):
 
 def validate(queens):
     left = right = col = queens[-1]
+    mopsa.ignore_exception(IndexError)
     for r in queens[:-1][::-1]:
         left, right = left-1, right+1
         if r in (left, col, right):
@@ -38,6 +39,7 @@ def test_main():
     mopsa.massert(isinstance(r_queens, list))
     mopsa.massert(isinstance(r_queens[0], int))
     mopsa.ignore_exception(IndexError)
+
 
 # To fix: original file does not work... the raise BailOut is never catched
 # Also, there is a recursive function we don't handle yet

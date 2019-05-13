@@ -186,49 +186,54 @@ module Domain =
            Eval.add_cleaners [mk_remove_var counter range; mk_remove_var target range] |>
            Option.return
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "max")}, _)}, [iterable], []) ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin s)}, _)}, [iterable], []) when s = "max" || s = "min" ->
          (* desugaring max(iterable) into:
           *    iter_var = iter(iterable)
           *    maxi_var = next(iter_var)
           *    for target_var in iter_var:
           *        if target_var > maxi_var:
           *            maxi_var = target_var *)
-         let iter = mktmp () in
-         let iter_var = mk_var iter range in
-         let maxi = mktmp () in
-         let maxi_var = mk_var maxi range in
-         let target = mktmp () in
-         let target_var = mk_var target range in
+        let comp_op = if s = "max" then O_gt else if s = "min" then O_lt else assert false in
+        let iter = mktmp () in
+        let iter_var = mk_var iter range in
+        let maxi = mktmp () in
+        let maxi_var = mk_var maxi range in
+        let target = mktmp () in
+        let target_var = mk_var target range in
 
-         let cleaners = List.map (fun x -> mk_remove_var x range) [iter; maxi; target] in
-         let pass = mk_block [] range in
+        let cleaners = List.map (fun x -> mk_remove_var x range) [iter; maxi; target] in
+        let pass = mk_block [] range in
 
-         let assign_iter = mk_assign iter_var (Utils.mk_builtin_call "iter" [iterable] range) range in
-         let assign_max =
-           Utils.mk_try_stopiteration
-             (mk_assign maxi_var (Utils.mk_builtin_call "next" [iter_var] range) range)
-             (Utils.mk_builtin_raise "ValueError" range)
-           range in
-         let for_stmt = mk_stmt (S_py_for (target_var, iter_var,
-                                           mk_if (mk_binop target_var O_gt maxi_var range)
-                                             (mk_assign maxi_var target_var range)
-                                             pass range
-                                           , pass)) range in
-         let stmt = mk_block (assign_iter :: assign_max :: for_stmt :: []) range in
-         debug "Rewriting %a into %a@\n" pp_expr exp pp_stmt stmt;
-         man.exec stmt flow |>
-           man.eval maxi_var |>
-           Eval.add_cleaners cleaners |>
-           Option.return
+        let assign_iter = mk_assign iter_var (Utils.mk_builtin_call "iter" [iterable] range) range in
+        let assign_max =
+          Utils.mk_try_stopiteration
+            (mk_assign maxi_var (Utils.mk_builtin_call "next" [iter_var] range) range)
+            (Utils.mk_builtin_raise "ValueError" range)
+            range in
+        let for_stmt = mk_stmt (S_py_for (target_var, iter_var,
+                                          mk_if (mk_binop target_var comp_op maxi_var range)
+                                            (mk_assign maxi_var target_var range)
+                                            pass range
+                                         , pass)) range in
+        let stmt = mk_block (assign_iter :: assign_max :: for_stmt :: []) range in
+        debug "Rewriting %a into %a@\n" pp_expr exp pp_stmt stmt;
+        man.exec stmt flow |>
+        man.eval maxi_var |>
+        Eval.add_cleaners cleaners |>
+        Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "max")}, _)}, [e1; e2], []) ->
-         (* desugaring max(e1, e2) into if e1 > e2 then e1 else e2 *)
-         let expr = mk_expr (E_py_if (mk_binop e1 O_gt e2 range, e1, e2)) range in
-         debug "Rewriting %a into %a@\n" pp_expr exp pp_expr expr;
-         man.eval expr flow |> Option.return
+        (* desugaring max(e1, e2) into if e1 > e2 then e1 else e2 *)
+        let expr = mk_expr (E_py_if (mk_binop e1 O_gt e2 range, e1, e2)) range in
+        debug "Rewriting %a into %a@\n" pp_expr exp pp_expr expr;
+        man.eval expr flow |> Option.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "print")}, _)}, [], [])  ->
+        man.eval (mk_py_none range) flow
+        |> Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "print")}, _)}, [obj], [])  ->
-        man.eval obj flow |>
+        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) obj flow |>
         Eval.bind (fun eobj flow ->
             man.eval (mk_py_none range) flow)
         |> Option.return
@@ -252,6 +257,7 @@ module Domain =
         |> Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "sorted")}, _)}, [obj], [])  ->
+        (* todo: call list on obj first *)
         let seq = mktmp () in
         let flow = man.exec (mk_assign (mk_var seq range) obj range) flow in
         man.eval (Utils.mk_builtin_call "list.sort" [mk_var seq range] range) flow |>
@@ -259,6 +265,13 @@ module Domain =
             man.eval (mk_var seq range) flow |>
             Eval.add_cleaners [mk_remove_var seq range]
           )
+        |> Option.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_class (C_builtin "reversed", _)}, _)}, args, [])  ->
+        (* Utils.check_instances man flow range args ["list"]
+         *   (fun eargs flow ->
+         *      let hd = List.hd eargs in *)
+        man.eval (Utils.mk_builtin_call "list.__reversed__" args range) flow
         |> Option.return
 
 

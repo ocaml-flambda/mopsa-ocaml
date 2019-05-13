@@ -55,6 +55,14 @@ build_job:
     - echo $PY_FILE
     - $MOPSA_PY benchmarks/pytypes/typpete/$PY_FILE
 
+.bench-typy:
+  stage: benchmarks
+  dependencies: [build_job]
+  script:
+    - eval `opam config env`
+    - echo $PY_FILE
+    - $MOPSA_PY benchmarks/python/performance/$PY_FILE
+
 test-c 1/20:
   variables:
     C_FILE: 'array_tests.c'
@@ -159,6 +167,37 @@ test-py 3/3:
   variables:
     PY_FILE: 'exception_tests.py'
   extends: .test-py
+
+bench-typy 1/6:
+  variables:
+    PY_FILE: 'bm_float.py'
+  extends: .bench-typy
+
+bench-typy 2/6:
+  variables:
+    PY_FILE: 'bm_fannkuch.py'
+  extends: .bench-typy
+
+bench-typy 3/6:
+  variables:
+    PY_FILE: 'bm_chaos.py'
+  extends: .bench-typy
+
+bench-typy 4/6:
+  variables:
+    PY_FILE: 'bm_nbody.py'
+  extends: .bench-typy
+
+bench-typy 5/6:
+  variables:
+    PY_FILE: 'bm_spectral_norm.py'
+  extends: .bench-typy
+
+bench-typy 6/6:
+  variables:
+    PY_FILE: 'bm_unpack_sequence.py'
+  extends: .bench-typy
+
 
 bench-typpete 1/43:
   variables:
@@ -374,4 +413,3 @@ bench-typpete 43/43:
   variables:
     PY_FILE: 'unary_test_not.py'
   extends: .bench-typpete
-

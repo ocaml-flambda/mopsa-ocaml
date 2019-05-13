@@ -60,7 +60,23 @@ let mk_avar ?(vtyp = T_any) addr_uid =
 module Domain =
 struct
 
-  module ASet = Framework.Lattices.Powerset.Make(PyAddr)
+  module ASet =
+    (struct
+      module PS = Framework.Lattices.Powerset.Make(PyAddr)
+      include PS
+      let undef a = match a with
+        | PyAddr.Def _ -> false
+        | _ -> true
+
+      let widen at bt =
+        Top.top_absorb2 (fun a b ->
+            if Set.cardinal b - Set.cardinal a = 1
+            && Set.exists undef b && Set.exists undef a then
+              Top.Nt (Set.union a b)
+            else
+              PS.widen at bt) at bt
+    end)
+
   module AMap = Framework.Lattices.Partial_map.Make
       (struct type t = var let compare = compare_var let print = pp_var end)
       (ASet)
@@ -104,7 +120,10 @@ struct
     | S_assign({ekind = E_var (v, WEAK)}, {ekind = E_var (w, WEAK)}) ->
       let cur = get_domain_env T_cur man flow in
       if mem w cur then
-        set_domain_env T_cur (add v (find w cur) cur) man flow |> Post.return |> Option.return
+        if mem v cur then
+          set_domain_env T_cur (add v (ASet.join (find w cur) (find v cur)) cur) man flow |> Post.return |> Option.return
+        else
+          set_domain_env T_cur (add v (find w cur) cur) man flow |> Post.return |> Option.return
       else
         flow |> Post.return |> Option.return
 
@@ -127,7 +146,7 @@ struct
                 assign_addr man v (PyAddr.Def addr) mode flow |>
                 man.exec ~zone:Zone.Z_py_obj (mk_assign (mk_addr addr range) expr range) |>  Post.return
 
-              | _ -> debug "%a@\n" pp_expr e; assert false
+              | _ -> Exceptions.panic_at range "%a@\n" pp_expr e
           )
       |> Option.return
 
@@ -144,7 +163,12 @@ struct
       let flow = map_domain_env T_cur (remove v) man flow in
       if String.length v.org_vname >= 4 && String.sub v.org_vname 0 4 = "$tmp" then
         Post.return flow |> Option.return
-      else if String.length v.org_vname >= 3 && String.sub v.org_vname 0 3 = "$l*" then
+      else if (String.length v.org_vname >= 3 && (String.sub v.org_vname 0 3 = "$l*"
+                                                 || String.sub v.org_vname 0 3 = "$s*"
+                                                 || String.sub v.org_vname 0 3 = "$t:"))
+           || (String.length v.org_vname >= 5 && (String.sub v.org_vname 0 5 = "$d_k*" ||
+                                                  String.sub v.org_vname 0 5 = "$d_v*"))
+                                                 then
         Post.return flow |> Option.return
       else
         (* if the variable maps to a list, we should remove the temporary variable associated, ONLY if it's not used by another list *)
@@ -154,7 +178,6 @@ struct
       (* Post.return flow *)
 
     | S_assume e ->
-      debug "S_assume %a in flow@\n%a@\n" pp_expr e (Flow.print man.lattice) flow;
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
       post_eval man (fun expr flow ->
         match ekind expr with
@@ -175,7 +198,6 @@ struct
     | S_rename ({ekind = E_addr a}, {ekind = E_addr a'}) ->
       let cur = get_domain_env T_cur man flow in
       let ncur = AMap.map (ASet.map (fun addr -> if addr = Def a then Def a' else addr)) cur in
-      debug "ncur = %a@\n" print ncur;
       let flow = set_domain_env T_cur ncur man flow in
       let annot = Flow.get_ctx flow in
       let to_rename = Flow.fold (fun acc tk d ->
@@ -199,7 +221,6 @@ struct
     | _ -> None
 
   and assign_addr man v av mode flow =
-    debug "assign_addr %a %a@\n" pp_var v PyAddr.print av;
     let cur = get_domain_env T_cur man flow in
     let aset = match mode with
       | STRONG -> ASet.singleton av
@@ -230,10 +251,12 @@ struct
               (Eval.singleton (mk_py_object (find_builtin v.org_vname) range) flow :: acc, annots)
 
             | Undef_global ->
+              debug "Incoming NameError, on var %a, range %a, cs = %a @\n" pp_var v pp_range range Callstack.print (Callstack.get flow);
               let flow = man.exec (Utils.mk_builtin_raise "NameError" range) flow in
               (Eval.empty_singleton flow :: acc, Flow.get_ctx flow)
 
             | Undef_local ->
+              debug "Incoming UnboundLocalError, on var %a, range %a, cs = %a @\n" pp_var v pp_range range Callstack.print (Callstack.get flow);
               let flow = man.exec (Utils.mk_builtin_raise "UnboundLocalError" range) flow in
               (Eval.empty_singleton flow :: acc, Flow.get_ctx flow)
 

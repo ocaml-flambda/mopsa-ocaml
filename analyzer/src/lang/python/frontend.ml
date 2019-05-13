@@ -76,17 +76,11 @@ and from_stmt (stmt: Py_parser.Ast.stmt) : stmt =
     | S_expression e ->
       Universal.Ast.S_expression (from_exp e)
 
-    | S_while (test, body, None) ->
-      Universal.Ast.S_while (
-        from_exp test,
-        from_stmt body
-      )
-
-    | S_while (test, body, Some orelse) ->
-      S_py_while(
+    | S_while (test, body, orelse) ->
+      S_py_while (
         from_exp test,
         from_stmt body,
-        from_stmt orelse
+        from_stmt_option srange' orelse
       )
 
     | S_break ->
@@ -399,7 +393,7 @@ and from_comparison_op : Py_parser.Cst.cmpop -> operator = function
   | NotIn -> O_py_not_in
 
 and from_unop = function
-  | Not -> O_log_not
+  | Not -> O_py_not
   | USub -> Universal.Ast.O_minus
   | UAdd -> Universal.Ast.O_plus
   | Invert -> Universal.Ast.O_bit_invert

@@ -220,7 +220,8 @@ struct
       struct
         type t = CellEquiv.t
         let print fmt m =
-          Format.fprintf fmt "Cells<=>vars: @[%a@]" CellEquiv.print m
+          Format.fprintf fmt "Cells<=>vars: @[%a@]"
+            (CellEquiv.print ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")) m
       end
       )
     in

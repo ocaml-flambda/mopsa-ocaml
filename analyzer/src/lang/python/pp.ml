@@ -74,6 +74,7 @@ let () =
       | O_py_in -> pp_print_string fmt "in"
       | O_py_not_in -> pp_print_string fmt "not in"
       | O_py_mat_mult -> pp_print_string fmt "@"
+      | O_py_not -> pp_print_string fmt "py_not"
       | op -> default fmt op
     );
   register_expr_pp (fun default fmt exp ->

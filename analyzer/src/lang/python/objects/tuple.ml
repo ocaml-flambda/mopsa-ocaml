@@ -76,7 +76,7 @@ struct
       struct
         type t = Equiv.t
         let print fmt m =
-          Format.fprintf fmt "Tuple annots: @[%a@]" Equiv.print m
+          Format.fprintf fmt "Tuple annots: @[%a@]" (Equiv.print ?pp_sep:None) m
       end
       )
     in
@@ -186,7 +186,7 @@ struct
            let tuple_addr = match ekind tuple with
              | E_py_object ({addr_kind = A_py_tuple _} as a, _) -> a
              | _ -> assert false in
-           let addr_iterator = mk_alloc_addr (Py_list.A_py_iterator ("tuple_iterator", tuple_addr, Some 0)) range in
+           let addr_iterator = mk_alloc_addr (Py_list.A_py_iterator ("tuple_iterator", [tuple_addr], Some 0)) range in
            man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_iterator flow |>
            Eval.bind (fun addr_it flow ->
                let addr_it = match ekind addr_it with
@@ -203,7 +203,7 @@ struct
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) iterator flow |>
       Eval.bind (fun eiterator flow ->
           let tuple_it_addr, tuple_addr, tuple_pos = match ekind eiterator with
-            | E_py_object ({addr_kind = Py_list.A_py_iterator (s, a, d)} as addr, _) when s = "tuple_iterator" -> addr, a, d
+            | E_py_object ({addr_kind = Py_list.A_py_iterator (s, [a], d)} as addr, _) when s = "tuple_iterator" -> addr, a, d
             | _ -> assert false in
           let vars_els = match akind tuple_addr with
             | A_py_tuple a -> a
@@ -213,7 +213,7 @@ struct
             let () = debug "exec incoming@\n" in
             let flow = man.exec
                 (mk_assign iterator
-                   (mk_py_object ({tuple_it_addr with addr_kind = Py_list.A_py_iterator ("tuple_iterator", tuple_addr, Some (d+1))}, None) range) range) flow in
+                   (mk_py_object ({tuple_it_addr with addr_kind = Py_list.A_py_iterator ("tuple_iterator", [tuple_addr], Some (d+1))}, None) range) range) flow in
             man.eval (mk_var ~mode:WEAK (List.nth vars_els d) range) flow
           | _ ->
             man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton
