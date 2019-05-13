@@ -22,6 +22,7 @@
 (** Evaluation of MOPSA built-in functions *)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Universal.Ast
 open Ast
 
@@ -236,11 +237,16 @@ struct
       Option.return
 
     | E_c_builtin_call("_mopsa_assert_exists", [cond]) ->
-      let stmt = {skind = S_simple_assert(cond,false,true); srange = exp.erange} in
-      let flow = man.exec stmt flow in
+      let flow' = man.exec (mk_assume cond exp.erange) flow in
+      let cond' =
+        if man.lattice.is_bottom (Flow.get T_cur man.lattice flow') then
+          mk_zero exp.erange
+        else
+          mk_one exp.erange
+      in
+      let flow = man.exec (mk_assert cond' exp.erange) flow in
       Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
       Option.return
-
 
     | E_c_builtin_call("_mopsa_assert_false", [cond]) ->
       assert false
