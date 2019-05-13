@@ -28,6 +28,7 @@ open Framework.Core.Sig.Stacked.Stateless
 open Universal.Ast
 open Ast
 open Zone
+open Universal.Zone
 
 
 module Domain =
@@ -51,7 +52,11 @@ struct
 
     ieval = {
       provides = [Z_c, Z_c_low_level];
-      uses = [Z_c, Z_c_low_level]
+      uses = [
+        Z_c, Z_c_low_level;
+        Z_c, Z_c_scalar;
+        Z_c, Z_u_num
+      ]
     };
   }
 
@@ -291,6 +296,27 @@ struct
     | S_assume(e) ->
       assume e stmt.srange man flow |>
       Option.return
+
+    | S_expression e when is_c_num_type e.etyp ->
+      Some (
+        man.eval ~zone:(Z_c,Z_u_num) e flow |>
+        post_eval man @@ fun e flow ->
+        Post.return flow
+      )
+
+    | S_expression e when is_c_scalar_type e.etyp ->
+      Some (
+        man.eval ~zone:(Z_c,Z_c_scalar) e flow |>
+        post_eval man @@ fun e flow ->
+        Post.return flow
+      )
+
+    | S_expression e when is_c_type e.etyp ->
+      Some (
+        man.eval ~zone:(Z_c,Z_c_low_level) e flow |>
+        post_eval man @@ fun e flow ->
+        Post.return flow
+      )
 
     | _ -> None
 

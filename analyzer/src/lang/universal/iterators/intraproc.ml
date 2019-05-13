@@ -41,7 +41,7 @@ struct
 
   let exec zone stmt man flow =
     match skind stmt with
-    | S_expression(e) ->
+    | S_expression(e) when is_universal_type e.etyp ->
       Some (
         man.eval e flow |>
         post_eval man @@ fun e flow ->
