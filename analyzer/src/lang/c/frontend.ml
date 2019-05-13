@@ -837,7 +837,7 @@ and from_stub_builtin f =
   | FLOAT_VALID -> FLOAT_VALID
   | FLOAT_INF -> FLOAT_INF
   | FLOAT_NAN -> FLOAT_NAN
-  | OLD -> panic "old not supported"
+  | BYTES -> BYTES
 
 and from_stub_log_binop = function
   | AND -> AND

@@ -59,17 +59,35 @@ struct
   let init _ _ flow =  flow
 
 
-  (** Size attribute *)
-  (** ============== *)
+  (** Bytes attribute *)
+  (** =============== *)
 
-  let mk_size_var addr range =
+  let mk_bytes_var addr =
     let vname =
-      Format.fprintf Format.str_formatter "size(%a)" pp_addr addr;
+      Format.fprintf Format.str_formatter "bytes(%a)" pp_addr addr;
       Format.flush_str_formatter ()
     in
     let uniq =  vname ^ ":" ^ (string_of_int addr.addr_uid) in
-    let v = mkv vname uniq (addr.addr_uid) (T_c_integer C_unsigned_long) in
-    mk_var v ~mode:addr.addr_mode range
+    mkv vname uniq (addr.addr_uid) (T_c_integer C_unsigned_long)
+
+  let mk_size addr range =
+    let bytes = mk_bytes_var addr in
+
+    (* Get the type of the contained elements *)
+    let elem_typ =
+      match akind addr with
+      | A_stub_resource "PointerArray" -> pointer_type u8
+      | A_stub_resource "Memory" -> u8
+      | A_stub_resource "ReadOnlyString" -> u8
+      | _ -> u8
+    in
+
+    let elm_size = sizeof_type elem_typ in
+
+    if Z.equal elm_size Z.one
+    then mk_var bytes range
+    else mk_binop (mk_var bytes range) O_div (mk_z elm_size range) ~etyp:bytes.vtyp range
+
 
   (** Computation of post-conditions *)
   (** ============================== *)
@@ -86,8 +104,8 @@ struct
 
       begin match ekind pt with
         | E_c_points_to (P_block (A ({ addr_kind = A_stub_resource _ } as addr), _)) ->
-          (* Remove the size attribute before removing the address *)
-          let stmt' = mk_remove (mk_size_var addr stmt.srange) stmt.srange in
+          (* Remove the bytes attribute before removing the address *)
+          let stmt' = mk_remove_var (mk_bytes_var addr) stmt.srange in
           let flow' = man.exec ~zone:Z_c_scalar stmt' flow in
 
           let stmt' = mk_free_addr addr stmt.srange in
@@ -106,9 +124,9 @@ struct
     | S_rename ({ ekind = E_addr ({ addr_kind = A_stub_resource _ } as addr1) },
                 { ekind = E_addr ({ addr_kind = A_stub_resource _ } as addr2) })
       ->
-      let size1 = mk_size_var addr1 stmt.srange in
-      let size2 = mk_size_var addr2 stmt.srange in
-      man.exec ~zone:Z_c_scalar (mk_rename size1 size2 stmt.srange) flow |>
+      let bytes1 = mk_bytes_var addr1 in
+      let bytes2 = mk_bytes_var addr2 in
+      man.exec ~zone:Z_c_scalar (mk_rename_var bytes1 bytes2 stmt.srange) flow |>
       man.exec ~zone:Z_c_low_level stmt |>
       Post.return |>
       Option.return
@@ -131,17 +149,21 @@ struct
 
       begin match ekind exp with
       | E_addr addr ->
-        (* Add size attribute *)
-        let size = mk_size_var addr exp.erange in
-        let flow' = man.exec ~zone:Z_c_scalar (mk_add size exp.erange) flow in
+        (* Add bytes attribute *)
+        let bytes = mk_bytes_var addr in
+        let flow' = man.exec ~zone:Z_c_scalar (mk_add_var bytes exp.erange) flow in
         Eval.singleton exp flow'
 
       | _ -> assert false
       end
 
-    | E_stub_builtin_call(SIZE, p) ->
+    | E_stub_builtin_call(BYTES, { ekind = E_addr addr }) ->
+      Eval.singleton (mk_var (mk_bytes_var addr) exp.erange) flow |>
+      Option.return
+
+    | E_stub_builtin_call(SIZE, e) ->
       Some (
-        man.eval ~zone:(Z_c, Z_c_points_to) p flow |>
+        man.eval ~zone:(Z_c_low_level,Z_c_points_to) e flow |>
         Eval.bind @@ fun pt flow ->
 
         let base =
@@ -158,8 +180,7 @@ struct
           Eval.singleton (mk_int (String.length str + 1) exp.erange ~typ:ul) flow
 
         | A addr ->
-          let size = mk_size_var addr exp.erange in
-          Eval.singleton size flow
+          Eval.singleton (mk_size addr exp.erange) flow
 
         | Z -> panic ~loc:__LOC__ "eval_base_size: addresses not supported"
       )
