@@ -185,16 +185,15 @@ struct
       []
       a.cells
 
-  (** [get_overlappings c a] returns the list of cells in [a.cells]
-      that overlap with [c]. *)
+  (** Return the list of cells in [a.cells] - other than [c] - that
+      overlap with [c]. *)
   let get_overlappings c (a:t) =
     find_cells (fun c' ->
         compare_cell c c' <> 0 &&
+        compare_base (c.base) (c'.base) = 0 &&
         (
-          let cell_range c = (c.offset, Z.add c.offset (sizeof_type c.typ))
-          in
+          let cell_range c = (c.offset, Z.add c.offset (sizeof_type c.typ)) in
           let check_overlap (a1, b1) (a2, b2) = Z.lt (Z.max a1 a2) (Z.min b1 b2) in
-          compare_base (c.base) (c'.base) = 0 &&
           check_overlap (cell_range c) (cell_range c')
         )
       ) a
@@ -202,12 +201,12 @@ struct
   let mk_cell base offset ?(primed=false) typ =
     { base; offset; typ = remove_typedef_qual typ; primed }
 
+
   (** {2 Cell-variable binding} *)
   (** ************************* *)
 
   (** The bindings between cells and their associated scalar variables
       are kept in a flow-insensitive context *)
-
   module CellEquiv = Equiv.Make
       (struct
         type t = cell
@@ -238,8 +237,10 @@ struct
     set_ctx CellEquiv.empty ctx
 
 
-  (** Create a scalar variable corresponding to a cell *)
-  let mk_cell_var (c:cell) ctx : var * Context.uctx =
+  (** Search for a scalar variable corresponding to a cell in the
+      context, or create a new one
+  *)
+  let mk_cell_var_ctx (c:cell) ctx : var * Context.uctx =
     let bindings = get_ctx ctx in
     (* Check if the binding already exists *)
     try CellEquiv.find_l c bindings, ctx
@@ -264,9 +265,12 @@ struct
       v, set_ctx (CellEquiv.add (c,v) bindings) ctx
 
 
-  let mk_cell_var_with_flow c flow =
+  (** Search for a scalar variable corresponding to a cell in a flow,
+      or create a new one
+  *)
+  let mk_cell_var_flow c flow =
     let ctx = Flow.get_unit_ctx flow in
-    let v, ctx' = mk_cell_var c ctx in
+    let v, ctx' = mk_cell_var_ctx c ctx in
     let flow' = Flow.set_unit_ctx ctx' flow in
     v, flow'
 
@@ -291,7 +295,7 @@ struct
               ) a
       with
       | Some (c') ->
-        let v, ctx= mk_cell_var c' ctx in
+        let v, ctx= mk_cell_var_ctx c' ctx in
         Some (
           (wrap_expr
              (mk_var v range)
@@ -316,7 +320,7 @@ struct
         | Some (c') ->
           let b = Z.sub c.offset c'.offset in
           let base = (Z.pow (Z.of_int 2) (8 * Z.to_int b))  in
-          let v, ctx = mk_cell_var c' ctx in
+          let v, ctx = mk_cell_var_ctx c' ctx in
           Some (
             (_mod
                (div (mk_var v range) (mk_z base range) range)
@@ -351,7 +355,7 @@ struct
               in
               let ll = aux 0 [] in
               let _,e,ctx = List.fold_left (fun (time, res, ctx) x ->
-                  let v, ctx = mk_cell_var x ctx in
+                  let v, ctx = mk_cell_var_ctx x ctx in
                   let res' =
                     add
                       (mul (mk_z time range) (mk_var v range) range)
@@ -394,7 +398,7 @@ struct
        not (BaseSet.mem c.base a.bases)
     then s
     else
-      let v, _ = mk_cell_var c ctx in
+      let v, _ = mk_cell_var_ctx c ctx in
       let s' = man.sexec ~zone:Z_c_scalar (mk_add (mk_var v range) range) ctx s in
       if is_c_pointer_type c.typ then s'
       else
@@ -459,16 +463,21 @@ struct
   (** {2 Cell expansion} *)
   (** ****************** *)
 
-  (** Expand a pointer dereference into a finite set of cells. Return
-      None if pointer is ⊤ *)
-  let expand p range man flow : (cell option, 'a) eval =
+  (** Possible results of a cell expansion *)
+  type expansion =
+    | ExpandedCell of cell
+    | OtherCells of cell list
+    | Top
+
+  (** Expand a pointer dereference into a cell. *)
+  let expand p range man flow : (expansion, 'a) eval =
     (* Get the base and offset of the pointed block *)
     man.eval ~zone:(Z_c_low_level, Z_c_points_to) p flow |>
     Eval.bind @@ fun pt flow ->
 
     match ekind pt with
     | E_c_points_to P_top ->
-      Eval.singleton None flow
+      Eval.singleton Top flow
 
     | E_c_points_to P_null ->
       let flow = raise_alarm Alarms.ANullDeref range ~bottom:true man.lattice flow in
@@ -505,34 +514,50 @@ struct
       in
       assume_eval ~zone:Z_u_num cond
         ~fthen:(fun flow ->
+            let a = get_domain_env T_cur man flow in
+
             (* Compute the interval and create a finite number of cells *)
             let itv = man.ask (Itv.Q_interval offset) flow in
             let step = Z.one in
 
             let l, u = Itv.bounds_opt itv in
 
-            (* l >= 0 *)
             let l =
               match l with
               | None -> Z.zero
               | Some l -> Z.max l Z.zero
             in
 
-            (* u <= l + !opt_expand *)
             let u =
-              match u with
-              | None -> Z.add l (Z.of_int !opt_expand)
-              | Some u -> Z.min u (Z.add l (Z.of_int !opt_expand))
+              match u, expr_to_z size with
+              | None, Some size -> Z.sub size elm
+              | Some u, Some size -> Z.min u (Z.sub size elm)
+              | Some u, None -> u
+              | None, None -> panic_at range "no upper bound found for offset %a" pp_expr offset
             in
 
             (* Iterate over [l, u] *)
             let rec aux i o =
-              if Z.gt o u
-              then []
+              if i = !opt_expand
+              then
+                if Z.gt o u
+                then []
+                else
+                  let itv = Itv.of_z o u in
+                  let cells = find_cells
+                      (fun c -> compare_base c.base base = 0 &&
+                                Itv.mem c.offset itv
+                      ) a
+                  in
+                  if cells = []
+                  then []
+                  else
+                    let flow = man.exec ~zone:Z_u_num (mk_assume (mk_binop offset O_ge (mk_z o range) range) range) flow in
+                    [Eval.singleton (OtherCells cells) flow]
               else
                 let flow' = man.exec ~zone:Z_u_num (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow in
                 let c = mk_cell base o typ in
-                Eval.singleton (Some c) flow' :: aux (i + 1) (Z.add o step)
+                Eval.singleton (ExpandedCell c) flow' :: aux (i + 1) (Z.add o step)
             in
             let evals = aux 0 l in
             Eval.join_list evals
@@ -565,7 +590,7 @@ struct
     if CellSet.mem c a.cells || not (is_c_scalar_type c.typ)
     then flow
     else
-      let v, flow = mk_cell_var_with_flow c flow in
+      let v, flow = mk_cell_var_flow c flow in
       let flow = man.exec ~zone:Z_c_scalar (mk_add (mk_var v range) range) flow in
 
       if is_c_pointer_type c.typ
@@ -583,31 +608,34 @@ struct
         in
         set_domain_env T_cur { a with cells = CellSet.add c a.cells } man flow
 
+  (* Remove a cell and its associated scalar variable *)
+  let remove_cell c range man flow =
+    let flow = map_domain_env T_cur (fun a ->
+        { a with cells = CellSet.remove c a.cells }
+      ) man flow
+    in
+    let v, flow = mk_cell_var_flow c flow in
+    let stmt = mk_remove_var v range in
+    man.exec_sub ~zone:Z_c_scalar stmt flow
+
 
   (** Remove cells overlapping with cell [c] *)
   let remove_overlappings c range man flow =
     let a = get_domain_env T_cur man flow in
     let overlappings = get_overlappings c a in
 
-    let a' =
-      overlappings |>
-      List.fold_left (fun a c' -> {a with cells = CellSet.remove c' a.cells}) a
-    in
-
-    let flow' = set_domain_env T_cur a' man flow in
-
     List.fold_left (fun acc c' ->
-        acc |> Post.bind @@ fun flow ->
-        let v', flow = mk_cell_var_with_flow c' flow in
-        let stmt = mk_remove_var v' range in
-        man.exec_sub ~zone:Z_c_scalar stmt flow
-      ) (Post.return flow') overlappings
+        Post.bind (remove_cell c' range man) acc
+      ) (Post.return flow) overlappings
 
 
   let assign_cell c e mode range man flow =
-    let flow = map_domain_env T_cur (fun a -> { a with cells = CellSet.add c a.cells }) man flow in
+    let flow = map_domain_env T_cur (fun a ->
+        { a with cells = CellSet.add c a.cells }
+      ) man flow
+    in
 
-    let v, flow = mk_cell_var_with_flow c flow in
+    let v, flow = mk_cell_var_flow c flow in
 
     let stmt = mk_assign (mk_var v ~mode range) e range in
     man.exec_sub ~zone:Z_c_scalar stmt flow |>
@@ -629,18 +657,11 @@ struct
           }
         ) man
     in
-    let oldv, flow = mk_cell_var_with_flow old_cell flow in
-    let newv, flow = mk_cell_var_with_flow new_cell flow in
+    let oldv, flow = mk_cell_var_flow old_cell flow in
+    let newv, flow = mk_cell_var_flow new_cell flow in
     let stmt = mk_rename_var oldv newv range in
     man.exec_sub ~zone:Z_c_scalar stmt flow
 
-
-  (* Remove a cell and its associated scalar variable *)
-  let remove_cell c range man flow =
-    let flow = map_domain_env T_cur (fun a -> { a with cells = CellSet.remove c a.cells }) man flow in
-    let v, flow = mk_cell_var_with_flow c flow in
-    let stmt = mk_remove_var v range in
-    man.exec_sub ~zone:Z_c_scalar stmt flow
 
 
   (** Rename bases and their cells *)
@@ -664,7 +685,7 @@ struct
       else
         (* Otherwise, assign with weak update *)
         fun c flow ->
-          let v, flow = mk_cell_var_with_flow c flow in
+          let v, flow = mk_cell_var_flow c flow in
           assign_cell (to_base2 c) (mk_var v range) WEAK range man flow |>
           Post.bind @@ remove_cell c range man
     in
@@ -779,7 +800,7 @@ struct
         in
 
         (* Initialize the associated variable *)
-        let v, flow = mk_cell_var_with_flow c flow in
+        let v, flow = mk_cell_var_flow c flow in
         let stmt = mk_c_declaration v init range in
         man.exec_sub ~zone:Z_c_scalar stmt flow |>
 
@@ -792,22 +813,25 @@ struct
   let assign p e mode range man flow =
     (* Expand *p into cells *)
     expand p range man flow |>
-    post_eval man @@ fun c flow ->
+    post_eval man @@ fun expansion flow ->
+    match expansion with
+    | Top ->
+      panic_at range "assignment to ⊤ lval is not supported"
 
-    match c with
-    | None ->
-      (* ⊤ pointer !!! *)
-      panic_at range "lval *%a can not be expanded" pp_expr p
-
-    | Some { base } when is_base_readonly base ->
+    | ExpandedCell { base } when is_base_readonly base ->
       let flow = raise_alarm Alarms.AReadOnlyModification ~bottom:true range man.lattice flow in
       Post.return flow
 
-    | Some c ->
+    | ExpandedCell c ->
       man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow |>
       post_eval man @@ fun e flow ->
 
       assign_cell c e mode range man flow
+
+    | OtherCells cells ->
+      List.fold_left (fun acc c ->
+          Post.bind (remove_cell c range man) acc
+        ) (Post.return flow) cells
 
 
   (** 𝕊⟦ ?e ⟧ *)
@@ -922,14 +946,12 @@ struct
       (* target should be a scalar lval *)
       begin
         expand (mk_c_address_of target range) range man flow |>
-        post_eval man @@ fun c flow ->
-        match c with
-        | None ->
-          (* ⊤ pointer *)
-          Post.return flow
-
-        | Some c ->
+        post_eval man @@ fun expansion flow ->
+        match expansion with
+        | ExpandedCell c ->
           rename_cell { c with primed = true } c range man flow
+
+        | _ -> assert false
       end
 
     | _ :: _ ->
@@ -1008,7 +1030,7 @@ struct
         let c = mk_cell (V v) Z.zero v.vtyp in
         let flow = map_domain_env T_cur (fun a -> { a with cells = CellSet.add c a.cells }) man flow in
 
-        let vv, flow = mk_cell_var_with_flow c flow in
+        let vv, flow = mk_cell_var_flow c flow in
         man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow |>
         post_eval man @@ fun e flow ->
 
@@ -1073,14 +1095,14 @@ struct
   let deref_scalar_pointer p mode range man flow =
     (* Expand *p into cells *)
     expand p range man flow |>
-    Eval.bind @@ fun c flow ->
+    Eval.bind @@ fun expansion flow ->
 
-    match c with
-    | None ->
-      (* ⊤ pointer => use the whole value interval *)
+    match expansion with
+    | Top | OtherCells _ ->
+      (* ⊤ pointer or expand threshold exceeded => use the whole value interval *)
       Eval.singleton (mk_top (under_pointer_type p.etyp) range) flow
 
-    | Some { base = S str; offset } ->
+    | ExpandedCell { base = S str; offset } ->
       let o = Z.to_int offset in
       let chr =
         if o = String.length str
@@ -1090,10 +1112,11 @@ struct
       let e = mk_c_character chr range in
       Eval.singleton e flow
 
-    | Some c ->
+    | ExpandedCell c ->
       let flow = add_cell c range man flow in
-      let v, flow = mk_cell_var_with_flow c flow in
+      let v, flow = mk_cell_var_flow c flow in
       Eval.singleton (mk_var v ~mode range) flow
+
 
 
   (* 𝔼⟦ *p ⟧ where p is a pointer to a function *)
@@ -1113,17 +1136,16 @@ struct
   (** 𝔼⟦ lval' ⟧ *)
   let primed lval range man flow =
     expand (mk_c_address_of lval range) range man flow |>
-    Eval.bind @@ fun c flow ->
+    Eval.bind @@ fun expansion flow ->
 
-    match c with
-    | None ->
-      (* &lval points to ⊤ *)
+    match expansion with
+    | Top | OtherCells _ ->
       Eval.singleton (mk_top lval.etyp range) flow
 
-    | Some c ->
+    | ExpandedCell c ->
       let c' = { c with primed = true } in
       let flow = add_cell c' range man flow in
-      let v', flow = mk_cell_var_with_flow c' flow in
+      let v', flow = mk_cell_var_flow c' flow in
       Eval.singleton (mk_var v' range) flow
 
 
