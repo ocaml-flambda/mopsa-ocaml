@@ -187,7 +187,7 @@ struct
 
   (** Return the list of cells in [a.cells] - other than [c] - that
       overlap with [c]. *)
-  let get_overlappings c (a:t) =
+  let get_cell_overlappings c (a:t) =
     find_cells (fun c' ->
         compare_cell c c' <> 0 &&
         compare_base (c.base) (c'.base) = 0 &&
@@ -195,6 +195,17 @@ struct
           let cell_range c = (c.offset, Z.add c.offset (sizeof_type c.typ)) in
           let check_overlap (a1, b1) (a2, b2) = Z.lt (Z.max a1 a2) (Z.min b1 b2) in
           check_overlap (cell_range c) (cell_range c')
+        )
+      ) a
+
+  (** Return the list of cells in [a.cells] in [base] that overlap in
+      offset interval [itv]. *)
+  let get_region_overlappings base itv (a:t) =
+    find_cells (fun c ->
+        compare_base (c.base) base = 0 &&
+        (
+          let itv' = Itv.of_z c.offset (Z.add c.offset (Z.pred (sizeof_type c.typ))) in
+          not (Itv.meet itv itv' |> Itv.is_bottom)
         )
       ) a
 
@@ -466,8 +477,8 @@ struct
 
   (** Possible results of a cell expansion *)
   type expansion =
-    | ExpandedCell of cell
-    | OtherCells of cell list
+    | Cell of cell
+    | Region of base * Itv.t
     | Top
 
   (** Expand a pointer dereference into a cell. *)
@@ -515,8 +526,6 @@ struct
       in
       assume_eval ~zone:Z_u_num cond
         ~fthen:(fun flow ->
-            let a = get_domain_env T_cur man flow in
-
             (* Compute the interval and create a finite number of cells *)
             let itv = man.ask (Itv.Q_interval offset) flow in
             let step = Z.one in
@@ -544,21 +553,13 @@ struct
                 if Z.gt o u
                 then []
                 else
-                  let itv = Itv.of_z o u in
-                  let cells = find_cells
-                      (fun c -> compare_base c.base base = 0 &&
-                                Itv.mem c.offset itv
-                      ) a
-                  in
-                  if cells = []
-                  then []
-                  else
-                    let flow = man.exec ~zone:Z_u_num (mk_assume (mk_binop offset O_ge (mk_z o range) range) range) flow in
-                    [Eval.singleton (OtherCells cells) flow]
+                  let region = Region (base, Itv.of_z o u) in
+                  let flow = man.exec ~zone:Z_u_num (mk_assume (mk_binop offset O_ge (mk_z o range) range) range) flow in
+                  [Eval.singleton region flow]
               else
                 let flow' = man.exec ~zone:Z_u_num (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow in
                 let c = mk_cell base o typ in
-                Eval.singleton (ExpandedCell c) flow' :: aux (i + 1) (Z.add o step)
+                Eval.singleton (Cell c) flow' :: aux (i + 1) (Z.add o step)
             in
             let evals = aux 0 l in
             Eval.join_list evals
@@ -621,9 +622,19 @@ struct
 
 
   (** Remove cells overlapping with cell [c] *)
-  let remove_overlappings c range man flow =
+  let remove_cell_overlappings c range man flow =
     let a = get_domain_env T_cur man flow in
-    let overlappings = get_overlappings c a in
+    let overlappings = get_cell_overlappings c a in
+
+    List.fold_left (fun acc c' ->
+        Post.bind (remove_cell c' range man) acc
+      ) (Post.return flow) overlappings
+
+
+  (** Remove cells overlapping with cell [c] *)
+  let remove_region_overlappings base itv range man flow =
+    let a = get_domain_env T_cur man flow in
+    let overlappings = get_region_overlappings base itv a in
 
     List.fold_left (fun acc c' ->
         Post.bind (remove_cell c' range man) acc
@@ -641,7 +652,11 @@ struct
     let stmt = mk_assign (mk_var v ~mode range) e range in
     man.exec_sub ~zone:Z_c_scalar stmt flow |>
 
-    Post.bind @@ remove_overlappings c range man
+    Post.bind @@ remove_cell_overlappings c range man
+
+
+  let assign_region base itv range man flow =
+    remove_region_overlappings base itv range man flow
 
 
   (** Rename a cell and its associated scalar variable *)
@@ -819,20 +834,18 @@ struct
     | Top ->
       panic_at range "assignment to ⊤ lval is not supported"
 
-    | ExpandedCell { base } when is_base_readonly base ->
+    | Cell { base } when is_base_readonly base ->
       let flow = raise_alarm Alarms.AReadOnlyModification ~bottom:true range man.lattice flow in
       Post.return flow
 
-    | ExpandedCell c ->
+    | Cell c ->
       man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow |>
       post_eval man @@ fun e flow ->
 
       assign_cell c e mode range man flow
 
-    | OtherCells cells ->
-      List.fold_left (fun acc c ->
-          Post.bind (remove_cell c range man) acc
-        ) (Post.return flow) cells
+    | Region (base,itv) ->
+      assign_region base itv range man flow
 
 
   (** 𝕊⟦ ?e ⟧ *)
@@ -949,7 +962,7 @@ struct
         expand (mk_c_address_of target range) range man flow |>
         post_eval man @@ fun expansion flow ->
         match expansion with
-        | ExpandedCell c ->
+        | Cell c ->
           rename_cell { c with primed = true } c range man flow
 
         | _ -> assert false
@@ -1038,7 +1051,7 @@ struct
         let stmt = mk_assign (mk_var vv ~mode lval.erange) e stmt.srange in
         man.exec_sub ~zone:Z_c_scalar stmt flow |>
 
-        Post.bind @@ remove_overlappings c stmt.srange man
+        Post.bind @@ remove_cell_overlappings c stmt.srange man
       )
 
     | S_assign(({ekind = E_c_deref(p)}), e) when is_c_scalar_type @@ under_type p.etyp ->
@@ -1099,11 +1112,11 @@ struct
     Eval.bind @@ fun expansion flow ->
 
     match expansion with
-    | Top | OtherCells _ ->
+    | Top | Region _ ->
       (* ⊤ pointer or expand threshold exceeded => use the whole value interval *)
       Eval.singleton (mk_top (under_pointer_type p.etyp) range) flow
 
-    | ExpandedCell { base = S str; offset } ->
+    | Cell { base = S str; offset } ->
       let o = Z.to_int offset in
       let chr =
         if o = String.length str
@@ -1113,7 +1126,7 @@ struct
       let e = mk_c_character chr range in
       Eval.singleton e flow
 
-    | ExpandedCell c ->
+    | Cell c ->
       let flow = add_cell c range man flow in
       let v, flow = mk_cell_var_flow c flow in
       Eval.singleton (mk_var v ~mode range) flow
@@ -1140,10 +1153,10 @@ struct
     Eval.bind @@ fun expansion flow ->
 
     match expansion with
-    | Top | OtherCells _ ->
+    | Top | Region _ ->
       Eval.singleton (mk_top lval.etyp range) flow
 
-    | ExpandedCell c ->
+    | Cell c ->
       let c' = { c with primed = true } in
       let flow = add_cell c' range man flow in
       let v', flow = mk_cell_var_flow c' flow in
