@@ -79,7 +79,7 @@ struct
   (** {2 Command-line options} *)
   (** ************************ *)
   let () =
-    import_standalone_option Rounding.name ~into:name  
+    import_standalone_option Rounding.name ~into:name
 
 
   (** {2 Environment utility functions} *)
@@ -105,7 +105,7 @@ struct
       List.filter (function { vtyp = T_float _} -> true | _ -> false) lv |>
       vars_to_apron ctx
     in
-    
+
 
     let env' = Apron.Environment.add env
         (Array.of_list int_vars)
@@ -145,15 +145,26 @@ struct
       ApronManager.name
       Apron.Abstract1.print abs
 
-  let merge pre (post1,log1) (post2,log2) =
+  let merge ctx pre (a1,log1) (a2,log2) =
     debug "@[<v>merging:@, pre-condition: %a@, post-condition #1: %a@, log #1: %a@, post-condition #2: %a@, log #2: %a@]"
       Apron.Abstract1.print pre
-      Apron.Abstract1.print post1
+      Apron.Abstract1.print a1
       pp_block log1
-      Apron.Abstract1.print post2
+      Apron.Abstract1.print a2
       pp_block log2
     ;
-    assert false
+    let patch stmt a acc =
+      match skind stmt with
+      | S_add { ekind = E_var (var, _) }
+      | S_assign({ ekind = E_var (var, _)}, _) ->
+        let acc, _ = add_missing_vars ctx acc [var] in
+        acc
+
+      | _ -> assert false
+    in
+    let a1' = List.fold_left (fun acc stmt -> patch stmt a1 acc) a2 log1 in
+    let a2' = List.fold_left (fun acc stmt -> patch stmt a2 acc) a1 log2 in
+    meet a1' a2'
 
 
 
@@ -321,7 +332,7 @@ struct
 
     | _ -> None
 
-  
+
   let ask : type r. r query -> Context.uctx -> t -> r option =
     fun query ctx abs ->
       match query with

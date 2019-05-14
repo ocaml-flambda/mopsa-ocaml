@@ -82,7 +82,7 @@ struct
 
   let debug fmt = Debug.debug ~channel:name fmt
 
-  let merge pre (a1, log1) (a2, log2) =
+  let merge ctx pre (a1, log1) (a2, log2) =
     debug "@[<v>merging:@, pre-condition: %a@, post-condition #1: %a@, log #1: %a@, post-condition #2: %a@, log #2: %a@]"
       VarMap.print pre
       VarMap.print a1
@@ -90,18 +90,21 @@ struct
       VarMap.print a2
       pp_block log2
     ;
-    assert false
 
-    (* let patch stmt a acc =
-     *   match skind stmt with
-     *   |
-     *   | S_assign({ ekind = E_var (var, _)}, _) ->
-     *     let v = find var a in
-     *     add var v acc
-     *   | _ -> assert false
-     * in
-     * let acc = List.fold_left (fun acc stmt -> patch stmt a1 acc) a2 log1 in
-     * List.fold_left (fun acc stmt -> patch stmt a2 acc) acc log2 *)
+    let patch stmt a acc =
+      match skind stmt with
+      | S_add { ekind = E_var (var, _) } ->
+        add var Value.top acc
+
+      | S_assign({ ekind = E_var (var, _)}, _) ->
+        let v = find var a in
+        add var v acc
+
+      | _ -> assert false
+    in
+    let acc = List.fold_left (fun acc stmt -> patch stmt a1 acc) a2 log1 in
+    List.fold_left (fun acc stmt -> patch stmt a2 acc) acc log2
+
 
   let print fmt a =
     Format.fprintf fmt "%s:@,@[   %a@]@\n" Value.display VarMap.print a
