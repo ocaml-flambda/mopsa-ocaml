@@ -34,8 +34,8 @@
 	    {
                 "apply": {
                     "compose": [
+                        "c.memory.structured.flat",
                         {
-                            "c.memory.structured.flat",
                             "product": [
                                 "c.memory.lowlevel.cells",
                                 "c.memory.lowlevel.string_length"
