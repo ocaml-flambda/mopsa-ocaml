@@ -170,7 +170,7 @@ struct
 
   let widen ctx = join
 
-  let merge pre (post1,log1) (post2,log2) =
+  let merge ctx pre (post1,log1) (post2,log2) =
     assert false
 
 end

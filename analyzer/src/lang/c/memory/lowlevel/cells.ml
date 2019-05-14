@@ -468,7 +468,7 @@ struct
     let (a, s, s') = join man ctx (a,s) (a',s') in
     (a, s, s', true)
 
-  let merge pre (a,log) (a',log') =
+  let merge ctx pre (a,log) (a',log') =
     assert false
 
 

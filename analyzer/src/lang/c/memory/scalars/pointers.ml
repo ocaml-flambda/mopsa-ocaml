@@ -172,7 +172,7 @@ struct
   let widen man ctx (a,s) (a',s') =
     Map.widen ctx a a', s, s', true
 
-  let merge pre (post,log) (post',log') =
+  let merge ctx pre (post,log) (post',log') =
     assert false
 
   let print fmt a =
