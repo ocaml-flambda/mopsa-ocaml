@@ -114,7 +114,7 @@ degree of the Spline."""
         if u == dom[1]:
             return self.points[-1]
         I = self.GetIndex(u)
-        d = [self.points[I]]
+        # d = [self.points[I]]
         d = [self.points[I - self.degree + 1 + ii]
              for ii in range(self.degree + 1)]
         U = self.knots
