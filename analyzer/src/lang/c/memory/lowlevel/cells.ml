@@ -506,6 +506,9 @@ struct
         f.c_func_org_name
 
     | E_c_points_to P_block (base, offset) ->
+      let typ = under_pointer_type p.etyp in
+      let elm = sizeof_type typ in
+
       (* Get the size of the base *)
       eval_base_size base range man flow |>
       Eval.bind @@ fun size flow ->
@@ -517,60 +520,81 @@ struct
       man.eval ~zone:(Z_c_scalar,Z_u_num) offset flow |>
       Eval.bind @@ fun offset flow ->
 
-      (* Check the bounds: offset ∈ [0, size - |typ|] *)
-      let typ = under_pointer_type p.etyp in
-      let elm = sizeof_type typ in
-      let cond = mk_in offset (mk_zero range)
-          (sub size (mk_z elm range) range ~typ:T_int)
-          range
-      in
-      assume_eval ~zone:Z_u_num cond
-        ~fthen:(fun flow ->
-            (* Compute the interval and create a finite number of cells *)
-            let itv = man.ask (Itv.Q_interval offset) flow in
-            let step = Z.one in
-
-            let l, u = Itv.bounds_opt itv in
-
-            let l =
-              match l with
-              | None -> Z.zero
-              | Some l -> Z.max l Z.zero
-            in
-
-            let u =
-              match u, expr_to_z size with
-              | None, Some size -> Z.sub size elm
-              | Some u, Some size -> Z.min u (Z.sub size elm)
-              | Some u, None -> u
-              | None, None -> panic_at range "no upper bound found for offset %a" pp_expr offset
-            in
-
-            (* Iterate over [l, u] *)
-            let rec aux i o =
-              if i = !opt_expand
-              then
-                if Z.gt o u
-                then []
-                else
-                  let region = Region (base, Itv.of_z o u) in
-                  let flow = man.exec ~zone:Z_u_num (mk_assume (mk_binop offset O_ge (mk_z o range) range) range) flow in
-                  [Eval.singleton region flow]
-              else
-                let flow' = man.exec ~zone:Z_u_num (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow in
-                let c = mk_cell base o typ in
-                Eval.singleton (Cell c) flow' :: aux (i + 1) (Z.add o step)
-            in
-            let evals = aux 0 l in
-            Eval.join_list evals
-          )
-        ~felse:(fun flow ->
+      (* Try static check *)
+      begin
+        match expr_to_z size, expr_to_z offset with
+        | Some size, Some offset ->
+          if Z.gt elm size then
+            panic_at range
+              "%a points to a cell of size %a, which is greater than the size %a of its base %a"
+              pp_expr p
+              Z.pp_print elm
+              Z.pp_print size
+              pp_base base
+          ;
+          if Z.leq Z.zero offset &&
+             Z.leq offset (Z.sub size elm)
+          then
+            let c = mk_cell base offset typ in
+            Eval.singleton (Cell c) flow
+          else
             let flow = raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow in
             Eval.empty_singleton flow
-          )
-        man flow
 
+        | _ ->
 
+          (* Check the bounds: offset ∈ [0, size - |typ|] *)
+          let cond = mk_in offset (mk_zero range)
+              (sub size (mk_z elm range) range ~typ:T_int)
+              range
+          in
+          assume_eval ~zone:Z_u_num cond
+            ~fthen:(fun flow ->
+                (* Compute the interval and create a finite number of cells *)
+                let itv = man.ask (Itv.Q_interval offset) flow in
+                let step = Z.one in
+
+                let l, u = Itv.bounds_opt itv in
+
+                let l =
+                  match l with
+                  | None -> Z.zero
+                  | Some l -> Z.max l Z.zero
+                in
+
+                let u =
+                  match u, expr_to_z size with
+                  | None, Some size -> Z.sub size elm
+                  | Some u, Some size -> Z.min u (Z.sub size elm)
+                  | Some u, None -> u
+                  | None, None -> panic_at range "no upper bound found for offset %a" pp_expr offset
+                in
+
+                (* Iterate over [l, u] *)
+                let rec aux i o =
+                  if i = !opt_expand
+                  then
+                    if Z.gt o u
+                    then []
+                    else
+                      let region = Region (base, Itv.of_z o u) in
+                      let flow = man.exec ~zone:Z_u_num (mk_assume (mk_binop offset O_ge (mk_z o range) range) range) flow in
+                      [Eval.singleton region flow]
+                  else
+                    let flow' = man.exec ~zone:Z_u_num (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow in
+                    let c = mk_cell base o typ in
+                    Eval.singleton (Cell c) flow' :: aux (i + 1) (Z.add o step)
+                in
+                let evals = aux 0 l in
+                Eval.join_list evals
+              )
+            ~felse:(fun flow ->
+                let flow = raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow in
+                Eval.empty_singleton flow
+              )
+            man flow
+
+      end
 
     | _ -> panic_at range ~loc:__LOC__
              "expand: %a points to unsupported object %a"
@@ -913,18 +937,18 @@ struct
          fold the result to compute the meet *)
       List.fold_left (fun acc sample ->
           let e' = e |> map_expr
-              (fun ee ->
-                 match ekind ee with
-                 | E_stub_quantified(FORALL, var, _) ->
-                   let _, i = List.find (fun (var', _) ->
-                       compare_var var var' = 0
-                     ) sample
-                   in
-                   Keep { ee with ekind = E_constant (C_int i) }
+                     (fun ee ->
+                        match ekind ee with
+                        | E_stub_quantified(FORALL, var, _) ->
+                          let _, i = List.find (fun (var', _) ->
+                              compare_var var var' = 0
+                            ) sample
+                          in
+                          Keep { ee with ekind = E_constant (C_int i) }
 
-                 | _ -> VisitParts ee
-              )
-              (fun s -> VisitParts s)
+                        | _ -> VisitParts ee
+                     )
+                     (fun s -> VisitParts s)
           in
           man.exec ~zone:Z_c_low_level (mk_assume e' range) acc
         ) flow samples |>
@@ -989,12 +1013,12 @@ struct
           (* First, get the flattened expressions of the lower and upper bounds *)
           let l, u =
             let rec doit accl accu t =
-            function
-            | [] -> accl, accu
-            | [(l, u)] ->
-              (mk_offset_bound accl l t), (mk_offset_bound accu u t)
-            | (l, u) :: tl ->
-              doit (mk_offset_bound accl l t) (mk_offset_bound accu u t) (under_type t) tl
+              function
+              | [] -> accl, accu
+              | [(l, u)] ->
+                (mk_offset_bound accl l t), (mk_offset_bound accu u t)
+              | (l, u) :: tl ->
+                doit (mk_offset_bound accl l t) (mk_offset_bound accu u t) (under_type t) tl
 
             (* Utility function that returns the expression of an offset bound *)
             and mk_offset_bound before bound t =
