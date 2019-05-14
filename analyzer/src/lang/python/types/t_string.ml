@@ -49,38 +49,41 @@ module Domain =
     let stub_base =
       let str = "str" and int = "int" and bool = "bool" in
       StringMap.empty |>
+      add_signature "str.__contains__" [str; str] bool |>
+      add_signature "str.__len__" [str] int |>
       add_signature "str.__mul__" [str; int] str |>
       add_signature "str.__rmul__" [str; int] str |>
 
       add_signature "str.capitalize" [str] str |>
-      (* add_signature "str.center" [str; int] str |> *)
+      add_signature "str.casefold" [str] str |>
       add_signature "str.center" [str; int; str] str |>
-      (* add_signature "str.join" [str; List str] str  |>
-       * add_signature "str.join" [str; Generator str] [str] [] |> *)
-
+      add_signature "str.count" [str; str] int |>
+      add_signature "str.endswith" [str; str] bool |>
+      add_signature "str.expandtabs" [str] str |>
+      add_signature "str.find" [str; str] int |>
+      add_signature "str.ljust" [str; int] str |>
       add_signature "str.lower" [str] str |>
-      add_signature "str.upper" [str] str |>
-      (* add_signature "str.split" [str] [List str] [] |>
-       * add_signature "str.split" [str; str] [List str] [] |>
-       * add_signature "str.split" [str; str; int] [List str] [] |> *)
+      add_signature "str.lstrip" [str] str |>
       add_signature "str.replace" [str; str; str] str |>
-      (* add_signature "str.replace" [str; str; str; int] [str] [] |> *)
+      add_signature "str.rfind" [str; str] int |>
+      add_signature "str.rjust" [str; int] str |>
       add_signature "str.rstrip" [str] str |>
-      (* add_signature "str.rstrip" [str; str] str |> *)
+      add_signature "str.startswith" [str; str] bool |>
       add_signature "str.strip" [str] str |>
-      (* add_signature "str.strip" [str; str] [str] [] |> *)
       add_signature "str.swapcase" [str] str |>
       add_signature "str.title" [str] str |>
-      add_signature "str.__len__" [str] int |>
-      (* add_signature "str.__getitem__" [str; int] [str] [] (\* ["IndexError"] *\) |>
-       * add_signature "str.__getitem__" [str; slice] [str] [] |> *)
-      add_signature "str.__contains__" [str; str] bool |>
+      add_signature "str.upper" [str] str |>
+      add_signature "str.zfill" [str; int] str |>
+
       add_signature "str.isalnum" [str] bool |>
       add_signature "str.isalpha" [str] bool |>
+      add_signature "str.isascii" [str] bool |>
       add_signature "str.isdecimal" [str] bool |>
       add_signature "str.isdigit" [str] bool |>
+      add_signature "str.isidentifier" [str] bool |>
       add_signature "str.islower" [str] bool |>
       add_signature "str.isnumeric" [str] bool  |>
+      add_signature "str.isprintable" [str] bool  |>
       add_signature "str.isspace" [str] bool |>
       add_signature "str.istitle" [str] bool |>
       add_signature "str.isupper" [str] bool
