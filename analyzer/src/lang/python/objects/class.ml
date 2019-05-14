@@ -51,26 +51,29 @@ module Domain =
       | E_py_call({ekind = E_py_object cls} as ecls, args, []) when isclass cls ->
         debug "class call  %a@\n@\n" pp_expr exp;
         (* Call __new__ *)
-        let new_call = mk_py_call (mk_py_object_attr cls "__new__" range) ((mk_py_object cls range) :: args) range in
-        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) new_call flow |>
-        Eval.bind (fun inst flow ->
-           assume_eval
-                 (mk_py_isinstance inst ecls range)
-                 ~fthen:(fun flow ->
-                   debug "init!@\n";
-                   man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object_attr cls "__init__" range) (inst :: args) range) flow |>
-                     Eval.bind (fun r flow ->
-                         assume_eval
-                           (mk_py_isinstance_builtin r "NoneType" range)
-                           ~fthen:(fun flow -> man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) inst flow)
-                           ~felse:(fun flow ->
-                             let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) flow in
-                             Eval.empty_singleton flow
-                           )
-                           man flow
-                 ))
-                 ~felse:(fun flow -> Eval.singleton inst flow)
-                 man flow
+        Eval.eval_list (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) args flow |>
+        Eval.bind (fun eargs flow ->
+            let new_call = mk_py_call (mk_py_object_attr cls "__new__" range) ((mk_py_object cls range) :: eargs) range in
+            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) new_call flow |>
+            Eval.bind (fun inst flow ->
+                assume_eval
+                  (mk_py_isinstance inst ecls range)
+                  ~fthen:(fun flow ->
+                      debug "init!@\n";
+                      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object_attr cls "__init__" range) (inst :: eargs) range) flow |>
+                      Eval.bind (fun r flow ->
+                          assume_eval
+                            (mk_py_isinstance_builtin r "NoneType" range)
+                            ~fthen:(fun flow -> man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) inst flow)
+                            ~felse:(fun flow ->
+                                let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) flow in
+                                Eval.empty_singleton flow
+                              )
+                            man flow
+                        ))
+                  ~felse:(fun flow -> Eval.singleton inst flow)
+                  man flow
+              )
           )
         |> Option.return
 
