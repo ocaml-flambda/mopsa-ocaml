@@ -153,7 +153,9 @@ end
 
 module HeapRecency = Domain(Pool.AddrInfoRecency)
 module HeapTypes   = Domain(Pool.AddrInfoTypes)
+module HeapTypes2  = Domain(Pool.AddrInfoKindOnly)
 
 let () =
   Framework.Core.Sig.Domain.Intermediate.register_domain (module HeapRecency);
-  Framework.Core.Sig.Domain.Intermediate.register_domain (module HeapTypes)
+  Framework.Core.Sig.Domain.Intermediate.register_domain (module HeapTypes);
+  Framework.Core.Sig.Domain.Intermediate.register_domain (module HeapTypes2)
