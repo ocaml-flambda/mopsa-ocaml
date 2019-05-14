@@ -89,7 +89,7 @@ module Domain =
                      )
                    man flow
             ) in
-        Debug.debug ~channel:"profiling" "Call %a: %.4f" pp_expr f (Timing.stop start);
+        Debug.debug ~channel:"profiling" "Call %a: %.4f at range %a" pp_expr f (Timing.stop start) pp_range range;
         res |> Option.return
 
       | E_py_call(f, args, _) ->

@@ -83,7 +83,7 @@ let () =
       | E_py_undefined false -> fprintf fmt "local undef"
       | E_py_object obj -> pp_py_object fmt obj
       | E_py_attribute(obj, attr) ->
-        fprintf fmt "(pyattr %a.%s)" pp_expr obj attr
+        fprintf fmt "%a.%s" pp_expr obj attr
       | E_py_list(elts) ->
         fprintf fmt "[%a]"
           (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_expr) elts
