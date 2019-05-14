@@ -112,7 +112,7 @@ struct
   let join _ _ = top
   let meet _ _ = top
   let widen _ _ _ = top
-  let merge _ _ _ = top
+  let merge _ _ _ _ = top
   let print _ _ = ()
 
   include GenDomainId(struct

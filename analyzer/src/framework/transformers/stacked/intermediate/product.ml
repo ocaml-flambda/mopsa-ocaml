@@ -129,7 +129,7 @@ struct
     in
     slist_fold_apply_sub_ext2 { f } Spec.pool (a1,s1) (a2,s2) true
 
-  let merge pre (a1,log1) (a2,log2) =
+  let merge ctx pre (a1,log1) (a2,log2) =
     Exceptions.panic ~loc:__LOC__ "merge not implemented"
 
 
@@ -203,7 +203,12 @@ struct
                  let pre = Flow.get tk man.lattice flow |> man.get_sub in
                  let slog = man.get_sub_log log in
                  let slog' = man.get_sub_log log' in
+
+                 debug "slog = @[%a@]" Log.print slog;
+                 debug "slog' = @[%a@]" Log.print slog';
+
                  let merged = man.merge_sub
+                     (Context.get_unit ctx)
                      pre
                      (man.get_sub a, slog)
                      (man.get_sub a', slog')

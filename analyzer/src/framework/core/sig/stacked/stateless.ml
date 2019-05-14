@@ -32,6 +32,7 @@ open Flow
 open Post
 open Eval
 open Log
+open Context
 
 
 (*==========================================================================*)
@@ -69,7 +70,7 @@ type ('a, 't, 's) man = ('a,'t,'s) Intermediate.man = {
   set_sub_log : log -> log -> log;
 
   (** Sub-tree merger *)
-  merge_sub : 's -> 's * log -> 's * log -> 's;
+  merge_sub : uctx -> 's -> 's * log -> 's * log -> 's;
 }
 
 
@@ -114,7 +115,7 @@ struct
   let bottom = ()
   let top = ()
   let is_bottom _ = false
-  let merge _ _ _ = ()
+  let merge _ _ _ _ = ()
   let print _ _ = ()
 
   include GenDomainId(struct

@@ -129,10 +129,10 @@ struct
     in
     dlist_apply2 { f } Spec.pool a1 a2
 
-  let merge pre (post1,log1) (post2,log2) =
+  let merge ctx pre (post1,log1) (post2,log2) =
     let f = fun (type a) (m: a dmodule) pre post1 post2 ->
       let module Domain = (val m) in
-      Domain.merge pre (post1,log1) (post2,log2)
+      Domain.merge ctx pre (post1,log1) (post2,log2)
     in
     dlist_apply3 { f } Spec.pool pre post1 post2
 

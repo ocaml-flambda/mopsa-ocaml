@@ -79,7 +79,7 @@ type ('a, 't, 's) man = {
   set_sub_log : log -> log -> log;
 
   (** Sub-tree merger *)
-  merge_sub : 's -> 's * log -> 's * log -> 's;
+  merge_sub : uctx -> 's -> 's * log -> 's * log -> 's;
 }
 
 
@@ -131,7 +131,7 @@ sig
 
   val widen: ('a,t,'s) man -> uctx -> 'a -> 'a -> t * 'a * 'a * bool
 
-  val merge: t -> t * log -> t * log -> t
+  val merge: uctx -> t -> t * log -> t * log -> t
   (** [merge pre (post1, log1) (post2, log2)] synchronizes two divergent
       post-conditions [post1] and [post2] using a common pre-condition [pre].
 

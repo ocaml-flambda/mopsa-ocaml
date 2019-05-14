@@ -115,9 +115,9 @@ struct
     let a2, a, a', stable2 = S2.widen (s2_man man) ctx a a' in
     (a1,a2), a, a', stable1 && stable2
 
-  let merge (pre1,pre2) ((a1,a2), log) ((a1',a2'), log') =
-    S1.merge pre1 (a1, Log.first log) (a1', Log.first log'),
-    S2.merge pre2 (a2, Log.second log) (a2', Log.second log')
+  let merge ctx (pre1,pre2) ((a1,a2), log) ((a1',a2'), log') =
+    S1.merge ctx pre1 (a1, Log.first log) (a1', Log.first log'),
+    S2.merge ctx pre2 (a2, Log.second log) (a2', Log.second log')
 
 
 

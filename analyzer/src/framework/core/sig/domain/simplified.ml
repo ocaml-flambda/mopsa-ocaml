@@ -85,7 +85,7 @@ sig
   (** [widen ctx a1 a2] computes an upper bound of [a1] and [a2] that
       ensures stabilization of ascending chains. *)
 
-  val merge : t -> t * block -> t * block -> t
+  val merge : uctx -> t -> t * block -> t * block -> t
   (** [merge pre (post1, log1) (post2, log2)] synchronizes two divergent
       post-conditions [post1] and [post2] using a common pre-condition [pre].
 
@@ -126,10 +126,10 @@ struct
 
   include D
 
-  let merge pre (post1, log1) (post2, log2) =
+  let merge ctx pre (post1, log1) (post2, log2) =
     let block1 = Log.get_domain_block log1
     and block2 = Log.get_domain_block log2 in
-    D.merge pre (post1, block1) (post2, block2)
+    D.merge ctx pre (post1, block1) (post2, block2)
 
   let init prog man flow =
     let ctx = Flow.get_ctx flow in
