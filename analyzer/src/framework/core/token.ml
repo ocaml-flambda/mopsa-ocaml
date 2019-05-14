@@ -178,6 +178,10 @@ struct
     let m = top_to_exn tmap in
     Map.fold (fun tk a acc -> f acc tk a) m init
 
+  let iter (f:token -> 'a -> unit) (tmap:'a t) : unit =
+    let m = top_to_exn tmap in
+    Map.iter f m
+
   let merge(f: token -> 'a option -> 'a option -> 'a option) (lattice: 'a lattice) (tmap1: 'a t) (tmap2: 'a t) : 'a t =
     top_lift2
       (Map.map2zo

@@ -140,13 +140,20 @@ struct
     let abs1', abs2' = unify abs1 abs2 in
     Apron.Abstract1.widening ApronManager.man abs1' abs2'
 
-  let merge pre (post1,log1) (post2,log2) =
-    assert false
-
   let print fmt abs =
     Format.fprintf fmt "%s:@,  @[%a@]@\n"
       ApronManager.name
       Apron.Abstract1.print abs
+
+  let merge pre (post1,log1) (post2,log2) =
+    debug "@[<v>merging:@, pre-condition: %a@, post-condition #1: %a@, log #1: %a@, post-condition #2: %a@, log #2: %a@]"
+      Apron.Abstract1.print pre
+      Apron.Abstract1.print post1
+      pp_block log1
+      Apron.Abstract1.print post2
+      pp_block log2
+    ;
+    assert false
 
 
 

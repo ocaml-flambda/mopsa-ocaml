@@ -60,6 +60,18 @@ let print (lattice:'a lattice) fmt (post:'a post) : unit =
     )
     fmt post
 
+let print_log fmt (post:'a post) : unit =
+  let open Format in
+  pp_print_list
+    ~pp_sep:(fun fmt () -> fprintf fmt "@ ∨@ ")
+    (fun fmt case ->
+       TokenMap.iter (fun tk (e,log) ->
+           fprintf fmt "%a: %a" pp_token tk Log.print log
+         ) case.tmap
+    )
+    fmt post
+
+
 let join (post1:'a post) (post2:'a post) =
   post1 @ post2
 

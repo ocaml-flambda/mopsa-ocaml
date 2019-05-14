@@ -39,9 +39,9 @@ type log =
                log (** Logs of the second domain *)
 
 let rec print fmt = function
-  | L_empty -> Format.pp_print_string fmt "[]"
-  | L_singleton(block,log) -> Format.fprintf fmt "%a :: %a" pp_block block print log
-  | L_tuple(fst,snd) -> Format.fprintf fmt "(%a, %a)" print fst print snd
+  | L_empty -> ()
+  | L_singleton(block,log) -> Format.fprintf fmt "[@[<hv 2>@,%a, {@[<v 2>@,%a@]}@]]" pp_block block print log
+  | L_tuple(fst,snd) -> Format.fprintf fmt "(@[<hv 2>@,%a,@, %a@])" print fst print snd
 
 (** Concatenate two logs *)
 let rec concat log1 log2 =

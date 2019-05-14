@@ -89,6 +89,8 @@ sig
 
   val fold : ('b -> token -> 'a -> 'b)  -> 'b -> 'a t -> 'b
 
+  val iter : (token -> 'a -> unit)  -> 'a t -> unit
+
   val merge : (token -> 'a option -> 'a option -> 'a option) -> 'a lattice -> 'a t -> 'a t -> 'a t
 
   val neutral2 : (token -> 'a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t

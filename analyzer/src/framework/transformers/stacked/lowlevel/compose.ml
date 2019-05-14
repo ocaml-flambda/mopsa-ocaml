@@ -102,8 +102,8 @@ struct
           man.set_sub_log (Log.second l)
         );
       exec_sub = (fun ?(zone=any_zone) stmt flow ->
-          man2.post ~zone stmt flow |>
-          log_post_stmt stmt man2
+          debug "exec_sub %a" pp_stmt stmt;
+          man2.post ~zone stmt flow
         );
       merge_sub = (fun (pre1,pre2) ((a1,a2), log) ((a1',a2'), log') ->
           debug "merge_sub %a and %a" Log.print (Log.second log) Log.print (Log.second log');
@@ -165,16 +165,14 @@ struct
       (* Only [S1] provides an [exec] for such zone *)
       let f = S1.exec zone in
       (fun stmt man flow ->
-         f stmt (s1_man man) flow |>
-         Option.lift @@ log_post_stmt stmt (s1_man man)
+         f stmt (s1_man man) flow
       )
 
     | false, true ->
       (* Only [S2] provides an [exec] for such zone *)
       let f = S2.exec zone in
       (fun stmt man flow ->
-         f stmt (s2_man man) flow |>
-         Option.lift @@ log_post_stmt stmt (s2_man man)
+         f stmt (s2_man man) flow
       )
 
     | true, true ->
@@ -184,11 +182,10 @@ struct
       (fun stmt man flow ->
          match f1 stmt (s1_man man) flow with
          | Some post ->
-           Option.return @@ log_post_stmt stmt (s1_man man) post
+           Option.return post
 
          | None ->
-           f2 stmt (s2_man man) flow |>
-           Option.lift @@ log_post_stmt stmt (s2_man man)
+           f2 stmt (s2_man man) flow
       )
 
 

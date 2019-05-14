@@ -95,8 +95,8 @@ struct
       eval = man.eval;
       ask = man.ask;
       exec_sub = (fun ?(zone=any_zone) stmt flow ->
-          dman.post ~zone stmt flow |>
-          Domain.log_post_stmt stmt dman
+          debug "exec_sub %a" pp_stmt stmt;
+          dman.post ~zone stmt flow
         );
 
       get = (fun a -> man.get a |> fst);
@@ -169,16 +169,14 @@ struct
       (* Only [S] provides an [exec] for such zone *)
       let f = S.exec zone in
       (fun stmt man flow ->
-         f stmt (s_man man) flow |>
-         Option.lift @@ Stacked.log_post_stmt stmt (s_man man)
+         f stmt (s_man man) flow
       )
 
     | false, true ->
       (* Only [D] provides an [exec] for such zone *)
       let f = D.exec zone in
       (fun stmt man flow ->
-         f stmt (d_man man) flow |>
-         Option.lift @@ Domain.log_post_stmt stmt (d_man man)
+         f stmt (d_man man) flow
       )
 
     | true, true ->
@@ -188,11 +186,10 @@ struct
       (fun stmt man flow ->
          match f1 stmt (s_man man) flow with
          | Some post ->
-           Some (Stacked.log_post_stmt stmt (s_man man) post)
+           Some post
 
          | None ->
-           f2 stmt (d_man man) flow |>
-           Option.lift (Domain.log_post_stmt stmt (d_man man))
+           f2 stmt (d_man man) flow
       )
 
 

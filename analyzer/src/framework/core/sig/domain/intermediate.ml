@@ -220,7 +220,9 @@ struct
 
   let init = D.init
 
-  let exec = D.exec
+  let exec zone stmt man flow =
+    D.exec zone stmt man flow |>
+    Option.lift @@ Lowlevel.log_post_stmt stmt man
 
   let eval = D.eval
 

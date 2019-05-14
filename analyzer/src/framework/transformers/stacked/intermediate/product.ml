@@ -169,12 +169,12 @@ struct
          else
            let module S = (val m) in
            let flow' = Flow.set_ctx ctx flow in
+           debug "%s turn" S.name;
            match S.exec zone stmt man flow' with
            | None -> (None :: acc, ctx)
            | Some post ->
-             let post' = log_post_stmt stmt man post in
-             let ctx' = Post.choose_ctx post' in
-             (Some post' :: acc, ctx')
+             let ctx' = Post.choose_ctx post in
+             (Some post :: acc, ctx')
        in
 
        let pointwise_posts, ctx = slist_man_fold_combined { f } Spec.pool coverage man ([], Flow.get_ctx flow) in
@@ -189,7 +189,7 @@ struct
                 c. meet the other states
              *)
              Post.merge (fun tk (a,log) (a',log') ->
-                 debug "merging@, a = %a@, log = %a@, a' = %a@, log' = %a"
+                 debug "@[<v 2>merging@, a = @[%a@]@, log = @[%a@]@, a' = @[%a@]@, log' = @[%a@]@]"
                    man.lattice.print a
                    Log.print log
                    man.lattice.print a'

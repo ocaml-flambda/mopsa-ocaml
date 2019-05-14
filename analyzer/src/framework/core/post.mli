@@ -34,6 +34,8 @@ val return : 'a flow -> 'a post
 
 val print : 'a lattice -> Format.formatter -> 'a post -> unit
 
+val print_log : Format.formatter -> 'a post -> unit
+
 val join : 'a post -> 'a post -> 'a post
 
 val merge : (token -> ('a*log) -> ('a*log) -> ('a*log)) -> 'a post -> 'a post -> 'a post

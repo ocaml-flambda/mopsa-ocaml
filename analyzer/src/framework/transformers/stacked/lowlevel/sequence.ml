@@ -143,16 +143,14 @@ struct
       (* Only [S1] provides an [exec] for such zone *)
       let f = S1.exec zone in
       (fun stmt man flow ->
-         f stmt (s1_man man) flow |>
-         Option.lift @@ log_post_stmt stmt (s1_man man)
+         f stmt (s1_man man) flow
       )
 
     | false, true ->
       (* Only [S2] provides an [exec] for such zone *)
       let f = S2.exec zone in
       (fun stmt man flow ->
-         f stmt (s2_man man) flow |>
-         Option.lift @@ log_post_stmt stmt (s2_man man)
+         f stmt (s2_man man) flow
       )
 
     | true, true ->
@@ -162,11 +160,10 @@ struct
       (fun stmt man flow ->
          match f1 stmt (s1_man man) flow with
          | Some post ->
-           Option.return @@ log_post_stmt stmt (s1_man man) post
+           Option.return post
 
          | None ->
-           f2 stmt (s2_man man) flow |>
-           Option.lift @@ log_post_stmt stmt (s2_man man)
+           f2 stmt (s2_man man) flow
       )
 
 
