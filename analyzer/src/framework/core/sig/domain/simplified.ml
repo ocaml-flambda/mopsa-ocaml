@@ -162,7 +162,8 @@ struct
 
       Intermediate.set_domain_env T_cur a' man flow |>
       Flow.set_ctx (Context.set_unit uctx ctx) |>
-      Post.return
+      Post.return |>
+      Intermediate.log_post_stmt stmt man
 
     | _ -> None
 

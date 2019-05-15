@@ -167,11 +167,27 @@ end
 (**                          {2 Registration}                               *)
 (*==========================================================================*)
 
+let log_post_stmt stmt man post =
+  Post.map_log (fun tk log ->
+      match tk with
+      | T_cur -> man.set_log (man.get_log log |> Log.append stmt) log
+      | _ -> log
+    ) post
+
+(** Auto-logger lifter used when registering a domain *)
+module AutoLogger(D:DOMAIN) : DOMAIN with type t = D.t =
+struct
+  include D
+  let exec zone stmt man flow =
+    D.exec zone stmt man flow |>
+    Option.lift @@ log_post_stmt stmt man
+end
 
 let domains : (module DOMAIN) list ref = ref []
 
 let register_domain dom =
-  domains := dom :: !domains
+  let module D = (val dom : DOMAIN) in
+  domains := (module AutoLogger(D)) :: !domains
 
 let find_domain name =
   List.find (fun dom ->
@@ -197,12 +213,6 @@ let names () =
 (**                        {2 Utility functions}                            *)
 (*==========================================================================*)
 
-let log_post_stmt stmt man post =
-  Post.map_log (fun tk log ->
-      match tk with
-      | T_cur -> man.set_log (man.get_log log |> Log.append stmt) log
-      | _ -> log
-    ) post
 
 let set_domain_env (tk:token) (env:'t) (man:('a,'t) man) (flow:'a flow) : 'a flow =
   Flow.set tk (man.set env (Flow.get tk man.lattice flow)) man.lattice flow

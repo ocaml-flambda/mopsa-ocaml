@@ -340,9 +340,7 @@ struct
 
   let init = S.init
 
-  let exec zone stmt man flow =
-    S.exec zone stmt man flow |>
-    Option.lift @@ Lowlevel.log_post_stmt stmt man
+  let exec = S.exec
 
   let eval = S.eval
 
@@ -359,10 +357,21 @@ end
 (*==========================================================================*)
 
 
+(** Auto-logger lifter used when registering a domain *)
+module AutoLogger(S:STACK) : STACK with type t = S.t =
+struct
+  include S
+  let exec zone stmt man flow =
+    S.exec zone stmt man flow |>
+    Option.lift @@ log_post_stmt stmt man
+end
+
+
 let stacks : (module STACK) list ref = ref []
 
 let register_stack dom =
-  stacks := dom :: !stacks
+  let module S = (val dom : STACK) in
+  stacks := (module AutoLogger(S)) :: !stacks
 
 let find_stack name =
   List.find (fun dom ->

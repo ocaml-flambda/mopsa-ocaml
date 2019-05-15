@@ -169,11 +169,28 @@ end
 (**                          {2 Registration}                               *)
 (*==========================================================================*)
 
+let log_post_stmt stmt man post =
+  Post.map_log (fun tk log ->
+      match tk with
+      | T_cur -> man.set_log (man.get_log log |> Log.append stmt) log
+      | _ -> log
+    ) post
+
+(** Auto-logger lifter used when registering a domain *)
+module AutoLogger(S:STACK) : STACK with type t = S.t =
+struct
+  include S
+  let exec zone stmt man flow =
+    S.exec zone stmt man flow |>
+    Option.lift @@ log_post_stmt stmt man
+end
+
 
 let stacks : (module STACK) list ref = ref []
 
 let register_stack dom =
-  stacks := dom :: !stacks
+  let module S = (val dom : STACK) in
+  stacks := (module AutoLogger(S)) :: !stacks
 
 let find_stack name =
   List.find (fun dom ->
@@ -197,13 +214,6 @@ let names () =
 (*==========================================================================*)
 (**                        {2 Utility functions}                            *)
 (*==========================================================================*)
-
-let log_post_stmt stmt man post =
-  Post.map_log (fun tk log ->
-      match tk with
-      | T_cur -> man.set_log (man.get_log log |> Log.append stmt) log
-      | _ -> log
-    ) post
 
 let log_post_sub_stmt stmt man post =
   Post.map_log (fun tk log ->
