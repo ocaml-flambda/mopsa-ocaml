@@ -145,6 +145,25 @@ struct
       ApronManager.name
       Apron.Abstract1.print abs
 
+
+  (** {2 Transfer functions} *)
+  (** ********************** *)
+
+  let zones = [Zone.Z_u_num]
+
+  let init prog ctx =
+    top, init_ctx ctx
+
+  let forget_var v ctx a =
+    let env = Apron.Abstract1.env a in
+    let vars, ctx =
+      List.filter (fun v -> is_env_var v a) [v] |>
+      vars_to_apron ctx
+    in
+    let env = Apron.Environment.remove env (Array.of_list vars) in
+    (Apron.Abstract1.change_environment ApronManager.man a env true, ctx)
+
+
   let merge ctx pre (a1,log1) (a2,log2) =
     debug "@[<v>merging:@, pre-condition: %a@, post-condition #1: %a@, log #1: %a@, post-condition #2: %a@, log #2: %a@]"
       Apron.Abstract1.print pre
@@ -155,9 +174,13 @@ struct
     ;
     let patch stmt a acc =
       match skind stmt with
+      | S_forget { ekind = E_var (var, _) }
       | S_add { ekind = E_var (var, _) }
       | S_assign({ ekind = E_var (var, _)}, _) ->
-        let acc, _ = add_missing_vars ctx acc [var] in
+        let acc', _ = forget_var var ctx acc in
+        acc'
+
+      | S_assume _ ->
         acc
 
       | _ -> assert false
@@ -167,16 +190,6 @@ struct
     meet a1' a2'
 
 
-
-
-  (** {2 Transfer functions} *)
-  (** ********************** *)
-
-  let zones = [Zone.Z_u_num]
-
-  let init prog ctx =
-    top, init_ctx ctx
-
   let rec exec stmt ctx a =
     match skind stmt with
     | S_add { ekind = E_var (var, _) } ->
@@ -185,13 +198,7 @@ struct
 
     | S_remove { ekind = E_var (var, _) }
     | S_forget { ekind = E_var (var, _) } ->
-      let env = Apron.Abstract1.env a in
-      let vars, ctx =
-        List.filter (fun v -> is_env_var v a) [var] |>
-        vars_to_apron ctx
-      in
-      let env = Apron.Environment.remove env (Array.of_list vars) in
-      (Apron.Abstract1.change_environment ApronManager.man a env true, ctx) |>
+      forget_var var ctx a |>
       Option.return
 
 

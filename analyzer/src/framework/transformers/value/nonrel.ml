@@ -93,6 +93,7 @@ struct
 
     let patch stmt a acc =
       match skind stmt with
+      | S_forget { ekind = E_var (var, _) }
       | S_add { ekind = E_var (var, _) } ->
         add var Value.top acc
 
@@ -100,7 +101,14 @@ struct
         let v = find var a in
         add var v acc
 
-      | _ -> assert false
+      | S_assume e ->
+        let vars = expr_vars e in
+        vars |> List.fold_left (fun acc var ->
+            let v = find var a in
+            add var v acc
+          ) acc
+
+      | _ -> Exceptions.panic ~loc:__LOC__ "merge: unsupported statement %a" pp_stmt stmt
     in
     let acc = List.fold_left (fun acc stmt -> patch stmt a1 acc) a2 log1 in
     List.fold_left (fun acc stmt -> patch stmt a2 acc) acc log2
