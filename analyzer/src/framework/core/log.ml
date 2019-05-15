@@ -40,8 +40,11 @@ type log =
 
 let rec print fmt = function
   | L_empty -> ()
-  | L_singleton(block,log) -> Format.fprintf fmt "[@[<hv 2>@,%a, {@[<v 2>@,%a@]}@]]" pp_block block print log
-  | L_tuple(fst,snd) -> Format.fprintf fmt "(@[<hv 2>@,%a,@, %a@])" print fst print snd
+  | L_singleton(block,L_empty) -> Format.fprintf fmt "@[<v 2>[@,%a@;<0 -2>]@]" pp_block block
+  | L_singleton(block,log) -> Format.fprintf fmt "@[<v 2>[@,%a@;<0 -2>]@] -> {@[<v 2>@,%a@;@]@;}" pp_block block print log
+  | L_tuple(fst,snd) -> Format.fprintf fmt "@[<v 2>(@,%a, %a@;<0 -2>)@]" print fst print snd
+
+let print fmt log = Format.fprintf fmt "@[<v 0>%a@]" print log
 
 (** Concatenate two logs *)
 let rec concat log1 log2 =
