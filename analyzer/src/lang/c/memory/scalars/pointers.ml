@@ -26,6 +26,7 @@ open Framework.Core.Sig.Stacked.Intermediate
 open Universal.Ast
 open Ast
 open Zone
+open Universal.Zone
 open Common.Points_to
 open Common.Base
 
@@ -173,7 +174,9 @@ struct
     Map.widen ctx a a', s, s', true
 
   let merge ctx pre (post,log) (post',log') =
-    assert false
+    let block = Log.get_domain_block log in
+    let block' = Log.get_domain_block log' in
+    Map.merge ctx pre (post,block) (post',block')
 
   let print fmt a =
     Map.print fmt a
@@ -450,7 +453,7 @@ struct
 
       (* Refine offsets in case p or q may point to a block *)
       if BaseSet.mem_block b1' && BaseSet.mem_block b2' then
-        man.eval ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) (compare_cond O_eq v1 o1 v2 o2 exp.erange) flow' |>
+        man.eval ~zone:(Z_c_scalar, Z_u_num) (compare_cond O_eq v1 o1 v2 o2 exp.erange) flow' |>
         Option.return
       else
         (* Remove offsets in other case *)
@@ -696,8 +699,7 @@ struct
       man.eval offset ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) flow' |>
       post_eval man @@ fun offset flow' ->
 
-      man.exec ~zone:(Universal.Zone.Z_u_num) (mk_assign o offset range) flow' |>
-      Post.return
+      man.exec_sub ~zone:(Universal.Zone.Z_u_num) (mk_assign o offset range) flow'
 
     | EQ (q, offset) ->
       let flow' = map_domain_env T_cur (fun a -> Map.add p (Map.find q a) a) man flow in
@@ -709,32 +711,25 @@ struct
         man.eval offset' ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) flow' |>
         post_eval man @@ fun offset' flow ->
 
-        man.exec ~zone:(Universal.Zone.Z_u_num) (mk_assign o offset' range) flow' |>
-        Post.return
+        man.exec_sub ~zone:(Universal.Zone.Z_u_num) (mk_assign o offset' range) flow'
       else
-        man.exec ~zone:(Universal.Zone.Z_u_num) (mk_remove o range) flow' |>
-        Post.return
+        man.exec_sub ~zone:(Universal.Zone.Z_u_num) (mk_remove o range) flow'
 
     | FUN f ->
       map_domain_env T_cur (Map.add p (BaseSet.bfun f)) man flow |>
-      man.exec ~zone:(Universal.Zone.Z_u_num) (mk_remove o range) |>
-      Post.return
+      man.exec_sub ~zone:(Universal.Zone.Z_u_num) (mk_remove o range)
 
     | INVALID ->
       map_domain_env T_cur (Map.add p BaseSet.invalid) man flow  |>
-      man.exec ~zone:(Universal.Zone.Z_u_num) (mk_remove o range) |>
-      Post.return
+      man.exec_sub ~zone:(Universal.Zone.Z_u_num) (mk_remove o range)
 
     | NULL ->
       map_domain_env T_cur (Map.add p BaseSet.null) man flow |>
-      man.exec ~zone:(Universal.Zone.Z_u_num) (mk_remove o range) |>
-      Post.return
+      man.exec_sub ~zone:(Universal.Zone.Z_u_num) (mk_remove o range)
 
     | TOP ->
       map_domain_env T_cur (Map.add p BaseSet.top) man flow |>
-      man.exec ~zone:(Universal.Zone.Z_u_num) (mk_assign o (mk_top T_int range) range) |>
-      Post.return
-
+      man.exec_sub ~zone:(Universal.Zone.Z_u_num) (mk_assign o (mk_top T_int range) range)
 
   (* Declaration of a scalar pointer variable *)
   let declare_var v init range man flow =
@@ -771,15 +766,13 @@ struct
     | S_add { ekind = E_var (p, _) } when is_c_pointer_type p.vtyp ->
       let o = mk_offset_var_expr p range in
       map_domain_env T_cur (Map.add p BaseSet.top) man flow |>
-      man.exec ~zone:(Universal.Zone.Z_u_num) (mk_add o range) |>
-      Post.return |>
+      man.exec_sub ~zone:(Universal.Zone.Z_u_num) (mk_add o range) |>
       Option.return
 
     | S_remove { ekind = E_var (p, _) } when is_c_pointer_type p.vtyp ->
       let flow1 = map_domain_env T_cur (Map.remove p) man flow in
       let o = mk_offset_var_expr p range in
-      let flow2 = man.exec ~zone:(Universal.Zone.Z_u_num) (mk_remove o range) flow1 in
-      Post.return flow2 |>
+      man.exec_sub ~zone:(Universal.Zone.Z_u_num) (mk_remove o range) flow1 |>
       Option.return
 
     | S_remove { ekind = E_addr addr } ->
@@ -813,8 +806,7 @@ struct
             oo :: ool, map_domain_env T_cur (Map.add p' pt) man flow
           ) ([],flow)
       in
-      man.exec ~zone:(Universal.Zone.Z_u_num) (mk_expand o ool range) flow |>
-      Post.return |>
+      man.exec_sub ~zone:(Universal.Zone.Z_u_num) (mk_expand o ool range) flow |>
       Option.return
 
     | S_rename({ekind = E_var (p1, _)}, {ekind = E_var (p2, _)})
@@ -831,8 +823,7 @@ struct
       in
       let o1 = mk_offset_var_expr p1 range in
       let o2 = mk_offset_var_expr p2 range in
-      let flow2 = man.exec ~zone:(Universal.Zone.Z_u_num) (mk_rename o1 o2 range) flow1 in
-      Post.return flow2 |>
+      man.exec_sub ~zone:(Universal.Zone.Z_u_num) (mk_rename o1 o2 range) flow1 |>
       Option.return
 
     | S_rename ({ekind = E_addr addr1}, {ekind = E_addr addr2}) ->

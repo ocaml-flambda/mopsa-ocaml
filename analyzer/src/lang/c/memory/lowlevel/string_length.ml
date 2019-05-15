@@ -172,14 +172,6 @@ struct
 
     (* Compute the offset in bytes *)
     let elm_size = sizeof_type typ in
-    let offset =
-      (* Pointer to void => return size in bytes *)
-      if is_c_void_type typ then offset
-      else
-      if Z.equal elm_size Z.one
-      then offset
-      else div size (of_z elm_size range) range
-    in
 
     (* Utility function to assign an interval *)
     let assign_interval l u flow =
@@ -472,7 +464,7 @@ struct
       Option.return
 
 
-    | S_assign(lval, rval) when is_c_scalar_type lval.etyp ->
+    | S_assign(lval, rval) when is_c_num_type lval.etyp ->
       assign lval rval stmt.srange man flow |>
       Option.return
 
@@ -514,19 +506,12 @@ struct
     eval_base_size base range man flow |>
     Eval.bind @@ fun size flow ->
 
+    debug "size = %a" pp_expr size;
+
     man.eval ~zone:(Z_c_scalar, Z_u_num) size flow |>
     Eval.bind @@ fun size flow ->
 
-    (* Compute the offset in bytes *)
     let elm_size = sizeof_type typ in
-    let offset =
-      (* Pointer to void => return size in bytes *)
-      if is_c_void_type typ then offset
-      else
-      if Z.equal elm_size Z.one
-      then offset
-      else div size (of_z elm_size range) range
-    in
 
     (* Check that offset ∈ [0, size - elm_size] *)
     assume_eval (mk_in offset (mk_zero range) (sub size (mk_z elm_size range) range) range)
@@ -610,11 +595,11 @@ struct
   (** Evaluations entry point *)
   let eval zone exp man flow =
     match ekind exp with
-    | E_var (v, mode) when is_c_scalar_type v.vtyp ->
+    | E_var (v, mode) when is_c_num_type v.vtyp ->
       deref_scalar_pointer (mk_c_address_of exp exp.erange) exp.erange man flow |>
       Option.return
 
-    | E_c_deref p when is_c_scalar_type exp.etyp ->
+    | E_c_deref p when is_c_num_type exp.etyp ->
       deref_scalar_pointer p exp.erange man flow |>
       Option.return
 
