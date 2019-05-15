@@ -685,7 +685,7 @@ struct
            let cur = get_domain_env T_cur man flow in
            let proceed addr (cl, mro, cur) =
              let flow = set_domain_env T_cur cur man flow in
-             let obj = mk_py_object ({addr with addr_kind = A_py_class (cl, mro)}, None) range in
+             let obj = mk_py_object ({addr_uid = 0; addr_kind = A_py_class (cl, mro); addr_mode = STRONG}, None) range in
              Eval.singleton obj flow in
            match ekind earg with
            | E_py_object ({addr_kind = A_py_instance _ | A_py_var _ } as addr, _) ->

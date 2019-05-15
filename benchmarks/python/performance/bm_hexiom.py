@@ -131,7 +131,7 @@ class Done(object):
         maxi = -1
         for i in range(self.count):
             if not self.already_done(i):
-                cells_around = pos.hex.get_by_id(i).links
+                cells_around = pos.hexc.get_by_id(i).links
                 # n = sum(1 if (self.already_done(nid) and (self[nid][0] != EMPTY)) else 0
                 #         for nid in cells_around)
                 n = sum([1 if (self.already_done(nid) and (self[nid][0] != EMPTY)) else 0
@@ -146,7 +146,7 @@ class Done(object):
         mini = -1
         for i in range(self.count):
             if not self.already_done(i):
-                cells_around = pos.hex.get_by_id(i).links
+                cells_around = pos.hexc.get_by_id(i).links
                 # n = sum(1 if (self.already_done(nid) and (self[nid][0] != EMPTY)) else 0
                 # for nid in cells_around)
                 n = sum([1 if (self.already_done(nid) and (self[nid][0] != EMPTY)) else 0
@@ -185,7 +185,7 @@ class Node(object):
 ##################################
 
 
-class Hex(object):
+class Hexc(object):
 
     def __init__(self, size):
         self.size = size
@@ -231,13 +231,13 @@ class Hex(object):
 ##################################
 class Pos(object):
 
-    def __init__(self, hex, tiles, done=None):
-        self.hex = hex
+    def __init__(self, hexc, tiles, done=None):
+        self.hexc = hexc
         self.tiles = tiles
-        self.done = Done(hex.count) if done is None else done
+        self.done = Done(hexc.count) if done is None else done
 
     def clone(self):
-        return Pos(self.hex, self.tiles, self.done.clone())
+        return Pos(self.hexc, self.tiles, self.done.clone())
 
 ##################################
 
@@ -249,12 +249,12 @@ def constraint_pass(pos, last_move=None):
 
     # Remove impossible values from free cells
     free_cells = (range(done.count) if last_move is None
-                  else pos.hex.get_by_id(last_move).links)
+                  else pos.hexc.get_by_id(last_move).links)
     for i in free_cells:
         if not done.already_done(i):
             vmax = 0
             vmin = 0
-            cells_around = pos.hex.get_by_id(i).links
+            cells_around = pos.hexc.get_by_id(i).links
             for nid in cells_around:
                 if done.already_done(nid):
                     if done[nid][0] != EMPTY:
@@ -299,7 +299,7 @@ def constraint_pass(pos, last_move=None):
             empties = 0
             filled = 0
             unknown = []
-            cells_around = pos.hex.get_by_id(i).links
+            cells_around = pos.hexc.get_by_id(i).links
             for nid in cells_around:
                 if done.already_done(nid):
                     if done[nid][0] == EMPTY:
@@ -351,14 +351,14 @@ def play_move(pos, move):
 
 
 def print_pos(pos, output):
-    hex = pos.hex
+    hexc = pos.hexc
     done = pos.done
-    size = hex.size
+    size = hexc.size
     for y in range(size):
         print(u" " * (size - y - 1)) # , end=u"") #, file=output)
         for x in range(size + y):
             pos2 = (x, y)
-            id = hex.get_by_pos(pos2).id
+            id = hexc.get_by_pos(pos2).id
             if done.already_done(id):
                 c = str(done[id][0]) if done[id][
                     0] != EMPTY else u"."
@@ -371,7 +371,7 @@ def print_pos(pos, output):
         for x in range(y, size * 2 - 1):
             ry = size + y - 1
             pos2 = (x, ry)
-            id = hex.get_by_pos(pos2).id
+            id = hexc.get_by_pos(pos2).id
             if done.already_done(id):
                 c = str(done[id][0]) if done[id][
                     0] != EMPTY else u"."
@@ -387,12 +387,12 @@ IMPOSSIBLE = -1
 
 
 def solved(pos, output, verbose=False):
-    hex = pos.hex
+    hexc = pos.hexc
     tiles = pos.tiles[:]
     done = pos.done
     exact = True
     all_done = True
-    for i in range(hex.count):
+    for i in range(hexc.count):
         if len(done[i]) == 0:
             return IMPOSSIBLE
         elif done.already_done(i):
@@ -403,7 +403,7 @@ def solved(pos, output, verbose=False):
             vmax = 0
             vmin = 0
             if num != EMPTY:
-                cells_around = hex.get_by_id(i).links
+                cells_around = hexc.get_by_id(i).links
                 for nid in cells_around:
                     if done.already_done(nid):
                         if done[nid][0] != EMPTY:
@@ -457,7 +457,7 @@ def solve_step(prev, strategy, order, output, first):
 
 
 def check_valid(pos):
-    hex = pos.hex
+    hexc = pos.hexc
     tiles = pos.tiles
     # fill missing entries in tiles
     tot = 0
@@ -467,9 +467,9 @@ def check_valid(pos):
         else:
             tiles[i] = 0
     # check total
-    if tot != hex.count:
+    if tot != hexc.count:
         raise Exception(
-            "Invalid input. Expected %d tiles, got %d." % (hex.count, tot))
+            "Invalid input. Expected %d tiles, got %d." % (hexc.count, tot))
 
 
 def solve(pos, strategy, order, output):
@@ -477,15 +477,15 @@ def solve(pos, strategy, order, output):
     return solve_step(pos, strategy, order, output, True)
 
 
-# TODO Write an 'iterator' to go over all x,y positions
+# TODO Write an 'iterator' to go over all x,y positionsZ
 
 def read_file(file):
-    lines = [line.strip("\r\n") for line in file.splitlines()]
+    lines = [line.strip() for line in file.splitlines()] # line.strip("\r\n")
     size = int(lines[0])
-    hex = Hex(size)
+    hexc = Hexc(size) # hex
     linei = 1
     tiles = 8 * [0]
-    done = Done(hex.count)
+    done = Done(hexc.count)
     for y in range(size):
         line = lines[linei][size - y - 1:]
         p = 0
@@ -501,7 +501,7 @@ def read_file(file):
             if tile[0] == "+":
                 # print("Adding locked tile: %d at pos %d, %d, id=%d" %
                 #      (inctile, x, y, hex.get_by_pos((x, y)).id))
-                done.set_done(hex.get_by_pos((x, y)).id, inctile)
+                done.set_done(hexc.get_by_pos((x, y)).id, inctile)
 
         linei += 1
     for y in range(1, size):
@@ -520,11 +520,11 @@ def read_file(file):
             if tile[0] == "+":
                 # print("Adding locked tile: %d at pos %d, %d, id=%d" %
                 #      (inctile, x, ry, hex.get_by_pos((x, ry)).id))
-                done.set_done(hex.get_by_pos((x, ry)).id, inctile)
+                done.set_done(hexc.get_by_pos((x, ry)).id, inctile)
         linei += 1
-    hex.link_nodes()
+    hexc.link_nodes()
     done.filter_tiles(tiles)
-    return Pos(hex, tiles, done)
+    return Pos(hexc, tiles, done)
 
 
 def solve_file(file, strategy, order, output):
@@ -679,4 +679,4 @@ if __name__ == "__main__":
     # runner.metadata['hexiom_level'] = args.level
 
     # runner.bench_time_func('hexiom', main, args.level)
-    main(10, 30)
+    main(10, 36)

@@ -40,7 +40,7 @@
             "python.data_model.aug_assign",
             "python.data_model.callable",
 
-            "universal.heap.recency.by_kind_callstack",
+            "universal.heap.recency.by_kind", //_callstack",
             // "python.types.addr_env",
             "python.types.t_string",
             "python.types.t_int",

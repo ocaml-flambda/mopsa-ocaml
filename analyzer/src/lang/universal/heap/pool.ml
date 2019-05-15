@@ -92,6 +92,29 @@ module AddrInfoTypes = struct
   let get_flag (a, cs, f) = f
 end
 
+module AddrInfoKindOnly = struct
+  type flag = int
+  type t = addr_kind * flag
+
+  let name = "by_kind"
+
+  let extract (a, cs, r, f) = (a, f)
+
+  let print fmt (a, f) =
+    Format.fprintf fmt "(%a, %a)"
+      pp_addr_kind a
+      Format.pp_print_int f
+
+  let compare (a, f) (a', f') =
+    Compare.compose
+      [
+        (fun () -> compare_addr_kind a a');
+        (fun () -> Pervasives.compare f f')
+      ]
+
+  let get_flag (a, f) = f
+end
+
 
 module Make
     (AddrInfo: ADDRINFO)
