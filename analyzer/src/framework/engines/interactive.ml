@@ -162,6 +162,19 @@ struct
 
   let linedit_ctx = LineEdit.create_ctx ()
 
+  (** Breakpoint flag *)
+  let break = ref true
+
+  (** Last breakpoint reached *)
+  let last_breakpoint = ref {
+      brk_file = None;
+      brk_line = -1;
+    }
+
+  (** Catch Ctrl+C interrupts as a Break exception*)
+  let () = Sys.catch_break true
+
+
   (** Read a debug command *)
   let rec read_command range () =
     print_prompt range ();
@@ -211,6 +224,12 @@ struct
             match parse_breakpoint loc with
             | Some brk ->
               breakpoints := BreakpointSet.add brk !breakpoints;
+              if compare_breakpoint brk !last_breakpoint = 0 then
+                last_breakpoint := {
+                  brk_file = None;
+                  brk_line = -1;
+                }
+              ;
 
             | None ->
               printf "Invalid breakpoint syntax@."
@@ -233,18 +252,6 @@ struct
     in
     last_command := Some c;
     c
-
-  (** Breakpoint flag *)
-  let break = ref true
-
-  (** Last breakpoint reached *)
-  let last_breakpoint = ref {
-      brk_file = None;
-      brk_line = -1;
-    }
-
-  (** Catch Ctrl+C interrupts as a Break exception*)
-  let () = Sys.catch_break true
 
 
   (** Interpreter actions *)
