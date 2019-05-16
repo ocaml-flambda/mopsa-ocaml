@@ -186,18 +186,19 @@ struct
              (* Patch the accumulated post by:
                 a. putting the newly state of S
                 b. merging the sub-tree state
-                c. meet the other states
              *)
              Post.merge (fun tk (a,log) (a',log') ->
-                 debug "@[<v 2>merging@, a = @[%a@]@, log = @[%a@]@, a' = @[%a@]@, log' = @[%a@]@]"
+                 (* a. Update the state of S *)
+                 let a' = man.set (man.get a) a' in
+
+                 debug "@[<v 2>merging token %a@, a = @[%a@]@, log = @[%a@]@, a' = @[%a@]@, log' = @[%a@]@]"
+                   pp_token tk
                    man.lattice.print a
                    Log.print log
                    man.lattice.print a'
                    Log.print log'
                  ;
 
-                 (* a. Update the state of S *)
-                 let a' = man.set (man.get a) a' in
 
                  (* b. Merge the sub-tree *)
                  let pre = Flow.get tk man.lattice flow |> man.get_sub in
@@ -214,15 +215,9 @@ struct
                      (man.get_sub a', slog')
                  in
 
-                 (* Meet the other states *)
-                 let a = man.set_sub merged a in
-                 let a' = man.set_sub merged a' in
+                 let aa = man.set_sub merged a in
 
-                 debug "merge@, a = %a@, a' = %a" man.lattice.print a man.lattice.print a';
-
-                 let aa = man.lattice.meet (Context.get_unit ctx) a a' in
-                 debug "meet@, aa = %a" man.lattice.print aa;
-
+                 debug "merged@, a = %a@, a' = %a@, aa = %a" man.lattice.print a man.lattice.print a' man.lattice.print aa;
                  aa, man.set_sub_log (Log.concat slog slog') log'
                ) post acc
            ) post acc
