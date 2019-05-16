@@ -1,7 +1,7 @@
-int a[10];
+char a[10];
 
 void main() {
-  int i = 10;
+  char i = 10;
   char *p = a;
   *p = i;
 }

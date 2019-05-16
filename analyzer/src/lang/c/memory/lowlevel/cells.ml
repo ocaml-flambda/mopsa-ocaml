@@ -614,25 +614,30 @@ struct
     let a = get_domain_env T_cur man flow in
 
     if CellSet.mem c a.cells || not (is_c_scalar_type c.typ)
-    then flow
+    then Post.return flow
     else
       let v, flow = mk_cell_var_flow c flow in
-      let flow = man.exec ~zone:Z_c_scalar (mk_add (mk_var v range) range) flow in
+      man.exec_sub ~zone:Z_c_scalar (mk_add (mk_var v range) range) flow |>
+      Post.bind @@ fun flow ->
 
       if is_c_pointer_type c.typ
       then
-        set_domain_env T_cur { a with cells = CellSet.add c a.cells } man flow
+        set_domain_env T_cur { a with cells = CellSet.add c a.cells } man flow |>
+        Post.return
       else
-        let flow = match phi c a (Flow.get_unit_ctx flow) range with
-          | Some (e, ctx) ->
-            let flow' = Flow.set_unit_ctx ctx flow in
-            let stmt = mk_assume (mk_binop (mk_var v range) O_eq e ~etyp:u8 range) range in
-            man.exec ~zone:Z_c_scalar stmt flow'
+        begin
+          match phi c a (Flow.get_unit_ctx flow) range with
+        | Some (e, ctx) ->
+          let flow' = Flow.set_unit_ctx ctx flow in
+          let stmt = mk_assume (mk_binop (mk_var v range) O_eq e ~etyp:u8 range) range in
+          man.exec_sub ~zone:Z_c_scalar stmt flow'
 
-          | None -> flow
-
-        in
-        set_domain_env T_cur { a with cells = CellSet.add c a.cells } man flow
+        | None -> Post.return flow
+        end
+        |>
+        Post.bind @@ fun flow ->
+        set_domain_env T_cur { a with cells = CellSet.add c a.cells } man flow |>
+        Post.return
 
   (* Remove a cell and its associated scalar variable *)
   let remove_cell c range man flow =
@@ -688,19 +693,22 @@ struct
     (* Add the old cell in case it has not been accessed before so
        that its constraints are added in the sub domain
     *)
-    let flow =
-      add_cell old_cell range man flow |>
-      (* Remove the old cell and add the new one *)
+    add_cell old_cell range man flow |>
+    Post.bind @@ fun flow ->
+
+    (* Remove the old cell and add the new one *)
+    let flow' =
       map_domain_env T_cur (fun a ->
           { a with cells = CellSet.remove old_cell a.cells |>
                            CellSet.add new_cell
           }
-        ) man
+        ) man flow
     in
+
     let oldv, flow = mk_cell_var_flow old_cell flow in
     let newv, flow = mk_cell_var_flow new_cell flow in
     let stmt = mk_rename_var oldv newv range in
-    man.exec_sub ~zone:Z_c_scalar stmt flow
+    man.exec_sub ~zone:Z_c_scalar stmt flow'
 
 
 
@@ -1092,8 +1100,7 @@ struct
 
     | S_add { ekind = E_var (v, _) } when is_c_scalar_type v.vtyp ->
       let c = mk_cell (V v) Z.zero v.vtyp in
-      let flow = add_cell c stmt.srange man flow in
-      Post.return flow |>
+      add_cell c stmt.srange man flow |>
       Option.return
 
     | S_add { ekind = E_var (v, _) } when not (is_c_scalar_type v.vtyp) ->
@@ -1151,7 +1158,9 @@ struct
       Eval.singleton e flow
 
     | Cell c ->
-      let flow = add_cell c range man flow in
+      let flow = add_cell c range man flow |>
+                 Post.to_flow man.lattice
+      in
       let v, flow = mk_cell_var_flow c flow in
       Eval.singleton (mk_var v ~mode range) flow
 
@@ -1182,7 +1191,9 @@ struct
 
     | Cell c ->
       let c' = { c with primed = true } in
-      let flow = add_cell c' range man flow in
+      let flow = add_cell c' range man flow |>
+                 Post.to_flow man.lattice
+      in
       let v', flow = mk_cell_var_flow c' flow in
       Eval.singleton (mk_var v' range) flow
 
