@@ -173,10 +173,31 @@ struct
   let widen man ctx (a,s) (a',s') =
     Map.widen ctx a a', s, s', true
 
-  let merge ctx pre (post,log) (post',log') =
+  let merge ctx pre (a,log) (a',log') =
     let block = Log.get_domain_block log in
     let block' = Log.get_domain_block log' in
-    Map.merge ctx pre (post,block) (post',block')
+
+    let patch_stmt stmt a acc =
+      match skind stmt with
+      | S_c_declaration (var,init) ->
+        let v = Map.find var a in
+        Some (Map.add var v acc)
+      | _ -> None
+    in
+
+    let patch_block block a acc =
+      List.fold_left (fun (acc,block') stmt ->
+          match patch_stmt stmt a acc with
+          | None -> acc, stmt :: block'
+          | Some acc' -> acc', block'
+        ) (acc,[]) block
+    in
+
+    let a', block = patch_block block a a' in
+    let a, block' = patch_block block' a' a in
+
+    Map.merge ctx pre (a,block) (a',block')
+
 
   let print fmt a =
     Map.print fmt a

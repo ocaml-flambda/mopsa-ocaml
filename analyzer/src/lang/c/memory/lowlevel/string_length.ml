@@ -68,7 +68,7 @@ struct
       ];
     };
     ieval = {
-      provides = [Z_c_low_level, Z_c_scalar];
+      provides = [];
       uses = [
         Z_c_low_level, Z_u_num;
         Z_c_scalar, Z_u_num;
@@ -145,7 +145,18 @@ struct
             o, size
         end
 
-      | _ -> assert false
+      | C_flat_fill (e,t,n) :: tl ->
+        begin
+          match expr_to_z e with
+          | Some e ->
+            if Z.equal e Z.zero
+            then o, o
+            else aux (Z.add o (Z.mul n (sizeof_type t))) tl
+
+          | None ->
+            (* FIXME: test the value of the expression *)
+            o, size
+        end
     in
     let o1, o2 = aux Z.zero flat_init in
 
@@ -499,111 +510,7 @@ struct
   (** {2 Abstract evaluations} *)
   (** ************************ *)
 
-  (** Cases of the abstraction evaluations *)
-  let deref_cases base offset typ range man flow =
-    let length = mk_length_var base range in
-
-    eval_base_size base range man flow |>
-    Eval.bind @@ fun size flow ->
-
-    debug "size = %a" pp_expr size;
-
-    man.eval ~zone:(Z_c_scalar, Z_u_num) size flow |>
-    Eval.bind @@ fun size flow ->
-
-    let elm_size = sizeof_type typ in
-
-    (* Check that offset ∈ [0, size - elm_size] *)
-    assume_eval (mk_in offset (mk_zero range) (sub size (mk_z elm_size range) range) range)
-      ~fthen:(fun flow ->
-          if Z.gt elm_size Z.one
-          then
-            let l,u = rangeof typ in
-            Eval.singleton (mk_z_interval l u ~typ range) flow
-          else
-            switch_eval [
-              (* before case *)
-              (* Offset condition: offset ∈ [0, length[ *)
-              (* Evaluation: [1; 255] if unsigned, [-128, 127] otherwise *)
-              [
-                mk_binop offset O_ge (mk_zero range) range, true;
-                mk_binop offset O_lt length range, true;
-              ],
-              (fun flow ->
-                 if is_signed typ = false then
-                   Eval.singleton (mk_int_interval 1 255 ~typ range) flow
-                 else
-                   Eval.singleton (mk_int_interval (-128) 127 ~typ range) flow
-              );
-
-              (* at case *)
-              (* Offset condition: offset = length *)
-              (* Evaluation: 0 *)
-              [
-                mk_binop offset O_eq length range, true;
-              ],
-              (fun flow -> Eval.singleton (mk_zero ~typ range)flow)
-              ;
-
-              (* After case *)
-              (* Offset condition: offset > length *)
-              (* Evaluation: [0; 255] if unsigned, [-128, 127] otherwise *)
-              [
-                mk_binop offset O_gt length range, true;
-              ],
-              (fun flow ->
-                 if is_signed typ = false then
-                   Eval.singleton (mk_int_interval 0 255 ~typ range) flow
-                 else
-                   Eval.singleton (mk_int_interval (-128) 127 ~typ range) flow
-              );
-
-            ] ~zone:Z_u_num man flow
-        )
-      ~felse:(fun flow ->
-          (* Unsafe case *)
-          raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow |>
-          Eval.empty_singleton
-        )
-      ~zone:Z_u_num man flow
-
-
-  (** Abstract evaluation of a dereference *)
-  let deref_scalar_pointer p range man flow =
-    man.eval ~zone:(Z_c_low_level, Z_c_points_to) p flow |>
-    Eval.bind @@ fun pt flow ->
-
-    match ekind pt with
-    | E_c_points_to P_null ->
-      raise_alarm Alarms.ANullDeref range ~bottom:true man.lattice flow |>
-      Eval.empty_singleton
-
-    | E_c_points_to P_invalid ->
-      raise_alarm Alarms.AInvalidDeref range ~bottom:true man.lattice flow |>
-      Eval.empty_singleton
-
-    | E_c_points_to (P_block (base, offset)) ->
-      man.eval ~zone:(Z_c_low_level, Z_u_num) offset flow |>
-      Eval.bind @@ fun offset flow ->
-
-      deref_cases base offset (under_pointer_type p.etyp) range man flow
-
-
-    | _ -> assert false
-
-
-  (** Evaluations entry point *)
-  let eval zone exp man flow =
-    match ekind exp with
-    | E_var (v, mode) when is_c_num_type v.vtyp ->
-      deref_scalar_pointer (mk_c_address_of exp exp.erange) exp.erange man flow |>
-      Option.return
-
-    | E_c_deref p when is_c_num_type exp.etyp ->
-      deref_scalar_pointer p exp.erange man flow |>
-      Option.return
-
-    | _ -> None
+  let eval zone exp man flow = None
 
 
   (** {2 Query handler} *)

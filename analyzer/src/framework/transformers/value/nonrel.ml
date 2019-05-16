@@ -97,6 +97,9 @@ struct
       | S_add { ekind = E_var (var, _) } ->
         add var Value.top acc
 
+      | S_remove { ekind = E_var (var, _) } ->
+        remove var acc
+
       | S_assign({ ekind = E_var (var, _)}, _) ->
         let v = find var a in
         add var v acc

@@ -176,6 +176,7 @@ struct
       match skind stmt with
       | S_forget { ekind = E_var (var, _) }
       | S_add { ekind = E_var (var, _) }
+      | S_remove { ekind = E_var (var, _) }
       | S_assign({ ekind = E_var (var, _)}, _) ->
         let acc', _ = forget_var var ctx acc in
         acc'
@@ -183,7 +184,7 @@ struct
       | S_assume _ ->
         acc
 
-      | _ -> assert false
+      | _ -> panic ~loc:__LOC__ "merge: unsupported statement %a" pp_stmt stmt
     in
     let a1' = List.fold_left (fun acc stmt -> patch stmt a1 acc) a2 log1 in
     let a2' = List.fold_left (fun acc stmt -> patch stmt a2 acc) a1 log2 in
