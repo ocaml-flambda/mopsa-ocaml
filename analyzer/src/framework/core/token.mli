@@ -55,15 +55,15 @@ sig
 
   val is_top : 'a lattice -> 'a t -> bool
 
-  val subset : 'a lattice -> 'a t -> 'a t -> bool
+  val subset : 'a lattice -> uctx -> 'a t -> 'a t -> bool
 
-  val join : 'a lattice -> 'a t -> 'a t -> 'a t
+  val join : 'a lattice -> uctx -> 'a t -> 'a t -> 'a t
 
-  val join_list : 'a lattice -> 'a t list -> 'a t
+  val join_list : 'a lattice -> uctx -> 'a t list -> 'a t
 
-  val meet : 'a lattice -> 'a t -> 'a t -> 'a t
+  val meet : 'a lattice -> uctx -> 'a t -> 'a t -> 'a t
 
-  val meet_list : 'a lattice -> 'a t list -> 'a t
+  val meet_list : 'a lattice -> uctx -> 'a t list -> 'a t
 
   val widen : 'a lattice -> uctx -> 'a t -> 'a t -> 'a t
 
@@ -81,8 +81,6 @@ sig
 
   val copy : token -> token -> 'a lattice -> 'a t -> 'a t -> 'a t
 
-  val add : token -> 'a -> 'a lattice -> 'a t -> 'a t
-
   val remove : token -> 'a t -> 'a t
 
   val filter : (token -> 'a -> bool) -> 'a t -> 'a t
@@ -90,6 +88,8 @@ sig
   val map : (token -> 'a -> 'b) -> 'a t -> 'b t
 
   val fold : ('b -> token -> 'a -> 'b)  -> 'b -> 'a t -> 'b
+
+  val iter : (token -> 'a -> unit)  -> 'a t -> unit
 
   val merge : (token -> 'a option -> 'a option -> 'a option) -> 'a lattice -> 'a t -> 'a t -> 'a t
 

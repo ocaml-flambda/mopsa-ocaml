@@ -29,12 +29,12 @@
 open Ast.All
 open Core.All
 open Log
-
+open Sig.Domain.Stateless
 
 module Make
-    (D1:Sig.Domain.Stateless.DOMAIN)
-    (D2:Sig.Domain.Stateless.DOMAIN)
-  : Sig.Domain.Stateless.DOMAIN
+    (D1:DOMAIN)
+    (D2:DOMAIN)
+  : DOMAIN
 =
 struct
 
@@ -67,19 +67,11 @@ struct
 
     | true, false ->
       (* Only [D1] provides an [exec] for such zone *)
-      let f = D1.exec zone in
-      (fun stmt man flow ->
-         f stmt man flow |>
-         Option.lift @@ log_post_stmt stmt man
-      )
+      D1.exec zone
 
     | false, true ->
       (* Only [D2] provides an [exec] for such zone *)
-      let f = D2.exec zone in
-      (fun stmt man flow ->
-         f stmt man flow |>
-         Option.lift @@ log_post_stmt stmt man
-      )
+      D2.exec zone
 
     | true, true ->
       (* Both [D1] and [D2] provide an [exec] for such zone *)
@@ -87,12 +79,9 @@ struct
       let f2 = D2.exec zone in
       (fun stmt man flow ->
          match f1 stmt man flow with
-         | Some post ->
-           Option.return @@ log_post_stmt stmt man post
+         | Some post -> Some post
 
-         | None ->
-           f2 stmt man flow |>
-           Option.lift @@ log_post_stmt stmt man
+         | None -> f2 stmt man flow
       )
 
 
@@ -107,17 +96,11 @@ struct
 
     | true, false ->
       (* Only [D1] provides an [eval] for such zone *)
-      let f = D1.eval zone in
-      (fun exp man flow ->
-         f exp man flow
-      )
+      D1.eval zone
 
     | false, true ->
       (* Only [D2] provides an [eval] for such zone *)
-      let f = D2.eval zone in
-      (fun exp man flow ->
-         f exp man flow
-      )
+      D2.eval zone
 
     | true, true ->
       (* Both [D1] and [D2] provide an [eval] for such zone *)
@@ -135,7 +118,7 @@ struct
   let ask query man flow =
     let reply1 = D1.ask query man flow in
     let reply2 = D2.ask query man flow in
-    Option.neutral2 (Query.join query) reply1 reply2
+    Option.neutral2 (join_query query) reply1 reply2
 
 
 end

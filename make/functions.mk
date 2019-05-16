@@ -41,4 +41,6 @@ pack_name = $(subst /,.,$(shell $(SED) -e "s/\b\(.\)/\u\1/g" <<< $(1)))
 
 merlin_root_path = $(shell $(SED) -e "s/[^\/]\+\//\.\.\//g" -e "s/\/[^\/]\+$$//g" <<< $(1))
 
-merlin_lineage = $(patsubst $(SRC)%,$(call merlin_root_path,$(1))/_build%,$(call lineage,$(shell dirname $(1))))
+reverse = $(if $(1),$(call reverse,$(wordlist 2,$(words $(1)),$(1)))) $(firstword $(1))
+
+merlin_lineage = $(patsubst $(SRC)%,$(call merlin_root_path,$(1))/_build%,$(call reverse,$(call lineage,$(shell dirname $(1)))))

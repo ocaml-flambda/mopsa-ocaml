@@ -19,6 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
+
 (** The STACK signature allows implementing domains that are parameterized by
     other domains. However, the stacked and the parameter domain are loosely
     coupled: the stack domain knows only the concrete semantic of its
@@ -35,14 +36,68 @@ open Stmt
 open Context
 open Token
 open Flow
-open Manager
+open Lattice
 open Eval
 open Log
 open Post
+open Query
 open Zone
 open Id
 open Interface
 open Channel
+
+
+(*==========================================================================*)
+(**                         {2 Stack managers}                              *)
+(*==========================================================================*)
+
+(** Managers provide access to full analyzer and the sub-tree
+    abstraction of the stack domain.
+*)
+type ('a, 't, 's) man = ('a,'t,'s) Lowlevel.man = {
+  (* Lattice operators over global abstract elements ['a] *)
+  lattice : 'a lattice;
+
+  (* Accessors to the domain's abstract element ['t] within ['a] *)
+  get : 'a -> 't;
+  set : 't -> 'a -> 'a;
+
+  (* Accessors to the sub-tree abstract element ['s] within ['a] *)
+  get_sub : 'a -> 's;
+  set_sub : 's -> 'a -> 'a;
+
+  (** Analyzer transfer functions *)
+  post : ?zone:zone -> stmt -> 'a flow -> 'a post;
+  exec : ?zone:zone -> stmt -> 'a flow -> 'a flow;
+  exec_sub : ?zone:zone -> stmt -> 'a flow -> 'a post;
+  eval : ?zone:(zone * zone) -> ?via:zone -> expr -> 'a flow -> (expr, 'a) eval;
+  ask : 'r. 'r Query.query -> 'a flow -> 'r;
+
+  (** Accessors to the domain's merge logs *)
+  get_log : log -> log;
+  set_log : log -> log -> log;
+
+  (** Accessors to the sub-tree merge logs *)
+  get_sub_log : log -> log;
+  set_sub_log : log -> log -> log;
+
+  (** Sub-tree merger *)
+  merge_sub : uctx -> 's -> 's * log -> 's * log -> 's;
+}
+
+
+(** Simplified stack managers are provided to the lattice operators of stacked domains
+    to modify the state of the parameter abstraction during unification.
+*)
+type 's sman = {
+  sexec: ?zone:zone -> stmt -> uctx -> 's -> 's;
+  sask: 'r. 'r query -> uctx -> 's -> 'r;
+}
+
+
+(*==========================================================================*)
+(**                         {2 Stack signature}                             *)
+(*==========================================================================*)
 
 (** Unified signature of stacked abstract domains *)
 module type STACK =
@@ -79,17 +134,17 @@ sig
   (** {2 Lattice operators} *)
   (** ********************* *)
 
-  val subset: 's sman -> t * 's -> t * 's -> bool * 's * 's
+  val subset: 's sman -> uctx -> t * 's -> t * 's -> bool * 's * 's
   (** [subset (a1, s1) (a2, s2) sman] tests whether [a1] is related to
       (or included in) [a2] and unifies the sub-tree elements [s1] and
       [s2]. *)
 
 
-  val join: 's sman -> t * 's -> t * 's -> t * 's * 's
+  val join: 's sman -> uctx -> t * 's -> t * 's -> t * 's * 's
   (** [join (a1, s1) (a2, s2) sman] computes an upper bound of [a1]
       and [a2] and unifies the sub-tree elements [s1] and [s2]. *)
 
-  val meet: 's sman -> t * 's -> t * 's -> t * 's * 's
+  val meet: 's sman -> uctx -> t * 's -> t * 's -> t * 's * 's
   (** [meet (a1, s1) (a2, s2) sman] computes a lower bound of [a1] and
       [a2] and unifies the sub-tree elements [s1] and [s2]. *)
 
@@ -100,7 +155,7 @@ sig
       unifies the sub-tree elements [s1] and [s2]. *)
 
 
-  val merge: t -> t * log -> t * log -> t
+  val merge: uctx -> t -> t * log -> t * log -> t
   (** [merge pre (post1, log1) (post2, log2)] synchronizes two divergent
       post-conditions [post1] and [post2] using a common pre-condition [pre].
 
@@ -116,22 +171,68 @@ sig
   (** {2 Transfer functions} *)
   (** ********************** *)
 
-  val init : program -> ('a, t) man -> 'a flow -> 'a flow
+  val init : program -> ('a, t,'s) man -> 'a flow -> 'a flow
   (** Initialization function *)
 
-  val exec : zone -> stmt -> ('a, t) man -> ('a,'s) man -> 'a flow -> 'a post option
+  val exec : zone -> stmt -> ('a, t,'s) man -> 'a flow -> 'a post option
   (** Post-state of statements *)
 
-  val eval : (zone * zone) -> expr -> ('a, t) man -> 'a flow -> (expr, 'a) eval option
+  val eval : (zone * zone) -> expr -> ('a, t,'s) man -> 'a flow -> (expr, 'a) eval option
   (** Evaluation of expressions *)
 
-  val ask  : 'r Query.query -> ('a, t) man -> 'a flow -> 'r option
+  val ask  : 'r Query.query -> ('a, t,'s) man -> 'a flow -> 'r option
   (** Handler of queries *)
 
-  val refine : channel -> ('a,t) man -> ('a,'s) man -> 'a flow -> 'a flow with_channel
+  val refine : channel -> ('a,t,'s) man -> 'a flow -> 'a flow with_channel
   (** Refinement using reduction channels *)
 
 end
+
+
+
+
+(*==========================================================================*)
+(**                        {2 Utility functions}                            *)
+(*==========================================================================*)
+
+let log_post_stmt = Lowlevel.log_post_stmt
+
+let log_post_sub_stmt = Lowlevel.log_post_sub_stmt
+
+let set_domain_env = Lowlevel.set_domain_env
+
+let set_sub_env = Lowlevel.set_sub_env
+
+let get_domain_env = Lowlevel.get_domain_env
+
+let get_sub_env = Lowlevel.get_sub_env
+
+let map_domain_env = Lowlevel.map_domain_env
+
+let map_sub_env = Lowlevel.map_sub_env
+
+let mem_domain_env = Lowlevel.mem_domain_env
+
+let mem_sub_env = Lowlevel.mem_sub_env
+
+let assume = Lowlevel.assume
+
+let assume_eval = Lowlevel.assume_eval
+
+let assume_post = Lowlevel.assume_post
+
+let switch = Lowlevel.switch
+
+let switch_eval = Lowlevel.switch_eval
+
+let switch_post = Lowlevel.switch_post
+
+let exec_eval = Lowlevel.exec_eval
+
+let post_eval = Lowlevel.post_eval
+
+let post_eval_with_cleaners = Lowlevel.post_eval_with_cleaners
+
 
 
 (*==========================================================================*)
@@ -165,27 +266,27 @@ struct
   (** {2 Stack manager} *)
   (** ***************** *)
 
-  (** Create a stack manager from a global manager of the sub-tree *)
-  let stack_man (man:('a,'s) man) : 's sman = {
-    sexec = (fun ?(zone=any_zone) stmt s ->
+  (** Create a simplified stack manager from a global manager *)
+  let simplified_man (man:('a,t,'s) man) : 's sman = {
+    sexec = (fun ?(zone=any_zone) stmt ctx s ->
         (* Create a singleton flow with the given environment *)
         let flow = Flow.singleton
-            Context.empty
+            (Context.empty |> Context.set_unit ctx)
             T_cur
-            (man.lattice.top |> man.set s)
+            (man.set_sub s man.lattice.top)
         in
         (* Execute the statement *)
         let flow' = man.exec ~zone stmt flow in
         (* Get the resulting environment *)
-        get_domain_env T_cur man flow'
+        get_sub_env T_cur man flow'
       );
 
-    sask = (fun query s ->
+    sask = (fun query ctx s ->
         (* Create a singleton flow with the given environment *)
         let flow = Flow.singleton
-            Context.empty
+            (Context.empty |> Context.set_unit ctx)
             T_cur
-            (man.lattice.top |> man.set s)
+            (man.set_sub s man.lattice.top)
         in
         (* Ask the query *)
         man.ask query flow
@@ -196,40 +297,43 @@ struct
   (** {2 Lattice operators} *)
   (** ********************* *)
 
-  let subset man sman a a' =
-    let b, s, s' = S.subset (stack_man sman)
-        (man.get a, sman.get a)
-        (man.get a', sman.get a')
+  let subset man ctx a a' =
+    let b, s, s' = S.subset
+        (simplified_man man)
+        ctx
+        (man.get a, man.get_sub a)
+        (man.get a', man.get_sub a')
     in
-    b, sman.set s a, sman.set s' a'
+    b, man.set_sub s a, man.set_sub s' a'
 
-  let join man sman a a' =
-    let x, s, s' = S.join (stack_man sman)
-        (man.get a, sman.get a)
-        (man.get a', sman.get a')
+  let join man ctx a a' =
+    let x, s, s' = S.join
+        (simplified_man man)
+        ctx
+        (man.get a, man.get_sub a)
+        (man.get a', man.get_sub a')
     in
-    x, sman.set s a, sman.set s' a'
+    x, man.set_sub s a, man.set_sub s' a'
 
-  let meet man sman a a' =
-    let x, s, s' = S.meet (stack_man sman)
-        (man.get a, sman.get a)
-        (man.get a', sman.get a')
+  let meet man ctx a a' =
+    let x, s, s' = S.meet
+        (simplified_man man)
+        ctx
+        (man.get a, man.get_sub a)
+        (man.get a', man.get_sub a')
     in
-    x, sman.set s a, sman.set s' a'
+    x, man.set_sub s a, man.set_sub s' a'
 
-  let widen man sman ctx a a' =
-    let x, s, s', stable = S.widen (stack_man sman) ctx
-        (man.get a, sman.get a)
-        (man.get a', sman.get a')
+  let widen man ctx a a' =
+    let x, s, s', stable = S.widen
+        (simplified_man man)
+        ctx
+        (man.get a, man.get_sub a)
+        (man.get a', man.get_sub a')
     in
-    x, sman.set s a, sman.set s' a', stable
+    x, man.set_sub s a, man.set_sub s' a', stable
 
-  let merge man pre (post1,log1) (post2,log2) =
-    S.merge
-      (man.get pre)
-      (man.get post1, man.get_log log1)
-      (man.get post2, man.get_log log2)
-
+  let merge = S.merge
 
   (** {2 Transfer functions} *)
   (** ********************** *)
@@ -253,10 +357,21 @@ end
 (*==========================================================================*)
 
 
+(** Auto-logger lifter used when registering a domain *)
+module AutoLogger(S:STACK) : STACK with type t = S.t =
+struct
+  include S
+  let exec zone stmt man flow =
+    S.exec zone stmt man flow |>
+    Option.lift @@ log_post_stmt stmt man
+end
+
+
 let stacks : (module STACK) list ref = ref []
 
 let register_stack dom =
-  stacks := dom :: !stacks
+  let module S = (val dom : STACK) in
+  stacks := (module AutoLogger(S)) :: !stacks
 
 let find_stack name =
   List.find (fun dom ->
@@ -275,196 +390,3 @@ let names () =
       let module S = (val dom : STACK) in
       S.name
     ) !stacks
-
-
-
-(****************************************************************************)
-(**                      {2 List representation}                            *)
-(****************************************************************************)
-
-
-(** Abstract stack module *)
-type 't smodule = (module STACK with type t = 't)
-
-
-(** List of stack modules *)
-type _ slist =
-  | Nil : unit slist
-  | Cons : 't smodule * 'b slist -> ('t * 'b) slist
-
-
-
-
-(** {2 Iterators} *)
-(** ************* *)
-
-
-type 'b fold = {
-  f: 't. 't smodule -> 'b -> 'b;
-}
-
-
-let slist_fold f l init =
-  let rec aux : type t. t slist -> 'b -> 'b =
-    fun l acc ->
-      match l with
-      | Nil -> acc
-      | Cons(hd,tl) ->
-        let acc' = f.f hd acc in
-        aux tl acc'
-  in
-  aux l init
-
-
-type ('a,'b) fold_sub2 = {
-  f: 't. 't smodule -> 'a -> 't * 'b -> 't * 'b -> 'a * 'b * 'b;
-}
-
-
-let slist_fold_sub2 f l init (a1,s1) (a2,s2) =
-  let rec aux : type t. t slist -> 'a -> t * 'b -> t * 'b -> 'a * 'b * 'b =
-    fun l acc (a1,s1) (a2,s2) ->
-      match l,a1,a2 with
-      | Nil,(),() -> acc,s1,s2
-      | Cons(hd,tl), (hda1,tla1), (hda2,tla2) ->
-        let acc,s1,s2 = f.f hd acc (hda1,s1) (hda2,s2) in
-        aux tl acc (tla1,s1) (tla2,s2)
-  in
-  aux l init (a1,s1) (a2,s2)
-
-
-type 'b apply_sub2 = {
-  f: 't. 't smodule -> 't * 'b -> 't * 'b -> 't * 'b * 'b;
-}
-
-
-let slist_apply_sub2 f l (a1,s1) (a2,s2) =
-  let rec aux : type t. t slist -> t * 'b -> t * 'b -> t * 'b * 'b =
-    fun l (a1,s1) (a2,s2) ->
-      match l,a1,a2 with
-      | Nil,(),() -> (),s1,s2
-      | Cons(hd,tl), (hda1,tla1), (hda2,tla2) ->
-        let hda,s1,s2 = f.f hd (hda1,s1) (hda2,s2) in
-        let tla,s1,s2 = aux tl (tla1,s1) (tla2,s2) in
-        (hda,tla), s1, s2
-  in
-  aux l (a1,s1) (a2,s2)
-
-
-
-type ('ext,'b) fold_apply_sub_ext2 = {
-  f: 't. 't smodule -> 't * 'b -> 't * 'b -> 'ext -> 't * 'b * 'b * 'ext;
-}
-
-
-let slist_fold_apply_sub_ext2 f l (a1,s1) (a2,s2) ext =
-  let rec aux : type t. t slist -> t * 'b -> t * 'b -> 'ext -> t * 'b * 'b * 'ext=
-    fun l (a1,s1) (a2,s2) ext ->
-      match l,a1,a2 with
-      | Nil,(),() -> (),s1,s2,ext
-      | Cons(hd,tl), (hda1,tla1), (hda2,tla2) ->
-        let hda,s1,s2,ext = f.f hd (hda1,s1) (hda2,s2) ext in
-        let tla,s1,s2,ext = aux tl (tla1,s1) (tla2,s2) ext in
-        (hda,tla), s1, s2,ext
-  in
-  aux l (a1,s1) (a2,s2) ext
-
-
-(** {2 Value creation} *)
-(** ****************** *)
-
-type create = {
-  f: 't. 't smodule -> 't;
-}
-
-let slist_create f l =
-  let rec aux : type t. t slist -> t =
-    fun l ->
-      match l with
-      | Nil -> ()
-      | Cons(hd,tl) ->
-        f.f hd, aux tl
-  in
-  aux l
-
-
-
-(** {2 Pretty printer} *)
-(** ****************** *)
-
-type 'a print = {
-  f: 't. 't smodule -> Format.formatter -> 't -> unit;
-}
-
-
-(** Print an abstract value *)
-let slist_print f l sep fmt a =
-  let rec aux : type t. t slist -> Format.formatter -> t -> unit =
-    fun l fmt a ->
-      match l, a with
-      | Nil, () -> ()
-      | Cons(m,Nil), (aa, ()) -> f.f m fmt aa
-      | Cons(hd,tl), (hda,tla) ->
-        f.f hd fmt hda;
-        Format.fprintf fmt "%s" sep;
-        aux tl fmt tla
-  in
-  aux l fmt a
-
-
-(** {2 Predicates} *)
-(** ************** *)
-
-type 'a pred = {
-  f: 't. 't smodule -> 't -> bool;
-}
-
-(** Test an ∃ predicate *)
-let slist_exists f l a =
-  let rec aux : type t. t slist -> t -> bool =
-    fun l a ->
-      match l, a with
-      | Nil, () -> false
-      | Cons(hd,tl), (hda,tla) ->
-        f.f hd hda || aux tl tla
-  in
-  aux l a
-
-
-(** {2 Managers of list elements} *)
-(** ***************************** *)
-
-let hdman man = {
-  man with
-  get = (fun a -> man.get a |> fst);
-  set = (fun hd a -> man.set (hd, man.get a |> snd) a);
-  get_log = (fun log -> man.get_log log |> Log.first);
-  set_log = (fun l log -> man.set_log (Log.tuple (l, man.get_log log |> Log.second)) log);
-}
-
-let tlman man = {
-  man with
-  get = (fun a -> man.get a |> snd);
-  set = (fun tl a -> man.set (man.get a |> fst, tl) a);
-  get_log = (fun log -> man.get_log log |> Log.second);
-  set_log = (fun l log -> man.set_log (Log.tuple (man.get_log log |> Log.first, l)) log);
-}
-
-
-(** {2 Iterators with managers} *)
-(** *************************** *)
-
-type ('a,'b) man_fold = {
-  f: 't. 't smodule -> ('a, 't) man -> 'b -> 'b;
-}
-
-let slist_man_fold f l man init =
-  let rec aux : type t. t slist -> ('a,t) man -> 'b -> 'b =
-    fun l man acc ->
-      match l with
-      | Nil -> acc
-      | Cons(hd,tl) ->
-        let acc' = f.f hd (hdman man) acc in
-        aux tl (tlman man) acc'
-  in
-  aux l man init

@@ -22,6 +22,7 @@
 (** Evaluation of built-in Libc functions *)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Universal.Ast
 open Ast
 open Zone
@@ -57,7 +58,7 @@ struct
   let interface = {
     iexec = {
       provides = [];
-      uses = [Universal.Zone.Z_u_num]
+      uses = [Z_c_low_level; Universal.Zone.Z_u_num]
     };
     ieval = {
       provides = [
@@ -160,7 +161,7 @@ struct
     Eval.map_flow (fun flow ->
         let flow =
           List.fold_left (fun flow unnamed ->
-              man.exec ~zone:Z_c (mk_remove_var unnamed range) flow
+              man.exec ~zone:Z_c_low_level (mk_remove_var unnamed range) flow
             ) flow vars
         in
         remove_unnamed_args flow
@@ -197,7 +198,7 @@ struct
             Eval.singleton ap flow
           )
         ~felse:(fun flow ->
-            raise_alarm Alarms.AOutOfBound range ~bottom:true man flow |>
+            raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow |>
             Eval.empty_singleton
           )
         ~zone:Z_c
@@ -260,7 +261,7 @@ struct
         )
       ~felse:(fun flow ->
           (* Raise an alarm since no next argument can be fetched by va_arg *)
-          let flow' = raise_alarm Alarms.AVaArgNoNext range ~bottom:true man flow in
+          let flow' = raise_alarm Alarms.AVaArgNoNext range ~bottom:true man.lattice flow in
           Eval.empty_singleton flow'
         )
       ~zone:Universal.Zone.Z_u_num

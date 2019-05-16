@@ -22,6 +22,7 @@
 (** Interpreter of for and do-while loops. *)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Ast
 open Zone
 
@@ -34,7 +35,7 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  let name = "c.desugar.loops"
+  let name = "c.iterators.loops"
   let debug fmt = Debug.debug ~channel:name fmt
 
   (** Zoning definition *)

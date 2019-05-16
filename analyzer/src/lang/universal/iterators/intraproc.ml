@@ -22,6 +22,7 @@
 (** Intra-procedural iterator for blocks, assignments and tests *)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Ast
 
 
@@ -40,7 +41,7 @@ struct
 
   let exec zone stmt man flow =
     match skind stmt with
-    | S_expression(e) ->
+    | S_expression(e) when is_universal_type e.etyp || e.etyp = T_any ->
       Some (
         man.eval e flow |>
         post_eval man @@ fun e flow ->
@@ -77,4 +78,4 @@ struct
 end
 
 let () =
-  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+  register_domain (module Domain)

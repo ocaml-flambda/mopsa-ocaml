@@ -63,6 +63,7 @@
 
 
 open Mopsa
+open Framework.Core.Sig.Domain.Intermediate
 open Universal.Ast
 open Stubs.Ast
 open Ast
@@ -119,12 +120,12 @@ struct
     others = Table.meet  a1.others a2.others;
   }
 
-  let widen annot a1 a2 = {
+  let widen ctx a1 a2 = {
     first = List.map2 Slot.join a1.first a2.first;
-    others = Table.widen annot a1.others a2.others;
+    others = Table.widen a1.others a2.others;
   }
 
-  let merge pre (post,log) (post',log') =
+  let merge ctx pre (post,log) (post',log') =
     assert false
 
   let print fmt a =
@@ -148,7 +149,7 @@ struct
 
   include Framework.Core.Id.GenDomainId(struct
       type typ = t
-      let name = "c.resources.file"
+      let name = "c.cstubs.file"
     end)
 
 
@@ -394,4 +395,4 @@ struct
 end
 
 let () =
-    Framework.Core.Sig.Domain.Intermediate.register_domain (module Domain)
+  Framework.Core.Sig.Domain.Intermediate.register_domain (module Domain)

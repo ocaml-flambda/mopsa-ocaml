@@ -200,7 +200,7 @@ let builtin_type f arg =
   | BASE   -> pointer_type C_AST.(T_void, no_qual)
   | PRIMED -> arg.content.Ast.typ
   | PTR_VALID | FLOAT_VALID | FLOAT_INF | FLOAT_NAN -> bool_type
-  | OLD    -> arg.content.Ast.typ
+  | BYTES    -> unsigned_long_type
 
 
 (** {2 Expressions} *)

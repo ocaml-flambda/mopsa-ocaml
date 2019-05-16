@@ -23,6 +23,7 @@
    irrelevant of the value/type domain *)
 
 open Mopsa
+open Sig.Domain.Stateless
 open Ast
 open Addr
 open Universal.Ast
@@ -79,7 +80,7 @@ struct
     K.key
 
 
-  let fresh_smashed_var =  mkfresh (fun uid -> "$s*" ^ (string_of_int uid)) T_any
+  let fresh_smashed_var =  mkfresh (fun uid -> "$s*", "$s*" ^ (string_of_int uid)) T_any
 
   let get_var_equiv (info: SetInfo.t) (e: Equiv.t) =
     try

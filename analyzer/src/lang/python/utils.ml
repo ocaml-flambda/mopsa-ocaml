@@ -20,6 +20,7 @@
 (****************************************************************************)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Lowlevel
 open Ast
 
 let debug fmt = Debug.debug ~channel:"python.utils" fmt

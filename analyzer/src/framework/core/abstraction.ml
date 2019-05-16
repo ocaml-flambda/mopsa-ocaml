@@ -31,13 +31,33 @@
 open Token
 open Context
 open Ast.All
+open Lattice
 open Flow
-open Manager
 open Eval
 open Post
 open Zone
 open Query
 open Log
+
+
+type ('a, 't) man = ('a, 't) Sig.Domain.Lowlevel.man = {
+  (* Lattice operators over global abstract elements ['a] *)
+  lattice : 'a lattice;
+
+  (* Accessors to the domain's abstract element ['t] within ['a] *)
+  get : 'a -> 't;
+  set : 't -> 'a -> 'a;
+
+  (** Analyzer transfer functions *)
+  post : ?zone:zone -> stmt -> 'a flow -> 'a post;
+  exec : ?zone:zone -> stmt -> 'a flow -> 'a flow;
+  eval : ?zone:(zone * zone) -> ?via:zone -> expr -> 'a flow -> (expr, 'a) eval;
+  ask : 'r. 'r Query.query -> 'a flow -> 'r;
+
+  (** Accessors to the domain's merging logs *)
+  get_log : log -> log;
+  set_log : log -> log -> log;
+}
 
 
 (** Signature of an encapsulated abstraction *)
@@ -61,11 +81,11 @@ sig
   (** {2 Lattice operators} *)
   (** ********************* *)
 
-  val subset: (t, t) man -> t -> t -> bool
+  val subset: (t, t) man -> uctx -> t -> t -> bool
 
-  val join: (t, t) man -> t -> t -> t
+  val join: (t, t) man -> uctx -> t -> t -> t
 
-  val meet: (t, t) man -> t -> t -> t
+  val meet: (t, t) man -> uctx -> t -> t -> t
 
   val widen: (t, t) man -> uctx -> t -> t -> t
 
@@ -188,7 +208,7 @@ struct
 
   let post ?(zone = any_zone) (stmt: stmt) man (flow: Domain.t flow) : Domain.t post =
     Debug_tree.reach stmt.srange;
-    Debug_tree.exec stmt zone man flow;
+    Debug_tree.exec stmt zone man.lattice flow;
 
     let timer = Timing.start () in
     let fexec =
@@ -197,7 +217,7 @@ struct
     in
     let post = Cache.exec fexec zone stmt man flow in
 
-    Debug_tree.exec_done stmt zone (Timing.stop timer) man post;
+    Debug_tree.exec_done stmt zone (Timing.stop timer) man.lattice post;
     post
 
   let exec ?(zone = any_zone) (stmt: stmt) man (flow: Domain.t flow) : Domain.t flow =
@@ -253,7 +273,7 @@ struct
 
   (** Evaluation of expressions. *)
   let rec eval ?(zone = (any_zone, any_zone)) ?(via=any_zone) exp man flow =
-    Debug_tree.eval exp zone man flow;
+    Debug_tree.eval exp zone man.lattice flow;
     let timer = Timing.start () in
 
     let ret =

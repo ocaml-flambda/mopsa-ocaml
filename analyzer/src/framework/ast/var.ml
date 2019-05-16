@@ -87,13 +87,13 @@ let vcounter = ref 0
 
 let mkfresh ?(vkind=V_common) funiq vtyp () =
   incr vcounter;
-  let uniq = funiq !vcounter in
-  mkv uniq uniq ~vkind !vcounter vtyp
+  let org, uniq = funiq !vcounter in
+  mkv org uniq ~vkind !vcounter vtyp
 
 let mktmp ?(typ=T_any) () =
   mkfresh (fun uid ->
       let vname = "$tmp" ^ (string_of_int uid) in
-      vname
+      vname, vname
     ) typ ()
 
 let start_vcounter_at (d:int) : unit =

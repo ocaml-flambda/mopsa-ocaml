@@ -1,9 +1,8 @@
-char * strcpy(char *s1, const char *s2)
+char * strcpy(char *dst, const char *src)
 {
-    char *s = s1;
-    while ((*s++ = *s2++) != 0)
+    while ((*dst++ = *src++) != 0)
 	;
-    return (s1);
+    return dst;
 }
 
 int main() {

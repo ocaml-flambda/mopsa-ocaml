@@ -378,7 +378,7 @@ let () =
         | E_call(f, args) ->
           fprintf fmt "%a(%a)"
             pp_expr f
-            (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") pp_expr) args
+            (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_expr) args
         | E_alloc_addr(akind, amode) -> fprintf fmt "alloc(%a, %a)" pp_addr_kind akind pp_mode amode
         | E_addr (addr) -> fprintf fmt "%a" pp_addr addr
         | E_len exp -> Format.fprintf fmt "|%a|" pp_expr exp
@@ -435,9 +435,11 @@ type stmt_kind +=
    (** Unit tests suite *)
 
    | S_simple_assert of expr * bool * bool
-   (** Unit tests simple assertions : S_simple_assert(e,b,b') = b
-       is_bottom(assume(b' cond)) where b exp is understood as exp if b
-      = true and not exp otherwise *)
+   (** Unit tests simple assertions :
+       S_simple_assert(cond,b,b') = b is_bottom(assume(b' cond))
+       where b exp is understood as:
+        f b = true then exp else not exp
+   *)
 
    | S_assert of expr
    (** Unit tests assertions *)

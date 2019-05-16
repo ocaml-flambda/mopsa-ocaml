@@ -31,6 +31,7 @@ type alarm_kind +=
   | AIntegerOverflow
   | AIllegalPointerDiff
   | AVaArgNoNext
+  | AReadOnlyModification
 
 let () =
   register_alarm
@@ -45,6 +46,7 @@ let () =
           | AIntegerOverflow -> Format.fprintf fmt "int-overflow"
           | AIllegalPointerDiff -> Format.fprintf fmt "ptr-diff"
           | AVaArgNoNext -> Format.fprintf fmt "va-arg"
+          | AReadOnlyModification -> Format.fprintf fmt "readonly"
           | _ -> default fmt a
         );
       pp_title = (fun default fmt a ->
@@ -55,7 +57,8 @@ let () =
           | ADivideByZero -> Format.fprintf fmt "Division by zero"
           | AIntegerOverflow -> Format.fprintf fmt "Integer overflow"
           | AIllegalPointerDiff -> Format.fprintf fmt "Illegal pointer difference"
-          | AVaArgNoNext -> Format.fprintf fmt "No next argument for va_arg "
+          | AVaArgNoNext -> Format.fprintf fmt "No next argument for va_arg"
+          | AReadOnlyModification -> Format.fprintf fmt "Modification of a readonly memory"
           | _ -> default fmt a
         );
       pp_report = (fun default fmt a ->
@@ -67,6 +70,7 @@ let () =
           | AIntegerOverflow -> Format.fprintf fmt ""
           | AIllegalPointerDiff -> Format.fprintf fmt ""
           | AVaArgNoNext -> Format.fprintf fmt ""
+          | AReadOnlyModification -> Format.fprintf fmt ""
           | _ -> default fmt a
         )
     };

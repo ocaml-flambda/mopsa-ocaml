@@ -64,7 +64,7 @@ struct
   let diff (abs1:t) (abs2:t) : t =
     top_neutral2 Set.diff abs1 abs2
 
-  let widen annot (abs1:t) (abs2:t) : t =
+  let widen (abs1:t) (abs2:t) : t =
     top_absorb2
       (fun s1 s2 ->
          if Set.subset s2 s1 then
@@ -210,9 +210,9 @@ struct
 
   let inter = meet
 
-  let widen annot ((l1,u1): t) ((l2,u2): t) : t =
+  let widen ((l1,u1): t) ((l2,u2): t) : t =
     Set.inter l1 l2,
-    USet.widen annot u1 u2
+    USet.widen u1 u2
 
   open Format
   let print fmt ((l,u):t) =

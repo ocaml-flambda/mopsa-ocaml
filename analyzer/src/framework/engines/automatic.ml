@@ -26,7 +26,6 @@ open Ast.Expr
 open Core
 open Lattice
 open Flow
-open Manager
 open Eval
 open Zone
 open Query
@@ -59,9 +58,9 @@ struct
     bottom = Abstraction.bottom;
     top = Abstraction.top;
     is_bottom = Abstraction.is_bottom;
-    subset = (fun a a' -> Abstraction.subset man a a');
-    join = (fun a a' -> Abstraction.join man a a');
-    meet = (fun a a' -> Abstraction.meet man a a');
+    subset = (fun ctx a a' -> Abstraction.subset man ctx a a');
+    join = (fun ctx a a' -> Abstraction.join man ctx a a');
+    meet = (fun ctx a a' -> Abstraction.meet man ctx a a');
     widen = (fun ctx a a' -> Abstraction.widen man ctx a a');
     print = Abstraction.print;
   }

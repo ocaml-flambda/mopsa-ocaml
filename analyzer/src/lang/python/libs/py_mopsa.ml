@@ -24,6 +24,7 @@
 (** MOPSA Python library. *)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Addr
 open Ast
 open Universal.Ast
@@ -129,7 +130,7 @@ module Domain =
          begin
            let error_env = Flow.fold (fun acc tk env ->
                                match tk with
-                               | T_alarm {alarm_kind = APyException _} -> man.lattice.join acc env
+                               | T_alarm {alarm_kind = APyException _} -> man.lattice.join (Flow.get_unit_ctx flow) acc env
                                | _ -> acc
                              ) man.lattice.bottom flow in
            let exception BottomFound in
@@ -160,7 +161,7 @@ module Domain =
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_unsafe")}, _)}, [], [])  ->
          begin
            let error_env = Flow.fold (fun acc tk env -> match tk with
-                                                        | T_alarm {alarm_kind = APyException _} -> man.lattice.join acc env
+                                                        | T_alarm {alarm_kind = APyException _} -> man.lattice.join (Flow.get_unit_ctx flow) acc env
                                                         | _ -> acc
              ) man.lattice.bottom flow in
            let exception BottomFound in
@@ -194,7 +195,7 @@ module Domain =
               let flow1 = Flow.set T_cur env man.lattice flow1 in
               let flow2 = man.exec (mk_assume (mk_py_isinstance exn assert_exn range) range) flow1 in
               if not @@ (Flow.get T_cur man.lattice flow2 |> man.lattice.is_bottom) then
-                man.lattice.join acc_env env, exn :: acc_good_exn
+                man.lattice.join (Flow.get_unit_ctx flow2) acc_env env, exn :: acc_good_exn
               else
                 acc_env, acc_good_exn
             | _ -> acc_env, acc_good_exn) (man.lattice.bottom, []) flow
@@ -246,7 +247,7 @@ module Domain =
               let flow1 = Flow.set T_cur env man.lattice flow1 in
               let flow2 = man.exec (mk_assume (mk_py_isinstance exn assert_exn range) range) flow1 in
               if not @@ (Flow.get T_cur man.lattice flow2 |> man.lattice.is_bottom) then
-                man.lattice.join acc env
+                man.lattice.join (Flow.get_unit_ctx flow) acc env
               else acc
             | _ -> acc
           ) man.lattice.bottom flow in

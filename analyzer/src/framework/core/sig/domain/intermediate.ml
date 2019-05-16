@@ -34,7 +34,7 @@ open Expr
 open Stmt
 open Context
 open Flow
-open Manager
+open Lattice
 open Eval
 open Query
 open Log
@@ -43,6 +43,38 @@ open Zone
 open Id
 open Interface
 open Channel
+
+
+(*==========================================================================*)
+(**                         {2 Domain manager}                              *)
+(*==========================================================================*)
+
+
+(** Managers provide access to full analyzer, i.e. (i) the lattice
+    operators of the global abstraction ['a], (ii) the transfer functions
+    over ['a flow] and (iii) accessors to the domain's abstract element ['t]
+    within ['a].
+*)
+type ('a, 't) man = ('a,'t) Lowlevel.man = {
+  (* Lattice operators over global abstract elements ['a] *)
+  lattice : 'a lattice;
+
+  (* Accessors to the domain's abstract element ['t] within ['a] *)
+  get : 'a -> 't;
+  set : 't -> 'a -> 'a;
+
+  (** Analyzer transfer functions *)
+  post : ?zone:zone -> stmt -> 'a flow -> 'a post;
+  exec : ?zone:zone -> stmt -> 'a flow -> 'a flow;
+  eval : ?zone:(zone * zone) -> ?via:zone -> expr -> 'a flow -> (expr, 'a) eval;
+  ask : 'r. 'r Query.query -> 'a flow -> 'r;
+
+  (** Accessors to the domain's merging logs *)
+  get_log : log -> log;
+  set_log : log -> log -> log;
+}
+
+
 
 
 (*==========================================================================*)
@@ -99,7 +131,7 @@ sig
   (** [widen ctx a1 a2] computes an upper bound of [a1] and [a2] that
       ensures stabilization of ascending chains. *)
 
-  val merge: t -> t * log -> t * log -> t
+  val merge: uctx -> t -> t * log -> t * log -> t
   (** [merge pre (post1, log1) (post2, log2)] synchronizes two divergent
       post-conditions [post1] and [post2] using a common pre-condition [pre].
 
@@ -138,15 +170,11 @@ end
 (**                        {2 Low-level lifters}                            *)
 (*==========================================================================*)
 
-let lift_unop f man a = f (man.get a)
+let lift_unop f man ctx a = f (man.get a)
 
-let lift_binop f man a a' = f (man.get a) (man.get a')
+let lift_binop f man ctx a a' = f (man.get a) (man.get a')
 
-let lift_merge merge man pre (post1,log1) (post2,log2) =
-  merge
-    (man.get pre)
-    (man.get post1, man.get_log log1)
-    (man.get post2, man.get_log log2)
+let lift_widen f man ctx a a' = f ctx (man.get a) (man.get a')
 
 
 (** Cast a unified signature into a low-level signature *)
@@ -176,16 +204,15 @@ struct
   (** {2 Lattice operators} *)
   (** ********************* *)
 
-  let subset man a a' = lift_binop D.subset man a a'
+  let subset man ctx a a' = lift_binop D.subset man ctx a a'
 
-  let join man a a' = lift_binop D.join man a a'
+  let join man ctx a a' = lift_binop D.join man ctx a a'
 
-  let meet man a a' = lift_binop D.meet man a a'
+  let meet man ctx a a' = lift_binop D.meet man ctx a a'
 
-  let widen man ctx a a' = lift_binop (D.widen ctx) man a a'
+  let widen man ctx a a' = lift_widen D.widen man ctx a a'
 
-  let merge man pre (post1,log1) (post2,log2) =
-    lift_merge D.merge man pre (post1,log1) (post2,log2)
+  let merge = D.merge
 
 
   (** {2 Transfer functions} *)
@@ -209,10 +236,25 @@ end
 (**                          {2 Registration}                               *)
 (*==========================================================================*)
 
+
+
+let log_post_stmt = Lowlevel.log_post_stmt
+
+(** Auto-logger lifter used when registering a domain *)
+module AutoLogger(D:DOMAIN) : DOMAIN with type t = D.t =
+struct
+  include D
+  let exec zone stmt man flow =
+    D.exec zone stmt man flow |>
+    Option.lift @@ log_post_stmt stmt man
+end
+
 let domains : (module DOMAIN) list ref = ref []
 
 let register_domain dom =
-  domains := dom :: !domains
+  let module D = (val dom : DOMAIN) in
+  domains := (module AutoLogger(D)) :: !domains
+
 
 let find_domain name =
   List.find (fun dom ->
@@ -231,3 +273,39 @@ let names () =
       let module D = (val dom : DOMAIN) in
       D.name
     ) !domains
+
+
+(*==========================================================================*)
+(**                        {2 Utility functions}                            *)
+(*==========================================================================*)
+
+
+let set_domain_env = Lowlevel.set_domain_env
+
+let get_domain_env = Lowlevel.get_domain_env
+
+let map_domain_env = Lowlevel.map_domain_env
+
+let mem_domain_env = Lowlevel.mem_domain_env
+
+let assume = Lowlevel.assume
+
+let assume_eval = Lowlevel.assume_eval
+
+let assume_post = Lowlevel.assume_post
+
+let switch = Lowlevel.switch
+
+let switch_eval = Lowlevel.switch_eval
+
+let switch_post = Lowlevel.switch_post
+
+let exec_eval = Lowlevel.exec_eval
+
+let post_eval = Lowlevel.post_eval
+
+let post_eval_with_cleaners = Lowlevel.post_eval_with_cleaners
+
+let exec_stmt_on_all_flows = Lowlevel.exec_stmt_on_all_flows
+
+let exec_block_on_all_flows = Lowlevel.exec_block_on_all_flows

@@ -23,6 +23,7 @@
    arithmetic*)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Intermediate
 open Ast
 open Zone
 

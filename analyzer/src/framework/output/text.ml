@@ -23,6 +23,7 @@
 
 open ArgExt
 open Core.All
+open Sig.Domain.Lowlevel
 open Format
 
 let print out fmt =

@@ -22,6 +22,7 @@
 (** Machine representation of C integers and floats *)
 
 open Mopsa
+open Framework.Core.Sig.Stacked.Stateless
 open Universal.Ast
 open Ast
 open Zone
@@ -112,7 +113,11 @@ let to_universal_type t =
     | _ -> panic ~loc:__LOC__ "non integer type %a" pp_typ t
 
 let to_universal_var v =
-  {v with vtyp = to_universal_type v.vtyp}
+  {
+    v with
+    vtyp = to_universal_type v.vtyp;
+    vkind = V_common
+  }
 
 let to_universal_expr e =
   match ekind e with
@@ -170,7 +175,7 @@ struct
            Eval.singleton exp' tflow
         )
         (fun fflow ->
-           let flow' = raise_alarm Alarms.ADivideByZero exp.erange ~bottom:true man fflow in
+           let flow' = raise_alarm Alarms.ADivideByZero exp.erange ~bottom:true man.lattice fflow in
            Eval.empty_singleton flow'
         ) e e' flow
 
@@ -184,7 +189,7 @@ struct
       check_overflow typ man range
         (fun e tflow -> Eval.singleton e tflow)
         (fun e fflow ->
-           let flow1 = raise_alarm Alarms.AIntegerOverflow exp.erange ~bottom:false man fflow in
+           let flow1 = raise_alarm Alarms.AIntegerOverflow exp.erange ~bottom:false man.lattice fflow in
            Eval.singleton
              {ekind  = E_unop(O_wrap(rmin, rmax), e);
               etyp   = to_universal_type typ;
@@ -202,7 +207,7 @@ struct
         check_overflow typ man range
           (fun e tflow -> Eval.singleton e tflow)
           (fun e fflow ->
-             let flow1 = raise_alarm Alarms.AIntegerOverflow exp.erange ~bottom:false man fflow in
+             let flow1 = raise_alarm Alarms.AIntegerOverflow exp.erange ~bottom:false man.lattice fflow in
              Eval.singleton
                {ekind  = E_unop(O_wrap(rmin, rmax), e);
                 etyp   = to_universal_type typ;
@@ -236,7 +241,7 @@ struct
                end
              else
                begin
-                 let flow1 = raise_alarm Alarms.AIntegerOverflow exp.erange ~bottom:false man fflow in
+                 let flow1 = raise_alarm Alarms.AIntegerOverflow exp.erange ~bottom:false man.lattice fflow in
                  Eval.singleton
                    {ekind  = E_unop(O_wrap(rmin, rmax), e);
                     etyp   = to_universal_type t;
@@ -363,70 +368,62 @@ struct
 
 
   (* Declaration of a scalar numeric variable *)
-  let declare_var v range man sman flow =
-    let init, scope =
-      match v.vkind with
-      | V_c { var_init; var_scope } -> var_init, var_scope
+  let declare_var v init range man flow =
+    let vv = mk_var (to_universal_var v) range in
+
+    let init' =
+      match var_scope v, init with
+      (** Uninitialized global variable *)
+      | Variable_global, None | Variable_file_static _, None ->
+        (* The variable is initialized with 0 (C99 6.7.8.10) *)
+        Eval.singleton (mk_zero range) flow
+
+      (** Uninitialized local variable *)
+      | Variable_local _, None | Variable_func_static _, None ->
+        (* The value of the variable is undetermined (C99 6.7.8.10) *)
+        let l,u = rangeof v.vtyp in
+        Eval.singleton (mk_z_interval l u range) flow
+
+      | _, Some (C_init_expr e) ->
+        man.eval ~zone:(Z_c_scalar,Z_u_num) e flow
+
       | _ -> assert false
     in
 
-    let vv = mk_var (to_universal_var v) range in
-
-    match scope, init with
-    (** Uninitialized global variable *)
-    | Variable_global, None | Variable_file_static _, None ->
-      (* The variable is initialized with 0 (C99 6.7.8.10) *)
-      sman.post ~zone:Z_u_num (mk_assign vv (mk_zero range) range) flow
-
-    (** Uninitialized local variable *)
-    | Variable_local _, None | Variable_func_static _, None ->
-      (* The value of the variable is undetermined (C99 6.7.8.10) *)
-      let l,u = rangeof v.vtyp in
-      sman.post ~zone:Z_u_num (mk_assign vv (mk_z_interval l u range) range) flow
-
-    | _, Some (C_init_expr e) ->
-      man.eval ~zone:(Z_c_scalar,Z_u_num) e flow |>
-      post_eval man @@ fun e flow ->
-
-      sman.post ~zone:Z_u_num (mk_assign vv e range) flow
-
-    | _ -> assert false
+    init' |> post_eval man @@ fun init' flow ->
+    man.exec_sub ~zone:Z_u_num (mk_add vv range) flow |>
+    Post.bind (man.exec_sub ~zone:Z_u_num (mk_assign vv init' range))
 
 
-  let exec zone stmt man stman flow =
+  let exec zone stmt man flow =
     match skind stmt with
-    | S_c_declaration v when is_c_num_type v.vtyp ->
-      declare_var v stmt.srange man stman flow |>
+    | S_c_declaration (v,init) when is_c_num_type v.vtyp ->
+      declare_var v init stmt.srange man flow |>
       Option.return
 
     | S_assign(lval, rval) when etyp lval |> is_c_num_type ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) lval flow |>
-      Option.return |> Option.lift @@ post_eval stman @@
-      fun lval' flow ->
+      Option.return |> Option.lift @@ post_eval man @@ fun lval' flow ->
 
       man.eval ~zone:(Z_c_scalar, Z_u_num) rval flow |>
-      post_eval stman @@ fun rval' flow ->
+      post_eval man @@ fun rval' flow ->
 
-      man.exec ~zone:Z_u_num (mk_assign lval' rval' stmt.srange) flow |>
-      Post.return
+      man.exec_sub ~zone:Z_u_num (mk_assign lval' rval' stmt.srange) flow
 
     | S_add v when is_c_num_type v.etyp ->
       let vv = to_universal_expr v in
-      man.exec ~zone:Z_u_num (mk_add vv stmt.srange) flow |>
-      Post.return |>
+      man.exec_sub ~zone:Z_u_num (mk_add vv stmt.srange) flow |>
       Option.return
 
     | S_expand(v, vl) when is_c_num_type v.etyp ->
       let vv = to_universal_expr v in
       let vvl = List.map to_universal_expr vl in
-      man.exec ~zone:Z_u_num (mk_expand vv vvl stmt.srange) flow |>
-      Post.return |>
+      man.exec_sub ~zone:Z_u_num (mk_expand vv vvl stmt.srange) flow |>
       Option.return
 
     | S_remove v when is_c_num_type v.etyp ->
       let vv = to_universal_expr v in
-      man.exec ~zone:Z_u_num (mk_remove vv stmt.srange) flow |>
-      Post.return |>
+      man.exec_sub ~zone:Z_u_num (mk_remove vv stmt.srange) flow |>
       Option.return
 
     | S_rename(v1, v2) when is_c_num_type v1.etyp &&
@@ -434,17 +431,15 @@ struct
       ->
       let vv1 = to_universal_expr v1 in
       let vv2 = to_universal_expr v2 in
-      man.exec ~zone:Z_u_num (mk_rename vv1 vv2 stmt.srange) flow |>
-      Post.return |>
+      man.exec_sub ~zone:Z_u_num (mk_rename vv1 vv2 stmt.srange) flow |>
       Option.return
 
 
     | S_assume(e) ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow |>
-      Option.return |> Option.lift @@ post_eval stman @@ fun e' flow ->
+      Option.return |> Option.lift @@ post_eval man @@ fun e' flow ->
 
-      man.exec ~zone:Z_u_num (mk_assume e' stmt.srange) flow |>
-      Post.return
+      man.exec_sub ~zone:Z_u_num (mk_assume e' stmt.srange) flow
 
     | _ -> None
 

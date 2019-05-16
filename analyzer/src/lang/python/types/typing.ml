@@ -21,6 +21,7 @@
 
 (* TODO: move S_assume and eval of not into t_bool domain? *)
 open Mopsa
+open Sig.Domain.Intermediate
 open Ast
 open Addr
 open Data_model.Attribute
@@ -241,6 +242,8 @@ struct
       (Polytypeset)
 
   include TMap
+
+  let widen ctx = widen
 
   include Framework.Core.Id.GenDomainId(struct
       type typ = t
@@ -1004,7 +1007,7 @@ struct
       Exceptions.panic_at range "Warning: no eval for %a" pp_expr exp (* ;
            None *)
 
-  let ask : type r. r Query.query -> ('a, t) man -> 'a flow -> r option =
+  let ask : type r. r query -> ('a, t) man -> 'a flow -> r option =
     fun query man flow ->
       match query with
       | Q_exn_string_query t ->

@@ -36,10 +36,7 @@ type 'a post = 'a Post.post
 
 module Log = Log
 
-include Manager
-
 include Query
-module Query = Query
 
 include Token
 

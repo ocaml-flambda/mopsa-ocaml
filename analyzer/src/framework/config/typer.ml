@@ -350,7 +350,7 @@ and stack_visitor spec = {
     compose = (fun l -> List.map (stack spec) l |> chain spec O_compose);
     apply = (fun s d -> assert false);
     nonrel = (fun v -> assert false);
-    product = (fun l r -> assert false);
+    product = (fun l r -> product spec (List.map (stack spec) l) r);
     disjoint = (fun l -> assert false);
   }
 

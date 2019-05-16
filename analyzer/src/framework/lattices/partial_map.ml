@@ -98,7 +98,7 @@ struct
       )
   (** Join two sets of partial maps. *)
 
-  let widen ctx ~widenv (a1:'a t) (a2:'a t) : 'a t =
+  let widen ~widenv (a1:'a t) (a2:'a t) : 'a t =
     match a1, a2 with
     | Bot, x | x, Bot -> x
     | Top, x | x, Top -> Top
@@ -107,7 +107,7 @@ struct
         Map.map2zo
           (fun _ v1 -> v1)
           (fun _ v2 -> v2)
-          (fun _ v1 v2 -> widenv ctx v1 v2)
+          (fun _ v1 v2 -> widenv v1 v2)
           m1 m2
       )
   (** Widening (naive). *)
@@ -278,11 +278,11 @@ struct
 
   let empty : t = Map.empty
 
-  let subset  (a1:t) (a2:t) : bool = Map.subset a1 a2 ~subsetv:Value.subset
+  let subset (a1:t) (a2:t) : bool = Map.subset a1 a2 ~subsetv:Value.subset
 
   let join (a1:t) (a2:t) : t = Map.join a1 a2 ~joinv:Value.join
 
-  let widen ctx (a1:t) (a2:t) : t = Map.widen ctx a1 a2 ~widenv:Value.widen
+  let widen (a1:t) (a2:t) : t = Map.widen a1 a2 ~widenv:Value.widen
 
   let meet (a1:t) (a2:t) : t = Map.meet a1 a2 ~meetv:Value.meet
 

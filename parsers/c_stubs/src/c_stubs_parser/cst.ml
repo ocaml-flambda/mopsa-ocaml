@@ -187,14 +187,13 @@ and var = {
 and builtin =
   | PRIMED
   | SIZE
+  | BYTES
   | OFFSET
   | BASE
   | PTR_VALID
   | FLOAT_VALID
   | FLOAT_INF
   | FLOAT_NAN
-  (* Deprecated *)
-  | OLD
 
 
 (** {2 Types} *)
@@ -256,6 +255,7 @@ let pp_resource fmt resource = pp_print_string fmt resource
 
 let pp_builtin fmt f =
   match f with
+  | BYTES   -> pp_print_string fmt "bytes"
   | SIZE   -> pp_print_string fmt "size"
   | OFFSET -> pp_print_string fmt "offset"
   | BASE   -> pp_print_string fmt "base"
@@ -264,7 +264,6 @@ let pp_builtin fmt f =
   | FLOAT_VALID -> pp_print_string fmt "float_valid"
   | FLOAT_INF   -> pp_print_string fmt "float_inf"
   | FLOAT_NAN   -> pp_print_string fmt "float_nan"
-  | OLD    -> pp_print_string fmt "old"
 
 let pp_list pp sep fmt l =
   pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt sep) pp fmt l

@@ -67,11 +67,9 @@
 %token REQUIRES LOCAL ASSIGNS CASE ASSUMES ENSURES PREDICATE WARN ALIAS
 %token TRUE FALSE
 %token FORALL EXISTS IN NEW
-%token FREE PRIMED RETURN SIZE SIZEOF OFFSET BASE PTR_VALID
+%token FREE PRIMED RETURN SIZE BYTES SIZEOF OFFSET BASE PTR_VALID
 %token FLOAT_VALID FLOAT_INF FLOAT_NAN
 
-(* Deprecated *)
-%token OLD
 
 (* Types *)
 %token VOID CHAR INT LONG FLOAT DOUBLE SHORT
@@ -345,6 +343,7 @@ set:
 
 %inline builtin:
   | SIZE   { SIZE }
+  | BYTES  { BYTES }
   | OFFSET { OFFSET }
   | BASE   { BASE }
   | PRIMED { PRIMED }
@@ -352,8 +351,6 @@ set:
   | FLOAT_VALID { FLOAT_VALID }
   | FLOAT_INF   { FLOAT_INF }
   | FLOAT_NAN   { FLOAT_NAN }
-  (* Deprecated *)
-  | OLD    { OLD }
 
 args:
   |                             { [] }

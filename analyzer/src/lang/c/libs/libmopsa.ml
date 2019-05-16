@@ -22,6 +22,7 @@
 (** Evaluation of MOPSA built-in functions *)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Universal.Ast
 open Ast
 
@@ -235,14 +236,27 @@ struct
       Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
       Option.return
 
+    | E_c_builtin_call("_mopsa_assert_exists", [cond]) ->
+      let flow' = man.exec (mk_assume cond exp.erange) flow in
+      let cond' =
+        if man.lattice.is_bottom (Flow.get T_cur man.lattice flow') then
+          mk_zero exp.erange
+        else
+          mk_one exp.erange
+      in
+      let flow = man.exec (mk_assert cond' exp.erange) flow in
+      Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
+      Option.return
+
     | E_c_builtin_call("_mopsa_assert_false", [cond]) ->
       assert false
 
     | E_c_builtin_call("_mopsa_assert_safe", []) ->
       begin
+        let ctx = Flow.get_unit_ctx flow in
         let error_env = Flow.fold (fun acc tk env ->
             match tk with
-            | T_alarm _ -> man.lattice.join acc env
+            | T_alarm _ -> man.lattice.join ctx acc env
             | _ -> acc
           ) man.lattice.bottom flow in
         let exception BottomFound in
@@ -271,9 +285,10 @@ struct
 
      | E_c_builtin_call("_mopsa_assert_unsafe", []) ->
       begin
+        let ctx = Flow.get_unit_ctx flow in
         let error_env = Flow.fold (fun acc tk env ->
             match tk with
-            | T_alarm _ -> man.lattice.join acc env
+            | T_alarm _ -> man.lattice.join ctx acc env
             | _ -> acc
           ) man.lattice.bottom flow in
         let cond =
@@ -286,28 +301,29 @@ struct
           | true, true -> mk_zero
         in
         let stmt = mk_assert (cond ~typ:u8 exp.erange) exp.erange in
-        let flow' = Flow.set T_cur man.lattice.top man.lattice flow in
-        let flow'' = man.exec stmt flow' |>
-                     (* Since the unsafe here is "normal", so we remove all alarms *)
-                     Flow.fold (fun flow tk _ ->
-                       match tk with
-                       | T_alarm _ -> Flow.remove tk flow
-                       | _ -> flow
-                     ) flow
+        let flow1 = Flow.set T_cur man.lattice.top man.lattice flow in
+        let flow2 = man.exec stmt flow1 in
+        (* Since the unsafe here is "normal", so we remove all alarms *)
+        let flow3 = Flow.filter (fun tk _ ->
+            match tk with
+            | T_alarm _ -> false
+            | _ -> true
+          ) flow2
         in
-        Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow'' |>
+        Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow3 |>
         Option.return
       end
 
     | E_c_builtin_call("_mopsa_assert_error", [{ekind = E_constant(C_int code)}]) ->
       begin
         let code = Z.to_int code in
+        let ctx = Flow.get_unit_ctx flow in
         let this_error_env = Flow.fold (fun acc tk env ->
             match tk with
             | T_alarm a when is_c_alarm a &&
                              code = alarm_to_code a
               ->
-              man.lattice.join acc env
+              man.lattice.join ctx acc env
             | _ -> acc
           ) man.lattice.bottom flow in
         let cond =
@@ -338,6 +354,7 @@ struct
     | E_c_builtin_call("_mopsa_assert_error_at_line", [{ekind = E_constant(C_int code)}; {ekind = E_constant(C_int line)}]) ->
       begin
         let code = Z.to_int code and line = Z.to_int line in
+        let ctx = Flow.get_unit_ctx flow in
         let this_error_env = Flow.fold (fun acc tk env ->
             match tk with
             | T_alarm a
@@ -345,7 +362,7 @@ struct
                 && code = alarm_to_code a
                 && line = get_range_line @@ fst a.alarm_trace
               ->
-              man.lattice.join acc env
+              man.lattice.join ctx acc env
             | _ -> acc
           ) man.lattice.bottom flow in
         let cond =
@@ -377,12 +394,13 @@ struct
     | E_c_builtin_call("_mopsa_assert_error_exists", [{ekind = E_constant(C_int code)}]) ->
       begin
         let code = Z.to_int code in
+        let ctx = Flow.get_unit_ctx flow in
         let error_env = Flow.fold (fun acc tk env ->
             match tk with
             | T_alarm a
               when is_c_alarm a
                 && code = alarm_to_code a
-              -> man.lattice.join acc env
+              -> man.lattice.join ctx acc env
             | _ -> acc
           ) man.lattice.bottom flow in
         let cur = Flow.get T_cur man.lattice flow in

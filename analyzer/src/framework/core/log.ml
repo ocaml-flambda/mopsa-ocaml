@@ -39,9 +39,12 @@ type log =
                log (** Logs of the second domain *)
 
 let rec print fmt = function
-  | L_empty -> Format.pp_print_string fmt "[]"
-  | L_singleton(block,log) -> Format.fprintf fmt "%a :: %a" pp_block block print log
-  | L_tuple(fst,snd) -> Format.fprintf fmt "(%a, %a)" print fst print snd
+  | L_empty -> ()
+  | L_singleton(block,L_empty) -> Format.fprintf fmt "@[<v 2>[@,%a@;<0 -2>]@]" pp_block block
+  | L_singleton(block,log) -> Format.fprintf fmt "@[<v 2>[@,%a@;<0 -2>]@] -> {@[<v 2>@,%a@;@]@;}" pp_block block print log
+  | L_tuple(fst,snd) -> Format.fprintf fmt "@[<v 2>(@,%a, %a@;<0 -2>)@]" print fst print snd
+
+let print fmt log = Format.fprintf fmt "@[<v 0>%a@]" print log
 
 (** Concatenate two logs *)
 let rec concat log1 log2 =
@@ -79,12 +82,14 @@ let second log =
 (** Return the block of statement logged by a domain *)
 let get_domain_block log =
   match log with
+  | L_empty -> []
   | L_singleton(block, _) -> block
   | _ -> assert false
 
 (** Return the inner logs of the domain *)
 let get_domain_inner_log log =
   match log with
+  | L_empty -> L_empty
   | L_singleton(_, l) -> l
   | _ -> assert false
 
@@ -92,7 +97,7 @@ let get_domain_inner_log log =
 let append stmt log =
   match log with
   | L_empty -> L_singleton ([stmt], L_empty)
-  | L_singleton (block, inner) -> L_singleton (block @ [stmt], inner)
+  | L_singleton (block, inner) -> L_singleton (stmt :: block, inner)
   | L_tuple (fst,snd) -> log
 
 (** Append a statement to the logs of the first domain in a tuple configuration *)
