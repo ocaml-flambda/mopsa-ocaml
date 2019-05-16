@@ -697,7 +697,7 @@ struct
     Post.bind @@ fun flow ->
 
     (* Remove the old cell and add the new one *)
-    let flow' =
+    let flow =
       map_domain_env T_cur (fun a ->
           { a with cells = CellSet.remove old_cell a.cells |>
                            CellSet.add new_cell
@@ -708,7 +708,7 @@ struct
     let oldv, flow = mk_cell_var_flow old_cell flow in
     let newv, flow = mk_cell_var_flow new_cell flow in
     let stmt = mk_rename_var oldv newv range in
-    man.exec_sub ~zone:Z_c_scalar stmt flow'
+    man.exec_sub ~zone:Z_c_scalar stmt flow
 
 
 
