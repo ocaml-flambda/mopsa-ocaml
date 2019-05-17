@@ -28,6 +28,8 @@
 
 type _ ukey
 
+type uctx
+
 module GenUnitKey
     (V:sig
        type t
@@ -37,9 +39,6 @@ module GenUnitKey
   sig
     val key : V.t ukey
   end
-
-
-type uctx
 
 val ufind :'v ukey -> uctx -> 'v
 
@@ -55,26 +54,32 @@ val uprint : Format.formatter -> uctx -> unit
 
 
 (****************************************************************************)
-(**                            {2 Contexts}                                 *)
+(**                     {2 Polymorphic contexts}                            *)
 (****************************************************************************)
 
 type ('a, _) pkey
 
-
-type 'a ctx
+type 'a pctx
 
 module GenPolyKey
     (V:sig
        type 'a t
-       val ctx : 'a ctx
        val print : Format.formatter -> 'a t -> unit
      end)
   :
   sig
     val key : ('a,'a V.t) pkey
-    val ctx : 'a ctx
+    val init : 'a pctx
 end
 
+
+(****************************************************************************)
+(**                            {2 Contexts}                                 *)
+(****************************************************************************)
+
+
+
+type 'a ctx
 
 val empty : 'a ctx
 
@@ -97,5 +102,7 @@ val add_poly : ('a,'v) pkey -> 'v -> 'a ctx -> 'a ctx
 val remove_unit : 'v ukey -> 'a ctx -> 'a ctx
 
 val remove_poly : ('a,'v) pkey -> 'a ctx -> 'a ctx
+
+val init_poly : 'a pctx -> 'a ctx -> 'a ctx
 
 val print : Format.formatter -> 'a ctx -> unit

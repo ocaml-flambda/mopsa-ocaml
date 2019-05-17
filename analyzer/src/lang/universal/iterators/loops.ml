@@ -99,7 +99,6 @@ struct
   module Lctx = Context.GenPolyKey(
     struct
         type 'a t = (range * 'a) list
-        let ctx = Context.empty
         let print fmt ctx =
         Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
           (fun fmt (range, env) -> Format.fprintf fmt "%a -> TODO" pp_range range) fmt ctx
@@ -117,7 +116,8 @@ struct
       ) l
     with Not_found -> None
 
-  let init prog man flow = flow
+  let init prog man flow =
+    Flow.map_ctx (Context.init_poly Lctx.init) flow
 
   let rec exec zone stmt (man:('a,unit) man) flow =
     match skind stmt with
