@@ -95,6 +95,28 @@ struct
     ieval = { provides = []; uses = [] };
   }
 
+
+  module Lctx = Context.GenPolyKey(
+    struct
+        type 'a t = (range * 'a) list
+        let ctx = Context.empty
+        let print fmt ctx =
+        Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
+          (fun fmt (range, env) -> Format.fprintf fmt "%a -> TODO" pp_range range) fmt ctx
+      end
+    )
+
+  let search_lctx srange flow =
+    try
+      let l = Context.find_poly Lctx.key (Flow.get_ctx flow) in
+      List.find_opt (fun (range, _) ->
+        let srange = untag_range srange and range = untag_range range in
+        match srange, range with
+        | R_orig (s1, e1), R_orig (s2, e2) -> s1.pos_file = s2.pos_file && abs (s1.pos_line - s2.pos_line) <= 1
+        | _ -> false
+      ) l
+    with Not_found -> None
+
   let init prog man flow = flow
 
   let rec exec zone stmt (man:('a,unit) man) flow =
@@ -108,13 +130,22 @@ struct
 
       let flow_init, flow_out = unroll cond body man flow0 in
 
+      let flow_init = Option.apply flow_init (fun (_, old_lfp) ->
+          let old_flow = Flow.add T_cur old_lfp man.lattice (Flow.bottom (Flow.get_ctx flow_init)) in
+          Flow.join man.lattice old_flow flow_init) (search_lctx stmt.srange flow_init) in
+
       (* debug "post unroll:@\n abs0 = @[%a@]@\n abs out = @[%a@]"
        *   (Flow.print man.lattice) flow_init
        *   (Flow.print man.lattice) flow_out
        * ; *)
+
+      let flow_lfp = lfp 0 !opt_loop_widening_delay cond body man flow_init flow_init in
+      let old_lfpctx = try Context.find_poly Lctx.key (Flow.get_ctx flow_lfp) with Not_found -> [] in
+      let lfpctx = (stmt.srange, Flow.get T_cur man.lattice flow_lfp) :: old_lfpctx in
+      let flow_lfp = Flow.set_ctx (Context.add_poly Lctx.key lfpctx (Flow.get_ctx flow_lfp)) flow_lfp in
+
       let res0 =
-        lfp 0 !opt_loop_widening_delay cond body man flow_init flow_init |>
-        man.exec (mk_assume (mk_not cond cond.erange) cond.erange) |>
+        man.exec (mk_assume (mk_not cond cond.erange) cond.erange) flow_lfp |>
         Flow.join man.lattice flow_out
       in
 
