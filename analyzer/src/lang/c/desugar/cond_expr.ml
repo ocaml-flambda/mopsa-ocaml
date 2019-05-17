@@ -35,8 +35,9 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  let name = "c.desugar.cond_expr"
-  let debug fmt = Debug.debug ~channel:name fmt
+  include GenStatelessDomainId(struct
+      let name = "c.desugar.cond_expr"
+    end)
 
 
   (** Zoning definition *)

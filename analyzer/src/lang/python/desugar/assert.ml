@@ -30,8 +30,9 @@ open Zone
 module Domain =
   struct
 
-    let name = "python.desugar.assert"
-    let debug fmt = Debug.debug ~channel:name fmt
+    include GenStatelessDomainId(struct
+        let name = "python.desugar.assert"
+      end)
 
     let interface = {
       iexec = {provides = [Zone.Z_py]; uses = []};

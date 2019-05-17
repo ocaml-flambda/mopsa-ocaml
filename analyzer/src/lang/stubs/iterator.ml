@@ -31,9 +31,9 @@ open Alarms
 module Domain =
 struct
 
-  let name = "stubs.iterator"
-
-  let debug fmt = Debug.debug ~channel:name fmt
+  include GenStatelessDomainId(struct
+      let name = "stubs.iterator"
+    end)
 
   (** Zoning definition *)
   (** ================= *)

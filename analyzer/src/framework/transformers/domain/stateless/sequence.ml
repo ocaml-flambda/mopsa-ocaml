@@ -42,7 +42,9 @@ struct
   (**                         {2 Domain header}                             *)
   (**************************************************************************)
 
-  let name = "framework.transformers.domain.stateless.sequence"
+  include GenStatelessDomainId(struct
+      let name = "framework.transformers.domain.stateless.sequence"
+    end)
 
   let interface = Core.Interface.concat D1.interface D2.interface
 

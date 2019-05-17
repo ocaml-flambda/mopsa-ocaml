@@ -37,8 +37,9 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  let name = "c.cstubs.resources"
-  let debug fmt = Debug.debug ~channel:name fmt
+  include GenStatelessDomainId(struct
+      let name = "c.cstubs.resources"
+    end)
 
   let interface= {
     iexec = {

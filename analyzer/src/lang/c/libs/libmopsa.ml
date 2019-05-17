@@ -64,8 +64,9 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  let name = "c.libs.libmopsa"
-  let debug fmt = Debug.debug ~channel:name fmt
+  include GenStatelessDomainId(struct
+      let name = "c.libs.libmopsa"
+    end)
 
   (** Zoning definition *)
   (** ================= *)

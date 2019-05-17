@@ -27,8 +27,8 @@
 
 open Ast.All
 open Core.All
-open Sig.Stacked.Reduction
 open Sig.Stacked.Intermediate
+module E = Sig.Stacked.Eval_reduction
 open Log
 
 
@@ -54,7 +54,7 @@ type 'b map = {
 }
 
 
-let slist_map f l =
+let map f l =
   let rec aux : type t. t slist -> 'b list =
     fun l ->
       match l with
@@ -70,7 +70,7 @@ type ('a,'b) map_combined = {
 }
 
 
-let slist_map_combined f l1 l2 =
+let map_combined f l1 l2 =
   let rec aux : type t. t slist -> 'a list -> 'b list =
     fun l1 l2 ->
       match l1, l2 with
@@ -87,7 +87,7 @@ type 'b fold = {
 }
 
 
-let slist_fold f l init =
+let fold f l init =
   let rec aux : type t. t slist -> 'b -> 'b =
     fun l acc ->
       match l with
@@ -104,7 +104,7 @@ type ('a,'b) fold_combined = {
 }
 
 
-let slist_fold_combined f l1 l2 init =
+let fold_combined f l1 l2 init =
   let rec aux : type t. t slist -> 'a list -> 'b -> 'b =
     fun l1 l2 acc ->
       match l1, l2 with
@@ -117,12 +117,12 @@ let slist_fold_combined f l1 l2 init =
   aux l1 l2 init
 
 
-type ('a,'b) fold_sub2 = {
+type ('a,'b) fold_ext2 = {
   f: 't. 't smodule -> 'a -> 't * 'b -> 't * 'b -> 'a * 'b * 'b;
 }
 
 
-let slist_fold_sub2 f l init (a1,s1) (a2,s2) =
+let fold_ext2 f l init (a1,s1) (a2,s2) =
   let rec aux : type t. t slist -> 'a -> t * 'b -> t * 'b -> 'a * 'b * 'b =
     fun l acc (a1,s1) (a2,s2) ->
       match l,a1,a2 with
@@ -134,12 +134,12 @@ let slist_fold_sub2 f l init (a1,s1) (a2,s2) =
   aux l init (a1,s1) (a2,s2)
 
 
-type 'b apply_sub2 = {
+type 'b apply_ext2 = {
   f: 't. 't smodule -> 't * 'b -> 't * 'b -> 't * 'b * 'b;
 }
 
 
-let slist_apply_sub2 f l (a1,s1) (a2,s2) =
+let apply_ext2 f l (a1,s1) (a2,s2) =
   let rec aux : type t. t slist -> t * 'b -> t * 'b -> t * 'b * 'b =
     fun l (a1,s1) (a2,s2) ->
       match l,a1,a2 with
@@ -153,12 +153,12 @@ let slist_apply_sub2 f l (a1,s1) (a2,s2) =
 
 
 
-type ('ext,'b) fold_apply_sub_ext2 = {
+type ('ext,'b) fold_apply_ext2 = {
   f: 't. 't smodule -> 't * 'b -> 't * 'b -> 'ext -> 't * 'b * 'b * 'ext;
 }
 
 
-let slist_fold_apply_sub_ext2 f l (a1,s1) (a2,s2) ext =
+let fold_apply_ext2 f l (a1,s1) (a2,s2) ext =
   let rec aux : type t. t slist -> t * 'b -> t * 'b -> 'ext -> t * 'b * 'b * 'ext=
     fun l (a1,s1) (a2,s2) ext ->
       match l,a1,a2 with
@@ -176,7 +176,7 @@ type create = {
   f: 't. 't smodule -> 't;
 }
 
-let slist_create f l =
+let create f l =
   let rec aux : type t. t slist -> t =
     fun l ->
       match l with
@@ -194,7 +194,7 @@ type 'a print = {
 
 
 (** Print an abstract value *)
-let slist_print f l sep fmt a =
+let print f l sep fmt a =
   let rec aux : type t. t slist -> Format.formatter -> t -> unit =
     fun l fmt a ->
       match l, a with
@@ -213,7 +213,7 @@ type 'a pred = {
 }
 
 (** Test an ∃ predicate *)
-let slist_exists f l a =
+let exists f l a =
   let rec aux : type t. t slist -> t -> bool =
     fun l a ->
       match l, a with
@@ -245,7 +245,7 @@ type ('a,'b,'s) man_fold = {
   f: 't. 't smodule -> ('a, 't,'s) man -> 'b -> 'b;
 }
 
-let slist_man_fold f l man init =
+let man_fold f l man init =
   let rec aux : type t. t slist -> ('a,t,'s) man -> 'b -> 'b =
     fun l man acc ->
       match l with
@@ -261,7 +261,7 @@ type ('a,'b,'s) man_map = {
   f: 't. 't smodule -> ('a, 't,'s) man -> 'b;
 }
 
-let slist_man_map f l man =
+let man_map f l man =
   let rec aux : type t. t slist -> ('a,t,'s) man -> 'b list =
     fun l man ->
       match l with
@@ -277,7 +277,7 @@ type ('a,'b,'c,'s) man_map_combined = {
 }
 
 
-let slist_man_map_combined f l1 l2 man =
+let man_map_combined f l1 l2 man =
   let rec aux : type t. t slist -> 'b list -> ('a,t,'s) man -> 'c list =
     fun l1 l2 man ->
       match l1, l2 with
@@ -294,7 +294,7 @@ type ('a,'b,'c,'s) man_fold_combined = {
 }
 
 
-let slist_man_fold_combined f l1 l2 man init =
+let man_fold_combined f l1 l2 man init =
   let rec aux : type t. t slist -> 'b list -> ('a,t,'s) man -> 'c -> 'c =
     fun l1 l2 man acc ->
       match l1, l2 with
@@ -319,7 +319,7 @@ module type SPEC =
 sig
   type t
   val pool : t slist
-  val rules : (module REDUCTION) list
+  val erules : (module E.REDUCTION) list
 end
 
 
@@ -345,21 +345,21 @@ struct
       let module S = (val m) in
       Interface.concat acc S.interface
     in
-    slist_fold { f } Spec.pool Interface.empty
+    fold { f } Spec.pool Interface.empty
 
   let bottom : t =
     let f = fun (type a) (m:a smodule) ->
       let module S = (val m) in
       S.bottom
     in
-    slist_create { f } Spec.pool
+    create { f } Spec.pool
 
   let top : t =
     let f = fun (type a) (m:a smodule) ->
       let module S = (val m) in
       S.top
     in
-    slist_create { f } Spec.pool
+    create { f } Spec.pool
 
 
   let print fmt a =
@@ -367,14 +367,14 @@ struct
       let module S = (val m) in
       S.print fmt aa
     in
-    slist_print { f } Spec.pool "" fmt a
+    print { f } Spec.pool "" fmt a
 
   let is_bottom a =
     let f = fun (type a) (m: a smodule) aa ->
       let module S = (val m) in
       S.is_bottom aa
     in
-    slist_exists { f } Spec.pool a
+    exists { f } Spec.pool a
 
 
   (** {2 Lattice operators} *)
@@ -386,21 +386,21 @@ struct
       let b, s1, s2 = S.subset sman ctx (a1,s1) (a2,s2) in
       b && acc, s1, s2
     in
-    slist_fold_sub2 { f } Spec.pool true (a1,s1) (a2,s2)
+    fold_ext2 { f } Spec.pool true (a1,s1) (a2,s2)
 
   let join sman ctx (a1,s1) (a2,s2) =
     let f = fun (type a) (m: a smodule) (a1,s1) (a2,s2) ->
       let module S = (val m) in
       S.join sman ctx (a1,s1) (a2,s2)
     in
-    slist_apply_sub2 { f } Spec.pool (a1,s1) (a2,s2)
+    apply_ext2 { f } Spec.pool (a1,s1) (a2,s2)
 
   let meet sman ctx (a1,s1) (a2,s2) =
     let f = fun (type a) (m: a smodule) (a1,s1) (a2,s2) ->
       let module S = (val m) in
       S.meet sman ctx (a1,s1) (a2,s2)
     in
-    slist_apply_sub2 { f } Spec.pool (a1,s1) (a2,s2)
+    apply_ext2 { f } Spec.pool (a1,s1) (a2,s2)
 
   let widen sman ctx (a1,s1) (a2,s2) =
     let f = fun (type a) (m: a smodule) (a1,s1) (a2,s2) stable ->
@@ -408,7 +408,7 @@ struct
       let a, s1, s2, stable' = S.widen sman ctx (a1,s1) (a2,s2) in
       a, s1, s2, stable && stable'
     in
-    slist_fold_apply_sub_ext2 { f } Spec.pool (a1,s1) (a2,s2) true
+    fold_apply_ext2 { f } Spec.pool (a1,s1) (a2,s2) true
 
   let merge ctx pre (a1,log1) (a2,log2) =
     Exceptions.panic ~loc:__LOC__ "merge not implemented"
@@ -422,7 +422,7 @@ struct
       let module S = (val m) in
       S.init prog man flow
     in
-    slist_man_fold { f } Spec.pool man flow
+    man_fold { f } Spec.pool man flow
 
 
   (** {2 Abstract transformer} *)
@@ -437,7 +437,7 @@ struct
         let module S = (val m) in
         Interface.sat_exec zone S.interface
       in
-      slist_map { f } Spec.pool
+      map { f } Spec.pool
     in
 
     (fun stmt man flow : 'a post option ->
@@ -458,7 +458,8 @@ struct
              (Some post :: acc, ctx')
        in
 
-       let pointwise_posts, ctx = slist_man_fold_combined { f } Spec.pool coverage man ([], Flow.get_ctx flow) in
+       let pointwise_posts, ctx = man_fold_combined { f } Spec.pool coverage man ([], Flow.get_ctx flow) in
+       let pointwise_posts = List.rev pointwise_posts in
 
        (* Merge post-conditions *)
        let f = fun (type a) (m:a smodule) post (man:('a,a,'s) man) acc ->
@@ -503,12 +504,65 @@ struct
                ) post acc
            ) post acc
        in
-       slist_man_fold_combined { f } Spec.pool pointwise_posts man None
+       man_fold_combined { f } Spec.pool pointwise_posts man None
     )
 
 
   (** {2 Abstract evaluations} *)
   (** ************************ *)
+
+  (** Manager used by evaluation reductions *)
+  let eman : 'a E.man = E.{
+      get = (
+        let f : type t. t domain -> (expr,'a) evals -> (expr,'a) eval option =
+          fun id evals ->
+            let rec aux : type t tt. t domain -> tt slist -> (expr,'a) evals -> (expr,'a) eval option =
+              fun id l e ->
+                match l, e with
+                | Nil, [] -> raise Not_found
+                | Cons(hd,tl), (hde::tle) ->
+                  begin
+                    let module D = (val hd) in
+                    match domain_id_eq D.id id with
+                    | Some Eq -> hde
+                    | None -> aux id tl tle
+                  end
+                | _ -> assert false
+            in
+            aux id Spec.pool evals
+        in
+        f
+      );
+      set = (
+        let f : type t. t domain -> (expr,'a) eval option -> (expr,'a) evals -> (expr,'a) evals =
+          fun id evl evals ->
+            let rec aux : type t tt. t domain -> tt slist -> (expr,'a) evals -> (expr,'a) evals =
+              fun id l e ->
+                match l, e with
+                | Nil, [] -> raise Not_found
+                | Cons(hd,tl), (hde::tle) ->
+                  begin
+                    let module D = (val hd) in
+                    match domain_id_eq D.id id with
+                    | Some Eq -> evl :: tle
+                    | None -> hde :: aux id tl tle
+                  end
+                | _ -> assert false
+            in
+            aux id Spec.pool evals
+        in
+        f
+      );
+  }
+
+
+  (** Reduce evaluations using the registered rules *)
+  let reduce_eval exp pointwise_evl =
+    List.fold_left (fun acc r ->
+        let module R = (val r : E.REDUCTION) in
+        R.reduce exp eman acc
+      ) pointwise_evl Spec.erules
+
 
   (** Entry point of abstract evaluations *)
   let eval zone =
@@ -519,7 +573,7 @@ struct
         let module S = (val m) in
         Interface.sat_eval zone S.interface
       in
-      slist_map { f } Spec.pool
+      map { f } Spec.pool
     in
 
     (fun exp man flow : (expr,'a) eval option ->
@@ -540,7 +594,11 @@ struct
              Some evl :: acc, ctx'
        in
 
-       let pointwise_evl, _ = slist_man_fold_combined { f } Spec.pool coverage man ([], Flow.get_ctx flow) in
+       let pointwise_evl, ctx = man_fold_combined { f } Spec.pool coverage man ([], Flow.get_ctx flow) in
+       let pointwise_evl = List.rev pointwise_evl in
+
+       (* Apply reductions *)
+       let pointwise_evl' = reduce_eval exp pointwise_evl in
 
        (* Meet evaluations *)
        let rec aux = function
@@ -552,7 +610,7 @@ struct
            | Some evl' ->
              Some (Eval.meet evl evl')
        in
-       aux pointwise_evl
+       aux pointwise_evl'
     )
 
 
@@ -565,7 +623,7 @@ struct
       S.ask query man flow |>
       Option.neutral2 (meet_query query) acc
     in
-    slist_man_fold { f } Spec.pool man None
+    man_fold { f } Spec.pool man None
 
 
   (** {2 Broadcast reductions} *)
@@ -599,7 +657,7 @@ let rec type_stack_pool : (module STACK) list -> spool = function
 
 let make
     (stacks: (module STACK) list)
-    (rules: (module REDUCTION) list)
+    (erules: (module E.REDUCTION) list)
   : (module STACK) =
 
   let S pool = type_stack_pool stacks in
@@ -609,7 +667,7 @@ let make
       struct
         type t = a
         let pool = pool
-        let rules = rules
+        let erules = erules
       end)
     in
     (module S : STACK)

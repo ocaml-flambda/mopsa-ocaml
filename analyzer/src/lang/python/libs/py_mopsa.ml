@@ -42,8 +42,10 @@ let check man cond range flow =
 
 module Domain =
   struct
-    let name = "python.libs.mopsa"
-    let debug fmt = Debug.debug ~channel:name fmt
+
+    include GenStatelessDomainId(struct
+        let name = "python.libs.mopsa"
+      end)
 
     let interface = {
       iexec = {provides = []; uses = [Zone.Z_py]};

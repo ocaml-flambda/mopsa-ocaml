@@ -239,3 +239,15 @@ let choose eval =
   match Dnf.choose eval with
   | Some case -> Some (case.eval_result, case.eval_flow)
   | None -> None
+
+let merge f evl1 evl2 =
+  Dnf.merge (fun case1 case2 ->
+      match case1.eval_result, case2.eval_result with
+      | Some e1, Some e2 ->
+        let evl1', evl2' = f e1 case1.eval_flow e2 case2.eval_flow in
+        let evl1'' = Option.lift (add_cleaners case1.eval_cleaners) evl1' in
+        let evl2'' = Option.lift (add_cleaners case2.eval_cleaners) evl2' in
+        evl1'', evl2''
+
+      | _ -> Some (Dnf.singleton case1), Some (Dnf.singleton case2)
+    ) evl1 evl2

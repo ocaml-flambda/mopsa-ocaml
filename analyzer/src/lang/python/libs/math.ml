@@ -33,8 +33,9 @@ open Universal.Ast
 module Domain =
   struct
 
-    let name = "python.libs.math"
-    let debug fmt = Debug.debug ~channel:name fmt
+    include GenStatelessDomainId(struct
+        let name = "python.libs.math"
+      end)
 
     let interface = {
       iexec = { provides = []; uses = [] };

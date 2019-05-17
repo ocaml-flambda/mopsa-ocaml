@@ -30,8 +30,9 @@ open Universal.Ast
 module Domain =
   struct
 
-    let name = "python.data_model.callable"
-    let debug fmt = Debug.debug ~channel:name fmt
+    include GenStatelessDomainId(struct
+        let name = "python.data_model.callable"
+      end)
 
     let interface = {
       iexec = {provides = []; uses = []};

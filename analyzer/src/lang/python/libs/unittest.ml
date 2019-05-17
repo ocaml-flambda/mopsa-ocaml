@@ -31,8 +31,9 @@ open Universal.Ast
 module Domain =
   struct
 
-    let name = "python.libs.unittest"
-    let debug fmt = Debug.debug ~channel:name fmt
+    include GenStatelessDomainId(struct
+        let name = "python.libs.unittest"
+      end)
 
     let interface = {
       iexec = { provides = []; uses = [Zone.Z_py] };

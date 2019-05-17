@@ -79,6 +79,9 @@ sig
   val name : string
   (** Name of the domain *)
 
+  val id : unit domain
+  (** Identifier of the domain *)
+
   val interface : interface
   (** Zoning interface *)
 
@@ -105,6 +108,8 @@ module MakeIntermediate(D: DOMAIN) : Intermediate.DOMAIN with type t = unit =
 struct
 
   type t = unit
+  let name = D.name
+  let id = D.id
   let bottom = ()
   let top = ()
   let is_bottom _ = false
@@ -114,11 +119,6 @@ struct
   let widen _ _ _ = top
   let merge _ _ _ _ = top
   let print _ _ = ()
-
-  include GenDomainId(struct
-      type typ = unit
-      let name = D.name
-    end)
 
   let init = D.init
 

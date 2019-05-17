@@ -28,9 +28,10 @@ open Universal.Ast
 
 module Domain =
   struct
-    let name = "python.types.t_complex"
 
-    let debug fmt = Debug.debug ~channel:name fmt
+    include GenStatelessDomainId(struct
+        let name = "python.types.t_complex"
+      end)
 
     let interface = {
       iexec = {provides = []; uses = []};

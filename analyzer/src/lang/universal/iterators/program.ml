@@ -29,8 +29,9 @@ open Zone
 module Domain =
 struct
 
-  let name = "universal.iterators.program"
-  let debug fmt = Debug.debug ~channel:name fmt
+  include GenStatelessDomainId(struct
+      let name = "universal.iterators.program"
+    end)
 
   let interface = {
     iexec = { provides = [Z_u]; uses = [] };

@@ -139,8 +139,9 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  let name = "c.memory.scalars.machine_numbers"
-  let debug fmt = Debug.debug ~channel:name fmt
+  include GenStatelessDomainId(struct
+      let name = "c.memory.scalars.machine_numbers"
+    end)
 
   (** Zoning definition *)
   (** ================= *)

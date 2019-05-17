@@ -53,7 +53,7 @@ type 'b fold = {
 }
 
 
-let dlist_fold f l init =
+let fold f l init =
   let rec aux : type t. t dlist -> 'b -> 'b =
     fun l acc ->
       match l with
@@ -70,7 +70,7 @@ type 'b fold_apply = {
 }
 
 
-let dlist_fold_apply f l init a =
+let fold_apply f l init a =
   let rec aux : type t. t dlist -> 'b -> t -> 'b =
     fun l acc a ->
       match l,a with
@@ -87,7 +87,7 @@ type 'a map_opt = {
 }
 
 (** Create an abstract value *)
-let dlist_map_opt f l a =
+let map_opt f l a =
   let rec aux : type t. t dlist -> t -> 'a option =
     fun l a ->
       match l, a with
@@ -105,7 +105,7 @@ type create = {
 }
 
 (** Create an abstract value *)
-let dlist_create f l =
+let create f l =
   let rec aux : type t. t dlist -> t =
     fun l ->
       match l with
@@ -121,7 +121,7 @@ type apply = {
 }
 
 (** Create an abstract value *)
-let dlist_apply f l a =
+let apply f l a =
   let rec aux : type t. t dlist -> t -> t =
     fun l a ->
       match l, a with
@@ -136,7 +136,7 @@ type apply_opt = {
 }
 
 (** Create an abstract value *)
-let dlist_apply_opt f l a =
+let apply_opt f l a =
   let rec aux : type t. t dlist -> t -> t option =
     fun l a ->
       match l, a with
@@ -157,7 +157,7 @@ type apply2 = {
 }
 
 (** Create an abstract value *)
-let dlist_apply2 f l a b =
+let apply2 f l a b =
   let rec aux : type t. t dlist -> t -> t -> t =
     fun l a b ->
       match l, a, b with
@@ -173,7 +173,7 @@ type apply3 = {
 }
 
 (** Create an abstract value *)
-let dlist_apply3 f l a b c =
+let apply3 f l a b c =
   let rec aux : type t. t dlist -> t -> t -> t -> t =
     fun l a b c ->
       match l, a, b, c with
@@ -189,7 +189,7 @@ type apply_with_channel = {
   f: 't. 't dmodule -> 't -> 't with_channel;
 }
 
-let dlist_apply_with_channel f l a =
+let apply_with_channel f l a =
   let rec aux : type t. t dlist -> t -> t with_channel=
     fun l a ->
       match l, a with
@@ -208,7 +208,7 @@ type 'a print = {
 
 
 (** Print an abstract value *)
-let dlist_print f l sep fmt a =
+let print f l sep fmt a =
   let rec aux : type t. t dlist -> Format.formatter -> t -> unit =
     fun l fmt a ->
       match l, a with
@@ -228,7 +228,7 @@ type 'a pred = {
 }
 
 (** Test an ∃ predicate *)
-let dlist_exists f l a =
+let exists f l a =
   let rec aux : type t. t dlist -> t -> bool =
     fun l a ->
       match l, a with
@@ -240,7 +240,7 @@ let dlist_exists f l a =
 
 
 (** Test a ∀ predicate *)
-let dlist_forall f l a =
+let forall f l a =
   let rec aux : type t. t dlist -> t -> bool =
     fun l a ->
       match l, a with
@@ -256,7 +256,7 @@ type 'a pred2 = {
 }
 
 (** Test an ∃ predicate *)
-let dlist_exists2 f l a b =
+let exists2 f l a b =
   let rec aux : type t. t dlist -> t -> t -> bool =
     fun l a b ->
       match l, a, b with
@@ -268,7 +268,7 @@ let dlist_exists2 f l a b =
 
 
 (** Test an ∃ predicate *)
-let dlist_forall2 f l a b =
+let forall2 f l a b =
   let rec aux : type t. t dlist -> t -> t -> bool =
     fun l a b ->
       match l, a, b with
@@ -316,7 +316,7 @@ struct
       let module Domain = (val m) in
       Domain.zones @ acc
     in
-    dlist_fold { f } Spec.pool []
+    fold { f } Spec.pool []
 
 
 
@@ -328,7 +328,7 @@ struct
       let module Domain = (val m) in
       Domain.bottom
     in
-    dlist_create { f } Spec.pool
+    create { f } Spec.pool
 
 
   let top : t =
@@ -336,7 +336,7 @@ struct
       let module Domain = (val m) in
       Domain.top
     in
-    dlist_create { f } Spec.pool
+    create { f } Spec.pool
 
 
   let print fmt a =
@@ -344,7 +344,7 @@ struct
       let module Domain = (val m) in
       Domain.print fmt aa
     in
-    dlist_print { f } Spec.pool "" fmt a
+    print { f } Spec.pool "" fmt a
 
 
   let is_bottom a =
@@ -352,42 +352,42 @@ struct
       let module Domain = (val m) in
       Domain.is_bottom aa
     in
-    dlist_exists { f } Spec.pool a
+    exists { f } Spec.pool a
 
   let subset a1 a2 =
     let f = fun (type a) (m: a dmodule) aa1 aa2 ->
       let module Domain = (val m) in
       Domain.subset aa1 aa2
     in
-    dlist_forall2 { f } Spec.pool a1 a2
+    forall2 { f } Spec.pool a1 a2
 
   let join a1 a2 =
     let f = fun (type a) (m: a dmodule) aa1 aa2 ->
       let module Domain = (val m) in
       Domain.join aa1 aa2
     in
-    dlist_apply2 { f } Spec.pool a1 a2
+    apply2 { f } Spec.pool a1 a2
 
   let meet a1 a2 =
     let f = fun (type a) (m: a dmodule) aa1 aa2 ->
       let module Domain = (val m) in
       Domain.meet aa1 aa2
     in
-    dlist_apply2 { f } Spec.pool a1 a2
+    apply2 { f } Spec.pool a1 a2
 
   let widen ctx a1 a2 =
     let f = fun (type a) (m: a dmodule) aa1 aa2 ->
       let module Domain = (val m) in
       Domain.widen ctx aa1 aa2
     in
-    dlist_apply2 { f } Spec.pool a1 a2
+    apply2 { f } Spec.pool a1 a2
 
   let merge ctx pre (post1,log1) (post2,log2) =
     let f = fun (type a) (m: a dmodule) pre post1 post2 ->
       let module Domain = (val m) in
       Domain.merge ctx pre (post1,log1) (post2,log2)
     in
-    dlist_apply3 { f } Spec.pool pre post1 post2
+    apply3 { f } Spec.pool pre post1 post2
 
 
   (** {2 Transfer functions} *)
@@ -415,7 +415,7 @@ struct
             meet_query query rep acc
           ) rep acc
       in
-      dlist_fold_apply { f } Spec.pool None a
+      fold_apply { f } Spec.pool None a
 
 
   let refine channel a =
@@ -423,7 +423,7 @@ struct
       let module Domain = (val m) in
       Domain.refine channel aa
     in
-    dlist_apply_with_channel { f } Spec.pool a
+    apply_with_channel { f } Spec.pool a
 
   let rec refine_lfp channel a =
     let ret, channels = refine channel a |> Channel.destruct in
@@ -466,7 +466,7 @@ struct
             | _ -> None
         in
 
-        match dlist_map_opt { f } Spec.pool a with
+        match map_opt { f } Spec.pool a with
         | Some r -> r
         | None -> Exceptions.panic "value of %a not found" pp_var var
 
@@ -504,7 +504,7 @@ struct
                 | _ -> None
             in
 
-            match dlist_apply_opt { f } Spec.pool a with
+            match apply_opt { f } Spec.pool a with
             | Some r -> r
             | None -> Exceptions.panic "value of %a not updated" pp_var var
 

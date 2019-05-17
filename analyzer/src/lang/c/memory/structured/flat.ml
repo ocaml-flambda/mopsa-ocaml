@@ -37,9 +37,9 @@ struct
   (** {2 Domain header *)
   (** ================ *)
 
-  let name = "c.memory.structured.flat"
-
-  let debug fmt = Debug.debug ~channel:name fmt
+  include GenStatelessDomainId(struct
+      let name = "c.memory.structured.flat"
+    end)
 
   let interface = {
     iexec = {

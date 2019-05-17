@@ -92,6 +92,31 @@ struct
 end
 
 
+(** Generator of a new identifier for stateless domains *)
+module GenStatelessDomainId(Spec:sig
+    val name : string
+  end) =
+struct
+
+  type _ domain += Domain : unit domain
+
+  let id = Domain
+
+  let name = Spec.name
+
+  let debug fmt = Debug.debug ~channel:Spec.name fmt
+
+  let eq : type a. a domain -> (a,unit) eq option =
+    function
+    | Domain -> Some Eq
+    | _ -> None
+
+  let () =
+    register_domain_id { eq }
+
+end
+
+
 (****************************************************************************)
 (**                         {2 Value identifiers}                           *)
 (****************************************************************************)

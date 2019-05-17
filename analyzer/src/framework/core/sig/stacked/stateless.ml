@@ -87,6 +87,9 @@ sig
   val name : string
   (** Name of the domain *)
 
+  val id : unit domain
+  (** Identifier of the domain *)
+
   val interface : interface
   (** Zoning interface *)
 
@@ -112,16 +115,13 @@ module MakeIntermediate(S: STACK) : Intermediate.STACK with type t = unit =
 struct
 
   type t = unit
+  let name = S.name
+  let id = S.id
   let bottom = ()
   let top = ()
   let is_bottom _ = false
   let merge _ _ _ _ = ()
   let print _ _ = ()
-
-  include GenDomainId(struct
-      type typ = unit
-      let name = S.name
-    end)
 
   let interface = S.interface
 

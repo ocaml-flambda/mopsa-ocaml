@@ -89,8 +89,9 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  let name = "c.iterators.switch"
-  let debug fmt = Debug.debug ~channel:name fmt
+  include GenStatelessDomainId(struct
+      let name = "c.iterators.switch"
+    end)
 
 
   (** Zoning definition *)

@@ -55,9 +55,9 @@ struct
   (** {2 Domain header} *)
   (** ***************** *)
 
-  let name = "c.memory.lowlevel.string_length"
-
-  let debug fmt = Debug.debug ~channel:name fmt
+  include GenStatelessDomainId(struct
+      let name = "c.memory.lowlevel.string_length"
+    end)
 
   let interface = {
     iexec = {

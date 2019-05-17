@@ -30,9 +30,9 @@ open Universal.Ast
 module Domain =
   struct
 
-    let name = "python.objects.range"
-
-    let debug fmt = Debug.debug ~channel:name fmt
+    include GenStatelessDomainId(struct
+        let name = "python.objects.range"
+      end)
 
     let interface = {
       iexec = {provides = []; uses = []};

@@ -152,8 +152,9 @@ struct
   (* Domain identification *)
   (* ===================== *)
 
-  let name = name
-  let debug fmt = Debug.debug ~channel:name fmt
+  include GenStatelessDomainId(struct
+      let name = name
+    end)
   let summary fmt = Debug.debug ~channel:"unittest" fmt
 
 

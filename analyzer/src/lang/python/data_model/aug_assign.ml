@@ -31,8 +31,9 @@ open Universal.Ast
 
 module Domain = struct
 
-  let name = "python.data_model.aug_assign"
-  let debug fmt = Debug.debug ~channel:name fmt
+  include GenStatelessDomainId(struct
+      let name = "python.data_model.aug_assign"
+    end)
 
   let interface = {
     iexec = {provides = [Zone.Z_py]; uses = []};

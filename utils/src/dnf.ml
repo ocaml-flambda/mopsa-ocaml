@@ -27,10 +27,10 @@ type 'a t = 'a list list
 let singleton (a: 'a) : 'a t = [[a]]
 
 
-let mk_true = [[]]
+let mk_true : 'a t = [[]]
 
 
-let mk_false = []
+let mk_false : 'a t = []
 
 
 let rec mk_and
@@ -184,18 +184,42 @@ let to_list (dnf: 'a t) : 'a list list = dnf
 
 let print pp fmt (dnf:'a t) =
   let open Format in
-  fprintf fmt "@[<hv>";
+  let l = to_list dnf in
+  fprintf fmt "@[<hv 2>%a@]"
+  (pp_print_list
+     ~pp_sep:(fun fmt () -> Format.fprintf fmt " ∨@;")
+     (fun fmt conj ->
+        match conj with
+        | [] -> ()
+        | [e] -> pp fmt e
+        | _ ->
+          fprintf fmt "(@[<hv 2>@,%a@;@])"
+            (pp_print_list
+               ~pp_sep:(fun fmt () -> Format.fprintf fmt " ∧@;")
+               pp
+            )
+            conj
+     )
+  )
+  l
 
-  to_list dnf |>
-  pp_print_list
-    ~pp_sep:(fun fmt () -> Format.fprintf fmt "@;∨@;")
-    (fun fmt conj ->
-       Format.pp_print_list
-         ~pp_sep:(fun fmt () -> Format.fprintf fmt "@;∧@;")
-         pp
-         fmt
-         conj
-    )
-    fmt;
 
-  fprintf fmt "@]"
+let merge
+    (f: 'a -> 'b -> 'a t option * 'b t option)
+    (dnf1:'a t) (dnf2:'b t)
+  : 'a t option * 'b t option =
+  List.fold_left (fun (acc1,acc2) conj1 ->
+      List.fold_left (fun (acc1,acc2) conj2 ->
+          let dnf1', dnf2' =
+            List.fold_left (fun (acc1,acc2) a ->
+                List.fold_left (fun (acc1,acc2) b ->
+                    let a', b' = f a b in
+                    Option.neutral2 mk_and a' acc1,
+                    Option.neutral2 mk_and b' acc2
+                  ) (acc1,acc2) conj2
+              ) (None, None) conj1
+          in
+          Option.neutral2 mk_or dnf1' acc1,
+          Option.neutral2 mk_or dnf2' acc2
+        ) (acc1,acc2) dnf2
+    ) (None, None) dnf1

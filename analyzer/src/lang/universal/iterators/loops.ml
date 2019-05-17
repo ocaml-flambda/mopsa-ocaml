@@ -87,8 +87,9 @@ let () =
 module Domain  =
 struct
 
-  let name = name
-  let debug fmt = Debug.debug ~channel:name fmt
+  include GenStatelessDomainId(struct
+      let name = name
+    end)
 
 
   let interface = {

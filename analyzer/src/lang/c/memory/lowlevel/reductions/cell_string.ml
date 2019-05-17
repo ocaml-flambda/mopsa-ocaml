@@ -19,66 +19,44 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Intra-procedural iterator for blocks, assignments and tests *)
+(** Reduction rule between evaluations of cells and string length domains *)
 
 open Mopsa
-open Framework.Core.Sig.Domain.Stateless
-open Ast
+open Universal.Ast
+open Sig.Stacked.Eval_reduction
 
 
-module Domain =
+module Reduction =
 struct
 
-  include GenStatelessDomainId(
-    struct
-      let name = "universal.iterators.intraproc"
-    end
-    )
+  let name = "c.memory.lowlevel.reductions.cell_string_length"
 
-  let interface = {
-    iexec = { provides = [Z_any]; uses = [] };
-    ieval = { provides = []; uses = [] };
-  }
+  let debug fmt = Debug.debug ~channel:name fmt
 
-  let init prog man flow = flow
+  let reduce exp man evals =
+    match man.get Cells.Domain.id evals,
+          man.get String_length.Domain.id evals
+    with
+    | Some evl1, Some evl2 ->
+      let evl1', evl2' = Eval.merge (fun e1 flow1 e2 flow2 ->
+          debug "reducing %a and %a" pp_expr e1 pp_expr e2;
+          match ekind e1, ekind e2 with
+          (* Keep string evaluation when it is constant 0 *)
+          | _, E_constant (C_int _) ->
+            debug "keeping string";
+            None, Some (Eval.singleton e2 flow2)
 
-  let exec zone stmt man flow =
-    match skind stmt with
-    | S_expression(e) when is_universal_type e.etyp || e.etyp = T_any ->
-      Some (
-        man.eval e flow |>
-        post_eval man @@ fun e flow ->
-        Post.return flow
-      )
+          (* Otherwise, keep cells *)
+          | _ ->
+            debug "keeping cells";
+            Some (Eval.singleton e1 flow1), None
+        ) evl1 evl2
+      in
+      man.set Cells.Domain.id evl1' evals |>
+      man.set String_length.Domain.id evl2'
 
-    | S_block(block) ->
-      Some (
-        List.fold_left (fun acc stmt -> man.exec ~zone stmt acc) flow block |>
-        Post.return
-      )
-
-    | S_if(cond, s1, s2) ->
-      let range = srange stmt in
-      let block1 = mk_block [mk_assume cond range; s1] range in
-      let block2 = mk_block [mk_assume (mk_not cond range) range; s2] range in
-      let flows = Flow.map_list man.exec [block1; block2] flow in
-      let flow' = Flow.join_list man.lattice flows in
-      Some (Post.return flow')
-
-    | S_print ->
-      Debug.debug ~channel:"print" "%a@\n  @[%a@]"
-        pp_position (srange stmt |> get_range_start)
-        (Flow.print man.lattice) flow
-      ;
-      Some (Post.return flow)
-
-    | _ -> None
-
-  let eval zone exp man flow = None
-
-  let ask query man flow = None
-
+    | _ -> evals
 end
 
 let () =
-  register_domain (module Domain)
+  register_reduction (module Reduction)

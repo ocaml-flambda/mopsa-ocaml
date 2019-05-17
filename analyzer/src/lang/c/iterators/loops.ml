@@ -35,8 +35,9 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  let name = "c.iterators.loops"
-  let debug fmt = Debug.debug ~channel:name fmt
+  include GenStatelessDomainId(struct
+      let name = "c.iterators.loops"
+    end)
 
   (** Zoning definition *)
   (** ================= *)

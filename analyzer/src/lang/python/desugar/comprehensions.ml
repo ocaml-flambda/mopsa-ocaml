@@ -34,8 +34,9 @@ open Universal.Ast
 module Domain =
   struct
 
-    let name = "python.desugar.comprehensions"
-    let debug fmt = Debug.debug ~channel:name fmt
+    include GenStatelessDomainId(struct
+        let name = "python.desugar.comprehensions"
+      end)
 
     let interface = {
       iexec = {provides = []; uses = [Zone.Z_py]};

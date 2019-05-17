@@ -57,9 +57,9 @@ let () =
 module Domain =
 struct
 
-  let name = "python.objects.dict"
-
-  let debug fmt = Debug.debug ~channel:name fmt
+  include GenStatelessDomainId(struct
+      let name = "python.objects.dict"
+    end)
 
 
   module VarsInfo =

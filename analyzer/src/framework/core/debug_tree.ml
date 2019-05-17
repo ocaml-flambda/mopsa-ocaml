@@ -167,8 +167,9 @@ let eval exp zone lattice flow =
 let eval_done exp zone time evl =
   decr cur_level;
   if !opt_short_log then
-    indent "%a done in zone %a [%.4fs]"
+    indent "%a = %a done in zone %a [%.4fs]"
       pp_E exp
+      (Eval.print ~pp:pp_expr) evl
       pp_zone2 zone
       time
       ~symbol:END

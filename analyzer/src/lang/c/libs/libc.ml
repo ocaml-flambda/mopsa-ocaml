@@ -49,8 +49,9 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  let name = "c.libs.libc"
-  let debug fmt = Debug.debug ~channel:name fmt
+  include GenStatelessDomainId(struct
+      let name = "c.libs.libc"
+    end)
 
   (** Zoning definition *)
   (** ================= *)

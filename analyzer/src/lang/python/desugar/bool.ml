@@ -31,8 +31,10 @@ open Zone
 
 module Domain =
   struct
-    let name = "python.desugar.bool"
-    let debug fmt = Debug.debug ~channel:name fmt
+
+    include GenStatelessDomainId(struct
+        let name = "python.desugar.bool"
+      end)
 
     let interface = {
       iexec = {provides = []; uses = []};

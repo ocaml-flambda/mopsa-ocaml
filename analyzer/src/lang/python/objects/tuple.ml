@@ -47,9 +47,9 @@ let () =
 module Domain =
 struct
 
-  let name = "python.objects.tuple"
-
-  let debug fmt = Debug.debug ~channel:name fmt
+  include GenStatelessDomainId(struct
+      let name = "python.objects.tuple"
+    end)
 
   module VarInfo = struct type t = var list let compare = Compare.list compare_var let print = Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_var end
   module TupleInfo = struct

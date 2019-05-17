@@ -66,9 +66,9 @@ let () =
 module Domain =
 struct
 
-  let name = "python.objects.list"
-
-  let debug fmt = Debug.debug ~channel:name fmt
+  include GenStatelessDomainId(struct
+      let name = "python.objects.list"
+    end)
 
 
   module VarInfo = struct type t = var let compare = compare_var let print = pp_var end

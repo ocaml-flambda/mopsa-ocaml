@@ -61,8 +61,9 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  let name = "universal.iterators.interproc.inlining"
-  let debug fmt = Debug.debug ~channel:name fmt
+  include GenStatelessDomainId(struct
+      let name = "universal.iterators.interproc.inlining"
+    end)
 
 
   (** Zoning definition *)
