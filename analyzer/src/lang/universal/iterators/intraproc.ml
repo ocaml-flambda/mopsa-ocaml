@@ -22,14 +22,18 @@
 (** Intra-procedural iterator for blocks, assignments and tests *)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Ast
 
 
 module Domain =
 struct
 
-  let name = "universal.iterators.intraproc"
-  let debug fmt = Debug.debug ~channel:name fmt
+  include GenStatelessDomainId(
+    struct
+      let name = "universal.iterators.intraproc"
+    end
+    )
 
   let interface = {
     iexec = { provides = [Z_any]; uses = [] };
@@ -40,7 +44,7 @@ struct
 
   let exec zone stmt man flow =
     match skind stmt with
-    | S_expression(e) ->
+    | S_expression(e) when is_universal_type e.etyp || e.etyp = T_any ->
       Some (
         man.eval e flow |>
         post_eval man @@ fun e flow ->
@@ -77,4 +81,4 @@ struct
 end
 
 let () =
-  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+  register_domain (module Domain)

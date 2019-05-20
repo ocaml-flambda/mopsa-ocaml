@@ -22,6 +22,7 @@
 (** Inter-procedural iterator of stubs by inlining. *)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Universal.Ast
 open Ast
 open Zone
@@ -30,9 +31,9 @@ open Alarms
 module Domain =
 struct
 
-  let name = "stubs.iterator"
-
-  let debug fmt = Debug.debug ~channel:name fmt
+  include GenStatelessDomainId(struct
+      let name = "stubs.iterator"
+    end)
 
   (** Zoning definition *)
   (** ================= *)
@@ -268,7 +269,7 @@ struct
       ftrue
 
     | Some ffalse ->
-      raise_alarm A_stub_invalid_require req.range ~bottom:true man ffalse |>
+      raise_alarm A_stub_invalid_require req.range ~bottom:true man.lattice ffalse |>
       Flow.join man.lattice ftrue
 
     | _ -> assert false
@@ -482,4 +483,4 @@ struct
 end
 
 let () =
-  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+  register_domain (module Domain)

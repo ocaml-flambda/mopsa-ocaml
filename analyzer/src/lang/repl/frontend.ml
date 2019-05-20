@@ -296,9 +296,10 @@ let parse_program files : program =
 
 module Domain = struct
 
-  let name = "universal.repl"
+  include GenStatelessDomainId(struct
+      let name = "universal.repl"
+    end)
 
-  let debug fmt = Debug.debug ~channel:name fmt
 
   let interface = {
     iexec = {provides = [Z_u]; uses = []};

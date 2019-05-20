@@ -58,7 +58,7 @@ struct
 
   let meet (a1:t) (a2:t) : t = I.meet_bot a1 a2
 
-  let widen ctx (a1:t) (a2:t) : t = I.widen_bot a1 a2
+  let widen (a1:t) (a2:t) : t = I.widen_bot a1 a2
 
   let print fmt (a:t) = I.fprint_bot fmt a
 
@@ -285,21 +285,21 @@ struct
 
   let () =
     register_query {
-      query_join = (
+      join = (
         let f : type r. query_pool -> r query -> r -> r -> r =
           fun next query a b ->
             match query with
             | Q_interval e -> join a b
-            | _ -> next.join query a b
+            | _ -> next.join_query query a b
         in
         f
       );
-      query_meet = (
+      meet = (
         let f : type r. query_pool -> r query -> r -> r -> r =
           fun next query a b ->
             match query with
             | Q_interval e -> meet a b
-            | _ -> next.meet query a b
+            | _ -> next.meet_query query a b
         in
         f
       );

@@ -22,14 +22,16 @@
 (** Main handler of Universal programs. *)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Ast
 open Zone
 
 module Domain =
 struct
 
-  let name = "universal.iterators.program"
-  let debug fmt = Debug.debug ~channel:name fmt
+  include GenStatelessDomainId(struct
+      let name = "universal.iterators.program"
+    end)
 
   let interface = {
     iexec = { provides = [Z_u]; uses = [] };
@@ -55,4 +57,4 @@ struct
 end
 
 let () =
-  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+  register_domain (module Domain)

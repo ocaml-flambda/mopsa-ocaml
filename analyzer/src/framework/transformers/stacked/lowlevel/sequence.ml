@@ -23,16 +23,16 @@
 open Ast.All
 open Core.All
 open Log
-
+open Sig.Stacked.Lowlevel
 
 (** The [Sequence.Stack ∈ 𝒮 × 𝒮 → 𝒮] operator combines two stacks over the
     same sub-abstraction, by "concatenating" their transfer functions (i.e.
     return the result of the first answering domain).
 *)
 module Make
-    (S1:Sig.Stacked.Lowlevel.STACK)
-    (S2:Sig.Stacked.Lowlevel.STACK)
-  : Sig.Stacked.Lowlevel.STACK with type t = S1.t * S2.t
+    (S1:STACK)
+    (S2:STACK)
+  : STACK with type t = S1.t * S2.t
 =
 struct
 
@@ -69,7 +69,7 @@ struct
   (**************************************************************************)
 
   (** Global manager of [S1] *)
-  let s1_man (man:('a, t) man) : ('a, S1.t) man = {
+  let s1_man (man:('a, t, 's) man) : ('a, S1.t, 's) man = {
     man with
     get = (fun flow -> man.get flow |> fst);
     set = (fun a flow -> man.set (a, man.get flow |> snd) flow);
@@ -80,7 +80,7 @@ struct
   }
 
   (** Global manager of [D] *)
-  let s2_man (man:('a, t) man) : ('a, S2.t) man = {
+  let s2_man (man:('a, t, 's) man) : ('a, S2.t, 's) man = {
     man with
     get = (fun flow -> man.get flow |> snd);
     set = (fun b flow -> man.set (man.get flow |> fst, b) flow);
@@ -95,29 +95,29 @@ struct
   (**                      {2 Lattice operators}                            *)
   (**************************************************************************)
 
-  let subset man sman a a' =
-    let b1, a, a' = S1.subset (s1_man man) sman a a' in
-    let b2, a, a' = S2.subset (s2_man man) sman a a' in
+  let subset man ctx a a' =
+    let b1, a, a' = S1.subset (s1_man man) ctx a a' in
+    let b2, a, a' = S2.subset (s2_man man) ctx a a' in
     b1 && b2, a, a'
 
-  let join man sman a a' =
-    let a1, a, a' = S1.join (s1_man man) sman a a' in
-    let a2, a, a' = S2.join (s2_man man) sman a a' in
+  let join man ctx a a' =
+    let a1, a, a' = S1.join (s1_man man) ctx a a' in
+    let a2, a, a' = S2.join (s2_man man) ctx a a' in
     (a1,a2), a, a'
 
-  let meet man sman a a' =
-    let a1, a, a' = S1.meet (s1_man man) sman a a' in
-    let a2, a, a' = S2.meet (s2_man man) sman a a' in
+  let meet man ctx a a' =
+    let a1, a, a' = S1.meet (s1_man man) ctx a a' in
+    let a2, a, a' = S2.meet (s2_man man) ctx a a' in
     (a1,a2), a, a'
 
-  let widen man sman ctx a a' =
-    let a1, a, a', stable1 = S1.widen (s1_man man) sman ctx a a' in
-    let a2, a, a', stable2 = S2.widen (s2_man man) sman ctx a a' in
+  let widen man ctx a a' =
+    let a1, a, a', stable1 = S1.widen (s1_man man) ctx a a' in
+    let a2, a, a', stable2 = S2.widen (s2_man man) ctx a a' in
     (a1,a2), a, a', stable1 && stable2
 
-  let merge man pre (post, log) (post', log') =
-    S1.merge (s1_man man) pre (post, log) (post', log'),
-    S2.merge (s2_man man) pre (post, log) (post', log')
+  let merge ctx (pre1,pre2) ((a1,a2), log) ((a1',a2'), log') =
+    S1.merge ctx pre1 (a1, Log.first log) (a1', Log.first log'),
+    S2.merge ctx pre2 (a2, Log.second log) (a2', Log.second log')
 
 
 
@@ -142,31 +142,28 @@ struct
     | true, false ->
       (* Only [S1] provides an [exec] for such zone *)
       let f = S1.exec zone in
-      (fun stmt man sman flow ->
-         f stmt (s1_man man) sman flow |>
-         Option.lift @@ log_post_stmt stmt (s1_man man)
+      (fun stmt man flow ->
+         f stmt (s1_man man) flow
       )
 
     | false, true ->
       (* Only [S2] provides an [exec] for such zone *)
       let f = S2.exec zone in
-      (fun stmt man sman flow ->
-         f stmt (s2_man man) sman flow |>
-         Option.lift @@ log_post_stmt stmt (s2_man man)
+      (fun stmt man flow ->
+         f stmt (s2_man man) flow
       )
 
     | true, true ->
       (* Both [S1] and [S2] provide an [exec] for such zone *)
       let f1 = S1.exec zone in
       let f2 = S2.exec zone in
-      (fun stmt man sman flow ->
-         match f1 stmt (s1_man man) sman flow with
+      (fun stmt man flow ->
+         match f1 stmt (s1_man man) flow with
          | Some post ->
-           Option.return @@ log_post_stmt stmt (s1_man man) post
+           Option.return post
 
          | None ->
-           f2 stmt (s2_man man) sman flow |>
-           Option.lift @@ log_post_stmt stmt (s2_man man)
+           f2 stmt (s2_man man) flow
       )
 
 
@@ -209,13 +206,13 @@ struct
   let ask query man flow =
     let reply1 = S1.ask query (s1_man man) flow in
     let reply2 = S2.ask query (s2_man man) flow in
-    Option.neutral2 (Query.join query) reply1 reply2
+    Option.neutral2 (join_query query) reply1 reply2
 
 
   (** Reduction refinement *)
-  let refine channel man sman flow =
-    S1.refine channel (s1_man man) sman flow |>
-    Core.Channel.bind @@ S2.refine channel (s2_man man) sman
+  let refine channel man flow =
+    S1.refine channel (s1_man man) flow |>
+    Core.Channel.bind @@ S2.refine channel (s2_man man)
 
 
 end

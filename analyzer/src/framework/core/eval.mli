@@ -69,6 +69,10 @@ val fold_apply :
   'b -> ('e,'a) eval ->
   'b * 'c
 
+val merge :
+  ('e -> 'a flow -> 'f -> 'b flow -> ('e, 'a) eval option * ('f, 'b) eval option) ->
+  ('e, 'a) eval -> ('f, 'b) eval -> ('e, 'a) eval option * ('f, 'b) eval option
+
 
 val choose : ('e, 'a) eval -> ('e option * 'a flow) option
 

@@ -22,6 +22,7 @@
 (** Abstraction of C function calls *)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Memory.Common.Points_to
 open Universal.Ast
 open Ast
@@ -35,8 +36,9 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  let name = "c.iterators.interproc"
-  let debug fmt = Debug.debug ~channel:name fmt
+  include GenStatelessDomainId(struct
+      let name = "c.iterators.interproc"
+    end)
 
 
   (** Zoning definition *)

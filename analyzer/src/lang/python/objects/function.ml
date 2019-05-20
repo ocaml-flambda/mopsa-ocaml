@@ -22,6 +22,7 @@
 (** Definition of python functions and evaluation of their calls. *)
 
 open Mopsa
+open Sig.Domain.Stateless
 open Ast
 open Addr
 open Universal.Ast
@@ -30,8 +31,9 @@ open Universal.Ast
 module Domain =
   struct
 
-    let name = "python.objects.function"
-    let debug fmt = Debug.debug ~channel:name fmt
+    include GenStatelessDomainId(struct
+        let name = "python.objects.function"
+      end)
 
     let interface = {
       iexec = {provides = [Zone.Z_py]; uses = []};

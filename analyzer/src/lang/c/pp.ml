@@ -23,14 +23,6 @@ open Format
 open Mopsa
 open Ast
 
-let rec pp_c_init fmt = function
-  | C_init_expr(e) -> pp_expr fmt e
-  | C_init_list([], Some filler) -> fprintf fmt "{%a ...}" pp_c_init filler
-  | C_init_list(l, _) -> fprintf fmt "{%a}"
-                           (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_c_init) l
-  | C_init_implicit t -> assert false
-  | C_init_stub stub -> fprintf fmt "/*$@,@[  %a@]@,*/" Stubs.Ast.pp_stub_init stub
-
 let rec pp_c_type_short fmt =
   function
   | T_c_void -> pp_print_string fmt "void"
@@ -69,6 +61,26 @@ let rec pp_c_type_short fmt =
     fprintf fmt "%s %a" qual pp_c_type_short t
   | T_c_enum(enum) -> fprintf fmt "e %s" enum.c_enum_org_name
   | t -> panic "pp_c_type_short: unsupported type %a" pp_typ t
+
+let rec pp_c_init fmt = function
+  | C_init_expr(e) -> pp_expr fmt e
+  | C_init_list([], Some filler) -> fprintf fmt "{%a ...}" pp_c_init filler
+  | C_init_list(l, _) -> fprintf fmt "{%a}"
+                           (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_c_init) l
+  | C_init_implicit t -> assert false
+  | C_init_stub stub -> fprintf fmt "/*$@,@[  %a@]@,*/" Stubs.Ast.pp_stub_init stub
+  | C_init_flat l ->
+    fprintf fmt "{| %a |}"
+      (pp_print_list
+         ~pp_sep:(fun fmt () -> fprintf fmt ", ")
+         (fun fmt init ->
+            match init with
+            | C_flat_expr (e,t) -> fprintf fmt "%a:%a" pp_expr e pp_c_type_short t
+            | C_flat_none n -> fprintf fmt "None * %a" Z.pp_print n
+            | C_flat_fill (e,t,n) -> fprintf fmt "%a:%a * %a" pp_expr e pp_c_type_short t Z.pp_print n
+         )
+      ) l
+
 
 
 let () =
@@ -167,17 +179,8 @@ let () =
     );
   register_stmt_pp (fun default fmt stmt ->
       match skind stmt with
-      | S_c_declaration v ->
-        begin match vkind v with
-          | V_c { var_init = None } ->
-            fprintf fmt "%a %a;" pp_typ v.vtyp pp_var v
-
-          | V_c { var_init = Some init } ->
-            fprintf fmt "%a %a = %a;" pp_typ v.vtyp pp_var v pp_c_init init
-
-          | _ -> assert false
-        end
-
+      | S_c_declaration (v,None) -> fprintf fmt "%a %a;" pp_typ v.vtyp pp_var v
+      | S_c_declaration (v,Some init) -> fprintf fmt "%a %a = %a;" pp_typ v.vtyp pp_var v pp_c_init init
       | S_c_for (init,cond,it,stmts) ->
         fprintf fmt "@[<v 4>for (%a;%a;%a) {@,%a@]@,}"
           pp_stmt init

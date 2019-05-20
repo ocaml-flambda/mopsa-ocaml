@@ -80,15 +80,19 @@ let base_range =
   | V { vkind = V_c {var_range} } -> var_range
   | _ -> assert false
 
+let is_base_readonly = function
+  | S _ -> true
+  | _ -> false
 
-(** Evaluate the size of a base *)
-let eval_base_size base ?(via=Z_any) range man flow =
+
+(** Evaluate the size of a base in bytes *)
+let eval_base_size base ?(via=Z_any) range (man:('a,'t,'s) Core.Sig.Stacked.Lowlevel.man) flow =
   match base with
   | V var -> Eval.singleton (mk_z (sizeof_type var.vtyp) range ~typ:ul) flow
   | S str -> Eval.singleton (mk_int (String.length str + 1) range ~typ:ul) flow
   | A addr ->
-    let size_expr = mk_expr (Stubs.Ast.E_stub_builtin_call (SIZE, mk_addr addr range)) range ~etyp:ul in
-    man.eval ~zone:(Z_c, Z_c_scalar) ~via size_expr flow
+    let bytes_expr = mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, mk_addr addr range)) range ~etyp:ul in
+    man.eval ~zone:(Z_c_low_level, Z_c_scalar) ~via bytes_expr flow
   | Z -> panic ~loc:__LOC__ "eval_base_size: addresses not supported"
 
 module Base =

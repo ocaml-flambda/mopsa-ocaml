@@ -113,19 +113,35 @@ let map_flow
       { case with eval_flow = flow' }
     ) eval
 
+
+let set_ctx ctx evl =
+  map_flow (Flow.set_ctx ctx) evl
+
 let choose_ctx eval =
   match Dnf.choose eval with
   | Some case -> get_ctx case.eval_flow
   | None -> Context.empty
 
-let set_ctx ctx evl =
-  map_flow (Flow.set_ctx ctx) evl
-
 let copy_ctx src dst =
   set_ctx (choose_ctx src) dst
 
+let uniform_ctx evl =
+  let ctx =
+    Dnf.fold
+      (fun ctx case ->
+         Context.get_most_recent ctx (Flow.get_ctx case.eval_flow)
+      )
+      Context.get_most_recent
+      Context.get_most_recent
+      (choose_ctx evl)
+      evl
+  in
+  set_ctx ctx evl
+
+
 let join (eval1: ('e, 'a) eval) (eval2: ('e, 'a) eval) : ('e, 'a) eval =
-  Dnf.mk_or eval1 eval2
+  Dnf.mk_or eval1 eval2 |>
+  uniform_ctx
 
 let join_list ?(empty=empty) (l: ('e, 'a) eval list) : ('e, 'a) eval =
   match l with
@@ -133,7 +149,8 @@ let join_list ?(empty=empty) (l: ('e, 'a) eval list) : ('e, 'a) eval =
   | hd :: tl -> List.fold_left join hd tl
 
 let meet (eval1: ('e, 'a) eval) (eval2: ('e, 'a) eval) : ('e, 'a) eval =
-  Dnf.mk_and eval1 eval2
+  Dnf.mk_and eval1 eval2 |>
+  uniform_ctx
 
 let meet_list ?(empty=empty) (l: ('e, 'a) eval list) : ('e, 'a) eval =
   match l with
@@ -222,3 +239,15 @@ let choose eval =
   match Dnf.choose eval with
   | Some case -> Some (case.eval_result, case.eval_flow)
   | None -> None
+
+let merge f evl1 evl2 =
+  Dnf.merge (fun case1 case2 ->
+      match case1.eval_result, case2.eval_result with
+      | Some e1, Some e2 ->
+        let evl1', evl2' = f e1 case1.eval_flow e2 case2.eval_flow in
+        let evl1'' = Option.lift (add_cleaners case1.eval_cleaners) evl1' in
+        let evl2'' = Option.lift (add_cleaners case2.eval_cleaners) evl2' in
+        evl1'', evl2''
+
+      | _ -> Some (Dnf.singleton case1), Some (Dnf.singleton case2)
+    ) evl1 evl2

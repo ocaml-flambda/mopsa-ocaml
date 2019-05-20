@@ -28,14 +28,14 @@ mopsa = framework mopsa lang main
 # Framework
 framework = ast core lattices engines transformers output config
 framework.ast = program typ operator constant var expr stmt visitor all
-framework.core = query context zone token log lattice flow eval post manager \
-	         id interface channel sig callstack alarm debug_tree cache \
+framework.core = query context zone token log lattice flow eval post id \
+	         interface channel sig callstack alarm debug_tree cache \
 		 abstraction all
 framework.core.sig = value domain stacked
 framework.core.sig.value = lowlevel simplified reduction
 framework.core.sig.domain = lowlevel intermediate simplified stateless reduction
-framework.core.sig.stacked = lowlevel intermediate stateless reduction
-framework.lattices = partial_map powerset total_map
+framework.core.sig.stacked = lowlevel intermediate stateless eval_reduction
+framework.lattices = partial_map powerset
 framework.engines = engine automatic interactive
 framework.transformers = value domain stacked
 framework.output = text json factory
@@ -60,17 +60,17 @@ lang.repl = frontend
 lang.stubs = ast zone alarms iterator
 
 # C
-lang.c = ast pp visitor zone frontend alarms desugar memory libs iterators resources
-lang.c.iterators = program switch goto interproc
-lang.c.desugar = low_level record_copy loops stub_init cond_expr
-lang.c.memory = common cells strings scalars
-lang.c.memory.common = base points_to init_visitor
-lang.c.memory.cells = cell expand cell2scalar
+lang.c = ast pp visitor zone frontend alarms desugar memory libs iterators cstubs
+lang.c.iterators = program switch loops goto interproc
+lang.c.desugar = cond_expr
+lang.c.memory = common structured lowlevel scalars
+lang.c.memory.common = base points_to
+lang.c.memory.structured = flat
+lang.c.memory.lowlevel = string_length cells reductions
 lang.c.memory.scalars = pointers machine_numbers
-lang.c.memory.scalars.pointers = bases nonrel
 lang.c.libs = libmopsa libc
-lang.c.resources = common file
-lang.c.resources.file = slot table domain
+lang.c.cstubs = resources file
+lang.c.cstubs.file = slot table domain
 
 lang.python = ast addr utils visitor  operators pp ast_compare frontend zone		\
               alarms libs desugar objects data_model types flows program

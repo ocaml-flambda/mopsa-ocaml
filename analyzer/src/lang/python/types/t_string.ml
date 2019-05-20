@@ -20,6 +20,7 @@
 (****************************************************************************)
 
 open Mopsa
+open Sig.Domain.Stateless
 open Ast
 open MapExt
 open Addr
@@ -28,8 +29,10 @@ open Universal.Ast
 
 module Domain =
   struct
-    let name = "python.types.t_string"
-    let debug fmt = Debug.debug ~channel:name fmt
+
+    include GenStatelessDomainId(struct
+        let name = "python.types.t_string"
+      end)
 
     type stub_signature = {in_args: string list;
                            out_type: Mopsa.typ}

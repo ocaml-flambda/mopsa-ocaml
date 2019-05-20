@@ -22,14 +22,16 @@
 (** Desugaring loops into a usual case *)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Universal.Ast
 open Ast
 
 module Domain =
   struct
 
-    let name = "python.desugar.loops"
-    let debug fmt = Debug.debug ~channel:name fmt
+    include GenStatelessDomainId(struct
+        let name = "python.desugar.loops"
+      end)
 
     let interface = {
       iexec = {provides = [Zone.Z_py]; uses = []};

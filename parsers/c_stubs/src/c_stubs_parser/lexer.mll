@@ -76,6 +76,7 @@ let _ =
      (* Built-ins *)
      "primed", PRIMED;  
      "size",   SIZE;
+     "bytes",  BYTES;
      "sizeof",   SIZEOF;
      "offset", OFFSET;
      "base", BASE;
@@ -87,9 +88,6 @@ let _ =
      "float_valid", FLOAT_VALID;
      "float_inf", FLOAT_INF;
      "float_nan", FLOAT_NAN;
-
-     (* Deprecated *)
-     "old", OLD;
    ]
 
    let char_for_backslash = function

@@ -20,15 +20,19 @@
 (****************************************************************************)
 
 (** Inliner of imported packages. *)
+
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Ast
 open Addr
 open Universal.Ast
 
 module Domain =
   struct
-    let name = "python.desugar.import"
-    let debug fmt = Debug.debug ~channel:name fmt
+
+    include GenStatelessDomainId(struct
+        let name = "python.desugar.import"
+      end)
 
     let interface = {
       iexec = {provides = [Zone.Z_py]; uses = []};

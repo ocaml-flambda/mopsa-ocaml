@@ -22,6 +22,7 @@
 (** Python standard library. *)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Addr
 open Ast
 open Universal.Ast
@@ -30,8 +31,9 @@ open MapExt
 module Domain =
   struct
 
-    let name = "python.libs.stdlib"
-    let debug fmt = Debug.debug ~channel:name fmt
+    include GenStatelessDomainId(struct
+        let name = "python.libs.stdlib"
+      end)
 
     let interface = {
       iexec = { provides = []; uses = [Zone.Z_py] };

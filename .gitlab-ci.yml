@@ -93,11 +93,6 @@ test-c 6/20:
     C_FILE: 'int_tests.c'
   extends: .test-c
 
-test-c 7/20:
-  variables:
-    C_FILE: 'stubs/assigns_tests.c'
-  extends: .test-c
-
 test-c 8/20:
   variables:
     C_FILE: 'pointer_tests.c'
@@ -108,11 +103,6 @@ test-c 9/20:
     C_FILE: 'string_tests.c'
   extends: .test-c
 
-test-c 10/20:
-  variables:
-    C_FILE: 'struct_tests.c'
-  extends: .test-c
-
 test-c 11/20:
   variables:
     C_FILE: 'switch_tests.c'
@@ -121,11 +111,6 @@ test-c 11/20:
 test-c 12/20:
   variables:
     C_FILE: 'union_tests.c'
-  extends: .test-c
-
-test-c 13/20:
-  variables:
-    C_FILE: 'stubs/forall_tests.c'
   extends: .test-c
 
 test-c 14/20:

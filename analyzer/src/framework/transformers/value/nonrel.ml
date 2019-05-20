@@ -80,13 +80,47 @@ struct
 
   let name = Value.name
 
-  let merge pre (post1, log1) (post2, log2) =
-    assert false
+  let debug fmt = Debug.debug ~channel:name fmt
+
+  let merge ctx pre (a1, log1) (a2, log2) =
+    debug "@[<v>merging:@, pre-condition: %a@, post-condition #1: %a@, log #1: %a@, post-condition #2: %a@, log #2: %a@]"
+      VarMap.print pre
+      VarMap.print a1
+      pp_block log1
+      VarMap.print a2
+      pp_block log2
+    ;
+
+    let patch stmt a acc =
+      match skind stmt with
+      | S_forget { ekind = E_var (var, _) }
+      | S_add { ekind = E_var (var, _) } ->
+        add var Value.top acc
+
+      | S_remove { ekind = E_var (var, _) } ->
+        remove var acc
+
+      | S_assign({ ekind = E_var (var, _)}, _) ->
+        let v = find var a in
+        add var v acc
+
+      | S_assume e ->
+        let vars = expr_vars e in
+        vars |> List.fold_left (fun acc var ->
+            let v = find var a in
+            add var v acc
+          ) acc
+
+      | _ -> Exceptions.panic ~loc:__LOC__ "merge: unsupported statement %a" pp_stmt stmt
+    in
+    let acc = List.fold_left (fun acc stmt -> patch stmt a1 acc) a2 log1 in
+    List.fold_left (fun acc stmt -> patch stmt a2 acc) acc log2
+
 
   let print fmt a =
     Format.fprintf fmt "%s:@,@[   %a@]@\n" Value.display VarMap.print a
 
-
+  let widen ctx = VarMap.widen
 
   (** {2 Evaluation of expressions} *)
   (** ***************************** *)

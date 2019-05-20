@@ -22,6 +22,7 @@
 (** Abstraction of exceptions flows. *)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Ast
 open Addr
 open Universal.Ast
@@ -61,8 +62,9 @@ let () =
 module Domain =
   struct
 
-    let name = name
-    let debug fmt = Debug.debug ~channel:name fmt
+    include GenStatelessDomainId(struct
+        let name = name
+      end)
 
     let interface = {
       iexec = {provides = [Zone.Z_py]; uses = [Zone.Z_py]};

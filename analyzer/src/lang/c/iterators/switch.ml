@@ -22,6 +22,7 @@
 (** Control flow abstraction for switch statements. *)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Ast
 
 (*==========================================================================*)
@@ -88,8 +89,9 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  let name = "c.iterators.switch"
-  let debug fmt = Debug.debug ~channel:name fmt
+  include GenStatelessDomainId(struct
+      let name = "c.iterators.switch"
+    end)
 
 
   (** Zoning definition *)
@@ -130,15 +132,18 @@ struct
       (* Store e in the annotations and execute body. *)
       let flow0' = set_switch_cond e flow0 in
 
-      (* let ctx = set_annot KSwitchExpr e ctx in *)
       let flow1 = man.exec body flow0' in
 
       (* Merge resulting T_cur, T_break and TSwitch (in case when there is no default case) *)
+      let ctx = Flow.get_unit_ctx flow1 in
       let cur =
         man.lattice.join
+          ctx
           (Flow.get T_cur man.lattice flow1)
-          (Flow.get Universal.Iterators.Loops.T_break man.lattice flow1) |>
+          (Flow.get Universal.Iterators.Loops.T_break man.lattice flow1)
+        |>
         man.lattice.join
+          ctx
           (Flow.get TSwitch man.lattice flow1)
 
       in
@@ -200,7 +205,9 @@ struct
       Option.return
 
     | S_c_switch_default ->
+      let ctx = Flow.get_unit_ctx flow in
       let cur = man.lattice.join
+          ctx
           (Flow.get TSwitch man.lattice flow)
           (Flow.get T_cur man.lattice flow)
       in

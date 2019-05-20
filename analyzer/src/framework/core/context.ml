@@ -262,7 +262,14 @@ let pprint fmt pctx =
 type 'a ctx = {
   ctx_unit : uctx;
   ctx_poly : 'a pctx;
+  ctx_timestamp : int;
 }
+
+let counter = ref 0
+
+let next_counter () =
+  incr counter;
+  !counter
 
 (** Generate a polymorphic (stateless) key *)
 module GenPolyKey(V:sig
@@ -295,6 +302,7 @@ end
 let empty : 'a ctx = {
   ctx_unit = uempty;
   ctx_poly = pempty;
+  ctx_timestamp = 0
 }
 
 let unit ctx = ctx.ctx_unit
@@ -312,23 +320,31 @@ let mem_poly (k: ('a,'v) pkey) (ctx:'a ctx) : bool =
   pmem k ctx.ctx_poly
 
 let add_unit (k: 'v ukey) (v:'v) (ctx:'a ctx) : 'a ctx =
-  { ctx with ctx_unit = uadd k v ctx.ctx_unit }
+  { ctx with ctx_unit = uadd k v ctx.ctx_unit; ctx_timestamp = next_counter () }
 
 let add_poly (k: ('a,'v) pkey) (v:'v) (ctx:'a ctx) : 'a ctx =
-  { ctx with ctx_poly = padd k v ctx.ctx_poly }
+  { ctx with ctx_poly = padd k v ctx.ctx_poly; ctx_timestamp = next_counter () }
 
 let remove_unit (k: 'v ukey) (ctx:'a ctx) : 'a ctx =
-  { ctx with ctx_unit = uremove k ctx.ctx_unit }
+  { ctx with ctx_unit = uremove k ctx.ctx_unit; ctx_timestamp = next_counter () }
 
 let remove_poly (k: ('a,'v) pkey) (ctx:'a ctx) : 'a ctx =
-  { ctx with ctx_poly = premove k ctx.ctx_poly }
+  { ctx with ctx_poly = premove k ctx.ctx_poly; ctx_timestamp = next_counter () }
 
 let init_poly (pctx:'a pctx) (ctx:'a ctx) : 'a ctx =
   { ctx with ctx_poly = pconcat ctx.ctx_poly pctx }
 
 let print fmt ctx =
-  Format.fprintf fmt "%a%a" uprint ctx.ctx_unit pprint ctx.ctx_poly
+  Format.fprintf fmt "%a@\n%a@\ntimestamp: %d"
+    uprint ctx.ctx_unit
+    pprint ctx.ctx_poly
+    ctx.ctx_timestamp
 
 let get_unit ctx = ctx.ctx_unit
 
-let set_unit unit ctx = { ctx with ctx_unit = unit }
+let set_unit unit ctx = { ctx with ctx_unit = unit; ctx_timestamp = next_counter () }
+
+let get_most_recent ctx1 ctx2 =
+  if ctx1.ctx_timestamp < ctx2.ctx_timestamp
+  then ctx2
+  else ctx1

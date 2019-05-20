@@ -23,6 +23,7 @@
    irrelevant of the value/type domain *)
 
 open Mopsa
+open Sig.Domain.Stateless
 open Ast
 open Addr
 open Universal.Ast
@@ -46,9 +47,9 @@ let () =
 module Domain =
 struct
 
-  let name = "python.objects.tuple"
-
-  let debug fmt = Debug.debug ~channel:name fmt
+  include GenStatelessDomainId(struct
+      let name = "python.objects.tuple"
+    end)
 
   module VarInfo = struct type t = var list let compare = Compare.list compare_var let print = Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_var end
   module TupleInfo = struct
@@ -85,7 +86,10 @@ struct
   let fresh_expanded_vars range d =
     let rec gen_aux pos acc =
       if pos < 0 then acc else
-        gen_aux (pos-1) ((mkfresh (fun uid -> Format.asprintf "$t:%d:%d" (get_range_line range) pos) T_any ())::acc)
+        gen_aux (pos-1) ((mkfresh (fun uid ->
+            let name = Format.asprintf "$t:%a:%d" pp_range range pos in
+            name, name
+          ) T_any ())::acc)
     in gen_aux (d-1) []
 
   let get_var_equiv ((cs, range, size) as info: TupleInfo.t) (e: Equiv.t) =

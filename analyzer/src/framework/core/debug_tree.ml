@@ -25,7 +25,6 @@ open Location
 open Ast.Expr
 open Ast.Stmt
 open Zone
-open Manager
 open Format
 
 (** Command-line option to activate logs *)
@@ -118,7 +117,7 @@ let pp_S fmt stmt =
 let pp_E fmt exp =
   fprintf fmt "@[<v 3>E [| %a@] |]" pp_expr exp
 
-let exec stmt zone man flow =
+let exec stmt zone lattice flow =
   if !opt_short_log then
     indent "%a in zone %a"
       pp_S stmt
@@ -127,13 +126,13 @@ let exec stmt zone man flow =
   else
     indent "%a @,in %a @,and zone %a"
       pp_S stmt
-      (Flow.print man.lattice) flow
+      (Flow.print lattice) flow
       pp_zone zone
       ~symbol:BEGIN
   ;
   incr cur_level
 
-let exec_done stmt zone time man post =
+let exec_done stmt zone time lattice post =
   decr cur_level;
   if !opt_short_log then
     indent "%a done in zone %a [%.4fs]"
@@ -146,10 +145,10 @@ let exec_done stmt zone time man post =
       pp_S stmt
       pp_zone zone
       time
-      (Post.print man.lattice) post
+      (Post.print lattice) post
       ~symbol:END
 
-let eval exp zone man flow =
+let eval exp zone lattice flow =
   if !opt_short_log then
     indent "%a in zone %a"
       pp_E exp
@@ -158,7 +157,7 @@ let eval exp zone man flow =
   else
     indent "%a @,in %a @,and zone %a"
       pp_E exp
-      (Flow.print man.lattice) flow
+      (Flow.print lattice) flow
       pp_zone2 zone
       ~symbol:BEGIN
   ;
@@ -168,8 +167,9 @@ let eval exp zone man flow =
 let eval_done exp zone time evl =
   decr cur_level;
   if !opt_short_log then
-    indent "%a done in zone %a [%.4fs]"
+    indent "%a = %a done in zone %a [%.4fs]"
       pp_E exp
+      (Eval.print ~pp:pp_expr) evl
       pp_zone2 zone
       time
       ~symbol:END

@@ -23,6 +23,7 @@
 
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Ast
 open Zone
 
@@ -86,8 +87,9 @@ let () =
 module Domain  =
 struct
 
-  let name = name
-  let debug fmt = Debug.debug ~channel:name fmt
+  include GenStatelessDomainId(struct
+      let name = name
+    end)
 
 
   let interface = {
@@ -251,7 +253,7 @@ struct
         match tk with
         | T_cur ->
           let cont = Flow.get T_continue man.lattice flow in
-          man.lattice.join eabs cont
+          man.lattice.join (Flow.get_unit_ctx flow) eabs cont
         | T_continue -> man.lattice.bottom
         | _ -> eabs
       ) flow
@@ -268,4 +270,4 @@ end
 
 
 let () =
-  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+  register_domain (module Domain)

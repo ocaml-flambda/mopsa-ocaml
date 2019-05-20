@@ -47,6 +47,7 @@ let () =
         | E_stub_quantified _
         | E_stub_builtin_call _
         | E_stub_primed _
+        | E_stub_resource_mem _
         | E_unop _
         | E_binop _                          -> Visit
         (* ------------------------------------------- *)
@@ -87,14 +88,14 @@ let () =
         | E_var _
         | E_c_function _                     -> Keep
         (* ------------------------------------------- *)
+        | E_stub_resource_mem _
         | E_stub_quantified _
         | E_stub_builtin_call _
         | E_stub_primed _
         | E_unop _
         | E_binop _
-        | E_c_cast _                         -> Visit
-        (* ------------------------------------------- *)
-        | E_c_address_of _                   -> Visit
+        | E_c_cast _
+        | E_c_address_of _
         | E_c_deref _                        -> Visit
         (* ------------------------------------------- *)
         | _                                  -> Process
@@ -112,16 +113,16 @@ let () =
         (* ------------------------------------------- *)
         | E_constant _
         | E_addr _
-        | E_var _
         | E_c_function _                     -> Keep
         (* ------------------------------------------- *)
+        | E_var _
         | E_stub_quantified _
         | E_stub_builtin_call _
         | E_unop _
         | E_binop _
+        | E_c_address_of _
         | E_c_cast _                         -> Visit
         (* ------------------------------------------- *)
-        | E_c_address_of _                   -> Visit
         | E_c_deref p
           when p.etyp |> under_type |> is_c_array_type
                                              -> Visit

@@ -21,9 +21,9 @@
 
 TARGET_CLIBS = utils
 
-utils = bot compare debug dnf equiv setExt setExtSig setP invRelation \
-        invRelationSig listExt mapExtSig mapExt mapPolyHet mapP option \
-        location printers exceptions relation relationSig valueSig timing \
+utils = bot compare debug option dnf equiv setExt setExtSig setP invRelation \
+        invRelationSig listExt mapExtSig mapExt mapPolyHet mapP location \
+	printers exceptions relation relationSig valueSig timing \
         top itvUtils congUtils bitfields graphSig graph argExt lineEdit \
         typeExt eq
 itvUtils = float intBound intItv floatItv floatItvNan

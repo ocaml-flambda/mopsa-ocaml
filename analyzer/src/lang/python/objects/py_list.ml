@@ -32,6 +32,7 @@
 (* TODO: add length for lists and position for iterator? *)
 
 open Mopsa
+open Sig.Domain.Stateless
 open Ast
 open Addr
 open Universal.Ast
@@ -65,9 +66,9 @@ let () =
 module Domain =
 struct
 
-  let name = "python.objects.list"
-
-  let debug fmt = Debug.debug ~channel:name fmt
+  include GenStatelessDomainId(struct
+      let name = "python.objects.list"
+    end)
 
 
   module VarInfo = struct type t = var let compare = compare_var let print = pp_var end
@@ -98,7 +99,8 @@ struct
     in
     K.key
 
-  let fresh_smashed_var =  mkfresh (fun uid -> "$l*" ^ (string_of_int uid)) T_any
+
+  let fresh_smashed_var =  mkfresh (fun uid -> "$l*", "$l*" ^ (string_of_int uid)) T_any
 
   let get_var_equiv (info: ListInfo.t) (e: Equiv.t) =
     try

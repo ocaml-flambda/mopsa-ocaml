@@ -37,23 +37,23 @@ type _ query +=
 
 let () =
   register_query {
-    query_join = (
+    join = (
       let f : type r. query_pool -> r query -> r -> r -> r =
         fun next query a b ->
           match query with
           | Q_related_vars _ -> a @ b
           | Q_constant_vars -> a @ b
-          | _ -> next.join query a b
+          | _ -> next.join_query query a b
         in
         f
       );
-      query_meet = (
+      meet = (
         let f : type r. query_pool -> r query -> r -> r -> r =
           fun next query a b ->
             match query with
             | Q_related_vars _ -> a @ b
             | Q_constant_vars -> a @ b
-            | _ -> next.meet query a b
+            | _ -> next.meet_query query a b
         in
         f
       );
@@ -79,7 +79,7 @@ struct
   (** {2 Command-line options} *)
   (** ************************ *)
   let () =
-    import_standalone_option Rounding.name ~into:name  
+    import_standalone_option Rounding.name ~into:name
 
 
   (** {2 Environment utility functions} *)
@@ -105,7 +105,7 @@ struct
       List.filter (function { vtyp = T_float _} -> true | _ -> false) lv |>
       vars_to_apron ctx
     in
-    
+
 
     let env' = Apron.Environment.add env
         (Array.of_list int_vars)
@@ -140,15 +140,10 @@ struct
     let abs1', abs2' = unify abs1 abs2 in
     Apron.Abstract1.widening ApronManager.man abs1' abs2'
 
-  let merge pre (post1,log1) (post2,log2) =
-    assert false
-
   let print fmt abs =
     Format.fprintf fmt "%s:@,  @[%a@]@\n"
       ApronManager.name
       Apron.Abstract1.print abs
-
-
 
 
   (** {2 Transfer functions} *)
@@ -159,6 +154,43 @@ struct
   let init prog ctx =
     top, init_ctx ctx
 
+  let forget_var v ctx a =
+    let env = Apron.Abstract1.env a in
+    let vars, ctx =
+      List.filter (fun v -> is_env_var v a) [v] |>
+      vars_to_apron ctx
+    in
+    let env = Apron.Environment.remove env (Array.of_list vars) in
+    (Apron.Abstract1.change_environment ApronManager.man a env true, ctx)
+
+
+  let merge ctx pre (a1,log1) (a2,log2) =
+    debug "@[<v>merging:@, pre-condition: %a@, post-condition #1: %a@, log #1: %a@, post-condition #2: %a@, log #2: %a@]"
+      Apron.Abstract1.print pre
+      Apron.Abstract1.print a1
+      pp_block log1
+      Apron.Abstract1.print a2
+      pp_block log2
+    ;
+    let patch stmt a acc =
+      match skind stmt with
+      | S_forget { ekind = E_var (var, _) }
+      | S_add { ekind = E_var (var, _) }
+      | S_remove { ekind = E_var (var, _) }
+      | S_assign({ ekind = E_var (var, _)}, _) ->
+        let acc', _ = forget_var var ctx acc in
+        acc'
+
+      | S_assume _ ->
+        acc
+
+      | _ -> panic ~loc:__LOC__ "merge: unsupported statement %a" pp_stmt stmt
+    in
+    let a1' = List.fold_left (fun acc stmt -> patch stmt a1 acc) a2 log1 in
+    let a2' = List.fold_left (fun acc stmt -> patch stmt a2 acc) a1 log2 in
+    meet a1' a2'
+
+
   let rec exec stmt ctx a =
     match skind stmt with
     | S_add { ekind = E_var (var, _) } ->
@@ -167,13 +199,7 @@ struct
 
     | S_remove { ekind = E_var (var, _) }
     | S_forget { ekind = E_var (var, _) } ->
-      let env = Apron.Abstract1.env a in
-      let vars, ctx =
-        List.filter (fun v -> is_env_var v a) [var] |>
-        vars_to_apron ctx
-      in
-      let env = Apron.Environment.remove env (Array.of_list vars) in
-      (Apron.Abstract1.change_environment ApronManager.man a env true, ctx) |>
+      forget_var var ctx a |>
       Option.return
 
 
@@ -314,7 +340,7 @@ struct
 
     | _ -> None
 
-  
+
   let ask : type r. r query -> Context.uctx -> t -> r option =
     fun query ctx abs ->
       match query with

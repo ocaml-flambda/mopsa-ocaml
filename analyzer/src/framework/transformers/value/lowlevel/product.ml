@@ -131,10 +131,10 @@ struct
         Value.meet v v'
       )} Spec.pool v v'
 
-  let widen ctx v v' =
+  let widen v v' =
     let f = fun (type a) (m:a vmodule) (v:a) (v':a) ->
       let module Value = (val m) in
-      Value.widen ctx v v'
+      Value.widen v v'
     in
     vlist_apply2 { f } Spec.pool v v'
 
@@ -311,7 +311,7 @@ struct
     | [hd] -> Some hd
     | hd :: tl ->
       let r =
-        List.fold_left (fun acc r -> Query.join query acc r) hd tl
+        List.fold_left (fun acc r -> meet_query query acc r) hd tl
       in
       Some r
 

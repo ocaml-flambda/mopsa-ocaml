@@ -21,7 +21,7 @@
 
 (** Render the output of an analysis depending on the selected engine. *)
 
-open Core.Manager
+open Core.Sig.Domain.Lowlevel
 
 type format =
   | F_text (* Textual output *)

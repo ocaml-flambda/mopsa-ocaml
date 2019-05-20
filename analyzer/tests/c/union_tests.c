@@ -8,10 +8,6 @@ union {
   struct {uint16 ax, bx;} w;
 } regs;
 
-void test_initialization_of_uninitialized_global() {
-  _mopsa_assert(regs.w.ax == 0);
-  _mopsa_assert(regs.b.al == 0);
-}
 
 void test_modify_part_and_reconstruct() {
   regs.w.ax = 0x1234;

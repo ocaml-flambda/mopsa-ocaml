@@ -26,6 +26,7 @@
 
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Addr
 open Ast
 open Universal.Ast
@@ -33,8 +34,9 @@ open Universal.Ast
 module Domain =
   struct
 
-    let name = "python.desugar.comprehensions"
-    let debug fmt = Debug.debug ~channel:name fmt
+    include GenStatelessDomainId(struct
+        let name = "python.desugar.comprehensions"
+      end)
 
     let interface = {
       iexec = {provides = []; uses = [Zone.Z_py]};

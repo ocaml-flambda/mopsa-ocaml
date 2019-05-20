@@ -24,6 +24,7 @@
    point, it should be kept for the type analysis I think *)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Ast
 open Addr
 open MapExt
@@ -32,8 +33,9 @@ open Universal.Ast
 module Domain =
   struct
 
-    let name = "python.libs.math"
-    let debug fmt = Debug.debug ~channel:name fmt
+    include GenStatelessDomainId(struct
+        let name = "python.libs.math"
+      end)
 
     let interface = {
       iexec = { provides = []; uses = [] };

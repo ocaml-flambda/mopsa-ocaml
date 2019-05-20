@@ -13,13 +13,11 @@ typedef struct {
 
 
 int main() {
-  toto e ;
+  toto e = { .a = { .x = 1 }, .b = { .x = 2 } };
   e.a.x = 1;
   e.b.x = 3;
   e.a.y = 2;
   e.b.y = 4;
-  void * e2 = (void*) (&e);
-  point aa = e.a;
-  aa.x = 10;
-  /* printf("%d", e.a.x); */
+  toto * e2 = &e;
+  (e2->b).x = 100;
 }

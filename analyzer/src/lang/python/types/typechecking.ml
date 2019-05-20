@@ -1,4 +1,5 @@
 open Mopsa
+open Core.Sig.Domain.Lowlevel
 open Addr
 open Typing
 open Addr_env
@@ -146,7 +147,7 @@ struct
    *     ) man a a' *)
 
 
-  let ask : type r. r Query.query -> ('a, t) man -> 'a flow -> r option = fun query man flow ->
+  let ask : type r. r query -> ('a, t) man -> 'a flow -> r option = fun query man flow ->
     match query with
     | Framework.Engines.Interactive.Q_print_var ->
       Some (

@@ -22,6 +22,7 @@
 (** Handling of assert statements. *)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Universal.Ast
 open Ast
 open Zone
@@ -29,8 +30,9 @@ open Zone
 module Domain =
   struct
 
-    let name = "python.desugar.assert"
-    let debug fmt = Debug.debug ~channel:name fmt
+    include GenStatelessDomainId(struct
+        let name = "python.desugar.assert"
+      end)
 
     let interface = {
       iexec = {provides = [Zone.Z_py]; uses = []};

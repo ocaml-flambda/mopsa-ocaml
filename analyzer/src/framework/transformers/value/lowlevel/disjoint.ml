@@ -101,10 +101,10 @@ struct
     | BOT,_ | _,BOT -> BOT
     | _ -> TOP
 
-  let widen ctx a b =
+  let widen a b =
     match a,b with
-    | V1 x, V1 y -> V1 (V1.widen ctx x y)
-    | V2 x, V2 y -> V2 (V2.widen ctx x y)
+    | V1 x, V1 y -> V1 (V1.widen x y)
+    | V2 x, V2 y -> V2 (V2.widen x y)
     | BOT,x | x,BOT -> x
     | _ -> TOP
 
@@ -251,7 +251,7 @@ struct
   let ask man q =
     let a = V1.ask (v1_man man) q in
     let b = V2.ask (v2_man man) q in
-    Option.neutral2 (Query.join q) a b
+    Option.neutral2 (join_query q) a b
 
 
   (** {2 Reduction refiner} *)

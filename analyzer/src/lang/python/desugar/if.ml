@@ -22,14 +22,16 @@
 (** Transformation of conditional expressions. *)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Universal.Ast
 open Ast
 
 module Domain =
   struct
 
-    let name = "python.desugar.if"
-    let debug fmt = Debug.debug ~channel:name fmt
+    include GenStatelessDomainId(struct
+        let name = "python.desugar.if"
+      end)
 
     let interface = {
       iexec = {provides = [Zone.Z_py]; uses = [Zone.Z_py]};

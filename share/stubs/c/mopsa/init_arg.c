@@ -29,7 +29,7 @@
 static int _argc;
 
 /*$
- * local:   char ** buf = new Memory;
+ * local:   char ** buf = new PointerArray;
  * ensures: size(buf) == _argc + 1; // need to allocate an additional
  *                                  // pointer for the last NULL
  * ensures: _argv == buf;

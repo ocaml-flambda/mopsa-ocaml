@@ -57,6 +57,19 @@ sig
 end
 
 
+(** Generator of a new identifier for stateless domains *)
+module GenStatelessDomainId(
+    Spec: sig
+      val name : string
+    end
+  ) :
+sig
+  val id : unit domain
+  val name : string
+  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
+end
+
+
 (****************************************************************************)
 (**                         {2 Value identifiers}                           *)
 (****************************************************************************)

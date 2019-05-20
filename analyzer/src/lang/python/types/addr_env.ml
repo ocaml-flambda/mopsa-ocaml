@@ -22,6 +22,7 @@
 (** An environment is a total map from variables to addresses. *)
 
 open Mopsa
+open Sig.Domain.Intermediate
 open Ast
 open Addr
 open Universal.Ast
@@ -53,7 +54,7 @@ struct
 end
 
 let mk_avar ?(vtyp = T_any) addr_uid =
-  mkfresh (fun uid -> "$addr@" ^ (string_of_int addr_uid) ^ "_" ^ (string_of_int uid)) vtyp ()
+  mkfresh (fun uid -> "$addr@" ^ (string_of_int addr_uid), "$addr@" ^ (string_of_int addr_uid) ^ "_" ^ (string_of_int uid)) vtyp ()
 
 
 module Domain =
@@ -67,13 +68,13 @@ struct
         | PyAddr.Def _ -> false
         | _ -> true
 
-      let widen annot at bt =
+      let widen at bt =
         Top.top_absorb2 (fun a b ->
             if Set.cardinal b - Set.cardinal a = 1
             && Set.exists undef b && Set.exists undef a then
               Top.Nt (Set.union a b)
             else
-              PS.widen annot at bt) at bt
+              PS.widen at bt) at bt
     end)
 
   module AMap = Framework.Lattices.Partial_map.Make
@@ -93,6 +94,8 @@ struct
   }
 
   let merge _ _ _ = assert false
+
+  let widen ctx = widen
 
   let print fmt m =
     Format.fprintf fmt "addrs: @[%a@]@\n" AMap.print m

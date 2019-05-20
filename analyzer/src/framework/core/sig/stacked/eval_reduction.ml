@@ -19,25 +19,20 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Reduction rules for products of stack domains *)
+(** Reduction rules for abstract evaluations *)
 
-open Ast.Var
-open Ast.Stmt
-open Context
+open Ast.Expr
 open Id
-open Query
-open Channel
-open Zone
 open Flow
-open Post
+open Eval
 
-(** Manager used reduction rules *)
+
+type ('e, 'a) evals = ('e, 'a) eval option list
+
+(** Manager used by reduction rules *)
 type 'a man = {
-  get : 't. 't domain -> 'a -> 't;
-  set : 't. 't domain -> 't -> 'a -> 'a;
-  exec : ?zone:zone -> stmt -> 'a flow -> 'a flow;
-  sub_exec : ?zone:zone -> stmt -> 'a flow -> 'a post;
-  ask : 'r. 'r query -> 'a flow -> 'r;
+  get : 't. 't domain -> (expr, 'a) evals -> (expr, 'a) eval option;
+  set : 't. 't domain -> (expr, 'a) eval option -> (expr, 'a) evals -> (expr, 'a) evals;
 }
 
 
@@ -46,7 +41,7 @@ type 'a man = {
 module type REDUCTION =
 sig
   val name   : string
-  val reduce : stmt -> 'a man -> 'a flow -> 'a flow -> 'a flow
+  val reduce : expr -> 'a man -> (expr,'a) evals  -> (expr,'a) evals
 end
 
 

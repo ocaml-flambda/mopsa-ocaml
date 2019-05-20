@@ -22,14 +22,16 @@
 (** Desugar non-scalar expressions in assignments and tests *)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Ast
 open Zone
 
 module Domain =
 struct
 
-  let name = "universal.iterators.scalar"
-  let debug fmt = Debug.debug ~channel:name fmt
+  include GenStatelessDomainId(struct
+      let name = "universal.iterators.scalar"
+    end)
 
   let interface = {
     iexec = { provides = [Z_u]; uses = [Z_u_num] };
@@ -72,4 +74,4 @@ struct
 end
 
 let () =
-  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+  register_domain (module Domain)

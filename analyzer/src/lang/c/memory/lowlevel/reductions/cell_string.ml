@@ -19,72 +19,44 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Interpreter of for and do-while loops. *)
+(** Reduction rule between evaluations of cells and string length domains *)
 
 open Mopsa
-open Ast
-open Zone
+open Universal.Ast
+open Sig.Stacked.Eval_reduction
 
-(** {2 Domain definition} *)
-(** ===================== *)
 
-module Domain =
+module Reduction =
 struct
 
-  (** Domain identification *)
-  (** ===================== *)
+  let name = "c.memory.lowlevel.reductions.cell_string_length"
 
-  let name = "c.desugar.loops"
   let debug fmt = Debug.debug ~channel:name fmt
 
-  (** Zoning definition *)
-  (** ================= *)
+  let reduce exp man evals =
+    match man.get Cells.Domain.id evals,
+          man.get String_length.Domain.id evals
+    with
+    | Some evl1, Some evl2 ->
+      let evl1', evl2' = Eval.merge (fun e1 flow1 e2 flow2 ->
+          debug "reducing %a and %a" pp_expr e1 pp_expr e2;
+          match ekind e1, ekind e2 with
+          (* Keep string evaluation when it is constant 0 *)
+          | _, E_constant (C_int _) ->
+            debug "keeping string";
+            None, Some (Eval.singleton e2 flow2)
 
-  let interface = {
-    iexec = {provides = [Z_c]; uses = []};
-    ieval = {provides = []; uses = []};
-  }
-
-  (** Initialization *)
-  (** ============== *)
-
-  let init _ _ flow = flow
-
-
-  let exec zone stmt man flow =
-    match skind stmt with
-    | S_c_for(init, cond, incr, body) ->
-      let range = stmt.srange in
-      let stmt = Universal.Ast.(
-          mk_block [
-            init;
-            mk_stmt (S_while (
-                (match cond with None -> mk_one range | Some e -> e),
-                (match incr with None -> body | Some e -> mk_block [body; mk_stmt (S_expression e) e.erange] body.srange)
-              )) range
-          ] range
-        )
+          (* Otherwise, keep cells *)
+          | _ ->
+            debug "keeping cells";
+            Some (Eval.singleton e1 flow1), None
+        ) evl1 evl2
       in
-      man.exec stmt flow |> Post.return |> Option.return
+      man.set Cells.Domain.id evl1' evals |>
+      man.set String_length.Domain.id evl2'
 
-    | S_c_do_while(body, cond) ->
-      let range = stmt.srange in
-      let stmt = Universal.Ast.(
-          mk_block [
-            body;
-            mk_stmt (S_while (cond, body)) range
-          ] range
-        )
-      in
-      man.exec stmt flow |> Post.return |> Option.return
-
-    | _ -> None
-
-  let eval _ _ _ _  = None
-
-  let ask _ _ _  = None
-
+    | _ -> evals
 end
 
 let () =
-  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+  register_reduction (module Reduction)

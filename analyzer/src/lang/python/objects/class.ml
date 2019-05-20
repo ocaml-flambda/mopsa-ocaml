@@ -22,6 +22,7 @@
 (** Handling of class definition and instantiation. *)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Ast
 open Addr
 open Universal.Ast
@@ -30,8 +31,9 @@ open Universal.Ast
 module Domain =
   struct
 
-    let name = "python.objects.class"
-    let debug fmt = Debug.debug ~channel:name fmt
+    include GenStatelessDomainId(struct
+        let name = "python.objects.class"
+      end)
 
     let interface = {
       iexec = {provides = [Zone.Z_py]; uses = []};
