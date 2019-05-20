@@ -61,7 +61,7 @@ struct
       (man:('a, unit) man)
       (flow:'a flow)
     : 'a flow * 'a flow option =
-    debug "eval formula@, %a@, in@, %a" pp_formula f (Flow.print man.lattice) flow;
+    debug "@[<v 2>eval formula %a@;in %a" pp_formula f (Flow.print man.lattice) flow;
     match f.content with
     | F_expr e ->
       man.exec (mk_assume e f.range) flow,
@@ -217,29 +217,6 @@ struct
 
     ftrue, ffalse
 
-  (* We need to compute a fixpoint of a formula evaluation *)
-  let eval_formula_fixpoint f ~negate man flow =
-    debug "eval formula fixpoint %a" pp_formula f;
-    let rec lfp (flow: 'a flow) (neg: 'a flow option) : 'a flow * 'a flow option =
-      debug "fixpoint iteration";
-      let flow1, neg1 = eval_formula f ~negate man flow in
-      let flow1' = Flow.meet man.lattice flow flow1 in
-      let neg1' = (Option.neutral2 (Flow.join man.lattice) neg neg1) in
-      debug "fixpoint iteration done:@\n input: @[%a@]@\n neg: @[%a@]@\n output: @[%a@]@\n neg': @[%a@]"
-        (Flow.print man.lattice) flow
-        (Option.print @@ Flow.print man.lattice) neg
-        (Flow.print man.lattice) flow1'
-        (Option.print @@ Flow.print man.lattice) neg1'
-      ;
-      if Flow.subset man.lattice flow flow1' then
-        flow1', neg1'
-      else
-        lfp flow1' neg1'
-    in
-    (* Unroll one time *)
-    let flow, neg = eval_formula f ~negate man flow in
-    lfp flow neg
-
 
 
   (** Initialize the parameters of the stubbed function *)
@@ -258,12 +235,12 @@ struct
 
   (** Evaluate the formula of the `assumes` section *)
   let exec_assumes assumes man flow =
-    let ftrue, _ = eval_formula_fixpoint assumes.content ~negate:false man flow in
+    let ftrue, _ = eval_formula assumes.content ~negate:false man flow in
     ftrue
 
   (** Evaluate the formula of the `requires` section and add the eventual alarms *)
   let exec_requires req man flow =
-    let ftrue, ffalse = eval_formula_fixpoint req.content ~negate:true man flow in
+    let ftrue, ffalse = eval_formula req.content ~negate:true man flow in
     match ffalse with
     | Some ffalse when Flow.is_bottom man.lattice ffalse ->
       ftrue
@@ -325,7 +302,7 @@ struct
           e.content
     in
     (* Evaluate ensure body and return flows that verify it *)
-    let ftrue, _ = eval_formula_fixpoint f ~negate:false man flow in
+    let ftrue, _ = eval_formula f ~negate:false man flow in
     ftrue
 
 

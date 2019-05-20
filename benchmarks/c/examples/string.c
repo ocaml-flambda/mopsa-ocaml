@@ -18,7 +18,7 @@ unsigned int strlen(unsigned char*s);
 
 void main() {
   unsigned char s[100];
-  unsigned int n = _mopsa_rand_int(0, 100 - 1), i;
+  unsigned int n = 99, i;
   for(i = 0; i < n; i ++) {
     s[i] = 'a';
   }
