@@ -278,7 +278,9 @@ struct
       man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow |>
       post_eval man @@ fun offset flow ->
 
-      assign_cases base offset rval (under_type p.etyp) range man flow
+      let post = assign_cases base offset rval (under_type p.etyp) range man flow in
+      debug "Post *%a = %a : %a" pp_expr p pp_expr rval  (Post.print man.lattice) post;
+      post
 
     | _ -> assert false
 

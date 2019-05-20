@@ -23,16 +23,19 @@
 
 open Ast.Expr
 open Id
+open Lattice
 open Flow
 open Eval
 
 
-type ('e, 'a) evals = ('e, 'a) eval option list
+(* Product evaluations *)
+type ('e, 'a) peval = ('e, 'a) eval option list
 
 (** Manager used by reduction rules *)
 type 'a man = {
-  get : 't. 't domain -> (expr, 'a) evals -> (expr, 'a) eval option;
-  set : 't. 't domain -> (expr, 'a) eval option -> (expr, 'a) evals -> (expr, 'a) evals;
+  lattice : 'a lattice;
+  get : 't. 't domain -> (expr, 'a) peval -> (expr, 'a) eval option;
+  set : 't. 't domain -> (expr, 'a) eval option -> (expr, 'a) peval -> (expr, 'a) peval;
 }
 
 
@@ -41,7 +44,7 @@ type 'a man = {
 module type REDUCTION =
 sig
   val name   : string
-  val reduce : expr -> 'a man -> (expr,'a) evals  -> (expr,'a) evals
+  val reduce : expr -> 'a man -> (expr,'a) peval  -> (expr,'a) peval
 end
 
 

@@ -210,7 +210,7 @@ let merge
   : 'a t option * 'b t option =
   List.fold_left (fun (acc1,acc2) conj1 ->
       List.fold_left (fun (acc1,acc2) conj2 ->
-          let dnf1', dnf2' =
+          let conj1', conj2' =
             List.fold_left (fun (acc1,acc2) a ->
                 List.fold_left (fun (acc1,acc2) b ->
                     let a', b' = f a b in
@@ -219,7 +219,21 @@ let merge
                   ) (acc1,acc2) conj2
               ) (None, None) conj1
           in
-          Option.neutral2 mk_or dnf1' acc1,
-          Option.neutral2 mk_or dnf2' acc2
+          Option.neutral2 mk_or conj1' acc1,
+          Option.neutral2 mk_or conj2' acc2
         ) (acc1,acc2) dnf2
     ) (None, None) dnf1
+
+
+let to_cnf (dnf:'a t) : 'a list list =
+  let rec aux : 'a t -> 'a list list = function
+    | [] -> [[]]
+    | conj :: tl ->
+      aux tl |>
+      List.fold_left (fun acc tl ->
+          List.fold_left (fun acc e ->
+              (e :: tl) :: acc
+            ) acc conj
+        ) []
+  in
+  aux dnf

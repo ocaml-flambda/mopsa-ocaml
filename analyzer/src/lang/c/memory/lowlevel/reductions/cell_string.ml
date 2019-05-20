@@ -38,19 +38,14 @@ struct
           man.get String_length.Domain.id evals
     with
     | Some evl1, Some evl2 ->
-      let evl1', evl2' = Eval.merge (fun e1 flow1 e2 flow2 ->
-          debug "reducing %a and %a" pp_expr e1 pp_expr e2;
+      let evl1', evl2' = Eval.merge (fun e1 e2 flow ->
           match ekind e1, ekind e2 with
           (* Keep string evaluation when it is constant 0 *)
-          | _, E_constant (C_int _) ->
-            debug "keeping string";
-            None, Some (Eval.singleton e2 flow2)
+          | _, E_constant (C_int _) -> None, Some (Eval.singleton e2 flow)
 
           (* Otherwise, keep cells *)
-          | _ ->
-            debug "keeping cells";
-            Some (Eval.singleton e1 flow1), None
-        ) evl1 evl2
+          | _ -> Some (Eval.singleton e1 flow), None
+        ) man.lattice evl1 evl2
       in
       man.set Cells.Domain.id evl1' evals |>
       man.set String_length.Domain.id evl2'

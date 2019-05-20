@@ -113,8 +113,9 @@ struct
 
       | _ -> Exceptions.panic ~loc:__LOC__ "merge: unsupported statement %a" pp_stmt stmt
     in
-    let acc = List.fold_left (fun acc stmt -> patch stmt a1 acc) a2 log1 in
-    List.fold_left (fun acc stmt -> patch stmt a2 acc) acc log2
+    let a2' = List.fold_left (fun acc stmt -> patch stmt a1 acc) a2 log1 in
+    let a1' = List.fold_left (fun acc stmt -> patch stmt a2 acc) a1 log2 in
+    meet a1' a2'
 
 
   let print fmt a =
