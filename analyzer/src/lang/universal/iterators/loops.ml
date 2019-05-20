@@ -101,7 +101,7 @@ struct
 
   module Lctx = Context.GenPolyKey(
     struct
-        type 'a t = 'a Rangemap.t
+        type 'a t = 'a flow Rangemap.t
         let print fmt ctx = Format.fprintf fmt "todo@\n"
 
       end
@@ -122,6 +122,23 @@ struct
   let init prog man flow =
     Flow.map_ctx (Context.init_poly Lctx.init) flow
 
+  let store_lfp man flow range  =
+    let old_lfp_ctx =
+      try Context.find_poly Lctx.key (Flow.get_ctx flow)
+      with Not_found -> Rangemap.empty in
+    let stripped_flow = flow in
+      (* Flow.add T_cur (Flow.get T_cur man.lattice flow) man.lattice (Flow.bottom (Flow.get_ctx flow)) |>
+       * Flow.add T_continue (Flow.get T_continue man.lattice flow) man.lattice |>
+       * Flow.add T_break (Flow.get T_break man.lattice flow) man.lattice  in *)
+    let lfp_ctx = Rangemap.add range stripped_flow old_lfp_ctx in
+    Flow.set_ctx (Context.add_poly Lctx.key lfp_ctx (Flow.get_ctx flow)) flow
+
+  let join_w_old_lfp man flow range =
+    match search_lctx range flow with
+    | None -> flow
+    | Some old_lfp -> Flow.join man.lattice old_lfp flow
+    (* flow *)
+
   let rec exec zone stmt (man:('a,unit) man) flow =
     match skind stmt with
     | S_while(cond, body) ->
@@ -132,10 +149,7 @@ struct
       in
 
       let flow_init, flow_out = unroll cond body man flow0 in
-
-      let flow_init = Option.apply flow_init (fun old_lfp ->
-          let old_flow = Flow.add T_cur old_lfp man.lattice (Flow.bottom (Flow.get_ctx flow_init)) in
-          Flow.join man.lattice old_flow flow_init) (search_lctx stmt.srange flow_init) in
+      let flow_init = join_w_old_lfp man flow_init stmt.srange in
 
       (* debug "post unroll:@\n abs0 = @[%a@]@\n abs out = @[%a@]"
        *   (Flow.print man.lattice) flow_init
@@ -143,11 +157,8 @@ struct
        * ; *)
 
       let flow_lfp = lfp 0 !opt_loop_widening_delay cond body man flow_init flow_init in
-      let old_lfpctx =
-        try Context.find_poly Lctx.key (Flow.get_ctx flow_lfp) with Not_found -> Rangemap.empty in
-      let lfpctx = Rangemap.add stmt.srange (Flow.get T_cur man.lattice flow_lfp) old_lfpctx in
-      let flow_lfp = Flow.set_ctx (Context.add_poly Lctx.key lfpctx (Flow.get_ctx flow_lfp)) flow_lfp in
 
+      let flow_lfp = store_lfp man flow_lfp stmt.srange in
       let res0 =
         man.exec (mk_assume (mk_not cond cond.erange) cond.erange) flow_lfp |>
         Flow.join man.lattice flow_out
