@@ -115,7 +115,9 @@ struct
       let mf = Rangemap.filter (fun range _ ->
         let srange = untag_range srange and range = untag_range range in
         match srange, range with
-        | R_orig (s1, e1), R_orig (s2, e2) -> s1.pos_file = s2.pos_file && abs (s1.pos_line - s2.pos_line) = 1
+        | R_orig (s1, e1), R_orig (s2, e2) ->
+          if s1.pos_file = s2.pos_file && 0 <= s2.pos_line - s1.pos_line && s2.pos_line - s1.pos_line <= 1 && s1.pos_column <> s2.pos_column then
+            (debug "range = %a %a@\n" pp_range srange pp_range range; true) else false
         | _ -> false
         ) m in
       Some (snd @@ Rangemap.choose mf)
@@ -138,7 +140,10 @@ struct
   let join_w_old_lfp man flow range =
     match search_lctx range flow with
     | None -> flow
-    | Some old_lfp -> Flow.join man.lattice old_lfp flow
+    | Some old_lfp ->
+      let res = Flow.join man.lattice old_lfp flow in
+      debug "cache: %a join %a = %a@\n" (Flow.print man.lattice) old_lfp (Flow.print man.lattice) flow (Flow.print man.lattice) res;
+      res
     (* flow *)
 
   let rec exec zone stmt (man:('a,unit) man) flow =
