@@ -42,19 +42,19 @@ type ('e, 'a) eval = ('e, 'a) case Dnf.t
 
 let empty = Dnf.mk_false
 
-let singleton (e: 'e) ?(cleaners=[]) (flow: 'a flow) : ('e, 'a) eval =
+
+let case e ?(cleaners=[]) (flow: 'a flow) : ('e, 'a) eval =
   Dnf.singleton {
-    eval_result = Some e;
+    eval_result = e;
     eval_flow = flow;
     eval_cleaners = cleaners
   }
 
+let singleton (e: 'e) ?(cleaners=[]) (flow: 'a flow) : ('e, 'a) eval =
+  case (Some e) ~cleaners flow
+
 let empty_singleton flow : ('e, 'a) eval  =
-  Dnf.singleton {
-    eval_result = None;
-    eval_flow = flow;
-    eval_cleaners = []
-  }
+  case None flow
 
 let iter (f: 'e -> 'a flow -> unit) (eval: ('e, 'a) eval) : unit =
   Dnf.iter (fun case ->
@@ -125,7 +125,7 @@ let choose_ctx eval =
 let copy_ctx src dst =
   set_ctx (choose_ctx src) dst
 
-let uniform_ctx evl =
+let normalize_ctx evl =
   let ctx =
     Dnf.fold
       (fun ctx case ->
@@ -141,7 +141,7 @@ let uniform_ctx evl =
 
 let join (eval1: ('e, 'a) eval) (eval2: ('e, 'a) eval) : ('e, 'a) eval =
   Dnf.mk_or eval1 eval2 |>
-  uniform_ctx
+  normalize_ctx
 
 let join_list ?(empty=empty) (l: ('e, 'a) eval list) : ('e, 'a) eval =
   match l with
@@ -150,7 +150,7 @@ let join_list ?(empty=empty) (l: ('e, 'a) eval list) : ('e, 'a) eval =
 
 let meet (eval1: ('e, 'a) eval) (eval2: ('e, 'a) eval) : ('e, 'a) eval =
   Dnf.mk_and eval1 eval2 |>
-  uniform_ctx
+  normalize_ctx
 
 let meet_list ?(empty=empty) (l: ('e, 'a) eval list) : ('e, 'a) eval =
   match l with
@@ -229,8 +229,10 @@ let eval_list feval l flow =
 let bind_some f evl =
   Some (bind f evl)
 
-let to_dnf (evl: ('e, 'a) eval) : ('e option * 'a flow) Dnf.t =
-  Dnf.map (fun case -> case.eval_result, case.eval_flow) evl
+let to_dnf (evl: ('e, 'a) eval) : ('e option * 'a flow * stmt list) Dnf.t =
+  Dnf.map (fun case ->
+      case.eval_result, case.eval_flow, case.eval_cleaners
+    ) evl
 
 let to_dnf_with_cleaners (evl: ('e, 'a) eval) : ('e option * 'a flow * stmt list) Dnf.t =
   Dnf.map (fun case -> case.eval_result, case.eval_flow, case.eval_cleaners) evl
@@ -240,14 +242,89 @@ let choose eval =
   | Some case -> Some (case.eval_result, case.eval_flow)
   | None -> None
 
-let merge f evl1 evl2 =
+let merge f lattice (evl1:('e,'a) eval) (evl2:('f,'a) eval) =
   Dnf.merge (fun case1 case2 ->
       match case1.eval_result, case2.eval_result with
       | Some e1, Some e2 ->
-        let evl1', evl2' = f e1 case1.eval_flow e2 case2.eval_flow in
-        let evl1'' = Option.lift (add_cleaners case1.eval_cleaners) evl1' in
-        let evl2'' = Option.lift (add_cleaners case2.eval_cleaners) evl2' in
-        evl1'', evl2''
+        let flow = Flow.meet lattice case1.eval_flow case2.eval_flow in
+        begin match f e1 e2 flow with
+          | Some r1, Some r2 ->
+            Some (add_cleaners case1.eval_cleaners r1),
+            Some (add_cleaners case2.eval_cleaners r2)
 
+          | Some r1, None ->
+            Some (add_cleaners (case1.eval_cleaners @ case2.eval_cleaners) r1),
+            None
+
+          | None, Some r2 ->
+            None,
+            Some (add_cleaners (case2.eval_cleaners @ case1.eval_cleaners) r2)
+
+          | None, None ->
+            None, None
+
+        end
       | _ -> Some (Dnf.singleton case1), Some (Dnf.singleton case2)
     ) evl1 evl2
+
+let rec simplify lattice compare evl =
+  let compare_case c1 c2 =
+    Compare.option compare c1.eval_result c2.eval_result
+  in
+
+  let rec simplify_conj conj =
+    match conj with
+    | [] -> conj
+    | [case] -> [case]
+    | case :: tl ->
+      (* Remove duplicates of case from tl *)
+      let case', tl' =
+        let rec aux = function
+          | [] -> case, []
+          | case' :: tl' ->
+            let case, tl'' = aux tl' in
+            match compare_case case case' with
+            | 0 ->
+              let case'' = {
+                eval_result = case.eval_result;
+                eval_flow = Flow.meet lattice case.eval_flow case'.eval_flow;
+                eval_cleaners = case.eval_cleaners @ case'.eval_cleaners
+              }
+              in
+              case'', tl''
+
+            | _ -> case, case' :: tl''
+        in
+        aux tl
+      in
+      case' :: simplify_conj tl'
+  in
+
+  let join_conj conj conj' =
+    List.combine conj conj' |>
+    List.map (fun (case, case') ->
+        {
+          eval_result = case.eval_result;
+          eval_flow = Flow.join lattice case.eval_flow case'.eval_flow;
+          eval_cleaners = case.eval_cleaners @ case'.eval_cleaners;
+        }
+      )
+  in
+
+  match evl with
+  | [] -> evl
+  | conj :: tl ->
+    let conj = simplify_conj conj in
+    (* Remove duplicates of conj' from tl *)
+    let conj', tl' =
+      let rec aux = function
+        | [] -> conj, []
+        | conj' :: tl' ->
+          let conj, tl'' = aux tl' in
+          match Compare.list compare_case conj conj' with
+          | 0 -> join_conj conj conj', tl''
+          | _ -> conj, conj' :: tl''
+      in
+      aux tl
+    in
+    conj' :: simplify lattice compare tl'

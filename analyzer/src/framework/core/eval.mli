@@ -28,6 +28,8 @@ type ('e, 'a) eval
 
 val empty : ('e, 'a) eval
 
+val case : 'e option -> ?cleaners:stmt list -> 'a flow -> ('e, 'a) eval
+
 val singleton : 'e -> ?cleaners:stmt list -> 'a flow -> ('e, 'a) eval
 
 val empty_singleton : 'a flow -> ('e, 'a) eval
@@ -70,17 +72,21 @@ val fold_apply :
   'b * 'c
 
 val merge :
-  ('e -> 'a flow -> 'f -> 'b flow -> ('e, 'a) eval option * ('f, 'b) eval option) ->
-  ('e, 'a) eval -> ('f, 'b) eval -> ('e, 'a) eval option * ('f, 'b) eval option
+  ('e -> 'f -> 'a flow -> ('e, 'a) eval option * ('f, 'a) eval option) ->
+  'a lattice ->
+  ('e, 'a) eval -> ('f, 'a) eval ->
+  ('e, 'a) eval option * ('f, 'a) eval option
 
 
 val choose : ('e, 'a) eval -> ('e option * 'a flow) option
 
-val to_dnf : ('e, 'a) eval -> ('e option * 'a flow) Dnf.t
+val to_dnf : ('e, 'a) eval -> ('e option * 'a flow * stmt list) Dnf.t
 
 val choose_ctx : ('e, 'a) eval -> 'a ctx
 
 val copy_ctx : ('e, 'a) eval -> ('e, 'a) eval -> ('e, 'a) eval
+
+val set_ctx : 'a ctx -> ('e, 'a) eval -> ('e, 'a) eval
 
 val bind : ('e -> 'a flow -> ('f, 'a) eval ) -> ('e, 'a) eval -> ('f, 'a) eval
 
@@ -91,3 +97,5 @@ val bind_some : ('e -> 'a flow -> ('f, 'a) eval ) -> ('e, 'a) eval -> ('f, 'a) e
 val eval_list : ('e -> 'a flow -> ('f, 'a) eval) -> 'e list -> 'a flow -> ('f list, 'a) eval
 
 val eval_list_opt : ('e -> 'a flow -> ('f, 'a) eval option) -> 'e list -> 'a flow -> ('f list, 'a) eval option
+
+val simplify : 'a lattice -> ('e -> 'e -> int) -> ('e,'a) eval -> ('e,'a) eval
