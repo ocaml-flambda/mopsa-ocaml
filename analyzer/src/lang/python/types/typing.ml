@@ -221,6 +221,8 @@ struct
           else
             Set.union s1 s2
         ) t1 t2
+
+    (* let widen _ = join *)
   end
 
   module TMap = Framework.Lattices.Partial_map.Make
@@ -283,8 +285,6 @@ struct
 
   let merge _ _ _ = assert false
 
-  let init progr man flow =
-    set_domain_env T_cur  TMap.empty man flow
 
   let class_le (c, b: class_address * py_object list) (d, b': class_address * py_object list) : bool =
     let res = List.exists (fun x -> match akind @@ fst x with
@@ -292,6 +292,50 @@ struct
         | _ -> false) b in
     debug "class_le %a %a = %b" pp_addr_kind (A_py_class (c, b)) pp_addr_kind (A_py_class (d, b')) res;
     res
+
+
+  let get_builtin bltin =
+    let obj = find_builtin bltin in
+    match kind_of_object obj with
+    | A_py_class (c, b) -> (c, b)
+    | _ -> assert false
+
+  let allocate_builtin man range flow bltin =
+    (* allocate addr, and map this addr to inst bltin *)
+    let range = tag_range range "alloc_%s" bltin in
+    let bltin_cls, bltin_mro = get_builtin bltin in
+    man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr (A_py_instance bltin) range) flow |>
+    Eval.bind (fun eaddr flow ->
+        let addr = match ekind eaddr with
+          | E_addr a -> a
+          | _ -> assert false in
+        let cur = get_domain_env T_cur man flow in
+        let bltin_inst = (Polytypeset.singleton (Instance {classn=Class (bltin_cls, bltin_mro); uattrs=StringMap.empty; oattrs=StringMap.empty})) in
+        let cur = TMap.add addr bltin_inst cur in
+        let flow = set_domain_env T_cur cur man flow in
+        (* Eval.singleton eaddr flow *)
+        Eval.singleton (mk_py_object (addr, None) range) flow
+      )
+
+  let bltin_inst bltin =
+    let cls, mro = get_builtin bltin in
+    Polytypeset.singleton (Instance {classn = Class (cls, mro); uattrs = StringMap.empty; oattrs = StringMap.empty})
+
+
+  let process_constant ?(value=None) man flow range bltin addr =
+    let cur = get_domain_env T_cur man flow in
+    let bltin_inst = bltin_inst bltin in
+    let cur = TMap.add addr bltin_inst cur in
+    let flow = set_domain_env T_cur cur man flow in
+    Eval.singleton (mk_py_object (addr, value) range) flow
+
+  let init progr man flow =
+    let tmap_init = List.fold_left (fun tmap static_addr ->
+        let inst = match static_addr.addr_kind with
+          | A_py_instance s -> bltin_inst s
+          | _ -> assert false in
+        TMap.add static_addr inst tmap) TMap.empty [addr_true; addr_false; addr_bool_top; addr_none; addr_notimplemented; addr_integers; addr_float] in
+    set_domain_env T_cur tmap_init man flow
 
   let exec zone stmt man flow =
     let range = stmt.srange in
@@ -393,37 +437,6 @@ struct
       end
 
     | _ -> None
-
-  let get_builtin bltin =
-    let obj = find_builtin bltin in
-    match kind_of_object obj with
-    | A_py_class (c, b) -> (c, b)
-    | _ -> assert false
-
-  let allocate_builtin man range flow bltin =
-    (* allocate addr, and map this addr to inst bltin *)
-    let range = tag_range range "alloc_%s" bltin in
-    let bltin_cls, bltin_mro = get_builtin bltin in
-    man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr (A_py_instance bltin) range) flow |>
-    Eval.bind (fun eaddr flow ->
-        let addr = match ekind eaddr with
-          | E_addr a -> a
-          | _ -> assert false in
-        let cur = get_domain_env T_cur man flow in
-        let bltin_inst = (Polytypeset.singleton (Instance {classn=Class (bltin_cls, bltin_mro); uattrs=StringMap.empty; oattrs=StringMap.empty})) in
-        let cur = TMap.add addr bltin_inst cur in
-        let flow = set_domain_env T_cur cur man flow in
-        (* Eval.singleton eaddr flow *)
-        Eval.singleton (mk_py_object (addr, None) range) flow
-      )
-
-  let process_constant ?(value=None) man flow range bltin addr =
-    let cur = get_domain_env T_cur man flow in
-    let cls, mro = get_builtin bltin in
-    let bltin_inst = Polytypeset.singleton (Instance {classn = Class (cls, mro); uattrs = StringMap.empty; oattrs = StringMap.empty}) in
-    let cur = TMap.add addr bltin_inst cur in
-    let flow = set_domain_env T_cur cur man flow in
-    Eval.singleton (mk_py_object (addr, value) range) flow
 
   let eval zs exp man flow =
     let range = erange exp in
