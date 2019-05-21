@@ -476,16 +476,16 @@ struct
 
        (* Merge post-conditions *)
        let f = fun (type a) (m:a smodule) (_,post) (man:('a,a,'s) man) acc ->
+         let module S = (val m) in
+         debug "Patching domain %s" S.name;
+         debug "post = %a" (Option.print (Post.print man.lattice)) post;
+         debug "acc = %a" (Option.print (Post.print man.lattice)) acc;
          Option.neutral2 (fun post acc ->
-             let module S = (val m) in
              (* Patch the accumulated post by:
                 a. putting the newly state of S
                 b. merging the sub-tree state
              *)
              Post.merge (fun tk (a,log) (a',log') ->
-                 (* a. Update the state of S *)
-                 let a' = man.set (man.get a) a' in
-                 debug "Domain %s" S.name;
                  debug "@[<v 2>merging token %a@, a = @[%a@]@, log = @[%a@]@, a' = @[%a@]@, log' = @[%a@]@]"
                    pp_token tk
                    man.lattice.print a
@@ -493,6 +493,9 @@ struct
                    man.lattice.print a'
                    Log.print log'
                  ;
+
+                 (* a. Update the state of S *)
+                 let a' = man.set (man.get a) a' in
 
 
                  (* b. Merge the sub-tree *)
@@ -510,7 +513,7 @@ struct
                      (man.get_sub a', slog')
                  in
 
-                 let aa = man.set_sub merged a in
+                 let aa = man.set_sub merged a' in
 
                  debug "merged@, a = %a@, a' = %a@, aa = %a"
                    man.lattice.print a
