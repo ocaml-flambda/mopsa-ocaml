@@ -63,6 +63,8 @@ let opt_loop_widening_delay : int ref = ref 0
 let opt_loop_unrolling : int ref = ref 1
 (** Number of unrolling iterations before joining the environments. *)
 
+let opt_loop_use_cache : bool ref = ref true
+
 let () =
   register_domain_option name {
     key = "-widening-delay";
@@ -77,6 +79,13 @@ let () =
     doc = " number of unrolling iterations before joining the environments";
     spec = ArgExt.Set_int opt_loop_unrolling;
     default = "1";
+  };
+  register_domain_option name {
+    key = "-loop-no-cache";
+    category = "Loops";
+    doc = " do not use cache for loops";
+    spec = ArgExt.Clear opt_loop_use_cache;
+    default = "use cache";
   }
 
 
@@ -97,86 +106,115 @@ struct
     ieval = { provides = []; uses = [] };
   }
 
-  module Rangemap = MapExt.Make(struct type t = range
-      let compare = compare_range
-      let print = pp_range end)
+  module Rangemap = MapExt.Make(
+    struct
+      type t = (range * Callstack.cs)
+      let compare (r1, cs1) (r2, cs2) =
+        Compare.compose
+          [(fun () -> compare_range r1 r2);
+           (fun () -> Callstack.compare cs1 cs2);
+          ]
+      let print fmt (r, cs) = Format.fprintf fmt "[%a, %a]" pp_range r Callstack.pp_call_stack cs end)
 
   module Lctx = Context.GenPolyKey(
     struct
         type 'a t = 'a flow Rangemap.t
-        let print fmt ctx = Format.fprintf fmt "todo@\n"
-
+        let print fmt ctx = Format.fprintf fmt "Lfp cache context: %a" (Format.pp_print_list (fun fmt ((r, _), _) -> pp_range fmt r)) (Rangemap.bindings ctx)
       end
     )
 
-  let search_lctx srange flow =
-    try
-      let m = Context.find_poly Lctx.key (Flow.get_ctx flow) in
-      let mf = Rangemap.filter (fun range _ ->
-        let srange = untag_range srange and range = untag_range range in
-        match srange, range with
-        | R_orig (s1, e1), R_orig (s2, e2) ->
-          if s1.pos_file = s2.pos_file && 0 <= s2.pos_line - s1.pos_line && s2.pos_line - s1.pos_line <= 1 && s1.pos_column <> s2.pos_column then
-            (debug "range = %a %a@\n" pp_range srange pp_range range; true) else false
-        | _ -> false
-        ) m in
-      Some (snd @@ Rangemap.choose mf)
-    with Not_found -> None
 
   let init prog man flow =
     Flow.map_ctx (Context.init_poly Lctx.init) flow
+
+  let search_lctx (srange, scs) flow =
+    try
+      let m = Context.find_poly Lctx.key (Flow.get_ctx flow) in
+      let mf = Rangemap.filter (fun (range, cs) _ ->
+          Callstack.compare cs scs = 0 &&
+          let srange = untag_range srange and range = untag_range range in
+          match srange, range with
+          | R_orig (s1, e1), R_orig (s2, e2) ->
+            s1.pos_file = s2.pos_file && 0 <= s2.pos_line - s1.pos_line && s2.pos_line - s1.pos_line <= 1
+          | _ -> false
+        ) m in
+      Some (snd @@ Rangemap.choose mf)
+    with Not_found ->
+      (debug "no ctx found";
+       None)
 
   let store_lfp man flow range  =
     let old_lfp_ctx =
       try Context.find_poly Lctx.key (Flow.get_ctx flow)
       with Not_found -> Rangemap.empty in
-    let stripped_flow = flow in
-      (* Flow.add T_cur (Flow.get T_cur man.lattice flow) man.lattice (Flow.bottom (Flow.get_ctx flow)) |>
-       * Flow.add T_continue (Flow.get T_continue man.lattice flow) man.lattice |>
-       * Flow.add T_break (Flow.get T_break man.lattice flow) man.lattice  in *)
+    let stripped_flow =
+      Flow.add T_cur (Flow.get T_cur man.lattice flow) man.lattice (Flow.bottom (Flow.get_ctx flow))
+      |>
+      Flow.add T_continue (Flow.get T_continue man.lattice flow) man.lattice |>
+      Flow.add T_break (Flow.get T_break man.lattice flow) man.lattice
+    in
     let lfp_ctx = Rangemap.add range stripped_flow old_lfp_ctx in
     Flow.set_ctx (Context.add_poly Lctx.key lfp_ctx (Flow.get_ctx flow)) flow
 
   let join_w_old_lfp man flow range =
+    debug "searching in cache";
     match search_lctx range flow with
-    | None -> flow
+    | None -> None
     | Some old_lfp ->
       let res = Flow.join man.lattice old_lfp flow in
-      debug "cache: %a join %a = %a@\n" (Flow.print man.lattice) old_lfp (Flow.print man.lattice) flow (Flow.print man.lattice) res;
-      res
+      (* debug "cache: %a join %a = %a@\n" (Flow.print man.lattice) old_lfp (Flow.print man.lattice) flow (Flow.print man.lattice) res; *)
+      Some res
     (* flow *)
 
   let rec exec zone stmt (man:('a,unit) man) flow =
     match skind stmt with
     | S_while(cond, body) ->
-      (* debug "while:@\n abs = @[%a@]" (Flow.print man.lattice) flow; *)
+      debug "while %a:" (* @\nflow = @[%a@] *) pp_range stmt.srange (* (Flow.print man.lattice) flow *);
 
       let flow0 = Flow.remove T_continue flow |>
                   Flow.remove T_break
       in
 
-      let flow_init, flow_out = unroll cond body man flow0 in
-      let flow_init = join_w_old_lfp man flow_init stmt.srange in
-
-      (* debug "post unroll:@\n abs0 = @[%a@]@\n abs out = @[%a@]"
+      let is_fp, flow_init, flow_out =
+        if !opt_loop_use_cache then
+          match join_w_old_lfp man flow0 (stmt.srange, Callstack.get flow0) with
+          | Some flow0 -> false, flow0, Flow.bottom (Flow.get_ctx flow0)
+          | None -> unroll cond body man flow0
+        else
+          unroll cond body man flow0 in
+      (* let flow0 = if !opt_loop_use_cache then join_w_old_lfp man flow0 stmt.srange else flow0 in
+       * let is_fp, flow_init, flow_out = unroll cond body man flow0 in *)
+      (* debug "post unroll %a (is_fp=%b):@\n flow_init = @[%a@]@\n flow_out = @[%a@]"
+       *   pp_range stmt.srange
+       *   is_fp
        *   (Flow.print man.lattice) flow_init
        *   (Flow.print man.lattice) flow_out
        * ; *)
 
-      let flow_lfp = lfp 0 !opt_loop_widening_delay cond body man flow_init flow_init in
+      let flow_lfp =
+        if is_fp then
+          flow_init
+        else
+        (* plutôt faire flow0 pour en dessous ? *)
 
-      let flow_lfp = store_lfp man flow_lfp stmt.srange in
+        let flow_lfp = lfp 0 !opt_loop_widening_delay cond body man flow_init flow_init in
+        let flow_lfp = if !opt_loop_use_cache then store_lfp man flow_lfp (stmt.srange, Callstack.get flow_lfp) else flow_lfp in
+        flow_lfp in
+
+      (* debug "flow_lfp %a" (Flow.print man.lattice) flow_lfp; *)
+
       let res0 =
         man.exec (mk_assume (mk_not cond cond.erange) cond.erange) flow_lfp |>
         Flow.join man.lattice flow_out
       in
+
+      debug "while post abs %a:" (* @\nres0 = @[%a@] *) pp_range stmt.srange (* (Flow.print man.lattice) res0 *);
 
       let res1 = Flow.add T_cur (Flow.get T_break man.lattice res0) man.lattice res0 |>
                  Flow.set T_break (Flow.get T_break man.lattice flow) man.lattice |>
                  Flow.set T_continue (Flow.get T_continue man.lattice flow) man.lattice
       in
 
-      (* debug "while post abs %a:@\n abs = @[%a@]" pp_range stmt.srange (Flow.print man.lattice) res1; *)
 
       Some (Post.return res1)
 
@@ -197,7 +235,7 @@ struct
     | _ -> None
 
   and lfp count delay cond body man flow_init flow =
-    debug "lfp called, range = %a, count = %d@\nflow = %a@\n" pp_range body.srange count (Flow.print man.lattice) flow;
+    debug "lfp called, range = %a, count = %d" (* @\n flow = %a@\n*) pp_range body.srange count (* (Flow.print man.lattice) flow *);
     let flow0 = Flow.remove T_continue flow |>
                 Flow.remove T_break
     in
@@ -218,26 +256,27 @@ struct
 
     (* debug "lfp join: %a@\n res = @[%a@]" pp_range body.srange (Flow.print man.lattice) flow3; *)
     let is_sub = Flow.subset man.lattice flow3 flow in
-    debug "lfp range %a is_sub: %b@\n" pp_range body.srange is_sub;
+    debug "lfp range %a is_sub: %b" pp_range body.srange is_sub;
     if is_sub then flow3
     else if delay = 0 then
       let wflow = Flow.widen man.lattice flow flow3 in
-      let () = debug
-          "widening: %a@\n abs =@\n@[  %a@]@\n abs' =@\n@[  %a@]@\n res =@\n@[  %a@]"
-          pp_range body.srange
-          (Flow.print man.lattice) flow
-          (Flow.print man.lattice) flow3
-          (Flow.print man.lattice) wflow
-      in
+      (* let () = debug
+       *     "widening: %a@\n abs =@\n@[  %a@]@\n abs' =@\n@[  %a@]@\n res =@\n@[  %a@]"
+       *     pp_range body.srange
+       *     (Flow.print man.lattice) flow
+       *     (Flow.print man.lattice) flow3
+       *     (Flow.print man.lattice) wflow
+       * in *)
       lfp (count+1) !opt_loop_widening_delay cond body man flow_init wflow
     else
       lfp (count+1) (delay - 1) cond body man flow_init flow3
 
   and unroll cond body man flow =
+    let flow_init = flow in
     let rec loop i flow =
       debug "unrolling iteration %d in %a" i pp_range (srange body);
       let annot = Flow.get_ctx flow in
-      if i = 0 then (flow, Flow.bottom annot)
+      if i = 0 then (false, flow, Flow.bottom annot)
       else
         let flow1 =
           man.exec {skind = S_assume cond; srange = cond.erange} flow |>
@@ -248,8 +287,17 @@ struct
         let flow2 =
           man.exec (mk_assume (mk_not cond cond.erange) cond.erange) (Flow.copy_ctx flow1 flow)
         in
-        let flow1', flow2' = loop (i - 1) (Flow.copy_ctx flow2 flow1) in
-        flow1', Flow.join man.lattice flow2 flow2'
+        (* it should be union of flow1s... *)
+        (* if Flow.subset man.lattice (Flow.join man.lattice flow_init flow1) flow then
+         *   let () = debug "lfp reached in unrolling!" in
+         *   true, flow1, flow2
+         * else *)
+        if Flow.subset man.lattice flow1 flow then
+          let () = debug "stabilisation reached in unrolling!" in
+          true, flow1, flow2
+        else
+          let flag, flow1', flow2' = loop (i - 1) (Flow.copy_ctx flow2 flow1) in
+          flag, flow1', Flow.join man.lattice flow2 flow2'
     in
     loop !opt_loop_unrolling flow
 
