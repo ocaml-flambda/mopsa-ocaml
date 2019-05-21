@@ -21,7 +21,9 @@
 
 (** Reduction rules for abstract evaluations *)
 
+open Ast.Stmt
 open Ast.Expr
+open Zone
 open Id
 open Lattice
 open Flow
@@ -36,6 +38,7 @@ type 'a man = {
   lattice : 'a lattice;
   get : 't. 't domain -> (expr, 'a) peval -> (expr, 'a) eval option;
   set : 't. 't domain -> (expr, 'a) eval option -> (expr, 'a) peval -> (expr, 'a) peval;
+  exec : ?zone:zone -> stmt -> 'a flow -> 'a flow;
 }
 
 

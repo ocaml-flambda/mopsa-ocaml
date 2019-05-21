@@ -24,7 +24,7 @@
 open Mopsa
 open Universal.Ast
 open Sig.Stacked.Eval_reduction
-
+open Zone
 
 module Reduction =
 struct
@@ -40,6 +40,14 @@ struct
     | Some evl1, Some evl2 ->
       let evl1', evl2' = Eval.merge (fun e1 flow1 e2 flow2 ->
           match ekind e1, ekind e2 with
+          (* Refine cell value *)
+          | E_var (v, _), E_constant (C_int _) ->
+            let flow2' = man.exec ~zone:Z_c_scalar (mk_assume (mk_binop e1 O_eq e2 exp.erange) exp.erange) flow2 in
+            if Flow.get T_cur man.lattice flow2' |> man.lattice.is_bottom then
+              None, None
+            else
+              None, Some (Eval.singleton e2 flow2')
+
           (* Keep string evaluation when it is constant 0 *)
           | _, E_constant (C_int _) -> None, Some (Eval.singleton e2 flow2)
 

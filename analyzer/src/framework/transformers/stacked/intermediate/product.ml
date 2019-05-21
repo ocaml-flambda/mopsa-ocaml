@@ -532,8 +532,9 @@ struct
   (** ************************ *)
 
   (** Manager used by evaluation reductions *)
-  let eman lattice : 'a E.man = E.{
-      lattice = lattice;
+  let eman (man:('a,t,'s) man) : 'a E.man = E.{
+      lattice = man.lattice;
+      exec = man.exec;
       get = (
         let f : type t. t domain -> (expr,'a) peval -> (expr,'a) eval option =
           fun id evals ->
@@ -579,7 +580,7 @@ struct
 
   (** Reduce evaluations using the registered rules *)
   let reduce_eval exp man pevl =
-    let eman = eman man.lattice in
+    let eman = eman man in
     List.fold_left (fun acc r ->
         let module R = (val r : E.REDUCTION) in
         R.reduce exp eman acc
