@@ -242,23 +242,22 @@ let choose eval =
   | Some case -> Some (case.eval_result, case.eval_flow)
   | None -> None
 
-let merge f lattice (evl1:('e,'a) eval) (evl2:('f,'a) eval) =
+let merge f (evl1:('e,'a) eval) (evl2:('f,'b) eval) =
   Dnf.merge (fun case1 case2 ->
       match case1.eval_result, case2.eval_result with
       | Some e1, Some e2 ->
-        let flow = Flow.meet lattice case1.eval_flow case2.eval_flow in
-        begin match f e1 e2 flow with
+        begin match f e1 case1.eval_flow e2 case2.eval_flow with
           | Some r1, Some r2 ->
             Some (add_cleaners case1.eval_cleaners r1),
             Some (add_cleaners case2.eval_cleaners r2)
 
           | Some r1, None ->
-            Some (add_cleaners (case1.eval_cleaners @ case2.eval_cleaners) r1),
+            Some (add_cleaners case1.eval_cleaners r1),
             None
 
           | None, Some r2 ->
             None,
-            Some (add_cleaners (case2.eval_cleaners @ case1.eval_cleaners) r2)
+            Some (add_cleaners case2.eval_cleaners r2)
 
           | None, None ->
             None, None
@@ -267,7 +266,9 @@ let merge f lattice (evl1:('e,'a) eval) (evl2:('f,'a) eval) =
       | _ -> Some (Dnf.singleton case1), Some (Dnf.singleton case2)
     ) evl1 evl2
 
+
 let rec simplify lattice compare evl =
+
   let compare_case c1 c2 =
     Compare.option compare c1.eval_result c2.eval_result
   in
@@ -315,7 +316,7 @@ let rec simplify lattice compare evl =
   | [] -> evl
   | conj :: tl ->
     let conj = simplify_conj conj in
-    (* Remove duplicates of conj' from tl *)
+    (* Remove duplicates of conj from tl *)
     let conj', tl' =
       let rec aux = function
         | [] -> conj, []
