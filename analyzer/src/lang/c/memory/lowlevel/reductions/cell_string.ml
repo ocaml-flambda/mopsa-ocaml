@@ -41,20 +41,26 @@ struct
       let evl1', evl2' = Eval.merge (fun e1 flow1 e2 flow2 ->
           match ekind e1, ekind e2 with
           (* Refine cell value *)
-          | E_var (v, _), E_constant (C_int _) ->
+          | E_var (v, _), _ ->
             let cond = mk_binop e1 O_eq e2 exp.erange in
             let flow1' = man.exec ~zone:Z_c_scalar (mk_assume cond exp.erange) flow1 in
             if Flow.get T_cur man.lattice flow1' |> man.lattice.is_bottom then
               None, None
             else
-              let flow2' = Flow.meet man.lattice flow1' flow2 in
-              None, Some (Eval.singleton e2 flow2')
+              let flow = Flow.meet man.lattice flow1' flow2 in
+              begin
+                match ekind e2 with
+                | E_constant (C_int _) ->
+                  None, Some (Eval.singleton e2 flow)
 
-          (* Keep string evaluation when it is constant 0 *)
-          | _, E_constant (C_int _) -> None, Some (Eval.singleton e2 flow2)
+                | _ ->
+                  Some (Eval.singleton e1 flow), None
+              end
 
-          (* Otherwise, keep cells *)
-          | _ -> Some (Eval.singleton e1 flow1), None
+
+          (* Otherwise, keep string evaluation *)
+          | _, _ -> None, Some (Eval.singleton e2 flow2)
+
         ) evl1 evl2
       in
       man.set Cells.Domain.id evl1' evals |>
