@@ -171,7 +171,11 @@ struct
   (* Create a counter variable for a va_list *)
   let mk_valc_var va_list range =
     let name = "$" ^ va_list.org_vname ^ "_counter" in
-    let v = mkv name (name ^ (string_of_int va_list.vuid)) va_list.vuid T_int in
+    let vuid = match vkind va_list with
+      | V_common v -> v
+      | V_c v -> v.var_uid
+      | _ -> assert false in
+    let v = mkv name (name ^ (string_of_int vuid)) (V_common vuid) T_int in
     mk_var v range
 
   (* Initialize a counter *)

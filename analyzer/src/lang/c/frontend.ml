@@ -213,7 +213,7 @@ and parse_stubs ctx () =
   if not !opt_without_libc then
     parse_file [] (Config.Paths.resolve_stub "c" "libc/libc.c") ctx
   ;
-  
+
   ()
 
 
@@ -450,8 +450,8 @@ and from_var ctx (v: C_AST.variable) : var =
       vkind = V_c {
           var_scope = from_var_scope ctx v.var_kind;
           var_range = from_range v.var_range;
+          var_uid = v.var_uid;
         };
-      vuid = v.var_uid;
       vtyp = from_typ ctx v.var_type;
     }
     in

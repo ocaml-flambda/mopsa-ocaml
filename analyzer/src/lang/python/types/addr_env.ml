@@ -54,7 +54,7 @@ struct
 end
 
 let mk_avar ?(vtyp = T_any) addr_uid =
-  mkfresh (fun uid -> "$addr@" ^ (string_of_int addr_uid), "$addr@" ^ (string_of_int addr_uid) ^ "_" ^ (string_of_int uid)) vtyp ()
+  mkfresh_common (fun uid -> "$addr@" ^ (string_of_int addr_uid), "$addr@" ^ (string_of_int addr_uid) ^ "_" ^ (string_of_int uid)) vtyp ()
 
 
 module Domain =
@@ -68,13 +68,13 @@ struct
         | PyAddr.Def _ -> false
         | _ -> true
 
-      let widen at bt =
-        Top.top_absorb2 (fun a b ->
-            if Set.cardinal b - Set.cardinal a = 1
-            && Set.exists undef b && Set.exists undef a then
-              Top.Nt (Set.union a b)
-            else
-              PS.widen at bt) at bt
+      let widen a b = join a b
+        (* Top.top_absorb2 (fun a b ->
+         *     if Set.cardinal b - Set.cardinal a = 1
+         *     && Set.exists undef b && Set.exists undef a then
+         *       Top.Nt (Set.union a b)
+         *     else
+         *       PS.widen annot at bt) at bt *)
     end)
 
   module AMap = Framework.Lattices.Partial_map.Make

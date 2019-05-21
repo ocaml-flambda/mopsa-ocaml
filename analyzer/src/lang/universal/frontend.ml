@@ -59,7 +59,7 @@ let from_var (v: string) (ext: U.extent) (var_ctx: var_context) =
   try
     let (id, typ) = MS.find v var_ctx in
     let uniq = v ^ (string_of_int id) in
-    mkv v uniq id typ
+    mkv v uniq (V_common id) typ
   with
   | Not_found ->
     Exceptions.panic_at ext

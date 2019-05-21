@@ -209,6 +209,7 @@ type c_var_init =
 type c_var = {
   var_scope: c_var_scope; (** life-time scope of the variable *)
   var_range: range; (** declaration range *)
+  var_uid: int;
 }
 
 type var_kind +=
@@ -389,7 +390,7 @@ let to_clang_float_type : c_float_type -> C_AST.float_type = function
   | C_double -> C_AST.DOUBLE
   | C_long_double -> C_AST.LONG_DOUBLE
 
-                   
+
     (* NOTE: this may cause issue with recutsive types
 
 let rec to_clang_type : typ -> C_AST.type_qual = function

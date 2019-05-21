@@ -88,7 +88,7 @@ struct
   (** ************************* *)
 
   (** Create a length variable. The returned variable is a
-      mathematical integer, not a C variable (it has type [T_int]) 
+      mathematical integer, not a C variable (it has type [T_int])
   *)
   let mk_length_var base range =
     let org_vname =
@@ -97,7 +97,7 @@ struct
     in
     let vuid = base_uid base in
     let uniq_vname = org_vname ^ ":" ^ (string_of_int vuid) in
-    let v = mkv org_vname uniq_vname vuid T_int in
+    let v = mkv org_vname uniq_vname (V_common vuid) T_int in
     mk_var v range
 
 

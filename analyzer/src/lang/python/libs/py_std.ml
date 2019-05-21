@@ -171,9 +171,9 @@ module Domain =
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "sum")}, _)}, [ els; start ], [])  ->
       (* let's desugar sum into tmp = 0; for x in els: tmp = tmp + x; tmp *)
-         let counter = mktmp () in
+         let counter = mkfresh_ranged (tag_range range "counter") ()  in
          let counter_var = mk_var counter range in
-         let target = mktmp () in
+         let target = mkfresh_ranged (tag_range range "target") () in
          let target_var = mk_var target range in
          let assign = mk_assign counter_var (mk_constant T_int (C_int (Z.of_int 0)) range) range in
          let pass = mk_block [] range in
@@ -195,11 +195,11 @@ module Domain =
           *        if target_var > maxi_var:
           *            maxi_var = target_var *)
         let comp_op = if s = "max" then O_gt else if s = "min" then O_lt else assert false in
-        let iter = mktmp () in
+        let iter = mkfresh_ranged (tag_range range "iter") () in
         let iter_var = mk_var iter range in
-        let maxi = mktmp () in
+        let maxi = mkfresh_ranged (tag_range range "extrema") () in
         let maxi_var = mk_var maxi range in
-        let target = mktmp () in
+        let target = mkfresh_ranged (tag_range range "target") () in
         let target_var = mk_var target range in
 
         let cleaners = List.map (fun x -> mk_remove_var x range) [iter; maxi; target] in
@@ -259,7 +259,7 @@ module Domain =
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "sorted")}, _)}, [obj], [])  ->
         (* todo: call list on obj first *)
-        let seq = mktmp () in
+        let seq = mkfresh_ranged (tag_range range "sorted") () in
         let flow = man.exec (mk_assign (mk_var seq range) obj range) flow in
         man.eval (Utils.mk_builtin_call "list.sort" [mk_var seq range] range) flow |>
         Eval.bind (fun _ flow ->

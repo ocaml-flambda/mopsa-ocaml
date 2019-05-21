@@ -86,7 +86,7 @@ struct
   let fresh_expanded_vars range d =
     let rec gen_aux pos acc =
       if pos < 0 then acc else
-        gen_aux (pos-1) ((mkfresh (fun uid ->
+        gen_aux (pos-1) ((mkfresh_common (fun uid ->
             let name = Format.asprintf "$t:%a:%d" pp_range range pos in
             name, name
           ) T_any ())::acc)
