@@ -58,14 +58,16 @@ let var_pp_chain = TypeExt.mk_print_chain (fun fmt v ->
 let register_var info =
   TypeExt.register info var_compare_chain var_pp_chain
 
-let compare_var v1 v2 =
-  Compare.compose [
-    (fun () -> TypeExt.compare var_compare_chain v1 v2);
-    (fun () -> compare v1.uniq_vname v2.uniq_vname);
-    (fun () -> compare_typ v1.vtyp v2.vtyp);
-  ]
-
 let pp_var fmt v = TypeExt.print var_pp_chain fmt v
+
+let compare_var v1 v2 =
+  let res = Compare.compose [
+    (fun () -> compare v1.uniq_vname v2.uniq_vname);
+    (fun () -> TypeExt.compare var_compare_chain v1 v2); (* FIXME: issue in bm_spectral_norm (ranged_var not found during dichotomy in var map) if this compare is above the compare on uniq_vnames... *)
+    (fun () -> compare_typ v1.vtyp v2.vtyp);
+  ] in
+  (* Format.printf "comparing %a and %a = %d@\n" pp_var v1 pp_var v2 res; *)
+  res
 
 
 module Var =
@@ -112,12 +114,13 @@ type var_kind +=
 
 let ranged_var_compare default v1 v2 =
   match vkind v1, vkind v2 with
-  | V_ranged_var r1, V_ranged_var r2 -> compare_range r1 r2
+  | V_ranged_var r1, V_ranged_var r2 ->
+    compare_range r1 r2
   | _ -> default v1 v2
 
 let ranged_var_print default fmt v =
   match vkind v with
-  | V_ranged_var r -> Format.fprintf fmt "ranged_var(%s, %a)" v.org_vname pp_range r
+  | V_ranged_var r -> Format.fprintf fmt "%s" v.uniq_vname
   | _ -> default fmt v
 
 let () = register_var TypeExt.{compare=ranged_var_compare; print=ranged_var_print}
