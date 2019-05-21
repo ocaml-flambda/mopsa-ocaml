@@ -42,10 +42,12 @@ struct
           match ekind e1, ekind e2 with
           (* Refine cell value *)
           | E_var (v, _), E_constant (C_int _) ->
-            let flow2' = man.exec ~zone:Z_c_scalar (mk_assume (mk_binop e1 O_eq e2 exp.erange) exp.erange) flow2 in
-            if Flow.get T_cur man.lattice flow2' |> man.lattice.is_bottom then
+            let cond = mk_binop e1 O_eq e2 exp.erange in
+            let flow1' = man.exec ~zone:Z_c_scalar (mk_assume cond exp.erange) flow1 in
+            if Flow.get T_cur man.lattice flow1' |> man.lattice.is_bottom then
               None, None
             else
+              let flow2' = Flow.meet man.lattice flow1' flow2 in
               None, Some (Eval.singleton e2 flow2')
 
           (* Keep string evaluation when it is constant 0 *)

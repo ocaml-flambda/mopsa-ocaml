@@ -487,7 +487,8 @@ struct
     | S_assume({ekind = E_binop(O_ne, lval, {ekind = E_constant(C_int n)})})
     | S_assume({ekind = E_unop(O_log_not, {ekind = E_binop(O_eq, lval, {ekind = E_constant(C_int n)})})})
       when is_expr_quantified lval &&
-           Z.equal n Z.zero
+           Z.equal n Z.zero &&
+           not (is_stub_primed lval)
       ->
       assume_quantified_zero O_ne lval stmt.srange man flow |>
       Option.return
@@ -496,7 +497,8 @@ struct
     | S_assume({ekind = E_binop(O_eq, lval, {ekind = E_constant(C_int n)})})
     | S_assume({ekind = E_unop(O_log_not, {ekind = E_binop(O_ne, lval, {ekind = E_constant(C_int n)})})})
       when is_expr_quantified lval &&
-           Z.equal n Z.zero
+           Z.equal n Z.zero &&
+           not (is_stub_primed lval)
       ->
       assume_quantified_zero O_eq lval stmt.srange man flow |>
       Option.return
