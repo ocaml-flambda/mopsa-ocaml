@@ -583,11 +583,11 @@ struct
 
     match ekind pt with
     | E_c_points_to P_null ->
-      raise_alarm Alarms.ANullDeref range ~bottom:true man.lattice flow |>
+      raise_alarm Alarms.ANullDeref p.erange ~bottom:true man.lattice flow |>
       Eval.empty_singleton
 
     | E_c_points_to P_invalid ->
-      raise_alarm Alarms.AInvalidDeref range ~bottom:true man.lattice flow |>
+      raise_alarm Alarms.AInvalidDeref p.erange ~bottom:true man.lattice flow |>
       Eval.empty_singleton
 
     | E_c_points_to (P_block (V v, offset)) when is_c_scalar_type v.vtyp ->
