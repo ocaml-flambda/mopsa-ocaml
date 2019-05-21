@@ -235,10 +235,21 @@ struct
 
   (** Create the offset variable of a pointer *)
   let mk_offset_var (p:var) : var =
-    mkfresh_common (fun uid ->
-        let vname = "offset(" ^ p.org_vname ^ ")" in
-        let uniq = vname ^ ":" ^ (string_of_int uid) in
-        vname, uniq) T_int ()
+    match vkind p with
+    | V_common uid ->
+      let vname = "offset(" ^ p.org_vname ^ ")" in
+      let uniq = vname ^ ":" ^ (string_of_int uid) in
+      mkv vname uniq (vkind p) T_int
+    | V_c { var_uid } ->
+      let vname = "offset(" ^ p.org_vname ^ ")" in
+      let uniq = vname ^ ":" ^ (string_of_int var_uid) in
+      mkv vname uniq (vkind p) T_int
+    | _ ->
+      Exceptions.panic "%a@\n" pp_var p
+      (* mkfresh_common (fun uid ->
+       *   let vname = "offset(" ^ p.org_vname ^ ")" in
+       *   let uniq = vname ^ ":" ^ (string_of_int uid) in
+       *   vname, uniq) T_int () *)
 
   let mk_offset_var_expr (p:var) range : expr =
     mk_var (mk_offset_var p) ~mode:STRONG range
