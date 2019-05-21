@@ -50,14 +50,15 @@ let return flow : 'a post =
     }
   ]
 
+let pp_case lattice fmt case =
+  let tmap' = TokenMap.map (fun tk (e,log) -> e) case.tmap in
+  TokenMap.print lattice fmt tmap'
+
 let print (lattice:'a lattice) fmt (post:'a post) : unit =
   let open Format in
   pp_print_list
     ~pp_sep:(fun fmt () -> fprintf fmt "@ ∨@ ")
-    (fun fmt case ->
-       let tmap' = TokenMap.map (fun tk (e,log) -> e) case.tmap in
-       TokenMap.print lattice fmt tmap'
-    )
+    (pp_case lattice)
     fmt post
 
 let print_log fmt (post:'a post) : unit =

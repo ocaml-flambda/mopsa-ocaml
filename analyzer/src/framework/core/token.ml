@@ -25,6 +25,8 @@ type token = ..
 
 type token += T_cur
 
+let debug fmt = Debug.debug ~channel:"framework.core.token" fmt
+
 let token_compare_chain = TypeExt.mk_compare_chain (fun tk1 tk2 ->
     match tk1, tk2 with
     | T_cur, T_cur -> 0

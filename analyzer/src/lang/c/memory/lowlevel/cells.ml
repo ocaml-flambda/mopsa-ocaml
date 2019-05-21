@@ -578,6 +578,7 @@ struct
                     then []
                     else
                       let region = Region (base, Itv.of_z o u) in
+                      debug "region [%a, %a]" Z.pp_print o Z.pp_print u;
                       let flow = man.exec ~zone:Z_u_num (mk_assume (mk_binop offset O_ge (mk_z o range) range) range) flow in
                       [Eval.singleton region flow]
                   else
@@ -685,6 +686,7 @@ struct
 
 
   let assign_region base itv range man flow =
+    debug "assign region %a%a" pp_base base Itv.print itv;
     remove_region_overlappings base itv range man flow
 
 
