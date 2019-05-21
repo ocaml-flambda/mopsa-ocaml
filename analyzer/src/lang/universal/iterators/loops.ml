@@ -162,7 +162,7 @@ struct
     | None -> None
     | Some old_lfp ->
       let res = Flow.join man.lattice old_lfp flow in
-      (* debug "cache: %a join %a = %a@\n" (Flow.print man.lattice) old_lfp (Flow.print man.lattice) flow (Flow.print man.lattice) res; *)
+      debug "cache: %a join %a = %a@\n" (Flow.print man.lattice) old_lfp (Flow.print man.lattice) flow (Flow.print man.lattice) res;
       Some res
     (* flow *)
 
@@ -272,7 +272,6 @@ struct
       lfp (count+1) (delay - 1) cond body man flow_init flow3
 
   and unroll cond body man flow =
-    let flow_init = flow in
     let rec loop i flow =
       debug "unrolling iteration %d in %a" i pp_range (srange body);
       let annot = Flow.get_ctx flow in

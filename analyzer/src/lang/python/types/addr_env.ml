@@ -168,14 +168,18 @@ struct
                                                  || String.sub v.org_vname 0 3 = "$t:"))
            || (String.length v.org_vname >= 5 && (String.sub v.org_vname 0 5 = "$d_k*" ||
                                                   String.sub v.org_vname 0 5 = "$d_v*"))
-                                                 then
+      then
         Post.return flow |> Option.return
       else
-        (* if the variable maps to a list, we should remove the temporary variable associated, ONLY if it's not used by another list *)
-        man.exec (mk_assign var (mk_expr (E_py_undefined true) range) range) flow |> Post.return |> Option.return
-      (* let v' = mk_py_value_var v T_any in
-       * man.exec (mk_remove_var v' range) flow |> Post.return *)
-      (* Post.return flow *)
+        (match vkind v with
+        | V_common _ ->
+          (* if the variable maps to a list, we should remove the temporary variable associated, ONLY if it's not used by another list *)
+          man.exec (mk_assign var (mk_expr (E_py_undefined true) range) range) flow |> Post.return |> Option.return
+        (* let v' = mk_py_value_var v T_any in
+         * man.exec (mk_remove_var v' range) flow |> Post.return *)
+        (* Post.return flow *)
+
+        | _ -> Post.return flow |> Option.return)
 
     | S_assume e ->
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
