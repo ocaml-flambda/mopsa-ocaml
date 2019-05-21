@@ -88,7 +88,7 @@ struct
   (** ************************* *)
 
   (** Create a length variable. The returned variable is a
-      mathematical integer, not a C variable (it has type [T_int]) 
+      mathematical integer, not a C variable (it has type [T_int])
   *)
   let mk_length_var base range =
     let org_vname =
@@ -278,7 +278,9 @@ struct
       man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow |>
       post_eval man @@ fun offset flow ->
 
-      assign_cases base offset rval (under_type p.etyp) range man flow
+      let post = assign_cases base offset rval (under_type p.etyp) range man flow in
+      debug "Post *%a = %a : %a" pp_expr p pp_expr rval  (Post.print man.lattice) post;
+      post
 
     | _ -> assert false
 
@@ -415,7 +417,8 @@ struct
         match ekind e with
         | E_c_deref p -> p
         | E_c_cast(ee, _) -> find_pointer ee
-        | _ -> assert false
+        | E_stub_primed _ -> panic_at range "primed expressions not supported";
+        | _ -> panic_at range "find_pointer: invalid argument " pp_expr e;
       in
       find_pointer lval
     in
@@ -484,7 +487,8 @@ struct
     | S_assume({ekind = E_binop(O_ne, lval, {ekind = E_constant(C_int n)})})
     | S_assume({ekind = E_unop(O_log_not, {ekind = E_binop(O_eq, lval, {ekind = E_constant(C_int n)})})})
       when is_expr_quantified lval &&
-           Z.equal n Z.zero
+           Z.equal n Z.zero &&
+           not (is_stub_primed lval)
       ->
       assume_quantified_zero O_ne lval stmt.srange man flow |>
       Option.return
@@ -493,7 +497,8 @@ struct
     | S_assume({ekind = E_binop(O_eq, lval, {ekind = E_constant(C_int n)})})
     | S_assume({ekind = E_unop(O_log_not, {ekind = E_binop(O_ne, lval, {ekind = E_constant(C_int n)})})})
       when is_expr_quantified lval &&
-           Z.equal n Z.zero
+           Z.equal n Z.zero &&
+           not (is_stub_primed lval)
       ->
       assume_quantified_zero O_eq lval stmt.srange man flow |>
       Option.return
@@ -507,8 +512,6 @@ struct
 
   (** Cases of the abstraction evaluations *)
   let eval_deref_cases base offset typ range man flow =
-    let length = mk_length_var base range in
-
     eval_base_size base range man flow |>
     Eval.bind @@ fun size flow ->
 
@@ -522,11 +525,14 @@ struct
     (* Check that offset ∈ [0, size - elm_size] *)
     assume_eval (mk_in offset (mk_zero range) (sub size (mk_z elm_size range) range) range)
       ~fthen:(fun flow ->
-          if Z.gt elm_size Z.one
-          then
+          match Z.gt elm_size Z.one, base with
+          (* Multi-byte scalars and string litterals are not handled here *)
+          | true, _ | _, S _ ->
             let l,u = rangeof typ in
             Eval.singleton (mk_z_interval l u ~typ range) flow
-          else
+
+          | _ ->
+            let length = mk_length_var base range in
             switch_eval [
               (* before case *)
               (* Offset condition: offset ∈ [0, length[ *)
@@ -581,11 +587,11 @@ struct
 
     match ekind pt with
     | E_c_points_to P_null ->
-      raise_alarm Alarms.ANullDeref range ~bottom:true man.lattice flow |>
+      raise_alarm Alarms.ANullDeref p.erange ~bottom:true man.lattice flow |>
       Eval.empty_singleton
 
     | E_c_points_to P_invalid ->
-      raise_alarm Alarms.AInvalidDeref range ~bottom:true man.lattice flow |>
+      raise_alarm Alarms.AInvalidDeref p.erange ~bottom:true man.lattice flow |>
       Eval.empty_singleton
 
     | E_c_points_to (P_block (V v, offset)) when is_c_scalar_type v.vtyp ->

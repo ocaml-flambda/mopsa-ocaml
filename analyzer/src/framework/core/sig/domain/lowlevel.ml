@@ -272,21 +272,31 @@ let switch
     ?(zone = any_zone)
     man flow
   : 'b  =
-  match cases with
-  | [] -> assert false
+  let rec one (cond : (expr * bool) list) acc t =
+    match cond with
+    | [] -> Some (t acc)
+    | (x,b) :: tl ->
+      let s =
+        if b then (mk_assume x x.erange)
+        else (mk_assume (mk_not x x.erange) x.erange)
+      in
+      let acc' = man.exec ~zone s acc in
+      if Flow.get T_cur man.lattice acc' |> man.lattice.is_bottom then
+        None
+      else
+        one tl acc' t
+  in
+  let rec aux cases =
+    match cases with
+    | [] -> None
 
-  | (cond, t) :: q ->
-    let one (cond : (expr * bool) list) t =
-      List.fold_left (fun acc (x, b) ->
-          let s =
-            if b then (mk_assume x x.erange)
-            else (mk_assume (mk_not x x.erange) x.erange)
-          in
-          man.exec ~zone s acc
-        ) flow cond
-      |> t
-    in
-    List.fold_left (fun acc (cond, t) -> join (one cond t) acc) (one cond t) q
+    | (cond, t) :: q ->
+      Option.neutral2 join (one cond flow t) (aux q)
+  in
+  match aux cases with
+  | None -> assert false
+
+  | Some x -> x
 
 let switch_eval = switch ~join:Eval.join
 

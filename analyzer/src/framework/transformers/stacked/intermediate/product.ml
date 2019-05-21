@@ -445,34 +445,47 @@ struct
        (* Compute the list of post-conditions by pointwise application.
           Most recent context is propagated through applications *)
        let f = fun (type a) (m:a smodule) covered (man:('a,a,'s) man) (acc,ctx) ->
+         let module S = (val m) in
          if not covered then
-           (None :: acc, ctx)
+           (S.name, None) :: acc, ctx
          else
-           let module S = (val m) in
            let flow' = Flow.set_ctx ctx flow in
-           debug "%s turn" S.name;
+           debug "exec %a in domain %s" pp_stmt stmt S.name;
            match S.exec zone stmt man flow' with
-           | None -> (None :: acc, ctx)
+           | None -> (S.name, None) :: acc, ctx
            | Some post ->
              let ctx' = Post.choose_ctx post in
-             (Some post :: acc, ctx')
+             (S.name, Some post) :: acc, ctx'
        in
 
        let pointwise_posts, ctx = man_fold_combined { f } Spec.pool coverage man ([], Flow.get_ctx flow) in
-       let pointwise_posts = List.rev pointwise_posts in
+       let pointwise_posts = List.rev pointwise_posts |>
+                             List.map (fun (name, post) -> (name, post |> Option.lift (Post.set_ctx ctx)))
+       in
+
+       debug "@[<v 2>pointwise posts:@,%a"
+         (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,")
+            (fun fmt (name, post) ->
+               Format.fprintf fmt "%s: %a"
+                 name
+                 (Option.print (Post.print man.lattice)) post
+            )
+         )
+         pointwise_posts
+       ;
 
        (* Merge post-conditions *)
-       let f = fun (type a) (m:a smodule) post (man:('a,a,'s) man) acc ->
+       let f = fun (type a) (m:a smodule) (_,post) (man:('a,a,'s) man) acc ->
+         let module S = (val m) in
+         debug "Patching domain %s" S.name;
+         debug "post = %a" (Option.print (Post.print man.lattice)) post;
+         debug "acc = %a" (Option.print (Post.print man.lattice)) acc;
          Option.neutral2 (fun post acc ->
-             let module S = (val m) in
              (* Patch the accumulated post by:
                 a. putting the newly state of S
                 b. merging the sub-tree state
              *)
              Post.merge (fun tk (a,log) (a',log') ->
-                 (* a. Update the state of S *)
-                 let a' = man.set (man.get a) a' in
-
                  debug "@[<v 2>merging token %a@, a = @[%a@]@, log = @[%a@]@, a' = @[%a@]@, log' = @[%a@]@]"
                    pp_token tk
                    man.lattice.print a
@@ -480,6 +493,9 @@ struct
                    man.lattice.print a'
                    Log.print log'
                  ;
+
+                 (* a. Update the state of S *)
+                 let a' = man.set (man.get a) a' in
 
 
                  (* b. Merge the sub-tree *)
@@ -497,9 +513,13 @@ struct
                      (man.get_sub a', slog')
                  in
 
-                 let aa = man.set_sub merged a in
+                 let aa = man.set_sub merged a' in
 
-                 debug "merged@, a = %a@, a' = %a@, aa = %a" man.lattice.print a man.lattice.print a' man.lattice.print aa;
+                 debug "merged@, a = %a@, a' = %a@, aa = %a"
+                   man.lattice.print a
+                   man.lattice.print a'
+                   man.lattice.print aa
+                 ;
                  aa, man.set_sub_log (Log.concat slog slog') log'
                ) post acc
            ) post acc
@@ -512,14 +532,16 @@ struct
   (** ************************ *)
 
   (** Manager used by evaluation reductions *)
-  let eman : 'a E.man = E.{
+  let eman (man:('a,t,'s) man) : 'a E.man = E.{
+      lattice = man.lattice;
+      exec = man.exec;
       get = (
-        let f : type t. t domain -> (expr,'a) evals -> (expr,'a) eval option =
+        let f : type t. t domain -> (expr,'a) peval -> (expr,'a) eval option =
           fun id evals ->
-            let rec aux : type t tt. t domain -> tt slist -> (expr,'a) evals -> (expr,'a) eval option =
+            let rec aux : type t tt. t domain -> tt slist -> (expr,'a) peval -> (expr,'a) eval option =
               fun id l e ->
                 match l, e with
-                | Nil, [] -> raise Not_found
+                | Nil, [] -> None
                 | Cons(hd,tl), (hde::tle) ->
                   begin
                     let module D = (val hd) in
@@ -534,9 +556,9 @@ struct
         f
       );
       set = (
-        let f : type t. t domain -> (expr,'a) eval option -> (expr,'a) evals -> (expr,'a) evals =
+        let f : type t. t domain -> (expr,'a) eval option -> (expr,'a) peval -> (expr,'a) peval =
           fun id evl evals ->
-            let rec aux : type t tt. t domain -> tt slist -> (expr,'a) evals -> (expr,'a) evals =
+            let rec aux : type t tt. t domain -> tt slist -> (expr,'a) peval -> (expr,'a) peval =
               fun id l e ->
                 match l, e with
                 | Nil, [] -> raise Not_found
@@ -557,11 +579,12 @@ struct
 
 
   (** Reduce evaluations using the registered rules *)
-  let reduce_eval exp pointwise_evl =
+  let reduce_eval exp man pevl =
+    let eman = eman man in
     List.fold_left (fun acc r ->
         let module R = (val r : E.REDUCTION) in
         R.reduce exp eman acc
-      ) pointwise_evl Spec.erules
+      ) pevl Spec.erules
 
 
   (** Entry point of abstract evaluations *)
@@ -582,26 +605,64 @@ struct
           Most recent context is propagated through applications.
        *)
        let f = fun (type a) (m:a smodule) covered (man:('a,a,'s) man) (acc,ctx) ->
+         let module S = (val m) in
          if not covered then
-           None :: acc, ctx
+           (S.name, None) :: acc, ctx
          else
-           let module S = (val m) in
            let flow' = Flow.set_ctx ctx flow in
+           debug "eval %a in domain %s" pp_expr exp S.name;
            match S.eval zone exp man flow' with
-           | None -> None :: acc, ctx
+           | None -> (S.name, None) :: acc, ctx
            | Some evl ->
              let ctx' = Eval.choose_ctx evl in
-             Some evl :: acc, ctx'
+             (S.name, Some evl) :: acc, ctx'
        in
 
        let pointwise_evl, ctx = man_fold_combined { f } Spec.pool coverage man ([], Flow.get_ctx flow) in
-       let pointwise_evl = List.rev pointwise_evl in
+       let pointwise_evl = List.rev pointwise_evl |>
+                           List.map (fun (name, evl) -> (name, evl |> Option.lift (Eval.set_ctx ctx)))
+       in
 
-       (* Apply reductions *)
-       let pointwise_evl' = reduce_eval exp pointwise_evl in
+       debug "@[<v 2>pointwise evaluations:@,%a@]"
+         (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,")
+            (fun fmt (name, evl) ->
+               Format.fprintf fmt "%s: %a"
+                 name
+                 (Option.print (Eval.print ~pp:pp_expr)) evl
+            )
+         )
+         pointwise_evl
+       ;
+
+       let pointwise_evl = List.map snd pointwise_evl in
+
+       (* Turn the point-wise evaluations into a dnf of singleton point-wise evaluations *)
+       let dnf : (expr, 'a) E.peval Dnf.t =
+         let rec aux = function
+           | [] -> Dnf.singleton []
+
+           | None :: tl ->
+             aux tl |>
+             Dnf.map (fun after -> None :: after)
+
+           | Some evl :: tl ->
+             let dnf = Eval.to_dnf evl in
+             aux tl |>
+             Dnf.bind (fun after ->
+                 Dnf.map (fun (e,flow,cleaners) ->
+                     Some (Eval.case e flow ~cleaners) :: after
+                   ) dnf
+               )
+         in
+         aux pointwise_evl
+       in
+
+
+       (* Reduce each pointwise evaluation *)
+       let reduced_dnf = Dnf.map (reduce_eval exp man) dnf in
 
        (* Meet evaluations *)
-       let rec aux = function
+       let rec aux : ('e,'a) E.peval -> ('e,'a) eval option = function
          | [] -> None
          | None :: tl -> aux tl
          | Some evl :: tl ->
@@ -610,7 +671,11 @@ struct
            | Some evl' ->
              Some (Eval.meet evl evl')
        in
-       aux pointwise_evl'
+       let ret = Dnf.apply aux (Option.neutral2 Eval.join) (Option.neutral2 Eval.meet) reduced_dnf |>
+                 Option.lift (Eval.simplify man.lattice compare_expr)
+       in
+       debug "reduced evaluations: %a" (Option.print (Eval.print ~pp:pp_expr)) ret;
+       ret
     )
 
 

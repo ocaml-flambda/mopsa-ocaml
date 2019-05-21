@@ -285,11 +285,13 @@ struct
       declare v init stmt.srange man flow |>
       Option.return
 
-    | S_assign(lval, e) when is_c_scalar_type lval.etyp ->
+    | S_assign(lval, e)
+    | S_expression { ekind = E_c_assign (lval, e) } when is_c_scalar_type lval.etyp ->
       assign_scalar lval e stmt.srange man flow |>
       Option.return
 
-    | S_assign(lval, e) when is_c_record_type lval.etyp ->
+    | S_assign(lval, e)
+    | S_expression { ekind = E_c_assign (lval, e) } when is_c_record_type lval.etyp ->
       assign_record lval e stmt.srange man flow |>
       Option.return
 
@@ -447,7 +449,10 @@ struct
       man.eval rval ~zone:(Z_c, Z_c_low_level) flow |>
       Eval.bind_some @@ fun rval flow ->
 
-      let flow = man.exec (mk_assign lval rval exp.erange) flow in
+      man.eval lval ~zone:(Z_c, Z_c_low_level) flow |>
+      Eval.bind @@ fun lval flow ->
+
+      let flow = man.exec ~zone:Z_c_low_level (mk_assign lval rval exp.erange) flow in
       Eval.singleton rval flow
 
     | E_c_statement {skind = S_block l} ->

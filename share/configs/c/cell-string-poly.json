@@ -39,6 +39,9 @@
                             "product": [
                                 "c.memory.lowlevel.cells",
                                 "c.memory.lowlevel.string_length"
+                            ],
+                            "reductions": [
+                                "c.memory.lowlevel.reductions.cell_string_length"
                             ]
                         },
                         {

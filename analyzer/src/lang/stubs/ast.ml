@@ -241,6 +241,16 @@ let mk_stub_rename_primed t offsets range =
   mk_stmt (S_stub_rename_primed (t, offsets)) range
 
 
+let is_stub_primed e =
+  fold_expr
+    (fun acc ee ->
+       match ekind ee with
+       | E_stub_primed _ -> Keep true
+       | _ -> VisitParts acc
+    )
+    (fun acc stmt -> VisitParts acc)
+    false e
+
 (** Visit expressions present in a formula *)
 let rec visit_expr_in_formula visitor f =
   bind_range f @@ fun f ->

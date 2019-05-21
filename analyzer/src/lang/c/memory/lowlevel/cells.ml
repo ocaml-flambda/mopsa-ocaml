@@ -492,11 +492,11 @@ struct
       Eval.singleton Top flow
 
     | E_c_points_to P_null ->
-      let flow = raise_alarm Alarms.ANullDeref range ~bottom:true man.lattice flow in
+      let flow = raise_alarm Alarms.ANullDeref p.erange ~bottom:true man.lattice flow in
       Eval.empty_singleton flow
 
     | E_c_points_to P_invalid ->
-      let flow = raise_alarm Alarms.AInvalidDeref range ~bottom:true man.lattice flow in
+      let flow = raise_alarm Alarms.AInvalidDeref p.erange ~bottom:true man.lattice flow in
       Eval.empty_singleton flow
 
     | E_c_points_to (P_fun f) ->
@@ -578,6 +578,7 @@ struct
                     then []
                     else
                       let region = Region (base, Itv.of_z o u) in
+                      debug "region [%a, %a]" Z.pp_print o Z.pp_print u;
                       let flow = man.exec ~zone:Z_u_num (mk_assume (mk_binop offset O_ge (mk_z o range) range) range) flow in
                       [Eval.singleton region flow]
                   else
@@ -627,12 +628,12 @@ struct
       else
         begin
           match phi c a (Flow.get_unit_ctx flow) range with
-        | Some (e, ctx) ->
-          let flow' = Flow.set_unit_ctx ctx flow in
-          let stmt = mk_assume (mk_binop (mk_var v range) O_eq e ~etyp:u8 range) range in
-          man.exec_sub ~zone:Z_c_scalar stmt flow'
+          | Some (e, ctx) ->
+            let flow' = Flow.set_unit_ctx ctx flow in
+            let stmt = mk_assume (mk_binop (mk_var v range) O_eq e ~etyp:u8 range) range in
+            man.exec_sub ~zone:Z_c_scalar stmt flow'
 
-        | None -> Post.return flow
+          | None -> Post.return flow
         end
         |>
         Post.bind @@ fun flow ->
@@ -685,6 +686,7 @@ struct
 
 
   let assign_region base itv range man flow =
+    debug "assign region %a%a" pp_base base Itv.print itv;
     remove_region_overlappings base itv range man flow
 
 
