@@ -268,7 +268,7 @@ struct
       let name = Format.flush_str_formatter () in
       let v =
         match c.base with
-        | V { vkind = V_c { var_uid } as vc } ->
+        | V { vkind = V_c { var_uid; var_scope } as vc } ->
           mkv name (name ^ ":" ^ (string_of_int var_uid)) vc c.typ
         | _ ->
           mkfresh_common (fun uid ->
