@@ -56,7 +56,7 @@ and from_var (v:Py_parser.Ast.var) =
    *     Exceptions.panic "%d is already %s, conflict with current %s@\n" v.uid (Hashtbl.find tmp v.uid) v.name
    *   else
    *     Hashtbl.add tmp v.uid v.name in *)
-  mkv v.name (v.name ^ ":" ^ (string_of_int v.uid)) v.uid T_any
+  mkv v.name (v.name ^ ":" ^ (string_of_int v.uid)) (V_common v.uid) T_any
 
 (** Translate a Python program into a stmt *)
 and from_program filename (p: Py_parser.Ast.program) : prog_kind =

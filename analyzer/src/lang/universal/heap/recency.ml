@@ -53,7 +53,11 @@ struct
     end)
 
 
-  let widen ctx = join
+  let widen ctx a b =
+    let res = join a b in
+    (* le soucis c'est que le widening peut pas appeler un rename global ce qui va pas être très modulaire, non ? *)
+    debug "widen@\n@[%a@\n%a@\n= %a@]@\nlastb = %a@\n" print a print b print res pp_addr (Top.top_to_exn b |> Set.max_elt);
+    res
 
   (** Zoning definition *)
   (** ================= *)

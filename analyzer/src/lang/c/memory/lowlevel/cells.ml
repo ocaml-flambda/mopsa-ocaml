@@ -266,13 +266,14 @@ struct
           (fun fmt () -> if c.primed then Format.pp_print_string fmt "'" else ()) ()
       in
       let name = Format.flush_str_formatter () in
-      let vkind = match c.base with
-        | V { vkind } -> vkind
-        | _ -> V_common
-      in
-      let v = mkfresh (fun uid ->
-          name, name ^ ":" ^ (string_of_int uid)
-        ) c.typ ~vkind ()
+      let v =
+        match c.base with
+        | V { vkind = V_c { var_uid; var_scope } as vc } ->
+          mkv name (name ^ ":" ^ (string_of_int var_uid)) vc c.typ
+        | _ ->
+          mkfresh_common (fun uid ->
+              name, name ^ ":" ^ (string_of_int uid)
+            ) c.typ ()
       in
       v, set_ctx (CellEquiv.add (c,v) bindings) ctx
 

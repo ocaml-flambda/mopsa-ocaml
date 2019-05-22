@@ -69,7 +69,7 @@ struct
       Format.flush_str_formatter ()
     in
     let uniq =  vname ^ ":" ^ (string_of_int addr.addr_uid) in
-    mkv vname uniq (addr.addr_uid) (T_c_integer C_unsigned_long)
+    mkv vname uniq (V_common (addr.addr_uid)) (T_c_integer C_unsigned_long)
 
   let mk_size addr range =
     let bytes = mk_bytes_var addr in

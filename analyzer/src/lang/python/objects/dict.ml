@@ -101,8 +101,8 @@ struct
     K.key
 
   let fresh_smashed_vars () =
-    let k = mkfresh (fun uid -> "$d_k*", "$d_k*" ^ (string_of_int uid)) T_any () in
-    let v = mkfresh (fun uid -> "$d_v*", "$d_v*" ^ (string_of_int uid)) T_any () in
+    let k = mkfresh_common (fun uid -> "$d_k*", "$d_k*" ^ (string_of_int uid)) T_any () in
+    let v = mkfresh_common (fun uid -> "$d_v*", "$d_v*" ^ (string_of_int uid)) T_any () in
     k, v
 
   let get_vars_equiv (info: DictInfo.t) (e: Equiv.t) =

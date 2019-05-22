@@ -191,6 +191,15 @@ type c_var_scope =
   | Variable_func_static of c_fundec (** restricted to a function *)
 
 
+let pp_scope fmt s =
+  Format.fprintf fmt "%s" (match s with
+  | Variable_global -> "variable_global"
+  | Variable_extern -> "extern" (** declared but not defined *)
+  | Variable_local _ -> "local"
+  | Variable_parameter _ -> "parameter"
+  | Variable_file_static _ -> "file static"
+  | Variable_func_static _ -> "func static")
+
 (** Flat variable initialization *)
 type c_flat_init =
   | C_flat_expr of expr * typ
@@ -209,6 +218,7 @@ type c_var_init =
 type c_var = {
   var_scope: c_var_scope; (** life-time scope of the variable *)
   var_range: range; (** declaration range *)
+  var_uid: int;
 }
 
 type var_kind +=
@@ -225,7 +235,11 @@ let () =
 
     compare = (fun next v1 v2 ->
         match vkind v1, vkind v2 with
-        | V_c _, V_c _ -> compare v1.uniq_vname v2.uniq_vname
+        | V_c vc1, V_c vc2 ->
+          Compare.compose
+            [(fun () -> Pervasives.compare vc1.var_uid vc2.var_uid);
+             (fun () -> compare v1.uniq_vname v2.uniq_vname)]
+
         | _ -> next v1 v2
       );
   }
@@ -389,7 +403,7 @@ let to_clang_float_type : c_float_type -> C_AST.float_type = function
   | C_double -> C_AST.DOUBLE
   | C_long_double -> C_AST.LONG_DOUBLE
 
-                   
+
     (* NOTE: this may cause issue with recutsive types
 
 let rec to_clang_type : typ -> C_AST.type_qual = function

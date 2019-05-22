@@ -54,7 +54,7 @@ struct
 end
 
 let mk_avar ?(vtyp = T_any) addr_uid =
-  mkfresh (fun uid -> "$addr@" ^ (string_of_int addr_uid), "$addr@" ^ (string_of_int addr_uid) ^ "_" ^ (string_of_int uid)) vtyp ()
+  mkfresh_common (fun uid -> "$addr@" ^ (string_of_int addr_uid), "$addr@" ^ (string_of_int addr_uid) ^ "_" ^ (string_of_int uid)) vtyp ()
 
 
 module Domain =
@@ -68,13 +68,13 @@ struct
         | PyAddr.Def _ -> false
         | _ -> true
 
-      let widen at bt =
-        Top.top_absorb2 (fun a b ->
-            if Set.cardinal b - Set.cardinal a = 1
-            && Set.exists undef b && Set.exists undef a then
-              Top.Nt (Set.union a b)
-            else
-              PS.widen at bt) at bt
+      let widen a b = join a b
+        (* Top.top_absorb2 (fun a b ->
+         *     if Set.cardinal b - Set.cardinal a = 1
+         *     && Set.exists undef b && Set.exists undef a then
+         *       Top.Nt (Set.union a b)
+         *     else
+         *       PS.widen annot at bt) at bt *)
     end)
 
   module AMap = Framework.Lattices.Partial_map.Make
@@ -168,14 +168,18 @@ struct
                                                  || String.sub v.org_vname 0 3 = "$t:"))
            || (String.length v.org_vname >= 5 && (String.sub v.org_vname 0 5 = "$d_k*" ||
                                                   String.sub v.org_vname 0 5 = "$d_v*"))
-                                                 then
+      then
         Post.return flow |> Option.return
       else
-        (* if the variable maps to a list, we should remove the temporary variable associated, ONLY if it's not used by another list *)
-        man.exec (mk_assign var (mk_expr (E_py_undefined true) range) range) flow |> Post.return |> Option.return
-      (* let v' = mk_py_value_var v T_any in
-       * man.exec (mk_remove_var v' range) flow |> Post.return *)
-      (* Post.return flow *)
+        (match vkind v with
+        | V_common _ ->
+          (* if the variable maps to a list, we should remove the temporary variable associated, ONLY if it's not used by another list *)
+          man.exec (mk_assign var (mk_expr (E_py_undefined true) range) range) flow |> Post.return |> Option.return
+        (* let v' = mk_py_value_var v T_any in
+         * man.exec (mk_remove_var v' range) flow |> Post.return *)
+        (* Post.return flow *)
+
+        | _ -> Post.return flow |> Option.return)
 
     | S_assume e ->
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>

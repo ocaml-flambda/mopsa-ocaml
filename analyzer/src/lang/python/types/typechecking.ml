@@ -113,14 +113,14 @@ struct
 
 
   (* let join man a a' =
-   *   Framework.Core.Sig.Intermediate.Domain.lift_binop
+   *   Framework.Core.Sig.Domain.Intermediate.lift_binop
    *     (fun (hd, tl) (hd', tl') ->
    *        (\* if !opt_polymorphism then *\)
    *        match hd, hd' with
-   *        | AD.AMap.Top, _ | _, AD.AMap.Top -> Iter.top
+   *        | AD.AMap.Map.Top, _ | _, AD.AMap.Map.Top -> Iter.top
    *        | _ ->
-   *          match tl.TD.abs_heap, tl'.TD.abs_heap with
-   *          | TD.TMap.Top, _ | _, TD.TMap.Top -> Iter.top
+   *          match tl, tl' with
+   *          | TD.TMap.Map.Top, _ | _, TD.TMap.Map.Top -> Iter.top
    *          | _ ->
    *            debug "hd, tl = %a, %a@\n@\nhd', tl' = %a, %a@\n" AD.print hd TD.print tl AD.print hd' TD.print tl';
    *            let p = create_partition hd tl
@@ -138,10 +138,9 @@ struct
    *                let rhd = VarSet.fold (fun var rhd -> AD.AMap.add var (AD.ASet.singleton (Def addr)) rhd) vars rhd in
    *                let rabsheap = TD.TMap.add addr types rabsheap in
    *                (rhd, rabsheap)
-   *              ) (jhd, jtl.abs_heap) ip in
-   *            let rtl = {jtl with abs_heap = rabsheap} in
-   *            debug "result is %a@\n%a@\n" AD.print rhd TD.print rtl;
-   *            rhd, {jtl with abs_heap = rabsheap}
+   *              ) (jhd, jtl) ip in
+   *            debug "result is %a@\n%a@\n" AD.print rhd TD.print rabsheap;
+   *            rhd, rabsheap
    *            (\* else
    *             *   Iter.join annot (hd, tl) (hd', tl') *\)
    *     ) man a a' *)

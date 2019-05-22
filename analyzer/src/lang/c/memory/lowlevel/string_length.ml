@@ -97,7 +97,7 @@ struct
     in
     let vuid = base_uid base in
     let uniq_vname = org_vname ^ ":" ^ (string_of_int vuid) in
-    let v = mkv org_vname uniq_vname vuid T_int in
+    let v = mkv org_vname uniq_vname (V_common vuid) T_int in
     mk_var v range
 
 

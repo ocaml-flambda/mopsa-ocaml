@@ -235,6 +235,14 @@ let premove (k:('a,'v) pkey) (pctx:'a pctx) : 'a pctx =
   in
   iter k pctx
 
+let pconcat (pctx:'a pctx) (pctx':'a pctx) : 'a pctx =
+  let rec iter = function
+    | [] -> pctx'
+    | hd :: tl ->
+    hd :: iter tl
+  in
+  iter pctx
+
 
 let pprint fmt pctx =
   let rec iter fmt pctx =
@@ -266,7 +274,6 @@ let next_counter () =
 (** Generate a polymorphic (stateless) key *)
 module GenPolyKey(V:sig
     type 'a t
-    val ctx : 'a ctx
     val print : Format.formatter -> 'a t -> unit
   end)
 =
@@ -281,13 +288,13 @@ struct
     | PKey -> Some Eq
     | _ -> None
 
-  let ctx =
+  let init =
     let desc = {
       eq = eq;
       print = V.print;
     }
     in
-    { V.ctx with ctx_poly = (desc,None) :: V.ctx.ctx_poly }
+    [(desc,None)]
 
 end
 
@@ -323,6 +330,9 @@ let remove_unit (k: 'v ukey) (ctx:'a ctx) : 'a ctx =
 
 let remove_poly (k: ('a,'v) pkey) (ctx:'a ctx) : 'a ctx =
   { ctx with ctx_poly = premove k ctx.ctx_poly; ctx_timestamp = next_counter () }
+
+let init_poly (pctx:'a pctx) (ctx:'a ctx) : 'a ctx =
+  { ctx with ctx_poly = pconcat ctx.ctx_poly pctx }
 
 let print fmt ctx =
   Format.fprintf fmt "%a@\n%a@\ntimestamp: %d"

@@ -51,7 +51,12 @@ let compare_base b b' = match b, b' with
   | _ -> compare b b'
 
 let base_uid = function
-  | V v -> v.vuid
+  | V v ->
+    begin match vkind v with
+    | V_c v -> v.var_uid
+    | V_common v -> v
+    | _ -> panic "base_uid on unknown var kind"
+    end
   | A a -> a.addr_uid
   | S _ -> panic ~loc:__LOC__ "base_uid: string literals not supported"
   | Z -> panic  ~loc:__LOC__ "base_uid: absolute pointers not supported"

@@ -116,7 +116,7 @@ let to_universal_var v =
   {
     v with
     vtyp = to_universal_type v.vtyp;
-    vkind = V_common
+    (* vkind = V_common *)
   }
 
 let to_universal_expr e =
