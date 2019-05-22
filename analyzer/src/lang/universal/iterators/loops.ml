@@ -108,18 +108,18 @@ struct
 
   module Rangemap = MapExt.Make(
     struct
-      type t = (range * Callstack.cs)
-      let compare (r1, cs1) (r2, cs2) =
+      type t = (Callstack.cs * range)
+      let compare (cs1, r1) (cs2, r2) =
         Compare.compose
           [(fun () -> compare_range r1 r2);
            (fun () -> Callstack.compare cs1 cs2);
           ]
-      let print fmt (r, cs) = Format.fprintf fmt "[%a, %a]" pp_range r Callstack.pp_call_stack cs end)
+      let print fmt (cs, r) = Format.fprintf fmt "[%a, %a]" pp_range r Callstack.pp_call_stack cs end)
 
   module Lctx = Context.GenPolyKey(
     struct
         type 'a t = 'a flow Rangemap.t
-        let print fmt ctx = Format.fprintf fmt "Lfp cache context: %a" (Format.pp_print_list (fun fmt ((r, _), _) -> pp_range fmt r)) (Rangemap.bindings ctx)
+        let print fmt ctx = Format.fprintf fmt "Lfp cache context: %a" (Format.pp_print_list (fun fmt ((_, r), _) -> pp_range fmt r)) (Rangemap.bindings ctx)
       end
     )
 
@@ -130,7 +130,7 @@ struct
   let search_lctx (srange, scs) flow =
     try
       let m = Context.find_poly Lctx.key (Flow.get_ctx flow) in
-      let mf = Rangemap.filter (fun (range, cs) _ ->
+      let mf = Rangemap.filter (fun (cs, range) _ ->
           Callstack.compare cs scs = 0 &&
           let srange = untag_range srange and range = untag_range range in
           match srange, range with
@@ -143,17 +143,20 @@ struct
       (debug "no ctx found";
        None)
 
-  let store_lfp man flow range  =
+  let store_lfp man flow (range, cs)  =
     let old_lfp_ctx =
-      try Context.find_poly Lctx.key (Flow.get_ctx flow)
+      try
+        let r = Context.find_poly Lctx.key (Flow.get_ctx flow) in
+        if Rangemap.cardinal r > 5 then
+          Rangemap.remove_min_binding r
+        else r
       with Not_found -> Rangemap.empty in
     let stripped_flow =
-      Flow.add T_cur (Flow.get T_cur man.lattice flow) man.lattice (Flow.bottom (Flow.get_ctx flow))
-      |>
+      Flow.add T_cur (Flow.get T_cur man.lattice flow) man.lattice (Flow.bottom (Flow.get_ctx flow)) |>
       Flow.add T_continue (Flow.get T_continue man.lattice flow) man.lattice |>
       Flow.add T_break (Flow.get T_break man.lattice flow) man.lattice
     in
-    let lfp_ctx = Rangemap.add range stripped_flow old_lfp_ctx in
+    let lfp_ctx = Rangemap.add (cs, range) stripped_flow old_lfp_ctx in
     Flow.set_ctx (Context.add_poly Lctx.key lfp_ctx (Flow.get_ctx flow)) flow
 
   let join_w_old_lfp man flow range =
