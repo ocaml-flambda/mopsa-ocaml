@@ -70,8 +70,6 @@ module Domain =
           exec_eval man (fun iterabletmp flow ->
               man.eval (Utils.mk_builtin_call "iter" [iterabletmp] range) flow |>
               exec_eval man (fun tmp flow ->
-          (* let iterabletmp = mktmp () in
-           * let tmp = mktmp () in *)
                   let l_else =
                     match skind orelse with
                     | S_block [] -> [mk_stmt S_break range]
@@ -100,20 +98,12 @@ module Domain =
                            ; body] range)
                     end in
                   let stmt =
-                    (* mk_block
-                     *   [
-                     *     mk_assign (iterabletmp) iterable range;
-                     *     mk_assign (mk_var tmp range) (Utils.mk_builtin_call "iter" [mk_var iterabletmp range] range) range; *)
                         mk_while
                           (mk_py_true range)
                           inner_block
                           range
-                      (* ]
-                       * range *)
                   in
                   man.exec stmt flow
-                  (* |>
-                   * exec_block_on_all_flows (List.map (fun x -> mk_remove_var x (tag_range range "forclean")) [iterabletmp; tmp]) man *)
                 )
             )
         in
