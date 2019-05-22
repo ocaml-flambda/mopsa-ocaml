@@ -185,26 +185,21 @@ struct
           | None -> unroll cond body man flow0
         else
           unroll cond body man flow0 in
-      (* let flow0 = if !opt_loop_use_cache then join_w_old_lfp man flow0 stmt.srange else flow0 in
-       * let is_fp, flow_init, flow_out = unroll cond body man flow0 in *)
-      (* debug "post unroll %a (is_fp=%b):@\n flow_init = @[%a@]@\n flow_out = @[%a@]"
-       *   pp_range stmt.srange
-       *   is_fp
-       *   (Flow.print man.lattice) flow_init
-       *   (Flow.print man.lattice) flow_out
-       * ; *)
+
+      debug "post unroll %a (is_fp=%b):@\n flow_init = @[%a@]@\n flow_out = @[%a@]"
+        pp_range stmt.srange
+        is_fp
+        (Flow.print man.lattice) flow_init
+        (Flow.print man.lattice) flow_out
+      ;
 
       let flow_lfp =
         if is_fp then
           flow_init
         else
-        (* plutôt faire flow0 pour en dessous ? *)
-
-        let flow_lfp = lfp 0 !opt_loop_widening_delay cond body man flow_init flow_init in
-        let flow_lfp = if !opt_loop_use_cache then store_lfp man flow_lfp (stmt.srange, Callstack.get flow_lfp) else flow_lfp in
-        flow_lfp in
-
-      (* debug "flow_lfp %a" (Flow.print man.lattice) flow_lfp; *)
+          let flow_lfp = lfp 0 !opt_loop_widening_delay cond body man flow_init flow_init in
+          let flow_lfp = if !opt_loop_use_cache then store_lfp man flow_lfp (stmt.srange, Callstack.get flow_lfp) else flow_lfp in
+          flow_lfp in
 
       let res0 =
         man.exec (mk_assume (mk_not cond cond.erange) cond.erange) flow_lfp |>
@@ -243,33 +238,26 @@ struct
                 Flow.remove T_break
     in
 
-    (* debug "lfp:@\n delay = %d@\n abs = @[%a@]"
-     *   delay (Flow.print man.lattice) flow0
-     * ; *)
-
     let flow1 = man.exec (mk_assume cond cond.erange) flow0 |>
                 man.exec body
     in
 
     let flow2 = merge_cur_and_continue man flow1 in
 
-    (* debug "lfp post:@\n res = @[%a@]" (Flow.print man.lattice) flow1; *)
-
     let flow3 = Flow.join man.lattice flow_init flow2 in
 
-    (* debug "lfp join: %a@\n res = @[%a@]" pp_range body.srange (Flow.print man.lattice) flow3; *)
     let is_sub = Flow.subset man.lattice flow3 flow in
     debug "lfp range %a is_sub: %b" pp_range body.srange is_sub;
     if is_sub then flow3
     else if delay = 0 then
       let wflow = Flow.widen man.lattice flow flow3 in
-      (* let () = debug
-       *     "widening: %a@\n abs =@\n@[  %a@]@\n abs' =@\n@[  %a@]@\n res =@\n@[  %a@]"
-       *     pp_range body.srange
-       *     (Flow.print man.lattice) flow
-       *     (Flow.print man.lattice) flow3
-       *     (Flow.print man.lattice) wflow
-       * in *)
+      let () = debug
+          "widening: %a@\n abs =@\n@[  %a@]@\n abs' =@\n@[  %a@]@\n res =@\n@[  %a@]"
+          pp_range body.srange
+          (Flow.print man.lattice) flow
+          (Flow.print man.lattice) flow3
+          (Flow.print man.lattice) wflow
+      in
       lfp (count+1) !opt_loop_widening_delay cond body man flow_init wflow
     else
       lfp (count+1) (delay - 1) cond body man flow_init flow3
@@ -289,11 +277,6 @@ struct
         let flow2 =
           man.exec (mk_assume (mk_not cond cond.erange) cond.erange) (Flow.copy_ctx flow1 flow)
         in
-        (* it should be union of flow1s... *)
-        (* if Flow.subset man.lattice (Flow.join man.lattice flow_init flow1) flow then
-         *   let () = debug "lfp reached in unrolling!" in
-         *   true, flow1, flow2
-         * else *)
         if Flow.subset man.lattice flow1 flow then
           let () = debug "stabilisation reached in unrolling!" in
           true, flow1, flow2
