@@ -904,16 +904,6 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__init__")}, _)}, args, []) ->
       man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range) flow |> Option.return
 
-    | E_py_sum_call (f, args) ->
-      let func = match ekind f with
-        | E_function (User_defined func) -> func
-        | _ -> assert false in
-      (* if !opt_pyty_summaries then
-       *   Exceptions.panic_at range "todo@\n"
-       * else *)
-        man.eval ~zone:(Universal.Zone.Z_u, Z_any) (mk_call func args range) flow
-        |> Option.return
-
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__new__")}, _)}, cls :: args, []) ->
       Utils.check_instances man flow range args
         ["int"; "int"; "int"]
