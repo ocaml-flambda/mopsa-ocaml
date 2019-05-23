@@ -133,7 +133,7 @@ module Domain =
                                   flow
                      in
 
-                     let ret_var = mktmp () in
+                     let ret_var = mkfresh_ranged (tag_range range "ret_var") () in
                      let fundec = {
                          fun_name = uniq_vname (pyfundec.py_func_var);
                          fun_parameters = pyfundec.py_func_parameters;
