@@ -7,6 +7,20 @@ open Ast
 open Universal.Ast
 open MapExt
 
+let name = "python.types.typechecking"
+
+let opt_python_modular_interproc : bool ref = ref true
+
+let () =
+  register_domain_option name {
+    key = "-py-no-modular-interproc";
+    category = "Python";
+    doc = " do not use the modular interprocedural analysis";
+    spec = ArgExt.Clear opt_python_modular_interproc;
+    default = "use it";
+  }
+
+
 
 module Domain =
 struct
@@ -24,33 +38,36 @@ struct
   let name = "python.types.typechecking"
   let debug fmt = Debug.debug ~channel:name fmt
 
-  type signature =
-    {in_args : (addr * TD.Polytypeset.t) list; in_args_out : (addr * TD.Polytypeset.t) list; out : addr * TD.Polytypeset.t }
+  module Fctx = Context.GenPolyKey(
+    struct
+      type 'a t = ('a flow * expr option * 'a flow) list StringMap.t
+      let print fmt ctx = Format.fprintf fmt "Function cache context (py): %a@\n"
+          (Format.pp_print_list (fun fmt (s, _) -> Format.print_string s)) (StringMap.bindings ctx)
+    end
+    )
 
-  let function_cache : signature list StringMap.t ref = ref StringMap.empty
+  let find_signature man funname in_flow =
+    if !opt_python_modular_interproc then
+      try
+        let cache = Context.find_poly Fctx.key (Flow.get_ctx in_flow) in
+        let flows = StringMap.find funname cache in
+        Some (List.find (fun (flow_in, _, _) -> Flow.subset man.lattice in_flow flow_in) flows)
+      with Not_found -> None
+    else
+      None
 
-  let pp_signature fmt (a, p) = Format.fprintf fmt "(%a, %a)" pp_addr a TD.Polytypeset.print p
+  let store_signature funname in_flow eval_res out_flow =
+    let old_ctx = try Context.find_poly Fctx.key (Flow.get_ctx out_flow) with Not_found -> StringMap.empty in
+    let old_sig = try StringMap.find funname old_ctx with Not_found -> [] in
+    let new_sig =
+      if List.length old_sig < 3 then (in_flow, eval_res, out_flow)::old_sig
+      else (in_flow, eval_res, out_flow) :: (List.rev @@ List.tl @@ List.rev old_sig) in
+    let new_ctx = StringMap.add funname new_sig old_ctx in
+    Flow.set_ctx (Context.add_poly Fctx.key new_ctx (Flow.get_ctx out_flow)) out_flow
 
-  let pp_slist fmt l = Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_signature fmt l
-
-  let extract_addrty cur eobj = match ekind eobj with
-    | E_py_object (addr, _) -> (addr, TD.find addr (snd cur))
-    | _ -> Exceptions.panic "%a@\n" pp_expr eobj
-
-  let find_signature funname inargs =
-    try
-      let sigs = StringMap.find funname !function_cache in
-      Some (
-        List.find (fun {in_args} -> Compare.list
-                      (fun (a1, p1) (a2, p2) ->
-                         Compare.compose [(fun () -> compare_addr a1 a2);
-                                          (fun () -> if TD.Polytypeset.equal p1 p2 then 0 else -1)])
-                      in_args inargs = 0) sigs)
-    with Not_found -> None
-
-  let store_signature funname sign =
-    let old_sigs = try StringMap.find funname !function_cache with Not_found -> [] in
-    function_cache := StringMap.add funname (sign::old_sigs) !function_cache
+  let init prog man flow =
+    Iter.init prog man flow |>
+    Flow.map_ctx (Context.init_poly Fctx.init)
 
   let eval zs exp man flow =
     let range = exp.erange in
@@ -66,33 +83,21 @@ struct
         | E_function (User_defined func) -> func
         | _ -> assert false in
       Eval.eval_list man.eval args flow |>
-      Eval.bind (fun args flow ->
-          let cur = get_domain_env T_cur man flow in
-          let in_args = List.map (extract_addrty cur) args in
-
-          match find_signature func.fun_name in_args with
+      Eval.bind (fun args in_flow ->
+          match find_signature man func.fun_name in_flow with
           | None ->
-            man.eval ~zone:(Universal.Zone.Z_u, Z_any) (mk_call func args range) flow |>
-            Eval.bind (fun eval_res flow ->
-                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) eval_res flow |>
-                Eval.bind (fun eval_res flow ->
-                    (* vérifier qu'on a les m^ token de flows qu'avant ? (modulo return) *)
-
-                    (* c'est plus cur *)
-                    let cur = man.get (Flow.get T_cur man.lattice flow) in
-                    let in_args_out = List.map (extract_addrty cur) args in
-                    let out = extract_addrty cur eval_res in
-                    store_signature func.fun_name {in_args; in_args_out; out};
-
-                    debug "in_args = %a@\nout_args = %a@\nout = %a@\n" pp_slist in_args pp_slist in_args_out pp_signature out;
-                    Eval.singleton eval_res flow
+            man.eval ~zone:(Universal.Zone.Z_u, Z_any) (mk_call func args range) in_flow |>
+            Eval.bind (fun eval_res out_flow ->
+                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) eval_res out_flow |>
+                Eval.bind_lowlevel (fun oeval_res out_flow cleaners ->
+                    let out_flow = exec_block_on_all_flows cleaners man out_flow in
+                    let flow = store_signature func.fun_name in_flow oeval_res out_flow in
+                    Eval.case oeval_res flow
                   )
               )
-          | Some {in_args; in_args_out; out} ->
-            let tmap = List.fold_left (fun tmap (a, pty) ->
-                TD.add a pty tmap) (snd cur) in_args_out in
-            let flow = set_domain_env T_cur (fst cur, tmap) man flow in
-            Eval.singleton (mk_py_object (fst out, None) range) flow
+          | Some (in_flow, oout_expr, out_flow) ->
+            debug "reusing something in function %s@\nchanging in_flow=%a@\ninto out_flow=%a@\n" func.fun_name (Flow.print man.lattice) in_flow (Flow.print man.lattice) out_flow;
+            Eval.case oout_expr (Flow.copy_ctx in_flow out_flow)
         )
       |> Option.return
 
