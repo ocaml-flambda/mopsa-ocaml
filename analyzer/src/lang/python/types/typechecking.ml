@@ -10,6 +10,7 @@ open MapExt
 let name = "python.types.typechecking"
 
 let opt_python_modular_interproc : bool ref = ref true
+let opt_python_modular_interproc_cache_size : int ref = ref 3
 
 let () =
   register_domain_option name {
@@ -18,7 +19,14 @@ let () =
     doc = " do not use the modular interprocedural analysis";
     spec = ArgExt.Clear opt_python_modular_interproc;
     default = "use it";
-  }
+  };
+  register_domain_option name {
+    key = "-py-mod-interproc-size";
+    category = "Python";
+    doc = " size of the cache in the modular interprocedural analysis";
+    spec = ArgExt.Set_int opt_python_modular_interproc_cache_size;
+    default = "3";
+  };
 
 
 
@@ -51,7 +59,14 @@ struct
       try
         let cache = Context.find_poly Fctx.key (Flow.get_ctx in_flow) in
         let flows = StringMap.find funname cache in
-        Some (List.find (fun (flow_in, _, _) -> Flow.subset man.lattice in_flow flow_in) flows)
+        Some (List.find (fun (flow_in, _, _) ->
+            (* (\* is that sound ? *\)
+             * man.lattice.subset
+             *   (Flow.get_unit_ctx flow_in)
+             *   (Flow.get T_cur man.lattice in_flow)
+             *   (Flow.get T_cur man.lattice flow_in) *)
+              Flow.subset man.lattice in_flow flow_in
+          ) flows)
       with Not_found -> None
     else
       None
@@ -60,7 +75,7 @@ struct
     let old_ctx = try Context.find_poly Fctx.key (Flow.get_ctx out_flow) with Not_found -> StringMap.empty in
     let old_sig = try StringMap.find funname old_ctx with Not_found -> [] in
     let new_sig =
-      if List.length old_sig < 3 then (in_flow, eval_res, out_flow)::old_sig
+      if List.length old_sig < !opt_python_modular_interproc_cache_size then (in_flow, eval_res, out_flow)::old_sig
       else (in_flow, eval_res, out_flow) :: (List.rev @@ List.tl @@ List.rev old_sig) in
     let new_ctx = StringMap.add funname new_sig old_ctx in
     Flow.set_ctx (Context.add_poly Fctx.key new_ctx (Flow.get_ctx out_flow)) out_flow
@@ -73,12 +88,6 @@ struct
     let range = exp.erange in
     match ekind exp with
     | E_py_sum_call (f, args) ->
-      (* les adresses ne changent pas in/out, on pourrait peut être bouger dans type? mais pour le polymorphisme?
-         si l'env change ?
-         **exceptions ?**
-
-         faire un truc plus simple où l'on garde l'environnement courant ? ça permettrait d'activer le polymorphisme?
-      *)
       let func = match ekind f with
         | E_function (User_defined func) -> func
         | _ -> assert false in
@@ -87,13 +96,20 @@ struct
           match find_signature man func.fun_name in_flow with
           | None ->
             man.eval ~zone:(Universal.Zone.Z_u, Z_any) (mk_call func args range) in_flow |>
-            Eval.bind (fun eval_res out_flow ->
-                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) eval_res out_flow |>
-                Eval.bind_lowlevel (fun oeval_res out_flow cleaners ->
-                    let out_flow = exec_block_on_all_flows cleaners man out_flow in
-                    let flow = store_signature func.fun_name in_flow oeval_res out_flow in
-                    Eval.case oeval_res flow
-                  )
+            Eval.bind_lowlevel (fun oeval_res out_flow cleaners ->
+                match oeval_res with
+                | None ->
+                  let out_flow = exec_block_on_all_flows cleaners man out_flow in
+                  let flow = store_signature func.fun_name in_flow oeval_res out_flow in
+                  Eval.case oeval_res flow
+                | Some eval_res ->
+                  man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) eval_res out_flow |>
+                  Eval.bind (fun eval_res out_flow ->
+                      debug "eval_res = %a@\ncleaners = %a@\n" pp_expr eval_res pp_stmt (mk_block cleaners range);
+                      let out_flow = exec_block_on_all_flows cleaners man out_flow in
+                      let flow = store_signature func.fun_name in_flow (Some eval_res) out_flow in
+                      Eval.singleton eval_res flow
+                    )
               )
           | Some (in_flow, oout_expr, out_flow) ->
             debug "reusing something in function %s@\nchanging in_flow=%a@\ninto out_flow=%a@\n" func.fun_name (Flow.print man.lattice) in_flow (Flow.print man.lattice) out_flow;
