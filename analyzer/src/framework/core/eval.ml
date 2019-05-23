@@ -193,12 +193,32 @@ let bind_opt f eval =
   in
   Option.lift (set_ctx ctx) eval
 
-
 let bind
     (f: 'e -> 'a flow -> ('f, 'a) eval)
     (evl: ('e, 'a) eval)
   : ('f, 'a) eval =
   bind_opt (fun e flow -> Some (f e flow)) evl |>
+  Option.none_to_exn
+
+
+let bind_lowlevel_opt
+    (f: 'e option -> 'a flow -> stmt list -> ('f, 'a) eval option )
+    (eval: ('e, 'a) eval) : ('f, 'a) eval option =
+  let ctx, eval = Dnf.fold_apply
+      (fun ctx case ->
+         let flow' = Flow.set_ctx ctx case.eval_flow in
+         let eval' = f case.eval_result flow' case.eval_cleaners in
+         let ctx = Option.apply ctx choose_ctx eval' in
+         (ctx,eval')
+      )
+      (Option.neutral2 join)
+      (Option.neutral2 meet)
+      (choose_ctx eval) eval
+  in
+  Option.lift (set_ctx ctx) eval
+
+let bind_lowlevel f evl =
+  bind_lowlevel_opt (fun e flow cleaners -> Some (f e flow cleaners)) evl |>
   Option.none_to_exn
 
 
