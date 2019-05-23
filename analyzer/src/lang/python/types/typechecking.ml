@@ -60,12 +60,9 @@ struct
         let cache = Context.find_poly Fctx.key (Flow.get_ctx in_flow) in
         let flows = StringMap.find funname cache in
         Some (List.find (fun (flow_in, _, _) ->
-            (* (\* is that sound ? *\)
-             * man.lattice.subset
-             *   (Flow.get_unit_ctx flow_in)
-             *   (Flow.get T_cur man.lattice in_flow)
-             *   (Flow.get T_cur man.lattice flow_in) *)
-              Flow.subset man.lattice in_flow flow_in
+            debug "flow_in = %a@\nin_flow = %a@\n" (Flow.print man.lattice) flow_in (Flow.print man.lattice) in_flow;
+            (* is that sound ? *)
+            Flow.subset man.lattice in_flow flow_in
           ) flows)
       with Not_found -> None
     else
@@ -93,27 +90,29 @@ struct
         | _ -> assert false in
       Eval.eval_list man.eval args flow |>
       Eval.bind (fun args in_flow ->
-          match find_signature man func.fun_name in_flow with
+          let in_flow_cur = Flow.set T_cur (Flow.get T_cur man.lattice in_flow) man.lattice (Flow.bottom (Flow.get_ctx in_flow))
+          and in_flow_other = Flow.remove T_cur in_flow in
+          match find_signature man func.fun_name in_flow_cur with
           | None ->
-            man.eval ~zone:(Universal.Zone.Z_u, Z_any) (mk_call func args range) in_flow |>
+            man.eval ~zone:(Universal.Zone.Z_u, Z_any) (mk_call func args range) in_flow_cur |>
             Eval.bind_lowlevel (fun oeval_res out_flow cleaners ->
                 match oeval_res with
                 | None ->
                   let out_flow = exec_block_on_all_flows cleaners man out_flow in
-                  let flow = store_signature func.fun_name in_flow oeval_res out_flow in
-                  Eval.case oeval_res flow
+                  let flow = store_signature func.fun_name in_flow_cur oeval_res out_flow in
+                  Eval.case oeval_res (Flow.join man.lattice in_flow_other flow)
                 | Some eval_res ->
                   man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) eval_res out_flow |>
                   Eval.bind (fun eval_res out_flow ->
                       debug "eval_res = %a@\ncleaners = %a@\n" pp_expr eval_res pp_stmt (mk_block cleaners range);
                       let out_flow = exec_block_on_all_flows cleaners man out_flow in
-                      let flow = store_signature func.fun_name in_flow (Some eval_res) out_flow in
-                      Eval.singleton eval_res flow
+                      let flow = store_signature func.fun_name in_flow_cur (Some eval_res) out_flow in
+                      Eval.singleton eval_res (Flow.join man.lattice in_flow_other flow)
                     )
               )
-          | Some (in_flow, oout_expr, out_flow) ->
+          | Some (_, oout_expr, out_flow) ->
             debug "reusing something in function %s@\nchanging in_flow=%a@\ninto out_flow=%a@\n" func.fun_name (Flow.print man.lattice) in_flow (Flow.print man.lattice) out_flow;
-            Eval.case oout_expr (Flow.copy_ctx in_flow out_flow)
+            Eval.case oout_expr (Flow.copy_ctx in_flow_cur out_flow)
         )
       |> Option.return
 
