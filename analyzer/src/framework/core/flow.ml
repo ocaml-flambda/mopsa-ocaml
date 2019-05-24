@@ -104,6 +104,12 @@ let widen (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
 
 let print (lattice: 'a lattice) fmt (flow : 'a flow) : unit =
   TokenMap.print lattice fmt flow.tmap
+  (* ;
+   * Context.print lattice.print fmt flow.ctx *)
+
+let print_w_lprint (lprint: Format.formatter -> 'a -> unit) fmt flow =
+  TokenMap.print_w_lprint lprint fmt flow.tmap
+
 
 let get (tk: token) (lattice: 'a lattice) (flow: 'a flow) : 'a =
   TokenMap.get tk lattice flow.tmap

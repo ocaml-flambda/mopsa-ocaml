@@ -171,7 +171,7 @@ type ('a, _) pkey = ..
 (** Descriptor of a polymorphic context key *)
 type ('a, 'v) pdesc = {
   eq : 'vv. ('a, 'vv) pkey -> ('vv, 'v) eq option;
-  print : Format.formatter -> 'v -> unit;
+  print : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'v -> unit;
 }
 
 type 'a pctx =
@@ -244,13 +244,13 @@ let pconcat (pctx:'a pctx) (pctx':'a pctx) : 'a pctx =
   iter pctx
 
 
-let pprint fmt pctx =
+let pprint lprint fmt pctx =
   let rec iter fmt pctx =
     match pctx with
     | [] -> ()
     | (_, None) :: tl -> iter fmt tl
-    | [(desc, Some v)] -> Format.fprintf fmt "%a" desc.print v
-    | (desc, Some v) :: tl -> Format.fprintf fmt "%a@\n%a" desc.print v iter tl
+    | [(desc, Some v)] -> Format.fprintf fmt "%a" (desc.print lprint) v
+    | (desc, Some v) :: tl -> Format.fprintf fmt "%a@\n%a" (desc.print lprint) v iter tl
   in
   iter fmt pctx
 
@@ -274,7 +274,7 @@ let next_counter () =
 (** Generate a polymorphic (stateless) key *)
 module GenPolyKey(V:sig
     type 'a t
-    val print : Format.formatter -> 'a t -> unit
+    val print : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
   end)
 =
 struct
@@ -334,10 +334,10 @@ let remove_poly (k: ('a,'v) pkey) (ctx:'a ctx) : 'a ctx =
 let init_poly (pctx:'a pctx) (ctx:'a ctx) : 'a ctx =
   { ctx with ctx_poly = pconcat ctx.ctx_poly pctx }
 
-let print fmt ctx =
+let print lprinter fmt ctx =
   Format.fprintf fmt "%a@\n%a@\ntimestamp: %d"
     uprint ctx.ctx_unit
-    pprint ctx.ctx_poly
+    (pprint lprinter) ctx.ctx_poly
     ctx.ctx_timestamp
 
 let get_unit ctx = ctx.ctx_unit
