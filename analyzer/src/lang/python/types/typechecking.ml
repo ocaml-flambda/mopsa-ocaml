@@ -10,7 +10,7 @@ open MapExt
 let name = "python.types.typechecking"
 
 let opt_python_modular_interproc : bool ref = ref true
-let opt_python_modular_interproc_cache_size : int ref = ref 3
+let opt_python_modular_interproc_cache_size : int ref = ref 10
 
 let () =
   register_domain_option name {
@@ -25,7 +25,7 @@ let () =
     category = "Python";
     doc = " size of the cache in the modular interprocedural analysis";
     spec = ArgExt.Set_int opt_python_modular_interproc_cache_size;
-    default = "3";
+    default = string_of_int !opt_python_modular_interproc_cache_size;
   };
 
 
@@ -49,8 +49,21 @@ struct
   module Fctx = Context.GenPolyKey(
     struct
       type 'a t = ('a flow * expr option * 'a flow) list StringMap.t
-      let print fmt ctx = Format.fprintf fmt "Function cache context (py): %a@\n"
-          (Format.pp_print_list (fun fmt (s, _) -> Format.print_string s)) (StringMap.bindings ctx)
+      let print p fmt ctx = Format.fprintf fmt "Function cache context (py): %a@\n"
+          (StringMap.fprint
+             MapExt.printer_default
+             (fun fmt s -> Format.fprintf fmt "%s" s)
+             (Format.pp_print_list
+                (fun fmt (flow_in, oexpr, flow_out) -> ()
+                   (* Format.fprintf fmt "flow_in =@\n%a@\nflow_out =@\n%a@\noexpr = %a@\n"
+                    *   (Flow.print_w_lprint p) flow_in
+                    *   (Flow.print_w_lprint p) flow_out
+                    *   (Option.print pp_expr) oexpr *)
+                )
+             )
+          )
+          ctx
+
     end
     )
 
@@ -60,8 +73,6 @@ struct
         let cache = Context.find_poly Fctx.key (Flow.get_ctx in_flow) in
         let flows = StringMap.find funname cache in
         Some (List.find (fun (flow_in, _, _) ->
-            debug "flow_in = %a@\nin_flow = %a@\n" (Flow.print man.lattice) flow_in (Flow.print man.lattice) in_flow;
-            (* is that sound ? *)
             Flow.subset man.lattice in_flow flow_in
           ) flows)
       with Not_found -> None
@@ -101,6 +112,7 @@ struct
                   let out_flow = exec_block_on_all_flows cleaners man out_flow in
                   let flow = store_signature func.fun_name in_flow_cur oeval_res out_flow in
                   Eval.case oeval_res (Flow.join man.lattice in_flow_other flow)
+
                 | Some eval_res ->
                   man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) eval_res out_flow |>
                   Eval.bind (fun eval_res out_flow ->
@@ -111,8 +123,9 @@ struct
                     )
               )
           | Some (_, oout_expr, out_flow) ->
+            Debug.debug ~channel:"profiling" "reusing %s at range %a" func.fun_name pp_range func.fun_range;
             debug "reusing something in function %s@\nchanging in_flow=%a@\ninto out_flow=%a@\n" func.fun_name (Flow.print man.lattice) in_flow (Flow.print man.lattice) out_flow;
-            Eval.case oout_expr (Flow.copy_ctx in_flow_cur out_flow)
+            Eval.case oout_expr (Flow.join man.lattice in_flow_other out_flow)
         )
       |> Option.return
 

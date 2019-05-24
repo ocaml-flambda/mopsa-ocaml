@@ -170,7 +170,7 @@ class Done(object):
         elif strategy == Done.MIN_NEIGHBORS_STRATEGY:
             return self.next_cell_min_neighbors(pos)
         else:
-            raise Exception("Wrong strategy: %d" % strategy)
+            raise Exception() # TODO "Wrong strategy: %d" % strategy)
 
 ##################################
 
@@ -190,7 +190,7 @@ class Hexc(object):
     def __init__(self, size):
         self.size = size
         self.count = 3 * size * (size - 1) + 1
-        self.nodes_by_id = self.count * [None]
+        self.nodes_by_id = self.count * [Node(0, 0, [])] #self.count * [None]
         self.nodes_by_pos = {}
         id = 0
         for y in range(size):
@@ -364,10 +364,10 @@ def print_pos(pos, output):
                     0] != EMPTY else u"."
             else:
                 c = u"?"
-            print(u"%s " % c) #, end=u"")#, file=output)
+            print(c) # u"%s " % c) #, end=u"")#, file=output)
         print() #end=u"\n")#, file=output)
     for y in range(1, size):
-        print(u" " * y) #, end=u"")#, file=output)
+        print(" " * y) # u" " * y #, end=u"")#, file=output)
         for x in range(y, size * 2 - 1):
             ry = size + y - 1
             pos2 = (x, ry)
@@ -377,7 +377,7 @@ def print_pos(pos, output):
                     0] != EMPTY else u"."
             else:
                 c = u"?"
-            print(u"%s " % c)#, end=u"")#, file=output)
+            print(c) # u"%s " % c #, end=u"")#, file=output)
         print() # end=u"\n")#, file=output)
 
 
@@ -468,8 +468,8 @@ def check_valid(pos):
             tiles[i] = 0
     # check total
     if tot != hexc.count:
-        raise Exception(
-            "Invalid input. Expected %d tiles, got %d." % (hexc.count, tot))
+        raise Exception()
+    #"Invalid input. Expected %d tiles, got %d." % (hexc.count, tot))
 
 
 def solve(pos, strategy, order, output):
@@ -651,8 +651,8 @@ def main(loops, level):
 
     output = '\n'#.join(line.rstrip() for line in output.splitlines())
     if output != expected:
-        raise AssertionError("got a wrong answer:\n%s\nexpected: %s"
-                             % (output, expected))
+        raise AssertionError() #"got a wrong answer:\n%s\nexpected: %s"
+    #% (output, expected))
 
     return dt
 
