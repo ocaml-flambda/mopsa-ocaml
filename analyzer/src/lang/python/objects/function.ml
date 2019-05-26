@@ -144,7 +144,8 @@ module Domain =
                          fun_range = pyfundec.py_func_range;
                        } in
 
-                     man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_sum_call fundec args exp.erange) flow
+                     man.eval (mk_call fundec args exp.erange) flow |>
+                     Eval.bind (man.eval)
                    )
                )
       (* 𝔼⟦ f() | isinstance(f, method) ⟧ *)

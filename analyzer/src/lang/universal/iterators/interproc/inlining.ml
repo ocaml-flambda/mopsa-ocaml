@@ -67,7 +67,6 @@ struct
 
 
   (** Zoning definition *)
-
   let interface = {
     iexec = { provides = [Z_u]; uses = [] };
     ieval = { provides = [Z_u, Z_any]; uses = [] };
@@ -99,85 +98,84 @@ struct
   (** Evaluation of expressions *)
   (** ========================= *)
 
+  let inline_function man f args range flow ret =
+    let start_time = Timing.start () in
+    debug "calling function %s" f.fun_name;
+    (* Check that no recursion is happening *)
+    let cs = Callstack.get flow in
+    if List.exists (fun cs -> cs.call_fun = f.fun_name) cs then
+      Exceptions.panic_at range "Recursive call on function %s detected...@\nCallstack = %a@\n" f.fun_name Callstack.print cs;
+
+    (* Clear all return flows *)
+    let flow0 = Flow.filter (fun tk env ->
+        match tk with
+        | T_return _ -> false
+        | _ -> true
+      ) flow
+    in
+
+    (* Add parameters and local variables to the environment *)
+    let new_vars = f.fun_parameters @ f.fun_locvars in
+    (* let new_vars_declaration_block = List.map (fun v ->
+     *     mk_add_var v (tag_range range "variable addition")
+     *   ) new_vars |> (fun x -> mk_block x (tag_range range "declaration_block"))
+     * in
+     * let flow0' = man.exec new_vars_declaration_block flow0 in *)
+
+    (* Assign arguments to parameters *)
+    let parameters_assign = List.mapi (fun i (param, arg) ->
+        mk_assign (mk_var param range) arg range
+      ) (List.combine f.fun_parameters args) in
+
+    let init_block = mk_block parameters_assign range in
+
+    (* Update call stack *)
+    let flow1 = Callstack.push f.fun_name range flow0 in
+
+    (* Execute body *)
+    let flow2 = man.exec init_block flow1 |>
+                man.exec f.fun_body
+    in
+
+    (* Iterate over return flows and assign the returned value to ret *)
+    let flow3 =
+      Flow.fold (fun acc tk env ->
+          match tk with
+          | T_return(_, None) -> Flow.add T_cur env man.lattice acc
+
+          | T_return(_, Some e) ->
+            Flow.set T_cur env man.lattice acc |>
+            man.exec (mk_add_var ret range) |>
+            man.exec (mk_assign (mk_var ret e.erange) e e.erange) |>
+            Flow.join man.lattice acc
+
+          | _ -> Flow.add tk env man.lattice acc
+        )
+        (Flow.remove T_cur (Flow.copy_ctx flow2 flow))
+        flow2
+    in
+
+    (* Restore call stack *)
+    let _, flow3 = Callstack.pop flow3 in
+
+    (* Remove parameters and local variables from the environment *)
+    let ignore_stmt_list =
+      List.mapi (fun i v ->
+          mk_remove_var v range
+        ) (new_vars)
+    in
+    let ignore_block = mk_block ignore_stmt_list range in
+
+    let flow4 = man.exec ignore_block flow3 in
+    debug "Analysis of %s took %.4f seconds.@\n" f.fun_name (Timing.stop start_time);
+    Eval.singleton (mk_var ret range) flow4 ~cleaners:[mk_remove_var ret range]
+
+
   let eval zone exp man flow =
     let range = erange exp in
     match ekind exp with
     | E_call({ekind = E_function (User_defined f)}, args) ->
-      let start_time = Timing.start () in
-      debug "calling function %s" f.fun_name;
-      (* Check that no recursion is happening *)
-      let cs = Callstack.get flow in
-      if List.exists (fun cs -> cs.call_fun = f.fun_name) cs then
-        Exceptions.panic_at range "Recursive call on function %s detected...@\nCallstack = %a@\n" f.fun_name Callstack.print cs;
-
-      (* Clear all return flows *)
-      let flow0 = Flow.filter (fun tk env ->
-          match tk with
-          | T_return _ -> false
-          | _ -> true
-        ) flow
-      in
-
-      (* Add parameters and local variables to the environment *)
-      let new_vars = f.fun_parameters @ f.fun_locvars in
-      (* let new_vars_declaration_block = List.map (fun v ->
-       *     mk_add_var v (tag_range range "variable addition")
-       *   ) new_vars |> (fun x -> mk_block x (tag_range range "declaration_block"))
-       * in
-       * let flow0' = man.exec new_vars_declaration_block flow0 in *)
-
-      (* Assign arguments to parameters *)
-      let parameters_assign = List.mapi (fun i (param, arg) ->
-          mk_assign (mk_var param range) arg range
-        ) (List.combine f.fun_parameters args) in
-
-      let init_block = mk_block parameters_assign range in
-
-      (* Update call stack *)
-      let flow1 = Callstack.push f.fun_name range flow0 in
-
-      (* Execute body *)
-      let flow2 = man.exec init_block flow1 |>
-                  man.exec f.fun_body
-      in
-
-      (* Store the return expression in fun_return_var *)
-      let ret = f.fun_return_var in
-
-      (* Iterate over return flows and assign the returned value to ret *)
-      let flow3 =
-        Flow.fold (fun acc tk env ->
-            match tk with
-            | T_return(_, None) -> Flow.add T_cur env man.lattice acc
-
-            | T_return(_, Some e) ->
-              Flow.set T_cur env man.lattice acc |>
-              man.exec (mk_add_var ret range) |>
-              man.exec (mk_assign (mk_var ret e.erange) e e.erange) |>
-              Flow.join man.lattice acc
-
-            | _ -> Flow.add tk env man.lattice acc
-          )
-          (Flow.remove T_cur (Flow.copy_ctx flow2 flow))
-          flow2
-      in
-
-      (* Restore call stack *)
-      let _, flow3 = Callstack.pop flow3 in
-
-      (* Remove parameters and local variables from the environment *)
-      let ignore_stmt_list =
-        List.mapi (fun i v ->
-            mk_remove_var v range
-          ) (new_vars)
-      in
-      let ignore_block = mk_block ignore_stmt_list range in
-
-      let flow4 = man.exec ignore_block flow3 in
-
-      debug "Analysis of %s took %.4f seconds.@\n" f.fun_name (Timing.stop start_time);
-      Eval.singleton (mk_var ret range) flow4 ~cleaners:[mk_remove_var ret range] |>
-      Option.return
+      inline_function man f args range flow f.fun_return_var |> Option.return
 
     | _ -> None
 
