@@ -112,6 +112,10 @@ and from_stmt (stmt: Py_parser.Ast.stmt) : stmt =
         py_func_is_generator = f.func_is_generator;
         py_func_decors = List.map from_exp f.func_decors;
         py_func_range = f.func_range;
+        py_func_ret_var = mkfresh_common (fun uid ->
+            let name = "ret_" ^ f.func_var.name in
+            let orig = name ^ (string_of_int uid) in
+            name, orig) T_any ()
       }
 
     | S_class cls ->

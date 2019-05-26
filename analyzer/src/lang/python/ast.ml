@@ -221,6 +221,7 @@ type py_fundec = {
   py_func_is_generator: bool; (** is the function a generator? *)
   py_func_decors: expr list;
   py_func_range: range; (** range of the function *)
+  py_func_ret_var: var
 }
 
 (** A Python class *)

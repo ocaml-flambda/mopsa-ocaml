@@ -133,14 +133,14 @@ module Domain =
                                   flow
                      in
 
-                     let ret_var = mkfresh_ranged (tag_range range "ret_var") () in
+                     (* let ret_var = mkfresh_ranged (tag_range range "ret_var") () in *)
                      let fundec = {
                          fun_name = uniq_vname (pyfundec.py_func_var);
                          fun_parameters = pyfundec.py_func_parameters;
                          fun_locvars = pyfundec.py_func_locals;
                          fun_body = pyfundec.py_func_body;
                          fun_return_type = Some T_any;
-                         fun_return_var = ret_var;
+                         fun_return_var = pyfundec.py_func_ret_var;
                          fun_range = pyfundec.py_func_range;
                        } in
 

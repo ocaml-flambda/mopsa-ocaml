@@ -32,7 +32,6 @@ open MapExt
 
 let name = "universal.iterators.interproc.sequential_cache"
 
-let opt_universal_modular_interproc : bool ref = ref true
 let opt_universal_modular_interproc_cache_size : int ref = ref 10
 
 let () =
@@ -66,20 +65,26 @@ struct
           (StringMap.fprint
              MapExt.printer_default
              (fun fmt s -> Format.fprintf fmt "%s" s)
-             (fun fmt _ -> ())
+             (fun fmt list ->
+                Format.pp_print_list
+                  (fun fmt (in_flow, oexpr, out_flow) ->
+                     Format.fprintf fmt "in_flow = %a@\nout_flow = %a@\noexpr = %a@\n"
+                       (Flow.print_w_lprint p) in_flow
+                       (Flow.print_w_lprint p) out_flow
+                       (Option.print pp_expr) oexpr)
+                     fmt list
+             )
           )
           ctx
     end)
 
   let find_signature man funname in_flow =
-    if !opt_universal_modular_interproc then
-      try
-        let cache = Context.find_poly Fctx.key (Flow.get_ctx in_flow) in
-        let flows = StringMap.find funname cache in
-        Some (List.find (fun (flow_in, _, _) -> Flow.subset man.lattice in_flow flow_in) flows)
-      with Not_found -> None
-    else
-      None
+    try
+      let cache = Context.find_poly Fctx.key (Flow.get_ctx in_flow) in
+      let flows = StringMap.find funname cache in
+      Some (List.find (fun (flow_in, _, _) -> Flow.subset man.lattice in_flow flow_in) flows)
+    with Not_found -> None
+
 
   let store_signature funname in_flow eval_res out_flow =
     let old_ctx = try Context.find_poly Fctx.key (Flow.get_ctx out_flow) with Not_found -> StringMap.empty in
@@ -103,9 +108,9 @@ struct
       and in_flow_other = Flow.remove T_cur in_flow in
       begin match find_signature man func.fun_name in_flow_cur with
         | None ->
-          (* oups, on peut pas faire ça, comme on recommence l'exécution d'en haut *)
-          (* man.eval ~zone:(Zone.Z_u, Z_any) (mk_call func args range) in_flow_cur |> *)
-          Inlining.Domain.inline_function man func args range flow func.fun_return_var |>
+          (* FIXME: good return variable? *)
+          let ret = mkfresh_ranged (tag_range range "ret_var") () in
+          Inlining.Domain.inline_function man func args range flow ret |>
           Eval.bind_lowlevel (fun oeval_res out_flow cleaners ->
               debug "in bind@\n";
               match oeval_res with

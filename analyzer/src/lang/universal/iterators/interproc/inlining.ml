@@ -175,7 +175,8 @@ struct
     let range = erange exp in
     match ekind exp with
     | E_call({ekind = E_function (User_defined f)}, args) ->
-      inline_function man f args range flow f.fun_return_var |> Option.return
+      let ret = mkfresh_ranged (tag_range range "ret_var") () in
+      inline_function man f args range flow ret |> Option.return
 
     | _ -> None
 
