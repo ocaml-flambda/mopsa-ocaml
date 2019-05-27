@@ -71,16 +71,39 @@ struct
   let is_bottom _ = false
 
   let subset man ctx (a,s) (a',s') =
-    assert false
+    Pool.subset a a', s, s'
 
   let join man ctx (a,s) (a',s') =
-    assert false
+    Pool.join a a', s, s'
 
   let meet man ctx (a,s) (a',s') =
-    assert false
+    Pool.meet a a', s, s'
 
   let widen man ctx (a,s) (a',s') =
-    assert false
+    debug "widening@,a = %a@,a'= %a" Pool.print a Pool.print a';
+    (* Search for strong addresses that belong only to a' and make them weak *)
+    let aa = Pool.join a a' in
+    let diff = Pool.diff a' a |>
+               Pool.filter (function ({ addr_mode } as addr) ->
+                   addr_mode = STRONG &&
+                   not (Pool.mem { addr with addr_mode = WEAK } aa)
+                 )
+    in
+    let range = mk_fresh_range () in
+    if Pool.is_empty diff
+    then aa, s, s', true
+    else
+      let aa, s' = Pool.fold (fun addr (acc,s') ->
+          debug "widening for address %a" pp_addr addr;
+          let addr' = { addr with addr_mode = WEAK } in
+          let acc = Pool.remove addr acc |>
+                    Pool.add addr'
+          in
+          let s' = man.sexec (mk_rename (mk_addr addr range) (mk_addr addr' range) range) ctx s' in
+          acc, s'
+        ) diff (aa, s')
+      in
+      aa, s, s', true
 
   let merge ctx pre (a,log) (a',log') =
     assert false
@@ -138,9 +161,9 @@ struct
           (* First time we allocate at this site, so no change to the sub-domain. *)
           flow
         else
-          let () = debug "rename to perform@\n" in
           (* Otherwise, we make the previous recent address as an old one *)
           let old_addr = Policy.mk_addr addr_kind WEAK range flow in
+          debug "rename %a to %a" pp_addr recent_addr pp_addr old_addr;
           map_domain_env T_cur (Pool.add old_addr) man flow |>
           man.exec (mk_rename (mk_addr recent_addr range) (mk_addr old_addr range) range)
       in
@@ -167,7 +190,7 @@ end
 
 module Heap1 = Domain(StackRangePolicy)
 module Heap2 = Domain(StackPlocy)
-module Heap3 = Domain(NonePolicy)
+module Heap3 = Domain(AllPolicy)
 
 let () =
   Framework.Core.Sig.Stacked.Intermediate.register_stack (module Heap1);

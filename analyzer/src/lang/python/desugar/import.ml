@@ -63,7 +63,7 @@ module Domain =
          let e =
            match kind_of_object obj with
            | A_py_module(M_user(_, globals)) ->
-              let v = List.find (fun v -> v.org_vname = name) globals in
+              let v = List.find (fun v -> get_orig_vname v = name) globals in
               mk_var v range
            | A_py_module(M_builtin m) ->
               let obj = find_builtin_attribute obj name in
@@ -97,7 +97,7 @@ module Domain =
         in
         let addr = {
           addr_kind = A_py_module (M_user(name, globals));
-          addr_uid = 0;
+          addr_group = G_all;
           addr_mode = STRONG;
         }
         in
@@ -122,10 +122,10 @@ module Domain =
       let rec parse base stmt =
         match skind stmt with
         | S_py_class(cls) ->
-          let name = mk_dot_name base cls.py_cls_var.org_vname in
+          let name = mk_dot_name base (get_orig_vname cls.py_cls_var) in
           let bases = List.map (fun base ->
               match ekind base with
-              | E_var (v, _) -> find_builtin v.org_vname
+              | E_var (v, _) -> find_builtin (get_orig_vname v)
               | _ -> assert false
             ) cls.py_cls_bases
           in
@@ -137,8 +137,8 @@ module Domain =
           parse (Some name) cls.py_cls_body
 
         | S_py_function(fundec) ->
-          let name = mk_dot_name base fundec.py_func_var.org_vname in
-          let fundec = {fundec with py_func_var = {fundec.py_func_var with org_vname = name}} in
+          let name = mk_dot_name base (get_orig_vname fundec.py_func_var) in
+          let fundec = {fundec with py_func_var = set_orig_vname name fundec.py_func_var} in
           let kind =
             if Libs.Py_mopsa.is_stub_fundec fundec then F_user fundec else
             if Libs.Py_mopsa.is_unsupported_fundec fundec then F_unsupported name
@@ -146,7 +146,7 @@ module Domain =
           in
           let addr = {
             addr_kind = A_py_function kind;
-            addr_uid = 0;
+            addr_group = G_all;
             addr_mode = STRONG;
           }
           in
@@ -164,7 +164,7 @@ module Domain =
       if name <> "stdlib" then
         let addr = {
           addr_kind = A_py_module(M_builtin name);
-          addr_uid = 0;
+          addr_group = G_all;
           addr_mode = STRONG;
         }
         in

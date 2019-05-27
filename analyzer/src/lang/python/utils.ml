@@ -115,7 +115,7 @@ let check_instances_disj ?(arguments_after_check=0) man flow range exprs instanc
 let strip_object (e:expr) =
   let ekind = match ekind e with
     | E_py_object (addr, oe) ->
-      let addr = {addr with addr_uid = 0} in
+      let addr = {addr with addr_group = Universal.Ast.G_all } in
       E_py_object (addr, oe)
     | _ -> assert false in
   {e with ekind}

@@ -183,26 +183,11 @@ struct
     else panic "stdno_to_string: invalid argument %d" n
 
   let init prog man flow =
-    (* generic allocation function *)
-    let allocate_std n flow =
-      let range = tag_range prog.prog_range "alloc_%s" (stdno_to_string n) in
-      man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr (A_stub_resource "FileDescriptor") range) flow |>
-      Eval.bind @@ fun alloc flow ->
-      match ekind alloc with
-      | E_addr addr -> Eval.singleton addr flow
-      | _ -> assert false
-    in
-
-    (* allocate stdin, stdout and stderr *)
-    allocate_std 0 flow |> exec_eval man @@ fun stdin_addr flow ->
-    allocate_std 1 flow |> exec_eval man @@ fun stdout_addr flow ->
-    allocate_std 2 flow |> exec_eval man @@ fun stderr_addr flow ->
-
     let init_state = {
       first = [
-        NotFree (AddrSet.singleton stdin_addr);
-        NotFree (AddrSet.singleton stdout_addr);
-        NotFree (AddrSet.singleton stderr_addr);
+        Free;
+        Free;
+        Free;
       ];
       others = Table.empty;
     }

@@ -119,36 +119,18 @@ end
 
 
 
-(** {2 No grouping policy} *)
-(** ====================== *)
+(** {2 Group all addresses} *)
+(** ======================= *)
 
-module NonePolicy : POLICY = struct
+module AllPolicy : POLICY = struct
 
-  type addr_group +=
-    | G_none
-
-  let name = "none"
+  let name = "all"
 
   let mk_addr kind mode range flow =
     {
       addr_kind = kind;
       addr_mode = mode;
-      addr_group = G_none
+      addr_group = G_all
     }
 
-
-  let () =
-    register_addr_group {
-      compare = (fun next g1 g2 ->
-          match g1, g2 with
-          | G_none, G_none -> 0
-          | _ -> next g1 g2
-        );
-
-      print = (fun next fmt g ->
-          match g with
-          | G_none -> ()
-          | _ -> next fmt g
-        );
-    }
 end

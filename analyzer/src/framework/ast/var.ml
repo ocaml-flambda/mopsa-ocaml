@@ -57,7 +57,7 @@ let mkv name kind typ =
 
 (** Internal compare chain over variable kinds *)
 let var_compare_chain = TypeExt.mk_compare_chain (fun v1 v2 ->
-    Exceptions.panic "compare_var: unregistered variable kind"
+    compare v1 v2
   )
 
 
@@ -151,6 +151,14 @@ let mk_uniq_var orig uid typ =
   mkv name (V_uniq (orig, uid)) typ
 
 
+(** Create a fresh variable with a unique ID *)
+let mk_fresh_uniq_var orig typ () =
+  mkfresh (fun uid ->
+      let name = orig ^ ":" ^ (string_of_int uid) in
+      name, (V_uniq (orig, uid))
+    ) typ ()
+
+
 (** Create a fresh temporary variable *)
 let mktmp ?(typ=T_any) () =
   mkfresh (fun uid ->
@@ -177,6 +185,20 @@ let mk_range_attr_var range attr typ =
   mkv name (V_range_attr (range, attr)) typ
 
 
+(** Return the original name of variables with UIDs *)
+let get_orig_vname v =
+  match v.vkind with
+  | V_uniq (orig,_) -> orig
+  | _ -> Exceptions.panic "variable %a does not have an original name" pp_var v
+
+
+(** Change the original name of variables with UIDs *)
+let set_orig_vname name v =
+  let uid = match v.vkind with V_uniq (_,uid) -> uid | _ -> assert false in
+  mk_uniq_var name uid v.vtyp
+
+
+(** Registration of the common variable kinds *)
 let () =
   register_var {
     compare = (fun next v1 v2 ->

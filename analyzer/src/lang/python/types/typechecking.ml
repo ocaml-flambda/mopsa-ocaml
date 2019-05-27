@@ -154,19 +154,19 @@ struct
           let amap, tmap = get_domain_env T_cur man flow in
           let ret = ref [] in
           AD.AMap.iter (fun var addrs  ->
-              if var.org_vname = v then
+              if get_orig_vname var = v then
                 AD.ASet.iter (fun addr ->
                     match addr with
                     | Def addr ->
                       if TD.TMap.mem addr tmap then
                         let ty = TD.TMap.find addr tmap in
-                        ret := (fun fmt -> Format.fprintf fmt "%s ⇝ %a ⇝ %a" var.uniq_vname pp_addr addr TD.Polytypeset.print ty) :: !ret
+                        ret := (fun fmt -> Format.fprintf fmt "%s ⇝ %a ⇝ %a" var.vname pp_addr addr TD.Polytypeset.print ty) :: !ret
                       else
-                        ret := (fun fmt -> Format.fprintf fmt "%s ⇝ %a ⇝ notinmap" var.uniq_vname pp_addr addr) :: !ret
+                        ret := (fun fmt -> Format.fprintf fmt "%s ⇝ %a ⇝ notinmap" var.vname pp_addr addr) :: !ret
                     | Undef_local ->
-                      ret := (fun fmt -> Format.fprintf fmt "%s ⇝ undef_local" var.uniq_vname) :: !ret
+                      ret := (fun fmt -> Format.fprintf fmt "%s ⇝ undef_local" var.vname) :: !ret
                     | Undef_global ->
-                      ret := (fun fmt -> Format.fprintf fmt "%s ⇝ undef_global" var.uniq_vname) :: !ret
+                      ret := (fun fmt -> Format.fprintf fmt "%s ⇝ undef_global" var.vname) :: !ret
                   ) addrs
             ) amap;
           Format.fprintf fmt "@[<v>%a@]"

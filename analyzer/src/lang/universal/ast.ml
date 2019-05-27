@@ -212,11 +212,18 @@ let register_addr_kind (info: addr_kind info) =
 (** Addresses are grouped by static criteria to make them finite *)
 type addr_group = ..
 
+type addr_group +=
+  | G_all (** Group all addresses into one *)
+
 let addr_group_compare_chain : (addr_group -> addr_group -> int) ref =
   ref (fun a1 a2 -> compare a1 a2)
 
 let addr_group_pp_chain : (Format.formatter -> addr_group -> unit) ref =
-  ref (fun fmt a -> panic "addr_group_pp_chain: unknown address")
+  ref (fun fmt g ->
+      match g with
+      | G_all -> Format.pp_print_string fmt "*"
+      | _ -> panic "addr_group_pp_chain: unknown address"
+    )
 
 let pp_addr_group fmt ak =
   !addr_group_pp_chain fmt ak
@@ -241,9 +248,9 @@ type addr = {
 let akind addr = addr.addr_kind
 
 let pp_addr fmt a =
-  fprintf fmt "@@%a:%a:%s"
+  fprintf fmt "@@%a:%xd:%s"
     pp_addr_kind a.addr_kind
-    pp_addr_group a.addr_group
+    (Hashtbl.hash a.addr_group)
     (match a.addr_mode with WEAK -> "w" | STRONG -> "s")
 
 

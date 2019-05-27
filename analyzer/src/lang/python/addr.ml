@@ -115,8 +115,8 @@ let object_name obj =
   | A_py_function(F_builtin name) | A_py_function(F_unsupported name)
   | A_py_module(M_builtin name) | A_py_module(M_user (name, _))
     -> name
-  | A_py_function(F_user f) -> f.py_func_var.org_vname
-  | A_py_class(C_user c, _) -> c.py_cls_var.org_vname
+  | A_py_function(F_user f) -> get_orig_vname f.py_func_var
+  | A_py_class(C_user c, _) -> get_orig_vname c.py_cls_var
   | _ -> panic "builtin_name: %a is not a builtin" pp_addr (addr_of_object obj)
 
 let add_builtin_class obj () =
@@ -170,7 +170,7 @@ let find_builtin_attribute base attr =
     | A_py_class(C_builtin name, _) | A_py_module(M_builtin name) | A_py_module(M_user (name, _)) ->
       find_builtin (mk_dot_name (Some name) attr)
     | A_py_class(C_user cls, _) ->
-      let name = cls.py_cls_var.org_vname in
+      let name = get_orig_vname cls.py_cls_var in
       find_builtin (mk_dot_name (Some name) attr)
     | _ -> assert false
 
@@ -540,13 +540,13 @@ and search_c (l: py_object list list) : py_object option =
 let create_builtin_class kind name cls bases range =
   let mro = c3_lin ({
       addr_kind= (A_py_class (kind, bases));
-      addr_uid= 0;
+      addr_group = G_all;
       addr_mode = STRONG
     }, None)
   in
   let addr = {
       addr_kind = A_py_class(kind, mro);
-      addr_uid = 0;
+      addr_group = G_all;
       addr_mode = STRONG
     }
   in
@@ -555,7 +555,7 @@ let create_builtin_class kind name cls bases range =
 
 let () =
   Format.(
-    register_addr {
+    register_addr_kind {
       print =
         (fun default fmt a ->
            match a with
@@ -612,7 +612,7 @@ type addr_kind +=
   | A_py_instance of string
 
 let () =
-  Format.(register_addr {
+  Format.(register_addr_kind {
       print = (fun default fmt a ->
           match a with
           | A_py_instance s (*c -> fprintf fmt "Inst{%a}" pp_addr_kind (A_py_class (c, []))*)
