@@ -104,13 +104,14 @@ struct
     match ekind exp with
     | E_call({ekind = E_function (User_defined func)}, args) ->
       let in_flow = flow in
-      let in_flow_cur = Flow.set T_cur (Flow.get T_cur man.lattice in_flow) man.lattice (Flow.bottom (Flow.get_ctx in_flow))
-      and in_flow_other = Flow.remove T_cur in_flow in
+      let in_flow_cur = Flow.set T_cur (Flow.get T_cur man.lattice in_flow) man.lattice (Flow.bottom (Flow.get_ctx in_flow)) in
+      let new_vars, in_flow_cur = Inlining.Domain.inline_function_assign_args man func args range in_flow_cur in
+      let in_flow_other = Flow.remove T_cur in_flow in
       begin match find_signature man func.fun_name in_flow_cur with
         | None ->
           (* FIXME: good return variable? *)
           let ret = mkfresh_ranged (tag_range range "ret_var") () in
-          Inlining.Domain.inline_function man func args range flow ret |>
+          Inlining.Domain.inline_function_exec_body man func args range new_vars in_flow_cur ret |>
           Eval.bind_lowlevel (fun oeval_res out_flow cleaners ->
               debug "in bind@\n";
               match oeval_res with
@@ -141,17 +142,7 @@ struct
 
     | _ -> None
 
-  (* TODO: copying the S_return from inlining is not modular *)
-  let exec zone stmt man flow =
-    match skind stmt with
-    | S_return e ->
-      let cur = Flow.get T_cur man.lattice flow in
-      Flow.add (T_return (stmt.srange, e)) cur man.lattice flow |>
-      Flow.remove T_cur |>
-      Post.return |> Option.return
-
-    | _ -> None
-
+  let exec _ _ _ _ = None
   let ask _ _ _ = None
 
 end

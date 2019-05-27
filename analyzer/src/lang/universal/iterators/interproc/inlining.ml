@@ -95,13 +95,11 @@ struct
     | _ -> None
 
 
+
   (** Evaluation of expressions *)
   (** ========================= *)
 
-  let inline_function man f args range flow ret =
-    let start_time = Timing.start () in
-    debug "calling function %s" f.fun_name;
-    (* Check that no recursion is happening *)
+  let inline_function_assign_args man f args range flow =
     let cs = Callstack.get flow in
     if List.exists (fun cs -> cs.call_fun = f.fun_name) cs then
       Exceptions.panic_at range "Recursive call on function %s detected...@\nCallstack = %a@\n" f.fun_name Callstack.print cs;
@@ -116,11 +114,6 @@ struct
 
     (* Add parameters and local variables to the environment *)
     let new_vars = f.fun_parameters @ f.fun_locvars in
-    (* let new_vars_declaration_block = List.map (fun v ->
-     *     mk_add_var v (tag_range range "variable addition")
-     *   ) new_vars |> (fun x -> mk_block x (tag_range range "declaration_block"))
-     * in
-     * let flow0' = man.exec new_vars_declaration_block flow0 in *)
 
     (* Assign arguments to parameters *)
     let parameters_assign = List.mapi (fun i (param, arg) ->
@@ -133,10 +126,16 @@ struct
     let flow1 = Callstack.push f.fun_name range flow0 in
 
     (* Execute body *)
-    let flow2 = man.exec init_block flow1 |>
-                man.exec f.fun_body
-    in
+    new_vars, man.exec init_block flow1
 
+
+  let inline_function_exec_body man f args range new_vars flow ret =
+    (* Check that no recursion is happening *)
+
+    debug "cs flow = %a@\n" Callstack.print (Callstack.get flow);
+    let flow2 = man.exec f.fun_body flow in
+
+    debug "cs flow2 = %a@\n" Callstack.print (Callstack.get flow2);
     (* Iterate over return flows and assign the returned value to ret *)
     let flow3 =
       Flow.fold (fun acc tk env ->
@@ -155,6 +154,7 @@ struct
         flow2
     in
 
+    debug "cs flow3 = %a@\n" Callstack.print (Callstack.get flow3);
     (* Restore call stack *)
     let _, flow3 = Callstack.pop flow3 in
 
@@ -164,11 +164,8 @@ struct
           mk_remove_var v range
         ) (new_vars)
     in
-    let ignore_block = mk_block ignore_stmt_list range in
 
-    let flow4 = man.exec ignore_block flow3 in
-    debug "Analysis of %s took %.4f seconds.@\n" f.fun_name (Timing.stop start_time);
-    Eval.singleton (mk_var ret range) flow4 ~cleaners:[mk_remove_var ret range]
+    Eval.singleton (mk_var ret range) flow3 ~cleaners:(ignore_stmt_list @ [mk_remove_var ret range])
 
 
   let eval zone exp man flow =
@@ -176,7 +173,9 @@ struct
     match ekind exp with
     | E_call({ekind = E_function (User_defined f)}, args) ->
       let ret = mkfresh_ranged (tag_range range "ret_var") () in
-      inline_function man f args range flow ret |> Option.return
+      let new_vars, flow = inline_function_assign_args man f args range flow in
+      inline_function_exec_body man f args range new_vars flow ret
+      |> Option.return
 
     | _ -> None
 
