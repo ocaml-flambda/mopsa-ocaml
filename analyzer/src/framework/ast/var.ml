@@ -189,6 +189,7 @@ let mk_range_attr_var range attr typ =
 let get_orig_vname v =
   match v.vkind with
   | V_uniq (orig,_) -> orig
+  | V_tmp _ -> v.vname
   | _ -> Exceptions.panic "variable %a does not have an original name" pp_var v
 
 
