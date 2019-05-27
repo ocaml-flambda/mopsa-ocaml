@@ -389,7 +389,7 @@ struct
                   (Utils.mk_builtin_call "bool" [
                       (mk_binop
                          (mk_py_isinstance (mk_var ~mode:WEAK var_k range) type_k range)
-                         O_py_or
+                         O_py_and
                          (mk_py_isinstance (mk_var ~mode:WEAK var_v range) type_v range)
                          range)
                     ] range)
