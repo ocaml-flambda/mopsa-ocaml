@@ -40,21 +40,14 @@
             "python.data_model.aug_assign",
             "python.data_model.callable",
 
+            "python.types.t_string",
+            "python.types.t_int",
+            "python.types.t_float",
+            "python.types.t_complex",
+
             {
                 "apply": "universal.heap.recency.all",
-                "on": {
-                    "seq": [
-                        // "python.types.addr_env",
-                        "python.types.t_string",
-                        "python.types.t_int",
-                        "python.types.t_float",
-                        "python.types.t_complex",
-                        // "python.types.t_list",
-                        // "python.types.t_set",
-                        // "python.types.typing"
-                        "python.types.typechecking"
-                    ]
-                }
+                "on": "python.types.typechecking"
             }
         ]
     }
