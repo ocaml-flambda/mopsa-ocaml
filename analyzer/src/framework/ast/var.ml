@@ -55,25 +55,20 @@ let mkv name kind typ =
   {vname = name; vkind = kind; vtyp = typ}
 
 
-(** Internal compare chain over variable kinds *)
-let var_compare_chain = TypeExt.mk_compare_chain (fun v1 v2 ->
-    compare v1 v2
-  )
-
-
 (** Internal pretty printer chain over variable kinds *)
 let var_pp_chain = TypeExt.mk_print_chain (fun fmt v ->
     Format.pp_print_string fmt v.vname
   )
 
 
-(** Register a new kind of variables *)
-let register_var info =
-  TypeExt.register info var_compare_chain var_pp_chain
-
-
 (** Pretty printer of variables *)
 let pp_var fmt v = TypeExt.print var_pp_chain fmt v
+
+
+(** Internal compare chain over variable kinds *)
+let var_compare_chain = TypeExt.mk_compare_chain (fun v1 v2 ->
+    Pervasives.compare v1 v2
+  )
 
 
 (** Total order between variables *)
@@ -84,6 +79,11 @@ let compare_var v1 v2 =
       (fun () -> compare_typ v1.vtyp v2.vtyp);
     ] in
   res
+
+
+(** Register a new kind of variables *)
+let register_var info =
+  TypeExt.register info var_compare_chain var_pp_chain
 
 
 (** Variables as ordered elements, useful for maps *)
@@ -208,6 +208,9 @@ let () =
         | V_uniq (orig,uid), V_uniq (orig',uid') ->
           Pervasives.compare uid uid'
 
+        | V_uniq _, _ -> 1
+        | _, V_uniq _ -> -1
+
         | V_tmp (uid), V_tmp (uid') ->
           Pervasives.compare uid uid'
 
@@ -216,6 +219,7 @@ let () =
             (fun () -> compare attr attr');
             (fun () -> compare_var v v');
           ]
+
 
         | V_range_attr (r,attr), V_range_attr (r',attr') ->
           Compare.compose [
