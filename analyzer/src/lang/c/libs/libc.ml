@@ -170,12 +170,7 @@ struct
 
   (* Create a counter variable for a va_list *)
   let mk_valc_var va_list range =
-    let name = "$" ^ va_list.org_vname ^ "_counter" in
-    let vuid = match vkind va_list with
-      | V_common v -> v
-      | V_c v -> v.var_uid
-      | _ -> assert false in
-    let v = mkv name (name ^ (string_of_int vuid)) (V_common vuid) T_int in
+    let v = mk_attr_var va_list "counter" T_int in
     mk_var v range
 
   (* Initialize a counter *)
@@ -211,12 +206,13 @@ struct
 
     | _ -> panic_at range "resolve_va_list: pointed object %a not supported" pp_expr pt
 
+
   (** Evaluate calls to va_start *)
   let va_start ap param range man flow =
     let last, _ = get_unnamed_args flow in
 
     (* Ensure that param is the last named parameter *)
-    if last.org_vname <> param.org_vname
+    if last.vname <> param.vname
     then panic_at range "va_start: %a is not the last named parameter"
         pp_var param
     ;

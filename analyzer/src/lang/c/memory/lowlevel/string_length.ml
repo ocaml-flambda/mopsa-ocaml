@@ -78,6 +78,40 @@ struct
     }
   }
 
+
+  (** {2 Variable of string lengths} *)
+  (** ****************************** *)
+
+  (** Registration of a new var kind for length variables *)
+  type var_kind +=
+    | V_c_string_length of base
+
+  let () =
+    register_var {
+      print = (fun next fmt v ->
+          match v.vkind with
+          | V_c_string_length base -> Format.fprintf fmt "length(%a)" pp_base base
+          | _ -> next fmt v
+        );
+      compare = (fun next v1 v2 ->
+          match v1.vkind, v2.vkind with
+          | V_c_string_length(b1), V_c_string_length(b2) -> compare_base b1 b2
+          | _ -> next v1 v2
+        );
+    }
+
+  (** Create a length variable. The returned variable is a
+      mathematical integer, not a C variable.
+  *)
+  let mk_length_var base range =
+    let name =
+      let () = Format.fprintf Format.str_formatter "length(%a)" pp_base base in
+      Format.flush_str_formatter ()
+    in
+    let v = mkv name (V_c_string_length base) T_int in
+    mk_var v range
+
+
   (** {2 Initialization procedure} *)
   (** **************************** *)
 
@@ -87,29 +121,15 @@ struct
   (** {2 Abstract transformers} *)
   (** ************************* *)
 
-  (** Create a length variable. The returned variable is a
-      mathematical integer, not a C variable (it has type [T_int])
-  *)
-  let mk_length_var base range =
-    let org_vname =
-      let () = Format.fprintf Format.str_formatter "length(%a)" pp_base base in
-      Format.flush_str_formatter ()
-    in
-    let vuid = base_uid base in
-    let uniq_vname = org_vname ^ ":" ^ (string_of_int vuid) in
-    let v = mkv org_vname uniq_vname (V_common vuid) T_int in
-    mk_var v range
-
-
 
   (** Declaration of a C variable *)
-  let declare_variable v init range man flow =
+  let declare_variable v init scope range man flow =
     (* Since we are in the Z_low_level zone, we assume that init has
        been translated by a structured domain into a flatten
        initialization *)
-    let flat_init, scope =
-      match init, v.vkind with
-      | Some (C_init_flat l), V_c { var_scope } -> l, var_scope
+    let flat_init =
+      match init with
+      | Some (C_init_flat l) -> l
       | _ -> assert false
     in
 
@@ -465,8 +485,8 @@ struct
   (** Transformers entry point *)
   let exec zone stmt man flow =
     match skind stmt with
-    | S_c_declaration (v,init) when not (is_c_scalar_type v.vtyp) ->
-      declare_variable v init stmt.srange man flow |>
+    | S_c_declaration (v,init,scope) when not (is_c_scalar_type v.vtyp) ->
+      declare_variable v init scope stmt.srange man flow |>
       Option.return
 
     | S_add { ekind = E_var (v, _) } when not (is_c_scalar_type v.vtyp) ->

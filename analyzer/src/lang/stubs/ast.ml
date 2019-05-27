@@ -190,7 +190,7 @@ type addr_kind +=
   | A_stub_resource of string (** resource address *)
 
 let () =
-  register_addr {
+  register_addr_kind {
     print = (fun next fmt addr_kind ->
         match addr_kind with
         | A_stub_resource res -> Format.pp_print_string fmt res

@@ -328,7 +328,7 @@ and from_stmt ctx ((skind, range): C_AST.statement) : stmt =
     | C_AST.S_local_declaration v ->
       let vv = from_var ctx v in
       let init = from_init_option ctx v.var_init in
-      Ast.S_c_declaration (vv, init)
+      Ast.S_c_declaration (vv, init, from_var_scope ctx v.var_kind)
     | C_AST.S_expression e -> Universal.Ast.S_expression (from_expr ctx e)
     | C_AST.S_block block -> from_block ctx srange block |> Framework.Ast.Stmt.skind
     | C_AST.S_if (cond, body, orelse) -> Universal.Ast.S_if (from_expr ctx cond, from_block ctx srange body, from_block ctx srange orelse)
@@ -444,16 +444,17 @@ and from_character_kind : C_AST.character_kind -> Ast.c_character_kind = functio
 and from_var ctx (v: C_AST.variable) : var =
   try Hashtbl.find ctx.ctx_vars v.var_uid |> fst
   with Not_found ->
-    let v' = {
-      org_vname = v.var_org_name;
-      uniq_vname = v.var_unique_name;
-      vkind = V_c {
-          var_scope = from_var_scope ctx v.var_kind;
-          var_range = from_range v.var_range;
-          var_uid = v.var_uid;
-        };
-      vtyp = from_typ ctx v.var_type;
-    }
+    let v' =
+      mkv
+        v.var_unique_name
+        (V_cvar {
+            cvar_orig_name = v.var_org_name;
+            cvar_uniq_name = v.var_unique_name;
+            cvar_scope = from_var_scope ctx v.var_kind;
+            cvar_range = from_range v.var_range;
+            cvar_uid = v.var_uid;
+          })
+        (from_typ ctx v.var_type)
     in
     let v'' = patch_array_parameters v' in
     Hashtbl.add ctx.ctx_vars v.var_uid (v'', v);

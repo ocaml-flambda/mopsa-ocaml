@@ -50,16 +50,6 @@ let compare_base b b' = match b, b' with
 
   | _ -> compare b b'
 
-let base_uid = function
-  | V v ->
-    begin match vkind v with
-    | V_c v -> v.var_uid
-    | V_common v -> v
-    | _ -> panic "base_uid on unknown var kind"
-    end
-  | A a -> a.addr_uid
-  | S _ -> panic ~loc:__LOC__ "base_uid: string literals not supported"
-  | Z -> panic  ~loc:__LOC__ "base_uid: absolute pointers not supported"
 
 let base_size =
   function
@@ -75,15 +65,6 @@ let base_mode =
   | A a -> a.addr_mode
   | Z -> panic ~loc:__LOC__ "base_mode: addresses not supported"
 
-let base_scope =
-  function
-  | V { vkind = V_c {var_scope} } -> var_scope
-  | _ -> assert false
-
-let base_range =
-  function
-  | V { vkind = V_c {var_range} } -> var_range
-  | _ -> assert false
 
 let is_base_readonly = function
   | S _ -> true

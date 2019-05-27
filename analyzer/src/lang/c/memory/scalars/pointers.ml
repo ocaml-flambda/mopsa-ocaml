@@ -179,7 +179,7 @@ struct
 
     let patch_stmt stmt a acc =
       match skind stmt with
-      | S_c_declaration (var,init) ->
+      | S_c_declaration (var,init,scope) ->
         let v = Map.find var a in
         Some (Map.add var v acc)
       | _ -> None
@@ -230,29 +230,49 @@ struct
     set_domain_env T_cur Map.empty man flow
 
 
-  (** {2 Utility functions for evaluations *)
-  (** ==================================== *)
+  (** {2 Offset variables} *)
+  (** ==================== *)
+
+  type var_kind +=
+    | V_c_ptr_offset of var
+
+
+  let pp_offset fmt p =
+    Format.fprintf fmt "offset(%a)" pp_var p
+
+
+  let () =
+    register_var {
+      print = (fun next fmt v ->
+          match v.vkind with
+          | V_c_ptr_offset p -> pp_offset fmt p
+          | _ -> next fmt v
+        );
+
+      compare = (fun next v1 v2 ->
+          match v1.vkind, v2.vkind with
+          | V_c_ptr_offset p1, V_c_ptr_offset p2 -> compare_var p1 p2
+          | _ -> next v1 v2
+        );
+    }
+
 
   (** Create the offset variable of a pointer *)
   let mk_offset_var (p:var) : var =
-    match vkind p with
-    | V_common uid ->
-      let vname = "offset(" ^ p.org_vname ^ ")" in
-      let uniq = vname ^ ":" ^ (string_of_int uid) in
-      mkv vname uniq (vkind p) T_int
-    | V_c { var_uid } ->
-      let vname = "offset(" ^ p.org_vname ^ ")" in
-      let uniq = vname ^ ":" ^ (string_of_int var_uid) in
-      mkv vname uniq (vkind p) T_int
-    | _ ->
-      Exceptions.panic "%a@\n" pp_var p
-      (* mkfresh_common (fun uid ->
-       *   let vname = "offset(" ^ p.org_vname ^ ")" in
-       *   let uniq = vname ^ ":" ^ (string_of_int uid) in
-       *   vname, uniq) T_int () *)
+    let name =
+      let () = pp_offset Format.str_formatter p in
+      Format.flush_str_formatter ()
+    in
+    mkv name (V_c_ptr_offset p) T_int
 
-  let mk_offset_var_expr (p:var) range : expr =
+
+  (** Create the offset expression of a pointer *)
+  let mk_offset_expr (p:var) range : expr =
     mk_var (mk_offset_var p) ~mode:STRONG range
+
+
+  (** {2 Utility functions for evaluations *)
+  (** ==================================== *)
 
   let pointed_size t =
     let tt = under_type t |> remove_typedef_qual in
@@ -326,7 +346,7 @@ struct
   (* Create the offset expression from optional pointer info *)
   let offset_expr v o range =
     match v, o with
-    | Some vv, Some oo -> mk_binop (mk_offset_var_expr vv range) O_plus oo range ~etyp:T_int
+    | Some vv, Some oo -> mk_binop (mk_offset_expr vv range) O_plus oo range ~etyp:T_int
     | None, Some oo -> oo
     | _ -> assert false
 
@@ -426,7 +446,7 @@ struct
       Eval.singleton (mk_c_points_to_bloc base offset exp.erange) flow
 
     | EQ (p, offset) ->
-      let offset' = mk_binop (mk_offset_var_expr p exp.erange) O_plus offset ~etyp:T_int exp.erange in
+      let offset' = mk_binop (mk_offset_expr p exp.erange) O_plus offset ~etyp:T_int exp.erange in
       let bases = Map.find p (get_domain_env T_cur man flow) in
       if BaseSet.is_top bases then
         Eval.singleton (mk_c_points_to_top exp.erange) flow
@@ -495,7 +515,7 @@ struct
           | None -> flow
           | Some vv ->
             if BaseSet.mem_block b then
-              man.exec (mk_remove (mk_offset_var_expr vv exp.erange) exp.erange) flow
+              man.exec (mk_remove (mk_offset_expr vv exp.erange) exp.erange) flow
             else
               flow
         in
@@ -724,7 +744,7 @@ struct
 
   (** Assignment abstract transformer *)
   let assign p q range man flow =
-    let o = mk_offset_var_expr p range in
+    let o = mk_offset_expr p range in
     match eval_pointer q with
     | ADDROF (b, offset) ->
       let flow' = map_domain_env T_cur (Map.add p (BaseSet.block b)) man flow in
@@ -738,7 +758,7 @@ struct
       let flow' = map_domain_env T_cur (fun a -> Map.add p (Map.find q a) a) man flow in
       (* Assign offset only if q points to a block *)
       if mem_domain_env T_cur (fun a -> Map.find q a |> BaseSet.mem_block) man flow then
-        let qo = mk_offset_var_expr q range in
+        let qo = mk_offset_expr q range in
         let offset' = mk_binop qo O_plus offset ~etyp:T_int range in
 
         man.eval offset' ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) flow' |>
@@ -765,8 +785,8 @@ struct
       man.exec_sub ~zone:(Universal.Zone.Z_u_num) (mk_assign o (mk_top T_int range) range)
 
   (* Declaration of a scalar pointer variable *)
-  let declare_var v init range man flow =
-    match var_scope v, init with
+  let declare_var v init scope range man flow =
+    match scope, init with
     (** Uninitialized global variable *)
     | Variable_global, None | Variable_file_static _, None ->
       (* The variable is initialized with NULL (C99 6.7.8.10) *)
@@ -788,8 +808,8 @@ struct
   let exec zone stmt man flow =
     let range = srange stmt in
     match skind stmt with
-    | S_c_declaration(p,init) when is_c_pointer_type p.vtyp ->
-      declare_var p init stmt.srange man flow |>
+    | S_c_declaration(p,init,scope) when is_c_pointer_type p.vtyp ->
+      declare_var p init scope stmt.srange man flow |>
       Option.return
 
     | S_assign({ekind = E_var(p, _)}, q) when is_c_pointer_type p.vtyp ->
@@ -797,14 +817,14 @@ struct
       Option.return
 
     | S_add { ekind = E_var (p, _) } when is_c_pointer_type p.vtyp ->
-      let o = mk_offset_var_expr p range in
+      let o = mk_offset_expr p range in
       map_domain_env T_cur (Map.add p BaseSet.top) man flow |>
       man.exec_sub ~zone:(Universal.Zone.Z_u_num) (mk_add o range) |>
       Option.return
 
     | S_remove { ekind = E_var (p, _) } when is_c_pointer_type p.vtyp ->
       let flow1 = map_domain_env T_cur (Map.remove p) man flow in
-      let o = mk_offset_var_expr p range in
+      let o = mk_offset_expr p range in
       man.exec_sub ~zone:(Universal.Zone.Z_u_num) (mk_remove o range) flow1 |>
       Option.return
 
@@ -832,10 +852,10 @@ struct
       let pl = List.map (function { ekind = E_var (q,_) } -> q | _ -> assert false) pl in
       let a = get_domain_env T_cur man flow in
       let pt = Map.find p a in
-      let o = mk_offset_var_expr p range in
+      let o = mk_offset_expr p range in
       let ool, flow =
         pl |> List.fold_left (fun (ool, flow) p' ->
-            let oo = mk_offset_var_expr p' range in
+            let oo = mk_offset_expr p' range in
             oo :: ool, map_domain_env T_cur (Map.add p' pt) man flow
           ) ([],flow)
       in
@@ -854,8 +874,8 @@ struct
           a'
         ) man flow
       in
-      let o1 = mk_offset_var_expr p1 range in
-      let o2 = mk_offset_var_expr p2 range in
+      let o1 = mk_offset_expr p1 range in
+      let o2 = mk_offset_expr p2 range in
       man.exec_sub ~zone:(Universal.Zone.Z_u_num) (mk_rename o1 o2 range) flow1 |>
       Option.return
 

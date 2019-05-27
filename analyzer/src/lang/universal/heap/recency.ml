@@ -19,45 +19,71 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** array access and structure member access transformation to pointer
-   arithmetic*)
+
+(** Abstraction of the heap *)
+
 
 open Mopsa
-open Framework.Core.Sig.Domain.Intermediate
+open Framework.Core.Sig.Stacked.Intermediate
 open Ast
 open Zone
+open Policies
+
+
 
 
 (** {2 Domain definition} *)
 (** ===================== *)
 
-module Domain(AddrInfo: Pool.ADDRINFO) =
+module Domain(Policy: POLICY) =
 struct
 
-  (** Lattice definition *)
-  (** ================== *)
+  (** Domain header *)
+  (** ============= *)
 
-  module Pool = Pool.Make(AddrInfo)
+  module Pool = Framework.Lattices.Powerset.Make(
+    struct
+      type t = addr
+      let compare = compare_addr
+      let print = pp_addr
+    end
+    )
 
-  include Pool
+  type t = Pool.t
 
-  let is_bottom _ = false
+  include GenDomainId(struct
+      type typ = t
+      let name = "universal.heap.recency" ^ "." ^ Policy.name
+    end)
 
   let print fmt pool =
     Format.fprintf fmt "heap: @[%a@]@\n"
       Pool.print pool
 
-  include GenDomainId(struct
-      type typ = t
-      let name = "universal.heap.recency" ^ "." ^ AddrInfo.name
-    end)
+  let bottom = Pool.bottom
+
+  let top = Pool.top
 
 
-  let widen ctx a b =
-    let res = join a b in
-    (* le soucis c'est que le widening peut pas appeler un rename global ce qui va pas être très modulaire, non ? *)
-    debug "widen@\n@[%a@\n%a@\n= %a@]@\nlastb = %a@\n" print a print b print res pp_addr (Top.top_to_exn b |> Set.max_elt);
-    res
+  (** Lattice operators *)
+  (** ================= *)
+
+  let is_bottom _ = false
+
+  let subset man ctx (a,s) (a',s') =
+    assert false
+
+  let join man ctx (a,s) (a',s') =
+    assert false
+
+  let meet man ctx (a,s) (a',s') =
+    assert false
+
+  let widen man ctx (a,s) (a',s') =
+    assert false
+
+  let merge ctx pre (a,log) (a',log') =
+    assert false
 
   (** Zoning definition *)
   (** ================= *)
@@ -72,8 +98,7 @@ struct
   (** ============== *)
 
   let init prog man flow =
-    set_domain_env T_cur empty man flow |>
-    Flow.set_ctx (Flow.get_ctx flow |> Context.add_unit Pool.ctx_key Equiv.empty)
+    set_domain_env T_cur Pool.empty man flow
 
 
   (** Post-conditions *)
@@ -84,8 +109,8 @@ struct
     (* 𝕊⟦ free(addr); ⟧ *)
     | S_free_addr addr ->
       let flow' =
-        if is_old addr flow then flow
-        else map_domain_env T_cur (remove addr) man flow
+        if addr.addr_mode = WEAK then flow
+        else map_domain_env T_cur (Pool.remove addr) man flow
       in
       let stmt' = mk_remove (mk_addr addr stmt.srange) stmt.srange in
       man.exec stmt' flow' |>
@@ -100,14 +125,11 @@ struct
 
   let eval zone expr man flow =
     match ekind expr with
-    | E_alloc_addr(addr_kind, STRONG) ->
+    | E_alloc_addr(addr_kind) ->
       let pool = get_domain_env T_cur man flow in
+      let range = expr.erange in
 
-      let cs = Callstack.get flow in
-      let range = erange expr in
-
-      let recent_uid, flow = get_id_flow (extract (addr_kind, cs, range, recent_flag)) flow in
-      let recent_addr = {addr_kind; addr_uid = recent_uid; addr_mode = STRONG} in
+      let recent_addr = Policy.mk_addr addr_kind STRONG range flow in
 
       (* Change the sub-domain *)
       let flow' =
@@ -118,32 +140,16 @@ struct
         else
           let () = debug "rename to perform@\n" in
           (* Otherwise, we make the previous recent address as an old one *)
-          let old_uid, flow = get_id_flow (extract (addr_kind, cs, range, old_flag)) flow in
-          let old_addr = {addr_kind; addr_uid = old_uid; addr_mode = WEAK} in
-          map_domain_env T_cur (add old_addr) man flow |>
+          let old_addr = Policy.mk_addr addr_kind WEAK range flow in
+          map_domain_env T_cur (Pool.add old_addr) man flow |>
           man.exec (mk_rename (mk_addr recent_addr range) (mk_addr old_addr range) range)
       in
 
       (* Add the recent address *)
-      map_domain_env T_cur (add recent_addr) man flow' |>
+      map_domain_env T_cur (Pool.add recent_addr) man flow' |>
       Eval.singleton (mk_addr recent_addr range) |>
       Option.return
 
-
-    | E_alloc_addr(addr_kind, WEAK) ->
-      let cs = Callstack.get flow in
-      let range = erange expr in
-
-      debug "weakly allocate %a in %a on call stack:@\n @[%a@]"
-        pp_addr_kind addr_kind
-        pp_range range
-        Callstack.print cs;
-
-      let old_uid, flow = get_id_flow (extract (addr_kind, cs, range, old_flag)) flow in
-      let old_addr = {addr_kind; addr_uid = old_uid; addr_mode = WEAK} in
-      map_domain_env T_cur (add old_addr) man flow |>
-      Eval.singleton (mk_addr old_addr range) |>
-      Option.return
 
     | _ -> None
 
@@ -156,11 +162,14 @@ struct
 
 end
 
-module HeapRecency = Domain(Pool.AddrInfoRecency)
-module HeapTypes   = Domain(Pool.AddrInfoTypes)
-module HeapTypes2  = Domain(Pool.AddrInfoKindOnly)
+
+
+
+module Heap1 = Domain(StackRangePolicy)
+module Heap2 = Domain(StackPlocy)
+module Heap3 = Domain(NonePolicy)
 
 let () =
-  Framework.Core.Sig.Domain.Intermediate.register_domain (module HeapRecency);
-  Framework.Core.Sig.Domain.Intermediate.register_domain (module HeapTypes);
-  Framework.Core.Sig.Domain.Intermediate.register_domain (module HeapTypes2)
+  Framework.Core.Sig.Stacked.Intermediate.register_stack (module Heap1);
+  Framework.Core.Sig.Stacked.Intermediate.register_stack (module Heap2);
+  Framework.Core.Sig.Stacked.Intermediate.register_stack (module Heap3)

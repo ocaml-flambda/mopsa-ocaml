@@ -187,7 +187,7 @@ struct
 
 
   (** 𝕊⟦ type v = init; ⟧ *)
-  let declare v init range man flow =
+  let declare v init scope range man flow =
     let flat_init = flatten_init init v.vtyp range in
 
     (* Evaluate C expressions into low-level expressions *)
@@ -214,7 +214,7 @@ struct
     post_eval man @@ fun init_list flow ->
 
     let init = C_init_flat init_list in
-    man.exec_sub ~zone:Z_c_low_level (mk_c_declaration v (Some init) range) flow
+    man.exec_sub ~zone:Z_c_low_level (mk_c_declaration v (Some init) scope range) flow
 
 
   (** 𝕊⟦ lval = e; ⟧ when lval is scalar *)
@@ -281,8 +281,8 @@ struct
 
   let exec zone stmt man flow =
     match skind stmt with
-    | S_c_declaration(v, init) ->
-      declare v init stmt.srange man flow |>
+    | S_c_declaration(v, init, scope) ->
+      declare v init scope stmt.srange man flow |>
       Option.return
 
     | S_assign(lval, e)

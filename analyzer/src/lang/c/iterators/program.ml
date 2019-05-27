@@ -89,21 +89,21 @@ struct
     List.fold_left (fun flow (v, init) ->
         let cvar =
           match v.vkind with
-          | V_c cvar -> cvar
+          | V_cvar cvar -> cvar
           | _ -> assert false
         in
-        if cvar.var_scope = Variable_extern then flow
+        if cvar.cvar_scope = Variable_extern then flow
         else
           let stmt =
             match init with
             | Some (C_init_stub stub)->
               mk_block [
-                mk_add_var v cvar.var_range;
-                Stubs.Ast.mk_stub_init v stub cvar.var_range
-              ] cvar.var_range
+                mk_add_var v cvar.cvar_range;
+                Stubs.Ast.mk_stub_init v stub cvar.cvar_range
+              ] cvar.cvar_range
 
             | _ ->
-              mk_c_declaration v init cvar.var_range
+              mk_c_declaration v init cvar.cvar_scope cvar.cvar_range
           in
           man.exec stmt flow
       ) flow
@@ -114,7 +114,10 @@ struct
       ) functions
 
   let find_global v globals =
-    List.find (fun (v',_) -> v'.org_vname = v) globals |> fst
+    List.find (function
+        | ({vkind = (V_cvar {cvar_orig_name})},_) -> cvar_orig_name = v
+        | _ -> false
+      ) globals |> fst
 
   let call f args man flow =
     let stmt = mk_c_call_stmt f args f.c_func_range in
