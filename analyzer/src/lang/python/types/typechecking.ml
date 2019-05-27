@@ -9,24 +9,16 @@ open MapExt
 
 let name = "python.types.typechecking"
 
-let opt_python_modular_interproc : bool ref = ref true
-let opt_python_modular_interproc_cache_size : int ref = ref 10
+let opt_py_type_polymorphism = ref false
 
 let () =
   register_domain_option name {
-    key = "-py-no-modular-interproc";
+    key = "-py-type-polymorphism";
     category = "Python";
-    doc = " do not use the modular interprocedural analysis";
-    spec = ArgExt.Clear opt_python_modular_interproc;
-    default = "use it";
-  };
-  register_domain_option name {
-    key = "-py-mod-interproc-size";
-    category = "Python";
-    doc = " size of the cache in the modular interprocedural analysis";
-    spec = ArgExt.Set_int opt_python_modular_interproc_cache_size;
-    default = string_of_int !opt_python_modular_interproc_cache_size;
-  };
+    doc = " enable type polymorphism";
+    spec = ArgExt.Set opt_py_type_polymorphism;
+    default = "false"
+  }
 
 
 
@@ -46,16 +38,6 @@ struct
   let name = "python.types.typechecking"
   let debug fmt = Debug.debug ~channel:name fmt
 
-  (* let opt_polymorphism = ref false
-   *
-   * let () =
-   *   register_domain_option name {
-   *     key = "-pyty-polymorphism";
-   *     category = "Python";
-   *     doc = " enable type polymorphism";
-   *     spec = ArgExt.Set opt_polymorphism;
-   *     default = "false"
-   *   } *)
 
   let extract_types_aset (t: TD.t) (aset: AD.ASet.t) : TD.Polytypeset.t =
     AD.ASet.fold (fun addr acc ->
@@ -134,39 +116,37 @@ struct
 
 
 
-  (* let join man a a' =
-   *   Framework.Core.Sig.Domain.Intermediate.lift_binop
-   *     (fun (hd, tl) (hd', tl') ->
-   *        (\* if !opt_polymorphism then *\)
-   *        match hd, hd' with
-   *        | AD.AMap.Map.Top, _ | _, AD.AMap.Map.Top -> Iter.top
-   *        | _ ->
-   *          match tl, tl' with
-   *          | TD.TMap.Map.Top, _ | _, TD.TMap.Map.Top -> Iter.top
-   *          | _ ->
-   *            debug "hd, tl = %a, %a@\n@\nhd', tl' = %a, %a@\n" AD.print hd TD.print tl AD.print hd' TD.print tl';
-   *            let p = create_partition hd tl
-   *            and p' = create_partition hd' tl' in
-   *            let ip = intersect_partitions p p' in
-   *            let ip = List.filter (fun (vars, ty1, ty2) -> not (TD.Polytypeset.is_top ty1) && not (TD.Polytypeset.is_top ty2) && VarSet.cardinal vars > 1 && TD.Polytypeset.cardinal ty1 > 0 && TD.Polytypeset.cardinal ty2 > 0 && not (TD.Polytypeset.cardinal ty1 = 1 && TD.Polytypeset.equal ty1 ty2))
-   *                ip in
-   *            debug "interesting partitions:@[@\n%a@]@\n" pp_ip ip;
-   *            (\* FIXME: is that necessary? *\)
-   *            let jhd = AD.join hd hd' and jtl = TD.join tl tl' in
-   *            let rhd, rabsheap = List.fold_left (fun (rhd, rabsheap) (vars, ty1, ty2) ->
-   *                let alpha = get_fresh_a_py_var () in
-   *                let addr = {addr_uid = alpha; addr_kind = A_py_var alpha; addr_mode = WEAK} in
-   *                let types = TD.Polytypeset.join ty1 ty2 in
-   *                let rhd = VarSet.fold (fun var rhd -> AD.AMap.add var (AD.ASet.singleton (Def addr)) rhd) vars rhd in
-   *                let rabsheap = TD.TMap.add addr types rabsheap in
-   *                (rhd, rabsheap)
-   *              ) (jhd, jtl) ip in
-   *            debug "result is %a@\n%a@\n" AD.print rhd TD.print rabsheap;
-   *            rhd, rabsheap
-   *            (\* else
-   *             *   Iter.join annot (hd, tl) (hd', tl') *\)
-   *     ) man a a' *)
-
+  let join man a a' =
+    if !opt_py_type_polymorphism then
+      Framework.Core.Sig.Domain.Intermediate.lift_binop
+        (fun (hd, tl) (hd', tl') ->
+           match hd, hd' with
+           | AD.AMap.Map.Top, _ | _, AD.AMap.Map.Top -> Iter.top
+           | _ ->
+             match tl, tl' with
+             | TD.TMap.Map.Top, _ | _, TD.TMap.Map.Top -> Iter.top
+             | _ ->
+               debug "hd, tl = %a, %a@\n@\nhd', tl' = %a, %a@\n" AD.print hd TD.print tl AD.print hd' TD.print tl';
+               let p = create_partition hd tl
+               and p' = create_partition hd' tl' in
+               let ip = intersect_partitions p p' in
+               let ip = List.filter (fun (vars, ty1, ty2) -> not (TD.Polytypeset.is_top ty1) && not (TD.Polytypeset.is_top ty2) && VarSet.cardinal vars > 1 && TD.Polytypeset.cardinal ty1 > 0 && TD.Polytypeset.cardinal ty2 > 0 && not (TD.Polytypeset.cardinal ty1 = 1 && TD.Polytypeset.equal ty1 ty2))
+                   ip in
+               debug "interesting partitions:@[@\n%a@]@\n" pp_ip ip;
+               (* FIXME: is that necessary? *)
+               let jhd = AD.join hd hd' and jtl = TD.join tl tl' in
+               let rhd, rabsheap = List.fold_left (fun (rhd, rabsheap) (vars, ty1, ty2) ->
+                   let alpha = get_fresh_a_py_var () in
+                   let addr = {addr_uid = alpha; addr_kind = A_py_var alpha; addr_mode = WEAK} in
+                   let types = TD.Polytypeset.join ty1 ty2 in
+                   let rhd = VarSet.fold (fun var rhd -> AD.AMap.add var (AD.ASet.singleton (Def addr)) rhd) vars rhd in
+                   let rabsheap = TD.TMap.add addr types rabsheap in
+                   (rhd, rabsheap)
+                 ) (jhd, jtl) ip in
+               debug "result is %a@\n%a@\n" AD.print rhd TD.print rabsheap;
+               rhd, rabsheap
+        ) man a a'
+    else Iter.join man a a'
 
   let ask : type r. r query -> ('a, t) man -> 'a flow -> r option = fun query man flow ->
     match query with
