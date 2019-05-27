@@ -73,6 +73,8 @@ struct
 
   let zones = [Zone.Z_c_scalar]
 
+  let widen = join
+
   let null = singleton PB_null
 
   let invalid = singleton PB_invalid
