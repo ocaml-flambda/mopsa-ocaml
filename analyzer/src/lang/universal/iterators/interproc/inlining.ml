@@ -172,7 +172,8 @@ struct
     let range = erange exp in
     match ekind exp with
     | E_call({ekind = E_function (User_defined f)}, args) ->
-      let ret = mk_range_attr_var range "ret_var" T_any in
+      let ret_typ = match f.fun_return_type with None -> T_any | Some t -> t in
+      let ret = mk_range_attr_var range "ret_var" ret_typ in
       let new_vars, flow = inline_function_assign_args man f args range flow in
       inline_function_exec_body man f args range new_vars flow ret
       |> Option.return
