@@ -83,7 +83,7 @@ let expr_compare_chain = TypeExt.mk_compare_chain (fun e1 e2 ->
         ]
       | E_constant c1, E_constant c2 -> compare_constant c1 c2
 
-      | _ -> Pervasives.compare e1 e2
+      | _ -> Pervasives.compare (ekind e1) (ekind e2)
   )
 
 
