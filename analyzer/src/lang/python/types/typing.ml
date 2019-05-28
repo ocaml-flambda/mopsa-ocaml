@@ -836,7 +836,7 @@ struct
                   process "NotImplementedType"
                 else if is_ao addr_integers then
                   process "int"
-                else if addr_obj.addr_group = G_all then (* FIXME: I'm not sure here if this comparison is correct? *)
+                else if addr_obj.addr_group = G_all then
                   match akind addr_obj with
                   | A_py_instance i ->
                     assert (is_builtin_name i);
