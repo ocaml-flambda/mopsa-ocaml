@@ -201,6 +201,7 @@ let pp_addr_kind fmt ak =
   !addr_kind_pp_chain fmt ak
 
 let compare_addr_kind ak1 ak2 =
+  if ak1 == ak2 then 0 else
   !addr_kind_compare_chain ak1 ak2
 
 let register_addr_kind (info: addr_kind info) =
@@ -229,7 +230,7 @@ let pp_addr_group fmt ak =
   !addr_group_pp_chain fmt ak
 
 let compare_addr_group a1 a2 =
-  !addr_group_compare_chain a1 a2
+  if a1 == a2 then 0 else !addr_group_compare_chain a1 a2
 
 let register_addr_group (info: addr_group info) =
   addr_group_compare_chain := info.compare !addr_group_compare_chain;
@@ -248,18 +249,25 @@ type addr = {
 let akind addr = addr.addr_kind
 
 let pp_addr fmt a =
-  fprintf fmt "@@%a:%xd:%s"
-    pp_addr_kind a.addr_kind
-    (Hashtbl.hash a.addr_group)
-    (match a.addr_mode with WEAK -> "w" | STRONG -> "s")
+  if a.addr_group = G_all then
+    fprintf fmt "@@%a:*:%s"
+      pp_addr_kind a.addr_kind
+      (match a.addr_mode with WEAK -> "w" | STRONG -> "s")
+  else
+    fprintf fmt "@@%a:%xd:%s"
+      pp_addr_kind a.addr_kind
+      (Hashtbl.hash a.addr_group)
+      (match a.addr_mode with WEAK -> "w" | STRONG -> "s")
+
 
 
 let compare_addr a b =
-  Compare.compose [
-    (fun () -> compare_addr_kind a.addr_kind b.addr_kind);
-    (fun () -> compare_addr_group a.addr_group b.addr_group);
-    (fun () -> compare_mode a.addr_mode b.addr_mode);
-  ]
+  if a == b then 0
+  else Compare.compose [
+      (fun () -> compare_addr_kind a.addr_kind b.addr_kind);
+      (fun () -> compare_addr_group a.addr_group b.addr_group);
+      (fun () -> compare_mode a.addr_mode b.addr_mode);
+    ]
 
 
 (** Address variables *)

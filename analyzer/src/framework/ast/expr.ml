@@ -103,7 +103,7 @@ let register_expr_compare cmp = TypeExt.register_compare cmp expr_compare_chain
 let register_expr_pp pp = TypeExt.register_print pp expr_pp_chain
 
 let compare_expr e1 e2 =
-  if e1 == e2 then 0 else TypeExt.compare expr_compare_chain e1 e2
+  TypeExt.compare expr_compare_chain e1 e2
 
 let pp_expr fmt e =
   TypeExt.print expr_pp_chain fmt e
