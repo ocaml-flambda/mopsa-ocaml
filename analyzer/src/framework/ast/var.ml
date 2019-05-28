@@ -73,12 +73,12 @@ let var_compare_chain = TypeExt.mk_compare_chain (fun v1 v2 ->
 
 (** Total order between variables *)
 let compare_var v1 v2 =
-  let res = Compare.compose [
+  if v1 == v2 then 0
+  else Compare.compose [
       (fun () -> TypeExt.compare var_compare_chain v1 v2);
       (fun () -> Pervasives.compare v1.vname v2.vname);
       (fun () -> compare_typ v1.vtyp v2.vtyp);
-    ] in
-  res
+    ]
 
 
 (** Register a new kind of variables *)

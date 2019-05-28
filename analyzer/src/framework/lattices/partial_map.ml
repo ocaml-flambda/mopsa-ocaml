@@ -71,6 +71,7 @@ struct
   let empty : 'a t = Finite Map.empty (* Note: an empty map is different than an empty set of maps *)
 
   let subset ~subsetv (a1:'a t) (a2:'a t) : bool =
+    if a1 == a2 then true else
     match a1, a2 with
     | Bot, _ -> true
     | _, Bot -> false
@@ -85,6 +86,7 @@ struct
   (** Inclusion test. *)
 
   let join ~joinv (a1:'a t) (a2:'a t) : 'a t =
+    if a1 == a2 then a1 else
     match a1, a2 with
     | Bot, x | x, Bot -> x
     | Top, _ | _, Top -> Top
@@ -99,6 +101,7 @@ struct
   (** Join two sets of partial maps. *)
 
   let widen ~widenv (a1:'a t) (a2:'a t) : 'a t =
+    if a1 == a2 then a1 else
     match a1, a2 with
     | Bot, x | x, Bot -> x
     | Top, x | x, Top -> Top
@@ -113,6 +116,7 @@ struct
   (** Widening (naive). *)
 
   let meet ~meetv (a1:'a t) (a2:'a t) : 'a t =
+    if a1 == a2 then a1 else
     match a1, a2 with
     | Bot, x | x, Bot -> Bot
     | Top, x | x, Top -> x

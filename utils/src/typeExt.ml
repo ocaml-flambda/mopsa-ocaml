@@ -51,6 +51,7 @@ let register info compare_chain print_chain =
   register_print info.print print_chain
 
 let compare (chain:'a compare_chain) x y =
+  if x == y then 0 else
   !chain x y
 
 let print (chain:'a print_chain) fmt x =
