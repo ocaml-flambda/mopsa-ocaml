@@ -80,30 +80,32 @@ struct
     Pool.meet a a', s, s'
 
   let widen man ctx (a,s) (a',s') =
-    debug "widening@,a = %a@,a'= %a" Pool.print a Pool.print a';
-    (* Search for strong addresses that belong only to a' and make them weak *)
-    let aa = Pool.join a a' in
-    let diff = Pool.diff a' a |>
-               Pool.filter (function ({ addr_mode } as addr) ->
-                   addr_mode = STRONG &&
-                   not (Pool.mem { addr with addr_mode = WEAK } aa)
-                 )
-    in
-    let range = mk_fresh_range () in
-    if Pool.is_empty diff
-    then aa, s, s', true
-    else
-      let aa, s' = Pool.fold (fun addr (acc,s') ->
-          debug "widening for address %a" pp_addr addr;
-          let addr' = { addr with addr_mode = WEAK } in
-          let acc = Pool.remove addr acc |>
-                    Pool.add addr'
-          in
-          let s' = man.sexec (mk_rename (mk_addr addr range) (mk_addr addr' range) range) ctx s' in
-          acc, s'
-        ) diff (aa, s')
-      in
-      aa, s, s', true
+    Pool.widen a a', s, s', true
+    (* debug "widening@,a = %a@,a'= %a" Pool.print a Pool.print a';
+     * (\* Search for strong addresses that belong only to a' and make them weak *\)
+     * let aa = Pool.join a a' in
+     * let diff = Pool.diff a' a |>
+     *            Pool.filter (function ({ addr_mode } as addr) ->
+     *                addr_mode = STRONG &&
+     *                not (Pool.mem { addr with addr_mode = WEAK } aa)
+     *              )
+     * in
+     * let range = mk_fresh_range () in
+     * if Pool.is_empty diff
+     * then aa, s, s', true
+     * else
+     *   let aa, s' = Pool.fold (fun addr (acc,s') ->
+     *       debug "widening for address %a" pp_addr addr;
+     *       let addr' = { addr with addr_mode = WEAK } in
+     *       let acc = Pool.remove addr acc |>
+     *                 Pool.add addr'
+     *       in
+     *       let s' = man.sexec (mk_rename (mk_addr addr range) (mk_addr addr' range) range) ctx s' in
+     *       acc, s'
+     *     ) diff (aa, s')
+     *   in
+     *   debug "aa=%a@\n" Pool.print aa;
+     *   aa, s, s', true *)
 
   let merge ctx pre (a,log) (a',log') =
     assert false
