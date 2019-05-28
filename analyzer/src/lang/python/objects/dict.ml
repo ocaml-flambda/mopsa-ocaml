@@ -33,7 +33,7 @@ type addr_kind +=
   | A_py_dict_view of string (* name *) * addr (* addr of the dictionary *)
 
 let () =
-  Format.(register_addr {
+  Format.(register_addr_kind {
       print = (fun default fmt a ->
           match a with
           | A_py_dict (keys, values) -> fprintf fmt "dict[%a, %a]" pp_var keys pp_var values
@@ -101,8 +101,8 @@ struct
     K.key
 
   let fresh_smashed_vars () =
-    let k = mkfresh_common (fun uid -> "$d_k*", "$d_k*" ^ (string_of_int uid)) T_any () in
-    let v = mkfresh_common (fun uid -> "$d_v*", "$d_v*" ^ (string_of_int uid)) T_any () in
+    let k = mk_fresh_uniq_var "$d_k*" T_any () in
+    let v = mk_fresh_uniq_var "$d_v*" T_any () in
     k, v
 
   let get_vars_equiv (info: DictInfo.t) (e: Equiv.t) =
@@ -389,7 +389,7 @@ struct
                   (Utils.mk_builtin_call "bool" [
                       (mk_binop
                          (mk_py_isinstance (mk_var ~mode:WEAK var_k range) type_k range)
-                         O_py_or
+                         O_py_and
                          (mk_py_isinstance (mk_var ~mode:WEAK var_v range) type_v range)
                          range)
                     ] range)

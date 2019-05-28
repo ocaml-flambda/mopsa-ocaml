@@ -19,57 +19,74 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Extensible type of variables. *)
+(** Program variables. *)
+
 
 open Typ
 
 
-(** Languages can extend this type to add extra information on variables *)
+
+(*========================================================================*)
+(**                     {2 Definition of variables}                       *)
+(*========================================================================*)
+
+
+
+(** Languages can extend this type to add new kinds of variables *)
 type var_kind = ..
 
-type var_kind +=
-  | V_common of int     (** common variable kind with uid *)
 
-(** variables *)
+(** Program variables *)
 type var = {
-  org_vname  : string; (** original name of the variable *)
-  uniq_vname : string; (** unique name of the variable *)
-  vtyp  : typ;         (** type of the variable. *)
-  vkind : var_kind;    (** language-dependent info on the variable *)
+  vname : string;     (** unique variable name *)
+  vkind : var_kind;   (** language-dependent info on the variable *)
+  vtyp  : typ;        (** type of the variable. *)
 }
 
-let vtyp v = v.vtyp
+
+(** Accessor functions *)
+let vname v = v.vname
 let vkind v = v.vkind
-let uniq_vname v = v.uniq_vname
-let org_vname v = v.org_vname
+let vtyp v = v.vtyp
 
-let var_compare_chain = TypeExt.mk_compare_chain (fun v1 v2 ->
-    match vkind v1, vkind v2 with
-    | V_common i1, V_common i2 -> Pervasives.compare i1 i2
-    | _ -> Pervasives.compare v1 v2
-  )
 
+(** Create a variable with a name, a kind and a type *)
+let mkv name kind typ =
+  {vname = name; vkind = kind; vtyp = typ}
+
+
+(** Internal pretty printer chain over variable kinds *)
 let var_pp_chain = TypeExt.mk_print_chain (fun fmt v ->
-    match vkind v with
-    | V_common _ -> Format.pp_print_string fmt v.org_vname
-    | _ -> Exceptions.panic "pp_var: unknown variable kind"
+    Format.pp_print_string fmt v.vname
   )
 
+
+(** Pretty printer of variables *)
+let pp_var fmt v = TypeExt.print var_pp_chain fmt v
+
+
+(** Internal compare chain over variable kinds *)
+let var_compare_chain = TypeExt.mk_compare_chain (fun v1 v2 ->
+    Pervasives.compare v1.vkind v2.vkind
+  )
+
+
+(** Total order between variables *)
+let compare_var v1 v2 =
+  if v1 == v2 then 0
+  else Compare.compose [
+      (fun () -> TypeExt.compare var_compare_chain v1 v2);
+      (fun () -> Pervasives.compare v1.vname v2.vname);
+      (fun () -> compare_typ v1.vtyp v2.vtyp);
+    ]
+
+
+(** Register a new kind of variables *)
 let register_var info =
   TypeExt.register info var_compare_chain var_pp_chain
 
-let pp_var fmt v = TypeExt.print var_pp_chain fmt v
 
-let compare_var v1 v2 =
-  let res = Compare.compose [
-    (fun () -> compare v1.uniq_vname v2.uniq_vname);
-    (fun () -> TypeExt.compare var_compare_chain v1 v2); (* FIXME: issue in bm_spectral_norm (ranged_var not found during dichotomy in var map) if this compare is above the compare on uniq_vnames... *)
-    (fun () -> compare_typ v1.vtyp v2.vtyp);
-  ] in
-  (* Format.printf "comparing %a and %a = %d@\n" pp_var v1 pp_var v2 res; *)
-  res
-
-
+(** Variables as ordered elements, useful for maps *)
 module Var =
 struct
   type t = var
@@ -78,28 +95,26 @@ struct
 end
 
 
-(*==========================================================================*)
-(**                  {2 Utility functions for variables}                    *)
-(*==========================================================================*)
 
-let mkv orig uniq vkind vtyp =
-  {org_vname = orig; uniq_vname = uniq; vtyp; vkind}
+(*========================================================================*)
+(**                  {2 Generation of fresh variables}                    *)
+(*========================================================================*)
 
-(* ref for vcommon *)
+
+(** Internal counter for fresh variables *)
 let vcounter = ref 0
 
-let mkfresh_common funiq vtyp () =
+
+(** Create a fresh variable. Function [f] is given a fresh and unique
+    identifier. It should return a unique name and a variable kind
+*)
+let mkfresh (f:int -> string * var_kind) typ () =
   incr vcounter;
-  let org, uniq = funiq !vcounter in
-  mkv org uniq (V_common !vcounter) vtyp
-
-let mktmp ?(typ=T_any) () =
-  mkfresh_common (fun uid ->
-      let vname = "$tmp" ^ (string_of_int uid) in
-      vname, vname
-    ) typ ()
+  let name, kind = f !vcounter in
+  mkv name kind typ
 
 
+(** Temporary fixes for frontends *)
 let start_vcounter_at (d:int) : unit =
   assert (!vcounter <= d);
   vcounter := d
@@ -107,25 +122,116 @@ let start_vcounter_at (d:int) : unit =
 let get_vcounter_val () = !vcounter
 
 
-open Location
+
+(*========================================================================*)
+(**                     {2 Common kinds of variables}                     *)
+(*========================================================================*)
 
 type var_kind +=
-  | V_ranged_var of range
 
-let ranged_var_compare default v1 v2 =
-  match vkind v1, vkind v2 with
-  | V_ranged_var r1, V_ranged_var r2 ->
-    compare_range r1 r2
-  | _ -> default v1 v2
+  (** Variables identified by their unique id *)
+  | V_uniq of string (** Original name *) *
+              int    (** Unique ID *)
 
-let ranged_var_print default fmt v =
-  match vkind v with
-  | V_ranged_var r -> Format.fprintf fmt "%s" v.uniq_vname
-  | _ -> default fmt v
+  (** Temporary variables *)
+  | V_tmp of int (** Unique ID *)
 
-let () = register_var TypeExt.{compare=ranged_var_compare; print=ranged_var_print}
+  (** Attribute attached to a variable *)
+  | V_var_attr of var    (** Attach variable *) *
+                  string (** Attribute *)
 
-let mkfresh_ranged range ?(vtyp=T_any) () =
-  let org = Format.fprintf Format.str_formatter "ranged_var(%a)" pp_range range; Format.flush_str_formatter () in
-  let uniq = org in
-  mkv org uniq (V_ranged_var range) vtyp
+  (** Attribute attached to a range of program location *)
+  | V_range_attr of Location.range (** Attach range *) *
+                    string (** Attribute *)
+
+
+(** Create a fresh temporary variable *)
+let mk_uniq_var orig uid typ =
+  let name = orig ^ ":" ^ (string_of_int uid) in
+  mkv name (V_uniq (orig, uid)) typ
+
+
+(** Create a fresh variable with a unique ID *)
+let mk_fresh_uniq_var orig typ () =
+  mkfresh (fun uid ->
+      let name = orig ^ ":" ^ (string_of_int uid) in
+      name, (V_uniq (orig, uid))
+    ) typ ()
+
+
+(** Create a fresh temporary variable *)
+let mktmp ?(typ=T_any) () =
+  mkfresh (fun uid ->
+      let name = "$tmp" ^ (string_of_int uid) in
+      name, V_tmp uid
+    ) typ ()
+
+
+(** Create a variable attribute *)
+let mk_attr_var v attr typ =
+  let name = v.vname ^ "." ^ attr in
+  mkv name (V_var_attr (v, attr)) typ
+
+
+(** Create a program range attribute *)
+let mk_range_attr_var range attr typ =
+  let name =
+    let () = Format.fprintf Format.str_formatter "%a.%s"
+        Location.pp_range range
+        attr
+    in
+    Format.flush_str_formatter ()
+    in
+  mkv name (V_range_attr (range, attr)) typ
+
+
+(** Return the original name of variables with UIDs *)
+let get_orig_vname v =
+  match v.vkind with
+  | V_uniq (orig,_) -> orig
+  | _ ->
+    Exceptions.warn "variable %a does not have an original name" pp_var v;
+    v.vname
+
+
+(** Change the original name of variables with UIDs *)
+let set_orig_vname name v =
+  let uid = match v.vkind with V_uniq (_,uid) -> uid | _ -> assert false in
+  mk_uniq_var name uid v.vtyp
+
+
+(** Registration of the common variable kinds *)
+let () =
+  register_var {
+    compare = (fun next v1 v2 ->
+        match vkind v1, vkind v2 with
+        | V_uniq (orig,uid), V_uniq (orig',uid') ->
+          Pervasives.compare uid uid'
+
+        | V_tmp (uid), V_tmp (uid') ->
+          Pervasives.compare uid uid'
+
+        | V_var_attr (v,attr), V_var_attr (v',attr') ->
+          Compare.compose [
+            (fun () -> compare attr attr');
+            (fun () -> compare_var v v');
+          ]
+
+
+        | V_range_attr (r,attr), V_range_attr (r',attr') ->
+          Compare.compose [
+            (fun () -> compare attr attr');
+            (fun () -> Location.compare_range r r');
+          ]
+
+        | _ -> next v1 v2
+      );
+    print = (fun next fmt v ->
+        match vkind v with
+        | V_uniq (orig,_) -> Format.fprintf fmt "%s" orig
+
+        | V_tmp _ | V_var_attr _ | V_range_attr _ -> Format.pp_print_string fmt v.vname
+
+        | _ -> next fmt v
+      )
+  }

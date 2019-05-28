@@ -22,9 +22,6 @@
             // C desugar
             "c.desugar.cond_expr",
 
-	    // Heap
-            "universal.heap.recency.by_kind_callstack_range",
-
 	    // Stubs
             "stubs.iterator",
             "c.cstubs.file",
@@ -35,6 +32,7 @@
                 "apply": {
                     "compose": [
                         "c.memory.structured.flat",
+                        "universal.heap.recency.callstack_range",
                         {
                             "product": [
                                 "c.memory.lowlevel.cells",

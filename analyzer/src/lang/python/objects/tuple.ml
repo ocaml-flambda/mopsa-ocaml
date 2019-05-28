@@ -32,7 +32,7 @@ type addr_kind +=
   | A_py_tuple of var list (* variable where the smashed elements are stored *)
 
 let () =
-  Format.(register_addr {
+  Format.(register_addr_kind {
       print = (fun default fmt a ->
           match a with
           | A_py_tuple vars -> fprintf fmt "tuple[%a]" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_var) vars
@@ -86,10 +86,8 @@ struct
   let fresh_expanded_vars range d =
     let rec gen_aux pos acc =
       if pos < 0 then acc else
-        gen_aux (pos-1) ((mkfresh_common (fun uid ->
-            let name = Format.asprintf "$t:%a:%d" pp_range range pos in
-            name, name
-          ) T_any ())::acc)
+        let v = mk_range_attr_var range ("$t[" ^ (string_of_int pos) ^ "]") T_any in
+        gen_aux (pos-1) (v::acc)
     in gen_aux (d-1) []
 
   let get_var_equiv ((cs, range, size) as info: TupleInfo.t) (e: Equiv.t) =

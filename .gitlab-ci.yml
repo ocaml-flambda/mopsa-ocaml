@@ -118,11 +118,6 @@ test-c 14/20:
     C_FILE: 'stubs/memory_resource_tests.c'
   extends: .test-c
 
-test-c 15/20:
-  variables:
-    C_FILE: 'stubs/file_resource_tests.c'
-  extends: .test-c
-
 test-c 16/20:
   variables:
     C_FILE: 'stubs/case_tests.c'

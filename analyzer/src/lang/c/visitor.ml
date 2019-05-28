@@ -187,12 +187,12 @@ let () =
       | S_program { prog_kind = C_program _ } ->
         Exceptions.panic "visitor of C_program not yet implemented"
 
-      | S_c_declaration(v, init) ->
+      | S_c_declaration(v, init,scope) ->
         let exprs = exprs_in_init_option init in
         {exprs; stmts = []},
         (function {exprs} ->
            let init, _ = init_option_from_exprs exprs init in
-           {stmt with skind = S_c_declaration (v,init)}
+           {stmt with skind = S_c_declaration (v,init,scope)}
         )
 
 

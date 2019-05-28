@@ -185,20 +185,11 @@ let () =
 
 
 
-(** {2 Universal heap} *)
-(*  ****************** *)
+(** {2 Universal heap addresses} *)
+(*  **************************** *)
 
 (** Kind of heap addresses, used to store extra information. *)
 type addr_kind = ..
-
-(** Heap addresses. *)
-type addr = {
-  addr_uid  : int;       (** Unique identifier. *)
-  addr_kind : addr_kind; (** Kind of the address. *)
-  addr_mode : mode;      (** assignment mode of address (string or weak) *)
-}
-
-let akind addr = addr.addr_kind
 
 let addr_kind_compare_chain : (addr_kind -> addr_kind -> int) ref =
   ref (fun a1 a2 -> compare a1 a2)
@@ -209,29 +200,105 @@ let addr_kind_pp_chain : (Format.formatter -> addr_kind -> unit) ref =
 let pp_addr_kind fmt ak =
   !addr_kind_pp_chain fmt ak
 
-let pp_addr fmt a =
-  let mode = match a.addr_mode with
-    | WEAK -> "w"
-    | STRONG -> "s" in
-  fprintf fmt "@@%a:%d:%s"
-    pp_addr_kind a.addr_kind
-    a.addr_uid
-    mode
-
 let compare_addr_kind ak1 ak2 =
+  if ak1 == ak2 then 0 else
   !addr_kind_compare_chain ak1 ak2
 
-let compare_addr a b =
-  Compare.compose [
-    (fun () -> compare a.addr_uid b.addr_uid);
-    (fun () -> compare_addr_kind a.addr_kind b.addr_kind);
-    (fun () -> compare_mode a.addr_mode b.addr_mode);
-  ]
-
-let register_addr (info: addr_kind info) =
+let register_addr_kind (info: addr_kind info) =
   addr_kind_compare_chain := info.compare !addr_kind_compare_chain;
   addr_kind_pp_chain := info.print !addr_kind_pp_chain;
   ()
+
+
+(** Addresses are grouped by static criteria to make them finite *)
+type addr_group = ..
+
+type addr_group +=
+  | G_all (** Group all addresses into one *)
+
+let addr_group_compare_chain : (addr_group -> addr_group -> int) ref =
+  ref (fun a1 a2 -> compare a1 a2)
+
+let addr_group_pp_chain : (Format.formatter -> addr_group -> unit) ref =
+  ref (fun fmt g ->
+      match g with
+      | G_all -> Format.pp_print_string fmt "*"
+      | _ -> panic "addr_group_pp_chain: unknown address"
+    )
+
+let pp_addr_group fmt ak =
+  !addr_group_pp_chain fmt ak
+
+let compare_addr_group a1 a2 =
+  if a1 == a2 then 0 else !addr_group_compare_chain a1 a2
+
+let register_addr_group (info: addr_group info) =
+  addr_group_compare_chain := info.compare !addr_group_compare_chain;
+  addr_group_pp_chain := info.print !addr_group_pp_chain;
+  ()
+
+
+(** Heap addresses. *)
+type addr = {
+  addr_kind : addr_kind;   (** Kind of the address. *)
+  addr_group : addr_group; (** Group of the address *)
+  addr_mode : mode;        (** Assignment mode of address (string or weak) *)
+}
+
+
+let akind addr = addr.addr_kind
+
+let pp_addr fmt a =
+  if a.addr_group = G_all then
+    fprintf fmt "@@%a:*:%s"
+      pp_addr_kind a.addr_kind
+      (match a.addr_mode with WEAK -> "w" | STRONG -> "s")
+  else
+    fprintf fmt "@@%a:%xd:%s"
+      pp_addr_kind a.addr_kind
+      (Hashtbl.hash a.addr_group)
+      (match a.addr_mode with WEAK -> "w" | STRONG -> "s")
+
+
+
+let compare_addr a b =
+  if a == b then 0
+  else Compare.compose [
+      (fun () -> compare_addr_kind a.addr_kind b.addr_kind);
+      (fun () -> compare_addr_group a.addr_group b.addr_group);
+      (fun () -> compare_mode a.addr_mode b.addr_mode);
+    ]
+
+
+(** Address variables *)
+type var_kind +=
+  | V_addr_attr of addr * string
+
+let () =
+  register_var {
+    compare = (fun next v1 v2 ->
+        match vkind v1, vkind v2 with
+        | V_addr_attr (a1,attr1), V_addr_attr (a2,attr2) ->
+          Compare.compose [
+            (fun () -> compare attr1 attr2);
+            (fun () -> compare_addr a1 a2)
+          ]
+        | _ -> next v1 v2
+      );
+    print = (fun next fmt v ->
+        match vkind v with
+        | V_addr_attr _ -> Format.pp_print_string fmt v.vname
+        | _ -> next fmt v
+      )
+  }
+
+let mk_addr_attr addr attr typ =
+  let name =
+    let () = Format.fprintf Format.str_formatter "%a.%s" pp_addr addr attr in
+    Format.flush_str_formatter ()
+  in
+  mkv name (V_addr_attr (addr,attr)) typ
+
 
 
 (** {2 Universal functions} *)
@@ -324,7 +391,7 @@ type expr_kind +=
   | E_subscript of expr * expr
 
   (** Allocation of an address on the heap *)
-  | E_alloc_addr of addr_kind * mode
+  | E_alloc_addr of addr_kind
 
   (** Head address. *)
   | E_addr of addr
@@ -354,11 +421,8 @@ let () =
             (fun () -> compare_expr i1 i2);
           ]
 
-        | E_alloc_addr(ak1, m1), E_alloc_addr(ak2, m2) ->
-          Compare.compose [
-            (fun () -> compare_addr_kind ak1 ak2);
-            (fun () -> compare_mode m1 m2);
-          ]
+        | E_alloc_addr(ak1), E_alloc_addr(ak2) ->
+          compare_addr_kind ak1 ak2
 
         | E_addr(a1), E_addr(a2) ->
           compare_addr a1 a2
@@ -379,7 +443,7 @@ let () =
           fprintf fmt "%a(%a)"
             pp_expr f
             (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_expr) args
-        | E_alloc_addr(akind, amode) -> fprintf fmt "alloc(%a, %a)" pp_addr_kind akind pp_mode amode
+        | E_alloc_addr(akind) -> fprintf fmt "alloc(%a)" pp_addr_kind akind
         | E_addr (addr) -> fprintf fmt "%a" pp_addr addr
         | E_len exp -> Format.fprintf fmt "|%a|" pp_expr exp
         | _ -> default fmt exp
@@ -671,8 +735,8 @@ let mk_false = mk_bool false
 
 let mk_addr addr range = mk_expr ~etyp:T_addr (E_addr addr) range
 
-let mk_alloc_addr addr_kind ?(mode=STRONG) range =
-  mk_expr (E_alloc_addr (addr_kind, mode)) ~etyp:T_addr range
+let mk_alloc_addr addr_kind range =
+  mk_expr (E_alloc_addr addr_kind) ~etyp:T_addr range
 
 let is_int_type = function
   | T_int | T_bool -> true

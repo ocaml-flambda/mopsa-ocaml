@@ -71,7 +71,7 @@ let render_alarm alarm : json =
   ]
 
 let render_var var : json =
-  `String var.Ast.Var.org_vname
+  `String var.Ast.Var.vname
 
 let render_value value : json =
   `String value

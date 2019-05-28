@@ -70,11 +70,12 @@ let default (none:'a) (a:'a option) : 'a =
   apply none (fun x -> x) a
 
 let compare (cmp: 'a -> 'a -> int) (a: 'a option) (b: 'a option) : int =
-  match a, b with
-  | None, None -> 0
-  | None, Some _ -> -1
-  | Some _, None -> 1
-  | Some x, Some y -> cmp x y
+  if a == b then 0
+  else match a, b with
+    | None, None -> 0
+    | None, Some _ -> -1
+    | Some _, None -> 1
+    | Some x, Some y -> cmp x y
 
 exception Found_None
 

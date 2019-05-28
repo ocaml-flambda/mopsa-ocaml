@@ -63,13 +63,35 @@ struct
   (** Bytes attribute *)
   (** =============== *)
 
+  type var_kind +=
+    | V_c_bytes of addr
+
+  let pp_bytes fmt addr =
+    Format.fprintf fmt "bytes(%a)" pp_addr addr
+
+  let () =
+    register_var {
+      print = (fun next fmt v ->
+          match v.vkind with
+          | V_c_bytes addr -> pp_bytes fmt addr
+          | _ -> next fmt v
+        );
+
+      compare = (fun next v1 v2 ->
+          match v1.vkind, v2.vkind with
+          | V_c_bytes a1, V_c_bytes a2 -> compare_addr a1 a2
+          | _ -> next v1 v2
+        );
+    }
+
+
   let mk_bytes_var addr =
-    let vname =
-      Format.fprintf Format.str_formatter "bytes(%a)" pp_addr addr;
+    let name =
+      let () = pp_bytes Format.str_formatter addr in
       Format.flush_str_formatter ()
     in
-    let uniq =  vname ^ ":" ^ (string_of_int addr.addr_uid) in
-    mkv vname uniq (V_common (addr.addr_uid)) (T_c_integer C_unsigned_long)
+    mkv name (V_c_bytes addr) (T_c_integer C_unsigned_long)
+
 
   let mk_size addr range =
     let bytes = mk_bytes_var addr in

@@ -50,8 +50,7 @@ let init_ctx ctx =
   set_ctx VarEquiv.empty ctx
 
 let mk_apron_var v =
-  let name = uniq_vname v in
-  Apron.Var.of_string name
+  Apron.Var.of_string v.vname
 
 
 let var_to_apron ctx (v:var) =

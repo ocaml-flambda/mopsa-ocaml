@@ -49,7 +49,8 @@ let print fmt (cs:cs) =
     fmt cs
 
 let compare_call c c' =
-  Compare.compose [
+  if c == c' then 0
+  else Compare.compose [
     (fun () -> compare c.call_fun c'.call_fun);
     (fun () -> compare_range c.call_site c'.call_site);
   ]
