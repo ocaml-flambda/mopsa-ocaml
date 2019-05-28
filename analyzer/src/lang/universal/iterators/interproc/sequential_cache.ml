@@ -110,7 +110,7 @@ struct
       begin match find_signature man func.fun_name in_flow_cur with
         | None ->
           (* FIXME: good return variable? *)
-          let ret = mkfresh_ranged (tag_range range "ret_var") () in
+          let ret = mk_range_attr_var range "ret_var" T_any in
           Inlining.Domain.inline_function_exec_body man func args range new_vars in_flow_cur ret |>
           Eval.bind_lowlevel (fun oeval_res out_flow cleaners ->
               debug "in bind@\n";

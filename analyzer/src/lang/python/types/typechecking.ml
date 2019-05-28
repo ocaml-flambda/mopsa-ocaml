@@ -137,7 +137,7 @@ struct
                let jhd = AD.join hd hd' and jtl = TD.join tl tl' in
                let rhd, rabsheap = List.fold_left (fun (rhd, rabsheap) (vars, ty1, ty2) ->
                    let alpha = get_fresh_a_py_var () in
-                   let addr = {addr_uid = alpha; addr_kind = A_py_var alpha; addr_mode = WEAK} in
+                   let addr = {addr_group = G_all; addr_kind = A_py_var alpha; addr_mode = WEAK} in
                    let types = TD.Polytypeset.join ty1 ty2 in
                    let rhd = VarSet.fold (fun var rhd -> AD.AMap.add var (AD.ASet.singleton (Def addr)) rhd) vars rhd in
                    let rabsheap = TD.TMap.add addr types rabsheap in
