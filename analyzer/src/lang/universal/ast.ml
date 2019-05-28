@@ -249,10 +249,16 @@ type addr = {
 let akind addr = addr.addr_kind
 
 let pp_addr fmt a =
-  fprintf fmt "@@%a:%xd:%s"
-    pp_addr_kind a.addr_kind
-    (Hashtbl.hash a.addr_group)
-    (match a.addr_mode with WEAK -> "w" | STRONG -> "s")
+  if a.addr_group = G_all then
+    fprintf fmt "@@%a:*:%s"
+      pp_addr_kind a.addr_kind
+      (match a.addr_mode with WEAK -> "w" | STRONG -> "s")
+  else
+    fprintf fmt "@@%a:%xd:%s"
+      pp_addr_kind a.addr_kind
+      (Hashtbl.hash a.addr_group)
+      (match a.addr_mode with WEAK -> "w" | STRONG -> "s")
+
 
 
 let compare_addr a b =
