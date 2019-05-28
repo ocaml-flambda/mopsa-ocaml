@@ -80,7 +80,7 @@ struct
     Pool.meet a a', s, s'
 
   let widen man ctx (a,s) (a',s') =
-    Pool.widen a a', s, s', true
+    Pool.join a a', s, s', true
     (* debug "widening@,a = %a@,a'= %a" Pool.print a Pool.print a';
      * (\* Search for strong addresses that belong only to a' and make them weak *\)
      * let aa = Pool.join a a' in
