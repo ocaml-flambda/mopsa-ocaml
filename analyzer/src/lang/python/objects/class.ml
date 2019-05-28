@@ -101,13 +101,13 @@ module Domain =
                  Post.return flow
                else
                  if Libs.Py_mopsa.is_unsupported_clsdec cls then
-                   let name = cls.py_cls_var.org_vname in
+                   let name = get_orig_vname cls.py_cls_var in
                    create_builtin_class (C_unsupported name) name cls bases' range;
                    Post.return flow
                  else
                    try
                      debug "bases' = %a@\n" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_expr) (List.map (fun x -> mk_py_object x range) bases');
-                     let mro = c3_lin ({addr_kind= (A_py_class (C_user cls, bases')); addr_uid=0; addr_mode = STRONG}, None) in
+                     let mro = c3_lin ({addr_kind= (A_py_class (C_user cls, bases')); addr_group=G_all; addr_mode = STRONG}, None) in
                      debug "MRO of %a: %a@\n" pp_var cls.py_cls_var
                        (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
                           (fun fmt x -> Format.fprintf fmt "%a" pp_expr (mk_py_object x (srange stmt))))

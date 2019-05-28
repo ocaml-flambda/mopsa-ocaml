@@ -44,7 +44,7 @@ module Domain =
     }
 
     let unfold_comprehension expr comprehensions base append range =
-         let tmp_acc = mkfresh_ranged (tag_range range "tmp_acc") () in
+         let tmp_acc = mk_range_attr_var range "tmp_acc" T_any in
          let acc_var = mk_var tmp_acc range in
          let rec unfold_lc aux_compr = match aux_compr with
            | [] ->

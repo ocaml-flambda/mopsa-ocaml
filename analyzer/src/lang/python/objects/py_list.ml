@@ -42,7 +42,7 @@ type addr_kind +=
   | A_py_iterator of string (* iterator kind (list_iterator, ...) *) * addr list  (* addr of the containers iterated on *) * int option (* potential position in the iterator *)
 
 let () =
-  Format.(register_addr {
+  Format.(register_addr_kind {
       print = (fun default fmt a ->
           match a with
           | A_py_list var -> fprintf fmt "list[%a]" pp_var var
@@ -100,7 +100,7 @@ struct
     K.key
 
 
-  let fresh_smashed_var =  mkfresh_common (fun uid -> "$l*"  ^ (string_of_int uid), "$l*" ^ (string_of_int uid)) T_any
+  let fresh_smashed_var =  mk_fresh_uniq_var "$l*" T_any
 
   let get_var_equiv (info: ListInfo.t) (e: Equiv.t) =
     try

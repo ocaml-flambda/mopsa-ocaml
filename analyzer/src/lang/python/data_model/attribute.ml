@@ -127,8 +127,8 @@ module Domain =
                    man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_getattr(exp, c_attr)) range) flow |>
                    Eval.bind (fun exp flow ->
                        match akind @@ fst @@ object_of_expr exp with
-                       | A_py_function (F_user f) when List.exists (fun x -> match ekind x with E_var (v, _) -> v.org_vname = "classmethod" | _ -> false) f.py_func_decors ->
-                         eval_alloc ~mode:WEAK man (A_py_method (object_of_expr exp, e)) range flow |>
+                       | A_py_function (F_user f) when List.exists (fun x -> match ekind x with E_var (v, _) -> get_orig_vname v = "classmethod" | _ -> false) f.py_func_decors ->
+                         eval_alloc man (A_py_method (object_of_expr exp, e)) range flow |>
                          Eval.bind (fun addr flow ->
                              let obj = (addr, None) in
                              Eval.singleton (mk_py_object obj range) flow
@@ -184,7 +184,7 @@ module Domain =
                                                (mk_py_isinstance_builtin obj' "function" range) man flow
                                                ~fthen:(fun flow ->
                                                    debug "obj'=%a; exp=%a@\n" pp_expr obj' pp_expr exp;
-                                                   eval_alloc ~mode:WEAK man (A_py_method (object_of_expr obj', e)) range flow |>
+                                                   eval_alloc man (A_py_method (object_of_expr obj', e)) range flow |>
                                                    Eval.bind (fun addr flow ->
                                                        let obj = (addr, None) in
                                                        Eval.singleton (mk_py_object obj range) flow)

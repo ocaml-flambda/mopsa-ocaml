@@ -157,13 +157,6 @@ type expr_kind +=
   (** Primed expressions denoting values in the post-state *)
 
 
-(** {2 Primed variables} *)
-(** =-=-=-=-=-=-=-=-=-=- *)
-
-type var_kind +=
-  | V_stub_primed of var
-  (** Primed variables denoting values in the post-state *)
-
 
 (** {2 Statements} *)
 (*  =-=-=-=-=-=-=- *)
@@ -190,7 +183,7 @@ type addr_kind +=
   | A_stub_resource of string (** resource address *)
 
 let () =
-  register_addr {
+  register_addr_kind {
     print = (fun next fmt addr_kind ->
         match addr_kind with
         | A_stub_resource res -> Format.pp_print_string fmt res
@@ -486,24 +479,6 @@ let () =
       );
   }
 
-(** {2 Registration of variables} *)
-(*  =-=-=-=-=-=-=-=-=-=-=-=-=-=- *)
-
-let () =
-  register_var {
-    print = (fun next fmt v ->
-        match vkind v with
-        | V_stub_primed vv -> fprintf fmt "%a'" pp_var vv
-        | _ -> next fmt v
-      );
-
-    compare = (fun next v1 v2 ->
-        match vkind v1, vkind v2 with
-        | V_stub_primed vv1, V_stub_primed vv2 ->
-          compare_var vv1 vv2
-        | _ -> next v1 v2
-      );
-  }
 
 (** {2 Registration of statements} *)
 (*  =-=-=-=-=-=-=-=-=-=-=-=-=-=-=- *)

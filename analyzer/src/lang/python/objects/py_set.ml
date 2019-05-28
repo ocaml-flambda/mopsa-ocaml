@@ -32,7 +32,7 @@ type addr_kind +=
   | A_py_set of var (* variable where the smashed elements are stored *)
 
 let () =
-  Format.(register_addr {
+  Format.(register_addr_kind {
       print = (fun default fmt a ->
           match a with
           | A_py_set var -> fprintf fmt "set[%a]" pp_var var
@@ -80,7 +80,7 @@ struct
     K.key
 
 
-  let fresh_smashed_var =  mkfresh_common (fun uid -> "$s*", "$s*" ^ (string_of_int uid)) T_any
+  let fresh_smashed_var =  mk_fresh_uniq_var "$s*" T_any
 
   let get_var_equiv (info: SetInfo.t) (e: Equiv.t) =
     try

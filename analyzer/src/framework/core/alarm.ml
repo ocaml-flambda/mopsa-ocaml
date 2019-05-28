@@ -65,11 +65,12 @@ let register_alarm info =
   ()
 
 let compare_alarm a1 a2 =
-  Compare.compose [
-        (fun () -> Compare.pair Location.compare_range Callstack.compare a1.alarm_trace a2.alarm_trace);
-        (fun () -> Pervasives.compare a1.alarm_level a2.alarm_level);
-        (fun () -> !compare_chain a1 a2)
-      ]
+  if a1 == a2 then 0
+  else Compare.compose [
+      (fun () -> Compare.pair Location.compare_range Callstack.compare a1.alarm_trace a2.alarm_trace);
+      (fun () -> Pervasives.compare a1.alarm_level a2.alarm_level);
+      (fun () -> !compare_chain a1 a2)
+    ]
 
 let pp_alarm_token fmt alarm =
   Format.fprintf fmt "%a:%a:%a"

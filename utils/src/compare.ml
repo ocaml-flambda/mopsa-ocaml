@@ -36,37 +36,44 @@ let rec compose = function
 (** [list p] lifts the 'a compare function [p] to 'a list *)
 let list p =
   fun l l' ->
-    let rec aux a b = match a,b with
-      | t::r , t'::r' -> let x = p t t' in if x = 0 then aux r r' else x
-      | []   , t'::r' -> -1
-      | []   , []     -> 0
-      | t::r , []     -> 1
-    in
-    aux l l'
+    if l == l' then 0
+    else
+      let rec aux a b = match a,b with
+        | t::r , t'::r' -> let x = p t t' in if x = 0 then aux r r' else x
+        | []   , t'::r' -> -1
+        | []   , []     -> 0
+        | t::r , []     -> 1
+      in
+      aux l l'
 
 (** [pair p] lifts the 'a compare function [p], 'b compare
    function [q] to 'a * 'b *)
 let pair p q =
   fun (a,b) (c,d) ->
-    let x = p a c in
-    if x = 0 then q b d else x
+    if a == c && b == d then 0
+    else
+      let x = p a c in
+      if x = 0 then q b d else x
 
 (** [triple p] lifts the 'a compare function [p], 'b compare
    function [q], 'c compare function [r] to 'a * 'b * 'c *)
 let triple p q r =
   fun (a,b,c) (d,e,f) ->
-    let x = p a d in
-    if x = 0 then
-      let y = q b e in
-      if y = 0 then
-        r c f
-      else
-        y
+    if a == d && b == e && c == f then 0
     else
-      x
+      let x = p a d in
+      if x = 0 then
+        let y = q b e in
+        if y = 0 then
+          r c f
+        else
+          y
+      else
+        x
 
 (** [option p] lifts [p: 'a -> 'a -> int] to ['a option -> 'a option -> int] *)
 let option p q r =
-  match q, r with
-  | Some x, Some y -> p x y
-  | _ -> Pervasives.compare q r
+  if q == r then 0
+  else match q, r with
+    | Some x, Some y -> p x y
+    | _ -> Pervasives.compare q r

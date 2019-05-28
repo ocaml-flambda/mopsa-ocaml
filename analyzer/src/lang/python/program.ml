@@ -53,7 +53,7 @@ struct
         (List.mapi (fun i v ->
              let e =
                (* Initialize globals with the same name of a builtin with its address *)
-               if is_builtin_name v.org_vname then (mk_py_object (find_builtin v.org_vname) range)
+               if is_builtin_name @@ get_orig_vname v then (mk_py_object (find_builtin @@ get_orig_vname v) range)
                else mk_expr (E_py_undefined true) range
              in
              mk_assign (mk_var v range) e range
@@ -91,7 +91,7 @@ struct
     flow3
 
 
-  let get_function_name fundec = fundec.py_func_var.org_vname
+  let get_function_name fundec = get_orig_vname fundec.py_func_var
 
   let is_test fundec =
     let name = get_function_name fundec in
@@ -113,7 +113,7 @@ struct
   let mk_py_unit_tests tests range =
     let tests =
       tests |> List.map (fun test ->
-          (test.py_func_var.org_vname, {skind = S_expression (mk_py_call (mk_var test.py_func_var range) [] range); srange = range})
+          (get_orig_vname test.py_func_var, {skind = S_expression (mk_py_call (mk_var test.py_func_var range) [] range); srange = range})
         )
     in
     mk_stmt (Universal.Ast.S_unit_tests (tests)) range

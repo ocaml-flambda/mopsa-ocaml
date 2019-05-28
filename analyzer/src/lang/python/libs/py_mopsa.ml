@@ -277,32 +277,32 @@ module Domain =
 
 
 let is_stub_fundec = function
-  | {py_func_decors = [{ekind = E_py_attribute({ekind = E_var( {org_vname = "mopsa"}, _)}, "stub")}]} -> true
+  | {py_func_decors = [{ekind = E_py_attribute({ekind = E_var( {vkind = V_uniq ("mopsa",_)}, _)}, "stub")}]} -> true
   | _ -> false
 
 let is_builtin_fundec = function
-  | {py_func_decors = [{ekind = E_py_call({ekind = E_py_attribute({ekind = E_var( {org_vname = "mopsa"}, _)}, "builtin")}, _, [])}]} -> true
+  | {py_func_decors = [{ekind = E_py_call({ekind = E_py_attribute({ekind = E_var( {vkind = V_uniq ("mopsa",_)}, _)}, "builtin")}, _, [])}]} -> true
   | _ -> false
 
 let is_builtin_clsdec = function
-  | {py_cls_decors = [{ekind = E_py_call({ekind = E_py_attribute({ekind = E_var( {org_vname = "mopsa"}, _)}, "builtin")}, _, [])}]} -> true
+  | {py_cls_decors = [{ekind = E_py_call({ekind = E_py_attribute({ekind = E_var( {vkind = V_uniq ("mopsa",_)}, _)}, "builtin")}, _, [])}]} -> true
   | _ -> false
 
 let is_unsupported_fundec = function
-  | {py_func_decors = [{ekind = E_py_attribute({ekind = E_var( {org_vname = "mopsa"}, _)}, "unsupported")}]} -> true
+  | {py_func_decors = [{ekind = E_py_attribute({ekind = E_var( {vkind = V_uniq ("mopsa",_)}, _)}, "unsupported")}]} -> true
   | _ -> false
 
 let is_unsupported_clsdec = function
-  | {py_cls_decors = [{ekind = E_py_attribute({ekind = E_var( {org_vname = "mopsa"}, _)}, "unsupported")}]} -> true
+  | {py_cls_decors = [{ekind = E_py_attribute({ekind = E_var( {vkind = V_uniq ("mopsa",_)}, _)}, "unsupported")}]} -> true
   | _ -> false
 
 
 let builtin_fundec_name = function
-  | {py_func_decors = [{ekind = E_py_call({ekind = E_py_attribute({ekind = E_var( {org_vname = "mopsa"}, _)}, "builtin")}, [{ekind = E_constant (C_string name)}], [])}]} -> name
+  | {py_func_decors = [{ekind = E_py_call({ekind = E_py_attribute({ekind = E_var( {vkind = V_uniq ("mopsa",_)}, _)}, "builtin")}, [{ekind = E_constant (C_string name)}], [])}]} -> name
   | _ -> raise Not_found
 
 let builtin_clsdec_name = function
-  | {py_cls_decors = [{ekind = E_py_call({ekind = E_py_attribute({ekind = E_var( {org_vname = "mopsa"}, _)}, "builtin")}, [{ekind = E_constant (C_string name)}], [])}]} -> name
+  | {py_cls_decors = [{ekind = E_py_call({ekind = E_py_attribute({ekind = E_var( {vkind = V_uniq ("mopsa",_)}, _)}, "builtin")}, [{ekind = E_constant (C_string name)}], [])}]} -> name
   | _ -> raise Not_found
 
 

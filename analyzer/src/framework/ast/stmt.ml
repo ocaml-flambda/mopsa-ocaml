@@ -110,7 +110,7 @@ let stmt_compare_chain = TypeExt.mk_compare_chain (fun s1 s2 ->
   )
 
 let compare_stmt s1 s2 =
-  if s1 == s2 then 0 else TypeExt.compare stmt_compare_chain s1 s2
+  TypeExt.compare stmt_compare_chain s1 s2
 
 let stmt_pp_chain = TypeExt.mk_print_chain (fun fmt stmt ->
     match skind stmt with

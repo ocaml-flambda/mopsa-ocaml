@@ -53,8 +53,6 @@ struct
     | Undef_global -> Format.fprintf fmt "undef"
 end
 
-let mk_avar ?(vtyp = T_any) addr_uid =
-  mkfresh_common (fun uid -> "$addr@" ^ (string_of_int addr_uid), "$addr@" ^ (string_of_int addr_uid) ^ "_" ^ (string_of_int uid)) vtyp ()
 
 
 module Domain =
@@ -161,25 +159,14 @@ struct
 
     | S_remove ({ekind = E_var (v, _)} as var) ->
       let flow = map_domain_env T_cur (remove v) man flow in
-      if String.length v.org_vname >= 4 && String.sub v.org_vname 0 4 = "$tmp" then
-        Post.return flow |> Option.return
-      else if (String.length v.org_vname >= 3 && (String.sub v.org_vname 0 3 = "$l*"
-                                                 || String.sub v.org_vname 0 3 = "$s*"
-                                                 || String.sub v.org_vname 0 3 = "$t:"))
-           || (String.length v.org_vname >= 5 && (String.sub v.org_vname 0 5 = "$d_k*" ||
-                                                  String.sub v.org_vname 0 5 = "$d_v*"))
-      then
-        Post.return flow |> Option.return
-      else
-        (match vkind v with
-        | V_common _ ->
+      begin match v.vkind with
+        | V_uniq _ ->
           (* if the variable maps to a list, we should remove the temporary variable associated, ONLY if it's not used by another list *)
           man.exec (mk_assign var (mk_expr (E_py_undefined true) range) range) flow |> Post.return |> Option.return
-        (* let v' = mk_py_value_var v T_any in
-         * man.exec (mk_remove_var v' range) flow |> Post.return *)
-        (* Post.return flow *)
 
-        | _ -> Post.return flow |> Option.return)
+        | _ ->
+          Post.return flow |> Option.return
+      end
 
     | S_assume e ->
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
@@ -248,11 +235,11 @@ struct
             let flow = set_domain_env T_cur (AMap.add v (ASet.singleton a) cur) man flow in
             let flow = Flow.set_ctx annots flow in
             match a with
-            | Undef_global when is_builtin_name v.org_vname ->
-              (Eval.singleton (mk_py_object (find_builtin v.org_vname) range) flow :: acc, annots)
+            | Undef_global when is_builtin_name (get_orig_vname v) ->
+              (Eval.singleton (mk_py_object (find_builtin (get_orig_vname v)) range) flow :: acc, annots)
 
-            | Undef_local when is_builtin_name v.org_vname ->
-              (Eval.singleton (mk_py_object (find_builtin v.org_vname) range) flow :: acc, annots)
+            | Undef_local when is_builtin_name (get_orig_vname v) ->
+              (Eval.singleton (mk_py_object (find_builtin @@ get_orig_vname v) range) flow :: acc, annots)
 
             | Undef_global ->
               debug "Incoming NameError, on var %a, range %a, cs = %a @\n" pp_var v pp_range range Callstack.print (Callstack.get flow);
@@ -273,10 +260,10 @@ struct
         let evals = List.map (fun eval -> Eval.map_flow (fun flow -> Flow.set_ctx annot flow) eval) evals in
         evals |> Eval.join_list
         |> Option.return
-      else if is_builtin_name v.org_vname then
+      else if is_builtin_name @@ get_orig_vname v then
         (* let () = debug "bla %s %s %d" v.org_vname v.uniq_vname v.vuid in *)
         (* man.eval (mk_py_object (find_builtin v.org_vname) range) flow |> Option.return *)
-        let obj = find_builtin v.org_vname in
+        let obj = find_builtin @@ get_orig_vname v in
         Eval.singleton (mk_py_object obj range) flow |> Option.return
       else
         Eval.empty_singleton flow |> Option.return

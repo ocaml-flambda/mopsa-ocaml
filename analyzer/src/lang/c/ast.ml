@@ -215,30 +215,33 @@ type c_var_init =
   | C_init_flat of c_flat_init list
 
 
-type c_var = {
-  var_scope: c_var_scope; (** life-time scope of the variable *)
-  var_range: range; (** declaration range *)
-  var_uid: int;
+type cvar = {
+  cvar_scope: c_var_scope; (** life-time scope of the variable *)
+  cvar_range: range; (** declaration range *)
+  cvar_uid: int;
+  cvar_orig_name : string;
+  cvar_uniq_name : string;
 }
 
 type var_kind +=
-  | V_c of c_var
+  | V_cvar of cvar
   (** C variable *)
 
 let () =
   register_var {
     print = (fun next fmt v ->
         match vkind v with
-        | V_c _ -> Format.pp_print_string fmt v.org_vname
+        | V_cvar cvar -> Format.pp_print_string fmt cvar.cvar_orig_name
         | _ -> next fmt v
       );
 
     compare = (fun next v1 v2 ->
         match vkind v1, vkind v2 with
-        | V_c vc1, V_c vc2 ->
-          Compare.compose
-            [(fun () -> Pervasives.compare vc1.var_uid vc2.var_uid);
-             (fun () -> compare v1.uniq_vname v2.uniq_vname)]
+        | V_cvar cvar1, V_cvar cvar2 ->
+          Compare.compose [
+            (fun () -> Pervasives.compare cvar1.cvar_uid cvar2.cvar_uid);
+            (fun () -> Pervasives.compare cvar1.cvar_uniq_name cvar2.cvar_uniq_name)
+          ]
 
         | _ -> next v1 v2
       );
@@ -339,7 +342,7 @@ type stmt_kind +=
   | S_c_goto_stab of stmt
   (** stabilization point for goto statement *)
 
-  | S_c_declaration of var * c_var_init option
+  | S_c_declaration of var * c_var_init option * c_var_scope
   (** declaration of a variable *)
 
   | S_c_do_while of
@@ -806,7 +809,7 @@ let is_c_type = function
 
 let is_c_function_parameter v =
   match v.vkind with
-  | V_c { var_scope = Variable_parameter _ } -> true
+  | V_cvar { cvar_scope = Variable_parameter _ } -> true
   | _ -> false
 
 let mk_c_address_of e range =
@@ -854,12 +857,12 @@ let mk_c_cast e t range =
 let mk_c_null range =
   mk_c_cast (mk_zero ~typ:u8 range) (pointer_type void) range
 
-let mk_c_declaration v init range =
-  mk_stmt (S_c_declaration (v, init)) range
+let mk_c_declaration v init scope range =
+  mk_stmt (S_c_declaration (v, init, scope)) range
 
 let var_scope v =
   match v.vkind with
-  | V_c { var_scope } -> var_scope
+  | V_cvar { cvar_scope } -> cvar_scope
   | _ -> assert false
 
 let () =

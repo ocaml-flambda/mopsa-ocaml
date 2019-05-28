@@ -112,14 +112,36 @@ let () =
       | _ -> next e1 e2)
 
 
-(* conventions: -1 represents True, -2 represents False, -3 is T:bool (Weak), -4 is None, -5 is NotImplemented, -6 is for all integers (weak),  *)
-let addr_true = {addr_uid = -1; addr_kind = A_py_instance "bool"; addr_mode = STRONG}
-let addr_false = {addr_uid = -2; addr_kind = A_py_instance "bool"; addr_mode = STRONG}
-let addr_bool_top = {addr_uid = -3; addr_kind = A_py_instance "bool"; addr_mode = WEAK}
-let addr_none = {addr_uid = -4; addr_kind = A_py_instance "NoneType"; addr_mode = STRONG}
-let addr_notimplemented = {addr_uid = -5; addr_kind = A_py_instance "NotImplementedType"; addr_mode = STRONG}
-let addr_integers = {addr_uid = -6; addr_kind = A_py_instance "int"; addr_mode = WEAK}
-let addr_float = {addr_uid = -7; addr_kind = A_py_instance "float"; addr_mode = WEAK}
+
+let addr_none = {addr_group = G_all; addr_kind = A_py_instance "NoneType"; addr_mode = STRONG}
+let addr_notimplemented = {addr_group = G_all; addr_kind = A_py_instance "NotImplementedType"; addr_mode = STRONG}
+let addr_integers = {addr_group = G_all; addr_kind = A_py_instance "int"; addr_mode = WEAK}
+let addr_float = {addr_group = G_all; addr_kind = A_py_instance "float"; addr_mode = WEAK}
+
+type addr_group +=
+  | G_py_bool of bool option
+
+
+let () =
+  register_addr_group {
+    print = (fun next fmt g ->
+        match g with
+        | G_py_bool (Some true) -> Format.fprintf fmt "true"
+        | G_py_bool (Some false) -> Format.fprintf fmt "false"
+        | G_py_bool None -> Format.fprintf fmt "⊤"
+        | _ -> next fmt g
+      );
+    compare = (fun next g1 g2 ->
+        match g1, g2 with
+        | G_py_bool b1, G_py_bool b2 -> Option.compare Pervasives.compare b1 b2
+        | _ -> next g1 g2
+      );
+  }
+
+
+let addr_true = {addr_group = G_py_bool (Some true); addr_kind = A_py_instance "bool"; addr_mode = STRONG}
+let addr_false = {addr_group = G_py_bool (Some false); addr_kind = A_py_instance "bool"; addr_mode = STRONG}
+let addr_bool_top = {addr_group = G_py_bool None; addr_kind = A_py_instance "bool"; addr_mode = WEAK}
 
 
 let pyvarcounter = ref (-1)
@@ -141,7 +163,7 @@ type addr_kind +=
 
 let () =
   Format.(
-    register_addr {
+    register_addr_kind {
       print =
         (fun default fmt a -> match a with
            | A_py_var a -> Format.fprintf fmt "%s" (greek_of_int a)
@@ -379,8 +401,8 @@ struct
     | S_assign({ekind = E_py_attribute(lval, attr)}, rval) ->
       begin match ekind lval, ekind rval with
         | E_py_object ({addr_kind = A_py_class (C_user c, b)} as alval, _ ), E_py_object (arval, _) when alval.addr_mode = STRONG ->
-          if List.exists (fun v -> v.org_vname = attr) c.py_cls_static_attributes then
-            let var = List.find (fun v -> v.org_vname = attr) c.py_cls_static_attributes in
+          if List.exists (fun v -> get_orig_vname v = attr) c.py_cls_static_attributes then
+            let var = List.find (fun v -> get_orig_vname v = attr) c.py_cls_static_attributes in
             man.exec (mk_assign (mk_var var range) rval range) flow
             |> Post.return |> Option.return
           else
@@ -599,13 +621,13 @@ struct
         | _ -> assert false in
       begin match akind addr with
         | A_py_module (M_user(name, globals)) ->
-          Eval.singleton (mk_py_bool (List.exists (fun v -> v.org_vname = attr) globals) range) flow
+          Eval.singleton (mk_py_bool (List.exists (fun v -> get_orig_vname v = attr) globals) range) flow
         | A_py_class (C_builtin _, _)
         | A_py_module _ ->
           Eval.singleton (mk_py_bool (is_builtin_attribute (object_of_expr e) attr) range) flow
 
         | A_py_class (C_user c, b) ->
-          Eval.singleton (mk_py_bool (List.exists (fun v -> v.org_vname = attr) c.py_cls_static_attributes) range) flow
+          Eval.singleton (mk_py_bool (List.exists (fun v -> get_orig_vname v = attr) c.py_cls_static_attributes) range) flow
 
         | A_py_var _
         | A_py_instance _ ->
@@ -664,14 +686,14 @@ struct
           Eval.singleton (mk_py_object (find_builtin_attribute (object_of_expr e) attr) range) flow
 
         | A_py_module (M_user (name, globals)) ->
-          let v = List.find (fun x -> x.org_vname = attr) globals in
+          let v = List.find (fun x -> get_orig_vname x = attr) globals in
           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var v range) flow
 
         | A_py_class (C_builtin c, b) ->
           Eval.singleton (mk_py_object (find_builtin_attribute (object_of_expr e) attr) range) flow
 
         | A_py_class (C_user c, b) ->
-          let f = List.find (fun x -> x.org_vname = attr) c.py_cls_static_attributes in
+          let f = List.find (fun x -> get_orig_vname x = attr) c.py_cls_static_attributes in
           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var f range) flow
 
         | A_py_var _
@@ -701,7 +723,7 @@ struct
            let cur = get_domain_env T_cur man flow in
            let proceed addr (cl, mro, cur) =
              let flow = set_domain_env T_cur cur man flow in
-             let obj = mk_py_object ({addr_uid = 0; addr_kind = A_py_class (cl, mro); addr_mode = STRONG}, None) range in
+             let obj = mk_py_object ({addr_group = G_all; addr_kind = A_py_class (cl, mro); addr_mode = STRONG}, None) range in
              Eval.singleton obj flow in
            match ekind earg with
            | E_py_object ({addr_kind = A_py_instance _ | A_py_var _ } as addr, _) ->
@@ -814,7 +836,7 @@ struct
                   process "NotImplementedType"
                 else if is_ao addr_integers then
                   process "int"
-                else if addr_obj.addr_uid <= 0 then
+                else if addr_obj.addr_group = G_all then
                   match akind addr_obj with
                   | A_py_instance i ->
                     assert (is_builtin_name i);
@@ -884,7 +906,7 @@ struct
             let cls_str = match cls with
               | C_builtin s
               | C_unsupported s -> s
-              | C_user c -> c.py_cls_var.org_vname
+              | C_user c -> get_orig_vname c.py_cls_var
             in
             man.eval  ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr (A_py_instance cls_str) range) flow |>
             Eval.bind (fun eaddr flow ->
@@ -1025,7 +1047,7 @@ struct
             | Instance {classn} -> begin match classn with
                 | Class (c, b) -> begin match c with
                     | C_builtin name | C_unsupported name -> name
-                    | C_user c -> c.py_cls_var.org_vname
+                    | C_user c -> get_orig_vname c.py_cls_var
                   end
                 | _ -> assert false
               end
