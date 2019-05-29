@@ -91,6 +91,10 @@ val bind : ('e -> 'a flow -> ('f, 'a) eval ) -> ('e, 'a) eval -> ('f, 'a) eval
 
 val bind_opt : ('e -> 'a flow -> ('f, 'a) eval option) -> ('e, 'a) eval -> ('f, 'a) eval option
 
+val bind_lowlevel_opt : ('e option -> 'a flow -> stmt list -> ('f, 'a) eval option) -> ('e, 'a) eval -> ('f, 'a) eval option
+
+val bind_lowlevel : ('e option -> 'a flow -> stmt list -> ('f, 'a) eval) -> ('e, 'a) eval -> ('f, 'a) eval
+
 val bind_some : ('e -> 'a flow -> ('f, 'a) eval ) -> ('e, 'a) eval -> ('f, 'a) eval option
 
 val eval_list : ('e -> 'a flow -> ('f, 'a) eval) -> 'e list -> 'a flow -> ('f list, 'a) eval

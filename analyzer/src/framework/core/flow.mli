@@ -72,6 +72,8 @@ val widen : 'a lattice -> 'a flow -> 'a flow -> 'a flow
 val print : 'a lattice -> Format.formatter -> 'a flow -> unit
 (** Pretty printer *)
 
+val print_w_lprint : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a flow -> unit
+
 val get : token -> 'a lattice -> 'a flow -> 'a
 (** [get tk lat flow] returns the abstract element associated to token
     [tk] in [flow]. Returns [lat.bottom] if the binding is not found. *)

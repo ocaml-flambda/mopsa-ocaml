@@ -64,7 +64,7 @@ type 'a pctx
 module GenPolyKey
     (V:sig
        type 'a t
-       val print : Format.formatter -> 'a t -> unit
+       val print : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
      end)
   :
   sig
@@ -105,6 +105,6 @@ val remove_poly : ('a,'v) pkey -> 'a ctx -> 'a ctx
 
 val init_poly : 'a pctx -> 'a ctx -> 'a ctx
 
-val print : Format.formatter -> 'a ctx -> unit
+val print : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a ctx -> unit
 
 val get_most_recent : 'a ctx -> 'a ctx -> 'a ctx

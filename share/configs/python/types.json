@@ -16,6 +16,8 @@
             "python.flows.exceptions",
 
             "universal.iterators.intraproc",
+            "universal.iterators.interproc.sequential_cache",
+            // "universal.iterators.interproc.join_based_cache",
             "universal.iterators.interproc.inlining",
             "universal.iterators.loops",
             "universal.iterators.unittest",

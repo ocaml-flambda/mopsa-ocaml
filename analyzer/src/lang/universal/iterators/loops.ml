@@ -119,7 +119,11 @@ struct
   module Lctx = Context.GenPolyKey(
     struct
         type 'a t = 'a flow Rangemap.t
-        let print fmt ctx = Format.fprintf fmt "Lfp cache context: %a" (Format.pp_print_list (fun fmt ((_, r), _) -> pp_range fmt r)) (Rangemap.bindings ctx)
+        let print (l: Format.formatter -> 'a -> unit) fmt ctx = Format.fprintf fmt "Lfp cache context: %a"
+            (Rangemap.fprint
+               MapExt.printer_default
+               (fun fmt (cs, r) -> Callstack.print fmt cs; pp_range fmt r)
+               (fun fmt flow -> TokenMap.print_w_lprint l fmt (Flow.get_token_map flow))) ctx
       end
     )
 

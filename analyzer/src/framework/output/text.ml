@@ -49,7 +49,8 @@ let report ?(flow=None) man alarms states time files out =
   let () = match flow with
     | None -> ()
     | Some f ->
-      print out "Last flow = %a@\n" (Core.Flow.print man.lattice) f
+      print out "Last flow =@[@\n%a@]@\nContext = @[@\n%a@]@\n" (Core.Flow.print man.lattice) f (Core.Context.print man.lattice.print) (Flow.get_ctx f)
+
   in
   print out "Time: %.3fs@." time;
   let () =
