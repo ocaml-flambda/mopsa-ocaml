@@ -184,6 +184,10 @@ struct
       | S_c_declaration (var,init,scope) ->
         let v = Map.find var a in
         Some (Map.add var v acc)
+
+      | S_rename ( {ekind = E_addr addr1}, {ekind = E_addr addr2} ) ->
+        Some acc
+
       | _ -> None
     in
 
