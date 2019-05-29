@@ -267,40 +267,29 @@ struct
     |>
     List.fold_left (fun (acc, nb_ok, nb_fail, nb_may_fail, nb_panic) (name, test) ->
         debug "Executing %s" name;
-        try
-          (* Fold the context *)
-          let flow = Flow.copy_ctx acc flow in
-          (* Call the function *)
-          let flow1 = man.exec test flow in
-          let ok, fail, may_fail = Flow.fold (fun (ok, fail, may_fail) tk env ->
-              match tk with
-              | T_safe_assert _ -> (ok + 1, fail, may_fail)
-              | T_alarm {alarm_kind = A_fail_assert _} -> (ok, fail + 1, may_fail)
-              | T_alarm {alarm_kind = A_may_assert _} -> (ok, fail, may_fail + 1)
-              | _ -> (ok, fail, may_fail)
-            ) (0, 0, 0) flow1
-          in
-          debug "Execution of %s done@\n %a  %a assertion%a passed@\n %a  %a assertion%a failed@\n %a  %a assertion%a unproven"
-            name
-            ((Debug.color "green") Format.pp_print_string) "✔" ((Debug.color "green") Format.pp_print_int) ok Debug.plurial_int ok
-            ((Debug.color "red") Format.pp_print_string) "✘" ((Debug.color "red") Format.pp_print_int) fail Debug.plurial_int fail
-            ((Debug.color "orange") Format.pp_print_string) "⚠" ((Debug.color "orange") Format.pp_print_int) may_fail Debug.plurial_int may_fail
-          ;
-          Flow.join man.lattice acc flow1,
-          nb_ok + ok,
-          nb_fail + fail,
-          nb_may_fail + may_fail,
-          nb_panic
-        with
-        | Exceptions.Panic (msg, loc) ->
-          let a = mk_alarm (A_panic_test (msg, name, loc)) test.srange ~level:PANIC in
-          let flow1 = Flow.add (T_alarm a) (Flow.get T_cur man.lattice flow) man.lattice flow in
-          Flow.join man.lattice acc flow1, nb_ok, nb_fail, nb_may_fail, nb_panic + 1
-
-        | Exceptions.PanicAt (range, msg, loc) ->
-          let a = mk_alarm (A_panic_test (msg, name, loc)) range ~level:PANIC in
-          let flow1 = Flow.add (T_alarm a) (Flow.get T_cur man.lattice flow) man.lattice flow in
-          Flow.join man.lattice acc flow1, nb_ok, nb_fail, nb_may_fail, nb_panic + 1
+        (* Fold the context *)
+        let flow = Flow.copy_ctx acc flow in
+        (* Call the function *)
+        let flow1 = man.exec test flow in
+        let ok, fail, may_fail = Flow.fold (fun (ok, fail, may_fail) tk env ->
+            match tk with
+            | T_safe_assert _ -> (ok + 1, fail, may_fail)
+            | T_alarm {alarm_kind = A_fail_assert _} -> (ok, fail + 1, may_fail)
+            | T_alarm {alarm_kind = A_may_assert _} -> (ok, fail, may_fail + 1)
+            | _ -> (ok, fail, may_fail)
+          ) (0, 0, 0) flow1
+        in
+        debug "Execution of %s done@\n %a  %a assertion%a passed@\n %a  %a assertion%a failed@\n %a  %a assertion%a unproven"
+          name
+          ((Debug.color "green") Format.pp_print_string) "✔" ((Debug.color "green") Format.pp_print_int) ok Debug.plurial_int ok
+          ((Debug.color "red") Format.pp_print_string) "✘" ((Debug.color "red") Format.pp_print_int) fail Debug.plurial_int fail
+          ((Debug.color "orange") Format.pp_print_string) "⚠" ((Debug.color "orange") Format.pp_print_int) may_fail Debug.plurial_int may_fail
+        ;
+        Flow.join man.lattice acc flow1,
+        nb_ok + ok,
+        nb_fail + fail,
+        nb_may_fail + may_fail,
+        nb_panic
 
 
       ) (Flow.bottom annot, 0, 0, 0, 0)

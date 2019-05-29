@@ -497,6 +497,8 @@ struct
       add_base (A addr) stmt.srange man flow |>
       Option.return
 
+    | S_rename ({ ekind = E_addr addr1 }, { ekind = E_addr add2 }) ->
+      assert false
 
     | S_assign({ ekind = E_c_deref p}, rval) when under_type p.etyp |> is_c_num_type ->
       assign_deref p rval stmt.srange man flow |>
@@ -548,6 +550,10 @@ struct
           match Z.gt elm_size Z.one, base with
           (* Multi-byte scalars and string litterals are not handled here *)
           | true, _ | _, S _ ->
+            let l,u = rangeof typ in
+            Eval.singleton (mk_z_interval l u ~typ range) flow
+
+          | _, V v when is_c_scalar_type v.vtyp ->
             let l,u = rangeof typ in
             Eval.singleton (mk_z_interval l u ~typ range) flow
 
@@ -613,9 +619,6 @@ struct
     | E_c_points_to P_invalid ->
       raise_alarm Alarms.AInvalidDeref p.erange ~bottom:true man.lattice flow |>
       Eval.empty_singleton
-
-    | E_c_points_to (P_block (V v, offset)) when is_c_scalar_type v.vtyp ->
-      Eval.singleton (mk_top (under_pointer_type p.etyp) range) flow
 
     | E_c_points_to (P_block (base, offset)) ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow |>

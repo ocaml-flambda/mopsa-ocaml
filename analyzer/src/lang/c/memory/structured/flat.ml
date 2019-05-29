@@ -82,7 +82,7 @@ struct
 
   and flatten_scalar_init init typ range =
     match init with
-    | None                 -> [C_flat_none (sizeof_type typ)]
+    | None                 -> [C_flat_none (Z.one, typ)]
     | Some (C_init_expr e) -> [C_flat_expr (e,typ)]
     | _ -> assert false
 
@@ -90,7 +90,12 @@ struct
     let n = get_array_constant_length typ in
     let under_typ = under_array_type typ in
     match init with
-    | None -> [C_flat_none (Z.mul n (sizeof_type under_typ))]
+    | None ->
+      if is_c_scalar_type under_typ then
+        [C_flat_none (n,under_typ)]
+      else
+        let nn = Z.mul n (sizeof_type under_typ) in
+        [C_flat_none (nn,u8)]
 
     | Some (C_init_list (l, filler)) ->
       let rec aux i =
@@ -99,14 +104,18 @@ struct
         if i < List.length l
         then flatten_init (Some (List.nth l i)) under_typ range @ aux (i + 1)
         else
-          let nn = Z.mul (Z.sub n (Z.of_int i)) (sizeof_type under_typ) in
+          let remain = Z.sub n (Z.of_int i) in
           match filler with
           | None ->
-            [C_flat_none nn]
+            if is_c_scalar_type under_typ then
+              [C_flat_none (remain,under_typ)]
+            else
+              let nn = Z.mul remain (sizeof_type under_typ) in
+              [C_flat_none (nn,u8)]
 
           | Some (C_init_list([], Some (C_init_expr e)))
           | Some (C_init_expr e) ->
-            [C_flat_fill (e, under_typ, nn)]
+            [C_flat_fill (e, under_typ, remain)]
 
           | Some x -> panic_at range "initialization filler %a not supported" Pp.pp_c_init x
       in
@@ -114,13 +123,16 @@ struct
 
     | Some (Ast.C_init_expr {ekind = E_constant(C_c_string (s, _))}) ->
       let rec aux i =
-        if Z.equal (Z.of_int i) n then []
-        else
-        if i < String.length s
+        if Z.equal (Z.of_int i) n
+        then []
+
+        else if i < String.length s
         then C_flat_expr (mk_c_character (String.get s i) range, under_typ) :: aux (i + 1)
+
         else if i = String.length s
         then C_flat_expr (mk_c_character (char_of_int 0) range, under_typ) :: aux (i + 1)
-        else [C_flat_none (Z.sub n (Z.of_int i))]
+
+        else [C_flat_none (Z.sub n (Z.of_int i), s8)]
       in
       aux 0
 

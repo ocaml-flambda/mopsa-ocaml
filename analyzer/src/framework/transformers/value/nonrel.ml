@@ -97,6 +97,12 @@ struct
       | S_add { ekind = E_var (var, _) } ->
         add var Value.top acc
 
+      | S_rename ( {ekind = E_var (var1, _)}, {ekind = E_var (var2, _)} ) ->
+        let v = find var2 a in
+        remove var1 acc |>
+        add var2 v
+        
+        
       | S_remove { ekind = E_var (var, _) } ->
         remove var acc
 

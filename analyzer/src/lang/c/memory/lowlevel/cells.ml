@@ -775,17 +775,10 @@ struct
             let init = Some (C_init_expr e) in
             c, init, tl, Z.add o (sizeof_type e.etyp)
 
-          | C_flat_none(n) :: tl when is_c_scalar_type v.vtyp &&
-                                      Z.equal n (sizeof_type v.vtyp)
-            ->
-            let c = mk_cell (V v) o v.vtyp in
+          | C_flat_none(n,t) :: tl ->
+            let c = mk_cell (V v) o t in
             let init = None in
-            c, init, tl, Z.add o n
-
-          | C_flat_none(n) :: tl ->
-            let c = mk_cell (V v) o u8 in
-            let init = None in
-            let tl' = if Z.equal n Z.one then tl else C_flat_none(Z.pred n) :: tl in
+            let tl' = if Z.equal n Z.one then tl else C_flat_none(Z.pred n,t) :: tl in
             c, init, tl', Z.succ o
 
           | _ -> assert false
