@@ -200,6 +200,13 @@ struct
     | Top -> d
     | Finite m -> Map.fold f m x
 
+  let fold2o (f1:Key.t -> 'a -> 'c -> 'c) (f2:Key.t -> 'b -> 'c -> 'c)
+      (f: Key.t -> 'a -> 'b -> 'c -> 'c) (m1: 'a t) (m2: 'b t) (init: 'c) : 'c =
+    match m1, m2 with
+    | Bot, _ | _, Bot -> init
+    | Top, _ | _, Top -> raise Top.Found_TOP
+    | Finite i1, Finite i2 -> Map.fold2o f1 f2 f i1 i2 init
+
   let mem (x:Key.t) (a:'a t) : bool =
     match a with
     | Bot -> false
@@ -309,6 +316,8 @@ struct
   let fold (f:Key.t -> Value.t -> 'a -> 'a) (a:t) (x:'a) : 'a = Map.fold f a x
 
   let fold_d (f:Key.t -> Value.t -> 'a -> 'a) (a:t) (d :'a) (x :'a) : 'a = Map.fold_d f a d x
+
+  let fold2o = Map.fold2o
 
   let mem (x:Key.t) (a:t) : bool = Map.mem x a
 
