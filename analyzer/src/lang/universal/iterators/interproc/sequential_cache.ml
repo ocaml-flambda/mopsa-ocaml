@@ -109,7 +109,6 @@ struct
       let in_flow_other = Flow.remove T_cur in_flow in
       begin match find_signature man func.fun_name in_flow_cur with
         | None ->
-          (* FIXME: good return variable? *)
           let ret = mk_range_attr_var range "ret_var" T_any in
           Inlining.Domain.inline_function_exec_body man func args range new_vars in_flow_cur ret |>
           Eval.bind_lowlevel (fun oeval_res out_flow cleaners ->
@@ -121,7 +120,7 @@ struct
                 Eval.case oeval_res (Flow.join man.lattice in_flow_other flow)
 
               | Some eval_res ->
-                man.eval (*FIXME: Zone issue? ~zone:(Zone.Z_py, Zone.Z_py_obj)*) eval_res out_flow |>
+                man.eval eval_res out_flow |>
                 Eval.bind (fun eval_res out_flow ->
                     debug "eval_res = %a@\ncleaners = %a@\n" pp_expr eval_res pp_stmt (mk_block cleaners range);
                     let out_flow = Framework.Core.Sig.Domain.Stateless.exec_block_on_all_flows cleaners man out_flow in

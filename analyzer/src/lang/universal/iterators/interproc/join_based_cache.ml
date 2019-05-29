@@ -94,10 +94,8 @@ struct
       let in_flow_cur = Flow.set T_cur (Flow.get T_cur man.lattice in_flow) man.lattice (Flow.bottom (Flow.get_ctx in_flow)) in
       let new_vars, in_flow_cur = Inlining.Domain.inline_function_assign_args man func args range in_flow_cur in
       let in_flow_other = Flow.remove T_cur in_flow in
-      (* FIXME: should we really do find_signature? We'll never join in this case I guess *)
       begin match find_signature man func.fun_name in_flow_cur with
         | None ->
-          (* FIXME: good return variable? *)
           Inlining.Domain.inline_function_exec_body man func args range new_vars in_flow_cur func.fun_return_var |>
           Eval.bind (fun var_res out_flow  ->
               let flow = store_signature man.lattice func.fun_name in_flow_cur out_flow in

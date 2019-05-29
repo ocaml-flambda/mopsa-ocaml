@@ -248,8 +248,7 @@ def constraint_pass(pos, last_move=None):
     done = pos.done
 
     # Remove impossible values from free cells
-    free_cells = (range(done.count) if last_move is None
-                  else pos.hexc.get_by_id(last_move).links)
+    free_cells = range(done.count) if last_move is None else pos.hexc.get_by_id(last_move).links
     for i in free_cells:
         if not done.already_done(i):
             vmax = 0
@@ -291,8 +290,7 @@ def constraint_pass(pos, last_move=None):
                         changed = True
 
     # Force empty or non-empty around filled cells
-    filled_cells = (range(done.count) if last_move is None
-                    else [last_move])
+    filled_cells = range(done.count) if last_move is None else [last_move]
     for i in filled_cells:
         if done.already_done(i):
             num = done[i][0]
