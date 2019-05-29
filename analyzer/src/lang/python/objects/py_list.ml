@@ -72,7 +72,7 @@ struct
     end)
 
   let interface = {
-    iexec = {provides = []; uses = [Zone.Z_py_obj]};
+    iexec = {provides = [Zone.Z_py_obj]; uses = [Zone.Z_py_obj]};
     ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj; Universal.Zone.Z_u_heap, Z_any]}
   }
 
@@ -605,7 +605,17 @@ struct
     | _ -> None
 
 
-  let exec zone stmt man flow = None
+  let exec zone stmt man flow =
+    let range = srange stmt in
+    match skind stmt with
+    | S_rename ({ekind = E_addr ({addr_kind = A_py_list _} as a)}, {ekind = E_addr a'}) ->
+      (* FIXME: this is weird *)
+      let var_of_a = var_of_addr a in
+      let var_of_a' = var_of_addr a' in
+      man.exec ~zone:Zone.Z_py_obj (mk_rename_var var_of_a var_of_a' range) flow
+      |> Post.return |> Option.return
+
+    | _ -> None
 
   let ask _ _ _ = None
 end

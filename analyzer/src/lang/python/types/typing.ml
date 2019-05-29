@@ -120,6 +120,8 @@ let addr_float = {addr_group = G_all; addr_kind = A_py_instance "float"; addr_mo
 
 type addr_group +=
   | G_py_bool of bool option
+  | G_group of addr * addr
+
 
 
 let () =
@@ -129,11 +131,17 @@ let () =
         | G_py_bool (Some true) -> Format.fprintf fmt "true"
         | G_py_bool (Some false) -> Format.fprintf fmt "false"
         | G_py_bool None -> Format.fprintf fmt "⊤"
+        | G_group (a1, a2) -> Format.fprintf fmt "(%a, %a)" pp_addr a1 pp_addr a2
         | _ -> next fmt g
       );
     compare = (fun next g1 g2 ->
         match g1, g2 with
         | G_py_bool b1, G_py_bool b2 -> Option.compare Pervasives.compare b1 b2
+        | G_group (a1, b1), G_group (a2, b2) ->
+          Compare.compose
+            [(fun () -> compare_addr a1 a2);
+             (fun () -> compare_addr b1 b2);
+            ]
         | _ -> next g1 g2
       );
   }
@@ -1030,8 +1038,7 @@ struct
     | E_py_object _ -> Eval.singleton exp flow |> Option.return
 
     | _ ->
-      Exceptions.panic_at range "Warning: no eval for %a" pp_expr exp (* ;
-           None *)
+      None
 
   let ask : type r. r query -> ('a, t) man -> 'a flow -> r option =
     fun query man flow ->
