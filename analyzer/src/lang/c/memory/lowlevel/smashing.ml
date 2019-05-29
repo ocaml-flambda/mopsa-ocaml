@@ -67,6 +67,7 @@ struct
     { base; typ = remove_typedef_qual typ }
 
 
+
   (** {2 Smash variables} *)
   (** ******************* *)
 
@@ -159,25 +160,99 @@ struct
   }
 
 
+  (** {2 Unification} *)
+  (** *************** *)
+
+  (** [phi c a range] returns a constraint expression over cell [c] found in [a] *)
+  let phi (c:smash) (a:t) range : expr option =
+    if is_c_int_type c.typ then
+      let a,b = rangeof c.typ in
+      Some (mk_z_interval a b range)
+
+    else
+    if is_c_float_type c.typ then
+      let prec = get_c_float_precision c.typ in
+      Some (mk_top (T_float prec) range)
+
+    else
+      None
+
+
+  (** Add a smashed cell to the underlying scalar domain *)
+  let add_smash c a range man ctx s =
+    (* Do nothing if c is already known or if it is an optional cell
+       (i.e. its base is not declared) 
+    *) 
+    if SmashSet.mem c a.smashes || not (BaseSet.mem c.base a.bases)
+    then s
+
+    (* Otherwise add numeric constraints about the cell value if
+       overlapping cells already exist 
+    *)
+    else
+      let v = mk_smash_var c in
+      let s' = man.sexec ~zone:Z_c_scalar (mk_add (mk_var v range) range) ctx s in
+      if is_c_pointer_type c.typ then s'
+      else
+        match phi c a range with
+        | Some e ->
+          let stmt = mk_assume (mk_binop (mk_var v range) O_eq e ~etyp:u8 range) range in
+          man.sexec ~zone:Z_c_scalar stmt ctx s'
+
+        | None ->
+          s'
+
+
+  (** Unify the support of two abstract elements by adding missing cells *)
+  let unify man ctx (a,s) (a',s') =
+    if a == a' then s, s' else
+    if SmashSet.is_empty a.smashes  then s, s' else
+    if SmashSet.is_empty a'.smashes then s, s'
+    else
+      try
+        let range = mk_fresh_range () in
+        let diff' = SmashSet.diff a.smashes a'.smashes in
+        let diff = SmashSet.diff a'.smashes a.smashes in
+        SmashSet.fold (fun c s ->
+            add_smash c a range man ctx s
+          ) diff s
+        ,
+        SmashSet.fold (fun c s' ->
+            add_smash c a' range man ctx s'
+          ) diff' s'
+      with Top.Found_TOP ->
+        s, s'
+
+
+
   (** {2 Lattice operators} *)
   (** ********************* *)
 
   let is_bottom a = false
 
+
   let subset man ctx (a,s) (a',s') =
-    assert false
+    let s, s' = unify man ctx (a, s) (a', s') in
+    (true, s, s')
 
 
   let join man ctx (a,s) (a',s') =
-    assert false
+    let s, s' = unify man ctx (a,s) (a',s') in
+    let a = {
+      smashes = SmashSet.join a.smashes a'.smashes;
+      bases = BaseSet.join a.bases a'.bases;
+    }
+    in
+    (a, s, s')
 
 
   let meet man ctx (a,s) (a',s') =
-    assert false
+    join man ctx (a,s) (a',s')
 
 
   let widen man ctx (a,s) (a',s') =
-    assert false
+    let (a, s, s') = join man ctx (a,s) (a',s') in
+    (a, s, s', true)
 
 
   let merge ctx pre (a,log) (a',log') =
