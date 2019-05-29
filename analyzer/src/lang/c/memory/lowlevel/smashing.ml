@@ -309,12 +309,12 @@ struct
             else None
           )
 
-      | C_flat_none _ :: tl ->
+      | C_flat_none (n,typ) :: tl ->
         collect_homogenous_init tl |>
         Option.bind (fun (typ',acc) ->
             if typ' = T_any ||
-               compare_typ u8 typ' = 0
-            then Some (u8, (None :: acc))
+               compare_typ typ typ' = 0
+            then Some (typ, (None :: acc))
             else None
           )
     in
@@ -339,7 +339,7 @@ struct
 
         | init :: tl ->
           let stmt = mk_c_declaration cv init scope range in
-          man.exec_sub stmt flow |>
+          man.exec_sub ~zone:Z_c_scalar stmt flow |>
           Post.join (aux tl)
       in
       aux el
@@ -349,7 +349,56 @@ struct
 
   (** Assignment abstract transformer for 𝕊⟦ *p = rval; ⟧ *)
   let assign_deref p rval range man flow =
-    assert false
+    man.eval ~zone:(Z_c_low_level, Z_c_points_to) p flow |>
+    post_eval man @@ fun pt flow ->
+
+    match ekind pt with
+    | E_c_points_to P_null ->
+      raise_alarm Alarms.ANullDeref p.erange ~bottom:true man.lattice flow |>
+      Post.return
+
+    | E_c_points_to P_invalid ->
+      raise_alarm Alarms.AInvalidDeref p.erange ~bottom:true man.lattice flow |>
+      Post.return
+
+    | E_c_points_to (P_block (V v, offset)) when is_c_scalar_type v.vtyp ->
+      Post.return flow
+
+    | E_c_points_to (P_block (base, offset)) ->
+      man.eval ~zone:(Z_c_low_level,Z_c_scalar) rval flow |>
+      post_eval man @@ fun rval flow ->
+
+      man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow |>
+      post_eval man @@ fun offset flow ->
+
+      eval_base_size base range man flow |>
+      post_eval man @@ fun size flow ->
+
+      man.eval ~zone:(Z_c_scalar, Z_u_num) size flow |>
+      post_eval man @@ fun size flow ->
+
+      let typ = under_type p.etyp in
+      let elm_size = sizeof_type typ in
+
+      (* Check that offset ∈ [0, size - elm_size] *)
+      assume_post (mk_in offset (mk_zero range) (sub size (mk_z elm_size range) range) range)
+        ~fthen:(fun flow ->
+            let c = mk_smash base typ in
+            let cv = mk_smash_var c in
+            let stmt = mk_assign (mk_var cv ~mode:WEAK range) rval range in
+            man.exec_sub ~zone:Z_c_scalar stmt flow
+          )
+        ~felse:(fun flow ->
+            (* Unsafe case *)
+            raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow |>
+            Post.return
+          )
+        ~zone:Z_u_num man flow
+
+
+
+    | _ -> assert false
+
 
 
   (** Transformers entry point *)
@@ -387,7 +436,51 @@ struct
 
   (** Abstract evaluation of a dereference *)
   let eval_deref p range man flow =
-    assert false
+    man.eval ~zone:(Z_c_low_level, Z_c_points_to) p flow |>
+    Eval.bind @@ fun pt flow ->
+
+    match ekind pt with
+    | E_c_points_to P_null ->
+      raise_alarm Alarms.ANullDeref p.erange ~bottom:true man.lattice flow |>
+      Eval.empty_singleton
+
+    | E_c_points_to P_invalid ->
+      raise_alarm Alarms.AInvalidDeref p.erange ~bottom:true man.lattice flow |>
+      Eval.empty_singleton
+
+    | E_c_points_to (P_block (V v, offset)) when is_c_scalar_type v.vtyp ->
+      Eval.singleton (mk_top (under_pointer_type p.etyp) range) flow
+
+    | E_c_points_to (P_block (base, offset)) ->
+      man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow |>
+      Eval.bind @@ fun offset flow ->
+
+      eval_base_size base range man flow |>
+      Eval.bind @@ fun size flow ->
+
+      man.eval ~zone:(Z_c_scalar, Z_u_num) size flow |>
+      Eval.bind @@ fun size flow ->
+      
+      let typ = under_type p.etyp in
+      let elm_size = sizeof_type typ in
+
+      (* Check that offset ∈ [0, size - elm_size] *)
+      assume_eval (mk_in offset (mk_zero range) (sub size (mk_z elm_size range) range) range)
+        ~fthen:(fun flow ->
+           let c = mk_smash base typ in
+           let cv = mk_smash_var c in
+           Eval.singleton (mk_var cv ~mode:WEAK range) flow
+        )
+        ~felse:(fun flow ->
+            (* Unsafe case *)
+            raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow |>
+            Eval.empty_singleton
+          )
+        ~zone:Z_u_num man flow
+
+
+    | _ -> assert false
+
 
   (** Evaluations entry point *)
   let eval zone exp man flow =
