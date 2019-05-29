@@ -286,7 +286,8 @@ struct
     compare_polytype pty pty' = 0
 
   let print fmt d =
-    TMap.print fmt d
+    Format.fprintf fmt "types: @[%a@]@\n"
+    TMap.print d
 
   (* let subset d d' =
    * (* not supporting correctly top and bottom *)
