@@ -34,7 +34,12 @@
                     "compose": [
                         "c.memory.structured.flat",
                         "universal.heap.recency.callstack_range",
-                        "c.memory.lowlevel.smashing",
+                        {
+			    "product": [
+				"c.memory.lowlevel.cells",
+				"c.memory.lowlevel.smashing"
+			    ]
+			},
                         {
                             "seq": [
 			        "c.memory.scalars.pointer",
