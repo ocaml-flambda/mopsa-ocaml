@@ -194,7 +194,10 @@ struct
     else
       let v = mk_smash_var c in
       let s' = man.sexec ~zone:Z_c_scalar (mk_add (mk_var v range) range) ctx s in
-      if is_c_pointer_type c.typ then s'
+
+      if is_c_pointer_type c.typ
+      then s'
+
       else
         match phi c a range with
         | Some e ->
@@ -404,6 +407,7 @@ struct
     let stmt = mk_remove_var v range in
     man.exec_sub ~zone:Z_c_scalar stmt flow
 
+
   let remove_overlappings c range man flow =
     let a = get_domain_env T_cur man flow in
     SmashSet.fold (fun c' acc ->
@@ -418,9 +422,14 @@ struct
   
   let assign_smash c rval range man flow =
     let cv = mk_smash_var c in
+    add_smash c range man flow |>
+    Post.bind @@ fun flow ->
+
     let stmt = mk_assign (mk_var cv ~mode:WEAK range) rval range in
     man.exec_sub ~zone:Z_c_scalar stmt flow |>
-    Post.bind (remove_overlappings c range man)
+    Post.bind @@ fun flow ->
+
+    remove_overlappings c range man flow
 
 
 
