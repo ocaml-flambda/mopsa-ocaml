@@ -22,7 +22,7 @@
 (** Reduction rule between evaluations of cells and string length domains *)
 
 open Mopsa
-open Sig.Stacked.Eval_reduction
+open Sig.Stacked.Reduction
 open Universal.Ast
 open Ast
 open Zone
@@ -35,29 +35,51 @@ struct
   let debug fmt = Debug.debug ~channel:name fmt
 
   let reduce exp man evals =
-    match man.get Cells.Domain.id evals,
-          man.get Smashing.Domain.id evals
+    match man.get_eval Cells.Domain.id evals,
+          man.get_eval Smashing.Domain.id evals
     with
     | Some evl1, Some evl2 ->
       let evl1', evl2' = Eval.merge (fun e1 flow1 e2 flow2 ->
           match ekind e1, ekind e2 with
           (* Constants from the cell domain should be precise, isn't it? *)
           | E_constant (C_int _), _
-          | E_constant (C_c_character _), _
+          | E_constant (C_c_character _), _ ->
+            Some (Eval.singleton e1 flow1), None
+
+          (* Ensure that the cell and the smash are equal *)
+          | E_var _, E_var ({ vkind = Smashing.Domain.V_c_smash smash }, _)  ->
+            let cond = mk_binop e1 O_eq e2 exp.erange in
+            let flow1' = Smashing.Domain.add_smash smash exp.erange (man.get_man Smashing.Domain.id) flow1 |>
+                         Post.to_flow man.lattice |>
+                         man.exec ~zone:Z_c_scalar (mk_assume cond exp.erange)
+            in
+            if Flow.get T_cur man.lattice flow1' |> man.lattice.is_bottom then
+              None, None
+            else
+              let flow = Flow.meet man.lattice flow1' flow2 in
+              Some (Eval.singleton e1 flow), None
+
+          (* Cell is precise if smash does not return a variable *)
           | E_var _, _  ->
             Some (Eval.singleton e1 flow1), None
 
+          (* Smash is precise if cell does not return a variable *)
+          | _, E_var _  ->
+            Some (Eval.singleton e1 flow1), None
+
+
+          (* Otherwise keep them both? *)
           | _ ->
-            None, Some (Eval.singleton e2 flow2)
+            Some (Eval.singleton e1 flow1), Some (Eval.singleton e2 flow2)
 
 
         ) evl1 evl2
       in
-      man.set Cells.Domain.id evl1' evals |>
-      man.set Smashing.Domain.id evl2'
+      man.set_eval Cells.Domain.id evl1' evals |>
+      man.set_eval Smashing.Domain.id evl2'
 
     | _ -> evals
 end
 
 let () =
-  register_reduction (module Reduction)
+  register_eval_reduction (module Reduction)
