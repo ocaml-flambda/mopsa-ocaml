@@ -77,6 +77,9 @@ struct
         Map.for_all (fun _ v -> lattice.is_bottom v) m
       ) tmap
 
+  let is_empty (tmap: 'a t) : bool =
+    top_dfl1 false Map.is_empty tmap
+  
   let is_top (lattice: 'a lattice) (tmap: 'a t) : bool =
     top_dfl1 true (fun _ -> false) tmap
 

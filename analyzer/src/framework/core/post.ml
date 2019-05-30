@@ -93,7 +93,10 @@ let merge (f:token -> ('a*log) -> ('a*log) -> ('a*log)) (post1:'a post) (post2:'
             ctx = case2.ctx
           }
         ) post2
-    ) [] post1
+    ) [] post1 |>
+  List.filter (fun case ->
+      not (TokenMap.is_empty case.tmap)
+  )
 
 
 let meet (lattice:'a lattice) (post1:'a post) (post2:'a post) : 'a post =
