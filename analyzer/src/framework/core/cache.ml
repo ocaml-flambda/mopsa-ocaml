@@ -52,20 +52,25 @@ struct
       | None ->
         if Flow.is_bottom man.lattice flow
         then Post.return flow
-        else
-          Exceptions.panic
+
+        else Exceptions.panic
             "Unable to analyze statement in %a:@\n @[%a@]"
             Location.pp_range stmt.srange
             pp_stmt stmt
 
       | Some post -> post
     in
-    if !opt_cache == 0 then
-      ff ()
-    else
-      try
-        let post = List.assoc (zone, stmt, Flow.get_token_map flow) !exec_cache in
-        (* debug "post-condition of %a found in cache" pp_stmt stmt; *)
+    if !opt_cache = 0
+    then ff ()
+
+    else try
+        let tmap = Flow.get_token_map flow in
+        let post =
+          List.find (fun ((zone',stmt',tmap'),_) ->
+              zone = zone' && stmt == stmt' && tmap == tmap'
+            ) !exec_cache |>
+          snd
+        in
         Post.set_ctx (Flow.get_ctx flow) post
       with Not_found ->
         let post = ff () in
@@ -73,12 +78,17 @@ struct
         post
 
   let eval f zone exp man flow =
-    if !opt_cache == 0
+    if !opt_cache = 0
     then f exp man flow
-    else
-      try
-        let evls = List.assoc (zone, exp, Flow.get_token_map flow) !eval_cache in
-        (* debug "evaluation of %a found in cache" pp_expr exp; *)
+
+    else try
+        let tmap = Flow.get_token_map flow in
+        let evls =
+          List.find (fun ((zone',exp',tmap'),_) ->
+              zone = zone' && exp == exp' && tmap == tmap'
+            ) !eval_cache |>
+          snd
+        in
         Option.lift (Eval.map_flow (Flow.copy_ctx flow)) evls
       with Not_found ->
         let evals = f exp man flow in
