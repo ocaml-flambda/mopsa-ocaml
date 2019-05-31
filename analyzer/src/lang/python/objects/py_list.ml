@@ -38,15 +38,18 @@ open Addr
 open Universal.Ast
 open Callstack
 
+module Rangeset = Set.Make(struct type t = range
+    let compare = compare_range end)
+
 type addr_kind +=
-  | A_py_list of range
+  | A_py_list of Rangeset.t
   | A_py_iterator of string (* iterator kind (list_iterator, ...) *) * addr list  (* addr of the containers iterated on *) * int option (* potential position in the iterator *)
 
 let () =
   Format.(register_addr_kind {
       print = (fun default fmt a ->
           match a with
-          | A_py_list r -> fprintf fmt "list[%a]" pp_range r
+          | A_py_list r -> fprintf fmt "list[%a]" (fun fmt -> Rangeset.iter (fun ra -> pp_range fmt ra)) r
           | A_py_iterator (s, addr, d) ->
             begin match d with
             | None -> fprintf fmt "%s[%a]" s (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_addr) addr
@@ -54,7 +57,7 @@ let () =
           | _ -> default fmt a);
       compare = (fun default a1 a2 ->
           match a1, a2 with
-          | A_py_list v1, A_py_list v2 -> compare_range v1 v2
+          | A_py_list v1, A_py_list v2 -> Rangeset.compare v1 v2
           | A_py_iterator (s1, a1, d1), A_py_iterator (s2, a2, d2) ->
             Compare.compose [
               (fun () -> Pervasives.compare s1 s2);
@@ -63,6 +66,9 @@ let () =
             ]
           | _ -> default a1 a2);})
 
+let join_akind ak1 ak2 = match ak1, ak2 with
+  | A_py_list r1, A_py_list r2 -> A_py_list (Rangeset.union r1 r2)
+  | _ -> failwith "hum"
 
 module Domain =
 struct
@@ -98,7 +104,7 @@ struct
       debug "Skipping list.__new__, list.__init__ for now@\n";
 
 
-      let addr_list = mk_alloc_addr (A_py_list range) range in
+      let addr_list = mk_alloc_addr (A_py_list (Rangeset.singleton range)) range in
       man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_list flow |>
       Eval.bind (fun eaddr_list flow ->
           let addr_list = addr_of_expr eaddr_list in
@@ -128,7 +134,7 @@ struct
                   ~felse:(fun flow ->
                       assume_eval (mk_py_isinstance_builtin index "slice" range) man flow
                         ~fthen:(fun flow ->
-                            let addr_list = mk_alloc_addr (A_py_list range) range in
+                            let addr_list = mk_alloc_addr (A_py_list (Rangeset.singleton range)) range in
                             man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_list flow |>
                             Eval.bind (fun eaddr_list flow ->
                                 let addr_list = addr_of_expr eaddr_list in
@@ -155,7 +161,7 @@ struct
 
            (* First, allocate new addr for the list, and new addr for the list elements *)
            (* Then assign the el addr to both addresses above *)
-           let addr_list = mk_alloc_addr (A_py_list range) range in
+           let addr_list = mk_alloc_addr (A_py_list (Rangeset.singleton range)) range in
            man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_list flow |>
            Eval.bind (fun list_addr flow ->
                let alist_addr = addr_of_expr list_addr in
@@ -218,7 +224,7 @@ struct
         (fun args flow ->
            let list, int = match args with [l; r] -> l, r | _ -> assert false in
            let els_list = var_of_eobj list in
-           let addr_list = mk_alloc_addr (A_py_list range) range in
+           let addr_list = mk_alloc_addr (A_py_list (Rangeset.singleton range)) range in
            man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_list flow |>
            Eval.bind (fun eaddr_list flow ->
                let addr_list = addr_of_expr eaddr_list in
@@ -610,9 +616,10 @@ struct
     match skind stmt with
     | S_rename ({ekind = E_addr ({addr_kind = A_py_list _} as a)}, {ekind = E_addr a'}) ->
       (* FIXME: this is weird *)
-      let var_of_a = var_of_addr a in
-      let var_of_a' = var_of_addr a' in
-      man.exec ~zone:Zone.Z_py_obj (mk_rename_var var_of_a var_of_a' range) flow
+      let va = var_of_addr a in
+      let va' = var_of_addr a' in
+      debug "renaming %a into %a@\n" pp_var va pp_var va';
+      man.exec ~zone:Zone.Z_py (mk_rename_var va va' range) flow
       |> Post.return |> Option.return
 
     | _ -> None

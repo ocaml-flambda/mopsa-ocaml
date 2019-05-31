@@ -395,7 +395,8 @@ struct
       Post.return flow |>
       Option.return
 
-    | S_rename ({ekind = E_addr a}, {ekind = E_addr a'}) ->
+    | S_rename ({ekind = E_addr ({addr_kind = A_py_instance _ } as a)}, {ekind = E_addr a'})
+    | S_rename ({ekind = E_addr ({addr_kind = A_py_var _ } as a)}, {ekind = E_addr a'}) ->
       (* TODO: le faire autrepart (addr_env), /!\ zones *)
       let cur = get_domain_env T_cur man flow in
       let abs_heap = TMap.rename a a' cur in
