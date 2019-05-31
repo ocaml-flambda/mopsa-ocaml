@@ -74,10 +74,39 @@ struct
   let init prog bigman flow = Iter.init prog (simplified_man bigman) flow
   let exec zone stmt bigman flow = Iter.exec zone stmt (simplified_man bigman) flow
   let eval zs expr bigman flow = Iter.eval zs expr (simplified_man bigman) flow
-  let ask query bigman flow = Iter.ask query (simplified_man bigman) flow
+
+  let ask : type r. r query -> ('a, t, 's ) Framework.Core.Sig.Stacked.Lowlevel.man -> 'a flow -> r option = fun query bigman flow ->
+    let man = simplified_man bigman in
+    match query with
+    | Framework.Engines.Interactive.Q_print_var ->
+      Some (
+        fun fmt v ->
+          let amap, tmap = get_domain_env T_cur man flow in
+          let ret = ref [] in
+          AD.AMap.iter (fun var addrs  ->
+              if get_orig_vname var = v then
+                AD.ASet.iter (fun addr ->
+                    match addr with
+                    | Def addr ->
+                      if TD.TMap.mem addr tmap then
+                        let ty = TD.TMap.find addr tmap in
+                        ret := (fun fmt -> Format.fprintf fmt "%s ⇝ %a ⇝ %a" var.vname pp_addr addr TD.Polytypeset.print ty) :: !ret
+                      else
+                        ret := (fun fmt -> Format.fprintf fmt "%s ⇝ %a ⇝ notinmap" var.vname pp_addr addr) :: !ret
+                    | Undef_local ->
+                      ret := (fun fmt -> Format.fprintf fmt "%s ⇝ undef_local" var.vname) :: !ret
+                    | Undef_global ->
+                      ret := (fun fmt -> Format.fprintf fmt "%s ⇝ undef_global" var.vname) :: !ret
+                  ) addrs
+            ) amap;
+          Format.fprintf fmt "@[<v>%a@]"
+            (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,")
+               (fun fmt pp -> pp fmt)
+            ) !ret
+      )
+    | _ -> Iter.ask query man flow
 
   let refine _ _ _ = failwith "todo"
-  (* include Iter *)
 
 
 
@@ -218,36 +247,8 @@ struct
    *              rhd, rabsheap
    *       ) man a a'
    *   else Iter.join man a a'
-   *
-   * let ask : type r. r query -> ('a, t) man -> 'a flow -> r option = fun query man flow ->
-   *   match query with
-   *   | Framework.Engines.Interactive.Q_print_var ->
-   *     Some (
-   *       fun fmt v ->
-   *         let amap, tmap = get_domain_env T_cur man flow in
-   *         let ret = ref [] in
-   *         AD.AMap.iter (fun var addrs  ->
-   *             if get_orig_vname var = v then
-   *               AD.ASet.iter (fun addr ->
-   *                   match addr with
-   *                   | Def addr ->
-   *                     if TD.TMap.mem addr tmap then
-   *                       let ty = TD.TMap.find addr tmap in
-   *                       ret := (fun fmt -> Format.fprintf fmt "%s ⇝ %a ⇝ %a" var.vname pp_addr addr TD.Polytypeset.print ty) :: !ret
-   *                     else
-   *                       ret := (fun fmt -> Format.fprintf fmt "%s ⇝ %a ⇝ notinmap" var.vname pp_addr addr) :: !ret
-   *                   | Undef_local ->
-   *                     ret := (fun fmt -> Format.fprintf fmt "%s ⇝ undef_local" var.vname) :: !ret
-   *                   | Undef_global ->
-   *                     ret := (fun fmt -> Format.fprintf fmt "%s ⇝ undef_global" var.vname) :: !ret
-   *                 ) addrs
-   *           ) amap;
-   *         Format.fprintf fmt "@[<v>%a@]"
-   *           (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,")
-   *              (fun fmt pp -> pp fmt)
-   *           ) !ret
-   *     )
-   *   | _ -> Iter.ask query man flow *)
+  *)
+
 
 
 end
