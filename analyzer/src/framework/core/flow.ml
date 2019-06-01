@@ -65,7 +65,7 @@ let join (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
   let ctx = Context.get_most_recent flow1.ctx flow2.ctx in
   { tmap = TokenMap.join lattice (Context.get_unit ctx) flow1.tmap flow2.tmap; ctx }
 
-let join_list lattice ?(ctx=Context.empty) l =
+let join_list lattice ~ctx l =
   match l with
   | [] -> bottom ctx
   | [f] -> f
@@ -84,7 +84,7 @@ let meet (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
   let ctx = Context.get_most_recent flow1.ctx flow2.ctx in
   { tmap = TokenMap.meet lattice (Context.get_unit ctx) flow1.tmap flow2.tmap; ctx }
 
-let meet_list lattice ?(ctx=Context.empty) l =
+let meet_list lattice ~ctx l =
   match l with
   | [] -> bottom ctx
   | [f] -> f
@@ -104,8 +104,8 @@ let widen (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
 
 let print (lattice: 'a lattice) fmt (flow : 'a flow) : unit =
   TokenMap.print lattice fmt flow.tmap
-  (* ;
-   * Context.print lattice.print fmt flow.ctx *)
+  ;
+  Context.print lattice.print fmt flow.ctx
 
 let print_w_lprint (lprint: Format.formatter -> 'a -> unit) fmt flow =
   TokenMap.print_w_lprint lprint fmt flow.tmap

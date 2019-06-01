@@ -454,7 +454,7 @@ struct
            match S.exec zone stmt man flow' with
            | None -> (S.name, None) :: acc, ctx
            | Some post ->
-             let ctx' = Post.choose_ctx post in
+             let ctx' = Post.get_ctx post in
              (S.name, Some post) :: acc, ctx'
        in
 
@@ -633,7 +633,7 @@ struct
            match S.eval zone exp man flow' with
            | None -> (S.name, None) :: acc, ctx
            | Some evl ->
-             let ctx' = Eval.choose_ctx evl in
+             let ctx' = Eval.get_ctx evl in
              (S.name, Some evl) :: acc, ctx'
        in
 

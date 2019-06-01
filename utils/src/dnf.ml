@@ -34,33 +34,28 @@ let mk_false : 'a t = []
 
 
 let rec mk_and
-    ?(fand=(@))
-    ?(compare=Pervasives.compare)
     (a: 'a t) (b: 'a t) : 'a t
   =
    List.fold_left (fun acc conj1 ->
       List.fold_left (fun acc conj2 ->
-          let conj = fand conj1 conj2 in
-          let conj' = List.sort_uniq compare conj in
-          mk_or acc [conj']
+          let conj = conj1 @ conj2 in
+          mk_or acc [conj]
         ) acc b
     ) mk_false a
 
 
 and mk_or
-    ?(compare=Pervasives.compare)
     (a: 'a t) (b: 'a t) : 'a t
   =
-  a @ b |>
-  List.sort_uniq (Compare.list compare)
+  a @ b
 
 
-and mk_neg neg ?(compare=Pervasives.compare) (a: 'a t) : 'a t =
+and mk_neg neg (a: 'a t) : 'a t =
   a |> List.fold_left (fun acc conj ->
-      mk_and ~compare acc (
+      mk_and acc (
         conj |>
         List.fold_left (fun acc x ->
-            mk_or ~compare acc (neg x)
+            mk_or acc (neg x)
           ) []
       )
     ) [[]]
@@ -146,6 +141,29 @@ let fold
   apply_disj init dnf
 
 
+
+let map_fold
+    (f: 'c -> 'a -> 'b * 'c)
+    (init: 'c)
+    (dnf: 'a t)
+  : 'b t * 'c =
+  let rec apply_conj acc = function
+    | [] -> [], acc
+    | e :: tl ->
+      let (r1,acc1) = f acc e in
+      let (r2,acc2) = apply_conj acc1 tl in
+      r1 :: r2, acc2
+  in
+  let rec apply_disj acc = function
+    | [] -> [], acc
+    | conj :: tl ->
+      let (r1,acc1) = apply_conj acc conj in
+      let (r2,acc2) = apply_disj acc1 tl in
+      r1 :: r2, acc2
+  in
+  apply_disj init dnf
+
+
 let fold_apply
     (f: 'b -> 'a -> 'b * 'c)
     (join: 'c -> 'c -> 'c)
@@ -180,6 +198,9 @@ let choose (dnf: 'a t) : 'a option =
 
 
 let to_list (dnf: 'a t) : 'a list list = dnf
+
+
+let from_list (l: 'a list list) : 'a t = l
 
 
 let print pp fmt (dnf:'a t) =
@@ -225,15 +246,24 @@ let merge
     ) (None, None) dnf1
 
 
-let to_cnf (dnf:'a t) : 'a list list =
-  let rec aux : 'a t -> 'a list list = function
-    | [] -> [[]]
-    | conj :: tl ->
-      aux tl |>
-      List.fold_left (fun acc tl ->
-          List.fold_left (fun acc e ->
-              (e :: tl) :: acc
-            ) acc conj
-        ) []
-  in
-  aux dnf
+let merge_fold
+    (f: 'c -> 'a -> 'b -> 'a t option * 'b t option * 'c)
+    (init:'c) (dnf1:'a t) (dnf2:'b t)
+  : 'a t option * 'b t option * 'c =
+  List.fold_left (fun (acc1,acc2,acc) conj1 ->
+      List.fold_left (fun (acc1,acc2,acc) conj2 ->
+          let conj1', conj2',acc =
+            List.fold_left (fun (acc1,acc2,acc) a ->
+                List.fold_left (fun (acc1,acc2,acc) b ->
+                    let a', b', acc = f acc a b in
+                    Option.neutral2 mk_and a' acc1,
+                    Option.neutral2 mk_and b' acc2,
+                    acc
+                  ) (acc1,acc2,acc) conj2
+              ) (None, None,acc) conj1
+          in
+          Option.neutral2 mk_or conj1' acc1,
+          Option.neutral2 mk_or conj2' acc2,
+          acc
+        ) (acc1,acc2,acc) dnf2
+    ) (None, None,init) dnf1

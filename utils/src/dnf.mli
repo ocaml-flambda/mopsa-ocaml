@@ -19,37 +19,59 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Post-states with journaling flows. *)
+(** Disjunctive normal form. *)
 
-open Ast.Stmt
-open Token
-open Flow
-open Log
-open Context
-open Lattice
+type 'a t
 
-type 'a post
 
-val return : 'a flow -> 'a post
+val singleton : 'a -> 'a t
 
-val print : 'a lattice -> Format.formatter -> 'a post -> unit
 
-val print_log : Format.formatter -> 'a post -> unit
+val mk_and : 'a t -> 'a t -> 'a t
+  
 
-val join : 'a post -> 'a post -> 'a post
+val mk_or : 'a t -> 'a t -> 'a t
 
-val merge : (token -> ('a*log) -> ('a*log) -> ('a*log)) -> 'a post -> 'a post -> 'a post
 
-val meet : 'a lattice -> 'a post -> 'a post -> 'a post
+val mk_neg : ('a -> 'a t) -> 'a t -> 'a t
 
-val get_ctx : 'a post -> 'a ctx
 
-val set_ctx : 'a ctx -> 'a post -> 'a post
+val map : ('a -> 'b) -> 'a t -> 'b t
 
-val bind : ('a flow -> 'a post) -> 'a post -> 'a post
 
-val map_log : (token -> log -> log) -> 'a post -> 'a post
+val iter : ('a -> unit) -> 'a t -> unit
 
-val map : (token -> 'a -> log -> 'b * log) -> 'b Context.ctx -> 'a post -> 'b post
 
-val to_flow : 'a lattice -> 'a post -> 'a flow
+val apply : ('a -> 'b) -> ('b -> 'b -> 'b) -> ('b -> 'b -> 'b) -> 'a t -> 'b
+
+
+val apply_list : ('a -> 'b) -> ('c list -> 'd) -> ('b list -> 'c) -> 'a t -> 'd
+
+
+val bind : ('a -> 'b t) -> 'a t -> 'b t
+
+
+val fold : ('b -> 'a -> 'b) -> ('b -> 'b -> 'b) -> ('b -> 'b -> 'b) -> 'b -> 'a t -> 'b
+
+
+val map_fold : ('c -> 'a -> 'b * 'c) -> 'c -> 'a t -> 'b t * 'c
+
+
+val fold_apply : ('b -> 'a -> 'b * 'c) -> ('c -> 'c -> 'c) -> ('c -> 'c -> 'c) -> 'b -> 'a t -> 'b * 'c
+
+
+val choose :'a t -> 'a option
+
+
+val to_list : 'a t -> 'a list list
+
+val from_list : 'a list list -> 'a t
+
+
+val print : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
+
+
+val merge : ('a -> 'b -> 'a t option * 'b t option) -> 'a t -> 'b t -> 'a t option * 'b t option
+
+
+val merge_fold  : ('c -> 'a -> 'b -> 'a t option * 'b t option * 'c) -> 'c -> 'a t -> 'b t -> 'a t option * 'b t option * 'c

@@ -102,7 +102,7 @@ let assume_eval cond ?(zone = any_zone)
     ~fthen ~felse
     ?(fboth = (fun flow1 flow2 ->
         let fthen_r = fthen flow1 in
-        let flow2 = Flow.set_ctx (Eval.choose_ctx fthen_r) flow2 in
+        let flow2 = Flow.set_ctx (Eval.get_ctx fthen_r) flow2 in
         let felse_r = felse flow2 in
         Eval.join fthen_r felse_r))
     ?(fnone = (fun flow -> empty_singleton flow))
@@ -114,7 +114,7 @@ let assume_post cond ?(zone = any_zone)
     ~fthen ~felse
     ?(fboth = (fun flow1 flow2 ->
         let fthen_r = fthen flow1 in
-        let flow2 = Flow.set_ctx (Post.choose_ctx fthen_r) flow2 in
+        let flow2 = Flow.set_ctx (Post.get_ctx fthen_r) flow2 in
         Post.join fthen_r (felse flow2)))
     ?(fnone = (fun flow -> Post.return flow))
     man flow
@@ -198,7 +198,7 @@ let exec_eval
       )
       (Flow.join man.lattice)
       (Flow.meet man.lattice)
-      (Eval.choose_ctx evl) evl
+      (Eval.get_ctx evl) evl
   in
   Flow.set_ctx ctx ret
 
@@ -215,7 +215,7 @@ let post_eval
          match e with
          | None ->
            let post' = exec_block_on_all_flows cleaners man flow |> Post.return in
-           Post.choose_ctx post', post'
+           Post.get_ctx post', post'
 
          | Some ee ->
            let post = f ee flow in
@@ -224,11 +224,11 @@ let post_eval
                Post.return (* FIXME: do we need to log cleaners? *)
              ) post
            in
-           Post.choose_ctx post', post'
+           Post.get_ctx post', post'
       )
       Post.join
       (Post.meet man.lattice)
-      (Eval.choose_ctx evl) evl
+      (Eval.get_ctx evl) evl
   in
   Post.set_ctx ctx ret
 
@@ -248,11 +248,11 @@ let post_eval_with_cleaners
 
          | Some ee ->
            let post = f ee flow cleaners in
-           Post.choose_ctx post, post
+           Post.get_ctx post, post
       )
       Post.join
       (Post.meet man.lattice)
-      (Eval.choose_ctx evl) evl
+      (Eval.get_ctx evl) evl
   in
   Post.set_ctx ctx ret
 
