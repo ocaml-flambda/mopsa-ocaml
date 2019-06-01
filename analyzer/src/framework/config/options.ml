@@ -152,6 +152,18 @@ let () =
     default = "";
   }
 
+
+(** Size of the cache *)
+let () =
+  register_builtin_option {
+    key = "-cache";
+    category = "Configuration";
+    doc = " size of the analysis cache";
+    spec = ArgExt.Set_int Core.Cache.opt_cache;
+    default = "10";
+  }
+
+
 (** Debug channels *)
 let () =
   register_builtin_option {
