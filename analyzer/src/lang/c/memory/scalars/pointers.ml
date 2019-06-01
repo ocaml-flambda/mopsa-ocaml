@@ -208,6 +208,16 @@ struct
   let print fmt a =
     Map.print fmt a
 
+
+  let add p v mode a =
+    if mode = STRONG
+    then Map.add p v a
+
+    else
+      let old = Map.find p a in
+      Map.add p (BaseSet.join v old) a
+
+
   (** {2 Zoning interface} *)
   (** ==================== *)
 
@@ -347,7 +357,7 @@ struct
   let set_base v b man flow =
     match v with
     | None -> flow
-    | Some (vv,_) -> map_domain_env T_cur (Map.add vv b) man flow
+    | Some (vv,mode) -> map_domain_env T_cur (add vv b mode) man flow
 
   (* Create the offset expression from optional pointer info *)
   let offset_expr v o range =
@@ -753,18 +763,21 @@ struct
     let o = mk_offset_expr p mode range in
     match eval_pointer q with
     | ADDROF (b, offset) ->
-      let flow' = map_domain_env T_cur (Map.add p (BaseSet.block b)) man flow in
+      let flow' = map_domain_env T_cur (add p (BaseSet.block b) mode) man flow in
 
       man.eval offset ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) flow' |>
       post_eval man @@ fun offset flow' ->
 
       man.exec_sub ~zone:(Universal.Zone.Z_u_num) (mk_assign o offset range) flow'
 
-    | EQ (q, mode, offset) ->
-      let flow' = map_domain_env T_cur (fun a -> Map.add p (Map.find q a) a) man flow in
+    | EQ (q, mode', offset) ->
+      let flow' = map_domain_env T_cur (fun a ->
+          add p (Map.find q a) mode a
+        ) man flow
+      in
       (* Assign offset only if q points to a block *)
       if mem_domain_env T_cur (fun a -> Map.find q a |> BaseSet.mem_block) man flow then
-        let qo = mk_offset_expr q mode range in
+        let qo = mk_offset_expr q mode' range in
         let offset' = mk_binop qo O_plus offset ~etyp:T_int range in
 
         man.eval offset' ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) flow' |>
@@ -775,19 +788,19 @@ struct
         man.exec_sub ~zone:(Universal.Zone.Z_u_num) (mk_remove o range) flow'
 
     | FUN f ->
-      map_domain_env T_cur (Map.add p (BaseSet.bfun f)) man flow |>
+      map_domain_env T_cur (add p (BaseSet.bfun f) mode) man flow |>
       man.exec_sub ~zone:(Universal.Zone.Z_u_num) (mk_remove o range)
 
     | INVALID ->
-      map_domain_env T_cur (Map.add p BaseSet.invalid) man flow  |>
+      map_domain_env T_cur (add p BaseSet.invalid mode) man flow  |>
       man.exec_sub ~zone:(Universal.Zone.Z_u_num) (mk_remove o range)
 
     | NULL ->
-      map_domain_env T_cur (Map.add p BaseSet.null) man flow |>
+      map_domain_env T_cur (add p BaseSet.null mode) man flow |>
       man.exec_sub ~zone:(Universal.Zone.Z_u_num) (mk_remove o range)
 
     | TOP ->
-      map_domain_env T_cur (Map.add p BaseSet.top) man flow |>
+      map_domain_env T_cur (add p BaseSet.top mode) man flow |>
       man.exec_sub ~zone:(Universal.Zone.Z_u_num) (mk_assign o (mk_top T_int range) range)
 
   (* Declaration of a scalar pointer variable *)
