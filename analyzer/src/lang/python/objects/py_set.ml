@@ -202,9 +202,9 @@ struct
             | A_py_set a -> a
             | _ -> assert false in
           let els = man.eval (mk_var var_els ~mode:WEAK range) flow in
-          let flow = Flow.set_ctx (Eval.choose_ctx els) flow in
+          let flow = Flow.set_ctx (Eval.get_ctx els) flow in
           let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
-          Eval.join_list (Eval.copy_ctx stopiteration els::stopiteration::[])
+          Eval.join_list ~empty:(Eval.empty_singleton flow) (Eval.copy_ctx stopiteration els::stopiteration::[])
         )
       |> Option.return
 

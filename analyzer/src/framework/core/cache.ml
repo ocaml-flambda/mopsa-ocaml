@@ -65,8 +65,9 @@ struct
     else
       try
         let post = List.assoc (zone, stmt, Flow.get_token_map flow) !exec_cache in
-        (* debug "post-condition of %a found in cache" pp_stmt stmt; *)
-        Post.set_ctx (Flow.get_ctx flow) post
+        Post.set_ctx (
+          Context.get_most_recent (Post.get_ctx post) (Flow.get_ctx flow)
+        ) post
       with Not_found ->
         let post = ff () in
         add_to_cache exec_cache ((zone, stmt, Flow.get_token_map flow), post);
@@ -79,7 +80,10 @@ struct
       try
         let evls = List.assoc (zone, exp, Flow.get_token_map flow) !eval_cache in
         (* debug "evaluation of %a found in cache" pp_expr exp; *)
-        Option.lift (Eval.map_flow (Flow.copy_ctx flow)) evls
+        Option.lift (fun evl ->
+            let ctx = Context.get_most_recent (Eval.get_ctx evl) (Flow.get_ctx flow) in
+            Eval.set_ctx ctx evl
+          ) evls
       with Not_found ->
         let evals = f exp man flow in
         add_to_cache eval_cache ((zone, exp, Flow.get_token_map flow), evals);
