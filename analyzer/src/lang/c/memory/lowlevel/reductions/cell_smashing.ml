@@ -68,9 +68,8 @@ struct
             Some (Eval.singleton e1 flow1), None
 
 
-          (* Otherwise keep them both? *)
           | _ ->
-            Some (Eval.singleton e1 flow1), Some (Eval.singleton e2 flow2)
+            None, Some (Eval.singleton e2 flow2)
 
 
         ) evl1 evl2
