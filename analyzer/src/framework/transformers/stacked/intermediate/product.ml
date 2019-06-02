@@ -28,7 +28,7 @@
 open Ast.All
 open Core.All
 open Sig.Stacked.Intermediate
-module E = Sig.Stacked.Eval_reduction
+module R = Sig.Stacked.Reduction
 open Log
 
 
@@ -319,7 +319,7 @@ module type SPEC =
 sig
   type t
   val pool : t slist
-  val erules : (module E.REDUCTION) list
+  val erules : (module R.EREDUCTION) list
 end
 
 
@@ -454,7 +454,7 @@ struct
            match S.exec zone stmt man flow' with
            | None -> (S.name, None) :: acc, ctx
            | Some post ->
-             let ctx' = Post.choose_ctx post in
+             let ctx' = Post.get_ctx post in
              (S.name, Some post) :: acc, ctx'
        in
 
@@ -532,10 +532,10 @@ struct
   (** ************************ *)
 
   (** Manager used by evaluation reductions *)
-  let eman (man:('a,t,'s) man) : 'a E.man = E.{
+  let eman (man:('a,t,'s) man) : ('a,'s) R.eman = R.{
       lattice = man.lattice;
       exec = man.exec;
-      get = (
+      get_eval = (
         let f : type t. t domain -> (expr,'a) peval -> (expr,'a) eval option =
           fun id evals ->
             let rec aux : type t tt. t domain -> tt slist -> (expr,'a) peval -> (expr,'a) eval option =
@@ -555,7 +555,7 @@ struct
         in
         f
       );
-      set = (
+      set_eval = (
         let f : type t. t domain -> (expr,'a) eval option -> (expr,'a) peval -> (expr,'a) peval =
           fun id evl evals ->
             let rec aux : type t tt. t domain -> tt slist -> (expr,'a) peval -> (expr,'a) peval =
@@ -575,6 +575,25 @@ struct
         in
         f
       );
+
+      get_man = (
+        let f : type t. t domain -> ('a,t,'s) man =
+          fun id ->
+            let rec aux : type t tt. t domain -> tt slist -> ('a,tt,'s) man -> ('a,t,'s) man =
+              fun id l man ->
+                match l with
+                | Nil -> raise Not_found
+                | Cons(hd,tl) ->
+                  let module D = (val hd) in
+                  match domain_id_eq D.id id with
+                  | Some Eq -> (hdman man)
+                  | None -> aux id tl (tlman man)
+            in
+            aux id Spec.pool man
+        in
+        f
+      );
+
   }
 
 
@@ -582,7 +601,7 @@ struct
   let reduce_eval exp man pevl =
     let eman = eman man in
     List.fold_left (fun acc r ->
-        let module R = (val r : E.REDUCTION) in
+        let module R = (val r : R.EREDUCTION) in
         R.reduce exp eman acc
       ) pevl Spec.erules
 
@@ -614,7 +633,7 @@ struct
            match S.eval zone exp man flow' with
            | None -> (S.name, None) :: acc, ctx
            | Some evl ->
-             let ctx' = Eval.choose_ctx evl in
+             let ctx' = Eval.get_ctx evl in
              (S.name, Some evl) :: acc, ctx'
        in
 
@@ -637,7 +656,7 @@ struct
        let pointwise_evl = List.map snd pointwise_evl in
 
        (* Turn the point-wise evaluations into a dnf of singleton point-wise evaluations *)
-       let dnf : (expr, 'a) E.peval Dnf.t =
+       let dnf : (expr, 'a) R.peval Dnf.t =
          let rec aux = function
            | [] -> Dnf.singleton []
 
@@ -662,7 +681,7 @@ struct
        let reduced_dnf = Dnf.map (reduce_eval exp man) dnf in
 
        (* Meet evaluations *)
-       let rec aux : ('e,'a) E.peval -> ('e,'a) eval option = function
+       let rec aux : ('e,'a) R.peval -> ('e,'a) eval option = function
          | [] -> None
          | None :: tl -> aux tl
          | Some evl :: tl ->
@@ -722,7 +741,7 @@ let rec type_stack_pool : (module STACK) list -> spool = function
 
 let make
     (stacks: (module STACK) list)
-    (erules: (module E.REDUCTION) list)
+    (erules: (module R.EREDUCTION) list)
   : (module STACK) =
 
   let S pool = type_stack_pool stacks in

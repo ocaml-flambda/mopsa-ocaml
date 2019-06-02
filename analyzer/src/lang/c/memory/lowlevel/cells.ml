@@ -554,7 +554,7 @@ struct
                     Eval.singleton (Cell c) flow' :: aux (i + 1) (Z.add o step)
                 in
                 let evals = aux 0 l in
-                Eval.join_list evals
+                Eval.join_list ~empty:(Eval.empty_singleton flow) evals
               )
             ~felse:(fun flow ->
                 let flow = raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow in

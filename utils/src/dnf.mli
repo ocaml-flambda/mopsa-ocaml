@@ -19,49 +19,59 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Reduction rules for abstract evaluations *)
+(** Disjunctive normal form. *)
 
-open Ast.Stmt
-open Ast.Expr
-open Zone
-open Id
-open Lattice
-open Flow
-open Eval
+type 'a t
 
 
-(* Product evaluations *)
-type ('e, 'a) peval = ('e, 'a) eval option list
-
-(** Manager used by reduction rules *)
-type 'a man = {
-  lattice : 'a lattice;
-  get : 't. 't domain -> (expr, 'a) peval -> (expr, 'a) eval option;
-  set : 't. 't domain -> (expr, 'a) eval option -> (expr, 'a) peval -> (expr, 'a) peval;
-  exec : ?zone:zone -> stmt -> 'a flow -> 'a flow;
-}
+val singleton : 'a -> 'a t
 
 
+val mk_and : 'a t -> 'a t -> 'a t
+  
 
-(** Signature of a reduction rule *)
-module type REDUCTION =
-sig
-  val name   : string
-  val reduce : expr -> 'a man -> (expr,'a) peval  -> (expr,'a) peval
-end
+val mk_or : 'a t -> 'a t -> 'a t
 
 
-(** Registered reductions *)
-let reductions : (module REDUCTION) list ref = ref []
+val mk_neg : ('a -> 'a t) -> 'a t -> 'a t
 
 
-(** Register a new reduction *)
-let register_reduction rule =
-  reductions := rule :: !reductions
+val map : ('a -> 'b) -> 'a t -> 'b t
 
-(** Find a reduction by its name *)
-let find_reduction name =
-  List.find (fun v ->
-      let module V = (val v : REDUCTION) in
-      compare V.name name = 0
-    ) !reductions
+
+val iter : ('a -> unit) -> 'a t -> unit
+
+
+val apply : ('a -> 'b) -> ('b -> 'b -> 'b) -> ('b -> 'b -> 'b) -> 'a t -> 'b
+
+
+val apply_list : ('a -> 'b) -> ('c list -> 'd) -> ('b list -> 'c) -> 'a t -> 'd
+
+
+val bind : ('a -> 'b t) -> 'a t -> 'b t
+
+
+val fold : ('b -> 'a -> 'b) -> ('b -> 'b -> 'b) -> ('b -> 'b -> 'b) -> 'b -> 'a t -> 'b
+
+
+val map_fold : ('c -> 'a -> 'b * 'c) -> 'c -> 'a t -> 'b t * 'c
+
+
+val fold_apply : ('b -> 'a -> 'b * 'c) -> ('c -> 'c -> 'c) -> ('c -> 'c -> 'c) -> 'b -> 'a t -> 'b * 'c
+
+
+val choose :'a t -> 'a option
+
+
+val to_list : 'a t -> 'a list list
+
+val from_list : 'a list list -> 'a t
+
+
+val print : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
+
+
+val merge : ('a -> 'b -> 'a t option * 'b t option) -> 'a t -> 'b t -> 'a t option * 'b t option
+
+
+val merge_fold  : ('c -> 'a -> 'b -> 'a t option * 'b t option * 'c) -> 'c -> 'a t -> 'b t -> 'a t option * 'b t option * 'c

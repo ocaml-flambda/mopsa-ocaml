@@ -19,37 +19,50 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Post-states with journaling flows. *)
+(** Reduction rules for abstract evaluations *)
 
 open Ast.Stmt
-open Token
-open Flow
-open Log
-open Context
+open Ast.Expr
+open Zone
+open Id
 open Lattice
+open Flow
+open Eval
 
-type 'a post
 
-val return : 'a flow -> 'a post
+(* Product evaluations *)
+type ('e, 'a) peval = ('e, 'a) eval option list
 
-val print : 'a lattice -> Format.formatter -> 'a post -> unit
+(** Manager used by eval reduction rules *)
+type ('a,'s) eman = {
+  lattice : 'a lattice;
+  get_man : 't. 't domain -> ('a, 't, 's) Manager.man;
+  get_eval : 't. 't domain -> (expr, 'a) peval -> (expr, 'a) eval option;
+  set_eval : 't. 't domain -> (expr, 'a) eval option -> (expr, 'a) peval -> (expr, 'a) peval;
+  exec : ?zone:zone -> stmt -> 'a flow -> 'a flow;
+}
 
-val print_log : Format.formatter -> 'a post -> unit
 
-val join : 'a post -> 'a post -> 'a post
 
-val merge : (token -> ('a*log) -> ('a*log) -> ('a*log)) -> 'a post -> 'a post -> 'a post
+(** Signature of a reduction rule *)
+module type EREDUCTION =
+sig
+  val name   : string
+  val reduce : expr -> ('a,'s) eman -> (expr,'a) peval  -> (expr,'a) peval
+end
 
-val meet : 'a lattice -> 'a post -> 'a post -> 'a post
 
-val get_ctx : 'a post -> 'a ctx
+(** Registered reductions *)
+let reductions : (module EREDUCTION) list ref = ref []
 
-val set_ctx : 'a ctx -> 'a post -> 'a post
 
-val bind : ('a flow -> 'a post) -> 'a post -> 'a post
+(** Register a new reduction *)
+let register_eval_reduction rule =
+  reductions := rule :: !reductions
 
-val map_log : (token -> log -> log) -> 'a post -> 'a post
-
-val map : (token -> 'a -> log -> 'b * log) -> 'b Context.ctx -> 'a post -> 'b post
-
-val to_flow : 'a lattice -> 'a post -> 'a flow
+(** Find a reduction by its name *)
+let find_eval_reduction name =
+  List.find (fun v ->
+      let module V = (val v : EREDUCTION) in
+      compare V.name name = 0
+    ) !reductions

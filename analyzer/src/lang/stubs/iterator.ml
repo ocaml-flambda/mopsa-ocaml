@@ -380,7 +380,7 @@ struct
     | _ ->
       (* FIXME: when the cases do not define a partitioning, we need
          to do something else *)
-      Flow.join_list man.lattice flows
+      Flow.join_list man.lattice ~ctx:(Flow.get_ctx flow) flows
 
 
   (** Entry point of expression evaluations *)

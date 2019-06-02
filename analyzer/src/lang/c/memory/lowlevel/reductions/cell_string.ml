@@ -22,7 +22,7 @@
 (** Reduction rule between evaluations of cells and string length domains *)
 
 open Mopsa
-open Sig.Stacked.Eval_reduction
+open Sig.Stacked.Reduction
 open Universal.Ast
 open Ast
 open Zone
@@ -35,8 +35,8 @@ struct
   let debug fmt = Debug.debug ~channel:name fmt
 
   let reduce exp man evals =
-    match man.get Cells.Domain.id evals,
-          man.get String_length.Domain.id evals
+    match man.get_eval Cells.Domain.id evals,
+          man.get_eval String_length.Domain.id evals
     with
     | Some evl1, Some evl2 ->
       let evl1', evl2' = Eval.merge (fun e1 flow1 e2 flow2 ->
@@ -70,11 +70,11 @@ struct
 
         ) evl1 evl2
       in
-      man.set Cells.Domain.id evl1' evals |>
-      man.set String_length.Domain.id evl2'
+      man.set_eval Cells.Domain.id evl1' evals |>
+      man.set_eval String_length.Domain.id evl2'
 
     | _ -> evals
 end
 
 let () =
-  register_reduction (module Reduction)
+  register_eval_reduction (module Reduction)

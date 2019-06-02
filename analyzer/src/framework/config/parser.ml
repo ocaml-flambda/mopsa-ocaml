@@ -318,7 +318,7 @@ and stack_chain_intermediate (op:operator) (l:config list) : (module Sig.Stacked
 and stack_product_intermediate (l:config list) (rules:string list) : (module Sig.Stacked.Intermediate.STACK) =
   let ll = List.map stack_intermediate l in
   let rules = List.map (fun name ->
-      try Sig.Stacked.Eval_reduction.find_reduction name
+      try Sig.Stacked.Reduction.find_eval_reduction name
       with Not_found -> Exceptions.panic "reduction %s not found" name
     ) rules
   in

@@ -26,8 +26,6 @@ open Context
 
 type ('e, 'a) eval
 
-val empty : ('e, 'a) eval
-
 val case : 'e option -> ?cleaners:stmt list -> 'a flow -> ('e, 'a) eval
 
 val singleton : 'e -> ?cleaners:stmt list -> 'a flow -> ('e, 'a) eval
@@ -36,11 +34,11 @@ val empty_singleton : 'a flow -> ('e, 'a) eval
 
 val join : ('e, 'a) eval  -> ('e, 'a) eval  -> ('e, 'a) eval
 
-val join_list : ?empty:(('e, 'a) eval) -> ('e, 'a) eval list -> ('e, 'a) eval
+val join_list : empty:(('e, 'a) eval) -> ('e, 'a) eval list -> ('e, 'a) eval
 
 val meet : ('e, 'a) eval  -> ('e, 'a) eval  -> ('e, 'a) eval
 
-val meet_list : ?empty:(('e, 'a) eval) -> ('e, 'a) eval list -> ('e, 'a) eval
+val meet_list : empty:(('e, 'a) eval) -> ('e, 'a) eval list -> ('e, 'a) eval
 
 val print: pp:(Format.formatter -> 'e -> unit) -> Format.formatter -> ('e, 'a) eval -> unit
 
@@ -72,16 +70,14 @@ val fold_apply :
   'b * 'c
 
 val merge :
-  ('e -> 'a flow -> 'f -> 'b flow -> ('e, 'a) eval option * ('f, 'b) eval option) ->
-  ('e, 'a) eval -> ('f, 'b) eval ->
-  ('e, 'a) eval option * ('f, 'b) eval option
+  ('e -> 'a flow -> 'f -> 'a flow -> ('e, 'a) eval option * ('f, 'a) eval option) ->
+  ('e, 'a) eval -> ('f, 'a) eval ->
+  ('e, 'a) eval option * ('f, 'a) eval option
 
-
-val choose : ('e, 'a) eval -> ('e option * 'a flow) option
 
 val to_dnf : ('e, 'a) eval -> ('e option * 'a flow * stmt list) Dnf.t
 
-val choose_ctx : ('e, 'a) eval -> 'a ctx
+val get_ctx : ('e, 'a) eval -> 'a ctx
 
 val copy_ctx : ('e, 'a) eval -> ('e, 'a) eval -> ('e, 'a) eval
 

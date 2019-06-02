@@ -43,8 +43,9 @@ struct
       etc.)  
   *)
   type smash = {
-    base : base;
-    typ  : typ;
+    base   : base;
+    typ    : typ;
+    primed : bool;
   }
 
   (** Total order of smashed blocks *)
@@ -52,19 +53,21 @@ struct
     Compare.compose [
       (fun () -> compare_base s1.base s2.base);
       (fun () -> compare_typ s1.typ s2.typ);
+      (fun () -> compare s1.primed s2.primed);
     ]
 
 
   (** Pretty printer of smashed blocks *)
   let pp_smash fmt s =
-    Format.fprintf fmt "[%a:*:%a]"
+    Format.fprintf fmt "[%a:*:%a]%s"
       pp_base s.base
       Pp.pp_c_type_short (remove_qual s.typ)
+      (if s.primed then "'" else "")
 
 
   (** Create a smash from a base and a type *)
-  let mk_smash base typ =
-    { base; typ = remove_typedef_qual typ }
+  let mk_smash base ?(primed=false) typ =
+    { base; typ = remove_typedef_qual typ; primed }
 
 
 
@@ -194,7 +197,10 @@ struct
     else
       let v = mk_smash_var c in
       let s' = man.sexec ~zone:Z_c_scalar (mk_add (mk_var v range) range) ctx s in
-      if is_c_pointer_type c.typ then s'
+
+      if is_c_pointer_type c.typ
+      then s'
+
       else
         match phi c a range with
         | Some e ->
@@ -272,6 +278,70 @@ struct
     } man flow
 
 
+
+
+  (** {2 Smashing of pointer dereferences} *)
+  (** ************************************ *)
+
+  type deref =
+    | Smash of smash
+    | Top of typ
+
+
+  (** Evaluate a pointer deref into a smashed cell *)
+  let deref p range man flow : (deref,'a) eval =
+    man.eval ~zone:(Z_c_low_level, Z_c_points_to) p flow |>
+    Eval.bind @@ fun pt flow ->
+
+    match ekind pt with
+    | E_c_points_to P_null ->
+      raise_alarm Alarms.ANullDeref p.erange ~bottom:true man.lattice flow |>
+      Eval.empty_singleton
+
+    | E_c_points_to P_invalid ->
+      raise_alarm Alarms.AInvalidDeref p.erange ~bottom:true man.lattice flow |>
+      Eval.empty_singleton
+
+    | E_c_points_to (P_block (base, offset)) ->
+      man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow |>
+      Eval.bind @@ fun offset flow ->
+
+      eval_base_size base range man flow |>
+      Eval.bind @@ fun size flow ->
+
+      man.eval ~zone:(Z_c_scalar, Z_u_num) size flow |>
+      Eval.bind @@ fun size flow ->
+
+      let typ = under_type p.etyp in
+      let elm_size = sizeof_type typ in
+
+      (* Check that offset ∈ [0, size - elm_size] *)
+      assume_eval (mk_in offset (mk_zero range) (sub size (mk_z elm_size range) range) range)
+        ~fthen:(fun flow ->
+            (* Do not handle scalar bases *)
+            match base with
+            | S _ ->
+              Eval.singleton (Top typ) flow
+
+            | V v when is_c_scalar_type v.vtyp ->
+              Eval.singleton (Top typ) flow
+
+            | _ ->
+              let c = mk_smash base typ in
+              Eval.singleton (Smash c) flow
+          )
+        ~felse:(fun flow ->
+            (* Unsafe case *)
+            raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow |>
+            Eval.empty_singleton
+          )
+        ~zone:Z_u_num man flow
+
+
+    | _ -> assert false
+
+
+  
 
   (** {2 Abstract transformers} *)
   (** ************************* *)
@@ -404,6 +474,7 @@ struct
     let stmt = mk_remove_var v range in
     man.exec_sub ~zone:Z_c_scalar stmt flow
 
+
   let remove_overlappings c range man flow =
     let a = get_domain_env T_cur man flow in
     SmashSet.fold (fun c' acc ->
@@ -418,70 +489,38 @@ struct
   
   let assign_smash c rval range man flow =
     let cv = mk_smash_var c in
+    add_smash c range man flow |>
+    Post.bind @@ fun flow ->
+
     let stmt = mk_assign (mk_var cv ~mode:WEAK range) rval range in
     man.exec_sub ~zone:Z_c_scalar stmt flow |>
-    Post.bind (remove_overlappings c range man)
+    Post.bind @@ fun flow ->
+
+    remove_overlappings c range man flow
 
 
 
   (** Assignment abstract transformer for 𝕊⟦ *p = rval; ⟧ *)
   let assign_deref p rval range man flow =
-    man.eval ~zone:(Z_c_low_level, Z_c_points_to) p flow |>
-    post_eval man @@ fun pt flow ->
+    deref p range man flow |>
+    post_eval man @@ fun deref flow ->
 
-    match ekind pt with
-    | E_c_points_to P_null ->
-      raise_alarm Alarms.ANullDeref p.erange ~bottom:true man.lattice flow |>
-      Post.return
+    man.eval rval ~zone:(Z_c_low_level,Z_c_scalar) flow |>
+    post_eval man @@ fun rval flow ->
 
-    | E_c_points_to P_invalid ->
-      raise_alarm Alarms.AInvalidDeref p.erange ~bottom:true man.lattice flow |>
-      Post.return
+    match deref with
+    | Top _ -> Post.return flow
 
-    | E_c_points_to (P_block (V v, offset)) when is_c_scalar_type v.vtyp ->
-      Post.return flow
+    | Smash c ->
+      match c.base with
+      | S _ ->
+        Post.return flow
 
-    | E_c_points_to (P_block (base, offset)) ->
-      man.eval ~zone:(Z_c_low_level,Z_c_scalar) rval flow |>
-      post_eval man @@ fun rval flow ->
+      | V v when is_c_scalar_type v.vtyp ->
+        Post.return flow
 
-      man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow |>
-      post_eval man @@ fun offset flow ->
-
-      eval_base_size base range man flow |>
-      post_eval man @@ fun size flow ->
-
-      man.eval ~zone:(Z_c_scalar, Z_u_num) size flow |>
-      post_eval man @@ fun size flow ->
-
-      let typ = under_type p.etyp in
-      let elm_size = sizeof_type typ in
-
-      (* Check that offset ∈ [0, size - elm_size] *)
-      assume_post (mk_in offset (mk_zero range) (sub size (mk_z elm_size range) range) range)
-        ~fthen:(fun flow ->
-            (* Do not handle scalar bases *)
-            match base with
-            | S _ ->
-              Post.return flow
-
-            | V v when is_c_scalar_type v.vtyp ->
-              Post.return flow
-
-            | _ ->
-              let c = mk_smash base typ in
-              assign_smash c rval range man flow
-          )
-        ~felse:(fun flow ->
-            (* Unsafe case *)
-            raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow |>
-            Post.return
-          )
-        ~zone:Z_u_num man flow
-
-
-
-    | _ -> assert false
+      | _ ->
+        assign_smash c rval range man flow
 
 
   let rename_smash oldc newc range man flow =
@@ -542,7 +581,7 @@ struct
     Post.return
 
 
-  
+
   let remove_base base range man flow =
     let a = get_domain_env T_cur man flow in
     let flow = set_domain_env T_cur { a with bases = BaseSet.remove base a.bases } man flow in
@@ -553,6 +592,43 @@ struct
           acc
       ) a.smashes (Post.return flow)
     with Top.Found_TOP -> Post.return flow
+
+
+
+  (** Rename primed smashes into unprimed ones *)
+  let rename_primed target offsets range man flow =
+    (* target is pointer, so resolve it and compute the affected offsets *)
+    man.eval ~zone:(Z_c_low_level, Z_c_points_to) target flow |>
+    post_eval man @@ fun pt flow ->
+    match ekind pt with
+    | E_c_points_to P_top ->
+      Post.return flow
+
+    | E_c_points_to (P_block(base, offset)) ->
+
+      (* Get cells with the same base *)
+      let a = get_domain_env T_cur man flow in
+      let same_base_cells = SmashSet.filter (fun c ->
+          compare_base base c.base = 0
+        ) a.smashes
+      in
+
+      SmashSet.fold (fun c acc ->
+          if c.primed then
+            (* Weak assign primed cells to their unprimed version before removing them *)
+            let cc = { c with primed = false } in
+            Post.bind (assign_smash cc (mk_var (mk_smash_var c) ~mode:WEAK range) range man) acc |>
+            Post.bind (remove_smash c range man)
+
+          else
+          if not (SmashSet.mem { c with primed = true } same_base_cells) then
+            (* Remove unprimed cells that have no primed version *)
+            Post.bind (remove_smash c range man) acc
+          else
+            acc
+        ) same_base_cells (Post.return flow)
+
+    | _ -> assert false
 
 
   (** Transformers entry point *)
@@ -592,6 +668,13 @@ struct
       Option.return
 
 
+    | S_stub_rename_primed(p, []) ->
+      None
+
+    | S_stub_rename_primed(p,offsets) ->
+      rename_primed p offsets stmt.srange man flow |>
+      Option.return
+
 
     | _ -> None
 
@@ -600,62 +683,42 @@ struct
   (** ************************ *)
 
 
+
   (** Abstract evaluation of a dereference *)
   let eval_deref p range man flow =
-    man.eval ~zone:(Z_c_low_level, Z_c_points_to) p flow |>
-    Eval.bind @@ fun pt flow ->
+    deref p range man flow |>
+    Eval.bind @@ fun deref flow ->
 
-    match ekind pt with
-    | E_c_points_to P_null ->
-      raise_alarm Alarms.ANullDeref p.erange ~bottom:true man.lattice flow |>
-      Eval.empty_singleton
+    match deref with
+    | Smash c ->
+      let v = mk_smash_var c in
+      let flow = add_smash c range man flow |>
+                 Post.to_flow man.lattice
+      in
+      Eval.singleton (mk_var v ~mode:WEAK range) flow
 
-    | E_c_points_to P_invalid ->
-      raise_alarm Alarms.AInvalidDeref p.erange ~bottom:true man.lattice flow |>
-      Eval.empty_singleton
-
-    | E_c_points_to (P_block (base, offset)) ->
-      man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow |>
-      Eval.bind @@ fun offset flow ->
-
-      eval_base_size base range man flow |>
-      Eval.bind @@ fun size flow ->
-
-      man.eval ~zone:(Z_c_scalar, Z_u_num) size flow |>
-      Eval.bind @@ fun size flow ->
-      
-      let typ = under_type p.etyp in
-      let elm_size = sizeof_type typ in
-
-      (* Check that offset ∈ [0, size - elm_size] *)
-      assume_eval (mk_in offset (mk_zero range) (sub size (mk_z elm_size range) range) range)
-        ~fthen:(fun flow ->
-            (* Do not handle scalar bases *)
-            match base with
-            | S _ ->
-              let l,u = rangeof typ in
-              Eval.singleton (mk_z_interval l u ~typ range) flow
-
-            | V v when is_c_scalar_type v.vtyp ->
-              Eval.singleton (mk_top typ range) flow
-
-            | _ ->
-              let c = mk_smash base typ in
-              let flow = add_smash c range man flow |>
-                         Post.to_flow man.lattice
-              in
-              let cv = mk_smash_var c in
-              Eval.singleton (mk_var cv ~mode:WEAK range) flow
-        )
-        ~felse:(fun flow ->
-            (* Unsafe case *)
-            raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow |>
-            Eval.empty_singleton
-          )
-        ~zone:Z_u_num man flow
+    | Top typ ->
+      Eval.singleton (mk_top typ range) flow
 
 
-    | _ -> assert false
+
+  (** Abstract evaluation of primed expressions in stubs *)
+  let eval_primed lval range man flow =
+    deref (mk_c_address_of lval range) range man flow |>
+    Eval.bind @@ fun deref flow ->
+
+    match deref with
+    | Smash c ->
+      let cc = { c with primed = true } in
+      let v = mk_smash_var cc in
+      let flow = add_smash cc range man flow |>
+                 Post.to_flow man.lattice
+      in
+      Eval.singleton (mk_var v  ~mode:WEAK range) flow
+
+    | Top typ ->
+      Eval.singleton (mk_top typ range) flow
+  
 
 
   (** Evaluations entry point *)
@@ -664,6 +727,10 @@ struct
     (* 𝔼⟦ *p ⟧ *)      
     | E_c_deref p when is_c_scalar_type exp.etyp ->
       eval_deref p exp.erange man flow |>
+      Option.return
+
+    | E_stub_primed lval ->
+      eval_primed lval exp.erange man flow |>
       Option.return
 
     | _ -> None
