@@ -531,7 +531,7 @@ struct
           | None -> flow
           | Some (vv,mode) ->
             if BaseSet.mem_block b then
-              man.exec (mk_remove (mk_offset_expr vv mode exp.erange) exp.erange) flow
+              man.exec ~zone:Z_u_num (mk_remove (mk_offset_expr vv mode exp.erange) exp.erange) flow
             else
               flow
         in
