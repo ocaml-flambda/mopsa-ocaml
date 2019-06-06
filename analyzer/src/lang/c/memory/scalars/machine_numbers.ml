@@ -40,6 +40,10 @@ let is_c_int_op = function
   | O_div | O_mod | O_mult | O_plus | O_minus -> true
   | _ -> false
 
+let is_compare_op = function
+  | O_eq | O_ne | O_gt | O_ge | O_lt | O_le -> true
+  | _ -> false
+
 let is_c_div = function
   | O_div | O_mod -> true
   | _ -> false
@@ -304,8 +308,31 @@ struct
       in
       Eval.singleton exp' flow
 
+    | E_binop(op, e, e') when is_compare_op op &&
+                              exp |> etyp |> is_c_num_type ->
+      man.eval e ~zone:(Z_c_scalar,Z_u_num) flow |>
+      Eval.bind_some @@ fun e flow ->
+
+      man.eval e' ~zone:(Z_c_scalar,Z_u_num) flow |>
+      Eval.bind @@ fun e' flow ->
+
+      assume_eval (mk_binop e op e' ~etyp:T_bool exp.erange) ~zone:Z_u_num
+        ~fthen:(fun flow -> Eval.singleton (mk_one exp.erange) flow)
+        ~felse:(fun flow -> Eval.singleton (mk_zero exp.erange) flow)
+        man flow
+
     | E_binop(op, e, e') when exp |> etyp |> is_c_num_type ->
       eval_binop op e e' exp man flow
+
+
+    | E_unop(O_log_not, e) when exp |> etyp |> is_c_num_type ->
+      man.eval e ~zone:(Z_c_scalar,Z_u_num) flow |>
+      Eval.bind_some @@ fun e flow ->
+
+      assume_eval e ~zone:Z_u_num
+        ~fthen:(fun flow -> Eval.singleton (mk_zero exp.erange) flow)
+        ~felse:(fun flow -> Eval.singleton (mk_one exp.erange) flow)
+        man flow
 
     | E_unop(op, e) when exp |> etyp |> is_c_num_type ->
       eval_unop op e exp man flow
