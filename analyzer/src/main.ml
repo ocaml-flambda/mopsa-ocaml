@@ -45,11 +45,13 @@ let () =
    source files *)
 let parse_options f () =
   let files = ref [] in
+  let args  = ref None in
   ArgExt.parse (Config.Options.to_arg ())
                (fun filename -> files := filename :: !files)
+               (fun rest -> args := Some rest)
                "Modular Open Platform for Static Analysis"
                Config.Options.help;
-  f !files
+  f !files !args
 
 
 (** {2 Parsing} *)
@@ -70,7 +72,7 @@ let parse_program lang files =
 (** *************** *)
 
 let () =
-  exit @@ parse_options (fun files ->
+  exit @@ parse_options (fun files args ->
       try
         let lang, domain = Config.Parser.parse !Config.Parser.opt_config in
 
@@ -98,7 +100,7 @@ let () =
         let flow = Engine.init prog in
 
         Debug_tree.phase "starting the analysis";
-        let stmt = mk_stmt (S_program prog) prog.prog_range in
+        let stmt = mk_stmt (S_program (prog, args)) prog.prog_range in
         let res = Engine.exec stmt flow in
         let t = Timing.stop t in
 

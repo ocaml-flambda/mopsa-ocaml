@@ -40,7 +40,7 @@ struct
 
   (** A smashed block is described by a scalar type and a base memory
       block (e.g.  a program variable, an address of a heap block,
-      etc.)  
+      etc.)
   *)
   type smash = {
     base   : base;
@@ -102,7 +102,7 @@ struct
     mkv name (V_c_smash s) s.typ
 
 
-  
+
   (** {2 Domain header} *)
   (** ***************** *)
 
@@ -115,7 +115,7 @@ struct
 
 
   (** Set of declared bases. Needed during unification to determine whether a
-      missing cell belongs to an optional base 
+      missing cell belongs to an optional base
   *)
   module BaseSet = Framework.Lattices.Powerset.Make(Base)
 
@@ -186,13 +186,13 @@ struct
   (** Add a smashed cell to the underlying scalar domain *)
   let add_smash_sub c a range man ctx s =
     (* Do nothing if c is already known or if it is an optional cell
-       (i.e. its base is not declared) 
-    *) 
+       (i.e. its base is not declared)
+    *)
     if SmashSet.mem c a.smashes || not (BaseSet.mem c.base a.bases)
     then s
 
     (* Otherwise add numeric constraints about the cell value if
-       overlapping cells already exist 
+       overlapping cells already exist
     *)
     else
       let v = mk_smash_var c in
@@ -290,58 +290,45 @@ struct
 
   (** Evaluate a pointer deref into a smashed cell *)
   let deref p range man flow : (deref,'a) eval =
-    man.eval ~zone:(Z_c_low_level, Z_c_points_to) p flow |>
-    Eval.bind @@ fun pt flow ->
+    eval_pointed_base_offset p range man flow |>
+    Eval.bind @@ fun (base, offset) flow ->
 
-    match ekind pt with
-    | E_c_points_to P_null ->
-      raise_alarm Alarms.ANullDeref p.erange ~bottom:true man.lattice flow |>
-      Eval.empty_singleton
+    man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow |>
+    Eval.bind @@ fun offset flow ->
 
-    | E_c_points_to P_invalid ->
-      raise_alarm Alarms.AInvalidDeref p.erange ~bottom:true man.lattice flow |>
-      Eval.empty_singleton
+    eval_base_size base range man flow |>
+    Eval.bind @@ fun size flow ->
 
-    | E_c_points_to (P_block (base, offset)) ->
-      man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow |>
-      Eval.bind @@ fun offset flow ->
+    man.eval ~zone:(Z_c_scalar, Z_u_num) size flow |>
+    Eval.bind @@ fun size flow ->
 
-      eval_base_size base range man flow |>
-      Eval.bind @@ fun size flow ->
+    let typ = under_type p.etyp in
+    let elm_size = sizeof_type typ in
 
-      man.eval ~zone:(Z_c_scalar, Z_u_num) size flow |>
-      Eval.bind @@ fun size flow ->
+    (* Check that offset ∈ [0, size - elm_size] *)
+    assume_eval (mk_in offset (mk_zero range) (sub size (mk_z elm_size range) range) range)
+      ~fthen:(fun flow ->
+          (* Do not handle scalar bases *)
+          match base with
+          | S _ ->
+            Eval.singleton (Top typ) flow
 
-      let typ = under_type p.etyp in
-      let elm_size = sizeof_type typ in
+          | V v when is_c_scalar_type v.vtyp ->
+            Eval.singleton (Top typ) flow
 
-      (* Check that offset ∈ [0, size - elm_size] *)
-      assume_eval (mk_in offset (mk_zero range) (sub size (mk_z elm_size range) range) range)
-        ~fthen:(fun flow ->
-            (* Do not handle scalar bases *)
-            match base with
-            | S _ ->
-              Eval.singleton (Top typ) flow
-
-            | V v when is_c_scalar_type v.vtyp ->
-              Eval.singleton (Top typ) flow
-
-            | _ ->
-              let c = mk_smash base typ in
-              Eval.singleton (Smash c) flow
-          )
-        ~felse:(fun flow ->
-            (* Unsafe case *)
-            raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow |>
-            Eval.empty_singleton
-          )
-        ~zone:Z_u_num man flow
+          | _ ->
+            let c = mk_smash base typ in
+            Eval.singleton (Smash c) flow
+        )
+      ~felse:(fun flow ->
+          (* Unsafe case *)
+          raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow |>
+          Eval.empty_singleton
+        )
+      ~zone:Z_u_num man flow
 
 
-    | _ -> assert false
 
-
-  
 
   (** {2 Abstract transformers} *)
   (** ************************* *)
@@ -352,7 +339,7 @@ struct
         { a with bases = BaseSet.add base a.bases }
       ) man flow
     in
-    
+
     let c = mk_smash base u8 |>
             mk_smash_var
     in
@@ -455,9 +442,9 @@ struct
             | _ ->
               Eval.singleton init flow
           in
-          
+
           evl |> post_eval man @@ fun init flow ->
-            
+
           let stmt = mk_c_declaration cv init scope range in
           man.exec_sub ~zone:Z_c_scalar stmt flow |>
           Post.join (aux tl)
@@ -486,7 +473,7 @@ struct
           acc
       ) a.smashes (Post.return flow)
 
-  
+
   let assign_smash c rval range man flow =
     let cv = mk_smash_var c in
     add_smash c range man flow |>
@@ -631,25 +618,155 @@ struct
     | _ -> assert false
 
 
-  (** Transformers entry point *)
+
+  (** Filter with a quantified test *)
+  let assume_quantified op p e primed range man flow =
+    eval_pointed_base_offset p range man flow |>
+    post_eval man @@ fun (base,offset) flow ->
+
+    eval_base_size base range man flow |>
+    post_eval man @@ fun size flow ->
+
+    man.eval ~zone:(Z_c_scalar, Z_u_num) size flow |>
+    post_eval man @@ fun size flow ->
+
+    (** Get symbolic bounds of the offset *)
+    let min, max = Common.Quantified_offset.bound offset in
+
+    man.eval ~zone:(Z_c_low_level, Z_u_num) min flow |>
+    post_eval man @@ fun min flow ->
+
+    man.eval ~zone:(Z_c_low_level, Z_u_num) max flow |>
+    post_eval man @@ fun max flow ->
+
+    man.eval ~zone:(Z_c_low_level, Z_c_scalar) e flow |>
+    post_eval man @@ fun e flow ->
+
+    let elm = sizeof_type @@ under_type p.etyp in
+
+    (* Do not process scalar bases *)
+    let is_scalar_base =
+      match base with
+      | S _ -> true
+      | V v when is_c_scalar_type v.vtyp -> true
+      | _ -> false
+    in
+
+    if is_scalar_base
+    then
+      (* In case of a scalar base, perform just the safety test of
+         bounded access.
+         Safety condition: [min, max] ⊆ [0, size - elm]
+      *)
+      assume_post (
+        mk_binop
+          (mk_in min (mk_zero range) (sub size (mk_z elm range) range) range)
+          O_log_and
+          (mk_in max (mk_zero range) (sub size (mk_z elm range) range) range)
+          range
+      )
+        ~fthen:(fun flow -> Post.return flow)
+        ~felse:(fun flow -> raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow |>
+                            Post.return
+               )
+        ~zone:Z_u_num man flow
+
+    else
+      (* In case of non-scalar base, try to use a strong smash in case
+         of full coverage by the quantifier *)
+      let c = mk_smash base ~primed (under_type p.etyp) in
+      let v = mk_smash_var c in
+
+      add_smash c range man flow |>
+      Post.bind @@ fun flow ->
+
+      switch_post [
+        (* Full coverage case
+           Condition: [min, max] = [0, size - elm]
+
+           min                       max
+           |*************************|-----------|-->
+           0                    size - elm      size
+
+           Transformation: [base:*:typ] == e
+        *)
+        [
+          mk_binop min O_eq (mk_zero range) range, true;
+          mk_binop max O_eq (sub size (mk_z elm range) range) range, true;
+        ],
+        (fun flow ->
+           (* Use strong mode *)
+           man.exec_sub ~zone:Z_c_scalar (mk_assume (mk_binop (mk_var v ~mode:STRONG range) op e range) range) flow
+        );
+
+
+        (* Partial coverage case
+           Condition: [min, max] ⊂ [0, size - elm]
+
+                 min         max
+           |------|***********|---------|-----------|-->
+           0                        size - elm      size
+
+           Transformation: weak([base:*:typ]) == e
+        *)
+        [
+          mk_in min (mk_zero range) max range, true;
+          mk_in max min (sub size (mk_z elm range) range) range, true;
+          (mk_binop
+             (mk_binop min O_gt (mk_zero range) range)
+             O_log_or
+             (mk_binop max O_lt (sub size (mk_z elm range) range) range)
+             range
+          ),true
+        ],
+        (fun flow ->
+           (* Use weak mode *)
+           man.exec_sub ~zone:Z_c_scalar (mk_assume (mk_binop (mk_var v ~mode:WEAK range) op e range) range) flow
+        );
+
+
+        (* Unsafe case
+           Condition: [min, max] ⊈ [0, size - elm]
+           Transformation: OutOfBound error
+        *)
+        [
+          (mk_binop
+             (mk_binop min O_lt (mk_zero range) range)
+             O_log_or
+             (mk_binop max O_gt (sub size (mk_z elm range) range) range)
+             range
+          ), true
+        ],
+        (fun flow ->
+           raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow |>
+           Post.return
+        )
+      ]
+        ~zone:Z_u_num man flow
+
+
+
+
+
+    (** Transformers entry point *)
   let exec zone stmt man flow =
     match skind stmt with
-    (* 𝕊⟦ type v = init; ⟧ *)      
+    (* 𝕊⟦ type v = init; ⟧ *)
     | S_c_declaration (v,init,scope) when not (is_c_scalar_type v.vtyp) ->
       declare_variable v init scope stmt.srange man flow |>
       Option.return
-        
-    (* 𝕊⟦ add var; ⟧ *)      
+
+    (* 𝕊⟦ add var; ⟧ *)
     | S_add { ekind = E_var (v, _) } when not (is_c_scalar_type v.vtyp) ->
       add_base (V v) stmt.srange man flow |>
       Option.return
 
-    (* 𝕊⟦ add @addr; ⟧ *)      
+    (* 𝕊⟦ add @addr; ⟧ *)
     | S_add { ekind = E_addr addr } ->
       add_base (A addr) stmt.srange man flow |>
       Option.return
 
-    (* 𝕊⟦ *p = rval; ⟧ *)      
+    (* 𝕊⟦ *p = rval; ⟧ *)
     | S_assign({ ekind = E_c_deref p}, rval) ->
       assign_deref p rval stmt.srange man flow |>
       Option.return
@@ -673,6 +790,69 @@ struct
 
     | S_stub_rename_primed(p,offsets) ->
       rename_primed p offsets stmt.srange man flow |>
+      Option.return
+
+
+    | S_assume({ekind = E_binop(op, {ekind = E_c_deref p}, e)})
+      when (is_expr_quantified p) &&
+           not (is_expr_quantified e)
+      ->
+      assume_quantified op p e false stmt.srange man flow |>
+      Option.return
+
+
+    | S_assume({ekind = E_binop(op, e, {ekind = E_c_deref p})})
+      when (is_expr_quantified p) &&
+           not (is_expr_quantified e)
+      ->
+      assume_quantified op p e false stmt.srange man flow |>
+      Option.return
+
+    | S_assume({ekind = E_binop(op, {ekind = E_stub_primed { ekind = E_c_deref p } }, e)})
+      when (is_expr_quantified p) &&
+           not (is_expr_quantified e)
+      ->
+      assume_quantified op p e true stmt.srange man flow |>
+      Option.return
+
+
+    | S_assume({ekind = E_binop(op, e, {ekind = E_stub_primed { ekind = E_c_deref p } })})
+      when (is_expr_quantified p) &&
+           not (is_expr_quantified e)
+      ->
+      assume_quantified op p e true stmt.srange man flow |>
+      Option.return
+
+
+    | S_assume({ekind = E_unop (O_log_not, {ekind = E_binop(op, {ekind = E_c_deref p}, e)})})
+      when (is_expr_quantified p) &&
+           not (is_expr_quantified e)
+      ->
+      assume_quantified (negate_comparison op) p e false stmt.srange man flow |>
+      Option.return
+
+
+    | S_assume({ekind = E_unop (O_log_not, {ekind = E_binop(op, e, {ekind = E_c_deref p})})})
+      when (is_expr_quantified p) &&
+           not (is_expr_quantified e)
+      ->
+      assume_quantified (negate_comparison op) p e false stmt.srange man flow |>
+      Option.return
+
+
+    | S_assume({ekind = E_unop (O_log_not, {ekind = E_binop(op, {ekind = E_stub_primed { ekind = E_c_deref p } }, e)})})
+      when (is_expr_quantified p) &&
+           not (is_expr_quantified e)
+      ->
+      assume_quantified (negate_comparison op) p e true stmt.srange man flow |>
+      Option.return
+
+
+    | S_assume({ekind = E_unop (O_log_not, {ekind = E_binop(op, e, {ekind = E_stub_primed { ekind = E_c_deref p } })})})
+      when (is_expr_quantified p) &&
+           not (is_expr_quantified e)
+      ->
+      assume_quantified (negate_comparison op) p e true stmt.srange man flow |>
       Option.return
 
 
@@ -718,13 +898,13 @@ struct
 
     | Top typ ->
       Eval.singleton (mk_top typ range) flow
-  
+
 
 
   (** Evaluations entry point *)
   let eval zone exp man flow =
     match ekind exp with
-    (* 𝔼⟦ *p ⟧ *)      
+    (* 𝔼⟦ *p ⟧ *)
     | E_c_deref p when is_c_scalar_type exp.etyp ->
       eval_deref p exp.erange man flow |>
       Option.return

@@ -190,11 +190,13 @@ and parse_db (dbfile: string) ctx : unit =
 
 and parse_file (opts: string list) (file: string) ctx =
   let opts' = ("-I" ^ (Paths.resolve_stub "c" "mopsa")) ::
+              ("-include" ^ "mopsa.h") ::
               (List.map (fun dir -> "-I" ^ dir) !opt_include_dirs) @
               !opt_clang @
               opts
   in
   C_parser.parse_file file opts' ctx
+
 
 and parse_stubs ctx () =
   (** Check if main has arguments argc and argv *)
@@ -206,7 +208,7 @@ and parse_stubs ctx () =
   in
 
   if has_arg then
-    parse_file [] (Config.Paths.resolve_stub "c" "mopsa/init_arg.c") ctx
+    parse_file [] (Config.Paths.resolve_stub "c" "mopsa/mopsa.c") ctx
   ;
 
   (** Add stubs of the standard library *)
