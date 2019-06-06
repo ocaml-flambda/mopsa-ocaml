@@ -30,7 +30,7 @@ type stmt_kind = ..
 
 (** Basic statements *)
 type stmt_kind +=
-  | S_program of program
+  | S_program of program * string list option
   (** Program to be analyzed *)
 
   | S_assign of expr (** lhs *) * expr (** rhs *)
@@ -114,7 +114,7 @@ let compare_stmt s1 s2 =
 
 let stmt_pp_chain = TypeExt.mk_print_chain (fun fmt stmt ->
     match skind stmt with
-    | S_program prog -> pp_program fmt prog
+    | S_program (prog,args) -> pp_program fmt prog
 
     | S_remove(e) -> fprintf fmt "remove(%a)" pp_expr e
 

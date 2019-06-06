@@ -39,12 +39,12 @@ extern long _mopsa_range_long_long();
 extern unsigned long _mopsa_range_unsigned_long_long();
 
 
-// Raise Framework.Manager.Panic exception with a given message
+// Raise Exception.Panic exception with a given message
 extern void _mopsa_panic(const char* msg);
 
 // Printing
 extern void _mopsa_print();
-extern void _mopsa_set_debug_channels(char* channels);
+
 
 // Errors
 #define OUT_OF_BOUND 1
@@ -52,6 +52,7 @@ extern void _mopsa_set_debug_channels(char* channels);
 #define INVALID_DEREF 3
 #define INTEGER_OVERFLOW 4
 #define DIVISION_BY_ZERO 5
+
 
 // Assertions
 extern void _mopsa_assert(int cond);

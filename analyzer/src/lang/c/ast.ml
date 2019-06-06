@@ -831,7 +831,9 @@ let void = T_c_void
 let u8 = T_c_integer(C_unsigned_char)
 let s8 = T_c_integer(C_signed_char)
 let s32 = T_c_integer(C_signed_int)
+let u32 = T_c_integer(C_unsigned_int)
 let ul = T_c_integer(C_unsigned_long)
+let array_type typ size = T_c_array(typ,C_array_length_cst size)
 
 let type_of_string s = T_c_array(s8, C_array_length_cst (Z.of_int (1 + String.length s)))
 

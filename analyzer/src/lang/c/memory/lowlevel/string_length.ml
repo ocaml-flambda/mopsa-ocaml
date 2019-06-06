@@ -305,53 +305,11 @@ struct
     | _ -> assert false
 
 
-  (** Compute symbolic boundaries of a quantified offset. *)
-  (* FIXME: works only for linear expressions *)
-  let rec bound_quantified_offset offset : expr * expr =
-    match ekind offset with
-    | E_constant _ -> offset, offset
-
-    | E_var (v, _) -> offset, offset
-
-    | E_stub_quantified(FORALL, _, S_interval(l, u)) -> l, u
-
-    | E_unop (O_minus, e) ->
-      let l, u = bound_quantified_offset e in
-      { offset with ekind = E_unop (O_minus, u)},
-      { offset with ekind = E_unop (O_minus, l)}
-
-    | E_binop (O_plus, e1, e2) ->
-      let l1, u1 = bound_quantified_offset e1 in
-      let l2, u2 = bound_quantified_offset e2 in
-      { offset with ekind = E_binop (O_plus, l1, l2)},
-      { offset with ekind = E_binop (O_plus, u1, u2)}
-
-    | E_binop (O_minus, e1, e2) ->
-      let l1, u1 = bound_quantified_offset e1 in
-      let l2, u2 = bound_quantified_offset e2 in
-      { offset with ekind = E_binop (O_minus, l1, u2)},
-      { offset with ekind = E_binop (O_minus, u1, l2)}
-
-    | E_binop (O_mult, e, ({ ekind = E_constant (C_int c) } as const))
-    | E_binop (O_mult, ({ ekind = E_constant (C_int c) } as const), e) ->
-      let l, u = bound_quantified_offset e in
-      if Z.geq c Z.zero then
-        { offset with ekind = E_binop (O_mult, l, { const with ekind = E_constant (C_int c) })},
-        { offset with ekind = E_binop (O_mult, u, { const with ekind = E_constant (C_int c) })}
-      else
-        { offset with ekind = E_binop (O_mult, u, { const with ekind = E_constant (C_int c) })},
-        { offset with ekind = E_binop (O_mult, l, { const with ekind = E_constant (C_int c) })}
-
-
-    | _ -> panic ~loc:__LOC__
-             "bound_quantified_offset called on a non linear expression %a"
-             pp_expr offset
-
 
   (** Cases of the abstract transformer for tests *(p + ∀i) ? 0 *)
   let assume_quantified_zero_cases op base offset range man flow =
     (** Get symbolic bounds of the offset *)
-    let min, max = bound_quantified_offset offset in
+    let min, max = Common.Quantified_offset.bound offset in
 
     eval_base_size base range man flow |>
     post_eval man @@ fun size flow ->
@@ -372,9 +330,9 @@ struct
     (* Safety condition: [min, max] ⊆ [0, size[ *)
     assume_post (
       mk_binop
-        (mk_in min (mk_zero range) size range)
+        (mk_in min (mk_zero range) size ~right_strict:true range)
         O_log_and
-        (mk_in max (mk_zero range) size range)
+        (mk_in max (mk_zero range) size ~right_strict:true range)
         range
     )
       ~fthen:(fun flow ->

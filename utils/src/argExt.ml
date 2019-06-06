@@ -57,7 +57,7 @@ type arg = {
 (** Replacement for [Arg.parse]. 
     Adds delayed Unit arguments.
  *)
-let parse (args:arg list) (handler:string -> unit) (msg:string) (help:unit -> unit) : unit =
+let parse (args:arg list) (handler:string -> unit) (rest:string list -> unit) (msg:string) (help:unit -> unit) : unit =
   (* separate arg into program name and actual command-line arguments *)
   let progname, opts =
     if Array.length Sys.argv < 1 then "?", []
@@ -80,12 +80,14 @@ let parse (args:arg list) (handler:string -> unit) (msg:string) (help:unit -> un
   (* eat argument list *)
   let rec eat = function
     | [] -> ()
-    | a::rest ->
+    | a::tl ->
        if a = "" then
-         eat rest
+         eat tl
+       else if a = "--" then
+         rest tl
        else if a.[0] != '-' then (
          handler a;
-         eat rest
+         eat tl
        )
        else (
          (* cut option at '=' if necessary *)
@@ -99,9 +101,9 @@ let parse (args:arg list) (handler:string -> unit) (msg:string) (help:unit -> un
          in
          (* get option argument, either after '=' or in the next 
             command-line argument *)
-         let get_arg () = match arg, rest with
-           | Some x, rest -> x, rest
-           | None, x::rest -> x, rest
+         let get_arg () = match arg, tl with
+           | Some x, tl -> x, tl
+           | None, x::tl -> x, tl
            | None, [] ->
               Printf.eprintf "%s: option %s requires an argument\n" progname opt;
               help ();
@@ -120,55 +122,55 @@ let parse (args:arg list) (handler:string -> unit) (msg:string) (help:unit -> un
            | Unit_delayed f ->
               noarg ();
               delayed := (!delayed)@[f];
-              eat rest
+              eat tl
               
            | Unit f ->
               noarg ();
               f ();
-              eat rest
+              eat tl
               
            | Set r ->
               noarg ();
               r := true;
-              eat rest
+              eat tl
               
            | Clear r ->
               noarg ();
               r := false;
-              eat rest
+              eat tl
               
            | Bool f ->
-              let v, rest = get_arg () in
+              let v, tl = get_arg () in
               f (to_bool a v);
-              eat rest
+              eat tl
             
            | Int f ->
-              let v, rest = get_arg () in
+              let v, tl = get_arg () in
               f (to_int a v);
-              eat rest
+              eat tl
             
            | Set_int f ->
-              let v, rest = get_arg () in
+              let v, tl = get_arg () in
               f := to_int a v;
-              eat rest
+              eat tl
             
            | String f ->
-              let v, rest = get_arg () in
+              let v, tl = get_arg () in
               f v;
-              eat rest
+              eat tl
             
            | Set_string f ->
-              let v, rest = get_arg () in
+              let v, tl = get_arg () in
               f := v;
-              eat rest
+              eat tl
               
            | Set_string_list f ->
-              let v, rest = get_arg () in
+              let v, tl = get_arg () in
               f := (!f)@[v];
-              eat rest
+              eat tl
               
            | Symbol (l,f) ->
-              let v, rest = get_arg () in
+              let v, tl = get_arg () in
               if not (List.mem v l) then (
                 Printf.eprintf
                   "%s: option %s requires an argument in the list: [%a]\n"
@@ -178,7 +180,7 @@ let parse (args:arg list) (handler:string -> unit) (msg:string) (help:unit -> un
                 exit 2
               );
               f v;
-              eat rest
+              eat tl
          )
          else (
            Printf.eprintf "%s: unknown option %s\n" progname a;
