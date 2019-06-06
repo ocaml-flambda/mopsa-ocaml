@@ -44,7 +44,7 @@ struct
   (** ================= *)
 
   let interface = {
-    iexec = {provides = []; uses = []};
+    iexec = {provides = []; uses = [Z_c]};
     ieval = {provides = [Z_c, Z_c_low_level]; uses = [Z_c, Z_c_low_level]};
   }
 
@@ -66,10 +66,35 @@ struct
 
   let eval zone exp man flow  =
     match ekind exp with
+
     | E_c_conditional(cond, e1, e2) ->
       assume_eval cond
         ~fthen:(fun flow ->
             man.eval ~zone:(Z_c, Z_c_low_level) e1 flow
+          )
+        ~felse:(fun flow ->
+            man.eval ~zone:(Z_c, Z_c_low_level) e2 flow
+          )
+        man flow |>
+      Option.return
+
+    | E_binop(O_c_and, e1, e2) ->
+      assume_eval
+        e1 ~zone:(Z_c)
+        ~fthen:(fun flow ->
+            man.eval ~zone:(Z_c, Z_c_low_level) e2 flow
+          )
+        ~felse:(fun flow ->
+            Eval.singleton (Universal.Ast.mk_zero exp.erange) flow
+          )
+        man flow |>
+      Option.return
+
+    | E_binop(O_c_or, e1, e2) ->
+      assume_eval
+        e1 ~zone:(Z_c)
+        ~fthen:(fun flow ->
+            Eval.singleton (Universal.Ast.mk_one exp.erange) flow
           )
         ~felse:(fun flow ->
             man.eval ~zone:(Z_c, Z_c_low_level) e2 flow

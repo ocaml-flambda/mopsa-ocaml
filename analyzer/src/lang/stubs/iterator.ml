@@ -53,8 +53,53 @@ struct
   (** Evaluation of expressions *)
   (** ========================= *)
 
+  let negate_log_binop : log_binop -> log_binop = function
+  | AND -> OR
+  | OR -> AND
+  | IMPLIES -> assert false
+
+    (** Negate a formula *)
+  let rec negate_formula (f:formula with_range) : formula with_range =
+    match f.content with
+    | F_expr e ->
+      with_range (F_expr (mk_not e e.erange)) f.range
+
+    | F_binop (IMPLIES, f1, f2) ->
+      with_range (
+        F_binop (
+          AND,
+          f1,
+          negate_formula f2
+        )) f.range
+
+   | F_binop (op, f1, f2) ->
+     with_range (F_binop (
+         negate_log_binop op,
+         negate_formula f1,
+         negate_formula f2
+       )) f.range
+
+    | F_not f -> f
+
+    | F_forall (var, set, ff) ->
+      with_range (F_exists (
+          var,
+          set,
+          negate_formula ff
+        )) f.range
+
+    | F_exists (var, set, ff) ->
+      with_range (F_forall (
+          var,
+          set,
+          negate_formula ff
+        )) f.range
+
+    | F_in (_, _) -> panic "negation of ∈ not supported"
+
+
   (** Evaluate a formula into a disjunction of two flows, depending on
-     its truth value *)
+      its truth value *)
   let rec eval_formula
       (f: formula with_range)
       ~(negate: bool)
@@ -108,13 +153,8 @@ struct
 
 
     | F_not ff ->
-      let ftrue, ffalse = eval_formula ff ~negate:true man flow in
-
-      begin match negate, ffalse with
-        | false, Some f -> f, None
-        | true, Some f  -> f, Some ftrue
-        | _ -> assert false
-      end
+      let ff' = negate_formula ff in
+      eval_formula ff' ~negate man flow
 
     | F_forall (v, s, ff) -> eval_quantified_formula FORALL v s ff ~negate f.range man flow
     | F_exists (v, s, ff) -> eval_quantified_formula EXISTS v s ff ~negate f.range man flow
@@ -190,7 +230,7 @@ struct
     let ffalse =
       if not negate then None
       else
-        let ff = with_range (F_not ff1) f.range in
+        let ff = negate_formula ff1 in
         let flip_var_quant f =
           visit_expr_in_formula
             (fun e ->

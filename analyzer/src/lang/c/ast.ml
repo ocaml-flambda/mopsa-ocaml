@@ -231,7 +231,7 @@ let () =
   register_var {
     print = (fun next fmt v ->
         match vkind v with
-        | V_cvar cvar -> Format.pp_print_string fmt cvar.cvar_orig_name
+        | V_cvar cvar -> Format.fprintf fmt "%s" cvar.cvar_uniq_name
         | _ -> next fmt v
       );
 
@@ -866,6 +866,10 @@ let var_scope v =
   match v.vkind with
   | V_cvar { cvar_scope } -> cvar_scope
   | _ -> assert false
+
+let is_c_global_scope = function
+  | Variable_global | Variable_extern | Variable_file_static _ -> true
+  | Variable_func_static _ | Variable_local _ | Variable_parameter _ -> false
 
 let () =
   register_typ_compare (fun next t1 t2 ->
