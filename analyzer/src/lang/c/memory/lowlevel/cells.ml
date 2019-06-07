@@ -480,6 +480,8 @@ struct
       eval_base_size base range man flow |>
       Eval.bind @@ fun size flow ->
 
+      debug "size = %a" pp_expr size;
+
       (* Convert the size and the offset to numeric *)
       man.eval ~zone:(Z_c_scalar,Z_u_num) size flow |>
       Eval.bind @@ fun size flow ->
@@ -545,16 +547,20 @@ struct
                     then []
                     else
                       let region = Region (base, Itv.of_z o u) in
-                      debug "region [%a, %a]" Z.pp_print o Z.pp_print u;
                       let flow = man.exec ~zone:Z_u_num (mk_assume (mk_binop offset O_ge (mk_z o range) range) range) flow in
-                      [Eval.singleton region flow]
+                      if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
+                      then []
+                      else [Eval.singleton region flow]
                   else
-                    let flow' = man.exec ~zone:Z_u_num (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow in
-                    let c = mk_cell base o typ in
-                    Eval.singleton (Cell c) flow' :: aux (i + 1) (Z.add o step)
+                    let flow = man.exec ~zone:Z_u_num (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow in
+                    if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
+                    then aux (i + 1) (Z.add o step)
+                    else 
+                      let c = mk_cell base o typ in
+                      Eval.singleton (Cell c) flow :: aux (i + 1) (Z.add o step)
                 in
                 let evals = aux 0 l in
-                Eval.join_list evals
+                Eval.join_list ~empty:(Eval.empty_singleton flow) evals
               )
             ~felse:(fun flow ->
                 let flow = raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow in
@@ -741,6 +747,98 @@ struct
     set_domain_env T_cur { cells = CellSet.empty; bases = BaseSet.empty } man flow
 
 
+
+
+  (** {2 Abstract evaluations} *)
+  (** ************************ *)
+
+  (** 𝔼⟦ *p ⟧ where p is a pointer to a scalar *)
+  let deref_scalar_pointer p mode primed range man flow =
+    (* Expand *p into cells *)
+    expand p range man flow |>
+    Eval.bind @@ fun expansion flow ->
+
+    match expansion with
+    | Top | Region _ ->
+      (* ⊤ pointer or expand threshold exceeded => use the whole value interval *)
+      Eval.singleton (mk_top (under_pointer_type p.etyp) range) flow
+
+    | Cell { base = S str; offset } ->
+      debug "cell str %s offset %a" str Z.pp_print offset;
+      let o = Z.to_int offset in
+      let chr =
+        if o = String.length str
+        then Char.chr 0
+        else String.get str o
+      in
+      let e = mk_c_character chr range in
+      Eval.singleton e flow
+
+    | Cell c ->
+      let c = { c with primed } in
+      let flow = add_cell c range man flow |>
+                 Post.to_flow man.lattice
+      in
+      let v = mk_cell_var c in
+      Eval.singleton (mk_var v ~mode range) flow
+
+
+
+  (* 𝔼⟦ *p ⟧ where p is a pointer to a function *)
+  let deref_function_pointer p range man flow =
+    man.eval ~zone:(Z_c_low_level,Z_c_points_to) p flow |>
+    Eval.bind @@ fun pt flow ->
+
+    match ekind pt with
+    | E_c_points_to (P_fun f) ->
+      Eval.singleton (mk_expr (E_c_function f) ~etyp:(under_type p.etyp) range) flow
+
+    | _ -> panic_at range
+             "deref_function_pointer: pointer %a points to a non-function object %a"
+             pp_expr p
+             pp_expr pt
+
+
+  (** 𝔼⟦ &lval ⟧ *)
+  let address_of lval range man flow =
+    match ekind lval with
+    | E_var _ ->
+      Eval.singleton (mk_c_address_of lval range) flow
+
+    | E_c_deref p ->
+      man.eval ~zone:(Z_c_low_level,Z_c_scalar) p flow
+
+    | _ ->
+      panic_at range ~loc:__LOC__
+        "evaluation of &%a not supported"
+        pp_expr lval
+
+
+  let eval zone exp man flow =
+    match ekind exp with
+    | E_var (v,mode) when is_c_scalar_type v.vtyp ->
+      deref_scalar_pointer (mk_c_address_of exp exp.erange) mode false exp.erange man flow |>
+      Option.return
+
+    | E_c_deref p when under_type p.etyp |> is_c_scalar_type  ->
+      deref_scalar_pointer p STRONG false exp.erange man flow |>
+      Option.return
+
+    | E_c_deref p when under_type p.etyp |> is_c_function_type ->
+      deref_function_pointer p exp.erange man flow |>
+      Option.return
+
+    | E_c_address_of lval ->
+      address_of lval exp.erange man flow |>
+      Option.return
+
+    | E_stub_primed lval ->
+      deref_scalar_pointer (mk_c_address_of lval exp.erange) STRONG true exp.erange man flow |>
+      Option.return
+
+    | _ -> None
+
+
   (** {2 Abstract transformers} *)
   (** ************************* *)
 
@@ -773,29 +871,24 @@ struct
           | C_flat_expr (e,t) :: tl ->
             let c = mk_cell (V v) o t in
             let init = Some (C_init_expr e) in
-            c, init, tl, Z.add o (sizeof_type e.etyp)
+            c, init, tl, Z.add o (sizeof_type t)
 
-          | C_flat_none(n) :: tl when is_c_scalar_type v.vtyp &&
-                                      Z.equal n (sizeof_type v.vtyp)
-            ->
-            let c = mk_cell (V v) o v.vtyp in
+          | C_flat_none(n,t) :: tl ->
+            let c = mk_cell (V v) o t in
             let init = None in
-            c, init, tl, Z.add o n
-
-          | C_flat_none(n) :: tl ->
-            let c = mk_cell (V v) o u8 in
-            let init = None in
-            let tl' = if Z.equal n Z.one then tl else C_flat_none(Z.pred n) :: tl in
+            let tl' = if Z.equal n Z.one then tl else C_flat_none(Z.pred n,t) :: tl in
             c, init, tl', Z.succ o
 
           | _ -> assert false
         in
         (* Evaluate the initialization into a scalar expression *)
         (
-          match init with
-          | None -> Eval.singleton None flow
+          match init, is_c_global_scope scope with
+          | None, _ -> Eval.singleton None flow
 
-          | Some (C_init_expr e) ->
+          | _, true -> Eval.singleton init flow
+
+          | Some (C_init_expr e), false ->
             man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow |>
             Eval.bind @@ fun e flow ->
             Eval.singleton (Some (C_init_expr e)) flow
@@ -851,85 +944,6 @@ struct
 
     let stmt = mk_assume e range in
     man.exec_sub ~zone:Z_c_scalar stmt flow
-
-
-  (* 𝕊⟦ ?e ⟧ when e contains quantified variables *)
-  let assume_quantified e range man flow =
-    (* Get the bounds the quantified variables *)
-    let bounds = fold_expr
-        (fun acc e ->
-           match ekind e with
-           | E_stub_quantified(FORALL, v, S_interval(l,u)) ->
-             Keep ((v, l, u) :: acc)
-
-           | _ -> VisitParts acc
-        )
-        (fun acc stmt -> VisitParts acc)
-        [] e
-    in
-    (* Compute an under-approximation of each bound *)
-    let exception NotPossible in
-    try
-      let under = List.map (fun (v,l,u) ->
-          let itv1 = compute_bound l man flow in
-          let itv2 = compute_bound u man flow in
-          match Itv.bounds_opt itv1, Itv.bounds_opt itv2 with
-          | (_, Some a), (Some b, _) when Z.leq a b -> (v, a, b)
-          | _ -> raise NotPossible
-        ) bounds
-      in
-      (* Iterate over some sample valuations in the under-approximation *)
-      let rec get_samples space =
-        match space with
-        | [] -> [[]]
-        | (var, l, u) :: tl ->
-          let after = get_samples tl in
-
-          (** Iterate on values in [i, u] and add them to the result vectors *)
-          let rec iter_on_space_dim ret i =
-            if Z.gt i u then ret
-            else iter_on_space_dim (add_sample i after ret) (Z.succ i)
-
-          (** and a sample value i to the result *)
-          and add_sample i after ret =
-            if List.length ret == !opt_expand then
-              ret
-            else
-              match after with
-              | [] -> ret
-              | hd :: tl ->
-                add_sample i tl (((var, i) :: hd)  :: ret)
-          in
-          iter_on_space_dim [] l
-      in
-      let samples = get_samples under in
-
-      (* Replace quantified variables with the samples and compute the meet *)
-      (* NOTE: since quantified expressions are pure expressions, we
-         fold the result to compute the meet *)
-      List.fold_left (fun acc sample ->
-          let e' = e |> map_expr
-                     (fun ee ->
-                        match ekind ee with
-                        | E_stub_quantified(FORALL, var, _) ->
-                          let _, i = List.find (fun (var', _) ->
-                              compare_var var var' = 0
-                            ) sample
-                          in
-                          Keep { ee with ekind = E_constant (C_int i) }
-
-                        | _ -> VisitParts ee
-                     )
-                     (fun s -> VisitParts s)
-          in
-          man.exec ~zone:Z_c_low_level (mk_assume e' range) acc
-        ) flow samples |>
-      Post.return
-
-
-    with NotPossible ->
-      Post.return flow
-
 
 
   (* 𝕊⟦ remove v ⟧ *)
@@ -1054,12 +1068,13 @@ struct
       assign p e STRONG stmt.srange man flow |>
       Option.return
 
-    | S_assume(e) when is_expr_quantified e ->
-      assume_quantified e stmt.srange man flow |>
+
+    | S_assume(e) when not (is_expr_quantified e) ->
+      assume e stmt.srange man flow |>
       Option.return
 
-    | S_assume(e) ->
-      assume e stmt.srange man flow |>
+    | S_assume(e) when is_expr_quantified e ->
+      Post.return flow |>
       Option.return
 
     | S_add { ekind = E_var (v, _) } when is_c_scalar_type v.vtyp ->
@@ -1093,111 +1108,6 @@ struct
       rename_primed lval bounds stmt.srange man flow |>
       Option.return
 
-
-    | _ -> None
-
-
-  (** {2 Abstract evaluations} *)
-  (** ************************ *)
-
-  (** 𝔼⟦ *p ⟧ where p is a pointer to a scalar *)
-  let deref_scalar_pointer p mode range man flow =
-    (* Expand *p into cells *)
-    expand p range man flow |>
-    Eval.bind @@ fun expansion flow ->
-
-    match expansion with
-    | Top | Region _ ->
-      (* ⊤ pointer or expand threshold exceeded => use the whole value interval *)
-      Eval.singleton (mk_top (under_pointer_type p.etyp) range) flow
-
-    | Cell { base = S str; offset } ->
-      let o = Z.to_int offset in
-      let chr =
-        if o = String.length str
-        then Char.chr 0
-        else String.get str o
-      in
-      let e = mk_c_character chr range in
-      Eval.singleton e flow
-
-    | Cell c ->
-      let flow = add_cell c range man flow |>
-                 Post.to_flow man.lattice
-      in
-      let v = mk_cell_var c in
-      Eval.singleton (mk_var v ~mode range) flow
-
-
-
-  (* 𝔼⟦ *p ⟧ where p is a pointer to a function *)
-  let deref_function_pointer p range man flow =
-    man.eval ~zone:(Z_c_low_level,Z_c_points_to) p flow |>
-    Eval.bind @@ fun pt flow ->
-
-    match ekind pt with
-    | E_c_points_to (P_fun f) ->
-      Eval.singleton (mk_expr (E_c_function f) ~etyp:(under_type p.etyp) range) flow
-
-    | _ -> panic_at range
-             "deref_function_pointer: pointer %a points to a non-function object %a"
-             pp_expr p
-             pp_expr pt
-
-  (** 𝔼⟦ lval' ⟧ *)
-  let primed lval range man flow =
-    expand (mk_c_address_of lval range) range man flow |>
-    Eval.bind @@ fun expansion flow ->
-
-    match expansion with
-    | Top | Region _ ->
-      Eval.singleton (mk_top lval.etyp range) flow
-
-    | Cell c ->
-      let c' = { c with primed = true } in
-      let flow = add_cell c' range man flow |>
-                 Post.to_flow man.lattice
-      in
-      let v' = mk_cell_var c' in
-      Eval.singleton (mk_var v' range) flow
-
-
-  (** 𝔼⟦ &lval ⟧ *)
-  let address_of lval range man flow =
-    match ekind lval with
-    | E_var _ ->
-      Eval.singleton (mk_c_address_of lval range) flow
-
-    | E_c_deref p ->
-      man.eval ~zone:(Z_c_low_level,Z_c_scalar) p flow
-
-    | _ ->
-      panic_at range ~loc:__LOC__
-        "evaluation of &%a not supported"
-        pp_expr lval
-
-
-  let eval zone exp man flow =
-    match ekind exp with
-    | E_var (v,mode) when is_c_scalar_type v.vtyp ->
-      deref_scalar_pointer (mk_c_address_of exp exp.erange) mode exp.erange man flow |>
-      Option.return
-
-    | E_c_deref p when under_type p.etyp |> is_c_scalar_type  ->
-      deref_scalar_pointer p STRONG exp.erange man flow |>
-      Option.return
-
-    | E_c_deref p when under_type p.etyp |> is_c_function_type ->
-      deref_function_pointer p exp.erange man flow |>
-      Option.return
-
-    | E_c_address_of lval ->
-      address_of lval exp.erange man flow |>
-      Option.return
-
-    | E_stub_primed lval ->
-      primed lval exp.erange man flow |>
-      Option.return
 
     | _ -> None
 

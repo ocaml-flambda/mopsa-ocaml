@@ -232,47 +232,6 @@ struct
 end
 
 
-(*==========================================================================*)
-(**                          {2 Registration}                               *)
-(*==========================================================================*)
-
-
-
-let log_post_stmt = Lowlevel.log_post_stmt
-
-(** Auto-logger lifter used when registering a domain *)
-module AutoLogger(D:DOMAIN) : DOMAIN with type t = D.t =
-struct
-  include D
-  let exec zone stmt man flow =
-    D.exec zone stmt man flow |>
-    Option.lift @@ log_post_stmt stmt man
-end
-
-let domains : (module DOMAIN) list ref = ref []
-
-let register_domain dom =
-  let module D = (val dom : DOMAIN) in
-  domains := (module AutoLogger(D)) :: !domains
-
-
-let find_domain name =
-  List.find (fun dom ->
-      let module D = (val dom : DOMAIN) in
-      compare D.name name = 0
-    ) !domains
-
-let mem_domain name =
-  List.exists (fun dom ->
-      let module D = (val dom : DOMAIN) in
-      compare D.name name = 0
-    ) !domains
-
-let names () =
-  List.map (fun dom ->
-      let module D = (val dom : DOMAIN) in
-      D.name
-    ) !domains
 
 
 (*==========================================================================*)
@@ -309,3 +268,47 @@ let post_eval_with_cleaners = Lowlevel.post_eval_with_cleaners
 let exec_stmt_on_all_flows = Lowlevel.exec_stmt_on_all_flows
 
 let exec_block_on_all_flows = Lowlevel.exec_block_on_all_flows
+
+let log_post_stmt = Lowlevel.log_post_stmt
+
+
+(*==========================================================================*)
+(**                          {2 Registration}                               *)
+(*==========================================================================*)
+
+
+(** Auto-logger lifter used when registering a domain *)
+module AutoLogger(D:DOMAIN) : DOMAIN with type t = D.t =
+struct
+  include D
+  let exec zone stmt man flow =
+    D.exec zone stmt man flow |>
+    Option.lift @@ log_post_stmt stmt man
+end
+
+let domains : (module DOMAIN) list ref = ref []
+
+let register_domain dom =
+  let module D = (val dom : DOMAIN) in
+  domains := (module AutoLogger(D)) :: !domains
+
+
+let find_domain name =
+  List.find (fun dom ->
+      let module D = (val dom : DOMAIN) in
+      compare D.name name = 0
+    ) !domains
+
+let mem_domain name =
+  List.exists (fun dom ->
+      let module D = (val dom : DOMAIN) in
+      compare D.name name = 0
+    ) !domains
+
+let names () =
+  List.map (fun dom ->
+      let module D = (val dom : DOMAIN) in
+      D.name
+    ) !domains
+
+

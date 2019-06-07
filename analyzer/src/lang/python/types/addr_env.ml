@@ -259,12 +259,12 @@ struct
 
             | Def addr ->
               let res = man.eval (mk_py_object (addr, Option.return @@ mk_addr addr range) range) flow in
-              let annots = Eval.choose_ctx res in
+              let annots = Eval.get_ctx res in
               res :: acc, annots
 
           ) aset ([], Flow.get_ctx flow) in
         let evals = List.map (fun eval -> Eval.map_flow (fun flow -> Flow.set_ctx annot flow) eval) evals in
-        evals |> Eval.join_list
+        evals |> Eval.join_list ~empty:(Eval.empty_singleton flow)
         |> Option.return
       else if is_builtin_name @@ get_orig_vname v then
         (* let () = debug "bla %s %s %d" v.org_vname v.uniq_vname v.vuid in *)

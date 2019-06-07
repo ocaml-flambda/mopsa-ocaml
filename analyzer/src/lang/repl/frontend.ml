@@ -310,7 +310,7 @@ module Domain = struct
 
   let exec zone stmt man flow =
     match skind stmt with
-    | S_program { prog_kind = P_REPL } ->
+    | S_program ({ prog_kind = P_REPL }, _) ->
        Some (Post.return (enter_repl man flow))
 
     | _ -> None

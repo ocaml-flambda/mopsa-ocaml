@@ -338,11 +338,8 @@ struct
 
   and bexp_to_apron ctx exp =
     match ekind exp with
-    | E_constant(C_int n) when Z.to_int n = 0 ->
-      Dnf.mk_false, ctx
-
     | E_constant(C_int _) ->
-      Dnf.mk_true, ctx
+      bexp_to_apron ctx (mk_binop exp O_ne (mk_zero exp.erange) exp.erange)
 
     | E_binop(O_gt, e0 , e1) ->
       let e0', ctx = exp_to_apron ctx e0 in

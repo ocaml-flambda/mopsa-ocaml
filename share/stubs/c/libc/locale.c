@@ -41,7 +41,7 @@ char * _local_buf;
  * case "success" {
  *   local:   char* addr = new ReadOnlyString;
  *   assigns: _local_buf;
- *   ensures: size(addr) > 0;
+ *   ensures: size(addr) in [1, INT_MAX];
  *   ensures: valid_string(addr);
  *   ensures: _local_buf' == addr;
  *   ensures: return == addr;

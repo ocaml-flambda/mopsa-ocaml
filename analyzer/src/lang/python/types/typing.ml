@@ -664,7 +664,7 @@ struct
                 let flow = set_domain_env T_cur (TMap.add addr (Polytypeset.singleton pty) cur) man flow in
                 Eval.singleton (mk_py_false range) flow :: acc
 
-              | _ -> Exceptions.panic "ll_hasattr %a" pp_polytype pty) ptys [] |> Eval.join_list
+              | _ -> Exceptions.panic "ll_hasattr %a" pp_polytype pty) ptys [] |> Eval.join_list ~empty:(Eval.empty_singleton flow)
 
         | Objects.Py_list.A_py_list _ ->
           Eval.singleton (mk_py_false range) flow
@@ -720,7 +720,7 @@ struct
                 Eval.singleton (mk_py_object (attr_addr, None) range) flow :: acc
 
               | _ -> Exceptions.panic "ll_hasattr %a@\n"  pp_polytype pty)
-            ptys [] |> Eval.join_list
+            ptys [] |> Eval.join_list ~empty:(Eval.empty_singleton flow)
 
         | _ -> Exceptions.panic_at range "ll_getattr: todo %a, attr=%s in@\n%a" pp_addr addr attr (Flow.print man.lattice) flow
       end
@@ -750,7 +750,7 @@ struct
                      (c, b, cur)::acc
                    | _ -> Exceptions.panic_at range "type : todo"
                  ) ptys [] in
-               List.map (proceed addr) types |> Eval.join_list
+               List.map (proceed addr) types |> Eval.join_list ~empty:(Eval.empty_singleton flow)
 
            | E_py_object ({addr_kind = Objects.Py_list.A_py_list _} as a, _) ->
              let lc, lb = get_builtin "list" in
@@ -967,7 +967,7 @@ struct
         (fun _ flow ->
            let res = man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow in
            let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
-           Eval.join_list (Eval.copy_ctx stopiteration res :: stopiteration :: [])
+           Eval.join_list (Eval.copy_ctx stopiteration res :: stopiteration :: []) ~empty:(Eval.empty_singleton flow)
         )
       |> Option.return
 

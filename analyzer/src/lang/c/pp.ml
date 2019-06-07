@@ -76,7 +76,7 @@ let rec pp_c_init fmt = function
          (fun fmt init ->
             match init with
             | C_flat_expr (e,t) -> fprintf fmt "%a:%a" pp_expr e pp_c_type_short t
-            | C_flat_none n -> fprintf fmt "None * %a" Z.pp_print n
+            | C_flat_none (n,t) -> fprintf fmt "None:%a * %a" pp_c_type_short t Z.pp_print n
             | C_flat_fill (e,t,n) -> fprintf fmt "%a:%a * %a" pp_expr e pp_c_type_short t Z.pp_print n
          )
       ) l

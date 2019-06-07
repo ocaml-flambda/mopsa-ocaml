@@ -305,53 +305,87 @@ struct
     | _ -> assert false
 
 
-  (** Compute symbolic boundaries of a quantified offset. *)
-  (* FIXME: works only for linear expressions *)
-  let rec bound_quantified_offset offset : expr * expr =
-    match ekind offset with
-    | E_constant _ -> offset, offset
 
-    | E_var (v, _) -> offset, offset
+  (** Cases of the abstract transformer for tests *("..." + ∀i) ? 0 *)
+  let assume_quantified_string_zero_cases op str offset range man flow =
+    debug "quantified string %s" str;
+    (** Get symbolic bounds of the offset *)
+    let min, max = Common.Quantified_offset.bound offset in
 
-    | E_stub_quantified(FORALL, _, S_interval(l, u)) -> l, u
+    man.eval ~zone:(Z_c_low_level, Z_u_num) min flow |>
+    post_eval man @@ fun min flow ->
 
-    | E_unop (O_minus, e) ->
-      let l, u = bound_quantified_offset e in
-      { offset with ekind = E_unop (O_minus, u)},
-      { offset with ekind = E_unop (O_minus, l)}
+    man.eval ~zone:(Z_c_low_level, Z_u_num) max flow |>
+    post_eval man @@ fun max flow ->
 
-    | E_binop (O_plus, e1, e2) ->
-      let l1, u1 = bound_quantified_offset e1 in
-      let l2, u2 = bound_quantified_offset e2 in
-      { offset with ekind = E_binop (O_plus, l1, l2)},
-      { offset with ekind = E_binop (O_plus, u1, u2)}
+    let length = mk_z (Z.of_int @@ String.length str) range in
 
-    | E_binop (O_minus, e1, e2) ->
-      let l1, u1 = bound_quantified_offset e1 in
-      let l2, u2 = bound_quantified_offset e2 in
-      { offset with ekind = E_binop (O_minus, l1, u2)},
-      { offset with ekind = E_binop (O_minus, u1, l2)}
+    let mk_bottom flow = Flow.set T_cur man.lattice.bottom man.lattice flow in
 
-    | E_binop (O_mult, e, ({ ekind = E_constant (C_int c) } as const))
-    | E_binop (O_mult, ({ ekind = E_constant (C_int c) } as const), e) ->
-      let l, u = bound_quantified_offset e in
-      if Z.geq c Z.zero then
-        { offset with ekind = E_binop (O_mult, l, { const with ekind = E_constant (C_int c) })},
-        { offset with ekind = E_binop (O_mult, u, { const with ekind = E_constant (C_int c) })}
-      else
-        { offset with ekind = E_binop (O_mult, u, { const with ekind = E_constant (C_int c) })},
-        { offset with ekind = E_binop (O_mult, l, { const with ekind = E_constant (C_int c) })}
+    (* Safety condition: [min, max] ⊆ [0, length] *)
+    assume_post (
+      mk_binop
+        (mk_in min (mk_zero range) length range)
+        O_log_and
+        (mk_in max (mk_zero range) length range)
+        range
+    )
+      ~fthen:(fun flow ->
+          switch_post [
+            (* nonzero case *)
+            (* Range condition: max < length
 
+               |--------|***********|--------| '\0' |----->
+               0       min         max    length   size
 
-    | _ -> panic ~loc:__LOC__
-             "bound_quantified_offset called on a non linear expression %a"
-             pp_expr offset
+                     ∀ i ∈ [min, max] : s[i] != 0
+            *)
+            (* Transformation: ⊥ if op = O_eq, nop if op = O_ne *)
+            [
+              mk_binop max O_lt length range, true;
+            ],
+            (fun flow ->
+               match op with
+               | O_eq -> Post.return (mk_bottom flow)
+               | O_ne -> Post.return flow
+               | _ -> assert false
+            )
+            ;
+
+            (* zero case *)
+            (* Range condition: max = length
+
+                       min                 max
+               |--------|*******************| '\0' |-------|->
+               0                         length    size
+
+                      ∃ i ∈ [min, max] : s[i] == 0
+            *)
+            (* Transformation: nop if op = O_eq, ⊥ if op = O_ne *)
+            [
+              mk_binop max O_eq length range, true;
+            ],
+            (fun flow ->
+               match op with
+               | O_eq -> Post.return flow
+               | O_ne -> Post.return (mk_bottom flow)
+               | _ -> assert false
+            )
+            ;
+          ] ~zone:Z_u_num man flow
+        )
+      ~felse:(fun flow ->
+          (* Unsafe case *)
+          let flow' = raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow in
+          Post.return flow'
+        )
+      ~zone:Z_u_num man flow
 
 
   (** Cases of the abstract transformer for tests *(p + ∀i) ? 0 *)
   let assume_quantified_zero_cases op base offset range man flow =
     (** Get symbolic bounds of the offset *)
-    let min, max = bound_quantified_offset offset in
+    let min, max = Common.Quantified_offset.bound offset in
 
     eval_base_size base range man flow |>
     post_eval man @@ fun size flow ->
@@ -372,9 +406,9 @@ struct
     (* Safety condition: [min, max] ⊆ [0, size[ *)
     assume_post (
       mk_binop
-        (mk_in min (mk_zero range) size range)
+        (mk_in min (mk_zero range) size ~right_strict:true range)
         O_log_and
-        (mk_in max (mk_zero range) size range)
+        (mk_in max (mk_zero range) size ~right_strict:true range)
         range
     )
       ~fthen:(fun flow ->
@@ -455,11 +489,18 @@ struct
       raise_alarm Alarms.AInvalidDeref p.erange ~bottom:true man.lattice flow |>
       Post.return
 
+    | E_c_points_to (P_block (S str, offset)) ->
+      man.eval ~zone:(Z_c_low_level, Z_u_num) offset flow |>
+      post_eval man @@ fun offset flow ->
+      assume_quantified_string_zero_cases op str offset range man flow
+
     | E_c_points_to (P_block (base, offset)) ->
       man.eval ~zone:(Z_c_low_level, Z_u_num) offset flow |>
       post_eval man @@ fun offset flow ->
-
       assume_quantified_zero_cases op base offset range man flow
+
+    | E_c_points_to P_top ->
+      Post.return flow
 
     | _ -> assert false
 
@@ -481,6 +522,19 @@ struct
     Post.bind (man.exec_sub ~zone:Z_u_num (mk_assume (mk_in length (mk_zero range) size range) range))
 
 
+  let rec is_deref_expr e =
+    match ekind e with
+    | E_c_deref _ -> true
+    | E_c_cast (ee, _) -> is_deref_expr ee
+    | _ -> false
+
+
+  let rec is_zero_expr e =
+    match ekind e with
+    | E_constant (C_int n) when Z.equal n Z.zero -> true
+    | E_c_cast (ee, _) -> is_zero_expr ee
+    | _ -> false
+
 
   (** Transformers entry point *)
   let exec zone stmt man flow =
@@ -497,6 +551,8 @@ struct
       add_base (A addr) stmt.srange man flow |>
       Option.return
 
+    | S_rename ({ ekind = E_addr addr1 }, { ekind = E_addr add2 }) ->
+      assert false
 
     | S_assign({ ekind = E_c_deref p}, rval) when under_type p.etyp |> is_c_num_type ->
       assign_deref p rval stmt.srange man flow |>
@@ -504,20 +560,22 @@ struct
 
 
     (* 𝕊⟦ *(p + ∀i) != 0 ⟧ *)
-    | S_assume({ekind = E_binop(O_ne, lval, {ekind = E_constant(C_int n)})})
-    | S_assume({ekind = E_unop(O_log_not, {ekind = E_binop(O_eq, lval, {ekind = E_constant(C_int n)})})})
+    | S_assume({ekind = E_binop(O_ne, lval, n)})
+    | S_assume({ekind = E_unop(O_log_not, {ekind = E_binop(O_eq, lval, n)})})
       when is_expr_quantified lval &&
-           Z.equal n Z.zero &&
+           is_deref_expr lval &&
+           is_zero_expr n &&
            not (is_stub_primed lval)
       ->
       assume_quantified_zero O_ne lval stmt.srange man flow |>
       Option.return
 
     (* 𝕊⟦ *(p + ∀i) == 0 ⟧ *)
-    | S_assume({ekind = E_binop(O_eq, lval, {ekind = E_constant(C_int n)})})
-    | S_assume({ekind = E_unop(O_log_not, {ekind = E_binop(O_ne, lval, {ekind = E_constant(C_int n)})})})
+    | S_assume({ekind = E_binop(O_eq, lval, n)})
+    | S_assume({ekind = E_unop(O_log_not, {ekind = E_binop(O_ne, lval, n)})})
       when is_expr_quantified lval &&
-           Z.equal n Z.zero &&
+           is_deref_expr lval &&
+           is_zero_expr n &&
            not (is_stub_primed lval)
       ->
       assume_quantified_zero O_eq lval stmt.srange man flow |>
@@ -530,12 +588,55 @@ struct
   (** {2 Abstract evaluations} *)
   (** ************************ *)
 
+
+  (** Cases of the abstraction evaluation of s[i] where s is a string *)
+  let eval_deref_string_cases str offset typ range man flow =
+
+    let length = mk_z (Z.of_int @@ String.length str) range in
+
+    (* Check that offset ∈ [0, length] *)
+    assume_eval (mk_in offset (mk_zero range) length range)
+      ~fthen:(fun flow ->
+          switch_eval [
+            (* before case *)
+            (* Offset condition: offset < length *)
+            (* Evaluation: [1; 255] if unsigned, [-128, -1] U [1, 127] otherwise *)
+            [
+              mk_binop offset O_lt length range, true;
+            ],
+            (fun flow ->
+               if is_signed typ = false then
+                 Eval.singleton (mk_int_interval 1 255 ~typ range) flow
+               else
+                 Eval.join
+                   (Eval.singleton (mk_int_interval (-128) (-1) ~typ range) flow)
+                   (Eval.singleton (mk_int_interval 1 127 ~typ range) flow)
+            );
+
+            (* at case *)
+            (* Offset condition: offset = length *)
+            (* Evaluation: 0 *)
+            [
+              mk_binop offset O_eq length range, true;
+            ],
+            (fun flow -> Eval.singleton (mk_zero ~typ range)flow)
+            ;
+
+          ] ~zone:Z_u_num man flow
+        )
+      ~felse:(fun flow ->
+          (* Unsafe case *)
+          raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow |>
+          Eval.empty_singleton
+        )
+      ~zone:Z_u_num man flow
+
+
+
   (** Cases of the abstraction evaluations *)
   let eval_deref_cases base offset typ range man flow =
     eval_base_size base range man flow |>
     Eval.bind @@ fun size flow ->
-
-    debug "size = %a" pp_expr size;
 
     man.eval ~zone:(Z_c_scalar, Z_u_num) size flow |>
     Eval.bind @@ fun size flow ->
@@ -547,7 +648,11 @@ struct
       ~fthen:(fun flow ->
           match Z.gt elm_size Z.one, base with
           (* Multi-byte scalars and string litterals are not handled here *)
-          | true, _ | _, S _ ->
+          | true, _ ->
+            let l,u = rangeof typ in
+            Eval.singleton (mk_z_interval l u ~typ range) flow
+
+          | _, V v when is_c_scalar_type v.vtyp ->
             let l,u = rangeof typ in
             Eval.singleton (mk_z_interval l u ~typ range) flow
 
@@ -556,7 +661,7 @@ struct
             switch_eval [
               (* before case *)
               (* Offset condition: offset ∈ [0, length[ *)
-              (* Evaluation: [1; 255] if unsigned, [-128, 127] otherwise *)
+              (* Evaluation: [1; 255] if unsigned, [-128, -1] U [1, 127] otherwise *)
               [
                 mk_binop offset O_ge (mk_zero range) range, true;
                 mk_binop offset O_lt length range, true;
@@ -565,7 +670,9 @@ struct
                  if is_signed typ = false then
                    Eval.singleton (mk_int_interval 1 255 ~typ range) flow
                  else
-                   Eval.singleton (mk_int_interval (-128) 127 ~typ range) flow
+                   Eval.join
+                     (Eval.singleton (mk_int_interval (-128) (-1) ~typ range) flow)
+                     (Eval.singleton (mk_int_interval 1 127 ~typ range) flow)
               );
 
               (* at case *)
@@ -614,15 +721,18 @@ struct
       raise_alarm Alarms.AInvalidDeref p.erange ~bottom:true man.lattice flow |>
       Eval.empty_singleton
 
-    | E_c_points_to (P_block (V v, offset)) when is_c_scalar_type v.vtyp ->
-      Eval.singleton (mk_top (under_pointer_type p.etyp) range) flow
+    | E_c_points_to (P_block (S str, offset)) ->
+      man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow |>
+      Eval.bind @@ fun offset flow ->
+      eval_deref_string_cases str offset (under_pointer_type p.etyp) range man flow
 
     | E_c_points_to (P_block (base, offset)) ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow |>
       Eval.bind @@ fun offset flow ->
-
       eval_deref_cases base offset (under_pointer_type p.etyp) range man flow
 
+    | E_c_points_to P_top ->
+      Eval.singleton (mk_top (under_pointer_type p.etyp) range) flow
 
     | _ -> assert false
 

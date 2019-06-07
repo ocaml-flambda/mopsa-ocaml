@@ -76,36 +76,49 @@ struct
   let unnamed_args_ctx =
     let module C = Context.GenUnitKey(
       struct
-        type t = var (** last named parameter *) *
+        type v = var (** last named parameter *) *
                  var list (** unnamed parameters *)
-        let print fmt (last, unnamed) =
-          Format.fprintf fmt "unnamed args: @[%a@]"
+
+        type t = v list
+
+        let print fmt stack =
+          Format.fprintf fmt "@[<v 2>unnamed args:@,%a@]"
             (Format.pp_print_list
-               ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ")
-               pp_var
-            ) unnamed
+               ~pp_sep:(fun fmt () -> Format.pp_print_string fmt "@,")
+               (fun fmt (named,unnamed) ->
+                  Format.pp_print_list
+                    ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ")
+                    pp_var
+                    fmt unnamed
+               )
+            ) stack
       end
       )
     in
     C.key
 
   let get_unnamed_args flow =
-    Flow.get_ctx flow |> Context.find_unit unnamed_args_ctx
+    Flow.get_ctx flow |> Context.find_unit unnamed_args_ctx |> List.hd
 
-  let set_unnamed_args (last, unnamed) flow =
-    Flow.set_ctx (
-      Flow.get_ctx flow |>
-      Context.add_unit unnamed_args_ctx (last, unnamed)
+  let push_unnamed_args (last, unnamed) flow =
+    Flow.map_ctx (fun ctx ->
+        let stack =
+          try Context.find_unit unnamed_args_ctx ctx
+          with Not_found -> []
+        in
+      Context.add_unit unnamed_args_ctx ((last, unnamed) :: stack) ctx
     ) flow
 
-  let mem_unnamed_args flow =
-    Flow.get_ctx flow |>
-    Context.mem_unit unnamed_args_ctx
-
-  let remove_unnamed_args flow =
-    Flow.set_ctx (
-      Flow.get_ctx flow |>
-      Context.remove_unit unnamed_args_ctx
+  let pop_unnamed_args flow =
+    Flow.map_ctx (fun ctx ->
+        let stack =
+          try
+            let stack = Context.find_unit unnamed_args_ctx ctx in
+            List.tl stack
+          with Not_found ->
+            []
+        in
+        Context.add_unit unnamed_args_ctx stack ctx
     ) flow
 
 
@@ -123,11 +136,6 @@ struct
 
   (** Evaluate a call to a variadic function *)
   let call_variadic_function fundec args range man flow =
-    (* FIXME: for the moment, the domain does not supporting cascading
-       calls to variadic functions *)
-    if mem_unnamed_args flow
-    then panic_at range "cascading calls to variadic functions not supported";
-
     (* Partition args into named and unnamed arguments *)
     let named, last, unnamed =
       let rec doit params args =
@@ -152,7 +160,7 @@ struct
     in
 
     (* Put vars in the annotation *)
-    let flow = set_unnamed_args (last,vars) flow in
+    let flow = push_unnamed_args (last,vars) flow in
 
     (* Call the function with only named arguments *)
     let fundec' = {fundec with c_func_variadic = false} in
@@ -165,7 +173,7 @@ struct
               man.exec ~zone:Z_c_low_level (mk_remove_var unnamed range) flow
             ) flow vars
         in
-        remove_unnamed_args flow
+        pop_unnamed_args flow
       )
 
   (* Create a counter variable for a va_list *)

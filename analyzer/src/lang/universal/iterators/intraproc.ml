@@ -62,7 +62,7 @@ struct
       let block1 = mk_block [mk_assume cond range; s1] range in
       let block2 = mk_block [mk_assume (mk_not cond range) range; s2] range in
       let flows = Flow.map_list man.exec [block1; block2] flow in
-      let flow' = Flow.join_list man.lattice flows in
+      let flow' = Flow.join_list man.lattice ~ctx:(Flow.get_ctx flow) flows in
       Some (Post.return flow')
 
     | S_print ->
