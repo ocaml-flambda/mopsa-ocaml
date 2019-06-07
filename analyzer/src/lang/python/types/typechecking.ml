@@ -202,6 +202,44 @@ struct
     | A_py_class _ | A_py_function _ | A_py_instance _ | A_py_method _ | A_py_module _ | A_py_var _ -> false
     | _ -> true
 
+  let unify man uctx a a' =
+    let (hd, tl) = man.get a and (hd', tl') = man.get a' in
+    let hd, hd', l = AD.AMap.fold2o
+        (fun k a acc -> acc)
+        (fun k a acc -> acc)
+        (fun k as1 as2 (hd, hd', acc) ->
+           if AD.ASet.cardinal as1 <= 1 && AD.ASet.cardinal as2 <= 1 then
+             match AD.ASet.choose as1, AD.ASet.choose as2 with
+             | Def a1, Def a2 ->
+               if compare_addr a1 a2 <> 0 && is_container a1 && is_container a2 then
+                 let addr_12 = {addr_group = join_agroup a1.addr_group a2.addr_group;
+                                addr_kind = Objects.Py_list.join_akind a1.addr_kind a2.addr_kind;
+                                addr_mode = join_amode a1.addr_mode a2.addr_mode} in
+                 AD.add k (AD.ASet.singleton (Def addr_12)) hd,
+                 AD.add k (AD.ASet.singleton (Def addr_12)) hd',
+                 (a1, a2, addr_12)::acc
+               else (hd, hd', acc)
+             | _ ->
+               (hd, hd', acc)
+           else
+             (hd, hd', acc)
+             (* failwith "todo" *)
+        ) hd hd' (hd, hd', []) in
+    let a, a' = man.set (hd, tl) a, man.set (hd', tl') a' in
+    debug "to_rename: %a@\n" (Format.pp_print_list (fun fmt (a1, a2, a12) -> Format.fprintf fmt "%a /\ %a ===> %a@\n" pp_addr a1 pp_addr a2 pp_addr a12)) l;
+    let a, a' = List.fold_left (fun (a, a') (a1, a2, a12) ->
+        let range = mk_fresh_range () in
+        let ea1 = mk_addr a1 range in
+        let ea2 = mk_addr a2 range in
+        let ea12 = mk_addr a12 range in
+        (* FIXME: context issue *)
+        let ctx = Context.set_unit uctx Context.empty in
+        let flowa = Flow.add T_cur a man.lattice (Flow.bottom ctx) in
+        let flowa' = Flow.add T_cur a' man.lattice (Flow.bottom ctx) in
+        Flow.get T_cur man.lattice @@ man.exec ~zone:Zone.Z_py_obj (mk_rename ea1 ea12 range) flowa,
+        Flow.get T_cur man.lattice @@ man.exec ~zone:Zone.Z_py_obj (mk_rename ea2 ea12 range) flowa'
+      ) (a, a') l in a, a', List.length l = 0
+
   let join (bigman:('a, t, 's) Framework.Core.Sig.Stacked.Lowlevel.man) uctx (a:'a) (a':'a) =
     let man = simplified_man bigman in
     let (hd, tl) = man.get a in
@@ -216,46 +254,19 @@ struct
         match tl, tl' with
         | TD.TMap.Map.Top, _ | _, TD.TMap.Map.Top -> Iter.top, a, a'
         | _ ->
-          let hd, hd', l = AD.AMap.fold2o
-              (fun k a acc -> acc)
-              (fun k a acc -> acc)
-              (fun k as1 as2 (hd, hd', acc) ->
-                 if AD.ASet.cardinal as1 <= 1 && AD.ASet.cardinal as2 <= 1 then
-                   match AD.ASet.choose as1, AD.ASet.choose as2 with
-                   | Def a1, Def a2 ->
-                     if compare_addr a1 a2 <> 0 && is_container a1 && is_container a2 then
-                       let addr_12 = {addr_group = join_agroup a1.addr_group a2.addr_group;
-                                      addr_kind = Objects.Py_list.join_akind a1.addr_kind a2.addr_kind;
-                                      addr_mode = join_amode a1.addr_mode a2.addr_mode} in
-                       AD.add k (AD.ASet.singleton (Def addr_12)) hd,
-                       AD.add k (AD.ASet.singleton (Def addr_12)) hd',
-                       (a1, a2, addr_12)::acc
-                     else (hd, hd', acc)
-                   | _ ->
-                     (hd, hd', acc)
-                 else
-                   failwith "todo"
-              ) hd hd' (hd, hd', []) in
-          let a, a' = man.set (hd, tl) a, man.set (hd', tl') a' in
-          debug "to_rename: %a@\n" (Format.pp_print_list (fun fmt (a1, a2, a12) -> Format.fprintf fmt "%a /\ %a ===> %a@\n" pp_addr a1 pp_addr a2 pp_addr a12)) l;
-          let a, a' = List.fold_left (fun (a, a') (a1, a2, a12) ->
-              let range = mk_fresh_range () in
-              let ea1 = mk_addr a1 range in
-              let ea2 = mk_addr a2 range in
-              let ea12 = mk_addr a12 range in
-              (* FIXME: context issue *)
-              let ctx = Context.set_unit uctx Context.empty in
-              let flowa = Flow.add T_cur a man.lattice (Flow.bottom ctx) in
-              let flowa' = Flow.add T_cur a' man.lattice (Flow.bottom ctx) in
-              Flow.get T_cur man.lattice @@ man.exec ~zone:Zone.Z_py_obj (mk_rename ea1 ea12 range) flowa,
-              Flow.get T_cur man.lattice @@ man.exec ~zone:Zone.Z_py_obj (mk_rename ea2 ea12 range) flowa'
-            ) (a, a') l in
           debug "OLD hd, tl = %a, %a@\n@\nOLD hd', tl' = %a, %a@\n" AD.print hd TD.print tl AD.print hd' TD.print tl';
+          let a, a' =
+            let rec aux a a' =
+              let a, a', f = unify man uctx a a' in
+              if f then a, a' else aux a a' in
+            aux a a' in
+          (* i guess it should be done recursively. Or to change in some way *)
           let (hd, tl) = man.get a and (hd', tl') = man.get a' in
           debug "hd, tl = %a, %a@\n@\nhd', tl' = %a, %a@\n" AD.print hd TD.print tl AD.print hd' TD.print tl';
           let p = create_partition hd tl
           and p' = create_partition hd' tl' in
           let ip = intersect_partitions p p' in
+          debug "intersected partitions:@[@\n%a@]@\n" pp_ip ip;
           let ip = List.filter (fun (vars, ty1, ty2) -> not (TD.Polytypeset.is_top ty1) && not (TD.Polytypeset.is_top ty2) && VarSet.cardinal vars > 1 && TD.Polytypeset.cardinal ty1 > 0 && TD.Polytypeset.cardinal ty2 > 0 && not (TD.Polytypeset.cardinal ty1 = 1 && TD.Polytypeset.equal ty1 ty2))
               ip in
           debug "interesting partitions:@[@\n%a@]@\n" pp_ip ip;
