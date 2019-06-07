@@ -129,7 +129,7 @@ struct
                       let indexerror = Eval.empty_singleton indexerror_f in
                       let flow = Flow.copy_ctx indexerror_f flow in
                       let evals = man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var var_els range) flow in
-                      Eval.join_list ~empty:(assert false) (evals :: Eval.copy_ctx evals indexerror :: [])
+                      Eval.join_list ~empty:(Eval.empty_singleton flow) (evals :: Eval.copy_ctx evals indexerror :: [])
                     )
                   ~felse:(fun flow ->
                       assume_eval (mk_py_isinstance_builtin index "slice" range) man flow
@@ -191,7 +191,7 @@ struct
 
                  let assignment = man.eval (mk_py_none range) assignment_f in
                  let indexerror = Eval.empty_singleton indexerror_f in
-                 Eval.join_list ~empty:(assert false) (assignment :: (Eval.copy_ctx assignment indexerror) ::[])
+                 Eval.join_list ~empty:(Eval.empty_singleton flow) (assignment :: (Eval.copy_ctx assignment indexerror) ::[])
                )
              ~felse:(fun flow ->
                  assume_eval (mk_py_isinstance_builtin index "slice" range) man flow
