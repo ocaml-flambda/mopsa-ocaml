@@ -824,11 +824,8 @@ struct
           | A_py_var _, A_py_class (c, mro)
           | A_py_instance _, A_py_class (c, mro) ->
             let cur = get_domain_env T_cur man flow in
-            let ptys =
-              if TMap.mem addr_obj cur then
-                TMap.find addr_obj cur
-              else
-                Polytypeset.empty in
+            let ptys = if TMap.mem addr_obj cur then TMap.find addr_obj cur
+                       else Polytypeset.empty in
             let ptys =
               if not (Polytypeset.is_empty ptys) then ptys
               else
