@@ -97,7 +97,7 @@ type ctx = {
      this is required for records defining recursive data-types
   *)
 
-  ctx_vars: (int,var*C_AST.variable) Hashtbl.t;
+  ctx_vars: (int*string,var*C_AST.variable) Hashtbl.t;
   (* cache of variables of the project *)
 
   ctx_global_preds: C_stubs_parser.Cst.predicate with_range list;
@@ -279,7 +279,6 @@ and from_project prj =
 
   (* Resolve stub aliases *)
   List.iter (fun (f, o, alias) ->
-      debug "resolving alias function %s" f.c_func_org_name;
       f.c_func_stub <- from_stub_alias ctx o alias;
     ) funcs_with_alias;
 
@@ -444,7 +443,7 @@ and from_character_kind : C_AST.character_kind -> Ast.c_character_kind = functio
 (** ============= *)
 
 and from_var ctx (v: C_AST.variable) : var =
-  try Hashtbl.find ctx.ctx_vars v.var_uid |> fst
+  try Hashtbl.find ctx.ctx_vars (v.var_uid,v.var_unique_name) |> fst
   with Not_found ->
     let v' =
       mkv
@@ -459,7 +458,7 @@ and from_var ctx (v: C_AST.variable) : var =
         (from_typ ctx v.var_type)
     in
     let v'' = patch_array_parameters v' in
-    Hashtbl.add ctx.ctx_vars v.var_uid (v'', v);
+    Hashtbl.add ctx.ctx_vars (v.var_uid,v.var_unique_name) (v'', v);
     v''
 
 (* Formal parameters of functions having array types should be
