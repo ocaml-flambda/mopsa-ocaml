@@ -184,7 +184,7 @@ let () =
 
   register_stmt_visitor (fun default stmt ->
       match skind stmt with
-      | S_program { prog_kind = C_program _ } ->
+      | S_program ({ prog_kind = C_program _ }, _) ->
         Exceptions.panic "visitor of C_program not yet implemented"
 
       | S_c_declaration(v, init,scope) ->

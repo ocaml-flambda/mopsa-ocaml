@@ -93,23 +93,12 @@ struct
     mkv name (V_c_bytes addr) (T_c_integer C_unsigned_long)
 
 
-  let mk_size addr range =
+  let mk_size addr elm range =
     let bytes = mk_bytes_var addr in
 
-    (* Get the type of the contained elements *)
-    let elem_typ =
-      match akind addr with
-      | A_stub_resource "PointerArray" -> pointer_type u8
-      | A_stub_resource "Memory" -> u8
-      | A_stub_resource "ReadOnlyString" -> u8
-      | _ -> u8
-    in
-
-    let elm_size = sizeof_type elem_typ in
-
-    if Z.equal elm_size Z.one
+    if Z.equal elm Z.one
     then mk_var bytes range
-    else mk_binop (mk_var bytes range) O_div (mk_z elm_size range) ~etyp:bytes.vtyp range
+    else mk_binop (mk_var bytes range) O_div (mk_z elm range) ~etyp:bytes.vtyp range
 
 
   (** Computation of post-conditions *)
@@ -189,23 +178,28 @@ struct
         man.eval ~zone:(Z_c_low_level,Z_c_points_to) e flow |>
         Eval.bind @@ fun pt flow ->
 
-        let base =
-          match ekind pt with
-          | E_c_points_to (P_block (base,_)) -> base
-          | _ -> assert false
+        let elm =
+          match under_type e.etyp with
+          | T_c_void -> Z.one
+          | t -> sizeof_type t
         in
 
-        match base with
-        | V var ->
-          Eval.singleton (mk_z (sizeof_type var.vtyp) exp.erange ~typ:ul) flow
+        match ekind pt with
+        | E_c_points_to (P_block (V var,_)) ->
+          Eval.singleton (mk_z (Z.div (sizeof_type var.vtyp) elm) exp.erange ~typ:ul) flow
 
-        | S str ->
-          Eval.singleton (mk_int (String.length str + 1) exp.erange ~typ:ul) flow
+        | E_c_points_to (P_block (S str,_)) ->
+          Eval.singleton (mk_z (Z.div (Z.of_int (String.length str + 1)) elm) exp.erange ~typ:ul) flow
 
-        | A addr ->
-          Eval.singleton (mk_size addr exp.erange) flow
+        | E_c_points_to (P_block (A addr,_)) ->
+          Eval.singleton (mk_size addr elm exp.erange) flow
 
-        | Z -> panic ~loc:__LOC__ "eval_base_size: addresses not supported"
+        | E_c_points_to (P_block (Z,_)) -> panic ~loc:__LOC__ "eval_base_size: addresses not supported"
+
+        | E_c_points_to P_top ->
+          Eval.singleton (mk_top ul exp.erange) flow
+
+        | _ -> panic_at exp.erange "size(%a) not supported" pp_expr pt
       )
 
 

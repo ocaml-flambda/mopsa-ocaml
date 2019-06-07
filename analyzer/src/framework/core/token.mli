@@ -53,6 +53,8 @@ sig
 
   val is_bottom : 'a lattice -> 'a t -> bool
 
+  val is_empty : 'a t -> bool
+
   val is_top : 'a lattice -> 'a t -> bool
 
   val subset : 'a lattice -> uctx -> 'a t -> 'a t -> bool

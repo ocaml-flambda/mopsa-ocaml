@@ -19,42 +19,49 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Main handler of Universal programs. *)
-
 open Mopsa
-open Framework.Core.Sig.Domain.Stateless
-open Ast
-open Zone
+open Universal.Ast
+open Stubs.Ast
 
-module Domain =
-struct
 
-  include GenStatelessDomainId(struct
-      let name = "universal.iterators.program"
-    end)
+(** Compute symbolic boundaries of a quantified offset. *)
+(* FIXME: works only for linear expressions *)
+let rec bound offset : expr * expr =
+  match ekind offset with
+  | E_constant _ -> offset, offset
 
-  let interface = {
-    iexec = { provides = [Z_u]; uses = [] };
-    ieval = { provides = []; uses = [] };
-  }
+  | E_var (v, _) -> offset, offset
 
-  let init prog man flow = flow
+  | E_stub_quantified(FORALL, _, S_interval(l, u)) -> l, u
 
-  let exec zone stmt man flow =
-    match skind stmt with
-    | S_program ({ prog_kind = P_universal{universal_main} }, _) ->
-      Some (
-        man.exec universal_main flow |>
-        Post.return
-      )
+  | E_unop (O_minus, e) ->
+    let l, u = bound e in
+    { offset with ekind = E_unop (O_minus, u)},
+    { offset with ekind = E_unop (O_minus, l)}
 
-    | _ -> None
+  | E_binop (O_plus, e1, e2) ->
+    let l1, u1 = bound e1 in
+    let l2, u2 = bound e2 in
+    { offset with ekind = E_binop (O_plus, l1, l2)},
+    { offset with ekind = E_binop (O_plus, u1, u2)}
 
-  let eval zone exp man flow = None
+  | E_binop (O_minus, e1, e2) ->
+    let l1, u1 = bound e1 in
+    let l2, u2 = bound e2 in
+    { offset with ekind = E_binop (O_minus, l1, u2)},
+    { offset with ekind = E_binop (O_minus, u1, l2)}
 
-  let ask query man flow = None
+  | E_binop (O_mult, e, ({ ekind = E_constant (C_int c) } as const))
+  | E_binop (O_mult, ({ ekind = E_constant (C_int c) } as const), e) ->
+    let l, u = bound e in
+    if Z.geq c Z.zero then
+      { offset with ekind = E_binop (O_mult, l, { const with ekind = E_constant (C_int c) })},
+      { offset with ekind = E_binop (O_mult, u, { const with ekind = E_constant (C_int c) })}
+    else
+      { offset with ekind = E_binop (O_mult, u, { const with ekind = E_constant (C_int c) })},
+      { offset with ekind = E_binop (O_mult, l, { const with ekind = E_constant (C_int c) })}
 
-end
 
-let () =
-  register_domain (module Domain)
+  | _ -> panic ~loc:__LOC__
+           "Quantified_offset.bound called on a non linear expression %a"
+           pp_expr offset

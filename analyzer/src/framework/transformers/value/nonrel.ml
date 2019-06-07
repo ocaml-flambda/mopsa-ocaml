@@ -97,6 +97,12 @@ struct
       | S_add { ekind = E_var (var, _) } ->
         add var Value.top acc
 
+      | S_rename ( {ekind = E_var (var1, _)}, {ekind = E_var (var2, _)} ) ->
+        let v = find var2 a in
+        remove var1 acc |>
+        add var2 v
+        
+        
       | S_remove { ekind = E_var (var, _) } ->
         remove var acc
 
@@ -128,7 +134,7 @@ struct
 
   (** Expressions annotated with abstract values; useful for assignment and compare. *)
   type aexpr =
-    | A_var of var * Value.t
+    | A_var of var * mode * Value.t
     | A_cst of constant * Value.t
     | A_unop of operator * typ  * aexpr * Value.t
     | A_binop of operator * typ * aexpr * Value.t * aexpr * Value.t
@@ -156,9 +162,9 @@ struct
      values for each sub-expression *)
   and eval (e:expr) (a:t) : (aexpr * Value.t) option =
     match ekind e with
-    | E_var(var, _) ->
+    | E_var(var, mode) ->
       let v = VarMap.find var a in
-      (A_var (var, v), v) |>
+      (A_var (var, mode, v), v) |>
       Option.return
 
     | E_constant(c) ->
@@ -192,10 +198,15 @@ struct
   let rec refine (ae:aexpr) (v:Value.t) (r:Value.t) (a:t) : t =
     let r' = Value.meet v r in
     match ae with
-    | A_var (var, _) ->
+    | A_var (var, mode, _) ->
       if Value.is_bottom r'
       then bottom
-      else VarMap.add var r' a
+
+      else
+      if mode = STRONG
+      then VarMap.add var r' a
+
+      else a
 
     | A_cst(_) ->
       if Value.is_bottom r'
@@ -245,10 +256,13 @@ struct
       (if Value.is_bottom w then bottom else a) |>
       Option.return
 
-    | E_var(var, _) ->
+    | E_var(var, mode) ->
       let v = find var a in
       let w = Value.filter (man a) v r in
-      (if Value.is_bottom w then bottom else add var w a) |>
+      (if Value.is_bottom w then bottom else
+       if mode = STRONG then add var w a
+       else a
+      ) |>
       Option.return
 
     (* arithmetic comparison part, handled by Value *)

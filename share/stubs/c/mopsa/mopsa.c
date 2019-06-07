@@ -19,49 +19,30 @@
 /*                                                                          */
 /****************************************************************************/
 
-#include <stddef.h>
+
 #include <limits.h>
 
-/*$
- * ensures: _argc in [1, INT_MAX - 1]; // do not go beyound INT_MAX because we will
- *                                     // allocate _argc + 1 pointers in _argv
- */
-static int _argc;
+
+/**************************/
+/* Symbolic argc and argv */
+/**************************/
 
 /*$
- * local:   char ** buf = new PointerArray;
- * ensures: size(buf) == _argc + 1; // need to allocate an additional
- *                                  // pointer for the last NULL
- * ensures: _argv == buf;
+ * ensures: return in [1, INT_MAX - 1];   // Do not go beyound INT_MAX because
+ *                                        // we will allocate argc + 1 pointers
+ *                                        // in argv
  */
-static char **_argv;
+static int _mopsa_init_symbolic_argc();
+
 
 /*$
- * local: char* str = new Memory;
- * ensures: size(str) in [1, INT_MAX]; // there is at least the NUL char at the end
- * // TODO ensures: str[size(str) - 1] == 0;
- * ensures: return == str;
+ * local:   char ** argv = new Memory;
+ * ensures: size(argv) == argc + 1;      // Need to allocate one additional
+ *                                       // pointer for the last NULL
+ * ensures: forall int i in [0, argc]:
+ *            argv[i] == NULL;           // Ugly trick! ensure that all values
+ *                                       // are set to NULL to avoid the default
+ *                                       // ⊤ value generated after the allocation
+ * ensures: return == argv;
  */
-char* _mopsa_new_valid_string();
-
-void _mopsa_init_symbolic_argc_argv() {
-  // Add program name
-  _argv[0] = _mopsa_new_valid_string();
-
-  /*
-   * The following code produces false negative
-   * when analyzed with non-relational numeric domains
-   */
-  #if 0
-  int i = 1;
-
-  // Initialize the array with valid strings
-  while(i < _argc) {
-    _argv[i] = _mopsa_new_valid_string();
-    i++;
-  }
-
-  // Add the last NULL pointer
-  _argv[_argc] = NULL;
-  #endif
-}
+static char **_mopsa_init_symbolic_argv(int argc);

@@ -133,7 +133,7 @@ let simplify_func ctx (f:func) =
          before1, (E_binary (O_logical LOGICAL_OR, e1, e2), t, r), after1
        else
          let tmp = make_temp ctx r f bool_type in
-         let tmp_var = E_variable tmp, t, r in
+         let tmp_var = E_variable tmp, bool_type, r in
          let create = S_local_declaration tmp, r in
          let cond =
            S_if (e1,
@@ -149,7 +149,7 @@ let simplify_func ctx (f:func) =
          before1, (E_binary (O_logical LOGICAL_AND, e1, e2), t, r), after1
        else
          let tmp = make_temp ctx r f bool_type in
-         let tmp_var = E_variable tmp, t, r in
+         let tmp_var = E_variable tmp, bool_type, r in
          let create = S_local_declaration tmp, r in
          let cond =
            S_if (e1,

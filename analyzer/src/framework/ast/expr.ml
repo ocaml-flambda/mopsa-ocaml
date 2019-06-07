@@ -91,7 +91,7 @@ let expr_pp_chain = TypeExt.mk_print_chain (fun fmt expr ->
     match ekind expr with
     | E_constant c -> pp_constant fmt c
     | E_var(v, STRONG) -> pp_var fmt v
-    | E_var(v, WEAK) -> Format.fprintf fmt "_w_%a" pp_var v
+    | E_var(v, WEAK) -> Format.fprintf fmt "weak(%a)" pp_var v
     | _ -> failwith "Pp: Unknown expression"
   )
 

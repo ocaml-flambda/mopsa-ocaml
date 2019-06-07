@@ -202,8 +202,8 @@ let pp_scope fmt s =
 
 (** Flat variable initialization *)
 type c_flat_init =
-  | C_flat_expr of expr * typ
-  | C_flat_none of Z.t (** Uninitialized bytes *)
+  | C_flat_expr of expr * typ       (** Init expression *)
+  | C_flat_none of Z.t * typ        (** Uninitialized bytes *)
   | C_flat_fill of expr * typ * Z.t (** Filler expression *)
 
 (** Variable initialization. *)
@@ -231,7 +231,7 @@ let () =
   register_var {
     print = (fun next fmt v ->
         match vkind v with
-        | V_cvar cvar -> Format.pp_print_string fmt cvar.cvar_orig_name
+        | V_cvar cvar -> Format.fprintf fmt "%s" cvar.cvar_orig_name
         | _ -> next fmt v
       );
 
@@ -831,7 +831,9 @@ let void = T_c_void
 let u8 = T_c_integer(C_unsigned_char)
 let s8 = T_c_integer(C_signed_char)
 let s32 = T_c_integer(C_signed_int)
+let u32 = T_c_integer(C_unsigned_int)
 let ul = T_c_integer(C_unsigned_long)
+let array_type typ size = T_c_array(typ,C_array_length_cst size)
 
 let type_of_string s = T_c_array(s8, C_array_length_cst (Z.of_int (1 + String.length s)))
 
@@ -864,6 +866,10 @@ let var_scope v =
   match v.vkind with
   | V_cvar { cvar_scope } -> cvar_scope
   | _ -> assert false
+
+let is_c_global_scope = function
+  | Variable_global | Variable_extern | Variable_file_static _ -> true
+  | Variable_func_static _ | Variable_local _ | Variable_parameter _ -> false
 
 let () =
   register_typ_compare (fun next t1 t2 ->
