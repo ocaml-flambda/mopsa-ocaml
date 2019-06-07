@@ -260,8 +260,14 @@ struct
         fields |> List.fold_left (fun acc field ->
             let lval = mk_c_member_access lval field range in
             let rval = mk_c_member_access rval field range in
-            let stmt = mk_assign lval rval range in
-            Post.bind (man.exec_sub ~zone:Z_c stmt) acc
+            if is_c_array_type field.c_field_type
+            then begin
+              warn_at range "copy of array %a not supported" pp_expr rval;
+              acc
+            end
+            else
+              let stmt = mk_assign lval rval range in
+              Post.bind (man.exec_sub ~zone:Z_c stmt) acc
           ) (Post.return flow)
 
       | C_union ->

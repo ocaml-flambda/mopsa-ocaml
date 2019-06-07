@@ -297,9 +297,12 @@ struct
       Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_float f)) |>
       with_context ctx
 
-    | E_var (v, _) ->
+    | E_var (v, STRONG) ->
       let vv, ctx = var_to_apron ctx v in
       Apron.Texpr1.Var vv, ctx
+
+    | E_var (v, WEAK) ->
+      panic "apron: weak variables not supported"
 
     | E_binop(binop, e1, e2) ->
       let binop' = binop_to_apron binop in
