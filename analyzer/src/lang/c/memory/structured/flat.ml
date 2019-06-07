@@ -84,7 +84,7 @@ struct
     match init with
     | None                 -> [C_flat_none (Z.one, typ)]
     | Some (C_init_expr e) -> [C_flat_expr (e,typ)]
-    | _ -> assert false
+    | Some init -> panic_at range "unsupported scalar initializer %a for type %a" Pp.pp_c_init init pp_typ typ;
 
   and flatten_array_init init typ range =
     let n = get_array_constant_length typ in

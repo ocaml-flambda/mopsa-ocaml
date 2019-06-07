@@ -480,6 +480,8 @@ struct
       eval_base_size base range man flow |>
       Eval.bind @@ fun size flow ->
 
+      debug "size = %a" pp_expr size;
+
       (* Convert the size and the offset to numeric *)
       man.eval ~zone:(Z_c_scalar,Z_u_num) size flow |>
       Eval.bind @@ fun size flow ->
@@ -545,13 +547,17 @@ struct
                     then []
                     else
                       let region = Region (base, Itv.of_z o u) in
-                      debug "region [%a, %a]" Z.pp_print o Z.pp_print u;
                       let flow = man.exec ~zone:Z_u_num (mk_assume (mk_binop offset O_ge (mk_z o range) range) range) flow in
-                      [Eval.singleton region flow]
+                      if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
+                      then []
+                      else [Eval.singleton region flow]
                   else
-                    let flow' = man.exec ~zone:Z_u_num (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow in
-                    let c = mk_cell base o typ in
-                    Eval.singleton (Cell c) flow' :: aux (i + 1) (Z.add o step)
+                    let flow = man.exec ~zone:Z_u_num (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow in
+                    if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
+                    then aux (i + 1) (Z.add o step)
+                    else 
+                      let c = mk_cell base o typ in
+                      Eval.singleton (Cell c) flow :: aux (i + 1) (Z.add o step)
                 in
                 let evals = aux 0 l in
                 Eval.join_list ~empty:(Eval.empty_singleton flow) evals
@@ -758,6 +764,7 @@ struct
       Eval.singleton (mk_top (under_pointer_type p.etyp) range) flow
 
     | Cell { base = S str; offset } ->
+      debug "cell str %s offset %a" str Z.pp_print offset;
       let o = Z.to_int offset in
       let chr =
         if o = String.length str

@@ -178,29 +178,28 @@ struct
         man.eval ~zone:(Z_c_low_level,Z_c_points_to) e flow |>
         Eval.bind @@ fun pt flow ->
 
-        let base =
-          match ekind pt with
-          | E_c_points_to (P_block (base,_)) -> base
-          | _ -> assert false
-        in
-
         let elm =
           match under_type e.etyp with
           | T_c_void -> Z.one
           | t -> sizeof_type t
         in
 
-        match base with
-        | V var ->
+        match ekind pt with
+        | E_c_points_to (P_block (V var,_)) ->
           Eval.singleton (mk_z (Z.div (sizeof_type var.vtyp) elm) exp.erange ~typ:ul) flow
 
-        | S str ->
+        | E_c_points_to (P_block (S str,_)) ->
           Eval.singleton (mk_z (Z.div (Z.of_int (String.length str + 1)) elm) exp.erange ~typ:ul) flow
 
-        | A addr ->
+        | E_c_points_to (P_block (A addr,_)) ->
           Eval.singleton (mk_size addr elm exp.erange) flow
 
-        | Z -> panic ~loc:__LOC__ "eval_base_size: addresses not supported"
+        | E_c_points_to (P_block (Z,_)) -> panic ~loc:__LOC__ "eval_base_size: addresses not supported"
+
+        | E_c_points_to P_top ->
+          Eval.singleton (mk_top ul exp.erange) flow
+
+        | _ -> panic_at exp.erange "size(%a) not supported" pp_expr pt
       )
 
 

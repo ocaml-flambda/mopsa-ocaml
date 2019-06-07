@@ -499,6 +499,9 @@ struct
       post_eval man @@ fun offset flow ->
       assume_quantified_zero_cases op base offset range man flow
 
+    | E_c_points_to P_top ->
+      Post.return flow
+
     | _ -> assert false
 
 
@@ -728,6 +731,8 @@ struct
       Eval.bind @@ fun offset flow ->
       eval_deref_cases base offset (under_pointer_type p.etyp) range man flow
 
+    | E_c_points_to P_top ->
+      Eval.singleton (mk_top (under_pointer_type p.etyp) range) flow
 
     | _ -> assert false
 

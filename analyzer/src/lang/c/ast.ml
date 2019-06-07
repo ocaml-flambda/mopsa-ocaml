@@ -231,7 +231,7 @@ let () =
   register_var {
     print = (fun next fmt v ->
         match vkind v with
-        | V_cvar cvar -> Format.fprintf fmt "%s" cvar.cvar_uniq_name
+        | V_cvar cvar -> Format.fprintf fmt "%s" cvar.cvar_orig_name
         | _ -> next fmt v
       );
 
