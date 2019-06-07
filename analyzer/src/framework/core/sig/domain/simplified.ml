@@ -156,14 +156,20 @@ struct
     | S_project _ | S_fold _ | S_expand _ | S_forget _
       ->
       let a = Intermediate.get_domain_env T_cur man flow in
-      let ctx = Flow.get_ctx flow in
-      D.exec stmt (Context.get_unit ctx) a |>
-      Option.lift @@ fun (a',uctx) ->
 
-      Intermediate.set_domain_env T_cur a' man flow |>
-      Flow.set_ctx (Context.set_unit uctx ctx) |>
-      Post.return |>
-      Intermediate.log_post_stmt stmt man
+      if D.is_bottom a
+      then Post.return flow |>
+           Option.return
+
+      else
+        let ctx = Flow.get_ctx flow in
+        D.exec stmt (Context.get_unit ctx) a |>
+        Option.lift @@ fun (a',uctx) ->
+
+        Intermediate.set_domain_env T_cur a' man flow |>
+        Flow.set_ctx (Context.set_unit uctx ctx) |>
+        Post.return |>
+        Intermediate.log_post_stmt stmt man
 
     | _ -> None
 
