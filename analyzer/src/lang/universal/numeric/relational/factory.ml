@@ -204,6 +204,8 @@ struct
 
 
     | S_rename ({ ekind = E_var (var1, _) }, { ekind = E_var (var2, _) }) ->
+      let a, ctx = add_missing_vars ctx a [var1] in
+      let a, ctx = forget_var var2 ctx a in
       let v1, ctx = var_to_apron ctx var1 in
       let v2, ctx = var_to_apron ctx var2 in
       (Apron.Abstract1.rename_array ApronManager.man a [| v1  |] [| v2 |], ctx) |>
@@ -230,8 +232,8 @@ struct
     | S_assign({ ekind = E_var (var, STRONG) }, e) ->
       let a, ctx = add_missing_vars ctx a (var :: (Visitor.expr_vars e)) in
       let v = mk_apron_var var in
-      let e, a, ctx, l = strongify_rhs e ctx a [] in
       begin try
+          let e, a, ctx, l = strongify_rhs e ctx a [] in
           let aenv = Apron.Abstract1.env a in
           let texp = Apron.Texpr1.of_expr aenv e in
           Apron.Abstract1.assign_texpr ApronManager.man a v texp None |>
@@ -345,6 +347,7 @@ struct
     fun query ctx abs ->
       match query with
       | Values.Intervals.Integer.Value.Q_interval e ->
+        let abs, ctx = add_missing_vars ctx abs (Visitor.expr_vars e) in
         let e, ctx = exp_to_apron ctx e in
         let env = Apron.Abstract1.env abs in
         let e = Apron.Texpr1.of_expr env e in
