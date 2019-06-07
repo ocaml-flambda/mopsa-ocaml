@@ -114,7 +114,13 @@ struct
   (** Create a scalar variable from a cell *)
   let mk_cell_var (c:cell) : var =
     let name =
-      let () = pp_cell Format.str_formatter c in
+      let () = match c.base with
+        | V { vkind = V_cvar { cvar_uid } } ->
+          Format.fprintf Format.str_formatter "%a:%d" pp_cell c cvar_uid
+
+        | _ ->
+          pp_cell Format.str_formatter c
+      in
       Format.flush_str_formatter ()
     in
     mkv name (V_c_cell c) c.typ
