@@ -256,7 +256,12 @@ let pp_addr fmt a =
   else
     fprintf fmt "@@%a:%xd:%s"
       pp_addr_kind a.addr_kind
-      (Hashtbl.hash a.addr_group)
+      (* Using Hashtbl.hash leads to collisions. Hashtbl.hash is
+         equivalent to Hashtbl.hash_param 10 100. By increasing the
+         number of meaningful nodes to encounter, collisions are less
+         likely to happen. 
+      *) 
+      (Hashtbl.hash_param 30 100 a.addr_group)
       (match a.addr_mode with WEAK -> "w" | STRONG -> "s")
 
 
