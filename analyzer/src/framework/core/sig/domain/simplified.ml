@@ -85,7 +85,7 @@ sig
   (** [widen ctx a1 a2] computes an upper bound of [a1] and [a2] that
       ensures stabilization of ascending chains. *)
 
-  val merge : uctx -> t -> t * block -> t * block -> t
+  val merge : t -> t * block -> t * block -> t
   (** [merge pre (post1, log1) (post2, log2)] synchronizes two divergent
       post-conditions [post1] and [post2] using a common pre-condition [pre].
 
@@ -101,13 +101,13 @@ sig
   (** {2 Transfer functions} *)
   (** ********************** *)
 
-  val init : program -> uctx -> t * uctx
+  val init : program -> t
   (** Initial abstract element *)
 
-  val exec : stmt -> uctx -> t -> (t * uctx) option
+  val exec : stmt -> t -> t option
   (** Computation of post-conditions *)
 
-  val ask : 'r Query.query -> uctx -> t -> 'r option
+  val ask : 'r Query.query -> t -> 'r option
   (** Handler of queries *)
 
 
@@ -126,18 +126,16 @@ struct
 
   include D
 
-  let merge ctx pre (post1, log1) (post2, log2) =
+  let merge pre (post1, log1) (post2, log2) =
     let block1 = Log.get_domain_block log1
     and block2 = Log.get_domain_block log2 in
-    D.merge ctx pre (post1, block1) (post2, block2)
+    D.merge pre (post1, block1) (post2, block2)
+
 
   let init prog man flow =
-    let ctx = Flow.get_ctx flow in
+    let a' = D.init prog in
+    Intermediate.set_domain_env T_cur a' man flow
 
-    let a', uctx = D.init prog (Context.get_unit ctx) in
-
-    Intermediate.set_domain_env T_cur a' man flow |>
-    Flow.set_ctx (Context.set_unit uctx ctx)
 
   let interface = {
     iexec = {
@@ -162,12 +160,9 @@ struct
            Option.return
 
       else
-        let ctx = Flow.get_ctx flow in
-        D.exec stmt (Context.get_unit ctx) a |>
-        Option.lift @@ fun (a',uctx) ->
-
+        D.exec stmt a |>
+        Option.lift @@ fun a' ->
         Intermediate.set_domain_env T_cur a' man flow |>
-        Flow.set_ctx (Context.set_unit uctx ctx) |>
         Post.return |>
         Intermediate.log_post_stmt stmt man
 
@@ -176,7 +171,7 @@ struct
   let eval zone exp man flow = None
 
   let ask query man flow =
-    D.ask query (Flow.get_ctx flow |> Context.get_unit) (Intermediate.get_domain_env T_cur man flow)
+    D.ask query (Intermediate.get_domain_env T_cur man flow)
 
   let refine channel man flow =
     D.refine channel (Intermediate.get_domain_env T_cur man flow) |>

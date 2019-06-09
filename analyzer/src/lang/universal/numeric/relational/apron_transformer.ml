@@ -26,7 +26,6 @@ open Mopsa
 open Rounding
 open Ast
 open Apron_manager
-open Var_binding
 
 
 module ApronTransformer(ApronManager : APRONMANAGER) =
@@ -102,7 +101,7 @@ struct
         let l = ref [] in
         let cons = Apron.Lincons1.array_get earray i in
         Apron.Lincons1.iter (fun c v ->
-            l := (c, apron_to_var ctx v) :: !l
+            l := (c, Binding.apron_to_var ctx v) :: !l
           ) cons
         ;
         (!l, Apron.Lincons1.get_cst cons, Apron.Lincons1.get_typ cons) :: (iter (i + 1))
@@ -180,7 +179,7 @@ struct
 
   let is_env_var v abs =
     let env = Apron.Abstract1.env abs in
-    Apron.Environment.mem_var env (mk_apron_var v)
+    Apron.Environment.mem_var env (Binding.mk_apron_var v)
 
   let is_env_var_apron v abs =
     let env = Apron.Abstract1.env abs in
@@ -222,13 +221,13 @@ struct
       ctx, abs, l
 
     | E_var (x, STRONG) ->
-      let xx, ctx = var_to_apron ctx x in
+      let xx, ctx = Binding.var_to_apron ctx x in
       Apron.Texpr1.Var(xx), ctx, abs, l
 
     | E_var (x, WEAK) ->
       let x' = mktmp ~typ:exp.etyp () in
-      let x_apr, ctx = var_to_apron ctx x in
-      let x_apr', ctx = var_to_apron ctx x' in
+      let x_apr, ctx = Binding.var_to_apron ctx x in
+      let x_apr', ctx = Binding.var_to_apron ctx x' in
       let abs = Apron.Abstract1.expand ApronManager.man abs x_apr [| x_apr' |] in
       (Apron.Texpr1.Var x_apr, ctx, abs, x_apr' :: l)
 

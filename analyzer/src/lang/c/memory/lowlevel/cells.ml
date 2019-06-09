@@ -75,11 +75,11 @@ struct
 
   (** Pretty printer of cells *)
   let pp_cell fmt c =
-    Format.fprintf fmt "⟨%a,%a,%a⟩%a"
+    Format.fprintf fmt "⟨%a,%a,%a⟩%s"
       pp_base c.base
       Z.pp_print c.offset
       Pp.pp_c_type_short (remove_qual c.typ)
-      (fun fmt () -> if c.primed then Format.pp_print_string fmt "'" else ()) ()
+      (if c.primed then "'" else "")
 
 
   (** Create a cell *)
@@ -115,8 +115,12 @@ struct
   let mk_cell_var (c:cell) range : expr =
     let name =
       let () = match c.base with
-        | V { vkind = V_cvar { cvar_uid } } ->
-          Format.fprintf Format.str_formatter "%a:%d" pp_cell c cvar_uid
+        | V v ->
+          Format.fprintf Format.str_formatter "⟨%s,%a,%a⟩%s"
+            v.vname
+            Z.pp_print c.offset
+            Pp.pp_c_type_short (remove_qual c.typ)
+            (if c.primed then "'" else "")
 
         | _ ->
           pp_cell Format.str_formatter c
@@ -436,7 +440,7 @@ struct
     let (a, s, s') = join man ctx (a,s) (a',s') in
     (a, s, s', true)
 
-  let merge ctx pre (a,log) (a',log') =
+  let merge pre (a,log) (a',log') =
     assert false
 
 

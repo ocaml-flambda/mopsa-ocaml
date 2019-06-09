@@ -82,7 +82,7 @@ type ('a, 't, 's) man = ('a,'t,'s) Lowlevel.man = {
   set_sub_log : log -> log -> log;
 
   (** Sub-tree merger *)
-  merge_sub : uctx -> 's -> 's * log -> 's * log -> 's;
+  merge_sub : 's -> 's * log -> 's * log -> 's;
 }
 
 
@@ -91,7 +91,7 @@ type ('a, 't, 's) man = ('a,'t,'s) Lowlevel.man = {
 *)
 type 's sman = {
   sexec: ?zone:zone -> stmt -> uctx -> 's -> 's;
-  sask: 'r. 'r query -> uctx -> 's -> 'r;
+  sask: 'r. 'r query -> 's -> 'r;
 }
 
 
@@ -155,7 +155,7 @@ sig
       unifies the sub-tree elements [s1] and [s2]. *)
 
 
-  val merge: uctx -> t -> t * log -> t * log -> t
+  val merge: t -> t * log -> t * log -> t
   (** [merge pre (post1, log1) (post2, log2)] synchronizes two divergent
       post-conditions [post1] and [post2] using a common pre-condition [pre].
 
@@ -281,10 +281,11 @@ struct
         get_sub_env T_cur man flow'
       );
 
-    sask = (fun query ctx s ->
+    sask = (fun query s ->
         (* Create a singleton flow with the given environment *)
-        let flow = Flow.singleton
-            (Context.empty |> Context.set_unit ctx)
+        let flow =
+          Flow.singleton
+            Context.empty
             T_cur
             (man.set_sub s man.lattice.top)
         in

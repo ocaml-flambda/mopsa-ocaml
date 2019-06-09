@@ -26,7 +26,6 @@ open Rounding
 open Ast
 open Apron_manager
 open Apron_transformer
-open Var_binding
 
 (** Query to retrieve relational variables *)
 
@@ -67,7 +66,8 @@ struct
 
   include ApronTransformer(ApronManager)
 
-  type t = ApronManager.t Apron.Abstract1.t
+  type t = ApronManager.t Apron.Abstract1.t * Binding.t
+
 
   include GenDomainId(struct
       type typ = t
@@ -91,19 +91,19 @@ struct
     (Apron.Abstract1.change_environment ApronManager.man abs1 env false),
     (Apron.Abstract1.change_environment ApronManager.man abs2 env false)
 
-  let add_missing_vars ctx abs lv =
-    let env = Apron.Abstract1.env abs in
+  let add_missing_vars ctx a lv =
+    let env = Apron.Abstract1.env a in
     let lv = List.sort_uniq compare lv in
-    let lv = List.filter (fun v -> not (Apron.Environment.mem_var env (mk_apron_var v))) lv in
+    let lv = List.filter (fun v -> not (Apron.Environment.mem_var env (Binding.mk_apron_var v))) lv in
 
     let int_vars, ctx =
       List.filter (fun v -> vtyp v = T_int || vtyp v = T_bool) lv |>
-      vars_to_apron ctx
+      Binding.vars_to_apron ctx
     in
 
     let float_vars, ctx =
       List.filter (function { vtyp = T_float _} -> true | _ -> false) lv |>
-      vars_to_apron ctx
+      Binding.vars_to_apron ctx
     in
 
 
@@ -111,36 +111,37 @@ struct
         (Array.of_list int_vars)
         (Array.of_list float_vars)
     in
-    Apron.Abstract1.change_environment ApronManager.man abs env' false, ctx
+    Apron.Abstract1.change_environment ApronManager.man a env' false,
+    ctx
 
 
   (** {2 Lattice operators} *)
   (** ********************* *)
 
-  let top = Apron.Abstract1.top ApronManager.man empty_env
+  let top = Apron.Abstract1.top ApronManager.man empty_env, Binding.empty
 
-  let bottom = Apron.Abstract1.bottom ApronManager.man empty_env
+  let bottom = Apron.Abstract1.bottom ApronManager.man empty_env, Binding.empty
 
-  let is_bottom abs =
+  let is_bottom (abs,_) =
     Apron.Abstract1.is_bottom ApronManager.man abs
 
-  let subset abs1 abs2 =
+  let subset (abs1,_) (abs2,_) =
     let abs1', abs2' = unify abs1 abs2 in
     Apron.Abstract1.is_leq ApronManager.man abs1' abs2'
 
-  let join abs1 abs2 =
+  let join (abs1,ctx1) (abs2,ctx2) =
     let abs1', abs2' = unify abs1 abs2 in
-    Apron.Abstract1.join ApronManager.man abs1' abs2'
+    Apron.Abstract1.join ApronManager.man abs1' abs2', Binding.concat ctx1 ctx2
 
-  let meet abs1 abs2 =
+  let meet (abs1,ctx1) (abs2,ctx2) =
     let abs1', abs2' = unify abs1 abs2 in
-    Apron.Abstract1.meet ApronManager.man abs1' abs2'
+    Apron.Abstract1.meet ApronManager.man abs1' abs2', Binding.concat ctx1 ctx2
 
-  let widen ctx abs1 abs2 =
+  let widen ctx (abs1,ctx1) (abs2,ctx2) =
     let abs1', abs2' = unify abs1 abs2 in
-    Apron.Abstract1.widening ApronManager.man abs1' abs2'
+    Apron.Abstract1.widening ApronManager.man abs1' abs2', Binding.concat ctx1 ctx2
 
-  let print fmt abs =
+  let print fmt (abs,_) =
     Format.fprintf fmt "%s:@,  @[%a@]@\n"
       ApronManager.name
       Apron.Abstract1.print abs
@@ -151,20 +152,19 @@ struct
 
   let zones = [Zone.Z_u_num]
 
-  let init prog ctx =
-    top, init_ctx ctx
+  let init prog = top
 
   let forget_var v ctx a =
     let env = Apron.Abstract1.env a in
     let vars, ctx =
       List.filter (fun v -> is_env_var v a) [v] |>
-      vars_to_apron ctx
+      Binding.vars_to_apron ctx
     in
     let env = Apron.Environment.remove env (Array.of_list vars) in
     (Apron.Abstract1.change_environment ApronManager.man a env true, ctx)
 
 
-  let merge ctx pre (a1,log1) (a2,log2) =
+  let merge (pre,ctx) ((a1,ctx1),log1) ((a2,ctx2),log2) =
     debug "@[<v>merging:@, pre-condition: %a@, post-condition #1: %a@, log #1: %a@, post-condition #2: %a@, log #2: %a@]"
       Apron.Abstract1.print pre
       Apron.Abstract1.print a1
@@ -172,6 +172,7 @@ struct
       Apron.Abstract1.print a2
       pp_block log2
     ;
+    let ctx = Binding.concat ctx1 ctx2 in
     let patch stmt a acc =
       match skind stmt with
       | S_forget { ekind = E_var (var, _) }
@@ -188,10 +189,10 @@ struct
     in
     let a1' = List.fold_left (fun acc stmt -> patch stmt a1 acc) a2 log1 in
     let a2' = List.fold_left (fun acc stmt -> patch stmt a2 acc) a1 log2 in
-    meet a1' a2'
+    meet (a1',ctx) (a2',ctx)
 
 
-  let rec exec stmt ctx a =
+  let rec exec stmt (a,ctx) =
     match skind stmt with
     | S_add { ekind = E_var (var, _) } ->
       add_missing_vars ctx a [var] |>
@@ -206,8 +207,8 @@ struct
     | S_rename ({ ekind = E_var (var1, _) }, { ekind = E_var (var2, _) }) ->
       let a, ctx = add_missing_vars ctx a [var1] in
       let a, ctx = forget_var var2 ctx a in
-      let v1, ctx = var_to_apron ctx var1 in
-      let v2, ctx = var_to_apron ctx var2 in
+      let v1, ctx = Binding.var_to_apron ctx var1 in
+      let v2, ctx = Binding.var_to_apron ctx var2 in
       (Apron.Abstract1.rename_array ApronManager.man a [| v1  |] [| v2 |], ctx) |>
       Option.return
 
@@ -220,7 +221,7 @@ struct
         ) vars
       in
       let env = Apron.Abstract1.env a in
-      let vars, ctx = vars_to_apron ctx vars in
+      let vars, ctx = Binding.vars_to_apron ctx vars in
       let old_vars1, old_vars2 = Apron.Environment.vars env in
       let old_vars = Array.to_list old_vars1 @ Array.to_list old_vars2 in
       let to_remove = List.filter (fun v -> not (List.mem v vars)) old_vars in
@@ -231,7 +232,7 @@ struct
 
     | S_assign({ ekind = E_var (var, STRONG) }, e) ->
       let a, ctx = add_missing_vars ctx a (var :: (Visitor.expr_vars e)) in
-      let v = mk_apron_var var in
+      let v = Binding.mk_apron_var var in
       begin try
           let e, ctx, a, l = exp_to_apron e ctx a [] in
           let aenv = Apron.Abstract1.env a in
@@ -241,14 +242,14 @@ struct
           with_context ctx |>
           Option.return
         with UnsupportedExpression ->
-          exec (mk_remove_var var stmt.srange) ctx a
+          exec (mk_remove_var var stmt.srange) (a,ctx)
       end
 
     | S_assign({ ekind = E_var (var, WEAK) } as lval, e) ->
       let lval' = { lval with ekind = E_var(var, STRONG) } in
-      exec {stmt with skind = S_assign(lval', e)} ctx a |>
-      Option.lift @@ fun (a',ctx) ->
-      join a a', ctx
+      exec {stmt with skind = S_assign(lval', e)} (a,ctx) |>
+      Option.lift @@ fun (a',ctx') ->
+      join (a,ctx) (a', ctx')
 
     | S_fold( {ekind = E_var (v, _)}, vl)
       when List.for_all (function { ekind = E_var _ } -> true | _ -> false) vl ->
@@ -261,12 +262,12 @@ struct
         match vl with
         | [] -> Exceptions.panic "Can not fold list of size 0"
         | p::q ->
-          let vars, ctx = vars_to_apron ctx vl in
+          let vars, ctx = Binding.vars_to_apron ctx vl in
           let abs = Apron.Abstract1.fold ApronManager.man a
               (Array.of_list vars)
           in
-          let pp, ctx = var_to_apron ctx p in
-          let vv, ctx = var_to_apron ctx v in
+          let pp, ctx = Binding.var_to_apron ctx p in
+          let vv, ctx = Binding.var_to_apron ctx v in
           Apron.Abstract1.rename_array ApronManager.man abs
             [| pp |] [| vv |] |>
           with_context ctx |>
@@ -281,8 +282,8 @@ struct
           | _ -> assert false
         ) vl
       in
-      let v, ctx = var_to_apron ctx v in
-      let vl, ctx = vars_to_apron ctx vl in
+      let v, ctx = Binding.var_to_apron ctx v in
+      let vl, ctx = Binding.vars_to_apron ctx vl in
       let abs = Apron.Abstract1.expand ApronManager.man a
           v (Array.of_list vl) in
       let env = Apron.Environment.remove (Apron.Abstract1.env abs) [| v |] in
@@ -344,8 +345,8 @@ struct
     | _ -> None
 
 
-  let ask : type r. r query -> Context.uctx -> t -> r option =
-    fun query ctx abs ->
+  let ask : type r. r query -> t -> r option =
+    fun query (abs,ctx) ->
       match query with
       | Values.Intervals.Integer.Value.Q_interval e ->
         let abs, ctx = add_missing_vars ctx abs (Visitor.expr_vars e) in

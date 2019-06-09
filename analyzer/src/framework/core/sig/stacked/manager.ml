@@ -71,7 +71,7 @@ type ('a, 't, 's) man = {
   set_sub_log : log -> log -> log;
 
   (** Sub-tree merger *)
-  merge_sub : uctx -> 's -> 's * log -> 's * log -> 's;
+  merge_sub : 's -> 's * log -> 's * log -> 's;
 }
 
 

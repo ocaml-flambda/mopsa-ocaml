@@ -175,7 +175,7 @@ struct
   let widen man ctx (a,s) (a',s') =
     Map.widen ctx a a', s, s', true
 
-  let merge ctx pre (a,log) (a',log') =
+  let merge pre (a,log) (a',log') =
     let block = Log.get_domain_block log in
     let block' = Log.get_domain_block log' in
 
@@ -202,7 +202,7 @@ struct
     let a', block = patch_block block a a' in
     let a, block' = patch_block block' a' a in
 
-    Map.merge ctx pre (a,block) (a',block')
+    Map.merge pre (a,block) (a',block')
 
 
   let print fmt a =
@@ -276,7 +276,7 @@ struct
   (** Create the offset variable of a pointer *)
   let mk_offset_var (p:var) : var =
     let name =
-      let () = pp_offset Format.str_formatter p in
+      let () = Format.fprintf Format.str_formatter "offset(%s)" p.vname in
       Format.flush_str_formatter ()
     in
     mkv name (V_c_ptr_offset p) T_int

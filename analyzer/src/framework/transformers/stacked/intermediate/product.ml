@@ -410,7 +410,7 @@ struct
     in
     fold_apply_ext2 { f } Spec.pool (a1,s1) (a2,s2) true
 
-  let merge ctx pre (a1,log1) (a2,log2) =
+  let merge pre (a1,log1) (a2,log2) =
     Exceptions.panic ~loc:__LOC__ "merge not implemented"
 
 
@@ -507,7 +507,6 @@ struct
                  debug "slog' = @[%a@]" Log.print slog';
 
                  let merged = man.merge_sub
-                     (Context.get_unit ctx)
                      pre
                      (man.get_sub a, slog)
                      (man.get_sub a', slog')

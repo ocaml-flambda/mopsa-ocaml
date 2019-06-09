@@ -141,9 +141,9 @@ struct
       (a1,a2)
 
 
-  let merge ctx (pre1,pre2) ((a1,a2), log) ((a1',a2'), log') =
-    S.merge ctx pre1 (a1, Log.first log) (a1', Log.first log'),
-    D.merge ctx pre2 (a2, Log.second log) (a2', Log.second log')
+  let merge (pre1,pre2) ((a1,a2), log) ((a1',a2'), log') =
+    S.merge pre1 (a1, Log.first log) (a1', Log.first log'),
+    D.merge pre2 (a2, Log.second log) (a2', Log.second log')
 
 
   (**************************************************************************)

@@ -107,7 +107,7 @@ struct
      *   debug "aa=%a@\n" Pool.print aa;
      *   aa, s, s', true *)
 
-  let merge ctx pre (a,log) (a',log') =
+  let merge pre (a,log) (a',log') =
     assert false
 
   (** Zoning definition *)
