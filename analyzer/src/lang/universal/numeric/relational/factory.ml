@@ -233,7 +233,7 @@ struct
       let a, ctx = add_missing_vars ctx a (var :: (Visitor.expr_vars e)) in
       let v = mk_apron_var var in
       begin try
-          let e, a, ctx, l = strongify_rhs e ctx a [] in
+          let e, ctx, a, l = exp_to_apron e ctx a [] in
           let aenv = Apron.Abstract1.env a in
           let texp = Apron.Texpr1.of_expr aenv e in
           Apron.Abstract1.assign_texpr ApronManager.man a v texp None |>
@@ -304,7 +304,7 @@ struct
         in
 
         try
-          let dnf, ctx = bexp_to_apron ctx e in
+          let dnf, ctx, a, l = bexp_to_apron e ctx a [] in
           Dnf.apply_list
             (fun (op,e1,typ1,e2,typ2) ->
                let typ =
@@ -335,6 +335,7 @@ struct
                Apron.Tcons1.make diff_texpr op
             )
             join_list meet_list dnf |>
+          remove_tmp l |>
           with_context ctx |>
           Option.return
         with UnsupportedExpression -> Option.return (a,ctx)
@@ -348,7 +349,7 @@ struct
       match query with
       | Values.Intervals.Integer.Value.Q_interval e ->
         let abs, ctx = add_missing_vars ctx abs (Visitor.expr_vars e) in
-        let e, ctx = exp_to_apron ctx e in
+        let e, ctx, abs, _ = exp_to_apron e ctx abs [] in
         let env = Apron.Abstract1.env abs in
         let e = Apron.Texpr1.of_expr env e in
         Apron.Abstract1.bound_texpr ApronManager.man abs e |>
