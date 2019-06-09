@@ -19,54 +19,37 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Flow-insensitive context to save bindings between MOPSA variables and
-    Apron variables *)
+(** Bindings between Mopsa variables and Apron variables *)
 
 open Mopsa
 
 
-module VarEquiv = Equiv.Make(Var)(Apron.Var)
+module Equiv = Equiv.Make(Var)(Apron.Var)
 
-let vars_ctx_key =
-  let module C = Context.GenUnitKey(
-    struct
-      type t = VarEquiv.t
-      let print fmt m =
-        Format.fprintf fmt "Apron vars: @[%a@]" (VarEquiv.print ?pp_sep:None) m
-    end
-    )
-  in
-  C.key
+type t = Equiv.t
 
-
-let get_ctx ctx =
-  try Context.ufind vars_ctx_key ctx
-  with _ -> VarEquiv.empty
-
-let set_ctx bindings ctx =
-  Context.uadd vars_ctx_key bindings ctx
-
-let init_ctx ctx =
-  set_ctx VarEquiv.empty ctx
+let empty : t = Equiv.empty
 
 let mk_apron_var v =
   Apron.Var.of_string v.vname
 
 
-let var_to_apron ctx (v:var) =
-  let bindings = get_ctx ctx in
-  try VarEquiv.find_l v bindings, ctx
+let var_to_apron (bindings:t) (v:var) : Apron.Var.t * t =
+  try Equiv.find_l v bindings, bindings
   with Not_found ->
     let vv = mk_apron_var v in
-    vv, set_ctx (VarEquiv.add (v,vv) bindings) ctx
+    vv, Equiv.add (v,vv) bindings
 
-let vars_to_apron ctx (l:var list) =
-  List.fold_left (fun (accv,ctx) v ->
-      let vv, ctx = var_to_apron ctx v in
-      (vv::accv),ctx
-    ) ([],ctx) l
+let vars_to_apron  bindings (l:var list) =
+  List.fold_left (fun (accv,accb) v ->
+      let vv, accb = var_to_apron accb v in
+      (vv::accv),accb
+    ) ([],bindings) l
 
-let apron_to_var ctx v =
-  let bindings = get_ctx ctx in
-  try VarEquiv.find_r v bindings
-  with Not_found -> panic "Apron variable %s not bound in context" (Apron.Var.to_string v)
+let apron_to_var bindings v =
+  try Equiv.find_r v bindings
+  with Not_found -> panic "Apron variable %s not bound" (Apron.Var.to_string v)
+
+
+let concat b1 b2 = Equiv.concat b1 b2
+    

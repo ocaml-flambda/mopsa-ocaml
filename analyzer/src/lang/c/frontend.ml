@@ -447,7 +447,7 @@ and from_var ctx (v: C_AST.variable) : var =
   with Not_found ->
     let v' =
       mkv
-        v.var_unique_name
+        (v.var_org_name ^ ":" ^ (string_of_int v.var_uid))
         (V_cvar {
             cvar_orig_name = v.var_org_name;
             cvar_uniq_name = v.var_unique_name;

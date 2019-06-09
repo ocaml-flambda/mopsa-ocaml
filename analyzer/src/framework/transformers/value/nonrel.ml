@@ -82,7 +82,7 @@ struct
 
   let debug fmt = Debug.debug ~channel:name fmt
 
-  let merge ctx pre (a1, log1) (a2, log2) =
+  let merge pre (a1, log1) (a2, log2) =
     debug "@[<v>merging:@, pre-condition: %a@, post-condition #1: %a@, log #1: %a@, post-condition #2: %a@, log #2: %a@]"
       VarMap.print pre
       VarMap.print a1
@@ -285,7 +285,7 @@ struct
   (** {2 Transfer functions} *)
   (** ********************** *)
 
-  let init prog ctx = empty, ctx
+  let init prog = empty
 
   let zones = Value.zones
 
@@ -354,11 +354,8 @@ struct
     | _ -> None
 
 
-  let exec stmt ctx map =
-    exec stmt map |> Option.lift @@ fun a' -> (a',ctx)
 
-
-  let ask query ctx map =
+  let ask query map =
     Value.ask (man map) query
 
 

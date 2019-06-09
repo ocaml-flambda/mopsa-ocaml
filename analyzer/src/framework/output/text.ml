@@ -38,13 +38,8 @@ let print out fmt =
       fprintf formatter "%s" str
     ) fmt
 
-let pp_state fmt state =
-  pp_print_list
-    ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
-    (fun fmt (var,env) -> fprintf fmt "%a → %s" Ast.Var.pp_var var env)
-    fmt state
 
-let report ?(flow=None) man alarms states time files out =
+let report ?(flow=None) man alarms time files out =
   print out "%a@." (Debug.color_str "green") "Analysis terminated successfully";
   let () = match flow with
     | None -> ()
@@ -63,18 +58,6 @@ let report ?(flow=None) man alarms states time files out =
            ~pp_sep:(fun fmt () -> fprintf fmt "@\n@\n")
            Core.Alarm.pp_alarm
         ) alarms
-  in
-  let () =
-    match states with
-    | [] -> ()
-    | _ ->
-      print out "reachable states:@.";
-      List.iter (fun (range, (pre,post)) ->
-          print out "%a:@\n  pre:@\n    @[%a@]@\n  post:@\n    @[%a@]@."
-            Location.pp_range range
-            pp_state pre
-            pp_state post
-      ) states
   in
   ()
 

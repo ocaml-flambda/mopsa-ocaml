@@ -52,7 +52,7 @@ lang.universal.heap = policies recency
 lang.universal.numeric = rounding values relational reductions
 lang.universal.numeric.values = intervals congruences
 lang.universal.numeric.values.intervals = integer float
-lang.universal.numeric.relational = apron_manager var_binding apron_transformer factory octagon polyhedra
+lang.universal.numeric.relational = apron_manager binding apron_transformer factory octagon polyhedra
 lang.universal.numeric.reductions = intervals_congruences intervals
 
 lang.repl = frontend

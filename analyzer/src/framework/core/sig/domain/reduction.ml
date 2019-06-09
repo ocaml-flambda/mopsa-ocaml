@@ -23,7 +23,6 @@
 
 open Ast.Var
 open Ast.Stmt
-open Context
 open Id
 open Query
 open Channel
@@ -36,7 +35,7 @@ type 'a man = {
   set : 't. 't domain -> 't -> 'a -> 'a;
   get_value : 't. 't value -> var -> 'a -> 't;
   set_value : 't. 't value -> var -> 't -> 'a -> 'a;
-  ask : 'r. 'r query -> uctx -> 'a -> 'r;
+  ask : 'r. 'r query -> 'a -> 'r;
   refine : channel -> 'a -> 'a;
 }
 
@@ -46,7 +45,7 @@ type 'a man = {
 module type REDUCTION =
 sig
   val name   : string
-  val reduce : stmt -> 'a man -> uctx -> 'a -> 'a -> 'a
+  val reduce : stmt -> 'a man -> 'a -> 'a -> 'a
 end
 
 

@@ -19,27 +19,13 @@
 /*                                                                          */
 /****************************************************************************/
 
+
 /*
- * Entry point of the libc
+ * Stubs for compiler builtins
  */
 
-#include "errno.c"
-#include "assert.c"
-#include "stdio.c"
-#include "stdio_ext.c"
-#include "stdlib.c"
-#include "unistd.c"
-#include "string.c"
-#include "getopt.c"
-#include "locale.c"
-#include "libintl.c"
-#include "utmp.c"
-#include "utmpx.c"
-#include "signal.c"
-#include "error.c"
-#include "builtins.c"
 
-/* #include "inttypes.c" */
-/* #include "fcntl.c" */
-/* #include "arpa/inet.c" */
-/* #include "netinet/in.c" */
+/*$
+ * requires: 1 == 0;
+ */
+void __builtin_unreachable(void);

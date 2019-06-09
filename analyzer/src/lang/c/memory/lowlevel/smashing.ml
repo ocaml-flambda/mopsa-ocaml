@@ -96,7 +96,16 @@ struct
   (** Create a scalar variable from a smash *)
   let mk_smash_var (s:smash) : var =
     let name =
-      let () = pp_smash Format.str_formatter s in
+      let () = match s.base with
+        | V v ->
+          Format.fprintf Format.str_formatter "[%s:*:%a]%s"
+            v.vname
+            Pp.pp_c_type_short (remove_qual s.typ)
+            (if s.primed then "'" else "")
+
+        | _ ->
+          pp_smash Format.str_formatter s
+      in
       Format.flush_str_formatter ()
     in
     mkv name (V_c_smash s) s.typ
@@ -263,7 +272,7 @@ struct
     (a, s, s', true)
 
 
-  let merge ctx pre (a,log) (a',log') =
+  let merge pre (a,log) (a',log') =
     assert false
 
 

@@ -26,7 +26,6 @@ open Mopsa
 open Rounding
 open Ast
 open Apron_manager
-open Var_binding
 
 
 module ApronTransformer(ApronManager : APRONMANAGER) =
@@ -102,7 +101,7 @@ struct
         let l = ref [] in
         let cons = Apron.Lincons1.array_get earray i in
         Apron.Lincons1.iter (fun c v ->
-            l := (c, apron_to_var ctx v) :: !l
+            l := (c, Binding.apron_to_var ctx v) :: !l
           ) cons
         ;
         (!l, Apron.Lincons1.get_cst cons, Apron.Lincons1.get_typ cons) :: (iter (i + 1))
@@ -178,84 +177,9 @@ struct
     | T_float F_REAL -> Apron.Texpr1.Real
     | t -> panic ~loc:__LOC__ "typ_to_apron: unsupported type %a" pp_typ t
 
-  let rec strongify_rhs exp ctx abs l =
-    match ekind exp with
-    | E_constant(C_int_interval (a,b)) ->
-      Apron.Texpr1.Cst(
-        Apron.Coeff.i_of_scalar
-          (Apron.Scalar.of_float @@ Z.to_float a)
-          (Apron.Scalar.of_float @@ Z.to_float b)
-      ), abs, ctx, l
-
-    | E_constant(C_float_interval (a,b)) ->
-      Apron.Texpr1.Cst(
-        Apron.Coeff.i_of_scalar
-          (Apron.Scalar.of_float a)
-          (Apron.Scalar.of_float b)
-      ), abs, ctx, l
-
-    | E_constant(C_int n) ->
-      Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_float @@ Z.to_float n)),
-      abs, ctx, l
-
-    | E_constant(C_float f) ->
-      Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_float f)),
-      abs, ctx, l
-
-    | E_var (x, STRONG) ->
-      let xx, ctx = var_to_apron ctx x in
-      Apron.Texpr1.Var(xx), abs, ctx, l
-
-    | E_var (x, WEAK) ->
-      let x' = mktmp ~typ:exp.etyp () in
-      let x_apr, ctx = var_to_apron ctx x in
-      let x_apr', ctx = var_to_apron ctx x' in
-      let abs = Apron.Abstract1.expand ApronManager.man abs x_apr [| x_apr' |] in
-      (Apron.Texpr1.Var x_apr, abs, ctx, x_apr' :: l)
-
-    | E_binop(binop, e1, e2) ->
-      let binop' = binop_to_apron binop in
-      let e1', abs, ctx, l = strongify_rhs e1 ctx abs l in
-      let e2', abs, ctx, l = strongify_rhs e2 ctx abs l in
-      let typ' = typ_to_apron exp.etyp in
-      Apron.Texpr1.Binop(binop', e1', e2', typ', !opt_float_rounding), abs, ctx, l
-
-    | E_unop (O_plus, e) ->
-      strongify_rhs e ctx abs l
-
-    | E_unop(O_cast, e) ->
-      let e', abs, ctx, l = strongify_rhs e ctx abs l in
-      let typ' = typ_to_apron e.etyp in
-      Apron.Texpr1.Unop(Apron.Texpr1.Cast, e', typ', !opt_float_rounding), abs, ctx, l
-
-    | E_unop(O_minus, e) ->
-      let e', abs, ctx, l = strongify_rhs e ctx abs l in
-      let typ' = typ_to_apron e.etyp in
-      Apron.Texpr1.Unop(Apron.Texpr1.Neg, e', typ', !opt_float_rounding), abs, ctx, l
-
-    | E_unop(O_sqrt, e) ->
-      let e', abs, ctx, l = strongify_rhs e ctx abs l in
-      let typ' = typ_to_apron exp.etyp in
-      Apron.Texpr1.Unop(Apron.Texpr1.Sqrt, e', typ', !opt_float_rounding), abs, ctx, l
-
-    | E_unop(O_wrap(g, d), e) ->
-      let r = erange e in
-      mk_binop ~etyp:T_int
-        (mk_z g r) O_plus (mk_binop ~etyp:T_int
-                             (mk_binop e O_minus (mk_z g r) r ~etyp:T_int)
-                             O_mod
-                             (mk_z (Z.(d-g+one)) r)
-                             r
-                          ) r
-      |> fun x -> strongify_rhs x ctx abs l
-
-    | _ ->
-      Exceptions.warn "[strongify rhs] : failed to transform %a of type %a" pp_expr exp pp_typ (etyp exp);
-      raise UnsupportedExpression
-
   let is_env_var v abs =
     let env = Apron.Abstract1.env abs in
-    Apron.Environment.mem_var env (mk_apron_var v)
+    Apron.Environment.mem_var env (Binding.mk_apron_var v)
 
   let is_env_var_apron v abs =
     let env = Apron.Abstract1.env abs in
@@ -269,123 +193,136 @@ struct
     let env = Apron.Environment.remove env (Array.of_list vars) in
     Apron.Abstract1.change_environment ApronManager.man abs env true
 
-  let rec exp_to_apron ctx exp =
+
+
+
+  let rec exp_to_apron exp ctx abs l =
     match ekind exp with
     | E_constant(C_int_interval (a,b)) ->
       Apron.Texpr1.Cst(
         Apron.Coeff.i_of_scalar
           (Apron.Scalar.of_float @@ Z.to_float a)
           (Apron.Scalar.of_float @@ Z.to_float b)
-      )
-      |>
-      with_context ctx
+      ), ctx, abs, l
 
     | E_constant(C_float_interval (a,b)) ->
       Apron.Texpr1.Cst(
         Apron.Coeff.i_of_scalar
           (Apron.Scalar.of_float a)
           (Apron.Scalar.of_float b)
-      )
-      |>
-      with_context ctx
+      ), ctx, abs, l
 
     | E_constant(C_int n) ->
-      Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_float @@ Z.to_float n)) |>
-      with_context ctx
+      Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_float @@ Z.to_float n)),
+      ctx, abs, l
 
     | E_constant(C_float f) ->
-      Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_float f)) |>
-      with_context ctx
+      Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_float f)),
+      ctx, abs, l
 
-    | E_var (v, _) ->
-      let vv, ctx = var_to_apron ctx v in
-      Apron.Texpr1.Var vv, ctx
+    | E_var (x, STRONG) ->
+      let xx, ctx = Binding.var_to_apron ctx x in
+      Apron.Texpr1.Var(xx), ctx, abs, l
+
+    | E_var (x, WEAK) ->
+      let x' = mktmp ~typ:exp.etyp () in
+      let x_apr, ctx = Binding.var_to_apron ctx x in
+      let x_apr', ctx = Binding.var_to_apron ctx x' in
+      let abs = Apron.Abstract1.expand ApronManager.man abs x_apr [| x_apr' |] in
+      (Apron.Texpr1.Var x_apr, ctx, abs, x_apr' :: l)
 
     | E_binop(binop, e1, e2) ->
       let binop' = binop_to_apron binop in
-      let e1', ctx = exp_to_apron ctx e1 in
-      let e2', ctx = exp_to_apron ctx e2 in
+      let e1', ctx, abs, l = exp_to_apron e1 ctx abs l in
+      let e2', ctx, abs, l = exp_to_apron e2 ctx abs l in
       let typ' = typ_to_apron exp.etyp in
-      Apron.Texpr1.Binop(binop', e1', e2', typ', !opt_float_rounding), ctx
+      Apron.Texpr1.Binop(binop', e1', e2', typ', !opt_float_rounding), ctx, abs, l
 
-    | E_unop(O_minus , e) ->
-      let e', ctx = exp_to_apron ctx e in
+    | E_unop (O_plus, e) ->
+      exp_to_apron e ctx abs l
+
+    | E_unop(O_cast, e) ->
+      let e', ctx, abs, l = exp_to_apron e ctx abs l in
       let typ' = typ_to_apron e.etyp in
-      Apron.Texpr1.Unop(Apron.Texpr1.Neg, e', typ', !opt_float_rounding), ctx
+      Apron.Texpr1.Unop(Apron.Texpr1.Cast, e', typ', !opt_float_rounding), ctx, abs, l
+
+    | E_unop(O_minus, e) ->
+      let e', ctx, abs, l = exp_to_apron e ctx abs l in
+      let typ' = typ_to_apron e.etyp in
+      Apron.Texpr1.Unop(Apron.Texpr1.Neg, e', typ', !opt_float_rounding), ctx, abs, l
 
     | E_unop(O_sqrt, e) ->
-      let e', ctx = exp_to_apron ctx e in
+      let e', ctx, abs, l = exp_to_apron e ctx abs l in
       let typ' = typ_to_apron exp.etyp in
-      Apron.Texpr1.Unop(Apron.Texpr1.Sqrt, e', typ', !opt_float_rounding), ctx
+      Apron.Texpr1.Unop(Apron.Texpr1.Sqrt, e', typ', !opt_float_rounding), ctx, abs, l
 
     | E_unop(O_wrap(g, d), e) ->
       let r = erange e in
       mk_binop ~etyp:T_int
-        (mk_z g r)
-        O_plus
-        (mk_binop ~etyp:T_int
-           (mk_binop e O_minus (mk_z g r) r ~etyp:T_int)
-           O_mod
-           (mk_z (Z.(d-g+one)) r)
-           r
-        ) r
-      |> exp_to_apron ctx
+        (mk_z g r) O_plus (mk_binop ~etyp:T_int
+                             (mk_binop e O_minus (mk_z g r) r ~etyp:T_int)
+                             O_mod
+                             (mk_z (Z.(d-g+one)) r)
+                             r
+                          ) r
+      |> fun x -> exp_to_apron x ctx abs l
 
     | _ ->
-      Exceptions.warn "[exp_to_apron] : failed to transform %a of type %a" pp_expr exp pp_typ (etyp exp);
+      Exceptions.warn "exp_to_apron: failed to transform %a of type %a" pp_expr exp pp_typ (etyp exp);
       raise UnsupportedExpression
 
 
-  and bexp_to_apron ctx exp =
+  
+  and bexp_to_apron exp ctx abs l =
     match ekind exp with
     | E_constant(C_int _) ->
-      bexp_to_apron ctx (mk_binop exp O_ne (mk_zero exp.erange) exp.erange)
+      bexp_to_apron (mk_binop exp O_ne (mk_zero exp.erange) exp.erange) ctx abs l
 
     | E_binop(O_gt, e0 , e1) ->
-      let e0', ctx = exp_to_apron ctx e0 in
-      let e1', ctx = exp_to_apron ctx e1 in
-      Dnf.singleton (Apron.Tcons1.SUP, e0', e0.etyp, e1', e1.etyp), ctx
+      let e0', ctx, abs, l = exp_to_apron e0 ctx abs l in
+      let e1', ctx, abs, l = exp_to_apron e1 ctx abs l in
+      Dnf.singleton (Apron.Tcons1.SUP, e0', e0.etyp, e1', e1.etyp), ctx, abs, l
 
     | E_binop(O_ge, e0 , e1) ->
-      let e0', ctx = exp_to_apron ctx e0 in
-      let e1', ctx = exp_to_apron ctx e1 in
-      Dnf.singleton (Apron.Tcons1.SUPEQ, e0', e0.etyp, e1', e1.etyp), ctx
+      let e0', ctx, abs, l = exp_to_apron e0 ctx abs l in
+      let e1', ctx, abs, l = exp_to_apron e1 ctx abs l in
+      Dnf.singleton (Apron.Tcons1.SUPEQ, e0', e0.etyp, e1', e1.etyp), ctx, abs, l
 
     | E_binop(O_lt, e0 , e1) ->
-      let e0', ctx = exp_to_apron ctx e0 in
-      let e1', ctx = exp_to_apron ctx e1 in
-      Dnf.singleton (Apron.Tcons1.SUP, e1', e1.etyp, e0', e0.etyp), ctx
+      let e0', ctx, abs, l = exp_to_apron e0 ctx abs l in
+      let e1', ctx, abs, l = exp_to_apron e1 ctx abs l in
+      Dnf.singleton (Apron.Tcons1.SUP, e1', e1.etyp, e0', e0.etyp), ctx, abs, l
 
     | E_binop(O_le, e0 , e1) ->
-      let e0', ctx = exp_to_apron ctx e0 in
-      let e1', ctx = exp_to_apron ctx e1 in
-      Dnf.singleton (Apron.Tcons1.SUPEQ, e1', e1.etyp, e0', e0.etyp), ctx
+      let e0', ctx, abs, l = exp_to_apron e0 ctx abs l in
+      let e1', ctx, abs, l = exp_to_apron e1 ctx abs l in
+      Dnf.singleton (Apron.Tcons1.SUPEQ, e1', e1.etyp, e0', e0.etyp), ctx, abs, l
 
     | E_binop(O_eq, e0 , e1) ->
-      let e0', ctx = exp_to_apron ctx e0 in
-      let e1', ctx = exp_to_apron ctx e1 in
-      Dnf.singleton (Apron.Tcons1.EQ, e0', e0.etyp, e1', e1.etyp), ctx
+      let e0', ctx, abs, l = exp_to_apron e0 ctx abs l in
+      let e1', ctx, abs, l = exp_to_apron e1 ctx abs l in
+      Dnf.singleton (Apron.Tcons1.EQ, e0', e0.etyp, e1', e1.etyp), ctx, abs, l
 
     | E_binop(O_ne, e0, e1) ->
-      let e0', ctx = exp_to_apron ctx e0 in
-      let e1', ctx = exp_to_apron ctx e1 in
+      let e0', ctx, abs, l = exp_to_apron e0 ctx abs l in
+      let e1', ctx, abs, l = exp_to_apron e1 ctx abs l in
       Dnf.mk_or
         (Dnf.singleton (Apron.Tcons1.SUP, e0', e0.etyp, e1', e1.etyp))
         (Dnf.singleton (Apron.Tcons1.SUP, e1', e1.etyp, e0', e0.etyp)),
-      ctx
+      ctx, abs, l
 
     | E_binop(O_log_or, e1, e2) ->
-      let e1', ctx = bexp_to_apron ctx e1 in
-      let e2', ctx = bexp_to_apron ctx e2 in
-      Dnf.mk_or e1' e2', ctx
+      let e1', ctx, abs, l = bexp_to_apron e1 ctx abs l in
+      let e2', ctx, abs, l = bexp_to_apron e2 ctx abs l in
+      Dnf.mk_or e1' e2', ctx, abs, l
 
     | E_binop(O_log_and,e1, e2) ->
-      let e1', ctx = bexp_to_apron ctx e1 in
-      let e2', ctx = bexp_to_apron ctx e2 in
-      Dnf.mk_and e1' e2', ctx
+      let e1', ctx, abs, l = bexp_to_apron e1 ctx abs l in
+      let e2', ctx, abs, l = bexp_to_apron e2 ctx abs l in
+      Dnf.mk_and e1' e2', ctx, abs, l
 
     | E_unop(O_log_not, exp') ->
-      let dnf, ctx = bexp_to_apron ctx exp' in
+      let dnf, ctx, abs, l = bexp_to_apron exp' ctx abs l in
       Dnf.mk_neg (fun (op, e1, t1, e2, t2) ->
           match op with
           | Apron.Tcons1.EQ ->
@@ -398,15 +335,16 @@ struct
             Dnf.singleton (Apron.Tcons1.SUP, e2, t2, e1, t1)
           | _ -> assert false
         ) dnf,
-      ctx
+      ctx, abs, l
+      
 
     | _ ->
-      let e0', ctx = exp_to_apron ctx exp in
+      let e0', ctx, abs, l = exp_to_apron exp ctx abs l in
       let e1' = Apron.Texpr1.Cst(Apron.Coeff.s_of_int 0) in
       Dnf.mk_or
         (Dnf.singleton (Apron.Tcons1.SUP, e0', exp.etyp, e1', T_int))
         (Dnf.singleton (Apron.Tcons1.SUP, e1', T_int, e0', exp.etyp)),
-      ctx
+      ctx, abs, l
 
   let tcons_array_of_tcons_list env l =
     let n = List.length l in

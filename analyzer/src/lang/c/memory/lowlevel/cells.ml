@@ -75,11 +75,11 @@ struct
 
   (** Pretty printer of cells *)
   let pp_cell fmt c =
-    Format.fprintf fmt "⟨%a,%a,%a⟩%a"
+    Format.fprintf fmt "⟨%a,%a,%a⟩%s"
       pp_base c.base
       Z.pp_print c.offset
       Pp.pp_c_type_short (remove_qual c.typ)
-      (fun fmt () -> if c.primed then Format.pp_print_string fmt "'" else ()) ()
+      (if c.primed then "'" else "")
 
 
   (** Create a cell *)
@@ -112,12 +112,23 @@ struct
 
 
   (** Create a scalar variable from a cell *)
-  let mk_cell_var (c:cell) : var =
+  let mk_cell_var (c:cell) range : expr =
     let name =
-      let () = pp_cell Format.str_formatter c in
+      let () = match c.base with
+        | V v ->
+          Format.fprintf Format.str_formatter "⟨%s,%a,%a⟩%s"
+            v.vname
+            Z.pp_print c.offset
+            Pp.pp_c_type_short (remove_qual c.typ)
+            (if c.primed then "'" else "")
+
+        | _ ->
+          pp_cell Format.str_formatter c
+      in
       Format.flush_str_formatter ()
     in
-    mkv name (V_c_cell c) c.typ
+    let v = mkv name (V_c_cell c) c.typ in
+    mk_var v ~mode:(base_mode c.base) range
 
 
 
@@ -276,14 +287,8 @@ struct
               ) a
       with
       | Some (c') ->
-        let v = mk_cell_var c' in
-        Some (
-          (wrap_expr
-             (mk_var v range)
-             (int_rangeof c.typ)
-             range
-          )
-        )
+        let v = mk_cell_var c' range in
+        Some (wrap_expr v (int_rangeof c.typ) range)
 
       | None ->
         match
@@ -300,10 +305,10 @@ struct
         | Some (c') ->
           let b = Z.sub c.offset c'.offset in
           let base = (Z.pow (Z.of_int 2) (8 * Z.to_int b))  in
-          let v = mk_cell_var c' in
+          let v = mk_cell_var c' range in
           Some (
             (_mod
-               (div (mk_var v range) (mk_z base range) range)
+               (div v (mk_z base range) range)
                (mk_int 256 range)
                range
             )
@@ -334,10 +339,10 @@ struct
               in
               let ll = aux 0 [] in
               let _,e = List.fold_left (fun (time, res) x ->
-                  let v = mk_cell_var x in
+                  let v = mk_cell_var x range in
                   let res' =
                     add
-                      (mul (mk_z time range) (mk_var v range) range)
+                      (mul (mk_z time range) v range)
                       res
                       range
                   in
@@ -377,13 +382,13 @@ struct
        not (BaseSet.mem c.base a.bases)
     then s
     else
-      let v = mk_cell_var c in
-      let s' = man.sexec ~zone:Z_c_scalar (mk_add (mk_var v range) range) ctx s in
+      let v = mk_cell_var c range in
+      let s' = man.sexec ~zone:Z_c_scalar (mk_add v range) ctx s in
       if is_c_pointer_type c.typ then s'
       else
         match phi c a range with
         | Some e ->
-          let stmt = mk_assume (mk_binop (mk_var v range) O_eq e ~etyp:u8 range) range in
+          let stmt = mk_assume (mk_binop v O_eq e ~etyp:u8 range) range in
           man.sexec ~zone:Z_c_scalar stmt ctx s'
 
         | None ->
@@ -435,7 +440,7 @@ struct
     let (a, s, s') = join man ctx (a,s) (a',s') in
     (a, s, s', true)
 
-  let merge ctx pre (a,log) (a',log') =
+  let merge pre (a,log) (a',log') =
     assert false
 
 
@@ -590,8 +595,8 @@ struct
     if CellSet.mem c a.cells || not (is_c_scalar_type c.typ)
     then Post.return flow
     else
-      let v = mk_cell_var c in
-      man.exec_sub ~zone:Z_c_scalar (mk_add (mk_var v range) range) flow |>
+      let v = mk_cell_var c range in
+      man.exec_sub ~zone:Z_c_scalar (mk_add v range) flow |>
       Post.bind @@ fun flow ->
 
       if is_c_pointer_type c.typ
@@ -602,7 +607,7 @@ struct
         begin
           match phi c a range with
           | Some e ->
-            let stmt = mk_assume (mk_binop (mk_var v range) O_eq e ~etyp:u8 range) range in
+            let stmt = mk_assume (mk_binop v O_eq e ~etyp:u8 range) range in
             man.exec_sub ~zone:Z_c_scalar stmt flow
 
           | None -> Post.return flow
@@ -618,8 +623,8 @@ struct
         { a with cells = CellSet.remove c a.cells }
       ) man flow
     in
-    let v = mk_cell_var c in
-    let stmt = mk_remove_var v range in
+    let v = mk_cell_var c range in
+    let stmt = mk_remove v range in
     man.exec_sub ~zone:Z_c_scalar stmt flow
 
 
@@ -649,9 +654,14 @@ struct
       ) man flow
     in
 
-    let v = mk_cell_var c in
+    let v = mk_cell_var c range in
+    let vv =
+      match ekind v with
+        E_var (vv, _) -> { v with ekind = E_var(vv, mode) }
+      | _ -> assert false
+    in
 
-    let stmt = mk_assign (mk_var v ~mode range) e range in
+    let stmt = mk_assign vv e range in
     man.exec_sub ~zone:Z_c_scalar stmt flow |>
 
     Post.bind @@ remove_cell_overlappings c range man
@@ -679,9 +689,9 @@ struct
         ) man flow
     in
 
-    let oldv = mk_cell_var old_cell in
-    let newv = mk_cell_var new_cell in
-    let stmt = mk_rename_var oldv newv range in
+    let oldv = mk_cell_var old_cell range in
+    let newv = mk_cell_var new_cell range in
+    let stmt = mk_rename oldv newv range in
     man.exec_sub ~zone:Z_c_scalar stmt flow
 
 
@@ -707,8 +717,8 @@ struct
       else
         (* Otherwise, assign with weak update *)
         fun c flow ->
-          let v = mk_cell_var c in
-          assign_cell (to_base2 c) (mk_var v range) WEAK range man flow |>
+          let v = mk_cell_var c range in
+          assign_cell (to_base2 c) v WEAK range man flow |>
           Post.bind @@ remove_cell c range man
     in
 
@@ -753,7 +763,7 @@ struct
   (** ************************ *)
 
   (** 𝔼⟦ *p ⟧ where p is a pointer to a scalar *)
-  let deref_scalar_pointer p mode primed range man flow =
+  let deref_scalar_pointer p primed range man flow =
     (* Expand *p into cells *)
     expand p range man flow |>
     Eval.bind @@ fun expansion flow ->
@@ -779,8 +789,8 @@ struct
       let flow = add_cell c range man flow |>
                  Post.to_flow man.lattice
       in
-      let v = mk_cell_var c in
-      Eval.singleton (mk_var v ~mode range) flow
+      let v = mk_cell_var c range in
+      Eval.singleton v flow
 
 
 
@@ -816,12 +826,12 @@ struct
 
   let eval zone exp man flow =
     match ekind exp with
-    | E_var (v,mode) when is_c_scalar_type v.vtyp ->
-      deref_scalar_pointer (mk_c_address_of exp exp.erange) mode false exp.erange man flow |>
+    | E_var (v,STRONG) when is_c_scalar_type v.vtyp ->
+      deref_scalar_pointer (mk_c_address_of exp exp.erange) false exp.erange man flow |>
       Option.return
 
     | E_c_deref p when under_type p.etyp |> is_c_scalar_type  ->
-      deref_scalar_pointer p STRONG false exp.erange man flow |>
+      deref_scalar_pointer p false exp.erange man flow |>
       Option.return
 
     | E_c_deref p when under_type p.etyp |> is_c_function_type ->
@@ -833,7 +843,7 @@ struct
       Option.return
 
     | E_stub_primed lval ->
-      deref_scalar_pointer (mk_c_address_of lval exp.erange) STRONG true exp.erange man flow |>
+      deref_scalar_pointer (mk_c_address_of lval exp.erange) true exp.erange man flow |>
       Option.return
 
     | _ -> None
@@ -905,7 +915,7 @@ struct
         in
 
         (* Initialize the associated variable *)
-        let v = mk_cell_var c in
+        let v = match ekind (mk_cell_var c range) with E_var (v, _) -> v | _ -> assert false in
         let stmt = mk_c_declaration v init scope range in
         man.exec_sub ~zone:Z_c_scalar stmt flow |>
 
@@ -1049,16 +1059,16 @@ struct
       declare v init scope stmt.srange man flow |>
       Option.return
 
-    | S_assign(({ekind = E_var(v, mode)} as lval), e) when is_c_scalar_type v.vtyp ->
+    | S_assign(({ekind = E_var(v, STRONG)} as lval), e) when is_c_scalar_type v.vtyp ->
       Some (
         let c = mk_cell (V v) Z.zero v.vtyp in
         let flow = map_domain_env T_cur (fun a -> { a with cells = CellSet.add c a.cells }) man flow in
 
-        let vv = mk_cell_var c in
+        let v = mk_cell_var c lval.erange in
         man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow |>
         post_eval man @@ fun e flow ->
 
-        let stmt = mk_assign (mk_var vv ~mode lval.erange) e stmt.srange in
+        let stmt = mk_assign v e stmt.srange in
         man.exec_sub ~zone:Z_c_scalar stmt flow |>
 
         Post.bind @@ remove_cell_overlappings c stmt.srange man

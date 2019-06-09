@@ -82,20 +82,13 @@ let render_env (var,value) : json =
     "val"   , render_value value;
   ]
 
-let render_state (range,(pre,post)) : json =
-  `Assoc [
-    "range", render_range range;
-    "pre", `List (List.map render_env pre);
-    "post", `List (List.map render_env post)
-  ]
 
-let report ?(flow=None) man alarms states time files out : unit =
+let report ?(flow=None) man alarms time files out : unit =
   let json : json = `Assoc [
       "success", `Bool true;
       "time", `Float time;
       "files", `List (List.map (fun f -> `String f) files);
-      "alarms", `List (List.map render_alarm alarms);
-      "states", `List (List.map render_state states)
+      "alarms", `List (List.map render_alarm alarms)
     ]
   in
   print out json

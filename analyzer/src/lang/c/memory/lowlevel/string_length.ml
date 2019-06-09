@@ -105,11 +105,17 @@ struct
   *)
   let mk_length_var base range =
     let name =
-      let () = Format.fprintf Format.str_formatter "length(%a)" pp_base base in
+      let () = match base with
+        | V v ->
+          Format.fprintf Format.str_formatter "length(%s)" v.vname
+
+        | _ ->
+          Format.fprintf Format.str_formatter "length(%a)" pp_base base
+      in
       Format.flush_str_formatter ()
     in
     let v = mkv name (V_c_string_length base) T_int in
-    mk_var v range
+    mk_var v ~mode:(base_mode base) range
 
 
   (** {2 Initialization procedure} *)
