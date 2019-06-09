@@ -109,7 +109,7 @@ struct
       Format.flush_str_formatter ()
     in
     let v = mkv name (V_c_string_length base) T_int in
-    mk_var v range
+    mk_var v ~mode:(base_mode base) range
 
 
   (** {2 Initialization procedure} *)
