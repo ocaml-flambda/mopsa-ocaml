@@ -29,7 +29,6 @@ open Mopsa
 open Universal.Ast
 module Itv = Universal.Numeric.Values.Intervals.Integer.Value
 
-let debug fmt = Debug.debug ~channel:"c.resources.file.table" fmt
 
 (** Map from addresses to intervals *)
 module AddrItvMap = Framework.Lattices.Partial_map.Make(Addr)(Itv)

@@ -19,18 +19,46 @@
 (*                                                                          *)
 (****************************************************************************)
 
+open Mopsa
 
+
+module OctMan = struct
+  type t = Oct.t
+  let name = "universal.numeric.relational"
+  let man = Oct.manager_alloc ()
+end
 
 
 module PolyMan = struct
   type t = Polka.loose Polka.t
-  let name = "universal.numeric.relational.polyhedra"
+  let name = "universal.numeric.relational"
   let man = Polka.manager_alloc_loose ()
 end
 
 
-module Domain = Factory.Make(PolyMan)
+let () =
+  register_domain_option "universal.numeric.relational" {
+    key = "-numeric";
+    category = "Numeric";
+    doc = " select the relational numeric domain.";
+    spec = ArgExt.Symbol (
+        ["octagon"; "polyhedra"],
+        (function
+          | "octagon"   ->
+            let module Domain = Factory.Make(OctMan) in
+            Framework.Core.Sig.Domain.Simplified.register_domain (module Domain)
 
+          | "polyhedra" ->
+            let module Domain = Factory.Make(PolyMan) in
+            Framework.Core.Sig.Domain.Simplified.register_domain (module Domain)
+
+          | _ -> assert false
+        )
+      );
+    default = "polyhedra"
+  }
+           
 
 let () =
+  let module Domain = Factory.Make(PolyMan) in
   Framework.Core.Sig.Domain.Simplified.register_domain (module Domain)

@@ -52,7 +52,7 @@ lang.universal.heap = policies recency
 lang.universal.numeric = rounding values relational reductions
 lang.universal.numeric.values = intervals congruences
 lang.universal.numeric.values.intervals = integer float
-lang.universal.numeric.relational = apron_manager binding apron_transformer factory octagon polyhedra
+lang.universal.numeric.relational = apron_manager binding apron_transformer factory octagon polyhedra default
 lang.universal.numeric.reductions = intervals_congruences intervals
 
 lang.repl = frontend
@@ -60,7 +60,7 @@ lang.repl = frontend
 lang.stubs = ast zone alarms iterator
 
 # C
-lang.c = ast pp visitor zone frontend alarms desugar memory libs iterators cstubs
+lang.c = ast pp visitor zone frontend alarms desugar memory libs iterators
 lang.c.iterators = program switch loops goto interproc
 lang.c.desugar = cond_expr
 lang.c.memory = common structured lowlevel scalars
@@ -68,10 +68,12 @@ lang.c.memory.common = base points_to quantified_offset
 lang.c.memory.structured = flat
 lang.c.memory.lowlevel = string_length cells smashing reductions
 lang.c.memory.scalars = pointers machine_numbers
-lang.c.libs = libmopsa libc
-lang.c.cstubs = resources file
-lang.c.cstubs.file = slot table domain
+lang.c.libs = common clib mopsalib builtins variadic resources
+lang.c.libs.clib.file = slot table domain
 
+
+
+# Python
 lang.python = ast addr utils visitor  operators pp ast_compare frontend zone		\
               alarms libs desugar objects data_model types flows program
 lang.python.objects = class function range nones py_list tuple dict py_set

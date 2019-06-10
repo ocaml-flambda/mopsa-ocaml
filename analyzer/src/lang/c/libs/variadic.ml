@@ -19,7 +19,9 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Evaluation of built-in Libc functions *)
+
+(** Support for variadic functions *)
+
 
 open Mopsa
 open Framework.Core.Sig.Domain.Stateless
@@ -28,30 +30,18 @@ open Ast
 open Zone
 module Itv = Universal.Numeric.Values.Intervals.Integer.Value
 
-let is_builtin_function = function
-  | "__builtin_constant_p"
-  | "__builtin_va_start"
-  | "__builtin_va_end"
-  | "__builtin_va_copy"
-  | "printf"
-  | "__printf_chk"
-  | "__fprintf_chk"
-  | "__vfprintf_chk"
-  | "__vprintf_chk"
-    -> true
-
-  | _ -> false
-
 
 module Domain =
 struct
+
 
   (** Domain identification *)
   (** ===================== *)
 
   include GenStatelessDomainId(struct
-      let name = "c.libs.libc"
+      let name = "c.libs.variadic"
     end)
+
 
   (** Zoning definition *)
   (** ================= *)
@@ -176,15 +166,18 @@ struct
         pop_unnamed_args flow
       )
 
+
   (* Create a counter variable for a va_list *)
   let mk_valc_var va_list range =
     let v = mk_attr_var va_list "counter" T_int in
     mk_var v range
 
+
   (* Initialize a counter *)
   let init_valc_var valc range man flow =
     man.exec (mk_add valc range) ~zone:Universal.Zone.Z_u_num flow |>
     man.exec (mk_assign valc (mk_zero range) range) ~zone:Universal.Zone.Z_u_num
+
 
   (* Resolve a pointer to a va_list *)
   let resolve_va_list ap range man flow =
@@ -234,6 +227,7 @@ struct
 
     Eval.empty_singleton flow
 
+
   (** Evaluate calls to va_arg *)
   let va_arg ap typ range man flow =
     let _, unnamed = get_unnamed_args flow in
@@ -276,6 +270,7 @@ struct
       ~zone:Universal.Zone.Z_u_num
       man flow
 
+
   (** Evaluate calls to va_end *)
   let va_end ap range man flow =
     resolve_va_list ap range man flow |>
@@ -288,45 +283,14 @@ struct
     Eval.empty_singleton flow'
 
 
+
   (** {2 Evaluation entry point} *)
   (** ========================== *)
 
   let eval zone exp man flow =
     match ekind exp with
-    (* 𝔼⟦ __builtin_constant_p(e) ⟧ *)
-    | E_c_builtin_call("__builtin_constant_p", [e]) ->
-      (* __builtin_constant_ determines if [e] is known to be constant
-         at compile time *)
-      let ret =
-        match ekind e with
-        | E_constant _ -> mk_one ~typ:s32 exp.erange
-        | _ -> mk_z_interval Z.zero Z.one ~typ:s32 exp.erange
-      in
-      Eval.singleton ret flow |>
-      Option.return
 
-    (* 𝔼⟦ printf(...) ⟧ *)
-    (* 𝔼⟦ __printf_chk(...) ⟧ *)
-    | E_c_builtin_call("__printf_chk", args) ->
-      warn_at exp.erange "__printf_chk: unsound implementation";
-      Eval.singleton (mk_top s32 exp.erange) flow |>
-      Option.return
-
-    (* 𝔼⟦ __fprintf_chk(...) ⟧ *)
-    | E_c_builtin_call("__fprintf_chk", args) ->
-      warn_at exp.erange "__fprintf_chk: unsound implementation";
-      Eval.singleton (mk_top s32 exp.erange) flow |>
-      Option.return
-
-    (* 𝔼⟦ __vprintf_chk(...) ⟧ *)
-    | E_c_builtin_call("__vprintf_chk", args) ->
-      panic_at exp.erange "__vprintf_chk not supported"
-
-    (* 𝔼⟦ __vfprintf_chk(...) ⟧ *)
-    | E_c_builtin_call("__vfprintf_chk", args) ->
-      panic_at exp.erange "__vfprintf_chk not supported"
-
-    (* 𝔼⟦ f(...) ⟧ *)
+    (* 𝔼⟦ variadic f(...) ⟧ *)
     | E_call ({ ekind = E_c_function ({c_func_variadic = true} as fundec)}, args) ->
       call_variadic_function fundec args exp.erange man flow |>
       Option.return

@@ -38,7 +38,7 @@ struct
   (** ===================== *)
 
   include GenStatelessDomainId(struct
-      let name = "c.cstubs.resources"
+      let name = "c.libs.resources"
     end)
 
   let interface= {

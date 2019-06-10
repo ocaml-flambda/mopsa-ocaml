@@ -32,28 +32,5 @@ extern int _errno;
 extern void *_mopsa_int_to_fd(int fd);
 
 
-/*
-  Some useful predicates
-*/
-
-/*$$
- * predicate valid_string(s):
- *   exists int _i in [0, size(s) - 1]: s[_i] == 0
- * ;
- *
- * predicate valid_primed_string(s):
- *   exists int _i in [0, size(s) - 1]: (s[_i])' == 0
- * ;
- *
- * predicate valid_substring(s, n):
- *   exists int _i in [0, n - 1]: s[_i] == 0
- * ;
- *
- * predicate valid_primed_substring(s, n):
- *   exists int _i in [0, n - 1]: (s[_i])' == 0
- * ;
- */
-
-
 
 #endif /* MOPSA_LIBC_UTILS_H */
