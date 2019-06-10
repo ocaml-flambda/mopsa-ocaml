@@ -941,3 +941,41 @@ let rec remove_casts e =
   match ekind e with
   | E_c_cast (e', _) -> remove_casts e'
   | _ -> e
+
+
+(** Simplify C constant expressions to constants *)
+let rec c_expr_to_z (e:expr) : Z.t option =
+  match ekind e with
+  | E_constant (C_int n) -> Some n
+
+  | E_constant (C_c_character (ch,_)) -> Some ch
+
+  | E_unop (O_minus, e') ->
+    c_expr_to_z e' |> Option.bind @@ fun n ->
+    Some (Z.neg n)
+
+  | E_binop(op, e1, e2) ->
+    c_expr_to_z e1 |> Option.bind @@ fun n1 ->
+    c_expr_to_z e2 |> Option.bind @@ fun n2 ->
+    begin
+      match op with
+      | O_plus -> Some (Z.add n1 n2)
+      | O_minus -> Some (Z.sub n1 n2)
+      | O_mult -> Some (Z.mul n1 n2)
+      | O_div -> if Z.equal n2 Z.zero then None else Some (Z.div n1 n2)
+      | O_eq -> Some (if Z.equal n1 n2 then Z.one else Z.zero)
+      | O_ne -> Some (if Z.equal n1 n2 then Z.zero else Z.one)
+      | O_gt -> Some (if Z.gt n1 n2 then Z.one else Z.zero)
+      | O_ge -> Some (if Z.geq n1 n2 then Z.one else Z.zero)
+      | O_lt -> Some (if Z.lt n1 n2 then Z.one else Z.zero)
+      | O_le -> Some (if Z.leq n1 n2 then Z.one else Z.zero)
+      | _ -> None
+    end
+
+  | E_c_conditional(cond,e1,e2) ->
+    c_expr_to_z cond |> Option.bind @@ fun c ->
+    if not (Z.equal c Z.zero)
+    then c_expr_to_z e1
+    else c_expr_to_z e2
+
+  | _ -> None

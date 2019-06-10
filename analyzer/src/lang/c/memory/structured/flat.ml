@@ -206,7 +206,46 @@ struct
     let rec aux l flow =
       match l with
       | [] -> Eval.singleton [] flow
+
+
+      | C_flat_expr (e,t) :: tl when is_c_global_scope scope ->
+        (* In case of global variables, initializers should be
+           constants expressions. We just simplify them into constant
+           values 
+        *)
+        begin
+          match c_expr_to_z (remove_casts e) with
+          | Some z ->
+            (* Expression simplified *)
+            let ee =
+              (* Restore cast *)
+              match ekind e with
+              | E_c_cast(ee,implicit) ->
+                mk_expr (E_c_cast(mk_z z ee.erange ~typ:ee.etyp, implicit)) ~etyp:e.etyp e.erange
+
+              | _ -> mk_z z e.erange ~typ:e.etyp
+            in
+            aux tl flow |>
+            Eval.bind @@ fun tl flow ->        
+            Eval.singleton (C_flat_expr (ee,t) :: tl) flow
+
+          | None ->
+            (* Expression not simplified statically, so rely on other domains *)
+            man.eval ~zone:(Z_c,Z_c_low_level) e flow |>
+            Eval.bind @@ fun e flow ->
+
+            aux tl flow |>
+            Eval.bind @@ fun tl flow ->
+
+            Eval.singleton (C_flat_expr (e,t) :: tl) flow
+
+        end
+
       | C_flat_expr (e,t) :: tl ->
+        (* In case of local variables, initializers are arbitrary
+           expressions. We need to go over all domains to simplify
+           them. 
+        *)
         man.eval ~zone:(Z_c,Z_c_low_level) e flow |>
         Eval.bind @@ fun e flow ->
 
