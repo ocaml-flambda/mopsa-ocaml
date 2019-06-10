@@ -26,36 +26,6 @@ open Framework.Core.Sig.Domain.Stateless
 open Universal.Ast
 open Ast
 
-let is_builtin_function = function
-  | "_mopsa_range_char"
-  | "_mopsa_range_unsigned_char"
-  | "_mopsa_range_short"
-  | "_mopsa_range_unsigned_short"
-  | "_mopsa_range_int"
-  | "_mopsa_range_unsigned_int"
-  | "_mopsa_range_long"
-  | "_mopsa_range_unsigned_long"
-  | "_mopsa_range_long_long"
-  | "_mopsa_range_unsigned_long_long"
-  | "_mopsa_set_debug_channels"
-  | "_mopsa_range"
-  | "_mopsa_rand"
-  | "_mopsa_rand_int"
-  | "_mopsa_rand_unsigned_long"
-  | "_mopsa_panic"
-  | "_mopsa_print"
-  | "_mopsa_assert_exists"
-  | "_mopsa_assert"
-  | "_mopsa_assert_safe"
-  | "_mopsa_assert_unsafe"
-  | "_mopsa_assert_error"
-  | "_mopsa_assert_error_exists"
-  | "_mopsa_assert_error_at_line"
-  | "_mopsa_fd_to_int"
-  | "_mopsa_int_to_fd"
-  | "_mopsa_cf_part"
-  | "_mopsa_cf_merge" -> true
-  | _ -> false
 
 
 module Domain =
@@ -65,7 +35,7 @@ struct
   (** ===================== *)
 
   include GenStatelessDomainId(struct
-      let name = "c.libs.libmopsa"
+      let name = "c.libs.mopsalib"
     end)
 
   (** Zoning definition *)

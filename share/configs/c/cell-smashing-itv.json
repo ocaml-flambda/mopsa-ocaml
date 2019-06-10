@@ -8,9 +8,6 @@
             "universal.iterators.interproc.inlining",
             "universal.iterators.unittest",
 
-	    // C libraries
-            "c.libs.libc",
-            "c.libs.libmopsa",
 
 	    // C iterators
             "c.iterators.program",
@@ -19,13 +16,19 @@
             "c.iterators.switch",
             "c.iterators.loops",
 
+            // Stubs
+	    "stubs.iterator",
+
             // C desugar
             "c.desugar.cond_expr",
 
-	    // Stubs
-            "stubs.iterator",
-            "c.cstubs.file",
-	    "c.cstubs.resources",
+	    // Libraries
+            "c.libs.builtins",
+            "c.libs.mopsalib",
+            "c.libs.clib.file",
+            "c.libs.clib.print",
+            "c.libs.variadic",
+	    "c.libs.resources",
 
             // Memory model
 	    {
@@ -33,7 +36,15 @@
                     "compose": [
                         "c.memory.structured.flat",
                         "universal.heap.recency.callstack_range",
-                        "c.memory.lowlevel.cells",
+                        {
+			    "product": [
+				"c.memory.lowlevel.cells",
+				"c.memory.lowlevel.smashing"
+			    ],
+			    "reductions": [
+				"c.memory.lowlevel.reductions.cell_smashing"
+			    ]
+			},
                         {
                             "seq": [
 			        "c.memory.scalars.pointer",
@@ -43,22 +54,14 @@
                     ]
                 },
 		"on": {
-                    "product": [
-                        "universal.numeric.relational.polyhedra",
-                        {
-                            "nonrel": {
-			        "disjoint": [
-			            "universal.numeric.values.intervals.float",
-                                    "universal.numeric.values.intervals.integer"
-			        ]
-		            }
-                        }
-                    ],
-                    "reductions": [
-                        "universal.numeric.reductions.intervals"
-                    ]
+                    "nonrel": {
+			"disjoint": [
+			    "universal.numeric.values.intervals.float",
+                            "universal.numeric.values.intervals.integer"
+			]
+		    }
                 }
-            }
+	    }
 	]
     }
 }

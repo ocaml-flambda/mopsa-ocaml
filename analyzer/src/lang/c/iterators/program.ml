@@ -47,7 +47,7 @@ struct
   (** Command line options *)
   (** ==================== *)
 
-  (* Name of the entry function to be analyzed. *)
+  (** Name of the entry function to be analyzed. *)
   let opt_entry_function = ref "main"
 
   let () =
@@ -58,6 +58,20 @@ struct
       spec = ArgExt.Set_string opt_entry_function;
       default = "main";
     }
+
+
+  (** Number of symbolic arguments passed to main *)
+  let opt_argc = ref 0
+
+  let () =
+    register_domain_option name {
+      key = "-argc";
+      category = "C";
+      doc = " number of symbolic arguments passed to main";
+      spec = ArgExt.Set_int opt_argc;
+      default = "0";
+    }
+
 
   (** Zoning definition *)
   (** ================= *)
@@ -203,7 +217,7 @@ struct
 
 
 
-  (** Initialize argc and argv with symbolic values and execute the body of main *)
+  (** Initialize argv as an array of length !opt_argc containing symbolic valid strings *)
   let call_main_with_symbolic_args main functions range man flow =
     (* Create the argc variable *)
     let argc = mkfresh (fun uid ->
@@ -219,11 +233,8 @@ struct
         vname, vkind
       ) s32 ()
     in
-    let decl = mk_c_declaration argc None Variable_global range in
-    let init_func = find_function "_mopsa_init_symbolic_argc" functions in
-    let flow = man.exec decl flow |>
-               man.exec (mk_assign (mk_var argc range) (mk_c_call init_func [] range) range)
-    in
+    let decl = mk_c_declaration argc (Some (C_init_expr (mk_int !opt_argc range))) Variable_global range in
+    let flow = man.exec decl flow in
 
     (* Create the argv variable *)
     let argv = mkfresh (fun uid ->
@@ -237,17 +248,44 @@ struct
           }
         in
         vname, vkind
-      ) (pointer_type (pointer_type s8)) ()
+      ) (array_type (pointer_type s8) (!opt_argc + 1 |> Z.of_int)) ()
     in
     let decl = mk_c_declaration argv None Variable_global range in
-    let init_func = find_function "_mopsa_init_symbolic_argv" functions in
+    let flow = man.exec decl flow in
 
-    man.exec decl flow |>
-    man.exec (mk_assign (mk_var argv range) (mk_c_call init_func [mk_var argc range] range) range) |>
+    (* Initialize argv[0] with the name of the program *)
+    let flow = man.exec
+        (mk_assign
+           (mk_c_subscript_access (mk_var argv range) (mk_zero range) range)
+           (mk_c_string "a.out" range)
+           range
+        )
+        flow
+    in
 
-    (* Initialize argv[0] and argv[1 .. argc] with fixed heap addresses of symbolic strings *)
-    panic "c.iterators.program: initialization of symbolic argv not implemented"
+    (* Initialize argv[i | 1 <= i < argc] with fixed heap addresses pointing to symbolic valid strings *)
+    let rec iter i flow =
+      if i >= !opt_argc
+      then
+        flow
+      else
+        let range = tag_range range "argv[%d]" i in
+        let argvi = mk_c_subscript_access (mk_var argv range) (mk_int i range) range in
+        let arg = mk_c_call (find_function "_mopsa_new_valid_string" functions) [] range in
+        let flow = man.exec (mk_assign argvi arg range) flow in
+        iter (i + 1) flow
+    in
+    let flow = iter 1 flow in
 
+    (* Put the last NULL cell *)
+    let last = mk_c_subscript_access (mk_var argv range) (mk_int !opt_argc range) range in
+    let flow = man.exec (mk_assign last (mk_zero range) range) flow in
+
+    (* call main with argc and argv *)
+    call main [
+      mk_var argc main.c_func_range;
+      mk_var argv main.c_func_range
+    ] man flow
 
 
 

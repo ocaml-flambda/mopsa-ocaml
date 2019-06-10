@@ -689,9 +689,7 @@ struct
            | Some evl' ->
              Some (Eval.meet evl evl')
        in
-       let ret = Dnf.apply aux (Option.neutral2 Eval.join) (Option.neutral2 Eval.meet) reduced_dnf |>
-                 Option.lift (Eval.simplify man.lattice compare_expr)
-       in
+       let ret = Dnf.apply aux (Option.neutral2 Eval.join) (Option.neutral2 Eval.meet) reduced_dnf in
        debug "reduced evaluations: %a" (Option.print (Eval.print ~pp:pp_expr)) ret;
        ret
     )

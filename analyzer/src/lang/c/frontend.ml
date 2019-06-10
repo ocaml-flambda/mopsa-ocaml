@@ -199,17 +199,8 @@ and parse_file (opts: string list) (file: string) ctx =
 
 
 and parse_stubs ctx () =
-  (** Check if main has arguments argc and argv *)
-  let has_arg =
-    try
-      let main = Clang_to_C.find_function "main" ctx in
-      Array.length main.C_AST.func_parameters <> 0
-    with Not_found -> false
-  in
-
-  if has_arg then
-    parse_file [] (Config.Paths.resolve_stub "c" "mopsa/mopsa.c") ctx
-  ;
+  (** Add Mopsa stubs *)
+  parse_file [] (Config.Paths.resolve_stub "c" "mopsa/mopsa.c") ctx;
 
   (** Add stubs of the standard library *)
   if not !opt_without_libc then

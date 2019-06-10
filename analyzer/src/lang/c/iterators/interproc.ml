@@ -78,8 +78,7 @@ struct
 
   (** Eval a function call *)
   let eval_call fundec args range man flow =
-    if  Libs.Libmopsa.is_builtin_function fundec.c_func_org_name ||
-        Libs.Libc.is_builtin_function fundec.c_func_org_name
+    if Libs.Common.is_builtin_function fundec.c_func_org_name
     then
       let exp' = mk_expr (E_c_builtin_call(fundec.c_func_org_name, args)) ~etyp:fundec.c_func_return range in
       man.eval ~zone:(Zone.Z_c, Zone.Z_c_low_level) exp' flow
@@ -116,6 +115,9 @@ struct
 
   let eval zone exp man flow =
     match ekind exp with
+    | E_call({ ekind = E_c_function { c_func_variadic = true}}, args) ->
+      None
+
     | E_call({ ekind = E_c_function f}, args) ->
       eval_call f args exp.erange man flow |>
       Option.return

@@ -8,9 +8,6 @@
             "universal.iterators.interproc.inlining",
             "universal.iterators.unittest",
 
-	    // C libraries
-            "c.libs.libc",
-            "c.libs.libmopsa",
 
 	    // C iterators
             "c.iterators.program",
@@ -19,14 +16,19 @@
             "c.iterators.switch",
             "c.iterators.loops",
 
+            // Stubs
+	    "stubs.iterator",
+
             // C desugar
             "c.desugar.cond_expr",
 
-            // Stubs
-            "stubs.iterator",
-            "c.cstubs.file",
-            "c.cstubs.resources",
-
+	    // Libraries
+            "c.libs.builtins",
+            "c.libs.mopsalib",
+            "c.libs.clib.file",
+            "c.libs.clib.print",
+            "c.libs.variadic",
+	    "c.libs.resources",
 
             // Memory model
 	    {

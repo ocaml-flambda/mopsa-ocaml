@@ -188,10 +188,23 @@ end
 (**                          {2 Registration}                               *)
 (*==========================================================================*)
 
+
 let domains : (module DOMAIN) list ref = ref []
 
+
 let register_domain dom =
-  domains := dom :: !domains
+  let module Dom = (val dom : DOMAIN) in
+  let rec iter = function
+    | [] -> [dom]
+    | hd :: tl ->
+      let module Hd = (val hd : DOMAIN) in
+      if Hd.name = Dom.name
+      then dom :: tl
+      else hd :: iter tl
+  in
+  domains := iter !domains
+
+
 
 let find_domain name =
   List.find (fun dom ->
@@ -199,11 +212,13 @@ let find_domain name =
       compare D.name name = 0
     ) !domains
 
+
 let mem_domain name =
   List.exists (fun dom ->
       let module D = (val dom : DOMAIN) in
       compare D.name name = 0
     ) !domains
+
 
 let names () =
   List.map (fun dom ->

@@ -39,21 +39,25 @@ struct
           man.get_eval String_length.Domain.id evals
     with
     | Some evl1, Some evl2 ->
+      debug "reducing@\n%a@\nand %a" (Eval.print ~pp:pp_expr) evl1 (Eval.print ~pp:pp_expr) evl2;
       let evl1', evl2' = Eval.merge (fun e1 flow1 e2 flow2 ->
           match ekind e1, ekind e2 with
           (* Constants from the cell domain should be precise, isn't it? *)
           | E_constant (C_int _), _
           | E_constant (C_c_character _), _ ->
+            debug "case 1";
             Some (Eval.singleton e1 flow1), None
 
           (* If the cell domain returned a cell variable, refine it if possible *)
           | E_var (v, _), _ ->
+            debug "case 2";
             let cond = mk_binop e1 O_eq e2 exp.erange in
             let flow1' = man.exec ~zone:Z_c_scalar (mk_assume cond exp.erange) flow1 in
             if Flow.get T_cur man.lattice flow1' |> man.lattice.is_bottom then
               None, None
             else
               let flow = Flow.meet man.lattice flow1' flow2 in
+              debug "meet flow = %a" (Flow.print man.lattice) flow;
               begin
                 match ekind e2 with
                 | E_constant (C_int _) ->
@@ -66,7 +70,9 @@ struct
 
           (* Otherwise, keep the string evaluation, because they are
              partitioned w.r.t. to the length auxiliary variable *)
-          | _, _ -> None, Some (Eval.singleton e2 flow2)
+          | _, _ ->
+            debug "case 3";
+            None, Some (Eval.singleton e2 flow2)
 
         ) evl1 evl2
       in
