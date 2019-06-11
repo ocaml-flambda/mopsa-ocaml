@@ -45,19 +45,17 @@ struct
   let interface = {
     iexec = {
       provides = [];
-      uses = [Z_c_low_level; Universal.Zone.Z_u_num]
+      uses = []
     };
     ieval = {
       provides = [
         Z_c, Z_c_low_level
       ];
-      uses = [
-        Z_c, Memory.Common.Points_to.Z_c_points_to
-      ]
+      uses = []
     }
   }
 
-  
+
   (** {2 Transfer functions} *)
   (** ====================== *)
 
@@ -73,23 +71,26 @@ struct
     match ekind exp with
 
     (* 𝔼⟦ printf(...) ⟧ *)
-    (* 𝔼⟦ __printf_chk(...) ⟧ *)
+    | E_c_builtin_call("printf", args)
     | E_c_builtin_call("__printf_chk", args) ->
-      warn_at exp.erange "__printf_chk: unsound implementation";
+      warn_at exp.erange "printf: unsound implementation";
       Eval.singleton (mk_top s32 exp.erange) flow |>
       Option.return
 
-    (* 𝔼⟦ __fprintf_chk(...) ⟧ *)
+    (* 𝔼⟦ fprintf(...) ⟧ *)
+    | E_c_builtin_call("fprintf", args)
     | E_c_builtin_call("__fprintf_chk", args) ->
-      warn_at exp.erange "__fprintf_chk: unsound implementation";
+      warn_at exp.erange "fprintf unsound implementation";
       Eval.singleton (mk_top s32 exp.erange) flow |>
       Option.return
 
-    (* 𝔼⟦ __vprintf_chk(...) ⟧ *)
+    (* 𝔼⟦ vprintf(...) ⟧ *)
+    | E_c_builtin_call("vprintf", args)
     | E_c_builtin_call("__vprintf_chk", args) ->
       panic_at exp.erange "__vprintf_chk not supported"
 
-    (* 𝔼⟦ __vfprintf_chk(...) ⟧ *)
+    (* 𝔼⟦ vfprintf(...) ⟧ *)
+    | E_c_builtin_call("vfprintf", args)
     | E_c_builtin_call("__vfprintf_chk", args) ->
       panic_at exp.erange "__vfprintf_chk not supported"
 

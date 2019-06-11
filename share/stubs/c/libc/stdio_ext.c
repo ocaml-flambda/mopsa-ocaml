@@ -83,6 +83,6 @@ void _flushlbf (void);
 /*$
  * requires: __fp in File;
  * ensures:  return == FSETLOCKING_INTERNAL or
-             return == FSETLOCKING_BYCALLER;
+ *           return == FSETLOCKING_BYCALLER;
  */
 int __fsetlocking (FILE *__fp, int __type);
