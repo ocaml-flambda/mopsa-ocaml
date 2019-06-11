@@ -273,6 +273,9 @@ and from_project prj =
       f.c_func_stub <- from_stub_alias ctx o alias;
     ) funcs_with_alias;
 
+  (* Parse stub directives *)
+  let directives = from_stub_directives ctx prj.proj_comments in
+
   let globals = StringMap.bindings prj.proj_vars |>
                 List.map snd |>
                 List.map (fun v ->
@@ -281,7 +284,11 @@ and from_project prj =
   in
 
 
-  Ast.C_program { c_globals = globals; c_functions = StringMap.bindings funcs |> List.split |> snd }
+  Ast.C_program {
+    c_globals = globals;
+    c_functions = StringMap.bindings funcs |> List.split |> snd;
+    c_stub_directives = directives;
+  }
 
 
 and find_target target targets =
@@ -473,7 +480,7 @@ and from_var_scope ctx = function
 and from_var_init ctx v =
   match v.var_init with
   | Some i -> Some (from_init ctx i)
-  | None -> from_init_stub ctx v
+  | None -> None
 
 and from_init_option ctx init =
   match init with
@@ -485,24 +492,6 @@ and from_init ctx init =
   | I_init_expr e -> C_init_expr (from_expr ctx e)
   | I_init_list(il, i) -> C_init_list (List.map (from_init ctx) il, from_init_option ctx i)
   | I_init_implicit t -> C_init_implicit (from_typ ctx t)
-
-and from_init_stub ctx v =
-  match C_stubs_parser.Main.parse_var_comment v
-          ctx.ctx_prj
-          ctx.ctx_macros
-          ctx.ctx_enums
-          ctx.ctx_global_preds
-          ctx.ctx_stubs
-  with
-  | None -> None
-  | Some stub ->
-    let stub =   {
-      stub_init_body     = List.map (from_stub_section ctx) stub.stub_body;
-      stub_init_locals   = List.map (from_stub_local ctx) stub.stub_locals;
-      stub_init_range    = stub.stub_range;
-    }
-    in
-    Some (C_init_stub stub)
 
 
 
@@ -863,6 +852,8 @@ and from_stub_expr_unop = function
   | LNOT -> O_log_not
   | BNOT -> O_bit_invert
 
+
+
 and from_stub_global_predicates com_map =
   let com_map = C_AST.RangeMap.filter (fun range com ->
       C_stubs_parser.Main.is_global_predicate com
@@ -871,6 +862,8 @@ and from_stub_global_predicates com_map =
   C_AST.RangeMap.fold (fun range com acc ->
       C_stubs_parser.Main.parse_global_predicate_comment com @ acc
     ) com_map []
+
+
 
 and from_stub_alias ctx f alias =
   let stub = C_stubs_parser.Main.resolve_alias alias f ctx.ctx_prj ctx.ctx_stubs in
@@ -899,3 +892,35 @@ and from_stub_alias ctx f alias =
   else
     panic "prototypes of function %s and its alias %s do not match"
       f.func_org_name alias
+
+
+
+and from_stub_directives ctx com_map =
+  let com_map = C_AST.RangeMap.filter (fun range com ->
+      C_stubs_parser.Main.is_directive com
+    ) com_map
+  in
+  C_AST.RangeMap.fold (fun range com acc ->
+      match C_stubs_parser.Main.parse_directive_comment
+              com
+              range
+              ctx.ctx_prj
+              ctx.ctx_macros
+              ctx.ctx_enums
+              ctx.ctx_global_preds
+              ctx.ctx_stubs
+      with
+      | None -> acc
+
+      | Some stub ->
+        from_stub_directive ctx stub :: acc
+    ) com_map []
+
+
+and from_stub_directive ctx stub =
+  {
+    stub_directive_body    = List.map (from_stub_section ctx) stub.stub_body;
+    stub_directive_range   = stub.stub_range;
+    stub_directive_locals  = List.map (from_stub_local ctx) stub.stub_locals;
+    stub_directive_assigns = List.map (from_stub_assigns ctx) stub.stub_assigns;
+  }

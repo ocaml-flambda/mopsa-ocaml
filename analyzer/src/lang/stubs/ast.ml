@@ -41,11 +41,12 @@ type stub_func = {
   stub_func_range  : range;
 }
 
-(** Stub for a variable initialization *)
-and stub_init = {
-  stub_init_body : section list;
-  stub_init_locals : local with_range list;
-  stub_init_range : range;
+(** Stub for a global directive *)
+and stub_directive = {
+  stub_directive_body : section list;
+  stub_directive_locals : local with_range list;
+  stub_directive_assigns : assigns with_range list;
+  stub_directive_range : range;
 }
 
 (** {2 Stub sections} *)
@@ -162,7 +163,7 @@ type expr_kind +=
 (*  =-=-=-=-=-=-=- *)
 
 type stmt_kind +=
-  | S_stub_init of var * stub_init
+  | S_stub_directive of stub_directive
   (** Initialization of a variable with a stub *)
 
   | S_stub_free of expr
@@ -224,8 +225,8 @@ let is_expr_quantified e =
     false
     e
 
-let mk_stub_init var stub range =
-  mk_stmt (S_stub_init (var, stub)) range
+let mk_stub_directive stub range =
+  mk_stmt (S_stub_directive stub) range
 
 let mk_stub_free e range =
   mk_stmt (S_stub_free e) range
@@ -389,7 +390,7 @@ let pp_sections fmt secs =
 
 let pp_stub_func fmt stub = pp_sections fmt stub.stub_func_body
 
-let pp_stub_init fmt stub = pp_sections fmt stub.stub_init_body
+let pp_stub_directive fmt stub = pp_sections fmt stub.stub_directive_body
 
 
 (** {2 Registration of expressions} *)
@@ -487,11 +488,8 @@ let () =
   register_stmt_with_visitor {
     compare = (fun next s1 s2 ->
         match skind s1, skind s2 with
-        | S_stub_init (v1, stub1), S_stub_init (v2, stub2) ->
-          Compare.compose [
-            (fun () -> compare_var v1 v2);
-            (fun () -> panic "compare for stubs not supported")
-          ]
+        | S_stub_directive (stub1), S_stub_directive (stub2) ->
+          panic "compare for stubs not supported"
 
         | S_stub_free(e1), S_stub_free(e2) ->
           compare_expr e1 e2
@@ -507,7 +505,7 @@ let () =
 
     visit = (fun next s ->
         match skind s with
-        | S_stub_init _ -> panic "visitor for S_stub_init not supported"
+        | S_stub_directive _ -> panic "visitor for S_stub_init not supported"
 
         | S_stub_free e ->
           { exprs = [e]; stmts = [] },
@@ -520,10 +518,9 @@ let () =
 
     print = (fun next fmt s ->
         match skind s with
-        | S_stub_init (v, stub) ->
-          fprintf fmt "@[<v 2>init %a:@,%a@]"
-            pp_var v
-            pp_sections stub.stub_init_body
+        | S_stub_directive (stub) ->
+          fprintf fmt "@[<v 2>/*$$$@,%a@]*/"
+            pp_sections stub.stub_directive_body
 
         | S_stub_free e -> fprintf fmt "free(%a);" pp_expr e
 

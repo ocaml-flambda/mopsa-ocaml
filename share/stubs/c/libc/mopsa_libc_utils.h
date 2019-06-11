@@ -28,9 +28,12 @@
 
 extern int _errno;
 
-// Translate a numeric file descriptor into the address of its resource
-extern void *_mopsa_int_to_fd(int fd);
+// Translate a file description resource into a numeric file descriptor
+extern int _mopsa_file_description_to_descriptor(void *f);
 
+
+// Translate a numeric file descriptor into a resource pointer
+extern void *_mopsa_file_descriptor_to_description(int fd);
 
 
 #endif /* MOPSA_LIBC_UTILS_H */

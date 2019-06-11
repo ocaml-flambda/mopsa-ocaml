@@ -92,13 +92,15 @@ struct
     in
     mkv name (V_c_bytes addr) (T_c_integer C_unsigned_long)
 
+  let mk_bytes addr range =
+    let v = mk_bytes_var addr in
+    mk_var v ~mode:addr.addr_mode range
 
   let mk_size addr elm range =
-    let bytes = mk_bytes_var addr in
-
+    let bytes = mk_bytes addr range in
     if Z.equal elm Z.one
-    then mk_var bytes range
-    else mk_binop (mk_var bytes range) O_div (mk_z elm range) ~etyp:bytes.vtyp range
+    then bytes
+    else mk_binop bytes O_div (mk_z elm range) ~etyp:bytes.etyp range
 
 
   (** Computation of post-conditions *)
@@ -127,10 +129,8 @@ struct
           man.exec stmt'' flow' |>
           Post.return
 
-        | E_c_points_to P_top ->
-          panic_at stmt.srange "resources.common: free(⊺) not supported"
-
-        | _ -> assert false
+        | _ ->
+          panic_at stmt.srange "resources.common: free(p | p %a) not supported" pp_expr pt
       end
 
     | S_rename ({ ekind = E_addr ({ addr_kind = A_stub_resource _ } as addr1) },
@@ -173,6 +173,30 @@ struct
       Eval.singleton (mk_var (mk_bytes_var addr) exp.erange) flow |>
       Option.return
 
+
+    | E_stub_builtin_call(BYTES, e) ->
+      Some (
+        man.eval ~zone:(Z_c_low_level,Z_c_points_to) e flow |>
+        Eval.bind @@ fun pt flow ->
+
+        match ekind pt with
+        | E_c_points_to (P_block (V var,_)) ->
+          Eval.singleton (mk_z (sizeof_type var.vtyp) exp.erange ~typ:ul) flow
+
+        | E_c_points_to (P_block (S str,_)) ->
+          Eval.singleton (mk_int (String.length str + 1) exp.erange ~typ:ul) flow
+
+        | E_c_points_to (P_block (A addr,_)) ->
+          Eval.singleton (mk_bytes addr exp.erange) flow
+
+        | E_c_points_to (P_block (Z,_)) -> panic ~loc:__LOC__ "bytes: addresses not supported"
+
+        | E_c_points_to P_top ->
+          Eval.singleton (mk_top ul exp.erange) flow
+
+        | _ -> panic_at exp.erange "bytes(%a | %a %a) not supported" pp_expr e pp_expr e pp_expr pt
+      )
+
     | E_stub_builtin_call(SIZE, e) ->
       Some (
         man.eval ~zone:(Z_c_low_level,Z_c_points_to) e flow |>
@@ -199,7 +223,7 @@ struct
         | E_c_points_to P_top ->
           Eval.singleton (mk_top ul exp.erange) flow
 
-        | _ -> panic_at exp.erange "size(%a) not supported" pp_expr pt
+        | _ -> panic_at exp.erange "size(%a | %a %a) not supported" pp_expr e pp_expr e pp_expr pt
       )
 
 

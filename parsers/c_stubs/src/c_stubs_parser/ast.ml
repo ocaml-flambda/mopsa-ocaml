@@ -19,7 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** 
+(**
    Abstract syntax tree for C stubs. It is similar to the CST except:
    - predicates are expanded.
    - types and variables are resolved using the context of the Clang parser.

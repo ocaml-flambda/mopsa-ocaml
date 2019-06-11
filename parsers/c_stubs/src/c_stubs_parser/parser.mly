@@ -103,9 +103,11 @@
 
 %start parse_stub
 %start parse_expr
+%start parse_type
 
 %type <Cst.stub option> parse_stub
 %type <Cst.expr> parse_expr
+%type <Cst.c_qual_typ> parse_type
 
 %%
 
@@ -115,6 +117,9 @@ parse_stub:
 
 parse_expr:
   | expr EOF { $1 }
+
+parse_type:
+  | c_qual_typ EOF { $1 }
 
 (* Sections *)
 section_list:

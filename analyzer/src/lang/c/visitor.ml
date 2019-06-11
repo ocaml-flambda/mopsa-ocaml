@@ -30,7 +30,6 @@ let rec exprs_in_init = function
     let el1 = l |> List.fold_left (fun acc init -> acc @ exprs_in_init init) [] in
     let el2 = exprs_in_init_option filler in
     el1 @ el2
-  | C_init_stub stub -> []
   | C_init_flat l ->
     List.fold_left (fun acc init ->
         match init with

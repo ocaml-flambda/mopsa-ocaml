@@ -479,12 +479,12 @@ struct
 
   let exec zone stmt man flow =
     match skind stmt with
-    | S_stub_init (v, stub) ->
+    | S_stub_directive (stub) ->
       (* Evaluate the body of the stub *)
-      let flow = exec_body stub.stub_init_body (Some v) man flow in
+      let flow = exec_body stub.stub_directive_body None man flow in
 
       (* Clean locals and primes *)
-      let flow = clean_post stub.stub_init_locals [] stub.stub_init_range man flow in
+      let flow = clean_post stub.stub_directive_locals stub.stub_directive_assigns stub.stub_directive_range man flow in
 
       Post.return flow |>
       Option.return

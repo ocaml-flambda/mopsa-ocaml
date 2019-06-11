@@ -110,18 +110,17 @@ struct
         in
         if cvar.cvar_scope = Variable_extern then flow
         else
-          let stmt =
-            match init with
-            | Some (C_init_stub stub)->
-              mk_block [
-                mk_add_var v cvar.cvar_range;
-                Stubs.Ast.mk_stub_init v stub cvar.cvar_range
-              ] cvar.cvar_range
-
-            | _ ->
-              mk_c_declaration v init cvar.cvar_scope cvar.cvar_range
-          in
+          let stmt = mk_c_declaration v init cvar.cvar_scope cvar.cvar_range in
           man.exec stmt flow
+      ) flow
+
+
+  (** Execute stub directives *)
+  let exec_stub_directives directives range man flow =
+    directives |>
+    List.fold_left (fun flow directive ->
+        let stmt = mk_stub_directive directive range in
+        man.exec stmt flow
       ) flow
 
 
@@ -291,10 +290,13 @@ struct
 
   let exec zone stmt man flow =
     match skind stmt with
-    | S_program ({ prog_kind = C_program {c_globals; c_functions} }, args)
+    | S_program ({ prog_kind = C_program {c_globals; c_functions; c_stub_directives} }, args)
       when not !Universal.Iterators.Unittest.unittest_flag ->
       (* Initialize global variables *)
       let flow1 = init_globals c_globals (srange stmt) man flow in
+
+      (* Execute stub directives *)
+      let flow1 = exec_stub_directives c_stub_directives (srange stmt) man flow1 in
 
       (* Find entry function *)
       let entry =

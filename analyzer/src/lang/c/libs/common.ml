@@ -27,14 +27,20 @@
 (** List of builtin functions *)
 let is_builtin_function = function
   | "__builtin_constant_p"
+
   | "__builtin_va_start"
   | "__builtin_va_end"
   | "__builtin_va_copy"
+
   | "printf"
+  | "fprintf"
+  | "vprintf"
+  | "vfprintf"
   | "__printf_chk"
   | "__fprintf_chk"
-  | "__vfprintf_chk"
   | "__vprintf_chk"
+  | "__vfprintf_chk"
+
   | "_mopsa_range_char"
   | "_mopsa_range_unsigned_char"
   | "_mopsa_range_short"
@@ -45,13 +51,14 @@ let is_builtin_function = function
   | "_mopsa_range_unsigned_long"
   | "_mopsa_range_long_long"
   | "_mopsa_range_unsigned_long_long"
-  | "_mopsa_set_debug_channels"
   | "_mopsa_range"
   | "_mopsa_rand"
   | "_mopsa_rand_int"
   | "_mopsa_rand_unsigned_long"
+
   | "_mopsa_panic"
   | "_mopsa_print"
+
   | "_mopsa_assert_exists"
   | "_mopsa_assert"
   | "_mopsa_assert_safe"
@@ -59,10 +66,13 @@ let is_builtin_function = function
   | "_mopsa_assert_error"
   | "_mopsa_assert_error_exists"
   | "_mopsa_assert_error_at_line"
-  | "_mopsa_fd_to_int"
-  | "_mopsa_int_to_fd"
+
+
   | "_mopsa_cf_part"
   | "_mopsa_cf_merge"
+
+  | "_mopsa_file_description_to_descriptor"
+  | "_mopsa_file_descriptor_to_description"
     -> true
 
   | _ -> false

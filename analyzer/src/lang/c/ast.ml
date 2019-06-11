@@ -211,7 +211,6 @@ type c_var_init =
   | C_init_expr of expr
   | C_init_list of c_var_init list (** specified elements *) * c_var_init option (** filler *)
   | C_init_implicit of typ
-  | C_init_stub of Stubs.Ast.stub_init
   | C_init_flat of c_flat_init list
 
 
@@ -375,8 +374,9 @@ type stmt_kind +=
 
 
 type c_program = {
-  c_globals : (var * c_var_init option) list;        (** global variables of the program *)
+  c_globals : (var * c_var_init option) list; (** global variables of the program *)
   c_functions : c_fundec list; (** functions of the program *)
+  c_stub_directives : Stubs.Ast.stub_directive list; (** list of stub directives *)
 }
 
 type prog_kind +=
@@ -979,3 +979,9 @@ let rec c_expr_to_z (e:expr) : Z.t option =
     else c_expr_to_z e2
 
   | _ -> None
+
+
+let is_c_expr_equals_z e z =
+  match c_expr_to_z e with
+  | None -> false
+  | Some n -> Z.equal n z
