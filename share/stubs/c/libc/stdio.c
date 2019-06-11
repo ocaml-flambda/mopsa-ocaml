@@ -33,68 +33,52 @@
   FILE* not struct _IO_FILE*
 */
 #if __GLIBC_MINOR__ <= 27
-
-/*$
- * local:   struct _IO_FILE* addr = new File;
- * ensures: stdin == addr;
- * ensures: size(stdin) == sizeof(struct _IO_FILE);
- * ensures: stdin->_fileno == 0;
- */
-struct _IO_FILE *stdin;
-
-/*$
- * local:   struct _IO_FILE* addr = new File;
- * ensures: stdout == addr;
- * ensures: size(stdout) == sizeof(struct _IO_FILE);
- * ensures: stdout->_fileno == 1;
- */
-struct _IO_FILE *stdout;
-
-/*$
- * local:   struct _IO_FILE* addr = new File;
- * ensures: stderr == addr;
- * ensures: size(stderr) == sizeof(struct _IO_FILE);
- * ensures: stderr->_fileno == 2;
- */
-struct _IO_FILE *stderr;
-
+#define _FILE_ struct _IO_FILE
 #else
+#define _FILE_ FILE
+#endif
+
+_FILE_ *stdin;
+_FILE_ *stdout;
+_FILE_ *stderr;
 
 /*$
- * local:   FILE* addr = new File;
- * ensures: stdin == addr;
- * ensures: size(stdin) == sizeof(FILE);
- * ensures: stdin->_fileno == 0;
+ * local: void *f = new FileDescription;
+ * local: int fd = _mopsa_file_description_to_descriptor(f);
+ * local: _FILE_* file = new File;
+ * ensures: bytes(file) == sizeof(_FILE_);
+ * ensures: file->_fileno == fd;
+ * ensures: return == file;
  */
-FILE *stdin;
+_FILE_ *_alloc_std_stream();
+
+/*$$$
+ * assigns: stdin;
+ * assigns: stdout;
+ * assigns: stderr;
+ * local:   _FILE_* fstdin = _alloc_std_stream();
+ * local:   _FILE_* fstdout = _alloc_std_stream();
+ * local:   _FILE_* fstderr = _alloc_std_stream();
+ * ensures: stdin' == fstdin;
+ * ensures: stdout' == fstdout;
+ * ensures: stderr' == fstderr;
+ */
+
+
+
+
 
 /*$
- * local:   FILE* addr = new File;
- * ensures: stdout == addr;
- * ensures: size(stdout) == sizeof(struct FILE);
- * ensures: stdout->_fileno == 1;
+ * local: void *f = new FileDescription;
+ * local: int fd = _mopsa_file_description_to_descriptor(f);
+ * local: FILE* file = new File;
+ * ensures: bytes(file) == sizeof(FILE);
+ * ensures: file->_fileno == fd;
+ * ensures: return == file;
  */
-FILE *stdout;
-
-/*$
- * local:   struct FILE* addr = new File;
- * ensures: stderr == addr;
- * ensures: size(stderr) == sizeof(struct FILE);
- * ensures: stderr->_fileno == 2;
- */
-FILE *stderr;
+FILE *_alloc_FILE();
 
 
-#endif // __GLIBC_MINOR__ <= 27
-
-/*$
- * local: FILE* f = new File;
- * local: int fd = new FileDescriptor;
- * ensures: f->_fileno == fd;
- * ensures: size(f) == sizeof(FILE);
- * ensures: return == f;
- */
-FILE* _alloc_FILE();
 
 const char *const sys_errlist[128]; // TODO: actual size
 
@@ -215,7 +199,7 @@ char *tempnam (const char *__dir, const char *__pfx);
  * requires: __stream->_fileno in FileDescriptor;
  *
  * case "success" {
- *   local:   void* addr = _mopsa_int_to_fd(__stream->_fileno);
+ *   local:   void* addr = _mopsa_file_descriptor_to_description(__stream->_fileno);
  *   ensures: return == 0;
  *   free:    __stream;
  *   free:    addr;
@@ -236,7 +220,7 @@ int fclose (FILE *__stream);
  *
  * case "success" {
  *   assumes:  __stream != NULL;
- *   local:   void* addr = _mopsa_int_to_fd(__stream->_fileno);
+ *   local:   void* addr = _mopsa_file_descriptor_to_description(__stream->_fileno);
  *   ensures: return == 0;
  *   free:    __stream;
  *   free:    addr;
@@ -313,7 +297,7 @@ FILE *freopen (const char *__restrict __filename,
  * case "success" {
  *   local:   FILE* f = new File;
  *   ensures: f->_fileno == __fd;
- *   ensures: size(f) == sizeof(FILE);
+ *   ensures: size(f) == 1;
  *   ensures: return == f;
  * }
  *

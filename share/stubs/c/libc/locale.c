@@ -27,13 +27,18 @@
 #include <locale.h>
 #include <limits.h>
 
-/*$
+char * _local_buf;
+
+
+/*$$$
+ * assigns: _local_buf;
  * local: char* addr = new ReadOnlyString;
  * ensures: size(addr) > 0;
  * // TODO ensures: valid_string(addr);
- * ensures: _local_buf == addr;
+ * ensures: _local_buf' == addr;
  */
-char * _local_buf;
+
+
 
 /*$
  * requires: __locale != NULL implies valid_string(__locale);
