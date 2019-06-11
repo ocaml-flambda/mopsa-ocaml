@@ -25,7 +25,7 @@
 	    // Libraries
             "c.libs.builtins",
             "c.libs.mopsalib",
-            "c.libs.clib.file",
+            "c.libs.clib.file_descriptor",
             "c.libs.clib.print",
             "c.libs.variadic",
 	    "c.libs.resources",

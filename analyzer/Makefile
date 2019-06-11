@@ -69,7 +69,7 @@ lang.c.memory.structured = flat
 lang.c.memory.lowlevel = string_length cells smashing reductions
 lang.c.memory.scalars = pointers machine_numbers
 lang.c.libs = common clib mopsalib builtins variadic resources
-lang.c.libs.clib.file = slot table domain
+lang.c.libs.clib.file_descriptor = slot table domain
 
 
 
