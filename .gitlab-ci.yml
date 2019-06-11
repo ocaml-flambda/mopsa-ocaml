@@ -162,7 +162,7 @@ test-c 19/22:
 
 test-c 20/22:
   variables:
-    C_FILE: 'libc/buitin_constant_p_tests.c'
+    C_FILE: 'libc/builtin_constant_p_tests.c'
   extends: .test-c
 
 test-c 21/22:
