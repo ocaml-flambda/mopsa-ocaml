@@ -1103,6 +1103,7 @@ and atomic_expr = {
  and unary_expr_or_type =
    | UETT_SizeOf
    | UETT_AlignOf
+   | UETT_PreferredAlignOf (* Clang >= 8 *)
 
  and array_type_trait =
    | ATT_ArrayRank
