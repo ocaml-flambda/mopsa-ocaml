@@ -195,6 +195,7 @@ let ident_type_name = function
 let unary_expr_or_type_name = function
   | UETT_SizeOf -> "sizeof"
   | UETT_AlignOf -> "alignof"
+  | UETT_PreferredAlignOf -> "__alignof"
 
 let array_type_trait_name = function
    | ATT_ArrayRank -> "__array_rank"

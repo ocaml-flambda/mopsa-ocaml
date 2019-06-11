@@ -982,7 +982,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
       (try
          match op with
          | C.UETT_SizeOf -> sizeof_expr ctx.ctx_target range typ tt
-         | C.UETT_AlignOf ->
+         | C.UETT_AlignOf | C.UETT_PreferredAlignOf ->
             E_integer_literal (alignof_type ctx.ctx_target tt), typ, range
        with Invalid_argument msg ->
          warning range msg (C.string_of_type (fst t));

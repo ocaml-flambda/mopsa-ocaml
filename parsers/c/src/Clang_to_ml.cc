@@ -2098,6 +2098,8 @@ enum {
 enum {
   MLTAG_UETT_SizeOf,
   MLTAG_UETT_AlignOf,
+  // Clang >= 8
+  MLTAG_UETT_PreferredAlignOf,
 };
 
 /* array_type_trait */
@@ -2375,6 +2377,9 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
           switch (x->getKind()) {
             GENERATE_CASE(r, UETT_SizeOf);
             GENERATE_CASE(r, UETT_AlignOf);
+#if CLANG_VERSION_MAJOR >= 8
+            GENERATE_CASE(r, UETT_PreferredAlignOf);
+#endif
           default:
             if (verbose_exn) { node->dump(); std::cout << "unknown kind of unary expression or type trait operator: " << x->getKind() << std::endl; }
             caml_failwith("mlClangAST: unknown kind of unary expresion or type trait operator");
