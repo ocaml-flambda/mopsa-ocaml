@@ -53,6 +53,13 @@ void test_null_is_zero() {
   _mopsa_assert(p == NULL);
 }
 
+
+void test_refine_top_pointer() {
+  int *p = _mopsa_rand_pointer(int *);
+  if (p) _mopsa_assert(p != NULL);
+}
+
+
 int *global;
 
 void test_initialization_to_null_of_uninitialized_global() {
@@ -245,13 +252,14 @@ void test_pointer_ge() {
   _mopsa_assert(p >= a);
 }
 
-void test_refine_top_pointer() {
-  int *p = _mopsa_rand_pointer(int *);
-  _mopsa_assume(p != NULL);
-  _mopsa_assume(p != _mopsa_invalid_pointer());
-  int x = *p;
-  _mopsa_assert_safe();
+void test_unsafe_pointer_le() {
+  int i, j;
+  int *p = &i;
+  int *q = &j;
+  int d = p <= q;
+  _mopsa_assert_unsafe();
 }
+
 
 
 /*

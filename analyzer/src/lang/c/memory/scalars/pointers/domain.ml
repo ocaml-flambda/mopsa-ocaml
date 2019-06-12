@@ -242,11 +242,13 @@ struct
       | O_ne -> mk_zero range
       | _ -> assert false
 
-  let remove_offset_opt p range man flow =
+  let remove_offset_opt p v v' range man flow =
     match p with
     | None -> flow
     | Some (p,mode) ->
-      man.exec ~zone:Z_u_num (mk_remove (mk_offset_expr p mode range) range) flow
+      if Value.is_valid_base v && not (Value.is_valid_base v')
+      then man.exec ~zone:Z_u_num (mk_remove (mk_offset_expr p mode range) range) flow
+      else flow
 
 
   (** {2 Pointer evaluation} *)
@@ -302,14 +304,10 @@ struct
     in
 
     (* Refine offsets in case v is a valid address *)
-    if Value.is_valid_base v
-    then
-      man.eval ~zone:(Z_c_scalar, Z_u_num) (mk_offset_constraint_opt O_eq p1 o1 p2 o2 range) flow
-    else
-      let flow = remove_offset_opt p1 range man flow |>
-                 remove_offset_opt p2 range man
-      in
-      Eval.singleton (mk_one range) flow
+    let flow = remove_offset_opt p1 v1 v range man flow |>
+               remove_offset_opt p2 v2 v range man
+    in
+    man.eval ~zone:(Z_c_scalar, Z_u_num) (mk_offset_constraint_opt O_eq p1 o1 p2 o2 range) flow
 
 
 
@@ -324,28 +322,30 @@ struct
 
     (* Case 1: same valid bases *)
     let case1 =
-      let v = Value.meet v1 v2 |> Value.meet Value.valid_top in
+      let v = Value.meet v1 v2 in
       if Value.is_bottom v
       then []
       else
         let flow = set_value_opt p1 v man flow |>
-                   set_value_opt p2 v man
+                   set_value_opt p2 v man |>
+                   remove_offset_opt p1 v1 v range man |>
+                   remove_offset_opt p2 v2 v range man
         in
         [man.eval ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) (mk_offset_constraint_opt O_ne p1 o1 p2 o2 range) flow]
     in
 
     (* Case 2: different bases *)
     let case2 =
-      let v1 = Value.diff v1 v2 in
-      let v2 = Value.diff v2 v1 in
-      if Value.is_bottom v1 || Value.is_bottom v2
+      let v1' = Value.diff v1 v2 in
+      let v2' = Value.diff v2 v1 in
+      if Value.is_bottom v1' || Value.is_bottom v2'
       then []
       else
-        let flow = set_value_opt p1 v1 man flow |>
-                   set_value_opt p2 v2 man
+        let flow = set_value_opt p1 v1' man flow |>
+                   set_value_opt p2 v2' man |>
+                   remove_offset_opt p1 v1 v1' range man |>
+                   remove_offset_opt p2 v2 v2' range man
         in
-        let flow = if not (Value.is_valid_base v1) then remove_offset_opt p1 range man flow else flow in
-        let flow = if not (Value.is_valid_base v2) then remove_offset_opt p2 range man flow else flow in
         [Eval.singleton (mk_one range) flow]
 
     in
@@ -392,7 +392,63 @@ struct
   
   (** 𝔼⟦ p - q ⟧ *)
   let eval_diff p q range man flow =
-    panic ~loc:__LOC__ "not implemented"
+    (* p1 and p2 should point to the same type *)
+    if compare_typ (under_type p.etyp) (under_type q.etyp) <> 0
+    then panic_at range
+        "%a - %a: pointers do not point to the same type"
+        pp_expr p pp_expr q
+    ;
+
+    (* Evaluate the pointed bases symbolically *)
+    let sp = Symbolic.eval p in
+    let sq = Symbolic.eval q in
+
+    let v1, o1, p1 = symbolic_to_value sp man flow in
+    let v2, o2, p2 = symbolic_to_value sq man flow in
+
+    (* Size of a pointed element *)
+    let elem_size =
+      match under_type p.etyp |> remove_typedef_qual with
+      | T_c_void -> Z.one
+      | t -> sizeof_type t
+    in
+
+    (* Case 1 : same base => return difference of offset *)
+    let case1 =
+      let v = Value.meet v1 v2 |> Value.meet Value.valid_top in
+      if Value.is_bottom v
+      then []
+      else
+        let flow = set_value_opt p1 v man flow |>
+                   set_value_opt p2 v man
+        in
+        let o1 = mk_offset_expr_opt p1 o1 range in
+        let o2 = mk_offset_expr_opt p2 o2 range in
+        let e = sub o1 o2 range in
+        let ee =
+          if Z.equal elem_size Z.one
+          then e
+          else div e (mk_z elem_size range) range
+        in
+        [man.eval ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) ee flow]
+    in
+
+    (* Case 2: different base => undefined behavior *)
+    let case2 =
+      let v1 = Value.diff v1 v2 in
+      let v2 = Value.diff v2 v1 in
+      if Value.is_bottom v1 || Value.is_bottom v2
+      then []
+      else
+        let flow = set_value_opt p1 v1 man flow |>
+                   set_value_opt p2 v2 man
+        in
+        let flow = raise_alarm Alarms.AIllegalPointerDiff range ~bottom:true man.lattice flow in
+        [Eval.empty_singleton flow]
+    in
+
+    Eval.join_list (case1 @ case2) ~empty:(Eval.empty_singleton flow) 
+
 
 
   (** 𝔼⟦ ptr_valid(p) ⟧ *)
