@@ -254,6 +254,14 @@ void test_pointer_ge() {
   _mopsa_assert(p >= a);
 }
 
+void test_refine_top_pointer() {
+  int *p = _mopsa_rand_pointer(int *);
+  _mopsa_assume(p != NULL);
+  _mopsa_assume(p != _mopsa_invalid_pointer());
+  int x = *p;
+  _mopsa_assert_safe();
+}
+
 
 /*
  * Pointer difference
