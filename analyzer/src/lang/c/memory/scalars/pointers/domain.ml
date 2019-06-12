@@ -294,14 +294,14 @@ struct
     let v1, o1, p1 = symbolic_to_value sp man flow in
     let v2, o2, p2 = symbolic_to_value sq man flow in
 
-    (* Compute new bases *)
+    (* Compute common pointed addresses *)
     let v = Value.meet v1 v2 in
 
     let flow = set_value_opt p1 v man flow |>
                set_value_opt p2 v man
     in
 
-    (* Refine offsets in case p and q are valid *)
+    (* Refine offsets in case v is a valid address *)
     if Value.is_valid v
     then
       man.eval ~zone:(Z_c_scalar, Z_u_num) (mk_offset_constraint_opt O_eq p1 o1 p2 o2 range) flow
@@ -321,9 +321,6 @@ struct
 
     let v1, o1, p1 = symbolic_to_value sp man flow in
     let v2, o2, p2 = symbolic_to_value sq man flow in
-
-    debug "v1 = %a, o1 = %a, p1 = %a" Value.print v1 (Option.print pp_expr) o1 (Option.print (fun fmt (p,_) -> pp_var fmt p)) p1;
-    debug "v2 = %a, o2 = %a, p2 = %a" Value.print v2 (Option.print pp_expr) o2 (Option.print (fun fmt (p,_) -> pp_var fmt p)) p2;
 
     (* Case 1: same valid bases *)
     let case1 =
@@ -348,7 +345,6 @@ struct
         let flow = set_value_opt p1 v1 man flow |>
                    set_value_opt p2 v2 man
         in
-        debug "case2: v1 = %a, v2 = %a" Value.print v1 Value.print v2;
         let flow = if not (Value.is_valid v1) then remove_offset_opt p1 range man flow else flow in
         let flow = if not (Value.is_valid v2) then remove_offset_opt p2 range man flow else flow in
         [Eval.singleton (mk_one range) flow]
@@ -363,7 +359,41 @@ struct
 
 
   let eval_is_valid p range man flow =
-    panic ~loc:__LOC__ "not implemented"
+    (* A valid pointer is not NULL nor INVALID, and its offset is
+       within [0, sizeof(base) - sizeof(under_type t) [ *)
+
+    (* Evaluate the pointed address *)
+    eval_points_to p man flow |>
+    Option.lift @@ Eval.bind @@ fun pt flow ->
+
+    match ekind pt with
+    | E_c_points_to(P_block(b, o)) ->
+      (* Evaluate the size of the base *)
+      Common.Base.eval_base_size b range man flow |>
+      Eval.bind @@ fun size flow ->
+
+      man.eval size ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) flow |>
+      Eval.bind @@ fun size flow ->
+
+      let elm =
+        match under_type p.etyp |> remove_typedef_qual with
+        | T_c_void -> mk_one range
+        | t -> mk_z (sizeof_type t) range
+      in
+
+      (* Check validity of the offset *)
+      let cond = mk_in o (mk_zero range) (sub size elm range) range in
+      Eval.singleton cond flow
+
+    | E_c_points_to(P_fun _) -> Eval.singleton (mk_one range) flow
+
+    | E_c_points_to(P_null | P_invalid) -> Eval.singleton (mk_zero range) flow
+
+    | E_c_points_to(P_top) -> Eval.singleton (mk_top T_bool range) flow
+
+    | _ -> panic_at range "is_valid(%a | %a %a) not supported"
+             pp_expr p pp_expr p pp_expr pt
+
 
 
   let eval_order op p q range man flow =
@@ -407,8 +437,7 @@ struct
 
     (* 𝔼⟦ ptr_valid(p) ⟧ *)
     | Stubs.Ast.E_stub_builtin_call( PTR_VALID, p) ->
-      eval_is_valid p exp.erange man flow |>
-      Option.return
+      eval_is_valid p exp.erange man flow
 
     (* 𝔼⟦ (t)p - (t)q | t is a numeric type ⟧ *)
     | E_binop(O_minus, { ekind = E_c_cast(p, _); etyp = t1 }, { ekind = E_c_cast(q, _); etyp = t2 })

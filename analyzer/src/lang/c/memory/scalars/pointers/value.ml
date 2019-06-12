@@ -263,15 +263,13 @@ let is_singleton (a:t) : bool =
 
 (** Compute the difference between two values *)
 let diff (a1:t) (a2:t) : t =
-  Debug.debug ~channel:"foo" "diff %a and %a" print a1 print a2;
   if is_singleton a2
   then {
     null = if a2.null then false else a1.null;
     invalid = if a2.invalid then false else a1.invalid;
     valid = ValidSet.diff a1.valid a2.valid;
   }
-  else
-    a1
+  else a1
 
 
 (** {2 Forward evaluations} *)
