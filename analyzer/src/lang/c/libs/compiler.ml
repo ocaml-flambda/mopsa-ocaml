@@ -20,59 +20,75 @@
 (****************************************************************************)
 
 
-(** Common utility functions for builtins *)
+(** Evaluation of compiler's builtin functions *)
 
 
-
-(** List of builtin functions *)
-let is_builtin_function = function
-  | "__builtin_constant_p"
-
-  | "__builtin_va_start"
-  | "__builtin_va_end"
-  | "__builtin_va_copy"
-
-  | "printf"
-  | "fprintf"
-  | "vprintf"
-  | "vfprintf"
-  | "__printf_chk"
-  | "__fprintf_chk"
-  | "__vprintf_chk"
-  | "__vfprintf_chk"
-
-  | "_mopsa_range_char"
-  | "_mopsa_range_unsigned_char"
-  | "_mopsa_range_short"
-  | "_mopsa_range_unsigned_short"
-  | "_mopsa_range_int"
-  | "_mopsa_range_unsigned_int"
-  | "_mopsa_range_long"
-  | "_mopsa_range_unsigned_long"
-  | "_mopsa_range_long_long"
-  | "_mopsa_range_unsigned_long_long"
-  | "_mopsa_range"
-  | "_mopsa_rand"
-  | "_mopsa_rand_int"
-  | "_mopsa_rand_unsigned_long"
-
-  | "_mopsa_panic"
-  | "_mopsa_print"
-
-  | "_mopsa_assert_exists"
-  | "_mopsa_assert"
-  | "_mopsa_assert_safe"
-  | "_mopsa_assert_unsafe"
-  | "_mopsa_assert_error"
-  | "_mopsa_assert_error_exists"
-  | "_mopsa_assert_error_at_line"
+open Mopsa
+open Framework.Core.Sig.Domain.Stateless
+open Universal.Ast
+open Ast
+open Zone
 
 
-  | "_mopsa_cf_part"
-  | "_mopsa_cf_merge"
+module Domain =
+struct
 
-  | "_mopsa_file_description_to_descriptor"
-  | "_mopsa_file_descriptor_to_description"
-    -> true
 
-  | _ -> false
+  (** Domain identification *)
+  (** ===================== *)
+
+  include GenStatelessDomainId(struct
+      let name = "c.libs.compiler"
+    end)
+
+  (** Zoning definition *)
+  (** ================= *)
+
+  let interface = {
+    iexec = {
+      provides = [];
+      uses = []
+    };
+    ieval = {
+      provides = [Z_c, Z_c_low_level];
+      uses = []
+    }
+  }
+
+  
+  (** {2 Transfer functions} *)
+  (** ====================== *)
+
+  let init _ _ flow =  flow
+
+  let exec zone stmt man flow = None
+
+
+  (** {2 Evaluation entry point} *)
+  (** ========================== *)
+
+  let eval zone exp man flow =
+    match ekind exp with
+
+    (* 𝔼⟦ __builtin_constant_p(e) ⟧ *)
+    | E_c_builtin_call("__builtin_constant_p", [e]) ->
+
+      (* __builtin_constant_ determines if [e] is known 
+         to be constant at compile time *)
+      let ret =
+        match ekind e with
+        | E_constant _ -> mk_one ~typ:s32 exp.erange
+        | _ -> mk_z_interval Z.zero Z.one ~typ:s32 exp.erange
+      in
+      Eval.singleton ret flow |>
+      Option.return
+
+
+    | _ -> None
+
+  let ask _ _ _  = None
+
+end
+
+let () =
+  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)

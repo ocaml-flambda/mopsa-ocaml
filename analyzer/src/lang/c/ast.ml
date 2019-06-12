@@ -827,9 +827,14 @@ let mk_c_subscript_access a i range =
 let mk_c_character c range =
   mk_constant (C_c_character ((Z.of_int @@ int_of_char c), C_char_ascii)) range ~etyp:(T_c_integer(C_unsigned_char))
 
+let mk_c_invalid_pointer range =
+  mk_constant C_c_invalid ~etyp:(T_c_pointer T_c_void) range
+
 let void = T_c_void
 let u8 = T_c_integer(C_unsigned_char)
 let s8 = T_c_integer(C_signed_char)
+let s16 = T_c_integer(C_signed_short)
+let u16 = T_c_integer(C_unsigned_short)
 let s32 = T_c_integer(C_signed_int)
 let u32 = T_c_integer(C_unsigned_int)
 let ul = T_c_integer(C_unsigned_long)
