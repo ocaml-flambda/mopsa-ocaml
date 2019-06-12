@@ -294,6 +294,10 @@ struct
       raise_alarm Alarms.AInvalidDeref p.erange ~bottom:true man.lattice flow |>
       Post.return
 
+    | E_c_points_to P_valid ->
+      warn_at range "unsound assignment to valid pointer %a" pp_expr p;
+      Post.return flow
+
     | E_c_points_to (P_block (V v, offset)) when is_c_scalar_type v.vtyp ->
       Post.return flow
 
@@ -505,7 +509,7 @@ struct
       post_eval man @@ fun offset flow ->
       assume_quantified_zero_cases op base offset range man flow
 
-    | E_c_points_to P_top ->
+    | E_c_points_to P_top | E_c_points_to P_valid ->
       Post.return flow
 
     | _ -> assert false
@@ -541,7 +545,14 @@ struct
     | E_c_cast (ee, _) -> is_zero_expr ee
     | _ -> false
 
+  let is_memory_addr addr =
+    match addr.addr_kind with
+    | A_stub_resource "Memory"
+    | A_stub_resource "String"
+    | A_stub_resource "ReadOnlyString" -> true
+    | _ -> false
 
+  
   (** Transformers entry point *)
   let exec zone stmt man flow =
     match skind stmt with
@@ -553,7 +564,7 @@ struct
       add_base (V v) stmt.srange man flow |>
       Option.return
 
-    | S_add { ekind = E_addr addr } ->
+    | S_add { ekind = E_addr addr } when is_memory_addr addr ->
       add_base (A addr) stmt.srange man flow |>
       Option.return
 
@@ -737,7 +748,7 @@ struct
       Eval.bind @@ fun offset flow ->
       eval_deref_cases base offset (under_pointer_type p.etyp) range man flow
 
-    | E_c_points_to P_top ->
+    | E_c_points_to P_top | E_c_points_to P_valid ->
       Eval.singleton (mk_top (under_pointer_type p.etyp) range) flow
 
     | _ -> assert false

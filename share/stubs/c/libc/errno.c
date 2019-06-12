@@ -24,6 +24,7 @@
   based on header from glibc-2.27-r6
 */
 #include <errno.h>
+#include <limits.h>
 #include "mopsa_libc_utils.h"
 
 int _errno;
@@ -33,22 +34,22 @@ int _errno;
  */
 int *__errno_location (void);
 
-#ifdef __USE_GNU
 
-/*$
- * local: char* addr = ReadOnlyString;
- * ensures: size(addr) > 1;
+/*$$$
+ * local: char* addr = new ReadOnlyString;
+ * assigns: program_invocation_name;
+ * ensures: size(addr) == INT_MAX;
  * ensures: valid_string(addr);
- * ensures: program_invocation_name == addr;
+ * ensures: program_invocation_name' == addr;
  */
 const char *program_invocation_name;
 
-/*$
- * local: char* addr = ReadOnlyString;
- * ensures: size(addr) > 1;
+/*$$$
+ * local: char* addr = new ReadOnlyString;
+ * assigns: program_invocation_short_name;
+ * ensures: size(addr) == INT_MAX;
  * ensures: valid_string(addr);
- * ensures: program_invocation_short_name;
+ * ensures: program_invocation_short_name' == addr;
  */
 const char *program_invocation_short_name;
 
-#endif

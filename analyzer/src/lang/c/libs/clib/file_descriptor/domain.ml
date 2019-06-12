@@ -381,7 +381,7 @@ struct
     match ekind exp with
     (* 𝔼⟦ new FileDescriptor ⟧ *)
     | E_stub_alloc("FileDescriptor") ->
-      let alloc = mk_alloc_addr (A_stub_resource "FileDescriptor") exp.erange in
+      let alloc = mk_alloc_addr (A_stub_resource "FileDescription") exp.erange in
       man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) alloc flow |>
       Eval.bind_some @@ fun exp' flow ->
       insert_addr (Addr.from_expr exp') exp.erange man flow

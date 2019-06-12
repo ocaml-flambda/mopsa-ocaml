@@ -223,6 +223,16 @@ struct
         | E_c_points_to P_top ->
           Eval.singleton (mk_top ul exp.erange) flow
 
+        | E_c_points_to P_valid ->
+          let _,max = rangeof ul in
+          Eval.singleton (mk_z_interval Z.one max exp.erange) flow
+
+        | E_c_points_to P_null 
+        | E_c_points_to P_invalid ->
+          warn_at exp.erange "size(%a) where %a %a not supported" pp_expr e pp_expr e pp_expr pt;
+          Eval.singleton (mk_top ul exp.erange) flow
+
+
         | _ -> panic_at exp.erange "size(%a | %a %a) not supported" pp_expr e pp_expr e pp_expr pt
       )
 

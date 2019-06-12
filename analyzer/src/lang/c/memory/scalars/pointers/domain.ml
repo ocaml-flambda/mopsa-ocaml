@@ -512,12 +512,14 @@ struct
       Option.return
 
     (* 𝔼⟦ p ⟧ *)
-    | E_var(v, _) when is_c_pointer_type v.vtyp ->
+    | E_constant (C_top _)
+    | E_var _ when is_c_pointer_type exp.etyp ->
       eval_ne exp (mk_zero exp.erange ~typ:(T_c_pointer T_c_void)) exp.erange man flow |>
       Option.return
 
     (* 𝔼⟦ !p ⟧ *)
-    | E_unop (O_log_not, ({ekind = E_var (v, _)} as p)) when is_c_pointer_type v.vtyp ->
+    | E_unop (O_log_not, ({ekind = E_constant (C_top _)} as p))
+    | E_unop (O_log_not, ({ekind = E_var _} as p)) when is_c_pointer_type exp.etyp ->
       eval_eq p (mk_zero exp.erange ~typ:(T_c_pointer T_c_void)) exp.erange man flow |>
       Option.return
 
