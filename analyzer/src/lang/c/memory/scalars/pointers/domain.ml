@@ -199,7 +199,7 @@ struct
       let v = get_domain_env T_cur man flow |>
               Map.find q
       in
-      v, (if Value.is_valid v then Some o else None), (Some (q,mode))
+      v, (if Value.is_valid_base v then Some o else None), (Some (q,mode))
 
     | Null ->
       Value.null, None, None
@@ -302,7 +302,7 @@ struct
     in
 
     (* Refine offsets in case v is a valid address *)
-    if Value.is_valid v
+    if Value.is_valid_base v
     then
       man.eval ~zone:(Z_c_scalar, Z_u_num) (mk_offset_constraint_opt O_eq p1 o1 p2 o2 range) flow
     else
@@ -331,7 +331,6 @@ struct
         let flow = set_value_opt p1 v man flow |>
                    set_value_opt p2 v man
         in
-        debug "case1: v = %a" Value.print v;
         [man.eval ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) (mk_offset_constraint_opt O_ne p1 o1 p2 o2 range) flow]
     in
 
@@ -345,19 +344,58 @@ struct
         let flow = set_value_opt p1 v1 man flow |>
                    set_value_opt p2 v2 man
         in
-        let flow = if not (Value.is_valid v1) then remove_offset_opt p1 range man flow else flow in
-        let flow = if not (Value.is_valid v2) then remove_offset_opt p2 range man flow else flow in
+        let flow = if not (Value.is_valid_base v1) then remove_offset_opt p1 range man flow else flow in
+        let flow = if not (Value.is_valid_base v2) then remove_offset_opt p2 range man flow else flow in
         [Eval.singleton (mk_one range) flow]
 
     in
     Eval.join_list (case1 @ case2) ~empty:(Eval.empty_singleton flow)
 
 
+  (** 𝔼⟦ p op q | op ∈ {<, <=, >, >=} ⟧ *)
+  let eval_order op p q range man flow =
+    (* Evaluate the pointed bases symbolically *)
+    let sp = Symbolic.eval p in
+    let sq = Symbolic.eval q in
 
+    let v1, o1, p1 = symbolic_to_value sp man flow in
+    let v2, o2, p2 = symbolic_to_value sq man flow in
+
+    (* Case 1: same valid bases *)
+    let case1 =
+      let v = Value.meet v1 v2 |> Value.meet Value.valid_top in
+      if Value.is_bottom v
+      then []
+      else
+        let flow = set_value_opt p1 v man flow |>
+                   set_value_opt p2 v man
+        in
+        [man.eval ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) (mk_offset_constraint_opt op p1 o1 p2 o2 range) flow]
+    in
+
+    (* Case 2: different bases => undefined behavior *)
+    let case2 =
+      let v1 = Value.diff v1 v2 in
+      let v2 = Value.diff v2 v1 in
+      if Value.is_bottom v1 || Value.is_bottom v2
+      then []
+      else
+        let flow = set_value_opt p1 v1 man flow |>
+                   set_value_opt p2 v2 man
+        in
+        let flow = raise_alarm Alarms.AIllegalPointerOrder range ~bottom:true man.lattice flow in
+        [Eval.empty_singleton flow]
+    in
+    
+    Eval.join_list (case1 @ case2) ~empty:(Eval.empty_singleton flow)
+
+  
+  (** 𝔼⟦ p - q ⟧ *)
   let eval_diff p q range man flow =
     panic ~loc:__LOC__ "not implemented"
 
 
+  (** 𝔼⟦ ptr_valid(p) ⟧ *)
   let eval_is_valid p range man flow =
     (* A valid pointer is not NULL nor INVALID, and its offset is
        within [0, sizeof(base) - sizeof(under_type t) [ *)
@@ -394,10 +432,6 @@ struct
     | _ -> panic_at range "is_valid(%a | %a %a) not supported"
              pp_expr p pp_expr p pp_expr pt
 
-
-
-  let eval_order op p q range man flow =
-    panic ~loc:__LOC__ "not implemented"
 
 
   (** Evaluation of pointer comparisons *)
@@ -509,7 +543,7 @@ struct
       in
       (* Assign offset only if q points to a valid block *)
       let a = get_domain_env T_cur man flow in
-      if Map.find q a |> Value.is_valid then
+      if Map.find q a |> Value.is_valid_base then
         let qo = mk_offset_expr q mode' range in
         let offset' = mk_binop qo O_plus offset ~etyp:T_int range in
 

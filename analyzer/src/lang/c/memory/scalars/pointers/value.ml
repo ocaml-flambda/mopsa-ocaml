@@ -206,6 +206,13 @@ let is_valid (a:t) : bool =
   not (ValidSet.is_empty a.valid)
 
 
+(** Check if the pointer may point to valid base addresses *)
+let is_valid_base (a:t) : bool =
+  ValidSet.is_top a.valid ||
+  ValidSet.exists (function Base _ -> true | _ -> false) a.valid
+
+
+(** Fold over pointed objects *)
 let fold_points_to
     (f: t -> points_to -> 'a -> 'a)
     (a:t)
