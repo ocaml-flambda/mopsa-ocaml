@@ -17,7 +17,7 @@ void test_case_disjunction() {
   _mopsa_assert(is_positive(1) == 1);
   _mopsa_assert(is_positive(-1) == 0);
 
-  int x = _mopsa_rand_int(-1, 1);
+  int x = _mopsa_range_int(-1, 1);
   _mopsa_assert_exists(is_positive(x) == 1);
   _mopsa_assert_exists(is_positive(x) == 0);
 }

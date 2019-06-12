@@ -30,6 +30,7 @@ type alarm_kind +=
   | ADivideByZero
   | AIntegerOverflow
   | AIllegalPointerDiff
+  | AIllegalPointerOrder
   | AVaArgNoNext
   | AReadOnlyModification
 
@@ -45,6 +46,7 @@ let () =
           | ADivideByZero -> Format.fprintf fmt "div-zero"
           | AIntegerOverflow -> Format.fprintf fmt "int-overflow"
           | AIllegalPointerDiff -> Format.fprintf fmt "ptr-diff"
+          | AIllegalPointerOrder -> Format.fprintf fmt "ptr-order"
           | AVaArgNoNext -> Format.fprintf fmt "va-arg"
           | AReadOnlyModification -> Format.fprintf fmt "readonly"
           | _ -> default fmt a
@@ -57,6 +59,7 @@ let () =
           | ADivideByZero -> Format.fprintf fmt "Division by zero"
           | AIntegerOverflow -> Format.fprintf fmt "Integer overflow"
           | AIllegalPointerDiff -> Format.fprintf fmt "Illegal pointer difference"
+          | AIllegalPointerOrder -> Format.fprintf fmt "Illegal pointer comparison"
           | AVaArgNoNext -> Format.fprintf fmt "No next argument for va_arg"
           | AReadOnlyModification -> Format.fprintf fmt "Modification of a readonly memory"
           | _ -> default fmt a
@@ -69,6 +72,7 @@ let () =
           | ADivideByZero -> Format.fprintf fmt ""
           | AIntegerOverflow -> Format.fprintf fmt ""
           | AIllegalPointerDiff -> Format.fprintf fmt ""
+          | AIllegalPointerOrder -> Format.fprintf fmt ""
           | AVaArgNoNext -> Format.fprintf fmt ""
           | AReadOnlyModification -> Format.fprintf fmt ""
           | _ -> default fmt a

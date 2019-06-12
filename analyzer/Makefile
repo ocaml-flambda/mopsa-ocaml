@@ -68,7 +68,8 @@ lang.c.memory.common = base points_to quantified_offset
 lang.c.memory.structured = flat
 lang.c.memory.lowlevel = string_length cells smashing reductions
 lang.c.memory.scalars = pointers machine_numbers
-lang.c.libs = common clib mopsalib builtins variadic resources
+lang.c.memory.scalars.pointers = value symbolic domain
+lang.c.libs = builtins clib mopsalib compiler variadic resources
 lang.c.libs.clib.file_descriptor = slot table domain
 
 

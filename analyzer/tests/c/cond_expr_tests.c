@@ -29,7 +29,7 @@ void test_chain_of_conditions() {
 }
 
 void test_nondet_cond() {
-  int a = _mopsa_rand();
+  int a = _mopsa_rand_int();
   int b = (a == 0) ? 100 : -100;
   _mopsa_assert_exists(b == 100);
   _mopsa_assert_exists(b == -100);

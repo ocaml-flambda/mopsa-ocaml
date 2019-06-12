@@ -20,75 +20,63 @@
 (****************************************************************************)
 
 
-(** Evaluation of compiler's builtin functions *)
+(** List of builtin functions *)
+let is_builtin_function = function
+  | "__builtin_constant_p"
 
+  | "__builtin_va_start"
+  | "__builtin_va_end"
+  | "__builtin_va_copy"
 
-open Mopsa
-open Framework.Core.Sig.Domain.Stateless
-open Universal.Ast
-open Ast
-open Zone
+  | "printf"
+  | "fprintf"
+  | "vprintf"
+  | "vfprintf"
+  | "__printf_chk"
+  | "__fprintf_chk"
+  | "__vprintf_chk"
+  | "__vfprintf_chk"
 
+  | "_mopsa_rand_char"
+  | "_mopsa_rand_int8"
+  | "_mopsa_rand_uint8"
+  | "_mopsa_rand_int16"
+  | "_mopsa_rand_uint16"
+  | "_mopsa_rand_int32"
+  | "_mopsa_rand_uint32"
+  | "_mopsa_rand_int"
+  | "_mopsa_rand_float"
+  | "_mopsa_rand_double"
+  | "_mopsa_rand_void_pointer"
 
-module Domain =
-struct
+  | "_mopsa_range_char"
+  | "_mopsa_range_int8"
+  | "_mopsa_range_uint8"
+  | "_mopsa_range_int16"
+  | "_mopsa_range_uint16"
+  | "_mopsa_range_int32"
+  | "_mopsa_range_uint32"
+  | "_mopsa_range_int"
+  | "_mopsa_range_float"
+  | "_mopsa_range_double"
 
+  | "_mopsa_invalid_pointer"
 
-  (** Domain identification *)
-  (** ===================== *)
+  | "_mopsa_panic"
+  | "_mopsa_print"
 
-  include GenStatelessDomainId(struct
-      let name = "c.libs.builtins"
-    end)
+  | "_mopsa_assume"
 
-  (** Zoning definition *)
-  (** ================= *)
+  | "_mopsa_assert_exists"
+  | "_mopsa_assert"
+  | "_mopsa_assert_safe"
+  | "_mopsa_assert_unsafe"
+  | "_mopsa_assert_error"
+  | "_mopsa_assert_error_exists"
+  | "_mopsa_assert_error_at_line"
 
-  let interface = {
-    iexec = {
-      provides = [];
-      uses = []
-    };
-    ieval = {
-      provides = [Z_c, Z_c_low_level];
-      uses = []
-    }
-  }
+  | "_mopsa_file_description_to_descriptor"
+  | "_mopsa_file_descriptor_to_description"
+    -> true
 
-  
-  (** {2 Transfer functions} *)
-  (** ====================== *)
-
-  let init _ _ flow =  flow
-
-  let exec zone stmt man flow = None
-
-
-  (** {2 Evaluation entry point} *)
-  (** ========================== *)
-
-  let eval zone exp man flow =
-    match ekind exp with
-
-    (* 𝔼⟦ __builtin_constant_p(e) ⟧ *)
-    | E_c_builtin_call("__builtin_constant_p", [e]) ->
-
-      (* __builtin_constant_ determines if [e] is known 
-         to be constant at compile time *)
-      let ret =
-        match ekind e with
-        | E_constant _ -> mk_one ~typ:s32 exp.erange
-        | _ -> mk_z_interval Z.zero Z.one ~typ:s32 exp.erange
-      in
-      Eval.singleton ret flow |>
-      Option.return
-
-
-    | _ -> None
-
-  let ask _ _ _  = None
-
-end
-
-let () =
-  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+  | _ -> false

@@ -460,7 +460,7 @@ struct
     Eval.bind @@ fun pt flow ->
 
     match ekind pt with
-    | E_c_points_to P_top ->
+    | E_c_points_to P_top | E_c_points_to P_valid ->
       Eval.singleton Top flow
 
     | E_c_points_to P_null ->
@@ -993,7 +993,7 @@ struct
       man.eval ~zone:(Z_c_low_level, Z_c_points_to) target flow |>
       post_eval man @@ fun pt flow ->
       match ekind pt with
-      | E_c_points_to P_top ->
+      | E_c_points_to P_top | E_c_points_to P_valid ->
         Post.return flow
 
       | E_c_points_to (P_block(base, offset)) ->

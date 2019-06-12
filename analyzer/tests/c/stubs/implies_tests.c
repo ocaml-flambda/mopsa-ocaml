@@ -16,7 +16,7 @@ void test_implies_without_overlapping() {
 }
 
 void test_implies_with_overlapping() {
-  int x = _mopsa_rand();
+  int x = _mopsa_rand_int();
   _mopsa_assert_exists(check(x == 1, 2, 3) == 2);
   _mopsa_assert_exists(check(x == 1, 2, 3) == 3);
   _mopsa_assert(check(x == 1, 2, 3) != 0);

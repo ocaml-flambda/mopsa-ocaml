@@ -23,7 +23,7 @@
             "c.desugar.cond_expr",
 
 	    // Libraries
-            "c.libs.builtins",
+            "c.libs.compiler",
             "c.libs.mopsalib",
             "c.libs.clib.file_descriptor",
             "c.libs.clib.print",

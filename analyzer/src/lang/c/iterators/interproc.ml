@@ -78,7 +78,7 @@ struct
 
   (** Eval a function call *)
   let eval_call fundec args range man flow =
-    if Libs.Common.is_builtin_function fundec.c_func_org_name
+    if Libs.Builtins.is_builtin_function fundec.c_func_org_name
     then
       let exp' = mk_expr (E_c_builtin_call(fundec.c_func_org_name, args)) ~etyp:fundec.c_func_return range in
       man.eval ~zone:(Zone.Z_c, Zone.Z_c_low_level) exp' flow
