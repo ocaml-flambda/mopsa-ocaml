@@ -44,6 +44,11 @@ let is_compare_op = function
   | O_eq | O_ne | O_gt | O_ge | O_lt | O_le -> true
   | _ -> false
 
+let is_logic_op = function
+  | O_log_and | O_log_or -> true
+  | _ -> false
+
+
 let is_c_div = function
   | O_div | O_mod -> true
   | _ -> false
@@ -133,6 +138,22 @@ let to_universal_expr e =
     }
 
   | _ -> assert false
+
+
+let rec to_compare_expr e =
+  match ekind e with
+  | E_binop(op, e1, e2) when is_compare_op op ->
+    e
+
+  | E_binop(op, e1, e2) when is_logic_op op ->
+    { e with ekind = E_binop(op, to_compare_expr e1, to_compare_expr e2) }
+
+  | E_unop(O_log_not, ee) -> 
+    { e with ekind = E_unop(O_log_not, to_compare_expr ee) }
+
+  | _ ->
+    mk_binop e O_ne (mk_zero e.erange) e.erange
+
 
 (** {2 Domain definition} *)
 (** ===================== *)
@@ -466,8 +487,7 @@ struct
     | S_assume(e) ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow |>
       Option.return |> Option.lift @@ post_eval man @@ fun e' flow ->
-
-      man.exec_sub ~zone:Z_u_num (mk_assume e' stmt.srange) flow
+      man.exec_sub ~zone:Z_u_num (mk_assume (to_compare_expr e') stmt.srange) flow
 
     | _ -> None
 
