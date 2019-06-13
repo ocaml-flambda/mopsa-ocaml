@@ -59,34 +59,34 @@ void test_sizeof_struct_typedef() {
 
 
 
-/* Tests for ptr_valid built-in*/
+/* Tests for valid_ptr built-in*/
 /* **************************** */
 
 /*$
- * requires: ptr_valid(p);
+ * requires: valid_ptr(p);
  */
 void check_int_ptr(int *p);
 
-void test_ptr_valid_on_int() {
+void test_valid_ptr_on_int() {
   int x;
   int *p = &x;
   check_int_ptr(p);
   _mopsa_assert_safe();
 }
 
-void test_ptr_valid_on_null() {
+void test_valid_ptr_on_null() {
   int *p = NULL;
   check_int_ptr(p);
   _mopsa_assert_unsafe();
 }
 
-void test_ptr_valid_on_invalid() {
+void test_valid_ptr_on_invalid() {
   int *p;
   check_int_ptr(p);
   _mopsa_assert_unsafe();
 }
 
-void test_ptr_valid_on_offset_overflow() {
+void test_valid_ptr_on_offset_overflow() {
   int a[10];
   int *p = a;
   p = p + 10;

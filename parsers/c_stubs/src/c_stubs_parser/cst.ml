@@ -190,8 +190,8 @@ and builtin =
   | BYTES
   | OFFSET
   | BASE
-  | PTR_VALID
-  | FLOAT_VALID
+  | VALID_PTR
+  | VALID_FLOAT
   | FLOAT_INF
   | FLOAT_NAN
 
@@ -260,8 +260,8 @@ let pp_builtin fmt f =
   | OFFSET -> pp_print_string fmt "offset"
   | BASE   -> pp_print_string fmt "base"
   | PRIMED -> pp_print_string fmt "primed"
-  | PTR_VALID -> pp_print_string fmt "ptr_valid"
-  | FLOAT_VALID -> pp_print_string fmt "float_valid"
+  | VALID_PTR -> pp_print_string fmt "valid_ptr"
+  | VALID_FLOAT -> pp_print_string fmt "valid_float"
   | FLOAT_INF   -> pp_print_string fmt "float_inf"
   | FLOAT_NAN   -> pp_print_string fmt "float_nan"
 

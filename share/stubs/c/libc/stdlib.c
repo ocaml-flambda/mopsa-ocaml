@@ -398,13 +398,13 @@ int rand_r (unsigned int *__seed);
 #if defined __USE_MISC || defined __USE_XOPEN
 
 /*$
- * ensures: float_valid(return) and return in [0., 1.];
+ * ensures: valid_float(return) and return in [0., 1.];
  */
 double drand48 (void);
 
 /*$
  * assigns: __xsubi[0, 2];
- * ensures: float_valid(return) and return in [0., 1.];
+ * ensures: valid_float(return) and return in [0., 1.];
  */
 double erand48 (unsigned short int __xsubi[3]);
 
@@ -455,7 +455,7 @@ void lcong48 (unsigned short int __param[7]);
 /*$
  * assigns: *__result;
  * assigns: *__buffer;
- * ensures: float_valid((*__result)') and (*__result)' in [0., 1.];
+ * ensures: valid_float((*__result)') and (*__result)' in [0., 1.];
  * ensures: return == 0;
  */
 int drand48_r (struct drand48_data *__restrict __buffer,
@@ -465,7 +465,7 @@ int drand48_r (struct drand48_data *__restrict __buffer,
  * assigns: *__result;
  * assigns: *__buffer;
  * assigns: __xsubi[0, 2];
- * ensures: float_valid((*__result)') and (*__result)' in [0., 1.];
+ * ensures: valid_float((*__result)') and (*__result)' in [0., 1.];
  * ensures: return == 0;
  */
 int erand48_r (unsigned short int __xsubi[3],

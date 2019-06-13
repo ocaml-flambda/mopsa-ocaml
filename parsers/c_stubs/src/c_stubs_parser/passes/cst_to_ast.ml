@@ -199,7 +199,7 @@ let builtin_type f arg =
   | OFFSET -> int_type
   | BASE   -> pointer_type C_AST.(T_void, no_qual)
   | PRIMED -> arg.content.Ast.typ
-  | PTR_VALID | FLOAT_VALID | FLOAT_INF | FLOAT_NAN -> bool_type
+  | VALID_PTR | VALID_FLOAT | FLOAT_INF | FLOAT_NAN -> bool_type
   | BYTES    -> unsigned_long_type
 
 

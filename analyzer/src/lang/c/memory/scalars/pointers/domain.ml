@@ -451,7 +451,7 @@ struct
 
 
 
-  (** 𝔼⟦ ptr_valid(p) ⟧ *)
+  (** 𝔼⟦ valid_ptr(p) ⟧ *)
   let eval_is_valid p range man flow =
     (* A valid pointer is not NULL nor INVALID, and its offset is
        within [0, sizeof(base) - sizeof(under_type t) [ *)
@@ -483,7 +483,7 @@ struct
 
     | E_c_points_to(P_null | P_invalid) -> Eval.singleton (mk_zero range) flow
 
-    | E_c_points_to(P_top) -> Eval.singleton (mk_top T_bool range) flow
+    | E_c_points_to(P_top | P_valid) -> Eval.singleton (mk_top T_bool range) flow
 
     | _ -> panic_at range "is_valid(%a | %a %a) not supported"
              pp_expr p pp_expr p pp_expr pt
@@ -527,8 +527,8 @@ struct
     | E_c_cast(p, _) when is_c_pointer_type p.etyp ->
       eval_compare p man flow
 
-    (* 𝔼⟦ ptr_valid(p) ⟧ *)
-    | Stubs.Ast.E_stub_builtin_call( PTR_VALID, p) ->
+    (* 𝔼⟦ valid_ptr(p) ⟧ *)
+    | Stubs.Ast.E_stub_builtin_call( VALID_PTR, p) ->
       eval_is_valid p exp.erange man flow
 
     (* 𝔼⟦ (t)p - (t)q | t is a numeric type ⟧ *)
