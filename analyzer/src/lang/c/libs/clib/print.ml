@@ -67,44 +67,40 @@ struct
   (** {2 Evaluation entry point} *)
   (** ========================== *)
 
+  (** Evaluate arguments into scalar values *)
+  let eval_args args man flow =
+    Eval.eval_list (fun e flow ->
+        if is_c_num_type e.etyp
+        then man.eval ~zone:(Z_c,Universal.Zone.Z_u_num) e flow
+        else man.eval ~zone:(Z_c,Z_c_scalar) e flow
+      ) args flow
+
+
+  (** Evaluation entry point *)
   let eval zone exp man flow =
     match ekind exp with
 
     (* 𝔼⟦ printf(...) ⟧ *)
-    | E_c_builtin_call("printf", args)
-    | E_c_builtin_call("__printf_chk", args) ->
-      warn_at exp.erange "printf: unsound implementation";
-      Eval.singleton (mk_top s32 exp.erange) flow |>
-      Option.return
+    | E_c_builtin_call("printf", format :: args)
+    | E_c_builtin_call("__printf_chk", format :: args) ->
+      eval_args args man flow |>
+      Eval.bind_some @@ fun _ flow ->
+      Eval.singleton (mk_top s32 exp.erange) flow
 
     (* 𝔼⟦ fprintf(...) ⟧ *)
-    | E_c_builtin_call("fprintf", args)
-    | E_c_builtin_call("__fprintf_chk", args) ->
-      warn_at exp.erange "fprintf: unsound implementation";
-      Eval.singleton (mk_top s32 exp.erange) flow |>
-      Option.return
-
-    (* 𝔼⟦ vprintf(...) ⟧ *)
-    | E_c_builtin_call("vprintf", args)
-    | E_c_builtin_call("__vprintf_chk", args) ->
-      warn_at exp.erange "vprintf: unsound implementation";
-      Eval.singleton (mk_top s32 exp.erange) flow |>
-      Option.return
-
-    (* 𝔼⟦ vfprintf(...) ⟧ *)
-    | E_c_builtin_call("vfprintf", args)
-    | E_c_builtin_call("__vfprintf_chk", args) ->
-      warn_at exp.erange "vfprintf: unsound implementation";
-      Eval.singleton (mk_top s32 exp.erange) flow |>
-      Option.return
+    | E_c_builtin_call("fprintf", stream :: format :: args)
+    | E_c_builtin_call("__fprintf_chk", stream :: _ :: format :: args) ->
+      eval_args args man flow |>
+      Eval.bind_some @@ fun _ flow ->
+      Eval.singleton (mk_top s32 exp.erange) flow
 
       (* 𝔼⟦ sprintf(...) ⟧ *)
-    | E_c_builtin_call("sprintf", args)
-    | E_c_builtin_call("__sprintf_chk", args)
-    | E_c_builtin_call("__builtin___sprintf_chk", args) ->
-      warn_at exp.erange "sprintf: unsound implementation";
-      Eval.singleton (mk_top s32 exp.erange) flow |>
-      Option.return
+    | E_c_builtin_call("sprintf", dst :: format :: args)
+    | E_c_builtin_call("__sprintf_chk", dst :: _ :: _ :: format :: args)
+    | E_c_builtin_call("__builtin___sprintf_chk", dst :: _ :: _ :: format :: args) ->
+      eval_args args man flow |>
+      Eval.bind_some @@ fun _ flow ->
+      Eval.singleton (mk_top s32 exp.erange) flow
 
 
     | _ -> None
