@@ -80,19 +80,31 @@ struct
     (* 𝔼⟦ fprintf(...) ⟧ *)
     | E_c_builtin_call("fprintf", args)
     | E_c_builtin_call("__fprintf_chk", args) ->
-      warn_at exp.erange "fprintf unsound implementation";
+      warn_at exp.erange "fprintf: unsound implementation";
       Eval.singleton (mk_top s32 exp.erange) flow |>
       Option.return
 
     (* 𝔼⟦ vprintf(...) ⟧ *)
     | E_c_builtin_call("vprintf", args)
     | E_c_builtin_call("__vprintf_chk", args) ->
-      panic_at exp.erange "__vprintf_chk not supported"
+      warn_at exp.erange "vprintf: unsound implementation";
+      Eval.singleton (mk_top s32 exp.erange) flow |>
+      Option.return
 
     (* 𝔼⟦ vfprintf(...) ⟧ *)
     | E_c_builtin_call("vfprintf", args)
     | E_c_builtin_call("__vfprintf_chk", args) ->
-      panic_at exp.erange "__vfprintf_chk not supported"
+      warn_at exp.erange "vfprintf: unsound implementation";
+      Eval.singleton (mk_top s32 exp.erange) flow |>
+      Option.return
+
+      (* 𝔼⟦ sprintf(...) ⟧ *)
+    | E_c_builtin_call("sprintf", args)
+    | E_c_builtin_call("__sprintf_chk", args)
+    | E_c_builtin_call("__builtin___sprintf_chk", args) ->
+      warn_at exp.erange "sprintf: unsound implementation";
+      Eval.singleton (mk_top s32 exp.erange) flow |>
+      Option.return
 
 
     | _ -> None
