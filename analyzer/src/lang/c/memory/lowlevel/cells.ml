@@ -750,6 +750,18 @@ struct
       evl
 
 
+  (** Remove all cells already realized *)
+  let remove_all_cells range man flow =
+    let a = get_domain_env T_cur man flow in
+
+    if CellSet.is_top a.cells
+    then Post.return flow
+
+    else CellSet.fold (fun c acc ->
+        Post.bind (remove_cell c range man) acc
+      ) a.cells (Post.return flow)
+
+
   (** {2 Initial state} *)
   (** ***************** *)
 
@@ -931,7 +943,10 @@ struct
     post_eval man @@ fun expansion flow ->
     match expansion with
     | Top ->
-      panic_at range "assignment to ⊤ lval is not supported"
+      warn_at range "unable to determine the memory block pointed by %a; the analysis is unsound."
+        pp_expr p
+      ;
+      Post.return flow
 
     | Cell { base } when is_base_readonly base ->
       let flow = raise_alarm Alarms.AReadOnlyModification ~bottom:true range man.lattice flow in
@@ -993,7 +1008,7 @@ struct
       man.eval ~zone:(Z_c_low_level, Z_c_points_to) target flow |>
       post_eval man @@ fun pt flow ->
       match ekind pt with
-      | E_c_points_to P_top | E_c_points_to P_valid ->
+      | E_c_points_to P_top | E_c_points_to P_valid | E_c_points_to P_null | E_c_points_to P_invalid ->
         Post.return flow
 
       | E_c_points_to (P_block(base, offset)) ->
