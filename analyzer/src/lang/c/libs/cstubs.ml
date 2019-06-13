@@ -19,7 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Common transfer functions for resource management *)
+(** Common transfer functions for handling C stubs *)
 
 open Mopsa
 open Framework.Core.Sig.Domain.Stateless
@@ -38,7 +38,7 @@ struct
   (** ===================== *)
 
   include GenStatelessDomainId(struct
-      let name = "c.libs.resources"
+      let name = "c.libs.cstubs"
     end)
 
   let interface= {
@@ -203,7 +203,7 @@ struct
         Eval.bind @@ fun pt flow ->
 
         let elm =
-          match under_type e.etyp with
+          match under_type e.etyp |> remove_typedef_qual with
           | T_c_void -> Z.one
           | t -> sizeof_type t
         in
@@ -236,6 +236,41 @@ struct
         | _ -> panic_at exp.erange "size(%a | %a %a) not supported" pp_expr e pp_expr e pp_expr pt
       )
 
+
+    | E_stub_builtin_call(BASE, e) ->
+      Some (
+        man.eval ~zone:(Z_c_low_level,Z_c_points_to) e flow |>
+        Eval.bind @@ fun pt flow ->
+
+        match ekind pt with
+        | E_c_points_to (P_block (V v,_)) when is_c_scalar_type v.vtyp ->
+          Eval.singleton (mk_c_address_of (mk_var v exp.erange) exp.erange) flow
+
+        | E_c_points_to (P_block (V v,_)) ->
+          Eval.singleton (mk_var v exp.erange) flow
+
+        | E_c_points_to (P_block (S str,_)) ->
+          Eval.singleton (mk_c_string str exp.erange) flow
+
+        | E_c_points_to (P_block (A addr,_)) ->
+          Eval.singleton (mk_addr addr exp.erange) flow
+
+        | E_c_points_to (P_block (Z,_)) ->
+          Eval.singleton (mk_c_cast (mk_top u32 exp.erange) (T_c_pointer T_c_void) exp.erange) flow
+
+        | E_c_points_to P_top
+        | E_c_points_to P_valid ->
+          Eval.singleton (mk_top (T_c_pointer T_c_void) exp.erange) flow
+
+        | E_c_points_to P_null ->
+          Eval.singleton (mk_c_cast (mk_int 0 exp.erange) (T_c_pointer T_c_void) exp.erange) flow
+
+        | E_c_points_to P_invalid ->
+          warn_at exp.erange "base(%a) where %a %a not supported" pp_expr e pp_expr e pp_expr pt;
+          Eval.singleton (mk_top (T_c_pointer T_c_void) exp.erange) flow
+
+        | _ -> panic_at exp.erange "base(%a) where %a %a not supported" pp_expr e pp_expr e pp_expr pt
+      )
 
     | E_stub_attribute({ ekind = E_addr _ }, _) ->
       None

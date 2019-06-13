@@ -28,7 +28,7 @@
             "c.libs.clib.file_descriptor",
             "c.libs.clib.print",
             "c.libs.variadic",
-	    "c.libs.resources",
+	    "c.libs.cstubs",
 
             // Memory model
 	    {
