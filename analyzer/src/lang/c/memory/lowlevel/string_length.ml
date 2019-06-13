@@ -559,15 +559,25 @@ struct
     Post.bind (man.exec_sub ~zone:Z_u_num (mk_assume (mk_in length (mk_zero range) size range) range))
 
 
+  (** Declare a block as assigned by adding the primed length variable *)
+  let stub_assigns target offsets range man flow =
+    man.eval target ~zone:(Z_c_low_level,Z_c_points_to) flow |>
+    post_eval man @@ fun pt flow ->
+    match ekind pt with
+    | E_c_points_to (P_block (base, _)) when is_memory_base base ->
+      let length' = mk_length_var base range ~primed:true in
+      man.exec_sub (mk_add length' range) ~zone:Z_u_num flow
+
+    | _ ->
+      Post.return flow
+    
+
   (** Rename primed variables introduced by a stub *)
   let rename_primed target offsets range man flow =
     (* FIXME: since we do not keep track of bases that have a length
        representation, we can not determine whether the length
        variable exists in the pre-condition (so we do a weak update)
        or not (so we rename the primed one).
-
-       Therefore, we add the length variable of the precondition and
-       we perform a weak update. This may cause loss of precision.
     *)
     man.eval target ~zone:(Z_c_low_level,Z_c_points_to) flow |>
     post_eval man @@ fun pt flow ->
@@ -575,8 +585,6 @@ struct
     | E_c_points_to (P_block (base, _)) ->
       let length = mk_length_var base range ~primed:false ~mode:WEAK in
       let length' = mk_length_var base range ~primed:true in
-      man.exec_sub ~zone:Z_u_num (mk_add length range) flow |> Post.bind @@ fun flow ->
-      man.exec_sub ~zone:Z_u_num (mk_add length' range) flow |> Post.bind @@ fun flow ->
       man.exec_sub ~zone:Z_u_num (mk_assign length length' range) flow |> Post.bind @@ fun flow ->
       man.exec_sub ~zone:Z_u_num (mk_remove length' range) flow
 
@@ -675,6 +683,11 @@ struct
       ->
       assume_quantified_zero O_eq lval stmt.srange man flow |>
       Option.return
+
+    | S_stub_assigns(target, offsets) ->
+      stub_assigns target offsets stmt.srange man flow |>
+      Option.return
+
 
     | S_stub_rename_primed (target, offsets) when is_c_type target.etyp &&
                                                   not (is_c_num_type target.etyp) &&
