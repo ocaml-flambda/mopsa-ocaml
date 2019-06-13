@@ -485,8 +485,6 @@ struct
       eval_base_size base range man flow |>
       Eval.bind @@ fun size flow ->
 
-      debug "size = %a" pp_expr size;
-
       (* Convert the size and the offset to numeric *)
       man.eval ~zone:(Z_c_scalar,Z_u_num) size flow |>
       Eval.bind @@ fun size flow ->
@@ -668,7 +666,6 @@ struct
 
 
   let assign_region base itv range man flow =
-    debug "assign region %a%a" pp_base base Itv.print itv;
     remove_region_overlappings base itv range man flow
 
 
@@ -786,7 +783,6 @@ struct
       Eval.singleton (mk_top (under_pointer_type p.etyp) range) flow
 
     | Cell { base = S str; offset } ->
-      debug "cell str %s offset %a" str Z.pp_print offset;
       let o = Z.to_int offset in
       let chr =
         if o = String.length str

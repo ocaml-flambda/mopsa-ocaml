@@ -226,6 +226,7 @@ struct
     match v, o with
     | Some (vv,mode), Some oo -> mk_binop (mk_offset_expr vv mode range) O_plus oo range ~etyp:T_int
     | None, Some oo -> oo
+    | Some _, None -> mk_top T_int range
     | _ -> assert false
 
 
