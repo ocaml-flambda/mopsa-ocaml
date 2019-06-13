@@ -240,6 +240,34 @@ struct
         Flow.get T_cur man.lattice @@ man.exec ~zone:Zone.Z_py_obj (mk_rename ea2 ea12 range) flowa'
       ) (a, a') l in a, a', List.length l = 0
 
+  (* clean A_py_vars having only one argument *)
+  let specialize (man:('a, t) Framework.Core.Sig.Domain.Lowlevel.man) a  =
+    let (hd, tl) = man.get a in
+    let to_clean = TD.TMap.fold (fun addr ptys acc ->
+        match akind addr with
+        | A_py_var _ when TD.Polytypeset.cardinal ptys = 1 -> addr :: acc
+        | _ -> acc
+      ) tl [] in
+    List.fold_left (fun (hd, tl) addr_to_clean ->
+        let ty = TD.Polytypeset.choose @@ TD.find addr_to_clean tl in
+        (* FIXME: terrible addr_ty. I guess A_py_var is supposed to store addresses rather than types *)
+        let addr_ty = List.hd @@
+          TD.fold (fun addr pty acc ->
+            if compare_addr addr addr_to_clean <> 0 &&
+               TD.Polytypeset.equal (TD.Polytypeset.singleton ty) pty &&
+               addr.addr_mode = WEAK then addr :: acc else acc) tl [] in
+        let tl = TD.TMap.remove addr_to_clean tl in
+        let hd = AD.AMap.fold (fun var aset acc ->
+            let aset =
+              if AD.ASet.mem (Def addr_to_clean) aset then
+                AD.ASet.remove (Def addr_to_clean) aset |> AD.ASet.add (Def addr_ty)
+              else aset in
+            AD.AMap.add var aset acc
+          ) hd AD.AMap.empty in
+        (hd, tl)
+      ) (hd, tl) to_clean
+
+
   let join (bigman:('a, t, 's) Framework.Core.Sig.Stacked.Lowlevel.man) uctx (a:'a) (a':'a) =
     let man = simplified_man bigman in
     let (hd, tl) = man.get a in
@@ -261,7 +289,9 @@ struct
               if f then a, a' else aux a a' in
             aux a a' in
           (* i guess it should be done recursively. Or to change in some way *)
-          let (hd, tl) = man.get a and (hd', tl') = man.get a' in
+          let (hd, tl) = specialize man a in
+          let (hd', tl') = specialize man a' in
+          debug "specialization done@\n";
           debug "hd, tl = %a, %a@\n@\nhd', tl' = %a, %a@\n" AD.print hd TD.print tl AD.print hd' TD.print tl';
           let p = create_partition hd tl
           and p' = create_partition hd' tl' in
