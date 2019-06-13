@@ -895,9 +895,16 @@ struct
             let c = mk_cell (V v) o t in
             let init = None in
             let tl' = if Z.equal n Z.one then tl else C_flat_none(Z.pred n,t) :: tl in
-            c, init, tl', Z.succ o
+            c, init, tl', Z.add o (sizeof_type t)
 
-          | _ -> assert false
+          | C_flat_fill(e,t,n) :: tl ->
+            let c = mk_cell (V v) o t in
+            let init = Some (C_init_expr e) in
+            let tl' = if Z.equal n Z.one then tl else C_flat_fill(e,t,Z.pred n) :: tl in
+            c, init, tl', Z.add o (sizeof_type t)
+
+
+          | l -> panic "?? %a" Pp.pp_c_init (C_init_flat l)
         in
         (* Evaluate the initialization into a scalar expression *)
         (
@@ -1124,6 +1131,9 @@ struct
       Post.bind (man.exec_sub ~zone:Z_c_scalar stmt) |>
       Option.return
 
+    | S_stub_assigns _ ->
+      Post.return flow |>
+      Option.return
 
     | S_stub_rename_primed(lval, bounds) ->
       rename_primed lval bounds stmt.srange man flow |>
