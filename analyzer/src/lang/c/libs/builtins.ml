@@ -30,12 +30,8 @@ let is_builtin_function = function
 
   | "printf"
   | "fprintf"
-  | "vprintf"
-  | "vfprintf"
   | "__printf_chk"
   | "__fprintf_chk"
-  | "__vprintf_chk"
-  | "__vfprintf_chk"
   | "__builtin___sprintf_chk"
 
   | "_mopsa_rand_s8"
