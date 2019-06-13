@@ -342,9 +342,7 @@ struct
       man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow |>
       post_eval man @@ fun offset flow ->
 
-      let post = assign_cases base offset rval (under_type p.etyp) range man flow in
-      debug "Post *%a = %a : %a" pp_expr p pp_expr rval  (Post.print man.lattice) post;
-      post
+      assign_cases base offset rval (under_type p.etyp) range man flow
 
     | _ -> assert false
 
@@ -352,7 +350,6 @@ struct
 
   (** Cases of the abstract transformer for tests *("..." + ∀i) ? 0 *)
   let assume_quantified_string_zero_cases op str offset range man flow =
-    debug "quantified string %s" str;
     (** Get symbolic bounds of the offset *)
     let min, max = Common.Quantified_offset.bound offset in
 
@@ -534,13 +531,9 @@ struct
       Post.return
 
     | E_c_points_to (P_block (S str, offset)) ->
-      man.eval ~zone:(Z_c_low_level, Z_u_num) offset flow |>
-      post_eval man @@ fun offset flow ->
       assume_quantified_string_zero_cases op str offset range man flow
 
     | E_c_points_to (P_block (base, offset)) ->
-      man.eval ~zone:(Z_c_low_level, Z_u_num) offset flow |>
-      post_eval man @@ fun offset flow ->
       assume_quantified_zero_cases op base offset primed range man flow
 
     | E_c_points_to P_top | E_c_points_to P_valid ->
@@ -750,8 +743,6 @@ struct
     Eval.bind @@ fun size flow ->
 
     let elm_size = sizeof_type typ in
-
-    debug "deref %a%s" pp_base base (if primed then "'" else "");
 
     (* Check that offset ∈ [0, size - elm_size] *)
     assume_eval (mk_in offset (mk_zero range) (sub size (mk_z elm_size range) range) range)
