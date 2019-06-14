@@ -62,7 +62,9 @@ struct
   let inter = meet
 
   let diff (abs1:t) (abs2:t) : t =
-    top_neutral2 Set.diff abs1 abs2
+    if is_top abs2
+    then bottom
+    else top_lift2 Set.diff abs1 abs2
 
   let widen (abs1:t) (abs2:t) : t =
     top_absorb2
