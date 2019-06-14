@@ -71,8 +71,8 @@ _FILE_ *_alloc_std_stream();
 /*$
  * local: void *f = new FileDescription;
  * local: int fd = _mopsa_file_description_to_descriptor(f);
- * local: _FILE_* file = new File;
- * ensures: bytes(file) == sizeof_type(_FILE_);
+ * local: FILE* file = new File;
+ * ensures: bytes(file) == sizeof_type(FILE);
  * ensures: file->_fileno == fd;
  * ensures: return == file;
  */
