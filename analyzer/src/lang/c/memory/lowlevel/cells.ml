@@ -523,8 +523,8 @@ struct
           assume_eval ~zone:Z_u_num cond
             ~fthen:(fun flow ->
                 (* Compute the interval and create a finite number of cells *)
-                let itv = man.ask (Itv.Q_interval offset) flow in
-                let step = Z.one in
+                let itv, (stride,_) = man.ask (Universal.Numeric.Common.Q_int_congr_interval offset) flow in
+                let step = if Z.equal stride Z.zero then Z.one else stride in
 
                 let l, u = Itv.bounds_opt itv in
 
@@ -741,7 +741,7 @@ struct
     let evl = man.eval ~zone:(Z_c_low_level, Z_u_num) e flow in
     Eval.apply
       (fun ee flow ->
-         man.ask (Itv.Q_interval ee) flow
+         man.ask (Universal.Numeric.Common.Q_int_interval ee) flow
       )
       Itv.join Itv.meet Itv.bottom
       evl
