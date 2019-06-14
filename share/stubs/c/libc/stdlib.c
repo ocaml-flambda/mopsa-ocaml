@@ -307,7 +307,7 @@ void srandom (unsigned int __seed);
 
 static char _rand__state[128];
 static char* _rand__statebuf = _rand__state;
-static size_t _rand__statelen = sizeof(_rand__statebuf);
+static size_t _rand__statelen = sizeof(_rand__state);
 
 /*$
  * // TODO: return NULL when __statelen < 8?

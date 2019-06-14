@@ -70,7 +70,7 @@ struct lconv * _lconv_buf = NULL;
  *
  * assigns: _lconv_buf;
  *
- * ensures: size(addr) == sizeof(struct lconv);
+ * ensures: size(addr) == sizeof_type(struct lconv);
  * ensures: return == addr;
  * ensures: _lconv_buf' == addr;
  *

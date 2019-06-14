@@ -46,7 +46,7 @@ _FILE_ *stderr;
  * local: void *f = new FileDescription;
  * local: int fd = _mopsa_file_description_to_descriptor(f);
  * local: _FILE_* file = new File;
- * ensures: bytes(file) == sizeof(_FILE_);
+ * ensures: bytes(file) == sizeof_type(_FILE_);
  * ensures: file->_fileno == fd;
  * ensures: return == file;
  */
@@ -71,8 +71,8 @@ _FILE_ *_alloc_std_stream();
 /*$
  * local: void *f = new FileDescription;
  * local: int fd = _mopsa_file_description_to_descriptor(f);
- * local: FILE* file = new File;
- * ensures: bytes(file) == sizeof(FILE);
+ * local: _FILE_* file = new File;
+ * ensures: bytes(file) == sizeof_type(_FILE_);
  * ensures: file->_fileno == fd;
  * ensures: return == file;
  */
@@ -787,7 +787,7 @@ int fgetpos (FILE *__restrict __stream, fpos_t *__restrict __pos);
 
 /*$
  * requires: __stream in File;
- * // TODO requires: size(__pos) >= sizeof(fpos_t);
+ * // TODO requires: size(__pos) >= sizeof_type(fpos_t);
  *
  * case "success" {
  *   ensures: return == 0;

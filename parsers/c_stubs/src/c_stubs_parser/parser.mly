@@ -67,7 +67,7 @@
 %token REQUIRES LOCAL ASSIGNS CASE ASSUMES ENSURES PREDICATE WARN ALIAS
 %token TRUE FALSE
 %token FORALL EXISTS IN NEW
-%token FREE PRIMED RETURN SIZE BYTES SIZEOF OFFSET BASE VALID_PTR
+%token FREE PRIMED RETURN SIZE BYTES SIZEOF_TYPE SIZEOF_EXPR OFFSET BASE VALID_PTR
 %token VALID_FLOAT FLOAT_INF FLOAT_NAN
 
 
@@ -269,9 +269,8 @@ expr:
   | with_range(expr) COLON IDENT                      { E_attribute ($1, $3) }
   | with_range(expr) ARROW IDENT                      { E_arrow ($1, $3) }
   | RETURN                                            { E_return }
-  | SIZEOF LPAR with_range(var) RPAR                  { E_sizeof_var $3 }
-  | SIZEOF LPAR with_range(c_qual_typ) RPAR           { E_sizeof_type $3 }
-  | SIZEOF LPAR with_range(expr) RPAR                 { E_sizeof_expr $3 }
+  | SIZEOF_TYPE LPAR with_range(c_qual_typ) RPAR           { E_sizeof_type $3 }
+  | SIZEOF_EXPR LPAR with_range(expr) RPAR                 { E_sizeof_expr $3 }
   | builtin LPAR with_range(expr) RPAR                { E_builtin_call ($1, $3) }
   | with_range(expr) PRIME                            { E_builtin_call (PRIMED, $1) }
 

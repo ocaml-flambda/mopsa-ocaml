@@ -77,7 +77,8 @@ let _ =
      "primed", PRIMED;  
      "size",   SIZE;
      "bytes",  BYTES;
-     "sizeof",   SIZEOF;
+     "sizeof_type",   SIZEOF_TYPE;
+     "sizeof_expr",   SIZEOF_EXPR;
      "offset", OFFSET;
      "base", BASE;
      "new", NEW;
