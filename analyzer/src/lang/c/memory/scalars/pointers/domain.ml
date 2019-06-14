@@ -222,26 +222,34 @@ struct
 
 
   (* Create the offset expression from optional pointer info *)
-  let mk_offset_expr_opt v o range =
-    match v, o with
-    | Some (vv,mode), Some oo -> mk_binop (mk_offset_expr vv mode range) O_plus oo range ~etyp:T_int
-    | None, Some oo -> oo
-    | Some _, None -> mk_top T_int range
-    | _ -> assert false
+  let mk_offset_expr_opt p v o range =
+    if not (Value.is_valid v)
+    then None
+    else
+    match p, o with
+    | Some (pp,mode), Some oo ->
+      Some (mk_binop (mk_offset_expr pp mode range) O_plus oo range ~etyp:T_int)
+
+    | None, Some oo ->
+      Some oo
+
+    | _ -> None
 
 
   (* Offset conditions for comparing two pointers *)
-  let mk_offset_constraint_opt op p1 o1 p2 o2 range =
-    match o1, o2 with
-    | Some _, Some _ ->
-      let e1 = mk_offset_expr_opt p1 o1 range in
-      let e2 = mk_offset_expr_opt p2 o2 range in
-      mk_binop e1 op e2 range
-    | _ ->
-      match op with
-      | O_eq -> mk_one range
-      | O_ne -> mk_zero range
-      | _ -> assert false
+  let mk_offset_constraint_opt op p1 v1 o1 p2 v2 o2 range =
+    mk_offset_expr_opt p1 v1 o1 range |> Option.bind @@ fun e1 ->
+    mk_offset_expr_opt p2 v2 o2 range |> Option.bind @@ fun e2 ->
+    Some (mk_binop e1 op e2 range)
+
+
+  let eval_offset_constraint_opt op p1 v1 o1 p2 v2 o2 range man flow =
+    match mk_offset_constraint_opt op p1 v1 o1 p2 v2 o2 range, op with
+    | None, O_eq -> Eval.singleton (mk_one range) flow
+    | None, O_ne -> Eval.singleton (mk_zero range) flow
+    | Some cond,_ -> man.eval ~zone:(Z_c_scalar,Z_u_num) cond flow
+    | _ -> assert false
+
 
   let remove_offset_opt p v v' range man flow =
     match p with
@@ -308,7 +316,8 @@ struct
     let flow = remove_offset_opt p1 v1 v range man flow |>
                remove_offset_opt p2 v2 v range man
     in
-    man.eval ~zone:(Z_c_scalar, Z_u_num) (mk_offset_constraint_opt O_eq p1 o1 p2 o2 range) flow
+
+    eval_offset_constraint_opt O_eq p1 v1 o1 p2 v2 o2 range man flow
 
 
 
@@ -321,6 +330,18 @@ struct
     let v1, o1, p1 = symbolic_to_value sp man flow in
     let v2, o2, p2 = symbolic_to_value sq man flow in
 
+    debug "v1 = %a, o1 = %a, p1 = %a"
+      Value.print v1
+      (Option.print pp_expr) o1
+      (Option.print (fun fmt (p,_) -> pp_var fmt p)) p1
+    ;
+
+    debug "v2 = %a, o2 = %a, p2 = %a"
+      Value.print v2
+      (Option.print pp_expr) o2
+      (Option.print (fun fmt (p,_) -> pp_var fmt p)) p2
+    ;
+
     (* Case 1: same valid bases *)
     let case1 =
       let v = Value.meet v1 v2 in
@@ -332,7 +353,8 @@ struct
                    remove_offset_opt p1 v1 v range man |>
                    remove_offset_opt p2 v2 v range man
         in
-        [man.eval ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) (mk_offset_constraint_opt O_ne p1 o1 p2 o2 range) flow]
+        debug "case 1 done";
+        [eval_offset_constraint_opt O_ne p1 v o1 p2 v o2 range man flow]
     in
 
     (* Case 2: different bases *)
@@ -347,6 +369,7 @@ struct
                    remove_offset_opt p1 v1 v1' range man |>
                    remove_offset_opt p2 v2 v2' range man
         in
+        debug "case 2: v1' = %a, v2' = %a" Value.print v1' Value.print v2';
         [Eval.singleton (mk_one range) flow]
 
     in
@@ -371,7 +394,7 @@ struct
         let flow = set_value_opt p1 v man flow |>
                    set_value_opt p2 v man
         in
-        [man.eval ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) (mk_offset_constraint_opt op p1 o1 p2 o2 range) flow]
+        [eval_offset_constraint_opt op p1 v o1 p2 v o2 range man flow]
     in
 
     (* Case 2: different bases => undefined behavior *)
@@ -387,10 +410,10 @@ struct
         let flow = raise_alarm Alarms.AIllegalPointerOrder range ~bottom:true man.lattice flow in
         [Eval.empty_singleton flow]
     in
-    
+
     Eval.join_list (case1 @ case2) ~empty:(Eval.empty_singleton flow)
 
-  
+
   (** 𝔼⟦ p - q ⟧ *)
   let eval_diff p q range man flow =
     (* p1 and p2 should point to the same type *)
@@ -406,6 +429,18 @@ struct
 
     let v1, o1, p1 = symbolic_to_value sp man flow in
     let v2, o2, p2 = symbolic_to_value sq man flow in
+
+    debug "v1 = %a, o1 = %a, p1 = %a"
+      Value.print v1
+      (Option.print pp_expr) o1
+      (Option.print (fun fmt (p,_) -> pp_var fmt p)) p1
+    ;
+
+    debug "v2 = %a, o2 = %a, p2 = %a"
+      Value.print v2
+      (Option.print pp_expr) o2
+      (Option.print (fun fmt (p,_) -> pp_var fmt p)) p2
+    ;
 
     (* Size of a pointed element *)
     let elem_size =
@@ -423,15 +458,17 @@ struct
         let flow = set_value_opt p1 v man flow |>
                    set_value_opt p2 v man
         in
-        let o1 = mk_offset_expr_opt p1 o1 range in
-        let o2 = mk_offset_expr_opt p2 o2 range in
-        let e = sub o1 o2 range in
         let ee =
+          mk_offset_expr_opt p1 v o1 range |> Option.bind @@ fun o1 ->
+          mk_offset_expr_opt p2 v o2 range |> Option.bind @@ fun o2 ->
+          let e = sub o1 o2 range in
           if Z.equal elem_size Z.one
-          then e
-          else div e (mk_z elem_size range) range
+          then Some e
+          else Some (div e (mk_z elem_size range) range)
         in
-        [man.eval ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) ee flow]
+        match ee with
+        | None -> [man.eval ~zone:(Z_c_scalar, Z_u_num) (mk_top T_int range) flow]
+        | Some e -> [man.eval ~zone:(Z_c_scalar, Z_u_num) e flow]
     in
 
     (* Case 2: different base => undefined behavior *)
@@ -448,7 +485,7 @@ struct
         [Eval.empty_singleton flow]
     in
 
-    Eval.join_list (case1 @ case2) ~empty:(Eval.empty_singleton flow) 
+    Eval.join_list (case1 @ case2) ~empty:(Eval.empty_singleton flow)
 
 
 
