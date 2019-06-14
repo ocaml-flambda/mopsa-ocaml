@@ -330,18 +330,6 @@ struct
     let v1, o1, p1 = symbolic_to_value sp man flow in
     let v2, o2, p2 = symbolic_to_value sq man flow in
 
-    debug "v1 = %a, o1 = %a, p1 = %a"
-      Value.print v1
-      (Option.print pp_expr) o1
-      (Option.print (fun fmt (p,_) -> pp_var fmt p)) p1
-    ;
-
-    debug "v2 = %a, o2 = %a, p2 = %a"
-      Value.print v2
-      (Option.print pp_expr) o2
-      (Option.print (fun fmt (p,_) -> pp_var fmt p)) p2
-    ;
-
     (* Case 1: same valid bases *)
     let case1 =
       let v = Value.meet v1 v2 in
@@ -353,7 +341,6 @@ struct
                    remove_offset_opt p1 v1 v range man |>
                    remove_offset_opt p2 v2 v range man
         in
-        debug "case 1 done";
         [eval_offset_constraint_opt O_ne p1 v o1 p2 v o2 range man flow]
     in
 
@@ -369,7 +356,6 @@ struct
                    remove_offset_opt p1 v1 v1' range man |>
                    remove_offset_opt p2 v2 v2' range man
         in
-        debug "case 2: v1' = %a, v2' = %a" Value.print v1' Value.print v2';
         [Eval.singleton (mk_one range) flow]
 
     in
@@ -429,18 +415,6 @@ struct
 
     let v1, o1, p1 = symbolic_to_value sp man flow in
     let v2, o2, p2 = symbolic_to_value sq man flow in
-
-    debug "v1 = %a, o1 = %a, p1 = %a"
-      Value.print v1
-      (Option.print pp_expr) o1
-      (Option.print (fun fmt (p,_) -> pp_var fmt p)) p1
-    ;
-
-    debug "v2 = %a, o2 = %a, p2 = %a"
-      Value.print v2
-      (Option.print pp_expr) o2
-      (Option.print (fun fmt (p,_) -> pp_var fmt p)) p2
-    ;
 
     (* Size of a pointed element *)
     let elem_size =
