@@ -306,7 +306,7 @@ struct
 
   include Core.Id.GenDomainId(
     struct
-      type typ = t
+      type nonrec t = t
       let name = "transformers.domain.product"
     end
     )

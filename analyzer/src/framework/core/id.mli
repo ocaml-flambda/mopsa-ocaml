@@ -46,12 +46,12 @@ val domain_id_eq : 'a domain -> 'b domain -> ('a,'b) eq option
 (** Generator of a new domain identifier *)
 module GenDomainId(
     Spec: sig
-      type typ
+      type t
       val name : string
     end
   ) :
 sig
-  val id : Spec.typ domain
+  val id : Spec.t domain
   val name : string
   val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
 end
@@ -98,13 +98,13 @@ val value_id_eq : 'a value -> 'b value -> ('a,'b) eq option
 (** Generator of a new value identifier *)
 module GenValueId(
     Spec:sig
-      type typ
+      type t
       val name : string
       val display : string
     end
   ) :
 sig
-  val id : Spec.typ value
+  val id : Spec.t value
   val name : string
   val display : string
   val debug : ('a, Format.formatter, unit, unit) format4 -> 'a

@@ -103,10 +103,10 @@ let indent ~symbol fmt =
 
 
 let phase name =
-  indent "%s" name ~symbol:MSG
+  printf "[%a] %s@." (Debug.color_str "orange") "*" name
 
 let parse file =
-  indent "parsing %s" file ~symbol:MSG
+  printf "[%a] parsing %s@." (Debug.color_str "orange") "*" file
 
 let reach loc =
   indent "reaching %a" pp_range loc ~symbol:MSG

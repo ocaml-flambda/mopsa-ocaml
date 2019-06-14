@@ -47,7 +47,7 @@ struct
 
   include GenValueId(
     struct
-      type typ = t
+      type nonrec t = t
       let name = "framework.combiners.value.disjoint"
       let display = V1.display ^ " ⊎ " ^ V2.display
     end

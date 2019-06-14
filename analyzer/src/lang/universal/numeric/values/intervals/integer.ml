@@ -36,7 +36,7 @@ struct
   type t = v with_bot
 
   include GenValueId(struct
-      type typ = t
+      type nonrec t = t
       let name = "universal.numeric.values.intervals.integer"
       let display = "int-itv"
     end)

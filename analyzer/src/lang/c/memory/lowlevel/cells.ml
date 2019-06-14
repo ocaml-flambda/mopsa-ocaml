@@ -173,7 +173,7 @@ struct
 
   (** Domain identifier *)
   include GenDomainId(struct
-      type typ = t
+      type nonrec t = t
       let name = "c.memory.lowlevel.cells"
     end)
 

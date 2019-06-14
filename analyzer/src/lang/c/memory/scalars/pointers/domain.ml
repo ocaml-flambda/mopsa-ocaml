@@ -50,7 +50,7 @@ struct
   type t = Map.t
 
   include GenDomainId(struct
-      type typ = t
+      type nonrec t = t
       let name = "c.memory.scalars.pointer"
     end)
 

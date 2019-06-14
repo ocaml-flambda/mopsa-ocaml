@@ -37,7 +37,7 @@ struct
 
   include GenValueId(
     struct
-        type typ = t
+        type nonrec t = t
         let name = "universal.numeric.values.congruences"
         let display = "congruences"
     end

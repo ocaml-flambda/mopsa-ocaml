@@ -335,7 +335,7 @@ struct
 
   include Core.Id.GenDomainId(
     struct
-      type typ = t
+      type nonrec t = t
       let name = "transformers.stacked.intermediate.product"
     end
     )

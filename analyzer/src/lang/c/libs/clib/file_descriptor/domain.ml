@@ -148,7 +148,7 @@ struct
   (** ===================== *)
 
   include Framework.Core.Id.GenDomainId(struct
-      type typ = t
+      type nonrec t = t
       let name = "c.libs.clib.file_descriptor"
     end)
 
