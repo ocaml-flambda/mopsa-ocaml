@@ -4,7 +4,7 @@
 /* ************************* */
 
 /*$
- * ensures: return == sizeof(x);
+ * ensures: return == sizeof_expr(x);
  */
 int sizeof_int(int x);
 
@@ -22,7 +22,7 @@ struct point {
 };
 
 /*$
- * ensures: return == sizeof(*x);
+ * ensures: return == sizeof_expr(*x);
  */
 int sizeof_struct_expr(struct point *x);
 
@@ -33,7 +33,7 @@ void test_sizeof_struct_expr() {
 }
 
 /*$
- * ensures: return == sizeof(struct point);
+ * ensures: return == sizeof_type(struct point);
  */
 int sizeof_struct_type(struct point *x);
 
@@ -46,7 +46,7 @@ void test_sizeof_struct_type() {
 typedef struct point point_t;
 
 /*$
- * ensures: return == sizeof(point_t);
+ * ensures: return == sizeof_type(point_t);
  */
 int sizeof_struct_typedef(point_t *x);
 
