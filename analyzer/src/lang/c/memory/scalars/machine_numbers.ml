@@ -87,7 +87,7 @@ struct
   let check_overflow typ man range f1 f2 exp flow =
     let rmin, rmax = rangeof typ in
     let rec fast_check e flow =
-      let itv = man.ask (Itv.Q_interval e) flow in
+      let itv = man.ask (Universal.Numeric.Common.Q_int_interval e) flow in
       if Itv.is_bottom itv then Eval.empty_singleton flow
       else
       if Itv.is_bounded itv then
@@ -111,7 +111,7 @@ struct
 
   let check_division man range f1 f2 e e' flow =
     let rec fast_check () =
-      let itv = man.ask (Itv.Q_interval e') flow in
+      let itv = man.ask (Universal.Numeric.Common.Q_int_interval e') flow in
       if Itv.is_bottom itv then Eval.empty_singleton flow
       else
       if Itv.is_bounded itv then

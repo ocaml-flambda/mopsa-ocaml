@@ -68,7 +68,7 @@ struct
         let itv = man.get_value I.id var post in
 
         (* Get the interval in all domain *)
-        let itv' = man.ask (I.Q_interval (mk_var var stmt.srange)) post in
+        let itv' = man.ask (Common.Q_int_interval (mk_var var stmt.srange)) post in
 
         (* Check if box is less precise *)
         if not (I.subset itv itv')

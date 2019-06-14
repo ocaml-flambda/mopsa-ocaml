@@ -198,6 +198,10 @@ struct
 
   let rec exp_to_apron exp (abs,bnd) l =
     match ekind exp with
+    | E_constant C_top t ->
+      Apron.Texpr1.Cst (Apron.Coeff.Interval Apron.Interval.top),
+      abs, bnd, l
+
     | E_constant(C_int_interval (a,b)) ->
       Apron.Texpr1.Cst(
         Apron.Coeff.i_of_scalar
@@ -272,12 +276,8 @@ struct
       raise UnsupportedExpression
 
 
-  
   and bexp_to_apron exp (abs,bnd) l =
     match ekind exp with
-    | E_constant(C_int _) ->
-      bexp_to_apron (mk_binop exp O_ne (mk_zero exp.erange) exp.erange) (abs,bnd) l
-
     | E_binop(O_gt, e0 , e1) ->
       let e0', abs, bnd, l = exp_to_apron e0 (abs,bnd) l in
       let e1', abs, bnd, l = exp_to_apron e1 (abs,bnd) l in
@@ -336,7 +336,6 @@ struct
           | _ -> assert false
         ) dnf,
       abs, bnd, l
-      
 
     | _ ->
       let e0', abs, bnd, l = exp_to_apron exp (abs,bnd) l in
