@@ -77,15 +77,16 @@ let _ =
      "primed", PRIMED;  
      "size",   SIZE;
      "bytes",  BYTES;
-     "sizeof",   SIZEOF;
+     "sizeof_type",   SIZEOF_TYPE;
+     "sizeof_expr",   SIZEOF_EXPR;
      "offset", OFFSET;
      "base", BASE;
      "new", NEW;
      "free", FREE;
      "return", RETURN;
-     "ptr_valid", PTR_VALID;
-     "valid", PTR_VALID; (* shortcut to ptr_valid *)
-     "float_valid", FLOAT_VALID;
+     "valid_ptr", VALID_PTR;
+     "valid", VALID_PTR; (* shortcut to valid_ptr *)
+     "valid_float", VALID_FLOAT;
      "float_inf", FLOAT_INF;
      "float_nan", FLOAT_NAN;
    ]

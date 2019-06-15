@@ -29,14 +29,14 @@ open Bot
 module Value =
 struct
 
+  type t = Common.int_itv
+
   module I = ItvUtils.IntItv
   module FI = ItvUtils.FloatItv
 
-  type v = I.t
-  type t = v with_bot
 
   include GenValueId(struct
-      type typ = t
+      type nonrec t = t
       let name = "universal.numeric.values.intervals.integer"
       let display = "int-itv"
     end)
@@ -278,41 +278,19 @@ struct
       iter a
 
 
-  (** {2 Interval query} *)
-
-  type _ query += Q_interval : expr -> t query
-
-
-  let () =
-    register_query {
-      join = (
-        let f : type r. query_pool -> r query -> r -> r -> r =
-          fun next query a b ->
-            match query with
-            | Q_interval e -> join a b
-            | _ -> next.join_query query a b
-        in
-        f
-      );
-      meet = (
-        let f : type r. query_pool -> r query -> r -> r -> r =
-          fun next query a b ->
-            match query with
-            | Q_interval e -> meet a b
-            | _ -> next.meet_query query a b
-        in
-        f
-      );
-    }
-
+  (** {2 Query handlers} *)
 
   let ask : type r. r query -> (expr -> t) -> r option =
     fun query eval ->
       match query with
-      | Q_interval e ->
+      | Common.Q_int_interval e ->
         eval e |> Option.return
 
+      | Common.Q_int_congr_interval e ->
+        (eval e, Common.C.minf_inf) |> Option.return
+
       | _ -> None
+
 
   let refine channel v = Channel.return v
 

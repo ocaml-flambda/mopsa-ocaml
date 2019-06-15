@@ -25,6 +25,7 @@
 
 /*$$
  * predicate valid_string(s):
+ *   valid_ptr(s) and
  *   exists int _i in [0, size(s) - 1]: s[_i] == 0
  * ;
  */
@@ -32,6 +33,7 @@
 
 /*$$
  * predicate valid_primed_string(s):
+ *   valid_ptr(s) and
  *   exists int _i in [0, size(s) - 1]: (s[_i])' == 0
  * ;
  */
@@ -39,6 +41,7 @@
 
 /*$$
  * predicate valid_substring(s, n):
+ *   valid_ptr(s) and
  *   exists int _i in [0, n - 1]: s[_i] == 0
  * ;
  */
@@ -46,6 +49,7 @@
 
 /*$$
  * predicate valid_primed_substring(s, n):
+ *   valid_ptr(s) and
  *   exists int _i in [0, n - 1]: (s[_i])' == 0
  * ;
  */

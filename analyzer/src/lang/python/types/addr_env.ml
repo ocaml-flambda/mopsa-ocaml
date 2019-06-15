@@ -82,7 +82,7 @@ struct
   include AMap
 
   include Framework.Core.Id.GenDomainId(struct
-      type typ = t
+      type nonrec t = t
       let name = "python.types.addr_env"
     end)
 

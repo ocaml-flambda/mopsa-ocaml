@@ -72,16 +72,12 @@ struct
     | _ -> assert false
 
   let is_rand_function = function
-    | "_mopsa_rand_char"
-    | "_mopsa_rand_int8"
-    | "_mopsa_rand_uint8"
-    | "_mopsa_rand_int16"
-    | "_mopsa_rand_uint16"
-    | "_mopsa_rand_int32"
-    | "_mopsa_rand_uint32"
-    | "_mopsa_rand_int"
-    | "_mopsa_rand_int64"
-    | "_mopsa_rand_uint64"
+    | "_mopsa_rand_s8"
+    | "_mopsa_rand_u8"
+    | "_mopsa_rand_s16"
+    | "_mopsa_rand_u16"
+    | "_mopsa_rand_s32"
+    | "_mopsa_rand_u32"
     | "_mopsa_rand_float"
     | "_mopsa_rand_double"
     | "_mopsa_rand_void_pointer"
@@ -90,14 +86,12 @@ struct
     | _ -> false
 
   let extract_rand_type = function
-    | "_mopsa_rand_char" -> s8
-    | "_mopsa_rand_int8" -> s8
-    | "_mopsa_rand_uint8" -> u8
-    | "_mopsa_rand_int16" -> s16
-    | "_mopsa_rand_uint16" -> u16
-    | "_mopsa_rand_int32" -> s32
-    | "_mopsa_rand_uint32" -> u32
-    | "_mopsa_rand_int" -> s32
+    | "_mopsa_rand_s8" -> s8
+    | "_mopsa_rand_u8" -> u8
+    | "_mopsa_rand_s16" -> s16
+    | "_mopsa_rand_u16" -> u16
+    | "_mopsa_rand_s32" -> s32
+    | "_mopsa_rand_u32" -> u32
     | "_mopsa_rand_float" -> T_c_float C_float
     | "_mopsa_rand_double" -> T_c_float C_double
     | "_mopsa_rand_void_pointer" -> T_c_pointer T_c_void
@@ -109,16 +103,13 @@ struct
 
 
   let is_range_function = function
-    | "_mopsa_range_char"
-    | "_mopsa_range_int8"
-    | "_mopsa_range_uint8"
-    | "_mopsa_range_int16"
-    | "_mopsa_range_uint16"
-    | "_mopsa_range_int32"
-    | "_mopsa_range_uint32"
+    | "_mopsa_range_s8"
+    | "_mopsa_range_u8"
+    | "_mopsa_range_s16"
+    | "_mopsa_range_u16"
+    | "_mopsa_range_s32"
+    | "_mopsa_range_u32"
     | "_mopsa_range_int"
-    | "_mopsa_range_int64"
-    | "_mopsa_range_uint64"
     | "_mopsa_range_float"
     | "_mopsa_range_double"
       -> true
@@ -126,14 +117,12 @@ struct
     | _ -> false
 
   let extract_range_type = function
-    | "_mopsa_range_char" -> s8
-    | "_mopsa_range_int8" -> s8
-    | "_mopsa_range_uint8" -> u8
-    | "_mopsa_range_int16" -> s16
-    | "_mopsa_range_uint16" -> u16
-    | "_mopsa_range_int32" -> s32
-    | "_mopsa_range_uint32" -> u32
-    | "_mopsa_range_int" -> s32
+    | "_mopsa_range_s8" -> s8
+    | "_mopsa_range_u8" -> u8
+    | "_mopsa_range_s16" -> s16
+    | "_mopsa_range_u16" -> u16
+    | "_mopsa_range_s32" -> s32
+    | "_mopsa_range_u32" -> u32
     | "_mopsa_range_float" -> T_c_float C_float
     | "_mopsa_range_double" -> T_c_float C_double
     | f -> panic "extract_range_type: invalid argument %s" f

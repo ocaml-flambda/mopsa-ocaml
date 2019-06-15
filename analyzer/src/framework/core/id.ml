@@ -68,12 +68,12 @@ let domain_id_eq (domain1:'a domain) (domain2:'b domain) : ('a,'b) eq option =
 
 (** Generator of a new domain identifier *)
 module GenDomainId(Spec:sig
-    type typ
+    type t
     val name : string
   end) =
 struct
 
-  type _ domain += Domain : Spec.typ domain
+  type _ domain += Domain : Spec.t domain
 
   let id = Domain
 
@@ -81,7 +81,7 @@ struct
 
   let debug fmt = Debug.debug ~channel:Spec.name fmt
 
-  let eq : type a. a domain -> (a,Spec.typ) eq option =
+  let eq : type a. a domain -> (a,Spec.t) eq option =
     function
     | Domain -> Some Eq
     | _ -> None
@@ -161,13 +161,13 @@ let value_id_eq (value1:'a value) (value2:'b value) : ('a,'b) eq option =
 
 (** Generator of a new value identifier *)
 module GenValueId(Spec:sig
-    type typ
+    type t
     val name : string
     val display : string
   end) =
 struct
 
-  type _ value += Value : Spec.typ value
+  type _ value += Value : Spec.t value
 
   let id = Value
 
@@ -177,7 +177,7 @@ struct
 
   let debug fmt = Debug.debug ~channel:Spec.name fmt
 
-  let eq : type a. a value -> (a,Spec.typ) eq option =
+  let eq : type a. a value -> (a,Spec.t) eq option =
     function
     | Value -> Some Eq
     | _ -> None

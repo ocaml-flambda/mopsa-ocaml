@@ -173,7 +173,7 @@ struct
 
   (** Domain identifier *)
   include GenDomainId(struct
-      type typ = t
+      type nonrec t = t
       let name = "c.memory.lowlevel.cells"
     end)
 
@@ -485,8 +485,6 @@ struct
       eval_base_size base range man flow |>
       Eval.bind @@ fun size flow ->
 
-      debug "size = %a" pp_expr size;
-
       (* Convert the size and the offset to numeric *)
       man.eval ~zone:(Z_c_scalar,Z_u_num) size flow |>
       Eval.bind @@ fun size flow ->
@@ -525,8 +523,8 @@ struct
           assume_eval ~zone:Z_u_num cond
             ~fthen:(fun flow ->
                 (* Compute the interval and create a finite number of cells *)
-                let itv = man.ask (Itv.Q_interval offset) flow in
-                let step = Z.one in
+                let itv, (stride,_) = man.ask (Universal.Numeric.Common.Q_int_congr_interval offset) flow in
+                let step = if Z.equal stride Z.zero then Z.one else stride in
 
                 let l, u = Itv.bounds_opt itv in
 
@@ -668,7 +666,6 @@ struct
 
 
   let assign_region base itv range man flow =
-    debug "assign region %a%a" pp_base base Itv.print itv;
     remove_region_overlappings base itv range man flow
 
 
@@ -744,10 +741,22 @@ struct
     let evl = man.eval ~zone:(Z_c_low_level, Z_u_num) e flow in
     Eval.apply
       (fun ee flow ->
-         man.ask (Itv.Q_interval ee) flow
+         man.ask (Universal.Numeric.Common.Q_int_interval ee) flow
       )
       Itv.join Itv.meet Itv.bottom
       evl
+
+
+  (** Remove all cells already realized *)
+  let remove_all_cells range man flow =
+    let a = get_domain_env T_cur man flow in
+
+    if CellSet.is_top a.cells
+    then Post.return flow
+
+    else CellSet.fold (fun c acc ->
+        Post.bind (remove_cell c range man) acc
+      ) a.cells (Post.return flow)
 
 
   (** {2 Initial state} *)
@@ -774,7 +783,6 @@ struct
       Eval.singleton (mk_top (under_pointer_type p.etyp) range) flow
 
     | Cell { base = S str; offset } ->
-      debug "cell str %s offset %a" str Z.pp_print offset;
       let o = Z.to_int offset in
       let chr =
         if o = String.length str
@@ -887,9 +895,16 @@ struct
             let c = mk_cell (V v) o t in
             let init = None in
             let tl' = if Z.equal n Z.one then tl else C_flat_none(Z.pred n,t) :: tl in
-            c, init, tl', Z.succ o
+            c, init, tl', Z.add o (sizeof_type t)
 
-          | _ -> assert false
+          | C_flat_fill(e,t,n) :: tl ->
+            let c = mk_cell (V v) o t in
+            let init = Some (C_init_expr e) in
+            let tl' = if Z.equal n Z.one then tl else C_flat_fill(e,t,Z.pred n) :: tl in
+            c, init, tl', Z.add o (sizeof_type t)
+
+
+          | l -> panic "?? %a" Pp.pp_c_init (C_init_flat l)
         in
         (* Evaluate the initialization into a scalar expression *)
         (
@@ -931,7 +946,10 @@ struct
     post_eval man @@ fun expansion flow ->
     match expansion with
     | Top ->
-      panic_at range "assignment to ⊤ lval is not supported"
+      warn_at range "unable to determine the memory block pointed by %a; the analysis is unsound."
+        pp_expr p
+      ;
+      Post.return flow
 
     | Cell { base } when is_base_readonly base ->
       let flow = raise_alarm Alarms.AReadOnlyModification ~bottom:true range man.lattice flow in
@@ -993,7 +1011,7 @@ struct
       man.eval ~zone:(Z_c_low_level, Z_c_points_to) target flow |>
       post_eval man @@ fun pt flow ->
       match ekind pt with
-      | E_c_points_to P_top | E_c_points_to P_valid ->
+      | E_c_points_to P_top | E_c_points_to P_valid | E_c_points_to P_null | E_c_points_to P_invalid ->
         Post.return flow
 
       | E_c_points_to (P_block(base, offset)) ->
@@ -1113,6 +1131,9 @@ struct
       Post.bind (man.exec_sub ~zone:Z_c_scalar stmt) |>
       Option.return
 
+    | S_stub_assigns _ ->
+      Post.return flow |>
+      Option.return
 
     | S_stub_rename_primed(lval, bounds) ->
       rename_primed lval bounds stmt.srange man flow |>

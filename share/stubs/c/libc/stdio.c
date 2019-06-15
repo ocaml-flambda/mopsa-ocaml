@@ -46,7 +46,7 @@ _FILE_ *stderr;
  * local: void *f = new FileDescription;
  * local: int fd = _mopsa_file_description_to_descriptor(f);
  * local: _FILE_* file = new File;
- * ensures: bytes(file) == sizeof(_FILE_);
+ * ensures: bytes(file) == sizeof_type(_FILE_);
  * ensures: file->_fileno == fd;
  * ensures: return == file;
  */
@@ -72,7 +72,7 @@ _FILE_ *_alloc_std_stream();
  * local: void *f = new FileDescription;
  * local: int fd = _mopsa_file_description_to_descriptor(f);
  * local: FILE* file = new File;
- * ensures: bytes(file) == sizeof(FILE);
+ * ensures: bytes(file) == sizeof_type(FILE);
  * ensures: file->_fileno == fd;
  * ensures: return == file;
  */
@@ -390,25 +390,6 @@ void setbuffer (FILE *__restrict __stream, char *__restrict __buf,
 void setlinebuf (FILE *__stream);
 
 
-/*$
- * // TODO: check format, check variable arguments
- *
- * requires: __stream in File;
- * requires: valid_string(__format);
- */
-int fprintf (FILE *__restrict __stream,
-             const char *__restrict __format, ...);
-
-/*$
- * // TODO: check format, check variable arguments, check size of __s
- *
- * requires: valid_string(__format);
- */
-int sprintf (char *__restrict __s,
-             const char *__restrict __format, ...);
-
-
-
 /*
   Starting from glibc 2.28, _G_va_list is replaced by _gnuc_va_list
 */
@@ -418,113 +399,6 @@ int sprintf (char *__restrict __s,
 
 #endif // __GLIBC_MINOR__ >= 28
 
-
-
-/*$
- * // TODO: check format, check variable arguments
- *
- * requires: __stream in File;
- * requires: valid_string(__fmt);
- */
-int vfprintf (FILE *__restrict __stream, const char *__restrict __fmt,
-              _G_va_list __arg);
-
-
-/*$
- * // TODO: check format, check variable arguments
- *
- * requires: valid_string(__fmt);
- */
-int vprintf (const char *__restrict __fmt, _G_va_list __ap);
-
-/*$
- * // TODO: check format, check variable arguments, check size of __s
- *
- * requires: valid_string(__fmt);
- */
-int vsprintf (char *__restrict __s, const char *__restrict __fmt,
-              _G_va_list __ap);
-
-
-/*$
- * // TODO: check format, check variable arguments
- *
- * requires: size(__s) >= __maxlen;
- * requires: valid_string(__format);
- */
-int snprintf (char *__restrict __s, size_t __maxlen,
-              const char *__restrict __format, ...);
-
-/*$
- * // TODO: check format, check variable arguments
- *
- * requires: size(__s) >= __n;
- * requires: valid_string(__fmt);
- */
-int vsnprintf (char *__restrict __s, size_t __n,
-               const char *__restrict __fmt, _G_va_list __ap);
-
-
-/*$
- * // TODO: check format, check variable arguments
- *
- * requires: valid_string(__fmt);
- *
- * case "success" {
- *   local:    char* r = new Memory;
- *   assigns:  *__ptr;
- *   ensures:  size(r) > 0;
- *   ensures:  valid_string(r);
- *   ensures:  (*__ptr)' == r;
- *   ensures:  return >= 0;
- * }
- *
- * case "failure" {
- *   assigns: *__ptr;
- *   ensures: return == -1;
- * }
- */
-int vasprintf (char **__restrict __ptr, const char *__restrict __fmt,
-               _G_va_list __ap);
-
-/*$
- * // TODO: check format, check variable arguments
- *
- * requires: valid_string(__fmt);
- *
- * case "success" {
- *   local:    char* r = new Memory;
- *   assigns:  *__ptr;
- *   ensures:  size(r) > 0;
- *   ensures:  valid_string(r);
- *   ensures:  (*__ptr)' == r;
- *   ensures:  return >= 0;
- * }
- *
- * case "failure" {
- *   assigns: *__ptr;
- *   ensures: return == -1;
- * }
- */
-int asprintf (char **__restrict __ptr,
-              const char *__restrict __fmt, ...);
-
-/*$
- * // TODO: check format, check variable arguments
- *
- * requires: __fd in FileDescriptor;
- * requires: exists int i in [0, size(__fmt) - 1]: __fmt[i] == 0;
- */
-int vdprintf (int __fd, const char *__restrict __fmt,
-              _G_va_list __arg);
-
-/*$
- * // TODO: check format, check variable arguments
- *
- * requires: __fd in FileDescriptor;
- * requires: valid_string(__fmt);
- */
-int dprintf (int __fd, const char *__restrict __fmt, ...);
 
 
 /*$
@@ -913,7 +787,7 @@ int fgetpos (FILE *__restrict __stream, fpos_t *__restrict __pos);
 
 /*$
  * requires: __stream in File;
- * // TODO requires: size(__pos) >= sizeof(fpos_t);
+ * // TODO requires: size(__pos) >= sizeof_type(fpos_t);
  *
  * case "success" {
  *   ensures: return == 0;

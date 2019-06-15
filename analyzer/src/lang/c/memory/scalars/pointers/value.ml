@@ -73,7 +73,7 @@ type t = {
 
 (** Generate a unique ID of this abstraction *)
 include Framework.Core.Id.GenValueId(struct
-    type typ = t
+    type nonrec t = t
     let name = "c.memory.pointers"
     let display = "pointers"
   end)

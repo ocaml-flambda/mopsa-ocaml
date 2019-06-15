@@ -42,7 +42,7 @@ struct
 
   include GenValueId(
     struct
-      type typ = t
+      type nonrec t = t
       let name = "universal.numeric.values.intervals.float"
       let display = "float-itv"
     end

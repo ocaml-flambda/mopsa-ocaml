@@ -76,7 +76,7 @@ struct
 
 
   include GenDomainId(struct
-      type typ = t
+      type nonrec t = t
       let name = ApronManager.name
     end)
 
@@ -350,17 +350,24 @@ struct
 
     | _ -> None
 
+  let eval_interval e (abs,bnd) =
+    let abs, bnd = add_missing_vars (abs,bnd) (Visitor.expr_vars e) in
+    let e, abs, bnd, _ = exp_to_apron e (abs,bnd) [] in
+    let env = Apron.Abstract1.env abs in
+    let e = Apron.Texpr1.of_expr env e in
+    Apron.Abstract1.bound_texpr ApronManager.man abs e |>
+    Values.Intervals.Integer.Value.of_apron
+
 
   let ask : type r. r query -> t -> r option =
     fun query (abs,bnd) ->
       match query with
-      | Values.Intervals.Integer.Value.Q_interval e ->
-        let abs, bnd = add_missing_vars (abs,bnd) (Visitor.expr_vars e) in
-        let e, abs, bnd, _ = exp_to_apron e (abs,bnd) [] in
-        let env = Apron.Abstract1.env abs in
-        let e = Apron.Texpr1.of_expr env e in
-        Apron.Abstract1.bound_texpr ApronManager.man abs e |>
-        Values.Intervals.Integer.Value.of_apron |>
+      | Common.Q_int_interval e ->
+        eval_interval e (abs,bnd) |>
+        Option.return
+
+      | Common.Q_int_congr_interval e ->
+        (eval_interval e (abs,bnd), Common.C.minf_inf) |>
         Option.return
 
       | Q_related_vars v ->

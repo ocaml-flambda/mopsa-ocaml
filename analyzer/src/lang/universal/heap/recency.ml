@@ -52,7 +52,7 @@ struct
   type t = Pool.t
 
   include GenDomainId(struct
-      type typ = t
+      type nonrec t = t
       let name = "universal.heap.recency" ^ "." ^ Policy.name
     end)
 

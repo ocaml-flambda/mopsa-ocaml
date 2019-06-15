@@ -189,6 +189,7 @@ and parse_db (dbfile: string) ctx : unit =
     ) srcs
 
 and parse_file (opts: string list) (file: string) ctx =
+  Core.Debug_tree.parse file;
   let opts' = ("-I" ^ (Paths.resolve_stub "c" "mopsa")) ::
               ("-include" ^ "mopsa.h") ::
               (List.map (fun dir -> "-I" ^ dir) !opt_include_dirs) @
@@ -815,8 +816,8 @@ and from_stub_builtin f =
   | SIZE -> SIZE
   | OFFSET -> OFFSET
   | BASE -> BASE
-  | PTR_VALID -> PTR_VALID
-  | FLOAT_VALID -> FLOAT_VALID
+  | VALID_PTR -> VALID_PTR
+  | VALID_FLOAT -> VALID_FLOAT
   | FLOAT_INF -> FLOAT_INF
   | FLOAT_NAN -> FLOAT_NAN
   | BYTES -> BYTES

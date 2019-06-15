@@ -152,7 +152,7 @@ struct
 
   (** Domain identifier *)
   include GenDomainId(struct
-      type typ = t
+      type nonrec t = t
       let name = "c.memory.lowlevel.smashing"
     end)
 
@@ -793,6 +793,9 @@ struct
       Post.bind (man.exec_sub ~zone:Z_c_scalar stmt) |>
       Option.return
 
+    | S_stub_assigns _ ->
+      Post.return flow |>
+      Option.return
 
     | S_stub_rename_primed(p, []) ->
       None

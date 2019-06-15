@@ -50,7 +50,7 @@ struct
 
   include GenValueId(
     struct
-      type typ = t
+      type nonrec t = t
 
       let name = "framework.combiners.value.product"
 

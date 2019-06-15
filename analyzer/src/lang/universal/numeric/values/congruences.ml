@@ -37,7 +37,7 @@ struct
 
   include GenValueId(
     struct
-        type typ = t
+        type nonrec t = t
         let name = "universal.numeric.values.congruences"
         let display = "congruences"
     end
@@ -143,7 +143,21 @@ struct
     with Found_BOT ->
       bottom, bottom
 
-  let ask query eval = None
+
+  let ask : type r. r query -> (expr -> t) -> r option =
+    fun query eval ->
+      match query with
+      | Common.Q_int_congr_interval e ->
+        let c = eval e in
+        let ret =
+          match c with
+          | BOT -> Intervals.Integer.Value.bottom, C.minf_inf
+          | Nb cc -> Intervals.Integer.Value.top, cc
+        in
+        Option.return ret
+
+      | _ -> None
+
 
   let refine channel v = Channel.return v
 

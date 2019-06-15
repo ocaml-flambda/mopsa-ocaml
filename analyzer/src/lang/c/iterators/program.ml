@@ -145,18 +145,10 @@ struct
     man.exec ~zone:Zone.Z_c stmt flow
 
 
-  (** Address of the program name string *)
-  let program_name_addr = {
-    addr_kind = A_stub_resource "String";
-    addr_group = G_all;
-    addr_mode = STRONG;
-  }
-
-
-  (** Initialize argc and argv with concrete values and execute the body of main *)
-  let call_main_with_concrete_args main args range man flow =
+  (** Call main with a fixed number of arguments, as given by function [fargv] *)
+  let call_main_with_fixed_argc main argc fargv range man flow =
     (* Create the argc variable and initialize it to |args| + 1 *)
-    let argc = mkfresh (fun uid ->
+    let argc_var = mkfresh (fun uid ->
         let vname = "_argc" in
         let vkind = V_cvar {
             cvar_scope = Variable_global;
@@ -171,72 +163,15 @@ struct
     in
     let decl =
       mk_c_declaration
-        argc
-        (Some (C_init_expr (mk_int (List.length args + 1) ~typ:s32 range)))
+        argc_var
+        (Some (C_init_expr (mk_int argc ~typ:s32 range)))
         Variable_global
         range
     in
-    let flow = man.exec decl flow in
-
-    (* Create the argv variable and initialize it with the given arguments *)
-    let argv = mkfresh (fun uid ->
-        let vname = "_argv" in
-        let vkind = V_cvar {
-            cvar_scope = Variable_global;
-            cvar_range = range;
-            cvar_uid = uid;
-            cvar_orig_name = vname;
-            cvar_uniq_name = vname;
-          }
-        in
-        vname, vkind
-      ) (array_type (pointer_type s8) (List.length args + 2 |> Z.of_int)) ()
-    in
-    let decl =
-      mk_c_declaration
-        argv
-        (Some (C_init_list (
-             (
-               (("a.out" :: args) |>
-                List.map (fun str -> C_init_expr (mk_c_string str range))
-               )
-               @ [C_init_expr (mk_zero range)]
-             ), None
-           )))
-        Variable_global
-        range
-    in
-    let flow = man.exec decl flow in
-
-    (* call main with argc and argv *)
-    call main [
-      mk_var argc main.c_func_range;
-      mk_var argv main.c_func_range
-    ] man flow
-
-
-
-  (** Initialize argv as an array of length !opt_argc containing symbolic valid strings *)
-  let call_main_with_symbolic_args main functions range man flow =
-    (* Create the argc variable *)
-    let argc = mkfresh (fun uid ->
-        let vname = "_argc" in
-        let vkind = V_cvar {
-            cvar_scope = Variable_global;
-            cvar_range = range;
-            cvar_uid = uid;
-            cvar_orig_name = vname;
-            cvar_uniq_name = vname;
-          }
-        in
-        vname, vkind
-      ) s32 ()
-    in
-    let decl = mk_c_declaration argc (Some (C_init_expr (mk_int !opt_argc range))) Variable_global range in
     let flow = man.exec decl flow in
 
     (* Create the argv variable *)
-    let argv = mkfresh (fun uid ->
+    let argv_var = mkfresh (fun uid ->
         let vname = "_argv" in
         let vkind = V_cvar {
             cvar_scope = Variable_global;
@@ -247,45 +182,60 @@ struct
           }
         in
         vname, vkind
-      ) (array_type (pointer_type s8) (!opt_argc + 1 |> Z.of_int)) ()
+      ) (array_type (pointer_type s8) (argc + 1 |> Z.of_int)) ()
     in
-    let decl = mk_c_declaration argv None Variable_global range in
+    let decl = mk_c_declaration argv_var None Variable_global range in
     let flow = man.exec decl flow in
 
     (* Initialize argv[0] with the name of the program *)
     let flow = man.exec
         (mk_assign
-           (mk_c_subscript_access (mk_var argv range) (mk_zero range) range)
+           (mk_c_subscript_access (mk_var argv_var range) (mk_zero range) range)
            (mk_c_string "a.out" range)
            range
         )
         flow
     in
 
-    (* Initialize argv[i | 1 <= i < argc] with fixed heap addresses pointing to symbolic valid strings *)
+    (* Initialize argv[i | 1 <= i < argc] with command-line arguments *)
     let rec iter i flow =
-      if i >= !opt_argc
-      then
-        flow
+      if i >= argc
+      then flow
       else
         let range = tag_range range "argv[%d]" i in
-        let argvi = mk_c_subscript_access (mk_var argv range) (mk_int i range) range in
-        let arg = mk_c_call (find_function "_mopsa_new_valid_string" functions) [] range in
+        let argvi = mk_c_subscript_access (mk_var argv_var range) (mk_int i range) range in
+        let arg = fargv i range in
         let flow = man.exec (mk_assign argvi arg range) flow in
         iter (i + 1) flow
     in
     let flow = iter 1 flow in
 
     (* Put the last NULL cell *)
-    let last = mk_c_subscript_access (mk_var argv range) (mk_int !opt_argc range) range in
+    let last = mk_c_subscript_access (mk_var argv_var range) (mk_int argc range) range in
     let flow = man.exec (mk_assign last (mk_zero range) range) flow in
 
     (* call main with argc and argv *)
     call main [
-      mk_var argc main.c_func_range;
-      mk_var argv main.c_func_range
+      mk_var argc_var main.c_func_range;
+      mk_var argv_var main.c_func_range
     ] man flow
 
+
+
+  (** Initialize argc and argv with concrete values and execute the body of main *)
+  let call_main_with_concrete_args main args range man flow =
+    call_main_with_fixed_argc main
+      (List.length args + 1)
+      (fun i range -> mk_c_string (List.nth args (i-1)) range)
+      range man flow
+
+
+  (** Initialize argv as an array of length !opt_argc containing symbolic valid strings *)
+  let call_main_with_symbolic_args main functions range man flow =
+    call_main_with_fixed_argc main
+      !opt_argc
+      (fun i range -> mk_c_call (find_function "_mopsa_new_valid_string" functions) [] range)
+      range man flow
 
 
   let exec zone stmt man flow =
@@ -324,10 +274,13 @@ struct
 
       else panic "entry functions with arguments not supported"
 
-    | S_program ({ prog_kind = C_program{ c_globals; c_functions } }, _)
+    | S_program ({ prog_kind = C_program{ c_globals; c_functions; c_stub_directives } }, _)
       when !Universal.Iterators.Unittest.unittest_flag ->
       (* Initialize global variables *)
       let flow1 = init_globals c_globals (srange stmt) man flow in
+
+      (* Execute stub directives *)
+      let flow1 = exec_stub_directives c_stub_directives (srange stmt) man flow1 in
 
       let is_test fundec =
         let name = fundec.c_func_org_name in

@@ -125,7 +125,6 @@ and expr =
 
   | E_builtin_call  of builtin * expr with_range
 
-  | E_sizeof_var    of var with_range
   | E_sizeof_type   of c_qual_typ with_range
   | E_sizeof_expr   of expr with_range
 
@@ -190,8 +189,8 @@ and builtin =
   | BYTES
   | OFFSET
   | BASE
-  | PTR_VALID
-  | FLOAT_VALID
+  | VALID_PTR
+  | VALID_FLOAT
   | FLOAT_INF
   | FLOAT_NAN
 
@@ -260,8 +259,8 @@ let pp_builtin fmt f =
   | OFFSET -> pp_print_string fmt "offset"
   | BASE   -> pp_print_string fmt "base"
   | PRIMED -> pp_print_string fmt "primed"
-  | PTR_VALID -> pp_print_string fmt "ptr_valid"
-  | FLOAT_VALID -> pp_print_string fmt "float_valid"
+  | VALID_PTR -> pp_print_string fmt "valid_ptr"
+  | VALID_FLOAT -> pp_print_string fmt "valid_float"
   | FLOAT_INF   -> pp_print_string fmt "float_inf"
   | FLOAT_NAN   -> pp_print_string fmt "float_nan"
 
@@ -289,7 +288,6 @@ let rec pp_expr fmt exp =
   | E_attribute(s, f) -> fprintf fmt "%a:%s" pp_expr s f
   | E_arrow(p, f) -> fprintf fmt "%a->%s" pp_expr p f
   | E_builtin_call(f, arg) -> fprintf fmt "%a(%a)" pp_builtin f pp_expr arg
-  | E_sizeof_var v -> fprintf fmt "sizeof(%a)" pp_var v.content
   | E_sizeof_type t -> fprintf fmt "sizeof(%a)" pp_c_qual_typ t.content
   | E_sizeof_expr e -> fprintf fmt "sizeof(%a)" pp_expr e
   | E_return -> pp_print_string fmt "return"

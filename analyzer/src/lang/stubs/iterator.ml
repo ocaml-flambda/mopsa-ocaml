@@ -326,17 +326,15 @@ struct
 
 
   let exec_ensures e return man flow =
-    debug "exec %a" pp_ensures e;
     (* Replace E_stub_return expression with the fresh return variable *)
     let f =
       match return with
-      | None -> debug "none"; e.content
+      | None -> e.content
       | Some v ->
-        debug "replace return with %a" pp_var v;
         visit_expr_in_formula
           (fun e ->
              match ekind e with
-             | E_stub_return -> debug "real replace";Keep { e with ekind = E_var (v, STRONG) }
+             | E_stub_return -> Keep { e with ekind = E_var (v, STRONG) }
              | _ -> VisitParts e
           )
           e.content
@@ -344,6 +342,14 @@ struct
     (* Evaluate ensure body and return flows that verify it *)
     let ftrue, _ = eval_formula f ~negate:false man flow in
     ftrue
+
+
+  let exec_assigns assigns man flow =
+    man.exec (mk_stub_assigns
+                assigns.content.assign_target
+                assigns.content.assign_offset
+                assigns.range
+             ) flow
 
 
   (** Remove locals and old copies of assigned variables *)
@@ -374,7 +380,7 @@ struct
     | S_local local -> exec_local local man flow
     | S_assumes assumes -> exec_assumes assumes man flow
     | S_requires requires -> exec_requires requires man flow
-    | S_assigns _ -> flow
+    | S_assigns assigns -> exec_assigns assigns man flow
     | S_ensures ensures -> exec_ensures ensures return man flow
     | S_free free -> exec_free free man flow
     | S_warn warn ->

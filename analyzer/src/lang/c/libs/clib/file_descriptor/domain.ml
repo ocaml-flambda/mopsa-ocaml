@@ -148,7 +148,7 @@ struct
   (** ===================== *)
 
   include Framework.Core.Id.GenDomainId(struct
-      type typ = t
+      type nonrec t = t
       let name = "c.libs.clib.file_descriptor"
     end)
 
@@ -285,7 +285,7 @@ struct
 
     and find_addr_others flow =
       let a = get_domain_env T_cur man flow in
-      let itv = man.ask (Itv.Q_interval i) flow in
+      let itv = man.ask (Universal.Numeric.Common.Q_int_interval i) flow in
 
       (* First case: return addresses having a descriptor interval
          intersecting with the target interval *)

@@ -44,7 +44,7 @@ struct
 
   include GenDomainId(
     struct
-      type typ = t
+      type nonrec t = t
       let name = "framework.operators.sequence.stacked"
     end
     )

@@ -26,26 +26,39 @@
 
 #include <libintl.h>
 
-char *_domain_name = NULL;
+#define DOMAIN_NAME_BUF_SIZE 100
+
+char *_domain_name_buf = NULL;
 
 /*$
- * requires: valid_string(__domainname);
- *
- * case "with domain name" {
+ * case "with domain name AND first call" {
  *   assumes: __domainname != NULL;
- *   assigns: _domain_name;
+ *   assumes: _domain_name_buf == NULL;
+ *   requires: valid_string(__domainname);
+ *   assigns: _domain_name_buf;
  *   local: char *addr = new ReadOnlyString;
- *
- *   ensures: _domain_name' == addr;
+ *   ensures: size(addr) == DOMAIN_NAME_BUF_SIZE;
+ *   ensures: _domain_name_buf' == addr;
  *   ensures: valid_string(addr);
  *   ensures: return == addr;
- *   // TODO: invalidate _domain_name
+ * }
+ *
+ * case "with domain name AND later calls" {
+ *   assumes: __domainname != NULL;
+ *   assumes: _domain_name_buf != NULL;
+ *   requires: valid_string(__domainname);
+ *   assigns: _domain_name_buf;
+ *   local: char *addr = new ReadOnlyString;
+ *   ensures: size(addr) == DOMAIN_NAME_BUF_SIZE;
+ *   ensures: _domain_name_buf' == addr;
+ *   ensures: valid_string(addr);
+ *   ensures: return == addr;
+ *   free: _domain_name_buf;
  * }
  *
  * case "without domain name" {
  *   assumes: __domainname == NULL;
- *   requires: _domain_name != NULL;
- *   ensures: return == _domain_name;
+ *   ensures: return == _domain_name_buf;
  * }
  */
 char *textdomain (const char *__domainname);
@@ -54,16 +67,32 @@ char *textdomain (const char *__domainname);
 /*$
  * requires: valid_string(__domainname);
  *
- * case "with directory name" {
- *  assumes: __dirname != NULL;
- *  local: char *addr = new ReadOnlyString;
- *  ensures: return == addr;
- *  ensures: valid_string(addr);
+ * case "with directory name AND first call" {
+ *   assumes: __dirname != NULL;
+ *   assumes: _domain_name_buf == NULL;
+ *   assigns: _domain_name_buf;
+ *   local: char *addr = new ReadOnlyString;
+ *   ensures: size(addr) == DOMAIN_NAME_BUF_SIZE;
+ *   ensures: _domain_name_buf' == addr;
+ *   ensures: valid_string(addr);
+ *   ensures: return == addr;
+ * }
+ *
+ * case "with directory name AND later calls" {
+ *   assumes: __dirname != NULL;
+ *   assumes: _domain_name_buf != NULL;
+ *   assigns: _domain_name_buf;
+ *   local: char *addr = new ReadOnlyString;
+ *   ensures: size(addr) == DOMAIN_NAME_BUF_SIZE;
+ *   ensures: _domain_name_buf' == addr;
+ *   ensures: valid_string(addr);
+ *   ensures: return == addr;
+ *   free: _domain_name_buf;
  * }
  *
  * case "without directory name" {
  *   assumes: __dirname == NULL;
- *   warn: "calling bindtextdomain without dirname is not supported";
+ *   ensures: return == _domain_name_buf;
  * }
  */
 char *bindtextdomain (const char *__domainname, const char *__dirname);
@@ -73,14 +102,36 @@ char *bindtextdomain (const char *__domainname, const char *__dirname);
  */
 char *bind_textdomain_codeset (const char *__domainname, const char *__codeset);
 
+#define GETTEXT_BUF_SIZE 100
+char _gettext_buf[GETTEXT_BUF_SIZE];
 
 /*$
- * warn: "unsupported stub";
+ * requires: valid_string(__msgid);
+ *
+ * case "translation found" {
+ *   assigns: _gettext_buf[0, GETTEXT_BUF_SIZE - 1];
+ *   ensures: valid_primed_string(_gettext_buf);
+ *   ensures: return == _gettext_buf;
+ * }
+ *
+ * case "translation not found" {
+ *   ensures: return == _gettext_buf;
+ * }
  */
 char *gettext (const char *__msgid);
 
 /*$
- * warn: "unsupported stub";
+ * requires: valid_string(__msgid);
+ *
+ * case "translation found" {
+ *   assigns: _gettext_buf[0, GETTEXT_BUF_SIZE - 1];
+ *   ensures: valid_primed_string(_gettext_buf);
+ *   ensures: return == _gettext_buf;
+ * }
+ *
+ * case "translation not found" {
+ *   ensures: return == _gettext_buf;
+ * }
  */
 char *dcgettext (const char *__domainname, const char *__msgid,
 		 int __category);

@@ -46,14 +46,22 @@
                     ]
                 },
 		"on": {
-                    "nonrel": {
-			"disjoint": [
-			    "universal.numeric.values.intervals.float",
-                            "universal.numeric.values.intervals.integer"
-			]
-		    }
+                    "product": [
+                        "universal.numeric.relational",
+                        {
+                            "nonrel": {
+			        "disjoint": [
+			            "universal.numeric.values.intervals.float",
+                                    "universal.numeric.values.intervals.integer"
+			        ]
+		            }
+                        }
+                    ],
+                    "reductions": [
+                        "universal.numeric.reductions.intervals"
+                    ]
                 }
-	    }
+            }
 	]
     }
 }

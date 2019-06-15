@@ -112,20 +112,9 @@ and visit_expr macros enums expr =
     let arg = visit_expr macros enums arg in
     E_builtin_call (f, arg)
 
-  | E_sizeof_var v when is_macro v.content.vname macros ->
-    begin try
-        let e' = expand_macro_to_expr v.content.vname v.range macros enums in
-        E_sizeof_expr e'
-      with _ ->
-        let t = expand_macro_to_type v.content.vname macros enums in
-        E_sizeof_type (with_range t v.range)
-    end
-
-  | E_sizeof_var v ->
-    E_sizeof_var v
-
   | E_sizeof_type t ->
-    E_sizeof_type t
+    let tt = visit_type macros enums t.content in
+    E_sizeof_type (with_range tt t.range)
 
   | E_sizeof_expr e ->
     let e = visit_expr macros enums e in

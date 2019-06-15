@@ -270,7 +270,7 @@ struct
   let widen ctx = widen
 
   include Framework.Core.Id.GenDomainId(struct
-      type typ = t
+      type nonrec t = t
       let name = "python.types.typing"
     end)
 

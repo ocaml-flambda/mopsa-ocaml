@@ -49,7 +49,7 @@ lang.universal = ast frontend zone iterators heap numeric
 lang.universal.iterators = program intraproc scalar interproc unittest loops
 lang.universal.iterators.interproc = inlining sequential_cache join_based_cache
 lang.universal.heap = policies recency
-lang.universal.numeric = rounding values relational reductions
+lang.universal.numeric = rounding common values relational reductions
 lang.universal.numeric.values = intervals congruences
 lang.universal.numeric.values.intervals = integer float
 lang.universal.numeric.relational = apron_manager binding apron_transformer factory octagon polyhedra default
@@ -69,7 +69,7 @@ lang.c.memory.structured = flat
 lang.c.memory.lowlevel = string_length cells smashing reductions
 lang.c.memory.scalars = pointers machine_numbers
 lang.c.memory.scalars.pointers = value symbolic domain
-lang.c.libs = builtins clib mopsalib compiler variadic resources
+lang.c.libs = builtins clib mopsalib compiler variadic cstubs
 lang.c.libs.clib.file_descriptor = slot table domain
 
 
