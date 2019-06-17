@@ -34,7 +34,8 @@ let opt_float_rounding = ref Apron.Texpr1.Near
 let () =
   register_standalone_option name {
     key = "-float-rounding-mode";
-    spec = Arg.Symbol (
+    category = "Numeric";
+    spec = ArgExt.Symbol (
         ["near"; "zero"; "up"; "down"; "rnd"],
         (function
           | "near" -> opt_float_rounding := Apron.Texpr1.Near

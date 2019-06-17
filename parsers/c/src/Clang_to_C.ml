@@ -127,7 +127,9 @@ let new_uid ctx =
   ctx.ctx_uid <- i;
   i
 
-
+let find_function name ctx =
+  Hashtbl.find ctx.ctx_funcs name
+  
     
 let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comment list) (macros:C.macro list) =
 
@@ -980,7 +982,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
       (try
          match op with
          | C.UETT_SizeOf -> sizeof_expr ctx.ctx_target range typ tt
-         | C.UETT_AlignOf ->
+         | C.UETT_AlignOf | C.UETT_PreferredAlignOf ->
             E_integer_literal (alignof_type ctx.ctx_target tt), typ, range
        with Invalid_argument msg ->
          warning range msg (C.string_of_type (fst t));
@@ -993,7 +995,10 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
       (* TODO: update when the AtomicExpr Clang node is handled better *)
       E_atomic (e.C.atomic_op, expr func e.C.atomic_ptr, expr func e.C.atomic_order),
       typ, range
-              
+
+   | C.FullExpr e | C.ConstantExpr e ->
+      expr func e
+     
    | e -> error range "unhandled expression" (C.expr_kind_name e)
 
 

@@ -29,14 +29,7 @@
  * module Domain =
  *   struct
  *
- *     type _ domain += D_python_objects_nones : unit domain
- *
- *     let id = D_python_objects_nones
  *     let name = "python.objects.nones"
- *     let identify : type a. a domain -> (unit, a) eq option = function
- *       | D_python_objects_nones -> Some Eq
- *       | _ -> None
- *
  *     let debug fmt = Debug.debug ~channel:name fmt
  *
  *     let exec_interface = {export = []; import = []}

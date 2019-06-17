@@ -51,10 +51,10 @@ struct
   let equal (abs1:t) (abs2:t) : bool =
     top_equal Set.equal abs1 abs2
 
-  let join annot (abs1:t) (abs2:t) : t =
+  let join (abs1:t) (abs2:t) : t =
     top_lift2 Set.union abs1 abs2
 
-  let meet annot (abs1:t) (abs2:t) : t =
+  let meet (abs1:t) (abs2:t) : t =
     top_neutral2 Set.inter abs1 abs2
 
   let union = join
@@ -62,9 +62,11 @@ struct
   let inter = meet
 
   let diff (abs1:t) (abs2:t) : t =
-    top_neutral2 Set.diff abs1 abs2
+    if is_top abs2
+    then bottom
+    else top_lift2 Set.diff abs1 abs2
 
-  let widen annot (abs1:t) (abs2:t) : t =
+  let widen (abs1:t) (abs2:t) : t =
     top_absorb2
       (fun s1 s2 ->
          if Set.subset s2 s1 then
@@ -104,6 +106,13 @@ struct
 
   let filter f (abs:t) : t =
     top_lift1 (Set.filter f) abs
+
+  let partition f (abs:t) : t * t =
+    match abs with
+    | TOP -> TOP, TOP
+    | Nt a ->
+      let r1, r2 = Set.partition f a in
+      Nt r1, Nt r2
 
   let exists f (abs:t) : bool =
     top_to_exn abs |> (fun s -> Set.exists f s)
@@ -191,21 +200,21 @@ struct
     Set.equal l1 l2 &&
     USet.equal u1 u2
 
-  let join annot ((l1,u1): t) ((l2,u2): t) : t =
+  let join ((l1,u1): t) ((l2,u2): t) : t =
     Set.inter l1 l2,
-    USet.join annot u1 u2
+    USet.join u1 u2
 
-  let meet annot ((l1,u1): t) ((l2,u2): t) : t =
+  let meet ((l1,u1): t) ((l2,u2): t) : t =
     Set.union l1 l2,
-    USet.meet annot u1 u2
+    USet.meet u1 u2
 
   let union = join
 
   let inter = meet
 
-  let widen annot ((l1,u1): t) ((l2,u2): t) : t =
+  let widen ((l1,u1): t) ((l2,u2): t) : t =
     Set.inter l1 l2,
-    USet.widen annot u1 u2
+    USet.widen u1 u2
 
   open Format
   let print fmt ((l,u):t) =

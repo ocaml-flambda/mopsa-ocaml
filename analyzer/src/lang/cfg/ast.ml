@@ -22,7 +22,7 @@
 (** Extends the simple Universal language with Control Flow Graphs. *)
 
 open Mopsa
-open Framework.Manager
+open Universal.Ast
 
    
 (*==========================================================================*)

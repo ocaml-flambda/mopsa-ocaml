@@ -30,7 +30,13 @@ let rec exprs_in_init = function
     let el1 = l |> List.fold_left (fun acc init -> acc @ exprs_in_init init) [] in
     let el2 = exprs_in_init_option filler in
     el1 @ el2
-  | C_init_stub stub -> []
+  | C_init_flat l ->
+    List.fold_left (fun acc init ->
+        match init with
+        | C_flat_expr (e,_) -> e :: acc
+        | C_flat_fill (e,_,_) -> e :: acc
+        | _ -> acc
+      ) [] l
 
 and exprs_in_init_option = function
   | None -> []
@@ -177,20 +183,15 @@ let () =
 
   register_stmt_visitor (fun default stmt ->
       match skind stmt with
-      | S_program { prog_kind = C_program _ } ->
+      | S_program ({ prog_kind = C_program _ }, _) ->
         Exceptions.panic "visitor of C_program not yet implemented"
 
-      | S_c_declaration(v) ->
-        let vv, init = match vkind v with
-          | V_c ({ var_init } as vv) -> vv, var_init
-          | _ -> assert false
-        in
+      | S_c_declaration(v, init,scope) ->
         let exprs = exprs_in_init_option init in
         {exprs; stmts = []},
         (function {exprs} ->
            let init, _ = init_option_from_exprs exprs init in
-           let v = { v with vkind = V_c { vv with var_init = init } } in
-           {stmt with skind = S_c_declaration v}
+           {stmt with skind = S_c_declaration (v,init,scope)}
         )
 
 

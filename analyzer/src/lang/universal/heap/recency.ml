@@ -19,62 +19,111 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** array access and structure member access transformation to pointer
-   arithmetic*)
+
+(** Abstraction of the heap *)
+
 
 open Mopsa
+open Framework.Core.Sig.Stacked.Intermediate
 open Ast
 open Zone
+open Policies
+
+
 
 
 (** {2 Domain definition} *)
 (** ===================== *)
 
-let name = "universal.heap.recency"
-let debug fmt = Debug.debug ~channel:name fmt
-
-module Domain =
+module Domain(Policy: POLICY) =
 struct
 
-  (** Lattice definition *)
-  (** ================== *)
+  (** Domain header *)
+  (** ============= *)
 
-  include Pool
+  module Pool = Framework.Lattices.Powerset.Make(
+    struct
+      type t = addr
+      let compare = compare_addr
+      let print = pp_addr
+    end
+    )
 
-  let is_bottom _ = false
+  type t = Pool.t
+
+  include GenDomainId(struct
+      type nonrec t = t
+      let name = "universal.heap.recency" ^ "." ^ Policy.name
+    end)
 
   let print fmt pool =
     Format.fprintf fmt "heap: @[%a@]@\n"
       Pool.print pool
 
-  (** Domain identification *)
-  (** ===================== *)
+  let bottom = Pool.bottom
 
-  type _ domain += D_u_heap_recency : t domain
-  let id = D_u_heap_recency
-  let name = "universal.heap.recency"
-  let identify : type a. a domain -> (t, a) eq option =
-    function
-    | D_u_heap_recency -> Some Eq
-    | _ -> None
+  let top = Pool.top
 
-  let debug fmt = Debug.debug ~channel:name fmt
+
+  (** Lattice operators *)
+  (** ================= *)
+
+  let is_bottom _ = false
+
+  let subset man ctx (a,s) (a',s') =
+    Pool.subset a a', s, s'
+
+  let join man ctx (a,s) (a',s') =
+    Pool.join a a', s, s'
+
+  let meet man ctx (a,s) (a',s') =
+    Pool.meet a a', s, s'
+
+  let widen man ctx (a,s) (a',s') =
+    Pool.join a a', s, s', true
+    (* debug "widening@,a = %a@,a'= %a" Pool.print a Pool.print a';
+     * (\* Search for strong addresses that belong only to a' and make them weak *\)
+     * let aa = Pool.join a a' in
+     * let diff = Pool.diff a' a |>
+     *            Pool.filter (function ({ addr_mode } as addr) ->
+     *                addr_mode = STRONG &&
+     *                not (Pool.mem { addr with addr_mode = WEAK } aa)
+     *              )
+     * in
+     * let range = mk_fresh_range () in
+     * if Pool.is_empty diff
+     * then aa, s, s', true
+     * else
+     *   let aa, s' = Pool.fold (fun addr (acc,s') ->
+     *       debug "widening for address %a" pp_addr addr;
+     *       let addr' = { addr with addr_mode = WEAK } in
+     *       let acc = Pool.remove addr acc |>
+     *                 Pool.add addr'
+     *       in
+     *       let s' = man.sexec (mk_rename (mk_addr addr range) (mk_addr addr' range) range) ctx s' in
+     *       acc, s'
+     *     ) diff (aa, s')
+     *   in
+     *   debug "aa=%a@\n" Pool.print aa;
+     *   aa, s, s', true *)
+
+  let merge pre (a,log) (a',log') =
+    assert false
 
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {export = [Z_u_heap]; import = []}
-  let eval_interface = {export = [Z_u_heap, Z_any]; import = []}
+  let interface = {
+    iexec = {provides = [Z_u_heap]; uses = []};
+    ieval = {provides = [Z_u_heap, Z_any]; uses = []};
+  }
+
 
   (** Initialization *)
   (** ============== *)
 
   let init prog man flow =
-    Some (
-      Flow.set_domain_cur empty man flow |>
-      Flow.set_annot KAddr Equiv.empty |>
-      Flow.without_callbacks
-    )
+    set_domain_env T_cur Pool.empty man flow
 
 
   (** Post-conditions *)
@@ -85,12 +134,13 @@ struct
     (* 𝕊⟦ free(addr); ⟧ *)
     | S_free_addr addr ->
       let flow' =
-        if is_old addr flow then flow
-        else Flow.map_domain_env T_cur (remove addr) man flow
+        if addr.addr_mode = WEAK then flow
+        else map_domain_env T_cur (Pool.remove addr) man flow
       in
       let stmt' = mk_remove (mk_addr addr stmt.srange) stmt.srange in
       man.exec stmt' flow' |>
-      Post.return
+      Post.return |>
+      Option.return
 
     | _ -> None
 
@@ -101,36 +151,30 @@ struct
   let eval zone expr man flow =
     match ekind expr with
     | E_alloc_addr(addr_kind) ->
-      let pool = Flow.get_domain_cur man flow in
+      let pool = get_domain_env T_cur man flow in
+      let range = expr.erange in
 
-      let cs = Callstack.get flow in
-      let range = erange expr in
-
-      debug "allocate %a in %a on call stack:@\n @[%a@]"
-        pp_addr_kind addr_kind
-        pp_range range
-        Callstack.print cs;
-
-      let recent_uid, flow = get_id_flow (addr_kind, cs, range, recent_flag) flow in
-      let recent_addr = {addr_kind; addr_uid = recent_uid; addr_mode = STRONG} in
+      let recent_addr = Policy.mk_addr addr_kind STRONG range flow in
 
       (* Change the sub-domain *)
       let flow' =
         if not (Pool.mem recent_addr pool) then
+          let () = debug "first allocation@\n" in
           (* First time we allocate at this site, so no change to the sub-domain. *)
           flow
         else
           (* Otherwise, we make the previous recent address as an old one *)
-          let old_uid, flow = get_id_flow (addr_kind, cs, range, old_flag) flow in
-          let old_addr = {addr_kind; addr_uid = old_uid; addr_mode = WEAK} in
-          Flow.map_domain_cur (add old_addr) man flow |>
+          let old_addr = Policy.mk_addr addr_kind WEAK range flow in
+          debug "rename %a to %a" pp_addr recent_addr pp_addr old_addr;
+          map_domain_env T_cur (Pool.add old_addr) man flow |>
           man.exec (mk_rename (mk_addr recent_addr range) (mk_addr old_addr range) range)
       in
 
       (* Add the recent address *)
-      Flow.map_domain_cur (add recent_addr) man flow' |>
+      map_domain_env T_cur (Pool.add recent_addr) man flow' |>
       Eval.singleton (mk_addr recent_addr range) |>
-      Eval.return
+      Option.return
+
 
     | _ -> None
 
@@ -139,7 +183,18 @@ struct
 
   let ask _ _ _ = None
 
+  let refine channel man flow = Channel.return flow
+
 end
 
+
+
+
+module Heap1 = Domain(StackRangePolicy)
+module Heap2 = Domain(StackPlocy)
+module Heap3 = Domain(AllPolicy)
+
 let () =
-  Framework.Domain.register_domain (module Domain)
+  Framework.Core.Sig.Stacked.Intermediate.register_stack (module Heap1);
+  Framework.Core.Sig.Stacked.Intermediate.register_stack (module Heap2);
+  Framework.Core.Sig.Stacked.Intermediate.register_stack (module Heap3)

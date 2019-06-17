@@ -28,32 +28,12 @@
 
 extern int _errno;
 
-// Translate a numeric file descriptor into the address of its resource
-extern void *_mopsa_int_to_fd(int fd);
+// Translate a file description resource into a numeric file descriptor
+extern int _mopsa_file_description_to_descriptor(void *f);
 
 
-/*
-  Some useful predicates
-*/
-
-/*$$
- * predicate valid_string(s):
- *   exists int _i in [0, size(s) - 1]: s[_i] == 0
- * ;
- *
- * predicate valid_primed_string(s):
- *   exists int _i in [0, size(s) - 1]: (s[_i])' == 0
- * ;
- *
- * predicate valid_substring(s, n):
- *   exists int _i in [0, n - 1]: s[_i] == 0
- * ;
- *
- * predicate valid_primed_substring(s, n):
- *   exists int _i in [0, n - 1]: (s[_i])' == 0
- * ;
- */
-
+// Translate a numeric file descriptor into a resource pointer
+extern void *_mopsa_file_descriptor_to_description(int fd);
 
 
 #endif /* MOPSA_LIBC_UTILS_H */

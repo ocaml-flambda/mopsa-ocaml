@@ -55,6 +55,7 @@ let () =
     | T_py_none -> pp_print_string fmt "none"
     | T_py_complex -> pp_print_string fmt "complex"
     | T_py_empty -> pp_print_string fmt "empty"
+    | T_py_bytes -> pp_print_string fmt "bytes"
     | _ -> default fmt typ
     );
   register_constant_pp (fun default fmt -> function
@@ -73,6 +74,7 @@ let () =
       | O_py_in -> pp_print_string fmt "in"
       | O_py_not_in -> pp_print_string fmt "not in"
       | O_py_mat_mult -> pp_print_string fmt "@"
+      | O_py_not -> pp_print_string fmt "py_not"
       | op -> default fmt op
     );
   register_expr_pp (fun default fmt exp ->
@@ -81,7 +83,7 @@ let () =
       | E_py_undefined false -> fprintf fmt "local undef"
       | E_py_object obj -> pp_py_object fmt obj
       | E_py_attribute(obj, attr) ->
-        fprintf fmt "(pyattr %a.%s)" pp_expr obj attr
+        fprintf fmt "%a.%s" pp_expr obj attr
       | E_py_list(elts) ->
         fprintf fmt "[%a]"
           (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_expr) elts
@@ -190,16 +192,6 @@ let () =
 
   register_stmt_pp (fun default fmt stmt ->
       match skind stmt with
-      | Universal.Ast.S_block(l) ->
-         if l = [] then
-           fprintf fmt "pass"
-         else
-           fprintf fmt "@[<v>%a@]"
-             (pp_print_list
-                ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
-                pp_stmt
-             ) l
-
       | S_py_class(cls) ->
         fprintf fmt "class %a(%a):@\n@[<h 2>  %a@]" pp_var cls.py_cls_var
           (pp_print_list
@@ -229,6 +221,9 @@ let () =
           pp_expr test
           pp_stmt body
           pp_stmt orelse
+
+      | S_py_if(test, sthen, selse) ->
+          fprintf fmt "@[<v 4>if (%a) {@,%a@]@,@[<v 4>} else {@,%a@]@,}" pp_expr test pp_stmt sthen pp_stmt selse
 
       | S_py_multi_assign(targets, e) ->
         fprintf fmt "%a %a"

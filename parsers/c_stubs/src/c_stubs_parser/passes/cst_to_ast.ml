@@ -199,8 +199,8 @@ let builtin_type f arg =
   | OFFSET -> int_type
   | BASE   -> pointer_type C_AST.(T_void, no_qual)
   | PRIMED -> arg.content.Ast.typ
-  | PTR_VALID | FLOAT_VALID | FLOAT_INF | FLOAT_NAN -> bool_type
-  | OLD    -> arg.content.Ast.typ
+  | VALID_PTR | VALID_FLOAT | FLOAT_INF | FLOAT_NAN -> bool_type
+  | BYTES    -> unsigned_long_type
 
 
 (** {2 Expressions} *)
@@ -463,33 +463,6 @@ let rec visit_expr e prj func =
       let target = Clang_parser.get_target_info (Clang_parser.get_default_target_options ()) in
       let size = C_utils.sizeof_type target typ in
       Ast.E_int(size), int_type
-
-    | E_sizeof_var v ->
-      let open C_AST in
-      (* Resolve the kind of v: variable or typedef? *)
-
-      (* Search for v in the parameters of the function or the globals of the project *)
-      let vars = Array.to_list func.func_parameters @
-                 (StringMap.bindings prj.proj_vars |> List.split |> snd)
-      in
-      begin match List.find_opt (fun v' -> compare v'.var_org_name v.content.vname = 0) vars with
-        | Some vv ->
-          let typ, _ = vv.var_type in
-          let target = Clang_parser.get_target_info (Clang_parser.get_default_target_options ()) in
-          let size = C_utils.sizeof_type target typ in
-          Ast.E_int(size), int_type
-
-        | None ->
-          (* Otherwise, it should be a typedef *)
-          try
-            let typedef = find_typedef v.content prj in
-            let t, _ = typedef.typedef_def in
-            let target = Clang_parser.get_target_info (Clang_parser.get_default_target_options ()) in
-            let size = C_utils.sizeof_type target t in
-            Ast.E_int(size), int_type
-          with Not_found -> Exceptions.panic_at e.range "sizeof(%a): %a not declared" pp_var v.content pp_var v.content
-      end
-
 
     | E_builtin_call(f,a) ->
       let a = visit_expr a prj func in

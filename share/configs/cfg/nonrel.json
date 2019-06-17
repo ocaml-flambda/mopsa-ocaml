@@ -1,0 +1,23 @@
+{
+    "language": "cfg",
+    "domain": {
+	"seq": [
+	    // Iterators
+	    "universal.iterators.program",
+	    "cfg.iterators.intraproc",
+	    "universal.iterators.intraproc",
+            "universal.iterators.interproc.inlining",
+            "universal.iterators.scalar",
+
+	    // Numeric abstraction
+            {
+                "nonrel": {
+		    "disjoint": [
+			"universal.numeric.values.intervals.integer",
+			"universal.numeric.values.intervals.float"
+		    ]
+		}
+            }
+	]
+    }
+}

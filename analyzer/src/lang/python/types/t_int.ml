@@ -20,6 +20,7 @@
 (****************************************************************************)
 
 open Mopsa
+open Sig.Domain.Stateless
 open Ast
 open MapExt
 open Addr
@@ -28,20 +29,17 @@ open Universal.Ast
 
 module Domain =
   struct
-    type _ domain += D_python_types_t_int : unit domain
 
-    let id = D_python_types_t_int
-    let name = "python.types.t_int"
-    let identify : type a. a domain -> (unit, a) eq option = function
-      | D_python_types_t_int -> Some Eq
-      | _ -> None
+    include GenStatelessDomainId(struct
+        let name = "python.types.t_int"
+      end)
 
-    let debug fmt = Debug.debug ~channel:name fmt
+    let interface = {
+      iexec = {provides = []; uses = []};
+      ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
+    }
 
-    let exec_interface = {export = []; import = []}
-    let eval_interface = {export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj]}
-
-    let init _ _ _ = None
+    let init _ _ flow = flow
 
     let is_arith_unop_fun = function
       | "int.__pos__"
@@ -50,10 +48,10 @@ module Domain =
            | _ -> false
 
     let eval zs exp man flow =
-      debug "eval %a@\n" pp_expr exp;
       let range = erange exp in
       match ekind exp with
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "bool.__new__")}, _)}, [cls; arg], []) ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_class (C_builtin "bool", _)}, _)}, [arg], [])
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "bool.__new__")}, _)}, [_; arg], []) ->
          (* FIXME: check: According to the documentation: By default,
             an object is considered true unless its class defines
             either a __bool__() method that returns False or a __l
@@ -62,17 +60,17 @@ module Domain =
 
          man.eval arg flow |>
            Eval.bind (fun earg flow ->
-               Eval.assume (mk_py_isinstance_builtin earg "bool" range)
+               assume_eval (mk_py_isinstance_builtin earg "bool" range)
                  ~fthen:(Eval.singleton earg)
                  ~felse:(fun flow ->
-                   Eval.assume
+                   assume_eval
                      (mk_py_hasattr earg "__bool__" range)
                      ~fthen:(fun flow ->
                        let attr = mk_py_attr earg "__bool__" range in
                        man.eval (mk_py_call attr [] range) flow
                      )
                      ~felse:(fun flow ->
-                       Eval.assume
+                       assume_eval
                          (mk_py_hasattr earg "__len__" range)
                          ~fthen:(fun flow ->
                            let attr = mk_py_attr earg "__len__" range in
@@ -86,32 +84,32 @@ module Domain =
                  )
                  man flow
              )
-         |> OptionExt.return
+         |> Option.return
 
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "int.__new__")}, _)}, [cls], []) ->
-        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow |> OptionExt.return
+        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow |> Option.return
 
       | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "int.__new__")}, _)} as f), [cls; arg], []) ->
          (* FIXME *)
          debug "ok, let's move on@\n";
-         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) {exp with ekind = E_py_call(f, [cls; arg; mk_int 10 range], [])} flow |> OptionExt.return
+         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) {exp with ekind = E_py_call(f, [cls; arg; mk_int 10 range], [])} flow |> Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "int.__new__")}, _)}, [cls; str; base], []) ->
          (* FIXME?*)
          debug "ok@\n";
-         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow |> OptionExt.return
+         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow |> Option.return
 
       (* 𝔼⟦ int.__op__(e1, e2) | op ∈ {==, !=, <, ...} ⟧ *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
            when is_compare_op_fun "int" f ->
-         Eval.eval_list [e1; e2] (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+         Eval.eval_list (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) [e1; e2] flow |>
            Eval.bind (fun el flow ->
                let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
-               Eval.assume
+               assume_eval
                  (mk_py_isinstance_builtin e1 "int" range)
                  ~fthen:(fun true_flow ->
-                   Eval.assume
+                   assume_eval
                      (mk_py_isinstance_builtin e2 "int" range)
                      ~fthen:(fun true_flow ->
                        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_bool range) true_flow)
@@ -125,17 +123,17 @@ module Domain =
                    Eval.empty_singleton flow)
                  man flow
              )
-         |>  OptionExt.return
+         |>  Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
            when is_arith_binop_fun "int" f ->
-         Eval.eval_list [e1; e2] (man.eval~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+         Eval.eval_list (man.eval~zone:(Zone.Z_py, Zone.Z_py_obj)) [e1; e2] flow |>
            Eval.bind (fun el flow ->
                let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
-               Eval.assume
+               assume_eval
                  (mk_py_isinstance_builtin e1 "int" range)
                  ~fthen:(fun true_flow ->
-                   Eval.assume
+                   assume_eval
                      (mk_py_isinstance_builtin e2 "int" range)
                      ~fthen:(fun true_flow ->
                        match f with
@@ -153,13 +151,13 @@ module Domain =
                    Eval.empty_singleton flow)
                  man flow
              )
-         |>  OptionExt.return
+         |>  Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e], [])
            when is_arith_unop_fun f ->
          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
            Eval.bind (fun el flow ->
-               Eval.assume
+               assume_eval
                  (mk_py_isinstance_builtin e "int" range)
                  ~fthen:(fun true_flow ->
                    man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) true_flow)
@@ -168,7 +166,13 @@ module Domain =
                    man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) expr false_flow)
                  man flow
              )
-         |> OptionExt.return
+         |> Option.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "int.__bool__")}, _)}, args, []) ->
+        Utils.check_instances man flow range args
+          ["int"]
+          (fun _ flow -> man.eval (mk_py_top T_bool range) flow)
+        |> Option.return
 
       | _ -> None
 
@@ -176,4 +180,4 @@ module Domain =
     let ask _ _ _ = None
   end
 
-let () = Framework.Domains.Stateless.register_domain (module Domain)
+let () = Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)

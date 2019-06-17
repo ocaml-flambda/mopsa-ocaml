@@ -42,7 +42,8 @@ let mk_pos file line column =
 
 (** Comparison function of positions. *)
 let compare_pos (pos1: pos) (pos2: pos) =
-  Compare.compose [
+  if pos1 == pos2 then 0
+  else Compare.compose [
     (fun () -> compare pos1.pos_file pos2.pos_file);
     (fun () -> compare pos1.pos_line pos2.pos_line);
     (fun () -> compare pos1.pos_column pos2.pos_column);
@@ -134,6 +135,10 @@ let get_range_column r =
   let pos = get_range_start r in
   pos.pos_column
 
+let is_orig = function
+  | R_orig _ -> true
+  | _ -> false
+
 let match_range_file file r =
   let pred f = Str.string_match (Str.regexp (".*" ^ file ^ "$")) f 0 in
   match untag_range r with
@@ -160,25 +165,26 @@ let from_lexing_range pos1 pos2 =
 
 (** Comparison function of ranges. *)
 let rec compare_range (r1: range) (r2: range) =
-  match r1, r2 with
-  | R_program pl1, R_program pl2 ->
-    Compare.list compare pl1 pl2
+  if r1 == r2 then 0
+  else match r1, r2 with
+    | R_program pl1, R_program pl2 ->
+      Compare.list compare pl1 pl2
 
-  | R_orig (l1, l2), R_orig (l1', l2') ->
-    Compare.compose [
-      (fun () -> compare_pos l1 l1');
-      (fun () -> compare_pos l2 l2');
-    ]
+    | R_orig (l1, l2), R_orig (l1', l2') ->
+      Compare.compose [
+        (fun () -> compare_pos l1 l1');
+        (fun () -> compare_pos l2 l2');
+      ]
 
-  | R_tagged(t1, r1), R_tagged(t2, r2) ->
-    Compare.compose [
-      (fun () -> compare_range r1 r2);
-      (fun () -> compare t1 t2)
-    ]
+    | R_tagged(t1, r1), R_tagged(t2, r2) ->
+      Compare.compose [
+        (fun () -> compare_range r1 r2);
+        (fun () -> compare t1 t2)
+      ]
 
-  | R_fresh(uid1), R_fresh(uid2) -> compare uid1 uid2
+    | R_fresh(uid1), R_fresh(uid2) -> compare uid1 uid2
 
-  | _ -> compare r1 r2
+    | _ -> compare r1 r2
 
 
 (** {2 Range annotations} *)

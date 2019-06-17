@@ -253,16 +253,12 @@ module Single = struct
   external of_double_zero: t -> t = "ml_to_sgl_zero" "ml_to_sgl_zero_opt" [@@unboxed] [@@noalloc]
   (** Rounding from double to single precision. *)                                                      
 
-  external of_int_near: int -> t = "ml_of_int_sgl_near" "ml_of_int_sgl_near_opt" "float"
-  external of_int_up:   int -> t = "ml_of_int_sgl_up"   "ml_of_int_sgl_up_opt"   "float"
-  external of_int_down: int -> t = "ml_of_int_sgl_down" "ml_of_int_sgl_down_opt" "float"
-  external of_int_zero: int -> t = "ml_of_int_sgl_zero" "ml_of_int_sgl_zero_opt" "float"
-  external of_int_cur:  int -> t = "ml_of_int_sgl_cur"  "ml_of_int_sgl_cur_opt"  "float"
+  external of_int_near: int -> t = "ml_of_int_sgl_near" "ml_of_int_sgl_near"
+  external of_int_up:   int -> t = "ml_of_int_sgl_up"   "ml_of_int_sgl_up"
+  external of_int_down: int -> t = "ml_of_int_sgl_down" "ml_of_int_sgl_down"
+  external of_int_zero: int -> t = "ml_of_int_sgl_zero" "ml_of_int_sgl_zero"
+  external of_int_cur:  int -> t = "ml_of_int_sgl_cur"  "ml_of_int_sgl_cur"
   (** Conversion from int with rounding. *)
-  (* Note: we keep using "float", despite the warning telling to use 
-     [@@unboxed]. Indeed, the later causes an error because the compiler 
-     cannot unbox int! 
-   *)
 
   external of_int64_near: int64 -> t = "ml_of_int64_sgl_near" "ml_of_int64_sgl_near_opt" [@@unboxed] [@@noalloc]
   external of_int64_up:   int64 -> t = "ml_of_int64_sgl_up"   "ml_of_int64_sgl_up_opt"   [@@unboxed] [@@noalloc]
@@ -274,7 +270,7 @@ module Single = struct
 
   (**
      Code from Zarith to convert from Z.t to float using the current rounding mode.
-   We      add a version for single precision rounding.
+     We add a version for single precision rounding.
    *)
                                      
   let round_z_to_single x exact =
@@ -429,10 +425,10 @@ module Double = struct
   external round_int_zero: t -> t = "ml_round_int_dbl_zero" "ml_round_int_dbl_zero_opt" [@@unboxed] [@@noalloc]
   (** Rounding to an integer. *)
                                                     
-  external of_int_near: int -> t = "ml_of_int_dbl_near" "ml_of_int_dbl_near_opt" "float"
-  external of_int_up:   int -> t = "ml_of_int_dbl_up"   "ml_of_int_dbl_up_opt"   "float"
-  external of_int_down: int -> t = "ml_of_int_dbl_down" "ml_of_int_dbl_down_opt" "float"
-  external of_int_zero: int -> t = "ml_of_int_dbl_zero" "ml_of_int_dbl_zero_opt" "float"
+  external of_int_near: int -> t = "ml_of_int_dbl_near" "ml_of_int_dbl_near"
+  external of_int_up:   int -> t = "ml_of_int_dbl_up"   "ml_of_int_dbl_up"
+  external of_int_down: int -> t = "ml_of_int_dbl_down" "ml_of_int_dbl_down"
+  external of_int_zero: int -> t = "ml_of_int_dbl_zero" "ml_of_int_dbl_zero"
   (** Conversion from int with rounding. *)
 
   external of_int64_near: int64 -> t = "ml_of_int64_dbl_near" "ml_of_int64_dbl_near_opt" [@@unboxed] [@@noalloc]

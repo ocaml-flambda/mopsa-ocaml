@@ -100,8 +100,29 @@ void test_assign_array() {
   _mopsa_assert(a[1] == 5);
 }
 
-/* Assign global variables */
 
+
+/*$
+ * assigns: a[0, size(a) - 1];
+ * ensures: (a[1])' == n;
+ */
+void partial_init_second(int *a, int n);
+
+void test_assign_array_partially() {
+  int a[10];
+  a[0] = 0;
+  a[1] = 1;
+  partial_init_second(a, 5);
+  _mopsa_assert_exists(a[0] == 0);
+  _mopsa_assert_exists(a[0] == 100);
+  _mopsa_assert(a[1] == 5);
+}
+
+
+
+
+/* Assign global variables */
+/* *********************** */
 int glob = 1;
 
 /*$

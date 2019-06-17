@@ -22,6 +22,7 @@
 (** Abstraction of C function calls *)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Memory.Common.Points_to
 open Universal.Ast
 open Ast
@@ -35,37 +36,36 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  type _ domain += D_c_interproc : unit domain
-
-  let id = D_c_interproc
-  let name = "c.iterators.interproc"
-  let identify : type a. a domain -> (unit, a) eq option =
-    function
-    | D_c_interproc -> Some Eq
-    | _ -> None
-
-  let debug fmt = Debug.debug ~channel:name fmt
+  include GenStatelessDomainId(struct
+      let name = "c.iterators.interproc"
+    end)
 
 
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {export = []; import = []}
+  let interface = {
+    iexec = {
+      provides = [];
+      uses = []
+    };
 
-  let eval_interface = {
-    export = [Z_c, Z_c_low_level];
-    import = [
-      Z_c, Z_c_points_to;
-      Universal.Zone.Z_u, any_zone;
-      Stubs.Zone.Z_stubs, Z_any
-    ]
+    ieval = {
+      provides = [Z_c, Z_c_low_level];
+      uses = [
+        Z_c, Z_c_points_to;
+        Universal.Zone.Z_u, any_zone;
+        Stubs.Zone.Z_stubs, Z_any
+      ]
+    }
   }
 
 
   (** Initialization of environments *)
   (** ============================== *)
 
-  let init prog man flow = None
+  let init _ _ flow =  flow
+
 
   (** Computation of post-conditions *)
   (** ============================== *)
@@ -76,53 +76,62 @@ struct
   (** Evaluation of expressions *)
   (** ========================= *)
 
+  (** Eval a function call *)
+  let eval_call fundec args range man flow =
+    if Libs.Builtins.is_builtin_function fundec.c_func_org_name
+    then
+      let exp' = mk_expr (E_c_builtin_call(fundec.c_func_org_name, args)) ~etyp:fundec.c_func_return range in
+      man.eval ~zone:(Zone.Z_c, Zone.Z_c_low_level) exp' flow
+    else
+      match fundec with
+      | {c_func_body = Some body; c_func_stub = None; c_func_variadic = false} ->
+        let open Universal.Ast in
+        let ret_var = mktmp ~typ:fundec.c_func_return () in
+        let fundec' = {
+          fun_name = fundec.c_func_unique_name;
+          fun_parameters = fundec.c_func_parameters;
+          fun_locvars = fundec.c_func_local_vars;
+          fun_body = {skind = S_c_goto_stab (body); srange = srange body};
+          fun_return_type = Some fundec.c_func_return;
+          fun_return_var = ret_var;
+          fun_range = fundec.c_func_range;
+        }
+        in
+        let exp' = mk_call fundec' args range in
+        (* Universal will evaluate the call into a temporary variable containing the returned value *)
+        man.eval ~zone:(Universal.Zone.Z_u, any_zone) exp' flow
+
+      | {c_func_variadic = true} ->
+        let exp' = mk_c_call fundec args range in
+        man.eval ~zone:(Zone.Z_c, Zone.Z_c_low_level) exp' flow
+
+      | {c_func_stub = Some stub} ->
+        let exp' = Stubs.Ast.mk_stub_call stub args range in
+        man.eval ~zone:(Stubs.Zone.Z_stubs, any_zone) exp' flow
+
+      | {c_func_body = None; c_func_org_name} ->
+        panic_at range "no implementation found for function %s" c_func_org_name
+
+
   let eval zone exp man flow =
     match ekind exp with
+    | E_call({ ekind = E_c_function { c_func_variadic = true}}, args) ->
+      None
+
+    | E_call({ ekind = E_c_function f}, args) ->
+      eval_call f args exp.erange man flow |>
+      Option.return
+
     | E_call(f, args) ->
-      begin
-        man.eval ~zone:(Zone.Z_c, Z_c_points_to) f flow |>
-        Eval.bind @@ fun f flow ->
+      man.eval ~zone:(Zone.Z_c, Z_c_points_to) f flow |>
+      Eval.bind_some @@ fun f flow ->
 
-        match ekind f with
-        | E_c_points_to (P_fun f)
-          when Libs.Libmopsa.is_builtin_function f.c_func_org_name ||
-               Libs.Libc.is_builtin_function f.c_func_org_name
-          ->
-          let exp' = {exp with ekind = E_c_builtin_call(f.c_func_org_name, args)} in
-          man.eval ~zone:(Zone.Z_c, Zone.Z_c_low_level) exp' flow
-
-        | E_c_points_to (P_fun ({c_func_body = Some body; c_func_stub = None; c_func_variadic = false} as fundec)) ->
-          let open Universal.Ast in
-          let ret_var = mktmp ~typ:fundec.c_func_return () in
-          let fundec' = {
-            fun_name = fundec.c_func_unique_name;
-            fun_parameters = fundec.c_func_parameters;
-            fun_locvars = fundec.c_func_local_vars;
-            fun_body = {skind = S_c_goto_stab (body); srange = srange body};
-            fun_return_type = Some fundec.c_func_return;
-            fun_return_var = ret_var;
-            fun_range = fundec.c_func_range;
-          }
-          in
-          let exp' = mk_call fundec' args exp.erange in
-          (* Universal will evaluate the call into a temporary variable containing the returned value *)
-          man.eval ~zone:(Universal.Zone.Z_u, any_zone) exp' flow
-
-        | E_c_points_to (P_fun ({c_func_variadic = true} as fundec)) ->
-          let exp' = mk_c_call fundec args exp.erange in
-          man.eval ~zone:(Zone.Z_c, Zone.Z_c_low_level) exp' flow
-
-        | E_c_points_to (P_fun {c_func_stub = Some stub}) ->
-          let exp' = Stubs.Ast.mk_stub_call stub args exp.erange in
-          man.eval ~zone:(Stubs.Zone.Z_stubs, any_zone) exp' flow
-
-        | E_c_points_to (P_fun {c_func_body = None; c_func_org_name}) ->
-          panic_at exp.erange "no implementation found for function %s" c_func_org_name
+      begin match ekind f with
+        | E_c_points_to (P_fun f) ->
+          eval_call f args exp.erange man flow
 
         | _ -> assert false
-      end |>
-      OptionExt.return
-
+      end
 
     | _ -> None
 
@@ -136,4 +145,4 @@ struct
 end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)

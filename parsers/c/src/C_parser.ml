@@ -20,7 +20,7 @@
 (****************************************************************************)
 
 (**
-  Main entry point of the C parser 
+  Main entry point of the C parser
  *)
 
 
@@ -39,15 +39,29 @@ let parse_file
   in
 
   let obj, diag, coms, macros = Clang_parser.parse target_options file (Array.of_list opts) in
-  
+
   let is_error =
     List.exists
       (function Clang_AST.({diag_level = Level_Error | Level_Fatal}) -> true | _ -> false)
        diag
   in
 
-  if not is_error then
+  if not is_error then (
+    List.iter (fun d ->
+        match d.Clang_AST.diag_level with
+        | Level_Warning ->
+          let pos = Location.mk_pos
+              d.diag_loc.loc_file
+              d.diag_loc.loc_line
+              d.diag_loc.loc_column
+          in
+          let range = Location.mk_orig_range pos pos in
+          Exceptions.warn_at range "%s" d.diag_message
+        | _ -> ()
+      ) diag;
     Clang_to_C.add_translation_unit ctx (Filename.basename file) obj coms macros
+  )
+
   else
     let errors =
       List.map

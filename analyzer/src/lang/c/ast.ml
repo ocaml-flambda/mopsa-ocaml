@@ -191,35 +191,57 @@ type c_var_scope =
   | Variable_func_static of c_fundec (** restricted to a function *)
 
 
+let pp_scope fmt s =
+  Format.fprintf fmt "%s" (match s with
+  | Variable_global -> "variable_global"
+  | Variable_extern -> "extern" (** declared but not defined *)
+  | Variable_local _ -> "local"
+  | Variable_parameter _ -> "parameter"
+  | Variable_file_static _ -> "file static"
+  | Variable_func_static _ -> "func static")
+
+(** Flat variable initialization *)
+type c_flat_init =
+  | C_flat_expr of expr * typ       (** Init expression *)
+  | C_flat_none of Z.t * typ        (** Uninitialized bytes *)
+  | C_flat_fill of expr * typ * Z.t (** Filler expression *)
+
 (** Variable initialization. *)
 type c_var_init =
   | C_init_expr of expr
   | C_init_list of c_var_init list (** specified elements *) * c_var_init option (** filler *)
   | C_init_implicit of typ
-  | C_init_stub of Stubs.Ast.stub_init
+  | C_init_flat of c_flat_init list
 
 
-type c_var = {
-  var_scope: c_var_scope; (** life-time scope of the variable *)
-  mutable var_init: c_var_init option; (** initialization *)
-  var_range: range; (** declaration range *)
+type cvar = {
+  cvar_scope: c_var_scope; (** life-time scope of the variable *)
+  cvar_range: range; (** declaration range *)
+  cvar_uid: int;
+  cvar_orig_name : string;
+  cvar_uniq_name : string;
 }
 
 type var_kind +=
-  | V_c of c_var
+  | V_cvar of cvar
   (** C variable *)
 
 let () =
   register_var {
     print = (fun next fmt v ->
         match vkind v with
-        | V_c _ -> Format.pp_print_string fmt v.org_vname
+        | V_cvar cvar -> Format.fprintf fmt "%s" cvar.cvar_orig_name
         | _ -> next fmt v
       );
 
     compare = (fun next v1 v2 ->
         match vkind v1, vkind v2 with
-        | V_c _, V_c _ -> compare v1.uniq_vname v2.uniq_vname
+        | V_cvar cvar1, V_cvar cvar2 ->
+          Compare.compose [
+            (fun () -> Pervasives.compare cvar1.cvar_uid cvar2.cvar_uid);
+            (fun () -> Pervasives.compare cvar1.cvar_uniq_name cvar2.cvar_uniq_name)
+          ]
+
         | _ -> next v1 v2
       );
   }
@@ -319,7 +341,7 @@ type stmt_kind +=
   | S_c_goto_stab of stmt
   (** stabilization point for goto statement *)
 
-  | S_c_declaration of var
+  | S_c_declaration of var * c_var_init option * c_var_scope
   (** declaration of a variable *)
 
   | S_c_do_while of
@@ -352,8 +374,9 @@ type stmt_kind +=
 
 
 type c_program = {
-  c_globals : var list;        (** global variables of the program *)
+  c_globals : (var * c_var_init option) list; (** global variables of the program *)
   c_functions : c_fundec list; (** functions of the program *)
+  c_stub_directives : Stubs.Ast.stub_directive list; (** list of stub directives *)
 }
 
 type prog_kind +=
@@ -383,7 +406,7 @@ let to_clang_float_type : c_float_type -> C_AST.float_type = function
   | C_double -> C_AST.DOUBLE
   | C_long_double -> C_AST.LONG_DOUBLE
 
-                   
+
     (* NOTE: this may cause issue with recutsive types
 
 let rec to_clang_type : typ -> C_AST.type_qual = function
@@ -593,6 +616,7 @@ let rec remove_typedef = function
 
 let rec remove_qual = function
   | T_c_qualified(_, t) -> remove_qual t
+  | T_c_pointer t -> T_c_pointer (remove_qual t)
   | t -> t
 
 let rec remove_typedef_qual = function
@@ -633,7 +657,7 @@ let int_rangeof t =
   (Z.to_int a, Z.to_int b)
 
 (** [wrap_expr e (l,h)] expression needed to bring back [e] in range ([l],[h]) *)
-let wrap_expr (e: expr) ((l,h) : int * int) range : Framework.Ast.expr =
+let wrap_expr (e: expr) ((l,h) : int * int) range : expr =
     let open Universal.Ast in
   add
     (mk_int l range)
@@ -657,7 +681,7 @@ let wrap_expr (e: expr) ((l,h) : int * int) range : Framework.Ast.expr =
     range
 
 (** [wrap v (l,h)] expression needed to bring back [v] in range ([l],[h]) *)
-let wrap (v : var) ((l,h) : int * int) range : Framework.Ast.expr =
+let wrap (v : var) ((l,h) : int * int) range : expr =
   wrap_expr (mk_var v (tag_range range "v")) (l,h) range
 
 
@@ -759,7 +783,7 @@ let under_type (t: typ) : typ =
 
 let get_array_constant_length t =
   match remove_typedef_qual t with
-  | T_c_array(_, C_array_length_cst n) -> Z.to_int n
+  | T_c_array(_, C_array_length_cst n) -> n
   | _ -> assert false
 
 let align_byte t i =
@@ -785,7 +809,7 @@ let is_c_type = function
 
 let is_c_function_parameter v =
   match v.vkind with
-  | V_c { var_scope = Variable_parameter _ } -> true
+  | V_cvar { cvar_scope = Variable_parameter _ } -> true
   | _ -> false
 
 let mk_c_address_of e range =
@@ -803,11 +827,18 @@ let mk_c_subscript_access a i range =
 let mk_c_character c range =
   mk_constant (C_c_character ((Z.of_int @@ int_of_char c), C_char_ascii)) range ~etyp:(T_c_integer(C_unsigned_char))
 
+let mk_c_invalid_pointer range =
+  mk_constant C_c_invalid ~etyp:(T_c_pointer T_c_void) range
+
 let void = T_c_void
 let u8 = T_c_integer(C_unsigned_char)
 let s8 = T_c_integer(C_signed_char)
+let s16 = T_c_integer(C_signed_short)
+let u16 = T_c_integer(C_unsigned_short)
 let s32 = T_c_integer(C_signed_int)
+let u32 = T_c_integer(C_unsigned_int)
 let ul = T_c_integer(C_unsigned_long)
+let array_type typ size = T_c_array(typ,C_array_length_cst size)
 
 let type_of_string s = T_c_array(s8, C_array_length_cst (Z.of_int (1 + String.length s)))
 
@@ -833,6 +864,17 @@ let mk_c_cast e t range =
 let mk_c_null range =
   mk_c_cast (mk_zero ~typ:u8 range) (pointer_type void) range
 
+let mk_c_declaration v init scope range =
+  mk_stmt (S_c_declaration (v, init, scope)) range
+
+let var_scope v =
+  match v.vkind with
+  | V_cvar { cvar_scope } -> cvar_scope
+  | _ -> assert false
+
+let is_c_global_scope = function
+  | Variable_global | Variable_extern | Variable_file_static _ -> true
+  | Variable_func_static _ | Variable_local _ | Variable_parameter _ -> false
 
 let () =
   register_typ_compare (fun next t1 t2 ->
@@ -904,3 +946,47 @@ let rec remove_casts e =
   match ekind e with
   | E_c_cast (e', _) -> remove_casts e'
   | _ -> e
+
+
+(** Simplify C constant expressions to constants *)
+let rec c_expr_to_z (e:expr) : Z.t option =
+  match ekind e with
+  | E_constant (C_int n) -> Some n
+
+  | E_constant (C_c_character (ch,_)) -> Some ch
+
+  | E_unop (O_minus, e') ->
+    c_expr_to_z e' |> Option.bind @@ fun n ->
+    Some (Z.neg n)
+
+  | E_binop(op, e1, e2) ->
+    c_expr_to_z e1 |> Option.bind @@ fun n1 ->
+    c_expr_to_z e2 |> Option.bind @@ fun n2 ->
+    begin
+      match op with
+      | O_plus -> Some (Z.add n1 n2)
+      | O_minus -> Some (Z.sub n1 n2)
+      | O_mult -> Some (Z.mul n1 n2)
+      | O_div -> if Z.equal n2 Z.zero then None else Some (Z.div n1 n2)
+      | O_eq -> Some (if Z.equal n1 n2 then Z.one else Z.zero)
+      | O_ne -> Some (if Z.equal n1 n2 then Z.zero else Z.one)
+      | O_gt -> Some (if Z.gt n1 n2 then Z.one else Z.zero)
+      | O_ge -> Some (if Z.geq n1 n2 then Z.one else Z.zero)
+      | O_lt -> Some (if Z.lt n1 n2 then Z.one else Z.zero)
+      | O_le -> Some (if Z.leq n1 n2 then Z.one else Z.zero)
+      | _ -> None
+    end
+
+  | E_c_conditional(cond,e1,e2) ->
+    c_expr_to_z cond |> Option.bind @@ fun c ->
+    if not (Z.equal c Z.zero)
+    then c_expr_to_z e1
+    else c_expr_to_z e2
+
+  | _ -> None
+
+
+let is_c_expr_equals_z e z =
+  match c_expr_to_z e with
+  | None -> false
+  | Some n -> Z.equal n z

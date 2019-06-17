@@ -21,39 +21,42 @@
 
 (** Essential modules. *)
 
-include Framework.Ast
+include Framework.Ast.All
 
-module Logging = Framework.Logging
+include Framework.Core.All
 
-module Setup = Framework.Setup
+type ('a, 't) man = ('a, 't) Framework.Core.Sig.Domain.Lowlevel.man = {
+  (* Lattice operators over global abstract elements ['a] *)
+  lattice : 'a lattice;
 
-module Visitor = Framework.Visitor
+  (* Accessors to the domain's abstract element ['t] within ['a] *)
+  get : 'a -> 't;
+  set : 't -> 'a -> 'a;
 
-include Framework.Zone
+  (** Analyzer transfer functions *)
+  post : ?zone:zone -> stmt -> 'a flow -> 'a post;
+  exec : ?zone:zone -> stmt -> 'a flow -> 'a flow;
+  eval : ?zone:(zone * zone) -> ?via:zone -> expr -> 'a flow -> (expr, 'a) eval;
+  ask : 'r. 'r query -> 'a flow -> 'r;
 
-include Framework.Manager
+  (** Accessors to the domain's merging logs *)
+  get_log : Log.log -> Log.log;
+  set_log : Log.log -> Log.log -> Log.log;
+}
 
-module Flow = Framework.Flow
 
-module Annotation = Framework.Annotation
-type 'a annot = 'a Annotation.annot
+module Core = Framework.Core
 
-module Channel = Framework.Channel
-type 'a with_channel = 'a Channel.with_channel
+module Config = Framework.Config
 
-module Post = Framework.Post
-type 'a post = 'a Post.post
+module Paths = Framework.Config.Paths
 
-module Eval = Framework.Eval
+module Visitor = Framework.Ast.Visitor
 
 include Location
 
-include Framework.Domain
-
-include Framework.Options
+include Framework.Config.Options
 
 include Exceptions
 
-module Callstack = Framework.Callstack
-
-include Framework.Alarm
+type 'a info = 'a TypeExt.info

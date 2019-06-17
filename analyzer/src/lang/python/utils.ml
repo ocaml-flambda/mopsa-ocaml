@@ -19,7 +19,8 @@
 (*                                                                          *)
 (****************************************************************************)
 
-open Framework.Ast
+open Mopsa
+open Framework.Core.Sig.Domain.Lowlevel
 open Ast
 
 let debug fmt = Debug.debug ~channel:"python.utils" fmt
@@ -60,3 +61,61 @@ let mk_try_stopiteration body except range =
     (Universal.Ast.mk_block [] range)
     (Universal.Ast.mk_block [] range)
     range
+
+let check_instances ?(arguments_after_check=0) man flow range exprs instances processing =
+  let open Mopsa in
+  let tyerror = fun flow -> man.exec (mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
+  let rec aux iexprs lexprs linstances flow =
+    match lexprs, linstances with
+    | _, [] ->
+      if arguments_after_check = List.length lexprs then
+        processing iexprs flow
+      else
+        tyerror flow
+    | e::es, i::is ->
+      assume_eval (Addr.mk_py_isinstance_builtin e i range) man flow
+        ~fthen:(aux iexprs es is)
+        ~felse:tyerror
+    | [], _ -> tyerror flow in
+  Eval.eval_list man.eval exprs flow |>
+  Eval.bind (fun exprs flow -> aux exprs exprs instances flow)
+
+let check_instances_disj ?(arguments_after_check=0) man flow range exprs instances processing =
+  let open Mopsa in
+  let tyerror = fun flow -> man.exec (mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
+  let rec aux iexprs lexprs linstances flow =
+    match lexprs, linstances with
+    | _, [] ->
+      if arguments_after_check = List.length lexprs then
+        processing iexprs flow
+      else
+        tyerror flow
+    | e::es, i::is ->
+      (*   let rec aux2 instances flow =
+       *     match instances with
+       *     | [] -> tyerror flow
+       *     | inst::instl ->
+       *       Eval.assume (Addr.mk_py_isinstance_builtin e inst range) man flow
+       *         ~fthen:(aux iexprs es is)
+       *         ~felse:(aux2 instl) in
+       *   aux2 i flow
+       * | [], _ -> assert false in *)
+      let mk_onecond = fun i -> Addr.mk_py_isinstance_builtin e i range in
+      let cond = List.fold_left (fun acc el ->
+          mk_binop acc O_py_or (mk_onecond el) range)
+          (mk_onecond @@ List.hd i) (List.tl i) in
+      assume_eval cond man flow
+        ~fthen:(aux iexprs es is)
+        ~felse:tyerror
+    | _ -> tyerror flow
+  in
+  Eval.eval_list man.eval exprs flow |>
+  Eval.bind (fun exprs flow -> aux exprs exprs instances flow)
+
+let strip_object (e:expr) =
+  let ekind = match ekind e with
+    | E_py_object (addr, oe) ->
+      let addr = {addr with addr_group = Universal.Ast.G_all } in
+      E_py_object (addr, oe)
+    | _ -> assert false in
+  {e with ekind}

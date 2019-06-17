@@ -22,26 +22,23 @@
 (** Transformation of conditional expressions. *)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Universal.Ast
 open Ast
 
 module Domain =
   struct
 
-    type _ domain += D_python_desugar_if : unit domain
+    include GenStatelessDomainId(struct
+        let name = "python.desugar.if"
+      end)
 
-    let id = D_python_desugar_if
-    let name = "python.desugar.if"
-    let identify : type a. a domain -> (unit, a) eq option = function
-      | D_python_desugar_if -> Some Eq
-      | _ -> None
+    let interface = {
+      iexec = {provides = [Zone.Z_py]; uses = [Zone.Z_py]};
+      ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
+    }
 
-    let debug fmt = Debug.debug ~channel:name fmt
-
-    let exec_interface = {export = []; import = []}
-    let eval_interface = {export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj]}
-
-    let init _ _ flow = Some flow
+    let init _ _ flow = flow
 
     let eval zs exp man flow =
       let range = erange exp in
@@ -50,7 +47,7 @@ module Domain =
          let tmp = mktmp () in
          let flow = man.exec
                       (mk_if
-                         test
+                         (Utils.mk_builtin_call "bool" [test] range)
                          (mk_assign (mk_var tmp (tag_range range "true branch lval")) body (tag_range range "true branch assign"))
                          (mk_assign (mk_var tmp (tag_range range "false branch lval")) orelse (tag_range range "false branch assign"))
                          range
@@ -59,16 +56,26 @@ module Domain =
          let exp' = {exp with ekind = E_var (tmp, STRONG)} in
          man.eval exp' flow |>
            Eval.add_cleaners [mk_remove_var tmp (tag_range range "cleaner")] |>
-           OptionExt.return
+           Option.return
 
       | _ -> None
 
 
-    let exec _ _ _ _ = None
+    let exec zone stmt man flow =
+      let range = srange stmt in
+      match skind stmt with
+      | S_py_if (test, sthen, selse) ->
+        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (Utils.mk_builtin_call "bool" [test] range) flow |>
+        post_eval man (fun exp flow ->
+            man.exec ~zone:Zone.Z_py (mk_if exp sthen selse range) flow |> Post.return
+          )
+        |> Option.return
+
+      | _ -> None
 
     let ask _ _ _ = None
 
   end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)

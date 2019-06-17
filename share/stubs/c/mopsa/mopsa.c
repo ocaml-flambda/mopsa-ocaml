@@ -19,53 +19,47 @@
 /*                                                                          */
 /****************************************************************************/
 
-#include <stddef.h>
+
 #include <limits.h>
 
-/*$
- * ensures: _argc in [1, INT_MAX - 1]; // do not go beyound INT_MAX because we will
- *                                     // allocate _argc + 1 pointers in _argv
+
+/*$$
+ * predicate valid_string(s):
+ *   valid_ptr(s) and
+ *   exists int _i in [0, size(s) - 1]: s[_i] == 0
+ * ;
  */
-static int _argc;
+
+
+/*$$
+ * predicate valid_primed_string(s):
+ *   valid_ptr(s) and
+ *   exists int _i in [0, size(s) - 1]: (s[_i])' == 0
+ * ;
+ */
+
+
+/*$$
+ * predicate valid_substring(s, n):
+ *   valid_ptr(s) and
+ *   exists int _i in [0, n - 1]: s[_i] == 0
+ * ;
+ */
+
+
+/*$$
+ * predicate valid_primed_substring(s, n):
+ *   valid_ptr(s) and
+ *   exists int _i in [0, n - 1]: (s[_i])' == 0
+ * ;
+ */
+
+
 
 /*$
- * local:   char ** buf = new Memory;
- * ensures: size(buf) == _argc + 1; // need to allocate an additional
- *                                  // pointer for the last NULL
- * ensures: _argv == buf;
- */
-static char **_argv;
-
-/*$
- * local: char* str = new Memory;
- * ensures: size(str) in [1, INT_MAX]; // there is at least the NUL char at the end
- * // TODO ensures: str[size(str) - 1] == 0;
+ * local:   char * str = new Memory;
+ * ensures: size(str) == INT_MAX;
+ * ensures: valid_string(str);
  * ensures: return == str;
  */
-char* _mopsa_new_valid_string();
-
-void _mopsa_init_symbolic_argc_argv() {
-  // Add program name
-  _argv[0] = _mopsa_new_valid_string();
-
-  /*
-   * The following code produces false negative
-   * when analyzed with non-relational numeric domains
-   */
-  #if 0
-  int i = 1;
-
-  // Initialize the array with valid strings
-  while(i < _argc) {
-    _argv[i] = _mopsa_new_valid_string();
-    i++;
-  }
-
-  // Add the last NULL pointer
-  _argv[_argc] = NULL;
-  #endif
-}
-
-
-// Temporary fix for missing error function in coreutuils
-void error (int __status, int __errnum, const char *__format, ...) { }
+static char *_mopsa_new_valid_string();

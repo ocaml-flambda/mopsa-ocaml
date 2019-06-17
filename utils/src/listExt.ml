@@ -57,6 +57,18 @@ let map_filter (f:'a -> 'b option) (l: 'a list) : 'b list =
     The order of the argument list is preserved.
  *)
 
+let split (l:'a list) : 'a list * 'a list =
+  let rec doit acc l nb =
+    if nb <= 0 then (List.rev acc), l
+    else doit ((List.hd l)::acc) (List.tl l) (nb-1)
+  in
+  doit [] l ((List.length l + 1) / 2)
+(** [split l] cuts the list [l] into two halves.
+    Either the two halves have the same size, or the first list is
+    one element larger.
+    If [a,b = split l], then [l = a @ b].
+ *)
+
 
 (** {2 Printing} *)
 

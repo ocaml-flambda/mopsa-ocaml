@@ -1,7 +1,7 @@
 {
     "language": "python",
     "domain": {
-        "iter": [
+        "seq": [
             "python.program",
 
             "python.desugar.bool",
@@ -16,6 +16,8 @@
             "python.flows.exceptions",
 
             "universal.iterators.intraproc",
+            "universal.iterators.interproc.sequential_cache",
+            // "universal.iterators.interproc.join_based_cache",
             "universal.iterators.interproc.inlining",
             "universal.iterators.loops",
             "universal.iterators.unittest",
@@ -27,7 +29,11 @@
 
             "python.objects.class",
             "python.objects.function",
-            // "python.objects.nones",
+            "python.objects.list",
+            "python.objects.tuple",
+            "python.objects.dict",
+            "python.objects.set",
+            "python.objects.range",
 
             "python.data_model.attribute",
             "python.data_model.subscript",
@@ -36,19 +42,14 @@
             "python.data_model.aug_assign",
             "python.data_model.callable",
 
+            "python.types.t_string",
+            "python.types.t_int",
+            "python.types.t_float",
+            "python.types.t_complex",
+
             {
-                "stack": "universal.heap.recency",
-                "over": {
-                    "iter": [
-                        "python.types.addr_env",
-                        "python.types.t_string",
-                        "python.types.t_int",
-                        "python.types.t_float",
-                        "python.types.t_list",
-                        "python.types.t_set",
-                        "python.types.typing"
-                    ]
-                }
+                "apply": "universal.heap.recency.all",
+                "on": "python.types.typechecking"
             }
         ]
     }

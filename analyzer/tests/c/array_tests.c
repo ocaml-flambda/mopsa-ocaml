@@ -5,14 +5,10 @@
 /* Array initialization */
 /************************/
 
-int glob1[5];
-int glob2[5][5];
-int glob3[5] = {1, 2};
+unsigned char glob[5];
 
 void test_global_init_with_zero() {
-  _mopsa_assert(glob1[0] == 0);
-  _mopsa_assert(glob2[0][0] == 0);
-  _mopsa_assert(glob3[0] == 1);
+  _mopsa_assert(glob[0] == 0);
 }
 
 void test_initialization() {
@@ -79,35 +75,35 @@ void test_array_safe_access_with_constant() {
 
 void test_array_safe_access_with_range() {
   int a[100];
-  int j = _mopsa_rand_int(0, 10);
+  int j = _mopsa_range_int(0, 10);
   int x = a[j];
   _mopsa_assert_safe();
 }
 
 void test_array_out_of_bound_access_with_range() {
   int a[100];
-  int j = _mopsa_rand_int(100, 200);
+  int j = _mopsa_range_int(100, 200);
   int x = a[j];
   _mopsa_assert_error(OUT_OF_BOUND);
 }
 
 void test_may_array_out_of_bound_access_with_range() {
   int a[100];
-  int j = _mopsa_rand_int(10, 200);
+  int j = _mopsa_range_int(10, 200);
   int x = a[j];
   _mopsa_assert_error_exists(OUT_OF_BOUND);
 }
 
 void test_array_safe_access_with_range_in_lval() {
   int a[100];
-  int j = _mopsa_rand_int(10, 20);
+  int j = _mopsa_range_int(10, 20);
   a[j] = 10;
   _mopsa_assert_safe();
 }
 
 void test_array_range_in_rval() {
   int a[100];
-  int j = _mopsa_rand_int(10, 80);
+  int j = _mopsa_range_int(10, 80);
   int x = a[j] + 0;
   _mopsa_assert_safe();
 }
@@ -121,7 +117,7 @@ void test_weak_update() {
   int a[100];
   a[0] = 0;
   a[1] = 1;
-  int j = _mopsa_rand_int(0, 1);
+  int j = _mopsa_range_int(0, 1);
   a[j] = 3;
   _mopsa_assert_exists(a[0] == 0);
   _mopsa_assert_exists(a[0] == 3);

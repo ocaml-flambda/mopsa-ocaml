@@ -6,7 +6,7 @@
  */
 
 void test_pointer_with_int_value() {
-  int *p = 1;
+  int *p = (int*)1;
   _mopsa_assert_safe();
 }
 
@@ -53,6 +53,13 @@ void test_null_is_zero() {
   _mopsa_assert(p == NULL);
 }
 
+
+void test_refine_top_pointer() {
+  int *p = _mopsa_rand_pointer(int *);
+  if (p) _mopsa_assert(p != NULL);
+}
+
+
 int *global;
 
 void test_initialization_to_null_of_uninitialized_global() {
@@ -73,9 +80,9 @@ void test_null_deref() {
 }
 
 void test_compare_pointers_with_int_values() {
-  int *p = 1;
-  int *q = 2;
-  int *r = 1;
+  int *p = (int*)1;
+  int *q = (int*)2;
+  int *r = (int*)1;
   _mopsa_assert(p != q);
   _mopsa_assert(p == r);
 }
@@ -110,14 +117,6 @@ void test_multi_array_as_array_of_addresses() {
   p = a[0];
   *p = 10;
   _mopsa_assert(a[0][0] == 10);
-}
-
-void test_address_of_array() {
-  int a[10];
-  int *p;
-  p = &a;
-  *p = 10;
-  _mopsa_assert(a[0] == 10);
 }
 
 void test_address_of_multi_array() {
@@ -175,7 +174,7 @@ void test_address_of_struct() {
 void test_pointer_increment_on_struct() {
   point a[10];
   point *p;
-  p = &a;
+  p = a;
   p->x = 10;
   p++;
   p->x = 20;
@@ -223,6 +222,47 @@ void test_pointer_function_assignment() {
 
 
 /*
+ * Pointer comparison
+ */
+
+void test_pointer_lt() {
+  int a[10];
+  int *p = a + 1;
+  int *q = a + 2;
+  _mopsa_assert(p < q);
+}
+
+void test_pointer_le() {
+  int a[10];
+  int *p = a + 1;
+  int *q = a + 2;
+  _mopsa_assert(p <= q);
+}
+
+void test_pointer_gt() {
+  int a[10];
+  int *p = a + 5;
+  int *q = a + 2;
+  _mopsa_assert(p > q);
+}
+
+void test_pointer_ge() {
+  int a[10];
+  int *p = a + 5;
+  _mopsa_assert(p >= a);
+}
+
+void test_unsafe_pointer_le() {
+  int i, j;
+  int *p = &i;
+  int *q = &j;
+  int d = p <= q;
+  _mopsa_assert_unsafe();
+}
+
+
+
+/*
  * Pointer difference
  */
 
@@ -248,14 +288,15 @@ void test_unsafe_pointer_difference() {
 }
 
 void test_string2_1bptr_macro() {
-  // This macro tests that the object pointed by __x is one byte width
-  // It is a workaround when __x is a void* pointer 
-  // Used in libc and defined in /usr/include/bits/string2.h:92
+  /* This macro tests that the object pointed by __x is one byte width
+   * It is a workaround when __x is a void* pointer
+   * Used in libc and defined in /usr/include/bits/string2.h:92
+   */
   #define __string2_1bptr_p(__x) \
    ((size_t)(const void *)((__x) + 1) - (size_t)(const void *)(__x) == 1)
 
   int x;
-  
+
   void *p1 =(void*)&x;
   _mopsa_assert(__string2_1bptr_p(p1));
 

@@ -789,6 +789,11 @@ and access_specifier =
    | VAArgExpr of expr
    (** Represents a call to the builtin function __builtin_va_arg. *)
 
+   | FullExpr of expr
+   (** Represents a "full-expression" node (clang >= 8) *)
+
+   | ConstantExpr of expr
+   (** An expression that occurs in a constant context. (clang >= 8) *)
 
    (* C++ EXPRESSIONS *)
 
@@ -908,6 +913,7 @@ and access_specifier =
 
    | UnknownExpr of (** statement (expression) class *) int *(** statement (expression) class name *) string
  (** Unhandled Expr node *)
+
 
  and conditional_operator = {
      cond_cond: expr; (** condition *)
@@ -1097,6 +1103,7 @@ and atomic_expr = {
  and unary_expr_or_type =
    | UETT_SizeOf
    | UETT_AlignOf
+   | UETT_PreferredAlignOf (* Clang >= 8 *)
 
  and array_type_trait =
    | ATT_ArrayRank

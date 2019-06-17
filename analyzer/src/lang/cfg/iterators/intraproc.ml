@@ -22,36 +22,54 @@
 (** General intraprocedural iterator on Control Flow Graphs. *)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Universal.Ast
 open Universal.Zone
 open Ast
 
-                
+
+let name = "cfg.iterators.intraproc"
+
+
+(*==========================================================================*)
+(**                       {2 Command line options}                          *)
+(*==========================================================================*)
+
+             
+let opt_decreasing_iter : int ref = ref 1
+(** Number of decreasing iterations after widening stabilisation. *)
+
+                                        
+let () =
+  register_domain_option name {
+    key = "-decreasing-iter";
+    category = "Loops";
+    doc = " number of decreasing iterations after stabilization";
+    spec = ArgExt.Set_int opt_decreasing_iter;
+    default = "1";
+  }
+ 
+                                        
 (*==========================================================================*)
                        (** {2 Iterator} *)
 (*==========================================================================*)
 
 
-module Domain : Framework.Domains.Stateless.S =
+module Domain =
 struct
 
-  type _ domain += D_cfg_intraproc : unit domain
+  include GenStatelessDomainId(struct
+      let name = name
+    end)
 
-  let name = "cfg.iterators.intraproc"
 
-  let id = D_cfg_intraproc
+  let interface = {
+    iexec = { provides = [Z_u]; uses = [] };
+    ieval = { provides = []; uses = [] };
+  }
 
-  let identify : type a. a domain -> (unit, a) eq option =
-    function
-    | D_cfg_intraproc -> Some Eq
-    | _ -> None
 
-  let debug fmt = Debug.debug ~channel:name fmt
-
-  let exec_interface = {export = [Z_u]; import = []}
-  let eval_interface = {export = []; import = []}
-
-  let init prog man flow = None
+  let init prog man flow = flow
 
 
   (* flow iterator for CFG *)                         
@@ -66,10 +84,10 @@ struct
       let flow =
         List.fold_left
           (fun flow (port,node) ->
-            let v = Flow.get (T_node (CFG.node_id node)) man flow in
+            let v = Flow.get (T_node (CFG.node_id node)) man.lattice flow in
             debug "input node %a -> port %a, abs = @[%a@]"
-                  pp_node_as_id node pp_token port man.print v;
-            Flow.add port v man flow
+                  pp_node_as_id node pp_token port man.lattice.print v;
+            Flow.add port v man.lattice flow
           )
           flow src
       in
@@ -80,17 +98,17 @@ struct
       let flow =
         List.fold_left
           (fun flow (port,node) ->
-            let v = Flow.get port man flow in
+            let v = Flow.get port man.lattice flow in
             debug "output port %a -> node %a, abs = @[%a@]"
-                  pp_token port pp_node_as_id node man.print v;
-            Flow.add (T_node (CFG.node_id node)) v man flow
+                  pp_token port pp_node_as_id node man.lattice.print v;
+            Flow.add (T_node (CFG.node_id node)) v man.lattice flow
           )
           flow dst
       in
       (* clean-up flows used by transfer function *)
       let flow =
         List.fold_left
-          (fun flow (port,_) -> Flow.remove port man flow)
+          (fun flow (port,_) -> Flow.remove port flow)
           flow (src@dst)
       in
       flow
@@ -111,30 +129,46 @@ struct
         | (GraphSig.Simple node)::_ -> CFG.node_id node
         | _ -> Exceptions.panic "node expected at the head of a component"
       in
-      let old = Flow.get (T_node wid) man flow in
-      debug "analyzing component @[%a@], widen=%a, abs=@[%a@]"
+      let old = Flow.get (T_node wid) man.lattice flow in
+      debug "analyzing component @[%a@], widen=%a, count=%i, abs=@[%a@]"
             (Graph.pp_nested_list_list pp_node_as_id) lst
-            pp_node_id wid man.print old;
+            pp_node_id wid count man.lattice.print old;
       (* analyze the component *)
       let flow = analyze_component lst flow in
-      let v = Flow.get (T_node wid) man flow in
+      let v = Flow.get (T_node wid) man.lattice flow in
       (* check stability *)
-      if man.subset v old
+      if man.lattice.subset (Flow.get_unit_ctx flow) v old
       then (
         debug "component head stable %a" pp_node_id wid;
-        flow
+        refine_component count lst flow
       )
       else
         (* apply widening *)
         let widened =
           if count < !Universal.Iterators.Loops.opt_loop_widening_delay
           then v
-          else man.widen flow.annot old v
+          else man.lattice.widen (Flow.get_unit_ctx flow) old v
         in
         debug "component head not stable %a" pp_node_id wid;
-        let flow = Flow.set (T_node wid) widened man flow in
+        let flow = Flow.set (T_node wid) widened man.lattice flow in
         fix_component (count+1) lst flow
-        
+
+    (* decreasing iterations *)
+    and refine_component count lst flow =
+      if count >= !opt_decreasing_iter then flow
+      else (
+        (* get widening node *)
+        let wid = match lst with
+          | (GraphSig.Simple node)::_ -> CFG.node_id node
+          | _ -> Exceptions.panic "node expected at the head of a component"
+        in
+        (* iter *)
+        debug "decreasing iteration at head %a, count=%i" pp_node_id wid count;
+        let flow = analyze_component lst flow in
+        refine_component (count+1) lst flow
+      )
+
+                      
     (* analyze a list of components *)
     and analyze_component lst flow =
       List.fold_left
@@ -148,12 +182,12 @@ struct
     
     (* shift the current flow into the entry nodes *)
     let flow_in flow =
-      let cur = Flow.get T_cur man flow in
-      let flow = Flow.remove T_cur man flow in
+      let cur = Flow.get T_cur man.lattice flow in
+      let flow = Flow.remove T_cur flow in
       List.fold_left
         (fun flow (port,node) ->
           debug "set entry node %a, port %a" pp_node_as_id node pp_token port;
-          Flow.set (T_node (CFG.node_id node)) cur man flow
+          Flow.set (T_node (CFG.node_id node)) cur man.lattice flow
         )
         flow
         (CFG.entries cfg.cfg_graph)
@@ -164,8 +198,8 @@ struct
       List.fold_left
         (fun flow (port,node) ->
           debug "get exit node %a, port %a" pp_node_as_id node pp_token port;
-          let v = Flow.get (T_node (CFG.node_id node)) man flow in
-          Flow.add T_cur v man flow
+          let v = Flow.get (T_node (CFG.node_id node)) man.lattice flow in
+          Flow.add T_cur v man.lattice flow
         )
         flow
         (CFG.exits cfg.cfg_graph)
@@ -174,52 +208,53 @@ struct
     (* remove all node-related flows (keeping cur, etc.) *)
     let cleanup flow =
       CFG.fold_nodes
-        (fun id _ flow -> Flow.remove (T_node id) man flow)
+        (fun id _ flow -> Flow.remove (T_node id) flow)
         cfg.cfg_graph flow
     in
     
     (* all together now *)
     let flow = flow_in flow in
-    debug "CFG iteration started:@\nabs = @[%a@]" (Flow.print man) flow;
+    debug "CFG iteration started:@\nabs = @[%a@]" (Flow.print man.lattice) flow;
     let flow = analyze_component cfg.cfg_order flow in
-    debug "CFG iteration finished:@\nabs = @[%a@]" (Flow.print man) flow;
+    debug "CFG iteration finished:@\nabs = @[%a@]" (Flow.print man.lattice) flow;
     let flow = flow |> flow_out |> cleanup in
-    debug "returned flow:@\nabs = @[%a@]" (Flow.print man) flow;
+    debug "returned flow:@\nabs = @[%a@]" (Flow.print man.lattice) flow;
     flow
 
 
   (* atomic test function *)
   let test_iterator man cond flow =
     let range = erange cond in
+    debug "CFG test [%a] at %a" pp_expr cond pp_range range;
     let tflow = man.exec (mk_assume cond range) flow
     and fflow = man.exec (mk_assume (mk_not cond range) range) flow in
-    let tflow = Flow.set T_true  (Flow.get T_cur man tflow) man tflow
-    and fflow = Flow.set T_false (Flow.get T_cur man fflow) man fflow in
-    Flow.join man tflow fflow
+    let tflow = Flow.set T_true  (Flow.get T_cur man.lattice tflow) man.lattice tflow
+    and fflow = Flow.set T_false (Flow.get T_cur man.lattice fflow) man.lattice fflow in
+    Flow.join man.lattice tflow fflow
 
     
-  let rec exec zone stmt man flow =
+  let exec zone stmt man flow =
     match skind stmt with
 
     | S_cfg cfg ->
-       Some (Post.of_flow (cfg_iterator cfg man flow))
+       Some (Post.return (cfg_iterator cfg man flow))
 
     | S_test expr ->
-       Some (Post.of_flow (test_iterator man expr flow))
+       Some (Post.return (test_iterator man expr flow))
 
     | S_skip ->
-       Some (Post.of_flow flow)
+       Some (Post.return flow)
       
     | _ ->
        (* S_expression, S_block and S_print are handled by universal's intraproc *)
        None
    
-  let eval _ _ _ _ = None
+  let eval zone exp man flow = None
 
-  let ask _ _ _ = None
+  let ask query man flow = None
 
 end
 
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  register_domain (module Domain)

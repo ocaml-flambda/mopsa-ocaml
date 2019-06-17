@@ -22,6 +22,7 @@
 (** Inter-procedural iterator by inlining.  *)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Ast
 open Zone
 open Callstack
@@ -32,19 +33,18 @@ open Callstack
 
 type token +=
   | T_return of range * expr option
-  (** [T_return(l, Some e)] represents flows reaching a return
-     statement at location [l] returning an expression [e]. The
-     expression is [None] when the function returns nothing
-      (i.e. case of a procedure). *)
+  (** [T_return(l, ret)] represents flows reaching a return statement at
+      location [l]. The option expression [ret] keeps the returned expression
+      if present. *)
 
 let () =
   register_token {
     compare = (fun next tk1 tk2 ->
-      match tk1, tk2 with
-      | T_return(r1, _), T_return(r2, _) -> compare_range r1 r2
-      | _ -> next tk1 tk2
-    );
-  print = (fun next fmt -> function
+        match tk1, tk2 with
+        | T_return(r1, _), T_return(r2, _) -> compare_range r1 r2
+        | _ -> next tk1 tk2
+      );
+    print = (fun next fmt -> function
         | T_return(r, Some e) -> Format.fprintf fmt "return %a" pp_expr e
         | T_return(r, None) -> Format.fprintf fmt "return"
         | tk -> next fmt tk
@@ -55,35 +55,31 @@ let () =
 (** {2 Domain definition} *)
 (** ===================== *)
 
-module Domain : Framework.Domains.Stateless.S =
+module Domain =
 struct
 
   (** Domain identification *)
   (** ===================== *)
 
-  type _ domain += D_universal_intraproc_inlining : unit domain
-  let id = D_universal_intraproc_inlining
-  let name = "universal.iterators.interproc.inlining"
-  let identify : type a. a domain -> (unit, a) eq option =
-    function
-    | D_universal_intraproc_inlining -> Some Eq
-    | _ -> None
-
-  let debug fmt = Debug.debug ~channel:name fmt
+  include GenStatelessDomainId(struct
+      let name = "universal.iterators.interproc.inlining"
+    end)
 
 
   (** Zoning definition *)
-
-  let exec_interface = {export = [Z_u]; import = []}
-  let eval_interface = {export = [Z_u, Z_any]; import = []}
+  let interface = {
+    iexec = { provides = [Z_u]; uses = [] };
+    ieval = { provides = [Z_u, Z_any]; uses = [] };
+  }
 
   (** Initialization *)
   (** ============== *)
 
   let init prog man (flow: 'a flow) =
-    Some (
-      Flow.set_annot A_call_stack [] flow
-    )
+    Flow.set_ctx (
+      Flow.get_ctx flow |>
+      Context.add_unit Callstack.ctx_key Callstack.empty
+    ) flow
 
   (** Computation of post-conditions *)
   (** ============================== *)
@@ -91,92 +87,96 @@ struct
   let exec zone stmt man flow =
     match skind stmt with
     | S_return e ->
-      Some (
-        let cur = Flow.get T_cur man flow in
-        Flow.add (T_return (stmt.srange, e)) cur man flow |>
-        Flow.remove T_cur man |>
-        Post.of_flow
-      )
+      let cur = Flow.get T_cur man.lattice flow in
+      Flow.add (T_return (stmt.srange, e)) cur man.lattice flow |>
+      Flow.remove T_cur |>
+      Post.return |> Option.return
 
     | _ -> None
+
 
 
   (** Evaluation of expressions *)
   (** ========================= *)
 
+  let inline_function_assign_args man f args range flow =
+    let cs = Callstack.get flow in
+    if List.exists (fun cs -> cs.call_fun = f.fun_name) cs then
+      Exceptions.panic_at range "Recursive call on function %s detected...@\nCallstack = %a@\n" f.fun_name Callstack.print cs;
+
+    (* Clear all return flows *)
+    let flow0 = Flow.filter (fun tk env ->
+        match tk with
+        | T_return _ -> false
+        | _ -> true
+      ) flow
+    in
+
+    (* Add parameters and local variables to the environment *)
+    let new_vars = f.fun_parameters @ f.fun_locvars in
+
+    (* Assign arguments to parameters *)
+    let parameters_assign = List.mapi (fun i (param, arg) ->
+        mk_assign (mk_var param range) arg range
+      ) (List.combine f.fun_parameters args) in
+
+    let init_block = mk_block parameters_assign range in
+
+    (* Update call stack *)
+    let flow1 = Callstack.push f.fun_name range flow0 in
+
+    (* Execute body *)
+    new_vars, man.exec init_block flow1
+
+
+  let inline_function_exec_body man f args range new_vars flow ret =
+    (* Check that no recursion is happening *)
+
+    debug "cs flow = %a@\n" Callstack.print (Callstack.get flow);
+    let flow2 = man.exec f.fun_body flow in
+
+    debug "cs flow2 = %a@\n" Callstack.print (Callstack.get flow2);
+    (* Iterate over return flows and assign the returned value to ret *)
+    let flow3 =
+      Flow.fold (fun acc tk env ->
+          match tk with
+          | T_return(_, None) -> Flow.add T_cur env man.lattice acc
+
+          | T_return(_, Some e) ->
+            Flow.set T_cur env man.lattice acc |>
+            man.exec (mk_add_var ret range) |>
+            man.exec (mk_assign (mk_var ret e.erange) e e.erange) |>
+            Flow.join man.lattice acc
+
+          | _ -> Flow.add tk env man.lattice acc
+        )
+        (Flow.remove T_cur (Flow.copy_ctx flow2 flow))
+        flow2
+    in
+
+    debug "cs flow3 = %a@\n" Callstack.print (Callstack.get flow3);
+    (* Restore call stack *)
+    let _, flow3 = Callstack.pop flow3 in
+
+    (* Remove parameters and local variables from the environment *)
+    let ignore_stmt_list =
+      List.mapi (fun i v ->
+          mk_remove_var v range
+        ) (new_vars)
+    in
+
+    Eval.singleton (mk_var ret range) flow3 ~cleaners:(ignore_stmt_list @ [mk_remove_var ret range])
+
+
   let eval zone exp man flow =
     let range = erange exp in
     match ekind exp with
     | E_call({ekind = E_function (User_defined f)}, args) ->
-      debug "calling function %s" f.fun_name;
-
-      (* Clear all return flows *)
-      let flow0 = Flow.filter (fun tk env ->
-          match tk with
-          | T_return _ -> false
-          | _ -> true
-        ) man flow
-      in
-
-      (* Add parameters and local variables to the environment *)
-      let new_vars = f.fun_parameters @ f.fun_locvars in
-      (* let new_vars_declaration_block = List.map (fun v ->
-       *     mk_add_var v (tag_range range "variable addition")
-       *   ) new_vars |> (fun x -> mk_block x (tag_range range "declaration_block"))
-       * in
-       * let flow0' = man.exec new_vars_declaration_block flow0 in *)
-
-      (* Assign arguments to parameters *)
-      let parameters_assign = List.mapi (fun i (param, arg) ->
-          mk_assign (mk_var param range) arg range
-        ) (List.combine f.fun_parameters args) in
-
-      let init_block = mk_block parameters_assign range in
-
-      (* Update call stack *)
-      let flow1 = Callstack.push f.fun_name range flow0 in
-
-      (* Execute body *)
-      let flow2 = man.exec init_block flow1 |>
-                  man.exec f.fun_body
-      in
-
-      (* Store the return expression in fun_return_var *)
-      let ret = f.fun_return_var in
-
-      (* Iterate over return flows and assign the returned value to ret *)
-      let flow3 =
-        Flow.fold (fun acc tk env ->
-            match tk with
-            | T_return(_, None) -> Flow.add T_cur env man acc
-
-            | T_return(_, Some e) ->
-              Flow.set T_cur env man acc |>
-              man.exec (mk_add_var ret range) |>
-              man.exec (mk_assign (mk_var ret e.erange) e e.erange) |>
-              Flow.join man acc
-
-            | _ -> Flow.add tk env man acc
-          )
-          (Flow.remove T_cur man (Flow.copy_annot flow2 flow))
-          man flow2
-      in
-
-      (* Restore call stack *)
-      let _, flow3 = Callstack.pop flow3 in
-
-      (* Remove parameters and local variables from the environment *)
-      let ignore_stmt_list =
-        List.mapi (fun i v ->
-            mk_remove_var v range
-          ) (new_vars)
-      in
-      let ignore_block = mk_block ignore_stmt_list range in
-
-      let flow4 = man.exec ignore_block flow3 in
-
-      Eval.singleton (mk_var ret range) flow4 ~cleaners:[mk_remove_var ret range] |>
-      Eval.return
+      let ret_typ = match f.fun_return_type with None -> T_any | Some t -> t in
+      let ret = mk_range_attr_var range "ret_var" ret_typ in
+      let new_vars, flow = inline_function_assign_args man f args range flow in
+      inline_function_exec_body man f args range new_vars flow ret
+      |> Option.return
 
     | _ -> None
 
@@ -186,4 +186,4 @@ end
 
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  register_domain (module Domain)

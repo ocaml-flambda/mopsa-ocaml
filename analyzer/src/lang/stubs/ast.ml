@@ -41,11 +41,12 @@ type stub_func = {
   stub_func_range  : range;
 }
 
-(** Stub for a variable initialization *)
-and stub_init = {
-  stub_init_body : section list;
-  stub_init_locals : local with_range list;
-  stub_init_range : range;
+(** Stub for a global directive *)
+and stub_directive = {
+  stub_directive_body : section list;
+  stub_directive_locals : local with_range list;
+  stub_directive_assigns : assigns with_range list;
+  stub_directive_range : range;
 }
 
 (** {2 Stub sections} *)
@@ -147,6 +148,9 @@ type expr_kind +=
   | E_stub_attribute of expr * string
   (** Access to an attribute of a resource *)
 
+  | E_stub_alloc of string
+  (** Allocate a resource and translate it into an address *)
+
   | E_stub_resource_mem of expr * resource
   (** Filter environments in which an instance is in a resource pool *)
 
@@ -154,25 +158,27 @@ type expr_kind +=
   (** Primed expressions denoting values in the post-state *)
 
 
-(** {2 Primed variables} *)
-(** =-=-=-=-=-=-=-=-=-=- *)
-
-type var_kind +=
-  | V_stub_primed of var
-  (** Primed variables denoting values in the post-state *)
-
 
 (** {2 Statements} *)
 (*  =-=-=-=-=-=-=- *)
 
 type stmt_kind +=
-  | S_stub_init of var * stub_init
+  | S_stub_directive of stub_directive
   (** Initialization of a variable with a stub *)
 
   | S_stub_free of expr
   (** Release a resource *)
 
-  (** Rename primed variables of assigned dimensions *)
+
+  (** Declare an assigned object *)
+  | S_stub_assigns of expr  (** modified pointer *) *
+                      (
+                        expr  (** index lower bound *) *
+                        expr  (** index upper bound *)
+                      ) list
+
+
+  (** Rename primed variables of an assigned object *)
   | S_stub_rename_primed of expr  (** modified pointer *) *
                             (
                               expr  (** index lower bound *) *
@@ -187,7 +193,7 @@ type addr_kind +=
   | A_stub_resource of string (** resource address *)
 
 let () =
-  register_addr {
+  register_addr_kind {
     print = (fun next fmt addr_kind ->
         match addr_kind with
         | A_stub_resource res -> Format.pp_print_string fmt res
@@ -228,15 +234,28 @@ let is_expr_quantified e =
     false
     e
 
-let mk_stub_init var stub range =
-  mk_stmt (S_stub_init (var, stub)) range
+let mk_stub_directive stub range =
+  mk_stmt (S_stub_directive stub) range
 
 let mk_stub_free e range =
   mk_stmt (S_stub_free e) range
 
+let mk_stub_assigns t offsets range =
+  mk_stmt (S_stub_assigns (t, offsets)) range
+
 let mk_stub_rename_primed t offsets range =
   mk_stmt (S_stub_rename_primed (t, offsets)) range
 
+
+let is_stub_primed e =
+  fold_expr
+    (fun acc ee ->
+       match ekind ee with
+       | E_stub_primed _ -> Keep true
+       | _ -> VisitParts acc
+    )
+    (fun acc stmt -> VisitParts acc)
+    false e
 
 (** Visit expressions present in a formula *)
 let rec visit_expr_in_formula visitor f =
@@ -258,7 +277,7 @@ and visit_expr visitor e =
   Visitor.map_expr visitor (fun stmt -> Keep stmt) e
 
 let mk_stub_alloc_resource res range =
-  mk_alloc_addr (A_stub_resource res) range
+  mk_expr (E_stub_alloc res) range
 
 let compare_resource = C_stubs_parser.Ast.compare_resource
 
@@ -383,14 +402,14 @@ let pp_sections fmt secs =
 
 let pp_stub_func fmt stub = pp_sections fmt stub.stub_func_body
 
-let pp_stub_init fmt stub = pp_sections fmt stub.stub_init_body
+let pp_stub_directive fmt stub = pp_sections fmt stub.stub_directive_body
 
 
 (** {2 Registration of expressions} *)
 (*  =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= *)
 
 let () =
-  register_expr {
+  register_expr_with_visitor {
     compare = (fun next e1 e2 ->
         match ekind e1, ekind e2 with
         | E_stub_call _, E_stub_call _ -> panic "stub comparison not supported"
@@ -413,6 +432,9 @@ let () =
             (fun () -> compare_expr o1 o2);
             (fun () -> compare f1 f2)
           ]
+
+        | E_stub_alloc r1, E_stub_alloc r2 ->
+          compare r1 r2
 
         | E_stub_resource_mem(x1, res1), E_stub_resource_mem(x2, res2) ->
           Compare.compose [
@@ -442,6 +464,8 @@ let () =
           { exprs = [o]; stmts = [] },
           (function { exprs = [o] } -> { e with ekind = E_stub_attribute(o, f) } | _ -> assert false)
 
+        | E_stub_alloc r -> leaf e
+
         | E_stub_resource_mem(x, res) ->
           { exprs = [x]; stmts = []},
           (function { exprs = [x] } -> { e with ekind = E_stub_resource_mem(x, res) } | _ -> assert false)
@@ -461,46 +485,32 @@ let () =
         | E_stub_quantified(FORALL, v, _) -> fprintf fmt "∀%a" pp_var v
         | E_stub_quantified(EXISTS, v, _) -> fprintf fmt "∃%a" pp_var v
         | E_stub_attribute(o, f) -> fprintf fmt "%a:%s" pp_expr o f
+        | E_stub_alloc r -> fprintf fmt "alloc res(%s)" r
         | E_stub_resource_mem(x, res) -> fprintf fmt "%a ∈ %a" pp_expr x pp_resource res
         | E_stub_primed(ee) -> fprintf fmt "%a'" pp_expr ee
         | _ -> next fmt e
       );
   }
 
-(** {2 Registration of variables} *)
-(*  =-=-=-=-=-=-=-=-=-=-=-=-=-=- *)
-
-let () =
-  register_var {
-    print = (fun next fmt v ->
-        match vkind v with
-        | V_stub_primed vv -> fprintf fmt "%a'" pp_var vv
-        | _ -> next fmt v
-      );
-
-    compare = (fun next v1 v2 ->
-        match vkind v1, vkind v2 with
-        | V_stub_primed vv1, V_stub_primed vv2 ->
-          compare_var vv1 vv2
-        | _ -> next v1 v2
-      );
-  }
 
 (** {2 Registration of statements} *)
 (*  =-=-=-=-=-=-=-=-=-=-=-=-=-=-=- *)
 
 let () =
-  register_stmt {
+  register_stmt_with_visitor {
     compare = (fun next s1 s2 ->
         match skind s1, skind s2 with
-        | S_stub_init (v1, stub1), S_stub_init (v2, stub2) ->
-          Compare.compose [
-            (fun () -> compare_var v1 v2);
-            (fun () -> panic "compare for stubs not supported")
-          ]
+        | S_stub_directive (stub1), S_stub_directive (stub2) ->
+          panic "compare for stubs not supported"
 
         | S_stub_free(e1), S_stub_free(e2) ->
           compare_expr e1 e2
+
+        | S_stub_assigns(t1, offsets1), S_stub_assigns(t2, offsets2) ->
+          Compare.compose [
+            (fun () -> compare_expr t1 t2);
+            (fun () -> Compare.list (Compare.pair compare_expr compare_expr) offsets1 offsets2);
+          ]
 
         | S_stub_rename_primed(t1, offsets1), S_stub_rename_primed(t2, offsets2) ->
           Compare.compose [
@@ -513,11 +523,13 @@ let () =
 
     visit = (fun next s ->
         match skind s with
-        | S_stub_init _ -> panic "visitor for S_stub_init not supported"
+        | S_stub_directive _ -> panic "visitor for S_stub_init not supported"
 
         | S_stub_free e ->
           { exprs = [e]; stmts = [] },
           (function { exprs = [e] } -> { s with skind = S_stub_free e } | _ -> assert false)
+
+        | S_stub_assigns(t, offsets) -> panic "visitor for S_stub_assigns not supported"
 
         | S_stub_rename_primed(t, offsets) -> panic "visitor for S_stub_rename_primed not supported"
 
@@ -526,12 +538,23 @@ let () =
 
     print = (fun next fmt s ->
         match skind s with
-        | S_stub_init (v, stub) ->
-          fprintf fmt "@[<v 2>init %a:@,%a@]"
-            pp_var v
-            pp_sections stub.stub_init_body
+        | S_stub_directive (stub) ->
+          fprintf fmt "@[<v 2>/*$$$@,%a@]*/"
+            pp_sections stub.stub_directive_body
 
         | S_stub_free e -> fprintf fmt "free(%a);" pp_expr e
+
+        | S_stub_assigns(t,offsets) ->
+          fprintf fmt "assigns: %a%a;"
+            pp_expr t
+            (pp_print_list
+               ~pp_sep:(fun fmt () -> ())
+               (fun fmt (a, b) ->
+                  fprintf fmt "[%a .. %a]"
+                    pp_expr a
+                    pp_expr b
+               )
+            ) offsets
 
         | S_stub_rename_primed(t,offsets) ->
           fprintf fmt "rename primed %a%a;"

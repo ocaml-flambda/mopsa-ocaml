@@ -35,7 +35,6 @@ int optopt;
  * requires: forall int i in [0, size(___argv) - 1]:
  *             valid_string(___argv[i]);
  * requires: valid_string(__shortopts);
- * requires: optind > 0;
  *
  * assigns: optind;
  * assigns: opterr;
@@ -44,6 +43,7 @@ int optopt;
  * // TODO assigns: ___argv[*][*];
  *
  * ensures: return in [-1, 255];
+ * ensures: optind' > 0; // Not sure?
  */
 int getopt (int ___argc, char *const *___argv, const char *__shortopts);
 
@@ -52,8 +52,7 @@ int getopt (int ___argc, char *const *___argv, const char *__shortopts);
 /*$
  * requires: forall int i in [0, size(___argv) - 1]: valid_string(___argv[i]);
  * requires: valid_string(__shortopts);
- * requires: forall int i in [0, sizeof(struct option) - 1]: ___argv[size(___argv) - 1][i] == 0;
- * requires: optind > 0;
+ * requires: forall int i in [0, sizeof_type(struct option) - 1]: ___argv[size(___argv) - 1][i] == 0;
  *
  * assigns: optind;
  * assigns: opterr;
@@ -62,6 +61,7 @@ int getopt (int ___argc, char *const *___argv, const char *__shortopts);
  * // TODO assigns: ___argv[*][*];
  *
  * ensures: return in [-1, 255];
+ * ensures: optind' > 0; // Not sure?
  */
 int getopt_long (int ___argc, char *const *___argv, const char *__shortopts,
                  const struct option *__longopts, int *__longind);
@@ -70,8 +70,7 @@ int getopt_long (int ___argc, char *const *___argv, const char *__shortopts,
 /*$
  * requires: forall int i in [0, size(___argv) - 1]: valid_string(___argv[i]);
  * requires: valid_string(__shortopts);
- * requires: forall int i in [0, sizeof(struct option) - 1]: ___argv[size(___argv) - 1][i] == 0;
- * requires: optind > 0;
+ * requires: forall int i in [0, sizeof_type(struct option) - 1]: ___argv[size(___argv) - 1][i] == 0;
  *
  * assigns: optind;
  * assigns: opterr;
@@ -80,6 +79,7 @@ int getopt_long (int ___argc, char *const *___argv, const char *__shortopts,
  * // TODO assigns: ___argv[*][*];
  *
  * ensures: return in [-1, 255];
+ * ensures: optind' > 0; // Not sure?
  */
 int getopt_long_only (int ___argc, char *const *___argv, const char *__shortopts,
                       const struct option *__longopts, int *__longind);

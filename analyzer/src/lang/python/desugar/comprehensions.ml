@@ -26,6 +26,7 @@
 
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Addr
 open Ast
 open Universal.Ast
@@ -33,56 +34,52 @@ open Universal.Ast
 module Domain =
   struct
 
-    type _ domain += D_python_desugar_comprehensions : unit domain
+    include GenStatelessDomainId(struct
+        let name = "python.desugar.comprehensions"
+      end)
 
-    let id = D_python_desugar_comprehensions
-    let name = "python.desugar.comprehensions"
-    let identify : type a. a domain -> (unit, a) eq option = function
-      | D_python_desugar_comprehensions -> Some Eq
-      | _ -> None
-
-    let debug fmt = Debug.debug ~channel:name fmt
-
-    let exec_interface = {export = []; import = [Zone.Z_py]}
-    let eval_interface = {export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj]}
+    let interface = {
+      iexec = {provides = []; uses = [Zone.Z_py]};
+      ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
+    }
 
     let unfold_comprehension expr comprehensions base append range =
-         let tmp_acc = mktmp () in
+         let tmp_acc = mk_range_attr_var range "tmp_acc" T_any in
          let acc_var = mk_var tmp_acc range in
          let rec unfold_lc aux_compr = match aux_compr with
            | [] ->
               mk_stmt (S_expression (mk_py_call append (acc_var::expr) range)) range
            | (target, iter, conds)::tl ->
-              (* todo: mk_remove target in the end *)
               let i_conds = List.rev conds in
               let empty_stmt = mk_stmt (Universal.Ast.S_block []) range in
               let if_stmt = List.fold_left (fun acc cond ->
-                                mk_stmt (Universal.Ast.S_if (cond, acc, empty_stmt)) range
+                                mk_stmt (Ast.S_py_if (cond, acc, empty_stmt)) range
                               ) (unfold_lc tl) i_conds in
               mk_stmt (S_py_for(target, iter,
                                 if_stmt,
                                 empty_stmt)) range in
-         let clean_targets = List.fold_left (fun acc (target, _, _) -> match ekind target with
-                                                                       | E_var (v, _) -> (mk_remove_var v range)::acc
-                                                                       | _ -> Exceptions.panic "Comprehension: target %a is not a variable...@\n" pp_expr target) [] comprehensions in
+         let clean_targets = List.fold_left
+             (fun acc (target, _, _) -> match ekind target with
+                | E_var (v, _) -> (mk_remove_var v range)::acc
+                | _ -> Exceptions.panic "Comprehension: target %a is not a variable...@\n" pp_expr target) [] comprehensions in
          let stmt = mk_block ((mk_assign acc_var base range) :: (unfold_lc comprehensions) :: clean_targets) range in
          stmt, tmp_acc
 
 
-    let init _ _ flow = Some flow
+    let init _ _ flow = flow
     let eval zs exp man flow =
       let range = erange exp in
       match ekind exp with
       | E_py_list_comprehension (expr, comprehensions) ->
          let list = find_builtin "list" in
          let listappend = mk_py_object (find_builtin_attribute list "append") range in
-         let stmt, tmp_acc = unfold_comprehension [expr] comprehensions (mk_expr (E_py_list []) range) listappend range in
+         let stmt, tmp_acc = unfold_comprehension [expr] comprehensions (mk_expr (E_py_list []) (tag_range range "acc")) listappend range in
          let acc_var = mk_var tmp_acc range in
          debug "Rewriting %a into %a@\n" pp_expr exp pp_stmt stmt;
          man.exec stmt flow |>
            man.eval acc_var |>
            Eval.add_cleaners [mk_remove_var tmp_acc range] |>
-           OptionExt.return
+           Option.return
 
       | E_py_set_comprehension (expr, comprehensions) ->
          let set = find_builtin "set" in
@@ -94,7 +91,7 @@ module Domain =
          man.exec stmt flow |>
            man.eval acc_var |>
            Eval.add_cleaners [mk_remove_var tmp_acc range] |>
-           OptionExt.return
+           Option.return
 
       | E_py_dict_comprehension (key, value, comprehensions) ->
          let dict = find_builtin "dict" in
@@ -106,7 +103,7 @@ module Domain =
          man.exec stmt flow |>
            man.eval acc_var |>
            Eval.add_cleaners [mk_remove_var tmp_acc range] |>
-           OptionExt.return
+           Option.return
 
       | E_py_generator_comprehension (expr, comprehensions) ->
          Debug.warn "No desugaring for generator comprehensions@\n"; None
@@ -120,4 +117,4 @@ module Domain =
   end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)

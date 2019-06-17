@@ -24,17 +24,17 @@
 module Make(L : ValueSig.S)(R : ValueSig.S) =
 struct
   exception Already_Paired
-  module LR = Map.Make(L)
-  module RL = Map.Make(R)
+  module LR = MapExt.Make(L)
+  module RL = MapExt.Make(R)
   type t =
     {
       lr : R.t LR.t ;
       rl : L.t RL.t ;
     }
-  let print fmt (e : t) =
+  let print ?(pp_sep=(fun fmt () -> Format.fprintf fmt ", ")) fmt (e : t) =
     Format.fprintf fmt "@[{%a}@]"
       (Format.pp_print_list
-         ~pp_sep:(fun fmt () -> Format.fprintf fmt ",")
+         ~pp_sep:pp_sep
          (fun fmt (z,t) -> Format.fprintf fmt "%a ↔ %a" L.print z R.print t)
       ) (LR.bindings e.lr)
   let compare (e : t) (e' : t) : int =
@@ -95,6 +95,25 @@ struct
       R.compare r r' = 0
     with
     | Not_found -> false
+
+  let concat (e1:t) (e2:t) =
+    let patch compare ppk ppv k v1 v2 =
+      match v1, v2 with
+      | None, None -> None
+      | Some vv, None | None, Some vv -> Some vv
+      | Some vv1, Some vv2 ->
+        if compare vv1 vv2 = 0
+        then Some vv1
+        else Exceptions.panic
+            "Equiva.concat: key %a points to different values %a and %a"
+            ppk k
+            ppv vv1
+            ppv vv2
+    in
+    {
+      lr = LR.merge (patch R.compare L.print R.print) e1.lr e2.lr;
+      rl = RL.merge (patch L.compare R.print L.print) e1.rl e2.rl;
+    }
 
   let mem_l (l : L.t) (e: t) =
     LR.mem l e.lr

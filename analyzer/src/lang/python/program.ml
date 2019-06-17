@@ -25,10 +25,6 @@
    functions if required *)
 
 open Mopsa
-open Framework.Domains.Stateless
-open Framework.Domains
-open Framework.Manager
-open Framework.Flow
 open Addr
 open Ast
 open Universal.Ast
@@ -37,20 +33,16 @@ open Universal.Ast
 module Domain =
 struct
 
-  type _ domain += D_python_program : unit domain
+  include GenStatelessDomainId(struct
+      let name = "python.program"
+    end)
 
-  let id = D_python_program
-  let name = "python.program"
-  let identify : type a. a domain -> (unit, a) eq option = function
-    | D_python_program -> Some Eq
-    | _ -> None
+  let interface = {
+    iexec = {provides = [Zone.Z_py]; uses = []};
+    ieval = {provides = []; uses = []}
+  }
 
-  let debug fmt = Debug.debug ~channel:name fmt
-
-  let exec_interface = {export = [Zone.Z_py]; import = []}
-  let eval_interface = {export = []; import = []}
-
-  let init _ _ flow = Some flow
+  let init _ _ flow = flow
 
   let eval _ _ _ _ = None
 
@@ -61,7 +53,7 @@ struct
         (List.mapi (fun i v ->
              let e =
                (* Initialize globals with the same name of a builtin with its address *)
-               if is_builtin_name v.org_vname then (mk_py_object (find_builtin v.org_vname) range)
+               if is_builtin_name @@ get_orig_vname v then (mk_py_object (find_builtin @@ get_orig_vname v) range)
                else mk_expr (E_py_undefined true) range
              in
              mk_assign (mk_var v range) e range
@@ -72,8 +64,11 @@ struct
     let flow1 = man.exec stmt flow in
 
     (** Initialize special variable __name__ *)
-    let v = mkv "__name__" "__name__" 0 T_any in
+    (* TODO: FIXME: __name__/__file__ is in gc, but not globals, so we're a bit stuck here. 140/141 seems to be the right constants **for now** *)
+    let v = Frontend.from_var {name="__name__"; uid=140} in
+    (* mkfresh (fun uid -> "__name__" ^ (string_of_int uid)) T_any () in *)
     let stmt =
+      let range = tag_range range "__name__ assignment" in
       mk_assign
         (mk_var v range)
         (mk_constant (Universal.Ast.C_string "__main__") ~etyp:Universal.Ast.T_string range)
@@ -82,8 +77,10 @@ struct
     let flow2 = man.exec stmt flow1 in
 
     (** Initialize special variable __file__ *)
-    let v = mkv "__file__" "__file__" 0 T_any in
+    (* let v = mkfresh (fun uid -> "__file__" ^ (string_of_int uid)) T_any () in *)
+    let v = Frontend.from_var {name="__file__"; uid=141} in
     let stmt =
+      let range = tag_range range "__file__ assignment" in
         mk_assign
           (mk_var v range)
           (mk_constant (Universal.Ast.C_string (get_range_file range)) ~etyp:Universal.Ast.T_string range)
@@ -94,7 +91,7 @@ struct
     flow3
 
 
-  let get_function_name fundec = fundec.py_func_var.org_vname
+  let get_function_name fundec = get_orig_vname fundec.py_func_var
 
   let is_test fundec =
     let name = get_function_name fundec in
@@ -102,7 +99,7 @@ struct
     else String.sub name 0 4 = "test"
 
   let get_test_functions body =
-    Framework.Visitor.fold_stmt
+    Visitor.fold_stmt
         (fun acc exp -> VisitParts acc)
         (fun acc stmt ->
            match skind stmt with
@@ -116,7 +113,7 @@ struct
   let mk_py_unit_tests tests range =
     let tests =
       tests |> List.map (fun test ->
-          (test.py_func_var.org_vname, {skind = S_expression (mk_py_call (mk_var test.py_func_var range) [] range); srange = range})
+          (get_orig_vname test.py_func_var, {skind = S_expression (mk_py_call (mk_var test.py_func_var range) [] range); srange = range})
         )
     in
     mk_stmt (Universal.Ast.S_unit_tests (tests)) range
@@ -124,15 +121,16 @@ struct
 
   let exec zone stmt man flow  =
     match skind stmt with
-    | S_program { prog_kind = Py_program(globals, body) }
+    | S_program ({ prog_kind = Py_program(globals, body) }, _)
       when not !Universal.Iterators.Unittest.unittest_flag ->
       (* Initialize global variables *)
       init_globals man globals (srange stmt) flow |>
       (* Execute the body *)
       man.exec body |>
-      Post.return
+      Post.return |>
+      Option.return
 
-    | S_program { prog_kind = Py_program(globals, body) }
+    | S_program ({ prog_kind = Py_program(globals, body) }, _)
       when !Universal.Iterators.Unittest.unittest_flag ->
       (* Initialize global variables *)
       let flow1 = init_globals man  globals (srange stmt) flow in
@@ -143,7 +141,8 @@ struct
       (* Collect test functions *)
       let tests = get_test_functions body in
       let stmt = mk_py_unit_tests tests (srange stmt) in
-      Post.return (man.exec stmt flow2)
+      Post.return (man.exec stmt flow2) |>
+      Option.return
 
 
     | _ -> None
@@ -153,4 +152,4 @@ struct
 end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)

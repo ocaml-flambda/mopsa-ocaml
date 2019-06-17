@@ -22,28 +22,49 @@
 (** Python standard library. *)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Addr
 open Ast
 open Universal.Ast
-
+open MapExt
 
 module Domain =
   struct
 
-    type _ domain += D_python_libs_stdlib : unit domain
+    include GenStatelessDomainId(struct
+        let name = "python.libs.stdlib"
+      end)
 
-    let id = D_python_libs_stdlib
-    let name = "python.libs.stdlib"
-    let identify : type a. a domain -> (unit, a) eq option = function
-      | D_python_libs_stdlib -> Some Eq
-      | _ -> None
+    let interface = {
+      iexec = { provides = []; uses = [Zone.Z_py] };
+      ieval = { provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj] }
+    }
 
-    let debug fmt = Debug.debug ~channel:name fmt
+    type stub_signature = {in_args: string list;
+                           out_type: Mopsa.typ}
+    type stub_db = stub_signature StringMap.t
 
-    let exec_interface = { export = []; import = [Zone.Z_py] }
-    let eval_interface = { export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj] }
+    let add_signature funname in_args out_type db =
+      let out_type = match out_type with
+        | "bool" -> T_bool
+        | "int" -> T_int
+        | "float" -> T_float F_DOUBLE
+        | "str" -> T_string
+        | "NoneType" -> T_py_none
+        | "NotImplementedType" -> T_py_not_implemented
+        | _ -> assert false in
+      StringMap.add funname {in_args; out_type} db
 
-    let init _ _ flow = Some flow
+    let stub_base =
+      StringMap.empty |>
+      add_signature "bin" ["int"] "str" |>
+      add_signature "chr" ["int"] "str" |>
+      add_signature "ord" ["str"] "int"
+
+    let process_simple man flow range exprs instances return =
+      Utils.check_instances man flow range exprs instances (fun _ flow -> man.eval (mk_py_top return range) flow)
+
+    let init _ _ flow = flow
 
     let exec _ _ _ _ = None
 
@@ -59,13 +80,13 @@ module Domain =
                man.eval (mk_py_type eobj range) flow |>
                  Eval.bind (fun cls' flow ->
                      let cls = object_of_expr cls' in
-                     Eval.assume
+                     assume_eval
                        (Utils.mk_object_hasattr cls "__iter__" range)
                        ~fthen:(fun true_flow ->
                          (* Call iter and check that it returns an object with an attribute __next__ *)
                          man.eval (mk_py_call (mk_py_object_attr cls "__iter__" range) [eobj] range) true_flow |>
                            Eval.bind (fun iter flow ->
-                               Eval.assume
+                               assume_eval
                                  (Utils.mk_hasattr iter "__next__" range)
                                  ~fthen:(fun true_flow -> Eval.singleton iter true_flow)
                                  ~felse:(fun false_flow ->
@@ -80,7 +101,7 @@ module Domain =
                        man flow
                    )
              )
-         |> OptionExt.return
+         |> Option.return
 
       (* Calls to len built-in function *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "len")}, _)},
@@ -91,13 +112,13 @@ module Domain =
                man.eval (mk_py_type eobj range) flow |>
                  Eval.bind (fun cls flow ->
                      let cls = object_of_expr cls in
-                     Eval.assume
+                     assume_eval
                        (Utils.mk_object_hasattr cls "__len__" range)
                        ~fthen:(fun true_flow ->
                          (* Call __len__ and check that it returns an integer *)
                          man.eval (mk_py_call (mk_py_object_attr cls "__len__" range) [eobj] range) true_flow |>
                            Eval.bind (fun len flow ->
-                               Eval.assume
+                               assume_eval
                                  (mk_py_isinstance_builtin len "int" range)
                                  ~fthen:(fun true_flow ->
                                    Eval.singleton len true_flow)
@@ -113,7 +134,7 @@ module Domain =
                        man flow
                    )
              )
-         |> OptionExt.return
+         |> Option.return
 
       (* Calls to built-in function next *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "next")}, _)},
@@ -124,10 +145,10 @@ module Domain =
                man.eval (mk_py_type eobj range) flow |>
                  Eval.bind (fun cls flow ->
                      let cls = object_of_expr cls in
-                     Eval.assume
+                     assume_eval
                        (Utils.mk_object_hasattr cls "__next__" range)
                        ~fthen:(fun true_flow ->
-                         man.eval (mk_py_call (mk_py_object_attr cls "__next__" range) [eobj] range) true_flow
+                         man.eval (mk_py_call (mk_py_object_attr cls "__next__" range) [obj] range) true_flow
                        )
                        ~felse:(fun false_flow ->
                          man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow |>
@@ -135,24 +156,24 @@ module Domain =
                        man flow
                    )
              )
-         |> OptionExt.return
+         |> Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "input")}, _)}, args, [])  ->
          let tyerror = fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
          if List.length args <= 1 then
-           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_string range) flow |> OptionExt.return
+           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_string range) flow |> Option.return
          else
-           tyerror flow |> OptionExt.return
+           tyerror flow |> Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "sum")}, _)} as call, [els], [])  ->
          let args' = els :: (mk_constant T_int (C_int (Z.of_int 0)) range) :: [] in
-         man.eval {exp with ekind = E_py_call(call, args', [])} flow |> OptionExt.return
+         man.eval {exp with ekind = E_py_call(call, args', [])} flow |> Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "sum")}, _)}, [ els; start ], [])  ->
       (* let's desugar sum into tmp = 0; for x in els: tmp = tmp + x; tmp *)
-         let counter = mktmp () in
+         let counter = mk_range_attr_var range "counter" T_any in
          let counter_var = mk_var counter range in
-         let target = mktmp () in
+         let target = mk_range_attr_var range "target" T_any in
          let target_var = mk_var target range in
          let assign = mk_assign counter_var (mk_constant T_int (C_int (Z.of_int 0)) range) range in
          let pass = mk_block [] range in
@@ -164,49 +185,102 @@ module Domain =
          man.exec stmt flow |>
            man.eval counter_var |>
            Eval.add_cleaners [mk_remove_var counter range; mk_remove_var target range] |>
-           OptionExt.return
+           Option.return
 
-      (* I prefer the version in typing.ml for now... *)
-      (* | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "max")}, _)}, [iterable], []) ->
-       *    (\* desugaring max(iterable) into:
-       *     *    tmp1 = iter(iterable)
-       *     *    max = next(tmp1)
-       *     *    for x in tmp1:
-       *     *        if x > max:
-       *     *            max = x *\)
-       *    let iter = mk_tmp () in
-       *    let iter_var = mk_var iter range in
-       *    let maxi = mk_tmp () in
-       *    let maxi_var = mk_var maxi range in
-       *    let target = mk_tmp () in
-       *    let target_var = mk_var target range in
-       *
-       *    let cleaners = List.map (fun x -> mk_remove_var x range) [iter; maxi; target] in
-       *    let pass = mk_block [] range in
-       *
-       *    let assign_iter = mk_assign iter_var (Utils.mk_builtin_call "iter" [iterable] range) range in
-       *    let assign_max =
-       *      Utils.mk_try_stopiteration
-       *        (mk_assign maxi_var (Utils.mk_builtin_call "next" [iter_var] range) range)
-       *        (Utils.mk_builtin_raise "ValueError" range)
-       *      range in
-       *    let for_stmt = mk_stmt (S_py_for (target_var, iter_var,
-       *                                      mk_if (mk_binop target_var O_gt maxi_var range)
-       *                                        (mk_assign maxi_var target_var range)
-       *                                        pass range
-       *                                      , pass)) range in
-       *    let stmt = mk_block (assign_iter :: assign_max :: for_stmt :: []) range in
-       *    debug "Rewriting %a into %a@\n" pp_expr exp pp_stmt stmt;
-       *    man.exec stmt flow |>
-       *      man.eval maxi_var |>
-       *      Eval.add_cleaners cleaners |>
-       *      OptionExt.return *)
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin s)}, _)}, [iterable], []) when s = "max" || s = "min" ->
+         (* desugaring max(iterable) into:
+          *    iter_var = iter(iterable)
+          *    maxi_var = next(iter_var)
+          *    for target_var in iter_var:
+          *        if target_var > maxi_var:
+          *            maxi_var = target_var *)
+        let comp_op = if s = "max" then O_gt else if s = "min" then O_lt else assert false in
+        let iter = mk_range_attr_var range "iter" T_any in
+        let iter_var = mk_var iter range in
+        let maxi = mk_range_attr_var range "extrema" T_any in
+        let maxi_var = mk_var maxi range in
+        let target = mk_range_attr_var range "target" T_any in
+        let target_var = mk_var target range in
+
+        let cleaners = List.map (fun x -> mk_remove_var x range) [iter; maxi; target] in
+        let pass = mk_block [] range in
+
+        let assign_iter = mk_assign iter_var (Utils.mk_builtin_call "iter" [iterable] range) range in
+        let assign_max =
+          Utils.mk_try_stopiteration
+            (mk_assign maxi_var (Utils.mk_builtin_call "next" [iter_var] range) range)
+            (Utils.mk_builtin_raise "ValueError" range)
+            range in
+        let for_stmt = mk_stmt (S_py_for (target_var, iter_var,
+                                          mk_if (mk_binop target_var comp_op maxi_var range)
+                                            (mk_assign maxi_var target_var range)
+                                            pass range
+                                         , pass)) range in
+        let stmt = mk_block (assign_iter :: assign_max :: for_stmt :: []) range in
+        debug "Rewriting %a into %a@\n" pp_expr exp pp_stmt stmt;
+        man.exec stmt flow |>
+        man.eval maxi_var |>
+        Eval.add_cleaners cleaners |>
+        Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "max")}, _)}, [e1; e2], []) ->
-         (* desugaring max(e1, e2) into if e1 > e2 then e1 else e2 *)
-         let expr = mk_expr (E_py_if (mk_binop e1 O_gt e2 range, e1, e2)) range in
-         debug "Rewriting %a into %a@\n" pp_expr exp pp_expr expr;
-         man.eval expr flow |> OptionExt.return
+        (* desugaring max(e1, e2) into if e1 > e2 then e1 else e2 *)
+        let expr = mk_expr (E_py_if (mk_binop e1 O_gt e2 range, e1, e2)) range in
+        debug "Rewriting %a into %a@\n" pp_expr exp pp_expr expr;
+        man.eval expr flow |> Option.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "print")}, _)}, [], [])  ->
+        man.eval (mk_py_none range) flow
+        |> Option.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "print")}, _)}, [obj], [])  ->
+        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) obj flow |>
+        Eval.bind (fun eobj flow ->
+            man.eval (mk_py_none range) flow)
+        |> Option.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "hash")}, _)}, args, []) ->
+        let tyerror = fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
+        Eval.eval_list man.eval args flow |>
+        Eval.bind (fun eargs flow ->
+            if List.length eargs <> 1 then tyerror flow else
+              let el = List.hd eargs in
+              man.eval (mk_py_call (mk_py_object_attr (object_of_expr el) "__hash__" range) [] range) flow
+          )
+        |> Option.return
+
+
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, args, []) when StringMap.mem f stub_base ->
+        debug "function %s in stub_base, processing@\n" f;
+        let {in_args; out_type} = StringMap.find f stub_base in
+        process_simple man flow range args in_args out_type
+        |> Option.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "sorted")}, _)}, [obj], [])  ->
+        (* todo: call list on obj first *)
+        let seq = mk_range_attr_var range "sorted" T_any in
+        let flow = man.exec (mk_assign (mk_var seq range) obj range) flow in
+        man.eval (Utils.mk_builtin_call "list.sort" [mk_var seq range] range) flow |>
+        Eval.bind (fun _ flow ->
+            man.eval (mk_var seq range) flow |>
+            Eval.add_cleaners [mk_remove_var seq range]
+          )
+        |> Option.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_class (C_builtin "reversed", _)}, _)}, args, [])  ->
+        (* Utils.check_instances man flow range args ["list"]
+         *   (fun eargs flow ->
+         *      let hd = List.hd eargs in *)
+        man.eval (Utils.mk_builtin_call "list.__reversed__" args range) flow
+        |> Option.return
+
+
+
+      (* | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "bin")}, _)}, args, [])  ->
+       *   Utils.check_instances man flow range args ["int"]
+       *     (fun _ flow -> man.eval (mk_py_top T_string range) flow)
+       *   |> Option.return *)
 
       | _ ->
          None
@@ -215,4 +289,4 @@ module Domain =
 
   end
 
-let () = Framework.Domains.Stateless.register_domain (module Domain)
+let () = Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)

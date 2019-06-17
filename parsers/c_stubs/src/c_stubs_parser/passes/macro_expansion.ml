@@ -25,9 +25,33 @@ open Cst
 open Location
 module M = MapExt.StringMap
 
+
 let debug fmt = Debug.debug ~channel:"c_stubs.passes.macro_expansion" fmt
 
-let rec visit_expr macros enums expr =
+
+let is_macro macro macros =
+  try
+    let body = M.find macro macros in
+    body <> macro
+  with Not_found ->
+    false
+
+
+let rec expand_macro_to_expr macro range macros enums =
+  let lexeme = M.find macro macros in
+  let lexbuf = Lexing.from_string lexeme in
+  let e' = Parser.parse_expr Lexer.read lexbuf in
+  visit_expr macros enums (with_range e' range)
+
+
+and expand_macro_to_type macro macros enums =
+  let lexeme = M.find macro macros in
+  let lexbuf = Lexing.from_string lexeme in
+  let t = Parser.parse_type Lexer.read lexbuf in
+  visit_type macros enums t
+
+
+and visit_expr macros enums expr =
   bind_range expr @@ fun e ->
   match e with
   | E_int _ | E_float _ | E_invalid
@@ -38,11 +62,9 @@ let rec visit_expr macros enums expr =
     let value = M.find v.vname enums in
     E_int (value, NO_SUFFIX)
 
-  | E_var v when M.mem v.vname macros ->
-    let lexeme = M.find v.vname macros in
-    let lexbuf = Lexing.from_string lexeme in
-    let e' = Parser.parse_expr Lexer.read lexbuf in
-    get_content @@ visit_expr macros enums (with_range e' expr.range)
+  | E_var v when is_macro v.vname macros ->
+    expand_macro_to_expr v.vname expr.range macros enums |>
+    get_content
 
   | E_var v ->
     E_var v
@@ -66,6 +88,7 @@ let rec visit_expr macros enums expr =
 
   | E_cast (t, e) ->
     let e = visit_expr macros enums e in
+    let t = visit_type macros enums t in
     E_cast (t, e)
 
   | E_subscript (a, i) ->
@@ -89,22 +112,27 @@ let rec visit_expr macros enums expr =
     let arg = visit_expr macros enums arg in
     E_builtin_call (f, arg)
 
-  | E_sizeof_var v when M.mem v.content.vname macros ->
-    let lexeme = M.find v.content.vname macros in
-    let lexbuf = Lexing.from_string lexeme in
-    let e' = Parser.parse_expr Lexer.read lexbuf in
-    let e' = visit_expr macros enums (with_range e' v.range) in
-    E_sizeof_expr e'
-
-  | E_sizeof_var v ->
-    E_sizeof_var v
-
   | E_sizeof_type t ->
-    E_sizeof_type t
+    let tt = visit_type macros enums t.content in
+    E_sizeof_type (with_range tt t.range)
 
   | E_sizeof_expr e ->
     let e = visit_expr macros enums e in
     E_sizeof_expr e
+
+
+and visit_type macros enums ((typ,qual):c_qual_typ) =
+  match typ with
+  | T_typedef v when is_macro v.vname macros ->
+    let (typ',_) = expand_macro_to_type v.vname macros enums in
+    (typ',qual)
+
+  | T_pointer tt -> T_pointer (visit_type macros enums tt),qual
+
+  | T_array (tt,len) -> T_array (visit_type macros enums tt,len),qual
+
+  | _ -> (typ,qual)
+
 
 let visit_set macros enums set =
   match set with
@@ -114,6 +142,7 @@ let visit_set macros enums set =
     S_interval(e1, e2)
 
   | S_resource r -> S_resource r
+
 
 let rec visit_formula macros enums formula =
   bind_range formula @@ fun f ->
@@ -163,11 +192,11 @@ let visit_free macros enums free =
   bind_range free @@ visit_expr macros enums
 
 let visit_local macros enums local =
-  bind_range local @@ fun local -> {
-    lvar = local.lvar;
-    ltyp = local.ltyp;
+  bind_range local @@ fun l -> {
+    lvar = l.lvar;
+    ltyp = visit_type macros enums l.ltyp;
     lval =
-      match local.lval with
+      match l.lval with
       | L_new r -> L_new r
       | L_call(f, args) -> L_call(f, List.map (visit_expr macros enums) args)
   }

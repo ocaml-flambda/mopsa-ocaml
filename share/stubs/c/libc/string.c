@@ -136,6 +136,22 @@ int memcmp (const void *__s1, const void *__s2, size_t __n);
  */
 void *memchr (const void *__s, int __c, size_t __n);
 
+
+/*$
+ * requires: exists int i in [0, size(__s) - 1]: (unsigned char*)__s[i] == __c;
+ * ensures:  exists int i in [0, size(__s) - 1]: (
+ *             (unsigned char*)__s[i] == __c and
+ *             forall int j in [0, i - 1]: (unsigned char*)__s[i] != __c and
+ *             return == (unsigned char*)__s + i
+ *           );
+ */
+void *rawmemchr (const void *__s, int __c);
+
+/*$
+ * alias: rawmemchr;
+ */
+void *__rawmemchr (const void *__s, int __c);
+
 #ifdef __USE_GNU
 
 /*$
@@ -354,7 +370,6 @@ size_t strxfrm_l (char *__dest, const char *__src, size_t __n, locale_t __l);
 
 #endif
 
-#if defined __USE_XOPEN_EXTENDED || defined __USE_XOPEN2K8
 
 /*$
  * local: size_t len = strlen(__s);
@@ -373,7 +388,11 @@ size_t strxfrm_l (char *__dest, const char *__src, size_t __n, locale_t __l);
  */
 char *strdup (const char *__s);
 
-#endif
+/*$
+ * alias: strdup;
+ */
+char *__strdup (const char *__s);
+
 
 #if defined __USE_XOPEN2K8
 

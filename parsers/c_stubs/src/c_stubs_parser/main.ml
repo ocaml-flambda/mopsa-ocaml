@@ -97,31 +97,48 @@ let parse_function_comment
       Exceptions.unnamed_syntax_error range
 
 
-(** Parse the stub specification from comments of a variable *)
-let parse_var_comment
-  (var:C_AST.variable)
-  (prj:C_AST.project)
-  (macros:string MapExt.StringMap.t)
-  (enums:Z.t MapExt.StringMap.t)
-  (preds:Cst.predicate with_range list)
-  (stubs:(string,Cst.stub) Hashtbl.t)
+
+(** Check whether a comment is a stub directive *)
+let is_directive com =
+  match com with
+  | [com] ->
+    let comment = com.Clang_AST.com_text |>
+                  String.trim
+    in
+    let lexeme = "/*$$$" in
+    String.length comment > String.length lexeme &&
+    lexeme = String.sub comment 0 (String.length lexeme)
+
+  | _ -> false
+
+
+
+(** Parse comment of a stub directive *)
+let parse_directive_comment
+    (com:Clang_AST.comment list)
+    (range:Clang_AST.range)
+    (prj:C_AST.project)
+    (macros:string MapExt.StringMap.t)
+    (enums:Z.t MapExt.StringMap.t)
+    (preds:Cst.predicate with_range list)
+    (stubs:(string,Cst.stub) Hashtbl.t)
   : Ast.stub option
   =
   (* Create a dummy init function *)
   let func = C_AST.{
-    func_uid = 0;
-    func_org_name = "$init_" ^ var.var_org_name;
-    func_unique_name = "$init_" ^ var.var_unique_name;
-    func_is_static = false;
-    func_return = var.var_type;
-    func_parameters = [||];
-    func_body = None;
-    func_static_vars = [];
-    func_local_vars = [];
-    func_variadic = false;
-    func_range = var.var_range;
-    func_com = var.var_com;
-  }
+      func_uid = 0;
+      func_org_name = "$directive";
+      func_unique_name = "$directive";
+      func_is_static = false;
+      func_return = C_AST.T_void, C_AST.no_qual;
+      func_parameters = [||];
+      func_body = None;
+      func_static_vars = [];
+      func_local_vars = [];
+      func_variadic = false;
+      func_range = range;
+      func_com = com;
+    }
   in
   parse_function_comment func prj macros enums preds stubs
 
@@ -134,8 +151,8 @@ let is_global_predicate com =
                   String.trim
     in
     let lexeme = "/*$$" in
-    let start = String.sub comment 0 (String.length lexeme) in
-    start = lexeme
+    String.length comment > String.length lexeme &&
+    lexeme = String.sub comment 0 (String.length lexeme)
 
   | _ -> false
 
@@ -162,7 +179,7 @@ let parse_global_predicate_comment com =
     (* Parse the comment *)
     try
       let cst = Parser.parse_stub Lexer.read buf in
-      OptionExt.option_dfl1 [] (fun cst ->
+      Option.apply [] (fun cst ->
           List.fold_left (fun acc section ->
               match section with
               | Cst.S_predicate pred -> pred :: acc

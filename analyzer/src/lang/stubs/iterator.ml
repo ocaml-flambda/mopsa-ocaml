@@ -22,6 +22,7 @@
 (** Inter-procedural iterator of stubs by inlining. *)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Universal.Ast
 open Ast
 open Zone
@@ -30,47 +31,82 @@ open Alarms
 module Domain =
 struct
 
-
-  (** Domain identification *)
-  (** ===================== *)
-
-  type _ domain += D_stubs_iterator : unit domain
-
-  let id = D_stubs_iterator
-  let name = "stubs.iterator"
-  let identify : type a. a domain -> (unit, a) eq option =
-    function
-    | D_stubs_iterator -> Some Eq
-    | _ -> None
-
-  let debug fmt = Debug.debug ~channel:name fmt
-
+  include GenStatelessDomainId(struct
+      let name = "stubs.iterator"
+    end)
 
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {export = [Z_stubs]; import = []}
-  let eval_interface = {export = [Z_stubs, Z_any]; import = []}
+  let interface = {
+    iexec = {provides = [Z_stubs]; uses = []};
+    ieval = {provides = [Z_stubs, Z_any]; uses = []};
+  }
 
 
   (** Initialization of environments *)
   (** ============================== *)
 
-  let init prog man flow = None
+  let init prog man flow = flow
 
 
   (** Evaluation of expressions *)
   (** ========================= *)
 
+  let negate_log_binop : log_binop -> log_binop = function
+  | AND -> OR
+  | OR -> AND
+  | IMPLIES -> assert false
+
+    (** Negate a formula *)
+  let rec negate_formula (f:formula with_range) : formula with_range =
+    match f.content with
+    | F_expr e ->
+      with_range (F_expr (mk_not e e.erange)) f.range
+
+    | F_binop (IMPLIES, f1, f2) ->
+      with_range (
+        F_binop (
+          AND,
+          f1,
+          negate_formula f2
+        )) f.range
+
+   | F_binop (op, f1, f2) ->
+     with_range (F_binop (
+         negate_log_binop op,
+         negate_formula f1,
+         negate_formula f2
+       )) f.range
+
+    | F_not f -> f
+
+    | F_forall (var, set, ff) ->
+      with_range (F_exists (
+          var,
+          set,
+          negate_formula ff
+        )) f.range
+
+    | F_exists (var, set, ff) ->
+      with_range (F_forall (
+          var,
+          set,
+          negate_formula ff
+        )) f.range
+
+    | F_in (_, _) -> panic "negation of ∈ not supported"
+
+
   (** Evaluate a formula into a disjunction of two flows, depending on
-     its truth value *)
+      its truth value *)
   let rec eval_formula
       (f: formula with_range)
       ~(negate: bool)
       (man:('a, unit) man)
       (flow:'a flow)
     : 'a flow * 'a flow option =
-    debug "eval formula %a@\n%a" pp_formula f (Flow.print man) flow;
+    debug "@[<v 2>eval formula %a@;in %a" pp_formula f (Flow.print man.lattice) flow;
     match f.content with
     | F_expr e ->
       man.exec (mk_assume e f.range) flow,
@@ -83,7 +119,7 @@ struct
       let ffalse =
         match negate, ffalse1, ffalse2 with
         | false, None, None      -> None
-        | true, Some f1, Some f2 -> Some (Flow.join man f1 f2)
+        | true, Some f1, Some f2 -> Some (Flow.join man.lattice f1 f2)
         | _ -> assert false
       in
 
@@ -93,12 +129,12 @@ struct
       let ftrue1, ffalse1 = eval_formula f1 ~negate man flow in
       let ftrue2, ffalse2 = eval_formula f2 ~negate man flow in
 
-      let ftrue = Flow.join man ftrue1 ftrue2 in
+      let ftrue = Flow.join man.lattice ftrue1 ftrue2 in
 
       let ffalse =
         match negate, ffalse1, ffalse2 with
         | false, None, None      -> None
-        | true, Some f1, Some f2 -> Some (Flow.meet man f1 f2)
+        | true, Some f1, Some f2 -> Some (Flow.meet man.lattice f1 f2)
         | _ -> assert false
       in
 
@@ -107,23 +143,18 @@ struct
 
     | F_binop (IMPLIES, f1, f2) ->
       let ftrue1, ffalse1 = eval_formula f1 ~negate:true man flow in
-      let ffalse1 = OptionExt.none_to_exn ffalse1 in
+      let ffalse1 = Option.none_to_exn ffalse1 in
 
       let ftrue2, ffalse2 = eval_formula f2 ~negate man ftrue1 in
 
-      let ftrue = Flow.join man ffalse1 ftrue2 in
+      let ftrue = Flow.join man.lattice ffalse1 ftrue2 in
 
       ftrue, ffalse2
-      
+
 
     | F_not ff ->
-      let ftrue, ffalse = eval_formula ff ~negate:true man flow in
-
-      begin match negate, ffalse with
-        | false, Some f -> f, None
-        | true, Some f  -> f, Some ftrue
-        | _ -> assert false
-      end
+      let ff' = negate_formula ff in
+      eval_formula ff' ~negate man flow
 
     | F_forall (v, s, ff) -> eval_quantified_formula FORALL v s ff ~negate f.range man flow
     | F_exists (v, s, ff) -> eval_quantified_formula EXISTS v s ff ~negate f.range man flow
@@ -135,9 +166,10 @@ struct
         else Some (
             man.exec (mk_assume (
                 mk_binop
-                  (mk_binop e O_lt l f.range)
+                  (mk_binop e O_lt l ~etyp:T_bool f.range)
                   O_log_or
-                  (mk_binop e O_gt u f.range)
+                  (mk_binop e O_gt u ~etyp:T_bool f.range)
+                  ~etyp:T_bool
                   f.range
               ) f.range) flow
           )
@@ -164,24 +196,27 @@ struct
     let flow =
       match s, q with
       | S_interval (l, u), EXISTS ->
-        man.exec (mk_assume (mk_binop (mk_var v range) O_ge l range) range) flow |>
-        man.exec (mk_assume (mk_binop (mk_var v range) O_le u range) range)
+        man.exec (mk_assume (mk_binop (mk_var v range) O_ge l ~etyp:T_bool range) range) flow |>
+        man.exec (mk_assume (mk_binop (mk_var v range) O_le u ~etyp:T_bool range) range)
 
       | _ -> flow
     in
 
 
-    (* Replace [v] in [ff] with a quantified expression *)
+    (* Replace [v] in [ff] with a quantified expression in case of ∀ quantifier *)
     let ff1 =
-      visit_expr_in_formula
-        (fun e ->
-           match ekind e with
-           | E_var (vv, _) when compare_var v vv = 0 ->
-             Keep { e with ekind = E_stub_quantified (q, v, s) }
+      match q with
+      | EXISTS -> f
+      | FORALL ->
+        visit_expr_in_formula
+          (fun e ->
+             match ekind e with
+             | E_var (vv, _) when compare_var v vv = 0 ->
+               Keep { e with ekind = E_stub_quantified (FORALL, v, s) }
 
-           | _ -> VisitParts e
-        )
-        f
+             | _ -> VisitParts e
+          )
+          f
     in
 
     let ftrue, _ = eval_formula ff1 ~negate:false man flow in
@@ -195,15 +230,15 @@ struct
     let ffalse =
       if not negate then None
       else
-        let ff = with_range (F_not ff1) f.range in
+        let ff = negate_formula ff1 in
         let flip_var_quant f =
           visit_expr_in_formula
             (fun e ->
                match ekind e with
                | E_stub_quantified(FORALL, vv, s) when compare_var v vv = 0 ->
-                 VisitParts { e with ekind = E_stub_quantified(EXISTS, v, s) }
+                 VisitParts { e with ekind = E_var(vv, STRONG) }
 
-               | E_stub_quantified(EXISTS, vv, s) when compare_var v vv = 0 ->
+               | E_stub_quantified(EXISTS, vv, _) when compare_var v vv = 0 ->
                  VisitParts { e with ekind = E_stub_quantified(FORALL, v, s) }
 
                | _ -> VisitParts e
@@ -221,29 +256,6 @@ struct
     in
 
     ftrue, ffalse
-
-  (* We need to compute a fixpoint of a formula evaluation *)
-  let eval_formula_fixpoint f ~negate man flow =
-    debug "eval formula fixpoint %a" pp_formula f;
-    let rec lfp (flow: 'a flow) (neg: 'a flow option) : 'a flow * 'a flow option =
-      debug "fixpoint iteration";
-      let flow1, neg1 = eval_formula f ~negate man flow in
-      let flow1' = Flow.meet man flow flow1 in
-      let neg1' = (OptionExt.option_neutral2 (Flow.join man) neg neg1) in
-      debug "fixpoint iteration done:@\n input: @[%a@]@\n neg: @[%a@]@\n output: @[%a@]@\n neg': @[%a@]"
-        (Flow.print man) flow
-        (OptionExt.print (Flow.print man)) neg
-        (Flow.print man) flow1'
-        (OptionExt.print (Flow.print man)) neg1'
-      ;
-      if Flow.subset man flow flow1' then
-        flow1', neg1'
-      else
-        lfp flow1' neg1'
-    in
-    (* Unroll one time *)
-    let flow, neg = eval_formula f ~negate man flow in
-    lfp flow neg
 
 
 
@@ -263,28 +275,39 @@ struct
 
   (** Evaluate the formula of the `assumes` section *)
   let exec_assumes assumes man flow =
-    let ftrue, _ = eval_formula_fixpoint assumes.content ~negate:false man flow in
+    let ftrue, _ = eval_formula assumes.content ~negate:false man flow in
     ftrue
-  
+
   (** Evaluate the formula of the `requires` section and add the eventual alarms *)
   let exec_requires req man flow =
-    let ftrue, ffalse = eval_formula_fixpoint req.content ~negate:true man flow in
+    let ftrue, ffalse = eval_formula req.content ~negate:true man flow in
     match ffalse with
-    | Some ffalse when Flow.is_bottom man ffalse ->
+    | Some ffalse when Flow.is_bottom man.lattice ffalse ->
       ftrue
 
     | Some ffalse ->
-      raise_alarm A_stub_invalid_require req.range ~bottom:true man ffalse |>
-      Flow.join man ftrue
+      raise_alarm A_stub_invalid_require req.range ~bottom:true man.lattice ffalse |>
+      Flow.join man.lattice ftrue
 
     | _ -> assert false
 
 
   (** Execute an allocation of a new resource *)
   let exec_local_new v res range man flow =
+    (* Evaluation the allocation request *)
     man.eval (mk_stub_alloc_resource res range) flow |>
-    Post.bind_flow man @@ fun addr flow ->
+    exec_eval man @@ fun addr flow ->
+
+    (* Add the address dimension before doing the assignment *)
+    let flow =
+      match ekind addr with
+      | E_addr _ -> man.exec (mk_add addr range) flow
+      | _ -> flow
+    in
+
+    (* Assign the address to the variable *)
     man.exec (mk_assign (mk_var v range) addr range) flow
+
 
   (** Execute a function call *)
   (* FIXME: check the purity of f *)
@@ -303,24 +326,30 @@ struct
 
 
   let exec_ensures e return man flow =
-    debug "exec %a" pp_ensures e;
     (* Replace E_stub_return expression with the fresh return variable *)
     let f =
       match return with
-      | None -> debug "none"; e.content
+      | None -> e.content
       | Some v ->
-        debug "replace return with %a" pp_var v;
         visit_expr_in_formula
           (fun e ->
              match ekind e with
-             | E_stub_return -> debug "real replace";Keep { e with ekind = E_var (v, STRONG) }
+             | E_stub_return -> Keep { e with ekind = E_var (v, STRONG) }
              | _ -> VisitParts e
           )
           e.content
     in
     (* Evaluate ensure body and return flows that verify it *)
-    let ftrue, _ = eval_formula_fixpoint f ~negate:false man flow in
+    let ftrue, _ = eval_formula f ~negate:false man flow in
     ftrue
+
+
+  let exec_assigns assigns man flow =
+    man.exec (mk_stub_assigns
+                assigns.content.assign_target
+                assigns.content.assign_offset
+                assigns.range
+             ) flow
 
 
   (** Remove locals and old copies of assigned variables *)
@@ -351,11 +380,11 @@ struct
     | S_local local -> exec_local local man flow
     | S_assumes assumes -> exec_assumes assumes man flow
     | S_requires requires -> exec_requires requires man flow
-    | S_assigns _ -> flow
+    | S_assigns assigns -> exec_assigns assigns man flow
     | S_ensures ensures -> exec_ensures ensures return man flow
     | S_free free -> exec_free free man flow
     | S_warn warn ->
-      if not (Flow.is_cur_bottom man flow)
+      if not (Flow.get T_cur man.lattice flow |> man.lattice.is_bottom)
       then Exceptions.warn_at warn.range "%s" warn.content;
       flow
 
@@ -372,7 +401,7 @@ struct
     in
     flow'
 
-  
+
   (** Execute the body of a stub *)
   let exec_body body return man flow =
     (* Execute leaf sections *)
@@ -388,7 +417,7 @@ struct
         match section with
         | S_case case -> Some (exec_case case return man flow)
         | _ -> None
-      ) flow body
+      ) body flow
     in
 
     (* Join flows *)
@@ -397,8 +426,8 @@ struct
     | _ ->
       (* FIXME: when the cases do not define a partitioning, we need
          to do something else *)
-      Flow.join_list man flows
-      
+      Flow.join_list man.lattice ~ctx:(Flow.get_ctx flow) flows
+
 
   (** Entry point of expression evaluations *)
   let eval zone exp man flow =
@@ -441,11 +470,11 @@ struct
       begin match return with
         | None ->
           Eval.empty_singleton flow |>
-          Eval.return
+          Option.return
 
         | Some v ->
           Eval.singleton (mk_var v exp.erange) flow ~cleaners:[mk_remove_var v exp.erange] |>
-          Eval.return
+          Option.return
       end
 
     | _ -> None
@@ -456,18 +485,19 @@ struct
 
   let exec zone stmt man flow =
     match skind stmt with
-    | S_stub_init (v, stub) ->
-      (* Evaluate the body of the styb *)
-      let flow = exec_body stub.stub_init_body (Some v) man flow in
+    | S_stub_directive (stub) ->
+      (* Evaluate the body of the stub *)
+      let flow = exec_body stub.stub_directive_body None man flow in
 
       (* Clean locals and primes *)
-      let flow = clean_post stub.stub_init_locals [] stub.stub_init_range man flow in
+      let flow = clean_post stub.stub_directive_locals stub.stub_directive_assigns stub.stub_directive_range man flow in
 
-      Post.return flow
+      Post.return flow |>
+      Option.return
 
     | _ -> None
 
-  
+
   (** Handler of queries *)
   (** ================== *)
 
@@ -476,4 +506,4 @@ struct
 end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  register_domain (module Domain)

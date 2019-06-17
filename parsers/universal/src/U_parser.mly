@@ -110,6 +110,15 @@
 %start<U_ast.prog> file
 
 
+/* entry-points for AST fragments (useful for REPL) */
+/****************************************************/
+
+%start<U_ast.declaration> declaration_eof
+%start<U_ast.fundec> fundec_eof
+%start<U_ast.stat> stat_eof
+%start<U_ast.expr> expr_eof
+
+
 %%
 
 
@@ -303,8 +312,8 @@ fundec:
 prog:
 | st=ext(block_no_curly)
        {{gvars = []; funs = [] ; main = st}}
-| d=ext(declaration) prg=prog {let () = print_string "adding declaration\n" in flush_all () ; add_declaration d prg}
-| d=ext(declaration) TOK_SEMICOLON prg=prog {let () = print_string "adding declaration\n" in flush_all () ; add_declaration d prg}
+| d=ext(declaration) prg=prog {add_declaration d prg}
+| d=ext(declaration) TOK_SEMICOLON prg=prog {add_declaration d prg}
 | d=ext(fundec) prg=prog {add_fundec d prg}
 | d=ext(fundec) TOK_SEMICOLON prg=prog {add_fundec d prg}
 
@@ -315,5 +324,20 @@ prog:
 %inline ext(X):
 | x=X { x, Location.from_lexing_range $startpos $endpos }
 
+
+/* rules for AST fragments */
+/***************************/
+
+expr_eof:
+| expr TOK_EOF { $1 }
+
+stat_eof:
+| stat TOK_EOF { $1 }
+
+declaration_eof:
+| declaration TOK_EOF { $1 }
+
+fundec_eof:
+| fundec TOK_EOF { $1 }
 
 %%

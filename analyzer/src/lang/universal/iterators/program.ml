@@ -22,34 +22,30 @@
 (** Main handler of Universal programs. *)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Ast
 open Zone
 
 module Domain =
 struct
 
-  type _ domain += D_universal_program : unit domain
+  include GenStatelessDomainId(struct
+      let name = "universal.iterators.program"
+    end)
 
-  let id = D_universal_program
-  let name = "universal.iterators.program"
-  let identify : type a. a domain -> (unit, a) eq option =
-    function
-    | D_universal_program -> Some Eq
-    | _ -> None
+  let interface = {
+    iexec = { provides = [Z_u]; uses = [] };
+    ieval = { provides = []; uses = [] };
+  }
 
-  let debug fmt = Debug.debug ~channel:name fmt
-
-  let exec_interface = {export = [Z_u]; import = []}
-  let eval_interface = {export = []; import = []}
-
-  let init prog man flow = None
+  let init prog man flow = flow
 
   let exec zone stmt man flow =
     match skind stmt with
-    | S_program { prog_kind = P_universal{universal_main} } ->
+    | S_program ({ prog_kind = P_universal{universal_main} }, _) ->
       Some (
         man.exec universal_main flow |>
-        Post.of_flow
+        Post.return
       )
 
     | _ -> None
@@ -61,4 +57,4 @@ struct
 end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  register_domain (module Domain)

@@ -67,11 +67,9 @@
 %token REQUIRES LOCAL ASSIGNS CASE ASSUMES ENSURES PREDICATE WARN ALIAS
 %token TRUE FALSE
 %token FORALL EXISTS IN NEW
-%token FREE PRIMED RETURN SIZE SIZEOF OFFSET BASE PTR_VALID
-%token FLOAT_VALID FLOAT_INF FLOAT_NAN
+%token FREE PRIMED RETURN SIZE BYTES SIZEOF_TYPE SIZEOF_EXPR OFFSET BASE VALID_PTR
+%token VALID_FLOAT FLOAT_INF FLOAT_NAN
 
-(* Deprecated *)
-%token OLD
 
 (* Types *)
 %token VOID CHAR INT LONG FLOAT DOUBLE SHORT
@@ -105,9 +103,11 @@
 
 %start parse_stub
 %start parse_expr
+%start parse_type
 
 %type <Cst.stub option> parse_stub
 %type <Cst.expr> parse_expr
+%type <Cst.c_qual_typ> parse_type
 
 %%
 
@@ -117,6 +117,9 @@ parse_stub:
 
 parse_expr:
   | expr EOF { $1 }
+
+parse_type:
+  | c_qual_typ EOF { $1 }
 
 (* Sections *)
 section_list:
@@ -266,9 +269,8 @@ expr:
   | with_range(expr) COLON IDENT                      { E_attribute ($1, $3) }
   | with_range(expr) ARROW IDENT                      { E_arrow ($1, $3) }
   | RETURN                                            { E_return }
-  | SIZEOF LPAR with_range(var) RPAR                  { E_sizeof_var $3 }
-  | SIZEOF LPAR with_range(c_qual_typ) RPAR           { E_sizeof_type $3 }
-  | SIZEOF LPAR with_range(expr) RPAR                 { E_sizeof_expr $3 }
+  | SIZEOF_TYPE LPAR with_range(c_qual_typ) RPAR           { E_sizeof_type $3 }
+  | SIZEOF_EXPR LPAR with_range(expr) RPAR                 { E_sizeof_expr $3 }
   | builtin LPAR with_range(expr) RPAR                { E_builtin_call ($1, $3) }
   | with_range(expr) PRIME                            { E_builtin_call (PRIMED, $1) }
 
@@ -345,15 +347,14 @@ set:
 
 %inline builtin:
   | SIZE   { SIZE }
+  | BYTES  { BYTES }
   | OFFSET { OFFSET }
   | BASE   { BASE }
   | PRIMED { PRIMED }
-  | PTR_VALID { PTR_VALID }
-  | FLOAT_VALID { FLOAT_VALID }
+  | VALID_PTR { VALID_PTR }
+  | VALID_FLOAT { VALID_FLOAT }
   | FLOAT_INF   { FLOAT_INF }
   | FLOAT_NAN   { FLOAT_NAN }
-  (* Deprecated *)
-  | OLD    { OLD }
 
 args:
   |                             { [] }

@@ -45,6 +45,7 @@ type typ +=
   | T_py_complex
   | T_py_none
   | T_py_empty
+  | T_py_bytes
 
 
 (*==========================================================================*)
@@ -67,6 +68,7 @@ type operator +=
   | O_py_in (** in *)
   | O_py_not_in (** not in *)
   | O_py_mat_mult (** @ *)
+  | O_py_not
 
 
 let is_arith_op = function
@@ -120,12 +122,12 @@ let is_arith_binop_fun cl str =
     | _ -> false
 
 let is_comp_op = function
-  | Framework.Ast.O_eq
-  | Framework.Ast.O_ne
-  | Framework.Ast.O_lt
-  | Framework.Ast.O_le
-  | Framework.Ast.O_gt
-  | Framework.Ast.O_ge -> true
+  | O_eq
+  | O_ne
+  | O_lt
+  | O_le
+  | O_gt
+  | O_ge -> true
   | _ -> false
 
 let is_compare_op_fun cl str =
@@ -219,6 +221,7 @@ type py_fundec = {
   py_func_is_generator: bool; (** is the function a generator? *)
   py_func_decors: expr list;
   py_func_range: range; (** range of the function *)
+  py_func_ret_var: var
 }
 
 (** A Python class *)
@@ -259,6 +262,9 @@ type stmt_kind +=
 
   (** exception instance *)
   | S_py_raise of expr option
+
+  (** if condition *)
+  | S_py_if of expr (*t test *) * stmt (* then *) * stmt (* else *)
 
   (** while loops. *)
   | S_py_while of expr (* test *) * stmt (* body *) * stmt (* orelse *)

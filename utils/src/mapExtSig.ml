@@ -1,4 +1,4 @@
-(*  
+(*
   This file is derived from the map.mli file from the OCaml distribution.
   Changes are marked with the [MOPSA] symbol.
 
@@ -50,7 +50,7 @@ type map_printer = {
 (** [MOPSA] Tells how to print a map. *)
 
 
-  
+
 module type S =
   sig
     type key
@@ -84,6 +84,8 @@ module type S =
     (** [remove x m] returns a map containing the same bindings as
        [m], except for [x] which is unbound in the returned map. *)
 
+    val remove_min_binding : 'a t -> 'a t
+
     val merge:
          (key -> 'a option -> 'b option -> 'c option) -> 'a t -> 'b t -> 'c t
     (** [merge f m1 m2] computes a map whose keys is a subset of keys of [m1]
@@ -94,7 +96,7 @@ module type S =
 
     val compare: ('a -> 'a -> int) -> 'a t -> 'a t -> int
     (** Total ordering between maps.  The first argument is a total ordering
-        used to compare data associated with equal keys in the two maps. 
+        used to compare data associated with equal keys in the two maps.
        We assume implicitly that [cmp x x] always returns 0.
      *)
 
@@ -102,7 +104,7 @@ module type S =
     (** [equal cmp m1 m2] tests whether the maps [m1] and [m2] are
        equal, that is, contain equal keys and associate them with
        equal data.  [cmp] is the equality predicate used to compare
-       the data associated with the keys. 
+       the data associated with the keys.
        We assume implicitly that [cmp x x] always returns [true].
      *)
 
@@ -117,7 +119,7 @@ module type S =
        where [k1 ... kN] are the keys of all bindings in [m]
        (in increasing order), and [d1 ... dN] are the associated data. *)
 
-    val for_all: (key -> 'a -> bool) -> 'a t -> bool        
+    val for_all: (key -> 'a -> bool) -> 'a t -> bool
     (* [MOPSA] now guarantees the evaluation order *)
     (** [for_all p m] checks if all the bindings of the map
         satisfy the predicate [p].
@@ -210,7 +212,7 @@ module type S =
 
 
     (* [MOPSA] additions *)
-   
+
     (** {2 Additional functions} *)
 
     val of_list: (key * 'a) list -> 'a t
@@ -262,11 +264,11 @@ module type S =
         side-effect free and idem-potent ([f k a a = a]).
         [m1] and [m2] must have the same key sets.
         The bindings are passed to [f] in increasing order of keys. *)
-  
+
     val iter2z: (key -> 'a -> 'a -> unit) -> 'a t -> 'a t -> unit
      (** [iter2z f m1 m2] is similar to [iter2 f m1 m2], but physically
         equal subtrees are ignored.
-        This is more efficient than [iter2], and equivalent if 
+        This is more efficient than [iter2], and equivalent if
         [f k a a] has no effect.
         [m1] and [m2] must have the same key sets.
         The bindings are passed to [f] in increasing order of keys. *)
@@ -274,7 +276,7 @@ module type S =
     val fold2z: (key -> 'a -> 'a -> 'b -> 'b) -> 'a t -> 'a t -> 'b -> 'b
     (** [fold2z f m1 m2 a] is similar to [fold2 f m1 m2 a], but physically
         equal subtrees are ignored.
-        This is more efficient than [fold2], and equivalent if 
+        This is more efficient than [fold2], and equivalent if
         [f k a a x = x] and has no effect.
         [m1] and [m2] must have the same key sets.
         The bindings are passed to [f] in increasing order of keys. *)
@@ -299,7 +301,7 @@ module type S =
 
 
     val map2o: (key -> 'a -> 'c) -> (key -> 'b -> 'c) -> (key -> 'a -> 'b -> 'c) -> 'a t -> 'b t -> 'c t
-    (** [map2o f1 f2 f m1 m2] is similar to [map2 f m1 m2], but 
+    (** [map2o f1 f2 f m1 m2] is similar to [map2 f m1 m2], but
         accepts maps defined over different sets of keys.
         To get a new binding, [f1] is used for keys appearing only
         in [m1], [f2] for keys appearing only in [m2], and [f] for
@@ -309,34 +311,34 @@ module type S =
         The bindings are passed to [f], [f1], [f2] in increasing order of keys. *)
 
     val iter2o: (key -> 'a -> unit) -> (key -> 'b -> unit) -> (key -> 'a -> 'b -> unit) -> 'a t -> 'b t -> unit
-    (** [iter2o f1 f2 f m1 m2] is similar to [iter2 f m1 m2], but 
+    (** [iter2o f1 f2 f m1 m2] is similar to [iter2 f m1 m2], but
         accepts maps defined over different sets of keys.
-        [f1] is called for keys appearing only in [m1], 
-        [f2] for keys appearing only in [m2], 
+        [f1] is called for keys appearing only in [m1],
+        [f2] for keys appearing only in [m2],
         and [f] for keys appearing in both maps.
         The bindings are passed to [f], [f1], [f2] in increasing order of keys. *)
 
     val fold2o: (key -> 'a -> 'c -> 'c) -> (key -> 'b -> 'c -> 'c) -> (key -> 'a -> 'b -> 'c -> 'c) -> 'a t -> 'b t -> 'c -> 'c
-    (** [fold2o f1 f2 f m1 m2 a] is similar to [fold2 f m1 m2 a], but 
+    (** [fold2o f1 f2 f m1 m2 a] is similar to [fold2 f m1 m2 a], but
         accepts maps defined over different sets of keys.
-        [f1] is called for keys appearing only in [m1], 
-        [f2] for keys appearing only in [m2], 
+        [f1] is called for keys appearing only in [m1],
+        [f2] for keys appearing only in [m2],
         and [f] for keys appearing in both maps.
         The bindings are passed to [f], [f1], [f2] in increasing order of keys. *)
 
     val for_all2o: (key -> 'a -> bool) -> (key -> 'b -> bool) -> (key -> 'a -> 'b -> bool) -> 'a t -> 'b t -> bool
-    (** [for_all2o f1 f2 f m1 m2] is similar to [for_all2 f m1 m2], but 
+    (** [for_all2o f1 f2 f m1 m2] is similar to [for_all2 f m1 m2], but
         accepts maps defined over different sets of keys.
-        [f1] is called for keys appearing only in [m1], 
-        [f2] for keys appearing only in [m2], 
+        [f1] is called for keys appearing only in [m1],
+        [f2] for keys appearing only in [m2],
         and [f] for keys appearing in both maps.
         The bindings are passed to [f], [f1], [f2] in increasing order of keys. *)
 
     val exists2o: (key -> 'a -> bool) -> (key -> 'b -> bool) -> (key -> 'a -> 'b -> bool) -> 'a t -> 'b t -> bool
-    (** [fexists2o f1 f2 f m1 m2] is similar to [fexists2 f m1 m2], but 
+    (** [fexists2o f1 f2 f m1 m2] is similar to [fexists2 f m1 m2], but
         accepts maps defined over different sets of keys.
-        [f1] is called for keys appearing only in [m1], 
-        [f2] for keys appearing only in [m2], 
+        [f1] is called for keys appearing only in [m1],
+        [f2] for keys appearing only in [m2],
         and [f] for keys appearing in both maps.
         The bindings are passed to [f], [f1], [f2] in increasing order of keys. *)
 
@@ -351,7 +353,7 @@ module type S =
         The returned map has bindings for all keys appearing in either
         [m1] or [m2].
         The bindings are passed to [f], [f1], [f2] in increasing order of keys. *)
-        
+
     val iter2zo: (key -> 'a -> unit) -> (key -> 'a -> unit) -> (key -> 'a -> 'a -> unit) -> 'a t -> 'a t -> unit
     (** [iter2zo f1 f2 f m1 m2] is similar to [iter2o f1 f2 f m1 m2] but,
         similary to [iter2z], [f] is not called on physically equal
@@ -359,20 +361,20 @@ module type S =
         This is more efficient than [iter2o], and equivalent if [f] is
         side-effect free.
         The bindings are passed to [f], [f1], [f2] in increasing order of keys. *)
-        
+
     val fold2zo: (key -> 'a -> 'b -> 'b) -> (key -> 'a -> 'b -> 'b) -> (key -> 'a -> 'a -> 'b -> 'b) -> 'a t -> 'a t -> 'b -> 'b
     (** [fold2zo f1 f2 f m1 m2 a] is similar to [fold2o f1 f2 f m1 m2 a] but,
         similary to [fold2z], [f] is not called on physically equal
         subtrees.
-        This is more efficient than [fold2o], and equivalent if 
+        This is more efficient than [fold2o], and equivalent if
         [f k a a x = x] and has no side-effect.
         The bindings are passed to [f], [f1], [f2] in increasing order of keys. *)
-        
+
     val for_all2zo: (key -> 'a -> bool) -> (key -> 'a -> bool) -> (key -> 'a -> 'a -> bool) -> 'a t -> 'a t -> bool
     (** [for_all2zo f1 f2 f m1 m2] is similar to [for_all2o f1 f2 f m1 m2] but,
         similary to [for_all2z], [f] is not called on physically equal
         subtrees.
-        This is more efficient than [for_all2o], and equivalent if 
+        This is more efficient than [for_all2o], and equivalent if
         [f k a a = true] and has no side-effect.
         The bindings are passed to [f], [f1], [f2] in increasing order of keys. *)
 
@@ -380,7 +382,7 @@ module type S =
     (** [exists2zo f1 f2 f m1 m2] is similar to [exists2o f1 f2 f m1 m2] but,
         similary to [exists2z], [f] is not called on physically equal
         subtrees.
-        This is more efficient than [exists2o], and equivalent if 
+        This is more efficient than [exists2o], and equivalent if
         [f k a a = false] and has no side-effect.
         The bindings are passed to [f], [f1], [f2] in increasing order of keys. *)
 
@@ -467,7 +469,7 @@ module type S =
 
 
     (** {2 Printing} *)
-                                                
+
     val to_string: map_printer -> (key -> string) -> ('a -> string) -> 'a t -> string
     (** String representation. *)
 
@@ -479,6 +481,6 @@ module type S =
 
     val bprint: map_printer -> (Buffer.t -> key -> unit) -> (Buffer.t -> 'a -> unit) -> Buffer.t -> 'a t -> unit
     (** Prints to a string buffer (for Printf.bprintf). *)
-                      
+
   end
 (** Output signature of the functor {!MapExt.Make}. *)

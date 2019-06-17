@@ -21,8 +21,7 @@
 
 (** Visitor of Python AST. *)
 
-open Framework.Ast
-open Framework.Visitor
+open Mopsa
 open Ast
 
 let () =
@@ -35,6 +34,10 @@ let () =
       | E_py_list elts ->
         {exprs = elts; stmts = [];},
         (fun parts -> {exp with ekind = E_py_list(parts.exprs)})
+
+      | E_py_set elts ->
+        {exprs = elts; stmts = [];},
+        (fun parts -> {exp with ekind = E_py_set(parts.exprs)})
 
       | E_py_tuple elts ->
         {exprs = elts; stmts = [];},
@@ -201,6 +204,11 @@ let () =
         {exprs = [test]; stmts = [body; orelse];},
         (function
           | {exprs = [test']; stmts = [body'; orelse']} -> {stmt with skind = S_py_while(test', body',orelse')}
+          | _ -> assert false)
+      | S_py_if(test, sthen, selse) ->
+        {exprs = [test]; stmts = [sthen; selse];},
+        (function
+          | {exprs = [test']; stmts = [sthen'; selse']} -> {stmt with skind = S_py_if(test', sthen', selse')}
           | _ -> assert false)
 
       | S_py_for(({ekind = E_py_tuple _ | E_py_list _} as target), iter, body, orelse) ->

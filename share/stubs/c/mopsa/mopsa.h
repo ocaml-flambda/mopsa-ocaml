@@ -22,32 +22,72 @@
 #ifndef _MOPSA_H
 #define _MOPSA_H
 
-// Initialize argc and argv with symbolic values
-extern void _mopsa_init_symbolic_argc_argv();
-
-// Abstract values
-extern int _mopsa_rand();
-extern long int _mopsa_rand_int(long int l, long int u);
-extern unsigned long int _mopsa_rand_unsigned_long(unsigned long int l, unsigned long int u);
-
-extern char _mopsa_range_char();
-extern unsigned char _mopsa_range_unsigned_char();
-extern int _mopsa_range_int();
-extern unsigned int _mopsa_range_unsigned_int();
-extern short _mopsa_range_short();
-extern unsigned short _mopsa_range_unsigned_short();
-extern long _mopsa_range_long();
-extern unsigned long _mopsa_range_unsigned_long();
-extern long _mopsa_range_long_long();
-extern unsigned long _mopsa_range_unsigned_long_long();
+// Type shortcuts
+#define u8 unsigned char
+#define s8 signed char
+#define u16 unsigned short
+#define s16 signed short
+#define u32 unsigned int
+#define s32 signed int
 
 
-// Raise Framework.Manager.Panic exception with a given message
+// Generators of typed random values
+extern s8 _mopsa_rand_s8();
+extern u8 _mopsa_rand_u8();
+#define _mopsa_rand_char _mopsa_rand_s8
+
+extern s16 _mopsa_rand_s16();
+extern u16 _mopsa_rand_u16();
+
+extern s32 _mopsa_rand_s32();
+extern u32 _mopsa_rand_u32();
+#define _mopsa_rand_int _mopsa_rand_s32
+
+extern float _mopsa_rand_float();
+extern double _mopsa_rand_double();
+
+extern void *_mopsa_rand_void_pointer();
+
+
+// Generic generators accepting the type as argument
+#define _mopsa_rand_number(T) _mopsa_rand_T()
+#define _mopsa_rand_pointer(T) (T)_mopsa_rand_void_pointer()
+
+
+// Generators of typed random ranges
+extern s8 _mopsa_range_s8(s8 l, s8 u);
+extern u8 _mopsa_range_u8(u8 l, u8 u);
+#define _mopsa_range_char _mopsa_range_s8
+
+extern s16 _mopsa_range_s16(s16 l, s16 u);
+extern u16 _mopsa_range_u16(u16 l, u16 u);
+
+extern s32 _mopsa_range_s32(s32 l, s32 u);
+extern u32 _mopsa_range_u32(u32 l, u32 u);
+#define _mopsa_range_int _mopsa_range_s32
+
+extern float _mopsa_range_float(float l, float u);
+extern double _mopsa_range_double(double l, double u);
+
+// Generic generators accepting the type as argument
+#define _mopsa_range(T,l,u) _mopsa_range_T(T l, T u)
+
+
+// Invalid pointer
+extern void *_mopsa_invalid_pointer();
+
+// Raise Exception.Panic exception with a given message
 extern void _mopsa_panic(const char* msg);
+
 
 // Printing
 extern void _mopsa_print();
-extern void _mopsa_set_debug_channels(char* channels);
+
+
+// Filters
+extern void _mopsa_assume(int cond);
+
+
 
 // Errors
 #define OUT_OF_BOUND 1
@@ -55,6 +95,7 @@ extern void _mopsa_set_debug_channels(char* channels);
 #define INVALID_DEREF 3
 #define INTEGER_OVERFLOW 4
 #define DIVISION_BY_ZERO 5
+
 
 // Assertions
 extern void _mopsa_assert(int cond);

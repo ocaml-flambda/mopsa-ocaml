@@ -22,7 +22,9 @@
 (** Entry point of the analyzer. *)
 
 open Framework
-
+open Framework.Ast.All
+open Framework.Core
+open Framework.Config.Options
 
 (** {2 Command-line options} *)
 (** ************************ *)
@@ -30,10 +32,11 @@ open Framework
 let opt_interactive = ref false
 
 let () =
-  Options.register_builtin_option {
+  register_builtin_option {
     key = "-interactive";
+    category = "Debugging";
     doc = " start the analysis in interactive mode";
-    spec = Arg.Set opt_interactive;
+    spec = ArgExt.Set opt_interactive;
     default = "false";
   }
 
@@ -42,14 +45,13 @@ let () =
    source files *)
 let parse_options f () =
   let files = ref [] in
-  let n = Array.length Sys.argv in
-  let return_value = ref 0 in
-  Arg.parse (Options.to_arg ()) (fun filename ->
-      files := filename :: !files;
-      if !Arg.current = n - 1 then
-        return_value := !return_value * 10 + (f !files)
-    ) "Modular Open Platform for Static Analysis";
-  !return_value
+  let args  = ref None in
+  ArgExt.parse (Config.Options.to_arg ())
+               (fun filename -> files := filename :: !files)
+               (fun rest -> args := Some rest)
+               "Modular Open Platform for Static Analysis"
+               Config.Options.help;
+  f !files !args
 
 
 (** {2 Parsing} *)
@@ -57,12 +59,13 @@ let parse_options f () =
 
 (** Call the appropriate frontend to parse the input sources *)
 let parse_program lang files =
-  Framework.Logging.phase "parsing";
+  Framework.Core.Debug_tree.phase "parsing";
   match lang with
   | "universal" -> Lang.Universal.Frontend.parse_program files
   | "c" -> Lang.C.Frontend.parse_program files
   | "python" -> Lang.Python.Frontend.parse_program files
   | "cfg" -> Lang.Cfg.Frontend.parse_program files
+  | "repl" -> Lang.Repl.Frontend.parse_program files
   | _ -> Exceptions.panic "Unknown language"
 
 
@@ -70,34 +73,41 @@ let parse_program lang files =
 (** *************** *)
 
 let () =
-  exit @@ parse_options (fun files ->
+  exit @@ parse_options (fun files args ->
       try
-        let lang, domain = Config.parse () in
+        let lang, domain = Config.Parser.parse !Config.Parser.opt_config in
 
         let prog = parse_program lang files in
 
         (* Top layer analyzer *)
         let module Domain = (val domain) in
-        let module Analyzer = Analyzer.Make(Domain) in
+        let module Abstraction = Abstraction.Make(Domain) in
+        let module Engine =
+          (val
+            if !opt_interactive
+            then
+              let module E = Engines.Interactive.Make(Abstraction) in
+              (module E)
+            else
+              let module E = Engines.Automatic.Make(Abstraction) in
+              (module E)
+            : Framework.Engines.Engine.ENGINE with type t = Domain.t
+          )
+        in
 
         let t = Timing.start () in
 
-        (* Get the appropriate analysis manager *)
-        let man =
-          if !opt_interactive
-          then Analyzer.interactive_man
-          else Analyzer.man
-        in
+        Debug_tree.phase "computing initial environments";
+        let flow = Engine.init prog in
 
-        Framework.Logging.phase "computing initial environments";
-        let flow = Analyzer.init prog man in
-
-        Framework.Logging.phase "starting the analysis";
-        let stmt = Ast.mk_stmt (Ast.S_program prog) prog.prog_range in
-        let res = Analyzer.exec stmt man flow in
+        Debug_tree.phase "starting the analysis";
+        let stmt = mk_stmt (S_program (prog, args)) prog.prog_range in
+        let res = Engine.exec stmt flow in
         let t = Timing.stop t in
 
-        Output.Factory.render Analyzer.man res t files
+        Output.Factory.report Engine.man res t files
+
+
 
       with
         e -> Output.Factory.panic ~btrace:(Printexc.get_backtrace()) e files; 2

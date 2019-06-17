@@ -42,7 +42,7 @@ void test_global_init_with_zero() {
 }
 
 void test_rand_int() {
-  int a = _mopsa_rand_int(0, 10);
+  int a = _mopsa_range_int(0, 10);
   _mopsa_assert(a >= 0 && a <= 10);
 }
 
@@ -63,7 +63,7 @@ void test_divide_by_variable() {
 }
 
 void test_divide_by_range() {
-  int x = _mopsa_rand_int(-5,-1);
+  int x = _mopsa_range_int(-5,-1);
   int a = 4 / x;
   _mopsa_assert_safe();
   int y = x + 2;

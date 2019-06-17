@@ -27,21 +27,29 @@
 #include <locale.h>
 #include <limits.h>
 
-/*$
- * local: char* addr = new ReadOnlyString;
- * ensures: size(addr) > 0;
- * // TODO ensures: valid_string(addr);
- * ensures: _local_buf == addr;
- */
+
+#define LOCAL_BUF_SIZE 100
+
 char * _local_buf;
 
+
+/*$$$
+ * assigns: _local_buf;
+ * local: char* addr = new ReadOnlyString;
+ * ensures: size(addr) == LOCAL_BUF_SIZE;
+ * // TODO ensures: valid_string(addr);
+ * ensures: _local_buf' == addr;
+ */
+
+
+
 /*$
- * requires: __locale == NULL or valid_string(__locale);
+ * requires: __locale != NULL implies valid_string(__locale);
  *
  * case "success" {
  *   local:   char* addr = new ReadOnlyString;
  *   assigns: _local_buf;
- *   ensures: size(addr) > 0;
+ *   ensures: size(addr) == LOCAL_BUF_SIZE;
  *   ensures: valid_string(addr);
  *   ensures: _local_buf' == addr;
  *   ensures: return == addr;
@@ -62,7 +70,7 @@ struct lconv * _lconv_buf = NULL;
  *
  * assigns: _lconv_buf;
  *
- * ensures: size(addr) == sizeof(struct lconv);
+ * ensures: size(addr) == sizeof_type(struct lconv);
  * ensures: return == addr;
  * ensures: _lconv_buf' == addr;
  *
@@ -78,30 +86,10 @@ struct lconv *localeconv (void);
 
 
 // type __locale_t has been renamed local_t starting from glibv 2.26
-#if __GLIBC_MINOR__ < 26
+#ifndef local_t
+#define local_t __local_t
+#endif
 
-/*$
- * warn: "unsupported stub";
- */
-__locale_t newlocale (int __category_mask, const char *__locale, __locale_t __base);
-
-/*$
- * warn: "unsupported stub";
- */
-__locale_t duplocale (__locale_t __dataset);
-
-/*$
- * warn: "unsupported stub";
- */
-void freelocale (__locale_t __dataset);
-
-/*$
- * warn: "unsupported stub";
- */
-__locale_t uselocale (__locale_t __dataset);
-
-
-#else // __GLIBC_MINOR__ >= 26
 
 /*$
  * warn: "unsupported stub";
@@ -123,9 +111,6 @@ void freelocale (locale_t __dataset);
  */
 locale_t uselocale (locale_t __dataset);
 
-
-
-#endif // __GLIBC_MINOR__ < 26
 
 
 #endif

@@ -22,52 +22,25 @@
 (** Definition of python functions and evaluation of their calls. *)
 
 open Mopsa
+open Sig.Domain.Stateless
 open Ast
 open Addr
 open Universal.Ast
-
-type expr_kind +=
-   | E_py_sum_call of expr (** function expression *) * expr list (** list of arguments *)
-
-let () =
-  register_expr_pp (fun default fmt exp ->
-      match ekind exp with
-      | E_py_sum_call (f, args) ->
-         Format.fprintf fmt "{py_sum_call}%a(%a)"
-           pp_expr f
-           (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ",@ ") pp_expr) args
-      | _ -> default fmt exp);
-  register_expr_visitor (fun default exp ->
-      match ekind exp with
-      | E_py_sum_call(f, args) ->
-         {exprs = f :: args; stmts = []},
-         (fun parts -> {exp with ekind = E_py_sum_call(List.hd parts.exprs, List.tl parts.exprs)})
-      | _ -> default exp)
-
-let mk_sum_call fundec args range =
-  mk_expr (E_py_sum_call (
-      mk_expr (E_function (User_defined fundec)) range,
-      args
-    )) range
 
 
 module Domain =
   struct
 
-    type _ domain += D_python_objects_function : unit domain
+    include GenStatelessDomainId(struct
+        let name = "python.objects.function"
+      end)
 
-    let id = D_python_objects_function
-    let name = "python.objects.function"
-    let identify : type a. a domain -> (unit, a) eq option = function
-      | D_python_objects_function -> Some Eq
-      | _ -> None
+    let interface = {
+      iexec = {provides = [Zone.Z_py]; uses = []};
+      ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
+    }
 
-    let debug fmt = Debug.debug ~channel:name fmt
-
-    let exec_interface = {export = [Zone.Z_py]; import = []}
-    let eval_interface = {export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj]}
-
-    let init _ _ flow = Some flow
+    let init _ _ flow = flow
 
     let eval zs exp man flow =
       let range = erange exp in
@@ -77,7 +50,7 @@ module Domain =
          debug "user-defined function call@\n";
          (* First check the correct number of arguments *)
          let default_args, nondefault_args = List.partition (function None -> false | _ -> true) pyfundec.py_func_defaults in
-         OptionExt.return @@
+         Option.return @@
            if List.length pyfundec.py_func_parameters < List.length nondefault_args then
              (
                debug "Too few arguments!@\n";
@@ -107,11 +80,15 @@ module Domain =
                    else
                      (* Remove the first default parameters that are already specified *)
                      let default_args =
+                       let to_remove = List.length args - List.length nondefault_args in
                        let rec remove_first n l =
                          match n with
                          | 0 -> l
-                         | _ -> remove_first (n-1) (ListExt.tl l)
-                       in remove_first (List.length args - List.length nondefault_args) default_args in
+                         | _ -> remove_first (n-1) (List.tl l)
+                       in
+                       let () = debug "%d %d" (List.length default_args) to_remove in
+                       if to_remove < 0 || List.length default_args < to_remove then [] else remove_first to_remove default_args
+                     in
                      (* Fill missing args with default parameters *)
                      let default_args = List.map (function Some e -> e | None -> assert false) default_args in
                      let rec fill_with_default dfs ndfs args =
@@ -142,11 +119,13 @@ module Domain =
                  else
                    (* Initialize local variables to undefined value and give the call to {!Universal} *)
                    (
-                     let flow = man.exec
+                     let flow =
+                       if pyfundec.py_func_locals = [] then flow else
+                       man.exec
                                   (mk_block (List.mapi (fun i v ->
                                                  let e =
                                                    (* Initialize locals with the same name of a builtin with its address *)
-                                                   if is_builtin_name v.org_vname then (mk_py_object (find_builtin v.org_vname) range)
+                                                   if is_builtin_name (get_orig_vname v) then (mk_py_object (find_builtin (get_orig_vname v)) range)
                                                    else mk_expr (E_py_undefined false) range
                                                  in
                                                  mk_assign (mk_var v range) e range
@@ -154,25 +133,25 @@ module Domain =
                                   flow
                      in
 
-                     let ret_var = mktmp () in
+                     (* let ret_var = mkfresh_ranged (tag_range range "ret_var") () in *)
                      let fundec = {
-                         fun_name = uniq_vname (pyfundec.py_func_var);
+                         fun_name = pyfundec.py_func_var.vname;
                          fun_parameters = pyfundec.py_func_parameters;
                          fun_locvars = pyfundec.py_func_locals;
                          fun_body = pyfundec.py_func_body;
                          fun_return_type = Some T_any;
-                         fun_return_var = ret_var;
+                         fun_return_var = pyfundec.py_func_ret_var;
                          fun_range = pyfundec.py_func_range;
                        } in
 
-                     man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_sum_call fundec args exp.erange) flow |>
-                     Eval.bind (fun e flow -> man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow )
+                     man.eval (mk_call fundec args exp.erange) flow |>
+                     Eval.bind (man.eval)
                    )
                )
       (* 𝔼⟦ f() | isinstance(f, method) ⟧ *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_method(f, e)}, _)}, args, []) ->
-         let exp' = mk_py_call (mk_py_object f range) (e :: args) range in
-         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) exp' flow |> OptionExt.return
+        let exp' = mk_py_call (mk_py_object f range) (e :: args) range in
+        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) exp' flow |> Option.return
 
       | _ -> None
 
@@ -185,14 +164,14 @@ module Domain =
          (* Allocate an object for the function and assign it to the variable
          representing the name of the function *)
          let kind =
-           if Libs.Py_mopsa.is_unsupported_fundec func then F_unsupported func.py_func_var.org_vname else
+           if Libs.Py_mopsa.is_unsupported_fundec func then F_unsupported (get_orig_vname func.py_func_var) else
              if Libs.Py_mopsa.is_builtin_fundec func then
                let name = Libs.Py_mopsa.builtin_fundec_name func in
                F_builtin name
              else F_user func
          in
          eval_alloc man (A_py_function kind) stmt.srange flow |>
-           Post.bind man (fun addr flow ->
+           post_eval man (fun addr flow ->
                let obj = (addr, None) in
                man.exec
                  (mk_assign
@@ -200,9 +179,9 @@ module Domain =
                     (mk_py_object obj range)
                     range
                  ) flow
-               |> Post.of_flow
+               |> Post.return
              )
-         |> OptionExt.return
+         |> Option.return
       | _ ->
          None
 
@@ -212,4 +191,4 @@ module Domain =
   end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)

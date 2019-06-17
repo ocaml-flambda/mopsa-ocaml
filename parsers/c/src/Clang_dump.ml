@@ -195,6 +195,7 @@ let ident_type_name = function
 let unary_expr_or_type_name = function
   | UETT_SizeOf -> "sizeof"
   | UETT_AlignOf -> "alignof"
+  | UETT_PreferredAlignOf -> "__alignof"
 
 let array_type_trait_name = function
    | ATT_ArrayRank -> "__array_rank"
@@ -500,6 +501,8 @@ let expr_kind_name e =
   | StringLiteral _ -> "StringLiteral"
   | UnaryExprOrTypeTraitExpr _ -> "UnaryExprOrTypeTraitExpr"
   | VAArgExpr _ -> "VAArgExpr"
+  | FullExpr _ -> "FullExpr"
+  | ConstantExpr _ -> "ConstantExpr"
   | ArrayTypeTraitExpr _ -> "ArrayTypeTraitExpr"
   | CXXBindTemporaryExpr _ -> "CXXBindTemporaryExpr"
   | CXXBoolLiteralExpr _ -> "CXXBoolLiteralExpr"
@@ -1202,6 +1205,8 @@ module P = struct
     | StringLiteral (s,k) -> p ch "String(%s,%s)" s (character_kind_name k)
     | UnaryExprOrTypeTraitExpr (op,t) -> p ch "UnaryType(%s,%a)" (unary_expr_or_type_name op) type_qual t
     | VAArgExpr e -> p ch "VAArgExpr(%a)" expr e
+    | FullExpr e -> p ch "FullExpr(%a)" expr e
+    | ConstantExpr e -> p ch "ConstantExpr(%a)" expr e
 
     (* C++*)
     | ArrayTypeTraitExpr a ->

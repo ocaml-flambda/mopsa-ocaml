@@ -1,8 +1,7 @@
 variables:
   MOPSA_C: "./bin/mopsa-c -unittest"
   MOPSA_U: "./bin/mopsa-universal -unittest"
-  MOPSA_PY: "./bin/mopsa-python -unittest"
-  MOPSA_PYTY: "./bin/mopsa-python-types -unittest -debug=unittest"
+  MOPSA_PY: "./bin/mopsa-python-types -unittest"
   DOCKER_DRIVER: overlay2
   GIT_STRATEGY: fetch
 
@@ -34,7 +33,6 @@ build_job:
 
 .test-u:
   stage: test
-  allow_failure: true
   dependencies: [build_job]
   script:
     - eval `opam config env`
@@ -42,224 +40,404 @@ build_job:
     - $MOPSA_U analyzer/tests/universal/$U_FILE
 
 .test-py:
-  allow_failure: true
-  allow_failure: true
   stage: test
   dependencies: [build_job]
   script:
     - eval `opam config env`
     - echo $PY_FILE
-    - $MOPSA_PY analyzer/tests/python/$PY_FILE
-
-.test-pyty:
-  stage: test
-  allow_failure: true
-  dependencies: [build_job]
-  script:
-    - eval `opam config env`
-    - echo $PY_FILE
-    - $MOPSA_PYTY analyzer/tests/python/types/$PY_FILE
+    - $MOPSA_PY analyzer/tests/python/types/$PY_FILE
 
 .bench-typpete:
   stage: benchmarks
-  allow_failure: true
   dependencies: [build_job]
   script:
     - eval `opam config env`
     - echo $PY_FILE
-    - $MOPSA_PYTY benchmarks/pytypes/typpete/$PY_FILE
+    - $MOPSA_PY benchmarks/pytypes/typpete/$PY_FILE
 
-test-c 1/20:
-  variables:
-    C_FILE: 'array_tests.c'
-  extends: .test-c
+.bench-typy:
+  stage: benchmarks
+  dependencies: [build_job]
+  script:
+    - eval `opam config env`
+    - echo $PY_FILE
+    - $MOPSA_PY benchmarks/python/performance/$PY_FILE
 
-test-c 2/20:
-  variables:
-    C_FILE: 'enum_tests.c'
-  extends: .test-c
 
-test-c 3/20:
-  variables:
-    C_FILE: 'for_tests.c'
-  extends: .test-c
-
-test-c 4/20:
-  variables:
-    C_FILE: 'function_tests.c'
-  extends: .test-c
-
-test-c 5/20:
-  variables:
-    C_FILE: 'goto_tests.c'
-  extends: .test-c
-
-test-c 6/20:
+test-c 1/22:
   variables:
     C_FILE: 'int_tests.c'
   extends: .test-c
 
-test-c 7/20:
+
+test-c 2/22:
   variables:
-    C_FILE: 'stubs/assigns_tests.c'
+    C_FILE: 'float_tests.c'
   extends: .test-c
 
-test-c 8/20:
+test-c 3/22:
   variables:
     C_FILE: 'pointer_tests.c'
   extends: .test-c
 
-test-c 9/20:
+test-c 4/22:
   variables:
     C_FILE: 'string_tests.c'
   extends: .test-c
 
-test-c 10/20:
+test-c 5/22:
   variables:
-    C_FILE: 'struct_tests.c'
+    C_FILE: 'array_tests.c'
   extends: .test-c
 
-test-c 11/20:
+test-c 6/22:
   variables:
-    C_FILE: 'switch_tests.c'
+    C_FILE: 'enum_tests.c'
   extends: .test-c
 
-test-c 12/20:
+test-c 7/22:
   variables:
     C_FILE: 'union_tests.c'
   extends: .test-c
 
-test-c 13/20:
+test-c 8/22:
   variables:
-    C_FILE: 'stubs/forall_tests.c'
+    C_FILE: 'struct_tests.c'
   extends: .test-c
 
-test-c 14/20:
+test-c 9/22:
+  variables:
+    C_FILE: 'switch_tests.c'
+  extends: .test-c
+
+test-c 10/22:
+  variables:
+    C_FILE: 'for_tests.c'
+  extends: .test-c
+
+test-c 11/22:
+  variables:
+    C_FILE: 'function_tests.c'
+  extends: .test-c
+
+test-c 12/22:
+  variables:
+    C_FILE: 'goto_tests.c'
+  extends: .test-c
+
+test-c 13/22:
   variables:
     C_FILE: 'stubs/memory_resource_tests.c'
   extends: .test-c
 
-test-c 15/20:
-  variables:
-    C_FILE: 'stubs/file_resource_tests.c'
-  extends: .test-c
-
-test-c 16/20:
+test-c 14/22:
   variables:
     C_FILE: 'stubs/case_tests.c'
   extends: .test-c
 
-test-c 17/20:
+test-c 15/22:
   variables:
     C_FILE: 'stubs/macro_tests.c'
   extends: .test-c
 
-test-c 18/20:
-  variables:
-    C_FILE: 'stubs/var_init_tests.c'
-  extends: .test-c
-
-test-c 19/20:
+test-c 16/22:
   variables:
     C_FILE: 'stubs/builtins_tests.c'
   extends: .test-c
 
-test-c 20/20:
+test-c 17/22:
   variables:
     C_FILE: 'stubs/global_predicate_tests.c'
   extends: .test-c
+
+test-c 18/22:
+  variables:
+    C_FILE: 'stubs/alias_tests.c'
+  extends: .test-c
+
+test-c 19/22:
+  variables:
+    C_FILE: 'stubs/assigns_tests.c'
+  extends: .test-c
+
+test-c 20/22:
+  variables:
+    C_FILE: 'libc/builtin_constant_p_tests.c'
+  extends: .test-c
+
+test-c 21/22:
+  variables:
+    C_FILE: 'libc/malloc_tests.c'
+  extends: .test-c
+
+test-c 22/22:
+  variables:
+    C_FILE: 'libc/variadic_tests.c'
+  extends: .test-c
+
 
 test-u 1/1:
   variables:
     U_FILE: 'int_tests.u'
   extends: .test-u
 
-test-pyty 1/3:
+test-py 1/3:
   variables:
     PY_FILE: 'int_tests.py'
-  extends: .test-pyty
+  extends: .test-py
 
-test-pyty 2/3:
+test-py 2/3:
   variables:
     PY_FILE: 'misc_tests.py'
-  extends: .test-pyty
+  extends: .test-py
 
-test-pyty 3/3:
+test-py 3/3:
   variables:
     PY_FILE: 'exception_tests.py'
-  extends: .test-pyty
+  extends: .test-py
 
-bench-typpete 1/15:
+bench-typy 1/6:
+  variables:
+    PY_FILE: 'bm_float.py'
+  extends: .bench-typy
+
+bench-typy 2/6:
+  variables:
+    PY_FILE: 'bm_fannkuch.py'
+  extends: .bench-typy
+
+bench-typy 3/6:
+  variables:
+    PY_FILE: 'bm_chaos.py'
+  extends: .bench-typy
+
+bench-typy 4/6:
+  variables:
+    PY_FILE: 'bm_nbody.py'
+  extends: .bench-typy
+
+bench-typy 5/6:
+  variables:
+    PY_FILE: 'bm_spectral_norm.py'
+  extends: .bench-typy
+
+bench-typy 6/6:
+  variables:
+    PY_FILE: 'bm_unpack_sequence.py'
+  extends: .bench-typy
+
+
+bench-typpete 1/43:
+  variables:
+    PY_FILE: 'bellman_ford.py'
+  extends: .bench-typpete
+
+bench-typpete 2/43:
+  variables:
+    PY_FILE: 'builtins_test.py'
+  extends: .bench-typpete
+
+bench-typpete 3/43:
+  variables:
+    PY_FILE: 'callable_class.py'
+  extends: .bench-typpete
+
+bench-typpete 4/43:
+  variables:
+    PY_FILE: 'callable_interface_generic.py'
+  extends: .bench-typpete
+
+bench-typpete 5/43:
   variables:
     PY_FILE: 'classes.py'
   extends: .bench-typpete
 
-bench-typpete 2/15:
+bench-typpete 6/43:
   variables:
     PY_FILE: 'class_pre_store.py'
   extends: .bench-typpete
 
-bench-typpete 3/15:
+bench-typpete 7/43:
+  variables:
+    PY_FILE: 'comparison_test.py'
+  extends: .bench-typpete
+
+bench-typpete 8/43:
+  variables:
+    PY_FILE: 'cookie.py'
+  extends: .bench-typpete
+
+bench-typpete 9/43:
+  variables:
+    PY_FILE: 'coop_concatenate.py'
+  extends: .bench-typpete
+
+bench-typpete 10/43:
+  variables:
+    PY_FILE: 'crafting_challenge.py'
+  extends: .bench-typpete
+
+bench-typpete 11/43:
+  variables:
+    PY_FILE: 'deceitful.py'
+  extends: .bench-typpete
+
+bench-typpete 12/43:
   variables:
     PY_FILE: 'default_args_class.py'
   extends: .bench-typpete
 
-bench-typpete 4/15:
+bench-typpete 13/43:
+  variables:
+    PY_FILE: 'dict_methods.py'
+  extends: .bench-typpete
+
+bench-typpete 14/43:
+  variables:
+    PY_FILE: 'disjoint_sets_nonrec.py'
+  extends: .bench-typpete
+
+bench-typpete 15/43:
+  variables:
+    PY_FILE: 'eight_queens.py'
+  extends: .bench-typpete
+
+bench-typpete 16/43:
   variables:
     PY_FILE: 'except_clause.py'
   extends: .bench-typpete
 
-bench-typpete 5/15:
+bench-typpete 17/43:
+  variables:
+    PY_FILE: 'explicit_object_superclass.py'
+  extends: .bench-typpete
+
+bench-typpete 18/43:
+  variables:
+    PY_FILE: 'expressions1.py'
+  extends: .bench-typpete
+
+bench-typpete 19/43:
+  variables:
+    PY_FILE: 'expressions2.py'
+  extends: .bench-typpete
+
+bench-typpete 20/43:
+  variables:
+    PY_FILE: 'expressions.py'
+  extends: .bench-typpete
+
+bench-typpete 21/43:
+  variables:
+    PY_FILE: 'factorization.py'
+  extends: .bench-typpete
+
+bench-typpete 22/43:
   variables:
     PY_FILE: 'file_download.py'
   extends: .bench-typpete
 
-bench-typpete 6/15:
+bench-typpete 23/43:
+  variables:
+    PY_FILE: 'functions.py'
+  extends: .bench-typpete
+
+bench-typpete 24/43:
+  variables:
+    PY_FILE: 'generic_class_test.py'
+  extends: .bench-typpete
+
+bench-typpete 25/43:
   variables:
     PY_FILE: 'guess_the_number.py'
   extends: .bench-typpete
 
-bench-typpete 7/15:
+bench-typpete 26/43:
   variables:
     PY_FILE: 'inheritance_cov_incorrect.py'
   extends: .bench-typpete
 
-bench-typpete 8/15:
+bench-typpete 27/43:
   variables:
     PY_FILE: 'inheritance_cov_sat.py'
   extends: .bench-typpete
 
-bench-typpete 9/15:
+bench-typpete 28/43:
   variables:
     PY_FILE: 'isinstance.py'
   extends: .bench-typpete
 
-bench-typpete 10/15:
+bench-typpete 29/43:
+  variables:
+    PY_FILE: 'linear_equality.py'
+  extends: .bench-typpete
+
+bench-typpete 30/43:
+  variables:
+    PY_FILE: 'list_methods.py'
+  extends: .bench-typpete
+
+bench-typpete 31/43:
+  variables:
+    PY_FILE: 'magic.py'
+  extends: .bench-typpete
+
+bench-typpete 32/43:
+  variables:
+    PY_FILE: 'math_test.py'
+  extends: .bench-typpete
+
+bench-typpete 33/43:
   variables:
     PY_FILE: 'mro.py'
   extends: .bench-typpete
 
-bench-typpete 11/15:
+bench-typpete 34/43:
   variables:
     PY_FILE: 'mult_inheritance.py'
   extends: .bench-typpete
 
-bench-typpete 12/15:
+bench-typpete 35/43:
   variables:
     PY_FILE: 'override_default_args_correct.py'
   extends: .bench-typpete
 
-bench-typpete 13/15:
+bench-typpete 36/43:
+  variables:
+    PY_FILE: 'prog_1.py'
+  extends: .bench-typpete
+
+bench-typpete 37/43:
+  variables:
+    PY_FILE: 'prog_2.py'
+  extends: .bench-typpete
+
+bench-typpete 38/43:
+  variables:
+    PY_FILE: 'statements.py'
+  extends: .bench-typpete
+
+bench-typpete 39/43:
   variables:
     PY_FILE: 'staticmethod.py'
   extends: .bench-typpete
 
-bench-typpete 14/15:
+bench-typpete 40/43:
+  variables:
+    PY_FILE: 'str_methods.py'
+  extends: .bench-typpete
+
+bench-typpete 41/43:
   variables:
     PY_FILE: 'stubs_default_args.py'
   extends: .bench-typpete
 
-bench-typpete 15/15:
+bench-typpete 42/43:
   variables:
     PY_FILE: 'syntax.py'
+  extends: .bench-typpete
+
+bench-typpete 43/43:
+  variables:
+    PY_FILE: 'unary_test_not.py'
   extends: .bench-typpete

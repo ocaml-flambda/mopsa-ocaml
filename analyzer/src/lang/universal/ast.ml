@@ -185,20 +185,11 @@ let () =
 
 
 
-(** {2 Universal heap} *)
-(*  ****************** *)
+(** {2 Universal heap addresses} *)
+(*  **************************** *)
 
 (** Kind of heap addresses, used to store extra information. *)
 type addr_kind = ..
-
-(** Heap addresses. *)
-type addr = {
-  addr_uid  : int;       (** Unique identifier. *)
-  addr_kind : addr_kind; (** Kind of the address. *)
-  addr_mode : mode;      (** assignment mode of address (string or weak) *)
-}
-
-let akind addr = addr.addr_kind
 
 let addr_kind_compare_chain : (addr_kind -> addr_kind -> int) ref =
   ref (fun a1 a2 -> compare a1 a2)
@@ -209,29 +200,110 @@ let addr_kind_pp_chain : (Format.formatter -> addr_kind -> unit) ref =
 let pp_addr_kind fmt ak =
   !addr_kind_pp_chain fmt ak
 
-let pp_addr fmt a =
-  let mode = match a.addr_mode with
-    | WEAK -> "w"
-    | STRONG -> "s" in
-  fprintf fmt "@@%a:%d:%s"
-    pp_addr_kind a.addr_kind
-    a.addr_uid
-    mode
-
 let compare_addr_kind ak1 ak2 =
+  if ak1 == ak2 then 0 else
   !addr_kind_compare_chain ak1 ak2
 
-let compare_addr a b =
-  Compare.compose [
-    (fun () -> compare a.addr_uid b.addr_uid);
-    (fun () -> compare_addr_kind a.addr_kind b.addr_kind);
-    (fun () -> compare_mode a.addr_mode b.addr_mode);
-  ]
-
-let register_addr (info: addr_kind info) =
+let register_addr_kind (info: addr_kind info) =
   addr_kind_compare_chain := info.compare !addr_kind_compare_chain;
   addr_kind_pp_chain := info.print !addr_kind_pp_chain;
   ()
+
+
+(** Addresses are grouped by static criteria to make them finite *)
+type addr_group = ..
+
+type addr_group +=
+  | G_all (** Group all addresses into one *)
+
+let addr_group_compare_chain : (addr_group -> addr_group -> int) ref =
+  ref (fun a1 a2 -> compare a1 a2)
+
+let addr_group_pp_chain : (Format.formatter -> addr_group -> unit) ref =
+  ref (fun fmt g ->
+      match g with
+      | G_all -> Format.pp_print_string fmt "*"
+      | _ -> panic "addr_group_pp_chain: unknown address"
+    )
+
+let pp_addr_group fmt ak =
+  !addr_group_pp_chain fmt ak
+
+let compare_addr_group a1 a2 =
+  if a1 == a2 then 0 else !addr_group_compare_chain a1 a2
+
+let register_addr_group (info: addr_group info) =
+  addr_group_compare_chain := info.compare !addr_group_compare_chain;
+  addr_group_pp_chain := info.print !addr_group_pp_chain;
+  ()
+
+
+(** Heap addresses. *)
+type addr = {
+  addr_kind : addr_kind;   (** Kind of the address. *)
+  addr_group : addr_group; (** Group of the address *)
+  addr_mode : mode;        (** Assignment mode of address (string or weak) *)
+}
+
+
+let akind addr = addr.addr_kind
+
+let pp_addr fmt a =
+  if a.addr_group = G_all then
+    fprintf fmt "@@%a:*:%s"
+      pp_addr_kind a.addr_kind
+      (match a.addr_mode with WEAK -> "w" | STRONG -> "s")
+  else
+    fprintf fmt "@@%a:%xd:%s"
+      pp_addr_kind a.addr_kind
+      (* Using Hashtbl.hash leads to collisions. Hashtbl.hash is
+         equivalent to Hashtbl.hash_param 10 100. By increasing the
+         number of meaningful nodes to encounter, collisions are less
+         likely to happen. 
+      *) 
+      (Hashtbl.hash_param 30 100 a.addr_group)
+      (match a.addr_mode with WEAK -> "w" | STRONG -> "s")
+
+
+
+let compare_addr a b =
+  if a == b then 0
+  else Compare.compose [
+      (fun () -> compare_addr_kind a.addr_kind b.addr_kind);
+      (fun () -> compare_addr_group a.addr_group b.addr_group);
+      (fun () -> compare_mode a.addr_mode b.addr_mode);
+    ]
+
+
+(** Address variables *)
+type var_kind +=
+  | V_addr_attr of addr * string
+
+let () =
+  register_var {
+    compare = (fun next v1 v2 ->
+        match vkind v1, vkind v2 with
+        | V_addr_attr (a1,attr1), V_addr_attr (a2,attr2) ->
+          Compare.compose [
+            (fun () -> compare attr1 attr2);
+            (fun () -> compare_addr a1 a2)
+          ]
+        | _ -> next v1 v2
+      );
+    print = (fun next fmt v ->
+        match vkind v with
+        | V_addr_attr _ -> Format.pp_print_string fmt v.vname
+        | _ -> next fmt v
+      )
+  }
+
+let mk_addr_attr addr attr typ =
+  let name =
+    let () = Format.fprintf Format.str_formatter "%a.%s" pp_addr addr attr in
+    Format.flush_str_formatter ()
+  in
+  mkv name (V_addr_attr (addr,attr)) typ
+
 
 
 (** {2 Universal functions} *)
@@ -285,7 +357,7 @@ let () =
             (
               pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
                 (fun fmt f ->
-                   fprintf fmt "%a %a(%a) {@\n@[<v 2>  %a@]@\n}"
+                   fprintf fmt "%a %a(%a) {@\n@[<v 4>  %a@]@\n}"
                      (fun fmt ot ->
                         match ot with
                         | None -> pp_print_string fmt "void"
@@ -334,7 +406,7 @@ type expr_kind +=
 
 
 let () =
-  register_expr {
+  register_expr_with_visitor {
     compare = (fun next e1 e2 ->
         match ekind e1, ekind e2 with
         | E_function(f1), E_function(f2) -> compare_fun_expr f1 f2
@@ -375,7 +447,7 @@ let () =
         | E_call(f, args) ->
           fprintf fmt "%a(%a)"
             pp_expr f
-            (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") pp_expr) args
+            (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_expr) args
         | E_alloc_addr(akind) -> fprintf fmt "alloc(%a)" pp_addr_kind akind
         | E_addr (addr) -> fprintf fmt "%a" pp_addr addr
         | E_len exp -> Format.fprintf fmt "|%a|" pp_expr exp
@@ -432,9 +504,11 @@ type stmt_kind +=
    (** Unit tests suite *)
 
    | S_simple_assert of expr * bool * bool
-   (** Unit tests simple assertions : S_simple_assert(e,b,b') = b
-       is_bottom(assume(b' cond)) where b exp is understood as exp if b
-      = true and not exp otherwise *)
+   (** Unit tests simple assertions :
+       S_simple_assert(cond,b,b') = b is_bottom(assume(b' cond))
+       where b exp is understood as:
+        f b = true then exp else not exp
+   *)
 
    | S_assert of expr
    (** Unit tests assertions *)
@@ -446,7 +520,7 @@ type stmt_kind +=
 
 
 let () =
-  register_stmt {
+  register_stmt_with_visitor {
     compare = (fun next s1 s2 ->
         match skind s1, skind s2 with
         | S_expression(e1), S_expression(e2) -> compare_expr e1 e2
@@ -489,7 +563,9 @@ let () =
         match skind stmt with
         | S_expression(e) -> fprintf fmt "%a;" pp_expr e
         | S_if(e, s1, s2) ->
-          fprintf fmt "@[<v 2>if (%a) {@,%a@]@,} @[<v 2>else {@,%a@]@,}" pp_expr e pp_stmt s1 pp_stmt s2
+          fprintf fmt "@[<v 4>if (%a) {@,%a@]@,@[<v 4>} else {@,%a@]@,}" pp_expr e pp_stmt s1 pp_stmt s2
+        | S_block[] -> fprintf fmt "pass"
+        | S_block[s] -> pp_stmt fmt s
         | S_block(l) ->
           fprintf fmt "@[<v>";
           pp_print_list
@@ -501,7 +577,7 @@ let () =
         | S_return(None) -> pp_print_string fmt "return;"
         | S_return(Some e) -> fprintf fmt "return %a;" pp_expr e
         | S_while(e, s) ->
-          fprintf fmt "@[<v 2>while %a {@,%a@]@,}" pp_expr e pp_stmt s
+          fprintf fmt "@[<v 4>while %a {@,%a@]@,}" pp_expr e pp_stmt s
         | S_break -> pp_print_string fmt "break;"
         | S_continue -> pp_print_string fmt "continue;"
         | S_unit_tests (tests) -> pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") (fun fmt (name, test) -> fprintf fmt "test %s:@\n  @[%a@]" name pp_stmt test) fmt tests
@@ -575,6 +651,16 @@ let () =
 (** {2 Utility functions} *)
 (*  ********************* *)
 
+let rec is_universal_type t =
+  match t with
+  | T_bool | T_int | T_float _
+  | T_string | T_addr   | T_unit | T_char ->
+    true
+
+  | T_array tt -> is_universal_type tt
+
+  | _ -> false
+
 let mk_not e = mk_unop O_log_not e
 
 let mk_int i ?(typ=T_int) erange =
@@ -598,35 +684,39 @@ let mk_float_interval ?(prec=F_DOUBLE) a b range =
 let mk_string s =
   mk_constant ~etyp:T_string (C_string s)
 
-let mk_in ?(strict = false) ?(left_strict = false) ?(right_strict = false) v e1 e2 erange =
+let mk_in ?(strict = false) ?(left_strict = false) ?(right_strict = false) ?(etyp=T_bool) v e1 e2 erange =
   match strict, left_strict, right_strict with
   | true, _, _
   | false, true, true ->
     mk_binop
-      (mk_binop e1 O_lt v erange)
+      (mk_binop e1 O_lt v ~etyp erange)
       O_log_and
-      (mk_binop v O_lt e2 erange)
+      (mk_binop v O_lt e2 ~etyp erange)
+      ~etyp
       erange
 
   | false, true, false ->
     mk_binop
-      (mk_binop e1 O_lt v erange)
+      (mk_binop e1 O_lt v ~etyp erange)
       O_log_and
-      (mk_binop v O_le e2 erange)
+      (mk_binop v O_le e2 ~etyp erange)
+      ~etyp
       erange
 
   | false, false, true ->
     mk_binop
-      (mk_binop e1 O_le v erange)
+      (mk_binop e1 O_le v ~etyp erange)
       O_log_and
-      (mk_binop v O_lt e2 erange)
+      (mk_binop v O_lt e2 ~etyp erange)
+      ~etyp
       erange
 
   | false, false, false ->
     mk_binop
-      (mk_binop e1 O_le v erange)
+      (mk_binop e1 O_le v ~etyp erange)
       O_log_and
-      (mk_binop v O_le e2 erange)
+      (mk_binop v O_le e2 ~etyp erange)
+      ~etyp
       erange
 
 let mk_zero = mk_int 0
@@ -654,8 +744,7 @@ let mk_alloc_addr addr_kind range =
   mk_expr (E_alloc_addr addr_kind) ~etyp:T_addr range
 
 let is_int_type = function
-  | T_int -> true
-  | T_bool -> true
+  | T_int | T_bool -> true
   | _ -> false
 
 let is_float_type = function
@@ -663,7 +752,7 @@ let is_float_type = function
   | _ -> false
 
 let is_numeric_type = function
-  | T_int | T_float _ -> true
+  | T_bool | T_int | T_float _ -> true
   | _ -> false
 
 let is_math_type = function

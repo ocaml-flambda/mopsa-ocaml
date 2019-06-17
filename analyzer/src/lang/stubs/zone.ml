@@ -31,9 +31,9 @@ type zone +=
 let () =
   register_zone {
     zone = Z_stubs;
-    subset = None;
-    name = "Stubs";
-    eval = (fun exp ->
+    zone_subset = None;
+    zone_name = "Stubs";
+    zone_eval = (fun exp ->
         match ekind exp with
         | E_stub_call _           -> Process
         | E_stub_return           -> Keep

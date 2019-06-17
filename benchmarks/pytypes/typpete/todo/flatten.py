@@ -27,11 +27,12 @@ def flatten_dict(dicts, defaults):
 
 def test_main():
     a = flatten([[1,2], [1,2], [True, False]])
-
     b = [{1:[2]}, {True: [True]}, {5: [1.2, 2]}]
     c = b[0][1]
-
     d = flatten_dict(b, [True, 1])
+    mopsa.ignore_exception(IndexError)
+    mopsa.ignore_exception(KeyError)
+    mopsa.assert_safe()
     mopsa.assert_list_of(a, int)
     mopsa.assert_list_of(b, dict)
     # mopsa.assert_list_of(c, float)

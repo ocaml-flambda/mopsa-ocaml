@@ -72,7 +72,7 @@ let eval_alloc man kind range flow =
   Eval.bind (fun exp flow ->
       match ekind exp with
       | E_addr (addr) -> Eval.singleton addr flow
-      | _ -> panic "eval_alloc: allocation returned a non-address express %a" Framework.Ast.pp_expr exp
+      | _ -> panic "eval_alloc: allocation returned a non-address express %a" pp_expr exp
     )
 
 (*==========================================================================*)
@@ -81,10 +81,10 @@ let eval_alloc man kind range flow =
 
 
 (** Lists of built-ins *)
-let classes : py_object list ref = ref []
-let functions : py_object list ref = ref []
-let modules : py_object list ref = ref []
-let all () = !classes @ !functions @ !modules
+let classes = Hashtbl.create 100
+let functions = Hashtbl.create 100
+let modules = Hashtbl.create 10
+(* let all () = !classes @ !functions @ !modules *)
 
 (** Name of a builtin with an optional dot notation in case of
    sub-objects (methods of classes, etc.) *)
@@ -115,24 +115,28 @@ let object_name obj =
   | A_py_function(F_builtin name) | A_py_function(F_unsupported name)
   | A_py_module(M_builtin name) | A_py_module(M_user (name, _))
     -> name
-  | A_py_function(F_user f) -> f.py_func_var.org_vname
-  | A_py_class(C_user c, _) -> c.py_cls_var.org_vname
+  | A_py_function(F_user f) -> get_orig_vname f.py_func_var
+  | A_py_class(C_user c, _) -> get_orig_vname c.py_cls_var
   | _ -> panic "builtin_name: %a is not a builtin" pp_addr (addr_of_object obj)
 
 let add_builtin_class obj () =
-  classes := obj :: !classes
+  Hashtbl.add classes (object_name obj) obj
 
 let add_builtin_function obj () =
-  functions := obj :: !functions
+  Hashtbl.add functions (object_name obj) obj
 
 let add_builtin_module obj () =
-  modules := obj :: !modules
+  Hashtbl.add modules (object_name obj) obj
 
 (** Search for the address of a builtin given its name *)
 let find_builtin name =
-  List.find (fun obj ->
-      name = object_name obj
-    ) (all ())
+  let search = fun tbl -> Hashtbl.find tbl name in
+  try
+    search classes
+  with Not_found ->
+  try search functions
+  with Not_found ->
+    search modules
 
 let is_object_unsupported obj =
   match kind_of_object obj with
@@ -141,9 +145,9 @@ let is_object_unsupported obj =
   | _ -> false
 
 (** Check whether a built-in exists given its name *)
-let is_builtin_name name = List.exists (fun obj -> name = object_name obj) (all ())
-
-let is_builtin obj = List.mem obj (all ())
+let is_builtin_name name =
+  let exists = fun tbl -> Hashtbl.mem tbl name in
+  exists classes || exists functions || exists modules
 
 (** Check whether an attribute of a built-in object exists, given its name *)
 let is_builtin_attribute base attr =
@@ -166,7 +170,7 @@ let find_builtin_attribute base attr =
     | A_py_class(C_builtin name, _) | A_py_module(M_builtin name) | A_py_module(M_user (name, _)) ->
       find_builtin (mk_dot_name (Some name) attr)
     | A_py_class(C_user cls, _) ->
-      let name = cls.py_cls_var.org_vname in
+      let name = get_orig_vname cls.py_cls_var in
       find_builtin (mk_dot_name (Some name) attr)
     | _ -> assert false
 
@@ -179,7 +183,7 @@ let is_builtin_class_function cls f =
 
 
 (** Class name of an atomic type *)
-let atomic_type_to_class_name (t: Framework.Ast.typ) : string=
+let atomic_type_to_class_name (t: typ) : string=
   let open Universal.Ast in
   match t with
   | T_int -> "int"
@@ -209,19 +213,19 @@ let class_of_object (obj: py_object) : py_object =
 
 let mro (obj: py_object) : py_object list =
   match kind_of_object obj with
-  | A_py_class (c, b) -> obj::b
+  | A_py_class (c, b) -> b
   | _ -> assert false
 
 (** Return the closest non-heap (i.e. non-user defined) base class *)
-let most_derive_builtin_base (obj: py_object) : py_object =
-  let rec aux =
-    function
-    | [o] when is_builtin o -> o
-    | o :: tl when is_builtin o -> o
-    | o :: tl -> aux tl
-    | [] -> assert false
-  in
-  aux (mro obj)
+(* let most_derive_builtin_base (obj: py_object) : py_object =
+ *   let rec aux =
+ *     function
+ *     | [o] when is_builtin o -> o
+ *     | o :: tl when is_builtin o -> o
+ *     | o :: tl -> aux tl
+ *     | [] -> assert false
+ *   in
+ *   aux (mro obj) *)
 
 (* (\** Return the closest non-heap (i.e. non-user defined) base class *\)
  * let most_derive_builtin_base (obj: py_object) : py_object =
@@ -302,15 +306,33 @@ let mk_py_z_interval l u range =
 let mk_py_float_interval l u range =
   mk_float_interval l u range
 
-let mk_attribute_var obj attr range =
-  let addr = addr_of_object obj in
-  let vname =
-    let () = Format.fprintf Format.str_formatter "%a.%s" pp_addr addr attr in
-    Format.flush_str_formatter ()
-  in
-  let uniq = vname ^ ":" ^ (string_of_int addr.addr_uid) in
-  let v = mkv vname uniq addr.addr_uid T_any in
-  mk_var v range
+(* Warning: mkv is depecriated, doesn't respect unique ids *)
+(* let mk_attribute_var obj attr range =
+ *   let addr = addr_of_object obj in
+ *   let vname =
+ *     let () = Format.fprintf Format.str_formatter "%a.%s" pp_addr addr attr in
+ *     Format.flush_str_formatter ()
+ *   in
+ *   let uniq = vname ^ ":" ^ (string_of_int addr.addr_uid) in
+ *   let v = mkv vname uniq addr.addr_uid T_any in
+ *   mk_var v range *)
+
+let mk_py_issubclass e1 e2 range =
+  mk_py_call (mk_py_object (find_builtin "issubclass") range) [e1; e2] range
+
+let mk_py_issubclass_builtin_r e builtin range =
+  let obj = find_builtin builtin in
+  mk_py_issubclass e (mk_py_object obj range) range
+
+let mk_py_issubclass_builtin_l builtin e range =
+  let obj = find_builtin builtin in
+  mk_py_issubclass (mk_py_object obj range) e range
+
+
+let mk_py_issubclass_builtin2 blt1 blt2 range =
+  let obj1 = find_builtin blt1 in
+  let obj2 = find_builtin blt2 in
+  mk_py_issubclass (mk_py_object obj1 range) (mk_py_object obj2 range) range
 
 let mk_py_hasattr e attr range =
   mk_py_call (mk_py_object (find_builtin "hasattr") range) [e; mk_constant ~etyp:T_string (C_string attr) range] range
@@ -416,10 +438,10 @@ let mk_py_type e range =
  * let mk_py_top t range =
  *   let open Universal.Ast in
  *   match t with
- *   | T_int -> mk_py_int_expr (Framework.Ast.mk_top T_int range) range
- *   | T_float -> mk_py_float_expr (Framework.Ast.mk_top T_float range) range
- *   | T_bool -> mk_py_bool_expr (Framework.Ast.mk_top T_bool range) range
- *   | T_string -> mk_py_string_expr (Framework.Ast.mk_top T_string range) range
+ *   | T_int -> mk_py_int_expr (mk_top T_int range) range
+ *   | T_float -> mk_py_float_expr (mk_top T_float range) range
+ *   | T_bool -> mk_py_bool_expr (mk_top T_bool range) range
+ *   | T_string -> mk_py_string_expr (mk_top T_string range) range
  *   | _ -> assert false
  *
  * let mk_py_constant c range =
@@ -492,7 +514,7 @@ and merge (l: py_object list list) : py_object list =
   match search_c l with
   | Some c ->
      let l' = List.filter (fun x -> x <> [])
-                (List.map (fun li -> List.filter (fun x -> compare_addr (fst c) (fst x) <> 0) li)
+                (List.map (fun li -> List.filter (fun x -> compare_addr_kind (akind @@ fst c) (akind @@ fst x) <> 0) li)
                    l) in
      (* l' is l with all c removed *)
      begin match l' with
@@ -518,13 +540,13 @@ and search_c (l: py_object list list) : py_object option =
 let create_builtin_class kind name cls bases range =
   let mro = c3_lin ({
       addr_kind= (A_py_class (kind, bases));
-      addr_uid=(-1);
+      addr_group = G_all;
       addr_mode = STRONG
     }, None)
   in
   let addr = {
       addr_kind = A_py_class(kind, mro);
-      addr_uid = 0;
+      addr_group = G_all;
       addr_mode = STRONG
     }
   in
@@ -533,7 +555,7 @@ let create_builtin_class kind name cls bases range =
 
 let () =
   Format.(
-    register_addr {
+    register_addr_kind {
       print =
         (fun default fmt a ->
            match a with
@@ -552,14 +574,14 @@ let () =
              begin match c1, c2 with
                | C_builtin s1, C_builtin s2
                | C_unsupported s1, C_unsupported s2 -> Pervasives.compare s1 s2
-               | C_user c1, C_user c2 -> Framework.Ast.compare_var c1.py_cls_var c2.py_cls_var
+               | C_user c1, C_user c2 -> compare_var c1.py_cls_var c2.py_cls_var
                | _, _ -> default a1 a2
              end
            | A_py_function f1, A_py_function f2 ->
              begin match f1, f2 with
                | F_builtin s1, F_builtin s2
                | F_unsupported s1, F_unsupported s2 -> Pervasives.compare s1 s2
-               | F_user u1, F_user u2 -> Framework.Ast.compare_var u1.py_func_var u2.py_func_var
+               | F_user u1, F_user u2 -> compare_var u1.py_func_var u2.py_func_var
                | _, _ -> default a1 a2
              end
            | A_py_module m1, A_py_module m2 ->
@@ -568,6 +590,11 @@ let () =
                | M_builtin s1, M_builtin s2 -> Pervasives.compare s1 s2
                | _, _ -> default a1 a2
              end
+           | A_py_method ((addr1, oexpr1), expr1), A_py_method ((addr2, oexpr2), expr2) ->
+             Compare.compose
+               [ (fun () -> compare_addr addr1 addr2);
+                 (fun () -> Compare.option compare_expr oexpr1 oexpr2);
+                 (fun () -> compare_expr expr1 expr2); ]
            | _ -> default a1 a2)
     }
   )
@@ -578,3 +605,21 @@ let builtin_cl_and_mro s =
   match tyo with
   | A_py_class (c, b) -> c, b
   | _ -> assert false
+
+
+
+type addr_kind +=
+  | A_py_instance of string
+
+let () =
+  Format.(register_addr_kind {
+      print = (fun default fmt a ->
+          match a with
+          | A_py_instance s (*c -> fprintf fmt "Inst{%a}" pp_addr_kind (A_py_class (c, []))*)
+            -> fprintf fmt "inst[%s]" s
+          | _ -> default fmt a);
+      compare = (fun default a1 a2 ->
+          match a1, a2 with
+          | A_py_instance c1, A_py_instance c2 ->
+            Pervasives.compare c1 c2
+          | _ -> default a1 a2);})

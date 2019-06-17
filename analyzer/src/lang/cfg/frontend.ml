@@ -21,7 +21,7 @@
 
 (** Converts a Universal program AST into a CFG. *)
 
-open OptionExt
+open Option
 open Mopsa
 open Universal.Ast
 open Ast
