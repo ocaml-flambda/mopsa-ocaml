@@ -32,7 +32,7 @@ itvUtils = float intBound intItv floatItv floatItvNan
 C_SRC = itvUtils/floats_x86_64.c
 
 # External packages, as given to ocamlfind
-PKGS = str gmp zarith camlidl
+PKGS = str gmp zarith camlidl threads
 
 
 MOPSAROOT = ..
