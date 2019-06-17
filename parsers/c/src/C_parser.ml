@@ -24,9 +24,16 @@
  *)
 
 
+let ctx_mutex = Mutex.create ()
+
+(* if only_parse is true, only parses the file without tranlating it to
+   C AST nor adding the result to the context
+ *)
 let parse_file
+    (command:string)
     (file:string)
     (opts:string list)
+    (only_parse:bool)
     (ctx:Clang_to_C.context)
   =
   let target_options = Clang_parser.get_default_target_options () in
@@ -38,7 +45,7 @@ let parse_file
                filtered_opts
   in
 
-  let obj, diag, coms, macros = Clang_parser.parse target_options file (Array.of_list opts) in
+  let obj, diag, coms, macros = Clang_parser.parse command target_options file (Array.of_list opts) in
 
   let is_error =
     List.exists
@@ -59,9 +66,14 @@ let parse_file
           Exceptions.warn_at range "%s" d.diag_message
         | _ -> ()
       ) diag;
-    Clang_to_C.add_translation_unit ctx (Filename.basename file) obj coms macros
+    if only_parse then ()
+    else (
+      Mutex.lock ctx_mutex;
+      (try Clang_to_C.add_translation_unit ctx (Filename.basename file) obj coms macros;
+       with x -> Mutex.unlock ctx_mutex; raise x);
+      Mutex.unlock ctx_mutex
+    )
   )
-
   else
     let errors =
       List.map
