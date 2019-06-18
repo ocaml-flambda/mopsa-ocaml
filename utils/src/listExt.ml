@@ -128,3 +128,53 @@ let rec mem_compare cmp e l = match l with
   | p::q when cmp p e = 0 -> true
   | p::q -> mem_compare cmp e q
   | [] -> false
+
+
+
+(** {2 Parallel functions} *)
+
+let par_iteri (nb_threads:int) (f: int -> 'a -> unit) (l:'a list) : unit =
+  if nb_threads <= 1 || List.length l <= 1
+  then List.iteri f l
+  else
+    let exn = ref None in (* exception thrown in thread *)
+    let mtx = Mutex.create () in
+    let i = ref 0 in
+    let ll = ref l in
+    let rec consumer () = 
+      Mutex.lock mtx;
+      match !ll with
+      | a::b when !exn = None->
+         (* eat one *)
+         let err = ref false in
+         ll := b;
+         let ii = !i in
+         incr i;
+         Mutex.unlock mtx;
+         (try
+             f ii a
+           with x ->
+             (* remember exception for main thread *)
+             Mutex.lock mtx;
+             exn := Some x;
+             Mutex.unlock mtx;
+             err := true
+         );
+         if not !err then consumer ()
+      | _ ->
+         (* the end *)
+         Mutex.unlock mtx
+    in
+    Array.init
+      (min nb_threads (List.length l))
+      (fun _ -> Thread.create consumer ())
+    |>  Array.iter Thread.join;
+    match !exn with
+    | None -> ()
+    | Some x -> raise x (* rethrow exception from thread *)
+(**
+   As List.iter, but in parallel using nb_threads threads.
+   As threads are used, this only makes sense if the iterated function
+   calls a C function that temporarily lifts the global interpreter lock
+   (e.g., the Clang parser)
+ *)

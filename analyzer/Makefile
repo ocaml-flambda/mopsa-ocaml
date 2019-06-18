@@ -87,7 +87,7 @@ lang.python.types = typing addr_env typechecking t_string t_int t_float t_list t
 
 
 # Packages
-PKGS = str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith
+PKGS = str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith threads
 
 
 # MOPSA

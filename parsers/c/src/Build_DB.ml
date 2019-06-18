@@ -29,6 +29,12 @@ let logfile = ref (open_out "/dev/null")
 
 (** {1 DB representation} *)
 
+(** Version number. 
+    This should be changed when the db type changes to avoid loading
+    old DB files.
+*)
+let version = "Mopsa.C.DB/1"
+
 
 module StringMap = Map.Make(String)
 (** Map with string key *)
@@ -314,31 +320,50 @@ let db_link (db:db) (out:string) (files: string list) =
                
 (** {1 DB loading, saving, locking} *)
 
-                
-let load_db (dbfile:string) : db =
-  let f = open_in dbfile in
-  let db:db =
-    if in_channel_length f = 0 then StringMap.empty
-    else Marshal.from_channel f
-  in
-  close_in f;
-  db
+let open_db ?(create=false) (dbfile:string) : Unix.file_descr =
+  let open Unix in
+  let flags = O_RDWR::(if create then [O_CREAT] else []) in
+  let d = openfile dbfile flags 0o666 in
+  lockf d F_LOCK 0;
+  d
+(** Open DB file and lock. Optionally create if it does not exist. *)
 
-let save_db (dbfile:string) (db:db) =
-  let f = open_out dbfile in
+let close_db (d:Unix.file_descr) =
+  let open Unix in
+  ignore (lseek d 0 SEEK_SET);
+  lockf d F_ULOCK 0
+(** Unlock and close DB file. *)        
+    
+let read_db (d:Unix.file_descr) : db =
+  let open Unix in
+  ignore (lseek d 0 SEEK_SET);
+  if (fstat d).st_size = 0 then StringMap.empty
+  else (
+    let f = in_channel_of_descr d in
+    let v : string = Marshal.from_channel f in
+    if v <> version then failwith ("Invalid DB format: reading version "^v^" but version "^version^" was expected");
+    Marshal.from_channel f
+  )
+(** Read from open DB file. *)
+                            
+let write_db (d:Unix.file_descr) (db:db) =
+  let open Unix in
+  ignore (lseek d 0 SEEK_SET);
+  ftruncate d 0;
+  let f = out_channel_of_descr d in
+  Marshal.to_channel f version [];
   Marshal.to_channel f db [];
-  close_out f
+  flush f
+(** Write to open DB file. *)
+        
+let load_db (dbfile:string) : db =
+  let d = open_db dbfile in
+  let db = read_db d in
+  close_db d;
+  db
+(** Load DB from file. *)
+        
 
-let lockf_db op dbfile =
-  let f = Unix.openfile dbfile [Unix.O_RDWR;Unix.O_CREAT] 0o640 in
-  Unix.lockf f op 0;
-  Unix.close f
-             
-let lock_db (dbfile:string) = lockf_db Unix.F_LOCK dbfile
-let unlock_db (dbfile:string) = lockf_db Unix.F_ULOCK dbfile
-
-
-                                         
 (** {1 DB extraction for analysis driver} *)
 
                                          

@@ -712,7 +712,7 @@ module P = struct
          (builtin_template_kind_name b.builtin_template_kind)
          (template_parameter_list indent2) b.builtin_template_param
          (bp_option "<none>" expr) b.builtin_template_requires_clause
-         (decl indent2) b.builtin_template_decl
+         (bp_option "<none>" (decl indent2)) b.builtin_template_decl
     | ClassTemplateDecl b ->
        p ch "%sClassTemplateDecl %a param=%a requires=%a injected=%a nbspecs=%i\n%a" indent
          name b.class_template_name
@@ -750,7 +750,7 @@ module P = struct
         b.template_param_is_parameter_pack
         b.template_param_is_pack_expansion
         (bp_array (template_parameter_list indent2) ";") b.template_param_expansion_template_param
-        (decl indent2) b.template_param_decl
+        (bp_option "<none>" (decl indent2)) b.template_param_decl
    | TemplateTypeParmDecl d ->
       p ch "%sTemplateTypeParmDecl %a def=%a\n" indent
         name d.template_type_param_name (bp_option "<none>" type_qual) d.template_type_param_default
@@ -877,9 +877,12 @@ module P = struct
     | Method_Destructor -> p ch "destructor"
     | Method_Conversion b -> p ch "conversion explicit=%B" b
     | Method_Constructor b ->
-       p ch "constructor explicit=%B delegate=%t init=[%a]"
+       p ch "constructor explicit=%B delegating=%B inheriting=%B target=%t inherited=%t init=[%a]"
          b.constructor_explicit
-         (fun ch -> match b.constructor_delegating with None -> p ch "<none>" | Some x -> name ch x.function_name)
+         b.constructor_delegating
+         b.constructor_inheriting
+         (fun ch -> match b.constructor_target with None -> p ch "<none>" | Some x -> name ch x.function_name)
+         (fun ch -> match b.constructor_inherited with None -> p ch "<none>" | Some x -> name ch x.function_name)
          (bp_list cxx_constructor_initializer ";") b.constructor_initializers
   and cxx_constructor_initializer ch f =
     sync ch;

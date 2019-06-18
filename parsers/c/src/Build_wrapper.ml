@@ -39,8 +39,6 @@ open Build_DB
 
 (** {1 Configuration} *)
 
-let log = ref false
-let logfile = ref (open_out "/dev/null")
 
 
 let obj_extension = ".o"
@@ -227,9 +225,9 @@ type cc_mode =
 
 type file_kind = C | CXX | ASM | OBJ | LIB | UNKNOWN
 
-let identify_file file =
+let identify_file ckind file =
   match String.lowercase_ascii (Filename.extension file) with
-  | ".c" -> C
+  | ".c" -> ckind
   | ".c++" | ".cxx" | ".cc" | ".cpp" -> CXX
   | ".s" | ".asm" -> ASM
   | ".o" | ".obj" -> OBJ
@@ -270,7 +268,7 @@ let find_lib lib paths =
 
 
 
-let compile db args =
+let compile ckind db args =
   let args = expand_at_file args in
   let mode = ref CC_LINK in
   let opts = ref [] in
@@ -363,7 +361,7 @@ let compile db args =
   let db, objs =
     List.fold_left
       (fun (db,objs) src ->
-        match identify_file src with
+        match identify_file ckind src with
         | (C | CXX | ASM) as id when !mode <> CC_NOTHING ->
            let obj =
              if !mode = CC_COMPILE && !out <> "" then !out (* user-specified name *)
@@ -390,7 +388,7 @@ let compile db args =
 
 
 
-let link = compile
+let link = compile C
 
 
 
@@ -401,10 +399,14 @@ type ar_mode = AR_ADD | AR_REMOVE | AR_EXTRACT | AR_NOTHING
 
 let ar db args =
   let args = expand_at_file args in
+  let mode, args = match args with
+    | mode::rest -> mode, rest
+    | [] -> "", []
+  in
   (* ignore option-like arguments *)
-  let args,_ = split_file_options args in
+  let args = List.filter (fun s -> not (starts_with "-" s)) args in
   let mode, archive, files = match args with
-    | mode::archive::files ->
+    | archive::files ->
        (if String.contains mode 'q' then AR_ADD
         else if String.contains mode 'r' then AR_ADD
         else if String.contains mode 'd' then AR_REMOVE
@@ -472,8 +474,8 @@ let main () =
   if !log then logfile := open_out_gen [Open_wronly;Open_creat;Open_append] 0o644 logname;
 
   (* open db *)
-  lock_db dbfile;
-  let db = load_db dbfile in
+  let d = open_db ~create:true dbfile in
+  let db = read_db d in
   let tool = Filename.basename (Sys.argv.(0))
   and args = List.tl (Array.to_list Sys.argv) in
 
@@ -485,8 +487,8 @@ let main () =
 
   (* action to database *)
   let db = match tool_normalized with
-    | "cc" | "clang" | "gcc" -> compile db args
-    | "c++" | "clang++" | "g++" -> compile db args
+    | "cc" | "clang" | "gcc" -> compile C db args
+    | "c++" | "clang++" | "g++" -> compile CXX db args
     | "ld" -> link db args
     | "ar" -> ar db args
     | "rm" -> rm db args
@@ -498,8 +500,8 @@ let main () =
   in
 
   (* close db *)
-  save_db dbfile db;
-  unlock_db dbfile;
+  write_db d db;
+  close_db d;
 
   (* now execute the original command *)
   exec_unwrapped Sys.argv (* note: this does not return *)

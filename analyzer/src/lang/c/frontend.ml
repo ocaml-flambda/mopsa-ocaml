@@ -46,6 +46,13 @@ let opt_make_target = ref ""
 let opt_without_libc = ref false
 (** Disable stubs of the standard library *)
 
+let nb_clang_threads = ref 4
+(** How many instances of the Clang parsers to spwan in parallel. *)
+
+let opt_enable_cache = ref true
+(** Enable the parser cache. *)
+
+
 let () =
   register_language_option "c" {
     key = "-I";
@@ -74,6 +81,20 @@ let () =
     doc = " disable stubs of the standard C library.";
     spec = ArgExt.Set opt_without_libc;
     default = "false";
+  };
+  register_language_option "c" {
+    key = "-clang-threads";
+    category = "C";
+    doc = " how many parallel instances of Clang parser to use.";
+    spec = ArgExt.Set_int nb_clang_threads;
+    default = "4";
+  };
+  register_language_option "c" {
+    key = "-disable-parser-cache";
+    category = "C";
+    doc = " disable the cache of the Clang parser.";
+    spec = ArgExt.Clear opt_enable_cache;
+    default = "unset";
   };
   ()
 
@@ -124,6 +145,8 @@ let find_function_in_context ctx (f: C_AST.func) =
 
 exception StubAliasFound of string
 
+let frontend_mutex = Mutex.create ()
+
 let rec parse_program (files: string list) =
   let open Clang_parser in
   let open Clang_to_C in
@@ -132,11 +155,13 @@ let rec parse_program (files: string list) =
 
   let target = get_target_info (get_default_target_options ()) in
   let ctx = Clang_to_C.create_context "project" target in
-  List.iter
-    (fun file ->
+  let nb = List.length files in
+  ListExt.par_iteri
+    !nb_clang_threads
+    (fun i file ->
        match file, Filename.extension file with
-       | _, ".c"
-       | _, ".h" -> parse_file [] file ctx
+       | _, (".c" | ".h") -> parse_file "clang" ~nb:(i,nb) [] file false false ctx
+       | _, (".cpp" | ".cc" | ".c++") -> parse_file "clang++" ~nb:(i,nb) [] file false true ctx
        | _, ".db" | ".db", _ -> parse_db file ctx
        | _, x -> Exceptions.panic "unknown C extension %s" x
     ) files;
@@ -157,8 +182,9 @@ and parse_db (dbfile: string) ctx : unit =
     (* No need for target selection if there is only one binary *)
     if List.length execs = 1
     then List.hd execs
-    else
-    if !opt_make_target = ""
+    else if execs = []
+    then panic "no binary in database"
+    else if !opt_make_target = ""
     then panic "a target is required in a multi-binary Makefile.@\nPossible targets:@\n @[%a@]"
         (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") Format.pp_print_string)
         execs
@@ -168,17 +194,18 @@ and parse_db (dbfile: string) ctx : unit =
         panic "binary target %s not found" !opt_make_target
   in
   let srcs = get_executable_sources db exec in
-  let i = ref 0 in
-  List.iter
-    (fun src ->
-       incr i;
+  let nb = List.length srcs in
+  ListExt.par_iteri
+    !nb_clang_threads
+    (fun i src ->
        match src.source_kind with
        | SOURCE_C | SOURCE_CXX ->
+         let cmd = if src.source_kind = SOURCE_C then "clang" else "clang++" in
          let cwd = Sys.getcwd() in
          Sys.chdir src.source_cwd;
          (try
-            (* parse file in the original compilation directory *)
-            parse_file src.source_opts src.source_path ctx;
+             (* parse file in the original compilation directory *)
+             parse_file cmd ~nb:(i,nb) src.source_opts src.source_path !opt_enable_cache (src.source_kind=SOURCE_CXX) ctx;
             Sys.chdir cwd;
           with x ->
             (* make sure we get back to cwd in all cases *)
@@ -188,24 +215,26 @@ and parse_db (dbfile: string) ctx : unit =
        | _ -> Exceptions.warn "ignoring file %s\n%!" src.source_path
     ) srcs
 
-and parse_file (opts: string list) (file: string) ctx =
-  Core.Debug_tree.parse file;
+and parse_file (cmd: string) ?nb (opts: string list) (file: string) enable_cache ignore ctx =
+  Mutex.lock frontend_mutex;
+  Core.Debug_tree.parse ~cmd ?nb file;
+  Mutex.unlock frontend_mutex;
   let opts' = ("-I" ^ (Paths.resolve_stub "c" "mopsa")) ::
               ("-include" ^ "mopsa.h") ::
               (List.map (fun dir -> "-I" ^ dir) !opt_include_dirs) @
               !opt_clang @
               opts
   in
-  C_parser.parse_file file opts' ctx
+  C_parser.parse_file cmd file opts' enable_cache ignore ctx
 
 
 and parse_stubs ctx () =
   (** Add Mopsa stubs *)
-  parse_file [] (Config.Paths.resolve_stub "c" "mopsa/mopsa.c") ctx;
+  parse_file "clang" [] (Config.Paths.resolve_stub "c" "mopsa/mopsa.c") false false ctx;
 
   (** Add stubs of the standard library *)
   if not !opt_without_libc then
-    parse_file [] (Config.Paths.resolve_stub "c" "libc/libc.c") ctx
+    parse_file "clang" [] (Config.Paths.resolve_stub "c" "libc/libc.c") false false ctx
   ;
 
   ()
