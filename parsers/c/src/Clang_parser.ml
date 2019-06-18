@@ -44,7 +44,14 @@ external get_target_info: target_options -> target_info = "mlclang_get_target_in
 
 
 (** {1 Parsing} *)
-
-
-external parse: command:string -> target:target_options -> filename:string -> args:string array -> decl * diagnostic list * comment list * macro list = "mlclang_parse"
-(** Parse the source file with the specified command (e.g., "clang" or "clang++") for the specified target, given the the specified compile-time options. Also returns a list of errors and the list of comments in the source file. *)
+                                                            
+type parse_result = {
+  parse_decl: decl; (** AST. *)
+  parse_diag : diagnostic list; (** Warnings and errors. *)
+  parse_comments: comment list; (** C/C++ comments. *)
+  parse_macros: macro list; (** Macros. *)
+  parse_files: string list; (** Files read during parsing. *)
+}
+      
+external parse: command:string -> target:target_options -> filename:string -> args:string array -> parse_result = "mlclang_parse"
+(** Parse the source file with the specified command (e.g., "clang" or "clang++") for the specified target, given the the specified compile-time options. *)
