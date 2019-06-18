@@ -260,6 +260,22 @@ public:
   CAMLprim void uncache(const void * key) {
     uncache(reinterpret_cast<uintptr_t>(key));
   }
+
+  CAMLprim value get_values() {
+    CAMLparam0();
+    CAMLlocal3(head, tmp, val);
+    head = Val_unit;
+    for (size_t i = 0; i < nb; i++) {
+      val = Field(mlvalues, i);
+      if (val != Val_unit) {
+        tmp = caml_alloc_tuple(2);
+        Store_field(tmp, 0, val);
+        Store_field(tmp, 1, head);
+        head = tmp;
+      }
+    }
+    CAMLreturn (head);
+  }
 };
 
 
@@ -488,6 +504,8 @@ public:
   ~MLLocationTranslator() {
     caml_remove_global_root(&invalid_file);
   }
+
+  CAMLprim value getFiles() { return cacheFile.get_values(); }
 
 };
 
@@ -4552,8 +4570,6 @@ CAML_EXPORT value mlclang_get_target_info(value target) {
 
 
 
-
-
 /* Macro table */
 /************* */
 
@@ -4596,9 +4612,30 @@ CAMLprim value getMacroTable(SourceManager& src, Preprocessor &pp, MLLocationTra
 }
 
 
+ 
+/* Source list */
+/************** */
+
+
+CAMLprim value getSources(SourceManager& src)
+{
+  CAMLparam0();
+  CAMLlocal2(head,tmp);
+  head = Val_unit;
+  for (auto f = src.fileinfo_begin(); f != src.fileinfo_end(); f++) {
+    const FileEntry& e = *f->first;
+    tmp = caml_alloc_tuple(2);
+    Store_field(tmp, 0, caml_copy_string(e.getName().str().c_str()));
+    Store_field(tmp, 1, head);
+    head = tmp;
+  }
+  CAMLreturn(head);
+}
+
+ 
+
 /* Parsing */
 /* ******* */
-
 
 
 class MLTreeBuilderConsumer : public ASTConsumer {
@@ -4688,11 +4725,12 @@ CAML_EXPORT value mlclang_parse(value command, value target, value name, value a
   ci.getDiagnosticClient().EndSourceFile();
     
   // return all info
-  ret = caml_alloc_tuple(4);
+  ret = caml_alloc_tuple(5);
   Store_field(ret, 0, tmp);
   Store_field(ret, 1, diag->getDiagnostics());
   Store_field(ret, 2, com.getRawCommentList(Context));
   Store_field(ret, 3, getMacroTable(src, pp, loc));
+  Store_field(ret, 4, getSources(src));
     
   CAMLreturn(ret);
 }

@@ -29,6 +29,12 @@ let logfile = ref (open_out "/dev/null")
 
 (** {1 DB representation} *)
 
+(** Version number. 
+    This should be changed when the db type changes to avoid loading
+    old DB files.
+*)
+let version = "Mopsa.C.DB/1"
+
 
 module StringMap = Map.Make(String)
 (** Map with string key *)
@@ -332,7 +338,12 @@ let read_db (d:Unix.file_descr) : db =
   let open Unix in
   ignore (lseek d 0 SEEK_SET);
   if (fstat d).st_size = 0 then StringMap.empty
-  else Marshal.from_channel (in_channel_of_descr d)
+  else (
+    let f = in_channel_of_descr d in
+    let v : string = Marshal.from_channel f in
+    if v <> version then failwith ("Invalid DB format: reading version "^v^" but version "^version^" was expected");
+    Marshal.from_channel f
+  )
 (** Read from open DB file. *)
                             
 let write_db (d:Unix.file_descr) (db:db) =
@@ -340,6 +351,7 @@ let write_db (d:Unix.file_descr) (db:db) =
   ignore (lseek d 0 SEEK_SET);
   ftruncate d 0;
   let f = out_channel_of_descr d in
+  Marshal.to_channel f version [];
   Marshal.to_channel f db [];
   flush f
 (** Write to open DB file. *)
