@@ -141,7 +141,7 @@ struct
   (** ================== *)
 
   let init prog man flow =
-    set_domain_env T_cur Map.empty man flow
+    set_env T_cur Map.empty man flow
 
 
 
@@ -196,7 +196,7 @@ struct
       Value.base b, Some o, None
 
     | Eq(q, mode, o) ->
-      let v = get_domain_env T_cur man flow |>
+      let v = get_env T_cur man flow |>
               Map.find q
       in
       v, (if Value.is_valid_base v then Some o else None), (Some (q,mode))
@@ -218,7 +218,7 @@ struct
   let set_value_opt p v man flow =
     match p with
     | None -> flow
-    | Some (p,mode) -> map_domain_env T_cur (add p v mode) man flow
+    | Some (p,mode) -> map_env T_cur (add p v mode) man flow
 
 
   (* Create the offset expression from optional pointer info *)
@@ -274,10 +274,10 @@ struct
 
     | Eq (p, mode, offset) ->
       let offset' = mk_binop (mk_offset_expr p mode exp.erange) O_plus offset ~etyp:T_int exp.erange in
-      let a = get_domain_env T_cur man flow in
+      let a = get_env T_cur man flow in
       let values = Map.find p a in
       let evals = Value.fold_points_to (fun v pt acc ->
-          let flow = set_domain_env T_cur (Map.add p v a) man flow in
+          let flow = set_env T_cur (Map.add p v a) man flow in
           Eval.singleton (mk_c_points_to pt exp.erange) flow :: acc
         ) values offset' []
       in
@@ -417,11 +417,7 @@ struct
     let v2, o2, p2 = symbolic_to_value sq man flow in
 
     (* Size of a pointed element *)
-    let elem_size =
-      match under_type p.etyp |> remove_typedef_qual with
-      | T_c_void -> Z.one
-      | t -> sizeof_type t
-    in
+    let elem_size = under_type p.etyp |> void_to_char |> sizeof_type in
 
     (* Case 1 : same base => return difference of offset *)
     let case1 =
@@ -481,10 +477,7 @@ struct
       man.eval size ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) flow |>
       Eval.bind @@ fun size flow ->
 
-      let elm =
-        match under_type p.etyp |> remove_typedef_qual with
-        | T_c_void -> mk_one range
-        | t -> mk_z (sizeof_type t) range
+      let elm = under_type p.etyp |> void_to_char |> (fun t -> mk_z (sizeof_type t) range)
       in
 
       (* Check validity of the offset *)
@@ -599,46 +592,43 @@ struct
     let o = mk_offset_expr p mode range in
     match Symbolic.eval q with
     | Symbolic.AddrOf (b, offset) ->
-      let flow' = map_domain_env T_cur (add p (Value.base b) mode) man flow in
+      let flow' = map_env T_cur (add p (Value.base b) mode) man flow in
 
-      man.eval offset ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) flow' |>
-      post_eval man @@ fun offset flow' ->
-
-      man.exec_sub ~zone:(Universal.Zone.Z_u_num) (mk_assign o offset range) flow'
+      man.eval offset ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) flow' >>$ fun offset flow' ->
+      man.post ~zone:(Universal.Zone.Z_u_num) (mk_assign o offset range) flow'
 
     | Eq (q, mode', offset) ->
-      let flow' = map_domain_env T_cur (fun a ->
+      let flow' = map_env T_cur (fun a ->
           add p (Map.find q a) mode a
         ) man flow
       in
       (* Assign offset only if q points to a valid block *)
-      let a = get_domain_env T_cur man flow in
-      if Map.find q a |> Value.is_valid_base then
+      let a = get_env T_cur man flow in
+      if Map.find q a |> Value.is_valid_base
+      then
         let qo = mk_offset_expr q mode' range in
         let offset' = mk_binop qo O_plus offset ~etyp:T_int range in
 
-        man.eval offset' ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) flow' |>
-        post_eval man @@ fun offset' flow ->
-
-        man.exec_sub ~zone:(Universal.Zone.Z_u_num) (mk_assign o offset' range) flow'
+        man.eval offset' ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) flow' >>$ fun offset' flow ->
+        man.post ~zone:(Universal.Zone.Z_u_num) (mk_assign o offset' range) flow'
       else
-        man.exec_sub ~zone:(Universal.Zone.Z_u_num) (mk_remove o range) flow'
+        man.post ~zone:(Universal.Zone.Z_u_num) (mk_remove o range) flow'
 
     | Fun f ->
-      map_domain_env T_cur (add p (Value.cfun f) mode) man flow |>
-      man.exec_sub ~zone:(Universal.Zone.Z_u_num) (mk_remove o range)
+      map_env T_cur (add p (Value.cfun f) mode) man flow |>
+      man.post ~zone:(Universal.Zone.Z_u_num) (mk_remove o range)
 
     | Invalid ->
-      map_domain_env T_cur (add p Value.invalid mode) man flow  |>
-      man.exec_sub ~zone:(Universal.Zone.Z_u_num) (mk_remove o range)
+      map_env T_cur (add p Value.invalid mode) man flow  |>
+      man.post ~zone:(Universal.Zone.Z_u_num) (mk_remove o range)
 
     | Null ->
-      map_domain_env T_cur (add p Value.null mode) man flow |>
-      man.exec_sub ~zone:(Universal.Zone.Z_u_num) (mk_remove o range)
+      map_env T_cur (add p Value.null mode) man flow |>
+      man.post ~zone:(Universal.Zone.Z_u_num) (mk_remove o range)
 
     | Top ->
-      map_domain_env T_cur (add p Value.top mode) man flow |>
-      man.exec_sub ~zone:(Universal.Zone.Z_u_num) (mk_assign o (mk_top T_int range) range)
+      map_env T_cur (add p Value.top mode) man flow |>
+      man.post ~zone:(Universal.Zone.Z_u_num) (mk_assign o (mk_top T_int range) range)
 
 
 
@@ -648,13 +638,13 @@ struct
     (** Uninitialized global variable *)
     | Variable_global, None | Variable_file_static _, None ->
       (* The variable is initialized with NULL (C99 6.7.8.10) *)
-      map_domain_env T_cur (Map.add v Value.null) man flow |>
+      map_env T_cur (Map.add v Value.null) man flow |>
       Post.return
 
     (** Uninitialized local variable *)
     | Variable_local _, None | Variable_func_static _, None ->
       (* The value of the variable is undetermined (C99 6.7.8.10) *)
-      map_domain_env T_cur (Map.add v Value.invalid) man flow |>
+      map_env T_cur (Map.add v Value.invalid) man flow |>
       Post.return
 
     | _, Some (C_init_expr e) ->
@@ -667,23 +657,23 @@ struct
   (** Add a pointer variable to the support of the non-rel map *)
   let add_var p range man flow =
     let o = mk_offset_expr p STRONG range in
-    map_domain_env T_cur (Map.add p Value.top) man flow |>
-    man.exec_sub ~zone:(Universal.Zone.Z_u_num) (mk_add o range)
+    map_env T_cur (Map.add p Value.top) man flow |>
+    man.post ~zone:(Universal.Zone.Z_u_num) (mk_add o range)
 
 
 
   (** Remove a pointer variable from the support of the non-rel map *)
   let remove_var p range man flow =
-    let flow = map_domain_env T_cur (Map.remove p) man flow in
+    let flow = map_env T_cur (Map.remove p) man flow in
     let o = mk_offset_expr p STRONG range in
-    man.exec_sub ~zone:(Universal.Zone.Z_u_num) (mk_remove o range) flow
+    man.post ~zone:(Universal.Zone.Z_u_num) (mk_remove o range) flow
 
 
 
   (** Make pointers pointing to addr as invalid *)
   let invalidate_addr addr range man flow =
     let base = A addr in
-    let flow' = map_domain_env T_cur (fun a ->
+    let flow' = map_env T_cur (fun a ->
         let a' = Map.map (fun v ->
             if not (Value.mem_base base v)
             then
@@ -705,10 +695,10 @@ struct
 
   (** Rename a pointer variable *)
   let rename_var p1 p2 range man flow =
-    let flow = map_domain_env T_cur (Map.rename p1 p2) man flow in
+    let flow = map_env T_cur (Map.rename p1 p2) man flow in
     let o1 = mk_offset_expr p1 STRONG range in
     let o2 = mk_offset_expr p2 STRONG range in
-    man.exec_sub ~zone:(Universal.Zone.Z_u_num) (mk_rename o1 o2 range) flow
+    man.post ~zone:(Universal.Zone.Z_u_num) (mk_rename o1 o2 range) flow
 
 
 
@@ -716,7 +706,7 @@ struct
   let rename_addr addr1 addr2 range man flow =
     let base1 = A addr1 in
     let base2 = A addr2 in
-    map_domain_env T_cur (Map.map (Value.rename_base base1 base2)) man flow |>
+    map_env T_cur (Map.map (Value.rename_base base1 base2)) man flow |>
     Post.return
 
 

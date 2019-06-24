@@ -179,13 +179,13 @@ let parse_global_predicate_comment com =
     (* Parse the comment *)
     try
       let cst = Parser.parse_stub Lexer.read buf in
-      Option.apply [] (fun cst ->
+      Option.apply (fun cst ->
           List.fold_left (fun acc section ->
               match section with
               | Cst.S_predicate pred -> pred :: acc
               | _ -> acc
             ) [] cst.content
-        ) cst
+        ) [] cst
     with
     | Lexer.SyntaxError s ->
       let range = Location.from_lexing_range (Lexing.lexeme_start_p buf) (Lexing.lexeme_end_p buf) in

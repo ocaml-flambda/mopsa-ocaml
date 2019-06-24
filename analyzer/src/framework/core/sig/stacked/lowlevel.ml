@@ -64,10 +64,9 @@ type ('a, 't, 's) man = ('a, 't, 's) Manager.man = {
   set_sub : 's -> 'a -> 'a;
 
   (** Analyzer transfer functions *)
-  post : ?zone:zone -> stmt -> 'a flow -> 'a post;
   exec : ?zone:zone -> stmt -> 'a flow -> 'a flow;
-  exec_sub : ?zone:zone -> stmt -> 'a flow -> 'a post;
-  eval : ?zone:(zone * zone) -> ?via:zone -> expr -> 'a flow -> (expr, 'a) eval;
+  post : ?zone:zone -> stmt -> 'a flow -> 'a post;
+  eval : ?zone:(zone * zone) -> ?via:zone -> expr -> 'a flow -> 'a eval;
   ask : 'r. 'r Query.query -> 'a flow -> 'r;
 
   (** Accessors to the domain's merge logs *)
@@ -153,7 +152,7 @@ sig
   val exec : zone -> stmt -> ('a, t, 's) man -> 'a flow -> 'a post option
   (** Post-state of statements *)
 
-  val eval : (zone * zone) -> expr -> ('a, t, 's) man -> 'a flow -> (expr, 'a) eval option
+  val eval : (zone * zone) -> expr -> ('a, t, 's) man -> 'a flow -> 'a eval option
   (** Evaluation of expressions *)
 
   val ask  : 'r Query.query -> ('a, t, 's) man -> 'a flow -> 'r option
@@ -174,49 +173,27 @@ end
 (*==========================================================================*)
 
 
-let set_domain_env = Manager.set_domain_env
+let set_env = Manager.set_env
+
+let get_env = Manager.get_env
+
+let map_env = Manager.map_env
 
 let set_sub_env = Manager.set_sub_env
 
-let get_domain_env = Manager.get_domain_env
-
 let get_sub_env = Manager.get_sub_env
-
-let map_domain_env = Manager.map_domain_env
 
 let map_sub_env = Manager.map_sub_env
 
-let mem_domain_env = Manager.mem_domain_env
-
-let mem_sub_env = Manager.mem_sub_env
-
 let assume = Manager.assume
 
-let assume_eval = Manager.assume_eval
-
-let assume_post = Manager.assume_post
-
 let switch = Manager.switch
-
-let switch_eval = Manager.switch_eval
-
-let switch_post = Manager.switch_post
-
-let exec_eval = Manager.exec_eval
-
-let post_eval = Manager.post_eval
-
-let post_eval_with_cleaners = Manager.post_eval_with_cleaners
 
 let exec_stmt_on_all_flows = Manager.exec_stmt_on_all_flows
 
 let exec_block_on_all_flows = Manager.exec_block_on_all_flows
 
-let log_post_stmt = Manager.log_post_stmt
-
-let log_post_sub_stmt = Manager.log_post_sub_stmt
-
-
+let post_to_flow = Manager.post_to_flow
 
 (*==========================================================================*)
 (**                          {2 Registration}                               *)
@@ -229,7 +206,12 @@ struct
   include S
   let exec zone stmt man flow =
     S.exec zone stmt man flow |>
-    Option.lift @@ log_post_stmt stmt man
+    Option.lift @@ fun res ->
+    Result.map_log (fun log ->
+        man.set_log (
+          man.get_log log |> Log.append stmt
+        ) log
+      ) res
 end
 
 

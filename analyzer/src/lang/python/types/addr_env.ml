@@ -99,7 +99,7 @@ struct
     Format.fprintf fmt "addrs: @[%a@]@\n" AMap.print m
 
   let init prog man flow =
-    set_domain_env T_cur empty man flow
+    set_env T_cur empty man flow
 
   let rec exec zone stmt man flow =
     let range = srange stmt in
@@ -116,19 +116,19 @@ struct
      *     flow |> Post.return *)
 
     | S_assign({ekind = E_var (v, WEAK)}, {ekind = E_var (w, WEAK)}) ->
-      let cur = get_domain_env T_cur man flow in
+      let cur = get_env T_cur man flow in
       if mem w cur then
         if mem v cur then
-          set_domain_env T_cur (add v (ASet.join (find w cur) (find v cur)) cur) man flow |> Post.return |> Option.return
+          set_env T_cur (add v (ASet.join (find w cur) (find v cur)) cur) man flow |> Post.return |> Option.return
         else
-          set_domain_env T_cur (add v (find w cur) cur) man flow |> Post.return |> Option.return
+          set_env T_cur (add v (find w cur) cur) man flow |> Post.return |> Option.return
       else
         flow |> Post.return |> Option.return
 
     (* S⟦ v = e ⟧ *)
     | S_assign({ekind = E_var (v, mode)}, e) ->
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
-        post_eval man
+      bind_some
           (fun e flow ->
             match ekind e with
               | E_py_undefined true ->
@@ -149,8 +149,8 @@ struct
       |> Option.return
 
     | S_assign({ekind = E_py_attribute(lval, attr)}, rval) ->
-      Eval.eval_list (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) [lval; rval] flow |>
-      post_eval man (fun args flow ->
+      bind_list [lval; rval] (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+      bind_some (fun args flow ->
           let elval, erval = match args with [e1;e2] -> e1, e2 | _ -> assert false in
           man.exec ~zone:Zone.Z_py_obj (mk_assign (mk_py_attr elval attr range) erval range) flow |> Post.return
         )
@@ -158,7 +158,7 @@ struct
 
 
     | S_remove ({ekind = E_var (v, _)} as var) ->
-      let flow = map_domain_env T_cur (remove v) man flow in
+      let flow = map_env T_cur (remove v) man flow in
       begin match v.vkind with
         | V_uniq _ ->
           (* if the variable maps to a list, we should remove the temporary variable associated, ONLY if it's not used by another list *)
@@ -170,7 +170,7 @@ struct
 
     | S_assume e ->
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
-      post_eval man (fun expr flow ->
+      bind_some (fun expr flow ->
         match ekind expr with
         | E_constant (C_top T_bool)
         | E_constant (C_bool true)
@@ -178,18 +178,18 @@ struct
         | E_py_object (a, _) when compare_addr a Typing.addr_true = 0 || compare_addr a Typing.addr_bool_top = 0
           -> Post.return flow
         | E_py_object (a, _) when compare_addr a Typing.addr_false = 0
-          -> Post.return (set_domain_env T_cur bottom man flow)
+          -> Post.return (set_env T_cur bottom man flow)
         | E_constant (C_bool false) ->
-          Post.return (set_domain_env T_cur bottom man flow)
+          Post.return (set_env T_cur bottom man flow)
         | _ ->
           Exceptions.panic_at range "todo addr_env/assume on %a@\n" pp_expr e
         )
       |> Option.return
 
     | S_rename ({ekind = E_addr a}, {ekind = E_addr a'}) ->
-      let cur = get_domain_env T_cur man flow in
+      let cur = get_env T_cur man flow in
       let ncur = AMap.map (ASet.map (fun addr -> if addr = Def a then Def a' else addr)) cur in
-      let flow = set_domain_env T_cur ncur man flow in
+      let flow = set_env T_cur ncur man flow in
       let annot = Flow.get_ctx flow in
       let to_rename = Flow.fold (fun acc tk d ->
           match tk with
@@ -212,7 +212,7 @@ struct
     | _ -> None
 
   and assign_addr man v av mode flow =
-    let cur = get_domain_env T_cur man flow in
+    let cur = get_env T_cur man flow in
     let aset = match mode with
       | STRONG -> ASet.singleton av
       | WEAK ->
@@ -221,18 +221,18 @@ struct
         else
           ASet.singleton av
     in
-    set_domain_env T_cur (add v aset cur) man flow
+    set_env T_cur (add v aset cur) man flow
 
 
   let eval zs exp man flow =
     let range = erange exp in
     match ekind exp with
     | E_var (v, mode) ->
-      let cur = get_domain_env T_cur man flow in
+      let cur = get_env T_cur man flow in
       if AMap.mem v cur then
         let aset = AMap.find v cur in
         let evals, annot = ASet.fold (fun a (acc, annots) ->
-            let flow = set_domain_env T_cur (AMap.add v (ASet.singleton a) cur) man flow in
+            let flow = set_env T_cur (AMap.add v (ASet.singleton a) cur) man flow in
             let flow = Flow.set_ctx annots flow in
             match a with
             | Undef_global when is_builtin_name (get_orig_vname v) ->
@@ -257,7 +257,7 @@ struct
               res :: acc, annots
 
           ) aset ([], Flow.get_ctx flow) in
-        let evals = List.map (fun eval -> Eval.map_flow (fun flow -> Flow.set_ctx annot flow) eval) evals in
+        let evals = List.map (Eval.set_ctx annot) evals in
         evals |> Eval.join_list ~empty:(Eval.empty_singleton flow)
         |> Option.return
       else if is_builtin_name @@ get_orig_vname v then

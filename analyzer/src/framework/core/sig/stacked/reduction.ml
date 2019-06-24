@@ -27,19 +27,23 @@ open Zone
 open Id
 open Lattice
 open Flow
+open Post
 open Eval
+open Result
 
 
-(* Product evaluations *)
-type ('e, 'a) peval = ('e, 'a) eval option list
+
+(** Product evaluations *)
+type prod_eval = expr option option list
+
 
 (** Manager used by eval reduction rules *)
 type ('a,'s) eman = {
   lattice : 'a lattice;
   get_man : 't. 't domain -> ('a, 't, 's) Manager.man;
-  get_eval : 't. 't domain -> (expr, 'a) peval -> (expr, 'a) eval option;
-  set_eval : 't. 't domain -> (expr, 'a) eval option -> (expr, 'a) peval -> (expr, 'a) peval;
-  exec : ?zone:zone -> stmt -> 'a flow -> 'a flow;
+  get_eval : 't. 't domain -> prod_eval -> expr option;
+  del_eval : 't. 't domain -> prod_eval -> prod_eval;
+  post : ?zone:zone -> stmt -> 'a flow -> 'a post;
 }
 
 
@@ -48,7 +52,7 @@ type ('a,'s) eman = {
 module type EREDUCTION =
 sig
   val name   : string
-  val reduce : expr -> ('a,'s) eman -> (expr,'a) peval  -> (expr,'a) peval
+  val reduce : expr -> ('a,'s) eman -> prod_eval -> 'a flow  -> ('a, prod_eval) result
 end
 
 

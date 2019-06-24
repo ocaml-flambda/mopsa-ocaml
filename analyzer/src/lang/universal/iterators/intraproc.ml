@@ -22,7 +22,7 @@
 (** Intra-procedural iterator for blocks, assignments and tests *)
 
 open Mopsa
-open Framework.Core.Sig.Domain.Stateless
+open Sig.Domain.Stateless
 open Ast
 
 
@@ -46,8 +46,7 @@ struct
     match skind stmt with
     | S_expression(e) when is_universal_type e.etyp || e.etyp = T_any ->
       Some (
-        man.eval e flow |>
-        post_eval man @@ fun e flow ->
+        man.eval e flow >>$ fun e flow ->
         Post.return flow
       )
 
@@ -68,7 +67,7 @@ struct
     | S_print ->
       Debug.debug ~channel:"print" "%a@\n  @[%a@]"
         pp_position (srange stmt |> get_range_start)
-        (Flow.print man.lattice) flow
+        (Flow.print man.lattice.print) flow
       ;
       Some (Post.return flow)
 

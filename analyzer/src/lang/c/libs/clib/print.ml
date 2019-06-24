@@ -69,11 +69,11 @@ struct
 
   (** Evaluate arguments into scalar values *)
   let eval_args args man flow =
-    Eval.eval_list (fun e flow ->
+    Result.bind_list args (fun e flow ->
         if is_c_num_type e.etyp
         then man.eval ~zone:(Z_c,Universal.Zone.Z_u_num) e flow
         else man.eval ~zone:(Z_c,Z_c_scalar) e flow
-      ) args flow
+      ) flow
 
 
   (** Evaluation entry point *)
@@ -83,24 +83,24 @@ struct
     (* 𝔼⟦ printf(...) ⟧ *)
     | E_c_builtin_call("printf", format :: args)
     | E_c_builtin_call("__printf_chk", format :: args) ->
-      eval_args args man flow |>
-      Eval.bind_some @@ fun _ flow ->
-      Eval.singleton (mk_top s32 exp.erange) flow
+      eval_args args man flow >>$? fun _ flow ->
+      Eval.singleton (mk_top s32 exp.erange) flow |>
+      Option.return
 
     (* 𝔼⟦ fprintf(...) ⟧ *)
     | E_c_builtin_call("fprintf", stream :: format :: args)
     | E_c_builtin_call("__fprintf_chk", stream :: _ :: format :: args) ->
-      eval_args args man flow |>
-      Eval.bind_some @@ fun _ flow ->
-      Eval.singleton (mk_top s32 exp.erange) flow
+      eval_args args man flow >>$? fun _ flow ->
+      Eval.singleton (mk_top s32 exp.erange) flow |>
+      Option.return
 
       (* 𝔼⟦ sprintf(...) ⟧ *)
     | E_c_builtin_call("sprintf", dst :: format :: args)
     | E_c_builtin_call("__sprintf_chk", dst :: _ :: _ :: format :: args)
     | E_c_builtin_call("__builtin___sprintf_chk", dst :: _ :: _ :: format :: args) ->
-      eval_args args man flow |>
-      Eval.bind_some @@ fun _ flow ->
-      Eval.singleton (mk_top s32 exp.erange) flow
+      eval_args args man flow >>$? fun _ flow ->
+      Eval.singleton (mk_top s32 exp.erange) flow |>
+      Option.return
 
 
     | _ -> None

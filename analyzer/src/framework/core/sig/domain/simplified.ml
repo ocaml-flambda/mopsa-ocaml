@@ -134,7 +134,7 @@ struct
 
   let init prog man flow =
     let a' = D.init prog in
-    Intermediate.set_domain_env T_cur a' man flow
+    Intermediate.set_env T_cur a' man flow
 
 
   let interface = {
@@ -153,7 +153,7 @@ struct
     | S_assign _ | S_assume _ | S_add _ | S_remove _ | S_rename _
     | S_project _ | S_fold _ | S_expand _ | S_forget _
       ->
-      let a = Intermediate.get_domain_env T_cur man flow in
+      let a = Intermediate.get_env T_cur man flow in
 
       if D.is_bottom a
       then Post.return flow |>
@@ -162,22 +162,26 @@ struct
       else
         D.exec stmt a |>
         Option.lift @@ fun a' ->
-        Intermediate.set_domain_env T_cur a' man flow |>
+        Intermediate.set_env T_cur a' man flow |>
         Post.return |>
-        Intermediate.log_post_stmt stmt man
+        Result.map_log (fun log ->
+            man.set_log (
+              man.get_log log |> Log.append stmt
+            ) log
+          )
 
     | _ -> None
 
   let eval zone exp man flow = None
 
   let ask query man flow =
-    D.ask query (Intermediate.get_domain_env T_cur man flow)
+    D.ask query (Intermediate.get_env T_cur man flow)
 
   let refine channel man flow =
-    D.refine channel (Intermediate.get_domain_env T_cur man flow) |>
+    D.refine channel (Intermediate.get_env T_cur man flow) |>
     Channel.bind @@ fun a ->
 
-    Intermediate.set_domain_env T_cur a man flow |>
+    Intermediate.set_env T_cur a man flow |>
     Channel.return
 
 end

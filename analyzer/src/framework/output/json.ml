@@ -32,7 +32,7 @@ let print out json =
   in
   Yojson.Basic.pretty_to_channel channel json
 
-let render_pos pos : json =
+let render_pos pos =
   let file = Location.get_pos_file pos in
   let line = Location.get_pos_line pos in
   let column = Location.get_pos_column pos in
@@ -43,22 +43,22 @@ let render_pos pos : json =
   ]
 
 
-let render_range range : json =
+let render_range range =
   `Assoc [
     "start", render_pos (Location.get_range_start range);
     "end", render_pos (Location.get_range_end range)
   ]
 
-let render_call (c:Core.Callstack.call) : json =
+let render_call (c:Core.Callstack.call)  =
   `Assoc [
     "function", `String c.call_fun;
     "range", render_range c.call_site;
   ]
 
-let render_callstack cs : json =
+let render_callstack cs  =
   `List (List.map render_call cs)
 
-let render_alarm alarm : json =
+let render_alarm alarm  =
   let title =
     let () = Core.Alarm.pp_alarm_title Format.str_formatter alarm in
     Format.flush_str_formatter ()
@@ -70,13 +70,13 @@ let render_alarm alarm : json =
     "callstack", render_callstack cs;
   ]
 
-let render_var var : json =
+let render_var var  =
   `String var.Ast.Var.vname
 
-let render_value value : json =
+let render_value value  =
   `String value
 
-let render_env (var,value) : json =
+let render_env (var,value)  =
   `Assoc [
     "var", render_var var;
     "val"   , render_value value;
@@ -84,7 +84,7 @@ let render_env (var,value) : json =
 
 
 let report ?(flow=None) man alarms time files out : unit =
-  let json : json = `Assoc [
+  let json  = `Assoc [
       "success", `Bool true;
       "time", `Float time;
       "files", `List (List.map (fun f -> `String f) files);
@@ -104,7 +104,7 @@ let panic ?(btrace="<none>") exn files out =
     | SyntaxErrorList l -> String.concat ", " (List.map snd l)
     |  _ -> Printexc.to_string exn
   in
-  let json : json = `Assoc [
+  let json  = `Assoc [
       "success", `Bool false;
       "files", `List (List.map (fun f -> `String f) files);
       "exception", `String error;
@@ -114,7 +114,7 @@ let panic ?(btrace="<none>") exn files out =
   print out json
 
 let help (args:arg list) out =
-  let json : json = `List (
+  let json  = `List (
       args |>
       List.map (fun arg ->
           `Assoc [
@@ -143,7 +143,7 @@ let help (args:arg list) out =
   print out json
 
 let list_domains (domains:string list) out =
-  let json : json = `List (
+  let json = `List (
       domains |>
       List.map (fun d -> `String d)
     )

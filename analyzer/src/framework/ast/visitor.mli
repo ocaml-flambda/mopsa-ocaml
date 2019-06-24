@@ -55,6 +55,9 @@ val split_expr : expr ->expr structure
 
 val split_stmt : stmt -> stmt structure
 
+val is_leaf_expr : expr -> bool
+
+val is_leaf_stmt : stmt -> bool
 
 (** Kinds of returned actions by a visitor *)
 type 'a action =

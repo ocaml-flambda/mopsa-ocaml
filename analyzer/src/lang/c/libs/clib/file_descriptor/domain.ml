@@ -192,7 +192,7 @@ struct
       others = Table.empty;
     }
     in
-    set_domain_env T_cur init_state man flow
+    set_env T_cur init_state man flow
 
 
   (** {2 Insertion of new resources} *)
@@ -200,7 +200,7 @@ struct
 
   (* Insert an address in the first slots *)
   let rec insert_addr_first addr range man flow =
-    let a = get_domain_env T_cur man flow in
+    let a = get_env T_cur man flow in
     let rec iter i not_inserted_before slots =
       match slots with
       | [] -> [], []
@@ -217,7 +217,7 @@ struct
           else
             let exp = mk_int i range in
             let a' = { a with first = not_inserted_before @ [inserted_here] @ not_inserted_after } in
-            let flow' = set_domain_env T_cur a' man flow in
+            let flow' = set_env T_cur a' man flow in
             Eval.singleton exp flow' :: cases
         in
         cases', not_inserted_here :: not_inserted_after
@@ -236,14 +236,14 @@ struct
 
   (** Insert an address in the remaining part of the table *)
   let insert_addr_others addr range man flow =
-    let a = get_domain_env T_cur man flow in
+    let a = get_env T_cur man flow in
     let others, itv = Table.insert addr window a.others in
     if Itv.is_bottom itv then
       []
     else
       let l, u = bounds itv in
       let exp = mk_z_interval l u range in
-      let flow = set_domain_env T_cur { a with others } man flow in
+      let flow = set_env T_cur { a with others } man flow in
       [Eval.singleton exp flow]
 
 
@@ -254,7 +254,7 @@ struct
       if is_bottom not_inserted then
         []
       else
-        let flow' = set_domain_env T_cur not_inserted man flow in
+        let flow' = set_env T_cur not_inserted man flow in
         insert_addr_others addr range man flow'
     in
     Eval.join_list ~empty:(Eval.empty_singleton flow) (case1 @ case2)
@@ -264,7 +264,7 @@ struct
   (** ================================================= *)
 
   let find_addr i range man flow =
-    let a = get_domain_env T_cur man flow in
+    let a = get_env T_cur man flow in
 
     let rec find_addr_first j slots flow =
       match slots with
@@ -273,7 +273,7 @@ struct
         let addrs = Slot.get hd in
         if addrs = [] then find_addr_first (j + 1) tl flow
         else
-          assume_eval (mk_binop i O_eq (mk_int j range) range) ~zone:Universal.Zone.Z_u_num
+          assume (mk_binop i O_eq (mk_int j range) range) ~zone:Universal.Zone.Z_u_num
             ~fthen:(fun flow ->
                 List.map (fun addr -> Eval.singleton (mk_addr addr range) flow) addrs |>
                 Eval.join_list ~empty:(Eval.empty_singleton flow)
@@ -284,7 +284,7 @@ struct
             man flow
 
     and find_addr_others flow =
-      let a = get_domain_env T_cur man flow in
+      let a = get_env T_cur man flow in
       let itv = man.ask (Universal.Numeric.Common.Q_int_interval i) flow in
 
       (* First case: return addresses having a descriptor interval
@@ -319,7 +319,7 @@ struct
   (** ============================================== *)
 
   let find_int addr range man flow =
-    let a = get_domain_env T_cur man flow in
+    let a = get_env T_cur man flow in
 
     let rec find_int_first j slots itv =
       match slots with
@@ -334,7 +334,7 @@ struct
           find_int_first (j + 1) tl itv
 
     and find_int_others itv =
-      let a = get_domain_env T_cur man flow in
+      let a = get_env T_cur man flow in
 
       let entries =
         Table.filter (fun addr' _ ->
@@ -354,11 +354,11 @@ struct
   (** ======================== *)
 
   let remove addr man flow =
-    let a = get_domain_env T_cur man flow in
+    let a = get_env T_cur man flow in
     let first = List.map (Slot.remove addr) a.first in
     let others = Table.remove addr a.others in
     let a' = { first; others } in
-    set_domain_env T_cur a' man flow
+    set_env T_cur a' man flow
 
 
   (** Computation of post-conditions *)
@@ -382,26 +382,23 @@ struct
     (* 𝔼⟦ new FileDescriptor ⟧ *)
     | E_stub_alloc("FileDescriptor") ->
       let alloc = mk_alloc_addr (A_stub_resource "FileDescription") exp.erange in
-      man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) alloc flow |>
-      Eval.bind_some @@ fun exp' flow ->
-      insert_addr (Addr.from_expr exp') exp.erange man flow
+      man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) alloc flow >>$? fun exp' flow ->
+      insert_addr (Addr.from_expr exp') exp.erange man flow |>
+      Option.return
 
     (* 𝔼⟦ new FileDescription ⟧ *)
     | E_stub_alloc("FileDescription") ->
       let alloc = mk_alloc_addr (A_stub_resource "FileDescription") exp.erange in
-      man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) alloc flow |>
-      Eval.bind_some @@ fun exp' flow ->
-      insert_addr (Addr.from_expr exp') exp.erange man flow |>
-      Eval.bind @@ fun _ flow ->
-      Eval.singleton exp' flow
+      man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) alloc flow >>$? fun exp' flow ->
+      insert_addr (Addr.from_expr exp') exp.erange man flow >>$? fun _ flow ->
+      Eval.singleton exp' flow |>
+      Option.return
 
     (* 𝔼⟦ n in FileDescriptor ⟧ *)
     | E_stub_resource_mem(n, "FileDescriptor") ->
-      man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) n flow |>
-      Eval.bind_some @@ fun n flow ->
+      man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) n flow >>$? fun n flow ->
 
-      find_addr n exp.erange man flow |>
-      Eval.bind @@ fun addr flow ->
+      find_addr n exp.erange man flow >>$? fun addr flow ->
 
       let exp' =
         match ekind addr with
@@ -409,20 +406,20 @@ struct
         | _ -> mk_zero ~typ:u8 exp.erange
       in
 
-      Eval.singleton exp' flow
+      Eval.singleton exp' flow |>
+      Option.return
 
 
     (* 𝔼⟦ _mopsa_file_descriptor_to_description(n) ⟧ *)
     | E_c_builtin_call("_mopsa_file_descriptor_to_description", [n]) ->
-      man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) n flow |>
-      Eval.bind_some @@ fun n flow ->
-      find_addr n exp.erange man flow
+      man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) n flow >>$? fun n flow ->
+      find_addr n exp.erange man flow |>
+      Option.return
 
 
     (* 𝔼⟦ _mopsa_file_description_to_descriptor(p) ⟧ *)
     | E_c_builtin_call("_mopsa_file_description_to_descriptor", [p]) ->
-      man.eval ~zone:(Z_c, Z_c_points_to) p flow |>
-      Eval.bind_some @@ fun pt flow ->
+      man.eval ~zone:(Z_c, Z_c_points_to) p flow >>$? fun pt flow ->
       begin match ekind pt with
         | E_c_points_to(P_block(A addr, n)) ->
           let itv = find_int addr exp.erange man flow in
@@ -437,7 +434,8 @@ struct
 
         | _ ->
           Eval.singleton (mk_top u32 exp.erange) flow
-      end
+      end |>
+      Option.return
 
     | _ -> None
 

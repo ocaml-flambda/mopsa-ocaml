@@ -781,6 +781,11 @@ let under_type (t: typ) : typ =
   | T_c_pointer _ -> under_pointer_type t
   | _ -> failwith "[under_type] called with a non array/pointer argument"
 
+let void_to_char t =
+  match remove_typedef_qual t with
+  | T_c_void -> T_c_integer C_signed_char
+  | _ -> t
+
 let get_array_constant_length t =
   match remove_typedef_qual t with
   | T_c_array(_, C_array_length_cst n) -> n

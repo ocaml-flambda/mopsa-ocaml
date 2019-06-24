@@ -222,3 +222,8 @@ let mk_fold_var v vl range =
     (mk_var v range)
     (List.map (fun v' -> mk_var v' range) vl)
     range
+
+let concat_blocks b1 b2 =
+  List.fold_left (fun acc c ->
+      if List.memq c acc then acc else c :: acc
+    ) b2 b1

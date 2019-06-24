@@ -68,7 +68,7 @@ struct
     match ekind exp with
 
     | E_c_conditional(cond, e1, e2) ->
-      assume_eval cond
+      assume cond
         ~fthen:(fun flow ->
             man.eval ~zone:(Z_c, Z_c_low_level) e1 flow
           )
@@ -79,7 +79,7 @@ struct
       Option.return
 
     | E_binop(O_c_and, e1, e2) ->
-      assume_eval
+      assume
         e1 ~zone:(Z_c)
         ~fthen:(fun flow ->
             man.eval ~zone:(Z_c, Z_c_low_level) e2 flow
@@ -91,7 +91,7 @@ struct
       Option.return
 
     | E_binop(O_c_or, e1, e2) ->
-      assume_eval
+      assume
         e1 ~zone:(Z_c)
         ~fthen:(fun flow ->
             Eval.singleton (Universal.Ast.mk_one exp.erange) flow

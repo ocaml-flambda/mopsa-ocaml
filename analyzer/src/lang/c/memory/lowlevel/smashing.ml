@@ -281,7 +281,7 @@ struct
   (** ***************** *)
 
   let init prog man flow =
-    set_domain_env T_cur {
+    set_env T_cur {
       smashes = SmashSet.empty;
       bases = BaseSet.empty
     } man flow
@@ -298,41 +298,34 @@ struct
 
 
   (** Evaluate a pointer deref into a smashed cell *)
-  let deref p range man flow : (deref,'a) eval =
-    eval_pointed_base_offset p range man flow |>
-    Eval.bind @@ fun (base, offset) flow ->
+  let deref p range man flow : ('a,deref) result =
+    eval_pointed_base_offset p range man flow >>$ fun (base, offset) flow ->
+    man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow >>$ fun offset flow ->
+    eval_base_size base range man flow >>$ fun size flow ->
+    man.eval ~zone:(Z_c_scalar, Z_u_num) size flow >>$ fun size flow ->
 
-    man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow |>
-    Eval.bind @@ fun offset flow ->
-
-    eval_base_size base range man flow |>
-    Eval.bind @@ fun size flow ->
-
-    man.eval ~zone:(Z_c_scalar, Z_u_num) size flow |>
-    Eval.bind @@ fun size flow ->
-
-    let typ = under_type p.etyp in
+    let typ = under_type p.etyp |> void_to_char in
     let elm_size = sizeof_type typ in
 
     (* Check that offset ∈ [0, size - elm_size] *)
-    assume_eval (mk_in offset (mk_zero range) (sub size (mk_z elm_size range) range) range)
+    assume (mk_in offset (mk_zero range) (sub size (mk_z elm_size range) range) range)
       ~fthen:(fun flow ->
           (* Do not handle scalar bases *)
           match base with
           | S _ ->
-            Eval.singleton (Top typ) flow
+            Result.singleton (Top typ) flow
 
           | V v when is_c_scalar_type v.vtyp ->
-            Eval.singleton (Top typ) flow
+            Result.singleton (Top typ) flow
 
           | _ ->
             let c = mk_smash base typ in
-            Eval.singleton (Smash c) flow
+            Result.singleton (Smash c) flow
         )
       ~felse:(fun flow ->
           (* Unsafe case *)
           raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow |>
-          Eval.empty_singleton
+          Result.empty_singleton
         )
       ~zone:Z_u_num man flow
 
@@ -344,7 +337,7 @@ struct
 
   (** Add a base to the set of declared blocks *)
   let add_base base range man flow =
-    let flow = map_domain_env T_cur (fun a ->
+    let flow = map_env T_cur (fun a ->
         { a with bases = BaseSet.add base a.bases }
       ) man flow
     in
@@ -352,42 +345,42 @@ struct
     let c = mk_smash base u8 |>
             mk_smash_var
     in
-    man.exec_sub ~zone:Z_u_num (mk_add_var c range) flow
+    man.post ~zone:Z_u_num (mk_add_var c range) flow
 
 
   let add_smash c range man flow =
-    let a = get_domain_env T_cur man flow in
+    let a = get_env T_cur man flow in
 
     if SmashSet.mem c a.smashes || not (is_c_scalar_type c.typ)
     then Post.return flow
     else
       let v = mk_smash_var c in
-      man.exec_sub ~zone:Z_c_scalar (mk_add (mk_var v range) range) flow |>
+      man.post ~zone:Z_c_scalar (mk_add (mk_var v range) range) flow |>
       Post.bind @@ fun flow ->
 
       if is_c_pointer_type c.typ
       then
-        set_domain_env T_cur { a with smashes = SmashSet.add c a.smashes } man flow |>
+        set_env T_cur { a with smashes = SmashSet.add c a.smashes } man flow |>
         Post.return
       else
         begin
           match phi c a range with
           | Some e ->
             let stmt = mk_assume (mk_binop (mk_var v range) O_eq e ~etyp:u8 range) range in
-            man.exec_sub ~zone:Z_c_scalar stmt flow
+            man.post ~zone:Z_c_scalar stmt flow
 
           | None -> Post.return flow
         end
         |>
         Post.bind @@ fun flow ->
-        set_domain_env T_cur { a with smashes = SmashSet.add c a.smashes } man flow |>
+        set_env T_cur { a with smashes = SmashSet.add c a.smashes } man flow |>
         Post.return
 
 
   (** Declaration of a C variable *)
   let declare_variable v init scope range man flow =
     (* Add the variable as a declared base *)
-    let flow = map_domain_env T_cur (fun a ->
+    let flow = map_env T_cur (fun a ->
         { a with bases = BaseSet.add (V v) a.bases }
       ) man flow
     in
@@ -429,7 +422,7 @@ struct
 
     | Some (typ, el) ->
       let c = mk_smash (V v) typ in
-      let flow = map_domain_env T_cur (fun a ->
+      let flow = map_env T_cur (fun a ->
           { a with smashes = SmashSet.add c a.smashes }
         ) man flow
       in
@@ -443,36 +436,35 @@ struct
           let evl =
             match init with
             | Some (C_init_expr e) ->
-              man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow |>
-              Eval.bind @@ fun e flow ->
+              man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow >>$ fun e flow ->
 
-              Eval.singleton (Some (C_init_expr e)) flow
+              Result.singleton (Some (C_init_expr e)) flow
 
             | _ ->
-              Eval.singleton init flow
+              Result.singleton init flow
           in
 
-          evl |> post_eval man @@ fun init flow ->
+          evl |> bind_some @@ fun init flow ->
 
           let stmt = mk_c_declaration cv init scope range in
-          man.exec_sub ~zone:Z_c_scalar stmt flow |>
+          man.post ~zone:Z_c_scalar stmt flow |>
           Post.join (aux tl)
       in
       aux el
 
   (* Remove a cell and its associated scalar variable *)
   let remove_smash c range man flow =
-    let flow = map_domain_env T_cur (fun a ->
+    let flow = map_env T_cur (fun a ->
         { a with smashes = SmashSet.remove c a.smashes }
       ) man flow
     in
     let v = mk_smash_var c in
     let stmt = mk_remove_var v range in
-    man.exec_sub ~zone:Z_c_scalar stmt flow
+    man.post ~zone:Z_c_scalar stmt flow
 
 
   let remove_overlappings c range man flow =
-    let a = get_domain_env T_cur man flow in
+    let a = get_env T_cur man flow in
     SmashSet.fold (fun c' acc ->
         if compare_base c.base c'.base = 0 &&
            compare_typ c.typ c'.typ <> 0
@@ -489,7 +481,7 @@ struct
     Post.bind @@ fun flow ->
 
     let stmt = mk_assign (mk_var cv ~mode:WEAK range) rval range in
-    man.exec_sub ~zone:Z_c_scalar stmt flow |>
+    man.post ~zone:Z_c_scalar stmt flow |>
     Post.bind @@ fun flow ->
 
     remove_overlappings c range man flow
@@ -498,11 +490,9 @@ struct
 
   (** Assignment abstract transformer for 𝕊⟦ *p = rval; ⟧ *)
   let assign_deref p rval range man flow =
-    deref p range man flow |>
-    post_eval man @@ fun deref flow ->
+    deref p range man flow >>$ fun deref flow ->
 
-    man.eval rval ~zone:(Z_c_low_level,Z_c_scalar) flow |>
-    post_eval man @@ fun rval flow ->
+    man.eval rval ~zone:(Z_c_low_level,Z_c_scalar) flow >>$ fun rval flow ->
 
     match deref with
     | Top _ -> Post.return flow
@@ -522,7 +512,7 @@ struct
   let rename_smash oldc newc range man flow =
     (* Remove the old cell and add the new one *)
     let flow =
-      map_domain_env T_cur (fun a ->
+      map_env T_cur (fun a ->
           { a with smashes = SmashSet.remove oldc a.smashes |>
                              SmashSet.add newc
           }
@@ -532,12 +522,12 @@ struct
     let oldv = mk_smash_var oldc in
     let newv = mk_smash_var newc in
     let stmt = mk_rename_var oldv newv range in
-    man.exec_sub ~zone:Z_c_scalar stmt flow
+    man.post ~zone:Z_c_scalar stmt flow
 
 
   (** Rename bases and their smash *)
   let rename_base base1 base2 range man flow =
-    let a = get_domain_env T_cur man flow in
+    let a = get_env T_cur man flow in
     (* Smashes of base1 *)
     let smashes1 = SmashSet.filter (fun c ->
         compare_base c.base base1 = 0
@@ -566,7 +556,7 @@ struct
     Post.bind @@ fun flow ->
 
     (* Remove base1 and add base2 *)
-    map_domain_env T_cur (fun a ->
+    map_env T_cur (fun a ->
         {
           a with
           bases = BaseSet.remove base1 a.bases |>
@@ -579,8 +569,8 @@ struct
 
 
   let remove_base base range man flow =
-    let a = get_domain_env T_cur man flow in
-    let flow = set_domain_env T_cur { a with bases = BaseSet.remove base a.bases } man flow in
+    let a = get_env T_cur man flow in
+    let flow = set_env T_cur { a with bases = BaseSet.remove base a.bases } man flow in
     try SmashSet.fold (fun c acc ->
         if compare_base c.base base = 0 then
           Post.bind (remove_smash c range man) acc
@@ -594,8 +584,7 @@ struct
   (** Rename primed smashes into unprimed ones *)
   let rename_primed target offsets range man flow =
     (* target is pointer, so resolve it and compute the affected offsets *)
-    man.eval ~zone:(Z_c_low_level, Z_c_points_to) target flow |>
-    post_eval man @@ fun pt flow ->
+    man.eval ~zone:(Z_c_low_level, Z_c_points_to) target flow >>$ fun pt flow ->
     match ekind pt with
     | E_c_points_to P_top | E_c_points_to P_valid ->
       Post.return flow
@@ -603,7 +592,7 @@ struct
     | E_c_points_to (P_block(base, offset)) ->
 
       (* Get cells with the same base *)
-      let a = get_domain_env T_cur man flow in
+      let a = get_env T_cur man flow in
       let same_base_cells = SmashSet.filter (fun c ->
           compare_base base c.base = 0
         ) a.smashes
@@ -630,28 +619,20 @@ struct
 
   (** Filter with a quantified test *)
   let assume_quantified op p e primed range man flow =
-    eval_pointed_base_offset p range man flow |>
-    post_eval man @@ fun (base,offset) flow ->
+    eval_pointed_base_offset p range man flow >>$ fun (base,offset) flow ->
 
-    eval_base_size base range man flow |>
-    post_eval man @@ fun size flow ->
-
-    man.eval ~zone:(Z_c_scalar, Z_u_num) size flow |>
-    post_eval man @@ fun size flow ->
+    eval_base_size base range man flow >>$ fun size flow ->
+    man.eval ~zone:(Z_c_scalar, Z_u_num) size flow >>$ fun size flow ->
 
     (** Get symbolic bounds of the offset *)
     let min, max = Common.Quantified_offset.bound offset in
 
-    man.eval ~zone:(Z_c_low_level, Z_u_num) min flow |>
-    post_eval man @@ fun min flow ->
+    man.eval ~zone:(Z_c_low_level, Z_u_num) min flow >>$ fun min flow ->
+    man.eval ~zone:(Z_c_low_level, Z_u_num) max flow >>$ fun max flow ->
 
-    man.eval ~zone:(Z_c_low_level, Z_u_num) max flow |>
-    post_eval man @@ fun max flow ->
+    man.eval ~zone:(Z_c_low_level, Z_c_scalar) e flow >>$ fun e flow ->
 
-    man.eval ~zone:(Z_c_low_level, Z_c_scalar) e flow |>
-    post_eval man @@ fun e flow ->
-
-    let elm = sizeof_type @@ under_type p.etyp in
+    let elm = sizeof_type @@ void_to_char @@ under_type p.etyp in
 
     (* Do not process scalar bases *)
     let is_scalar_base =
@@ -667,7 +648,7 @@ struct
          bounded access.
          Safety condition: [min, max] ⊆ [0, size - elm]
       *)
-      assume_post (
+      assume (
         mk_binop
           (mk_in min (mk_zero range) (sub size (mk_z elm range) range) range)
           O_log_and
@@ -683,13 +664,13 @@ struct
     else
       (* In case of non-scalar base, try to use a strong smash in case
          of full coverage by the quantifier *)
-      let c = mk_smash base ~primed (under_type p.etyp) in
+      let c = mk_smash base ~primed (under_type p.etyp |> void_to_char) in
       let v = mk_smash_var c in
 
       add_smash c range man flow |>
       Post.bind @@ fun flow ->
 
-      switch_post [
+      switch [
         (* Full coverage case
            Condition: [min, max] = [0, size - elm]
 
@@ -700,12 +681,12 @@ struct
            Transformation: [base:*:typ] == e
         *)
         [
-          mk_binop min O_eq (mk_zero range) range, true;
-          mk_binop max O_eq (sub size (mk_z elm range) range) range, true;
+          mk_binop min O_eq (mk_zero range) range;
+          mk_binop max O_eq (sub size (mk_z elm range) range) range;
         ],
         (fun flow ->
            (* Use strong mode *)
-           man.exec_sub ~zone:Z_c_scalar (mk_assume (mk_binop (mk_var v ~mode:STRONG range) op e range) range) flow
+           man.post ~zone:Z_c_scalar (mk_assume (mk_binop (mk_var v ~mode:STRONG range) op e range) range) flow
         );
 
 
@@ -719,18 +700,18 @@ struct
            Transformation: weak([base:*:typ]) == e
         *)
         [
-          mk_in min (mk_zero range) max range, true;
-          mk_in max min (sub size (mk_z elm range) range) range, true;
+          mk_in min (mk_zero range) max range;
+          mk_in max min (sub size (mk_z elm range) range) range;
           (mk_binop
              (mk_binop min O_gt (mk_zero range) range)
              O_log_or
              (mk_binop max O_lt (sub size (mk_z elm range) range) range)
              range
-          ),true
+          )
         ],
         (fun flow ->
            (* Use weak mode *)
-           man.exec_sub ~zone:Z_c_scalar (mk_assume (mk_binop (mk_var v ~mode:WEAK range) op e range) range) flow
+           man.post ~zone:Z_c_scalar (mk_assume (mk_binop (mk_var v ~mode:WEAK range) op e range) range) flow
         );
 
 
@@ -744,7 +725,7 @@ struct
              O_log_or
              (mk_binop max O_gt (sub size (mk_z elm range) range) range)
              range
-          ), true
+          )
         ],
         (fun flow ->
            raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow |>
@@ -790,7 +771,7 @@ struct
 
     | S_rename({ ekind = E_addr addr1 }, { ekind = E_addr addr2 }) ->
       rename_base (A addr1) (A addr2) stmt.srange man flow |>
-      Post.bind (man.exec_sub ~zone:Z_c_scalar stmt) |>
+      Post.bind (man.post ~zone:Z_c_scalar stmt) |>
       Option.return
 
     | S_stub_assigns _ ->
@@ -878,15 +859,12 @@ struct
 
   (** Abstract evaluation of a dereference *)
   let eval_deref p range man flow =
-    deref p range man flow |>
-    Eval.bind @@ fun deref flow ->
+    deref p range man flow >>$ fun deref flow ->
 
     match deref with
     | Smash c ->
       let v = mk_smash_var c in
-      let flow = add_smash c range man flow |>
-                 Post.to_flow man.lattice
-      in
+      add_smash c range man flow >>= fun _ flow ->
       Eval.singleton (mk_var v ~mode:WEAK range) flow
 
     | Top typ ->
@@ -896,16 +874,13 @@ struct
 
   (** Abstract evaluation of primed expressions in stubs *)
   let eval_primed lval range man flow =
-    deref (mk_c_address_of lval range) range man flow |>
-    Eval.bind @@ fun deref flow ->
+    deref (mk_c_address_of lval range) range man flow >>$ fun deref flow ->
 
     match deref with
     | Smash c ->
       let cc = { c with primed = true } in
       let v = mk_smash_var cc in
-      let flow = add_smash cc range man flow |>
-                 Post.to_flow man.lattice
-      in
+      add_smash cc range man flow >>= fun _ flow ->
       Eval.singleton (mk_var v  ~mode:WEAK range) flow
 
     | Top typ ->

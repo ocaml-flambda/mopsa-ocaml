@@ -25,6 +25,7 @@
    functions if required *)
 
 open Mopsa
+open Sig.Domain.Stateless
 open Addr
 open Ast
 open Universal.Ast

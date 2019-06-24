@@ -174,7 +174,7 @@ struct
       in
 
       let flow0 = Flow.set T_cur (Flow.get TSwitch man.lattice flow) man.lattice flow in
-      assume_post
+      assume
         (mk_binop e0 O_eq e stmt.srange ~etyp:u8)
         ~fthen:(fun true_flow ->
             Flow.set TSwitch man.lattice.bottom man.lattice true_flow

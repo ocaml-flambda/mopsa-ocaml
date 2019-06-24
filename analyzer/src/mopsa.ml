@@ -25,26 +25,6 @@ include Framework.Ast.All
 
 include Framework.Core.All
 
-type ('a, 't) man = ('a, 't) Framework.Core.Sig.Domain.Lowlevel.man = {
-  (* Lattice operators over global abstract elements ['a] *)
-  lattice : 'a lattice;
-
-  (* Accessors to the domain's abstract element ['t] within ['a] *)
-  get : 'a -> 't;
-  set : 't -> 'a -> 'a;
-
-  (** Analyzer transfer functions *)
-  post : ?zone:zone -> stmt -> 'a flow -> 'a post;
-  exec : ?zone:zone -> stmt -> 'a flow -> 'a flow;
-  eval : ?zone:(zone * zone) -> ?via:zone -> expr -> 'a flow -> (expr, 'a) eval;
-  ask : 'r. 'r query -> 'a flow -> 'r;
-
-  (** Accessors to the domain's merging logs *)
-  get_log : Log.log -> Log.log;
-  set_log : Log.log -> Log.log -> Log.log;
-}
-
-
 module Core = Framework.Core
 
 module Config = Framework.Config

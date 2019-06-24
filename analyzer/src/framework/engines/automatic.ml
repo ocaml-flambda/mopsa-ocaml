@@ -62,6 +62,7 @@ struct
     join = (fun ctx a a' -> Abstraction.join man ctx a a');
     meet = (fun ctx a a' -> Abstraction.meet man ctx a a');
     widen = (fun ctx a a' -> Abstraction.widen man ctx a a');
+    merge = Abstraction.merge;
     print = Abstraction.print;
   }
 

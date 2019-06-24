@@ -123,7 +123,7 @@ struct
             (Rangemap.fprint
                MapExt.printer_default
                (fun fmt (cs, r) -> Callstack.print fmt cs; pp_range fmt r)
-               (fun fmt flow -> TokenMap.print_w_lprint l fmt (Flow.get_token_map flow))) ctx
+               (fun fmt flow -> TokenMap.print l fmt (Flow.get_token_map flow))) ctx
       end
     )
 
@@ -169,7 +169,7 @@ struct
     | None -> None
     | Some old_lfp ->
       let res = Flow.join man.lattice old_lfp flow in
-      debug "cache: %a join %a = %a@\n" (Flow.print man.lattice) old_lfp (Flow.print man.lattice) flow (Flow.print man.lattice) res;
+      debug "cache: %a join %a = %a@\n" (Flow.print man.lattice.print) old_lfp (Flow.print man.lattice.print) flow (Flow.print man.lattice.print) res;
       Some res
     (* flow *)
 
@@ -193,8 +193,8 @@ struct
       debug "post unroll %a (is_fp=%b):@\n flow_init = @[%a@]@\n flow_out = @[%a@]"
         pp_range stmt.srange
         is_fp
-        (Flow.print man.lattice) flow_init
-        (Flow.print man.lattice) flow_out
+        (Flow.print man.lattice.print) flow_init
+        (Flow.print man.lattice.print) flow_out
       ;
 
       let flow_lfp =
@@ -258,9 +258,9 @@ struct
       let () = debug
           "widening: %a@\n abs =@\n@[  %a@]@\n abs' =@\n@[  %a@]@\n res =@\n@[  %a@]"
           pp_range body.srange
-          (Flow.print man.lattice) flow
-          (Flow.print man.lattice) flow3
-          (Flow.print man.lattice) wflow
+          (Flow.print man.lattice.print) flow
+          (Flow.print man.lattice.print) flow3
+          (Flow.print man.lattice.print) wflow
       in
       lfp (count+1) !opt_loop_widening_delay cond body man flow_init wflow
     else

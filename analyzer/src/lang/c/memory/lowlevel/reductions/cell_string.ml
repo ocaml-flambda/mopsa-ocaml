@@ -34,47 +34,57 @@ struct
 
   let debug fmt = Debug.debug ~channel:name fmt
 
-  let reduce exp man evals =
-    match man.get_eval Cells.Domain.id evals,
-          man.get_eval String_length.Domain.id evals
-    with
-    | Some evl1, Some evl2 ->
-      let evl1', evl2' = Eval.merge (fun e1 flow1 e2 flow2 ->
-          match ekind e1, ekind e2 with
+  let cells = Cells.Domain.id
+  let strings = String_length.Domain.id
+
+
+  let reduce exp man evals flow =
+    let oe1 = man.get_eval cells evals in
+    let oe2 = man.get_eval strings evals in
+
+    (* Reduce only when both domains did an evaluation *)
+    Option.apply2
+      (fun e1 e2 ->
+         match ekind e1, ekind e2 with
           (* Constants from the cell domain should be precise, isn't it? *)
           | E_constant (C_int _), _
           | E_constant (C_c_character _), _ ->
-            Some (Eval.singleton e1 flow1), None
+            let evals = man.del_eval strings evals in
+            Result.singleton evals flow
 
           (* If the cell domain returned a cell variable, refine it if possible *)
           | E_var (v, _), _ ->
             let cond = mk_binop e1 O_eq e2 exp.erange in
-            let flow1' = man.exec ~zone:Z_c_scalar (mk_assume cond exp.erange) flow1 in
-            if Flow.get T_cur man.lattice flow1' |> man.lattice.is_bottom then
-              None, None
+            man.post ~zone:Z_c_scalar (mk_assume cond exp.erange) flow >>= fun _ flow ->
+
+            if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
+            then
+              let evals = man.del_eval cells evals |>
+                          man.del_eval strings
+              in
+              Result.singleton evals flow
             else
-              let flow = Flow.meet man.lattice flow1' flow2 in
               begin
                 match ekind e2 with
                 | E_constant (C_int _) ->
-                  None, Some (Eval.singleton e2 flow)
+                  let evals = man.del_eval cells evals in
+                  Result.singleton evals flow
 
                 | _ ->
-                  Some (Eval.singleton e1 flow), None
+                  let evals = man.del_eval strings evals in
+                  Result.singleton evals flow
               end
 
 
           (* Otherwise, keep the string evaluation, because they are
              partitioned w.r.t. to the length auxiliary variable *)
           | _, _ ->
-            None, Some (Eval.singleton e2 flow2)
+            let evals = man.del_eval cells evals in
+            Result.singleton evals flow
+      )
+      (Result.singleton evals flow)
+      oe1 oe2
 
-        ) evl1 evl2
-      in
-      man.set_eval Cells.Domain.id evl1' evals |>
-      man.set_eval String_length.Domain.id evl2'
-
-    | _ -> evals
 end
 
 let () =

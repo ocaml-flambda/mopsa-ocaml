@@ -91,12 +91,9 @@ struct
     {
       lattice = man.lattice;
       exec = man.exec;
-      post = man.post;
+      post = dman.post;
       eval = man.eval;
       ask = man.ask;
-      exec_sub = (fun ?(zone=any_zone) stmt flow ->
-          dman.post ~zone stmt flow
-        );
 
       get = (fun a -> man.get a |> fst);
       set = (fun a1 a -> man.set (a1, man.get a |> snd) a);
