@@ -55,10 +55,9 @@ type ('a, 't, 's) man = ('a,'t,'s) Intermediate.man = {
   set_sub : 's -> 'a -> 'a;
 
   (** Analyzer transfer functions *)
-  post : ?zone:zone -> stmt -> 'a flow -> 'a post;
   exec : ?zone:zone -> stmt -> 'a flow -> 'a flow;
-  exec_sub : ?zone:zone -> stmt -> 'a flow -> 'a post;
-  eval : ?zone:(zone * zone) -> ?via:zone -> expr -> 'a flow -> (expr, 'a) eval;
+  post : ?zone:zone -> stmt -> 'a flow -> 'a post;
+  eval : ?zone:(zone * zone) -> ?via:zone -> expr -> 'a flow -> 'a eval;
   ask : 'r. 'r Query.query -> 'a flow -> 'r;
 
   (** Accessors to the domain's merge logs *)
@@ -102,7 +101,7 @@ sig
   val exec : zone -> stmt -> ('a, unit,'s) man -> 'a flow -> 'a post option
   (** Computation of post-conditions *)
 
-  val eval : zone * zone -> expr -> ('a, unit,'s) man -> 'a flow -> (expr, 'a) eval option
+  val eval : zone * zone -> expr -> ('a, unit,'s) man -> 'a flow -> 'a eval option
   (** Evaluation of expressions *)
 
   val ask  : 'r Query.query -> ('a, unit,'s) man -> 'a flow -> 'r option
@@ -175,18 +174,10 @@ let names () =
 
 let assume = Intermediate.assume
 
-let assume_eval = Intermediate.assume_eval
-
-let assume_post = Intermediate.assume_post
-
 let switch = Intermediate.switch
 
-let switch_eval = Intermediate.switch_eval
+let exec_stmt_on_all_flows = Intermediate.exec_stmt_on_all_flows
 
-let switch_post = Intermediate.switch_post
+let exec_block_on_all_flows = Intermediate.exec_block_on_all_flows
 
-let exec_eval = Intermediate.exec_eval
-
-let post_eval = Intermediate.post_eval
-
-let post_eval_with_cleaners = Intermediate.post_eval_with_cleaners
+let post_to_flow = Intermediate.post_to_flow

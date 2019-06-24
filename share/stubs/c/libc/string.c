@@ -91,7 +91,7 @@ void *memccpy (void *__restrict __dest, const void *__restrict __src,
 /*$
  * requires: size(__dest) >= __len;
  * assigns: ((unsigned char*)__dest)[0, __len - 1];
- * ensures: forall int i in [0, __len - 1]: ((unsigned char*)__dest[i])' == __ch;
+ * ensures: forall int i in [0, __len - 1]: (((unsigned char*)__dest)[i])' == __ch;
  * ensures: return == __dest;
  */
 void *memset (void *__dest, int __ch, size_t __len);
@@ -101,17 +101,17 @@ void *memset (void *__dest, int __ch, size_t __len);
  * requires: size(__s2) >= __n;
  *
  * case "equal" {
- *   assumes: forall int i in [0, __n - 1]: (unsigned char*)__s1[i] == (unsigned char*)__s2[i];
+ *   assumes: forall int i in [0, __n - 1]: ((unsigned char*)__s1)[i] == ((unsigned char*)__s2)[i];
  *   ensures: return == 0;
  * }
  *
  * case "notequal" {
- *   assumes: exists int i in [0, __n - 1]: (unsigned char*)__s1[i] != (unsigned char*)__s2[i];
+ *   assumes: exists int i in [0, __n - 1]: ((unsigned char*)__s1)[i] != ((unsigned char*)__s2)[i];
  *   ensures: exists int i in [0, __n - 1]: (
  *             (unsigned char*)__s1[i] != (unsigned char*)__s2[i] and
- *             forall int j in [0, i - 1]: (unsigned char*)__s1[j] == (unsigned char*)__s2[j] and
- *             ((unsigned char*)__s1[i] - (unsigned char*)__s2[i] > 0 implies return > 0) and
- *             ((unsigned char*)__s1[i] - (unsigned char*)__s2[i] < 0 implies return < 0)
+ *             forall int j in [0, i - 1]: ((unsigned char*)__s1)[j] == ((unsigned char*)__s2)[j] and
+ *             (((unsigned char*)__s1)[i] - ((unsigned char*)__s2)[i] > 0 implies return > 0) and
+ *             (((unsigned char*)__s1)[i] - ((unsigned char*)__s2)[i] < 0 implies return < 0)
  *            );
  * }
  */
@@ -253,17 +253,30 @@ char *strncat (char *__restrict __dest, const char *__restrict __src,
  *
  * case "equal" {
  *   assumes: len1 == len2 and
+ *            len1 >= 1 and
  *            forall int i in [0, len1 - 1]: __s1[i] == __s2[i];
  *   ensures: return == 0;
  * }
  *
+ * case "both-empty" {
+ *   assumes: len1 == 0 and len2 == 0;
+ *   ensures: return == 0;
+ * }
+ *
+ * case "only-one-empty" {
+ *   assumes: len1 == 0 or len2 == 0;
+ *   assumes: len1 != len2;
+ *   ensures: (len1 >= 1 implies return > 0) and (len2 >= 1 implies return < 0);
+ * }
+ *
  * case "not-equal" {
+ *   assumes: len1 >= 1 and len2 >= 1;
  *   assumes: exists int i in [0, len1 - 1]: (
- *              i <= len2 - 1 and 
+ *              i <= len2 - 1 and
  *              __s1[i] != __s2[i]
  *            );
  *   ensures: exists int i in [0, len1 - 1]: (
- *              i <= len2 - 1 and 
+ *              i <= len2 - 1 and
  *              __s1[i] != __s2[i] and
  *              forall int j in [0, i - 1]: __s1[j] == __s2[j] and
  *             (__s1[i] - __s2[i] > 0 implies return > 0) and
@@ -467,11 +480,23 @@ char *__builtin_strchr (const char *__s, int __c);
 char *strrchr (const char *__s, int __c);
 
 
+
+
 /*$
  * requires: valid_string(__s);
- * ensures: return in [0, size(__s) - 1];
- * ensures: __s[return] == 0;
- * ensures: forall signed int i in [0, (signed int)return - 1]: __s[i] != 0;
+ *
+ * case "empty string" {
+ *   assumes: __s[0] == 0;
+ *   ensures: return == 0;
+ * }
+ *
+ * case "non empty string" {
+ *   assumes: __s[0] != 0;
+ *   ensures: return in [1, size(__s) - 1];
+ *   ensures: __s[return] == 0;
+ *   ensures: forall unsigned int k in [0, return - 1]: __s[k] != 0;
+ * }
+ *
  */
 size_t strlen (const char *__s);
 

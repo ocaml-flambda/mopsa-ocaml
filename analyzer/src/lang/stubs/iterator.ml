@@ -106,7 +106,7 @@ struct
       (man:('a, unit) man)
       (flow:'a flow)
     : 'a flow * 'a flow option =
-    debug "@[<v 2>eval formula %a@;in %a" pp_formula f (Flow.print man.lattice) flow;
+    debug "@[<v 2>eval formula %a@;in %a" pp_formula f (Flow.print man.lattice.print) flow;
     match f.content with
     | F_expr e ->
       man.exec (mk_assume e f.range) flow,
@@ -295,18 +295,22 @@ struct
   (** Execute an allocation of a new resource *)
   let exec_local_new v res range man flow =
     (* Evaluation the allocation request *)
-    man.eval (mk_stub_alloc_resource res range) flow |>
-    exec_eval man @@ fun addr flow ->
+    let post =
+      man.eval (mk_stub_alloc_resource res range) flow |>
+      bind_some @@ fun addr flow ->
 
-    (* Add the address dimension before doing the assignment *)
-    let flow =
-      match ekind addr with
-      | E_addr _ -> man.exec (mk_add addr range) flow
-      | _ -> flow
+      (* Add the address dimension before doing the assignment *)
+      let flow =
+        match ekind addr with
+        | E_addr _ -> man.exec (mk_add addr range) flow
+        | _ -> flow
+      in
+
+      (* Assign the address to the variable *)
+      man.exec (mk_assign (mk_var v range) addr range) flow |>
+      Post.return
     in
-
-    (* Assign the address to the variable *)
-    man.exec (mk_assign (mk_var v range) addr range) flow
+    post_to_flow man post
 
 
   (** Execute a function call *)
@@ -391,15 +395,13 @@ struct
 
   (** Execute the body of a case section *)
   let exec_case case return man flow =
-    let flow' =
-      (* Execute leaf sections *)
-      List.fold_left (fun flow leaf ->
-          exec_leaf leaf return man flow
-        ) flow case.case_body |>
-      (* Clean case post state *)
-      clean_post case.case_locals case.case_assigns case.case_range man
-    in
-    flow'
+    (* Execute leaf sections *)
+    List.fold_left (fun flow leaf ->
+        exec_leaf leaf return man flow
+      ) flow case.case_body |>
+
+    (* Clean case post state *)
+    clean_post case.case_locals case.case_assigns case.case_range man
 
 
   (** Execute the body of a stub *)

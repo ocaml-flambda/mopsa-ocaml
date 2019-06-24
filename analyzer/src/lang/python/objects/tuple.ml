@@ -120,8 +120,8 @@ struct
     let range = erange exp in
     match ekind exp with
     | E_py_tuple els ->
-      Eval.eval_list man.eval els flow |>
-      Eval.bind(fun els flow ->
+      bind_list els man.eval flow |>
+      bind_some (fun els flow ->
           let els_vars, flow = get_var_flow (Callstack.get flow, range, List.length els) flow in
           let flow = List.fold_left2 (fun acc vari eli ->
               man.exec ~zone:Zone.Z_py

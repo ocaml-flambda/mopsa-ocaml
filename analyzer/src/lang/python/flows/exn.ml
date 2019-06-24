@@ -86,7 +86,7 @@ module Domain =
 
         (* Execute try body *)
         let try_flow = man.exec body flow0 in
-        debug "post try flow:@\n  @[%a@]" (Flow.print man.lattice) try_flow;
+        debug "post try flow:@\n  @[%a@]" (Flow.print man.lattice.print) try_flow;
         (* Execute handlers *)
         let flow_caught, flow_uncaught =
           List.fold_left (fun (acc_caught, acc_uncaught) excpt ->
@@ -124,10 +124,13 @@ module Domain =
       | S_py_raise(Some exp) ->
         debug "Raising %a@\n" pp_expr exp;
         (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) exp flow |>
-         post_eval_with_cleaners man (fun exp flow cleaners ->
+         bind_full (fun exp flow log cleaners ->
+             match exp with
+             | None -> Result.return None flow ~log ~cleaners
+             | Some exp ->
              (* match ekind exp with
               * | E_py_object obj -> *)
-             assume_post
+             assume
                (mk_py_isinstance_builtin exp "BaseException" range)
                man
                ~fthen:(fun true_flow ->
@@ -147,18 +150,18 @@ module Domain =
                    let flow' = Flow.add (T_alarm a) cur man.lattice true_flow |>
                                Flow.set T_cur man.lattice.bottom man.lattice
                    in
-                   Post.return flow')
+                   Post.return flow' ~log)
                ~felse:(fun false_flow ->
-                   assume_post
+                   assume
                      (* isclass obj <=> isinstance(obj, type) *)
                      (mk_py_isinstance_builtin exp "type" range)
                      man
                      ~fthen:(fun true_flow ->
                          man.exec {stmt with skind = S_py_raise(Some (mk_py_call exp [] range))} true_flow
-                         |> Post.return)
+                         |> Post.return ~log)
                      ~felse:(fun false_flow ->
                          man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow
-                         |> Post.return)
+                         |> Post.return ~log)
                      false_flow
                  )
                flow
@@ -173,13 +176,13 @@ module Domain =
 
 
     and exec_except (man:('a, unit) man) excpt range (flow:'a flow) : 'a flow =
-      debug "exec except on@ @[%a@]" (Flow.print man.lattice) flow;
+      debug "exec except on@ @[%a@]" (Flow.print man.lattice.print) flow;
       let flow0 = Flow.set T_cur man.lattice.bottom man.lattice flow in
-      debug "flow_cur %a@\n" (Flow.print man.lattice) flow;
+      debug "flow_cur %a@\n" (Flow.print man.lattice.print) flow;
       let flow0 = Flow.filter (function
           | T_alarm {alarm_kind = APyException _} -> fun _ -> false
           | _ -> fun _ -> true) flow0 in
-      debug "exec except flow0@ @[%a@]" (Flow.print man.lattice) flow0;
+      debug "exec except flow0@ @[%a@]" (Flow.print man.lattice.print) flow0;
       let flow1 =
         match excpt.py_excpt_type with
         (* Default except case: catch all exceptions *)
@@ -202,16 +205,16 @@ module Domain =
                 let flow = Flow.set T_cur env man.lattice flow0 in
                 let flow' =
                   man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
-                  post_eval man (fun e flow ->
+                  bind_some (fun e flow ->
                       match ekind e with
                       | E_py_object obj ->
-                        assume_post
+                        assume
                           (* if issubclass obj (find_builtin "BaseException") then *)
                           (* issubclass cls1 cls2 <-> ???*)
                           (mk_py_call (mk_py_object (find_builtin "issubclass") range) [e; mk_py_object (find_builtin "BaseException") range] range)
                           man flow
                           ~fthen:(fun true_flow ->
-                              assume_post
+                              assume
                                 (mk_py_isinstance exn e range)
                                 man
                                 ~fthen:(fun true_flow ->
@@ -230,7 +233,7 @@ module Domain =
                       | _ -> assert false
                     )
                 in
-                let flow' = Post.to_flow man.lattice flow' in
+                let flow' = post_to_flow man flow' in
                 Flow.fold (fun acc tk env ->
                     match tk with
                     | T_cur | T_alarm {alarm_kind = APyException _} -> Flow.add tk env man.lattice acc
@@ -243,7 +246,7 @@ module Domain =
         match excpt.py_excpt_name with
         | None -> mk_block [] (tag_range range "clean_except_var")
         | Some v -> mk_remove_var v (tag_range range "clean_except_var") in
-      debug "except flow1 =@ @[%a@]" (Flow.print man.lattice) flow1;
+      debug "except flow1 =@ @[%a@]" (Flow.print man.lattice.print) flow1;
       (* Execute exception handler *)
       man.exec excpt.py_excpt_body flow1
       |> man.exec clean_except_var
@@ -266,16 +269,16 @@ module Domain =
               let flow = Flow.set T_cur env man.lattice flow0 in
               let flow' =
                 man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
-                post_eval man (fun e flow ->
+                bind_some (fun e flow ->
                     match ekind e with
                     | E_py_object obj ->
-                      assume_post
+                      assume
                         (mk_py_call (mk_py_object (find_builtin "issubclass") range) [e; mk_py_object (find_builtin "BaseException") range] range)
                         man
                         (* if issubclass obj (find_builtin "BaseException") && not (isinstance exn obj) then
                          *   man.flow.add (TExn exn) env flow *)
                         ~fthen:(fun true_flow ->
-                            assume_post
+                            assume
                               (mk_py_isinstance exn e range)
                               man
                               ~fthen:(fun true_flow -> Post.return true_flow)
@@ -296,7 +299,7 @@ module Domain =
                     | _ -> Post.return flow
                   )
               in
-              let flow' = Post.to_flow man.lattice flow' in
+              let flow' = post_to_flow man flow' in
               Flow.fold (fun acc tk env ->
                   match tk with
                   | T_alarm {alarm_kind = APyException _} -> Flow.add tk env man.lattice acc

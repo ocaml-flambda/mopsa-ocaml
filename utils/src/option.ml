@@ -55,19 +55,19 @@ let equal (f:'a->'b->bool) (a:'a option) (b:'b option) : bool =
 let included (f:'a->'b->bool) (a:'a option) (b:'b option) : bool =
   match a,b with None, _ -> true | Some x, Some y -> f x y | _ -> false
 
-let apply (none:'a) (f:'b->'a) (b:'b option) : 'a =
+let apply (f:'b->'a) (none:'a) (b:'b option) : 'a =
   match b with None -> none | Some x -> f x
 
 let apply2
-    (none:'c)
     (f:'a->'b->'c)
+    (none:'c)
     (a:'a option)
     (b:'b option) : 'c
   =
   match a,b with None,_ | _,None -> none | Some x, Some y -> f x y
 
 let default (none:'a) (a:'a option) : 'a =
-  apply none (fun x -> x) a
+  apply (fun x -> x) none a
 
 let compare (cmp: 'a -> 'a -> int) (a: 'a option) (b: 'a option) : int =
   if a == b then 0

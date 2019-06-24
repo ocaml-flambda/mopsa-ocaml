@@ -115,9 +115,9 @@ let () =
         | E_addr _
         | E_c_function _                     -> Keep
         (* ------------------------------------------- *)
-        | E_var _
+        | E_var _                            -> Visit
+        (* ------------------------------------------- *)
         | E_stub_quantified _
-        | E_stub_builtin_call _
         | E_unop _
         | E_binop _
         | E_c_address_of _

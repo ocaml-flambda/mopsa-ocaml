@@ -44,8 +44,6 @@ type 'a structure = parts * (parts -> 'a)
 let leaf (x: 'a) : 'a structure =
   {exprs = []; stmts = []}, (fun _ -> x)
 
-
-
 (*==========================================================================*)
 (**                           {2 Registration}                              *)
 (*==========================================================================*)
@@ -133,6 +131,13 @@ let split_expr (expr : expr) : expr structure = !expr_visit_chain expr
 
 let split_stmt (stmt : stmt) : stmt structure = !stmt_visit_chain stmt
 
+let is_leaf_expr e =
+  let parts, _ = split_expr e in
+  List.length parts.exprs = 0 && List.length parts.stmts = 0
+
+let is_leaf_stmt s =
+  let parts, _ = split_stmt s in
+  List.length parts.exprs = 0 && List.length parts.stmts = 0
 
 (*==========================================================================*)
 (**                            {2 Visitors}                                 *)

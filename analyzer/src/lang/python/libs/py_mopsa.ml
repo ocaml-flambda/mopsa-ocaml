@@ -152,7 +152,7 @@ module Domain =
                           man.exec stmt |>
                           Flow.set T_cur cur man.lattice
              in
-             debug "Flow is now %a@\n" (Flow.print man.lattice) flow;
+             debug "Flow is now %a@\n" (Flow.print man.lattice.print) flow;
              man.eval (mk_py_true exp.erange) flow
              |> Option.return
            with BottomFound ->
@@ -218,12 +218,12 @@ module Domain =
                    Flow.set T_cur cur man.lattice
         in
         (* FIXME:  mk_py_int ?*)
-        debug "flow = %a@\n" (Flow.print man.lattice) flow;
+        debug "flow = %a@\n" (Flow.print man.lattice.print) flow;
         man.eval (mk_py_false exp.erange) flow
         |> Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.ignore_exception")}, _)}, [{ekind = cls} as assert_exn], []) ->
-         debug "begin ignore_exception(%a) on %a" pp_expr assert_exn (Flow.print man.lattice) flow;
+         debug "begin ignore_exception(%a) on %a" pp_expr assert_exn (Flow.print man.lattice.print) flow;
          let ctx = Flow.get_ctx flow in
          let none = mk_py_none range in
          let flow = Flow.fold (fun acc tk env -> match tk with
@@ -231,13 +231,13 @@ module Domain =
                                                    let flow1 = Flow.bottom ctx |> Flow.set T_cur env man.lattice in
                                                    debug "assert_exn = %a, exn = %a" pp_expr assert_exn pp_expr exn;
                                                    let flow2 = man.exec (mk_assume (mk_py_isinstance exn assert_exn range) range) flow1 in
-                                                   debug "flow2 = %a" (Flow.print man.lattice) flow2;
+                                                   debug "flow2 = %a" (Flow.print man.lattice.print) flow2;
                                                    if Flow.get T_cur man.lattice flow2 |> man.lattice.is_bottom then
                                                      Flow.set tk env man.lattice acc
                                                    else
                                                      acc
                                                  | _ -> Flow.set tk env man.lattice acc) (Flow.bottom ctx) flow in
-         debug "Final flow = %a" (Flow.print man.lattice) flow;
+         debug "Final flow = %a" (Flow.print man.lattice.print) flow;
          man.eval none flow |> Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_exception_exists")}, _)}, [{ekind = cls} as assert_exn], [])  ->
@@ -259,7 +259,7 @@ module Domain =
         let cur = Flow.get T_cur man.lattice flow in
         let flow = Flow.set T_cur man.lattice.top man.lattice flow |>
                    man.exec stmt |> Flow.set T_cur cur man.lattice in
-        debug "flow = %a" (Flow.print man.lattice) flow;
+        debug "flow = %a" (Flow.print man.lattice.print) flow;
         man.eval (mk_py_true exp.erange) flow
         |> Option.return
 

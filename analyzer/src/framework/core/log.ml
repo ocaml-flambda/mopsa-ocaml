@@ -50,7 +50,7 @@ let print fmt log = Format.fprintf fmt "@[<v 0>%a@]" print log
 let rec concat log1 log2 =
   match log1, log2 with
   | L_empty, x | x, L_empty -> x
-  | L_singleton (b1, l1), L_singleton (b2, l2) -> L_singleton (b1 @ b2, concat l1 l2)
+  | L_singleton (b1, l1), L_singleton (b2, l2) -> L_singleton (concat_blocks b1 b2, concat l1 l2)
   | L_tuple (fst1,snd1), L_tuple (fst2,snd2) -> L_tuple (concat fst1 fst2, concat snd1 snd2)
   | _ -> assert false
 

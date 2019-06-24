@@ -53,24 +53,22 @@ module Domain =
 
       | S_py_assert (e, msg)->
          man.eval e flow |>
-           post_eval man @@
-             (fun e flow ->
-               let ok_case = man.exec (mk_assume e (tag_range range "safe case assume")) flow in
+         bind_some_opt  @@ fun e flow ->
+         let ok_case = man.exec (mk_assume e (tag_range range "safe case assume")) flow in
 
-               let fail_case =
-                 debug "checking fail";
-                 let flow = man.exec (mk_assume (mk_not e e.erange) (tag_range range "fail case assume")) flow in
-                 if Flow.is_bottom man.lattice flow then
-                   let _ = debug "no fail" in
-                   Flow.bottom (Flow.get_ctx flow)
-                 else
-                   man.exec (
-                       Utils.mk_builtin_raise "AssertionError" (tag_range range "fail case raise")
-                     ) flow
-               in
-               Flow.join man.lattice ok_case fail_case
-               |> Post.return
-             )
+         let fail_case =
+           debug "checking fail";
+           let flow = man.exec (mk_assume (mk_not e e.erange) (tag_range range "fail case assume")) flow in
+           if Flow.is_bottom man.lattice flow then
+             let _ = debug "no fail" in
+             Flow.bottom (Flow.get_ctx flow)
+           else
+             man.exec (
+               Utils.mk_builtin_raise "AssertionError" (tag_range range "fail case raise")
+             ) flow
+         in
+         Flow.join man.lattice ok_case fail_case
+         |> Post.return
          |> Option.return
 
       | _ -> None

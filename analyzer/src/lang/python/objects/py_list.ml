@@ -165,7 +165,7 @@ struct
       Utils.check_instances ~arguments_after_check:1 man flow range args ["list"]
         (fun eargs flow ->
            let e1, e2 = match args with [l; r] -> l, r | _ -> assert false in
-           assume_eval (mk_py_isinstance_builtin e2 "list" range) man flow
+           assume (mk_py_isinstance_builtin e2 "list" range) man flow
              ~fthen:(man.eval (mk_py_top T_bool range))
              ~felse:(fun flow ->
                  let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
@@ -220,7 +220,7 @@ struct
         ["list"]
         (fun args flow ->
            let list, element = match args with | [l; e] -> l, e | _ -> assert false in
-           debug "list: %a@\nelement = %a@\nflow = %a@\n" pp_expr list pp_expr element (Flow.print man.lattice) flow;
+           debug "list: %a@\nelement = %a@\nflow = %a@\n" pp_expr list pp_expr element (Flow.print man.lattice.print) flow;
            let var_els = match ekind list with
              | E_py_object ({addr_kind = A_py_list a}, _) -> a
              | _ -> assert false in
@@ -255,7 +255,7 @@ struct
            let var_els = match ekind list with
              | E_py_object ({addr_kind = A_py_list a}, _) -> a
              | _ -> Exceptions.panic_at range "%a@\n" pp_expr list in
-           assume_eval (mk_py_isinstance_builtin other "list" range) man flow
+           assume (mk_py_isinstance_builtin other "list" range) man flow
              ~fthen:(fun flow ->
                  let var_sndels = match ekind other with
                    | E_py_object ({addr_kind = A_py_list a}, _) -> a
@@ -264,7 +264,7 @@ struct
                  man.eval (mk_py_none range)
                )
              ~felse:(fun flow ->
-                 assume_eval (mk_py_isinstance_builtin other "range" range) man flow
+                 assume (mk_py_isinstance_builtin other "range" range) man flow
                    ~fthen:(fun flow ->
                        (* TODO: more precision on top (for range) *)
                        man.exec (mk_assign (mk_var var_els ~mode:WEAK range) (mk_py_top T_int range) range) flow  |>
@@ -272,7 +272,7 @@ struct
                      )
                    (* TODO: if object has iter field call it and then call next *)
                    ~felse:(fun flow ->
-                       assume_eval (mk_py_isinstance_builtin other "list_reverseiterator" range) man flow
+                       assume (mk_py_isinstance_builtin other "list_reverseiterator" range) man flow
                          ~fthen:(fun flow ->
                              let var_sndels = match ekind other with
                                | E_py_object ({addr_kind = A_py_iterator (_, [{addr_kind = A_py_list a}], _)}, _) -> a
@@ -361,15 +361,15 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__getitem__")}, _)}, [list; index], []) ->
       let tyerror = fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
-      Eval.eval_list man.eval [list; index] flow |>
-      Eval.bind (fun exprs flow ->
+      bind_list [list; index] man.eval flow |>
+      bind_some (fun exprs flow ->
           let list, index = match exprs with [l; i] -> l, i | _ -> assert false in
-          assume_eval (mk_py_isinstance_builtin list "list" range) man flow
+          assume (mk_py_isinstance_builtin list "list" range) man flow
             ~fthen:(fun flow ->
                 let var_els = match ekind list with
                   | E_py_object ({addr_kind = A_py_list a}, _) -> a
                   | _ -> assert false in
-                assume_eval (mk_py_isinstance_builtin index "int" range) man flow
+                assume (mk_py_isinstance_builtin index "int" range) man flow
                   ~fthen:(fun flow ->
                       let indexerror_f = man.exec (Utils.mk_builtin_raise "IndexError" range) flow in
                       let indexerror = Eval.empty_singleton indexerror_f in
@@ -378,7 +378,7 @@ struct
                       Eval.join_list ~empty:(Eval.empty_singleton flow) (evals :: Eval.copy_ctx evals indexerror :: [])
                     )
                   ~felse:(fun flow ->
-                      assume_eval (mk_py_isinstance_builtin index "slice" range) man flow
+                      assume (mk_py_isinstance_builtin index "slice" range) man flow
                         ~fthen:(fun flow ->
                             let slicedlist_var, flow = get_var_flow (Callstack.get flow, range) flow in
                             let flow = man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:WEAK slicedlist_var range) (mk_var ~mode:WEAK var_els range) range) flow in
@@ -404,7 +404,7 @@ struct
         ["list"]
         (fun args flow ->
            let list, index, value = match args with | [l; i; v] -> l, i, v | _ -> assert false in
-           assume_eval (mk_py_isinstance_builtin index "int" range) man flow
+           assume (mk_py_isinstance_builtin index "int" range) man flow
              ~fthen:(fun flow ->
                  let var_els = match ekind list with
                    | E_py_object ({addr_kind = A_py_list a}, _) -> a
@@ -420,7 +420,7 @@ struct
                  Eval.join_list ~empty:(Eval.empty_singleton flow) (assignment :: (Eval.copy_ctx assignment indexerror) ::[])
                )
              ~felse:(fun flow ->
-                 assume_eval (mk_py_isinstance_builtin index "slice" range) man flow
+                 assume (mk_py_isinstance_builtin index "slice" range) man flow
                    ~fthen:(fun flow ->
                        man.eval (mk_py_call (mk_py_object (find_builtin "list.extend") range) [list; value] range) flow
                      )
@@ -506,17 +506,17 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "math.fsum")}, _)}, args, []) ->
       let tyerror = fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
-      Eval.eval_list man.eval args flow |>
-      Eval.bind (fun args flow ->
+      bind_list args man.eval flow |>
+      bind_some (fun args flow ->
           if List.length args >= 1 then
             let in_ty = List.hd args in
-            assume_eval (mk_py_isinstance_builtin in_ty "list" range) man flow
+            assume (mk_py_isinstance_builtin in_ty "list" range) man flow
               ~fthen:(fun flow ->
                   (* FIXME: we're assuming that we use the list abstraction *)
                   let var_els_in_ty = match ekind in_ty with
                     | E_py_object ({addr_kind = A_py_list a}, _) -> a
                     | _ -> assert false in
-                  assume_eval (mk_py_isinstance_builtin (mk_var ~mode:WEAK var_els_in_ty range) "float" range) man flow
+                  assume (mk_py_isinstance_builtin (mk_var ~mode:WEAK var_els_in_ty range) "float" range) man flow
                     ~fthen:(man.eval (mk_py_top (T_float F_DOUBLE) range))
                     ~felse:tyerror)
               ~felse:tyerror
@@ -625,7 +625,7 @@ struct
            let var_els_iterable = match ekind iterable with
              | E_py_object ({addr_kind = A_py_list a}, _) -> a
              | _ -> assert false in
-           assume_eval (mk_py_isinstance_builtin (mk_var ~mode:WEAK var_els_iterable range) "str" range) man flow
+           assume (mk_py_isinstance_builtin (mk_var ~mode:WEAK var_els_iterable range) "str" range) man flow
              ~fthen:(man.eval (mk_py_top T_string range))
              ~felse:tyerror
         )
@@ -668,10 +668,10 @@ struct
       |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_list_of")}, _)}, args, []) ->
-      Eval.eval_list man.eval args flow |>
-      Eval.bind (fun eargs flow ->
+      bind_list args man.eval flow |>
+      bind_some (fun eargs flow ->
           let list, type_v = match eargs with [d;e] -> d,e | _ -> assert false in
-          assume_eval (mk_py_isinstance_builtin list "list" range) man flow
+          assume (mk_py_isinstance_builtin list "list" range) man flow
             ~fthen:(fun flow ->
                 let var = match ekind list with
                   | E_py_object ({addr_kind = A_py_list a}, _) -> a

@@ -49,8 +49,8 @@ module Domain =
       match ekind exp with
       | E_binop(op, e1, e2) when is_arith_op op (*&& is_py_expr e1 && is_py_expr e2*) ->
          debug "arith op@\n";
-         Eval.eval_list (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) [e1; e2] flow |>
-           Eval.bind
+         bind_list [e1; e2] (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+         bind_some
              (fun el flow ->
                let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
 
@@ -69,13 +69,13 @@ module Domain =
                            let is_same_type = compare_py_object cls1 cls2 = 0 in
                            let not_implemented_type = mk_py_type (mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range) range in
 
-                           assume_eval
+                           assume
                              (Utils.mk_object_hasattr cls1 op_fun range)
                              ~fthen:(fun true_flow ->
                                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object_attr cls1 op_fun range) [e1; e2] range) true_flow |>
                                  Eval.bind (fun r flow ->
                                      let expr = mk_py_isinstance r not_implemented_type range in
-                                     assume_eval expr
+                                     assume expr
                                        ~fthen:(fun true_flow ->
                                          let flow = true_flow in
                                          (* if is_not_implemented r then *)
@@ -83,12 +83,12 @@ module Domain =
                                            let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) flow in
                                            Eval.empty_singleton flow
                                          else
-                                           assume_eval
+                                           assume
                                              (Utils.mk_object_hasattr cls2 rop_fun range)
                                              ~fthen:(fun true_flow ->
                                                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object_attr cls2 rop_fun range) [e2; e1] range) true_flow |>
                                                  Eval.bind (fun r flow ->
-                                                     assume_eval
+                                                     assume
                                                        (mk_py_isinstance r not_implemented_type range)
                                                        ~fthen:(fun true_flow ->
                                                          (* if is_not_implemented r then *)
@@ -115,12 +115,12 @@ module Domain =
                                  let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) flow in
                                  Eval.empty_singleton flow
                                else
-                                 assume_eval
+                                 assume
                                    (Utils.mk_object_hasattr cls2 rop_fun range)
                                    ~fthen:(fun true_flow ->
                                      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object_attr cls2 rop_fun range) [e2; e1] range) true_flow |>
                                        Eval.bind (fun r flow ->
-                                           assume_eval
+                                           assume
                                              (mk_py_isinstance r not_implemented_type range)
                                              ~fthen:(fun true_flow ->
                                                (* if is_not_implemented r then *)
@@ -149,7 +149,7 @@ module Domain =
                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type e range) flow |>
                  Eval.bind (fun cls flow ->
                      let cls = object_of_expr cls in
-                     assume_eval
+                     assume
                        (Utils.mk_object_hasattr cls op_fun range)
                        ~fthen:(fun true_flow ->
                          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object_attr cls op_fun range) [e] range) true_flow

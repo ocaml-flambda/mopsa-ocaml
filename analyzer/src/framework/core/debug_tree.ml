@@ -171,7 +171,7 @@ let eval_done exp zone time evl =
   if !opt_short_log then
     indent "%a = %a done in zone %a [%.4fs]"
       pp_E exp
-      (Eval.print ~pp:pp_expr) evl
+      Eval.print evl
       pp_zone2 zone
       time
       ~symbol:END
@@ -180,7 +180,7 @@ let eval_done exp zone time evl =
       pp_E exp
       pp_zone2 zone
       time
-      (Eval.print ~pp:pp_expr) evl
+      Eval.print evl
       ~symbol:END
 
 let debug fmt =

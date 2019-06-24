@@ -194,7 +194,7 @@ struct
     | S_assert(cond) ->
       let range = srange stmt in
       let cs = Callstack.get flow in
-      assume_post
+      assume
         cond
         ~fthen:(fun safe_flow ->
             Flow.add (T_safe_assert range) (Flow.get T_cur man.lattice safe_flow) man.lattice safe_flow |>
@@ -215,14 +215,6 @@ struct
               (T_alarm a) (Flow.get T_cur man.lattice flow)
               man.lattice flow |>
             Flow.set T_cur (Flow.get T_cur man.lattice safe_flow) man.lattice |>
-            Post.return
-          )
-        ~fnone:(fun flow ->
-            let a = mk_alarm (A_fail_assert cond) range ~cs ~level:ERROR in
-            Flow.add
-              (T_alarm a) man.lattice.top
-              man.lattice flow |>
-            Flow.set T_cur man.lattice.bottom man.lattice |>
             Post.return
           )
         man flow

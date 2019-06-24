@@ -37,25 +37,30 @@ open Log
 (**                      {2 List representation}                            *)
 (****************************************************************************)
 
+(* The pool of a reduced product [S1 * ... * Sn] is represented as an
+   heterogenous list [(t1 * (t2 * ... * (tn * unit))) pool] where
+   each type [ti] is the type of the stack [Si].
+*)
+
 
 (** Abstract stack module *)
-type 't smodule = (module STACK with type t = 't)
+type 't stack = (module STACK with type t = 't)
 
 
 (** List of stack modules *)
-type _ slist =
-  | Nil : unit slist
-  | Cons : 't smodule * 'b slist -> ('t * 'b) slist
+type _ pool =
+  | Nil : unit pool
+  | Cons : 't stack * 'b pool -> ('t * 'b) pool
 
 
 
 type 'b map = {
-  f: 't. 't smodule -> 'b;
+  f: 't. 't stack -> 'b;
 }
 
 
 let map f l =
-  let rec aux : type t. t slist -> 'b list =
+  let rec aux : type t. t pool -> 'b list =
     fun l ->
       match l with
       | Nil -> []
@@ -66,12 +71,12 @@ let map f l =
 
 
 type ('a,'b) map_combined = {
-  f: 't. 't smodule -> 'a -> 'b;
+  f: 't. 't stack -> 'a -> 'b;
 }
 
 
 let map_combined f l1 l2 =
-  let rec aux : type t. t slist -> 'a list -> 'b list =
+  let rec aux : type t. t pool -> 'a list -> 'b list =
     fun l1 l2 ->
       match l1, l2 with
       | Nil, [] -> []
@@ -83,12 +88,12 @@ let map_combined f l1 l2 =
 
 
 type 'b fold = {
-  f: 't. 't smodule -> 'b -> 'b;
+  f: 't. 't stack -> 'b -> 'b;
 }
 
 
 let fold f l init =
-  let rec aux : type t. t slist -> 'b -> 'b =
+  let rec aux : type t. t pool -> 'b -> 'b =
     fun l acc ->
       match l with
       | Nil -> acc
@@ -100,12 +105,12 @@ let fold f l init =
 
 
 type ('a,'b) fold_combined = {
-  f: 't. 't smodule -> 'a -> 'b -> 'b;
+  f: 't. 't stack -> 'a -> 'b -> 'b;
 }
 
 
 let fold_combined f l1 l2 init =
-  let rec aux : type t. t slist -> 'a list -> 'b -> 'b =
+  let rec aux : type t. t pool -> 'a list -> 'b -> 'b =
     fun l1 l2 acc ->
       match l1, l2 with
       | Nil, [] -> acc
@@ -118,12 +123,12 @@ let fold_combined f l1 l2 init =
 
 
 type ('a,'b) fold_ext2 = {
-  f: 't. 't smodule -> 'a -> 't * 'b -> 't * 'b -> 'a * 'b * 'b;
+  f: 't. 't stack -> 'a -> 't * 'b -> 't * 'b -> 'a * 'b * 'b;
 }
 
 
 let fold_ext2 f l init (a1,s1) (a2,s2) =
-  let rec aux : type t. t slist -> 'a -> t * 'b -> t * 'b -> 'a * 'b * 'b =
+  let rec aux : type t. t pool -> 'a -> t * 'b -> t * 'b -> 'a * 'b * 'b =
     fun l acc (a1,s1) (a2,s2) ->
       match l,a1,a2 with
       | Nil,(),() -> acc,s1,s2
@@ -135,12 +140,12 @@ let fold_ext2 f l init (a1,s1) (a2,s2) =
 
 
 type 'b apply_ext2 = {
-  f: 't. 't smodule -> 't * 'b -> 't * 'b -> 't * 'b * 'b;
+  f: 't. 't stack -> 't * 'b -> 't * 'b -> 't * 'b * 'b;
 }
 
 
 let apply_ext2 f l (a1,s1) (a2,s2) =
-  let rec aux : type t. t slist -> t * 'b -> t * 'b -> t * 'b * 'b =
+  let rec aux : type t. t pool -> t * 'b -> t * 'b -> t * 'b * 'b =
     fun l (a1,s1) (a2,s2) ->
       match l,a1,a2 with
       | Nil,(),() -> (),s1,s2
@@ -154,12 +159,12 @@ let apply_ext2 f l (a1,s1) (a2,s2) =
 
 
 type ('ext,'b) fold_apply_ext2 = {
-  f: 't. 't smodule -> 't * 'b -> 't * 'b -> 'ext -> 't * 'b * 'b * 'ext;
+  f: 't. 't stack -> 't * 'b -> 't * 'b -> 'ext -> 't * 'b * 'b * 'ext;
 }
 
 
 let fold_apply_ext2 f l (a1,s1) (a2,s2) ext =
-  let rec aux : type t. t slist -> t * 'b -> t * 'b -> 'ext -> t * 'b * 'b * 'ext=
+  let rec aux : type t. t pool -> t * 'b -> t * 'b -> 'ext -> t * 'b * 'b * 'ext=
     fun l (a1,s1) (a2,s2) ext ->
       match l,a1,a2 with
       | Nil,(),() -> (),s1,s2,ext
@@ -173,11 +178,11 @@ let fold_apply_ext2 f l (a1,s1) (a2,s2) ext =
 
 
 type create = {
-  f: 't. 't smodule -> 't;
+  f: 't. 't stack -> 't;
 }
 
 let create f l =
-  let rec aux : type t. t slist -> t =
+  let rec aux : type t. t pool -> t =
     fun l ->
       match l with
       | Nil -> ()
@@ -189,13 +194,13 @@ let create f l =
 
 
 type 'a print = {
-  f: 't. 't smodule -> Format.formatter -> 't -> unit;
+  f: 't. 't stack -> Format.formatter -> 't -> unit;
 }
 
 
 (** Print an abstract value *)
 let print f l sep fmt a =
-  let rec aux : type t. t slist -> Format.formatter -> t -> unit =
+  let rec aux : type t. t pool -> Format.formatter -> t -> unit =
     fun l fmt a ->
       match l, a with
       | Nil, () -> ()
@@ -209,12 +214,12 @@ let print f l sep fmt a =
 
 
 type 'a pred = {
-  f: 't. 't smodule -> 't -> bool;
+  f: 't. 't stack -> 't -> bool;
 }
 
 (** Test an ∃ predicate *)
 let exists f l a =
-  let rec aux : type t. t slist -> t -> bool =
+  let rec aux : type t. t pool -> t -> bool =
     fun l a ->
       match l, a with
       | Nil, () -> false
@@ -242,11 +247,11 @@ let tlman man = {
 
 
 type ('a,'b,'s) man_fold = {
-  f: 't. 't smodule -> ('a, 't,'s) man -> 'b -> 'b;
+  f: 't. 't stack -> ('a, 't,'s) man -> 'b -> 'b;
 }
 
 let man_fold f l man init =
-  let rec aux : type t. t slist -> ('a,t,'s) man -> 'b -> 'b =
+  let rec aux : type t. t pool -> ('a,t,'s) man -> 'b -> 'b =
     fun l man acc ->
       match l with
       | Nil -> acc
@@ -258,11 +263,11 @@ let man_fold f l man init =
 
 
 type ('a,'b,'s) man_map = {
-  f: 't. 't smodule -> ('a, 't,'s) man -> 'b;
+  f: 't. 't stack -> ('a, 't,'s) man -> 'b;
 }
 
 let man_map f l man =
-  let rec aux : type t. t slist -> ('a,t,'s) man -> 'b list =
+  let rec aux : type t. t pool -> ('a,t,'s) man -> 'b list =
     fun l man ->
       match l with
       | Nil -> []
@@ -273,12 +278,12 @@ let man_map f l man =
 
 
 type ('a,'b,'c,'s) man_map_combined = {
-  f: 't. 't smodule -> 'b -> ('a,'t,'s) man -> 'c;
+  f: 't. 't stack -> 'b -> ('a,'t,'s) man -> 'c;
 }
 
 
 let man_map_combined f l1 l2 man =
-  let rec aux : type t. t slist -> 'b list -> ('a,t,'s) man -> 'c list =
+  let rec aux : type t. t pool -> 'b list -> ('a,t,'s) man -> 'c list =
     fun l1 l2 man ->
       match l1, l2 with
       | Nil, [] -> []
@@ -290,12 +295,12 @@ let man_map_combined f l1 l2 man =
 
 
 type ('a,'b,'c,'s) man_fold_combined = {
-  f: 't. 't smodule -> 'b -> ('a,'t,'s) man -> 'c -> 'c;
+  f: 't. 't stack -> 'b -> ('a,'t,'s) man -> 'c -> 'c;
 }
 
 
 let man_fold_combined f l1 l2 man init =
-  let rec aux : type t. t slist -> 'b list -> ('a,t,'s) man -> 'c -> 'c =
+  let rec aux : type t. t pool -> 'b list -> ('a,t,'s) man -> 'c -> 'c =
     fun l1 l2 man acc ->
       match l1, l2 with
       | Nil, [] -> acc
@@ -318,7 +323,7 @@ let man_fold_combined f l1 l2 man init =
 module type SPEC =
 sig
   type t
-  val pool : t slist
+  val pool : t pool
   val erules : (module R.EREDUCTION) list
 end
 
@@ -328,8 +333,8 @@ module Make(Spec:SPEC) : STACK with type t = Spec.t =
 struct
 
 
-  (** {2 Stack header} *)
-  (** **************** *)
+  (** {2 Header declaration} *)
+  (** ********************** *)
 
   type t = Spec.t
 
@@ -341,21 +346,21 @@ struct
     )
 
   let interface =
-    let f = fun (type a) (m:a smodule) acc ->
+    let f = fun (type a) (m:a stack) acc ->
       let module S = (val m) in
       Interface.concat acc S.interface
     in
     fold { f } Spec.pool Interface.empty
 
   let bottom : t =
-    let f = fun (type a) (m:a smodule) ->
+    let f = fun (type a) (m:a stack) ->
       let module S = (val m) in
       S.bottom
     in
     create { f } Spec.pool
 
   let top : t =
-    let f = fun (type a) (m:a smodule) ->
+    let f = fun (type a) (m:a stack) ->
       let module S = (val m) in
       S.top
     in
@@ -363,14 +368,14 @@ struct
 
 
   let print fmt a =
-    let f = fun (type a) (m: a smodule) fmt aa ->
+    let f = fun (type a) (m: a stack) fmt aa ->
       let module S = (val m) in
       S.print fmt aa
     in
     print { f } Spec.pool "" fmt a
 
   let is_bottom a =
-    let f = fun (type a) (m: a smodule) aa ->
+    let f = fun (type a) (m: a stack) aa ->
       let module S = (val m) in
       S.is_bottom aa
     in
@@ -381,7 +386,7 @@ struct
   (** ********************* *)
 
   let subset sman ctx (a1,s1) (a2,s2) =
-    let f = fun (type a) (m: a smodule) acc (a1,s1) (a2,s2) ->
+    let f = fun (type a) (m: a stack) acc (a1,s1) (a2,s2) ->
       let module S = (val m) in
       let b, s1, s2 = S.subset sman ctx (a1,s1) (a2,s2) in
       b && acc, s1, s2
@@ -389,21 +394,21 @@ struct
     fold_ext2 { f } Spec.pool true (a1,s1) (a2,s2)
 
   let join sman ctx (a1,s1) (a2,s2) =
-    let f = fun (type a) (m: a smodule) (a1,s1) (a2,s2) ->
+    let f = fun (type a) (m: a stack) (a1,s1) (a2,s2) ->
       let module S = (val m) in
       S.join sman ctx (a1,s1) (a2,s2)
     in
     apply_ext2 { f } Spec.pool (a1,s1) (a2,s2)
 
   let meet sman ctx (a1,s1) (a2,s2) =
-    let f = fun (type a) (m: a smodule) (a1,s1) (a2,s2) ->
+    let f = fun (type a) (m: a stack) (a1,s1) (a2,s2) ->
       let module S = (val m) in
       S.meet sman ctx (a1,s1) (a2,s2)
     in
     apply_ext2 { f } Spec.pool (a1,s1) (a2,s2)
 
   let widen sman ctx (a1,s1) (a2,s2) =
-    let f = fun (type a) (m: a smodule) (a1,s1) (a2,s2) stable ->
+    let f = fun (type a) (m: a stack) (a1,s1) (a2,s2) stable ->
       let module S = (val m) in
       let a, s1, s2, stable' = S.widen sman ctx (a1,s1) (a2,s2) in
       a, s1, s2, stable && stable'
@@ -414,138 +419,222 @@ struct
     Exceptions.panic ~loc:__LOC__ "merge not implemented"
 
 
+
   (** {2 Initialization procedure} *)
   (** **************************** *)
 
   let init prog (man:('a,t,'s) man) flow =
-    let f = fun (type a) (m:a smodule) (man:('a,a,'s) man) flow ->
+    let f = fun (type a) (m:a stack) (man:('a,a,'s) man) flow ->
       let module S = (val m) in
       S.init prog man flow
     in
     man_fold { f } Spec.pool man flow
 
 
+
+  (** {2 Merging functions} *)
+  (** ********************* *)
+
+  (** Merge the conflicts of two flows using logs *)
+  let merge_flows man pre (flow1,log1) (flow2,log2) =
+    let ctx = Context.get_most_recent (Flow.get_ctx flow1) (Flow.get_ctx flow2) |>
+              Context.get_unit
+    in
+    Flow.merge (fun tk oa1 oa2 ->
+        match tk, oa1, oa2 with
+        (* Logs concern only cur environments *)
+        | T_cur, Some a1, Some a2 ->
+          (* Merge the shared sub-tree *)
+          let p = Flow.get T_cur man.lattice pre |> man.get_sub in
+          let slog1 = man.get_sub_log log1 in
+          let slog2 = man.get_sub_log log2 in
+
+          let merged = man.merge_sub
+              p
+              (man.get_sub a1, slog1)
+              (man.get_sub a2, slog2)
+          in
+
+          let a1 = man.set_sub merged a1 in
+          let a2 = man.set_sub merged a2 in
+
+          let a = man.lattice.meet ctx a1 a2 in
+          if man.lattice.is_bottom a then None else Some a
+
+        (* For the other tokens, compute the meet of the environments *)
+        | _ ->
+          Option.absorb2 (fun a1 a2 ->
+              let a = man.lattice.meet ctx a1 a2 in
+              if man.lattice.is_bottom a then None else Some a
+            ) oa1 oa2
+      ) man.lattice flow1 flow2
+
+
+
+  (** Merge the conflicts between distinct domains in a pointwise result *)
+  let rec merge_inter_conflicts man pre (pointwise:('a,'r) result option list) : ('a,'r option option list) result =
+    let rec aux : type t. t pool -> ('a,'r) result option list -> ('a,t,'s) man -> ('a,'r option option list) result =
+      fun pool pointwise man ->
+        match pointwise, pool with
+        | [None], _ ->
+          Result.singleton [None] pre
+
+        | [Some r], _ ->
+          r |> Result.bind @@ fun rr flow ->
+          Result.singleton [Some rr] flow
+
+        | None :: tl, Cons(hds,tls) ->
+          aux tls tl (tlman man) |>
+          Result.bind @@ fun after flow ->
+          let after = Option.none_to_exn after in
+          Result.singleton (None :: after) flow
+
+        | Some r :: tl, Cons(hds,tls) ->
+          aux tls tl (tlman man) |>
+          Result.bind_full @@ fun after after_flow after_log after_cleaners ->
+          let after = Option.none_to_exn after in
+          r |> Result.bind_full @@ fun rr flow log cleaners ->
+          if after |> List.exists (function Some _ -> true | None -> false) then
+            let hdman = hdman man in
+            let after_flow = Flow.set T_cur (
+                let cur = Flow.get T_cur man.lattice flow in
+                let after_cur = Flow.get T_cur man.lattice after_flow in
+                hdman.set (hdman.get cur) after_cur
+              ) man.lattice after_flow
+            in
+            let flow = merge_flows man pre (flow,log) (after_flow,after_log) in
+            let log = Log.concat log after_log in
+            let cleaners = cleaners @ after_cleaners in
+            Result.return (Some (Some rr :: after)) flow ~cleaners ~log
+          else
+            Result.return (Some (Some rr :: after)) flow ~cleaners ~log
+
+
+        | _ -> assert false
+    in
+    aux Spec.pool pointwise man
+
+
+
+  (** Merge the conflicts emerging from the same domain *)
+  let merge_intra_conflicts man pre (r:('a,'r) result) : ('a,'r) result =
+    Result.merge_conjunctions_flow (fun (flow1,log1) (flow2,log2) ->
+        merge_flows man pre (flow1,log1) (flow2,log2)
+      ) r
+
+
+
   (** {2 Abstract transformer} *)
   (** ************************ *)
 
-  (** Entry point of abstract transformers *)
-  let exec zone =
+  (** Return a coverage bit mask indicating which domains provide an
+     [exec] transfer function for [zone]
+  *)
+  let get_exec_coverage zone : bool list =
+    let f = fun (type a) (m:a stack) ->
+      let module S = (val m) in
+      Interface.sat_exec zone S.interface
+    in
+    map { f } Spec.pool
 
-    (* Compute the coverage mask of the required zone *)
-    let coverage =
-      let f = fun (type a) (m:a smodule) ->
-        let module S = (val m) in
-        Interface.sat_exec zone S.interface
-      in
-      map { f } Spec.pool
+
+  (* Apply [exec] transfer function pointwise over all domains *)
+  let exec_pointwise zone coverage stmt man flow : 'a post option list option =
+    let f = fun (type a) (m:a stack) covered (man:('a,a,'s) man) (acc,ctx) ->
+      let module S = (val m) in
+      if not covered then
+        None :: acc, ctx
+      else
+        let flow' = Flow.set_ctx ctx flow in
+        debug "exec %a in domain %s and zone %a" pp_stmt stmt S.name pp_zone zone;
+        match S.exec zone stmt man flow' with
+        | None -> None :: acc, ctx
+        | Some post ->
+          let ctx' = Post.get_ctx post in
+          Some post :: acc, ctx'
     in
 
-    (fun stmt man flow : 'a post option ->
-
-       (* Compute the list of post-conditions by pointwise application.
-          Most recent context is propagated through applications *)
-       let f = fun (type a) (m:a smodule) covered (man:('a,a,'s) man) (acc,ctx) ->
-         let module S = (val m) in
-         if not covered then
-           (S.name, None) :: acc, ctx
-         else
-           let flow' = Flow.set_ctx ctx flow in
-           debug "exec %a in domain %s" pp_stmt stmt S.name;
-           match S.exec zone stmt man flow' with
-           | None -> (S.name, None) :: acc, ctx
-           | Some post ->
-             let ctx' = Post.get_ctx post in
-             (S.name, Some post) :: acc, ctx'
-       in
-
-       let pointwise_posts, ctx = man_fold_combined { f } Spec.pool coverage man ([], Flow.get_ctx flow) in
-       let pointwise_posts = List.rev pointwise_posts |>
-                             List.map (fun (name, post) -> (name, post |> Option.lift (Post.set_ctx ctx)))
-       in
-
-       debug "@[<v 2>pointwise posts:@,%a"
-         (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,")
-            (fun fmt (name, post) ->
-               Format.fprintf fmt "%s: %a"
-                 name
-                 (Option.print (Post.print man.lattice)) post
-            )
-         )
-         pointwise_posts
-       ;
-
-       (* Merge post-conditions *)
-       let f = fun (type a) (m:a smodule) (_,post) (man:('a,a,'s) man) acc ->
-         let module S = (val m) in
-         debug "Patching domain %s" S.name;
-         debug "post = %a" (Option.print (Post.print man.lattice)) post;
-         debug "acc = %a" (Option.print (Post.print man.lattice)) acc;
-         Option.neutral2 (fun post acc ->
-             (* Patch the accumulated post by:
-                a. putting the newly state of S
-                b. merging the sub-tree state
-             *)
-             Post.merge (fun tk (a,log) (a',log') ->
-                 debug "@[<v 2>merging token %a@, a = @[%a@]@, log = @[%a@]@, a' = @[%a@]@, log' = @[%a@]@]"
-                   pp_token tk
-                   man.lattice.print a
-                   Log.print log
-                   man.lattice.print a'
-                   Log.print log'
-                 ;
-
-                 (* a. Update the state of S *)
-                 let a' = man.set (man.get a) a' in
+    let posts, ctx = man_fold_combined { f } Spec.pool coverage man ([], Flow.get_ctx flow) in
+    let posts = List.map (Option.lift (Post.set_ctx ctx)) posts |>
+                List.rev
+    in
+    if List.exists (function Some _ -> true | None -> false) posts
+    then Some posts
+    else None
 
 
-                 (* b. Merge the sub-tree *)
-                 let pre = Flow.get tk man.lattice flow |> man.get_sub in
-                 let slog = man.get_sub_log log in
-                 let slog' = man.get_sub_log log' in
+  (** Simplify a pointwise post-state by changing lists of unit into unit *)
+  let simplify_pointwise_post (pointwise:('a,unit option option list) result) : 'a post =
+    pointwise |> Result.bind @@ fun r flow ->
+    let rr = r |> Option.lift (fun rr -> ()) in
+    Result.return rr flow
 
-                 debug "slog = @[%a@]" Log.print slog;
-                 debug "slog' = @[%a@]" Log.print slog';
 
-                 let merged = man.merge_sub
-                     pre
-                     (man.get_sub a, slog)
-                     (man.get_sub a', slog')
-                 in
-
-                 let aa = man.set_sub merged a' in
-
-                 debug "merged@, a = %a@, a' = %a@, aa = %a"
-                   man.lattice.print a
-                   man.lattice.print a'
-                   man.lattice.print aa
-                 ;
-                 aa, man.set_sub_log (Log.concat slog slog') log'
-               ) post acc
-           ) post acc
-       in
-       man_fold_combined { f } Spec.pool pointwise_posts man None
+  (** Entry point of abstract transformers *)
+  let exec zone =
+    let coverage = get_exec_coverage zone in
+    (fun stmt man flow ->
+       exec_pointwise zone coverage stmt man flow |>
+       Option.lift @@ fun pointwise ->
+       merge_inter_conflicts man flow pointwise |>
+       simplify_pointwise_post |>
+       merge_intra_conflicts man flow
     )
 
 
   (** {2 Abstract evaluations} *)
   (** ************************ *)
 
+  (* Compute the coverage bit mask of domains providing an [eval] for [zone] *)
+  let get_eval_coverage zone : bool list =
+    let f = fun (type a) (m:a stack) ->
+      let module S = (val m) in
+      Interface.sat_eval zone S.interface
+    in
+    map { f } Spec.pool
+
+
+  (** Compute pointwise evaluations over the pool of domains *)
+  let eval_pointwise zone coverage exp man flow : 'a eval option list option =
+    let f = fun (type a) (m:a stack) covered (man:('a,a,'s) man) (acc,ctx) ->
+      let module S = (val m) in
+      if not covered then
+        None :: acc, ctx
+      else
+        let flow' = Flow.set_ctx ctx flow in
+        debug "eval %a in domain %s and zone %a" pp_expr exp S.name pp_zone2 zone;
+        match S.eval zone exp man flow' with
+        | None -> None :: acc, ctx
+        | Some evl ->
+          let ctx' = Eval.get_ctx evl in
+          Some evl :: acc, ctx'
+    in
+
+    let pointwise, ctx = man_fold_combined { f } Spec.pool coverage man ([], Flow.get_ctx flow) in
+    let pointwise = List.map (Option.lift (Eval.set_ctx ctx)) pointwise |>
+                    List.rev
+    in
+    if List.exists (function Some _ -> true | None -> false) pointwise
+    then Some pointwise
+    else None
+
+
   (** Manager used by evaluation reductions *)
   let eman (man:('a,t,'s) man) : ('a,'s) R.eman = R.{
       lattice = man.lattice;
-      exec = man.exec;
+      post = man.post;
       get_eval = (
-        let f : type t. t domain -> (expr,'a) peval -> (expr,'a) eval option =
+        let f : type t. t domain -> prod_eval -> expr option =
           fun id evals ->
-            let rec aux : type t tt. t domain -> tt slist -> (expr,'a) peval -> (expr,'a) eval option =
-              fun id l e ->
-                match l, e with
+            let rec aux : type t tt. t domain -> tt pool -> prod_eval -> expr option =
+              fun id l el ->
+                match l, el with
                 | Nil, [] -> None
                 | Cons(hd,tl), (hde::tle) ->
                   begin
                     let module D = (val hd) in
                     match domain_id_eq D.id id with
-                    | Some Eq -> hde
+                    | Some Eq -> (match hde with None -> None | Some x -> x)
                     | None -> aux id tl tle
                   end
                 | _ -> assert false
@@ -554,18 +643,19 @@ struct
         in
         f
       );
-      set_eval = (
-        let f : type t. t domain -> (expr,'a) eval option -> (expr,'a) peval -> (expr,'a) peval =
-          fun id evl evals ->
-            let rec aux : type t tt. t domain -> tt slist -> (expr,'a) peval -> (expr,'a) peval =
-              fun id l e ->
-                match l, e with
+
+      del_eval = (
+        let f : type t. t domain -> prod_eval -> prod_eval =
+          fun id evals ->
+            let rec aux : type t tt. t domain -> tt pool -> prod_eval -> prod_eval =
+              fun id l el ->
+                match l, el with
                 | Nil, [] -> raise Not_found
                 | Cons(hd,tl), (hde::tle) ->
                   begin
                     let module D = (val hd) in
                     match domain_id_eq D.id id with
-                    | Some Eq -> evl :: tle
+                    | Some Eq -> None :: tle
                     | None -> hde :: aux id tl tle
                   end
                 | _ -> assert false
@@ -578,7 +668,7 @@ struct
       get_man = (
         let f : type t. t domain -> ('a,t,'s) man =
           fun id ->
-            let rec aux : type t tt. t domain -> tt slist -> ('a,tt,'s) man -> ('a,t,'s) man =
+            let rec aux : type t tt. t domain -> tt pool -> ('a,tt,'s) man -> ('a,t,'s) man =
               fun id l man ->
                 match l with
                 | Nil -> raise Not_found
@@ -596,102 +686,34 @@ struct
   }
 
 
-  (** Reduce evaluations using the registered rules *)
-  let reduce_eval exp man pevl =
+  (** Apply reduction rules on a pointwise evaluation *)
+  let reduce_pointwise_eval exp man (pointwise:('a,expr option option list) result) : 'a eval =
     let eman = eman man in
-    List.fold_left (fun acc r ->
-        let module R = (val r : R.EREDUCTION) in
-        R.reduce exp eman acc
-      ) pevl Spec.erules
+    (* Let reduction rules roll out imprecise evaluations from [pointwise] *)
+    let pointwise = List.fold_left (fun pointiwise rule ->
+        let module R = (val rule : R.EREDUCTION) in
+        pointiwise |> Result.bind_some @@ fun el flow ->
+        R.reduce exp eman el flow
+      ) pointwise Spec.erules
+    in
+    (* For performance reasons, we keep only one evaluation.
+       THE CHOICE IS ARBITRARY: keep the first non-None result using the
+       order of domains in the configuration file.
+    *)
+    pointwise |> Result.map_opt @@ fun el ->
+    try List.find (function Some _ -> true | None -> false) el
+    with Not_found -> None
 
 
   (** Entry point of abstract evaluations *)
   let eval zone =
-
-    (* Compute the coverage mask of the required zone *)
-    let coverage =
-      let f = fun (type a) (m:a smodule) ->
-        let module S = (val m) in
-        Interface.sat_eval zone S.interface
-      in
-      map { f } Spec.pool
-    in
-
-    (fun exp man flow : (expr,'a) eval option ->
-
-       (* Compute the list of evaluations by pointwise application.
-          Most recent context is propagated through applications.
-       *)
-       let f = fun (type a) (m:a smodule) covered (man:('a,a,'s) man) (acc,ctx) ->
-         let module S = (val m) in
-         if not covered then
-           (S.name, None) :: acc, ctx
-         else
-           let flow' = Flow.set_ctx ctx flow in
-           debug "eval %a in domain %s" pp_expr exp S.name;
-           match S.eval zone exp man flow' with
-           | None -> (S.name, None) :: acc, ctx
-           | Some evl ->
-             let ctx' = Eval.get_ctx evl in
-             (S.name, Some evl) :: acc, ctx'
-       in
-
-       let pointwise_evl, ctx = man_fold_combined { f } Spec.pool coverage man ([], Flow.get_ctx flow) in
-       let pointwise_evl = List.rev pointwise_evl |>
-                           List.map (fun (name, evl) -> (name, evl |> Option.lift (Eval.set_ctx ctx)))
-       in
-
-       debug "@[<v 2>pointwise evaluations:@,%a@]"
-         (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,")
-            (fun fmt (name, evl) ->
-               Format.fprintf fmt "%s: %a"
-                 name
-                 (Option.print (Eval.print ~pp:pp_expr)) evl
-            )
-         )
-         pointwise_evl
-       ;
-
-       let pointwise_evl = List.map snd pointwise_evl in
-
-       (* Turn the point-wise evaluations into a dnf of singleton point-wise evaluations *)
-       let dnf : (expr, 'a) R.peval Dnf.t =
-         let rec aux = function
-           | [] -> Dnf.singleton []
-
-           | None :: tl ->
-             aux tl |>
-             Dnf.map (fun after -> None :: after)
-
-           | Some evl :: tl ->
-             let dnf = Eval.to_dnf evl in
-             aux tl |>
-             Dnf.bind (fun after ->
-                 Dnf.map (fun (e,flow,cleaners) ->
-                     Some (Eval.case e flow ~cleaners) :: after
-                   ) dnf
-               )
-         in
-         aux pointwise_evl
-       in
-
-
-       (* Reduce each pointwise evaluation *)
-       let reduced_dnf = Dnf.map (reduce_eval exp man) dnf in
-
-       (* Meet evaluations *)
-       let rec aux : ('e,'a) R.peval -> ('e,'a) eval option = function
-         | [] -> None
-         | None :: tl -> aux tl
-         | Some evl :: tl ->
-           match aux tl with
-           | None -> Some evl
-           | Some evl' ->
-             Some (Eval.meet evl evl')
-       in
-       let ret = Dnf.apply aux (Option.neutral2 Eval.join) (Option.neutral2 Eval.meet) reduced_dnf in
-       debug "reduced evaluations: %a" (Option.print (Eval.print ~pp:pp_expr)) ret;
-       ret
+    let coverage = get_eval_coverage zone in
+    (fun exp man flow ->
+       eval_pointwise zone coverage exp man flow |>
+       Option.lift @@ fun pointwise ->
+       merge_inter_conflicts man flow pointwise |>
+       reduce_pointwise_eval exp man |>
+       merge_intra_conflicts man flow
     )
 
 
@@ -699,7 +721,7 @@ struct
   (** ***************** *)
 
   let ask query man flow =
-    let f = fun (type a) (m:a smodule) (man:('a,a,'s) man) acc ->
+    let f = fun (type a) (m:a stack) (man:('a,a,'s) man) acc ->
       let module S = (val m) in
       S.ask query man flow |>
       Option.neutral2 (meet_query query) acc
@@ -718,11 +740,16 @@ end
 
 
 
+(****************************************************************************)
+(**                      {2 Functional factory}                             *)
+(****************************************************************************)
+
+(** The following functions are useful to create a reduced product
+    from a list of first-class modules
+*)
 
 
-(** Factory function *)
-
-type spool = S : 'a slist -> spool
+type spool = S : 'a pool -> spool
 
 let type_stack (type a) (s : (module STACK with type t = a)) =
     let module S = (val s) in
@@ -743,7 +770,7 @@ let make
 
   let S pool = type_stack_pool stacks in
 
-  let create_product (type a) (pool: a slist) =
+  let create_product (type a) (pool: a pool) =
     let module S = Make(
       struct
         type t = a

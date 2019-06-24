@@ -50,6 +50,8 @@ let any_zone = Z_any
 let under_zone z = Z_under z
 let above_zone z = Z_above z
 
+let debug fmt = Debug.debug ~channel:"framework.core.zone" fmt
+
 let rec compare_zone (z1: zone) (z2: zone) : int =
   if z1 == z2 then 0
   else match z1, z2 with
@@ -171,7 +173,7 @@ let pp_eval_path fmt (zp:path) =
 *)
 
 let eval_template exp z =
-  let template =
+  let template : expr -> zone_action =
     try
       let info = ZoneMap.find z !zones in
       info.zone_eval
@@ -190,10 +192,14 @@ let eval_template exp z =
       let evals =
         Visitor.fold_expr
           (fun acc exp ->
-             VisitParts ((template exp) :: acc)
+             match template exp with
+             | Visit when Visitor.is_leaf_expr exp -> Visitor.VisitParts (Visit :: acc)
+             | Visit -> Visitor.VisitParts (acc)
+             | Keep -> Visitor.Keep (Keep :: acc)
+             | Process -> Visitor.Keep (Process :: acc)
           )
           (fun acc stmt ->
-             VisitParts (Process :: acc)
+             Visitor.Keep (Process :: acc)
           )
           [] exp
       in

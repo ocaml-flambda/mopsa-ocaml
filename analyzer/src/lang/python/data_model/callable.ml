@@ -82,7 +82,7 @@ module Domain =
 
                | _ ->
                  (* if f has attribute call, restart with that *)
-                 assume_eval
+                 assume
                    (mk_py_hasattr f "__call__" range)
                    ~fthen:(fun flow ->
                        man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_attr f "__call__" range) args range) flow)

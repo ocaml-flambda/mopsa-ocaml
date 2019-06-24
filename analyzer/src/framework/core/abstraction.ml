@@ -22,13 +22,13 @@
 (** An abstraction is the encapsulation of the overall abstract domain used by
     the analyzer.
 
-    There are three main differences with domains. First, maps of zoned
+    There are two main differences with domains. First, maps of zoned
     transfer functions are constructed at creation. Second, transfer functions
-    are not partial functions and return always a result. Finally, post
-    conditions of statements are merged into flows.
+    are not partial functions and return always a result.
 *)
 
 open Token
+open Sig.Domain.Lowlevel
 open Context
 open Ast.All
 open Lattice
@@ -38,6 +38,7 @@ open Post
 open Zone
 open Query
 open Log
+open Result
 
 
 type ('a, 't) man = ('a, 't) Sig.Domain.Lowlevel.man = {
@@ -49,9 +50,9 @@ type ('a, 't) man = ('a, 't) Sig.Domain.Lowlevel.man = {
   set : 't -> 'a -> 'a;
 
   (** Analyzer transfer functions *)
-  post : ?zone:zone -> stmt -> 'a flow -> 'a post;
   exec : ?zone:zone -> stmt -> 'a flow -> 'a flow;
-  eval : ?zone:(zone * zone) -> ?via:zone -> expr -> 'a flow -> (expr, 'a) eval;
+  post : ?zone:zone -> stmt -> 'a flow -> 'a post;
+  eval : ?zone:(zone * zone) -> ?via:zone -> expr -> 'a flow -> 'a eval;
   ask : 'r. 'r Query.query -> 'a flow -> 'r;
 
   (** Accessors to the domain's merging logs *)
@@ -89,6 +90,7 @@ sig
 
   val widen: (t, t) man -> uctx -> t -> t -> t
 
+  val merge : t -> t * log -> t * log -> t
 
 
   (** {2 Transfer functions} *)
@@ -100,7 +102,7 @@ sig
 
   val post : ?zone:zone -> stmt -> (t, t) man -> t flow -> t post
 
-  val eval : ?zone:(zone * zone) -> ?via:zone -> expr -> (t, t) man -> t flow -> (expr, t) eval
+  val eval : ?zone:(zone * zone) -> ?via:zone -> expr -> (t, t) man -> t flow -> t eval
 
   val ask  : 'r Query.query -> (t, t) man -> t flow -> 'r
 
@@ -145,6 +147,8 @@ struct
 
   let widen man ctx a a' = Domain.widen man ctx a a'
 
+  let merge = Domain.merge
+
 
   (** {2 Caches and zone maps} *)
   (** ************************ *)
@@ -178,7 +182,7 @@ struct
 
     (* The initial flow is a singleton ⊤ environment *)
     let flow0 = Flow.singleton ctx T_cur man.lattice.top in
-    debug "flow0 = %a" (Flow.print man.lattice) flow0;
+    debug "flow0 = %a" (Flow.print man.lattice.print) flow0;
 
     (* Initialize domains *)
     Domain.init prog man flow0
@@ -208,7 +212,7 @@ struct
 
   let post ?(zone = any_zone) (stmt: stmt) man (flow: Domain.t flow) : Domain.t post =
     Debug_tree.reach stmt.srange;
-    Debug_tree.exec stmt zone man.lattice flow;
+    Debug_tree.exec stmt zone man.lattice.print flow;
 
     let timer = Timing.start () in
     let fexec =
@@ -217,13 +221,13 @@ struct
     in
     let post = Cache.exec fexec zone stmt man flow in
 
-    Debug_tree.exec_done stmt zone (Timing.stop timer) man.lattice post;
+    Debug_tree.exec_done stmt zone (Timing.stop timer) man.lattice.print post;
     post
+
 
   let exec ?(zone = any_zone) (stmt: stmt) man (flow: Domain.t flow) : Domain.t flow =
     let post = post ~zone stmt man flow in
-    Post.to_flow man.lattice post
-
+    post_to_flow man post
 
 
   (** {2 Evaluation of expressions} *)
@@ -273,7 +277,7 @@ struct
 
   (** Evaluation of expressions. *)
   let rec eval ?(zone = (any_zone, any_zone)) ?(via=any_zone) exp man flow =
-    Debug_tree.eval exp zone man.lattice flow;
+    Debug_tree.eval exp zone man.lattice.print flow;
     let timer = Timing.start () in
 
     let ret =
@@ -287,6 +291,7 @@ struct
           try find_eval_paths_via zone via eval_map
           with Not_found -> Exceptions.panic_at exp.erange "eval for %a not found" pp_zone2 zone
         in
+
         match eval_over_paths paths exp man flow with
         | Some evl -> evl
         | None ->
@@ -294,26 +299,33 @@ struct
           | Keep -> Eval.singleton exp flow
 
           | Process ->
-            Exceptions.warn_at exp.erange "%a not evaluated" pp_expr exp;
-            Eval.singleton exp flow
+            if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
+            then Eval.empty_singleton flow
+            else Exceptions.panic_at exp.erange
+                "unable to evaluate %a in zone %a"
+                pp_expr exp
+                pp_zone2 zone
+
 
           | Visit ->
             let open Ast.Visitor in
             let parts, builder = split_expr exp in
             match parts with
             | {exprs; stmts = []} ->
-              Eval.eval_list
+              Result.bind_list exprs
                 (fun exp flow ->
                    match eval_over_paths paths exp man flow with
                    | None ->
-                     Exceptions.warn_at exp.erange "%a not evaluated" pp_expr exp;
-                     Eval.singleton exp flow
+                     if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
+                     then Eval.empty_singleton flow
+                     else Exceptions.panic_at exp.erange
+                         "unable to evaluate %a in zone %a"
+                         pp_expr exp
+                         pp_zone2 zone
 
                    | Some evl -> evl
-                )
-                exprs flow
-              |>
-              Eval.bind @@ fun exprs flow ->
+                ) flow |>
+              bind_some @@ fun exprs flow ->
               let exp = builder {exprs; stmts = []} in
               Eval.singleton exp flow
 
@@ -343,9 +355,8 @@ struct
 
     | (z1, z2, path, feval) :: tl ->
       eval_hop z1 z2 feval man exp flow |>
-      Option.bind @@
-      Eval.bind_opt @@
-      eval_over_path tl man
+      Option.bind @@ bind_some_opt @@ fun e flow ->
+      eval_over_path tl man e flow
 
   and eval_hop z1 z2 feval man exp flow =
     debug "trying eval %a in hop %a" pp_expr exp pp_zone2 (z1, z2);
@@ -371,8 +382,8 @@ struct
           let parts, builder = split_expr exp in
           match parts with
           | {exprs; stmts = []} ->
-            Eval.eval_list_opt (eval_hop z1 z2 feval man) exprs flow |>
-            Option.lift @@ Eval.bind @@ fun exprs flow ->
+            bind_list_opt exprs (eval_hop z1 z2 feval man) flow |>
+            Option.lift @@ bind_some @@ fun exprs flow ->
             let exp' = builder {exprs; stmts = []} in
             debug "%a -> %a" pp_expr exp pp_expr exp';
             Eval.singleton exp' flow

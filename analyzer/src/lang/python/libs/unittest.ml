@@ -44,7 +44,7 @@ module Domain =
 
     let exec _ _ _ _ = None
 
-    let eval zones exp (man:('a, unit) man) (flow:'a flow) : (expr,'a) eval option =
+    let eval zones exp (man:('a, unit) man) (flow:'a flow) =
       let range = exp.erange in
       match ekind exp with
       (* | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "unittest.main")}, _)}, [], []) ->
@@ -171,7 +171,7 @@ module Domain =
          man.eval exp' flow |> Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "unittest.ExceptionContext.__exit__")}, _)},[self; typ; exn; trace], []) ->
-         assume_eval
+         assume
            (mk_binop exn O_eq (mk_py_none range) range)
            ~fthen:(fun true_flow ->
              (* No exception raised => assertion failed *)
@@ -180,7 +180,7 @@ module Domain =
            )
            ~felse:(fun false_flow ->
              (* Check that the caught exception is an instance of the expected exception *)
-             assume_eval
+             assume
                (Utils.mk_builtin_call "isinstance" [exn; (mk_py_attr self "expected" range)] range)
                ~fthen:(fun true_flow ->
                  let flow = man.exec (mk_assert_reachable range) true_flow in

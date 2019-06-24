@@ -37,7 +37,7 @@ module Make(Domain: sig type t end) =
 struct
   let exec_cache : ((zone * stmt * Domain.t Token.TokenMap.t) * Domain.t post) list ref = ref []
 
-  let eval_cache : (((zone * zone) * expr * Domain.t Token.TokenMap.t) * (expr, Domain.t) eval option) list ref = ref []
+  let eval_cache : (((zone * zone) * expr * Domain.t Token.TokenMap.t) * Domain.t eval option) list ref = ref []
 
   let add_to_cache : type a. a list ref -> a -> unit =
     fun cache x ->
@@ -53,10 +53,10 @@ struct
         if Flow.is_bottom man.lattice flow
         then Post.return flow
         else
-          Exceptions.panic
-            "Unable to analyze statement in %a:@\n @[%a@]"
-            Location.pp_range stmt.srange
+          Exceptions.panic_at stmt.srange
+            "unable to analyze statement %a in zone %a"
             pp_stmt stmt
+            pp_zone zone
 
       | Some post -> post
     in

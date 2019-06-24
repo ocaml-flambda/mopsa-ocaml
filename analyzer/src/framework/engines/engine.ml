@@ -39,7 +39,7 @@ sig
 
   val exec : ?zone:zone -> stmt -> t flow -> t flow
 
-  val eval : ?zone:(zone * zone) -> ?via:zone -> expr -> t flow -> (expr, t) eval
+  val eval : ?zone:(zone * zone) -> ?via:zone -> expr -> t flow -> t eval
 
   val ask : 'r Query.query -> t flow -> 'r
 

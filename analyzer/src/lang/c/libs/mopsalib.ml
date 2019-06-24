@@ -177,7 +177,7 @@ struct
     | E_c_builtin_call("_mopsa_print", []) ->
         Debug.debug ~channel:"print" "%a@\n  @[%a@]"
         pp_position (erange exp |> get_range_start)
-        (Flow.print man.lattice) flow
+        (Flow.print man.lattice.print) flow
       ;
       Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
       Option.return

@@ -113,8 +113,7 @@ struct
       Option.return
 
     | S_stub_free p ->
-      man.eval ~zone:(Z_c, Z_c_points_to) p flow |>
-      Option.return |> Option.lift @@ post_eval man @@ fun pt flow ->
+      man.eval ~zone:(Z_c, Z_c_points_to) p flow >>$? fun pt flow ->
 
       begin match ekind pt with
         | E_c_points_to (P_block (A ({ addr_kind = A_stub_resource _ } as addr), _)) ->
@@ -127,7 +126,8 @@ struct
 
           let stmt'' = mk_stub_free (mk_addr addr stmt.srange) stmt.srange in
           man.exec stmt'' flow' |>
-          Post.return
+          Post.return |>
+          Option.return
 
         | _ ->
           panic_at stmt.srange "resources.common: free(p | p %a) not supported" pp_expr pt

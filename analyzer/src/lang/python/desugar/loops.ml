@@ -67,9 +67,9 @@ module Domain =
         let start = Timing.start () in
         let res =
           man.eval iterable flow  |>
-          exec_eval man (fun iterabletmp flow ->
+          bind_some (fun iterabletmp flow ->
               man.eval (Utils.mk_builtin_call "iter" [iterabletmp] range) flow |>
-              exec_eval man (fun tmp flow ->
+              bind_some (fun tmp flow ->
                   let l_else =
                     match skind orelse with
                     | S_block [] -> [mk_stmt S_break range]
@@ -103,12 +103,13 @@ module Domain =
                           inner_block
                           range
                   in
-                  man.exec stmt flow
+                  man.exec stmt flow |>
+                  Post.return
                 )
             )
         in
         Debug.debug ~channel:"profiling" "for loop at range %a: %.4f" pp_range range (Timing.stop start);
-        res |> Post.return |> Option.return
+        res |> Option.return
 
       | _ -> None
 

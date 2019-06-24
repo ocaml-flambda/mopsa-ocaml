@@ -19,82 +19,42 @@
 (*                                                                          *)
 (****************************************************************************)
 
+(** Eval - abstract evaluations of expressions *)
+
 open Lattice
 open Flow
 open Ast.Stmt
+open Ast.Expr
 open Context
+open Result
+open Log
 
-type ('e, 'a) eval
+type 'a eval = ('a, expr) result
 
-val case : 'e option -> ?cleaners:stmt list -> 'a flow -> ('e, 'a) eval
+val return : ?cleaners:block -> ?log:log -> expr option -> 'a flow -> 'a eval
 
-val singleton : 'e -> ?cleaners:stmt list -> 'a flow -> ('e, 'a) eval
+val singleton : ?cleaners:block -> expr -> 'a flow -> 'a eval
 
-val empty_singleton : 'a flow -> ('e, 'a) eval
+val empty_singleton : 'a flow -> 'a eval
 
-val join : ('e, 'a) eval  -> ('e, 'a) eval  -> ('e, 'a) eval
+val join : 'a eval  -> 'a eval  -> 'a eval
 
-val join_list : empty:(('e, 'a) eval) -> ('e, 'a) eval list -> ('e, 'a) eval
+val meet : 'a eval  -> 'a eval  -> 'a eval
 
-val meet : ('e, 'a) eval  -> ('e, 'a) eval  -> ('e, 'a) eval
+val join_list : empty:('a eval) -> 'a eval list -> 'a eval
 
-val meet_list : empty:(('e, 'a) eval) -> ('e, 'a) eval list -> ('e, 'a) eval
+val meet_list : empty:('a eval) -> 'a eval list -> 'a eval
 
-val print: pp:(Format.formatter -> 'e -> unit) -> Format.formatter -> ('e, 'a) eval -> unit
+val print: Format.formatter -> 'a eval -> unit
 
-val add_cleaners : stmt list -> ('e, 'a) eval  -> ('e, 'a) eval
+val add_cleaners : stmt list -> 'a eval  -> 'a eval
 
-val iter : ('e -> 'a flow -> unit) -> ('e, 'a) eval -> unit
+val get_ctx : 'a eval -> 'a ctx
 
-val map:
-  ('e -> 'a flow -> 'e * 'a flow) ->
-  ('e, 'a) eval -> ('e, 'a) eval
+val set_ctx : 'a ctx -> 'a eval -> 'a eval
 
-val map_flow:
-  ('a flow -> 'a flow) ->
-  ('e, 'a) eval -> ('e, 'a) eval
+val copy_ctx : 'a eval -> 'a eval -> 'a eval
 
-val apply :
-    ('e -> 'a flow -> 'b) ->
-    ('b -> 'b -> 'b) ->
-    ('b -> 'b -> 'b) ->
-    'b ->
-    ('e, 'a) eval ->
-    'b
+val bind : (expr -> 'a flow -> ('a,'r) result) -> 'a eval -> ('a,'r) result
 
-val fold_apply :
-  ('b -> 'e option -> 'a flow -> stmt list -> 'b * 'c) ->
-  ('c -> 'c -> 'c) ->
-  ('c -> 'c -> 'c) ->
-  'b -> ('e,'a) eval ->
-  'b * 'c
-
-val merge :
-  ('e -> 'a flow -> 'f -> 'a flow -> ('e, 'a) eval option * ('f, 'a) eval option) ->
-  ('e, 'a) eval -> ('f, 'a) eval ->
-  ('e, 'a) eval option * ('f, 'a) eval option
-
-
-val to_dnf : ('e, 'a) eval -> ('e option * 'a flow * stmt list) Dnf.t
-
-val get_ctx : ('e, 'a) eval -> 'a ctx
-
-val copy_ctx : ('e, 'a) eval -> ('e, 'a) eval -> ('e, 'a) eval
-
-val set_ctx : 'a ctx -> ('e, 'a) eval -> ('e, 'a) eval
-
-val bind : ('e -> 'a flow -> ('f, 'a) eval ) -> ('e, 'a) eval -> ('f, 'a) eval
-
-val bind_opt : ('e -> 'a flow -> ('f, 'a) eval option) -> ('e, 'a) eval -> ('f, 'a) eval option
-
-val bind_lowlevel_opt : ('e option -> 'a flow -> stmt list -> ('f, 'a) eval option) -> ('e, 'a) eval -> ('f, 'a) eval option
-
-val bind_lowlevel : ('e option -> 'a flow -> stmt list -> ('f, 'a) eval) -> ('e, 'a) eval -> ('f, 'a) eval
-
-val bind_some : ('e -> 'a flow -> ('f, 'a) eval ) -> ('e, 'a) eval -> ('f, 'a) eval option
-
-val eval_list : ('e -> 'a flow -> ('f, 'a) eval) -> 'e list -> 'a flow -> ('f list, 'a) eval
-
-val eval_list_opt : ('e -> 'a flow -> ('f, 'a) eval option) -> 'e list -> 'a flow -> ('f list, 'a) eval option
-
-val simplify : 'a lattice -> ('e -> 'e -> int) -> ('e,'a) eval -> ('e,'a) eval
+val apply : (expr -> 'a flow -> 'b) -> ('b -> 'b -> 'b) -> ('b -> 'b -> 'b) -> 'b -> 'a eval -> 'b

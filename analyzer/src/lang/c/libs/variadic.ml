@@ -154,17 +154,14 @@ struct
 
     (* Call the function with only named arguments *)
     let fundec' = {fundec with c_func_variadic = false} in
-    man.eval (mk_c_call fundec' named range) flow |>
-
-    (* Remove unnamed arguments and the annotation *)
-    Eval.map_flow (fun flow ->
-        let flow =
-          List.fold_left (fun flow unnamed ->
-              man.exec ~zone:Z_c_low_level (mk_remove_var unnamed range) flow
-            ) flow vars
-        in
-        pop_unnamed_args flow
-      )
+    man.eval (mk_c_call fundec' named range) flow >>= fun ret flow ->
+    let flow =
+      List.fold_left (fun flow unnamed ->
+          man.exec ~zone:Z_c_low_level (mk_remove_var unnamed range) flow
+        ) flow vars |>
+      pop_unnamed_args
+    in
+    Eval.return ret flow
 
 
   (* Create a counter variable for a va_list *)
@@ -182,8 +179,7 @@ struct
   (* Resolve a pointer to a va_list *)
   let resolve_va_list ap range man flow =
     let open Memory.Common.Points_to in
-    man.eval ap ~zone:(Z_c, Z_c_points_to) flow |>
-    Eval.bind @@ fun pt flow ->
+    man.eval ap ~zone:(Z_c, Z_c_points_to) flow >>$ fun pt flow ->
 
     match ekind pt with
     | E_c_points_to (P_block (V ap, offset)) ->
@@ -193,14 +189,14 @@ struct
       if not (Z.equal base_size elem_size) then panic_at range "arrays of va_list not supported";
 
       (* In this case, only offset 0 is OK *)
-      assume_eval
+      assume
         (mk_binop offset O_eq (mk_zero range) range)
         ~fthen:(fun flow ->
-            Eval.singleton ap flow
+            Result.singleton ap flow
           )
         ~felse:(fun flow ->
             raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow |>
-            Eval.empty_singleton
+            Result.empty_singleton
           )
         ~zone:Z_c
         man flow
@@ -218,8 +214,7 @@ struct
         pp_var param
     ;
 
-    resolve_va_list ap range man flow |>
-    Eval.bind @@ fun ap flow ->
+    resolve_va_list ap range man flow >>$ fun ap flow ->
 
     (* Initialize the counter *)
     let valc = mk_valc_var ap range in
@@ -232,14 +227,13 @@ struct
   let va_arg ap typ range man flow =
     let _, unnamed = get_unnamed_args flow in
 
-    resolve_va_list ap range man flow |>
-    Eval.bind @@ fun ap flow ->
+    resolve_va_list ap range man flow >>$ fun ap flow ->
 
     let valc = mk_valc_var ap range in
 
     (* Check that value of the counter does not exceed the number of
        unnamed arguments *)
-    assume_eval
+    assume
       (mk_binop valc O_lt (mk_int (List.length unnamed) range) range)
       ~fthen:(fun flow ->
           (* Compute the interval of the counter *)
@@ -273,8 +267,7 @@ struct
 
   (** Evaluate calls to va_end *)
   let va_end ap range man flow =
-    resolve_va_list ap range man flow |>
-    Eval.bind @@ fun ap flow ->
+    resolve_va_list ap range man flow >>$ fun ap flow ->
 
     let valc = mk_valc_var ap range in
 

@@ -41,19 +41,19 @@ module Domain =
 
     let init _ _ flow = flow
 
-    let eval zs exp (man: ('a, unit) man) (flow:'a flow) : (expr,'a) eval option =
+    let eval zs exp (man: ('a, unit) man) (flow:'a flow)  =
       let range = erange exp in
       match ekind exp with
       (* 𝔼⟦ set.__op__(e1, e2) | op ∈ {==, !=, <, ...} ⟧ *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
            when is_compare_op_fun "set" f ->
-         Eval.eval_list (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) [e1; e2] flow |>
-           Eval.bind (fun el flow ->
+         bind_list [e1; e2] (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+         bind_some (fun el flow ->
                let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
-               assume_eval
+               assume
                  (mk_py_isinstance_builtin e1 "set" range)
                  ~fthen:(fun true_flow ->
-                   assume_eval
+                   assume
                      (mk_py_isinstance_builtin e2 "set" range)
                      ~fthen:(fun true_flow ->
                        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_bool range) true_flow)
@@ -72,7 +72,7 @@ module Domain =
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "set.__len__")}, _)}, [e], []) ->
          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
            Eval.bind (fun el flow ->
-               assume_eval
+               assume
                  (mk_py_isinstance_builtin e "set" range)
                  ~fthen:(fun true_flow ->
                    man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) true_flow)

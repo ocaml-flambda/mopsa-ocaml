@@ -65,8 +65,8 @@ module Domain = struct
     match ekind exp with
     | E_binop(op, e1, e2) when is_comp_op op (*&& is_py_expr e1 && is_py_expr e2*) ->
       debug "compare op@\n";
-      Eval.eval_list (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj))  [e1; e2] flow |>
-      Eval.bind (fun el flow ->
+      bind_list [e1; e2] (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+      bind_some (fun el flow ->
           let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
 
           let op_fun, rop_fun =
@@ -91,7 +91,7 @@ module Domain = struct
                       let not_implemented_type = mk_py_type (mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range) range in
                       let expr = mk_py_isinstance cmp not_implemented_type range in
                       debug "Expr is %a@\n" pp_expr expr;
-                      assume_eval
+                      assume
                         expr
                         ~fthen:(fun true_flow ->
                             (* FIXME: subclass priority check is not implemented *)
@@ -99,7 +99,7 @@ module Domain = struct
                               (* FIXME: really necessary? *)
                               match op with
                               | O_eq | O_ne ->
-                                assume_eval
+                                assume
                                   (mk_expr (E_binop(O_py_is, e1, e2)) range)
                                   ~fthen:(fun flow ->
                                       match op with
@@ -117,7 +117,7 @@ module Domain = struct
                               | _ ->
                                 man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object_attr cls2 rop_fun range) [e2; e1] range) flow |>
                                 Eval.bind (fun rcmp flow ->
-                                    assume_eval (mk_py_isinstance rcmp not_implemented_type range) man flow
+                                    assume (mk_py_isinstance rcmp not_implemented_type range) man flow
                                       ~fthen:(fun flow ->
                                           let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) flow in
                                           Eval.empty_singleton flow

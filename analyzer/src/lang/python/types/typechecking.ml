@@ -153,7 +153,7 @@ struct
     | Framework.Engines.Interactive.Q_print_var ->
       Some (
         fun fmt v ->
-          let amap, tmap = get_domain_env T_cur man flow in
+          let amap, tmap = get_env T_cur man flow in
           let ret = ref [] in
           AD.AMap.iter (fun var addrs  ->
               if get_orig_vname var = v then

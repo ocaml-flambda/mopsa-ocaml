@@ -120,19 +120,18 @@ let () =
 
 
 let eval_pointed_base_offset ptr range (man:('a,'t,'s) Core.Sig.Stacked.Lowlevel.man) flow =
-  man.eval ptr ~zone:(Zone.Z_c_low_level, Z_c_points_to) flow |>
-  Eval.bind @@ fun pt flow ->
+  man.eval ptr ~zone:(Zone.Z_c_low_level, Z_c_points_to) flow >>$ fun pt flow ->
 
   match ekind pt with
   | E_c_points_to P_null ->
     raise_alarm Alarms.ANullDeref range ~bottom:true man.lattice flow |>
-    Eval.empty_singleton
+    Result.empty_singleton
 
   | E_c_points_to P_invalid ->
     raise_alarm Alarms.AInvalidDeref range ~bottom:true man.lattice flow |>
-    Eval.empty_singleton
+    Result.empty_singleton
 
   | E_c_points_to (P_block (base, offset)) ->
-    Eval.singleton (base, offset) flow
+    Result.singleton (base, offset) flow
 
   | _ -> assert false

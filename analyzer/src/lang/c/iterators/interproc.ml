@@ -109,8 +109,9 @@ struct
         let exp' = Stubs.Ast.mk_stub_call stub args range in
         man.eval ~zone:(Stubs.Zone.Z_stubs, any_zone) exp' flow
 
-      | {c_func_body = None; c_func_org_name} ->
-        panic_at range "no implementation found for function %s" c_func_org_name
+      | {c_func_body = None; c_func_org_name; c_func_return} ->
+        warn_at range "unsound analysis: ignoring side effects of calling undefined function %s" c_func_org_name;
+        Eval.singleton (mk_top c_func_return range) flow
 
 
   let eval zone exp man flow =
@@ -123,12 +124,12 @@ struct
       Option.return
 
     | E_call(f, args) ->
-      man.eval ~zone:(Zone.Z_c, Z_c_points_to) f flow |>
-      Eval.bind_some @@ fun f flow ->
+      man.eval ~zone:(Zone.Z_c, Z_c_points_to) f flow >>$? fun f flow ->
 
       begin match ekind f with
         | E_c_points_to (P_fun f) ->
-          eval_call f args exp.erange man flow
+          eval_call f args exp.erange man flow |>
+          Option.return
 
         | _ -> assert false
       end

@@ -42,17 +42,13 @@ type t =
 (** Advance the offset of a symbolic pointer *)
 let advance_offset (op:operator) (ptr:t) (o:expr) typ range : t =
   (* Size of the pointed type *)
-  let size =
-    match under_type typ |> remove_typedef_qual with
-    | T_c_void -> Z.one
-    | tt -> sizeof_type tt
- in
+  let size = under_type typ |> void_to_char |> sizeof_type in
 
- let advance oo =
-   if Z.equal size Z.one then
-     mk_binop oo op o range ~etyp:T_int
-   else
-     mk_binop oo op (mk_binop o O_mult (mk_z size range) range ~etyp:T_int) range ~etyp:T_int
+  let advance oo =
+    if Z.equal size Z.one then
+      mk_binop oo op o range ~etyp:T_int
+    else
+      mk_binop oo op (mk_binop o O_mult (mk_z size range) range ~etyp:T_int) range ~etyp:T_int
   in
 
   match ptr with

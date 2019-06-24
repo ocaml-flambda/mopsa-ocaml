@@ -379,10 +379,10 @@ struct
 
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_dict_of")}, _)}, args, []) ->
-      Eval.eval_list man.eval args flow |>
-      Eval.bind (fun eargs flow ->
+      bind_list args man.eval flow |>
+      bind_some (fun eargs flow ->
           let dict, type_k, type_v = match eargs with [d;e;f] -> d,e,f | _ -> assert false in
-          assume_eval (mk_py_isinstance_builtin dict "dict" range) man flow
+          assume (mk_py_isinstance_builtin dict "dict" range) man flow
             ~fthen:(fun flow ->
                 let var_k, var_v = extract_vars dict in
                 Libs.Py_mopsa.check man
