@@ -517,8 +517,9 @@ struct
     | E_c_points_to (P_block (base, offset)) ->
       assume_quantified_zero_cases op base offset primed range man flow
 
-    | E_c_points_to P_top | E_c_points_to P_valid ->
-      Post.return flow
+    | E_c_points_to P_valid ->
+      raise_alarm Alarms.AOutOfBound p.erange ~bottom:false man.lattice flow |>
+      Post.return
 
     | _ -> assert false
 
@@ -570,7 +571,7 @@ struct
       Post.return flow
 
 
-    | E_c_points_to (P_top | P_valid) ->
+    | E_c_points_to P_valid ->
       warn_at range "unsound: rename of %a not supported because it can not be resolved"
         pp_expr target
       ;
@@ -817,8 +818,9 @@ struct
       Eval.bind @@ fun offset flow ->
       eval_deref_cases base offset (under_pointer_type p.etyp |> void_to_char) primed range man flow
 
-    | E_c_points_to P_top | E_c_points_to P_valid ->
-      Eval.singleton (mk_top (under_pointer_type p.etyp |> void_to_char) range) flow
+    | E_c_points_to P_valid ->
+      raise_alarm Alarms.AOutOfBound p.erange ~bottom:false man.lattice flow |>
+      Eval.singleton (mk_top (under_pointer_type p.etyp |> void_to_char) range)
 
     | _ -> assert false
 

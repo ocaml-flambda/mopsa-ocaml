@@ -293,7 +293,14 @@ struct
       Eval.singleton (mk_c_points_to_invalid exp.erange) flow
 
     | Top ->
-      Eval.singleton (mk_c_points_to_top exp.erange) flow
+      let el = [
+        Eval.singleton (mk_c_points_to_valid exp.erange) flow;
+        Eval.singleton (mk_c_points_to_null exp.erange) flow;
+        Eval.singleton (mk_c_points_to_invalid exp.erange) flow
+      ]
+      in
+      Eval.join_list ~empty:(Eval.empty_singleton flow) el
+
 
 
   (** 𝔼⟦ p == q ⟧ *)
@@ -488,7 +495,7 @@ struct
 
     | E_c_points_to(P_null | P_invalid) -> Eval.singleton (mk_zero range) flow
 
-    | E_c_points_to(P_top | P_valid) -> Eval.singleton (mk_top T_bool range) flow
+    | E_c_points_to(P_valid) -> Eval.singleton (mk_top T_bool range) flow
 
     | _ -> panic_at range "is_valid(%a | %a %a) not supported"
              pp_expr p pp_expr p pp_expr pt
