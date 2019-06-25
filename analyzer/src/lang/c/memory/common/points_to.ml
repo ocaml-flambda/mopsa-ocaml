@@ -33,7 +33,6 @@ type points_to =
   | P_valid
   | P_null
   | P_invalid
-  | P_top
 
 let pp_points_to fmt = function
   | P_fun f -> Format.fprintf fmt "(fp %s)" f.Ast.c_func_org_name
@@ -41,7 +40,6 @@ let pp_points_to fmt = function
   | P_valid -> Format.pp_print_string fmt "Valid"
   | P_null -> Format.pp_print_string fmt "NULL"
   | P_invalid -> Format.pp_print_string fmt "Invalid"
-  | P_top -> Format.pp_print_string fmt "⊺"
 
 let compare_points_to p1 p2 =
   match p1, p2 with
@@ -65,9 +63,6 @@ let mk_c_points_to pt range =
 let mk_c_points_to_bloc b o range =
   mk_c_points_to (P_block (b, o)) range
 
-let mk_c_points_to_top range =
-  mk_c_points_to P_top range
-
 let mk_c_points_to_null range =
   mk_c_points_to P_null range
 
@@ -79,7 +74,6 @@ let mk_c_points_to_fun f range =
 
 let mk_c_points_to_valid range =
   mk_c_points_to P_valid range
-
 
 let () =
   register_expr_with_visitor {

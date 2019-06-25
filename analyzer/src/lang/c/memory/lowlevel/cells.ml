@@ -462,8 +462,9 @@ struct
     man.eval ~zone:(Z_c_low_level, Z_c_points_to) p flow >>$ fun pt flow ->
 
     match ekind pt with
-    | E_c_points_to P_top | E_c_points_to P_valid ->
-      Result.singleton Top flow
+    | E_c_points_to P_valid ->
+      raise_alarm Alarms.AOutOfBound range ~bottom:false man.lattice flow |>
+      Result.singleton Top
 
     | E_c_points_to P_null ->
       let flow = raise_alarm Alarms.ANullDeref p.erange ~bottom:true man.lattice flow in
@@ -1080,7 +1081,7 @@ struct
       (* target is pointer, so resolve it and compute the affected offsets *)
       man.eval ~zone:(Z_c_low_level, Z_c_points_to) target flow >>$ fun pt flow ->
       match ekind pt with
-      | E_c_points_to P_top | E_c_points_to P_valid | E_c_points_to P_null | E_c_points_to P_invalid ->
+      | E_c_points_to P_valid | E_c_points_to P_null | E_c_points_to P_invalid ->
         Post.return flow
 
       | E_c_points_to (P_block(base, offset)) ->
