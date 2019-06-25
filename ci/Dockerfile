@@ -10,7 +10,7 @@ FROM ubuntu:latest
 ##
 
 ENV APT_DEPS build-essential lsb-release m4 opam llvm-6.0-dev libclang-6.0-dev clang-6.0 libgmp-dev libmpfr-dev zlib1g-dev
-ENV OPAM_SWITCH 4.07.1
+ENV OPAM_SWITCH 4.07.0
 ENV OPAM_DEPS apron ocp-pack-split zarith menhir yojson javalib
 
 
