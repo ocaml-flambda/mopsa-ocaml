@@ -526,6 +526,31 @@ struct
       eval_ne p q exp.erange man flow |>
       Option.return
 
+    (* 𝔼⟦ NULL ⟧ *)
+    | E_c_cast({ ekind = E_constant (C_int n) }, _)
+      when is_c_pointer_type exp.etyp &&
+           Z.equal n Z.zero ->
+      Eval.singleton (mk_zero exp.erange) flow |>
+      Option.return
+
+    (* 𝔼⟦ !NULL ⟧ *)
+    | E_unop (O_log_not, { ekind = E_c_cast({ ekind = E_constant (C_int n) }, _) })
+      when is_c_pointer_type exp.etyp &&
+           Z.equal n Z.zero ->
+      Eval.singleton (mk_one exp.erange) flow |>
+      Option.return
+
+    (* 𝔼⟦ INVALID ⟧ *)
+    | E_constant (C_c_invalid) ->
+      Eval.singleton (mk_top T_bool exp.erange) flow |>
+      Option.return
+
+    (* 𝔼⟦ !INVALID ⟧ *)
+    | E_unop (O_log_not, { ekind = E_constant (C_c_invalid) }) ->
+      Eval.singleton (mk_top T_bool exp.erange) flow |>
+      Option.return
+
+
     (* 𝔼⟦ p ⟧ *)
     | E_constant (C_top _)
     | E_var _ when is_c_pointer_type exp.etyp ->
