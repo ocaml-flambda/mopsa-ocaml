@@ -35,11 +35,46 @@ struct
   let debug fmt = Debug.debug ~channel:name fmt
 
   let cells = Cells.Domain.id
-  let sentilenl = Null_invalid_sentinel.Domain.id
+  let sentinel = Null_invalid_sentinel.Domain.id
 
 
   let reduce exp man evals flow =
-    Result.singleton evals flow
+    let oe1 = man.get_eval cells evals in
+    let oe2 = man.get_eval sentinel evals in
+
+    (* Reduce only when both domains did an evaluation *)
+    Option.apply2
+      (fun e1 e2 ->
+         match ekind e1, ekind e2 with
+         | _, E_constant (C_top _)
+         | E_constant (C_int _), _
+         | E_constant (C_c_character _), _ ->
+           let evals = man.del_eval sentinel evals in
+           Result.singleton evals flow
+
+          (* If the cell domain returned a cell variable, refine it if possible *)
+          | E_var (v, _), _ ->
+            let cond = mk_binop e1 O_eq e2 exp.erange in
+            man.post ~zone:Z_c_scalar (mk_assume cond exp.erange) flow >>= fun _ flow ->
+
+            if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
+            then
+              let evals = man.del_eval cells evals |>
+                          man.del_eval sentinel
+              in
+              Result.singleton evals flow
+            else
+              let evals = man.del_eval sentinel evals in
+              Result.singleton evals flow
+
+
+          (* Otherwise, keep the sentinel evaluation *)
+          | _, _ ->
+            let evals = man.del_eval cells evals in
+            Result.singleton evals flow
+      )
+      (Result.singleton evals flow)
+      oe1 oe2
 
 end
 
