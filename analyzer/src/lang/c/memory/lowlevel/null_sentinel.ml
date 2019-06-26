@@ -22,7 +22,11 @@
 (** Abstraction of pointer arrays with a NULL sentinel.
 
     This abstract domain keeps track of the position of the first NULL
-    pointer in an array of pointers.
+    pointer in an array of pointers. This position is represented by
+    the auxiliary variable null(b), where b represents a base.
+
+    Pointers before null(b) are smashed into a single auxiliary
+    variable not-null(b).
 *)
 
 
@@ -71,25 +75,29 @@ struct
   (** {2 Variable of NULL position} *)
   (** ********************************* *)
 
-  (** Registration of a new var kind for sentinel variables *)
+  (** Registration of a new var kinds for our auxiliary variables *)
   type var_kind +=
-    | V_c_null_sentinel of base * bool (* is it primed? *)
+    | V_c_null    of base * bool (* is it primed? *)
+    | V_c_not_null of base * bool
+
 
   let () =
     register_var {
       print = (fun next fmt v ->
           match v.vkind with
-          | V_c_null_sentinel (base,primed) ->
-            Format.fprintf fmt "null(%a)%s"
-              pp_base base
-              (if primed then "'" else "")
+          | V_c_null (base,primed) ->
+            Format.fprintf fmt "null(%a)%s" pp_base base (if primed then "'" else "")
+
+          | V_c_not_null (base,primed) ->
+            Format.fprintf fmt "not-null(%a)%s" pp_base base (if primed then "'" else "")
 
           | _ -> next fmt v
         );
 
       compare = (fun next v1 v2 ->
           match v1.vkind, v2.vkind with
-          | V_c_null_sentinel(b1,p1), V_c_null_sentinel(b2,p2) ->
+          | V_c_null(b1,p1), V_c_null(b2,p2)
+          | V_c_not_null(b1,p1), V_c_not_null(b2,p2) ->
             Compare.compose [
               (fun () -> compare_base b1 b2);
               (fun () -> compare p1 p2);
@@ -99,32 +107,33 @@ struct
         );
     }
 
-  (** Create a sentinel variable. The returned variable is a
-      mathematical integer, not a C variable.
-  *)
-  let mk_null_var base ?(primed=false) ?(mode=base_mode base) range =
-    let name =
-      let () = match base with
-        | V v ->
-          Format.fprintf Format.str_formatter "null(%s)%s"
-            v.vname
-            (if primed then "'" else "")
+  (** Create the auxiliary null(base) variable representing the
+      position of the first NULL pointer in the base.
 
-        | _ ->
-          Format.fprintf Format.str_formatter "null(%a)%s"
-            pp_base base
-            (if primed then "'" else "")
-      in
-      Format.flush_str_formatter ()
-    in
-    let v = mkv name (V_c_null_sentinel (base,primed)) T_int in
+      Note that the returned variable has a mathematical integer type,
+      not a C int type.
+  *)
+  let mk_null_var base ?(primed=false) ?(mode=base_mode base) range : expr =
+    let name = "null(" ^ (base_uniq_name base) ^ ")" ^ (if primed then "'" else "") in
+    let v = mkv name (V_c_null (base,primed)) T_int in
     mk_var v ~mode range
+
+
+  (** Create the auxiliary not-null(base) variable representing the
+      all pointers before null(base).
+  *)
+  let mk_not_null_var base ?(primed=false) ?(mode=WEAK) range : expr =
+    let name = "not-null(" ^ (base_uniq_name base) ^ ")" ^ (if primed then "'" else "") in
+    let v = mkv name (V_c_not_null (base,primed)) (T_c_pointer T_c_void) in
+    mk_var v ~mode range
+
 
 
   (** {2 Initialization procedure} *)
   (** **************************** *)
 
   let init prog man flow = flow
+
 
 
   (** {2 Abstract transformers} *)
@@ -136,8 +145,9 @@ struct
   *)
   let is_interesting_base base =
     match base with
-    | V v -> is_c_type v.vtyp &&
-             not (is_c_scalar_type v.vtyp)
+    | V v -> is_c_type v.vtyp && not (is_c_scalar_type v.vtyp)
+
+    | A { addr_kind = A_stub_resource "Memory" } -> true
 
     | _ -> false
 
@@ -145,8 +155,7 @@ struct
   (** Declaration of a C variable *)
   let declare_variable v init scope range man flow =
     if not (is_interesting_base (V v))
-    then
-      Post.return flow
+    then Post.return flow
 
     else
       (* Since we are in the Z_low_level zone, we assume that init has
@@ -166,57 +175,96 @@ struct
 
       let size = sizeof_type v.vtyp in
 
+      let pointer_size = sizeof_type (T_c_pointer T_c_void) in
+
       let null = mk_null_var (V v) range in
 
+      let notnull = mk_not_null_var (V v) range in
+
       let is_null_expr e =
-        match c_expr_to_z e, ekind e with
-        | Some e, _ when Z.equal e Z.zero -> Some true
-        | Some e, _                       -> Some false
-        | None, E_c_address_of _
-        | None, E_constant (C_c_string _) -> Some false
-        | _ -> None
+        match ekind (remove_casts e) with
+        | E_c_address_of _
+        | E_constant (C_c_string _) -> Some false
+        | _ ->
+          match c_expr_to_z (remove_casts e) with
+          | Some e -> Some (Z.equal e Z.zero)
+          | None -> None
       in
 
-      (* Find the position of the first NULL *)
-      let rec aux o l =
+
+      (* Exception raised when a non-pointer initializer is found *)
+      let exception NonPointerFound in
+
+      (* Check if an initializer has a pointer type *)
+      let is_non_pointer = function
+        | C_flat_none (_,t)
+        | C_flat_expr(_,t)
+        | C_flat_fill(_,t,_) ->
+          not (is_c_pointer_type t)
+      in
+
+
+      (* Find the position of the first NULL and accumulate valid pointers *)
+      let rec aux o l acc =
         match l with
-        | [] -> o, o
+        | [] -> size, size, acc
 
-        | C_flat_none _ :: tl when is_global -> o, o
+        | hd :: _ when is_non_pointer hd -> raise NonPointerFound
 
-        | C_flat_none _ :: tl -> o, size
+        | C_flat_none _ :: tl when is_global -> o, o, acc
 
-        | C_flat_expr (e,t) :: tl when is_c_pointer_type t ->
+        | C_flat_none (n,_) :: tl ->
+          aux (Z.add o (Z.mul n pointer_size)) tl (mk_c_invalid_pointer range :: acc)
+
+
+        | C_flat_expr (e,_) :: tl ->
+          debug "init expr %a" pp_expr e;
           begin
             match is_null_expr e with
-            | Some true -> o, o
-            | Some false -> aux (Z.add o (sizeof_type t)) tl
-            | None -> o, size
+            | Some true -> debug "null expression"; o, o, acc
+            | Some false -> debug "not-null"; aux (Z.add o pointer_size) tl (e :: acc)
+            | None ->
+              debug "don't know";
+              let o1,o2,acc = aux (Z.add o pointer_size) tl (e :: acc) in
+              o,o2,acc
           end
 
-        | C_flat_expr (e,t) :: tl -> o, size
 
-        | C_flat_fill (e,t,n) :: tl when is_c_pointer_type t ->
+        | C_flat_fill (e,_,n) :: tl ->
+          debug "fill expression %a * %a" pp_expr e Z.pp_print n;
           begin
             match is_null_expr e with
-            | Some true -> o, o
-            | Some false -> aux (Z.add o (Z.mul n (sizeof_type t))) tl
-            | None -> o, size
+            | Some true -> o, o, acc
+            | Some false -> aux (Z.add o (Z.mul n pointer_size)) tl (e :: acc)
+            | None ->
+              let o1,o2,acc = aux (Z.add o (Z.mul n pointer_size)) tl (e :: acc) in
+              o,o2,acc
           end
 
-        | C_flat_fill (e,t,n) :: tl -> o, size
-
       in
-      let o1, o2 = aux Z.zero flat_init in
-
-      let init' =
-        if Z.equal o1 o2
-        then mk_z o1 range
-        else mk_z_interval o1 o2 range
-      in
-
       man.post ~zone:Z_u_num (mk_add null range) flow >>= fun _ flow ->
-      man.post ~zone:Z_u_num (mk_assign null init' range) flow
+      man.post ~zone:Z_c_scalar (mk_add notnull range) flow >>= fun _ flow ->
+      try
+        let o1, o2, pointers = aux Z.zero flat_init [] in
+        let pos =
+          if Z.equal o1 o2
+          then mk_z o1 range
+          else mk_z_interval o1 o2 range
+        in
+        man.post ~zone:Z_u_num (mk_assign null pos range) flow >>= fun _ flow ->
+        match pointers with
+        | [] -> Post.return flow
+        | hd :: tl ->
+          let strong_notnull = mk_not_null_var (V v) range ~mode:STRONG in
+          man.post ~zone:Z_c_scalar (mk_assign strong_notnull hd range) flow >>= fun _ flow ->
+          List.fold_left (fun acc ptr ->
+              acc >>= fun _ flow ->
+              man.post ~zone:Z_c_scalar (mk_assign notnull ptr range) flow
+            ) (Post.return flow) tl
+
+      with NonPointerFound ->
+        Post.return flow
+
 
 
 
