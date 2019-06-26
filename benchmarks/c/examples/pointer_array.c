@@ -15,5 +15,6 @@ int main() {
 
   char **p = a;
   while(*p) p++;
+  p--;
   printf("%c\n", *p[0]);
 }

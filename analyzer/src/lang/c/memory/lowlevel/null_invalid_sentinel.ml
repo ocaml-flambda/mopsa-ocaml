@@ -544,8 +544,59 @@ struct
   (** ************************ *)
 
   (** Cases of the abstraction evaluations *)
-  let eval_deref_cases base offset primed range man flow =
-    assert false
+  let eval_deref_cases base offset typ primed range man flow =
+    eval_base_size base range man flow >>$ fun size flow ->
+    man.eval ~zone:(Z_c_scalar,Z_u_num) size flow  >>$ fun size flow ->
+
+    (* Safety condition: offset ∈ [0, size - pointer_size] *)
+    assume ~zone:Z_u_num
+      (mk_in offset (mk_zero range) (sub size (mk_z pointer_size range) range) range)
+      ~fthen:(fun flow ->
+          if not (is_interesting_base base)
+          then Eval.singleton (mk_top typ range) flow
+
+          else
+            let sentinel = mk_sentinel_var base ~primed range in
+            let before = mk_before_var base ~primed range in
+            let zero = mk_zero range in
+
+            (* Fact that is always true: sentinel(a) ∈ [0, size] *)
+            man.post ~zone:Z_u_num (mk_assume (mk_in sentinel zero size range) range) flow >>= fun _ flow ->
+
+            switch ~zone:Z_c_scalar [
+              (* Case 1: before sentinel
+                 Offset condition: offset < sentinel
+                 Transformation: weak(before)
+              *)
+              [
+                mk_binop offset O_lt sentinel range;
+              ],
+              (fun flow ->
+                 Eval.singleton before flow
+              );
+
+              (* Case 2: at sentinel
+                 Offset condition: offset >= sentinel
+                 Transformation: NULL v INVALID
+              *)
+              [
+                mk_binop offset O_ge sentinel range;
+              ],
+              (fun flow ->
+                 Eval.join
+                   (Eval.singleton (mk_c_null range) flow)
+                   (Eval.singleton (mk_c_invalid_pointer range) flow)
+              );
+
+            ] man flow
+
+        )
+      ~felse:(fun flow ->
+          (* Unsafe case *)
+          let flow' = raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow in
+          Eval.empty_singleton flow'
+        ) man flow
+
 
 
   (** Abstract evaluation of a dereference *)
@@ -566,7 +617,7 @@ struct
     | E_c_points_to (P_block (base, offset)) when is_interesting_base base ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow |>
       Eval.bind @@ fun offset flow ->
-      eval_deref_cases base offset primed range man flow
+      eval_deref_cases base offset (under_type p.etyp) primed range man flow
 
     | E_c_points_to (P_block _)
     | E_c_points_to P_valid ->
