@@ -30,12 +30,12 @@ open Zone
 module Reduction =
 struct
 
-  let name = "c.memory.lowlevel.reductions.cell_null_sentinel"
+  let name = "c.memory.lowlevel.reductions.cell_null_invalid_sentinel"
 
   let debug fmt = Debug.debug ~channel:name fmt
 
   let cells = Cells.Domain.id
-  let sentilenl = Null_sentinel.Domain.id
+  let sentilenl = Null_invalid_sentinel.Domain.id
 
 
   let reduce exp man evals flow =

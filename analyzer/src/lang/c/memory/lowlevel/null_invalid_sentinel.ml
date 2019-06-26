@@ -19,14 +19,14 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Abstraction of pointer arrays with a NULL sentinel.
+(** Abstraction of pointer arrays with a NULL/INVALID sentinel.
 
-    This abstract domain keeps track of the position of the first NULL
+    This abstract domain keeps track of the position of the first NULL/INVALID
     pointer in an array of pointers. This position is represented by
-    the auxiliary variable null(b), where b represents a base.
+    the auxiliary variable sentinel(b), where b represents a base.
 
-    Pointers before null(b) are smashed into a single auxiliary
-    variable not-null(b).
+    Pointers before sentinel(b) are all valid pointers and are smashed into
+    a single auxiliary variable valid(b).
 *)
 
 
@@ -48,7 +48,7 @@ struct
   (** ***************** *)
 
   include GenStatelessDomainId(struct
-      let name = "c.memory.lowlevel.null_sentinel"
+      let name = "c.memory.lowlevel.null_invalid_sentinel"
     end)
 
   let interface = {
@@ -77,27 +77,27 @@ struct
 
   (** Registration of a new var kinds for our auxiliary variables *)
   type var_kind +=
-    | V_c_null    of base * bool (* is it primed? *)
-    | V_c_not_null of base * bool
+    | V_c_sentinel of base * bool (* is it primed? *)
+    | V_c_valid    of base * bool
 
 
   let () =
     register_var {
       print = (fun next fmt v ->
           match v.vkind with
-          | V_c_null (base,primed) ->
-            Format.fprintf fmt "null(%a)%s" pp_base base (if primed then "'" else "")
+          | V_c_sentinel (base,primed) ->
+            Format.fprintf fmt "sentinel(%a)%s" pp_base base (if primed then "'" else "")
 
-          | V_c_not_null (base,primed) ->
-            Format.fprintf fmt "not-null(%a)%s" pp_base base (if primed then "'" else "")
+          | V_c_valid (base,primed) ->
+            Format.fprintf fmt "valid(%a)%s" pp_base base (if primed then "'" else "")
 
           | _ -> next fmt v
         );
 
       compare = (fun next v1 v2 ->
           match v1.vkind, v2.vkind with
-          | V_c_null(b1,p1), V_c_null(b2,p2)
-          | V_c_not_null(b1,p1), V_c_not_null(b2,p2) ->
+          | V_c_sentinel(b1,p1), V_c_sentinel(b2,p2)
+          | V_c_valid(b1,p1), V_c_valid(b2,p2) ->
             Compare.compose [
               (fun () -> compare_base b1 b2);
               (fun () -> compare p1 p2);
@@ -107,24 +107,24 @@ struct
         );
     }
 
-  (** Create the auxiliary null(base) variable representing the
-      position of the first NULL pointer in the base.
+  (** Create the auxiliary sentinel(base) variable representing the
+      position of the first NULL/INVALID pointer in the base.
 
       Note that the returned variable has a mathematical integer type,
       not a C int type.
   *)
-  let mk_null_var base ?(primed=false) ?(mode=base_mode base) range : expr =
-    let name = "null(" ^ (base_uniq_name base) ^ ")" ^ (if primed then "'" else "") in
-    let v = mkv name (V_c_null (base,primed)) T_int in
+  let mk_sentinel_var base ?(primed=false) ?(mode=base_mode base) range : expr =
+    let name = "sentinel(" ^ (base_uniq_name base) ^ ")" ^ (if primed then "'" else "") in
+    let v = mkv name (V_c_sentinel (base,primed)) T_int in
     mk_var v ~mode range
 
 
-  (** Create the auxiliary not-null(base) variable representing the
-      all pointers before null(base).
+  (** Create the auxiliary valid(base) variable representing the
+      all pointers before sentinel(base).
   *)
-  let mk_not_null_var base ?(primed=false) ?(mode=WEAK) range : expr =
-    let name = "not-null(" ^ (base_uniq_name base) ^ ")" ^ (if primed then "'" else "") in
-    let v = mkv name (V_c_not_null (base,primed)) (T_c_pointer T_c_void) in
+  let mk_valid_var base ?(primed=false) ?(mode=WEAK) range : expr =
+    let name = "valid(" ^ (base_uniq_name base) ^ ")" ^ (if primed then "'" else "") in
+    let v = mkv name (V_c_valid (base,primed)) (T_c_pointer T_c_void) in
     mk_var v ~mode range
 
 
@@ -167,24 +167,19 @@ struct
         | _ -> assert false
       in
 
-      let is_global =
-        match scope with
-        | Variable_func_static _ | Variable_local _ | Variable_parameter _ -> false
-        | _ -> true
-      in
-
       let size = sizeof_type v.vtyp in
 
       let pointer_size = sizeof_type (T_c_pointer T_c_void) in
 
-      let null = mk_null_var (V v) range in
+      let sentinel = mk_sentinel_var (V v) range in
+      let valid = mk_valid_var (V v) range in
 
-      let notnull = mk_not_null_var (V v) range in
-
-      let is_null_expr e =
+      let is_sentinel_expr e =
         match ekind (remove_casts e) with
-        | E_c_address_of _
+        | E_c_address_of _          -> Some false
         | E_constant (C_c_string _) -> Some false
+        | E_var (v,_) when is_c_array_type v.vtyp -> Some false
+        | E_constant C_c_invalid    -> Some true
         | _ ->
           match c_expr_to_z (remove_casts e) with
           | Some e -> Some (Z.equal e Z.zero)
@@ -211,20 +206,15 @@ struct
 
         | hd :: _ when is_non_pointer hd -> raise NonPointerFound
 
-        | C_flat_none _ :: tl when is_global -> o, o, acc
-
-        | C_flat_none (n,_) :: tl ->
-          aux (Z.add o (Z.mul n pointer_size)) tl (mk_c_invalid_pointer range :: acc)
-
+        | C_flat_none _ :: tl  -> o, o, acc
 
         | C_flat_expr (e,_) :: tl ->
           debug "init expr %a" pp_expr e;
           begin
-            match is_null_expr e with
-            | Some true -> debug "null expression"; o, o, acc
-            | Some false -> debug "not-null"; aux (Z.add o pointer_size) tl (e :: acc)
+            match is_sentinel_expr e with
+            | Some true -> o, o, acc
+            | Some false -> aux (Z.add o pointer_size) tl (e :: acc)
             | None ->
-              debug "don't know";
               let o1,o2,acc = aux (Z.add o pointer_size) tl (e :: acc) in
               o,o2,acc
           end
@@ -233,7 +223,7 @@ struct
         | C_flat_fill (e,_,n) :: tl ->
           debug "fill expression %a * %a" pp_expr e Z.pp_print n;
           begin
-            match is_null_expr e with
+            match is_sentinel_expr e with
             | Some true -> o, o, acc
             | Some false -> aux (Z.add o (Z.mul n pointer_size)) tl (e :: acc)
             | None ->
@@ -242,8 +232,7 @@ struct
           end
 
       in
-      man.post ~zone:Z_u_num (mk_add null range) flow >>= fun _ flow ->
-      man.post ~zone:Z_c_scalar (mk_add notnull range) flow >>= fun _ flow ->
+      man.post ~zone:Z_u_num (mk_add sentinel range) flow >>= fun _ flow ->
       try
         let o1, o2, pointers = aux Z.zero flat_init [] in
         let pos =
@@ -251,15 +240,16 @@ struct
           then mk_z o1 range
           else mk_z_interval o1 o2 range
         in
-        man.post ~zone:Z_u_num (mk_assign null pos range) flow >>= fun _ flow ->
+        man.post ~zone:Z_u_num (mk_assign sentinel pos range) flow >>= fun _ flow ->
         match pointers with
         | [] -> Post.return flow
         | hd :: tl ->
-          let strong_notnull = mk_not_null_var (V v) range ~mode:STRONG in
-          man.post ~zone:Z_c_scalar (mk_assign strong_notnull hd range) flow >>= fun _ flow ->
+          man.post ~zone:Z_c_scalar (mk_add valid range) flow >>= fun _ flow ->
+          let strong_valid = mk_valid_var (V v) range ~mode:STRONG in
+          man.post ~zone:Z_c_scalar (mk_assign strong_valid hd range) flow >>= fun _ flow ->
           List.fold_left (fun acc ptr ->
               acc >>= fun _ flow ->
-              man.post ~zone:Z_c_scalar (mk_assign notnull ptr range) flow
+              man.post ~zone:Z_c_scalar (mk_assign valid ptr range) flow
             ) (Post.return flow) tl
 
       with NonPointerFound ->
@@ -284,15 +274,17 @@ struct
     man.eval target ~zone:(Z_c_low_level,Z_c_points_to) flow >>$ fun pt flow ->
     match ekind pt with
     | E_c_points_to (P_block (base, _)) when is_interesting_base base ->
-      let null' = mk_null_var base range ~primed:true in
-      man.post (mk_add null' range) ~zone:Z_u_num flow
+      let sentinel' = mk_sentinel_var base range ~primed:true in
+      let valid' = mk_valid_var base range ~primed:true in
+      man.post (mk_add sentinel' range) ~zone:Z_u_num flow >>= fun _ flow ->
+      man.post (mk_add valid' range) ~zone:Z_c_scalar flow
 
     | _ -> Post.return flow
 
 
 
   (** Rename primed variables introduced by a stub *)
-  let rename_primed target offsets range man flow =
+  let rename_primed target offsets range man flow : 'a post =
     assert false
 
 
@@ -356,7 +348,7 @@ struct
   (** {2 Abstract evaluations} *)
   (** ************************ *)
 
-    (** Cases of the abstraction evaluations *)
+  (** Cases of the abstraction evaluations *)
   let eval_deref_cases base offset primed range man flow =
     assert false
 
