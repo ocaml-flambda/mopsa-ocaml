@@ -128,7 +128,9 @@ let switch
     | [] -> None
 
     | (cond, t) :: q ->
-      Option.neutral2 Result.join (one cond flow t) (aux q)
+      let r = one cond flow t in
+      let rr = aux q in
+      Option.neutral2 Result.join r rr
   in
   match aux cases with
   | None -> assert false

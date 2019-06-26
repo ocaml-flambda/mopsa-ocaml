@@ -243,7 +243,7 @@ struct
     Some (mk_binop e1 op e2 range)
 
 
-  let eval_offset_constraint_opt op p1 v1 o1 p2 v2 o2 range man flow =
+  let eval_offset_constraint_same_base_opt op p1 v1 o1 p2 v2 o2 range man flow =
     match mk_offset_constraint_opt op p1 v1 o1 p2 v2 o2 range, op with
     | None, O_eq -> Eval.singleton (mk_one range) flow
     | None, O_ne -> Eval.singleton (mk_zero range) flow
@@ -324,7 +324,10 @@ struct
                remove_offset_opt p2 v2 v range man
     in
 
-    eval_offset_constraint_opt O_eq p1 v1 o1 p2 v2 o2 range man flow
+    if Value.is_bottom v then
+      Eval.singleton (mk_zero range) flow
+    else
+      eval_offset_constraint_same_base_opt O_eq p1 v1 o1 p2 v2 o2 range man flow
 
 
 
@@ -348,7 +351,7 @@ struct
                    remove_offset_opt p1 v1 v range man |>
                    remove_offset_opt p2 v2 v range man
         in
-        [eval_offset_constraint_opt O_ne p1 v o1 p2 v o2 range man flow]
+        [eval_offset_constraint_same_base_opt O_ne p1 v o1 p2 v o2 range man flow]
     in
 
     (* Case 2: different bases *)
@@ -387,7 +390,7 @@ struct
         let flow = set_value_opt p1 v man flow |>
                    set_value_opt p2 v man
         in
-        [eval_offset_constraint_opt op p1 v o1 p2 v o2 range man flow]
+        [eval_offset_constraint_same_base_opt op p1 v o1 p2 v o2 range man flow]
     in
 
     (* Case 2: different bases => undefined behavior *)
@@ -594,6 +597,13 @@ struct
   (** {2 Computation of post-conditions} *)
   (** ================================== *)
 
+  let remove_offset o mode range man flow =
+    if mode = STRONG then
+      man.post ~zone:(Universal.Zone.Z_u_num) (mk_remove o range) flow
+    else
+      Post.return flow
+
+
   (** Assignment abstract transformer *)
   let assign p q mode range man flow =
     let o = mk_offset_expr p mode range in
@@ -619,19 +629,19 @@ struct
         man.eval offset' ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) flow' >>$ fun offset' flow ->
         man.post ~zone:(Universal.Zone.Z_u_num) (mk_assign o offset' range) flow'
       else
-        man.post ~zone:(Universal.Zone.Z_u_num) (mk_remove o range) flow'
+        remove_offset o mode range man flow'
 
     | Fun f ->
       map_env T_cur (add p (Value.cfun f) mode) man flow |>
-      man.post ~zone:(Universal.Zone.Z_u_num) (mk_remove o range)
+      remove_offset o mode range man
 
     | Invalid ->
       map_env T_cur (add p Value.invalid mode) man flow  |>
-      man.post ~zone:(Universal.Zone.Z_u_num) (mk_remove o range)
+      remove_offset o mode range man
 
     | Null ->
       map_env T_cur (add p Value.null mode) man flow |>
-      man.post ~zone:(Universal.Zone.Z_u_num) (mk_remove o range)
+      remove_offset o mode range man
 
     | Top ->
       map_env T_cur (add p Value.top mode) man flow |>
