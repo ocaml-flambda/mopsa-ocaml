@@ -19,7 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Reduction rule between evaluations of cells and NULL sentinel domains *)
+(** Reduction rule between evaluations of cells and pointer sentinel domains *)
 
 open Mopsa
 open Sig.Stacked.Reduction
@@ -30,12 +30,12 @@ open Zone
 module Reduction =
 struct
 
-  let name = "c.memory.lowlevel.reductions.cell_null_invalid_sentinel"
+  let name = "c.memory.lowlevel.reductions.cell_pointer"
 
   let debug fmt = Debug.debug ~channel:name fmt
 
   let cells = Cells.Domain.id
-  let sentinel = Null_invalid_sentinel.Domain.id
+  let sentinel = Pointer_sentinel.Domain.id
 
 
   let reduce exp man evals flow =

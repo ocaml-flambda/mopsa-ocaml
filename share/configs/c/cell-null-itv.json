@@ -39,10 +39,10 @@
                         {
                             "product": [
                                 "c.memory.lowlevel.cells",
-                                "c.memory.lowlevel.null_invalid_sentinel"
+                                "c.memory.lowlevel.pointer_sentinel"
                             ],
                             "reductions": [
-                                "c.memory.lowlevel.reductions.cell_null_invalid_sentinel"
+                                "c.memory.lowlevel.reductions.cell_pointer"
                             ]
                         },
                         {
