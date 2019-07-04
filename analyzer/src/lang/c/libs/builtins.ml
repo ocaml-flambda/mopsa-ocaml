@@ -33,6 +33,10 @@ let is_builtin_function = function
   | "__printf_chk"
   | "__fprintf_chk"
   | "__builtin___sprintf_chk"
+  | "fscanf"
+  | "scanf"
+  | "sscanf"
+
 
   | "_mopsa_rand_s8"
   | "_mopsa_rand_u8"
