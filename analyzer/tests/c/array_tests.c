@@ -58,7 +58,7 @@ void test_array_out_of_bound_with_constant_index() {
   int a[100];
   int j = 100;
   int x = a[j];
-  _mopsa_assert_error(OUT_OF_BOUND);
+  _mopsa_assert_unsafe();
 }
 
 void test_array_safe_access_with_constant() {
@@ -84,14 +84,14 @@ void test_array_out_of_bound_access_with_range() {
   int a[100];
   int j = _mopsa_range_int(100, 200);
   int x = a[j];
-  _mopsa_assert_error(OUT_OF_BOUND);
+  _mopsa_assert_unsafe();
 }
 
 void test_may_array_out_of_bound_access_with_range() {
   int a[100];
   int j = _mopsa_range_int(10, 200);
   int x = a[j];
-  _mopsa_assert_error_exists(OUT_OF_BOUND);
+  _mopsa_assert_unsafe();
 }
 
 void test_array_safe_access_with_range_in_lval() {

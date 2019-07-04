@@ -44,6 +44,7 @@ open Universal.Zone
 open Zone
 open Common.Base
 open Common.Points_to
+open Alarms
 module Itv = Universal.Numeric.Values.Intervals.Integer.Value
 
 
@@ -463,15 +464,15 @@ struct
 
     match ekind pt with
     | E_c_points_to P_valid ->
-      raise_alarm Alarms.AOutOfBound range ~bottom:false man.lattice flow |>
+      raise_c_alarm AOutOfBound range ~bottom:false man.lattice flow |>
       Result.singleton Top
 
     | E_c_points_to P_null ->
-      let flow = raise_alarm Alarms.ANullDeref p.erange ~bottom:true man.lattice flow in
+      let flow = raise_c_alarm ANullDeref p.erange ~bottom:true man.lattice flow in
       Result.empty_singleton flow
 
     | E_c_points_to P_invalid ->
-      let flow = raise_alarm Alarms.AInvalidDeref p.erange ~bottom:true man.lattice flow in
+      let flow = raise_c_alarm AInvalidDeref p.erange ~bottom:true man.lattice flow in
       Result.empty_singleton flow
 
     | E_c_points_to (P_fun f) ->
@@ -510,7 +511,7 @@ struct
             let c = mk_cell base offset typ in
             Result.singleton (Cell c) flow
           else
-            let flow = raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow in
+            let flow = raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow in
             Result.empty_singleton flow
 
         | _ ->
@@ -566,7 +567,7 @@ struct
                 Result.join_list ~empty:(Result.empty_singleton flow) evals
               )
             ~felse:(fun flow ->
-                let flow = raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow in
+                let flow = raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow in
                 Result.empty_singleton flow
               )
             man flow
@@ -957,7 +958,7 @@ struct
       Post.return flow
 
     | Cell { base } when is_base_readonly base ->
-      let flow = raise_alarm Alarms.AReadOnlyModification ~bottom:true range man.lattice flow in
+      let flow = raise_c_alarm AReadOnlyModification ~bottom:true range man.lattice flow in
       Post.return flow
 
     | Cell c ->

@@ -28,7 +28,7 @@ open Framework.Core.Sig.Domain.Stateless
 open Addr
 open Ast
 open Universal.Ast
-open Alarms
+open Flows.Exn
 
 let check man cond range flow =
   let flow = man.exec (mk_assert cond range) flow in

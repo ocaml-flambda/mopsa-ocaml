@@ -69,14 +69,14 @@ void test_initialization_to_null_of_uninitialized_global() {
 void test_deref_of_uninitialized_local_is_invalid() {
   int *p;
   int i = *p;
-  _mopsa_assert_error(INVALID_DEREF);
+  _mopsa_assert_unsafe();
 }
 
 void test_null_deref() {
   int *p = NULL;
   int **q = &p;
   **q = 1;
-  _mopsa_assert_error(NULL_DEREF);
+  _mopsa_assert_unsafe();
 }
 
 void test_compare_pointers_with_int_values() {

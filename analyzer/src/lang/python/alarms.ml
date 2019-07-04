@@ -21,25 +21,40 @@
 
 open Mopsa
 
-type alarm_kind +=
-   | APyException of expr * string
+
+type alarm_kind += APyException
+type alarm_report += RPyException of expr * string
+
+
+let raise_py_alarm exn name range lattice flow =
+  let cs = Flow.get_callstack flow in
+  let alarm = mk_alarm APyException ~report:(RPyException (exn,name)) range ~cs in
+  Flow.raise_alarm alarm ~bottom:true lattice flow
+
 
 let () =
-  register_alarm
-    {
-      compare = (fun default a a' -> match a.alarm_kind, a'.alarm_kind with
-                                     | APyException (e, s), APyException (e', s') -> compare_expr e e'
-                                     | _ -> default a a');
-      pp_token = (fun default fmt a ->
-        match a.alarm_kind with
-        | APyException (e, s) -> Format.fprintf fmt "PyExc(%a)" pp_expr e
-        | _ -> default fmt a);
-      pp_title = (fun default fmt a ->
-        match a.alarm_kind with
-        | APyException (e, s) -> Format.fprintf fmt "Python Exception: %s" s
-        | _ -> default fmt a);
-      pp_report = (fun default fmt a ->
-        match a.alarm_kind with
-        | APyException _ -> Format.fprintf fmt "FIXME"
-        | _ -> default fmt a);
+  register_alarm_kind {
+    compare = (fun default a a' ->
+        match a, a' with
+        | APyException, APyException -> 0
+        | _ -> default a a'
+      );
+    print = (fun default fmt a ->
+        match a with
+        | APyException -> Format.fprintf fmt "Python Exception"
+        | _ -> default fmt a
+      );
+    };
+  register_alarm_report {
+    compare = (fun default a a' ->
+        match a, a' with
+        | RPyException (e, s), RPyException (e', s') ->
+          compare_expr e e'
+        | _ -> default a a'
+      );
+    print = (fun default fmt a ->
+        match a with
+        | RPyException (e, s) -> Format.fprintf fmt "Python Exception: %s" s
+        | _ -> default fmt a
+      );
     }

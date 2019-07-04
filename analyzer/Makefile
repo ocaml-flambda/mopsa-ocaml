@@ -28,8 +28,8 @@ mopsa = framework mopsa lang main
 # Framework
 framework = ast core lattices engines transformers output config
 framework.ast = program typ operator constant var expr stmt visitor all
-framework.core = query context zone token log lattice flow result eval post \
-		 id interface channel sig callstack alarm debug_tree cache \
+framework.core = query context zone callstack alarm token log lattice flow result eval post \
+		 id interface channel sig debug_tree cache \
 		 abstraction all
 framework.core.sig = value domain stacked
 framework.core.sig.value = lowlevel simplified reduction
@@ -75,12 +75,7 @@ lang.c.libs.clib.file_descriptor = slot table domain
 
 
 # Python
-lang.python = ast addr utils visitor  operators pp ast_compare frontend zone		\
-              alarms libs desugar objects data_model types flows program
-lang.python.objects = class function range nones py_list tuple dict py_set
-lang.python.data_model = callable arith_ops compare_ops aug_assign	\
-                         attribute subscript
-lang.python.types = typing addr_env typechecking t_string t_int t_float t_list t_set t_complex
+lang.python = ast addr utils visitor zone operators pp ast_compare frontend program
 
 
 # Packages

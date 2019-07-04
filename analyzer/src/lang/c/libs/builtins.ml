@@ -65,9 +65,6 @@ let is_builtin_function = function
   | "_mopsa_assert"
   | "_mopsa_assert_safe"
   | "_mopsa_assert_unsafe"
-  | "_mopsa_assert_error"
-  | "_mopsa_assert_error_exists"
-  | "_mopsa_assert_error_at_line"
 
   | "_mopsa_file_description_to_descriptor"
   | "_mopsa_file_descriptor_to_description"

@@ -34,25 +34,18 @@ type alarm_kind +=
   | AVaArgNoNext
   | AReadOnlyModification
 
+
+let raise_c_alarm a range ?(bottom=false) lattice flow =
+  let cs = Flow.get_callstack flow in
+  let alarm = mk_alarm a range ~cs in
+  Flow.raise_alarm alarm ~bottom lattice flow
+
+
 let () =
-  register_alarm
-    {
+  register_alarm_kind {
       compare = (fun default a b -> default a b);
-      pp_token = (fun default fmt a ->
-          match a.alarm_kind with
-          | AOutOfBound -> Format.fprintf fmt "out-bound"
-          | ANullDeref -> Format.fprintf fmt "null-deref"
-          | AInvalidDeref -> Format.fprintf fmt "invalid-deref"
-          | ADivideByZero -> Format.fprintf fmt "div-zero"
-          | AIntegerOverflow -> Format.fprintf fmt "int-overflow"
-          | AIllegalPointerDiff -> Format.fprintf fmt "ptr-diff"
-          | AIllegalPointerOrder -> Format.fprintf fmt "ptr-order"
-          | AVaArgNoNext -> Format.fprintf fmt "va-arg"
-          | AReadOnlyModification -> Format.fprintf fmt "readonly"
-          | _ -> default fmt a
-        );
-      pp_title = (fun default fmt a ->
-          match a.alarm_kind with
+      print = (fun default fmt a ->
+          match a with
           | AOutOfBound -> Format.fprintf fmt "Out of bound access"
           | ANullDeref -> Format.fprintf fmt "Null pointer dereference"
           | AInvalidDeref -> Format.fprintf fmt "Invalid pointer dereference"
@@ -64,17 +57,4 @@ let () =
           | AReadOnlyModification -> Format.fprintf fmt "Modification of a readonly memory"
           | _ -> default fmt a
         );
-      pp_report = (fun default fmt a ->
-          match a.alarm_kind with
-          | AOutOfBound -> Format.fprintf fmt ""
-          | ANullDeref -> Format.fprintf fmt ""
-          | AInvalidDeref -> Format.fprintf fmt ""
-          | ADivideByZero -> Format.fprintf fmt ""
-          | AIntegerOverflow -> Format.fprintf fmt ""
-          | AIllegalPointerDiff -> Format.fprintf fmt ""
-          | AIllegalPointerOrder -> Format.fprintf fmt ""
-          | AVaArgNoNext -> Format.fprintf fmt ""
-          | AReadOnlyModification -> Format.fprintf fmt ""
-          | _ -> default fmt a
-        )
     };

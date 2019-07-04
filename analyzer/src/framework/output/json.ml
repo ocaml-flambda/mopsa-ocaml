@@ -23,6 +23,8 @@
 
 open Yojson.Basic
 open ArgExt
+open Core.Alarm
+
 
 let print out json =
   let channel =
@@ -60,7 +62,7 @@ let render_callstack cs  =
 
 let render_alarm alarm  =
   let title =
-    let () = Core.Alarm.pp_alarm_title Format.str_formatter alarm in
+    let () = pp_alarm_kind Format.str_formatter alarm.alarm_kind in
     Format.flush_str_formatter ()
   in
   let range, cs = alarm.Core.Alarm.alarm_trace in

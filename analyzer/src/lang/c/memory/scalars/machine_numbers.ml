@@ -27,6 +27,7 @@ open Universal.Ast
 open Ast
 open Zone
 open Universal.Zone
+open Alarms
 
 module Itv = Universal.Numeric.Values.Intervals.Integer.Value
 
@@ -224,7 +225,7 @@ struct
            Eval.singleton exp' tflow
         )
         (fun fflow ->
-           let flow' = raise_alarm Alarms.ADivideByZero exp.erange ~bottom:true man.lattice fflow in
+           let flow' = raise_c_alarm ADivideByZero exp.erange ~bottom:true man.lattice fflow in
            Eval.empty_singleton flow'
         ) e e' flow |>
       Option.return
@@ -237,7 +238,7 @@ struct
       check_overflow typ man range
         (fun e tflow -> Eval.singleton e tflow)
         (fun e fflow ->
-           let flow1 = raise_alarm Alarms.AIntegerOverflow exp.erange ~bottom:false man.lattice fflow in
+           let flow1 = raise_c_alarm AIntegerOverflow exp.erange ~bottom:false man.lattice fflow in
            Eval.singleton
              {ekind  = E_unop(O_wrap(rmin, rmax), e);
               etyp   = to_universal_type typ;
@@ -254,7 +255,7 @@ struct
         check_overflow typ man range
           (fun e tflow -> Eval.singleton e tflow)
           (fun e fflow ->
-             let flow1 = raise_alarm Alarms.AIntegerOverflow exp.erange ~bottom:false man.lattice fflow in
+             let flow1 = raise_c_alarm AIntegerOverflow exp.erange ~bottom:false man.lattice fflow in
              Eval.singleton
                {ekind  = E_unop(O_wrap(rmin, rmax), e);
                 etyp   = to_universal_type typ;
@@ -289,7 +290,7 @@ struct
                end
              else
                begin
-                 let flow1 = raise_alarm Alarms.AIntegerOverflow exp.erange ~bottom:false man.lattice fflow in
+                 let flow1 = raise_c_alarm AIntegerOverflow exp.erange ~bottom:false man.lattice fflow in
                  Eval.singleton
                    {ekind  = E_unop(O_wrap(rmin, rmax), e);
                     etyp   = to_universal_type t;

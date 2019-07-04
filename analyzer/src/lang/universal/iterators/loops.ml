@@ -184,7 +184,7 @@ struct
 
       let is_fp, flow_init, flow_out =
         if !opt_loop_use_cache then
-          match join_w_old_lfp man flow0 (stmt.srange, Callstack.get flow0) with
+          match join_w_old_lfp man flow0 (stmt.srange, Flow.get_callstack flow0) with
           | Some flow0 -> false, flow0, Flow.bottom (Flow.get_ctx flow0)
           | None -> unroll cond body man flow0
         else
@@ -202,7 +202,7 @@ struct
           flow_init
         else
           let flow_lfp = lfp 0 !opt_loop_widening_delay cond body man flow_init flow_init in
-          let flow_lfp = if !opt_loop_use_cache then store_lfp man flow_lfp (stmt.srange, Callstack.get flow_lfp) else flow_lfp in
+          let flow_lfp = if !opt_loop_use_cache then store_lfp man flow_lfp (stmt.srange, Flow.get_callstack flow_lfp) else flow_lfp in
           flow_lfp in
 
       let res0 =

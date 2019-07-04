@@ -21,42 +21,66 @@
 
 (** Alarms reporting potential errors inferred by abstract domains. *)
 
-open Lattice
+
 
 type alarm_kind = ..
+
+type alarm_report = ..
 
 type alarm_level =
   | ERROR
   | WARNING
-  | PANIC
 
 
 type alarm = {
-  alarm_kind : alarm_kind;   (** the kind of the alarm *)
+  alarm_kind : alarm_kind;
+  alarm_report : alarm_report;
   alarm_level : alarm_level;
   alarm_trace : Location.range * Callstack.cs;
 }
 
+val mk_alarm :
+  alarm_kind -> ?report:alarm_report -> ?level:alarm_level ->
+  ?cs:Callstack.cs -> Location.range -> alarm
 
-type alarm_info = {
-  compare    : (alarm -> alarm -> int) -> alarm -> alarm -> int;
-  pp_token   : (Format.formatter -> alarm -> unit) -> Format.formatter -> alarm -> unit;
-  pp_title : (Format.formatter -> alarm -> unit) -> Format.formatter -> alarm -> unit;
-  pp_report  : (Format.formatter -> alarm -> unit) -> Format.formatter -> alarm -> unit;
-}
+val register_alarm_kind: alarm_kind TypeExt.info -> unit
+(** Register a new alarm kind *)
 
-val register_alarm: alarm_info -> unit
-(** Register a new alarm *)
+val register_alarm_report: alarm_report TypeExt.info -> unit
+(** Register a new alarm report *)
 
 val pp_alarm : Format.formatter -> alarm -> unit
-(** Pretty print the report of an alarm *)
+(** Pretty print an alarm *)
 
-val pp_alarm_title : Format.formatter -> alarm -> unit
+val pp_alarm_kind : Format.formatter -> alarm_kind -> unit
 
-type Token.token += T_alarm of alarm
 
-val alarm_token : alarm -> Token.token
+module AlarmSet :
+sig
+  type t
 
-val mk_alarm : alarm_kind ->  ?cs:Callstack.cs -> ?level:alarm_level -> Location.range -> alarm
+  val singleton : alarm -> t
 
-val raise_alarm : alarm_kind -> Location.range -> ?level:alarm_level -> ?bottom:bool -> 'a lattice -> 'a Flow.flow -> 'a Flow.flow
+  val empty : t
+
+  val is_empty : t -> bool
+
+  val cardinal : t -> int
+
+  val elements : t -> alarm list
+
+  val add : alarm -> t -> t
+
+  val join : t -> t -> t
+
+  val join_list : t list -> t
+
+  val meet : t -> t -> t
+
+  val meet_list : t list -> t
+
+  val diff : t -> t -> t
+
+  val print : Format.formatter -> t -> unit
+
+end

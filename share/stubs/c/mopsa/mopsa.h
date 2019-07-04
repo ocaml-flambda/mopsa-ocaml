@@ -87,25 +87,12 @@ extern void _mopsa_print();
 // Filters
 extern void _mopsa_assume(int cond);
 
-
-
-// Errors
-#define OUT_OF_BOUND 1
-#define NULL_DEREF 2
-#define INVALID_DEREF 3
-#define INTEGER_OVERFLOW 4
-#define DIVISION_BY_ZERO 5
-
-
 // Assertions
 extern void _mopsa_assert(int cond);
 extern void _mopsa_assert_exists(int cond);
 extern void _mopsa_assert_unreachable();
 extern void _mopsa_assert_safe();
 extern void _mopsa_assert_unsafe();
-extern void _mopsa_assert_error(int error);
-extern void _mopsa_assert_error_exists(int error);
-extern void _mopsa_assert_error_at_line(int error, int line);
 
 
 #endif //_MOPSA_H

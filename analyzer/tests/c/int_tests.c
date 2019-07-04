@@ -50,7 +50,7 @@ void test_divide_by_constant() {
   int a = 4 / 2;
   _mopsa_assert_safe();
   int c = a / (1 - 1);
-  _mopsa_assert_error(DIVISION_BY_ZERO);
+  _mopsa_assert_unsafe();
 }
 
 void test_divide_by_variable() {
@@ -59,7 +59,7 @@ void test_divide_by_variable() {
   _mopsa_assert_safe();
   int y = x - 1;
   int c = a / y;
-  _mopsa_assert_error(DIVISION_BY_ZERO);
+  _mopsa_assert_unsafe();
 }
 
 void test_divide_by_range() {
@@ -68,14 +68,14 @@ void test_divide_by_range() {
   _mopsa_assert_safe();
   int y = x + 2;
   int c = a / y;
-  _mopsa_assert_error_exists(DIVISION_BY_ZERO);
+  _mopsa_assert_unsafe();
 }
 
 int test_overflow() {
   unsigned char c = 25;
   unsigned char d = 6;
   unsigned char e = 10 * c + d;
-  _mopsa_assert_error_exists(INTEGER_OVERFLOW);
+  _mopsa_assert_unsafe();
 }
 
 int test_condition_value() {
