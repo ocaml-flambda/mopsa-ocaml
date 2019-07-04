@@ -57,6 +57,21 @@ struct
     }
   }
 
+
+  (** Command-line options *)
+  (** ==================== *)
+
+  let opt_ignore_cast_alarm = ref false
+
+  let () =
+    register_domain_option name {
+      key = "-ignore-cast-overflow";
+      category = "C";
+      doc = " do not raise integer overflow alarms in explicit casts";
+      spec = ArgExt.Set opt_ignore_cast_alarm;
+      default = "false";
+    }
+
   (** Utility functions *)
   (** ================= *)
 
@@ -82,8 +97,6 @@ struct
   let is_c_div = function
     | O_div | O_mod -> true
     | _ -> false
-
-  let cast_alarm = ref true
 
   let check_overflow typ man range f1 f2 exp flow =
     let rmin, rmax = rangeof typ in
@@ -279,7 +292,7 @@ struct
         check_overflow t man range
           (fun e tflow -> Eval.singleton {e with etyp = to_universal_type t} tflow)
           (fun e fflow ->
-             if b && not (!cast_alarm) then
+             if b && !opt_ignore_cast_alarm then
                begin
                  Eval.singleton
                    ({ekind  = E_unop(O_wrap(rmin, rmax), e);
