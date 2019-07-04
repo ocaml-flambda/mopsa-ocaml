@@ -47,21 +47,21 @@ size_t __ctype_get_mb_cur_max (void);
 
 /*$
  * //NOTE: we are more strict than the spec by requiring that __nptr is 0-terminated
- * requires: valid_string(__nptr);
+ * //requires: valid_string(__nptr);
  *
  */
 double atof (const char *__nptr);
 
 /*$
  * //NOTE: we are more strict than the spec by requiring that __nptr is 0-terminated
- * requires: valid_string(__nptr);
+ * //requires: valid_string(__nptr);
  *
  */
 int atoi (const char *__nptr);
 
 /*$
  * //NOTE: we are more strict than the spec by requiring that __nptr is 0-terminated
- * requires: valid_string(__nptr);
+ * //requires: valid_string(__nptr);
  *
  */
 long int atol (const char *__nptr);
@@ -70,7 +70,7 @@ long int atol (const char *__nptr);
 
 /*$
  * //NOTE: we are more strict than the spec by requiring that __nptr is 0-terminated
- * requires: valid_string(__nptr);
+ * //requires: valid_string(__nptr);
  *
  */
 long long int atoll (const char *__nptr);
