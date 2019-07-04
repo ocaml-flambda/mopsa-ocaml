@@ -24,6 +24,7 @@
 open Yojson.Basic
 open ArgExt
 open Core.Alarm
+open Core.Soundness
 
 
 let print out json =
@@ -72,6 +73,12 @@ let render_alarm alarm  =
     "callstack", render_callstack cs;
   ]
 
+let render_warning w  =
+  `Assoc [
+    "message", `String w.warn_message;
+    "range", render_range w.warn_range;
+  ]
+
 let render_var var  =
   `String var.Ast.Var.vname
 
@@ -90,7 +97,8 @@ let report ?(flow=None) man alarms time files out : unit =
       "success", `Bool true;
       "time", `Float time;
       "files", `List (List.map (fun f -> `String f) files);
-      "alarms", `List (List.map render_alarm alarms)
+      "alarms", `List (List.map render_alarm alarms);
+      "warnings", `List (List.map render_warning (get_warnings ()));
     ]
   in
   print out json

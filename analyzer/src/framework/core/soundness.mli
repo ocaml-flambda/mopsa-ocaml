@@ -19,64 +19,19 @@
 (*                                                                          *)
 (****************************************************************************)
 
-include Alarm
+(** Soundness warnings *)
 
-module Callstack = Callstack
+type warning = {
+  warn_range   : Location.range;
+  warn_message : string;
+}
 
-module Context = Context
+val pp_warning : Format.formatter -> warning -> unit
 
-module Result = Result
+val compare_warning : warning -> warning -> int
 
-type ('a,'r) result = ('a,'r) Result.result
+val is_sound : unit -> bool
 
-let bind_full = Result.bind_full
-let (>>*) = Result.(>>*)
+val get_warnings : unit -> warning list
 
-let bind_full_opt = Result.bind_full_opt
-let (>>*?) = Result.(>>*?)
-
-let bind = Result.bind
-let (>>=) = Result.(>>=)
-
-let bind_opt = Result.bind_opt
-let (>>=?) = Result.(>>=?)
-
-let bind_some = Result.bind_some
-let (>>$) = Result.(>>$)
-
-let bind_some_opt = Result.bind_some_opt
-let (>>$?) = Result.(>>$?)
-
-let bind_list = Result.bind_list
-let bind_list_opt = Result.bind_list_opt
-
-
-module Eval = Eval
-type 'a eval = 'a Eval.eval
-
-module Flow = Flow
-type 'a flow = 'a Flow.flow
-
-module Post = Post
-type 'a post = 'a Post.post
-
-module Log = Log
-
-include Query
-
-include Token
-
-include Zone
-
-include Lattice
-
-include Id
-
-include Interface
-module Interface = Interface
-
-module Sig = Sig
-
-module Channel = Channel
-
-module Soundness = Soundness
+val warn : Location.range -> ('a, Format.formatter, unit, unit) format4 -> 'a

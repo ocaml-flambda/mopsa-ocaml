@@ -951,7 +951,7 @@ struct
     expand p range man flow >>$ fun expansion flow ->
     match expansion with
     | Top ->
-      warn_at range "unsound analysis: ignoring assignment to undetermined lval *%a = %a;"
+      Soundness.warn range "ignoring assignment to undetermined lval *%a = %a;"
         pp_expr p
         pp_expr e
       ;

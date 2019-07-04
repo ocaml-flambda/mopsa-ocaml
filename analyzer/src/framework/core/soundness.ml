@@ -19,64 +19,41 @@
 (*                                                                          *)
 (****************************************************************************)
 
-include Alarm
+(** Soundness warnings *)
 
-module Callstack = Callstack
+open Location
 
-module Context = Context
+type warning = {
+  warn_range   : range;
+  warn_message : string;
+}
 
-module Result = Result
+let pp_warning fmt w =
+  Format.fprintf fmt "%a: %s" pp_range w.warn_range w.warn_message 
 
-type ('a,'r) result = ('a,'r) Result.result
+let compare_warning w1 w2 =
+  Compare.compose [
+    (fun () -> compare_range w1.warn_range w2.warn_range);
+    (fun () -> compare w1.warn_message w2.warn_message);
+  ]
 
-let bind_full = Result.bind_full
-let (>>*) = Result.(>>*)
+module Warnings = Set.Make(struct
+    type t = warning
+    let compare = compare_warning
+  end)
 
-let bind_full_opt = Result.bind_full_opt
-let (>>*?) = Result.(>>*?)
+let warnings = ref Warnings.empty
 
-let bind = Result.bind
-let (>>=) = Result.(>>=)
+let is_sound () = Warnings.is_empty !warnings
 
-let bind_opt = Result.bind_opt
-let (>>=?) = Result.(>>=?)
+let get_warnings () = Warnings.elements !warnings
 
-let bind_some = Result.bind_some
-let (>>$) = Result.(>>$)
-
-let bind_some_opt = Result.bind_some_opt
-let (>>$?) = Result.(>>$?)
-
-let bind_list = Result.bind_list
-let bind_list_opt = Result.bind_list_opt
-
-
-module Eval = Eval
-type 'a eval = 'a Eval.eval
-
-module Flow = Flow
-type 'a flow = 'a Flow.flow
-
-module Post = Post
-type 'a post = 'a Post.post
-
-module Log = Log
-
-include Query
-
-include Token
-
-include Zone
-
-include Lattice
-
-include Id
-
-include Interface
-module Interface = Interface
-
-module Sig = Sig
-
-module Channel = Channel
-
-module Soundness = Soundness
+let warn range fmt =
+  Format.kasprintf (fun msg ->
+      let w = {
+        warn_range = range;
+        warn_message = msg;
+      }
+      in
+      warnings := Warnings.add w !warnings
+    ) fmt

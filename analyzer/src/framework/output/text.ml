@@ -40,7 +40,9 @@ let print out fmt =
 
 
 let report ?(flow=None) man alarms time files out =
-  print out "%a@." (Debug.color_str "green") "Analysis terminated successfully";
+  if Soundness.is_sound ()
+  then print out "%a@." (Debug.color_str "green") "Analysis terminated successfully"
+  else print out "%a@." (Debug.color_str "orange") "Unsound analysis";
   let () = match flow with
     | None -> ()
     | Some f ->
@@ -60,6 +62,17 @@ let report ?(flow=None) man alarms time files out =
            ~pp_sep:(fun fmt () -> fprintf fmt "@\n@\n")
            Core.Alarm.pp_alarm
         ) alarms
+  in
+  let () =
+    match Soundness.get_warnings () with
+    | [] -> ()
+    | warnings ->
+      print out "%d warning%a detected:@." (List.length warnings) Debug.plurial_list warnings;
+      print out "@[%a@]@."
+        (pp_print_list
+           ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
+           Core.Soundness.pp_warning
+        ) warnings
   in
   ()
 
