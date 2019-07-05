@@ -100,7 +100,36 @@ struct
 
   let check_overflow typ man range f1 f2 exp flow =
     let rmin, rmax = rangeof typ in
-    let rec fast_check e flow =
+
+    let rec const_check e flow =
+      match ekind e with
+      | E_constant (C_int n) ->
+        if Z.leq rmin n && Z.leq n rmax
+        then f1 e flow
+        else f2 e flow
+
+      | E_constant (C_int_interval (a,b)) ->
+        let case1 =
+          let a' = Z.max a rmin and b' = Z.min b rmax in
+          if Z.leq a' b'
+          then
+            let e' = mk_z_interval a' b' range in
+            [f1 e' flow]
+          else
+            []
+        in
+        let case2 =
+          if Z.gt rmin a || Z.lt rmax b
+          then
+            [f2 e flow]
+          else
+            []
+        in
+        Eval.join_list (case1 @ case2) ~empty:(Eval.empty_singleton flow)
+
+      | _ -> fast_check e flow
+
+    and fast_check e flow =
       let itv = man.ask (Universal.Numeric.Common.Q_int_interval e) flow in
       if Itv.is_bottom itv then Eval.empty_singleton flow
       else
@@ -121,7 +150,7 @@ struct
         ~felse:(fun fflow -> f2 e flow)
         man flow
     in
-    fast_check exp flow
+    const_check exp flow
 
   let check_division man range f1 f2 e e' flow =
     let rec fast_check () =
@@ -262,19 +291,19 @@ struct
     | E_binop(op, e, e') when is_c_int_op op &&
                               e  |> etyp |> is_c_int_type &&
                               e' |> etyp |> is_c_int_type ->
-        let typ = etyp exp in
-        let rmin, rmax = rangeof typ in
-        eval_binop op e e' exp man flow >>$? fun e flow ->
-        check_overflow typ man range
-          (fun e tflow -> Eval.singleton e tflow)
-          (fun e fflow ->
-             let flow1 = raise_c_alarm AIntegerOverflow exp.erange ~bottom:false man.lattice fflow in
-             Eval.singleton
-               {ekind  = E_unop(O_wrap(rmin, rmax), e);
-                etyp   = to_universal_type typ;
-                erange = tag_range range "wrap"} flow1
-          ) e flow |>
-        Option.return
+      let typ = etyp exp in
+      let rmin, rmax = rangeof typ in
+      eval_binop op e e' exp man flow >>$? fun e flow ->
+      check_overflow typ man range
+        (fun e tflow -> Eval.singleton e tflow)
+        (fun e fflow ->
+           let flow1 = raise_c_alarm AIntegerOverflow exp.erange ~bottom:false man.lattice fflow in
+           Eval.singleton
+             {ekind  = E_unop(O_wrap(rmin, rmax), e);
+              etyp   = to_universal_type typ;
+              erange = tag_range range "wrap"} flow1
+        ) e flow |>
+      Option.return
 
     | E_c_cast(e, b) when exp |> etyp |> is_c_int_type &&
                           e   |> etyp |> is_c_num_type
