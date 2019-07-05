@@ -89,7 +89,8 @@ __off_t lseek (int __fd, __off_t __offset, int __whence);
  * requires: __fd in FileDescriptor;
  *
  * case "success" {
- *   free:    __fd;
+ *   local:   void* addr = _mopsa_file_descriptor_to_description(__fd);
+ *   free:    addr;
  *   ensures: return == 0;
  * }
  *
