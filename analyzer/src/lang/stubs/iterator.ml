@@ -282,7 +282,7 @@ struct
   let exec_requires req man flow =
     let ftrue, ffalse = eval_formula req.content ~negate:true man flow in
     match ffalse with
-    | Some ffalse when Flow.is_bottom man.lattice ffalse ->
+    | Some ffalse when Flow.get T_cur man.lattice ffalse |> man.lattice.is_bottom ->
       ftrue
 
     | Some ffalse ->
