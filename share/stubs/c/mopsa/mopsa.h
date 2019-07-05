@@ -29,6 +29,8 @@
 #define s16 signed short
 #define u32 unsigned int
 #define s32 signed int
+#define u64 unsigned long
+#define s64 signed long
 
 
 // Generators of typed random values
@@ -42,6 +44,9 @@ extern u16 _mopsa_rand_u16();
 extern s32 _mopsa_rand_s32();
 extern u32 _mopsa_rand_u32();
 #define _mopsa_rand_int _mopsa_rand_s32
+
+extern s64 _mopsa_rand_s64();
+extern u64 _mopsa_rand_u64();
 
 extern float _mopsa_rand_float();
 extern double _mopsa_rand_double();
@@ -65,6 +70,9 @@ extern u16 _mopsa_range_u16(u16 l, u16 u);
 extern s32 _mopsa_range_s32(s32 l, s32 u);
 extern u32 _mopsa_range_u32(u32 l, u32 u);
 #define _mopsa_range_int _mopsa_range_s32
+
+extern s64 _mopsa_range_s64(s64 l, s64 u);
+extern u64 _mopsa_range_u64(u64 l, u64 u);
 
 extern float _mopsa_range_float(float l, float u);
 extern double _mopsa_range_double(double l, double u);

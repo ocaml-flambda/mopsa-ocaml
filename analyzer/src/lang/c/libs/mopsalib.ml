@@ -61,6 +61,8 @@ struct
     | "_mopsa_rand_u16"
     | "_mopsa_rand_s32"
     | "_mopsa_rand_u32"
+    | "_mopsa_rand_s64"
+    | "_mopsa_rand_u64"
     | "_mopsa_rand_float"
     | "_mopsa_rand_double"
     | "_mopsa_rand_void_pointer"
@@ -75,6 +77,8 @@ struct
     | "_mopsa_rand_u16" -> u16
     | "_mopsa_rand_s32" -> s32
     | "_mopsa_rand_u32" -> u32
+    | "_mopsa_rand_s64" -> s64
+    | "_mopsa_rand_u64" -> u64
     | "_mopsa_rand_float" -> T_c_float C_float
     | "_mopsa_rand_double" -> T_c_float C_double
     | "_mopsa_rand_void_pointer" -> T_c_pointer T_c_void
@@ -92,6 +96,8 @@ struct
     | "_mopsa_range_u16"
     | "_mopsa_range_s32"
     | "_mopsa_range_u32"
+    | "_mopsa_range_s64"
+    | "_mopsa_range_u64"
     | "_mopsa_range_int"
     | "_mopsa_range_float"
     | "_mopsa_range_double"
@@ -106,6 +112,8 @@ struct
     | "_mopsa_range_u16" -> u16
     | "_mopsa_range_s32" -> s32
     | "_mopsa_range_u32" -> u32
+    | "_mopsa_range_s64" -> s64
+    | "_mopsa_range_u64" -> u64
     | "_mopsa_range_float" -> T_c_float C_float
     | "_mopsa_range_double" -> T_c_float C_double
     | f -> panic "extract_range_type: invalid argument %s" f
