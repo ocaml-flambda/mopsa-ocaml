@@ -77,7 +77,7 @@ let report ?(flow=None) man alarms time files out =
   ()
 
 
-let panic ?btrace exn files out =
+let panic ?btrace exn files time out =
   print out "%a@." (Debug.color_str "red") "Analysis aborted";
   let () =
     match exn with

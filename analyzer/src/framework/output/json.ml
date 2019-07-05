@@ -104,7 +104,7 @@ let report ?(flow=None) man alarms time files out : unit =
   print out json
 
 
-let panic ?(btrace="<none>") exn files out =
+let panic ?(btrace="<none>") exn files time out =
   let open Exceptions in
   let error =
     match exn with
@@ -116,6 +116,7 @@ let panic ?(btrace="<none>") exn files out =
   in
   let json  = `Assoc [
       "success", `Bool false;
+      "time", `Float time;
       "files", `List (List.map (fun f -> `String f) files);
       "exception", `String error;
       "backtrace", `String btrace;
