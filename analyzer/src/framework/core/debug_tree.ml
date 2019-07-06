@@ -106,7 +106,7 @@ let phase name =
   Debug.info "%s" name
 
 let parse ?(cmd="") ?nb file =
-  Debug.info "parsing %s%s%s@."
+  Debug.info "parsing %s%s%s"
     file
     (if cmd="" then "" else " with "^cmd)
     (match nb with None -> "" | Some (a,b) -> Printf.sprintf " [%i of %i]" (a+1) b)

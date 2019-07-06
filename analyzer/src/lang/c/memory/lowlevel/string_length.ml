@@ -489,6 +489,7 @@ struct
 
 
   (** Abstract transformer for tests *(p + ∀i) ? 0 *)
+  (* FIXME: this code is redundant with Cell domain *)
   let assume_quantified_zero op lval range man flow =
     let p, primed =
       let rec doit e =

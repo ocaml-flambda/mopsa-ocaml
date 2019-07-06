@@ -22,63 +22,45 @@
 #ifndef _MOPSA_H
 #define _MOPSA_H
 
-// Type shortcuts
-#define u8 unsigned char
-#define s8 signed char
-#define u16 unsigned short
-#define s16 signed short
-#define u32 unsigned int
-#define s32 signed int
-#define u64 unsigned long
-#define s64 signed long
-
 
 // Generators of typed random values
-extern s8 _mopsa_rand_s8();
-extern u8 _mopsa_rand_u8();
+extern signed char _mopsa_rand_s8();
+extern unsigned char _mopsa_rand_u8();
 #define _mopsa_rand_char _mopsa_rand_s8
 
-extern s16 _mopsa_rand_s16();
-extern u16 _mopsa_rand_u16();
+extern signed short _mopsa_rand_s16();
+extern unsigned short _mopsa_rand_u16();
 
-extern s32 _mopsa_rand_s32();
-extern u32 _mopsa_rand_u32();
+extern signed int _mopsa_rand_s32();
+extern unsigned int _mopsa_rand_u32();
 #define _mopsa_rand_int _mopsa_rand_s32
 
-extern s64 _mopsa_rand_s64();
-extern u64 _mopsa_rand_u64();
+extern signed long _mopsa_rand_s64();
+extern unsigned long _mopsa_rand_u64();
 
 extern float _mopsa_rand_float();
 extern double _mopsa_rand_double();
 
 extern void *_mopsa_rand_void_pointer();
-
-
-// Generic generators accepting the type as argument
-#define _mopsa_rand_number(T) _mopsa_rand_T()
-#define _mopsa_rand_pointer(T) (T)_mopsa_rand_void_pointer()
-
+#define _mopsa_rand_pointer _mopsa_rand_void_pointer
 
 // Generators of typed random ranges
-extern s8 _mopsa_range_s8(s8 l, s8 u);
-extern u8 _mopsa_range_u8(u8 l, u8 u);
+extern signed char _mopsa_range_s8(signed char l, signed char u);
+extern unsigned char _mopsa_range_u8(unsigned char l, unsigned char u);
 #define _mopsa_range_char _mopsa_range_s8
 
-extern s16 _mopsa_range_s16(s16 l, s16 u);
-extern u16 _mopsa_range_u16(u16 l, u16 u);
+extern signed short _mopsa_range_s16(signed short l, signed short u);
+extern unsigned short _mopsa_range_u16(unsigned short l, unsigned short u);
 
-extern s32 _mopsa_range_s32(s32 l, s32 u);
-extern u32 _mopsa_range_u32(u32 l, u32 u);
+extern signed int _mopsa_range_s32(signed int l, signed int u);
+extern unsigned int _mopsa_range_u32(unsigned int l, unsigned int u);
 #define _mopsa_range_int _mopsa_range_s32
 
-extern s64 _mopsa_range_s64(s64 l, s64 u);
-extern u64 _mopsa_range_u64(u64 l, u64 u);
+extern signed long _mopsa_range_s64(signed long l, signed long u);
+extern unsigned long _mopsa_range_u64(unsigned long l, unsigned long u);
 
 extern float _mopsa_range_float(float l, float u);
 extern double _mopsa_range_double(double l, double u);
-
-// Generic generators accepting the type as argument
-#define _mopsa_range(T,l,u) _mopsa_range_T(T l, T u)
 
 
 // Invalid pointer
