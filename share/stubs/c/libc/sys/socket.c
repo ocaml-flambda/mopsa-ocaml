@@ -42,5 +42,6 @@ int connect (int __fd, const struct sockaddr * __addr, socklen_t __len);
  * requires: __fd in FileDescriptor;
  * requires: size(__buf) >= __n;
  * assigns: ((char*)__buf)[0, __n - 1];
+ * ensures: return in [-1, __n];
  */
 ssize_t recv (int __fd, void *__buf, size_t __n, int __flags);
