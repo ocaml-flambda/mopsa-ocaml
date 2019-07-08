@@ -123,6 +123,17 @@ let () =
   ()
 
 
+let raise_assert_fail cond level range man flow =
+  let cs = Flow.get_callstack flow in
+  let alarm = mk_alarm AK_assert_fail
+      ~report:(AR_assert_fail cond)
+      ~level
+      range ~cs
+  in
+  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+
+
+
 module Domain =
 struct
 
@@ -168,17 +179,6 @@ struct
         let flow1 = man.exec test flow in
         Flow.join man.lattice acc flow1
       ) (Flow.bottom ctx) tests
-
-
-  let raise_assert_fail cond level range man flow =
-    let cs = Flow.get_callstack flow in
-    let alarm = mk_alarm AK_assert_fail
-        ~report:(AR_assert_fail cond)
-        ~level
-        range ~cs
-    in
-    Flow.raise_alarm alarm ~bottom:true man.lattice flow
-
 
   let rec exec zone stmt man flow  =
     match skind stmt with

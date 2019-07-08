@@ -195,53 +195,24 @@ struct
 
 
     | E_c_builtin_call("_mopsa_assert_safe", []) ->
-      begin
-        let is_safe = Flow.get_alarms flow |> AlarmSet.is_empty in
-        let exception BottomFound in
-        try
-          let cond =
-            match Flow.get T_cur man.lattice flow |> man.lattice.is_bottom,
-                  is_safe
-            with
-            | false, true -> mk_one
-            | true, false -> mk_zero
-            | false, false -> mk_int_interval 0 1
-            | true, true -> raise BottomFound
-          in
-          let stmt = mk_assert (cond ~typ:u8 exp.erange) exp.erange in
-          let cur = Flow.get T_cur man.lattice flow in
-          let flow = Flow.set T_cur man.lattice.top man.lattice flow |>
-                     man.exec stmt |>
-                     Flow.set T_cur cur man.lattice
-          in
-          Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
-          Option.return
-        with BottomFound ->
-          Eval.empty_singleton flow |>
-          Option.return
-      end
+      let is_safe = Flow.get_alarms flow |> AlarmSet.is_empty in
+      let flow =
+        if is_safe
+        then flow
+        else Universal.Iterators.Unittest.raise_assert_fail exp ERROR exp.erange man flow
+      in
+      Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
+      Option.return
 
-     | E_c_builtin_call("_mopsa_assert_unsafe", []) ->
-      begin
-        let alarms = Flow.get_alarms flow in
-        let cond =
-          match Flow.get T_cur man.lattice flow |> man.lattice.is_bottom,
-                AlarmSet.is_empty alarms
-          with
-          | false, true -> mk_zero
-          | true, false -> mk_one
-          | false, false -> mk_int_interval 0 1
-          | true, true -> mk_zero
-        in
-        let stmt = mk_assert (cond ~typ:u8 exp.erange) exp.erange in
-        let flow1 = Flow.set T_cur man.lattice.top man.lattice flow in
-        let flow2 = man.exec stmt flow1 in
-        (* Since the unsafe here is "normal", so we remove initial alarms *)
-        let alarms' = AlarmSet.diff (Flow.get_alarms flow2) alarms in
-        let flow3 = Flow.set_alarms alarms' flow2 in
-        Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow3 |>
-        Option.return
-      end
+    | E_c_builtin_call("_mopsa_assert_unsafe", []) ->
+      let is_safe = Flow.get_alarms flow |> AlarmSet.is_empty in
+      let flow =
+        if not is_safe
+        then Flow.remove_alarms flow
+        else Universal.Iterators.Unittest.raise_assert_fail exp ERROR exp.erange man flow
+      in
+      Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
+      Option.return
 
 
     | _ -> None
