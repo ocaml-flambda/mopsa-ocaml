@@ -105,6 +105,7 @@ struct
           | T_goto s -> (nogotos, Flow.add k v man.lattice gotos)
           | _       -> (Flow.add k v man.lattice nogotos, gotos)
         ) (Flow.bottom ctx, Flow.bottom ctx) flow in
+      let init_alarms = Flow.get_alarms flow in
       let next f f' i wid_limit =
         let get_gotos f = Flow.filter
             (fun t e -> match t with | T_goto s -> true | _ -> false)
@@ -118,6 +119,7 @@ struct
         else Some (Flow.join man.lattice f1 f1')
       in
       let rec stabilization f i wid_limit =
+        let f = Flow.set_alarms init_alarms f in
         let f' = man.exec stmt' f in
         match next (Flow.copy_ctx f' f) f' i wid_limit with
         | None -> f'
