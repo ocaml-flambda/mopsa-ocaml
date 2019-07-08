@@ -126,6 +126,8 @@ val copy_ctx : 'a flow -> 'a flow -> 'a flow
 
 val get_token_map : 'a flow -> 'a TokenMap.t
 
+val add_alarm : alarm -> 'a flow -> 'a flow
+
 val raise_alarm : alarm -> ?bottom:bool -> 'a lattice -> 'a flow -> 'a flow
 
 val get_alarms : 'a flow -> AlarmSet.t

@@ -185,8 +185,11 @@ let copy_ctx flow1 flow2 =
 
 let get_token_map flow = flow.tmap
 
+let add_alarm alarm flow =
+  { flow with alarms = AlarmSet.add alarm flow.alarms }
+
 let raise_alarm alarm ?(bottom=false) lattice flow =
-  let flow = { flow with alarms = AlarmSet.add alarm flow.alarms } in
+  let flow = add_alarm alarm flow in
   if not bottom
   then flow
   else set T_cur lattice.bottom lattice flow

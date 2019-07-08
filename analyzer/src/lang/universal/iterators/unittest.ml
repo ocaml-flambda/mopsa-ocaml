@@ -206,6 +206,17 @@ struct
         man flow
       |> Option.return
 
+    | S_satisfy(cond) ->
+      let flow' = man.exec (mk_assume cond stmt.srange) flow in
+      if not @@ man.lattice.is_bottom @@ Flow.get T_cur man.lattice flow' then
+        Post.return flow |>
+        Option.return
+      else
+        raise_assert_fail cond ERROR stmt.srange man flow |>
+        Post.return |>
+        Option.return
+
+
     | _ -> None
 
 

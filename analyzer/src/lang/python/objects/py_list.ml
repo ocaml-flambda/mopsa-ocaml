@@ -146,7 +146,7 @@ struct
            (* FIXME: try to reuse other functions? in the impl, list_concat (Objects/listobject.c) is not reusing anything *)
            (* First, allocate new addr for the list, and new addr for the list elements *)
            (* Then assign the el addr to both addresses above *)
-           let els_res_var, flow = get_var_flow (Callstack.get flow, range) flow in
+           let els_res_var, flow = get_var_flow (Flow.get_callstack flow, range) flow in
            let flow = List.fold_left (fun acc el ->
                man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:WEAK els_res_var range) el range) acc)
                flow [mk_var ~mode:WEAK elsl_var range;
@@ -182,7 +182,7 @@ struct
            let els_list = match ekind list with
              | E_py_object ({addr_kind = A_py_list a}, _) -> a
              | _ -> assert false in
-           let els_var, flow = get_var_flow (Callstack.get flow, range) flow in
+           let els_var, flow = get_var_flow (Flow.get_callstack flow, range) flow in
            let flow = man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:WEAK els_var range) (mk_var ~mode:WEAK els_list range) range) flow in
            let addr_list = mk_alloc_addr (A_py_list els_var) range in
            man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_list flow |>
@@ -198,7 +198,7 @@ struct
     | E_py_list ls ->
       debug "Skipping list.__new__, list.__init__ for now@\n";
       (* TODO: handle empty lists *)
-      let els_var, flow = get_var_flow (Callstack.get flow, range) flow in
+      let els_var, flow = get_var_flow (Flow.get_callstack flow, range) flow in
       let flow = List.fold_left (fun acc el ->
           man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:WEAK els_var range) el range) acc) flow ls in
       let addr_list = mk_alloc_addr (A_py_list els_var) range in
@@ -380,7 +380,7 @@ struct
                   ~felse:(fun flow ->
                       assume (mk_py_isinstance_builtin index "slice" range) man flow
                         ~fthen:(fun flow ->
-                            let slicedlist_var, flow = get_var_flow (Callstack.get flow, range) flow in
+                            let slicedlist_var, flow = get_var_flow (Flow.get_callstack flow, range) flow in
                             let flow = man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:WEAK slicedlist_var range) (mk_var ~mode:WEAK var_els range) range) flow in
                             let addr_list = mk_alloc_addr (A_py_list slicedlist_var) range in
                             man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_list flow |>

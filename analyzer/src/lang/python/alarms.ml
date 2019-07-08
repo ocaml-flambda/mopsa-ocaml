@@ -29,7 +29,7 @@ type alarm_report += RPyException of expr * string
 let raise_py_alarm exn name range lattice flow =
   let cs = Flow.get_callstack flow in
   let alarm = mk_alarm APyException ~report:(RPyException (exn,name)) range ~cs in
-  Flow.raise_alarm alarm ~bottom:true lattice flow
+  Flow.raise_alarm alarm ~bottom:false lattice flow
 
 
 let () =
@@ -58,3 +58,45 @@ let () =
         | _ -> default fmt a
       );
     }
+
+
+
+(** Flow token for exceptions *)
+type py_exc_kind =
+  | Py_exc_unprecise
+  | Py_exc_with_callstack of range * Callstack.cs
+
+type token +=
+  | T_py_exception of expr * string * py_exc_kind
+
+let mk_py_unprecise_exception obj name =
+  T_py_exception(obj,name,Py_exc_unprecise)
+
+let mk_py_exception obj name ~cs range =
+  T_py_exception (obj, name, Py_exc_with_callstack (range,cs))
+
+let () =
+  register_token {
+    compare = (fun next tk1 tk2 ->
+        match tk1, tk2 with
+        | T_py_exception (e1,_,k1), T_py_exception (e2,_,k2) ->
+          Compare.compose [
+            (fun () -> compare_expr e1 e2);
+            (fun () ->
+               match k1, k2 with
+               | Py_exc_unprecise, Py_exc_unprecise -> 0
+               | Py_exc_with_callstack (r1, cs1), Py_exc_with_callstack (r2, cs2) ->
+                 Compare.compose [
+                   (fun () -> compare_range r2 r2);
+                   (fun () -> Callstack.compare cs1 cs2);
+                 ]
+               | _ -> compare k1 k2
+            );
+          ]
+        | _ -> next tk1 tk2
+      );
+    print = (fun next fmt tk ->
+        match tk with
+        | T_py_exception (e,_,_) -> Format.fprintf fmt "PyExc(%a)" pp_expr e
+        | _ -> next fmt tk);
+  }
