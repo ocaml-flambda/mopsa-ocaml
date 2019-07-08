@@ -91,32 +91,32 @@ let () =
 
 
 (* Analysis alarms *)
-type alarm_kind += AK_assert_fail
-type alarm_report += AR_assert_fail of expr (** condition *)
+type alarm_kind += A_assert_fail
+type alarm_extra += A_assert_fail_condition of expr (** condition *)
 
 
 let () =
   register_alarm_kind {
     compare = (fun next a1 a2 ->
         match a1, a2 with
-        | AK_assert_fail, AK_assert_fail -> 0
+        | A_assert_fail, A_assert_fail -> 0
         | _ -> next a1 a2
       );
     print = (fun next fmt a ->
         match a with
-        | AK_assert_fail -> Format.fprintf fmt "Assertion fail"
+        | A_assert_fail -> Format.fprintf fmt "Assertion fail"
         | _ -> next fmt a
       );
   };
-  register_alarm_report {
+  register_alarm_extra {
     compare = (fun next a1 a2 ->
         match a1, a2 with
-        | AR_assert_fail(c1), AR_assert_fail(c2) -> compare_expr c1 c2
+        | A_assert_fail_condition(c1), A_assert_fail_condition(c2) -> compare_expr c1 c2
         | _ -> next a1 a2
       );
     print = (fun next fmt a ->
         match a with
-        | AR_assert_fail(cond) -> Format.fprintf fmt "Assertion %a violated" pp_expr cond
+        | A_assert_fail_condition(cond) -> Format.fprintf fmt "Assertion %a violated" pp_expr cond
         | _ -> next fmt a
       );
   };
@@ -125,8 +125,9 @@ let () =
 
 let raise_assert_fail cond level range man flow =
   let cs = Flow.get_callstack flow in
-  let alarm = mk_alarm AK_assert_fail
-      ~report:(AR_assert_fail cond)
+  let alarm = mk_alarm
+      A_assert_fail
+      ~extra:(A_assert_fail_condition cond)
       ~level
       range ~cs
   in

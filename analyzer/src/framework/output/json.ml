@@ -63,10 +63,10 @@ let render_callstack cs  =
 
 let render_alarm alarm  =
   let title =
-    let () = pp_alarm_kind Format.str_formatter alarm.alarm_kind in
+    let () = pp_alarm_kind Format.str_formatter (Core.Alarm.get_alarm_kind alarm) in
     Format.flush_str_formatter ()
   in
-  let range, cs = alarm.Core.Alarm.alarm_trace in
+  let range, cs = Core.Alarm.get_alarm_trace alarm in
   `Assoc [
     "title", `String title;
     "range", render_range range;

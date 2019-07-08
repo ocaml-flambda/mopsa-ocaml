@@ -25,29 +25,32 @@
 
 type alarm_kind = ..
 
-type alarm_report = ..
+type alarm_extra = ..
 
 type alarm_level =
   | ERROR
   | WARNING
 
 
-type alarm = {
-  alarm_kind : alarm_kind;
-  alarm_report : alarm_report;
-  alarm_level : alarm_level;
-  alarm_trace : Location.range * Callstack.cs;
-}
+type alarm
 
 val mk_alarm :
-  alarm_kind -> ?report:alarm_report -> ?level:alarm_level ->
+  alarm_kind -> ?extra:alarm_extra -> ?level:alarm_level ->
   ?cs:Callstack.cs -> Location.range -> alarm
+
+val get_alarm_kind : alarm -> alarm_kind
+
+val get_alarm_extra : alarm -> alarm_extra
+
+val get_alarm_trace : alarm -> Location.range * Callstack.cs
+
+val get_alarm_level : alarm -> alarm_level
 
 val register_alarm_kind: alarm_kind TypeExt.info -> unit
 (** Register a new alarm kind *)
 
-val register_alarm_report: alarm_report TypeExt.info -> unit
-(** Register a new alarm report *)
+val register_alarm_extra: alarm_extra TypeExt.info -> unit
+(** Register a new alarm extra *)
 
 val pp_alarm : Format.formatter -> alarm -> unit
 (** Pretty print an alarm *)

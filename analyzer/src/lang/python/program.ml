@@ -126,13 +126,14 @@ struct
         match tk with
         | Alarms.T_py_exception (e, s, k) ->
           let a = Alarms.APyException in
-          let r = Alarms.RPyException (e,s) in
+          let x = Alarms.XPyException (e,s) in
           let alarm =
             match k with
             | Alarms.Py_exc_unprecise ->
-              mk_alarm a ~report:r unprecise_exception_range ~cs:Callstack.empty
+              mk_alarm a ~extra:x unprecise_exception_range ~cs:Callstack.empty
+
             | Alarms.Py_exc_with_callstack (range,cs) ->
-              mk_alarm a ~report:r range ~cs
+              mk_alarm a ~extra:x range ~cs
           in
           Flow.add_alarm alarm acc
         | _ -> acc
