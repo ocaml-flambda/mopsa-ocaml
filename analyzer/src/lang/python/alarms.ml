@@ -75,6 +75,10 @@ let mk_py_unprecise_exception obj name =
 let mk_py_exception obj name ~cs range =
   T_py_exception (obj, name, Py_exc_with_callstack (range,cs))
 
+let pp_py_exc_kind fmt = function
+  | Py_exc_unprecise -> ()
+  | Py_exc_with_callstack (range,cs) -> Format.fprintf fmt "%a@,%a" pp_range range Callstack.print cs
+
 let () =
   register_token {
     compare = (fun next tk1 tk2 ->
@@ -87,7 +91,7 @@ let () =
                | Py_exc_unprecise, Py_exc_unprecise -> 0
                | Py_exc_with_callstack (r1, cs1), Py_exc_with_callstack (r2, cs2) ->
                  Compare.compose [
-                   (fun () -> compare_range r2 r2);
+                   (fun () -> compare_range r1 r2);
                    (fun () -> Callstack.compare cs1 cs2);
                  ]
                | _ -> compare k1 k2
@@ -97,6 +101,6 @@ let () =
       );
     print = (fun next fmt tk ->
         match tk with
-        | T_py_exception (e,_,_) -> Format.fprintf fmt "PyExc(%a)" pp_expr e
+        | T_py_exception (_,str,k) -> Format.fprintf fmt "@[<hv 2>PyExc(%s)@,%a@]" str pp_py_exc_kind k
         | _ -> next fmt tk);
   }
