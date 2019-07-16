@@ -38,7 +38,7 @@ open Callstack
 type 'a flow
 (** A flow is a flow map augmented with an context *)
 
-val bottom : 'a ctx -> 'a flow
+val bottom : 'a ctx -> AlarmSet.t -> 'a flow
 (** Empty set of flows *)
 
 val top : 'a ctx -> 'a flow
@@ -60,13 +60,13 @@ val subset : 'a lattice -> 'a flow -> 'a flow -> bool
 val join : 'a lattice -> 'a flow -> 'a flow -> 'a flow
 (** Abstraction union operator. *)
 
-val join_list : 'a lattice -> ctx:'a Context.ctx -> 'a flow list -> 'a flow
+val join_list : 'a lattice -> empty:'a flow -> 'a flow list -> 'a flow
 (** Union over a list of flows *)
 
 val meet : 'a lattice -> 'a flow -> 'a flow -> 'a flow
 (** Abstract intersection operator *)
 
-val meet_list : 'a lattice -> ctx:'a Context.ctx -> 'a flow list -> 'a flow
+val meet_list : 'a lattice -> empty:'a flow -> 'a flow list -> 'a flow
 (** Intersection over a list of flows. *)
 
 val widen : 'a lattice -> 'a flow -> 'a flow -> 'a flow

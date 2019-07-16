@@ -167,11 +167,12 @@ struct
   (* ============================== *)
 
   let execute_test_functions tests man flow =
-    let ctx = Flow.get_ctx flow in
     let tests = match !unittest_filter with
       | [] | ["all"] -> tests
       | _ -> List.filter (fun (t, _) -> List.mem t !unittest_filter) tests
     in
+    let ctx = Flow.get_ctx flow in
+    let alarms = Flow.get_alarms flow in
     List.fold_left (fun acc (name, test) ->
         debug "Executing %s" name;
         (* Fold the context *)
@@ -179,7 +180,9 @@ struct
         (* Call the function *)
         let flow1 = man.exec test flow in
         Flow.join man.lattice acc flow1
-      ) (Flow.bottom ctx) tests
+      )
+      (Flow.bottom ctx alarms)
+      tests
 
   let rec exec zone stmt man flow  =
     match skind stmt with

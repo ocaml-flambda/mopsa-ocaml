@@ -39,10 +39,10 @@ type 'a flow = {
 (** A flow is a flow map augmented with an context *)
 
 
-let bottom ctx : 'a flow = {
+let bottom ctx alarms : 'a flow = {
   tmap = TokenMap.bottom;
   ctx;
-  alarms = AlarmSet.empty;
+  alarms;
 }
 
 let top ctx : 'a flow = {
@@ -74,9 +74,9 @@ let join (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
     alarms = AlarmSet.join flow1.alarms flow2.alarms;
   }
 
-let join_list lattice ~ctx l =
+let join_list lattice ~empty l =
   match l with
-  | [] -> bottom ctx
+  | [] -> empty
   | [f] -> f
   | hd :: tl ->
     let ctx  = List.fold_left (fun acc f ->
@@ -97,9 +97,9 @@ let meet (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
     alarms = AlarmSet.meet flow1.alarms flow2.alarms;
   }
 
-let meet_list lattice ~ctx l =
+let meet_list lattice ~empty l =
   match l with
-  | [] -> bottom ctx
+  | [] -> empty
   | [f] -> f
   | hd :: tl ->
     let ctx  = List.fold_left (fun acc f ->

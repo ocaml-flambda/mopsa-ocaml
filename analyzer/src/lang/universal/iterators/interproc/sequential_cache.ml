@@ -105,7 +105,9 @@ struct
     match ekind exp with
     | E_call({ekind = E_function (User_defined func)}, args) ->
       let in_flow = flow in
-      let in_flow_cur = Flow.set T_cur (Flow.get T_cur man.lattice in_flow) man.lattice (Flow.bottom (Flow.get_ctx in_flow)) in
+      let in_flow_cur = Flow.bottom (Flow.get_ctx in_flow) (Flow.get_alarms in_flow) |>
+                        Flow.set T_cur (Flow.get T_cur man.lattice in_flow) man.lattice
+      in
       let new_vars, in_flow_cur = Inlining.Domain.inline_function_assign_args man func args range in_flow_cur in
       let in_flow_other = Flow.remove T_cur in_flow in
       begin match find_signature man func.fun_name in_flow_cur with

@@ -83,7 +83,7 @@ module Domain =
               let uncaught = escape_except man excpt range acc_uncaught in
               let caught = Flow.copy_ctx uncaught caught in
               Flow.join man.lattice acc_caught caught, uncaught)
-            (Flow.bottom (Flow.get_ctx try_flow), try_flow)  excepts in
+            (Flow.bottom (Flow.get_ctx try_flow) (Flow.get_alarms try_flow), try_flow)  excepts in
 
         (* Execute else body after removing all exceptions *)
         let orelse_flow = Flow.filter (function

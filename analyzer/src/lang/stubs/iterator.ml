@@ -428,12 +428,9 @@ struct
     let flows = List.map (Flow.set_ctx ctx) flows in
 
     (* Join flows *)
-    match flows with
-    | [] -> flow
-    | _ ->
-      (* FIXME: when the cases do not define a partitioning, we need
+    (* FIXME: when the cases do not define a partitioning, we need
          to do something else *)
-      Flow.join_list man.lattice ~ctx flows
+    Flow.join_list man.lattice flows ~empty:flow
 
 
   (** Entry point of expression evaluations *)

@@ -61,7 +61,7 @@ module Domain =
            let flow = man.exec (mk_assume (mk_not e e.erange) (tag_range range "fail case assume")) flow in
            if Flow.is_bottom man.lattice flow then
              let _ = debug "no fail" in
-             Flow.bottom (Flow.get_ctx flow)
+             Flow.bottom (Flow.get_ctx flow) (Flow.get_alarms flow)
            else
              man.exec (
                Utils.mk_builtin_raise "AssertionError" (tag_range range "fail case raise")

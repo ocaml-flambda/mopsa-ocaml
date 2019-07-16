@@ -100,11 +100,13 @@ struct
     | S_c_goto_stab stmt' ->
       (* Stabilization statement for backward gotos *)
       let ctx = Flow.get_ctx flow in
+      let alarms = Flow.get_alarms flow in
+      let bottom = Flow.bottom ctx alarms in
       let nogotos, gotos = Flow.fold (fun (nogotos, gotos) k v ->
           match k with
           | T_goto s -> (nogotos, Flow.add k v man.lattice gotos)
           | _       -> (Flow.add k v man.lattice nogotos, gotos)
-        ) (Flow.bottom ctx, Flow.bottom ctx) flow in
+        ) (bottom, bottom) flow in
       let init_alarms = Flow.get_alarms flow in
       let next f f' i wid_limit =
         let get_gotos f = Flow.filter
