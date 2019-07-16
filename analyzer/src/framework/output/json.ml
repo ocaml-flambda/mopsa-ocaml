@@ -23,6 +23,9 @@
 
 open Yojson.Basic
 open ArgExt
+open Core.Alarm
+open Core.Soundness
+
 
 let print out json =
   let channel =
@@ -60,14 +63,20 @@ let render_callstack cs  =
 
 let render_alarm alarm  =
   let title =
-    let () = Core.Alarm.pp_alarm_title Format.str_formatter alarm in
+    let () = pp_alarm_kind Format.str_formatter (Core.Alarm.get_alarm_kind alarm) in
     Format.flush_str_formatter ()
   in
-  let range, cs = alarm.Core.Alarm.alarm_trace in
+  let range, cs = Core.Alarm.get_alarm_trace alarm in
   `Assoc [
     "title", `String title;
     "range", render_range range;
     "callstack", render_callstack cs;
+  ]
+
+let render_warning w  =
+  `Assoc [
+    "message", `String w.warn_message;
+    "range", render_range w.warn_range;
   ]
 
 let render_var var  =
@@ -88,13 +97,14 @@ let report ?(flow=None) man alarms time files out : unit =
       "success", `Bool true;
       "time", `Float time;
       "files", `List (List.map (fun f -> `String f) files);
-      "alarms", `List (List.map render_alarm alarms)
+      "alarms", `List (List.map render_alarm alarms);
+      "warnings", `List (List.map render_warning (get_warnings ()));
     ]
   in
   print out json
 
 
-let panic ?(btrace="<none>") exn files out =
+let panic ?(btrace="<none>") exn files time out =
   let open Exceptions in
   let error =
     match exn with
@@ -106,6 +116,7 @@ let panic ?(btrace="<none>") exn files out =
   in
   let json  = `Assoc [
       "success", `Bool false;
+      "time", `Float time;
       "files", `List (List.map (fun f -> `String f) files);
       "exception", `String error;
       "backtrace", `String btrace;

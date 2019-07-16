@@ -23,6 +23,7 @@
 
 open Mopsa
 open Base
+open Alarms
 
 (* Points-to results *)
 (* ================= *)
@@ -118,11 +119,11 @@ let eval_pointed_base_offset ptr range (man:('a,'t,'s) Core.Sig.Stacked.Lowlevel
 
   match ekind pt with
   | E_c_points_to P_null ->
-    raise_alarm Alarms.ANullDeref range ~bottom:true man.lattice flow |>
+    raise_c_alarm ANullDeref range ~bottom:true man.lattice flow |>
     Result.empty_singleton
 
   | E_c_points_to P_invalid ->
-    raise_alarm Alarms.AInvalidDeref range ~bottom:true man.lattice flow |>
+    raise_c_alarm AInvalidDeref range ~bottom:true man.lattice flow |>
     Result.empty_singleton
 
   | E_c_points_to (P_block (base, offset)) ->

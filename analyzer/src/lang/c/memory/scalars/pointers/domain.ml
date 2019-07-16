@@ -29,6 +29,7 @@ open Zone
 open Universal.Zone
 open Common.Points_to
 open Common.Base
+open Alarms
 
 
 module Domain =
@@ -400,7 +401,7 @@ struct
         let flow = set_value_opt p1 v1 man flow |>
                    set_value_opt p2 v2 man
         in
-        let flow = raise_alarm Alarms.AIllegalPointerOrder range ~bottom:true man.lattice flow in
+        let flow = raise_c_alarm Alarms.AIllegalPointerOrder range ~bottom:true man.lattice flow in
         [Eval.empty_singleton flow]
     in
 
@@ -458,7 +459,7 @@ struct
         let flow = set_value_opt p1 v1 man flow |>
                    set_value_opt p2 v2 man
         in
-        let flow = raise_alarm Alarms.AIllegalPointerDiff range ~bottom:true man.lattice flow in
+        let flow = raise_c_alarm Alarms.AIllegalPointerDiff range ~bottom:true man.lattice flow in
         [Eval.empty_singleton flow]
     in
 

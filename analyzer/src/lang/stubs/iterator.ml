@@ -282,11 +282,11 @@ struct
   let exec_requires req man flow =
     let ftrue, ffalse = eval_formula req.content ~negate:true man flow in
     match ffalse with
-    | Some ffalse when Flow.is_bottom man.lattice ffalse ->
+    | Some ffalse when Flow.get T_cur man.lattice ffalse |> man.lattice.is_bottom ->
       ftrue
 
     | Some ffalse ->
-      raise_alarm A_stub_invalid_require req.range ~bottom:true man.lattice ffalse |>
+      raise_invalid_require req.range ~bottom:true man.lattice ffalse |>
       Flow.join man.lattice ftrue
 
     | _ -> assert false
@@ -415,20 +415,22 @@ struct
     in
 
     (* Execute case sections separately *)
-    let flows = Flow.map_list_opt (fun section flow ->
+    let flows, ctx = List.fold_left (fun (acc,ctx) section ->
         match section with
-        | S_case case -> Some (exec_case case return man flow)
-        | _ -> None
-      ) body flow
+        | S_case case ->
+          let flow = Flow.set_ctx ctx flow in
+          let flow' = exec_case case return man flow in
+          flow':: acc, Flow.get_ctx flow'
+        | _ -> acc, ctx
+      ) ([], Flow.get_ctx flow) body
     in
 
+    let flows = List.map (Flow.set_ctx ctx) flows in
+
     (* Join flows *)
-    match flows with
-    | [] -> flow
-    | _ ->
-      (* FIXME: when the cases do not define a partitioning, we need
+    (* FIXME: when the cases do not define a partitioning, we need
          to do something else *)
-      Flow.join_list man.lattice ~ctx:(Flow.get_ctx flow) flows
+    Flow.join_list man.lattice flows ~empty:flow
 
 
   (** Entry point of expression evaluations *)
@@ -454,8 +456,8 @@ struct
       in
 
       (* Update the callstack *)
-      let cs = Callstack.get flow in
-      let flow = Callstack.push stub.stub_func_name exp.erange flow in
+      let cs = Flow.get_callstack flow in
+      let flow = Flow.push_callstack stub.stub_func_name exp.erange flow in
 
       (* Evaluate the body of the styb *)
       let flow = exec_body stub.stub_func_body return man flow in
@@ -467,7 +469,7 @@ struct
       let flow = remove_params stub.stub_func_params exp.erange man flow in
 
       (* Restore the callstack *)
-      let flow = Callstack.set cs flow in
+      let flow = Flow.set_callstack cs flow in
 
       begin match return with
         | None ->

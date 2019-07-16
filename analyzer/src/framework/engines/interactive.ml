@@ -340,7 +340,7 @@ struct
             interact ~where:false action range flow
 
           | Callstack ->
-            let cs = Callstack.get flow in
+            let cs = Flow.get_callstack flow in
             printf "%a@." Callstack.print cs;
             interact ~where:false action range flow
 

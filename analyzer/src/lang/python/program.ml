@@ -119,6 +119,26 @@ struct
     in
     mk_stmt (Universal.Ast.S_unit_tests (tests)) range
 
+  let unprecise_exception_range = mk_fresh_range ()
+
+  let collect_uncaught_exceptions flow =
+    Flow.fold (fun acc tk env ->
+        match tk with
+        | Alarms.T_py_exception (e, s, k) ->
+          let a = Alarms.APyException in
+          let x = Alarms.XPyException (e,s) in
+          let alarm =
+            match k with
+            | Alarms.Py_exc_unprecise ->
+              mk_alarm a ~extra:x unprecise_exception_range ~cs:Callstack.empty
+
+            | Alarms.Py_exc_with_callstack (range,cs) ->
+              mk_alarm a ~extra:x range ~cs
+          in
+          Flow.add_alarm alarm acc
+        | _ -> acc
+      ) flow flow
+
 
   let exec zone stmt man flow  =
     match skind stmt with
@@ -128,6 +148,7 @@ struct
       init_globals man globals (srange stmt) flow |>
       (* Execute the body *)
       man.exec body |>
+      collect_uncaught_exceptions |>
       Post.return |>
       Option.return
 
@@ -142,7 +163,9 @@ struct
       (* Collect test functions *)
       let tests = get_test_functions body in
       let stmt = mk_py_unit_tests tests (srange stmt) in
-      Post.return (man.exec stmt flow2) |>
+      man.exec stmt flow2 |>
+      collect_uncaught_exceptions |>
+      Post.return |>
       Option.return
 
 

@@ -114,7 +114,7 @@ struct
     match ekind exp with
     | E_py_set ls ->
       debug "Skipping set.__new__, set.__init__ for now@\n";
-      let els_var, flow = get_var_flow (Callstack.get flow, range) flow in
+      let els_var, flow = get_var_flow (Flow.get_callstack flow, range) flow in
       let flow = List.fold_left (fun acc el ->
           man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:WEAK els_var range) el range) acc) flow ls in
       let addr_set = mk_alloc_addr (A_py_set els_var) range in

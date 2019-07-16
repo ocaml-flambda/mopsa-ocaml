@@ -89,7 +89,13 @@ let debug ?(channel = "debug") fmt =
 
 let warn fmt = debug ~channel:"warning" fmt
 
-let info fmt = debug ~channel:"info" fmt
+let info fmt =
+    if can_print "info" then
+      Format.kasprintf (fun str ->
+          Format.printf "[%a] %s@." (color_str "orange") "*" str
+      ) fmt
+  else
+    Format.ifprintf Format.std_formatter fmt
 
 let plurial_list fmt l = if List.length l <= 1 then () else Format.pp_print_string fmt "s"
 let plurial_int fmt n = if n <= 1 then () else Format.pp_print_string fmt "s"

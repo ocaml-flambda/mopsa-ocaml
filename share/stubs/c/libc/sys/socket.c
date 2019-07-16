@@ -19,28 +19,29 @@
 /*                                                                          */
 /****************************************************************************/
 
-/*
- * Entry point of the libc
+/* Stubs for <sys/socket.h> */
+
+#include <sys/socket.h>
+
+
+/*$
+ * local: int fd = new FileDescriptor;
+ * ensures: return == fd;
  */
+int socket (int __domain, int __type, int __protocol);
 
-#include "errno.c"
-#include "assert.c"
-#include "stdio.c"
-#include "stdio_ext.c"
-#include "stdlib.c"
-#include "unistd.c"
-#include "string.c"
-#include "getopt.c"
-#include "locale.c"
-#include "libintl.c"
-#include "utmp.c"
-#include "utmpx.c"
-#include "signal.c"
-#include "error.c"
-#include "builtins.c"
-#include "sys/socket.c"
-#include "arpa/inet.c"
-#include "netinet/in.c"
 
-/* #include "inttypes.c" */
-/* #include "fcntl.c" */
+
+/*$
+ * requires: __fd in FileDescriptor;
+ */
+int connect (int __fd, const struct sockaddr * __addr, socklen_t __len);
+
+
+/*$
+ * requires: __fd in FileDescriptor;
+ * requires: size(__buf) >= __n;
+ * assigns: ((char*)__buf)[0, __n - 1];
+ * ensures: return in [-1, __n];
+ */
+ssize_t recv (int __fd, void *__buf, size_t __n, int __flags);

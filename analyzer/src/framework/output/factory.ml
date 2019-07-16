@@ -22,6 +22,7 @@
 (** Render the output of an analysis depending on the selected engine. *)
 
 open Core.Sig.Domain.Lowlevel
+open Core.Alarm
 
 type format =
   | F_text (* Textual output *)
@@ -40,23 +41,18 @@ let opt_display_lastflow = ref false
 
 (* Print collected alarms in the desired output format *)
 let report man flow time files =
-  let alarms = Core.Flow.fold (fun acc tk env ->
-      match tk with
-      | Core.Alarm.T_alarm a -> a :: acc
-      | _ -> acc
-    ) [] flow
-  in
-  let return_v = if List.length alarms > 0 then 1 else 0 in
+  let alarms = Core.Flow.get_alarms flow |> AlarmSet.elements in
+  let return_v = if alarms = [] then 0 else 1 in
   let lf = if !opt_display_lastflow then Some flow else None in
   let _ = match !opt_format with
     | F_text -> Text.report ~flow:lf man alarms time files !opt_file
     | F_json -> Json.report man alarms time files !opt_file in
   return_v
 
-let panic ?btrace exn files =
+let panic ?btrace exn time files =
   match !opt_format with
-  | F_text -> Text.panic ?btrace exn files !opt_file
-  | F_json -> Json.panic ?btrace exn files !opt_file
+  | F_text -> Text.panic ?btrace exn files time !opt_file
+  | F_json -> Json.panic ?btrace exn files time !opt_file
 
 let help (args:ArgExt.arg list) =
   match !opt_format with

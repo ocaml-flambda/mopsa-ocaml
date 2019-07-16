@@ -33,6 +33,10 @@ let is_builtin_function = function
   | "__printf_chk"
   | "__fprintf_chk"
   | "__builtin___sprintf_chk"
+  | "fscanf"
+  | "scanf"
+  | "sscanf"
+
 
   | "_mopsa_rand_s8"
   | "_mopsa_rand_u8"
@@ -40,6 +44,8 @@ let is_builtin_function = function
   | "_mopsa_rand_u16"
   | "_mopsa_rand_s32"
   | "_mopsa_rand_u32"
+  | "_mopsa_rand_s64"
+  | "_mopsa_rand_u64"
   | "_mopsa_rand_float"
   | "_mopsa_rand_double"
   | "_mopsa_rand_void_pointer"
@@ -50,6 +56,8 @@ let is_builtin_function = function
   | "_mopsa_range_u16"
   | "_mopsa_range_s32"
   | "_mopsa_range_u32"
+  | "_mopsa_range_s64"
+  | "_mopsa_range_u64"
   | "_mopsa_range_int"
   | "_mopsa_range_float"
   | "_mopsa_range_double"
@@ -65,9 +73,6 @@ let is_builtin_function = function
   | "_mopsa_assert"
   | "_mopsa_assert_safe"
   | "_mopsa_assert_unsafe"
-  | "_mopsa_assert_error"
-  | "_mopsa_assert_error_exists"
-  | "_mopsa_assert_error_at_line"
 
   | "_mopsa_file_description_to_descriptor"
   | "_mopsa_file_descriptor_to_description"

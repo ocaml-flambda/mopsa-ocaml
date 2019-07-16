@@ -47,6 +47,7 @@ open Universal.Zone
 open Zone
 open Common.Base
 open Common.Points_to
+open Alarms
 
 
 module Domain =
@@ -310,7 +311,7 @@ struct
         )
       ~felse:(fun flow ->
           (* Unsafe case *)
-          let flow' = raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow in
+          let flow' = raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow in
           Post.return flow'
         )
       ~zone:Z_u_num man flow
@@ -322,15 +323,15 @@ struct
 
     match ekind pt with
     | E_c_points_to P_null ->
-      raise_alarm Alarms.ANullDeref p.erange ~bottom:true man.lattice flow |>
+      raise_c_alarm ANullDeref p.erange ~bottom:true man.lattice flow |>
       Post.return
 
     | E_c_points_to P_invalid ->
-      raise_alarm Alarms.AInvalidDeref p.erange ~bottom:true man.lattice flow |>
+      raise_c_alarm AInvalidDeref p.erange ~bottom:true man.lattice flow |>
       Post.return
 
     | E_c_points_to P_valid ->
-      warn_at range "unsound assignment to valid pointer %a" pp_expr p;
+      Soundness.warn range "ignoring assignment to undetermined valid pointer %a" pp_expr p;
       Post.return flow
 
     | E_c_points_to (P_block (base, offset)) ->
@@ -407,7 +408,7 @@ struct
         )
       ~felse:(fun flow ->
           (* Unsafe case *)
-          let flow' = raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow in
+          let flow' = raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow in
           Post.return flow'
         )
       ~zone:Z_u_num man flow
@@ -479,7 +480,7 @@ struct
         )
       ~felse:(fun flow ->
           (* Unsafe case *)
-          let flow' = raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow in
+          let flow' = raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow in
           Post.return flow'
         )
       ~zone:Z_u_num man flow
@@ -488,6 +489,7 @@ struct
 
 
   (** Abstract transformer for tests *(p + ∀i) ? 0 *)
+  (* FIXME: this code is redundant with Cell domain *)
   let assume_quantified_zero op lval range man flow =
     let p, primed =
       let rec doit e =
@@ -504,11 +506,11 @@ struct
 
     match ekind pt with
     | E_c_points_to P_null ->
-      raise_alarm Alarms.ANullDeref p.erange ~bottom:true man.lattice flow |>
+      raise_c_alarm ANullDeref p.erange ~bottom:true man.lattice flow |>
       Post.return
 
     | E_c_points_to P_invalid ->
-      raise_alarm Alarms.AInvalidDeref p.erange ~bottom:true man.lattice flow |>
+      raise_c_alarm AInvalidDeref p.erange ~bottom:true man.lattice flow |>
       Post.return
 
     | E_c_points_to (P_block (S str, offset)) ->
@@ -518,7 +520,7 @@ struct
       assume_quantified_zero_cases op base offset primed range man flow
 
     | E_c_points_to P_valid ->
-      raise_alarm Alarms.AOutOfBound p.erange ~bottom:false man.lattice flow |>
+      raise_c_alarm AOutOfBound p.erange ~bottom:false man.lattice flow |>
       Post.return
 
     | _ -> assert false
@@ -572,7 +574,7 @@ struct
 
 
     | E_c_points_to P_valid ->
-      warn_at range "unsound: rename of %a not supported because it can not be resolved"
+      Soundness.warn range "rename of %a not supported because it can not be resolved"
         pp_expr target
       ;
       Post.return flow
@@ -717,7 +719,7 @@ struct
         )
       ~felse:(fun flow ->
           (* Unsafe case *)
-          raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow |>
+          raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow |>
           Eval.empty_singleton
         )
       ~zone:Z_u_num man flow
@@ -787,7 +789,7 @@ struct
         )
       ~felse:(fun flow ->
           (* Unsafe case *)
-          raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow |>
+          raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow |>
           Eval.empty_singleton
         )
       ~zone:Z_u_num man flow
@@ -801,11 +803,11 @@ struct
 
     match ekind pt with
     | E_c_points_to P_null ->
-      raise_alarm Alarms.ANullDeref p.erange ~bottom:true man.lattice flow |>
+      raise_c_alarm ANullDeref p.erange ~bottom:true man.lattice flow |>
       Eval.empty_singleton
 
     | E_c_points_to P_invalid ->
-      raise_alarm Alarms.AInvalidDeref p.erange ~bottom:true man.lattice flow |>
+      raise_c_alarm AInvalidDeref p.erange ~bottom:true man.lattice flow |>
       Eval.empty_singleton
 
     | E_c_points_to (P_block (S str, offset)) ->
@@ -819,7 +821,7 @@ struct
       eval_deref_cases base offset (under_pointer_type p.etyp |> void_to_char) primed range man flow
 
     | E_c_points_to P_valid ->
-      raise_alarm Alarms.AOutOfBound p.erange ~bottom:false man.lattice flow |>
+      raise_c_alarm AOutOfBound p.erange ~bottom:false man.lattice flow |>
       Eval.singleton (mk_top (under_pointer_type p.etyp |> void_to_char) range)
 
     | _ -> assert false

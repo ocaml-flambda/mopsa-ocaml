@@ -842,6 +842,8 @@ let s16 = T_c_integer(C_signed_short)
 let u16 = T_c_integer(C_unsigned_short)
 let s32 = T_c_integer(C_signed_int)
 let u32 = T_c_integer(C_unsigned_int)
+let s64 = T_c_integer(C_signed_long)
+let u64 = T_c_integer(C_unsigned_long)
 let ul = T_c_integer(C_unsigned_long)
 let array_type typ size = T_c_array(typ,C_array_length_cst size)
 

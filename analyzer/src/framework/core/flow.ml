@@ -24,6 +24,7 @@
 open Lattice
 open Context
 open Token
+open Alarm
 
 
 (****************************************************************************)
@@ -33,23 +34,27 @@ open Token
 type 'a flow = {
   tmap : 'a TokenMap.t;
   ctx : 'a ctx;
+  alarms: AlarmSet.t;
 }
 (** A flow is a flow map augmented with an context *)
 
 
-let bottom ctx : 'a flow = {
+let bottom ctx alarms : 'a flow = {
   tmap = TokenMap.bottom;
   ctx;
+  alarms;
 }
 
 let top ctx : 'a flow = {
   tmap = TokenMap.top;
   ctx;
+  alarms = AlarmSet.empty;
 }
 
 let singleton (ctx:'a Context.ctx) (tk:token) (env:'a) : 'a flow = {
   tmap = TokenMap.singleton tk env;
-  ctx
+  ctx;
+  alarms = AlarmSet.empty;
 }
 
 let is_bottom (lattice: 'a lattice) (flow: 'a flow) : bool =
@@ -63,30 +68,38 @@ let subset (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : bool =
 
 let join (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
   let ctx = Context.get_most_recent flow1.ctx flow2.ctx in
-  { tmap = TokenMap.join lattice (Context.get_unit ctx) flow1.tmap flow2.tmap; ctx }
+  {
+    tmap = TokenMap.join lattice (Context.get_unit ctx) flow1.tmap flow2.tmap;
+    ctx;
+    alarms = AlarmSet.join flow1.alarms flow2.alarms;
+  }
 
-let join_list lattice ~ctx l =
+let join_list lattice ~empty l =
   match l with
-  | [] -> bottom ctx
+  | [] -> empty
   | [f] -> f
   | hd :: tl ->
     let ctx  = List.fold_left (fun acc f ->
         Context.get_most_recent acc f.ctx
       ) hd.ctx tl
     in
-
     {
       tmap = TokenMap.join_list lattice (Context.get_unit ctx) (List.map (function {tmap} -> tmap) l);
       ctx;
+      alarms = AlarmSet.join_list (List.map (function {alarms} -> alarms) l);
     }
 
 let meet (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
   let ctx = Context.get_most_recent flow1.ctx flow2.ctx in
-  { tmap = TokenMap.meet lattice (Context.get_unit ctx) flow1.tmap flow2.tmap; ctx }
+  {
+    tmap = TokenMap.meet lattice (Context.get_unit ctx) flow1.tmap flow2.tmap;
+    ctx;
+    alarms = AlarmSet.meet flow1.alarms flow2.alarms;
+  }
 
-let meet_list lattice ~ctx l =
+let meet_list lattice ~empty l =
   match l with
-  | [] -> bottom ctx
+  | [] -> empty
   | [f] -> f
   | hd :: tl ->
     let ctx  = List.fold_left (fun acc f ->
@@ -96,15 +109,22 @@ let meet_list lattice ~ctx l =
     {
       tmap = TokenMap.meet_list lattice (Context.get_unit ctx) (List.map (function {tmap} -> tmap) l);
       ctx;
+      alarms = AlarmSet.meet_list (List.map (function {alarms} -> alarms) l);
     }
 
 let widen (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
     let ctx = Context.get_most_recent flow1.ctx flow2.ctx in
-    { tmap = TokenMap.widen lattice (Context.get_unit ctx) flow1.tmap flow2.tmap; ctx }
+    {
+      tmap = TokenMap.widen lattice (Context.get_unit ctx) flow1.tmap flow2.tmap;
+      ctx;
+      alarms = AlarmSet.join flow1.alarms flow2.alarms;
+    }
 
 
 let print (pp: Format.formatter -> 'a -> unit) fmt flow =
-  TokenMap.print pp fmt flow.tmap
+  Format.fprintf fmt "@[<v>%a@,alarms: %a@]"
+    (TokenMap.print pp) flow.tmap
+    AlarmSet.print flow.alarms
 
 
 let get (tk: token) (lattice: 'a lattice) (flow: 'a flow) : 'a =
@@ -118,6 +138,7 @@ let copy (tk1:token) (tk2:token) (lattice:'a lattice) (flow1:'a flow) (flow2:'a 
   {
     tmap = TokenMap.copy tk1 tk2 lattice flow1.tmap flow2.tmap;
     ctx;
+    alarms = flow2.alarms;
   }
 
 let add (tk: token) (a: 'a) (lattice: 'a lattice) (flow: 'a flow) : 'a flow =
@@ -137,11 +158,15 @@ let map (f: token -> 'a -> 'a) (flow: 'a flow) : 'a flow =
 let fold (f: 'b -> token -> 'a -> 'b) (init: 'b) (flow: 'a flow) : 'b =
   TokenMap.fold f init flow.tmap
 
-let merge (f: token -> 'a option -> 'a option -> 'a option) (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
+let merge
+    (ftk: token -> 'a option -> 'a option -> 'a option)
+    (falarm: AlarmSet.t -> AlarmSet.t -> AlarmSet.t)
+    (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
   let ctx = Context.get_most_recent flow1.ctx flow2.ctx in
   {
-    tmap = TokenMap.merge f lattice flow1.tmap flow2.tmap;
+    tmap = TokenMap.merge ftk lattice flow1.tmap flow2.tmap;
     ctx;
+    alarms = falarm flow1.alarms flow2.alarms;
   }
 
 let get_ctx flow = flow.ctx
@@ -160,32 +185,48 @@ let copy_ctx flow1 flow2 =
 
 let get_token_map flow = flow.tmap
 
-let create ctx tmap = {
+let add_alarm alarm flow =
+  { flow with alarms = AlarmSet.add alarm flow.alarms }
+
+let raise_alarm alarm ?(bottom=false) lattice flow =
+  let flow = add_alarm alarm flow in
+  if not bottom
+  then flow
+  else set T_cur lattice.bottom lattice flow
+
+let get_alarms flow = flow.alarms
+
+let set_alarms alarms flow = { flow with alarms }
+
+let remove_alarms flow = { flow with alarms = AlarmSet.empty }
+
+let copy_alarms src dst = { dst with alarms = AlarmSet.join src.alarms dst.alarms }
+
+let create ctx alarms tmap = {
   tmap;
   ctx;
+  alarms;
 }
 
-let map_flow (f:token -> 'a -> 'b) (ctx:'b ctx) (flow:'a flow) : 'b flow =
-  {
-    tmap = TokenMap.map f flow.tmap;
-    ctx;
-  }
+let get_callstack flow =
+  get_ctx flow |>
+  Context.find_unit Callstack.ctx_key
 
-let map_list (f:'b -> 'a flow -> 'a flow) (l: 'b list) (flow: 'a flow) : 'a flow list =
-  let flows, ctx = List.fold_left (fun (acc, ctx) x ->
-      let flow' = { flow with ctx } in
-      let flow'' = f x flow' in
-      flow'' :: acc, flow''.ctx
-    ) ([], flow.ctx) l
-  in
-  List.map (set_ctx ctx) flows
 
-let map_list_opt (f:'b -> 'a flow -> 'a flow option) (l:'b list) (flow:'a flow) : 'a flow list =
-  let flows, _ = List.fold_left (fun (acc, ctx) x ->
-      let flow' = { flow with ctx } in
-      match f x flow' with
-      | None -> acc, ctx
-      | Some flow'' -> flow'' :: acc, flow''.ctx
-    ) ([], flow.ctx) l
+let set_callstack cs flow =
+  set_ctx (
+    get_ctx flow |>
+    Context.add_unit Callstack.ctx_key cs
+  ) flow
+
+let push_callstack fname range flow =
+  set_callstack (
+    get_callstack flow |>
+    Callstack.push fname range
+  ) flow
+
+let pop_callstack flow =
+  let hd, cs = get_callstack flow |>
+               Callstack.pop
   in
-  flows
+  hd, set_callstack cs flow

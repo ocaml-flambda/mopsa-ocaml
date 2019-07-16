@@ -27,7 +27,7 @@ open Ast
 open Addr
 open Universal.Ast
 open Data_model.Attribute
-
+open Alarms
 
 (*==========================================================================*)
 (**                            {2 Addresses}                                *)
@@ -190,18 +190,17 @@ struct
       let cur = get_env T_cur man flow in
       let ncur = AMap.map (ASet.map (fun addr -> if addr = Def a then Def a' else addr)) cur in
       let flow = set_env T_cur ncur man flow in
-      let annot = Flow.get_ctx flow in
       let to_rename = Flow.fold (fun acc tk d ->
           match tk with
-          | T_alarm {alarm_kind = Alarms.APyException ({ekind = E_py_object _}, _)} -> true
+          | T_py_exception ({ekind = E_py_object _}, _, _) -> true
           | _ -> acc) false flow in
       let flow =
         if to_rename then
           Flow.fold (fun acc tk d ->
               match tk with
-              | T_alarm ({alarm_kind = Alarms.APyException ({ekind = E_py_object (oa, oe)} as e, s)} as al) when compare_addr a oa = 0 ->
-                Flow.add (T_alarm {al with alarm_kind = Alarms.APyException ({e with ekind = E_py_object (a', oe)}, s)}) d man.lattice acc
-              | _ -> Flow.add tk d man.lattice acc) (Flow.bottom annot) flow
+              | T_py_exception ({ekind = E_py_object (oa, oe)} as e, s, k) when compare_addr a oa = 0 ->
+                Flow.add (T_py_exception ({e with ekind = E_py_object (a', oe)}, s, k)) d man.lattice acc
+              | _ -> Flow.add tk d man.lattice acc) (Flow.bottom (Flow.get_ctx flow) (Flow.get_alarms flow)) flow
         else
           flow in
       begin match akind a with
@@ -242,12 +241,12 @@ struct
               (Eval.singleton (mk_py_object (find_builtin @@ get_orig_vname v) range) flow :: acc, annots)
 
             | Undef_global ->
-              debug "Incoming NameError, on var %a, range %a, cs = %a @\n" pp_var v pp_range range Callstack.print (Callstack.get flow);
+              debug "Incoming NameError, on var %a, range %a, cs = %a @\n" pp_var v pp_range range Callstack.print (Flow.get_callstack flow);
               let flow = man.exec (Utils.mk_builtin_raise "NameError" range) flow in
               (Eval.empty_singleton flow :: acc, Flow.get_ctx flow)
 
             | Undef_local ->
-              debug "Incoming UnboundLocalError, on var %a, range %a, cs = %a @\n" pp_var v pp_range range Callstack.print (Callstack.get flow);
+              debug "Incoming UnboundLocalError, on var %a, range %a, cs = %a @\n" pp_var v pp_range range Callstack.print (Flow.get_callstack flow);
               let flow = man.exec (Utils.mk_builtin_raise "UnboundLocalError" range) flow in
               (Eval.empty_singleton flow :: acc, Flow.get_ctx flow)
 

@@ -27,23 +27,18 @@ open Ast
 type alarm_kind +=
   | A_stub_invalid_require
 
+let raise_invalid_require range ?(bottom=false) lattice flow =
+  let cs = Flow.get_callstack flow in
+  let alarm = mk_alarm A_stub_invalid_require range ~cs in
+  Flow.raise_alarm alarm ~bottom lattice flow
+
+
 let () =
-  register_alarm
-    {
-      compare = (fun default a b ->default a b);
-      pp_token = (fun default fmt a ->
-          match a.alarm_kind with
-          | A_stub_invalid_require -> Format.fprintf fmt "stub-req"
-          | _ -> default fmt a
-        );
-      pp_title = (fun default fmt a ->
-          match a.alarm_kind with
+  register_alarm_kind {
+      compare = (fun default a b -> default a b);
+      print = (fun default fmt a ->
+          match a with
           | A_stub_invalid_require -> Format.fprintf fmt "Invalid stub requirement"
           | _ -> default fmt a
         );
-      pp_report = (fun default fmt a ->
-          match a.alarm_kind with
-          | A_stub_invalid_require -> Format.fprintf fmt "TODO"
-          | _ -> default fmt a
-        )
     };

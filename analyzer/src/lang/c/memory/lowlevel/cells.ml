@@ -44,6 +44,7 @@ open Universal.Zone
 open Zone
 open Common.Base
 open Common.Points_to
+open Alarms
 module Itv = Universal.Numeric.Values.Intervals.Integer.Value
 
 
@@ -463,15 +464,15 @@ struct
 
     match ekind pt with
     | E_c_points_to P_valid ->
-      raise_alarm Alarms.AOutOfBound range ~bottom:false man.lattice flow |>
+      raise_c_alarm AOutOfBound range ~bottom:false man.lattice flow |>
       Result.singleton Top
 
     | E_c_points_to P_null ->
-      let flow = raise_alarm Alarms.ANullDeref p.erange ~bottom:true man.lattice flow in
+      let flow = raise_c_alarm ANullDeref p.erange ~bottom:true man.lattice flow in
       Result.empty_singleton flow
 
     | E_c_points_to P_invalid ->
-      let flow = raise_alarm Alarms.AInvalidDeref p.erange ~bottom:true man.lattice flow in
+      let flow = raise_c_alarm AInvalidDeref p.erange ~bottom:true man.lattice flow in
       Result.empty_singleton flow
 
     | E_c_points_to (P_fun f) ->
@@ -510,7 +511,7 @@ struct
             let c = mk_cell base offset typ in
             Result.singleton (Cell c) flow
           else
-            let flow = raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow in
+            let flow = raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow in
             Result.empty_singleton flow
 
         | _ ->
@@ -566,7 +567,7 @@ struct
                 Result.join_list ~empty:(Result.empty_singleton flow) evals
               )
             ~felse:(fun flow ->
-                let flow = raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow in
+                let flow = raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow in
                 Result.empty_singleton flow
               )
             man flow
@@ -798,7 +799,6 @@ struct
       Eval.singleton v flow
 
 
-
   (* 𝔼⟦ *p ⟧ where p is a pointer to a function *)
   let deref_function_pointer p range man flow =
     man.eval ~zone:(Z_c_low_level,Z_c_points_to) p flow |>
@@ -841,6 +841,7 @@ struct
       deref_scalar_pointer p false exp.erange man flow |>
       Option.return
 
+
     | E_c_deref p when under_type p.etyp |> is_c_function_type &&
                        not (is_expr_quantified p)
       ->
@@ -854,6 +855,7 @@ struct
     | E_stub_primed lval when not (is_expr_quantified lval) ->
       deref_scalar_pointer (mk_c_address_of lval exp.erange) true exp.erange man flow |>
       Option.return
+
 
     | E_stub_builtin_call(VALID_PTR, p) ->
       man.eval ~zone:(Z_c_low_level,Z_c_scalar) p flow >>$? fun p flow ->
@@ -950,14 +952,14 @@ struct
     expand p range man flow >>$ fun expansion flow ->
     match expansion with
     | Top ->
-      warn_at range "unsound analysis: ignoring assignment to undetermined lval *%a = %a;"
+      Soundness.warn range "ignoring assignment to undetermined lval *%a = %a;"
         pp_expr p
         pp_expr e
       ;
       Post.return flow
 
     | Cell { base } when is_base_readonly base ->
-      let flow = raise_alarm Alarms.AReadOnlyModification ~bottom:true range man.lattice flow in
+      let flow = raise_c_alarm AReadOnlyModification ~bottom:true range man.lattice flow in
       Post.return flow
 
     | Cell c ->
@@ -969,81 +971,123 @@ struct
 
 
   (** 𝕊⟦ ?e ⟧ *)
-  let assume e range man flow =
+  let assume_non_quantified e range man flow =
     man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow >>$ fun e flow ->
 
     let stmt = mk_assume e range in
     man.post ~zone:Z_c_scalar stmt flow
 
 
-  (* 𝕊⟦ ?e ⟧ when e contains quantified variables *)
-  let assume_quantified e range man flow =
-    (* Get the bounds the quantified variables *)
-    let bounds = fold_expr
-        (fun acc e ->
-           match ekind e with
-           | E_stub_quantified(FORALL, v, S_interval(l,u)) ->
-             Keep ((v, l, u) :: acc)
+  let rec is_deref_expr e =
+    match ekind (remove_casts e) with
+    | E_c_deref _ -> true
+    | E_stub_primed ee -> is_deref_expr ee
+    | _ -> false
 
-           | _ -> VisitParts acc
-        )
-        (fun acc stmt -> VisitParts acc)
-        [] e
+  (** 𝔼⟦ *(p + ∀i) op e ⟧ where p is a pointer to a scalar *)
+  (* FIXME: this code is redundant with String_length domain *)
+  let assume_quantified_compare lval op e range man flow =
+    let p, primed =
+      let rec doit e =
+        match ekind (remove_casts e) with
+        | E_c_deref p -> p, false
+        | E_stub_primed e -> fst (doit e), true
+        | _ -> panic_at range "assume_quantified_zero: invalid argument %a" pp_expr lval;
+      in
+      doit lval
     in
-    (* Compute an under-approximation of each bound *)
-    let exception NotPossible in
-    try
-      let under = List.map (fun (v,l,u) ->
-          let itv1 = compute_bound ~zone:(Z_c,Z_u_num) l man flow in
-          let itv2 = compute_bound ~zone:(Z_c,Z_u_num) u man flow in
-          match Itv.bounds_opt itv1, Itv.bounds_opt itv2 with
-          | (_, Some a), (Some b, _) when Z.leq a b -> (v, a, b)
-          | _ -> raise NotPossible
-        ) bounds
-      in
-      (* Iterate over some sample valuations in the under-approximation *)
-      let rec get_samples ret sample space =
-        match space with
-        | [] -> sample :: ret
 
-        | (var, l, u) :: tl ->
-          let rec iter ret i =
-            if Z.gt i u then ret
-            else
-              let ret' = get_samples ret ((var, i) :: sample) tl in
-              if List.length ret' >= !opt_expand
-              then ret'
+    man.eval p ~zone:(Z_c_low_level,Z_c_points_to) flow >>$ fun pt flow ->
+    match ekind pt with
+    | E_c_points_to P_valid ->
+      raise_c_alarm AOutOfBound range ~bottom:false man.lattice flow |>
+      Post.return
 
-              else iter ret' (Z.succ i)
-          in
-          iter ret l
-      in
-      let samples = get_samples [] [] under in
+    | E_c_points_to P_null ->
+      raise_c_alarm ANullDeref p.erange ~bottom:true man.lattice flow |>
+      Post.return
 
-      (* Replace quantified variables with the samples and compute the meet *)
-      (* NOTE: since quantified expressions are pure expressions, we
-         fold the result to compute the meet *)
-      List.fold_left (fun acc sample ->
-          let e' = e |> map_expr
-                     (fun ee ->
-                        match ekind ee with
-                        | E_stub_quantified(FORALL, var, _) ->
-                          let _, i = List.find (fun (var', _) ->
-                              compare_var var var' = 0
-                            ) sample
-                          in
-                          Keep { ee with ekind = E_constant (C_int i) }
+    | E_c_points_to P_invalid ->
+      raise_c_alarm AInvalidDeref p.erange ~bottom:true man.lattice flow |>
+      Post.return
 
-                        | _ -> VisitParts ee
-                     )
-                     (fun s -> VisitParts s)
-          in
-          Post.bind (man.post ~zone:Z_c (mk_assume e' range)) acc
-        ) (Post.return flow) samples
+    | E_c_points_to (P_fun f) ->
+      panic_at range
+        "%a can not be dereferenced to a cell; it points to function %s"
+        pp_expr p
+        f.c_func_org_name
 
+    | E_c_points_to P_block (base, offset) ->
+      (* Get the size of the base *)
+      eval_base_size base range man flow >>$ fun size flow ->
+      man.eval ~zone:(Z_c_scalar,Z_u_num) size flow >>$ fun size flow ->
+      (** Get symbolic bounds of the offset *)
+      let min, max = Common.Quantified_offset.bound offset in
+      man.eval ~zone:(Z_c, Z_u_num) min flow >>$ fun min flow ->
+      man.eval ~zone:(Z_c, Z_u_num) max flow >>$ fun max flow ->
+      (* Safety condition: [min, max] ⊆ [0, size - |typ|] *)
+      let typ = under_type p.etyp |> void_to_char in
+      let limit = mk_binop size O_minus (mk_z (sizeof_type typ) range) ~etyp:T_int range in
+      assume
+        (
+          mk_binop
+            (mk_in min (mk_zero range) limit range)
+            O_log_and
+            (mk_in max (mk_zero range) limit range)
+            range
+        ) ~zone:Z_u_num man flow
+        ~fthen:(fun flow ->
+            (* We give an answer only for the easy case : base is a
+               litteral string.
+            *)
+            match base with
+            | V _ | A _ | Z ->
+              Post.return flow
 
-    with NotPossible ->
-      Post.return flow
+            (* We do not handle for the moment the case of muti-byte deref from a string *)
+            | S _ when sizeof_type typ |> Z.gt Z.one ->
+              Post.return flow
+
+            | S str ->
+              (* Handle only comparisons with zero *)
+              assume (mk_binop e O_eq (mk_zero range) range) ~zone:Z_c_low_level man flow
+                ~felse:(fun flow -> Post.return flow)
+                ~fthen:(fun flow ->
+                    let length = mk_int (String.length str) range in
+                    switch [
+                      (* Case 1: before the terminating NUL byte *)
+                      [
+                        mk_binop max O_lt length range
+                      ],
+                      (fun flow ->
+                         match op with
+                         | O_eq -> Flow.set T_cur man.lattice.bottom man.lattice flow |>
+                                   Post.return
+                         | O_ne -> Post.return flow
+                         | _ -> assert false
+                      );
+
+                      (* Case 2: after the terminating NUL byte *)
+                      [
+                        mk_binop max O_eq length range
+                      ],
+                      (fun flow ->
+                         match op with
+                         | O_ne -> Flow.set T_cur man.lattice.bottom man.lattice flow |>
+                                   Post.return
+                         | O_eq -> Post.return flow
+                         | _ -> assert false
+                      )
+                    ] ~zone:Z_u_num man flow
+                  )
+          )
+        ~felse:(fun flow ->
+            raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow |>
+            Post.return
+          )
+
+    | _ -> assert false
+
 
 
   (* 𝕊⟦ remove v ⟧ *)
@@ -1166,12 +1210,27 @@ struct
 
 
     | S_assume(e) when not (is_expr_quantified e) ->
-      assume e stmt.srange man flow |>
+      assume_non_quantified e stmt.srange man flow |>
       Option.return
 
-    | S_assume(e) when is_expr_quantified e ->
-      assume_quantified e stmt.srange man flow |>
+    (* 𝕊⟦ *(p + ∀i) != e ⟧ *)
+    | S_assume({ekind = E_binop(O_ne, lval, e)})
+    | S_assume({ekind = E_unop(O_log_not, {ekind = E_binop(O_eq, lval, e)})})
+      when is_expr_quantified lval &&
+           is_deref_expr lval
+      ->
+      assume_quantified_compare lval O_ne e stmt.srange man flow |>
       Option.return
+
+    (* 𝕊⟦ *(p + ∀i) == e ⟧ *)
+    | S_assume({ekind = E_binop(O_eq, lval, e)})
+    | S_assume({ekind = E_unop(O_log_not, {ekind = E_binop(O_ne, lval, e)})})
+      when is_expr_quantified lval &&
+           is_deref_expr lval
+      ->
+      assume_quantified_compare lval O_eq e stmt.srange man flow |>
+      Option.return
+
 
     | S_add { ekind = E_var (v, _) } when is_c_scalar_type v.vtyp ->
       let c = mk_cell (V v) Z.zero v.vtyp in

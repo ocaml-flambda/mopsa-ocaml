@@ -100,7 +100,7 @@ struct
   (** ========================= *)
 
   let inline_function_assign_args man f args range flow =
-    let cs = Callstack.get flow in
+    let cs = Flow.get_callstack flow in
     if List.exists (fun cs -> cs.call_fun = f.fun_name) cs then
       Exceptions.panic_at range "Recursive call on function %s detected...@\nCallstack = %a@\n" f.fun_name Callstack.print cs;
 
@@ -123,7 +123,7 @@ struct
     let init_block = mk_block parameters_assign range in
 
     (* Update call stack *)
-    let flow1 = Callstack.push f.fun_name range flow0 in
+    let flow1 = Flow.push_callstack f.fun_name range flow0 in
 
     (* Execute body *)
     new_vars, man.exec init_block flow1
@@ -132,10 +132,8 @@ struct
   let inline_function_exec_body man f args range new_vars flow ret =
     (* Check that no recursion is happening *)
 
-    debug "cs flow = %a@\n" Callstack.print (Callstack.get flow);
     let flow2 = man.exec f.fun_body flow in
 
-    debug "cs flow2 = %a@\n" Callstack.print (Callstack.get flow2);
     (* Iterate over return flows and assign the returned value to ret *)
     let flow3 =
       Flow.fold (fun acc tk env ->
@@ -150,13 +148,12 @@ struct
 
           | _ -> Flow.add tk env man.lattice acc
         )
-        (Flow.remove T_cur (Flow.copy_ctx flow2 flow))
+        (Flow.copy_ctx flow2 flow |> Flow.copy_alarms flow2 |> Flow.remove T_cur)
         flow2
     in
 
-    debug "cs flow3 = %a@\n" Callstack.print (Callstack.get flow3);
     (* Restore call stack *)
-    let _, flow3 = Callstack.pop flow3 in
+    let _, flow3 = Flow.pop_callstack flow3 in
 
     (* Remove parameters and local variables from the environment *)
     let ignore_stmt_list =

@@ -28,43 +28,31 @@ open Addr
 open Universal.Ast
 open Alarms
 
-(* type token +=
- *    | T_exn of expr
- *
- * let () =
- *   register_token {
- *       compare = (fun next tk1 tk2 -> match tk1, tk2 with
- *                                      | T_exn e1, T_exn e2 -> compare_expr e1 e2
- *                                      | _ -> next tk1 tk2);
- *       print = (fun next fmt tk ->
- *         match tk with
- *         | T_exn e -> Format.fprintf fmt "exn(%a)" pp_expr e
- *         | _ -> next fmt tk);
- *     } *)
-
-let name = "python.flows.exceptions"
-
-let opt_unprecise_exn = ref []
-(* Be unprecise on some exceptions *)
-
-let () =
-  register_domain_option name {
-    key = "-unprecise-exn";
-    category = "Python";
-    doc = " raised exceptions passed to this arguments will be collapsed into one environment. Useful for exceptions the analysis is unprecise on (for example, IndexError for the smashing abstraction of lists).";
-    spec = ArgExt.Set_string_list opt_unprecise_exn;
-    default = "";
-  }
-
-
-
 
 module Domain =
   struct
 
     include GenStatelessDomainId(struct
-        let name = name
+        let name = "python.flows.exceptions"
       end)
+
+
+    let opt_unprecise_exn = ref []
+    (* Be unprecise on some exceptions *)
+
+    let () =
+      register_domain_option name {
+        key = "-unprecise-exn";
+        category = "Python";
+        doc = " raised exceptions passed to this arguments will be collapsed \
+               into one environment. Useful for exceptions the analysis is \
+               unprecise on (for example, IndexError for the smashing \
+               abstraction of lists).";
+        spec = ArgExt.Set_string_list opt_unprecise_exn;
+        default = "";
+      }
+
+
 
     let interface = {
       iexec = {provides = [Zone.Z_py]; uses = [Zone.Z_py]};
@@ -81,7 +69,7 @@ module Domain =
         let old_flow = flow in
         (* Remove all previous exception flows *)
         let flow0 = Flow.filter (function
-            | T_alarm {alarm_kind = APyException _} -> fun _ -> false
+            | T_py_exception _ -> fun _ -> false
             | _ -> fun _ -> true) flow in
 
         (* Execute try body *)
@@ -95,11 +83,11 @@ module Domain =
               let uncaught = escape_except man excpt range acc_uncaught in
               let caught = Flow.copy_ctx uncaught caught in
               Flow.join man.lattice acc_caught caught, uncaught)
-            (Flow.bottom (Flow.get_ctx try_flow), try_flow)  excepts in
+            (Flow.bottom (Flow.get_ctx try_flow) (Flow.get_alarms try_flow), try_flow)  excepts in
 
         (* Execute else body after removing all exceptions *)
         let orelse_flow = Flow.filter (function
-            | T_alarm {alarm_kind = APyException _} -> fun _ -> false
+            | T_py_exception _ -> fun _ -> false
             | _ -> fun _ -> true) try_flow |>
                           man.exec orelse
         in
@@ -116,7 +104,7 @@ module Domain =
         (* Restore old exceptions *)
         Flow.fold (fun acc tk env ->
             match tk with
-            | T_alarm {alarm_kind = APyException _} -> Flow.add tk env man.lattice acc
+            | T_py_exception _ -> Flow.add tk env man.lattice acc
             | _ -> acc
           ) flow old_flow |>
         Post.return |> Option.return
@@ -137,17 +125,16 @@ module Domain =
                    debug "True flow, exp is %a@\n" pp_expr exp;
                    let true_flow =  man.exec (mk_block cleaners range) true_flow in
                    let cur = Flow.get T_cur man.lattice true_flow in
-                   let cs = Callstack.get true_flow in
                    let str = man.ask (Types.Typing.Q_exn_string_query exp) flow in
-                   let a =
+                   let tk =
                      if List.exists (fun x -> Pervasives.compare x str = 0) !opt_unprecise_exn then
-                       let range = tag_range (R_fresh 0) "unprecise exn" in
-                       let cs = [] in
                        let exp = Utils.strip_object exp in
-                       mk_alarm (APyException (exp, str)) range ~cs ~level:ERROR
+                       mk_py_unprecise_exception exp str
                      else
-                       mk_alarm (APyException (exp, str)) range ~cs ~level:ERROR in
-                   let flow' = Flow.add (T_alarm a) cur man.lattice true_flow |>
+                       let cs = Flow.get_callstack true_flow in
+                       mk_py_exception exp str cs range
+                   in
+                   let flow' = Flow.add tk cur man.lattice true_flow |>
                                Flow.set T_cur man.lattice.bottom man.lattice
                    in
                    Post.return flow' ~log)
@@ -180,7 +167,7 @@ module Domain =
       let flow0 = Flow.set T_cur man.lattice.bottom man.lattice flow in
       debug "flow_cur %a@\n" (Flow.print man.lattice.print) flow;
       let flow0 = Flow.filter (function
-          | T_alarm {alarm_kind = APyException _} -> fun _ -> false
+          | T_py_exception _ -> fun _ -> false
           | _ -> fun _ -> true) flow0 in
       debug "exec except flow0@ @[%a@]" (Flow.print man.lattice.print) flow0;
       let flow1 =
@@ -190,7 +177,7 @@ module Domain =
           (* Add all remaining exceptions env to cur *)
           Flow.fold (fun acc tk env ->
               match tk with
-              | T_alarm {alarm_kind = APyException _} -> Flow.add T_cur env man.lattice acc
+              | T_py_exception _ -> Flow.add T_cur env man.lattice acc
               | _ -> acc)
             flow0 flow
 
@@ -199,7 +186,7 @@ module Domain =
           (* Add exception that match expression e *)
           Flow.fold (fun acc tk env ->
               match tk with
-              | T_alarm {alarm_kind = APyException (exn, _)} ->
+              | T_py_exception (exn, _, _) ->
                 (* Evaluate e in env to check if it corresponds to eaddr *)
                 debug "T_cur now matches tk %a@\n" pp_token tk;
                 let flow = Flow.set T_cur env man.lattice flow0 in
@@ -236,7 +223,7 @@ module Domain =
                 let flow' = post_to_flow man flow' in
                 Flow.fold (fun acc tk env ->
                     match tk with
-                    | T_cur | T_alarm {alarm_kind = APyException _} -> Flow.add tk env man.lattice acc
+                    | T_cur | T_py_exception _ -> Flow.add tk env man.lattice acc
                     | _ -> acc
                   ) acc flow'
               | _ -> acc
@@ -256,7 +243,7 @@ module Domain =
       debug "escape except";
       let flow0 = Flow.set T_cur man.lattice.bottom man.lattice flow |>
                   Flow.filter (function
-                      | T_alarm {alarm_kind = APyException _} -> fun _ -> false
+                      | T_py_exception _ -> fun _ -> false
                       | _ -> fun _ -> true) in
       match excpt.py_excpt_type with
       | None -> flow0
@@ -264,7 +251,7 @@ module Domain =
       | Some e ->
         Flow.fold (fun acc tk env ->
             match tk with
-            | T_alarm {alarm_kind = APyException (exn, s)} ->
+            | T_py_exception (exn, s, k) ->
               (* Evaluate e in env to check if it corresponds to exn *)
               let flow = Flow.set T_cur env man.lattice flow0 in
               let flow' =
@@ -283,16 +270,8 @@ module Domain =
                               man
                               ~fthen:(fun true_flow -> Post.return true_flow)
                               ~felse:(fun false_flow ->
-                                  let cs = Callstack.get false_flow in
-                                  let a =
-                                    if List.mem s !opt_unprecise_exn then
-                                      let range = tag_range (R_fresh 0) "unprecise exn" in
-                                      let cs = [] in
-                                      let exp = Utils.strip_object exn in
-                                      mk_alarm (APyException (exp, s)) range ~cs ~level:ERROR
-                                    else
-                                      mk_alarm (APyException (exn, s)) range ~cs ~level:ERROR in
-                                  Flow.add (T_alarm a) env man.lattice false_flow |> Post.return)
+                                  Flow.add tk env man.lattice false_flow |> Post.return
+                                )
                               true_flow)
                         ~felse:(fun false_flow -> Post.return false_flow)
                         flow
@@ -302,7 +281,7 @@ module Domain =
               let flow' = post_to_flow man flow' in
               Flow.fold (fun acc tk env ->
                   match tk with
-                  | T_alarm {alarm_kind = APyException _} -> Flow.add tk env man.lattice acc
+                  | T_py_exception _ -> Flow.add tk env man.lattice acc
                   | _ -> acc
                 ) flow0 flow'
             | _ -> acc

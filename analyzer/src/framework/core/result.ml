@@ -28,7 +28,7 @@ open Flow
 open Token
 open Log
 open Context
-
+open Alarm
 
 
 
@@ -40,6 +40,7 @@ open Context
 type ('a,'r) case = {
   case_output   : 'r option;     (** Case output *)
   case_flow     : 'a TokenMap.t; (** Token map of abstract states *)
+  case_alarms   : AlarmSet.t;    (** Collected alarms *)
   case_log      : log;           (** Journal of statements log *)
   case_cleaners : block;         (** Cleaner statements *)
 }
@@ -67,6 +68,7 @@ let mk_case
   {
     case_output = output;
     case_flow = Flow.get_token_map flow;
+    case_alarms = Flow.get_alarms flow;
     case_log = log;
     case_cleaners = cleaners;
   }
@@ -161,7 +163,7 @@ let add_cleaners cleaners r =
 
 let apply_full f join meet r =
   Dnf.apply (fun case ->
-      let flow = Flow.create r.res_ctx case.case_flow in
+      let flow = Flow.create r.res_ctx case.case_alarms case.case_flow in
       f case.case_output flow case.case_log case.case_cleaners
     ) join meet r.res_cases
 
@@ -172,7 +174,7 @@ let apply f join meet r =
 
 let print_full pp fmt r =
   Dnf.print (fun fmt case ->
-      let flow = Flow.create r.res_ctx case.case_flow in
+      let flow = Flow.create r.res_ctx case.case_alarms case.case_flow in
       pp fmt case.case_output flow
     )
     fmt r.res_cases
@@ -221,16 +223,18 @@ let merge_conjunctions_flow
       | hd :: tl ->
         let flow,log,cleaners =
           tl |> List.fold_left (fun (flow, log, cleaners) case ->
-              let flow' = Flow.create ctx case.case_flow in
+              let flow' = Flow.create ctx case.case_alarms case.case_flow in
               let flow = f (flow,log) (flow',case.case_log) in
               flow, Log.concat log case.case_log, concat_blocks cleaners case.case_cleaners
-            ) (Flow.create ctx hd.case_flow, hd.case_log, hd.case_cleaners)
+            ) (Flow.create ctx hd.case_alarms hd.case_flow, hd.case_log, hd.case_cleaners)
         in
         hd :: tl |> List.map (fun case -> {
-              case with
+              case_output = case.case_output;
               case_flow = Flow.get_token_map flow;
+              case_alarms = Flow.get_alarms flow;
               case_log = log;
-              case_cleaners = cleaners}
+              case_cleaners = cleaners
+            }
           )
     ) l
   in
@@ -244,7 +248,9 @@ let merge_conjunctions_flow
 let is_empty (r:('a,'r) result) : bool =
   Dnf.to_list r.res_cases |>
   List.for_all (
-    List.for_all (fun case -> TokenMap.is_empty case.case_flow)
+    List.for_all (fun case -> AlarmSet.is_empty case.case_alarms &&
+                              TokenMap.is_empty case.case_flow
+                 )
   )
 
 (** Join two results *)
@@ -291,7 +297,7 @@ let bind_full_opt
   : ('a,'s) result option =
   let ctx, ret = Dnf.fold_apply
       (fun ctx case ->
-         let flow' = Flow.create ctx case.case_flow in
+         let flow' = Flow.create ctx case.case_alarms case.case_flow in
          let r' = f case.case_output flow' case.case_log case.case_cleaners in
          let ctx = Option.apply get_ctx ctx r' in
          (ctx,r')

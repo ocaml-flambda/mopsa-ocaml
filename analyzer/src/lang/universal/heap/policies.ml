@@ -47,7 +47,7 @@ module StackRangePolicy : POLICY = struct
   let name = "callstack_range"
 
   let mk_addr kind mode range flow =
-    let cs = Callstack.get flow in
+    let cs = Flow.get_callstack flow in
     {
       addr_kind = kind;
       addr_mode = mode;
@@ -91,7 +91,7 @@ module StackPlocy : POLICY = struct
   let name = "callstack"
 
   let mk_addr kind mode range flow =
-    let cs = Callstack.get flow in
+    let cs = Flow.get_callstack flow in
     {
       addr_kind = kind;
       addr_mode = mode;

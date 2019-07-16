@@ -143,7 +143,7 @@ struct
     match ekind exp with
     | E_py_dict (ks, vs) ->
       debug "Skipping dict.__new__, dict.__init__ for now@\n";
-      let (els_keys, els_vals), flow = get_var_flow (Callstack.get flow, range) flow in
+      let (els_keys, els_vals), flow = get_var_flow (Flow.get_callstack flow, range) flow in
       let flow = List.fold_left2 (fun acc key valu ->
           acc |>
           man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:WEAK els_keys range) key range) |>

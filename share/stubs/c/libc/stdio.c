@@ -401,33 +401,6 @@ void setlinebuf (FILE *__stream);
 
 
 
-/*$
- * // TODO: check format, check variable arguments
- *
- * requires: __stream in File;
- * requires: valid_string(__format);
- * assigns:  _errno;
- */
-int fscanf (FILE *__restrict __stream,
-            const char *__restrict __format, ...);
-
-/*$
- * // TODO: check format, check variable arguments
- *
- * requires: valid_string(__format);
- * assigns:  _errno;
- */
-int scanf (const char *__restrict __format, ...);
-
-/*$
- * // TODO: check format, check variable arguments
- *
- * requires: valid_string(__s);
- * requires: valid_string(__format);
- * assigns:  _errno;
- */
-int sscanf (const char *__restrict __s,
-            const char *__restrict __format, ...);
 
 
 /*$

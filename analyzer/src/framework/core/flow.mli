@@ -31,11 +31,14 @@
 open Context
 open Lattice
 open Token
+open Alarm
+open Callstack
+
 
 type 'a flow
 (** A flow is a flow map augmented with an context *)
 
-val bottom : 'a ctx -> 'a flow
+val bottom : 'a ctx -> AlarmSet.t -> 'a flow
 (** Empty set of flows *)
 
 val top : 'a ctx -> 'a flow
@@ -57,13 +60,13 @@ val subset : 'a lattice -> 'a flow -> 'a flow -> bool
 val join : 'a lattice -> 'a flow -> 'a flow -> 'a flow
 (** Abstraction union operator. *)
 
-val join_list : 'a lattice -> ctx:'a Context.ctx -> 'a flow list -> 'a flow
+val join_list : 'a lattice -> empty:'a flow -> 'a flow list -> 'a flow
 (** Union over a list of flows *)
 
 val meet : 'a lattice -> 'a flow -> 'a flow -> 'a flow
 (** Abstract intersection operator *)
 
-val meet_list : 'a lattice -> ctx:'a Context.ctx -> 'a flow list -> 'a flow
+val meet_list : 'a lattice -> empty:'a flow -> 'a flow list -> 'a flow
 (** Intersection over a list of flows. *)
 
 val widen : 'a lattice -> 'a flow -> 'a flow -> 'a flow
@@ -98,7 +101,11 @@ val map : (token -> 'a -> 'a) -> 'a flow -> 'a flow
 
 val fold : ('b -> token -> 'a -> 'b)  -> 'b -> 'a flow -> 'b
 
-val merge : (token -> 'a option -> 'a option -> 'a option) -> 'a lattice -> 'a flow -> 'a flow -> 'a flow
+val merge :
+  (token -> 'a option -> 'a option -> 'a option) ->
+  (AlarmSet.t -> AlarmSet.t -> AlarmSet.t) ->
+  'a lattice ->
+  'a flow -> 'a flow -> 'a flow
 
 val get_ctx : 'a flow -> 'a ctx
 (** [get_all_ctx flow] retrieves the context pool from [flow] *)
@@ -119,10 +126,24 @@ val copy_ctx : 'a flow -> 'a flow -> 'a flow
 
 val get_token_map : 'a flow -> 'a TokenMap.t
 
-val create : 'a ctx -> 'a TokenMap.t -> 'a flow
+val add_alarm : alarm -> 'a flow -> 'a flow
 
-val map_flow : (token -> 'a -> 'b) -> 'b ctx -> 'a flow -> 'b flow
+val raise_alarm : alarm -> ?bottom:bool -> 'a lattice -> 'a flow -> 'a flow
 
-val map_list : ('b -> 'a flow -> 'a flow) -> 'b list -> 'a flow -> 'a flow list
+val get_alarms : 'a flow -> AlarmSet.t
 
-val map_list_opt : ('b -> 'a flow -> 'a flow option) -> 'b list -> 'a flow -> 'a flow list
+val set_alarms : AlarmSet.t -> 'a flow -> 'a flow
+
+val remove_alarms : 'a flow -> 'a flow
+
+val copy_alarms : 'a flow -> 'a flow -> 'a flow
+
+val create : 'a ctx -> AlarmSet.t -> 'a TokenMap.t -> 'a flow
+
+val get_callstack : 'a flow -> cs
+
+val set_callstack : cs -> 'a flow -> 'a flow
+
+val push_callstack : string -> Location.range -> 'a flow -> 'a flow
+
+val pop_callstack : 'a flow -> Callstack.call * 'a flow

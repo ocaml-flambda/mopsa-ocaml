@@ -467,7 +467,7 @@ struct
               let a = man.lattice.meet ctx a1 a2 in
               if man.lattice.is_bottom a then None else Some a
             ) oa1 oa2
-      ) man.lattice flow1 flow2
+      ) AlarmSet.meet man.lattice flow1 flow2
 
 
 
