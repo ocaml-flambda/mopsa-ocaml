@@ -183,8 +183,8 @@ let () =
       | S_c_for (init,cond,it,stmts) ->
         fprintf fmt "@[<v 4>for (%a;%a;%a) {@,%a@]@,}"
           pp_stmt init
-          (Printers.print_option pp_expr) cond
-          (Printers.print_option pp_expr) it
+          (Option.print pp_expr) cond
+          (Option.print pp_expr) it
           pp_stmt stmts
       | S_c_do_while (body,cond) ->
         fprintf fmt "@[<v 4>do {@,%a@]@, while (%a);"
