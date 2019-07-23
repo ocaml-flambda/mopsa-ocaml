@@ -27,6 +27,7 @@
             "c.libs.mopsalib",
             "c.libs.clib.file_descriptor",
             "c.libs.clib.print",
+            "c.libs.clib.scanf",
             "c.libs.variadic",
 	    "c.libs.cstubs",
 
@@ -36,7 +37,15 @@
                     "compose": [
                         "c.memory.structured.flat",
                         "universal.heap.recency.callstack_range",
-                        "c.memory.lowlevel.cells",
+			{
+			    "product": [
+				"c.memory.lowlevel.string_literals",
+				"c.memory.lowlevel.cells"
+			    ],
+			    "reductions": [
+				"c.memory.lowlevel.reductions.cell_string_literals"
+			    ]
+			},
                         {
                             "seq": [
 			        "c.memory.scalars.pointer",
