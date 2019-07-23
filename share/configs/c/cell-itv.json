@@ -37,7 +37,15 @@
                     "compose": [
                         "c.memory.structured.flat",
                         "universal.heap.recency.callstack_range",
-                        "c.memory.lowlevel.cells",
+			{
+			    "product": [
+				"c.memory.lowlevel.string_literals",
+				"c.memory.lowlevel.cells"
+			    ],
+			    "reductions": [
+				"c.memory.lowlevel.reductions.cell_string_literals"
+			    ]
+			},
                         {
                             "seq": [
 			        "c.memory.scalars.pointer",

@@ -85,10 +85,6 @@ struct
     | O_div | O_mod | O_mult | O_plus | O_minus -> true
     | _ -> false
 
-  let is_compare_op = function
-    | O_eq | O_ne | O_gt | O_ge | O_lt | O_le -> true
-    | _ -> false
-
   let is_logic_op = function
     | O_log_and | O_log_or -> true
     | _ -> false
@@ -214,7 +210,7 @@ struct
 
   let rec to_compare_expr e =
     match ekind e with
-    | E_binop(op, e1, e2) when is_compare_op op ->
+    | E_binop(op, e1, e2) when is_comparison_op op ->
       e
 
     | E_binop(op, e1, e2) when is_logic_op op ->
@@ -384,7 +380,7 @@ struct
       Option.return
 
     | E_c_cast(e, b) when exp |> etyp |> is_c_float_type &&
-                          e   |> etyp |> is_c_int_type->
+                          e   |> etyp |> is_c_int_type ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e flow ->
       let exp' = {
         ekind = E_unop (O_cast, e);
@@ -395,7 +391,7 @@ struct
       Eval.singleton exp' flow |>
       Option.return
 
-    | E_binop(op, e, e') when is_compare_op op &&
+    | E_binop(op, e, e') when is_comparison_op op &&
                               exp |> etyp |> is_c_num_type ->
       man.eval e ~zone:(Z_c_scalar,Z_u_num) flow >>$? fun e flow ->
       man.eval e' ~zone:(Z_c_scalar,Z_u_num) flow >>$? fun e' flow ->
