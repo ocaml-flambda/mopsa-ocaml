@@ -333,7 +333,7 @@ module Make(Spec:SPEC) : STACK with type t = Spec.t =
 struct
 
 
-  (** {2 Header declaration} *)
+  (** {2 Declaration header} *)
   (** ********************** *)
 
   type t = Spec.t
@@ -690,9 +690,9 @@ struct
   let reduce_pointwise_eval exp man (pointwise:('a,expr option option list) result) : 'a eval =
     let eman = eman man in
     (* Let reduction rules roll out imprecise evaluations from [pointwise] *)
-    let pointwise = List.fold_left (fun pointiwise rule ->
+    let pointwise = List.fold_left (fun pointwise rule ->
         let module R = (val rule : R.EREDUCTION) in
-        pointiwise |> Result.bind_some @@ fun el flow ->
+        pointwise |> Result.bind_some @@ fun el flow ->
         R.reduce exp eman el flow
       ) pointwise Spec.erules
     in

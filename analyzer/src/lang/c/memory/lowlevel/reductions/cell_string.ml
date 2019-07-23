@@ -19,7 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Reduction rule between evaluations of cells and string length domains *)
+(** Reduction rule between cells and string length domains *)
 
 open Mopsa
 open Sig.Stacked.Reduction

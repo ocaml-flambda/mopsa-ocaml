@@ -278,9 +278,11 @@ char *strncat (char *__restrict __dest, const char *__restrict __src,
  *   ensures: exists int i in [0, len1 - 1]: (
  *              i <= len2 - 1 and
  *              __s1[i] != __s2[i] and
- *              forall int j in [0, i - 1]: __s1[j] == __s2[j] and
- *             (__s1[i] - __s2[i] > 0 implies return > 0) and
- *             (__s1[i] - __s2[i] < 0 implies return < 0)
+ *              (
+ *                i >= 1 implies forall int j in [0, i - 1]: __s1[j] == __s2[j]
+ *              ) and
+ *              (__s1[i] - __s2[i] > 0 implies return > 0) and
+ *              (__s1[i] - __s2[i] < 0 implies return < 0)
  *           );
  *  }
  */
