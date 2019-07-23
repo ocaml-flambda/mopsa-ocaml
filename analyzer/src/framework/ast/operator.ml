@@ -70,8 +70,11 @@ let compare_operator o1 o2 = TypeExt.compare operator_compare_chain o1 o2
 
 let pp_operator fmt operator = TypeExt.print operator_pp_chain fmt operator
 
-(* Utility to negate the comparisons in framework *)
-let negate_comparison = function
+let is_comparison_op = function
+  | O_eq | O_ne | O_gt | O_ge | O_lt | O_le -> true
+  | _ -> false
+
+let negate_comparison_op = function
   | O_eq -> O_ne
   | O_ne -> O_eq
   | O_lt -> O_ge
@@ -79,3 +82,12 @@ let negate_comparison = function
   | O_gt -> O_le
   | O_ge -> O_lt
   | op -> Exceptions.panic "don't know how to negate operator %a" pp_operator op
+
+let flip_comparison_op = function
+  | O_eq -> O_eq
+  | O_ne -> O_ne
+  | O_lt -> O_gt
+  | O_le -> O_ge
+  | O_gt -> O_lt
+  | O_ge -> O_le
+  | op -> Exceptions.panic "don't know how to flip operator %a" pp_operator op

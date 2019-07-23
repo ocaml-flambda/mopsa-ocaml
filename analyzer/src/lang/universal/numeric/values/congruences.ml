@@ -128,7 +128,7 @@ struct
   let compare op a1 a2 r =
     try
       let a1, a2 = bot_to_exn a1, bot_to_exn a2 in
-      let op = if r then op else negate_comparison op in
+      let op = if r then op else negate_comparison_op op in
       let aa1, aa2 =
         match op with
         | O_eq -> bot_to_exn (C.filter_eq a1 a2)

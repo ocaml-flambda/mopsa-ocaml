@@ -532,7 +532,6 @@ struct
        initialize it with the interval [0, size(@)]
     *)
     eval_base_size base range man flow >>$ fun size flow ->
-
     man.eval ~zone:(Z_c_scalar, Z_u_num) size flow >>$ fun size flow ->
 
     let length = mk_length_var base range in

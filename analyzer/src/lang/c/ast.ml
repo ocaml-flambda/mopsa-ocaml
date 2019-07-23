@@ -997,3 +997,9 @@ let is_c_expr_equals_z e z =
   match c_expr_to_z e with
   | None -> false
   | Some n -> Z.equal n z
+
+
+let is_c_deref e =
+  match remove_casts e |> ekind with
+  | E_c_deref _ -> true
+  | _ -> false

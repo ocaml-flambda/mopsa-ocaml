@@ -19,7 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Reduction rule between evaluations of cells and string length domains *)
+(** Reduction rule between cells and string literals domains *)
 
 open Mopsa
 open Sig.Stacked.Reduction
@@ -27,60 +27,37 @@ open Universal.Ast
 open Ast
 open Zone
 
-
 module Reduction =
 struct
 
-  let name = "c.memory.lowlevel.reductions.cell_smashing"
+  let name = "c.memory.lowlevel.reductions.cell_string_literals"
 
   let debug fmt = Debug.debug ~channel:name fmt
 
   let cells = Cells.Domain.id
-  let smash = Smashing.Domain.id
+  let strings = String_literals.Domain.id
+
 
   let reduce exp man evals flow =
     let oe1 = man.get_eval cells evals in
-    let oe2 = man.get_eval smash evals in
+    let oe2 = man.get_eval strings evals in
 
     (* Reduce only when both domains did an evaluation *)
     Option.apply2
       (fun e1 e2 ->
          match ekind e1, ekind e2 with
-         (* Constants from the cell domain should be precise, isn't it? *)
-         | E_constant (C_int _), _
-         | E_constant (C_c_character _), _ ->
-           let evals = man.del_eval smash evals in
-           Result.singleton evals flow
+          (* Constants from the string literals domain should be precise *)
+          | _, E_constant (C_int _)
+          | _, E_constant (C_c_character _)
+          | _, E_constant (C_int_interval _) ->
+            (* Remove cell evaluation *)
+            let evals = man.del_eval cells evals in
+            Result.singleton evals flow
 
-         (* Ensure that the cell and the smash are equal *)
-         | E_var _, E_var _  ->
-           let cond = mk_binop e1 O_eq e2 exp.erange in
-           man.post ~zone:Z_c_scalar (mk_assume cond exp.erange) flow >>= fun _ flow ->
-           if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
-           then
-             let evals = man.del_eval cells evals |>
-                         man.del_eval smash
-             in
-             Result.singleton evals flow
-
-           else
-             let evals = man.del_eval smash evals in
-             Result.singleton evals flow
-
-         (* Cell is precise if smash does not return a variable *)
-         | E_var _, _  ->
-           let evals = man.del_eval smash evals in
-           Result.singleton evals flow
-
-         (* Smash is precise if cell does not return a variable *)
-         | _, E_var _  ->
-           let evals = man.del_eval smash evals in
-           Result.singleton evals flow
-
-         | _ ->
-           let evals = man.del_eval smash evals in
-           Result.singleton evals flow
-
+          (* Otherwise, keep cells *)
+          | _ ->
+            let evals = man.del_eval strings evals in
+            Result.singleton evals flow
       )
       (Result.singleton evals flow)
       oe1 oe2

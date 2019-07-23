@@ -27,6 +27,7 @@
             "c.libs.mopsalib",
             "c.libs.clib.file_descriptor",
             "c.libs.clib.print",
+            "c.libs.clib.scanf",
             "c.libs.variadic",
 	    "c.libs.cstubs",
 

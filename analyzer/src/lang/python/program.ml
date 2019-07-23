@@ -121,7 +121,7 @@ struct
 
   let unprecise_exception_range = mk_fresh_range ()
 
-  let collect_uncaught_exceptions flow =
+  let collect_uncaught_exceptions man flow =
     Flow.fold (fun acc tk env ->
         match tk with
         | Alarms.T_py_exception (e, s, k) ->
@@ -135,7 +135,7 @@ struct
             | Alarms.Py_exc_with_callstack (range,cs) ->
               mk_alarm a ~extra:x range ~cs
           in
-          Flow.add_alarm alarm acc
+          Flow.add_alarm alarm man.lattice acc
         | _ -> acc
       ) flow flow
 
@@ -148,7 +148,7 @@ struct
       init_globals man globals (srange stmt) flow |>
       (* Execute the body *)
       man.exec body |>
-      collect_uncaught_exceptions |>
+      collect_uncaught_exceptions man |>
       Post.return |>
       Option.return
 
@@ -164,7 +164,7 @@ struct
       let tests = get_test_functions body in
       let stmt = mk_py_unit_tests tests (srange stmt) in
       man.exec stmt flow2 |>
-      collect_uncaught_exceptions |>
+      collect_uncaught_exceptions man |>
       Post.return |>
       Option.return
 
