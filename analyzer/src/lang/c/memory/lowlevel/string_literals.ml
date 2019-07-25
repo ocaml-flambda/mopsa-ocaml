@@ -238,20 +238,23 @@ struct
 
             | S str ->
               (* Partition result depending on the position of the terminating NUL byte *)
-              let length = mk_int (String.length str) range in
+              let length = String.length str in
               assume
-                (mk_binop offset O_eq length range)
+                (mk_binop offset O_eq (mk_int length range) range)
                 ~fthen:(fun flow ->
                     Eval.singleton (mk_zero ~typ:elm range) flow
                   )
                 ~felse:(fun flow ->
                     (* Construct an interval covering all chars pointed by the offset *)
-                    let offset_itv = man.ask (Universal.Numeric.Common.Q_int_interval offset) flow in
+                    let offset_itv = man.ask (Universal.Numeric.Common.Q_int_interval offset) flow |>
+                                     Itv.meet (Itv.of_int 0 (length - 1))
+                    in
                     if Itv.is_bounded offset_itv then
                       let a, b = Itv.bounds offset_itv in
                       let rec aux i =
                         if Z.gt i b
                         then Itv.bottom
+
                         else
                           let c = String.get str (Z.to_int i) |>
                                   Char.code
