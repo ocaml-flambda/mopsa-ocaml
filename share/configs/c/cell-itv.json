@@ -35,25 +35,17 @@
 	    {
                 "apply": {
                     "compose": [
-                        "c.memory.structured.flat",
                         "universal.heap.recency.callstack_range",
+                        "c.memory.structured.flat",
+                        "c.memory.lowlevel.cells",
 			{
-			    "product": [
-				"c.memory.lowlevel.string_literals",
-				"c.memory.lowlevel.cells"
-			    ],
-			    "reductions": [
-				"c.memory.lowlevel.reductions.cell_string_literals"
-			    ]
-			},
-                        {
                             "seq": [
-			        "c.memory.scalars.pointer",
-			        "c.memory.scalars.machine_numbers"
+				"c.memory.scalars.pointer",
+				"c.memory.scalars.machine_numbers"
                             ]
-                        }
+			}
                     ]
-                },
+		},
 		"on": {
                     "nonrel": {
 			"disjoint": [
@@ -61,7 +53,7 @@
                             "universal.numeric.values.intervals.integer"
 			]
 		    }
-                }
+		}
 	    }
 	]
     }

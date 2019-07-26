@@ -262,10 +262,14 @@ struct
                           aux (Z.succ i) |>
                           Itv.join (Itv.of_int c c)
                       in
-                      let min,max = aux a |> Itv.bounds in
-                      if Z.equal min max
-                      then Eval.singleton (mk_z min ~typ:elm range) flow
-                      else Eval.singleton (mk_z_interval min max ~typ:elm range) flow
+                      let itv = aux a in
+                      if Itv.is_bottom itv
+                      then Eval.empty_singleton flow
+                      else
+                        let min,max = aux a |> Itv.bounds in
+                        if Z.equal min max
+                        then Eval.singleton (mk_z min ~typ:elm range) flow
+                        else Eval.singleton (mk_z_interval min max ~typ:elm range) flow
                     else
                       Eval.singleton (mk_top elm range) flow
                   )
