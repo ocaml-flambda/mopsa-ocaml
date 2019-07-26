@@ -28,7 +28,7 @@ open Ast
 open Zone
 open Callstack
 open Context
-open Inlining
+open Common
 open MapExt
 
 let name = "universal.iterators.interproc.sequential_cache"
@@ -108,12 +108,12 @@ struct
       let in_flow_cur = Flow.bottom (Flow.get_ctx in_flow) (Flow.get_alarms in_flow) |>
                         Flow.set T_cur (Flow.get T_cur man.lattice in_flow) man.lattice
       in
-      let new_vars, in_flow_cur = Inlining.Domain.inline_function_assign_args man func args range in_flow_cur in
+      let params, in_flow_cur = init_fun_params func args range man in_flow_cur in
       let in_flow_other = Flow.remove T_cur in_flow in
       begin match find_signature man func.fun_name in_flow_cur with
         | None ->
           let ret = mk_range_attr_var range "ret_var" T_any in
-          Inlining.Domain.inline_function_exec_body man func args range new_vars in_flow_cur ret |>
+          inline func params ret range man in_flow_cur |>
           bind_full (fun oeval_res out_flow log cleaners ->
               debug "in bind@\n";
               match oeval_res with

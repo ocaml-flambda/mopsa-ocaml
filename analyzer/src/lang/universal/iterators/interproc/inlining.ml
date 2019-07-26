@@ -25,31 +25,7 @@ open Mopsa
 open Framework.Core.Sig.Domain.Stateless
 open Ast
 open Zone
-open Callstack
-
-
-(** {2 Return flow token} *)
-(** ===================== *)
-
-type token +=
-  | T_return of range * expr option
-  (** [T_return(l, ret)] represents flows reaching a return statement at
-      location [l]. The option expression [ret] keeps the returned expression
-      if present. *)
-
-let () =
-  register_token {
-    compare = (fun next tk1 tk2 ->
-        match tk1, tk2 with
-        | T_return(r1, _), T_return(r2, _) -> compare_range r1 r2
-        | _ -> next tk1 tk2
-      );
-    print = (fun next fmt -> function
-        | T_return(r, Some e) -> Format.fprintf fmt "return %a" pp_expr e
-        | T_return(r, None) -> Format.fprintf fmt "return"
-        | tk -> next fmt tk
-      );
-  }
+open Common
 
 
 (** {2 Domain definition} *)
@@ -99,80 +75,15 @@ struct
   (** Evaluation of expressions *)
   (** ========================= *)
 
-  let inline_function_assign_args man f args range flow =
-    let cs = Flow.get_callstack flow in
-    if List.exists (fun cs -> cs.call_fun = f.fun_name) cs then
-      Exceptions.panic_at range "Recursive call on function %s detected...@\nCallstack = %a@\n" f.fun_name Callstack.print cs;
-
-    (* Clear all return flows *)
-    let flow0 = Flow.filter (fun tk env ->
-        match tk with
-        | T_return _ -> false
-        | _ -> true
-      ) flow
-    in
-
-    (* Add parameters and local variables to the environment *)
-    let new_vars = f.fun_parameters @ f.fun_locvars in
-
-    (* Assign arguments to parameters *)
-    let parameters_assign = List.mapi (fun i (param, arg) ->
-        mk_assign (mk_var param range) arg range
-      ) (List.combine f.fun_parameters args) in
-
-    let init_block = mk_block parameters_assign range in
-
-    (* Update call stack *)
-    let flow1 = Flow.push_callstack f.fun_name range flow0 in
-
-    (* Execute body *)
-    new_vars, man.exec init_block flow1
-
-
-  let inline_function_exec_body man f args range new_vars flow ret =
-    (* Check that no recursion is happening *)
-
-    let flow2 = man.exec f.fun_body flow in
-
-    (* Iterate over return flows and assign the returned value to ret *)
-    let flow3 =
-      Flow.fold (fun acc tk env ->
-          match tk with
-          | T_return(_, None) -> Flow.add T_cur env man.lattice acc
-
-          | T_return(_, Some e) ->
-            Flow.set T_cur env man.lattice acc |>
-            man.exec (mk_add_var ret range) |>
-            man.exec (mk_assign (mk_var ret e.erange) e e.erange) |>
-            Flow.join man.lattice acc
-
-          | _ -> Flow.add tk env man.lattice acc
-        )
-        (Flow.copy_ctx flow2 flow |> Flow.copy_alarms flow2 |> Flow.remove T_cur)
-        flow2
-    in
-
-    (* Restore call stack *)
-    let _, flow3 = Flow.pop_callstack flow3 in
-
-    (* Remove parameters and local variables from the environment *)
-    let ignore_stmt_list =
-      List.mapi (fun i v ->
-          mk_remove_var v range
-        ) (new_vars)
-    in
-
-    Eval.singleton (mk_var ret range) flow3 ~cleaners:(ignore_stmt_list @ [mk_remove_var ret range])
-
 
   let eval zone exp man flow =
     let range = erange exp in
     match ekind exp with
     | E_call({ekind = E_function (User_defined f)}, args) ->
+      let params, flow = init_fun_params f args range man flow in
       let ret_typ = match f.fun_return_type with None -> T_any | Some t -> t in
       let ret = mk_range_attr_var range "ret_var" ret_typ in
-      let new_vars, flow = inline_function_assign_args man f args range flow in
-      inline_function_exec_body man f args range new_vars flow ret
+      inline f params ret range man flow
       |> Option.return
 
     | _ -> None
