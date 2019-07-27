@@ -129,6 +129,18 @@ struct
           Post.return |>
           Option.return
 
+        | E_c_points_to P_null ->
+          Post.return flow |>
+          Option.return
+
+        | E_c_points_to P_valid ->
+          Soundness.warn stmt.srange
+            "ignoring free statement because of undetermined resource pointer"
+          ;
+          Post.return flow |>
+          Option.return
+
+
         | _ ->
           panic_at stmt.srange "resources.common: free(p | p %a) not supported" pp_expr pt
       end
