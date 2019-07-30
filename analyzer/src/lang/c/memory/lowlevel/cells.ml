@@ -536,7 +536,25 @@ struct
                   | None, Some size -> Z.sub size elm
                   | Some u, Some size -> Z.min u (Z.sub size elm)
                   | Some u, None -> u
-                  | None, None -> panic_at range "no upper bound found for offset %a" pp_expr offset
+                  | None, None ->
+                    (* No bound found for the offset and the size is not constant, so
+                       get an upper bound of the size.
+                    *)
+                    let size_itv = man.ask (Universal.Numeric.Common.Q_int_interval size) flow in
+                    let ll, uu = Itv.bounds_opt size_itv in
+                    match uu with
+                    | Some size -> Z.sub size elm
+                    | None ->
+                      (* We are in trouble: the size is not bounded! 
+                         So we assume that it does not exceed the range of unsigned long, usually used for size_t 
+                      *)
+                      let _, uuu = rangeof ul in
+                      Soundness.warn range
+                        "size of %a is unbounded and is assumed to %a"
+                        pp_base base
+                        Z.pp_print uuu
+                      ;
+                      Z.sub uuu elm
                 in
 
                 (* Iterate over [l, u] *)
