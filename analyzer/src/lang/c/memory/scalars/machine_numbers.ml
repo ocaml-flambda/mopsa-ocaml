@@ -49,7 +49,10 @@ struct
   let interface = {
     iexec = {
       provides = [Z_c_scalar];
-      uses = [Z_u_num];
+      uses = [
+        Z_c_scalar;
+        Z_u_num
+      ];
     };
     ieval = {
       provides = [Z_c_scalar, Z_u_num];
@@ -84,11 +87,6 @@ struct
   let is_c_int_op = function
     | O_div | O_mod | O_mult | O_plus | O_minus -> true
     | _ -> false
-
-  let is_logic_op = function
-    | O_log_and | O_log_or -> true
-    | _ -> false
-
 
   let is_c_div = function
     | O_div | O_mod -> true
@@ -208,6 +206,15 @@ struct
     | _ -> assert false
 
 
+  let rec is_compare_expr e =
+    match ekind e with
+    | E_binop(op, e1, e2) when is_comparison_op op -> true
+    | E_binop(op, e1, e2) when is_logic_op op -> true
+    | E_unop(O_log_not, ee) -> is_compare_expr ee
+    | E_c_cast(ee,_) -> is_compare_expr ee
+    | _ -> false
+
+
   let rec to_compare_expr e =
     match ekind e with
     | E_binop(op, e1, e2) when is_comparison_op op ->
@@ -240,7 +247,6 @@ struct
 
   let eval_unop op e exp man flow =
     man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$ fun e flow ->
-
     let exp' = {exp with
                 ekind = E_unop(op, e);
                 etyp = to_universal_type exp.etyp
@@ -249,7 +255,7 @@ struct
     Eval.singleton exp' flow
 
 
-  let rec eval zone exp man flow =
+  let eval zone exp man flow =
     let range = erange exp in
     match ekind exp with
     | E_binop(op, e, e') when op |> is_c_div &&
@@ -339,46 +345,6 @@ struct
           ) e' flow |>
         Option.return
 
-    | E_binop(O_c_and, e1, e2) ->
-        assume
-          e1 ~zone:(Z_c_scalar)
-          ~fthen:(fun flow ->
-              assume
-                e2 ~zone:(Z_c_scalar)
-                ~fthen:(fun flow ->
-                    Eval.singleton (mk_one exp.erange) flow
-                  )
-                ~felse:(fun flow ->
-                    Eval.singleton (mk_zero exp.erange) flow
-                  )
-                man flow
-            )
-          ~felse:(fun flow ->
-              Eval.singleton (mk_zero exp.erange) flow
-            )
-          man flow |>
-        Option.return
-
-    | E_binop(O_c_or, e1, e2) ->
-      assume
-        e1 ~zone:(Z_c_scalar)
-        ~fthen:(fun flow ->
-            Eval.singleton (mk_one exp.erange) flow
-          )
-        ~felse:(fun flow ->
-            assume
-              e2 ~zone:(Z_c_scalar)
-              ~fthen:(fun flow ->
-                  Eval.singleton (mk_one exp.erange) flow
-                )
-              ~felse:(fun flow ->
-                  Eval.singleton (mk_zero exp.erange) flow
-                )
-              man flow
-          )
-        man flow |>
-      Option.return
-
     | E_c_cast(e, b) when exp |> etyp |> is_c_float_type &&
                           e   |> etyp |> is_c_int_type ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e flow ->
@@ -391,29 +357,16 @@ struct
       Eval.singleton exp' flow |>
       Option.return
 
-    | E_binop(op, e, e') when is_comparison_op op &&
-                              exp |> etyp |> is_c_num_type ->
-      man.eval e ~zone:(Z_c_scalar,Z_u_num) flow >>$? fun e flow ->
-      man.eval e' ~zone:(Z_c_scalar,Z_u_num) flow >>$? fun e' flow ->
-
-      assume (mk_binop e op e' ~etyp:T_bool exp.erange) ~zone:Z_u_num
-        ~fthen:(fun flow -> Eval.singleton (mk_one exp.erange) flow)
-        ~felse:(fun flow -> Eval.singleton (mk_zero exp.erange) flow)
-        man flow |>
+    | E_unop(O_log_not, e) when exp |> etyp |> is_c_num_type &&
+                                not (is_compare_expr e)
+      ->
+      man.eval ~zone:(Z_c_scalar,Z_u_num) e flow >>$? fun e flow ->
+      let exp' = mk_binop e O_eq (mk_zero exp.erange) exp.erange ~etyp:T_bool in
+      Eval.singleton exp' flow |>
       Option.return
 
     | E_binop(op, e, e') when exp |> etyp |> is_c_num_type ->
       eval_binop op e e' exp man flow |>
-      Option.return
-
-
-    | E_unop(O_log_not, e) when exp |> etyp |> is_c_num_type ->
-      man.eval e ~zone:(Z_c_scalar,Z_u_num) flow >>$? fun e flow ->
-
-      assume (to_compare_expr e) ~zone:Z_u_num
-        ~fthen:(fun flow -> Eval.singleton (mk_zero exp.erange) flow)
-        ~felse:(fun flow -> Eval.singleton (mk_one exp.erange) flow)
-        man flow |>
       Option.return
 
     | E_unop(op, e) when exp |> etyp |> is_c_num_type ->
@@ -470,12 +423,22 @@ struct
         Eval.singleton (mk_z_interval l u range) flow
 
       | _, Some (C_init_expr e) ->
-        man.eval ~zone:(Z_c_scalar,Z_u_num) e flow
+        if not (is_compare_expr e) then
+          man.eval ~zone:(Z_c_scalar,Z_u_num) e flow
+        else
+          assume e ~zone:Z_c_scalar
+            ~fthen:(fun flow ->
+                Eval.singleton (mk_one range) flow
+              )
+            ~felse:(fun flow ->
+                Eval.singleton (mk_zero range) flow
+              )
+            man flow
 
       | _ -> assert false
     in
 
-    init' |> bind_some @@ fun init' flow ->
+    init' >>$ fun init' flow ->
     man.post ~zone:Z_u_num (mk_add vv range) flow >>= fun _ flow ->
     man.post ~zone:Z_u_num (mk_assign vv init' range) flow
 
@@ -484,6 +447,19 @@ struct
     match skind stmt with
     | S_c_declaration (v,init,scope) when is_c_num_type v.vtyp ->
       declare_var v init scope stmt.srange man flow |>
+      Option.return
+
+    | S_assign(lval, rval) when etyp lval |> is_c_num_type &&
+                                is_compare_expr rval ->
+      let range = stmt.srange in
+      assume rval ~zone:Z_c_scalar
+        ~fthen:(fun flow ->
+            man.post ~zone:Z_c_scalar (mk_assign lval (mk_one ~typ:rval.etyp range) range) flow
+          )
+        ~felse:(fun flow ->
+            man.post ~zone:Z_c_scalar (mk_assign lval (mk_zero ~typ:rval.etyp range) range) flow
+          )
+        man flow |>
       Option.return
 
     | S_assign(lval, rval) when etyp lval |> is_c_num_type ->
