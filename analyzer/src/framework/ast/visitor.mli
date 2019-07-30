@@ -90,6 +90,12 @@ val fold_expr :
 (** Folding function for expressions  *)
 
 
+val fold_sub_expr :
+  ('a -> expr -> 'a action) ->
+  ('a -> stmt -> 'a action) ->
+  'a -> expr -> 'a
+
+
 val fold_stmt :
   ('a -> expr -> 'a action) ->
   ('a -> stmt -> 'a action) ->

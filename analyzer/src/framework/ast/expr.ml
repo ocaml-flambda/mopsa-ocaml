@@ -130,7 +130,7 @@ let () =
 
     print = (fun next fmt e ->
         match ekind e with
-        | E_unop(op, e) -> fprintf fmt "%a (%a)" pp_operator op pp_expr e
+        | E_unop(op, e) -> fprintf fmt "%a(%a)" pp_operator op pp_expr e
         | E_binop(op, e1, e2) -> fprintf fmt "(%a %a %a)" pp_expr e1 pp_operator op pp_expr e2
         | _ -> next fmt e
       );
