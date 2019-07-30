@@ -123,12 +123,11 @@ let () =
   ()
 
 
-let raise_assert_fail cond level range man flow =
+let raise_assert_fail cond range man flow =
   let cs = Flow.get_callstack flow in
   let alarm = mk_alarm
       A_assert_fail
       ~extra:(A_assert_fail_condition cond)
-      ~level
       range ~cs
   in
   Flow.raise_alarm alarm ~bottom:true man.lattice flow
@@ -194,20 +193,14 @@ struct
 
     | S_assert(cond) ->
       let range = srange stmt in
-      assume
+      assume_flow
         cond
-        ~fthen:(fun safe_flow -> Post.return safe_flow)
+        ~fthen:(fun safe_flow -> safe_flow)
         ~felse:(fun fail_flow ->
-            raise_assert_fail cond ERROR range man fail_flow |>
-            Post.return
-          )
-        ~fboth:(fun safe_flow fail_flow ->
-            Flow.join man.lattice safe_flow fail_flow |>
-            raise_assert_fail cond WARNING range man |>
-            Flow.set T_cur (Flow.get T_cur man.lattice safe_flow) man.lattice |>
-            Post.return
+            raise_assert_fail cond range man fail_flow
           )
         man flow
+      |> Post.return
       |> Option.return
 
     | S_satisfy(cond) ->
@@ -216,7 +209,7 @@ struct
         Post.return flow |>
         Option.return
       else
-        raise_assert_fail cond ERROR stmt.srange man flow |>
+        raise_assert_fail cond stmt.srange man flow |>
         Post.return |>
         Option.return
 

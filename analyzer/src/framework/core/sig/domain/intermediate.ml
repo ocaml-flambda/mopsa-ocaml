@@ -247,6 +247,8 @@ let map_env = Lowlevel.map_env
 
 let assume = Lowlevel.assume
 
+let assume_flow = Manager.assume_flow
+
 let switch = Lowlevel.switch
 
 let exec_stmt_on_all_flows = Lowlevel.exec_stmt_on_all_flows

@@ -57,14 +57,10 @@ struct
       )
 
     | S_if(cond, s1, s2) ->
-      let flow1 = man.exec (mk_assume cond cond.erange) flow |>
-                  man.exec s1
-      in
-      let flow2 = Flow.copy_ctx flow1 flow |>
-                  man.exec (mk_assume (mk_not cond cond.erange) cond.erange) |>
-                  man.exec s2
-      in
-      Flow.join man.lattice flow1 flow2 |>
+      assume_flow cond
+        ~fthen:(man.exec s1)
+        ~felse:(man.exec s2)
+        man flow |>
       Post.return |>
       Option.return
 
