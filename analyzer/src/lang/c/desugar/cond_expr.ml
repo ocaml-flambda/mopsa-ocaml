@@ -87,7 +87,7 @@ struct
             man.eval ~zone:(Z_c, Z_c_low_level) e2 flow
           )
         ~felse:(fun flow ->
-            Eval.singleton (Universal.Ast.mk_zero exp.erange) flow
+            Eval.singleton (Universal.Ast.mk_zero ~typ:exp.etyp exp.erange) flow
           )
         ~zone:Z_c_scalar
         man flow |>
@@ -97,7 +97,7 @@ struct
       man.eval e1 ~zone:(Z_c,Z_c_scalar) flow >>$? fun e1 flow ->
       assume e1
         ~fthen:(fun flow ->
-            Eval.singleton (Universal.Ast.mk_one exp.erange) flow
+            Eval.singleton (Universal.Ast.mk_one ~typ:exp.etyp exp.erange) flow
           )
         ~felse:(fun flow ->
             man.eval ~zone:(Z_c, Z_c_low_level) e2 flow
