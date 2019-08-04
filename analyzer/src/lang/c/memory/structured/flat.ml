@@ -73,6 +73,7 @@ struct
   (** The following functions flatten the initialization expression
       into a list of scalar initializations *)
   let rec flatten_init init typ range =
+    debug "flatten_init: %a (%a)" (Option.print Pp.pp_c_init) init pp_typ typ;
     if is_c_scalar_type typ then flatten_scalar_init init typ range else
     if is_c_array_type typ  then flatten_array_init init typ range else
     if is_c_record_type typ then flatten_record_init init typ range
@@ -133,6 +134,16 @@ struct
         then C_flat_expr (mk_c_character (char_of_int 0) range, under_typ) :: aux (i + 1)
 
         else [C_flat_none (Z.sub n (Z.of_int i), s8)]
+      in
+      aux 0
+
+    | Some (Ast.C_init_expr e) ->
+      let rec aux i =
+        if Z.equal (Z.of_int i) n
+        then []
+        else
+          let init' = Some (C_init_expr (mk_c_subscript_access e (mk_int i range) range)) in
+          flatten_init init' under_typ range @ aux (i + 1)
       in
       aux 0
 
@@ -287,7 +298,7 @@ struct
             let rval = mk_c_member_access rval field range in
             if is_c_array_type field.c_field_type
             then begin
-              warn_at range "copy of array %a not supported" pp_expr rval;
+              Soundness.warn range "copy of array %a ignored" pp_expr rval;
               acc
             end
             else
