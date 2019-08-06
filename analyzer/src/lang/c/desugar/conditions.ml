@@ -37,7 +37,7 @@ struct
   (** ===================== *)
 
   include GenStatelessDomainId(struct
-      let name = "c.desugar.cond_expr"
+      let name = "c.desugar.conditions"
     end)
 
 
@@ -66,7 +66,6 @@ struct
   (** ========================= *)
 
   let eval zone exp man flow  =
-    debug "eval %a" pp_expr exp;
     match ekind exp with
     | E_c_conditional(cond, e1, e2) ->
       man.eval cond ~zone:(Z_c,Z_c_scalar) flow >>$? fun cond flow ->
