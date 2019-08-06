@@ -244,18 +244,6 @@ struct
              Pp.pp_c_init (Option.none_to_exn init)
 
 
-  let to_lowlevel_expr e man flow =
-    (* Check if e is a constant *)
-    match c_expr_to_z e with
-    | Some z ->
-      Result.singleton (mk_z z ~typ:e.etyp e.erange) flow
-
-    | None ->
-      (* Expression not simplified statically to a constant, so
-         rely on other domains to evaluate it 
-      *)
-      man.eval ~zone:(Z_c,Z_c_low_level) e flow
-
 
   (** Evaluate init expressions into low-level expressions *)
   let rec to_lowlevel_init_opt init range man flow =
@@ -267,10 +255,11 @@ struct
       to_lowlevel_init init range man flow >>$ fun init flow ->
       Result.singleton (Some init) flow
 
+
   and to_lowlevel_init init range man flow =
     match init with
     | C_init_expr e ->
-      to_lowlevel_expr e man flow >>$ fun e flow ->
+      man.eval ~zone:(Z_c,Z_c_low_level) e flow >>$ fun e flow ->
       Result.singleton (C_init_expr e) flow
 
     | C_init_list(l, filler) ->
