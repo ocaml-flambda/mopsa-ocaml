@@ -124,14 +124,20 @@ struct
       Option.return
 
     | E_call(f, args) ->
-      man.eval ~zone:(Zone.Z_c, Z_c_points_to) f flow >>$? fun f flow ->
+      man.eval ~zone:(Zone.Z_c, Z_c_points_to) f flow >>$? fun ff flow ->
 
-      begin match ekind f with
+      begin match ekind ff with
         | E_c_points_to (P_fun f) ->
           eval_call f args exp.erange man flow |>
           Option.return
 
-        | _ -> assert false
+        | _ ->
+          Soundness.warn exp.erange
+            "ignoring side-effect of undetermined function pointer %a"
+            pp_expr f
+          ;
+          Eval.singleton (mk_top exp.etyp exp.erange) flow |>
+          Option.return
       end
 
     | _ -> None
