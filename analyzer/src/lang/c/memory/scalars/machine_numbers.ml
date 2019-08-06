@@ -409,7 +409,7 @@ struct
       Eval.singleton exp' flow |>
       Option.return
 
-    | E_var _ ->
+    | E_var (v,_) when is_c_num_type v.vtyp ->
       Eval.singleton (to_universal_expr exp) flow |>
       Option.return
 

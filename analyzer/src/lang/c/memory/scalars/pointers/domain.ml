@@ -241,7 +241,7 @@ struct
   let mk_offset_constraint_opt op p1 v1 o1 p2 v2 o2 range =
     mk_offset_expr_opt p1 v1 o1 range |> Option.bind @@ fun e1 ->
     mk_offset_expr_opt p2 v2 o2 range |> Option.bind @@ fun e2 ->
-    Some (mk_binop e1 op e2 range)
+    Some (mk_binop e1 op e2 ~etyp:T_int range)
 
 
   let eval_offset_constraint_opt op p1 v1 o1 p2 v2 o2 range man flow =
@@ -249,7 +249,7 @@ struct
     | None, O_eq -> Eval.singleton (mk_one range) flow
     | None, O_ne -> Eval.singleton (mk_zero range) flow
     | Some cond,_ -> man.eval ~zone:(Z_c_scalar,Z_u_num) cond flow
-    | _ -> assert false
+    | _ -> Eval.singleton (mk_int_interval 0 1 range) flow
 
 
   let remove_offset_opt p v v' range man flow =
@@ -263,7 +263,6 @@ struct
 
   (** {2 Pointer evaluation} *)
   (** ====================== *)
-
 
   (** Evaluation of points-to information *)
   let eval_points_to exp man flow =
