@@ -67,6 +67,42 @@ struct
   let init _ _ flow = flow
 
 
+  (** {2 Syntactic simplifications} *)
+  (** ============================= *)
+
+  (** a[i] -> *(a + i) *)
+  let mk_lowlevel_subscript_access a i t range =
+    mk_c_deref (mk_binop a O_plus i ~etyp:(pointer_type t) range) range
+
+
+  (** s.f -> *(( typeof(s.f)* )(( char* )(&s) + alignof(s.f))) *)
+  let mk_lowlevel_member_access s i range =
+    let ss = mk_c_address_of s range in
+
+    let st = etyp s in
+    let field =
+      match remove_typedef_qual st with
+      | T_c_record r -> List.nth r.c_record_fields i
+      | _ -> panic "member access on type %a" pp_typ st;
+    in
+    let t = field.c_field_type in
+    let align = mk_int (align_byte st i) range in
+
+    mk_c_deref
+      (mk_c_cast
+         (mk_binop
+            (mk_c_cast ss (pointer_type s8) range)
+            O_plus
+            align
+            range
+         )
+         (pointer_type t)
+         range
+      )
+      range
+
+
+
   (** {2 Abstract transformers} *)
   (** ========================= *)
 
@@ -142,7 +178,7 @@ struct
         if Z.equal (Z.of_int i) n
         then []
         else
-          let init' = Some (C_init_expr (mk_c_subscript_access e (mk_int i range) range)) in
+          let init' = Some (C_init_expr (mk_lowlevel_subscript_access e (mk_int i range) under_typ range)) in
           flatten_init init' under_typ range @ aux (i + 1)
       in
       aux 0
@@ -199,7 +235,7 @@ struct
         | _ -> assert false
       in
       fields' |> List.fold_left (fun acc field ->
-          let init = Some (C_init_expr (mk_c_member_access e field range)) in
+          let init = Some (C_init_expr (mk_lowlevel_member_access e field.c_field_index range)) in
           acc @ flatten_init init field.c_field_type range
         ) []
 
@@ -208,63 +244,53 @@ struct
              Pp.pp_c_init (Option.none_to_exn init)
 
 
+  let to_lowlevel_expr e man flow =
+    (* Check if e is a constant *)
+    match c_expr_to_z e with
+    | Some z ->
+      Result.singleton (mk_z z ~typ:e.etyp e.erange) flow
+
+    | None ->
+      (* Expression not simplified statically to a constant, so
+         rely on other domains to evaluate it 
+      *)
+      man.eval ~zone:(Z_c,Z_c_low_level) e flow
+
+
+  (** Evaluate init expressions into low-level expressions *)
+  let rec to_lowlevel_init_opt init range man flow =
+    match init with
+    | None ->
+      Result.singleton None flow
+
+    | Some init ->
+      to_lowlevel_init init range man flow >>$ fun init flow ->
+      Result.singleton (Some init) flow
+
+  and to_lowlevel_init init range man flow =
+    match init with
+    | C_init_expr e ->
+      to_lowlevel_expr e man flow >>$ fun e flow ->
+      Result.singleton (C_init_expr e) flow
+
+    | C_init_list(l, filler) ->
+      Result.bind_list l
+        (fun init flow -> to_lowlevel_init init range man flow) flow
+      >>$ fun l flow ->
+      to_lowlevel_init_opt filler range man flow >>$ fun filler flow ->
+      Result.singleton (C_init_list(l, filler)) flow
+
+    | _ -> panic_at range
+             "initialization expression %a not supported"
+             Pp.pp_c_init init
+
 
   (** 𝕊⟦ type v = init; ⟧ *)
   let declare v init scope range man flow =
+    to_lowlevel_init_opt init range man flow >>$ fun init flow ->
     let flat_init = flatten_init init v.vtyp range in
-
-    (* Evaluate C expressions into low-level expressions *)
-    let rec aux l flow =
-      match l with
-      | [] -> Result.singleton [] flow
-
-
-      | C_flat_expr (e,t) :: tl when is_c_global_scope scope ->
-        (* In case of global variables, initializers should be
-           constants expressions. We just simplify them into constant
-           values
-        *)
-        begin
-          match c_expr_to_z (remove_casts e) with
-          | Some z ->
-            (* Expression simplified *)
-            let ee =
-              (* Restore cast *)
-              match ekind e with
-              | E_c_cast(ee,implicit) ->
-                mk_expr (E_c_cast(mk_z z ee.erange ~typ:ee.etyp, implicit)) ~etyp:e.etyp e.erange
-
-              | _ -> mk_z z e.erange ~typ:e.etyp
-            in
-            aux tl flow >>$ fun tl flow ->
-            Result.singleton (C_flat_expr (ee,t) :: tl) flow
-
-          | None ->
-            (* Expression not simplified statically, so rely on other domains *)
-            man.eval ~zone:(Z_c,Z_c_low_level) e flow >>$ fun e flow ->
-            aux tl flow >>$ fun tl flow ->
-
-            Result.singleton (C_flat_expr (e,t) :: tl) flow
-
-        end
-
-      | C_flat_expr (e,t) :: tl ->
-        (* In case of local variables, initializers are arbitrary
-           expressions. We need to go over all domains to simplify
-           them.
-        *)
-        man.eval ~zone:(Z_c,Z_c_low_level) e flow >>$ fun e flow ->
-        aux tl flow >>$ fun tl flow ->
-        Result.singleton (C_flat_expr (e,t) :: tl) flow
-
-      | x :: tl ->
-        aux tl flow >>$ fun tl flow ->
-        Result.singleton (x :: tl) flow
-    in
-
-    aux flat_init flow >>$ fun init_list flow ->
-    let init = C_init_flat init_list in
-    man.post ~zone:Z_c_low_level (mk_c_declaration v (Some init) scope range) flow
+    let init' = C_init_flat flat_init in
+    man.post ~zone:Z_c_low_level (mk_c_declaration v (Some init') scope range) flow
 
 
   (** 𝕊⟦ lval = e; ⟧ when lval is scalar *)
@@ -375,42 +401,20 @@ struct
   (** {2 Abstract evaluations} *)
   (** ======================== *)
 
-  (** 𝔼⟦ a[i] ⟧ -> *(a + i) *)
   let array_subscript a i exp range man flow =
     man.eval ~zone:(Z_c, Z_c_low_level) a flow |>
     Eval.bind @@ fun a flow ->
     man.eval ~zone:(Z_c, Z_c_low_level) i flow |> Eval.bind @@ fun i flow ->
-    let t = exp |> etyp |> Ast.pointer_type in
-    let exp' = mk_c_deref (mk_binop a O_plus i ~etyp:t range) range in
-
+    let exp' = mk_lowlevel_subscript_access a i exp.etyp range in
     Eval.singleton exp' flow
 
   (** 𝔼⟦ s.f ⟧ -> *(( typeof(s.f)* )(( char* )(&s) + alignof(s.f))) *)
   let member_access s i f exp range man flow =
     man.eval ~zone:(Z_c, Z_c_low_level) s flow |>
     Eval.bind @@ fun s flow ->
-
-    let ss = mk_c_address_of s range in
-
-    let st = etyp s in
-    let t = etyp exp in
-    let align = mk_int (align_byte st i) range in
-
-    let exp' =
-      mk_c_deref
-        (mk_c_cast
-           (mk_binop
-              (mk_c_cast ss (pointer_type s8) range)
-              O_plus
-              align
-              range
-           )
-           (pointer_type t)
-           range
-        )
-        range
-    in
+    let exp' = mk_lowlevel_member_access s i range in
     Eval.singleton exp' flow
+
 
   (** 𝔼⟦ p->f ⟧ -> *(( typeof(p->f)* )(( char* )p + alignof(p->f))) *)
   let arrow_access p i f exp range man flow =
@@ -448,6 +452,7 @@ struct
 
       let exp' = { exp with ekind = E_binop(O_plus, a, i) } in
       Eval.singleton exp' flow
+
 
   (** 𝔼⟦ &(p->f) ⟧ = ( typeof(p->f)* )(( char* )p + alignof(p->f)) *)
   let address_of_arrow_access p i f exp range man flow =
