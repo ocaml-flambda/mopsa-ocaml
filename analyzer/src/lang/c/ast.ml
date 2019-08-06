@@ -1010,7 +1010,7 @@ let rec c_expr_to_z (e:expr) : Z.t option =
     then c_expr_to_z e1
     else c_expr_to_z e2
 
-  | E_c_cast(ee,_) when is_c_num_type e.etyp ->
+  | E_c_cast(ee,_) when is_c_int_type e.etyp ->
     c_expr_to_z ee |> Option.bind @@ fun n ->
     let a,b = rangeof e.etyp in
     if Z.leq a n && Z.leq n b then Some n else None

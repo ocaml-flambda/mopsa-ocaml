@@ -307,8 +307,33 @@ struct
         ) e flow |>
       Option.return
 
+    | E_c_cast(e, b) when exp |> etyp |> is_c_float_type &&
+                          e   |> etyp |> is_c_int_type ->
+      man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e flow ->
+      let exp' = {
+        ekind = E_unop (O_cast (to_universal_type e.etyp, to_universal_type exp.etyp), e);
+        etyp = to_universal_type exp.etyp;
+        erange = exp.erange
+      }
+      in
+      Eval.singleton exp' flow |>
+      Option.return
+
+  
     | E_c_cast(e, b) when exp |> etyp |> is_c_int_type &&
-                          e   |> etyp |> is_c_num_type
+                          e   |> etyp |> is_c_float_type ->
+      man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e flow ->
+      let exp' = {
+        ekind = E_unop (O_cast (to_universal_type e.etyp, to_universal_type exp.etyp), e);
+        etyp = to_universal_type exp.etyp;
+        erange = exp.erange
+      }
+      in
+      Eval.singleton exp' flow |>
+      Option.return
+
+    | E_c_cast(e, b) when exp |> etyp |> is_c_int_type &&
+                          e   |> etyp |> is_c_int_type
       ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e' flow ->
       let t  = etyp exp in
@@ -344,18 +369,6 @@ struct
                end
           ) e' flow |>
         Option.return
-
-    | E_c_cast(e, b) when exp |> etyp |> is_c_float_type &&
-                          e   |> etyp |> is_c_int_type ->
-      man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e flow ->
-      let exp' = {
-        ekind = E_unop (O_cast, e);
-        etyp = to_universal_type exp.etyp;
-        erange = exp.erange
-      }
-      in
-      Eval.singleton exp' flow |>
-      Option.return
 
     | E_unop(O_log_not, e) when exp |> etyp |> is_c_num_type &&
                                 not (is_compare_expr e)
@@ -419,8 +432,11 @@ struct
       (** Uninitialized local variable *)
       | Variable_local _, None | Variable_func_static _, None ->
         (* The value of the variable is undetermined (C99 6.7.8.10) *)
-        let l,u = rangeof v.vtyp in
-        Eval.singleton (mk_z_interval l u range) flow
+        if is_c_int_type v.vtyp then
+          let l,u = rangeof v.vtyp in
+          Eval.singleton (mk_z_interval l u range) flow
+        else
+          Eval.singleton (mk_top (to_universal_type v.vtyp) range) flow
 
       | _, Some (C_init_expr e) ->
         if not (is_compare_expr e) then

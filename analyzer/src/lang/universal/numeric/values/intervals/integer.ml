@@ -92,6 +92,9 @@ struct
         let () = debug "O_wrap done : %a [%a-%a] : %a" print a Z.pp_print l Z.pp_print u print rep in
         rep
       | O_bit_invert -> bot_lift1 I.bit_not a
+      | O_cast (T_float _, T_int) ->
+        warn "float->int cast not implemented";
+        top
       | _ -> top
 
   let binop op a1 a2 =
