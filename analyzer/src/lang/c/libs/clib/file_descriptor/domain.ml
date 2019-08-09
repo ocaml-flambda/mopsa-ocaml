@@ -19,7 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Manager of the `FileDescriptor` resources *)
+(** Abstraction of UNIX file descriptors *)
 
 (*
    UNIX file descriptors are associated to integer identifiers. These
@@ -67,6 +67,7 @@ open Framework.Core.Sig.Domain.Intermediate
 open Universal.Ast
 open Stubs.Ast
 open Ast
+open Universal.Zone
 open Zone
 open Memory.Common.Points_to
 module Itv = Universal.Numeric.Values.Intervals.Integer.Value
@@ -260,6 +261,48 @@ struct
     Eval.join_list ~empty:(Eval.empty_singleton flow) (case1 @ case2)
 
 
+
+  (** {2 Insertion of new resources at a specific slot} *)
+  (** ================================================= *)
+
+
+  (** Insert an address in the table of file descriptors at a specific slot *)
+  let insert_addr_at addr slot range man flow =
+    switch
+      (
+        List.map (fun i ->
+            [mk_binop slot O_eq (mk_int i range) range],
+            (fun flow ->
+               let flow = map_env T_cur (fun a ->
+                   { a with
+                     first =
+                       List.mapi (fun j s ->
+                           if i = j then Slot.add addr s else s
+                         ) a.first
+                   }
+                 ) man flow
+               in
+               Eval.singleton (mk_zero ~typ:s8 range) flow
+            )
+          )
+          (let rec aux k = if k = window then [] else k :: aux (k + 1) in aux 0)
+        @
+        [
+          [mk_binop slot O_ge (mk_int window range) range],
+          (fun flow ->
+             let itv = man.ask (Universal.Numeric.Common.Q_int_interval slot) flow in
+             let flow = map_env T_cur (fun a ->
+                 { a with others = Table.insert_at addr itv a.others }
+               ) man flow
+             in
+             Eval.singleton (mk_zero ~typ:s8 range) flow
+          )
+        ]
+      )
+      ~zone:Z_u_num
+      man flow
+      
+
   (** {2 Find the address of a numeric file descriptor} *)
   (** ================================================= *)
 
@@ -368,7 +411,7 @@ struct
 
   let exec zone stmt man flow  =
     match skind stmt with
-    | S_remove({ekind = E_addr ({ addr_kind = A_stub_resource "FileDescriptor"} as addr)}) ->
+    | S_remove({ekind = E_addr ({ addr_kind = A_stub_resource "FileRes"} as addr)}) ->
       remove addr man flow |>
       Post.return |>
       Option.return
@@ -381,20 +424,41 @@ struct
 
   let eval zone exp man flow =
     match ekind exp with
-    (* 𝔼⟦ new FileDescriptor ⟧ *)
-    | E_stub_alloc("FileDescriptor") ->
-      let alloc = mk_alloc_addr (A_stub_resource "FileDescription") exp.erange in
-      man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) alloc flow >>$? fun exp' flow ->
-      insert_addr (Addr.from_expr exp') exp.erange man flow |>
+    (* 𝔼⟦ _mopsa_register_file_resource(f) ⟧ *)
+    | E_c_builtin_call("_mopsa_register_file_resource", [f]) ->
+      begin
+        man.eval ~zone:(Z_c,Z_c_points_to) f flow >>$ fun p flow ->
+        match ekind p with
+        | E_c_points_to (P_block(A addr,_)) ->
+          insert_addr addr exp.erange man flow
+
+        | _ ->
+          Eval.singleton (mk_int (-1) ~typ:s8 exp.erange) flow
+      end
+      |> Option.return
+
+
+    (* 𝔼⟦ _mopsa_register_file_resource_at(f) ⟧ *)
+    | E_c_builtin_call("_mopsa_register_file_resource_at", [f; fd]) ->
+      begin
+        man.eval ~zone:(Z_c,Z_c_points_to) f flow >>$ fun p flow ->
+        man.eval ~zone:(Z_c,Z_u_num) fd flow >>$ fun fd flow ->
+        match ekind p with
+        | E_c_points_to (P_block(A addr,_)) ->
+          insert_addr_at addr fd exp.erange man flow
+
+        | _ ->
+          Eval.singleton (mk_int (-1) ~typ:s8 exp.erange) flow
+      end
+      |> Option.return
+
+
+    (* 𝔼⟦ _mopsa_find_file_resource(fd) ⟧ *)
+    | E_c_builtin_call("_mopsa_find_file_resource", [fd]) ->
+      man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) fd flow >>$? fun fd flow ->
+      find_addr fd exp.erange man flow |>
       Option.return
 
-    (* 𝔼⟦ new FileDescription ⟧ *)
-    | E_stub_alloc("FileDescription") ->
-      let alloc = mk_alloc_addr (A_stub_resource "FileDescription") exp.erange in
-      man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) alloc flow >>$? fun exp' flow ->
-      insert_addr (Addr.from_expr exp') exp.erange man flow >>$? fun _ flow ->
-      Eval.singleton exp' flow |>
-      Option.return
 
     (* 𝔼⟦ n in FileDescriptor ⟧ *)
     | E_stub_resource_mem(n, "FileDescriptor") ->
@@ -411,33 +475,6 @@ struct
       Eval.singleton exp' flow |>
       Option.return
 
-
-    (* 𝔼⟦ _mopsa_file_descriptor_to_description(n) ⟧ *)
-    | E_c_builtin_call("_mopsa_file_descriptor_to_description", [n]) ->
-      man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) n flow >>$? fun n flow ->
-      find_addr n exp.erange man flow |>
-      Option.return
-
-
-    (* 𝔼⟦ _mopsa_file_description_to_descriptor(p) ⟧ *)
-    | E_c_builtin_call("_mopsa_file_description_to_descriptor", [p]) ->
-      man.eval ~zone:(Z_c, Z_c_points_to) p flow >>$? fun pt flow ->
-      begin match ekind pt with
-        | E_c_points_to(P_block(A addr, n)) ->
-          let itv = find_int addr exp.erange man flow in
-          let a, b =
-            match Itv.bounds_opt itv with
-            | Some a, Some b -> a, b
-            | Some a, None -> a, rangeof u32 |> snd
-            | None, Some b -> Z.zero, b
-            | None, None -> rangeof u32
-          in
-          Eval.singleton (mk_z_interval a b exp.erange) flow
-
-        | _ ->
-          Eval.singleton (mk_top u32 exp.erange) flow
-      end |>
-      Option.return
 
     | _ -> None
 

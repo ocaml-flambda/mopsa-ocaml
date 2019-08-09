@@ -118,6 +118,15 @@ let insert addr window (t:table) =
     in
     add addr itv t, itv
 
+
+let insert_at addr itv t =
+  let itv = Itv.join itv (AddrItvMap.find addr t.map) in
+  {
+    map = AddrItvMap.add addr itv t.map;
+    support = AddrSet.add addr t.support;
+  }
+
+
 let filter f (t:table) : table =
   let map = AddrItvMap.filter f t.map in
   let support = AddrSet.filter (fun addr -> AddrItvMap.mem addr map) t.support in

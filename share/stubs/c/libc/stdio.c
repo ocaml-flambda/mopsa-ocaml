@@ -43,14 +43,18 @@ _FILE_ *stdout;
 _FILE_ *stderr;
 
 /*$
- * local: void *f = new FileDescription;
- * local: int fd = _mopsa_file_description_to_descriptor(f);
+ * local: void *f = new FileRes;
+ * local: int fd = _mopsa_register_file_resource(f);
  * local: _FILE_* file = new File;
  * ensures: bytes(file) == sizeof_type(_FILE_);
  * ensures: file->_fileno == fd;
  * ensures: return == file;
  */
 _FILE_ *_alloc_std_stream();
+
+
+
+
 
 /*$$$
  * assigns: stdin;
@@ -68,9 +72,10 @@ _FILE_ *_alloc_std_stream();
 
 
 
+
 /*$
- * local: void *f = new FileDescription;
- * local: int fd = _mopsa_file_description_to_descriptor(f);
+ * local: void *f = new FileRes;
+ * local: int fd = _mopsa_register_file_resource(f);
  * local: FILE* file = new File;
  * ensures: bytes(file) == sizeof_type(FILE);
  * ensures: file->_fileno == fd;
@@ -78,6 +83,17 @@ _FILE_ *_alloc_std_stream();
  */
 FILE *_alloc_FILE();
 
+
+
+/*$
+ * local: void *f = new FileRes;
+ * local: int ffd = _mopsa_register_file_resource_at(f, fd);
+ * local: FILE* file = new File;
+ * ensures: bytes(file) == sizeof_type(FILE);
+ * ensures: file->_fileno == fd;
+ * ensures: return == file;
+ */
+FILE *_alloc_FILE_at(int fd);
 
 
 const char *const sys_errlist[128]; // TODO: actual size
@@ -196,13 +212,12 @@ char *tempnam (const char *__dir, const char *__pfx);
 
 /*$
  * requires: __stream in File;
- * requires: __stream->_fileno in FileDescriptor;
  *
  * case "success" {
- *   local:   void* addr = _mopsa_file_descriptor_to_description(__stream->_fileno);
+ *   local:   void *f = _mopsa_find_file_resource(__stream->_fileno);
  *   ensures: return == 0;
  *   free:    __stream;
- *   free:    addr;
+ *   free:    f;
  * }
  *
  * case "failure" {
@@ -212,15 +227,13 @@ char *tempnam (const char *__dir, const char *__pfx);
  */
 int fclose (FILE *__stream);
 
+
 /*$
- * requires: __stream != NULL implies (
- *             __stream in File and
- *             __stream->_fileno in FileDescriptor
- *           );
+ * requires: __stream != NULL implies __stream in File;
  *
  * case "success" {
  *   assumes:  __stream != NULL;
- *   local:   void* addr = _mopsa_file_descriptor_to_description(__stream->_fileno);
+ *   local:   void* addr = _mopsa_find_file_resource(__stream->_fileno);
  *   ensures: return == 0;
  *   free:    __stream;
  *   free:    addr;
@@ -274,9 +287,6 @@ FILE *fopen (const char *__restrict __filename,
  * requires: __stream in File;
  *
  * case "success" {
- *   local:   int fd = new FileDescriptor;
- *   assigns: __stream->_fileno;
- *   ensures: (__stream->_fileno)' == fd;
  *   ensures: return == __stream;
  * }
  *
@@ -295,9 +305,8 @@ FILE *freopen (const char *__restrict __filename,
  * requires: __fd in FileDescriptor;
  *
  * case "success" {
- *   local:   FILE* f = new File;
- *   ensures: f->_fileno == __fd;
- *   ensures: size(f) == 1;
+ *   local:   FILE* f = _alloc_FILE_at(__fd);
+ *   ensures: bytes(f) == sizeof_type(FILE);
  *   ensures: return == f;
  * }
  *
