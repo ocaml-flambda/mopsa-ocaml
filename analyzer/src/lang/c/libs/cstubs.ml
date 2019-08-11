@@ -134,7 +134,7 @@ struct
           Option.return
 
         | E_c_points_to P_valid ->
-          Soundness.warn stmt.srange
+          Soundness.warn_at stmt.srange
             "ignoring free statement because of undetermined resource pointer"
           ;
           Post.return flow |>

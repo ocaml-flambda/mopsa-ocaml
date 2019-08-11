@@ -549,7 +549,7 @@ struct
                          So we assume that it does not exceed the range of unsigned long, usually used for size_t 
                       *)
                       let _, uuu = rangeof ul in
-                      Soundness.warn range
+                      Soundness.warn_at range
                         "size of %a is unbounded and is assumed to %a"
                         pp_base base
                         Z.pp_print uuu
@@ -1000,7 +1000,7 @@ struct
     expand p range man flow >>$ fun expansion flow ->
     match expansion with
     | Top ->
-      Soundness.warn range "ignoring assignment to undetermined lval *%a = %a;"
+      Soundness.warn_at range "ignoring assignment to undetermined lval *%a = %a;"
         pp_expr p
         pp_expr e
       ;

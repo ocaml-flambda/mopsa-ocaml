@@ -74,10 +74,18 @@ let render_alarm alarm  =
   ]
 
 let render_warning w  =
-  `Assoc [
-    "message", `String w.warn_message;
-    "range", render_range w.warn_range;
-  ]
+  match w.warn_range with
+  | None ->
+    `Assoc [
+      "message", `String w.warn_message;
+    ]
+
+  | Some r ->
+    `Assoc [
+      "message", `String w.warn_message;
+      "range", render_range r;
+    ]
+    
 
 let render_var var  =
   `String var.Ast.Var.vname

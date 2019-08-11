@@ -110,7 +110,7 @@ struct
         man.eval ~zone:(Stubs.Zone.Z_stubs, any_zone) exp' flow
 
       | {c_func_body = None; c_func_org_name; c_func_return} ->
-        Soundness.warn range "ignoring side effects of calling undefined function %s" c_func_org_name;
+        Soundness.warn_at range "ignoring side effects of calling undefined function %s" c_func_org_name;
         Eval.singleton (mk_top c_func_return range) flow
 
 
@@ -132,7 +132,7 @@ struct
           Option.return
 
         | _ ->
-          Soundness.warn exp.erange
+          Soundness.warn_at exp.erange
             "ignoring side-effect of undetermined function pointer %a"
             pp_expr f
           ;

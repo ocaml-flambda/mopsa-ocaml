@@ -76,7 +76,7 @@ struct
       | '%' -> parse_type format (i + 1) args range man flow
 
       | _ ->
-        Soundness.warn range "ignoring side-effect of scanf format %s" format;
+        Soundness.warn_at range "ignoring side-effect of scanf format %s" format;
         Post.return flow
 
   and parse_type format i args range man flow =
@@ -104,7 +104,7 @@ struct
     match ekind (remove_casts format) with
     | E_constant(C_c_string (str,_)) -> assign_args_from_string_format str args range man flow
     | _ ->
-      Soundness.warn range "ignoring side-effect of scanf format %a" pp_expr format;
+      Soundness.warn_at range "ignoring side-effect of scanf format %a" pp_expr format;
       Post.return flow
 
 

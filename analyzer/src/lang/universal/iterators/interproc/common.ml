@@ -125,7 +125,7 @@ let inline f params ret range man flow =
   let flow =
     match check_recursion f flow with
     | true ->
-      Soundness.warn range
+      Soundness.warn_at range
         "recursive call on function %s ignored" f.fun_name
       ;
       man.exec (mk_add_var ret range) flow |>

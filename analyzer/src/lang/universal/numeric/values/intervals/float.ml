@@ -70,7 +70,7 @@ struct
   let top_of_prec = function
     | F_SINGLE -> I.single_special
     | F_DOUBLE -> I.double_special
-    | F_LONG_DOUBLE -> panic "unhandled F_LONG_DOUBLE"
+    | F_LONG_DOUBLE -> Soundness.warn "long double assumed as double"; I.double_special
     | F_REAL -> panic "unhandled F_REAL"
 
   let top = top_of_prec F_DOUBLE
@@ -96,7 +96,7 @@ struct
   let prec : float_prec -> I.prec = function
     | F_SINGLE -> `SINGLE
     | F_DOUBLE -> `DOUBLE
-    | F_LONG_DOUBLE -> panic "unhandled `DOUBLE intervals"
+    | F_LONG_DOUBLE -> Soundness.warn "long double assumed as double"; `DOUBLE
     | F_REAL -> panic "unhandled `REAL intervals"
 
   let round () : I.round =

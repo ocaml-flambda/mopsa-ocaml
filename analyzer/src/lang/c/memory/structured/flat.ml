@@ -313,7 +313,7 @@ struct
             let rval = mk_c_member_access rval field range in
             if is_c_array_type field.c_field_type
             then begin
-              Soundness.warn range "copy of array %a ignored" pp_expr rval;
+              Soundness.warn_at range "copy of array %a ignored" pp_expr rval;
               acc
             end
             else
