@@ -702,10 +702,16 @@ struct
 
   (** Rename a pointer variable *)
   let rename_var p1 p2 range man flow =
-    let flow = map_env T_cur (Map.rename p1 p2) man flow in
-    let o1 = mk_offset_expr p1 STRONG range in
-    let o2 = mk_offset_expr p2 STRONG range in
-    man.post ~zone:(Universal.Zone.Z_u_num) (mk_rename o1 o2 range) flow
+    let flow' = map_env T_cur (Map.rename p1 p2) man flow in
+
+    (* Rename the offset if present *)
+    let a1 = get_env T_cur man flow |> Map.find p1 in
+    if Value.is_valid_base a1 then
+      let o1 = mk_offset_expr p1 STRONG range in
+      let o2 = mk_offset_expr p2 STRONG range in
+      man.post ~zone:(Universal.Zone.Z_u_num) (mk_rename o1 o2 range) flow'
+    else
+      Post.return flow'
 
 
 
