@@ -23,9 +23,9 @@
 
 
 module PolyMan = struct
-  type t = Polka.strict Polka.t
-  let name = "polyhedra"
-  let man = Polka.manager_alloc_strict ()
+  type t = Polka.loose Polka.t
+  let name = "universal.numeric.relational.polyhedra"
+  let man = Polka.manager_alloc_loose ()
 end
 
 

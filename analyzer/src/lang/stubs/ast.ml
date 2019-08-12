@@ -41,11 +41,12 @@ type stub_func = {
   stub_func_range  : range;
 }
 
-(** Stub for a variable initialization *)
-and stub_init = {
-  stub_init_body : section list;
-  stub_init_locals : local with_range list;
-  stub_init_range : range;
+(** Stub for a global directive *)
+and stub_directive = {
+  stub_directive_body : section list;
+  stub_directive_locals : local with_range list;
+  stub_directive_assigns : assigns with_range list;
+  stub_directive_range : range;
 }
 
 (** {2 Stub sections} *)
@@ -162,13 +163,22 @@ type expr_kind +=
 (*  =-=-=-=-=-=-=- *)
 
 type stmt_kind +=
-  | S_stub_init of var * stub_init
+  | S_stub_directive of stub_directive
   (** Initialization of a variable with a stub *)
 
   | S_stub_free of expr
   (** Release a resource *)
 
-  (** Rename primed variables of assigned dimensions *)
+
+  (** Declare an assigned object *)
+  | S_stub_assigns of expr  (** modified pointer *) *
+                      (
+                        expr  (** index lower bound *) *
+                        expr  (** index upper bound *)
+                      ) list
+
+
+  (** Rename primed variables of an assigned object *)
   | S_stub_rename_primed of expr  (** modified pointer *) *
                             (
                               expr  (** index lower bound *) *
@@ -224,11 +234,14 @@ let is_expr_quantified e =
     false
     e
 
-let mk_stub_init var stub range =
-  mk_stmt (S_stub_init (var, stub)) range
+let mk_stub_directive stub range =
+  mk_stmt (S_stub_directive stub) range
 
 let mk_stub_free e range =
   mk_stmt (S_stub_free e) range
+
+let mk_stub_assigns t offsets range =
+  mk_stmt (S_stub_assigns (t, offsets)) range
 
 let mk_stub_rename_primed t offsets range =
   mk_stmt (S_stub_rename_primed (t, offsets)) range
@@ -389,7 +402,7 @@ let pp_sections fmt secs =
 
 let pp_stub_func fmt stub = pp_sections fmt stub.stub_func_body
 
-let pp_stub_init fmt stub = pp_sections fmt stub.stub_init_body
+let pp_stub_directive fmt stub = pp_sections fmt stub.stub_directive_body
 
 
 (** {2 Registration of expressions} *)
@@ -487,14 +500,17 @@ let () =
   register_stmt_with_visitor {
     compare = (fun next s1 s2 ->
         match skind s1, skind s2 with
-        | S_stub_init (v1, stub1), S_stub_init (v2, stub2) ->
-          Compare.compose [
-            (fun () -> compare_var v1 v2);
-            (fun () -> panic "compare for stubs not supported")
-          ]
+        | S_stub_directive (stub1), S_stub_directive (stub2) ->
+          panic "compare for stubs not supported"
 
         | S_stub_free(e1), S_stub_free(e2) ->
           compare_expr e1 e2
+
+        | S_stub_assigns(t1, offsets1), S_stub_assigns(t2, offsets2) ->
+          Compare.compose [
+            (fun () -> compare_expr t1 t2);
+            (fun () -> Compare.list (Compare.pair compare_expr compare_expr) offsets1 offsets2);
+          ]
 
         | S_stub_rename_primed(t1, offsets1), S_stub_rename_primed(t2, offsets2) ->
           Compare.compose [
@@ -507,11 +523,13 @@ let () =
 
     visit = (fun next s ->
         match skind s with
-        | S_stub_init _ -> panic "visitor for S_stub_init not supported"
+        | S_stub_directive _ -> panic "visitor for S_stub_init not supported"
 
         | S_stub_free e ->
           { exprs = [e]; stmts = [] },
           (function { exprs = [e] } -> { s with skind = S_stub_free e } | _ -> assert false)
+
+        | S_stub_assigns(t, offsets) -> panic "visitor for S_stub_assigns not supported"
 
         | S_stub_rename_primed(t, offsets) -> panic "visitor for S_stub_rename_primed not supported"
 
@@ -520,12 +538,23 @@ let () =
 
     print = (fun next fmt s ->
         match skind s with
-        | S_stub_init (v, stub) ->
-          fprintf fmt "@[<v 2>init %a:@,%a@]"
-            pp_var v
-            pp_sections stub.stub_init_body
+        | S_stub_directive (stub) ->
+          fprintf fmt "@[<v 2>/*$$$@,%a@]*/"
+            pp_sections stub.stub_directive_body
 
         | S_stub_free e -> fprintf fmt "free(%a);" pp_expr e
+
+        | S_stub_assigns(t,offsets) ->
+          fprintf fmt "assigns: %a%a;"
+            pp_expr t
+            (pp_print_list
+               ~pp_sep:(fun fmt () -> ())
+               (fun fmt (a, b) ->
+                  fprintf fmt "[%a .. %a]"
+                    pp_expr a
+                    pp_expr b
+               )
+            ) offsets
 
         | S_stub_rename_primed(t,offsets) ->
           fprintf fmt "rename primed %a%a;"

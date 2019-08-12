@@ -52,7 +52,7 @@ struct
   type t = Pool.t
 
   include GenDomainId(struct
-      type typ = t
+      type nonrec t = t
       let name = "universal.heap.recency" ^ "." ^ Policy.name
     end)
 
@@ -107,7 +107,7 @@ struct
      *   debug "aa=%a@\n" Pool.print aa;
      *   aa, s, s', true *)
 
-  let merge ctx pre (a,log) (a',log') =
+  let merge pre (a,log) (a',log') =
     assert false
 
   (** Zoning definition *)
@@ -123,7 +123,7 @@ struct
   (** ============== *)
 
   let init prog man flow =
-    set_domain_env T_cur Pool.empty man flow
+    set_env T_cur Pool.empty man flow
 
 
   (** Post-conditions *)
@@ -135,7 +135,7 @@ struct
     | S_free_addr addr ->
       let flow' =
         if addr.addr_mode = WEAK then flow
-        else map_domain_env T_cur (Pool.remove addr) man flow
+        else map_env T_cur (Pool.remove addr) man flow
       in
       let stmt' = mk_remove (mk_addr addr stmt.srange) stmt.srange in
       man.exec stmt' flow' |>
@@ -151,7 +151,7 @@ struct
   let eval zone expr man flow =
     match ekind expr with
     | E_alloc_addr(addr_kind) ->
-      let pool = get_domain_env T_cur man flow in
+      let pool = get_env T_cur man flow in
       let range = expr.erange in
 
       let recent_addr = Policy.mk_addr addr_kind STRONG range flow in
@@ -166,12 +166,12 @@ struct
           (* Otherwise, we make the previous recent address as an old one *)
           let old_addr = Policy.mk_addr addr_kind WEAK range flow in
           debug "rename %a to %a" pp_addr recent_addr pp_addr old_addr;
-          map_domain_env T_cur (Pool.add old_addr) man flow |>
+          map_env T_cur (Pool.add old_addr) man flow |>
           man.exec (mk_rename (mk_addr recent_addr range) (mk_addr old_addr range) range)
       in
 
       (* Add the recent address *)
-      map_domain_env T_cur (Pool.add recent_addr) man flow' |>
+      map_env T_cur (Pool.add recent_addr) man flow' |>
       Eval.singleton (mk_addr recent_addr range) |>
       Option.return
 

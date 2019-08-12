@@ -135,7 +135,7 @@ struct
       Utils.check_instances ~arguments_after_check:1 man flow range args ["set"]
         (fun eargs flow ->
            let e1, e2 = match args with [l; r] -> l, r | _ -> assert false in
-           assume_eval (mk_py_isinstance_builtin e2 "set" range) man flow
+           assume (mk_py_isinstance_builtin e2 "set" range) man flow
              ~fthen:(man.eval (mk_py_top T_bool range))
              ~felse:(fun flow ->
                  let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
@@ -201,10 +201,10 @@ struct
 
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_set_of")}, _)}, args, []) ->
-      Eval.eval_list man.eval args flow |>
-      Eval.bind (fun eargs flow ->
+      bind_list args man.eval flow |>
+      bind_some (fun eargs flow ->
           let set, set_v = match eargs with [d;e] -> d,e | _ -> assert false in
-          assume_eval (mk_py_isinstance_builtin set "set" range) man flow
+          assume (mk_py_isinstance_builtin set "set" range) man flow
             ~fthen:(fun flow ->
                 let var = var_of_eobj set in
                 Libs.Py_mopsa.check man

@@ -42,7 +42,7 @@ void test_global_init_with_zero() {
 }
 
 void test_rand_int() {
-  int a = _mopsa_rand_int(0, 10);
+  int a = _mopsa_range_int(0, 10);
   _mopsa_assert(a >= 0 && a <= 10);
 }
 
@@ -50,7 +50,7 @@ void test_divide_by_constant() {
   int a = 4 / 2;
   _mopsa_assert_safe();
   int c = a / (1 - 1);
-  _mopsa_assert_error(DIVISION_BY_ZERO);
+  _mopsa_assert_unsafe();
 }
 
 void test_divide_by_variable() {
@@ -59,23 +59,23 @@ void test_divide_by_variable() {
   _mopsa_assert_safe();
   int y = x - 1;
   int c = a / y;
-  _mopsa_assert_error(DIVISION_BY_ZERO);
+  _mopsa_assert_unsafe();
 }
 
 void test_divide_by_range() {
-  int x = _mopsa_rand_int(-5,-1);
+  int x = _mopsa_range_int(-5,-1);
   int a = 4 / x;
   _mopsa_assert_safe();
   int y = x + 2;
   int c = a / y;
-  _mopsa_assert_error_exists(DIVISION_BY_ZERO);
+  _mopsa_assert_unsafe();
 }
 
 int test_overflow() {
   unsigned char c = 25;
   unsigned char d = 6;
   unsigned char e = 10 * c + d;
-  _mopsa_assert_error_exists(INTEGER_OVERFLOW);
+  _mopsa_assert_unsafe();
 }
 
 int test_condition_value() {

@@ -19,69 +19,94 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Alarms reporting potential errors inferred by abstract domains. *)
+(** Alarm -- Potential bugs inferred by abstract domains. *)
 
-open Ast
-open Token
-open Lattice
+
+
+(** {2 Alarm data structure} *)
+(** ************************ *)
 
 type alarm_kind = ..
+
+type alarm_extra = ..
+
+type alarm_extra += NoExtra
 
 type alarm_level =
   | ERROR
   | WARNING
-  | PANIC
 
 type alarm = {
-  alarm_kind : alarm_kind;   (** the kind of the alarm *)
+  alarm_kind : alarm_kind;
+  alarm_extra : alarm_extra;
   alarm_level : alarm_level;
   alarm_trace : Location.range * Callstack.cs;
 }
 
-type alarm_info = {
-  compare : (alarm -> alarm -> int) -> alarm -> alarm -> int;
-  pp_token   : (Format.formatter -> alarm -> unit) -> Format.formatter -> alarm -> unit;
-  pp_title : (Format.formatter -> alarm -> unit) -> Format.formatter -> alarm -> unit;
-  pp_report : (Format.formatter -> alarm -> unit) -> Format.formatter -> alarm -> unit;
-}
 
-let compare_chain : (alarm -> alarm -> int) ref =
-  ref (fun a1 a2 -> Pervasives.compare a1.alarm_kind a2.alarm_kind)
+let mk_alarm kind ?(extra=NoExtra) ?(level=WARNING) ?(cs=Callstack.empty) range =
+  {
+    alarm_kind = kind;
+    alarm_extra = extra;
+    alarm_level = level;
+    alarm_trace = range, cs;
+  }
 
-let pp_token_chain : (Format.formatter -> alarm -> unit) ref =
-  ref (fun fmt alarm -> failwith "Pp: Unknown alarm")
 
-let pp_title_chain : (Format.formatter -> alarm -> unit) ref =
-  ref (fun fmt alarm -> failwith "Pp: Unknown alarm")
+let get_alarm_kind alarm = alarm.alarm_kind
 
-let pp_report_chain : (Format.formatter -> alarm -> unit) ref =
-  ref (fun fmt alarm -> failwith "Pp: Unknown alarm")
+let get_alarm_extra alarm = alarm.alarm_extra
 
-let register_alarm info =
-  compare_chain := info.compare !compare_chain;
-  pp_token_chain := info.pp_token !pp_token_chain;
-  pp_title_chain := info.pp_title !pp_title_chain;
-  pp_report_chain := info.pp_report !pp_report_chain;
-  ()
+let get_alarm_trace alarm = alarm.alarm_trace
+
+let get_alarm_level alarm = alarm.alarm_level
+
+
+(** {2 Total order comparison function} *)
+(** *********************************** *)
+
+let compare_alarm_kind_chain = TypeExt.mk_compare_chain (fun a1 a2 -> compare a1 a2)
+
+let compare_alarm_kind = TypeExt.compare compare_alarm_kind_chain
+
+let compare_alarm_extra_chain = TypeExt.mk_compare_chain (fun a1 a2 ->
+    match a1, a2 with
+    | NoExtra, NoExtra -> 0
+    | _ -> compare a1 a2
+  )
+
+let compare_alarm_extra = TypeExt.compare compare_alarm_extra_chain
 
 let compare_alarm a1 a2 =
   if a1 == a2 then 0
   else Compare.compose [
+      (fun () -> compare_alarm_kind a1.alarm_kind a2.alarm_kind);
+      (fun () -> compare_alarm_extra a1.alarm_extra a2.alarm_extra);
       (fun () -> Compare.pair Location.compare_range Callstack.compare a1.alarm_trace a2.alarm_trace);
       (fun () -> Pervasives.compare a1.alarm_level a2.alarm_level);
-      (fun () -> !compare_chain a1 a2)
     ]
 
-let pp_alarm_token fmt alarm =
-  Format.fprintf fmt "%a:%a:%a"
-    !pp_token_chain alarm
-    Location.pp_range (fst alarm.alarm_trace)
-    Callstack.pp_call_stack (snd alarm.alarm_trace)
+
+
+(** {2 Pretty printers} *)
+(** ******************* *)
+
+let pp_kind_chain = TypeExt.mk_print_chain (fun fmt alarm -> failwith "Pp: Unknown alarm")
+
+let pp_alarm_kind = TypeExt.print pp_kind_chain
+
+let pp_extra_chain = TypeExt.mk_print_chain (fun fmt alarm ->
+    match alarm with
+    | NoExtra -> ()
+    | _ -> failwith "Pp: Unknown alarm"
+  )
+
+let pp_alarm_extra = TypeExt.print pp_extra_chain
+
 
 let pp_level fmt = function
   | ERROR -> ((Debug.color "red") Format.pp_print_string) fmt "✘"
   | WARNING -> ((Debug.color "orange") Format.pp_print_string) fmt "⚠"
-  | PANIC -> ((Debug.color "red") Format.pp_print_string) fmt "⛔"
 
 let pp_callstack fmt (cs:Callstack.cs) =
   (* print in the style of gcc's preprocessor include stack *)
@@ -89,51 +114,132 @@ let pp_callstack fmt (cs:Callstack.cs) =
     (fun c -> Format.fprintf fmt "\tfrom %a: %s@\n" Location.pp_range c.Callstack.call_site c.Callstack.call_fun)
     cs
 
+
 let pp_alarm fmt alarm =
   (* print using a format recognized by emacs: location first *)
   Format.fprintf fmt "%a: %a %a@\n%a"
     Location.pp_range (alarm.alarm_trace |> fst |> Location.untag_range)
     pp_level alarm.alarm_level
-    !pp_title_chain alarm
+    (fun fmt -> function
+       | NoExtra -> pp_alarm_kind fmt alarm.alarm_kind
+       | x -> pp_alarm_extra fmt x
+    ) alarm.alarm_extra
     pp_callstack (alarm.alarm_trace |> snd)
 
-let pp_alarm_title fmt alarm = !pp_title_chain fmt alarm
 
-type token += T_alarm of alarm
-
-let alarm_token a = T_alarm a
-
-let mk_alarm kind ?(cs = Callstack.empty) ?(level = WARNING) range =
-  {
-    alarm_kind = kind;
-    alarm_level = level;
-    alarm_trace = (range, cs);
-  }
-
-let raise_alarm akind range ?(level = WARNING) ?(bottom=true) (lattice:'a lattice) flow =
-  let cs = Callstack.get flow in
-  let alarm = mk_alarm akind range ~cs in
-  let tk = alarm_token alarm in
-  let a1 = Flow.get tk lattice flow in
-  let a2 = Flow.get T_cur lattice flow in
-  let aa = lattice.join (Flow.get_ctx flow |> Context.get_unit) a1 a2 in
-  let flow' = Flow.set tk aa lattice flow in
-  if bottom then
-    Flow.set T_cur lattice.bottom lattice flow'
-  else
-    flow'
+(** {2 Registration} *)
+(** **************** *)
 
 
-let () =
-  register_token {
-    compare = (fun next tk1 tk2 ->
-        match tk1, tk2 with
-        | T_alarm a1, T_alarm a2 -> compare_alarm a1 a2
-        | _ -> next tk1 tk2
-      );
-    print = (fun next fmt tk ->
-        match tk with
-        | T_alarm a -> pp_alarm_token fmt a
-        | _ -> next fmt tk
-      );
-  }
+let register_alarm_kind info =
+  TypeExt.register info compare_alarm_kind_chain pp_kind_chain
+
+
+let register_alarm_extra info =
+  TypeExt.register info compare_alarm_extra_chain pp_extra_chain
+
+
+
+(** {2 Set of alarms} *)
+(** ***************** *)
+
+module AlarmSet = struct
+
+  module Map = MapExt.Make(struct
+      type t = alarm_kind
+      let compare = compare_alarm_kind
+      let print = pp_alarm_kind
+    end
+    )
+
+  module Set = SetExt.Make(struct
+      type t = alarm
+      let compare = compare_alarm
+    end)
+
+  type t = Set.t Map.t
+
+  let empty = Map.empty
+
+  let is_empty x = Map.is_empty x
+
+  let cardinal x =
+    Map.fold (fun _ s acc -> acc + Set.cardinal s) x 0
+
+  let elements x =
+    Map.fold (fun _ s acc -> acc @ Set.elements s) x []
+
+  let singleton alarm = Map.singleton alarm.alarm_kind (Set.singleton alarm)
+
+  let add alarm x =
+    Map.add alarm.alarm_kind (
+      try
+        let old = Map.find alarm.alarm_kind x in
+        Set.add alarm old
+      with Not_found -> Set.singleton alarm
+    ) x
+
+
+  let join x1 x2 =
+    Map.map2zo
+      (fun _ s1 -> s1)
+      (fun _ s2 -> s2)
+      (fun _ s1 s2 -> Set.union s1 s2)
+      x1 x2
+
+  let rec join_list l =
+    match l with
+    | [] -> empty
+    | [hd] -> hd
+    | hd :: tl -> join hd (join_list tl)
+
+
+  let meet x1 x2 =
+    Map.merge (fun _ s1 s2 ->
+        match s1, s2 with
+        | None, _ | _, None -> None
+        | Some ss1, Some ss2 ->
+          let s = Set.inter ss1 ss2 in
+          if Set.is_empty s
+          then None
+          else Some s
+      ) x1 x2
+
+
+  let rec meet_list l =
+    match l with
+    | [] -> empty
+    | [hd] -> hd
+    | hd :: tl -> meet hd (meet_list tl)
+
+
+  let diff x1 x2 =
+    Map.merge (fun a os1 os2 ->
+        match os1, os2 with
+        | None, None -> None
+        | Some s, None -> Some s
+        | None, Some _ -> None
+        | Some s1, Some s2 ->
+          let s = Set.diff s1 s2 in
+          if Set.is_empty s
+          then None
+          else Some s
+      ) x1 x2
+
+
+  let print fmt x =
+    let open Format in
+    if Map.is_empty x then pp_print_string fmt "∅"
+    else
+      let l = Map.bindings x in
+      pp_print_list
+        ~pp_sep:(fun fmt () -> fprintf fmt ", ")
+        (fun fmt (kind, alarms) ->
+           let n = Set.cardinal alarms in
+           if n = 0 then () else
+           if n = 1 then pp_alarm_kind fmt kind
+           else fprintf fmt "%a x %d" pp_alarm_kind kind n
+        ) fmt l
+
+
+end

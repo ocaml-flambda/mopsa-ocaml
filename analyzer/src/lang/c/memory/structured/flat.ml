@@ -205,40 +205,65 @@ struct
     (* Evaluate C expressions into low-level expressions *)
     let rec aux l flow =
       match l with
-      | [] -> Eval.singleton [] flow
+      | [] -> Result.singleton [] flow
+
+
+      | C_flat_expr (e,t) :: tl when is_c_global_scope scope ->
+        (* In case of global variables, initializers should be
+           constants expressions. We just simplify them into constant
+           values
+        *)
+        begin
+          match c_expr_to_z (remove_casts e) with
+          | Some z ->
+            (* Expression simplified *)
+            let ee =
+              (* Restore cast *)
+              match ekind e with
+              | E_c_cast(ee,implicit) ->
+                mk_expr (E_c_cast(mk_z z ee.erange ~typ:ee.etyp, implicit)) ~etyp:e.etyp e.erange
+
+              | _ -> mk_z z e.erange ~typ:e.etyp
+            in
+            aux tl flow >>$ fun tl flow ->
+            Result.singleton (C_flat_expr (ee,t) :: tl) flow
+
+          | None ->
+            (* Expression not simplified statically, so rely on other domains *)
+            man.eval ~zone:(Z_c,Z_c_low_level) e flow >>$ fun e flow ->
+            aux tl flow >>$ fun tl flow ->
+
+            Result.singleton (C_flat_expr (e,t) :: tl) flow
+
+        end
+
       | C_flat_expr (e,t) :: tl ->
-        man.eval ~zone:(Z_c,Z_c_low_level) e flow |>
-        Eval.bind @@ fun e flow ->
-
-        aux tl flow |>
-        Eval.bind @@ fun tl flow ->
-
-        Eval.singleton (C_flat_expr (e,t) :: tl) flow
+        (* In case of local variables, initializers are arbitrary
+           expressions. We need to go over all domains to simplify
+           them.
+        *)
+        man.eval ~zone:(Z_c,Z_c_low_level) e flow >>$ fun e flow ->
+        aux tl flow >>$ fun tl flow ->
+        Result.singleton (C_flat_expr (e,t) :: tl) flow
 
       | x :: tl ->
-        aux tl flow |>
-        Eval.bind @@ fun tl flow ->
-
-        Eval.singleton (x :: tl) flow
+        aux tl flow >>$ fun tl flow ->
+        Result.singleton (x :: tl) flow
     in
 
-    aux flat_init flow |>
-    post_eval man @@ fun init_list flow ->
-
+    aux flat_init flow >>$ fun init_list flow ->
     let init = C_init_flat init_list in
-    man.exec_sub ~zone:Z_c_low_level (mk_c_declaration v (Some init) scope range) flow
+    man.post ~zone:Z_c_low_level (mk_c_declaration v (Some init) scope range) flow
 
 
   (** 𝕊⟦ lval = e; ⟧ when lval is scalar *)
   let assign_scalar lval e range man flow =
-    man.eval ~zone:(Z_c,Z_c_low_level) lval flow |>
-    post_eval man @@ fun lval flow ->
-
-    man.eval ~zone:(Z_c,Z_c_low_level) e flow |>
-    post_eval man @@ fun e flow ->
+    man.eval ~zone:(Z_c,Z_c_low_level) lval flow >>$ fun lval flow ->
+    man.eval ~zone:(Z_c,Z_c_low_level) e flow >>$ fun e flow ->
 
     let stmt = mk_assign lval e range in
-    man.exec_sub ~zone:Z_c_low_level stmt flow
+    man.post ~zone:Z_c_low_level stmt flow
+
 
   (** 𝕊⟦ lval = rval; ⟧ when lval is a record *)
   let assign_record lval rval range man flow =
@@ -260,8 +285,14 @@ struct
         fields |> List.fold_left (fun acc field ->
             let lval = mk_c_member_access lval field range in
             let rval = mk_c_member_access rval field range in
-            let stmt = mk_assign lval rval range in
-            Post.bind (man.exec_sub ~zone:Z_c stmt) acc
+            if is_c_array_type field.c_field_type
+            then begin
+              warn_at range "copy of array %a not supported" pp_expr rval;
+              acc
+            end
+            else
+              let stmt = mk_assign lval rval range in
+              Post.bind (man.post ~zone:Z_c stmt) acc
           ) (Post.return flow)
 
       | C_union ->
@@ -277,18 +308,16 @@ struct
           let lval = mk_c_member_access lval field range in
           let rval = mk_c_member_access rval field range in
           let stmt = mk_assign lval rval range in
-          man.exec_sub ~zone:Z_c stmt flow
+          man.post ~zone:Z_c stmt flow
 
         | None -> panic_at range "[%s] all fields have size 0" name
 
 
   (** 𝕊⟦ ?e ⟧ *)
   let assume e range man flow =
-    man.eval ~zone:(Z_c,Z_c_low_level) e flow |>
-    post_eval man @@ fun e flow ->
-
+    man.eval ~zone:(Z_c,Z_c_low_level) e flow >>$ fun e flow ->
     let stmt = mk_assume e range in
-    man.exec_sub ~zone:Z_c_low_level stmt flow
+    man.post ~zone:Z_c_low_level stmt flow
 
 
   let exec zone stmt man flow =
@@ -313,22 +342,19 @@ struct
 
     | S_expression e when is_c_num_type e.etyp ->
       Some (
-        man.eval ~zone:(Z_c,Z_u_num) e flow |>
-        post_eval man @@ fun e flow ->
+        man.eval ~zone:(Z_c,Z_u_num) e flow >>$ fun e flow ->
         Post.return flow
       )
 
     | S_expression e when is_c_scalar_type e.etyp ->
       Some (
-        man.eval ~zone:(Z_c,Z_c_scalar) e flow |>
-        post_eval man @@ fun e flow ->
+        man.eval ~zone:(Z_c,Z_c_scalar) e flow >>$ fun e flow ->
         Post.return flow
       )
 
     | S_expression e when is_c_type e.etyp ->
       Some (
-        man.eval ~zone:(Z_c,Z_c_low_level) e flow |>
-        post_eval man @@ fun e flow ->
+        man.eval ~zone:(Z_c,Z_c_low_level) e flow >>$ fun e flow ->
         Post.return flow
       )
 
@@ -458,14 +484,11 @@ struct
       Option.return
 
     | E_c_assign(lval, rval) ->
-      man.eval rval ~zone:(Z_c, Z_c_low_level) flow |>
-      Eval.bind_some @@ fun rval flow ->
-
-      man.eval lval ~zone:(Z_c, Z_c_low_level) flow |>
-      Eval.bind @@ fun lval flow ->
-
+      man.eval rval ~zone:(Z_c, Z_c_low_level) flow >>$? fun rval flow ->
+      man.eval lval ~zone:(Z_c, Z_c_low_level) flow >>$? fun lval flow ->
       let flow = man.exec ~zone:Z_c_low_level (mk_assign lval rval exp.erange) flow in
-      Eval.singleton rval flow
+      Eval.singleton rval flow |>
+      Option.return
 
     | E_c_statement {skind = S_block l} ->
       begin

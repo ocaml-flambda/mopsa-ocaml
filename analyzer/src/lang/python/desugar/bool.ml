@@ -43,7 +43,7 @@ module Domain =
 
     let init _ _ flow = flow
 
-    let eval zs exp (man:('a, unit) man) (flow:'a flow) : (expr,'a) eval option =
+    let eval zs exp (man:('a, unit) man) (flow:'a flow) =
       let range = erange exp in
       match ekind exp with
       | E_unop(O_py_not, e) ->
@@ -62,7 +62,7 @@ module Domain =
       | E_binop(O_py_and, e1, e2) ->
         man.eval (Utils.mk_builtin_call "bool" [e1] range) flow |>
         Eval.bind (fun be1 flow1 ->
-            assume_eval be1 man
+            assume be1 man
               ~fthen:(fun true_flow -> man.eval e2 true_flow)
               ~felse:(fun false_flow -> man.eval e1 false_flow)
               flow1
@@ -80,7 +80,7 @@ module Domain =
         (* FIXME: combinatoric explosion *)
          man.eval (Utils.mk_builtin_call "bool" [e1] range) flow |>
            Eval.bind (fun be1 flow1 ->
-               assume_eval be1
+               assume be1
                  ~fthen:(fun true_flow ->
                      man.eval e1 true_flow)
                  ~felse:(fun false_flow ->
@@ -96,54 +96,54 @@ module Domain =
 
       (* E⟦ e1 in e2 ⟧ *)
       | E_binop(O_py_in, e1, e2) ->
-         Eval.eval_list man.eval [e1; e2] flow |>
-           Eval.bind (fun el flow ->
-               let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
+         bind_list [e1; e2] man.eval flow |>
+         bind_some_opt (fun el flow ->
+             let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
 
-               man.eval (mk_py_type e2 range) flow |>
-                 Eval.bind (fun cls2 flow ->
-                     assume_eval
-                       (Utils.mk_hasattr cls2 "__contains__" range)
-                       ~fthen:(fun true_flow ->
-                         let exp' = mk_py_call (mk_py_attr cls2 "__contains__" range) [e2; e1] range in
-                         man.eval exp' true_flow
-                       )
-                       ~felse:(fun false_flow ->
-                         assume_eval
-                           (Utils.mk_hasattr cls2 "__iter__" range)
-                           ~fthen:(fun true_flow ->
+             man.eval (mk_py_type e2 range) flow |>
+             Eval.bind (fun cls2 flow ->
+                 assume
+                   (Utils.mk_hasattr cls2 "__contains__" range)
+                   ~fthen:(fun true_flow ->
+                       let exp' = mk_py_call (mk_py_attr cls2 "__contains__" range) [e2; e1] range in
+                       man.eval exp' true_flow
+                     )
+                   ~felse:(fun false_flow ->
+                       assume
+                         (Utils.mk_hasattr cls2 "__iter__" range)
+                         ~fthen:(fun true_flow ->
                              let v = mktmp () in
                              let stmt = mk_stmt (S_py_for (
-                                                     mk_var v range,
-                                                     e2,
-                                                     mk_if
-                                                       (mk_binop (mk_var v range) O_eq e1 range)
-                                                       (mk_stmt S_break range)
-                                                       (mk_block [] range)
-                                                       range,
-                                                     (mk_block [] range)
-                                          )) range
+                                 mk_var v range,
+                                 e2,
+                                 mk_if
+                                   (mk_binop (mk_var v range) O_eq e1 range)
+                                   (mk_stmt S_break range)
+                                   (mk_block [] range)
+                                   range,
+                                 (mk_block [] range)
+                               )) range
                              in
                              let flow = man.exec stmt true_flow in
                              man.eval (mk_var v range) flow |> Eval.add_cleaners [mk_remove_var v range]
                            )
-                           ~felse:(fun false_flow ->
-                             assume_eval
+                         ~felse:(fun false_flow ->
+                             assume
                                (Utils.mk_hasattr cls2 "__getitem__" range)
                                ~fthen:(fun true_flow ->
-                                 panic_at range "evaluating 'in' operator using __getitem__ not supported"
-                               )
+                                   panic_at range "evaluating 'in' operator using __getitem__ not supported"
+                                 )
                                ~felse:(fun false_flow ->
-                                 let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow in
-                                 Eval.empty_singleton flow
-                               )
+                                   let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow in
+                                   Eval.empty_singleton flow
+                                 )
                                man false_flow
                            )
-                           man false_flow
-                       ) man flow
-                   )
-             )
-         |> Option.return
+                         man false_flow
+                     ) man flow
+               )
+             |> Option.return
+           )
 
       (* E⟦ e1 in e2 ⟧ *)
       | E_binop(O_py_not_in, e1, e2) ->
@@ -154,25 +154,25 @@ module Domain =
          debug "multi compare";
          let range = erange exp in
          man.eval left flow |>
-           Eval.bind (fun left flow ->
-               debug "left evaluated";
-               let rec aux left flow = function
-                 | [] ->
-                    debug "leaf case -> true";
-                    Eval.singleton (mk_py_true range) flow
+         Eval.bind (fun left flow ->
+             debug "left evaluated";
+             let rec aux left flow = function
+               | [] ->
+                 debug "leaf case -> true";
+                 Eval.singleton (mk_py_true range) flow
 
-                 | (op, right) :: tl ->
-                    man.eval right flow |>
-                      Eval.bind (fun right flow ->
-                          assume_eval
-                            (mk_binop left op right range)
-                            ~fthen:(fun true_flow -> aux right true_flow tl)
-                            ~felse:(fun false_flow -> Eval.singleton (mk_py_false range) flow)
-                            man flow
-                        )
-               in
-               aux left flow (List.combine ops rights)
-             ) |> Option.return
+               | (op, right) :: tl ->
+                 man.eval right flow |>
+                 Eval.bind (fun right flow ->
+                     assume
+                       (mk_binop left op right range)
+                       ~fthen:(fun true_flow -> aux right true_flow tl)
+                       ~felse:(fun false_flow -> Eval.singleton (mk_py_false range) flow)
+                       man flow
+                   )
+             in
+             aux left flow (List.combine ops rights)
+           ) |> Option.return
 
       | _ -> None
 

@@ -103,10 +103,13 @@ let indent ~symbol fmt =
 
 
 let phase name =
-  indent "%s" name ~symbol:MSG
+  Debug.info "%s" name
 
-let parse file =
-  indent "parsing %s" file ~symbol:MSG
+let parse ?(cmd="") ?nb file =
+  Debug.info "parsing %s%s%s"
+    file
+    (if cmd="" then "" else " with "^cmd)
+    (match nb with None -> "" | Some (a,b) -> Printf.sprintf " [%i of %i]" (a+1) b)
 
 let reach loc =
   indent "reaching %a" pp_range loc ~symbol:MSG
@@ -169,7 +172,7 @@ let eval_done exp zone time evl =
   if !opt_short_log then
     indent "%a = %a done in zone %a [%.4fs]"
       pp_E exp
-      (Eval.print ~pp:pp_expr) evl
+      Eval.print evl
       pp_zone2 zone
       time
       ~symbol:END
@@ -178,7 +181,7 @@ let eval_done exp zone time evl =
       pp_E exp
       pp_zone2 zone
       time
-      (Eval.print ~pp:pp_expr) evl
+      Eval.print evl
       ~symbol:END
 
 let debug fmt =

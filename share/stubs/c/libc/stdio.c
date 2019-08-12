@@ -33,68 +33,52 @@
   FILE* not struct _IO_FILE*
 */
 #if __GLIBC_MINOR__ <= 27
-
-/*$
- * local:   struct _IO_FILE* addr = new File;
- * ensures: stdin == addr;
- * ensures: size(stdin) == sizeof(struct _IO_FILE);
- * ensures: stdin->_fileno == 0;
- */
-struct _IO_FILE *stdin;
-
-/*$
- * local:   struct _IO_FILE* addr = new File;
- * ensures: stdout == addr;
- * ensures: size(stdout) == sizeof(struct _IO_FILE);
- * ensures: stdout->_fileno == 1;
- */
-struct _IO_FILE *stdout;
-
-/*$
- * local:   struct _IO_FILE* addr = new File;
- * ensures: stderr == addr;
- * ensures: size(stderr) == sizeof(struct _IO_FILE);
- * ensures: stderr->_fileno == 2;
- */
-struct _IO_FILE *stderr;
-
+#define _FILE_ struct _IO_FILE
 #else
+#define _FILE_ FILE
+#endif
+
+_FILE_ *stdin;
+_FILE_ *stdout;
+_FILE_ *stderr;
 
 /*$
- * local:   FILE* addr = new File;
- * ensures: stdin == addr;
- * ensures: size(stdin) == sizeof(FILE);
- * ensures: stdin->_fileno == 0;
+ * local: void *f = new FileDescription;
+ * local: int fd = _mopsa_file_description_to_descriptor(f);
+ * local: _FILE_* file = new File;
+ * ensures: bytes(file) == sizeof_type(_FILE_);
+ * ensures: file->_fileno == fd;
+ * ensures: return == file;
  */
-FILE *stdin;
+_FILE_ *_alloc_std_stream();
+
+/*$$$
+ * assigns: stdin;
+ * assigns: stdout;
+ * assigns: stderr;
+ * local:   _FILE_* fstdin = _alloc_std_stream();
+ * local:   _FILE_* fstdout = _alloc_std_stream();
+ * local:   _FILE_* fstderr = _alloc_std_stream();
+ * ensures: stdin' == fstdin;
+ * ensures: stdout' == fstdout;
+ * ensures: stderr' == fstderr;
+ */
+
+
+
+
 
 /*$
- * local:   FILE* addr = new File;
- * ensures: stdout == addr;
- * ensures: size(stdout) == sizeof(struct FILE);
- * ensures: stdout->_fileno == 1;
+ * local: void *f = new FileDescription;
+ * local: int fd = _mopsa_file_description_to_descriptor(f);
+ * local: FILE* file = new File;
+ * ensures: bytes(file) == sizeof_type(FILE);
+ * ensures: file->_fileno == fd;
+ * ensures: return == file;
  */
-FILE *stdout;
-
-/*$
- * local:   struct FILE* addr = new File;
- * ensures: stderr == addr;
- * ensures: size(stderr) == sizeof(struct FILE);
- * ensures: stderr->_fileno == 2;
- */
-FILE *stderr;
+FILE *_alloc_FILE();
 
 
-#endif // __GLIBC_MINOR__ <= 27
-
-/*$
- * local: FILE* f = new File;
- * local: int fd = new FileDescriptor;
- * ensures: f->_fileno == fd;
- * ensures: size(f) == sizeof(FILE);
- * ensures: return == f;
- */
-FILE* _alloc_FILE();
 
 const char *const sys_errlist[128]; // TODO: actual size
 
@@ -215,7 +199,7 @@ char *tempnam (const char *__dir, const char *__pfx);
  * requires: __stream->_fileno in FileDescriptor;
  *
  * case "success" {
- *   local:   void* addr = _mopsa_int_to_fd(__stream->_fileno);
+ *   local:   void* addr = _mopsa_file_descriptor_to_description(__stream->_fileno);
  *   ensures: return == 0;
  *   free:    __stream;
  *   free:    addr;
@@ -236,7 +220,7 @@ int fclose (FILE *__stream);
  *
  * case "success" {
  *   assumes:  __stream != NULL;
- *   local:   void* addr = _mopsa_int_to_fd(__stream->_fileno);
+ *   local:   void* addr = _mopsa_file_descriptor_to_description(__stream->_fileno);
  *   ensures: return == 0;
  *   free:    __stream;
  *   free:    addr;
@@ -313,7 +297,7 @@ FILE *freopen (const char *__restrict __filename,
  * case "success" {
  *   local:   FILE* f = new File;
  *   ensures: f->_fileno == __fd;
- *   ensures: size(f) == sizeof(FILE);
+ *   ensures: size(f) == 1;
  *   ensures: return == f;
  * }
  *
@@ -406,25 +390,6 @@ void setbuffer (FILE *__restrict __stream, char *__restrict __buf,
 void setlinebuf (FILE *__stream);
 
 
-/*$
- * // TODO: check format, check variable arguments
- *
- * requires: __stream in File;
- * requires: valid_string(__format);
- */
-int fprintf (FILE *__restrict __stream,
-             const char *__restrict __format, ...);
-
-/*$
- * // TODO: check format, check variable arguments, check size of __s
- *
- * requires: valid_string(__format);
- */
-int sprintf (char *__restrict __s,
-             const char *__restrict __format, ...);
-
-
-
 /*
   Starting from glibc 2.28, _G_va_list is replaced by _gnuc_va_list
 */
@@ -436,140 +401,6 @@ int sprintf (char *__restrict __s,
 
 
 
-/*$
- * // TODO: check format, check variable arguments
- *
- * requires: __stream in File;
- * requires: valid_string(__fmt);
- */
-int vfprintf (FILE *__restrict __stream, const char *__restrict __fmt,
-              _G_va_list __arg);
-
-
-/*$
- * // TODO: check format, check variable arguments
- *
- * requires: valid_string(__fmt);
- */
-int vprintf (const char *__restrict __fmt, _G_va_list __ap);
-
-/*$
- * // TODO: check format, check variable arguments, check size of __s
- *
- * requires: valid_string(__fmt);
- */
-int vsprintf (char *__restrict __s, const char *__restrict __fmt,
-              _G_va_list __ap);
-
-
-/*$
- * // TODO: check format, check variable arguments
- *
- * requires: size(__s) >= __maxlen;
- * requires: valid_string(__format);
- */
-int snprintf (char *__restrict __s, size_t __maxlen,
-              const char *__restrict __format, ...);
-
-/*$
- * // TODO: check format, check variable arguments
- *
- * requires: size(__s) >= __n;
- * requires: valid_string(__fmt);
- */
-int vsnprintf (char *__restrict __s, size_t __n,
-               const char *__restrict __fmt, _G_va_list __ap);
-
-
-/*$
- * // TODO: check format, check variable arguments
- *
- * requires: valid_string(__fmt);
- *
- * case "success" {
- *   local:    char* r = new Memory;
- *   assigns:  *__ptr;
- *   ensures:  size(r) > 0;
- *   ensures:  valid_string(r);
- *   ensures:  (*__ptr)' == r;
- *   ensures:  return >= 0;
- * }
- *
- * case "failure" {
- *   assigns: *__ptr;
- *   ensures: return == -1;
- * }
- */
-int vasprintf (char **__restrict __ptr, const char *__restrict __fmt,
-               _G_va_list __ap);
-
-/*$
- * // TODO: check format, check variable arguments
- *
- * requires: valid_string(__fmt);
- *
- * case "success" {
- *   local:    char* r = new Memory;
- *   assigns:  *__ptr;
- *   ensures:  size(r) > 0;
- *   ensures:  valid_string(r);
- *   ensures:  (*__ptr)' == r;
- *   ensures:  return >= 0;
- * }
- *
- * case "failure" {
- *   assigns: *__ptr;
- *   ensures: return == -1;
- * }
- */
-int asprintf (char **__restrict __ptr,
-              const char *__restrict __fmt, ...);
-
-/*$
- * // TODO: check format, check variable arguments
- *
- * requires: __fd in FileDescriptor;
- * requires: exists int i in [0, size(__fmt) - 1]: __fmt[i] == 0;
- */
-int vdprintf (int __fd, const char *__restrict __fmt,
-              _G_va_list __arg);
-
-/*$
- * // TODO: check format, check variable arguments
- *
- * requires: __fd in FileDescriptor;
- * requires: valid_string(__fmt);
- */
-int dprintf (int __fd, const char *__restrict __fmt, ...);
-
-
-/*$
- * // TODO: check format, check variable arguments
- *
- * requires: __stream in File;
- * requires: valid_string(__format);
- * assigns:  _errno;
- */
-int fscanf (FILE *__restrict __stream,
-            const char *__restrict __format, ...);
-
-/*$
- * // TODO: check format, check variable arguments
- *
- * requires: valid_string(__format);
- * assigns:  _errno;
- */
-int scanf (const char *__restrict __format, ...);
-
-/*$
- * // TODO: check format, check variable arguments
- *
- * requires: valid_string(__s);
- * requires: valid_string(__format);
- * assigns:  _errno;
- */
-int sscanf (const char *__restrict __s,
-            const char *__restrict __format, ...);
 
 
 /*$
@@ -929,7 +760,7 @@ int fgetpos (FILE *__restrict __stream, fpos_t *__restrict __pos);
 
 /*$
  * requires: __stream in File;
- * // TODO requires: size(__pos) >= sizeof(fpos_t);
+ * // TODO requires: size(__pos) >= sizeof_type(fpos_t);
  *
  * case "success" {
  *   ensures: return == 0;

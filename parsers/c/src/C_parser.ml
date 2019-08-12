@@ -24,9 +24,17 @@
  *)
 
 
+let ctx_mutex = Mutex.create ()
+
+(* if only_parse is true, only parses the file without tranlating it to
+   C AST nor adding the result to the context
+ *)
 let parse_file
+    (command:string)
     (file:string)
     (opts:string list)
+    (enable_cache:bool)
+    (only_parse:bool)
     (ctx:Clang_to_C.context)
   =
   let target_options = Clang_parser.get_default_target_options () in
@@ -38,12 +46,13 @@ let parse_file
                filtered_opts
   in
 
-  let obj, diag, coms, macros = Clang_parser.parse target_options file (Array.of_list opts) in
+  let r = Clang_parser_cache.parse command target_options enable_cache file (Array.of_list opts)
+  in
 
   let is_error =
     List.exists
       (function Clang_AST.({diag_level = Level_Error | Level_Fatal}) -> true | _ -> false)
-       diag
+       r.parse_diag
   in
 
   if not is_error then (
@@ -58,10 +67,18 @@ let parse_file
           let range = Location.mk_orig_range pos pos in
           Exceptions.warn_at range "%s" d.diag_message
         | _ -> ()
-      ) diag;
-    Clang_to_C.add_translation_unit ctx (Filename.basename file) obj coms macros
+      ) r.parse_diag;
+    if only_parse then ()
+    else (
+      Mutex.lock ctx_mutex;
+      (try
+          Clang_to_C.add_translation_unit
+            ctx (Filename.basename file)
+            r.parse_decl r.parse_comments r.parse_macros;
+       with x -> Mutex.unlock ctx_mutex; raise x);
+      Mutex.unlock ctx_mutex
+    )
   )
-
   else
     let errors =
       List.map
@@ -75,6 +92,6 @@ let parse_file
            let range = Location.mk_orig_range pos pos in
            (range, diag.diag_message)
         )
-        diag
+        r.parse_diag
     in
     Exceptions.syntax_errors errors

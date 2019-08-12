@@ -21,25 +21,86 @@
 
 open Mopsa
 
-type alarm_kind +=
-   | APyException of expr * string
+
+type alarm_kind += APyException
+type alarm_extra += XPyException of expr * string
+
+
+let raise_py_alarm exn name range lattice flow =
+  let cs = Flow.get_callstack flow in
+  let alarm = mk_alarm APyException ~extra:(XPyException (exn,name)) range ~cs in
+  Flow.raise_alarm alarm ~bottom:false lattice flow
+
 
 let () =
-  register_alarm
-    {
-      compare = (fun default a a' -> match a.alarm_kind, a'.alarm_kind with
-                                     | APyException (e, s), APyException (e', s') -> compare_expr e e'
-                                     | _ -> default a a');
-      pp_token = (fun default fmt a ->
-        match a.alarm_kind with
-        | APyException (e, s) -> Format.fprintf fmt "PyExc(%a)" pp_expr e
-        | _ -> default fmt a);
-      pp_title = (fun default fmt a ->
-        match a.alarm_kind with
-        | APyException (e, s) -> Format.fprintf fmt "Python Exception: %s" s
-        | _ -> default fmt a);
-      pp_report = (fun default fmt a ->
-        match a.alarm_kind with
-        | APyException _ -> Format.fprintf fmt "FIXME"
-        | _ -> default fmt a);
+  register_alarm_kind {
+    compare = (fun default a a' ->
+        match a, a' with
+        | APyException, APyException -> 0
+        | _ -> default a a'
+      );
+    print = (fun default fmt a ->
+        match a with
+        | APyException -> Format.fprintf fmt "Python Exception"
+        | _ -> default fmt a
+      );
+    };
+  register_alarm_extra {
+    compare = (fun default a a' ->
+        match a, a' with
+        | XPyException (e, s), XPyException (e', s') ->
+          compare_expr e e'
+        | _ -> default a a'
+      );
+    print = (fun default fmt a ->
+        match a with
+        | XPyException (e, s) -> Format.fprintf fmt "Python Exception: %s" s
+        | _ -> default fmt a
+      );
     }
+
+
+
+(** Flow token for exceptions *)
+type py_exc_kind =
+  | Py_exc_unprecise
+  | Py_exc_with_callstack of range * Callstack.cs
+
+type token +=
+  | T_py_exception of expr * string * py_exc_kind
+
+let mk_py_unprecise_exception obj name =
+  T_py_exception(obj,name,Py_exc_unprecise)
+
+let mk_py_exception obj name ~cs range =
+  T_py_exception (obj, name, Py_exc_with_callstack (range,cs))
+
+let pp_py_exc_kind fmt = function
+  | Py_exc_unprecise -> ()
+  | Py_exc_with_callstack (range,cs) -> Format.fprintf fmt "%a@,%a" pp_range range Callstack.print cs
+
+let () =
+  register_token {
+    compare = (fun next tk1 tk2 ->
+        match tk1, tk2 with
+        | T_py_exception (e1,_,k1), T_py_exception (e2,_,k2) ->
+          Compare.compose [
+            (fun () -> compare_expr e1 e2);
+            (fun () ->
+               match k1, k2 with
+               | Py_exc_unprecise, Py_exc_unprecise -> 0
+               | Py_exc_with_callstack (r1, cs1), Py_exc_with_callstack (r2, cs2) ->
+                 Compare.compose [
+                   (fun () -> compare_range r1 r2);
+                   (fun () -> Callstack.compare cs1 cs2);
+                 ]
+               | _ -> compare k1 k2
+            );
+          ]
+        | _ -> next tk1 tk2
+      );
+    print = (fun next fmt tk ->
+        match tk with
+        | T_py_exception (_,str,k) -> Format.fprintf fmt "@[<hv 2>PyExc(%s)@,%a@]" str pp_py_exc_kind k
+        | _ -> next fmt tk);
+  }

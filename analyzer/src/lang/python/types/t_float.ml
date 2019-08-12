@@ -57,17 +57,17 @@ module Domain =
          (* FIXME?*)
          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) arg flow |>
            Eval.bind (fun el flow ->
-               assume_eval
+               assume
                  (mk_py_isinstance_builtin el "float" range)
                  ~fthen:(fun flow ->
                    man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top (T_float F_DOUBLE) range) flow)
                  ~felse:(fun flow ->
-                   assume_eval
+                   assume
                      (mk_py_isinstance_builtin el "int" range)
                      ~fthen:(fun flow ->
                        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top (T_float F_DOUBLE) range) flow)
                      ~felse:(fun flow ->
-                       assume_eval
+                       assume
                          (mk_py_isinstance_builtin el "str" range)
                          ~fthen:(fun flow ->
                            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top (T_float F_DOUBLE) range) flow)
@@ -85,10 +85,10 @@ module Domain =
       (* 𝔼⟦ float.__op__(e1, e2) | op ∈ {==, !=, <, ...} ⟧ *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
         when is_compare_op_fun "float" f ->
-        Eval.eval_list (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) [e1; e2] flow |>
-        Eval.bind (fun el flow ->
+        bind_list [e1; e2] (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+        bind_some (fun el flow ->
             let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
-            assume_eval (mk_py_isinstance_builtin e1 "float" range) man flow
+            assume (mk_py_isinstance_builtin e1 "float" range) man flow
               ~fthen:(fun flow ->
                   (* let float_or_int = mk_binop
                    *     (mk_py_isinstance_builtin e2 "float" range)
@@ -96,13 +96,13 @@ module Domain =
                    *     (mk_py_isinstance_builtin e2 "int" range)
                    *     range
                    * in *)
-                  assume_eval
+                  assume
                     (mk_py_isinstance_builtin e2 "float" range)
                     (* float_or_int *)
                     man flow
                     ~fthen:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_bool range))
                     ~felse:(fun flow ->
-                        assume_eval (mk_py_isinstance_builtin e2 "int" range) man flow
+                        assume (mk_py_isinstance_builtin e2 "int" range) man flow
                           ~fthen:(fun flow ->
                               (* Exceptions.panic_at range "eurk %a@\n" man.pri(Flow.print man.lattice) flow; *)
                               let res = man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_bool range) flow in
@@ -123,18 +123,18 @@ module Domain =
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
            when is_arith_binop_fun "float" f ->
-         Eval.eval_list (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) [e1; e2] flow |>
-           Eval.bind (fun el flow ->
+         bind_list [e1; e2] (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+           bind_some (fun el flow ->
                let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
-               assume_eval
+               assume
                  (mk_py_isinstance_builtin e1 "float" range)
                  ~fthen:(fun true_flow ->
-                   assume_eval
+                   assume
                      (mk_py_isinstance_builtin e2 "float" range)
                      ~fthen:(fun true_flow ->
                        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top (T_float F_DOUBLE) range) true_flow)
                      ~felse:(fun false_flow ->
-                       assume_eval
+                       assume
                          (mk_py_isinstance_builtin e2 "int" range)
                          ~fthen:(fun flow -> man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top (T_float F_DOUBLE) range) true_flow)
                          ~felse:(fun false_flow ->
@@ -154,7 +154,7 @@ module Domain =
            when is_arith_unop_fun f ->
          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
            Eval.bind (fun el flow ->
-               assume_eval
+               assume
                  (mk_py_isinstance_builtin e "float" range)
                  ~fthen:(fun true_flow ->
                    man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top (T_float F_DOUBLE) range) true_flow)

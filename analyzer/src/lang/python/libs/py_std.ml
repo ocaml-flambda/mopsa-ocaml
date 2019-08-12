@@ -80,13 +80,13 @@ module Domain =
                man.eval (mk_py_type eobj range) flow |>
                  Eval.bind (fun cls' flow ->
                      let cls = object_of_expr cls' in
-                     assume_eval
+                     assume
                        (Utils.mk_object_hasattr cls "__iter__" range)
                        ~fthen:(fun true_flow ->
                          (* Call iter and check that it returns an object with an attribute __next__ *)
                          man.eval (mk_py_call (mk_py_object_attr cls "__iter__" range) [eobj] range) true_flow |>
                            Eval.bind (fun iter flow ->
-                               assume_eval
+                               assume
                                  (Utils.mk_hasattr iter "__next__" range)
                                  ~fthen:(fun true_flow -> Eval.singleton iter true_flow)
                                  ~felse:(fun false_flow ->
@@ -112,13 +112,13 @@ module Domain =
                man.eval (mk_py_type eobj range) flow |>
                  Eval.bind (fun cls flow ->
                      let cls = object_of_expr cls in
-                     assume_eval
+                     assume
                        (Utils.mk_object_hasattr cls "__len__" range)
                        ~fthen:(fun true_flow ->
                          (* Call __len__ and check that it returns an integer *)
                          man.eval (mk_py_call (mk_py_object_attr cls "__len__" range) [eobj] range) true_flow |>
                            Eval.bind (fun len flow ->
-                               assume_eval
+                               assume
                                  (mk_py_isinstance_builtin len "int" range)
                                  ~fthen:(fun true_flow ->
                                    Eval.singleton len true_flow)
@@ -145,7 +145,7 @@ module Domain =
                man.eval (mk_py_type eobj range) flow |>
                  Eval.bind (fun cls flow ->
                      let cls = object_of_expr cls in
-                     assume_eval
+                     assume
                        (Utils.mk_object_hasattr cls "__next__" range)
                        ~fthen:(fun true_flow ->
                          man.eval (mk_py_call (mk_py_object_attr cls "__next__" range) [obj] range) true_flow
@@ -241,8 +241,8 @@ module Domain =
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "hash")}, _)}, args, []) ->
         let tyerror = fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
-        Eval.eval_list man.eval args flow |>
-        Eval.bind (fun eargs flow ->
+        Result.bind_list args man.eval flow |>
+        Result.bind_some (fun eargs flow ->
             if List.length eargs <> 1 then tyerror flow else
               let el = List.hd eargs in
               man.eval (mk_py_call (mk_py_object_attr (object_of_expr el) "__hash__" range) [] range) flow

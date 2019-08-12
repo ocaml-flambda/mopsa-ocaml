@@ -73,12 +73,12 @@ let check_instances ?(arguments_after_check=0) man flow range exprs instances pr
       else
         tyerror flow
     | e::es, i::is ->
-      assume_eval (Addr.mk_py_isinstance_builtin e i range) man flow
+      assume (Addr.mk_py_isinstance_builtin e i range) man flow
         ~fthen:(aux iexprs es is)
         ~felse:tyerror
     | [], _ -> tyerror flow in
-  Eval.eval_list man.eval exprs flow |>
-  Eval.bind (fun exprs flow -> aux exprs exprs instances flow)
+  Result.bind_list exprs man.eval flow |>
+  Result.bind_some (fun exprs flow -> aux exprs exprs instances flow)
 
 let check_instances_disj ?(arguments_after_check=0) man flow range exprs instances processing =
   let open Mopsa in
@@ -104,13 +104,13 @@ let check_instances_disj ?(arguments_after_check=0) man flow range exprs instanc
       let cond = List.fold_left (fun acc el ->
           mk_binop acc O_py_or (mk_onecond el) range)
           (mk_onecond @@ List.hd i) (List.tl i) in
-      assume_eval cond man flow
+      assume cond man flow
         ~fthen:(aux iexprs es is)
         ~felse:tyerror
     | _ -> tyerror flow
   in
-  Eval.eval_list man.eval exprs flow |>
-  Eval.bind (fun exprs flow -> aux exprs exprs instances flow)
+  Result.bind_list exprs man.eval flow |>
+  Result.bind_some (fun exprs flow -> aux exprs exprs instances flow)
 
 let strip_object (e:expr) =
   let ekind = match ekind e with

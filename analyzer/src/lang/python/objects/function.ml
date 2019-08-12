@@ -171,19 +171,19 @@ module Domain =
              else F_user func
          in
          eval_alloc man (A_py_function kind) stmt.srange flow |>
-           post_eval man (fun addr flow ->
-               let obj = (addr, None) in
-               man.exec
-                 (mk_assign
-                    (mk_var func.py_func_var range)
-                    (mk_py_object obj range)
-                    range
-                 ) flow
-               |> Post.return
-             )
+         bind_some (fun addr flow ->
+             let obj = (addr, None) in
+             man.exec
+               (mk_assign
+                  (mk_var func.py_func_var range)
+                  (mk_py_object obj range)
+                  range
+               ) flow
+             |> Post.return
+           )
          |> Option.return
       | _ ->
-         None
+        None
 
 
     let ask _ _ _ = None

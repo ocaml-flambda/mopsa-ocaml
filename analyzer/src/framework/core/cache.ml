@@ -35,9 +35,9 @@ let opt_cache = ref 10
 
 module Make(Domain: sig type t end) =
 struct
-  let exec_cache : ((zone * stmt * Domain.t Token.TokenMap.t) * Domain.t post) list ref = ref []
+  let exec_cache : ((zone * stmt * Domain.t Token.TokenMap.t * Alarm.AlarmSet.t) * Domain.t post) list ref = ref []
 
-  let eval_cache : (((zone * zone) * expr * Domain.t Token.TokenMap.t) * (expr, Domain.t) eval option) list ref = ref []
+  let eval_cache : (((zone * zone) * expr * Domain.t Token.TokenMap.t * Alarm.AlarmSet.t) * Domain.t eval option) list ref = ref []
 
   let add_to_cache : type a. a list ref -> a -> unit =
     fun cache x ->
@@ -53,10 +53,10 @@ struct
         if Flow.is_bottom man.lattice flow
         then Post.return flow
         else
-          Exceptions.panic
-            "Unable to analyze statement in %a:@\n @[%a@]"
-            Location.pp_range stmt.srange
+          Exceptions.panic_at stmt.srange
+            "unable to analyze statement %a in zone %a"
             pp_stmt stmt
+            pp_zone zone
 
       | Some post -> post
     in
@@ -64,13 +64,13 @@ struct
       ff ()
     else
       try
-        let post = List.assoc (zone, stmt, Flow.get_token_map flow) !exec_cache in
+        let post = List.assoc (zone, stmt, Flow.get_token_map flow, Flow.get_alarms flow) !exec_cache in
         Post.set_ctx (
           Context.get_most_recent (Post.get_ctx post) (Flow.get_ctx flow)
         ) post
       with Not_found ->
         let post = ff () in
-        add_to_cache exec_cache ((zone, stmt, Flow.get_token_map flow), post);
+        add_to_cache exec_cache ((zone, stmt, Flow.get_token_map flow, Flow.get_alarms flow), post);
         post
 
   let eval f zone exp man flow =
@@ -78,7 +78,7 @@ struct
     then f exp man flow
     else
       try
-        let evls = List.assoc (zone, exp, Flow.get_token_map flow) !eval_cache in
+        let evls = List.assoc (zone, exp, Flow.get_token_map flow, Flow.get_alarms flow) !eval_cache in
         (* debug "evaluation of %a found in cache" pp_expr exp; *)
         Option.lift (fun evl ->
             let ctx = Context.get_most_recent (Eval.get_ctx evl) (Flow.get_ctx flow) in
@@ -86,7 +86,7 @@ struct
           ) evls
       with Not_found ->
         let evals = f exp man flow in
-        add_to_cache eval_cache ((zone, exp, Flow.get_token_map flow), evals);
+        add_to_cache eval_cache ((zone, exp, Flow.get_token_map flow, Flow.get_alarms flow), evals);
         evals
 
 end

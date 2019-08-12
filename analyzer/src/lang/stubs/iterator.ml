@@ -106,7 +106,7 @@ struct
       (man:('a, unit) man)
       (flow:'a flow)
     : 'a flow * 'a flow option =
-    debug "@[<v 2>eval formula %a@;in %a" pp_formula f (Flow.print man.lattice) flow;
+    debug "@[<v 2>eval formula %a@;in %a" pp_formula f (Flow.print man.lattice.print) flow;
     match f.content with
     | F_expr e ->
       man.exec (mk_assume e f.range) flow,
@@ -282,11 +282,11 @@ struct
   let exec_requires req man flow =
     let ftrue, ffalse = eval_formula req.content ~negate:true man flow in
     match ffalse with
-    | Some ffalse when Flow.is_bottom man.lattice ffalse ->
+    | Some ffalse when Flow.get T_cur man.lattice ffalse |> man.lattice.is_bottom ->
       ftrue
 
     | Some ffalse ->
-      raise_alarm A_stub_invalid_require req.range ~bottom:true man.lattice ffalse |>
+      raise_invalid_require req.range ~bottom:true man.lattice ffalse |>
       Flow.join man.lattice ftrue
 
     | _ -> assert false
@@ -295,18 +295,22 @@ struct
   (** Execute an allocation of a new resource *)
   let exec_local_new v res range man flow =
     (* Evaluation the allocation request *)
-    man.eval (mk_stub_alloc_resource res range) flow |>
-    exec_eval man @@ fun addr flow ->
+    let post =
+      man.eval (mk_stub_alloc_resource res range) flow |>
+      bind_some @@ fun addr flow ->
 
-    (* Add the address dimension before doing the assignment *)
-    let flow =
-      match ekind addr with
-      | E_addr _ -> man.exec (mk_add addr range) flow
-      | _ -> flow
+      (* Add the address dimension before doing the assignment *)
+      let flow =
+        match ekind addr with
+        | E_addr _ -> man.exec (mk_add addr range) flow
+        | _ -> flow
+      in
+
+      (* Assign the address to the variable *)
+      man.exec (mk_assign (mk_var v range) addr range) flow |>
+      Post.return
     in
-
-    (* Assign the address to the variable *)
-    man.exec (mk_assign (mk_var v range) addr range) flow
+    post_to_flow man post
 
 
   (** Execute a function call *)
@@ -326,17 +330,15 @@ struct
 
 
   let exec_ensures e return man flow =
-    debug "exec %a" pp_ensures e;
     (* Replace E_stub_return expression with the fresh return variable *)
     let f =
       match return with
-      | None -> debug "none"; e.content
+      | None -> e.content
       | Some v ->
-        debug "replace return with %a" pp_var v;
         visit_expr_in_formula
           (fun e ->
              match ekind e with
-             | E_stub_return -> debug "real replace";Keep { e with ekind = E_var (v, STRONG) }
+             | E_stub_return -> Keep { e with ekind = E_var (v, STRONG) }
              | _ -> VisitParts e
           )
           e.content
@@ -344,6 +346,14 @@ struct
     (* Evaluate ensure body and return flows that verify it *)
     let ftrue, _ = eval_formula f ~negate:false man flow in
     ftrue
+
+
+  let exec_assigns assigns man flow =
+    man.exec (mk_stub_assigns
+                assigns.content.assign_target
+                assigns.content.assign_offset
+                assigns.range
+             ) flow
 
 
   (** Remove locals and old copies of assigned variables *)
@@ -374,7 +384,7 @@ struct
     | S_local local -> exec_local local man flow
     | S_assumes assumes -> exec_assumes assumes man flow
     | S_requires requires -> exec_requires requires man flow
-    | S_assigns _ -> flow
+    | S_assigns assigns -> exec_assigns assigns man flow
     | S_ensures ensures -> exec_ensures ensures return man flow
     | S_free free -> exec_free free man flow
     | S_warn warn ->
@@ -385,15 +395,13 @@ struct
 
   (** Execute the body of a case section *)
   let exec_case case return man flow =
-    let flow' =
-      (* Execute leaf sections *)
-      List.fold_left (fun flow leaf ->
-          exec_leaf leaf return man flow
-        ) flow case.case_body |>
-      (* Clean case post state *)
-      clean_post case.case_locals case.case_assigns case.case_range man
-    in
-    flow'
+    (* Execute leaf sections *)
+    List.fold_left (fun flow leaf ->
+        exec_leaf leaf return man flow
+      ) flow case.case_body |>
+
+    (* Clean case post state *)
+    clean_post case.case_locals case.case_assigns case.case_range man
 
 
   (** Execute the body of a stub *)
@@ -407,20 +415,22 @@ struct
     in
 
     (* Execute case sections separately *)
-    let flows = Flow.map_list_opt (fun section flow ->
+    let flows, ctx = List.fold_left (fun (acc,ctx) section ->
         match section with
-        | S_case case -> Some (exec_case case return man flow)
-        | _ -> None
-      ) body flow
+        | S_case case ->
+          let flow = Flow.set_ctx ctx flow in
+          let flow' = exec_case case return man flow in
+          flow':: acc, Flow.get_ctx flow'
+        | _ -> acc, ctx
+      ) ([], Flow.get_ctx flow) body
     in
 
+    let flows = List.map (Flow.set_ctx ctx) flows in
+
     (* Join flows *)
-    match flows with
-    | [] -> flow
-    | _ ->
-      (* FIXME: when the cases do not define a partitioning, we need
+    (* FIXME: when the cases do not define a partitioning, we need
          to do something else *)
-      Flow.join_list man.lattice ~ctx:(Flow.get_ctx flow) flows
+    Flow.join_list man.lattice flows ~empty:flow
 
 
   (** Entry point of expression evaluations *)
@@ -446,8 +456,8 @@ struct
       in
 
       (* Update the callstack *)
-      let cs = Callstack.get flow in
-      let flow = Callstack.push stub.stub_func_name exp.erange flow in
+      let cs = Flow.get_callstack flow in
+      let flow = Flow.push_callstack stub.stub_func_name exp.erange flow in
 
       (* Evaluate the body of the styb *)
       let flow = exec_body stub.stub_func_body return man flow in
@@ -459,7 +469,7 @@ struct
       let flow = remove_params stub.stub_func_params exp.erange man flow in
 
       (* Restore the callstack *)
-      let flow = Callstack.set cs flow in
+      let flow = Flow.set_callstack cs flow in
 
       begin match return with
         | None ->
@@ -479,12 +489,12 @@ struct
 
   let exec zone stmt man flow =
     match skind stmt with
-    | S_stub_init (v, stub) ->
+    | S_stub_directive (stub) ->
       (* Evaluate the body of the stub *)
-      let flow = exec_body stub.stub_init_body (Some v) man flow in
+      let flow = exec_body stub.stub_directive_body None man flow in
 
       (* Clean locals and primes *)
-      let flow = clean_post stub.stub_init_locals [] stub.stub_init_range man flow in
+      let flow = clean_post stub.stub_directive_locals stub.stub_directive_assigns stub.stub_directive_range man flow in
 
       Post.return flow |>
       Option.return

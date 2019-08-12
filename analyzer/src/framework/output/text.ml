@@ -38,18 +38,17 @@ let print out fmt =
       fprintf formatter "%s" str
     ) fmt
 
-let pp_state fmt state =
-  pp_print_list
-    ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
-    (fun fmt (var,env) -> fprintf fmt "%a → %s" Ast.Var.pp_var var env)
-    fmt state
 
-let report ?(flow=None) man alarms states time files out =
-  print out "%a@." (Debug.color_str "green") "Analysis terminated successfully";
+let report ?(flow=None) man alarms time files out =
+  if Soundness.is_sound ()
+  then print out "%a@." (Debug.color_str "green") "Analysis terminated successfully"
+  else print out "%a@." (Debug.color_str "orange") "Unsound analysis";
   let () = match flow with
     | None -> ()
     | Some f ->
-      print out "Last flow =@[@\n%a@]@\nContext = @[@\n%a@]@\n" (Core.Flow.print man.lattice) f (Core.Context.print man.lattice.print) (Flow.get_ctx f)
+      print out "Last flow =@[@\n%a@]@\nContext = @[@\n%a@]@\n"
+        (Core.Flow.print man.lattice.print) f
+        (Core.Context.print man.lattice.print) (Flow.get_ctx f)
 
   in
   print out "Time: %.3fs@." time;
@@ -65,21 +64,20 @@ let report ?(flow=None) man alarms states time files out =
         ) alarms
   in
   let () =
-    match states with
+    match Soundness.get_warnings () with
     | [] -> ()
-    | _ ->
-      print out "reachable states:@.";
-      List.iter (fun (range, (pre,post)) ->
-          print out "%a:@\n  pre:@\n    @[%a@]@\n  post:@\n    @[%a@]@."
-            Location.pp_range range
-            pp_state pre
-            pp_state post
-      ) states
+    | warnings ->
+      print out "%d warning%a detected:@." (List.length warnings) Debug.plurial_list warnings;
+      print out "@[%a@]@."
+        (pp_print_list
+           ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
+           Core.Soundness.pp_warning
+        ) warnings
   in
   ()
 
 
-let panic ?btrace exn files out =
+let panic ?btrace exn files time out =
   print out "%a@." (Debug.color_str "red") "Analysis aborted";
   let () =
     match exn with

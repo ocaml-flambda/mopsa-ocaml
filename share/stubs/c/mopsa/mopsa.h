@@ -22,37 +22,60 @@
 #ifndef _MOPSA_H
 #define _MOPSA_H
 
-// Abstract values
-extern int _mopsa_rand();
-extern long int _mopsa_rand_int(long int l, long int u);
-extern unsigned long int _mopsa_rand_unsigned_long(unsigned long int l, unsigned long int u);
 
-extern char _mopsa_range_char();
-extern unsigned char _mopsa_range_unsigned_char();
-extern int _mopsa_range_int();
-extern unsigned int _mopsa_range_unsigned_int();
-extern short _mopsa_range_short();
-extern unsigned short _mopsa_range_unsigned_short();
-extern long _mopsa_range_long();
-extern unsigned long _mopsa_range_unsigned_long();
-extern long _mopsa_range_long_long();
-extern unsigned long _mopsa_range_unsigned_long_long();
+// Generators of typed random values
+extern signed char _mopsa_rand_s8();
+extern unsigned char _mopsa_rand_u8();
+#define _mopsa_rand_char _mopsa_rand_s8
 
+extern signed short _mopsa_rand_s16();
+extern unsigned short _mopsa_rand_u16();
+
+extern signed int _mopsa_rand_s32();
+extern unsigned int _mopsa_rand_u32();
+#define _mopsa_rand_int _mopsa_rand_s32
+
+extern signed long _mopsa_rand_s64();
+extern unsigned long _mopsa_rand_u64();
+
+extern float _mopsa_rand_float();
+extern double _mopsa_rand_double();
+
+extern void *_mopsa_rand_void_pointer();
+#define _mopsa_rand_pointer _mopsa_rand_void_pointer
+
+// Generators of typed random ranges
+extern signed char _mopsa_range_s8(signed char l, signed char u);
+extern unsigned char _mopsa_range_u8(unsigned char l, unsigned char u);
+#define _mopsa_range_char _mopsa_range_s8
+
+extern signed short _mopsa_range_s16(signed short l, signed short u);
+extern unsigned short _mopsa_range_u16(unsigned short l, unsigned short u);
+
+extern signed int _mopsa_range_s32(signed int l, signed int u);
+extern unsigned int _mopsa_range_u32(unsigned int l, unsigned int u);
+#define _mopsa_range_int _mopsa_range_s32
+
+extern signed long _mopsa_range_s64(signed long l, signed long u);
+extern unsigned long _mopsa_range_u64(unsigned long l, unsigned long u);
+
+extern float _mopsa_range_float(float l, float u);
+extern double _mopsa_range_double(double l, double u);
+
+
+// Invalid pointer
+extern void *_mopsa_invalid_pointer();
 
 // Raise Exception.Panic exception with a given message
 extern void _mopsa_panic(const char* msg);
+
 
 // Printing
 extern void _mopsa_print();
 
 
-// Errors
-#define OUT_OF_BOUND 1
-#define NULL_DEREF 2
-#define INVALID_DEREF 3
-#define INTEGER_OVERFLOW 4
-#define DIVISION_BY_ZERO 5
-
+// Filters
+extern void _mopsa_assume(int cond);
 
 // Assertions
 extern void _mopsa_assert(int cond);
@@ -60,9 +83,6 @@ extern void _mopsa_assert_exists(int cond);
 extern void _mopsa_assert_unreachable();
 extern void _mopsa_assert_safe();
 extern void _mopsa_assert_unsafe();
-extern void _mopsa_assert_error(int error);
-extern void _mopsa_assert_error_exists(int error);
-extern void _mopsa_assert_error_at_line(int error, int line);
 
 
 #endif //_MOPSA_H

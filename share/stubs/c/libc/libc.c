@@ -37,8 +37,10 @@
 #include "utmpx.c"
 #include "signal.c"
 #include "error.c"
+#include "builtins.c"
+#include "sys/socket.c"
+#include "arpa/inet.c"
+#include "netinet/in.c"
 
 /* #include "inttypes.c" */
 /* #include "fcntl.c" */
-/* #include "arpa/inet.c" */
-/* #include "netinet/in.c" */

@@ -211,7 +211,6 @@ type c_var_init =
   | C_init_expr of expr
   | C_init_list of c_var_init list (** specified elements *) * c_var_init option (** filler *)
   | C_init_implicit of typ
-  | C_init_stub of Stubs.Ast.stub_init
   | C_init_flat of c_flat_init list
 
 
@@ -375,8 +374,9 @@ type stmt_kind +=
 
 
 type c_program = {
-  c_globals : (var * c_var_init option) list;        (** global variables of the program *)
+  c_globals : (var * c_var_init option) list; (** global variables of the program *)
   c_functions : c_fundec list; (** functions of the program *)
+  c_stub_directives : Stubs.Ast.stub_directive list; (** list of stub directives *)
 }
 
 type prog_kind +=
@@ -781,6 +781,11 @@ let under_type (t: typ) : typ =
   | T_c_pointer _ -> under_pointer_type t
   | _ -> failwith "[under_type] called with a non array/pointer argument"
 
+let void_to_char t =
+  match remove_typedef_qual t with
+  | T_c_void -> T_c_integer C_signed_char
+  | _ -> t
+
 let get_array_constant_length t =
   match remove_typedef_qual t with
   | T_c_array(_, C_array_length_cst n) -> n
@@ -827,11 +832,18 @@ let mk_c_subscript_access a i range =
 let mk_c_character c range =
   mk_constant (C_c_character ((Z.of_int @@ int_of_char c), C_char_ascii)) range ~etyp:(T_c_integer(C_unsigned_char))
 
+let mk_c_invalid_pointer range =
+  mk_constant C_c_invalid ~etyp:(T_c_pointer T_c_void) range
+
 let void = T_c_void
 let u8 = T_c_integer(C_unsigned_char)
 let s8 = T_c_integer(C_signed_char)
+let s16 = T_c_integer(C_signed_short)
+let u16 = T_c_integer(C_unsigned_short)
 let s32 = T_c_integer(C_signed_int)
 let u32 = T_c_integer(C_unsigned_int)
+let s64 = T_c_integer(C_signed_long)
+let u64 = T_c_integer(C_unsigned_long)
 let ul = T_c_integer(C_unsigned_long)
 let array_type typ size = T_c_array(typ,C_array_length_cst size)
 
@@ -941,3 +953,53 @@ let rec remove_casts e =
   match ekind e with
   | E_c_cast (e', _) -> remove_casts e'
   | _ -> e
+
+
+(** Simplify C constant expressions to constants *)
+let rec c_expr_to_z (e:expr) : Z.t option =
+  match ekind e with
+  | E_constant (C_int n) -> Some n
+
+  | E_constant (C_c_character (ch,_)) -> Some ch
+
+  | E_unop (O_minus, e') ->
+    c_expr_to_z e' |> Option.bind @@ fun n ->
+    Some (Z.neg n)
+
+  | E_binop(op, e1, e2) ->
+    c_expr_to_z e1 |> Option.bind @@ fun n1 ->
+    c_expr_to_z e2 |> Option.bind @@ fun n2 ->
+    begin
+      match op with
+      | O_plus -> Some (Z.add n1 n2)
+      | O_minus -> Some (Z.sub n1 n2)
+      | O_mult -> Some (Z.mul n1 n2)
+      | O_div -> if Z.equal n2 Z.zero then None else Some (Z.div n1 n2)
+      | O_eq -> Some (if Z.equal n1 n2 then Z.one else Z.zero)
+      | O_ne -> Some (if Z.equal n1 n2 then Z.zero else Z.one)
+      | O_gt -> Some (if Z.gt n1 n2 then Z.one else Z.zero)
+      | O_ge -> Some (if Z.geq n1 n2 then Z.one else Z.zero)
+      | O_lt -> Some (if Z.lt n1 n2 then Z.one else Z.zero)
+      | O_le -> Some (if Z.leq n1 n2 then Z.one else Z.zero)
+      | _ -> None
+    end
+
+  | E_c_conditional(cond,e1,e2) ->
+    c_expr_to_z cond |> Option.bind @@ fun c ->
+    if not (Z.equal c Z.zero)
+    then c_expr_to_z e1
+    else c_expr_to_z e2
+
+  | _ -> None
+
+
+let is_c_expr_equals_z e z =
+  match c_expr_to_z e with
+  | None -> false
+  | Some n -> Z.equal n z
+
+
+let is_c_deref e =
+  match remove_casts e |> ekind with
+  | E_c_deref _ -> true
+  | _ -> false

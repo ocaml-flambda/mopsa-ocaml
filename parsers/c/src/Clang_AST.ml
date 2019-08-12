@@ -229,7 +229,7 @@ type name = {
      (* C++ *)
      function_template: function_template_specialization option; (** (C++) template origin *)
      function_overloaded_operator: overloaded_operator option; (** (C++) whether this is an overloaded operator *)
-     function_method: cxx_method_decl option; (** (C++) additional informati on for methods; None if not a method *)
+     function_method: cxx_method_decl option; (** (C++) additional information for methods; None if not a method *)
    }
  (** Represents a function declaration or definition. *)
 
@@ -252,8 +252,10 @@ type name = {
  and cxx_constructor_decl = {
      constructor_initializers: cxx_constructor_initializer list;
      constructor_explicit: bool; (** whether this function is explicit *)
-     constructor_delegating: function_decl option; (** whether the constructor delegates to another, with the target constructor*)
-     constructor_inheriting: function_decl option; (** whether this is an implicit constructor synthetzed to model a call to a constructor inherited from a base class *)
+     constructor_delegating: bool;(** whether the constructor creates a delegating construtor *)
+     constructor_inheriting: bool; (** whether this is an implicit constructor synthesized to model a call to a constructor inherited from a base class *)
+     constructor_target: function_decl option; (** when this constructor delegates to another, retrieve the target *)
+     constructor_inherited: function_decl option; (** whether this base class's constructors get inherited. *)
    }
  (** (C++) Additional information for constructors. *)
 
@@ -1103,6 +1105,7 @@ and atomic_expr = {
  and unary_expr_or_type =
    | UETT_SizeOf
    | UETT_AlignOf
+   | UETT_PreferredAlignOf (* Clang >= 8 *)
 
  and array_type_trait =
    | ATT_ArrayRank
@@ -1367,13 +1370,13 @@ and atomic_expr = {
  and builtin_template_decl = {
      builtin_template_name: name;
      builtin_template_param: template_parameter_list; (** the list of template parameters *)
-     builtin_template_decl: decl; (**  underlying, templated declaration *)
+     builtin_template_decl: decl option; (**  underlying, templated declaration *)
      builtin_template_requires_clause: expr option; (** the constraint-expression from the associated requires-clause (if any) *)
      builtin_template_kind: builtin_template_kind;
    }
    (** (C++) Represents the builtin template declaration which is used to implement __make_integer_seq and other builtin templates *)
 
-                                (** Kinds of BuiltinTemplateDecl *)
+ (** Kinds of BuiltinTemplateDecl *)
  and builtin_template_kind =
    | BTK__make_integer_seq (** this names the __make_integer_seq BuiltinTemplateDecl *)
    | BTK__type_pack_element (** this names the __type_pack_element BuiltinTemplateDecl *)
@@ -1383,7 +1386,7 @@ and atomic_expr = {
      class_template_param: template_parameter_list; (** the list of template parameters *)
      class_template_decl: record_decl; (**  underlying, templated declaration *)
      class_template_requires_clause: expr option; (** the constraint-expression from the associated requires-clause (if any) *)
-     class_template_specializations: record_decl list; (** specializations *)
+     class_template_specializations: record_decl list; (** specializations (NOTE: left empty for now) *)
      class_template_injected_type: type_qual; (** template specialization type of the injected-class-name for this class template *)
    }
  (** (C++) Declaration of a class template. *)
@@ -1399,7 +1402,7 @@ and atomic_expr = {
      function_template_param: template_parameter_list; (** the list of template parameters *)
      function_template_decl: function_decl; (**  underlying function declaration of the template *)
      function_template_requires_clause: expr option; (** the constraint-expression from the associated requires-clause (if any) *)
-     function_template_specializations: function_decl list; (** specializations *)
+     function_template_specializations: function_decl list; (** specializations (NOTE: left empty for now) *)
     }
  (** (C++) Declaration of a template function. *)
 
@@ -1422,7 +1425,7 @@ and atomic_expr = {
      var_template_param: template_parameter_list; (** the list of template parameters *)
      var_template_decl: var_decl; (**  underlying, templated declaration *)
      var_template_requires_clause: expr option; (** the constraint-expression from the associated requires-clause (if any) *)
-     var_template_specializations: var_decl list; (** specializations *)
+     var_template_specializations: var_decl list; (** specializations (NOTE: left empty for now) *)
   }
  (** (C++) Declaration of a variable template. *)
 
@@ -1435,7 +1438,7 @@ and atomic_expr = {
  and template_template_param_decl = {
      template_param_name: name;
      template_param_param: template_parameter_list; (** the list of template parameters *)
-     template_param_decl: decl; (** underlying, templated declaration *)
+     template_param_decl: decl option; (** underlying, templated declaration *)
      template_param_requires_clause: expr option; (** the constraint-expression from the associated requires-clause (if any) *)
      template_param_is_parameter_pack: bool; (** whether this template template parameter is a template parameter pack *)
      template_param_is_pack_expansion: bool; (** whether this parameter pack is a pack expansion *)

@@ -67,10 +67,9 @@ type ('a, 't, 's) man = ('a,'t,'s) Lowlevel.man = {
   set_sub : 's -> 'a -> 'a;
 
   (** Analyzer transfer functions *)
-  post : ?zone:zone -> stmt -> 'a flow -> 'a post;
   exec : ?zone:zone -> stmt -> 'a flow -> 'a flow;
-  exec_sub : ?zone:zone -> stmt -> 'a flow -> 'a post;
-  eval : ?zone:(zone * zone) -> ?via:zone -> expr -> 'a flow -> (expr, 'a) eval;
+  post : ?zone:zone -> stmt -> 'a flow -> 'a post;
+  eval : ?zone:(zone * zone) -> ?via:zone -> expr -> 'a flow -> 'a eval;
   ask : 'r. 'r Query.query -> 'a flow -> 'r;
 
   (** Accessors to the domain's merge logs *)
@@ -82,7 +81,7 @@ type ('a, 't, 's) man = ('a,'t,'s) Lowlevel.man = {
   set_sub_log : log -> log -> log;
 
   (** Sub-tree merger *)
-  merge_sub : uctx -> 's -> 's * log -> 's * log -> 's;
+  merge_sub : 's -> 's * log -> 's * log -> 's;
 }
 
 
@@ -91,7 +90,7 @@ type ('a, 't, 's) man = ('a,'t,'s) Lowlevel.man = {
 *)
 type 's sman = {
   sexec: ?zone:zone -> stmt -> uctx -> 's -> 's;
-  sask: 'r. 'r query -> uctx -> 's -> 'r;
+  sask: 'r. 'r query -> 's -> 'r;
 }
 
 
@@ -155,7 +154,7 @@ sig
       unifies the sub-tree elements [s1] and [s2]. *)
 
 
-  val merge: uctx -> t -> t * log -> t * log -> t
+  val merge: t -> t * log -> t * log -> t
   (** [merge pre (post1, log1) (post2, log2)] synchronizes two divergent
       post-conditions [post1] and [post2] using a common pre-condition [pre].
 
@@ -177,7 +176,7 @@ sig
   val exec : zone -> stmt -> ('a, t,'s) man -> 'a flow -> 'a post option
   (** Post-state of statements *)
 
-  val eval : (zone * zone) -> expr -> ('a, t,'s) man -> 'a flow -> (expr, 'a) eval option
+  val eval : (zone * zone) -> expr -> ('a, t,'s) man -> 'a flow -> 'a eval option
   (** Evaluation of expressions *)
 
   val ask  : 'r Query.query -> ('a, t,'s) man -> 'a flow -> 'r option
@@ -195,45 +194,27 @@ end
 (**                        {2 Utility functions}                            *)
 (*==========================================================================*)
 
-let log_post_stmt = Lowlevel.log_post_stmt
+let set_env = Lowlevel.set_env
 
-let log_post_sub_stmt = Lowlevel.log_post_sub_stmt
+let get_env = Lowlevel.get_env
 
-let set_domain_env = Lowlevel.set_domain_env
+let map_env = Lowlevel.map_env
 
 let set_sub_env = Lowlevel.set_sub_env
 
-let get_domain_env = Lowlevel.get_domain_env
-
 let get_sub_env = Lowlevel.get_sub_env
-
-let map_domain_env = Lowlevel.map_domain_env
 
 let map_sub_env = Lowlevel.map_sub_env
 
-let mem_domain_env = Lowlevel.mem_domain_env
-
-let mem_sub_env = Lowlevel.mem_sub_env
-
 let assume = Lowlevel.assume
-
-let assume_eval = Lowlevel.assume_eval
-
-let assume_post = Lowlevel.assume_post
 
 let switch = Lowlevel.switch
 
-let switch_eval = Lowlevel.switch_eval
+let exec_stmt_on_all_flows = Lowlevel.exec_stmt_on_all_flows
 
-let switch_post = Lowlevel.switch_post
+let exec_block_on_all_flows = Lowlevel.exec_block_on_all_flows
 
-let exec_eval = Lowlevel.exec_eval
-
-let post_eval = Lowlevel.post_eval
-
-let post_eval_with_cleaners = Lowlevel.post_eval_with_cleaners
-
-
+let post_to_flow = Lowlevel.post_to_flow
 
 (*==========================================================================*)
 (**                         {2 Low-level cast}                              *)
@@ -281,10 +262,11 @@ struct
         get_sub_env T_cur man flow'
       );
 
-    sask = (fun query ctx s ->
+    sask = (fun query s ->
         (* Create a singleton flow with the given environment *)
-        let flow = Flow.singleton
-            (Context.empty |> Context.set_unit ctx)
+        let flow =
+          Flow.singleton
+            Context.empty
             T_cur
             (man.set_sub s man.lattice.top)
         in
@@ -363,7 +345,13 @@ struct
   include S
   let exec zone stmt man flow =
     S.exec zone stmt man flow |>
-    Option.lift @@ log_post_stmt stmt man
+    Option.lift @@ fun res ->
+    Result.map_log (fun log ->
+        man.set_log (
+          man.get_log log |> Log.append stmt
+        ) log
+      ) res
+
 end
 
 

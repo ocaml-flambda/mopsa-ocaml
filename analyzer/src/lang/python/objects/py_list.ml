@@ -215,7 +215,7 @@ struct
       Utils.check_instances ~arguments_after_check:1 man flow range args ["list"]
         (fun eargs flow ->
            let e1, e2 = match args with [l; r] -> l, r | _ -> assert false in
-           assume_eval (mk_py_isinstance_builtin e2 "list" range) man flow
+           assume (mk_py_isinstance_builtin e2 "list" range) man flow
              ~fthen:(man.eval (mk_py_top T_bool range))
              ~felse:(fun flow ->
                  let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
@@ -285,7 +285,7 @@ struct
                  man.eval (mk_py_none range)
                )
              ~felse:(fun flow ->
-                 assume_eval (mk_py_isinstance_builtin other "range" range) man flow
+                 assume (mk_py_isinstance_builtin other "range" range) man flow
                    ~fthen:(fun flow ->
                        (* TODO: more precision on top (for range) *)
                        man.exec (mk_assign (mk_var var_els ~mode:WEAK range) (mk_py_top T_int range) range) flow  |>
@@ -293,7 +293,7 @@ struct
                      )
                    (* TODO: if object has iter field call it and then call next *)
                    ~felse:(fun flow ->
-                       assume_eval (mk_py_isinstance_builtin other "list_reverseiterator" range) man flow
+                       assume (mk_py_isinstance_builtin other "list_reverseiterator" range) man flow
                          ~fthen:(fun flow ->
                              let var_sndels = match ekind other with
                                | E_py_object ({addr_kind = A_py_iterator (_, [{addr_kind = A_py_list _} as a], _)}, _) -> var_of_addr a
@@ -455,11 +455,11 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "math.fsum")}, _)}, args, []) ->
       let tyerror = fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
-      Eval.eval_list man.eval args flow |>
-      Eval.bind (fun args flow ->
+      bind_list args man.eval flow |>
+      bind_some (fun args flow ->
           if List.length args >= 1 then
             let in_ty = List.hd args in
-            assume_eval (mk_py_isinstance_builtin in_ty "list" range) man flow
+            assume (mk_py_isinstance_builtin in_ty "list" range) man flow
               ~fthen:(fun flow ->
                   (* FIXME: we're assuming that we use the list abstraction *)
                   let var_els_in_ty = var_of_eobj in_ty in
@@ -607,10 +607,10 @@ struct
       |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_list_of")}, _)}, args, []) ->
-      Eval.eval_list man.eval args flow |>
-      Eval.bind (fun eargs flow ->
+      bind_list args man.eval flow |>
+      bind_some (fun eargs flow ->
           let list, type_v = match eargs with [d;e] -> d,e | _ -> assert false in
-          assume_eval (mk_py_isinstance_builtin list "list" range) man flow
+          assume (mk_py_isinstance_builtin list "list" range) man flow
             ~fthen:(fun flow ->
                 let var = var_of_eobj list in
                 Libs.Py_mopsa.check man

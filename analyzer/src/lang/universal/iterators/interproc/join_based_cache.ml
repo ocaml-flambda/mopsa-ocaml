@@ -23,6 +23,7 @@
    results for each flow *)
 
 open Mopsa
+open Sig.Domain.Stateless
 open Ast
 open Zone
 open Callstack
@@ -56,8 +57,8 @@ struct
              (fun fmt s -> Format.fprintf fmt "%s" s)
              (fun fmt (in_flow, out_flow) ->
                 Format.fprintf fmt "in_flow=%a@\nout_flow=%a@\n"
-                  (Flow.print_w_lprint p) in_flow
-                  (Flow.print_w_lprint p) out_flow
+                  (Flow.print p) in_flow
+                  (Flow.print p) out_flow
              )
           )
           ctx
@@ -91,13 +92,15 @@ struct
     match ekind exp with
     | E_call({ekind = E_function (User_defined func)}, args) ->
       let in_flow = flow in
-      let in_flow_cur = Flow.set T_cur (Flow.get T_cur man.lattice in_flow) man.lattice (Flow.bottom (Flow.get_ctx in_flow)) in
+      let in_flow_cur = Flow.bottom (Flow.get_ctx in_flow) (Flow.get_alarms in_flow) |>
+                        Flow.set T_cur (Flow.get T_cur man.lattice in_flow) man.lattice
+      in
       let new_vars, in_flow_cur = Inlining.Domain.inline_function_assign_args man func args range in_flow_cur in
       let in_flow_other = Flow.remove T_cur in_flow in
       begin match find_signature man func.fun_name in_flow_cur with
         | None ->
           Inlining.Domain.inline_function_exec_body man func args range new_vars in_flow_cur func.fun_return_var |>
-          Eval.bind (fun var_res out_flow  ->
+          bind_some (fun var_res out_flow  ->
               let flow = store_signature man.lattice func.fun_name in_flow_cur out_flow in
               man.eval var_res (Flow.join man.lattice in_flow_other flow)
             )

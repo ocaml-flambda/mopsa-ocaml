@@ -78,8 +78,7 @@ struct
 
   (** Eval a function call *)
   let eval_call fundec args range man flow =
-    if  Libs.Libmopsa.is_builtin_function fundec.c_func_org_name ||
-        Libs.Libc.is_builtin_function fundec.c_func_org_name
+    if Libs.Builtins.is_builtin_function fundec.c_func_org_name
     then
       let exp' = mk_expr (E_c_builtin_call(fundec.c_func_org_name, args)) ~etyp:fundec.c_func_return range in
       man.eval ~zone:(Zone.Z_c, Zone.Z_c_low_level) exp' flow
@@ -110,23 +109,27 @@ struct
         let exp' = Stubs.Ast.mk_stub_call stub args range in
         man.eval ~zone:(Stubs.Zone.Z_stubs, any_zone) exp' flow
 
-      | {c_func_body = None; c_func_org_name} ->
-        panic_at range "no implementation found for function %s" c_func_org_name
+      | {c_func_body = None; c_func_org_name; c_func_return} ->
+        Soundness.warn range "ignoring side effects of calling undefined function %s" c_func_org_name;
+        Eval.singleton (mk_top c_func_return range) flow
 
 
   let eval zone exp man flow =
     match ekind exp with
+    | E_call({ ekind = E_c_function { c_func_variadic = true}}, args) ->
+      None
+
     | E_call({ ekind = E_c_function f}, args) ->
       eval_call f args exp.erange man flow |>
       Option.return
 
     | E_call(f, args) ->
-      man.eval ~zone:(Zone.Z_c, Z_c_points_to) f flow |>
-      Eval.bind_some @@ fun f flow ->
+      man.eval ~zone:(Zone.Z_c, Z_c_points_to) f flow >>$? fun f flow ->
 
       begin match ekind f with
         | E_c_points_to (P_fun f) ->
-          eval_call f args exp.erange man flow
+          eval_call f args exp.erange man flow |>
+          Option.return
 
         | _ -> assert false
       end

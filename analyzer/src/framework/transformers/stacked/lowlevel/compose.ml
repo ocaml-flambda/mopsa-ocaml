@@ -44,7 +44,7 @@ struct
 
   include GenDomainId(
     struct
-      type typ = t
+      type nonrec t = t
       let name = "framework.transformers.stacked.lowlevel.compose"
     end
     )
@@ -86,6 +86,7 @@ struct
     let man2 = s2_man man in
     {
       man with
+      exec = man2.exec;
       get = (fun a -> man.get a |> fst);
       set = (fun a1 a -> man.set (a1, man.get a |> snd) a);
       get_sub = (fun a -> man2.get a, man.get_sub a);
@@ -101,12 +102,9 @@ struct
           man2.set_log (Log.first l) log |>
           man.set_sub_log (Log.second l)
         );
-      exec_sub = (fun ?(zone=any_zone) stmt flow ->
-          man2.post ~zone stmt flow
-        );
-      merge_sub = (fun ctx (pre1,pre2) ((a1,a2), log) ((a1',a2'), log') ->
-          S2.merge ctx pre1 (a1, Log.first log) (a1', Log.first log'),
-          man.merge_sub ctx pre2 (a2, Log.second log) (a2', Log.second log')
+      merge_sub = (fun (pre1,pre2) ((a1,a2), log) ((a1',a2'), log') ->
+          S2.merge pre1 (a1, Log.first log) (a1', Log.first log'),
+          man.merge_sub pre2 (a2, Log.second log) (a2', Log.second log')
         );
     }
 
@@ -134,9 +132,9 @@ struct
     let a2, a, a', stable2 = S2.widen (s2_man man) ctx a a' in
     (a1,a2), a, a', stable1 && stable2
 
-  let merge ctx (pre1,pre2) ((a1,a2), log) ((a1',a2'), log') =
-    S1.merge ctx pre1 (a1, Log.first log) (a1', Log.first log'),
-    S2.merge ctx pre2 (a2, Log.second log) (a2', Log.second log')
+  let merge (pre1,pre2) ((a1,a2), log) ((a1',a2'), log') =
+    S1.merge pre1 (a1, Log.first log) (a1', Log.first log'),
+    S2.merge pre2 (a2, Log.second log) (a2', Log.second log')
 
 
 

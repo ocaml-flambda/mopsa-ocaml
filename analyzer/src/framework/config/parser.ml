@@ -210,7 +210,7 @@ and domain_simplified_product (l:config list) (rules:string list) : (module Sig.
 and domain_simplified_nonrel (v:config) : (module Sig.Domain.Simplified.DOMAIN) =
   let vv = value_lowlevel v in
   let module V = (val vv : Sig.Value.Lowlevel.VALUE) in
-  let module VV = Transformers.Value.Nonrel_with_history.Make(V)() in
+  let module VV = Transformers.Value.Nonrel.Make(V) in
   (module VV)
 
 and domain_stateless (config:config) : (module Sig.Domain.Stateless.DOMAIN) =

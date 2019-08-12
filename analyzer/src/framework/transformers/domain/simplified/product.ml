@@ -306,7 +306,7 @@ struct
 
   include Core.Id.GenDomainId(
     struct
-      type typ = t
+      type nonrec t = t
       let name = "transformers.domain.product"
     end
     )
@@ -382,10 +382,10 @@ struct
     in
     apply2 { f } Spec.pool a1 a2
 
-  let merge ctx pre (post1,log1) (post2,log2) =
+  let merge pre (post1,log1) (post2,log2) =
     let f = fun (type a) (m: a dmodule) pre post1 post2 ->
       let module Domain = (val m) in
-      Domain.merge ctx pre (post1,log1) (post2,log2)
+      Domain.merge pre (post1,log1) (post2,log2)
     in
     apply3 { f } Spec.pool pre post1 post2
 
@@ -393,24 +393,20 @@ struct
   (** {2 Transfer functions} *)
   (** ********************** *)
 
-  let init prog ctx =
-    let rec aux : type t. t dlist -> uctx -> t * uctx =
-      fun l ctx ->
-        match l with
-        | Nil -> (), ctx
-        | Cons(hd,tl) ->
-          let module Domain = (val hd) in
-          let hda, ctx = Domain.init prog ctx in
-          let tla, ctx = aux tl ctx in
-          (hda,tla), ctx
-    in
-    aux Spec.pool ctx
 
-  let ask : type r. r query -> uctx -> t -> r option =
-    fun query ctx a ->
+  let init prog =
+    let f = fun (type a) (m: a dmodule) ->
+      let module Domain = (val m) in
+      Domain.init prog
+    in
+    create { f } Spec.pool
+
+
+  let ask : type r. r query -> t -> r option =
+    fun query a ->
       let f = fun (type a) (m: a dmodule) acc aa ->
         let module Domain = (val m) in
-        let rep = Domain.ask query ctx aa in
+        let rep = Domain.ask query aa in
         Option.neutral2 (fun rep acc ->
             meet_query query rep acc
           ) rep acc
@@ -513,9 +509,9 @@ struct
       );
 
     ask = (
-      let doit : type r. r query -> uctx -> t -> r =
-        fun query ctx a ->
-          match ask query ctx a with
+      let doit : type r. r query -> t -> r =
+        fun query a ->
+          match ask query a with
           | Some r -> r
           | None -> Exceptions.panic "query not handled"
       in
@@ -525,35 +521,20 @@ struct
     refine = refine_lfp;
   }
 
-  let reduce stmt ctx pre post =
+  let reduce stmt pre post =
     List.fold_left (fun acc rule ->
         let module R = (val rule : REDUCTION) in
-        R.reduce stmt reduction_man ctx pre acc
+        R.reduce stmt reduction_man pre acc
       ) post Spec.rules
 
-  let exec stmt ctx a =
-    let rec aux : type t. t dlist -> uctx -> t -> (t*uctx) option =
-      fun l ctx a ->
-        match l, a with
-        | Nil, () -> None
-        | Cons(hd,tl), (hda,tla) ->
-          let module Domain = (val hd) in
-          match Domain.exec stmt ctx hda with
-          | None ->
-            begin match aux tl ctx tla with
-              | None -> None
-              | Some (tla',ctx) -> Some ((hda,tla'),ctx)
-            end
-
-          | Some (hda',ctx') ->
-            match aux tl ctx' tla with
-            | None -> Some ((hda',tla),ctx')
-            | Some (tla',ctx'') -> Some ((hda',tla'),ctx'')
+  let exec stmt a =
+    let f = fun (type a) (m: a dmodule) aa ->
+      let module Domain = (val m) in
+      Domain.exec stmt aa
     in
-    aux Spec.pool ctx a |>
-    Option.lift @@ fun (aa,ctx) ->
-    let a' = reduce stmt ctx a aa in
-    (a',ctx)
+    apply_opt { f } Spec.pool a |>
+    Option.lift @@ fun a' ->
+    reduce stmt a a'
 
 
 end

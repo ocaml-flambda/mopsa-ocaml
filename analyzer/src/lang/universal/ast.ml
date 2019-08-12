@@ -256,7 +256,12 @@ let pp_addr fmt a =
   else
     fprintf fmt "@@%a:%xd:%s"
       pp_addr_kind a.addr_kind
-      (Hashtbl.hash a.addr_group)
+      (* Using Hashtbl.hash leads to collisions. Hashtbl.hash is
+         equivalent to Hashtbl.hash_param 10 100. By increasing the
+         number of meaningful nodes to encounter, collisions are less
+         likely to happen. 
+      *) 
+      (Hashtbl.hash_param 30 100 a.addr_group)
       (match a.addr_mode with WEAK -> "w" | STRONG -> "s")
 
 
@@ -498,15 +503,11 @@ type stmt_kind +=
    | S_unit_tests of (string * stmt) list (** list of unit tests and their names *)
    (** Unit tests suite *)
 
-   | S_simple_assert of expr * bool * bool
-   (** Unit tests simple assertions :
-       S_simple_assert(cond,b,b') = b is_bottom(assume(b' cond))
-       where b exp is understood as:
-        f b = true then exp else not exp
-   *)
-
    | S_assert of expr
    (** Unit tests assertions *)
+
+   | S_satisfy of expr
+   (** Unit tests satisfiability check *)
 
    | S_print
    (** Print the abstract flow map at current location *)
@@ -540,14 +541,9 @@ let () =
         | S_unit_tests(tl1), S_unit_tests(tl2) ->
           Compare.list (fun (t1, _) (t2, _) -> Pervasives.compare t1 t2) tl1 tl2
 
-        | S_simple_assert(e1,b1,b1'), S_simple_assert(e2,b2,b2') ->
-          Compare.compose [
-            (fun () -> compare_expr e1 e2);
-            (fun () -> Pervasives.compare b1 b2);
-            (fun () -> Pervasives.compare b1' b2');
-          ]
-
         | S_assert(e1), S_assert(e2) -> compare_expr e1 e2
+
+        | S_satisfy(e1), S_satisfy(e2) -> compare_expr e1 e2
 
         | S_free_addr a1, S_free_addr a2 ->
           compare_addr a1 a2
@@ -577,14 +573,7 @@ let () =
         | S_continue -> pp_print_string fmt "continue;"
         | S_unit_tests (tests) -> pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") (fun fmt (name, test) -> fprintf fmt "test %s:@\n  @[%a@]" name pp_stmt test) fmt tests
         | S_assert e -> fprintf fmt "assert(%a);" pp_expr e
-        | S_simple_assert(e,b,b') ->
-          begin
-            match b,b' with
-            | true, true -> fprintf fmt "is_bottom(assume(%a))" pp_expr e
-            | true, false -> fprintf fmt "is_bottom(assume(!%a))" pp_expr e
-            | false, false -> fprintf fmt "!is_bottom(assume(!%a))" pp_expr e
-            | false, true -> fprintf fmt "!is_bottom(assume(%a))" pp_expr e
-          end
+        | S_satisfy e -> fprintf fmt "sat(%a);" pp_expr e
         | S_print -> fprintf fmt "print();"
         | S_free_addr a -> fprintf fmt "free_addr(%a);" pp_addr a
         | _ -> default fmt stmt
@@ -622,9 +611,10 @@ let () =
           {exprs = [e]; stmts = []},
           (function {exprs = [e]} -> {stmt with skind = S_assert(e)} | _ -> assert false)
 
-        | S_simple_assert(e,b,b') ->
+
+        | S_satisfy(e) ->
           {exprs = [e]; stmts = []},
-          (function {exprs = [e]} -> {stmt with skind = S_simple_assert(e,b,b')} | _ -> assert false)
+          (function {exprs = [e]} -> {stmt with skind = S_satisfy(e)} | _ -> assert false)
 
         | S_unit_tests(tests) ->
           let tests_names, tests_bodies = List.split tests in
@@ -758,14 +748,8 @@ let is_math_type = function
 let mk_assert e range =
   mk_stmt (S_assert e) range
 
-let mk_simple_assert e b1 b2 range =
-  mk_stmt (S_simple_assert (e, b1, b2)) range
-
-let mk_assert_reachable range =
-  mk_simple_assert (mk_one range) true false range
-
-let mk_assert_unreachable range =
-  mk_simple_assert (mk_one range) true true range
+let mk_satisfy e range =
+  mk_stmt (S_satisfy e) range
 
 let mk_block block = mk_stmt (S_block block)
 

@@ -47,21 +47,21 @@ size_t __ctype_get_mb_cur_max (void);
 
 /*$
  * //NOTE: we are more strict than the spec by requiring that __nptr is 0-terminated
- * requires: valid_string(__nptr);
+ * //requires: valid_string(__nptr);
  *
  */
 double atof (const char *__nptr);
 
 /*$
  * //NOTE: we are more strict than the spec by requiring that __nptr is 0-terminated
- * requires: valid_string(__nptr);
+ * //requires: valid_string(__nptr);
  *
  */
 int atoi (const char *__nptr);
 
 /*$
  * //NOTE: we are more strict than the spec by requiring that __nptr is 0-terminated
- * requires: valid_string(__nptr);
+ * //requires: valid_string(__nptr);
  *
  */
 long int atol (const char *__nptr);
@@ -70,7 +70,7 @@ long int atol (const char *__nptr);
 
 /*$
  * //NOTE: we are more strict than the spec by requiring that __nptr is 0-terminated
- * requires: valid_string(__nptr);
+ * //requires: valid_string(__nptr);
  *
  */
 long long int atoll (const char *__nptr);
@@ -307,7 +307,7 @@ void srandom (unsigned int __seed);
 
 static char _rand__state[128];
 static char* _rand__statebuf = _rand__state;
-static size_t _rand__statelen = sizeof(_rand__statebuf);
+static size_t _rand__statelen = sizeof(_rand__state);
 
 /*$
  * // TODO: return NULL when __statelen < 8?
@@ -398,13 +398,13 @@ int rand_r (unsigned int *__seed);
 #if defined __USE_MISC || defined __USE_XOPEN
 
 /*$
- * ensures: float_valid(return) and return in [0., 1.];
+ * ensures: valid_float(return) and return in [0., 1.];
  */
 double drand48 (void);
 
 /*$
  * assigns: __xsubi[0, 2];
- * ensures: float_valid(return) and return in [0., 1.];
+ * ensures: valid_float(return) and return in [0., 1.];
  */
 double erand48 (unsigned short int __xsubi[3]);
 
@@ -455,7 +455,7 @@ void lcong48 (unsigned short int __param[7]);
 /*$
  * assigns: *__result;
  * assigns: *__buffer;
- * ensures: float_valid((*__result)') and (*__result)' in [0., 1.];
+ * ensures: valid_float((*__result)') and (*__result)' in [0., 1.];
  * ensures: return == 0;
  */
 int drand48_r (struct drand48_data *__restrict __buffer,
@@ -465,7 +465,7 @@ int drand48_r (struct drand48_data *__restrict __buffer,
  * assigns: *__result;
  * assigns: *__buffer;
  * assigns: __xsubi[0, 2];
- * ensures: float_valid((*__result)') and (*__result)' in [0., 1.];
+ * ensures: valid_float((*__result)') and (*__result)' in [0., 1.];
  * ensures: return == 0;
  */
 int erand48_r (unsigned short int __xsubi[3],
@@ -713,7 +713,7 @@ void *aligned_alloc (size_t __alignment, size_t __size);
 void abort (void);
 
 /*$
- * warn: "unsupported stub";
+ * warn: "unsupported stub atexit";
  */
 int atexit (void (*__func) (void));
 

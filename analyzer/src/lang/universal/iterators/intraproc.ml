@@ -22,7 +22,7 @@
 (** Intra-procedural iterator for blocks, assignments and tests *)
 
 open Mopsa
-open Framework.Core.Sig.Domain.Stateless
+open Sig.Domain.Stateless
 open Ast
 
 
@@ -46,8 +46,7 @@ struct
     match skind stmt with
     | S_expression(e) when is_universal_type e.etyp || e.etyp = T_any ->
       Some (
-        man.eval e flow |>
-        post_eval man @@ fun e flow ->
+        man.eval e flow >>$ fun e flow ->
         Post.return flow
       )
 
@@ -58,17 +57,21 @@ struct
       )
 
     | S_if(cond, s1, s2) ->
-      let range = srange stmt in
-      let block1 = mk_block [mk_assume cond range; s1] range in
-      let block2 = mk_block [mk_assume (mk_not cond range) range; s2] range in
-      let flows = Flow.map_list man.exec [block1; block2] flow in
-      let flow' = Flow.join_list man.lattice ~ctx:(Flow.get_ctx flow) flows in
-      Some (Post.return flow')
+      let flow1 = man.exec (mk_assume cond cond.erange) flow |>
+                  man.exec s1
+      in
+      let flow2 = Flow.copy_ctx flow1 flow |>
+                  man.exec (mk_assume (mk_not cond cond.erange) cond.erange) |>
+                  man.exec s2
+      in
+      Flow.join man.lattice flow1 flow2 |>
+      Post.return |>
+      Option.return
 
     | S_print ->
       Debug.debug ~channel:"print" "%a@\n  @[%a@]"
         pp_position (srange stmt |> get_range_start)
-        (Flow.print man.lattice) flow
+        (Flow.print man.lattice.print) flow
       ;
       Some (Post.return flow)
 

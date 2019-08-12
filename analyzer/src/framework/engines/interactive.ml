@@ -257,7 +257,7 @@ struct
   type _ action =
     | Exec : stmt * zone -> Abstraction.t flow action
     | Post : stmt * zone -> Abstraction.t post action
-    | Eval : expr * (zone * zone) * zone -> (expr, Abstraction.t) eval action
+    | Eval : expr * (zone * zone) * zone -> Abstraction.t eval action
 
 
   (** Print the current analysis action *)
@@ -340,13 +340,13 @@ struct
             interact ~where:false action range flow
 
           | Callstack ->
-            let cs = Callstack.get flow in
+            let cs = Flow.get_callstack flow in
             printf "%a@." Callstack.print cs;
             interact ~where:false action range flow
 
 
           | Print ->
-            printf "%a@." (Flow.print man.lattice) flow;
+            printf "%a@." (Flow.print man.lattice.print) flow;
             interact ~where:false action range flow
 
           | Env ->
@@ -394,6 +394,7 @@ struct
     join = (fun a a' -> Abstraction.join man a a');
     meet = (fun a a' -> Abstraction.meet man a a');
     widen = (fun ctx a a' -> Abstraction.widen man ctx a a');
+    merge = Abstraction.merge;
     print = Abstraction.print;
   }
 

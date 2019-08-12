@@ -21,7 +21,7 @@
 
 module OctMan = struct
   type t = Oct.t
-  let name = "octagon"
+  let name = "universal.numeric.relational.octagon"
   let man = Oct.manager_alloc ()
 end
 

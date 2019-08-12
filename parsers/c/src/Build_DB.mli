@@ -111,15 +111,22 @@ val db_link : db -> string -> string list -> db
 
 (** {1 DB loading, saving, locking} *)
 
+val open_db : ?create:bool -> string -> Unix.file_descr
+(** Open DB file and lock. Optionally create if it does not exist. *)
+
+val close_db : Unix.file_descr -> unit
+(** Unlock and close DB file. *)        
+    
+val read_db : Unix.file_descr -> db
+(** Read from open DB file. *)
+                            
+val write_db : Unix.file_descr -> db -> unit
+(** Write to open DB file. *)
+        
 val load_db : string -> db
-val save_db : string -> db -> unit
-(** [load_db db_filename] and [save_db db_filename db] load and save a database to file. *)
+(** Load DB from file. *)
 
-val lock_db : string -> unit
-val unlock_db : string -> unit
-(** [lock_db db_filename] and [unlock_db db_filename] use file-locking operations to ensure atomicity of database operations. *)
-
-
+                          
 (** {1 DB extraction for analysis driver} *)
 
 val get_executables : db -> string list

@@ -48,7 +48,7 @@ struct
 
   include GenDomainId(
     struct
-      type typ = t
+      type nonrec t = t
       let name = "framework.transformers.domain.lowlevel.apply"
     end
     )
@@ -91,12 +91,9 @@ struct
     {
       lattice = man.lattice;
       exec = man.exec;
-      post = man.post;
+      post = dman.post;
       eval = man.eval;
       ask = man.ask;
-      exec_sub = (fun ?(zone=any_zone) stmt flow ->
-          dman.post ~zone stmt flow
-        );
 
       get = (fun a -> man.get a |> fst);
       set = (fun a1 a -> man.set (a1, man.get a |> snd) a);
@@ -141,9 +138,9 @@ struct
       (a1,a2)
 
 
-  let merge ctx (pre1,pre2) ((a1,a2), log) ((a1',a2'), log') =
-    S.merge ctx pre1 (a1, Log.first log) (a1', Log.first log'),
-    D.merge ctx pre2 (a2, Log.second log) (a2', Log.second log')
+  let merge (pre1,pre2) ((a1,a2), log) ((a1',a2'), log') =
+    S.merge pre1 (a1, Log.first log) (a1', Log.first log'),
+    D.merge pre2 (a2, Log.second log) (a2', Log.second log')
 
 
   (**************************************************************************)

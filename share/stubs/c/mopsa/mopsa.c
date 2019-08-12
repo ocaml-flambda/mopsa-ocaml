@@ -23,26 +23,43 @@
 #include <limits.h>
 
 
-/**************************/
-/* Symbolic argc and argv */
-/**************************/
+/*$$
+ * predicate valid_string(s):
+ *   valid_ptr(s) and
+ *   exists int _i in [0, size(s) - 1]: s[_i] == 0
+ * ;
+ */
+
+
+/*$$
+ * predicate valid_primed_string(s):
+ *   valid_ptr(s) and
+ *   exists int _i in [0, size(s) - 1]: (s[_i])' == 0
+ * ;
+ */
+
+
+/*$$
+ * predicate valid_substring(s, n):
+ *   valid_ptr(s) and
+ *   exists int _i in [0, n - 1]: s[_i] == 0
+ * ;
+ */
+
+
+/*$$
+ * predicate valid_primed_substring(s, n):
+ *   valid_ptr(s) and
+ *   exists int _i in [0, n - 1]: (s[_i])' == 0
+ * ;
+ */
+
+
 
 /*$
- * ensures: return in [1, INT_MAX - 1];   // Do not go beyound INT_MAX because
- *                                        // we will allocate argc + 1 pointers
- *                                        // in argv
+ * local:   char * str = new Memory;
+ * ensures: size(str) == INT_MAX;
+ * ensures: valid_string(str);
+ * ensures: return == str;
  */
-static int _mopsa_init_symbolic_argc();
-
-
-/*$
- * local:   char ** argv = new Memory;
- * ensures: size(argv) == argc + 1;      // Need to allocate one additional
- *                                       // pointer for the last NULL
- * ensures: forall int i in [0, argc]:
- *            argv[i] == NULL;           // Ugly trick! ensure that all values
- *                                       // are set to NULL to avoid the default
- *                                       // ⊤ value generated after the allocation
- * ensures: return == argv;
- */
-static char **_mopsa_init_symbolic_argv(int argc);
+static char *_mopsa_new_valid_string();

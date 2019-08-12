@@ -73,6 +73,7 @@ let parse_program lang files =
 
 let () =
   exit @@ parse_options (fun files args ->
+      let t = Timing.start () in
       try
         let lang, domain = Config.Parser.parse !Config.Parser.opt_config in
 
@@ -94,8 +95,6 @@ let () =
           )
         in
 
-        let t = Timing.start () in
-
         Debug_tree.phase "computing initial environments";
         let flow = Engine.init prog in
 
@@ -109,5 +108,8 @@ let () =
 
 
       with
-        e -> Output.Factory.panic ~btrace:(Printexc.get_backtrace()) e files; 2
+        e ->
+        let t = Timing.stop t in
+        Output.Factory.panic ~btrace:(Printexc.get_backtrace()) e t files;
+        2
     ) ()

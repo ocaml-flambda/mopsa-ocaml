@@ -66,7 +66,7 @@ module Domain =
       match skind stmt with
       | S_py_if (test, sthen, selse) ->
         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (Utils.mk_builtin_call "bool" [test] range) flow |>
-        post_eval man (fun exp flow ->
+        bind_some (fun exp flow ->
             man.exec ~zone:Zone.Z_py (mk_if exp sthen selse range) flow |> Post.return
           )
         |> Option.return

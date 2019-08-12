@@ -23,6 +23,7 @@
    results for each flow *)
 
 open Mopsa
+open Sig.Domain.Stateless
 open Ast
 open Zone
 open Callstack
@@ -69,8 +70,8 @@ struct
                 Format.pp_print_list
                   (fun fmt (in_flow, oexpr, out_flow) ->
                      Format.fprintf fmt "in_flow = %a@\nout_flow = %a@\noexpr = %a@\n"
-                       (Flow.print_w_lprint p) in_flow
-                       (Flow.print_w_lprint p) out_flow
+                       (Flow.print p) in_flow
+                       (Flow.print p) out_flow
                        (Option.print pp_expr) oexpr)
                      fmt list
              )
@@ -104,35 +105,37 @@ struct
     match ekind exp with
     | E_call({ekind = E_function (User_defined func)}, args) ->
       let in_flow = flow in
-      let in_flow_cur = Flow.set T_cur (Flow.get T_cur man.lattice in_flow) man.lattice (Flow.bottom (Flow.get_ctx in_flow)) in
+      let in_flow_cur = Flow.bottom (Flow.get_ctx in_flow) (Flow.get_alarms in_flow) |>
+                        Flow.set T_cur (Flow.get T_cur man.lattice in_flow) man.lattice
+      in
       let new_vars, in_flow_cur = Inlining.Domain.inline_function_assign_args man func args range in_flow_cur in
       let in_flow_other = Flow.remove T_cur in_flow in
       begin match find_signature man func.fun_name in_flow_cur with
         | None ->
           let ret = mk_range_attr_var range "ret_var" T_any in
           Inlining.Domain.inline_function_exec_body man func args range new_vars in_flow_cur ret |>
-          Eval.bind_lowlevel (fun oeval_res out_flow cleaners ->
+          bind_full (fun oeval_res out_flow log cleaners ->
               debug "in bind@\n";
               match oeval_res with
               | None ->
-                let out_flow = Framework.Core.Sig.Domain.Stateless.exec_block_on_all_flows cleaners man out_flow in
+                let out_flow = exec_block_on_all_flows cleaners man out_flow in
                 let flow = store_signature func.fun_name in_flow_cur oeval_res out_flow in
-                Eval.case oeval_res (Flow.join man.lattice in_flow_other flow)
+                Result.return oeval_res (Flow.join man.lattice in_flow_other flow) ~log
 
               | Some eval_res ->
                 man.eval eval_res out_flow |>
                 Eval.bind (fun eval_res out_flow ->
                     debug "eval_res = %a@\ncleaners = %a@\n" pp_expr eval_res pp_stmt (mk_block cleaners range);
-                    let out_flow = Framework.Core.Sig.Domain.Stateless.exec_block_on_all_flows cleaners man out_flow in
+                    let out_flow = exec_block_on_all_flows cleaners man out_flow in
                     let flow = store_signature func.fun_name in_flow_cur (Some eval_res) out_flow in
-                    Eval.singleton eval_res (Flow.join man.lattice in_flow_other flow)
+                    Result.return (Some eval_res) (Flow.join man.lattice in_flow_other flow) ~log
                   )
             )
 
         | Some (_, oout_expr, out_flow) ->
           Debug.debug ~channel:"profiling" "reusing %s at range %a" func.fun_name pp_range func.fun_range;
-          debug "reusing something in function %s@\nchanging in_flow=%a@\ninto out_flow=%a@\n" func.fun_name (Flow.print man.lattice) in_flow (Flow.print man.lattice) out_flow;
-          Eval.case oout_expr (Flow.join man.lattice in_flow_other out_flow)
+          debug "reusing something in function %s@\nchanging in_flow=%a@\ninto out_flow=%a@\n" func.fun_name (Flow.print man.lattice.print) in_flow (Flow.print man.lattice.print) out_flow;
+          Result.return oout_expr (Flow.join man.lattice in_flow_other out_flow)
       end
       |> Option.return
 

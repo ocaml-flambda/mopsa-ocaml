@@ -46,6 +46,13 @@ let opt_make_target = ref ""
 let opt_without_libc = ref false
 (** Disable stubs of the standard library *)
 
+let nb_clang_threads = ref 4
+(** How many instances of the Clang parsers to spwan in parallel. *)
+
+let opt_enable_cache = ref true
+(** Enable the parser cache. *)
+
+
 let () =
   register_language_option "c" {
     key = "-I";
@@ -74,6 +81,20 @@ let () =
     doc = " disable stubs of the standard C library.";
     spec = ArgExt.Set opt_without_libc;
     default = "false";
+  };
+  register_language_option "c" {
+    key = "-clang-threads";
+    category = "C";
+    doc = " how many parallel instances of Clang parser to use.";
+    spec = ArgExt.Set_int nb_clang_threads;
+    default = "4";
+  };
+  register_language_option "c" {
+    key = "-disable-parser-cache";
+    category = "C";
+    doc = " disable the cache of the Clang parser.";
+    spec = ArgExt.Clear opt_enable_cache;
+    default = "unset";
   };
   ()
 
@@ -124,6 +145,8 @@ let find_function_in_context ctx (f: C_AST.func) =
 
 exception StubAliasFound of string
 
+let frontend_mutex = Mutex.create ()
+
 let rec parse_program (files: string list) =
   let open Clang_parser in
   let open Clang_to_C in
@@ -132,11 +155,13 @@ let rec parse_program (files: string list) =
 
   let target = get_target_info (get_default_target_options ()) in
   let ctx = Clang_to_C.create_context "project" target in
-  List.iter
-    (fun file ->
+  let nb = List.length files in
+  ListExt.par_iteri
+    !nb_clang_threads
+    (fun i file ->
        match file, Filename.extension file with
-       | _, ".c"
-       | _, ".h" -> parse_file [] file ctx
+       | _, (".c" | ".h") -> parse_file "clang" ~nb:(i,nb) [] file false false ctx
+       | _, (".cpp" | ".cc" | ".c++") -> parse_file "clang++" ~nb:(i,nb) [] file false true ctx
        | _, ".db" | ".db", _ -> parse_db file ctx
        | _, x -> Exceptions.panic "unknown C extension %s" x
     ) files;
@@ -157,8 +182,9 @@ and parse_db (dbfile: string) ctx : unit =
     (* No need for target selection if there is only one binary *)
     if List.length execs = 1
     then List.hd execs
-    else
-    if !opt_make_target = ""
+    else if execs = []
+    then panic "no binary in database"
+    else if !opt_make_target = ""
     then panic "a target is required in a multi-binary Makefile.@\nPossible targets:@\n @[%a@]"
         (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") Format.pp_print_string)
         execs
@@ -168,17 +194,18 @@ and parse_db (dbfile: string) ctx : unit =
         panic "binary target %s not found" !opt_make_target
   in
   let srcs = get_executable_sources db exec in
-  let i = ref 0 in
-  List.iter
-    (fun src ->
-       incr i;
+  let nb = List.length srcs in
+  ListExt.par_iteri
+    !nb_clang_threads
+    (fun i src ->
        match src.source_kind with
        | SOURCE_C | SOURCE_CXX ->
+         let cmd = if src.source_kind = SOURCE_C then "clang" else "clang++" in
          let cwd = Sys.getcwd() in
          Sys.chdir src.source_cwd;
          (try
-            (* parse file in the original compilation directory *)
-            parse_file src.source_opts src.source_path ctx;
+             (* parse file in the original compilation directory *)
+             parse_file cmd ~nb:(i,nb) src.source_opts src.source_path !opt_enable_cache (src.source_kind=SOURCE_CXX) ctx;
             Sys.chdir cwd;
           with x ->
             (* make sure we get back to cwd in all cases *)
@@ -188,32 +215,26 @@ and parse_db (dbfile: string) ctx : unit =
        | _ -> Exceptions.warn "ignoring file %s\n%!" src.source_path
     ) srcs
 
-and parse_file (opts: string list) (file: string) ctx =
+and parse_file (cmd: string) ?nb (opts: string list) (file: string) enable_cache ignore ctx =
+  Mutex.lock frontend_mutex;
+  Core.Debug_tree.parse ~cmd ?nb file;
+  Mutex.unlock frontend_mutex;
   let opts' = ("-I" ^ (Paths.resolve_stub "c" "mopsa")) ::
               ("-include" ^ "mopsa.h") ::
               (List.map (fun dir -> "-I" ^ dir) !opt_include_dirs) @
               !opt_clang @
               opts
   in
-  C_parser.parse_file file opts' ctx
+  C_parser.parse_file cmd file opts' enable_cache ignore ctx
 
 
 and parse_stubs ctx () =
-  (** Check if main has arguments argc and argv *)
-  let has_arg =
-    try
-      let main = Clang_to_C.find_function "main" ctx in
-      Array.length main.C_AST.func_parameters <> 0
-    with Not_found -> false
-  in
-
-  if has_arg then
-    parse_file [] (Config.Paths.resolve_stub "c" "mopsa/mopsa.c") ctx
-  ;
+  (** Add Mopsa stubs *)
+  parse_file "clang" [] (Config.Paths.resolve_stub "c" "mopsa/mopsa.c") false false ctx;
 
   (** Add stubs of the standard library *)
   if not !opt_without_libc then
-    parse_file [] (Config.Paths.resolve_stub "c" "libc/libc.c") ctx
+    parse_file "clang" [] (Config.Paths.resolve_stub "c" "libc/libc.c") false false ctx
   ;
 
   ()
@@ -282,6 +303,9 @@ and from_project prj =
       f.c_func_stub <- from_stub_alias ctx o alias;
     ) funcs_with_alias;
 
+  (* Parse stub directives *)
+  let directives = from_stub_directives ctx prj.proj_comments in
+
   let globals = StringMap.bindings prj.proj_vars |>
                 List.map snd |>
                 List.map (fun v ->
@@ -290,7 +314,11 @@ and from_project prj =
   in
 
 
-  Ast.C_program { c_globals = globals; c_functions = StringMap.bindings funcs |> List.split |> snd }
+  Ast.C_program {
+    c_globals = globals;
+    c_functions = StringMap.bindings funcs |> List.split |> snd;
+    c_stub_directives = directives;
+  }
 
 
 and find_target target targets =
@@ -447,7 +475,7 @@ and from_var ctx (v: C_AST.variable) : var =
   with Not_found ->
     let v' =
       mkv
-        v.var_unique_name
+        (v.var_org_name ^ ":" ^ (string_of_int v.var_uid))
         (V_cvar {
             cvar_orig_name = v.var_org_name;
             cvar_uniq_name = v.var_unique_name;
@@ -482,7 +510,7 @@ and from_var_scope ctx = function
 and from_var_init ctx v =
   match v.var_init with
   | Some i -> Some (from_init ctx i)
-  | None -> from_init_stub ctx v
+  | None -> None
 
 and from_init_option ctx init =
   match init with
@@ -494,24 +522,6 @@ and from_init ctx init =
   | I_init_expr e -> C_init_expr (from_expr ctx e)
   | I_init_list(il, i) -> C_init_list (List.map (from_init ctx) il, from_init_option ctx i)
   | I_init_implicit t -> C_init_implicit (from_typ ctx t)
-
-and from_init_stub ctx v =
-  match C_stubs_parser.Main.parse_var_comment v
-          ctx.ctx_prj
-          ctx.ctx_macros
-          ctx.ctx_enums
-          ctx.ctx_global_preds
-          ctx.ctx_stubs
-  with
-  | None -> None
-  | Some stub ->
-    let stub =   {
-      stub_init_body     = List.map (from_stub_section ctx) stub.stub_body;
-      stub_init_locals   = List.map (from_stub_local ctx) stub.stub_locals;
-      stub_init_range    = stub.stub_range;
-    }
-    in
-    Some (C_init_stub stub)
 
 
 
@@ -835,8 +845,8 @@ and from_stub_builtin f =
   | SIZE -> SIZE
   | OFFSET -> OFFSET
   | BASE -> BASE
-  | PTR_VALID -> PTR_VALID
-  | FLOAT_VALID -> FLOAT_VALID
+  | VALID_PTR -> VALID_PTR
+  | VALID_FLOAT -> VALID_FLOAT
   | FLOAT_INF -> FLOAT_INF
   | FLOAT_NAN -> FLOAT_NAN
   | BYTES -> BYTES
@@ -872,6 +882,8 @@ and from_stub_expr_unop = function
   | LNOT -> O_log_not
   | BNOT -> O_bit_invert
 
+
+
 and from_stub_global_predicates com_map =
   let com_map = C_AST.RangeMap.filter (fun range com ->
       C_stubs_parser.Main.is_global_predicate com
@@ -880,6 +892,8 @@ and from_stub_global_predicates com_map =
   C_AST.RangeMap.fold (fun range com acc ->
       C_stubs_parser.Main.parse_global_predicate_comment com @ acc
     ) com_map []
+
+
 
 and from_stub_alias ctx f alias =
   let stub = C_stubs_parser.Main.resolve_alias alias f ctx.ctx_prj ctx.ctx_stubs in
@@ -908,3 +922,35 @@ and from_stub_alias ctx f alias =
   else
     panic "prototypes of function %s and its alias %s do not match"
       f.func_org_name alias
+
+
+
+and from_stub_directives ctx com_map =
+  let com_map = C_AST.RangeMap.filter (fun range com ->
+      C_stubs_parser.Main.is_directive com
+    ) com_map
+  in
+  C_AST.RangeMap.fold (fun range com acc ->
+      match C_stubs_parser.Main.parse_directive_comment
+              com
+              range
+              ctx.ctx_prj
+              ctx.ctx_macros
+              ctx.ctx_enums
+              ctx.ctx_global_preds
+              ctx.ctx_stubs
+      with
+      | None -> acc
+
+      | Some stub ->
+        from_stub_directive ctx stub :: acc
+    ) com_map []
+
+
+and from_stub_directive ctx stub =
+  {
+    stub_directive_body    = List.map (from_stub_section ctx) stub.stub_body;
+    stub_directive_range   = stub.stub_range;
+    stub_directive_locals  = List.map (from_stub_local ctx) stub.stub_locals;
+    stub_directive_assigns = List.map (from_stub_assigns ctx) stub.stub_assigns;
+  }

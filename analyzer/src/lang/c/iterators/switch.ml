@@ -174,7 +174,7 @@ struct
       in
 
       let flow0 = Flow.set T_cur (Flow.get TSwitch man.lattice flow) man.lattice flow in
-      assume_post
+      assume
         (mk_binop e0 O_eq e stmt.srange ~etyp:u8)
         ~fthen:(fun true_flow ->
             Flow.set TSwitch man.lattice.bottom man.lattice true_flow
@@ -184,18 +184,6 @@ struct
             Flow.set T_cur man.lattice.bottom man.lattice false_flow |>
             Flow.set TSwitch cur man.lattice |>
             Post.return
-          )
-        ~fboth:(fun true_flow false_flow ->
-            let true_cur = Flow.get T_cur man.lattice true_flow in
-            let false_cur = Flow.get T_cur man.lattice false_flow in
-            Flow.merge (fun tk true_env false_env ->
-                match tk, true_env, false_env with
-                | T_cur, _, _ -> Some true_cur
-                | TSwitch, _, _ -> Some false_cur
-                | _, Some env, _ | _, _, Some env -> Some env
-                | _, None, None -> None
-              ) man.lattice true_flow false_flow
-            |> Post.return
           )
         man flow0 |>
       Post.bind (fun flow0 ->

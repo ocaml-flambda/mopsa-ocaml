@@ -23,6 +23,7 @@
 
 open Mopsa
 open Base
+open Alarms
 
 (* Points-to results *)
 (* ================= *)
@@ -30,16 +31,16 @@ open Base
 type points_to =
   | P_fun of Ast.c_fundec
   | P_block of base (** base *) * expr (** offset *)
+  | P_valid
   | P_null
   | P_invalid
-  | P_top
 
 let pp_points_to fmt = function
   | P_fun f -> Format.fprintf fmt "(fp %s)" f.Ast.c_func_org_name
   | P_block(base, offset) -> Format.fprintf fmt "(%a, %a)" pp_base base pp_expr offset
+  | P_valid -> Format.pp_print_string fmt "Valid"
   | P_null -> Format.pp_print_string fmt "NULL"
   | P_invalid -> Format.pp_print_string fmt "Invalid"
-  | P_top -> Format.pp_print_string fmt "⊺"
 
 let compare_points_to p1 p2 =
   match p1, p2 with
@@ -52,24 +53,28 @@ let compare_points_to p1 p2 =
   | _, _ -> Pervasives.compare p1 p2
 
 
+
 type expr_kind +=
   | E_c_points_to of points_to  (* Reply to a points-to evaluation *)
 
-let mk_c_points_to_bloc b o range =
-  mk_expr (E_c_points_to (P_block (b, o))) range
 
-let mk_c_points_to_top range =
-  mk_expr (E_c_points_to P_top) range
+let mk_c_points_to pt range =
+  mk_expr (E_c_points_to pt) range
+
+let mk_c_points_to_bloc b o range =
+  mk_c_points_to (P_block (b, o)) range
 
 let mk_c_points_to_null range =
-  mk_expr (E_c_points_to P_null) range
+  mk_c_points_to P_null range
 
 let mk_c_points_to_invalid range =
-  mk_expr (E_c_points_to P_invalid) range
+  mk_c_points_to P_invalid range
 
 let mk_c_points_to_fun f range =
-  mk_expr (E_c_points_to (P_fun f)) range
+  mk_c_points_to (P_fun f) range
 
+let mk_c_points_to_valid range =
+  mk_c_points_to P_valid range
 
 let () =
   register_expr_with_visitor {
@@ -110,19 +115,21 @@ let () =
 
 
 let eval_pointed_base_offset ptr range (man:('a,'t,'s) Core.Sig.Stacked.Lowlevel.man) flow =
-  man.eval ptr ~zone:(Zone.Z_c_low_level, Z_c_points_to) flow |>
-  Eval.bind @@ fun pt flow ->
+  man.eval ptr ~zone:(Zone.Z_c_low_level, Z_c_points_to) flow >>$ fun pt flow ->
 
   match ekind pt with
   | E_c_points_to P_null ->
-    raise_alarm Alarms.ANullDeref range ~bottom:true man.lattice flow |>
-    Eval.empty_singleton
+    raise_c_alarm ANullDeref range ~bottom:true man.lattice flow |>
+    Result.empty_singleton
 
   | E_c_points_to P_invalid ->
-    raise_alarm Alarms.AInvalidDeref range ~bottom:true man.lattice flow |>
-    Eval.empty_singleton
+    raise_c_alarm AInvalidDeref range ~bottom:true man.lattice flow |>
+    Result.empty_singleton
 
   | E_c_points_to (P_block (base, offset)) ->
-    Eval.singleton (base, offset) flow
+    Result.singleton (Some (base, offset)) flow
+
+  | E_c_points_to P_valid ->
+    Result.singleton None flow
 
   | _ -> assert false
