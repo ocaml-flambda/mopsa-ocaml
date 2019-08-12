@@ -50,6 +50,7 @@ let join_akind ak1 ak2 = match ak1, ak2 with
   | A_py_list r1, A_py_list r2 -> A_py_list (Rangeset.union r1 r2)
   | _ -> failwith "hum"
 
+
 let () =
   Format.(register_addr_kind {
       print = (fun default fmt a ->
@@ -623,7 +624,6 @@ struct
     let range = srange stmt in
     match skind stmt with
     | S_rename ({ekind = E_addr ({addr_kind = A_py_list _} as a)}, {ekind = E_addr a'}) ->
-      (* FIXME: this is weird *)
       let va = var_of_addr a in
       let va' = var_of_addr a' in
       debug "renaming %a into %a@\n" pp_var va pp_var va';

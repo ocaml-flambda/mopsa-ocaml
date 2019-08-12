@@ -28,6 +28,15 @@ open Addr
 open Universal.Ast
 open Data_model.Attribute
 
+(*FIXME: can iterators over addresses be renamed? *)
+(*FIXME: is_data_container should be defined modularly *)
+let is_data_container = ref (fun (a:addr) -> match akind a with
+    | Objects.Py_list.A_py_list _
+    | Objects.Tuple.A_py_tuple _
+    | Objects.Dict.A_py_dict _
+    | Objects.Py_set.A_py_set _
+      -> true
+    | _ -> false)
 
 (*==========================================================================*)
 (**                            {2 Addresses}                                *)
@@ -193,7 +202,9 @@ struct
       Post.return |> Option.return
 
     | S_rename ({ekind = E_addr a}, {ekind = E_addr a'}) ->
+      (* renaming V_addr_attr(a, _) into V_addr_attr(a', _) is done by each domain (see for example py_list exec). FIXME: is that a good idea? *)
       let cur = get_domain_env T_cur man flow in
+      debug "cur after %a:\n%a" pp_stmt stmt AMap.print cur;
       let ncur = AMap.map (ASet.map (fun addr -> if addr = Def a then Def a' else addr)) cur in
       let flow = set_domain_env T_cur ncur man flow in
       let annot = Flow.get_ctx flow in
@@ -212,6 +223,8 @@ struct
           flow in
       begin match akind a with
         | A_py_instance _ -> man.exec ~zone:Zone.Z_py_obj stmt flow |> Post.return |> Option.return
+        | _ when !is_data_container a ->
+          man.exec ~zone:Zone.Z_py_obj stmt flow |> Post.return |> Option.return
         | _ -> flow |> Post.return |> Option.return
       end
 
@@ -253,9 +266,14 @@ struct
               (Eval.empty_singleton flow :: acc, Flow.get_ctx flow)
 
             | Undef_local ->
-              debug "Incoming UnboundLocalError, on var %a, range %a, cs = %a @\n" pp_var v pp_range range Callstack.print (Callstack.get flow);
-              let flow = man.exec (Utils.mk_builtin_raise "UnboundLocalError" range) flow in
-              (Eval.empty_singleton flow :: acc, Flow.get_ctx flow)
+              (* begin match v.vkind with
+               *   | V_uniq _ -> *)
+                  debug "Incoming UnboundLocalError, on var %a, range %a, cs = %a @\n" pp_var v pp_range range Callstack.print (Callstack.get flow);
+                  let flow = man.exec (Utils.mk_builtin_raise "UnboundLocalError" range) flow in
+                  (Eval.empty_singleton flow :: acc, Flow.get_ctx flow)
+              (*   | _ ->
+               *     (acc, Flow.get_ctx flow)
+               * end *)
 
             | Def addr ->
               let res = man.eval (mk_py_object (addr, Option.return @@ mk_addr addr range) range) flow in

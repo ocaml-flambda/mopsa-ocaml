@@ -29,7 +29,8 @@ open Addr
 open Universal.Ast
 
 type addr_kind +=
-  | A_py_tuple of Py_list.Rangeset.t list (* variable where the smashed elements are stored *)
+  | A_py_tuple of Py_list.Rangeset.t list
+  (* variables where the expanded elements are stored *)
 
 let () =
   Format.(register_addr_kind {
@@ -52,7 +53,7 @@ struct
     end)
 
   let interface = {
-    iexec = {provides = []; uses = [Zone.Z_py_obj]};
+    iexec = {provides = [Zone.Z_py_obj]; uses = [Zone.Z_py_obj]};
     ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj; Universal.Zone.Z_u_heap, Z_any]}
   }
 
@@ -167,7 +168,18 @@ struct
     | _ -> None
 
 
-  let exec zone stmt man flow = None
+  let exec zone stmt man flow =
+    let range = srange stmt in
+    match skind stmt with
+    | S_rename ({ekind = E_addr ({addr_kind = A_py_tuple _} as a)}, {ekind = E_addr a'}) ->
+      let vas = var_of_addr a in
+      let vas' = var_of_addr a' in
+      List.fold_left2 (fun flow v v' ->
+          man.exec ~zone:Zone.Z_py (mk_rename_var v v' range) flow)
+        flow vas vas'
+      |> Post.return |> Option.return
+    | _ -> None
+
 
   let ask _ _ _ = None
 end
