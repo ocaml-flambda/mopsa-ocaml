@@ -410,7 +410,10 @@ struct
   (** 𝔼⟦ p - q ⟧ *)
   let eval_diff p q range man flow =
     (* p1 and p2 should point to the same type *)
-    if compare_typ (under_type p.etyp) (under_type q.etyp) <> 0
+    let elem_size_p = under_type p.etyp |> void_to_char |> sizeof_type in
+    let elem_size_q = under_type q.etyp |> void_to_char |> sizeof_type in
+    (* FIXME: do we need to check the sign also? *)
+    if not @@ Z.equal elem_size_p elem_size_q
     then panic_at range
         "%a - %a: pointers do not point to the same type"
         pp_expr p pp_expr q
@@ -424,7 +427,7 @@ struct
     let v2, o2, p2 = symbolic_to_value sq man flow in
 
     (* Size of a pointed element *)
-    let elem_size = under_type p.etyp |> void_to_char |> sizeof_type in
+    let elem_size = elem_size_p in
 
     (* Case 1 : same base => return difference of offset *)
     let case1 =
