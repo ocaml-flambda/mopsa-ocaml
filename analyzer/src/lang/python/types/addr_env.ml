@@ -216,7 +216,7 @@ struct
           flow in
       begin match akind a with
         | A_py_instance _ -> man.exec ~zone:Zone.Z_py_obj stmt flow |> Post.return |> Option.return
-        | ak when Data_container_utils.is_data_container ak ->
+        | ak when Objects.Data_container_utils.is_data_container ak ->
           man.exec ~zone:Zone.Z_py_obj stmt flow |> Post.return |> Option.return
         | _ -> flow |> Post.return |> Option.return
       end
