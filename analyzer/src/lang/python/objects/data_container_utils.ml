@@ -30,11 +30,11 @@ let is_data_container_chain = ref (fun (a:addr_kind) -> false)
 let register_is_data_container (is_dc:('a -> bool) -> 'a -> bool) =
   is_data_container_chain := is_dc !is_data_container_chain
 
-let is_data_container = !is_data_container_chain
+let is_data_container ak = !is_data_container_chain ak
 
 let join_akind_chain = ref (fun (ak1: addr_kind) (ak2: addr_kind) -> failwith "join_akind NotImplemented")
 
 let register_join_akind (join_akind_f: ('a -> 'a -> 'a) -> 'a -> 'a -> 'a) =
   join_akind_chain := join_akind_f !join_akind_chain
 
-let join_akind = !join_akind_chain
+let join_akind ak1 ak2 = !join_akind_chain ak1 ak2
