@@ -27,25 +27,37 @@ open Framework.Core.Sig.Domain.Stateless
 open Ast
 open Addr
 open Universal.Ast
+open Data_container_utils
 
 type addr_kind +=
-  | A_py_dict of Py_list.Rangeset.t * Py_list.Rangeset.t
+  | A_py_dict of Rangeset.t * Rangeset.t
   (* variables where the smashed elements are stored (one for the keys and one for the values *)
   | A_py_dict_view of string (* name *) * addr (* addr of the dictionary *)
+
+
+let () =
+  register_join_akind (fun default ak1 ak2 ->
+      match ak1, ak2 with
+      | A_py_dict (k1, v1), A_py_dict (k2, v2) -> A_py_dict ((Rangeset.union k1 k2), (Rangeset.union v1 v2))
+      | _ -> default ak1 ak2);
+  register_is_data_container (fun default ak -> match ak with
+      | A_py_dict _ -> true
+      | _ -> default ak)
+
 
 let () =
   Format.(register_addr_kind {
       print = (fun default fmt a ->
           match a with
-          | A_py_dict (keys, values) -> fprintf fmt "dict[%a, %a]" (fun fmt -> Py_list.Rangeset.iter (fun ra -> pp_range fmt ra)) keys (fun fmt -> Py_list.Rangeset.iter (fun ra -> pp_range fmt ra)) values
+          | A_py_dict (keys, values) -> fprintf fmt "dict[%a, %a]" (fun fmt -> Rangeset.iter (fun ra -> pp_range fmt ra)) keys (fun fmt -> Rangeset.iter (fun ra -> pp_range fmt ra)) values
           | A_py_dict_view (s, a) -> fprintf fmt "%s[%a]" s pp_addr a
           | _ -> default fmt a);
       compare = (fun default a1 a2 ->
           match a1, a2 with
           | A_py_dict (k1, v1), A_py_dict (k2, v2) ->
             Compare.compose [
-              (fun () -> Py_list.Rangeset.compare k1 k2);
-              (fun () -> Py_list.Rangeset.compare v1 v2);
+              (fun () -> Rangeset.compare k1 k2);
+              (fun () -> Rangeset.compare v1 v2);
             ]
           | A_py_dict_view (s1, a1), A_py_dict_view (s2, a2) ->
             Compare.compose [
@@ -104,7 +116,7 @@ struct
     | E_py_dict (ks, vs) ->
       debug "Skipping dict.__new__, dict.__init__ for now@\n";
 
-      let addr_dict = mk_alloc_addr (A_py_dict (Py_list.Rangeset.singleton range, Py_list.Rangeset.singleton range)) range in
+      let addr_dict = mk_alloc_addr (A_py_dict (Rangeset.singleton range, Rangeset.singleton range)) range in
       man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_dict flow |>
       Eval.bind (fun eaddr_dict flow ->
           let addr_dict = addr_of_expr eaddr_dict in

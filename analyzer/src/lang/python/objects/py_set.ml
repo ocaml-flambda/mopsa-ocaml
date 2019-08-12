@@ -27,19 +27,31 @@ open Sig.Domain.Stateless
 open Ast
 open Addr
 open Universal.Ast
+open Data_container_utils
+
 
 type addr_kind +=
-  | A_py_set of Py_list.Rangeset.t (* variable where the smashed elements are stored *)
+  | A_py_set of Rangeset.t (* variable where the smashed elements are stored *)
+
+let () =
+  register_join_akind (fun default ak1 ak2 ->
+      match ak1, ak2 with
+      | A_py_set r1, A_py_set r2 -> A_py_set (Rangeset.union r1 r2)
+      | _ -> default ak1 ak2);
+  register_is_data_container (fun default ak -> match ak with
+      | A_py_set _ -> true
+      | _ -> default ak)
+
 
 let () =
   Format.(register_addr_kind {
       print = (fun default fmt a ->
           match a with
-          | A_py_set r -> fprintf fmt "set[%a]" (fun fmt -> Py_list.Rangeset.iter (fun ra -> pp_range fmt ra)) r
+          | A_py_set r -> fprintf fmt "set[%a]" (fun fmt -> Rangeset.iter (fun ra -> pp_range fmt ra)) r
           | _ -> default fmt a);
       compare = (fun default a1 a2 ->
           match a1, a2 with
-          | A_py_set v1, A_py_set v2 -> Py_list.Rangeset.compare v1 v2
+          | A_py_set v1, A_py_set v2 -> Rangeset.compare v1 v2
           | _ -> default a1 a2);})
 
 
@@ -76,7 +88,7 @@ struct
     | E_py_set ls ->
       debug "Skipping set.__new__, set.__init__ for now@\n";
 
-      let addr_set = mk_alloc_addr (A_py_set (Py_list.Rangeset.singleton range)) range in
+      let addr_set = mk_alloc_addr (A_py_set (Rangeset.singleton range)) range in
       man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_set flow |>
       Eval.bind (fun eaddr_set flow ->
           let addr_set = addr_of_expr eaddr_set in

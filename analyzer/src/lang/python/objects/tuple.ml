@@ -27,21 +27,31 @@ open Sig.Domain.Stateless
 open Ast
 open Addr
 open Universal.Ast
+open Data_container_utils
 
 type addr_kind +=
-  | A_py_tuple of Py_list.Rangeset.t list
+  | A_py_tuple of Rangeset.t list
   (* variables where the expanded elements are stored *)
+
+let () =
+  register_join_akind (fun default ak1 ak2 ->
+      match ak1, ak2 with
+      | A_py_tuple ts1, A_py_tuple ts2 -> A_py_tuple (List.map2 Rangeset.union ts1 ts2)
+      | _ -> default ak1 ak2);
+  register_is_data_container (fun default ak -> match ak with
+      | A_py_tuple _ -> true
+      | _ -> default ak)
 
 let () =
   Format.(register_addr_kind {
       print = (fun default fmt a ->
           match a with
-          | A_py_tuple vars -> fprintf fmt "tuple[%a]" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") (fun fmt -> Py_list.Rangeset.iter (fun ra -> pp_range fmt ra))) vars
+          | A_py_tuple vars -> fprintf fmt "tuple[%a]" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") (fun fmt -> Rangeset.iter (fun ra -> pp_range fmt ra))) vars
           | _ -> default fmt a);
       compare = (fun default a1 a2 ->
           match a1, a2 with
           | A_py_tuple t1, A_py_tuple t2 ->
-            Compare.list Py_list.Rangeset.compare t1 t2
+            Compare.list Rangeset.compare t1 t2
           | _ -> default a1 a2);})
 
 
@@ -76,7 +86,7 @@ struct
     let range = erange exp in
     match ekind exp with
     | E_py_tuple els ->
-      let addr_tuple = mk_alloc_addr (A_py_tuple (List.map (fun _ -> Py_list.Rangeset.singleton range) els)) range in
+      let addr_tuple = mk_alloc_addr (A_py_tuple (List.map (fun _ -> Rangeset.singleton range) els)) range in
       man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_tuple flow |>
       Eval.bind (fun eaddr_tuple flow ->
           let addr_tuple = addr_of_expr eaddr_tuple in

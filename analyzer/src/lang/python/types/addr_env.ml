@@ -29,14 +29,7 @@ open Universal.Ast
 open Data_model.Attribute
 
 (*FIXME: can iterators over addresses be renamed? *)
-(*FIXME: is_data_container should be defined modularly *)
-let is_data_container = ref (fun (a:addr) -> match akind a with
-    | Objects.Py_list.A_py_list _
-    | Objects.Tuple.A_py_tuple _
-    | Objects.Dict.A_py_dict _
-    | Objects.Py_set.A_py_set _
-      -> true
-    | _ -> false)
+
 
 (*==========================================================================*)
 (**                            {2 Addresses}                                *)
@@ -223,7 +216,7 @@ struct
           flow in
       begin match akind a with
         | A_py_instance _ -> man.exec ~zone:Zone.Z_py_obj stmt flow |> Post.return |> Option.return
-        | _ when !is_data_container a ->
+        | ak when Data_container_utils.is_data_container ak ->
           man.exec ~zone:Zone.Z_py_obj stmt flow |> Post.return |> Option.return
         | _ -> flow |> Post.return |> Option.return
       end

@@ -213,7 +213,7 @@ struct
              | Def a1, Def a2 ->
                if compare_addr a1 a2 <> 0 && is_container a1 && is_container a2 then
                  let addr_12 = {addr_group = join_agroup a1.addr_group a2.addr_group;
-                                addr_kind = Objects.Py_list.join_akind a1.addr_kind a2.addr_kind;
+                                addr_kind = Objects.Data_container_utils.join_akind a1.addr_kind a2.addr_kind;
                                 addr_mode = join_amode a1.addr_mode a2.addr_mode} in
                  AD.add k (AD.ASet.singleton (Def addr_12)) hd,
                  AD.add k (AD.ASet.singleton (Def addr_12)) hd',

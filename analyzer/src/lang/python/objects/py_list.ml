@@ -37,18 +37,22 @@ open Ast
 open Addr
 open Universal.Ast
 open Callstack
-
-module Rangeset = Set.Make(struct type t = range
-    let compare = compare_range end)
+open Data_container_utils
 
 type addr_kind +=
   | A_py_list of Rangeset.t (* rangeset because a list may be a summarization of list allocated at different ranges *)
   | A_py_iterator of string (* iterator kind (list_iterator, ...) *) * addr list  (* addr of the containers iterated on *) * int option (* potential position in the iterator *)
 
-(* TODO: proper join_akind *)
-let join_akind ak1 ak2 = match ak1, ak2 with
-  | A_py_list r1, A_py_list r2 -> A_py_list (Rangeset.union r1 r2)
-  | _ -> failwith "hum"
+
+let () =
+  register_join_akind (fun default ak1 ak2 ->
+      match ak1, ak2 with
+      | A_py_list r1, A_py_list r2 -> A_py_list (Rangeset.union r1 r2)
+      (* FIXME: this makes a cascade of matches. Any way to specialize the code? *)
+      | _ -> default ak1 ak2);
+  register_is_data_container (fun default ak -> match ak with
+      | A_py_list _ -> true
+      | _ -> default ak)
 
 
 let () =
