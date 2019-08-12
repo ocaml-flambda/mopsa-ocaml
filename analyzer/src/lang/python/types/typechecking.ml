@@ -69,7 +69,7 @@ struct
   let widen (bigman:('a, t, 's) Framework.Core.Sig.Stacked.Lowlevel.man) uctx a a' =
     Iter.widen uctx (bigman.get a) (bigman.get a'), a, a', true
 
-  let merge _ _ _ _ = failwith "todo"
+  let merge _ _ _ = failwith "todo"
 
   let init prog bigman flow = Iter.init prog (simplified_man bigman) flow
   let exec zone stmt bigman flow = Iter.exec zone stmt (simplified_man bigman) flow
@@ -81,7 +81,7 @@ struct
     | Framework.Engines.Interactive.Q_print_var ->
       Some (
         fun fmt v ->
-          let amap, tmap = get_domain_env T_cur man flow in
+          let amap, tmap = get_env T_cur man flow in
           let ret = ref [] in
           AD.AMap.iter (fun var addrs  ->
               if get_orig_vname var = v then
@@ -234,8 +234,8 @@ struct
         let ea12 = mk_addr a12 range in
         (* FIXME: context issue *)
         let ctx = Context.set_unit uctx Context.empty in
-        let flowa = Flow.add T_cur a man.lattice (Flow.bottom ctx) in
-        let flowa' = Flow.add T_cur a' man.lattice (Flow.bottom ctx) in
+        let flowa = Flow.add T_cur a man.lattice (Flow.bottom ctx Framework.Core.Alarm.AlarmSet.empty) in
+        let flowa' = Flow.add T_cur a' man.lattice (Flow.bottom ctx Framework.Core.Alarm.AlarmSet.empty) in
         Flow.get T_cur man.lattice @@ man.exec ~zone:Zone.Z_py_obj (mk_rename ea1 ea12 range) flowa,
         Flow.get T_cur man.lattice @@ man.exec ~zone:Zone.Z_py_obj (mk_rename ea2 ea12 range) flowa'
       ) (a, a') l in a, a', List.length l = 0

@@ -82,9 +82,11 @@ lang.c.libs.clib.file_descriptor = slot table domain
 # Python
 lang.python = ast addr utils visitor operators pp ast_compare frontend zone  \
               alarms libs desugar objects data_model types flows program
+lang.python.libs = math py_mopsa py_std
 lang.python.objects = class function range nones data_container_utils py_list tuple dict py_set
 lang.python.data_model = callable arith_ops compare_ops aug_assign	\
                          attribute subscript
+lang.python.types = typing addr_env typechecking t_string t_int t_float t_list t_set t_complex
 
 
 # Packages

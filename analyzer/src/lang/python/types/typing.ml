@@ -823,7 +823,7 @@ struct
 
           | A_py_var _, A_py_class (c, mro)
           | A_py_instance _, A_py_class (c, mro) ->
-            let cur = get_domain_env T_cur man flow in
+            let cur = get_env T_cur man flow in
             let ptys = if TMap.mem addr_obj cur then TMap.find addr_obj cur
               else Polytypeset.empty in
             let ptys =
@@ -860,7 +860,7 @@ struct
                     let flow =
                       if TMap.mem addr_obj cur then
                         let cur = TMap.add addr_obj (Polytypeset.singleton pty) cur in
-                        set_domain_env T_cur cur man flow
+                        set_env T_cur cur man flow
                       else flow in
                     man.eval (mk_py_bool (class_le (ci, mroi) (c, mro)) range) flow :: acc
                   | _ -> Exceptions.panic "todo@\n"

@@ -123,13 +123,13 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__getitem__")}, _)}, [list; index], []) ->
       let tyerror = fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
-      Eval.eval_list man.eval [list; index] flow |>
-      Eval.bind (fun exprs flow ->
+      bind_list [list; index] man.eval flow |>
+      bind_some (fun exprs flow ->
           let list, index = match exprs with [l; i] -> l, i | _ -> assert false in
-          assume_eval (mk_py_isinstance_builtin list "list" range) man flow
+          assume (mk_py_isinstance_builtin list "list" range) man flow
             ~fthen:(fun flow ->
                 let var_els = var_of_eobj list in
-                assume_eval (mk_py_isinstance_builtin index "int" range) man flow
+                assume (mk_py_isinstance_builtin index "int" range) man flow
                   ~fthen:(fun flow ->
                       let indexerror_f = man.exec (Utils.mk_builtin_raise "IndexError" range) flow in
                       let indexerror = Eval.empty_singleton indexerror_f in
@@ -138,7 +138,7 @@ struct
                       Eval.join_list ~empty:(Eval.empty_singleton flow) (evals :: Eval.copy_ctx evals indexerror :: [])
                     )
                   ~felse:(fun flow ->
-                      assume_eval (mk_py_isinstance_builtin index "slice" range) man flow
+                      assume (mk_py_isinstance_builtin index "slice" range) man flow
                         ~fthen:(fun flow ->
                             let addr_list = mk_alloc_addr (A_py_list (Rangeset.singleton range)) range in
                             man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_list flow |>
@@ -186,7 +186,7 @@ struct
         ["list"]
         (fun args flow ->
            let list, index, value = match args with | [l; i; v] -> l, i, v | _ -> assert false in
-           assume_eval (mk_py_isinstance_builtin index "int" range) man flow
+           assume (mk_py_isinstance_builtin index "int" range) man flow
              ~fthen:(fun flow ->
                  let var_els = var_of_eobj list in
                  let indexerror_f = man.exec (Utils.mk_builtin_raise "IndexError" range) flow in
@@ -200,7 +200,7 @@ struct
                  Eval.join_list ~empty:(Eval.empty_singleton flow) (assignment :: (Eval.copy_ctx assignment indexerror) ::[])
                )
              ~felse:(fun flow ->
-                 assume_eval (mk_py_isinstance_builtin index "slice" range) man flow
+                 assume (mk_py_isinstance_builtin index "slice" range) man flow
                    ~fthen:(fun flow ->
                        man.eval (mk_py_call (mk_py_object (find_builtin "list.extend") range) [list; value] range) flow
                      )
@@ -249,7 +249,7 @@ struct
         ["list"]
         (fun args flow ->
            let list, element = match args with | [l; e] -> l, e | _ -> assert false in
-           debug "list: %a@\nelement = %a@\nflow = %a@\n" pp_expr list pp_expr element (Flow.print man.lattice) flow;
+           debug "list: %a@\nelement = %a@\nflow = %a@\n" pp_expr list pp_expr element (Flow.print man.lattice.print) flow;
            let var_els = var_of_eobj list in
            man.exec (mk_assign (mk_var var_els ~mode:WEAK range) element range) flow |>
            man.eval (mk_py_none range))
@@ -278,7 +278,7 @@ struct
            (* FIXME: check manually (with ekind list) that we have a list or list_iterator as we are in the same abstract domain? *)
            let list, other = match eargs with e1::e2::[] -> e1, e2 | _ -> assert false in
            let var_els = var_of_eobj list in
-           assume_eval (mk_py_isinstance_builtin other "list" range) man flow
+           assume (mk_py_isinstance_builtin other "list" range) man flow
              ~fthen:(fun flow ->
                  let var_sndels = var_of_eobj other in
                  man.exec (mk_assign (mk_var var_els ~mode:WEAK range) (mk_var var_sndels ~mode:WEAK range) range) flow |>
@@ -404,14 +404,14 @@ struct
             | _ -> assert false in
           let var_els = var_of_addr list_addr in
           let els = man.eval (mk_var var_els ~mode:WEAK range) flow in
-          Option.none_to_exn @@ Eval.bind_lowlevel_opt
-            (fun oels flow cleaners ->
+          Option.none_to_exn @@ Result.bind_opt
+            (fun oels flow ->
                let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
-               Some (Eval.add_cleaners cleaners (match oels with
+               Some (match oels with
                    | None -> stopiteration
                    | Some e ->
                      Eval.join_list ~empty:(Eval.empty_singleton flow) (Eval.copy_ctx stopiteration els::stopiteration::[])
-                 ) )
+                 )
             )
             els
         )
@@ -463,7 +463,7 @@ struct
               ~fthen:(fun flow ->
                   (* FIXME: we're assuming that we use the list abstraction *)
                   let var_els_in_ty = var_of_eobj in_ty in
-                  assume_eval (mk_py_isinstance_builtin (mk_var ~mode:WEAK var_els_in_ty range) "float" range) man flow
+                  assume (mk_py_isinstance_builtin (mk_var ~mode:WEAK var_els_in_ty range) "float" range) man flow
                     ~fthen:(man.eval (mk_py_top (T_float F_DOUBLE) range))
                     ~felse:tyerror)
               ~felse:tyerror
@@ -564,7 +564,7 @@ struct
         (fun eargs flow ->
            let toinsert, iterable = match eargs with [t; i] -> t, i | _ -> assert false in
            let var_els_iterable = var_of_eobj iterable in
-           assume_eval (mk_py_isinstance_builtin (mk_var ~mode:WEAK var_els_iterable range) "str" range) man flow
+           assume (mk_py_isinstance_builtin (mk_var ~mode:WEAK var_els_iterable range) "str" range) man flow
              ~fthen:(man.eval (mk_py_top T_string range))
              ~felse:tyerror
         )

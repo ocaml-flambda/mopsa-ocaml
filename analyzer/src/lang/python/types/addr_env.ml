@@ -27,6 +27,7 @@ open Ast
 open Addr
 open Universal.Ast
 open Data_model.Attribute
+open Alarms
 
 (*FIXME: can iterators over addresses be renamed? *)
 
@@ -190,13 +191,13 @@ struct
 
     | S_rename ({ekind = E_var (v, mode)}, {ekind = E_var (v', mode')}) ->
       (* FIXME: modes *)
-      let cur = get_domain_env T_cur man flow in
-      set_domain_env T_cur (AMap.rename v v' cur) man flow |>
+      let cur = get_env T_cur man flow in
+      set_env T_cur (AMap.rename v v' cur) man flow |>
       Post.return |> Option.return
 
     | S_rename ({ekind = E_addr a}, {ekind = E_addr a'}) ->
       (* renaming V_addr_attr(a, _) into V_addr_attr(a', _) is done by each domain (see for example py_list exec). FIXME: is that a good idea? *)
-      let cur = get_domain_env T_cur man flow in
+      let cur = get_env T_cur man flow in
       debug "cur after %a:\n%a" pp_stmt stmt AMap.print cur;
       let ncur = AMap.map (ASet.map (fun addr -> if addr = Def a then Def a' else addr)) cur in
       let flow = set_env T_cur ncur man flow in
