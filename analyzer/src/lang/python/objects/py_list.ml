@@ -42,8 +42,13 @@ module Rangeset = Set.Make(struct type t = range
     let compare = compare_range end)
 
 type addr_kind +=
-  | A_py_list of Rangeset.t
+  | A_py_list of Rangeset.t (* rangeset because a list may be a summarization of list allocated at different ranges *)
   | A_py_iterator of string (* iterator kind (list_iterator, ...) *) * addr list  (* addr of the containers iterated on *) * int option (* potential position in the iterator *)
+
+(* TODO: proper join_akind *)
+let join_akind ak1 ak2 = match ak1, ak2 with
+  | A_py_list r1, A_py_list r2 -> A_py_list (Rangeset.union r1 r2)
+  | _ -> failwith "hum"
 
 let () =
   Format.(register_addr_kind {
@@ -66,9 +71,6 @@ let () =
             ]
           | _ -> default a1 a2);})
 
-let join_akind ak1 ak2 = match ak1, ak2 with
-  | A_py_list r1, A_py_list r2 -> A_py_list (Rangeset.union r1 r2)
-  | _ -> failwith "hum"
 
 module Domain =
 struct
@@ -95,14 +97,13 @@ struct
 
   let addr_of_expr exp = match ekind exp with
     | E_addr a -> a
-    | _ -> assert false
+    | _ -> Exceptions.panic "%a@\n" pp_expr exp
 
   let rec eval zones exp man flow =
     let range = erange exp in
     match ekind exp with
     | E_py_list ls ->
       debug "Skipping list.__new__, list.__init__ for now@\n";
-
 
       let addr_list = mk_alloc_addr (A_py_list (Rangeset.singleton range)) range in
       man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_list flow |>
@@ -398,9 +399,16 @@ struct
             | _ -> assert false in
           let var_els = var_of_addr list_addr in
           let els = man.eval (mk_var var_els ~mode:WEAK range) flow in
-          let flow = Flow.set_ctx (Eval.get_ctx els) flow in
-          let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
-          Eval.join_list ~empty:(Eval.empty_singleton flow) (Eval.copy_ctx stopiteration els::stopiteration::[])
+          Option.none_to_exn @@ Eval.bind_lowlevel_opt
+            (fun oels flow cleaners ->
+               let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
+               Some (Eval.add_cleaners cleaners (match oels with
+                   | None -> stopiteration
+                   | Some e ->
+                     Eval.join_list ~empty:(Eval.empty_singleton flow) (Eval.copy_ctx stopiteration els::stopiteration::[])
+                 ) )
+            )
+            els
         )
       |> Option.return
 
@@ -414,7 +422,7 @@ struct
         ["list"]
         (fun args flow ->
            let list = match args with | [l] -> l | _ -> assert false in
-           let list_addr = addr_of_expr list in
+           let list_addr = addr_of_object (object_of_expr list) in
            let a = mk_alloc_addr (A_py_iterator ("list_reverseiterator", [list_addr], None)) range in
            man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) a flow |>
            Eval.bind (fun eaddr_it flow ->

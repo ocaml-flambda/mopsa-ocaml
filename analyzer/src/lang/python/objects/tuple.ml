@@ -29,18 +29,18 @@ open Addr
 open Universal.Ast
 
 type addr_kind +=
-  | A_py_tuple of var list (* variable where the smashed elements are stored *)
+  | A_py_tuple of Py_list.Rangeset.t list (* variable where the smashed elements are stored *)
 
 let () =
   Format.(register_addr_kind {
       print = (fun default fmt a ->
           match a with
-          | A_py_tuple vars -> fprintf fmt "tuple[%a]" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_var) vars
+          | A_py_tuple vars -> fprintf fmt "tuple[%a]" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") (fun fmt -> Py_list.Rangeset.iter (fun ra -> pp_range fmt ra))) vars
           | _ -> default fmt a);
       compare = (fun default a1 a2 ->
           match a1, a2 with
           | A_py_tuple t1, A_py_tuple t2 ->
-            Compare.list compare_var t1 t2
+            Compare.list Py_list.Rangeset.compare t1 t2
           | _ -> default a1 a2);})
 
 
@@ -51,89 +51,39 @@ struct
       let name = "python.objects.tuple"
     end)
 
-  module VarInfo = struct type t = var list let compare = Compare.list compare_var let print = Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_var end
-  module TupleInfo = struct
-    type tuple_size = int
-    type t = Callstack.cs * range * tuple_size
-    let compare (cs, r, s) (cs', r', s') =
-      Compare.compose
-        [
-          (fun () -> Callstack.compare cs cs');
-          (fun () -> compare_range r r');
-          (fun () -> Pervasives.compare s s')
-        ]
-    let print fmt (cs, r, s) =
-      Format.fprintf fmt "(%a, %a, %d)"
-        Callstack.pp_call_stack cs
-        pp_range r
-        s
-  end
-
-  module Equiv = Equiv.Make(TupleInfo)(VarInfo)
-
-  let ctx_key =
-    let module K = Context.GenUnitKey(
-      struct
-        type t = Equiv.t
-        let print fmt m =
-          Format.fprintf fmt "Tuple annots: @[%a@]" (Equiv.print ?pp_sep:None) m
-      end
-      )
-    in
-    K.key
-
-
-  let fresh_expanded_vars range d =
-    let rec gen_aux pos acc =
-      if pos < 0 then acc else
-        let v = mk_range_attr_var range ("$t[" ^ (string_of_int pos) ^ "]") T_any in
-        gen_aux (pos-1) (v::acc)
-    in gen_aux (d-1) []
-
-  let get_var_equiv ((cs, range, size) as info: TupleInfo.t) (e: Equiv.t) =
-    try
-      Equiv.find_l info e, e
-    with Not_found ->
-      let vars = fresh_expanded_vars range size in
-      let new_eq = Equiv.add (info, vars) e in
-      vars, new_eq
-
-  let get_var_flow (info: TupleInfo.t) (f: 'a flow) : var list * 'a flow =
-    let a = Flow.get_ctx f |>
-            Context.find_unit ctx_key
-    in
-    let var, a = get_var_equiv info a in
-    var, Flow.set_ctx (Flow.get_ctx f |> Context.add_unit ctx_key a) f
-
   let interface = {
     iexec = {provides = []; uses = [Zone.Z_py_obj]};
     ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj; Universal.Zone.Z_u_heap, Z_any]}
   }
 
-  let init (prog:program) man flow =
-    Flow.set_ctx (
-      Flow.get_ctx flow |>
-      Context.add_unit ctx_key Equiv.empty
-    ) flow
+  let init (prog:program) man flow = flow
+
+  let var_of_addr a = match akind a with
+    | A_py_tuple s -> List.mapi (fun i _ -> mk_addr_attr a ("tuple[" ^ string_of_int i ^ "]") T_any) s
+    | _ -> assert false
+
+  let var_of_eobj e = match ekind e with
+    | E_py_object (a, _) -> var_of_addr a
+    | _ -> assert false
+
+  let addr_of_expr exp = match ekind exp with
+    | E_addr a -> a
+    | _ -> Exceptions.panic "%a@\n" pp_expr exp
+
 
   let rec eval zones exp man flow =
     let range = erange exp in
     match ekind exp with
     | E_py_tuple els ->
-      Eval.eval_list man.eval els flow |>
-      Eval.bind(fun els flow ->
-          let els_vars, flow = get_var_flow (Callstack.get flow, range, List.length els) flow in
+      let addr_tuple = mk_alloc_addr (A_py_tuple (List.map (fun _ -> Py_list.Rangeset.singleton range) els)) range in
+      man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_tuple flow |>
+      Eval.bind (fun eaddr_tuple flow ->
+          let addr_tuple = addr_of_expr eaddr_tuple in
+          let els_vars = var_of_addr addr_tuple in
           let flow = List.fold_left2 (fun acc vari eli ->
               man.exec ~zone:Zone.Z_py
                 (mk_assign (mk_var ~mode:WEAK vari range) eli range) acc) flow els_vars els in
-          let addr_tuple = mk_alloc_addr (A_py_tuple els_vars) range in
-          man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_tuple flow |>
-          Eval.bind (fun eaddr_tuple flow ->
-              let addr_tuple = match ekind eaddr_tuple with
-                | E_addr a -> a
-                | _ -> assert false in
-              Eval.singleton (mk_py_object (addr_tuple, None) range) flow
-            )
+          Eval.singleton (mk_py_object (addr_tuple, None) range) flow
         )
       |> Option.return
 
@@ -143,9 +93,7 @@ struct
         (fun eargs flow ->
            let tuple = List.hd eargs in
            let isin = List.hd (List.tl eargs) in
-           let tuple_vars = match ekind tuple with
-             | E_py_object ({addr_kind = A_py_tuple vars}, _) -> vars
-             | _ -> assert false in
+           let tuple_vars = var_of_eobj tuple in
            let mk_comp var = mk_binop (mk_var ~mode:WEAK var range) O_eq isin range in
            if List.length tuple_vars = 0 then
              man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_false range) flow
@@ -165,9 +113,7 @@ struct
            let pos = match ekind (List.hd (List.tl args)) with
              | E_constant (C_int z) -> Z.to_int z
              | _ -> Exceptions.panic "tuple.__getitem__ over non-constant integer" in
-           let tuple_vars = match ekind tuple with
-             | E_py_object ({addr_kind = A_py_tuple vars}, _) -> vars
-             | _ -> assert false in
+           let tuple_vars = var_of_eobj tuple in
            if 0 <= pos && pos < List.length tuple_vars then
              man.eval (mk_var ~mode:WEAK (List.nth tuple_vars pos) range) flow
            else
@@ -203,9 +149,7 @@ struct
           let tuple_it_addr, tuple_addr, tuple_pos = match ekind eiterator with
             | E_py_object ({addr_kind = Py_list.A_py_iterator (s, [a], d)} as addr, _) when s = "tuple_iterator" -> addr, a, d
             | _ -> assert false in
-          let vars_els = match akind tuple_addr with
-            | A_py_tuple a -> a
-            | _ -> assert false in
+          let vars_els = var_of_addr tuple_addr in
           match tuple_pos with
           | Some d when d < List.length vars_els ->
             let () = debug "exec incoming@\n" in
