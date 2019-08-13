@@ -94,10 +94,6 @@ struct
                      mk_addr_attr a "dict_val" T_any
     | _ -> assert false
 
-  (* let var_of_eobj e = match ekind e with
-   *   | E_py_object (a, _) -> var_of_addr a
-   *   | _ -> assert false *)
-
   let addr_of_expr exp = match ekind exp with
     | E_addr a -> a
     | _ -> Exceptions.panic "%a@\n" pp_expr exp

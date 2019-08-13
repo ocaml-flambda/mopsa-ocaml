@@ -468,5 +468,3 @@ def bench_all(loops):
 def test_main():
     import mopsa
     bench_all(400)
-    mopsa.ignore_exception(IndexError)
-    mopsa.assert_safe()

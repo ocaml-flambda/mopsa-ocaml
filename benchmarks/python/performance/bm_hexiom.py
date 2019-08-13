@@ -190,7 +190,7 @@ class Hexc(object):
     def __init__(self, size):
         self.size = size
         self.count = 3 * size * (size - 1) + 1
-        self.nodes_by_id = self.count * [Node(0, 0, [])] #self.count * [None]
+        self.nodes_by_id = self.count * [Node((0, 0), 0, [])] #self.count * [None]
         self.nodes_by_pos = {}
         id = 0
         for y in range(size):
@@ -336,8 +336,7 @@ def find_moves(pos, strategy, order):
         return [(cell_id, v) for v in done[cell_id]]
     else:
         # Try higher values first and EMPTY last
-        moves = list(reversed([(cell_id, v)
-                               for v in done[cell_id] if v != EMPTY]))
+        moves = list(reversed([(cell_id, v) for v in done[cell_id] if v != EMPTY]))
         if EMPTY in done[cell_id]:
             moves.append((cell_id, EMPTY))
         return moves

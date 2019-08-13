@@ -24,7 +24,6 @@ let () =
 
 module Domain =
 struct
-  (* TODO: lists and polymorphism? *)
 
   module AD = Addr_env.Domain
   module TD = Typing.Domain
@@ -196,12 +195,6 @@ struct
     | WEAK, _ | _, WEAK -> WEAK
     | STRONG, STRONG -> STRONG
 
-  let is_container a =
-    (* FIXME: at least move it to lists, so it's right (py_iterators too) *)
-    match akind a with
-    | A_py_class _ | A_py_function _ | A_py_instance _ | A_py_method _ | A_py_module _ | A_py_var _ -> false
-    | _ -> true
-
   let unify man uctx a a' =
     let (hd, tl) = man.get a and (hd', tl') = man.get a' in
     let hd, hd', l = AD.AMap.fold2o
@@ -211,7 +204,9 @@ struct
            if AD.ASet.cardinal as1 <= 1 && AD.ASet.cardinal as2 <= 1 then
              match AD.ASet.choose as1, AD.ASet.choose as2 with
              | Def a1, Def a2 ->
-               if compare_addr a1 a2 <> 0 && is_container a1 && is_container a2 then
+               if compare_addr a1 a2 <> 0 &&
+                  Objects.Data_container_utils.is_data_container a1.addr_kind &&
+                  Objects.Data_container_utils.is_data_container a2.addr_kind then
                  let addr_12 = {addr_group = join_agroup a1.addr_group a2.addr_group;
                                 addr_kind = Objects.Data_container_utils.join_akind a1.addr_kind a2.addr_kind;
                                 addr_mode = join_amode a1.addr_mode a2.addr_mode} in
@@ -234,6 +229,7 @@ struct
         let ea12 = mk_addr a12 range in
         (* FIXME: context issue *)
         let ctx = Context.set_unit uctx Context.empty in
+        (* FIXME: what about alarms? *)
         let flowa = Flow.add T_cur a man.lattice (Flow.bottom ctx Framework.Core.Alarm.AlarmSet.empty) in
         let flowa' = Flow.add T_cur a' man.lattice (Flow.bottom ctx Framework.Core.Alarm.AlarmSet.empty) in
         Flow.get T_cur man.lattice @@ man.exec ~zone:Zone.Z_py_obj (mk_rename ea1 ea12 range) flowa,

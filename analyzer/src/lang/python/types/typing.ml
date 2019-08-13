@@ -590,7 +590,6 @@ struct
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e' (*(Utils.mk_builtin_call "bool" [e'] range)*) flow |>
       Eval.bind
         (fun exp flow ->
-           (* FIXME: test if instance of bool and proceed accordingly *)
            match ekind exp with
            | E_constant (C_top T_bool) ->
              Eval.singleton exp flow
