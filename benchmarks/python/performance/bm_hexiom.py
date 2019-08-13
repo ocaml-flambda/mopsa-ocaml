@@ -658,7 +658,7 @@ def add_cmdline_args(cmd, args):
     cmd.extend(("--level", str(args.level)))
 
 
-if __name__ == "__main__":
+#if __name__ == "__main__":
     # kw = {'add_cmdline_args': add_cmdline_args}
     # if perf.python_has_jit():
     #     # PyPy needs to compute more warmup values to warmup its JIT
@@ -676,4 +676,17 @@ if __name__ == "__main__":
     # runner.metadata['hexiom_level'] = args.level
 
     # runner.bench_time_func('hexiom', main, args.level)
+def test_main():
+    import mopsa
+
     main(10, 36)
+    mopsa.ignore_exception(IndexError)
+    mopsa.ignore_exception(KeyError)
+    mopsa.ignore_exception(ValueError)
+    mopsa.assert_exception_exists(UnboundLocalError)
+    mopsa.ignore_exception(UnboundLocalError)
+    mopsa.assert_exception_exists(AssertionError)
+    mopsa.ignore_exception(AssertionError)
+    mopsa.assert_exception_exists(Exception)
+    mopsa.ignore_exception(Exception)
+    mopsa.assert_safe()
