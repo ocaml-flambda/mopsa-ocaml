@@ -112,6 +112,8 @@ and from_stmt (stmt: Py_parser.Ast.stmt) : stmt =
         py_func_is_generator = f.func_is_generator;
         py_func_decors = List.map from_exp f.func_decors;
         py_func_range = f.func_range;
+        py_func_types_in = List.map from_exp_option f.func_types_in;
+        py_func_type_out = from_exp_option f.func_type_out;
         py_func_ret_var =
           mk_fresh_uniq_var ("ret_" ^ f.func_var.name) T_any ()
       }
@@ -191,6 +193,10 @@ and from_exp_option : Py_parser.Ast.expr option -> expr option
 (** Translation of expressions *)
 and from_exp exp =
   let ekind, etyp = match exp.ekind with
+    | E_ellipsis ->
+      E_constant (C_py_ellipsis),
+      T_any
+
     | E_true ->
       E_constant (Universal.Ast.C_bool true),
       Universal.Ast.T_bool

@@ -33,6 +33,7 @@ let () =
       match c1, c2 with
       | C_py_imag f1, C_py_imag f2 -> Pervasives.compare f1 f2
       | C_py_none, C_py_none
+      | C_py_ellipsis, C_py_ellipsis
       | C_py_not_implemented, C_py_not_implemented
       | C_py_empty, C_py_empty -> 0
       | _ -> default c1 c2);
