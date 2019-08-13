@@ -89,8 +89,11 @@ let () =
         fprintf fmt "[%a]"
           (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_expr) elts
       | E_py_tuple(elts) ->
-        fprintf fmt "(%a)"
-          (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_expr) elts
+        if List.length elts = 1 then
+          fprintf fmt "(%a,)" pp_expr (List.hd elts)
+        else
+          fprintf fmt "(%a)"
+            (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_expr) elts
       | E_py_set(elts) ->
         fprintf fmt "{%a}"
           (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_expr) elts
