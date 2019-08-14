@@ -84,10 +84,12 @@ module Domain =
       then find_builtin name, flow
       else
         let dir = Paths.get_lang_stubs_dir "python" () in
-        let filename = dir ^ "/" ^ name ^ ".py" in
-
-        if not (Sys.file_exists filename)
-        then panic_at range "module %s not found in stubs" name;
+        let filename =
+          let tentative1 = dir ^ "/" ^ name ^ ".py" in
+          let tentative2 = name ^ ".py" in
+          if Sys.file_exists tentative1 then tentative1
+          else if Sys.file_exists tentative2 then tentative2
+          else panic_at range "module %s not found (searched in %s and in the current directory)"  name dir in
 
         let prog = Frontend.parse_program [filename] in
         let globals, body =
