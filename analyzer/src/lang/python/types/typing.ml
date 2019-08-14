@@ -120,6 +120,8 @@ let addr_float = {addr_group = G_all; addr_kind = A_py_instance "float"; addr_mo
 
 type addr_group +=
   | G_py_bool of bool option
+  | G_group of addr * addr
+
 
 
 let () =
@@ -129,11 +131,17 @@ let () =
         | G_py_bool (Some true) -> Format.fprintf fmt "true"
         | G_py_bool (Some false) -> Format.fprintf fmt "false"
         | G_py_bool None -> Format.fprintf fmt "⊤"
+        | G_group (a1, a2) -> Format.fprintf fmt "(%a, %a)" pp_addr a1 pp_addr a2
         | _ -> next fmt g
       );
     compare = (fun next g1 g2 ->
         match g1, g2 with
         | G_py_bool b1, G_py_bool b2 -> Option.compare Pervasives.compare b1 b2
+        | G_group (a1, b1), G_group (a2, b2) ->
+          Compare.compose
+            [(fun () -> compare_addr a1 a2);
+             (fun () -> compare_addr b1 b2);
+            ]
         | _ -> next g1 g2
       );
   }
@@ -387,7 +395,8 @@ struct
       Post.return flow |>
       Option.return
 
-    | S_rename ({ekind = E_addr a}, {ekind = E_addr a'}) ->
+    | S_rename ({ekind = E_addr ({addr_kind = A_py_instance _ } as a)}, {ekind = E_addr a'})
+    | S_rename ({ekind = E_addr ({addr_kind = A_py_var _ } as a)}, {ekind = E_addr a'}) ->
       (* TODO: le faire autrepart (addr_env), /!\ zones *)
       let cur = get_env T_cur man flow in
       let abs_heap = TMap.rename a a' cur in
@@ -581,7 +590,6 @@ struct
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e' (*(Utils.mk_builtin_call "bool" [e'] range)*) flow |>
       Eval.bind
         (fun exp flow ->
-           (* FIXME: test if instance of bool and proceed accordingly *)
            match ekind exp with
            | E_constant (C_top T_bool) ->
              Eval.singleton exp flow
@@ -815,11 +823,8 @@ struct
           | A_py_var _, A_py_class (c, mro)
           | A_py_instance _, A_py_class (c, mro) ->
             let cur = get_env T_cur man flow in
-            let ptys =
-              if TMap.mem addr_obj cur then
-                TMap.find addr_obj cur
-              else
-                Polytypeset.empty in
+            let ptys = if TMap.mem addr_obj cur then TMap.find addr_obj cur
+              else Polytypeset.empty in
             let ptys =
               if not (Polytypeset.is_empty ptys) then ptys
               else
@@ -851,6 +856,11 @@ struct
             Polytypeset.fold (fun pty acc ->
                 begin match pty with
                   | Instance {classn=Class (ci, mroi); uattrs; oattrs} ->
+                    let flow =
+                      if TMap.mem addr_obj cur then
+                        let cur = TMap.add addr_obj (Polytypeset.singleton pty) cur in
+                        set_env T_cur cur man flow
+                      else flow in
                     man.eval (mk_py_bool (class_le (ci, mroi) (c, mro)) range) flow :: acc
                   | _ -> Exceptions.panic "todo@\n"
                 end) ptys []
@@ -1030,8 +1040,7 @@ struct
     | E_py_object _ -> Eval.singleton exp flow |> Option.return
 
     | _ ->
-      Exceptions.panic_at range "Warning: no eval for %a" pp_expr exp (* ;
-           None *)
+      None
 
   let ask : type r. r query -> ('a, t) man -> 'a flow -> r option =
     fun query man flow ->

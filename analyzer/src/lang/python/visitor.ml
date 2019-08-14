@@ -89,20 +89,26 @@ let () =
       | E_py_list_comprehension(e, comprhs)
       | E_py_set_comprehension(e, comprhs)
       | E_py_generator_comprehension(e, comprhs) ->
-        let iters, targets = comprhs |> List.fold_left (fun acc (target, iter, conds) ->
-            match conds with
-            | [] ->
-              iter :: fst acc, target :: snd acc
-            | _ -> assert false
-          ) ([], [])
+        let open Universal.Ast in
+        let iters, targets, conds = comprhs |> List.fold_left (fun (acc1, acc2, acc3) (target, iter, conds) ->
+            (* todo: do not change conds into stmts, use the structure of comprhs in the rebuild function to know if sth is an iter or a compr *)
+            iter :: acc1, target :: acc2, (Universal.Ast.mk_block (List.map (fun x -> Universal.Ast.mk_expr_stmt x exp.erange) conds) exp.erange) :: acc3
+          ) ([], [], [])
         in
-        {exprs = e :: iters; stmts = []},
+        {exprs = e :: iters; stmts = conds},
         (function
-          | {exprs = e :: iters} ->
+          | {exprs = e :: iters; stmts = conds} ->
             let comprhs =
-              List.combine iters targets |>
-              List.fold_left (fun acc (iter, target) ->
-                  (target, iter, []) :: acc
+              List.combine (List.combine iters targets) conds |>
+              List.fold_left (fun acc ((iter, target), conds) ->
+                  (target, iter,
+                   match skind conds with
+                   | S_block l -> List.map
+                                    (fun x -> match skind x with
+                                       | S_expression e -> e
+                                       | _ -> assert false) l
+                   | _ -> assert false
+                  ) :: acc
                 ) []
             in
             begin

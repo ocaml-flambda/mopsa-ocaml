@@ -196,34 +196,39 @@ test-py 3/3:
     PY_FILE: 'exception_tests.py'
   extends: .test-py
 
-bench-typy 1/6:
+bench-typy 1/7:
   variables:
     PY_FILE: 'bm_float.py'
   extends: .bench-typy
 
-bench-typy 2/6:
+bench-typy 2/7:
   variables:
     PY_FILE: 'bm_fannkuch.py'
   extends: .bench-typy
 
-bench-typy 3/6:
+bench-typy 3/7:
   variables:
     PY_FILE: 'bm_chaos.py'
   extends: .bench-typy
 
-bench-typy 4/6:
+bench-typy 4/7:
   variables:
     PY_FILE: 'bm_nbody.py'
   extends: .bench-typy
 
-bench-typy 5/6:
+bench-typy 5/7:
   variables:
     PY_FILE: 'bm_spectral_norm.py'
   extends: .bench-typy
 
-bench-typy 6/6:
+bench-typy 6/7:
   variables:
     PY_FILE: 'bm_unpack_sequence.py'
+  extends: .bench-typy
+
+bench-typy 7/7:
+  variables:
+    PY_FILE: 'bm_hexiom.py'
   extends: .bench-typy
 
 
@@ -294,7 +299,7 @@ bench-typpete 13/43:
 
 bench-typpete 14/43:
   variables:
-    PY_FILE: 'disjoint_sets_nonrec.py'
+    PY_FILE: 'disjoint_sets.py'
   extends: .bench-typpete
 
 bench-typpete 15/43:
@@ -441,3 +446,4 @@ bench-typpete 43/43:
   variables:
     PY_FILE: 'unary_test_not.py'
   extends: .bench-typpete
+

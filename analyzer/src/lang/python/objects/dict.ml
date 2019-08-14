@@ -27,24 +27,37 @@ open Framework.Core.Sig.Domain.Stateless
 open Ast
 open Addr
 open Universal.Ast
+open Data_container_utils
 
 type addr_kind +=
-  | A_py_dict of var * var (* variables where the smashed elements are stored (on for the keys and one for the values *)
+  | A_py_dict of Rangeset.t * Rangeset.t
+  (* variables where the smashed elements are stored (one for the keys and one for the values *)
   | A_py_dict_view of string (* name *) * addr (* addr of the dictionary *)
+
+
+let () =
+  register_join_akind (fun default ak1 ak2 ->
+      match ak1, ak2 with
+      | A_py_dict (k1, v1), A_py_dict (k2, v2) -> A_py_dict ((Rangeset.union k1 k2), (Rangeset.union v1 v2))
+      | _ -> default ak1 ak2);
+  register_is_data_container (fun default ak -> match ak with
+      | A_py_dict _ -> true
+      | _ -> default ak)
+
 
 let () =
   Format.(register_addr_kind {
       print = (fun default fmt a ->
           match a with
-          | A_py_dict (keys, values) -> fprintf fmt "dict[%a, %a]" pp_var keys pp_var values
+          | A_py_dict (keys, values) -> fprintf fmt "dict[%a, %a]" (fun fmt -> Rangeset.iter (fun ra -> pp_range fmt ra)) keys (fun fmt -> Rangeset.iter (fun ra -> pp_range fmt ra)) values
           | A_py_dict_view (s, a) -> fprintf fmt "%s[%a]" s pp_addr a
           | _ -> default fmt a);
       compare = (fun default a1 a2 ->
           match a1, a2 with
           | A_py_dict (k1, v1), A_py_dict (k2, v2) ->
             Compare.compose [
-              (fun () -> compare_var k1 k2);
-              (fun () -> compare_var v1 v2);
+              (fun () -> Rangeset.compare k1 k2);
+              (fun () -> Rangeset.compare v1 v2);
             ]
           | A_py_dict_view (s1, a1), A_py_dict_view (s2, a2) ->
             Compare.compose [
@@ -61,80 +74,35 @@ struct
       let name = "python.objects.dict"
     end)
 
-
-  module VarsInfo =
-  struct
-    type t = var * var
-    let compare (k1, v1) (k2, v2) =
-      Compare.compose
-        [(fun () -> compare_var k1 k2);
-         (fun () -> compare_var v1 v2);
-        ]
-    let print fmt (k, v) = Format.fprintf fmt "%a, %a" pp_var k pp_var v
-  end
-
-  module DictInfo = struct
-    type t = Callstack.cs * range
-    let compare (cs, r) (cs', r') =
-      Compare.compose
-        [
-          (fun () -> Callstack.compare cs cs');
-          (fun () -> compare_range r r')
-        ]
-    let print fmt (cs, r) =
-      Format.fprintf fmt "(%a, %a)"
-        Callstack.pp_call_stack cs
-        pp_range r
-  end
-
-  module Equiv = Equiv.Make(DictInfo)(VarsInfo)
-
-  let ctx_key =
-    let module K = Context.GenUnitKey(
-      struct
-        type t = Equiv.t
-        let print fmt m =
-          Format.fprintf fmt "Dict annots: @[%a@]" (Equiv.print ?pp_sep:None) m
-      end
-      )
-    in
-    K.key
-
-  let fresh_smashed_vars () =
-    let k = mk_fresh_uniq_var "$d_k*" T_any () in
-    let v = mk_fresh_uniq_var "$d_v*" T_any () in
-    k, v
-
-  let get_vars_equiv (info: DictInfo.t) (e: Equiv.t) =
-    try
-      Equiv.find_l info e, e
-    with Not_found ->
-      let vars = fresh_smashed_vars () in
-      let new_eq = Equiv.add (info, vars) e in
-      vars, new_eq
-
-  let get_var_flow (info: DictInfo.t) (f: 'a flow) : (var * var) * 'a flow =
-        let a = Flow.get_ctx f |>
-            Context.find_unit ctx_key
-    in
-    let vars, a = get_vars_equiv info a in
-    vars, Flow.set_ctx (Flow.get_ctx f |> Context.add_unit ctx_key a) f
-
   let interface = {
-    iexec = {provides = []; uses = [Zone.Z_py_obj]};
+    iexec = {provides = [Zone.Z_py_obj]; uses = [Zone.Z_py_obj]};
     ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj; Universal.Zone.Z_u_heap, Z_any]}
   }
 
-  let init (prog:program) man flow =
-    Flow.set_ctx (
-      Flow.get_ctx flow |>
-      Context.add_unit ctx_key Equiv.empty
-    ) flow
+  let init (prog:program) man flow = flow
 
+  let kvar_of_addr a = match akind a with
+    | A_py_dict _ -> mk_addr_attr a "dict_key" T_any
+    | _ -> assert false
+
+  let vvar_of_addr a = match akind a with
+    | A_py_dict _ -> mk_addr_attr a "dict_val" T_any
+    | _ -> assert false
+
+  let var_of_addr a = match akind a with
+    | A_py_dict _ -> mk_addr_attr a "dict_key" T_any,
+                     mk_addr_attr a "dict_val" T_any
+    | _ -> assert false
+
+  let addr_of_expr exp = match ekind exp with
+    | E_addr a -> a
+    | _ -> Exceptions.panic "%a@\n" pp_expr exp
 
   let extract_vars dictobj =
     match ekind dictobj with
-    | E_py_object ({addr_kind = A_py_dict (a, b)}, _) -> (a, b)
+    | E_py_object ({addr_kind = A_py_dict _} as addr, _) ->
+      mk_addr_attr addr "dict_key" T_any,
+      mk_addr_attr addr "dict_val" T_any
     | _ -> assert false
 
 
@@ -143,16 +111,17 @@ struct
     match ekind exp with
     | E_py_dict (ks, vs) ->
       debug "Skipping dict.__new__, dict.__init__ for now@\n";
-      let (els_keys, els_vals), flow = get_var_flow (Flow.get_callstack flow, range) flow in
-      let flow = List.fold_left2 (fun acc key valu ->
-          acc |>
-          man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:WEAK els_keys range) key range) |>
-          man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:WEAK els_vals range) valu range)
-        ) flow ks vs in
-      let addr_dict = mk_alloc_addr (A_py_dict (els_keys, els_vals)) range in
+
+      let addr_dict = mk_alloc_addr (A_py_dict (Rangeset.singleton range, Rangeset.singleton range)) range in
       man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_dict flow |>
-      Eval.bind (fun addr_dict flow ->
-          let addr_dict = match ekind addr_dict with E_addr a -> a | _ -> assert false in
+      Eval.bind (fun eaddr_dict flow ->
+          let addr_dict = addr_of_expr eaddr_dict in
+          let els_keys, els_vals = var_of_addr addr_dict in
+          let flow = List.fold_left2 (fun acc key valu ->
+              acc |>
+              man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:WEAK els_keys range) key range) |>
+              man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:WEAK els_vals range) valu range)
+            ) flow ks vs in
           Eval.singleton (mk_py_object (addr_dict, None) range) flow
         )
       |> Option.return
@@ -332,9 +301,7 @@ struct
            let dict_addr = match ekind @@ List.hd args with
              | E_py_object ({addr_kind = Py_list.A_py_iterator ("dict_keyiterator", [a], _)}, _) -> a
              | _ -> assert false in
-           let var_k = match akind dict_addr with
-             | A_py_dict (k, v) -> k
-             | _ -> assert false in
+           let var_k = kvar_of_addr dict_addr in
            let els = man.eval (mk_var var_k ~mode:WEAK range) flow in
 
            let flow = Flow.set_ctx (Eval.get_ctx els) flow in
@@ -349,9 +316,7 @@ struct
            let dict_addr = match ekind @@ List.hd args with
              | E_py_object ({addr_kind = Py_list.A_py_iterator ("dict_valueiterator", [a], _)}, _) -> a
              | _ -> assert false in
-           let var_v = match akind dict_addr with
-             | A_py_dict (k, v) -> v
-             | _ -> assert false in
+           let var_v = vvar_of_addr dict_addr in
            let els = man.eval (mk_var var_v ~mode:WEAK range) flow in
 
            let flow = Flow.set_ctx (Eval.get_ctx els) flow in
@@ -366,9 +331,7 @@ struct
            let dict_addr = match ekind @@ List.hd args with
              | E_py_object ({addr_kind = Py_list.A_py_iterator ("dict_itemiterator", [a], _)}, _) -> a
              | _ -> assert false in
-           let var_k, var_v = match akind dict_addr with
-             | A_py_dict (k, v) -> k, v
-             | _ -> assert false in
+           let var_k, var_v = var_of_addr dict_addr in
            let els = man.eval (mk_expr (E_py_tuple [mk_var var_k ~mode:WEAK range;
                                                     mk_var var_v ~mode:WEAK range]) range) flow in
            let flow = Flow.set_ctx (Eval.get_ctx els) flow in
@@ -402,7 +365,19 @@ struct
     | _ -> None
 
 
-  let exec zone stmt man flow = None
+  let exec zone stmt man flow =
+    let range = srange stmt in
+    match skind stmt with
+    | S_rename ({ekind = E_addr ({addr_kind = A_py_dict _} as a)}, {ekind = E_addr a'}) ->
+      let kva, vva = var_of_addr a in
+      let kva', vva' = var_of_addr a' in
+      debug "renaming %a into %a@\n" pp_var kva pp_var kva';
+      let flow = man.exec ~zone:Zone.Z_py (mk_rename_var kva kva' range) flow  in
+      debug "renaming %a into %a@\n" pp_var vva pp_var vva';
+      man.exec ~zone:Zone.Z_py (mk_rename_var vva vva' range) flow
+      |> Post.return |> Option.return
+
+    | _ -> None
 
   let ask _ _ _ = None
 end

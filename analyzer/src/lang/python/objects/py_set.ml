@@ -27,19 +27,31 @@ open Sig.Domain.Stateless
 open Ast
 open Addr
 open Universal.Ast
+open Data_container_utils
+
 
 type addr_kind +=
-  | A_py_set of var (* variable where the smashed elements are stored *)
+  | A_py_set of Rangeset.t (* variable where the smashed elements are stored *)
+
+let () =
+  register_join_akind (fun default ak1 ak2 ->
+      match ak1, ak2 with
+      | A_py_set r1, A_py_set r2 -> A_py_set (Rangeset.union r1 r2)
+      | _ -> default ak1 ak2);
+  register_is_data_container (fun default ak -> match ak with
+      | A_py_set _ -> true
+      | _ -> default ak)
+
 
 let () =
   Format.(register_addr_kind {
       print = (fun default fmt a ->
           match a with
-          | A_py_set var -> fprintf fmt "set[%a]" pp_var var
+          | A_py_set r -> fprintf fmt "set[%a]" (fun fmt -> Rangeset.iter (fun ra -> pp_range fmt ra)) r
           | _ -> default fmt a);
       compare = (fun default a1 a2 ->
           match a1, a2 with
-          | A_py_set v1, A_py_set v2 -> compare_var v1 v2
+          | A_py_set v1, A_py_set v2 -> Rangeset.compare v1 v2
           | _ -> default a1 a2);})
 
 
@@ -51,78 +63,38 @@ struct
     end)
 
 
-  module VarInfo = struct type t = var let compare = compare_var let print = pp_var end
-  module SetInfo = struct
-    type t = Callstack.cs * range
-    let compare (cs, r) (cs', r') =
-      Compare.compose
-        [
-          (fun () -> Callstack.compare cs cs');
-          (fun () -> compare_range r r')
-        ]
-    let print fmt (cs, r) =
-      Format.fprintf fmt "(%a, %a)"
-        Callstack.pp_call_stack cs
-        pp_range r
-  end
-
-  module Equiv = Equiv.Make(SetInfo)(VarInfo)
-
-  let ctx_key =
-    let module K = Context.GenUnitKey(
-      struct
-        type t = Equiv.t
-        let print fmt m =
-          Format.fprintf fmt "Set annots: @[%a@]" (Equiv.print ?pp_sep:None) m
-      end
-      )
-    in
-    K.key
-
-
-  let fresh_smashed_var =  mk_fresh_uniq_var "$s*" T_any
-
-  let get_var_equiv (info: SetInfo.t) (e: Equiv.t) =
-    try
-      Equiv.find_l info e, e
-    with Not_found ->
-      let var = fresh_smashed_var () in
-      let new_eq = Equiv.add (info, var) e in
-      var, new_eq
-
-  let get_var_flow (info: SetInfo.t) (f: 'a flow) : var * 'a flow =
-    let a = Flow.get_ctx f |>
-            Context.find_unit ctx_key
-    in
-    let var, a = get_var_equiv info a in
-    var, Flow.set_ctx (Flow.get_ctx f |> Context.add_unit ctx_key a) f
-
   let interface = {
-    iexec = {provides = []; uses = [Zone.Z_py_obj]};
+    iexec = {provides = [Zone.Z_py_obj]; uses = [Zone.Z_py_obj]};
     ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj; Universal.Zone.Z_u_heap, Z_any]}
   }
 
-  let init (prog:program) man flow =
-    Flow.set_ctx (
-      Flow.get_ctx flow |>
-      Context.add_unit ctx_key Equiv.empty
-    ) flow
+  let init (prog:program) man flow = flow
 
+  let var_of_addr a = match akind a with
+    | A_py_set _ -> mk_addr_attr a "set" T_any
+    | _ -> assert false
+
+  let var_of_eobj e = match ekind e with
+    | E_py_object (a, _) -> var_of_addr a
+    | _ -> assert false
+
+  let addr_of_expr exp = match ekind exp with
+    | E_addr a -> a
+    | _ -> Exceptions.panic "%a@\n" pp_expr exp
 
   let rec eval zones exp man flow =
     let range = erange exp in
     match ekind exp with
     | E_py_set ls ->
       debug "Skipping set.__new__, set.__init__ for now@\n";
-      let els_var, flow = get_var_flow (Flow.get_callstack flow, range) flow in
-      let flow = List.fold_left (fun acc el ->
-          man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:WEAK els_var range) el range) acc) flow ls in
-      let addr_set = mk_alloc_addr (A_py_set els_var) range in
+
+      let addr_set = mk_alloc_addr (A_py_set (Rangeset.singleton range)) range in
       man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_set flow |>
       Eval.bind (fun eaddr_set flow ->
-          let addr_set = match ekind eaddr_set with
-            | E_addr a -> a
-            | _ -> assert false in
+          let addr_set = addr_of_expr eaddr_set in
+          let els_var = var_of_addr addr_set in
+          let flow = List.fold_left (fun acc el ->
+              man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:WEAK els_var range) el range) acc) flow ls in
           Eval.singleton (mk_py_object (addr_set, None) range) flow
         )
       |> Option.return
@@ -144,10 +116,8 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "set.clear")}, _)}, args, []) ->
       Utils.check_instances man flow range args ["set"]
         (fun args flow ->
-           let list = List.hd args in
-           let var_els = match ekind list with
-             | E_py_object ({addr_kind = A_py_set a}, _) ->a
-             | _ -> Exceptions.panic_at range "%a@\n" pp_expr list in
+           let set = List.hd args in
+           let var_els = var_of_eobj set in
            man.exec (mk_remove_var var_els range) flow |>
            man.eval (mk_py_none range)
         )
@@ -198,9 +168,7 @@ struct
           let set_addr = match ekind iterator with
             | E_py_object ({addr_kind = Py_list.A_py_iterator (s, [a], _)}, _) when s = "set_iterator" -> a
             | _ -> assert false in
-          let var_els = match akind set_addr with
-            | A_py_set a -> a
-            | _ -> assert false in
+          let var_els = var_of_addr set_addr in
           let els = man.eval (mk_var var_els ~mode:WEAK range) flow in
           let flow = Flow.set_ctx (Eval.get_ctx els) flow in
           let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
@@ -226,9 +194,7 @@ struct
         (fun args flow ->
            let set, element = match args with | [l; e] -> l, e | _ -> assert false in
            debug "set: %a@\n" pp_expr set;
-           let var_els = match ekind set with
-             | E_py_object ({addr_kind = A_py_set a}, _) -> a
-             | _ -> assert false in
+           let var_els = var_of_eobj set in
            man.exec (mk_assign (mk_var var_els ~mode:WEAK range) element range) flow |>
            man.eval (mk_py_none range))
       |> Option.return
@@ -240,9 +206,7 @@ struct
           let set, set_v = match eargs with [d;e] -> d,e | _ -> assert false in
           assume (mk_py_isinstance_builtin set "set" range) man flow
             ~fthen:(fun flow ->
-                let var = match ekind set with
-                  | E_py_object ({addr_kind = A_py_set a}, _) -> a
-                  | _ -> assert false in
+                let var = var_of_eobj set in
                 Libs.Py_mopsa.check man
                   (mk_py_isinstance (mk_var ~mode:WEAK var range) set_v range)
                   range flow
@@ -255,7 +219,17 @@ struct
     | _ -> None
 
 
-  let exec zone stmt man flow = None
+  let exec zone stmt man flow =
+    let range = srange stmt in
+    match skind stmt with
+    | S_rename ({ekind = E_addr ({addr_kind = A_py_set _} as a)}, {ekind = E_addr a'}) ->
+      let va = var_of_addr a in
+      let va' = var_of_addr a' in
+      debug "renaming %a into %a@\n" pp_var va pp_var va';
+      man.exec ~zone:Zone.Z_py (mk_rename_var va va' range) flow
+      |> Post.return |> Option.return
+
+    | _ -> None
 
   let ask _ _ _ = None
 end

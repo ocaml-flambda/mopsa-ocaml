@@ -29,6 +29,7 @@ open Universal.Ast
 (*==========================================================================*)
 
 type constant +=
+  | C_py_ellipsis
   | C_py_none
   | C_py_not_implemented
   | C_py_imag of float
@@ -220,6 +221,8 @@ type py_fundec = {
   py_func_body: stmt; (** function body *)
   py_func_is_generator: bool; (** is the function a generator? *)
   py_func_decors: expr list;
+  py_func_types_in: expr option list;
+  py_func_type_out: expr option;
   py_func_range: range; (** range of the function *)
   py_func_ret_var: var
 }

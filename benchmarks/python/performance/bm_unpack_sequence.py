@@ -466,4 +466,5 @@ def bench_all(loops):
 
     # runner.bench_time_func(name, func, inner_loops=400)
 def test_main():
+    import mopsa
     bench_all(400)

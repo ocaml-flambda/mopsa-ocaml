@@ -59,7 +59,8 @@ and translate_stmt (scope: (var list) * (var list)) stmt =
     let func_parameters = List.map create_new_uid f.func_parameters in
     let func_defaults = List.map (translate_expr_option scope) f.func_defaults in
     let func_decors = List.map (translate_expr scope) f.func_decors in
-    let func_return = translate_expr_option scope f.func_return in
+    let func_types_in = List.map (translate_expr_option scope) f.func_types_in in
+    let func_type_out = translate_expr_option scope f.func_type_out in
     let parent_scope = List.filter (fun v -> List.for_all (fun v' -> v.name != v'.name ) (func_locals @ func_parameters)) lscope in
     let new_lscope = func_var :: func_parameters @ func_locals @ func_nonlocals @ parent_scope in
     { stmt with
@@ -73,7 +74,8 @@ and translate_stmt (scope: (var list) * (var list)) stmt =
           func_globals;
           func_is_generator = f.func_is_generator;
           func_decors;
-          func_return;
+          func_types_in;
+          func_type_out;
           func_range = f.func_range;
         }
     }
@@ -239,7 +241,7 @@ and translate_expr scope expr =
   | E_unop (op, operand) ->
     {expr with ekind = E_unop (op, translate_expr scope operand)}
 
-  | E_num _ | E_true | E_false | E_none | E_notimplemented | E_str _ | E_bytes _ -> expr
+  | E_num _ | E_true | E_false | E_none | E_notimplemented | E_str _ | E_bytes _ | E_ellipsis -> expr
 
 and translate_stmt_option scope = function
   | None -> None

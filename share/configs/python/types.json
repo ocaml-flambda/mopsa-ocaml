@@ -28,10 +28,6 @@
 
             "python.objects.class",
             "python.objects.function",
-            "python.objects.list",
-            "python.objects.tuple",
-            "python.objects.dict",
-            "python.objects.set",
             "python.objects.range",
 
             "python.data_model.attribute",
@@ -47,8 +43,21 @@
             "python.types.t_complex",
 
             {
-                "apply": "universal.heap.recency.all",
-                "on": "python.types.typechecking"
+                "apply":
+                { "compose":
+                  [
+                      "universal.heap.recency.all",
+                      "python.types.typechecking"
+                  ]},
+                "on":
+                { "seq":
+                  [
+                      "python.objects.list",
+                      "python.objects.tuple",
+                      "python.objects.dict",
+                      "python.objects.set"
+                  ]
+                }
             }
         ]
     }

@@ -49,7 +49,7 @@ and print_stmt fmt (stmt: Ast.stmt) =
   | S_break -> str fmt "break"
   | S_continue -> str fmt "continue"
   | S_block sl ->
-    pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") print_stmt fmt sl 
+    pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") print_stmt fmt sl
   | S_aug_assign (v, op, e) -> fprintf fmt "%a %a= %a" print_exp v print_binop op print_exp e
   | S_if (test, body, orelse) ->
     fprintf fmt
@@ -133,9 +133,10 @@ and print_number fmt (n: Cst.number) =
 
 and print_exp fmt exp =
   match exp.ekind with
+  | E_ellipsis -> str fmt "..."
   | E_true -> str fmt "True"
   | E_false -> str fmt "False"
-  | E_none -> str fmt "None"
+  | E_none -> str fmt "Py_None"
   | E_notimplemented -> str fmt "NotImplemented"
   | E_num(n) -> print_number fmt n
   | E_str(s)-> fprintf fmt "\"%s\"" s

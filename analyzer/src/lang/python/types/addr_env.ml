@@ -29,6 +29,9 @@ open Universal.Ast
 open Data_model.Attribute
 open Alarms
 
+(*FIXME: can iterators over addresses be renamed? *)
+
+
 (*==========================================================================*)
 (**                            {2 Addresses}                                *)
 (*==========================================================================*)
@@ -186,6 +189,18 @@ struct
         )
       |> Option.return
 
+    | S_rename ({ekind = E_var (v, mode)}, {ekind = E_var (v', mode')}) ->
+      (* FIXME: modes *)
+      let cur = get_env T_cur man flow in
+      if AMap.mem v cur then
+        set_env T_cur (AMap.rename v v' cur) man flow |>
+        Post.return |> Option.return
+      else
+        begin match v.vkind with
+        | V_addr_attr(a, _) when Objects.Data_container_utils.is_data_container a.addr_kind ->
+          flow |> Post.return |> Option.return
+        | _ -> assert false (* shouldn't happen *) end
+
     | S_rename ({ekind = E_addr a}, {ekind = E_addr a'}) ->
       let cur = get_env T_cur man flow in
       let ncur = AMap.map (ASet.map (fun addr -> if addr = Def a then Def a' else addr)) cur in
@@ -205,6 +220,8 @@ struct
           flow in
       begin match akind a with
         | A_py_instance _ -> man.exec ~zone:Zone.Z_py_obj stmt flow |> Post.return |> Option.return
+        | ak when Objects.Data_container_utils.is_data_container ak ->
+          man.exec ~zone:Zone.Z_py_obj stmt flow |> Post.return |> Option.return
         | _ -> flow |> Post.return |> Option.return
       end
 

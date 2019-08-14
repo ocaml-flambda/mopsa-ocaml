@@ -36,7 +36,7 @@ module Domain =
 
     let interface = {
       iexec = {provides = []; uses = []};
-      ieval = {provides = [Zone.Z_py, Zone.Z_py; Zone.Z_py, Zone.Z_py_obj]; uses = []}
+      ieval = {provides = [Zone.Z_py, Zone.Z_py; Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
     }
 
     let rec eval zs exp man flow =

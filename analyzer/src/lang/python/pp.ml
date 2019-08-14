@@ -59,6 +59,7 @@ let () =
     | _ -> default fmt typ
     );
   register_constant_pp (fun default fmt -> function
+      | C_py_ellipsis -> pp_print_string fmt "C_py_ellipsis"
       | C_py_none -> pp_print_string fmt "C_py_None"
       | C_py_not_implemented -> pp_print_string fmt "NotImplemented"
       | C_py_imag j -> fprintf fmt "%aj" pp_print_float j
@@ -88,8 +89,11 @@ let () =
         fprintf fmt "[%a]"
           (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_expr) elts
       | E_py_tuple(elts) ->
-        fprintf fmt "(%a)"
-          (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_expr) elts
+        if List.length elts = 1 then
+          fprintf fmt "(%a,)" pp_expr (List.hd elts)
+        else
+          fprintf fmt "(%a)"
+            (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_expr) elts
       | E_py_set(elts) ->
         fprintf fmt "{%a}"
           (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_expr) elts
@@ -200,10 +204,17 @@ let () =
           pp_stmt cls.py_cls_body
 
       | S_py_function(func) ->
-        fprintf fmt "%a@\ndef %a(%a):@\n@[<h 2>  %a@]"
+        fprintf fmt "%a@\ndef %a(%a)%a:@\n@[<h 2>  %a@]"
           (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") (fun fmt d -> fprintf fmt "@@%a" pp_expr d)) func.py_func_decors
           pp_var func.py_func_var
-          (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_var) func.py_func_parameters
+          (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") (fun fmt (var, oty) ->
+               match oty with
+               | None -> pp_var fmt var
+               | Some ty -> fprintf fmt "%a: %a" pp_var var pp_expr ty
+             )) (List.map2 (fun  x y -> (x, y)) func.py_func_parameters func.py_func_types_in)
+          (fun fmt oty -> match oty with
+             | None -> ()
+             | Some ty -> fprintf fmt " -> %a" pp_expr ty) func.py_func_type_out
           pp_stmt func.py_func_body
 
       | S_py_try(body, excepts, orelse, final) ->

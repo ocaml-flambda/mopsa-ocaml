@@ -565,7 +565,9 @@ let () =
            | A_py_function(F_user f) -> fprintf fmt "function %a" pp_var f.py_func_var
            | A_py_function((F_builtin f | F_unsupported f)) -> fprintf fmt "builtin-function %s" f
            | A_py_method(f, e) -> fprintf fmt "method %a of %a" pp_addr (addr_of_object f) pp_expr e
-           | A_py_module(M_user(m, _) | M_builtin(m)) -> fprintf fmt "module %s" m
+           | A_py_module(M_builtin(m)) -> fprintf fmt "module %s" m
+           | A_py_module(M_user(m, globals)) -> fprintf fmt "module %s[defined globals = %a]" m
+                           (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_var) globals
            | _ -> default fmt a
         );
       compare =
