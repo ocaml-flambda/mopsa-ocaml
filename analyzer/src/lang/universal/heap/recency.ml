@@ -30,6 +30,28 @@ open Zone
 open Policies
 
 
+type _ query += Q_allocated_addresses : addr list query
+
+let () =
+  register_query {
+    join = (
+      let f : type r. query_pool -> r query -> r -> r -> r =
+        fun next query a b ->
+          match query with
+          | Q_allocated_addresses -> a @ b
+          | _ -> next.join_query query a b
+      in f
+    );
+    meet = (
+      let f : type r. query_pool -> r query -> r -> r -> r =
+        fun next query a b ->
+          match query with
+          | Q_allocated_addresses ->
+            a @ b
+          | _ -> next.meet_query query a b
+      in f
+    );
+  }
 
 
 (** {2 Domain definition} *)
@@ -181,7 +203,14 @@ struct
   (** Queries *)
   (** ******* *)
 
-  let ask _ _ _ = None
+  let ask : type r. r query -> ('a, t, 's) man -> 'a flow -> r option =
+    fun query man flow ->
+    match query with
+    | Q_allocated_addresses ->
+      let pool = get_env T_cur man flow in
+      Some (Pool.elements pool)
+
+    | _ -> None
 
   let refine channel man flow = Channel.return flow
 
