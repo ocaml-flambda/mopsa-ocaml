@@ -729,6 +729,7 @@ let is_c_scalar_type ( t : typ) =
 let is_c_pointer_type ( t : typ) =
   match remove_typedef_qual t with
   | T_c_pointer _ -> true
+  | T_c_array _ -> true
   | _ -> false
 
 let is_c_void_type (t:typ) =

@@ -532,10 +532,20 @@ struct
       eval_ne exp (mk_zero exp.erange ~typ:(T_c_pointer T_c_void)) exp.erange man flow |>
       Option.return
 
+    (* 𝔼⟦ "..." ⟧ *)
+    | E_constant (C_c_string _) ->
+      Eval.singleton (mk_one exp.erange) flow |>
+      Option.return
+
     (* 𝔼⟦ !p ⟧ *)
     | E_unop (O_log_not, ({ekind = E_constant (C_top _)} as p))
-    | E_unop (O_log_not, ({ekind = E_var _} as p)) when is_c_pointer_type exp.etyp ->
+    | E_unop (O_log_not, ({ekind = E_var _} as p)) when is_c_pointer_type p.etyp ->
       eval_eq p (mk_zero exp.erange ~typ:(T_c_pointer T_c_void)) exp.erange man flow |>
+      Option.return
+
+    (* 𝔼⟦ !"..." ⟧ *)
+    | E_unop (O_log_not, ({ekind = E_constant (C_c_string _)})) ->
+      Eval.singleton (mk_zero exp.erange) flow |>
       Option.return
 
     (* 𝔼⟦ (t)p ⟧ *)
