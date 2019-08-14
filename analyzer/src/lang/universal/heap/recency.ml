@@ -30,7 +30,9 @@ open Zone
 open Policies
 
 
-type _ query += Q_allocated_addresses : addr list query
+type _ query +=
+  | Q_allocated_addresses : addr list query
+  | Q_select_allocated_addresses : (addr -> bool) -> addr list query
 
 let () =
   register_query {
@@ -39,6 +41,9 @@ let () =
         fun next query a b ->
           match query with
           | Q_allocated_addresses -> a @ b
+          | Q_select_allocated_addresses _ ->
+            (* is that ok? *)
+            a @ b
           | _ -> next.join_query query a b
       in f
     );
@@ -47,6 +52,9 @@ let () =
         fun next query a b ->
           match query with
           | Q_allocated_addresses ->
+            a @ b
+          | Q_select_allocated_addresses _ ->
+            (* is that ok? *)
             a @ b
           | _ -> next.meet_query query a b
       in f
@@ -209,6 +217,12 @@ struct
     | Q_allocated_addresses ->
       let pool = get_env T_cur man flow in
       Some (Pool.elements pool)
+    | Q_select_allocated_addresses f ->
+      let pool = get_env T_cur man flow in
+      Some (
+        (* I guess a fold would be better than filter and elements *)
+        Pool.elements @@ Pool.filter f pool
+      )
 
     | _ -> None
 
