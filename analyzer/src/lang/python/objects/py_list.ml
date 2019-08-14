@@ -85,7 +85,7 @@ struct
     end)
 
   let interface = {
-    iexec = {provides = [Zone.Z_py_obj]; uses = [Zone.Z_py_obj]};
+    iexec = {provides = [Zone.Z_py_obj]; uses = [Zone.Z_py_obj; Universal.Zone.Z_u_heap]};
     ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj; Universal.Zone.Z_u_heap, Z_any]}
   }
 
@@ -398,15 +398,15 @@ struct
       (* todo: checks ? *)
       let it_name = String.sub s 0 (String.index s '.') in
       man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) iterator flow |>
-      Eval.bind (fun iterator flow ->
+      Eval.bind (fun iterator it_flow ->
           let list_addr = match ekind iterator with
             | E_py_object ({addr_kind = A_py_iterator (s, [a], _)}, _) when s = it_name -> a
             | _ -> assert false in
           let var_els = var_of_addr list_addr in
-          let els = man.eval (mk_var var_els ~mode:WEAK range) flow in
+          let els = man.eval (mk_var var_els ~mode:WEAK range) it_flow in
           Option.none_to_exn @@ Result.bind_opt
             (fun oels flow ->
-               let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
+               let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) it_flow |> Eval.empty_singleton in
                Some (match oels with
                    | None -> stopiteration
                    | Some e ->
@@ -628,10 +628,33 @@ struct
     let range = srange stmt in
     match skind stmt with
     | S_rename ({ekind = E_addr ({addr_kind = A_py_list _} as a)}, {ekind = E_addr a'}) ->
+      (* FIXME: I guess we could just do it for every data_container. Maybe add a data_container domain on top of them performing the renaming?*)
+      (* working on lists entails smashed element variable being index by the address, meaning we need to rename them *)
       let va = var_of_addr a in
       let va' = var_of_addr a' in
       debug "renaming %a into %a@\n" pp_var va pp_var va';
-      man.exec ~zone:Zone.Z_py (mk_rename_var va va' range) flow
+      let flow = man.exec ~zone:Zone.Z_py (mk_rename_var va va' range) flow in
+      (* FIXME: now we need to do the same for iterators based on this address, but it's complicated *)
+      (* let to_rename = []
+       *     man.ask (Universal.Heap.Recency.Q_select_allocated_addresses
+       *                            (fun addr -> match akind addr with
+       *                               | A_py_iterator (_, l, _) ->
+       *                                 List.exists (fun a_l -> compare_addr a_l a = 0) l
+       *                               | _ -> false)
+       *                         )
+       *                 flow
+       * in
+       * List.fold_left (fun flow iterator ->
+       *     let new_iterator = match akind iterator with
+       *       | A_py_iterator (name, addrs, pos) ->
+       *         let new_addrs = List.map (fun addr ->
+       *             if compare_addr addr a = 0 then a' else addr) addrs in
+       *         {iterator with addr_kind = A_py_iterator(name, new_addrs, pos)}
+       *       | _ -> assert false
+       *     in
+       *     man.exec ~zone:Universal.Zone.Z_u_heap (mk_rename (mk_addr iterator range) (mk_addr new_iterator range) range) flow
+       *   ) flow to_rename *)
+      flow
       |> Post.return |> Option.return
 
     | _ -> None

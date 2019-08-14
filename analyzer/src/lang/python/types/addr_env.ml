@@ -202,7 +202,6 @@ struct
         | _ -> assert false (* shouldn't happen *) end
 
     | S_rename ({ekind = E_addr a}, {ekind = E_addr a'}) ->
-      (* renaming V_addr_attr(a, _) into V_addr_attr(a', _) is done by each domain (see for example py_list exec). FIXME: is that a good idea? *)
       let cur = get_env T_cur man flow in
       let ncur = AMap.map (ASet.map (fun addr -> if addr = Def a then Def a' else addr)) cur in
       let flow = set_env T_cur ncur man flow in
