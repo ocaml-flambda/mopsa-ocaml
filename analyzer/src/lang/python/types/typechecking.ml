@@ -105,7 +105,7 @@ struct
       )
     | _ -> Iter.ask query man flow
 
-  let refine = Iter.refine
+  let refine _ _ flow = Channel.return flow
 
 
 
