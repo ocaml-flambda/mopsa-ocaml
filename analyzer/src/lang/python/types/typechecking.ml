@@ -68,7 +68,7 @@ struct
   let widen (bigman:('a, t, 's) Framework.Core.Sig.Stacked.Lowlevel.man) uctx a a' =
     Iter.widen uctx (bigman.get a) (bigman.get a'), a, a', true
 
-  let merge _ _ _ = failwith "todo"
+  let merge = Iter.merge
 
   let init prog bigman flow = Iter.init prog (simplified_man bigman) flow
   let exec zone stmt bigman flow = Iter.exec zone stmt (simplified_man bigman) flow
@@ -105,7 +105,7 @@ struct
       )
     | _ -> Iter.ask query man flow
 
-  let refine _ _ _ = failwith "todo"
+  let refine = Iter.refine
 
 
 
