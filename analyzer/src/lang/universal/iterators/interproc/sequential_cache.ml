@@ -113,7 +113,7 @@ struct
       begin match find_signature man func.fun_name in_flow_cur with
         | None ->
           let ret = mk_range_attr_var range "ret_var" T_any in
-          inline func params ret range man in_flow_cur |>
+          inline func params (Some ret) range man in_flow_cur |>
           bind_full (fun oeval_res out_flow log cleaners ->
               debug "in bind@\n";
               match oeval_res with

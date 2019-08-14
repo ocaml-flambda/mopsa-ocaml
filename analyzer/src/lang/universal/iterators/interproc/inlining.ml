@@ -81,8 +81,10 @@ struct
     match ekind exp with
     | E_call({ekind = E_function (User_defined f)}, args) ->
       let params, flow = init_fun_params f args range man flow in
-      let ret_typ = match f.fun_return_type with None -> T_any | Some t -> t in
-      let ret = mk_range_attr_var range "ret_var" ret_typ in
+      let ret = match f.fun_return_type with
+        | None -> None
+        | Some t -> Some (mk_range_attr_var range "ret_var" t)
+      in
       inline f params ret range man flow
       |> Option.return
 

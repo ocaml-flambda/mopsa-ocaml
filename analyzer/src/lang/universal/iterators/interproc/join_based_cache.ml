@@ -99,7 +99,7 @@ struct
       let in_flow_other = Flow.remove T_cur in_flow in
       begin match find_signature man func.fun_name in_flow_cur with
         | None ->
-          inline func params func.fun_return_var range man in_flow_cur |>
+          inline func params (Some func.fun_return_var) range man in_flow_cur |>
           bind_some (fun var_res out_flow  ->
               let flow = store_signature man.lattice func.fun_name in_flow_cur out_flow in
               man.eval var_res (Flow.join man.lattice in_flow_other flow)

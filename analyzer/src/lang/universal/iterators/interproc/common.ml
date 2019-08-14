@@ -55,6 +55,9 @@ let () =
 (** {2 Function inlining} *)
 (** ===================== *)
 
+let debug fmt = Debug.debug ~channel:"universal.iterators.interproc.common" fmt
+
+
 (** Check that no recursion is happening *)
 let check_recursion f flow =
   let cs = Flow.get_callstack flow in
@@ -95,24 +98,36 @@ let exec_fun_body f ret range man flow =
   (* Execute the body of the function *)
   let flow2 = man.exec f.fun_body flow1 in
 
-  (* Iterate over return flows and assign the returned value to ret *)
   let flow3 =
-    Flow.fold (fun acc tk env ->
-        match tk with
-        | T_return(_, None) ->
-          Flow.add T_cur env man.lattice acc
+    match ret with
+    | None ->
+      (* Remove return flows *)
+      Flow.fold (fun acc tk env ->
+          match tk with
+          | T_return _ -> acc
+          | _ -> Flow.add tk env man.lattice acc
+        )
+        (Flow.copy_ctx flow2 flow1 |> Flow.copy_alarms flow2 |> Flow.remove T_cur)
+        flow2
+    
+    | Some v ->
+      (* Iterate over return flows and assign the returned value to v *)
+      Flow.fold (fun acc tk env ->
+          match tk with
+          | T_return(_, None) ->
+            Flow.add T_cur env man.lattice acc
 
-        | T_return(_, Some e) ->
-          Flow.set T_cur env man.lattice acc |>
-          man.exec (mk_add_var ret range) |>
-          man.exec (mk_assign (mk_var ret e.erange) e e.erange) |>
-          Flow.join man.lattice acc
+          | T_return(_, Some e) ->
+            Flow.set T_cur env man.lattice acc |>
+            man.exec (mk_add_var v range) |>
+            man.exec (mk_assign (mk_var v e.erange) e e.erange) |>
+            Flow.join man.lattice acc
 
-        | _ ->
-          Flow.add tk env man.lattice acc
-      )
-      (Flow.copy_ctx flow2 flow1 |> Flow.copy_alarms flow2 |> Flow.remove T_cur)
-      flow2
+          | _ ->
+            Flow.add tk env man.lattice acc
+        )
+        (Flow.copy_ctx flow2 flow1 |> Flow.copy_alarms flow2 |> Flow.remove T_cur)
+        flow2
   in
 
   (* Restore call stack *)
@@ -125,23 +140,31 @@ let inline f params ret range man flow =
   let flow =
     match check_recursion f flow with
     | true ->
-      Soundness.warn_at range
-        "recursive call on function %s ignored" f.fun_name
-      ;
-      man.exec (mk_add_var ret range) flow |>
-      man.exec (mk_assign (mk_var ret range) (mk_top ret.vtyp range) range)
+      begin
+        Soundness.warn_at range
+          "recursive call on function %s ignored" f.fun_name
+        ;
+        match ret with
+        | None -> flow
+        | Some v ->
+          man.exec (mk_add_var v range) flow |>
+          man.exec (mk_assign (mk_var v range) (mk_top v.vtyp range) range)
+      end
 
     | false ->
       exec_fun_body f ret range man flow
   in
+
   (* Remove parameters and local variables from the environment *)
-  let ignore_stmt_list =
-    List.map (fun v ->
-        mk_remove_var v range
-      ) params
+  let flow = man.exec (mk_block (List.map (fun v ->
+      mk_remove_var v range
+    ) params) range) flow
   in
 
-  Eval.singleton (mk_var ret range) flow ~cleaners:(ignore_stmt_list @ [mk_remove_var ret range])
+  match ret with
+  | None -> Eval.empty_singleton flow
+  | Some v ->
+    Eval.singleton (mk_var v range) flow ~cleaners:([mk_remove_var v range])
 
 
 

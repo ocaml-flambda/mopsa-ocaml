@@ -92,7 +92,7 @@ struct
           fun_parameters = fundec.c_func_parameters;
           fun_locvars = fundec.c_func_local_vars;
           fun_body = {skind = S_c_goto_stab (body); srange = srange body};
-          fun_return_type = Some fundec.c_func_return;
+          fun_return_type = if is_c_void_type fundec.c_func_return then None else Some fundec.c_func_return;
           fun_return_var = ret_var;
           fun_range = fundec.c_func_range;
         }
@@ -111,7 +111,10 @@ struct
 
       | {c_func_body = None; c_func_org_name; c_func_return} ->
         Soundness.warn_at range "ignoring side effects of calling undefined function %s" c_func_org_name;
-        Eval.singleton (mk_top c_func_return range) flow
+        if is_c_void_type c_func_return then
+          Eval.empty_singleton flow
+        else
+          Eval.singleton (mk_top c_func_return range) flow
 
 
   let eval zone exp man flow =
@@ -136,8 +139,12 @@ struct
             "ignoring side-effect of undetermined function pointer %a"
             pp_expr f
           ;
-          Eval.singleton (mk_top exp.etyp exp.erange) flow |>
-          Option.return
+          if is_c_void_type exp.etyp then
+            Eval.empty_singleton flow |>
+            Option.return
+          else
+            Eval.singleton (mk_top exp.etyp exp.erange) flow |>
+            Option.return
       end
 
     | _ -> None
