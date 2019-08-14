@@ -165,8 +165,8 @@ struct
           | Some d when d < List.length vars_els ->
             let () = debug "exec incoming@\n" in
             let flow = man.exec
-                (mk_assign iterator
-                   (mk_py_object ({tuple_it_addr with addr_kind = Py_list.A_py_iterator ("tuple_iterator", [tuple_addr], Some (d+1))}, None) range) range) flow in
+                         (mk_rename (mk_addr tuple_it_addr range)
+                            (mk_addr {tuple_it_addr with addr_kind = Py_list.A_py_iterator ("tuple_iterator", [tuple_addr], Some (d+1))} range) range) flow in
             man.eval (mk_var ~mode:WEAK (List.nth vars_els d) range) flow
           | _ ->
             man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton
