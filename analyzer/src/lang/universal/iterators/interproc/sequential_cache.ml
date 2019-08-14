@@ -100,16 +100,19 @@ struct
   let init prog flow =
     Flow.map_ctx (Context.init_poly Fctx.init)
 
+  let split_cur_from_others man flow =
+    let bot = Flow.bottom (Flow.get_ctx flow) (Flow.get_alarms flow) in
+    let flow_cur = Flow.set T_cur (Flow.get T_cur man.lattice flow) man.lattice bot in
+    let flow_other = Flow.remove T_cur flow in
+    flow_cur, flow_other
+
   let eval zs exp man flow =
     let range = erange exp in
     match ekind exp with
     | E_call({ekind = E_function (User_defined func)}, args) ->
       let in_flow = flow in
-      let in_flow_cur = Flow.bottom (Flow.get_ctx in_flow) (Flow.get_alarms in_flow) |>
-                        Flow.set T_cur (Flow.get T_cur man.lattice in_flow) man.lattice
-      in
+      let in_flow_cur, in_flow_other = split_cur_from_others man in_flow in
       let new_vars, in_flow_cur = Inlining.Domain.inline_function_assign_args man func args range in_flow_cur in
-      let in_flow_other = Flow.remove T_cur in_flow in
       begin match find_signature man func.fun_name in_flow_cur with
         | None ->
           let ret = mk_range_attr_var range "ret_var" T_any in
@@ -118,7 +121,9 @@ struct
               debug "in bind@\n";
               match oeval_res with
               | None ->
-                let out_flow = exec_block_on_all_flows cleaners man out_flow in
+                let out_flow_cur, out_flow_other = split_cur_from_others man out_flow in
+                let out_flow_cur = exec_block_on_all_flows cleaners man out_flow_cur in
+                let out_flow = Flow.join man.lattice out_flow_cur out_flow_other in
                 let flow = store_signature func.fun_name in_flow_cur oeval_res out_flow in
                 Result.return oeval_res (Flow.join man.lattice in_flow_other flow) ~log
 
@@ -126,7 +131,9 @@ struct
                 man.eval eval_res out_flow |>
                 Eval.bind (fun eval_res out_flow ->
                     debug "eval_res = %a@\ncleaners = %a@\n" pp_expr eval_res pp_stmt (mk_block cleaners range);
-                    let out_flow = exec_block_on_all_flows cleaners man out_flow in
+                    let out_flow_cur, out_flow_other = split_cur_from_others man out_flow in
+                    let out_flow_cur = exec_block_on_all_flows cleaners man out_flow_cur in
+                    let out_flow = Flow.join man.lattice out_flow_cur out_flow_other in
                     let flow = store_signature func.fun_name in_flow_cur (Some eval_res) out_flow in
                     Result.return (Some eval_res) (Flow.join man.lattice in_flow_other flow) ~log
                   )
