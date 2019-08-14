@@ -152,17 +152,18 @@ let inline f params ret range man flow =
       end
 
     | false ->
-      exec_fun_body f ret range man flow
+      exec_fun_body f ret range man flow |>
+      (* Remove parameters and local variables from the environment *)
+      man.exec (mk_block (List.map (fun v ->
+          mk_remove_var v range
+        ) params) range)
   in
 
-  (* Remove parameters and local variables from the environment *)
-  let flow = man.exec (mk_block (List.map (fun v ->
-      mk_remove_var v range
-    ) params) range) flow
-  in
 
   match ret with
-  | None -> Eval.empty_singleton flow
+  | None ->
+    Eval.empty_singleton flow
+
   | Some v ->
     Eval.singleton (mk_var v range) flow ~cleaners:([mk_remove_var v range])
 
