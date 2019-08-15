@@ -20,7 +20,7 @@
 (****************************************************************************)
 
 (** [Disjoint ∈ 𝒱 × 𝒱 → 𝒱] creates an exclusive disjunction of two value
-    abstraction. The resulting value can be one of the argument abstractions,
+    abstractions. The resulting value can be one of the argument abstractions,
     but not both of them in the same time. This is useful when variables have
     a single static type.
 *)
