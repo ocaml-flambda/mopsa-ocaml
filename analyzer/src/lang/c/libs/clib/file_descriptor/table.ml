@@ -120,7 +120,11 @@ let insert addr window (t:table) =
 
 
 let insert_at addr itv t =
-  let itv = Itv.join itv (AddrItvMap.find addr t.map) in
+  let itv =
+    if AddrItvMap.mem addr t.map
+    then Itv.join itv (AddrItvMap.find addr t.map)
+    else itv
+  in
   {
     map = AddrItvMap.add addr itv t.map;
     support = AddrSet.add addr t.support;

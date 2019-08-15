@@ -327,15 +327,12 @@ struct
             man flow
 
     and find_addr_others flow =
-      debug "find others in %a" (Flow.print man.lattice.print) flow;
       let a = get_env T_cur man flow in
       let itv = man.ask (Universal.Numeric.Common.Q_int_interval i) flow in
-      debug "Interval: %a" Itv.print itv;
       (* First case: return addresses having a descriptor interval
          intersecting with the target interval *)
       let case1 =
         Table.filter (fun addr itv' ->
-            debug "Itv' = %a" Itv.print itv';
             not @@ Itv.is_bottom (Itv.meet itv itv')
           ) a.others |>
         Table.pool |>
@@ -463,9 +460,7 @@ struct
     (* 𝔼⟦ n in FileDescriptor ⟧ *)
     | E_stub_resource_mem(n, "FileDescriptor") ->
       man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) n flow >>$? fun n flow ->
-      debug "numeric descriptor %a" pp_expr n;
       find_addr n exp.erange man flow >>$? fun addr flow ->
-      debug "addr = %a" pp_expr addr;
       let exp' =
         match ekind addr with
         | E_addr _ -> mk_one ~typ:u8 exp.erange
