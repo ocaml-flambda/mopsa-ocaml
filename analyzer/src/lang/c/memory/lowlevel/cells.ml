@@ -55,13 +55,28 @@ struct
   (** {2 Memory cells} *)
   (** **************** *)
 
+
   (** Type of a cell *)
+  type cell_typ =
+    | Numeric of typ
+    | Pointer
+
+
+  (** Cells *)
   type cell = {
     base   : Base.t;
     offset : Z.t;
-    typ    : typ;
+    typ    : cell_typ;
     primed : bool;
   }
+
+
+  (** Total order of cell types *)
+  let compare_cell_typ t1 t2 =
+    match t1, t2 with
+    | Numeric tt1, Numeric tt2 -> compare_typ tt1 tt2
+    | Pointer, Pointer -> 0
+    | _ -> compare t1 t2
 
 
   (** Total order of cells *)
@@ -69,9 +84,16 @@ struct
     Compare.compose [
       (fun () -> compare_base c1.base c2.base);
       (fun () -> Z.compare c1.offset c2.offset);
-      (fun () -> compare_typ c1.typ c2.typ);
+      (fun () -> compare_cell_typ c1.typ c2.typ);
       (fun () -> compare c1.primed c2.primed);
     ]
+
+
+  (** Pretty printer of cell types *)
+  let pp_cell_typ fmt t =
+    match t with
+    | Numeric tt -> Pp.pp_c_type_short fmt tt
+    | Pointer -> Format.fprintf fmt "ptr"
 
 
   (** Pretty printer of cells *)
@@ -79,14 +101,67 @@ struct
     Format.fprintf fmt "⟨%a,%a,%a⟩%s"
       pp_base c.base
       Z.pp_print c.offset
-      Pp.pp_c_type_short (remove_qual c.typ)
+      pp_cell_typ c.typ
       (if c.primed then "'" else "")
 
 
   (** Create a cell *)
   let mk_cell base offset ?(primed=false) typ =
-    { base; offset; typ = remove_typedef_qual typ; primed }
+    {
+      base;
+      offset;
+      primed;
+      typ =
+        if is_c_num_type typ then Numeric (remove_typedef_qual typ)
+        else if is_c_pointer_type typ then Pointer
+        else panic "cell can not be created with type %a" pp_typ typ;
+    }
 
+
+  (** Return the type of a cell *)
+  let cell_type c =
+    match c.typ with
+    | Numeric t -> t
+    | Pointer -> T_c_pointer T_c_void
+
+
+  (** Check if a cell is numeric *)
+  let is_numeric_cell c =
+    match c.typ with
+    | Numeric _ -> true
+    | Pointer   -> false
+
+
+  (** Check if a cell is an integer cell *)
+  let is_int_cell c =
+    match c.typ with
+    | Numeric t -> is_c_int_type t
+    | Pointer   -> false
+
+
+  (** Check if a cell is a float cell *)
+  let is_float_cell c =
+    match c.typ with
+    | Numeric t -> is_c_float_type t
+    | Pointer   -> false
+
+
+  (** Check if a cell is a pointer *)
+  let is_pointer_cell c =
+    match c.typ with
+    | Numeric _ -> false
+    | Pointer   -> true
+
+
+  (** Size of a cell in bytes *)
+  let sizeof_cell c = sizeof_type (cell_type c)
+
+
+  (** Value range of an integer cell *)
+  let rangeof_int_cell c =
+    assert(is_int_cell c);
+    rangeof (cell_type c)
+  
 
 
   (** {2 Cell variables} *)
@@ -94,6 +169,7 @@ struct
 
   type var_kind +=
     | V_c_cell of cell
+
 
   let () =
     register_var {
@@ -112,30 +188,47 @@ struct
     }
 
 
-  (** Create a scalar variable from a cell *)
-  let mk_cell_var (c:cell) range : expr =
-    let name =
-      let () = match c.base with
-        | V v ->
-          Format.fprintf Format.str_formatter "⟨%s,%a,%a⟩%s"
-            v.vname
-            Z.pp_print c.offset
-            Pp.pp_c_type_short (remove_qual c.typ)
-            (if c.primed then "'" else "")
+  (** Construct the variable name associated to a cell *)
+  let mk_cell_var_name c =
+    let () = match c.base with
+      | V v ->
+        Format.fprintf Format.str_formatter "⟨%s,%a,%a⟩%s"
+          v.vname
+          Z.pp_print c.offset
+          pp_cell_typ c.typ
+          (if c.primed then "'" else "")
 
-        | _ ->
-          pp_cell Format.str_formatter c
-      in
-      Format.flush_str_formatter ()
+      | _ ->
+        pp_cell Format.str_formatter c
     in
-    let v = mkv name (V_c_cell c) c.typ in
+    Format.flush_str_formatter ()
+
+
+  (** Create a variable from a cell *)
+  let mk_cell_var c : var =
+    let name = mk_cell_var_name c in
+    mkv name (V_c_cell c) (cell_type c)
+  
+
+  (** Create a variable from a numeric cell *)
+  let mk_numeric_cell_var_expr c range : expr =
+    assert(is_numeric_cell c);
+    let v = mk_cell_var c in
     mk_var v ~mode:(base_mode c.base) range
 
 
+  (** Create a variable from a pointer cell *)
+  let mk_pointer_cell_var_expr c typ range : expr =
+    assert(is_pointer_cell c);
+    let v = mk_cell_var c in
+    if is_c_void_type (under_type typ)
+    then mk_var v ~mode:(base_mode c.base) range
+    else mk_c_cast (mk_var v ~mode:(base_mode c.base) range) typ range
 
+
+    
   (** {2 Domain header} *)
   (** ***************** *)
-
 
 
   (** Set of memory cells *)
@@ -248,13 +341,16 @@ struct
   (** Return the list of cells in [a.cells] - other than [c] - that
       overlap with [c]. *)
   let get_cell_overlappings c (a:t) =
+    let check_overlap c1 c2 =
+      let (a1,b1) = (c1.offset, Z.add c1.offset (sizeof_cell c1)) in
+      let (a2,b2) = (c2.offset, Z.add c2.offset (sizeof_cell c2)) in
+      Z.lt (Z.max a1 a2) (Z.min b1 b2)
+    in
     find_cells (fun c' ->
         compare_cell c c' <> 0 &&
         compare_base (c.base) (c'.base) = 0 &&
         (
-          let cell_range c = (c.offset, Z.add c.offset (sizeof_type c.typ)) in
-          let check_overlap (a1, b1) (a2, b2) = Z.lt (Z.max a1 a2) (Z.min b1 b2) in
-          check_overlap (cell_range c) (cell_range c')
+          check_overlap c c'
         )
       ) a
 
@@ -264,7 +360,7 @@ struct
     find_cells (fun c ->
         compare_base (c.base) base = 0 &&
         (
-          let itv' = Itv.of_z c.offset (Z.add c.offset (Z.pred (sizeof_type c.typ))) in
+          let itv' = Itv.of_z c.offset (Z.add c.offset (Z.pred (sizeof_cell c))) in
           not (Itv.meet itv itv' |> Itv.is_bottom)
         )
       ) a
@@ -283,16 +379,16 @@ struct
     | None ->
       match find_cell_opt
               (fun c' ->
-                 is_c_int_type c'.typ &&
-                 Z.equal (sizeof_type c'.typ) (sizeof_type c.typ) &&
+                 is_int_cell c' &&
+                 Z.equal (sizeof_cell c') (sizeof_cell c) &&
                  compare_base c.base (c'.base) = 0 &&
                  Z.equal c.offset c'.offset &&
                  c.primed = c'.primed
               ) a
       with
       | Some (c') ->
-        let v = mk_cell_var c' range in
-        Some (wrap_expr v (int_rangeof c.typ) range)
+        let v = mk_numeric_cell_var_expr c' range in
+        Some (wrap_expr v (rangeof_int_cell c) range)
 
       | None ->
         match
@@ -300,16 +396,16 @@ struct
               let b = Z.sub c.offset c'.offset in
               Z.geq b Z.zero &&
               compare_base c.base (c'.base) = 0 &&
-              Z.lt b (sizeof_type c'.typ) &&
-              is_c_int_type c'.typ &&
-              compare_typ (remove_typedef_qual c.typ) (T_c_integer(C_unsigned_char)) = 0 &&
+              Z.lt b (sizeof_cell c') &&
+              is_int_cell c' &&
+              compare_typ (cell_type c) (T_c_integer(C_unsigned_char)) = 0 &&
               c.primed = c'.primed
             ) a
         with
         | Some (c') ->
           let b = Z.sub c.offset c'.offset in
           let base = (Z.pow (Z.of_int 2) (8 * Z.to_int b))  in
-          let v = mk_cell_var c' range in
+          let v = mk_numeric_cell_var_expr c' range in
           Some (
             (_mod
                (div v (mk_z base range) range)
@@ -321,16 +417,16 @@ struct
         | None ->
           let exception NotPossible in
           try
-            if is_c_int_type c.typ then
+            if is_int_cell c then
               let t' = T_c_integer(C_unsigned_char) in
-              let n = Z.to_int (sizeof_type (c.typ)) in
+              let n = Z.to_int (sizeof_cell c) in
               let rec aux i l =
                 if i < n then
                   let tobein = (fun cc ->
                       {
                         base = cc.base;
                         offset = Z.add c.offset (Z.of_int i);
-                        typ = t';
+                        typ = Numeric t';
                         primed = cc.primed;
                       }
                     ) c
@@ -343,7 +439,7 @@ struct
               in
               let ll = aux 0 [] in
               let _,e = List.fold_left (fun (time, res) x ->
-                  let v = mk_cell_var x range in
+                  let v = mk_numeric_cell_var_expr x range in
                   let res' =
                     add
                       (mul (mk_z time range) v range)
@@ -368,13 +464,13 @@ struct
                 Some (mk_int (String.get s (Z.to_int c.offset) |> int_of_char) range)
 
             | _ ->
-              if is_c_int_type c.typ then
-                let a,b = rangeof c.typ in
+              if is_int_cell c then
+                let a,b = rangeof_int_cell c in
                 Some (mk_z_interval a b range)
-              else if is_c_float_type c.typ then
-                let prec = get_c_float_precision c.typ in
+              else if is_float_cell c then
+                let prec = get_c_float_precision (cell_type c) in
                 Some (mk_top (T_float prec) range)
-              else if is_c_pointer_type c.typ then
+              else if is_pointer_cell c then
                 panic_at range ~loc:__LOC__ "phi called on a pointer cell %a" pp_cell c
               else
                 None
@@ -382,17 +478,18 @@ struct
   (** Add a cell in the underlying domain using the simplified manager *)
   let add_cell_simplified c a range man ctx s =
     if CellSet.mem c a.cells ||
-       not (is_c_scalar_type c.typ) ||
+       (* not (is_c_scalar_type c.typ) || *)
        not (BaseSet.mem c.base a.bases)
     then s
     else
-      let v = mk_cell_var c range in
-      let s' = man.sexec ~zone:Z_c_scalar (mk_add v range) ctx s in
-      if is_c_pointer_type c.typ then s'
+      let v = mk_cell_var c in
+      let s' = man.sexec ~zone:Z_c_scalar (mk_add_var v range) ctx s in
+      if is_pointer_cell c
+      then s'
       else
         match phi c a range with
         | Some e ->
-          let stmt = mk_assume (mk_binop v O_eq e ~etyp:u8 range) range in
+          let stmt = mk_assume (mk_binop (mk_var v range) O_eq e ~etyp:u8 range) range in
           man.sexec ~zone:Z_c_scalar stmt ctx s'
 
         | None ->
@@ -598,14 +695,14 @@ struct
     let flow = add_base c.base man flow in
     let a = get_env T_cur man flow in
 
-    if CellSet.mem c a.cells || not (is_c_scalar_type c.typ)
+    if CellSet.mem c a.cells (* || not (is_c_scalar_type c.typ) *)
     then Post.return flow
     else
-      let v = mk_cell_var c range in
-      man.post ~zone:Z_c_scalar (mk_add v range) flow |>
+      let v = mk_cell_var c in
+      man.post ~zone:Z_c_scalar (mk_add_var v range) flow |>
       Post.bind @@ fun flow ->
 
-      if is_c_pointer_type c.typ
+      if is_pointer_cell c
       then
         set_env T_cur { a with cells = CellSet.add c a.cells } man flow |>
         Post.return
@@ -613,7 +710,7 @@ struct
         begin
           match phi c a range with
           | Some e ->
-            let stmt = mk_assume (mk_binop v O_eq e ~etyp:u8 range) range in
+            let stmt = mk_assume (mk_binop (mk_var v range) O_eq e ~etyp:u8 range) range in
             man.post ~zone:Z_c_scalar stmt flow
 
           | None -> Post.return flow
@@ -629,8 +726,8 @@ struct
         { a with cells = CellSet.remove c a.cells }
       ) man flow
     in
-    let v = mk_cell_var c range in
-    let stmt = mk_remove v range in
+    let v = mk_cell_var c in
+    let stmt = mk_remove_var v range in
     man.post ~zone:Z_c_scalar stmt flow
 
 
@@ -660,17 +757,11 @@ struct
       ) man flow
     in
 
-    let v = mk_cell_var c range in
-    let vv =
-      match ekind v with
-        E_var (vv, _) -> { v with ekind = E_var(vv, mode) }
-      | _ -> assert false
-    in
-
+    let v = mk_cell_var c in
+    let vv = mk_var v ~mode range in
     let stmt = mk_assign vv e range in
-    man.post ~zone:Z_c_scalar stmt flow |>
-
-    Post.bind @@ remove_cell_overlappings c range man
+    man.post ~zone:Z_c_scalar stmt flow >>= fun _ flow ->
+    remove_cell_overlappings c range man flow
 
 
   let assign_region base itv range man flow =
@@ -694,53 +785,12 @@ struct
         ) man flow
     in
 
-    let oldv = mk_cell_var old_cell range in
-    let newv = mk_cell_var new_cell range in
-    let stmt = mk_rename oldv newv range in
+    let oldv = mk_cell_var old_cell in
+    let newv = mk_cell_var new_cell in
+    let stmt = mk_rename_var oldv newv range in
     man.post ~zone:Z_c_scalar stmt flow
 
 
-
-  (** Rename bases and their cells *)
-  let rename_base base1 base2 range man flow =
-    let a = get_env T_cur man flow in
-    (* Cells of base1 *)
-    let cells1 = CellSet.filter (fun c ->
-        compare_base c.base base1 = 0
-      ) a.cells
-    in
-
-    (* Cell renaming *)
-    let to_base2 c = { c with base = base2 } in
-
-    (* Content copy, depends on the presence of base2 *)
-    let copy =
-      if not (BaseSet.mem base2 a.bases) then
-        (* If base2 is not already present => rename the cells *)
-        fun c flow ->
-          rename_cell c (to_base2 c) range man flow
-      else
-        (* Otherwise, assign with weak update *)
-        fun c flow ->
-          let v = mk_cell_var c range in
-          assign_cell (to_base2 c) v WEAK range man flow |>
-          Post.bind @@ remove_cell c range man
-    in
-
-    (* Apply copy function *)
-    CellSet.fold (fun c acc -> Post.bind (copy c) acc) cells1 (Post.return flow) |>
-    Post.bind @@ fun flow ->
-
-    (* Remove base1 and add base2 *)
-    map_env T_cur (fun a ->
-        {
-          a with
-          bases = BaseSet.remove base1 a.bases |>
-                  BaseSet.add base2;
-        }
-      ) man flow
-    |>
-    Post.return
 
 
 
@@ -780,24 +830,29 @@ struct
   (** ************************ *)
 
   (** 𝔼⟦ *p ⟧ where p is a pointer to a scalar *)
-  let deref_scalar_pointer p primed range man flow =
+  let eval_deref_scalar_pointer p primed range man flow =
     (* Expand *p into cells *)
     expand p range man flow >>$ fun expansion flow ->
-
+    let t = under_type p.etyp in
     match expansion with
     | Top | Region _ ->
       (* ⊤ pointer or expand threshold exceeded => use the whole value interval *)
-      Eval.singleton (mk_top (under_pointer_type p.etyp |> void_to_char) range) flow
+      Eval.singleton (mk_top (void_to_char t) range) flow
 
     | Cell c ->
       let c = { c with primed } in
       add_cell c range man flow >>= fun _ flow ->
-      let v = mk_cell_var c range in
+      let v =
+        if is_pointer_cell c then
+          mk_pointer_cell_var_expr c t range
+        else
+          mk_numeric_cell_var_expr c range
+      in
       Eval.singleton v flow
 
 
   (* 𝔼⟦ *p ⟧ where p is a pointer to a function *)
-  let deref_function_pointer p range man flow =
+  let eval_deref_function_pointer p range man flow =
     man.eval ~zone:(Z_c_low_level,Z_c_points_to) p flow |>
     Eval.bind @@ fun pt flow ->
 
@@ -812,7 +867,7 @@ struct
 
 
   (** 𝔼⟦ &lval ⟧ *)
-  let address_of lval range man flow =
+  let eval_address_of lval range man flow =
     match ekind @@ remove_casts lval with
     | E_var _ ->
       Eval.singleton (mk_c_address_of lval range) flow
@@ -827,7 +882,7 @@ struct
 
 
   (** 𝔼⟦ *(p + ∀i) ⟧ *)
-  let deref_quantified p range man flow =
+  let eval_deref_quantified p range man flow =
     let elm = under_type p.etyp |> void_to_char in
     eval_pointed_base_offset p range man flow >>$ fun pp flow ->
 
@@ -870,36 +925,36 @@ struct
   let eval zone exp man flow =
     match ekind exp with
     | E_var (v,STRONG) when is_c_scalar_type v.vtyp ->
-      deref_scalar_pointer (mk_c_address_of exp exp.erange) false exp.erange man flow |>
+      eval_deref_scalar_pointer (mk_c_address_of exp exp.erange) false exp.erange man flow |>
       Option.return
 
     | E_c_deref p when under_type p.etyp |> void_to_char |> is_c_scalar_type &&
                        not (is_expr_quantified p)
       ->
-      deref_scalar_pointer p false exp.erange man flow |>
+      eval_deref_scalar_pointer p false exp.erange man flow |>
       Option.return
 
 
     | E_c_deref p when under_type p.etyp |> is_c_function_type &&
                        not (is_expr_quantified p)
       ->
-      deref_function_pointer p exp.erange man flow |>
+      eval_deref_function_pointer p exp.erange man flow |>
       Option.return
 
     | E_c_address_of lval ->
-      address_of lval exp.erange man flow |>
+      eval_address_of lval exp.erange man flow |>
       Option.return
 
     | E_stub_primed lval when not (is_expr_quantified lval) ->
-      deref_scalar_pointer (mk_c_address_of lval exp.erange) true exp.erange man flow |>
+      eval_deref_scalar_pointer (mk_c_address_of lval exp.erange) true exp.erange man flow |>
       Option.return
 
     | E_c_deref p when is_expr_quantified exp ->
-      deref_quantified p exp.erange man flow |>
+      eval_deref_quantified p exp.erange man flow |>
       Option.return
 
     | E_stub_primed e when is_expr_quantified exp -> 
-      deref_quantified (mk_c_address_of e exp.erange) exp.erange man flow |>
+      eval_deref_quantified (mk_c_address_of e exp.erange) exp.erange man flow |>
       Option.return
 
 
@@ -916,7 +971,7 @@ struct
   (** ************************* *)
 
   (** 𝕊⟦ type v = init; ⟧  *)
-  let declare v init scope range man flow =
+  let exec_declare v init scope range man flow =
     (* Since we are in the Z_low_level zone, we assume that init has
        been translated by a structured domain into a flatten
        initialization *)
@@ -984,7 +1039,7 @@ struct
         in
 
         (* Initialize the associated variable *)
-        let v = match ekind (mk_cell_var c range) with E_var (v, _) -> v | _ -> assert false in
+        let v = mk_cell_var c in
         let stmt = mk_c_declaration v init scope range in
         man.post ~zone:Z_c_scalar stmt flow |>
 
@@ -995,7 +1050,7 @@ struct
 
 
   (** 𝕊⟦ *p = e; ⟧ *)
-  let assign p e mode range man flow =
+  let exec_assign p e mode range man flow =
     (* Expand *p into cells *)
     expand p range man flow >>$ fun expansion flow ->
     match expansion with
@@ -1019,26 +1074,94 @@ struct
 
 
   (** 𝕊⟦ ?e ⟧ *)
-  let assume e range man flow =
+  let exec_assume e range man flow =
     man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow >>$ fun e flow ->
     let stmt = mk_assume e range in
     man.post ~zone:Z_c_scalar stmt flow
 
 
+  let exec_add b range man flow =
+    match b with
+    | V v when is_c_scalar_type v.vtyp ->
+      let c = mk_cell (V v) Z.zero v.vtyp in
+      add_cell c range man flow
+
+    | _ ->
+      add_base b man flow |>
+      Post.return
+
+
+
+
   (* 𝕊⟦ remove v ⟧ *)
-  let remove_var v range man flow =
+  let exec_remove b range man flow =
     let a = get_env T_cur man flow in
-    let flow = set_env T_cur { a with bases = BaseSet.remove (V v) a.bases } man flow in
-    let cells = find_cells (fun c -> compare_base c.base (V v) = 0) a in
+    let flow = set_env T_cur { a with bases = BaseSet.remove b a.bases } man flow in
+    let cells = find_cells (fun c -> compare_base c.base b = 0) a in
     List.fold_left (fun acc c ->
         Post.bind (remove_cell c range man) acc
       ) (Post.return flow) cells
 
 
+  (** Rename bases and their cells *)
+  let exec_rename base1 base2 range man flow =
+    debug "rename %a into %a" pp_base base1 pp_base base2;
+    let a = get_env T_cur man flow in
+
+    (* Cell renaming function *)
+    let to_base2 c = { c with base = base2 } in
+
+    (* Cells of base1 *)
+    let cells1 = CellSet.filter (fun c ->
+        let x = compare_base c.base base1 in
+        if x = 0 then debug "%a should be renamed %a" pp_cell c pp_cell (to_base2 c);
+        x = 0
+      ) a.cells
+    in
+
+
+    (* Cell copy function, depends on the presence of base2 *)
+    let copy =
+      if not (BaseSet.mem base2 a.bases) then
+        (* If base2 is not already present => rename the cells *)
+        fun c flow ->
+          rename_cell c (to_base2 c) range man flow
+      else
+        (* Otherwise, assign with weak update *)
+        fun c flow ->
+          debug "copy %a to %a" pp_cell c pp_cell (to_base2 c);
+          let v = mk_cell_var c in
+          assign_cell (to_base2 c) (mk_var v range) WEAK range man flow |>
+          Post.bind @@ remove_cell c range man
+    in
+
+    (* Apply copy function *)
+    CellSet.fold (fun c acc -> Post.bind (copy c) acc) cells1 (Post.return flow) |>
+    Post.bind @@ fun flow ->
+
+    (* Remove base1 and add base2 *)
+    let flow = map_env T_cur (fun a ->
+        {
+          a with
+          bases = BaseSet.remove base1 a.bases |>
+                  BaseSet.add base2;
+        }
+      ) man flow
+    in
+
+    (* Forward the rename statement to scalar domains in case of addresses *)
+    match base1, base2 with
+    | A addr1, A addr2 ->
+      man.post ~zone:Z_c_scalar (mk_rename (mk_addr addr1 range) (mk_addr addr2 range) range) flow
+
+    | _ ->
+      Post.return flow
+
+
   (* 𝕊⟦ rename target[i1][i2]...[in]' into target[i1][i2]...[in],
      ∀ i1 ∈ [l1,u1], ..., in ∈ [ln,un] ⟧
   *)
-  let rename_primed target bounds range man flow =
+  let exec_rename_primed target bounds range man flow =
     match bounds with
     | [] when not (is_c_scalar_type target.etyp) ->
       panic_at range
@@ -1123,7 +1246,7 @@ struct
   let exec zone stmt man flow =
     match skind stmt with
     | S_c_declaration (v,init,scope) ->
-      declare v init scope stmt.srange man flow |>
+      exec_declare v init scope stmt.srange man flow |>
       Option.return
 
     | S_assign(({ekind = E_var(v, STRONG)} as lval), e) when is_c_scalar_type v.vtyp ->
@@ -1131,48 +1254,43 @@ struct
         let c = mk_cell (V v) Z.zero v.vtyp in
         let flow = map_env T_cur (fun a -> { a with cells = CellSet.add c a.cells }) man flow in
 
-        let v = mk_cell_var c lval.erange in
+        let v = mk_cell_var c in
         man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow >>$ fun e flow ->
-        let stmt = mk_assign v e stmt.srange in
+        let stmt = mk_assign (mk_var v lval.erange) e stmt.srange in
         man.post ~zone:Z_c_scalar stmt flow |>
 
         Post.bind @@ remove_cell_overlappings c stmt.srange man
       )
 
     | S_assign(({ekind = E_c_deref(p)}), e) when is_c_scalar_type @@ under_type p.etyp ->
-      assign p e STRONG stmt.srange man flow |>
+      exec_assign p e STRONG stmt.srange man flow |>
       Option.return
 
 
     | S_assume(e) ->
-      assume e stmt.srange man flow |>
+      exec_assume e stmt.srange man flow |>
       Option.return
 
 
-    | S_add { ekind = E_var (v, _) } when is_c_scalar_type v.vtyp ->
-      let c = mk_cell (V v) Z.zero v.vtyp in
-      add_cell c stmt.srange man flow |>
+    | S_add { ekind = E_var (v, _) } ->
+      exec_add (V v) stmt.srange man flow |>
       Option.return
 
-    | S_add { ekind = E_var (v, _) } when not (is_c_scalar_type v.vtyp) ->
-      add_base (V v) man flow |>
-      Post.return |> Option.return
 
     | S_add { ekind = E_addr addr } ->
-      add_base (A addr) man flow |>
-      Post.return  |> Option.return
+      exec_add (A addr) stmt.srange man flow |>
+      Option.return
 
     | S_remove { ekind = E_var (v, _) } when is_c_type v.vtyp ->
-      remove_var v stmt.srange man flow |>
+      exec_remove (V v) stmt.srange man flow |>
       Option.return
 
     | S_rename({ ekind = E_var (v1, _) }, { ekind = E_var (v2, _) }) ->
-      rename_base (V v1) (V v2) stmt.srange man flow |>
+      exec_rename (V v1) (V v2) stmt.srange man flow |>
       Option.return
 
     | S_rename({ ekind = E_addr addr1 }, { ekind = E_addr addr2 }) ->
-      rename_base (A addr1) (A addr2) stmt.srange man flow |>
-      Post.bind (man.post ~zone:Z_c_scalar stmt) |>
+      exec_rename (A addr1) (A addr2) stmt.srange man flow |>
       Option.return
 
     | S_stub_assigns _ ->
@@ -1180,7 +1298,7 @@ struct
       Option.return
 
     | S_stub_rename_primed(lval, bounds) ->
-      rename_primed lval bounds stmt.srange man flow |>
+      exec_rename_primed lval bounds stmt.srange man flow |>
       Option.return
 
 

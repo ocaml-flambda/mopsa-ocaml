@@ -657,20 +657,20 @@ let int_rangeof t =
   (Z.to_int a, Z.to_int b)
 
 (** [wrap_expr e (l,h)] expression needed to bring back [e] in range ([l],[h]) *)
-let wrap_expr (e: expr) ((l,h) : int * int) range : expr =
+let wrap_expr (e: expr) ((l,h) : Z.t * Z.t) range : expr =
     let open Universal.Ast in
   add
-    (mk_int l range)
+    (mk_z l range)
     (_mod
        (sub
           e
-          (mk_int l range)
+          (mk_z l range)
           range
        )
        (add
           (sub
-             (mk_int h range)
-             (mk_int l range)
+             (mk_z h range)
+             (mk_z l range)
              range
           )
           (mk_one range)
@@ -681,7 +681,7 @@ let wrap_expr (e: expr) ((l,h) : int * int) range : expr =
     range
 
 (** [wrap v (l,h)] expression needed to bring back [v] in range ([l],[h]) *)
-let wrap (v : var) ((l,h) : int * int) range : expr =
+let wrap (v : var) ((l,h) : Z.t * Z.t) range : expr =
   wrap_expr (mk_var v (tag_range range "v")) (l,h) range
 
 
