@@ -46,7 +46,6 @@ framework.config = paths visitor typer parser options
 lang = universal repl stubs c python
 
 # Universal
-lang.universal = ast frontend
 lang.universal = ast frontend zone iterators heap numeric
 lang.universal.iterators = program intraproc scalar interproc unittest loops
 lang.universal.iterators.interproc = inlining sequential_cache join_based_cache

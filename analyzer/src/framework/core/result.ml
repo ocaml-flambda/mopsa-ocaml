@@ -58,7 +58,7 @@ type ('a,'r) result = {
 (**                      {2 Utility functions}                              *)
 (****************************************************************************)
 
-(** Create a case for one output and flow*)
+(** Create a case for one output and flow *)
 let mk_case
     ?(cleaners=[])
     ?(log=Log.empty)

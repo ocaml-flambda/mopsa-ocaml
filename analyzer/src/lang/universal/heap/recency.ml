@@ -234,7 +234,7 @@ end
 
 
 module Heap1 = Domain(StackRangePolicy)
-module Heap2 = Domain(StackPlocy)
+module Heap2 = Domain(StackPolicy)
 module Heap3 = Domain(AllPolicy)
 
 let () =

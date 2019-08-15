@@ -83,7 +83,7 @@ end
 (** {2 Grouping of addresses by callstack} *)
 (** ====================================== *)
 
-module StackPlocy : POLICY = struct
+module StackPolicy : POLICY = struct
 
   type addr_group +=
     | G_stack of Callstack.cs

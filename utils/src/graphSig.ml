@@ -95,7 +95,7 @@ module type P = sig
   (** Unique edge identifiers, that can serve as keys in maps.  *)
 
   module Port: ID_TYPE
-  (** Edges connect to node through tagged ports. *)
+  (** Edges connect to nodes through tagged ports. *)
      
 end
 
