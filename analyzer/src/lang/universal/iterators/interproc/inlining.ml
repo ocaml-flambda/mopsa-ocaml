@@ -41,7 +41,12 @@ let () =
   register_token {
     compare = (fun next tk1 tk2 ->
         match tk1, tk2 with
-        | T_return(r1, _), T_return(r2, _) -> compare_range r1 r2
+        | T_return(r1, oe1), T_return(r2, oe2) ->
+          (* we may return different things at one same location (for example due to disjunctions *)
+          Compare.compose
+            [ (fun () -> compare_range r1 r2);
+              (fun () -> Compare.option compare_expr oe1 oe2);
+            ]
         | _ -> next tk1 tk2
       );
     print = (fun next fmt -> function
@@ -86,11 +91,23 @@ struct
 
   let exec zone stmt man flow =
     match skind stmt with
-    | S_return e ->
+    | S_return (Some e) ->
+      man.eval e flow |>
+      bind_some (fun ee flow ->
+          debug "on %a, flow = %a" pp_expr ee (Flow.print man.lattice.print) flow;
+          let cur = Flow.get T_cur man.lattice flow in
+          Flow.add (T_return (stmt.srange, Some ee)) cur man.lattice flow |>
+          Flow.remove T_cur |>
+          Post.return
+        )
+      |> Option.return
+
+    | S_return None ->
       let cur = Flow.get T_cur man.lattice flow in
-      Flow.add (T_return (stmt.srange, e)) cur man.lattice flow |>
+      Flow.add (T_return (stmt.srange, None)) cur man.lattice flow |>
       Flow.remove T_cur |>
-      Post.return |> Option.return
+          Post.return
+      |> Option.return
 
     | _ -> None
 
