@@ -59,6 +59,7 @@ module Domain =
          Option.return
 
       | S_py_import_from(modul, name, _, vmodul) ->
+        (* FIXME: objects defined in modul other than name should not appear *)
          let obj, flow = import_module man modul range flow in
          let e =
            match kind_of_object obj with
@@ -70,6 +71,7 @@ module Domain =
               mk_py_object obj range
            | _ -> assert false
          in
+         debug "assign!";
          man.exec (mk_assign (mk_var vmodul range) e range) flow |>
          Post.return |>
          Option.return
