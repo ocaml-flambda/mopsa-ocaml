@@ -123,7 +123,19 @@ let object_name obj =
 let add_builtin_class obj () =
   Hashtbl.add classes (object_name obj) obj
 
+let print_classes fmt _ =
+  Hashtbl.iter (fun cl _ ->
+      Format.fprintf fmt "%s\n" cl
+    ) classes
+
+let print_functions fmt _ =
+  Hashtbl.iter (fun cl _ ->
+      Format.fprintf fmt "%s\n" cl
+    ) functions
+
+
 let add_builtin_function obj () =
+  debug "added builtin function %s" (object_name obj);
   Hashtbl.add functions (object_name obj) obj
 
 let add_builtin_module obj () =
