@@ -87,6 +87,7 @@ module Domain =
          |> Option.return
 
 
+
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "int.__new__")}, _)}, [cls], []) ->
         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow |> Option.return
 
@@ -102,28 +103,33 @@ module Domain =
 
       (* 𝔼⟦ int.__op__(e1, e2) | op ∈ {==, !=, <, ...} ⟧ *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
-           when is_compare_op_fun "int" f ->
-         bind_list [e1; e2] (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
-         bind_some (fun el flow ->
-               let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
-               assume
-                 (mk_py_isinstance_builtin e1 "int" range)
-                 ~fthen:(fun true_flow ->
-                   assume
-                     (mk_py_isinstance_builtin e2 "int" range)
-                     ~fthen:(fun true_flow ->
-                       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_bool range) true_flow)
-                     ~felse:(fun false_flow ->
-                       let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
-                       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) expr false_flow)
-                     man true_flow
-                 )
-                 ~felse:(fun false_flow ->
-                   let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow in
-                   Eval.empty_singleton flow)
-                 man flow
-             )
-         |>  Option.return
+        when is_compare_op_fun "int" f ->
+        bind_list [e1; e2] (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+        bind_some (fun el flow ->
+            let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
+            let addr_group a = a.addr_group in
+            match addr_group @@ fst @@ object_of_expr e1, addr_group @@ fst @@ object_of_expr e2 with
+            | Typing.G_py_bool (Some b1), Typing.G_py_bool (Some b2) ->
+              Eval.singleton (mk_py_bool (b1 = b2) range) flow
+            | _ ->
+              assume
+                (mk_py_isinstance_builtin e1 "int" range)
+                ~fthen:(fun true_flow ->
+                    assume
+                      (mk_py_isinstance_builtin e2 "int" range)
+                      ~fthen:(fun true_flow ->
+                          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_bool range) true_flow)
+                      ~felse:(fun false_flow ->
+                          let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
+                          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) expr false_flow)
+                      man true_flow
+                  )
+                ~felse:(fun false_flow ->
+                    let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow in
+                    Eval.empty_singleton flow)
+                man flow
+          )
+        |>  Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
            when is_arith_binop_fun "int" f ->

@@ -685,7 +685,7 @@ struct
       end
       |> Option.return
 
-    | E_py_ll_getattr({ekind = E_py_object (addr, objexpr)} as e, attr) ->
+    | E_py_ll_getattr({ekind = E_py_object ((addr, objexpr) as obj)} as e, attr) ->
       let attr = match ekind attr with
         | E_constant (C_string s) -> s
         | E_py_object (_, Some {ekind = E_constant (C_string s)}) -> s
@@ -696,7 +696,12 @@ struct
 
         | A_py_module (M_user (name, globals)) ->
           let v = List.find (fun x -> get_orig_vname x = attr) globals in
-          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var v range) flow
+          (* FIXME: is that normal?! used in stub module unittest with builtin unittest.TestCase... *)
+          if is_builtin_name (name ^ "." ^ attr) then
+            let () = warn_at range "using builtin rather than variable when performing %a" pp_expr exp in
+            Eval.singleton (mk_py_object (find_builtin_attribute obj attr) range) flow
+          else
+            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var v range) flow
 
         | A_py_class (C_builtin c, b) ->
           Eval.singleton (mk_py_object (find_builtin_attribute (object_of_expr e) attr) range) flow

@@ -173,13 +173,17 @@ module Domain =
          eval_alloc man (A_py_function kind) stmt.srange flow |>
          bind_some (fun addr flow ->
              let obj = (addr, None) in
-             man.exec
-               (mk_assign
-                  (mk_var func.py_func_var range)
-                  (mk_py_object obj range)
-                  range
-               ) flow
-             |> Post.return
+             if Libs.Py_mopsa.is_unsupported_fundec func || Libs.Py_mopsa.is_builtin_fundec func then
+               let () = add_builtin_function obj () in
+               Post.return flow
+             else
+               man.exec
+                 (mk_assign
+                    (mk_var func.py_func_var range)
+                    (mk_py_object obj range)
+                    range
+                 ) flow
+               |> Post.return
            )
          |> Option.return
       | _ ->

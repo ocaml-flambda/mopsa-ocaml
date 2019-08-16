@@ -97,12 +97,14 @@ struct
           if Libs.Py_mopsa.is_builtin_clsdec cls then
             let name = Libs.Py_mopsa.builtin_clsdec_name cls in
             create_builtin_class (C_builtin name) name cls bases' range;
-            Post.return flow
+            man.exec cls.py_cls_body flow |>
+            Post.return
           else
           if Libs.Py_mopsa.is_unsupported_clsdec cls then
             let name = get_orig_vname cls.py_cls_var in
             create_builtin_class (C_unsupported name) name cls bases' range;
-            Post.return flow
+            man.exec cls.py_cls_body flow |>
+            Post.return
           else
             try
               debug "bases' = %a@\n" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_expr) (List.map (fun x -> mk_py_object x range) bases');
