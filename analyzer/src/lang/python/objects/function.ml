@@ -46,7 +46,9 @@ module Domain =
       let range = erange exp in
       match ekind exp with
       (* 𝔼⟦ f() | isinstance(f, function) ⟧ *)
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function(F_user pyfundec)}, _)}, args, []) ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function(F_user pyfundec)}, _)}, args, kwargs) ->
+        debug "args: %a@\n" (Format.pp_print_list pp_expr) args;
+        debug "kwargs: %a@\n" (Format.pp_print_list (fun fmt (so, e) -> Format.fprintf fmt "%a~>%a" (Option.print Format.pp_print_string) so pp_expr e)) kwargs;
          debug "user-defined function call@\n";
          (* First check the correct number of arguments *)
          let default_args, nondefault_args = List.partition (function None -> false | _ -> true) pyfundec.py_func_defaults in
@@ -78,16 +80,28 @@ module Domain =
                    if List.length args = (List.length pyfundec.py_func_parameters) then
                      args
                    else
+                     (* Replace default_args by kwargs *)
+                     let default_args = List.map2 (fun default param ->
+                         let vname = match vkind param with | V_uniq (s, _) -> s | _ -> assert false in
+                         match List.find_opt (fun (so, _) -> match so with
+                             | None -> false
+                             | Some s -> s = vname) kwargs with
+                         | None -> default
+                         | Some (so, e) ->
+                           debug "yay!";
+                           Some e
+                       ) default_args pyfundec.py_func_parameters in
                      (* Remove the first default parameters that are already specified *)
                      let default_args =
                        let to_remove = List.length args - List.length nondefault_args in
+                       (* + List.length kwargs - List.length default_args in *)
                        let rec remove_first n l =
                          match n with
                          | 0 -> l
                          | _ -> remove_first (n-1) (List.tl l)
                        in
                        let () = debug "%d %d" (List.length default_args) to_remove in
-                       if to_remove < 0 || List.length default_args < to_remove then [] else remove_first to_remove default_args
+                       if to_remove < 0 || List.length default_args < to_remove then assert false else remove_first to_remove default_args
                      in
                      (* Fill missing args with default parameters *)
                      let default_args = List.map (function Some e -> e | None -> assert false) default_args in

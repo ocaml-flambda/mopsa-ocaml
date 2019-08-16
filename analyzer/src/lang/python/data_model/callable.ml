@@ -53,7 +53,7 @@ module Domain =
        *      function *\)
        *   panic_at range "call %a can not be resolved" pp_expr exp *)
 
-      | E_py_call(f, args, []) ->
+      | E_py_call(f, args, kwargs) when List.for_all (fun (so, _) -> so <> None) kwargs ->
         let start = Timing.start () in
         debug "Calling %a from %a" pp_expr exp pp_range exp.erange;
         let res =
@@ -73,19 +73,15 @@ module Domain =
                | E_py_object ({addr_kind = A_py_function _}, _)
                | E_py_object ({addr_kind = A_py_method _}, _)
                | E_py_object ({addr_kind = A_py_module _}, _) ->
-
-                 (* Eval.eval_list args (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
-                  * Eval.bind (fun args flow -> *)
-                 let exp = {exp with ekind = E_py_call(f, args, [])} in
+                 let exp = {exp with ekind = E_py_call(f, args, kwargs)} in
                  man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) exp flow
-               (* ) *)
 
                | _ ->
                  (* if f has attribute call, restart with that *)
                  assume
                    (mk_py_hasattr f "__call__" range)
                    ~fthen:(fun flow ->
-                       man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_attr f "__call__" range) args range) flow)
+                       man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_kall (mk_py_attr f "__call__" range) args kwargs range) flow)
                    ~felse:(fun flow ->
                        debug "callable/E_py_call, on %a@\n" pp_expr f; assert false
                      )
@@ -95,7 +91,7 @@ module Domain =
         res |> Option.return
 
       | E_py_call(f, args, _) ->
-        panic_at range "calls with keyword arguments not supported"
+        panic_at range "calls with **kwargs not supported"
 
       | _ -> None
 

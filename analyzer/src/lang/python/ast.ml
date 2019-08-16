@@ -373,6 +373,10 @@ let mk_raise exc range =
 let mk_py_call func args range =
   mk_expr (E_py_call (func, args, [])) range
 
+let mk_py_kall func args kwargs range =
+  (* call with kwargs *)
+  mk_expr (E_py_call (func, args, kwargs)) range
+
 let mk_py_attr obj attr ?(etyp=T_any) range =
   mk_expr (E_py_attribute (obj, attr)) ~etyp range
 
