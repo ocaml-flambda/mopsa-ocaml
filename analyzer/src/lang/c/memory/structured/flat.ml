@@ -330,6 +330,10 @@ struct
           ) (None, Z.zero) fields
         in
         match fieldopt with
+        | Some field when is_c_array_type field.c_field_type ->
+          Soundness.warn_at range "copy of array %a ignored" pp_expr rval;
+          Post.return flow
+
         | Some field ->
           let lval = mk_c_member_access lval field range in
           let rval = mk_c_member_access rval field range in
