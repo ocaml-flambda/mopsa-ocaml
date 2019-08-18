@@ -249,7 +249,7 @@ struct
     | None, O_eq -> Eval.singleton (mk_one range) flow
     | None, O_ne -> Eval.singleton (mk_zero range) flow
     | Some cond,_ -> man.eval ~zone:(Z_c_scalar,Z_u_num) cond flow
-    | _ -> Eval.singleton (mk_int_interval 0 1 range) flow
+    | _ -> Eval.singleton (mk_int_interval 0 1 range) flow (* FIXME: can we return a more precise expression? *)
 
 
   let remove_offset_opt p v v' range man flow =
@@ -378,9 +378,9 @@ struct
     let v1, o1, p1 = symbolic_to_value sp man flow in
     let v2, o2, p2 = symbolic_to_value sq man flow in
 
-    (* Case 1: same valid bases *)
+    (* Case 1: same bases *)
     let case1 =
-      let v = Value.meet v1 v2 |> Value.meet Value.valid_top in
+      let v = Value.meet v1 v2 in
       if Value.is_bottom v
       then []
       else
@@ -431,7 +431,7 @@ struct
 
     (* Case 1 : same base => return difference of offset *)
     let case1 =
-      let v = Value.meet v1 v2 |> Value.meet Value.valid_top in
+      let v = Value.meet v1 v2 in
       if Value.is_bottom v
       then []
       else
@@ -447,7 +447,7 @@ struct
           else Some (div e (mk_z elem_size range) range)
         in
         match ee with
-        | None -> [man.eval ~zone:(Z_c_scalar, Z_u_num) (mk_top T_int range) flow]
+        | None -> [man.eval ~zone:(Z_c_scalar, Z_u_num) (mk_top T_int range) flow] (* FIXME: why not return 0? *)
         | Some e -> [man.eval ~zone:(Z_c_scalar, Z_u_num) e flow]
     in
 
