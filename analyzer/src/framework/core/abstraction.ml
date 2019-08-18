@@ -219,10 +219,11 @@ struct
       try ExecMap.find zone exec_map
       with Not_found -> Exceptions.panic_at stmt.srange "exec for %a not found" pp_zone zone
     in
-    let post = Cache.exec fexec zone stmt man flow in
-
-    Debug_tree.exec_done stmt zone (Timing.stop timer) man.lattice.print post;
-    post
+    try
+      let post = Cache.exec fexec zone stmt man flow in
+      Debug_tree.exec_done stmt zone (Timing.stop timer) man.lattice.print post;
+      post
+    with Exceptions.Panic(msg, line) -> raise (Exceptions.PanicAt(stmt.srange, msg, line))
 
 
   let exec ?(zone = any_zone) (stmt: stmt) man (flow: Domain.t flow) : Domain.t flow =
@@ -366,7 +367,11 @@ struct
       Option.return
 
     | other_action ->
-      match Cache.eval feval (z1, z2) exp man flow with
+      match
+        (try Cache.eval feval (z1, z2) exp man flow
+         with Exceptions.Panic(msg,line) -> raise (Exceptions.PanicAt (exp.erange,msg,line))
+        )
+      with
       | Some evl -> Some evl
       | None ->
         match other_action with
