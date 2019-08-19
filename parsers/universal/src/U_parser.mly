@@ -51,7 +51,10 @@
 %token TOK_BREAK
 %token TOK_CONTINUE
 %token TOK_RAND
+%token TOK_RANDF
+%token TOK_ROUND
 %token TOK_ASSERT
+%token TOK_ASSUME
 %token TOK_PRINT
 
 %token TOK_LPAREN
@@ -137,6 +140,7 @@ file: t=prog TOK_EOF { t }
 | TOK_PLUS           { AST_UNARY_PLUS }
 | TOK_MINUS          { AST_UNARY_MINUS }
 | TOK_EXCLAIM        { AST_NOT }
+| TOK_ROUND          { AST_ROUND }
 
 
 // binary operators
@@ -209,6 +213,9 @@ expr:
 | TOK_RAND TOK_LPAREN e1=ext(sign_int_literal) TOK_COMMA e2=ext(sign_int_literal) TOK_RPAREN
     { AST_rand (e1, e2) }
 
+| TOK_RANDF TOK_LPAREN e1=ext(real_constant) TOK_COMMA e2=ext(real_constant) TOK_RPAREN
+    { AST_randf (e1, e2) }
+
 | TOK_BAR e=ext(expr) TOK_BAR
     { AST_len (e)}
 
@@ -276,6 +283,9 @@ stat:
 
 | TOK_ASSERT TOK_LPAREN e=ext(expr) TOK_RPAREN TOK_SEMICOLON
   { AST_assert e }
+
+| TOK_ASSUME TOK_LPAREN e=ext(expr) TOK_RPAREN TOK_SEMICOLON
+  { AST_assume e }
 
 | TOK_PRINT TOK_LPAREN TOK_RPAREN TOK_SEMICOLON
   { AST_print }
