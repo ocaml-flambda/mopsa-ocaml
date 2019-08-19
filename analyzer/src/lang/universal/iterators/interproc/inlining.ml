@@ -32,24 +32,26 @@ open Callstack
 (** ===================== *)
 
 type token +=
-  | T_return of range * bool
-  (** [T_return(l, b)] represents flows reaching a return statement at
-      location [l]. The boolean is true iff there a return expression is present *)
+  | T_return of range * expr option
+  (** [T_return(l, ret)] represents flows reaching a return statement at
+      location [l]. The option expression [ret] keeps the returned expression
+      if present. *)
 
 let () =
   register_token {
     compare = (fun next tk1 tk2 ->
         match tk1, tk2 with
-        | T_return(r1, b1), T_return(r2, b2) ->
+        | T_return(r1, oe1), T_return(r2, oe2) ->
           (* we may return different things at one same location (for example due to disjunctions *)
           Compare.compose
             [ (fun () -> compare_range r1 r2);
-              (fun () -> Pervasives.compare b1 b2);
+              (fun () -> Compare.option compare_expr oe1 oe2);
             ]
         | _ -> next tk1 tk2
       );
     print = (fun next fmt -> function
-        | T_return(r, b) -> Format.fprintf fmt "return[r = %a, b = %b@" pp_range r b
+        | T_return(r, Some e) -> Format.fprintf fmt "return %a" pp_expr e
+        | T_return(r, None) -> Format.fprintf fmt "return"
         | tk -> next fmt tk
       );
   }
@@ -88,23 +90,24 @@ struct
   (** ============================== *)
 
   let exec zone stmt man flow =
-    let range = stmt.srange in
     match skind stmt with
     | S_return (Some e) ->
-      let ret = mk_range_attr_var range "return" T_any in
-      let flow =
-        man.exec (mk_add_var ret range) flow |>
-        man.exec (mk_assign (mk_var ret range) e range) in
-      let cur = Flow.get T_cur man.lattice flow in
-      Flow.add (T_return (range, true)) cur man.lattice flow |>
-      Flow.remove T_cur |>
-      Post.return |> Option.return
+      man.eval e flow |>
+      bind_some (fun ee flow ->
+          debug "on %a, flow = %a" pp_expr ee (Flow.print man.lattice.print) flow;
+          let cur = Flow.get T_cur man.lattice flow in
+          Flow.add (T_return (stmt.srange, Some ee)) cur man.lattice flow |>
+          Flow.remove T_cur |>
+          Post.return
+        )
+      |> Option.return
 
     | S_return None ->
       let cur = Flow.get T_cur man.lattice flow in
-      Flow.add (T_return (range, false)) cur man.lattice flow |>
+      Flow.add (T_return (stmt.srange, None)) cur man.lattice flow |>
       Flow.remove T_cur |>
-      Post.return |> Option.return
+          Post.return
+      |> Option.return
 
     | _ -> None
 
@@ -152,15 +155,12 @@ struct
     let flow3 =
       Flow.fold (fun acc tk env ->
           match tk with
-          | T_return(_, false) ->
-            Flow.add T_cur env man.lattice acc
+          | T_return(_, None) -> Flow.add T_cur env man.lattice acc
 
-          | T_return(range, true) ->
-            let rreturn = mk_range_attr_var range "return" T_any in
+          | T_return(_, Some e) ->
             Flow.set T_cur env man.lattice acc |>
             man.exec (mk_add_var ret range) |>
-            man.exec (mk_assign (mk_var ret range) (mk_var rreturn range) range) |>
-            man.exec (mk_remove_var rreturn range) |>
+            man.exec (mk_assign (mk_var ret e.erange) e e.erange) |>
             Flow.join man.lattice acc
 
           | _ -> Flow.add tk env man.lattice acc
