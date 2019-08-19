@@ -1,0 +1,30 @@
+{
+    "language": "universal",
+    "domain": {
+	"seq": [
+	    // Iterators
+	    "universal.iterators.program",
+	    "universal.iterators.intraproc",
+	    "universal.iterators.loops",
+            "universal.iterators.interproc.inlining",
+            "universal.iterators.scalar",
+            "universal.iterators.unittest",
+
+	    // Numeric abstraction
+            {
+                "product": [
+                    "universal.numeric.relational.polyhedra",
+                    {
+                        "nonrel": {
+		            "disjoint": [
+		                "universal.numeric.values.intervals.float",
+		                "universal.numeric.values.intervals.integer"
+		            ]
+		        }
+                    }
+                ]
+            }
+	}
+    ]
+}
+}
