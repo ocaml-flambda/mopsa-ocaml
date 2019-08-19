@@ -89,7 +89,7 @@ __off_t lseek (int __fd, __off_t __offset, int __whence);
  * requires: __fd in FileDescriptor;
  *
  * case "success" {
- *   local:   void* addr = _mopsa_file_descriptor_to_description(__fd);
+ *   local:   void* addr = _mopsa_find_file_resource(__fd);
  *   free:    addr;
  *   ensures: return == 0;
  * }
@@ -386,8 +386,9 @@ char *getwd (char *__buf);
  * requires: __fd in FileDescriptor;
  *
  * case "success" {
- *   local:   int r = new FileDescriptor;
- *   ensures: return == r;
+ *   local:   void *f = new FileRes;
+ *   local:   int fd = _mopsa_register_file_resource(f);
+ *   ensures: return == fd;
  * }
  *
  * case "failure" {
@@ -401,10 +402,10 @@ int dup (int __fd);
  * requires: __fd in FileDescriptor;
  *
  * case "newfd" {
- *   warn: "unsupported stub case";
- *   local:   int r = new FileDescriptor;
- *   ensures: r == __fd2;
- *   ensures: return == r;
+ *   assumes: not __fd2 in FileDescriptor;
+ *   local: void *f = new FileRes;
+ *   local: int x = _mopsa_register_file_resource_at(f, __fd2);
+ *   ensures: return == __fd2;
  * }
  *
  * case "reopen" {

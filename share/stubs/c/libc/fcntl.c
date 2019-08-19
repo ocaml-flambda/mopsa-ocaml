@@ -34,81 +34,38 @@
 int fcntl (int __fd, int __cmd, ...);
 
 /*$
- * requires: exists int i in [0, size(__file) - 1]: __file[i] == 0;
+ * requires: valid_string(__file);
  *
- * case "success":
- *   local:   void* fd = new FileDescriptor;
- *   ensures: return == (int)fd;
+ * case "success" {
+ *   local:   void* f = new FileRes;
+ *   local:   int fd = _mopsa_register_file_resource(f);
+ *   ensures: return == fd;
+ * }
  *
- * case "failure":
+ * case "failure" {
  *   assigns: _errno;
  *   ensures: return == -1;
+ * }
  */
 int open (const char *__file, int __oflag, ...);
 
-#ifdef __USE_ATFILE
-/*$
- * requires: exists int i in [0, size(__file) - 1]: __file[i] == 0;
- * requires: __fd in FileDescriptor;
- *
- * case "success":
- *   local:   void* fd = new FileDescriptor;
- *   ensures: return == (int)fd;
- *
- * case "failure":
- *   assigns: _errno;
- *   ensures: return == -1;
- */
-int openat (int __fd, const char *__file, int __oflag, ...);
-
-#endif
 
 
-/*$
- * requires: exists int i in [0, size(__file) - 1]: __file[i] == 0;
- *
- * case "success":
- *   local:   void* fd = new FileDescriptor;
- *   ensures: return == (int)fd;
- *
- * case "failure":
- *   assigns: _errno;
- *   ensures: return == -1;
- */
-int creat (const char *__file, mode_t __mode);
+int creat (const char *__file, mode_t __mode) {
+  return open(__file, O_CREAT|O_WRONLY|O_TRUNC, __mode);
+}
 
-static const int _F_ULOCKF = F_ULOCK;
-static const int _F_LOCK = F_LOCK;
-static const int _F_TLOCK = F_TLOCK;
-static const int _F_TEST = F_TEST;
 
 /*$
  * requires: __fd in FileDescriptor;
- * requires: __cmd >= _F_ULOCKF && __cmd <= _F_TEST;
  *
- * case "success":
+ * case "success" {
  *   ensures: return == 0;
+ * }
  *
- * case "failure":
+ * case "failure" {
  *   assigns: _errno;
  *   ensures: return == -1;
+ * }
  */
 int lockf (int __fd, int __cmd, off_t __len);
-
-#ifdef __USE_XOPEN2K
-
-static const int _POSIX_FADV_NORMAL = POSIX_FADV_NORMAL;
-static const int _POSIX_FADV_NOREUSE = POSIX_FADV_NOREUSE;
-
-/*$
- * requires: __fd in FileDescriptor;
- * requires: __advise >= _POSIX_FADV_NORMAL and __advise <= _POSIX_FADV_NOREUSE;
- */
-int posix_fadvise (int __fd, off_t __offset, off_t __len, int __advise);
-
-/*$
- * requires: __fd in FileDescriptor;
- */
-int posix_fallocate (int __fd, off_t __offset, off_t __len);
-
-#endif

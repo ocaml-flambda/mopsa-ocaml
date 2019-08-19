@@ -174,6 +174,8 @@ let map_env = Manager.map_env
 
 let assume = Manager.assume
 
+let assume_flow = Manager.assume_flow
+
 let switch = Manager.switch
 
 let exec_stmt_on_all_flows = Manager.exec_stmt_on_all_flows

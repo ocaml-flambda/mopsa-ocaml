@@ -182,32 +182,26 @@ let eval_template exp z =
       (fun exp -> Process)
   in
 
-  (* Evaluate expression by structural induction *)
-  let rec aux exp =
-    match template exp with
-    | Keep -> Keep
-    | Process -> Process
-    | Visit ->
-      (* Check whether all sub-expressions are part of the zone *)
-      let evals =
-        Visitor.fold_expr
-          (fun acc exp ->
-             match template exp with
-             | Visit when Visitor.is_leaf_expr exp -> Visitor.VisitParts (Visit :: acc)
-             | Visit -> Visitor.VisitParts (acc)
-             | Keep -> Visitor.Keep (Keep :: acc)
-             | Process -> Visitor.Keep (Process :: acc)
-          )
-          (fun acc stmt ->
-             Visitor.Keep (Process :: acc)
-          )
-          [] exp
-      in
-      if List.for_all (function Keep -> true | _ -> false) evals
-      then Keep
-      else Visit
-  in
-  aux exp
+  match template exp with
+  | Keep -> Keep
+  | Process -> Process
+  | Visit ->
+    (* Check whether all sub-expressions are part of the zone *)
+    let rec mem e =
+      debug "mem %a in %a" pp_expr e pp_zone z;
+      match template e with
+      | Keep -> true
+      | Process -> false
+      | Visit ->
+        if Visitor.is_leaf_expr e
+        then false
+        else
+          Visitor.fold_sub_expr
+            (fun acc ee -> Visitor.Keep (acc && mem ee))
+            (fun acc stmt -> Visitor.Keep false)
+            true e
+    in
+    if mem exp then Keep else Visit
 
 
 (** {2 Eval graph}

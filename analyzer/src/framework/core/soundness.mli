@@ -22,7 +22,7 @@
 (** Soundness warnings *)
 
 type warning = {
-  warn_range   : Location.range;
+  warn_range   : Location.range option;
   warn_message : string;
 }
 
@@ -34,4 +34,6 @@ val is_sound : unit -> bool
 
 val get_warnings : unit -> warning list
 
-val warn : Location.range -> ('a, Format.formatter, unit, unit) format4 -> 'a
+val warn : ('a, Format.formatter, unit, unit) format4 -> 'a
+
+val warn_at : Location.range -> ('a, Format.formatter, unit, unit) format4 -> 'a

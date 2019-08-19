@@ -217,8 +217,17 @@ and fold_stmt
     let x2 = List.fold_left (fold_expr fe fs) x1 parts.exprs in
     List.fold_left (fold_stmt fe fs) x2 parts.stmts
 
+
+let fold_sub_expr
+    (fe: 'a -> expr -> 'a action)
+    (fs: 'a -> stmt -> 'a action) x0 e =
+  let parts, _ = split_expr e in
+  let x2 = List.fold_left (fold_expr fe fs) x0 parts.exprs in
+  List.fold_left (fold_stmt fe fs) x2 parts.stmts
+
+
 (** Combination of map and fold for expressions *)
-and fold_map_expr
+let rec fold_map_expr
     (fme  : 'a -> expr -> ('a * expr) action)
     (fms  : 'a -> stmt -> ('a * stmt) action)
     (x0   : 'a)

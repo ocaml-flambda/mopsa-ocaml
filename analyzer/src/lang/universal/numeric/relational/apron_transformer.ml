@@ -245,9 +245,9 @@ struct
     | E_unop (O_plus, e) ->
       exp_to_apron e (abs,bnd) l
 
-    | E_unop(O_cast, e) ->
+    | E_unop(O_cast(t1, t2), e) ->
       let e', abs, bnd, l = exp_to_apron e (abs,bnd) l in
-      let typ' = typ_to_apron e.etyp in
+      let typ' = typ_to_apron t2 in
       Apron.Texpr1.Unop(Apron.Texpr1.Cast, e', typ', !opt_float_rounding), abs, bnd, l
 
     | E_unop(O_minus, e) ->

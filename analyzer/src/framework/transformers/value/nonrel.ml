@@ -281,7 +281,6 @@ struct
     | _ -> assert false
 
 
-
   (** {2 Transfer functions} *)
   (** ********************** *)
 
@@ -289,7 +288,7 @@ struct
 
   let zones = Value.zones
 
-  let rec exec stmt (map:t) : t option =
+  let exec stmt (map:t) : t option =
     match skind stmt with
     | S_remove { ekind = E_var (v, _) }  ->
       VarMap.remove v map |>

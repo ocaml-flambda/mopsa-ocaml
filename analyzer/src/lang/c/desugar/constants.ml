@@ -19,13 +19,13 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Inter-procedural iterator by inlining.  *)
+(** Desugar constant expressions. *)
 
 open Mopsa
 open Framework.Core.Sig.Domain.Stateless
+open Universal.Ast
 open Ast
 open Zone
-open Common
 
 
 (** {2 Domain definition} *)
@@ -38,62 +38,49 @@ struct
   (** ===================== *)
 
   include GenStatelessDomainId(struct
-      let name = "universal.iterators.interproc.inlining"
+      let name = "c.desugar.constants"
     end)
 
 
   (** Zoning definition *)
+  (** ================= *)
+
   let interface = {
-    iexec = { provides = [Z_u]; uses = [] };
-    ieval = { provides = [Z_u, Z_any]; uses = [] };
+    iexec = {provides = []; uses = []};
+    ieval = {provides = [Z_c, Z_c_low_level]; uses = []};
   }
+
 
   (** Initialization *)
   (** ============== *)
 
-  let init prog man (flow: 'a flow) =
-    Flow.set_ctx (
-      Flow.get_ctx flow |>
-      Context.add_unit Callstack.ctx_key Callstack.empty
-    ) flow
+  let init _ _ flow = flow
 
-  (** Computation of post-conditions *)
-  (** ============================== *)
 
-  let exec zone stmt man flow =
-    match skind stmt with
-    | S_return e ->
-      let cur = Flow.get T_cur man.lattice flow in
-      Flow.add (T_return (stmt.srange, e)) cur man.lattice flow |>
-      Flow.remove T_cur |>
-      Post.return |> Option.return
+  (** Post-condition computation *)
+  (** ========================== *)
 
-    | _ -> None
-
+  let exec zone stmt man flow = None
 
 
   (** Evaluation of expressions *)
   (** ========================= *)
 
+  let eval zone exp man flow  =
+    match c_expr_to_z exp with
+    | None   -> None
+    | Some z ->
+      debug "%a simplified into %a" pp_expr exp Z.pp_print z;
+      Eval.singleton (mk_z z ~typ:exp.etyp exp.erange) flow |>
+      Option.return
 
-  let eval zone exp man flow =
-    let range = erange exp in
-    match ekind exp with
-    | E_call({ekind = E_function (User_defined f)}, args) ->
-      let params, flow = init_fun_params f args range man flow in
-      let ret = match f.fun_return_type with
-        | None -> None
-        | Some t -> Some (mk_range_attr_var range "ret_var" t)
-      in
-      inline f params ret range man flow
-      |> Option.return
 
-    | _ -> None
+  (** Query handler *)
+  (** ============= *)
 
-  let ask _ _ _ = None
+  let ask _ _ _  = None
 
 end
 
-
 let () =
-  register_domain (module Domain)
+  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)

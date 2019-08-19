@@ -241,7 +241,7 @@ struct
   let mk_offset_constraint_opt op p1 v1 o1 p2 v2 o2 range =
     mk_offset_expr_opt p1 v1 o1 range |> Option.bind @@ fun e1 ->
     mk_offset_expr_opt p2 v2 o2 range |> Option.bind @@ fun e2 ->
-    Some (mk_binop e1 op e2 range)
+    Some (mk_binop e1 op e2 ~etyp:T_int range)
 
 
   let eval_offset_constraint_opt op p1 v1 o1 p2 v2 o2 range man flow =
@@ -249,7 +249,7 @@ struct
     | None, O_eq -> Eval.singleton (mk_one range) flow
     | None, O_ne -> Eval.singleton (mk_zero range) flow
     | Some cond,_ -> man.eval ~zone:(Z_c_scalar,Z_u_num) cond flow
-    | _ -> assert false
+    | _ -> Eval.singleton (mk_int_interval 0 1 range) flow (* FIXME: can we return a more precise expression? *)
 
 
   let remove_offset_opt p v v' range man flow =
@@ -263,7 +263,6 @@ struct
 
   (** {2 Pointer evaluation} *)
   (** ====================== *)
-
 
   (** Evaluation of points-to information *)
   let eval_points_to exp man flow =
@@ -379,9 +378,9 @@ struct
     let v1, o1, p1 = symbolic_to_value sp man flow in
     let v2, o2, p2 = symbolic_to_value sq man flow in
 
-    (* Case 1: same valid bases *)
+    (* Case 1: same bases *)
     let case1 =
-      let v = Value.meet v1 v2 |> Value.meet Value.valid_top in
+      let v = Value.meet v1 v2 in
       if Value.is_bottom v
       then []
       else
@@ -411,7 +410,10 @@ struct
   (** 𝔼⟦ p - q ⟧ *)
   let eval_diff p q range man flow =
     (* p1 and p2 should point to the same type *)
-    if compare_typ (under_type p.etyp) (under_type q.etyp) <> 0
+    let elem_size_p = under_type p.etyp |> void_to_char |> sizeof_type in
+    let elem_size_q = under_type q.etyp |> void_to_char |> sizeof_type in
+    (* FIXME: do we need to check the sign also? *)
+    if not @@ Z.equal elem_size_p elem_size_q
     then panic_at range
         "%a - %a: pointers do not point to the same type"
         pp_expr p pp_expr q
@@ -425,11 +427,11 @@ struct
     let v2, o2, p2 = symbolic_to_value sq man flow in
 
     (* Size of a pointed element *)
-    let elem_size = under_type p.etyp |> void_to_char |> sizeof_type in
+    let elem_size = elem_size_p in
 
     (* Case 1 : same base => return difference of offset *)
     let case1 =
-      let v = Value.meet v1 v2 |> Value.meet Value.valid_top in
+      let v = Value.meet v1 v2 in
       if Value.is_bottom v
       then []
       else
@@ -445,7 +447,7 @@ struct
           else Some (div e (mk_z elem_size range) range)
         in
         match ee with
-        | None -> [man.eval ~zone:(Z_c_scalar, Z_u_num) (mk_top T_int range) flow]
+        | None -> [man.eval ~zone:(Z_c_scalar, Z_u_num) (mk_top T_int range) flow] (* FIXME: why not return 0? *)
         | Some e -> [man.eval ~zone:(Z_c_scalar, Z_u_num) e flow]
     in
 
@@ -530,10 +532,20 @@ struct
       eval_ne exp (mk_zero exp.erange ~typ:(T_c_pointer T_c_void)) exp.erange man flow |>
       Option.return
 
+    (* 𝔼⟦ "..." ⟧ *)
+    | E_constant (C_c_string _) ->
+      Eval.singleton (mk_one exp.erange) flow |>
+      Option.return
+
     (* 𝔼⟦ !p ⟧ *)
     | E_unop (O_log_not, ({ekind = E_constant (C_top _)} as p))
-    | E_unop (O_log_not, ({ekind = E_var _} as p)) when is_c_pointer_type exp.etyp ->
+    | E_unop (O_log_not, ({ekind = E_var _} as p)) when is_c_pointer_type p.etyp ->
       eval_eq p (mk_zero exp.erange ~typ:(T_c_pointer T_c_void)) exp.erange man flow |>
+      Option.return
+
+    (* 𝔼⟦ !"..." ⟧ *)
+    | E_unop (O_log_not, ({ekind = E_constant (C_c_string _)})) ->
+      Eval.singleton (mk_zero exp.erange) flow |>
       Option.return
 
     (* 𝔼⟦ (t)p ⟧ *)
@@ -703,10 +715,16 @@ struct
 
   (** Rename a pointer variable *)
   let rename_var p1 p2 range man flow =
-    let flow = map_env T_cur (Map.rename p1 p2) man flow in
-    let o1 = mk_offset_expr p1 STRONG range in
-    let o2 = mk_offset_expr p2 STRONG range in
-    man.post ~zone:(Universal.Zone.Z_u_num) (mk_rename o1 o2 range) flow
+    let flow' = map_env T_cur (Map.rename p1 p2) man flow in
+
+    (* Rename the offset if present *)
+    let a1 = get_env T_cur man flow |> Map.find p1 in
+    if Value.is_valid_base a1 then
+      let o1 = mk_offset_expr p1 STRONG range in
+      let o2 = mk_offset_expr p2 STRONG range in
+      man.post ~zone:(Universal.Zone.Z_u_num) (mk_rename o1 o2 range) flow'
+    else
+      Post.return flow'
 
 
 

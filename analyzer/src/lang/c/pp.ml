@@ -155,7 +155,7 @@ let () =
     );
   register_expr_pp (fun default fmt expr ->
       match ekind expr with
-      | E_c_conditional(cond, body, orelse) -> fprintf fmt "%a ? %a : %a" pp_expr cond pp_expr body pp_expr orelse
+      | E_c_conditional(cond, body, orelse) -> fprintf fmt "(%a ? %a : %a)" pp_expr cond pp_expr body pp_expr orelse
       | E_c_array_subscript(arr, idx) -> fprintf fmt "%a[%a]" pp_expr arr pp_expr idx
       | E_c_member_access(rcd, idx, fld) -> fprintf fmt "%a.%s" pp_expr rcd fld
       | E_c_function(f) -> pp_print_string fmt f.c_func_org_name
@@ -169,7 +169,7 @@ let () =
       | E_c_address_of (e) -> fprintf fmt "&%a" pp_expr e
       | E_c_deref(p) -> fprintf fmt "*%a" pp_expr p
       | E_c_cast(e, true) -> fprintf fmt "(%a) %a" pp_typ (etyp expr) pp_expr e
-      | E_c_cast(e, false) -> fprintf fmt "%a" pp_expr e
+      | E_c_cast(e, false) -> pp_expr fmt e
       | E_c_statement s -> fprintf fmt "@[<v 4>{@,%a@]@,}" pp_stmt s
       | E_c_var_args e -> fprintf fmt "__builtin_va_arg(%a)" pp_expr e
       | E_c_predefined _ -> assert false
