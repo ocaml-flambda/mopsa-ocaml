@@ -79,9 +79,9 @@ struct
   let return_key =
     let module K = Context.GenUnitKey(
       struct
-        type t = (var * range) list
+        type t = var * range
         let print fmt vs =
-          Format.fprintf fmt "Return vars: %a" (Format.pp_print_list (fun fmt (v, r) -> Format.fprintf fmt "(%a at %a)" pp_var v pp_range r)) vs
+          Format.fprintf fmt "Return vars: %a" (fun fmt (v, r) -> Format.fprintf fmt "(%a at %a)" pp_var v pp_range r) vs
       end
       )
     in
@@ -103,8 +103,7 @@ struct
     let range = stmt.srange in
     match skind stmt with
     | S_return (Some e) ->
-      debug "Context = %a" Context.uprint (Context.get_unit @@ Flow.get_ctx flow);
-      let ret, rrange = List.hd @@ Context.find_unit return_key (Flow.get_ctx flow) in
+      let ret, rrange = Context.find_unit return_key (Flow.get_ctx flow) in
       let flow =
         man.exec (mk_add_var ret rrange) flow |>
         man.exec (mk_assign (mk_var ret rrange) e range) in
@@ -159,9 +158,9 @@ struct
   let inline_function_exec_body man f args range new_vars flow ret =
     (* Check that no recursion is happening *)
 
-    let rets = try Context.find_unit return_key (Flow.get_ctx flow) with Not_found -> [] in
+    let oldreturn = try Some (Context.find_unit return_key (Flow.get_ctx flow)) with Not_found -> None in
     let flow = Flow.set_ctx
-        (Context.add_unit return_key ((ret, range)::rets) (Flow.get_ctx flow))
+        (Context.add_unit return_key (ret, range) (Flow.get_ctx flow))
         flow in
 
     let flow2 = man.exec f.fun_body flow in
@@ -184,7 +183,9 @@ struct
     in
 
     (* Restore call stack *)
-    let flow3 = Flow.set_ctx (Context.add_unit return_key rets (Flow.get_ctx flow3)) flow3 in
+    let flow3 = match oldreturn with
+      | None -> flow3
+      | Some rets -> Flow.set_ctx (Context.add_unit return_key rets (Flow.get_ctx flow3)) flow3 in
     let _, flow3 = Flow.pop_callstack flow3 in
 
     (* Remove parameters and local variables from the environment *)
