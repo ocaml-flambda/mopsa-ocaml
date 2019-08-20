@@ -1,0 +1,8 @@
+int succ(int x) {
+  return x + 1;
+}
+
+void test_call() {
+  int x = 1;
+  assert(succ(x) == 2);
+}
