@@ -6,3 +6,8 @@ void test_call() {
   int x = 1;
   assert(succ(x) == 2);
 }
+
+void test_call_in_declaration() {
+  int x = succ(0);
+  assert(x == 1);
+}
