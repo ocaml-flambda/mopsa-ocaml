@@ -11,3 +11,8 @@ void test_call_in_declaration() {
   int x = succ(0);
   assert(x == 1);
 }
+
+void test_call_and_binop() {
+  int x = succ(0) + 1;
+  assert(x == 2);
+}
