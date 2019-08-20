@@ -45,15 +45,13 @@ struct
 
   let exec zone stmt man flow =
     match skind stmt with
-    | S_assign(x, e) when Core.Zone.eval_template x Z_u_num <> Keep ||
-                          Core.Zone.eval_template e Z_u_num <> Keep
-      ->
+    | S_assign(x, e) when is_numeric_type e.etyp ->
       desugar x man flow >>$? fun x flow ->
       desugar e man flow >>$? fun e flow ->
       man.post ~zone:Z_u_num (mk_assign x e stmt.srange) flow |>
       Option.return
 
-    | S_assume e when Core.Zone.eval_template e Z_u_num <> Keep ->
+    | S_assume e when is_numeric_type e.etyp ->
       desugar e man flow >>$? fun e flow ->
       man.post ~zone:Z_u_num (mk_assume e stmt.srange) flow |>
       Option.return

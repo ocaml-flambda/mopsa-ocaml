@@ -19,12 +19,12 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** An abstraction is the encapsulation of the overall abstract domain used by
-    the analyzer.
+(** An abstraction is the encapsulation of the top-level abstract domain used
+    by the analyzer.
 
-    There are two main differences with domains. First, maps of zoned
-    transfer functions are constructed at creation. Second, transfer functions
-    are not partial functions and return always a result.
+    There are two main differences with domains. First, transfer functions are
+    indexed by zones to enable a faster access. Second, transfer functions are 
+    not partial functions and return always a result.
 *)
 
 open Token
@@ -117,7 +117,7 @@ end
 let debug fmt = Debug.debug ~channel:"framework.core.abstraction" fmt
 
 
-(** Encapsulate a domain into an abstraction *)
+(** Encapsulate a domain into a top-level abstraction *)
 module Make(Domain:Sig.Domain.Lowlevel.DOMAIN)
   : ABSTRACTION with type t = Domain.t
 =
@@ -330,7 +330,14 @@ struct
               let exp = builder {exprs; stmts = []} in
               Eval.singleton exp flow
 
-            | _ -> Eval.singleton exp flow
+            | _ ->
+              if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
+              then Eval.empty_singleton flow
+              else Exceptions.panic_at exp.erange
+                  "unable to evaluate %a in zone %a"
+                  pp_expr exp
+                  pp_zone2 zone
+
     in
 
     Debug_tree.eval_done exp zone (Timing.stop timer) ret;
@@ -377,7 +384,9 @@ struct
         match other_action with
         | Keep -> assert false
 
+
         | Process ->
+          (* No answer from domains, so let's try other eval paths, if any. *)
           debug "no answer";
           None
 
@@ -387,13 +396,16 @@ struct
           let parts, builder = split_expr exp in
           match parts with
           | {exprs; stmts = []} ->
+            debug "eval parts of %a" pp_expr exp;
             bind_list_opt exprs (eval_hop z1 z2 feval man) flow |>
             Option.lift @@ bind_some @@ fun exprs flow ->
             let exp' = builder {exprs; stmts = []} in
             debug "%a -> %a" pp_expr exp pp_expr exp';
             Eval.singleton exp' flow
 
-          | _ -> None
+          | _ ->
+            debug "%a is a leaf expression" pp_expr exp;
+            None
 
   (* Filter paths that pass through [via] zone *)
   and find_eval_paths_via (src, dst) via map =
