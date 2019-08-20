@@ -623,7 +623,12 @@ and find_globals_in_stmt stmt =
     -> []
   (* Not supported statements *)
   | AsyncFunctionDef (_,_,_,_,_) -> failwith "async not supported"
-  | AnnAssign _ -> failwith "Annotated assign not supported"
+  | AnnAssign (target, annot, value) ->
+    let ttarget = translate_expr target in
+    let tannot = translate_expr annot in
+    let tvalue = translate_expr_option2 value in
+    debug "AnnAssign(%a, %a, %a)" Pp.print_exp ttarget Pp.print_exp tannot (Option.print Pp.print_exp) tvalue;
+    failwith "Annotated assign not supported"
   | AsyncFor _ -> failwith "Async not supported"
   | AsyncWith (_,_) -> failwith "Async not supported"
 

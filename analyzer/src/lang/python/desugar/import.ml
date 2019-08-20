@@ -89,9 +89,11 @@ module Domain =
         let filename =
           let tentative1 = dir ^ "/" ^ name ^ ".py" in
           let tentative2 = name ^ ".py" in
+          let tentative3 = dir ^ "/typeshed/" ^ name ^ ".pyi" in
           if Sys.file_exists tentative1 then tentative1
           else if Sys.file_exists tentative2 then tentative2
-          else panic_at range "module %s not found (searched in %s and in the current directory)"  name dir in
+          else if Sys.file_exists tentative3 then tentative3
+          else panic_at range "module %s not found (searched in %s and in %s and in the current directory)" name dir (dir ^ "/typeshed/") in
 
         let prog = Frontend.parse_program [filename] in
         let globals, body =
