@@ -64,7 +64,10 @@ module Domain =
          let e =
            match kind_of_object obj with
            | A_py_module(M_user(_, globals)) ->
-              let v = List.find (fun v -> get_orig_vname v = name) globals in
+             let v =
+               try List.find (fun v -> get_orig_vname v = name) globals
+               with Not_found -> panic_at range "import: name %s not found in module %s" name modul
+             in
               mk_var v range
            | A_py_module(M_builtin m) ->
               let obj = find_builtin_attribute obj name in

@@ -55,6 +55,8 @@ and stmt_kind =
     of expr (** target *) *
        expr (** value *)
 
+  | S_type_annot of expr (** target *) * expr (** value *)
+
   | S_expression
     of expr (** expression statements *)
 

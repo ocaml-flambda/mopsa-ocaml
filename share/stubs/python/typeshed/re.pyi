@@ -11,44 +11,65 @@ from typing import (
     AnyStr, Match, Pattern, Any, Optional, Union
 )
 
-import enum
-class RegexFlag(enum.IntFlag):
-    A: int
-    ASCII: int
-    DEBUG: int
-    I: int
-    IGNORECASE: int
-    L: int
-    LOCALE: int
-    M: int
-    MULTILINE: int
-    S: int
-    DOTALL: int
-    X: int
-    VERBOSE: int
-    U: int
-    UNICODE: int
-    T: int
-    TEMPLATE: int
+# ----- re variables and constants -----
+# if sys.version_info >= (3, 6):
+#     import enum
+#     class RegexFlag(enum.IntFlag):
+#         A: int
+#         ASCII: int
+#         DEBUG: int
+#         I: int
+#         IGNORECASE: int
+#         L: int
+#         LOCALE: int
+#         M: int
+#         MULTILINE: int
+#         S: int
+#         DOTALL: int
+#         X: int
+#         VERBOSE: int
+#         U: int
+#         UNICODE: int
+#         T: int
+#         TEMPLATE: int
 
-    A = RegexFlag.A
-    ASCII = RegexFlag.ASCII
-    DEBUG = RegexFlag.DEBUG
-    I = RegexFlag.I
-    IGNORECASE = RegexFlag.IGNORECASE
-    L = RegexFlag.L
-    LOCALE = RegexFlag.LOCALE
-    M = RegexFlag.M
-    MULTILINE = RegexFlag.MULTILINE
-    S = RegexFlag.S
-    DOTALL = RegexFlag.DOTALL
-    X = RegexFlag.X
-    VERBOSE = RegexFlag.VERBOSE
-    U = RegexFlag.U
-    UNICODE = RegexFlag.UNICODE
-    T = RegexFlag.T
-    TEMPLATE = RegexFlag.TEMPLATE
-    _FlagsType = Union[int, RegexFlag]
+#     A = RegexFlag.A
+#     ASCII = RegexFlag.ASCII
+#     DEBUG = RegexFlag.DEBUG
+#     I = RegexFlag.I
+#     IGNORECASE = RegexFlag.IGNORECASE
+#     L = RegexFlag.L
+#     LOCALE = RegexFlag.LOCALE
+#     M = RegexFlag.M
+#     MULTILINE = RegexFlag.MULTILINE
+#     S = RegexFlag.S
+#     DOTALL = RegexFlag.DOTALL
+#     X = RegexFlag.X
+#     VERBOSE = RegexFlag.VERBOSE
+#     U = RegexFlag.U
+#     UNICODE = RegexFlag.UNICODE
+#     T = RegexFlag.T
+#     TEMPLATE = RegexFlag.TEMPLATE
+#     _FlagsType = Union[int, RegexFlag]
+# else:
+A: int
+ASCII: int
+DEBUG: int
+I: int
+IGNORECASE: int
+L: int
+LOCALE: int
+M: int
+MULTILINE: int
+S: int
+DOTALL: int
+X: int
+VERBOSE: int
+U: int
+UNICODE: int
+T: int
+TEMPLATE: int
+_FlagsType = int
 
 # if sys.version_info < (3, 7):
 #     # undocumented

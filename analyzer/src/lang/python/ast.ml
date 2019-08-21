@@ -221,6 +221,7 @@ type py_fundec = {
   py_func_body: stmt; (** function body *)
   py_func_is_generator: bool; (** is the function a generator? *)
   py_func_decors: expr list;
+  (* FIXME: change this to support @overload defining multiple signatures of functions *)
   py_func_types_in: expr option list;
   py_func_type_out: expr option;
   py_func_range: range; (** range of the function *)
@@ -277,6 +278,9 @@ type stmt_kind +=
 
   (** increment assignments *)
   | S_py_aug_assign of expr * operator * expr
+
+  (** type annotations for variables *)
+  | S_py_annot of expr * expr
 
   (** for loops *)
   | S_py_for of expr (** target *) *

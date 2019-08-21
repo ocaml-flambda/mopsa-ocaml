@@ -247,6 +247,11 @@ let () =
           pp_operator op
           pp_expr e
 
+      | S_py_annot(x, typ) ->
+        fprintf fmt "%a: %a"
+          pp_expr x
+          pp_expr typ
+
       | S_py_for(target, iter, body, orelse) ->
         fprintf fmt "for %a in %a:@\n@[<h 2>  %a@]@\nelse:@\n@[<h 2>  %a@]"
           pp_expr target

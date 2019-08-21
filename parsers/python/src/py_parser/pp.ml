@@ -39,6 +39,7 @@ and print_program fmt p = print_stmt fmt p.prog_body
 and print_stmt fmt (stmt: Ast.stmt) =
   match stmt.skind with
   | S_assign (v, e) -> fprintf fmt "%a = %a" print_exp v print_exp e
+  | S_type_annot (v, e) -> fprintf fmt "%a: %a" print_exp v print_exp e
   | S_expression e -> print_exp fmt e
   | S_while (test, body, orelse) ->
     fprintf fmt

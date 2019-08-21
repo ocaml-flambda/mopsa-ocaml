@@ -236,9 +236,16 @@ let () =
         (function {exprs = [e]} -> {stmt with skind = S_py_multi_assign(targets, e)} | _ -> assert false)
 
       | S_py_aug_assign(x, op, e) ->
-        {exprs = [e]; stmts = []},
+        {exprs = [x; e]; stmts = []},
         (function
-          | {exprs = [e]} -> {stmt with skind = S_py_aug_assign(x, op, e)}
+          | {exprs = [x; e]} -> {stmt with skind = S_py_aug_assign(x, op, e)}
+          | _ -> assert false
+        )
+
+      | S_py_annot(x, typ) ->
+        {exprs = [x; typ]; stmts = []},
+        (function
+          | {exprs = [x; typ]} -> {stmt with skind = S_py_annot(x, typ)}
           | _ -> assert false
         )
 
