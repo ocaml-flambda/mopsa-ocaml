@@ -275,7 +275,19 @@ module Domain =
         man.eval (Utils.mk_builtin_call "list.__reversed__" args range) flow
         |> Option.return
 
-
+      (* FIXME: in libs.py_std or flows.exn? *)
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "BaseException.__init__")}, _)}, args, []) ->
+        Utils.check_instances ~arguments_after_check:(List.length args - 1) man flow range args ["BaseException"]
+          (fun args flow ->
+             let exc = List.hd args in
+             let flow = if List.length args = 1 then flow else
+                 man.exec (mk_assign
+                             (mk_py_attr exc "args" range)
+                             (mk_expr (E_py_tuple (List.tl args)) range) range) flow
+             in
+             man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range) flow
+          )
+        |> Option.return
 
       (* | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "bin")}, _)}, args, [])  ->
        *   Utils.check_instances man flow range args ["int"]
