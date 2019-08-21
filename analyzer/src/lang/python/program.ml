@@ -135,7 +135,7 @@ struct
             | Alarms.Py_exc_with_callstack (range,cs) ->
               mk_alarm a ~extra:x range ~cs
           in
-          Flow.add_alarm alarm man.lattice acc
+          Flow.add_alarm alarm ~force:true man.lattice acc
         | _ -> acc
       ) flow flow
 
