@@ -46,10 +46,9 @@ framework.config = paths visitor typer parser options
 lang = universal repl stubs c python
 
 # Universal
-lang.universal = ast frontend
 lang.universal = ast frontend zone iterators heap numeric
-lang.universal.iterators = program intraproc scalar interproc unittest loops
-lang.universal.iterators.interproc = inlining sequential_cache join_based_cache
+lang.universal.iterators = unittest program intraproc scalar interproc loops
+lang.universal.iterators.interproc = common inlining sequential_cache join_based_cache
 lang.universal.heap = policies recency
 lang.universal.numeric = rounding common values relational reductions
 lang.universal.numeric.values = intervals congruences
@@ -67,7 +66,7 @@ lang.stubs = ast zone alarms iterator
 # C
 lang.c = ast pp visitor zone frontend alarms desugar memory libs iterators
 lang.c.iterators = program switch loops goto interproc
-lang.c.desugar = cond_expr
+lang.c.desugar = conditions constants
 lang.c.memory = common structured lowlevel scalars
 lang.c.memory.common = base points_to quantified_offset
 lang.c.memory.structured = flat

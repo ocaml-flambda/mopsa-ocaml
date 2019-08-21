@@ -176,9 +176,19 @@ test-c 22/22:
   extends: .test-c
 
 
-test-u 1/1:
+test-u 1/3:
   variables:
     U_FILE: 'int_tests.u'
+  extends: .test-u
+
+test-u 2/3:
+  variables:
+    U_FILE: 'function_tests.u'
+  extends: .test-u
+
+test-u 3/3:
+  variables:
+    U_FILE: 'loop_tests.u'
   extends: .test-u
 
 test-py 1/3:

@@ -41,6 +41,7 @@
 #include "sys/socket.c"
 #include "arpa/inet.c"
 #include "netinet/in.c"
+#include "fcntl.c"
 
 /* #include "inttypes.c" */
-/* #include "fcntl.c" */
+/*  */

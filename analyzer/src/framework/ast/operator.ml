@@ -74,6 +74,10 @@ let is_comparison_op = function
   | O_eq | O_ne | O_gt | O_ge | O_lt | O_le -> true
   | _ -> false
 
+let is_logic_op = function
+  | O_log_and | O_log_or | O_log_not -> true
+  | _ -> false
+
 let negate_comparison_op = function
   | O_eq -> O_ne
   | O_ne -> O_eq

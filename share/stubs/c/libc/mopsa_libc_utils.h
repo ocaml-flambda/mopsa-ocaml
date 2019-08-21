@@ -28,12 +28,17 @@
 
 extern int _errno;
 
-// Translate a file description resource into a numeric file descriptor
-extern int _mopsa_file_description_to_descriptor(void *f);
+// Register a new file resource pointer and return the smallest available
+// file descriptor
+extern int _mopsa_register_file_resource(void *f);
 
 
-// Translate a numeric file descriptor into a resource pointer
-extern void *_mopsa_file_descriptor_to_description(int fd);
+// Register a new file resource pointer at a specific file descriptor
+extern int _mopsa_register_file_resource_at(void *f, int fd);
+
+
+// Find a file resource by its numeric descriptor
+extern void *_mopsa_find_file_resource(int fd);
 
 
 #endif /* MOPSA_LIBC_UTILS_H */

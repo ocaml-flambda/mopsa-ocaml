@@ -657,20 +657,20 @@ let int_rangeof t =
   (Z.to_int a, Z.to_int b)
 
 (** [wrap_expr e (l,h)] expression needed to bring back [e] in range ([l],[h]) *)
-let wrap_expr (e: expr) ((l,h) : int * int) range : expr =
+let wrap_expr (e: expr) ((l,h) : Z.t * Z.t) range : expr =
     let open Universal.Ast in
   add
-    (mk_int l range)
+    (mk_z l range)
     (_mod
        (sub
           e
-          (mk_int l range)
+          (mk_z l range)
           range
        )
        (add
           (sub
-             (mk_int h range)
-             (mk_int l range)
+             (mk_z h range)
+             (mk_z l range)
              range
           )
           (mk_one range)
@@ -681,7 +681,7 @@ let wrap_expr (e: expr) ((l,h) : int * int) range : expr =
     range
 
 (** [wrap v (l,h)] expression needed to bring back [v] in range ([l],[h]) *)
-let wrap (v : var) ((l,h) : int * int) range : expr =
+let wrap (v : var) ((l,h) : Z.t * Z.t) range : expr =
   wrap_expr (mk_var v (tag_range range "v")) (l,h) range
 
 
@@ -729,6 +729,7 @@ let is_c_scalar_type ( t : typ) =
 let is_c_pointer_type ( t : typ) =
   match remove_typedef_qual t with
   | T_c_pointer _ -> true
+  | T_c_array _ -> true
   | _ -> false
 
 let is_c_void_type (t:typ) =
@@ -966,6 +967,22 @@ let rec c_expr_to_z (e:expr) : Z.t option =
     c_expr_to_z e' |> Option.bind @@ fun n ->
     Some (Z.neg n)
 
+  | E_unop (O_bit_invert, e') ->
+    c_expr_to_z e' |> Option.bind @@ fun n ->
+    Some (Z.lognot n)
+
+  | E_unop (O_log_not, e') ->
+    c_expr_to_z e' |> Option.bind @@ fun n ->
+    if Z.equal n Z.zero then Some Z.one else Some Z.zero
+
+  | E_binop(O_c_and, e1, e2) ->
+    c_expr_to_z e1 |> Option.bind @@ fun n1 ->
+    if Z.equal n1 Z.zero then Some Z.zero else c_expr_to_z e2
+
+  | E_binop(O_c_or, e1, e2) ->
+    c_expr_to_z e1 |> Option.bind @@ fun n1 ->
+    if Z.equal n1 Z.zero then c_expr_to_z e2 else Some Z.one
+
   | E_binop(op, e1, e2) ->
     c_expr_to_z e1 |> Option.bind @@ fun n1 ->
     c_expr_to_z e2 |> Option.bind @@ fun n2 ->
@@ -975,6 +992,10 @@ let rec c_expr_to_z (e:expr) : Z.t option =
       | O_minus -> Some (Z.sub n1 n2)
       | O_mult -> Some (Z.mul n1 n2)
       | O_div -> if Z.equal n2 Z.zero then None else Some (Z.div n1 n2)
+      | O_bit_lshift -> begin try Some (Z.shift_left n1 (Z.to_int n2)) with _ -> None end
+      | O_bit_rshift -> begin try Some (Z.shift_right n1 (Z.to_int n2)) with _ -> None end
+      | O_bit_and -> Some (Z.logand n1 n2)
+      | O_bit_or -> Some (Z.logor n1 n2)
       | O_eq -> Some (if Z.equal n1 n2 then Z.one else Z.zero)
       | O_ne -> Some (if Z.equal n1 n2 then Z.zero else Z.one)
       | O_gt -> Some (if Z.gt n1 n2 then Z.one else Z.zero)
@@ -989,6 +1010,11 @@ let rec c_expr_to_z (e:expr) : Z.t option =
     if not (Z.equal c Z.zero)
     then c_expr_to_z e1
     else c_expr_to_z e2
+
+  | E_c_cast(ee,_) when is_c_int_type e.etyp ->
+    c_expr_to_z ee |> Option.bind @@ fun n ->
+    let a,b = rangeof e.etyp in
+    if Z.leq a n && Z.leq n b then Some n else None
 
   | _ -> None
 

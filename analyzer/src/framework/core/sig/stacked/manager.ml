@@ -100,28 +100,53 @@ let map_sub_env (tk:token) (f:'s -> 's) (man:('a,'t,'s) man) (flow:'a flow) : 'a
   set_sub_env tk (f (get_sub_env tk man flow)) man flow
 
 
-let assume cond ?(zone = any_zone)
+let assume
+    cond ?(zone=any_zone)
     ~fthen ~felse
-    ?(fboth = (fun flow1 flow2 ->
-        let fthen_r = fthen flow1 in
-        let flow2 = Flow.set_ctx (Result.get_ctx fthen_r) flow2 in
-        let felse_r = felse flow2 in
-        Result.join fthen_r felse_r)
-     )
-    ?(fnone = (fun flow -> Result.empty flow))
+    ?(fnone=(fun flow -> Result.empty flow))
     man flow
   =
-  man.post ~zone (mk_assume cond cond.erange) flow >>= fun _ then_flow ->
-  let flow = Flow.copy_ctx then_flow flow in
-  man.post ~zone (mk_assume (mk_not cond cond.erange) cond.erange) flow >>= fun _ else_flow ->
-  let then_flow = Flow.copy_ctx else_flow then_flow in
+  let then_post = man.post ~zone (mk_assume cond cond.erange) flow in
+  let flow = Flow.set_ctx (Post.get_ctx then_post) flow in
+  let else_post = man.post ~zone (mk_assume (mk_not cond cond.erange) cond.erange) flow in
+
+  then_post >>= fun _ then_flow ->
+  else_post >>= fun _ else_flow ->
+
   match man.lattice.is_bottom (Flow.get T_cur man.lattice then_flow),
         man.lattice.is_bottom (Flow.get T_cur man.lattice else_flow)
   with
   | false, true -> fthen then_flow
   | true, false -> felse else_flow
-  | false, false -> fboth then_flow else_flow
   | true, true -> fnone (Flow.join man.lattice then_flow else_flow)
+  | false, false ->
+    let then_res = fthen then_flow in
+    let else_flow' = Flow.set_ctx (Result.get_ctx then_res) else_flow in
+    let else_res = felse else_flow' in
+    Result.join then_res else_res
+
+
+let assume_flow
+    ?(zone=any_zone) cond
+    ~fthen ~felse
+    ?(fnone=(fun flow -> flow))
+    man flow
+  =
+  let then_flow = man.exec ~zone (mk_assume cond cond.erange) flow in
+  let flow = Flow.set_ctx (Flow.get_ctx then_flow) flow in
+  let else_flow = man.exec ~zone (mk_assume (mk_not cond cond.erange) cond.erange) flow in
+
+  match man.lattice.is_bottom (Flow.get T_cur man.lattice then_flow),
+        man.lattice.is_bottom (Flow.get T_cur man.lattice else_flow)
+  with
+  | false, true -> fthen then_flow
+  | true, false -> felse else_flow
+  | true, true -> fnone (Flow.join man.lattice then_flow else_flow)
+  | false, false ->
+    let then_res = fthen then_flow in
+    let else_flow' = Flow.copy_ctx then_res else_flow in
+    let else_res = felse else_flow' in
+    Flow.join man.lattice then_res else_res
 
 
 let switch

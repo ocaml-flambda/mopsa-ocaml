@@ -166,6 +166,8 @@ let names () =
 
 let assume = Intermediate.assume
 
+let assume_flow = Manager.assume_flow
+
 let switch = Intermediate.switch
 
 let exec_stmt_on_all_flows = Intermediate.exec_stmt_on_all_flows

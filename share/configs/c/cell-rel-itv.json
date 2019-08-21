@@ -20,7 +20,8 @@
 	    "stubs.iterator",
 
             // C desugar
-            "c.desugar.cond_expr",
+            "c.desugar.constants",
+            "c.desugar.conditions",
 
 	    // Libraries
             "c.libs.compiler",

@@ -19,64 +19,68 @@
 (*                                                                          *)
 (****************************************************************************)
 
+(** Desugar constant expressions. *)
 
-(** List of builtin functions *)
-let is_builtin_function = function
-  | "__builtin_constant_p"
-
-  | "__builtin_va_start"
-  | "__builtin_va_end"
-  | "__builtin_va_copy"
-
-  | "printf"
-  | "fprintf"
-  | "__printf_chk"
-  | "__fprintf_chk"
-  | "__builtin___sprintf_chk"
-  | "fscanf"
-  | "scanf"
-  | "sscanf"
+open Mopsa
+open Framework.Core.Sig.Domain.Stateless
+open Universal.Ast
+open Ast
+open Zone
 
 
-  | "_mopsa_rand_s8"
-  | "_mopsa_rand_u8"
-  | "_mopsa_rand_s16"
-  | "_mopsa_rand_u16"
-  | "_mopsa_rand_s32"
-  | "_mopsa_rand_u32"
-  | "_mopsa_rand_s64"
-  | "_mopsa_rand_u64"
-  | "_mopsa_rand_float"
-  | "_mopsa_rand_double"
-  | "_mopsa_rand_void_pointer"
+(** {2 Domain definition} *)
+(** ===================== *)
 
-  | "_mopsa_range_s8"
-  | "_mopsa_range_u8"
-  | "_mopsa_range_s16"
-  | "_mopsa_range_u16"
-  | "_mopsa_range_s32"
-  | "_mopsa_range_u32"
-  | "_mopsa_range_s64"
-  | "_mopsa_range_u64"
-  | "_mopsa_range_int"
-  | "_mopsa_range_float"
-  | "_mopsa_range_double"
+module Domain =
+struct
 
-  | "_mopsa_invalid_pointer"
+  (** Domain identification *)
+  (** ===================== *)
 
-  | "_mopsa_panic"
-  | "_mopsa_print"
+  include GenStatelessDomainId(struct
+      let name = "c.desugar.constants"
+    end)
 
-  | "_mopsa_assume"
 
-  | "_mopsa_assert_exists"
-  | "_mopsa_assert"
-  | "_mopsa_assert_safe"
-  | "_mopsa_assert_unsafe"
+  (** Zoning definition *)
+  (** ================= *)
 
-  | "_mopsa_register_file_resource"
-  | "_mopsa_register_file_resource_at"
-  | "_mopsa_find_file_resource"
-    -> true
+  let interface = {
+    iexec = {provides = []; uses = []};
+    ieval = {provides = [Z_c, Z_c_low_level]; uses = []};
+  }
 
-  | _ -> false
+
+  (** Initialization *)
+  (** ============== *)
+
+  let init _ _ flow = flow
+
+
+  (** Post-condition computation *)
+  (** ========================== *)
+
+  let exec zone stmt man flow = None
+
+
+  (** Evaluation of expressions *)
+  (** ========================= *)
+
+  let eval zone exp man flow  =
+    match c_expr_to_z exp with
+    | None   -> None
+    | Some z ->
+      debug "%a simplified into %a" pp_expr exp Z.pp_print z;
+      Eval.singleton (mk_z z ~typ:exp.etyp exp.erange) flow |>
+      Option.return
+
+
+  (** Query handler *)
+  (** ============= *)
+
+  let ask _ _ _  = None
+
+end
+
+let () =
+  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)

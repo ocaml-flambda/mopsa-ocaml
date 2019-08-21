@@ -95,8 +95,12 @@ let insert addr window (t:table) =
     add addr itv t, itv
   else
     (* A sound solution is [window, b + 1], where [a, b] = allocated *)
-    let l = Z.of_int window
-    and u = Itv.bounds allocated |> snd |> Z.succ
+    let l = Z.of_int window in
+    let u =
+      match Itv.bounds_opt allocated with
+      | _, Some b -> Z.succ b
+      | _, None   -> Ast.(rangeof s32) |> snd
+                  (* When allocated is not upper-bounded *)
     in
 
     let itv0 = Itv.of_z l u in
@@ -117,6 +121,19 @@ let insert addr window (t:table) =
       ) itv0 sorted
     in
     add addr itv t, itv
+
+
+let insert_at addr itv t =
+  let itv =
+    if AddrItvMap.mem addr t.map
+    then Itv.join itv (AddrItvMap.find addr t.map)
+    else itv
+  in
+  {
+    map = AddrItvMap.add addr itv t.map;
+    support = AddrSet.add addr t.support;
+  }
+
 
 let filter f (t:table) : table =
   let map = AddrItvMap.filter f t.map in

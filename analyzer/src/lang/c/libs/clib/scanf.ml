@@ -67,17 +67,17 @@ struct
   (** {2 Evaluation entry point} *)
   (** ========================== *)
 
+  exception UnsupportedFormat
+
   let rec parse format i args range man flow =
     if String.length format = i
     then Post.return flow
-    else match format.[i] with
+    else
+      match format.[i] with
       | ' '
       | '\\' -> parse format (i + 2) args range man flow
       | '%' -> parse_type format (i + 1) args range man flow
-
-      | _ ->
-        Soundness.warn range "ignoring side-effect of scanf format %s" format;
-        Post.return flow
+      | _ -> raise UnsupportedFormat
 
   and parse_type format i args range man flow =
     if format.[i] = '%'
@@ -87,7 +87,7 @@ struct
         | 'c' -> s8
         | 'd' -> s32
         | 'u' -> u32
-        | _ -> panic_at range "unsupported scanf format %s" format
+        | _ -> raise UnsupportedFormat
       in
       let hd = List.hd args in
       let ptr = T_c_pointer t in
@@ -96,7 +96,11 @@ struct
 
 
   let assign_args_from_string_format (format:string) args range man flow =
-    parse format 0 args range man flow
+    try parse format 0 args range man flow
+    with UnsupportedFormat ->
+      Soundness.warn_at range "ignoring side-effect of scanf format %s" format;
+      Post.return flow
+
 
 
   (** Assign arbitrary values to arguments *)
@@ -104,7 +108,7 @@ struct
     match ekind (remove_casts format) with
     | E_constant(C_c_string (str,_)) -> assign_args_from_string_format str args range man flow
     | _ ->
-      Soundness.warn range "ignoring side-effect of scanf format %a" pp_expr format;
+      Soundness.warn_at range "ignoring side-effect of scanf format %a" pp_expr format;
       Post.return flow
 
 

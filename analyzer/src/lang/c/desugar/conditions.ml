@@ -19,12 +19,13 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Desugar conditional expressions `cond?e1:e2`. *)
+(** Desugar conditional expressions. *)
 
 open Mopsa
 open Framework.Core.Sig.Domain.Stateless
 open Ast
 open Zone
+
 
 (** {2 Domain definition} *)
 (** ===================== *)
@@ -36,7 +37,7 @@ struct
   (** ===================== *)
 
   include GenStatelessDomainId(struct
-      let name = "c.desugar.cond_expr"
+      let name = "c.desugar.conditions"
     end)
 
 
@@ -44,8 +45,8 @@ struct
   (** ================= *)
 
   let interface = {
-    iexec = {provides = []; uses = [Z_c]};
-    ieval = {provides = [Z_c, Z_c_low_level]; uses = [Z_c, Z_c_low_level]};
+    iexec = {provides = []; uses = [Z_c_scalar]};
+    ieval = {provides = [Z_c, Z_c_low_level]; uses = [Z_c, Z_c_low_level; Z_c, Z_c_scalar]};
   }
 
 
@@ -66,8 +67,8 @@ struct
 
   let eval zone exp man flow  =
     match ekind exp with
-
     | E_c_conditional(cond, e1, e2) ->
+      man.eval cond ~zone:(Z_c,Z_c_scalar) flow >>$? fun cond flow ->
       assume cond
         ~fthen:(fun flow ->
             man.eval ~zone:(Z_c, Z_c_low_level) e1 flow
@@ -75,31 +76,32 @@ struct
         ~felse:(fun flow ->
             man.eval ~zone:(Z_c, Z_c_low_level) e2 flow
           )
-        man flow |>
+        ~zone:Z_c_scalar man flow |>
       Option.return
 
     | E_binop(O_c_and, e1, e2) ->
-      assume
-        e1 ~zone:(Z_c)
+      man.eval e1 ~zone:(Z_c,Z_c_scalar) flow >>$? fun e1 flow ->
+      assume e1
         ~fthen:(fun flow ->
             man.eval ~zone:(Z_c, Z_c_low_level) e2 flow
           )
         ~felse:(fun flow ->
-            Eval.singleton (Universal.Ast.mk_zero exp.erange) flow
+            Eval.singleton (Universal.Ast.mk_zero ~typ:exp.etyp exp.erange) flow
           )
+        ~zone:Z_c_scalar
         man flow |>
       Option.return
 
     | E_binop(O_c_or, e1, e2) ->
-      assume
-        e1 ~zone:(Z_c)
+      man.eval e1 ~zone:(Z_c,Z_c_scalar) flow >>$? fun e1 flow ->
+      assume e1
         ~fthen:(fun flow ->
-            Eval.singleton (Universal.Ast.mk_one exp.erange) flow
+            Eval.singleton (Universal.Ast.mk_one ~typ:exp.etyp exp.erange) flow
           )
         ~felse:(fun flow ->
             man.eval ~zone:(Z_c, Z_c_low_level) e2 flow
           )
-        man flow |>
+         ~zone:Z_c_scalar man flow |>
       Option.return
 
     | _ -> None

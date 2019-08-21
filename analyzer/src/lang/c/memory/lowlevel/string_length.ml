@@ -331,7 +331,7 @@ struct
       Post.return
 
     | E_c_points_to P_valid ->
-      Soundness.warn range "ignoring assignment to undetermined valid pointer %a" pp_expr p;
+      Soundness.warn_at range "ignoring assignment to undetermined valid pointer %a" pp_expr p;
       Post.return flow
 
     | E_c_points_to (P_block (base, offset)) ->
@@ -573,7 +573,7 @@ struct
 
 
     | E_c_points_to P_valid ->
-      Soundness.warn range "rename of %a not supported because it can not be resolved"
+      Soundness.warn_at range "rename of %a not supported because it can not be resolved"
         pp_expr target
       ;
       Post.return flow

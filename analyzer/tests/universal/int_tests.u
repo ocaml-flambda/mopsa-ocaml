@@ -1,8 +1,16 @@
-int x = 1;
-int y;
-
-int f(int a) {
-  return (a+1);
+void test_int_declaration() {
+  int x = 1;
+  assert(x == 1);
 }
 
-y = f(x);
+void test_int_addition() {
+  int x = 1;
+  int y = 2;
+  assert(x + y == 3);
+}
+
+void test_int_substraction() {
+  int x = 10;
+  int y = 2;
+  assert(x - y == 8);
+}
