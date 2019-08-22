@@ -56,7 +56,8 @@
                       "python.objects.list",
                       "python.objects.tuple",
                       "python.objects.dict",
-                      "python.objects.set"
+                      "python.objects.set",
+                      "python.values.string"
                   ]
                 }
             }

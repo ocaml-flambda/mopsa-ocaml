@@ -186,6 +186,7 @@ let () =
   )
 
 type _ query += Q_exn_string_query : expr -> string query
+(** FIXME: register THAT QUERY *)
 
 module Domain =
 struct
@@ -1059,16 +1060,25 @@ struct
         if Polytypeset.cardinal ptys = 1 then
           let r = Polytypeset.choose ptys in
           let str = match r with
-            | Instance {classn} -> begin match classn with
+            | Instance {classn; uattrs} ->
+              let name = match classn with
                 | Class (c, b) -> begin match c with
                     | C_builtin name | C_unsupported name -> name
                     | C_user c -> get_orig_vname c.py_cls_var
                   end
                 | _ -> assert false
-              end
+              in
+              let message =
+                if StringMap.mem "args" uattrs then
+                  let var = List.hd @@ Objects.Tuple.Domain.var_of_addr @@ StringMap.find "args" uattrs in
+                  man.ask (Values.Py_string.Q_strings_of_var var) flow
+                else
+                  ""
+              in
+              name ^ ": " ^ message
             | _ -> assert false in
           let () = debug "answer to query is %s@\n" str in
-          Some str
+                    Some str
         else
           assert false
 

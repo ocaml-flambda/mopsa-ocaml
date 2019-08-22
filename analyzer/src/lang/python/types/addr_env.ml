@@ -129,7 +129,7 @@ struct
         flow |> Post.return |> Option.return
 
     (* S⟦ v = e ⟧ *)
-    | S_assign({ekind = E_var (v, mode)}, e) ->
+    | S_assign(({ekind = E_var (v, mode)} as evar), e) ->
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
       bind_some
           (fun e flow ->
@@ -145,7 +145,8 @@ struct
 
               | E_py_object (addr, Some expr) ->
                 assign_addr man v (PyAddr.Def addr) mode flow |>
-                man.exec ~zone:Zone.Z_py_obj (mk_assign (mk_addr addr range) expr range) |>  Post.return
+                man.exec ~zone:Zone.Z_py_obj (mk_assign evar e range) |>
+                Post.return
 
               | _ -> Exceptions.panic_at range "%a@\n" pp_expr e
           )
@@ -166,7 +167,8 @@ struct
       begin match v.vkind with
         | V_uniq _ ->
           (* if the variable maps to a list, we should remove the temporary variable associated, ONLY if it's not used by another list *)
-          man.exec (mk_assign var (mk_expr (E_py_undefined true) range) range) flow |> Post.return |> Option.return
+          let flow = man.exec (mk_assign var (mk_expr (E_py_undefined true) range) range) flow in
+          flow |> Post.return |> Option.return
 
         | _ ->
           Post.return flow |> Option.return
@@ -233,10 +235,7 @@ struct
     let aset = match mode with
       | STRONG -> ASet.singleton av
       | WEAK ->
-        if mem v cur then
-          ASet.add av (find v cur)
-        else
-          ASet.singleton av
+          ASet.add av (try find v cur with Not_found -> ASet.empty)
     in
     set_env T_cur (add v aset cur) man flow
 
@@ -269,7 +268,7 @@ struct
               (Eval.empty_singleton flow :: acc, Flow.get_ctx flow)
 
             | Def addr ->
-              let res = man.eval (mk_py_object (addr, Option.return @@ mk_addr addr range) range) flow in
+              let res = man.eval (mk_py_object (addr, Some exp) range) flow in
               let annots = Eval.get_ctx res in
               res :: acc, annots
 
