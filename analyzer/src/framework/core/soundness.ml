@@ -24,16 +24,19 @@
 open Location
 
 type warning = {
-  warn_range   : range;
+  warn_range   : range option;
   warn_message : string;
 }
 
 let pp_warning fmt w =
-  Format.fprintf fmt "%a: %s" pp_range w.warn_range w.warn_message 
+  match w.warn_range with
+  | None   -> Format.fprintf fmt "%s" w.warn_message
+  | Some r -> Format.fprintf fmt "%a: %s" pp_range r w.warn_message 
+
 
 let compare_warning w1 w2 =
   Compare.compose [
-    (fun () -> compare_range w1.warn_range w2.warn_range);
+    (fun () -> Option.compare compare_range w1.warn_range w2.warn_range);
     (fun () -> compare w1.warn_message w2.warn_message);
   ]
 
@@ -48,10 +51,20 @@ let is_sound () = Warnings.is_empty !warnings
 
 let get_warnings () = Warnings.elements !warnings
 
-let warn range fmt =
+let warn fmt =
   Format.kasprintf (fun msg ->
       let w = {
-        warn_range = range;
+        warn_range = None;
+        warn_message = msg;
+      }
+      in
+      warnings := Warnings.add w !warnings
+    ) fmt
+
+let warn_at range fmt =
+  Format.kasprintf (fun msg ->
+      let w = {
+        warn_range = Some range;
         warn_message = msg;
       }
       in

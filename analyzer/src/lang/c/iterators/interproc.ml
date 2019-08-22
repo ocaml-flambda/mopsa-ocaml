@@ -92,7 +92,7 @@ struct
           fun_parameters = fundec.c_func_parameters;
           fun_locvars = fundec.c_func_local_vars;
           fun_body = {skind = S_c_goto_stab (body); srange = srange body};
-          fun_return_type = Some fundec.c_func_return;
+          fun_return_type = if is_c_void_type fundec.c_func_return then None else Some fundec.c_func_return;
           fun_return_var = ret_var;
           fun_range = fundec.c_func_range;
         }
@@ -110,8 +110,11 @@ struct
         man.eval ~zone:(Stubs.Zone.Z_stubs, any_zone) exp' flow
 
       | {c_func_body = None; c_func_org_name; c_func_return} ->
-        Soundness.warn range "ignoring side effects of calling undefined function %s" c_func_org_name;
-        Eval.singleton (mk_top c_func_return range) flow
+        Soundness.warn_at range "ignoring side effects of calling undefined function %s" c_func_org_name;
+        if is_c_void_type c_func_return then
+          Eval.empty_singleton flow
+        else
+          Eval.singleton (mk_top c_func_return range) flow
 
 
   let eval zone exp man flow =
@@ -124,14 +127,24 @@ struct
       Option.return
 
     | E_call(f, args) ->
-      man.eval ~zone:(Zone.Z_c, Z_c_points_to) f flow >>$? fun f flow ->
+      man.eval ~zone:(Zone.Z_c, Z_c_points_to) f flow >>$? fun ff flow ->
 
-      begin match ekind f with
+      begin match ekind ff with
         | E_c_points_to (P_fun f) ->
           eval_call f args exp.erange man flow |>
           Option.return
 
-        | _ -> assert false
+        | _ ->
+          Soundness.warn_at exp.erange
+            "ignoring side-effect of undetermined function pointer %a"
+            pp_expr f
+          ;
+          if is_c_void_type exp.etyp then
+            Eval.empty_singleton flow |>
+            Option.return
+          else
+            Eval.singleton (mk_top exp.etyp exp.erange) flow |>
+            Option.return
       end
 
     | _ -> None

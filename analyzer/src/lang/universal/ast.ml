@@ -130,10 +130,10 @@ let () =
 
 type operator +=
   (* Unary operators *)
-  | O_sqrt         (** Square root *)
-  | O_bit_invert   (** bitwise ~ *)
+  | O_sqrt              (** Square root *)
+  | O_bit_invert        (** bitwise ~ *)
   | O_wrap of Z.t * Z.t (** wrap *)
-  | O_cast         (** Cast *)
+  | O_cast of typ * typ (** Cast *)
 
   (* Binary operators *)
   | O_plus       (** + *)
@@ -178,7 +178,7 @@ let () =
         | O_bit_xor    -> pp_print_string fmt "^"
         | O_bit_rshift -> pp_print_string fmt ">>"
         | O_bit_lshift -> pp_print_string fmt "<<"
-        | O_cast       -> pp_print_string fmt "cast"
+        | O_cast(t1,t2)    -> fprintf fmt "cast[%a->%a]" pp_typ t1 pp_typ t2
         | op           -> default fmt op
       );
   }

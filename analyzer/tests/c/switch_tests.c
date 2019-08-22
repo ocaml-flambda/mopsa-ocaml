@@ -15,8 +15,8 @@ void test_int_condition() {
 }
 
 void test_char_condition() {
-  char *s = "ab";
-  int i = 1, j;
+  char s[] = "ab";
+  int i = 0, j;
   switch (s[i]) {
   case 'a': j = 0; break;
   case 'b': j = 10; break;
@@ -24,7 +24,7 @@ void test_char_condition() {
   case 'd': j = 30; break;
   default: j = 40;
   }
-  _mopsa_assert(j == 10);
+  _mopsa_assert(j == 0);
 }
 
 void test_default_case() {

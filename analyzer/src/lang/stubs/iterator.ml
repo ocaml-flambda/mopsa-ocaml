@@ -95,7 +95,24 @@ struct
           negate_formula ff
         )) f.range
 
-    | F_in (_, _) -> panic "negation of ∈ not supported"
+    | F_in (e, S_interval(l,u)) ->
+      with_range (
+        F_expr (
+          mk_binop
+            (mk_binop e O_lt l ~etyp:T_bool f.range)
+            O_log_or
+            (mk_binop e O_gt u ~etyp:T_bool f.range)
+            ~etyp:T_bool
+            f.range
+        )
+      ) f.range
+
+    | F_in (e, S_resource res) ->
+      with_range (
+        F_expr (
+          mk_not (mk_stub_resource_mem e res f.range) f.range
+        )
+      ) f.range
 
 
   (** Evaluate a formula into a disjunction of two flows, depending on

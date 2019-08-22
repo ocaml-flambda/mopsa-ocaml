@@ -74,8 +74,9 @@ let is_builtin_function = function
   | "_mopsa_assert_safe"
   | "_mopsa_assert_unsafe"
 
-  | "_mopsa_file_description_to_descriptor"
-  | "_mopsa_file_descriptor_to_description"
+  | "_mopsa_register_file_resource"
+  | "_mopsa_register_file_resource_at"
+  | "_mopsa_find_file_resource"
     -> true
 
   | _ -> false

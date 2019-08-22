@@ -92,6 +92,9 @@ struct
         let () = debug "O_wrap done : %a [%a-%a] : %a" print a Z.pp_print l Z.pp_print u print rep in
         rep
       | O_bit_invert -> bot_lift1 I.bit_not a
+      | O_cast (T_float _, T_int) ->
+        warn "float->int cast not implemented";
+        top
       | _ -> top
 
   let binop op a1 a2 =
@@ -129,9 +132,8 @@ struct
           | O_wrap(l,u) -> bot_to_exn (I.bwd_wrap a (l,u) r)
           | O_bit_invert -> bot_to_exn (I.bwd_bit_not a r)
           | _ ->
-            let () = Exceptions.panic "following backward %a unary operator is not yet implemented"
-                pp_operator op in
-            assert false
+            warn "Intervals.Integer: no backward evaluation for operator %a" pp_operator op;
+            bot_to_exn (I.bwd_default_unary a r)
         in
         Nb aa
       with Found_BOT ->

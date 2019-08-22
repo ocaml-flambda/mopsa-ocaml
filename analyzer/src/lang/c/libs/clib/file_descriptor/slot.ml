@@ -124,6 +124,14 @@ let print fmt s =
   | MaybeFree a -> Format.fprintf fmt "❓ : %a" AddrSet.print a
 
 
+let add addr s =
+  match s with
+  | Bot -> Bot
+  | Top -> Top
+  | Free -> NotFree (AddrSet.singleton addr)
+  | NotFree a -> NotFree (AddrSet.add addr a)
+  | MaybeFree a -> NotFree (AddrSet.add addr a)
+
 (** Insert an address in a slot. Returns the new state of the
     slot after insertion, or its state when the insertion is
     not possible.

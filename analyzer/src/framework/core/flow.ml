@@ -185,8 +185,9 @@ let copy_ctx flow1 flow2 =
 
 let get_token_map flow = flow.tmap
 
-let add_alarm alarm lattice flow =
-  if get T_cur lattice flow |> lattice.is_bottom
+let add_alarm ?(force=false) alarm lattice flow =
+  if not force &&
+     get T_cur lattice flow |> lattice.is_bottom
   then flow
   else { flow with alarms = AlarmSet.add alarm flow.alarms }
 

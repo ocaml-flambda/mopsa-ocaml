@@ -1,0 +1,7 @@
+void test_simple_widening() {
+  int i = 0;
+  while (i < 100) {
+    i = i + 1;
+  }
+  assert(i == 100);
+}

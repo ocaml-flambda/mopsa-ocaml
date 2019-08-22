@@ -22,6 +22,7 @@
 open Mopsa
 open Universal.Ast
 open Stubs.Ast
+open Ast
 
 
 (** Compute symbolic boundaries of a quantified offset. *)
@@ -61,7 +62,12 @@ let rec bound offset : expr * expr =
       { offset with ekind = E_binop (O_mult, u, { const with ekind = E_constant (C_int c) })},
       { offset with ekind = E_binop (O_mult, l, { const with ekind = E_constant (C_int c) })}
 
+  | E_c_cast(e, xplct) ->
+    let l, u = bound e in
+    { offset with ekind = E_c_cast (l, xplct)},
+    { offset with ekind = E_c_cast (u, xplct)}
 
-  | _ -> panic ~loc:__LOC__
-           "Quantified_offset.bound called on a non linear expression %a"
+
+  | _ -> panic_at offset.erange
+           "can not compute symbolic bounds of non-linear expression %a"
            pp_expr offset

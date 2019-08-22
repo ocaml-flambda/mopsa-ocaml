@@ -107,6 +107,9 @@ let rec eval_opt exp : t option =
   | E_c_address_of { ekind = E_var (v, _) } ->
     AddrOf (V v, mk_zero exp.erange) |> Option.return
 
+  | E_c_address_of { ekind = E_constant (C_top _) } ->
+    Top |> Option.return
+
   | E_c_address_of { ekind = E_c_function f } ->
     Fun f |> Option.return
 

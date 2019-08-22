@@ -90,7 +90,7 @@ let to_typ (t:typ) (e:expr) : expr =
   else
     match orgt, t with
     | (T_int | T_float _), (T_int | T_float _) ->
-      mk_unop O_cast e ~etyp:t range
+       mk_unop (O_cast (orgt,t)) e ~etyp:t range
     | _ ->
       Exceptions.panic "cannot convert expression %a of type %a to type %a" pp_expr e pp_typ orgt pp_typ t
 

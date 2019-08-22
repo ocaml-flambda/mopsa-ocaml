@@ -412,7 +412,11 @@ let () =
   register_expr_with_visitor {
     compare = (fun next e1 e2 ->
         match ekind e1, ekind e2 with
-        | E_stub_call _, E_stub_call _ -> panic "stub comparison not supported"
+        | E_stub_call(f1,args1), E_stub_call(f2,args2) ->
+          Compare.compose [
+            (fun () -> compare f1.stub_func_name f2.stub_func_name);
+            (fun () -> Compare.list compare_expr args1 args2);
+          ]
 
         | E_stub_builtin_call(f1, arg1), E_stub_builtin_call(f2, arg2) ->
           Compare.compose [
@@ -450,7 +454,10 @@ let () =
 
     visit  = (fun next e ->
         match ekind e with
-        | E_stub_call _ -> panic "stub visitor not supported"
+        | E_stub_call (f,args) ->
+          { exprs = args; stmts = [] },
+          (function {exprs = args} -> {e with ekind = E_stub_call(f, args)})
+
 
         | E_stub_return -> leaf e
 

@@ -67,7 +67,13 @@ struct
 
   let bottom = I.bot
 
-  let top = I.double_special
+  let top_of_prec = function
+    | F_SINGLE -> I.single_special
+    | F_DOUBLE -> I.double_special
+    | F_LONG_DOUBLE -> Soundness.warn "long double assumed as double"; I.double_special
+    | F_REAL -> panic "unhandled F_REAL"
+
+  let top = top_of_prec F_DOUBLE
 
   let is_bottom = I.is_bot
 
@@ -90,7 +96,7 @@ struct
   let prec : float_prec -> I.prec = function
     | F_SINGLE -> `SINGLE
     | F_DOUBLE -> `DOUBLE
-    | F_LONG_DOUBLE -> panic "unhandled `DOUBLE intervals"
+    | F_LONG_DOUBLE -> Soundness.warn "long double assumed as double"; `DOUBLE
     | F_REAL -> panic "unhandled `REAL intervals"
 
   let round () : I.round =
@@ -119,7 +125,10 @@ struct
        I.zero
 
     | T_float _, C_bool true ->
-       I.one
+      I.one
+
+    | T_float p, C_top (T_float pp) when p = pp ->
+      top_of_prec p
 
     | _ -> top
 
@@ -130,7 +139,7 @@ struct
          | O_minus -> I.neg a
          | O_plus  -> a
          | O_sqrt  -> I.sqrt (prec p) (round ()) a
-         | O_cast  ->
+         | O_cast (T_int, T_float p)  ->
            let int_itv = man.cast Integer.Value.id v in
            I.of_int_itv_bot (prec p) (round ()) int_itv
          (* this seems to return top every time. Why don't we use
