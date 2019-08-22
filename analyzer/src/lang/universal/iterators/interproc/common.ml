@@ -80,9 +80,10 @@ let debug fmt = Debug.debug ~channel:"universal.iterators.interproc.common" fmt
 
 (** Check that no recursion is happening *)
 let check_recursion f range flow =
-  let cs = match Flow.get_callstack flow with [] -> [] | hd::tl -> tl in
-  (* FIXME: is f.fun_name not going to be imprecise if multiple python methods have the same name? *)
-  List.exists (fun cs -> Callstack.compare_call cs {call_fun=f.fun_name; call_site=range} = 0) cs
+  let cs = Flow.get_callstack flow in
+  if cs = [] then false
+  else
+    List.exists (fun cs -> Callstack.compare_call cs {call_fun=f.fun_name; call_site=range} = 0) (List.tl cs)
 
 
 
