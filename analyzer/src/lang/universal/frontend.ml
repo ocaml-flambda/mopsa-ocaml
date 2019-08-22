@@ -129,7 +129,7 @@ let from_unop (t: typ) (b: U.unary_op) : operator =
   | T_int, AST_NOT           -> O_log_not
   | T_float f, AST_UNARY_PLUS  -> O_plus
   | T_float f, AST_UNARY_MINUS -> O_minus
-  | T_float _, AST_ROUND -> O_cast
+  | T_float f, AST_ROUND -> O_cast (T_float f, T_int)
   | _ -> Exceptions.panic "operator %a cannot be used with type %a" U_ast_printer.print_unary_op b pp_typ t
 
 let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: fun_context option): expr =
