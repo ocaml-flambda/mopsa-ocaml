@@ -152,6 +152,7 @@ struct
       |> Option.return
 
     | S_assign({ekind = E_py_attribute(lval, attr)}, rval) ->
+      (* TODO: setattr *)
       bind_list [lval; rval] (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
       bind_some (fun args flow ->
           let elval, erval = match args with [e1;e2] -> e1, e2 | _ -> assert false in
