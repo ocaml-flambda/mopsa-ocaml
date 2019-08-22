@@ -142,6 +142,8 @@ struct
          | O_cast (T_int, T_float p)  ->
            let int_itv = man.cast Integer.Value.id v in
            I.of_int_itv_bot (prec p) (round ()) int_itv
+         (* this seems to return top every time. Why don't we use
+            I.round_int (prec p) (round ()) a ? *)
          | _ -> top)
       | _ -> top
     ) man t op v

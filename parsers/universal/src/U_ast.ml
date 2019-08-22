@@ -56,6 +56,7 @@ type unary_op =
   | AST_UNARY_PLUS     (* +e *)
   | AST_UNARY_MINUS    (* -e *)
   | AST_NOT            (* !e logical negation *)
+  | AST_ROUND          (* round *)
 
 (* binary expression operators *)
 type binary_op =
@@ -113,6 +114,10 @@ and expr =
   | AST_rand of (string ext) (* lower bound *) *
                 (string ext) (* upper bound *)
 
+  (* non-deterministic choice between two floats *)
+  | AST_randf of (string ext) (* lower bound *) *
+                (string ext) (* upper bound *)
+
   (* array accesses *)
   | AST_array_access of (expr ext * expr ext)
 
@@ -154,6 +159,9 @@ type stat =
 
   (* assertion: exit if the boolean expression does not hold *)
   | AST_assert of expr ext
+
+  (* assume: assume the boolean expression holds in the rest of the program *)
+  | AST_assume of expr ext
 
   (* evaluates expression (useful for function calls) *)
   | AST_expr of expr ext

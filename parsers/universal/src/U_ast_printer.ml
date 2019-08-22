@@ -35,6 +35,7 @@ let string_of_unary_op = function
   | AST_UNARY_PLUS -> "+"
   | AST_UNARY_MINUS -> "-"
   | AST_NOT -> "!"
+  | AST_ROUND -> "round"
 
 let string_of_binary_op = function
   | AST_MULTIPLY -> "*"
@@ -152,6 +153,9 @@ and print_expr fmt e =
   | AST_rand ((i1,_),(i2,_)) ->
     Format.fprintf fmt "rand(%s,%s)" i1 i2
 
+  | AST_randf ((i1,_),(i2,_)) ->
+    Format.fprintf fmt "randf(%s,%s)" i1 i2
+
   | AST_identifier (v,_) -> print_var fmt v
 
   | AST_array_access ((e1, _), (e2, _)) ->
@@ -206,6 +210,10 @@ and print_stat fmt = function
 
   | AST_assert e ->
     Format.fprintf fmt "assert (%a)"
+      print_expr_ext e
+
+  | AST_assume e ->
+    Format.fprintf fmt "assume (%a)"
       print_expr_ext e
 
   | AST_print ->

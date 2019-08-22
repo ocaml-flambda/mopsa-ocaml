@@ -92,7 +92,7 @@ let to_typ (t:typ) (e:expr) : expr =
     | (T_int | T_float _), (T_int | T_float _) ->
        mk_unop (O_cast (orgt,t)) e ~etyp:t range
     | _ ->
-       Exceptions.panic "cannot convert expression %a of type %a to type %a" pp_expr e pp_typ orgt pp_typ t
+      Exceptions.panic "cannot convert expression %a of type %a to type %a" pp_expr e pp_typ orgt pp_typ t
 
 let from_binop (t: typ) (b: U.binary_op) : operator =
   match t, b with
@@ -129,6 +129,7 @@ let from_unop (t: typ) (b: U.unary_op) : operator =
   | T_int, AST_NOT           -> O_log_not
   | T_float f, AST_UNARY_PLUS  -> O_plus
   | T_float f, AST_UNARY_MINUS -> O_minus
+  | T_float f, AST_ROUND -> O_cast (T_float f, T_int)
   | _ -> Exceptions.panic "operator %a cannot be used with type %a" U_ast_printer.print_unary_op b pp_typ t
 
 let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: fun_context option): expr =
@@ -249,6 +250,9 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
 
   | AST_rand((l, _), (u, _)) ->
     mk_z_interval (Z.of_string l) (Z.of_string u) range
+
+  | AST_randf((l, _), (u, _)) ->
+    mk_float_interval (float_of_string l) (float_of_string u) range
 
   | AST_array_access((e1, ext1), (e2, ext2)) ->
     begin
@@ -387,6 +391,11 @@ let rec from_stmt (s: U.stat) (ext: U.extent) (var_ctx: var_context) (fun_ctx: f
   | AST_assert (e, ext) ->
     let e = from_expr e ext var_ctx fun_ctx in
     mk_assert e range
+
+  | AST_assume (e, ext) ->
+    let e = from_expr e ext var_ctx fun_ctx in
+    mk_assume e range
+
 
   | AST_print ->
     mk_stmt S_print range
