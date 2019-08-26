@@ -115,8 +115,11 @@ struct
       Eval.bind (fun eaddr_list flow ->
           let addr_list = addr_of_expr eaddr_list in
           let els_var = var_of_addr addr_list in
+          (* let flow = man.exec (mk_add_var els_var range) flow in *)
           let flow = List.fold_left (fun acc el ->
-              man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:WEAK els_var range) el range) acc) flow ls in
+              let stmt = mk_assign (mk_var ~mode:WEAK els_var range) el range in
+              (* debug "fold_left %a@\n" pp_stmt stmt; *)
+              man.exec ~zone:Zone.Z_py stmt acc) flow ls in
           Eval.singleton (mk_py_object (addr_list, None) range) flow
         )
       |> Option.return
@@ -404,13 +407,15 @@ struct
             | _ -> assert false in
           let var_els = var_of_addr list_addr in
           let els = man.eval (mk_var var_els ~mode:WEAK range) it_flow in
+          debug "Result = %a" (Result.print_full (fun fmt e flow -> Format.fprintf fmt "%a@\n%a@\n@\n" (Option.print pp_expr) e (Flow.print man.lattice.print) flow)) els;
           Option.none_to_exn @@ Result.bind_opt
             (fun oels flow ->
                let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) it_flow |> Eval.empty_singleton in
                Some (match oels with
-                   | None -> stopiteration
+                   | None ->
+                     stopiteration
                    | Some e ->
-                     Eval.join_list ~empty:(Eval.empty_singleton flow) (Eval.copy_ctx stopiteration els::stopiteration::[])
+                     Eval.join_list ~empty:(Eval.empty_singleton flow) [Eval.copy_ctx stopiteration (Eval.singleton e flow) ; stopiteration ]
                  )
             )
             els
@@ -588,7 +593,8 @@ struct
       Utils.check_instances man flow range args
         ["str"; "str"; "int"]
         (fun eargs flow ->
-           man.eval (mk_expr (E_py_list [mk_py_top T_string range]) range) flow
+           (* FIXME: notok, as one strong element. Fixed by adding to tops, but terrible *)
+           man.eval (mk_expr (E_py_list [mk_py_top T_string range; mk_py_top T_string range]) range) flow
         )
       |> Option.return
 

@@ -154,6 +154,13 @@ struct
       try Map.find k m
       with Not_found -> Exceptions.panic ~loc:__LOC__ "key %a not found" Key.print k
 
+  let find_opt ~bottomv ~topv (k: Key.t) (a: 'a t) : 'a option =
+    match a with
+    | Bot -> Some bottomv
+    | Top -> Some topv
+    | Finite m ->
+      Map.find_opt k m
+
   let remove (k: Key.t) (a:'a t) : 'a t =
     match a with
     | Bot -> Bot
@@ -300,6 +307,8 @@ struct
   let print fmt (a:t) = Map.print fmt a ~printv:Value.print
 
   let find (k: Key.t) (a: t) : Value.t = Map.find k a ~bottomv:Value.bottom ~topv:Value.top
+
+  let find_opt (k: Key.t) (a: t) : Value.t option = Map.find_opt k a ~bottomv:Value.bottom ~topv:Value.top
 
   let remove (k: Key.t) (a: t) : t = Map.remove k a
 

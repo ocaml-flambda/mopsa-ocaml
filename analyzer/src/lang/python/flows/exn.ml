@@ -125,14 +125,15 @@ module Domain =
                    debug "True flow, exp is %a@\n" pp_expr exp;
                    let true_flow =  man.exec (mk_block cleaners range) true_flow in
                    let cur = Flow.get T_cur man.lattice true_flow in
-                   let str = man.ask (Types.Typing.Q_exn_string_query exp) flow in
+                   let exc_str, exc_message = man.ask (Types.Typing.Q_exn_string_query exp) flow in
                    let tk =
-                     if List.exists (fun x -> Pervasives.compare x str = 0) !opt_unprecise_exn then
+                     if List.exists (fun x ->
+                         Pervasives.compare x exc_str = 0) !opt_unprecise_exn then
                        let exp = Utils.strip_object exp in
-                       mk_py_unprecise_exception exp str
+                       mk_py_unprecise_exception exp (exc_str ^ ": " ^ exc_message)
                      else
                        let cs = Flow.get_callstack true_flow in
-                       mk_py_exception exp str cs range
+                       mk_py_exception exp (exc_str ^ ": " ^ exc_message) cs range
                    in
                    let flow' = Flow.add tk cur man.lattice true_flow |>
                                Flow.set T_cur man.lattice.bottom man.lattice

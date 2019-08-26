@@ -105,6 +105,7 @@ struct
     set_env T_cur empty man flow
 
   let rec exec zone stmt man flow =
+    debug "exec %a@\n" pp_stmt stmt;
     let range = srange stmt in
     match skind stmt with
     (* | S_add ({ekind = E_var (v, mode)}) ->
@@ -144,8 +145,14 @@ struct
                 assign_addr man v (PyAddr.Def addr) mode flow |> Post.return
 
               | E_py_object (addr, Some expr) ->
-                assign_addr man v (PyAddr.Def addr) mode flow |>
-                man.exec ~zone:Zone.Z_py_obj (mk_assign evar e range) |>
+                debug "epysome@\n";
+                let flow = assign_addr man v (PyAddr.Def addr) mode flow in
+                begin match akind addr with
+                | A_py_instance "str" ->
+                  man.exec ~zone:Zone.Z_py_obj (mk_assign evar e range) flow
+                | _ ->
+                  flow
+                end |>
                 Post.return
 
               | _ -> Exceptions.panic_at range "%a@\n" pp_expr e
@@ -235,7 +242,7 @@ struct
     let aset = match mode with
       | STRONG -> ASet.singleton av
       | WEAK ->
-          ASet.add av (try find v cur with Not_found -> ASet.empty)
+        ASet.add av (Option.default ASet.empty (find_opt v cur))
     in
     set_env T_cur (add v aset cur) man flow
 
@@ -282,7 +289,10 @@ struct
         let obj = find_builtin @@ get_orig_vname v in
         Eval.singleton (mk_py_object obj range) flow |> Option.return
       else
-        Eval.empty_singleton flow |> Option.return
+        (* let () = warn_at range "NameError that shouldn't happen. Todo: use partial envs and add_var" in
+         * man.exec (Utils.mk_builtin_raise "NameError" range) flow |> *)
+        Eval.empty_singleton flow |>
+        Option.return
 
 
     | _ -> None

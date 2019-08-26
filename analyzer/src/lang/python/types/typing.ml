@@ -185,7 +185,7 @@ let () =
     }
   )
 
-type _ query += Q_exn_string_query : expr -> string query
+type _ query += Q_exn_string_query : expr -> (string * string) query
 (** FIXME: register THAT QUERY *)
 
 module Domain =
@@ -1059,7 +1059,7 @@ struct
         let ptys = TMap.find addr cur in
         if Polytypeset.cardinal ptys = 1 then
           let r = Polytypeset.choose ptys in
-          let str = match r with
+          let exc, message = match r with
             | Instance {classn; uattrs} ->
               let name = match classn with
                 | Class (c, b) -> begin match c with
@@ -1075,10 +1075,10 @@ struct
                 else
                   ""
               in
-              name ^ ": " ^ message
+              name, message
             | _ -> assert false in
-          let () = debug "answer to query is %s@\n" str in
-                    Some str
+          let () = debug "answer to query is %s %s@\n" exc message in
+                    Some (exc, message)
         else
           assert false
 

@@ -66,26 +66,39 @@ struct
   let init prog man flow = set_env T_cur empty man flow
 
   let exec zone stmt man flow =
+    debug "exec %a" pp_stmt stmt;
     (* FIXME: is there a way to factor using eval? *)
     match skind stmt with
     | S_assign ({ekind = E_var (v, mode)}, {ekind = E_py_object ({addr_kind = A_py_instance "str"},
                                                                  Some {ekind = E_constant (C_string s)})}) ->
       let cur = get_env T_cur man flow in
-      let cur = match mode with
-      | WEAK -> SMap.add v (try SMap.find v cur with Not_found -> StringSet.empty) cur
-      | STRONG -> SMap.add v (StringSet.singleton s) cur in
+      let cur =
+        SMap.add v (match mode with
+        | WEAK ->
+          let old_s = Option.default (StringSet.empty) (SMap.find_opt v cur) in
+          StringSet.add s old_s
+        | STRONG -> StringSet.singleton s)
+          cur in
       set_env T_cur cur man flow
       |> Post.return |> Option.return
 
     | S_assign ({ekind = E_var (v, mode)}, {ekind = E_py_object ({addr_kind = A_py_instance "str"},
                                                                  Some {ekind = E_var (v', mode')})}) ->
       let cur = get_env T_cur man flow in
-      let set_v' = SMap.find v' cur in
+      debug "old cur = %a@\n" print cur;
+      let set_v' = Option.default StringSet.empty (SMap.find_opt v' cur) in
       let cur = match mode with
-        | WEAK -> failwith "todo"
+        | WEAK ->
+          let set_v = Option.default StringSet.empty (SMap.find_opt v cur) in
+          SMap.add v (StringSet.join set_v set_v') cur
         | STRONG -> SMap.add v set_v' cur in
-      set_env T_cur cur man flow
-      |> Post.return |> Option.return
+      debug "cur = %a@\n" print cur;
+      (* FIXME: this is to avoid falling into cur, but that's terrible *)
+      (if not @@ is_bottom cur then
+        set_env T_cur cur man flow
+      else
+        flow)
+        |> Post.return |> Option.return
 
     (* FIXME: remove vars / rename / ... not caught in the zone yet ? :/ *)
     (* | S_remove {ekind = E_var (v, _)} ->
