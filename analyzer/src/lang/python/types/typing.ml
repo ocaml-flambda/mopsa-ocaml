@@ -1001,10 +1001,11 @@ struct
       |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "abs")}, _)}, args, []) ->
-      let tyerror = fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
       bind_list args man.eval flow |>
       bind_some (fun eargs flow ->
-          if List.length eargs <> 1 then tyerror flow
+          if List.length eargs <> 1 then
+            let () = Format.fprintf Format.str_formatter "abs() takes exactly one argument (%d given)" (List.length args) in
+            man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |> Eval.empty_singleton
           else
             let v = List.hd eargs in
             assume (mk_py_isinstance_builtin v "int" range) man flow
@@ -1012,7 +1013,11 @@ struct
               ~felse:(fun flow ->
                 assume (mk_py_isinstance_builtin v "float" range) man flow
                   ~fthen:(man.eval (mk_py_top (T_float F_DOUBLE) range))
-                  ~felse:tyerror
+                  ~felse:(fun flow ->
+                      Format.fprintf Format.str_formatter "bad operand type for abs()";  (* FIXME *)
+                      man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |>
+                      Eval.empty_singleton
+                    )
               )
         )
       |> Option.return
@@ -1022,6 +1027,7 @@ struct
       |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "divmod")}, _)}, args, []) ->
+      (* FIXME: error messages etc *)
       let tyerror = fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
       bind_list args man.eval flow |>
       bind_some (fun eargs flow ->

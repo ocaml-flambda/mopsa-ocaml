@@ -145,7 +145,6 @@ struct
                 assign_addr man v (PyAddr.Def addr) mode flow |> Post.return
 
               | E_py_object (addr, Some expr) ->
-                debug "epysome@\n";
                 let flow = assign_addr man v (PyAddr.Def addr) mode flow in
                 begin match akind addr with
                 | A_py_instance "str" ->
@@ -266,12 +265,14 @@ struct
 
             | Undef_global ->
               debug "Incoming NameError, on var %a, range %a, cs = %a @\n" pp_var v pp_range range Callstack.print (Flow.get_callstack flow);
-              let flow = man.exec (Utils.mk_builtin_raise "NameError" range) flow in
+              Format.fprintf Format.str_formatter "name '%a' is not defined" pp_var v;
+              let flow = man.exec (Utils.mk_builtin_raise_msg "NameError" (Format.flush_str_formatter ()) range) flow in
               (Eval.empty_singleton flow :: acc, Flow.get_ctx flow)
 
             | Undef_local ->
               debug "Incoming UnboundLocalError, on var %a, range %a, cs = %a @\n" pp_var v pp_range range Callstack.print (Flow.get_callstack flow);
-              let flow = man.exec (Utils.mk_builtin_raise "UnboundLocalError" range) flow in
+              Format.fprintf Format.str_formatter "local variable '%a' referenced before assignment" pp_var v;
+              let flow = man.exec (Utils.mk_builtin_raise_msg "UnboundLocalError" (Format.flush_str_formatter ()) range) flow in
               (Eval.empty_singleton flow :: acc, Flow.get_ctx flow)
 
             | Def addr ->

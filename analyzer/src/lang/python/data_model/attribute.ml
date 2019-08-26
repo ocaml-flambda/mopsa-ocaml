@@ -87,12 +87,13 @@ module Domain =
         | E_py_attribute(obj, ("mro" as attr))
         | E_py_attribute(obj, ("__subclass__" as attr)) ->
          panic_at range "Access to special attribute %s not supported" attr
-
+      (* TODO: wtf factor search_mro *)
       (* Attributes of builtins classes are static, so we can be much more efficient *)
       | E_py_attribute ({ekind = E_py_object ({addr_kind = A_py_class (C_builtin c, mro)}, _)}, attr) ->
         let rec search_mro mro = match mro with
           | [] ->
-            man.exec (Utils.mk_builtin_raise "AttributeError" range) flow |>
+            Format.fprintf Format.str_formatter "'%s' object has no attribute '%s'" c attr;
+            man.exec (Utils.mk_builtin_raise_msg "AttributeError" (Format.flush_str_formatter ()) range) flow |>
             Eval.empty_singleton
           | cls::tl ->
             if is_builtin_attribute cls attr then
@@ -111,7 +112,8 @@ module Domain =
              | E_py_object ({addr_kind = A_py_class (C_builtin c, mro)}, _) ->
                let rec search_mro mro = match mro with
                  | [] ->
-                   man.exec (Utils.mk_builtin_raise "AttributeError" range) flow |>
+                   Format.fprintf Format.str_formatter "'%s' object has no attribute '%s'" c attr;
+                   man.exec (Utils.mk_builtin_raise_msg "AttributeError" (Format.flush_str_formatter ()) range) flow |>
                    Eval.empty_singleton
                  | cls::tl ->
                    if is_builtin_attribute cls attr then
@@ -152,8 +154,9 @@ module Domain =
                            let rec search_mro flow mro = match mro with
                              | [] ->
                                debug "No attribute found for %a@\n" pp_expr expr;
-                               let flow = man.exec (Utils.mk_builtin_raise "AttributeError" range) flow in
-                               Eval.empty_singleton flow
+                               Format.fprintf Format.str_formatter "'%a' object has no attribute '%s'" pp_expr exp attr;
+                               man.exec (Utils.mk_builtin_raise_msg "AttributeError" (Format.flush_str_formatter ()) range) flow |>
+                               Eval.empty_singleton
                              | cls::tl ->
                                assume
                                  (mk_expr (E_py_ll_hasattr (mk_py_object cls range, c_attr)) range)
@@ -171,8 +174,9 @@ module Domain =
                                let rec search_mro flow mro = match mro with
                                  | [] ->
                                    debug "No attribute found for %a@\n" pp_expr expr;
-                                   let flow = man.exec (Utils.mk_builtin_raise "AttributeError" range) flow in
-                                   Eval.empty_singleton flow
+                                   Format.fprintf Format.str_formatter "'%a' object has no attribute '%s'" pp_expr exp attr;
+                                   man.exec (Utils.mk_builtin_raise_msg "AttributeError" (Format.flush_str_formatter ()) range) flow |>
+                                   Eval.empty_singleton
                                  | cls::tl ->
                                    assume
                                      (mk_expr (E_py_ll_hasattr (mk_py_object cls range, c_attr)) range)

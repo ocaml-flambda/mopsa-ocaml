@@ -101,7 +101,9 @@ module Domain =
                                                    )
                                              )
                                              ~felse:(fun false_flow ->
-                                               let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow in
+                                                 Format.fprintf Format.str_formatter "unsupported operand type(s) for +: '%a' and '%a'" pp_addr_kind (akind @@ fst cls1) pp_addr_kind (akind @@ fst cls2);
+                                                 let msg = Format.flush_str_formatter () in
+                                                 let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow in
                                                Eval.empty_singleton flow
                                              )
                                              man flow)

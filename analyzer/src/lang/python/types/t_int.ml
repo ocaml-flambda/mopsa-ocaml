@@ -125,7 +125,8 @@ module Domain =
                       man true_flow
                   )
                 ~felse:(fun false_flow ->
-                    let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow in
+                    Format.fprintf Format.str_formatter "descriptor '%s' requires a 'int' object but received '%a'" f pp_expr e1; (* FIXME: could be cleaner I guess *)
+                    let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) false_flow in
                     Eval.empty_singleton flow)
                 man flow
           )
@@ -153,7 +154,8 @@ module Domain =
                      man true_flow
                  )
                  ~felse:(fun false_flow ->
-                   let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow in
+                     Format.fprintf Format.str_formatter "descriptor '%s' requires a 'int' object but received '%a'" f pp_expr e1;
+                   let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) false_flow in
                    Eval.empty_singleton flow)
                  man flow
              )

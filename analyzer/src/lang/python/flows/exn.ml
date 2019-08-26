@@ -130,7 +130,7 @@ module Domain =
                      if List.exists (fun x ->
                          Pervasives.compare x exc_str = 0) !opt_unprecise_exn then
                        let exp = Utils.strip_object exp in
-                       mk_py_unprecise_exception exp (exc_str ^ ": " ^ exc_message)
+                       mk_py_unprecise_exception exp exc_str (* we don't keep the message for unprecise exns *)
                      else
                        let cs = Flow.get_callstack true_flow in
                        mk_py_exception exp (exc_str ^ ": " ^ exc_message) cs range
@@ -148,7 +148,7 @@ module Domain =
                          man.exec {stmt with skind = S_py_raise(Some (mk_py_call exp [] range))} true_flow
                          |> Post.return ~log)
                      ~felse:(fun false_flow ->
-                         man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow
+                         man.exec (Utils.mk_builtin_raise_msg "TypeError" "exceptions must derive from BaseException" range) false_flow
                          |> Post.return ~log)
                      false_flow
                  )
@@ -217,7 +217,7 @@ module Domain =
                             )
                           ~felse:(fun false_flow ->
                               (* else *)
-                              man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Post.return)
+                              man.exec (Utils.mk_builtin_raise_msg "TypeError" "catching classes that do not inherit from BaseException is not allowed" range) flow |> Post.return)
                       | _ -> assert false
                     )
                 in

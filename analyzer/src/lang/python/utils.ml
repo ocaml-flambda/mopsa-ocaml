@@ -37,6 +37,13 @@ let rec partition_list_by_length n l =
 let mk_builtin_raise exn range =
   mk_stmt (S_py_raise (Some (mk_py_object (Addr.find_builtin exn) range))) range
 
+let mk_builtin_raise_args exn args range =
+  mk_stmt (S_py_raise (Some (mk_py_call (mk_py_object (Addr.find_builtin exn) range) args range))) range
+
+let mk_builtin_raise_msg exn msg range =
+  let open Universal.Ast in
+  mk_builtin_raise_args exn [mk_constant T_string (C_string msg) range] range
+
 let mk_builtin_call f params range =
   mk_py_call (mk_py_object (Addr.find_builtin f) range) params range
 
@@ -63,6 +70,7 @@ let mk_try_stopiteration body except range =
     range
 
 let check_instances ?(arguments_after_check=0) man flow range exprs instances processing =
+  (* FIXME: error messages *)
   let open Mopsa in
   let tyerror = fun flow -> man.exec (mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
   let rec aux iexprs lexprs linstances flow =
@@ -81,6 +89,7 @@ let check_instances ?(arguments_after_check=0) man flow range exprs instances pr
   Result.bind_some (fun exprs flow -> aux exprs exprs instances flow)
 
 let check_instances_disj ?(arguments_after_check=0) man flow range exprs instances processing =
+  (* FIXME: error messages *)
   let open Mopsa in
   let tyerror = fun flow -> man.exec (mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
   let rec aux iexprs lexprs linstances flow =
@@ -91,15 +100,6 @@ let check_instances_disj ?(arguments_after_check=0) man flow range exprs instanc
       else
         tyerror flow
     | e::es, i::is ->
-      (*   let rec aux2 instances flow =
-       *     match instances with
-       *     | [] -> tyerror flow
-       *     | inst::instl ->
-       *       Eval.assume (Addr.mk_py_isinstance_builtin e inst range) man flow
-       *         ~fthen:(aux iexprs es is)
-       *         ~felse:(aux2 instl) in
-       *   aux2 i flow
-       * | [], _ -> assert false in *)
       let mk_onecond = fun i -> Addr.mk_py_isinstance_builtin e i range in
       let cond = List.fold_left (fun acc el ->
           mk_binop acc O_py_or (mk_onecond el) range)

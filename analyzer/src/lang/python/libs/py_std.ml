@@ -90,13 +90,17 @@ module Domain =
                                  (Utils.mk_hasattr iter "__next__" range)
                                  ~fthen:(fun true_flow -> Eval.singleton iter true_flow)
                                  ~felse:(fun false_flow ->
-                                   man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow |>
+                                     Format.fprintf Format.str_formatter "iter() returned non-iterator of type '%a'" pp_addr_kind (akind @@ fst @@ object_of_expr iter);
+                                     let msg = Format.flush_str_formatter () in
+                                     man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow |>
                                      Eval.empty_singleton)
                                  man flow
                              )
                        )
                        ~felse:(fun false_flow ->
-                         man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow |>
+                           Format.fprintf Format.str_formatter "'%a' object is not iterable" pp_addr_kind (akind @@ fst cls);
+                           let msg = Format.flush_str_formatter () in
+                           man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow |>
                            Eval.empty_singleton)
                        man flow
                    )
@@ -120,16 +124,20 @@ module Domain =
                            Eval.bind (fun len flow ->
                                assume
                                  (mk_py_isinstance_builtin len "int" range)
+                                 (* FIXME: i guess the condition is actually more subtle, like castable to int or something *)
                                  ~fthen:(fun true_flow ->
                                    Eval.singleton len true_flow)
                                  ~felse:(fun false_flow ->
-                                   man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow |>
+                                     Format.fprintf Format.str_formatter "'%a' object cannot be interpreted as an integer" pp_addr_kind (akind @@ fst @@ object_of_expr len);
+                                     let msg = Format.flush_str_formatter () in
+                                     man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow |>
                                      Eval.empty_singleton)
                                  man flow
                              )
                        )
                        ~felse:(fun false_flow ->
-                         man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow |>
+                           Format.fprintf Format.str_formatter "object of type '%a' has no len()" pp_addr_kind (akind @@ fst cls);
+                           man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) false_flow |>
                            Eval.empty_singleton)
                        man flow
                    )
@@ -151,7 +159,8 @@ module Domain =
                          man.eval (mk_py_call (mk_py_object_attr cls "__next__" range) [obj] range) true_flow
                        )
                        ~felse:(fun false_flow ->
-                         man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow |>
+                           Format.fprintf Format.str_formatter "'%a' object is not an iterator" pp_addr_kind (akind @@ fst cls);
+                           man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) false_flow |>
                            Eval.empty_singleton)
                        man flow
                    )
@@ -159,7 +168,9 @@ module Domain =
          |> Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "input")}, _)}, args, [])  ->
-         let tyerror = fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
+        let tyerror = fun flow ->
+          Format.fprintf Format.str_formatter "input expected at most 1 arguments, got %d" (List.length args);
+          man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |> Eval.empty_singleton in
          if List.length args <= 1 then
            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_string range) flow |> Option.return
          else
@@ -206,10 +217,11 @@ module Domain =
         let pass = mk_block [] range in
 
         let assign_iter = mk_assign iter_var (Utils.mk_builtin_call "iter" [iterable] range) range in
+        Format.fprintf Format.str_formatter "%s() arg is an empty sequence" s;
         let assign_max =
           Utils.mk_try_stopiteration
             (mk_assign maxi_var (Utils.mk_builtin_call "next" [iter_var] range) range)
-            (Utils.mk_builtin_raise "ValueError" range)
+            (Utils.mk_builtin_raise_msg "ValueError" (Format.flush_str_formatter ()) range)
             range in
         let for_stmt = mk_stmt (S_py_for (target_var, iter_var,
                                           mk_if (mk_binop target_var comp_op maxi_var range)
@@ -240,7 +252,9 @@ module Domain =
         |> Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "hash")}, _)}, args, []) ->
-        let tyerror = fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
+        let tyerror = fun flow ->
+          Format.fprintf Format.str_formatter "hash() takes exactly one argument (%d given)" (List.length args);
+          man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |> Eval.empty_singleton in
         Result.bind_list args man.eval flow |>
         Result.bind_some (fun eargs flow ->
             if List.length eargs <> 1 then tyerror flow else

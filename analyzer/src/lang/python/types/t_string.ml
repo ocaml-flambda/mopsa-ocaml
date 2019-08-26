@@ -146,7 +146,8 @@ module Domain =
                     man true_flow
                 )
               ~felse:(fun false_flow ->
-                  let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow in
+                  Format.fprintf Format.str_formatter "descriptor '%s' requires a 'str' object but received '%a'" f pp_expr e1;
+                  let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) false_flow in
                   Eval.empty_singleton flow)
               man flow
           )
@@ -170,7 +171,8 @@ module Domain =
                     man true_flow
                 )
               ~felse:(fun false_flow ->
-                  let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow in
+                  Format.fprintf Format.str_formatter "descriptor '%s' requires a 'str' object but received '%a'" f pp_expr e1;
+                  let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) false_flow in
                   Eval.empty_singleton flow)
               man flow
           )
@@ -181,7 +183,7 @@ module Domain =
         Utils.check_instances ~arguments_after_check:1 man flow range args ["str"]
           (fun eargs flow ->
              (* TODO: constant strings are kept in the objects, so we could raise less alarms *)
-             let tyerror_f = man.exec (Utils.mk_builtin_raise "TypeError" range) flow in
+             let tyerror_f = man.exec (Utils.mk_builtin_raise_msg "ValueError" "incomplete format" range) flow in
              let flow = Flow.copy_ctx tyerror_f flow in
              let res = man.eval (mk_py_top T_string range) flow in
              let tyerror = tyerror_f |> Eval.empty_singleton in

@@ -72,7 +72,8 @@ module Domain =
                          ~fthen:(fun flow ->
                            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top (T_float F_DOUBLE) range) flow)
                          ~felse:(fun flow ->
-                           man.exec (Utils.mk_builtin_raise "TypeError" range) flow |>
+                             Format.fprintf Format.str_formatter "float() argument must be a string or a number, not '%a'" pp_expr el;
+                           man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |>
                              Eval.empty_singleton)
                          man flow)
                      man flow
@@ -106,7 +107,7 @@ module Domain =
                           ~fthen:(fun flow ->
                               (* Exceptions.panic_at range "eurk %a@\n" man.pri(Flow.print man.lattice) flow; *)
                               let res = man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_bool range) flow in
-                              let overflow = man.exec (Utils.mk_builtin_raise "OverflowError" range) flow |> Eval.empty_singleton in
+                              let overflow = man.exec (Utils.mk_builtin_raise_msg "OverflowError" "int too large to convert to float" range) flow |> Eval.empty_singleton in
                               Eval.join_list (Eval.copy_ctx overflow res :: overflow :: []) ~empty:(Eval.empty_singleton flow)
                             )
                           ~felse:(fun flow ->
@@ -117,7 +118,8 @@ module Domain =
                     (* ) *)
                 )
               ~felse:(fun flow ->
-                  man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton)
+                  Format.fprintf Format.str_formatter "descriptor '%s' requires a 'float' object but received '%a'" f pp_expr e1;
+                  man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |> Eval.empty_singleton)
           )
         |>  Option.return
 
@@ -144,8 +146,9 @@ module Domain =
                      man true_flow
                  )
                  ~felse:(fun false_flow ->
-                   let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow in
-                   Eval.empty_singleton flow)
+                     Format.fprintf Format.str_formatter "descriptor '%s' requires a 'float' object but received '%a'" f pp_expr e1;
+                     let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) false_flow in
+                     Eval.empty_singleton flow)
                  man flow
              )
          |>  Option.return
