@@ -33,7 +33,21 @@ module StringSet = Framework.Lattices.Powerset.Make(
   end)
 
 type _ query += Q_strings_of_var : var -> string query
-(** FIXME: register that query *)
+
+let () = register_query {
+    join = (let f : type r. query_pool -> r query -> r -> r -> r =
+              fun next query a b ->
+                match query with
+                | Q_strings_of_var _ -> a ^ b
+                | _ -> next.join_query query a b in
+            f
+           );
+    meet = (let f : type r. query_pool -> r query -> r -> r -> r =
+              fun next query a b ->
+                match query with
+                | Q_strings_of_var _ -> assert false
+                | _ -> next.meet_query query a b in f)
+  }
 
 module Domain =
 struct

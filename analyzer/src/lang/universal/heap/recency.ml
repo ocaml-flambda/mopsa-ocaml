@@ -52,10 +52,10 @@ let () =
         fun next query a b ->
           match query with
           | Q_allocated_addresses ->
-            a @ b
+            assert false
           | Q_select_allocated_addresses _ ->
             (* is that ok? *)
-            a @ b
+            assert false
           | _ -> next.meet_query query a b
       in f
     );

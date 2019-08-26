@@ -186,7 +186,21 @@ let () =
   )
 
 type _ query += Q_exn_string_query : expr -> (string * string) query
-(** FIXME: register THAT QUERY *)
+
+let () = register_query {
+    join = (let f : type r. query_pool -> r query -> r -> r -> r =
+              fun next query a b ->
+                match query with
+                | Q_exn_string_query _ -> (fst a ^ fst b, snd a ^ snd b)
+                | _ -> next.join_query query a b in
+            f
+           );
+    meet = (let f : type r. query_pool -> r query -> r -> r -> r =
+              fun next query a b ->
+                match query with
+                | Q_exn_string_query _ -> assert false
+                | _ -> next.meet_query query a b in f)
+  }
 
 module Domain =
 struct
