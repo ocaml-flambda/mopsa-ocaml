@@ -97,6 +97,12 @@ struct
       |> Post.return |> Option.return
 
     | S_assign ({ekind = E_var (v, mode)}, {ekind = E_py_object ({addr_kind = A_py_instance "str"},
+                                                                 Some {ekind = E_constant (C_top T_string)})}) ->
+      let cur = get_env T_cur man flow in
+      set_env T_cur (SMap.add v StringSet.top cur) man flow
+      |> Post.return |> Option.return
+
+    | S_assign ({ekind = E_var (v, mode)}, {ekind = E_py_object ({addr_kind = A_py_instance "str"},
                                                                  Some {ekind = E_var (v', mode')})}) ->
       let cur = get_env T_cur man flow in
       debug "old cur = %a@\n" print cur;
@@ -115,10 +121,14 @@ struct
         |> Post.return |> Option.return
 
     (* FIXME: remove vars / rename / ... not caught in the zone yet ? :/ *)
-    (* | S_remove {ekind = E_var (v, _)} ->
-     *   let cur = get_env T_cur man flow in
-     *   set_env T_cur (SMap.remove v cur) man flow
-     *   |> Post.return |> Option.return *)
+    | S_remove {ekind = E_var (v, _)} ->
+      let cur = get_env T_cur man flow in
+      begin if SMap.mem v cur then
+          set_env T_cur (SMap.remove v cur) man flow
+        else
+          flow
+      end
+      |> Post.return |> Option.return
 
     | _ ->  None
 
