@@ -332,11 +332,10 @@ struct
   let merge _ _ _ = assert false
 
 
-  let class_le (c, b: class_address * py_object list) (d, b': class_address * py_object list) : bool =
+  let class_le (_, b: class_address * py_object list) (d, _: class_address * py_object list) : bool =
     let res = List.exists (fun x -> match akind @@ fst x with
         | A_py_class (x, _) -> x = d
         | _ -> false) b in
-    debug "class_le %a %a = %b" pp_addr_kind (A_py_class (c, b)) pp_addr_kind (A_py_class (d, b')) res;
     res
 
 
@@ -657,7 +656,6 @@ struct
         | A_py_instance _ ->
           let cur = get_env T_cur man flow in
           let ptys = TMap.find addr cur in
-          debug "%a %a" pp_addr addr (Flow.print man.lattice.print) flow;
           Polytypeset.fold (fun pty acc ->
               match pty with
               | Instance {classn; uattrs; oattrs} when StringMap.exists (fun k _ -> k = attr) uattrs ->
@@ -825,7 +823,7 @@ struct
       bind_list [obj; attr] (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
       bind_some (fun evals flow ->
           let eobj, eattr = match evals with [e1; e2] -> e1, e2 | _ -> assert false in
-          debug "now isinstance(%a, %a) at range %a, flow %a@\n" pp_expr eobj pp_expr eattr pp_range range (Flow.print man.lattice.print) flow;
+          debug "now isinstance(%a, %a) at range %a@\n" pp_expr eobj pp_expr eattr pp_range range (*(Flow.print man.lattice.print) flow*);
           let addr_obj = match ekind eobj with
             | E_py_object (a, _) -> a
             | _ -> assert false in
@@ -846,7 +844,7 @@ struct
             let ptys = if TMap.mem addr_obj cur then TMap.find addr_obj cur
               else Polytypeset.empty in
             let ptys =
-              if not (Polytypeset.is_empty ptys) then ptys
+              if not (Polytypeset.is_empty ptys) && not (Polytypeset.is_top ptys) then ptys
               else
                 let is_ao addr = compare_addr addr_obj addr = 0 in
                 let process bltin =
@@ -881,7 +879,7 @@ struct
                         let cur = TMap.add addr_obj (Polytypeset.singleton pty) cur in
                         set_env T_cur cur man flow
                       else flow in
-                    man.eval (mk_py_bool (class_le (ci, mroi) (c, mro)) range) flow :: acc
+                        man.eval (mk_py_bool (class_le (ci, mroi) (c, mro)) range) flow :: acc
                   | _ -> Exceptions.panic "todo@\n"
                 end) ptys []
             |> (Eval.join_list ~empty:(Eval.empty_singleton flow))

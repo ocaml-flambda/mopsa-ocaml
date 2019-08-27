@@ -133,7 +133,9 @@ module Domain =
                        mk_py_unprecise_exception exp exc_str (* we don't keep the message for unprecise exns *)
                      else
                        let cs = Flow.get_callstack true_flow in
-                       mk_py_exception exp (exc_str ^ ": " ^ exc_message) cs range
+                       mk_py_exception exp
+                         (if exc_message = "" then exc_str else (exc_str ^ ": " ^ exc_message))
+                         cs range
                    in
                    let flow' = Flow.add tk cur man.lattice true_flow |>
                                Flow.set T_cur man.lattice.bottom man.lattice
