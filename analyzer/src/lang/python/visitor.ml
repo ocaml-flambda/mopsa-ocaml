@@ -31,6 +31,10 @@ let () =
 
       | E_py_object _ -> leaf exp
 
+      | E_py_annot e ->
+        {exprs = [e]; stmts = [];},
+        (fun parts -> {exp with ekind = E_py_annot (List.hd parts.exprs)})
+
       | E_py_list elts ->
         {exprs = elts; stmts = [];},
         (fun parts -> {exp with ekind = E_py_list(parts.exprs)})

@@ -2,7 +2,7 @@ overload = object()
 Any = object()
 TypeVar = object()
 
-AnyStr = TypeVar('AnyStr', str, bytes)
+# AnyStr = TypeVar('AnyStr', str, bytes)
 
 class _SpecialForm:
     def __getitem__(self, typeargs: Any) -> Any: ...

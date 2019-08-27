@@ -345,7 +345,7 @@ struct
     | A_py_class (c, b) -> (c, b)
     | _ -> assert false
 
-  let allocate_builtin man range flow bltin =
+  let allocate_builtin man range flow bltin oe =
     (* allocate addr, and map this addr to inst bltin *)
     let range = tag_range range "alloc_%s" bltin in
     let bltin_cls, bltin_mro = get_builtin bltin in
@@ -359,7 +359,7 @@ struct
         let cur = TMap.add addr bltin_inst cur in
         let flow = set_env T_cur cur man flow in
         (* Eval.singleton eaddr flow *)
-        Eval.singleton (mk_py_object (addr, None) range) flow
+        Eval.singleton (mk_py_object (addr, oe) range) flow
       )
 
   let bltin_inst bltin =
@@ -478,7 +478,6 @@ struct
           Post.return flow |>
           Option.return
 
-
         | _ -> assert false
       end
 
@@ -487,45 +486,21 @@ struct
   let eval zs exp man flow =
     let range = erange exp in
     match ekind exp with
-    (* | E_py_object (addr, _) when TMap.mem addr (Flow.get_env T_cur man flow).abs_heap ->
-     *   debug "this addr: %a@\n" pp_addr addr;
-     *   let cur = Flow.get_env T_cur man flow in
-     *   Polytypeset.fold (fun pty acc ->
-     *       let abs_heap = TMap.add addr (Polytypeset.singleton pty) cur.abs_heap in
-     *       let flow = set_env T_cur {cur with abs_heap} man flow in
-     *       match pty with
-     *       | Class (c, b) ->
-     *         debug "class is %a@\n" pp_addr addr;
-     *         Eval.singleton (mk_py_object ({addr with addr_kind = (A_py_class (c, b))}, None) range) flow :: acc
-     *
-     *       | Instance _ ->
-     *         Eval.singleton (mk_py_object ({addr with addr_kind = A_py_instance}, None) range) flow :: acc
-     *
-     *       (\* TODO: no need for modules and functions in types? *\)
-     *       | Module m ->
-     *         Eval.singleton (mk_py_object ({addr with addr_kind = A_py_module m}, None) range) flow :: acc
-     *
-     *       | Function f ->
-     *         Eval.singleton (mk_py_object ({addr with addr_kind = A_py_function f}, None) range) flow :: acc
-     *
-     *       | _ -> Exceptions.panic_at range "E_py_object mem: %a@\n" pp_polytype pty)
-     *     (TMap.find addr cur.abs_heap) []
-     *   |> Eval.join_list |> OptionExt.return *)
+    | E_py_annot e ->
+      begin match ekind e with
+        | E_var (v, mode) when is_builtin_name @@ get_orig_vname v ->
+          allocate_builtin man range flow (get_orig_vname v) (Some e)
+        | E_var (v, mode) ->
+          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call e [] range) flow
+        | E_py_index_subscript (e1, e2) ->
+          Exceptions.panic_at range "subscript e1=%a e2=%a@\n" pp_expr e1 pp_expr e2
+        | _ ->
+          Exceptions.panic_at range "%a@\n" pp_expr e
+      end
+      |> Option.return
 
     | E_py_object ({addr_kind = A_py_instance _}, _) ->
       Eval.singleton exp flow |> Option.return
-
-
-      (* let cur = Flow.get_env T_cur man flow in
-       *
-       * let ty = match akind addr with
-       *   | A_py_class (c, b) -> Class (c, b)
-       *   | A_py_function f -> Function f
-       *   | A_py_module m -> Module m
-       *   | _ -> Exceptions.panic_at range "E_py_object not mem: %a@\n" pp_addr addr in
-       * let abs_heap = TMap.add addr (Polytypeset.singleton ty) cur.abs_heap in
-       * let flow = set_env T_cur {cur with abs_heap} man flow in
-       * Eval.singleton (mk_py_object (addr, None) range) flow |> OptionExt.return *)
 
     | E_constant (C_top T_bool) ->
       process_constant man flow range "bool" addr_bool_top  |> Option.return
@@ -551,11 +526,11 @@ struct
       process_constant man flow range "float" addr_float |> Option.return
 
     | E_constant (C_top T_string) ->
-      allocate_builtin man range flow "str" |> Option.return
+      allocate_builtin man range flow "str" (Some exp) |> Option.return
 
 
     | E_constant (C_top T_py_complex) ->
-      allocate_builtin man range flow "complex" |> Option.return
+      allocate_builtin man range flow "complex" (Some exp) |> Option.return
 
     | E_constant (C_string s) ->
       (* we keep s in the expression of the returned object *)
@@ -577,7 +552,7 @@ struct
 
     | E_constant (C_top T_py_bytes)
     | E_py_bytes _ ->
-      allocate_builtin man range flow "bytes" |> Option.return
+      allocate_builtin man range flow "bytes" (Some exp) |> Option.return
 
 
     (* Je pense pas avoir besoin de ça finalement *)
@@ -958,7 +933,7 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__new__")}, _)}, cls :: args, []) ->
       Utils.check_instances man flow range args
         ["int"; "int"; "int"]
-        (fun args flow -> allocate_builtin man range flow "range")
+        (fun args flow -> allocate_builtin man range flow "range" (Some exp))
       |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__contains__")}, _)}, args, []) ->
@@ -977,7 +952,7 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__iter__")}, _)}, args, []) ->
       Utils.check_instances man flow range args
         ["range"]
-        (fun r flow -> allocate_builtin man range flow "range_iterator")
+        (fun r flow -> allocate_builtin man range flow "range_iterator" (Some exp))
       |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range_iterator.__next__")}, _)}, args, []) ->
@@ -995,7 +970,7 @@ struct
       Utils.check_instances_disj man flow range args
         [intornone; intornone; intornone]
         (fun _ flow ->
-           allocate_builtin man range flow "slice")
+           allocate_builtin man range flow "slice" (Some exp))
       |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "abs")}, _)}, args, []) ->

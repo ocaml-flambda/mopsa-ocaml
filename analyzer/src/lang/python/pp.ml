@@ -80,6 +80,7 @@ let () =
     );
   register_expr_pp (fun default fmt exp ->
       match ekind exp with
+      | E_py_annot e -> fprintf fmt "(annot) %a" pp_expr e
       | E_py_undefined true -> fprintf fmt "global undef"
       | E_py_undefined false -> fprintf fmt "local undef"
       | E_py_object obj -> pp_py_object fmt obj

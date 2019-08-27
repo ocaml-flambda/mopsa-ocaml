@@ -39,6 +39,7 @@ let () =
       | _ -> default c1 c2);
   register_expr_compare (fun default e1 e2 ->
       match ekind e1, ekind e2 with
+      | E_py_annot e1, E_py_annot e2 -> compare_expr e1 e2
       | E_py_undefined b1, E_py_undefined b2 -> Pervasives.compare b1 b2
       | E_py_object (a1, oe1), E_py_object (a2, oe2) ->
         Compare.compose

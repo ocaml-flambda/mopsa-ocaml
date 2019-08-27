@@ -205,7 +205,7 @@ type expr_kind +=
   | E_py_multi_compare of expr (* left *)
                       * operator list (* ops *)
                       * expr list (* comparators *)
-
+  | E_py_annot of expr
 
 (*==========================================================================*)
                            (** {2 Statements} *)

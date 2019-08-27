@@ -20,7 +20,7 @@
 ##############################################################################
 
 import mopsa
-# from typing import List
+from typing import List
 
 # maxsize = mopsa.random_int()
-path: int = 1
+path: List[str]

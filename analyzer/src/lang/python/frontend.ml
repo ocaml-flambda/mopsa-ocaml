@@ -74,7 +74,9 @@ and from_stmt (stmt: Py_parser.Ast.stmt) : stmt =
       S_assign (from_exp x, from_exp e)
 
     | S_type_annot (x, e) ->
-      S_py_annot (from_exp x, from_exp e)
+      let expr = from_exp e in
+      let expr = {expr with ekind = E_py_annot expr} in
+      S_py_annot (from_exp x, expr)
 
     | S_expression e ->
       Universal.Ast.S_expression (from_exp e)

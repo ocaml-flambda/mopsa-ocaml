@@ -158,6 +158,19 @@ struct
           )
       |> Option.return
 
+    | S_py_annot ({ekind = E_var (v, mode)}, e) ->
+      (* need to make e E_py_annot here or on the frontend *)
+      (* then handle E_py_annot in typing, to perform an allocation? *)
+      (* what about non builtins? *)
+      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
+      bind_some (fun e flow -> match ekind e with
+          | E_py_object (addr, _) ->
+            assign_addr man v (PyAddr.Def addr) mode flow
+            |> Post.return
+          | _ -> Exceptions.panic_at range "%a@\n" pp_expr e)
+      |> Option.return
+
+
     | S_assign({ekind = E_py_attribute(lval, attr)}, rval) ->
       (* TODO: setattr *)
       bind_list [lval; rval] (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
@@ -170,6 +183,7 @@ struct
 
     | S_remove ({ekind = E_var (v, _)} as var) ->
       let flow = map_env T_cur (remove v) man flow in
+      let flow = man.exec ~zone:Zone.Z_py_obj (mk_remove_var v range) flow in
       begin match v.vkind with
         | V_uniq _ ->
           (* if the variable maps to a list, we should remove the temporary variable associated, ONLY if it's not used by another list *)
