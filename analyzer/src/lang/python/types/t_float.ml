@@ -169,8 +169,8 @@ module Domain =
          |> Option.return
 
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "float.__hash__")}, _)}, args, []) ->
-        Utils.check_instances man flow range args ["float"] (fun _ -> man.eval (mk_py_top T_int range))
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("float.__hash__" as f))}, _)}, args, []) ->
+        Utils.check_instances f man flow range args ["float"] (fun _ -> man.eval (mk_py_top T_int range))
         |> Option.return
 
       | _ -> None

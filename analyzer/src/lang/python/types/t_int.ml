@@ -176,8 +176,8 @@ module Domain =
              )
          |> Option.return
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "int.__bool__")}, _)}, args, []) ->
-        Utils.check_instances man flow range args
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("int.__bool__" as f))}, _)}, args, []) ->
+        Utils.check_instances f man flow range args
           ["int"]
           (fun _ flow -> man.eval (mk_py_top T_bool range) flow)
         |> Option.return

@@ -950,8 +950,8 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__init__")}, _)}, args, []) ->
       man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range) flow |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__new__")}, _)}, cls :: args, []) ->
-      Utils.check_instances man flow range args
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range.__new__" as f))}, _)}, cls :: args, []) ->
+      Utils.check_instances f man flow range args
         ["int"; "int"; "int"]
         (fun args flow -> allocate_builtin man range flow "range" (Some exp))
       |> Option.return
@@ -969,14 +969,14 @@ struct
         )
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__iter__")}, _)}, args, []) ->
-      Utils.check_instances man flow range args
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range.__iter__" as f))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args
         ["range"]
         (fun r flow -> allocate_builtin man range flow "range_iterator" (Some exp))
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range_iterator.__next__")}, _)}, args, []) ->
-      Utils.check_instances man flow range args
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range_iterator.__next__" as f))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args
         ["range_iterator"]
         (fun _ flow ->
            let res = man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow in
@@ -985,9 +985,9 @@ struct
         )
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "slice.__new__")}, _)}, cls :: args, []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("slice.__new__" as f))}, _)}, cls :: args, []) ->
       let intornone = ["int"; "NoneType"] in
-      Utils.check_instances_disj man flow range args
+      Utils.check_instances_disj f man flow range args
         [intornone; intornone; intornone]
         (fun _ flow ->
            allocate_builtin man range flow "slice" (Some exp))
@@ -1015,8 +1015,8 @@ struct
         )
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "all")}, _)}, args, []) ->
-      Utils.check_instances man flow range args ["list"] (fun _ -> man.eval (mk_py_top T_bool range))
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("all" as f))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args ["list"] (fun _ -> man.eval (mk_py_top T_bool range))
       |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "divmod")}, _)}, args, []) ->

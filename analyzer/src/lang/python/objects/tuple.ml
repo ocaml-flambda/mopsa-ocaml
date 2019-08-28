@@ -98,8 +98,8 @@ struct
         )
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "tuple.__contains__")}, _)}, args, []) ->
-      Utils.check_instances ~arguments_after_check:1 man flow range args
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("tuple.__contains__" as f))}, _)}, args, []) ->
+      Utils.check_instances ~arguments_after_check:1 f man flow range args
         ["tuple"]
         (fun eargs flow ->
            let tuple = List.hd eargs in
@@ -116,8 +116,8 @@ struct
         )
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "tuple.__getitem__")}, _)}, args, []) ->
-      Utils.check_instances man flow range args
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("tuple.__getitem__" as f))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args
         ["tuple"; "int"]
         (fun eargs flow ->
            let tuple = List.hd eargs in
@@ -128,13 +128,13 @@ struct
            if 0 <= pos && pos < List.length tuple_vars then
              man.eval (mk_var ~mode:STRONG (List.nth tuple_vars pos) range) flow
            else
-             man.exec (Utils.mk_builtin_raise "IndexError" range) flow |>
+             man.exec (Utils.mk_builtin_raise_msg "IndexError" "tuple index out of range" range) flow |>
              Eval.empty_singleton
         )
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "tuple.__iter__")}, _)}, args, []) ->
-      Utils.check_instances man flow range args
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("tuple.__iter__" as f))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args
         ["tuple"]
         (fun args flow ->
            let tuple = List.hd args in

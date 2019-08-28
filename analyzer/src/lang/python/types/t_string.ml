@@ -92,8 +92,8 @@ module Domain =
       add_signature "str.isupper" [str] bool
 
 
-    let process_simple man flow range exprs instances return =
-      Utils.check_instances man flow range exprs instances (fun _ flow -> man.eval (mk_py_top return range) flow)
+    let process_simple f man flow range exprs instances return =
+      Utils.check_instances f man flow range exprs instances (fun _ flow -> man.eval (mk_py_top return range) flow)
 
     let interface = {
       iexec = {provides = []; uses = []};
@@ -118,7 +118,7 @@ module Domain =
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, args, []) when StringMap.mem f stub_base ->
         debug "function %s in stub_base, processing@\n" f;
         let {in_args; out_type} = StringMap.find f stub_base in
-        process_simple man flow range args in_args out_type
+        process_simple f man flow range args in_args out_type
         |> Option.return
 
       | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.__new__")}, _)}), [cls; obj], []) ->
@@ -179,8 +179,8 @@ module Domain =
         |>  Option.return
 
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.__mod__")}, _)}, args, []) ->
-        Utils.check_instances ~arguments_after_check:1 man flow range args ["str"]
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__mod__" as f))}, _)}, args, []) ->
+        Utils.check_instances ~arguments_after_check:1 f man flow range args ["str"]
           (fun eargs flow ->
              (* TODO: constant strings are kept in the objects, so we could raise less alarms *)
              let tyerror_f = man.exec (Utils.mk_builtin_raise_msg "ValueError" "incomplete format" range) flow in
@@ -191,20 +191,20 @@ module Domain =
           )
         |> Option.return
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.__getitem__")}, _)}, args, []) ->
-        Utils.check_instances_disj man flow range args
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__getitem__" as f))}, _)}, args, []) ->
+        Utils.check_instances_disj f man flow range args
           [["str"]; ["int"; "slice"]]
           (fun _ flow -> man.eval (mk_py_top T_string range) flow)
         |> Option.return
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "bytes.__getitem__")}, _)}, args, []) ->
-        Utils.check_instances_disj man flow range args
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bytes.__getitem__" as f))}, _)}, args, []) ->
+        Utils.check_instances_disj f man flow range args
           [["bytes"]; ["int"; "slice"]]
           (fun _ flow -> man.eval (mk_py_top T_py_bytes range) flow)
         |> Option.return
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.__iter__")}, _)}, args, []) ->
-        Utils.check_instances man flow range args
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__iter__" as f))}, _)}, args, []) ->
+        Utils.check_instances f man flow range args
           ["str"]
           (fun args flow ->
              let str = List.hd args in
@@ -220,8 +220,8 @@ module Domain =
           )
         |> Option.return
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str_iterator.__next__")}, _)}, args, []) ->
-        Utils.check_instances man flow range args
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str_iterator.__next__" as f))}, _)}, args, []) ->
+        Utils.check_instances f man flow range args
           ["str_iterator"]
           (fun _ flow ->
              let stopiteration_f = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow in

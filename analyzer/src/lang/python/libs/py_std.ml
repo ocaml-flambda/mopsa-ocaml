@@ -61,8 +61,8 @@ module Domain =
       add_signature "chr" ["int"] "str" |>
       add_signature "ord" ["str"] "int"
 
-    let process_simple man flow range exprs instances return =
-      Utils.check_instances man flow range exprs instances (fun _ flow -> man.eval (mk_py_top return range) flow)
+    let process_simple f man flow range exprs instances return =
+      Utils.check_instances f man flow range exprs instances (fun _ flow -> man.eval (mk_py_top return range) flow)
 
     let init _ _ flow = flow
 
@@ -268,7 +268,7 @@ module Domain =
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, args, []) when StringMap.mem f stub_base ->
         debug "function %s in stub_base, processing@\n" f;
         let {in_args; out_type} = StringMap.find f stub_base in
-        process_simple man flow range args in_args out_type
+        process_simple f man flow range args in_args out_type
         |> Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "sorted")}, _)}, [obj], [])  ->
@@ -290,8 +290,8 @@ module Domain =
         |> Option.return
 
       (* FIXME: in libs.py_std or flows.exn? *)
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "BaseException.__init__")}, _)}, args, []) ->
-        Utils.check_instances ~arguments_after_check:(List.length args - 1) man flow range args ["BaseException"]
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("BaseException.__init__" as f))}, _)}, args, []) ->
+        Utils.check_instances ~arguments_after_check:(List.length args - 1) f man flow range args ["BaseException"]
           (fun args flow ->
              let exc = List.hd args in
              let flow = if List.length args = 1 then flow else

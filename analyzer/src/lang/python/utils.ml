@@ -69,48 +69,68 @@ let mk_try_stopiteration body except range =
     (Universal.Ast.mk_block [] range)
     range
 
-let check_instances ?(arguments_after_check=0) man flow range exprs instances processing =
-  (* FIXME: error messages *)
+let check_instances ?(arguments_after_check=0) funname man flow range exprs instances processing =
   let open Mopsa in
-  let tyerror = fun flow -> man.exec (mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
-  let rec aux iexprs lexprs linstances flow =
+  let rec aux pos iexprs lexprs linstances flow =
     match lexprs, linstances with
     | _, [] ->
       if arguments_after_check = List.length lexprs then
         processing iexprs flow
       else
-        tyerror flow
+        let () = Format.fprintf Format.str_formatter "%s: too many arguments: %d given, %d expected" funname (List.length exprs) (arguments_after_check + List.length instances) in
+        man.exec (mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow
+        |> Eval.empty_singleton
     | e::es, i::is ->
       assume (Addr.mk_py_isinstance_builtin e i range) man flow
-        ~fthen:(aux iexprs es is)
-        ~felse:tyerror
-    | [], _ -> tyerror flow in
+        ~fthen:(aux (pos+1) iexprs es is)
+        ~felse:(fun flow ->
+            Format.fprintf Format.str_formatter "%s: expected instance of '%s', but found %a at argument #%d" funname i pp_expr e pos;
+            man.exec (mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |>
+            Eval.empty_singleton
+          )
+    | [], _ ->
+      Format.fprintf Format.str_formatter "%s: too few arguments: %d given, %d expected" funname (List.length exprs) (arguments_after_check + List.length instances);
+      man.exec (mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |>
+      Eval.empty_singleton
+  in
   Result.bind_list exprs man.eval flow |>
-  Result.bind_some (fun exprs flow -> aux exprs exprs instances flow)
+  Result.bind_some (fun exprs flow -> aux 1 exprs exprs instances flow)
 
-let check_instances_disj ?(arguments_after_check=0) man flow range exprs instances processing =
+let check_instances_disj ?(arguments_after_check=0) funname man flow range exprs instances processing =
   (* FIXME: error messages *)
   let open Mopsa in
-  let tyerror = fun flow -> man.exec (mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
-  let rec aux iexprs lexprs linstances flow =
+  let rec aux pos iexprs lexprs linstances flow =
     match lexprs, linstances with
     | _, [] ->
       if arguments_after_check = List.length lexprs then
         processing iexprs flow
       else
-        tyerror flow
+        let () = Format.fprintf Format.str_formatter "%s: too many arguments: %d given, %d expected" funname (List.length exprs) (arguments_after_check + List.length instances) in
+        man.exec (mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow
+        |> Eval.empty_singleton
     | e::es, i::is ->
       let mk_onecond = fun i -> Addr.mk_py_isinstance_builtin e i range in
       let cond = List.fold_left (fun acc el ->
           mk_binop acc O_py_or (mk_onecond el) range)
           (mk_onecond @@ List.hd i) (List.tl i) in
       assume cond man flow
-        ~fthen:(aux iexprs es is)
-        ~felse:tyerror
-    | _ -> tyerror flow
+        ~fthen:(aux (pos+1) iexprs es is)
+        ~felse:(fun flow ->
+            Format.fprintf Format.str_formatter "%s: expected instance ∈ {%a}, but found %a at argument #%d"
+              funname
+              (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") Format.pp_print_string) i
+              pp_expr e
+              pos;
+            man.exec (mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |>
+            Eval.empty_singleton
+          )
+    | _ ->
+      Format.fprintf Format.str_formatter "%s: too few arguments: %d given, %d expected" funname (List.length exprs) (arguments_after_check + List.length instances);
+      man.exec (mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |>
+      Eval.empty_singleton
   in
   Result.bind_list exprs man.eval flow |>
-  Result.bind_some (fun exprs flow -> aux exprs exprs instances flow)
+  Result.bind_some (fun exprs flow -> aux 1 exprs exprs instances flow)
 
 let strip_object (e:expr) =
   let ekind = match ekind e with

@@ -130,10 +130,10 @@ struct
       man.eval (mk_expr (E_py_dict ([],[])) range) flow
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dict.__init__")}, _)}, args, [])
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dict.update")}, _)}, args, []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.__init__" as f))}, _)}, args, [])
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.update" as f))}, _)}, args, []) ->
       (* FIXME: it's actually a bit more complicated than that, as you can pass **kwargs *)
-      Utils.check_instances man flow range args
+      Utils.check_instances f man flow range args
         ["dict"; "dict"]
         (fun eargs flow ->
            let dict, snddict = match eargs with l::s::[] -> l, s | _ -> assert false in
@@ -145,8 +145,8 @@ struct
         )
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dict.__setitem__")}, _)}, args, []) ->
-      Utils.check_instances ~arguments_after_check:2 man flow range args
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.__setitem__" as f))}, _)}, args, []) ->
+      Utils.check_instances ~arguments_after_check:2 f man flow range args
         ["dict"]
         (fun args flow ->
            let dict, key, value = match args with [d;k;v] -> d,k,v | _ -> assert false in
@@ -157,8 +157,8 @@ struct
         )
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dict.copy")}, _)}, args, []) ->
-      Utils.check_instances man flow range args ["dict"]
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.copy" as f))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args ["dict"]
         (fun args flow ->
            (* FIXME: to test *)
            let var_k, var_v = extract_vars (List.hd args) in
@@ -166,8 +166,8 @@ struct
         )
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dict.clear")}, _)}, args, []) ->
-      Utils.check_instances man flow range args ["dict"]
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.clear" as f))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args ["dict"]
         (fun args flow ->
            let var_k, var_v = extract_vars (List.hd args) in
            man.exec (mk_remove_var var_k range) flow |>
@@ -176,9 +176,9 @@ struct
         )
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dict.pop")}, _)}, args, [])
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dict.__getitem__")}, _)}, args, []) ->
-      Utils.check_instances ~arguments_after_check:1 man flow range args ["dict"]
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.pop" as f))}, _)}, args, [])
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.__getitem__" as f))}, _)}, args, []) ->
+      Utils.check_instances ~arguments_after_check:1 f man flow range args ["dict"]
         (fun args flow ->
            let var_k, var_v = extract_vars (List.hd args) in
 
@@ -197,8 +197,8 @@ struct
       man.eval {exp with ekind=E_py_call(call, dict::key::(mk_py_none range)::[], [])} flow
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dict.get")}, _)}, args, []) ->
-      Utils.check_instances ~arguments_after_check:2 man flow range args ["dict"]
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.get" as f))}, _)}, args, []) ->
+      Utils.check_instances ~arguments_after_check:2 f man flow range args ["dict"]
         (fun args flow ->
            let var_k, var_v = extract_vars (List.hd args) in
 
@@ -212,8 +212,8 @@ struct
         )
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dict.popitem")}, _)}, args, []) ->
-      Utils.check_instances man flow range args ["dict"]
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.popitem" as f))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args ["dict"]
         (fun args flow ->
            let var_k, var_v = extract_vars (List.hd args) in
 
@@ -227,14 +227,14 @@ struct
         )
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dict.__contains__")}, _)}, args, []) ->
-      Utils.check_instances ~arguments_after_check:1 man flow range args ["dict"]
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.__contains__" as f))}, _)}, args, []) ->
+      Utils.check_instances f ~arguments_after_check:1 man flow range args ["dict"]
         (fun args flow ->
            man.eval (mk_py_top T_bool range) flow)
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dict.__iter__")}, _)}, args, []) ->
-      Utils.check_instances man flow range args ["dict"]
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.__iter__" as f))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args ["dict"]
         (fun args flow ->
            let dict = List.hd args in
            let dict_addr = match ekind dict with
@@ -249,15 +249,15 @@ struct
         )
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dict.items" as n)}, _)}, args, [])
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dict.keys" as n)}, _)}, args, [])
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dict.values" as n)}, _)}, args, []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.items" as n))}, _)}, args, [])
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.keys" as n))}, _)}, args, [])
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.values" as n))}, _)}, args, []) ->
       let viewname = match n with
-        | F_builtin "dict.items" -> "dict_items"
-        | F_builtin "dict.keys" -> "dict_keys"
-        | F_builtin "dict.values" -> "dict_values"
+        | "dict.items" -> "dict_items"
+        | "dict.keys" -> "dict_keys"
+        | "dict.values" -> "dict_values"
         | _ -> assert false in
-      Utils.check_instances man flow range args ["dict"]
+      Utils.check_instances n man flow range args ["dict"]
         (fun args flow ->
            let dict = List.hd args in
            let dict_addr = match ekind dict with
@@ -272,15 +272,15 @@ struct
         )
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dict_items.__iter__" as n)}, _)}, args, [])
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dict_values.__iter__" as n)}, _)}, args, [])
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dict_keys.__iter__" as n)}, _)}, args, []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict_items.__iter__" as n))}, _)}, args, [])
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict_values.__iter__" as n))}, _)}, args, [])
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict_keys.__iter__" as n))}, _)}, args, []) ->
       let case, itname = match n with
-        | F_builtin "dict_items.__iter__" -> "dict_items", "dict_itemiterator"
-        | F_builtin "dict_values.__iter__" -> "dict_values", "dict_valueiterator"
-        | F_builtin "dict_keys.__iter__" -> "dict_keys", "dict_keyiterator"
+        | "dict_items.__iter__" -> "dict_items", "dict_itemiterator"
+        | "dict_values.__iter__" -> "dict_values", "dict_valueiterator"
+        | "dict_keys.__iter__" -> "dict_keys", "dict_keyiterator"
         | _ -> assert false in
-      Utils.check_instances man flow range args [case]
+      Utils.check_instances n man flow range args [case]
         (fun args flow ->
            let dict_addr = match ekind @@ List.hd args with
              | E_py_object ({addr_kind = A_py_dict_view (case, a)}, _) -> a
@@ -295,8 +295,8 @@ struct
       |> Option.return
 
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dict_keyiterator.__next__")}, _)}, args, []) ->
-      Utils.check_instances man flow range args ["dict_keyiterator"]
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict_keyiterator.__next__" as f))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args ["dict_keyiterator"]
         (fun args flow ->
            let dict_addr = match ekind @@ List.hd args with
              | E_py_object ({addr_kind = Py_list.A_py_iterator ("dict_keyiterator", [a], _)}, _) -> a
@@ -310,8 +310,8 @@ struct
         )
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dict_valueiterator.__next__")}, _)}, args, []) ->
-      Utils.check_instances man flow range args ["dict_valueiterator"]
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict_valueiterator.__next__" as f))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args ["dict_valueiterator"]
         (fun args flow ->
            let dict_addr = match ekind @@ List.hd args with
              | E_py_object ({addr_kind = Py_list.A_py_iterator ("dict_valueiterator", [a], _)}, _) -> a
@@ -325,8 +325,8 @@ struct
         )
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dict_itemiterator.__next__")}, _)}, args, []) ->
-      Utils.check_instances man flow range args ["dict_itemiterator"]
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict_itemiterator.__next__" as f))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args ["dict_itemiterator"]
         (fun args flow ->
            let dict_addr = match ekind @@ List.hd args with
              | E_py_object ({addr_kind = Py_list.A_py_iterator ("dict_itemiterator", [a], _)}, _) -> a
