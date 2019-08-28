@@ -627,6 +627,18 @@ struct
         )
       |> Option.return
 
+    | E_py_annot {ekind = E_py_index_subscript ({ekind = E_var (l, mode)}, i) } when get_orig_vname l = "List" ->
+      let addr_list = mk_alloc_addr (A_py_list (Rangeset.singleton range)) range in
+      man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_list flow |>
+      Eval.bind (fun eaddr_list flow ->
+          let addr_list = addr_of_expr eaddr_list in
+          let els_var = var_of_addr addr_list in
+          let stmt = mk_stmt (S_py_annot (mk_var ~mode:WEAK els_var range, mk_expr (E_py_annot i) range)) range in
+          man.exec ~zone:Zone.Z_py stmt flow |>
+          Eval.singleton (mk_py_object (addr_list, None) range)
+        )
+      |> Option.return
+
     | _ -> None
 
 

@@ -345,11 +345,11 @@ struct
     | A_py_class (c, b) -> (c, b)
     | _ -> assert false
 
-  let allocate_builtin man range flow bltin oe =
+  let allocate_builtin ?(mode=STRONG) man range flow bltin oe =
     (* allocate addr, and map this addr to inst bltin *)
     let range = tag_range range "alloc_%s" bltin in
     let bltin_cls, bltin_mro = get_builtin bltin in
-    man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr (A_py_instance bltin) range) flow |>
+    man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr ~mode:mode (A_py_instance bltin) range) flow |>
     Eval.bind (fun eaddr flow ->
         let addr = match ekind eaddr with
           | E_addr a -> a
@@ -489,15 +489,31 @@ struct
     | E_py_annot e ->
       begin match ekind e with
         | E_var (v, mode) when is_builtin_name @@ get_orig_vname v ->
-          allocate_builtin man range flow (get_orig_vname v) (Some e)
+          let name = get_orig_vname v in
+          begin match name with
+          | "int" ->
+            process_constant man flow range name addr_integers
+          | "float" ->
+            process_constant man flow range name addr_float
+          | "NotImplementedType" ->
+            process_constant man flow range name addr_notimplemented
+          | "NoneType" ->
+            process_constant man flow range name addr_none
+          | _ ->
+            allocate_builtin ~mode:WEAK man range flow (get_orig_vname v) (Some e)
+          end
+          |> Option.return
+
         | E_var (v, mode) ->
-          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call e [] range) flow
+          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call e [] range) flow |> Option.return
+
         | E_py_index_subscript (e1, e2) ->
-          Exceptions.panic_at range "subscript e1=%a e2=%a@\n" pp_expr e1 pp_expr e2
+          warn_at range "subscript e1=%a e2=%a escaping E_py_annot@\n" pp_expr e1 pp_expr e2;
+          None
+
         | _ ->
           Exceptions.panic_at range "%a@\n" pp_expr e
       end
-      |> Option.return
 
     | E_py_object ({addr_kind = A_py_instance _}, _) ->
       Eval.singleton exp flow |> Option.return
@@ -773,8 +789,12 @@ struct
              proceed a (mc, mb, cur)
 
            | E_py_object ({addr_kind = A_py_method _} as a, _) ->
-             let mc, mb = get_builtin "module" in
+             let mc, mb = get_builtin "method" in
              proceed a (mc, mb, cur)
+
+           | E_py_object ({addr_kind = A_py_class _} as a, _) ->
+             let cc, cb = get_builtin "type" in
+             proceed a (cc, cb, cur)
 
            | _ -> Exceptions.panic_at range "type: todo: %a@\n" pp_expr arg
 
