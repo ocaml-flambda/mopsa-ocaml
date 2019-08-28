@@ -304,9 +304,10 @@ struct
         let obj = find_builtin @@ get_orig_vname v in
         Eval.singleton (mk_py_object obj range) flow |> Option.return
       else
-        (* let () = warn_at range "NameError that shouldn't happen. Todo: use partial envs and add_var" in
-         * man.exec (Utils.mk_builtin_raise "NameError" range) flow |> *)
-        Eval.empty_singleton flow |>
+        let () = warn_at range "NameError that shouldn't happen. Todo: use partial envs and add_var" in
+        let () = Format.fprintf Format.str_formatter "name '%s' is not defined" (get_orig_vname v) in
+        man.exec (Utils.mk_builtin_raise_msg "NameError" (Format.flush_str_formatter ()) range) flow |>
+        Eval.empty_singleton |>
         Option.return
 
 
