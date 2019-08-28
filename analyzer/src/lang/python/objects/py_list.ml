@@ -473,7 +473,7 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "math.fsum")}, _)}, args, []) ->
       bind_list args man.eval flow |>
       bind_some (fun args flow ->
-          if List.length args <> 1 then
+          if List.length args = 1 then
             let in_ty = List.hd args in
             assume (mk_py_isinstance_builtin in_ty "list" range) man flow
               ~fthen:(fun flow ->
