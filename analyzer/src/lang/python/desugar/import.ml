@@ -49,7 +49,7 @@ module Domain =
          panic_at range "import from sub-module %s not supported" modul
 
       | S_py_import(modul, vasname, vroot) ->
-         let obj, flow = import_module man modul range flow in
+         let obj, flow, _ = import_module man modul range flow in
          let v = match vasname with
            | None -> vroot
            | Some v -> v
@@ -60,22 +60,46 @@ module Domain =
 
       | S_py_import_from(modul, name, _, vmodul) ->
         (* FIXME: objects defined in modul other than name should not appear *)
-         let obj, flow = import_module man modul range flow in
+        let obj, flow, ispyi = import_module man modul range flow in
+        (* FIXME: terrible disjunction *)
+        if ispyi then
+          match kind_of_object obj with
+          | A_py_module (M_user (_, globals)) ->
+            begin
+              try
+                let e = find_type_alias_by_name name in
+                debug "adding one more alias: %a -> %a" pp_var vmodul pp_expr e;
+                add_type_alias vmodul e;
+                flow
+              with Not_found ->
+                let v =
+                  try List.find (fun v -> get_orig_vname v = name) globals
+                  with Not_found ->
+                    panic_at range "import: name %s not found in module %s" name modul
+                in
+                let stmt = mk_assign (mk_var vmodul range) (mk_var v range) range in
+                man.exec stmt flow
+            end
+            |> Post.return |> Option.return
+          | _ -> assert false
+        else
          let e =
            match kind_of_object obj with
            | A_py_module(M_user(_, globals)) ->
              let v =
                try List.find (fun v -> get_orig_vname v = name) globals
-               with Not_found -> panic_at range "import: name %s not found in module %s" name modul
+               with Not_found ->
+                 panic_at range "import: name %s not found in module %s" name modul
              in
-              mk_var v range
+             mk_var v range
            | A_py_module(M_builtin m) ->
               let obj = find_builtin_attribute obj name in
               mk_py_object obj range
            | _ -> assert false
          in
-         debug "assign!";
-         man.exec (mk_assign (mk_var vmodul range) e range) flow |>
+         let stmt = mk_assign (mk_var vmodul range) e range in
+         let () = debug "assign %a!" pp_stmt stmt in
+         man.exec stmt flow |>
          Post.return |>
          Option.return
 
@@ -86,7 +110,7 @@ module Domain =
     (** Search for the module in the search path and parse its body *)
     and import_module man name range flow =
       if is_builtin_name name
-      then find_builtin name, flow
+      then find_builtin name, flow, false
       else
         let dir = Paths.get_lang_stubs_dir "python" () in
         let filename =
@@ -98,20 +122,24 @@ module Domain =
           else if Sys.file_exists tentative3 then tentative3
           else panic_at range "module %s not found (searched in %s and in %s and in the current directory)" name dir (dir ^ "/typeshed/") in
 
-        let prog = Frontend.parse_program [filename] in
-        let globals, body =
-          match prog.prog_kind with
-          | Py_program(body, globals) -> body, globals
-          | _ -> assert false
-        in
-        let addr = {
-          addr_kind = A_py_module (M_user(name, globals));
-          addr_group = G_all;
-          addr_mode = STRONG;
-        }
-        in
-        let flow' = man.exec body flow in
-        (addr, None), flow'
+        if filename = dir ^ "/typeshed/" ^ name ^ ".pyi" then
+          let o, f = import_stubs_module man (dir ^ "/typeshed") name flow in
+          o, f, true
+        else
+          let prog = Frontend.parse_program [filename] in
+          let globals, body =
+            match prog.prog_kind with
+            | Py_program(globals, body) -> globals, body
+            | _ -> assert false
+          in
+          let addr = {
+            addr_kind = A_py_module (M_user(name, globals));
+            addr_group = G_all;
+            addr_mode = STRONG;
+          }
+          in
+          let flow' = man.exec body flow in
+          (addr, None), flow', false
 
 
     (** Parse and import a builtin module *)
@@ -180,6 +208,73 @@ module Domain =
         add_builtin_module (addr, None) ()
       else
         ()
+
+    and import_stubs_module man base name flow =
+      debug "import_stubs_module %s %s" base name;
+      let prog = Frontend.parse_program [(base ^ "/" ^ name ^ ".pyi")] in
+      let globals, stmts = match prog.prog_kind with
+        | Py_program(g, b) -> g, b
+        | _ -> assert false in
+      let rec parse stmt globals : stmt * var list =
+        let range = srange stmt in
+        match skind stmt with
+        | S_assign ({ekind = E_var (v, _)}, e) ->
+          (* let v = set_orig_vname (mk_dot_name (Some name) (get_orig_vname v)) v in *)
+          debug "%s: adding alias %a[%s] = %a" base pp_var v v.vname pp_expr e;
+          add_type_alias v e;
+          (* add to map *)
+          {stmt with skind = S_block []},
+          List.filter (fun var -> compare_var var v <> 0) globals
+
+        (* FIXME: if a = int in typing and b = a in base, what happens? *)
+        | S_py_import _
+        | S_py_import_from _ ->
+          stmt, globals
+
+        (* FIXME: and substitution for other modules? *)
+        | S_py_annot _
+        | S_py_class _
+        | S_py_function _ ->
+          let stmt = Visitor.map_stmt (fun e -> match ekind e with
+              | E_var (v, m) ->
+                begin
+                  try
+                    let substexpr = Hashtbl.find type_aliases v in
+                    (* let rec recsubst expr =
+                     *   match ekind expr with
+                     *   | E_var (v, _) ->
+                     *     begin
+                     *       try recsubst (Hashtbl.find type_aliases v)
+                     *       with Not_found -> expr
+                     *     end
+                     *   | _ -> expr in
+                     * Keep (recsubst substexpr) *)
+                    Keep substexpr
+                  with Not_found ->
+                    Keep e
+                end
+              | _ -> VisitParts e) (fun s -> VisitParts s) stmt
+          in
+          stmt, globals
+
+        | S_block(block) ->
+          let newblock, newglobals = List.fold_left (fun (nb, ng) s ->
+              let news, g = parse s ng in
+              match skind news with
+              | S_block [] -> nb, g
+              | _ -> news::nb, g
+            ) ([], globals) block in
+          let newblock = List.rev newblock in
+          {stmt with skind = S_block newblock}, newglobals
+
+        | _ -> panic_at range "stmt %a not supported in stubs file %s" pp_stmt stmt name
+      in
+      let body, globals = parse stmts globals in
+      let addr = { addr_kind = A_py_module(M_user (name, globals));
+                   addr_group = G_all;
+                   addr_mode = STRONG; } in
+      let flow = man.exec body flow in
+      (addr, None), flow
 
     let init prog man flow =
       import_builtin_module (Some "mopsa") "mopsa";

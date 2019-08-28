@@ -1,17 +1,18 @@
-overload = object()
-Any = object()
-TypeVar = object()
+class overload: pass
+Any = object # cheating, removed the ()
+# TypeVar = object()
 
 class Union: pass
+
 # AnyStr = TypeVar('AnyStr', str, bytes)
 # FIXME: we're currently cheating on AnyStr
-AnyStr = Union[str, bytes]
+AnyStr = int # Union[str, bytes]
 
-class _SpecialForm:
-    def __getitem__(self, typeargs: Any) -> Any: ...
+# class _SpecialForm:
+#     def __getitem__(self, typeargs: Any) -> Any: ...
 
-Tuple: _SpecialForm
-Callable: _SpecialForm
+class Tuple: pass
+class Callable: pass
 
 
 class Iterable: pass
@@ -21,7 +22,7 @@ class List: pass
 class Match: pass
 class Optional: pass
 class Pattern: pass
-class Union: pass
+# class Union: pass
 class Sequence: pass
 class Text: pass
 class Mapping: pass

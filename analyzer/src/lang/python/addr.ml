@@ -86,6 +86,8 @@ let classes = Hashtbl.create 100
 let functions = Hashtbl.create 100
 let modules = Hashtbl.create 10
 (* let all () = !classes @ !functions @ !modules *)
+let type_aliases = Hashtbl.create 100
+
 
 (** Name of a builtin with an optional dot notation in case of
    sub-objects (methods of classes, etc.) *)
@@ -119,6 +121,16 @@ let object_name obj =
   | A_py_function(F_user f) -> get_orig_vname f.py_func_var
   | A_py_class(C_user c, _) -> get_orig_vname c.py_cls_var
   | _ -> panic "builtin_name: %a is not a builtin" pp_addr (addr_of_object obj)
+
+let add_type_alias (v: var) (e: expr) =
+  Hashtbl.replace type_aliases v e
+
+let find_type_alias_by_name (s: string) : expr =
+  let exception Foundit of expr in
+  try
+    Hashtbl.iter (fun v e -> if get_orig_vname v = s then raise (Foundit e)) type_aliases;
+    raise Not_found
+  with Foundit e -> e
 
 let add_builtin_class obj () =
   Hashtbl.add classes (object_name obj) obj
