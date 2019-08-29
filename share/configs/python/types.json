@@ -26,6 +26,7 @@
             "python.libs.stdlib",
             "python.libs.math",
             "python.libs.unittest",
+            "python.libs.typing",
 
             "python.objects.class",
             "python.objects.function",
