@@ -27,12 +27,15 @@ open Ast
 open Addr
 open Universal.Ast
 
+
 module Domain =
   struct
 
     include GenStatelessDomainId(struct
         let name = "python.desugar.import"
       end)
+
+    let imported_modules = Hashtbl.create 100
 
     let interface = {
       iexec = {provides = [Zone.Z_py]; uses = []};
@@ -113,35 +116,46 @@ module Domain =
       if is_builtin_name name
       then find_builtin name, flow, false
       else
-        let dir = Paths.get_lang_stubs_dir "python" () in
-        let filename =
-          let tentative1 = dir ^ "/" ^ name ^ ".py" in
-          let tentative2 = name ^ ".py" in
-          let tentative3 = dir ^ "/typeshed/" ^ name ^ ".pyi" in
-          if Sys.file_exists tentative1 then tentative1
-          else if Sys.file_exists tentative2 then tentative2
-          else if Sys.file_exists tentative3 then tentative3
-          else panic_at range "module %s not found (searched in %s and in %s and in the current directory)" name dir (dir ^ "/typeshed/") in
-
-        if filename = dir ^ "/typeshed/" ^ name ^ ".pyi" then
-          let o, f = import_stubs_module man (dir ^ "/typeshed") name flow in
-          o, f, true
-        else
-          let prog = Frontend.parse_program [filename] in
-          let globals, body =
-            match prog.prog_kind with
-            | Py_program(globals, body) -> globals, body
-            | _ -> assert false
-          in
-          let addr = {
-            addr_kind = A_py_module (M_user(name, globals));
-            addr_group = G_all;
-            addr_mode = STRONG;
-          }
-          in
-          let flow' = man.exec body flow in
-          (addr, None), flow', false
-
+        let (addr, expr), flow, is_stub =
+          try
+            let (a, e), is_stub = Hashtbl.find imported_modules name in
+            debug "module %s already imported, cache hit!" name;
+            (a, e), flow, is_stub
+          with Not_found ->
+            begin
+              let dir = Paths.get_lang_stubs_dir "python" () in
+              let filename =
+                let tentative1 = dir ^ "/" ^ name ^ ".py" in
+                let tentative2 = name ^ ".py" in
+                let tentative3 = dir ^ "/typeshed/" ^ name ^ ".pyi" in
+                if Sys.file_exists tentative1 then tentative1
+                else if Sys.file_exists tentative2 then tentative2
+                else if Sys.file_exists tentative3 then tentative3
+                else panic_at range "module %s not found (searched in %s and in %s and in the current directory)" name dir (dir ^ "/typeshed/") in
+              let (a, e), body, is_stub =
+                if filename = dir ^ "/typeshed/" ^ name ^ ".pyi" then
+                  let o, b = import_stubs_module man (dir ^ "/typeshed") name flow in
+                  o, b, true
+                else
+                  let prog = Frontend.parse_program [filename] in
+                  let globals, body =
+                    match prog.prog_kind with
+                    | Py_program(globals, body) -> globals, body
+                    | _ -> assert false
+                  in
+                  let addr = {
+                    addr_kind = A_py_module (M_user(name, globals));
+                    addr_group = G_all;
+                    addr_mode = STRONG;
+                  }
+                  in
+                  (addr, None), body, false in
+              let flow' = man.exec body flow in
+              Hashtbl.add imported_modules name ((a, e), is_stub);
+              (a, e), flow', is_stub
+            end
+        in
+        (addr, expr), flow, is_stub
 
     (** Parse and import a builtin module *)
     and import_builtin_module base name =
@@ -274,8 +288,7 @@ module Domain =
       let addr = { addr_kind = A_py_module(M_user (name, globals));
                    addr_group = G_all;
                    addr_mode = STRONG; } in
-      let flow = man.exec body flow in
-      (addr, None), flow
+      (addr, None), body
 
     let init prog man flow =
       import_builtin_module (Some "mopsa") "mopsa";
