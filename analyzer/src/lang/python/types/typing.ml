@@ -525,9 +525,19 @@ struct
               man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |> Option.return
           end
 
-        | E_py_index_subscript (e1, e2) ->
-          warn_at range "subscript e1=%a e2=%a escaping E_py_annot@\n" pp_expr e1 pp_expr e2;
+        | E_py_index_subscript ({ekind = E_py_object _} as e1, e2) ->
+          warn_at range "E_py_annot subscript e1=%a e2=%a now in the wild" pp_expr e1 pp_expr e2;
           None
+
+        | E_py_index_subscript (e1, e2) ->
+          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e1 flow |>
+          bind_some (fun e1 flow ->
+              warn_at range "trasnlated to e1=%a e2=%a" pp_expr e1 pp_expr e2;
+              man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) {exp with ekind = E_py_annot {e with ekind = E_py_index_subscript(e1, e2)}} flow
+            )
+          |> Option.return
+
+
 
         | _ ->
           Exceptions.panic_at range "Unsupported type annotation %a@\n" pp_expr e

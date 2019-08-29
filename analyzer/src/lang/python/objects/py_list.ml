@@ -652,7 +652,7 @@ struct
         )
       |> Option.return
 
-    | E_py_annot {ekind = E_py_index_subscript ({ekind = E_var (l, mode)}, i) } when get_orig_vname l = "List" ->
+    | E_py_annot {ekind = E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_user c, _)}, _)}, i) } when get_orig_vname c.py_cls_var = "List" ->
       let addr_list = mk_alloc_addr (A_py_list (Rangeset.singleton range)) range in
       man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_list flow |>
       Eval.bind (fun eaddr_list flow ->
@@ -663,7 +663,6 @@ struct
           Eval.singleton (mk_py_object (addr_list, None) range)
         )
       |> Option.return
-
     | _ -> None
 
 
