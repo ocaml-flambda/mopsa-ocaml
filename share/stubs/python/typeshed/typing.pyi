@@ -6,7 +6,7 @@ class Union: pass
 
 # AnyStr = TypeVar('AnyStr', str, bytes)
 # FIXME: we're currently cheating on AnyStr
-AnyStr = int # Union[str, bytes]
+AnyStr = Union[str, bytes]
 
 # class _SpecialForm:
 #     def __getitem__(self, typeargs: Any) -> Any: ...

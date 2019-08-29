@@ -185,7 +185,7 @@ struct
       let flow = map_env T_cur (remove v) man flow in
       let flow = man.exec ~zone:Zone.Z_py_obj (mk_remove_var v range) flow in
       begin match v.vkind with
-        | V_uniq _ ->
+        | V_uniq _ when not (Hashtbl.mem type_aliases v) ->
           (* if the variable maps to a list, we should remove the temporary variable associated, ONLY if it's not used by another list *)
           let flow = man.exec (mk_assign var (mk_expr (E_py_undefined true) range) range) flow in
           flow |> Post.return |> Option.return

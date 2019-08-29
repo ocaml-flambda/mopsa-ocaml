@@ -69,8 +69,9 @@ module Domain =
               try
                 let e = find_type_alias_by_name name in
                 debug "adding one more alias: %a -> %a" pp_var vmodul pp_expr e;
+                debug "removing var %a from the environment" pp_var vmodul;
                 add_type_alias vmodul e;
-                flow
+                man.exec (mk_remove_var vmodul range) flow
               with Not_found ->
                 let v =
                   try List.find (fun v -> get_orig_vname v = name) globals

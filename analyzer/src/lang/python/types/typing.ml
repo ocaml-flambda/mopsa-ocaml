@@ -509,16 +509,18 @@ struct
           begin try
               let e = Hashtbl.find type_aliases v in
               debug "found type alias, replacing %a by %a" pp_var v pp_expr e;
-              man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |> Option.return
+              man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_annot e) range) flow |> Option.return
             with Not_found ->
               man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call e [] range) flow |> Option.return
           end
+
         | E_py_attribute ({ekind = E_var (v, _)}, s) ->
           debug "searching %a in the type aliases..." pp_expr e;
           begin
             try
-              (* ouch, not found in man.eval would also get caught... *)
-              let r = find_type_alias_by_name ((get_orig_vname v) ^ "." ^ s) in
+              (* FIXME ouch, not found in man.eval would also get caught... *)
+              (* FIXME: this also means that if a.pyi defines alias b and b.pyi too, we'll encounter some trouble *)
+              let r = find_type_alias_by_name s in
               man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_annot r) range) flow |> Option.return
             with Not_found ->
               debug "not found, trying usual evaluation";
