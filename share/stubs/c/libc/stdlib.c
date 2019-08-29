@@ -763,6 +763,7 @@ void _Exit (int __status);
  *
  * case "success" {
  *   local:    char* r = new ReadOnlyMemory;
+ *   ensures:  size(r) in [1, INT_MAX];
  *   ensures:  return == r;
  *   ensures:  valid_string(return);
  * }

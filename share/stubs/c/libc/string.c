@@ -39,8 +39,18 @@
  * // TODO requires: no_overlap(__src, __dest, __len);
  * requires: size(__src) >= __len;
  * requires: size(__dest) >= __len;
- * assigns: ((unsigned char*)__dest)[0, __len - 1];
- * ensures: forall int i in [0, __len - 1]: (((unsigned char*)__dest)[i])' == ((unsigned char*)__src)[i];
+ *
+ * case "copy" {
+ *   assumes: __len >= 1;
+ *   assigns: ((unsigned char*)__dest)[0, __len - 1];
+ *   ensures: forall int i in [0, __len - 1]: (((unsigned char*)__dest)[i])' == ((unsigned char*)__src)[i];
+ * }
+ *
+ * case "nop" {
+ *   assumes: __len == 0;
+ * }
+ *
+ * ensures: return == __dest;
  */
 void *memcpy (void *__restrict __dest, const void *__restrict __src,
               size_t __len);
