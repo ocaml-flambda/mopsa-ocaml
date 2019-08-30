@@ -42,9 +42,7 @@
 #include "arpa/inet.c"
 #include "netinet/in.c"
 #include "fcntl.c"
+#include "inttypes.c"
 
 /* TODO: include math library only when -lm is used */
 #include "math.c"
-
-/* #include "inttypes.c" */
-/*  */

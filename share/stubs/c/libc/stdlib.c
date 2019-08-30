@@ -1079,14 +1079,6 @@ long long int llabs (long long int __x);
 
 
 /*$
- * requires: __x > INTMAX_MAX;
- * ensures:  (__x >= 0 implies return == __x) and
- *           (__x < 0 implies return == -__x);
- */
-intmax_t imaxabs(intmax_t j);
-
-
-/*$
  * requires: __denom != 0;
  * ensures:  (return.quot == __numer / __denom) and 
  *           (return.rem == __numer % __denom);
