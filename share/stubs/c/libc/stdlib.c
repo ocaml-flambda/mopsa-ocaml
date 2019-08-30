@@ -25,6 +25,7 @@
 */
 #include <stdlib.h>
 #include <limits.h>
+#include <inttypes.h>
 #include "mopsa_libc_utils.h"
 
 
@@ -1068,7 +1069,6 @@ int abs (int __x);
  */
 long int labs (long int __x);
 
-#ifdef __USE_ISOC99
 
 /*$
  * requires: __x > LLONG_MAX;
@@ -1077,7 +1077,14 @@ long int labs (long int __x);
  */
 long long int llabs (long long int __x);
 
-#endif
+
+/*$
+ * requires: __x > INTMAX_MAX;
+ * ensures:  (__x >= 0 implies return == __x) and
+ *           (__x < 0 implies return == -__x);
+ */
+intmax_t imaxabs(intmax_t j);
+
 
 /*$
  * requires: __denom != 0;
@@ -1405,4 +1412,3 @@ int getpt (void);
 int getloadavg (double __loadavg[], int __nelem);
 
 #endif
-

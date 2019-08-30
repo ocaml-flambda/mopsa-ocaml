@@ -43,5 +43,8 @@
 #include "netinet/in.c"
 #include "fcntl.c"
 
+/* TODO: include math library only when -lm is used */
+#include "math.c"
+
 /* #include "inttypes.c" */
 /*  */

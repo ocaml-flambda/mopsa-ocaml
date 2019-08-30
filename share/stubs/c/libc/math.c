@@ -28,85 +28,78 @@
 #include "mopsa_libc_utils.h"
 
 
-/* overapproximation of π, used in ensures */
-static const double _pi = 4.;
-
-/* overapproximation of π/2, used in ensures */
-static const double _pi_2 = 2.;
-
-
 /*$
  * requires: valid_float(__x) and __x >= -1. and __x <= 1.;
- * ensures:  valid_float(return) and return >= 0. and return <= _pi;
+ * ensures:  valid_float(return) and return >= 0. and return <= M_PI;
  */
 double acos(double __x);
 
 /*$
  * requires: valid_float(__x) and __x >= -1. and __x <= 1.;
- * ensures:  valid_float(return) and return >= 0. and return <= _pi;
+ * ensures:  valid_float(return) and return >= 0. and return <= M_PI;
  */
 float acosf(float __x);
 
 /*$
  * requires: valid_float(__x) and __x >= -1. and __x <= 1.;
- * ensures:  valid_float(return) and return >= 0. and return <= _pi;
+ * ensures:  valid_float(return) and return >= 0. and return <= M_PI;
  */
 long double acosl(long double __x);
 
 
 /*$
  * requires: valid_float(__x) and __x >= -1. and __x <= 1.;
- * ensures:  valid_float(return) and return >= -_pi_2 and return <= _pi_2;
+ * ensures:  valid_float(return) and return >= -M_PI_2 and return <= M_PI_2;
  */
 double asin(double __x);
 
 /*$
  * requires: valid_float(__x) and __x >= -1. and __x <= 1.;
- * ensures:  valid_float(return) and return >= -_pi_2 and return <= _pi_2;
+ * ensures:  valid_float(return) and return >= -M_PI_2 and return <= M_PI_2;
  */
 float asinf(float __x);
 
 /*$
  * requires: valid_float(__x) and __x >= -1. and __x <= 1.;
- * ensures:  valid_float(return) and return >= -_pi_2 and return <= _pi_2;
+ * ensures:  valid_float(return) and return >= -M_PI_2 and return <= M_PI_2;
  */
 long double asinl(long double __x);
 
 
 /*$
  * requires: __x == __x; // means that __x is not a NaN
- * ensures:  valid_float(return) and return >= -_pi_2 and return <= _pi_2;
+ * ensures:  valid_float(return) and return >= -M_PI_2 and return <= M_PI_2;
  */
 double atan(double __x);
 
 /*$
  * requires: __x == __x; // means that __x is not a NaN
- * ensures:  valid_float(return) and return >= -_pi_2 and return <= _pi_2;
+ * ensures:  valid_float(return) and return >= -M_PI_2 and return <= M_PI_2;
  */
 float atanf(float __x);
 
 /*$
  * requires: __x == __x; // means that __x is not a NaN
- * ensures:  valid_float(return) and return >= -_pi_2 and return <= _pi_2;
+ * ensures:  valid_float(return) and return >= -M_PI_2 and return <= M_PI_2;
  */
 long double atanl(long double __x);
 
 
 /*$
  * requires: valid_float(__x) and valid_float(__y);
- * ensures:  valid_float(return) and return >= -_pi and return <= _pi;
+ * ensures:  valid_float(return) and return >= -M_PI and return <= M_PI;
  */
 double atan2(double __y, double __x);
 
 /*$
  * requires: valid_float(__x) and valid_float(__y);
- * ensures:  valid_float(return) and return >= -_pi and return <= _pi;
+ * ensures:  valid_float(return) and return >= -M_PI and return <= M_PI;
  */
 float atan2f(float __y, float __x);
 
 /*$
  * requires: valid_float(__x) and valid_float(__y);
- * ensures:  valid_float(return) and return >= -_pi and return <= _pi;
+ * ensures:  valid_float(return) and return >= -M_PI and return <= M_PI;
  */
 long double atan2l(long double __y, long double __x);
 
@@ -1630,83 +1623,77 @@ float remquof(float __x, float __y, int* __quo);
  */
 long double remquol(long double __x, long double __y, int* __quo);
 
-
-static const long int _LONG_MIN = LONG_MIN;
-static const long int _LONG_MAX = LONG_MAX;
-static const long long int _LLONG_MIN = LLONG_MIN;
-static const long long int _LLONG_MAX = LLONG_MAX;
-
 /*$
- * requires: valid_float(__x) and __x >= _LONG_MIN and __x <= _LONG_MAX;
+ * requires: valid_float(__x) and __x >= LONG_MIN and __x <= LONG_MAX;
  * ensures:  __x - 1. < return && return < __x + 1.;
  */
 long int lrint(double __x);
 
 /*$
- * requires: valid_float(__x) and __x >= _LONG_MIN and __x <= _LONG_MAX;
+ * requires: valid_float(__x) and __x >= LONG_MIN and __x <= LONG_MAX;
  * ensures:  __x - 1. < return && return < __x + 1.;
  */
 long int lrintf(float __x);
 
 /*$
- * requires: valid_float(__x) and __x >= _LONG_MIN and __x <= _LONG_MAX;
+ * requires: valid_float(__x) and __x >= LONG_MIN and __x <= LONG_MAX;
  * ensures:  __x - 1. < return && return < __x + 1.;
  */
 long int lrintl(long double __x);
 
 
 /*$
- * requires: valid_float(__x) and __x >= _LLONG_MIN and __x <= _LLONG_MAX;
+ * requires: valid_float(__x) and __x >= LLONG_MIN and __x <= LLONG_MAX;
  * ensures:  __x - 1. < return && return < __x + 1.;
  */
 long long int llrint(double __x);
 
 /*$
- * requires: valid_float(__x) and __x >= _LLONG_MIN and __x <= _LLONG_MAX;
+ * requires: valid_float(__x) and __x >= LLONG_MIN and __x <= LLONG_MAX;
  * ensures:  __x - 1. < return && return < __x + 1.;
  */
 long long int llrintf(float __x);
 
 /*$
- * requires: valid_float(__x) and __x >= _LLONG_MIN and __x <= _LLONG_MAX;
+ * requires: valid_float(__x) and __x >= LLONG_MIN and __x <= LLONG_MAX;
  * ensures:  __x - 1. < return && return < __x + 1.;
  */
 long long int llrintl(long double __x);
 
 
 /*$
- * requires: valid_float(__x) and __x >= _LONG_MIN and __x <= _LONG_MAX;
+ * requires: valid_float(__x) and __x >= LONG_MIN and __x <= LONG_MAX;
  * ensures:  __x - 0.5 <= return && return <= __x + 0.5;
  */
 long int lround(double __x);
 
 /*$
- * requires: valid_float(__x) and __x >= _LONG_MIN and __x <= _LONG_MAX;
+ * requires: valid_float(__x) and __x >= LONG_MIN and __x <= LONG_MAX;
  * ensures:  __x - 0.5 <= return && return <= __x + 0.5;
  */
 long int lroundf(float __x);
 
 /*$
- * requires: valid_float(__x) and __x >= _LONG_MIN and __x <= _LONG_MAX;
+ * requires: valid_float(__x) and __x >= LONG_MIN and __x <= LONG_MAX;
  * ensures:  __x - 0.5 <= return && return <= __x + 0.5;
  */
 long int lroundl(long double __x);
 
 
 /*$
- * requires: valid_float(__x) and __x >= _LLONG_MIN and __x <= _LLONG_MAX;
+ * requires: valid_float(__x) and __x >= LLONG_MIN and __x <= LLONG_MAX;
  * ensures:  __x - 0.5 <= return && return <= __x + 0.5;
  */
 long long int llround(double __x);
 
 /*$
- * requires: valid_float(__x) and __x >= _LLONG_MIN and __x <= _LLONG_MAX;
+ * requires: valid_float(__x) and __x >= LLONG_MIN and __x <= LLONG_MAX;
  * ensures:  __x - 0.5 <= return && return <= __x + 0.5;
  */
 long long int llroundf(float __x);
 
 /*$
- * requires: valid_float(__x) and __x >= _LLONG_MIN and __x <= _LLONG_MAX;
+ * requires: valid_float(__x) and __x >= LLONG_MIN and __x <= LLONG_MAX;
  * ensures:  __x - 0.5 <= return && return <= __x + 0.5;
  */
 long long int llroundl(long double __x);
