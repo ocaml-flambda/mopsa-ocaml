@@ -1161,7 +1161,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateFriendDecl(const FriendDecl *org) 
   check_null(org, "FriendDecl");
   const FriendDecl *x = org;
   //x = x->getCanonicalDecl();
-  WITH_CACHE_TUPLE(cacheMisc2, ret, org, 6, {
+  WITH_CACHE_TUPLE(cacheMisc2, ret, x, 6, {
       Store_field_option(ret, 0, x->getFriendType(), TranslateQualType(x->getFriendType()->getType()));
       Store_field_option(ret, 1, x->getFriendDecl(), TranslateDecl(x->getFriendDecl()));
       Store_field(ret, 2, Val_bool(x->isUnsupportedFriend()));
@@ -1553,7 +1553,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateVarDecl(const VarDecl *org) {
   check_null(org, "TranslateVarDecl");
   const VarDecl *x = org;
   //x = x->getCanonicalDecl();
-  WITH_CACHE_TUPLE(cacheMisc, ret, org, 10, {
+  WITH_CACHE_TUPLE(cacheMisc, ret, x, 10, {
       Store_uid(ret, 0);
       Store_field(ret, 1, TranslateNamedDecl(x));
       Store_field(ret, 2, TranslateQualType(x->getType()));
@@ -1595,7 +1595,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateFunctionDecl(const FunctionDecl *o
   check_null(org, "FunctionDecl");
   const FunctionDecl *x = org;
   //x = x->getCanonicalDecl();
-  WITH_CACHE_TUPLE(cacheMisc, ret, org, 14, {
+  WITH_CACHE_TUPLE(cacheMisc, ret, x, 14, {
       Store_uid(ret, 0);
       Store_field(ret, 1, TranslateNamedDecl(x));
       Store_field_option(ret, 2, x->hasBody() && x->doesThisDeclarationHaveABody(), TranslateStmt(x->getBody()));
@@ -4114,7 +4114,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateEnumConstantDecl(const EnumConstan
   check_null(org, "TranslateEnumConstantDecl");
   const EnumConstantDecl* x = org;
   //x = x->getCanonicalDecl();
-  WITH_CACHE_TUPLE(cacheMisc, ret, org, 5, {
+  WITH_CACHE_TUPLE(cacheMisc, ret, x, 5, {
       Store_uid(ret, 0);
       Store_field(ret, 1, TranslateNamedDecl(x));
       Store_field(ret, 2, TranslateAPSInt(x->getInitVal()));
@@ -4132,7 +4132,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateEnumDecl(const EnumDecl * org) {
   check_null(org, "TranslateEnumDecl");
   const EnumDecl * x = org;
   //x = x->getCanonicalDecl();
-  WITH_CACHE_TUPLE(cacheMisc, ret, org, 11, {
+  WITH_CACHE_TUPLE(cacheMisc, ret, x, 11, {
       Store_uid(ret, 0);
       Store_field(ret, 1, TranslateNamedDecl(x));
       Store_field(ret, 2, Val_int(x->getNumPositiveBits()));
@@ -4156,7 +4156,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateFieldDecl(const FieldDecl * org) {
   check_null(org, "TranslateFieldDecl");
   const FieldDecl * x = org;
   //x = x->getCanonicalDecl();
-  WITH_CACHE_TUPLE(cacheMisc2, ret, org, 12, {
+  WITH_CACHE_TUPLE(cacheMisc2, ret, x, 12, {
       const RecordDecl* d = x->getParent();
       Store_uid(ret, 0);
       Store_field(ret, 1, TranslateNamedDecl(x));
@@ -4198,7 +4198,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateRecordDecl(const RecordDecl * org)
   check_null(org, "TranslateRecordDecl");
   const RecordDecl *x = org;
   //x = dyn_cast<RecordDecl>(x->getCanonicalDecl());
-  WITH_CACHE_TUPLE(cacheMisc, ret, org, 19, {
+  WITH_CACHE_TUPLE(cacheMisc, ret, x, 19, {
       Store_uid(ret, 0);
       Store_field(ret, 1, TranslateNamedDecl(x));
       int kind;
@@ -4282,7 +4282,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateTypedefNameDecl(const TypedefNameD
   const TypedefNameDecl * x = org;
   // NOTE: the canonical decl may sometimes miss its name!
   // x = dyn_cast<TypedefDecl>(x->getCanonicalDecl());
-  WITH_CACHE_TUPLE(cacheMisc, ret, org, 5, {
+  WITH_CACHE_TUPLE(cacheMisc, ret, x, 5, {
       Store_uid(ret, 0);
       Store_field(ret, 1, TranslateNamedDecl(x));
       Store_field(ret, 2, TranslateQualType(x->getUnderlyingType()));
