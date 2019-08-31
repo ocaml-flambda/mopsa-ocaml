@@ -290,11 +290,18 @@ and from_project prj =
       f.c_func_static_vars <- List.map (from_var ctx) o.func_static_vars;
       f.c_func_local_vars <- List.map (from_var ctx) o.func_local_vars;
       f.c_func_body <- from_body_option ctx (from_range o.func_range) o.func_body;
-      try
-        f.c_func_stub <- from_stub_comment ctx o;
+      (* Parse stub when the function has no body *)
+      match f.c_func_body with
+      | None | Some { skind = S_block [] } ->
+        begin
+          try
+            f.c_func_stub <- from_stub_comment ctx o;
+            funcs_with_alias
+          with (StubAliasFound alias) ->
+            (f, o, alias) :: funcs_with_alias
+        end
+      | _ ->
         funcs_with_alias
-      with (StubAliasFound alias) ->
-        (f, o, alias) :: funcs_with_alias
     ) [] funcs_and_origins
   in
 
