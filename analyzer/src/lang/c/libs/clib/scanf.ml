@@ -93,6 +93,9 @@ struct
         | 'l' when format.[i+1] = 'l' && format.[i+2] = 'u' -> ull, i+3
         | 'h' when format.[i+1] = 'd' -> s16, i+2
         | 'h' when format.[i+1] = 'u' -> u16, i+2
+        | 'f' -> T_c_float C_float, i+1
+        | 'l' when format.[i+1] = 'f' -> T_c_float C_double, i+2
+        | 'L' when format.[i+1] = 'f' -> T_c_float C_long_double, i+2
         | _ -> raise UnsupportedFormat
       in
       let hd = List.hd args in
