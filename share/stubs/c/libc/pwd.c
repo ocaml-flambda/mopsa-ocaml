@@ -19,34 +19,21 @@
 /*                                                                          */
 /****************************************************************************/
 
-/*
- * Entry point of the libc
+#include <sys/types.h>
+#include <pwd.h>
+
+#define NB_PASSWD_ENTRIES 10
+struct passwd _passwd_db[NB_PASSWD_ENTRIES];
+
+/*$
+ * case "success" {
+ *   local: unsigned int i = _mopsa_range_u32(0, NB_PASSWD_ENTRIES - 1);
+ *   ensures: return == &(_passwd_db[i]);
+ * }
+ *
+ * case "failure" {
+ *   assigns: _errno;
+ *   ensures: return == NULL;
+ * }
  */
-
-#include "errno.c"
-#include "assert.c"
-#include "stdio.c"
-#include "stdio_ext.c"
-#include "stdlib.c"
-#include "unistd.c"
-#include "string.c"
-#include "getopt.c"
-#include "locale.c"
-#include "libintl.c"
-#include "utmp.c"
-#include "utmpx.c"
-#include "signal.c"
-#include "error.c"
-#include "builtins.c"
-#include "sys/socket.c"
-#include "arpa/inet.c"
-#include "netinet/in.c"
-#include "fcntl.c"
-#include "inttypes.c"
-#include "langinfo.c"
-#include "time.c"
-#include "pwd.c"
-#include "sys/resource.c"
-
-/* TODO: include math library only when -lm is used */
-#include "math.c"
+struct passwd *getpwuid (__uid_t __uid);

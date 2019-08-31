@@ -26,6 +26,7 @@
 #include <stdlib.h>
 #include <limits.h>
 #include <inttypes.h>
+#include <locale.h>
 #include "mopsa_libc_utils.h"
 
 
@@ -97,6 +98,28 @@ long long int atoll (const char *__nptr);
 double strtod (const char *__restrict __nptr,
                char **__restrict __endptr);
 
+
+
+/*$
+ * //NOTE: we are more strict than the spec by requiring that __nptr is 0-terminated
+ * requires: valid_string(__nptr);
+ *
+ * case "with_endptr" {
+ *   assumes: __endptr != NULL;
+ *   assigns:  *__endptr;
+ *   assigns:  _errno;
+ *   ensures:  (*__endptr)' >= __nptr and (*__endptr)' < __nptr + size(__nptr);
+ * }
+ *
+ * case "without_endptr" {
+ *   assumes: __endptr == NULL;
+ *   assigns:  _errno;
+ * }
+ */
+double strtod_l (const char *__restrict __nptr,
+		 char **__restrict __endptr, locale_t __loc);
+
+
 #ifdef	__USE_ISOC99
 
 /*$
@@ -158,6 +181,11 @@ long double strtold (const char *__restrict __nptr,
  */
 long int strtol (const char *__restrict __nptr,
                  char **__restrict __endptr, int __base);
+
+
+long int __strtol_internal(const char *__restrict __nptr,
+			   char **__restrict __endptr,
+			   int __base, int __group);
 
 
 /*$
