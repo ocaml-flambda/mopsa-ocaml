@@ -19,32 +19,29 @@
 /*                                                                          */
 /****************************************************************************/
 
-/*
- * Entry point of the libc
+#include <time.h>
+#include "mopsa_libc_utils.h"
+
+/*$
+ * requires: valid_ptr(__requested_time);
+ *
+ * case "success" {
+ *   ensures: return == 0;
+ * }
+ *
+ * case "interrupted-with-remaining" {
+ *   assumes: __remaining != NULL;
+ *   assigns: __remaining;
+ *   assigns: _errno;
+ *   ensures: _errno' == EINTR;
+ *   ensures: return == -1;
+ * }
+ *
+ * case "interrupted-without-remaining" {
+ *   assumes: __remaining == NULL;
+ *   assigns: _errno;
+ *   ensures: return == -1;
+ * }
  */
-
-#include "errno.c"
-#include "assert.c"
-#include "stdio.c"
-#include "stdio_ext.c"
-#include "stdlib.c"
-#include "unistd.c"
-#include "string.c"
-#include "getopt.c"
-#include "locale.c"
-#include "libintl.c"
-#include "utmp.c"
-#include "utmpx.c"
-#include "signal.c"
-#include "error.c"
-#include "builtins.c"
-#include "sys/socket.c"
-#include "arpa/inet.c"
-#include "netinet/in.c"
-#include "fcntl.c"
-#include "inttypes.c"
-#include "langinfo.c"
-#include "time.c"
-
-/* TODO: include math library only when -lm is used */
-#include "math.c"
+int nanosleep (const struct timespec *__requested_time,
+		      struct timespec *__remaining);
