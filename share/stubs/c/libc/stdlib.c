@@ -1056,14 +1056,14 @@ void qsort_r (void *__base, size_t __nmemb, size_t __size,
 
 
 /*$
- * requires: __x > INT_MAX;
+ * requires: __x > INT_MIN;
  * ensures:  (__x >= 0 implies return == __x) and
  *           (__x < 0 implies return == -__x);
  */
 int abs (int __x);
 
 /*$
- * requires: __x > LONG_MAX;
+ * requires: __x > LONG_MIN;
  * ensures:  (__x >= 0 implies return == __x) and
  *           (__x < 0 implies return == -__x);
  */
@@ -1071,7 +1071,7 @@ long int labs (long int __x);
 
 
 /*$
- * requires: __x > LLONG_MAX;
+ * requires: __x > LLONG_MIN;
  * ensures:  (__x >= 0 implies return == __x) and
  *           (__x < 0 implies return == -__x);
  */
