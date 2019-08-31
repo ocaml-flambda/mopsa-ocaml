@@ -19,33 +19,28 @@
 /*                                                                          */
 /****************************************************************************/
 
-/*
- * Entry point of the libc
+#include <sys/resource.h>
+
+/*$
+ * case "success" {
+ * }
+ *
+ * case "failure" {
+ *   assigns: _errno;
+ *   ensures: return == -1;
+ * }
  */
+int getpriority (__priority_which_t __which, id_t __who);
 
-#include "errno.c"
-#include "assert.c"
-#include "stdio.c"
-#include "stdio_ext.c"
-#include "stdlib.c"
-#include "unistd.c"
-#include "string.c"
-#include "getopt.c"
-#include "locale.c"
-#include "libintl.c"
-#include "utmp.c"
-#include "utmpx.c"
-#include "signal.c"
-#include "error.c"
-#include "builtins.c"
-#include "sys/socket.c"
-#include "arpa/inet.c"
-#include "netinet/in.c"
-#include "fcntl.c"
-#include "inttypes.c"
-#include "langinfo.c"
-#include "time.c"
-#include "sys/resource.c"
 
-/* TODO: include math library only when -lm is used */
-#include "math.c"
+/*$
+ * case "success" {
+ *   ensures: return == 0;
+ * }
+ *
+ * case "failure" {
+ *   assigns: _errno;
+ *   ensures: return == -1;
+ * }
+ */
+int setpriority (__priority_which_t __which, id_t __who, int __prio);
