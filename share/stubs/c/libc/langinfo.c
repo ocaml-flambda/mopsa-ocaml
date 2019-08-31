@@ -19,31 +19,22 @@
 /*                                                                          */
 /****************************************************************************/
 
-/*
- * Entry point of the libc
+#include <langinfo.h>
+
+/*$
+ * local:   char *addr = new ReadOnlyString;
+ * ensures: size(addr) in [1, SIZE_MAX];
+ * ensures: valid_string(addr);
+ * ensures: return == addr;
  */
+char *nl_langinfo (nl_item __item);
 
-#include "errno.c"
-#include "assert.c"
-#include "stdio.c"
-#include "stdio_ext.c"
-#include "stdlib.c"
-#include "unistd.c"
-#include "string.c"
-#include "getopt.c"
-#include "locale.c"
-#include "libintl.c"
-#include "utmp.c"
-#include "utmpx.c"
-#include "signal.c"
-#include "error.c"
-#include "builtins.c"
-#include "sys/socket.c"
-#include "arpa/inet.c"
-#include "netinet/in.c"
-#include "fcntl.c"
-#include "inttypes.c"
-#include "langinfo.c"
-
-/* TODO: include math library only when -lm is used */
-#include "math.c"
+/*$
+ * // FIXME: nl_langinfo_l is undefined if __l is LC_GLOBAL_LOCALE or 
+ * //        is not a valid locale object handle.
+ * local:   char *addr = new ReadOnlyString;
+ * ensures: size(addr) in [1, SIZE_MAX];
+ * ensures: valid_string(addr);
+ * ensures: return == addr;
+ */
+char *nl_langinfo_l (nl_item __item, locale_t __l);
