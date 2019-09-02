@@ -2,7 +2,7 @@
 /*                                                                          */
 /* This file is part of MOPSA, a Modular Open Platform for Static Analysis. */
 /*                                                                          */
-/* Copyright (C) 2019 The MOPSA Project.                                    */
+/* Copyright (C) 2017-2019 The MOPSA Project.                               */
 /*                                                                          */
 /* This program is free software: you can redistribute it and/or modify     */
 /* it under the terms of the GNU Lesser General Public License as published */
@@ -19,48 +19,29 @@
 /*                                                                          */
 /****************************************************************************/
 
-
-#include <limits.h>
-
-
-/*$$
- * predicate valid_string(s):
- *   valid_ptr(s) and
- *   size(s) >= 1 and
- *   exists int _i in [0, size(s) - 1]: s[_i] == 0
- * ;
- */
-
-
-/*$$
- * predicate valid_primed_string(s):
- *   valid_ptr(s) and
- *   exists int _i in [0, size(s) - 1]: (s[_i])' == 0
- * ;
- */
-
-
-/*$$
- * predicate valid_substring(s, n):
- *   valid_ptr(s) and
- *   exists int _i in [0, n - 1]: s[_i] == 0
- * ;
- */
-
-
-/*$$
- * predicate valid_primed_substring(s, n):
- *   valid_ptr(s) and
- *   exists int _i in [0, n - 1]: (s[_i])' == 0
- * ;
- */
-
-
+#include <time.h>
+#include "mopsa_libc_utils.h"
 
 /*$
- * local:   char * str = new Memory;
- * ensures: size(str) == INT_MAX;
- * ensures: valid_string(str);
- * ensures: return == str;
+ * requires: valid_ptr(__requested_time);
+ *
+ * case "success" {
+ *   ensures: return == 0;
+ * }
+ *
+ * case "interrupted-with-remaining" {
+ *   assumes: __remaining != NULL;
+ *   assigns: __remaining;
+ *   assigns: _errno;
+ *   ensures: _errno' == EINTR;
+ *   ensures: return == -1;
+ * }
+ *
+ * case "interrupted-without-remaining" {
+ *   assumes: __remaining == NULL;
+ *   assigns: _errno;
+ *   ensures: return == -1;
+ * }
  */
-static char *_mopsa_new_valid_string();
+int nanosleep (const struct timespec *__requested_time,
+		      struct timespec *__remaining);

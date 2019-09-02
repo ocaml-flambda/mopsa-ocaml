@@ -958,9 +958,9 @@ struct
       Option.return
 
 
-    | E_stub_builtin_call(VALID_PTR, p) ->
-      man.eval ~zone:(Z_c_low_level,Z_c_scalar) p flow >>$? fun p flow ->
-      Eval.singleton (mk_expr (E_stub_builtin_call(VALID_PTR, p)) ~etyp:exp.etyp exp.erange) flow |>
+    | E_stub_builtin_call((VALID_PTR | VALID_FLOAT) as f, e) ->
+      man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow >>$? fun e flow ->
+      Eval.singleton (mk_expr (E_stub_builtin_call(f, e)) ~etyp:exp.etyp exp.erange) flow |>
       Option.return
 
     | _ -> None

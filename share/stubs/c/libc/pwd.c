@@ -2,7 +2,7 @@
 /*                                                                          */
 /* This file is part of MOPSA, a Modular Open Platform for Static Analysis. */
 /*                                                                          */
-/* Copyright (C) 2019 The MOPSA Project.                                    */
+/* Copyright (C) 2017-2019 The MOPSA Project.                               */
 /*                                                                          */
 /* This program is free software: you can redistribute it and/or modify     */
 /* it under the terms of the GNU Lesser General Public License as published */
@@ -19,48 +19,21 @@
 /*                                                                          */
 /****************************************************************************/
 
+#include <sys/types.h>
+#include <pwd.h>
 
-#include <limits.h>
-
-
-/*$$
- * predicate valid_string(s):
- *   valid_ptr(s) and
- *   size(s) >= 1 and
- *   exists int _i in [0, size(s) - 1]: s[_i] == 0
- * ;
- */
-
-
-/*$$
- * predicate valid_primed_string(s):
- *   valid_ptr(s) and
- *   exists int _i in [0, size(s) - 1]: (s[_i])' == 0
- * ;
- */
-
-
-/*$$
- * predicate valid_substring(s, n):
- *   valid_ptr(s) and
- *   exists int _i in [0, n - 1]: s[_i] == 0
- * ;
- */
-
-
-/*$$
- * predicate valid_primed_substring(s, n):
- *   valid_ptr(s) and
- *   exists int _i in [0, n - 1]: (s[_i])' == 0
- * ;
- */
-
-
+#define NB_PASSWD_ENTRIES 10
+struct passwd _passwd_db[NB_PASSWD_ENTRIES];
 
 /*$
- * local:   char * str = new Memory;
- * ensures: size(str) == INT_MAX;
- * ensures: valid_string(str);
- * ensures: return == str;
+ * case "success" {
+ *   local: unsigned int i = _mopsa_range_u32(0, NB_PASSWD_ENTRIES - 1);
+ *   ensures: return == &(_passwd_db[i]);
+ * }
+ *
+ * case "failure" {
+ *   assigns: _errno;
+ *   ensures: return == NULL;
+ * }
  */
-static char *_mopsa_new_valid_string();
+struct passwd *getpwuid (__uid_t __uid);

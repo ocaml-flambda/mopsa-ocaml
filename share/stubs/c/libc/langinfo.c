@@ -2,7 +2,7 @@
 /*                                                                          */
 /* This file is part of MOPSA, a Modular Open Platform for Static Analysis. */
 /*                                                                          */
-/* Copyright (C) 2019 The MOPSA Project.                                    */
+/* Copyright (C) 2017-2019 The MOPSA Project.                               */
 /*                                                                          */
 /* This program is free software: you can redistribute it and/or modify     */
 /* it under the terms of the GNU Lesser General Public License as published */
@@ -19,48 +19,22 @@
 /*                                                                          */
 /****************************************************************************/
 
-
-#include <limits.h>
-
-
-/*$$
- * predicate valid_string(s):
- *   valid_ptr(s) and
- *   size(s) >= 1 and
- *   exists int _i in [0, size(s) - 1]: s[_i] == 0
- * ;
- */
-
-
-/*$$
- * predicate valid_primed_string(s):
- *   valid_ptr(s) and
- *   exists int _i in [0, size(s) - 1]: (s[_i])' == 0
- * ;
- */
-
-
-/*$$
- * predicate valid_substring(s, n):
- *   valid_ptr(s) and
- *   exists int _i in [0, n - 1]: s[_i] == 0
- * ;
- */
-
-
-/*$$
- * predicate valid_primed_substring(s, n):
- *   valid_ptr(s) and
- *   exists int _i in [0, n - 1]: (s[_i])' == 0
- * ;
- */
-
-
+#include <langinfo.h>
 
 /*$
- * local:   char * str = new Memory;
- * ensures: size(str) == INT_MAX;
- * ensures: valid_string(str);
- * ensures: return == str;
+ * local:   char *addr = new ReadOnlyString;
+ * ensures: size(addr) in [1, SIZE_MAX];
+ * ensures: valid_string(addr);
+ * ensures: return == addr;
  */
-static char *_mopsa_new_valid_string();
+char *nl_langinfo (nl_item __item);
+
+/*$
+ * // FIXME: nl_langinfo_l is undefined if __l is LC_GLOBAL_LOCALE or 
+ * //        is not a valid locale object handle.
+ * local:   char *addr = new ReadOnlyString;
+ * ensures: size(addr) in [1, SIZE_MAX];
+ * ensures: valid_string(addr);
+ * ensures: return == addr;
+ */
+char *nl_langinfo_l (nl_item __item, locale_t __l);

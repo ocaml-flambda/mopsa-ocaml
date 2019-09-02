@@ -413,6 +413,9 @@ struct
       Eval.singleton (to_universal_expr exp) flow |>
       Option.return
 
+    | Stubs.Ast.E_stub_builtin_call(VALID_FLOAT, f) ->
+      panic_at exp.erange "valid_float not supported"
+
     | _ ->
       None
 
