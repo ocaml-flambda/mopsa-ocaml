@@ -48,6 +48,7 @@ struct
     ieval = { provides = [Z_u, Z_any]; uses = [] };
   }
 
+
   (** Initialization *)
   (** ============== *)
 
@@ -61,10 +62,21 @@ struct
   (** ============================== *)
 
   let exec zone stmt man flow =
+    let range = stmt.srange in
     match skind stmt with
-    | S_return e ->
+    | S_return (Some e) ->
+      let ret, rrange = Context.find_unit return_key (Flow.get_ctx flow) in
+      let flow =
+        man.exec (mk_add_var ret rrange) flow |>
+        man.exec (mk_assign (mk_var ret rrange) e range) in
       let cur = Flow.get T_cur man.lattice flow in
-      Flow.add (T_return (stmt.srange, e)) cur man.lattice flow |>
+      Flow.add (T_return (range, true)) cur man.lattice flow |>
+      Flow.remove T_cur |>
+      Post.return |> Option.return
+
+    | S_return None ->
+      let cur = Flow.get T_cur man.lattice flow in
+      Flow.add (T_return (range, false)) cur man.lattice flow |>
       Flow.remove T_cur |>
       Post.return |> Option.return
 
@@ -74,18 +86,16 @@ struct
 
   (** Evaluation of expressions *)
   (** ========================= *)
-
-
   let eval zone exp man flow =
     let range = erange exp in
     match ekind exp with
     | E_call({ekind = E_function (User_defined f)}, args) ->
-      let params, flow = init_fun_params f args range man flow in
+      let params, body, flow = init_fun_params f args range man flow in
       let ret = match f.fun_return_type with
         | None -> None
         | Some t -> Some (mk_range_attr_var range "ret_var" t)
       in
-      inline f params ret range man flow
+      inline f params body ret range man flow
       |> Option.return
 
     | _ -> None

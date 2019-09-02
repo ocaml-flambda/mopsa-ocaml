@@ -112,11 +112,11 @@ struct
     | E_call({ekind = E_function (User_defined func)}, args) ->
       let in_flow = flow in
       let in_flow_cur, in_flow_other = split_cur_from_others man in_flow in
-      let params, in_flow_cur = init_fun_params func args range man in_flow_cur in
+      let params, body, in_flow_cur = init_fun_params func args range man in_flow_cur in
       begin match find_signature man func.fun_name in_flow_cur with
         | None ->
           let ret = mk_range_attr_var range "ret_var" T_any in
-          inline func params (Some ret) range man in_flow_cur |>
+          inline func params body (Some ret) range man in_flow_cur |>
           bind_full (fun oeval_res out_flow log cleaners ->
               debug "in bind@\n";
               match oeval_res with
