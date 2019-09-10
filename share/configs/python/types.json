@@ -31,6 +31,7 @@
             "python.objects.class",
             "python.objects.function",
             "python.objects.range",
+            "python.objects.object",
 
             "python.data_model.attribute",
             "python.data_model.subscript",
