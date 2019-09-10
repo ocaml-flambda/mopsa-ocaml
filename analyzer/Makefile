@@ -36,7 +36,7 @@ framework.core.sig.value = lowlevel simplified reduction
 framework.core.sig.domain = manager lowlevel intermediate simplified         \
                             stateless reduction
 framework.core.sig.stacked = manager lowlevel intermediate stateless reduction
-framework.lattices = partial_map powerset
+framework.lattices = partial_map powerset powersetwithunder
 framework.engines = engine automatic interactive
 framework.transformers = value domain stacked
 framework.output = text json factory
@@ -85,7 +85,7 @@ lang.python.libs = math py_mopsa py_std py_unittest py_typing
 lang.python.objects = class function range nones data_container_utils py_list tuple dict py_set
 lang.python.data_model = callable arith_ops compare_ops aug_assign	\
                          attribute subscript
-lang.python.types = typing addr_env typechecking t_string t_int t_float t_complex
+lang.python.types = structural_types nominal_types addr_env typechecking t_string t_int t_float t_complex
 lang.python.values = py_string
 
 

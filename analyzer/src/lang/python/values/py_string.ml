@@ -83,8 +83,8 @@ struct
     debug "exec %a" pp_stmt stmt;
     (* FIXME: is there a way to factor using eval? *)
     match skind stmt with
-    | S_assign ({ekind = E_var (v, mode)}, {ekind = E_py_object ({addr_kind = A_py_instance "str"},
-                                                                 Some {ekind = E_constant (C_string s)})}) ->
+    | S_assign ({ekind = E_var (v, mode)}, {ekind = E_py_object ({addr_kind = A_py_instance scls},
+                                                                 Some {ekind = E_constant (C_string s)})}) when compare_addr scls (fst @@ find_builtin "str") = 0 ->
       let cur = get_env T_cur man flow in
       let cur =
         SMap.add v (match mode with
@@ -96,14 +96,15 @@ struct
       set_env T_cur cur man flow
       |> Post.return |> Option.return
 
-    | S_assign ({ekind = E_var (v, mode)}, {ekind = E_py_object ({addr_kind = A_py_instance "str"},
-                                                                 Some {ekind = E_constant (C_top T_string)})}) ->
+    | S_assign ({ekind = E_var (v, mode)}, {ekind = E_py_object ({addr_kind = A_py_instance scls},
+                                                                 Some {ekind = E_constant (C_top T_string)})}) when compare_addr scls (fst @@ find_builtin "str") = 0 ->
       let cur = get_env T_cur man flow in
       set_env T_cur (SMap.add v StringSet.top cur) man flow
       |> Post.return |> Option.return
 
-    | S_assign ({ekind = E_var (v, mode)}, {ekind = E_py_object ({addr_kind = A_py_instance "str"},
-                                                                 Some {ekind = E_var (v', mode')})}) ->
+    | S_assign ({ekind = E_var (v, mode)}, {ekind = E_py_object ({addr_kind = A_py_instance scls},
+                                                                 Some {ekind = E_var (v', mode')})}) when
+        compare_addr scls (fst @@ find_builtin "str") = 0 ->
       let cur = get_env T_cur man flow in
       debug "old cur = %a@\n" print cur;
       let set_v' = Option.default StringSet.empty (SMap.find_opt v' cur) in

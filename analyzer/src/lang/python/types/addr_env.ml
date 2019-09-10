@@ -57,6 +57,44 @@ struct
 end
 
 
+type addr_group +=
+  | G_py_bool of bool option
+  | G_group of addr * addr
+
+
+
+let () =
+  register_addr_group {
+    print = (fun next fmt g ->
+        match g with
+        | G_py_bool (Some true) -> Format.fprintf fmt "true"
+        | G_py_bool (Some false) -> Format.fprintf fmt "false"
+        | G_py_bool None -> Format.fprintf fmt "⊤"
+        | G_group (a1, a2) -> Format.fprintf fmt "(%a, %a)" pp_addr a1 pp_addr a2
+        | _ -> next fmt g
+      );
+    compare = (fun next g1 g2 ->
+        match g1, g2 with
+        | G_py_bool b1, G_py_bool b2 -> Option.compare Pervasives.compare b1 b2
+        | G_group (a1, b1), G_group (a2, b2) ->
+          Compare.compose
+            [(fun () -> compare_addr a1 a2);
+             (fun () -> compare_addr b1 b2);
+            ]
+        | _ -> next g1 g2
+      );
+  }
+
+
+(* FIXME: I'm pretty sure this is going to fail as builtins won't be registered at this point *)
+let addr_none () = {addr_group = G_all; addr_kind = A_py_instance (fst @@ find_builtin "NoneType"); addr_mode = STRONG}
+let addr_notimplemented () = {addr_group = G_all; addr_kind = A_py_instance (fst @@ find_builtin "NotImplementedType"); addr_mode = STRONG}
+let addr_integers () = {addr_group = G_all; addr_kind = A_py_instance (fst @@ find_builtin "int"); addr_mode = WEAK}
+let addr_float () = {addr_group = G_all; addr_kind = A_py_instance (fst @@ find_builtin "float"); addr_mode = WEAK}
+let addr_true () = {addr_group = G_py_bool (Some true); addr_kind = A_py_instance (fst @@ find_builtin "bool"); addr_mode = STRONG}
+let addr_false () = {addr_group = G_py_bool (Some false); addr_kind = A_py_instance (fst @@ find_builtin "bool"); addr_mode = STRONG}
+let addr_bool_top () = {addr_group = G_py_bool None; addr_kind = A_py_instance (fst @@ find_builtin "bool"); addr_mode = WEAK}
+
 
 module Domain =
 struct
@@ -108,16 +146,16 @@ struct
     debug "exec %a@\n" pp_stmt stmt;
     let range = srange stmt in
     match skind stmt with
-    (* | S_add ({ekind = E_var (v, mode)}) ->
-     *   let cur = Flow.get_domain_cur man flow in
-     *   if mem v cur then
-     *     flow |> Post.return
-     *   else
-     *     let ncur = add v ASet.empty cur in
-     *     let () = debug "cur was %a@\nncur is %a@\n" print cur print ncur in
-     *     let flow =  Flow.set_domain_cur ncur man flow in
-     *     let () = debug "flow is now %a@\n" (Flow.print man) flow in
-     *     flow |> Post.return *)
+    | S_add ({ekind = E_var (v, mode)}) ->
+      let cur = get_env T_cur man flow in
+      if mem v cur then
+        flow |> Post.return |> Option.return
+      else
+        let ncur = add v (ASet.singleton Undef_global) cur in
+        let () = debug "cur was %a@\nncur is %a@\n" print cur print ncur in
+        let flow =  set_env T_cur ncur man flow in
+        let () = debug "flow is now %a@\n" (Flow.print man.lattice.print) flow in
+        flow |> Post.return |> Option.return
 
     | S_assign({ekind = E_var (v, WEAK)}, {ekind = E_var (w, WEAK)}) ->
       let cur = get_env T_cur man flow in
@@ -147,7 +185,7 @@ struct
               | E_py_object (addr, Some expr) ->
                 let flow = assign_addr man v (PyAddr.Def addr) mode flow in
                 begin match akind addr with
-                | A_py_instance "str" ->
+                | A_py_instance s when compare_addr s (fst @@ find_builtin "str") = 0 ->
                   man.exec ~zone:Zone.Z_py_obj (mk_assign evar e range) flow
                 | _ ->
                   flow
@@ -201,9 +239,9 @@ struct
         | E_constant (C_top T_bool)
         | E_constant (C_bool true)
           -> Post.return flow
-        | E_py_object (a, _) when compare_addr a Typing.addr_true = 0 || compare_addr a Typing.addr_bool_top = 0
+        | E_py_object (a, _) when compare_addr a (addr_true ()) = 0 || compare_addr a (addr_bool_top ()) = 0
           -> Post.return flow
-        | E_py_object (a, _) when compare_addr a Typing.addr_false = 0
+        | E_py_object (a, _) when compare_addr a (addr_false ()) = 0
           -> Post.return (set_env T_cur bottom man flow)
         | E_constant (C_bool false) ->
           Post.return (set_env T_cur bottom man flow)
@@ -213,7 +251,7 @@ struct
       |> Option.return
 
     | S_rename ({ekind = E_var (v, mode)}, {ekind = E_var (v', mode')}) ->
-      (* FIXME: modes *)
+      (* FIXME: modes, rename in weak shouldn't erase the old v'? *)
       let cur = get_env T_cur man flow in
       if AMap.mem v cur then
         set_env T_cur (AMap.rename v v' cur) man flow |>
@@ -258,6 +296,31 @@ struct
         ASet.add av (Option.default ASet.empty (find_opt v cur))
     in
     set_env T_cur (add v aset cur) man flow
+
+
+  let get_builtin bltin =
+    let obj = find_builtin bltin in
+    match kind_of_object obj with
+    | A_py_class (c, b) -> (c, b)
+    | _ -> assert false
+
+  let bltin_inst bltin =
+    let obj = find_builtin bltin in A_py_instance (fst obj)
+
+  let allocate_builtin ?(mode=STRONG) man range flow bltin oe =
+    (* allocate addr, and map this addr to inst bltin *)
+    let range = tag_range range "alloc_%s" bltin in
+    let cls = fst @@ find_builtin bltin in
+    man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr ~mode:mode (A_py_instance cls) range) flow |>
+    Eval.bind (fun eaddr flow ->
+        let addr = match ekind eaddr with
+          | E_addr a -> a
+          | _ -> assert false in
+        man.exec ~zone:Zone.Z_py_obj (mk_add eaddr range) flow |>
+        Eval.singleton (mk_py_object (addr, oe) range)
+      )
+
+
 
 
   let eval zs exp man flow =
@@ -310,12 +373,115 @@ struct
         Eval.empty_singleton |>
         Option.return
 
+    (* todo: should be moved to zone system? useless? *)
+    | E_py_object ({addr_kind = A_py_instance _}, _) ->
+      Eval.singleton exp flow |> Option.return
+
+    | E_constant (C_top T_bool) ->
+      Eval.singleton (mk_py_object (addr_bool_top (), None) range) flow |> Option.return
+
+    | E_constant (C_bool true) ->
+      Eval.singleton (mk_py_object (addr_true (), None) range) flow |> Option.return
+
+    | E_constant (C_bool false) ->
+      Eval.singleton (mk_py_object (addr_false (), None) range) flow |> Option.return
+
+    | E_constant (C_top T_int)
+    | E_constant (C_int _) ->
+      Eval.singleton (mk_py_object (addr_integers (), None) range) flow |> Option.return
+
+    | E_constant C_py_none ->
+      Eval.singleton (mk_py_object (addr_none (), None) range) flow |> Option.return
+
+    | E_constant C_py_not_implemented ->
+      Eval.singleton (mk_py_object (addr_notimplemented (), None) range) flow |> Option.return
+
+    | E_constant (C_top (T_float _))
+    | E_constant (C_float _) ->
+      Eval.singleton (mk_py_object (addr_float (), None) range) flow |> Option.return
+
+    | E_constant (C_top T_string) ->
+      allocate_builtin man range flow "str" (Some exp) |> Option.return
+
+    | E_constant (C_top T_py_complex) ->
+      allocate_builtin man range flow "complex" (Some exp) |> Option.return
+
+    | E_constant (C_top T_py_bytes)
+    | E_py_bytes _ ->
+      allocate_builtin man range flow "bytes" (Some exp) |> Option.return
+
+    | E_constant (C_string s) ->
+      allocate_builtin man range flow "str" (Some exp) |> Option.return
+      (* we keep s in the expression of the returned object *)
+
+    | E_unop(O_log_not, e') ->
+      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e' (*(Utils.mk_builtin_call "bool" [e'] range)*) flow |>
+      Eval.bind
+        (fun exp flow ->
+           match ekind exp with
+           | E_constant (C_top T_bool) ->
+             Eval.singleton exp flow
+           | E_constant (C_bool true) ->
+             Eval.singleton (mk_py_false range) flow
+           | E_constant (C_bool false) ->
+             Eval.singleton (mk_py_true range) flow
+           | E_py_object (a, _) when compare_addr a (addr_true ()) = 0 ->
+             man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_false range) flow
+           | E_py_object (a, _) when compare_addr a (addr_false ()) = 0 ->
+             man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_true range) flow
+           | E_py_object (a, _) when compare_addr a (addr_bool_top ()) = 0 ->
+             Eval.singleton exp flow
+           | _ ->
+             Exceptions.panic "not ni on %a@\n" pp_expr exp
+        )
+      |> Option.return
+
+    | E_binop(O_py_is, e1, e2) ->
+      bind_list [e1;e2] (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+      bind_some (fun evals flow ->
+          let e1, e2 = match evals with [e1;e2] -> e1, e2 | _ -> assert false in
+          begin match ekind e1, ekind e2 with
+            | E_py_object (a1, _), E_py_object (a2, _) when
+                compare_addr a1 a2 = 0 &&
+                (compare_addr a1 (addr_notimplemented ()) = 0 || compare_addr a1 (addr_none ()) = 0) ->
+              man.eval (mk_py_true range) flow
+            | _ -> man.eval (mk_py_top T_bool range) flow
+          end
+        )
+      |> Option.return
+
+
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__new__")}, _)}, args, []) ->
+      bind_list args (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+      bind_some (fun args flow ->
+          match args with
+          | [] ->
+            debug "Error during creation of a new instance@\n";
+            man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton
+          | cls :: tl ->
+            let c = fst @@ object_of_expr cls in
+            man.eval  ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr (A_py_instance c) range) flow |>
+            Eval.bind (fun eaddr flow ->
+                let addr = match ekind eaddr with
+                  | E_addr a -> a
+                  | _ -> assert false in
+                man.exec ~zone:Zone.Z_py_obj (mk_add eaddr range) flow |>
+                Eval.singleton (mk_py_object (addr, None) range)
+              )
+        )
+      |> Option.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__init__")}, _)}, args, []) ->
+      man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range) flow |> Option.return
+
 
     | _ -> None
 
   let ask _ _ _ = None
 
   let refine channel man flow = Channel.return flow
+
 
 end
 

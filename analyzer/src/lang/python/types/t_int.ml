@@ -109,7 +109,7 @@ module Domain =
             let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
             let addr_group a = a.addr_group in
             match addr_group @@ fst @@ object_of_expr e1, addr_group @@ fst @@ object_of_expr e2 with
-            | Typing.G_py_bool (Some b1), Typing.G_py_bool (Some b2) ->
+            | Addr_env.G_py_bool (Some b1), Addr_env.G_py_bool (Some b2) ->
               Eval.singleton (mk_py_bool (b1 = b2) range) flow
             | _ ->
               assume

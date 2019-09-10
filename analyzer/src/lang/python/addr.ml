@@ -636,17 +636,17 @@ let builtin_cl_and_mro s =
 
 
 type addr_kind +=
-  | A_py_instance of string
+  | A_py_instance of addr
+  (* it's the class from which the object is instantiated *)
 
 let () =
   Format.(register_addr_kind {
       print = (fun default fmt a ->
           match a with
-          | A_py_instance s (*c -> fprintf fmt "Inst{%a}" pp_addr_kind (A_py_class (c, []))*)
-            -> fprintf fmt "inst[%s]" s
+          | A_py_instance c -> fprintf fmt "Inst{%a}" pp_addr_kind (akind c)
           | _ -> default fmt a);
       compare = (fun default a1 a2 ->
           match a1, a2 with
           | A_py_instance c1, A_py_instance c2 ->
-            Pervasives.compare c1 c2
+            compare_addr c1 c2
           | _ -> default a1 a2);})
