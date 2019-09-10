@@ -43,6 +43,9 @@ module Domain =
     let eval zs exp man flow =
       let range = erange exp in
       match ekind exp with
+      | E_constant (C_top T_py_complex) ->
+        Addr_env.Domain.allocate_builtin man range flow "complex" (Some exp) |> Option.return
+
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "complex.__new__")}, _)}, [cls], []) ->
          (* FIXME?*)
          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_py_complex range) flow |> Option.return

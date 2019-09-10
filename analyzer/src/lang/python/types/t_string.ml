@@ -115,7 +115,19 @@ module Domain =
     let eval zs exp (man: ('a, unit) man) (flow:'a flow) =
       let range = erange exp in
       match ekind exp with
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, args, []) when StringMap.mem f stub_base ->
+      | E_constant (C_top T_string) ->
+        Addr_env.Domain.allocate_builtin man range flow "str" (Some exp) |> Option.return
+
+      | E_constant (C_string s) ->
+        Addr_env.Domain.allocate_builtin man range flow "str" (Some exp) |> Option.return
+      (* we keep s in the expression of the returned object *)
+
+      | E_constant (C_top T_py_bytes)
+      | E_py_bytes _ ->
+        Addr_env.Domain.allocate_builtin man range flow "bytes" (Some exp) |> Option.return
+
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, args, []) when StringMap.mem f stub_base ->
         debug "function %s in stub_base, processing@\n" f;
         let {in_args; out_type} = StringMap.find f stub_base in
         process_simple f man flow range args in_args out_type

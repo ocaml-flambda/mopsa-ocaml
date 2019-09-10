@@ -60,7 +60,7 @@ struct
         (fun earg flow ->
            let proceed s = Eval.singleton (mk_py_object (find_builtin s) range) flow in
            match ekind earg with
-           | E_py_object ({addr_kind = A_py_instance cls} as addr, _) ->
+           | E_py_object ({addr_kind = A_py_instance cls}, _) ->
              Eval.singleton (mk_py_object (cls, None) range) flow
            | E_py_object ({addr_kind = Objects.Py_list.A_py_list _}, _) ->
              proceed "list"

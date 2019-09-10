@@ -367,52 +367,22 @@ struct
         let obj = find_builtin @@ get_orig_vname v in
         Eval.singleton (mk_py_object obj range) flow |> Option.return
       else
-        let () = warn_at range "NameError that shouldn't happen. Todo: use partial envs and add_var" in
-        let () = Format.fprintf Format.str_formatter "name '%s' is not defined" (get_orig_vname v) in
-        man.exec (Utils.mk_builtin_raise_msg "NameError" (Format.flush_str_formatter ()) range) flow |>
-        Eval.empty_singleton |>
+        (* let () = warn_at range "NameError on %a that shouldn't happen. Todo: use partial envs and add_var %a" pp_var v (Flow.print man.lattice.print) flow in
+         * let () = Format.fprintf Format.str_formatter "name '%s' is not defined" (get_orig_vname v) in
+         * man.exec (Utils.mk_builtin_raise_msg "NameError" (Format.flush_str_formatter ()) range) flow |> *)
+        Eval.empty_singleton flow |>
         Option.return
 
     (* todo: should be moved to zone system? useless? *)
     | E_py_object ({addr_kind = A_py_instance _}, _) ->
       Eval.singleton exp flow |> Option.return
 
-    | E_constant (C_top T_bool) ->
-      Eval.singleton (mk_py_object (addr_bool_top (), None) range) flow |> Option.return
-
-    | E_constant (C_bool true) ->
-      Eval.singleton (mk_py_object (addr_true (), None) range) flow |> Option.return
-
-    | E_constant (C_bool false) ->
-      Eval.singleton (mk_py_object (addr_false (), None) range) flow |> Option.return
-
-    | E_constant (C_top T_int)
-    | E_constant (C_int _) ->
-      Eval.singleton (mk_py_object (addr_integers (), None) range) flow |> Option.return
-
+    (* FIXME: clean *)
     | E_constant C_py_none ->
       Eval.singleton (mk_py_object (addr_none (), None) range) flow |> Option.return
 
     | E_constant C_py_not_implemented ->
       Eval.singleton (mk_py_object (addr_notimplemented (), None) range) flow |> Option.return
-
-    | E_constant (C_top (T_float _))
-    | E_constant (C_float _) ->
-      Eval.singleton (mk_py_object (addr_float (), None) range) flow |> Option.return
-
-    | E_constant (C_top T_string) ->
-      allocate_builtin man range flow "str" (Some exp) |> Option.return
-
-    | E_constant (C_top T_py_complex) ->
-      allocate_builtin man range flow "complex" (Some exp) |> Option.return
-
-    | E_constant (C_top T_py_bytes)
-    | E_py_bytes _ ->
-      allocate_builtin man range flow "bytes" (Some exp) |> Option.return
-
-    | E_constant (C_string s) ->
-      allocate_builtin man range flow "str" (Some exp) |> Option.return
-      (* we keep s in the expression of the returned object *)
 
     | E_unop(O_log_not, e') ->
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e' (*(Utils.mk_builtin_call "bool" [e'] range)*) flow |>
@@ -450,30 +420,6 @@ struct
         )
       |> Option.return
 
-
-
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__new__")}, _)}, args, []) ->
-      bind_list args (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
-      bind_some (fun args flow ->
-          match args with
-          | [] ->
-            debug "Error during creation of a new instance@\n";
-            man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton
-          | cls :: tl ->
-            let c = fst @@ object_of_expr cls in
-            man.eval  ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr (A_py_instance c) range) flow |>
-            Eval.bind (fun eaddr flow ->
-                let addr = match ekind eaddr with
-                  | E_addr a -> a
-                  | _ -> assert false in
-                man.exec ~zone:Zone.Z_py_obj (mk_add eaddr range) flow |>
-                Eval.singleton (mk_py_object (addr, None) range)
-              )
-        )
-      |> Option.return
-
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__init__")}, _)}, args, []) ->
-      man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range) flow |> Option.return
 
 
     | _ -> None

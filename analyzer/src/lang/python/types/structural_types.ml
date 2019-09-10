@@ -29,39 +29,6 @@ open MapExt
 open SetExt
 open Universal.Ast
 
-let pyvarcounter = ref (-1)
-
-let get_fresh_a_py_var () =
-  incr pyvarcounter;
-  !pyvarcounter
-
-let greek_of_int =
-  let list = ["α"; "β"; "γ"; "δ"; "ε"; "ζ"; "η"; "θ"; "ι"; "κ"; "λ"; "μ"; "ν"; "ξ"; "ο"; "π"; "ρ"; "σ"; "τ"; "υ"; "φ"; "χ"; "ψ"; "ω"] in
-  let listn = List.length list in
-  fun n ->
-    let letter = List.nth list (n mod listn) in
-    if n < listn then letter
-    else Format.sprintf "%s(%d)" letter (n / listn)
-
-type addr_kind +=
-    A_py_var of int
-
-let () =
-  Format.(
-    register_addr_kind {
-      print =
-        (fun default fmt a -> match a with
-           | A_py_var a -> Format.fprintf fmt "%s" (greek_of_int a)
-           | _ -> default fmt a
-        );
-      compare =
-        (fun default a1 a2 ->
-           match a1, a2 with
-           | A_py_var v1, A_py_var v2 -> Pervasives.compare v1 v2
-           | _ -> default a1 a2);
-    }
-  )
-
 type _ query += Q_exn_string_query : expr -> (string * string) query
 
 let () = register_query {
@@ -80,72 +47,7 @@ let () = register_query {
   }
 
 module Domain =
- struct
-
-  (* module Polytypeset =
-   * struct
-   *   include Framework.Lattices.Powerset.Make(struct
-   *       type t = polytype
-   *       let compare = compare_polytype
-   *       let print = pp_polytype
-   *     end)
-   *
-   *
-   *   exception JoinError
-   *
-   *   let join t1 t2 =
-   *     (\* joins I[A, a, empty] and I[A, empty, a] into the last one *\)
-   *     let proceed i1 s2 =
-   *       let s, r = Set.fold (fun e2 (sacc, ok) ->
-   *           match e2 with
-   *           | Instance i2 when compare_polytype i1.classn i2.classn = 0 &&
-   *                              (StringMap.compare compare_addr i1.uattrs i2.uattrs <> 0 ||
-   *                              StringMap.compare compare_addr i1.oattrs i2.oattrs <> 0) ->
-   *             begin try
-   *               let ru, o1, o2 = StringMap.fold2o
-   *                   (fun k v1 (accr, acc1o, acc2o) -> (accr, StringMap.add k v1 acc1o, acc2o))
-   *                   (fun k v2 (accr, acc1o, acc2o) -> (accr, acc1o, StringMap.add k v2 acc2o))
-   *                   (fun k v1 v2 (accr, acc1o, acc2o) ->
-   *                      if compare_addr v1 v2 = 0 then
-   *                        (StringMap.add k v1 accr, acc1o, acc2o)
-   *                      else
-   *                        raise JoinError
-   *                   ) i1.uattrs i2.uattrs (StringMap.empty, i1.oattrs, i2.oattrs) in
-   *               let ro = StringMap.fold2o
-   *                   StringMap.add
-   *                   StringMap.add
-   *                   (fun k v1 v2 acc ->
-   *                      if compare_addr v1 v2 = 0 then
-   *                        StringMap.add k v1 acc
-   *                      else
-   *                        raise JoinError
-   *                   )
-   *                   o1 o2 StringMap.empty
-   *               in
-   *               let ri = {classn = i1.classn; uattrs = ru; oattrs = ro} in
-   *               (\* Format.printf "join @[@\n%a@\n%a@\n%a@]@\n@\n" pp_polytype (Instance i1) pp_polytype (Instance i2) pp_polytype (Instance ri); *\)
-   *               Set.add (Instance ri) sacc, true
-   *             with JoinError ->
-   *               Set.add (Instance i2) sacc, ok
-   *           end
-   *           | _ -> Set.add e2 sacc, ok
-   *         ) s2 (Set.empty, false) in
-   *       if r then s else Set.add (Instance i1) s in
-   *     Top.top_lift2 (fun s1 s2 ->
-   *         if cardinal t1 = 1 then
-   *           match choose t1 with
-   *           | Instance i1 ->proceed i1 s2
-   *           | _ -> Set.union s1 s2
-   *         else if cardinal t2 = 1 then
-   *           match choose t2 with
-   *           | Instance i2 -> proceed i2 s1
-   *           | _ -> Set.union s1 s2
-   *         else
-   *           Set.union s1 s2
-   *       ) t1 t2
-   *
-   *   (\* let widen _ = join *\)
-   * end *)
+struct
 
   module AttrSet = Framework.Lattices.Powersetwithunder.Make(
     struct
@@ -181,23 +83,6 @@ module Domain =
   let print fmt d =
     Format.fprintf fmt "attributes: @[%a@]@\n"
       AMap.print d
-
-  (* let subset d d' =
-   * (* not supporting correctly top and bottom *)
-   *   debug "subset %a %a..." print d print d';
-   *   let res = TMap.fold (fun absaddr ptys acc ->
-   *       if TMap.mem absaddr d' then
-   *         let ptys' = TMap.find absaddr d' in
-   *         debug "absaddr = %a, ptys' = %a@\n" pp_addr absaddr Polytypeset.print ptys';
-   *         (\* acc && polytype_leq (pty, d.typevar_env) (pty', d'.typevar_env) *\)
-   *         acc && (Polytypeset.is_top ptys' || Polytypeset.for_all (fun pty -> Polytypeset.exists (fun pty' -> polytype_leq pty pty') ptys') ptys)
-   *       else false
-   *     )
-   *       d true
-   *   in
-   *   debug "= %b@\n" res;
-   *   res *)
-
 
   let merge _ _ _ = assert false
 
@@ -353,29 +238,6 @@ module Domain =
      *       Exceptions.panic_at range "Unsupported type annotation %a@\n" pp_expr e
      *   end *)
 
-
-
-    (* Je pense pas avoir besoin de ça finalement *)
-    (* | E_py_object ({addr_kind = A_py_class (c, b)} as addr, expr) ->
-     *   let cur = get_env T_cur man flow in
-     *   let abs_heap = TMap.add addr (Polytypeset.singleton (Class (c, b))) cur.abs_heap in
-     *   let flow = set_env T_cur {cur with abs_heap} man flow in
-     *   Eval.singleton (mk_addr addr range) flow |> Option.return *)
-
-    (* begin match akind with
-     * | A_py_method (func, self) ->
-     *    man.eval (mk_py_object ({addr_kind = akind; addr_uid = (-1); addr_mode=STRONG}, mk_py_empty range) range) flow
-     * | _ ->
-     *    let addr = {addr_kind = akind; addr_uid=(-1);addr_mode=STRONG} in
-     *    Eval.singleton (mk_addr addr range) flow
-     * end
-     * |> Option.return *)
-
-    (* | E_unop(O_log_not, {ekind=E_constant (C_bool b)}) ->
-     *   Eval.singleton (mk_py_bool (not b) range) flow
-     *   |> Option.return *)
-
-
     | E_py_ll_hasattr({ekind = E_py_object (addr, objexpr)} as e, attr) ->
       let attr = match ekind attr with
         | E_constant (C_string s) -> s
@@ -391,7 +253,6 @@ module Domain =
         | A_py_class (C_user c, b) ->
           Eval.singleton (mk_py_bool (List.exists (fun v -> get_orig_vname v = attr) c.py_cls_static_attributes) range) flow
 
-        (* | A_py_var _ *)
         | A_py_instance _ ->
           let cur = get_env T_cur man flow in
           let oaset = AMap.find_opt addr cur in
@@ -411,6 +272,7 @@ module Domain =
               else
                 Eval.singleton (mk_py_false range) flow
           end
+
         | Objects.Py_list.A_py_list _ ->
           Eval.singleton (mk_py_false range) flow
 
@@ -444,7 +306,6 @@ module Domain =
           let v = List.find (fun x -> get_orig_vname x = attr) globals in
           (* FIXME: is that normal?! used in stub module unittest with builtin unittest.TestCase... *)
           if is_builtin_name (name ^ "." ^ attr) then
-            let () = warn_at range "using builtin rather than variable when performing %a" pp_expr exp in
             Eval.singleton (mk_py_object (find_builtin_attribute obj attr) range) flow
           else
             man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var v range) flow
@@ -456,7 +317,6 @@ module Domain =
           let f = List.find (fun x -> get_orig_vname x = attr) c.py_cls_static_attributes in
           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var f range) flow
 
-        (* | A_py_var _ *)
         | A_py_instance _ ->
           (* there should be a positive hasattr before, so we just evaluate the addr_attr var *)
           let attr_var = mk_addr_attr addr attr T_any in
@@ -465,73 +325,10 @@ module Domain =
         | _ -> Exceptions.panic_at range "ll_getattr: todo %a, attr=%s in@\n%a" pp_addr addr attr (Flow.print man.lattice.print) flow
       end
       |> Option.return
-    (* FIXME: rename over addr should rename attr vars *)
 
-
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "abs")}, _)}, args, []) ->
-      bind_list args man.eval flow |>
-      bind_some (fun eargs flow ->
-          if List.length eargs <> 1 then
-            let () = Format.fprintf Format.str_formatter "abs() takes exactly one argument (%d given)" (List.length args) in
-            man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |> Eval.empty_singleton
-          else
-            let v = List.hd eargs in
-            assume (mk_py_isinstance_builtin v "int" range) man flow
-              ~fthen:(man.eval (mk_py_top T_int range))
-              ~felse:(fun flow ->
-                assume (mk_py_isinstance_builtin v "float" range) man flow
-                  ~fthen:(man.eval (mk_py_top (T_float F_DOUBLE) range))
-                  ~felse:(fun flow ->
-                      Format.fprintf Format.str_formatter "bad operand type for abs()";  (* FIXME *)
-                      man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |>
-                      Eval.empty_singleton
-                    )
-              )
-        )
-      |> Option.return
-
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("all" as f))}, _)}, args, []) ->
-      Utils.check_instances f man flow range args ["list"] (fun _ -> man.eval (mk_py_top T_bool range))
-      |> Option.return
-
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "divmod")}, _)}, args, []) ->
-      (* FIXME: error messages etc *)
-      let tyerror = fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
-      bind_list args man.eval flow |>
-      bind_some (fun eargs flow ->
-          if List.length args <> 2 then tyerror flow else
-            let argl, argr = match eargs with l::r::[] -> l, r | _ -> assert false in
-            assume (mk_py_isinstance_builtin argl "int" range) man flow
-              ~fthen:(fun flow ->
-                  assume (mk_py_isinstance_builtin argr "int" range) man flow
-                    ~fthen:(man.eval (mk_expr (E_py_tuple [mk_py_top T_int range; mk_py_top T_int range]) range))
-                    ~felse:(fun flow ->
-                        assume (mk_py_isinstance_builtin argr "float" range) man flow
-                          ~fthen:(man.eval (mk_expr (E_py_tuple [mk_py_top (T_float F_DOUBLE) range; mk_py_top (T_float F_DOUBLE) range]) range))
-                          ~felse:tyerror
-                      )
-              )
-              ~felse:(fun flow ->
-                  assume (mk_py_isinstance_builtin argl "float" range) man flow
-                    ~fthen:(fun flow ->
-                        assume (mk_py_isinstance_builtin argr "int" range) man flow
-                          ~fthen:(man.eval (mk_expr (E_py_tuple [mk_py_top (T_float F_DOUBLE) range; mk_py_top (T_float F_DOUBLE) range]) range))
-                          ~felse:(fun flow ->
-                              assume (mk_py_isinstance_builtin argr "float" range) man flow
-                                ~fthen:(man.eval (mk_expr (E_py_tuple [mk_py_top (T_float F_DOUBLE) range; mk_py_top (T_float F_DOUBLE) range]) range))
-                                ~felse:tyerror
-                            )
-
-                      )
-                    ~felse:tyerror
-                )
-        )
-      |> Option.return
-
-
-    | E_py_undefined _ -> Eval.singleton exp flow |> Option.return
-
-    | E_py_object _ -> Eval.singleton exp flow |> Option.return
+    (* FIXME: zones *)
+    (* | E_py_undefined _ -> Eval.singleton exp flow |> Option.return
+     * | E_py_object _ -> Eval.singleton exp flow |> Option.return *)
 
     | _ ->
       None
