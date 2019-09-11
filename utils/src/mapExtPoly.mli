@@ -21,16 +21,44 @@
 
 (** Maps with polymorphic keys and values *)
 
-type (+'a,'k) t
+type ('k,+'a) t
 
 type 'k compare = 'k -> 'k -> int
 
-val singleton : compare:'k compare -> 'k -> 'a -> ('a,'k) t
+val singleton : compare:'k compare -> 'k -> 'a -> ('k,'a) t
 
-val empty : compare:'k compare -> ('a,'k) t
+val empty : compare:'k compare -> ('k,'a) t
 
-val is_empty : ('a,'k) t -> bool
+val is_empty : ('k,'a) t -> bool
 
-val add : 'k -> 'a -> ('a,'k) t -> ('a,'k) t
+val add : 'k -> 'a -> ('k,'a) t -> ('k,'a) t
 
-val find : 'k -> ('a,'k) t -> 'a
+val find : 'k -> ('k,'a) t -> 'a
+
+val mem : 'k -> ('k,'a) t -> bool
+
+val min_binding : ('k,'a) t -> ('k *'a)
+
+val max_binding : ('k,'a) t -> ('k *'a)
+
+val remove_min_binding : ('k,'a) t -> ('k,'a) t
+
+val merge : ('k,'a) t -> ('k,'a) t -> ('k,'a) t
+
+val remove : 'k -> ('k,'a) t -> ('k,'a) t
+
+val iter : ('k -> 'a -> unit) -> ('k,'a) t -> unit
+
+val map : ('a -> 'b) -> ('k,'a) t -> ('k,'b) t
+
+val mapi : ('k -> 'a -> 'b) -> ('k,'a) t -> ('k,'b) t
+
+val fold : ('k -> 'a -> 'b -> 'b) -> ('k,'a) t -> 'b -> 'b
+
+val for_all : ('k -> 'a -> bool) -> ('k,'a) t -> bool
+
+val exists : ('k -> 'a -> bool) -> ('k,'a) t -> bool
+
+val filter : ('k -> 'a -> bool) -> ('k,'a) t -> ('k,'a) t
+
+val partition : ('k -> 'a -> bool) -> ('k,'a) t -> ('k,'a) t * ('k,'a) t
