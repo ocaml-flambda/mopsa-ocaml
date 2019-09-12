@@ -221,11 +221,27 @@ type py_fundec = {
   py_func_body: stmt; (** function body *)
   py_func_is_generator: bool; (** is the function a generator? *)
   py_func_decors: expr list;
-  (* FIXME: change this to support @overload defining multiple signatures of functions *)
   py_func_types_in: expr option list;
   py_func_type_out: expr option;
   py_func_range: range; (** range of the function *)
   py_func_ret_var: var
+}
+
+type py_func_sig =
+  {
+    py_funcs_parameters: var list;
+    py_funcs_defaults: bool list; (* true iff argument has default *)
+    py_funcs_types_in: expr option list;
+    py_funcs_type_out: expr option;
+  }
+
+
+type py_func_annot = {
+  py_funca_var: var;
+  py_funca_decors: expr list;
+  py_funca_range: range;
+  py_funca_ret_var: var;
+  py_funca_sig: py_func_sig list;
 }
 
 (** A Python class *)
@@ -281,6 +297,9 @@ type stmt_kind +=
 
   (** type annotations for variables *)
   | S_py_annot of expr * expr
+
+  (* checking type annotations using stubs *)
+  | S_py_check_annot of expr * expr
 
   (** for loops *)
   | S_py_for of expr (** target *) *

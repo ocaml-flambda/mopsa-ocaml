@@ -126,9 +126,10 @@ struct
              | _ -> Exceptions.panic "tuple.__getitem__ over non-constant integer" in
            let tuple_vars = var_of_eobj tuple in
            if 0 <= pos && pos < List.length tuple_vars then
-             man.eval (mk_var ~mode:STRONG (List.nth tuple_vars pos) range) flow
+             let () = debug "ok@\n" in
+             man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var ~mode:STRONG (List.nth tuple_vars pos) range) flow
            else
-             man.exec (Utils.mk_builtin_raise_msg "IndexError" "tuple index out of range" range) flow |>
+             man.exec ~zone:Zone.Z_py_obj (Utils.mk_builtin_raise_msg "IndexError" "tuple index out of range" range) flow |>
              Eval.empty_singleton
         )
       |> Option.return

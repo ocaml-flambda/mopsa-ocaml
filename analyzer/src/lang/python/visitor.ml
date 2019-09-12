@@ -253,6 +253,12 @@ let () =
           | _ -> assert false
         )
 
+      | S_py_check_annot (e1, e2) ->
+        {exprs = [e1; e2]; stmts = [];},
+        (function
+          | {exprs = [v1; v2]} -> {stmt with skind = S_py_check_annot(v1, v2)}
+          | _ -> assert false
+        )
 
       | S_py_import _ -> leaf stmt
       | S_py_import_from _ -> leaf stmt

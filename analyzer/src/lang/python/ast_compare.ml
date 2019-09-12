@@ -176,6 +176,12 @@ let () =
             (fun () -> compare_expr ty1 ty2);
           ]
 
+      | S_py_check_annot (e11, e12), S_py_check_annot (e21, e22) ->
+        Compare.compose
+          [ (fun () -> compare_expr e11 e12);
+            (fun () -> compare_expr e12 e22);
+          ]
+
       | S_py_for (t1, i1, b1, e1), S_py_for (t2, i2, b2, e2) ->
         Compare.compose
           [ (fun () -> compare_expr t1 t2);

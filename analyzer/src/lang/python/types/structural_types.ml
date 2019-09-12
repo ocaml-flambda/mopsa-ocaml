@@ -179,65 +179,6 @@ struct
   let eval zs exp man flow =
     let range = erange exp in
     match ekind exp with
-    (* | E_py_annot e ->
-     *   begin match ekind e with
-     *     | E_var (v, mode) when is_builtin_name @@ get_orig_vname v ->
-     *       let name = get_orig_vname v in
-     *       begin match name with
-     *       | "int" ->
-     *         process_constant man flow range name addr_integers
-     *       | "float" ->
-     *         process_constant man flow range name addr_float
-     *       | "NotImplementedType" ->
-     *         process_constant man flow range name addr_notimplemented
-     *       | "NoneType" ->
-     *         process_constant man flow range name addr_none
-     *       | _ ->
-     *         allocate_builtin ~mode:WEAK man range flow (get_orig_vname v) (Some e)
-     *       end
-     *       |> Option.return
-     *
-     *     | E_var (v, mode) ->
-     *       debug "E_annot %s" v.vname;
-     *       begin try
-     *           let e = Hashtbl.find type_aliases v in
-     *           debug "found type alias, replacing %a by %a" pp_var v pp_expr e;
-     *           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_annot e) range) flow |> Option.return
-     *         with Not_found ->
-     *           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call e [] range) flow |> Option.return
-     *       end
-     *
-     *     | E_py_attribute ({ekind = E_var (v, _)}, s) ->
-     *       debug "searching %a in the type aliases..." pp_expr e;
-     *       begin
-     *         try
-     *           (\* FIXME ouch, not found in man.eval would also get caught... *\)
-     *           (\* FIXME: this also means that if a.pyi defines alias b and b.pyi too, we'll encounter some trouble *\)
-     *           let r = find_type_alias_by_name s in
-     *           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_annot r) range) flow |> Option.return
-     *         with Not_found ->
-     *           debug "not found, trying usual evaluation";
-     *           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |> Option.return
-     *       end
-     *
-     *     | E_py_index_subscript ({ekind = E_py_object _} as e1, e2) ->
-     *       warn_at range "E_py_annot subscript e1=%a e2=%a now in the wild" pp_expr e1 pp_expr e2;
-     *       None
-     *
-     *     | E_py_index_subscript (e1, e2) ->
-     *       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e1 flow |>
-     *       bind_some (fun e1 flow ->
-     *           warn_at range "trasnlated to e1=%a e2=%a" pp_expr e1 pp_expr e2;
-     *           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) {exp with ekind = E_py_annot {e with ekind = E_py_index_subscript(e1, e2)}} flow
-     *         )
-     *       |> Option.return
-     *
-     *
-     *
-     *     | _ ->
-     *       Exceptions.panic_at range "Unsupported type annotation %a@\n" pp_expr e
-     *   end *)
-
     | E_py_ll_hasattr({ekind = E_py_object (addr, objexpr)} as e, attr) ->
       let attr = match ekind attr with
         | E_constant (C_string s) -> s
@@ -307,6 +248,8 @@ struct
           (* FIXME: is that normal?! used in stub module unittest with builtin unittest.TestCase... *)
           if is_builtin_name (name ^ "." ^ attr) then
             Eval.singleton (mk_py_object (find_builtin_attribute obj attr) range) flow
+          (* else if Hashtbl.mem typed_functions attr then
+           *   failwith "~ok" *)
           else
             man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var v range) flow
 
@@ -340,8 +283,8 @@ struct
       | Q_exn_string_query t ->
         let range = erange t in
         let cur = get_env T_cur man flow in
-        let addr = match ekind t with
-          | E_py_object ({addr_kind = A_py_instance a}, _) -> a
+        let iaddr, addr = match ekind t with
+          | E_py_object ({addr_kind = A_py_instance a} as ad, _) -> ad, a
           | _ -> assert false in
         let exc, message =
           let name = match akind addr with
@@ -353,17 +296,17 @@ struct
             | _ -> assert false
           in
           let message =
-            if AttrSet.mem_o "args" (match AMap.find_opt addr cur with None -> AttrSet.empty | Some x -> x) then
+            if AttrSet.mem_o "args" (match AMap.find_opt iaddr cur with None -> AttrSet.empty | Some x -> x) then
               (* FIXME *)
-              let res = man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object (find_builtin "tuple.__getitem__") range) [mk_var (mk_addr_attr addr "args" T_any) range] range) flow in
-              Eval.apply (fun expr flow ->
-                  match ekind expr with
-                  | E_py_object (_, Some {ekind = E_constant (C_string s)}) -> s
-                  | _ -> assert false
+              man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var (mk_addr_attr iaddr "args" T_any) range) flow |>
+              Eval.apply (fun etuple flow ->
+                  let var = List.hd @@ Objects.Tuple.Domain.var_of_eobj etuple in
+                  let r = man.ask (Values.Py_string.Q_strings_of_var var) flow  in
+                  r
                 )
-                (fun x y -> x)
-                (fun x y -> x)
-                "" res
+                (fun _ _ -> assert false)
+                (fun _ _ -> assert false)
+                ""
             else
               ""
           in

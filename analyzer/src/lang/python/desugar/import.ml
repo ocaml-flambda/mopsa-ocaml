@@ -270,7 +270,43 @@ module Domain =
                 end
               | _ -> VisitParts e) (fun s -> VisitParts s) stmt
           in
-          stmt, globals
+          let is_typingoverload_fundec = function
+            | {py_func_decors = [{ekind = E_py_attribute({ekind = E_var( {vkind = V_uniq ("typing",_)}, _)}, "overload")}]} -> true
+            (* FIXME *)
+            | {py_func_decors = [{ekind = E_var( {vkind = V_uniq ("overload",_)}, _)}]} -> true
+            | _ -> false in
+          begin match skind stmt with
+            | S_py_annot _ | S_py_class _ -> stmt, globals
+            | S_py_function f ->
+              let newf =
+                { py_funca_var = f.py_func_var;
+                  py_funca_decors = f.py_func_decors;
+                  py_funca_range = f.py_func_range;
+                  py_funca_ret_var = f.py_func_ret_var;
+                  py_funca_sig =
+                    [{
+                      py_funcs_parameters = f.py_func_parameters;
+                      py_funcs_defaults = List.map (Option.apply (fun _ -> true) false) f.py_func_defaults;
+                      py_funcs_types_in = f.py_func_types_in;
+                      py_funcs_type_out = f.py_func_type_out;
+                    }]
+                } in
+              let addr = {
+                addr_kind = A_py_function (F_annot newf);
+                addr_group = G_all;
+                addr_mode = STRONG;
+              } in
+              debug "adding F_annot %a, hd decors = %a" pp_addr addr pp_expr (List.hd f.py_func_decors);
+              let () =
+                if is_typingoverload_fundec f then
+                  let () = debug "typing overload on %a" pp_var f.py_func_var in
+                  add_typed_function_overload (addr, None)
+              else
+                add_typed_function (addr, None) in
+              debug "done";
+              {stmt with skind = S_block []}, globals
+            | _ -> assert false
+          end
 
         | S_block(block) ->
           let newblock, newglobals = List.fold_left (fun (nb, ng) s ->

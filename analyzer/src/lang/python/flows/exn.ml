@@ -125,8 +125,8 @@ module Domain =
                    debug "True flow, exp is %a@\n" pp_expr exp;
                    let true_flow =  man.exec (mk_block cleaners range) true_flow in
                    let cur = Flow.get T_cur man.lattice true_flow in
-                   debug "asking...@\n";
-                   let exc_str, exc_message = man.ask (Types.Structural_types.Q_exn_string_query exp) flow in
+                   debug "asking...@\ntrue_flow = %a" (Flow.print man.lattice.print) true_flow;
+                   let exc_str, exc_message = man.ask (Types.Structural_types.Q_exn_string_query exp) true_flow in
                    debug "ok@\n";
                    let tk =
                      if List.exists (fun x ->
