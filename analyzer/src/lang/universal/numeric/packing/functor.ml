@@ -60,7 +60,7 @@ struct
     | TOP -> pp_print_string fmt Top.top_string
     | Nt m when Map.is_empty m -> pp_print_string fmt Bot.bot_string
     | Nt m ->
-      fprintf fmt "@[<v>%a@]"
+      fprintf fmt "@[<v>%a@]@\n"
         (pp_print_list
            ~pp_sep:(fun fmt () -> fprintf fmt ",@,")
            (fun fmt (k, v) ->

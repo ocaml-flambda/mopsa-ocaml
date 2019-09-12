@@ -69,12 +69,13 @@ lang.stubs = ast zone alarms iterator
 lang.c = ast pp visitor zone frontend alarms desugar memory libs iterators
 lang.c.iterators = program switch loops goto interproc
 lang.c.desugar = conditions constants
-lang.c.memory = common structured lowlevel scalars
+lang.c.memory = common structured lowlevel scalars packing
 lang.c.memory.common = base points_to quantified_offset
 lang.c.memory.structured = flat
 lang.c.memory.lowlevel = cells string_literals string_length reductions
 lang.c.memory.scalars = pointers machine_numbers
 lang.c.memory.scalars.pointers = value symbolic domain
+lang.c.memory.packing = static_scope
 lang.c.libs = builtins clib mopsalib compiler variadic cstubs
 lang.c.libs.clib.file_descriptor = slot table domain
 

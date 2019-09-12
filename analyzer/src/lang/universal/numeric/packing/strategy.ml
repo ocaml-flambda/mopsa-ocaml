@@ -35,7 +35,7 @@ sig
   type key
   (** Keys to identify packs *)
 
-  val compare : key -> key -> key
+  val compare : key -> key -> int
   (** Total order of packing keys *)
 
   val print : Format.formatter -> key -> unit
