@@ -31,11 +31,12 @@ framework.ast = program typ operator constant var expr stmt visitor all
 framework.core = query context zone callstack alarm token log lattice        \
 		 soundness flow result eval post id interface channel sig    \
                  debug_tree cache abstraction all
-framework.core.sig = value domain stacked
+framework.core.sig = value domain stacked functor
 framework.core.sig.value = lowlevel simplified reduction
 framework.core.sig.domain = manager lowlevel intermediate simplified         \
                             stateless reduction
 framework.core.sig.stacked = manager lowlevel intermediate stateless reduction
+framework.core.sig.functor = simplified
 framework.lattices = partial_map powerset
 framework.engines = engine automatic interactive
 framework.transformers = value domain stacked
@@ -50,9 +51,10 @@ lang.universal = ast frontend zone iterators heap numeric
 lang.universal.iterators = unittest program intraproc scalar interproc loops
 lang.universal.iterators.interproc = common inlining sequential_cache join_based_cache
 lang.universal.heap = policies recency
-lang.universal.numeric = rounding common values relational reductions
+lang.universal.numeric = rounding common values relational packing reductions
 lang.universal.numeric.values = intervals congruences
 lang.universal.numeric.values.intervals = integer float
+lang.universal.numeric.packing = strategy functor
 lang.universal.numeric.relational = apron_manager binding apron_transformer \
                                     factory octagon polyhedra default
 lang.universal.numeric.reductions = intervals_congruences intervals
