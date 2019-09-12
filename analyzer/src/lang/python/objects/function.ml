@@ -175,6 +175,7 @@ module Domain =
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function(F_annot pyannot)}, _)}, args, kwargs) ->
         (* FIXME: kwargs *)
         let sigs = List.filter (fun sign -> List.length args = List.length sign.py_funcs_types_in) pyannot.py_funca_sig in
+
         let filter_sig in_types flow =
           List.fold_left2 (fun acc arg annot ->
                                                         (* woops if self of method *)

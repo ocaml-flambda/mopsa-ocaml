@@ -214,6 +214,19 @@ struct
         man.exec (mk_assume (mk_py_isinstance_builtin e (get_orig_vname v) range) range) flow
         |> Post.return
         |> Option.return
+
+      | E_py_index_subscript ({ekind = E_py_object _} as e1, e2) ->
+        warn_at range "S_py_check_annot subscript e1=%a e2=%a now in the wild" pp_expr e1 pp_expr e2;
+        None
+
+      | E_py_index_subscript (e1, e2) ->
+        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e1 flow |>
+        bind_some (fun e1 flow ->
+            warn_at range "trasnlated to e1=%a e2=%a" pp_expr e1 pp_expr e2;
+            man.exec ~zone:Zone.Z_py_obj ({stmt with skind = S_py_check_annot (e, {annot with ekind = E_py_index_subscript (e1, e2)})}) flow |> Post.return
+          )
+        |> Option.return
+
       | _ -> Exceptions.panic_at range "S_py_check_annot: %a not supported" pp_expr annot
       end
 
