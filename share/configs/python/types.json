@@ -54,7 +54,6 @@
                       "python.types.nominal_types",
                       "python.types.structural_types",
                       "python.objects.list",
-                      "python.types.dummy",
                       "python.objects.tuple",
                       "python.objects.dict",
                       "python.objects.set",

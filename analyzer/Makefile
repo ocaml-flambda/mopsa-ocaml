@@ -85,7 +85,7 @@ lang.python.libs = math py_mopsa py_std py_unittest py_typing
 lang.python.objects = class function range nones data_container_utils py_list tuple dict py_set py_object
 lang.python.data_model = callable arith_ops compare_ops aug_assign	\
                          attribute subscript
-lang.python.types = dummy structural_types nominal_types addr_env typechecking t_string t_int t_float t_complex
+lang.python.types = structural_types nominal_types addr_env typechecking t_string t_int t_float t_complex
 lang.python.values = py_string
 
 
