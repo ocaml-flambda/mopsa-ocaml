@@ -351,12 +351,15 @@ struct
     | _ -> None
 
   let eval_interval e (abs,bnd) =
-    let abs, bnd = add_missing_vars (abs,bnd) (Visitor.expr_vars e) in
-    let e, abs, bnd, _ = exp_to_apron e (abs,bnd) [] in
-    let env = Apron.Abstract1.env abs in
-    let e = Apron.Texpr1.of_expr env e in
-    Apron.Abstract1.bound_texpr ApronManager.man abs e |>
-    Values.Intervals.Integer.Value.of_apron
+    try
+      let abs, bnd = add_missing_vars (abs,bnd) (Visitor.expr_vars e) in
+      let e, abs, bnd, _ = exp_to_apron e (abs,bnd) [] in
+      let env = Apron.Abstract1.env abs in
+      let e = Apron.Texpr1.of_expr env e in
+      Apron.Abstract1.bound_texpr ApronManager.man abs e |>
+      Values.Intervals.Integer.Value.of_apron
+    with UnsupportedExpression ->
+      Values.Intervals.Integer.Value.top
 
 
   let ask : type r. r query -> t -> r option =
