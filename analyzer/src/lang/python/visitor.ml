@@ -24,6 +24,40 @@
 open Mopsa
 open Ast
 
+(* Assumes: List.length (List.flatten old_struct) = List.length new_els *)
+(* Ensures: list list structure is the same between old_struct and the output *)
+let recompose (old_struct : 'a list list) (new_els: 'a list) : 'a list list =
+  let rec aux (old_struct: 'a list list) (new_els: 'a list) (acc_cur: 'a list) : 'a list list =
+    match old_struct with
+    | [] ->
+      assert(new_els = []);
+      assert(acc_cur = []);
+      []
+    | oldhdl :: oldtll ->
+      begin match oldhdl with
+      | [] -> List.rev acc_cur :: aux oldtll new_els []
+      | ohd :: otl ->
+        begin match new_els with
+          | [] -> assert false
+          | ehd :: etl -> aux (otl :: oldtll) etl (ehd :: acc_cur)
+        end
+      end
+  in aux old_struct new_els []
+
+(* Assumes: there are as many non-none elements in old as they are in news *)
+(* Ensures: the structure from old is preserved but with the new values provided in news *)
+let fill_some (old: 'a option list) (news: 'b list) : 'b option list =
+  List.fold_left (fun (news, acc) old_el ->
+      match old_el with
+      | None -> (news, None :: acc)
+      | Some _ ->
+        begin match news with
+          | [] -> assert false
+          | hdn :: tln -> (tln, Some hdn :: acc)
+        end
+    ) (news, []) old |> snd |> List.rev
+
+
 let () =
   register_expr_visitor (fun default exp ->
       match ekind exp with
@@ -199,8 +233,37 @@ let () =
         {exprs = cls.py_cls_bases; stmts = [cls.py_cls_body];},
         (function {exprs = bases; stmts = [body]} -> {stmt with skind = S_py_class({cls with py_cls_body = body; py_cls_bases = bases})} | _ -> assert false)
       | S_py_function(func) ->
-        {exprs = []; stmts = [func.py_func_body];},
-        (fun parts -> {stmt with skind = S_py_function({func with py_func_body = List.hd parts.stmts})})
+        (* FIXME: filter_map in 4.08 *)
+        let filter_map f l =
+          List.fold_left (fun acc el ->
+              match f el with
+              | None -> acc
+              | Some v -> v :: acc
+            ) [] l |> List.rev in
+        let defaults = filter_map (fun x -> x) func.py_func_defaults in
+        let decors = func.py_func_decors in
+        let types_in = filter_map (fun x -> x) func.py_func_types_in in
+        let type_out = match func.py_func_type_out with | None -> [] | Some x -> [x] in
+        let all = [defaults; decors; types_in; type_out] in
+        let allf = List.flatten all in
+        {exprs = allf; stmts = [func.py_func_body];},
+        (function
+          | {exprs; stmts = [body]} ->
+            let nall = recompose all exprs in
+            begin match nall with
+              | [def; dec; tyin; tyout] ->
+                let ndefaults = fill_some func.py_func_defaults def in
+                let ndecors = dec in
+                let ntypes_in = fill_some func.py_func_types_in tyin in
+                let ntype_out = List.hd @@ fill_some [func.py_func_type_out] tyout in
+                {stmt with skind = S_py_function({func with py_func_defaults = ndefaults;
+                                                            py_func_decors = ndecors;
+                                                            py_func_types_in = ntypes_in;
+                                                            py_func_type_out = ntype_out;
+                                                            py_func_body = body})}
+              | _ -> assert false end
+          | _ -> assert false
+        )
       | S_py_raise(None) -> leaf stmt
       | S_py_raise(Some e) ->
         {exprs = [e]; stmts = [];},
