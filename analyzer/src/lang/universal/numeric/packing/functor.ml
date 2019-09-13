@@ -56,17 +56,19 @@ struct
 
   (** Pretty printer *)
   let print fmt a =
+    fprintf fmt "packs:";
     match a with
-    | TOP -> pp_print_string fmt Top.top_string
-    | Nt m when Map.is_empty m -> pp_print_string fmt Bot.bot_string
+    | TOP -> fprintf fmt "%s@\n" Top.top_string
+    | Nt m when Map.is_empty m -> fprintf fmt "%s@\n" Bot.bot_string
     | Nt m ->
-      fprintf fmt "@[<v>%a@]@\n"
+      fprintf fmt "@[<v>%a@]"
         (pp_print_list
-           ~pp_sep:(fun fmt () -> fprintf fmt ",@,")
+           ~pp_sep:(fun fmt () -> fprintf fmt "@,")
            (fun fmt (k, v) ->
-              fprintf fmt "%a ⇥ @[%a@]" Strategy.print k Domain.print v
+              fprintf fmt "%a ⇥ @[<hov>%a@]" Strategy.print k Domain.print v
            )
         ) (Map.bindings m)
+
 
 
   (** {2 Lattice operators} *)
