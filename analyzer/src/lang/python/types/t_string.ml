@@ -199,7 +199,7 @@ module Domain =
              let flow = Flow.copy_ctx tyerror_f flow in
              let res = man.eval (mk_py_top T_string range) flow in
              let tyerror = tyerror_f |> Eval.empty_singleton in
-             Eval.join_list ~empty:(Eval.empty_singleton flow) (Eval.copy_ctx res tyerror :: res :: [])
+             Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Eval.copy_ctx res tyerror :: res :: [])
           )
         |> Option.return
 
@@ -240,7 +240,7 @@ module Domain =
              let flow = Flow.copy_ctx stopiteration_f flow in
              let els = man.eval (mk_py_top T_string range) flow in
              let stopiteration = stopiteration_f |> Eval.empty_singleton in
-             Eval.join_list ~empty:(Eval.empty_singleton flow) (Eval.copy_ctx els stopiteration :: els :: [])
+             Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Eval.copy_ctx els stopiteration :: els :: [])
           )
         |> Option.return
 

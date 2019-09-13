@@ -137,7 +137,7 @@ struct
                       let indexerror = Eval.empty_singleton indexerror_f in
                       let flow = Flow.copy_ctx indexerror_f flow in
                       let evals = man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var var_els range) flow in
-                      Eval.join_list ~empty:(Eval.empty_singleton flow) (evals :: Eval.copy_ctx evals indexerror :: [])
+                      Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (evals :: Eval.copy_ctx evals indexerror :: [])
                     )
                   ~felse:(fun flow ->
                       assume (mk_py_isinstance_builtin index "slice" range) man flow
@@ -207,7 +207,7 @@ struct
 
                  let assignment = man.eval (mk_py_none range) assignment_f in
                  let indexerror = Eval.empty_singleton indexerror_f in
-                 Eval.join_list ~empty:(Eval.empty_singleton flow) (assignment :: (Eval.copy_ctx assignment indexerror) ::[])
+                 Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (assignment :: (Eval.copy_ctx assignment indexerror) ::[])
                )
              ~felse:(fun flow ->
                  assume (mk_py_isinstance_builtin index "slice" range) man flow
@@ -348,7 +348,7 @@ struct
            let flow = Flow.copy_ctx eval_verror_f flow in
            let eval_verror = Eval.empty_singleton eval_verror_f in
            let eval_res = man.eval (mk_py_top T_int range) flow in
-           Eval.join_list ~empty:(Eval.empty_singleton flow) (eval_res :: eval_verror :: []))
+           Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (eval_res :: eval_verror :: []))
       |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.pop")}, _)} as call, [arg], []) ->
@@ -365,7 +365,7 @@ struct
            let eval_indexerror = man.exec (Utils.mk_builtin_raise_msg "IndexError" "pop from empty list" range) flow
                                  |> Eval.empty_singleton in
            let eval_el = man.eval (mk_var ~mode:WEAK var_els range) flow in
-           Eval.join_list ~empty:(Eval.empty_singleton flow) (Eval.copy_ctx eval_indexerror eval_el :: eval_indexerror :: [])
+           Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Eval.copy_ctx eval_indexerror eval_el :: eval_indexerror :: [])
         )
       |> Option.return
 
@@ -378,7 +378,7 @@ struct
            let eval_verror = Eval.empty_singleton eval_verror_f in
            let flow = Flow.copy_ctx eval_verror_f flow in
            let eval_none = man.eval (mk_py_none range) flow in
-           Eval.join_list ~empty:(Eval.empty_singleton flow) (eval_none :: eval_verror :: [])
+           Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (eval_none :: eval_verror :: [])
         )
       |> Option.return
 
@@ -427,7 +427,7 @@ struct
                    | None ->
                      stopiteration
                    | Some e ->
-                     Eval.join_list ~empty:(Eval.empty_singleton flow) [Eval.copy_ctx stopiteration (Eval.singleton e flow) ; stopiteration ]
+                     Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) [Eval.copy_ctx stopiteration (Eval.singleton e flow) ; stopiteration ]
                  )
             )
             els
@@ -534,7 +534,7 @@ struct
                                                    mk_var var_els ~mode:WEAK range]) range) flow in
           let flow = Flow.set_ctx (Eval.get_ctx els) flow in
           let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
-          Eval.join_list ~empty:(Eval.empty_singleton flow) (Eval.copy_ctx stopiteration els::stopiteration::[])
+          Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Eval.copy_ctx stopiteration els::stopiteration::[])
         )
       |> Option.return
 
@@ -580,7 +580,7 @@ struct
                                                    mk_var var_els2 ~mode:WEAK range]) range) flow in
           let flow = Flow.set_ctx (Eval.get_ctx els) flow in
           let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
-          Eval.join_list ~empty:(Eval.empty_singleton flow) (Eval.copy_ctx stopiteration els::stopiteration::[])
+          Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Eval.copy_ctx stopiteration els::stopiteration::[])
         )
       |> Option.return
 

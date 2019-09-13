@@ -254,7 +254,7 @@ struct
             ) itv
           in
 
-          Eval.join_list evl ~empty:(Eval.empty_singleton flow)
+          Eval.join_list evl ~empty:(fun () -> Eval.empty_singleton flow)
         )
       ~felse:(fun flow ->
           (* Raise an alarm since no next argument can be fetched by va_arg *)

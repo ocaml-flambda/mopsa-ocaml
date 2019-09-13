@@ -360,7 +360,7 @@ struct
 
           ) aset ([], Flow.get_ctx flow) in
         let evals = List.map (Eval.set_ctx annot) evals in
-        evals |> Eval.join_list ~empty:(Eval.empty_singleton flow)
+        evals |> Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow)
         |> Option.return
       else if is_builtin_name @@ get_orig_vname v then
         (* let () = debug "bla %s %s %d" v.org_vname v.uniq_vname v.vuid in *)

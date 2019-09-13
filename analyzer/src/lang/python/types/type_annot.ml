@@ -102,7 +102,7 @@ struct
                     range) , new_typevars
       in
       Eval.join_list ~empty:(
-        let () = Format.fprintf Format.str_formatter "%a does not match any signature provided in the stubs" pp_var pyannot.py_funca_var in
+        fun () -> let () = Format.fprintf Format.str_formatter "%a does not match any signature provided in the stubs" pp_var pyannot.py_funca_var in
         man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |> Eval.empty_singleton)
         (List.fold_left (fun acc sign ->
              let nflow, ntypevars = apply_sig flow sign in
@@ -226,7 +226,7 @@ struct
               let flow = set_env T_cur (TVMap.add s (ESet.singleton typ) cur) man flow in
               (man.exec {stmt with skind = S_py_check_annot (e, typ)} flow |> Post.return) :: acc
             ) [] types in
-          Result.join_list ~empty:(Flow.bottom (Flow.get_ctx flow) (Flow.get_alarms flow) |> Post.return) flows |> Option.return
+          Result.join_list ~empty:(fun () -> Flow.bottom (Flow.get_ctx flow) (Flow.get_alarms flow) |> Post.return) flows |> Option.return
 
 
         | _ -> Exceptions.panic_at range "S_py_check_annot: %a not supported" pp_expr annot

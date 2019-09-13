@@ -275,14 +275,14 @@ let meet (r1:('a,'r) result) (r2:('a,'r) result) : ('a,'r) result =
 (** Join a list of results *)
 let join_list ~empty (l: ('a,'r) result list) : ('a,'r) result =
   match l with
-  | [] -> empty
+  | [] -> empty ()
   | hd :: tl -> List.fold_left join hd tl
 
 
 (** Meet a list of results *)
 let meet_list ~empty (l: ('a,'r) result list) : ('a,'r) result =
   match l with
-  | [] -> empty
+  | [] -> empty ()
   | hd :: tl -> List.fold_left meet hd tl
 
 

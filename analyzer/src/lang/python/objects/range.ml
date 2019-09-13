@@ -103,7 +103,7 @@ struct
         (fun _ flow ->
            let res = man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow in
            let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
-           Eval.join_list (Eval.copy_ctx stopiteration res :: stopiteration :: []) ~empty:(Eval.empty_singleton flow)
+           Eval.join_list (Eval.copy_ctx stopiteration res :: stopiteration :: []) ~empty:(fun () -> Eval.empty_singleton flow)
         )
       |> Option.return
 

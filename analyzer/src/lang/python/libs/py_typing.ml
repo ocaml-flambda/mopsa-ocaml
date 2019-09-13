@@ -51,7 +51,8 @@ module Domain =
         (* FIXME: we could eval i as a tuple, but then we would be somehow stuck I think *)
         bind_list (List.map (fun (e:expr) -> mk_expr (E_py_annot e) range) annots) (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
         bind_some (fun types flow ->
-            Eval.join_list ~empty:(Eval.empty_singleton flow) (List.map (fun e -> Eval.singleton e flow) types)
+            Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow)
+              (List.map (fun e -> Eval.singleton e flow) types)
           )
         |> Option.return
 

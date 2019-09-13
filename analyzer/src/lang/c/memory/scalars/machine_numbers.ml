@@ -119,7 +119,7 @@ struct
           else
             []
         in
-        Eval.join_list (case1 @ case2) ~empty:(Eval.empty_singleton flow)
+        Eval.join_list (case1 @ case2) ~empty:(fun () -> Eval.empty_singleton flow)
 
       | _ -> fast_check e flow
 
@@ -223,7 +223,7 @@ struct
     | E_binop(op, e1, e2) when is_logic_op op ->
       { e with ekind = E_binop(op, to_compare_expr e1, to_compare_expr e2) }
 
-    | E_unop(O_log_not, ee) -> 
+    | E_unop(O_log_not, ee) ->
       { e with ekind = E_unop(O_log_not, to_compare_expr ee) }
 
     | _ ->
@@ -319,7 +319,7 @@ struct
       Eval.singleton exp' flow |>
       Option.return
 
-  
+
     | E_c_cast(e, b) when exp |> etyp |> is_c_int_type &&
                           e   |> etyp |> is_c_float_type ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e flow ->

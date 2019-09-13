@@ -161,7 +161,7 @@ struct
   let rangeof_int_cell c =
     assert(is_int_cell c);
     rangeof (cell_type c)
-  
+
 
 
   (** {2 Cell variables} *)
@@ -208,7 +208,7 @@ struct
   let mk_cell_var c : var =
     let name = mk_cell_var_name c in
     mkv name (V_c_cell c) (cell_type c)
-  
+
 
   (** Create a variable from a numeric cell *)
   let mk_numeric_cell_var_expr c range : expr =
@@ -226,7 +226,7 @@ struct
     else mk_c_cast (mk_var v ~mode:(base_mode c.base) range) typ range
 
 
-    
+
   (** {2 Domain header} *)
   (** ***************** *)
 
@@ -642,8 +642,8 @@ struct
                     match uu with
                     | Some size -> Z.sub size elm
                     | None ->
-                      (* We are in trouble: the size is not bounded! 
-                         So we assume that it does not exceed the range of unsigned long, usually used for size_t 
+                      (* We are in trouble: the size is not bounded!
+                         So we assume that it does not exceed the range of unsigned long, usually used for size_t
                       *)
                       let _, uuu = rangeof ul in
                       Soundness.warn_at range
@@ -675,7 +675,7 @@ struct
                       Result.singleton (Cell c) flow :: aux (i + 1) (Z.add o step)
                 in
                 let evals = aux 0 l in
-                Result.join_list ~empty:(Result.empty_singleton flow) evals
+                Result.join_list ~empty:(fun () -> Result.empty_singleton flow) evals
             )
           ~felse:(fun flow ->
               let flow = raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow in
@@ -953,7 +953,7 @@ struct
       eval_deref_quantified p exp.erange man flow |>
       Option.return
 
-    | E_stub_primed e when is_expr_quantified exp -> 
+    | E_stub_primed e when is_expr_quantified exp ->
       eval_deref_quantified (mk_c_address_of e exp.erange) exp.erange man flow |>
       Option.return
 
