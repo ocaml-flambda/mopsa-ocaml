@@ -1,6 +1,6 @@
 class overload: pass
 Any = object # cheating, removed the ()
-# TypeVar = object()
+TypeVar = object()
 
 class Union: pass
 

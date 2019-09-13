@@ -208,27 +208,7 @@ struct
           | _ -> Exceptions.panic_at range "%a@\n" pp_expr e)
       |> Option.return
 
-    | S_py_check_annot (e, annot) ->
-      begin match ekind annot with
-      | E_var (v, mode) when is_builtin_name @@ get_orig_vname v ->
-        man.exec (mk_assume (mk_py_isinstance_builtin e (get_orig_vname v) range) range) flow
-        |> Post.return
-        |> Option.return
 
-      | E_py_index_subscript ({ekind = E_py_object _} as e1, e2) ->
-        warn_at range "S_py_check_annot subscript e1=%a e2=%a now in the wild" pp_expr e1 pp_expr e2;
-        None
-
-      | E_py_index_subscript (e1, e2) ->
-        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e1 flow |>
-        bind_some (fun e1 flow ->
-            warn_at range "trasnlated to e1=%a e2=%a" pp_expr e1 pp_expr e2;
-            man.exec ~zone:Zone.Z_py_obj ({stmt with skind = S_py_check_annot (e, {annot with ekind = E_py_index_subscript (e1, e2)})}) flow |> Post.return
-          )
-        |> Option.return
-
-      | _ -> Exceptions.panic_at range "S_py_check_annot: %a not supported" pp_expr annot
-      end
 
     | S_assign({ekind = E_py_attribute(lval, attr)}, rval) ->
       (* TODO: setattr *)
@@ -441,64 +421,6 @@ struct
         )
       |> Option.return
 
-    | E_py_annot e ->
-      begin match ekind e with
-        | E_var (v, mode) when is_builtin_name @@ get_orig_vname v ->
-          let name = get_orig_vname v in
-          begin match name with
-          | "int" ->
-            (fun s -> Eval.singleton (mk_py_object (s (), None) range) flow) addr_integers
-          | "float" ->
-            (fun s -> Eval.singleton (mk_py_object (s (), None) range) flow) addr_float
-          | "NotImplementedType" ->
-            (fun s -> Eval.singleton (mk_py_object (s (), None) range) flow) addr_notimplemented
-          | "NoneType" ->
-            (fun s -> Eval.singleton (mk_py_object (s (), None) range) flow) addr_none
-          | _ ->
-            allocate_builtin ~mode:WEAK man range flow (get_orig_vname v) (Some e)
-          end
-          |> Option.return
-
-        | E_var (v, mode) ->
-          debug "E_annot %s" v.vname;
-          begin try
-              let e = Hashtbl.find type_aliases v in
-              debug "found type alias, replacing %a by %a" pp_var v pp_expr e;
-              man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_annot e) range) flow |> Option.return
-            with Not_found ->
-              man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call e [] range) flow |> Option.return
-          end
-
-        | E_py_attribute ({ekind = E_var (v, _)}, s) ->
-          debug "searching %a in the type aliases..." pp_expr e;
-          begin
-            try
-              (* FIXME ouch, not found in man.eval would also get caught... *)
-              (* FIXME: this also means that if a.pyi defines alias b and b.pyi too, we'll encounter some trouble *)
-              let r = find_type_alias_by_name s in
-              man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_annot r) range) flow |> Option.return
-            with Not_found ->
-              debug "not found, trying usual evaluation";
-              man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |> Option.return
-          end
-
-        | E_py_index_subscript ({ekind = E_py_object _} as e1, e2) ->
-          warn_at range "E_py_annot subscript e1=%a e2=%a now in the wild" pp_expr e1 pp_expr e2;
-          None
-
-        | E_py_index_subscript (e1, e2) ->
-          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e1 flow |>
-          bind_some (fun e1 flow ->
-              warn_at range "trasnlated to e1=%a e2=%a" pp_expr e1 pp_expr e2;
-              man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) {exp with ekind = E_py_annot {e with ekind = E_py_index_subscript(e1, e2)}} flow
-            )
-          |> Option.return
-
-
-
-        | _ ->
-          Exceptions.panic_at range "Unsupported type annotation %a@\n" pp_expr e
-      end
 
 
     | _ -> None

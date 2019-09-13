@@ -426,7 +426,7 @@ let () =
            | A_py_class(C_user c, _) -> fprintf fmt "u{%a}" pp_var c.py_cls_var
            | A_py_class((C_builtin c | C_unsupported c), _) -> fprintf fmt "cb{%s}" c
            | A_py_function(F_user f) -> fprintf fmt "function %a" pp_var f.py_func_var
-           | A_py_function(F_annot f) -> fprintf fmt "f-annot %a" pp_var f.py_funca_var
+           | A_py_function(F_annot f) -> fprintf fmt "f-annot %a@\n%a" pp_var f.py_funca_var Ast.pp_py_func_annot f
            | A_py_function((F_builtin f | F_unsupported f)) -> fprintf fmt "builtin-function %s" f
            | A_py_method(f, e) -> fprintf fmt "method %a of %a" pp_addr (addr_of_object f) pp_expr e
            | A_py_module(M_builtin(m)) -> fprintf fmt "module %s" m

@@ -172,31 +172,6 @@ module Domain =
         let exp' = mk_py_call (mk_py_object f range) (e :: args) range in
         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) exp' flow |> Option.return
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function(F_annot pyannot)}, _)}, args, kwargs) ->
-        (* FIXME: kwargs *)
-        let sigs = List.filter (fun sign -> List.length args = List.length sign.py_funcs_types_in) pyannot.py_funca_sig in
-
-        let filter_sig in_types flow =
-          List.fold_left2 (fun acc arg annot ->
-                                                        (* woops if self of method *)
-              man.exec (mk_stmt (S_py_check_annot (arg, (Option.none_to_exn annot))) range) acc
-            )  flow args in_types in
-        let apply_sig flow signature =
-          let flow = filter_sig signature.py_funcs_types_in flow in
-          man.exec (mk_stmt (S_py_annot (mk_var pyannot.py_funca_ret_var range,
-                                         mk_expr (E_py_annot (Option.none_to_exn signature.py_funcs_type_out)) range))
-                      range) flow
-        in
-        Eval.join_list ~empty:(
-          let () = Format.fprintf Format.str_formatter "%a does not match any signature provided in the stubs" pp_var pyannot.py_funca_var in
-          man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |> Eval.empty_singleton)
-          (List.fold_left (fun acc sign ->
-               let nflow = apply_sig flow sign in
-               if Flow.is_bottom man.lattice nflow then acc
-               else
-               man.eval (mk_var pyannot.py_funca_ret_var range) nflow :: acc
-             ) [] sigs)
-        |> Option.return
 
       | _ -> None
 

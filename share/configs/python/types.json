@@ -53,6 +53,7 @@
                       "python.types.addr_env",
                       "python.types.nominal_types",
                       "python.types.structural_types",
+                      "python.types.type_annot",
                       "python.objects.list",
                       "python.objects.tuple",
                       "python.objects.dict",
