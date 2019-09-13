@@ -940,18 +940,9 @@ let () =
     )
 
 let range_cond e_mint rmin rmax range =
-  let condle = {ekind = E_binop(O_le, e_mint, mk_z rmax (tag_range range "wrap_le_z"));
-                etyp  = T_bool;
-                erange = tag_range range "wrap_le"
-               } in
-  let condge = {ekind = E_binop(O_ge, e_mint, mk_z rmin (tag_range range "wrap_ge_z"));
-                etyp  = T_bool;
-                erange = tag_range range "wrap_ge"
-               } in
-  {ekind = E_binop(O_log_and, condle, condge);
-   etyp = T_bool;
-   erange = tag_range range "wrap_full"
-  }
+  let condle = mk_binop e_mint O_le (mk_z rmax range) ~etyp:T_bool range in
+  let condge = mk_binop e_mint O_ge (mk_z rmin range) ~etyp:T_bool range in
+  mk_binop condle O_log_and condge ~etyp:T_bool range
 
 let rec remove_casts e =
   match ekind e with

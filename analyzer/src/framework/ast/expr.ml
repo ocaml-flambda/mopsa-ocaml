@@ -36,9 +36,10 @@ type expr_kind = ..
 
 (** An expression is identified by a kind, a type and a location *)
 type expr = {
-  ekind: expr_kind;
-  etyp: typ;
-  erange: Location.range;
+  ekind: expr_kind; (** kind of the expression *)
+  etyp: typ; (** type of the expression *)
+  erange: Location.range; (** range of the expression *)
+  eprev: expr option; (** previous form of the expression *)
 }
 
 
@@ -143,10 +144,11 @@ let () =
 
 let mk_expr
     ?(etyp = T_any)
+    ?(eprev = None)
     ekind
     erange
   =
-  {ekind; etyp; erange}
+  {ekind; etyp; erange; eprev}
 
 let mk_var v ?(mode = STRONG) erange =
   mk_expr ~etyp:v.vtyp (E_var(v, mode)) erange

@@ -130,6 +130,16 @@ let map_cases
   }
 
 
+(** Map outputs of a result *)
+let map (f:'r->'r) (r:('a,'r) result) : ('a,'r) result =
+  map_cases (fun case ->
+      match case.case_output with
+      | Some o -> { case with case_output = Some (f o) }
+      | None -> case
+    ) r
+  
+
+
 (** Map each case with with function [f] if the return value is
     non-empty, otherwise remove the case *)
 let map_opt (f:'r -> 's option option) (r:('a,'r) result) : ('a,'s) result =

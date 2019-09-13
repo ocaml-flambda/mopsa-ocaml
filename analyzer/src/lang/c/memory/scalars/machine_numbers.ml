@@ -160,11 +160,7 @@ struct
         full_check ()
 
     and full_check () =
-      let cond = {ekind = E_binop(O_eq, e', mk_z Z.zero (tag_range range "div0"));
-                  etyp  = T_bool;
-                  erange = tag_range range "div0cond"
-                 }
-      in
+      let cond = mk_binop e' O_eq (mk_zero range) ~etyp:T_bool range in
       assume
         ~zone:Z_u_num
         cond
@@ -283,10 +279,7 @@ struct
         (fun e tflow -> Eval.singleton e tflow)
         (fun e fflow ->
            let flow1 = raise_c_alarm AIntegerOverflow exp.erange ~bottom:false man.lattice fflow in
-           Eval.singleton
-             {ekind  = E_unop(O_wrap(rmin, rmax), e);
-              etyp   = to_universal_type typ;
-              erange = tag_range range "wrap"} flow1
+           Eval.singleton (mk_unop (O_wrap(rmin, rmax)) e ~etyp:(to_universal_type typ) range) flow1
         ) e flow |>
       Option.return
 
@@ -300,21 +293,17 @@ struct
         (fun e tflow -> Eval.singleton e tflow)
         (fun e fflow ->
            let flow1 = raise_c_alarm AIntegerOverflow exp.erange ~bottom:false man.lattice fflow in
-           Eval.singleton
-             {ekind  = E_unop(O_wrap(rmin, rmax), e);
-              etyp   = to_universal_type typ;
-              erange = tag_range range "wrap"} flow1
+           Eval.singleton (mk_unop (O_wrap(rmin, rmax)) e ~etyp:(to_universal_type typ) range) flow1
         ) e flow |>
       Option.return
 
     | E_c_cast(e, b) when exp |> etyp |> is_c_float_type &&
                           e   |> etyp |> is_c_int_type ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e flow ->
-      let exp' = {
-        ekind = E_unop (O_cast (to_universal_type e.etyp, to_universal_type exp.etyp), e);
-        etyp = to_universal_type exp.etyp;
-        erange = exp.erange
-      }
+      let exp' = mk_unop
+          (O_cast (to_universal_type e.etyp, to_universal_type exp.etyp))
+          e
+          ~etyp:(to_universal_type exp.etyp) exp.erange
       in
       Eval.singleton exp' flow |>
       Option.return
@@ -323,11 +312,10 @@ struct
     | E_c_cast(e, b) when exp |> etyp |> is_c_int_type &&
                           e   |> etyp |> is_c_float_type ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e flow ->
-      let exp' = {
-        ekind = E_unop (O_cast (to_universal_type e.etyp, to_universal_type exp.etyp), e);
-        etyp = to_universal_type exp.etyp;
-        erange = exp.erange
-      }
+      let exp' = mk_unop
+          (O_cast (to_universal_type e.etyp, to_universal_type exp.etyp))
+          e
+          ~etyp:(to_universal_type exp.etyp) exp.erange
       in
       Eval.singleton exp' flow |>
       Option.return
@@ -349,24 +337,10 @@ struct
           (fun e tflow -> Eval.singleton {e with etyp = to_universal_type t} tflow)
           (fun e fflow ->
              if b && !opt_ignore_cast_alarm then
-               begin
-                 Eval.singleton
-                   ({ekind  = E_unop(O_wrap(rmin, rmax), e);
-                     etyp   = to_universal_type t;
-                     erange = tag_range range "wrap"
-                    }) fflow
-
-               end
+                 Eval.singleton (mk_unop (O_wrap(rmin, rmax)) e ~etyp:(to_universal_type t) range) fflow
              else
-               begin
-                 let flow1 = raise_c_alarm AIntegerOverflow exp.erange ~bottom:false man.lattice fflow in
-                 Eval.singleton
-                   {ekind  = E_unop(O_wrap(rmin, rmax), e);
-                    etyp   = to_universal_type t;
-                    erange = tag_range range "wrap"
-                   }
-                   flow1
-               end
+               let flow1 = raise_c_alarm AIntegerOverflow exp.erange ~bottom:false man.lattice fflow in
+               Eval.singleton (mk_unop (O_wrap(rmin, rmax)) e ~etyp:(to_universal_type t) range) flow1
           ) e' flow |>
         Option.return
 

@@ -92,3 +92,5 @@ let apply f join meet empty evl =
        | None -> empty
     )
     join meet evl
+
+let map = Result.map
