@@ -584,22 +584,6 @@ struct
         )
       |> Option.return
 
-
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.join" as f))}, _)}, args, []) ->
-      Utils.check_instances f man flow range args
-        ["str"; "list"]
-        (fun eargs flow ->
-           let toinsert, iterable = match eargs with [t; i] -> t, i | _ -> assert false in
-           let var_els_iterable = var_of_eobj iterable in
-           assume (mk_py_isinstance_builtin (mk_var ~mode:WEAK var_els_iterable range) "str" range) man flow
-             ~fthen:(man.eval (mk_py_top T_string range))
-             ~felse:(fun flow ->
-                 man.exec (Utils.mk_builtin_raise_msg "TypeError" "sequence item: expected str instance" range) flow |>
-                 Eval.empty_singleton
-               )
-        )
-      |> Option.return
-
     (* the last case of str.split uses this list abstraction so every case is here... *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.split")}, _)} as call, [str], []) ->
       (* rewrite into str.split(str, " ", -1) *)

@@ -78,7 +78,10 @@ struct
     match ekind exp with
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function(F_annot pyannot)}, _)}, args, kwargs) ->
       (* FIXME: kwargs *)
-      let sigs = List.filter (fun sign -> List.length args = List.length sign.py_funcs_types_in) pyannot.py_funca_sig in
+      let sigs = List.filter (fun sign ->
+          let ndefaults = List.fold_left (fun count el -> if el then count + 1 else count) 0 sign.py_funcs_defaults in
+          List.length sign.py_funcs_types_in - ndefaults <= List.length args &&
+          List.length args <= List.length sign.py_funcs_types_in) pyannot.py_funca_sig in
       let filter_sig in_types flow =
         List.fold_left2 (fun acc arg annot ->
             (* woops if self of method *)
@@ -95,7 +98,17 @@ struct
             (fun s tycur tynew acc -> assert false)
             cur new_typevars TVMap.empty in
         let flow = set_env T_cur ncur man flow in
-        let flow = filter_sig signature.py_funcs_types_in flow in
+        let in_types = (* remove types having a default parameter and no argument *)
+          let rec filter types defaults args acc =
+            match defaults, args with
+            | dhd::dtl, ahd::atl ->
+              filter (List.tl types) dtl atl ((List.hd types) :: acc)
+            | _, [] -> List.rev acc
+            | [], _ -> assert false
+          in
+          filter signature.py_funcs_types_in signature.py_funcs_defaults args []
+        in
+        let flow = filter_sig in_types flow in
         man.exec (mk_add_var pyannot.py_funca_ret_var range) flow |>
         man.exec (mk_stmt (S_py_annot (mk_var pyannot.py_funca_ret_var range,
                                        mk_expr (E_py_annot (Option.none_to_exn signature.py_funcs_type_out)) range))
@@ -159,6 +172,18 @@ struct
               man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |> Option.return
           end
 
+        | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_user c, _)}, _)} as e, i) when get_orig_vname c.py_cls_var = "Pattern" ->
+          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call e [] range) flow
+          |> Eval.bind (fun ee flow ->
+              match ekind ee with
+              | E_py_object (addr, _) ->
+                debug "coucou";
+                man.exec (mk_stmt (S_py_annot (mk_var (mk_addr_attr addr "typ" T_any) range, (mk_expr (E_py_annot i) range))) range) flow |>
+                Eval.singleton ee
+              | _ -> assert false
+            )
+          |> Option.return
+
         | E_py_index_subscript ({ekind = E_py_object _} as e1, e2) ->
           warn_at range "E_py_annot subscript e1=%a e2=%a now in the wild" pp_expr e1 pp_expr e2;
           None
@@ -170,6 +195,7 @@ struct
               man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) {exp with ekind = E_py_annot {e with ekind = E_py_index_subscript(e1, e2)}} flow
             )
           |> Option.return
+
 
         | E_py_call ({ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)}, {ekind = E_constant (C_string s)}::[], []) ->
           Exceptions.panic_at range "generic typevar annot"

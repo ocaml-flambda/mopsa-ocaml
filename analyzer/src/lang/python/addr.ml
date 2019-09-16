@@ -162,7 +162,7 @@ let add_typed_function_overload obj =
     let obj_sig = match akind @@ fst obj with
       | A_py_function (F_annot f) -> f.py_funca_sig
       | _ -> assert false in
-    let newf = {oldf with py_funca_sig=(obj_sig @ oldf.py_funca_sig)} in
+    let newf = {oldf with py_funca_sig=(oldf.py_funca_sig @ obj_sig)} in
     Hashtbl.remove typed_functions (object_name obj);
     Hashtbl.add typed_functions (object_name obj) ({a with addr_kind = A_py_function (F_annot newf)}, snd obj);
   | _ -> assert false

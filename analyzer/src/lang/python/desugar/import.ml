@@ -132,10 +132,10 @@ module Domain =
                 else if Sys.file_exists tentative2 then tentative2
                 else if Sys.file_exists tentative3 then tentative3
                 else panic_at range "module %s not found (searched in %s and in %s and in the current directory)" name dir (dir ^ "/typeshed/") in
-              let (a, e), body, is_stub =
+              let (a, e), body, is_stub, flow =
                 if filename = dir ^ "/typeshed/" ^ name ^ ".pyi" then
-                  let o, b = import_stubs_module man (dir ^ "/typeshed") name flow in
-                  o, b, true
+                  let o, b, flow = import_stubs_module man (dir ^ "/typeshed") name flow in
+                  o, b, true, flow
                 else
                   let prog = Frontend.parse_program [filename] in
                   let globals, body =
@@ -149,7 +149,7 @@ module Domain =
                     addr_mode = STRONG;
                   }
                   in
-                  (addr, None), body, false in
+                  (addr, None), body, false, flow in
               let flow' = man.exec body flow in
               Hashtbl.add imported_modules name ((a, e), is_stub);
               (a, e), flow', is_stub
@@ -230,7 +230,7 @@ module Domain =
       let globals, stmts = match prog.prog_kind with
         | Py_program(g, b) -> g, b
         | _ -> assert false in
-      let rec parse stmt globals : stmt * var list =
+      let rec parse stmt globals flow : stmt * var list * 'a flow  =
         let range = srange stmt in
         match skind stmt with
         | S_assign ({ekind = E_var (v, _)}, e) ->
@@ -239,12 +239,15 @@ module Domain =
           add_type_alias v e;
           (* add to map *)
           {stmt with skind = S_block []},
-          List.filter (fun var -> compare_var var v <> 0) globals
+          List.filter (fun var -> compare_var var v <> 0) globals,
+          flow
 
         (* FIXME: if a = int in typing and b = a in base, what happens? *)
-        | S_py_import _
-        | S_py_import_from _ ->
-          stmt, globals
+        | S_py_import (s, _, _)
+        | S_py_import_from (s, _, _, _) ->
+          debug "hum, maybe we should import %s first" s;
+          {stmt with skind = S_block []}, globals, man.exec stmt flow
+
 
         (* FIXME: and substitution for other modules? *)
         | S_py_annot _
@@ -254,6 +257,8 @@ module Domain =
               | E_var (v, m) ->
                 begin
                   try
+                    if get_orig_vname v = "AnyStr" then
+                      debug "AnyStr: in type_aliases: %b" (Hashtbl.mem type_aliases v);
                     let substexpr = Hashtbl.find type_aliases v in
                     (* let rec recsubst expr =
                      *   match ekind expr with
@@ -276,7 +281,7 @@ module Domain =
             | {py_func_decors = [{ekind = E_var( {vkind = V_uniq ("overload",_)}, _)}]} -> true
             | _ -> false in
           begin match skind stmt with
-            | S_py_annot _ | S_py_class _ -> stmt, globals
+            | S_py_annot _ | S_py_class _ -> stmt, globals, flow
             | S_py_function f ->
               let newf =
                 { py_funca_var = f.py_func_var;
@@ -303,27 +308,27 @@ module Domain =
               else
                 add_typed_function (addr, None) in
               debug "done";
-              {stmt with skind = S_block []}, globals
+              {stmt with skind = S_block []}, globals, flow
             | _ -> assert false
           end
 
         | S_block(block) ->
-          let newblock, newglobals = List.fold_left (fun (nb, ng) s ->
-              let news, g = parse s ng in
+          let newblock, newglobals, newflow = List.fold_left (fun (nb, ng, nf) s ->
+              let news, g, nf = parse s ng nf in
               match skind news with
-              | S_block [] -> nb, g
-              | _ -> news::nb, g
-            ) ([], globals) block in
+              | S_block [] -> nb, g, nf
+              | _ -> news::nb, g, nf
+            ) ([], globals, flow) block in
           let newblock = List.rev newblock in
-          {stmt with skind = S_block newblock}, newglobals
+          {stmt with skind = S_block newblock}, newglobals, newflow
 
         | _ -> panic_at range "stmt %a not supported in stubs file %s" pp_stmt stmt name
       in
-      let body, globals = parse stmts globals in
+      let body, globals, flow = parse stmts globals flow in
       let addr = { addr_kind = A_py_module(M_user (name, globals));
                    addr_group = G_all;
                    addr_mode = STRONG; } in
-      (addr, None), body
+      (addr, None), body, flow
 
     let init prog man flow =
       import_builtin_module (Some "mopsa") "mopsa";

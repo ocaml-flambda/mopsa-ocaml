@@ -58,6 +58,7 @@
                       "python.objects.tuple",
                       "python.objects.dict",
                       "python.objects.set",
+                      "python.objects.iterable",
                       "python.values.string"
                   ]
                 }
