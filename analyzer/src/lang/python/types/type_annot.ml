@@ -48,7 +48,7 @@ struct
     end)
 
   let interface = {
-    iexec = {provides = [Zone.Z_py]; uses = []};
+    iexec = {provides = [Zone.Z_py]; uses = [Zone.Z_py]};
     ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
   }
 
@@ -231,6 +231,22 @@ struct
           |> Post.return
           |> Option.return
 
+        | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_user c, _)}, _)} as pattern, i) when get_orig_vname c.py_cls_var = "Pattern" ->
+          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
+          Eval.bind (fun ee flow ->
+              assume (mk_py_isinstance ee pattern range) man flow
+                ~fthen:(fun flow ->
+                    let ee_addr = match ekind ee with
+                      | E_py_object (a, _) -> a
+                      | _ -> assert false in
+                    man.exec ~zone:Zone.Z_py (mk_stmt (S_py_check_annot (mk_var (mk_addr_attr ee_addr "typ" T_any) range, i)) range) flow |> Post.return
+                  )
+                ~felse:(fun flow ->
+                    Post.return (Flow.bottom (Flow.get_ctx flow) (Flow.get_alarms flow)))
+            )
+          |> Option.return
+
+
         | E_py_index_subscript ({ekind = E_py_object _} as e1, e2) ->
           warn_at range "S_py_check_annot subscript e1=%a e2=%a now in the wild" pp_expr e1 pp_expr e2;
           None
@@ -239,7 +255,7 @@ struct
           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e1 flow |>
           bind_some (fun e1 flow ->
               warn_at range "translated to e1=%a e2=%a" pp_expr e1 pp_expr e2;
-              man.exec ~zone:Zone.Z_py_obj ({stmt with skind = S_py_check_annot (e, {annot with ekind = E_py_index_subscript (e1, e2)})}) flow |> Post.return
+              man.exec ~zone:Zone.Z_py ({stmt with skind = S_py_check_annot (e, {annot with ekind = E_py_index_subscript (e1, e2)})}) flow |> Post.return
             )
           |> Option.return
 
