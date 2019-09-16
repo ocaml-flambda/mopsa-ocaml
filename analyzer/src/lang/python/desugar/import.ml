@@ -296,7 +296,6 @@ module Domain =
                 addr_group = G_all;
                 addr_mode = STRONG;
               } in
-              debug "adding F_annot %a, hd decors = %a" pp_addr addr pp_expr (List.hd f.py_func_decors);
               let () =
                 if is_typingoverload_fundec f then
                   let () = debug "typing overload on %a" pp_var f.py_func_var in

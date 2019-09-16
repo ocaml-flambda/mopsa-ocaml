@@ -46,11 +46,13 @@ let rec translate_program program =
   debug "starting at counter = %d@\n" !counter;
   debug "program.prog_globals = %a@\n" pp_globs program.prog_globals;
   let globals = List.rev @@ List.fold_left (fun acc var_wouid ->
-      if List.mem var_wouid.name Builtins.all then acc else
+      (* if List.mem var_wouid.name Builtins.all then
+       *   acc
+       * else *)
         (create_new_uid var_wouid) :: acc) [] program.prog_globals in
   debug "globals is now:@\n%a@\n" pp_globs globals;
   let translated_prog = {
-    prog_body = translate_stmt (gc @ globals, []) program.prog_body;
+    prog_body = translate_stmt (globals @ gc, []) program.prog_body;
     prog_globals = globals;
   } in
   translated_prog, !counter
@@ -288,7 +290,10 @@ and translate_comprehension (comprhs, scope) (target, iter, conds) =
   (comprh' :: comprhs), scope'
 
 and find_in_scope (globals, lscope) range v =
+  let search v' = v.name = v'.name in
   try
-    List.find (fun v' -> v.name = v'.name) (lscope @ globals)
+    List.find search lscope
   with Not_found ->
-    Exceptions.panic "Unbounded variable %a at range %a" Pp.print_var v Location.pp_range range
+    try List.find search globals
+    with Not_found ->
+      Exceptions.panic "Unbounded variable %a at range %a" Pp.print_var v Location.pp_range range

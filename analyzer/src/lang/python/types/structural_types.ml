@@ -245,12 +245,14 @@ struct
 
         | A_py_module (M_user (name, globals)) ->
           let v = List.find (fun x -> get_orig_vname x = attr) globals in
+          debug "searching for %s" (name ^ "." ^ attr);
           (* FIXME: is that normal?! used in stub module unittest with builtin unittest.TestCase... *)
           if is_builtin_name (name ^ "." ^ attr) then
             Eval.singleton (mk_py_object (find_builtin_attribute obj attr) range) flow
           (* else if Hashtbl.mem typed_functions attr then
            *   failwith "~ok" *)
           else
+            let () = debug "else for var %a" pp_var v in
             man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var v range) flow
 
         | A_py_class (C_builtin c, b) ->

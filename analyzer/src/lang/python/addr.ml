@@ -174,14 +174,13 @@ let add_builtin_module obj () =
 (** Search for the address of a builtin given its name *)
 let find_builtin name =
   let search = fun tbl -> Hashtbl.find tbl name in
-  try
-    search classes
+  try search typed_functions
+  with Not_found ->
+  try search classes
   with Not_found ->
   try search functions
   with Not_found ->
-  try search modules
-  with Not_found ->
-    search typed_functions
+    search modules
 
 
 let is_object_unsupported obj =

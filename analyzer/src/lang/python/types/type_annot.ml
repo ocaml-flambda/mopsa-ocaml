@@ -102,8 +102,9 @@ struct
                     range) , new_typevars
       in
       Eval.join_list ~empty:(
-        fun () -> let () = Format.fprintf Format.str_formatter "%a does not match any signature provided in the stubs" pp_var pyannot.py_funca_var in
-        man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |> Eval.empty_singleton)
+        fun () ->
+          let () = Format.fprintf Format.str_formatter "%a does not match any signature provided in the stubs" pp_var pyannot.py_funca_var in
+          man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |> Eval.empty_singleton)
         (List.fold_left (fun acc sign ->
              let nflow, ntypevars = apply_sig flow sign in
              debug "nflow after apply_sig = %a@\n" (Flow.print man.lattice.print) nflow;
