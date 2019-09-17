@@ -93,7 +93,7 @@ struct
       let params, body, flow = init_fun_params f args range man flow in
       let ret = match f.fun_return_type with
         | None -> None
-        | Some _ -> Some (mk_return_var f range)
+        | Some _ -> Some (mk_return_var exp)
       in
       inline f params body ret range man flow
       |> Option.return

@@ -62,39 +62,35 @@ let () =
 (** =================== *)
 
 
-(** Return variable of a function, annotated with the call site *)
-type var_kind += V_return of fundec * range
+(** Return variable of a function call *)
+type var_kind += V_return of expr
 
 (** Registration of the kind of return variables *)
 let () =
   register_var {
     print = (fun next fmt v ->
         match v.vkind with
-        | V_return (f,r) -> Format.fprintf fmt "ret_%s" f.fun_name
+        | V_return e -> Format.fprintf fmt "ret(%a)" pp_expr e
         | _ -> next fmt v
       );
     compare = (fun next v1 v2 ->
         match v1.vkind, v2.vkind with
-        | V_return(f1,r1), V_return(f2,r2) ->
+        | V_return e1, V_return e2 ->
           Compare.compose [
-            (fun () -> Pervasives.compare f1.fun_name f2.fun_name);
-            (fun () -> compare_range r1 r2);
+            (fun () -> compare_expr e1 e2);
+            (fun () -> compare_range e1.erange e2.erange);
           ]
         | _ -> next v1 v2
       );
   }
 
 (** Constructor of return variables *)
-let mk_return_var f range =
+let mk_return_var call =
   let uniq_name =
-    let () = Format.fprintf Format.str_formatter "ret_%s@@%a" f.fun_name pp_range range in
+    let () = Format.fprintf Format.str_formatter "ret(%a)@@%a" pp_expr call pp_range call.erange in
     Format.flush_str_formatter ()
   in
-  let t = match f.fun_return_type with
-    | Some t -> t
-    | None -> T_any
-  in
-  mkv uniq_name (V_return (f,range)) t
+  mkv uniq_name (V_return call) call.etyp
 
 
 (* Context to keep return variable *)
