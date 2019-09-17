@@ -112,7 +112,14 @@ struct
 
 
   (** Merging of divergent states *)
-  let merge pre (m1,log1) (m2,log2) = join m1 m2
+  let merge pre (m1,log1) (m2,log2) =
+    Map.map2o
+      (fun _ a1 -> a1)
+      (fun _ a2 -> a2)
+      (fun pack a1 a2 ->
+         let prea = try Map.find pack pre with Not_found -> Domain.top in
+         Domain.merge prea (a1,log1) (a2,log2)
+      ) m1 m2
 
 
   (** Initial state *)
@@ -129,12 +136,17 @@ struct
   (** Packs of a base memory block *)
   let packs_of_base ctx b =
     match b with
-    | V { vkind = V_cvar {cvar_scope = Variable_global} } ->
-      Set.singleton Globals
-    | V { vkind = V_cvar {cvar_scope = Variable_local f} } ->
+    | V { vkind = V_cvar {cvar_scope = Variable_global} }
+    | V { vkind = V_cvar {cvar_scope = Variable_file_static _} } ->
+      Set.empty
+
+    | V { vkind = V_cvar {cvar_scope = Variable_local f} }
+    | V { vkind = V_cvar {cvar_scope = Variable_func_static f} } ->
       Set.singleton (Locals f.c_func_unique_name)
+
     | V { vkind = V_cvar {cvar_scope = Variable_parameter f} } ->
       (* Parameters are part of the caller and the callee packs *)
+      debug "parameter of %s" f.c_func_org_name; 
       let cs = Context.ufind Callstack.ctx_key ctx in
       if Callstack.is_empty cs then Set.empty
       else
@@ -143,18 +155,25 @@ struct
         else
           let caller, _ = Callstack.pop cs' in
           Set.of_list [Locals caller.call_fun; Locals callee.call_fun]
-    | V { vkind = Universal.Iterators.Interproc.Common.V_return (f,range) } ->
+
+    | V { vkind = Universal.Iterators.Interproc.Common.V_return call } ->
       (* Return variables are also part of the caller and the callee packs *)
       (* Note that the top of the callstack is not always the callee
          function, because the return variable is used after the function
          returns 
       *)
+      debug "return of %a" pp_expr call; 
       let cs = Context.ufind Callstack.ctx_key ctx in
       if Callstack.is_empty cs then Set.empty
       else
         let f1, cs' = Callstack.pop cs in
+        let fname = match ekind call with
+          | E_call ({ekind = E_function (User_defined f)},_) -> f.fun_name
+          | Stubs.Ast.E_stub_call(f,_) -> f.stub_func_name
+          | _ -> assert false
+        in
         if Callstack.is_empty cs' then Set.singleton (Locals f1.call_fun)
-        else if f1.call_fun <> f.fun_name then Set.singleton (Locals f1.call_fun)
+        else if f1.call_fun <> fname then Set.singleton (Locals f1.call_fun)
         else
           let f2, _ = Callstack.pop cs' in
           Set.of_list [Locals f1.call_fun; Locals f2.call_fun]
@@ -166,22 +185,32 @@ struct
         let callee, _ = Callstack.pop cs in
         Set.singleton (Locals callee.call_fun)
     | _ ->
+      debug "empty base pack";
       Set.empty
 
 
+  let packs_of_base ctx b =
+    let packs = packs_of_base ctx b in
+    debug "packs(%a) = %a" pp_base b (Set.fprint SetExt.printer_default print) packs;
+    packs
+
 
   (** Packing function returning packs of a variable *)
-  let rec packs_of_expr ctx e =
+  let rec packs_of_var ctx prev v =
+    debug "packs_of_var(%a)" pp_var v;
+    match v.vkind with
+    | V_cvar _ -> packs_of_base ctx (V v)
+    | Lowlevel.Cells.Domain.V_c_cell {base} -> packs_of_base ctx base
+    | Lowlevel.String_length.Domain.V_c_string_length (base,_) -> packs_of_base ctx base
+    | Scalars.Pointers.Domain.Domain.V_c_ptr_offset vv -> packs_of_var ctx prev vv
+    | _ ->
+      match prev with
+      | None -> debug "empty var pack"; Set.empty
+      | Some e -> packs_of_expr ctx e
+
+  and packs_of_expr ctx e =
     match e.ekind with
-    | E_var ({ vkind = V_cvar _ } as v, _) -> packs_of_base ctx (V v)
-    | E_var ({ vkind = Lowlevel.Cells.Domain.V_c_cell {base}},_) -> packs_of_base ctx base
-    | E_var ({ vkind = Lowlevel.String_length.Domain.V_c_string_length (base,_)},_) -> packs_of_base ctx base
-    | E_var ({ vkind = Scalars.Pointers.Domain.Domain.V_c_ptr_offset vv},_) -> packs_of_base ctx (V vv)
-    | E_var _ ->
-      begin match e.eprev with
-        | None -> Set.empty
-        | Some ee -> packs_of_expr ctx ee
-      end
+    | E_var (v,_) -> packs_of_var ctx e.eprev v
     | E_unop(_, ee) -> packs_of_expr ctx ee
     | E_binop(_, e1, e2) -> Set.union (packs_of_expr ctx e1) (packs_of_expr ctx e2)
     | _ -> Set.empty
@@ -235,13 +264,25 @@ struct
 
   (** Transfer function of tests *)
   let exec_assume ctx cond range m =
+    let has_vars = Visitor.fold_expr
+        (fun b e ->
+           match ekind e with
+           | E_var _ -> Keep true
+           | _ -> if b then Keep true else VisitParts b
+        )
+        (fun b s -> if b then Keep true else VisitParts b)
+        false cond
+    in
     Map.mapi (fun pack a ->
-        let found, cond' = resolve_missing_variables ctx pack cond in
-        if found then
-          let stmt' = mk_assume cond' range in
-          Domain.exec ctx stmt' a |> Option.none_to_exn
+        if not has_vars then
+          Domain.exec ctx (mk_assume cond range) a |> Option.none_to_exn
         else
-          a
+          let found, cond' = resolve_missing_variables ctx pack cond in
+          if found then
+            let stmt' = mk_assume cond' range in
+            Domain.exec ctx stmt' a |> Option.none_to_exn
+          else
+            a
       ) m
 
   (** Transfer functions entry point *)

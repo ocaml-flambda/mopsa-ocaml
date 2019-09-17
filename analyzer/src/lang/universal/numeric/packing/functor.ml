@@ -109,7 +109,7 @@ struct
   let merge pre (a,log) (a',log') =
     match pre, a,a' with
     | TOP, _, _ | _, TOP, _ | _, _, TOP -> TOP
-    | Nt m, Nt m1, Nt m2 -> Nt (Strategy.merge m (m1,log) (m2,log))
+    | Nt m, Nt m1, Nt m2 -> Nt (Strategy.merge m (m1,log) (m2,log'))
 
 
   (** {2 Transfer functions} *)
