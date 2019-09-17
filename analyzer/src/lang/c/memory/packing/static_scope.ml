@@ -48,14 +48,14 @@ struct
   (** Packing key *)
   type key =
     | Globals (** Pack of global variables *)
-    | Locals of c_fundec (** Pack of local variables of a function *)
+    | Locals of string (** Pack of local variables of a function *)
 
 
   (** Total order of packing keys *)
   let compare k1 k2 =
     match k1, k2 with
     | Globals, Globals -> 0
-    | Locals f1, Locals f2 -> compare f1.c_func_unique_name f2.c_func_unique_name
+    | Locals f1, Locals f2 -> compare f1 f2
     | Globals, Locals _ -> 1
     | Locals _, Globals -> -1
 
@@ -63,7 +63,7 @@ struct
   (** Pretty printer of packing keys *)
   let print fmt = function
     | Globals -> Format.pp_print_string fmt "[globals]"
-    | Locals f -> Format.pp_print_string fmt f.c_func_org_name
+    | Locals f -> Format.pp_print_string fmt f
 
 
   (** Packing map binding keys to abstract elements *)
@@ -73,54 +73,6 @@ struct
   (** Set of packing keys *)
   module Set = SetExt.Make(struct type t = key let compare = compare end)
 
-
-  (** Packs of a base *)
-  let packs_of_base b =
-    match b with
-    | V { vkind = V_cvar {cvar_scope = Variable_global} } -> Set.singleton Globals
-    | V { vkind = V_cvar {cvar_scope = Variable_local f} } -> Set.singleton (Locals f)
-    | V { vkind = V_cvar {cvar_scope = Variable_parameter f} } -> Set.singleton (Locals f)
-    | _ -> Set.empty
-
-
-  (** Packing function returning packs of a variable *)
-  let rec packs_of_expr e =
-    match e.ekind with
-    | E_var ({ vkind = V_cvar _ } as v, _) -> packs_of_base (V v)
-    | E_var ({ vkind = Lowlevel.Cells.Domain.V_c_cell {base}},_) -> packs_of_base base
-    | E_var ({ vkind = Lowlevel.String_length.Domain.V_c_string_length (base,_)},_) -> packs_of_base base
-    | E_var ({ vkind = Scalars.Pointers.Domain.Domain.V_c_ptr_offset vv},_) -> packs_of_base (V vv)
-    | E_var _ ->
-      begin match e.eprev with
-        | None -> Set.empty
-        | Some ee -> packs_of_expr ee
-      end
-    | E_unop(_, ee) -> packs_of_expr ee
-    | E_binop(_, e1, e2) -> Set.union (packs_of_expr e1) (packs_of_expr e2)
-    | _ -> Set.empty
-
-
-  (** Check if an expression belongs to a pack *)
-  let mem_pack e pack =
-    let packs = packs_of_expr e in
-    Set.mem pack packs
-
-
-  (** Rewrite an expression by replacing variables not belonging to a pack by their over-approximation *)
-  let resolve_missing_variables pack e =
-    Visitor.fold_map_expr
-      (fun found ee ->
-         match ekind ee with
-         | E_var _ when mem_pack ee pack ->
-           Visitor.Keep (true, e)
-         | E_var _ ->
-           (* FIXME: use intervals instead of top *)
-           Visitor.Keep (found, mk_top ee.etyp ee.erange)
-         | _ ->
-           Visitor.VisitParts (found, ee)
-      )
-      (fun found s -> Visitor.VisitParts (found, s))
-      false e
 
 
   (** Inclusion test *)
@@ -167,51 +119,146 @@ struct
   let init prog = Map.singleton Globals (Domain.init prog)
 
 
+  let is_return_var ctx v =
+    try
+      let ret, _ = Context.ufind Universal.Iterators.Interproc.Common.return_key ctx in
+      compare_var ret v = 0
+    with Not_found ->
+      false
+  
+  (** Packs of a base memory block *)
+  let packs_of_base ctx b =
+    match b with
+    | V { vkind = V_cvar {cvar_scope = Variable_global} } ->
+      Set.singleton Globals
+    | V { vkind = V_cvar {cvar_scope = Variable_local f} } ->
+      Set.singleton (Locals f.c_func_unique_name)
+    | V { vkind = V_cvar {cvar_scope = Variable_parameter f} } ->
+      (* Parameters are part of the caller and the callee packs *)
+      let cs = Context.ufind Callstack.ctx_key ctx in
+      if Callstack.is_empty cs then Set.empty
+      else
+        let callee, cs' = Callstack.pop cs in
+        if Callstack.is_empty cs' then Set.empty
+        else
+          let caller, _ = Callstack.pop cs' in
+          Set.of_list [Locals caller.call_fun; Locals callee.call_fun]
+    | V { vkind = Universal.Iterators.Interproc.Common.V_return (f,range) } ->
+      (* Return variables are also part of the caller and the callee packs *)
+      (* Note that the top of the callstack is not always the callee
+         function, because the return variable is used after the function
+         returns 
+      *)
+      let cs = Context.ufind Callstack.ctx_key ctx in
+      if Callstack.is_empty cs then Set.empty
+      else
+        let f1, cs' = Callstack.pop cs in
+        if Callstack.is_empty cs' then Set.singleton (Locals f1.call_fun)
+        else if f1.call_fun <> f.fun_name then Set.singleton (Locals f1.call_fun)
+        else
+          let f2, _ = Callstack.pop cs' in
+          Set.of_list [Locals f1.call_fun; Locals f2.call_fun]
+    | V { vkind = V_tmp _ } ->
+      (* Temporary variables are considered as locals *)
+      let cs = Context.ufind Callstack.ctx_key ctx in
+      if Callstack.is_empty cs then Set.singleton Globals
+      else
+        let callee, _ = Callstack.pop cs in
+        Set.singleton (Locals callee.call_fun)
+    | _ ->
+      Set.empty
+
+
+
+  (** Packing function returning packs of a variable *)
+  let rec packs_of_expr ctx e =
+    match e.ekind with
+    | E_var ({ vkind = V_cvar _ } as v, _) -> packs_of_base ctx (V v)
+    | E_var ({ vkind = Lowlevel.Cells.Domain.V_c_cell {base}},_) -> packs_of_base ctx base
+    | E_var ({ vkind = Lowlevel.String_length.Domain.V_c_string_length (base,_)},_) -> packs_of_base ctx base
+    | E_var ({ vkind = Scalars.Pointers.Domain.Domain.V_c_ptr_offset vv},_) -> packs_of_base ctx (V vv)
+    | E_var _ ->
+      begin match e.eprev with
+        | None -> Set.empty
+        | Some ee -> packs_of_expr ctx ee
+      end
+    | E_unop(_, ee) -> packs_of_expr ctx ee
+    | E_binop(_, e1, e2) -> Set.union (packs_of_expr ctx e1) (packs_of_expr ctx e2)
+    | _ -> Set.empty
+
+
+  (** Check if an expression belongs to a pack *)
+  let mem_pack ctx e pack =
+    let packs = packs_of_expr ctx e in
+    Set.mem pack packs
+
+
+  (** Rewrite an expression by replacing variables not belonging to a pack by their over-approximation *)
+  let resolve_missing_variables ctx pack e =
+    Visitor.fold_map_expr
+      (fun found ee ->
+         match ekind ee with
+         | E_var _ when mem_pack ctx ee pack ->
+           Visitor.Keep (true, ee)
+         | E_var _ ->
+           (* FIXME: use intervals instead of top *)
+           Visitor.Keep (found, mk_top ee.etyp ee.erange)
+         | _ ->
+           Visitor.VisitParts (found, ee)
+      )
+      (fun found s -> Visitor.VisitParts (found, s))
+      false e
+
+
   (** Transfer function of assignments *)
-  let exec_assign v e range m =
+  let exec_assign ctx v e range m =
     (* Find packs of the lval *)
-    let packs = packs_of_expr v in
+    let packs = packs_of_expr ctx v in
+
     (* Initialize new packs *)
     let m = Set.fold (fun pack acc ->
         if Map.mem pack acc then acc else Map.add pack Domain.top acc
       ) packs m
     in
+    debug "%a = %a;" pp_expr v pp_expr e;
     (* Execute pointwise *)
     Map.mapi (fun pack a ->
         if Set.mem pack packs then
-          let _,e' = resolve_missing_variables pack e in
+          let _,e' = resolve_missing_variables ctx pack e in
+          debug "   assigning %a in pack %a" pp_expr e' print pack;
           let stmt' = mk_assign v e' range in
-          Domain.exec stmt' a |> Option.none_to_exn
+          Domain.exec ctx stmt' a |> Option.none_to_exn
         else
+          let () = debug "   skipping pack %a" print pack in
           a
       ) m
 
   (** Transfer function of tests *)
-  let exec_assume cond range m =
+  let exec_assume ctx cond range m =
     Map.mapi (fun pack a ->
-        let found, cond' = resolve_missing_variables pack cond in
+        let found, cond' = resolve_missing_variables ctx pack cond in
         if found then
           let stmt' = mk_assume cond' range in
-          Domain.exec stmt' a |> Option.none_to_exn
+          Domain.exec ctx stmt' a |> Option.none_to_exn
         else
           a
       ) m
 
   (** Transfer functions entry point *)
-  let exec stmt m =
+  let exec ctx stmt m =
     match skind stmt with
     | S_assign({ekind = E_var _} as v, e) ->
-      exec_assign v e stmt.srange m |>
+      exec_assign ctx v e stmt.srange m |>
       Option.return
 
     | S_assume(cond) ->
-      exec_assume cond stmt.srange m |>
+      exec_assume ctx cond stmt.srange m |>
       Option.return
 
     | _ ->
       try
         let m' = Map.map (fun a ->
-            Domain.exec stmt a |> Option.none_to_exn
+            Domain.exec ctx stmt a |> Option.none_to_exn
           ) m
         in
         Some m'
