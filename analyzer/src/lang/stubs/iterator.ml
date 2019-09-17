@@ -459,6 +459,10 @@ struct
         pp_stub_func stub
       ;
 
+      (* Update the callstack *)
+      let cs = Flow.get_callstack flow in
+      let flow = Flow.push_callstack stub.stub_func_name exp.erange flow in
+
       (* Initialize parameters *)
       let flow = init_params args stub.stub_func_params exp.erange man flow in
 
@@ -467,23 +471,16 @@ struct
         match stub.stub_func_return_type with
         | None -> None, flow
         | Some t ->
-          let return = mktmp ~typ:t () in
+          let return = Universal.Iterators.Interproc.Common.mk_return_var exp in
           let flow = man.exec (mk_add_var return exp.erange) flow in
           Some return, flow
       in
 
-      (* Update the callstack *)
-      let cs = Flow.get_callstack flow in
-      let flow = Flow.push_callstack stub.stub_func_name exp.erange flow in
-
-      (* Evaluate the body of the styb *)
+      (* Evaluate the body of the stb *)
       let flow = exec_body stub.stub_func_body return man flow in
 
       (* Clean locals and primes *)
       let flow = clean_post stub.stub_func_locals stub.stub_func_assigns stub.stub_func_range man flow in
-
-      (* Remove parameters *)
-      let flow = remove_params stub.stub_func_params exp.erange man flow in
 
       (* Restore the callstack *)
       let flow = Flow.set_callstack cs flow in
@@ -494,7 +491,10 @@ struct
           Option.return
 
         | Some v ->
-          Eval.singleton (mk_var v exp.erange) flow ~cleaners:[mk_remove_var v exp.erange] |>
+          Eval.singleton (mk_var v exp.erange) flow ~cleaners:(
+            mk_remove_var v exp.erange ::
+            List.map (fun param -> mk_remove_var param exp.erange) stub.stub_func_params
+          ) |>
           Option.return
       end
 
