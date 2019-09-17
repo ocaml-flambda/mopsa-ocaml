@@ -117,10 +117,10 @@ struct
 
   let init prog = Nt (Strategy.init prog)
 
-  let exec stmt a =
+  let exec ctx stmt a =
     match a with
     | TOP -> Some TOP
-    | Nt m -> Strategy.exec stmt m |>
+    | Nt m -> Strategy.exec ctx stmt m |>
               Option.lift (fun mm -> Nt mm)
 
   let ask q a =

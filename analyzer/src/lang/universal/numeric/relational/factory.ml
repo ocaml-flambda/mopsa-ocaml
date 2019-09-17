@@ -198,7 +198,7 @@ struct
     meet (a1',bnd) (a2',bnd)
 
 
-  let rec exec stmt (a,bnd) =
+  let rec exec ctx stmt (a,bnd) =
     match skind stmt with
     | S_add { ekind = E_var (var, _) } ->
       add_missing_vars (a,bnd) [var] |>
@@ -249,12 +249,12 @@ struct
           in
           Some (a', bnd)
         with UnsupportedExpression ->
-          exec (mk_remove_var var stmt.srange) (a,bnd)
+          exec ctx (mk_remove_var var stmt.srange) (a,bnd)
       end
 
     | S_assign({ ekind = E_var (var, WEAK) } as lval, e) ->
       let lval' = { lval with ekind = E_var(var, STRONG) } in
-      exec {stmt with skind = S_assign(lval', e)} (a,bnd) |>
+      exec ctx {stmt with skind = S_assign(lval', e)} (a,bnd) |>
       Option.lift @@ fun (a',bnd') ->
       join (a,bnd) (a', bnd')
 

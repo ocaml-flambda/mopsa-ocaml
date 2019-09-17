@@ -288,7 +288,7 @@ struct
 
   let zones = Value.zones
 
-  let exec stmt (map:t) : t option =
+  let exec ctx stmt (map:t) : t option =
     match skind stmt with
     | S_remove { ekind = E_var (v, _) }  ->
       VarMap.remove v map |>

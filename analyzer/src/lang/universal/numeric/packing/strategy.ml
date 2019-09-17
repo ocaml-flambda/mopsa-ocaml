@@ -62,7 +62,7 @@ sig
   val init : program -> Domain.t Map.t
   (** Initial state *)
 
-  val exec : stmt -> Domain.t Map.t -> Domain.t Map.t option
+  val exec : uctx -> stmt -> Domain.t Map.t -> Domain.t Map.t option
   (** Abstract transformer of statements *)
 
 end

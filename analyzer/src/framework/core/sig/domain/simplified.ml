@@ -104,7 +104,7 @@ sig
   val init : program -> t
   (** Initial abstract element *)
 
-  val exec : stmt -> t -> t option
+  val exec : uctx -> stmt -> t -> t option
   (** Computation of post-conditions *)
 
   val ask : 'r Query.query -> t -> 'r option
@@ -160,7 +160,7 @@ struct
            Option.return
 
       else
-        D.exec stmt a |>
+        D.exec (Flow.get_unit_ctx flow) stmt a |>
         Option.lift @@ fun a' ->
         Intermediate.set_env T_cur a' man flow |>
         Post.return |>
