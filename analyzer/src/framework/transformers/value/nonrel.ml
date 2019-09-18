@@ -101,8 +101,7 @@ struct
         let v = find var2 a in
         remove var1 acc |>
         add var2 v
-        
-        
+
       | S_remove { ekind = E_var (var, _) } ->
         remove var acc
 
@@ -287,7 +286,7 @@ struct
 
   let zones = Value.zones
 
-  let exec ctx stmt (map:t) : t option =
+  let exec ctx stmt man (map:t) : t option =
     match skind stmt with
     | S_remove { ekind = E_var (v, _) }  ->
       VarMap.remove v map |>

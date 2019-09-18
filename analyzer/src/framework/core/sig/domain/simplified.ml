@@ -33,6 +33,23 @@ open Interface
 open Token
 open Channel
 
+
+
+(*==========================================================================*)
+(**                         {2 Domain manager}                              *)
+(*==========================================================================*)
+
+
+(** Simplified domains are given a simplified manager providing access to
+    queries on the pre-condition only 
+*)
+type man = {
+  ask : 'r. 'r Query.query -> 'r;
+}
+
+
+
+
 module type DOMAIN =
 sig
 
@@ -104,7 +121,7 @@ sig
   val init : program -> t
   (** Initial abstract element *)
 
-  val exec : uctx -> stmt -> t -> t option
+  val exec : uctx -> stmt -> man -> t -> t option
   (** Computation of post-conditions *)
 
   val ask : 'r Query.query -> t -> 'r option
@@ -160,7 +177,16 @@ struct
            Option.return
 
       else
-        D.exec (Flow.get_unit_ctx flow) stmt a |>
+        let simplified_man = {
+          ask = (
+            let f : type r. r Query.query -> r = fun query ->
+              man.ask query flow
+             in
+             f
+            );
+        }
+        in
+        D.exec (Flow.get_unit_ctx flow) stmt simplified_man a |>
         Option.lift @@ fun a' ->
         Intermediate.set_env T_cur a' man flow |>
         Post.return |>

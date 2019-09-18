@@ -527,10 +527,10 @@ struct
         R.reduce stmt reduction_man pre acc
       ) post Spec.rules
 
-  let exec ctx stmt a =
+  let exec ctx stmt man a =
     let f = fun (type a) (m: a dmodule) aa ->
       let module Domain = (val m) in
-      Domain.exec ctx stmt aa
+      Domain.exec ctx stmt man aa
     in
     apply_opt { f } Spec.pool a |>
     Option.lift @@ fun a' ->
