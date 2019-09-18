@@ -169,7 +169,7 @@ struct
       | _ -> fast_check e flow
 
     and fast_check e flow =
-      let itv = man.ask (Universal.Numeric.Common.Q_int_interval e) flow in
+      let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query e) flow in
       if Itv.is_bottom itv then Eval.empty_singleton flow
       else
       if Itv.is_bounded itv then
@@ -193,7 +193,7 @@ struct
 
   let check_division man range f1 f2 e e' flow =
     let rec fast_check () =
-      let itv = man.ask (Universal.Numeric.Common.Q_int_interval e') flow in
+      let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query e') flow in
       if Itv.is_bottom itv then Eval.empty_singleton flow
       else
       if Itv.is_bounded itv then

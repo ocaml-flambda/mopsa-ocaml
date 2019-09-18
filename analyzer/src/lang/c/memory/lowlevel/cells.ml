@@ -637,7 +637,7 @@ struct
                     (* No bound found for the offset and the size is not constant, so
                        get an upper bound of the size.
                     *)
-                    let size_itv = man.ask (Universal.Numeric.Common.Q_int_interval size) flow in
+                    let size_itv = man.ask (Universal.Numeric.Common.mk_int_interval_query size) flow in
                     let ll, uu = Itv.bounds_opt size_itv in
                     match uu with
                     | Some size -> Z.sub size elm
@@ -799,7 +799,7 @@ struct
     let evl = man.eval ~zone e flow in
     Eval.apply
       (fun ee flow ->
-         man.ask (Universal.Numeric.Common.Q_int_interval ee) flow
+         man.ask (Universal.Numeric.Common.mk_int_interval_query ee) flow
       )
       Itv.join Itv.meet Itv.bottom
       evl

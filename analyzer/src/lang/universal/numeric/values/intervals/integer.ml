@@ -287,10 +287,10 @@ struct
       match query with
       | Common.Q_int_interval e ->
         eval e |> Option.return
-
+      | Common.Q_fast_int_interval e ->
+        eval e |> Option.return
       | Common.Q_int_congr_interval e ->
         (eval e, Common.C.minf_inf) |> Option.return
-
       | _ -> None
 
 

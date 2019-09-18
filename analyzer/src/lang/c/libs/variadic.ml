@@ -237,7 +237,7 @@ struct
       (mk_binop valc O_lt (mk_int (List.length unnamed) range) range)
       ~fthen:(fun flow ->
           (* Compute the interval of the counter *)
-          let itv = man.ask (Universal.Numeric.Common.Q_int_interval valc) flow |>
+          let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query valc) flow |>
                     Itv.meet (Itv.of_int 0 (List.length unnamed - 1))
           in
 

@@ -290,7 +290,7 @@ struct
         [
           [mk_binop slot O_ge (mk_int window range) range],
           (fun flow ->
-             let itv = man.ask (Universal.Numeric.Common.Q_int_interval slot) flow in
+             let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query slot) flow in
              let flow = map_env T_cur (fun a ->
                  { a with others = Table.insert_at addr itv a.others }
                ) man flow
@@ -328,7 +328,7 @@ struct
 
     and find_addr_others flow =
       let a = get_env T_cur man flow in
-      let itv = man.ask (Universal.Numeric.Common.Q_int_interval i) flow in
+      let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query i) flow in
       (* First case: return addresses having a descriptor interval
          intersecting with the target interval *)
       let case1 =
