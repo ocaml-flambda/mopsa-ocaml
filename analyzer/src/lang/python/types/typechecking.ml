@@ -273,10 +273,10 @@ struct
     else
     if !opt_py_type_polymorphism then
       match hd, hd' with
-      | AD.AMap.Map.Top, _ | _, AD.AMap.Map.Top -> Iter.top, a, a'
+      | AD.AMap.PolyMap.Top, _ | _, AD.AMap.PolyMap.Top -> Iter.top, a, a'
       | _ ->
         match tl, tl' with
-        | TD.TMap.Map.Top, _ | _, TD.TMap.Map.Top -> Iter.top, a, a'
+        | TD.TMap.PolyMap.Top, _ | _, TD.TMap.PolyMap.Top -> Iter.top, a, a'
         | _ ->
           debug "OLD hd, tl = %a, %a@\n@\nOLD hd', tl' = %a, %a@\n" AD.print hd TD.print tl AD.print hd' TD.print tl';
           let a, a' =

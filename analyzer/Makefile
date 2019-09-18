@@ -47,17 +47,18 @@ framework.config = paths visitor typer parser options
 lang = universal repl stubs c python
 
 # Universal
-lang.universal = ast frontend zone iterators heap numeric
+lang.universal = ast frontend zone iterators heap numeric packing
 lang.universal.iterators = unittest program intraproc scalar interproc loops
 lang.universal.iterators.interproc = common inlining sequential_cache join_based_cache
 lang.universal.heap = policies recency
-lang.universal.numeric = rounding common values relational packing reductions
+lang.universal.numeric = rounding common values relational reductions
 lang.universal.numeric.values = intervals congruences
 lang.universal.numeric.values.intervals = integer float
 lang.universal.numeric.packing = strategy functor
 lang.universal.numeric.relational = apron_manager binding apron_transformer \
                                     factory octagon polyhedra default
 lang.universal.numeric.reductions = intervals_congruences intervals
+lang.universal.packing = static
 
 # REPL
 lang.repl = frontend

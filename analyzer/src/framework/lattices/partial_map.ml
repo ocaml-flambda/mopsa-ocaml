@@ -100,7 +100,7 @@ struct
       )
   (** Join two sets of partial maps. *)
 
-  let widen ~widenv (a1:'a t) (a2:'a t) : 'a t =
+  let widen ~widenv ctx (a1:'a t) (a2:'a t) : 'a t =
     if a1 == a2 then a1 else
     match a1, a2 with
     | Bot, x | x, Bot -> x
@@ -110,7 +110,7 @@ struct
         Map.map2zo
           (fun _ v1 -> v1)
           (fun _ v2 -> v2)
-          (fun _ v1 v2 -> widenv v1 v2)
+          (fun _ v1 v2 -> widenv ctx v1 v2)
           m1 m2
       )
   (** Widening (naive). *)
@@ -150,9 +150,7 @@ struct
     match a with
     | Bot -> bottomv
     | Top -> topv
-    | Finite m ->
-      try Map.find k m
-      with Not_found -> Exceptions.panic ~loc:__LOC__ "key %a not found" Key.print k
+    | Finite m -> Map.find k m
 
   let remove (k: Key.t) (a:'a t) : 'a t =
     match a with
@@ -224,6 +222,14 @@ struct
       Finite (Map.map f m) |>
       canonize ~is_bottomv
 
+  let mapi ~is_bottomv (f:Key.t -> 'a -> 'b) (a:'a t) : 'b t =
+    match a with
+    | Bot -> Bot
+    | Top -> Top
+    | Finite m ->
+      Finite (Map.mapi f m) |>
+      canonize ~is_bottomv
+
   let map_p ~is_bottomv (f:Key.t * 'a -> Key.t * 'b) (a:'a t) : 'b t  =
     match a with
     | Bot -> Bot
@@ -265,6 +271,7 @@ struct
     | Bot -> 0
     | Top -> raise Top.Found_TOP
     | Finite m -> Map.cardinal m
+
 end
 
 
@@ -277,63 +284,66 @@ module Make
 =
 struct
 
-  module Map = MakePolymorph(Key)
+  module PolyMap = MakePolymorph(Key)
 
-  type t = Value.t Map.t
+  type t = Value.t PolyMap.t
 
-  let bottom : t = Map.bottom
+  let bottom : t = PolyMap.bottom
 
-  let top : t = Map.top
+  let top : t = PolyMap.top
 
-  let is_bottom (a:t) : bool = Map.is_bottom a ~is_bottomv:Value.is_bottom
+  let is_bottom (a:t) : bool = PolyMap.is_bottom a ~is_bottomv:Value.is_bottom
 
-  let empty : t = Map.empty
+  let empty : t = PolyMap.empty
 
-  let subset (a1:t) (a2:t) : bool = Map.subset a1 a2 ~subsetv:Value.subset
+  let subset (a1:t) (a2:t) : bool = PolyMap.subset a1 a2 ~subsetv:Value.subset
 
-  let join (a1:t) (a2:t) : t = Map.join a1 a2 ~joinv:Value.join
+  let join (a1:t) (a2:t) : t = PolyMap.join a1 a2 ~joinv:Value.join
 
-  let widen (a1:t) (a2:t) : t = Map.widen a1 a2 ~widenv:Value.widen
+  let widen ctx (a1:t) (a2:t) : t = PolyMap.widen ctx a1 a2 ~widenv:Value.widen
 
-  let meet (a1:t) (a2:t) : t = Map.meet a1 a2 ~meetv:Value.meet
+  let meet (a1:t) (a2:t) : t = PolyMap.meet a1 a2 ~meetv:Value.meet
 
-  let print fmt (a:t) = Map.print fmt a ~printv:Value.print
+  let print fmt (a:t) = PolyMap.print fmt a ~printv:Value.print
 
-  let find (k: Key.t) (a: t) : Value.t = Map.find k a ~bottomv:Value.bottom ~topv:Value.top
+  let find (k: Key.t) (a: t) : Value.t = PolyMap.find k a ~bottomv:Value.bottom ~topv:Value.top
 
-  let remove (k: Key.t) (a: t) : t = Map.remove k a
+  let remove (k: Key.t) (a: t) : t = PolyMap.remove k a
 
-  let add (k: Key.t) (v: Value.t) (a: t) : t = Map.add k v a ~is_bottomv:Value.is_bottom
+  let add (k: Key.t) (v: Value.t) (a: t) : t = PolyMap.add k v a ~is_bottomv:Value.is_bottom
 
-  let rename (k: Key.t) (k': Key.t) (a: t) : t = Map.rename k k' a ~bottomv:Value.bottom ~topv:Value.top ~is_bottomv:Value.is_bottom
+  let rename (k: Key.t) (k': Key.t) (a: t) : t = PolyMap.rename k k' a ~bottomv:Value.bottom ~topv:Value.top ~is_bottomv:Value.is_bottom
 
-  let singleton (k:Key.t) (v:Value.t) : t = Map.singleton k v ~is_bottomv:Value.is_bottom
+  let singleton (k:Key.t) (v:Value.t) : t = PolyMap.singleton k v ~is_bottomv:Value.is_bottom
 
-  let filter (f : Key.t -> Value.t -> bool) (a : t) : t = Map.filter f a
+  let filter (f : Key.t -> Value.t -> bool) (a : t) : t = PolyMap.filter f a
 
-  let iter (f:Key.t -> Value.t -> unit) (a: t) : unit = Map.iter f a
+  let iter (f:Key.t -> Value.t -> unit) (a: t) : unit = PolyMap.iter f a
 
-  let fold (f:Key.t -> Value.t -> 'a -> 'a) (a:t) (x:'a) : 'a = Map.fold f a x
+  let fold (f:Key.t -> Value.t -> 'a -> 'a) (a:t) (x:'a) : 'a = PolyMap.fold f a x
 
-  let fold_d (f:Key.t -> Value.t -> 'a -> 'a) (a:t) (d :'a) (x :'a) : 'a = Map.fold_d f a d x
+  let fold_d (f:Key.t -> Value.t -> 'a -> 'a) (a:t) (d :'a) (x :'a) : 'a = PolyMap.fold_d f a d x
 
-  let fold2o = Map.fold2o
+  let fold2o = PolyMap.fold2o
 
-  let mem (x:Key.t) (a:t) : bool = Map.mem x a
+  let mem (x:Key.t) (a:t) : bool = PolyMap.mem x a
 
-  let canonize (a:t) : t = Map.canonize a ~is_bottomv:Value.is_bottom
+  let canonize (a:t) : t = PolyMap.canonize a ~is_bottomv:Value.is_bottom
 
-  let map (f:Value.t -> Value.t) (a:t) : t = Map.map f a ~is_bottomv:Value.is_bottom
+  let map (f:Value.t -> Value.t) (a:t) : t = PolyMap.map f a ~is_bottomv:Value.is_bottom
 
-  let map_p (f:Key.t * Value.t -> Key.t * Value.t) (a:t) : t  = Map.map_p f a ~is_bottomv:Value.is_bottom
+  let mapi (f:Key.t -> Value.t -> Value.t) (a:t) : t = PolyMap.mapi f a ~is_bottomv:Value.is_bottom
 
-  let bindings (a:t) : (Key.t * Value.t) list = Map.bindings a
+  let map_p (f:Key.t * Value.t -> Key.t * Value.t) (a:t) : t  = PolyMap.map_p f a ~is_bottomv:Value.is_bottom
 
-  let for_all (f:Key.t -> Value.t -> bool) (a:t) : bool = Map.for_all f a
+  let bindings (a:t) : (Key.t * Value.t) list = PolyMap.bindings a
 
-  let exists (f:Key.t -> Value.t -> bool) (a:t) : bool = Map.exists f a
+  let for_all (f:Key.t -> Value.t -> bool) (a:t) : bool = PolyMap.for_all f a
 
-  let max_binding (a:t) : (Key.t * Value.t) option = Map.max_binding a
+  let exists (f:Key.t -> Value.t -> bool) (a:t) : bool = PolyMap.exists f a
 
-  let cardinal (a: t) : int = Map.cardinal a
+  let max_binding (a:t) : (Key.t * Value.t) option = PolyMap.max_binding a
+
+  let cardinal (a: t) : int = PolyMap.cardinal a
+
 end

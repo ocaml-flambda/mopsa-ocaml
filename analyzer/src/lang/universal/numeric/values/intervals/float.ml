@@ -83,7 +83,7 @@ struct
 
   let meet (a1:t) (a2:t) : t = I.meet a1 a2
 
-  let widen (a1:t) (a2:t) : t = I.widen a1 a2
+  let widen ctx (a1:t) (a2:t) : t = I.widen a1 a2
 
   let print fmt (a:t) = I.fprint I.dfl_fmt fmt a
 
