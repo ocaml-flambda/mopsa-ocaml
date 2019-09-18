@@ -765,10 +765,13 @@ let mk_free_addr a range =
   mk_stmt (S_free_addr a) range
 
 let mk_call fundec args range =
-  mk_expr (E_call (
-      mk_expr (E_function (User_defined fundec)) range,
-      args
-    )) range
+  mk_expr
+    (E_call (
+        mk_expr (E_function (User_defined fundec)) range,
+        args
+      ))
+    ~etyp:(match fundec.fun_return_type with None -> T_any | Some t -> t)
+    range
 
 let mk_expr_stmt e =
   mk_stmt (S_expression e)
