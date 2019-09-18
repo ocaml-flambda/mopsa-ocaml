@@ -83,11 +83,11 @@ struct
       (* Parameters are part of the caller and the callee packs *)
       let cs = Context.ufind Callstack.ctx_key ctx in
       if Callstack.is_empty cs
-      then [Globals]
+      then []
       else
         let callee, cs' = Callstack.pop cs in
         if Callstack.is_empty cs'
-        then [Globals]
+        then []
         else
           let caller, _ = Callstack.pop cs' in
           [Locals caller.call_fun; Locals callee.call_fun]
@@ -100,7 +100,7 @@ struct
       *)
       let cs = Context.ufind Callstack.ctx_key ctx in
       if Callstack.is_empty cs
-      then [Globals]
+      then []
       else
         let f1, cs' = Callstack.pop cs in
         let fname = match ekind call with
@@ -120,7 +120,7 @@ struct
       (* Temporary variables are considered as locals *)
       let cs = Context.ufind Callstack.ctx_key ctx in
       if Callstack.is_empty cs
-      then [Globals]
+      then []
       else
         let callee, _ = Callstack.pop cs in
         [Locals callee.call_fun]

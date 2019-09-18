@@ -81,6 +81,16 @@ struct
   module Set = SetExt.Make(struct type t = Strategy.pack let compare = Strategy.compare end)
 
 
+  (** Packs of each variable can be kept in a cache, since the strategy is static *)
+  module Cache = Hashtbl.Make(struct
+      type t = var
+      let equal v1 v2 = v1.vname = v2.vname
+      let hash v = Hashtbl.hash v.vname
+    end)
+
+  let cache : Strategy.pack list Cache.t = Cache.create 16
+
+
   (** Abstract element *)
   type t = Map.t
 
@@ -137,14 +147,19 @@ struct
     let () = Strategy.init prog in
     Map.empty
 
+  let packs_of_var ctx v =
+    try Cache.find cache v
+    with Not_found ->
+      let packs = Strategy.packs_of_var ctx v in
+      let () = Cache.add cache v packs in
+      packs
 
   let rec packs_of_expr ctx e =
     Visitor.fold_expr
       (fun acc ee ->
          match ekind ee with
          | E_var (v,_) ->
-           let packs = Strategy.packs_of_var ctx v |>
-                       Set.of_list
+           let packs = packs_of_var ctx v |> Set.of_list
            in
            let packs' =
              if Set.is_empty packs then
@@ -178,7 +193,7 @@ struct
       (fun ee ->
          match ekind ee with
          | E_var (v,_) ->
-           let packs = Strategy.packs_of_var ctx v in
+           let packs = packs_of_var ctx v in
            if List.exists (fun p -> Strategy.compare p pack = 0) packs then
              Visitor.Keep ee
            else
@@ -197,7 +212,8 @@ struct
       | S_add { ekind = E_var (v,_) } -> v
       | _ -> assert false
     in
-    let packs = Strategy.packs_of_var ctx v in
+    let packs = packs_of_var ctx v in
+    let () = Cache.add cache v packs in
     List.fold_left (fun acc pack ->
         let aa = try Map.find pack acc with Not_found -> Domain.top in
         debug "exec %a in %a" pp_stmt stmt Strategy.print pack;
@@ -211,7 +227,7 @@ struct
       | S_assign ({ ekind = E_var (v,_) } as lval, e ) -> v, lval, e
       | _ -> assert false
     in
-    let packs = Strategy.packs_of_var ctx v in
+    let packs = packs_of_var ctx v in
     List.fold_left (fun acc pack ->
         let aa = try Map.find pack acc with Not_found -> Domain.top in
         let e' = resolve_missing_vars ctx pack e in
