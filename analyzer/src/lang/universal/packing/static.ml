@@ -25,6 +25,7 @@
 
 open Mopsa
 open Sig.Functor.Simplified
+open Sig.Domain.Simplified
 open Ast
 open Zone
 open Format
@@ -188,7 +189,7 @@ struct
       Set.empty stmt
 
 
-  let resolve_missing_vars ctx pack e =
+  let resolve_expr_missing_vars ctx pack man e =
     Visitor.map_expr
       (fun ee ->
          match ekind ee with
@@ -197,8 +198,12 @@ struct
            if List.exists (fun p -> Strategy.compare p pack = 0) packs then
              Visitor.Keep ee
            else
-             (* FIXME: use intervals instead of top *)
-             Visitor.Keep (mk_top ee.etyp ee.erange)
+             let itv = man.ask (Numeric.Common.mk_int_interval_query ee) in
+             if Numeric.Values.Intervals.Integer.Value.is_bounded itv then
+               let l,u = Numeric.Values.Intervals.Integer.Value.bounds itv in
+               Visitor.Keep (mk_z_interval l u ee.erange)
+             else
+               Visitor.Keep (mk_top ee.etyp ee.erange)
          | _ ->
            Visitor.VisitParts ee
       )
@@ -206,8 +211,15 @@ struct
       e
 
 
+  let resolve_stmt_missing_vars ctx pack man s =
+    Visitor.map_stmt
+      (fun ee -> Visitor.Keep (resolve_expr_missing_vars ctx pack man ee))
+      (fun ss -> Visitor.VisitParts ss)
+      s
 
-  let exec_add_var ctx stmt a =
+
+
+  let exec_add_var ctx stmt man a =
     let v = match skind stmt with
       | S_add { ekind = E_var (v,_) } -> v
       | _ -> assert false
@@ -216,13 +228,12 @@ struct
     let () = Cache.add cache v packs in
     List.fold_left (fun acc pack ->
         let aa = try Map.find pack acc with Not_found -> Domain.top in
-        debug "exec %a in %a" pp_stmt stmt Strategy.print pack;
-        let aa' = Domain.exec ctx stmt aa |> Option.none_to_exn in
+        let aa' = Domain.exec ctx stmt man aa |> Option.none_to_exn in
         Map.add pack aa' acc
       ) a packs
 
 
-  let exec_assign_var ctx stmt a =
+  let exec_assign_var ctx stmt man a =
     let v,lval,e = match skind stmt with
       | S_assign ({ ekind = E_var (v,_) } as lval, e ) -> v, lval, e
       | _ -> assert false
@@ -230,23 +241,22 @@ struct
     let packs = packs_of_var ctx v in
     List.fold_left (fun acc pack ->
         let aa = try Map.find pack acc with Not_found -> Domain.top in
-        let e' = resolve_missing_vars ctx pack e in
+        let e' = resolve_expr_missing_vars ctx pack man e in
         let stmt' = { stmt with skind = S_assign (lval, e') } in
-        debug "exec %a in %a" pp_stmt stmt Strategy.print pack;
-        let aa' = Domain.exec ctx stmt' aa |> Option.none_to_exn in
+        let aa' = Domain.exec ctx stmt' man aa |> Option.none_to_exn in
         Map.add pack aa' acc
       ) a packs
 
 
 
-  let exec ctx stmt a =
+  let exec ctx stmt man a =
     match skind stmt with
     | S_add {ekind = E_var _} ->
-      exec_add_var ctx stmt a |>
+      exec_add_var ctx stmt man a |>
       Option.return
 
     | S_assign ({ekind = E_var _}, _) ->
-      exec_assign_var ctx stmt a |>
+      exec_assign_var ctx stmt man a |>
       Option.return
 
     | _ ->
@@ -262,7 +272,7 @@ struct
       try
         if not has_vars then
           let a' = Map.map (fun aa ->
-              Domain.exec ctx stmt aa |>
+              Domain.exec ctx stmt man aa |>
               Option.none_to_exn
             ) a
           in
@@ -270,15 +280,12 @@ struct
         else
           (* Statement contains variables, so see which packs are concerned *)
           let packs = packs_of_stmt ctx stmt in
-          let a' = Map.mapi (fun pack aa ->
-              if Set.mem pack packs then begin
-                debug "exec %a in %a" pp_stmt stmt Strategy.print pack;
-                Domain.exec ctx stmt aa |>
-                Option.none_to_exn
-              end
-              else
-                aa
-            ) a
+          let a' = Set.fold (fun pack acc ->
+              let aa = try Map.find pack acc with Not_found -> Domain.top in
+              let stmt' = resolve_stmt_missing_vars ctx pack man stmt in
+              let aa' = Domain.exec ctx stmt' man aa |> Option.none_to_exn in
+              Map.add pack aa' acc
+            ) packs a
           in
           Some a'
       with Option.Found_None -> None
