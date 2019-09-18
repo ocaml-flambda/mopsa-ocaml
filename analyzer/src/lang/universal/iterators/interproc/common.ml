@@ -153,7 +153,6 @@ let init_fun_params f args range man flow =
       let function_vars = f.fun_parameters @ f.fun_locvars in
       let fun_parameters = List.map add_range f.fun_parameters in
       let fun_locvars = List.map add_range f.fun_locvars in
-      let new_vars = fun_parameters @ fun_locvars in
 
       (* TODO: do this transformation only if we detect f in the callstack? That could work? *)
       let new_body = Visitor.map_stmt (fun e -> match ekind e with
@@ -172,15 +171,11 @@ let init_fun_params f args range man flow =
 
 
       (* Execute body *)
-      new_vars, new_body, man.exec init_block flow1
+      fun_parameters, fun_locvars, new_body, man.exec init_block flow1
 
     end
   else
     begin
-      (* Add parameters and local variables to the environment *)
-      let function_vars = f.fun_parameters @ f.fun_locvars in
-
-      (* Assign arguments to parameters *)
       (* Assign arguments to parameters *)
       let parameters_assign = List.rev @@ List.fold_left (fun acc (param, arg) ->
           mk_assign (mk_var param range) arg range ::
@@ -190,7 +185,7 @@ let init_fun_params f args range man flow =
       let init_block = mk_block parameters_assign range in
 
       (* Execute body *)
-      function_vars, f.fun_body, man.exec init_block flow1
+      f.fun_parameters, f.fun_locvars, f.fun_body, man.exec init_block flow1
     end
 
 
@@ -232,7 +227,7 @@ let exec_fun_body f body ret range man flow =
 
 
 (** Inline a function call *)
-let inline f params body ret range man flow =
+let inline f params locals body ret range man flow =
   let flow =
     match check_recursion f range flow with
     | true ->
@@ -248,7 +243,13 @@ let inline f params body ret range man flow =
       end
 
     | false ->
-      exec_fun_body f body ret range man flow
+      exec_fun_body f body ret range man flow |>
+      (* Remove local variables from the environment. Remove of parameters is
+         postponed after finishing the statement, to keep relations between
+         the passed arguments and the return value. *)
+      man.exec (mk_block (List.map (fun v ->
+          mk_remove_var v range
+        ) locals) range)
   in
   match ret with
   | None ->
