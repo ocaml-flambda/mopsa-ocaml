@@ -21,7 +21,7 @@
 
 (** Debug - Conditional debugging with channel filtering. *)
 
-let channels = ref [Str.regexp "warning"]
+let channels = ref []
 let print_color = ref true
 let print_all = ref false
 let colors = [
