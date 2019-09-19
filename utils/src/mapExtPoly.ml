@@ -21,13 +21,13 @@
 
 (** Maps with polymorphic keys and values *)
 
-type ('k,+'a) map =
+type ('k,'a) map =
     Empty
   | Node of ('k,'a) map * 'k * 'a * ('k,'a) map * int
 
 type 'k compare = 'k -> 'k -> int
 
-type ('k,+'a) t = {
+type ('k,'a) t = {
   map: ('k,'a) map;
   compare: 'k compare;
 }
@@ -169,17 +169,14 @@ let rec fold_ f m accu =
   | Node(l, v, d, r, _) ->
     fold_ f r (f v d (fold_ f l accu))
 
-(* [MOPSA] changed to call p in the key order *)
 let rec for_all_ p = function
     Empty -> true
   | Node(l, v, d, r, _) -> for_all_ p l && p v d && for_all_ p r
 
-(* [MOPSA] changed to call p in the key order *)
 let rec exists_ p = function
     Empty -> false
   | Node(l, v, d, r, _) -> exists_ p l || p v d || exists_ p r
 
-(* [MOPSA] changed to call p in the key order *)
 let filter_ compare p s =
   fold_ (fun k d a -> if p k d then add_ compare k d a else a) s Empty
 
@@ -190,11 +187,115 @@ let partition_ compare p s =
       part (part (if p v d then (add_ compare v d t, f) else (t, add_ compare v d f)) l) r in
   part (Empty, Empty) s
 
+let rec join_ compare l v d r =
+  match (l, r) with
+    (Empty, _) -> add_ compare v d r
+  | (_, Empty) -> add_ compare v d l
+  | (Node(ll, lv, ld, lr, lh), Node(rl, rv, rd, rr, rh)) ->
+    if lh > rh + 2 then bal_ ll lv ld (join_ compare lr v d r) else
+    if rh > lh + 2 then bal_ (join_ compare l v d rl) rv rd rr else
+      create_ l v d r
+let concat_ compare t1 t2 =
+  match (t1, t2) with
+    (Empty, t) -> t
+  | (t, Empty) -> t
+  | (_, _) ->
+    let (x, d) = min_binding_ t2 in
+    join_ compare t1 x d (remove_min_binding_ t2)
+
+let concat_or_join_ compare t1 v d t2 =
+  match d with
+  | Some d -> join_ compare t1 v d t2
+  | None -> concat_ compare t1 t2
 
 
+let of_list compare l =
+  List.fold_left (fun acc (k,x) -> add_ compare k x acc) empty_ l
+
+let rec cut_ compare k = function
+    Empty -> Empty,None,Empty
+  | Node (l1,k1,d1,r1,h1) ->
+    let c = compare k k1 in
+    if c < 0 then
+      let l2,d2,r2 = cut_ compare k l1 in (l2,d2,Node (r2,k1,d1,r1,h1))
+    else if c > 0 then
+      let l2,d2,r2 = cut_ compare k r1 in (Node (l1,k1,d1,l2,h1),d2,r2)
+    else (l1,Some d1,r1)
+
+let rec for_all2zo_ compare f1 f2 f m1 m2 =
+  (m1 == m2) ||
+  (match m1 with
+   | Empty -> for_all_ f2 m2
+   | Node (l1,k,d1,r1,h1) ->
+     let l2, d2, r2 = cut_ compare k m2 in
+     (for_all2zo_ compare f1 f2 f l1 l2) &&
+     (match d2 with None -> f1 k d1 | Some d2 -> d1 == d2 || f k d1 d2) &&
+     (for_all2zo_ compare f1 f2 f r1 r2)
+  )
 
 
+let rec map2zo_ compare f1 f2 f m1 m2 =
+  if m1 == m2 then m1 else
+    match m1 with
+    | Empty -> mapi_ f2 m2
+    | Node (l1,k,d1,r1,h1) ->
+      let l2, d2, r2 = cut_ compare k m2 in
+      let l = map2zo_ compare f1 f2 f l1 l2 in
+      let d = match d2 with
+        | None -> f1 k d1
+        | Some d2 -> if d1 == d2 then d1 else f k d1 d2
+      in
+      let r = map2zo_ compare f1 f2 f r1 r2 in
+      join_ compare l k d r
 
+let rec split_ compare x = function
+    Empty ->
+    (Empty, None, Empty)
+  | Node(l, v, d, r, _) ->
+    let c = compare x v in
+    if c = 0 then (l, Some d, r)
+    else if c < 0 then
+      let (ll, pres, rl) = split_ compare x l in (ll, pres, join_ compare rl v d r)
+    else
+      let (lr, pres, rr) = split_ compare x r in (join_ compare l v d lr, pres, rr)
+
+let rec merge_ compare f s1 s2 =
+  match (s1, s2) with
+    (Empty, Empty) -> Empty
+  | (Node (l1, v1, d1, r1, h1), _) when h1 >= height_ s2 ->
+    let (l2, d2, r2) = split_ compare v1 s2 in
+    concat_or_join_ compare (merge_ compare f l1 l2) v1 (f v1 (Some d1) d2) (merge_ compare f r1 r2)
+  | (_, Node (l2, v2, d2, r2, h2)) ->
+    let (l1, d1, r1) = split_ compare v2 s1 in
+    concat_or_join_ compare (merge_ compare f l1 l2) v2 (f v2 d1 (Some d2)) (merge_ compare f r1 r2)
+  | _ ->
+    assert false
+
+
+let rec bindings_aux_ accu = function
+    Empty -> accu
+  | Node(l, v, d, r, _) -> bindings_aux_ ((v, d) :: bindings_aux_ accu r) l
+
+let bindings_ s =
+  bindings_aux_ [] s
+
+let rec cardinal_ = function
+    Empty -> 0
+  | Node(l, _, _, r, _) -> cardinal_ l + 1 + cardinal_ r
+
+
+let rec fold2zo_ compare f1 f2 f m1 m2 acc =
+  if m1 == m2 then acc else
+    match m1 with
+    | Empty -> fold_ f2 m2 acc
+    | Node (l1,k,d1,r1,h1) ->
+      let l2, d2, r2 = cut_ compare k m2 in
+      let acc = fold2zo_ compare f1 f2 f l1 l2 acc in
+      let acc = match d2 with
+        | None -> f1 k d1 acc
+        | Some d2 -> if d1 == d2 then acc else f k d1 d2 acc
+      in
+      fold2zo_ compare f1 f2 f r1 r2 acc
 
 
 
@@ -217,9 +318,6 @@ let mem x m = mem_ m.compare x m.map
 let min_binding m = min_binding_ m.map
 
 let remove_min_binding m = { m with map = remove_min_binding_ m.map }
-
-let merge t1 t2 : ('a,'k) t =
-  { map = merge_ t1.map t2.map; compare = t1.compare }
 
 let remove x m =
   let map = remove_ m.compare x m.map in
@@ -245,4 +343,25 @@ let filter p s =
 
 let partition p s =
   let map1,map2 = partition_ s.compare p s.map in
-  { s with map = map1 }, { s with map = map2 }
+  (if map1 == s.map then s else { s with map = map1 }),
+  (if map2 == s.map then s else { s with map = map2 })
+
+let for_all2zo f1 f2 f m1 m2 =
+  for_all2zo_ m1.compare f1 f2 f m1.map m2.map
+
+let map2zo f1 f2 f m1 m2 =
+  let map = map2zo_ m1.compare f1 f2 f m1.map m2.map in
+  if map == m1.map then m1
+  else if map == m2.map then m2
+  else { map; compare = m1.compare }
+
+let merge f m1 m2 =
+  let map = merge_ m1.compare f m1.map m2.map in
+  { map; compare = m1.compare }
+
+let bindings s = bindings_ s.map
+
+let cardinal s = cardinal_ s.map
+
+let fold2zo f1 f2 f m1 m2 acc =
+  fold2zo_ m1.compare f1 f2 f m1.map m2.map acc

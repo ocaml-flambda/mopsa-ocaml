@@ -28,17 +28,13 @@ open Core.All
 open Sig.Value.Lowlevel
 
 
-(** {2 Variable maps} *)
-(** ***************** *)
-
-module VarMap = Lattices.Partial_map.MakePolymorph(Var)
 
 
 (** {2 Identifier for the non-relation domain} *)
 (** ****************************************** *)
 
-type _ domain +=
-  | D_nonrel_id : 'v vmodule -> 'v VarMap.t domain
+
+type _ id += D_nonrel : 'v vmodule -> (var,'v) Lattices.Partial_map.map id
 
 
 module Make(Value: VALUE) =
@@ -56,18 +52,18 @@ struct
 
   include VarMap
 
-  let id = D_nonrel_id (module Value)
+  let id = D_nonrel (module Value)
 
   let () =
     let open Eq in
-    register_domain_id {
+    register_id {
       eq = (
-        let f : type a. a domain -> (a, t) eq option =
+        let f : type a. a id -> (a, t) eq option =
           function
-          | D_nonrel_id vmodule ->
+          | D_nonrel v ->
             begin
-              let module V = (val vmodule) in
-              match Core.Id.value_id_eq V.id Value.id with
+              let module V = (val v) in
+              match equal_id V.id Value.id with
               | Some Eq -> Some Eq
               | None -> None
             end

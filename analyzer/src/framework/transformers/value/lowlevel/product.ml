@@ -155,27 +155,27 @@ struct
     vlist_apply { f } Spec.pool
 
   let vrman = {
-    get = (fun (type a) (id:a Core.Id.value) (v:t) ->
+    get = (fun (type a) (id:a id) (v:t) ->
         let rec aux : type b. b vlist -> b -> a =
           fun l v ->
             match l, v with
             | Nil, () -> raise Not_found
             | Cons(hd,tl), (vhd,vtl) ->
               let module Value = (val hd) in
-              match Core.Id.value_id_eq Value.id id with
+              match equal_id Value.id id with
               | Some Eq.Eq -> vhd
               | None -> aux tl vtl
         in
         aux Spec.pool v
       );
-    set = (fun (type a) (id:a Core.Id.value) (x:a) (v:t) ->
+    set = (fun (type a) (id:a id) (x:a) (v:t) ->
         let rec aux : type b. b vlist -> b -> b =
           fun l v ->
             match l, v with
             | Nil, () -> raise Not_found
             | Cons(hd,tl), (vhd,vtl) ->
               let module Value = (val hd) in
-              match Core.Id.value_id_eq Value.id id with
+              match equal_id Value.id id with
               | Some Eq.Eq -> x,vtl
               | None -> vhd,aux tl vtl
         in

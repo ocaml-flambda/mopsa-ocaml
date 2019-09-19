@@ -624,16 +624,16 @@ struct
       lattice = man.lattice;
       post = man.post;
       get_eval = (
-        let f : type t. t domain -> prod_eval -> expr option =
+        let f : type t. t id -> prod_eval -> expr option =
           fun id evals ->
-            let rec aux : type t tt. t domain -> tt pool -> prod_eval -> expr option =
+            let rec aux : type t tt. t id -> tt pool -> prod_eval -> expr option =
               fun id l el ->
                 match l, el with
                 | Nil, [] -> None
                 | Cons(hd,tl), (hde::tle) ->
                   begin
                     let module D = (val hd) in
-                    match domain_id_eq D.id id with
+                    match equal_id D.id id with
                     | Some Eq -> (match hde with None -> None | Some x -> x)
                     | None -> aux id tl tle
                   end
@@ -645,16 +645,16 @@ struct
       );
 
       del_eval = (
-        let f : type t. t domain -> prod_eval -> prod_eval =
+        let f : type t. t id -> prod_eval -> prod_eval =
           fun id evals ->
-            let rec aux : type t tt. t domain -> tt pool -> prod_eval -> prod_eval =
+            let rec aux : type t tt. t id -> tt pool -> prod_eval -> prod_eval =
               fun id l el ->
                 match l, el with
                 | Nil, [] -> raise Not_found
                 | Cons(hd,tl), (hde::tle) ->
                   begin
                     let module D = (val hd) in
-                    match domain_id_eq D.id id with
+                    match equal_id D.id id with
                     | Some Eq -> None :: tle
                     | None -> hde :: aux id tl tle
                   end
@@ -666,15 +666,15 @@ struct
       );
 
       get_man = (
-        let f : type t. t domain -> ('a,t,'s) man =
+        let f : type t. t id -> ('a,t,'s) man =
           fun id ->
-            let rec aux : type t tt. t domain -> tt pool -> ('a,tt,'s) man -> ('a,t,'s) man =
+            let rec aux : type t tt. t id -> tt pool -> ('a,tt,'s) man -> ('a,t,'s) man =
               fun id l man ->
                 match l with
                 | Nil -> raise Not_found
                 | Cons(hd,tl) ->
                   let module D = (val hd) in
-                  match domain_id_eq D.id id with
+                  match equal_id D.id id with
                   | Some Eq -> (hdman man)
                   | None -> aux id tl (tlman man)
             in
