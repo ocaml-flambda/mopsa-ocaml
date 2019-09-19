@@ -58,7 +58,7 @@ struct
 
 
   (** Reduction operator *)
-  let reduce stmt (man: 'a man) (pre:'a) (post:'a) : 'a =
+  let reduce ctx stmt (man: 'a man) (pre:'a) (post:'a) : 'a =
     (* Get the modified variables *)
     let vars = get_modified_vars stmt man pre in
 

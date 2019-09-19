@@ -20,7 +20,7 @@
 (****************************************************************************)
 
 (** Static packing functor - lifting an abstract domain to a map of buckets
-    with fewer dimensions using a static strategy.
+    with fewer dimensions using a static packing strategy.
 *)
 
 open Mopsa
@@ -30,9 +30,10 @@ open Ast
 open Zone
 open Format
 open Context
+open Bot_top
 
 
-(** Static packing strategy *)
+(** Signature of a static packing strategy *)
 module type STRATEGY =
 sig
 
@@ -40,9 +41,10 @@ sig
   (** Name of the packing strategy *)
 
   type pack
-  (** Packs are finite abstraction of the dimensions of a the underlying
-      domain.
-  *)
+  (** Packs are finite abstraction of the dimensions of a the underlying domain. *)
+
+  val id : pack id
+  (** Unique identifier of the packing strategy *)
 
   val compare : pack -> pack -> int
   (** Total order of packs *)
@@ -59,14 +61,17 @@ sig
 end
 
 
+(** Identifier of packed domains *)
+type _ id += D_static_packing : 'k id * 'a id -> ('k,'a) Framework.Lattices.Partial_map.map id
+
+
 (** Creation of a domain functor from a packing strategy *)
-module Make(Strategy:STRATEGY) : FUNCTOR = functor(Domain:Sig.Domain.Simplified.DOMAIN) ->
+module Make(Strategy:STRATEGY) : FUNCTOR = functor(Domain:DOMAIN) ->
 struct
 
 
   (** {2 Header of the functor} *)
   (** ************************* *)
-
 
   (** Partial map from packs to abstract elements *)
   module Map = Framework.Lattices.Partial_map.Make
@@ -76,6 +81,8 @@ struct
         let print = Strategy.print
       end)
       (Domain)
+
+  module PolyMap = MapExtPoly
 
 
   (** Set of packs *)
@@ -97,11 +104,26 @@ struct
 
 
   (** Id of the packing functor *)
-  include GenDomainId(struct
-      type nonrec t = t
-      let name = Strategy.name
-    end)
+  let id = D_static_packing (Strategy.id, Domain.id)
+  let () =
+    let open Eq in
+    register_id {
+      eq = (
+        let f : type a. a id -> (a, t) eq option =
+          function
+          | D_static_packing(strategy,domain) ->
+            begin match equal_id strategy Strategy.id, equal_id domain Domain.id with
+              | Some Eq, Some Eq -> Some Eq
+              | _ -> None
+            end
+          | _ -> None
+        in
+        f
+      );
+    }
 
+  (** The name of the domain is the name of the strategy *)
+  let name = Strategy.name
 
   (** Semantic zone of the functor, inherited from the domain *)
   let zones = Domain.zones
@@ -110,6 +132,11 @@ struct
   (** Pretty printer *)
   let print fmt a =
     fprintf fmt "packs: %a@\n" Map.print a
+
+
+
+  (** {2 Lattice operators} *)
+  (** ********************* *)
 
   let bottom = Map.bottom
 
@@ -127,11 +154,11 @@ struct
 
   let merge pre (a,log1) (b,log2) =
     match a, b with
-    | Map.PolyMap.Top, _ | _, Map.PolyMap.Top -> top
-    | Map.PolyMap.Bot, x | x, Map.PolyMap.Bot -> x
-    | Map.PolyMap.Finite m1, Map.PolyMap.Finite m2 ->
-      Map.PolyMap.Finite (
-        Map.PolyMap.Map.map2zo
+    | TOP, _ | _, TOP -> top
+    | BOT, x | x, BOT -> x
+    | Nbt m1, Nbt m2 ->
+      Nbt (
+        PolyMap.map2zo
           (fun _ a1 -> a1)
           (fun _ a2 -> a2)
           (fun pack a1 a2 ->
@@ -293,10 +320,10 @@ struct
 
   let ask q a =
     match a with
-    | Map.PolyMap.Bot | Map.PolyMap.Top -> None
-    | Map.PolyMap.Finite m ->
-      let rep = Map.PolyMap.Map.map (Domain.ask q) m |>
-                Map.PolyMap.Map.bindings |>
+    | BOT | TOP -> None
+    | Nbt m ->
+      let rep = PolyMap.map (Domain.ask q) m |>
+                PolyMap.bindings |>
                 List.map snd
       in
       let rec loop = function

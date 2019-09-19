@@ -350,16 +350,30 @@ struct
 
     | _ -> None
 
-  let eval_interval e (abs,bnd) =
-    try
-      let abs, bnd = add_missing_vars (abs,bnd) (Visitor.expr_vars e) in
-      let e, abs, bnd, _ = exp_to_apron e (abs,bnd) [] in
-      let env = Apron.Abstract1.env abs in
-      let e = Apron.Texpr1.of_expr env e in
-      Apron.Abstract1.bound_texpr ApronManager.man abs e |>
+
+
+  let bound_var v (abs,bnd) =
+    if is_env_var v abs then
+      let vv = Binding.mk_apron_var v in
+      Apron.Abstract1.bound_variable ApronManager.man abs vv |>
       Values.Intervals.Integer.Value.of_apron
-    with UnsupportedExpression ->
+    else
       Values.Intervals.Integer.Value.top
+
+
+  let eval_interval e (abs,bnd) =
+    match ekind e with
+    | E_var (v,_) -> bound_var v (abs,bnd)
+    | _ ->
+      try
+        let abs, bnd = add_missing_vars (abs,bnd) (Visitor.expr_vars e) in
+        let e, abs, bnd, _ = exp_to_apron e (abs,bnd) [] in
+        let env = Apron.Abstract1.env abs in
+        let e = Apron.Texpr1.of_expr env e in
+        Apron.Abstract1.bound_texpr ApronManager.man abs e |>
+        Values.Intervals.Integer.Value.of_apron
+      with UnsupportedExpression ->
+        Values.Intervals.Integer.Value.top
 
 
   let ask : type r. r query -> t -> r option =

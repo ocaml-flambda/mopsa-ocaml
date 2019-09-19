@@ -38,15 +38,18 @@ open Common.Base
 module Strategy =
 struct
 
-  (** Name of the packing strategy *)
-  let name = "c.memory.packing.static_scope"
-
-  let debug fmt = Debug.debug ~channel:name fmt
 
   (** Packing key *)
   type pack =
     | Globals (** Pack of global variables *)
     | Locals of string (** Pack of local variables of a function *)
+
+
+  (** Generate a unique ID for the strategy *)
+  include GenId(struct
+      type t = pack
+      let name = "c.memory.packing.static_scope"
+    end)
 
 
   (** Total order of packing keys *)

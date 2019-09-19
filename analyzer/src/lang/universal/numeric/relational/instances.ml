@@ -21,20 +21,21 @@
 
 open Mopsa
 
-
-module OctMan = struct
+module Octagon = Factory.Make(struct
   type t = Oct.t
   let name = "universal.numeric.relational"
   let man = Oct.manager_alloc ()
 end
+)
 
-
-module PolyMan = struct
+module Polyhedra = Factory.Make(struct
   type t = Polka.loose Polka.t
   let name = "universal.numeric.relational"
   let man = Polka.manager_alloc_loose ()
-end
+end)
 
+
+let opt_numeric = ref "polyhedra"
 
 let () =
   register_domain_option "universal.numeric.relational" {
@@ -45,20 +46,18 @@ let () =
         ["octagon"; "polyhedra"],
         (function
           | "octagon"   ->
-            let module Domain = Factory.Make(OctMan) in
-            Framework.Core.Sig.Domain.Simplified.register_domain (module Domain)
+            opt_numeric := "octagon";
+            Framework.Core.Sig.Domain.Simplified.register_domain (module Octagon)
 
           | "polyhedra" ->
-            let module Domain = Factory.Make(PolyMan) in
-            Framework.Core.Sig.Domain.Simplified.register_domain (module Domain)
+            opt_numeric := "polyhedra";
+            Framework.Core.Sig.Domain.Simplified.register_domain (module Polyhedra)
 
           | _ -> assert false
         )
       );
     default = "polyhedra"
   }
-           
 
 let () =
-  let module Domain = Factory.Make(PolyMan) in
-  Framework.Core.Sig.Domain.Simplified.register_domain (module Domain)
+  Framework.Core.Sig.Domain.Simplified.register_domain (module Polyhedra)

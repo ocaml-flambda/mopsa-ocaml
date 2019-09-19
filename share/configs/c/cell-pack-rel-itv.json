@@ -61,6 +61,9 @@
                             "apply":"c.memory.packing.static_scope",
                             "on": "universal.numeric.relational"
                         }
+                    ],
+                    "reductions": [
+                        "c.memory.packing.reductions.intervals_static_scope"
                     ]
                 }
             }
