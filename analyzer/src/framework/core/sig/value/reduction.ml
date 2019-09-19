@@ -21,12 +21,13 @@
 
 (** Reduction operators of non-relational abstract values *)
 
+open Id
 
 
 (** Manager for value reduction rules *)
 type 'a vrman = {
-  get : 'r. 'r Id.value -> 'a -> 'r;
-  set : 'r. 'r Id.value -> 'r -> 'a -> 'a;
+  get : 'r. 'r id -> 'a -> 'r;
+  set : 'r. 'r id -> 'r -> 'a -> 'a;
 }
 
 

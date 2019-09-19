@@ -40,9 +40,9 @@ type prod_eval = expr option option list
 (** Manager used by eval reduction rules *)
 type ('a,'s) eman = {
   lattice : 'a lattice;
-  get_man : 't. 't domain -> ('a, 't, 's) Manager.man;
-  get_eval : 't. 't domain -> prod_eval -> expr option;
-  del_eval : 't. 't domain -> prod_eval -> prod_eval;
+  get_man : 't. 't id -> ('a, 't, 's) Manager.man;
+  get_eval : 't. 't id -> prod_eval -> expr option;
+  del_eval : 't. 't id -> prod_eval -> prod_eval;
   post : ?zone:zone -> stmt -> 'a flow -> 'a post;
 }
 

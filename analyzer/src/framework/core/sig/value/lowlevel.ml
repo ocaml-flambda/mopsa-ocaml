@@ -39,7 +39,7 @@ type ('a, 't) man = {
   get : 'a -> 't;
   set : 't -> 'a -> 'a;
   eval : expr -> 'a;
-  cast : 'r. 'r Id.value -> 'a -> 'r;
+  cast : 'r. 'r id -> 'a -> 'r;
 }
 
 
@@ -57,7 +57,7 @@ sig
   type t
   (** Type of the abstract value. *)
 
-  val id : t value
+  val id : t id
   (** Identifier of the value domain *)
 
   val name : string
@@ -81,10 +81,10 @@ sig
   val print: Format.formatter -> t -> unit
   (** Printer of an abstract element. *)
 
-  val get: ('a,t) man -> 's value -> 'a -> 's option
+  val get: ('a,t) man -> 's id -> 'a -> 's option
   (** Get a specific value embedded in the abstraction *)
 
-  val set: ('a,t) man -> 's value -> 's -> 'a -> 'a option
+  val set: ('a,t) man -> 's id -> 's -> 'a -> 'a option
   (** Set a specific value embedded in the abstraction *)
 
   (** {2 Lattice operators} *)
