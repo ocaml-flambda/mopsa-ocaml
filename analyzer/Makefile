@@ -56,7 +56,7 @@ lang.universal.numeric.values = intervals congruences
 lang.universal.numeric.values.intervals = integer float
 lang.universal.numeric.packing = strategy functor
 lang.universal.numeric.relational = apron_manager binding apron_transformer \
-                                    factory octagon polyhedra default
+                                    factory instances
 lang.universal.numeric.reductions = intervals_congruences intervals
 lang.universal.packing = static
 
@@ -76,7 +76,7 @@ lang.c.memory.structured = flat
 lang.c.memory.lowlevel = cells string_literals string_length reductions
 lang.c.memory.scalars = pointers machine_numbers
 lang.c.memory.scalars.pointers = value symbolic domain
-lang.c.memory.packing = static_scope
+lang.c.memory.packing = static_scope reductions
 lang.c.libs = builtins clib mopsalib compiler variadic cstubs
 lang.c.libs.clib.file_descriptor = slot table domain
 
