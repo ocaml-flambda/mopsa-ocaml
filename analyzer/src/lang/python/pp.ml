@@ -192,6 +192,8 @@ let () =
       | E_py_bytes(s) ->
         fprintf fmt "b\"%s\"" s
 
+      | E_py_check_annot (e1, e2) -> fprintf fmt "check_annot(%a, %a)" pp_expr e1 pp_expr e2
+
       | _ -> default fmt exp
     );
 
@@ -252,8 +254,6 @@ let () =
         fprintf fmt "%a: %a"
           pp_expr x
           pp_expr typ
-
-      | S_py_check_annot (e1, e2) -> fprintf fmt "check_annot(%a, %a)" pp_expr e1 pp_expr e2
 
       | S_py_for(target, iter, body, orelse) ->
         fprintf fmt "for %a in %a:@\n@[<h 2>  %a@]@\nelse:@\n@[<h 2>  %a@]"

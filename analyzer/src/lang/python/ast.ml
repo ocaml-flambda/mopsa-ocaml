@@ -206,6 +206,10 @@ type expr_kind +=
                       * operator list (* ops *)
                       * expr list (* comparators *)
   | E_py_annot of expr
+  (* checking type annotations using stubs *)
+  | E_py_check_annot of expr * expr
+
+
 
 (*==========================================================================*)
                            (** {2 Statements} *)
@@ -312,9 +316,6 @@ type stmt_kind +=
 
   (** type annotations for variables *)
   | S_py_annot of expr * expr
-
-  (* checking type annotations using stubs *)
-  | S_py_check_annot of expr * expr
 
   (** for loops *)
   | S_py_for of expr (** target *) *

@@ -69,6 +69,14 @@ let () =
         {exprs = [e]; stmts = [];},
         (fun parts -> {exp with ekind = E_py_annot (List.hd parts.exprs)})
 
+      | E_py_check_annot (e1, e2) ->
+        {exprs = [e1; e2]; stmts = [];},
+        (function
+          | {exprs = [v1; v2]} -> {exp with ekind = E_py_check_annot(v1, v2)}
+          | _ -> assert false
+        )
+
+
       | E_py_list elts ->
         {exprs = elts; stmts = [];},
         (fun parts -> {exp with ekind = E_py_list(parts.exprs)})
@@ -313,13 +321,6 @@ let () =
         {exprs = [x; typ]; stmts = []},
         (function
           | {exprs = [x; typ]} -> {stmt with skind = S_py_annot(x, typ)}
-          | _ -> assert false
-        )
-
-      | S_py_check_annot (e1, e2) ->
-        {exprs = [e1; e2]; stmts = [];},
-        (function
-          | {exprs = [v1; v2]} -> {stmt with skind = S_py_check_annot(v1, v2)}
           | _ -> assert false
         )
 

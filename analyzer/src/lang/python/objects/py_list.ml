@@ -647,7 +647,26 @@ struct
           Eval.singleton (mk_py_object (addr_list, None) range)
         )
       |> Option.return
+    | E_py_check_annot (tocheck, {ekind = E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_user c, _)}, _)}, i) }) when get_orig_vname c.py_cls_var = "List" ->
+      debug "s_py_check_annot list";
+      assume (mk_py_isinstance_builtin tocheck "list" range) man flow
+        ~fthen:(fun flow ->
+            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) tocheck flow |>
+            bind_some (fun iterator flow ->
+                let list_addr = match ekind iterator with
+                  | E_py_object ({addr_kind = A_py_list r} as a, _) -> a
+                  | _ -> Exceptions.panic "should be a list: %a@\nflow = %a@\n" pp_expr iterator (Flow.print man.lattice.print) flow in
+                let var_els = var_of_addr list_addr in
+                man.eval (mk_expr (E_py_check_annot (mk_var var_els range, i)) range) flow
+              )
+          )
+        ~felse:(fun flow ->
+            let flow = Flow.bottom_from flow in
+            Eval.empty_singleton flow)
+      |> Option.return
+
     | _ -> None
+
 
 
   let exec zone stmt man flow =
@@ -683,23 +702,6 @@ struct
       flow
       |> Post.return |> Option.return
 
-    | S_py_check_annot (tocheck, {ekind = E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_user c, _)}, _)}, i) }) when get_orig_vname c.py_cls_var = "List" ->
-      debug "s_py_check_annot list";
-      assume (mk_py_isinstance_builtin tocheck "list" range) man flow
-        ~fthen:(fun flow ->
-            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) tocheck flow |>
-            bind_some (fun iterator flow ->
-                let list_addr = match ekind iterator with
-                  | E_py_object ({addr_kind = A_py_list r} as a, _) -> a
-                  | _ -> Exceptions.panic "should be a list: %a@\nflow = %a@\n" pp_expr iterator (Flow.print man.lattice.print) flow in
-                let var_els = var_of_addr list_addr in
-                man.exec (mk_stmt (S_py_check_annot (mk_var var_els range, i)) range) flow |> Post.return
-              )
-          )
-        ~felse:(fun flow ->
-            let flow = Flow.bottom (Flow.get_ctx flow) (Flow.get_alarms flow) in
-            Post.return flow)
-      |> Option.return
 
 
     | _ -> None

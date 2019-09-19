@@ -48,7 +48,7 @@ struct
     end)
 
   let interface = {
-    iexec = {provides = [Zone.Z_py]; uses = [Zone.Z_py]};
+    iexec = {provides = []; uses = []};
     ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
   }
 
@@ -83,10 +83,13 @@ struct
           List.length sign.py_funcs_types_in - ndefaults <= List.length args &&
           List.length args <= List.length sign.py_funcs_types_in) pyannot.py_funca_sig in
       let filter_sig in_types flow =
-        List.fold_left2 (fun acc arg annot ->
+        List.fold_left2 (fun (flow_in, flow_notin) arg annot ->
+            (* FIXME: filter flow with negation too *)
             (* woops if self of method *)
-            man.exec (mk_stmt (S_py_check_annot (arg, (Option.none_to_exn annot))) range) acc
-          )  flow args in_types in
+            let e = mk_expr (E_py_check_annot (arg, (Option.none_to_exn annot))) range in
+            man.exec (mk_assume e range) flow_in,
+            Flow.join man.lattice (man.exec (mk_assume (mk_not e range) range) flow_in) flow_notin
+          )  (flow, Flow.bottom_from flow) args in_types in
       let apply_sig flow signature =
         debug "apply_sig %a" pp_py_func_sig signature;
         let cur = get_env T_cur man flow in
@@ -108,27 +111,30 @@ struct
           in
           filter signature.py_funcs_types_in signature.py_funcs_defaults args []
         in
-        let flow = filter_sig in_types flow in
-        man.exec (mk_add_var pyannot.py_funca_ret_var range) flow |>
+        let flow_ok, flow_notok = filter_sig in_types flow in
+        man.exec (mk_add_var pyannot.py_funca_ret_var range) flow_ok |>
         man.exec (mk_stmt (S_py_annot (mk_var pyannot.py_funca_ret_var range,
                                        mk_expr (E_py_annot (Option.none_to_exn signature.py_funcs_type_out)) range))
-                    range) , new_typevars
+                    range), flow_notok, new_typevars
       in
       Eval.join_list ~empty:(
         fun () ->
           let () = Format.fprintf Format.str_formatter "%a does not match any signature provided in the stubs" pp_var pyannot.py_funca_var in
           man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |> Eval.empty_singleton)
-        (List.fold_left (fun acc sign ->
-             let nflow, ntypevars = apply_sig flow sign in
-             debug "nflow after apply_sig = %a@\n" (Flow.print man.lattice.print) nflow;
-             let cur = get_env T_cur man nflow in
-             let ncur = TVMap.filter (fun tyvar _ -> not @@ TVMap.mem tyvar ntypevars) cur in
-             let nflow = set_env T_cur ncur man nflow in
-             debug "nflow = %a@\n" (Flow.print man.lattice.print) nflow;
-             if Flow.is_bottom man.lattice nflow then acc
-             else
-               (Eval.singleton (mk_var pyannot.py_funca_ret_var range) nflow ~cleaners:([mk_remove_var pyannot.py_funca_ret_var range]) |> Eval.bind (man.eval)) :: acc
-           ) [] sigs)
+        (let evals, remaining =
+           (List.fold_left (fun (acc, remaining_flow) sign ->
+                let nflow, flow_notok, ntypevars = apply_sig remaining_flow sign in
+                debug "nflow after apply_sig = %a@\n" (Flow.print man.lattice.print) nflow;
+                let cur = get_env T_cur man nflow in
+                let ncur = TVMap.filter (fun tyvar _ -> not @@ TVMap.mem tyvar ntypevars) cur in
+                let nflow = set_env T_cur ncur man nflow in
+                debug "nflow = %a@\n" (Flow.print man.lattice.print) nflow;
+                if Flow.is_bottom man.lattice nflow then (acc, flow_notok)
+                else
+                  (Eval.singleton (mk_var pyannot.py_funca_ret_var range) nflow ~cleaners:([mk_remove_var pyannot.py_funca_ret_var range]) |> Eval.bind (man.eval)) :: acc, flow_notok
+              ) ([], flow) sigs) in
+         let () = Format.fprintf Format.str_formatter "%a does not match any signature provided in the stubs" pp_var pyannot.py_funca_var in
+         (man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) remaining |> Eval.empty_singleton) :: evals)
       |> Option.return
 
     | E_py_annot e ->
@@ -206,7 +212,7 @@ struct
           debug "tycur = %a@\n" ESet.print tycur;
           begin match ESet.cardinal tycur with
           | 0 ->
-            Flow.bottom (Flow.get_ctx flow) (Flow.get_alarms flow) |>
+            Flow.bottom_from flow |>
             Eval.empty_singleton
           | _ ->
             assert (ESet.cardinal tycur = 1);
@@ -218,17 +224,10 @@ struct
           Exceptions.panic_at range "Unsupported type annotation %a@\n" pp_expr e
       end
 
-
-    | _ -> None
-
-  let exec zone stmt man flow =
-    let range = srange stmt in
-    match skind stmt with
-    | S_py_check_annot (e, annot) ->
+    | E_py_check_annot (e, annot) ->
       begin match ekind annot with
         | E_var (v, mode) when is_builtin_name @@ get_orig_vname v ->
-          man.exec (mk_assume (mk_py_isinstance_builtin e (get_orig_vname v) range) range) flow
-          |> Post.return
+          man.eval (mk_py_isinstance_builtin e (get_orig_vname v) range) flow
           |> Option.return
 
         | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_user c, _)}, _)} as pattern, i) when get_orig_vname c.py_cls_var = "Pattern" ->
@@ -239,10 +238,10 @@ struct
                     let ee_addr = match ekind ee with
                       | E_py_object (a, _) -> a
                       | _ -> assert false in
-                    man.exec ~zone:Zone.Z_py (mk_stmt (S_py_check_annot (mk_var (mk_addr_attr ee_addr "typ" T_any) range, i)) range) flow |> Post.return
+                    man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_check_annot (mk_var (mk_addr_attr ee_addr "typ" T_any) range, i)) range) flow
                   )
                 ~felse:(fun flow ->
-                    Post.return (Flow.bottom (Flow.get_ctx flow) (Flow.get_alarms flow)))
+                    Eval.empty_singleton (Flow.bottom_from flow))
             )
           |> Option.return
 
@@ -255,7 +254,7 @@ struct
           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e1 flow |>
           bind_some (fun e1 flow ->
               warn_at range "translated to e1=%a e2=%a" pp_expr e1 pp_expr e2;
-              man.exec ~zone:Zone.Z_py ({stmt with skind = S_py_check_annot (e, {annot with ekind = E_py_index_subscript (e1, e2)})}) flow |> Post.return
+              man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) ({exp with ekind = E_py_check_annot (e, {annot with ekind = E_py_index_subscript (e1, e2)})}) flow
             )
           |> Option.return
 
@@ -267,15 +266,17 @@ struct
           let flows = List.fold_left (fun acc typ ->
               let cur = get_env T_cur man flow in
               let flow = set_env T_cur (TVMap.add s (ESet.singleton typ) cur) man flow in
-              (man.exec {stmt with skind = S_py_check_annot (e, typ)} flow |> Post.return) :: acc
+              (man.eval {exp with ekind = E_py_check_annot (e, typ)} flow) :: acc
             ) [] types in
-          Result.join_list ~empty:(fun () -> Flow.bottom (Flow.get_ctx flow) (Flow.get_alarms flow) |> Post.return) flows |> Option.return
+          Result.join_list ~empty:(fun () -> Eval.empty_singleton (Flow.bottom_from flow)) flows |> Option.return
 
 
         | _ -> Exceptions.panic_at range "S_py_check_annot: %a not supported" pp_expr annot
       end
 
     | _ -> None
+
+  let exec zone stmt man flow = None
 
   let ask _ _ _ = None
   let refine channel man flow = Channel.return flow
