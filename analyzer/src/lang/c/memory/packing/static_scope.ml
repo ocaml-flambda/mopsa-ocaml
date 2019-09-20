@@ -72,14 +72,20 @@ struct
 
 
   (** Packs of a base memory block *)
-  let packs_of_base ctx b =
+  let packs_of_base ?(only_scalars=true) ctx b =
     match b with
     | V { vkind = V_cvar {cvar_scope = Variable_global} }
     | V { vkind = V_cvar {cvar_scope = Variable_file_static _} } ->
       []
 
-    | V { vkind = V_cvar {cvar_scope = Variable_local f} }
-    | V { vkind = V_cvar {cvar_scope = Variable_func_static f} } ->
+    | V { vkind = V_cvar {cvar_scope = Variable_local f; cvar_orig_name}; vtyp }
+    | V { vkind = V_cvar {cvar_scope = Variable_func_static f; cvar_orig_name}; vtyp }
+      when cvar_orig_name = "__SAST_tmp" ->
+      []
+
+    | V { vkind = V_cvar {cvar_scope = Variable_local f}; vtyp }
+    | V { vkind = V_cvar {cvar_scope = Variable_func_static f}; vtyp }
+      when not only_scalars || is_c_scalar_type vtyp  ->
       [Locals f.c_func_unique_name]
 
     | V { vkind = V_cvar {cvar_scope = Variable_parameter f} } ->
@@ -137,7 +143,7 @@ struct
     match v.vkind with
     | V_cvar _ -> packs_of_base ctx (V v)
     | Lowlevel.Cells.Domain.V_c_cell {base} -> packs_of_base ctx base
-    | Lowlevel.String_length.Domain.V_c_string_length (base,_) -> packs_of_base ctx base
+    | Lowlevel.String_length.Domain.V_c_string_length (base,_) -> packs_of_base ~only_scalars:false ctx base
     | Scalars.Pointers.Domain.Domain.V_c_ptr_offset vv -> packs_of_var ctx vv
     | Scalars.Machine_numbers.Domain.V_c_num vv -> packs_of_var ctx vv
     | _ -> []
