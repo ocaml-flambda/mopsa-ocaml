@@ -56,8 +56,8 @@ lang.universal.numeric.values = intervals congruences
 lang.universal.numeric.values.intervals = integer float
 lang.universal.numeric.packing = strategy functor
 lang.universal.numeric.relational = apron_manager binding apron_transformer \
-                                    factory instances
-lang.universal.numeric.reductions = intervals_congruences intervals
+                                    domain instances
+lang.universal.numeric.reductions = intervals_congruences intervals_rel
 lang.universal.packing = static
 
 # REPL

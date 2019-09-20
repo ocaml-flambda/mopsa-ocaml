@@ -117,6 +117,7 @@ struct
         (Array.of_list int_vars)
         (Array.of_list float_vars)
     in
+    debug "|vars| = %d" (Apron.Environment.size env');
     Apron.Abstract1.change_environment ApronManager.man a env' false,
     bnd
 
@@ -171,13 +172,6 @@ struct
 
 
   let merge (pre,bnd) ((a1,bnd1),log1) ((a2,bnd2),log2) =
-    debug "@[<v>merging:@, pre-condition: %a@, post-condition #1: %a@, log #1: %a@, post-condition #2: %a@, log #2: %a@]"
-      Apron.Abstract1.print pre
-      Apron.Abstract1.print a1
-      pp_block log1
-      Apron.Abstract1.print a2
-      pp_block log2
-    ;
     let bnd = Binding.concat bnd1 bnd2 in
     let patch stmt a acc =
       match skind stmt with
@@ -186,6 +180,11 @@ struct
       | S_remove { ekind = E_var (var, _) }
       | S_assign({ ekind = E_var (var, _)}, _) ->
         let acc', _ = forget_var var (acc,bnd) in
+        acc'
+      | S_rename ( {ekind = E_var (var1, _)}, {ekind = E_var (var2, _)} ) ->
+        let acc', _ = forget_var var1 (acc,bnd) |>
+                      forget_var var2
+        in
         acc'
 
       | S_assume _ ->

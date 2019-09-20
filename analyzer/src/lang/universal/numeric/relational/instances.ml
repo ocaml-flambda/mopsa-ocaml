@@ -21,14 +21,14 @@
 
 open Mopsa
 
-module Octagon = Factory.Make(struct
+module Octagon = Domain.Make(struct
   type t = Oct.t
   let name = "universal.numeric.relational"
   let man = Oct.manager_alloc ()
 end
 )
 
-module Polyhedra = Factory.Make(struct
+module Polyhedra = Domain.Make(struct
   type t = Polka.loose Polka.t
   let name = "universal.numeric.relational"
   let man = Polka.manager_alloc_loose ()

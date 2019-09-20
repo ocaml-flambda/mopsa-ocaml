@@ -68,7 +68,7 @@
                         }
                     ],
                     "reductions": [
-                        "universal.numeric.reductions.intervals"
+                        "universal.numeric.reductions.intervals_rel"
                     ]
                 }
             }

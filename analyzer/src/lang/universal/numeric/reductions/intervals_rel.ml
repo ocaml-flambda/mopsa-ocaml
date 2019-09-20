@@ -30,11 +30,11 @@ open Core.Sig.Domain.Reduction
 module Reduction =
 struct
 
-  let name = "universal.numeric.reductions.intervals"
+  let name = "universal.numeric.reductions.intervals_rel"
   let debug fmt = Debug.debug ~channel:name fmt
 
   module I = Values.Intervals.Integer.Value
-  module R = Relational.Factory
+  module R = Relational.Domain
 
   (** Get a list of variables related numerically to [v] *)
   let get_related_vars v man a =
