@@ -57,21 +57,24 @@ struct
 
   let collect_typevars ?(base=TVMap.empty) signature =
     List.fold_left (fun acc oty ->
-        Visitor.fold_expr
-          (fun acc expr -> match ekind expr with
-             | E_py_call ({ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)}, {ekind = E_constant (C_string s)}::types, []) ->
-               let set = if types = [] then ESet.top else ESet.of_list types in
-               debug "in %a, set = %a" pp_expr expr ESet.print set;
-               begin match TVMap.find_opt s acc with
-                 | None -> Keep (TVMap.add s set acc)
-                 | Some set2 ->
-                   if ESet.equal set set2 then Keep acc
-                   else Exceptions.panic_at (erange expr) "conflict for typevar %s, sets %a and %a differ" s ESet.print set ESet.print set2
-               end
-             | _ ->
-               VisitParts acc)
-          (fun acc stmt -> VisitParts acc)
-          acc (Option.none_to_exn oty)) base signature.py_funcs_types_in
+        match oty with
+        | None -> acc
+        | Some ty ->
+          Visitor.fold_expr
+            (fun acc expr -> match ekind expr with
+               | E_py_call ({ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)}, {ekind = E_constant (C_string s)}::types, []) ->
+                 let set = if types = [] then ESet.top else ESet.of_list types in
+                 debug "in %a, set = %a" pp_expr expr ESet.print set;
+                 begin match TVMap.find_opt s acc with
+                   | None -> Keep (TVMap.add s set acc)
+                   | Some set2 ->
+                     if ESet.equal set set2 then Keep acc
+                     else Exceptions.panic_at (erange expr) "conflict for typevar %s, sets %a and %a differ" s ESet.print set ESet.print set2
+                 end
+               | _ ->
+                 VisitParts acc)
+            (fun acc stmt -> VisitParts acc)
+            acc ty) base signature.py_funcs_types_in
 
   let eval zs exp man flow =
     let range = erange exp in
@@ -84,11 +87,12 @@ struct
           List.length args <= List.length sign.py_funcs_types_in) pyannot.py_funca_sig in
       let filter_sig in_types flow =
         List.fold_left2 (fun (flow_in, flow_notin) arg annot ->
-            (* FIXME: filter flow with negation too *)
-            (* woops if self of method *)
-            let e = mk_expr (E_py_check_annot (arg, (Option.none_to_exn annot))) range in
-            man.exec (mk_assume e range) flow_in,
-            Flow.join man.lattice (man.exec (mk_assume (mk_not e range) range) flow_in) flow_notin
+            match annot with
+            | None -> (flow_in, flow_notin)
+            | Some ant ->
+              let e = mk_expr (E_py_check_annot (arg, ant)) range in
+              man.exec (mk_assume e range) flow_in,
+              Flow.join man.lattice (man.exec (mk_assume (mk_not e range) range) flow_in) flow_notin
           )  (flow, Flow.bottom_from flow) args in_types in
       let apply_sig flow signature =
         debug "apply_sig %a" pp_py_func_sig signature;

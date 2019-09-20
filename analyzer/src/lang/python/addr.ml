@@ -45,6 +45,7 @@ type class_address =
   | C_builtin of string (* name of a built-in class *)
   | C_user of py_clsdec (* declaration of a user class *)
   | C_unsupported of string (** unsupported class *)
+  | C_annot of py_cls_annot (** class annotations *)
 
 (** Functions *)
 type function_address =
@@ -122,6 +123,7 @@ let object_name obj =
   | A_py_function(F_user f) -> get_orig_vname f.py_func_var
   | A_py_function(F_annot f) -> get_orig_vname f.py_funca_var
   | A_py_class(C_user c, _) -> get_orig_vname c.py_cls_var
+  | A_py_class(C_annot c, _) -> get_orig_vname c.py_cls_a_var
   | _ -> panic "builtin_name: %a is not a builtin" pp_addr (addr_of_object obj)
 
 let add_type_alias (v: var) (e: expr) =
@@ -152,12 +154,14 @@ let add_builtin_function obj () =
   debug "added builtin function %s" (object_name obj);
   Hashtbl.add functions (object_name obj) obj
 
-let add_typed_function obj =
-  Hashtbl.add typed_functions (object_name obj) obj
+let add_typed obj =
+  let name = object_name obj in
+  debug "adds %s -> %a" name pp_expr (mk_py_object obj (Location.R_fresh (-1)));
+  Hashtbl.add typed_functions name obj
 
-let add_typed_function_overload obj =
+let add_typed_overload obj =
   match Hashtbl.find_opt typed_functions (object_name obj) with
-  | None -> add_typed_function obj
+  | None -> add_typed obj
   | Some ({addr_kind = A_py_function (F_annot oldf)} as a, _) ->
     let obj_sig = match akind @@ fst obj with
       | A_py_function (F_annot f) -> f.py_funca_sig
@@ -203,6 +207,8 @@ let is_builtin_attribute base attr =
     match kind_of_object base with
     | A_py_class(C_builtin name, _) | A_py_module(M_builtin name) ->
       is_builtin_name (mk_dot_name (Some name) attr)
+    | A_py_class (C_annot c, _) ->
+      is_builtin_name (mk_dot_name (Some (get_orig_vname c.py_cls_a_var)) attr)
     | _ -> false
 
 (** Search for the address of a builtin attribute *)
@@ -216,6 +222,9 @@ let find_builtin_attribute base attr =
       find_builtin (mk_dot_name (Some name) attr)
     | A_py_class(C_user cls, _) ->
       let name = get_orig_vname cls.py_cls_var in
+      find_builtin (mk_dot_name (Some name) attr)
+    | A_py_class (C_annot cls, _) ->
+      let name = get_orig_vname cls.py_cls_a_var in
       find_builtin (mk_dot_name (Some name) attr)
     | _ -> assert false
 
@@ -271,7 +280,10 @@ let isinstance obj cls =
 
 let isclass obj =
   match kind_of_object obj with
-  | A_py_class _ -> true
+  | A_py_class
+      _
+      (* ((C_user _ | C_unsupported _ | C_builtin _), _) *)
+    -> true
   | _ -> false
 
 let is_not_implemented r =
@@ -424,6 +436,7 @@ let () =
            match a with
            | A_py_class(C_user c, _) -> fprintf fmt "u{%a}" pp_var c.py_cls_var
            | A_py_class((C_builtin c | C_unsupported c), _) -> fprintf fmt "cb{%s}" c
+           | A_py_class(C_annot c, _) -> fprintf fmt "ua{%a}" pp_var c.py_cls_a_var;
            | A_py_function(F_user f) -> fprintf fmt "function %a" pp_var f.py_func_var
            | A_py_function(F_annot f) -> fprintf fmt "f-annot %a@\n%a" pp_var f.py_funca_var Ast.pp_py_func_annot f
            | A_py_function((F_builtin f | F_unsupported f)) -> fprintf fmt "builtin-function %s" f
@@ -441,6 +454,7 @@ let () =
                | C_builtin s1, C_builtin s2
                | C_unsupported s1, C_unsupported s2 -> Pervasives.compare s1 s2
                | C_user c1, C_user c2 -> compare_var c1.py_cls_var c2.py_cls_var
+               | C_annot c1, C_annot c2 -> compare_var c1.py_cls_a_var c2.py_cls_a_var;
                | _, _ -> default a1 a2
              end
            | A_py_function f1, A_py_function f2 ->

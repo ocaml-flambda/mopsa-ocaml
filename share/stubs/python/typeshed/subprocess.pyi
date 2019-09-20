@@ -72,3 +72,9 @@ class Popen(Generic[AnyStr]):
                 restore_signals: bool = ...,
                 start_new_session: bool = ...,
                 pass_fds: Any = ...) -> Popen[Any]: ...
+    # Return str/bytes
+    def communicate(self,
+                    input: Optional[AnyStr] = ...,
+                    timeout: Optional[float] = ...,
+                    # morally this should be optional
+                    ) -> Tuple[AnyStr, AnyStr]: ...

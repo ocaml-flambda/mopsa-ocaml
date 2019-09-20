@@ -188,6 +188,7 @@ struct
         | A_py_module (M_user(name, globals)) ->
           Eval.singleton (mk_py_bool (List.exists (fun v -> get_orig_vname v = attr) globals) range) flow
         | A_py_class (C_builtin _, _)
+        | A_py_class (C_annot _, _)
         | A_py_module _ ->
           Eval.singleton (mk_py_bool (is_builtin_attribute (object_of_expr e) attr) range) flow
 
@@ -258,6 +259,10 @@ struct
         | A_py_class (C_builtin c, b) ->
           Eval.singleton (mk_py_object (find_builtin_attribute (object_of_expr e) attr) range) flow
 
+        | A_py_class (C_annot c, _) ->
+          Eval.singleton (mk_py_object (find_builtin_attribute (object_of_expr e) attr) range) flow
+
+
         | A_py_class (C_user c, b) ->
           let f = List.find (fun x -> get_orig_vname x = attr) c.py_cls_static_attributes in
           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var f range) flow
@@ -294,6 +299,7 @@ struct
               begin match c with
                 | C_builtin name | C_unsupported name -> name
                 | C_user c -> get_orig_vname c.py_cls_var
+                | C_annot c -> get_orig_vname c.py_cls_a_var
               end
             | _ -> assert false
           in

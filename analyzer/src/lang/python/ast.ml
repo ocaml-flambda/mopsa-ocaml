@@ -274,6 +274,13 @@ type py_clsdec = {
   py_cls_range : range; (** range of the class *)
 }
 
+type py_cls_annot = {
+  py_cls_a_var : var;
+  py_cls_a_body : stmt;
+  py_cls_a_bases : expr list;
+  py_cls_a_abases : expr list;
+  py_cls_a_range : range;
+}
 
 
 (** Exception handler *)

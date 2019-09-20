@@ -171,6 +171,7 @@ module Domain =
                            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type exp range) flow |>
                            Eval.bind (fun class_of_exp flow ->
                                let mro = mro (object_of_expr class_of_exp) in
+                               debug "mro of %a: %a" pp_expr class_of_exp (Format.pp_print_list (fun fmt (a, _) -> pp_addr fmt a)) mro;
                                let rec search_mro flow mro = match mro with
                                  | [] ->
                                    debug "No attribute found for %a@\n" pp_expr expr;

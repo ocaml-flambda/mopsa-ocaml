@@ -63,7 +63,9 @@ module Domain =
 
       | S_py_import_from(modul, name, _, vmodul) ->
         (* FIXME: objects defined in modul other than name should not appear *)
+        debug "importing module %s" name;
         let obj, flow, ispyi = import_module man modul range flow in
+        debug "import ok, adding a few eq";
         (* FIXME: terrible disjunction *)
         if ispyi then
           match kind_of_object obj with
@@ -230,7 +232,8 @@ module Domain =
       let globals, stmts = match prog.prog_kind with
         | Py_program(g, b) -> g, b
         | _ -> assert false in
-      let rec parse stmt globals flow : stmt * var list * 'a flow  =
+      let rec parse basename stmt globals flow : stmt * var list * 'a flow  =
+        debug "parse %a" pp_stmt stmt;
         let range = srange stmt in
         match skind stmt with
         | S_assign ({ekind = E_var (v, _)}, e) ->
@@ -281,10 +284,49 @@ module Domain =
             | {py_func_decors = [{ekind = E_var( {vkind = V_uniq ("overload",_)}, _)}]} -> true
             | _ -> false in
           begin match skind stmt with
-            | S_py_annot _ | S_py_class _ -> stmt, globals, flow
+            | S_py_annot _ ->
+              stmt, globals, flow
+            | S_py_class c ->
+              let bases, abases = List.partition (fun expr -> match ekind expr with
+                  | E_py_index_subscript _ -> false
+                  | _ -> true
+                ) c.py_cls_bases in
+              let r = bind_list bases (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+                      bind_some (fun ebases flow ->
+                          (* FIXME: won't work with Generic[T] I guess *)
+                          let obases = match ebases with
+                            | [] -> [find_builtin "object"]
+                            | _ -> List.map object_of_expr bases in
+                          let name = mk_dot_name basename (get_orig_vname c.py_cls_var) in
+                          let py_cls_a_body, globals, flow = parse (Some name) c.py_cls_body globals flow in
+                          debug "body of %s: %a" name pp_stmt py_cls_a_body;
+                          let newc =
+                            { py_cls_a_var = set_orig_vname name c.py_cls_var;
+                              py_cls_a_body;
+                              py_cls_a_bases = bases;
+                              py_cls_a_abases = abases;
+                              py_cls_a_range = c.py_cls_range;
+                            } in
+                          let addr = {
+                            addr_kind = A_py_class (C_annot newc, obases);
+                            addr_group = G_all;
+                            addr_mode = STRONG;
+                          } in
+                          let mro = c3_lin (addr, None) in
+                          let addr = {addr with addr_kind = A_py_class (C_annot newc, mro)} in
+                          debug "add_typed %a" pp_addr addr;
+                          let () = add_typed (addr, None) in
+                          Result.empty flow
+                        )
+              in
+              let flow = Result.apply (fun _ f -> f) (Flow.join man.lattice) (Flow.meet man.lattice) r in
+              {stmt with skind = S_block []}, globals, flow
+
+
             | S_py_function f ->
+              let name = mk_dot_name basename (get_orig_vname f.py_func_var) in
               let newf =
-                { py_funca_var = f.py_func_var;
+                { py_funca_var = set_orig_vname name f.py_func_var;
                   py_funca_decors = f.py_func_decors;
                   py_funca_range = f.py_func_range;
                   py_funca_ret_var = f.py_func_ret_var;
@@ -304,9 +346,9 @@ module Domain =
               let () =
                 if is_typingoverload_fundec f then
                   let () = debug "typing overload on %a" pp_var f.py_func_var in
-                  add_typed_function_overload (addr, None)
+                  add_typed_overload (addr, None)
               else
-                add_typed_function (addr, None) in
+                add_typed (addr, None) in
               debug "done";
               {stmt with skind = S_block []}, globals, flow
             | _ -> assert false
@@ -314,7 +356,7 @@ module Domain =
 
         | S_block(block) ->
           let newblock, newglobals, newflow = List.fold_left (fun (nb, ng, nf) s ->
-              let news, g, nf = parse s ng nf in
+              let news, g, nf = parse basename s ng nf in
               match skind news with
               | S_block [] -> nb, g, nf
               | _ -> news::nb, g, nf
@@ -324,7 +366,7 @@ module Domain =
 
         | _ -> panic_at range "stmt %a not supported in stubs file %s" pp_stmt stmt name
       in
-      let body, globals, flow = parse stmts globals flow in
+      let body, globals, flow = parse None stmts globals flow in
       let addr = { addr_kind = A_py_module(M_user (name, globals));
                    addr_group = G_all;
                    addr_mode = STRONG; } in
