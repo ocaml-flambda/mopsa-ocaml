@@ -349,7 +349,11 @@ struct
 
     | _ -> None
 
-
+  let vars (abs,bnd) =
+    fold_env (fun v acc ->
+        let vv = Binding.apron_to_var bnd v in
+        vv :: acc
+      ) (Apron.Abstract1.env abs) []
 
   let bound_var v (abs,bnd) =
     if is_env_var v abs then

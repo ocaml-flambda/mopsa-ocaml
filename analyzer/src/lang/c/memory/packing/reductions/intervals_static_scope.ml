@@ -42,13 +42,14 @@ struct
   module P = Universal.Numeric.Relational.Instances.Polyhedra
 
   (** Signature of relational numeric domains with the additional functions
-      [related_vars] and [bound_var] functions.
+      [related_vars], [bound_var] and [vars] functions.
   *)
   module type REL =
   sig
     include DOMAIN
     val related_vars : var -> t -> var list
     val bound_var : var -> t -> I.t
+    val vars : t -> var list
   end
 
   (** Packing map with its underlying relational domain *)
@@ -70,86 +71,88 @@ struct
 
 
 
-  (** Get the list of variables related numerically to v *)
-  let get_related_vars ctx v man a =
-    let PM (aa, domain) = get_pack_map man a in
+  (** Get the interval of a variable in all packs *)
+  let get_var_interval_in_packs var ctx man post =
+    (* Get the packing map and the underlying rel domain *)
+    let PM (a, domain) = get_pack_map man post in
     let module Domain = (val domain) in
-    match aa with
-    | BOT -> []
-    | TOP -> []
-    | Nbt m ->
-      let packs = S.packs_of_var ctx v in
-      List.fold_left (fun acc pack ->
-          try
-            let aaa = M.PMap.find pack m in
-            let rel = Domain.related_vars v aaa in
-            rel @ acc
-          with Not_found -> acc
-        ) [] packs
-
-
-  (** Get the list of modified variables *)
-  let get_modified_vars ctx stmt man a =
-    match skind stmt with
-    | S_assign({ekind = E_var (v, _)}, _) -> [v]
-
-    | S_assume e ->
-      (* In case of a filter, we search for the relations of the
-         variables present in the expression *)
-      let vars = Visitor.expr_vars e in
-      List.fold_left (fun acc v -> get_related_vars ctx v man a @ acc) vars vars |>
-      List.sort_uniq compare_var
-
-    | _ -> []
-
-
-
-  (** Get the interval of v in pack p *)
-  let get_interval_in_pack v p man a =
-    let PM (aa, domain) = get_pack_map man a in
-    let module Domain = (val domain) in
-    match aa with
+    match a with
     | BOT -> I.bottom
     | TOP -> I.top
     | Nbt m ->
-      try
-        let aaa = M.PMap.find p m in
-        Domain.bound_var v aaa
-      with Not_found -> I.top
+      (* Get the packs of the variable *)
+      let packs = S.packs_of_var ctx var in
+      (* Fold over the packs to compute the meet of the intervals *)
+      packs |> List.fold_left (fun acc pack ->
+          try
+            M.PMap.find pack m |>
+            Domain.bound_var var |>
+            I.meet acc
+          with Not_found -> acc
+      ) I.top
+
+
+  (** Refine the interval of a variable in the box domain *)
+  let refine_var_interval var ctx man a =
+    (* Get the interval of the variable in the box domain *)
+    let itv = man.get_value I.id var a in
+    (** Get the interval of the variable in all packs *)
+    let itv' = get_var_interval_in_packs var ctx man a in
+    if not (I.subset itv itv')
+    then
+      let () = debug "reducing the interval of %a from %a to %a"
+          pp_var var
+          I.print itv
+          I.print itv'
+      in
+      man.set_value I.id var itv' a
+    else
+      a
+
+
+  (** Reduction after a test *)
+  let reduce_assume cond ctx man pre post =
+    let PM (a, domain) = get_pack_map man post in
+    let module Domain = (val domain) in
+    match a with
+    | BOT -> post
+    | TOP -> post
+    | Nbt m ->
+      (* Get the variables in the condition *)
+      let vars = Visitor.expr_vars cond in
+      let post', _ = vars |> List.fold_left (fun (acc,past) var ->
+          (* Fold over the packs of var and search for the variables in the same pack *)
+          let packs = S.packs_of_var ctx var in
+          packs |> List.fold_left (fun (acc,past) pack ->
+              try
+                let aa = M.PMap.find pack m in
+                (* Get the variables in this pack that were not handled before *)
+                let vars = Domain.vars aa |> VarSet.of_list in
+                let vars' = VarSet.diff vars past in
+                (* Refine the interval of these variables *)
+                let acc' = VarSet.fold (fun var' acc ->
+                    refine_var_interval var' ctx man acc
+                  ) vars' acc
+                in
+                acc', VarSet.union vars' past
+              with Not_found -> (acc,past)
+            ) (acc,past)
+        ) (post,VarSet.empty)
+      in
+      post'
 
 
   (** Reduction operator *)
   let reduce ctx stmt man (pre:'a) (post:'a) : 'a =
-    (* Get the modified variables *)
-    let vars = get_modified_vars ctx stmt man pre in
+    match skind stmt with
+    | S_assign ({ ekind = E_var (v,_) },_) ->
+      refine_var_interval v ctx man post
 
-    (* Refine the interval of each variable *)
-    List.fold_left (fun post var ->
-        (* Get the interval of var in the box domain *)
-        let itv = man.get_value I.id var post in
+    | S_assume cond ->
+      reduce_assume cond ctx man pre post
 
-        (** Get the packs of the variable *)
-        let packs = S.packs_of_var ctx var in
-
-        (* Get the most precise interval in packs *)
-        let itv' = List.fold_left (fun acc pack ->
-            let i = get_interval_in_pack var pack man post in
-            I.meet acc i
-          ) I.top packs
-        in
-
-        (* Check if box is less precise *)
-        if not (I.subset itv itv')
-        then
-          let () = debug "reducing the interval of %a from %a to %a"
-              pp_var var
-              I.print itv
-              I.print itv'
-          in
-          man.set_value I.id var itv' post
-        else post
-
-      ) post vars
+    | _ ->
+      post
 
 end
 
