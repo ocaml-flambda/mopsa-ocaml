@@ -868,7 +868,7 @@ and access_specifier =
    | ExprWithCleanups of expr_with_cleanups
    (** (C++) Represents an expression – generally a full-expression – that introduces cleanups to be run at the end of the sub-expression's evaluation. *)
 
-   | FunctionParmPackExpr of (** parameter pack which this expression refers to *) param_var_decl * (** expansions of the parameter pack *) param_var_decl array
+   | FunctionParmPackExpr of (** parameter pack which this expression refers to *) var_decl * (** expansions of the parameter pack *) var_decl array
    (** (C++) Represents a reference to a function parameter pack that has been substituted but not yet expanded. When a pack expansion contains multiple parameter packs at different levels, this node is used to represent a function parameter pack at an outer level which we have already substituted to refer to expanded parameters, but where the containing pack expansion cannot yet be expanded. *)
 
    | MaterializeTemporaryExpr of materialize_tmp_expr

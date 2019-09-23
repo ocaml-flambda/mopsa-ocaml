@@ -2284,7 +2284,11 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
 
       GENERATE_NODE_INDIRECT(GenericSelectionExpr, ret, node, 3, {
           Store_field(ret, 0, TranslateExpr(x->getControllingExpr()));
+#if CLANG_VERSION_MAJOR >= 9
+          Store_field_array(ret, 1, x->getNumAssocs(), TranslateExpr(x->getAssocExprs()[i]));
+#else
           Store_field_array(ret, 1, x->getNumAssocs(), TranslateExpr(x->getAssocExpr(i)));
+#endif
           Store_field(ret, 2, Val_int(x->getResultIndex()));
         });
 
@@ -2495,7 +2499,11 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
           Store_field(ret, 0, TranslateQualType(x->getAllocatedType()));
           Store_field_option(ret, 1, x->getOperatorNew(), TranslateFunctionDecl(x->getOperatorNew()));
           Store_field_option(ret, 2, x->getOperatorDelete(), TranslateFunctionDecl(x->getOperatorDelete()));
+#if CLANG_VERSION_MAJOR >= 9
+          Store_field_option(ret, 3, x->isArray() && x->getArraySize().hasValue(), TranslateExpr(x->getArraySize().getValue()));
+#else
           Store_field_option(ret, 3, x->isArray(), TranslateExpr(x->getArraySize()));
+#endif
           Store_field(ret, 4, Val_bool(x->isGlobalNew()));
           int r = 0;
           switch (x->getInitializationStyle()) {
@@ -2586,8 +2594,8 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
         });
 
       GENERATE_NODE(FunctionParmPackExpr, ret, node, 2, {
-          Store_field(ret, 0, TranslateParmVarDecl(x->getParameterPack()));
-          Store_field_array(ret, 1, x->getNumExpansions(), TranslateParmVarDecl(x->getExpansion(i)));
+          Store_field(ret, 0, TranslateVarDecl(x->getParameterPack()));
+          Store_field_array(ret, 1, x->getNumExpansions(), TranslateVarDecl(x->getExpansion(i)));
         });
 
       GENERATE_NODE_INDIRECT(MaterializeTemporaryExpr, ret, node, 4, {
