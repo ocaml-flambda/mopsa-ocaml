@@ -292,7 +292,7 @@ let () =
       );
     print = (fun next fmt v ->
         match vkind v with
-        | V_addr_attr _ -> Format.pp_print_string fmt v.vname
+        | V_addr_attr (addr, attr) -> Format.fprintf fmt "%a.%s" pp_addr addr attr
         | _ -> next fmt v
       )
   }

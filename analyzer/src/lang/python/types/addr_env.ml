@@ -263,7 +263,7 @@ struct
           flow |> Post.return |> Option.return
         | _ -> assert false (* shouldn't happen *) end
 
-    | S_rename ({ekind = E_addr a}, {ekind = E_addr a'}) ->
+    | S_rename (({ekind = E_addr a} as e1), ({ekind = E_addr a'} as e2)) ->
       let cur = get_env T_cur man flow in
       let ncur = AMap.map (ASet.map (fun addr -> if addr = Def a then Def a' else addr)) cur in
       let flow = set_env T_cur ncur man flow in
@@ -281,11 +281,16 @@ struct
         else
           flow in
       begin match akind a with
-        | A_py_instance _ -> man.exec ~zone:Zone.Z_py_obj stmt flow |> Post.return |> Option.return
+        | A_py_instance {addr_kind = A_py_class (C_annot _, _)} ->
+          man.exec ~zone:Zone.Z_py_obj stmt flow |>
+          man.exec ~zone:Zone.Z_py_obj {stmt with skind = S_rename ({e1 with ekind = E_py_annot e1}, e2)}
+        | A_py_instance _ ->
+          man.exec ~zone:Zone.Z_py_obj stmt flow
         | ak when Objects.Data_container_utils.is_data_container ak ->
-          man.exec ~zone:Zone.Z_py_obj stmt flow |> Post.return |> Option.return
-        | _ -> flow |> Post.return |> Option.return
+          man.exec ~zone:Zone.Z_py_obj stmt flow
+        | _ -> flow
       end
+      |> Post.return |> Option.return
 
     | _ -> None
 

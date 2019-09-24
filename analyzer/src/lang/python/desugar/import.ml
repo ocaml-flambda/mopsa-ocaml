@@ -287,16 +287,17 @@ module Domain =
             | S_py_annot _ ->
               stmt, globals, flow
             | S_py_class c ->
-              let bases, abases = List.partition (fun expr -> match ekind expr with
-                  | E_py_index_subscript _ -> false
-                  | _ -> true
-                ) c.py_cls_bases in
+              let bases, abases = List.fold_left (fun (b, ab) expr -> match ekind expr with
+                  | E_py_index_subscript (c, _) -> (c::b, expr::ab)
+                  | _ -> (expr::b, ab)
+                ) ([], []) c.py_cls_bases in
+              let bases, abases = List.rev bases, List.rev abases in
               let r = bind_list bases (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
                       bind_some (fun ebases flow ->
                           (* FIXME: won't work with Generic[T] I guess *)
                           let obases = match ebases with
                             | [] -> [find_builtin "object"]
-                            | _ -> List.map object_of_expr bases in
+                            | _ -> List.map object_of_expr ebases in
                           let name = mk_dot_name basename (get_orig_vname c.py_cls_var) in
                           let py_cls_a_body, globals, flow = parse (Some name) c.py_cls_body globals flow in
                           debug "body of %s: %a" name pp_stmt py_cls_a_body;

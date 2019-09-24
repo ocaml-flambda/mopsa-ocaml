@@ -1,6 +1,6 @@
 class overload: pass
 Any = object # cheating, removed the ()
-TypeVar = object()
+class TypeVar: pass
 
 class Union: pass
 
@@ -25,6 +25,7 @@ class Sequence: pass
 class Text: pass
 class Mapping: pass
 class Literal: pass
-class Generic: pass
+class Generic:
+    def __new__(self): pass
 
 class Type: pass

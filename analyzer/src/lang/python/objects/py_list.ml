@@ -647,7 +647,8 @@ struct
           Eval.singleton (mk_py_object (addr_list, None) range)
         )
       |> Option.return
-    | E_py_check_annot (tocheck, {ekind = E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_user c, _)}, _)}, i) }) when get_orig_vname c.py_cls_var = "List" ->
+
+    | E_py_check_annot (tocheck, {ekind = E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)}, i) }) when get_orig_vname c.py_cls_a_var = "List" ->
       debug "s_py_check_annot list";
       assume (mk_py_isinstance_builtin tocheck "list" range) man flow
         ~fthen:(fun flow ->
