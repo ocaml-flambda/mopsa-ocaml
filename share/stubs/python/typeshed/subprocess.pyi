@@ -1,4 +1,4 @@
-from typing import Generic, AnyStr, Sequence, Text, Union, IO, overload, Optional, Any, Callable, Mapping, Literal
+from typing import Generic, AnyStr, Sequence, Text, Union, IO, overload, Optional, Any, Callable, Mapping, Literal, Tuple
 
 _FILE = Union[None, int, IO[Any]]
 _TXT = Union[bytes, Text]
