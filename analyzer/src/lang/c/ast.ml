@@ -828,7 +828,7 @@ let mk_c_member_access r f range =
   mk_expr (E_c_member_access (r, f.c_field_index, f.c_field_org_name)) ~etyp:f.c_field_type range
 
 let mk_c_subscript_access a i range =
-  mk_expr (E_c_array_subscript (a, i)) ~etyp:(under_array_type a.etyp) range
+  mk_expr (E_c_array_subscript (a, i)) ~etyp:(under_type a.etyp) range
 
 let mk_c_character c range =
   mk_constant (C_c_character ((Z.of_int @@ int_of_char c), C_char_ascii)) range ~etyp:(T_c_integer(C_unsigned_char))
@@ -864,6 +864,9 @@ let mk_c_call f args range =
   }
   in
   mk_expr (E_call (mk_expr (E_c_function f) range ~etyp:(T_c_function (Some ftype)), args)) range ~etyp:(f.c_func_return)
+
+let mk_c_builtin_call builtin args typ range =
+  mk_expr (E_c_builtin_call (builtin,args)) range ~etyp:typ
 
 let mk_c_call_stmt f args range =
   let exp = mk_c_call f args range in

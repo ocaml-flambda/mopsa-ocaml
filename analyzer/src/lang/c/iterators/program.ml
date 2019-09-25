@@ -27,6 +27,8 @@ open Framework.Core.Sig.Domain.Stateless
 open Universal.Ast
 open Stubs.Ast
 open Ast
+open Zone
+open Universal.Zone
 
 
 (** Iterator domain *)
@@ -60,17 +62,27 @@ struct
     }
 
 
-  (** Number of symbolic arguments passed to main *)
-  let opt_argc = ref 0
+  (** {2 Auxiliary variables} *)
+  (** ======================= *)
 
-  let () =
-    register_domain_option name {
-      key = "-argc";
-      category = "C";
-      doc = " number of symbolic arguments passed to main";
-      spec = ArgExt.Set_int opt_argc;
-      default = "0";
+  (** Symbolic variable representing the number of command-line arguments *)
+  type var_kind += V_c_argn
+
+  let () = register_var {
+      print = (fun next fmt v ->
+          match v.vkind with
+          | V_c_argn -> Format.fprintf fmt "|args|"
+          | _ -> next fmt v
+        );
+      compare = (fun next v1 v2 ->
+          match v1.vkind, v2.vkind with
+          | V_c_argn,V_c_argn -> 0
+          | _ -> next v1 v2
+        );
     }
+
+  let mk_c_argn range =
+    mk_var (mkv "|args|" V_c_argn s32) range
 
 
   (** Zoning definition *)
@@ -78,13 +90,13 @@ struct
 
   let interface = {
     iexec = {
-      provides= [Zone.Z_c];
-      uses = [Zone.Z_c]
+      provides= [Z_c];
+      uses = [Z_c;Z_c_scalar]
     };
 
     ieval = {
       provides = [];
-      uses = []
+      uses = [Z_c,Z_c_scalar]
     }
   }
 
@@ -131,66 +143,64 @@ struct
       ) functions
 
 
-  (** Find a global variable by name *)
-  let find_global v globals =
-    List.find (function
-        | ({vkind = (V_cvar {cvar_orig_name})},_) -> cvar_orig_name = v
-        | _ -> false
-      ) globals |> fst
-
-
   (** Call a function with a list of arguments *)
   let call f args man flow =
     let stmt = mk_c_call_stmt f args f.c_func_range in
-    man.exec ~zone:Zone.Z_c stmt flow
+    man.exec ~zone:Z_c stmt flow |>
+    Post.return
 
 
-  (** Call main with a fixed number of arguments, as given by function [fargv] *)
-  let call_main_with_fixed_argc main argc fargv range man flow =
-    (* Create the argc variable and initialize it to |args| + 1 *)
-    let argc_var = mkfresh (fun uid ->
-        let vname = "_argc" in
-        let vkind = V_cvar {
-            cvar_scope = Variable_global;
-            cvar_range = range;
-            cvar_uid = uid;
-            cvar_orig_name = vname;
-            cvar_uniq_name = vname;
-          }
-        in
-        vname, vkind
-      ) s32 ()
-    in
-    let decl =
-      mk_c_declaration
-        argc_var
-        (Some (C_init_expr (mk_int argc ~typ:s32 range)))
-        Variable_global
-        range
-    in
-    let flow = man.exec decl flow in
+  (** Create the address of the array pointed by argv *)
+  let mk_c_argv range =
+    mk_addr
+      {
+        addr_kind = Stubs.Ast.A_stub_resource "argv";
+        addr_group = G_all;
+        addr_mode = STRONG;
+      }
+      ~etyp:(T_c_pointer (T_c_pointer s8))
+      range
 
-    (* Create the argv variable *)
-    let argv_var = mkfresh (fun uid ->
-        let vname = "_argv" in
-        let vkind = V_cvar {
-            cvar_scope = Variable_global;
-            cvar_range = range;
-            cvar_uid = uid;
-            cvar_orig_name = vname;
-            cvar_uniq_name = vname;
-          }
-        in
-        vname, vkind
-      ) (array_type (pointer_type s8) (argc + 1 |> Z.of_int)) ()
+
+  (** Create the address of an argument string *)
+  let mk_c_arg ~mode range =
+    mk_addr
+      {
+        addr_kind = Stubs.Ast.A_stub_resource "arg";
+        addr_group = G_all;
+        addr_mode = mode;
+      }
+      ~etyp:(T_c_pointer s8)
+      range
+
+
+  (** Initialize argc and argv with concrete values and execute the body of main *)
+  let call_main_with_concrete_args main args man flow =
+    let range = main.c_func_range in
+
+    (* argc is set to |args| + 1 *)
+    let argc = mk_int (List.length args + 1) range in
+
+    (* Create the memory block pointed by argv. *)
+    let argv = mk_c_argv range in
+
+    (* Initialize its size to |args| + 2 *)
+    man.eval ~zone:(Z_c,Z_c_scalar) (mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, argv)) range ~etyp:ul) flow >>$ fun bytes flow ->
+    let flow = man.exec ~zone:Z_c_scalar (mk_add bytes range) flow |>
+               man.exec ~zone:Z_c_scalar (mk_assign bytes (mk_z
+                                                             (Z.mul
+                                                                (sizeof_type (T_c_pointer s8))
+                                                                (Z.of_int (List.length args + 2))
+                                                             ) range
+                                                          ) range) |>
+               man.exec (mk_add argv range)
     in
-    let decl = mk_c_declaration argv_var None Variable_global range in
-    let flow = man.exec decl flow in
+
 
     (* Initialize argv[0] with the name of the program *)
     let flow = man.exec
         (mk_assign
-           (mk_c_subscript_access (mk_var argv_var range) (mk_zero range) range)
+           (mk_c_subscript_access argv (mk_zero range) range)
            (mk_c_string "a.out" range)
            range
         )
@@ -199,43 +209,101 @@ struct
 
     (* Initialize argv[i | 1 <= i < argc] with command-line arguments *)
     let rec iter i flow =
-      if i >= argc
+      if i >= List.length args + 1
       then flow
       else
         let range = tag_range range "argv[%d]" i in
-        let argvi = mk_c_subscript_access (mk_var argv_var range) (mk_int i range) range in
-        let arg = fargv i range in
+        let argvi = mk_c_subscript_access argv (mk_int i range) range in
+        let arg = mk_c_string (List.nth args (i-1)) range in
         let flow = man.exec (mk_assign argvi arg range) flow in
         iter (i + 1) flow
     in
     let flow = iter 1 flow in
 
-    (* Put the last NULL cell *)
-    let last = mk_c_subscript_access (mk_var argv_var range) (mk_int argc range) range in
+    (* Put NULL in argv[argc + 1] *)
+    let last = mk_c_subscript_access argv argc range in
     let flow = man.exec (mk_assign last (mk_zero range) range) flow in
 
     (* call main with argc and argv *)
-    call main [
-      mk_var argc_var main.c_func_range;
-      mk_var argv_var main.c_func_range
-    ] man flow
+    call main [argc; argv] man flow
 
 
 
-  (** Initialize argc and argv with concrete values and execute the body of main *)
-  let call_main_with_concrete_args main args range man flow =
-    call_main_with_fixed_argc main
-      (List.length args + 1)
-      (fun i range -> mk_c_string (List.nth args (i-1)) range)
-      range man flow
 
-
-  (** Initialize argv as an array of length !opt_argc containing symbolic valid strings *)
+  (** Initialize argc and argv with symbolic arguments *)
   let call_main_with_symbolic_args main functions range man flow =
-    call_main_with_fixed_argc main
-      !opt_argc
-      (fun i range -> mk_c_call (find_function "_mopsa_new_valid_string" functions) [] range)
-      range man flow
+    let range = main.c_func_range in
+
+    (* Add the symbolic variable argn representing the number of arguments *)
+    let argn = mk_c_argn range in
+    let flow = man.exec (mk_add argn range) flow |>
+               man.exec (mk_assign argn (mk_z_interval Z.one (rangeof s32 |> snd |> Z.pred) range) range)
+    in
+
+    (* Initialize argc *)
+    let argc = add argn (mk_one range) range in
+
+    (* Create the memory block pointed by argv. *)
+    let argv = mk_c_argv range in
+
+    (* Initialize its size to argc + 1 *)
+    man.eval ~zone:(Z_c,Z_c_scalar) (mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, argv)) range ~etyp:ul) flow >>$ fun bytes flow ->
+    man.eval ~zone:(Z_c,Z_c_scalar) argc flow >>$ fun scalar_argc flow ->
+    let flow = man.exec ~zone:Z_c_scalar (mk_add bytes range) flow |>
+               man.exec ~zone:Z_c_scalar (mk_assign bytes (mul
+                                                             (mk_z (sizeof_type (T_c_pointer s8)) range)
+                                                             (add scalar_argc (mk_one range) range)
+                                                             range
+                                                          ) range) |>
+               man.exec (mk_add argv range)
+    in
+
+    (* Initialize argv[0] with the name of the program *)
+    let flow = man.exec
+        (mk_assign
+           (mk_c_subscript_access argv (mk_zero range) range)
+           (mk_c_string "a.out" range)
+           range
+        )
+        flow
+    in
+
+    (* Create a symbolic argument *)
+    let arg = mk_c_arg ~mode:STRONG range in
+
+    (* Initialize the size of the argument *)
+    man.eval ~zone:(Z_c,Z_c_scalar) (mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, arg)) range ~etyp:ul) flow >>$ fun bytes flow ->
+    let flow = man.exec ~zone:Z_c_scalar (mk_add bytes range) flow |>
+               man.exec ~zone:Z_c_scalar (mk_assign bytes (mk_z (rangeof s32 |> snd) range) range) |>
+               man.exec (mk_add arg range)
+    in
+
+    (* Ensure that the argument is a valid string *)
+    let some_arg_cell = mk_c_subscript_access arg (mk_z_interval Z.zero (rangeof s32 |> snd |> Z.pred) range) range in
+    let flow = man.exec (mk_assign some_arg_cell (mk_zero range) range) flow in
+
+    (* Make the address weak *)
+    let arg_weak = mk_c_arg ~mode:WEAK range in
+    let flow = man.exec (mk_rename arg arg_weak range) flow in
+
+    (* Put the symbolic argument in argv[1 : argc-1] *)
+    let i = mktmp ~typ:s32 () in
+    let ii = mk_var i range in
+    let l = mk_one range in
+    let u = argn in
+    let flow = man.exec (mk_add ii range) flow |>
+               man.exec (mk_assign ii (mk_c_builtin_call "_mopsa_range_s32" [l;u] s32 range) range)
+    in
+    let every_argv_cell = mk_c_subscript_access argv (mk_expr (Stubs.Ast.E_stub_quantified(FORALL,i,S_interval(l,u))) ~etyp:s32 range) range in
+    let flow = man.exec (mk_assume (mk_binop every_argv_cell O_eq arg_weak range) range) flow |>
+               man.exec (mk_remove ii range)
+    in
+
+    (* Put NULL in argv[argc] *)
+    let last = mk_c_subscript_access argv argc range in
+    let flow = man.exec (mk_assign last (mk_zero range) range) flow in
+
+    call main [argc; argv] man flow
 
 
   let exec zone stmt man flow =
@@ -257,19 +325,17 @@ struct
 
       (* Special processing for main for initializing argc and argv*)
       if !opt_entry_function = "main" && List.length entry.c_func_parameters = 2 then
-        let flow2 =
+        let post =
           match args with
-          | Some args -> call_main_with_concrete_args entry args entry.c_func_range man flow1
+          | Some args -> call_main_with_concrete_args entry args man flow1
           | None      -> call_main_with_symbolic_args entry c_functions entry.c_func_range man flow1
         in
-        Post.return flow2 |>
-        Option.return
+        Some post
       else
 
       if List.length entry.c_func_parameters = 0 then
         (* Otherwise execute the body *)
         call entry [] man flow1 |>
-        Post.return |>
         Option.return
 
       else panic "entry functions with arguments not supported"

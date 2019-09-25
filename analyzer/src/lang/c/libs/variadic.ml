@@ -56,7 +56,7 @@ struct
         Z_c, Z_c_low_level
       ];
       uses = [
-        Z_c, Memory.Common.Points_to.Z_c_points_to
+        Z_c, Common.Points_to.Z_c_points_to
       ]
     }
   }
@@ -178,7 +178,7 @@ struct
 
   (* Resolve a pointer to a va_list *)
   let resolve_va_list ap range man flow =
-    let open Memory.Common.Points_to in
+    let open Common.Points_to in
     man.eval ap ~zone:(Z_c, Z_c_points_to) flow >>$ fun pt flow ->
 
     match ekind pt with

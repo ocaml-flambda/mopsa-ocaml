@@ -153,6 +153,7 @@ struct
     | A { addr_kind = A_stub_resource "ReadOnlyMemory" }
     | A { addr_kind = A_stub_resource "String"}
     | A { addr_kind = A_stub_resource "ReadOnlyString" }
+    | A { addr_kind = A_stub_resource "arg" }
       -> true
 
     | _ -> false

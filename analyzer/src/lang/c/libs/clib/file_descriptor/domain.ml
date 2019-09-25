@@ -69,7 +69,7 @@ open Stubs.Ast
 open Ast
 open Universal.Zone
 open Zone
-open Memory.Common.Points_to
+open Common.Points_to
 module Itv = Universal.Numeric.Values.Intervals.Integer.Value
 open Slot
 open Table
