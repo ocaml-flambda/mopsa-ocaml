@@ -309,7 +309,11 @@ struct
         init_aux_var (mk_before_var (V v) range) before flow >>= fun _ flow ->
         init_aux_var (mk_after_var (V v) range) after flow
       with NonPointerFound ->
-        Post.return flow
+        (* Non-pointer value found in the initializers *)
+        man.post ~zone:Z_u_num (mk_assign sentinel (mk_z_interval Z.zero size range) range) flow >>= fun _ flow ->
+        man.post ~zone:Z_c_scalar (mk_add (mk_before_var (V v) range) range) flow >>= fun _ flow ->
+        man.post ~zone:Z_c_scalar (mk_add (mk_after_var (V v) range) range) flow
+
 
 
   (** Add a pointer to the smash after-sentinel *)
@@ -571,7 +575,18 @@ struct
 
   (** Add a base to the domain's dimensions *)
   let add_base base range man flow =
-    assert false
+    eval_base_size base range man flow >>$ fun size flow ->
+    man.eval ~zone:(Z_c_scalar, Z_u_num) size flow >>$ fun size flow ->
+
+    let sentinel = mk_sentinel_var base range in
+    let before = mk_before_var base range in
+    let after = mk_after_var base range in
+
+    man.post ~zone:Z_u_num (mk_add sentinel range) flow >>= fun _ flow ->
+    man.post ~zone:Z_u_num (mk_assume (mk_in sentinel (mk_zero range) size range) range) flow >>= fun _ flow ->
+    man.post ~zone:Z_c_scalar (mk_add before range) flow >>= fun _ flow ->
+    man.post ~zone:Z_c_scalar (mk_add after range) flow
+
 
 
   (** Declare a block as assigned by adding the primed length variable *)
@@ -581,8 +596,10 @@ struct
     | E_c_points_to (P_block (base, _)) when is_interesting_base base ->
       let sentinel' = mk_sentinel_var base range ~primed:true in
       let before' = mk_before_var base range ~primed:true in
+      let after' = mk_after_var base range ~primed:true ~mode:STRONG in
       man.post (mk_add sentinel' range) ~zone:Z_u_num flow >>= fun _ flow ->
-      man.post (mk_add before' range) ~zone:Z_c_scalar flow
+      man.post (mk_add before' range) ~zone:Z_c_scalar flow >>= fun _ flow ->
+      man.post (mk_add after' range) ~zone:Z_c_scalar flow
 
     | _ -> Post.return flow
 
@@ -590,12 +607,55 @@ struct
 
   (** Rename primed variables introduced by a stub *)
   let rename_primed target offsets range man flow : 'a post =
-    assert false
+    man.eval target ~zone:(Z_c_low_level,Z_c_points_to) flow >>$ fun pt flow ->
+    match ekind pt with
+    | E_c_points_to (P_block (base, _)) when is_interesting_base base ->
+      (* FIXME: not yet implemented *)
+      let sentinel = mk_sentinel_var base range in
+      let sentinel' = mk_sentinel_var ~primed:true base range in
+      man.post ~zone:Z_u_num (mk_assign (weaken sentinel) (weaken sentinel') range) flow >>= fun _ flow ->
+      man.post ~zone:Z_u_num (mk_remove sentinel' range) flow  >>= fun _ flow ->
+
+      let before = mk_before_var base range in
+      let before' = mk_before_var ~primed:true base range in
+      man.post ~zone:Z_c_scalar (mk_assign before (mk_top (T_c_pointer T_c_void) range) range) flow >>= fun _ flow ->
+      man.post ~zone:Z_c_scalar (mk_remove before' range) flow  >>= fun _ flow ->
+
+      let after = mk_after_var base range in
+      let after' = mk_after_var ~primed:true base range in
+      man.post ~zone:Z_c_scalar (mk_assign after (mk_top (T_c_pointer T_c_void) range) range) flow >>= fun _ flow ->
+      man.post ~zone:Z_c_scalar (mk_remove after' range) flow
+
+
+    | E_c_points_to (P_null | P_invalid) ->
+      Post.return flow
+
+
+    | E_c_points_to P_valid ->
+      warn_at range "unsound: rename of %a not supported because it can not be resolved"
+        pp_expr target
+      ;
+      Post.return flow
+
+
+    | _ -> assert false
+
 
 
   (** Rename the length variable associated to a base *)
   let rename_base base1 base2 range man flow =
-    assert false
+    let sentinel1 = mk_sentinel_var base1 range in
+    let sentinel2 = mk_sentinel_var base2 range in
+    man.post ~zone:Z_u_num (mk_rename sentinel1 sentinel2 range) flow >>= fun _ flow ->
+
+    let before1 = mk_before_var base1 range in
+    let before2 = mk_before_var base2 range in
+    man.post ~zone:Z_c_scalar (mk_rename before1 before2 range) flow >>= fun _ flow ->
+
+    let after1 = mk_after_var base1 range in
+    let after2 = mk_after_var base2 range in
+    man.post ~zone:Z_c_scalar (mk_rename after1 after2 range) flow
+
 
 
   (** Transformers entry point *)
@@ -747,8 +807,8 @@ struct
       eval_deref exp false exp.erange man flow |>
       Option.return
 
-    | E_stub_primed e when is_c_pointer_type exp.etyp &&
-                           not (is_expr_quantified e)
+    | E_stub_primed ({ ekind = E_c_deref _ } as e) when is_c_pointer_type exp.etyp &&
+                                                        not (is_expr_quantified e)
       ->
       eval_deref e true exp.erange man flow |>
       Option.return
