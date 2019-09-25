@@ -19,13 +19,13 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Simple packing strategy based on static scoping of variables.
+(** Simple packing strategy based on static scoping of C variables.
 
-    The idea is simple: global variables are kept in one pack and local
-    variables of each function are kept in separate packs.
-
-    The packs may overlap to preserve some relations between arguments passed
-    to a function and its return value.
+    The idea is simple: global variables are kept in one pack and each function
+    has its own pack for its local variables. To preserve relations between 
+    the call arguments and the returned value, the packs may overlap: 
+    the formal parameters and the return variable are kept in the caller and
+    callee packs.
 *)
 
 open Mopsa
@@ -74,43 +74,46 @@ struct
   (** Packs of a base memory block *)
   let packs_of_base ?(only_scalars=true) ctx b =
     match b with
+    (* Global variables *)
     | V { vkind = V_cvar {cvar_scope = Variable_global} }
     | V { vkind = V_cvar {cvar_scope = Variable_file_static _} } ->
       []
 
+    (* Local temporary variables *)
     | V { vkind = V_cvar {cvar_scope = Variable_local f; cvar_orig_name}; vtyp }
     | V { vkind = V_cvar {cvar_scope = Variable_func_static f; cvar_orig_name}; vtyp }
       when cvar_orig_name = "__SAST_tmp" ->
       []
 
+    (* Local variables *)
     | V { vkind = V_cvar {cvar_scope = Variable_local f}; vtyp }
     | V { vkind = V_cvar {cvar_scope = Variable_func_static f}; vtyp }
       when not only_scalars || is_c_scalar_type vtyp  ->
       [Locals f.c_func_unique_name]
 
+    (* Formal parameters are part of the caller and the callee packs *)
     | V { vkind = V_cvar {cvar_scope = Variable_parameter f} } ->
-      (* Parameters are part of the caller and the callee packs *)
       let cs = Context.ufind Callstack.ctx_key ctx in
       if Callstack.is_empty cs
-      then []
+      then [Locals f.c_func_unique_name]
       else
-        let callee, cs' = Callstack.pop cs in
+        let _, cs' = Callstack.pop cs in
         if Callstack.is_empty cs'
-        then []
+        then [Locals f.c_func_unique_name]
         else
           let caller, _ = Callstack.pop cs' in
-          [Locals caller.call_fun; Locals callee.call_fun]
+          [Locals f.c_func_unique_name; Locals caller.call_fun]
 
+    (* Return variables are also part of the caller and the callee packs *)
     | V { vkind = Universal.Iterators.Interproc.Common.V_return call } ->
-      (* Return variables are also part of the caller and the callee packs *)
-      (* Note that the top of the callstack is not always the callee
-         function, because the return variable is used after the function
-         returns
-      *)
       let cs = Context.ufind Callstack.ctx_key ctx in
       if Callstack.is_empty cs
       then []
       else
+          (* Note that the top of the callstack is not always the callee
+             function, because the return variable is used after the function
+             returns
+          *)
         let f1, cs' = Callstack.pop cs in
         let fname = match ekind call with
           | E_call ({ekind = E_function (User_defined f)},_) -> f.fun_name
@@ -125,14 +128,24 @@ struct
           let f2, _ = Callstack.pop cs' in
           [Locals f1.call_fun; Locals f2.call_fun]
 
+    (* Temporary variables are considered as locals *)
     | V { vkind = V_tmp _ } ->
-      (* Temporary variables are considered as locals *)
       let cs = Context.ufind Callstack.ctx_key ctx in
       if Callstack.is_empty cs
       then []
       else
         let callee, _ = Callstack.pop cs in
         [Locals callee.call_fun]
+
+    (* Symbolic number of command-line arguments is kept in the pack of main *)
+    | V { vkind = Iterators.Program.Domain.V_c_argn } ->
+      [Locals "main"]
+
+
+    (* Symbolic command-line arguments strings are also kept in the pack of main *)
+    | A { addr_kind = Stubs.Ast.A_stub_resource "argv" }
+    | A { addr_kind = Stubs.Ast.A_stub_resource "arg" } ->
+      [Locals "main"]
 
     | _ ->
       []
@@ -146,6 +159,8 @@ struct
     | Lowlevel.String_length.Domain.V_c_string_length (base,_) -> packs_of_base ~only_scalars:false ctx base
     | Scalars.Pointers.Domain.Domain.V_c_ptr_offset vv -> packs_of_var ctx vv
     | Scalars.Machine_numbers.Domain.V_c_num vv -> packs_of_var ctx vv
+    | Libs.Cstubs.Domain.V_c_bytes a -> packs_of_base ~only_scalars:false ctx (A a)
+    | Iterators.Program.Domain.V_c_argn -> [Locals "main"]
     | _ -> []
 
 end

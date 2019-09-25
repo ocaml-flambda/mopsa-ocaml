@@ -19,8 +19,17 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Static packing functor - lifting an abstract domain to a map of buckets
-    with fewer dimensions using a static packing strategy.
+(** Packing functor with static strategy.
+
+    This functor lifts an abstract domain to a set of packs with fewer
+    dimensions. Users of the functor need to define a static strategy that
+    gives the packs of a given variable.
+
+    The packs are represented as a map from packing keys to abstract
+    elements. Lattice operators are defined pointwise. To compute the
+    post-state of a statement, the functor inspects the statement to extract
+    the affected variables, and propagate the (modified) statement to the
+    appropriate pack.
 *)
 
 open Mopsa
@@ -131,7 +140,15 @@ struct
 
   (** Pretty printer *)
   let print fmt a =
-    fprintf fmt "packs: %a@\n" Map.print a
+    fprintf fmt "@[<v>%a@]"
+      (pp_print_list
+         ~pp_sep:(fun fmt () -> fprintf fmt "")
+         (fun fmt (pack,aa) ->
+            fprintf fmt "@[{%a}::%a@]"
+              Strategy.print pack
+              Domain.print aa
+         )
+      ) (Map.bindings a)
 
 
 
@@ -171,10 +188,13 @@ struct
   (** {2 Transfer functions} *)
   (** ********************** *)
 
+  (** Initialization *)
   let init prog =
     let () = Strategy.init prog in
     Map.empty
 
+
+  (** Get the packs of a variable *)
   let packs_of_var ctx v =
     try Cache.find cache v
     with Not_found ->
@@ -182,6 +202,7 @@ struct
       let () = Cache.add cache v packs in
       packs
 
+  (** Get the packs of the variables present in an expression *)
   let rec packs_of_expr ctx e =
     Visitor.fold_expr
       (fun acc ee ->
@@ -204,6 +225,7 @@ struct
       Set.empty e
 
 
+  (** Get the packs of the variables affected by a statement *)
   let packs_of_stmt ctx stmt =
     Visitor.fold_stmt
       (fun acc e ->
@@ -216,6 +238,7 @@ struct
       Set.empty stmt
 
 
+  (** Rewrite an expression w.r.t. to a pack by replacing missing variables with their intervals *)
   let resolve_expr_missing_vars ctx pack man e =
     Visitor.map_expr
       (fun ee ->
@@ -238,6 +261,7 @@ struct
       e
 
 
+  (** Rewrite a statement w.r.t. to a pack by replacing missing variables with their intervals *)
   let resolve_stmt_missing_vars ctx pack man s =
     Visitor.map_stmt
       (fun ee -> Visitor.Keep (resolve_expr_missing_vars ctx pack man ee))
@@ -246,6 +270,7 @@ struct
 
 
 
+  (** 𝕊⟦ add v ⟧ *)
   let exec_add_var ctx stmt man a =
     let v = match skind stmt with
       | S_add { ekind = E_var (v,_) } -> v
@@ -260,6 +285,7 @@ struct
       ) a packs
 
 
+  (** 𝕊⟦ v = e; ⟧ *)
   let exec_assign_var ctx stmt man a =
     let v,lval,e = match skind stmt with
       | S_assign ({ ekind = E_var (v,_) } as lval, e ) -> v, lval, e
@@ -276,6 +302,7 @@ struct
 
 
 
+  (* 𝕊⟦  ⟧ *)
   let exec ctx stmt man a =
     match skind stmt with
     | S_add {ekind = E_var _} ->
@@ -318,6 +345,7 @@ struct
       with Option.Found_None -> None
 
 
+  (** Handler of queries *)
   let ask q a =
     match a with
     | BOT | TOP -> None

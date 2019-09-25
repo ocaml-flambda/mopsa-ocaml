@@ -57,7 +57,6 @@
                 },
 		"on": {
                     "product": [
-                        "universal.numeric.relational",
                         {
                             "nonrel": {
 			        "disjoint": [
@@ -65,7 +64,8 @@
                                     "universal.numeric.values.intervals.integer"
 			        ]
 		            }
-                        }
+                        },
+                        "universal.numeric.relational"
                     ],
                     "reductions": [
                         "universal.numeric.reductions.intervals_rel"
