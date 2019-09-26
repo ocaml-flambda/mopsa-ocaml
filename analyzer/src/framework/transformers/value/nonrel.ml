@@ -101,8 +101,7 @@ struct
         let v = find var2 a in
         remove var1 acc |>
         add var2 v
-        
-        
+
       | S_remove { ekind = E_var (var, _) } ->
         remove var acc
 
