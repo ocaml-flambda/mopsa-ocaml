@@ -50,19 +50,19 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind=A_py_class (C_builtin "type", _)}, _)}, args, []) ->
       None
 
-    | E_py_call({ekind = E_py_object cls} as ecls, args, []) when isclass cls ->
+    | E_py_call({ekind = E_py_object cls} as ecls, args, kwargs) when isclass cls ->
       debug "class call  %a@\n@\n" pp_expr exp;
       (* Call __new__ *)
       bind_list args (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
       bind_some (fun eargs flow ->
-          let new_call = mk_py_call (mk_py_object_attr cls "__new__" range) ((mk_py_object cls range) :: eargs) range in
+          let new_call = mk_py_kall (mk_py_object_attr cls "__new__" range) ((mk_py_object cls range) :: eargs) kwargs range in
           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) new_call flow |>
           Eval.bind (fun inst flow ->
               assume
                 (mk_py_isinstance inst ecls range)
                 ~fthen:(fun flow ->
                     debug "init!@\n";
-                    man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object_attr cls "__init__" range) (inst :: eargs) range) flow |>
+                    man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_kall (mk_py_object_attr cls "__init__" range) (inst :: eargs) kwargs range) flow |>
                     Eval.bind (fun r flow ->
                         assume
                           (mk_py_isinstance_builtin r "NoneType" range)

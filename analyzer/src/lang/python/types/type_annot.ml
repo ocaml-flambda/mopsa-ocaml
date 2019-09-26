@@ -171,15 +171,17 @@ struct
 
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function(F_annot pyannot)}, _)}, args, kwargs) ->
-      (* FIXME: kwargs *)
       bind_list args man.eval flow |>
       bind_some (fun args flow ->
           let sigs = List.filter (fun sign ->
               let ndefaults = List.fold_left (fun count el -> if el then count + 1 else count) 0 sign.py_funcs_defaults in
-              List.length sign.py_funcs_types_in - ndefaults <= List.length args &&
-              List.length args <= List.length sign.py_funcs_types_in) pyannot.py_funca_sig in
+              debug "filter %a -> [%d; %d]; |args| = %d, |kwargs| = %d" pp_py_func_sig sign (List.length sign.py_funcs_types_in - ndefaults) (List.length sign.py_funcs_types_in) (List.length args) (List.length kwargs);
+              List.length sign.py_funcs_types_in - ndefaults <= List.length args + List.length kwargs &&
+              List.length args + List.length kwargs <= List.length sign.py_funcs_types_in) pyannot.py_funca_sig in
+          debug "|sigs| = %d" (List.length sigs);
           let is_method = split_dot_name @@ get_orig_vname pyannot.py_funca_var <> None in
-          let filter_sig in_types flow =
+          let filter_sig in_types in_args flow =
+            List.iter2 (fun ty args -> debug "arg = %a, ty = %a" pp_expr args (Option.print pp_expr) ty) in_types in_args;
             List.fold_left2 (fun (flow_in, flow_notin) arg annot ->
                 match annot with
                 | None -> (flow_in, flow_notin)
@@ -201,7 +203,7 @@ struct
                       mk_expr (E_py_check_annot (arg, ant)) range in
                   man.exec (mk_assume e range) flow_in,
                   Flow.join man.lattice (man.exec (mk_assume (mk_not e range) range) flow_in) flow_notin
-              )  (flow, Flow.bottom_from flow) args in_types in
+              )  (flow, Flow.bottom_from flow) in_args in_types in
           let apply_sig flow signature =
             debug "apply_sig %a" pp_py_func_sig signature;
             let cur = get_env T_cur man flow in
@@ -217,17 +219,38 @@ struct
                      Exceptions.panic_at range "s = %a, tycur = %a, tynew = %a, acc = %a" Keys.print s ESet.print tycur ESet.print tynew TVMap.print acc)
                 cur new_typevars TVMap.empty in
             let flow = set_env T_cur ncur man flow in
-            let in_types = (* remove types having a default parameter and no argument *)
-              let rec filter types defaults args acc =
-                match defaults, args with
-                | dhd::dtl, ahd::atl ->
-                  filter (List.tl types) dtl atl ((List.hd types) :: acc)
-                | _, [] -> List.rev acc
-                | [], _ -> assert false
+            let in_types, in_args =
+              (* remove types having a default parameter and no argument *)
+              (* FIXME: kwargs actually depend on the chosen py_func_sig...  *)
+              (* we need to add kwargs to args smartly here *)
+              (* failwith "otodkwargs"; *)
+              let rec filter names types defaults args (acctypes, accargs) =
+                match names, defaults, args with
+                | nhd::ntl, dhd::dtl, ahd::atl ->
+                  begin match List.find_opt (fun (vo, expr) -> match vo with
+                      | None -> false
+                      | Some v -> v = get_orig_vname nhd) kwargs with
+                  | None ->
+                    if dhd then
+                      (* if the argument is optional and not replaced in the kwargs *)
+                      (* the default argument has its default value, we don't check anything *)
+                      filter ntl (List.tl types) dtl args (acctypes, accargs)
+                    else
+                      filter ntl (List.tl types) dtl atl (List.hd types :: acctypes, ahd :: accargs)
+                  | Some (vo, expr) ->
+                    if dhd then
+                      (* the argument is optional and replaced in the kwargs *)
+                      filter ntl (List.tl types) dtl args (List.hd types :: acctypes, expr :: accargs)
+                    else
+                      (* if the argument is not a default one, we keep both types and arguments *)
+                      filter ntl (List.tl types) dtl atl (List.hd types :: acctypes, expr ::accargs)
+                  end
+                | _, _, [] -> List.rev acctypes, List.rev accargs
+                | _ -> assert false
               in
-              filter signature.py_funcs_types_in signature.py_funcs_defaults args []
+              filter signature.py_funcs_parameters signature.py_funcs_types_in signature.py_funcs_defaults args ([], [])
             in
-            let flow_ok, flow_notok = filter_sig in_types flow in
+            let flow_ok, flow_notok = filter_sig in_types in_args flow in
             let annot_out =
               let e = Option.none_to_exn signature.py_funcs_type_out in
               {e with ekind =
@@ -310,7 +333,7 @@ struct
               man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |> Option.return
           end
 
-        | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_user c, _)}, _)} as e, i) when get_orig_vname c.py_cls_var = "Pattern" ->
+        | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)} as e, i) when get_orig_vname c.py_cls_a_var = "Pattern" ->
           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call e [] range) flow
           |> Eval.bind (fun ee flow ->
               match ekind ee with
