@@ -137,10 +137,6 @@ struct
         let callee, _ = Callstack.pop cs in
         [Locals callee.call_fun]
 
-    (* Symbolic number of command-line arguments is kept in the pack of main *)
-    | V { vkind = Iterators.Program.Domain.V_c_argn } ->
-      [Locals "main"]
-
 
     (* Symbolic command-line arguments strings are also kept in the pack of main *)
     | A { addr_kind = Stubs.Ast.A_stub_resource "argv" }
@@ -163,7 +159,6 @@ struct
     | Scalars.Pointers.Domain.Domain.V_c_ptr_offset vv -> packs_of_var ctx vv
     | Scalars.Machine_numbers.Domain.V_c_num vv -> packs_of_var ctx vv
     | Libs.Cstubs.Domain.V_c_bytes a -> packs_of_base ~only_scalars:false ctx (A a)
-    | Iterators.Program.Domain.V_c_argn -> [Locals "main"]
     | _ -> []
 
 end
