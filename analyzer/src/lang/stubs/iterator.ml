@@ -132,8 +132,6 @@ struct
       ) f.range
 
 
-  (** Evaluate a formula into a disjunction of two flows, depending on
-      its truth value *)
   let rec eval_formula
       (f: formula with_range)
       (man:('a, unit) man)
@@ -145,21 +143,21 @@ struct
       man.post (mk_assume e f.range) flow
 
     | F_binop (AND, f1, f2) ->
-      eval_formula f1 man flow >>= fun _ flow ->
+      eval_formula f1 man flow >>$ fun _ flow ->
       eval_formula f2 man flow
 
     | F_binop (OR, f1, f2) ->
-      eval_formula f1 man flow >>= fun _ f1 ->
-      eval_formula f2 man flow >>= fun _ f2 ->
+      eval_formula f1 man flow >>$ fun _ f1 ->
+      eval_formula f2 man flow >>$ fun _ f2 ->
 
       Flow.join man.lattice f1 f2 |>
       Post.return
 
 
     | F_binop (IMPLIES, f1, f2) ->
-      eval_formula (negate_formula f1) man flow >>= fun _ nf1 ->
-      eval_formula f1 man flow >>= fun _ f1 ->
-      eval_formula f2 man f1 >>= fun _ f2 ->
+      eval_formula (negate_formula f1) man flow >>$ fun _ nf1 ->
+      eval_formula f1 man flow >>$ fun _ f1 ->
+      eval_formula f2 man f1 >>$ fun _ f2 ->
 
       Flow.join man.lattice nf1 f2 |>
       Post.return
@@ -179,21 +177,71 @@ struct
       man.post (mk_assume (mk_stub_resource_mem e res f.range) f.range) flow
 
 
+
+
+  and eval_formula_flow
+      (f: formula with_range)
+      (man:('a, unit) man)
+      (flow:'a flow)
+    : 'a flow =
+    debug "@[<v 2>eval formula %a@;in %a" pp_formula f (Flow.print man.lattice.print) flow;
+    match f.content with
+    | F_expr e ->
+      man.exec (mk_assume e f.range) flow
+
+    | F_binop (AND, f1, f2) ->
+      let flow = eval_formula_flow f1 man flow in
+      eval_formula_flow f2 man flow
+
+    | F_binop (OR, f1, f2) ->
+      let f1 = eval_formula_flow f1 man flow in
+      let f2 = eval_formula_flow f2 man flow in
+
+      Flow.join man.lattice f1 f2
+
+
+    | F_binop (IMPLIES, f1, f2) ->
+      let nf1 = eval_formula_flow (negate_formula f1) man flow in
+      let f1 = eval_formula_flow f1 man flow in
+      let f2 = eval_formula_flow f2 man f1 in
+
+      Flow.join man.lattice nf1 f2
+
+
+    | F_not ff ->
+      let ff' = negate_formula ff in
+      eval_formula_flow ff' man flow
+
+    | F_forall (v, s, ff) ->
+      eval_quantified_formula FORALL v s ff f.range man flow |>
+      post_to_flow man
+
+    | F_exists (v, s, ff) ->
+      eval_quantified_formula EXISTS v s ff f.range man flow |>
+      post_to_flow man
+
+    | F_in (e, S_interval (l, u)) ->
+      man.exec (mk_assume (mk_in e l u f.range) f.range) flow
+
+    | F_in (e, S_resource res ) ->
+      man.exec (mk_assume (mk_stub_resource_mem e res f.range) f.range) flow
+
+
   (** Evaluate a quantified formula and its eventual negation *)
   and eval_quantified_formula q v s f range man flow : 'a post =
     (* Add [v] to the environment *)
-    man.post (mk_add_var v range) flow >>= fun _ flow ->
+    man.post (mk_add_var v range) flow >>$ fun _ flow ->
 
     (* Constrain the range of [v] in case of ∃ *)
     (
       match s, q with
       | S_interval (l, u), EXISTS ->
-        man.post (mk_assume (mk_binop (mk_var v range) O_ge l ~etyp:T_bool range) range) flow >>= fun _ flow ->
+        man.post (mk_assume (mk_binop (mk_var v range) O_ge l ~etyp:T_bool range) range) flow >>$ fun _ flow ->
         man.post (mk_assume (mk_binop (mk_var v range) O_le u ~etyp:T_bool range) range) flow
 
       | _ -> Post.return flow
     )
-    >>= fun _ flow ->
+    >>$ fun _ flow ->
 
     (* Replace [v] in [ff] with a quantified expression in case of ∀ quantifier *)
     let ff1 =
@@ -211,8 +259,8 @@ struct
           f
     in
 
-    eval_formula ff1 man flow >>= fun _ flow ->
-    man.post (mk_remove_var v range) flow
+    eval_formula_flow ff1 man flow |>
+    man.post (mk_remove_var v range)
 
 
 
@@ -237,8 +285,8 @@ struct
 
   (** Evaluate the formula of the `requires` section and add the eventual alarms *)
   let exec_requires req man flow =
-    eval_formula req.content man flow >>= fun _ ftrue ->
-    eval_formula (negate_formula req.content) man flow >>= fun _ ffalse ->
+    eval_formula req.content man flow >>$ fun _ ftrue ->
+    eval_formula (negate_formula req.content) man flow >>$ fun _ ffalse ->
 
     if Flow.get T_cur man.lattice ffalse |> man.lattice.is_bottom then
       Post.return ftrue
@@ -260,7 +308,7 @@ struct
       | E_addr _ -> man.post (mk_add addr range) flow
       | _ -> Post.return flow
     )
-    >>= fun _ flow ->
+    >>$ fun _ flow ->
 
     (* Assign the address to the variable *)
     man.post (mk_assign (mk_var v range) addr range) flow
@@ -350,11 +398,9 @@ struct
   let exec_case case return man flow =
     (* Execute leaf sections *)
     List.fold_left (fun acc leaf ->
-        Post.bind (exec_leaf leaf return man) acc
-      ) (Post.return flow) case.case_body |>
-
-    (* Merge cases of the post *)
-    post_to_flow man |>
+        exec_leaf leaf return man acc |>
+        post_to_flow man
+      ) flow case.case_body |>
 
     (* Clean case post state *)
     clean_post case.case_locals case.case_assigns case.case_range man
