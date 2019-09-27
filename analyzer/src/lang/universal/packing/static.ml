@@ -140,15 +140,19 @@ struct
 
   (** Pretty printer *)
   let print fmt a =
-    fprintf fmt "@[<v>%a@]"
-      (pp_print_list
-         ~pp_sep:(fun fmt () -> fprintf fmt "")
-         (fun fmt (pack,aa) ->
-            fprintf fmt "@[{%a}::%a@]"
-              Strategy.print pack
-              Domain.print aa
-         )
-      ) (Map.bindings a)
+    match a with
+    | TOP -> Domain.print fmt Domain.top
+    | BOT -> Domain.print fmt Domain.bottom
+    | _ ->
+      fprintf fmt "@[<v>%a@]"
+        (pp_print_list
+           ~pp_sep:(fun fmt () -> fprintf fmt "")
+           (fun fmt (pack,aa) ->
+              fprintf fmt "@[{%a}::%a@]"
+                Strategy.print pack
+                Domain.print aa
+           )
+        ) (Map.bindings a)
 
 
 
