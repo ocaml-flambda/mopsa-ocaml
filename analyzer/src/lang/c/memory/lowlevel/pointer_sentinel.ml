@@ -194,7 +194,17 @@ struct
   *)
   let is_interesting_base base =
     match base with
-    | V v -> is_c_type v.vtyp && not (is_c_scalar_type v.vtyp)
+    | V v when is_c_type v.vtyp && is_c_array_type v.vtyp ->
+      (* Accept only arrays with pointers or records of pointers *)
+      let rec aux t =
+        match remove_typedef_qual t with
+        | T_c_pointer _ -> true
+        | T_c_array(tt,_) -> aux tt
+        | T_c_record { c_record_fields } ->
+          List.for_all (fun field -> aux field.c_field_type) c_record_fields
+        | _ -> false
+      in
+      aux v.vtyp
 
     | A { addr_kind = A_stub_resource "Memory" } -> true
 
@@ -263,11 +273,11 @@ struct
         match init with
         | [] -> Result.singleton (size, size, None, []) flow
 
-        | hd :: _ when is_non_pointer hd -> raise NonPointerFound
-
         | C_flat_none (n,_) :: tl  ->
           let sentinel = if is_global then mk_c_null range else mk_c_invalid_pointer range in
           Result.singleton (o,o,Some sentinel,[]) flow
+
+        | hd :: _ when is_non_pointer hd -> raise NonPointerFound
 
         | (C_flat_fill (e,_,_) as hd):: tl
         | (C_flat_expr (e,_) as hd):: tl ->
@@ -515,12 +525,12 @@ struct
 
 
 
-  (** Declare a block as assigned by adding the primed length variable *)
+  (** Declare a block as assigned by adding the primed auxiliary variables *)
+  (* FIXME: not yet implemented *)
   let stub_assigns target offsets range man flow =
     man.eval target ~zone:(Z_c_low_level,Z_c_points_to) flow >>$ fun pt flow ->
     match ekind pt with
     | E_c_points_to (P_block (base, _)) when is_interesting_base base ->
-      (* FIXME: not yet implemented *)
       let sentinel = mk_sentinel_var base range in
       let at = mk_at_var base range in
       let before = mk_before_var base range in
@@ -535,30 +545,13 @@ struct
 
 
   (** Rename primed variables introduced by a stub *)
+  (* FIXME: not yet implemented *)
   let rename_primed target offsets range man flow : 'a post =
-    man.eval target ~zone:(Z_c_low_level,Z_c_points_to) flow >>$ fun pt flow ->
-    match ekind pt with
-    | E_c_points_to (P_block (base, _)) when is_interesting_base base ->
-      (* FIXME: not yet implemented *)
-      Post.return flow
-
-
-    | E_c_points_to (P_null | P_invalid) ->
-      Post.return flow
-
-
-    | E_c_points_to P_valid ->
-      warn_at range "unsound: rename of %a not supported because it can not be resolved"
-        pp_expr target
-      ;
-      Post.return flow
-
-
-    | _ -> assert false
+    Post.return flow
 
 
 
-  (** Rename the length variable associated to a base *)
+  (** Rename the auxiliary variables associated to a base *)
   let rename_base base1 base2 range man flow =
     let sentinel1 = mk_sentinel_var base1 range in
     let sentinel2 = mk_sentinel_var base2 range in
@@ -573,28 +566,36 @@ struct
       ~empty:(fun flow -> Post.return flow)
     >>= fun _ flow ->
 
-    (* FIXME: check if at exists *)
+    (* FIXME: check if at-sentinel exists *)
     let at1 = mk_at_var base1 range in
     let at2 = mk_at_var base2 range in
     man.post ~zone:Z_c_scalar (mk_rename at1 at2 range) flow
 
 
+  (** Remove the auxiliary variables of a base *)
+  let remove_base base range man flow =
+    let sentinel = mk_sentinel_var base range in
+    let at = mk_at_var base range in
+    let before = mk_before_var base range in
+    man.post ~zone:Z_u_num (mk_remove sentinel range) flow >>= fun _ flow ->
+    man.post ~zone:Z_c_scalar (mk_remove at range) flow >>= fun _ flow ->
+    man.post ~zone:Z_c_scalar (mk_remove before range) flow
+
 
   (** Transformers entry point *)
   let exec zone stmt man flow =
     match skind stmt with
-    | S_c_declaration (v,init,scope) when not (is_c_scalar_type v.vtyp) ->
+    | S_c_declaration (v,init,scope) when is_interesting_base (V v) ->
       declare_variable v init scope stmt.srange man flow |>
       Option.return
 
-    | S_add { ekind = E_var (v, _) } when not (is_c_scalar_type v.vtyp) ->
+    | S_add { ekind = E_var (v, _) } when is_interesting_base (V v) ->
       add_base (V v) stmt.srange man flow |>
       Option.return
 
     | S_add { ekind = E_addr addr } when is_interesting_base (A addr) ->
       add_base (A addr) stmt.srange man flow |>
       Option.return
-
 
     | S_rename ({ ekind = E_var (v1,_) }, { ekind = E_var (v2,_) })
       when is_interesting_base (V v1) &&
@@ -614,6 +615,10 @@ struct
 
     | S_assign({ ekind = E_c_deref p}, rval) when is_c_pointer_type rval.etyp ->
       assign_deref p rval stmt.srange man flow |>
+      Option.return
+
+    | S_remove { ekind = E_var (v, _) } when is_interesting_base (V v) ->
+      remove_base (V v) stmt.srange man flow |>
       Option.return
 
 
@@ -732,14 +737,18 @@ struct
   (** Evaluations entry point *)
   let eval zone exp man flow =
     match ekind exp with
-    | E_c_deref p when is_c_pointer_type exp.etyp &&
-                       not (is_expr_quantified p)
+    | E_c_deref p
+      when is_c_pointer_type exp.etyp &&
+           under_type p.etyp |> void_to_char |> is_c_scalar_type &&
+           not (is_expr_quantified p)
       ->
       eval_deref exp false exp.erange man flow |>
       Option.return
 
-    | E_stub_primed ({ ekind = E_c_deref _ } as e) when is_c_pointer_type exp.etyp &&
-                                                        not (is_expr_quantified e)
+    | E_stub_primed ({ ekind = E_c_deref p } as e)
+      when is_c_pointer_type exp.etyp &&
+           under_type p.etyp |> void_to_char |> is_c_scalar_type &&
+           not (is_expr_quantified e)
       ->
       eval_deref e true exp.erange man flow |>
       Option.return
