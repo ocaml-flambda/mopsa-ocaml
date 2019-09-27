@@ -268,7 +268,7 @@ struct
               (* set0 case *)
               (* Offset condition: offset ∈ [0, length] *)
               (* RHS condition: rhs = 0 *)
-              (* Transformation: length := 0; *)
+              (* Transformation: length := offset; *)
               [
                 mk_in offset (mk_zero range) length range;
                 mk_binop rhs O_eq (mk_zero range) range;

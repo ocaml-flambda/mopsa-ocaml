@@ -217,7 +217,6 @@ float tanhf(float __x);
  */
 long double tanhl(long double __x);
 
-
 /*$
  * requires: valid_float(__x);
  * assigns:  *__sinx;
@@ -604,7 +603,6 @@ float sqrtf(float __x);
  */
 long double sqrtl(long double __x);
 
-
 /*$
  * requires: valid_float(__x) and valid_float(__y);
  * ensures:  (valid_float(return) or float_inf(return)) and return >= 0.;
@@ -897,7 +895,6 @@ int __signbitl(long double __value);
 */
 
 // TODO: not documented:__iseqsig, __issignaling
-
 
 /*$
  * requires: valid_float(__x) and valid_float(__y);
@@ -1278,7 +1275,6 @@ float nextafterf(float __x, float __y);
  */
 long double nextafterl(long double __x, long double __y);
 
-
 /*$
  * requires: valid_float(__x) and valid_float(__y);
  * ensures:  valid_float(return) or float_inf(return);
@@ -1382,7 +1378,6 @@ float remainderf(float __x, float __y);
  *           (__y <= 0. implies return >=  __y and return < -__y);
  */
 long double remainderl(long double __x, long double __y);
-
 
 /*$
  * requires: valid_float(__x);
@@ -1765,7 +1760,5 @@ float __builtin_nanf(const char* __tagb);
    __builtin_islessgreater(x, y)
    __builtin_isunordered((x. y)
 */
-
-
 
 

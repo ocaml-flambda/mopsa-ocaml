@@ -39,6 +39,15 @@ let pp_base fmt = function
   | S s -> Format.fprintf fmt "\"%s\"" s
   | Z -> Format.fprintf fmt "ℤ"
 
+
+let base_uniq_name = function
+  | V v -> v.vname
+  | A a ->
+    let () = pp_addr Format.str_formatter a in
+    Format.flush_str_formatter ()
+  | S s -> s
+  | Z -> "ℤ"
+
 let compare_base b b' = match b, b' with
   | V v, V v' -> compare_var v v'
 

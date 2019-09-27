@@ -856,14 +856,17 @@ let type_of_string s = T_c_array(s8, C_array_length_cst (Z.of_int (1 + String.le
 let mk_c_string s range =
   mk_constant (C_c_string (s, C_char_ascii)) range ~etyp:(type_of_string s)
 
-let mk_c_call f args range =
+let mk_c_fun_typ f =
   let ftype = {
     c_ftype_return = f.c_func_return;
     c_ftype_params = List.map (fun p -> p.vtyp) f.c_func_parameters;
     c_ftype_variadic = f.c_func_variadic;
   }
   in
-  mk_expr (E_call (mk_expr (E_c_function f) range ~etyp:(T_c_function (Some ftype)), args)) range ~etyp:(f.c_func_return)
+  T_c_function (Some ftype)
+
+let mk_c_call f args range =
+  mk_expr (E_call (mk_expr (E_c_function f) range ~etyp:(mk_c_fun_typ f), args)) range ~etyp:(f.c_func_return)
 
 let mk_c_builtin_call builtin args typ range =
   mk_expr (E_c_builtin_call (builtin,args)) range ~etyp:typ
