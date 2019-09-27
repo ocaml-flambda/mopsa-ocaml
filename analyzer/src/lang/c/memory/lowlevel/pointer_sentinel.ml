@@ -208,6 +208,8 @@ struct
 
     | A { addr_kind = A_stub_resource "Memory" } -> true
 
+    | A { addr_kind = A_stub_resource "argv" } -> true
+
     | _ -> false
 
 
