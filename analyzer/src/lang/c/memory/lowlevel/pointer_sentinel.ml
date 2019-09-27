@@ -511,6 +511,144 @@ struct
     | _ -> assert false
 
 
+  (** Cases of the transfer function of quantified tests 𝕊⟦ *(base + ∀offset) op q ⟧ *)
+  let assume_quantified_cases op base offset primed q range man flow =
+    (** Get symbolic bounds of the offset *)
+    let min, max = Common.Quantified_offset.bound offset in
+
+    eval_base_size base range man flow >>$ fun size flow ->
+    man.eval ~zone:(Z_c_scalar, Z_u_num) size flow >>$ fun size flow ->
+    man.eval ~zone:(Z_c, Z_u_num) min flow >>$ fun min flow ->
+    man.eval ~zone:(Z_c, Z_u_num) max flow >>$ fun max flow ->
+
+    let sentinel = mk_sentinel_var base range in
+    let at = mk_at_var base range in
+    let before = mk_before_var base range in
+    let ptr = mk_z ptr_size range in
+
+    debug "min = %a, max = %a" pp_expr min pp_expr max;
+    debug "cur = %a" man.lattice.print (Flow.get T_cur man.lattice flow);
+
+    (* Safety condition: [min, max] ⊆ [0, size - ptr [ *)
+    assume
+      (
+        mk_binop
+          (mk_in min (mk_zero range) (sub size ptr range) range)
+          O_log_and
+          (mk_in max (mk_zero range) (sub size ptr range) range)
+          range
+      )
+      ~fthen:(fun flow ->
+          is_sentinel_expr q man flow >>$ fun ok flow ->
+
+          (* q is a sentinel *)
+          if ok then
+            switch [
+              [
+                mk_binop (add sentinel ptr range) O_le min range
+              ],
+              (fun flow ->
+                 debug "case 1";
+                 Post.return flow
+              );
+
+              [
+                mk_binop min O_eq sentinel range
+              ],
+              (fun flow ->
+                 debug "case 2";
+                 man.post ~zone:Z_c_scalar (mk_assume (mk_binop at O_eq q range) range) flow
+              );
+
+              [
+                mk_binop min O_le (sub sentinel ptr range) range
+              ],
+              (fun flow ->
+                 debug "case 3";
+                 Flow.set T_cur man.lattice.bottom man.lattice flow |>
+                 Post.return
+              )
+            ] ~zone:Z_u_num man flow
+
+          (* q is not a sentinel *)
+          else
+            switch [
+              [
+                mk_binop (add sentinel ptr range) O_le min range
+              ],
+              (fun flow ->
+                 debug "case 4";
+                 Post.return flow
+              );
+
+              [
+                mk_binop min O_eq sentinel range
+              ],
+              (fun flow ->
+                 debug "case 5";
+                 man.post ~zone:Z_u_num (mk_assign sentinel (add max ptr range) range) flow >>= fun _ flow ->
+                 before_cases min range man flow
+                   ~exists:(fun flow -> man.post ~zone:Z_c_scalar (mk_assign (weaken before) q range) flow)
+                   ~empty:(fun flow -> man.post ~zone:Z_c_scalar (mk_assign before q range) flow)
+              );
+
+              [
+                mk_binop max O_le (sub sentinel ptr range) range
+              ],
+              (fun flow ->
+                 debug "case 6";
+                 Post.return flow
+              )
+
+            ]
+              ~zone:Z_u_num man flow
+        )
+      ~felse:(fun flow ->
+          (* Unsafe case *)
+          raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow |>
+          Post.return
+        )
+      ~zone:Z_u_num man flow
+
+
+
+
+  (** Entry point of the transfer function of quantified tests 𝕊⟦ *(p + ∀i) op q ⟧ *)
+  let assume_quantified op p q range man flow =
+    let pp, primed =
+      let rec doit e =
+        match ekind e with
+        | E_c_deref pp -> pp, false
+        | E_c_cast(ee, _) -> doit ee
+        | E_stub_primed e -> fst (doit e), true
+        | _ -> panic_at range "assume_quantified_zero: invalid argument %a" pp_expr p;
+      in
+      doit p
+    in
+
+    man.eval ~zone:(Z_c_low_level, Z_c_points_to) pp flow >>$ fun pt flow ->
+
+    match ekind pt with
+    | E_c_points_to P_null ->
+      raise_c_alarm ANullDeref p.erange ~bottom:true man.lattice flow |>
+      Post.return
+
+    | E_c_points_to P_invalid ->
+      raise_c_alarm AInvalidDeref p.erange ~bottom:true man.lattice flow |>
+      Post.return
+
+    | E_c_points_to (P_block (base, offset)) when is_interesting_base base ->
+      assume_quantified_cases op base offset primed q range man flow
+
+    | E_c_points_to (P_block (base, offset)) ->
+      Post.return flow
+
+    | E_c_points_to P_valid ->
+      raise_c_alarm AOutOfBound p.erange ~bottom:false man.lattice flow |>
+      Post.return
+
+    | _ -> assert false
+
 
 
   (** Add a base to the domain's dimensions *)
@@ -615,9 +753,32 @@ struct
       man.post ~zone:Z_c_scalar stmt flow |>
       Option.return
 
-    | S_assign({ ekind = E_c_deref p}, rval) when is_c_pointer_type rval.etyp ->
+    | S_assign({ ekind = E_c_deref p} as lval, rval) when is_c_pointer_type lval.etyp ->
       assign_deref p rval stmt.srange man flow |>
       Option.return
+
+    (* 𝕊⟦ *(p + ∀i) = q ⟧ *)
+    | S_assume({ekind = E_binop(O_eq, lval, q)})
+    | S_assume({ekind = E_unop(O_log_not, {ekind = E_binop(O_ne, lval, q)})})
+      when is_c_pointer_type lval.etyp &&
+           is_expr_quantified lval &&
+           not (is_expr_quantified q) &&
+           is_c_deref lval
+      ->
+      assume_quantified O_eq lval q stmt.srange man flow |>
+      Option.return
+
+    (* 𝕊⟦ *(p + ∀i) != q ⟧ *)
+    | S_assume({ekind = E_binop(O_ne, lval, q)})
+    | S_assume({ekind = E_unop(O_log_not, {ekind = E_binop(O_eq, lval, q)})})
+      when is_c_pointer_type lval.etyp &&
+           is_expr_quantified lval &&
+           not (is_expr_quantified q) &&
+           is_c_deref lval
+      ->
+      assume_quantified O_ne lval q stmt.srange man flow |>
+      Option.return
+
 
     | S_remove { ekind = E_var (v, _) } when is_interesting_base (V v) ->
       remove_base (V v) stmt.srange man flow |>
