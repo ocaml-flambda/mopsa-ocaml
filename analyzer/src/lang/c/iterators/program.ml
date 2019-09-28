@@ -211,7 +211,7 @@ struct
       | _ -> assert false
     in
     man.exec (mk_assign argcv argc range) flow |>
-    man.exec (mk_assign argvv argc range) |>
+    man.exec (mk_assign argvv argv range) |>
     exec_entry_body main man
 
 
@@ -221,26 +221,27 @@ struct
   let call_main_with_symbolic_args main functions man flow =
     let range = main.c_func_range in
 
-    let argcv, argvv = match main.c_func_parameters with
+    let argc_var, argv_var = match main.c_func_parameters with
       | [v1;v2] -> v1,v2
       | _ -> assert false
     in
 
     (* Add the symbolic variable argc representing the number of
-       arguments. It should greater than 2 due to the presence of the program
-       name and at least one argument. Also, it should not exceed INT_MAX -
-       1, because the argument argc + 1 is the last NULL.
+       arguments. It should greater than 1 due to the presence of the
+       program name. Also, it should not exceed INT_MAX - 1, because
+       the argument argv[argc + 1] contains terminating NULL pointer
+       (i.e. to avoid integer overflow).  
     *)
 
-    let argc = mk_var argcv range in
+    let argc = mk_var argc_var range in
     let flow = man.exec (mk_add argc range) flow |>
-               man.exec (mk_assign argc (mk_z_interval (Z.of_int 2) (rangeof s32 |> snd |> Z.pred) range) range)
+               man.exec (mk_assign argc (mk_z_interval Z.one (rangeof s32 |> snd |> Z.pred) range) range)
     in
 
 
     (* Create the memory block pointed by argv. *)
     let argv = mk_c_argv range in
-    let argvv = mk_var argvv range in
+    let argvv = mk_var argv_var range in
     let flow = man.exec (mk_add argvv range) flow |>
                man.exec (mk_assign argvv argv range)
     in
@@ -257,16 +258,6 @@ struct
                man.exec (mk_add argv range)
     in
 
-    (* Initialize argv[0] with the name of the program *)
-    let flow = man.exec
-        (mk_assign
-           (mk_c_subscript_access argv (mk_zero range) range)
-           (mk_c_string "a.out" range)
-           range
-        )
-        flow
-    in
-
     (* Create a symbolic argument *)
     let arg = mk_c_arg ~mode:STRONG range in
 
@@ -277,18 +268,20 @@ struct
                man.exec (mk_add arg range)
     in
 
-    (* Ensure that the argument is a valid string *)
-    let some_arg_cell = mk_c_subscript_access arg (mk_z_interval Z.zero (rangeof s32 |> snd |> Z.pred) range) range in
+    (* Ensure that the argument is a valid string with at least one character *)
+    let first_arg_cell = mk_c_subscript_access arg (mk_zero range) range in
+    let flow = man.exec (mk_assign first_arg_cell (mk_z_interval Z.one (rangeof s8 |> snd) range) range) flow in
+    let some_arg_cell = mk_c_subscript_access arg (mk_z_interval Z.one (rangeof s32 |> snd |> Z.pred) range) range in
     let flow = man.exec (mk_assign some_arg_cell (mk_zero range) range) flow in
 
     (* Make the address weak *)
     let arg_weak = mk_c_arg ~mode:WEAK range in
     let flow = man.exec (mk_rename arg arg_weak range) flow in
 
-    (* Put the symbolic argument in argv[1 : argc-1] *)
+    (* Put the symbolic argument in argv[0 : argc-1] *)
     let i = mktmp ~typ:s32 () in
     let ii = mk_var i range in
-    let l = mk_one range in
+    let l = mk_zero range in
     let u = sub argc (mk_one range) range in
     let flow = man.exec (mk_add ii range) flow |>
                man.exec (mk_assign ii (mk_c_builtin_call "_mopsa_range_s32" [l;u] s32 range) range)
@@ -298,11 +291,12 @@ struct
                man.exec (mk_remove ii range)
     in
 
-    (* Put NULL in argv[argc] *)
+    (* Put the terminating NULL pointer in argv[argc] *)
     let last = mk_c_subscript_access argv argc range in
     let flow = man.exec (mk_assign last (mk_c_null range) range) flow in
 
     exec_entry_body main man flow
+
 
 
   let call_main main args functions man flow =
