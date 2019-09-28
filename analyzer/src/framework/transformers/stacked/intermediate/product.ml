@@ -546,7 +546,6 @@ struct
         None :: acc, ctx
       else
         let flow' = Flow.set_ctx ctx flow in
-        debug "exec %a in domain %s and zone %a" pp_stmt stmt S.name pp_zone zone;
         match S.exec zone stmt man flow' with
         | None -> None :: acc, ctx
         | Some post ->
@@ -602,7 +601,6 @@ struct
         None :: acc, ctx
       else
         let flow' = Flow.set_ctx ctx flow in
-        debug "eval %a in domain %s and zone %a" pp_expr exp S.name pp_zone2 zone;
         match S.eval zone exp man flow' with
         | None -> None :: acc, ctx
         | Some evl ->
@@ -696,13 +694,17 @@ struct
         R.reduce exp eman el flow
       ) pointwise Spec.erules
     in
-    (* For performance reasons, we keep only one evaluation.
+    (* For performance reasons, we keep only one evaluation in each conjunction.
        THE CHOICE IS ARBITRARY: keep the first non-None result using the
        order of domains in the configuration file.
     *)
-    pointwise |> Result.map_opt @@ fun el ->
-    try List.find (function Some _ -> true | None -> false) el
-    with Not_found -> None
+    let evl = pointwise |> Result.map_opt (fun el ->
+        try List.find (function Some _ -> true | None -> false) el
+        with Not_found -> None
+      )
+    in
+    (* To avoid a blowup of cases, we remove duplicate output expressions *)
+    Result.remove_duplicates compare_expr man.lattice evl
 
 
   (** Entry point of abstract evaluations *)

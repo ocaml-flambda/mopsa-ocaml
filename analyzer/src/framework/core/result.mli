@@ -253,3 +253,6 @@ val bind_list_opt :
 val bind_list :
   'r list -> ('r -> 'a flow -> ('a,'s) result) ->
   'a flow -> ('a, 's list) result
+
+(** Remove duplicate results *)
+val remove_duplicates : ('r -> 'r -> int) -> 'a Lattice.lattice -> ('a,'r) result -> ('a,'r) result
