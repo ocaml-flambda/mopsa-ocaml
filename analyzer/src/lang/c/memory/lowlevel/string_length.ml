@@ -146,8 +146,12 @@ struct
 
   let is_memory_base base =
     match base with
-    | V v -> is_c_type v.vtyp &&
-             not (is_c_scalar_type v.vtyp)
+    (* Accept only arrays of chars *)
+    | V v when is_c_type v.vtyp &&
+               is_c_array_type v.vtyp &&
+               under_array_type v.vtyp |> remove_typedef_qual |> sizeof_type |> Z.equal Z.one
+      ->
+      true
 
     | A { addr_kind = A_stub_resource "Memory" }
     | A { addr_kind = A_stub_resource "ReadOnlyMemory" }
@@ -562,12 +566,14 @@ struct
     *)
     man.eval target ~zone:(Z_c_low_level,Z_c_points_to) flow >>$ fun pt flow ->
     match ekind pt with
-    | E_c_points_to (P_block (base, _)) ->
+    | E_c_points_to (P_block (base, _)) when is_memory_base base ->
       let length = mk_length_var base range ~primed:false ~mode:WEAK in
       let length' = mk_length_var base range ~primed:true in
       man.post ~zone:Z_u_num (mk_assign length length' range) flow >>= fun _ flow ->
       man.post ~zone:Z_u_num (mk_remove length' range) flow
 
+    | E_c_points_to (P_block _) ->
+      Post.return flow
 
     | E_c_points_to (P_null | P_invalid) ->
       Post.return flow
