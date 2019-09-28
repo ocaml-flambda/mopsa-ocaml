@@ -136,53 +136,6 @@ struct
       (f: formula with_range)
       (man:('a, unit) man)
       (flow:'a flow)
-    : 'a post =
-    debug "@[<v 2>eval formula %a@;in %a" pp_formula f (Flow.print man.lattice.print) flow;
-    match f.content with
-    | F_expr e ->
-      man.post (mk_assume e f.range) flow
-
-    | F_binop (AND, f1, f2) ->
-      eval_formula f1 man flow >>$ fun _ flow ->
-      eval_formula f2 man flow
-
-    | F_binop (OR, f1, f2) ->
-      eval_formula f1 man flow >>$ fun _ f1 ->
-      eval_formula f2 man flow >>$ fun _ f2 ->
-
-      Flow.join man.lattice f1 f2 |>
-      Post.return
-
-
-    | F_binop (IMPLIES, f1, f2) ->
-      eval_formula (negate_formula f1) man flow >>$ fun _ nf1 ->
-      eval_formula f1 man flow >>$ fun _ f1 ->
-      eval_formula f2 man f1 >>$ fun _ f2 ->
-
-      Flow.join man.lattice nf1 f2 |>
-      Post.return
-
-
-    | F_not ff ->
-      let ff' = negate_formula ff in
-      eval_formula ff' man flow
-
-    | F_forall (v, s, ff) -> eval_quantified_formula FORALL v s ff f.range man flow
-    | F_exists (v, s, ff) -> eval_quantified_formula EXISTS v s ff f.range man flow
-
-    | F_in (e, S_interval (l, u)) ->
-      man.post (mk_assume (mk_in e l u f.range) f.range) flow
-
-    | F_in (e, S_resource res ) ->
-      man.post (mk_assume (mk_stub_resource_mem e res f.range) f.range) flow
-
-
-
-
-  and eval_formula_flow
-      (f: formula with_range)
-      (man:('a, unit) man)
-      (flow:'a flow)
     : 'a flow =
     debug "@[<v 2>eval formula %a@;in %a" pp_formula f (Flow.print man.lattice.print) flow;
     match f.content with
@@ -190,35 +143,33 @@ struct
       man.exec (mk_assume e f.range) flow
 
     | F_binop (AND, f1, f2) ->
-      let flow = eval_formula_flow f1 man flow in
-      eval_formula_flow f2 man flow
+      let flow = eval_formula f1 man flow in
+      eval_formula f2 man flow
 
     | F_binop (OR, f1, f2) ->
-      let f1 = eval_formula_flow f1 man flow in
-      let f2 = eval_formula_flow f2 man flow in
+      let f1 = eval_formula f1 man flow in
+      let f2 = eval_formula f2 man flow in
 
       Flow.join man.lattice f1 f2
 
 
     | F_binop (IMPLIES, f1, f2) ->
-      let nf1 = eval_formula_flow (negate_formula f1) man flow in
-      let f1 = eval_formula_flow f1 man flow in
-      let f2 = eval_formula_flow f2 man f1 in
+      let nf1 = eval_formula (negate_formula f1) man flow in
+      let f1 = eval_formula f1 man flow in
+      let f2 = eval_formula f2 man f1 in
 
       Flow.join man.lattice nf1 f2
 
 
     | F_not ff ->
       let ff' = negate_formula ff in
-      eval_formula_flow ff' man flow
+      eval_formula ff' man flow
 
     | F_forall (v, s, ff) ->
-      eval_quantified_formula FORALL v s ff f.range man flow |>
-      post_to_flow man
+      eval_quantified_formula FORALL v s ff f.range man flow
 
     | F_exists (v, s, ff) ->
-      eval_quantified_formula EXISTS v s ff f.range man flow |>
-      post_to_flow man
+      eval_quantified_formula EXISTS v s ff f.range man flow
 
     | F_in (e, S_interval (l, u)) ->
       man.exec (mk_assume (mk_in e l u f.range) f.range) flow
@@ -228,20 +179,19 @@ struct
 
 
   (** Evaluate a quantified formula and its eventual negation *)
-  and eval_quantified_formula q v s f range man flow : 'a post =
+  and eval_quantified_formula q v s f range man flow : 'a flow =
     (* Add [v] to the environment *)
-    man.post (mk_add_var v range) flow >>$ fun _ flow ->
+    let flow = man.exec (mk_add_var v range) flow in
 
     (* Constrain the range of [v] in case of ∃ *)
-    (
+    let flow =
       match s, q with
       | S_interval (l, u), EXISTS ->
-        man.post (mk_assume (mk_binop (mk_var v range) O_ge l ~etyp:T_bool range) range) flow >>$ fun _ flow ->
-        man.post (mk_assume (mk_binop (mk_var v range) O_le u ~etyp:T_bool range) range) flow
+        man.exec (mk_assume (mk_binop (mk_var v range) O_ge l ~etyp:T_bool range) range) flow |>
+        man.exec (mk_assume (mk_binop (mk_var v range) O_le u ~etyp:T_bool range) range)
 
-      | _ -> Post.return flow
-    )
-    >>$ fun _ flow ->
+      | _ -> flow
+    in
 
     (* Replace [v] in [ff] with a quantified expression in case of ∀ quantifier *)
     let ff1 =
@@ -259,8 +209,8 @@ struct
           f
     in
 
-    eval_formula_flow ff1 man flow |>
-    man.post (mk_remove_var v range)
+    eval_formula ff1 man flow |>
+    man.exec (mk_remove_var v range)
 
 
 
@@ -285,39 +235,39 @@ struct
 
   (** Evaluate the formula of the `requires` section and add the eventual alarms *)
   let exec_requires req man flow =
-    eval_formula req.content man flow >>$ fun _ ftrue ->
-    eval_formula (negate_formula req.content) man flow >>$ fun _ ffalse ->
+    let ftrue = eval_formula req.content man flow in
+    let ffalse = eval_formula (negate_formula req.content) man flow in
 
     if Flow.get T_cur man.lattice ffalse |> man.lattice.is_bottom then
-      Post.return ftrue
-
+      ftrue
     else
       raise_invalid_require req.range ~bottom:true man.lattice ffalse |>
-      Flow.join man.lattice ftrue |>
-      Post.return
+      Flow.join man.lattice ftrue
 
 
   (** Execute an allocation of a new resource *)
-  let exec_local_new v res range man flow : 'a post =
+  let exec_local_new v res range man flow : 'a flow =
     (* Evaluation the allocation request *)
-    man.eval (mk_stub_alloc_resource res range) flow >>$ fun addr flow ->
+    post_to_flow man (
+      man.eval (mk_stub_alloc_resource res range) flow >>$ fun addr flow ->
 
-    (* Add the address dimension before doing the assignment *)
-    (
-      match ekind addr with
-      | E_addr _ -> man.post (mk_add addr range) flow
-      | _ -> Post.return flow
+      (* Add the address dimension before doing the assignment *)
+      (
+        match ekind addr with
+        | E_addr _ -> man.post (mk_add addr range) flow
+        | _ -> Post.return flow
+      )
+      >>$ fun _ flow ->
+
+      (* Assign the address to the variable *)
+      man.post (mk_assign (mk_var v range) addr range) flow
     )
-    >>$ fun _ flow ->
-
-    (* Assign the address to the variable *)
-    man.post (mk_assign (mk_var v range) addr range) flow
 
 
   (** Execute a function call *)
   (* FIXME: check the purity of f *)
   let exec_local_call v f args range man flow =
-    man.post (mk_assign
+    man.exec (mk_assign
                 (mk_var v range)
                 (mk_expr (E_call(f, args)) ~etyp:v.vtyp range)
                 range
@@ -350,7 +300,7 @@ struct
 
 
   let exec_assigns assigns man flow =
-    man.post (mk_stub_assigns
+    man.exec (mk_stub_assigns
                 assigns.content.assign_target
                 assigns.content.assign_offset
                 assigns.range
@@ -376,7 +326,7 @@ struct
   let exec_free free man flow =
     let e = free.content in
     let stmt = mk_stub_free e free.range in
-    man.post stmt flow
+    man.exec stmt flow
 
 
   (** Execute a leaf section *)
@@ -391,15 +341,14 @@ struct
     | S_warn warn ->
       if not (Flow.get T_cur man.lattice flow |> man.lattice.is_bottom)
       then Exceptions.warn_at warn.range "%s" warn.content;
-      Post.return flow
+      flow
 
 
   (** Execute the body of a case section *)
   let exec_case case return man flow =
     (* Execute leaf sections *)
     List.fold_left (fun acc leaf ->
-        exec_leaf leaf return man acc |>
-        post_to_flow man
+        exec_leaf leaf return man acc
       ) flow case.case_body |>
 
     (* Clean case post state *)
@@ -411,8 +360,7 @@ struct
     (* Execute leaf sections *)
     let flow = List.fold_left (fun flow section ->
         match section with
-        | S_leaf leaf -> exec_leaf leaf return man flow |>
-                         post_to_flow man
+        | S_leaf leaf -> exec_leaf leaf return man flow
         | _ -> flow
       ) flow body
     in
