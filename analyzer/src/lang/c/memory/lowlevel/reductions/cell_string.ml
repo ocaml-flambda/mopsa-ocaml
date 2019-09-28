@@ -24,6 +24,7 @@
 open Mopsa
 open Sig.Stacked.Reduction
 open Universal.Ast
+open Stubs.Ast
 open Ast
 open Zone
 
@@ -53,7 +54,8 @@ struct
             Result.singleton evals flow
 
           (* If the cell domain returned a cell variable, refine it if possible *)
-          | E_var (v, _), _ ->
+          | E_var _, _
+          | E_c_cast ({ ekind = E_var _ },_), _ ->
             let cond = mk_binop e1 O_eq e2 exp.erange in
             man.post ~zone:Z_c_scalar (mk_assume cond exp.erange) flow >>= fun _ flow ->
 
@@ -71,6 +73,7 @@ struct
                   Result.singleton evals flow
 
                 | _ ->
+                  debug "case 4";
                   let evals = man.del_eval strings evals in
                   Result.singleton evals flow
               end
@@ -78,7 +81,7 @@ struct
 
           (* Otherwise, keep the string evaluation, because they are
              partitioned w.r.t. to the length auxiliary variable *)
-          | _, _ ->
+          | ek1,ek2 ->
             let evals = man.del_eval cells evals in
             Result.singleton evals flow
       )
