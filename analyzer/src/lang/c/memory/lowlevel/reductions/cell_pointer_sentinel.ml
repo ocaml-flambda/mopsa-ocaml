@@ -30,7 +30,7 @@ open Zone
 module Reduction =
 struct
 
-  let name = "c.memory.lowlevel.reductions.cell_pointer"
+  let name = "c.memory.lowlevel.reductions.cell_pointer_sentinel"
 
   let debug fmt = Debug.debug ~channel:name fmt
 

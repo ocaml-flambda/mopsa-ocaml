@@ -44,7 +44,7 @@
                                 "c.memory.lowlevel.pointer_sentinel"
                             ],
                             "reductions": [
-                                "c.memory.lowlevel.reductions.cell_pointer"
+                                "c.memory.lowlevel.reductions.cell_pointer_sentinel"
                             ]
                         },
                         {
@@ -56,20 +56,12 @@
                     ]
                 },
 		"on": {
-                    "product": [
-                        "universal.numeric.relational",
-                        {
-                            "nonrel": {
-			        "disjoint": [
-			            "universal.numeric.values.intervals.float",
-                                    "universal.numeric.values.intervals.integer"
-			        ]
-		            }
-                        }
-                    ],
-                    "reductions": [
-                        "universal.numeric.reductions.intervals"
-                    ]
+                    "nonrel": {
+			"disjoint": [
+			    "universal.numeric.values.intervals.float",
+                            "universal.numeric.values.intervals.integer"
+			]
+		    }
                 }
             }
 	]

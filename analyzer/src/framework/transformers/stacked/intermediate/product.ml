@@ -698,13 +698,10 @@ struct
        THE CHOICE IS ARBITRARY: keep the first non-None result using the
        order of domains in the configuration file.
     *)
-    let evl = pointwise |> Result.map_opt (fun el ->
+    pointwise |> Result.map_opt (fun el ->
         try List.find (function Some _ -> true | None -> false) el
         with Not_found -> None
       )
-    in
-    (* To avoid a blowup of cases, we remove duplicate output expressions *)
-    Result.remove_duplicates compare_expr man.lattice evl
 
 
   (** Entry point of abstract evaluations *)
