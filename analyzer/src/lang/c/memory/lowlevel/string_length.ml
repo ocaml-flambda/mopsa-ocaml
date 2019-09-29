@@ -532,14 +532,14 @@ struct
 
 
   (** Add a base to the domain's dimensions *)
-  let add_base base range man flow =
+  let add_base base ?(primed=false) range man flow =
     (* Add the length of the base to the numeric domain and
        initialize it with the interval [0, size(@)]
     *)
     eval_base_size base range man flow >>$ fun size flow ->
     man.eval ~zone:(Z_c_scalar, Z_u_num) size flow >>$ fun size flow ->
 
-    let length = mk_length_var base range in
+    let length = mk_length_var base ~primed range in
 
     man.post ~zone:Z_u_num (mk_add length range) flow >>= fun _ flow ->
     man.post ~zone:Z_u_num (mk_assume (mk_in length (mk_zero range) size range) range) flow
@@ -550,8 +550,7 @@ struct
     man.eval target ~zone:(Z_c_low_level,Z_c_points_to) flow >>$ fun pt flow ->
     match ekind pt with
     | E_c_points_to (P_block (base, _)) when is_memory_base base ->
-      let length' = mk_length_var base range ~primed:true in
-      man.post (mk_add length' range) ~zone:Z_u_num flow
+      add_base base ~primed:true range man flow
 
     | _ ->
       Post.return flow
