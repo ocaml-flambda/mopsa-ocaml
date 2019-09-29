@@ -74,10 +74,10 @@ struct
   (** Packs of a base memory block *)
   let packs_of_base ?(only_scalars=true) ctx b =
     match b with
-    (* Global variables *)
-    | V { vkind = V_cvar {cvar_scope = Variable_global} }
-    | V { vkind = V_cvar {cvar_scope = Variable_file_static _} } ->
-      []
+    (* Special global variables *)
+    | V { vkind = V_cvar {cvar_scope = Variable_global; cvar_orig_name} }
+    | V { vkind = V_cvar {cvar_scope = Variable_file_static _; cvar_orig_name} } when cvar_orig_name = "_gettext_buf" ->
+      [Locals "gettext"; Locals "dcgettext"]
 
     (* Local temporary variables *)
     | V { vkind = V_cvar {cvar_scope = Variable_local f; cvar_orig_name}; vtyp }
