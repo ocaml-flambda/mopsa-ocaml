@@ -184,13 +184,13 @@ struct
     let flow = man.exec (mk_add_var v range) flow in
 
     (* Constrain the range of [v] in case of ∃ *)
-    let flow =
+    let post =
       match s, q with
       | S_interval (l, u), EXISTS ->
-        man.exec (mk_assume (mk_binop (mk_var v range) O_ge l ~etyp:T_bool range) range) flow |>
-        man.exec (mk_assume (mk_binop (mk_var v range) O_le u ~etyp:T_bool range) range)
+        man.post (mk_assume (mk_in (mk_var v range) l u ~etyp:T_bool range) range) flow
 
-      | _ -> flow
+      | _ ->
+        Post.return flow
     in
 
     (* Replace [v] in [ff] with a quantified expression in case of ∀ quantifier *)
@@ -209,7 +209,8 @@ struct
           f
     in
 
-    eval_formula ff1 man flow |>
+    Post.bind (fun flow -> eval_formula ff1 man flow |> Post.return) post |>
+    post_to_flow man |>
     man.exec (mk_remove_var v range)
 
 
