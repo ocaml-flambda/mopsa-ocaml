@@ -47,7 +47,7 @@
                             ],
                             "reductions": [
                                 "c.memory.lowlevel.reductions.cell_pointer_smashing",
-                                "c.memory.lowlevel.reductions.cell_string_pointer"
+                                "c.memory.lowlevel.reductions.cell_pointer_sentinel"
                             ]
                         },
                         {

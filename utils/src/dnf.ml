@@ -267,3 +267,9 @@ let merge_fold
           acc
         ) (acc1,acc2,acc) dnf2
     ) (None, None,init) dnf1
+
+
+let cardinal (dnf:'a t) : int =
+  List.fold_left (fun acc conj ->
+      List.length conj + acc
+    ) 0 dnf

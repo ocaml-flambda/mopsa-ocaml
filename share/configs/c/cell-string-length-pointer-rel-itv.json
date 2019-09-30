@@ -43,9 +43,6 @@
                                 "c.memory.lowlevel.cells",
                                 "c.memory.lowlevel.string_length",
                                 "c.memory.lowlevel.pointer_sentinel"
-                            ],
-                            "reductions": [
-                                "c.memory.lowlevel.reductions.cell_string_pointer"
                             ]
                         },
                         {
