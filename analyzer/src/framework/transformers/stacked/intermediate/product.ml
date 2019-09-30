@@ -604,6 +604,7 @@ struct
         match S.eval zone exp man flow' with
         | None -> None :: acc, ctx
         | Some evl ->
+          let evl = Eval.remove_duplicates man.lattice evl in
           let ctx' = Eval.get_ctx evl in
           Some evl :: acc, ctx'
     in
@@ -698,10 +699,13 @@ struct
        THE CHOICE IS ARBITRARY: keep the first non-None result using the
        order of domains in the configuration file.
     *)
-    pointwise |> Result.map_opt (fun el ->
+    let evl = pointwise |> Result.map_opt (fun el ->
         try List.find (function Some _ -> true | None -> false) el
         with Not_found -> None
       )
+    in
+    Eval.remove_duplicates man.lattice evl
+
 
 
   (** Entry point of abstract evaluations *)

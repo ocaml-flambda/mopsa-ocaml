@@ -256,3 +256,6 @@ val bind_list :
 
 (** Remove duplicate results *)
 val remove_duplicates : ('r -> 'r -> int) -> 'a Lattice.lattice -> ('a,'r) result -> ('a,'r) result
+
+(** Return the number of outputs in a result *)
+val cardinal : ('a,'r) result -> int

@@ -379,7 +379,13 @@ struct
 
     | other_action ->
       match
-        (try Cache.eval feval (z1, z2) exp man flow
+        (try Cache.eval (fun e man flow ->
+             match feval e man flow with
+             | None -> None
+             | Some evl ->
+               let evl' = Eval.remove_duplicates man.lattice evl in
+               Some evl'
+           ) (z1, z2) exp man flow
          with Exceptions.Panic(msg,line) -> raise (Exceptions.PanicAt (exp.erange,msg,line))
         )
       with

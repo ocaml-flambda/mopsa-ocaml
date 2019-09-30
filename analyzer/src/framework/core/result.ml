@@ -472,3 +472,6 @@ let remove_duplicates compare lattice r =
       conj' :: simplify_disj tl'
   in
   { r with res_cases = Dnf.from_list (simplify_disj (Dnf.to_list r.res_cases)) }
+
+
+let cardinal r = Dnf.cardinal r.res_cases

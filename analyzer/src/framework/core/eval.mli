@@ -62,3 +62,5 @@ val apply : (expr -> 'a flow -> 'b) -> ('b -> 'b -> 'b) -> ('b -> 'b -> 'b) -> '
 val map : (expr -> expr) -> 'a eval -> 'a eval
 
 val remove_duplicates : 'a lattice -> 'a eval -> 'a eval
+
+val cardinal : 'a eval -> int
