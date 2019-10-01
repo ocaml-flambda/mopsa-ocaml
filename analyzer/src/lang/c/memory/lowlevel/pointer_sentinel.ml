@@ -868,6 +868,66 @@ struct
 
 
 
+  (** Cases of the abstraction evaluations of *(p + ∀i) *)
+  let eval_quantified_deref_cases base offset typ primed range man flow =
+    eval_base_size base range man flow >>$ fun size flow ->
+    man.eval ~zone:(Z_c_scalar,Z_u_num) size flow  >>$ fun size flow ->
+
+    let min, max = Common.Quantified_offset.bound offset in
+
+    man.eval ~zone:(Z_c, Z_u_num) min flow >>$ fun min flow ->
+    man.eval ~zone:(Z_c, Z_u_num) max flow >>$ fun max flow ->
+
+    let ptr = mk_z ptr_size range in
+
+    (* Safety condition: [min, max] ⊆ [0, size - ptr [ *)
+    assume
+      (
+        mk_binop
+          (mk_in min (mk_zero range) (sub size ptr range) range)
+          O_log_and
+          (mk_in max (mk_zero range) (sub size ptr range) range)
+          range
+      )
+      ~fthen:(fun flow ->
+          let sentinel = mk_sentinel_var base ~primed range in
+          let before = mk_before_var base ~primed range in
+          let top = mk_top void_ptr range in
+
+          switch ~zone:Z_c_scalar [
+              (* Case 1: before sentinel
+                 Offset condition: max <= sentinel - |ptr|
+                 Transformation: weak(before)
+              *)
+              [
+                mk_binop max O_le (sub sentinel ptr range) range;
+              ],
+              (fun flow ->
+                 Eval.singleton (weaken before) flow
+              );
+
+              (* Case 2: after sentinel
+                 Offset condition: max >= sentinel
+                 Transformation: ⊤
+              *)
+              [
+                mk_binop max O_ge sentinel range;
+              ],
+              (fun flow ->
+                 Eval.singleton top flow
+              );
+
+            ] man flow
+
+        )
+      ~felse:(fun flow ->
+          (* Unsafe case *)
+          let flow' = raise_c_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow in
+          Eval.empty_singleton flow'
+        ) man flow
+
+
+
   (** Abstract evaluation of a dereference *)
   let eval_deref exp primed range man flow =
     let p = match ekind exp with E_c_deref p -> p | _ -> assert false in
@@ -883,10 +943,19 @@ struct
       raise_c_alarm Alarms.AInvalidDeref p.erange ~bottom:true man.lattice flow |>
       Eval.empty_singleton
 
-    | E_c_points_to (P_block (base, offset)) when is_interesting_base base ->
+    | E_c_points_to (P_block (base, offset))
+      when is_interesting_base base &&
+           not (is_expr_quantified offset)
+      ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow |>
       Eval.bind @@ fun offset flow ->
       eval_deref_cases base offset (under_type p.etyp) primed range man flow
+
+    | E_c_points_to (P_block (base, offset))
+      when is_interesting_base base &&
+           is_expr_quantified offset
+      ->
+      eval_quantified_deref_cases base offset (under_type p.etyp) primed range man flow
 
     | E_c_points_to (P_block _)
     | E_c_points_to P_valid ->
@@ -902,16 +971,14 @@ struct
     match ekind exp with
     | E_c_deref p
       when is_c_pointer_type exp.etyp &&
-           under_type p.etyp |> void_to_char |> is_c_scalar_type &&
-           not (is_expr_quantified p)
+           under_type p.etyp |> void_to_char |> is_c_scalar_type
       ->
       eval_deref exp false exp.erange man flow |>
       Option.return
 
     | E_stub_primed ({ ekind = E_c_deref p } as e)
       when is_c_pointer_type exp.etyp &&
-           under_type p.etyp |> void_to_char |> is_c_scalar_type &&
-           not (is_expr_quantified e)
+           under_type p.etyp |> void_to_char |> is_c_scalar_type
       ->
       eval_deref e true exp.erange man flow |>
       Option.return
