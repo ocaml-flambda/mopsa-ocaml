@@ -197,7 +197,7 @@ struct
 
   let unify man uctx a a' =
     let (hd, tl) = man.get a and (hd', tl') = man.get a' in
-    let hd, hd', l = AD.AMap.fold2o
+    let hd, hd', l = AD.fold2zo
         (fun k a acc -> acc)
         (fun k a acc -> acc)
         (fun k as1 as2 (hd, hd', acc) ->
@@ -273,10 +273,10 @@ struct
     else
     if !opt_py_type_polymorphism then
       match hd, hd' with
-      | AD.AMap.Map.Top, _ | _, AD.AMap.Map.Top -> Iter.top, a, a'
+      | Bot_top.TOP, _ | _, Bot_top.TOP -> Iter.top, a, a'
       | _ ->
         match tl, tl' with
-        | TD.TMap.Map.Top, _ | _, TD.TMap.Map.Top -> Iter.top, a, a'
+        | Bot_top.TOP, _ | _, Bot_top.TOP -> Iter.top, a, a'
         | _ ->
           debug "OLD hd, tl = %a, %a@\n@\nOLD hd', tl' = %a, %a@\n" AD.print hd TD.print tl AD.print hd' TD.print tl';
           let a, a' =

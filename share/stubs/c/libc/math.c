@@ -1416,7 +1416,6 @@ int ilogbf(float __x);
  */
 int ilogbl(long double __x);
 
-
 // TODO: not documented: llogb
 
 /*$

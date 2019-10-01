@@ -95,11 +95,11 @@ struct
       let in_flow_cur = Flow.bottom (Flow.get_ctx in_flow) (Flow.get_alarms in_flow) |>
                         Flow.set T_cur (Flow.get T_cur man.lattice in_flow) man.lattice
       in
-      let params, body, in_flow_cur = init_fun_params func args range man in_flow_cur in
+      let params, locals, body, in_flow_cur = init_fun_params func args range man in_flow_cur in
       let in_flow_other = Flow.remove T_cur in_flow in
       begin match find_signature man func.fun_name in_flow_cur with
         | None ->
-          inline func params body (Some func.fun_return_var) range man in_flow_cur |>
+          inline func params locals body (Some func.fun_return_var) range man in_flow_cur |>
           bind_some (fun var_res out_flow  ->
               let flow = store_signature man.lattice func.fun_name in_flow_cur out_flow in
               man.eval var_res (Flow.join man.lattice in_flow_other flow)

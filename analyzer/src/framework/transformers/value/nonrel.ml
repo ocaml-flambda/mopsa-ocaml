@@ -28,17 +28,13 @@ open Core.All
 open Sig.Value.Lowlevel
 
 
-(** {2 Variable maps} *)
-(** ***************** *)
-
-module VarMap = Lattices.Partial_map.MakePolymorph(Var)
 
 
 (** {2 Identifier for the non-relation domain} *)
 (** ****************************************** *)
 
-type _ domain +=
-  | D_nonrel_id : 'v vmodule -> 'v VarMap.t domain
+
+type _ id += D_nonrel : 'v vmodule -> (var,'v) Lattices.Partial_map.map id
 
 
 module Make(Value: VALUE) =
@@ -56,18 +52,18 @@ struct
 
   include VarMap
 
-  let id = D_nonrel_id (module Value)
+  let id = D_nonrel (module Value)
 
   let () =
     let open Eq in
-    register_domain_id {
+    register_id {
       eq = (
-        let f : type a. a domain -> (a, t) eq option =
+        let f : type a. a id -> (a, t) eq option =
           function
-          | D_nonrel_id vmodule ->
+          | D_nonrel v ->
             begin
-              let module V = (val vmodule) in
-              match Core.Id.value_id_eq V.id Value.id with
+              let module V = (val v) in
+              match equal_id V.id Value.id with
               | Some Eq -> Some Eq
               | None -> None
             end
@@ -119,14 +115,13 @@ struct
       | _ -> Exceptions.panic ~loc:__LOC__ "merge: unsupported statement %a" pp_stmt stmt
     in
     let a2' = List.fold_left (fun acc stmt -> patch stmt a1 acc) a2 log1 in
-    let a1' = List.fold_left (fun acc stmt -> patch stmt a2 acc) a1 log2 in
+    let a1' = List.fold_left (fun acc stmt -> patch stmt a2' acc) a1 log2 in
     meet a1' a2'
 
 
   let print fmt a =
     Format.fprintf fmt "%s:@,@[   %a@]@\n" Value.display VarMap.print a
 
-  let widen ctx = VarMap.widen
 
   (** {2 Evaluation of expressions} *)
   (** ***************************** *)
@@ -287,7 +282,7 @@ struct
 
   let zones = Value.zones
 
-  let exec stmt (map:t) : t option =
+  let exec ctx stmt man (map:t) : t option =
     match skind stmt with
     | S_remove { ekind = E_var (v, _) }  ->
       VarMap.remove v map |>

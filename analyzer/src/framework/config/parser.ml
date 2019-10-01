@@ -67,9 +67,10 @@ let spec = {
       | _, _, _ -> false
     );
 
-  apply = (fun signature ->
-      match signature with
-      | S_lowlevel -> true
+  apply = (fun abstraction signature ->
+      match abstraction, signature with
+      | A_stack, S_lowlevel -> true
+      | A_functor, S_simplified -> true
       | _ -> false
     );
 
@@ -195,6 +196,7 @@ and domain_simplified (config:config) : (module Sig.Domain.Simplified.DOMAIN) =
   match config.structure with
   | S_leaf name -> Sig.Domain.Simplified.find_domain name
   | S_product(l,r) -> domain_simplified_product l r
+  | S_apply(f,d) -> domain_simplified_apply f d
   | S_nonrel v -> domain_simplified_nonrel v
   | _ -> assert false
 
@@ -212,6 +214,15 @@ and domain_simplified_nonrel (v:config) : (module Sig.Domain.Simplified.DOMAIN) 
   let module V = (val vv : Sig.Value.Lowlevel.VALUE) in
   let module VV = Transformers.Value.Nonrel.Make(V) in
   (module VV)
+
+
+and domain_simplified_apply (f:config) (d:config) : (module Sig.Domain.Simplified.DOMAIN) =
+  let ff = functor_simplified f in
+  let dd = domain_simplified d in
+  let module F = (val ff : Sig.Functor.Simplified.FUNCTOR) in
+  let module D = (val dd : Sig.Domain.Simplified.DOMAIN) in
+  let module DD = F(D) in
+  (module DD)
 
 and domain_stateless (config:config) : (module Sig.Domain.Stateless.DOMAIN) =
   match config.structure with
@@ -341,6 +352,14 @@ and stack_stateless (config:config) : (module Sig.Stacked.Stateless.STACK) =
   | S_leaf name -> Sig.Stacked.Stateless.find_stack name
   | _ -> assert false
 
+
+(** {2 Functor builders} *)
+(** ******************** *)
+
+and functor_simplified (config:config) : (module Sig.Functor.Simplified.FUNCTOR) =
+  match config.structure with
+  | S_leaf name -> Sig.Functor.Simplified.find_functor name
+  | _ -> assert false
 
 (** {2 Value builders} *)
 (** ******************* *)

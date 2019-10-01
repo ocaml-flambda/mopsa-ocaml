@@ -21,12 +21,16 @@
 
 (** Abstraction of sets of partial maps. *)
 
-open Top
+open Bot_top
 open Core.Lattice
+
 
 let debug fmt = Debug.debug ~channel:"framework.lattices.partial_map" fmt
 
+module PMap = MapExtPoly
 
+
+type ('k,'v) map = ('k,'v) PMap.t with_bot_top
 
 
 module type KEY =
@@ -37,303 +41,209 @@ sig
 end
 
 
-module MakePolymorph
-    (Key : KEY)
+module Make
+    (Key   : KEY)
+    (Value : LATTICE)
 =
 struct
 
-  module Map = MapExt.Make(Key)
 
   (** Abstraction of a set of partial maps from [Key.t] to ['a].*)
-  type +'a t =
-    | Bot
-    (** empty set *)
+  type t = (Key.t, Value.t) map
 
-    | Finite of 'a Map.t
-    (** [Finite m] abstracts partial maps having support included in
-       the support of [m] *)
+  let bottom : t = BOT
 
-    | Top
-    (** all possible partial maps *)
+  let top : t = TOP
 
-  let bottom : 'a t = Bot
-
-  let top : 'a t = Top
-
-  let is_bottom ~is_bottomv (a:'a t) : bool =
+  let is_bottom (a:t) : bool =
     match a with
-    | Bot -> true
-    | Top -> false
-    | Finite m ->
-      Map.cardinal m > 0 &&
-      Map.exists (fun k v -> is_bottomv v) m
+    | BOT -> true
+    | TOP -> false
+    | Nbt m -> false
 
-  let empty : 'a t = Finite Map.empty (* Note: an empty map is different than an empty set of maps *)
+  let empty : t = Nbt (PMap.empty ~compare:Key.compare)
 
-  let subset ~subsetv (a1:'a t) (a2:'a t) : bool =
+  let subset (a1:t) (a2:t) : bool =
     if a1 == a2 then true else
     match a1, a2 with
-    | Bot, _ -> true
-    | _, Bot -> false
-    | _, Top -> true
-    | Top, _ -> false
-    | Finite m1, Finite m2 ->
-      Map.for_all2zo
+    | BOT, _ -> true
+    | _, BOT -> false
+    | _, TOP -> true
+    | TOP, _ -> false
+    | Nbt m1, Nbt m2 ->
+      PMap.for_all2zo
          (fun _ v1 -> false)
          (fun _ v2 -> true)
-         (fun _ v1 v2 -> subsetv v1 v2)
+         (fun _ v1 v2 -> Value.subset v1 v2)
          m1 m2
   (** Inclusion test. *)
 
-  let join ~joinv (a1:'a t) (a2:'a t) : 'a t =
+  let join (a1:t) (a2:t) : t =
     if a1 == a2 then a1 else
     match a1, a2 with
-    | Bot, x | x, Bot -> x
-    | Top, _ | _, Top -> Top
-    | Finite m1, Finite m2 ->
-      Finite (
-        Map.map2zo
+    | BOT, x | x, BOT -> x
+    | TOP, _ | _, TOP -> TOP
+    | Nbt m1, Nbt m2 ->
+      Nbt (
+        PMap.map2zo
           (fun _ v1 -> v1)
           (fun _ v2 -> v2)
-          (fun _ v1 v2 -> joinv v1 v2)
+          (fun _ v1 v2 -> Value.join v1 v2)
           m1 m2
       )
   (** Join two sets of partial maps. *)
 
-  let widen ~widenv (a1:'a t) (a2:'a t) : 'a t =
+  let widen ctx (a1:t) (a2:t) : t =
     if a1 == a2 then a1 else
     match a1, a2 with
-    | Bot, x | x, Bot -> x
-    | Top, x | x, Top -> Top
-    | Finite m1, Finite m2 ->
-      Finite (
-        Map.map2zo
+    | BOT, x | x, BOT -> x
+    | TOP, x | x, TOP -> TOP
+    | Nbt m1, Nbt m2 ->
+      Nbt (
+        PMap.map2zo
           (fun _ v1 -> v1)
           (fun _ v2 -> v2)
-          (fun _ v1 v2 -> widenv v1 v2)
+          (fun _ v1 v2 -> Value.widen ctx v1 v2)
           m1 m2
       )
   (** Widening (naive). *)
 
-  let meet ~meetv (a1:'a t) (a2:'a t) : 'a t =
+  let meet (a1:t) (a2:t) : t =
     if a1 == a2 then a1 else
     match a1, a2 with
-    | Bot, x | x, Bot -> Bot
-    | Top, x | x, Top -> x
-    | Finite m1, Finite m2 ->
-      Finite (
-        Map.merge (fun _ v1 v2 ->
+    | BOT, x | x, BOT -> BOT
+    | TOP, x | x, TOP -> x
+    | Nbt m1, Nbt m2 ->
+      Nbt (
+        PMap.merge (fun _ v1 v2 ->
             match v1, v2 with
             | None, _ | _, None -> None
-            | Some vv1, Some vv2 -> Some (meetv vv1 vv2)
+            | Some vv1, Some vv2 -> Some (Value.meet vv1 vv2)
           ) m1 m2
       )
   (** Meet. *)
 
 
-  let print fmt ~printv (a:'a t) =
+  let print fmt (a:t) : unit =
     match a with
-    | Bot -> Format.pp_print_string fmt "⊥"
-    | Top -> Format.pp_print_string fmt "⊤"
-    | Finite m when Map.is_empty m -> Format.fprintf fmt "∅"
-    | Finite m ->
+    | BOT -> Format.pp_print_string fmt "⊥"
+    | TOP -> Format.pp_print_string fmt "⊤"
+    | Nbt m when PMap.is_empty m -> Format.fprintf fmt "∅"
+    | Nbt m ->
       Format.fprintf fmt "@[<v>%a@]"
         (Format.pp_print_list
            ~pp_sep:(fun fmt () -> Format.fprintf fmt ",@,")
            (fun fmt (k, v) ->
-              Format.fprintf fmt "%a ⇀ @[%a@]" Key.print k printv v
+              Format.fprintf fmt "%a ⇀ @[%a@]" Key.print k Value.print v
            )
-        ) (Map.bindings m)
+        ) (PMap.bindings m)
   (** Printing. *)
 
-  let find ~bottomv ~topv (k: Key.t) (a:'a t) : 'a =
+  let find (k: Key.t) (a:t) : 'a =
     match a with
-    | Bot -> bottomv
-    | Top -> topv
-    | Finite m ->
-      try Map.find k m
-      with Not_found -> Exceptions.panic ~loc:__LOC__ "key %a not found" Key.print k
+    | BOT -> Value.bottom
+    | TOP -> Value.top
+    | Nbt m -> PMap.find k m
 
-  let remove (k: Key.t) (a:'a t) : 'a t =
+  let remove (k: Key.t) (a:t) : t =
     match a with
-    | Bot -> Bot
-    | Top -> Top
-    | Finite m -> Finite (Map.remove k m)
+    | BOT -> BOT
+    | TOP -> TOP
+    | Nbt m -> Nbt (PMap.remove k m)
 
-  let add (k: Key.t) ~is_bottomv (v:'a) (a:'a t) : 'a t =
-    if is_bottomv v then Bot
+  let add (k: Key.t) (v:'a) (a:t) : t =
+    if Value.is_bottom v then BOT
     else
       match a with
-      | Bot -> Bot
-      | Top -> Top
-      | Finite m -> Finite (Map.add k v m)
+      | BOT -> BOT
+      | TOP -> TOP
+      | Nbt m -> Nbt (PMap.add k v m)
 
-  let rename ~bottomv ~topv ~is_bottomv (k: Key.t) (k': Key.t) (a:'a t) : 'a t =
-    let v = find ~bottomv ~topv k a in
+  let rename (k: Key.t) (k': Key.t) (a:t) : t =
+    let v = find k a in
     let a = remove k a in
-    add ~is_bottomv k' v a
+    add k' v a
 
-  let singleton ~is_bottomv (k:Key.t) (v:'a) : 'a t =
-    add ~is_bottomv k v empty
+  let singleton (k:Key.t) (v:'a) : t =
+    add k v empty
 
-  let filter (f : Key.t -> 'a -> bool) (a :'a t) : 'a t =
+  let filter (f : Key.t -> 'a -> bool) (a :t) : t =
     match a with
-    | Bot -> Bot
-    | Top -> Top
-    | Finite m -> Finite (Map.filter f m)
+    | BOT -> BOT
+    | TOP -> TOP
+    | Nbt m -> Nbt (PMap.filter f m)
 
-  let iter (f:Key.t -> 'a -> unit) (a:'a t) : unit =
+  let iter (f:Key.t -> 'a -> unit) (a:t) : unit =
     match a with
-    | Bot -> ()
-    | Top -> raise Top.Found_TOP
-    | Finite m -> Map.iter f m
+    | BOT -> ()
+    | TOP -> raise Top.Found_TOP
+    | Nbt m -> PMap.iter f m
 
-  let fold (f:Key.t -> 'a -> 'b -> 'b) (a:'a t) (x:'b) : 'b =
+  let fold (f:Key.t -> 'a -> 'b -> 'b) (a:t) (x:'b) : 'b =
     match a with
-    | Bot -> x
-    | Top -> raise Top.Found_TOP
-    | Finite m -> Map.fold f m x
+    | BOT -> x
+    | TOP -> raise Top.Found_TOP
+    | Nbt m -> PMap.fold f m x
 
-  let fold_d (f:Key.t -> 'a -> 'b -> 'b) (a:'a t) (d :'b) (x :'b) : 'b =
+  let fold2zo f1 f2 f a b acc =
+    match a, b with
+    | BOT, _ | _, BOT -> acc
+    | TOP, _ | _, TOP -> raise Top.Found_TOP
+    | Nbt m1, Nbt m2 -> PMap.fold2zo f1 f2 f m1 m2 acc
+
+  let mem (x:Key.t) (a:t) : bool =
     match a with
-    | Bot -> x
-    | Top -> d
-    | Finite m -> Map.fold f m x
+    | BOT -> false
+    | TOP -> true
+    | Nbt m -> PMap.mem x m
 
-  let fold2o (f1:Key.t -> 'a -> 'c -> 'c) (f2:Key.t -> 'b -> 'c -> 'c)
-      (f: Key.t -> 'a -> 'b -> 'c -> 'c) (m1: 'a t) (m2: 'b t) (init: 'c) : 'c =
-    match m1, m2 with
-    | Bot, _ | _, Bot -> init
-    | Top, _ | _, Top -> raise Top.Found_TOP
-    | Finite i1, Finite i2 -> Map.fold2o f1 f2 f i1 i2 init
+  let canonize (a:t) : t =
+    if is_bottom a then BOT else a
 
-  let mem (x:Key.t) (a:'a t) : bool =
+  let map (f:Value.t -> Value.t) (a:t) : t =
     match a with
-    | Bot -> false
-    | Top -> true
-    | Finite m -> Map.mem x m
+    | BOT -> BOT
+    | TOP -> TOP
+    | Nbt m ->
+      Nbt (PMap.map f m) |>
+      canonize
 
-  let canonize ~is_bottomv (a:'a t) : 'a t =
-    if is_bottom ~is_bottomv a then Bot else a
-
-  let map ~is_bottomv (f:'a -> 'b) (a:'a t) : 'b t =
+  let mapi (f:Key.t -> Value.t -> Value.t) (a:t) : t =
     match a with
-    | Bot -> Bot
-    | Top -> Top
-    | Finite m ->
-      Finite (Map.map f m) |>
-      canonize ~is_bottomv
+    | BOT -> BOT
+    | TOP -> TOP
+    | Nbt m ->
+      Nbt (PMap.mapi f m) |>
+      canonize
 
-  let map_p ~is_bottomv (f:Key.t * 'a -> Key.t * 'b) (a:'a t) : 'b t  =
+  let bindings (a:t) : (Key.t * 'a) list =
     match a with
-    | Bot -> Bot
-    | Top -> Top
-    | Finite m ->
-      Finite (Map.fold (fun k v acc ->
-          let k',v' = f (k,v) in
-          Map.add k' v' acc
-        ) m Map.empty)
-      |>
-      canonize ~is_bottomv
+    | BOT -> []
+    | TOP -> raise Top.Found_TOP
+    | Nbt m -> PMap.bindings m
 
-  let bindings (a:'a t) : (Key.t * 'a) list =
+  let for_all (f:Key.t -> 'a -> bool) (a:t) : bool =
     match a with
-    | Bot -> []
-    | Top -> raise Top.Found_TOP
-    | Finite m -> Map.bindings m
+    | BOT -> true
+    | TOP -> raise Top.Found_TOP
+    | Nbt m -> PMap.for_all f m
 
-  let for_all (f:Key.t -> 'a -> bool) (a:'a t) : bool =
+  let exists (f:Key.t -> 'a -> bool) (a:t) : bool =
     match a with
-    | Bot -> true
-    | Top -> raise Top.Found_TOP
-    | Finite m -> Map.for_all f m
+    | BOT -> false
+    | TOP -> raise Top.Found_TOP
+    | Nbt m -> PMap.exists f m
 
-  let exists (f:Key.t -> 'a -> bool) (a:'a t) : bool =
+  let max_binding (a:t) : (Key.t * 'a) option =
     match a with
-    | Bot -> false
-    | Top -> raise Top.Found_TOP
-    | Finite m -> Map.exists f m
+    | BOT -> None
+    | TOP -> None
+    | Nbt m -> Some (PMap.max_binding m)
 
-  let max_binding (a:'a t) : (Key.t * 'a) option =
+  let cardinal (a:t) : int =
     match a with
-    | Bot -> None
-    | Top -> None
-    | Finite m -> Some (Map.max_binding m)
+    | BOT -> 0
+    | TOP -> raise Top.Found_TOP
+    | Nbt m -> PMap.cardinal m
 
-  let cardinal (a:'a t) : int =
-    match a with
-    | Bot -> 0
-    | Top -> raise Top.Found_TOP
-    | Finite m -> Map.cardinal m
-end
-
-
-
-
-
-module Make
-    (Key : KEY)
-    (Value: LATTICE)
-=
-struct
-
-  module Map = MakePolymorph(Key)
-
-  type t = Value.t Map.t
-
-  let bottom : t = Map.bottom
-
-  let top : t = Map.top
-
-  let is_bottom (a:t) : bool = Map.is_bottom a ~is_bottomv:Value.is_bottom
-
-  let empty : t = Map.empty
-
-  let subset (a1:t) (a2:t) : bool = Map.subset a1 a2 ~subsetv:Value.subset
-
-  let join (a1:t) (a2:t) : t = Map.join a1 a2 ~joinv:Value.join
-
-  let widen (a1:t) (a2:t) : t = Map.widen a1 a2 ~widenv:Value.widen
-
-  let meet (a1:t) (a2:t) : t = Map.meet a1 a2 ~meetv:Value.meet
-
-  let print fmt (a:t) = Map.print fmt a ~printv:Value.print
-
-  let find (k: Key.t) (a: t) : Value.t = Map.find k a ~bottomv:Value.bottom ~topv:Value.top
-
-  let remove (k: Key.t) (a: t) : t = Map.remove k a
-
-  let add (k: Key.t) (v: Value.t) (a: t) : t = Map.add k v a ~is_bottomv:Value.is_bottom
-
-  let rename (k: Key.t) (k': Key.t) (a: t) : t = Map.rename k k' a ~bottomv:Value.bottom ~topv:Value.top ~is_bottomv:Value.is_bottom
-
-  let singleton (k:Key.t) (v:Value.t) : t = Map.singleton k v ~is_bottomv:Value.is_bottom
-
-  let filter (f : Key.t -> Value.t -> bool) (a : t) : t = Map.filter f a
-
-  let iter (f:Key.t -> Value.t -> unit) (a: t) : unit = Map.iter f a
-
-  let fold (f:Key.t -> Value.t -> 'a -> 'a) (a:t) (x:'a) : 'a = Map.fold f a x
-
-  let fold_d (f:Key.t -> Value.t -> 'a -> 'a) (a:t) (d :'a) (x :'a) : 'a = Map.fold_d f a d x
-
-  let fold2o = Map.fold2o
-
-  let mem (x:Key.t) (a:t) : bool = Map.mem x a
-
-  let canonize (a:t) : t = Map.canonize a ~is_bottomv:Value.is_bottom
-
-  let map (f:Value.t -> Value.t) (a:t) : t = Map.map f a ~is_bottomv:Value.is_bottom
-
-  let map_p (f:Key.t * Value.t -> Key.t * Value.t) (a:t) : t  = Map.map_p f a ~is_bottomv:Value.is_bottom
-
-  let bindings (a:t) : (Key.t * Value.t) list = Map.bindings a
-
-  let for_all (f:Key.t -> Value.t -> bool) (a:t) : bool = Map.for_all f a
-
-  let exists (f:Key.t -> Value.t -> bool) (a:t) : bool = Map.exists f a
-
-  let max_binding (a:t) : (Key.t * Value.t) option = Map.max_binding a
-
-  let cardinal (a: t) : int = Map.cardinal a
 end

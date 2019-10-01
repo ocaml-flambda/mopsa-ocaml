@@ -361,7 +361,7 @@ and from_exp exp =
 
 
   in
-  {ekind; etyp; erange = exp.erange}
+  mk_expr ekind ~etyp exp.erange
 
 
 and from_binop : Py_parser.Ast.binop -> operator = function

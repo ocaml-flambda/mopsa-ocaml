@@ -339,9 +339,13 @@ struct
                   pp_zone2 zone
 
     in
+    (* Update the eprev field in returned expressions to indicate the
+       previous form of the result *)
+    let ret' = Eval.map (fun e -> { e with eprev = Some exp }) ret in
 
-    Debug_tree.eval_done exp zone (Timing.stop timer) ret;
-    ret
+    (* Notify the debug tree about the result *)
+    Debug_tree.eval_done exp zone (Timing.stop timer) ret';
+    ret'
 
   and eval_over_paths paths exp man flow =
     match paths with
@@ -375,7 +379,13 @@ struct
 
     | other_action ->
       match
-        (try Cache.eval feval (z1, z2) exp man flow
+        (try Cache.eval (fun e man flow ->
+             match feval e man flow with
+             | None -> None
+             | Some evl ->
+               let evl' = Eval.remove_duplicates man.lattice evl in
+               Some evl'
+           ) (z1, z2) exp man flow
          with Exceptions.Panic(msg,line) -> raise (Exceptions.PanicAt (exp.erange,msg,line))
         )
       with

@@ -61,7 +61,9 @@ let compare cs cs' =
 let empty : cs = []
 
 let is_empty (cs:cs) =
-  List.length cs = 0
+  match cs with
+  | [] -> true
+  | _ -> false
 
 let ctx_key =
   let module K = Context.GenUnitKey(
@@ -78,5 +80,9 @@ let ctx_key =
 let push f range cs =
   { call_fun = f; call_site = range} :: cs
 
+exception EmptyCallstack
+
 let pop cs =
-  List.hd cs, List.tl cs
+  match cs with
+  | [] -> raise EmptyCallstack
+  | _ -> List.hd cs, List.tl cs

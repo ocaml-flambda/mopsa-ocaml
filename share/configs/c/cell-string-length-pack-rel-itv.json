@@ -42,9 +42,6 @@
                             "product": [
                                 "c.memory.lowlevel.cells",
                                 "c.memory.lowlevel.string_length"
-                            ],
-                            "reductions": [
-                                "c.memory.lowlevel.reductions.cell_string_length"
                             ]
                         },
                         {
@@ -56,12 +53,23 @@
                     ]
                 },
 		"on": {
-                    "nonrel": {
-			"disjoint": [
-			    "universal.numeric.values.intervals.float",
-                            "universal.numeric.values.intervals.integer"
-			]
-		    }
+                    "product": [
+                        {
+                            "nonrel": {
+			        "disjoint": [
+			            "universal.numeric.values.intervals.float",
+                                    "universal.numeric.values.intervals.integer"
+			        ]
+		            }
+                        },
+			{
+                            "apply":"c.memory.packing.static_scope",
+                            "on": "universal.numeric.relational"
+                        }
+		    ],
+                    "reductions": [
+                        "c.memory.packing.reductions.intervals_static_scope"
+                    ]
                 }
             }
 	]

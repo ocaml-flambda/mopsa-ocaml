@@ -130,6 +130,16 @@ let map_cases
   }
 
 
+(** Map outputs of a result *)
+let map (f:'r->'r) (r:('a,'r) result) : ('a,'r) result =
+  map_cases (fun case ->
+      match case.case_output with
+      | Some o -> { case with case_output = Some (f o) }
+      | None -> case
+    ) r
+  
+
+
 (** Map each case with with function [f] if the return value is
     non-empty, otherwise remove the case *)
 let map_opt (f:'r -> 's option option) (r:('a,'r) result) : ('a,'s) result =
@@ -397,3 +407,71 @@ let bind_list_opt
 let bind_list l f flow =
   bind_list_opt l (fun e flow -> Some (f e flow)) flow |>
   Option.none_to_exn
+
+
+let remove_duplicates compare lattice r =
+  let ctx = r.res_ctx in
+  let compare_case case case' = Option.compare compare case.case_output case'.case_output in
+  let rec simplify_conj conj =
+    match conj with
+    | [] -> conj
+    | [case] -> [case]
+    | case :: tl ->
+      (* Remove duplicates of case from tl *)
+      let case', tl' =
+        let rec aux = function
+          | [] -> case, []
+          | case' :: tl' ->
+            let case, tl'' = aux tl' in
+            match compare_case case case' with
+            | 0 ->
+              let case'' = {
+                case_output = case.case_output;
+                case_flow = TokenMap.meet lattice (Context.get_unit ctx) case.case_flow case'.case_flow;
+                case_cleaners = case.case_cleaners @ case'.case_cleaners;
+                case_alarms = AlarmSet.meet case.case_alarms case'.case_alarms;
+                case_log = Log.concat case.case_log case.case_log;
+              }
+              in
+              case'', tl''
+            | _ -> case, case' :: tl''
+        in
+        aux tl
+      in
+      case' :: simplify_conj tl'
+  in
+  let join_conj conj conj' =
+    List.combine conj conj' |>
+    List.map (fun (case, case') ->
+        {
+          case_output = case.case_output;
+          case_flow = TokenMap.join lattice (Context.get_unit ctx) case.case_flow case'.case_flow;
+          case_cleaners = case.case_cleaners @ case'.case_cleaners;
+          case_alarms = AlarmSet.join case.case_alarms case'.case_alarms;
+          case_log = Log.concat case.case_log case.case_log;
+        }
+      )
+  in
+  let rec simplify_disj disj =
+    match disj with
+    | [] -> disj
+    | conj :: tl ->
+      let conj = simplify_conj conj in
+      (* Remove duplicates of conj from tl *)
+      let conj', tl' =
+        let rec aux = function
+          | [] -> conj, []
+          | conj' :: tl' ->
+            let conj, tl'' = aux tl' in
+            match Compare.list compare_case conj conj' with
+            | 0 -> join_conj conj conj', tl''
+            | _ -> conj, conj' :: tl''
+        in
+        aux tl
+      in
+      conj' :: simplify_disj tl'
+  in
+  { r with res_cases = Dnf.from_list (simplify_disj (Dnf.to_list r.res_cases)) }
+
+
+let cardinal r = Dnf.cardinal r.res_cases

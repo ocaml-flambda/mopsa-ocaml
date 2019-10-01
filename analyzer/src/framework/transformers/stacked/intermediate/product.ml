@@ -546,7 +546,6 @@ struct
         None :: acc, ctx
       else
         let flow' = Flow.set_ctx ctx flow in
-        debug "exec %a in domain %s and zone %a" pp_stmt stmt S.name pp_zone zone;
         match S.exec zone stmt man flow' with
         | None -> None :: acc, ctx
         | Some post ->
@@ -602,10 +601,10 @@ struct
         None :: acc, ctx
       else
         let flow' = Flow.set_ctx ctx flow in
-        debug "eval %a in domain %s and zone %a" pp_expr exp S.name pp_zone2 zone;
         match S.eval zone exp man flow' with
         | None -> None :: acc, ctx
         | Some evl ->
+          let evl = Eval.remove_duplicates man.lattice evl in
           let ctx' = Eval.get_ctx evl in
           Some evl :: acc, ctx'
     in
@@ -624,16 +623,16 @@ struct
       lattice = man.lattice;
       post = man.post;
       get_eval = (
-        let f : type t. t domain -> prod_eval -> expr option =
+        let f : type t. t id -> prod_eval -> expr option =
           fun id evals ->
-            let rec aux : type t tt. t domain -> tt pool -> prod_eval -> expr option =
+            let rec aux : type t tt. t id -> tt pool -> prod_eval -> expr option =
               fun id l el ->
                 match l, el with
                 | Nil, [] -> None
                 | Cons(hd,tl), (hde::tle) ->
                   begin
                     let module D = (val hd) in
-                    match domain_id_eq D.id id with
+                    match equal_id D.id id with
                     | Some Eq -> (match hde with None -> None | Some x -> x)
                     | None -> aux id tl tle
                   end
@@ -645,16 +644,16 @@ struct
       );
 
       del_eval = (
-        let f : type t. t domain -> prod_eval -> prod_eval =
+        let f : type t. t id -> prod_eval -> prod_eval =
           fun id evals ->
-            let rec aux : type t tt. t domain -> tt pool -> prod_eval -> prod_eval =
+            let rec aux : type t tt. t id -> tt pool -> prod_eval -> prod_eval =
               fun id l el ->
                 match l, el with
                 | Nil, [] -> raise Not_found
                 | Cons(hd,tl), (hde::tle) ->
                   begin
                     let module D = (val hd) in
-                    match domain_id_eq D.id id with
+                    match equal_id D.id id with
                     | Some Eq -> None :: tle
                     | None -> hde :: aux id tl tle
                   end
@@ -666,15 +665,15 @@ struct
       );
 
       get_man = (
-        let f : type t. t domain -> ('a,t,'s) man =
+        let f : type t. t id -> ('a,t,'s) man =
           fun id ->
-            let rec aux : type t tt. t domain -> tt pool -> ('a,tt,'s) man -> ('a,t,'s) man =
+            let rec aux : type t tt. t id -> tt pool -> ('a,tt,'s) man -> ('a,t,'s) man =
               fun id l man ->
                 match l with
                 | Nil -> raise Not_found
                 | Cons(hd,tl) ->
                   let module D = (val hd) in
-                  match domain_id_eq D.id id with
+                  match equal_id D.id id with
                   | Some Eq -> (hdman man)
                   | None -> aux id tl (tlman man)
             in
@@ -696,13 +695,17 @@ struct
         R.reduce exp eman el flow
       ) pointwise Spec.erules
     in
-    (* For performance reasons, we keep only one evaluation.
+    (* For performance reasons, we keep only one evaluation in each conjunction.
        THE CHOICE IS ARBITRARY: keep the first non-None result using the
        order of domains in the configuration file.
     *)
-    pointwise |> Result.map_opt @@ fun el ->
-    try List.find (function Some _ -> true | None -> false) el
-    with Not_found -> None
+    let evl = pointwise |> Result.map_opt (fun el ->
+        try List.find (function Some _ -> true | None -> false) el
+        with Not_found -> None
+      )
+    in
+    Eval.remove_duplicates man.lattice evl
+
 
 
   (** Entry point of abstract evaluations *)

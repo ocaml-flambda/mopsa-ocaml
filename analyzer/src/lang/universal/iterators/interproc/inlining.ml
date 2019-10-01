@@ -90,12 +90,12 @@ struct
     let range = erange exp in
     match ekind exp with
     | E_call({ekind = E_function (User_defined f)}, args) ->
-      let params, body, flow = init_fun_params f args range man flow in
+      let params, locals, body, flow = init_fun_params f args range man flow in
       let ret = match f.fun_return_type with
         | None -> None
-        | Some t -> Some (mk_range_attr_var range "ret_var" t)
+        | Some _ -> Some (mk_return_var exp)
       in
-      inline f params body ret range man flow
+      inline f params locals body ret range man flow
       |> Option.return
 
     | _ -> None

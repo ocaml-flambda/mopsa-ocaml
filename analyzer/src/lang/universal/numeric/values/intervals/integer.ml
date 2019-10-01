@@ -58,7 +58,7 @@ struct
 
   let meet (a1:t) (a2:t) : t = I.meet_bot a1 a2
 
-  let widen (a1:t) (a2:t) : t = I.widen_bot a1 a2
+  let widen ctx (a1:t) (a2:t) : t = I.widen_bot a1 a2
 
   let print fmt (a:t) = I.fprint_bot fmt a
 
@@ -287,10 +287,10 @@ struct
       match query with
       | Common.Q_int_interval e ->
         eval e |> Option.return
-
+      | Common.Q_fast_int_interval e ->
+        eval e |> Option.return
       | Common.Q_int_congr_interval e ->
         (eval e, Common.C.minf_inf) |> Option.return
-
       | _ -> None
 
 

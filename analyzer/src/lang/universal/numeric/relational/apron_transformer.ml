@@ -205,8 +205,8 @@ struct
     | E_constant(C_int_interval (a,b)) ->
       Apron.Texpr1.Cst(
         Apron.Coeff.i_of_scalar
-          (Apron.Scalar.of_float @@ Z.to_float a)
-          (Apron.Scalar.of_float @@ Z.to_float b)
+          (Apron.Scalar.of_mpq @@ Mpq.of_string @@ Z.to_string a)
+          (Apron.Scalar.of_mpq @@ Mpq.of_string @@ Z.to_string b)
       ), abs, bnd, l
 
     | E_constant(C_float_interval (a,b)) ->
@@ -217,7 +217,7 @@ struct
       ), abs, bnd, l
 
     | E_constant(C_int n) ->
-      Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_float @@ Z.to_float n)),
+      Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_mpq @@ Mpq.of_string @@ Z.to_string n)),
       abs, bnd, l
 
     | E_constant(C_float f) ->

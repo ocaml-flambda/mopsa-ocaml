@@ -275,8 +275,6 @@ struct
 
   include TMap
 
-  let widen ctx = widen
-
   include Framework.Core.Id.GenDomainId(struct
       type nonrec t = t
       let name = "python.types.typing"

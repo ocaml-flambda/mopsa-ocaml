@@ -25,7 +25,7 @@ open Mopsa
 open Framework.Core.Sig.Domain.Stateless
 open Universal.Ast
 open Stubs.Ast
-open Memory.Common.Points_to
+open Common.Points_to
 open Ast
 open Zone
 

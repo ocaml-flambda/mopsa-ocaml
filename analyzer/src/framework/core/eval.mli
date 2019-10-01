@@ -58,3 +58,9 @@ val copy_ctx : 'a eval -> 'a eval -> 'a eval
 val bind : (expr -> 'a flow -> ('a,'r) result) -> 'a eval -> ('a,'r) result
 
 val apply : (expr -> 'a flow -> 'b) -> ('b -> 'b -> 'b) -> ('b -> 'b -> 'b) -> 'b -> 'a eval -> 'b
+
+val map : (expr -> expr) -> 'a eval -> 'a eval
+
+val remove_duplicates : 'a lattice -> 'a eval -> 'a eval
+
+val cardinal : 'a eval -> int

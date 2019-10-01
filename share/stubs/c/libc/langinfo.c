@@ -23,7 +23,7 @@
 
 /*$
  * local:   char *addr = new ReadOnlyString;
- * ensures: size(addr) in [1, SIZE_MAX];
+ * ensures: size(addr) in [1, INT_MAX];
  * ensures: valid_string(addr);
  * ensures: return == addr;
  */
@@ -33,7 +33,7 @@ char *nl_langinfo (nl_item __item);
  * // FIXME: nl_langinfo_l is undefined if __l is LC_GLOBAL_LOCALE or 
  * //        is not a valid locale object handle.
  * local:   char *addr = new ReadOnlyString;
- * ensures: size(addr) in [1, SIZE_MAX];
+ * ensures: size(addr) in [1, INT_MAX];
  * ensures: valid_string(addr);
  * ensures: return == addr;
  */

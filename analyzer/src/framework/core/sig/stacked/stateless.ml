@@ -86,7 +86,7 @@ sig
   val name : string
   (** Name of the domain *)
 
-  val id : unit domain
+  val id : unit id
   (** Identifier of the domain *)
 
   val interface : interface

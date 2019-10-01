@@ -92,3 +92,9 @@ let apply f join meet empty evl =
        | None -> empty
     )
     join meet evl
+
+let map = Result.map
+
+let remove_duplicates lattice evl = Result.remove_duplicates compare_expr lattice evl
+
+let cardinal = Result.cardinal

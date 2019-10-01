@@ -32,6 +32,7 @@ type abstraction =
   | A_domain
   | A_stack
   | A_value
+  | A_functor
 
 (** Signature levels of an abstraction *)
 type signature =
@@ -70,7 +71,7 @@ and operator =
 (** A specification determines which transformers are provided by the framework *)
 type spec = {
   chain   : abstraction -> operator -> signature -> bool;
-  apply   : signature -> bool;
+  apply   : abstraction -> signature -> bool;
   product : abstraction -> signature -> bool;
 }
 

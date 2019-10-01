@@ -723,7 +723,7 @@ let mk_bool b range = mk_constant ~etyp:T_bool (C_bool b) range
 let mk_true = mk_bool true
 let mk_false = mk_bool false
 
-let mk_addr addr range = mk_expr ~etyp:T_addr (E_addr addr) range
+let mk_addr addr ?(etyp=T_addr) range = mk_expr ~etyp (E_addr addr) range
 
 let mk_alloc_addr addr_kind range =
   mk_expr (E_alloc_addr addr_kind) ~etyp:T_addr range
@@ -765,10 +765,13 @@ let mk_free_addr a range =
   mk_stmt (S_free_addr a) range
 
 let mk_call fundec args range =
-  mk_expr (E_call (
-      mk_expr (E_function (User_defined fundec)) range,
-      args
-    )) range
+  mk_expr
+    (E_call (
+        mk_expr (E_function (User_defined fundec)) range,
+        args
+      ))
+    ~etyp:(match fundec.fun_return_type with None -> T_any | Some t -> t)
+    range
 
 let mk_expr_stmt e =
   mk_stmt (S_expression e)

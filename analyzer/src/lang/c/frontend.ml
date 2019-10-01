@@ -435,7 +435,7 @@ and from_expr ctx ((ekind, tc , range) : C_AST.expr) : expr =
     | C_AST.E_compound_literal _ -> Exceptions.panic_at erange "E_compound_literal not supported"
     | C_AST.E_atomic (_,_,_) -> Exceptions.panic_at erange "E_atomic not supported"
   in
-  {ekind; erange; etyp}
+  mk_expr ekind erange ~etyp
 
 and from_expr_option ctx : C_AST.expr option -> expr option = function
   | None -> None
@@ -824,7 +824,7 @@ and from_stub_set ctx s =
 and from_stub_expr ctx exp =
   let bind_range_expr (exp:C_stubs_parser.Ast.expr with_range) f =
     let ekind = f exp.content.kind
-    in { ekind; erange = exp.range; etyp = from_typ ctx exp.content.typ }
+    in mk_expr ekind exp.range  ~etyp:(from_typ ctx exp.content.typ)
   in
   bind_range_expr exp @@ function
   | E_int n -> E_constant (C_int n)

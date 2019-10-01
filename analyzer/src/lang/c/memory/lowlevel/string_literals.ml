@@ -246,7 +246,7 @@ struct
                   )
                 ~felse:(fun flow ->
                     (* Construct an interval covering all chars pointed by the offset *)
-                    let offset_itv = man.ask (Universal.Numeric.Common.Q_int_interval offset) flow |>
+                    let offset_itv = man.ask (Universal.Numeric.Common.mk_int_interval_query offset) flow |>
                                      Itv.meet (Itv.of_int 0 (length - 1))
                     in
                     if Itv.is_bounded offset_itv then

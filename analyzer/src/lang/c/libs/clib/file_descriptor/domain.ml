@@ -69,7 +69,7 @@ open Stubs.Ast
 open Ast
 open Universal.Zone
 open Zone
-open Memory.Common.Points_to
+open Common.Points_to
 module Itv = Universal.Numeric.Values.Intervals.Integer.Value
 open Slot
 open Table
@@ -123,7 +123,7 @@ struct
 
   let widen ctx a1 a2 = {
     first = List.map2 Slot.join a1.first a2.first;
-    others = Table.widen a1.others a2.others;
+    others = Table.widen ctx a1.others a2.others;
   }
 
   let merge pre (post,log) (post',log') =
@@ -290,7 +290,7 @@ struct
         [
           [mk_binop slot O_ge (mk_int window range) range],
           (fun flow ->
-             let itv = man.ask (Universal.Numeric.Common.Q_int_interval slot) flow in
+             let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query slot) flow in
              let flow = map_env T_cur (fun a ->
                  { a with others = Table.insert_at addr itv a.others }
                ) man flow
@@ -328,7 +328,7 @@ struct
 
     and find_addr_others flow =
       let a = get_env T_cur man flow in
-      let itv = man.ask (Universal.Numeric.Common.Q_int_interval i) flow in
+      let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query i) flow in
       (* First case: return addresses having a descriptor interval
          intersecting with the target interval *)
       let case1 =
