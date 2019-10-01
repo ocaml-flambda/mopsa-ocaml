@@ -393,19 +393,13 @@ char *strndup (const char *__s, size_t __n);
 #endif
 
 /*$
- * local: size_t len = strlen(__s);
+ * requires: valid_string(__s);
  *
  * case "found" {
- *   assumes: exists int i in [0, len]: __s[i] == __c;
- *   ensures: exists int i in [0, len]: (
- *              __s[i] == __c and
- *              return == __s + i and
- *              forall int j in [0, i - 1]: __s[j] != __c
- *            );
+ *   ensures: exists int i in [0, size(__s) - 1]: return == __s + i;
  * }
  *
  * case "notfound" {
- *   assumes: forall int j in [0, len]: __s[j] != __c;
  *   ensures: return == NULL;
  * }
  */

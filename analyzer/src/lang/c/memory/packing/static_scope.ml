@@ -91,6 +91,18 @@ struct
       when not only_scalars || is_c_scalar_type vtyp  ->
       [Locals f.c_func_unique_name]
 
+    (* argc parameter *)
+    | V { vkind = V_cvar {cvar_scope = Variable_parameter f; cvar_orig_name} }
+      when f.c_func_org_name = "main" &&
+           cvar_orig_name = "argc"
+      ->
+      [Locals "main"; Locals "getopt"; Locals "getopt_long"; Locals "getopt_long_only"]
+
+    (* argv and its auxiliary variables *)
+    | A { addr_kind = Stubs.Ast.A_stub_resource "argv" }
+    | A { addr_kind = Stubs.Ast.A_stub_resource "arg" } ->
+      [Locals "main"; Locals "getopt"; Locals "getopt_long"; Locals "getopt_long_only"]
+
     (* Formal parameters are part of the caller and the callee packs *)
     | V { vkind = V_cvar {cvar_scope = Variable_parameter f} } ->
       let cs = Context.ufind Callstack.ctx_key ctx in
@@ -136,12 +148,6 @@ struct
       else
         let callee, _ = Callstack.pop cs in
         [Locals callee.call_fun]
-
-
-    (* Symbolic command-line arguments strings are also kept in the pack of main *)
-    | A { addr_kind = Stubs.Ast.A_stub_resource "argv" }
-    | A { addr_kind = Stubs.Ast.A_stub_resource "arg" } ->
-      [Locals "main"]
 
     | _ ->
       []
