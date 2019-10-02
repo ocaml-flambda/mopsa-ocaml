@@ -114,13 +114,18 @@ struct
     | BOT, x | x, BOT -> BOT
     | TOP, x | x, TOP -> x
     | Nbt m1, Nbt m2 ->
-      Nbt (
-        PMap.merge (fun _ v1 v2 ->
-            match v1, v2 with
-            | None, _ | _, None -> None
-            | Some vv1, Some vv2 -> Some (Value.meet vv1 vv2)
-          ) m1 m2
-      )
+      try
+        Nbt (
+          PMap.merge (fun _ v1 v2 ->
+              match v1, v2 with
+              | None, _ | _, None -> None
+              | Some vv1, Some vv2 ->
+                let vv = Value.meet vv1 vv2 in
+                if Value.is_bottom vv then raise Bot.Found_BOT
+                else Some vv
+            ) m1 m2
+        )
+      with Bot.Found_BOT -> bottom
   (** Meet. *)
 
 
