@@ -78,6 +78,7 @@ struct
         Z_c_scalar, Z_u_num;
         Z_c_low_level, Z_c_scalar;
         Z_c_low_level, Z_c_points_to;
+        Z_c_scalar, Z_c_points_to;
       ];
     }
   }
@@ -215,7 +216,7 @@ struct
 
 
   (** Partition [flow] depending whether e is a sentinel or not *)
-  let is_sentinel_expr e man flow =
+  let is_sentinel_expr ?(zone=Z_c_low_level) e man flow =
     (* Try static checks *)
     match ekind (remove_casts e) with
     | E_c_address_of _            -> Result.singleton false flow
@@ -228,7 +229,7 @@ struct
       | Some e -> Result.singleton (Z.equal e Z.zero) flow
       | None ->
         (* If the above heuristics fails, fall back to dynamic evaluations *)
-        man.eval e ~zone:(Z_c_low_level,Z_c_points_to) flow >>$ fun pt flow ->
+        man.eval e ~zone:(zone,Z_c_points_to) flow >>$ fun pt flow ->
         match ekind pt with
         | E_c_points_to (P_null | P_invalid) -> Result.singleton true flow
         | E_c_points_to (P_block _ | P_valid | P_fun _) -> Result.singleton false flow
@@ -398,7 +399,7 @@ struct
               ],
               (fun flow ->
                  (* Test if the rval is a sentinel *)
-                 is_sentinel_expr rval man flow >>$ fun ok flow ->
+                 is_sentinel_expr ~zone:Z_c_scalar rval man flow >>$ fun ok flow ->
                  if ok then
                    (* Case 2.1: set sentinel before
                                     offset
@@ -442,7 +443,7 @@ struct
               ],
               (fun flow ->
                  (* Test if the rval is a sentinel *)
-                 is_sentinel_expr rval man flow >>$ fun ok flow ->
+                 is_sentinel_expr ~zone:Z_c_scalar rval man flow >>$ fun ok flow ->
                  if ok then
                    (* Case 3: set sentinel at sentinel
                                                   offset
@@ -761,7 +762,7 @@ struct
     | S_assume({ekind = E_binop(O_eq, lval, q)})
     | S_assume({ekind = E_unop(O_log_not, {ekind = E_binop(O_ne, lval, q)})})
       when is_c_pointer_type lval.etyp &&
-           is_expr_quantified lval &&
+           is_lval_offset_quantified lval &&
            not (is_expr_quantified q) &&
            is_c_deref lval
       ->
@@ -772,8 +773,8 @@ struct
     | S_assume({ekind = E_binop(O_ne, lval, q)})
     | S_assume({ekind = E_unop(O_log_not, {ekind = E_binop(O_eq, lval, q)})})
       when is_c_pointer_type lval.etyp &&
-           is_expr_quantified lval &&
-           not (is_expr_quantified q) &&
+           is_lval_offset_quantified lval &&
+           not (is_lval_offset_quantified q) &&
            is_c_deref lval
       ->
       assume_quantified O_ne lval q stmt.srange man flow |>

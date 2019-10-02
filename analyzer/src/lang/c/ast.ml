@@ -1029,3 +1029,18 @@ let is_c_deref e =
   match remove_casts e |> ekind with
   | E_c_deref _ -> true
   | _ -> false
+
+
+let is_pointer_offset_quantified p =
+  let open Stubs.Ast in
+  match ekind p with
+  | E_binop(_,e1,e2) when is_c_num_type e2.etyp -> is_expr_quantified e2
+  | E_binop(_,e1,e2) when is_c_num_type e1.etyp -> is_expr_quantified e1
+  | _ -> false
+
+let is_lval_offset_quantified e =
+  let open Stubs.Ast in
+  match remove_casts e |> ekind with
+  | E_c_deref(p) -> is_pointer_offset_quantified p
+  | E_c_array_subscript(_,o) -> is_expr_quantified o
+  | _ -> false
