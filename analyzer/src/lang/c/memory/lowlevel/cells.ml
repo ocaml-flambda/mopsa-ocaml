@@ -191,6 +191,9 @@ struct
   (** Construct the variable name associated to a cell *)
   let mk_cell_var_name c =
     let () = match c.base with
+      | V { vkind = V_c_cell c } ->
+        panic "recursive creation of cell %a" pp_cell c
+
       | V v ->
         Format.fprintf Format.str_formatter "⟨%s,%a,%a⟩%s"
           v.vname
@@ -198,8 +201,7 @@ struct
           pp_cell_typ c.typ
           (if c.primed then "'" else "")
 
-      | _ ->
-        pp_cell Format.str_formatter c
+      | _ -> pp_cell Format.str_formatter c
     in
     Format.flush_str_formatter ()
 
@@ -929,14 +931,14 @@ struct
       Option.return
 
     | E_c_deref p when under_type p.etyp |> void_to_char |> is_c_scalar_type &&
-                       not (is_expr_quantified p)
+                       not (is_pointer_offset_quantified p)
       ->
       eval_deref_scalar_pointer p false exp.erange man flow |>
       Option.return
 
 
     | E_c_deref p when under_type p.etyp |> is_c_function_type &&
-                       not (is_expr_quantified p)
+                       not (is_pointer_offset_quantified p)
       ->
       eval_deref_function_pointer p exp.erange man flow |>
       Option.return
@@ -945,15 +947,15 @@ struct
       eval_address_of lval exp.erange man flow |>
       Option.return
 
-    | E_stub_primed lval when not (is_expr_quantified lval) ->
+    | E_stub_primed lval when not (is_lval_offset_quantified lval) ->
       eval_deref_scalar_pointer (mk_c_address_of lval exp.erange) true exp.erange man flow |>
       Option.return
 
-    | E_c_deref p when is_expr_quantified exp ->
+    | E_c_deref p when is_pointer_offset_quantified p ->
       eval_deref_quantified p exp.erange man flow |>
       Option.return
 
-    | E_stub_primed e when is_expr_quantified exp -> 
+    | E_stub_primed e when is_lval_offset_quantified exp -> 
       eval_deref_quantified (mk_c_address_of e exp.erange) exp.erange man flow |>
       Option.return
 

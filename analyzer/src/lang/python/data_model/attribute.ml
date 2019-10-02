@@ -121,7 +121,19 @@ module Domain =
                search_mro mro
              | _ ->
                debug "other: %a@\n" pp_expr exp;
-               assume (mk_expr (E_py_ll_hasattr (exp, c_attr)) range)
+               (* In a bottom environment, the only thing that we can
+                  do is to search for builtins attributes and resolve
+                  them statically.
+               *)
+               if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom then
+                 let oexp = object_of_expr exp in
+                 if is_builtin_name (object_name oexp) && is_builtin_attribute oexp attr then
+                   let rese = mk_py_object (find_builtin_attribute oexp attr) range in
+                   Eval.singleton rese flow
+                 else
+                   Eval.empty_singleton flow
+               else
+                 assume (mk_expr (E_py_ll_hasattr (exp, c_attr)) range)
                  ~fthen:(fun flow ->
                    debug "instance attribute found locally@\n";
                    man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_getattr(exp, c_attr)) range) flow |>
@@ -211,17 +223,6 @@ module Domain =
                                in search_mro flow mro)
                          )
                        man flow
-                   )
-                 ~fnone:(fun flow ->
-                     (* In a bottom environment, the only thing that we
-                        can do is to search for builtins attributes and
-                        resolve them statically *)
-                     let oexp = object_of_expr exp in
-                     if is_builtin_name (object_name oexp) && is_builtin_attribute oexp attr then
-                       let rese = mk_py_object (find_builtin_attribute oexp attr) range in
-                       Eval.singleton rese flow
-                     else
-                       Eval.empty_singleton flow
                    )
                  man flow
            )

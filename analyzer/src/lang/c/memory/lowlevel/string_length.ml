@@ -626,8 +626,7 @@ struct
     (* 𝕊⟦ !*(p + i) ⟧ *)
     | S_assume({ ekind = E_unop(O_log_not,lval)})
       when is_c_int_type lval.etyp &&
-           is_deref_expr lval &&
-           not (is_expr_quantified lval)
+           is_deref_expr lval
       ->
       assume_zero O_eq lval stmt.srange man flow |>
       Option.return

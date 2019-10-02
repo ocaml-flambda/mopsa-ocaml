@@ -386,7 +386,8 @@ struct
       raise_c_alarm AOutOfBound range ~bottom:false man.lattice flow |>
       Eval.singleton (mk_top t range)
 
-    | Some (base,offset) ->
+    | Some (base,offset) when not (is_expr_quantified offset) ->
+      debug "eval non quantified %a" pp_expr offset;
       eval_base_size base range man flow >>$ fun size flow ->
       man.eval ~zone:(Z_c_scalar,Z_u_num) size flow >>$ fun size flow ->
       man.eval ~zone:(Z_c_scalar,Z_u_num) offset flow >>$ fun offset flow ->
@@ -405,6 +406,35 @@ struct
           )
         ~zone:Z_u_num man flow
 
+    | Some (base,offset) when is_expr_quantified offset ->
+      debug "eval quantified %a" pp_expr offset;
+      eval_base_size base range man flow >>$ fun size flow ->
+      man.eval ~zone:(Z_c_scalar,Z_u_num) size flow >>$ fun size flow ->
+      let min, max = Common.Quantified_offset.bound offset in
+      man.eval ~zone:(Z_c, Z_u_num) min flow >>$ fun min flow ->
+      man.eval ~zone:(Z_c, Z_u_num) max flow >>$ fun max flow ->
+      (* Safety condition: [min, max] ⊆ [0, size - ptr [ *)
+      assume
+      (
+        mk_binop
+          (mk_in min (mk_zero range) (sub size (mk_z ptr_size range) range) range)
+          O_log_and
+          (mk_in max (mk_zero range) (sub size (mk_z ptr_size range) range) range)
+          range
+      )
+      ~fthen:(fun flow ->
+          if is_interesting_base base then
+            let smash_weak = mk_smash_var base ~primed range |> weaken in
+            Eval.singleton smash_weak flow
+          else
+            Eval.singleton (mk_top t range) flow
+        )
+      ~felse:(fun flow ->
+          raise_c_alarm AOutOfBound range ~bottom:false man.lattice flow |>
+          Eval.empty_singleton
+        ) ~zone:Z_u_num man flow
+
+    | _ -> assert false
 
 
 
@@ -413,16 +443,14 @@ struct
     match ekind exp with
     | E_c_deref p
       when is_c_pointer_type exp.etyp &&
-           under_type p.etyp |> void_to_char |> is_c_scalar_type &&
-           not (is_expr_quantified p)
+           under_type p.etyp |> void_to_char |> is_c_scalar_type
       ->
       eval_deref exp false exp.erange man flow |>
       Option.return
 
     | E_stub_primed ({ ekind = E_c_deref p } as e)
       when is_c_pointer_type exp.etyp &&
-           under_type p.etyp |> void_to_char |> is_c_scalar_type &&
-           not (is_expr_quantified e)
+           under_type p.etyp |> void_to_char |> is_c_scalar_type
       ->
       eval_deref e true exp.erange man flow |>
       Option.return
