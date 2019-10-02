@@ -103,33 +103,34 @@ let map_sub_env (tk:token) (f:'s -> 's) (man:('a,'t,'s) man) (flow:'a flow) : 'a
 let assume
     cond ?(zone=any_zone)
     ~fthen ~felse
-    ?(fnone=(fun flow -> Result.empty flow))
     man flow
   =
   let then_post = man.post ~zone (mk_assume cond cond.erange) flow in
   let flow = Flow.set_ctx (Post.get_ctx then_post) flow in
   let else_post = man.post ~zone (mk_assume (mk_not cond cond.erange) cond.erange) flow in
 
-  then_post >>= fun _ then_flow ->
-  else_post >>= fun _ else_flow ->
+  let then_res = then_post >>$? fun () then_flow ->
+    if man.lattice.is_bottom (Flow.get T_cur man.lattice then_flow)
+    then None
+    else Some (fthen then_flow)
+  in
 
-  match man.lattice.is_bottom (Flow.get T_cur man.lattice then_flow),
-        man.lattice.is_bottom (Flow.get T_cur man.lattice else_flow)
-  with
-  | false, true -> fthen then_flow
-  | true, false -> felse else_flow
-  | true, true -> fnone (Flow.join man.lattice then_flow else_flow)
-  | false, false ->
-    let then_res = fthen then_flow in
-    let else_flow' = Flow.set_ctx (Result.get_ctx then_res) else_flow in
-    let else_res = felse else_flow' in
-    Result.join then_res else_res
+  let else_res = else_post >>$? fun () else_flow ->
+    if man.lattice.is_bottom (Flow.get T_cur man.lattice else_flow)
+    then None
+    else Some (felse else_flow)
+  in
+
+  match then_res, else_res with
+  | Some r, None -> r
+  | None, Some r -> r
+  | Some r1, Some r2 -> Result.join r1 r2
+  | None, None -> Result.empty flow
 
 
 let assume_flow
     ?(zone=any_zone) cond
     ~fthen ~felse
-    ?(fnone=(fun flow -> flow))
     man flow
   =
   let then_flow = man.exec ~zone (mk_assume cond cond.erange) flow in
@@ -141,7 +142,7 @@ let assume_flow
   with
   | false, true -> fthen then_flow
   | true, false -> felse else_flow
-  | true, true -> fnone (Flow.join man.lattice then_flow else_flow)
+  | true, true -> flow
   | false, false ->
     let then_res = fthen then_flow in
     let else_flow' = Flow.copy_ctx then_res else_flow in
