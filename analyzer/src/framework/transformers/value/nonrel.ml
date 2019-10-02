@@ -90,7 +90,8 @@ struct
     let patch stmt a acc =
       match skind stmt with
       | S_forget { ekind = E_var (var, _) }
-      | S_add { ekind = E_var (var, _) } ->
+      | S_add { ekind = E_var (var, _) }
+      | S_assign({ ekind = E_var (var, _)}, _) ->
         add var Value.top acc
 
       | S_rename ( {ekind = E_var (var1, _)}, {ekind = E_var (var2, _)} ) ->
@@ -101,23 +102,13 @@ struct
       | S_remove { ekind = E_var (var, _) } ->
         remove var acc
 
-      | S_assign({ ekind = E_var (var, _)}, _) ->
-        let v = find var a in
-        add var v acc
-
-      | S_assume e ->
-        let vars = expr_vars e in
-        vars |> List.fold_left (fun acc var ->
-            let v = find var a in
-            add var v acc
-          ) acc
+      | S_assume e -> acc
 
       | _ -> Exceptions.panic ~loc:__LOC__ "merge: unsupported statement %a" pp_stmt stmt
     in
     let a2' = List.fold_left (fun acc stmt -> patch stmt a1 acc) a2 log1 in
-    let a1' = List.fold_left (fun acc stmt -> patch stmt a2' acc) a1 log2 in
+    let a1' = List.fold_left (fun acc stmt -> patch stmt a2 acc) a1 log2 in
     meet a1' a2'
-
 
   let print fmt a =
     Format.fprintf fmt "%s:@,@[   %a@]@\n" Value.display VarMap.print a
