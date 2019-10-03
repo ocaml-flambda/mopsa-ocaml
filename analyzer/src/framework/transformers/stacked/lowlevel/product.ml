@@ -29,7 +29,7 @@ open Ast.All
 open Core.All
 open Sig.Stacked.Lowlevel
 open Common.Stack_list
-module R = Sig.Stacked.Reduction
+open Sig.Stacked.Reduction
 open Log
 
 
@@ -40,7 +40,8 @@ module type SPEC =
 sig
   type t
   val pool : t stack_list
-  val erules : (module R.EREDUCTION) list
+  val erules : (module EVAL_REDUCTION) list
+  val srules : (module EXEC_REDUCTION) list
 end
 
 
@@ -168,7 +169,7 @@ struct
   (** ********************* *)
 
   (** Merge the conflicts of two flows using logs *)
-  let merge_flows man pre (flow1,log1) (flow2,log2) =
+  let merge_flows (man: _ man) pre (flow1,log1) (flow2,log2) =
     let ctx = Context.get_most_recent (Flow.get_ctx flow1) (Flow.get_ctx flow2) |>
               Context.get_unit
     in
@@ -259,6 +260,73 @@ struct
   (** {2 Abstract transformer} *)
   (** ************************ *)
 
+  (** Manager used by reductions *)
+  let rman (man:('a,t,'s) man) : ('a,'s) rman = {
+    lattice = man.lattice;
+    post = man.post;
+    get_eval = (
+      let f : type t. t id -> prod_eval -> expr option =
+        fun id evals ->
+          let rec aux : type t tt. t id -> tt stack_list -> prod_eval -> expr option =
+            fun id l el ->
+              match l, el with
+              | Nil, [] -> None
+              | Cons(hd,tl), (hde::tle) ->
+                begin
+                  let module D = (val hd) in
+                  match equal_id D.id id with
+                  | Some Eq -> (match hde with None -> None | Some x -> x)
+                  | None -> aux id tl tle
+                end
+              | _ -> assert false
+          in
+          aux id Spec.pool evals
+      in
+      f
+    );
+
+    del_eval = (
+      let f : type t. t id -> prod_eval -> prod_eval =
+        fun id evals ->
+          let rec aux : type t tt. t id -> tt stack_list -> prod_eval -> prod_eval =
+            fun id l el ->
+              match l, el with
+              | Nil, [] -> raise Not_found
+              | Cons(hd,tl), (hde::tle) ->
+                begin
+                  let module D = (val hd) in
+                  match equal_id D.id id with
+                  | Some Eq -> None :: tle
+                  | None -> hde :: aux id tl tle
+                end
+              | _ -> assert false
+          in
+          aux id Spec.pool evals
+      in
+      f
+    );
+
+    get_man = (
+      let f : type t. t id -> ('a,t,'s) man =
+        fun id ->
+          let rec aux : type t tt. t id -> tt stack_list -> ('a,tt,'s) man -> ('a,t,'s) man =
+            fun id l man ->
+              match l with
+              | Nil -> raise Not_found
+              | Cons(hd,tl) ->
+                let module D = (val hd) in
+                match equal_id D.id id with
+                | Some Eq -> (hdman man)
+                | None -> aux id tl (tlman man)
+          in
+          aux id Spec.pool man
+      in
+      f
+    );
+
+  }
+
+
   (** Return a coverage bit mask indicating which domains provide an
      [exec] transfer function for [zone]
   *)
@@ -301,6 +369,15 @@ struct
     Result.return rr flow
 
 
+  (** Apply reduction rules on a post-conditions *)
+  let reduce_post stmt man pre post =
+    let rman = rman man in
+    List.fold_left (fun pointwise rule ->
+        let module R = (val rule : EXEC_REDUCTION) in
+        Post.bind (R.reduce stmt rman pre) post
+      ) post Spec.srules
+
+
   (** Entry point of abstract transformers *)
   let exec zone =
     let coverage = get_exec_coverage zone in
@@ -309,7 +386,8 @@ struct
        Option.lift @@ fun pointwise ->
        merge_inter_conflicts man flow pointwise |>
        simplify_pointwise_post |>
-       merge_intra_conflicts man flow
+       merge_intra_conflicts man flow |>
+       reduce_post stmt man flow
     )
 
 
@@ -350,81 +428,14 @@ struct
     else None
 
 
-  (** Manager used by evaluation reductions *)
-  let eman (man:('a,t,'s) man) : ('a,'s) R.eman = R.{
-      lattice = man.lattice;
-      post = man.post;
-      get_eval = (
-        let f : type t. t id -> prod_eval -> expr option =
-          fun id evals ->
-            let rec aux : type t tt. t id -> tt stack_list -> prod_eval -> expr option =
-              fun id l el ->
-                match l, el with
-                | Nil, [] -> None
-                | Cons(hd,tl), (hde::tle) ->
-                  begin
-                    let module D = (val hd) in
-                    match equal_id D.id id with
-                    | Some Eq -> (match hde with None -> None | Some x -> x)
-                    | None -> aux id tl tle
-                  end
-                | _ -> assert false
-            in
-            aux id Spec.pool evals
-        in
-        f
-      );
-
-      del_eval = (
-        let f : type t. t id -> prod_eval -> prod_eval =
-          fun id evals ->
-            let rec aux : type t tt. t id -> tt stack_list -> prod_eval -> prod_eval =
-              fun id l el ->
-                match l, el with
-                | Nil, [] -> raise Not_found
-                | Cons(hd,tl), (hde::tle) ->
-                  begin
-                    let module D = (val hd) in
-                    match equal_id D.id id with
-                    | Some Eq -> None :: tle
-                    | None -> hde :: aux id tl tle
-                  end
-                | _ -> assert false
-            in
-            aux id Spec.pool evals
-        in
-        f
-      );
-
-      get_man = (
-        let f : type t. t id -> ('a,t,'s) man =
-          fun id ->
-            let rec aux : type t tt. t id -> tt stack_list -> ('a,tt,'s) man -> ('a,t,'s) man =
-              fun id l man ->
-                match l with
-                | Nil -> raise Not_found
-                | Cons(hd,tl) ->
-                  let module D = (val hd) in
-                  match equal_id D.id id with
-                  | Some Eq -> (hdman man)
-                  | None -> aux id tl (tlman man)
-            in
-            aux id Spec.pool man
-        in
-        f
-      );
-
-  }
-
-
   (** Apply reduction rules on a pointwise evaluation *)
   let reduce_pointwise_eval exp man (pointwise:('a,expr option option list) result) : 'a eval =
-    let eman = eman man in
+    let rman = rman man in
     (* Let reduction rules roll out imprecise evaluations from [pointwise] *)
     let pointwise = List.fold_left (fun pointwise rule ->
-        let module R = (val rule : R.EREDUCTION) in
+        let module R = (val rule : EVAL_REDUCTION) in
         pointwise |> Result.bind_some @@ fun el flow ->
-        R.reduce exp eman el flow
+        R.reduce exp rman el flow
       ) pointwise Spec.erules
     in
     (* For performance reasons, we keep only one evaluation in each conjunction.
@@ -500,7 +511,8 @@ let rec type_stack_pool : (module STACK) list -> pool = function
 
 let make
     (stacks: (module STACK) list)
-    (erules: (module R.EREDUCTION) list)
+    (erules: (module EVAL_REDUCTION) list)
+    (srules: (module EXEC_REDUCTION) list)
   : (module STACK) =
 
   let P pool = type_stack_pool stacks in
@@ -511,6 +523,7 @@ let make
         type t = a
         let pool = pool
         let erules = erules
+        let srules = srules
       end)
     in
     (module S : STACK)

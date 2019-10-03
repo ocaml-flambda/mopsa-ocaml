@@ -284,7 +284,7 @@ and stack_product_lowlevel (l:config list) (rules:string list) : (module Sig.Sta
       with Not_found -> Exceptions.panic "reduction %s not found" name
     ) rules
   in
-  Transformers.Stacked.Lowlevel.Product.make ll rules
+  Transformers.Stacked.Lowlevel.Product.make ll rules []
 
 
 and stack_cast_lowlevel (config:config) : (module Sig.Stacked.Lowlevel.STACK) =
@@ -342,7 +342,7 @@ and stack_product_intermediate (l:config list) (rules:string list) : (module Sig
       with Not_found -> Exceptions.panic "reduction %s not found" name
     ) rules
   in
-  Transformers.Stacked.Intermediate.Product.make ll rules
+  Transformers.Stacked.Intermediate.Product.make ll rules []
 
 
 and stack_cast_intermediate (config:config) : (module Sig.Stacked.Intermediate.STACK) =

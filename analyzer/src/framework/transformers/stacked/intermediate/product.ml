@@ -28,7 +28,7 @@
 open Ast.All
 open Core.All
 open Sig.Stacked.Intermediate
-module R = Sig.Stacked.Reduction
+open Sig.Stacked.Reduction
 open Log
 
 
@@ -324,7 +324,8 @@ module type SPEC =
 sig
   type t
   val pool : t pool
-  val erules : (module R.EREDUCTION) list
+  val erules : (module EVAL_REDUCTION) list
+  val srules : (module EXEC_REDUCTION) list
 end
 
 
@@ -436,7 +437,7 @@ struct
   (** ********************* *)
 
   (** Merge the conflicts of two flows using logs *)
-  let merge_flows man pre (flow1,log1) (flow2,log2) =
+  let merge_flows (man: _ man) pre (flow1,log1) (flow2,log2) =
     let ctx = Context.get_most_recent (Flow.get_ctx flow1) (Flow.get_ctx flow2) |>
               Context.get_unit
     in
@@ -527,99 +528,9 @@ struct
   (** {2 Abstract transformer} *)
   (** ************************ *)
 
-  (** Return a coverage bit mask indicating which domains provide an
-     [exec] transfer function for [zone]
-  *)
-  let get_exec_coverage zone : bool list =
-    let f = fun (type a) (m:a stack) ->
-      let module S = (val m) in
-      Interface.sat_exec zone S.interface
-    in
-    map { f } Spec.pool
 
-
-  (* Apply [exec] transfer function pointwise over all domains *)
-  let exec_pointwise zone coverage stmt man flow : 'a post option list option =
-    let f = fun (type a) (m:a stack) covered (man:('a,a,'s) man) (acc,ctx) ->
-      let module S = (val m) in
-      if not covered then
-        None :: acc, ctx
-      else
-        let flow' = Flow.set_ctx ctx flow in
-        match S.exec zone stmt man flow' with
-        | None -> None :: acc, ctx
-        | Some post ->
-          let ctx' = Post.get_ctx post in
-          Some post :: acc, ctx'
-    in
-
-    let posts, ctx = man_fold_combined { f } Spec.pool coverage man ([], Flow.get_ctx flow) in
-    let posts = List.map (Option.lift (Post.set_ctx ctx)) posts |>
-                List.rev
-    in
-    if List.exists (function Some _ -> true | None -> false) posts
-    then Some posts
-    else None
-
-
-  (** Simplify a pointwise post-state by changing lists of unit into unit *)
-  let simplify_pointwise_post (pointwise:('a,unit option option list) result) : 'a post =
-    pointwise |> Result.bind @@ fun r flow ->
-    let rr = r |> Option.lift (fun rr -> ()) in
-    Result.return rr flow
-
-
-  (** Entry point of abstract transformers *)
-  let exec zone =
-    let coverage = get_exec_coverage zone in
-    (fun stmt man flow ->
-       exec_pointwise zone coverage stmt man flow |>
-       Option.lift @@ fun pointwise ->
-       merge_inter_conflicts man flow pointwise |>
-       simplify_pointwise_post |>
-       merge_intra_conflicts man flow
-    )
-
-
-  (** {2 Abstract evaluations} *)
-  (** ************************ *)
-
-  (* Compute the coverage bit mask of domains providing an [eval] for [zone] *)
-  let get_eval_coverage zone : bool list =
-    let f = fun (type a) (m:a stack) ->
-      let module S = (val m) in
-      Interface.sat_eval zone S.interface
-    in
-    map { f } Spec.pool
-
-
-  (** Compute pointwise evaluations over the pool of domains *)
-  let eval_pointwise zone coverage exp man flow : 'a eval option list option =
-    let f = fun (type a) (m:a stack) covered (man:('a,a,'s) man) (acc,ctx) ->
-      let module S = (val m) in
-      if not covered then
-        None :: acc, ctx
-      else
-        let flow' = Flow.set_ctx ctx flow in
-        match S.eval zone exp man flow' with
-        | None -> None :: acc, ctx
-        | Some evl ->
-          let evl = Eval.remove_duplicates man.lattice evl in
-          let ctx' = Eval.get_ctx evl in
-          Some evl :: acc, ctx'
-    in
-
-    let pointwise, ctx = man_fold_combined { f } Spec.pool coverage man ([], Flow.get_ctx flow) in
-    let pointwise = List.map (Option.lift (Eval.set_ctx ctx)) pointwise |>
-                    List.rev
-    in
-    if List.exists (function Some _ -> true | None -> false) pointwise
-    then Some pointwise
-    else None
-
-
-  (** Manager used by evaluation reductions *)
-  let eman (man:('a,t,'s) man) : ('a,'s) R.eman = R.{
+  (** Manager used by reductions *)
+  let rman (man:('a,t,'s) man) : ('a,'s) rman = {
       lattice = man.lattice;
       post = man.post;
       get_eval = (
@@ -685,14 +596,116 @@ struct
   }
 
 
+  (** Return a coverage bit mask indicating which domains provide an
+     [exec] transfer function for [zone]
+  *)
+  let get_exec_coverage zone : bool list =
+    let f = fun (type a) (m:a stack) ->
+      let module S = (val m) in
+      Interface.sat_exec zone S.interface
+    in
+    map { f } Spec.pool
+
+
+  (* Apply [exec] transfer function pointwise over all domains *)
+  let exec_pointwise zone coverage stmt man flow : 'a post option list option =
+    let f = fun (type a) (m:a stack) covered (man:('a,a,'s) man) (acc,ctx) ->
+      let module S = (val m) in
+      if not covered then
+        None :: acc, ctx
+      else
+        let flow' = Flow.set_ctx ctx flow in
+        match S.exec zone stmt man flow' with
+        | None -> None :: acc, ctx
+        | Some post ->
+          let ctx' = Post.get_ctx post in
+          Some post :: acc, ctx'
+    in
+
+    let posts, ctx = man_fold_combined { f } Spec.pool coverage man ([], Flow.get_ctx flow) in
+    let posts = List.map (Option.lift (Post.set_ctx ctx)) posts |>
+                List.rev
+    in
+    if List.exists (function Some _ -> true | None -> false) posts
+    then Some posts
+    else None
+
+
+  (** Simplify a pointwise post-state by changing lists of unit into unit *)
+  let simplify_pointwise_post (pointwise:('a,unit option option list) result) : 'a post =
+    pointwise |> Result.bind @@ fun r flow ->
+    let rr = r |> Option.lift (fun rr -> ()) in
+    Result.return rr flow
+
+
+
+  (** Apply reduction rules on a post-conditions *)
+  let reduce_post stmt man pre post =
+    let rman = rman man in
+    List.fold_left (fun pointwise rule ->
+        let module R = (val rule : EXEC_REDUCTION) in
+        Post.bind (R.reduce stmt rman pre) post
+      ) post Spec.srules
+
+
+  (** Entry point of abstract transformers *)
+  let exec zone =
+    let coverage = get_exec_coverage zone in
+    (fun stmt man flow ->
+       exec_pointwise zone coverage stmt man flow |>
+       Option.lift @@ fun pointwise ->
+       merge_inter_conflicts man flow pointwise |>
+       simplify_pointwise_post |>
+       merge_intra_conflicts man flow |>
+       reduce_post stmt man flow
+    )
+
+
+  (** {2 Abstract evaluations} *)
+  (** ************************ *)
+
+  (* Compute the coverage bit mask of domains providing an [eval] for [zone] *)
+  let get_eval_coverage zone : bool list =
+    let f = fun (type a) (m:a stack) ->
+      let module S = (val m) in
+      Interface.sat_eval zone S.interface
+    in
+    map { f } Spec.pool
+
+
+  (** Compute pointwise evaluations over the pool of domains *)
+  let eval_pointwise zone coverage exp man flow : 'a eval option list option =
+    let f = fun (type a) (m:a stack) covered (man:('a,a,'s) man) (acc,ctx) ->
+      let module S = (val m) in
+      if not covered then
+        None :: acc, ctx
+      else
+        let flow' = Flow.set_ctx ctx flow in
+        match S.eval zone exp man flow' with
+        | None -> None :: acc, ctx
+        | Some evl ->
+          let evl = Eval.remove_duplicates man.lattice evl in
+          let ctx' = Eval.get_ctx evl in
+          Some evl :: acc, ctx'
+    in
+
+    let pointwise, ctx = man_fold_combined { f } Spec.pool coverage man ([], Flow.get_ctx flow) in
+    let pointwise = List.map (Option.lift (Eval.set_ctx ctx)) pointwise |>
+                    List.rev
+    in
+    if List.exists (function Some _ -> true | None -> false) pointwise
+    then Some pointwise
+    else None
+
+
   (** Apply reduction rules on a pointwise evaluation *)
   let reduce_pointwise_eval exp man (pointwise:('a,expr option option list) result) : 'a eval =
-    let eman = eman man in
+    let rman = rman man in
     (* Let reduction rules roll out imprecise evaluations from [pointwise] *)
     let pointwise = List.fold_left (fun pointwise rule ->
-        let module R = (val rule : R.EREDUCTION) in
+        let module R = (val rule : EVAL_REDUCTION) in
         pointwise |> Result.bind_some @@ fun el flow ->
-        R.reduce exp eman el flow
+        R.reduce exp rman el flow
       ) pointwise Spec.erules
     in
     (* For performance reasons, we keep only one evaluation in each conjunction.
@@ -768,7 +781,8 @@ let rec type_stack_pool : (module STACK) list -> spool = function
 
 let make
     (stacks: (module STACK) list)
-    (erules: (module R.EREDUCTION) list)
+    (erules: (module EVAL_REDUCTION) list)
+    (srules: (module EXEC_REDUCTION) list)
   : (module STACK) =
 
   let S pool = type_stack_pool stacks in
@@ -779,6 +793,7 @@ let make
         type t = a
         let pool = pool
         let erules = erules
+        let srules = srules
       end)
     in
     (module S : STACK)
