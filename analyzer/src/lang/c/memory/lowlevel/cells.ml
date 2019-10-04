@@ -955,7 +955,7 @@ struct
       eval_deref_quantified p exp.erange man flow |>
       Option.return
 
-    | E_stub_primed e when is_lval_offset_quantified exp -> 
+    | E_stub_primed e when is_lval_offset_quantified e -> 
       eval_deref_quantified (mk_c_address_of e exp.erange) exp.erange man flow |>
       Option.return
 
