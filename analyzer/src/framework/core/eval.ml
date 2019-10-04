@@ -51,11 +51,11 @@ let meet (evl1:'a eval) (evl2:'a eval) : 'a eval =
   Result.meet evl1 evl2
 
 
-let join_list ~(empty:'a eval) (l:'a eval list) : 'a eval =
+let join_list ~(empty:unit -> 'a eval) (l:'a eval list) : 'a eval =
   Result.join_list ~empty l
 
 
-let meet_list ~(empty:'a eval) (l:'a eval list) : 'a eval =
+let meet_list ~(empty:unit -> 'a eval) (l:'a eval list) : 'a eval =
   Result.join_list ~empty l
 
 

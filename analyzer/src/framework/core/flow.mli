@@ -147,3 +147,6 @@ val set_callstack : cs -> 'a flow -> 'a flow
 val push_callstack : string -> Location.range -> 'a flow -> 'a flow
 
 val pop_callstack : 'a flow -> Callstack.call * 'a flow
+
+val bottom_from : 'a flow -> 'a flow
+(** Empty set of flows *)

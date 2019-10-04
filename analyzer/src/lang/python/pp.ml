@@ -80,6 +80,7 @@ let () =
     );
   register_expr_pp (fun default fmt exp ->
       match ekind exp with
+      | E_py_annot e -> fprintf fmt "(annot) %a" pp_expr e
       | E_py_undefined true -> fprintf fmt "global undef"
       | E_py_undefined false -> fprintf fmt "local undef"
       | E_py_object obj -> pp_py_object fmt obj
@@ -191,6 +192,8 @@ let () =
       | E_py_bytes(s) ->
         fprintf fmt "b\"%s\"" s
 
+      | E_py_check_annot (e1, e2) -> fprintf fmt "check_annot(%a, %a)" pp_expr e1 pp_expr e2
+
       | _ -> default fmt exp
     );
 
@@ -246,6 +249,11 @@ let () =
           pp_expr x
           pp_operator op
           pp_expr e
+
+      | S_py_annot(x, typ) ->
+        fprintf fmt "%a: %a"
+          pp_expr x
+          pp_expr typ
 
       | S_py_for(target, iter, body, orelse) ->
         fprintf fmt "for %a in %a:@\n@[<h 2>  %a@]@\nelse:@\n@[<h 2>  %a@]"

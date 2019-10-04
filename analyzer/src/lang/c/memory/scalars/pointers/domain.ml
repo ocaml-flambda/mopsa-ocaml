@@ -281,7 +281,7 @@ struct
           Eval.singleton (mk_c_points_to pt exp.erange) flow :: acc
         ) values offset' []
       in
-      Eval.join_list evals ~empty:(Eval.empty_singleton flow)
+      Eval.join_list evals ~empty:(fun () -> Eval.empty_singleton flow)
 
     | Fun f ->
       Eval.singleton (mk_c_points_to_fun f exp.erange) flow
@@ -299,7 +299,7 @@ struct
         Eval.singleton (mk_c_points_to_invalid exp.erange) flow
       ]
       in
-      Eval.join_list ~empty:(Eval.empty_singleton flow) el
+      Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) el
 
 
 
@@ -369,7 +369,7 @@ struct
         [Eval.singleton (mk_one range) flow]
 
     in
-    Eval.join_list (case1 @ case2) ~empty:(Eval.empty_singleton flow)
+    Eval.join_list (case1 @ case2) ~empty:(fun () -> Eval.empty_singleton flow)
 
 
   (** 𝔼⟦ p op q | op ∈ {<, <=, >, >=} ⟧ *)
@@ -407,7 +407,7 @@ struct
         [Eval.empty_singleton flow]
     in
 
-    Eval.join_list (case1 @ case2) ~empty:(Eval.empty_singleton flow)
+    Eval.join_list (case1 @ case2) ~empty:(fun () -> Eval.empty_singleton flow)
 
 
   (** 𝔼⟦ p - q ⟧ *)
@@ -468,7 +468,7 @@ struct
         [Eval.empty_singleton flow]
     in
 
-    Eval.join_list (case1 @ case2) ~empty:(Eval.empty_singleton flow)
+    Eval.join_list (case1 @ case2) ~empty:(fun () -> Eval.empty_singleton flow)
 
 
 

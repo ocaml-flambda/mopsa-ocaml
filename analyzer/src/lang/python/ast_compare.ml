@@ -39,6 +39,7 @@ let () =
       | _ -> default c1 c2);
   register_expr_compare (fun default e1 e2 ->
       match ekind e1, ekind e2 with
+      | E_py_annot e1, E_py_annot e2 -> compare_expr e1 e2
       | E_py_undefined b1, E_py_undefined b2 -> Pervasives.compare b1 b2
       | E_py_object (a1, oe1), E_py_object (a2, oe2) ->
         Compare.compose
@@ -100,6 +101,13 @@ let () =
 
       | E_py_lambda _, E_py_lambda _
       | E_py_multi_compare _, E_py_multi_compare _ -> Exceptions.panic "compare py"
+
+      | E_py_check_annot (e11, e12), E_py_check_annot (e21, e22) ->
+        Compare.compose
+          [ (fun () -> compare_expr e11 e12);
+            (fun () -> compare_expr e12 e22);
+          ]
+
 
       | _ -> default e1 e2
     );
@@ -168,6 +176,12 @@ let () =
           [ (fun () -> compare_expr l1 l2);
             (fun () -> compare_operator o1 o2);
             (fun () -> compare_expr r1 r2); ]
+
+      | S_py_annot (v1, ty1), S_py_annot (v2, ty2) ->
+        Compare.compose
+          [ (fun () -> compare_expr v1 v2);
+            (fun () -> compare_expr ty1 ty2);
+          ]
 
       | S_py_for (t1, i1, b1, e1), S_py_for (t2, i2, b2, e2) ->
         Compare.compose

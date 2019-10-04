@@ -93,7 +93,10 @@ let mk_return_var call =
   mkv uniq_name (V_return call) call.etyp
 
 
-(* Context to keep return variable *)
+
+(** {2 Context to keep return variable} *)
+(** =================================== *)
+
 let return_key =
   let module K = Context.GenUnitKey(
     struct

@@ -49,6 +49,10 @@ module Domain =
     let eval zs exp man flow =
       let range = erange exp in
       match ekind exp with
+      | E_constant (C_top (T_float _))
+      | E_constant (C_float _) ->
+        Eval.singleton (mk_py_object (Addr_env.addr_float (), None) range) flow |> Option.return
+
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "float.__new__")}, _)}, [cls], []) ->
          (* FIXME?*)
          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top (T_float F_DOUBLE) range) flow |> Option.return
@@ -72,7 +76,8 @@ module Domain =
                          ~fthen:(fun flow ->
                            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top (T_float F_DOUBLE) range) flow)
                          ~felse:(fun flow ->
-                           man.exec (Utils.mk_builtin_raise "TypeError" range) flow |>
+                             Format.fprintf Format.str_formatter "float() argument must be a string or a number, not '%a'" pp_expr el;
+                           man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |>
                              Eval.empty_singleton)
                          man flow)
                      man flow
@@ -106,8 +111,8 @@ module Domain =
                           ~fthen:(fun flow ->
                               (* Exceptions.panic_at range "eurk %a@\n" man.pri(Flow.print man.lattice) flow; *)
                               let res = man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_bool range) flow in
-                              let overflow = man.exec (Utils.mk_builtin_raise "OverflowError" range) flow |> Eval.empty_singleton in
-                              Eval.join_list (Eval.copy_ctx overflow res :: overflow :: []) ~empty:(Eval.empty_singleton flow)
+                              let overflow = man.exec (Utils.mk_builtin_raise_msg "OverflowError" "int too large to convert to float" range) flow |> Eval.empty_singleton in
+                              Eval.join_list (Eval.copy_ctx overflow res :: overflow :: []) ~empty:(fun () -> Eval.empty_singleton flow)
                             )
                           ~felse:(fun flow ->
                               debug "compare: %a at %a@\n" pp_expr exp pp_range exp.erange;
@@ -117,7 +122,8 @@ module Domain =
                     (* ) *)
                 )
               ~felse:(fun flow ->
-                  man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton)
+                  Format.fprintf Format.str_formatter "descriptor '%s' requires a 'float' object but received '%a'" f pp_expr e1;
+                  man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |> Eval.empty_singleton)
           )
         |>  Option.return
 
@@ -144,8 +150,9 @@ module Domain =
                      man true_flow
                  )
                  ~felse:(fun false_flow ->
-                   let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow in
-                   Eval.empty_singleton flow)
+                     Format.fprintf Format.str_formatter "descriptor '%s' requires a 'float' object but received '%a'" f pp_expr e1;
+                     let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) false_flow in
+                     Eval.empty_singleton flow)
                  man flow
              )
          |>  Option.return
@@ -166,8 +173,8 @@ module Domain =
          |> Option.return
 
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "float.__hash__")}, _)}, args, []) ->
-        Utils.check_instances man flow range args ["float"] (fun _ -> man.eval (mk_py_top T_int range))
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("float.__hash__" as f))}, _)}, args, []) ->
+        Utils.check_instances f man flow range args ["float"] (fun _ -> man.eval (mk_py_top T_int range))
         |> Option.return
 
       | _ -> None

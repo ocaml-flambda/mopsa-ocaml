@@ -481,7 +481,8 @@ class super(object): pass
 ##  Exceptions  ##
 ##################
 
-class BaseException(object): pass
+class BaseException(object):
+    def __init__(self, arg): pass
 class SystemExit(BaseException): pass
 class KeyboardInterrupt(BaseException): pass
 class GeneratorExit(BaseException): pass

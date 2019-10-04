@@ -25,10 +25,13 @@
             "python.libs.mopsa",
             "python.libs.stdlib",
             "python.libs.math",
+            "python.libs.unittest",
+            "python.libs.typing",
 
             "python.objects.class",
             "python.objects.function",
             "python.objects.range",
+            "python.objects.object",
 
             "python.data_model.attribute",
             "python.data_model.subscript",
@@ -43,19 +46,20 @@
             "python.types.t_complex",
 
             {
-                "apply":
-                { "compose":
-                  [
-                      "universal.heap.recency.all",
-                      "python.types.typechecking"
-                  ]},
+                "apply": "universal.heap.recency.all",
                 "on":
                 { "seq":
                   [
+                      "python.types.addr_env",
+                      "python.types.nominal_types",
+                      "python.types.structural_types",
+                      "python.types.type_annot",
                       "python.objects.list",
                       "python.objects.tuple",
                       "python.objects.dict",
-                      "python.objects.set"
+                      "python.objects.set",
+                      "python.objects.iterable",
+                      "python.values.string"
                   ]
                 }
             }

@@ -125,14 +125,19 @@ module Domain =
                    debug "True flow, exp is %a@\n" pp_expr exp;
                    let true_flow =  man.exec (mk_block cleaners range) true_flow in
                    let cur = Flow.get T_cur man.lattice true_flow in
-                   let str = man.ask (Types.Typing.Q_exn_string_query exp) flow in
+                   debug "asking...@\ntrue_flow = %a" (Flow.print man.lattice.print) true_flow;
+                   let exc_str, exc_message = man.ask (Types.Structural_types.Q_exn_string_query exp) true_flow in
+                   debug "ok@\n";
                    let tk =
-                     if List.exists (fun x -> Pervasives.compare x str = 0) !opt_unprecise_exn then
+                     if List.exists (fun x ->
+                         Pervasives.compare x exc_str = 0) !opt_unprecise_exn then
                        let exp = Utils.strip_object exp in
-                       mk_py_unprecise_exception exp str
+                       mk_py_unprecise_exception exp exc_str (* we don't keep the message for unprecise exns *)
                      else
                        let cs = Flow.get_callstack true_flow in
-                       mk_py_exception exp str cs range
+                       mk_py_exception exp
+                         (if exc_message = "" then exc_str else (exc_str ^ ": " ^ exc_message))
+                         cs range
                    in
                    let flow' = Flow.add tk cur man.lattice true_flow |>
                                Flow.set T_cur man.lattice.bottom man.lattice
@@ -147,7 +152,7 @@ module Domain =
                          man.exec {stmt with skind = S_py_raise(Some (mk_py_call exp [] range))} true_flow
                          |> Post.return ~log)
                      ~felse:(fun false_flow ->
-                         man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow
+                         man.exec (Utils.mk_builtin_raise_msg "TypeError" "exceptions must derive from BaseException" range) false_flow
                          |> Post.return ~log)
                      false_flow
                  )
@@ -216,7 +221,7 @@ module Domain =
                             )
                           ~felse:(fun false_flow ->
                               (* else *)
-                              man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Post.return)
+                              man.exec (Utils.mk_builtin_raise_msg "TypeError" "catching classes that do not inherit from BaseException is not allowed" range) flow |> Post.return)
                       | _ -> assert false
                     )
                 in
