@@ -83,7 +83,11 @@ struct
                      Keys.Class (mk_addr_attr addr s T_any)
                    | _ -> assert false in
                  begin match TVMap.find_opt var acc with
-                   | None -> Keep (TVMap.add var set acc)
+                   | None ->
+                     (begin match var with
+                        | Keys.Class _ -> Keep acc
+                        | Keys.Global _ -> Keep (TVMap.add var set acc)
+                      end)
                    | Some set2 ->
                      if ESet.equal set set2 then Keep acc
                      else Exceptions.panic_at (erange expr) "conflict for typevar %s, sets %a and %a differ" s ESet.print set ESet.print set2
@@ -205,7 +209,7 @@ struct
                   Flow.join man.lattice (man.exec (mk_assume (mk_not e range) range) flow_in) flow_notin
               )  (flow, Flow.bottom_from flow) in_args in_types in
           let apply_sig flow signature =
-            debug "apply_sig %a" pp_py_func_sig signature;
+            debug "[%a] apply_sig %a" pp_var pyannot.py_funca_var pp_py_func_sig signature;
             let cur = get_env T_cur man flow in
             let new_typevars = collect_typevars (if is_method then Some (List.hd args) else None) signature in
             (* il faut enelver des trucs là, je veux pas enlever les variables de classe *)
@@ -334,6 +338,7 @@ struct
           end
 
         | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)} as e, i) when get_orig_vname c.py_cls_a_var = "Pattern" ->
+          debug "Pattern!";
           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call e [] range) flow
           |> Eval.bind (fun ee flow ->
               match ekind ee with
@@ -344,6 +349,28 @@ struct
               | _ -> assert false
             )
           |> Option.return
+
+        | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)} as e, i) when get_orig_vname c.py_cls_a_var <> "List" && get_orig_vname c.py_cls_a_var <> "Tuple" ->
+          begin match c.py_cls_a_abases with
+          | [] ->
+            man.eval (mk_py_call (mk_py_object (find_builtin "object.__new__") range) [e] range) flow
+
+          | abase :: _ ->
+            man.eval (mk_py_call (mk_py_object (find_builtin "object.__new__") range) [e] range) flow |>
+            Eval.bind (fun eobj flow ->
+                let addr = match ekind eobj with
+                  | E_py_object (a, _) -> a
+                  | _ -> assert false in
+                let tname = match ekind abase with
+                  | E_py_index_subscript ({ekind = E_var (v, _)}, {ekind = E_py_call ({ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)}, {ekind = E_constant (C_string s)}::_, [])}) when get_orig_vname v = "Generic" -> s
+                  | _ -> Exceptions.panic_at range "tname %a" pp_expr (List.hd c.py_cls_a_abases) in
+                let flow = set_env T_cur (TVMap.add (Class (mk_addr_attr addr tname T_any)) (ESet.singleton i) (get_env T_cur man flow)) man flow in
+                debug "after %a, cur = %a" pp_expr exp TVMap.print (get_env T_cur man flow);
+                (* man.exec (mk_stmt (S_py_annot (mk_var (mk_addr_attr addr tname T_any) range, mk_expr (E_py_annot i) range)) range) flow |> *)
+                Eval.singleton eobj flow
+              )
+          end
+            |> Option.return
 
         | E_py_index_subscript ({ekind = E_py_object _} as e1, e2) ->
           warn_at range "E_py_annot subscript e1=%a e2=%a now in the wild" pp_expr e1 pp_expr e2;
@@ -418,6 +445,8 @@ struct
             )
           |> Option.return
 
+        | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)} as pattern, i) when get_orig_vname c.py_cls_a_var = "Union" ->
+          failwith "ok"
 
         | E_py_index_subscript ({ekind = E_py_object _} as e1, e2) ->
           warn_at range "E_py_check_annot subscript e1=%a e2=%a now in the wild" pp_expr e1 pp_expr e2;
