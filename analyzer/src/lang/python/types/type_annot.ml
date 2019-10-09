@@ -379,7 +379,6 @@ struct
         | E_py_index_subscript (e1, e2) ->
           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e1 flow |>
           bind_some (fun e1 flow ->
-              warn_at range "trasnlated to e1=%a e2=%a" pp_expr e1 pp_expr e2;
               man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) {exp with ekind = E_py_annot {e with ekind = E_py_index_subscript(e1, e2)}} flow
             )
           |> Option.return
@@ -455,7 +454,6 @@ struct
         | E_py_index_subscript (e1, e2) ->
           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e1 flow |>
           bind_some (fun e1 flow ->
-              warn_at range "translated to e1=%a e2=%a" pp_expr e1 pp_expr e2;
               man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) ({exp with ekind = E_py_check_annot (e, {annot with ekind = E_py_index_subscript (e1, e2)})}) flow
             )
           |> Option.return
