@@ -42,6 +42,8 @@ module Domain =
       ieval = {provides = []; uses = []}
     }
 
+    exception Module_not_found of string
+
     let rec exec zone stmt man flow =
       let range = srange stmt in
       match skind stmt with
@@ -52,14 +54,22 @@ module Domain =
          panic_at range "import from sub-module %s not supported" modul
 
       | S_py_import(modul, vasname, vroot) ->
-         let obj, flow, _ = import_module man modul range flow in
-         let v = match vasname with
-           | None -> vroot
-           | Some v -> v
-         in
-         man.exec (mk_assign (mk_var v range) (mk_py_object obj range) range) flow |>
-         Post.return |>
-         Option.return
+        begin debug "stmt = %a" pp_stmt stmt;
+        try
+          let obj, flow, _ = import_module man modul range flow in
+          let v = match vasname with
+            | None -> vroot
+            | Some v -> v
+          in
+          man.exec (mk_assign (mk_var v range) (mk_py_object obj range) range) flow |>
+          Post.return |>
+          Option.return
+        with Module_not_found m ->
+          Format.fprintf Format.str_formatter "No module named '%s'" m;
+          man.exec
+            (Utils.mk_builtin_raise_msg "ModuleNotFoundError" (Format.flush_str_formatter ()) range)
+            flow |> Post.return |> Option.return
+        end
 
       | S_py_import_from(modul, name, _, vmodul) ->
         (* FIXME: objects defined in modul other than name should not appear *)
@@ -115,8 +125,8 @@ module Domain =
 
     (** Search for the module in the search path and parse its body *)
     and import_module man name range flow =
-      if is_builtin_name name
-      then find_builtin name, flow, false
+      if is_builtin_module name
+      then find_builtin_module name, flow, false
       else
         let (addr, expr), flow, is_stub =
           try
@@ -133,7 +143,9 @@ module Domain =
                 if Sys.file_exists tentative1 then tentative1
                 else if Sys.file_exists tentative2 then tentative2
                 else if Sys.file_exists tentative3 then tentative3
-                else panic_at range "module %s not found (searched in %s and in %s and in the current directory)" name dir (dir ^ "/typeshed/") in
+                else
+                  let () = warn_at range "module %s not found (searched in %s and in %s and in the current directory)" name dir (dir ^ "/typeshed/") in
+                  raise (Module_not_found name) in
               let (a, e), body, is_stub, flow =
                 if filename = dir ^ "/typeshed/" ^ name ^ ".pyi" then
                   let o, b, flow = import_stubs_module man (dir ^ "/typeshed") name flow in

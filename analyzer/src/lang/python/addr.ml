@@ -198,6 +198,9 @@ let is_builtin_name name =
   let exists = fun tbl -> Hashtbl.mem tbl name in
   exists classes || exists functions || exists modules || exists typed_functions
 
+let is_builtin_module name = Hashtbl.mem modules name
+let find_builtin_module name = Hashtbl.find modules name
+
 (** Check whether an attribute of a built-in object exists, given its name *)
 let is_builtin_attribute base attr =
   let name = object_name base in
