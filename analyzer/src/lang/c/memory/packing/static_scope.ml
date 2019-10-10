@@ -74,7 +74,7 @@ struct
   (** Packs of a base memory block *)
   let packs_of_base ?(only_scalars=true) ctx b =
     match b with
-    (* Special global variables *)
+    (* Special global variables for gettext functions *)
     | V { vkind = V_cvar {cvar_scope = Variable_global; cvar_orig_name} }
     | V { vkind = V_cvar {cvar_scope = Variable_file_static _; cvar_orig_name} } when cvar_orig_name = "_gettext_buf" ->
       [Locals "gettext"; Locals "dcgettext"]
@@ -102,6 +102,13 @@ struct
     | A { addr_kind = Stubs.Ast.A_stub_resource "argv" }
     | A { addr_kind = Stubs.Ast.A_stub_resource "arg" } ->
       [Locals "main"; Locals "getopt"; Locals "getopt_long"; Locals "getopt_long_only"]
+
+    (* optind variable *)
+    | V { vkind = V_cvar {cvar_scope = Variable_global; cvar_orig_name} }
+      when cvar_orig_name = "optind"
+      ->
+      [Locals "main"; Locals "getopt"; Locals "getopt_long"; Locals "getopt_long_only"]
+
 
     (* Formal parameters are part of the caller and the callee packs *)
     | V { vkind = V_cvar {cvar_scope = Variable_parameter f} } ->
