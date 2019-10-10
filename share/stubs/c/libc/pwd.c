@@ -22,13 +22,17 @@
 #include <sys/types.h>
 #include <pwd.h>
 
-#define NB_PASSWD_ENTRIES 10
-struct passwd _passwd_db[NB_PASSWD_ENTRIES];
+struct passwd _passwd_buf[1];
+
+/*$$$
+ * assigns: _passwd_buf[0,0];
+ * local: char *name = _mopsa_new_valid_string();
+ * ensures: (_passwd_buf->pw_name)' == name;
+ */
 
 /*$
  * case "success" {
- *   local: unsigned int i = _mopsa_range_u32(0, NB_PASSWD_ENTRIES - 1);
- *   ensures: return == &(_passwd_db[i]);
+ *   ensures: return == _passwd_buf;
  * }
  *
  * case "failure" {
