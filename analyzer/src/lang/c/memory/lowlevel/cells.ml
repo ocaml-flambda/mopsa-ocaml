@@ -574,7 +574,7 @@ struct
       Result.singleton Top
 
     | Some (base,offset) ->
-      let typ = under_pointer_type p.etyp |> void_to_char in
+      let typ = under_type p.etyp |> void_to_char in
       let elm = sizeof_type typ in
 
       (* Get the size of the base *)

@@ -961,7 +961,7 @@ struct
     | E_c_points_to (P_block _)
     | E_c_points_to P_valid ->
       raise_c_alarm Alarms.AOutOfBound p.erange ~bottom:false man.lattice flow |>
-      Eval.singleton (mk_top (under_pointer_type p.etyp |> void_to_char) range)
+      Eval.singleton (mk_top (under_type p.etyp |> void_to_char) range)
 
     | _ -> assert false
 
