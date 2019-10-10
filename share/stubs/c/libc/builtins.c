@@ -26,6 +26,6 @@
 
 
 /*$
- * requires: 1 == 0;
+ * ensures: 1 == 0;
  */
 void __builtin_unreachable(void);
