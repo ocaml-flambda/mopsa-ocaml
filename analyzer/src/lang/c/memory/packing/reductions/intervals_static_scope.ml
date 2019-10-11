@@ -98,16 +98,16 @@ struct
     let itv = man.get_value I.id var a in
     (** Get the interval of the variable in all packs *)
     let itv' = get_var_interval_in_packs var ctx man a in
-    if not (I.subset itv itv')
-    then
-      let () = debug "reducing the interval of %a from %a to %a"
+    if I.subset itv itv' then a
+    else
+      let itv'' = I.meet itv itv' in
+      let () = debug "reducing the interval of %a from (%a,%a) to %a"
           pp_var var
           I.print itv
           I.print itv'
+          I.print itv''
       in
-      man.set_value I.id var itv' a
-    else
-      a
+      man.set_value I.id var itv'' a
 
 
   (** Reduction after a test *)
