@@ -94,8 +94,13 @@ struct
   let widen (su1: t) (su2: t) : t =
     bot_neutral2 (fun (l1, u1) (l2, u2) -> Set.inter l1 l2, USet.widen u1 u2) su1 su2
 
-  let fold_u (f : Elt.t -> 'a -> 'a) (su: t) (init : 'a) : 'a =
-    bot_to_exn su |> (fun (l, u) -> USet.fold f u init)
+  let fold_u (f : Elt.t -> 'a -> 'a) (s : t) (init : 'a) : 'a =
+    bot_to_exn s |> (fun (_, u) -> USet.fold f u init)
+
+  let fold_o (f : Elt.t -> 'a -> 'a) (s : t) (init : 'a) : 'a =
+    bot_to_exn s |> (fun (l, _) -> Set.fold f l init)
+
+  let fold_uo f s init = fold_o f s (fold_u f s init)
 
   open Format
   let print fmt (su:t) =
