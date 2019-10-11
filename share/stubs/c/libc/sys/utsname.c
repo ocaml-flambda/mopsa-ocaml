@@ -19,35 +19,20 @@
 /*                                                                          */
 /****************************************************************************/
 
+
 /*
- * Entry point of the libc
+ * Stubs for sys/utsname.h
  */
 
-#include "errno.c"
-#include "assert.c"
-#include "stdio.c"
-#include "stdio_ext.c"
-#include "stdlib.c"
-#include "unistd.c"
-#include "string.c"
-#include "getopt.c"
-#include "locale.c"
-#include "libintl.c"
-#include "utmp.c"
-#include "utmpx.c"
-#include "signal.c"
-#include "error.c"
-#include "builtins.c"
-#include "sys/socket.c"
-#include "arpa/inet.c"
-#include "netinet/in.c"
-#include "fcntl.c"
-#include "inttypes.c"
-#include "langinfo.c"
-#include "time.c"
-#include "pwd.c"
-#include "sys/resource.c"
-#include "sys/utsname.c"
+#include <sys/utsname.h>
 
-/* TODO: include math library only when -lm is used */
-#include "math.c"
+/*$
+ * requires: __name != NULL;
+ * assigns: __name;
+ * ensures: valid_primed_substring(__name->sysname, _UTSNAME_SYSNAME_LENGTH);
+ * ensures: valid_primed_substring(__name->nodename, _UTSNAME_NODENAME_LENGTH);
+ * ensures: valid_primed_substring(__name->release, _UTSNAME_RELEASE_LENGTH);
+ * ensures: valid_primed_substring(__name->version, _UTSNAME_VERSION_LENGTH);
+ * ensures: valid_primed_substring(__name->machine, _UTSNAME_MACHINE_LENGTH);
+ */
+int uname(struct utsname *__name);
