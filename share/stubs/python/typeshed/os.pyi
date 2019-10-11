@@ -19,6 +19,34 @@
 #                                                                            #
 ##############################################################################
 
+from typing import Union, Optional, Dict
 import posixpath as path
 
-environ = {}
+environ : Dict[str, str]
+
+_PathType = path._PathType
+_FdOrPathType = Union[int, _PathType]
+
+
+class stat_result:
+    # For backward compatibility, the return value of stat() is also
+    # accessible as a tuple of at least 10 integers giving the most important
+    # (and portable) members of the stat structure, in the order st_mode,
+    # st_ino, st_dev, st_nlink, st_uid, st_gid, st_size, st_atime, st_mtime,
+    # st_ctime. More items may be added at the end by some implementations.
+
+    st_mode: int  # protection bits,
+    st_ino: int  # inode number,
+    st_dev: int  # device,
+    st_nlink: int  # number of hard links,
+    st_uid: int  # user id of owner,
+    st_gid: int  # group id of owner,
+    st_size: int  # size of file, in bytes,
+    st_atime: float  # time of most recent access,
+    st_mtime: float  # time of most recent content modification,
+    st_ctime: float  # platform dependent (time of most recent metadata change on Unix, or the time of creation on Windows)
+    st_atime_ns: int  # time of most recent access, in nanoseconds
+    st_mtime_ns: int  # time of most recent content modification in nanoseconds
+    st_ctime_ns: int  # platform dependent (time of most recent metadata change on Unix, or the time of creation on Windows) in nanoseconds
+
+def stat(path: _FdOrPathType, dir_fd: Optional[int] = ..., follow_symlinks: bool = ...) -> stat_result: ...

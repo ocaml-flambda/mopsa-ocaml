@@ -9,6 +9,7 @@ AnyStr = TypeVar('AnyStr', str, bytes)
 # class _SpecialForm:
 #     def __getitem__(self, typeargs: Any) -> Any: ...
 
+class Dict: pass
 class Tuple: pass
 class Callable: pass
 
@@ -18,8 +19,13 @@ class Iterator: pass
 class IO: pass
 class List: pass
 class Match: pass
-class Optional: pass
-class Pattern: pass
+class Optional(Generic[TypeVar('T')]): pass
+
+class Match(Generic[AnyStr]): pass
+class Pattern:
+    def search(self, string: AnyStr, pos: int = ..., endpos: int = ...) -> Optional[Match[AnyStr]]: ...
+
+
 # class Union: pass
 class Sequence: pass
 class Text: pass
