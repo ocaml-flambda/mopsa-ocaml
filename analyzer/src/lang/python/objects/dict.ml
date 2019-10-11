@@ -362,6 +362,27 @@ struct
         )
       |> Option.return
 
+    | E_py_annot {ekind = E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)}, i) } when get_orig_vname c.py_cls_a_var = "Dict" ->
+      let addr_dict = mk_alloc_addr (A_py_dict (Rangeset.singleton range, Rangeset.singleton range)) range in
+      let ty_key, ty_value = match ekind i with
+        | E_py_tuple (a::b::[]) -> a, b
+        | _ -> assert false in
+      man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_dict flow |>
+      Eval.bind (fun eaddr_dict flow ->
+          let addr_dict = addr_of_expr eaddr_dict in
+          let keys_var, values_var = var_of_addr addr_dict in
+          let stmts = mk_block (
+              List.map (fun (var, annot) ->
+                  mk_stmt (S_py_annot
+                             (mk_var ~mode:WEAK var range,
+                              mk_expr (E_py_annot annot) range)
+                          ) range
+                ) [(keys_var, ty_key); (values_var, ty_value)]) range in
+          man.exec ~zone:Zone.Z_py stmts flow |>
+          Eval.singleton (mk_py_object (addr_dict, None) range)
+        )
+      |> Option.return
+
     | _ -> None
 
 
