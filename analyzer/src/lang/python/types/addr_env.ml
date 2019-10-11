@@ -370,12 +370,14 @@ struct
       else if is_builtin_name @@ get_orig_vname v then
         (* let () = debug "bla %s %s %d" v.org_vname v.uniq_vname v.vuid in *)
         (* man.eval (mk_py_object (find_builtin v.org_vname) range) flow |> Option.return *)
+        let () = debug "is it a builtin?" in
         let obj = find_builtin @@ get_orig_vname v in
         Eval.singleton (mk_py_object obj range) flow |> Option.return
       else
         (* let () = warn_at range "NameError on %a that shouldn't happen. Todo: use partial envs and add_var %a" pp_var v (Flow.print man.lattice.print) flow in
          * let () = Format.fprintf Format.str_formatter "name '%s' is not defined" (get_orig_vname v) in
          * man.exec (Utils.mk_builtin_raise_msg "NameError" (Format.flush_str_formatter ()) range) flow |> *)
+        let () = debug "not a builtin..." in
         Eval.empty_singleton flow |>
         Option.return
 
@@ -430,7 +432,25 @@ struct
 
     | _ -> None
 
-  let ask _ _ _ = None
+  let ask : type r. r query -> ('a, t) man -> 'a flow -> r option =
+    fun query man flow ->
+      match query with
+      | Framework.Engines.Interactive.Q_print_var ->
+        Option.return @@
+        fun fmt var_as_string ->
+        let cur = get_env T_cur man flow in
+        let cur_v = AMap.filter (fun var _ -> get_orig_vname var = var_as_string) cur in
+        Format.fprintf fmt "%a" print cur_v;
+        AMap.fold (fun var aset () ->
+            ASet.fold (fun addr () ->
+                match addr with
+                | Def a ->
+                  Format.fprintf fmt "%a"
+                    (man.ask Structural_types.Q_print_addr_related_info flow) a
+                | _ -> ()
+              ) aset ()
+          ) cur_v ()
+      | _ -> None
 
   let refine channel man flow = Channel.return flow
 

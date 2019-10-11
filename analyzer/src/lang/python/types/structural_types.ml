@@ -46,6 +46,36 @@ let () = register_query {
                 | _ -> next.meet_query query a b in f)
   }
 
+type _ query += Q_print_addr_related_info : (Format.formatter -> addr -> unit) query
+
+let () =
+  register_query {
+    join = (
+      let doit : type r. query_pool -> r query -> r -> r -> r =
+        fun next query a b ->
+          match query with
+          | Q_print_addr_related_info ->
+            fun fmt var ->
+              Format.fprintf fmt "%a@,%a" a var b var
+          | _ -> next.join_query query a b
+      in
+      doit
+    );
+
+    meet = (
+      let doit : type r. query_pool -> r query -> r -> r -> r =
+        fun next query a b ->
+          match query with
+          | Q_print_addr_related_info ->
+            fun fmt var ->
+              Format.fprintf fmt "%a@,%a" a var b var
+          | _ -> next.meet_query query a b
+      in
+      doit
+    );
+  }
+
+
 module Domain =
 struct
 
@@ -321,6 +351,23 @@ struct
           name, message in
         let () = debug "answer to query is %s %s@\n" exc message in
         Some (exc, message)
+
+      | Q_print_addr_related_info ->
+        Option.return @@
+        fun fmt addr ->
+        let cur = get_env T_cur man flow in
+        let addrs = AMap.filter (fun a _ -> compare_addr a addr = 0) cur in
+        Format.fprintf fmt "%a" print addrs;
+        AMap.iter
+          (fun addr aset ->
+             AttrSet.fold_uo (fun attr () ->
+                 Format.fprintf fmt "%a"
+                   (man.ask Framework.Engines.Interactive.Q_print_var flow) (mk_addr_attr addr attr T_any).vname
+               ) aset ()
+          ) addrs
+
+
+
 
       | _ -> None
 
