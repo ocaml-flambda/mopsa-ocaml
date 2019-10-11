@@ -43,6 +43,7 @@ int optopt;
  *
  * ensures: return in [-1, 255];
  * ensures: optind' in [1, ___argc]; // Not sure?
+ * ensures: exists int i in [0, ___argc]: optarg' == ___argv[i];
  */
 int getopt (int ___argc, char *const *___argv, const char *__shortopts);
 
@@ -60,6 +61,7 @@ int getopt (int ___argc, char *const *___argv, const char *__shortopts);
  *
  * ensures: return in [-1, 255];
  * ensures: optind' in [1, ___argc]; // Not sure?
+ * ensures: exists int i in [0, ___argc]: optarg' == ___argv[i];
  */
 int getopt_long (int ___argc, char *const *___argv, const char *__shortopts,
                  const struct option *__longopts, int *__longind);
@@ -77,6 +79,7 @@ int getopt_long (int ___argc, char *const *___argv, const char *__shortopts,
  *
  * ensures: return in [-1, 255];
  * ensures: optind' in [1, ___argc]; // Not sure?
+ * ensures: exists int i in [0, ___argc]: optarg' == ___argv[i];
  */
 int getopt_long_only (int ___argc, char *const *___argv, const char *__shortopts,
                       const struct option *__longopts, int *__longind);
