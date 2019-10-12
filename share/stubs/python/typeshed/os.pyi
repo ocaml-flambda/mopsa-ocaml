@@ -23,6 +23,7 @@ from typing import Union, Optional, Dict
 import posixpath as path
 
 environ : Dict[str, str]
+sep: str
 
 _PathType = path._PathType
 _FdOrPathType = Union[int, _PathType]
