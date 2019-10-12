@@ -97,6 +97,7 @@ struct
       in
       let params, in_flow_cur = init_fun_params func args range man in_flow_cur in
       let in_flow_other = Flow.remove T_cur in_flow in
+      (* FIXME: join in_flow_other even if inline returns empty singleton. This means is done in sequential cache with a full Result.bind doing the join *)
       begin match find_signature man func.fun_name in_flow_cur with
         | None ->
           inline func params (Some func.fun_return_var) range man in_flow_cur |>
