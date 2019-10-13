@@ -22,7 +22,7 @@
 (**
   IntBound - Enriches arbitrary precision integers with +∞ and -∞.
 
-  Useful as array bounds.
+  Useful as interval bounds.
  *)
 
 
