@@ -110,6 +110,5 @@ let () =
       with
         e ->
         let t = Timing.stop t in
-        Output.Factory.panic ~btrace:(Printexc.get_backtrace()) e t files;
-        2
+        Output.Factory.panic ~btrace:(Printexc.get_backtrace()) e t files
     ) ()

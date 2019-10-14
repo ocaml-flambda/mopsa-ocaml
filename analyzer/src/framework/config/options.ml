@@ -223,6 +223,17 @@ let () =
   }
 
 
+(** Ignore alarms when returning a value to the shell *)
+let () =
+  register_builtin_option {
+    key = "-silent";
+    category = "Output";
+    doc = " do not return a non-zero value when detecting alarms";
+    spec = ArgExt.Set Output.Factory.opt_silent;
+    default = "unset";
+  }
+
+
 (** Output stream *)
 let () =
   register_builtin_option {

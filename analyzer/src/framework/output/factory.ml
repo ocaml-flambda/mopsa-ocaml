@@ -35,6 +35,7 @@ type format =
 let opt_format = ref F_text
 let opt_file = ref None
 let opt_display_lastflow = ref false
+let opt_silent = ref false
 
 (* Result rendering *)
 (* ---------------- *)
@@ -42,7 +43,7 @@ let opt_display_lastflow = ref false
 (* Print collected alarms in the desired output format *)
 let report man flow time files =
   let alarms = Core.Flow.get_alarms flow |> AlarmSet.elements in
-  let return_v = if alarms = [] then 0 else 1 in
+  let return_v = if !opt_silent || alarms = [] then 0 else 1 in
   let lf = if !opt_display_lastflow then Some flow else None in
   let _ = match !opt_format with
     | F_text -> Text.report ~flow:lf man alarms time files !opt_file
@@ -50,9 +51,11 @@ let report man flow time files =
   return_v
 
 let panic ?btrace exn time files =
-  match !opt_format with
-  | F_text -> Text.panic ?btrace exn files time !opt_file
-  | F_json -> Json.panic ?btrace exn files time !opt_file
+  let () = match !opt_format with
+    | F_text -> Text.panic ?btrace exn files time !opt_file
+    | F_json -> Json.panic ?btrace exn files time !opt_file
+  in
+  if !opt_silent then 0 else 2
 
 let help (args:ArgExt.arg list) =
   match !opt_format with
