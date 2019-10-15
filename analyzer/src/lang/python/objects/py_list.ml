@@ -191,6 +191,14 @@ struct
         )
       |> Option.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.__iadd__" as f))}, _)}, args, []) ->
+      (* let's rewrite list.__iadd__(s, t) into list.extend(s, t) && return s *)
+      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object (find_builtin "list.extend") range) args range) flow
+      |> Eval.bind (fun nonety flow ->
+          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (List.hd args) flow
+        )
+      |> Option.return
+
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.__setitem__" as f))}, _)}, args, []) ->
       Utils.check_instances ~arguments_after_check:2 f man flow range args
         ["list"]

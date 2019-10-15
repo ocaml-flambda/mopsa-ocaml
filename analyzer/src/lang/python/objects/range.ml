@@ -36,7 +36,7 @@ struct
 
   let interface = {
     iexec = {provides = []; uses = []};
-    ieval = {provides = [Zone.Z_py, Zone.Z_py; Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
+    ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
   }
 
   let allocate_builtin ?(mode=STRONG) man range flow bltin oe =

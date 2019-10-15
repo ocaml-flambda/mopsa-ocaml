@@ -249,19 +249,20 @@ type addr = {
 let akind addr = addr.addr_kind
 
 let pp_addr fmt a =
-  if a.addr_group = G_all then
+  if compare_addr_group a.addr_group G_all = 0 then
     fprintf fmt "@@%a:*:%s"
       pp_addr_kind a.addr_kind
       (match a.addr_mode with WEAK -> "w" | STRONG -> "s")
   else
-    fprintf fmt "@@%a:%xd:%s"
+    fprintf fmt "@@%a:%a:%s"
       pp_addr_kind a.addr_kind
-      (* Using Hashtbl.hash leads to collisions. Hashtbl.hash is
-         equivalent to Hashtbl.hash_param 10 100. By increasing the
-         number of meaningful nodes to encounter, collisions are less
-         likely to happen.
-      *)
-      (Hashtbl.hash_param 30 100 a.addr_group)
+      (* (\* Using Hashtbl.hash leads to collisions. Hashtbl.hash is
+       *    equivalent to Hashtbl.hash_param 10 100. By increasing the
+       *    number of meaningful nodes to encounter, collisions are less
+       *    likely to happen.
+       * *\)
+       * (Hashtbl.hash_param 30 100 a.addr_group) *)
+      pp_addr_group a.addr_group
       (match a.addr_mode with WEAK -> "w" | STRONG -> "s")
 
 

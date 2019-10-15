@@ -174,7 +174,24 @@ struct
         )
       |> Option.return
 
-
+    | E_py_annot {ekind = E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)}, i) } when get_orig_vname c.py_cls_a_var = "Tuple" ->
+      debug "TUPLE";
+      let i = match ekind i with
+        | E_py_tuple i -> i
+        | _ -> assert false in
+      let addr_tuple = mk_alloc_addr (A_py_tuple (List.map (fun _ -> Rangeset.singleton range) i)) range in
+      man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_tuple flow |>
+      Eval.bind (fun eaddr_tuple flow ->
+          let addr_tuple = addr_of_expr eaddr_tuple in
+          let els_var = var_of_addr addr_tuple in
+          let flow = List.fold_left2 (fun flow vari eli ->
+              man.exec ~zone:Zone.Z_py
+                (mk_stmt (S_py_annot (mk_var ~mode:STRONG vari range, eli)) range) flow
+            ) flow els_var i in
+          debug "TUPLE, flow = %a@\n" (Flow.print man.lattice.print) flow;
+          Eval.singleton (mk_py_object (addr_tuple, None) range) flow
+        )
+      |> Option.return
 
     | _ -> None
 

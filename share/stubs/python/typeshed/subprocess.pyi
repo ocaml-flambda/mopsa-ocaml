@@ -23,6 +23,13 @@ class Popen(Generic[AnyStr]):
                 stderr: Optional[_FILE] = ...,
                 shell: bool = ...,
                 universal_newlines: Literal[True]) -> Popen[str]: ...
+    def __init__(cls,
+                args: _CMD,
+                stdin: Optional[_FILE] = ...,
+                stdout: Optional[_FILE] = ...,
+                stderr: Optional[_FILE] = ...,
+                shell: bool = ...,
+                universal_newlines: Literal[True]) -> None: ...
     # @overload
     # def __new__(cls,
     #             args: _CMD,
