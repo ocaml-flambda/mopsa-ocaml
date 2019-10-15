@@ -373,10 +373,13 @@ struct
         let () = debug "is it a builtin?" in
         let obj = find_builtin @@ get_orig_vname v in
         Eval.singleton (mk_py_object obj range) flow |> Option.return
+      else if is_bottom cur then
+        Eval.empty_singleton flow |> Option.return
       else
         (* let () = warn_at range "NameError on %a that shouldn't happen. Todo: use partial envs and add_var %a" pp_var v (Flow.print man.lattice.print) flow in
          * let () = Format.fprintf Format.str_formatter "name '%s' is not defined" (get_orig_vname v) in
          * man.exec (Utils.mk_builtin_raise_msg "NameError" (Format.flush_str_formatter ()) range) flow |> *)
+        (* panic_at range "%a not a builtin, cur = %a" pp_var v print cur *)
         let () = debug "not a builtin..." in
         Eval.empty_singleton flow |>
         Option.return
