@@ -447,15 +447,23 @@ struct
   (** Default for tests *p ? 0 *)
   let assume_default_cases base offset range man flow =
     debug "assume_default_cases: base = %a, offset = %a" pp_base base pp_expr offset;
-    eval_base_size base range man flow >>$ fun size flow ->
-    (* Safety condition: offset ⊆ [0, size[ *)
-    assume
-      (mk_in offset (mk_zero range) size ~right_strict:true range)
-      ~fthen:(fun flow -> Post.return flow)
-      ~felse:(fun flow ->
-        raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow |>
-        Post.return
-      ) ~zone:Z_c_scalar man flow
+    (* Quantified offsets cannot be handled numerically, so we just raise a
+       non-deterministic out-of-bound alarm
+    *)
+    if is_expr_quantified offset
+    then
+      raise_c_alarm AOutOfBound range ~bottom:false man.lattice flow |>
+      Post.return
+    else
+      (* Safety condition: offset ⊆ [0, size[ *)
+      eval_base_size base range man flow >>$ fun size flow ->
+      assume
+        (mk_in offset (mk_zero range) size ~right_strict:true range)
+        ~fthen:(fun flow -> Post.return flow)
+        ~felse:(fun flow ->
+            raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow |>
+            Post.return
+          ) ~zone:Z_c_scalar man flow
 
 
 
@@ -480,6 +488,7 @@ struct
       Post.return
 
     | Some (base,offset) ->
+      debug "base = %a, offset = %a" pp_base base pp_expr offset;
       if not (is_memory_base base)
       then assume_default_cases base offset range man flow
 

@@ -2,15 +2,10 @@
 
 function usage() {
     echo "Mopsa wrapper for make"
-    echo "Usage: mopsa-make [options] [make-target]"
+    echo "Usage: mopsa-make [options] [target]"
     echo "Options:"
     echo " -h, --help                           display this message"
     echo " -C DIRECTORY, --directory DIRECTORY  change directory to DIRECTORY before compiling."
-    echo " -t TARGET, --target TARGET           analyze binary TARGET. (default: [make-target])"
-    echo " -i, --interactive                    start an interactive analysis session."
-    echo " -l, --log                            display analysis logs."
-    echo " -s, --short-log                      display short analysis logs."
-    echo " -d DEBUG, --debug DEBUG              activate debug channels DEBUG during the analysis. (default: none)"
     echo " -o DB, --db DB                       save build database in DB. (default: mopsa.db)"
 }
 
@@ -18,13 +13,10 @@ MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/.."
 
 OPTIND=1
 
-opts=$(getopt --longoptions "help,directory:,target:,interactive,log,short-log,debug:,db:" --options "hC:t:ilsd:o:" -- "$@")
+opts=$(getopt --longoptions "help,directory:,db:" --options "hC:o:" -- "$@")
 
 DIRECTORY="."
 DB="mopsa.db"
-DEBUG=""
-LOG=""
-INTERACTIVE=""
 
 eval set --$opts
 
@@ -35,21 +27,6 @@ while true; do
             ;;
         -C | --directory )
             DIRECTORY="$2"; shift 2;
-            ;;
-        -t | --target )
-            MOPSA_TARGET="$2"; shift 2;
-            ;;
-        -i | --interactive)
-            INTERACTIVE="-interactive"; shift;
-            ;;
-        -l | --log)
-            LOG="-log"; shift;
-            ;;
-        -s | --short-log)
-            LOG="-short-log"; shift;
-            ;;
-        -d | --debug)
-            DEBUG="$2"; shift 2;
             ;;
         -o | --db)
             DB="$2"; shift 2;
@@ -72,13 +49,5 @@ fi
 if [[ "${MAKE_TARGET}" == "clean" ]]; then
     make -C ${DIRECTORY} ${MAKE_TARGET}
 else
-    if [[ "${MOPSA_TARGET}" == "" ]]; then
-        MOPSA_TARGET=${MAKE_TARGET}
-    fi
     PATH=${MOPSADIR}/parsers/c/bin:${PATH} MOPSADB=${DB} make -C ${DIRECTORY} ${MAKE_TARGET}
-    ERROR=$?
-    if [[ ${ERROR} -eq 0 ]]; then
-        echo "${MOPSADIR}/bin/mopsa-c -make-target=${MOPSA_TARGET} -debug=${DEBUG} ${INTERACTIVE} ${LOG} ${DB}"
-        ${MOPSADIR}/bin/mopsa-c -make-target=${MOPSA_TARGET} -debug=${DEBUG} ${INTERACTIVE} ${LOG} ${DB}
-    fi
 fi

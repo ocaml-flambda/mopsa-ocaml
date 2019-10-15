@@ -152,6 +152,18 @@ let () =
     default = "";
   }
 
+
+(** Size of the cache *)
+let () =
+  register_builtin_option {
+    key = "-cache";
+    category = "Configuration";
+    doc = " size of the analysis cache";
+    spec = ArgExt.Set_int Core.Cache.opt_cache;
+    default = "5";
+  }
+
+
 (** Debug channels *)
 let () =
   register_builtin_option {
@@ -208,6 +220,17 @@ let () =
     doc = " display the last output";
     spec = ArgExt.Set Output.Factory.opt_display_lastflow;
     default = "false";
+  }
+
+
+(** Ignore alarms when returning a value to the shell *)
+let () =
+  register_builtin_option {
+    key = "-silent";
+    category = "Output";
+    doc = " do not return a non-zero value when detecting alarms";
+    spec = ArgExt.Set Output.Factory.opt_silent;
+    default = "unset";
   }
 
 

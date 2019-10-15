@@ -21,11 +21,18 @@
 
 
 /*
- * Stubs for compiler builtins
+ * Stubs for sys/utsname.h
  */
 
+#include <sys/utsname.h>
 
 /*$
- * ensures: 1 == 0;
+ * requires: __name != NULL;
+ * assigns: __name;
+ * ensures: valid_primed_substring(__name->sysname, _UTSNAME_SYSNAME_LENGTH);
+ * ensures: valid_primed_substring(__name->nodename, _UTSNAME_NODENAME_LENGTH);
+ * ensures: valid_primed_substring(__name->release, _UTSNAME_RELEASE_LENGTH);
+ * ensures: valid_primed_substring(__name->version, _UTSNAME_VERSION_LENGTH);
+ * ensures: valid_primed_substring(__name->machine, _UTSNAME_MACHINE_LENGTH);
  */
-void __builtin_unreachable(void);
+int uname(struct utsname *__name);

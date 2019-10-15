@@ -47,6 +47,7 @@
 #include "time.c"
 #include "pwd.c"
 #include "sys/resource.c"
+#include "sys/utsname.c"
 
 /* TODO: include math library only when -lm is used */
 #include "math.c"
