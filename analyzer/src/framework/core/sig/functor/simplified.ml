@@ -19,18 +19,61 @@
 (*                                                                          *)
 (****************************************************************************)
 
+(** Simplified interface of functor domains. *)
+
+open Ast.All
+open Zone
+open Query
+open Lattice
+open Context
+open Channel
+open Id
+
+
+(** {2 Signature of functor domains} *)
+(** ******************************** *)
+
+module type FUNCTOR =
+  functor(Arg:Domain.Simplified.DOMAIN) -> Domain.Simplified.DOMAIN
 
 
 
-module PolyMan = struct
-  type t = Polka.loose Polka.t
-  let name = "universal.numeric.relational.polyhedra"
-  let man = Polka.manager_alloc_loose ()
-end
+(*==========================================================================*)
+(**                          {2 Registration}                               *)
+(*==========================================================================*)
 
 
-module Domain = Factory.Make(PolyMan)
+let functors : (string * (module FUNCTOR)) list ref = ref []
 
 
-let () =
-  Framework.Core.Sig.Domain.Simplified.register_domain (module Domain)
+let register_functor name dom =
+  let module Dom = (val dom : FUNCTOR) in
+  let rec iter = function
+    | [] -> [name,dom]
+    | (hdname,hd) :: tl ->
+      let module Hd = (val hd : FUNCTOR) in
+      if hdname = name
+      then (name,dom) :: tl
+      else (hdname,hd) :: iter tl
+  in
+  functors := iter !functors
+
+
+
+let find_functor name =
+  List.find (fun (name',dom) ->
+      let module D = (val dom : FUNCTOR) in
+      compare name name' = 0
+    ) !functors |>
+  snd
+
+
+let mem_functor name =
+  List.exists (fun (name',dom) ->
+      let module D = (val dom : FUNCTOR) in
+      compare name name' = 0
+    ) !functors
+
+
+let names () =
+  List.map (fun (name,dom) -> name) !functors

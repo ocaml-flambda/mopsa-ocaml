@@ -83,16 +83,25 @@ struct
     if format.[i] = '%'
     then parse format (i + 1) args range man flow
     else
-      let t = match format.[i] with
-        | 'c' -> s8
-        | 'd' -> s32
-        | 'u' -> u32
+      let t, i' = match format.[i] with
+        | 'c' -> s8, i+1
+        | 'd' -> s32, i+1
+        | 'u' -> u32, i+1
+        | 'l' when format.[i+1] = 'd' -> sl, i+2
+        | 'l' when format.[i+1] = 'u' -> ul, i+2
+        | 'l' when format.[i+1] = 'l' && format.[i+2] = 'd' -> sll, i+3
+        | 'l' when format.[i+1] = 'l' && format.[i+2] = 'u' -> ull, i+3
+        | 'h' when format.[i+1] = 'd' -> s16, i+2
+        | 'h' when format.[i+1] = 'u' -> u16, i+2
+        | 'f' -> T_c_float C_float, i+1
+        | 'l' when format.[i+1] = 'f' -> T_c_float C_double, i+2
+        | 'L' when format.[i+1] = 'f' -> T_c_float C_long_double, i+2
         | _ -> raise UnsupportedFormat
       in
       let hd = List.hd args in
       let ptr = T_c_pointer t in
       man.post (mk_assign (mk_c_deref (mk_c_cast hd ptr range) range) (mk_top t range) range) flow >>= fun _ flow ->
-      parse format (i + 1) (List.tl args) range man flow
+      parse format i' (List.tl args) range man flow
 
 
   let assign_args_from_string_format (format:string) args range man flow =

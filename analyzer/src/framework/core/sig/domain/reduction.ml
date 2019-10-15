@@ -26,15 +26,15 @@ open Ast.Stmt
 open Id
 open Query
 open Channel
-
+open Context
 
 
 (** Manager used by post-state reduction rules *)
 type 'a man = {
-  get : 't. 't domain -> 'a -> 't;
-  set : 't. 't domain -> 't -> 'a -> 'a;
-  get_value : 't. 't value -> var -> 'a -> 't;
-  set_value : 't. 't value -> var -> 't -> 'a -> 'a;
+  get : 't. 't id -> 'a -> 't;
+  set : 't. 't id -> 't -> 'a -> 'a;
+  get_value : 't. 't id -> var -> 'a -> 't;
+  set_value : 't. 't id -> var -> 't -> 'a -> 'a;
   ask : 'r. 'r query -> 'a -> 'r;
   refine : channel -> 'a -> 'a;
 }
@@ -45,7 +45,7 @@ type 'a man = {
 module type REDUCTION =
 sig
   val name   : string
-  val reduce : stmt -> 'a man -> 'a -> 'a -> 'a
+  val reduce : uctx -> stmt -> 'a man -> 'a -> 'a -> 'a
 end
 
 

@@ -28,85 +28,78 @@
 #include "mopsa_libc_utils.h"
 
 
-/* overapproximation of π, used in ensures */
-static const double _pi = 4.;
-
-/* overapproximation of π/2, used in ensures */
-static const double _pi_2 = 2.;
-
-
 /*$
  * requires: valid_float(__x) and __x >= -1. and __x <= 1.;
- * ensures:  valid_float(return) and return >= 0. and return <= _pi;
+ * ensures:  valid_float(return) and return >= 0. and return <= M_PI;
  */
 double acos(double __x);
 
 /*$
  * requires: valid_float(__x) and __x >= -1. and __x <= 1.;
- * ensures:  valid_float(return) and return >= 0. and return <= _pi;
+ * ensures:  valid_float(return) and return >= 0. and return <= M_PI;
  */
 float acosf(float __x);
 
 /*$
  * requires: valid_float(__x) and __x >= -1. and __x <= 1.;
- * ensures:  valid_float(return) and return >= 0. and return <= _pi;
+ * ensures:  valid_float(return) and return >= 0. and return <= M_PI;
  */
 long double acosl(long double __x);
 
 
 /*$
  * requires: valid_float(__x) and __x >= -1. and __x <= 1.;
- * ensures:  valid_float(return) and return >= -_pi_2 and return <= _pi_2;
+ * ensures:  valid_float(return) and return >= -M_PI_2 and return <= M_PI_2;
  */
 double asin(double __x);
 
 /*$
  * requires: valid_float(__x) and __x >= -1. and __x <= 1.;
- * ensures:  valid_float(return) and return >= -_pi_2 and return <= _pi_2;
+ * ensures:  valid_float(return) and return >= -M_PI_2 and return <= M_PI_2;
  */
 float asinf(float __x);
 
 /*$
  * requires: valid_float(__x) and __x >= -1. and __x <= 1.;
- * ensures:  valid_float(return) and return >= -_pi_2 and return <= _pi_2;
+ * ensures:  valid_float(return) and return >= -M_PI_2 and return <= M_PI_2;
  */
 long double asinl(long double __x);
 
 
 /*$
  * requires: __x == __x; // means that __x is not a NaN
- * ensures:  valid_float(return) and return >= -_pi_2 and return <= _pi_2;
+ * ensures:  valid_float(return) and return >= -M_PI_2 and return <= M_PI_2;
  */
 double atan(double __x);
 
 /*$
  * requires: __x == __x; // means that __x is not a NaN
- * ensures:  valid_float(return) and return >= -_pi_2 and return <= _pi_2;
+ * ensures:  valid_float(return) and return >= -M_PI_2 and return <= M_PI_2;
  */
 float atanf(float __x);
 
 /*$
  * requires: __x == __x; // means that __x is not a NaN
- * ensures:  valid_float(return) and return >= -_pi_2 and return <= _pi_2;
+ * ensures:  valid_float(return) and return >= -M_PI_2 and return <= M_PI_2;
  */
 long double atanl(long double __x);
 
 
 /*$
  * requires: valid_float(__x) and valid_float(__y);
- * ensures:  valid_float(return) and return >= -_pi and return <= _pi;
+ * ensures:  valid_float(return) and return >= -M_PI and return <= M_PI;
  */
 double atan2(double __y, double __x);
 
 /*$
  * requires: valid_float(__x) and valid_float(__y);
- * ensures:  valid_float(return) and return >= -_pi and return <= _pi;
+ * ensures:  valid_float(return) and return >= -M_PI and return <= M_PI;
  */
 float atan2f(float __y, float __x);
 
 /*$
  * requires: valid_float(__x) and valid_float(__y);
- * ensures:  valid_float(return) and return >= -_pi and return <= _pi;
+ * ensures:  valid_float(return) and return >= -M_PI and return <= M_PI;
  */
 long double atan2l(long double __y, long double __x);
 
@@ -224,9 +217,6 @@ float tanhf(float __x);
  */
 long double tanhl(long double __x);
 
-
-#ifdef __USE_GNU
-
 /*$
  * requires: valid_float(__x);
  * assigns:  *__sinx;
@@ -253,11 +243,6 @@ void sincosf(float __x, float* __sinx, float* __cosx);
  * ensures:  *__cosx >= -1. and *__cosx <= 1.;
  */
 void sincosl(long double __x, long double* __sinx, long double* __cosx);
-
-#endif
-
-
-#if defined __USE_XOPEN_EXTENDED || defined __USE_ISOC99
 
 /*$
  * requires: valid_float(__x) and __x >= 1.;
@@ -313,10 +298,6 @@ float atanhf(float __x);
  * ensures:  valid_float(return) or float_inf(return);
  */
 long double atanhl(long double __x);
-
-
-#endif
-
 
 /*$
  * requires: valid_float(__x);
@@ -470,9 +451,6 @@ float modff(float __x, float* __iptr);
  */
 long double modfl(long double __x, long double* __iptr);
 
-
-#if __GLIBC_USE (IEC_60559_FUNCS_EXT)
-
 /*$
  * requires: valid_float(__x);
  * ensures:  (valid_float(return) or float_inf(return)) and return >= 0.;
@@ -490,11 +468,6 @@ float exp10f(float __x);
  * ensures:  (valid_float(return) or float_inf(return)) and return >= 0.;
  */
 long double exp10l(long double __x);
-
-#endif
-
-
-#if defined __USE_XOPEN_EXTENDED || defined __USE_ISOC99
 
 /*$
  * requires: valid_float(__x);
@@ -556,12 +529,6 @@ float logbf(float __x);
  */
 long double logbl(long double __x);
 
-#endif
-
-
-
-#ifdef __USE_ISOC99
-
 /*$
  * requires: valid_float(__x);
  * ensures:  (valid_float(return) or float_inf(return)) and return >= 0.;
@@ -598,10 +565,6 @@ float log2f(float __x);
  * ensures:  (valid_float(return) or float_inf(return));
  */
 long double log2l(long double __x);
-
-
-#endif
-
 
 /*$
  * requires: valid_float(__x) and valid_float(__y);
@@ -640,9 +603,6 @@ float sqrtf(float __x);
  */
 long double sqrtl(long double __x);
 
-
-#if defined __USE_XOPEN || defined __USE_ISOC99
-
 /*$
  * requires: valid_float(__x) and valid_float(__y);
  * ensures:  (valid_float(return) or float_inf(return)) and return >= 0.;
@@ -661,11 +621,6 @@ float hypotf(float __x, float __y);
  */
 long double hypotl(long double __x, long double __y);
 
-#endif
-
-
-#if defined __USE_XOPEN_EXTENDED || defined __USE_ISOC99
-
 /*$
  * requires: valid_float(__x);
  * ensures:  valid_float(return);
@@ -683,8 +638,6 @@ float cbrtf(float __x);
  * ensures:  valid_float(return);
  */
 long double cbrtl(long double __x);
-
-#endif
 
 /*$
  * requires: valid_float(__x);
@@ -943,9 +896,6 @@ int __signbitl(long double __value);
 
 // TODO: not documented:__iseqsig, __issignaling
 
-
-#ifdef __USE_MISC
-
 /*$
  * requires: valid_float(__x) and valid_float(__y);
  * requires: __y != 0.;
@@ -992,12 +942,6 @@ float significandf(float __x);
  */
 long double significandl(long double __x);
 
-#endif
-
-
-
-#ifdef __USE_ISOC99
-
 /*$
  * ensures: (__x >= 0. and __y >= 0. implies return ==  __x) and
  *          (__x >= 0. and __y <= 0. implies return == -__x) and
@@ -1040,11 +984,6 @@ float nanf(const char* __tagb);
  * ensures: float_nan(return);
  */
 long double nanl(const char* __tagb);
-
-#endif
-
-
-#if defined __USE_MISC || defined __USE_XOPEN
 
 /*$
  * requires: valid_float(__x);
@@ -1173,11 +1112,6 @@ float ynf(int __n, float __x);
  */
 long double ynl(int __n, long double __x);
 
-#endif
-
-
-#if defined __USE_XOPEN || defined __USE_ISOC99
-
 /*$
  * requires: valid_float(__x);
  * ensures:  valid_float(__x);
@@ -1242,11 +1176,6 @@ float lgammaf(float __x);
  */
 long double lgammal(long double __x);
 
-#endif
-
-
-#ifdef __USE_ISOC99
-
 /*$
  * requires: valid_float(__x);
  * assigns:  _errno;
@@ -1273,11 +1202,6 @@ long double tgammal(long double __x);
 
 // gamma functions are deprecated versions of tgamma
 
-#endif
-
-
-#ifdef __USE_MISC
-
 /*$
  * requires: valid_float(__x);
  * assigns:  _errno;
@@ -1301,11 +1225,6 @@ float lgammaf_r(float __x, int* __signgamp);
  * ensures:  valid_float(__x) or float_inf(__x);
  */
 long double lgammal_r(long double __x, int* __signgamp);
-
-#endif
-
-
-#if defined __USE_XOPEN_EXTENDED || defined __USE_ISOC99
 
 /*$
  * requires: valid_float(__x);
@@ -1356,9 +1275,6 @@ float nextafterf(float __x, float __y);
  */
 long double nextafterl(long double __x, long double __y);
 
-
-# if defined __USE_ISOC99
-
 /*$
  * requires: valid_float(__x) and valid_float(__y);
  * ensures:  valid_float(return) or float_inf(return);
@@ -1385,8 +1301,6 @@ float nexttowardf(float __x, long double __y);
  * // TODO: better bounds for return
  */
 long double nexttowardl(long double __x, long double __y);
-
-#endif
 
 /*$
  * requires: valid_float(__x);
@@ -1465,9 +1379,6 @@ float remainderf(float __x, float __y);
  */
 long double remainderl(long double __x, long double __y);
 
-
-# ifdef __USE_ISOC99
-
 /*$
  * requires: valid_float(__x);
  * ensures:  valid_float(return) or float_inf(return);
@@ -1485,8 +1396,6 @@ float scalbnf(float __x, int __n);
  * ensures:  valid_float(return) or float_inf(return);
  */
 long double scalbnl(long double __x, int __n);
-
-# endif
 
 /*$
  * requires: valid_float(__x) and __x != 0;
@@ -1507,13 +1416,7 @@ int ilogbf(float __x);
  */
 int ilogbl(long double __x);
 
-#endif
-
-
 // TODO: not documented: llogb
-
-
-#ifdef __USE_ISOC99
 
 /*$
  * requires: valid_float(__x);
@@ -1630,83 +1533,77 @@ float remquof(float __x, float __y, int* __quo);
  */
 long double remquol(long double __x, long double __y, int* __quo);
 
-
-static const long int _LONG_MIN = LONG_MIN;
-static const long int _LONG_MAX = LONG_MAX;
-static const long long int _LLONG_MIN = LLONG_MIN;
-static const long long int _LLONG_MAX = LLONG_MAX;
-
 /*$
- * requires: valid_float(__x) and __x >= _LONG_MIN and __x <= _LONG_MAX;
+ * requires: valid_float(__x) and __x >= LONG_MIN and __x <= LONG_MAX;
  * ensures:  __x - 1. < return && return < __x + 1.;
  */
 long int lrint(double __x);
 
 /*$
- * requires: valid_float(__x) and __x >= _LONG_MIN and __x <= _LONG_MAX;
+ * requires: valid_float(__x) and __x >= LONG_MIN and __x <= LONG_MAX;
  * ensures:  __x - 1. < return && return < __x + 1.;
  */
 long int lrintf(float __x);
 
 /*$
- * requires: valid_float(__x) and __x >= _LONG_MIN and __x <= _LONG_MAX;
+ * requires: valid_float(__x) and __x >= LONG_MIN and __x <= LONG_MAX;
  * ensures:  __x - 1. < return && return < __x + 1.;
  */
 long int lrintl(long double __x);
 
 
 /*$
- * requires: valid_float(__x) and __x >= _LLONG_MIN and __x <= _LLONG_MAX;
+ * requires: valid_float(__x) and __x >= LLONG_MIN and __x <= LLONG_MAX;
  * ensures:  __x - 1. < return && return < __x + 1.;
  */
 long long int llrint(double __x);
 
 /*$
- * requires: valid_float(__x) and __x >= _LLONG_MIN and __x <= _LLONG_MAX;
+ * requires: valid_float(__x) and __x >= LLONG_MIN and __x <= LLONG_MAX;
  * ensures:  __x - 1. < return && return < __x + 1.;
  */
 long long int llrintf(float __x);
 
 /*$
- * requires: valid_float(__x) and __x >= _LLONG_MIN and __x <= _LLONG_MAX;
+ * requires: valid_float(__x) and __x >= LLONG_MIN and __x <= LLONG_MAX;
  * ensures:  __x - 1. < return && return < __x + 1.;
  */
 long long int llrintl(long double __x);
 
 
 /*$
- * requires: valid_float(__x) and __x >= _LONG_MIN and __x <= _LONG_MAX;
+ * requires: valid_float(__x) and __x >= LONG_MIN and __x <= LONG_MAX;
  * ensures:  __x - 0.5 <= return && return <= __x + 0.5;
  */
 long int lround(double __x);
 
 /*$
- * requires: valid_float(__x) and __x >= _LONG_MIN and __x <= _LONG_MAX;
+ * requires: valid_float(__x) and __x >= LONG_MIN and __x <= LONG_MAX;
  * ensures:  __x - 0.5 <= return && return <= __x + 0.5;
  */
 long int lroundf(float __x);
 
 /*$
- * requires: valid_float(__x) and __x >= _LONG_MIN and __x <= _LONG_MAX;
+ * requires: valid_float(__x) and __x >= LONG_MIN and __x <= LONG_MAX;
  * ensures:  __x - 0.5 <= return && return <= __x + 0.5;
  */
 long int lroundl(long double __x);
 
 
 /*$
- * requires: valid_float(__x) and __x >= _LLONG_MIN and __x <= _LLONG_MAX;
+ * requires: valid_float(__x) and __x >= LLONG_MIN and __x <= LLONG_MAX;
  * ensures:  __x - 0.5 <= return && return <= __x + 0.5;
  */
 long long int llround(double __x);
 
 /*$
- * requires: valid_float(__x) and __x >= _LLONG_MIN and __x <= _LLONG_MAX;
+ * requires: valid_float(__x) and __x >= LLONG_MIN and __x <= LLONG_MAX;
  * ensures:  __x - 0.5 <= return && return <= __x + 0.5;
  */
 long long int llroundf(float __x);
 
 /*$
- * requires: valid_float(__x) and __x >= _LLONG_MIN and __x <= _LLONG_MAX;
+ * requires: valid_float(__x) and __x >= LLONG_MIN and __x <= LLONG_MAX;
  * ensures:  __x - 0.5 <= return && return <= __x + 0.5;
  */
 long long int llroundl(long double __x);
@@ -1802,8 +1699,6 @@ float fmaf(float __x, float __y, float __z);
  */
 long double fmal(long double __x, long double __y, long double __z);
 
-#endif
-
 // TODO: not documented: roundeven, fromfp, ufromfp, fromfpx, ufromfpx, fmaxmag, fminmag, totalorder, totalordermag, canonicalize, getpauload, setpayload, setpayloadsig
 
 
@@ -1865,7 +1760,5 @@ float __builtin_nanf(const char* __tagb);
    __builtin_islessgreater(x, y)
    __builtin_isunordered((x. y)
 */
-
-
 
 

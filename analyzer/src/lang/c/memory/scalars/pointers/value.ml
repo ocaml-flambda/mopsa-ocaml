@@ -153,10 +153,10 @@ let meet (a1:t) (a2:t) : t = {
 
 
 (** Widening operator *)
-let widen (a1:t) (a2:t) : t = {
+let widen ctx (a1:t) (a2:t) : t = {
   null = a1.null || a2.null;
   invalid = a1.invalid || a2.invalid;
-  valid = ValidSet.widen a1.valid a2.valid;
+  valid = ValidSet.widen ctx a1.valid a2.valid;
 }
 
 

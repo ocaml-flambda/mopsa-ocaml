@@ -30,11 +30,11 @@ open Core.Sig.Domain.Reduction
 module Reduction =
 struct
 
-  let name = "universal.numeric.reductions.intervals"
+  let name = "universal.numeric.reductions.intervals_rel"
   let debug fmt = Debug.debug ~channel:name fmt
 
   module I = Values.Intervals.Integer.Value
-  module R = Relational.Factory
+  module R = Relational.Domain
 
   (** Get a list of variables related numerically to [v] *)
   let get_related_vars v man a =
@@ -58,7 +58,7 @@ struct
 
 
   (** Reduction operator *)
-  let reduce stmt (man: 'a man) (pre:'a) (post:'a) : 'a =
+  let reduce ctx stmt (man: 'a man) (pre:'a) (post:'a) : 'a =
     (* Get the modified variables *)
     let vars = get_modified_vars stmt man pre in
 

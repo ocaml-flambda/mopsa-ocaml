@@ -74,6 +74,10 @@ struct lconv * _lconv_buf = NULL;
  * ensures: return == addr;
  * ensures: _lconv_buf' == addr;
  *
+ * case "first-allocation" {
+ *   assumes: _lconv_buf == NULL;
+ * }
+ *
  * case "invalidate-previous-lconv" {
  *   assumes: _lconv_buf != NULL;
  *   free: _lconv_buf;

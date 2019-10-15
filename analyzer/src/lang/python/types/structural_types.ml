@@ -96,8 +96,6 @@ struct
 
   include AMap
 
-  let widen ctx = widen
-
   include Framework.Core.Id.GenDomainId(struct
       type nonrec t = t
       let name = "python.types.structural_types"

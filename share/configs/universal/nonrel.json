@@ -9,6 +9,7 @@
             "universal.iterators.interproc.inlining",
 	    "universal.iterators.unittest",
             "universal.iterators.scalar",
+            "universal.iterators.unittest",
 
 	    // Numeric abstraction
             {
@@ -16,9 +17,9 @@
 		    "disjoint": [
 			"universal.numeric.values.intervals.integer",
 			"universal.numeric.values.intervals.float"
-		    ]
-		}
-            }
+	            ]
+                }
+	    }
 	]
     }
 }

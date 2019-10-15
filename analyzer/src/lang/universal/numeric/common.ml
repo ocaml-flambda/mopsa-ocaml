@@ -26,16 +26,19 @@ open Mopsa
 module I = ItvUtils.IntItv
 module C = CongUtils.IntCong
 
+
 (** {2 Integer intervals} *)
 (** ********************* *)
 
 (** Integer intervals *)
 type int_itv = I.t_with_bot
 
+type _ query +=
+  | Q_int_interval : expr -> int_itv query (** Query to evaluate the integer interval of an expression *)
+  | Q_fast_int_interval : expr -> int_itv query (** Query handled by non-relational domains only *)
 
-(** Query to evaluate the integer interval of an expression *)
-type _ query += Q_int_interval : expr -> int_itv query
-
+let mk_int_interval_query ?(fast=true) e =
+  if fast then Q_fast_int_interval e else Q_int_interval e
 
 let () =
   register_query {
@@ -43,9 +46,8 @@ let () =
       let f : type r. query_pool -> r query -> r -> r -> r =
         fun next query a b ->
           match query with
-
-          | Q_int_interval e -> I.join_bot a b
-
+          | Q_int_interval _ -> I.join_bot a b
+          | Q_fast_int_interval _ -> I.join_bot a b
           | _ -> next.join_query query a b
       in
       f
@@ -54,9 +56,8 @@ let () =
       let f : type r. query_pool -> r query -> r -> r -> r =
         fun next query a b ->
           match query with
-
           | Q_int_interval e -> I.meet_bot a b
-
+          | Q_fast_int_interval e -> I.meet_bot a b
           | _ -> next.meet_query query a b
       in
       f

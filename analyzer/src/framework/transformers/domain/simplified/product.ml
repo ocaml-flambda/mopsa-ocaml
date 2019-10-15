@@ -427,27 +427,53 @@ struct
 
 
   let reduction_man : Spec.t man = {
-    get = (fun id a ->
-        Exceptions.panic ~loc:__LOC__ "get not implemented"
+    get = (
+        let doit : type a. a id -> t -> a = fun id a ->
+          let f : type b. b dmodule -> b -> a option = fun m aa ->
+            let module Domain = (val m) in
+            match equal_id id Domain.id with
+            | Some Eq -> Some aa
+            | None -> None
+          in
+          match map_opt { f } Spec.pool a with
+          | Some r -> r
+          | None -> raise Not_found
+        in
+        doit
       );
 
-    set = (fun id v a ->
-        Exceptions.panic ~loc:__LOC__ "set not implemented"
-      );
+    set = (
+      let doit : type a. a id -> a -> t -> t = fun id v a ->
+        let f : type b. b dmodule -> b -> b option = fun m _ ->
+          let module Domain = (val m) in
+          match equal_id id Domain.id with
+          | Some Eq -> Some v
+          | None -> None
+        in
+        match apply_opt { f } Spec.pool a with
+        | Some r -> r
+        | None -> raise Not_found
+      in
+      doit
+    );
 
     get_value = (
-      let doit : type v. v value -> var -> t -> v =
-        fun (type v) (id:v value)  var a ->
-        let open Value.Nonrel in
-
+      let doit : type v. v id -> var -> t -> v =
+        fun (type v) (id:v id)  var a ->
+          let open Value.Nonrel in
+          let open Bot_top in
+          let open Lattices.Partial_map in
         let f : type a. a dmodule -> a -> v option =
           fun m aa ->
             let module Domain = (val m) in
-
             match Domain.id with
-            | D_nonrel_id vmodule ->
+            | D_nonrel vmodule ->
               let module Value = (val vmodule) in
-              let v = VarMap.find var aa ~bottomv:Value.bottom ~topv:Value.top in
+              let v = match aa with
+                | TOP -> Value.top
+                | BOT -> Value.bottom
+                | Nbt map -> PMap.find var map
+              in
 
               let man : (Value.t,Value.t) Sig.Value.Lowlevel.man = {
                 get = (fun v -> v);
@@ -471,18 +497,23 @@ struct
     );
 
     set_value = (
-        let doit : type v. v value -> var -> v -> t -> t =
-          fun (type v) (id:v value) var v a ->
+        let doit : type v. v id -> var -> v -> t -> t =
+          fun (type v) (id:v id) var v a ->
             let open Value.Nonrel in
-
+            let open Bot_top in
+            let open Lattices.Partial_map in
             let f : type a. a dmodule -> a -> a option =
               fun m aa ->
                 let module Domain = (val m) in
 
                 match Domain.id with
-                | D_nonrel_id vmodule ->
+                | D_nonrel vmodule ->
                   let module Value = (val vmodule) in
-                  let x = VarMap.find var aa ~bottomv:Value.bottom ~topv:Value.top in
+                  let x = match aa with
+                    | TOP -> Value.top
+                    | BOT -> Value.bottom
+                    | Nbt map -> PMap.find var map
+                  in
 
                   let man : (Value.t,Value.t) Sig.Value.Lowlevel.man = {
                     get = (fun v -> v);
@@ -493,7 +524,13 @@ struct
                   in
 
                   begin match Value.set man id v x with
-                    | Some x' -> Some (VarMap.add var x' aa ~is_bottomv:Value.is_bottom)
+                    | Some x' -> Some (
+                        match aa with
+                        | TOP -> TOP
+                        | BOT -> BOT
+                        | Nbt map when Value.is_bottom x' -> BOT
+                        | Nbt map -> Nbt (PMap.add var x' map)
+                      )
                     | None -> None
                   end
 
@@ -521,20 +558,20 @@ struct
     refine = refine_lfp;
   }
 
-  let reduce stmt pre post =
+  let reduce ctx stmt pre post =
     List.fold_left (fun acc rule ->
         let module R = (val rule : REDUCTION) in
-        R.reduce stmt reduction_man pre acc
+        R.reduce ctx stmt reduction_man pre acc
       ) post Spec.rules
 
-  let exec stmt a =
+  let exec ctx stmt man a =
     let f = fun (type a) (m: a dmodule) aa ->
       let module Domain = (val m) in
-      Domain.exec stmt aa
+      Domain.exec ctx stmt man aa
     in
     apply_opt { f } Spec.pool a |>
     Option.lift @@ fun a' ->
-    reduce stmt a a'
+    reduce ctx stmt a a'
 
 
 end

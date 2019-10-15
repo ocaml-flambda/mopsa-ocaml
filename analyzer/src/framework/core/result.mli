@@ -91,6 +91,10 @@ val map_log : (log -> log) -> ('a,'r) result -> ('a,'r) result
 val map_opt : ('r -> 's option option) -> ('a,'r) result -> ('a,'s) result
 
 
+(** Map outputs of a result *)
+val map : ('r->'r) -> ('a,'r) result -> ('a,'r) result
+
+
 (** [apply f join meet r] collapses a formula to a single value
     by applying [f] on each case of [r] and merging cases using [join]
     and [meet] *)
@@ -249,3 +253,9 @@ val bind_list_opt :
 val bind_list :
   'r list -> ('r -> 'a flow -> ('a,'s) result) ->
   'a flow -> ('a, 's list) result
+
+(** Remove duplicate results *)
+val remove_duplicates : ('r -> 'r -> int) -> 'a Lattice.lattice -> ('a,'r) result -> ('a,'r) result
+
+(** Return the number of outputs in a result *)
+val cardinal : ('a,'r) result -> int

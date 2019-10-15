@@ -77,6 +77,8 @@ type context = {
     ctx_tu_typedefs: (C.uid,typedef) Hashtbl.t;
     ctx_tu_vars: (C.uid,variable) Hashtbl.t;
     ctx_tu_funcs: (C.uid,func) Hashtbl.t;
+    ctx_tu_static_funcs: (string,func) Hashtbl.t;
+    ctx_tu_static_vars: (string,variable) Hashtbl.t;
 
     (* shared among all TU *)
     mutable ctx_uid: uid; (* counter to generate new uid *)
@@ -109,6 +111,8 @@ let create_context (project_name:string) (info:C.target_info) =
     ctx_tu_typedefs = Hashtbl.create 16;
     ctx_tu_vars = Hashtbl.create 16;
     ctx_tu_funcs = Hashtbl.create 16;
+    ctx_tu_static_vars = Hashtbl.create 16;
+    ctx_tu_static_funcs = Hashtbl.create 16;
     ctx_uid = 0;
     ctx_enums = Hashtbl.create 16;
     ctx_enum_vals = Hashtbl.create 16;
@@ -170,6 +174,8 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
   Hashtbl.clear ctx.ctx_tu_typedefs;
   Hashtbl.clear ctx.ctx_tu_vars;
   Hashtbl.clear ctx.ctx_tu_funcs;
+  Hashtbl.clear ctx.ctx_tu_static_vars;
+  Hashtbl.clear ctx.ctx_tu_static_funcs;
 
   let tu = {
       tu_uid = new_uid ctx;
@@ -529,6 +535,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
       in
       let prev =
         if not (variable_is_global kind) then None
+        else if variable_is_file_static kind then Hashtbl.find_opt ctx.ctx_tu_static_vars org_name
         else find_extern (Hashtbl.find_all ctx.ctx_vars org_name)
       in
       (* merge types *)
@@ -565,6 +572,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
       in
       if variable_is_global kind && prev = None then Hashtbl.add ctx.ctx_vars org_name var;
       Hashtbl.add ctx.ctx_tu_vars v.C.var_uid var;
+      if variable_is_file_static kind then Hashtbl.add ctx.ctx_tu_static_vars org_name var;
       (* init *)
       if var.var_kind = Variable_extern && (kind = Variable_global || var.var_init <> None)
       then var.var_kind <- Variable_global;
@@ -598,8 +606,8 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
         | [] -> None
         | f::r -> if f.func_is_static then find_extern r else Some f
       in
-       let prev =
-        if static then None
+      let prev =
+        if static then Hashtbl.find_opt ctx.ctx_tu_static_funcs org_name
         else find_extern (Hashtbl.find_all ctx.ctx_funcs org_name)
       in
       (* create structure *)
@@ -627,6 +635,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
            }
       in
       if prev = None then Hashtbl.add ctx.ctx_funcs org_name func;
+      if static then Hashtbl.replace ctx.ctx_tu_static_funcs org_name func;
       Hashtbl.add ctx.ctx_tu_funcs f.C.function_uid func;
       (* fill in parameters & return *)
       let params = 

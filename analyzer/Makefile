@@ -31,14 +31,15 @@ framework.ast = program typ operator constant var expr stmt visitor all
 framework.core = query context zone callstack alarm token log lattice        \
 		 soundness flow result eval post id interface channel sig    \
                  debug_tree cache abstraction all
-framework.core.sig = value domain stacked
+framework.core.sig = value domain stacked functor
 framework.core.sig.value = lowlevel simplified reduction
 framework.core.sig.domain = manager lowlevel intermediate simplified         \
                             stateless reduction
 framework.core.sig.stacked = manager lowlevel intermediate stateless reduction
+framework.core.sig.functor = simplified
 framework.lattices = partial_map powerset powersetwithunder
 framework.engines = engine automatic interactive
-framework.transformers = value domain stacked
+framework.transformers = common value domain stacked
 framework.output = text json factory
 framework.config = paths visitor typer parser options
 
@@ -46,16 +47,18 @@ framework.config = paths visitor typer parser options
 lang = universal repl stubs c python
 
 # Universal
-lang.universal = ast frontend zone iterators heap numeric
+lang.universal = ast frontend zone iterators heap numeric packing
 lang.universal.iterators = unittest program intraproc scalar interproc loops
 lang.universal.iterators.interproc = common inlining sequential_cache join_based_cache
 lang.universal.heap = policies recency
 lang.universal.numeric = rounding common values relational reductions
 lang.universal.numeric.values = intervals congruences
 lang.universal.numeric.values.intervals = integer float
+lang.universal.numeric.packing = strategy functor
 lang.universal.numeric.relational = apron_manager binding apron_transformer \
-                                    factory octagon polyhedra default
-lang.universal.numeric.reductions = intervals_congruences intervals
+                                    domain instances
+lang.universal.numeric.reductions = intervals_congruences intervals_rel
+lang.universal.packing = static
 
 # REPL
 lang.repl = frontend
@@ -64,15 +67,17 @@ lang.repl = frontend
 lang.stubs = ast zone alarms iterator
 
 # C
-lang.c = ast pp visitor zone frontend alarms desugar memory libs iterators
+lang.c = ast pp visitor zone frontend alarms common desugar libs iterators memory
+lang.c.common = base points_to quantified_offset
 lang.c.iterators = program switch loops goto interproc
 lang.c.desugar = conditions constants
-lang.c.memory = common structured lowlevel scalars
-lang.c.memory.common = base points_to quantified_offset
+lang.c.memory = structured lowlevel scalars packing
 lang.c.memory.structured = flat
-lang.c.memory.lowlevel = cells string_literals string_length reductions
+lang.c.memory.lowlevel = cells string_literals string_length pointer_smashing pointer_sentinel reductions
+lang.c.memory.lowlevel.reductions = cell_pointer_sentinel cell_pointer_smashing
 lang.c.memory.scalars = pointers machine_numbers
 lang.c.memory.scalars.pointers = value symbolic domain
+lang.c.memory.packing = static_scope reductions
 lang.c.libs = builtins clib mopsalib compiler variadic cstubs
 lang.c.libs.clib.file_descriptor = slot table domain
 

@@ -211,7 +211,11 @@ let () =
 (** ********************* *)
 
 let mk_stub_call stub args range =
-  mk_expr (E_stub_call (stub, args)) range
+  let t = match stub.stub_func_return_type with
+    | None -> T_any
+    | Some t -> t
+  in
+  mk_expr (E_stub_call (stub, args)) ~etyp:t range
 
 let mk_stub_quantified quant v s range =
   mk_expr (E_stub_quantified(quant, v, s)) range ~etyp:v.vtyp

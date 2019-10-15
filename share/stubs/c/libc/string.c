@@ -39,8 +39,18 @@
  * // TODO requires: no_overlap(__src, __dest, __len);
  * requires: size(__src) >= __len;
  * requires: size(__dest) >= __len;
- * assigns: ((unsigned char*)__dest)[0, __len - 1];
- * ensures: forall int i in [0, __len - 1]: (((unsigned char*)__dest)[i])' == ((unsigned char*)__src)[i];
+ *
+ * case "copy" {
+ *   assumes: __len >= 1;
+ *   assigns: ((unsigned char*)__dest)[0, __len - 1];
+ *   ensures: forall int i in [0, __len - 1]: (((unsigned char*)__dest)[i])' == ((unsigned char*)__src)[i];
+ * }
+ *
+ * case "nop" {
+ *   assumes: __len == 0;
+ * }
+ *
+ * ensures: return == __dest;
  */
 void *memcpy (void *__restrict __dest, const void *__restrict __src,
               size_t __len);
@@ -248,43 +258,9 @@ char *strncat (char *__restrict __dest, const char *__restrict __src,
                size_t __len);
 
 /*$
- * local: size_t len1 = strlen(__s1);
- * local: size_t len2 = strlen(__s2);
+ * requires: valid_string(__s1);
+ * requires: valid_string(__s2);
  *
- * case "equal" {
- *   assumes: len1 == len2 and
- *            len1 >= 1 and
- *            forall int i in [0, len1 - 1]: __s1[i] == __s2[i];
- *   ensures: return == 0;
- * }
- *
- * case "both-empty" {
- *   assumes: len1 == 0 and len2 == 0;
- *   ensures: return == 0;
- * }
- *
- * case "only-one-empty" {
- *   assumes: len1 == 0 or len2 == 0;
- *   assumes: len1 != len2;
- *   ensures: (len1 >= 1 implies return > 0) and (len2 >= 1 implies return < 0);
- * }
- *
- * case "not-equal" {
- *   assumes: len1 >= 1 and len2 >= 1;
- *   assumes: exists int i in [0, len1 - 1]: (
- *              i <= len2 - 1 and
- *              __s1[i] != __s2[i]
- *            );
- *   ensures: exists int i in [0, len1 - 1]: (
- *              i <= len2 - 1 and
- *              __s1[i] != __s2[i] and
- *              (
- *                i >= 1 implies forall int j in [0, i - 1]: __s1[j] == __s2[j]
- *              ) and
- *              (__s1[i] - __s2[i] > 0 implies return > 0) and
- *              (__s1[i] - __s2[i] < 0 implies return < 0)
- *           );
- *  }
  */
 int strcmp (const char *__s1, const char *__s2);
 
@@ -295,29 +271,8 @@ int __builtin_strcmp (const char *__s1, const char *__s2);
 
 
 /*$
- * requires: size(__s1) >= __n or valid_string(__s1);
- * requires: size(__s2) >= __n or valid_string(__s2);
- *
- * case "equal" {
- *   assumes: exists int l in [0, __n - 1]: (
- *              (l == __n - 1 or __s1[l] == 0) and
- *              forall int i in [0, l]: __s1[i] == __s2[i]
- *   );
- *   ensures: return == 0;
- * }
- *
- * case "notequal" {
- *   assumes: exists int l in [0, __n - 1]: (
- *              __s1[l] != __s2[l] and
- *              forall int i in [0, l - 1]: (__s1[i] != 0 or __s2[i] != 0)
- *            );
- *   ensures: exists int l in [0, __n - 1]: (
- *              __s1[l] != __s2[l] and
- *              forall int i in [0, l]: __s1[i] == __s2[i] and
- *              (__s1[l] - __s2[l] > 0 implies return > 0) and
- *              (__s1[l] - __s2[l] < 0 implies return < 0)
- *            );
- *   }
+ * requires: size(__s1) < __n implies valid_string(__s1);
+ * requires: size(__s2) < __n implies valid_string(__s2);
  */
 int strncmp (const char *__s1, const char *__s2, size_t __n);
 
@@ -438,19 +393,13 @@ char *strndup (const char *__s, size_t __n);
 #endif
 
 /*$
- * local: size_t len = strlen(__s);
+ * requires: valid_string(__s);
  *
  * case "found" {
- *   assumes: exists int i in [0, len]: __s[i] == __c;
- *   ensures: exists int i in [0, len]: (
- *              __s[i] == __c and
- *              return == __s + i and
- *              forall int j in [0, i - 1]: __s[j] != __c
- *            );
+ *   ensures: exists int i in [0, size(__s) - 1]: return == __s + i;
  * }
  *
  * case "notfound" {
- *   assumes: forall int j in [0, len]: __s[j] != __c;
  *   ensures: return == NULL;
  * }
  */
@@ -463,21 +412,7 @@ char *__builtin_strchr (const char *__s, int __c);
 
 
 /*$
- * local: size_t len = strlen(__s);
- *
- * case "found" {
- *   assumes: exists int i in [0, len]: __s[i] == __c;
- *   ensures: exists int i in [0, len]: (
- *              __s[i] == __c and
- *              return == __s + i and
- *              forall int j in [i, len]: __s[j] != __c
- *            );
- * }
- *
- * case "notfound" {
- *   assumes: forall int j in [0, len]: __s[j] != __c;
- *   ensures: return == NULL;
- * }
+ * requires: valid_string(__s);
  */
 char *strrchr (const char *__s, int __c);
 

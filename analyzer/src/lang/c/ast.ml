@@ -828,7 +828,7 @@ let mk_c_member_access r f range =
   mk_expr (E_c_member_access (r, f.c_field_index, f.c_field_org_name)) ~etyp:f.c_field_type range
 
 let mk_c_subscript_access a i range =
-  mk_expr (E_c_array_subscript (a, i)) ~etyp:(under_array_type a.etyp) range
+  mk_expr (E_c_array_subscript (a, i)) ~etyp:(under_type a.etyp) range
 
 let mk_c_character c range =
   mk_constant (C_c_character ((Z.of_int @@ int_of_char c), C_char_ascii)) range ~etyp:(T_c_integer(C_unsigned_char))
@@ -846,6 +846,9 @@ let u32 = T_c_integer(C_unsigned_int)
 let s64 = T_c_integer(C_signed_long)
 let u64 = T_c_integer(C_unsigned_long)
 let ul = T_c_integer(C_unsigned_long)
+let sl = T_c_integer(C_signed_long)
+let ull = T_c_integer(C_unsigned_long_long)
+let sll = T_c_integer(C_signed_long_long)
 let array_type typ size = T_c_array(typ,C_array_length_cst size)
 
 let type_of_string s = T_c_array(s8, C_array_length_cst (Z.of_int (1 + String.length s)))
@@ -853,14 +856,20 @@ let type_of_string s = T_c_array(s8, C_array_length_cst (Z.of_int (1 + String.le
 let mk_c_string s range =
   mk_constant (C_c_string (s, C_char_ascii)) range ~etyp:(type_of_string s)
 
-let mk_c_call f args range =
+let mk_c_fun_typ f =
   let ftype = {
     c_ftype_return = f.c_func_return;
     c_ftype_params = List.map (fun p -> p.vtyp) f.c_func_parameters;
     c_ftype_variadic = f.c_func_variadic;
   }
   in
-  mk_expr (E_call (mk_expr (E_c_function f) range ~etyp:(T_c_function (Some ftype)), args)) range ~etyp:(f.c_func_return)
+  T_c_function (Some ftype)
+
+let mk_c_call f args range =
+  mk_expr (E_call (mk_expr (E_c_function f) range ~etyp:(mk_c_fun_typ f), args)) range ~etyp:(f.c_func_return)
+
+let mk_c_builtin_call builtin args typ range =
+  mk_expr (E_c_builtin_call (builtin,args)) range ~etyp:typ
 
 let mk_c_call_stmt f args range =
   let exp = mk_c_call f args range in
@@ -937,18 +946,9 @@ let () =
     )
 
 let range_cond e_mint rmin rmax range =
-  let condle = {ekind = E_binop(O_le, e_mint, mk_z rmax (tag_range range "wrap_le_z"));
-                etyp  = T_bool;
-                erange = tag_range range "wrap_le"
-               } in
-  let condge = {ekind = E_binop(O_ge, e_mint, mk_z rmin (tag_range range "wrap_ge_z"));
-                etyp  = T_bool;
-                erange = tag_range range "wrap_ge"
-               } in
-  {ekind = E_binop(O_log_and, condle, condge);
-   etyp = T_bool;
-   erange = tag_range range "wrap_full"
-  }
+  let condle = mk_binop e_mint O_le (mk_z rmax range) ~etyp:T_bool range in
+  let condge = mk_binop e_mint O_ge (mk_z rmin range) ~etyp:T_bool range in
+  mk_binop condle O_log_and condge ~etyp:T_bool range
 
 let rec remove_casts e =
   match ekind e with
@@ -1028,4 +1028,19 @@ let is_c_expr_equals_z e z =
 let is_c_deref e =
   match remove_casts e |> ekind with
   | E_c_deref _ -> true
+  | _ -> false
+
+
+let is_pointer_offset_quantified p =
+  let open Stubs.Ast in
+  match ekind p with
+  | E_binop(_,e1,e2) when is_c_num_type e2.etyp -> is_expr_quantified e2
+  | E_binop(_,e1,e2) when is_c_num_type e1.etyp -> is_expr_quantified e1
+  | _ -> false
+
+let is_lval_offset_quantified e =
+  let open Stubs.Ast in
+  match remove_casts e |> ekind with
+  | E_c_deref(p) -> is_pointer_offset_quantified p
+  | E_c_array_subscript(_,o) -> is_expr_quantified o
   | _ -> false

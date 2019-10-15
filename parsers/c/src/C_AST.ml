@@ -483,3 +483,9 @@ let variable_is_static kind =
   | Variable_file_static _ | Variable_func_static _ -> true
   | Variable_extern | Variable_global | Variable_local _ | Variable_parameter _ -> false
 (** Whether variables of this kind are static or not. *)
+
+let variable_is_file_static kind =
+  match kind with
+  | Variable_file_static _ -> true
+  | _ -> false
+(** Whether variables of this kind are file-level static. *)

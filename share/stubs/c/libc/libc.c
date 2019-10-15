@@ -42,6 +42,11 @@
 #include "arpa/inet.c"
 #include "netinet/in.c"
 #include "fcntl.c"
+#include "inttypes.c"
+#include "langinfo.c"
+#include "time.c"
+#include "pwd.c"
+#include "sys/resource.c"
 
-/* #include "inttypes.c" */
-/*  */
+/* TODO: include math library only when -lm is used */
+#include "math.c"
