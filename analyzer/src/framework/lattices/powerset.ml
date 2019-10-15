@@ -66,7 +66,7 @@ struct
     then bottom
     else top_lift2 Set.diff abs1 abs2
 
-  let widen (abs1:t) (abs2:t) : t =
+  let widen ctx (abs1:t) (abs2:t) : t =
     top_absorb2
       (fun s1 s2 ->
          if Set.subset s2 s1 then

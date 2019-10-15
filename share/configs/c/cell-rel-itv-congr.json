@@ -38,15 +38,7 @@
                     "compose": [
                         "c.memory.structured.flat",
                         "universal.heap.recency.callstack_range",
-			{
-			    "product": [
-				"c.memory.lowlevel.string_literals",
-				"c.memory.lowlevel.cells"
-			    ],
-			    "reductions": [
-				"c.memory.lowlevel.reductions.cell_string_literals"
-			    ]
-			},
+			"c.memory.lowlevel.cells",
                         {
                             "seq": [
 			        "c.memory.scalars.pointer",
@@ -57,7 +49,6 @@
                 },
 		"on": {
                     "product": [
-                        "universal.numeric.relational.octagon",
                         {
                             "nonrel": {
 			        "disjoint": [
@@ -73,10 +64,11 @@
                                     }
 			        ]
 		            }
-                        }
+                        },
+                        "universal.numeric.relational"
                     ],
                     "reductions": [
-                        "universal.numeric.reductions.intervals"
+                        "universal.numeric.reductions.intervals_rel"
                     ]
                 }
             }

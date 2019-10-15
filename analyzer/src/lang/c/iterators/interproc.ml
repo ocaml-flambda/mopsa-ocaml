@@ -23,10 +23,10 @@
 
 open Mopsa
 open Framework.Core.Sig.Domain.Stateless
-open Memory.Common.Points_to
 open Universal.Ast
 open Ast
 open Zone
+open Common.Points_to
 
 
 module Domain =

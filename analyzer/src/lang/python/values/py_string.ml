@@ -72,8 +72,6 @@ struct
     ieval = { provides = [Zone.Z_py_obj, Zone.Z_py_obj]; uses = []}
   }
 
-  let widen ctx = widen
-
   let print fmt =
     Format.fprintf fmt "strings: @[%a@]@\n" SMap.print
 

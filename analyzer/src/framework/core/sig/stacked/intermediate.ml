@@ -108,7 +108,7 @@ sig
   type t
   (** Type of an abstract elements. *)
 
-  val id : t domain
+  val id : t id
   (** Domain identifier *)
 
   val name : string

@@ -83,7 +83,7 @@ struct
 
   let meet (a1:t) (a2:t) : t = I.meet a1 a2
 
-  let widen (a1:t) (a2:t) : t = I.widen a1 a2
+  let widen ctx (a1:t) (a2:t) : t = I.widen a1 a2
 
   let print fmt (a:t) = I.fprint I.dfl_fmt fmt a
 
@@ -142,6 +142,8 @@ struct
          | O_cast (T_int, T_float p)  ->
            let int_itv = man.cast Integer.Value.id v in
            I.of_int_itv_bot (prec p) (round ()) int_itv
+         (* this seems to return top every time. Why don't we use
+            I.round_int (prec p) (round ()) a ? *)
          | _ -> top)
       | _ -> top
     ) man t op v

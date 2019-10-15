@@ -75,6 +75,51 @@ struct
       default = "false";
     }
 
+
+  (** Numeric variables *)
+  (** ================= *)
+
+  (** Kind of mathematical numeric variables encoding the value of C numeric
+      variables (integers and floats)
+  *)
+  type var_kind += V_c_num of var
+
+  let () =
+    register_var {
+      print = (fun next fmt v ->
+          match v.vkind with
+          | V_c_num vv -> pp_var fmt vv
+          | _ -> next fmt v
+        );
+      compare = (fun next v1 v2 ->
+          match v1.vkind, v2.vkind with
+          | V_c_num vv1, V_c_num vv2 -> compare_var vv1 vv2
+          | _ -> next v1 v2
+        );
+    }
+
+  let to_num_type t =
+    match t with
+    | T_bool | T_int | T_float _ | T_any -> t
+    | _ ->
+      match remove_typedef_qual t with
+      | T_c_bool -> T_bool
+      | T_c_integer _ -> T_int
+      | T_c_enum _ -> T_int
+      | T_c_float C_float -> T_float F_SINGLE
+      | T_c_float C_double -> T_float F_DOUBLE
+      | T_c_float C_long_double -> T_float F_LONG_DOUBLE
+      | _ -> panic ~loc:__LOC__ "non integer type %a" pp_typ t
+
+  let mk_num_var v =
+    mkv v.vname (V_c_num v) (to_num_type v.vtyp)
+
+  let mk_num_var_expr e =
+    match ekind e with
+    | E_var (v,mode) -> mk_var (mk_num_var v) ~mode e.erange
+    | _ -> assert false
+
+
   (** Utility functions *)
   (** ================= *)
 
@@ -124,7 +169,7 @@ struct
       | _ -> fast_check e flow
 
     and fast_check e flow =
-      let itv = man.ask (Universal.Numeric.Common.Q_int_interval e) flow in
+      let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query e) flow in
       if Itv.is_bottom itv then Eval.empty_singleton flow
       else
       if Itv.is_bounded itv then
@@ -148,7 +193,7 @@ struct
 
   let check_division man range f1 f2 e e' flow =
     let rec fast_check () =
-      let itv = man.ask (Universal.Numeric.Common.Q_int_interval e') flow in
+      let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query e') flow in
       if Itv.is_bottom itv then Eval.empty_singleton flow
       else
       if Itv.is_bounded itv then
@@ -160,11 +205,7 @@ struct
         full_check ()
 
     and full_check () =
-      let cond = {ekind = E_binop(O_eq, e', mk_z Z.zero (tag_range range "div0"));
-                  etyp  = T_bool;
-                  erange = tag_range range "div0cond"
-                 }
-      in
+      let cond = mk_binop e' O_eq (mk_zero range) ~etyp:T_bool range in
       assume
         ~zone:Z_u_num
         cond
@@ -173,37 +214,6 @@ struct
         man flow
     in
     fast_check ()
-
-  let to_universal_type t =
-    match t with
-    | T_bool | T_int | T_float _ | T_any -> t
-    | _ ->
-      match remove_typedef_qual t with
-      | T_c_bool -> T_bool
-      | T_c_integer _ -> T_int
-      | T_c_enum _ -> T_int
-      | T_c_float C_float -> T_float F_SINGLE
-      | T_c_float C_double -> T_float F_DOUBLE
-      | T_c_float C_long_double -> T_float F_LONG_DOUBLE
-      | _ -> panic ~loc:__LOC__ "non integer type %a" pp_typ t
-
-  let to_universal_var v =
-    {
-      v with
-      vtyp = to_universal_type v.vtyp;
-      (* vkind = V_common *)
-    }
-
-  let to_universal_expr e =
-    match ekind e with
-    | E_var (v, mode) ->
-      {
-        e with
-        ekind = E_var (to_universal_var v, mode);
-        etyp = to_universal_type v.vtyp
-      }
-
-    | _ -> assert false
 
 
   let rec is_compare_expr e =
@@ -239,7 +249,7 @@ struct
 
     let exp' = {exp with
                 ekind = E_binop(op, e, e');
-                etyp = to_universal_type exp.etyp
+                etyp = to_num_type exp.etyp
                }
     in
     Eval.singleton exp' flow
@@ -249,7 +259,7 @@ struct
     man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$ fun e flow ->
     let exp' = {exp with
                 ekind = E_unop(op, e);
-                etyp = to_universal_type exp.etyp
+                etyp = to_num_type exp.etyp
                }
     in
     Eval.singleton exp' flow
@@ -265,7 +275,7 @@ struct
       man.eval ~zone:(Z_c_scalar, Z_u_num) e' flow >>$? fun e' flow ->
       check_division man range
         (fun tflow ->
-           let exp' = mk_binop e op e' ~etyp:(to_universal_type exp.etyp) range in
+           let exp' = mk_binop e op e' ~etyp:(to_num_type exp.etyp) range in
            Eval.singleton exp' tflow
         )
         (fun fflow ->
@@ -283,10 +293,7 @@ struct
         (fun e tflow -> Eval.singleton e tflow)
         (fun e fflow ->
            let flow1 = raise_c_alarm AIntegerOverflow exp.erange ~bottom:false man.lattice fflow in
-           Eval.singleton
-             {ekind  = E_unop(O_wrap(rmin, rmax), e);
-              etyp   = to_universal_type typ;
-              erange = tag_range range "wrap"} flow1
+           Eval.singleton (mk_unop (O_wrap(rmin, rmax)) e ~etyp:(to_num_type typ) range) flow1
         ) e flow |>
       Option.return
 
@@ -300,21 +307,17 @@ struct
         (fun e tflow -> Eval.singleton e tflow)
         (fun e fflow ->
            let flow1 = raise_c_alarm AIntegerOverflow exp.erange ~bottom:false man.lattice fflow in
-           Eval.singleton
-             {ekind  = E_unop(O_wrap(rmin, rmax), e);
-              etyp   = to_universal_type typ;
-              erange = tag_range range "wrap"} flow1
+           Eval.singleton (mk_unop (O_wrap(rmin, rmax)) e ~etyp:(to_num_type typ) range) flow1
         ) e flow |>
       Option.return
 
     | E_c_cast(e, b) when exp |> etyp |> is_c_float_type &&
                           e   |> etyp |> is_c_int_type ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e flow ->
-      let exp' = {
-        ekind = E_unop (O_cast (to_universal_type e.etyp, to_universal_type exp.etyp), e);
-        etyp = to_universal_type exp.etyp;
-        erange = exp.erange
-      }
+      let exp' = mk_unop
+          (O_cast (to_num_type e.etyp, to_num_type exp.etyp))
+          e
+          ~etyp:(to_num_type exp.etyp) exp.erange
       in
       Eval.singleton exp' flow |>
       Option.return
@@ -323,11 +326,10 @@ struct
     | E_c_cast(e, b) when exp |> etyp |> is_c_int_type &&
                           e   |> etyp |> is_c_float_type ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e flow ->
-      let exp' = {
-        ekind = E_unop (O_cast (to_universal_type e.etyp, to_universal_type exp.etyp), e);
-        etyp = to_universal_type exp.etyp;
-        erange = exp.erange
-      }
+      let exp' = mk_unop
+          (O_cast (to_num_type e.etyp, to_num_type exp.etyp))
+          e
+          ~etyp:(to_num_type exp.etyp) exp.erange
       in
       Eval.singleton exp' flow |>
       Option.return
@@ -346,27 +348,13 @@ struct
       else
         let rmin, rmax = rangeof t in
         check_overflow t man range
-          (fun e tflow -> Eval.singleton {e with etyp = to_universal_type t} tflow)
+          (fun e tflow -> Eval.singleton {e with etyp = to_num_type t} tflow)
           (fun e fflow ->
              if b && !opt_ignore_cast_alarm then
-               begin
-                 Eval.singleton
-                   ({ekind  = E_unop(O_wrap(rmin, rmax), e);
-                     etyp   = to_universal_type t;
-                     erange = tag_range range "wrap"
-                    }) fflow
-
-               end
+                 Eval.singleton (mk_unop (O_wrap(rmin, rmax)) e ~etyp:(to_num_type t) range) fflow
              else
-               begin
-                 let flow1 = raise_c_alarm AIntegerOverflow exp.erange ~bottom:false man.lattice fflow in
-                 Eval.singleton
-                   {ekind  = E_unop(O_wrap(rmin, rmax), e);
-                    etyp   = to_universal_type t;
-                    erange = tag_range range "wrap"
-                   }
-                   flow1
-               end
+               let flow1 = raise_c_alarm AIntegerOverflow exp.erange ~bottom:false man.lattice fflow in
+               Eval.singleton (mk_unop (O_wrap(rmin, rmax)) e ~etyp:(to_num_type t) range) flow1
           ) e' flow |>
         Option.return
 
@@ -391,27 +379,30 @@ struct
       Option.return
 
     | E_constant(C_c_character (c, _)) ->
-      Eval.singleton {exp with ekind = E_constant (C_int c); etyp = to_universal_type exp.etyp} flow
+      Eval.singleton {exp with ekind = E_constant (C_int c); etyp = to_num_type exp.etyp} flow
       |> Option.return
 
     | E_constant(C_int _ | C_int_interval _ | C_float _ | C_float_interval _) ->
-      Eval.singleton {exp with etyp = to_universal_type exp.etyp} flow
+      Eval.singleton {exp with etyp = to_num_type exp.etyp} flow
       |> Option.return
 
     | E_constant(C_top t) when is_c_int_type t ->
       let l, u = rangeof t in
-      let exp' = mk_z_interval l u ~typ:(to_universal_type t) exp.erange in
+      let exp' = mk_z_interval l u ~typ:(to_num_type t) exp.erange in
       Eval.singleton exp' flow |>
       Option.return
 
     | E_constant(C_top t) when is_c_float_type t ->
-      let exp' = mk_top (to_universal_type t) exp.erange in
+      let exp' = mk_top (to_num_type t) exp.erange in
       Eval.singleton exp' flow |>
       Option.return
 
     | E_var (v,_) when is_c_num_type v.vtyp ->
-      Eval.singleton (to_universal_expr exp) flow |>
+      Eval.singleton (mk_num_var_expr exp) flow |>
       Option.return
+
+    | Stubs.Ast.E_stub_builtin_call(VALID_FLOAT, f) ->
+      panic_at exp.erange "valid_float not supported"
 
     | _ ->
       None
@@ -420,7 +411,7 @@ struct
 
   (* Declaration of a scalar numeric variable *)
   let declare_var v init scope range man flow =
-    let vv = mk_var (to_universal_var v) range in
+    let vv = mk_var (mk_num_var v) range in
 
     let init' =
       match scope, init with
@@ -436,7 +427,7 @@ struct
           let l,u = rangeof v.vtyp in
           Eval.singleton (mk_z_interval l u range) flow
         else
-          Eval.singleton (mk_top (to_universal_type v.vtyp) range) flow
+          Eval.singleton (mk_top (to_num_type v.vtyp) range) flow
 
       | _, Some (C_init_expr e) ->
         if not (is_compare_expr e) then
@@ -485,26 +476,26 @@ struct
       Option.return
 
     | S_add v when is_c_num_type v.etyp ->
-      let vv = to_universal_expr v in
+      let vv = mk_num_var_expr v in
       man.post ~zone:Z_u_num (mk_add vv stmt.srange) flow |>
       Option.return
 
     | S_expand(v, vl) when is_c_num_type v.etyp ->
-      let vv = to_universal_expr v in
-      let vvl = List.map to_universal_expr vl in
+      let vv = mk_num_var_expr v in
+      let vvl = List.map mk_num_var_expr vl in
       man.post ~zone:Z_u_num (mk_expand vv vvl stmt.srange) flow |>
       Option.return
 
     | S_remove v when is_c_num_type v.etyp ->
-      let vv = to_universal_expr v in
+      let vv = mk_num_var_expr v in
       man.post ~zone:Z_u_num (mk_remove vv stmt.srange) flow |>
       Option.return
 
     | S_rename(v1, v2) when is_c_num_type v1.etyp &&
                             is_c_num_type v2.etyp
       ->
-      let vv1 = to_universal_expr v1 in
-      let vv2 = to_universal_expr v2 in
+      let vv1 = mk_num_var_expr v1 in
+      let vv2 = mk_num_var_expr v2 in
       man.post ~zone:Z_u_num (mk_rename vv1 vv2 stmt.srange) flow |>
       Option.return
 

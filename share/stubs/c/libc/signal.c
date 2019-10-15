@@ -27,3 +27,15 @@
  * warn: "unsupported stub";
  */
 int kill (__pid_t __pid, int __sig);
+
+
+/*$
+ * case "safe" {
+ *   ensures: return in [0, 1];
+ * }
+ *
+ * case "failure" {
+ *   ensures: return == -1;
+ * }
+ */
+int sigismember (const sigset_t *__set, int __signo);

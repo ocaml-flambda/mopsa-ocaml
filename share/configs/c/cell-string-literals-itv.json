@@ -41,10 +41,10 @@
                         {
                             "product": [
                                 "c.memory.lowlevel.cells",
-                                "c.memory.lowlevel.string_length"
+                                "c.memory.lowlevel.string_literals"
                             ],
                             "reductions": [
-                                "c.memory.lowlevel.reductions.cell_string_length"
+                                "c.memory.lowlevel.reductions.cell_string_literals"
                             ]
                         },
                         {
@@ -56,20 +56,12 @@
                     ]
                 },
 		"on": {
-                    "product": [
-                        "universal.numeric.relational",
-                        {
-                            "nonrel": {
-			        "disjoint": [
-			            "universal.numeric.values.intervals.float",
-                                    "universal.numeric.values.intervals.integer"
-			        ]
-		            }
-                        }
-                    ],
-                    "reductions": [
-                        "universal.numeric.reductions.intervals"
-                    ]
+                    "nonrel": {
+			"disjoint": [
+			    "universal.numeric.values.intervals.float",
+                            "universal.numeric.values.intervals.integer"
+			]
+		    }
                 }
             }
 	]

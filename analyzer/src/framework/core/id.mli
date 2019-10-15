@@ -25,22 +25,36 @@
 open Eq
 
 
-type _ domain = ..
-(** Domain identifier *)
+type _ id = ..
+(** Identifiers *)
 
 
-type 'a domain_info = {
-  eq :  'b. 'b domain -> ('b,'a) eq option;
+type 'a witness = {
+  eq :  'b. 'b id -> ('b,'a) eq option;
 }
-(** Descriptor of a domain identifier *)
+(** Equality witness of an identifier *)
 
 
-val register_domain_id : 'a domain_info -> unit
+val register_id : 'a witness -> unit
 (** Register a new descriptor *)
 
 
-val domain_id_eq : 'a domain -> 'b domain -> ('a,'b) eq option
-(** Equality witness of domain identifiers *)
+val equal_id : 'a id -> 'b id -> ('a,'b) eq option
+(** Equality witness of identifiers *)
+
+
+(** Generator of a new identifier *)
+module GenId(
+    Spec: sig
+      type t
+      val name : string
+    end
+  ) :
+sig
+  val id : Spec.t id
+  val name : string
+  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
+end
 
 
 (** Generator of a new domain identifier *)
@@ -51,7 +65,7 @@ module GenDomainId(
     end
   ) :
 sig
-  val id : Spec.t domain
+  val id : Spec.t id
   val name : string
   val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
 end
@@ -64,36 +78,12 @@ module GenStatelessDomainId(
     end
   ) :
 sig
-  val id : unit domain
+  val id : unit id
   val name : string
   val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
 end
 
 
-(****************************************************************************)
-(**                         {2 Value identifiers}                           *)
-(****************************************************************************)
-
-
-type _ value = ..
-(** Value identifier *)
-
-type 'a value_info = {
-  eq :  'b. 'b value -> ('b,'a) eq option;
-}
-(** Descriptor of a value identifier *)
-
-
-val register_value_id : 'a value_info -> unit
-(** Register a new descriptor *)
-
-
-val value_id_eq : 'a value -> 'b value -> ('a,'b) eq option
-(** Equality witness of value identifiers *)
-
-
-val value_id_eq : 'a value -> 'b value -> ('a,'b) eq option
-(** Equality witness of value identifiers *)
 
 (** Generator of a new value identifier *)
 module GenValueId(
@@ -104,7 +94,7 @@ module GenValueId(
     end
   ) :
 sig
-  val id : Spec.t value
+  val id : Spec.t id
   val name : string
   val display : string
   val debug : ('a, Format.formatter, unit, unit) format4 -> 'a

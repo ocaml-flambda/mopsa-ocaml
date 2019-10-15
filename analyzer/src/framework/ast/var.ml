@@ -235,3 +235,11 @@ let () =
         | _ -> next fmt v
       )
   }
+
+
+(*========================================================================*)
+(**                         {2 Utility modules}                           *)
+(*========================================================================*)
+
+module VarSet = SetExt.Make(struct type t = var let compare = compare_var end)
+module VarMap = MapExt.Make(struct type t = var let compare = compare_var end)

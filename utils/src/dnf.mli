@@ -75,3 +75,6 @@ val merge : ('a -> 'b -> 'a t option * 'b t option) -> 'a t -> 'b t -> 'a t opti
 
 
 val merge_fold  : ('c -> 'a -> 'b -> 'a t option * 'b t option * 'c) -> 'c -> 'a t -> 'b t -> 'a t option * 'b t option * 'c
+
+
+val cardinal : 'a t -> int

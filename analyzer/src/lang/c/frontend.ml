@@ -290,11 +290,18 @@ and from_project prj =
       f.c_func_static_vars <- List.map (from_var ctx) o.func_static_vars;
       f.c_func_local_vars <- List.map (from_var ctx) o.func_local_vars;
       f.c_func_body <- from_body_option ctx (from_range o.func_range) o.func_body;
-      try
-        f.c_func_stub <- from_stub_comment ctx o;
+      (* Parse stub when the function has no body *)
+      match f.c_func_body with
+      | None | Some { skind = S_block [] } ->
+        begin
+          try
+            f.c_func_stub <- from_stub_comment ctx o;
+            funcs_with_alias
+          with (StubAliasFound alias) ->
+            (f, o, alias) :: funcs_with_alias
+        end
+      | _ ->
         funcs_with_alias
-      with (StubAliasFound alias) ->
-        (f, o, alias) :: funcs_with_alias
     ) [] funcs_and_origins
   in
 
@@ -428,7 +435,7 @@ and from_expr ctx ((ekind, tc , range) : C_AST.expr) : expr =
     | C_AST.E_compound_literal _ -> Exceptions.panic_at erange "E_compound_literal not supported"
     | C_AST.E_atomic (_,_,_) -> Exceptions.panic_at erange "E_atomic not supported"
   in
-  {ekind; erange; etyp}
+  mk_expr ekind erange ~etyp
 
 and from_expr_option ctx : C_AST.expr option -> expr option = function
   | None -> None
@@ -817,7 +824,7 @@ and from_stub_set ctx s =
 and from_stub_expr ctx exp =
   let bind_range_expr (exp:C_stubs_parser.Ast.expr with_range) f =
     let ekind = f exp.content.kind
-    in { ekind; erange = exp.range; etyp = from_typ ctx exp.content.typ }
+    in mk_expr ekind exp.range  ~etyp:(from_typ ctx exp.content.typ)
   in
   bind_range_expr exp @@ function
   | E_int n -> E_constant (C_int n)

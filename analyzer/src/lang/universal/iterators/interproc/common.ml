@@ -28,8 +28,7 @@ open Ast
 open Callstack
 
 
-(** {2 Return flow token} *)
-(** ===================== *)
+let debug fmt = Debug.debug ~channel:"universal.iterators.interproc.common" fmt
 
 
 (** {2 Return flow token} *)
@@ -58,11 +57,46 @@ let () =
       );
   }
 
-(** {2 Function inlining} *)
-(** ===================== *)
+
+(** {2 Return variable} *)
+(** =================== *)
 
 
-(* Context to keep return variable *)
+(** Return variable of a function call *)
+type var_kind += V_return of expr
+
+(** Registration of the kind of return variables *)
+let () =
+  register_var {
+    print = (fun next fmt v ->
+        match v.vkind with
+        | V_return e -> Format.fprintf fmt "ret(%a)" pp_expr e
+        | _ -> next fmt v
+      );
+    compare = (fun next v1 v2 ->
+        match v1.vkind, v2.vkind with
+        | V_return e1, V_return e2 ->
+          Compare.compose [
+            (fun () -> compare_expr e1 e2);
+            (fun () -> compare_range e1.erange e2.erange);
+          ]
+        | _ -> next v1 v2
+      );
+  }
+
+(** Constructor of return variables *)
+let mk_return_var call =
+  let uniq_name =
+    let () = Format.fprintf Format.str_formatter "ret(%a)@@%a" pp_expr call pp_range call.erange in
+    Format.flush_str_formatter ()
+  in
+  mkv uniq_name (V_return call) call.etyp
+
+
+
+(** {2 Context to keep return variable} *)
+(** =================================== *)
+
 let return_key =
   let module K = Context.GenUnitKey(
     struct
@@ -75,7 +109,10 @@ let return_key =
   K.key
 
 
-let debug fmt = Debug.debug ~channel:"universal.iterators.interproc.common" fmt
+
+
+(** {2 Recursion checks} *)
+(** ==================== *)
 
 
 (** Check that no recursion is happening *)
@@ -85,6 +122,15 @@ let check_recursion f range flow =
   else
     List.exists (fun cs -> Callstack.compare_call cs {call_fun=f.fun_name; call_site=range} = 0) (List.tl cs)
 
+let check_nested_calls f range flow =
+  let cs = Flow.get_callstack flow in
+  if cs = [] then false
+  else List.exists (fun call -> call.call_fun = f) (List.tl cs)
+
+
+
+(** {2 Function inlining} *)
+(** ===================== *)
 
 
 (** Initialize function parameters *)
@@ -97,24 +143,57 @@ let init_fun_params f args range man flow =
     ) flow
   in
 
-  (* Add parameters and local variables to the environment *)
-  let new_vars = f.fun_parameters @ f.fun_locvars in
+  (* Update call stack *)
+  let flow1 = Flow.push_callstack f.fun_name range flow0 in
 
-  (* Assign arguments to parameters *)
-  let parameters_assign = List.mapi (fun i (param, arg) ->
-      mk_assign (mk_var param range) arg range
-    ) (List.combine f.fun_parameters args) in
+  if check_nested_calls f.fun_name range flow1 then
+    begin
+      debug "nested calls detected on %s, performing parameters and locvar renaming" f.fun_name;
+      (* Add parameters and local variables to the environment *)
+      let add_range = (fun p -> mk_attr_var p (Format.fprintf Format.str_formatter "%a" pp_range range;
+                                               Format.flush_str_formatter ()) p.vtyp) in
 
-  let init_block = mk_block parameters_assign range in
+      let function_vars = f.fun_parameters @ f.fun_locvars in
+      let fun_parameters = List.map add_range f.fun_parameters in
+      let fun_locvars = List.map add_range f.fun_locvars in
 
-  (* Execute body *)
-  let flow0 = Flow.push_callstack f.fun_name range flow0 in
-  new_vars, man.exec init_block flow0
+      (* TODO: do this transformation only if we detect f in the callstack? That could work? *)
+      let new_body = Visitor.map_stmt (fun e -> match ekind e with
+          | E_var (v, m) when List.exists (fun v' -> compare_var v v' = 0) function_vars ->
+            Keep {e with ekind = E_var(add_range v, m)}
+          | _ -> VisitParts e) (fun s -> VisitParts s) f.fun_body in
+      debug "moved body from:%a@\nto %a@\n" pp_stmt f.fun_body pp_stmt new_body;
 
+      (* Assign arguments to parameters *)
+      let parameters_assign = List.rev @@ List.fold_left (fun acc (param, arg) ->
+          mk_assign (mk_var param range) arg range ::
+          mk_add_var param range :: acc
+        ) [] (List.combine fun_parameters args) in
+
+      let init_block = mk_block parameters_assign range in
+
+
+      (* Execute body *)
+      fun_parameters, fun_locvars, new_body, man.exec init_block flow1
+
+    end
+  else
+    begin
+      (* Assign arguments to parameters *)
+      let parameters_assign = List.rev @@ List.fold_left (fun acc (param, arg) ->
+          mk_assign (mk_var param range) arg range ::
+          mk_add_var param range :: acc
+        ) [] (List.combine f.fun_parameters args) in
+
+      let init_block = mk_block parameters_assign range in
+
+      (* Execute body *)
+      f.fun_parameters, f.fun_locvars, f.fun_body, man.exec init_block flow1
+    end
 
 
 (** Execute function body and save the return value *)
-let exec_fun_body f ret range man flow =
+let exec_fun_body f body ret range man flow =
   let oldreturn, flow1 =
     match ret with
     | None -> None, flow
@@ -123,7 +202,7 @@ let exec_fun_body f ret range man flow =
       Flow.set_ctx (Context.add_unit return_key (ret, range) (Flow.get_ctx flow)) flow in
 
   (* Execute the body of the function *)
-  let flow2 = man.exec f.fun_body flow1 in
+  let flow2 = man.exec body flow1 in
 
   let flow3 =
     Flow.fold (fun acc tk env ->
@@ -151,7 +230,7 @@ let exec_fun_body f ret range man flow =
 
 
 (** Inline a function call *)
-let inline f params ret range man flow =
+let inline f params locals body ret range man flow =
   let flow =
     match check_recursion f range flow with
     | true ->
@@ -167,15 +246,22 @@ let inline f params ret range man flow =
       end
 
     | false ->
-      exec_fun_body f ret range man flow |>
-      (* Remove parameters and local variables from the environment *)
+      exec_fun_body f body ret range man flow |>
+      (* Remove local variables from the environment. Remove of parameters is
+         postponed after finishing the statement, to keep relations between
+         the passed arguments and the return value. *)
       man.exec (mk_block (List.map (fun v ->
           mk_remove_var v range
-        ) params) range)
+        ) locals) range)
   in
   match ret with
   | None ->
     Eval.empty_singleton flow
 
   | Some v ->
-    Eval.singleton (mk_var v range) flow ~cleaners:([mk_remove_var v range])
+    Eval.singleton (mk_var v range) flow ~cleaners:(
+      mk_remove_var v range ::
+      List.map (fun v ->
+          mk_remove_var v range
+        ) params
+    )

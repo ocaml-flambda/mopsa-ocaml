@@ -23,6 +23,7 @@
 (** List of builtin functions *)
 let is_builtin_function = function
   | "__builtin_constant_p"
+  | "__builtin_expect"
 
   | "__builtin_va_start"
   | "__builtin_va_end"

@@ -26,6 +26,7 @@
 /*$$
  * predicate valid_string(s):
  *   valid_ptr(s) and
+ *   size(s) >= 1 and
  *   exists int _i in [0, size(s) - 1]: s[_i] == 0
  * ;
  */

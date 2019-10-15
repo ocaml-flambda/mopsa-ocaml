@@ -107,7 +107,7 @@ struct
         | PyAddr.Def _ -> false
         | _ -> true
 
-      let widen a b = join a b
+      let widen ctx a b = join a b
         (* Top.top_absorb2 (fun a b ->
          *     if Set.cardinal b - Set.cardinal a = 1
          *     && Set.exists undef b && Set.exists undef a then
@@ -133,8 +133,6 @@ struct
   }
 
   let merge _ _ _ = assert false
-
-  let widen ctx = widen
 
   let print fmt m =
     Format.fprintf fmt "addrs: @[%a@]@\n" AMap.print m

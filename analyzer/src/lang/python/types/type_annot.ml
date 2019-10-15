@@ -49,7 +49,7 @@ struct
   module TVMap = Framework.Lattices.Partial_map.Make(Keys)(ESet)
 
   include TVMap
-  let widen ctx = widen
+
   let print fmt m =
     Format.fprintf fmt "TypeVar annotations: @[%a@]@\n" TVMap.print m
 
@@ -215,7 +215,7 @@ struct
             (* il faut enelver des trucs là, je veux pas enlever les variables de classe *)
             debug "new_typevars: %a" TVMap.print new_typevars;
             debug "cur: %a" TVMap.print cur;
-            let ncur = TVMap.fold2o
+            let ncur = TVMap.fold2zo
                 TVMap.add
                 TVMap.add
                 (fun s tycur tynew acc ->

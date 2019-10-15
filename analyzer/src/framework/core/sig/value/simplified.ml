@@ -37,7 +37,7 @@ sig
   type t
   (** Type of the abstract value. *)
 
-  val id : t value
+  val id : t id
   (** Identifier of the value domain *)
 
   val name : string
@@ -78,7 +78,7 @@ sig
   val meet: t -> t -> t
   (** [meet a1 a2] computes a lower bound of [a1] and [a2]. *)
 
-  val widen: t -> t -> t
+  val widen: uctx -> t -> t -> t
   (** [widen ctx a1 a2] computes an upper bound of [a1] and [a2] that
       ensures stabilization of ascending chains. *)
 
@@ -171,15 +171,15 @@ let lift_refine refine man channel v =
   man.set r v |>
   Channel.return
 
-let leaf_get :type t s. ('a,t) man -> t value -> s value -> 'a -> s option =
+let leaf_get :type t s. ('a,t) man -> t id -> s id -> 'a -> s option =
   fun man id1 id2 a ->
-    match Id.value_id_eq id1 id2 with
+    match equal_id id1 id2 with
     | Some Eq.Eq -> Some (man.get a)
     | None -> None
 
-let leaf_set :type t s. ('a,t) man -> t value -> s value -> s -> 'a -> 'a option =
+let leaf_set :type t s. ('a,t) man -> t id -> s id -> s -> 'a -> 'a option =
   fun man id1 id2 v a ->
-    match Id.value_id_eq id1 id2 with
+    match equal_id id1 id2 with
     | Some Eq.Eq -> Some (man.set v a)
     | None -> None
 

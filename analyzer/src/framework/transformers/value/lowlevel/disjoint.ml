@@ -101,10 +101,10 @@ struct
     | BOT,_ | _,BOT -> BOT
     | _ -> TOP
 
-  let widen a b =
+  let widen ctx a b =
     match a,b with
-    | V1 x, V1 y -> V1 (V1.widen x y)
-    | V2 x, V2 y -> V2 (V2.widen x y)
+    | V1 x, V1 y -> V1 (V1.widen ctx x y)
+    | V2 x, V2 y -> V2 (V2.widen ctx x y)
     | BOT,x | x,BOT -> x
     | _ -> TOP
 

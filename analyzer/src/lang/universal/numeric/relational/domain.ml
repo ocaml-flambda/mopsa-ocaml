@@ -117,6 +117,7 @@ struct
         (Array.of_list int_vars)
         (Array.of_list float_vars)
     in
+    debug "|vars| = %d" (Apron.Environment.size env');
     Apron.Abstract1.change_environment ApronManager.man a env' false,
     bnd
 
@@ -171,13 +172,6 @@ struct
 
 
   let merge (pre,bnd) ((a1,bnd1),log1) ((a2,bnd2),log2) =
-    debug "@[<v>merging:@, pre-condition: %a@, post-condition #1: %a@, log #1: %a@, post-condition #2: %a@, log #2: %a@]"
-      Apron.Abstract1.print pre
-      Apron.Abstract1.print a1
-      pp_block log1
-      Apron.Abstract1.print a2
-      pp_block log2
-    ;
     let bnd = Binding.concat bnd1 bnd2 in
     let patch stmt a acc =
       match skind stmt with
@@ -186,6 +180,11 @@ struct
       | S_remove { ekind = E_var (var, _) }
       | S_assign({ ekind = E_var (var, _)}, _) ->
         let acc', _ = forget_var var (acc,bnd) in
+        acc'
+      | S_rename ( {ekind = E_var (var1, _)}, {ekind = E_var (var2, _)} ) ->
+        let acc', _ = forget_var var1 (acc,bnd) |>
+                      forget_var var2
+        in
         acc'
 
       | S_assume _ ->
@@ -198,7 +197,7 @@ struct
     meet (a1',bnd) (a2',bnd)
 
 
-  let rec exec stmt (a,bnd) =
+  let rec exec ctx stmt man (a,bnd) =
     match skind stmt with
     | S_add { ekind = E_var (var, _) } ->
       add_missing_vars (a,bnd) [var] |>
@@ -249,12 +248,12 @@ struct
           in
           Some (a', bnd)
         with UnsupportedExpression ->
-          exec (mk_remove_var var stmt.srange) (a,bnd)
+          exec ctx (mk_remove_var var stmt.srange) man (a,bnd)
       end
 
     | S_assign({ ekind = E_var (var, WEAK) } as lval, e) ->
       let lval' = { lval with ekind = E_var(var, STRONG) } in
-      exec {stmt with skind = S_assign(lval', e)} (a,bnd) |>
+      exec ctx {stmt with skind = S_assign(lval', e)} man (a,bnd) |>
       Option.lift @@ fun (a',bnd') ->
       join (a,bnd) (a', bnd')
 
@@ -350,13 +349,34 @@ struct
 
     | _ -> None
 
+  let vars (abs,bnd) =
+    fold_env (fun v acc ->
+        let vv = Binding.apron_to_var bnd v in
+        vv :: acc
+      ) (Apron.Abstract1.env abs) []
+
+  let bound_var v (abs,bnd) =
+    if is_env_var v abs then
+      let vv = Binding.mk_apron_var v in
+      Apron.Abstract1.bound_variable ApronManager.man abs vv |>
+      Values.Intervals.Integer.Value.of_apron
+    else
+      Values.Intervals.Integer.Value.top
+
+
   let eval_interval e (abs,bnd) =
-    let abs, bnd = add_missing_vars (abs,bnd) (Visitor.expr_vars e) in
-    let e, abs, bnd, _ = exp_to_apron e (abs,bnd) [] in
-    let env = Apron.Abstract1.env abs in
-    let e = Apron.Texpr1.of_expr env e in
-    Apron.Abstract1.bound_texpr ApronManager.man abs e |>
-    Values.Intervals.Integer.Value.of_apron
+    match ekind e with
+    | E_var (v,_) -> bound_var v (abs,bnd)
+    | _ ->
+      try
+        let abs, bnd = add_missing_vars (abs,bnd) (Visitor.expr_vars e) in
+        let e, abs, bnd, _ = exp_to_apron e (abs,bnd) [] in
+        let env = Apron.Abstract1.env abs in
+        let e = Apron.Texpr1.of_expr env e in
+        Apron.Abstract1.bound_texpr ApronManager.man abs e |>
+        Values.Intervals.Integer.Value.of_apron
+      with UnsupportedExpression ->
+        Values.Intervals.Integer.Value.top
 
 
   let ask : type r. r query -> t -> r option =

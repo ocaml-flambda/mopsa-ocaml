@@ -25,139 +25,85 @@
 open Eq
 
 
-(****************************************************************************)
-(**                        {2 Domain identifiers}                           *)
-(****************************************************************************)
+type _ id = ..
 
-(** Domain identifier *)
-type _ domain = ..
 
-(** Descriptor of a domain identifier *)
-type 'a domain_info = {
-  eq :  'b. 'b domain -> ('b,'a) eq option;
+type 'a witness = {
+  eq :  'b. 'b id -> ('b,'a) eq option;
 }
 
-(** Pool of descriptors of domain identifiers *)
-type domain_pool =
-  | [] :   domain_pool
-  | (::) : 'a domain_info * domain_pool -> domain_pool
+(** Pool of witnesses *)
+type pool =
+  | [] :   pool
+  | (::) : 'a witness * pool -> pool
 
-let domain_pool : domain_pool ref = ref []
+let pool : pool ref = ref []
 
-(** Register a new descriptor *)
-let register_domain_id (info:'a domain_info) =
-  domain_pool := info :: !domain_pool
 
-(** Find descriptor of a domain identifier *)
-let find_domain (domain:'a domain) =
-  let rec aux : type b. b domain -> domain_pool -> b domain_info =
-    fun domain domain_pool ->
-      match domain_pool with
+let register_id (info:'a witness) =
+  pool := info :: !pool
+
+
+let find_witnesss (id:'a id) =
+  let rec aux : type b. b id -> pool -> b witness =
+    fun id pool ->
+      match pool with
       | [] -> raise Not_found
-      | domain_info :: tl ->
-        match domain_info.eq domain with
-        | Some Eq -> domain_info
-        | None -> aux domain tl
+      | info :: tl ->
+        match info.eq id with
+        | Some Eq -> info
+        | None -> aux id tl
   in
-  aux domain !domain_pool
+  aux id !pool
 
 (** Equality witness of domain identifiers *)
-let domain_id_eq (domain1:'a domain) (domain2:'b domain) : ('a,'b) eq option =
-  let domain_info2 = find_domain domain2 in
-  domain_info2.eq domain1
+let equal_id (id1:'a id) (id2:'b id) : ('a,'b) eq option =
+  let info2 = find_witnesss id2 in
+  info2.eq id1
 
-(** Generator of a new domain identifier *)
-module GenDomainId(Spec:sig
+
+(** Generator of a new identifier *)
+module GenId(Spec:sig
     type t
     val name : string
   end) =
 struct
 
-  type _ domain += Domain : Spec.t domain
+  type _ id += Id : Spec.t id
 
-  let id = Domain
+  let id = Id
 
   let name = Spec.name
 
   let debug fmt = Debug.debug ~channel:Spec.name fmt
 
-  let eq : type a. a domain -> (a,Spec.t) eq option =
+  let eq : type a. a id -> (a,Spec.t) eq option =
     function
-    | Domain -> Some Eq
+    | Id -> Some Eq
     | _ -> None
 
   let () =
-    register_domain_id { eq }
+    register_id { eq }
 
 end
 
+
+module GenDomainId = GenId
 
 (** Generator of a new identifier for stateless domains *)
 module GenStatelessDomainId(Spec:sig
     val name : string
-  end) =
+  end)
+=
 struct
 
-  type _ domain += Domain : unit domain
-
-  let id = Domain
-
-  let name = Spec.name
-
-  let debug fmt = Debug.debug ~channel:Spec.name fmt
-
-  let eq : type a. a domain -> (a,unit) eq option =
-    function
-    | Domain -> Some Eq
-    | _ -> None
-
-  let () =
-    register_domain_id { eq }
+  include GenId(struct
+      type t = unit
+      let name = Spec.name
+    end)
 
 end
 
-
-(****************************************************************************)
-(**                         {2 Value identifiers}                           *)
-(****************************************************************************)
-
-
-(** Value identifier *)
-type _ value = ..
-
-(** Descriptor of a value identifier *)
-type 'a value_info = {
-  eq :  'b. 'b value -> ('b,'a) eq option;
-}
-
-(** Pool of descriptors of value identifiers *)
-type value_pool =
-  | [] :   value_pool
-  | (::) : 'a value_info * value_pool -> value_pool
-
-let value_pool : value_pool ref = ref []
-
-(** Register a new descriptor *)
-let register_value_id (value_info:'a value_info) =
-  value_pool := value_info :: !value_pool
-
-(** Find descriptor of a value identifier *)
-let find_value (value:'a value) =
-  let rec aux : type b. b value -> value_pool -> b value_info =
-    fun value value_pool ->
-      match value_pool with
-      | [] -> raise Not_found
-      | value_info :: tl ->
-        match value_info.eq value with
-        | Some Eq -> value_info
-        | None -> aux value tl
-  in
-  aux value !value_pool
-
-(** Equality witness of value identifiers *)
-let value_id_eq (value1:'a value) (value2:'b value) : ('a,'b) eq option =
-  let value_info2 = find_value value2 in
-  value_info2.eq value1
 
 (** Generator of a new value identifier *)
 module GenValueId(Spec:sig
@@ -167,22 +113,8 @@ module GenValueId(Spec:sig
   end) =
 struct
 
-  type _ value += Value : Spec.t value
-
-  let id = Value
-
-  let name = Spec.name
+  include GenId(Spec)
 
   let display = Spec.display
-
-  let debug fmt = Debug.debug ~channel:Spec.name fmt
-
-  let eq : type a. a value -> (a,Spec.t) eq option =
-    function
-    | Value -> Some Eq
-    | _ -> None
-
-  let () =
-    register_value_id { eq }
 
 end
