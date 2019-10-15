@@ -414,7 +414,7 @@ struct
     man.eval ~zone:(Z_c, Z_c_low_level) p flow |>
     Eval.bind @@ fun p flow ->
 
-    let st = under_pointer_type p.etyp in
+    let st = under_type p.etyp in
     let t = etyp exp in
     let align = mk_int (align_byte st i) range in
 
@@ -452,7 +452,7 @@ struct
     man.eval ~zone:(Z_c, Z_c_low_level) p flow |>
     Eval.bind @@ fun p flow ->
 
-    let st = under_pointer_type p.etyp in
+    let st = under_type p.etyp in
     let t = etyp exp in
     let align = mk_int (align_byte st i) range in
 

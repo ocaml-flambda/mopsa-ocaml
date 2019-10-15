@@ -76,6 +76,13 @@ struct
   (** Evaluation of expressions *)
   (** ========================= *)
 
+  (** Check if there is a recursive call to a function *)
+  let is_recursive_call f flow =
+    let open Callstack in
+    let cs = Flow.get_callstack flow in
+    List.exists (fun c -> c.call_fun = f.c_func_unique_name) cs
+
+
   (** Eval a function call *)
   let eval_call fundec args range man flow =
     if Libs.Builtins.is_builtin_function fundec.c_func_org_name
@@ -84,6 +91,13 @@ struct
       man.eval ~zone:(Zone.Z_c, Zone.Z_c_low_level) exp' flow
     else
       match fundec with
+      | _ when is_recursive_call fundec flow ->
+        Soundness.warn_at range "ignoring recursive call of function %s in %a" fundec.c_func_org_name pp_range range;
+        if is_c_void_type fundec.c_func_return then
+          Eval.empty_singleton flow
+        else
+          Eval.singleton (mk_top fundec.c_func_return range) flow
+
       | {c_func_body = Some body; c_func_stub = None; c_func_variadic = false} ->
         let open Universal.Ast in
         let ret_var = mktmp ~typ:fundec.c_func_return () in

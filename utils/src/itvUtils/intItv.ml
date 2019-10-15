@@ -692,7 +692,7 @@ let bwd_bit_not (a:t) (r:t) : t_with_bot =
 
 let bwd_join (a:t) (b:t) (r:t) : (t*t) with_bot =
   bot_merge2 (meet a r) (meet b r)
-(** Backward join: both arguments and intersected with the result. *)
+(** Backward join: both arguments are intersected with the result. *)
 
 let bwd_bit_xor (a:t) (b:t) (r:t) : (t*t) with_bot =
   bot_merge2 (meet a (bit_xor b r)) (meet b (bit_xor a r))

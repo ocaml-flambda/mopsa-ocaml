@@ -151,7 +151,8 @@ type print_format = unit
 (* TODO *)
 
 let dfl_fmt : print_format = ()
-                  
+(** Default format. *)
+
 let to_string (fmt:print_format) (x:t) : string =
   if is_nan x then "NaN"
   else if x = infinity then "+∞"
@@ -160,7 +161,7 @@ let to_string (fmt:print_format) (x:t) : string =
 (* Note: don't remove the "+.0."; it is here to ensure we never print "-0." 
    TODO: printing a guaranteed under/over-approximation.
  *)
-                       
+
 let print fmt ch (x:t) = output_string ch (to_string fmt x)
 let fprint fmt ch (x:t) = Format.pp_print_string ch (to_string fmt x)
 let bprint fmt ch (x:t) = Buffer.add_string ch (to_string fmt x)

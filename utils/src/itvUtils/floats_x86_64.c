@@ -29,7 +29,7 @@
   as rounding upwards the negation of the expected result, when possible.
   Thus, we expect that, in practice, we will only switch between
   rounding upwards and rounding to nearest. Switching between two
-  rounding modes is ratjer efficient on modern processors (but not 
+  rounding modes is rather efficient on modern processors (but not 
   switching between three or more rounding modes).
  */
 
@@ -48,7 +48,7 @@
 
 
 /*
-  We rely on the compiler strictly evaluting float expressions in single 
+  We rely on the compiler strictly evaluating float expressions in single 
   precision and double expressions in double precision in the current
   rounding more, and interpreting (float) casts as rounding to float 
   in the current rounding mode.
