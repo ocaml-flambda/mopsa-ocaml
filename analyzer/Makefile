@@ -30,7 +30,7 @@ framework = ast core lattices engines transformers output config
 framework.ast = program typ operator constant var expr stmt visitor all
 framework.core = query context zone callstack alarm token log lattice        \
 		 soundness flow result eval post id interface channel sig    \
-                 debug_tree cache abstraction all
+                 hook cache abstraction all
 framework.core.sig = value domain stacked functor
 framework.core.sig.value = lowlevel simplified reduction
 framework.core.sig.domain = manager lowlevel intermediate simplified         \

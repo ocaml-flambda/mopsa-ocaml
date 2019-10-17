@@ -244,27 +244,6 @@ let () =
     default = "";
   }
 
-(** Logs activation *)
-let () =
-  register_builtin_option {
-    key = "-log";
-    category = "Debugging";
-    doc = " activate logs";
-    spec = ArgExt.Set Core.Debug_tree.opt_log;
-    default = "false";
-  }
-
-(** Short logs *)
-let () =
-  register_builtin_option {
-    key = "-short-log";
-    category = "Debugging";
-    doc = " display logs without abstract states";
-    spec = ArgExt.Set Core.Debug_tree.opt_short_log;
-    default = "false";
-  }
-
-
 
 (** Help message *)
 let help () =

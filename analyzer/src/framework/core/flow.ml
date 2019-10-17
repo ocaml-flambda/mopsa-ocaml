@@ -171,7 +171,8 @@ let merge
 
 let get_ctx flow = flow.ctx
 
-let set_ctx ctx flow = {flow with ctx}
+let set_ctx ctx flow =
+  if ctx == flow.ctx then flow else {flow with ctx}
 
 let get_unit_ctx flow = Context.get_unit flow.ctx
 
