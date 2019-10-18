@@ -52,22 +52,59 @@ sig
   val init : 'a ctx -> 'a ctx
   (** Initialization of the hook *)
 
-  val on_before_exec : zone -> stmt -> ('a,'a) man  -> 'a flow -> 'a ctx option
+  val on_before_exec : zone -> stmt -> ('a,'a) man  -> 'a flow -> 'a ctx
   (** Event fired before an exec is performed *)
 
-  val on_after_exec : zone -> stmt -> ('a,'a) man -> 'a post -> 'a ctx option
+  val on_after_exec : zone -> stmt -> ('a,'a) man -> 'a post -> 'a ctx
   (** Event fired after an exec is performed *)
 
-  val on_before_eval : (zone * zone) -> expr -> ('a,'a) man -> 'a flow -> 'a ctx option
+  val on_before_eval : (zone * zone) -> expr -> ('a,'a) man -> 'a flow -> 'a ctx
   (** Event fired before an eval is performed *)
 
-  val on_after_eval : (zone * zone) -> expr -> ('a,'a) man -> 'a eval -> 'a ctx option
+  val on_after_eval : (zone * zone) -> expr -> ('a,'a) man -> 'a eval -> 'a ctx
   (** Event fired after an eval is performed *)
+
+  val on_finish : ('a,'a) man -> 'a flow -> unit
+  (** Event fired after the analysis has terminated *)
+end
+
+(** Signature of a stateless hook *)
+module type STATELESS_HOOK =
+sig
+  val name : string
+  (** Name of the hook *)
+
+  val exec_zones : zone list
+  (** List of exec zones to capture *)
+
+  val eval_zones: (zone * zone) list
+  (** List of eval zones to capture *)
+
+  val init : 'a ctx -> unit
+  (** Initialization of the hook *)
+
+  val on_before_exec : zone -> stmt -> ('a,'a) man  -> 'a flow -> unit
+  (** Event fired before an exec is performed *)
+
+  val on_after_exec : zone -> stmt -> ('a,'a) man -> 'a post -> unit
+  (** Event fired after an exec is performed *)
+
+  val on_before_eval : (zone * zone) -> expr -> ('a,'a) man -> 'a flow -> unit
+  (** Event fired before an eval is performed *)
+
+  val on_after_eval : (zone * zone) -> expr -> ('a,'a) man -> 'a eval -> unit
+  (** Event fired after an eval is performed *)
+
+  val on_finish : ('a,'a) man -> 'a flow -> unit
+  (** Event fired after the analysis has terminated *)
 end
 
 
 val register_hook : (module HOOK) -> unit
 (** Register a new hook *)
+
+val register_stateless_hook : (module STATELESS_HOOK) -> unit
+(** Register a new stateless hook *)
 
 val activate_hook : string -> unit
 (** Activate a hook *)
@@ -86,3 +123,6 @@ val on_before_eval : (zone * zone) -> expr -> ('a,'a) man -> 'a flow -> 'a ctx
 
 val on_after_eval : (zone * zone) -> expr -> ('a,'a) man -> 'a eval -> 'a ctx
 (** Call [on_after_eval] on all hooks attached to [zone] *)
+
+val on_finish : ('a,'a) man -> 'a flow -> unit
+(** Call [on_finish] on all active hooks *)

@@ -59,7 +59,7 @@ struct
   (* We use a stack for keeping the duration of exec and eval *)
   let stack = Stack.create ()
 
-  let init ctx = ctx
+  let init ctx = ()
 
 
   (** {2 Indentation} *)
@@ -143,6 +143,9 @@ struct
     fprintf fmt "@[<v 3>E [| %a@] |]" pp_expr exp
 
 
+  (** {2 Events handlers} *)
+  (** ******************* *)
+
   let on_before_exec zone stmt man flow =
     reach stmt.srange;
     if !opt_short_logs then
@@ -157,8 +160,7 @@ struct
         pp_zone zone
         ~symbol:BEGIN
     ;
-    Stack.push (Sys.time ()) stack;
-    None
+    Stack.push (Sys.time ()) stack
 
 
   let on_after_exec zone stmt man post =
@@ -176,8 +178,7 @@ struct
         time
         (Post.print man.lattice.print) post
         ~symbol:END
-    ;
-    None
+
 
   let on_before_eval zone exp man flow =
     if !opt_short_logs then
@@ -192,9 +193,7 @@ struct
         pp_zone2 zone
         ~symbol:BEGIN
     ;
-    Stack.push (Sys.time ()) stack;
-    None
-
+    Stack.push (Sys.time ()) stack
 
 
   let on_after_eval zone exp man evl =
@@ -213,10 +212,10 @@ struct
         time
         Eval.print evl
         ~symbol:END
-    ;
-    None
+
+  let on_finish man flow = ()
 
 end
 
 let () =
-  Core.Hook.register_hook (module Hook)
+  Core.Hook.register_stateless_hook (module Hook)

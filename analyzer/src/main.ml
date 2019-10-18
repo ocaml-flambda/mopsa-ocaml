@@ -98,7 +98,7 @@ let () =
         let stmt = mk_stmt (S_program (prog, args)) prog.prog_range in
         let res = Engine.exec stmt flow in
         let t = Timing.stop t in
-
+        Hook.on_finish Engine.man res;
         Output.Factory.report Engine.man res t files
 
 

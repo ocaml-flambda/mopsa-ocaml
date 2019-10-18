@@ -80,3 +80,5 @@ module Sig = Sig
 module Channel = Channel
 
 module Soundness = Soundness
+
+module Hook = Hook

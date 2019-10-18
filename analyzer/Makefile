@@ -68,7 +68,7 @@ lang.repl = frontend
 lang.stubs = ast zone alarms iterator
 
 # C
-lang.c = ast pp visitor zone frontend alarms common desugar libs iterators memory
+lang.c = ast pp visitor zone frontend alarms common desugar libs iterators memory hooks
 lang.c.common = base points_to quantified_offset
 lang.c.iterators = program switch loops goto interproc
 lang.c.desugar = conditions constants
@@ -81,6 +81,7 @@ lang.c.memory.scalars.pointers = value symbolic domain
 lang.c.memory.packing = static_scope reductions
 lang.c.libs = builtins clib mopsalib compiler variadic cstubs
 lang.c.libs.clib.file_descriptor = slot table domain
+lang.c.hooks = profiler
 
 
 
