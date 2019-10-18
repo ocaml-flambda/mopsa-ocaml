@@ -153,6 +153,20 @@ let () =
   }
 
 
+(** Active hooks *)
+let () =
+  register_builtin_option {
+    key = "-hook";
+    category = "Configuration";
+    doc = " activate a hook";
+    spec = ArgExt.String (fun s ->
+        try Core.Hook.activate_hook s
+        with Not_found -> Exceptions.panic "hook %s not found" s
+      );
+    default = "";
+  }
+
+
 (** Size of the cache *)
 let () =
   register_builtin_option {

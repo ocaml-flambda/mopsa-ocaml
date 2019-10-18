@@ -19,74 +19,107 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Logs of analysis events *)
+(** Hook for displaying analysis logs as a tree *)
 
 open Location
 open Ast.Expr
 open Ast.Stmt
-open Zone
 open Format
+open Core.All
+open Sig.Domain.Manager
 
-(** Command-line option to activate logs *)
-let opt_log = ref false
 
 (** Command-line option for printing logs without abstract states *)
-let opt_short_log = ref false
+let opt_short_logs = ref false
 
-(** Current log level *)
-let cur_level = ref 0
+let () =
+  Config.Options.register_builtin_option {
+    key = "-short-logs";
+    category = "Debugging";
+    doc = " show analysis logs without abstract states";
+    spec = ArgExt.Set opt_short_logs;
+    default = "false";
+  }
 
-let color level s =
-  let code = (level mod 16) * 16 + 10 in
-  if !Debug.print_color then
-    Printf.sprintf "\027[1;38;5;%dm%s\027[0m" code s
-  else
-    s
 
-type symbol =
-  | BEGIN
-  | END
-  | MSG
+module Hook =
+struct
 
-(** Symbol of a new entry *)
-let symbol_to_string symbol level =
-  match symbol with
-  | BEGIN -> color level "+"
-  | END -> color level "o"
-  | MSG -> color level "*"
+  (** {2 Hook header} *)
+  (** *************** *)
 
-let is_end_symbol = function
-  | END -> true
-  | _ -> false
+  let name = "logs"
+  let exec_zones = []
+  let eval_zones = []
 
-(** Tabulation *)
-let tab level = color level "|"
 
-(** Indent a message by adding tabs at the beginning of each line *)
-let indent ~symbol fmt =
-  if !opt_log || !opt_short_log then
+  (** {2 Initialization} *)
+  (** ****************** *)
+
+  (* We use a stack for keeping the duration of exec and eval *)
+  let stack = Stack.create ()
+
+  let init ctx = ctx
+
+
+  (** {2 Indentation} *)
+  (** *************** *)
+
+  let color level s =
+    let code = (level mod 16) * 16 + 10 in
+    if !Debug.print_color then
+      Printf.sprintf "\027[1;38;5;%dm%s\027[0m" code s
+    else
+      s
+
+  type symbol =
+    | BEGIN
+    | END
+    | MSG
+
+
+  (** Symbol of a new entry *)
+  let symbol_to_string symbol level =
+    match symbol with
+    | BEGIN -> color level "+"
+    | END -> color level "o"
+    | MSG -> color level "*"
+
+
+  let is_end_symbol = function
+    | END -> true
+    | _ -> false
+
+
+  (** Tabulation *)
+  let tab level = color level "|"
+
+
+  (** Indent a message by adding tabs at the beginning of each line *)
+  let indent ~symbol fmt =
     (* Get the formatted message as a string *)
     Format.kasprintf (fun str ->
         (* Split the message into lines *)
         let lines = String.split_on_char '\n' str in
+        let cur_level = Stack.length stack in
 
         match lines with
         | [] -> ()
         | first :: others ->
 
           (* The first line is prefixed with the entry symbol *)
-          let first' = (symbol_to_string symbol !cur_level) ^ " " ^ first in
+          let first' = (symbol_to_string symbol cur_level) ^ " " ^ first in
 
           (* The other lines are prefixed with the indent symbol *)
           let others' =
             if not (is_end_symbol symbol) then
-              List.map (fun line -> (tab !cur_level) ^ " " ^ line) others
+              List.map (fun line -> (tab cur_level) ^ " " ^ line) others
             else
               List.map (fun line -> "  " ^ line) others
           in
 
           (* Add the margin *)
-          let margin = List.init !cur_level (fun i -> (tab i) ^ " ") |>
+          let margin = List.init cur_level (fun i -> (tab i) ^ " ") |>
                        String.concat ""
           in
           let lines' = List.map (fun line ->
@@ -98,91 +131,92 @@ let indent ~symbol fmt =
             (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") pp_print_string)
             lines'
       ) fmt
-  else
-    ifprintf std_formatter fmt
 
 
-let phase name =
-  Debug.info "%s" name
+  let reach loc =
+    indent "reaching %a" pp_range loc ~symbol:MSG
 
-let parse ?(cmd="") ?nb file =
-  Debug.info "parsing %s%s%s"
-    file
-    (if cmd="" then "" else " with "^cmd)
-    (match nb with None -> "" | Some (a,b) -> Printf.sprintf " [%i of %i]" (a+1) b)
+  let pp_S fmt stmt =
+    fprintf fmt "@[<v 3>S [| %a@] |]" pp_stmt stmt
 
-let reach loc =
-  indent "reaching %a" pp_range loc ~symbol:MSG
-
-let pp_S fmt stmt =
-  fprintf fmt "@[<v 3>S [| %a@] |]" pp_stmt stmt
-
-let pp_E fmt exp =
-  fprintf fmt "@[<v 3>E [| %a@] |]" pp_expr exp
-
-let exec stmt zone lattice flow =
-  if !opt_short_log then
-    indent "%a in zone %a"
-      pp_S stmt
-      pp_zone zone
-      ~symbol:BEGIN
-  else
-    indent "%a @,in %a @,and zone %a"
-      pp_S stmt
-      (Flow.print lattice) flow
-      pp_zone zone
-      ~symbol:BEGIN
-  ;
-  incr cur_level
-
-let exec_done stmt zone time lattice post =
-  decr cur_level;
-  if !opt_short_log then
-    indent "%a done in zone %a [%.4fs]"
-      pp_S stmt
-      pp_zone zone
-      time
-      ~symbol:END
-  else
-    indent "%a done in zone %a [%.4fs]@ -->  %a"
-      pp_S stmt
-      pp_zone zone
-      time
-      (Post.print lattice) post
-      ~symbol:END
-
-let eval exp zone lattice flow =
-  if !opt_short_log then
-    indent "%a in zone %a"
-      pp_E exp
-      pp_zone2 zone
-      ~symbol:BEGIN
-  else
-    indent "%a @,in %a @,and zone %a"
-      pp_E exp
-      (Flow.print lattice) flow
-      pp_zone2 zone
-      ~symbol:BEGIN
-  ;
-  incr cur_level
+  let pp_E fmt exp =
+    fprintf fmt "@[<v 3>E [| %a@] |]" pp_expr exp
 
 
-let eval_done exp zone time evl =
-  decr cur_level;
-  if !opt_short_log then
-    indent "%a = %a done in zone %a [%.4fs]"
-      pp_E exp
-      Eval.print evl
-      pp_zone2 zone
-      time
-      ~symbol:END
-  else
-    indent "%a done in zone %a [%.4fs]@ -->  %a"
-      pp_E exp
-      pp_zone2 zone
-      time
-      Eval.print evl
-      ~symbol:END
+  let on_before_exec zone stmt man flow =
+    reach stmt.srange;
+    if !opt_short_logs then
+      indent "%a in zone %a"
+        pp_S stmt
+        pp_zone zone
+        ~symbol:BEGIN
+    else
+      indent "%a @,in %a @,and zone %a"
+        pp_S stmt
+        (Flow.print man.lattice.print) flow
+        pp_zone zone
+        ~symbol:BEGIN
+    ;
+    Stack.push (Sys.time ()) stack;
+    None
 
-let debug fmt =
-  indent ~symbol:MSG fmt
+
+  let on_after_exec zone stmt man post =
+    let time = Sys.time () -. Stack.pop stack in
+    if !opt_short_logs then
+      indent "%a done in zone %a [%.4fs]"
+        pp_S stmt
+        pp_zone zone
+        time
+        ~symbol:END
+    else
+      indent "%a done in zone %a [%.4fs]@ -->  %a"
+        pp_S stmt
+        pp_zone zone
+        time
+        (Post.print man.lattice.print) post
+        ~symbol:END
+    ;
+    None
+
+  let on_before_eval zone exp man flow =
+    if !opt_short_logs then
+      indent "%a in zone %a"
+        pp_E exp
+        pp_zone2 zone
+        ~symbol:BEGIN
+    else
+      indent "%a @,in %a @,and zone %a"
+        pp_E exp
+        (Flow.print man.lattice.print) flow
+        pp_zone2 zone
+        ~symbol:BEGIN
+    ;
+    Stack.push (Sys.time ()) stack;
+    None
+
+
+
+  let on_after_eval zone exp man evl =
+    let time = Sys.time () -. Stack.pop stack in
+    if !opt_short_logs then
+      indent "%a = %a done in zone %a [%.4fs]"
+        pp_E exp
+        Eval.print evl
+        pp_zone2 zone
+        time
+        ~symbol:END
+    else
+      indent "%a done in zone %a [%.4fs]@ -->  %a"
+        pp_E exp
+        pp_zone2 zone
+        time
+        Eval.print evl
+        ~symbol:END
+    ;
+    None
+
+end
+
+let () =
+  Core.Hook.register_hook (module Hook)

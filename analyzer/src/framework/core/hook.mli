@@ -33,6 +33,7 @@ open Post
 open Eval
 open Zone
 open Interface
+open Sig.Domain.Manager
 
 
 (** Signature of a hook *)
@@ -51,16 +52,16 @@ sig
   val init : 'a ctx -> 'a ctx
   (** Initialization of the hook *)
 
-  val before_exec : zone -> stmt -> 'a lattice -> 'a flow -> 'a ctx
+  val on_before_exec : zone -> stmt -> ('a,'a) man  -> 'a flow -> 'a ctx option
   (** Event fired before an exec is performed *)
 
-  val after_exec : zone -> stmt -> 'a lattice -> 'a post -> 'a ctx
+  val on_after_exec : zone -> stmt -> ('a,'a) man -> 'a post -> 'a ctx option
   (** Event fired after an exec is performed *)
 
-  val before_eval : (zone * zone) -> expr -> 'a lattice -> 'a flow -> 'a ctx
+  val on_before_eval : (zone * zone) -> expr -> ('a,'a) man -> 'a flow -> 'a ctx option
   (** Event fired before an eval is performed *)
 
-  val after_eval : (zone * zone) -> expr -> 'a lattice -> 'a eval -> 'a ctx
+  val on_after_eval : (zone * zone) -> expr -> ('a,'a) man -> 'a eval -> 'a ctx option
   (** Event fired after an eval is performed *)
 end
 
@@ -68,17 +69,20 @@ end
 val register_hook : (module HOOK) -> unit
 (** Register a new hook *)
 
-val init : interface -> 'a ctx -> 'a ctx
+val activate_hook : string -> unit
+(** Activate a hook *)
+
+val init_hooks : interface -> 'a ctx -> 'a ctx
 (** Initialize all hooks *)
 
-val before_exec : zone -> stmt -> 'a lattice -> 'a flow -> 'a ctx
-(** Call [before_exec] on all hooks attached to [zone] *)
+val on_before_exec : zone -> stmt -> ('a,'a) man -> 'a flow -> 'a ctx
+(** Call [on_before_exec] on all hooks attached to [zone] *)
 
-val after_exec : zone -> stmt -> 'a lattice -> 'a post -> 'a ctx
-(** Call [after_exec] on all hooks attached to [zone] *)
+val on_after_exec : zone -> stmt -> ('a,'a) man -> 'a post -> 'a ctx
+(** Call [on_after_exec] on all hooks attached to [zone] *)
 
-val before_eval : (zone * zone) -> expr -> 'a lattice -> 'a flow -> 'a ctx
-(** Call [before_eval] on all hooks attached to [zone] *)
+val on_before_eval : (zone * zone) -> expr -> ('a,'a) man -> 'a flow -> 'a ctx
+(** Call [on_before_eval] on all hooks attached to [zone] *)
 
-val after_eval : (zone * zone) -> expr -> 'a lattice -> 'a eval -> 'a ctx
-(** Call [after_eval] on all hooks attached to [zone] *)
+val on_after_eval : (zone * zone) -> expr -> ('a,'a) man -> 'a eval -> 'a ctx
+(** Call [on_after_eval] on all hooks attached to [zone] *)

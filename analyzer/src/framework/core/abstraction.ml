@@ -181,7 +181,7 @@ struct
     in
 
     (* Initialize hooks *)
-    let ctx = Hook.init Domain.interface ctx in
+    let ctx = Hook.init_hooks Domain.interface ctx in
 
     (* The initial flow is a singleton ⊤ environment *)
     let flow0 = Flow.singleton ctx T_cur man.lattice.top in
@@ -214,7 +214,7 @@ struct
       ) map
 
   let post ?(zone = any_zone) (stmt: stmt) man (flow: Domain.t flow) : Domain.t post =
-    let ctx = Hook.before_exec zone stmt man.lattice flow in
+    let ctx = Hook.on_before_exec zone stmt man flow in
     let flow = Flow.set_ctx ctx flow in
 
     let fexec =
@@ -223,7 +223,7 @@ struct
     in
     try
       let post = Cache.exec fexec zone stmt man flow in
-      let ctx = Hook.after_exec zone stmt man.lattice post in
+      let ctx = Hook.on_after_exec zone stmt man post in
       Post.set_ctx ctx post
     with Exceptions.Panic(msg, line) -> raise (Exceptions.PanicAt(stmt.srange, msg, line))
 
@@ -280,7 +280,7 @@ struct
 
   (** Evaluation of expressions. *)
   let rec eval ?(zone = (any_zone, any_zone)) ?(via=any_zone) exp man flow =
-    let ctx = Hook.before_eval zone exp man.lattice flow in
+    let ctx = Hook.on_before_eval zone exp man flow in
     let flow = Flow.set_ctx ctx flow in
 
     let ret =
@@ -345,7 +345,7 @@ struct
        previous form of the result *)
     let ret' = Eval.map (fun e -> { e with eprev = Some exp }) ret in
 
-    let ctx = Hook.after_eval zone exp man.lattice ret' in
+    let ctx = Hook.on_after_eval zone exp man ret' in
     Eval.set_ctx ctx ret'
 
 

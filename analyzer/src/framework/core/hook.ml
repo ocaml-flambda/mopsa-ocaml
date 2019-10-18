@@ -33,6 +33,7 @@ open Post
 open Eval
 open Zone
 open Interface
+open Sig.Domain.Manager
 
 
 module type HOOK =
@@ -45,24 +46,35 @@ sig
 
   val init : 'a ctx -> 'a ctx
 
-  val before_exec : zone -> stmt -> 'a lattice -> 'a flow -> 'a ctx
+  val on_before_exec : zone -> stmt -> ('a,'a) man -> 'a flow -> 'a ctx option
 
-  val after_exec : zone -> stmt -> 'a lattice -> 'a post -> 'a ctx
+  val on_after_exec : zone -> stmt -> ('a,'a) man -> 'a post -> 'a ctx option
 
-  val before_eval : zone*zone -> expr -> 'a lattice -> 'a flow -> 'a ctx
+  val on_before_eval : zone*zone -> expr -> ('a,'a) man -> 'a flow -> 'a ctx option
 
-  val after_eval : zone*zone -> expr -> 'a lattice -> 'a eval -> 'a ctx
+  val on_after_eval : zone*zone -> expr -> ('a,'a) man -> 'a eval -> 'a ctx option
 end
 
 
 (** List of registered hoolks *)
 let hooks : (module HOOK) list ref = ref []
 
+(** List of active hooks *)
+let active_hooks : (module HOOK) list ref = ref []
+
 (** Register a new hook *)
 let register_hook hook =
   hooks := hook :: !hooks
 
-
+(** Activate a hook *)
+let activate_hook name =
+  let rec iter = function
+    | [] -> raise Not_found
+    | hook :: tl ->
+      let module H = (val hook : HOOK) in
+      if H.name = name then active_hooks := hook :: !active_hooks else iter tl
+  in
+  iter !hooks
 
 (** Caches of hooks, indexed by used zones *)
 module ExecCache = MapExt.Make(struct type t = zone let compare = compare_zone end)
@@ -81,12 +93,12 @@ let cache = {
 
 
 (** Initialization *)
-let init interface ctx =
+let init_hooks interface ctx =
   (* Initialize all hooks *)
   let ctx = List.fold_left (fun ctx hook ->
       let module H = (val hook : HOOK) in
       H.init ctx
-    ) ctx !hooks
+    ) ctx !active_hooks
   in
 
   (* Build the exec caches *)
@@ -98,14 +110,14 @@ let init interface ctx =
             if List.exists (fun z -> sat_zone z zone) H.exec_zones
             then hook :: acc
             else acc
-          ) [] !hooks
+          ) [] !active_hooks
         in
         ExecCache.add zone selected_hooks cache
       ) ExecCache.empty
   in
 
   (* Add the all hooks if the zone is Z_any *)
-  let exec_cache = ExecCache.add Z_any !hooks exec_cache in
+  let exec_cache = ExecCache.add Z_any !active_hooks exec_cache in
 
   (* Build the eval caches *)
   let eval_cache =
@@ -116,14 +128,14 @@ let init interface ctx =
             if List.exists (fun z2 -> sat_zone2 z2 zone2) H.eval_zones
             then hook :: acc
             else acc
-          ) [] !hooks
+          ) [] !active_hooks
         in
         EvalCache.add zone2 selected_hooks cache
       ) EvalCache.empty
   in
 
   (* Add the all hooks if the zone is Z_any*Z_any *)
-  let eval_cache = EvalCache.add (Z_any,Z_any) !hooks eval_cache in
+  let eval_cache = EvalCache.add (Z_any,Z_any) !active_hooks eval_cache in
 
   cache.exec <- exec_cache;
   cache.eval <- eval_cache;
@@ -132,43 +144,43 @@ let init interface ctx =
 
 
 
-(** Fire [before_exec] event *)
-let before_exec zone stmt lattice flow =
+(** Fire [on_before_exec] event *)
+let on_before_exec zone stmt man flow =
   let hooks = ExecCache.find zone cache.exec in
   List.fold_left (fun ctx hook ->
       let flow = Flow.set_ctx ctx flow in
       let module H = (val hook : HOOK) in
-      H.before_exec zone stmt lattice flow
+      Option.default ctx (H.on_before_exec zone stmt man flow)
     ) (Flow.get_ctx flow) hooks
 
 
 
-(** Fire [after_exec] event *)
-let after_exec zone stmt lattice post =
+(** Fire [on_after_exec] event *)
+let on_after_exec zone stmt man post =
   let hooks = ExecCache.find zone cache.exec in
   List.fold_left (fun ctx hook ->
       let post = Post.set_ctx ctx post in
       let module H = (val hook : HOOK) in
-      H.after_exec zone stmt lattice post
+      Option.default ctx (H.on_after_exec zone stmt man post)
     ) (Post.get_ctx post) hooks
 
 
-(** Fire [before_eval] event *)
-let before_eval zone stmt lattice flow =
+(** Fire [on_before_eval] event *)
+let on_before_eval zone stmt man flow =
   let hooks = EvalCache.find zone cache.eval in
   List.fold_left (fun ctx hook ->
       let flow = Flow.set_ctx ctx flow in
       let module H = (val hook : HOOK) in
-      H.before_eval zone stmt lattice flow
+      Option.default ctx (H.on_before_eval zone stmt man flow)
     ) (Flow.get_ctx flow) hooks
 
 
 
-(** Fire [after_eval] event *)
-let after_eval zone stmt lattice eval =
+(** Fire [on_after_eval] event *)
+let on_after_eval zone stmt man eval =
   let hooks = EvalCache.find zone cache.eval in
   List.fold_left (fun ctx hook ->
       let eval = Eval.set_ctx ctx eval in
       let module H = (val hook : HOOK) in
-      H.after_eval zone stmt lattice eval
+      Option.default ctx (H.on_after_eval zone stmt man eval)
     ) (Eval.get_ctx eval) hooks
