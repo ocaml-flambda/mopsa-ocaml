@@ -156,3 +156,11 @@ let help (args:ArgExt.arg list) out =
 let list_domains (domains:string list) out =
   print out "Domains:@.";
   List.iter (fun d -> print out "  %s@." d) domains
+
+let print range printer flow out =
+  if Debug.can_print "print" then
+    print out "%a@\n  @[%a@]"
+      Location.pp_range range
+      printer flow
+  else
+    ()

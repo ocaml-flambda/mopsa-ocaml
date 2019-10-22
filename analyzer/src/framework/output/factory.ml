@@ -66,3 +66,8 @@ let list_domains (domains:string list) =
   match !opt_format with
   | F_text -> Text.list_domains domains !opt_file
   | F_json -> Json.list_domains domains !opt_file
+
+let print range printer flow =
+  match !opt_format with
+  | F_text -> Text.print range printer flow !opt_file
+  | F_json -> Json.print range printer flow !opt_file
