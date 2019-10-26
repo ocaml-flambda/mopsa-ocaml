@@ -43,6 +43,34 @@ type ('a, 't) man = {
 }
 
 
+
+(*==========================================================================*)
+(**                      {2 Widening threhsolds}                            *)
+(*==========================================================================*)
+
+(** Widening thresholds for value abstractions.
+    Widening thresholds defined in [Common.Widening_threshold] are
+    general expressions. We refine them to constant thresholds for
+    variables in order to be used by value abstractions.
+*)
+
+let value_widening_threshold_ctx =
+  let module K = Context.GenUnitKey (struct
+      type t = constant list
+      let print fmt l =
+        Format.fprintf fmt "constant thresholds: %a"
+          (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_constant) l
+    end)
+  in
+  K.key
+
+
+(** Get the list of widening thresholds *)
+let get_value_widening_thresholds uctx =
+  try Context.ufind value_widening_threshold_ctx uctx
+  with Not_found -> []
+
+
 (*==========================================================================*)
 (**                          {2 Value domain}                               *)
 (*==========================================================================*)

@@ -424,6 +424,16 @@ struct
       None
 
 
+  let add_var_bounds vv t flow =
+    if is_c_int_type t then
+      let l,u = rangeof t in
+      let vv = match ekind vv with E_var (vv, _) -> vv | _ -> assert false in
+      Framework.Common.Var_bounds.add_var_bounds_flow vv (C_int_interval (l,u)) flow |>
+      Post.return
+    else
+      Post.return flow
+
+  
 
   (* Declaration of a scalar numeric variable *)
   let declare_var v init scope range man flow =
@@ -463,6 +473,7 @@ struct
 
     init' >>$ fun init' flow ->
     man.post ~zone:Z_u_num (mk_add vv range) flow >>= fun _ flow ->
+    add_var_bounds vv v.vtyp flow >>= fun _ flow ->
     man.post ~zone:Z_u_num (mk_assign vv init' range) flow
 
 
@@ -494,6 +505,7 @@ struct
     | S_add v when is_c_num_type v.etyp ->
       let vv = mk_num_var_expr v in
       man.post ~zone:Z_u_num (mk_add vv stmt.srange) flow |>
+      Post.bind (add_var_bounds vv v.etyp) |>
       Option.return
 
     | S_expand(v, vl) when is_c_num_type v.etyp ->
@@ -505,6 +517,14 @@ struct
     | S_remove v when is_c_num_type v.etyp ->
       let vv = mk_num_var_expr v in
       man.post ~zone:Z_u_num (mk_remove vv stmt.srange) flow |>
+      Post.bind (fun flow ->
+          if is_c_int_type v.etyp then
+            let vv = match ekind vv with E_var (vv,_) -> vv | _ -> assert false in
+            Framework.Common.Var_bounds.remove_var_bounds_flow vv flow |>
+            Post.return
+          else
+            Post.return flow
+        ) |>
       Option.return
 
     | S_rename(v1, v2) when is_c_num_type v1.etyp &&
