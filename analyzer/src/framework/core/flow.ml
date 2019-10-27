@@ -71,7 +71,7 @@ let join (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
   {
     tmap = TokenMap.join lattice (Context.get_unit ctx) flow1.tmap flow2.tmap;
     ctx;
-    alarms = AlarmSet.join flow1.alarms flow2.alarms;
+    alarms = AlarmSet.union flow1.alarms flow2.alarms;
   }
 
 let join_list lattice ~empty l =
@@ -86,7 +86,7 @@ let join_list lattice ~empty l =
     {
       tmap = TokenMap.join_list lattice (Context.get_unit ctx) (List.map (function {tmap} -> tmap) l);
       ctx;
-      alarms = AlarmSet.join_list (List.map (function {alarms} -> alarms) l);
+      alarms = List.fold_left (fun acc {alarms} -> AlarmSet.union alarms acc) hd.alarms tl;
     }
 
 let meet (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
@@ -94,7 +94,7 @@ let meet (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
   {
     tmap = TokenMap.meet lattice (Context.get_unit ctx) flow1.tmap flow2.tmap;
     ctx;
-    alarms = AlarmSet.meet flow1.alarms flow2.alarms;
+    alarms = AlarmSet.inter flow1.alarms flow2.alarms;
   }
 
 let meet_list lattice ~empty l =
@@ -109,7 +109,7 @@ let meet_list lattice ~empty l =
     {
       tmap = TokenMap.meet_list lattice (Context.get_unit ctx) (List.map (function {tmap} -> tmap) l);
       ctx;
-      alarms = AlarmSet.meet_list (List.map (function {alarms} -> alarms) l);
+      alarms = List.fold_left (fun acc {alarms} -> AlarmSet.inter alarms acc) hd.alarms tl;
     }
 
 let widen (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
@@ -117,14 +117,14 @@ let widen (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
     {
       tmap = TokenMap.widen lattice (Context.get_unit ctx) flow1.tmap flow2.tmap;
       ctx;
-      alarms = AlarmSet.join flow1.alarms flow2.alarms;
+      alarms = AlarmSet.union flow1.alarms flow2.alarms;
     }
 
 
 let print (pp: Format.formatter -> 'a -> unit) fmt flow =
   Format.fprintf fmt "@[<v>%a@,alarms: %a@]"
     (TokenMap.print pp) flow.tmap
-    AlarmSet.print flow.alarms
+    AlarmMap.print (AlarmMap.of_set flow.alarms)
 
 
 let get (tk: token) (lattice: 'a lattice) (flow: 'a flow) : 'a =
@@ -204,7 +204,7 @@ let set_alarms alarms flow = { flow with alarms }
 
 let remove_alarms flow = { flow with alarms = AlarmSet.empty }
 
-let copy_alarms src dst = { dst with alarms = AlarmSet.join src.alarms dst.alarms }
+let copy_alarms src dst = { dst with alarms = AlarmSet.union src.alarms dst.alarms }
 
 let create ctx alarms tmap = {
   tmap;

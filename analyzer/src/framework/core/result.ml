@@ -430,7 +430,7 @@ let remove_duplicates compare lattice r =
                 case_output = case.case_output;
                 case_flow = TokenMap.meet lattice (Context.get_unit ctx) case.case_flow case'.case_flow;
                 case_cleaners = case.case_cleaners @ case'.case_cleaners;
-                case_alarms = AlarmSet.meet case.case_alarms case'.case_alarms;
+                case_alarms = AlarmSet.inter case.case_alarms case'.case_alarms;
                 case_log = Log.concat case.case_log case.case_log;
               }
               in
@@ -448,7 +448,7 @@ let remove_duplicates compare lattice r =
           case_output = case.case_output;
           case_flow = TokenMap.join lattice (Context.get_unit ctx) case.case_flow case'.case_flow;
           case_cleaners = case.case_cleaners @ case'.case_cleaners;
-          case_alarms = AlarmSet.join case.case_alarms case'.case_alarms;
+          case_alarms = AlarmSet.union case.case_alarms case'.case_alarms;
           case_log = Log.concat case.case_log case.case_log;
         }
       )

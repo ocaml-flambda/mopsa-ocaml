@@ -130,10 +130,10 @@ struct
           let alarm =
             match k with
             | Alarms.Py_exc_unprecise ->
-              mk_alarm a ~extra:x unprecise_exception_range ~cs:Callstack.empty
+              mk_alarm a ~detail:x unprecise_exception_range ~cs:Callstack.empty
 
             | Alarms.Py_exc_with_callstack (range,cs) ->
-              mk_alarm a ~extra:x range ~cs
+              mk_alarm a ~detail:x range ~cs
           in
           Flow.add_alarm alarm ~force:true man.lattice acc
         | _ -> acc

@@ -24,7 +24,7 @@
 open Mopsa
 open Ast
 
-type alarm_kind +=
+type alarm_category +=
   | A_stub_invalid_require
 
 let raise_invalid_require range ?(bottom=false) lattice flow =
@@ -34,7 +34,7 @@ let raise_invalid_require range ?(bottom=false) lattice flow =
 
 
 let () =
-  register_alarm_kind {
+  register_alarm_category {
       compare = (fun default a b -> default a b);
       print = (fun default fmt a ->
           match a with
