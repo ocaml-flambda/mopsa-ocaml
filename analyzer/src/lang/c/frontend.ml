@@ -217,7 +217,6 @@ and parse_db (dbfile: string) ctx : unit =
 
 and parse_file (cmd: string) ?nb (opts: string list) (file: string) enable_cache ignore ctx =
   Mutex.lock frontend_mutex;
-  Core.Debug_tree.parse ~cmd ?nb file;
   Mutex.unlock frontend_mutex;
   let opts' = ("-I" ^ (Paths.resolve_stub "c" "mopsa")) ::
               ("-include" ^ "mopsa.h") ::

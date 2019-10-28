@@ -76,6 +76,18 @@ struct
     }
 
 
+  let opt_detect_unsigned_wrap = ref false
+
+  let () =
+    register_domain_option name {
+      key = "-detect-unsigned-wrap";
+      category = "C";
+      doc = " raise integer overflow alarms when an unsigned integer wraps around";
+      spec = ArgExt.Set opt_detect_unsigned_wrap;
+      default = "false";
+    }
+
+
   (** Numeric variables *)
   (** ================= *)
 
@@ -306,12 +318,16 @@ struct
       check_overflow typ man range
         (fun e tflow -> Eval.singleton e tflow)
         (fun e fflow ->
-           let flow1 = raise_c_alarm AIntegerOverflow exp.erange ~bottom:false man.lattice fflow in
-           Eval.singleton (mk_unop (O_wrap(rmin, rmax)) e ~etyp:(to_num_type typ) range) flow1
+           let e' = mk_unop (O_wrap(rmin, rmax)) e ~etyp:(to_num_type typ) range in
+           if not (is_signed typ) && not !opt_detect_unsigned_wrap
+           then Eval.singleton e' fflow
+           else
+             let flow1 = raise_c_alarm AIntegerOverflow exp.erange ~bottom:false man.lattice fflow in
+             Eval.singleton e' flow1
         ) e flow |>
       Option.return
 
-    | E_c_cast(e, b) when exp |> etyp |> is_c_float_type &&
+    | E_c_cast(e, _) when exp |> etyp |> is_c_float_type &&
                           e   |> etyp |> is_c_int_type ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e flow ->
       let exp' = mk_unop
@@ -322,8 +338,8 @@ struct
       Eval.singleton exp' flow |>
       Option.return
 
-  
-    | E_c_cast(e, b) when exp |> etyp |> is_c_int_type &&
+
+    | E_c_cast(e, _) when exp |> etyp |> is_c_int_type &&
                           e   |> etyp |> is_c_float_type ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e flow ->
       let exp' = mk_unop
@@ -334,7 +350,7 @@ struct
       Eval.singleton exp' flow |>
       Option.return
 
-    | E_c_cast(e, b) when exp |> etyp |> is_c_int_type &&
+    | E_c_cast(e, is_explicit_cast) when exp |> etyp |> is_c_int_type &&
                           e   |> etyp |> is_c_int_type
       ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e' flow ->
@@ -350,7 +366,7 @@ struct
         check_overflow t man range
           (fun e tflow -> Eval.singleton {e with etyp = to_num_type t} tflow)
           (fun e fflow ->
-             if b && !opt_ignore_cast_alarm then
+             if is_explicit_cast && !opt_ignore_cast_alarm then
                  Eval.singleton (mk_unop (O_wrap(rmin, rmax)) e ~etyp:(to_num_type t) range) fflow
              else
                let flow1 = raise_c_alarm AIntegerOverflow exp.erange ~bottom:false man.lattice fflow in
@@ -408,6 +424,16 @@ struct
       None
 
 
+  let add_var_bounds vv t flow =
+    if is_c_int_type t then
+      let l,u = rangeof t in
+      let vv = match ekind vv with E_var (vv, _) -> vv | _ -> assert false in
+      Framework.Common.Var_bounds.add_var_bounds_flow vv (C_int_interval (l,u)) flow |>
+      Post.return
+    else
+      Post.return flow
+
+  
 
   (* Declaration of a scalar numeric variable *)
   let declare_var v init scope range man flow =
@@ -447,6 +473,7 @@ struct
 
     init' >>$ fun init' flow ->
     man.post ~zone:Z_u_num (mk_add vv range) flow >>= fun _ flow ->
+    add_var_bounds vv v.vtyp flow >>= fun _ flow ->
     man.post ~zone:Z_u_num (mk_assign vv init' range) flow
 
 
@@ -478,6 +505,7 @@ struct
     | S_add v when is_c_num_type v.etyp ->
       let vv = mk_num_var_expr v in
       man.post ~zone:Z_u_num (mk_add vv stmt.srange) flow |>
+      Post.bind (add_var_bounds vv v.etyp) |>
       Option.return
 
     | S_expand(v, vl) when is_c_num_type v.etyp ->
@@ -489,6 +517,14 @@ struct
     | S_remove v when is_c_num_type v.etyp ->
       let vv = mk_num_var_expr v in
       man.post ~zone:Z_u_num (mk_remove vv stmt.srange) flow |>
+      Post.bind (fun flow ->
+          if is_c_int_type v.etyp then
+            let vv = match ekind vv with E_var (vv,_) -> vv | _ -> assert false in
+            Framework.Common.Var_bounds.remove_var_bounds_flow vv flow |>
+            Post.return
+          else
+            Post.return flow
+        ) |>
       Option.return
 
     | S_rename(v1, v2) when is_c_num_type v1.etyp &&

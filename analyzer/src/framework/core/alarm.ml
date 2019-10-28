@@ -21,69 +21,63 @@
 
 (** Alarm -- Potential bugs inferred by abstract domains. *)
 
+open Location
 
 
 (** {2 Alarm data structure} *)
 (** ************************ *)
 
-type alarm_kind = ..
+type alarm_category = ..
 
-type alarm_extra = ..
+type alarm_detail = ..
 
-type alarm_extra += NoExtra
-
-type alarm_level =
-  | ERROR
-  | WARNING
+type alarm_detail += EmptyDetail
 
 type alarm = {
-  alarm_kind : alarm_kind;
-  alarm_extra : alarm_extra;
-  alarm_level : alarm_level;
-  alarm_trace : Location.range * Callstack.cs;
+  alarm_category : alarm_category;
+  alarm_detail : alarm_detail;
+  alarm_trace : range * Callstack.cs;
 }
 
 
-let mk_alarm kind ?(extra=NoExtra) ?(level=WARNING) ?(cs=Callstack.empty) range =
+let mk_alarm cat ?(detail=EmptyDetail) ?(cs=Callstack.empty) range =
   {
-    alarm_kind = kind;
-    alarm_extra = extra;
-    alarm_level = level;
+    alarm_category = cat;
+    alarm_detail = detail;
     alarm_trace = range, cs;
   }
 
 
-let get_alarm_kind alarm = alarm.alarm_kind
+let get_alarm_category alarm = alarm.alarm_category
 
-let get_alarm_extra alarm = alarm.alarm_extra
+let get_alarm_detail alarm = alarm.alarm_detail
 
 let get_alarm_trace alarm = alarm.alarm_trace
 
-let get_alarm_level alarm = alarm.alarm_level
+let get_alarm_range alarm = fst @@ get_alarm_trace alarm
 
 
 (** {2 Total order comparison function} *)
 (** *********************************** *)
 
-let compare_alarm_kind_chain = TypeExt.mk_compare_chain (fun a1 a2 -> compare a1 a2)
+let compare_alarm_category_chain = TypeExt.mk_compare_chain (fun a1 a2 -> compare a1 a2)
 
-let compare_alarm_kind = TypeExt.compare compare_alarm_kind_chain
+let compare_alarm_category = TypeExt.compare compare_alarm_category_chain
 
-let compare_alarm_extra_chain = TypeExt.mk_compare_chain (fun a1 a2 ->
+let compare_alarm_detail_chain = TypeExt.mk_compare_chain (fun a1 a2 ->
     match a1, a2 with
-    | NoExtra, NoExtra -> 0
+    | EmptyDetail, EmptyDetail -> 0
     | _ -> compare a1 a2
   )
 
-let compare_alarm_extra = TypeExt.compare compare_alarm_extra_chain
+let compare_alarm_detail = TypeExt.compare compare_alarm_detail_chain
 
 let compare_alarm a1 a2 =
   if a1 == a2 then 0
   else Compare.compose [
-      (fun () -> compare_alarm_kind a1.alarm_kind a2.alarm_kind);
-      (fun () -> compare_alarm_extra a1.alarm_extra a2.alarm_extra);
-      (fun () -> Compare.pair Location.compare_range Callstack.compare a1.alarm_trace a2.alarm_trace);
-      (fun () -> Pervasives.compare a1.alarm_level a2.alarm_level);
+      (fun () -> compare_alarm_category a1.alarm_category a2.alarm_category);
+      (fun () -> compare_alarm_detail a1.alarm_detail a2.alarm_detail);
+      (fun () -> Compare.pair compare_range Callstack.compare a1.alarm_trace a2.alarm_trace);
     ]
 
 
@@ -91,39 +85,39 @@ let compare_alarm a1 a2 =
 (** {2 Pretty printers} *)
 (** ******************* *)
 
-let pp_kind_chain = TypeExt.mk_print_chain (fun fmt alarm -> failwith "Pp: Unknown alarm")
+let pp_category_chain = TypeExt.mk_print_chain (fun fmt alarm -> failwith "Pp: Unknown alarm")
 
-let pp_alarm_kind = TypeExt.print pp_kind_chain
+let pp_alarm_category = TypeExt.print pp_category_chain
 
-let pp_extra_chain = TypeExt.mk_print_chain (fun fmt alarm ->
+let pp_detail_chain = TypeExt.mk_print_chain (fun fmt alarm ->
     match alarm with
-    | NoExtra -> ()
+    | EmptyDetail -> ()
     | _ -> failwith "Pp: Unknown alarm"
   )
 
-let pp_alarm_extra = TypeExt.print pp_extra_chain
+let pp_alarm_detail = TypeExt.print pp_detail_chain
 
 
-let pp_level fmt = function
-  | ERROR -> ((Debug.color "red") Format.pp_print_string) fmt "✘"
-  | WARNING -> ((Debug.color "orange") Format.pp_print_string) fmt "⚠"
+(* let pp_level fmt = function
+ *   | ERROR -> ((Debug.color "red") Format.pp_print_string) fmt "✘"
+ *   | WARNING -> ((Debug.color "orange") Format.pp_print_string) fmt "⚠" *)
 
 let pp_callstack fmt (cs:Callstack.cs) =
   (* print in the style of gcc's preprocessor include stack *)
   List.iter
-    (fun c -> Format.fprintf fmt "\tfrom %a: %s@\n" Location.pp_range c.Callstack.call_site c.Callstack.call_fun)
+    (fun c -> Format.fprintf fmt "\tfrom %a: %s@\n" pp_range c.Callstack.call_site c.Callstack.call_fun)
     cs
 
 
 let pp_alarm fmt alarm =
   (* print using a format recognized by emacs: location first *)
   Format.fprintf fmt "%a: %a %a@\n%a"
-    Location.pp_range (alarm.alarm_trace |> fst |> Location.untag_range)
-    pp_level alarm.alarm_level
+    pp_range (get_alarm_range alarm |> untag_range)
+    ((Debug.color "red") Format.pp_print_string) "✘"
     (fun fmt -> function
-       | NoExtra -> pp_alarm_kind fmt alarm.alarm_kind
-       | x -> pp_alarm_extra fmt x
-    ) alarm.alarm_extra
+       | EmptyDetail -> pp_alarm_category fmt alarm.alarm_category
+       | x -> pp_alarm_detail fmt x
+    ) alarm.alarm_detail
     pp_callstack (alarm.alarm_trace |> snd)
 
 
@@ -131,115 +125,112 @@ let pp_alarm fmt alarm =
 (** **************** *)
 
 
-let register_alarm_kind info =
-  TypeExt.register info compare_alarm_kind_chain pp_kind_chain
+let register_alarm_category info =
+  TypeExt.register info compare_alarm_category_chain pp_category_chain
 
 
-let register_alarm_extra info =
-  TypeExt.register info compare_alarm_extra_chain pp_extra_chain
+let register_alarm_detail info =
+  TypeExt.register info compare_alarm_detail_chain pp_detail_chain
 
 
+(** {2 Sets of alarms} *)
+(** ****************** *)
 
-(** {2 Set of alarms} *)
-(** ***************** *)
+module AlarmSet = SetExt.Make(struct
+    type t = alarm
+    let compare = compare_alarm
+  end)
 
-module AlarmSet = struct
+
+(** {2 Maps from ranges to alarms} *)
+(** ****************************** *)
+
+module AlarmRangeIndexMap =
+struct
 
   module Map = MapExt.Make(struct
-      type t = alarm_kind
-      let compare = compare_alarm_kind
-      let print = pp_alarm_kind
+      type t = range
+      let compare = compare_range
+    end)
+
+  type t = AlarmSet.t Map.t
+
+  let add alarm map =
+    let range = get_alarm_range alarm |> untag_range in
+    Map.add range (
+      try
+        let old = Map.find range map in
+        AlarmSet.add alarm old
+      with Not_found -> AlarmSet.singleton alarm
+    ) map
+
+  let of_set s = 
+    AlarmSet.fold add s Map.empty
+
+  let singleton alarm =
+    let range = get_alarm_range alarm |> untag_range in
+    Map.singleton range (AlarmSet.singleton alarm)
+
+  let cardinal m = Map.cardinal m
+
+  let ranges m =
+    Map.fold (fun range _ acc -> range :: acc) m [] |>
+    List.rev
+
+end
+
+
+(** {2 Maps from alarm categories to AlarmRangeIndexMap} *)
+(** **************************************************** *)
+
+module AlarmMap = struct
+
+  module Map = MapExt.Make(struct
+      type t = alarm_category
+      let compare = compare_alarm_category
+      let print = pp_alarm_category
     end
     )
 
-  module Set = SetExt.Make(struct
-      type t = alarm
-      let compare = compare_alarm
-    end)
+  type t = AlarmRangeIndexMap.t Map.t
 
-  type t = Set.t Map.t
+  let of_set s =
+    AlarmSet.fold (fun alarm acc ->
+        Map.add alarm.alarm_category (
+          try
+            let old = Map.find alarm.alarm_category acc in
+            AlarmRangeIndexMap.add alarm old
+          with Not_found -> AlarmRangeIndexMap.singleton alarm
+        ) acc
+      ) s Map.empty
 
-  let empty = Map.empty
-
-  let is_empty x = Map.is_empty x
-
-  let cardinal x =
-    Map.fold (fun _ s acc -> acc + Set.cardinal s) x 0
-
-  let elements x =
-    Map.fold (fun _ s acc -> acc @ Set.elements s) x []
-
-  let singleton alarm = Map.singleton alarm.alarm_kind (Set.singleton alarm)
-
-  let add alarm x =
-    Map.add alarm.alarm_kind (
-      try
-        let old = Map.find alarm.alarm_kind x in
-        Set.add alarm old
-      with Not_found -> Set.singleton alarm
-    ) x
-
-
-  let join x1 x2 =
-    Map.map2zo
-      (fun _ s1 -> s1)
-      (fun _ s2 -> s2)
-      (fun _ s1 s2 -> Set.union s1 s2)
-      x1 x2
-
-  let rec join_list l =
-    match l with
-    | [] -> empty
-    | [hd] -> hd
-    | hd :: tl -> join hd (join_list tl)
-
-
-  let meet x1 x2 =
-    Map.merge (fun _ s1 s2 ->
-        match s1, s2 with
-        | None, _ | _, None -> None
-        | Some ss1, Some ss2 ->
-          let s = Set.inter ss1 ss2 in
-          if Set.is_empty s
-          then None
-          else Some s
-      ) x1 x2
-
-
-  let rec meet_list l =
-    match l with
-    | [] -> empty
-    | [hd] -> hd
-    | hd :: tl -> meet hd (meet_list tl)
-
-
-  let diff x1 x2 =
-    Map.merge (fun a os1 os2 ->
-        match os1, os2 with
-        | None, None -> None
-        | Some s, None -> Some s
-        | None, Some _ -> None
-        | Some s1, Some s2 ->
-          let s = Set.diff s1 s2 in
-          if Set.is_empty s
-          then None
-          else Some s
-      ) x1 x2
-
+  let cardinal m =
+    Map.fold (fun _ map2 acc ->
+        AlarmRangeIndexMap.cardinal map2 + acc
+      ) m 0
 
   let print fmt x =
     let open Format in
     if Map.is_empty x then pp_print_string fmt "∅"
     else
       let l = Map.bindings x in
-      pp_print_list
-        ~pp_sep:(fun fmt () -> fprintf fmt ", ")
-        (fun fmt (kind, alarms) ->
-           let n = Set.cardinal alarms in
-           if n = 0 then () else
-           if n = 1 then pp_alarm_kind fmt kind
-           else fprintf fmt "%a x %d" pp_alarm_kind kind n
-        ) fmt l
+      fprintf fmt "@[<v>%a@]"
+        (pp_print_list
+           ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+           (fun fmt (kind, alarms) ->
+              let n = AlarmRangeIndexMap.cardinal alarms in
+              if n = 0 then ()
+              else
+                let ranges = AlarmRangeIndexMap.ranges alarms in
+                fprintf fmt "@[<v 2>%a x %d:@,%a@]"
+                  pp_alarm_category kind
+                  n
+                  (pp_print_list
+                     ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+                     (fun fmt range -> fprintf fmt "%a:" pp_range range)
+                  ) ranges
+           )
+        ) l
 
 
 end

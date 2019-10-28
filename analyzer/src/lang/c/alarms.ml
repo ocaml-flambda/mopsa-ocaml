@@ -23,7 +23,7 @@
 
 open Mopsa
 
-type alarm_kind +=
+type alarm_category +=
   | AOutOfBound
   | ANullDeref
   | AInvalidDeref
@@ -42,7 +42,7 @@ let raise_c_alarm a range ?(bottom=false) lattice flow =
 
 
 let () =
-  register_alarm_kind {
+  register_alarm_category {
       compare = (fun default a b -> default a b);
       print = (fun default fmt a ->
           match a with

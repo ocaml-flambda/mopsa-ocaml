@@ -42,8 +42,8 @@ let opt_silent = ref false
 
 (* Print collected alarms in the desired output format *)
 let report man flow time files =
-  let alarms = Core.Flow.get_alarms flow |> AlarmSet.elements in
-  let return_v = if !opt_silent || alarms = [] then 0 else 1 in
+  let alarms = Core.Flow.get_alarms flow in
+  let return_v = if !opt_silent || AlarmSet.is_empty alarms then 0 else 1 in
   let lf = if !opt_display_lastflow then Some flow else None in
   let _ = match !opt_format with
     | F_text -> Text.report ~flow:lf man alarms time files !opt_file

@@ -22,18 +22,18 @@
 open Mopsa
 
 
-type alarm_kind += APyException
-type alarm_extra += XPyException of expr * string
+type alarm_category += APyException
+type alarm_detail += XPyException of expr * string
 
 
 let raise_py_alarm exn name range lattice flow =
   let cs = Flow.get_callstack flow in
-  let alarm = mk_alarm APyException ~extra:(XPyException (exn,name)) range ~cs in
+  let alarm = mk_alarm APyException ~detail:(XPyException (exn,name)) range ~cs in
   Flow.raise_alarm alarm ~bottom:false lattice flow
 
 
 let () =
-  register_alarm_kind {
+  register_alarm_category {
     compare = (fun default a a' ->
         match a, a' with
         | APyException, APyException -> 0
@@ -45,7 +45,7 @@ let () =
         | _ -> default fmt a
       );
     };
-  register_alarm_extra {
+  register_alarm_detail {
     compare = (fun default a a' ->
         match a, a' with
         | XPyException (e, s), XPyException (e', s') ->
