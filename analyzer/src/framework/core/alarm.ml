@@ -173,6 +173,10 @@ struct
 
   let cardinal m = Map.cardinal m
 
+  let ranges m =
+    Map.fold (fun range _ acc -> range :: acc) m [] |>
+    List.rev
+
 end
 
 
@@ -215,9 +219,16 @@ module AlarmMap = struct
            ~pp_sep:(fun fmt () -> fprintf fmt "@,")
            (fun fmt (kind, alarms) ->
               let n = AlarmRangeIndexMap.cardinal alarms in
-              if n = 0 then () else
-              if n = 1 then pp_alarm_category fmt kind
-              else fprintf fmt "%a x %d" pp_alarm_category kind n
+              if n = 0 then ()
+              else
+                let ranges = AlarmRangeIndexMap.ranges alarms in
+                fprintf fmt "@[<v 2>%a x %d:@,%a@]"
+                  pp_alarm_category kind
+                  n
+                  (pp_print_list
+                     ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+                     (fun fmt range -> fprintf fmt "%a:" pp_range range)
+                  ) ranges
            )
         ) l
 
