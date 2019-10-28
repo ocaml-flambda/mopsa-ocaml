@@ -453,13 +453,13 @@ int vsscanf (const char *__restrict __s,
 
 /*$
  * requires: __stream in File;
- * ensures: return in [0, 255] or return == EOF;
+ * ensures: return in [0, 127] or return == EOF;
  */
 int fgetc (FILE *__stream);
 
 
 /*$
- * ensures: return in [0, 255] or return == EOF;
+ * ensures: return in [0, 127] or return == EOF;
  */
 int getchar (void);
 
@@ -468,13 +468,13 @@ int getchar (void);
 /*$
  * // TODO: not thread-safe
  * requires: __fp in File;
- * ensures: return in [0, 255] or return == EOF;
+ * ensures: return in [0, 127] or return == EOF;
  */
 int getc_unlocked (FILE *__fp);
 
 /*$
  * // TODO: not thread-safe
- * ensures: return in [0, 255] or return == EOF;
+ * ensures: return in [0, 127] or return == EOF;
  */
 int getchar_unlocked (void);
 
@@ -482,7 +482,7 @@ int getchar_unlocked (void);
 /*$
  * // TODO: not thread-safe
  * requires: __fp in File;
- * ensures: return in [0, 255] or return == EOF;
+ * ensures: return in [0, 127] or return == EOF;
  */
 int fgetc_unlocked (FILE *__fp);
 
@@ -939,6 +939,25 @@ int ftrylockfile (FILE *__stream);
  */
 void funlockfile (FILE *__stream);
 
+
+
+/*$
+ * requires: valid_ptr(__s);
+ *
+ * case "nop" {
+ *   assumes: __maxlen == 0;
+ * }
+ *
+ * case "print" {
+ *   assumes: __maxlen >= 1;
+ *   requires: size(__s) >= __maxlen;
+ *   assigns:  __s[0, __maxlen - 1];
+ *   ensures: exists int i in [0, __maxlen - 1]: (__s[i])' == 0;
+ * }
+ *
+ * ensures: return in [0, size(__s) - 1];
+ */
+int snprintf (char *__restrict __s, size_t __maxlen, const char *__restrict __format, ...);
 
 
 

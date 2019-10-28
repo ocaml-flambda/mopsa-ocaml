@@ -64,7 +64,7 @@ let render_callstack cs  =
 
 let render_alarm alarm  =
   let title =
-    let () = pp_alarm_kind Format.str_formatter (Core.Alarm.get_alarm_kind alarm) in
+    let () = pp_alarm_category Format.str_formatter (Core.Alarm.get_alarm_category alarm) in
     Format.flush_str_formatter ()
   in
   let range, cs = Core.Alarm.get_alarm_trace alarm in
@@ -106,7 +106,7 @@ let report ?(flow=None) man alarms time files out : unit =
       "success", `Bool true;
       "time", `Float time;
       "files", `List (List.map (fun f -> `String f) files);
-      "alarms", `List (List.map render_alarm alarms);
+      "alarms", `List (AlarmSet.elements alarms |> List.map render_alarm);
       "warnings", `List (List.map render_warning (get_warnings ()));
     ]
   in

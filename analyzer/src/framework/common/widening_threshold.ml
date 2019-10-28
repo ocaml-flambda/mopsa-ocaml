@@ -19,26 +19,54 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Stub alarms *)
 
-open Mopsa
-open Ast
+(** Context for stocking widening thresholds *)
 
-type alarm_category +=
-  | A_stub_invalid_require
-
-let raise_invalid_require range ?(bottom=false) lattice flow =
-  let cs = Flow.get_callstack flow in
-  let alarm = mk_alarm A_stub_invalid_require range ~cs in
-  Flow.raise_alarm alarm ~bottom lattice flow
+open Ast.All
+open Core
 
 
-let () =
-  register_alarm_category {
-      compare = (fun default a b -> default a b);
-      print = (fun default fmt a ->
-          match a with
-          | A_stub_invalid_require -> Format.fprintf fmt "Invalid stub requirement"
-          | _ -> default fmt a
-        );
-    };
+(** Widening thresholds are represented as a set of expressions *)
+module Thresholds = SetExt.Make(struct type t = expr let compare = compare_expr end)
+
+
+(** Context key for indexing widening thresholds within the context table *)
+let widening_thresholds_ctx_key =
+  let module K = Context.GenUnitKey(
+    struct
+      type t = Thresholds.t
+      let print fmt t =
+        Format.fprintf fmt "widening thresholds: %a"
+          (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_expr)
+          (Thresholds.elements t)
+    end
+  )
+  in
+  K.key
+
+
+(** Add a condition expression to widening thresholds *)
+let add_widening_threshold cond flow =
+  let ctx = Flow.get_ctx flow in
+  let thresholds = try Context.find_unit widening_thresholds_ctx_key ctx with Not_found -> Thresholds.empty in
+  let thresholds' = Thresholds.add cond thresholds in
+  let ctx' = Context.add_unit widening_thresholds_ctx_key thresholds' ctx in
+  Flow.set_ctx ctx' flow
+
+
+(** Return the list of widening thresholds *)
+let get_widening_thresholds flow =
+  let ctx = Flow.get_ctx flow in
+  try Context.find_unit widening_thresholds_ctx_key ctx |>
+      Thresholds.elements
+  with Not_found -> []
+
+
+(** Fold over widening thresholds *)
+let fold_widening_thresholds f x0 flow =
+  let ctx = Flow.get_ctx flow in
+  try
+    let thresholds = Context.find_unit widening_thresholds_ctx_key ctx in
+    Thresholds.fold f thresholds x0
+  with Not_found ->
+    x0

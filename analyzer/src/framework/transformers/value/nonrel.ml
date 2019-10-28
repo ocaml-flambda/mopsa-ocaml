@@ -26,15 +26,15 @@
 open Ast.All
 open Core.All
 open Sig.Value.Lowlevel
-
+open Common.Var_bounds
 
 
 
 (** {2 Identifier for the non-relation domain} *)
 (** ****************************************** *)
 
-
 type _ id += D_nonrel : 'v vmodule -> (var,'v) Lattices.Partial_map.map id
+
 
 
 module Make(Value: VALUE) =
@@ -72,6 +72,34 @@ struct
         f
       );
     }
+
+
+  (** Constrain the value of a variable with its bounds *)
+  let constrain_var_with_bounds uctx v a =
+    match find_var_bounds_ctx_opt v uctx with
+    | None -> a
+    | Some bounds ->
+      let aa = Value.of_constant v.vtyp bounds in
+      Value.meet a aa
+
+
+  let widen uctx a1 a2 =
+    let open Bot_top in
+    if a1 == a2 then a1 else
+    match a1, a2 with
+      | BOT, x | x, BOT -> x
+      | TOP, x | x, TOP -> TOP
+      | Nbt m1, Nbt m2 ->
+        Nbt (
+          MapExtPoly.map2zo
+            (fun _ v1 -> v1)
+            (fun _ v2 -> v2)
+            (fun v v1 v2 -> Value.widen uctx v1 v2 |>
+                            constrain_var_with_bounds uctx v
+            )
+            m1 m2
+        )
+
 
 
   let name = Value.name
@@ -310,7 +338,8 @@ struct
 
     | S_assign ({ ekind= E_var (var, mode) }, e)  ->
       eval e map |> Option.lift @@ fun (_, v) ->
-      let map' = VarMap.add var v map in
+      let vv = constrain_var_with_bounds ctx var v in
+      let map' = VarMap.add var vv map in
       begin
         match mode with
         | STRONG -> map'

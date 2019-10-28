@@ -19,26 +19,58 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Stub alarms *)
 
-open Mopsa
-open Ast
+(** Var_bounds - Context for saving invariants of variables bounds *)
 
-type alarm_category +=
-  | A_stub_invalid_require
-
-let raise_invalid_require range ?(bottom=false) lattice flow =
-  let cs = Flow.get_callstack flow in
-  let alarm = mk_alarm A_stub_invalid_require range ~cs in
-  Flow.raise_alarm alarm ~bottom lattice flow
+open Ast.All
+open Core
 
 
-let () =
-  register_alarm_category {
-      compare = (fun default a b -> default a b);
-      print = (fun default fmt a ->
-          match a with
-          | A_stub_invalid_require -> Format.fprintf fmt "Invalid stub requirement"
-          | _ -> default fmt a
-        );
-    };
+let var_bounds_ctx =
+  let module K = Context.GenUnitKey(struct
+      type t = constant VarMap.t
+      let print fmt m =
+        Format.fprintf fmt "variables bounds: %a"
+          (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
+             (fun fmt (v,b) -> Format.fprintf fmt "%a: %a" pp_var v pp_constant b)
+          ) (VarMap.bindings m)
+    end)
+  in
+  K.key
+
+
+(** Add the bounds of a variable to context *)
+let add_var_bounds_ctx v b uctx =
+  let m = try Context.ufind var_bounds_ctx uctx with Not_found -> VarMap.empty in
+  Context.uadd var_bounds_ctx (VarMap.add v b m) uctx
+
+
+(** Add the bounds of a variable to flow *)
+let add_var_bounds_flow v b flow =
+  let ctx = add_var_bounds_ctx v b (Flow.get_unit_ctx flow) in
+  Flow.set_unit_ctx ctx flow
+
+
+(** Remove the bounds of a variable from context *)
+let remove_var_bounds_ctx v ctx =
+  try
+    let m = Context.ufind var_bounds_ctx ctx in
+    let mm = VarMap.remove v m in
+    Context.uadd var_bounds_ctx mm ctx
+  with Not_found -> ctx
+
+
+(** Remove the bounds of a variable from flow *)
+let remove_var_bounds_flow v flow =
+  let ctx = remove_var_bounds_ctx v (Flow.get_unit_ctx flow) in
+  Flow.set_unit_ctx ctx flow
+
+
+(** Find the bounds of a variable in context *)
+let find_var_bounds_ctx_opt v uctx =
+  try
+    let m = Context.ufind var_bounds_ctx uctx in
+    try Some (VarMap.find v m)
+    with Not_found -> None
+  with Not_found -> None
+

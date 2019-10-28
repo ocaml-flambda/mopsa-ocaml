@@ -36,40 +36,35 @@
 	    {
                 "apply": {
                     "compose": [
-                        "c.memory.structured.flat",
                         "universal.heap.recency.callstack_range",
+                        "c.memory.structured.flat",
                         {
-                            "product": [
-                                "c.memory.lowlevel.cells",
-                                "c.memory.lowlevel.string_length",
-                                "c.memory.lowlevel.pointer_sentinel"
-                            ]
-                        },
-                        {
+			    "product": [
+				"c.memory.lowlevel.cells",
+				"c.memory.lowlevel.string_length",
+				"c.memory.lowlevel.pointer_smashing"
+			    ],
+			    "reductions": [
+				"c.memory.lowlevel.reductions.cell_pointer_smashing"
+			    ]
+			},
+			{
                             "seq": [
-			        "c.memory.scalars.pointer",
-			        "c.memory.scalars.machine_numbers"
+				"c.memory.scalars.pointer",
+				"c.memory.scalars.machine_numbers"
                             ]
-                        }
+			}
                     ]
-                },
+		},
 		"on": {
-                    "product": [
-                        {
-                            "nonrel": {
-			        "disjoint": [
-			            "universal.numeric.values.intervals.float",
-                                    "universal.numeric.values.intervals.integer"
-			        ]
-		            }
-                        },
-                        "universal.numeric.relational"
-		    ],
-                    "reductions": [
-                        "universal.numeric.reductions.intervals_rel"
-                    ]
-                }
-            }
+                    "nonrel": {
+			"disjoint": [
+			    "universal.numeric.values.intervals.float",
+                            "universal.numeric.values.intervals.integer"
+			]
+		    }
+		}
+	    }
 	]
     }
 }

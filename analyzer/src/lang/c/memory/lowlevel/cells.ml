@@ -1127,14 +1127,22 @@ struct
       if not (BaseSet.mem base2 a.bases) then
         (* If base2 is not already present => rename the cells *)
         fun c flow ->
-          rename_cell c (to_base2 c) range man flow
+          let c' = to_base2 c in
+          debug "rename %a into %a" pp_cell c pp_cell c';
+          let v = mk_cell_var c in
+          let v' = mk_cell_var c' in
+          let stmt = mk_rename_var v v' range in
+          man.post ~zone:Z_c_scalar stmt flow
       else
         (* Otherwise, assign with weak update *)
         fun c flow ->
-          debug "copy %a to %a" pp_cell c pp_cell (to_base2 c);
+          let c' = to_base2 c in
+          debug "weak copy %a to %a" pp_cell c pp_cell c';
           let v = mk_cell_var c in
-          assign_cell (to_base2 c) (mk_var v range) WEAK range man flow |>
-          Post.bind @@ remove_cell c range man
+          let v' = mk_cell_var c' in
+          let stmt = mk_assign (mk_var v' range) (mk_var v ~mode:WEAK range) range in
+          man.post ~zone:Z_c_scalar stmt flow >>= fun _ flow ->
+          remove_cell c range man flow
     in
 
     (* Apply copy function *)

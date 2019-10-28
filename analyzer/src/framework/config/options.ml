@@ -153,6 +153,20 @@ let () =
   }
 
 
+(** Active hooks *)
+let () =
+  register_builtin_option {
+    key = "-hook";
+    category = "Configuration";
+    doc = " activate a hook";
+    spec = ArgExt.String (fun s ->
+        try Core.Hook.activate_hook s
+        with Not_found -> Exceptions.panic "hook %s not found" s
+      );
+    default = "";
+  }
+
+
 (** Size of the cache *)
 let () =
   register_builtin_option {
@@ -243,27 +257,6 @@ let () =
     spec = ArgExt.String (fun s -> Output.Factory.opt_file := Some s);
     default = "";
   }
-
-(** Logs activation *)
-let () =
-  register_builtin_option {
-    key = "-log";
-    category = "Debugging";
-    doc = " activate logs";
-    spec = ArgExt.Set Core.Debug_tree.opt_log;
-    default = "false";
-  }
-
-(** Short logs *)
-let () =
-  register_builtin_option {
-    key = "-short-log";
-    category = "Debugging";
-    doc = " display logs without abstract states";
-    spec = ArgExt.Set Core.Debug_tree.opt_short_log;
-    default = "false";
-  }
-
 
 
 (** Help message *)

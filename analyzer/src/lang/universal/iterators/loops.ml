@@ -210,12 +210,14 @@ struct
                 merge_cur_and_continue man |>
                 Flow.join man.lattice flow_init
     in
-
-    let is_sub = Flow.subset man.lattice flow' flow in
+    let cur = Flow.get T_cur man.lattice flow in
+    let cur' = Flow.get T_cur man.lattice flow' in
+    let is_sub = man.lattice.subset (Flow.get_unit_ctx flow') cur' cur in
     debug "lfp range %a is_sub: %b" pp_range body.srange is_sub;
     if is_sub then flow'
     else if delay = 0 then
-      let wflow = Flow.widen man.lattice flow flow' in
+      let wcur = man.lattice.widen (Flow.get_unit_ctx flow') cur cur' in
+      let wflow = Flow.set T_cur wcur man.lattice flow' in
       let () = debug
           "widening: %a@\n abs =@\n@[  %a@]@\n abs' =@\n@[  %a@]@\n res =@\n@[  %a@]"
           pp_range body.srange

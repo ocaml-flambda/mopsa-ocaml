@@ -237,13 +237,13 @@ and pp_range fmt range =
 
   | R_orig (pos1, pos2) when pos1.pos_file == pos2.pos_file
                           && pos1.pos_line == pos2.pos_line ->
-    Format.fprintf fmt "%s:%d:%d-%d"
+    Format.fprintf fmt "%s:%d.%d-%d"
       pos1.pos_file
       pos1.pos_line
       pos1.pos_column pos2.pos_column
 
   | R_orig (pos1, pos2) when pos1.pos_file == pos2.pos_file ->
-    Format.fprintf fmt "%s:%d:%d-%d:%d"
+    Format.fprintf fmt "%s:%d.%d-%d.%d"
       pos1.pos_file
       pos1.pos_line pos1.pos_column
       pos2.pos_line pos2.pos_column
