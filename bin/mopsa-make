@@ -49,5 +49,5 @@ fi
 if [[ "${MAKE_TARGET}" == "clean" ]]; then
     make -C ${DIRECTORY} ${MAKE_TARGET}
 else
-    PATH=${MOPSADIR}/parsers/c/bin:${PATH} MOPSADB=${DB} make -C ${DIRECTORY} ${MAKE_TARGET}
+    PATH=${MOPSADIR}/bin/mopsa-wrappers:${PATH} MOPSADB=${DB} make -C ${DIRECTORY} ${MAKE_TARGET}
 fi

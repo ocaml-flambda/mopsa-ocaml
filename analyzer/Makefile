@@ -157,8 +157,10 @@ inst_bins := $(foreach f, $(wildcard ../bin/*), $(shell basename $f))
 install:
 	@mkdir -p $(PREFIX)/bin
 	@for i in $(inst_bins); do \
-		echo -e "$(INSTALLMSG)     bin/$$i"; \
-		cp ../bin/$$i $(PREFIX)/bin/$$i; \
+		if test -f ../bin/$$i; then \
+			echo -e "$(INSTALLMSG)     bin/$$i"; \
+			cp ../bin/$$i $(PREFIX)/bin/$$i; \
+		fi; \
 	done
 	@mkdir -p $(PREFIX)/share
 	@echo -e "$(INSTALLMSG)     share/mopsa"
@@ -166,8 +168,10 @@ install:
 
 uninstall:
 	@for i in $(inst_bins); do \
-		echo -e "$(UINSTALLMSG)     bin/$$i"; \
-		rm -f $(PREFIX)/bin/$$i; \
+		if test -f ../bin/$$i; then \
+			echo -e "$(UINSTALLMSG)     bin/$$i"; \
+			rm -f $(PREFIX)/bin/$$i; \
+		fi; \
 	done
 	@echo -e "$(UINSTALLMSG)     share/mopsa"
 	@rm -rf $(PREFIX)/share/mopsa
