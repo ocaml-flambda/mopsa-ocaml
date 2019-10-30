@@ -62,13 +62,18 @@ include $(MOPSAROOT)/make/main.mk
 
 # install
 
-inst_bins := $(foreach f, $(wildcard ../../bin/mopsa-wrappers/*), $(shell basename $f))
+inst_src  := ../../bin/mopsa-wrappers
+inst_bins := $(foreach f, $(wildcard $(inst_src)/*), $(shell basename $f))
 
 install:
 	@mkdir -p $(PREFIX)/bin/mopsa-wrappers
 	@for i in $(inst_bins); do \
 		echo -e "$(INSTALLMSG)     bin/mopsa-wrappers/$$i"; \
-		ln -s $(PREFIX)/bin/mopsa-wrapper $(PREFIX)/bin/mopsa-wrappers/$$i; \
+		if [ $$i = "mopsa-wrapper" ]; then \
+			cp -f $(inst_src)/$$i $(PREFIX)/bin/mopsa-wrappers/$$i; \
+		else \
+			ln -s -f $(PREFIX)/bin/mopsa-wrappers/mopsa-wrapper $(PREFIX)/bin/mopsa-wrappers/$$i; \
+		fi; \
 	done
 
 uninstall:
