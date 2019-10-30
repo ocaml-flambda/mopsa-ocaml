@@ -117,6 +117,42 @@ let rec print_file indent (name,kind) =
 let print_db (db:db) =
   StringMap.iter (fun _ -> print_file "") db
 
+let print_list_json sep f ch = function
+  | [] -> ()
+  | [a] -> f ch a
+  | (a::rest) ->
+     f ch a;
+     List.iter (Printf.fprintf ch "%s%a" sep f) rest
+  
+  
+let print_file_json (name,kind) =
+  Printf.printf "  {\n    \"filename\": \"%s\",\n" name;
+  (match kind with
+   | Object s ->
+      Printf.printf "    \"type\": \"object\",\n";
+      Printf.printf "    \"lang\": \"%s\",\n" (source_kind_name s.source_kind);
+      Printf.printf "    \"source\": \"%s\",\n" (String.escaped s.source_path);
+      Printf.printf "    \"args\": [%a],\n" (print_list_json ", " (fun ch l -> Printf.fprintf ch "\"%s\"" (String.escaped l))) s.source_opts;
+      Printf.printf "    \"path\": \"%s\"\n" (String.escaped s.source_cwd)
+  | Library (k,contents) ->
+      Printf.printf "    \"type\": \"library\",\n";
+      Printf.printf "    \"kind\": \"%s\",\n" (library_kind_name k);
+      let cnt = StringMap.fold (fun tag _ acc -> tag::acc) contents [] in
+      Printf.printf "    \"contents\": [%a]\n" (print_list_json ", " (fun ch tag -> Printf.printf "\"%s\"" (String.escaped tag))) (List.rev cnt);
+  | Executable contents ->
+      Printf.printf "    \"type\": \"executable\",\n";
+      Printf.printf "    \"contents\": [%a]\n" (print_list_json ", " (fun ch f -> Printf.printf "\"%s\"" (String.escaped (fst f)))) contents
+  | Unknown _ ->
+      Printf.printf "    \"type\": \"unknown\"\n"
+  );
+  Printf.printf "  }"
+
+let print_db_json (db:db) =
+  let cnt = StringMap.fold (fun _ l acc -> l::acc) db [] in
+  Printf.printf "[";
+  print_list_json ",\n" (fun _ f -> print_file_json f) stdout (List.rev cnt);
+  Printf.printf "]"
+
                  
                
 (** {1 Utilities} *)

@@ -31,7 +31,8 @@ let print out json =
   let channel =
     match out with
     | None -> stdout
-    | Some file -> open_out file
+    | Some file ->
+       open_out_gen [Open_append; Open_wronly; Open_creat] 0o644 file
   in
   Yojson.Basic.pretty_to_channel channel json
 
@@ -166,5 +167,17 @@ let list_domains (domains:string list) out =
       domains |>
       List.map (fun d -> `String d)
     )
+  in
+  print out json
+
+let print range printer flow out =
+  printer Format.str_formatter flow;
+  let str = Format.flush_str_formatter () in
+  let json =
+    `Assoc [
+       "channel", `String "print";
+       "range", render_range range;
+       "msg", `String str;
+     ]
   in
   print out json
