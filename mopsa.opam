@@ -18,13 +18,13 @@ build: [
   [make]
 ]
 install: [
-  [make "install"]
+  [make "PREFIX=%{prefix}%" "install"]
 ]
 depends: [
   "apron"
   "menhir"
   "mlgmpidl"
-  "ocaml" {>= "4.08.0"}
+  "ocaml" {>= "4.07.1"}
   "ocamlfind"
   "conf-libclang"
   "yojson"
