@@ -161,7 +161,7 @@ let init_hooks interface ctx =
       ) ExecCache.empty
   in
 
-  (* Add the all hooks if the zone is Z_any *)
+  (* Add all hooks if the zone is Z_any *)
   let exec_cache = ExecCache.add Z_any !active_hooks exec_cache in
 
   (* Build the eval caches *)
@@ -179,7 +179,7 @@ let init_hooks interface ctx =
       ) EvalCache.empty
   in
 
-  (* Add the all hooks if the zone is Z_any*Z_any *)
+  (* Add all hooks if the zone is Z_any*Z_any *)
   let eval_cache = EvalCache.add (Z_any,Z_any) !active_hooks eval_cache in
 
   cache.exec <- exec_cache;
