@@ -49,8 +49,8 @@ struct
   (** *************** *)
 
   let name = "logs"
-  let exec_zones = []
-  let eval_zones = []
+  let exec_zones = [Z_any]
+  let eval_zones = [Z_any,Z_any]
 
 
   (** {2 Initialization} *)
