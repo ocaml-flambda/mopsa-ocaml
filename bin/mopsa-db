@@ -1,0 +1,5 @@
+#!/bin/bash
+
+MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/.."
+MOPSADB=${MOPSADB-`pwd`/mopsa.db} ${MOPSADIR}/parsers/c/bin/mopsa-wrapper $@
+

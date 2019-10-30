@@ -426,33 +426,57 @@ let ar db args =
 
 (** {1 Printing} *)
 
+                  
+let print dbfile args =
+  (* db loading *)
+  let db = try load_db dbfile with Unix.Unix_error _ -> empty_db in
 
-let print db dbfile args =
-  Printf.printf "DB file is %s\n" dbfile;
-  if List.exists ((=) "-v") args then print_db db
-  else if args = [] then (
-    Printf.printf "List of executables:\n";
-    List.iter (fun s -> Printf.printf "%s\n" s) (get_executables db)
+  (* argument parsing *)
+  let tool = Filename.basename (Sys.argv.(0)) in
+  let verbose = ref false
+  and json = ref false
+  and files = ref [] in
+  Arg.parse
+    ["-v", Arg.Set verbose, "textual dump of all targets";
+     "-json", Arg.Set json, "JSON dump of all targets"
+    ]
+    (fun x -> files := x::(!files))
+    (tool^" [-v | -json | <target list>]");
+
+  (* printing *)
+
+  if !json then (
+    Printf.printf "{\n  \"dbfile\": \"%s\",\n  \"contents\":\n" (String.escaped dbfile);
+    print_db_json db;
+    Printf.printf "\n}\n"
   )
-  else
-    List.iter
-      (fun exe ->
-        try
-          let srcs = get_executable_sources db exe in
-          Printf.printf "Executable %s\n" exe;
-          List.iter
-            (fun src ->
-              Printf.printf
-                "%s %s, in %s, %a\n"
-                src.source_path
-                (source_kind_name src.source_kind)
-                src.source_cwd
-                (print_list " " output_string) src.source_opts
-            ) srcs
-        with Not_found ->
-          Printf.printf "%s not found\n" exe
-      ) args
 
+  else (
+    Printf.printf "DB file is %s\n" dbfile;
+    if !verbose then print_db db
+    else if !files = [] then (
+      Printf.printf "List of executables:\n";
+      List.iter (fun s -> Printf.printf "%s\n" s) (get_executables db)
+    )
+    else
+      List.iter
+        (fun exe ->
+          try
+            let srcs = get_executable_sources db exe in
+            Printf.printf "Executable %s\n" exe;
+            List.iter
+              (fun src ->
+                Printf.printf
+                  "%s %s, in %s, %a\n"
+                  src.source_path
+                  (source_kind_name src.source_kind)
+                  src.source_cwd
+                  (print_list " " output_string) src.source_opts
+              ) srcs
+          with Not_found ->
+            Printf.printf "%s not found\n" exe
+        ) (List.rev !files);
+  )
 
 
 (** {1 Entry point} *)
@@ -473,9 +497,6 @@ let main () =
   let logname = Filename.concat (Filename.dirname dbfile) "mopsa.log" in
   if !log then logfile := open_out_gen [Open_wronly;Open_creat;Open_append] 0o644 logname;
 
-  (* open db *)
-  let d = open_db ~create:true dbfile in
-  let db = read_db d in
   let tool = Filename.basename (Sys.argv.(0))
   and args = List.tl (Array.to_list Sys.argv) in
 
@@ -485,23 +506,28 @@ let main () =
   (* cut suffix after - *)
   let tool_normalized = List.hd (Str.split (Str.regexp "-") tool) in
 
-  (* action to database *)
-  let db = match tool_normalized with
-    | "cc" | "clang" | "gcc" -> compile C db args
-    | "c++" | "clang++" | "g++" -> compile CXX db args
-    | "ld" -> link db args
-    | "ar" -> ar db args
-    | "rm" -> rm db args
-    | "mv" -> mv db args
-    | "cp" -> cp db args
-    | "ln" -> ln db args
-    | "mopsa" -> print db dbfile args; db
-    | _ -> db
+  (* executes action f on database *)
+  let apply f =
+    let d = open_db ~create:true dbfile in
+    let db = read_db d in
+    let db = f db args in
+    write_db d db;
+    close_db d;
   in
-
-  (* close db *)
-  write_db d db;
-  close_db d;
+  
+  (* action to database *)
+  (match tool_normalized with
+    | "cc" | "clang" | "gcc" -> apply (compile C)
+    | "c++" | "clang++" | "g++" -> apply (compile CXX)
+    | "ld" -> apply link
+    | "ar" -> apply ar
+    | "rm" -> apply rm
+    | "mv" -> apply mv
+    | "cp" -> apply cp
+    | "ln" -> apply ln
+    | "mopsa" -> print dbfile args; exit 0
+    | _ -> () (* unknown -> nothing to do! *)
+  );
 
   (* now execute the original command *)
   exec_unwrapped Sys.argv (* note: this does not return *)

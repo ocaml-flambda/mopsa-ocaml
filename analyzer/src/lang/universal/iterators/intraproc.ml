@@ -69,10 +69,7 @@ struct
       Option.return
 
     | S_print ->
-      Debug.debug ~channel:"print" "%a@\n  @[%a@]"
-        pp_position (srange stmt |> get_range_start)
-        (Flow.print man.lattice.print) flow
-      ;
+      Framework.Output.Factory.print (srange stmt) (Flow.print man.lattice.print) flow;
       Some (Post.return flow)
 
     | _ -> None
