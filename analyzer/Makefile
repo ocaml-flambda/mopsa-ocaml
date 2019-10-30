@@ -147,3 +147,28 @@ universal-tests: mopsa
 
 
 tests: c-tests python-tests universal-tests
+
+
+
+# install
+
+inst_bins := $(foreach f, $(wildcard ../bin/*), $(shell basename $f))
+
+install:
+	@mkdir -p $(PREFIX)/bin
+	@for i in $(inst_bins); do \
+		echo -e "$(INSTALLMSG)     bin/$$i"; \
+		cp ../bin/$$i $(PREFIX)/bin/$$i; \
+	done
+	@mkdir -p $(PREFIX)/share
+	@echo -e "$(INSTALLMSG)     share/mopsa"
+	@cp -r ../share/mopsa $(PREFIX)/share
+
+uninstall:
+	@for i in $(inst_bins); do \
+		echo -e "$(UINSTALLMSG)     bin/$$i"; \
+		rm -f $(PREFIX)/bin/$$i; \
+	done
+	@echo -e "$(UINSTALLMSG)     share/mopsa"
+	@rm -rf $(PREFIX)/share/mopsa
+
