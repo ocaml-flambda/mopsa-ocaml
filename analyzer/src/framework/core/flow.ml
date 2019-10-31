@@ -192,8 +192,8 @@ let add_alarm ?(force=false) alarm lattice flow =
   then flow
   else { flow with alarms = AlarmSet.add alarm flow.alarms }
 
-let raise_alarm alarm ?(bottom=false) lattice flow =
-  let flow = add_alarm alarm lattice flow in
+let raise_alarm ?(force=false) ?(bottom=false) alarm lattice flow =
+  let flow = add_alarm ~force alarm lattice flow in
   if not bottom
   then flow
   else set T_cur lattice.bottom lattice flow
