@@ -31,6 +31,7 @@ type alarm_category +=
   | AIntegerOverflow
   | AIllegalPointerDiff
   | AIllegalPointerOrder
+  | AInvalidBitShift
   | AVaArgNoNext
   | AReadOnlyModification
 
@@ -54,6 +55,7 @@ let () =
           | AIllegalPointerDiff -> Format.fprintf fmt "Illegal pointer difference"
           | AIllegalPointerOrder -> Format.fprintf fmt "Illegal pointer comparison"
           | AVaArgNoNext -> Format.fprintf fmt "No next argument for va_arg"
+          | AInvalidBitShift -> Format.fprintf fmt "Invald bit-shift"
           | AReadOnlyModification -> Format.fprintf fmt "Modification of a readonly memory"
           | _ -> default fmt a
         );

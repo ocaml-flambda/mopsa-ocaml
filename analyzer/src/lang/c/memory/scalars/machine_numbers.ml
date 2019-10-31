@@ -149,6 +149,10 @@ struct
     | O_div | O_mod -> true
     | _ -> false
 
+  let is_c_shift = function
+    | O_bit_lshift | O_bit_rshift -> true
+    | _ -> false
+
   let check_overflow typ man range f1 f2 exp flow =
     let rmin, rmax = rangeof typ in
 
@@ -228,6 +232,21 @@ struct
     fast_check ()
 
 
+  (** Check that bit-shifts are safe. Two conditions are verified: (i)
+      the shift position is positive and (ii) does not exceed the size
+      of the shifted value 
+  *)
+  let check_shift n t range fsafe funsafe man flow =
+    (* Condition: n ∈ [0, bits(t) - 1] *)
+    let bits = sizeof_type t |> Z.mul (Z.of_int 8) in
+    let cond = mk_in n (mk_zero range) (mk_z (Z.pred bits) range) range in
+    assume cond
+      ~fthen:(fun flow -> fsafe flow)
+      ~felse:(fun flow -> funsafe flow)
+      ~zone:Z_u_num man flow
+      
+
+  
   let rec is_compare_expr e =
     match ekind e with
     | E_binop(op, e1, e2) when is_comparison_op op -> true
@@ -294,6 +313,24 @@ struct
            let flow' = raise_c_alarm ADivideByZero exp.erange ~bottom:true man.lattice fflow in
            Eval.empty_singleton flow'
         ) e e' flow |>
+      Option.return
+
+    | E_binop(op, e, e') when op |> is_c_shift &&
+                              e  |> etyp |> is_c_int_type &&
+                              e' |> etyp |> is_c_int_type
+      ->
+      let t = e.etyp in
+      man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e flow ->
+      man.eval ~zone:(Z_c_scalar, Z_u_num) e' flow >>$? fun e' flow ->
+      check_shift e' t range
+        (fun tflow ->
+           let exp' = mk_binop e op e' ~etyp:(to_num_type exp.etyp) range in
+           Eval.singleton exp' tflow
+        )
+        (fun fflow ->
+           let flow' = raise_c_alarm AInvalidBitShift exp.erange ~bottom:true man.lattice fflow in
+           Eval.empty_singleton flow'
+        ) man flow |>
       Option.return
 
     | E_unop(op, e) when is_c_int_op op &&
