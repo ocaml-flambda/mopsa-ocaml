@@ -37,7 +37,7 @@ module C =
     
 (** {2 Debug} *)
 
-let dump_decls = ref true
+let dump_decls = ref false
 (* dump each C declarations found, for debugging *)
 
 let log_rename = ref false
