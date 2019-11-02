@@ -70,10 +70,10 @@ struct
   let top_of_prec = function
     | F_SINGLE -> I.single_special
     | F_DOUBLE -> I.double_special
-    | F_LONG_DOUBLE -> Soundness.warn "long double assumed as double"; I.double_special
-    | F_REAL -> panic "unhandled F_REAL"
+    | F_LONG_DOUBLE -> I.long_double_special
+    | F_REAL -> I.real
 
-  let top = top_of_prec F_DOUBLE
+  let top = top_of_prec F_LONG_DOUBLE
 
   let is_bottom = I.is_bot
 
@@ -96,8 +96,8 @@ struct
   let prec : float_prec -> I.prec = function
     | F_SINGLE -> `SINGLE
     | F_DOUBLE -> `DOUBLE
-    | F_LONG_DOUBLE -> Soundness.warn "long double assumed as double"; `DOUBLE
-    | F_REAL -> panic "unhandled `REAL intervals"
+    | F_LONG_DOUBLE -> `LONG_DOUBLE
+    | F_REAL -> `REAL
 
   let round () : I.round =
     match !opt_float_rounding with
@@ -106,7 +106,7 @@ struct
     | Apron.Texpr1.Up -> `UP
     | Apron.Texpr1.Down -> `DOWN
     | Apron.Texpr1.Rnd -> `ANY
-
+                        
   let of_constant t c =
     match t, c with
     | T_float p, C_float i ->
@@ -144,7 +144,7 @@ struct
            I.of_int_itv_bot (prec p) (round ()) int_itv
          (* this seems to return top every time. Why don't we use
             I.round_int (prec p) (round ()) a ? *)
-         | _ -> top)
+         | _ -> top_of_prec p)
       | _ -> top
     ) man t op v
 
@@ -157,7 +157,7 @@ struct
          | O_mult  -> I.mul (prec p) (round ()) a1 a2
          | O_div   -> I.div (prec p) (round ()) a1 a2
          | O_mod   -> I.fmod (prec p) (round ()) a1 a2
-         | _ -> top)
+         | _ -> top_of_prec p)
       | _ -> top
     ) man t op a1 a2
 
@@ -190,17 +190,17 @@ struct
   let compare man t op a1 a2 r = Simplified.lift_compare (fun op a1 a2 r ->
       match t with
       | T_float p ->
-        (match r, op with
+         (match r, op with
          | true, O_eq | false, O_ne -> I.filter_eq  (prec p) a1 a2
          | true, O_ne | false, O_eq -> I.filter_neq (prec p) a1 a2
          | true, O_lt -> I.filter_lt  (prec p) a1 a2
          | true, O_le -> I.filter_leq (prec p) a1 a2
          | true, O_gt -> I.filter_gt  (prec p) a1 a2
          | true, O_ge -> I.filter_geq (prec p) a1 a2
-         | false, O_lt -> I.filter_lt_false  (prec p) a1 a2
          | false, O_le -> I.filter_leq_false (prec p) a1 a2
-         | false, O_gt -> I.filter_gt_false  (prec p) a1 a2
+         | false, O_lt -> I.filter_lt_false  (prec p) a1 a2
          | false, O_ge -> I.filter_geq_false (prec p) a1 a2
+         | false, O_gt -> I.filter_gt_false  (prec p) a1 a2
          | _ -> a1,a2)
       | _ -> a1,a2
     ) man t op a1 a2 r
