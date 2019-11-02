@@ -37,7 +37,10 @@ let print_loc = true
 
 let print_comments = true
 (** Prints comments attached to declarations. *)
-                  
+
+let print_scope = false
+(** Prints scope update information (end of blocks & jumps). *)
+
 
 (** {2 Internal printing utilities} *)
 
@@ -392,7 +395,7 @@ and c_buf_expr indent buf ((e,t,_) as ee:expr) =
 
    | E_statement b ->
       bp buf "({ %a })"
-         (c_buf_statement_list indent) b
+         (c_buf_statement_list indent) b.blk_stmts
 
    | E_var_args e1 ->
       bp buf "__builtin_va_arg(%a,%a)"
@@ -431,17 +434,29 @@ and c_buf_init indent buf i = match i with
 and c_buf_statement_list indent buf l =
   List.iter (c_buf_statement indent buf) l
 
-and c_buf_block indent buf = function
+and c_buf_block indent buf blk = match blk.blk_stmts with
   | [] -> bp_str buf ";\n"
   (*  | [s] -> bp buf "\n%a" (c_buf_statement (inc_indent indent)) s*)
-  | l -> bp buf "{\n%a%s}\n" (c_buf_statement_list (inc_indent indent)) l indent
+  | l -> bp buf "{\n%a%a%s}\n" (c_buf_statement_list (inc_indent indent)) l (c_buf_scope (inc_indent indent)) blk indent
 
-and c_buf_for_init indent buf = function
+and c_buf_scope indent buf blk =
+  let p buf v = bp_str buf v.var_unique_name in
+  if not print_scope || blk.blk_local_vars = [] then ()
+  else bp buf "%s/* to remove: %a */\n" indent (bp_list p ",") blk.blk_local_vars
+
+and c_buf_update buf upd =
+  let p buf v = bp_str buf v.var_unique_name in
+  if print_scope && upd.scope_var_removed <> []
+  then bp buf " /* to remove: %a */" (bp_list p ",") upd.scope_var_removed;
+  if print_scope && upd.scope_var_added <> []
+  then bp buf " /* to add: %a */" (bp_list p ",") upd.scope_var_added
+
+and c_buf_for_init indent buf b =
+  match b.blk_stmts with
   | [] -> ()
   | [S_local_declaration v,_] -> c_buf_var_decl_inner indent buf v
   | [S_expression e,_] -> c_buf_expr indent buf e
-  | x -> c_buf_expr indent buf (E_statement x, (T_void, no_qual), empty_range)
-(*  | _ -> invalid_arg "unhandled init in for loop"*)
+  | _ -> c_buf_expr indent buf (E_statement b, (T_void, no_qual), empty_range)
             
 and c_buf_statement indent buf ((s,_):statement) =
   let indent2 = inc_indent indent in
@@ -453,9 +468,9 @@ and c_buf_statement indent buf ((s,_):statement) =
      bp buf "%s%a;\n" indent (c_buf_expr indent2) e
         
   | S_block l ->
-     bp buf "%s{\n%a%s}\n" indent (c_buf_statement_list indent2) l indent
+     bp buf "%s{\n%a%a%s}\n" indent (c_buf_statement_list indent2) l.blk_stmts (c_buf_scope indent2) l indent
         
-  | S_if (e1,b1,[]) ->
+  | S_if (e1,b1, { blk_stmts=[] } ) ->
      bp buf "%sif (%a) %a"
         indent (c_buf_expr_bool indent2) e1
         (c_buf_block indent) b1
@@ -484,25 +499,25 @@ and c_buf_statement indent buf ((s,_):statement) =
         (bp_option "" (c_buf_expr indent2)) e2
         (c_buf_block indent) b2
 
-  | S_jump (S_goto s) -> bp buf "%sgoto %s;\n" indent s
-  | S_jump S_break -> bp buf "%sbreak;\n" indent
-  | S_jump S_continue -> bp buf "%scontinue;\n" indent
+  | S_jump (S_goto (s,u)) -> bp buf "%sgoto %s;%a\n" indent s c_buf_update u
+  | S_jump (S_break u) -> bp buf "%sbreak;%a\n" indent c_buf_update u
+  | S_jump (S_continue u) -> bp buf "%scontinue;%a\n" indent c_buf_update u
 
-  | S_jump (S_return e1) ->
-     bp buf "%sreturn %a;\n"
-        indent (bp_option "" (c_buf_expr indent2)) e1
+  | S_jump (S_return (e1, u)) ->
+     bp buf "%sreturn %a;%a\n"
+        indent (bp_option "" (c_buf_expr indent2)) e1 c_buf_update u
         
   | S_jump (S_switch (e1,b1)) ->
-     bp buf "%sswitch (%a) {\n%a%s}\n" indent
-        (c_buf_expr indent2) e1 (c_buf_statement_list indent) b1 indent
+     bp buf "%sswitch (%a) {\n%a%a%s}\n" indent
+        (c_buf_expr indent2) e1 (c_buf_statement_list indent) b1.blk_stmts (c_buf_scope indent) b1 indent
         
   | S_target (S_label s) -> bp buf "%s%s:;\n" indent s
                                
-  | S_target (S_case e1) ->
-     bp buf "%scase %a:;\n"
-        indent (c_buf_expr indent2) e1
+  | S_target (S_case (e1, u)) ->
+     bp buf "%scase %a:;%a\n"
+        indent (c_buf_expr indent2) e1 c_buf_update u
 
-  | S_target (S_default) -> bp buf "%sdefault:;\n" indent
+  | S_target (S_default u) -> bp buf "%sdefault:;%a\n" indent c_buf_update u
 
 and c_buf_com indent buf v =
   if print_comments
@@ -546,7 +561,7 @@ and c_buf_func_decl indent buf f =
   c_buf_type_suffix buf f.func_unique_name indent false inner f.func_return;
   (match f.func_body with
    | None -> bp_str buf ";\n"
-   | Some l -> bp buf "\n%s{\n%a%s}\n" indent (c_buf_statement_list indent2) l indent
+   | Some l -> bp buf "\n%s{\n%a%a%s}\n" indent (c_buf_statement_list indent2) l.blk_stmts (c_buf_scope indent2) l indent
   )
 
 and c_buf_func_proto indent buf f =

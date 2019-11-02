@@ -370,20 +370,20 @@ and from_stmt ctx ((skind, range): C_AST.statement) : stmt =
     | C_AST.S_while (cond, body) -> Universal.Ast.S_while (from_expr ctx cond, from_block ctx srange body)
     | C_AST.S_do_while (body, cond) -> Ast.S_c_do_while (from_block ctx srange body, from_expr ctx cond)
     | C_AST.S_for (init, test, increm, body) -> Ast.S_c_for(from_block ctx srange init, from_expr_option ctx test, from_expr_option ctx increm, from_block ctx srange body)
-    | C_AST.S_jump (C_AST.S_goto label) -> S_c_goto label
-    | C_AST.S_jump (C_AST.S_break) -> Universal.Ast.S_break
-    | C_AST.S_jump (C_AST.S_continue) -> Universal.Ast.S_continue
-    | C_AST.S_jump (C_AST.S_return None) -> Universal.Ast.S_return None
-    | C_AST.S_jump (C_AST.S_return (Some e)) -> Universal.Ast.S_return (Some (from_expr ctx e))
+    | C_AST.S_jump (C_AST.S_goto (label, upd)) -> S_c_goto label
+    | C_AST.S_jump (C_AST.S_break upd) -> Universal.Ast.S_break
+    | C_AST.S_jump (C_AST.S_continue upd) -> Universal.Ast.S_continue
+    | C_AST.S_jump (C_AST.S_return (None, upd)) -> Universal.Ast.S_return None
+    | C_AST.S_jump (C_AST.S_return (Some e, upd)) -> Universal.Ast.S_return (Some (from_expr ctx e))
     | C_AST.S_jump (C_AST.S_switch (cond, body)) -> Ast.S_c_switch (from_expr ctx cond, from_block ctx srange body)
-    | C_AST.S_target(C_AST.S_case(e)) -> Ast.S_c_switch_case(from_expr ctx e)
-    | C_AST.S_target(C_AST.S_default) -> Ast.S_c_switch_default
+    | C_AST.S_target(C_AST.S_case(e,upd)) -> Ast.S_c_switch_case(from_expr ctx e)
+    | C_AST.S_target(C_AST.S_default upd) -> Ast.S_c_switch_default
     | C_AST.S_target(C_AST.S_label l) -> Ast.S_c_label l
   in
   {skind; srange}
 
 and from_block ctx range (block: C_AST.block) : stmt =
-  mk_block (List.map (from_stmt ctx) block) range
+  mk_block (List.map (from_stmt ctx) block.blk_stmts) range
 
 and from_block_option ctx (range: Location.range) (block: C_AST.block option) : stmt =
   match block with
