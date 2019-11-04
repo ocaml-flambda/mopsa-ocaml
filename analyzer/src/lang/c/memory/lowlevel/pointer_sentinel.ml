@@ -616,7 +616,7 @@ struct
       doit p
     in
 
-    eval_pointed_base_offset p range man flow >>$ fun pt flow ->
+    eval_pointed_base_offset pp range man flow >>$ fun pt flow ->
     match pt with
     | None ->
       warn_at range "ignoring unresolved pointer %a" pp_expr pp;
@@ -911,10 +911,9 @@ struct
   let eval_deref exp primed range man flow =
     let p = match ekind exp with E_c_deref p -> p | _ -> assert false in
     eval_pointed_base_offset p range man flow >>$ fun pp flow ->
-
     match pp with
     | None ->
-      Soundness.warn_at range "ignoring dereference of ⊤ pointer";
+      Soundness.warn_at range "sentinel: ignoring dereference of ⊤ pointer";
       Eval.singleton (mk_top (under_type p.etyp |> void_to_char) range) flow
 
     | Some (base,offset)

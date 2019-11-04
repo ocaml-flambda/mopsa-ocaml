@@ -136,9 +136,7 @@ let eval_pointed_base_offset ptr range (man:('a,'t,'s) Core.Sig.Stacked.Lowlevel
   | E_c_points_to (P_block (base, offset)) ->
     Result.singleton (Some (base, offset)) flow
 
-
   | E_c_points_to P_top ->
-    Soundness.warn_at range "ignoring ⊤ pointer resolution";
     Result.singleton None flow
 
   | _ -> assert false

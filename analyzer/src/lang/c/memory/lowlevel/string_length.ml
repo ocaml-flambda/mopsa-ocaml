@@ -340,7 +340,6 @@ struct
 
   (** Cases of the abstract transformer for tests *(p + i) == 0 *)
   let assume_zero_cases base offset primed range man flow =
-    debug "assume_zero: base = %a, offset = %a" pp_base base pp_expr offset;
     eval_base_size base range man flow >>$ fun size flow ->
     man.eval ~zone:(Z_c_scalar, Z_u_num) size flow >>$ fun size flow ->
     man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow >>$ fun offset flow ->
@@ -368,7 +367,6 @@ struct
 
   (** Cases of the abstract transformer for tests *(p + ∀i) != 0 *)
   let assume_quantified_non_zero_cases base offset primed range man flow =
-    debug "assume_quantified_non_zero: base = %a, offset = %a" pp_base base pp_expr offset;
     (** Get symbolic bounds of the offset *)
     let min, max = Common.Quantified_offset.bound offset in
 
@@ -435,7 +433,6 @@ struct
 
   (** Default for tests *p ? 0 *)
   let assume_default_cases base offset range man flow =
-    debug "assume_default_cases: base = %a, offset = %a" pp_base base pp_expr offset;
     (* Quantified offsets cannot be handled numerically, so we just raise a
        non-deterministic out-of-bound alarm
     *)
@@ -477,7 +474,6 @@ struct
       Post.return
 
     | Some (base,offset) ->
-      debug "base = %a, offset = %a" pp_base base pp_expr offset;
       if not (is_memory_base base)
       then assume_default_cases base offset range man flow
 

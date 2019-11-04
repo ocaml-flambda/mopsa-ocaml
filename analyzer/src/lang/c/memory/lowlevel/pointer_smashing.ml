@@ -194,19 +194,17 @@ struct
       (* Collect pointers initializations *)
       let rec aux init flow : ('a,expr list) result =
         match init with
-        | [] -> debug "1";Result.singleton [] flow
+        | [] -> Result.singleton [] flow
 
         | C_flat_none (n,_) :: tl  ->
-          debug "3";
           let e = if is_global then mk_c_null range else mk_c_invalid_pointer range in
           aux tl flow >>$ fun el flow ->
           Result.singleton (e::el) flow
 
-        | hd :: _ when is_non_pointer hd -> debug "2";raise NonPointerFound
+        | hd :: _ when is_non_pointer hd -> raise NonPointerFound
 
         | C_flat_fill (e,_,_):: tl
         | C_flat_expr (e,_) :: tl ->
-          debug "4";
           aux tl flow >>$ fun el flow ->
           Result.singleton (e::el) flow
       in
@@ -387,7 +385,6 @@ struct
       Eval.singleton (mk_top t range)
 
     | Some (base,offset) when not (is_expr_quantified offset) ->
-      debug "eval non quantified %a" pp_expr offset;
       eval_base_size base range man flow >>$ fun size flow ->
       man.eval ~zone:(Z_c_scalar,Z_u_num) size flow >>$ fun size flow ->
       man.eval ~zone:(Z_c_scalar,Z_u_num) offset flow >>$ fun offset flow ->
@@ -407,7 +404,6 @@ struct
         ~zone:Z_u_num man flow
 
     | Some (base,offset) when is_expr_quantified offset ->
-      debug "eval quantified %a" pp_expr offset;
       eval_base_size base range man flow >>$ fun size flow ->
       man.eval ~zone:(Z_c_scalar,Z_u_num) size flow >>$ fun size flow ->
       let min, max = Common.Quantified_offset.bound offset in
