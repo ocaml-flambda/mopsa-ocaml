@@ -111,3 +111,43 @@ let () =
       f
     );
   }
+
+
+
+(** {2 Float intervals} *)
+(** ******************* *)
+
+
+module F = ItvUtils.FloatItvNan
+
+
+(** Float intervals *)
+type float_itv = F.t
+
+type _ query +=
+  | Q_float_interval : expr -> float_itv query (** Query to evaluate the float interval of an expression, with infinities and NaN *)
+
+let mk_float_interval_query e =
+  Q_float_interval e
+
+let () =
+  register_query {
+    join = (
+      let f : type r. query_pool -> r query -> r -> r -> r =
+        fun next query a b ->
+          match query with
+          | Q_float_interval _ -> F.join a b
+          | _ -> next.join_query query a b
+      in
+      f
+    );
+    meet = (
+      let f : type r. query_pool -> r query -> r -> r -> r =
+        fun next query a b ->
+          match query with
+          | Q_float_interval e -> F.meet a b
+          | _ -> next.meet_query query a b
+      in
+      f
+    );
+  }

@@ -151,6 +151,16 @@ struct
          )
       ) evl
 
+  (** Print the value of a float expression *)
+  let print_float_value exp man fmt flow =
+    let evl = man.eval ~zone:(Z_c,Z_u_num) exp flow in
+    Format.fprintf fmt "%a = %a"
+      pp_expr exp
+      (Result.print (fun fmt e flow ->
+           let itv = man.ask (Universal.Numeric.Common.mk_float_interval_query e) flow in
+           Universal.Numeric.Values.Intervals.Float.Value.print fmt itv
+         )
+      ) evl
 
   (** Print the value of a pointer expression *)
   let print_pointer_value exp man fmt flow =
@@ -178,6 +188,7 @@ struct
   (** Print the value of an expression *)
   let print_value exp man fmt flow =
     if is_c_int_type exp.etyp then print_int_value exp man fmt flow
+    else if is_c_float_type exp.etyp then print_float_value exp man fmt flow
     else if is_c_pointer_type exp.etyp then print_pointer_value exp man fmt flow
     else panic_at exp.erange "_mopsa_print: unsupported type %a" pp_typ exp.etyp
 
