@@ -231,8 +231,9 @@ struct
         (* If the above heuristics fails, fall back to dynamic evaluations *)
         man.eval e ~zone:(zone,Z_c_points_to) flow >>$ fun pt flow ->
         match ekind pt with
+        | E_c_points_to P_top -> Result.join (Result.singleton true flow) (Result.singleton false flow)
         | E_c_points_to (P_null | P_invalid) -> Result.singleton true flow
-        | E_c_points_to (P_block _ | P_valid | P_fun _) -> Result.singleton false flow
+        | E_c_points_to (P_block _ | P_fun _) -> Result.singleton false flow
         | _ -> assert false
 
 
@@ -499,8 +500,8 @@ struct
       raise_c_alarm Alarms.AInvalidDeref p.erange ~bottom:true man.lattice flow |>
       Post.return
 
-    | E_c_points_to P_valid ->
-      Soundness.warn_at range "unsound assignment to valid pointer %a" pp_expr p;
+    | E_c_points_to P_top ->
+      Soundness.warn_at range "unsound assignment to ⊤ pointer %a" pp_expr p;
       raise_c_alarm Alarms.AOutOfBound p.erange ~bottom:false man.lattice flow |>
       Post.return
 
@@ -644,7 +645,7 @@ struct
     | E_c_points_to (P_block (base, offset)) ->
       Post.return flow
 
-    | E_c_points_to P_valid ->
+    | E_c_points_to P_top ->
       raise_c_alarm AOutOfBound p.erange ~bottom:false man.lattice flow |>
       Post.return
 
@@ -958,10 +959,12 @@ struct
       ->
       eval_quantified_deref_cases base offset (under_type p.etyp) primed range man flow
 
-    | E_c_points_to (P_block _)
-    | E_c_points_to P_valid ->
-      raise_c_alarm Alarms.AOutOfBound p.erange ~bottom:false man.lattice flow |>
-      Eval.singleton (mk_top (under_type p.etyp |> void_to_char) range)
+    | E_c_points_to (P_block _) ->
+      Eval.singleton (mk_top (under_type p.etyp |> void_to_char) range) flow
+
+    | E_c_points_to P_top ->
+      Soundness.warn_at range "ignoring dereference of ⊤ pointer";
+      Eval.singleton (mk_top (under_type p.etyp |> void_to_char) range) flow
 
     | _ -> assert false
 

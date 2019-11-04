@@ -573,7 +573,7 @@ struct
       Option.return
 
 
-    | S_assume(e) ->
+    | S_assume(e) when is_c_num_type e.etyp || is_numeric_type e.etyp || e.etyp = T_any ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e' flow ->
       man.post ~zone:Z_u_num (mk_assume (to_compare_expr e') stmt.srange) flow |>
       Option.return

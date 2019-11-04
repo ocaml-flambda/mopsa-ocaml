@@ -336,7 +336,7 @@ struct
       raise_c_alarm AInvalidDeref p.erange ~bottom:true man.lattice flow |>
       Post.return
 
-    | E_c_points_to P_valid ->
+    | E_c_points_to P_top ->
       Soundness.warn_at range "ignoring assignment to undetermined valid pointer %a" pp_expr p;
       Post.return flow
 
@@ -579,7 +579,7 @@ struct
       Post.return flow
 
 
-    | E_c_points_to P_valid ->
+    | E_c_points_to P_top ->
       Soundness.warn_at range "rename of %a not supported because it can not be resolved"
         pp_expr target
       ;

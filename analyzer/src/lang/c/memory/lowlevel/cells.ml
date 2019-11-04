@@ -569,9 +569,7 @@ struct
     eval_pointed_base_offset p range man flow >>$ fun pp flow ->
     match pp with
     | None ->
-      (* Valid pointer but unknown offset *)
-      raise_c_alarm AOutOfBound range ~bottom:false man.lattice flow |>
-      Result.singleton Top
+      Result.singleton Top flow
 
     | Some (base,offset) ->
       let typ = under_type p.etyp |> void_to_char in
@@ -837,8 +835,11 @@ struct
     expand p range man flow >>$ fun expansion flow ->
     let t = under_type p.etyp in
     match expansion with
-    | Top | Region _ ->
-      (* ⊤ pointer or expand threshold exceeded => use the whole value interval *)
+    | Top ->
+      Soundness.warn_at range "ignoring dereference of ⊤ pointer";
+      Eval.singleton (mk_top (void_to_char t) range) flow
+
+    | Region _ ->
       Eval.singleton (mk_top (void_to_char t) range) flow
 
     | Cell c ->
@@ -1193,7 +1194,7 @@ struct
       (* target is pointer, so resolve it and compute the affected offsets *)
       man.eval ~zone:(Z_c_low_level, Z_c_points_to) target flow >>$ fun pt flow ->
       match ekind pt with
-      | E_c_points_to P_valid | E_c_points_to P_null | E_c_points_to P_invalid ->
+      | E_c_points_to P_top | E_c_points_to P_null | E_c_points_to P_invalid ->
         Post.return flow
 
       | E_c_points_to (P_block(base, offset)) ->

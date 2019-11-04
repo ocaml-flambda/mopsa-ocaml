@@ -30,23 +30,19 @@ open Universal.Zone
 open Common.Points_to
 open Common.Base
 open Alarms
-
+open Value
+open Static_points_to
 
 module Domain =
 struct
 
 
-  (** {2 Non-relational map} *)
-  (** ====================== *)
-
-  module Map =
-    Framework.Transformers.Value.Nonrel.Make(
-      Framework.Core.Sig.Value.Simplified.MakeLowlevel(Value)
-    )
-
 
   (** {2 Domain header} *)
   (** ================= *)
+
+  (** Map from variables to set of pointer values *)
+  module Map = Framework.Lattices.Partial_map.Make(Var)(PointerSet)
 
   type t = Map.t
 
@@ -60,7 +56,7 @@ struct
   let top = Map.top
 
   let print fmt a =
-    Map.print fmt a
+    Format.fprintf fmt "pointers: %a@\n" Map.print a
 
   let interface = {
     iexec = {
@@ -96,7 +92,7 @@ struct
     Map.meet a a', s, s'
 
   let widen man ctx (a,s) (a',s') =
-    Map.widen ctx a a', s, s', true
+    Map.join a a', s, s', true
 
   let merge pre (a,log) (a',log') =
     let block = Log.get_domain_block log in
@@ -125,7 +121,8 @@ struct
     let a', block = patch_block block a a' in
     let a, block' = patch_block block' a' a in
 
-    Map.merge pre (a,block) (a',block')
+    Framework.Transformers.Value.Nonrel.generic_nonrel_merge pre (a,block) (a',block')
+      ~top:PointerSet.top ~add:Map.add ~find:Map.find ~remove:Map.remove ~meet:Map.meet
 
 
   let add p v mode a =
@@ -183,24 +180,25 @@ struct
 
 
   (** Create the offset expression of a pointer *)
-  let mk_offset_expr (p:var) mode range : expr =
+  let mk_offset (p:var) mode range : expr =
     mk_var (mk_offset_var p) ~mode range
+
 
 
   (** {2 Utility functions for symbolic evaluations} *)
   (** ============================================== *)
 
-  (* Get the base and eventual pointer offset from a symbolic pointer evaluation *)
-  let symbolic_to_value (p:Symbolic.t) man flow : (Value.t * expr option * (var * mode) option) =
+  (** Evaluate a static points-to expression *)
+  let eval_static_points_to man flow (p:static_points_to) : (Value.t * expr option * (var * mode) option) =
     match p with
-    | Symbolic.AddrOf (b, o) ->
+    | AddrOf (b, o) ->
       Value.base b, Some o, None
 
-    | Eq(q, mode, o) ->
+    | Eval(q, mode, o) ->
       let v = get_env T_cur man flow |>
               Map.find q
       in
-      v, (if Value.is_valid_base v then Some o else None), (Some (q,mode))
+      v, (if Value.is_valid v then Some o else None), (Some (q,mode))
 
     | Null ->
       Value.null, None, None
@@ -215,65 +213,61 @@ struct
       panic ~loc:__LOC__ "symbolic_to_value: function pointers not supported"
 
 
-  (* Set value of an optional pointer returned by [symbolic_to_value] *)
+  (** Set value of an optional pointer *)
   let set_value_opt p v man flow =
     match p with
     | None -> flow
     | Some (p,mode) -> map_env T_cur (add p v mode) man flow
 
 
-  (* Create the offset expression from optional pointer info *)
-  let mk_offset_expr_opt p v o range =
+  (** Create the offset expression from optional pointer *)
+  let mk_offset_opt p v o range =
     if not (Value.is_valid v)
     then None
     else
-    match p, o with
-    | Some (pp,mode), Some oo ->
-      Some (mk_binop (mk_offset_expr pp mode range) O_plus oo range ~etyp:T_int)
+      match p, o with
+      | Some (pp,mode), Some oo ->
+        Some (mk_binop (mk_offset pp mode range) O_plus oo range ~etyp:T_int)
 
-    | None, Some oo ->
-      Some oo
+      | None, Some oo ->
+        Some oo
 
-    | _ -> None
+      | _ -> None
 
 
-  (* Offset conditions for comparing two pointers *)
+  (** Offset conditions for comparing two pointers *)
   let mk_offset_constraint_opt op p1 v1 o1 p2 v2 o2 range =
-    mk_offset_expr_opt p1 v1 o1 range |> Option.bind @@ fun e1 ->
-    mk_offset_expr_opt p2 v2 o2 range |> Option.bind @@ fun e2 ->
+    mk_offset_opt p1 v1 o1 range |> Option.bind @@ fun e1 ->
+    mk_offset_opt p2 v2 o2 range |> Option.bind @@ fun e2 ->
     Some (mk_binop e1 op e2 ~etyp:T_int range)
 
 
-  let eval_offset_constraint_same_base_opt op p1 v1 o1 p2 v2 o2 range man flow =
-    match mk_offset_constraint_opt op p1 v1 o1 p2 v2 o2 range, op with
-    | None, O_eq -> Eval.singleton (mk_one range) flow
-    | None, O_ne -> Eval.singleton (mk_zero range) flow
-    | Some cond,_ -> man.eval ~zone:(Z_c_scalar,Z_u_num) cond flow
-    | _ -> Eval.singleton (mk_int_interval 0 1 range) flow (* FIXME: can we return a more precise expression? *)
-
-
+  (** Remove the offset variable when an abstract pointer value changes *)
   let remove_offset_opt p v v' range man flow =
     match p with
-    | None -> flow
+    | None -> Post.return flow
     | Some (p,mode) ->
-      if Value.is_valid_base v && not (Value.is_valid_base v')
-      then man.exec ~zone:Z_u_num (mk_remove (mk_offset_expr p mode range) range) flow
-      else flow
+      debug "remove_offset_opt %a: old=%a, new=%a" pp_var p Value.print v Value.print v';
+      if Value.is_valid v && not (Value.is_valid v')
+      then let () = debug "remove" in man.post ~zone:Z_u_num (mk_remove (mk_offset p mode range) range) flow
+      else Post.return flow
 
+
+  
 
   (** {2 Pointer evaluation} *)
   (** ====================== *)
 
-  (** Evaluation of points-to information *)
+  (** Evaluation a pointer expression into a points-to expression *)
   let eval_points_to exp man flow =
-    Symbolic.eval_opt exp |> Option.lift @@ fun ptr ->
+    Static_points_to.eval_opt exp |> Option.lift @@ fun ptr ->
 
     match ptr with
-    | Symbolic.AddrOf (base, offset) ->
+    | AddrOf (base, offset) ->
       Eval.singleton (mk_c_points_to_bloc base offset exp.erange) flow
 
-    | Eq (p, mode, offset) ->
-      let offset' = mk_binop (mk_offset_expr p mode exp.erange) O_plus offset ~etyp:T_int exp.erange in
+    | Eval (p, mode, offset) ->
+      let offset' = mk_binop (mk_offset p mode exp.erange) O_plus offset ~etyp:T_int exp.erange in
       let a = get_env T_cur man flow in
       let values = Map.find p a in
       let evals = Value.fold_points_to (fun v pt acc ->
@@ -293,121 +287,7 @@ struct
       Eval.singleton (mk_c_points_to_invalid exp.erange) flow
 
     | Top ->
-      let el = [
-        Eval.singleton (mk_c_points_to_valid exp.erange) flow;
-        Eval.singleton (mk_c_points_to_null exp.erange) flow;
-        Eval.singleton (mk_c_points_to_invalid exp.erange) flow
-      ]
-      in
-      Eval.join_list ~empty:(Eval.empty_singleton flow) el
-
-
-
-  (** 𝔼⟦ p == q ⟧ *)
-  let eval_eq p q range man flow =
-    (* Evaluate the pointed bases symbolically *)
-    let sp = Symbolic.eval p in
-    let sq = Symbolic.eval q in
-
-    let v1, o1, p1 = symbolic_to_value sp man flow in
-    let v2, o2, p2 = symbolic_to_value sq man flow in
-
-    (* Compute common pointed addresses *)
-    let v = Value.meet v1 v2 in
-
-    let flow = set_value_opt p1 v man flow |>
-               set_value_opt p2 v man
-    in
-
-    (* Refine offsets in case v is a valid address *)
-    let flow = remove_offset_opt p1 v1 v range man flow |>
-               remove_offset_opt p2 v2 v range man
-    in
-
-    if Value.is_bottom v then
-      Eval.singleton (mk_zero range) flow
-    else
-      eval_offset_constraint_same_base_opt O_eq p1 v1 o1 p2 v2 o2 range man flow
-
-
-
-  (** 𝔼⟦ p != q ⟧ *)
-  let eval_ne p q range man flow =
-    (* Evaluate the pointed bases symbolically *)
-    let sp = Symbolic.eval p in
-    let sq = Symbolic.eval q in
-
-    let v1, o1, p1 = symbolic_to_value sp man flow in
-    let v2, o2, p2 = symbolic_to_value sq man flow in
-
-    (* Case 1: same valid bases *)
-    let case1 =
-      let v = Value.meet v1 v2 in
-      if Value.is_bottom v
-      then []
-      else
-        let flow = set_value_opt p1 v man flow |>
-                   set_value_opt p2 v man |>
-                   remove_offset_opt p1 v1 v range man |>
-                   remove_offset_opt p2 v2 v range man
-        in
-        [eval_offset_constraint_same_base_opt O_ne p1 v o1 p2 v o2 range man flow]
-    in
-
-    (* Case 2: different bases *)
-    let case2 =
-      let v1' = Value.diff v1 v2 in
-      let v2' = Value.diff v2 v1 in
-      if Value.is_bottom v1' || Value.is_bottom v2'
-      then []
-      else
-        let flow = set_value_opt p1 v1' man flow |>
-                   set_value_opt p2 v2' man |>
-                   remove_offset_opt p1 v1 v1' range man |>
-                   remove_offset_opt p2 v2 v2' range man
-        in
-        [Eval.singleton (mk_one range) flow]
-
-    in
-    Eval.join_list (case1 @ case2) ~empty:(Eval.empty_singleton flow)
-
-
-  (** 𝔼⟦ p op q | op ∈ {<, <=, >, >=} ⟧ *)
-  let eval_order op p q range man flow =
-    (* Evaluate the pointed bases symbolically *)
-    let sp = Symbolic.eval p in
-    let sq = Symbolic.eval q in
-
-    let v1, o1, p1 = symbolic_to_value sp man flow in
-    let v2, o2, p2 = symbolic_to_value sq man flow in
-
-    (* Case 1: same bases *)
-    let case1 =
-      let v = Value.meet v1 v2 in
-      if Value.is_bottom v
-      then []
-      else
-        let flow = set_value_opt p1 v man flow |>
-                   set_value_opt p2 v man
-        in
-        [eval_offset_constraint_same_base_opt op p1 v o1 p2 v o2 range man flow]
-    in
-
-    (* Case 2: different bases => undefined behavior *)
-    let case2 =
-      let v1 = Value.diff v1 v2 in
-      let v2 = Value.diff v2 v1 in
-      if Value.is_bottom v1 || Value.is_bottom v2
-      then []
-      else
-        let flow = set_value_opt p1 v1 man flow |>
-                   set_value_opt p2 v2 man
-        in
-        let flow = raise_c_alarm Alarms.AIllegalPointerOrder range ~bottom:true man.lattice flow in
-        [Eval.empty_singleton flow]
-    in
-
-    Eval.join_list (case1 @ case2) ~empty:(Eval.empty_singleton flow)
+      Eval.singleton (mk_c_points_to_top exp.erange) flow
 
 
   (** 𝔼⟦ p - q ⟧ *)
@@ -423,11 +303,12 @@ struct
     ;
 
     (* Evaluate the pointed bases symbolically *)
-    let sp = Symbolic.eval p in
-    let sq = Symbolic.eval q in
-
-    let v1, o1, p1 = symbolic_to_value sp man flow in
-    let v2, o2, p2 = symbolic_to_value sq man flow in
+    let v1, o1, p1 = Static_points_to.eval p |>
+                     eval_static_points_to man flow
+    in
+    let v2, o2, p2 = Static_points_to.eval q |>
+                     eval_static_points_to man flow
+    in
 
     (* Size of a pointed element *)
     let elem_size = elem_size_p in
@@ -442,8 +323,8 @@ struct
                    set_value_opt p2 v man
         in
         let ee =
-          mk_offset_expr_opt p1 v o1 range |> Option.bind @@ fun o1 ->
-          mk_offset_expr_opt p2 v o2 range |> Option.bind @@ fun o2 ->
+          mk_offset_opt p1 v o1 range |> Option.bind @@ fun o1 ->
+          mk_offset_opt p2 v o2 range |> Option.bind @@ fun o2 ->
           let e = sub o1 o2 range in
           if Z.equal elem_size Z.one
           then Some e
@@ -472,118 +353,10 @@ struct
 
 
 
-  (** 𝔼⟦ valid_ptr(p) ⟧ *)
-  let eval_is_valid p range man flow =
-    (* A valid pointer is not NULL nor INVALID, and its offset is
-       within [0, sizeof(base) - sizeof(under_type t) [ *)
 
-    (* Evaluate the pointed address *)
-    eval_points_to p man flow |>
-    Option.lift @@ Eval.bind @@ fun pt flow ->
-
-    match ekind pt with
-    | E_c_points_to(P_block(b, o)) ->
-      (* Evaluate the size of the base *)
-      Common.Base.eval_base_size b range man flow |>
-      Eval.bind @@ fun size flow ->
-
-      man.eval size ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) flow |>
-      Eval.bind @@ fun size flow ->
-
-      let elm = under_type p.etyp |> void_to_char |> (fun t -> mk_z (sizeof_type t) range)
-      in
-
-      (* Check validity of the offset *)
-      let cond = mk_in o (mk_zero range) (sub size elm range) range in
-      Eval.singleton cond flow
-
-    | E_c_points_to(P_fun _) -> Eval.singleton (mk_one range) flow
-
-    | E_c_points_to(P_null | P_invalid) -> Eval.singleton (mk_zero range) flow
-
-    | E_c_points_to(P_valid) -> Eval.singleton (mk_top T_bool range) flow
-
-    | _ -> panic_at range "is_valid(%a | %a %a) not supported"
-             pp_expr p pp_expr p pp_expr pt
-
-
-
-  (** Evaluation of pointer comparisons *)
-  let rec eval_compare exp man flow =
+  (** Evaluation of a pointer comparison into a numeric expression *)
+  let eval_compare exp man flow =
     match ekind exp with
-    (* 𝔼⟦ p == q ⟧ *)
-    | E_binop(O_eq, p, q)
-    | E_unop(O_log_not, {ekind = E_binop(O_ne, p, q)})
-      when is_c_pointer_type p.etyp ||
-           is_c_pointer_type q.etyp
-      ->
-      eval_eq p q exp.erange man flow |>
-      Option.return
-
-    (* 𝔼⟦ p != q ⟧ *)
-    | E_binop(O_ne, p, q)
-    | E_unop(O_log_not, {ekind = E_binop(O_eq, p, q)})
-      when is_c_pointer_type p.etyp ||
-           is_c_pointer_type q.etyp
-      ->
-      eval_ne p q exp.erange man flow |>
-      Option.return
-
-    (* 𝔼⟦ NULL ⟧ *)
-    | E_c_cast({ ekind = E_constant (C_int n) }, _)
-      when is_c_pointer_type exp.etyp &&
-           Z.equal n Z.zero ->
-      Eval.singleton (mk_zero exp.erange) flow |>
-      Option.return
-
-    (* 𝔼⟦ !NULL ⟧ *)
-    | E_unop (O_log_not, { ekind = E_c_cast({ ekind = E_constant (C_int n) }, _) })
-      when is_c_pointer_type exp.etyp &&
-           Z.equal n Z.zero ->
-      Eval.singleton (mk_one exp.erange) flow |>
-      Option.return
-
-    (* 𝔼⟦ INVALID ⟧ *)
-    | E_constant (C_c_invalid) ->
-      Eval.singleton (mk_top T_bool exp.erange) flow |>
-      Option.return
-
-    (* 𝔼⟦ !INVALID ⟧ *)
-    | E_unop (O_log_not, { ekind = E_constant (C_c_invalid) }) ->
-      Eval.singleton (mk_top T_bool exp.erange) flow |>
-      Option.return
-
-
-    (* 𝔼⟦ p ⟧ *)
-    | E_constant (C_top _)
-    | E_var _ when is_c_pointer_type exp.etyp ->
-      eval_ne exp (mk_zero exp.erange ~typ:(T_c_pointer T_c_void)) exp.erange man flow |>
-      Option.return
-
-    (* 𝔼⟦ "..." ⟧ *)
-    | E_constant (C_c_string _) ->
-      Eval.singleton (mk_one exp.erange) flow |>
-      Option.return
-
-    (* 𝔼⟦ !p ⟧ *)
-    | E_unop (O_log_not, ({ekind = E_constant (C_top _)} as p))
-    | E_unop (O_log_not, ({ekind = E_var _} as p)) when is_c_pointer_type p.etyp ->
-      eval_eq p (mk_zero exp.erange ~typ:(T_c_pointer T_c_void)) exp.erange man flow |>
-      Option.return
-
-    (* 𝔼⟦ !"..." ⟧ *)
-    | E_unop (O_log_not, ({ekind = E_constant (C_c_string _)})) ->
-      Eval.singleton (mk_zero exp.erange) flow |>
-      Option.return
-
-    (* 𝔼⟦ (t)p ⟧ *)
-    | E_c_cast(p, _) when is_c_pointer_type p.etyp ->
-      eval_compare p man flow
-
-    (* 𝔼⟦ valid_ptr(p) ⟧ *)
-    | Stubs.Ast.E_stub_builtin_call( VALID_PTR, p) ->
-      eval_is_valid p exp.erange man flow
-
     (* 𝔼⟦ (t)p - (t)q | t is a numeric type ⟧ *)
     | E_binop(O_minus, { ekind = E_c_cast(p, _); etyp = t1 }, { ekind = E_c_cast(q, _); etyp = t2 })
       when is_c_pointer_type p.etyp &&
@@ -611,16 +384,7 @@ struct
       eval_diff p1 p2 exp.erange man flow |>
       Option.return
 
-    (* 𝔼⟦ p op q | op ∈ {<, <=, >, >=} ⟧ *)
-    | E_binop((O_lt | O_le | O_gt | O_ge) as op, p, q)
-      when is_c_pointer_type p.etyp &&
-           is_c_pointer_type q.etyp
-      ->
-      eval_order op p q exp.erange man flow |>
-      Option.return
-
     | _ -> None
-
 
 
   (** Entry point of abstraction evaluations *)
@@ -644,24 +408,24 @@ struct
 
   (** Assignment abstract transformer *)
   let assign p q mode range man flow =
-    let o = mk_offset_expr p mode range in
-    match Symbolic.eval q with
-    | Symbolic.AddrOf (b, offset) ->
+    let o = mk_offset p mode range in
+    match Static_points_to.eval q with
+    | AddrOf (b, offset) ->
       let flow' = map_env T_cur (add p (Value.base b) mode) man flow in
 
       man.eval offset ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) flow' >>$ fun offset flow' ->
       man.post ~zone:(Universal.Zone.Z_u_num) (mk_assign o offset range) flow'
 
-    | Eq (q, mode', offset) ->
+    | Eval (q, mode', offset) ->
       let flow' = map_env T_cur (fun a ->
           add p (Map.find q a) mode a
         ) man flow
       in
       (* Assign offset only if q points to a valid block *)
       let a = get_env T_cur man flow in
-      if Map.find q a |> Value.is_valid_base
+      if Map.find q a |> Value.is_valid
       then
-        let qo = mk_offset_expr q mode' range in
+        let qo = mk_offset q mode' range in
         let offset' = mk_binop qo O_plus offset ~etyp:T_int range in
 
         man.eval offset' ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) flow' >>$ fun offset' flow ->
@@ -711,7 +475,7 @@ struct
 
   (** Add a pointer variable to the support of the non-rel map *)
   let add_var p range man flow =
-    let o = mk_offset_expr p STRONG range in
+    let o = mk_offset p STRONG range in
     map_env T_cur (Map.add p Value.top) man flow |>
     man.post ~zone:(Universal.Zone.Z_u_num) (mk_add o range)
 
@@ -720,7 +484,7 @@ struct
   (** Remove a pointer variable from the support of the non-rel map *)
   let remove_var p range man flow =
     let flow = map_env T_cur (Map.remove p) man flow in
-    let o = mk_offset_expr p STRONG range in
+    let o = mk_offset p STRONG range in
     man.post ~zone:(Universal.Zone.Z_u_num) (mk_remove o range) flow
 
 
@@ -754,9 +518,9 @@ struct
 
     (* Rename the offset if present *)
     let a1 = get_env T_cur man flow |> Map.find p1 in
-    if Value.is_valid_base a1 then
-      let o1 = mk_offset_expr p1 STRONG range in
-      let o2 = mk_offset_expr p2 STRONG range in
+    if Value.is_valid a1 then
+      let o1 = mk_offset p1 STRONG range in
+      let o2 = mk_offset p2 STRONG range in
       man.post ~zone:(Universal.Zone.Z_u_num) (mk_rename o1 o2 range) flow'
     else
       Post.return flow'
@@ -769,6 +533,134 @@ struct
     let base2 = A addr2 in
     map_env T_cur (Map.map (Value.rename_base base1 base2)) man flow |>
     Post.return
+
+
+  (** Filter equal pointers *)
+  let assume_eq p q range man flow =
+    let v1, o1, p1 = Static_points_to.eval p |>
+                     eval_static_points_to man flow
+    in
+    let v2, o2, p2 = Static_points_to.eval q |>
+                     eval_static_points_to man flow
+    in
+    let v = Value.meet v1 v2 in
+    if Value.is_bottom v then
+      Flow.set T_cur man.lattice.bottom man.lattice flow |>
+      Post.return
+    else
+      let flow = set_value_opt p1 v man flow |>
+                 set_value_opt p2 v man
+      in
+      remove_offset_opt p1 v1 v range man flow >>$ fun () flow ->
+      remove_offset_opt p2 v2 v range man flow >>$ fun () flow ->
+      match mk_offset_constraint_opt O_eq p1 v1 o1 p2 v2 o2 range with
+      | None -> Post.return flow
+      | Some cond ->
+        man.eval ~zone:(Z_c_scalar,Z_u_num) cond flow >>$ fun cond flow ->
+        man.post ~zone:Z_u_num (mk_assume cond range) flow
+
+
+
+  (** Filter non-equal pointers *)
+  let assume_ne p q range man flow =
+    debug "assume_ne %a %a" pp_expr p pp_expr q;
+    let v1, o1, p1 = Static_points_to.eval p |>
+                     eval_static_points_to man flow
+    in
+    let v2, o2, p2 = Static_points_to.eval q |>
+                     eval_static_points_to man flow
+    in
+    debug "o1 = %a" (Option.print pp_expr) o1;
+    debug "o2 = %a" (Option.print pp_expr) o2;
+    (* Case 1: p and q point to the same base *)
+    let same_base_case =
+      let v = Value.meet v1 v2 in
+      match Value.is_bottom v,
+            mk_offset_opt p1 v o1 range,
+            mk_offset_opt p2 v o2 range
+      with
+      | true, _, _
+      | _, None, _
+      | _, _, None ->
+        []
+      | false, Some o1, Some o2 ->
+        let flow = set_value_opt p1 v man flow |>
+                   set_value_opt p2 v man
+        in
+        let cond = mk_binop o1 O_ne o2 ~etyp:T_int range in
+        [
+          man.eval ~zone:(Z_c_scalar,Z_u_num) cond flow >>$ fun cond flow ->
+          man.post ~zone:Z_u_num (mk_assume cond range) flow
+        ]
+    in
+
+    (* Case 2: p and q point to different bases *)
+    let different_base_case =
+      let vv1 = Value.singleton_diff v1 v2 in
+      let vv2 = Value.singleton_diff v2 v1 in
+      if Value.is_bottom vv1 || Value.is_bottom vv2 then
+        []
+      else
+        let flow = set_value_opt p1 vv1 man flow |>
+                   set_value_opt p2 vv2 man
+        in
+        [ Post.return flow ]
+    in
+    let bottom_case = Flow.set T_cur man.lattice.bottom man.lattice flow |>
+                      Post.return
+    in
+    Post.join_list (same_base_case @ different_base_case) ~empty:bottom_case
+
+
+
+  (** Filter ordered pointers *)
+  let assume_order op p q range man flow =
+    let v1, o1, p1 = Static_points_to.eval p |>
+                     eval_static_points_to man flow
+    in
+    let v2, o2, p2 = Static_points_to.eval q |>
+                     eval_static_points_to man flow
+    in
+    debug "o1 = %a" (Option.print pp_expr) o1;
+    debug "o2 = %a" (Option.print pp_expr) o2;
+    (* Case 1: p and q point to the same base *)
+    let same_base_case =
+      let v = Value.meet v1 v2 in
+      if Value.is_bottom v
+      then []
+      else
+        let () = debug "case 1" in
+        [
+          remove_offset_opt p1 v1 v range man flow >>$ fun () flow ->
+          remove_offset_opt p2 v2 v range man flow >>$ fun () flow ->
+          match mk_offset_constraint_opt op p1 v1 o1 p2 v2 o2 range with
+          | None -> Post.return flow
+          | Some cond ->
+            man.eval ~zone:(Z_c_scalar,Z_u_num) cond flow >>$ fun cond flow ->
+            man.post ~zone:Z_u_num (mk_assume cond range) flow
+        ]
+    in
+
+    (* Case 2: p and q point to different bases *)
+    let different_base_case =
+      let vv1 = Value.singleton_diff v1 v2 in
+      let vv2 = Value.singleton_diff v2 v1 in
+      if Value.is_bottom vv1 || Value.is_bottom vv2
+      then []
+      else
+        let () = debug "case 2" in
+        let flow = set_value_opt p1 vv1 man flow |>
+                   set_value_opt p2 vv2 man
+        in
+        let flow = raise_c_alarm Alarms.AIllegalPointerOrder range ~bottom:true man.lattice flow in
+        debug "%a" (Flow.print man.lattice.print) flow;
+        [ Post.return flow ]
+    in
+    let bottom_case = Flow.set T_cur man.lattice.bottom man.lattice flow |>
+                      Post.return
+    in
+    Post.join_list (same_base_case @ different_base_case) ~empty:bottom_case
+
 
 
 
@@ -805,6 +697,112 @@ struct
     | S_rename ({ekind = E_addr addr1}, {ekind = E_addr addr2}) ->
       rename_addr addr1 addr2 stmt.srange man flow |>
       Option.return
+
+    (* S⟦ ?(p == q) ⟧ *)
+    | S_assume({ ekind = E_binop(O_eq, p, q) })
+    | S_assume({ ekind = E_unop(O_log_not, {ekind = E_binop(O_ne, p, q)}) })
+      when is_c_pointer_type p.etyp ||
+           is_c_pointer_type q.etyp
+      ->
+      assume_eq p q stmt.srange man flow |>
+      Option.return
+
+    (* S⟦ ?(p != q) ⟧ *)
+    | S_assume ({ ekind = E_binop(O_ne, p, q) })
+    | S_assume ({ ekind = E_unop(O_log_not, {ekind = E_binop(O_eq, p, q)}) })
+      when is_c_pointer_type p.etyp ||
+           is_c_pointer_type q.etyp
+      ->
+      assume_ne p q stmt.srange man flow |>
+      Option.return
+
+
+    (* S⟦ ?(p op q) | op ∈ {<, <=, >, >=} ⟧ *)
+    | S_assume ({ ekind = E_binop((O_lt | O_le | O_gt | O_ge) as op, p, q) })
+      when is_c_pointer_type p.etyp &&
+           is_c_pointer_type q.etyp
+      ->
+      assume_order op p q stmt.srange man flow |>
+      Option.return
+
+    (* S⟦ ?!(p op q) | op ∈ {<, <=, >, >=} ⟧ *)
+    | S_assume ({ ekind = E_unop (O_log_not, { ekind = E_binop((O_lt | O_le | O_gt | O_ge) as op, p, q) })})
+      when is_c_pointer_type p.etyp &&
+           is_c_pointer_type q.etyp
+      ->
+      assume_order (negate_comparison_op op) p q stmt.srange man flow |>
+      Option.return
+
+    (* S⟦ ?NULL ⟧ *)
+    | S_assume ({ ekind = E_c_cast({ ekind = E_constant (C_int n) } as exp, _) })
+      when is_c_pointer_type exp.etyp &&
+           Z.equal n Z.zero ->
+      Flow.set T_cur man.lattice.bottom man.lattice flow |>
+      Post.return |>
+      Option.return
+
+    (* S⟦ ?NULL ⟧ *)
+    | S_assume ({ ekind = E_unop (O_log_not, { ekind = E_c_cast({ ekind = E_constant (C_int n) } as exp, _) }) })
+      when is_c_pointer_type exp.etyp &&
+           Z.equal n Z.zero ->
+      Post.return flow |>
+      Option.return
+
+    (* S⟦ ?INVALID ⟧ *)
+    (* S⟦ ?!INVALID ⟧ *)
+    | S_assume ({ ekind = E_constant (C_c_invalid) })
+    | S_assume ({ ekind = E_unop (O_log_not, { ekind = E_constant (C_c_invalid) }) }) ->
+      Post.return flow |>
+      Option.return
+
+    (* S⟦ ?⊤ ⟧ *)
+    (* S⟦ ?!⊤ ⟧ *)
+    | S_assume ({ ekind = E_constant (C_top t) })
+    | S_assume ({ ekind = E_unop (O_log_not, { ekind = E_constant (C_top t) }) })
+      when is_c_pointer_type t ->
+      Post.return flow |>
+      Option.return
+
+    (* S⟦ ?p ⟧ *)
+    | S_assume ({ ekind = E_var _ } as exp)
+    | S_assume ({ ekind = E_c_cast({ ekind = E_var _ },_) } as exp)
+      when is_c_pointer_type exp.etyp ->
+      assume_ne exp (mk_zero stmt.srange ~typ:(T_c_pointer T_c_void)) stmt.srange man flow |>
+      Option.return
+
+    (* S⟦ ?!p ⟧ *)
+    | S_assume ({ ekind = E_unop (O_log_not, ({ekind = E_var _} as exp)) })
+    | S_assume ({ ekind = E_unop (O_log_not, ({ ekind = E_c_cast({ ekind = E_var _ },_) } as exp)) })
+      when is_c_pointer_type exp.etyp ->
+      assume_eq exp (mk_zero stmt.srange ~typ:(T_c_pointer T_c_void)) stmt.srange man flow |>
+      Option.return
+
+
+    (* S⟦ ?"..." ⟧ *)
+    | S_assume ({ ekind = E_constant (C_c_string _) }) ->
+      Post.return flow |>
+      Option.return
+
+    (* S⟦ ?!"..." ⟧ *)
+    | S_assume ({ ekind = E_unop(O_log_not, ({ekind = E_constant (C_c_string _)})) }) ->
+      Flow.set T_cur man.lattice.bottom man.lattice flow |>
+      Post.return |>
+      Option.return
+
+    (* S⟦ (t)p ⟧ *)
+    | S_assume ({ ekind = E_c_cast(p, _) })
+      when is_c_pointer_type p.etyp ->
+      man.post ~zone (mk_assume p stmt.srange) flow |>
+      Option.return
+
+
+    (* S⟦ !(t)p ⟧ *)
+    | S_assume ({ ekind = E_unop (O_log_not, ({ ekind = E_c_cast(p, _) })) })
+      when is_c_pointer_type p.etyp ->
+      man.post ~zone (mk_assume (mk_not p stmt.srange) stmt.srange) flow |>
+      Option.return
+
+
 
     | _ -> None
 

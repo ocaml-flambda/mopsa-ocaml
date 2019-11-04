@@ -133,7 +133,7 @@ struct
           Post.return flow |>
           Option.return
 
-        | E_c_points_to P_valid ->
+        | E_c_points_to P_top ->
           Soundness.warn_at stmt.srange
             "ignoring free statement because of undetermined resource pointer"
           ;
@@ -161,6 +161,24 @@ struct
 
   (** Evaluation of expressions *)
   (** ========================= *)
+
+
+  let eval_base_bytes base range man flow =
+    let open Common.Base in
+    match base with
+    | V var ->
+      Eval.singleton (mk_z (sizeof_type var.vtyp) range ~typ:ul) flow
+
+    | S str ->
+      Eval.singleton (mk_int (String.length str + 1) range ~typ:ul) flow
+
+    | A addr ->
+      Eval.singleton (mk_bytes addr range) flow
+
+    | Z -> panic ~loc:__LOC__ "bytes: addresses not supported"
+
+    | _ -> assert false
+
 
   let eval zone exp man flow =
     match ekind exp with
@@ -192,18 +210,11 @@ struct
         Eval.bind @@ fun pt flow ->
 
         match ekind pt with
-        | E_c_points_to (P_block (V var,_)) ->
-          Eval.singleton (mk_z (sizeof_type var.vtyp) exp.erange ~typ:ul) flow
+        | E_c_points_to (P_block (base,_)) ->
+          eval_base_bytes base exp.erange man flow
 
-        | E_c_points_to (P_block (S str,_)) ->
-          Eval.singleton (mk_int (String.length str + 1) exp.erange ~typ:ul) flow
-
-        | E_c_points_to (P_block (A addr,_)) ->
-          Eval.singleton (mk_bytes addr exp.erange) flow
-
-        | E_c_points_to (P_block (Z,_)) -> panic ~loc:__LOC__ "bytes: addresses not supported"
-
-        | E_c_points_to P_valid ->
+        | E_c_points_to P_top ->
+          Soundness.warn_at exp.erange "ignoring size computation of ⊤ pointer";
           Eval.singleton (mk_top ul exp.erange) flow
 
         | _ -> panic_at exp.erange "bytes(%a | %a %a) not supported" pp_expr e pp_expr e pp_expr pt
@@ -232,7 +243,8 @@ struct
 
         | E_c_points_to (P_block (Z,_)) -> panic ~loc:__LOC__ "eval_base_size: addresses not supported"
 
-        | E_c_points_to P_valid ->
+        | E_c_points_to P_top ->
+          Soundness.warn_at exp.erange "ignoring size computation of ⊤ pointer";
           let _,max = rangeof ul in
           Eval.singleton (mk_z_interval Z.one max exp.erange) flow
 
@@ -267,7 +279,8 @@ struct
         | E_c_points_to (P_block (Z,_)) ->
           Eval.singleton (mk_c_cast (mk_top u32 exp.erange) (T_c_pointer T_c_void) exp.erange) flow
 
-        | E_c_points_to P_valid ->
+        | E_c_points_to P_top ->
+          Soundness.warn_at exp.erange "ignoring base computation of ⊤ pointer";
           Eval.singleton (mk_top (T_c_pointer T_c_void) exp.erange) flow
 
         | E_c_points_to P_null ->
@@ -279,6 +292,30 @@ struct
 
         | _ -> panic_at exp.erange "base(%a) where %a %a not supported" pp_expr e pp_expr e pp_expr pt
       )
+
+    | E_stub_builtin_call(VALID_PTR, p) ->
+      Some (
+        man.eval ~zone:(Z_c_low_level,Z_c_points_to) p flow >>$ fun pt flow ->
+        let range = exp.erange in
+        match ekind pt with
+        | E_c_points_to(P_block(b, o)) ->
+          eval_base_bytes b range man flow >>$ fun size flow ->
+          man.eval size ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) flow >>$ fun size flow ->
+          let elm = under_type p.etyp |> void_to_char |> (fun t -> mk_z (sizeof_type t) range) in
+          (* Check validity of the offset *)
+          let cond = mk_in o (mk_zero range) (sub size elm range) range in
+          Eval.singleton cond flow
+
+        | E_c_points_to(P_fun _) -> Eval.singleton (mk_one range) flow
+
+        | E_c_points_to(P_null | P_invalid) -> Eval.singleton (mk_zero range) flow
+
+        | E_c_points_to(P_top) -> Eval.singleton (mk_top T_bool range) flow
+
+        | _ -> panic_at range "is_valid(%a | %a %a) not supported"
+             pp_expr p pp_expr p pp_expr pt
+      )
+
 
     | E_stub_attribute({ ekind = E_addr _ }, _) ->
       None
@@ -310,7 +347,7 @@ struct
           else
             Eval.singleton (mk_zero exp.erange ~typ:u8) flow
 
-        | E_c_points_to P_valid ->
+        | E_c_points_to P_top ->
           Eval.singleton (mk_top T_bool exp.erange) flow
 
         | _ ->

@@ -109,23 +109,20 @@ let assume
   let flow = Flow.set_ctx (Post.get_ctx then_post) flow in
   let else_post = man.post ~zone (mk_assume (mk_not cond cond.erange) cond.erange) flow in
 
-  let then_res = then_post >>$? fun () then_flow ->
+  let then_res = then_post >>$ fun () then_flow ->
     if man.lattice.is_bottom (Flow.get T_cur man.lattice then_flow)
-    then None
-    else Some (fthen then_flow)
+    then Result.empty_singleton then_flow
+    else fthen then_flow
   in
 
-  let else_res = else_post >>$? fun () else_flow ->
+  let else_res = else_post >>$ fun () else_flow ->
     if man.lattice.is_bottom (Flow.get T_cur man.lattice else_flow)
-    then None
-    else Some (felse else_flow)
+    then Result.empty_singleton else_flow
+    else felse else_flow
   in
 
-  match then_res, else_res with
-  | Some r, None -> r
-  | None, Some r -> r
-  | Some r1, Some r2 -> Result.join r1 r2
-  | None, None -> Result.empty flow
+  Result.join then_res else_res |>
+  Result.remove_duplicates compare man.lattice
 
 
 let assume_flow
@@ -142,7 +139,7 @@ let assume_flow
   with
   | false, true -> fthen then_flow
   | true, false -> felse else_flow
-  | true, true -> flow
+  | true, true -> Flow.join man.lattice then_flow else_flow
   | false, false ->
     let then_res = fthen then_flow in
     let else_flow' = Flow.copy_ctx then_res else_flow in
