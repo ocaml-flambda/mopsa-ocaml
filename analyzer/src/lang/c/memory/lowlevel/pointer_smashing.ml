@@ -380,9 +380,8 @@ struct
     eval_pointed_base_offset p range man flow >>$ fun r flow ->
     match r with
     | None ->
-      (* Undetermined (valid) base *)
-      raise_c_alarm AOutOfBound range ~bottom:false man.lattice flow |>
-      Eval.singleton (mk_top t range)
+      Soundness.warn_at range "ignoring dereference of ⊤ pointer";
+      Eval.singleton (mk_top t range) flow
 
     | Some (base,offset) when not (is_expr_quantified offset) ->
       eval_base_size base range man flow >>$ fun size flow ->

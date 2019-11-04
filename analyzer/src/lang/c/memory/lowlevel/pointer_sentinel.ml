@@ -913,7 +913,7 @@ struct
     eval_pointed_base_offset p range man flow >>$ fun pp flow ->
     match pp with
     | None ->
-      Soundness.warn_at range "sentinel: ignoring dereference of ⊤ pointer";
+      Soundness.warn_at range "ignoring dereference of ⊤ pointer";
       Eval.singleton (mk_top (under_type p.etyp |> void_to_char) range) flow
 
     | Some (base,offset)

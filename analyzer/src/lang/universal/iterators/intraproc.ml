@@ -50,6 +50,10 @@ struct
         Post.return flow
       )
 
+    | S_assume { ekind = E_unop (O_log_not, { ekind = E_unop (O_log_not, e) }) } ->
+      man.post ~zone (mk_assume e stmt.srange) flow |>
+      Option.return
+
     | S_block(block) ->
       Some (
         List.fold_left (fun acc stmt -> man.exec ~zone stmt acc) flow block |>
