@@ -91,20 +91,23 @@ let assume
   let flow = Flow.set_ctx (Post.get_ctx then_post) flow in
   let else_post = man.post ~zone (mk_assume (mk_not cond cond.erange) cond.erange) flow in
 
-  let then_res = then_post >>$ fun () then_flow ->
+  let then_res = then_post >>$? fun () then_flow ->
     if man.lattice.is_bottom (Flow.get T_cur man.lattice then_flow)
-    then Result.empty_singleton then_flow
-    else fthen then_flow
+       && Alarm.AlarmSet.subset (Flow.get_alarms then_flow) (Flow.get_alarms flow)
+    then None
+    else Some (fthen then_flow)
   in
 
-  let else_res = else_post >>$ fun () else_flow ->
+  let else_res = else_post >>$? fun () else_flow ->
     if man.lattice.is_bottom (Flow.get T_cur man.lattice else_flow)
-    then Result.empty_singleton else_flow
-    else felse else_flow
+       && Alarm.AlarmSet.subset (Flow.get_alarms else_flow) (Flow.get_alarms flow)
+    then None
+    else Some (felse else_flow)
   in
 
-  Result.join then_res else_res |>
-  Result.remove_duplicates compare man.lattice
+  match Option.neutral2 Result.join then_res else_res with
+  | None -> Result.empty_singleton flow
+  | Some r -> r
 
 
 let assume_flow
