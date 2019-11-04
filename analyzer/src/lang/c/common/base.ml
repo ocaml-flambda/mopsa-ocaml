@@ -37,7 +37,7 @@ type base =
 let pp_base fmt = function
   | V v -> pp_var fmt v
   | A (a) -> pp_addr fmt a
-  | D (a,r) -> Format.fprintf fmt "✗%a:%a" pp_addr a pp_range r
+  | D (a,r) -> Format.fprintf fmt "✗%a" pp_addr a
   | S s -> Format.fprintf fmt "\"%s\"" s
   | Z -> Format.fprintf fmt "ℤ"
 

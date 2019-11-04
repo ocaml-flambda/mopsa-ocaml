@@ -247,9 +247,8 @@ struct
     match p with
     | None -> Post.return flow
     | Some (p,mode) ->
-      debug "remove_offset_opt %a: old=%a, new=%a" pp_var p Value.print v Value.print v';
       if Value.is_valid v && not (Value.is_valid v')
-      then let () = debug "remove" in man.post ~zone:Z_u_num (mk_remove (mk_offset p mode range) range) flow
+      then man.post ~zone:Z_u_num (mk_remove (mk_offset p mode range) range) flow
       else Post.return flow
 
 
@@ -489,20 +488,19 @@ struct
 
 
 
-  (** Make pointers pointing to addr as invalid *)
-  let invalidate_addr addr range man flow =
+  (** Free an allocated address and update all pointers pointing to it *)
+  let free_addr addr range man flow =
     let base = A addr in
+    let base' = D (addr, range) in
     let flow' = map_env T_cur (fun a ->
         let a' = Map.map (fun v ->
             if not (Value.mem_base base v)
-            then
-              v
+            then v
             else
-              let v' = Value.invalidate v in
-              if addr.addr_mode = STRONG then
-                Value.remove_base base v'
-              else
-                v'
+            if addr.addr_mode = STRONG
+            then Value.remove_base base v |>
+                 Value.add_base base'
+            else Value.add_base base' v
           ) a
         in
         a'
@@ -563,15 +561,12 @@ struct
 
   (** Filter non-equal pointers *)
   let assume_ne p q range man flow =
-    debug "assume_ne %a %a" pp_expr p pp_expr q;
     let v1, o1, p1 = Static_points_to.eval p |>
                      eval_static_points_to man flow
     in
     let v2, o2, p2 = Static_points_to.eval q |>
                      eval_static_points_to man flow
     in
-    debug "o1 = %a" (Option.print pp_expr) o1;
-    debug "o2 = %a" (Option.print pp_expr) o2;
     (* Case 1: p and q point to the same base *)
     let same_base_case =
       let v = Value.meet v1 v2 in
@@ -621,15 +616,12 @@ struct
     let v2, o2, p2 = Static_points_to.eval q |>
                      eval_static_points_to man flow
     in
-    debug "o1 = %a" (Option.print pp_expr) o1;
-    debug "o2 = %a" (Option.print pp_expr) o2;
     (* Case 1: p and q point to the same base *)
     let same_base_case =
       let v = Value.meet v1 v2 in
       if Value.is_bottom v
       then []
       else
-        let () = debug "case 1" in
         [
           remove_offset_opt p1 v1 v range man flow >>$ fun () flow ->
           remove_offset_opt p2 v2 v range man flow >>$ fun () flow ->
@@ -648,12 +640,10 @@ struct
       if Value.is_bottom vv1 || Value.is_bottom vv2
       then []
       else
-        let () = debug "case 2" in
         let flow = set_value_opt p1 vv1 man flow |>
                    set_value_opt p2 vv2 man
         in
         let flow = raise_c_alarm Alarms.AIllegalPointerOrder range ~bottom:true man.lattice flow in
-        debug "%a" (Flow.print man.lattice.print) flow;
         [ Post.return flow ]
     in
     let bottom_case = Flow.set T_cur man.lattice.bottom man.lattice flow |>
@@ -684,7 +674,7 @@ struct
       Option.return
 
     | S_remove { ekind = E_addr addr } ->
-      invalidate_addr addr stmt.srange man flow |>
+      free_addr addr stmt.srange man flow |>
       Option.return
 
     | S_rename({ekind = E_var (p1, _)}, {ekind = E_var (p2, _)})

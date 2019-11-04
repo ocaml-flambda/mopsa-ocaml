@@ -142,9 +142,6 @@ let rename_base (b1:base) (b2:base) (a:t) : t =
   else remove_base b1 a |>
        add_base b2
 
-(** Flag an abstract value as an invalid pointer *)
-let invalidate (a:t) : t = add Invalid a
-
 
 (** Test if an abstract value is a singleton element *)
 let is_singleton a =
