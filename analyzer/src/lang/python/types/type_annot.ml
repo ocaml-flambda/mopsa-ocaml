@@ -141,7 +141,16 @@ struct
                     let etypes = ESet.of_list types in
                     let tyvar = mk_addr_attr addr_eobj tyname T_any in
                     match TVMap.find_opt (Class tyvar) cur with
-                    | None -> TVMap.add (Class tyvar) etypes cur
+                    | None ->
+                      begin match TVMap.find_opt (Global tyname) cur with
+                      | None ->
+                        TVMap.add (Class tyvar) etypes cur
+                      | Some set ->
+                        if ESet.subset set etypes then
+                          TVMap.add (Class tyvar) set cur
+                        else
+                          Exceptions.panic_at range "conflict for typevar %a, global set %a and class set %a differ" pp_var tyvar ESet.print set ESet.print etypes
+                      end
                     | Some set ->
                       if ESet.equal set etypes then
                         cur
@@ -179,7 +188,7 @@ struct
       bind_some (fun args flow ->
           let sigs = List.filter (fun sign ->
               let ndefaults = List.fold_left (fun count el -> if el then count + 1 else count) 0 sign.py_funcs_defaults in
-              debug "filter %a -> [%d; %d]; |args| = %d, |kwargs| = %d" pp_py_func_sig sign (List.length sign.py_funcs_types_in - ndefaults) (List.length sign.py_funcs_types_in) (List.length args) (List.length kwargs);
+              debug "filter %a at range %a -> [%d; %d]; |args| = %d, |kwargs| = %d" pp_py_func_sig sign pp_range range (List.length sign.py_funcs_types_in - ndefaults) (List.length sign.py_funcs_types_in) (List.length args) (List.length kwargs);
               List.length sign.py_funcs_types_in - ndefaults <= List.length args + List.length kwargs &&
               List.length args + List.length kwargs <= List.length sign.py_funcs_types_in) pyannot.py_funca_sig in
           debug "|sigs| = %d" (List.length sigs);
@@ -515,20 +524,17 @@ struct
   let exec zone stmt man flow =
     match skind stmt with
     | S_rename ({ekind = E_py_annot {ekind = (E_addr a)}}, {ekind = E_addr a'}) ->
-      debug "rename %a %a" pp_addr a pp_addr a';
       let cur = get_env T_cur man flow in
-      let ncur = TVMap.map_p (fun (k, v) ->
-          match k with
-          | Class ({vkind = V_addr_attr (av, s) } as var) ->
-            (* FIXME: we should probably change vname too *)
-            (* FIXME: and this hold for all renames of V_addr_attr *)
-            if compare_addr av a = 0 then
-              (Class {var with vkind = V_addr_attr (a', s)}, v)
-            else
-              (k, v)
-          | Global s -> (k, v)
-          | _ -> assert false
-        ) cur in
+      debug "rename %a %a, at %a@\ncur=%a" pp_addr a pp_addr a' pp_range stmt.srange TVMap.print cur;
+      let ncur =
+        let abasedaddr, other = TVMap.fold (fun k v (acc_a, acc_nota) ->
+            match k with
+            | Class ({vkind = V_addr_attr (av, s)} as var) when compare_addr av a = 0 ->
+              (TVMap.add (Class (mk_addr_attr a' s T_any)) v acc_a, acc_nota)
+            | _ ->
+              (acc_a, TVMap.add k v acc_nota)
+          ) cur (TVMap.empty, TVMap.empty) in
+        TVMap.join abasedaddr other in
       debug "ncur = %a" TVMap.print ncur;
       set_env T_cur ncur man flow
       |> Post.return |> Option.return

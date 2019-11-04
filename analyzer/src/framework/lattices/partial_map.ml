@@ -235,9 +235,7 @@ struct
     | Nbt m ->
       Nbt (PMap.fold (fun k v acc ->
           let k',v' = f (k,v) in
-          if k' == k && v' == v
-          then acc
-          else PMap.add k' v' acc
+          PMap.add k' v' acc
         ) m (PMap.empty ~compare:Key.compare))
       |>
       canonize
