@@ -447,10 +447,11 @@ struct
                 match addr with
                 | Def a ->
                   Format.fprintf fmt "%a"
-                    (man.ask Structural_types.Q_print_addr_related_info flow) a
+                    (man.ask Q_print_addr_related_info flow) a
                 | _ -> ()
               ) aset ()
           ) cur_v ()
+
       | _ -> None
 
   let refine channel man flow = Channel.return flow

@@ -507,3 +507,33 @@ let () =
           | A_py_instance c1, A_py_instance c2 ->
             compare_addr c1 c2
           | _ -> default a1 a2);})
+
+
+type _ query += Q_print_addr_related_info : (Format.formatter -> addr -> unit) query
+
+let () =
+  register_query {
+    join = (
+      let doit : type r. query_pool -> r query -> r -> r -> r =
+        fun next query a b ->
+          match query with
+          | Q_print_addr_related_info ->
+            fun fmt var ->
+              Format.fprintf fmt "%a \/ %a" a var b var
+          | _ -> next.join_query query a b
+      in
+      doit
+    );
+
+    meet = (
+      let doit : type r. query_pool -> r query -> r -> r -> r =
+        fun next query a b ->
+          match query with
+          | Q_print_addr_related_info ->
+            fun fmt var ->
+              Format.fprintf fmt "%a /\ %a" a var b var
+          | _ -> next.meet_query query a b
+      in
+      doit
+    );
+  }
