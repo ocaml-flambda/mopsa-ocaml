@@ -360,6 +360,15 @@ struct
           Eval.singleton (mk_zero exp.erange ~typ:u8) flow
       end
 
+    | E_stub_builtin_call(OFFSET, e) ->
+      Some (
+        man.eval ~zone:(Z_c_low_level,Z_c_points_to) e flow |>
+        Eval.bind @@ fun pt flow ->
+        match ekind pt with
+        | E_c_points_to(P_block(_,o)) -> Eval.singleton o flow
+        | _ -> Eval.singleton (mk_top ul exp.erange) flow
+      )
+
     | _ -> None
 
   let ask _ _ _ = None

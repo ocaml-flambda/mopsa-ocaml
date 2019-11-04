@@ -16,3 +16,10 @@ void test_unsafe_double_free() {
   free(p);
   _mopsa_assert_unsafe();
 }
+
+
+void test_unsafe_free_with_non_zero_offset() {
+  char *p = malloc(100);
+  free(p + 1);
+  _mopsa_assert_unsafe();
+}
