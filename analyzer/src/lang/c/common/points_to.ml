@@ -129,6 +129,10 @@ let eval_pointed_base_offset ptr range (man:('a,'t,'s) Core.Sig.Stacked.Lowlevel
     raise_c_alarm AInvalidDeref range ~bottom:true man.lattice flow |>
     Result.empty_singleton
 
+  | E_c_points_to (P_block (D _, offset)) ->
+    raise_c_alarm AUseAfterFree range ~bottom:true man.lattice flow |>
+    Result.empty_singleton
+
   | E_c_points_to (P_block (base, offset)) ->
     Result.singleton (Some (base, offset)) flow
 

@@ -892,8 +892,8 @@ struct
     match pp with
     | None ->
       (* Valid pointer but unknown offset *)
-      raise_c_alarm AOutOfBound range ~bottom:false man.lattice flow |>
-      Eval.singleton (mk_top elm range)
+      warn_at range "ignoring unresolved pointer %a" pp_expr p;
+      Eval.singleton (mk_top elm range) flow
 
     | Some (base,offset) ->
       eval_base_size base range man flow >>$ fun size flow ->

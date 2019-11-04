@@ -489,28 +489,16 @@ struct
 
   (** Assignment abstract transformer for 𝕊⟦ *p = rval; ⟧ *)
   let assign_deref p rval range man flow =
-    man.eval ~zone:(Z_c_low_level, Z_c_points_to) p flow >>$ fun pt flow ->
-
-    match ekind pt with
-    | E_c_points_to P_null ->
-      raise_c_alarm Alarms.ANullDeref p.erange ~bottom:true man.lattice flow |>
-      Post.return
-
-    | E_c_points_to P_invalid ->
-      raise_c_alarm Alarms.AInvalidDeref p.erange ~bottom:true man.lattice flow |>
-      Post.return
-
-    | E_c_points_to P_top ->
+    eval_pointed_base_offset p range man flow >>$ fun pp flow ->
+    match pp with
+    | None ->
       Soundness.warn_at range "unsound assignment to ⊤ pointer %a" pp_expr p;
-      raise_c_alarm Alarms.AOutOfBound p.erange ~bottom:false man.lattice flow |>
-      Post.return
+      Post.return flow
 
-    | E_c_points_to (P_block (base, offset)) ->
+    | Some (base, offset) ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow >>$ fun offset flow ->
       man.eval ~zone:(Z_c_low_level,Z_c_scalar) rval flow >>$ fun rval flow ->
       assign_cases base offset rval range man flow
-
-    | _ -> assert false
 
 
   (** Cases of the transfer function of quantified tests 𝕊⟦ *(base + ∀offset) op q ⟧ *)
@@ -628,28 +616,17 @@ struct
       doit p
     in
 
-    man.eval ~zone:(Z_c_low_level, Z_c_points_to) pp flow >>$ fun pt flow ->
-
-    match ekind pt with
-    | E_c_points_to P_null ->
-      raise_c_alarm ANullDeref p.erange ~bottom:true man.lattice flow |>
-      Post.return
-
-    | E_c_points_to P_invalid ->
-      raise_c_alarm AInvalidDeref p.erange ~bottom:true man.lattice flow |>
-      Post.return
-
-    | E_c_points_to (P_block (base, offset)) when is_interesting_base base ->
-      assume_quantified_cases op base offset primed q range man flow
-
-    | E_c_points_to (P_block (base, offset)) ->
+    eval_pointed_base_offset p range man flow >>$ fun pt flow ->
+    match pt with
+    | None ->
+      warn_at range "ignoring unresolved pointer %a" pp_expr pp;
       Post.return flow
 
-    | E_c_points_to P_top ->
-      raise_c_alarm AOutOfBound p.erange ~bottom:false man.lattice flow |>
-      Post.return
+    | Some (base, offset) when is_interesting_base base ->
+      assume_quantified_cases op base offset primed q range man flow
 
-    | _ -> assert false
+    | Some _ ->
+      Post.return flow
 
 
 
@@ -933,19 +910,14 @@ struct
   (** Abstract evaluation of a dereference *)
   let eval_deref exp primed range man flow =
     let p = match ekind exp with E_c_deref p -> p | _ -> assert false in
-    man.eval ~zone:(Z_c_low_level, Z_c_points_to) p flow |>
-    Eval.bind @@ fun pt flow ->
+    eval_pointed_base_offset p range man flow >>$ fun pp flow ->
 
-    match ekind pt with
-    | E_c_points_to P_null ->
-      raise_c_alarm Alarms.ANullDeref p.erange ~bottom:true man.lattice flow |>
-      Eval.empty_singleton
+    match pp with
+    | None ->
+      Soundness.warn_at range "ignoring dereference of ⊤ pointer";
+      Eval.singleton (mk_top (under_type p.etyp |> void_to_char) range) flow
 
-    | E_c_points_to P_invalid ->
-      raise_c_alarm Alarms.AInvalidDeref p.erange ~bottom:true man.lattice flow |>
-      Eval.empty_singleton
-
-    | E_c_points_to (P_block (base, offset))
+    | Some (base,offset)
       when is_interesting_base base &&
            not (is_expr_quantified offset)
       ->
@@ -953,20 +925,14 @@ struct
       Eval.bind @@ fun offset flow ->
       eval_deref_cases base offset (under_type p.etyp) primed range man flow
 
-    | E_c_points_to (P_block (base, offset))
+    | Some (base, offset)
       when is_interesting_base base &&
            is_expr_quantified offset
       ->
       eval_quantified_deref_cases base offset (under_type p.etyp) primed range man flow
 
-    | E_c_points_to (P_block _) ->
+    | Some _ ->
       Eval.singleton (mk_top (under_type p.etyp |> void_to_char) range) flow
-
-    | E_c_points_to P_top ->
-      Soundness.warn_at range "ignoring dereference of ⊤ pointer";
-      Eval.singleton (mk_top (under_type p.etyp |> void_to_char) range) flow
-
-    | _ -> assert false
 
 
 

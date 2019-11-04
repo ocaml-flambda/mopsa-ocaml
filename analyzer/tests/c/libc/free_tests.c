@@ -23,3 +23,13 @@ void test_unsafe_free_with_non_zero_offset() {
   free(p + 1);
   _mopsa_assert_unsafe();
 }
+
+
+void test_unsafe_use_after_free() {
+  char *p = malloc(100);
+  if (p) {
+    free(p);
+    char c = *p;
+    _mopsa_assert_unsafe();
+  }
+}

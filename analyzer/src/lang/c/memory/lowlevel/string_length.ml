@@ -325,27 +325,16 @@ struct
 
   (** Assignment abstract transformer for 𝕊⟦ *p = rval; ⟧ *)
   let assign_deref p rval range man flow =
-    man.eval ~zone:(Z_c_low_level, Z_c_points_to) p flow >>$ fun pt flow ->
-
-    match ekind pt with
-    | E_c_points_to P_null ->
-      raise_c_alarm ANullDeref p.erange ~bottom:true man.lattice flow |>
-      Post.return
-
-    | E_c_points_to P_invalid ->
-      raise_c_alarm AInvalidDeref p.erange ~bottom:true man.lattice flow |>
-      Post.return
-
-    | E_c_points_to P_top ->
+    eval_pointed_base_offset p range man flow >>$ fun r flow ->
+    match r with
+    | None ->
       Soundness.warn_at range "ignoring assignment to undetermined valid pointer %a" pp_expr p;
       Post.return flow
 
-    | E_c_points_to (P_block (base, offset)) ->
+    | Some (base, offset) ->
       man.eval ~zone:(Z_c_low_level,Z_u_num) rval flow >>$ fun rval flow ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow >>$ fun offset flow ->
       assign_cases base offset rval (under_type p.etyp |> void_to_char) range man flow
-
-    | _ -> assert false
 
 
 
