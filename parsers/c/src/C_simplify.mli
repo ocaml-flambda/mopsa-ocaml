@@ -30,7 +30,7 @@ type context
     All simplifications for the C program must occur within the same context.
  *)
 
-val create_context : unit -> context
+val create_context : C_AST.target_info -> context
 (** Create a simplification context. *)
 
 val simplify_func : context -> func -> unit
