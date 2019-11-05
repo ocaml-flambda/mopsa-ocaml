@@ -37,6 +37,33 @@ type _ id += D_nonrel : 'v vmodule -> (var,'v) Lattices.Partial_map.map id
 
 
 
+(** Generic merge operation for non-relational domains *)
+let generic_nonrel_merge ~top ~add ~remove ~find ~meet pre (a1, log1) (a2, log2) =
+  let patch stmt a acc =
+    match skind stmt with
+    | S_forget { ekind = E_var (var, _) }
+    | S_add { ekind = E_var (var, _) }
+    | S_assign({ ekind = E_var (var, _)}, _) ->
+      add var top acc
+
+    | S_rename ( {ekind = E_var (var1, _)}, {ekind = E_var (var2, _)} ) ->
+      let v = find var2 a in
+      remove var1 acc |>
+      add var2 v
+
+    | S_remove { ekind = E_var (var, _) } ->
+      remove var acc
+
+    | S_assume e -> acc
+
+    | _ -> Exceptions.panic ~loc:__LOC__ "merge: unsupported statement %a" pp_stmt stmt
+  in
+  let a2' = List.fold_left (fun acc stmt -> patch stmt a1 acc) a2 log1 in
+  let a1' = List.fold_left (fun acc stmt -> patch stmt a2 acc) a1 log2 in
+  meet a1' a2'
+
+
+
 module Make(Value: VALUE) =
 struct
 
@@ -106,37 +133,11 @@ struct
 
   let debug fmt = Debug.debug ~channel:name fmt
 
-  let merge pre (a1, log1) (a2, log2) =
-    debug "@[<v>merging:@, pre-condition: %a@, post-condition #1: %a@, log #1: %a@, post-condition #2: %a@, log #2: %a@]"
-      VarMap.print pre
-      VarMap.print a1
-      pp_block log1
-      VarMap.print a2
-      pp_block log2
-    ;
+  let find v a =
+    try find v a
+    with Not_found -> Exceptions.warn "variable %a not found" pp_var v; raise Not_found
 
-    let patch stmt a acc =
-      match skind stmt with
-      | S_forget { ekind = E_var (var, _) }
-      | S_add { ekind = E_var (var, _) }
-      | S_assign({ ekind = E_var (var, _)}, _) ->
-        add var Value.top acc
-
-      | S_rename ( {ekind = E_var (var1, _)}, {ekind = E_var (var2, _)} ) ->
-        let v = find var2 a in
-        remove var1 acc |>
-        add var2 v
-
-      | S_remove { ekind = E_var (var, _) } ->
-        remove var acc
-
-      | S_assume e -> acc
-
-      | _ -> Exceptions.panic ~loc:__LOC__ "merge: unsupported statement %a" pp_stmt stmt
-    in
-    let a2' = List.fold_left (fun acc stmt -> patch stmt a1 acc) a2 log1 in
-    let a1' = List.fold_left (fun acc stmt -> patch stmt a2 acc) a1 log2 in
-    meet a1' a2'
+  let merge pre (a1, log1) (a2, log2) = generic_nonrel_merge ~top:Value.top ~add ~remove ~find ~meet pre (a1, log1) (a2, log2)
 
   let print fmt a =
     Format.fprintf fmt "%s:@,@[   %a@]@\n" Value.display VarMap.print a
@@ -176,7 +177,7 @@ struct
   and eval (e:expr) (a:t) : (aexpr * Value.t) option =
     match ekind e with
     | E_var(var, mode) ->
-      let v = VarMap.find var a in
+      let v = find var a in
       (A_var (var, mode, v), v) |>
       Option.return
 
@@ -327,7 +328,7 @@ struct
       Option.return
 
     | S_rename ({ ekind = E_var (var1, _) }, { ekind = E_var (var2, _) }) ->
-      let v = VarMap.find var1 map in
+      let v = find var1 map in
       VarMap.remove var1 map |>
       VarMap.add var2 v |>
       Option.return

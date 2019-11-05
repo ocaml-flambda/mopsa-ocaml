@@ -46,6 +46,8 @@ let print pp fmt post =
 let join (p1:'a post) (p2:'a post) : 'a post =
   Result.join p1 p2
 
+let join_list ~empty l =
+  Result.join_list ~empty l
 
 
 let meet (p1:'a post) (p2:'a post) : 'a post =

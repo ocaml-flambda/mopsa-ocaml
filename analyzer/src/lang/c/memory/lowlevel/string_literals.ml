@@ -107,7 +107,7 @@ struct
         ~fthen:(fun flow ->
             (* We give an answer only for the case literal strings *)
             match base with
-            | V _ | A _ | Z ->
+            | V _ | A _ | D _ | Z ->
               Post.return flow
 
             (* We do not handle for the moment the case of muti-byte deref from a string *)
@@ -230,7 +230,7 @@ struct
         (mk_in offset (mk_zero range) (sub size (mk_z elm_size range) range) range)
         ~fthen:(fun flow ->
             match base with
-            | V _ | A _ | Z ->
+            | V _ | A _ | D _ | Z ->
               Eval.singleton (mk_top elm range) flow
 
             | S _ when Z.gt elm_size Z.one ->

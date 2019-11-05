@@ -569,9 +569,8 @@ struct
     eval_pointed_base_offset p range man flow >>$ fun pp flow ->
     match pp with
     | None ->
-      (* Valid pointer but unknown offset *)
-      raise_c_alarm AOutOfBound range ~bottom:false man.lattice flow |>
-      Result.singleton Top
+      warn_at range "ignoring unresolved pointer %a" pp_expr p;
+      Result.singleton Top flow
 
     | Some (base,offset) ->
       let typ = under_type p.etyp |> void_to_char in
@@ -837,8 +836,10 @@ struct
     expand p range man flow >>$ fun expansion flow ->
     let t = under_type p.etyp in
     match expansion with
-    | Top | Region _ ->
-      (* ⊤ pointer or expand threshold exceeded => use the whole value interval *)
+    | Top ->
+      Eval.singleton (mk_top (void_to_char t) range) flow
+
+    | Region _ ->
       Eval.singleton (mk_top (void_to_char t) range) flow
 
     | Cell c ->
@@ -891,8 +892,8 @@ struct
     match pp with
     | None ->
       (* Valid pointer but unknown offset *)
-      raise_c_alarm AOutOfBound range ~bottom:false man.lattice flow |>
-      Eval.singleton (mk_top elm range)
+      warn_at range "ignoring unresolved pointer %a" pp_expr p;
+      Eval.singleton (mk_top elm range) flow
 
     | Some (base,offset) ->
       eval_base_size base range man flow >>$ fun size flow ->
@@ -916,7 +917,6 @@ struct
             Eval.singleton (mk_top elm range) flow
           )
         ~felse:(fun flow ->
-            debug "out-of-bound in %a" (Flow.print man.lattice.print) flow;
             raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow |>
             Eval.empty_singleton
           )
@@ -1107,7 +1107,6 @@ struct
 
   (** Rename bases and their cells *)
   let exec_rename base1 base2 range man flow =
-    debug "rename %a into %a" pp_base base1 pp_base base2;
     let a = get_env T_cur man flow in
 
     (* Cell renaming function *)
@@ -1115,9 +1114,7 @@ struct
 
     (* Cells of base1 *)
     let cells1 = CellSet.filter (fun c ->
-        let x = compare_base c.base base1 in
-        if x = 0 then debug "%a should be renamed %a" pp_cell c pp_cell (to_base2 c);
-        x = 0
+        compare_base c.base base1 = 0
       ) a.cells
     in
 
@@ -1128,21 +1125,28 @@ struct
         (* If base2 is not already present => rename the cells *)
         fun c flow ->
           let c' = to_base2 c in
-          debug "rename %a into %a" pp_cell c pp_cell c';
           let v = mk_cell_var c in
           let v' = mk_cell_var c' in
+          let flow = map_env T_cur (fun a ->
+              { a with cells = CellSet.remove c a.cells |>
+                               CellSet.add c' }
+            ) man flow in
           let stmt = mk_rename_var v v' range in
           man.post ~zone:Z_c_scalar stmt flow
       else
         (* Otherwise, assign with weak update *)
         fun c flow ->
           let c' = to_base2 c in
-          debug "weak copy %a to %a" pp_cell c pp_cell c';
           let v = mk_cell_var c in
           let v' = mk_cell_var c' in
-          let stmt = mk_assign (mk_var v' range) (mk_var v ~mode:WEAK range) range in
+          let flow = map_env T_cur (fun a ->
+              { a with cells = CellSet.remove c a.cells |>
+                               CellSet.add c' }
+            ) man flow in
+          let stmt = mk_assign (mk_var v' ~mode:WEAK range) (mk_var v range) range in
           man.post ~zone:Z_c_scalar stmt flow >>= fun _ flow ->
-          remove_cell c range man flow
+          let stmt = mk_remove_var v range in
+          man.post ~zone:Z_c_scalar stmt flow
     in
 
     (* Apply copy function *)
@@ -1193,7 +1197,7 @@ struct
       (* target is pointer, so resolve it and compute the affected offsets *)
       man.eval ~zone:(Z_c_low_level, Z_c_points_to) target flow >>$ fun pt flow ->
       match ekind pt with
-      | E_c_points_to P_valid | E_c_points_to P_null | E_c_points_to P_invalid ->
+      | E_c_points_to P_top | E_c_points_to P_null | E_c_points_to P_invalid ->
         Post.return flow
 
       | E_c_points_to (P_block(base, offset)) ->
