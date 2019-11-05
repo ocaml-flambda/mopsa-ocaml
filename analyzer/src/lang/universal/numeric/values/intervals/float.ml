@@ -205,7 +205,14 @@ struct
       | _ -> a1,a2
     ) man t op a1 a2 r
 
-  let ask man q = None
+  let ask_simplified : type r. r query -> (expr -> t) -> r option =
+     fun query eval ->
+      match query with
+      | Common.Q_float_interval e ->
+        eval e |> Option.return
+      | _ -> None
+
+  let ask man q = Simplified.lift_ask ask_simplified man q
 
   let refine man channel v = Channel.return v
 
