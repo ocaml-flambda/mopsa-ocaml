@@ -40,6 +40,8 @@ type _ query +=
 let mk_int_interval_query ?(fast=true) e =
   if fast then Q_fast_int_interval e else Q_int_interval e
 
+let pp_int_interval fmt itv = I.fprint_bot fmt itv
+
 let () =
   register_query {
     join = (
@@ -129,6 +131,8 @@ type _ query +=
 
 let mk_float_interval_query e =
   Q_float_interval e
+
+let pp_float_interval fmt itv = F.fprint F.dfl_fmt fmt itv
 
 let () =
   register_query {

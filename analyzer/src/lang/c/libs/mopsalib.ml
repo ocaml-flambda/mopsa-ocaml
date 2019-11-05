@@ -29,6 +29,7 @@ open Zone
 open Universal.Zone
 open Common.Points_to
 open Common.Base
+open Universal.Numeric.Common
 
 
 module Domain =
@@ -140,38 +141,44 @@ struct
   (** {2 Printing of abstract values} *)
   (** ******************************* *)
 
+  let exp_to_str exp =
+    let () = pp_expr Format.str_formatter exp in
+    Format.flush_str_formatter ()
+
+
   (** Print the value of an integer expression *)
-  let print_int_value exp man fmt flow =
+  let print_int_value exp ?(display=exp_to_str exp) man fmt flow =
     let evl = man.eval ~zone:(Z_c,Z_u_num) exp flow in
-    Format.fprintf fmt "%a = %a"
-      pp_expr exp
+    Format.fprintf fmt "%s = %a"
+      display
       (Result.print (fun fmt e flow ->
-           let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query e) flow in
-           Universal.Numeric.Values.Intervals.Integer.Value.print fmt itv
+           let itv = man.ask (mk_int_interval_query e) flow in
+           pp_int_interval fmt itv
          )
       ) evl
 
   (** Print the value of a float expression *)
-  let print_float_value exp man fmt flow =
+  let print_float_value exp ?(display=exp_to_str exp) man fmt flow =
     let evl = man.eval ~zone:(Z_c,Z_u_num) exp flow in
-    Format.fprintf fmt "%a = %a"
-      pp_expr exp
+    Format.fprintf fmt "%s = %a"
+      display
       (Result.print (fun fmt e flow ->
-           let itv = man.ask (Universal.Numeric.Common.mk_float_interval_query e) flow in
-           Universal.Numeric.Values.Intervals.Float.Value.print fmt itv
+           let itv = man.ask (mk_float_interval_query e) flow in
+           pp_float_interval fmt itv
          )
       ) evl
 
+
   (** Print the value of a pointer expression *)
-  let print_pointer_value exp man fmt flow =
+  let print_pointer_value exp ?(display=exp_to_str exp) man fmt flow =
     let evl = man.eval ~zone:(Z_c,Z_c_points_to) exp flow in
-    Format.fprintf fmt "%a ⇝ %a"
-      pp_expr exp
+    Format.fprintf fmt "%s ⇝ %a"
+      display
       (Result.print (fun fmt e flow ->
            match ekind e with
            | E_c_points_to (P_block(base,offset)) ->
              let evl = man.eval ~zone:(Z_c_scalar,Z_u_num) offset flow in
-             Format.fprintf fmt "%a:%a"
+             Format.fprintf fmt "&(%a%a)"
                pp_base base
                (Result.print (fun fmt e flow ->
                     let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query e) flow in
@@ -185,12 +192,29 @@ struct
       ) evl
 
 
+  (** Print the values of an array *)
+  let rec print_array_values exp ?(display=exp_to_str exp) man fmt flow =
+    match remove_casts exp |> etyp |> remove_typedef_qual with
+    | T_c_array(_, C_array_length_cst len) ->
+      (* Create an interval expression [0, len - 1] to use as an index *)
+      let itv = mk_z_interval Z.zero (Z.pred len) exp.erange in
+      let exp' = mk_c_subscript_access exp itv exp.erange in
+      let display =
+        let () = Format.fprintf Format.str_formatter "%s%a" display pp_expr itv in
+        Format.flush_str_formatter ()
+      in
+      print_value exp' ~display man fmt flow
+    | _ ->
+      warn_at exp.erange "_mopsa_print: unsupported array type %a" pp_typ exp.etyp
+
+
   (** Print the value of an expression *)
-  let print_value exp man fmt flow =
-    if is_c_int_type exp.etyp then print_int_value exp man fmt flow
-    else if is_c_float_type exp.etyp then print_float_value exp man fmt flow
-    else if is_c_pointer_type exp.etyp then print_pointer_value exp man fmt flow
-    else panic_at exp.erange "_mopsa_print: unsupported type %a" pp_typ exp.etyp
+  and print_value exp ?(display=exp_to_str exp) man fmt flow =
+    if is_c_int_type exp.etyp then print_int_value exp ~display man fmt flow
+    else if is_c_float_type exp.etyp then print_float_value exp ~display man fmt flow
+    else if is_c_array_type @@ etyp @@ remove_casts exp then print_array_values exp ~display man fmt flow
+    else if is_c_pointer_type exp.etyp then print_pointer_value exp ~display man fmt flow
+    else warn_at exp.erange "_mopsa_print: unsupported type %a" pp_typ exp.etyp
 
 
   (** Print the values of a list of expressions *)
