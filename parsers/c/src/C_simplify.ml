@@ -86,7 +86,7 @@ let rec expr_one target range (t:typ) =
   | T_bool ->
      expr_integer_cst range SIGNED_INT Z.one
   | T_float f ->
-     expr_float_cst range f 0.
+     expr_float_cst range f 1.
   | T_pointer _ ->
      expr_integer_cst range (ptrdiff_type target) Z.one
   | T_bitfield (t,_) ->
