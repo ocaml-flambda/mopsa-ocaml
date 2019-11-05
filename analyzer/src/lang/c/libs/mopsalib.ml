@@ -208,10 +208,28 @@ struct
       warn_at exp.erange "_mopsa_print: unsupported array type %a" pp_typ exp.etyp
 
 
+  (** Print fields values of a record *)
+  and print_record_values exp ?(display=exp_to_str exp) man fmt flow =
+    let fields = match remove_typedef_qual exp.etyp with
+      | T_c_record {c_record_fields} -> c_record_fields
+      | _ -> assert false
+    in
+    Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,")
+      (fun fmt field ->
+         let exp' = mk_c_member_access exp field exp.erange in
+         let display =
+           let () = Format.fprintf Format.str_formatter "%s.%s" display field.c_field_org_name in
+           Format.flush_str_formatter ()
+         in
+         print_value exp' ~display man fmt flow
+      ) fmt fields
+
+
   (** Print the value of an expression *)
   and print_value exp ?(display=exp_to_str exp) man fmt flow =
     if is_c_int_type exp.etyp then print_int_value exp ~display man fmt flow
     else if is_c_float_type exp.etyp then print_float_value exp ~display man fmt flow
+    else if is_c_record_type exp.etyp then print_record_values exp ~display man fmt flow
     else if is_c_array_type @@ etyp @@ remove_casts exp then print_array_values exp ~display man fmt flow
     else if is_c_pointer_type exp.etyp then print_pointer_value exp ~display man fmt flow
     else warn_at exp.erange "_mopsa_print: unsupported type %a" pp_typ exp.etyp
