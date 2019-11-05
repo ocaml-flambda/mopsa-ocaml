@@ -1127,6 +1127,10 @@ struct
           let c' = to_base2 c in
           let v = mk_cell_var c in
           let v' = mk_cell_var c' in
+          let flow = map_env T_cur (fun a ->
+              { a with cells = CellSet.remove c a.cells |>
+                               CellSet.add c' }
+            ) man flow in
           let stmt = mk_rename_var v v' range in
           man.post ~zone:Z_c_scalar stmt flow
       else
@@ -1135,9 +1139,14 @@ struct
           let c' = to_base2 c in
           let v = mk_cell_var c in
           let v' = mk_cell_var c' in
-          let stmt = mk_assign (mk_var v' range) (mk_var v ~mode:WEAK range) range in
+          let flow = map_env T_cur (fun a ->
+              { a with cells = CellSet.remove c a.cells |>
+                               CellSet.add c' }
+            ) man flow in
+          let stmt = mk_assign (mk_var v' ~mode:WEAK range) (mk_var v range) range in
           man.post ~zone:Z_c_scalar stmt flow >>= fun _ flow ->
-          remove_cell c range man flow
+          let stmt = mk_remove_var v range in
+          man.post ~zone:Z_c_scalar stmt flow
     in
 
     (* Apply copy function *)
