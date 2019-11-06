@@ -49,7 +49,7 @@ sig
   val zones : Zone.zone list
   (** Zones in which the value abstraction is defined *)
 
-  val types : typ list
+  val mem_type : typ -> bool
   (** Types abstracted by the domain *)
 
   val bottom: t
@@ -86,7 +86,7 @@ sig
   (** {2 Forward semantics} *)
   (** ********************* *)
 
-  val of_constant : constant -> t
+  val constant : constant -> t
   (** Create a singleton abstract value from a constant. *)
 
   val unop : operator -> t -> t
@@ -130,19 +130,6 @@ sig
   *)
 
 
-  (** {2 Query handler} *)
-  (** ***************** *)
-
-  val ask : 'r query -> (expr -> t) -> 'r option
-
-
-  (** {2 Reduction refinement} *)
-  (** ************************ *)
-
-  val refine : channel -> t -> t with_channel
-
-
-
 end
 
 
@@ -162,26 +149,7 @@ let lift_bwd_binop bwd_binop man t op a b r = bwd_binop op (man.get a) (man.get 
 
 let lift_compare compare man t op a b r = compare op (man.get a) (man.get b) r
 
-let lift_ask ask man q = ask q (fun e -> man.eval e |> man.get)
 
-let lift_refine refine man channel v =
-  refine channel (man.get v) |>
-  Channel.bind @@ fun r ->
-
-  man.set r v |>
-  Channel.return
-
-let leaf_get :type t s. ('a,t) man -> t id -> s id -> 'a -> s option =
-  fun man id1 id2 a ->
-    match equal_id id1 id2 with
-    | Some Eq.Eq -> Some (man.get a)
-    | None -> None
-
-let leaf_set :type t s. ('a,t) man -> t id -> s id -> s -> 'a -> 'a option =
-  fun man id1 id2 v a ->
-    match equal_id id1 id2 with
-    | Some Eq.Eq -> Some (man.set v a)
-    | None -> None
 
 (** Lift a general-purpose signature to a low-level one *)
 module MakeLowlevel(Value:VALUE) : Lowlevel.VALUE with type t = Value.t =
@@ -193,7 +161,7 @@ struct
   let name = Value.name
   let display = Value.display
   let zones = Value.zones
-  let types = Value.types
+  let mem_type = Value.mem_type
   let bottom = Value.bottom
   let top = Value.top
   let is_bottom = Value.is_bottom
@@ -203,14 +171,11 @@ struct
   let widen = Value.widen
   let print = Value.print
 
-  let get man id a = leaf_get man Value.id id a
-  let set man id v a = leaf_set man Value.id id v a
-
 
   (** {2 Forward semantics} *)
   (** ********************* *)
 
-  let of_constant t c = Value.of_constant c
+  let constant t c = Value.constant c
 
   let unop man t op a = lift_unop Value.unop man t op a
 
@@ -232,14 +197,13 @@ struct
   (** {2 Evaluation query} *)
   (** ******************** *)
 
-  let ask man q = lift_ask Value.ask man q
+  let ask man q a = None
 
 
   (** {2 Reduction refinement} *)
   (** ************************ *)
 
-  let refine man channel a =
-    lift_refine Value.refine man channel a
+  let refine man channel a = Channel.return a
 
 end
 

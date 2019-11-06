@@ -39,7 +39,7 @@ type ('a, 't) man = {
   get : 'a -> 't;
   set : 't -> 'a -> 'a;
   eval : expr -> 'a;
-  cast : 'r. 'r id -> 'a -> 'r;
+  ask : 'r. 'r query -> 'a -> 'r;
 }
 
 
@@ -97,7 +97,7 @@ sig
   val zones : Zone.zone list
   (** Zones in which the value abstraction is defined *)
 
-  val types : typ list
+  val mem_type : typ -> bool
   (** Types abstracted by the domain *)
 
   val bottom: t
@@ -109,11 +109,6 @@ sig
   val print: Format.formatter -> t -> unit
   (** Printer of an abstract element. *)
 
-  val get: ('a,t) man -> 's id -> 'a -> 's option
-  (** Get a specific value embedded in the abstraction *)
-
-  val set: ('a,t) man -> 's id -> 's -> 'a -> 'a option
-  (** Set a specific value embedded in the abstraction *)
 
   (** {2 Lattice operators} *)
   (** ********************* *)
@@ -139,7 +134,7 @@ sig
   (** {2 Forward semantics} *)
   (** ********************* *)
 
-  val of_constant : typ -> constant -> t
+  val constant : typ -> constant -> t
   (** Create a singleton abstract value from a constant. *)
 
   val unop : ('a,t) man -> typ -> operator -> 'a -> t
@@ -186,7 +181,7 @@ sig
   (** {2 Query handler } *)
   (** ****************** *)
 
-  val ask : ('a,t) man -> 'r query -> 'r option
+  val ask : ('a,t) man -> 'r query -> 'a -> 'r option
 
 
   (** {2 Reduction refinement} *)
@@ -316,6 +311,22 @@ let vlist_map f l =
 (****************************************************************************)
 (**                           {3 Predicates}                                *)
 (****************************************************************************)
+
+type pred0 = {
+  f: 't. 't vmodule -> bool;
+}
+
+(** Test an ∃ predicate *)
+let vlist_exists0 f l =
+  let rec aux : type t. t vlist -> bool =
+    fun l ->
+      match l with
+      | Nil -> false
+      | Cons(hd,tl) ->
+        f.f hd || aux tl
+  in
+  aux l
+
 
 type pred = {
   f: 't. 't vmodule -> 't -> bool;

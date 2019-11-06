@@ -55,12 +55,12 @@ struct
 
   let zones = V1.zones @ V2.zones
 
-  let types = V1.types @ V2.types
+  let mem_type t = V1.mem_type t || V2.mem_type t
 
   let bottom = BOT
 
   let top = TOP
-  
+
   let print fmt v =
     match v with
     | BOT -> Format.pp_print_string fmt Bot.bot_string
@@ -136,34 +136,21 @@ struct
     set = (fun v2 v -> man.set (V2 v2) v);
   }
 
-  let get man id a =
-    match V1.get (v1_man man) id a with
-    | Some v -> Some v
-    | None -> V2.get (v2_man man) id a
-
-  let set man id v a =
-    match V1.set (v1_man man) id v a with
-    | Some v -> Some v
-    | None -> V2.set (v2_man man) id v a
-
-
 
   (** {2 Forward semantics} *)
   (** ********************* *)
 
   let is_v1_type t =
-    List.exists (fun t' -> compare_typ t t' = 0) V1.types
+    V1.mem_type t
 
   let is_v2_type t =
-    List.exists (fun t' -> compare_typ t t' = 0) V2.types
+    V2.mem_type t
 
-  let of_constant t c =
-    if is_v1_type t then
-      V1 (V1.of_constant t c)
-    else if is_v2_type t then
-      V2 (V2.of_constant t c)
+  let constant t c =
+    if is_v1_type t then V1 (V1.constant t c)
+    else if is_v2_type t then V2 (V2.constant t c)
     else
-      Exceptions.panic "of_constant called on unsupported constant %a of type %a"
+      Exceptions.panic "unsupported constant %a of type %a"
         ~loc:__LOC__
         pp_constant c
         pp_typ t
@@ -248,10 +235,10 @@ struct
   (** {2 Evaluation query} *)
   (** ******************** *)
 
-  let ask man q =
-    let a = V1.ask (v1_man man) q in
-    let b = V2.ask (v2_man man) q in
-    Option.neutral2 (join_query q) a b
+  let ask man q a =
+    let r1 = V1.ask (v1_man man) q a in
+    let r2 = V2.ask (v2_man man) q a in
+    Option.neutral2 (join_query q) r1 r2
 
 
   (** {2 Reduction refiner} *)

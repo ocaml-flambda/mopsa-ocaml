@@ -106,7 +106,7 @@ struct
     match find_var_bounds_ctx_opt v uctx with
     | None -> a
     | Some bounds ->
-      let aa = Value.of_constant v.vtyp bounds in
+      let aa = Value.constant v.vtyp bounds in
       Value.meet a aa
 
 
@@ -165,7 +165,7 @@ struct
 
 
   (** Value manager *)
-  let rec man (a:t) : (Value.t,Value.t) man = {
+  let rec man a : (Value.t,Value.t) man = {
     get = (fun v -> v);
     set = (fun v _ -> v);
     eval = (fun e ->
@@ -173,10 +173,10 @@ struct
         Option.default (A_unsupported,Value.top) |>
         snd
       );
-    cast = (fun id v ->
-        match Value.get (man a) id v with
-        | Some rr -> rr
-        | None -> Exceptions.panic "cast not handled"
+    ask = (fun q v ->
+        match Value.ask (man a) q v with
+        | Some r -> r
+        | None -> Exceptions.panic "query not handled"
       );
   }
 
@@ -192,7 +192,7 @@ struct
       Option.return
 
     | E_constant(c) ->
-      let v = Value.of_constant e.etyp c in
+      let v = Value.constant e.etyp c in
       (A_cst (c, v), v) |>
       Option.return
 
@@ -276,7 +276,7 @@ struct
       Option.return
 
     | E_constant c ->
-      let v = Value.of_constant e.etyp c in
+      let v = Value.constant e.etyp c in
       let w = Value.filter (man a) v r in
       (if Value.is_bottom w then bottom else a) |>
       Option.return

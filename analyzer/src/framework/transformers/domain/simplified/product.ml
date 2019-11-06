@@ -479,7 +479,7 @@ struct
                 get = (fun v -> v);
                 set = (fun v _ -> v);
                 eval = (fun e -> assert false);
-                cast = (fun id v -> assert false);
+                ask = (fun id v -> assert false);
               }
               in
 
