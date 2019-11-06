@@ -56,7 +56,10 @@ struct
     };
     ieval = {
       provides = [Z_c_scalar, Z_u_num];
-      uses = [Z_c_scalar, Z_u_num];
+      uses = [
+        Z_c_scalar, Z_u_num;
+        Z_c_scalar, Z_c_points_to
+      ];
     }
   }
 
