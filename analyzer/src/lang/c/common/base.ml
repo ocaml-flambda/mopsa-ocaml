@@ -91,8 +91,8 @@ let eval_base_size base ?(via=Z_any) range (man:('a,'t,'s) Core.Sig.Stacked.Lowl
   | A addr ->
     let bytes_expr = mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, mk_addr addr range)) range ~etyp:ul in
     man.eval ~zone:(Z_c_low_level, Z_c_scalar) ~via bytes_expr flow
+  | Z -> Eval.singleton (mk_top ul range) flow
   | D _ -> panic ~loc:__LOC__ "eval_base_size: deallocated addresses not supported"
-  | Z -> panic ~loc:__LOC__ "eval_base_size: absolute pointers not supported"
 
 module Base =
 struct

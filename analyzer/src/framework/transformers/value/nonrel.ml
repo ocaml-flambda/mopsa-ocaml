@@ -139,6 +139,9 @@ struct
 
   let merge pre (a1, log1) (a2, log2) = generic_nonrel_merge ~top:Value.top ~add ~remove ~find ~meet pre (a1, log1) (a2, log2)
 
+  let add ctx var v a =
+    VarMap.add var (constrain_var_with_bounds ctx var v) a
+
   let print fmt a =
     Format.fprintf fmt "%s:@,@[   %a@]@\n" Value.display VarMap.print a
 
@@ -219,7 +222,7 @@ struct
   (** Backward refinement of expressions; given an annotated tree, and
       a target value, refine the environment using the variables in the
       expression *)
-  let rec refine (ae:aexpr) (v:Value.t) (r:Value.t) (a:t) : t =
+  let rec refine ctx (ae:aexpr) (v:Value.t) (r:Value.t) (a:t) : t =
     let r' = Value.meet v r in
     match ae with
     | A_var (var, mode, _) ->
@@ -228,7 +231,7 @@ struct
 
       else
       if mode = STRONG
-      then VarMap.add var r' a
+      then add ctx var r' a
 
       else a
 
@@ -239,12 +242,12 @@ struct
 
     | A_unop (op, typ, ae1, v1) ->
       let w = Value.bwd_unop (man a) typ op v1 r' in
-      refine ae1 v1 w a
+      refine ctx ae1 v1 w a
 
     | A_binop (op, typ, ae1, v1, ae2, v2) ->
       let w1, w2 = Value.bwd_binop (man a) typ op v1 v2 r' in
-      let a1 = refine ae1 v1 w1 a in
-      refine ae2 v2 w2 a1
+      let a1 = refine ctx ae1 v1 w1 a in
+      refine ctx ae2 v2 w2 a1
 
     | A_unsupported ->
       a
@@ -257,21 +260,21 @@ struct
      if r=true, keep the states that may satisfy the expression;
      if r=false, keep the states that may falsify the expression
   *)
-  let rec filter (e:expr) (r:bool) (a:t) : t option =
+  let rec filter ctx (e:expr) (r:bool) (a:t) : t option =
     match ekind e with
 
     | E_unop (O_log_not, e) ->
-      filter e (not r) a
+      filter ctx e (not r) a
 
     | E_binop (O_log_and, e1, e2) ->
-      filter e1 r a |> Option.bind @@ fun a1 ->
-      filter e2 r a |> Option.bind @@ fun a2 ->
+      filter ctx e1 r a |> Option.bind @@ fun a1 ->
+      filter ctx e2 r a |> Option.bind @@ fun a2 ->
       (if r then meet else join) a1 a2 |>
       Option.return
 
     | E_binop (O_log_or, e1, e2) ->
-      filter e1 r a |> Option.bind @@ fun a1 ->
-      filter e2 r a |> Option.bind @@ fun a2 ->
+      filter ctx e1 r a |> Option.bind @@ fun a1 ->
+      filter ctx e2 r a |> Option.bind @@ fun a2 ->
       (if r then join else meet) a1 a2 |>
       Option.return
 
@@ -285,7 +288,7 @@ struct
       let v = find var a in
       let w = Value.filter (man a) v r in
       (if Value.is_bottom w then bottom else
-       if mode = STRONG then add var w a
+       if mode = STRONG then add ctx var w a
        else a
       ) |>
       Option.return
@@ -300,7 +303,7 @@ struct
       let r1, r2 = Value.compare (man a) e1.etyp op v1 v2 r in
 
       (* propagate backward on both argument expressions *)
-      refine ae2 v2 r2 @@ refine ae1 v1 r1 a |>
+      refine ctx ae2 v2 r2 @@ refine ctx ae1 v1 r1 a |>
       Option.return
 
     | _ -> assert false
@@ -345,7 +348,7 @@ struct
       Option.return
 
     | S_forget { ekind = E_var (var, _) } ->
-      add var Value.top map |>
+      add ctx var Value.top map |>
       Option.return
 
     | S_assign ({ ekind= E_var (var, mode) }, e)  ->
@@ -368,13 +371,13 @@ struct
       in
       let value = find v map in
       List.fold_left (fun acc v' ->
-          add v' value acc
+          add ctx v' value acc
         ) map vl |>
       Option.return
 
     (* FIXME: check weak variables in rhs *)
     | S_assume e ->
-      filter e true map
+      filter ctx e true map
 
     | _ -> None
 

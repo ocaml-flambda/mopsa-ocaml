@@ -379,6 +379,7 @@ struct
       None
 
     | None ->
+      if not (is_c_int_type @@ cell_type c) then None else
       match find_cell_opt
               (fun c' ->
                  is_int_cell c' &&
