@@ -29,8 +29,6 @@ open Ast
 module Value =
 struct
 
-  type v = Zero | NonZero
-
   type t =
     | TOP
     | BOT
@@ -97,7 +95,7 @@ struct
     | C_int i -> NON_ZERO
 
     | C_int_interval (i1,i2) when Z.equal i1 Z.zero &&
-                                  Z.equal i1 Z.zero ->
+                                  Z.equal i2 Z.zero ->
       ZERO
 
     | C_int_interval (i1,i2) when Z.gt i1 Z.zero ||
@@ -120,10 +118,19 @@ struct
 
   let binop op a1 a2 =
     match op with
-    | O_plus -> begin match a1, a2 with
+    | O_plus | O_minus ->
+      begin match a1, a2 with
         | BOT, _ | _, BOT -> BOT
         | TOP, _ | _, TOP -> TOP
         | ZERO, x | x, ZERO -> x
+        | _ -> TOP
+      end
+
+    | O_mult ->
+      begin match a1, a2 with
+        | BOT, _ | _, BOT -> BOT
+        | TOP, _ | _, TOP -> TOP
+        | ZERO, x | x, ZERO -> ZERO
         | _ -> TOP
       end
     | _     -> top
@@ -132,8 +139,8 @@ struct
     match a with
     | TOP -> TOP
     | BOT -> BOT
-    | ZERO -> if b then BOT else ZERO
-    | NON_ZERO -> if b then NON_ZERO else BOT
+    | ZERO -> if b then BOT else a
+    | NON_ZERO -> if b then a else BOT
 
   let bwd_unop op abs rabs = default_bwd_unop op abs rabs
 

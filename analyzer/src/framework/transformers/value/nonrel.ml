@@ -154,6 +154,16 @@ struct
     | A_binop of operator * typ * aexpr * Value.t * aexpr * Value.t
     | A_unsupported
 
+
+  (** Pretty printer of annotated expressions *)
+  let rec pp_aexp fmt = function
+    | A_var (var,mode,v) -> Format.fprintf fmt "<%a:%a>" pp_var var Value.print v
+    | A_cst (c,v) -> Format.fprintf fmt "<%a:%a>" pp_constant c Value.print v
+    | A_unop (op,t,ae,v) -> Format.fprintf fmt "%a<%a:%a>" pp_operator op pp_aexp ae Value.print v
+    | A_binop (op,t,ae1,v1,ae2,v2) -> Format.fprintf fmt "<%a:%a> %a <%a:%a>" pp_aexp ae1 Value.print v1 pp_operator op pp_aexp ae2 Value.print v2
+    | A_unsupported -> Format.pp_print_string fmt "?"
+
+
   (** Value manager *)
   let rec man (a:t) : (Value.t,Value.t) man = {
     get = (fun v -> v);
@@ -238,6 +248,7 @@ struct
 
     | A_unsupported ->
       a
+
 
   (* utility function to reduce the complexity of testing boolean expressions;
      it handles the boolean operators &&, ||, ! internally, by induction
