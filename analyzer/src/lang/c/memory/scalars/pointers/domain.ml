@@ -61,7 +61,7 @@ struct
   let interface = {
     iexec = {
       provides = [Z_c_scalar];
-      uses = [Universal.Zone.Z_u_num];
+      uses = [Z_c_scalar; Universal.Zone.Z_u_num];
     };
 
 
@@ -387,7 +387,7 @@ struct
       assume (mk_binop exp O_eq (mk_c_null exp.erange) exp.erange)
         ~fthen:(fun flow -> Eval.singleton (mk_zero exp.erange) flow)
         ~felse:(fun flow -> Eval.singleton (mk_one exp.erange) flow)
-        man flow |>
+        ~zone:Z_c_scalar man flow|>
       Option.return
 
     | _ -> None
