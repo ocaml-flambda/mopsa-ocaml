@@ -46,9 +46,9 @@ let advance_offset (op:operator) (ptr:static_points_to) (o:expr) typ range : sta
 
   let advance oo =
     if Z.equal size Z.one then
-      mk_binop oo op o range ~etyp:T_int
+      mk_binop oo op o range ~etyp:s32
     else
-      mk_binop oo op (mk_binop o O_mult (mk_z size range) range ~etyp:T_int) range ~etyp:T_int
+      mk_binop oo op (mk_binop o O_mult (mk_z size range) range ~etyp:s32) range ~etyp:s32
   in
 
   match ptr with
@@ -81,7 +81,7 @@ let rec eval_opt exp : static_points_to option =
     Top |> Option.return
 
   | E_addr (addr) ->
-    AddrOf(A addr, mk_zero exp.erange) |> Option.return
+    AddrOf(A addr, mk_zero ~typ:s32 exp.erange) |> Option.return
 
   | E_c_deref { ekind = E_c_address_of e } ->
     eval_opt e
@@ -96,16 +96,16 @@ let rec eval_opt exp : static_points_to option =
     Fun f |> Option.return
 
   | E_constant (C_c_string (s, _)) ->
-    AddrOf(S s, mk_zero exp.erange) |> Option.return
+    AddrOf(S s, mk_zero ~typ:s32 exp.erange) |> Option.return
 
   | E_var (a, _) when is_c_array_type a.vtyp ->
-    AddrOf(V a, mk_zero exp.erange) |> Option.return
+    AddrOf(V a, mk_zero ~typ:s32 exp.erange) |> Option.return
 
   | E_c_deref a when is_c_array_type (under_type a.etyp) ->
     eval_opt a
 
   | E_c_address_of { ekind = E_var (v, _) } ->
-    AddrOf (V v, mk_zero exp.erange) |> Option.return
+    AddrOf (V v, mk_zero ~typ:s32 exp.erange) |> Option.return
 
   | E_c_address_of { ekind = E_constant (C_top _) } ->
     Top |> Option.return
@@ -124,7 +124,7 @@ let rec eval_opt exp : static_points_to option =
     advance_offset op ptr i p.etyp exp.erange
 
   | E_var (v, mode) when is_c_pointer_type v.vtyp ->
-    Eval (v, mode, mk_zero exp.erange) |> Option.return
+    Eval (v, mode, mk_zero ~typ:s32 exp.erange) |> Option.return
 
   | x when is_c_int_type exp.etyp ->
     AddrOf(Common.Base.Z, exp) |> Option.return

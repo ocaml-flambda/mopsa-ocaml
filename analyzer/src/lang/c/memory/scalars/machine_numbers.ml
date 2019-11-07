@@ -28,7 +28,7 @@ open Ast
 open Zone
 open Universal.Zone
 open Alarms
-
+open Common.Points_to
 module Itv = Universal.Numeric.Values.Intervals.Integer.Value
 
 
@@ -56,7 +56,10 @@ struct
     };
     ieval = {
       provides = [Z_c_scalar, Z_u_num];
-      uses = [Z_c_scalar, Z_u_num];
+      uses = [
+        Z_c_scalar, Z_u_num;
+        Z_c_scalar, Z_c_points_to
+      ];
     }
   }
 
@@ -371,6 +374,19 @@ struct
           (O_cast (to_num_type e.etyp, to_num_type exp.etyp))
           e
           ~etyp:(to_num_type exp.etyp) exp.erange
+      in
+      Eval.singleton exp' flow |>
+      Option.return
+
+    | E_c_cast(p, _) when exp |> etyp |> is_c_int_type &&
+                          p   |> etyp |> is_c_pointer_type ->
+      man.eval ~zone:(Z_c_scalar, Z_c_points_to) p flow >>$? fun pt flow ->
+      let exp' =
+        match ekind pt with
+        | E_c_points_to P_null -> mk_zero exp.erange
+        | _ ->
+          let l,u = rangeof exp.etyp in
+          mk_z_interval l u exp.erange
       in
       Eval.singleton exp' flow |>
       Option.return
