@@ -98,14 +98,16 @@ module Domain =
        man.eval (mk_py_none range)
        |> Option.return
 
-
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertEqual")}, _)}, [test; arg1; arg2; _], [])
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertEqual")}, _)}, [test; arg1; arg2], []) ->
          Py_mopsa.check man (mk_binop arg1 O_eq arg2 range) range flow
          |> Option.return
 
+      (* FIXME: handle message *)
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertTrue")}, _)}, [test; cond;_], [])
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertTrue")}, _)}, [test; cond], []) ->
-         Py_mopsa.check man cond range flow
-         |> Option.return
+        Py_mopsa.check man (Utils.mk_builtin_call "bool" [cond] range) range flow
+        |> Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertFalse")}, _)}, [test; cond], []) ->
          Py_mopsa.check man (mk_not cond range) range flow
@@ -189,9 +191,9 @@ module Domain =
        *      man flow
        *    |> Option.return *)
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, _, _)
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, args, _)
            when is_builtin_class_function "unittest.TestCase" f ->
-         panic "unittest.TestCase function %s not implemented" f
+         panic "unittest.TestCase function %s not implemented (with |args| = %d)" f (List.length args)
 
       | _ -> None
 
