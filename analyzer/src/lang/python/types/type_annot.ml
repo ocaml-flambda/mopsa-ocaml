@@ -266,18 +266,20 @@ struct
             let flow_ok, flow_notok = filter_sig in_types in_args flow in
             let annot_out =
               let e = Option.none_to_exn signature.py_funcs_type_out in
-              {e with ekind =
-                        match ekind e with
-                        | E_py_call ({ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)} as tv, {ekind = E_constant (C_string s)}::types, []) when is_method ->
-                          E_py_call (tv, (
+              Visitor.map_expr
+                (fun expr -> match ekind expr with
+                   | E_py_call ({ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)} as tv, {ekind = E_constant (C_string s)}::types, []) when is_method ->
+                     Keep {expr with ekind = E_py_call (tv, (
                               mk_var
                                 (mk_addr_attr (match ekind @@ List.hd args with
                                      | E_py_object (a, _) -> a
                                      | _ -> assert false) s T_any)
                                 range
-                            )::types, [])
-                        | k -> k
-              } in
+                            )::types, [])}
+                   | _ -> VisitParts expr)
+                (fun stmt -> VisitParts stmt)
+                e
+            in
             let ret_var = mk_range_attr_var range "ret_var" T_any in
             man.exec (mk_add_var ret_var range) flow_ok |>
             man.exec (mk_stmt (S_py_annot (mk_var ret_var range,
@@ -310,16 +312,18 @@ struct
         | E_var (v, mode) when is_builtin_name @@ get_orig_vname v ->
           let name = get_orig_vname v in
           begin match name with
-          | "int" ->
-            (fun s -> Eval.singleton (mk_py_object (s (), None) range) flow) Addr_env.addr_integers
-          | "float" ->
-            (fun s -> Eval.singleton (mk_py_object (s (), None) range) flow) Addr_env.addr_float
-          | "NotImplementedType" ->
-            (fun s -> Eval.singleton (mk_py_object (s (), None) range) flow) Addr_env.addr_notimplemented
-          | "NoneType" ->
-            (fun s -> Eval.singleton (mk_py_object (s (), None) range) flow) Addr_env.addr_none
-          | _ ->
-            Addr_env.Domain.allocate_builtin ~mode:WEAK man range flow (get_orig_vname v) (Some e)
+            | "bool" ->
+              (fun s -> Eval.singleton (mk_py_object (s (), None) range) flow) Addr_env.addr_bool_top
+            | "int" ->
+              (fun s -> Eval.singleton (mk_py_object (s (), None) range) flow) Addr_env.addr_integers
+            | "float" ->
+              (fun s -> Eval.singleton (mk_py_object (s (), None) range) flow) Addr_env.addr_float
+            | "NotImplementedType" ->
+              (fun s -> Eval.singleton (mk_py_object (s (), None) range) flow) Addr_env.addr_notimplemented
+            | "NoneType" ->
+              (fun s -> Eval.singleton (mk_py_object (s (), None) range) flow) Addr_env.addr_none
+            | _ ->
+              Addr_env.Domain.allocate_builtin ~mode:WEAK man range flow (get_orig_vname v) (Some e)
           end
           |> Option.return
 
@@ -392,13 +396,36 @@ struct
                   | E_py_object (a, _) -> a
                   | _ -> assert false in
                 let tname = match ekind abase with
-                  | E_py_index_subscript ({ekind = E_var (v, _)}, {ekind = E_py_call ({ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)}, {ekind = E_constant (C_string s)}::_, [])}) when get_orig_vname v = "Generic" -> s
-                  | _ -> Exceptions.panic_at range "tname %a" pp_expr (List.hd c.py_cls_a_abases) in
+                  | E_py_index_subscript ({ekind = E_var (v, _)},
+                                          {ekind = E_py_call ({ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)},
+                                                              {ekind = E_constant (C_string s)}::_, [])})
+                    when get_orig_vname v = "Generic" -> s
+                  | _ ->
+                    Exceptions.panic_at range "tname %a" pp_expr (List.hd c.py_cls_a_abases) in
+                debug "here, tname=%s" tname ;
                 let flow =
                   set_env T_cur (TVMap.add (Class (mk_addr_attr addr tname T_any))
                                    (match TVMap.find_opt (Global tname) (get_env T_cur man flow) with
-                                    | None -> ESet.singleton i
-                                    | Some st -> st)
+                                    | None ->
+                                      debug "tname(%s) not found in cur" tname;
+                                      begin match i with
+                                        | {ekind = E_py_call (
+                                            {ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)},
+                                            {ekind = E_constant (C_string s)}::_, [])
+                                          } ->
+                                          (* FIXME: égalité entre s et tname à gérer mieux que ça ? *)
+                                          Option.default (ESet.singleton i) (TVMap.find_opt (Global s) (get_env T_cur man flow))
+                                        | {ekind = E_py_call (
+                                            {ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)},
+                                            {ekind = E_var (vname, _)}::_, [])
+                                          } ->
+                                          Option.default (ESet.singleton i) (TVMap.find_opt (Class vname) (get_env T_cur man flow))
+
+                                        | _ -> ESet.singleton i
+                                      end
+                                    | Some st ->
+                                      debug "tname(%s) found in cur" tname;
+                                      st)
                                    (get_env T_cur man flow)) man flow in
                 debug "after %a, cur = %a" pp_expr exp TVMap.print (get_env T_cur man flow);
                 (* man.exec (mk_stmt (S_py_annot (mk_var (mk_addr_attr addr tname T_any) range, mk_expr (E_py_annot i) range)) range) flow |> *)
@@ -421,22 +448,36 @@ struct
 
 
         | E_py_call ({ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)}, {ekind = E_constant (C_string s)}::[], []) ->
-          Exceptions.panic_at range "generic typevar annot"
+          let cur = get_env T_cur man flow in
+          let tycur = TVMap.find (Global s) cur in
+          if ESet.cardinal tycur = 0 then
+            Flow.bottom_from flow
+            |> Eval.empty_singleton
+            |> Option.return
+          else
+            let () = assert (ESet.cardinal tycur = 1) in
+            let ty = ESet.choose tycur in
+            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) {exp with ekind = E_py_annot ty} flow
+            |> Option.return
 
         | E_py_call ({ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)}, {ekind = E_constant (C_string s)}::types, []) ->
           let cur = get_env T_cur man flow in
-          let tycur = TVMap.find (Global s) cur in
-          debug "tycur = %a@\n" ESet.print tycur;
-          begin match ESet.cardinal tycur with
-          | 0 ->
-            Flow.bottom_from flow |>
-            Eval.empty_singleton
+          begin match TVMap.find_opt (Global s) cur with
+          | Some tycur ->
+            debug "tycur = %a@\n" ESet.print tycur;
+            begin match ESet.cardinal tycur with
+              | 0 ->
+                Flow.bottom_from flow |>
+                Eval.empty_singleton
+              | _ ->
+                assert (ESet.cardinal tycur = 1);
+                let ty = ESet.choose tycur in
+                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) {exp with ekind = E_py_annot ty} flow
+            end
           | _ ->
-            assert (ESet.cardinal tycur = 1);
-            let ty = ESet.choose tycur in
-            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) {exp with ekind = E_py_annot ty} flow
+            Eval.join_list ~empty:(fun () -> assert false)
+              (List.map (fun t -> man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) {exp with ekind = E_py_annot t} flow) types)
           end |> Option.return
-
 
         | E_py_call ({ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)}, {ekind = E_var (v, _)}::types, []) ->
           let cur = get_env T_cur man flow in
@@ -454,6 +495,10 @@ struct
 
         | E_constant C_py_none ->
           (fun s -> Eval.singleton (mk_py_object (s (), None) range) flow) Addr_env.addr_none |> Option.return
+
+        | E_py_object ({addr_kind = A_py_class _}, _) ->
+          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call e [] range) flow
+          |> Option.return
 
         | _ ->
           Exceptions.panic_at range "Unsupported type annotation %a@\n" pp_expr e
@@ -481,7 +526,17 @@ struct
           |> Option.return
 
         | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)} as pattern, i) when get_orig_vname c.py_cls_a_var = "Union" ->
-          failwith "ok"
+          let types = match ekind i with
+            | E_py_tuple t -> t
+            | _ -> assert false in
+          let mk_cannot a = {exp with ekind = E_py_check_annot(e, a)} in
+          let mk_or e1 e2 = mk_binop e1 O_py_or e2 range in
+          let conds = List.fold_left (fun acc elu ->
+              mk_or acc (mk_cannot elu)
+            ) (mk_cannot @@ List.hd types) (List.tl types) in
+          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) conds flow
+          |> Option.return
+          (* big disjunction on check_annot(e, t) for t in types *)
 
         | E_py_index_subscript ({ekind = E_py_object _} as e1, e2) ->
           warn_at range "E_py_check_annot subscript e1=%a e2=%a now in the wild" pp_expr e1 pp_expr e2;
@@ -495,7 +550,22 @@ struct
           |> Option.return
 
         | E_py_call ({ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)}, {ekind = E_constant (C_string s)}::[], []) ->
-          Exceptions.panic_at range "Spycheckannot typevar"
+
+          let cur = get_env T_cur man flow in
+          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type e range) flow |>
+          Eval.bind (fun type_e flow ->
+              match TVMap.find_opt (Global s) cur with
+              | Some typ when not @@ ESet.is_top typ ->
+                (* FIXMEEEEEEE: move everything in ESet to classes? And use class_le or sth *)
+                man.eval (mk_py_bool (ESet.equal typ (ESet.singleton type_e)) range) flow
+                (* Exceptions.panic_at range "Spycheckannot typevar, typ = %a" ESet.print typ *)
+              | _ ->
+                let cur = get_env T_cur man flow in
+                let ncur = TVMap.add (Global s) (ESet.singleton type_e) cur in
+                set_env T_cur ncur man flow |>
+                man.eval (mk_py_true range)
+            )
+          |> Option.return
 
         | E_py_call ({ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)}, (({ekind = E_constant (C_string _)} | {ekind = E_var (_, _) }) as v)::types, []) ->
           let key = match ekind v with

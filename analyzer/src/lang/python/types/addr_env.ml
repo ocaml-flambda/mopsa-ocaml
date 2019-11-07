@@ -52,8 +52,8 @@ struct
   let print fmt =
     function
     | Def a -> Universal.Ast.pp_addr fmt a
-    | Undef_local -> Format.fprintf fmt "unbound"
-    | Undef_global -> Format.fprintf fmt "undef"
+    | Undef_local -> Format.fprintf fmt "UndefLocal"
+    | Undef_global -> Format.fprintf fmt "UndefGlobal"
 end
 
 

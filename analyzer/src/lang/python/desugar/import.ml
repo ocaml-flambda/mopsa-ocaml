@@ -251,7 +251,10 @@ module Domain =
         | S_assign ({ekind = E_var (v, _)}, e) ->
           (* let v = set_orig_vname (mk_dot_name (Some name) (get_orig_vname v)) v in *)
           debug "%s: adding alias %a[%s] = %a" base pp_var v v.vname pp_expr e;
-          add_type_alias v e;
+          let ee = Visitor.map_expr (fun exp -> match ekind exp with
+              | E_var (v, m) -> begin try Keep (Hashtbl.find type_aliases v) with Not_found -> Keep exp end
+              | _ -> VisitParts exp) (fun s -> VisitParts s) e in
+          add_type_alias v ee;
           (* add to map *)
           {stmt with skind = S_block []},
           List.filter (fun var -> compare_var var v <> 0) globals,
@@ -272,8 +275,6 @@ module Domain =
               | E_var (v, m) ->
                 begin
                   try
-                    if get_orig_vname v = "AnyStr" then
-                      debug "AnyStr: in type_aliases: %b" (Hashtbl.mem type_aliases v);
                     let substexpr = Hashtbl.find type_aliases v in
                     (* let rec recsubst expr =
                      *   match ekind expr with
