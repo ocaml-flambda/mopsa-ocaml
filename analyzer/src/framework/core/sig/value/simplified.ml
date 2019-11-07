@@ -28,6 +28,7 @@ open Query
 open Channel
 open Lowlevel
 
+
 module type VALUE =
 sig
 
@@ -133,23 +134,6 @@ sig
 end
 
 
-(*==========================================================================*)
-(**                      {2 Low-level lifters}                              *)
-(*==========================================================================*)
-
-let lift_unop unop (man:('a,'t) man) (t:typ) (op:operator) (a:'a) : 't = unop op (man.get a)
-
-let lift_binop binop man t op a b = binop op (man.get a) (man.get b)
-
-let lift_filter filter man v b =  filter (man.get v) b
-
-let lift_bwd_unop bwd_unop man t op v r = bwd_unop op (man.get v) (man.get r)
-
-let lift_bwd_binop bwd_binop man t op a b r = bwd_binop op (man.get a) (man.get b) (man.get r)
-
-let lift_compare compare man t op a b r = compare op (man.get a) (man.get b) r
-
-
 
 (** Lift a general-purpose signature to a low-level one *)
 module MakeLowlevel(Value:VALUE) : Lowlevel.VALUE with type t = Value.t =
@@ -177,33 +161,28 @@ struct
 
   let constant t c = Value.constant c
 
-  let unop man t op a = lift_unop Value.unop man t op a
+  let unop man t op a = lift_simplified_unop Value.unop man t op a
 
-  let binop man t op a b = lift_binop Value.binop man t op a b
+  let binop man t op a b = lift_simplified_binop Value.binop man t op a b
 
-  let filter man a b = lift_filter Value.filter man a b
+  let filter man a b = lift_simplified_filter Value.filter man a b
 
 
   (** {2 Backward semantics} *)
   (** ********************** *)
 
-  let bwd_unop man t op v r = lift_bwd_unop Value.bwd_unop man t op v r
+  let bwd_unop man t op v r = lift_simplified_bwd_unop Value.bwd_unop man t op v r
 
-  let bwd_binop man t op v1 v2 r = lift_bwd_binop Value.bwd_binop man t op v1 v2 r
+  let bwd_binop man t op v1 v2 r = lift_simplified_bwd_binop Value.bwd_binop man t op v1 v2 r
 
-  let compare man t op v1 v2 b = lift_compare Value.compare man t op v1 v2 b
+  let compare man t op v1 v2 b = lift_simplified_compare Value.compare man t op v1 v2 b
 
 
   (** {2 Evaluation query} *)
   (** ******************** *)
 
-  let ask man q a = None
+  let ask man q = None
 
-
-  (** {2 Reduction refinement} *)
-  (** ************************ *)
-
-  let refine man channel a = Channel.return a
 
 end
 

@@ -61,7 +61,7 @@ and structure =
 and operator =
   | O_seq
   | O_compose
-  | O_disjoint
+  | O_union
 
 
 

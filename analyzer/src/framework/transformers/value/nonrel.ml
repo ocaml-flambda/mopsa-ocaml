@@ -173,8 +173,8 @@ struct
         Option.default (A_unsupported,Value.top) |>
         snd
       );
-    ask = (fun q v ->
-        match Value.ask (man a) q v with
+    ask = (fun vq ->
+        match Value.ask (man a) vq with
         | Some r -> r
         | None -> Exceptions.panic "query not handled"
       );
@@ -381,7 +381,7 @@ struct
 
 
   let ask query map =
-    Value.ask (man map) query
+    Value.ask (man map) (NormalQuery query)
 
 
   let refine channel a =

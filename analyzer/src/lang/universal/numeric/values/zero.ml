@@ -45,7 +45,7 @@ struct
 
   let zones = [Zone.Z_u_num]
 
-  let types = [T_int; T_bool]
+  let mem_type = function T_int | T_bool -> true | _ -> false
 
   let bottom = BOT
 
@@ -89,7 +89,7 @@ struct
     | ZERO -> Format.fprintf fmt "0"
     | NON_ZERO -> Format.fprintf fmt "≠ 0"
 
-  let of_constant = function
+  let constant = function
     | C_int i when Z.equal i Z.zero -> ZERO
 
     | C_int i -> NON_ZERO
@@ -164,9 +164,6 @@ struct
 
     | _ -> default_compare op a1 a2 r
 
-  let ask q eval = None
-
-  let refine channel v = Channel.return v
 
 end
 

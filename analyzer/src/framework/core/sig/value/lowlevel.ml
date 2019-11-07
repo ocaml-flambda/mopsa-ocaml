@@ -29,6 +29,30 @@ open Channel
 
 
 
+
+(*==========================================================================*)
+(**                         {2 Value queries}                               *)
+(*==========================================================================*)
+
+type ('a,_) vquery =
+  (* Queries over an abstract value *)
+  | ValueQuery : 'a * 'r query -> ('a, 'r) vquery
+
+  (* Other queries *)
+  | NormalQuery : 'r query -> ('a, 'r) vquery
+
+
+let join_vquery vq r1 r2 =
+  match vq with
+  | ValueQuery(_,q) -> join_query q r1 r2
+  | NormalQuery(q) -> join_query q r1 r2
+
+
+let meet_vquery vq r1 r2 =
+  match vq with
+  | ValueQuery(_,q) -> meet_query q r1 r2
+  | NormalQuery(q) -> meet_query q r1 r2
+
 (*==========================================================================*)
 (**                         {2 Value manager}                              *)
 (*==========================================================================*)
@@ -39,36 +63,10 @@ type ('a, 't) man = {
   get : 'a -> 't;
   set : 't -> 'a -> 'a;
   eval : expr -> 'a;
-  ask : 'r. 'r query -> 'a -> 'r;
+  ask : 'r. ('a,'r) vquery -> 'r;
 }
 
 
-
-(*==========================================================================*)
-(**                      {2 Widening threhsolds}                            *)
-(*==========================================================================*)
-
-(** Widening thresholds for value abstractions.
-    Widening thresholds defined in [Common.Widening_threshold] are
-    general expressions. We refine them to constant thresholds for
-    variables in order to be used by value abstractions.
-*)
-
-let value_widening_threshold_ctx =
-  let module K = Context.GenUnitKey (struct
-      type t = constant list
-      let print fmt l =
-        Format.fprintf fmt "constant thresholds: %a"
-          (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_constant) l
-    end)
-  in
-  K.key
-
-
-(** Get the list of widening thresholds *)
-let get_value_widening_thresholds uctx =
-  try Context.ufind value_widening_threshold_ctx uctx
-  with Not_found -> []
 
 
 (*==========================================================================*)
@@ -135,7 +133,7 @@ sig
   (** ********************* *)
 
   val constant : typ -> constant -> t
-  (** Create a singleton abstract value from a constant. *)
+  (** Create an abstract value from a constant. *)
 
   val unop : ('a,t) man -> typ -> operator -> 'a -> t
   (** Forward evaluation of unary operators. *)
@@ -152,7 +150,7 @@ sig
 
   val bwd_unop : ('a,t) man -> typ -> operator -> 'a -> 'a -> t
   (** Backward evaluation of unary operators.
-      [bwd_unop op x r] returns x':
+      [bwd_unop man t op x r] returns x':
        - x' abstracts the set of v in x such as op v is in r
        i.e., we fiter the abstract values x knowing the result r of applying
        the operation on x
@@ -160,7 +158,7 @@ sig
 
   val bwd_binop : ('a,t) man -> typ -> operator -> 'a -> 'a -> 'a -> (t * t)
   (** Backward evaluation of binary operators.
-      [bwd_binop op x y r] returns (x',y') where
+      [bwd_binop man t op x y r] returns (x',y') where
       - x' abstracts the set of v  in x such that v op v' is in r for some v' in y
       - y' abstracts the set of v' in y such that v op v' is in r for some v  in x
       i.e., we filter the abstract values x and y knowing that, after
@@ -169,7 +167,7 @@ sig
 
 
   val compare : ('a,t) man -> typ -> operator -> 'a -> 'a -> bool -> (t * t)
-  (** Backward evaluation of boolean comparisons. [compare op x y true] returns (x',y') where:
+  (** Backward evaluation of boolean comparisons. [compare man t op x y true] returns (x',y') where:
        - x' abstracts the set of v  in x such that v op v' is true for some v' in y
        - y' abstracts the set of v' in y such that v op v' is true for some v  in x
        i.e., we filter the abstract values x and y knowing that the test is true
@@ -181,13 +179,8 @@ sig
   (** {2 Query handler } *)
   (** ****************** *)
 
-  val ask : ('a,t) man -> 'r query -> 'a -> 'r option
+  val ask : ('a,t) man -> ('a,'r) vquery -> 'r option
 
-
-  (** {2 Reduction refinement} *)
-  (** ************************ *)
-
-  val refine : ('a,t) man -> channel -> 'a -> 'a with_channel
 
 
 end
@@ -205,6 +198,27 @@ let default_bwd_binop man typ op x y r =
 
 let default_compare man typ op x y b =
   (x, y)
+
+
+
+
+(*==========================================================================*)
+(**            {2 Low-level lifters from simplified signatures}             *)
+(*==========================================================================*)
+
+let lift_simplified_unop unop man t op a = unop op (man.get a)
+
+let lift_simplified_binop binop man t op a b = binop op (man.get a) (man.get b)
+
+let lift_simplified_filter filter man v b =  filter (man.get v) b
+
+let lift_simplified_bwd_unop bwd_unop man t op v r = bwd_unop op (man.get v) (man.get r)
+
+let lift_simplified_bwd_binop bwd_binop man t op a b r = bwd_binop op (man.get a) (man.get b) (man.get r)
+
+let lift_simplified_compare compare man t op a b r = compare op (man.get a) (man.get b) r
+
+
 
 
 (*==========================================================================*)

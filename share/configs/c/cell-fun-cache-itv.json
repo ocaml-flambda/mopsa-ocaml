@@ -50,7 +50,7 @@
 		},
 		"on": {
                     "nonrel": {
-			"disjoint": [
+			"union": [
 			    "universal.numeric.values.intervals.float",
                             "universal.numeric.values.intervals.integer"
 			]

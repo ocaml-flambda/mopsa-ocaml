@@ -116,8 +116,8 @@ let insert addr window (t:table) =
       ) minitv
     in
     let itv = List.fold_left (fun acc itv ->
-        Itv.compare O_ne acc itv true |>
-        fst
+        Bot.bot_absorb2 Itv.I.filter_neq acc itv |>
+        Bot.bot_lift1 fst
       ) itv0 sorted
     in
     add addr itv t, itv
