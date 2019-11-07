@@ -186,7 +186,7 @@ struct
           let els_var = var_of_addr addr_tuple in
           let flow = List.fold_left2 (fun flow vari eli ->
               man.exec ~zone:Zone.Z_py
-                (mk_stmt (S_py_annot (mk_var ~mode:STRONG vari range, eli)) range) flow
+                (mk_stmt (S_py_annot (mk_var ~mode:STRONG vari range, mk_expr (E_py_annot eli) range)) range) flow
             ) flow els_var i in
           debug "TUPLE, flow = %a@\n" (Flow.print man.lattice.print) flow;
           Eval.singleton (mk_py_object (addr_tuple, None) range) flow
@@ -209,7 +209,21 @@ struct
     | _ -> None
 
 
-  let ask _ _ _ = None
+  let ask : type r. r query -> ('a, unit) man -> 'a flow -> r option =
+    fun query man flow ->
+    match query with
+    | Q_print_addr_related_info ->
+      Option.return @@
+      fun fmt addr ->
+      begin
+        match akind addr with
+        | A_py_tuple _ ->
+          List.iter (fun var ->Format.fprintf fmt "%a"
+                        (man.ask Framework.Engines.Interactive.Q_print_var flow) var.vname) (var_of_addr addr)
+        | _ -> Format.fprintf fmt ""
+      end
+    | _ -> None
+
 end
 
 let () =

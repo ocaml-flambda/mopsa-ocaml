@@ -140,8 +140,10 @@ struct
       Option.return
 
     | S_add ({ekind = E_addr a}) ->
+      debug "S_add";
       let cur = get_env T_cur man flow in
       let ncur = add a AttrSet.empty cur in
+      debug "S_add ok?";
       set_env T_cur ncur man flow |>
       Post.return |>
       Option.return
@@ -215,6 +217,9 @@ struct
           end
 
         | Objects.Py_list.A_py_list _ ->
+          Eval.singleton (mk_py_false range) flow
+
+        | Objects.Tuple.A_py_tuple _ ->
           Eval.singleton (mk_py_false range) flow
 
         | Objects.Py_set.A_py_set _ ->
