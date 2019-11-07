@@ -303,8 +303,7 @@ struct
     let range = erange exp in
     match ekind exp with
     | E_binop(op, e, e') when op |> is_c_div &&
-                              e  |> etyp |> is_c_int_type &&
-                              e' |> etyp |> is_c_int_type ->
+                              exp  |> etyp |> is_c_int_type ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e flow ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e' flow >>$? fun e' flow ->
       check_division man range
@@ -319,8 +318,7 @@ struct
       Option.return
 
     | E_binop(op, e, e') when op |> is_c_shift &&
-                              e  |> etyp |> is_c_int_type &&
-                              e' |> etyp |> is_c_int_type
+                              exp  |> etyp |> is_c_int_type
       ->
       let t = e.etyp in
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e flow ->
@@ -337,7 +335,7 @@ struct
       Option.return
 
     | E_unop(op, e) when is_c_int_op op &&
-                         e |> etyp |> is_c_int_type ->
+                         exp |> etyp |> is_c_int_type ->
       let typ = etyp exp in
       let rmin, rmax = rangeof typ in
       eval_unop op e exp man flow >>$? fun e flow ->
@@ -350,8 +348,8 @@ struct
       Option.return
 
     | E_binop(op, e, e') when is_c_int_op op &&
-                              e  |> etyp |> is_c_int_type &&
-                              e' |> etyp |> is_c_int_type ->
+                              exp  |> etyp |> is_c_int_type
+      ->
       let typ = etyp exp in
       let rmin, rmax = rangeof typ in
       eval_binop op e e' exp man flow >>$? fun e flow ->

@@ -190,7 +190,7 @@ struct
 
       (* In this case, only offset 0 is OK *)
       assume
-        (mk_binop offset O_eq (mk_zero range) range)
+        (mk_binop offset O_eq (mk_zero range) ~etyp:u8 range)
         ~fthen:(fun flow ->
             Result.singleton ap flow
           )

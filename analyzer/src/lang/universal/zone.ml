@@ -71,7 +71,9 @@ let () =
           Keep
         (* ------------------------------------------- *)
         | E_unop _
-        | E_binop _                          -> Visit
+        | E_binop _
+          when is_numeric_type (etyp exp) ->
+          Visit
         (* ------------------------------------------- *)
         | _                                  -> Process
       );
