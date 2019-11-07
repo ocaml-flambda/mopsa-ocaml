@@ -198,6 +198,17 @@ struct
       Eval.add_cleaners [mk_remove_var counter range; mk_remove_var target range] |>
       Option.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin s)}, _)}, [e1; e2], []) when s = "max" || s = "min" ->
+      (* desugaring max(e1, e2) into e1 if e1 > e2 else e2 *)
+      let comp_op = if s = "max" then O_gt else O_lt in
+      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr
+                                                   (E_py_if
+                                                      (mk_binop e1 comp_op e2 range,
+                                                       e1,
+                                                       e2)
+                                                   ) range) flow |>
+      Option.return
+
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin s)}, _)}, [iterable], []) when s = "max" || s = "min" ->
       (* desugaring max(iterable) into:
        *    iter_var = iter(iterable)
