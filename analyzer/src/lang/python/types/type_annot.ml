@@ -286,10 +286,11 @@ struct
                                            mk_expr (E_py_annot annot_out) range))
                         range), flow_notok, new_typevars, ret_var
           in
+          let msg = Format.fprintf Format.str_formatter "%a(%a) does not match any signature provided in the stubs" pp_var pyannot.py_funca_var (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ") pp_expr) args;
+            Format.flush_str_formatter () in
           Eval.join_list ~empty:(
             fun () ->
-              let () = Format.fprintf Format.str_formatter "%a does not match any signature provided in the stubs" pp_var pyannot.py_funca_var in
-              man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |> Eval.empty_singleton)
+              man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow |> Eval.empty_singleton)
             (let evals, remaining =
                (List.fold_left (fun (acc, remaining_flow) sign ->
                     let nflow, flow_notok, ntypevars, ret_var = apply_sig remaining_flow sign in
@@ -302,8 +303,7 @@ struct
                     else
                       (Eval.singleton (mk_var ret_var range) nflow ~cleaners:([mk_remove_var ret_var range]) |> Eval.bind (man.eval)) :: acc, flow_notok
                   ) ([], flow) sigs) in
-             let () = Format.fprintf Format.str_formatter "%a does not match any signature provided in the stubs" pp_var pyannot.py_funca_var in
-             (man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) remaining |> Eval.empty_singleton) :: evals)
+             (man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) remaining |> Eval.empty_singleton) :: evals)
         )
       |> Option.return
 
