@@ -129,7 +129,8 @@ module Domain =
                *)
                if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom then
                  let oexp = object_of_expr exp in
-                 if is_builtin_name (object_name oexp) && is_builtin_attribute oexp attr then
+                 let oname = oobject_name oexp in
+                 if oname <> None && is_builtin_name (Option.none_to_exn oname) && is_builtin_attribute oexp attr then
                    let rese = mk_py_object (find_builtin_attribute oexp attr) range in
                    Eval.singleton rese flow
                  else

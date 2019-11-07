@@ -114,17 +114,24 @@ let kind_of_object (obj: py_object) : addr_kind =
   addr.addr_kind
 
 (** Name of an object *)
-let object_name obj =
+let oobject_name obj =
+  let some = fun x -> Some x in
   match kind_of_object obj with
   | A_py_class(C_builtin name, _) | A_py_class(C_unsupported name, _)
   | A_py_function(F_builtin name) | A_py_function(F_unsupported name)
   | A_py_module(M_builtin name) | A_py_module(M_user (name, _))
-    -> name
-  | A_py_function(F_user f) -> get_orig_vname f.py_func_var
-  | A_py_function(F_annot f) -> get_orig_vname f.py_funca_var
-  | A_py_class(C_user c, _) -> get_orig_vname c.py_cls_var
-  | A_py_class(C_annot c, _) -> get_orig_vname c.py_cls_a_var
-  | _ -> panic "builtin_name: %a is not a builtin" pp_addr (addr_of_object obj)
+    -> some name
+  | A_py_function(F_user f) -> some @@ get_orig_vname f.py_func_var
+  | A_py_function(F_annot f) -> some @@ get_orig_vname f.py_funca_var
+  | A_py_class(C_user c, _) -> some @@ get_orig_vname c.py_cls_var
+  | A_py_class(C_annot c, _) -> some @@ get_orig_vname c.py_cls_a_var
+  | _ -> None
+
+
+let object_name obj =
+  match oobject_name obj with
+  | Some o -> o
+  | None -> panic "builtin_name: %a is not a builtin" pp_addr (addr_of_object obj)
 
 let add_type_alias (v: var) (e: expr) =
   Hashtbl.replace type_aliases v e
