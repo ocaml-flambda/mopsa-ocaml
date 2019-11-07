@@ -718,16 +718,11 @@ struct
   let ask : type r. r query -> ('a, unit) man -> 'a flow -> r option =
     fun query man flow ->
     match query with
-    | Q_print_addr_related_info ->
+    | Q_print_addr_related_info ({addr_kind = A_py_list _} as addr) ->
       Option.return @@
-      fun fmt addr ->
-      begin
-        match akind addr with
-        | A_py_list _ ->
-            Format.fprintf fmt "%a"
-            (man.ask Framework.Engines.Interactive.Q_print_var flow) (var_of_addr addr).vname
-        | _ -> Format.fprintf fmt ""
-      end
+      fun fmt ->
+      Format.fprintf fmt "%a"
+        (man.ask Framework.Engines.Interactive.Q_print_var flow) (var_of_addr addr).vname
 
     | _ -> None
 

@@ -516,7 +516,7 @@ let () =
           | _ -> default a1 a2);})
 
 
-type _ query += Q_print_addr_related_info : (Format.formatter -> addr -> unit) query
+type _ query += Q_print_addr_related_info : addr -> ((Format.formatter -> unit) query)
 
 let () =
   register_query {
@@ -524,9 +524,8 @@ let () =
       let doit : type r. query_pool -> r query -> r -> r -> r =
         fun next query a b ->
           match query with
-          | Q_print_addr_related_info ->
-            fun fmt var ->
-              Format.fprintf fmt "%a \/ %a" a var b var
+          | Q_print_addr_related_info addr ->
+            fun fmt -> a fmt; b fmt
           | _ -> next.join_query query a b
       in
       doit
@@ -536,9 +535,8 @@ let () =
       let doit : type r. query_pool -> r query -> r -> r -> r =
         fun next query a b ->
           match query with
-          | Q_print_addr_related_info ->
-            fun fmt var ->
-              Format.fprintf fmt "%a /\ %a" a var b var
+          | Q_print_addr_related_info addr ->
+            fun fmt -> a fmt; b fmt
           | _ -> next.meet_query query a b
       in
       doit

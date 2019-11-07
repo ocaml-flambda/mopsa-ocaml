@@ -441,13 +441,12 @@ struct
         fun fmt var_as_string ->
         let cur = get_env T_cur man flow in
         let cur_v = AMap.filter (fun var _ -> get_orig_vname var = var_as_string) cur in
-        Format.fprintf fmt "%a" print cur_v;
+        Format.fprintf fmt "%a@\n" AMap.print cur_v;
         AMap.fold (fun var aset () ->
             ASet.fold (fun addr () ->
                 match addr with
                 | Def a ->
-                  Format.fprintf fmt "%a"
-                    (man.ask Q_print_addr_related_info flow) a
+                  (man.ask (Q_print_addr_related_info a) flow) fmt
                 | _ -> ()
               ) aset ()
           ) cur_v ()

@@ -326,19 +326,20 @@ struct
         let () = debug "answer to query is %s %s@\n" exc message in
         Some (exc, message)
 
-      | Q_print_addr_related_info ->
+      | Q_print_addr_related_info addr ->
         Option.return @@
-        fun fmt addr ->
+        fun fmt ->
         let cur = get_env T_cur man flow in
         let addrs = AMap.filter (fun a _ -> compare_addr a addr = 0) cur in
-        Format.fprintf fmt "%a" print addrs;
-        AMap.iter
-          (fun addr aset ->
-             AttrSet.fold_uo (fun attr () ->
-                 Format.fprintf fmt "%a"
-                   (man.ask Framework.Engines.Interactive.Q_print_var flow) (mk_addr_attr addr attr T_any).vname
-               ) aset ()
-          ) addrs
+        if AMap.cardinal addrs <> 0 then
+             let () = Format.fprintf fmt "%a@\n" AMap.print addrs in
+             AMap.iter
+               (fun addr aset ->
+                  AttrSet.fold_uo (fun attr () ->
+                      Format.fprintf fmt "%a"
+                        (man.ask Framework.Engines.Interactive.Q_print_var flow) (mk_addr_attr addr attr T_any).vname
+                    ) aset ()
+               ) addrs
 
 
 
