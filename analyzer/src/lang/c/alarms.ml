@@ -23,7 +23,7 @@
 
 open Mopsa
 
-type alarm_kind +=
+type alarm_category +=
   | AOutOfBound
   | ANullDeref
   | AInvalidDeref
@@ -31,6 +31,9 @@ type alarm_kind +=
   | AIntegerOverflow
   | AIllegalPointerDiff
   | AIllegalPointerOrder
+  | AInvalidBitShift
+  | AUseAfterFree
+  | ADoubleFree
   | AVaArgNoNext
   | AReadOnlyModification
 
@@ -42,7 +45,7 @@ let raise_c_alarm a range ?(bottom=false) lattice flow =
 
 
 let () =
-  register_alarm_kind {
+  register_alarm_category {
       compare = (fun default a b -> default a b);
       print = (fun default fmt a ->
           match a with
@@ -53,7 +56,10 @@ let () =
           | AIntegerOverflow -> Format.fprintf fmt "Integer overflow"
           | AIllegalPointerDiff -> Format.fprintf fmt "Illegal pointer difference"
           | AIllegalPointerOrder -> Format.fprintf fmt "Illegal pointer comparison"
+          | AUseAfterFree -> Format.fprintf fmt "Use of after free"
+          | ADoubleFree -> Format.fprintf fmt "Double free"
           | AVaArgNoNext -> Format.fprintf fmt "No next argument for va_arg"
+          | AInvalidBitShift -> Format.fprintf fmt "Invald bit-shift"
           | AReadOnlyModification -> Format.fprintf fmt "Modification of a readonly memory"
           | _ -> default fmt a
         );

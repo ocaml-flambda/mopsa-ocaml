@@ -59,7 +59,6 @@ let parse_options f () =
 
 (** Call the appropriate frontend to parse the input sources *)
 let parse_program lang files =
-  Framework.Core.Debug_tree.phase "parsing";
   match lang with
   | "universal" -> Lang.Universal.Frontend.parse_program files
   | "c" -> Lang.C.Frontend.parse_program files
@@ -95,14 +94,11 @@ let () =
           )
         in
 
-        Debug_tree.phase "computing initial environments";
         let flow = Engine.init prog in
-
-        Debug_tree.phase "starting the analysis";
         let stmt = mk_stmt (S_program (prog, args)) prog.prog_range in
         let res = Engine.exec stmt flow in
         let t = Timing.stop t in
-
+        Hook.on_finish Engine.man res;
         Output.Factory.report Engine.man res t files
 
 

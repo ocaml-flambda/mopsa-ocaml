@@ -26,11 +26,11 @@ TARGET_NATIVES = mopsa
 mopsa = framework mopsa lang main
 
 # Framework
-framework = ast core lattices engines transformers output config
+framework = ast core lattices engines common transformers output config hooks
 framework.ast = program typ operator constant var expr stmt visitor all
 framework.core = query context zone callstack alarm token log lattice        \
 		 soundness flow result eval post id interface channel sig    \
-                 debug_tree cache abstraction all
+                 hook cache abstraction all
 framework.core.sig = value domain stacked functor
 framework.core.sig.value = lowlevel simplified reduction
 framework.core.sig.domain = manager lowlevel intermediate simplified         \
@@ -39,9 +39,11 @@ framework.core.sig.stacked = manager lowlevel intermediate stateless reduction
 framework.core.sig.functor = simplified
 framework.lattices = partial_map powerset powersetwithunder
 framework.engines = engine automatic interactive
-framework.transformers = common value domain stacked
+framework.common = widening_threshold var_bounds
+framework.transformers = common_t value domain stacked
 framework.output = text json factory
 framework.config = paths visitor typer parser options
+framework.hooks = logs
 
 # Languages
 lang = universal repl stubs c python
@@ -52,7 +54,7 @@ lang.universal.iterators = unittest program intraproc scalar interproc loops
 lang.universal.iterators.interproc = common inlining sequential_cache join_based_cache
 lang.universal.heap = policies recency
 lang.universal.numeric = rounding common values relational reductions
-lang.universal.numeric.values = intervals congruences
+lang.universal.numeric.values = intervals congruences zero
 lang.universal.numeric.values.intervals = integer float
 lang.universal.numeric.packing = strategy functor
 lang.universal.numeric.relational = apron_manager binding apron_transformer \
@@ -67,7 +69,7 @@ lang.repl = frontend
 lang.stubs = ast zone alarms iterator
 
 # C
-lang.c = ast pp visitor zone frontend alarms common desugar libs iterators memory
+lang.c = ast pp visitor zone frontend alarms common desugar libs iterators memory hooks
 lang.c.common = base points_to quantified_offset
 lang.c.iterators = program switch loops goto interproc
 lang.c.desugar = conditions constants
@@ -76,10 +78,11 @@ lang.c.memory.structured = flat
 lang.c.memory.lowlevel = cells string_literals string_length pointer_smashing pointer_sentinel reductions
 lang.c.memory.lowlevel.reductions = cell_pointer_sentinel cell_pointer_smashing
 lang.c.memory.scalars = pointers machine_numbers
-lang.c.memory.scalars.pointers = value symbolic domain
+lang.c.memory.scalars.pointers = value static_points_to domain
 lang.c.memory.packing = static_scope reductions
 lang.c.libs = builtins clib mopsalib compiler variadic cstubs
 lang.c.libs.clib.file_descriptor = slot table domain
+lang.c.hooks = profiler
 
 
 

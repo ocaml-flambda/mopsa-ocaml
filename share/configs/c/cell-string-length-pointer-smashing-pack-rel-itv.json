@@ -42,7 +42,10 @@
                             "product": [
                                 "c.memory.lowlevel.cells",
                                 "c.memory.lowlevel.string_length",
-                                "c.memory.lowlevel.pointer_sentinel"
+                                "c.memory.lowlevel.pointer_smashing"
+                            ],
+                            "reductions": [
+                                "c.memory.lowlevel.reductions.cell_pointer_smashing"
                             ]
                         },
                         {
@@ -63,10 +66,13 @@
 			        ]
 		            }
                         },
-                        "universal.numeric.relational"
+			{
+                            "apply":"c.memory.packing.static_scope",
+                            "on": "universal.numeric.relational"
+                        }
 		    ],
                     "reductions": [
-                        "universal.numeric.reductions.intervals_rel"
+                        "c.memory.packing.reductions.intervals_static_scope"
                     ]
                 }
             }

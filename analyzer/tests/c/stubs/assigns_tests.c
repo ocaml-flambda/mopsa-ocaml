@@ -51,10 +51,10 @@ void test_assign_int_with_relation() {
 /* ************************************ */
 
 /*$
- * assigns: *p;
- * ensures: (*p)' == *p + s;
+ * assigns: *ptr;
+ * ensures: (*ptr)' == *ptr + s;
  */
-void advance(int**p, int s) {}
+void advance(int**ptr, int s) {}
 
 void test_assign_ptr() {
   int a [5] = {0, 1, 2, 3, 4};

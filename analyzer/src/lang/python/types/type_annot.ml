@@ -525,7 +525,7 @@ struct
             )
           |> Option.return
 
-        | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)} as pattern, i) when get_orig_vname c.py_cls_a_var = "Union" ->
+        | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)}, i) when get_orig_vname c.py_cls_a_var = "Union" ->
           let types = match ekind i with
             | E_py_tuple t -> t
             | _ -> assert false in
@@ -599,7 +599,7 @@ struct
       let ncur =
         let abasedaddr, other = TVMap.fold (fun k v (acc_a, acc_nota) ->
             match k with
-            | Class ({vkind = V_addr_attr (av, s)} as var) when compare_addr av a = 0 ->
+            | Class ({vkind = V_addr_attr (av, s)}) when compare_addr av a = 0 ->
               (TVMap.add (Class (mk_addr_attr a' s T_any)) v acc_a, acc_nota)
             | _ ->
               (acc_a, TVMap.add k v acc_nota)

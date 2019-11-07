@@ -28,7 +28,7 @@
 open Ast.All
 open Core.All
 open Sig.Stacked.Lowlevel
-open Common.Stack_list
+open Common_t.Stack_list
 open Sig.Stacked.Reduction
 open Log
 
@@ -200,7 +200,7 @@ struct
               let a = man.lattice.meet ctx a1 a2 in
               if man.lattice.is_bottom a then None else Some a
             ) oa1 oa2
-      ) AlarmSet.meet man.lattice flow1 flow2
+      ) AlarmSet.inter man.lattice flow1 flow2
 
 
 

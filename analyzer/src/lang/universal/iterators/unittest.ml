@@ -91,12 +91,12 @@ let () =
 
 
 (* Analysis alarms *)
-type alarm_kind += A_assert_fail
-type alarm_extra += A_assert_fail_condition of expr (** condition *)
+type alarm_category += A_assert_fail
+type alarm_detail += A_assert_fail_condition of expr (** condition *)
 
 
 let () =
-  register_alarm_kind {
+  register_alarm_category {
     compare = (fun next a1 a2 ->
         match a1, a2 with
         | A_assert_fail, A_assert_fail -> 0
@@ -108,7 +108,7 @@ let () =
         | _ -> next fmt a
       );
   };
-  register_alarm_extra {
+  register_alarm_detail {
     compare = (fun next a1 a2 ->
         match a1, a2 with
         | A_assert_fail_condition(c1), A_assert_fail_condition(c2) -> compare_expr c1 c2
@@ -123,14 +123,14 @@ let () =
   ()
 
 
-let raise_assert_fail cond range man flow =
+let raise_assert_fail ?(force=false) cond range man flow =
   let cs = Flow.get_callstack flow in
   let alarm = mk_alarm
       A_assert_fail
-      ~extra:(A_assert_fail_condition cond)
+      ~detail:(A_assert_fail_condition cond)
       range ~cs
   in
-  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+  Flow.raise_alarm alarm ~bottom:true ~force man.lattice flow
 
 
 

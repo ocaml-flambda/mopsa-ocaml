@@ -52,31 +52,26 @@ let report ?(flow=None) man alarms time files out =
         (* (Core.Context.print man.lattice.print) (Flow.get_ctx f) *)
 
   in
-  print out "Time: %.3fs@." time;
   let () =
-    match alarms with
-    | [] -> print out "%a No alarm@." ((Debug.color "green") pp_print_string) "✔"
-    | _ ->
-      print out "%d alarm%a detected:@." (List.length alarms) Debug.plurial_list alarms;
-      print out "@[%a@]@."
-        (pp_print_list
-           ~pp_sep:(fun fmt () -> fprintf fmt "@\n@\n")
-           Core.Alarm.pp_alarm
-        ) alarms
+    if AlarmSet.is_empty alarms
+    then print out "%a No alarm@." ((Debug.color "green") pp_print_string) "✔"
+    else
+      let map = AlarmMap.of_set alarms in
+      let nb_alarms = AlarmMap.cardinal map in
+      print out "%d alarm%a detected:@,  %a@." nb_alarms Debug.plurial_int nb_alarms AlarmMap.print map
   in
   let () =
     match Soundness.get_warnings () with
     | [] -> ()
     | warnings ->
-      print out "%d warning%a detected:@." (List.length warnings) Debug.plurial_list warnings;
-      print out "@[%a@]@."
+      print out "%d warning%a detected:@,  @[<v>%a@]@." (List.length warnings) Debug.plurial_list warnings
         (pp_print_list
-           ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
+           ~pp_sep:(fun fmt () -> fprintf fmt "@,")
            Core.Soundness.pp_warning
         ) warnings
   in
+  print out "Time: %.3fs@." time;
   ()
-
 
 let panic ?btrace exn files time out =
   print out "%a@." (Debug.color_str "red") "Analysis aborted";
@@ -156,3 +151,11 @@ let help (args:ArgExt.arg list) out =
 let list_domains (domains:string list) out =
   print out "Domains:@.";
   List.iter (fun d -> print out "  %s@." d) domains
+
+let print range printer flow out =
+  if Debug.can_print "print" then
+    print out "%a@\n  @[%a@]@."
+      Location.pp_range range
+      printer flow
+  else
+    ()

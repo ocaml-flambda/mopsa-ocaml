@@ -192,22 +192,6 @@ struct
         print_usage ();
         read_command range ()
 
-      | "log on" | "l on" ->
-        Core.Debug_tree.opt_short_log := true;
-        read_command range ()
-
-      | "log off" | "l off" ->
-        Core.Debug_tree.opt_short_log := false;
-        read_command range ()
-
-      | "llog on" ->
-        Core.Debug_tree.opt_log := true;
-        read_command range ()
-
-      | "llog off" ->
-        Core.Debug_tree.opt_log := false;
-        read_command range ()
-
 
       | "" -> (
         match !last_command with

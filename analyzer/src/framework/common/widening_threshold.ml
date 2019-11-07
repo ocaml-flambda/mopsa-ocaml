@@ -20,66 +20,53 @@
 (****************************************************************************)
 
 
-(** List of builtin functions *)
-let builtin_functions = Hashtbl.create 16
+(** Context for stocking widening thresholds *)
 
-let _ =
-  List.iter (fun a -> Hashtbl.add builtin_functions a ()) [
-      "__builtin_constant_p";
-      "__builtin_expect";
+open Ast.All
+open Core
 
-      "__builtin_va_start";
-      "__builtin_va_end";
-      "__builtin_va_copy";
 
-      "printf";
-      "fprintf";
-      "__printf_chk";
-      "__fprintf_chk";
-      "__builtin___sprintf_chk";
-      "fscanf";
-      "scanf";
-      "sscanf";
+(** Widening thresholds are represented as a set of expressions *)
+module Thresholds = SetExt.Make(struct type t = expr let compare = compare_expr end)
 
-      "_mopsa_rand_s8";
-      "_mopsa_rand_u8";
-      "_mopsa_rand_s16";
-      "_mopsa_rand_u16";
-      "_mopsa_rand_s32";
-      "_mopsa_rand_u32";
-      "_mopsa_rand_s64";
-      "_mopsa_rand_u64";
-      "_mopsa_rand_float";
-      "_mopsa_rand_double";
-      "_mopsa_rand_void_pointer";
 
-      "_mopsa_range_s8";
-      "_mopsa_range_u8";
-      "_mopsa_range_s16";
-      "_mopsa_range_u16";
-      "_mopsa_range_s32";
-      "_mopsa_range_u32";
-      "_mopsa_range_s64";
-      "_mopsa_range_u64";
-      "_mopsa_range_int";
-      "_mopsa_range_float";
-      "_mopsa_range_double";
+(** Context key for indexing widening thresholds within the context table *)
+let widening_thresholds_ctx_key =
+  let module K = Context.GenUnitKey(
+    struct
+      type t = Thresholds.t
+      let print fmt t =
+        Format.fprintf fmt "widening thresholds: %a"
+          (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_expr)
+          (Thresholds.elements t)
+    end
+  )
+  in
+  K.key
 
-      "_mopsa_invalid_pointer";
 
-      "_mopsa_panic";
-      "_mopsa_print";
+(** Add a condition expression to widening thresholds *)
+let add_widening_threshold cond flow =
+  let ctx = Flow.get_ctx flow in
+  let thresholds = try Context.find_unit widening_thresholds_ctx_key ctx with Not_found -> Thresholds.empty in
+  let thresholds' = Thresholds.add cond thresholds in
+  let ctx' = Context.add_unit widening_thresholds_ctx_key thresholds' ctx in
+  Flow.set_ctx ctx' flow
 
-      "_mopsa_assume";
 
-      "_mopsa_assert_exists";
-      "_mopsa_assert";
-      "_mopsa_assert_safe";
-      "_mopsa_assert_unsafe";
+(** Return the list of widening thresholds *)
+let get_widening_thresholds flow =
+  let ctx = Flow.get_ctx flow in
+  try Context.find_unit widening_thresholds_ctx_key ctx |>
+      Thresholds.elements
+  with Not_found -> []
 
-      "_mopsa_register_file_resource";
-      "_mopsa_register_file_resource_at";
-      "_mopsa_find_file_resource"
-    ]
 
-let is_builtin_function = Hashtbl.mem builtin_functions
+(** Fold over widening thresholds *)
+let fold_widening_thresholds f x0 flow =
+  let ctx = Flow.get_ctx flow in
+  try
+    let thresholds = Context.find_unit widening_thresholds_ctx_key ctx in
+    Thresholds.fold f thresholds x0
+  with Not_found ->
+    x0

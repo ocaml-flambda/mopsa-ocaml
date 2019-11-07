@@ -633,9 +633,9 @@ void *calloc (size_t __nmemb, size_t __size);
  *   local:    void* r = new Memory;
  *   ensures:  size(r) == __size;
  *   ensures:  size(__ptr) >= __size implies 
- *             forall int i in [0, __size - 1]: (char*)r[i] == (char*)__ptr[i];
+ *             forall int i in [0, __size - 1]: ((char*)r)[i] == ((char*)__ptr)[i];
  *   ensures:  size(__ptr) <= __size implies 
- *             forall int i in [0, size(__ptr) - 1]: (char*)r[i] == (char*)__ptr[i];
+ *             forall int i in [0, size(__ptr) - 1]: ((char*)r)[i] == ((char*)__ptr)[i];
  *   free:     __ptr;
  *   ensures:  return == r;
  * }
@@ -657,6 +657,7 @@ void *realloc (void *__ptr, size_t __size);
  * case "free" {
  *   assumes:  __ptr != NULL;
  *   requires: __ptr in Memory;
+ *   requires: offset(__ptr) == 0;
  *   free:     __ptr;
  * }
  */

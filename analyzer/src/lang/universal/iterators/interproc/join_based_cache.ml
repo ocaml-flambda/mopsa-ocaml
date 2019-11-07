@@ -90,7 +90,7 @@ struct
   let eval zs exp man flow =
     let range = erange exp in
     match ekind exp with
-    | E_call({ekind = E_function (User_defined func)}, args) ->
+    | E_call({ekind = E_function (User_defined func)} as f, args) ->
       let in_flow = flow in
       let in_flow_cur = Flow.bottom (Flow.get_ctx in_flow) (Flow.get_alarms in_flow) |>
                         Flow.set T_cur (Flow.get T_cur man.lattice in_flow) man.lattice
@@ -98,17 +98,41 @@ struct
       let params, locals, body, in_flow_cur = init_fun_params func args range man in_flow_cur in
       let in_flow_other = Flow.remove T_cur in_flow in
       (* FIXME: join in_flow_other even if inline returns empty singleton. This means is done in sequential cache with a full Result.bind doing the join *)
+      let ret = match func.fun_return_type with
+        | None -> None
+        | Some _ ->
+          let generic_call = { exp with ekind = E_call(f,[]); erange = func.fun_range } in
+          Some (mk_return_var generic_call)
+      in
       begin match find_signature man func.fun_name in_flow_cur with
         | None ->
-          inline func params locals body (Some func.fun_return_var) range man in_flow_cur |>
-          bind_some (fun var_res out_flow  ->
-              let flow = store_signature man.lattice func.fun_name in_flow_cur out_flow in
-              man.eval var_res (Flow.join man.lattice in_flow_other flow)
-            )
+          Debug.debug ~channel:"profiling" "inlining %s at range %a" func.fun_name pp_range range;
+          inline func params locals body ret range man in_flow_cur >>= fun ret out_flow ->
+          debug "%s: out_flow = %a" func.fun_name man.lattice.print (Flow.get T_cur man.lattice out_flow);
+          let flow = store_signature man.lattice func.fun_name in_flow_cur out_flow in
+          debug "%s: flow = %a" func.fun_name man.lattice.print (Flow.get T_cur man.lattice flow);
+          let flow' = Flow.join man.lattice in_flow_other flow in
+          debug "%s: flow' = %a" func.fun_name man.lattice.print (Flow.get T_cur man.lattice flow');
+          Eval.return ret flow'
 
         | Some (_,  out_flow) ->
-          Debug.debug ~channel:"profiling" "reusing %s at range %a" func.fun_name pp_range func.fun_range;
-          man.eval (mk_var func.fun_return_var range) (Flow.join man.lattice in_flow_other out_flow)
+          Debug.debug ~channel:"profiling" "reusing %s at range %a" func.fun_name pp_range range;
+          let flow = Flow.join man.lattice in_flow_other out_flow |>
+                     man.exec (mk_block (List.map (fun v ->
+                         mk_remove_var v range
+                       ) locals) range)
+          in
+          match ret with
+          | None ->
+            Eval.empty_singleton flow
+
+          | Some v ->
+            Eval.singleton (mk_var v range) flow ~cleaners:(
+              mk_remove_var v range ::
+              List.map (fun v ->
+                  mk_remove_var v range
+                ) params
+            )
       end
       |> Option.return
 

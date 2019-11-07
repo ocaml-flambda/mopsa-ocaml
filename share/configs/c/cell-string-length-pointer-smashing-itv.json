@@ -1,0 +1,70 @@
+{
+    "language": "c",
+    "domain": {
+	"seq": [
+            // Universal iterators
+            "universal.iterators.intraproc",
+            "universal.iterators.loops",
+            "universal.iterators.interproc.inlining",
+            "universal.iterators.unittest",
+
+
+	    // C iterators
+            "c.iterators.program",
+            "c.iterators.interproc",
+            "c.iterators.goto",
+            "c.iterators.switch",
+            "c.iterators.loops",
+
+            // Stubs
+	    "stubs.iterator",
+
+            // C desugar
+            "c.desugar.constants",
+            "c.desugar.conditions",
+
+	    // Libraries
+            "c.libs.compiler",
+            "c.libs.mopsalib",
+            "c.libs.clib.file_descriptor",
+            "c.libs.clib.print",
+            "c.libs.clib.scanf",
+            "c.libs.variadic",
+	    "c.libs.cstubs",
+
+            // Memory model
+	    {
+                "apply": {
+                    "compose": [
+                        "universal.heap.recency.callstack_range",
+                        "c.memory.structured.flat",
+                        {
+			    "product": [
+				"c.memory.lowlevel.cells",
+				"c.memory.lowlevel.string_length",
+				"c.memory.lowlevel.pointer_smashing"
+			    ],
+			    "reductions": [
+				"c.memory.lowlevel.reductions.cell_pointer_smashing"
+			    ]
+			},
+			{
+                            "seq": [
+				"c.memory.scalars.pointer",
+				"c.memory.scalars.machine_numbers"
+                            ]
+			}
+                    ]
+		},
+		"on": {
+                    "nonrel": {
+			"disjoint": [
+			    "universal.numeric.values.intervals.float",
+                            "universal.numeric.values.intervals.integer"
+			]
+		    }
+		}
+	    }
+	]
+    }
+}

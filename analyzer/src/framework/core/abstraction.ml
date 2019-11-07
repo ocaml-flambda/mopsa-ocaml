@@ -180,6 +180,9 @@ struct
               Context.add_unit Callstack.ctx_key Callstack.empty
     in
 
+    (* Initialize hooks *)
+    let ctx = Hook.init_hooks Domain.interface ctx in
+
     (* The initial flow is a singleton ⊤ environment *)
     let flow0 = Flow.singleton ctx T_cur man.lattice.top in
     debug "flow0 = %a" (Flow.print man.lattice.print) flow0;
@@ -211,18 +214,17 @@ struct
       ) map
 
   let post ?(zone = any_zone) (stmt: stmt) man (flow: Domain.t flow) : Domain.t post =
-    Debug_tree.reach stmt.srange;
-    Debug_tree.exec stmt zone man.lattice.print flow;
+    let ctx = Hook.on_before_exec zone stmt man flow in
+    let flow = Flow.set_ctx ctx flow in
 
-    let timer = Timing.start () in
     let fexec =
       try ExecMap.find zone exec_map
       with Not_found -> Exceptions.panic_at stmt.srange "exec for %a not found" pp_zone zone
     in
     try
       let post = Cache.exec fexec zone stmt man flow in
-      Debug_tree.exec_done stmt zone (Timing.stop timer) man.lattice.print post;
-      post
+      let ctx = Hook.on_after_exec zone stmt man post in
+      Post.set_ctx ctx post
     with Exceptions.Panic(msg, line) -> raise (Exceptions.PanicAt(stmt.srange, msg, line))
 
 
@@ -278,8 +280,8 @@ struct
 
   (** Evaluation of expressions. *)
   let rec eval ?(zone = (any_zone, any_zone)) ?(via=any_zone) exp man flow =
-    Debug_tree.eval exp zone man.lattice.print flow;
-    let timer = Timing.start () in
+    let ctx = Hook.on_before_eval zone exp man flow in
+    let flow = Flow.set_ctx ctx flow in
 
     let ret =
       (* Check whether exp is already in the desired zone *)
@@ -343,9 +345,9 @@ struct
        previous form of the result *)
     let ret' = Eval.map (fun e -> { e with eprev = Some exp }) ret in
 
-    (* Notify the debug tree about the result *)
-    Debug_tree.eval_done exp zone (Timing.stop timer) ret';
-    ret'
+    let ctx = Hook.on_after_eval zone exp man ret' in
+    Eval.set_ctx ctx ret'
+
 
   and eval_over_paths paths exp man flow =
     match paths with

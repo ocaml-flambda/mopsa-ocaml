@@ -31,7 +31,8 @@ let print out json =
   let channel =
     match out with
     | None -> stdout
-    | Some file -> open_out file
+    | Some file ->
+       open_out_gen [Open_append; Open_wronly; Open_creat] 0o644 file
   in
   Yojson.Basic.pretty_to_channel channel json
 
@@ -63,7 +64,7 @@ let render_callstack cs  =
 
 let render_alarm alarm  =
   let title =
-    let () = pp_alarm_kind Format.str_formatter (Core.Alarm.get_alarm_kind alarm) in
+    let () = pp_alarm_category Format.str_formatter (Core.Alarm.get_alarm_category alarm) in
     Format.flush_str_formatter ()
   in
   let range, cs = Core.Alarm.get_alarm_trace alarm in
@@ -105,7 +106,7 @@ let report ?(flow=None) man alarms time files out : unit =
       "success", `Bool true;
       "time", `Float time;
       "files", `List (List.map (fun f -> `String f) files);
-      "alarms", `List (List.map render_alarm alarms);
+      "alarms", `List (AlarmSet.elements alarms |> List.map render_alarm);
       "warnings", `List (List.map render_warning (get_warnings ()));
     ]
   in
@@ -166,5 +167,17 @@ let list_domains (domains:string list) out =
       domains |>
       List.map (fun d -> `String d)
     )
+  in
+  print out json
+
+let print range printer flow out =
+  printer Format.str_formatter flow;
+  let str = Format.flush_str_formatter () in
+  let json =
+    `Assoc [
+       "channel", `String "print";
+       "range", render_range range;
+       "msg", `String str;
+     ]
   in
   print out json

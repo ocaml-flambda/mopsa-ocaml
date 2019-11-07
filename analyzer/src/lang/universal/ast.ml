@@ -650,7 +650,6 @@ let rec is_universal_type t =
 
   | _ -> false
 
-let mk_not e = mk_unop O_log_not e
 
 let mk_int i ?(typ=T_int) erange =
   mk_constant ~etyp:typ (C_int (Z.of_int i)) erange

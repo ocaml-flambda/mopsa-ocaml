@@ -25,7 +25,11 @@ open Mopsa
 open Framework.Core.Sig.Domain.Stateless
 open Universal.Ast
 open Ast
-
+open Zone
+open Universal.Zone
+open Common.Points_to
+open Common.Base
+open Universal.Numeric.Common
 
 
 module Domain =
@@ -48,8 +52,11 @@ struct
     };
 
     ieval = {
-      provides = [Zone.Z_c, Zone.Z_c_low_level];
-      uses = []
+      provides = [Z_c, Z_c_low_level];
+      uses = [
+        Z_c, Z_u_num;
+        Z_c, Z_c_points_to
+      ]
     }
   }
 
@@ -131,6 +138,111 @@ struct
 
 
 
+  (** {2 Printing of abstract values} *)
+  (** ******************************* *)
+
+  let exp_to_str exp =
+    let () = pp_expr Format.str_formatter exp in
+    Format.flush_str_formatter ()
+
+
+  (** Print the value of an integer expression *)
+  let print_int_value exp ?(display=exp_to_str exp) man fmt flow =
+    let evl = man.eval ~zone:(Z_c,Z_u_num) exp flow in
+    Format.fprintf fmt "%s = %a"
+      display
+      (Result.print (fun fmt e flow ->
+           let itv = man.ask (mk_int_interval_query e) flow in
+           pp_int_interval fmt itv
+         )
+      ) evl
+
+  (** Print the value of a float expression *)
+  let print_float_value exp ?(display=exp_to_str exp) man fmt flow =
+    let evl = man.eval ~zone:(Z_c,Z_u_num) exp flow in
+    Format.fprintf fmt "%s = %a"
+      display
+      (Result.print (fun fmt e flow ->
+           let itv = man.ask (mk_float_interval_query e) flow in
+           pp_float_interval fmt itv
+         )
+      ) evl
+
+
+  (** Print the value of a pointer expression *)
+  let print_pointer_value exp ?(display=exp_to_str exp) man fmt flow =
+    let evl = man.eval ~zone:(Z_c,Z_c_points_to) exp flow in
+    Format.fprintf fmt "%s ⇝ %a"
+      display
+      (Result.print (fun fmt e flow ->
+           match ekind e with
+           | E_c_points_to (P_block(base,offset)) ->
+             let evl = man.eval ~zone:(Z_c_scalar,Z_u_num) offset flow in
+             Format.fprintf fmt "&(%a%a)"
+               pp_base base
+               (Result.print (fun fmt e flow ->
+                    let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query e) flow in
+                    Universal.Numeric.Values.Intervals.Integer.Value.print fmt itv
+                  )
+               ) evl
+
+           | E_c_points_to p -> pp_points_to fmt p
+           | _ -> assert false
+         )
+      ) evl
+
+
+  (** Print the values of an array *)
+  let rec print_array_values exp ?(display=exp_to_str exp) man fmt flow =
+    match remove_casts exp |> etyp |> remove_typedef_qual with
+    | T_c_array(_, C_array_length_cst len) ->
+      (* Create an interval expression [0, len - 1] to use as an index *)
+      let itv = mk_z_interval Z.zero (Z.pred len) exp.erange in
+      let exp' = mk_c_subscript_access exp itv exp.erange in
+      let display =
+        let () = Format.fprintf Format.str_formatter "%s%a" display pp_expr itv in
+        Format.flush_str_formatter ()
+      in
+      print_value exp' ~display man fmt flow
+    | _ ->
+      warn_at exp.erange "_mopsa_print: unsupported array type %a" pp_typ exp.etyp
+
+
+  (** Print fields values of a record *)
+  and print_record_values exp ?(display=exp_to_str exp) man fmt flow =
+    let fields = match remove_typedef_qual exp.etyp with
+      | T_c_record {c_record_fields} -> c_record_fields
+      | _ -> assert false
+    in
+    Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,")
+      (fun fmt field ->
+         let exp' = mk_c_member_access exp field exp.erange in
+         let display =
+           let () = Format.fprintf Format.str_formatter "%s.%s" display field.c_field_org_name in
+           Format.flush_str_formatter ()
+         in
+         print_value exp' ~display man fmt flow
+      ) fmt fields
+
+
+  (** Print the value of an expression *)
+  and print_value exp ?(display=exp_to_str exp) man fmt flow =
+    if is_c_int_type exp.etyp then print_int_value exp ~display man fmt flow
+    else if is_c_float_type exp.etyp then print_float_value exp ~display man fmt flow
+    else if is_c_record_type exp.etyp then print_record_values exp ~display man fmt flow
+    else if is_c_array_type @@ etyp @@ remove_casts exp then print_array_values exp ~display man fmt flow
+    else if is_c_pointer_type exp.etyp then print_pointer_value exp ~display man fmt flow
+    else warn_at exp.erange "_mopsa_print: unsupported type %a" pp_typ exp.etyp
+
+
+  (** Print the values of a list of expressions *)
+  let print_values args man fmt flow =
+    Format.fprintf fmt "@[<v>%a@]"
+      (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,")
+         (fun fmt e -> print_value e man fmt flow)
+      ) args
+
+
   (*==========================================================================*)
   (** {2 Transfer functions} *)
   (*==========================================================================*)
@@ -166,10 +278,12 @@ struct
       Exceptions.panic "%s" s
 
     | E_c_builtin_call("_mopsa_print", []) ->
-        Debug.debug ~channel:"print" "%a@\n  @[%a@]"
-        pp_position (erange exp |> get_range_start)
-        (Flow.print man.lattice.print) flow
-      ;
+       Framework.Output.Factory.print (erange exp) (Flow.print man.lattice.print) flow;
+       Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
+       Option.return
+
+    | E_c_builtin_call("_mopsa_print", args) ->
+      Framework.Output.Factory.print (erange exp) (print_values args man) flow;
       Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
       Option.return
 
@@ -199,7 +313,7 @@ struct
       let flow =
         if is_safe
         then flow
-        else Universal.Iterators.Unittest.raise_assert_fail exp exp.erange man flow
+        else Universal.Iterators.Unittest.raise_assert_fail exp exp.erange man ~force:true flow
       in
       Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
       Option.return
@@ -209,7 +323,7 @@ struct
       let flow =
         if not is_safe
         then Flow.remove_alarms flow
-        else Universal.Iterators.Unittest.raise_assert_fail exp exp.erange man flow
+        else Universal.Iterators.Unittest.raise_assert_fail exp exp.erange ~force:true man flow
       in
       Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
       Option.return

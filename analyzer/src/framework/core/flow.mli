@@ -128,7 +128,7 @@ val get_token_map : 'a flow -> 'a TokenMap.t
 
 val add_alarm : ?force:bool -> alarm -> 'a lattice -> 'a flow -> 'a flow
 
-val raise_alarm : alarm -> ?bottom:bool -> 'a lattice -> 'a flow -> 'a flow
+val raise_alarm : ?force:bool -> ?bottom:bool -> alarm -> 'a lattice -> 'a flow -> 'a flow
 
 val get_alarms : 'a flow -> AlarmSet.t
 
