@@ -100,7 +100,7 @@
       let result = ref 0 in
       let pos = ref 0 in
       while !pos < String.length s - 1 do
-        if s.[!pos] = '\r' && s.[!pos+1] = '\n' then
+        if !pos < String.length s - 2 && s.[!pos] = '\r' && s.[!pos+1] = '\n' then
           begin
             incr result;
             incr pos;
@@ -109,7 +109,7 @@
           incr result;
         incr pos;
       done;
-      if s.[!pos] = '\n' || s.[!pos] = '\r' then
+      if !pos < String.length s && (s.[!pos] = '\n' || s.[!pos] = '\r') then
         incr result;
       !result
 }

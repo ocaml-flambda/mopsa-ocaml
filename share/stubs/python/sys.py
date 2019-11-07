@@ -24,3 +24,4 @@ from typing import List
 
 # maxsize = mopsa.random_int()
 path: List[str]
+version_info = (3, 7)

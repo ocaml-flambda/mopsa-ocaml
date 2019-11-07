@@ -33,6 +33,7 @@ let debug fmt = Debug.debug ~channel:"python.frontend" fmt
 let rec parse_program (files: string list) : program =
   match files with
   | [filename] ->
+    debug "parsing %s" filename;
     let ast, counter = Py_parser.Main.parse_file ~counter:(Framework.Ast.Var.get_vcounter_val ()) filename in
     Framework.Ast.Var.start_vcounter_at counter;
     {
