@@ -101,15 +101,6 @@ struct
     }
 
 
-  (** Constrain the value of a variable with its bounds *)
-  let constrain_var_with_bounds uctx v a =
-    match find_var_bounds_ctx_opt v uctx with
-    | None -> a
-    | Some bounds ->
-      let aa = Value.constant v.vtyp bounds in
-      Value.meet a aa
-
-
   let widen uctx a1 a2 =
     let open Bot_top in
     if a1 == a2 then a1 else
@@ -121,8 +112,21 @@ struct
           MapExtPoly.map2zo
             (fun _ v1 -> v1)
             (fun _ v2 -> v2)
-            (fun v v1 v2 -> Value.widen uctx v1 v2 |>
-                            constrain_var_with_bounds uctx v
+            (fun var v1 v2 ->
+               let w = Value.widen uctx v1 v2 in
+               (* In order to apply the bounds constraints of variable [var] on
+                  result [w], we need to ensure that both [v1] and [v2] are
+                  within these bounds. Otherwise, applying directly the
+                  constraints makes the widening unsound (the operands are
+                  not included in the result).
+               *)
+               match find_var_bounds_ctx_opt var uctx with
+               | None -> w
+               | Some bounds ->
+                 let vv = Value.constant var.vtyp bounds in
+                 if Value.subset v1 vv && Value.subset v2 vv
+                 then Value.meet w vv
+                 else w
             )
             m1 m2
         )
@@ -137,10 +141,23 @@ struct
     try find v a
     with Not_found -> Exceptions.warn "variable %a not found" pp_var v; raise Not_found
 
+
   let merge pre (a1, log1) (a2, log2) = generic_nonrel_merge ~top:Value.top ~add ~remove ~find ~meet pre (a1, log1) (a2, log2)
 
+
+  (* Constrain the value of a variable with its bounds *)
+  let add_bound_constraints ctx var v =
+    match find_var_bounds_ctx_opt var ctx with
+    | None -> v
+    | Some bounds ->
+      let vv = Value.constant var.vtyp bounds in
+      Value.meet v vv
+
+
   let add ctx var v a =
-    VarMap.add var (constrain_var_with_bounds ctx var v) a
+    let vv = add_bound_constraints ctx var v in
+    VarMap.add var vv a
+
 
   let print fmt a =
     Format.fprintf fmt "%s:@,@[   %a@]@\n" Value.display VarMap.print a
@@ -353,8 +370,7 @@ struct
 
     | S_assign ({ ekind= E_var (var, mode) }, e)  ->
       eval e map |> Option.lift @@ fun (_, v) ->
-      let vv = constrain_var_with_bounds ctx var v in
-      let map' = VarMap.add var vv map in
+      let map' = add ctx var v map in
       begin
         match mode with
         | STRONG -> map'
