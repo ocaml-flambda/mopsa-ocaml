@@ -29,6 +29,7 @@
             "python.libs.typing",
 
             "python.objects.class",
+            "python.objects.lambda",
             "python.objects.function",
             "python.objects.range",
             "python.objects.object",
