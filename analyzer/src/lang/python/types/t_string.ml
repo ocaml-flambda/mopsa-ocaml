@@ -112,7 +112,7 @@ module Domain =
             -> true
       | _ -> false
 
-    let eval zs exp (man: ('a, unit) man) (flow:'a flow) =
+    let rec eval zs exp (man: ('a, unit) man) (flow:'a flow) =
       let range = erange exp in
       match ekind exp with
       | E_constant (C_top T_string) ->
@@ -127,7 +127,7 @@ module Domain =
         Addr_env.Domain.allocate_builtin man range flow "bytes" (Some exp) |> Option.return
 
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, args, []) when StringMap.mem f stub_base ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, args, []) when StringMap.mem f stub_base ->
         debug "function %s in stub_base, processing@\n" f;
         let {in_args; out_type} = StringMap.find f stub_base in
         process_simple f man flow range args in_args out_type
@@ -241,6 +241,41 @@ module Domain =
              let els = man.eval (mk_py_top T_string range) flow in
              let stopiteration = stopiteration_f |> Eval.empty_singleton in
              Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Eval.copy_ctx els stopiteration :: els :: [])
+          )
+        |> Option.return
+
+      | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.encode")}, _)}) as caller, [arg], [])
+      | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "bytes.decode")}, _)}) as caller, [arg], []) ->
+        let encoding = mk_expr (E_constant (C_string "utf-8")) range in
+        eval zs {exp with ekind = E_py_call(caller, [arg; encoding], [])} man flow
+
+      | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.encode" as f))}, _)}), [arg; encoding], []) ->
+        (* FIXME: check encoding? *)
+        Utils.check_instances f man flow range [arg; encoding]
+          ["str"; "str"]
+          (fun eargs flow ->
+             let earg, eencoding = match eargs with [e1;e2] -> e1, e2 | _ -> assert false in
+             let msg = Format.fprintf Format.str_formatter "unknown encoding: %a" pp_expr eencoding; Format.flush_str_formatter () in
+             let lookuperr_f = man.exec (Utils.mk_builtin_raise_msg "LookupError" msg range) flow in
+             Eval.join_list
+               ~empty:(fun () -> assert false)
+               [ Eval.empty_singleton lookuperr_f;
+                 man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_constant (C_top T_py_bytes)) range) (Flow.copy_ctx lookuperr_f flow)]
+          )
+        |> Option.return
+
+      | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bytes.decode" as f))}, _)}), [arg; encoding], []) ->
+        (* FIXME: check encoding? *)
+        Utils.check_instances f man flow range [arg; encoding]
+          ["bytes"; "str"]
+          (fun eargs flow ->
+             let earg, eencoding = match eargs with [e1;e2] -> e1, e2 | _ -> assert false in
+             let msg = Format.fprintf Format.str_formatter "unknown encoding: %a" pp_expr eencoding; Format.flush_str_formatter () in
+             let lookuperr_f = man.exec (Utils.mk_builtin_raise_msg "LookupError" msg range) flow in
+             Eval.join_list
+               ~empty:(fun () -> assert false)
+               [ Eval.empty_singleton lookuperr_f;
+                 man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_constant (C_top T_string)) range) (Flow.copy_ctx lookuperr_f flow)]
           )
         |> Option.return
 
