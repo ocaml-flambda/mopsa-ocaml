@@ -83,21 +83,18 @@ struct
   let of_z z1 z2 : t = Nb (I.of_z z1 z2)
   let of_int n1 n2 : t = Nb (I.of_int n1 n2)
 
-  let unop man = lift_simplified_unop (fun op a ->
+  let unop man t op v = lift_simplified_unop (fun op a ->
       match op with
       | O_log_not -> bot_lift1 I.log_not a
       | O_minus  -> bot_lift1 I.neg a
       | O_plus  -> a
-      | O_wrap(l, u) ->
-        let rep =  bot_lift1 (fun itv -> I.wrap itv l u) a in
-        let () = debug "O_wrap done : %a [%a-%a] : %a" print a Z.pp_print l Z.pp_print u print rep in
-        rep
+      | O_wrap(l, u) -> bot_lift1 (fun itv -> I.wrap itv l u) a
       | O_bit_invert -> bot_lift1 I.bit_not a
       | O_cast (T_float _, T_int) ->
-        warn "float->int cast not implemented";
-        top
+        let float_itv = man.ask (ValueQuery (v,Common.VQ_to_float_interval)) in
+        ItvUtils.FloatItvNan.to_int_itv float_itv
       | _ -> top
-    ) man
+    ) man t op v
 
   let binop man = lift_simplified_binop (fun op a1 a2 ->
       match op with
