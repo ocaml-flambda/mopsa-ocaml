@@ -67,13 +67,10 @@ let () =
         (* ------------------------------------------- *)
         | E_constant _
         | E_var _
-          when is_numeric_type (etyp exp) ->
-          Keep
+          when is_numeric_type (etyp exp)    -> Keep
         (* ------------------------------------------- *)
         | E_unop _
-        | E_binop _
-          when is_numeric_type (etyp exp) ->
-          Visit
+        | E_binop _                          -> Visit
         (* ------------------------------------------- *)
         | _                                  -> Process
       );
