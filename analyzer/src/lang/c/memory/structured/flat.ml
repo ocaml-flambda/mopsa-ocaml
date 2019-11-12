@@ -262,12 +262,35 @@ struct
       man.eval ~zone:(Z_c,Z_c_low_level) e flow >>$ fun e flow ->
       Result.singleton (C_init_expr e) flow
 
+
     | C_init_list(l, filler) ->
-      Result.bind_list l
-        (fun init flow -> to_lowlevel_init init range man flow) flow
-      >>$ fun l flow ->
-      to_lowlevel_init_opt filler range man flow >>$ fun filler flow ->
-      Result.singleton (C_init_list(l, filler)) flow
+      let exception NonConstantInit in
+      (* Check if all initializers in l are constant, so we can do a
+         static transformation.
+      *)
+      begin try
+          let l' = List.map (function
+              | C_init_expr e ->
+                let z = match c_expr_to_z e with
+                  | Some z -> z
+                  | None -> raise NonConstantInit
+                in
+                C_init_expr (mk_z z ~typ:e.etyp e.erange)
+              | _ -> raise NonConstantInit
+            ) l
+          in
+          to_lowlevel_init_opt filler range man flow >>$ fun filler flow ->
+          let init' = C_init_list (l',filler) in
+          Result.singleton init' flow
+
+        (* When an initializer is not a constant, we use dynamic evaluation to simplify it *)
+        with NonConstantInit ->
+          Result.bind_list l
+            (fun init flow -> to_lowlevel_init init range man flow) flow
+          >>$ fun l flow ->
+          to_lowlevel_init_opt filler range man flow >>$ fun filler flow ->
+          Result.singleton (C_init_list(l, filler)) flow
+      end
 
     | _ -> panic_at range
              "initialization expression %a not supported"

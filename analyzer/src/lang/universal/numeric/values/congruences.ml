@@ -22,7 +22,7 @@
 (** Congruence abstraction of integer values. *)
 
 open Mopsa
-open Core.Sig.Value.Simplified
+open Core.Sig.Value.Lowlevel
 open Ast
 open Bot
 
@@ -45,7 +45,7 @@ struct
 
   let zones = [Zone.Z_u_num]
 
-  let types = [T_int; T_bool]
+  let mem_type = function T_int | T_bool -> true | _ -> false
 
   let bottom = BOT
 
@@ -64,21 +64,22 @@ struct
 
   let print fmt (a:t) = C.fprint_bot fmt a
 
-  let of_constant = function
+  let constant t = function
     | C_int i -> Nb (C.cst i)
 
     | C_int_interval (i1,i2) -> Nb (C.of_range i1 i2)
 
     | _ -> top
 
-  let unop op a =
+  let unop man = lift_simplified_unop (fun op a ->
     match op with
     | O_log_not -> bot_lift1 C.log_not a
     | O_minus  -> bot_lift1 C.neg a
     | O_plus  -> a
     | _ -> top
+    ) man
 
-  let binop op a1 a2 =
+  let binop man = lift_simplified_binop (fun op a1 a2 ->
     match op with
     | O_plus   -> bot_lift2 C.add a1 a2
     | O_minus  -> bot_lift2 C.sub a1 a2
@@ -90,12 +91,14 @@ struct
     | O_bit_rshift -> bot_absorb2 C.shift_right a1 a2
     | O_bit_lshift -> bot_absorb2 C.shift_left a1 a2
     | _     -> top
+    ) man
 
-  let filter a b =
+  let filter man = lift_simplified_filter (fun a b ->
     if b then bot_absorb1 C.meet_nonzero a
     else bot_absorb1 C.meet_zero a
+    ) man
 
-  let bwd_unop op abs rabs =
+  let bwd_unop man = lift_simplified_bwd_unop (fun op abs rabs ->
     try
       let a, r = bot_to_exn abs, bot_to_exn rabs in
       let aa = match op with
@@ -106,8 +109,9 @@ struct
       Nb aa
     with Found_BOT ->
       bottom
+    ) man
 
-  let bwd_binop op a1 a2 r =
+  let bwd_binop man = lift_simplified_bwd_binop (fun op a1 a2 r ->
     try
       let a1, a2, r = bot_to_exn a1, bot_to_exn a2, bot_to_exn r in
       let aa1, aa2 =
@@ -124,8 +128,9 @@ struct
       Nb aa1, Nb aa2
     with Found_BOT ->
       bottom, bottom
+    ) man
 
-  let compare op a1 a2 r =
+  let compare man = lift_simplified_compare (fun op a1 a2 r ->
     try
       let a1, a2 = bot_to_exn a1, bot_to_exn a2 in
       let op = if r then op else negate_comparison_op op in
@@ -142,13 +147,14 @@ struct
       Nb aa1, Nb aa2
     with Found_BOT ->
       bottom, bottom
+    ) man
 
 
-  let ask : type r. r query -> (expr -> t) -> r option =
-    fun query eval ->
+  let ask : type r. ('a,t) man -> ('a,r) vquery -> r option =
+    fun man query ->
       match query with
-      | Common.Q_int_congr_interval e ->
-        let c = eval e in
+      | NormalQuery(Common.Q_int_congr_interval e) ->
+        let c = man.eval e |> man.get in
         let ret =
           match c with
           | BOT -> Intervals.Integer.Value.bottom, C.minf_inf
@@ -157,9 +163,6 @@ struct
         Option.return ret
 
       | _ -> None
-
-
-  let refine channel v = Channel.return v
 
 end
 
