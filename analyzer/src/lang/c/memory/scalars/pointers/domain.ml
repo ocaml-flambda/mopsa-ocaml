@@ -76,6 +76,7 @@ struct
     }
   }
 
+  let alarms = []
 
   (** {2 Lattice operators} *)
   (** ===================== *)

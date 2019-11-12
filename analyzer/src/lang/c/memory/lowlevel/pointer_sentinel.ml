@@ -83,6 +83,7 @@ struct
     }
   }
 
+  let alarms = []
 
   (** {2 Auxiliary variables} *)
   (** *********************** *)

@@ -173,6 +173,7 @@ struct
     }
   }
 
+  let alarms = []
 
   (** Initialization of environments *)
   (** ============================== *)

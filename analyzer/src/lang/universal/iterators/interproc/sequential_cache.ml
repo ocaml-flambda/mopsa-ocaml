@@ -57,6 +57,8 @@ struct
     ieval = { provides = [Z_u, Z_any]; uses = [Z_u, Z_any] };
   }
 
+  let alarms = []
+
   let debug fmt = Debug.debug ~channel:name fmt
 
   module Fctx = Context.GenPolyKey(

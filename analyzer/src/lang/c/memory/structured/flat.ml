@@ -60,6 +60,7 @@ struct
     };
   }
 
+  let alarms = []
 
   (** {2 Initialization procedure} *)
   (** ============================ *)

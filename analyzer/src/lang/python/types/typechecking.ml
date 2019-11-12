@@ -37,6 +37,7 @@ struct
   let debug fmt = Debug.debug ~channel:name fmt
 
   let interface = Iter.interface
+  let alarms = Iter.alarms
   let bottom = Iter.bottom
   let top = Iter.top
   let is_bottom = Iter.is_bottom

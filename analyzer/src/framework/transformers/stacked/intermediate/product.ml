@@ -352,6 +352,14 @@ struct
     in
     fold { f } Spec.pool Interface.empty
 
+  let alarms =
+    let f = fun (type a) (m:a stack) acc ->
+      let module S = (val m) in
+      S.alarms @ acc
+    in
+    fold { f } Spec.pool [] |>
+    List.sort_uniq compare
+
   let bottom : t =
     let f = fun (type a) (m:a stack) ->
       let module S = (val m) in
@@ -435,8 +443,9 @@ struct
   (** {2 Merging functions} *)
   (** ********************* *)
 
+
   (** Merge the conflicts of two flows using logs *)
-  let merge_flows man pre (flow1,log1) (flow2,log2) =
+  let merge_flows ~merge_alarms man pre (flow1,log1) (flow2,log2) =
     let ctx = Context.get_most_recent (Flow.get_ctx flow1) (Flow.get_ctx flow2) |>
               Context.get_unit
     in
@@ -467,33 +476,35 @@ struct
               let a = man.lattice.meet ctx a1 a2 in
               if man.lattice.is_bottom a then None else Some a
             ) oa1 oa2
-      ) AlarmSet.inter man.lattice flow1 flow2
+      ) merge_alarms man.lattice flow1 flow2
 
 
 
   (** Merge the conflicts between distinct domains in a pointwise result *)
-  let rec merge_inter_conflicts man pre (pointwise:('a,'r) result option list) : ('a,'r option option list) result =
-    let rec aux : type t. t pool -> ('a,'r) result option list -> ('a,t,'s) man -> ('a,'r option option list) result =
+  let merge_inter_conflicts man pre (pointwise:('a,'r) result option list) : ('a,'r option option list) result =
+    let rec aux : type t. t pool -> ('a,'r) result option list -> ('a,t,'s) man -> ('a,'r option option list * alarm_category list) result =
       fun pool pointwise man ->
         match pointwise, pool with
         | [None], _ ->
-          Result.singleton [None] pre
+          Result.singleton ([None],[]) pre
 
-        | [Some r], _ ->
+        | [Some r], Cons(s,Nil) ->
           r |> Result.bind @@ fun rr flow ->
-          Result.singleton [Some rr] flow
+          let module S = (val s) in
+          Result.singleton ([Some rr],S.alarms) flow
 
         | None :: tl, Cons(hds,tls) ->
           aux tls tl (tlman man) |>
           Result.bind @@ fun after flow ->
-          let after = Option.none_to_exn after in
-          Result.singleton (None :: after) flow
+          let after,alarms = Option.none_to_exn after in
+          Result.singleton (None :: after, alarms) flow
 
         | Some r :: tl, Cons(hds,tls) ->
           aux tls tl (tlman man) |>
           Result.bind_full @@ fun after after_flow after_log after_cleaners ->
-          let after = Option.none_to_exn after in
+          let after,alarms = Option.none_to_exn after in
           r |> Result.bind_full @@ fun rr flow log cleaners ->
+          let module S = (val hds) in
           if after |> List.exists (function Some _ -> true | None -> false) then
             let hdman = hdman man in
             let after_flow = Flow.set T_cur (
@@ -502,24 +513,33 @@ struct
                 hdman.set (hdman.get cur) after_cur
               ) man.lattice after_flow
             in
-            let flow = merge_flows man pre (flow,log) (after_flow,after_log) in
+            let common_alarms = List.filter (fun a -> List.mem a alarms) S.alarms in
+            let merge_alarms a1 a2 =
+              let a1', a1'' = AlarmSet.partition (fun a -> List.mem (get_alarm_category a) common_alarms) a1 in
+              let a2', a2'' = AlarmSet.partition (fun a -> List.mem (get_alarm_category a) common_alarms) a2 in
+              AlarmSet.inter a1' a2' |>
+              AlarmSet.union a1'' |>
+              AlarmSet.union a2''
+            in
+            let flow = merge_flows ~merge_alarms man pre (flow,log) (after_flow,after_log) in
             let log = Log.concat log after_log in
             let cleaners = cleaners @ after_cleaners in
-            Result.return (Some (Some rr :: after)) flow ~cleaners ~log
+            Result.return (Some (Some rr :: after, S.alarms @ alarms |> List.sort_uniq compare)) flow ~cleaners ~log
           else
-            Result.return (Some (Some rr :: after)) flow ~cleaners ~log
+            Result.return (Some (Some rr :: after, S.alarms @ alarms |> List.sort_uniq compare)) flow ~cleaners ~log
 
 
         | _ -> assert false
     in
-    aux Spec.pool pointwise man
+    aux Spec.pool pointwise man |>
+    Result.map (fun (r,alarms) -> r)
 
 
 
   (** Merge the conflicts emerging from the same domain *)
   let merge_intra_conflicts man pre (r:('a,'r) result) : ('a,'r) result =
     Result.merge_conjunctions_flow (fun (flow1,log1) (flow2,log2) ->
-        merge_flows man pre (flow1,log1) (flow2,log2)
+        merge_flows ~merge_alarms:AlarmSet.inter man pre (flow1,log1) (flow2,log2)
       ) r
 
 

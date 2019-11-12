@@ -109,6 +109,7 @@ struct
     ieval = { provides = []; uses = [] };
   }
 
+  let alarms = []
 
   (** {3 Cache of last fixpoint} *)
   (** ************************** *)

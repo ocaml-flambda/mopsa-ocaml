@@ -199,11 +199,25 @@ let () =
 let () =
   register_builtin_option {
     key = "-list";
-    category = "Configuration";
+    category = "Help";
     doc = " list available domains; if a configuration is specified, only used domains are listed";
     spec = ArgExt.Unit_delayed (fun () ->
         let domains = Parser.domains !Parser.opt_config in
         Output.Factory.list_domains domains
+      );
+    default = "";
+  }
+
+(** List of alarms *)
+let () =
+  register_builtin_option {
+    key = "-alarms";
+    category = "Help";
+    doc = " list the alarms captured by the selected configuration";
+    spec = ArgExt.Unit_delayed (fun () ->
+        let _, domain = Parser.parse !Parser.opt_config in
+        let module Domain = (val domain) in
+        Output.Factory.list_alarms Domain.alarms
       );
     default = "";
   }

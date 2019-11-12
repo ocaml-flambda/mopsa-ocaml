@@ -48,6 +48,7 @@ struct
     ieval = { provides = [Z_u, Z_any]; uses = [] };
   }
 
+  let alarms = []
 
   (** Initialization *)
   (** ============== *)

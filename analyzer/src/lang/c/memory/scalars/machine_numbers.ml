@@ -63,6 +63,7 @@ struct
     }
   }
 
+  let alarms = []
 
   (** Command-line options *)
   (** ==================== *)
