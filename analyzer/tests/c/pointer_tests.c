@@ -54,10 +54,6 @@ void test_null_is_zero() {
 }
 
 
-void test_refine_top_pointer() {
-  int *p = (int*)_mopsa_rand_pointer();
-  if (p) _mopsa_assert(p != NULL);
-}
 
 
 int *global;

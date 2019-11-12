@@ -325,33 +325,21 @@ struct
 
   (** Assignment abstract transformer for 𝕊⟦ *p = rval; ⟧ *)
   let assign_deref p rval range man flow =
-    man.eval ~zone:(Z_c_low_level, Z_c_points_to) p flow >>$ fun pt flow ->
-
-    match ekind pt with
-    | E_c_points_to P_null ->
-      raise_c_alarm ANullDeref p.erange ~bottom:true man.lattice flow |>
-      Post.return
-
-    | E_c_points_to P_invalid ->
-      raise_c_alarm AInvalidDeref p.erange ~bottom:true man.lattice flow |>
-      Post.return
-
-    | E_c_points_to P_valid ->
+    eval_pointed_base_offset p range man flow >>$ fun r flow ->
+    match r with
+    | None ->
       Soundness.warn_at range "ignoring assignment to undetermined valid pointer %a" pp_expr p;
       Post.return flow
 
-    | E_c_points_to (P_block (base, offset)) ->
+    | Some (base, offset) ->
       man.eval ~zone:(Z_c_low_level,Z_u_num) rval flow >>$ fun rval flow ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow >>$ fun offset flow ->
       assign_cases base offset rval (under_type p.etyp |> void_to_char) range man flow
-
-    | _ -> assert false
 
 
 
   (** Cases of the abstract transformer for tests *(p + i) == 0 *)
   let assume_zero_cases base offset primed range man flow =
-    debug "assume_zero: base = %a, offset = %a" pp_base base pp_expr offset;
     eval_base_size base range man flow >>$ fun size flow ->
     man.eval ~zone:(Z_c_scalar, Z_u_num) size flow >>$ fun size flow ->
     man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow >>$ fun offset flow ->
@@ -379,7 +367,6 @@ struct
 
   (** Cases of the abstract transformer for tests *(p + ∀i) != 0 *)
   let assume_quantified_non_zero_cases base offset primed range man flow =
-    debug "assume_quantified_non_zero: base = %a, offset = %a" pp_base base pp_expr offset;
     (** Get symbolic bounds of the offset *)
     let min, max = Common.Quantified_offset.bound offset in
 
@@ -446,7 +433,6 @@ struct
 
   (** Default for tests *p ? 0 *)
   let assume_default_cases base offset range man flow =
-    debug "assume_default_cases: base = %a, offset = %a" pp_base base pp_expr offset;
     (* Quantified offsets cannot be handled numerically, so we just raise a
        non-deterministic out-of-bound alarm
     *)
@@ -488,7 +474,6 @@ struct
       Post.return
 
     | Some (base,offset) ->
-      debug "base = %a, offset = %a" pp_base base pp_expr offset;
       if not (is_memory_base base)
       then assume_default_cases base offset range man flow
 
@@ -579,7 +564,7 @@ struct
       Post.return flow
 
 
-    | E_c_points_to P_valid ->
+    | E_c_points_to P_top ->
       Soundness.warn_at range "rename of %a not supported because it can not be resolved"
         pp_expr target
       ;

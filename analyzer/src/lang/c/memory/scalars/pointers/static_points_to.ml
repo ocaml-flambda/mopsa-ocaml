@@ -20,7 +20,7 @@
 (****************************************************************************)
 
 
-(** Symbolic representation of pointer values with equality predicates *)
+(** Static evaluation of a pointer expression  *)
 
 
 open Mopsa
@@ -29,10 +29,10 @@ open Ast
 open Common.Base
 
 
-(** Symbolic pointer values *)
-type t =
+(** Static points-to values *)
+type static_points_to =
   | AddrOf of base * expr
-  | Eq of var * mode * expr
+  | Eval of var * mode * expr
   | Fun of c_fundec
   | Null
   | Invalid
@@ -40,7 +40,7 @@ type t =
 
 
 (** Advance the offset of a symbolic pointer *)
-let advance_offset (op:operator) (ptr:t) (o:expr) typ range : t =
+let advance_offset (op:operator) (ptr:static_points_to) (o:expr) typ range : static_points_to =
   (* Size of the pointed type *)
   let size = under_type typ |> void_to_char |> sizeof_type in
 
@@ -54,7 +54,7 @@ let advance_offset (op:operator) (ptr:t) (o:expr) typ range : t =
   match ptr with
   | AddrOf (b, oo) -> AddrOf (b, advance oo)
 
-  | Eq (p, mode, oo) -> Eq (p, mode, advance oo)
+  | Eval (p, mode, oo) -> Eval (p, mode, advance oo)
 
   | Null -> Null
 
@@ -69,7 +69,7 @@ let advance_offset (op:operator) (ptr:t) (o:expr) typ range : t =
 
 
 (** Symbolic evaluation of a pointer expression *)
-let rec eval_opt exp : t option =
+let rec eval_opt exp : static_points_to option =
   match ekind exp with
   | E_constant(C_int n) when Z.equal n Z.zero ->
     Null |> Option.return
@@ -124,7 +124,7 @@ let rec eval_opt exp : t option =
     advance_offset op ptr i p.etyp exp.erange
 
   | E_var (v, mode) when is_c_pointer_type v.vtyp ->
-    Eq (v, mode, mk_zero exp.erange) |> Option.return
+    Eval (v, mode, mk_zero exp.erange) |> Option.return
 
   | x when is_c_int_type exp.etyp ->
     AddrOf(Common.Base.Z, exp) |> Option.return
@@ -135,7 +135,7 @@ let rec eval_opt exp : t option =
 
 
 (** Symbolic evaluation of a pointer expression *)
-let eval exp : t =
+let eval exp : static_points_to =
   match eval_opt exp with
   | Some ptr -> ptr
   | None -> panic_at exp.erange "evaluation of pointer expression %a not supported" pp_expr exp

@@ -25,7 +25,11 @@
 
 open C_AST
 open C_print
-module C = Clang_AST
+module C =
+  struct
+    include Clang_AST
+    include Clang_dump
+  end
 
 
 (** {2 Debug} *)
@@ -812,3 +816,13 @@ let resolve_scope (b:block) : block =
     The block is modified in-place, and returned.
     Call after AST transformations that may change variable scopes.
  *)
+
+
+(** {2 Errors} *)
+
+let error range msg arg =
+  failwith (Printf.sprintf "%s: %s: %s" (C.string_of_range range) msg arg)
+
+let warning range msg arg =
+  (* Printf.eprintf "WARNING %s: %s: %s\n" (C.string_of_range range) msg arg *)
+  ()

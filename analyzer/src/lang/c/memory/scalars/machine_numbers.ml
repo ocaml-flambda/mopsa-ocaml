@@ -28,7 +28,7 @@ open Ast
 open Zone
 open Universal.Zone
 open Alarms
-
+open Common.Points_to
 module Itv = Universal.Numeric.Values.Intervals.Integer.Value
 
 
@@ -56,7 +56,10 @@ struct
     };
     ieval = {
       provides = [Z_c_scalar, Z_u_num];
-      uses = [Z_c_scalar, Z_u_num];
+      uses = [
+        Z_c_scalar, Z_u_num;
+        Z_c_scalar, Z_c_points_to
+      ];
     }
   }
 
@@ -300,8 +303,9 @@ struct
     let range = erange exp in
     match ekind exp with
     | E_binop(op, e, e') when op |> is_c_div &&
-                              e  |> etyp |> is_c_int_type &&
-                              e' |> etyp |> is_c_int_type ->
+                              (e    |> etyp |> is_c_int_type &&
+                               e'   |> etyp |> is_c_int_type)
+      ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e flow ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e' flow >>$? fun e' flow ->
       check_division man range
@@ -316,8 +320,8 @@ struct
       Option.return
 
     | E_binop(op, e, e') when op |> is_c_shift &&
-                              e  |> etyp |> is_c_int_type &&
-                              e' |> etyp |> is_c_int_type
+                              (e    |> etyp |> is_c_int_type &&
+                               e'   |> etyp |> is_c_int_type)
       ->
       let t = e.etyp in
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e flow ->
@@ -347,8 +351,10 @@ struct
       Option.return
 
     | E_binop(op, e, e') when is_c_int_op op &&
-                              e  |> etyp |> is_c_int_type &&
-                              e' |> etyp |> is_c_int_type ->
+                              (exp  |> etyp |> is_c_int_type &&
+                               e    |> etyp |> is_c_int_type &&
+                               e'   |> etyp |> is_c_int_type)
+      ->
       let typ = etyp exp in
       let rmin, rmax = rangeof typ in
       eval_binop op e e' exp man flow >>$? fun e flow ->
@@ -375,6 +381,19 @@ struct
       Eval.singleton exp' flow |>
       Option.return
 
+    | E_c_cast(p, _) when exp |> etyp |> is_c_int_type &&
+                          p   |> etyp |> is_c_pointer_type ->
+      man.eval ~zone:(Z_c_scalar, Z_c_points_to) p flow >>$? fun pt flow ->
+      let exp' =
+        match ekind pt with
+        | E_c_points_to P_null -> mk_zero exp.erange
+        | _ ->
+          let l,u = rangeof exp.etyp in
+          mk_z_interval l u exp.erange
+      in
+      Eval.singleton exp' flow |>
+      Option.return
+
 
     | E_c_cast(e, _) when exp |> etyp |> is_c_int_type &&
                           e   |> etyp |> is_c_float_type ->
@@ -388,7 +407,7 @@ struct
       Option.return
 
     | E_c_cast(e, is_explicit_cast) when exp |> etyp |> is_c_int_type &&
-                          e   |> etyp |> is_c_int_type
+                                         e   |> etyp |> is_c_int_type
       ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e' flow ->
       let t  = etyp exp in
@@ -419,7 +438,10 @@ struct
       Eval.singleton exp' flow |>
       Option.return
 
-    | E_binop(op, e, e') when exp |> etyp |> is_c_num_type ->
+    | E_binop(op, e, e') when (exp |> etyp |> is_c_num_type ||
+                               e   |> etyp |> is_c_num_type ||
+                               e'  |> etyp |> is_c_num_type)
+      ->
       eval_binop op e e' exp man flow |>
       Option.return
 
@@ -573,7 +595,7 @@ struct
       Option.return
 
 
-    | S_assume(e) ->
+    | S_assume(e) when is_c_num_type e.etyp || is_numeric_type e.etyp || e.etyp = T_any ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e' flow ->
       man.post ~zone:Z_u_num (mk_assume (to_compare_expr e') stmt.srange) flow |>
       Option.return

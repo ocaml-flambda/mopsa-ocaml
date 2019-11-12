@@ -154,7 +154,7 @@ let list_domains (domains:string list) out =
 
 let print range printer flow out =
   if Debug.can_print "print" then
-    print out "%a@\n  @[%a@]"
+    print out "%a@\n  @[%a@]@."
       Location.pp_range range
       printer flow
   else

@@ -121,7 +121,7 @@ let create_context (project_name:string) (info:C.target_info) =
     ctx_vars = Hashtbl.create 16;
     ctx_funcs = Hashtbl.create 16;
     ctx_names = Hashtbl.create 16;
-    ctx_simplify = C_simplify.create_context ();
+    ctx_simplify = C_simplify.create_context info;
     ctx_comments = RangeMap.empty;
     ctx_macros = Hashtbl.create 16;
   }
@@ -163,15 +163,6 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
     Hashtbl.add ctx.ctx_names unique name;
     if !log_rename && unique <> org then Printf.printf "renamed '%s' into '%s'\n" org unique;
     unique
-  in
-
-  let error range msg arg =
-    failwith (Printf.sprintf "%s: %s: %s" (C.string_of_range range) msg arg)
-
-  and warning range msg arg =
-    (* Printf.eprintf "WARNING %s: %s: %s\n" (C.string_of_range range) msg arg *)
-    ()
-
   in
 
   
