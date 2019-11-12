@@ -25,7 +25,11 @@
 
 open C_AST
 open C_print
-module C = Clang_AST
+module C =
+  struct
+    include Clang_AST
+    include Clang_dump
+  end
 
 
 (** {2 Debug} *)
@@ -654,3 +658,13 @@ let declarations_in_block (b:block) : variable list =
 (** Returns the local variables declared in the block.
     Does not include the variables declared in sub-blocks.
  *)
+
+
+(** {2 Errors} *)
+
+let error range msg arg =
+  failwith (Printf.sprintf "%s: %s: %s" (C.string_of_range range) msg arg)
+
+let warning range msg arg =
+  (* Printf.eprintf "WARNING %s: %s: %s\n" (C.string_of_range range) msg arg *)
+  ()
