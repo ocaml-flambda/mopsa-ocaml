@@ -97,6 +97,7 @@ struct
       |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "isinstance")}, _)}, [obj; attr], []) ->
+      (* TODO: if v is a class inheriting from protocol we should check the attributes *)
       bind_list [obj; attr] (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
       bind_some (fun evals flow ->
           let eobj, eattr = match evals with [e1; e2] -> e1, e2 | _ -> assert false in
@@ -113,10 +114,29 @@ struct
             man.eval (mk_py_bool (c = "function") range) flow
 
           | A_py_instance cls, A_py_class (c, mro) ->
-            let ic, imro = match akind cls with
-              | A_py_class (c, m) -> c, m
-              | _ -> assert false in
-            man.eval (mk_py_bool (class_le (ic, imro) (c, mro)) range) flow
+            begin match List.find_opt
+                          (fun x -> match akind @@ fst x with
+                             | A_py_class (C_annot c, _) -> get_orig_vname c.py_cls_a_var = "Protocol"
+                             | _ -> false) mro with
+            | Some ({addr_kind = A_py_class (C_annot c_proto, _)}, _) ->
+              debug "Protocol case!";
+              let mk_and conds = List.fold_left (fun acc cond -> mk_binop acc O_py_and cond range) (List.hd conds) (List.tl conds) in
+              let conds = List.map (fun x -> mk_py_hasattr eobj (get_orig_vname x) range) (match c with
+                  | C_user c -> c.py_cls_static_attributes
+                  | C_annot c -> c.py_cls_a_static_attributes
+                  | _ -> assert false) in
+              if List.length conds = 0 then
+                let () = debug "empy attributes for c?!" in
+                man.eval (mk_py_true range) flow
+              else
+                man.eval (mk_and conds) flow
+            | Some _ -> assert false
+            | None ->
+              let ic, imro = match akind cls with
+                | A_py_class (c, m) -> c, m
+                | _ -> assert false in
+              man.eval (mk_py_bool (class_le (ic, imro) (c, mro)) range) flow
+            end
 
           | Objects.Py_list.A_py_list _, A_py_class (C_builtin "list", _)
           | Objects.Py_set.A_py_set _, A_py_class (C_builtin "set", _)

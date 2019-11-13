@@ -88,7 +88,7 @@ struct
     (* 𝕊⟦ class cls: body ⟧ *)
     | S_py_class cls ->
       debug "definition of class %a" pp_var cls.py_cls_var;
-      bind_list cls.py_cls_bases (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+      bind_list cls.py_cls_bases (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
       bind_some (fun bases flow ->
           let bases' =
             match bases with

@@ -278,7 +278,8 @@ type py_cls_annot = {
   py_cls_a_var : var;
   py_cls_a_body : stmt;
   py_cls_a_bases : expr list;
-  py_cls_a_abases : expr list;
+  py_cls_a_abases : expr list; (* bases from the typing module, hopefully *)
+  py_cls_a_static_attributes: var list;
   py_cls_a_range : range;
 }
 

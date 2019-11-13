@@ -318,6 +318,7 @@ module Domain =
                             { py_cls_a_var = set_orig_vname name c.py_cls_var;
                               py_cls_a_body;
                               py_cls_a_bases = bases;
+                              py_cls_a_static_attributes = c.py_cls_static_attributes;
                               py_cls_a_abases = abases;
                               py_cls_a_range = c.py_cls_range;
                             } in

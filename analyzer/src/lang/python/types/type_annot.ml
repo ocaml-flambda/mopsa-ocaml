@@ -550,7 +550,6 @@ struct
           |> Option.return
 
         | E_py_call ({ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)}, {ekind = E_constant (C_string s)}::[], []) ->
-
           let cur = get_env T_cur man flow in
           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type e range) flow |>
           Eval.bind (fun type_e flow ->

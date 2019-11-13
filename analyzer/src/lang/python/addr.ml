@@ -89,7 +89,7 @@ let functions = Hashtbl.create 100
 let modules = Hashtbl.create 10
 (* let all () = !classes @ !functions @ !modules *)
 let type_aliases = Hashtbl.create 100
-let typed_functions = Hashtbl.create 100
+let typed_functions = Hashtbl.create 100 (* and typed classes *)
 
 (** Name of a builtin with an optional dot notation in case of
    sub-objects (methods of classes, etc.) *)
