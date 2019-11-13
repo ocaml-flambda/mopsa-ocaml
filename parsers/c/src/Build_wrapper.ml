@@ -293,6 +293,9 @@ let compile ckind db args =
     | "-c"::rest ->
        mode := CC_COMPILE;
        doit rest
+    | ("-M"|"-MM"|"-MP")::rest ->
+       mode := CC_NOTHING;
+       doit rest
 
     | "-o"::o::rest ->
        (* out file *)
