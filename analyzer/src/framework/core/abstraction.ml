@@ -225,7 +225,10 @@ struct
       let post = Cache.exec fexec zone stmt man flow in
       let ctx = Hook.on_after_exec zone stmt man post in
       Post.set_ctx ctx post
-    with Exceptions.Panic(msg, line) -> raise (Exceptions.PanicAt(stmt.srange, msg, line))
+    with Exceptions.Panic(msg, line) ->
+      Printexc.raise_with_backtrace
+        (Exceptions.PanicAt(stmt.srange, msg, line))
+        (Printexc.get_raw_backtrace())
 
 
   let exec ?(zone = any_zone) (stmt: stmt) man (flow: Domain.t flow) : Domain.t flow =
@@ -388,7 +391,10 @@ struct
                let evl' = Eval.remove_duplicates man.lattice evl in
                Some evl'
            ) (z1, z2) exp man flow
-         with Exceptions.Panic(msg,line) -> raise (Exceptions.PanicAt (exp.erange,msg,line))
+         with Exceptions.Panic(msg, line) ->
+           Printexc.raise_with_backtrace
+             (Exceptions.PanicAt(exp.erange, msg, line))
+             (Printexc.get_raw_backtrace())
         )
       with
       | Some evl -> Some evl
