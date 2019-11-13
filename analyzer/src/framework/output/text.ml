@@ -35,7 +35,7 @@ let print out fmt =
       formatter_of_out_channel o
   in
   kasprintf (fun str ->
-      fprintf formatter "%s" str
+      fprintf formatter "%s%!" str
     ) fmt
 
 
