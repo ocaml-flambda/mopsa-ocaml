@@ -589,13 +589,9 @@ struct
       match expr_to_z size, expr_to_z offset with
       | Some s, Some o ->
         if Z.gt elm s then
-          panic_at range
-            "%a points to a cell of size %a, which is greater than the size %a of its base %a"
-            pp_expr p
-            Z.pp_print elm
-            Z.pp_print s
-            pp_base base
-        ;
+          let flow = raise_c_out_bound_alarm ~base ~offset ~size range man flow in
+          Result.empty_singleton flow
+        else
         if Z.leq Z.zero o &&
            Z.leq o (Z.sub s elm)
         then

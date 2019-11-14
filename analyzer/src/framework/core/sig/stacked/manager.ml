@@ -209,3 +209,23 @@ let post_to_flow man post =
     (Flow.join man.lattice)
     (Flow.join man.lattice)
     post
+
+
+(* Transform a domain manager into a stack manager on unit *)
+let of_domain_man (man:('a,'t) Domain.Manager.man) : ('a,'t,unit) man =
+  {
+    lattice = man.lattice;
+    get = man.get;
+    set = man.set;
+    get_sub = (fun _ -> ());
+    set_sub = (fun _ a -> a);
+    exec = man.exec;
+    post = man.post;
+    eval = man.eval;
+    ask = man.ask;
+    get_log = man.get_log;
+    set_log = man.set_log;
+    get_sub_log = (fun _ -> Log.empty);
+    set_sub_log =  (fun _ l -> l);
+    merge_sub = (fun _ _ _ -> ());
+  }

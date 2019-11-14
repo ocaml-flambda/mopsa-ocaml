@@ -12,7 +12,7 @@
 	    // Numeric abstraction
             {
                 "nonrel": {
-		    "disjoint": [
+		    "union": [
 			"universal.numeric.values.intervals.integer",
 			"universal.numeric.values.intervals.float"
 		    ]
