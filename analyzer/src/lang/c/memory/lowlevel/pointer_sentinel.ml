@@ -49,7 +49,7 @@ open Universal.Zone
 open Zone
 open Common.Base
 open Common.Points_to
-open Alarms
+open Common.Alarms
 
 
 module Domain =
@@ -482,7 +482,7 @@ struct
         )
       ~felse:(fun flow ->
           (* Unsafe case *)
-          raise_c_alarm AOutOfBound range ~bottom:false man.lattice flow |>
+          raise_c_out_bound_alarm ~base ~offset ~size range man flow |>
           Post.return
         ) man flow
 
@@ -595,7 +595,7 @@ struct
         )
       ~felse:(fun flow ->
           (* Unsafe case *)
-          raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow |>
+          raise_c_out_bound_alarm ~base ~offset ~size range man flow |>
           Post.return
         )
       ~zone:Z_u_num man flow
@@ -841,7 +841,7 @@ struct
         )
       ~felse:(fun flow ->
           (* Unsafe case *)
-          let flow' = raise_c_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow in
+          let flow' = raise_c_out_bound_alarm ~base ~offset ~size range man flow in
           Eval.empty_singleton flow'
         ) man flow
 
@@ -901,7 +901,7 @@ struct
         )
       ~felse:(fun flow ->
           (* Unsafe case *)
-          let flow' = raise_c_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow in
+          let flow' = raise_c_out_bound_alarm ~base ~offset ~size range man flow in
           Eval.empty_singleton flow'
         ) man flow
 

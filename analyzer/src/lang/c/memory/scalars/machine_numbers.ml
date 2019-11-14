@@ -27,7 +27,7 @@ open Universal.Ast
 open Ast
 open Zone
 open Universal.Zone
-open Alarms
+open Common.Alarms
 open Common.Points_to
 module Itv = Universal.Numeric.Values.Intervals.Integer.Value
 
@@ -344,7 +344,7 @@ struct
       check_overflow typ man range
         (fun e tflow -> Eval.singleton e tflow)
         (fun e fflow ->
-           let flow1 = raise_c_alarm AIntegerOverflow exp.erange ~bottom:false man.lattice fflow in
+           let flow1 = raise_c_integer_overflow_alarm e typ exp.erange man fflow in
            Eval.singleton (mk_unop (O_wrap(rmin, rmax)) e ~etyp:(to_num_type typ) range) flow1
         ) e flow |>
       Option.return
@@ -362,7 +362,7 @@ struct
            if not (is_signed typ) && not !opt_detect_unsigned_wrap
            then Eval.singleton e' fflow
            else
-             let flow1 = raise_c_alarm AIntegerOverflow exp.erange ~bottom:false man.lattice fflow in
+             let flow1 = raise_c_integer_overflow_alarm e typ exp.erange man fflow in
              Eval.singleton e' flow1
         ) e flow |>
       Option.return
@@ -422,7 +422,7 @@ struct
              if is_explicit_cast && !opt_ignore_cast_alarm then
                  Eval.singleton (mk_unop (O_wrap(rmin, rmax)) e ~etyp:(to_num_type t) range) fflow
              else
-               let flow1 = raise_c_alarm AIntegerOverflow exp.erange ~bottom:false man.lattice fflow in
+               let flow1 = raise_c_integer_overflow_alarm e' t exp.erange man fflow in
                Eval.singleton (mk_unop (O_wrap(rmin, rmax)) e ~etyp:(to_num_type t) range) flow1
           ) e' flow |>
         Option.return

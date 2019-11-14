@@ -44,7 +44,7 @@ open Universal.Zone
 open Zone
 open Common.Base
 open Common.Points_to
-open Alarms
+open Common.Alarms
 module Itv = Universal.Numeric.Values.Intervals.Integer.Value
 
 
@@ -587,22 +587,22 @@ struct
 
       (* Try static check *)
       match expr_to_z size, expr_to_z offset with
-      | Some size, Some offset ->
-        if Z.gt elm size then
+      | Some s, Some o ->
+        if Z.gt elm s then
           panic_at range
             "%a points to a cell of size %a, which is greater than the size %a of its base %a"
             pp_expr p
             Z.pp_print elm
-            Z.pp_print size
+            Z.pp_print s
             pp_base base
         ;
-        if Z.leq Z.zero offset &&
-           Z.leq offset (Z.sub size elm)
+        if Z.leq Z.zero o &&
+           Z.leq o (Z.sub s elm)
         then
-          let c = mk_cell base offset typ in
+          let c = mk_cell base o typ in
           Result.singleton (Cell c) flow
         else
-          let flow = raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow in
+          let flow = raise_c_out_bound_alarm ~base ~offset ~size range man flow in
           Result.empty_singleton flow
 
       | _ ->
@@ -680,7 +680,7 @@ struct
                 Result.join_list ~empty:(Result.empty_singleton flow) evals
             )
           ~felse:(fun flow ->
-              let flow = raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow in
+              let flow = raise_c_out_bound_alarm ~base ~offset ~size range man flow in
               Result.empty_singleton flow
             )
           man flow
@@ -887,14 +887,14 @@ struct
 
   (** 𝔼⟦ *(p + ∀i) ⟧ *)
   let eval_deref_quantified p range man flow =
-    let elm = under_type p.etyp |> void_to_char in
+    let typ = under_type p.etyp |> void_to_char in
     eval_pointed_base_offset p range man flow >>$ fun pp flow ->
 
     match pp with
     | None ->
       (* Valid pointer but unknown offset *)
       warn_at range "ignoring unresolved pointer %a" pp_expr p;
-      Eval.singleton (mk_top elm range) flow
+      Eval.singleton (mk_top typ range) flow
 
     | Some (base,offset) ->
       eval_base_size base range man flow >>$ fun size flow ->
@@ -904,7 +904,7 @@ struct
       man.eval ~zone:(Z_c, Z_u_num) min flow >>$ fun min flow ->
       man.eval ~zone:(Z_c, Z_u_num) max flow >>$ fun max flow ->
 
-      let limit = sub size (mk_z (sizeof_type elm) range) range in
+      let limit = sub size (mk_z (sizeof_type typ) range) range in
 
       (* Safety condition: [min, max] ⊆ [0, size - |elm|] *)
       assume (
@@ -915,10 +915,10 @@ struct
           range
       )
         ~fthen:(fun flow ->
-            Eval.singleton (mk_top elm range) flow
+            Eval.singleton (mk_top typ range) flow
           )
         ~felse:(fun flow ->
-            raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow |>
+            raise_c_out_bound_alarm ~base ~offset ~size range man flow |>
             Eval.empty_singleton
           )
         ~zone:Z_u_num man flow
@@ -1072,7 +1072,12 @@ struct
       man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow >>$ fun e flow ->
       assign_cell c e mode range man flow
 
-    | Region (base,itv) ->
+    | Region (base,itv) when is_c_num_type e.etyp ->
+      man.eval ~zone:(Z_c_low_level,Z_u_num) e flow >>$ fun e flow ->
+      assign_region base itv range man flow
+
+    | Region (base,itv)  ->
+      man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow >>$ fun e flow ->
       assign_region base itv range man flow
 
 

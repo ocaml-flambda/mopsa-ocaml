@@ -195,7 +195,7 @@ struct
             Result.singleton ap flow
           )
         ~felse:(fun flow ->
-            Alarms.raise_c_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow |>
+            Common.Alarms.(raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow) |>
             Result.empty_singleton
           )
         ~zone:Z_c
@@ -258,7 +258,7 @@ struct
         )
       ~felse:(fun flow ->
           (* Raise an alarm since no next argument can be fetched by va_arg *)
-          let flow' = Alarms.raise_c_alarm Alarms.AVaArgNoNext range ~bottom:true man.lattice flow in
+          let flow' = Common.Alarms.(raise_c_alarm AVaArgNoNext range ~bottom:true man.lattice flow) in
           Eval.empty_singleton flow'
         )
       ~zone:Universal.Zone.Z_u_num

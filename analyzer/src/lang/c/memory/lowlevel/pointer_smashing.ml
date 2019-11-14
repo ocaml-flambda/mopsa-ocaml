@@ -31,7 +31,7 @@ open Universal.Zone
 open Zone
 open Common.Base
 open Common.Points_to
-open Alarms
+open Common.Alarms
 
 
 module Domain =
@@ -256,7 +256,7 @@ struct
               Post.return flow
           )
         ~felse:(fun flow ->
-            raise_c_alarm AOutOfBound range ~bottom:false man.lattice flow |>
+            raise_c_out_bound_alarm ~base ~offset ~size range man flow |>
             Post.return
           )
         ~zone:Z_u_num man flow

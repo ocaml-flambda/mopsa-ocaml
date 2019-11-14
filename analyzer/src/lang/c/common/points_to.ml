@@ -122,7 +122,7 @@ let eval_pointed_base_offset ptr range (man:('a,'t,'s) Core.Sig.Stacked.Lowlevel
 
   match ekind pt with
   | E_c_points_to P_null ->
-    raise_c_alarm ANullDeref range ~bottom:true man.lattice flow |>
+    raise_c_null_deref_alarm ptr range man flow |>
     Result.empty_singleton
 
   | E_c_points_to P_invalid ->
@@ -130,7 +130,7 @@ let eval_pointed_base_offset ptr range (man:('a,'t,'s) Core.Sig.Stacked.Lowlevel
     Result.empty_singleton
 
   | E_c_points_to (P_block (D _, offset)) ->
-    raise_c_alarm AUseAfterFree range ~bottom:true man.lattice flow |>
+    raise_c_use_after_free_alarm ptr range man flow |>
     Result.empty_singleton
 
   | E_c_points_to (P_block (base, offset)) ->

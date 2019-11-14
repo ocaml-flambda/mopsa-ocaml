@@ -69,13 +69,13 @@ lang.repl = frontend
 lang.stubs = ast zone alarms iterator
 
 # C
-lang.c = ast pp visitor zone frontend alarms common desugar libs iterators memory hooks
-lang.c.common = base points_to quantified_offset
+lang.c = ast pp visitor zone frontend common desugar libs iterators memory hooks
+lang.c.common = base alarms points_to quantified_offset
 lang.c.iterators = program switch loops goto interproc
 lang.c.desugar = conditions constants
 lang.c.memory = structured lowlevel scalars packing
 lang.c.memory.structured = flat
-lang.c.memory.lowlevel = cells string_literals string_length pointer_smashing pointer_sentinel reductions
+lang.c.memory.lowlevel = cells string_length pointer_smashing pointer_sentinel reductions
 lang.c.memory.lowlevel.reductions = cell_pointer_sentinel cell_pointer_smashing
 lang.c.memory.scalars = pointers machine_numbers
 lang.c.memory.scalars.pointers = value static_points_to domain
