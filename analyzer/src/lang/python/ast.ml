@@ -235,6 +235,7 @@ type py_func_sig =
   {
     py_funcs_parameters: var list;
     py_funcs_defaults: bool list; (* true iff argument has default *)
+    py_funcs_exceptions: expr list;
     py_funcs_types_in: expr option list;
     py_funcs_type_out: expr option;
   }

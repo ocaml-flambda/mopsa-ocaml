@@ -100,7 +100,7 @@ struct
   let eval zs exp man flow =
     let range = erange exp in
     match ekind exp with
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function(F_annot pyannot)}, _)}, args, kwargs) when get_orig_vname pyannot.py_funca_var = "Generic.__new__"->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function(F_annot pyannot)}, _)}, args, kwargs) when get_orig_vname pyannot.py_funca_var = "Generic.__new__" ->
       let cls = List.hd args in
       man.eval cls flow |>
       Eval.bind (fun ecls flow ->
@@ -301,7 +301,13 @@ struct
                     debug "nflow = %a@\n" (Flow.print man.lattice.print) nflow;
                     if Flow.is_bottom man.lattice nflow then (acc, flow_notok)
                     else
-                      (Eval.singleton (mk_var ret_var range) nflow ~cleaners:([mk_remove_var ret_var range]) |> Eval.bind (man.eval)) :: acc, flow_notok
+                      let ret = (Eval.singleton (mk_var ret_var range) nflow ~cleaners:([mk_remove_var ret_var range]) |> Eval.bind (man.eval)) in
+                      debug "raised_exn %d" (List.length sign.py_funcs_exceptions);
+                      let raised_exn = List.map (fun exn ->
+                          man.exec (mk_stmt (S_py_raise (Some exn)) range) flow |>
+                          Eval.empty_singleton
+                        ) sign.py_funcs_exceptions in
+                      ret::raised_exn @ acc, flow_notok
                   ) ([], flow) sigs) in
              (man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) remaining |> Eval.empty_singleton) :: evals)
         )
@@ -384,55 +390,68 @@ struct
 
 
         | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)} as e, i) when
+            (* issue: if object.__new__(e) renames addresses used in i, this is not caught... *)
             List.for_all (fun n -> get_orig_vname c.py_cls_a_var <> n) ["List"; "Tuple"; "Dict"; "Optional"; "Union"] ->
           begin match c.py_cls_a_abases with
-          | [] ->
-            man.eval (mk_py_call (mk_py_object (find_builtin "object.__new__") range) [e] range) flow
+            | [] ->
+              man.eval (mk_py_call (mk_py_object (find_builtin "object.__new__") range) [e] range) flow
 
-          | abase :: _ ->
-            man.eval (mk_py_call (mk_py_object (find_builtin "object.__new__") range) [e] range) flow |>
-            Eval.bind (fun eobj flow ->
-                let addr = match ekind eobj with
-                  | E_py_object (a, _) -> a
-                  | _ -> assert false in
-                let tname = match ekind abase with
-                  | E_py_index_subscript ({ekind = E_var (v, _)},
-                                          {ekind = E_py_call ({ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)},
-                                                              {ekind = E_constant (C_string s)}::_, [])})
-                    when get_orig_vname v = "Generic" -> s
-                  | _ ->
-                    Exceptions.panic_at range "tname %a" pp_expr (List.hd c.py_cls_a_abases) in
-                debug "here, tname=%s" tname ;
-                let flow =
-                  set_env T_cur (TVMap.add (Class (mk_addr_attr addr tname T_any))
-                                   (match TVMap.find_opt (Global tname) (get_env T_cur man flow) with
-                                    | None ->
-                                      debug "tname(%s) not found in cur" tname;
-                                      begin match i with
-                                        | {ekind = E_py_call (
-                                            {ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)},
-                                            {ekind = E_constant (C_string s)}::_, [])
-                                          } ->
-                                          (* FIXME: égalité entre s et tname à gérer mieux que ça ? *)
-                                          Option.default (ESet.singleton i) (TVMap.find_opt (Global s) (get_env T_cur man flow))
-                                        | {ekind = E_py_call (
-                                            {ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)},
-                                            {ekind = E_var (vname, _)}::_, [])
-                                          } ->
-                                          Option.default (ESet.singleton i) (TVMap.find_opt (Class vname) (get_env T_cur man flow))
+            | abase :: _ ->
+              man.eval (mk_py_call (mk_py_object (find_builtin "object.__new__") range) [e] range) flow |>
+              Eval.bind (fun eobj flow ->
+                  let addr = match ekind eobj with
+                    | E_py_object (a, _) -> a
+                    | _ -> assert false in
+                  let tname = match ekind abase with
+                    | E_py_index_subscript ({ekind = E_var (v, _)},
+                                            {ekind = E_py_call ({ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)},
+                                                                {ekind = E_constant (C_string s)}::_, [])})
+                      when get_orig_vname v = "Generic" || get_orig_vname v = "Protocol" -> s
+                    | _ ->
+                      Exceptions.panic_at range "tname %a" pp_expr (List.hd c.py_cls_a_abases) in
+                  debug "here, tname=%s" tname ;
+                  let flow =
+                    set_env T_cur (TVMap.add (Class (mk_addr_attr addr tname T_any))
+                                     (match TVMap.find_opt (Global tname) (get_env T_cur man flow) with
+                                      | None ->
+                                        debug "tname(%s) not found in cur" tname;
+                                        debug "cur = %a" TVMap.print (get_env T_cur man flow);
+                                        ESet.singleton @@
+                                        Visitor.map_expr
+                                          (fun expr -> match ekind expr with
+                                             | E_py_call (
+                                                 {ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)},
+                                                 {ekind = E_constant (C_string s)}::_, []) ->
+                                               (* FIXME: égalité entre s et tname à gérer mieux que ça ? *)
+                                               Keep (ESet.choose @@ Option.default (ESet.singleton expr) (TVMap.find_opt (Global s) (get_env T_cur man flow)))
+                                             | E_py_call (
+                                                 {ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)},
+                                                 {ekind = E_var (vname, _)}::_, []) ->
+                                               Keep (ESet.choose begin match TVMap.find_opt (Class vname) (get_env T_cur man flow) with
+                                                 | Some s -> s
+                                                 | None ->
+                                                   debug "vname = %a@\n" pp_var vname;
+                                                   match vkind vname with
+                                                   (* FIXME: ugly fix to handle:             (* issue: if object.__new__(e) renames addresses used in i, this is not caught... *) *)
+                                                   | V_addr_attr ({addr_kind = A_py_instance {addr_kind = A_py_class (C_annot c', _)}} as addr, attr) when compare_var c.py_cls_a_var c'.py_cls_a_var = 0 ->
+                                                     Option.default (ESet.singleton expr) (TVMap.find_opt (Class (mk_addr_attr {addr with addr_mode = WEAK} attr T_any)) (get_env T_cur man flow))
+                                                   | _ -> ESet.singleton expr
+                                               end)
+                                             | _ -> VisitParts expr
+                                          )
+                                          (fun stmt -> VisitParts stmt)
+                                          i
 
-                                        | _ -> ESet.singleton i
-                                      end
-                                    | Some st ->
-                                      debug "tname(%s) found in cur" tname;
-                                      st)
-                                   (get_env T_cur man flow)) man flow in
-                debug "after %a, cur = %a" pp_expr exp TVMap.print (get_env T_cur man flow);
-                (* man.exec (mk_stmt (S_py_annot (mk_var (mk_addr_attr addr tname T_any) range, mk_expr (E_py_annot i) range)) range) flow |> *)
-                Eval.singleton eobj flow
-              )
+                                      | Some st ->
+                                        debug "tname(%s) found in cur" tname;
+                                        st)
+                                     (get_env T_cur man flow)) man flow in
+                  debug "after %a, cur = %a" pp_expr exp TVMap.print (get_env T_cur man flow);
+                  (* man.exec (mk_stmt (S_py_annot (mk_var (mk_addr_attr addr tname T_any) range, mk_expr (E_py_annot i) range)) range) flow |> *)
+                  Eval.singleton eobj flow
+                )
           end
-            |> Option.return
+          |> Option.return
 
 
         | E_py_index_subscript ({ekind = E_py_object _} as e1, e2) ->

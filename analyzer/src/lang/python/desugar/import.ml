@@ -349,6 +349,11 @@ module Domain =
                     [{
                       py_funcs_parameters = f.py_func_parameters;
                       py_funcs_defaults = List.map (Option.apply (fun _ -> true) false) f.py_func_defaults;
+                      py_funcs_exceptions =
+                        (debug "for %a, py_func_body = %a" pp_var f.py_func_var pp_stmt f.py_func_body;
+                          match skind f.py_func_body with
+                         | S_block ({skind = S_py_raise (Some e)}::_) -> [e]
+                         | _ -> []);
                       py_funcs_types_in = f.py_func_types_in;
                       py_funcs_type_out = f.py_func_type_out;
                     }]

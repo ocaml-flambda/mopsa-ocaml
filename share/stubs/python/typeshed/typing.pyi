@@ -3,7 +3,6 @@ class runtime_checkable: pass
 Any = object # cheating, removed the ()
 class TypeVar: pass
 
-class Protocol: pass
 class Union: pass
 
 AnyStr = TypeVar('AnyStr', str, bytes)
@@ -18,9 +17,9 @@ class Callable: pass
 class Generic:
     def __new__(self): pass
 
+class Protocol(Generic): pass
 
-class Iterable: pass
-class Iterator: pass
+
 class IO: pass
 class List: pass
 class Match: pass
@@ -48,7 +47,9 @@ _T_co = TypeVar('_T_co') # FIXME , covariant=True)  # Any type covariant contain
 class Iterable(Protocol[_T_co]):
     def __iter__(self) -> Iterator[_T_co]: ...
 
-class Iterator(Iterable[_T_co], Protocol[_T_co]):
+class Iterator(Protocol[_T_co]): #Iterable[_T_co],
 # FIXME    @abstractmethod
-    def __next__(self) -> _T_co: ...
+    def __next__(self) -> _T_co:
+        raise StopIteration
+    # il faudrait dire qu'on peut raise StopIteration aussi ><'
     def __iter__(self) -> Iterator[_T_co]: ...
