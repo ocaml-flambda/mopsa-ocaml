@@ -80,6 +80,13 @@ let compare_alarm a1 a2 =
       (fun () -> Compare.pair compare_range Callstack.compare a1.alarm_trace a2.alarm_trace);
     ]
 
+let weak_compare_alarm a1 a2 =
+  if a1 == a2 then 0
+  else Compare.compose [
+      (fun () -> compare_alarm_category a1.alarm_category a2.alarm_category);
+      (fun () -> Compare.pair compare_range Callstack.compare a1.alarm_trace a2.alarm_trace);
+    ]
+
 
 
 (** {2 Pretty printers} *)
@@ -132,10 +139,24 @@ let register_alarm_detail info =
 (** {2 Sets of alarms} *)
 (** ****************** *)
 
-module AlarmSet = SetExt.Make(struct
-    type t = alarm
-    let compare = compare_alarm
-  end)
+module AlarmSet =
+struct
+
+  include SetExt.Make(struct
+      type t = alarm
+      let compare = compare_alarm
+    end)
+
+  (** Intersection of alarms do not take into account the alarm details *)
+  let inter s1 s2 =
+    let weak_mem a s = exists (fun a' -> weak_compare_alarm a a' = 0) s in
+    fold2
+      (fun a1 acc -> if weak_mem a1 s2 then add a1 acc else acc)
+      (fun a2 acc -> if weak_mem a2 s1 then add a2 acc else acc)
+      (fun a acc -> add a acc)
+      s1 s2 empty
+
+end
 
 
 (** {2 Maps from ranges to alarms} *)
