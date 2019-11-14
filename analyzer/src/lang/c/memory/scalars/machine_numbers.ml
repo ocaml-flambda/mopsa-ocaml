@@ -204,8 +204,8 @@ struct
       assume
         ~zone:Z_u_num
         cond
-        ~fthen:(fun tflow -> f1 e flow)
-        ~felse:(fun fflow -> f2 e flow)
+        ~fthen:(fun tflow -> f1 e tflow)
+        ~felse:(fun fflow -> f2 e fflow)
         man flow
     in
     const_check exp flow
