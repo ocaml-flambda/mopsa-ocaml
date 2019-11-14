@@ -54,6 +54,8 @@ let get_alarm_detail alarm = alarm.alarm_detail
 
 let get_alarm_trace alarm = alarm.alarm_trace
 
+let get_alarm_callstack alarm = get_alarm_trace alarm |> snd
+
 let get_alarm_range alarm = fst @@ get_alarm_trace alarm
 
 
@@ -198,7 +200,15 @@ struct
       (fun fmt (range,alarms) ->
          pp_print_list
            ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-           (fun fmt alarm -> fprintf fmt "%a: %a" pp_range range pp_alarm_detail (get_alarm_detail alarm))
+           (fun fmt alarm ->
+              fprintf fmt "@[<v>%a: %a@,%a@]@,"
+                pp_range range
+                pp_alarm_detail (get_alarm_detail alarm)
+                (pp_print_list
+                   ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+                   (fun fmt c -> fprintf fmt "\tfrom %a: %s" pp_range c.Callstack.call_site c.Callstack.call_fun)
+                ) (get_alarm_callstack alarm)
+           )
            fmt (AlarmSet.elements alarms)
       )
       fmt l
