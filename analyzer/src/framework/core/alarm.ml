@@ -98,10 +98,6 @@ let pp_detail_chain = TypeExt.mk_print_chain (fun fmt alarm ->
 let pp_alarm_detail = TypeExt.print pp_detail_chain
 
 
-(* let pp_level fmt = function
- *   | ERROR -> ((Debug.color "red") Format.pp_print_string) fmt "✘"
- *   | WARNING -> ((Debug.color "orange") Format.pp_print_string) fmt "⚠" *)
-
 let pp_callstack fmt (cs:Callstack.cs) =
   (* print in the style of gcc's preprocessor include stack *)
   List.iter
@@ -173,9 +169,18 @@ struct
 
   let cardinal m = Map.cardinal m
 
-  let ranges m =
-    Map.fold (fun range _ acc -> range :: acc) m [] |>
-    List.rev
+  let print fmt m =
+    let open Format in
+    let l = Map.bindings m in
+    pp_print_list
+      ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+      (fun fmt (range,alarms) ->
+         pp_print_list
+           ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+           (fun fmt alarm -> fprintf fmt "%a: %a" pp_range range pp_alarm_detail (get_alarm_detail alarm))
+           fmt (AlarmSet.elements alarms)
+      )
+      fmt l
 
 end
 
@@ -217,18 +222,14 @@ module AlarmMap = struct
       fprintf fmt "@[<v>%a@]"
         (pp_print_list
            ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-           (fun fmt (kind, alarms) ->
+           (fun fmt (category, alarms) ->
               let n = AlarmRangeIndexMap.cardinal alarms in
               if n = 0 then ()
               else
-                let ranges = AlarmRangeIndexMap.ranges alarms in
                 fprintf fmt "@[<v 2>%a x %d:@,%a@]"
-                  pp_alarm_category kind
+                  pp_alarm_category category
                   n
-                  (pp_print_list
-                     ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-                     (fun fmt range -> fprintf fmt "%a:" pp_range range)
-                  ) ranges
+                  AlarmRangeIndexMap.print alarms
            )
         ) l
 
