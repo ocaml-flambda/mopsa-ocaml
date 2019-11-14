@@ -42,6 +42,8 @@ let mk_int_interval_query ?(fast=true) e =
 
 let pp_int_interval fmt itv = I.fprint_bot fmt itv
 
+let compare_int_interval itv1 itv2 = I.compare_bot itv1 itv2
+
 let () =
   register_query {
     join = (
@@ -133,6 +135,8 @@ let mk_float_interval_query e =
   Q_float_interval e
 
 let pp_float_interval fmt itv = F.fprint F.dfl_fmt fmt itv
+
+let compare_float_interval itv1 itv2 = F.compare itv1 itv2
 
 let () =
   register_query {
