@@ -80,6 +80,7 @@ struct
     }
   }
 
+  let alarms = []
 
   (** {2 Variable of string lengths} *)
   (** ****************************** *)

@@ -61,6 +61,9 @@ struct
       ]
     }
   }
+
+  let alarms = []
+
   (** Flow-insensitive annotations *)
   (** ============================ *)
 

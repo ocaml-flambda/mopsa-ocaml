@@ -60,6 +60,7 @@ struct
     }
   }
 
+  let alarms = []
 
   let is_rand_function = function
     | "_mopsa_rand_s8"

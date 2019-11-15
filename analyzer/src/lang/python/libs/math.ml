@@ -42,6 +42,8 @@ module Domain =
       ieval = { provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [] }
     }
 
+    let alarms = []
+
     type stub_signature = {in_args: string list;
                            out_type: Mopsa.typ}
     type stub_db = stub_signature StringMap.t

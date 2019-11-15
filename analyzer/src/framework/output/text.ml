@@ -152,6 +152,10 @@ let list_domains (domains:string list) out =
   print out "Domains:@.";
   List.iter (fun d -> print out "  %s@." d) domains
 
+let list_alarms alarms out =
+  print out "Target alarms:@.";
+  List.iter (fun a -> print out "  %a@." Core.Alarm.pp_alarm_category a) alarms
+
 let print range printer flow out =
   if Debug.can_print "print" then
     print out "%a@\n  @[%a@]@."

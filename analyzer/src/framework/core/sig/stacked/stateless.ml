@@ -33,6 +33,7 @@ open Post
 open Eval
 open Log
 open Context
+open Alarm
 
 
 (*==========================================================================*)
@@ -92,6 +93,9 @@ sig
   val interface : interface
   (** Zoning interface *)
 
+  val alarms : alarm_category list
+  (** List of alarms detected by the domain *)
+
 
   (** {2 Transfer functions} *)
   (** ********************** *)
@@ -123,7 +127,7 @@ struct
   let print _ _ = ()
 
   let interface = S.interface
-
+  let alarms = S.alarms
 
   let subset _ ctx ((),s) ((),s') = true,s,s'
   let join _ ctx ((),s) ((),s') = (),s,s'

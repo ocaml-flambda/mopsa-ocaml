@@ -295,6 +295,7 @@ struct
     }
   }
 
+  let alarms = [AOutOfBound; ANullDeref; AUseAfterFree; AInvalidDeref]
 
   (** {2 Command-line options} *)
   (** ************************ *)

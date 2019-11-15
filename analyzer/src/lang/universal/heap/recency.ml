@@ -94,6 +94,7 @@ struct
 
   let top = Pool.top
 
+  let alarms = []
 
   (** Lattice operators *)
   (** ================= *)
