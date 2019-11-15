@@ -23,18 +23,21 @@
 
 open Mopsa
 open Ast
+open Sig.Stacked.Manager
+
 
 type alarm_category +=
-  | A_stub_invalid_require
+  | A_stub_invalid_requires
 
 
 type alarm_detail +=
-  | A_stub_invalid_require_formula of formula with_range
+  | A_stub_invalid_requires_condition of expr
 
-let raise_invalid_require formula range lattice flow =
+let raise_stub_invalid_requires cond range man flow =
   let cs = Flow.get_callstack flow in
-  let alarm = mk_alarm A_stub_invalid_require (A_stub_invalid_require_formula formula) range ~cs in
-  Flow.raise_alarm alarm ~bottom:true lattice flow
+  let cond' = get_orig_expr cond in
+  let alarm = mk_alarm A_stub_invalid_requires (A_stub_invalid_requires_condition cond') range ~cs in
+  Flow.raise_alarm alarm ~bottom:true man.lattice flow
 
 
 let () =
@@ -42,7 +45,7 @@ let () =
       compare = (fun default a b -> default a b);
       print = (fun default fmt a ->
           match a with
-          | A_stub_invalid_require -> Format.fprintf fmt "Invalid stub requirement"
+          | A_stub_invalid_requires -> Format.fprintf fmt "Invalid stub requirement"
           | _ -> default fmt a
         );
     }
@@ -52,13 +55,13 @@ let () =
   register_alarm_detail {
     compare = (fun next a1 a2 ->
         match a1, a2 with
-        | A_stub_invalid_require_formula f1, A_stub_invalid_require_formula f2 ->
-          compare_formula f1 f2
+        | A_stub_invalid_requires_condition e1, A_stub_invalid_requires_condition e2 ->
+          compare_expr e1 e2
         | _ -> next a1 a2
       );
       print = (fun next fmt a ->
           match a with
-          | A_stub_invalid_require_formula f -> Format.fprintf fmt "invalid requirement @[<hov 2>%a@]" pp_formula f
+          | A_stub_invalid_requires_condition e -> Format.fprintf fmt "invalid requirement %a" pp_expr e
           | _ -> next fmt a
         );
     };

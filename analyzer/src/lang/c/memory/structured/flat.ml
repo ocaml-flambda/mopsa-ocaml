@@ -29,6 +29,7 @@ open Universal.Ast
 open Ast
 open Zone
 open Universal.Zone
+open Stubs.Ast
 
 
 module Domain =
@@ -410,6 +411,12 @@ struct
       Some (
         man.eval ~zone:(Z_c,Z_c_low_level) e flow >>$ fun e flow ->
         Post.return flow
+      )
+
+    | S_stub_requires e ->
+      Some (
+        man.eval ~zone:(Z_c,Z_c_low_level) e flow >>$ fun e flow ->
+        man.post ~zone:Z_c_low_level (mk_stub_requires e stmt.srange) flow
       )
 
     | _ -> None

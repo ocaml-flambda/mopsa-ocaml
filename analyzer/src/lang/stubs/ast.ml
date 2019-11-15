@@ -210,7 +210,10 @@ type expr_kind +=
 
 type stmt_kind +=
   | S_stub_directive of stub_directive
-  (** Initialization of a variable with a stub *)
+  (** A call to a stub directive, which are stub functions called at the
+      initialization of the analysis. Useful to initialize variables with stub
+      formulas.
+  *)
 
   | S_stub_free of expr
   (** Release a resource *)
@@ -230,6 +233,10 @@ type stmt_kind +=
                               expr  (** index lower bound *) *
                               expr  (** index upper bound *)
                             ) list
+
+  | S_stub_requires of expr
+  (** Filter the current environments that verify a condition, and raise an
+      alarm if the condition may be violated. *)
 
 
 (** {2 Heap addresses for resources} *)
@@ -296,6 +303,8 @@ let mk_stub_assigns t offsets range =
 let mk_stub_rename_primed t offsets range =
   mk_stmt (S_stub_rename_primed (t, offsets)) range
 
+let mk_stub_requires cond range =
+  mk_stmt (S_stub_requires cond) range
 
 let is_stub_primed e =
   fold_expr
@@ -560,6 +569,9 @@ let () =
             (fun () -> Compare.list (Compare.pair compare_expr compare_expr) offsets1 offsets2);
           ]
 
+        | S_stub_requires(e1), S_stub_requires(e2) ->
+          compare_expr e1 e2
+
         | _ -> next s1 s2
       );
 
@@ -574,6 +586,10 @@ let () =
         | S_stub_assigns(t, offsets) -> panic "visitor for S_stub_assigns not supported"
 
         | S_stub_rename_primed(t, offsets) -> panic "visitor for S_stub_rename_primed not supported"
+
+        | S_stub_requires e ->
+          { exprs = [e]; stmts = [] },
+          (function { exprs = [e] } -> { s with skind = S_stub_requires e } | _ -> assert false)
 
         | _ -> next s
       );
@@ -609,6 +625,10 @@ let () =
                     pp_expr b
                )
             ) offsets
+
+        | S_stub_requires e ->
+          fprintf fmt "requires %a;" pp_expr e
+
         | _ -> next fmt s
       );
   }

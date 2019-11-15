@@ -43,7 +43,7 @@ struct
     ieval = {provides = [Z_stubs, Z_any]; uses = []};
   }
 
-  let alarms = [A_stub_invalid_require]
+  let alarms = []
 
   (** Initialization of environments *)
   (** ============================== *)
@@ -134,6 +134,7 @@ struct
 
 
   let rec eval_formula
+      (cond_to_stmt: expr -> range -> stmt)
       (f: formula with_range)
       (man:('a, unit) man)
       (flow:'a flow)
@@ -141,36 +142,36 @@ struct
     debug "@[<v 2>eval formula %a@;in %a" pp_formula f (Flow.print man.lattice.print) flow;
     match f.content with
     | F_expr e ->
-      man.exec (mk_assume e f.range) flow
+      man.exec (cond_to_stmt e f.range) flow
 
     | F_binop (AND, f1, f2) ->
-      let flow = eval_formula f1 man flow in
-      eval_formula f2 man flow
+      let flow = eval_formula cond_to_stmt f1 man flow in
+      eval_formula cond_to_stmt f2 man flow
 
     | F_binop (OR, f1, f2) ->
-      let f1 = eval_formula f1 man flow in
-      let f2 = eval_formula f2 man flow in
+      let f1 = eval_formula cond_to_stmt f1 man flow in
+      let f2 = eval_formula cond_to_stmt f2 man flow in
 
       Flow.join man.lattice f1 f2
 
 
     | F_binop (IMPLIES, f1, f2) ->
-      let nf1 = eval_formula (negate_formula f1) man flow in
-      let f1 = eval_formula f1 man flow in
-      let f2 = eval_formula f2 man f1 in
+      let nf1 = eval_formula cond_to_stmt (negate_formula f1) man flow in
+      let f1 = eval_formula cond_to_stmt f1 man flow in
+      let f2 = eval_formula cond_to_stmt f2 man f1 in
 
       Flow.join man.lattice nf1 f2
 
 
     | F_not ff ->
       let ff' = negate_formula ff in
-      eval_formula ff' man flow
+      eval_formula cond_to_stmt ff' man flow
 
     | F_forall (v, s, ff) ->
-      eval_quantified_formula FORALL v s ff f.range man flow
+      eval_quantified_formula cond_to_stmt FORALL v s ff f.range man flow
 
     | F_exists (v, s, ff) ->
-      eval_quantified_formula EXISTS v s ff f.range man flow
+      eval_quantified_formula cond_to_stmt EXISTS v s ff f.range man flow
 
     | F_in (e, S_interval (l, u)) ->
       man.exec (mk_assume (mk_in e l u f.range) f.range) flow
@@ -180,7 +181,7 @@ struct
 
 
   (** Evaluate a quantified formula and its eventual negation *)
-  and eval_quantified_formula q v s f range man flow : 'a flow =
+  and eval_quantified_formula cond_to_stmt q v s f range man flow : 'a flow =
     (* Add [v] to the environment *)
     let flow = man.exec (mk_add_var v range) flow in
 
@@ -210,7 +211,7 @@ struct
           f
     in
 
-    Post.bind (fun flow -> eval_formula ff1 man flow |> Post.return) post |>
+    Post.bind (fun flow -> eval_formula cond_to_stmt ff1 man flow |> Post.return) post |>
     post_to_flow man |>
     man.exec (mk_remove_var v range)
 
@@ -232,19 +233,12 @@ struct
 
   (** Evaluate the formula of the `assumes` section *)
   let exec_assumes assumes man flow =
-    eval_formula assumes.content man flow
+    eval_formula mk_assume assumes.content man flow
 
 
-  (** Evaluate the formula of the `requires` section and add the eventual alarms *)
+  (** Evaluate the formula of the `requires` section *)
   let exec_requires req man flow =
-    let ftrue = eval_formula req.content man flow in
-    let ffalse = eval_formula (negate_formula req.content) man flow in
-
-    if Flow.get T_cur man.lattice ffalse |> man.lattice.is_bottom then
-      ftrue
-    else
-      raise_invalid_require req.content req.range man.lattice ffalse |>
-      Flow.join man.lattice ftrue
+    eval_formula mk_stub_requires req.content man flow
 
 
   (** Execute an allocation of a new resource *)
@@ -298,7 +292,7 @@ struct
           e.content
     in
     (* Evaluate ensure body and return flows that verify it *)
-    eval_formula f man flow
+    eval_formula mk_assume f man flow
 
 
   let exec_assigns assigns man flow =

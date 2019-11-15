@@ -161,7 +161,7 @@ struct
   let rangeof_int_cell c =
     assert(is_int_cell c);
     rangeof (cell_type c)
-  
+
 
 
   (** {2 Cell variables} *)
@@ -210,7 +210,7 @@ struct
   let mk_cell_var c : var =
     let name = mk_cell_var_name c in
     mkv name (V_c_cell c) (cell_type c)
-  
+
 
   (** Create a variable from a numeric cell *)
   let mk_numeric_cell_var_expr c range : expr =
@@ -228,7 +228,7 @@ struct
     else mk_c_cast (mk_var v ~mode:(base_mode c.base) range) typ range
 
 
-    
+
   (** {2 Domain header} *)
   (** ***************** *)
 
@@ -295,7 +295,7 @@ struct
     }
   }
 
-  let alarms = [AOutOfBound; ANullDeref; AUseAfterFree; AInvalidDeref]
+  let alarms = [AOutOfBound; ANullDeref; AUseAfterFree; AInvalidDeref; Stubs.Alarms.A_stub_invalid_requires]
 
   (** {2 Command-line options} *)
   (** ************************ *)
@@ -641,8 +641,8 @@ struct
                     match uu with
                     | Some size -> Z.sub size elm
                     | None ->
-                      (* We are in trouble: the size is not bounded! 
-                         So we assume that it does not exceed the range of unsigned long, usually used for size_t 
+                      (* We are in trouble: the size is not bounded!
+                         So we assume that it does not exceed the range of unsigned long, usually used for size_t
                       *)
                       let _, uuu = rangeof ul in
                       Soundness.warn_at range
@@ -954,7 +954,7 @@ struct
       eval_deref_quantified p exp.erange man flow |>
       Option.return
 
-    | E_stub_primed e when is_lval_offset_quantified e -> 
+    | E_stub_primed e when is_lval_offset_quantified e ->
       eval_deref_quantified (mk_c_address_of e exp.erange) exp.erange man flow |>
       Option.return
 
@@ -1260,6 +1260,18 @@ struct
       | _ -> assert false
 
 
+  (** 𝕊⟦ requires cond; ⟧ *)
+  let exec_stub_requires cond range man flow =
+    assume cond
+      ~fthen:(fun flow ->
+          Post.return flow
+        )
+      ~felse:(fun flow ->
+          Stubs.Alarms.raise_stub_invalid_requires cond range man flow |>
+          Post.return
+        )
+      ~zone:Z_c_low_level man flow
+
 
   let exec zone stmt man flow =
     match skind stmt with
@@ -1317,6 +1329,10 @@ struct
 
     | S_stub_rename_primed(lval, bounds) ->
       exec_rename_primed lval bounds stmt.srange man flow |>
+      Option.return
+
+    | S_stub_requires e ->
+      exec_stub_requires e stmt.srange man flow |>
       Option.return
 
 
