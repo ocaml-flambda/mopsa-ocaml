@@ -571,7 +571,7 @@ struct
     eval_pointed_base_offset p range man flow >>$ fun pp flow ->
     match pp with
     | None ->
-      warn_at range "ignoring unresolved pointer %a" pp_expr p;
+      Soundness.warn_at range "ignoring ⊤ pointer %a" pp_expr p;
       Result.singleton Top flow
 
     | Some (base,offset) ->
@@ -889,7 +889,7 @@ struct
     match pp with
     | None ->
       (* Valid pointer but unknown offset *)
-      warn_at range "ignoring unresolved pointer %a" pp_expr p;
+      Soundness.warn_at range "ignoring ⊤ pointer %a" pp_expr p;
       Eval.singleton (mk_top typ range) flow
 
     | Some (base,offset) ->
@@ -1060,7 +1060,7 @@ struct
     expand p range man flow >>$ fun expansion flow ->
     match expansion with
     | Top ->
-      Soundness.warn_at range "ignoring assignment to undetermined lval *%a = %a;"
+      Soundness.warn_at range "ignoring assignment to ⊤ pointer *%a = %a;"
         pp_expr p
         pp_expr e
       ;

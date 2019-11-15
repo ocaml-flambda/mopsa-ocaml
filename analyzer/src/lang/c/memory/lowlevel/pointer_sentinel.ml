@@ -190,6 +190,22 @@ struct
   (** {2 Abstract transformers} *)
   (** ************************* *)
 
+  (** Get the base and offset pointed by ptr. Since we do not track invalid
+     dereferences, we ignore invalid pointers.
+  *)
+  let eval_pointed_base_offset ptr range man flow =
+    man.eval ptr ~zone:(Zone.Z_c_low_level, Z_c_points_to) flow >>$ fun pt flow ->
+    match ekind pt with
+    | E_c_points_to P_null
+    | E_c_points_to P_invalid
+    | E_c_points_to (P_block (D _, _))
+    | E_c_points_to P_top ->
+      Result.empty_singleton flow
+
+    | E_c_points_to (P_block (base, offset)) ->
+      Result.singleton (base, offset) flow
+
+    | _ -> assert false
 
   (** Predicate defining interesting bases for which the domain will
       track the sentinel position.
@@ -363,7 +379,8 @@ struct
     eval_base_size base range man flow >>$ fun size flow ->
     man.eval ~zone:(Z_c_scalar,Z_u_num) size flow  >>$ fun size flow ->
 
-    (* Safety condition: offset ∈ [0, size - pointer_size] *)
+    (* Safety condition: offset ∈ [0, size - pointer_size]. This test is
+       optional as the domain does not raise out-of-bound alarms *)
     assume ~zone:Z_u_num
       (mk_in offset (mk_zero range) (sub size (mk_z ptr_size range) range) range)
       ~fthen:(fun flow ->
@@ -482,24 +499,18 @@ struct
 
         )
       ~felse:(fun flow ->
-          (* Unsafe case *)
-          raise_c_out_bound_alarm ~base ~offset ~size range man flow |>
+          (* Unsafe case. No alarm is raised as this should be done by other domains *)
+          Flow.set_bottom T_cur flow |>
           Post.return
         ) man flow
 
 
   (** Assignment abstract transformer for 𝕊⟦ *p = rval; ⟧ *)
   let assign_deref p rval range man flow =
-    eval_pointed_base_offset p range man flow >>$ fun pp flow ->
-    match pp with
-    | None ->
-      Soundness.warn_at range "unsound assignment to ⊤ pointer %a" pp_expr p;
-      Post.return flow
-
-    | Some (base, offset) ->
-      man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow >>$ fun offset flow ->
-      man.eval ~zone:(Z_c_low_level,Z_c_scalar) rval flow >>$ fun rval flow ->
-      assign_cases base offset rval range man flow
+    eval_pointed_base_offset p range man flow >>$ fun (base,offset) flow ->
+    man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow >>$ fun offset flow ->
+    man.eval ~zone:(Z_c_low_level,Z_c_scalar) rval flow >>$ fun rval flow ->
+    assign_cases base offset rval range man flow
 
 
   (** Cases of the transfer function of quantified tests 𝕊⟦ *(base + ∀offset) op q ⟧ *)
@@ -596,7 +607,7 @@ struct
         )
       ~felse:(fun flow ->
           (* Unsafe case *)
-          raise_c_out_bound_alarm ~base ~offset ~size range man flow |>
+          Flow.set_bottom T_cur flow |>
           Post.return
         )
       ~zone:Z_u_num man flow
@@ -617,16 +628,10 @@ struct
       doit p
     in
 
-    eval_pointed_base_offset pp range man flow >>$ fun pt flow ->
-    match pt with
-    | None ->
-      warn_at range "ignoring unresolved pointer %a" pp_expr pp;
-      Post.return flow
-
-    | Some (base, offset) when is_interesting_base base ->
+    eval_pointed_base_offset pp range man flow >>$ fun (base,offset) flow ->
+    if is_interesting_base base then
       assume_quantified_cases op base offset primed q range man flow
-
-    | Some _ ->
+    else
       Post.return flow
 
 
@@ -842,8 +847,8 @@ struct
         )
       ~felse:(fun flow ->
           (* Unsafe case *)
-          let flow' = raise_c_out_bound_alarm ~base ~offset ~size range man flow in
-          Eval.empty_singleton flow'
+          Flow.set_bottom T_cur flow |>
+          Eval.empty_singleton
         ) man flow
 
 
@@ -902,8 +907,8 @@ struct
         )
       ~felse:(fun flow ->
           (* Unsafe case *)
-          let flow' = raise_c_out_bound_alarm ~base ~offset ~size range man flow in
-          Eval.empty_singleton flow'
+          Flow.set_bottom T_cur flow |>
+          Eval.empty_singleton
         ) man flow
 
 
@@ -911,27 +916,18 @@ struct
   (** Abstract evaluation of a dereference *)
   let eval_deref exp primed range man flow =
     let p = match ekind exp with E_c_deref p -> p | _ -> assert false in
-    eval_pointed_base_offset p range man flow >>$ fun pp flow ->
-    match pp with
-    | None ->
-      Soundness.warn_at range "ignoring dereference of ⊤ pointer";
-      Eval.singleton (mk_top (under_type p.etyp |> void_to_char) range) flow
-
-    | Some (base,offset)
-      when is_interesting_base base &&
-           not (is_expr_forall_quantified offset)
-      ->
+    eval_pointed_base_offset p range man flow >>$ fun (base,offset) flow ->
+    if is_interesting_base base &&
+       not (is_expr_forall_quantified offset)
+    then
       man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow |>
       Eval.bind @@ fun offset flow ->
       eval_deref_cases base offset (under_type p.etyp) primed range man flow
-
-    | Some (base, offset)
-      when is_interesting_base base &&
-           is_expr_forall_quantified offset
-      ->
+    else if is_interesting_base base &&
+            is_expr_forall_quantified offset
+    then
       eval_quantified_deref_cases base offset (under_type p.etyp) primed range man flow
-
-    | Some _ ->
+    else
       Eval.singleton (mk_top (under_type p.etyp |> void_to_char) range) flow
 
 
