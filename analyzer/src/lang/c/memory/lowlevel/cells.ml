@@ -566,6 +566,31 @@ struct
     | _ -> false
 
 
+  let eval_pointed_base_offset ptr range man flow =
+    man.eval ptr ~zone:(Zone.Z_c_low_level, Z_c_points_to) flow >>$ fun pt flow ->
+
+    match ekind pt with
+    | E_c_points_to P_null ->
+      raise_c_null_deref_alarm ptr range man flow |>
+      Result.empty_singleton
+
+    | E_c_points_to P_invalid ->
+      raise_c_invalid_deref_alarm ptr range man flow |>
+      Result.empty_singleton
+
+    | E_c_points_to (P_block (D (_,r), offset)) ->
+      raise_c_use_after_free_alarm ptr r range man flow |>
+      Result.empty_singleton
+
+    | E_c_points_to (P_block (base, offset)) ->
+      Result.singleton (Some (base, offset)) flow
+
+    | E_c_points_to P_top ->
+      Result.singleton None flow
+
+    | _ -> assert false
+
+
   (** Expand a pointer dereference into a cell. *)
   let expand p range man flow : ('a, expansion) result =
     eval_pointed_base_offset p range man flow >>$ fun pp flow ->
