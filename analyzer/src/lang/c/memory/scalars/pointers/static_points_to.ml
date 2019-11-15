@@ -86,8 +86,27 @@ let rec eval_opt exp : static_points_to option =
   | E_c_deref { ekind = E_c_address_of e } ->
     eval_opt e
 
-  | E_c_address_of { ekind = E_c_deref p } ->
-    eval_opt p
+  | E_c_address_of e ->
+    begin match remove_casts e |> ekind with
+      | E_var (v, _) ->
+        AddrOf (V v, mk_zero exp.erange) |>
+        Option.return
+
+      | E_constant (C_top _) ->
+        Top |>
+        Option.return
+
+      | E_c_function f ->
+        Fun f |>
+        Option.return
+
+      | E_c_deref p ->
+        eval_opt p
+
+      | _ ->
+        warn_at exp.erange "evaluation of pointer expression %a not supported" pp_expr exp;
+        None
+    end
 
   | E_c_cast (e, _) ->
     eval_opt e
@@ -103,15 +122,6 @@ let rec eval_opt exp : static_points_to option =
 
   | E_c_deref a when is_c_array_type (under_type a.etyp) ->
     eval_opt a
-
-  | E_c_address_of { ekind = E_var (v, _) } ->
-    AddrOf (V v, mk_zero exp.erange) |> Option.return
-
-  | E_c_address_of { ekind = E_constant (C_top _) } ->
-    Top |> Option.return
-
-  | E_c_address_of { ekind = E_c_function f } ->
-    Fun f |> Option.return
 
   | E_binop(O_plus | O_minus as op, e1, e2) ->
     let p, i =
