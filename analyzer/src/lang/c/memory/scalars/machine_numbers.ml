@@ -314,7 +314,7 @@ struct
            Eval.singleton exp' tflow
         )
         (fun fflow ->
-           let flow' = raise_c_alarm ADivideByZero exp.erange ~bottom:true man.lattice fflow in
+           let flow' = raise_c_divide_by_zero_alarm e' exp.erange man fflow in
            Eval.empty_singleton flow'
         ) e e' flow |>
       Option.return
@@ -332,7 +332,7 @@ struct
            Eval.singleton exp' tflow
         )
         (fun fflow ->
-           let flow' = raise_c_alarm AInvalidBitShift exp.erange ~bottom:true man.lattice fflow in
+           let flow' = raise_c_invalid_bit_shift_alarm e' t exp.erange man fflow in
            Eval.empty_singleton flow'
         ) man flow |>
       Option.return

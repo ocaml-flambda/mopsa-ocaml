@@ -582,8 +582,8 @@ struct
 
       (* Convert the size and the offset to numeric *)
       man.eval ~zone:(Z_c_scalar,Z_u_num) size flow >>$ fun size flow ->
-
       man.eval ~zone:(Z_c_scalar,Z_u_num) offset flow >>$ fun offset flow ->
+      debug "offset = %a in %a" pp_expr offset man.lattice.print (Flow.get T_cur man.lattice flow);
 
       (* Try static check *)
       match expr_to_z size, expr_to_z offset with
@@ -914,6 +914,7 @@ struct
             Eval.singleton (mk_top typ range) flow
           )
         ~felse:(fun flow ->
+            (* FIXME: remove qunatifiers from offset *)
             raise_c_out_bound_alarm ~base ~offset ~size range man flow |>
             Eval.empty_singleton
           )
@@ -1061,7 +1062,7 @@ struct
       Post.return flow
 
     | Cell { base } when is_base_readonly base ->
-      let flow = raise_c_alarm AReadOnlyModification ~bottom:true range man.lattice flow in
+      let flow = raise_c_read_only_modification_alarm base range man flow in
       Post.return flow
 
     | Cell c ->

@@ -32,7 +32,7 @@ type alarm_detail = ..
 type alarm
 (** Alarms *)
 
-val mk_alarm : alarm_category -> ?detail:alarm_detail -> ?cs:Callstack.cs -> range -> alarm
+val mk_alarm : alarm_category -> alarm_detail -> ?cs:Callstack.cs -> range -> alarm
 (** Create an alarm instance *)
 
 val get_alarm_category : alarm -> alarm_category

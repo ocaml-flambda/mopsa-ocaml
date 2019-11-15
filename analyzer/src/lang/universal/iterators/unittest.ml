@@ -127,7 +127,7 @@ let raise_assert_fail ?(force=false) cond range man flow =
   let cs = Flow.get_callstack flow in
   let alarm = mk_alarm
       A_assert_fail
-      ~detail:(A_assert_fail_condition cond)
+      (A_assert_fail_condition cond)
       range ~cs
   in
   Flow.raise_alarm alarm ~bottom:true ~force man.lattice flow

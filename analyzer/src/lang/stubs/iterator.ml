@@ -242,7 +242,7 @@ struct
     if Flow.get T_cur man.lattice ffalse |> man.lattice.is_bottom then
       ftrue
     else
-      raise_invalid_require req.range ~bottom:true man.lattice ffalse |>
+      raise_invalid_require req.content req.range man.lattice ffalse |>
       Flow.join man.lattice ftrue
 
 

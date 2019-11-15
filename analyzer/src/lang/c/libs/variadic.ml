@@ -56,7 +56,8 @@ struct
         Z_c, Z_c_low_level
       ];
       uses = [
-        Z_c, Common.Points_to.Z_c_points_to
+        Z_c, Common.Points_to.Z_c_points_to;
+        Z_c_scalar, Universal.Zone.Z_u_num
       ]
     }
   }
@@ -183,10 +184,12 @@ struct
 
     match ekind pt with
     | E_c_points_to (P_block (V ap, offset)) ->
-      (* We do not consider the case of arrays of va_list *)
       let base_size = sizeof_type ap.vtyp in
       let elem_size = sizeof_type (under_type ap.vtyp) in
-      if not (Z.equal base_size elem_size) then panic_at range "arrays of va_list not supported";
+
+      (* We do not consider the case of arrays of va_list *)
+      if not (Z.equal base_size elem_size)
+      then panic_at range "arrays of va_list not supported";
 
       (* In this case, only offset 0 is OK *)
       assume
@@ -195,7 +198,8 @@ struct
             Result.singleton ap flow
           )
         ~felse:(fun flow ->
-            Common.Alarms.(raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow) |>
+            man.eval offset ~zone:(Z_c_scalar,Universal.Zone.Z_u_num) flow >>$ fun offset flow ->
+            Common.Alarms.(raise_c_out_bound_alarm ~base:(V ap) ~offset ~size:(mk_z base_size range) range (Core.Sig.Stacked.Manager.of_domain_man man) flow) |>
             Result.empty_singleton
           )
         ~zone:Z_c
@@ -258,7 +262,7 @@ struct
         )
       ~felse:(fun flow ->
           (* Raise an alarm since no next argument can be fetched by va_arg *)
-          let flow' = Common.Alarms.(raise_c_alarm AVaArgNoNext range ~bottom:true man.lattice flow) in
+          let flow' = Common.Alarms.(raise_c_no_next_va_arg ~va_list:ap ~counter:valc ~args:unnamed range (Sig.Stacked.Manager.of_domain_man man) flow) in
           Eval.empty_singleton flow'
         )
       ~zone:Universal.Zone.Z_u_num

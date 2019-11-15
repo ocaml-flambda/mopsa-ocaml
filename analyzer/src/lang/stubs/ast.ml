@@ -124,6 +124,52 @@ and formula =
   | F_in     of expr * set
 
 
+let compare_resource = C_stubs_parser.Ast.compare_resource
+
+let compare_set s1 s2 =
+  match s1, s2 with
+  | S_interval(a1, b1), S_interval(a2, b2) ->
+    Compare.compose [
+      (fun () -> compare_expr a1 a2);
+      (fun () -> compare_expr b1 b2);
+    ]
+
+  | S_resource r1, S_resource r2 ->
+    compare_resource r1 r2
+
+  | _ ->
+    compare s1 s2
+
+let rec compare_formula f1 f2 =
+  match f1.content, f2.content with
+  | F_expr e1, F_expr e2 -> compare_expr e1 e2
+  | F_binop(o1, f1, g1), F_binop(o2, f2, g2) ->
+    Compare.compose [
+      (fun () -> compare o1 o2);
+      (fun () -> compare_formula f1 f2);
+      (fun () -> compare_formula g1 g2);
+    ]
+  | F_not f1, F_not f2 -> compare_formula f1 f2
+  | F_forall(v1,s1,f1), F_forall(v2,s2,f2) ->
+    Compare.compose [
+      (fun () -> compare_var v1 v2);
+      (fun () -> compare_set s1 s2);
+      (fun () -> compare_formula f1 f2);
+    ]
+  | F_exists(v1,s1,f1), F_exists(v2,s2,f2) ->
+    Compare.compose [
+      (fun () -> compare_var v1 v2);
+      (fun () -> compare_set s1 s2);
+      (fun () -> compare_formula f1 f2);
+    ]
+  | F_in(e1,s1), F_in(e2,s2) ->
+    Compare.compose [
+      (fun () -> compare_expr e1 e2);
+      (fun () -> compare_set s1 s2)
+    ]
+  | x,y -> compare x y
+
+
 (** {2 Expressions} *)
 (*  =-=-=-=-=-=-=-= *)
 
@@ -283,21 +329,6 @@ and visit_expr visitor e =
 let mk_stub_alloc_resource res range =
   mk_expr (E_stub_alloc res) range
 
-let compare_resource = C_stubs_parser.Ast.compare_resource
-
-let compare_set s1 s2 =
-  match s1, s2 with
-  | S_interval(a1, b1), S_interval(a2, b2) ->
-    Compare.compose [
-      (fun () -> compare_expr a1 a2);
-      (fun () -> compare_expr b1 b2);
-    ]
-
-  | S_resource r1, S_resource r2 ->
-    compare_resource r1 r2
-
-  | _ ->
-    compare s1 s2
 
 (** {2 Pretty printers} *)
 (** =-=-=-=-=-=-=-=-=-= *)

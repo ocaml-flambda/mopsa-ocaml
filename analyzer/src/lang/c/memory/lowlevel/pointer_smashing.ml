@@ -397,7 +397,7 @@ struct
               Eval.singleton (mk_top t range) flow
           )
         ~felse:(fun flow ->
-            raise_c_alarm AOutOfBound range ~bottom:false man.lattice flow |>
+            raise_c_out_bound_alarm ~base ~offset ~size range man flow |>
             Eval.empty_singleton
           )
         ~zone:Z_u_num man flow
@@ -425,7 +425,8 @@ struct
             Eval.singleton (mk_top t range) flow
         )
       ~felse:(fun flow ->
-          raise_c_alarm AOutOfBound range ~bottom:false man.lattice flow |>
+          (* FIXME: remove qunatifiers from offset *)
+          raise_c_out_bound_alarm ~base ~offset ~size range man flow |>
           Eval.empty_singleton
         ) ~zone:Z_u_num man flow
 

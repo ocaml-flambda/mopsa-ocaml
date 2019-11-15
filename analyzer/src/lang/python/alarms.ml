@@ -28,7 +28,7 @@ type alarm_detail += XPyException of expr * string
 
 let raise_py_alarm exn name range lattice flow =
   let cs = Flow.get_callstack flow in
-  let alarm = mk_alarm APyException ~detail:(XPyException (exn,name)) range ~cs in
+  let alarm = mk_alarm APyException (XPyException (exn,name)) range ~cs in
   Flow.raise_alarm alarm ~bottom:false lattice flow
 
 

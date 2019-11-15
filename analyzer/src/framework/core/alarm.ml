@@ -31,8 +31,6 @@ type alarm_category = ..
 
 type alarm_detail = ..
 
-type alarm_detail += EmptyDetail
-
 type alarm = {
   alarm_category : alarm_category;
   alarm_detail : alarm_detail;
@@ -40,7 +38,7 @@ type alarm = {
 }
 
 
-let mk_alarm cat ?(detail=EmptyDetail) ?(cs=Callstack.empty) range =
+let mk_alarm cat detail ?(cs=Callstack.empty) range =
   {
     alarm_category = cat;
     alarm_detail = detail;
@@ -67,9 +65,7 @@ let compare_alarm_category_chain = TypeExt.mk_compare_chain (fun a1 a2 -> compar
 let compare_alarm_category = TypeExt.compare compare_alarm_category_chain
 
 let compare_alarm_detail_chain = TypeExt.mk_compare_chain (fun a1 a2 ->
-    match a1, a2 with
-    | EmptyDetail, EmptyDetail -> 0
-    | _ -> compare a1 a2
+    compare a1 a2
   )
 
 let compare_alarm_detail = TypeExt.compare compare_alarm_detail_chain
@@ -99,9 +95,7 @@ let pp_category_chain = TypeExt.mk_print_chain (fun fmt alarm -> failwith "Pp: U
 let pp_alarm_category = TypeExt.print pp_category_chain
 
 let pp_detail_chain = TypeExt.mk_print_chain (fun fmt alarm ->
-    match alarm with
-    | EmptyDetail -> ()
-    | _ -> failwith "Pp: Unknown alarm"
+    failwith "Pp: Unknown alarm"
   )
 
 let pp_alarm_detail = TypeExt.print pp_detail_chain
@@ -119,10 +113,7 @@ let pp_alarm fmt alarm =
   Format.fprintf fmt "%a: %a %a@\n%a"
     pp_range (get_alarm_range alarm |> untag_range)
     ((Debug.color "red") Format.pp_print_string) "✘"
-    (fun fmt -> function
-       | EmptyDetail -> pp_alarm_category fmt alarm.alarm_category
-       | x -> pp_alarm_detail fmt x
-    ) alarm.alarm_detail
+    pp_alarm_detail alarm.alarm_detail
     pp_callstack (alarm.alarm_trace |> snd)
 
 

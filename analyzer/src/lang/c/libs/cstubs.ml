@@ -130,7 +130,7 @@ struct
           Option.return
 
         | E_c_points_to (P_block (D ({ addr_kind = A_stub_resource _ }, drange), _)) ->
-          Common.Alarms.(raise_c_alarm ADoubleFree stmt.srange ~bottom:true man.lattice flow) |>
+          Common.Alarms.(raise_c_double_free_alarm p drange stmt.srange (Sig.Stacked.Manager.of_domain_man man) flow) |>
           Post.return |>
           Option.return
 

@@ -424,32 +424,24 @@ struct
           ] ~zone:Z_u_num man flow
         )
       ~felse:(fun flow ->
-          (* Unsafe case *)
-          let flow' = raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow in
-          Post.return flow'
+          (* FIXME: remove qunatifiers from offset *)
+          raise_c_out_bound_alarm ~base ~offset ~size range man flow |>
+          Post.return
         )
       ~zone:Z_u_num man flow
 
 
   (** Default for tests *p ? 0 *)
   let assume_default_cases base offset range man flow =
-    (* Quantified offsets cannot be handled numerically, so we just raise a
-       non-deterministic out-of-bound alarm
-    *)
-    if is_expr_quantified offset
-    then
-      raise_c_alarm AOutOfBound range ~bottom:false man.lattice flow |>
-      Post.return
-    else
-      (* Safety condition: offset ⊆ [0, size[ *)
-      eval_base_size base range man flow >>$ fun size flow ->
-      assume
-        (mk_in offset (mk_zero range) size ~right_strict:true range)
-        ~fthen:(fun flow -> Post.return flow)
-        ~felse:(fun flow ->
-            raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow |>
-            Post.return
-          ) ~zone:Z_c_scalar man flow
+    eval_base_size base range man flow >>$ fun size flow ->
+    (* Safety condition: offset ⊆ [0, size[ *)
+    assume
+      (mk_in offset (mk_zero range) size ~right_strict:true range)
+      ~fthen:(fun flow -> Post.return flow)
+      ~felse:(fun flow ->
+          raise_c_out_bound_alarm ~base ~offset ~size range man flow |>
+          Post.return
+        ) ~zone:Z_c_scalar man flow
 
 
 
@@ -470,8 +462,7 @@ struct
     eval_pointed_base_offset p range man flow >>$ fun r flow ->
     match r with
     | None ->
-      raise_c_alarm AOutOfBound p.erange ~bottom:false man.lattice flow |>
-      Post.return
+      Post.return flow
 
     | Some (base,offset) ->
       if not (is_memory_base base)
