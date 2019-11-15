@@ -279,12 +279,12 @@ let mk_stub_resource_mem e res range =
 let mk_stub_primed e range =
   mk_expr (E_stub_primed e) ~etyp:e.etyp range
 
-(** Check whether an expression is quantified? *)
-let is_expr_quantified e =
+(** Check whether an expression is universally quantified? *)
+let is_expr_forall_quantified e =
   Visitor.fold_expr
     (fun acc e ->
        match ekind e with
-       | E_stub_quantified _ -> Keep true
+       | E_stub_quantified (FORALL,_,_) -> Keep true
        | _ -> VisitParts acc
     )
     (fun acc s -> VisitParts acc)
@@ -337,6 +337,39 @@ and visit_expr visitor e =
 
 let mk_stub_alloc_resource res range =
   mk_expr (E_stub_alloc res) range
+
+
+let negate_log_binop : log_binop -> log_binop = function
+  | AND -> OR
+  | OR -> AND
+  | IMPLIES -> assert false
+
+
+let flip_quantified_var v s f =
+  visit_expr_in_formula
+    (fun e ->
+       match ekind e with
+       | E_stub_quantified(FORALL, vv, s) when compare_var v vv = 0 ->
+         VisitParts { e with ekind = E_stub_quantified(EXISTS, v, s) }
+
+       | E_stub_quantified(EXISTS, vv, s) when compare_var v vv = 0 ->
+         VisitParts { e with ekind = E_stub_quantified(FORALL, v, s) }
+
+       | _ -> VisitParts e
+    ) f
+
+let flip_quantified_vars s f =
+  visit_expr_in_formula
+    (fun e ->
+       match ekind e with
+       | E_stub_quantified(FORALL, v, s) ->
+         VisitParts { e with ekind = E_stub_quantified(EXISTS, v, s) }
+
+       | E_stub_quantified(EXISTS, v, s) ->
+         VisitParts { e with ekind = E_stub_quantified(FORALL, v, s) }
+
+       | _ -> VisitParts e
+    ) f
 
 
 (** {2 Pretty printers} *)

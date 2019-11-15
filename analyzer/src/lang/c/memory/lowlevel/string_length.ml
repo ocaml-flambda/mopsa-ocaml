@@ -469,10 +469,10 @@ struct
       if not (is_memory_base base)
       then assume_default_cases base offset range man flow
 
-      else if op = O_ne && is_expr_quantified offset
+      else if op = O_ne && is_expr_forall_quantified offset
       then assume_quantified_non_zero_cases base offset primed range man flow
 
-      else if op = O_eq && not (is_expr_quantified offset)
+      else if op = O_eq && not (is_expr_forall_quantified offset)
       then assume_zero_cases base offset primed range man flow
 
       else assume_default_cases base offset range man flow

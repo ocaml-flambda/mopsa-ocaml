@@ -584,7 +584,6 @@ struct
       (* Convert the size and the offset to numeric *)
       man.eval ~zone:(Z_c_scalar,Z_u_num) size flow >>$ fun size flow ->
       man.eval ~zone:(Z_c_scalar,Z_u_num) offset flow >>$ fun offset flow ->
-      debug "offset = %a in %a" pp_expr offset man.lattice.print (Flow.get T_cur man.lattice flow);
 
       (* Try static check *)
       match expr_to_z size, expr_to_z offset with
@@ -930,14 +929,14 @@ struct
       Option.return
 
     | E_c_deref p when under_type p.etyp |> void_to_char |> is_c_scalar_type &&
-                       not (is_pointer_offset_quantified p)
+                       not (is_pointer_offset_forall_quantified p)
       ->
       eval_deref_scalar_pointer p false exp.erange man flow |>
       Option.return
 
 
     | E_c_deref p when under_type p.etyp |> is_c_function_type &&
-                       not (is_pointer_offset_quantified p)
+                       not (is_pointer_offset_forall_quantified p)
       ->
       eval_deref_function_pointer p exp.erange man flow |>
       Option.return
@@ -946,15 +945,15 @@ struct
       eval_address_of lval exp.erange man flow |>
       Option.return
 
-    | E_stub_primed lval when not (is_lval_offset_quantified lval) ->
+    | E_stub_primed lval when not (is_lval_offset_forall_quantified lval) ->
       eval_deref_scalar_pointer (mk_c_address_of lval exp.erange) true exp.erange man flow |>
       Option.return
 
-    | E_c_deref p when is_pointer_offset_quantified p ->
+    | E_c_deref p when is_pointer_offset_forall_quantified p ->
       eval_deref_quantified p exp.erange man flow |>
       Option.return
 
-    | E_stub_primed e when is_lval_offset_quantified e ->
+    | E_stub_primed e when is_lval_offset_forall_quantified e ->
       eval_deref_quantified (mk_c_address_of e exp.erange) exp.erange man flow |>
       Option.return
 
@@ -962,6 +961,11 @@ struct
     | E_stub_builtin_call((VALID_PTR | VALID_FLOAT) as f, e) ->
       man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow >>$? fun e flow ->
       Eval.singleton (mk_expr (E_stub_builtin_call(f, e)) ~etyp:exp.etyp exp.erange) flow |>
+      Option.return
+
+    | E_stub_quantified(EXISTS, v, _) ->
+      let e = mk_var v exp.erange in
+      man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow |>
       Option.return
 
     | _ -> None
@@ -1269,6 +1273,23 @@ struct
       ~felse:(fun flow ->
           Stubs.Alarms.raise_stub_invalid_requires cond range man flow |>
           Post.return
+        )
+      ~negate:(fun e range ->
+          let ee = map_expr
+              (fun e ->
+                 match ekind e with
+                 | E_stub_quantified(FORALL, v, s) ->
+                   VisitParts { e with ekind = E_stub_quantified(EXISTS, v, s) }
+
+                 | E_stub_quantified(EXISTS, v, s) ->
+                   VisitParts { e with ekind = E_stub_quantified(FORALL, v, s) }
+
+                 | _ -> VisitParts e
+              )
+              (fun s -> VisitParts s)
+              e
+          in
+          mk_not ee range
         )
       ~zone:Z_c_low_level man flow
 

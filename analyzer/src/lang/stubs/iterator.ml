@@ -54,25 +54,6 @@ struct
   (** Evaluation of expressions *)
   (** ========================= *)
 
-  let negate_log_binop : log_binop -> log_binop = function
-  | AND -> OR
-  | OR -> AND
-  | IMPLIES -> assert false
-
-
-  let flip_quantified_var v s f =
-    visit_expr_in_formula
-      (fun e ->
-         match ekind e with
-         | E_stub_quantified(FORALL, vv, s) when compare_var v vv = 0 ->
-           VisitParts { e with ekind = E_stub_quantified(EXISTS, v, s) }
-
-         | E_stub_quantified(EXISTS, vv, s) when compare_var v vv = 0 ->
-           VisitParts { e with ekind = E_stub_quantified(FORALL, v, s) }
-
-         | _ -> VisitParts e
-      ) f
-
 
   (** Negate a formula *)
   let rec negate_formula (f:formula with_range) : formula with_range =
@@ -156,8 +137,8 @@ struct
 
 
     | F_binop (IMPLIES, f1, f2) ->
-      let nf1 = eval_formula cond_to_stmt (negate_formula f1) man flow in
-      let f1 = eval_formula cond_to_stmt f1 man flow in
+      let nf1 = eval_formula mk_assume (negate_formula f1) man flow in
+      let f1 = eval_formula mk_assume f1 man flow in
       let f2 = eval_formula cond_to_stmt f2 man f1 in
 
       Flow.join man.lattice nf1 f2
@@ -185,33 +166,29 @@ struct
     (* Add [v] to the environment *)
     let flow = man.exec (mk_add_var v range) flow in
 
-    (* Constrain the range of [v] in case of ∃ *)
+    (* Constrain the range of [v] *)
     let post =
-      match s, q with
-      | S_interval (l, u), EXISTS ->
+      match s with
+      | S_interval (l, u) ->
         man.post (mk_assume (mk_in (mk_var v range) l u ~etyp:T_bool range) range) flow
 
       | _ ->
         Post.return flow
     in
 
-    (* Replace [v] in [ff] with a quantified expression in case of ∀ quantifier *)
-    let ff1 =
-      match q with
-      | EXISTS -> f
-      | FORALL ->
-        visit_expr_in_formula
-          (fun e ->
-             match ekind e with
-             | E_var (vv, _) when compare_var v vv = 0 ->
-               Keep { e with ekind = E_stub_quantified (FORALL, v, s) }
+    (* Replace [v] in [f] with a quantified expression *)
+    let f' = visit_expr_in_formula
+        (fun e ->
+           match ekind e with
+           | E_var (vv, _) when compare_var v vv = 0 ->
+             Keep { e with ekind = E_stub_quantified (q, v, s) }
 
-             | _ -> VisitParts e
+           | _ -> VisitParts e
           )
           f
     in
 
-    Post.bind (fun flow -> eval_formula cond_to_stmt ff1 man flow |> Post.return) post |>
+    Post.bind (fun flow -> eval_formula cond_to_stmt f' man flow |> Post.return) post |>
     post_to_flow man |>
     man.exec (mk_remove_var v range)
 

@@ -741,8 +741,8 @@ struct
     | S_assume({ekind = E_binop(O_eq, lval, q)})
     | S_assume({ekind = E_unop(O_log_not, {ekind = E_binop(O_ne, lval, q)})})
       when is_c_pointer_type lval.etyp &&
-           is_lval_offset_quantified lval &&
-           not (is_expr_quantified q) &&
+           is_lval_offset_forall_quantified lval &&
+           not (is_expr_forall_quantified q) &&
            is_c_deref lval
       ->
       assume_quantified O_eq lval q stmt.srange man flow |>
@@ -752,8 +752,8 @@ struct
     | S_assume({ekind = E_binop(O_ne, lval, q)})
     | S_assume({ekind = E_unop(O_log_not, {ekind = E_binop(O_eq, lval, q)})})
       when is_c_pointer_type lval.etyp &&
-           is_lval_offset_quantified lval &&
-           not (is_lval_offset_quantified q) &&
+           is_lval_offset_forall_quantified lval &&
+           not (is_lval_offset_forall_quantified q) &&
            is_c_deref lval
       ->
       assume_quantified O_ne lval q stmt.srange man flow |>
@@ -919,7 +919,7 @@ struct
 
     | Some (base,offset)
       when is_interesting_base base &&
-           not (is_expr_quantified offset)
+           not (is_expr_forall_quantified offset)
       ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow |>
       Eval.bind @@ fun offset flow ->
@@ -927,7 +927,7 @@ struct
 
     | Some (base, offset)
       when is_interesting_base base &&
-           is_expr_quantified offset
+           is_expr_forall_quantified offset
       ->
       eval_quantified_deref_cases base offset (under_type p.etyp) primed range man flow
 

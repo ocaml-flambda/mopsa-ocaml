@@ -384,7 +384,7 @@ struct
       Soundness.warn_at range "ignoring dereference of ⊤ pointer";
       Eval.singleton (mk_top t range) flow
 
-    | Some (base,offset) when not (is_expr_quantified offset) ->
+    | Some (base,offset) when not (is_expr_forall_quantified offset) ->
       eval_base_size base range man flow >>$ fun size flow ->
       man.eval ~zone:(Z_c_scalar,Z_u_num) size flow >>$ fun size flow ->
       man.eval ~zone:(Z_c_scalar,Z_u_num) offset flow >>$ fun offset flow ->
@@ -403,7 +403,7 @@ struct
           )
         ~zone:Z_u_num man flow
 
-    | Some (base,offset) when is_expr_quantified offset ->
+    | Some (base,offset) when is_expr_forall_quantified offset ->
       eval_base_size base range man flow >>$ fun size flow ->
       man.eval ~zone:(Z_c_scalar,Z_u_num) size flow >>$ fun size flow ->
       let min, max = Common.Quantified_offset.bound offset in
