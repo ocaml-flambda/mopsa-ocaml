@@ -28,6 +28,7 @@ open Stubs.Ast
 open Common.Points_to
 open Ast
 open Zone
+open Universal.Zone
 
 
 module Domain =
@@ -44,12 +45,15 @@ struct
   let interface= {
     iexec = {
       provides = [Z_c];
-      uses = [Z_c; Z_c_scalar; Z_c_low_level]
+      uses = [Z_c; Z_c_scalar; Z_c_low_level; Z_u_num]
     };
 
     ieval = {
       provides = [Z_c_low_level, Z_c_scalar];
-      uses = [Z_c_low_level, Z_c_points_to]
+      uses = [
+        Z_c_low_level, Z_c_points_to;
+        Z_c_scalar, Z_u_num
+      ]
     }
   }
 
@@ -160,6 +164,57 @@ struct
       man.exec ~zone:Z_c_low_level stmt |>
       Post.return |>
       Option.return
+
+    | S_stub_requires { ekind = E_stub_builtin_call(VALID_PTR, p) } ->
+      Some (
+        let range = stmt.srange in
+        let man' = Sig.Stacked.Manager.of_domain_man man in
+        eval_pointed_base_offset p range man' flow >>$ fun pt flow ->
+        match pt with
+        (* ⊤ pointer *)
+        | None ->
+          Soundness.warn_at range "ignoring requirement check due to ⊤ pointer %a" pp_expr p;
+          Post.return flow
+
+        (* Valid base + ∀ quantified offset *)
+        | Some(base,offset) when is_expr_forall_quantified offset ->
+          Common.Base.eval_base_size base range man' flow >>$ fun size flow ->
+          man.eval ~zone:(Z_c_scalar,Z_u_num) size flow >>$ fun size flow ->
+          let min, max = Common.Quantified_offset.bound offset in
+          man.eval ~zone:(Z_c, Z_u_num) min flow >>$ fun min flow ->
+          man.eval ~zone:(Z_c, Z_u_num) max flow >>$ fun max flow ->
+          let elm = under_type p.etyp |> void_to_char |> (fun t -> mk_z (sizeof_type t) range) in
+          let limit = sub size elm range in
+          let cond = mk_binop
+              (mk_in min (mk_zero range) limit range)
+              O_log_and
+              (mk_in max (mk_zero range) limit range)
+              range
+          in
+          assume cond
+            ~fthen:(fun flow -> Post.return flow)
+            ~felse:(fun flow ->
+                Common.Alarms.raise_c_out_bound_alarm ~base ~offset ~size range man' flow |>
+                Post.return
+              )
+            ~zone:Z_u_num man flow
+
+        (* Valid base + non-quantified offset *)
+        | Some(base,offset) ->
+          Common.Base.eval_base_size base range man' flow >>$ fun size flow ->
+          man.eval ~zone:(Z_c_scalar,Z_u_num) size flow >>$ fun size flow ->
+          man.eval ~zone:(Z_c_scalar,Z_u_num) offset flow >>$ fun offset flow ->
+          let elm = under_type p.etyp |> void_to_char |> (fun t -> mk_z (sizeof_type t) range) in
+          let limit = sub size elm range in
+          let cond = mk_in offset (mk_zero range) limit range in
+          assume cond
+            ~fthen:(fun flow -> Post.return flow)
+            ~felse:(fun flow ->
+                Common.Alarms.raise_c_out_bound_alarm ~base ~offset ~size range man' flow |>
+                Post.return
+              )
+            ~zone:Z_u_num man flow
+      )
 
     | _ -> None
 
