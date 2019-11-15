@@ -29,7 +29,7 @@ open Universal.Ast
 open Ast
 open Zone
 module Itv = Universal.Numeric.Values.Intervals.Integer.Value
-
+open Common.Alarms
 
 module Domain =
 struct
@@ -62,7 +62,7 @@ struct
     }
   }
 
-  let alarms = []
+  let alarms = [AOutOfBound; AVaArgNoNext]
 
   (** Flow-insensitive annotations *)
   (** ============================ *)
@@ -202,7 +202,7 @@ struct
           )
         ~felse:(fun flow ->
             man.eval offset ~zone:(Z_c_scalar,Universal.Zone.Z_u_num) flow >>$ fun offset flow ->
-            Common.Alarms.(raise_c_out_bound_alarm ~base:(V ap) ~offset ~size:(mk_z base_size range) range (Core.Sig.Stacked.Manager.of_domain_man man) flow) |>
+            raise_c_out_bound_alarm ~base:(V ap) ~offset ~size:(mk_z base_size range) range (Core.Sig.Stacked.Manager.of_domain_man man) flow |>
             Result.empty_singleton
           )
         ~zone:Z_c
@@ -265,7 +265,7 @@ struct
         )
       ~felse:(fun flow ->
           (* Raise an alarm since no next argument can be fetched by va_arg *)
-          let flow' = Common.Alarms.(raise_c_no_next_va_arg ~va_list:ap ~counter:valc ~args:unnamed range (Sig.Stacked.Manager.of_domain_man man) flow) in
+          let flow' = raise_c_no_next_va_arg ~va_list:ap ~counter:valc ~args:unnamed range (Sig.Stacked.Manager.of_domain_man man) flow in
           Eval.empty_singleton flow'
         )
       ~zone:Universal.Zone.Z_u_num

@@ -53,7 +53,7 @@ struct
     }
   }
 
-  let alarms = []
+  let alarms = [Common.Alarms.ADoubleFree]
 
   (** Initialization of environments *)
   (** ============================== *)

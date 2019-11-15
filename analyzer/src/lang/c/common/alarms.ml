@@ -147,7 +147,7 @@ let () =
           | AIntegerOverflow -> Format.fprintf fmt "Integer overflow"
           | AIllegalPointerDiff -> Format.fprintf fmt "Illegal pointer difference"
           | AIllegalPointerCompare -> Format.fprintf fmt "Illegal pointer comparison"
-          | AUseAfterFree -> Format.fprintf fmt "Use of after free"
+          | AUseAfterFree -> Format.fprintf fmt "Use after free"
           | ADoubleFree -> Format.fprintf fmt "Double free"
           | AVaArgNoNext -> Format.fprintf fmt "No next argument for va_arg"
           | AInvalidBitShift -> Format.fprintf fmt "Invald bit-shift"

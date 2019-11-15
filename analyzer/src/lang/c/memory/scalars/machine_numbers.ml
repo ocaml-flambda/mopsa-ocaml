@@ -63,7 +63,7 @@ struct
     }
   }
 
-  let alarms = []
+  let alarms = [AIntegerOverflow; ADivideByZero; AInvalidBitShift]
 
   (** Command-line options *)
   (** ==================== *)

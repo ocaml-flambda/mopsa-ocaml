@@ -43,7 +43,7 @@ struct
     ieval = {provides = [Z_stubs, Z_any]; uses = []};
   }
 
-  let alarms = []
+  let alarms = [A_stub_invalid_require]
 
   (** Initialization of environments *)
   (** ============================== *)

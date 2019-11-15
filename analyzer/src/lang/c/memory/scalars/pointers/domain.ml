@@ -76,7 +76,7 @@ struct
     }
   }
 
-  let alarms = []
+  let alarms = [AIllegalPointerCompare; AIllegalPointerDiff]
 
   (** {2 Lattice operators} *)
   (** ===================== *)
