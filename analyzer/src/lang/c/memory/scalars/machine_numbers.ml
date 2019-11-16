@@ -63,7 +63,7 @@ struct
     }
   }
 
-  let alarms = [AIntegerOverflow; ADivideByZero; AInvalidBitShift]
+  let alarms = [A_c_integer_overflow_cls; A_c_divide_by_zero_cls; A_c_invalid_bit_shift_cls]
 
   (** Command-line options *)
   (** ==================== *)

@@ -24,109 +24,139 @@
 open Location
 
 
-(** {2 Alarm data structure} *)
-(** ************************ *)
 
-type alarm_category = ..
+(** {2 Alarm classes} *)
+(** ******************** *)
 
-type alarm_detail = ..
+(** Alarm are categorized into a finite set of classes *)
+type alarm_class = ..
 
+
+(** Chain of pretty printers for alarm classes *)
+let pp_alarm_class_chain = TypeExt.mk_print_chain (fun fmt alarm -> failwith "Pp: Unknown alarm class")
+
+
+(** Pretty printer of alarm classes *)
+let pp_alarm_class = TypeExt.print pp_alarm_class_chain
+
+
+(** Register an new alarm class. There is no need for registering a
+    compare function, since classes are simple variants without
+    arguments. *)
+let register_alarm_class pp = TypeExt.register_print pp pp_alarm_class_chain
+
+
+
+(** {2 Alarm bodies} *)
+(** **************** *)
+
+(** Alarm body provides details about the context of the alarm, such
+    as expression intervals, expected values, etc.*)
+type alarm_body = ..
+
+
+(** Chain of compare functions for alarm body  *)
+let compare_alarm_body_chain = TypeExt.mk_compare_chain compare
+
+
+(** Compare two alarm bodies *)
+let compare_alarm_body = TypeExt.compare compare_alarm_body_chain
+
+
+(** Chain of pretty printers of alarm bodies *)
+let pp_alarm_body_chain = TypeExt.mk_print_chain (fun fmt alarm -> failwith "Pp: Unknown alarm body")
+
+
+(** Pretty printer of alarm body *)
+let pp_alarm_body = TypeExt.print pp_alarm_body_chain
+
+
+(** Chaining function to get the class of an alarm body *)
+type alarm_classifier = (alarm_body -> alarm_class) -> alarm_body -> alarm_class
+
+
+(** Chain of alarm classifiers *)
+let alarm_classifer_chain : (alarm_body -> alarm_class) ref = ref (fun _ -> failwith "classifier: unknown alarm body")
+
+
+(** Get the class of an alarm body *)
+let classify_alarm_body d = !alarm_classifer_chain d
+
+
+(** Register an alarm classifer *)
+let register_alarm_classifier c = alarm_classifer_chain := c !alarm_classifer_chain
+
+
+(** Registration information of an alarm body *)
+type alarm_body_info = {
+  classifier: alarm_classifier;
+  compare : alarm_body TypeExt.compare;
+  print : alarm_body TypeExt.print;
+}
+  
+
+(** Register a new alarm body *)
+let register_alarm_body info =
+  register_alarm_classifier info.classifier;
+  TypeExt.register_compare info.compare compare_alarm_body_chain;
+  TypeExt.register_print info.print pp_alarm_body_chain;
+
+
+
+(** {2 Alarm instance} *)
+(** ****************** *)
+
+
+  (** Alarm instance *)
 type alarm = {
-  alarm_category : alarm_category;
-  alarm_detail : alarm_detail;
-  alarm_trace : range * Callstack.cs;
+  alarm_body : alarm_body;
+  alarm_range : range;
+  alarm_callstack : Callstack.cs;
 }
 
 
-let mk_alarm cat detail ?(cs=Callstack.empty) range =
+let mk_alarm body ?(cs=Callstack.empty) range =
   {
-    alarm_category = cat;
-    alarm_detail = detail;
-    alarm_trace = range, cs;
+    alarm_body = body;
+    alarm_range = range;
+    alarm_callstack= cs;
   }
 
 
-let get_alarm_category alarm = alarm.alarm_category
+let get_alarm_class alarm = classify_alarm_body alarm.alarm_body
 
-let get_alarm_detail alarm = alarm.alarm_detail
+let get_alarm_body alarm = alarm.alarm_body
 
-let get_alarm_trace alarm = alarm.alarm_trace
+let get_alarm_callstack alarm = alarm.alarm_callstack
 
-let get_alarm_callstack alarm = get_alarm_trace alarm |> snd
-
-let get_alarm_range alarm = fst @@ get_alarm_trace alarm
-
-
-(** {2 Total order comparison function} *)
-(** *********************************** *)
-
-let compare_alarm_category_chain = TypeExt.mk_compare_chain (fun a1 a2 -> compare a1 a2)
-
-let compare_alarm_category = TypeExt.compare compare_alarm_category_chain
-
-let compare_alarm_detail_chain = TypeExt.mk_compare_chain (fun a1 a2 ->
-    compare a1 a2
-  )
-
-let compare_alarm_detail = TypeExt.compare compare_alarm_detail_chain
+let get_alarm_range alarm = alarm.alarm_range
 
 let compare_alarm a1 a2 =
   if a1 == a2 then 0
   else Compare.compose [
-      (fun () -> compare_alarm_category a1.alarm_category a2.alarm_category);
-      (fun () -> compare_alarm_detail a1.alarm_detail a2.alarm_detail);
-      (fun () -> Compare.pair compare_range Callstack.compare a1.alarm_trace a2.alarm_trace);
+      (fun () -> compare_alarm_body a1.alarm_body a2.alarm_body);
+      (fun () -> compare_range a1.alarm_range a2.alarm_range);
+      (fun () -> Callstack.compare a1.alarm_callstack a2.alarm_callstack);
     ]
 
-let weak_compare_alarm a1 a2 =
+let compare_alarm_by_class a1 a2 =
   if a1 == a2 then 0
   else Compare.compose [
-      (fun () -> compare_alarm_category a1.alarm_category a2.alarm_category);
-      (fun () -> Compare.pair compare_range Callstack.compare a1.alarm_trace a2.alarm_trace);
+      (fun () -> compare (get_alarm_class a1) (get_alarm_class a2));
+      (fun () -> compare_range a1.alarm_range a2.alarm_range);
+      (fun () -> Callstack.compare a1.alarm_callstack a2.alarm_callstack);
     ]
 
-
-
-(** {2 Pretty printers} *)
-(** ******************* *)
-
-let pp_category_chain = TypeExt.mk_print_chain (fun fmt alarm -> failwith "Pp: Unknown alarm")
-
-let pp_alarm_category = TypeExt.print pp_category_chain
-
-let pp_detail_chain = TypeExt.mk_print_chain (fun fmt alarm ->
-    failwith "Pp: Unknown alarm"
-  )
-
-let pp_alarm_detail = TypeExt.print pp_detail_chain
-
-
-let pp_callstack fmt (cs:Callstack.cs) =
-  (* print in the style of gcc's preprocessor include stack *)
-  List.iter
-    (fun c -> Format.fprintf fmt "\tfrom %a: %s@\n" pp_range c.Callstack.call_site c.Callstack.call_fun)
-    cs
-
-
 let pp_alarm fmt alarm =
-  (* print using a format recognized by emacs: location first *)
-  Format.fprintf fmt "%a: %a %a@\n%a"
-    pp_range (get_alarm_range alarm |> untag_range)
-    ((Debug.color "red") Format.pp_print_string) "✘"
-    pp_alarm_detail alarm.alarm_detail
-    pp_callstack (alarm.alarm_trace |> snd)
+  let open Format in
+  fprintf fmt "@[<v>%a: %a@,%a@]@,"
+    pp_range (get_alarm_range alarm)
+    pp_alarm_body (get_alarm_body alarm)
+    (Format.pp_print_list
+       ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+       (fun fmt c -> fprintf fmt "\tfrom %a: %s" pp_range c.Callstack.call_site c.Callstack.call_fun)
+    ) (get_alarm_callstack alarm)
 
-
-(** {2 Registration} *)
-(** **************** *)
-
-
-let register_alarm_category info =
-  TypeExt.register info compare_alarm_category_chain pp_category_chain
-
-
-let register_alarm_detail info =
-  TypeExt.register info compare_alarm_detail_chain pp_detail_chain
 
 
 (** {2 Sets of alarms} *)
@@ -140,9 +170,9 @@ struct
       let compare = compare_alarm
     end)
 
-  (** Intersection of alarms do not take into account the alarm details *)
+  (** Intersection of alarms. We do not take into account the alarm body. *)
   let inter s1 s2 =
-    let weak_mem a s = exists (fun a' -> weak_compare_alarm a a' = 0) s in
+    let weak_mem a s = exists (fun a' -> compare_alarm_by_class a a' = 0) s in
     fold2
       (fun a1 acc -> if weak_mem a1 s2 then add a1 acc else acc)
       (fun a2 acc -> if weak_mem a2 s1 then add a2 acc else acc)
@@ -194,7 +224,7 @@ struct
            (fun fmt alarm ->
               fprintf fmt "@[<v>%a: %a@,%a@]@,"
                 pp_range range
-                pp_alarm_detail (get_alarm_detail alarm)
+                pp_alarm_body (get_alarm_body alarm)
                 (pp_print_list
                    ~pp_sep:(fun fmt () -> fprintf fmt "@,")
                    (fun fmt c -> fprintf fmt "\tfrom %a: %s" pp_range c.Callstack.call_site c.Callstack.call_fun)
@@ -207,15 +237,15 @@ struct
 end
 
 
-(** {2 Maps from alarm categories to AlarmRangeIndexMap} *)
+(** {2 Maps from alarm classes to AlarmRangeIndexMap} *)
 (** **************************************************** *)
 
 module AlarmMap = struct
 
   module Map = MapExt.Make(struct
-      type t = alarm_category
-      let compare = compare_alarm_category
-      let print = pp_alarm_category
+      type t = alarm_class
+      let compare = compare
+      let print = pp_alarm_class
     end
     )
 
@@ -223,9 +253,10 @@ module AlarmMap = struct
 
   let of_set s =
     AlarmSet.fold (fun alarm acc ->
-        Map.add alarm.alarm_category (
+        let c = get_alarm_class alarm in
+        Map.add c (
           try
-            let old = Map.find alarm.alarm_category acc in
+            let old = Map.find c acc in
             AlarmRangeIndexMap.add alarm old
           with Not_found -> AlarmRangeIndexMap.singleton alarm
         ) acc
@@ -244,12 +275,12 @@ module AlarmMap = struct
       fprintf fmt "@[<v>%a@]"
         (pp_print_list
            ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-           (fun fmt (category, alarms) ->
+           (fun fmt (cls, alarms) ->
               let n = AlarmRangeIndexMap.cardinal alarms in
               if n = 0 then ()
               else
                 fprintf fmt "@[<v 2>%a x %d:@,%a@]"
-                  pp_alarm_category category
+                  pp_alarm_class cls
                   n
                   AlarmRangeIndexMap.print alarms
            )

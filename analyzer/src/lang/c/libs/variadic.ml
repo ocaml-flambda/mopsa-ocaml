@@ -62,7 +62,7 @@ struct
     }
   }
 
-  let alarms = [AOutOfBound; AVaArgNoNext]
+  let alarms = [A_c_out_of_bound_cls; A_c_no_next_va_arg_cls]
 
   (** Flow-insensitive annotations *)
   (** ============================ *)

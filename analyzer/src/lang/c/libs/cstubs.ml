@@ -59,7 +59,7 @@ struct
     }
   }
 
-  let alarms = [Common.Alarms.ADoubleFree]
+  let alarms = [Common.Alarms.A_c_double_free_cls]
 
   (** Initialization of environments *)
   (** ============================== *)

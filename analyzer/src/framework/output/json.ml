@@ -62,17 +62,18 @@ let render_call (c:Core.Callstack.call)  =
 let render_callstack cs  =
   `List (List.map render_call cs)
 
-let render_alarm_category alarm =
+let render_alarm_class alarm =
   let title =
-    let () = pp_alarm_category Format.str_formatter alarm in
+    let () = pp_alarm_class Format.str_formatter alarm in
     Format.flush_str_formatter ()
   in
   `String title
 
 let render_alarm alarm  =
-  let range, cs = Core.Alarm.get_alarm_trace alarm in
+  let range = Core.Alarm.get_alarm_range alarm in
+  let cs = Core.Alarm.get_alarm_callstack alarm in
   `Assoc [
-    "title", render_alarm_category (Core.Alarm.get_alarm_category alarm);
+    "title", render_alarm_class (Core.Alarm.get_alarm_class alarm);
     "range", render_range range;
     "callstack", render_callstack cs;
   ]
@@ -175,7 +176,7 @@ let list_domains (domains:string list) out =
 
 let list_alarms alarms out =
   let json = `List (
-      List.map render_alarm_category alarms
+      List.map render_alarm_class alarms
     )
   in
   print out json

@@ -93,7 +93,7 @@ sig
   val interface : interface
   (** Zoning interface *)
 
-  val alarms : alarm_category list
+  val alarms : alarm_class list
   (** List of alarms detected by the domain *)
 
 

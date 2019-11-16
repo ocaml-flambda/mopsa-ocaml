@@ -295,7 +295,7 @@ struct
     }
   }
 
-  let alarms = [AOutOfBound; ANullDeref; AUseAfterFree; AInvalidDeref; Stubs.Alarms.A_stub_invalid_requires]
+  let alarms = [A_c_out_of_bound_cls; A_c_null_deref_cls; A_c_use_after_free_cls; A_c_invalid_deref_cls; Stubs.Alarms.A_stub_invalid_requires_cls]
 
   (** {2 Command-line options} *)
   (** ************************ *)

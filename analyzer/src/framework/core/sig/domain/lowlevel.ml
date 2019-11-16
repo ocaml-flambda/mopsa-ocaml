@@ -95,8 +95,8 @@ sig
   val interface : interface
   (** Interface of the domain *)
 
-  val alarms : alarm_category list
-  (** List of alarms detected by the domain *)
+  val alarms : alarm_class list
+  (** List of alarm classes detected by the domain *)
 
   val bottom: t
   (** Least abstract element of the lattice. *)

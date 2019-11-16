@@ -482,7 +482,7 @@ struct
 
   (** Merge the conflicts between distinct domains in a pointwise result *)
   let merge_inter_conflicts man pre (pointwise:('a,'r) result option list) : ('a,'r option option list) result =
-    let rec aux : type t. t pool -> ('a,'r) result option list -> ('a,t,'s) man -> ('a,'r option option list * alarm_category list) result =
+    let rec aux : type t. t pool -> ('a,'r) result option list -> ('a,t,'s) man -> ('a,'r option option list * alarm_class list) result =
       fun pool pointwise man ->
         match pointwise, pool with
         | [None], _ ->
@@ -515,8 +515,8 @@ struct
             in
             let common_alarms = List.filter (fun a -> List.mem a alarms) S.alarms in
             let merge_alarms a1 a2 =
-              let a1', a1'' = AlarmSet.partition (fun a -> List.mem (get_alarm_category a) common_alarms) a1 in
-              let a2', a2'' = AlarmSet.partition (fun a -> List.mem (get_alarm_category a) common_alarms) a2 in
+              let a1', a1'' = AlarmSet.partition (fun a -> List.mem (get_alarm_class a) common_alarms) a1 in
+              let a2', a2'' = AlarmSet.partition (fun a -> List.mem (get_alarm_class a) common_alarms) a2 in
               AlarmSet.inter a1' a2' |>
               AlarmSet.union a1'' |>
               AlarmSet.union a2''

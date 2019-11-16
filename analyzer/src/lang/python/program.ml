@@ -127,15 +127,14 @@ struct
     Flow.fold (fun acc tk env ->
         match tk with
         | Alarms.T_py_exception (e, s, k) ->
-          let a = Alarms.APyException in
-          let x = Alarms.XPyException (e,s) in
+          let a = Alarms.A_py_uncaught_exception (e,s) in
           let alarm =
             match k with
             | Alarms.Py_exc_unprecise ->
-              mk_alarm a x unprecise_exception_range ~cs:Callstack.empty
+              mk_alarm a unprecise_exception_range ~cs:Callstack.empty
 
             | Alarms.Py_exc_with_callstack (range,cs) ->
-              mk_alarm a x range ~cs
+              mk_alarm a range ~cs
           in
           Flow.add_alarm alarm ~force:true man.lattice acc
         | _ -> acc

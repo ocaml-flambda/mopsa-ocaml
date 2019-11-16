@@ -22,39 +22,36 @@
 open Mopsa
 
 
-type alarm_category += APyException
-type alarm_detail += XPyException of expr * string
+type alarm_class += A_py_uncaught_exception_cls
+type alarm_body += A_py_uncaught_exception of expr * string
 
 
-let raise_py_alarm exn name range lattice flow =
+let raise_py_uncaught_exception_alarm exn name range lattice flow =
   let cs = Flow.get_callstack flow in
-  let alarm = mk_alarm APyException (XPyException (exn,name)) range ~cs in
+  let alarm = mk_alarm (A_py_uncaught_exception (exn,name)) range ~cs in
   Flow.raise_alarm alarm ~bottom:false lattice flow
 
 
 let () =
-  register_alarm_category {
-    compare = (fun default a a' ->
-        match a, a' with
-        | APyException, APyException -> 0
-        | _ -> default a a'
-      );
-    print = (fun default fmt a ->
+  register_alarm_class (fun default fmt a ->
         match a with
-        | APyException -> Format.fprintf fmt "Python Exception"
+        | A_py_uncaught_exception_cls -> Format.fprintf fmt "Uncaught Python exception"
         | _ -> default fmt a
       );
-    };
-  register_alarm_detail {
+  register_alarm_body {
+    classifier = (fun next -> function
+        | A_py_uncaught_exception _ -> A_py_uncaught_exception_cls
+        | a -> next a
+      );
     compare = (fun default a a' ->
         match a, a' with
-        | XPyException (e, s), XPyException (e', s') ->
+        | A_py_uncaught_exception (e, s), A_py_uncaught_exception (e', s') ->
           compare_expr e e'
         | _ -> default a a'
       );
     print = (fun default fmt a ->
         match a with
-        | XPyException (e, s) -> Format.fprintf fmt "Python Exception: %s" s
+        | A_py_uncaught_exception (e, s) -> Format.fprintf fmt "Uncaught Python exception: %s" s
         | _ -> default fmt a
       );
     }

@@ -19,47 +19,101 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Alarms reporting potential errors inferred by abstract domains. *)
+(** Alarms of potential runtime errors inferred by the analysis. *)
 
-open Location
 
-type alarm_category = ..
-(** Categories of alarms *)
 
-type alarm_detail = ..
-(** Detail information of alarms *)
+(** {2 Alarm classes} *)
+(** ******************** *)
 
+(** Alarm are categorized into a finite set of classes *)
+type alarm_class = ..
+
+
+(** Pretty printer of alarm classes *)
+val pp_alarm_class : Format.formatter -> alarm_class -> unit
+
+
+(** Register an new alarm class. There is no need for registering a
+    compare function, since classes are simple variants without
+    arguments. *)
+val register_alarm_class : alarm_class TypeExt.print -> unit
+
+
+
+(** {2 Alarm bodies} *)
+(** **************** *)
+
+(** Alarm body provides details about the context of the alarm, such
+    as expression intervals, expected values, etc.*)
+type alarm_body = ..
+
+
+(** Compare two alarm bodies *)
+val compare_alarm_body : alarm_body -> alarm_body -> int
+
+
+(** Pretty printer of alarm body *)
+val pp_alarm_body : Format.formatter -> alarm_body -> unit
+
+
+(** Chaining function to get the class of an alarm body *)
+type alarm_classifier = (alarm_body -> alarm_class) -> alarm_body -> alarm_class
+
+
+(** Get the class of an alarm body *)
+val classify_alarm_body : alarm_body -> alarm_class
+
+
+
+(** Registration information of an alarm body *)
+type alarm_body_info = {
+  classifier: alarm_classifier;
+  compare : alarm_body TypeExt.compare;
+  print : alarm_body TypeExt.print;
+}
+  
+
+(** Register a new alarm body *)
+val register_alarm_body : alarm_body_info -> unit
+
+
+
+(** {2 Alarm instance} *)
+(** ****************** *)
+
+(** Alarm instance *)
 type alarm
-(** Alarms *)
 
-val mk_alarm : alarm_category -> alarm_detail -> ?cs:Callstack.cs -> range -> alarm
+
 (** Create an alarm instance *)
+val mk_alarm : alarm_body -> ?cs:Callstack.cs -> Location.range -> alarm
 
-val get_alarm_category : alarm -> alarm_category
-(** Get the category of an alarm *)
 
-val get_alarm_detail : alarm -> alarm_detail
-(** Get the detail of an alarm *)
+(** Get the class of an alarm *)
+val get_alarm_class : alarm -> alarm_class
 
-val get_alarm_trace : alarm -> range * Callstack.cs
-(** Get the trace of an alarm *)
+(** Get the body of an alarm *)
+val get_alarm_body : alarm -> alarm_body
 
-val register_alarm_category: alarm_category TypeExt.info -> unit
-(** Register a new alarm category *)
+(** Get the range of an alarm *)
+val get_alarm_range : alarm -> Location.range
 
-val register_alarm_detail: alarm_detail TypeExt.info -> unit
-(** Register a new alarm detail *)
+(** Get the callstack of an alarm *)
+val get_alarm_callstack : alarm -> Callstack.cs
 
+(** Compare two alarms *)
+val compare_alarm : alarm -> alarm -> int
+
+(** Pretty printer of alarms *)
 val pp_alarm : Format.formatter -> alarm -> unit
-(** Pretty print an alarm *)
-
-val pp_alarm_category : Format.formatter -> alarm_category -> unit
-(** Pretty print an alarm category *)
 
 
-module AlarmSet : SetExtSig.S with type elt = alarm
 (** Sets of alarms *)
+module AlarmSet : SetExtSig.S with type elt = alarm
 
+
+(** Maps from alarms classes to sets of alarms *)
 module AlarmMap :
 sig
   type t
@@ -67,6 +121,5 @@ sig
   val of_set : AlarmSet.t -> t
   val print : Format.formatter -> t -> unit
 end
-(** Maps from alarms categories to sets of alarms *)
 
 
