@@ -488,7 +488,7 @@ struct
     if is_c_int_type t then
       let l,u = rangeof t in
       let vv = match ekind vv with E_var (vv, _) -> vv | _ -> assert false in
-      Framework.Common.Var_bounds.add_var_bounds_flow vv (C_int_interval (l,u)) flow |>
+      Framework.Transformers.Value.Nonrel.add_var_bounds_flow vv (C_int_interval (l,u)) flow |>
       Post.return
     else
       Post.return flow
@@ -580,7 +580,7 @@ struct
       Post.bind (fun flow ->
           if is_c_int_type v.etyp then
             let vv = match ekind vv with E_var (vv,_) -> vv | _ -> assert false in
-            Framework.Common.Var_bounds.remove_var_bounds_flow vv flow |>
+            Framework.Transformers.Value.Nonrel.remove_var_bounds_flow vv flow |>
             Post.return
           else
             Post.return flow

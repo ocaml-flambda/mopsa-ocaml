@@ -113,13 +113,22 @@ val pp_alarm : Format.formatter -> alarm -> unit
 module AlarmSet : SetExtSig.S with type elt = alarm
 
 
-(** Maps from alarms classes to sets of alarms *)
-module AlarmMap :
+(** {2 Alarm indexation} *)
+(** ******************** *)
+module type SETMAP =
 sig
+  type k
   type t
-  val cardinal : t -> int
   val of_set : AlarmSet.t -> t
-  val print : Format.formatter -> t -> unit
+  val cardinal : t -> int
+  val bindings : t -> (k*AlarmSet.t) list
+  val fold : (k -> AlarmSet.t -> 'a -> 'a) -> t -> 'a -> 'a
 end
 
+module RangeMap : SETMAP with type k = Location.range
+module ClassMap : SETMAP with type k = alarm_class
 
+
+val index_alarm_set_by_range : AlarmSet.t -> RangeMap.t
+
+val index_alarm_set_by_class : AlarmSet.t -> ClassMap.t

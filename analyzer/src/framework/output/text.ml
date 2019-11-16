@@ -24,7 +24,9 @@
 open ArgExt
 open Core.All
 open Sig.Domain.Lowlevel
+open Location
 open Format
+
 
 let print out fmt =
   let formatter =
@@ -37,6 +39,11 @@ let print out fmt =
   kasprintf (fun str ->
       fprintf formatter "%s%!" str
     ) fmt
+
+
+module AlarmBodySet = SetExt.Make(struct type t = alarm_body let compare = compare_alarm_body end)
+module CallstackSet = SetExt.Make(struct type t = Callstack.cs let compare = Callstack.compare end)
+
 
 
 let report ?(flow=None) man alarms time files out =
@@ -56,9 +63,57 @@ let report ?(flow=None) man alarms time files out =
     if AlarmSet.is_empty alarms
     then print out "%a No alarm@." ((Debug.color "green") pp_print_string) "✔"
     else
-      let map = AlarmMap.of_set alarms in
-      let nb_alarms = AlarmMap.cardinal map in
-      print out "%d alarm%a detected:@,  %a@." nb_alarms Debug.plurial_int nb_alarms AlarmMap.print map
+      (* Print alarms summary *)
+      (* Iterate first on the alarm classes *)
+      let cls_map = index_alarm_set_by_class alarms in
+      let sub_totals, total = ClassMap.fold (fun cls ss (sub_totals, total) ->
+
+          (* Then iterate on the location ranges within each class *)
+          let range_map = index_alarm_set_by_range ss in
+          let sub_total = RangeMap.fold (fun range sss sub_total ->
+
+              (* Group similar bodies and callstacks *)
+              let bodies, callstacks = AlarmSet.fold (fun alarm (bodies,callstacks) ->
+                  AlarmBodySet.add (get_alarm_body alarm) bodies,
+                  CallstackSet.add (get_alarm_callstack alarm) callstacks
+                ) sss (AlarmBodySet.empty, CallstackSet.empty)
+              in
+
+              (* Print the alarm instance *)
+              print out "@.@[<v 2>%a: %a@,%a@,%a@]@.@."
+                pp_range range
+                pp_alarm_class cls
+                (fun fmt bodies ->
+                   (* Print the bodies *)
+                   fprintf fmt "@[<hov 8>Cause%a:@ %a@]" Debug.plurial_int (AlarmBodySet.cardinal bodies)
+                     (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+                        pp_alarm_body
+                     ) (AlarmBodySet.elements bodies)
+                ) bodies
+                (fun fmt callstacks ->
+                   (* Print the callstacks *)
+                   fprintf fmt "@[<v>Call trace%a:@,%a@]" Debug.plurial_int (CallstackSet.cardinal callstacks)
+                     (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,\t+@,")
+                        (fun fmt cs ->
+                           pp_print_list
+                             ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+                             (fun fmt c -> fprintf fmt "\tfrom %a: %s" pp_range c.Callstack.call_site c.Callstack.call_fun)
+                             fmt cs
+                        )
+                     ) (CallstackSet.elements callstacks);
+                ) callstacks
+              ;
+              sub_total + 1
+            ) range_map 0
+          in
+          (cls,sub_total) :: sub_totals, sub_total + total
+        ) cls_map ([],0)
+      in
+      print out "@[<v 2>Summary of detected alarms:@,%a@,Total: %d@]@."
+        (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+           (fun fmt (cls,nb) -> fprintf fmt "%a: %d" pp_alarm_class cls nb)
+        ) sub_totals
+        total
   in
   let () =
     match Soundness.get_warnings () with

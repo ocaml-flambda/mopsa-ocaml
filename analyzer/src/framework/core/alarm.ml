@@ -170,36 +170,48 @@ struct
       let compare = compare_alarm
     end)
 
-  (** Intersection of alarms. We do not take into account the alarm body. *)
+  (** Intersection of alarms. We do not take into account the alarm
+     body. This is important in reduced products in order to keep
+     alarms that have the same class but differ in the reported
+     details *)
   let inter s1 s2 =
     let weak_mem a s = exists (fun a' -> compare_alarm_by_class a a' = 0) s in
     fold2
       (fun a1 acc -> if weak_mem a1 s2 then add a1 acc else acc)
       (fun a2 acc -> if weak_mem a2 s1 then add a2 acc else acc)
       (fun a acc -> add a acc)
-      s1 s2 empty
+      s1 s2 empty    
 
 end
 
 
-(** {2 Maps from ranges to alarms} *)
-(** ****************************** *)
 
-module AlarmRangeIndexMap =
+(** {2 Alarm indexation} *)
+(** ******************** *)
+
+module type SETMAP =
+sig
+  type k
+  type t
+  val of_set : AlarmSet.t -> t
+  val cardinal : t -> int
+  val bindings : t -> (k*AlarmSet.t) list
+  val fold : (k -> AlarmSet.t -> 'a -> 'a) -> t -> 'a -> 'a
+end
+
+module MakeSetMap(K:sig type t val compare : t -> t -> int val from_alarm : alarm -> t end) : SETMAP with type k = K.t =
 struct
 
-  module Map = MapExt.Make(struct
-      type t = range
-      let compare = compare_range
-    end)
+  module Map = MapExt.Make(K)
 
+  type k = K.t
   type t = AlarmSet.t Map.t
 
   let add alarm map =
-    let range = get_alarm_range alarm |> untag_range in
-    Map.add range (
+    let k = K.from_alarm alarm in
+    Map.add k (
       try
-        let old = Map.find range map in
+        let old = Map.find k map in
         AlarmSet.add alarm old
       with Not_found -> AlarmSet.singleton alarm
     ) map
@@ -208,83 +220,42 @@ struct
     AlarmSet.fold add s Map.empty
 
   let singleton alarm =
-    let range = get_alarm_range alarm |> untag_range in
-    Map.singleton range (AlarmSet.singleton alarm)
+    let k = K.from_alarm alarm in
+    Map.singleton k (AlarmSet.singleton alarm)
 
-  let cardinal m = Map.cardinal m
+  let cardinal = Map.cardinal
 
-  let print fmt m =
-    let open Format in
-    let l = Map.bindings m in
-    pp_print_list
-      ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-      (fun fmt (range,alarms) ->
-         pp_print_list
-           ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-           (fun fmt alarm ->
-              fprintf fmt "@[<v>%a: %a@,%a@]@,"
-                pp_range range
-                pp_alarm_body (get_alarm_body alarm)
-                (pp_print_list
-                   ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-                   (fun fmt c -> fprintf fmt "\tfrom %a: %s" pp_range c.Callstack.call_site c.Callstack.call_fun)
-                ) (get_alarm_callstack alarm)
-           )
-           fmt (AlarmSet.elements alarms)
-      )
-      fmt l
+  let bindings = Map.bindings
+
+  let fold = Map.fold
 
 end
 
-
-(** {2 Maps from alarm classes to AlarmRangeIndexMap} *)
-(** **************************************************** *)
-
-module AlarmMap = struct
-
-  module Map = MapExt.Make(struct
-      type t = alarm_class
-      let compare = compare
-      let print = pp_alarm_class
-    end
-    )
-
-  type t = AlarmRangeIndexMap.t Map.t
-
-  let of_set s =
-    AlarmSet.fold (fun alarm acc ->
-        let c = get_alarm_class alarm in
-        Map.add c (
-          try
-            let old = Map.find c acc in
-            AlarmRangeIndexMap.add alarm old
-          with Not_found -> AlarmRangeIndexMap.singleton alarm
-        ) acc
-      ) s Map.empty
-
-  let cardinal m =
-    Map.fold (fun _ map2 acc ->
-        AlarmRangeIndexMap.cardinal map2 + acc
-      ) m 0
-
-  let print fmt x =
-    let open Format in
-    if Map.is_empty x then pp_print_string fmt "∅"
-    else
-      let l = Map.bindings x in
-      fprintf fmt "@[<v>%a@]"
-        (pp_print_list
-           ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-           (fun fmt (cls, alarms) ->
-              let n = AlarmRangeIndexMap.cardinal alarms in
-              if n = 0 then ()
-              else
-                fprintf fmt "@[<v 2>%a x %d:@,%a@]"
-                  pp_alarm_class cls
-                  n
-                  AlarmRangeIndexMap.print alarms
-           )
-        ) l
+module RangeMap = MakeSetMap(struct type t = range let compare = compare_range let from_alarm = get_alarm_range end)
+module ClassMap = MakeSetMap(struct type t = alarm_class let compare = compare let from_alarm = get_alarm_class end)
 
 
-end
+let index_alarm_set_by_range (s:AlarmSet.t) : RangeMap.t =
+  RangeMap.of_set s
+
+
+let index_alarm_set_by_class (s:AlarmSet.t) : ClassMap.t =
+  ClassMap.of_set s
+
+let pp_alarm_set_summary fmt s =
+  let open Format in
+  if AlarmSet.is_empty s then pp_print_string fmt "∅"
+  else
+    let cls_map = index_alarm_set_by_class s in
+    let sub_totals, total = ClassMap.fold (fun cls ss (sub_totals, total) ->
+        let range_map = index_alarm_set_by_range ss in
+        let sub_total = RangeMap.cardinal range_map in
+        (cls,sub_total) :: sub_totals, sub_total + total
+      ) cls_map ([],0)
+    in
+
+    fprintf fmt "@[<v>%a@,Total: %d@]"
+      (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+         (fun fmt (cls,nb) -> fprintf fmt "%a: %d" pp_alarm_class cls nb)
+      ) sub_totals
+      total

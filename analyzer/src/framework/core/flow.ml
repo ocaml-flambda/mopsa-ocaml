@@ -122,9 +122,7 @@ let widen (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
 
 
 let print (pp: Format.formatter -> 'a -> unit) fmt flow =
-  Format.fprintf fmt "@[<v>%a@,alarms: %a@]"
-    (TokenMap.print pp) flow.tmap
-    AlarmMap.print (AlarmMap.of_set flow.alarms)
+  TokenMap.print pp fmt flow.tmap
 
 
 let get (tk: token) (lattice: 'a lattice) (flow: 'a flow) : 'a =
