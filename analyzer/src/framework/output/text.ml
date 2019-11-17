@@ -50,6 +50,7 @@ let report ?(flow=None) man alarms time files out =
   if Soundness.is_sound ()
   then print out "%a@." (Debug.color_str "green") "Analysis terminated successfully"
   else print out "%a@." (Debug.color_str "orange") "Unsound analysis";
+
   let () = match flow with
     | None -> ()
     | Some f ->
@@ -57,8 +58,8 @@ let report ?(flow=None) man alarms time files out =
         (* "Context = @[@\n%a@]@\n" *)
         (Core.Flow.print man.lattice.print) f
         (* (Core.Context.print man.lattice.print) (Flow.get_ctx f) *)
-
   in
+
   let () =
     if AlarmSet.is_empty alarms
     then print out "%a No alarm@." ((Debug.color "green") pp_print_string) "✔"
@@ -79,10 +80,12 @@ let report ?(flow=None) man alarms time files out =
               in
 
               (* Print the alarm instance *)
-              print out "@.@[<v 2>%a: %a@,%a@,%a@,%a@]@.@."
+              print out "@.@[<v 2>%a: %a%a@,%a@,%a@]@.@."
                 pp_range range
                 pp_alarm_class cls
                 (fun fmt range ->
+                   if not @@ is_orig @@ untag_range range then ()
+                   else
                    (* Print source code at location range *)
                    let start_pos = get_range_start range in
                    let end_pos = get_range_end range in
@@ -135,7 +138,7 @@ let report ?(flow=None) man alarms time files out =
                    (* Print the highlighted lines *)
                    let lines = get_lines 1 in
                    close_in f;
-                   fprintf fmt "@[<v>%a@]"
+                   fprintf fmt "@,@[<v>%a@]"
                      (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
                         (fun fmt (i,is_bug_line,l) ->
                            fprintf fmt "%a: %s"
