@@ -63,7 +63,6 @@ let report ?(flow=None) man alarms time files out =
     if AlarmSet.is_empty alarms
     then print out "%a No alarm@." ((Debug.color "green") pp_print_string) "✔"
     else
-      (* Print alarms summary *)
       (* Iterate first on the alarm classes *)
       let cls_map = index_alarm_set_by_class alarms in
       let sub_totals, total = ClassMap.fold (fun cls ss (sub_totals, total) ->
@@ -80,9 +79,71 @@ let report ?(flow=None) man alarms time files out =
               in
 
               (* Print the alarm instance *)
-              print out "@.@[<v 2>%a: %a@,%a@,%a@]@.@."
+              print out "@.@[<v 2>%a: %a@,%a@,%a@,%a@]@.@."
                 pp_range range
                 pp_alarm_class cls
+                (fun fmt range ->
+                   (* Print source code at location range *)
+                   let start_pos = get_range_start range in
+                   let end_pos = get_range_end range in
+                   let file = get_pos_file start_pos in
+                   assert (file = get_pos_file end_pos);
+
+                   let delta = 2 in
+                   let mem_line_delta i = i >= get_pos_line start_pos - delta && i <= get_pos_line end_pos + delta in
+                   let mem_line i = i >= get_pos_line start_pos && i <= get_pos_line end_pos in
+                   let after_line i = i > get_pos_line end_pos + delta in
+
+                   (* Read the file from disk *)
+                   let f = open_in file in
+                   let rec get_lines i =
+                     try
+                       let l = input_line f in
+                       if mem_line i then (i,true,highlight_bug i l) :: get_lines (i+1)
+                       else if mem_line_delta i then (i,false,l) :: get_lines (i+1)
+                       else if after_line i then []
+                       else get_lines (i+1)
+                     with End_of_file -> []
+
+                   (* Highlight bug region *)
+                   and highlight_bug i l =
+                     let n = String.length l in
+                     let c1 = get_pos_column start_pos in
+                     let c2 = get_pos_column end_pos in
+                     let s1,s2,s3 =
+                       if i = get_pos_line start_pos && i = get_pos_line end_pos then
+                         String.sub l 0 c1,
+                         String.sub l c1 (c2-c1),
+                         String.sub l c2 (n-c2)
+                       else if i = get_pos_line start_pos && i = get_pos_line end_pos then
+                         String.sub l 0 c1,
+                         String.sub l c1 (n-c1),
+                         ""
+                       else if i = get_pos_line end_pos then
+                         "",
+                         String.sub l 0 c2,
+                         String.sub l c2 (n-c2)
+                       else
+                         "",
+                         l,
+                         ""
+                     in
+                     let () = Format.fprintf Format.str_formatter "%s%a%s" s1 (Debug.color_str "red") s2 s3 in
+                     Format.flush_str_formatter ()
+                   in
+
+                   (* Print the highlighted lines *)
+                   let lines = get_lines 1 in
+                   close_in f;
+                   fprintf fmt "@[<v>%a@]"
+                     (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+                        (fun fmt (i,is_bug_line,l) ->
+                           fprintf fmt "%a: %s"
+                             (Debug.color (if is_bug_line then "red" else "LightSlateBlue") pp_print_int) i
+                             l
+                        )
+                     ) lines
+                ) range
                 (fun fmt bodies ->
                    (* Print the bodies *)
                    fprintf fmt "@[<hov 8>Cause%a:@ %a@]" Debug.plurial_int (AlarmBodySet.cardinal bodies)
@@ -109,6 +170,7 @@ let report ?(flow=None) man alarms time files out =
           (cls,sub_total) :: sub_totals, sub_total + total
         ) cls_map ([],0)
       in
+      (* Print alarms summary *)
       print out "@[<v 2>Summary of detected alarms:@,%a@,Total: %d@]@."
         (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
            (fun fmt (cls,nb) -> fprintf fmt "%a: %d" pp_alarm_class cls nb)
