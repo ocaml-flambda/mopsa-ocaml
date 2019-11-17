@@ -493,7 +493,7 @@ class MLLocationTranslator {
   value invalid_file;
 
 public:
-  CAMLprim value TranslateSourceLocation(SourceLocation a);
+  CAMLprim value TranslateSourceLocation(SourceLocation a, int offset = 0);
   CAMLprim value TranslateSourceRange(SourceRange a);
 
   MLLocationTranslator(SourceManager& src, const LangOptions &opts)
@@ -510,7 +510,7 @@ public:
 
 };
 
-CAMLprim value MLLocationTranslator::TranslateSourceLocation(SourceLocation a) {
+CAMLprim value MLLocationTranslator::TranslateSourceLocation(SourceLocation a, int offset) {
   CAMLparam0();
   CAMLlocal2(ret,tmp);
   unsigned raw = a.getRawEncoding();
@@ -531,7 +531,7 @@ CAMLprim value MLLocationTranslator::TranslateSourceLocation(SourceLocation a) {
         // Clang counts lines & columns starting from 1
         // we count lines from 1 but columns from 0
         Store_field(ret, 0, Val_int(loc.getLine()));
-        Store_field(ret, 1, Val_int(loc.getColumn()-1));
+        Store_field(ret, 1, Val_int(loc.getColumn()-1+offset));
         Store_field(ret, 2, tmp);
       }
       else {
@@ -555,8 +555,12 @@ CAMLprim value MLLocationTranslator::TranslateSourceRange(SourceRange a) {
   Store_field(ret, 0, TranslateSourceLocation(a.getBegin()));
   // ...to the last character of the last token (if possible)
   SourceLocation end(clang::Lexer::getLocForEndOfToken(a.getEnd(),0,src,opts));
-  if (!src.getPresumedLoc(end).isValid()) end = a.getEnd();
-  Store_field(ret, 1, TranslateSourceLocation(end));
+  if (src.getPresumedLoc(end).isValid()) {
+    Store_field(ret, 1, TranslateSourceLocation(end));
+  }
+  else {
+    Store_field(ret, 1, TranslateSourceLocation(a.getEnd(), 1));
+  }
   CAMLreturn(ret);
 }
 
