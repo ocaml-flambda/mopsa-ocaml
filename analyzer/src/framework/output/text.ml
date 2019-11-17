@@ -111,8 +111,9 @@ let report ?(flow=None) man alarms time files out =
                    (* Highlight bug region *)
                    and highlight_bug i l =
                      let n = String.length l in
+                     (* prints from c1 to c2 included *)
                      let c1 = get_pos_column start_pos in
-                     let c2 = get_pos_column end_pos in
+                     let c2 = get_pos_column end_pos + 1 in
                      let s1,s2,s3 =
                        if i = get_pos_line start_pos && i = get_pos_line end_pos then
                          String.sub l 0 c1,
