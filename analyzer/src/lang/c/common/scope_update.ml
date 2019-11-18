@@ -35,5 +35,5 @@ let update_scope upd range man flow =
     ) flow upd.c_scope_var_removed
   in
   List.fold_left (fun acc v ->
-      man.exec (mk_add_var v range) acc
+      man.exec (mk_c_declaration v None (var_scope v) range) acc
     ) flow upd.c_scope_var_added
