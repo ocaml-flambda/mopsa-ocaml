@@ -23,6 +23,7 @@
 
 open Mopsa
 open Framework.Core.Sig.Domain.Stateless
+open Universal.Ast
 open Ast
 open Zone
 
@@ -57,9 +58,14 @@ struct
     match skind stmt with
     | S_c_for(init, cond, incr, body) ->
       let range = stmt.srange in
+      (* If init contains variable declarations, change their scope to the scope of the entire block *)
+      let init', vars = match skind init with
+        | S_block(sl,vl) -> mk_block sl ~vars:[] init.srange, vl
+        | _ -> init,[]
+      in
       let stmt = Universal.Ast.(
-          mk_block [
-            init;
+          mk_block ~vars [
+            init';
             mk_stmt (S_while (
                 (match cond with None -> mk_one range | Some e -> e),
                 (match incr with None -> body | Some e -> mk_block [body; mk_stmt (S_expression e) e.erange] body.srange)
