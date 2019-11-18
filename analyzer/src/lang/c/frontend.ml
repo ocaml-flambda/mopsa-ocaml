@@ -291,7 +291,7 @@ and from_project prj =
       f.c_func_body <- from_body_option ctx (from_range o.func_range) o.func_body;
       (* Parse stub when the function has no body *)
       match f.c_func_body with
-      | None | Some { skind = S_block [] } ->
+      | None | Some { skind = S_block ([],_) } ->
         begin
           try
             f.c_func_stub <- from_stub_comment ctx o;
@@ -383,7 +383,10 @@ and from_stmt ctx ((skind, range): C_AST.statement) : stmt =
   {skind; srange}
 
 and from_block ctx range (block: C_AST.block) : stmt =
-  mk_block (List.map (from_stmt ctx) block.blk_stmts) range
+  mk_block
+    (List.map (from_stmt ctx) block.blk_stmts)
+    ~vars:(List.map (from_var ctx) block.blk_local_vars)
+    range
 
 and from_block_option ctx (range: Location.range) (block: C_AST.block option) : stmt =
   match block with

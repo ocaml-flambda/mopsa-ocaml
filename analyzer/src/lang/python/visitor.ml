@@ -103,7 +103,7 @@ let () =
               List.fold_left (fun acc ((iter, target), conds) ->
                   (target, iter,
                    match skind conds with
-                   | S_block l -> List.map
+                   | S_block (l,_) -> List.map
                                     (fun x -> match skind x with
                                        | S_expression e -> e
                                        | _ -> assert false) l

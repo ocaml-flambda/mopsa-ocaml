@@ -51,7 +51,7 @@ module Domain =
               mk_stmt (S_expression (mk_py_call append (acc_var::expr) range)) range
            | (target, iter, conds)::tl ->
               let i_conds = List.rev conds in
-              let empty_stmt = mk_stmt (Universal.Ast.S_block []) range in
+              let empty_stmt = mk_block [] range in
               let if_stmt = List.fold_left (fun acc cond ->
                                 mk_stmt (Ast.S_py_if (cond, acc, empty_stmt)) range
                               ) (unfold_lc tl) i_conds in

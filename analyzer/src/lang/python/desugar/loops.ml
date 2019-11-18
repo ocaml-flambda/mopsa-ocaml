@@ -72,11 +72,11 @@ module Domain =
               bind_some (fun tmp flow ->
                   let l_else =
                     match skind orelse with
-                    | S_block [] -> [mk_stmt S_break range]
+                    | S_block ([],_) -> [mk_stmt S_break range]
                     | _ -> [orelse; mk_stmt S_break range] in
                   let inner_block  =
                     begin match skind body with
-                      | S_block l ->
+                      | S_block (l,_) ->
                         (mk_block
                            ((Utils.mk_try_stopiteration
                                (mk_assign

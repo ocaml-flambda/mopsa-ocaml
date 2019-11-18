@@ -488,7 +488,7 @@ type stmt_kind +=
 
    | S_if of expr (** condition *) * stmt (** then branch *) * stmt (** else branch *)
 
-   | S_block of stmt list (** Sequence block of statements *)
+   | S_block of stmt list (** Sequence block of statements *) * var list (** local variables declared within the block *)
 
    | S_return of expr option (** Function return with an optional return expression *)
 
@@ -528,7 +528,8 @@ let () =
             (fun () -> compare_stmt else1 else2);
           ]
 
-        | S_block(sl1), S_block(sl2) -> Compare.list compare_stmt sl1 sl2
+        | S_block(sl1,vl1), S_block(sl2,vl2) ->
+          Compare.pair (Compare.list compare_stmt) (Compare.list compare_var) (sl1,vl1) (sl2,vl2)
 
         | S_return(e1), S_return(e2) -> Compare.option compare_expr e1 e2
 
@@ -555,9 +556,9 @@ let () =
         | S_expression(e) -> fprintf fmt "%a;" pp_expr e
         | S_if(e, s1, s2) ->
           fprintf fmt "@[<v 4>if (%a) {@,%a@]@,@[<v 4>} else {@,%a@]@,}" pp_expr e pp_stmt s1 pp_stmt s2
-        | S_block[] -> fprintf fmt "pass"
-        | S_block[s] -> pp_stmt fmt s
-        | S_block(l) ->
+        | S_block([],_) -> fprintf fmt "pass"
+        | S_block([s],_) -> pp_stmt fmt s
+        | S_block(l,_) ->
           fprintf fmt "@[<v>";
           pp_print_list
             ~pp_sep:(fun fmt () -> fprintf fmt "@,")
@@ -597,9 +598,9 @@ let () =
           {exprs = [e]; stmts = [s]},
           (fun parts -> {stmt with skind = S_while(List.hd parts.exprs, List.hd parts.stmts)})
 
-        | S_block(sl) ->
+        | S_block(sl,vl) ->
           {exprs = []; stmts = sl},
-          (fun parts -> {stmt with skind = S_block(parts.stmts)})
+          (fun parts -> {stmt with skind = S_block(parts.stmts,vl)})
 
         | S_return(None) -> leaf stmt
 
@@ -750,7 +751,7 @@ let mk_assert e range =
 let mk_satisfy e range =
   mk_stmt (S_satisfy e) range
 
-let mk_block block = mk_stmt (S_block block)
+let mk_block block ?(vars=[]) range = mk_stmt (S_block (block,vars)) range
 
 let mk_nop range = mk_block [] range
 
