@@ -333,6 +333,24 @@ type expr_kind +=
 
   | E_c_atomic of int (** operation *) * expr * expr
 
+
+
+
+(*==========================================================================*)
+                           (** {2 Scope update} *)
+(*==========================================================================*)
+
+
+type c_scope_update = {
+  c_scope_var_added:   var list;
+  c_scope_var_removed: var list;
+}
+(** Scope update information for jump statements *)
+
+
+
+
+
 (*==========================================================================*)
                            (** {2 Statements} *)
 (*==========================================================================*)
@@ -357,7 +375,16 @@ type stmt_kind +=
   (** for loop; the scope of the locals declared in the init block
       is the while for loop *)
 
-  | S_c_goto of string
+  | S_c_return of expr option * c_scope_update
+  (** return statement *)
+
+  | S_c_break of c_scope_update
+  (** break statement *)
+
+  | S_c_continue of c_scope_update
+  (** continue statement *)
+
+  | S_c_goto of string * c_scope_update
   (** goto statements. *)
 
   | S_c_switch of expr * stmt
@@ -366,10 +393,10 @@ type stmt_kind +=
   | S_c_label of string
   (** statement label. *)
 
-  | S_c_switch_case of expr
+  | S_c_switch_case of expr * c_scope_update
   (** case of a switch statement. *)
 
-  | S_c_switch_default
+  | S_c_switch_default of c_scope_update
   (** default case of switch statements. *)
 
 

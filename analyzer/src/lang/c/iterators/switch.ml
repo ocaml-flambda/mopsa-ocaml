@@ -164,7 +164,7 @@ struct
       Post.return flow3 |>
       Option.return
 
-    | S_c_switch_case(e) ->
+    | S_c_switch_case(e,upd) ->
       (* Look up expression in switch *)
       let e0 =
         try get_switch_cond flow
@@ -192,7 +192,7 @@ struct
         ) |>
       Option.return
 
-    | S_c_switch_default ->
+    | S_c_switch_default upd ->
       let ctx = Flow.get_unit_ctx flow in
       let cur = man.lattice.join
           ctx

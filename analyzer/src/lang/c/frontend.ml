@@ -353,6 +353,14 @@ and from_function =
       c_func_range = from_range func.func_range;
     }
 
+(** {2 Scope update} *)
+(** **************** *)
+
+and from_scope_update ctx (upd:C_AST.scope_update) : Ast.c_scope_update =
+  {
+    c_scope_var_added = List.map (from_var ctx) upd.scope_var_added;
+    c_scope_var_removed = List.map (from_var ctx) upd.scope_var_removed;
+  }
 
 (** {2 Statements} *)
 (** ============== *)
@@ -368,16 +376,16 @@ and from_stmt ctx ((skind, range): C_AST.statement) : stmt =
     | C_AST.S_block block -> from_block ctx srange block |> Framework.Ast.Stmt.skind
     | C_AST.S_if (cond, body, orelse) -> Universal.Ast.S_if (from_expr ctx cond, from_block ctx srange body, from_block ctx srange orelse)
     | C_AST.S_while (cond, body) -> Universal.Ast.S_while (from_expr ctx cond, from_block ctx srange body)
-    | C_AST.S_do_while (body, cond) -> Ast.S_c_do_while (from_block ctx srange body, from_expr ctx cond)
-    | C_AST.S_for (init, test, increm, body) -> Ast.S_c_for(from_block ctx srange init, from_expr_option ctx test, from_expr_option ctx increm, from_block ctx srange body)
-    | C_AST.S_jump (C_AST.S_goto (label, upd)) -> S_c_goto label
-    | C_AST.S_jump (C_AST.S_break upd) -> Universal.Ast.S_break
-    | C_AST.S_jump (C_AST.S_continue upd) -> Universal.Ast.S_continue
-    | C_AST.S_jump (C_AST.S_return (None, upd)) -> Universal.Ast.S_return None
-    | C_AST.S_jump (C_AST.S_return (Some e, upd)) -> Universal.Ast.S_return (Some (from_expr ctx e))
+    | C_AST.S_do_while (body, cond) -> S_c_do_while (from_block ctx srange body, from_expr ctx cond)
+    | C_AST.S_for (init, test, increm, body) -> S_c_for(from_block ctx srange init, from_expr_option ctx test, from_expr_option ctx increm, from_block ctx srange body)
+    | C_AST.S_jump (C_AST.S_goto (label, upd)) -> S_c_goto (label,from_scope_update ctx upd)
+    | C_AST.S_jump (C_AST.S_break upd) -> S_c_break (from_scope_update ctx upd)
+    | C_AST.S_jump (C_AST.S_continue upd) -> S_c_continue (from_scope_update ctx upd)
+    | C_AST.S_jump (C_AST.S_return (None, upd)) -> S_c_return (None,from_scope_update ctx upd)
+    | C_AST.S_jump (C_AST.S_return (Some e, upd)) -> S_c_return (Some (from_expr ctx e), from_scope_update ctx upd)
     | C_AST.S_jump (C_AST.S_switch (cond, body)) -> Ast.S_c_switch (from_expr ctx cond, from_block ctx srange body)
-    | C_AST.S_target(C_AST.S_case(e,upd)) -> Ast.S_c_switch_case(from_expr ctx e)
-    | C_AST.S_target(C_AST.S_default upd) -> Ast.S_c_switch_default
+    | C_AST.S_target(C_AST.S_case(e,upd)) -> S_c_switch_case(from_expr ctx e, from_scope_update ctx upd)
+    | C_AST.S_target(C_AST.S_default upd) -> S_c_switch_default (from_scope_update ctx upd)
     | C_AST.S_target(C_AST.S_label l) -> Ast.S_c_label l
   in
   {skind; srange}

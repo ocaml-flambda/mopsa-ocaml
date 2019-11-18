@@ -79,7 +79,7 @@ struct
 
   let exec zone stmt man flow =
     match skind stmt with
-    | S_c_goto s ->
+    | S_c_goto (s,upd) ->
       (* Save TCur env in T_goto s token, then set T_cur to bottom. *)
       let cur = Flow.get T_cur man.lattice flow in
       let flow0 = Flow.add (T_goto s) cur man.lattice flow |>

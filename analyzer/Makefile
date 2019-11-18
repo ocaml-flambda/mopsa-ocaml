@@ -70,7 +70,7 @@ lang.stubs = ast zone alarms iterator
 
 # C
 lang.c = ast pp visitor zone frontend alarms common desugar libs iterators memory hooks
-lang.c.common = base points_to quantified_offset
+lang.c.common = base points_to quantified_offset scope_update
 lang.c.iterators = program switch loops goto interproc
 lang.c.desugar = conditions constants
 lang.c.memory = structured lowlevel scalars packing
