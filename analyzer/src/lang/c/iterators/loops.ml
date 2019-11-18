@@ -26,6 +26,8 @@ open Framework.Core.Sig.Domain.Stateless
 open Universal.Ast
 open Ast
 open Zone
+open Common.Scope_update
+
 
 (** {2 Domain definition} *)
 (** ===================== *)
@@ -85,6 +87,20 @@ struct
         )
       in
       man.exec stmt flow |> Post.return |> Option.return
+
+    | S_c_break upd ->
+      let flow' = update_scope upd stmt.srange man flow in
+      let stmt' = { stmt with skind = S_break } in
+      man.exec stmt' flow' |>
+      Post.return |>
+      Option.return
+
+    | S_c_continue upd ->
+      let flow' = update_scope upd stmt.srange man flow in
+      let stmt' = { stmt with skind = S_continue } in
+      man.exec stmt' flow' |>
+      Post.return |>
+      Option.return
 
     | _ -> None
 

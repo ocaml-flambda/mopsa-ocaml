@@ -24,6 +24,8 @@
 open Mopsa
 open Framework.Core.Sig.Domain.Stateless
 open Ast
+open Common.Scope_update
+
 
 
 (*==========================================================================*)
@@ -81,6 +83,7 @@ struct
     match skind stmt with
     | S_c_goto (s,upd) ->
       (* Save TCur env in T_goto s token, then set T_cur to bottom. *)
+      let flow = update_scope upd stmt.srange man flow in
       let cur = Flow.get T_cur man.lattice flow in
       let flow0 = Flow.add (T_goto s) cur man.lattice flow |>
                   Flow.remove T_cur
