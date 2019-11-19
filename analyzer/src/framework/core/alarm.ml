@@ -242,20 +242,12 @@ let index_alarm_set_by_range (s:AlarmSet.t) : RangeMap.t =
 let index_alarm_set_by_class (s:AlarmSet.t) : ClassMap.t =
   ClassMap.of_set s
 
-let pp_alarm_set_summary fmt s =
-  let open Format in
-  if AlarmSet.is_empty s then pp_print_string fmt "∅"
+let count_alarms s =
+  if AlarmSet.is_empty s then 0
   else
     let cls_map = index_alarm_set_by_class s in
-    let sub_totals, total = ClassMap.fold (fun cls ss (sub_totals, total) ->
+    ClassMap.fold (fun cls ss acc ->
         let range_map = index_alarm_set_by_range ss in
         let sub_total = RangeMap.cardinal range_map in
-        (cls,sub_total) :: sub_totals, sub_total + total
-      ) cls_map ([],0)
-    in
-
-    fprintf fmt "@[<v>%a@,Total: %d@]"
-      (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-         (fun fmt (cls,nb) -> fprintf fmt "%a: %d" pp_alarm_class cls nb)
-      ) sub_totals
-      total
+        sub_total + acc
+      ) cls_map 0

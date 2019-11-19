@@ -182,6 +182,8 @@ let () =
 
         | A_c_null_deref(p1), A_c_null_deref(p2) -> compare_expr p1 p2
 
+        | A_c_invalid_deref(p1), A_c_invalid_deref(p2) -> compare_expr p1 p2
+
         | A_c_use_after_free(p1,r1), A_c_use_after_free(p2,r2) ->
           Compare.compose [
             (fun () -> compare_expr p1 p2);
@@ -255,6 +257,9 @@ let () =
 
         | A_c_null_deref(pointer) ->
           Format.fprintf fmt "%a points to a NULL pointer" pp_expr pointer
+
+        | A_c_invalid_deref(pointer) ->
+          Format.fprintf fmt "%a points to an invalid pointer" pp_expr pointer
 
         | A_c_use_after_free(pointer,r) ->
           Format.fprintf fmt "%a points to invalid memory deallocated at %a" pp_expr pointer pp_range r
