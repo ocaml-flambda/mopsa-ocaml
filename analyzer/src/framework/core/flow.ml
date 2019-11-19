@@ -45,6 +45,7 @@ let bottom ctx alarms : 'a flow = {
   alarms;
 }
 
+
 let top ctx : 'a flow = {
   tmap = TokenMap.top;
   ctx;
@@ -237,3 +238,6 @@ let pop_callstack flow =
                Callstack.pop
   in
   hd, set_callstack cs flow
+
+let bottom_from flow : 'a flow =
+  bottom (get_ctx flow) (get_alarms flow)

@@ -38,7 +38,7 @@ val print : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a post -> u
 
 val join : 'a post -> 'a post -> 'a post
 
-val join_list : empty:'a post -> 'a post list -> 'a post
+val join_list : empty:(unit -> 'a post) -> 'a post list -> 'a post
 
 val meet : 'a post -> 'a post -> 'a post
 

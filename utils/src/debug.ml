@@ -64,7 +64,7 @@ let can_print channel =
   !channels |> List.exists (fun re -> Str.string_match re channel 0)
 
 (** Gives a random map of channel colors *)
-let random_color channel = (Hashtbl.hash channel mod 26) * 10 + 2
+let random_color channel = (Hashtbl.hash channel mod 26) * 9 + 2
 
 let color c pp fmt x =
   if !print_color then

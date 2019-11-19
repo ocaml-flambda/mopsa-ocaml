@@ -151,7 +151,7 @@ struct
           | _ -> false
         ) m in
       Some (LoopHeadMap.choose mf |> snd |> Flow.join man.lattice flow)
-      
+
     with Not_found ->
       (debug "no ctx found";
        None)
@@ -204,6 +204,8 @@ struct
 
   let rec lfp count delay cond body man flow_init flow =
     debug "lfp called, range = %a, count = %d" (* @\n flow = %a@\n*) pp_range body.srange count (* (Flow.print man.lattice) flow *);
+    if count > 10 then
+      warn_at body.srange "lfp computation at iteration #%d" count;
     let flow' = Flow.remove T_continue flow |>
                 Flow.remove T_break |>
                 man.exec (mk_assume cond cond.erange) |>
@@ -251,7 +253,7 @@ struct
         let flag, flow1', flow2' = unroll (i - 1) cond body man (Flow.copy_ctx flow2 flow1) in
         flag, flow1', Flow.join man.lattice flow2 flow2'
 
-  
+
   let rec exec zone stmt (man:('a,unit) man) flow =
     match skind stmt with
     | S_while(cond, body) ->

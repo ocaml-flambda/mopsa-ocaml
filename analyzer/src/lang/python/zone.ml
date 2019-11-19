@@ -66,5 +66,6 @@ let () =
     zone_eval = (fun exp ->
         match ekind exp with
         | E_py_object _ -> Keep
+        | E_py_undefined _ -> Keep
         | _ -> Process);
   }

@@ -357,8 +357,7 @@ def print_pos(pos, output):
             pos2 = (x, y)
             id = hexc.get_by_pos(pos2).id
             if done.already_done(id):
-                c = str(done[id][0]) if done[id][
-                    0] != EMPTY else u"."
+                c = str(done[id][0]) if done[id][0] != EMPTY else u"."
             else:
                 c = u"?"
             print(c) # u"%s " % c) #, end=u"")#, file=output)

@@ -95,19 +95,19 @@ struct
           let els_vars = var_of_addr addr_tuple in
           let flow = List.fold_left2 (fun acc vari eli ->
               man.exec ~zone:Zone.Z_py
-                (mk_assign (mk_var ~mode:WEAK vari range) eli range) acc) flow els_vars els in
+                (mk_assign (mk_var ~mode:STRONG vari range) eli range) acc) flow els_vars els in
           Eval.singleton (mk_py_object (addr_tuple, None) range) flow
         )
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "tuple.__contains__")}, _)}, args, []) ->
-      Utils.check_instances ~arguments_after_check:1 man flow range args
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("tuple.__contains__" as f))}, _)}, args, []) ->
+      Utils.check_instances ~arguments_after_check:1 f man flow range args
         ["tuple"]
         (fun eargs flow ->
            let tuple = List.hd eargs in
            let isin = List.hd (List.tl eargs) in
            let tuple_vars = var_of_eobj tuple in
-           let mk_comp var = mk_binop (mk_var ~mode:WEAK var range) O_eq isin range in
+           let mk_comp var = mk_binop (mk_var ~mode:STRONG var range) O_eq isin range in
            if List.length tuple_vars = 0 then
              man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_false range) flow
            else
@@ -118,8 +118,8 @@ struct
         )
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "tuple.__getitem__")}, _)}, args, []) ->
-      Utils.check_instances man flow range args
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("tuple.__getitem__" as f))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args
         ["tuple"; "int"]
         (fun eargs flow ->
            let tuple = List.hd eargs in
@@ -128,15 +128,16 @@ struct
              | _ -> Exceptions.panic "tuple.__getitem__ over non-constant integer" in
            let tuple_vars = var_of_eobj tuple in
            if 0 <= pos && pos < List.length tuple_vars then
-             man.eval (mk_var ~mode:WEAK (List.nth tuple_vars pos) range) flow
+             let () = debug "ok@\n" in
+             man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var ~mode:STRONG (List.nth tuple_vars pos) range) flow
            else
-             man.exec (Utils.mk_builtin_raise "IndexError" range) flow |>
+             man.exec ~zone:Zone.Z_py_obj (Utils.mk_builtin_raise_msg "IndexError" "tuple index out of range" range) flow |>
              Eval.empty_singleton
         )
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "tuple.__iter__")}, _)}, args, []) ->
-      Utils.check_instances man flow range args
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("tuple.__iter__" as f))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args
         ["tuple"]
         (fun args flow ->
            let tuple = List.hd args in
@@ -169,13 +170,30 @@ struct
             let flow = man.exec
                          (mk_rename (mk_addr tuple_it_addr range)
                             (mk_addr {tuple_it_addr with addr_kind = Py_list.A_py_iterator ("tuple_iterator", [tuple_addr], Some (d+1))} range) range) flow in
-            man.eval (mk_var ~mode:WEAK (List.nth vars_els d) range) flow
+            man.eval (mk_var ~mode:STRONG (List.nth vars_els d) range) flow
           | _ ->
             man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton
         )
       |> Option.return
 
-
+    | E_py_annot {ekind = E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)}, i) } when get_orig_vname c.py_cls_a_var = "Tuple" ->
+      debug "TUPLE";
+      let i = match ekind i with
+        | E_py_tuple i -> i
+        | _ -> assert false in
+      let addr_tuple = mk_alloc_addr (A_py_tuple (List.map (fun _ -> Rangeset.singleton range) i)) range in
+      man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_tuple flow |>
+      Eval.bind (fun eaddr_tuple flow ->
+          let addr_tuple = addr_of_expr eaddr_tuple in
+          let els_var = var_of_addr addr_tuple in
+          let flow = List.fold_left2 (fun flow vari eli ->
+              man.exec ~zone:Zone.Z_py
+                (mk_stmt (S_py_annot (mk_var ~mode:STRONG vari range, mk_expr (E_py_annot eli) range)) range) flow
+            ) flow els_var i in
+          debug "TUPLE, flow = %a@\n" (Flow.print man.lattice.print) flow;
+          Eval.singleton (mk_py_object (addr_tuple, None) range) flow
+        )
+      |> Option.return
 
     | _ -> None
 
@@ -193,7 +211,16 @@ struct
     | _ -> None
 
 
-  let ask _ _ _ = None
+  let ask : type r. r query -> ('a, unit) man -> 'a flow -> r option =
+    fun query man flow ->
+    match query with
+    | Q_print_addr_related_info ({addr_kind = A_py_tuple _} as addr) ->
+      Option.return @@
+      fun fmt ->
+      List.iter (fun var ->Format.fprintf fmt "%a"
+                    (man.ask Framework.Engines.Interactive.Q_print_var flow) var.vname) (var_of_addr addr)
+    | _ -> None
+
 end
 
 let () =

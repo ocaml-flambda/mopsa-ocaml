@@ -253,7 +253,7 @@ struct
       else Post.return flow
 
 
-  
+
 
   (** {2 Pointer evaluation} *)
   (** ====================== *)
@@ -275,7 +275,7 @@ struct
           Eval.singleton (mk_c_points_to pt exp.erange) flow :: acc
         ) values offset' []
       in
-      Eval.join_list evals ~empty:(Eval.empty_singleton flow)
+      Eval.join_list evals ~empty:(fun () -> Eval.empty_singleton flow)
 
     | Fun f ->
       Eval.singleton (mk_c_points_to_fun f exp.erange) flow
@@ -288,7 +288,6 @@ struct
 
     | Top ->
       Eval.singleton (mk_c_points_to_top exp.erange) flow
-
 
   (** 𝔼⟦ p - q ⟧ *)
   let eval_diff p q range man flow =
@@ -349,7 +348,7 @@ struct
         [Eval.empty_singleton flow]
     in
 
-    Eval.join_list (case1 @ case2) ~empty:(Eval.empty_singleton flow)
+    Eval.join_list (case1 @ case2) ~empty:(fun () -> Eval.empty_singleton flow)
 
 
 
@@ -612,7 +611,7 @@ struct
     let bottom_case = Flow.set T_cur man.lattice.bottom man.lattice flow |>
                       Post.return
     in
-    Post.join_list (same_base_case @ different_base_case) ~empty:bottom_case
+    Post.join_list (same_base_case @ different_base_case) ~empty:(fun () -> bottom_case)
 
 
 
@@ -657,7 +656,7 @@ struct
     let bottom_case = Flow.set T_cur man.lattice.bottom man.lattice flow |>
                       Post.return
     in
-    Post.join_list (same_base_case @ different_base_case) ~empty:bottom_case
+    Post.join_list (same_base_case @ different_base_case) ~empty:(fun () -> bottom_case)
 
 
 

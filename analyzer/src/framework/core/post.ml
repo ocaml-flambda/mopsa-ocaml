@@ -55,12 +55,12 @@ let meet (p1:'a post) (p2:'a post) : 'a post =
 
 
 
-let join_list ~(empty:'a post) (l:'a post list) : 'a post =
+let join_list ~(empty:unit -> 'a post) (l:'a post list) : 'a post =
   Result.join_list ~empty l
 
 
 
-let meet_list ~(empty:'a post) (l:'a post list) : 'a post =
+let meet_list ~(empty:unit -> 'a post) (l:'a post list) : 'a post =
   Result.join_list ~empty l
 
 

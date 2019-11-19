@@ -33,6 +33,7 @@ let debug fmt = Debug.debug ~channel:"python.frontend" fmt
 let rec parse_program (files: string list) : program =
   match files with
   | [filename] ->
+    debug "parsing %s" filename;
     let ast, counter = Py_parser.Main.parse_file ~counter:(Framework.Ast.Var.get_vcounter_val ()) filename in
     Framework.Ast.Var.start_vcounter_at counter;
     {
@@ -72,6 +73,11 @@ and from_stmt (stmt: Py_parser.Ast.stmt) : stmt =
     match stmt.skind with
     | S_assign (x, e) ->
       S_assign (from_exp x, from_exp e)
+
+    | S_type_annot (x, e) ->
+      let expr = from_exp e in
+      let expr = {expr with ekind = E_py_annot expr} in
+      S_py_annot (from_exp x, expr)
 
     | S_expression e ->
       Universal.Ast.S_expression (from_exp e)

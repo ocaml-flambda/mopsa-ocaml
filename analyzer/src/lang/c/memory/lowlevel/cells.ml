@@ -712,7 +712,7 @@ struct
                       Result.singleton (Cell c) flow :: aux (i + 1) (Z.add o step)
                 in
                 let evals = aux 0 l in
-                Result.join_list ~empty:(Result.empty_singleton flow) evals
+                Result.join_list ~empty:(fun () -> Result.empty_singleton flow) evals
             )
           ~felse:(fun flow ->
               let flow = raise_c_out_bound_alarm ~base ~offset ~size range man flow in

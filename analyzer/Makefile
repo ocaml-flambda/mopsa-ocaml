@@ -37,10 +37,10 @@ framework.core.sig.domain = manager lowlevel intermediate simplified         \
                             stateless reduction
 framework.core.sig.stacked = manager lowlevel intermediate stateless reduction
 framework.core.sig.functor = simplified
-framework.lattices = partial_map powerset
+framework.lattices = partial_map powerset powersetwithunder
 framework.engines = engine automatic interactive
 framework.common = widening_threshold var_bounds
-framework.transformers = value domain stacked
+framework.transformers = common_t value domain stacked
 framework.output = text json factory
 framework.config = paths visitor typer parser options
 framework.hooks = logs
@@ -88,12 +88,13 @@ lang.c.hooks = profiler
 
 # Python
 lang.python = ast addr utils visitor operators pp ast_compare frontend zone  \
-              alarms libs desugar objects data_model types flows program
-lang.python.libs = math py_mopsa py_std
-lang.python.objects = class function range nones data_container_utils py_list tuple dict py_set
+              alarms libs desugar objects data_model values types  flows program
+lang.python.libs = math py_mopsa py_std py_unittest py_typing
+lang.python.objects = lambda class function range nones data_container_utils py_list tuple dict py_set py_object iterable
 lang.python.data_model = callable arith_ops compare_ops aug_assign	\
                          attribute subscript
-lang.python.types = typing addr_env typechecking t_string t_int t_float t_complex
+lang.python.types = structural_types nominal_types addr_env t_string t_int t_float t_complex type_annot
+lang.python.values = py_string
 
 
 # Packages

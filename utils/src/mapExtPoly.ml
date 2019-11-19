@@ -98,6 +98,15 @@ let rec find_ compare x = function
     if c = 0 then d
     else find_ compare x (if c < 0 then l else r)
 
+let rec find_opt_ compare x = function
+    Empty ->
+    None
+  | Node(l, v, d, r, _) ->
+    let c = compare x v in
+    if c = 0 then Some d
+    else find_opt_ compare x (if c < 0 then l else r)
+
+
 let rec mem_ compare x = function
     Empty ->
     false
@@ -312,6 +321,8 @@ let add x data m =
   if m.map == map then m else { m with map }
 
 let find x m = find_ m.compare x m.map
+
+let find_opt x m = find_opt_ m.compare x m.map
 
 let mem x m = mem_ m.compare x m.map
 

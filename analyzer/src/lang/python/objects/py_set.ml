@@ -107,16 +107,16 @@ struct
       man.eval (mk_expr (E_py_set []) range) flow
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "set.__init__")}, _)}, args, []) ->
-      Utils.check_instances man flow range args
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__init__" as f))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args
         ["set"]
         (fun eargs flow ->
            man.eval (mk_py_none range) flow
         )
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "set.clear")}, _)}, args, []) ->
-      Utils.check_instances man flow range args ["set"]
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.clear" as f))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args ["set"]
         (fun args flow ->
            let set = List.hd args in
            let var_els = var_of_eobj set in
@@ -125,8 +125,8 @@ struct
         )
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "set.__contains__")}, _)}, args, []) ->
-      Utils.check_instances ~arguments_after_check:1 man flow range args ["set"]
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__contains__" as f))}, _)}, args, []) ->
+      Utils.check_instances f ~arguments_after_check:1 man flow range args ["set"]
         (fun args flow ->
            man.eval (mk_py_top T_bool range) flow)
       |> Option.return
@@ -134,7 +134,7 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, args, [])
       when is_compare_op_fun "set" f ->
-      Utils.check_instances ~arguments_after_check:1 man flow range args ["set"]
+      Utils.check_instances ~arguments_after_check:1 f man flow range args ["set"]
         (fun eargs flow ->
            let e1, e2 = match args with [l; r] -> l, r | _ -> assert false in
            assume (mk_py_isinstance_builtin e2 "set" range) man flow
@@ -146,8 +146,8 @@ struct
       |> Option.return
 
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "set.__iter__")}, _)}, args, []) ->
-      Utils.check_instances man flow range args
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__iter__" as f))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args
         ["set"]
         (fun args flow ->
            let set = match args with | [l] -> l | _ -> assert false in
@@ -174,7 +174,7 @@ struct
           let els = man.eval (mk_var var_els ~mode:WEAK range) flow in
           let flow = Flow.set_ctx (Eval.get_ctx els) flow in
           let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
-          Eval.join_list ~empty:(Eval.empty_singleton flow) (Eval.copy_ctx stopiteration els::stopiteration::[])
+          Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Eval.copy_ctx stopiteration els::stopiteration::[])
         )
       |> Option.return
 
@@ -182,16 +182,16 @@ struct
       (* todo: checks ? *)
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) iterator flow |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "set.__len__")}, _)}, args, []) ->
-      Utils.check_instances man flow range args
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__len__" as f))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args
         ["set"]
         (fun args flow ->
            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow
         )
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "set.add")}, _)}, args, []) ->
-      Utils.check_instances ~arguments_after_check:1 man flow range args
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.add" as f))}, _)}, args, []) ->
+      Utils.check_instances f ~arguments_after_check:1 man flow range args
         ["set"]
         (fun args flow ->
            let set, element = match args with | [l; e] -> l, e | _ -> assert false in

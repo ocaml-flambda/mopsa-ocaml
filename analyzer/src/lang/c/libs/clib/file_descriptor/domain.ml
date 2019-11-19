@@ -259,7 +259,7 @@ struct
         let flow' = set_env T_cur not_inserted man flow in
         insert_addr_others addr range man flow'
     in
-    Eval.join_list ~empty:(Eval.empty_singleton flow) (case1 @ case2)
+    Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (case1 @ case2)
 
 
 
@@ -302,7 +302,7 @@ struct
       )
       ~zone:Z_u_num
       man flow
-      
+
 
   (** {2 Find the address of a numeric file descriptor} *)
   (** ================================================= *)
@@ -320,7 +320,7 @@ struct
           assume (mk_binop i O_eq (mk_int j range) range) ~zone:Universal.Zone.Z_u_num
             ~fthen:(fun flow ->
                 List.map (fun addr -> Eval.singleton (mk_addr addr range) flow) addrs |>
-                Eval.join_list ~empty:(Eval.empty_singleton flow)
+                Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow)
               )
             ~felse:(fun flow ->
                 find_addr_first (j + 1) tl flow
@@ -356,7 +356,7 @@ struct
         else
           []
       in
-      Eval.join_list (case1 @ case2) ~empty:(Eval.empty_singleton flow)
+      Eval.join_list (case1 @ case2) ~empty:(fun () -> Eval.empty_singleton flow)
     in
     find_addr_first 0 a.first flow
 

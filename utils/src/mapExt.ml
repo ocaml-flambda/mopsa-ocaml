@@ -100,6 +100,14 @@ module Make(Ord: OrderedType) =
           if c = 0 then d
           else find x (if c < 0 then l else r)
 
+    let rec find_opt x = function
+        Empty ->
+          None
+      | Node(l, v, d, r, _) ->
+          let c = Ord.compare x v in
+          if c = 0 then Some d
+          else find_opt x (if c < 0 then l else r)
+
     let rec mem x = function
         Empty ->
           false

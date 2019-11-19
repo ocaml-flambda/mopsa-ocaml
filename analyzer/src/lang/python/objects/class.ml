@@ -52,25 +52,26 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind=A_py_class (C_builtin "type", _)}, _)}, args, []) ->
       None
 
-    | E_py_call({ekind = E_py_object cls} as ecls, args, []) when isclass cls ->
+    | E_py_call({ekind = E_py_object cls} as ecls, args, kwargs) when isclass cls ->
       debug "class call  %a@\n@\n" pp_expr exp;
       (* Call __new__ *)
       bind_list args (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
       bind_some (fun eargs flow ->
-          let new_call = mk_py_call (mk_py_object_attr cls "__new__" range) ((mk_py_object cls range) :: eargs) range in
+          let new_call = mk_py_kall (mk_py_object_attr cls "__new__" range) ((mk_py_object cls range) :: eargs) kwargs range in
           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) new_call flow |>
           Eval.bind (fun inst flow ->
               assume
                 (mk_py_isinstance inst ecls range)
                 ~fthen:(fun flow ->
                     debug "init!@\n";
-                    man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object_attr cls "__init__" range) (inst :: eargs) range) flow |>
+                    man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_kall (mk_py_object_attr cls "__init__" range) (inst :: eargs) kwargs range) flow |>
                     Eval.bind (fun r flow ->
                         assume
                           (mk_py_isinstance_builtin r "NoneType" range)
                           ~fthen:(fun flow -> man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) inst flow)
                           ~felse:(fun flow ->
-                              let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) flow in
+                              Format.fprintf Format.str_formatter "__init__() should return None, not %a" pp_expr r;
+                              let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow in
                               Eval.empty_singleton flow
                             )
                           man flow
@@ -89,7 +90,7 @@ struct
     (* 𝕊⟦ class cls: body ⟧ *)
     | S_py_class cls ->
       debug "definition of class %a" pp_var cls.py_cls_var;
-      bind_list cls.py_cls_bases (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+      bind_list cls.py_cls_bases (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
       bind_some (fun bases flow ->
           let bases' =
             match bases with
@@ -99,12 +100,14 @@ struct
           if Libs.Py_mopsa.is_builtin_clsdec cls then
             let name = Libs.Py_mopsa.builtin_clsdec_name cls in
             create_builtin_class (C_builtin name) name cls bases' range;
-            Post.return flow
+            man.exec cls.py_cls_body flow |>
+            Post.return
           else
           if Libs.Py_mopsa.is_unsupported_clsdec cls then
             let name = get_orig_vname cls.py_cls_var in
             create_builtin_class (C_unsupported name) name cls bases' range;
-            Post.return flow
+            man.exec cls.py_cls_body flow |>
+            Post.return
           else
             try
               debug "bases' = %a@\n" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_expr) (List.map (fun x -> mk_py_object x range) bases');
@@ -124,7 +127,7 @@ struct
                 )
             with C3_lin_failure ->
               Exceptions.warn "C3 linearization failure during class declaration %a@\n" pp_var cls.py_cls_var;
-              man.exec (Utils.mk_builtin_raise "TypeError" range) flow
+              man.exec (Utils.mk_builtin_raise_msg "TypeError" "Cannot create a consistent method resolution order (MRO)" range) flow
               |> Post.return
         )
       |> Option.return

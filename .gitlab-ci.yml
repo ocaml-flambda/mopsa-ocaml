@@ -466,4 +466,3 @@ bench-typpete 43/43:
   variables:
     PY_FILE: 'unary_test_not.py'
   extends: .bench-typpete
-

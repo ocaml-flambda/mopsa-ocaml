@@ -56,16 +56,17 @@ struct
           Eval.bind (fun cls flow ->
               assume
                 (Utils.mk_hasattr cls "__getitem__" range)
+                man flow
                 ~fthen:(fun true_flow ->
                     (* we need to keep the unevaluated index here for the type analysis *)
                     let exp' = mk_py_call (mk_py_attr cls "__getitem__" range) [eobj; index] range in
                     man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) exp' true_flow
                   )
                 ~felse:(fun false_flow ->
-                    let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow in
+                    Format.fprintf Format.str_formatter "'%a' object is not subscriptable" pp_addr_kind (akind @@ fst @@ object_of_expr cls);
+                    let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) false_flow in
                     Eval.empty_singleton flow
                   )
-                man flow
             )
         )
       |> Option.return
@@ -78,6 +79,7 @@ struct
           Eval.bind (fun cls flow ->
               assume
                 (Utils.mk_hasattr cls "__getitem__" range)
+                man flow
                 ~fthen:(fun true_flow ->
                     man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (Utils.mk_builtin_call "slice" [start; stop; step] range) true_flow |>
                     Eval.bind (fun slice flow ->
@@ -86,10 +88,10 @@ struct
                       )
                   )
                 ~felse:(fun false_flow ->
-                    let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow in
+                    Format.fprintf Format.str_formatter "'%a' object is not subscriptable" pp_addr_kind (akind @@ fst @@ object_of_expr cls);
+                    let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) false_flow in
                     Eval.empty_singleton flow
                   )
-                man flow
             )
         )
       |> Option.return
@@ -109,16 +111,16 @@ struct
            bind_some (fun cls flow ->
                assume
                  (Utils.mk_hasattr cls "__setitem__" range)
-                 man
+                 man flow
                  ~fthen:(fun true_flow ->
                      (* we need to keep the unevaluated index here for the type analysis *)
                      let exp' = mk_py_call (mk_py_attr cls "__setitem__" range) [obj; index; exp] range in
                      man.exec {stmt with skind = S_expression(exp')} true_flow |> Post.return
                    )
                  ~felse:(fun false_flow ->
-                     man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow |> Post.return
+                     Format.fprintf Format.str_formatter "'%a' object does not support item assignment" pp_addr_kind (akind @@ fst @@ object_of_expr cls);
+                     man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) false_flow |> Post.return
                    )
-                 flow
              )
         )
       |> Option.return
@@ -131,7 +133,7 @@ struct
           bind_some (fun cls flow ->
               assume
                 (Utils.mk_hasattr cls "__setitem__" range)
-                man
+                man flow
                 ~fthen:(fun true_flow ->
                     man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (Utils.mk_builtin_call "slice" [start; stop; step] range) true_flow |>
                     bind_some (fun slice flow ->
@@ -140,9 +142,9 @@ struct
                       )
                   )
                 ~felse:(fun false_flow ->
-                    man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow |> Post.return
+                     Format.fprintf Format.str_formatter "'%a' object does not support item assignment" pp_addr_kind (akind @@ fst @@ object_of_expr cls);
+                     man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) false_flow |> Post.return
                   )
-                flow
             )
         )
       |> Option.return

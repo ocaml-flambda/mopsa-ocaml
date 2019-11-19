@@ -19,3 +19,12 @@
 #                                                                            #
 ##############################################################################
 
+import mopsa
+
+@mopsa.unsupported
+class deque(object): pass
+
+from typing import Union, Iterable, Type
+
+def namedtuple(typename: str, field_names: str, #Union[str, Iterable[str]],
+               verbose: bool = ..., rename: bool = ...) -> Type[tuple]: ...

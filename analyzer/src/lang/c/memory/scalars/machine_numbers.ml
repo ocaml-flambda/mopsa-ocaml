@@ -184,7 +184,7 @@ struct
           else
             []
         in
-        Eval.join_list (case1 @ case2) ~empty:(Eval.empty_singleton flow)
+        Eval.join_list (case1 @ case2) ~empty:(fun () -> Eval.empty_singleton flow)
 
       | _ -> fast_check e flow
 
@@ -238,7 +238,7 @@ struct
 
   (** Check that bit-shifts are safe. Two conditions are verified: (i)
       the shift position is positive and (ii) does not exceed the size
-      of the shifted value 
+      of the shifted value
   *)
   let check_shift n t range fsafe funsafe man flow =
     (* Condition: n ∈ [0, bits(t) - 1] *)
@@ -248,9 +248,9 @@ struct
       ~fthen:(fun flow -> fsafe flow)
       ~felse:(fun flow -> funsafe flow)
       ~zone:Z_u_num man flow
-      
 
-  
+
+
   let rec is_compare_expr e =
     match ekind e with
     | E_binop(op, e1, e2) when is_comparison_op op -> true
@@ -268,7 +268,7 @@ struct
     | E_binop(op, e1, e2) when is_logic_op op ->
       { e with ekind = E_binop(op, to_compare_expr e1, to_compare_expr e2) }
 
-    | E_unop(O_log_not, ee) -> 
+    | E_unop(O_log_not, ee) ->
       { e with ekind = E_unop(O_log_not, to_compare_expr ee) }
 
     | _ ->
@@ -493,7 +493,7 @@ struct
     else
       Post.return flow
 
-  
+
 
   (* Declaration of a scalar numeric variable *)
   let declare_var v init scope range man flow =

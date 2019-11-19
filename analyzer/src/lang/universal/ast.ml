@@ -249,19 +249,20 @@ type addr = {
 let akind addr = addr.addr_kind
 
 let pp_addr fmt a =
-  if a.addr_group = G_all then
+  if compare_addr_group a.addr_group G_all = 0 then
     fprintf fmt "@@%a:*:%s"
       pp_addr_kind a.addr_kind
       (match a.addr_mode with WEAK -> "w" | STRONG -> "s")
   else
-    fprintf fmt "@@%a:%xd:%s"
+    fprintf fmt "@@%a:%a:%s"
       pp_addr_kind a.addr_kind
-      (* Using Hashtbl.hash leads to collisions. Hashtbl.hash is
-         equivalent to Hashtbl.hash_param 10 100. By increasing the
-         number of meaningful nodes to encounter, collisions are less
-         likely to happen.
-      *)
-      (Hashtbl.hash_param 40 100 a.addr_group)
+      (* (\* Using Hashtbl.hash leads to collisions. Hashtbl.hash is
+       *    equivalent to Hashtbl.hash_param 10 100. By increasing the
+       *    number of meaningful nodes to encounter, collisions are less
+       *    likely to happen.
+       * *\)
+       * (Hashtbl.hash_param 30 100 a.addr_group) *)
+      pp_addr_group a.addr_group
       (match a.addr_mode with WEAK -> "w" | STRONG -> "s")
 
 
@@ -292,7 +293,7 @@ let () =
       );
     print = (fun next fmt v ->
         match vkind v with
-        | V_addr_attr _ -> Format.pp_print_string fmt v.vname
+        | V_addr_attr (addr, attr) -> Format.fprintf fmt "%a.%s" pp_addr addr attr
         | _ -> next fmt v
       )
   }
@@ -396,7 +397,7 @@ type expr_kind +=
   | E_subscript of expr * expr
 
   (** Allocation of an address on the heap *)
-  | E_alloc_addr of addr_kind
+  | E_alloc_addr of addr_kind * mode
 
   (** Head address. *)
   | E_addr of addr
@@ -426,8 +427,11 @@ let () =
             (fun () -> compare_expr i1 i2);
           ]
 
-        | E_alloc_addr(ak1), E_alloc_addr(ak2) ->
-          compare_addr_kind ak1 ak2
+        | E_alloc_addr(ak1, m1), E_alloc_addr(ak2, m2) ->
+          Compare.compose [
+            (fun () -> compare_addr_kind ak1 ak2);
+            (fun () -> compare_mode m1 m2);
+          ]
 
         | E_addr(a1), E_addr(a2) ->
           compare_addr a1 a2
@@ -448,7 +452,7 @@ let () =
           fprintf fmt "%a(%a)"
             pp_expr f
             (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_expr) args
-        | E_alloc_addr(akind) -> fprintf fmt "alloc(%a)" pp_addr_kind akind
+        | E_alloc_addr(akind, mode) -> fprintf fmt "alloc(%a, %a)" pp_addr_kind akind pp_mode mode
         | E_addr (addr) -> fprintf fmt "%a" pp_addr addr
         | E_len exp -> Format.fprintf fmt "|%a|" pp_expr exp
         | _ -> default fmt exp
@@ -725,8 +729,8 @@ let mk_false = mk_bool false
 
 let mk_addr addr ?(etyp=T_addr) range = mk_expr ~etyp (E_addr addr) range
 
-let mk_alloc_addr addr_kind range =
-  mk_expr (E_alloc_addr addr_kind) ~etyp:T_addr range
+let mk_alloc_addr ?(mode=STRONG) addr_kind range =
+  mk_expr (E_alloc_addr (addr_kind, mode)) ~etyp:T_addr range
 
 let is_int_type = function
   | T_int | T_bool -> true

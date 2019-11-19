@@ -82,7 +82,8 @@ module Domain =
                                          let flow = true_flow in
                                          (* if is_not_implemented r then *)
                                          if is_same_type then
-                                           let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) flow in
+                                           let () = Format.fprintf Format.str_formatter "unsupported operand type(s) for '%s': '%a' and '%a'" op_fun pp_addr_kind (akind @@ fst cls1) pp_addr_kind (akind @@ fst cls2) in
+                                           let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow in
                                            Eval.empty_singleton flow
                                          else
                                            assume
@@ -94,7 +95,8 @@ module Domain =
                                                        (mk_py_isinstance r not_implemented_type range)
                                                        ~fthen:(fun true_flow ->
                                                          (* if is_not_implemented r then *)
-                                                         let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) true_flow in
+                                                           Format.fprintf Format.str_formatter "unsupported operand type(s) for '%s': '%a' and '%a'" op_fun pp_addr_kind (akind @@ fst cls1) pp_addr_kind (akind @@ fst cls2);
+                                                           let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) true_flow in
                                                          Eval.empty_singleton flow)
                                                        ~felse:(fun false_flow ->
                                                          (* else *)
@@ -103,7 +105,9 @@ module Domain =
                                                    )
                                              )
                                              ~felse:(fun false_flow ->
-                                               let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow in
+                                                 Format.fprintf Format.str_formatter "unsupported operand type(s) for '%s': '%a' and '%a'" op_fun pp_addr_kind (akind @@ fst cls1) pp_addr_kind (akind @@ fst cls2);
+                                                 let msg = Format.flush_str_formatter () in
+                                                 let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow in
                                                Eval.empty_singleton flow
                                              )
                                              man flow)
@@ -114,7 +118,8 @@ module Domain =
                              )
                              ~felse:(fun false_flow ->
                                if is_same_type then
-                                 let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) flow in
+                                 let () = Format.fprintf Format.str_formatter "unsupported operand type(s) for '%s': '%a' and '%a'" op_fun pp_addr_kind (akind @@ fst cls1) pp_addr_kind (akind @@ fst cls2) in
+                                 let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow in
                                  Eval.empty_singleton flow
                                else
                                  assume
@@ -126,21 +131,23 @@ module Domain =
                                              (mk_py_isinstance r not_implemented_type range)
                                              ~fthen:(fun true_flow ->
                                                (* if is_not_implemented r then *)
-                                               let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) true_flow in
-                                               Eval.empty_singleton flow)
+                                                 let () = Format.fprintf Format.str_formatter "unsupported operand type(s) for '%s': '%a' and '%a'" op_fun pp_addr_kind (akind @@ fst cls1) pp_addr_kind (akind @@ fst cls2) in
+                                                 let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow in
+                                                 Eval.empty_singleton flow)
                                              ~felse:(fun false_flow ->
                                                Eval.singleton r flow)
                                              man flow
                                          )
                                    )
                                    ~felse:(fun false_flow ->
-                                     let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) flow in
-                                     Eval.empty_singleton flow
-                                   )
+                                       let () = Format.fprintf Format.str_formatter "unsupported operand type(s) for '%s': '%a' and '%a'" op_fun pp_addr_kind (akind @@ fst cls1) pp_addr_kind (akind @@ fst cls2) in
+                                       let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow in
+                                       Eval.empty_singleton flow
+                                     )
                                    man flow
-                             )
-                           man flow
-             )))
+                               )
+                             man flow
+                       )))
          |> Option.return
       | E_unop(op, e) when is_arith_op op(* && is_py_expr e*) ->
          debug "Resolving unary operator %a" pp_operator op;
@@ -157,8 +164,9 @@ module Domain =
                          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object_attr cls op_fun range) [e] range) true_flow
                        )
                        ~felse:(fun false_flow ->
-                         let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow in
-                         Eval.empty_singleton flow
+                           Format.fprintf Format.str_formatter "bad operand type for unary '%s': '%a'" op_fun pp_addr_kind (akind @@ fst cls);
+                           let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) false_flow in
+                           Eval.empty_singleton flow
                        )
                        man flow
                    )
