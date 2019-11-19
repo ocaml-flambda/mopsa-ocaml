@@ -129,7 +129,13 @@ struct
         let fundec' = {
           fun_name = fundec.c_func_unique_name;
           fun_parameters = fundec.c_func_parameters;
-          fun_locvars = fundec.c_func_local_vars;
+          fun_locvars = [];
+          (* FIXME: This is a temporary fix to avoid double removal of
+             local variables. The field fun_locvars is used by the
+             Universal iterator at the end of the call to clean the
+             environment. Since the environment is automatically
+             cleaned by the scope mechanism, local variables are
+             removed twice. *)
           fun_body = {skind = S_c_goto_stab (body); srange = srange body};
           fun_return_type = if is_c_void_type fundec.c_func_return then None else Some fundec.c_func_return;
           fun_return_var = ret_var;
