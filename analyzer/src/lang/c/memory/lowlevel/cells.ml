@@ -44,7 +44,7 @@ open Universal.Zone
 open Zone
 open Common.Base
 open Common.Points_to
-open Alarms
+open Common.Alarms
 module Itv = Universal.Numeric.Values.Intervals.Integer.Value
 
 
@@ -161,7 +161,7 @@ struct
   let rangeof_int_cell c =
     assert(is_int_cell c);
     rangeof (cell_type c)
-  
+
 
 
   (** {2 Cell variables} *)
@@ -210,7 +210,7 @@ struct
   let mk_cell_var c : var =
     let name = mk_cell_var_name c in
     mkv name (V_c_cell c) (cell_type c)
-  
+
 
   (** Create a variable from a numeric cell *)
   let mk_numeric_cell_var_expr c range : expr =
@@ -228,7 +228,7 @@ struct
     else mk_c_cast (mk_var v ~mode:(base_mode c.base) range) typ range
 
 
-    
+
   (** {2 Domain header} *)
   (** ***************** *)
 
@@ -295,6 +295,7 @@ struct
     }
   }
 
+  let alarms = [A_c_out_of_bound_cls; A_c_null_deref_cls; A_c_use_after_free_cls; A_c_invalid_deref_cls; Stubs.Alarms.A_stub_invalid_requires_cls]
 
   (** {2 Command-line options} *)
   (** ************************ *)
@@ -565,12 +566,37 @@ struct
     | _ -> false
 
 
+  let eval_pointed_base_offset ptr range man flow =
+    man.eval ptr ~zone:(Zone.Z_c_low_level, Z_c_points_to) flow >>$ fun pt flow ->
+
+    match ekind pt with
+    | E_c_points_to P_null ->
+      raise_c_null_deref_alarm ptr range man flow |>
+      Result.empty_singleton
+
+    | E_c_points_to P_invalid ->
+      raise_c_invalid_deref_alarm ptr range man flow |>
+      Result.empty_singleton
+
+    | E_c_points_to (P_block (D (_,r), offset)) ->
+      raise_c_use_after_free_alarm ptr r range man flow |>
+      Result.empty_singleton
+
+    | E_c_points_to (P_block (base, offset)) ->
+      Result.singleton (Some (base, offset)) flow
+
+    | E_c_points_to P_top ->
+      Result.singleton None flow
+
+    | _ -> assert false
+
+
   (** Expand a pointer dereference into a cell. *)
   let expand p range man flow : ('a, expansion) result =
     eval_pointed_base_offset p range man flow >>$ fun pp flow ->
     match pp with
     | None ->
-      warn_at range "ignoring unresolved pointer %a" pp_expr p;
+      Soundness.warn_at range "ignoring ⊤ pointer %a" pp_expr p;
       Result.singleton Top flow
 
     | Some (base,offset) ->
@@ -582,23 +608,22 @@ struct
 
       (* Convert the size and the offset to numeric *)
       man.eval ~zone:(Z_c_scalar,Z_u_num) size flow >>$ fun size flow ->
-
       man.eval ~zone:(Z_c_scalar,Z_u_num) offset flow >>$ fun offset flow ->
 
       (* Try static check *)
       match expr_to_z size, expr_to_z offset with
-      | Some size, Some offset ->
-        if Z.gt elm size then
-          let flow = raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow in
+      | Some s, Some o ->
+        if Z.gt elm s then
+          let flow = raise_c_out_bound_alarm ~base ~offset ~size range man flow in
           Result.empty_singleton flow
         else
-        if Z.leq Z.zero offset &&
-           Z.leq offset (Z.sub size elm)
+        if Z.leq Z.zero o &&
+           Z.leq o (Z.sub s elm)
         then
-          let c = mk_cell base offset typ in
+          let c = mk_cell base o typ in
           Result.singleton (Cell c) flow
         else
-          let flow = raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow in
+          let flow = raise_c_out_bound_alarm ~base ~offset ~size range man flow in
           Result.empty_singleton flow
 
       | _ ->
@@ -640,8 +665,8 @@ struct
                     match uu with
                     | Some size -> Z.sub size elm
                     | None ->
-                      (* We are in trouble: the size is not bounded! 
-                         So we assume that it does not exceed the range of unsigned long, usually used for size_t 
+                      (* We are in trouble: the size is not bounded!
+                         So we assume that it does not exceed the range of unsigned long, usually used for size_t
                       *)
                       let _, uuu = rangeof ul in
                       Soundness.warn_at range
@@ -676,7 +701,7 @@ struct
                 Result.join_list ~empty:(Result.empty_singleton flow) evals
             )
           ~felse:(fun flow ->
-              let flow = raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow in
+              let flow = raise_c_out_bound_alarm ~base ~offset ~size range man flow in
               Result.empty_singleton flow
             )
           man flow
@@ -883,14 +908,14 @@ struct
 
   (** 𝔼⟦ *(p + ∀i) ⟧ *)
   let eval_deref_quantified p range man flow =
-    let elm = under_type p.etyp |> void_to_char in
+    let typ = under_type p.etyp |> void_to_char in
     eval_pointed_base_offset p range man flow >>$ fun pp flow ->
 
     match pp with
     | None ->
       (* Valid pointer but unknown offset *)
-      warn_at range "ignoring unresolved pointer %a" pp_expr p;
-      Eval.singleton (mk_top elm range) flow
+      Soundness.warn_at range "ignoring ⊤ pointer %a" pp_expr p;
+      Eval.singleton (mk_top typ range) flow
 
     | Some (base,offset) ->
       eval_base_size base range man flow >>$ fun size flow ->
@@ -900,7 +925,7 @@ struct
       man.eval ~zone:(Z_c, Z_u_num) min flow >>$ fun min flow ->
       man.eval ~zone:(Z_c, Z_u_num) max flow >>$ fun max flow ->
 
-      let limit = sub size (mk_z (sizeof_type elm) range) range in
+      let limit = sub size (mk_z (sizeof_type typ) range) range in
 
       (* Safety condition: [min, max] ⊆ [0, size - |elm|] *)
       assume (
@@ -911,10 +936,11 @@ struct
           range
       )
         ~fthen:(fun flow ->
-            Eval.singleton (mk_top elm range) flow
+            Eval.singleton (mk_top typ range) flow
           )
         ~felse:(fun flow ->
-            raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow |>
+            (* FIXME: remove qunatifiers from offset *)
+            raise_c_out_bound_alarm ~base ~offset ~size range man flow |>
             Eval.empty_singleton
           )
         ~zone:Z_u_num man flow
@@ -928,14 +954,14 @@ struct
       Option.return
 
     | E_c_deref p when under_type p.etyp |> void_to_char |> is_c_scalar_type &&
-                       not (is_pointer_offset_quantified p)
+                       not (is_pointer_offset_forall_quantified p)
       ->
       eval_deref_scalar_pointer p false exp.erange man flow |>
       Option.return
 
 
     | E_c_deref p when under_type p.etyp |> is_c_function_type &&
-                       not (is_pointer_offset_quantified p)
+                       not (is_pointer_offset_forall_quantified p)
       ->
       eval_deref_function_pointer p exp.erange man flow |>
       Option.return
@@ -944,15 +970,15 @@ struct
       eval_address_of lval exp.erange man flow |>
       Option.return
 
-    | E_stub_primed lval when not (is_lval_offset_quantified lval) ->
+    | E_stub_primed lval when not (is_lval_offset_forall_quantified lval) ->
       eval_deref_scalar_pointer (mk_c_address_of lval exp.erange) true exp.erange man flow |>
       Option.return
 
-    | E_c_deref p when is_pointer_offset_quantified p ->
+    | E_c_deref p when is_pointer_offset_forall_quantified p ->
       eval_deref_quantified p exp.erange man flow |>
       Option.return
 
-    | E_stub_primed e when is_lval_offset_quantified e -> 
+    | E_stub_primed e when is_lval_offset_forall_quantified e ->
       eval_deref_quantified (mk_c_address_of e exp.erange) exp.erange man flow |>
       Option.return
 
@@ -960,6 +986,11 @@ struct
     | E_stub_builtin_call((VALID_PTR | VALID_FLOAT) as f, e) ->
       man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow >>$? fun e flow ->
       Eval.singleton (mk_expr (E_stub_builtin_call(f, e)) ~etyp:exp.etyp exp.erange) flow |>
+      Option.return
+
+    | E_stub_quantified(EXISTS, v, _) ->
+      let e = mk_var v exp.erange in
+      man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow |>
       Option.return
 
     | _ -> None
@@ -1054,21 +1085,26 @@ struct
     expand p range man flow >>$ fun expansion flow ->
     match expansion with
     | Top ->
-      Soundness.warn_at range "ignoring assignment to undetermined lval *%a = %a;"
+      Soundness.warn_at range "ignoring assignment to ⊤ pointer *%a = %a;"
         pp_expr p
         pp_expr e
       ;
       Post.return flow
 
     | Cell { base } when is_base_readonly base ->
-      let flow = raise_c_alarm AReadOnlyModification ~bottom:true range man.lattice flow in
+      let flow = raise_c_read_only_modification_alarm base range man flow in
       Post.return flow
 
     | Cell c ->
       man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow >>$ fun e flow ->
       assign_cell c e mode range man flow
 
-    | Region (base,itv) ->
+    | Region (base,itv) when is_c_num_type e.etyp ->
+      man.eval ~zone:(Z_c_low_level,Z_u_num) e flow >>$ fun e flow ->
+      assign_region base itv range man flow
+
+    | Region (base,itv)  ->
+      man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow >>$ fun e flow ->
       assign_region base itv range man flow
 
 
@@ -1253,6 +1289,35 @@ struct
       | _ -> assert false
 
 
+  (** 𝕊⟦ requires cond; ⟧ *)
+  let exec_stub_requires cond range man flow =
+    assume cond
+      ~fthen:(fun flow ->
+          Post.return flow
+        )
+      ~felse:(fun flow ->
+          Stubs.Alarms.raise_stub_invalid_requires cond range man flow |>
+          Post.return
+        )
+      ~negate:(fun e range ->
+          let ee = map_expr
+              (fun e ->
+                 match ekind e with
+                 | E_stub_quantified(FORALL, v, s) ->
+                   VisitParts { e with ekind = E_stub_quantified(EXISTS, v, s) }
+
+                 | E_stub_quantified(EXISTS, v, s) ->
+                   VisitParts { e with ekind = E_stub_quantified(FORALL, v, s) }
+
+                 | _ -> VisitParts e
+              )
+              (fun s -> VisitParts s)
+              e
+          in
+          mk_not ee range
+        )
+      ~zone:Z_c_low_level man flow
+
 
   let exec zone stmt man flow =
     match skind stmt with
@@ -1310,6 +1375,10 @@ struct
 
     | S_stub_rename_primed(lval, bounds) ->
       exec_rename_primed lval bounds stmt.srange man flow |>
+      Option.return
+
+    | S_stub_requires e ->
+      exec_stub_requires e stmt.srange man flow |>
       Option.return
 
 

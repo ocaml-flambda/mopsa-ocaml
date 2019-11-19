@@ -72,6 +72,8 @@ struct
     ieval = {provides = []; uses = []};
   }
 
+  let alarms = []
+
   (** Initialization *)
   (** ============== *)
 

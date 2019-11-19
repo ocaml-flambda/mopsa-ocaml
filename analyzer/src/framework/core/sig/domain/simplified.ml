@@ -165,6 +165,8 @@ struct
     }
   }
 
+  let alarms = []
+
   let exec zone stmt man flow =
     match skind stmt with
     | S_assign _ | S_assume _ | S_add _ | S_remove _ | S_rename _

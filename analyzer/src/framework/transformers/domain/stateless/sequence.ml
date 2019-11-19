@@ -48,6 +48,7 @@ struct
 
   let interface = Core.Interface.concat D1.interface D2.interface
 
+  let alarms = D1.alarms @ D2.alarms |> List.sort_uniq compare
 
   (**************************************************************************)
   (**                      {2 Transfer functions}                           *)

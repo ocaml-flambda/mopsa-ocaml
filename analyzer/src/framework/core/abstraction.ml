@@ -344,12 +344,8 @@ struct
                   pp_zone2 zone
 
     in
-    (* Update the eprev field in returned expressions to indicate the
-       previous form of the result *)
-    let ret' = Eval.map (fun e -> { e with eprev = Some exp }) ret in
-
-    let ctx = Hook.on_after_eval zone exp man ret' in
-    Eval.set_ctx ctx ret'
+    let ctx = Hook.on_after_eval zone exp man ret in
+    Eval.set_ctx ctx ret
 
 
   and eval_over_paths paths exp man flow =
@@ -389,7 +385,10 @@ struct
              | None -> None
              | Some evl ->
                let evl' = Eval.remove_duplicates man.lattice evl in
-               Some evl'
+               (* Update the eprev field in returned expressions to indicate the
+                  previous form of the result *)
+               let evl'' = Eval.map (fun ee -> { ee with eprev = Some e }) evl' in
+               Some evl''
            ) (z1, z2) exp man flow
          with Exceptions.Panic(msg, line) ->
            Printexc.raise_with_backtrace
@@ -419,7 +418,10 @@ struct
             Option.lift @@ bind_some @@ fun exprs flow ->
             let exp' = builder {exprs; stmts = []} in
             debug "%a -> %a" pp_expr exp pp_expr exp';
-            Eval.singleton exp' flow
+            (* Update the eprev field in returned expressions to
+               indicate the previous form of the result *)
+            let exp'' = { exp' with eprev = Some exp } in
+            Eval.singleton exp'' flow
 
           | _ ->
             debug "%a is a leaf expression" pp_expr exp;

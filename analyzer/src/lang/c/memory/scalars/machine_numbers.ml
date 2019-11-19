@@ -27,7 +27,7 @@ open Universal.Ast
 open Ast
 open Zone
 open Universal.Zone
-open Alarms
+open Common.Alarms
 open Common.Points_to
 module Itv = Universal.Numeric.Values.Intervals.Integer.Value
 
@@ -63,6 +63,7 @@ struct
     }
   }
 
+  let alarms = [A_c_integer_overflow_cls; A_c_divide_by_zero_cls; A_c_invalid_bit_shift_cls]
 
   (** Command-line options *)
   (** ==================== *)
@@ -204,8 +205,8 @@ struct
       assume
         ~zone:Z_u_num
         cond
-        ~fthen:(fun tflow -> f1 e flow)
-        ~felse:(fun fflow -> f2 e flow)
+        ~fthen:(fun tflow -> f1 e tflow)
+        ~felse:(fun fflow -> f2 e fflow)
         man flow
     in
     const_check exp flow
@@ -314,7 +315,7 @@ struct
            Eval.singleton exp' tflow
         )
         (fun fflow ->
-           let flow' = raise_c_alarm ADivideByZero exp.erange ~bottom:true man.lattice fflow in
+           let flow' = raise_c_divide_by_zero_alarm e' exp.erange man fflow in
            Eval.empty_singleton flow'
         ) e e' flow |>
       Option.return
@@ -332,7 +333,7 @@ struct
            Eval.singleton exp' tflow
         )
         (fun fflow ->
-           let flow' = raise_c_alarm AInvalidBitShift exp.erange ~bottom:true man.lattice fflow in
+           let flow' = raise_c_invalid_bit_shift_alarm e' t exp.erange man fflow in
            Eval.empty_singleton flow'
         ) man flow |>
       Option.return
@@ -345,7 +346,7 @@ struct
       check_overflow typ man range
         (fun e tflow -> Eval.singleton e tflow)
         (fun e fflow ->
-           let flow1 = raise_c_alarm AIntegerOverflow exp.erange ~bottom:false man.lattice fflow in
+           let flow1 = raise_c_integer_overflow_alarm e typ exp.erange man fflow in
            Eval.singleton (mk_unop (O_wrap(rmin, rmax)) e ~etyp:(to_num_type typ) range) flow1
         ) e flow |>
       Option.return
@@ -365,7 +366,7 @@ struct
            if not (is_signed typ) && not !opt_detect_unsigned_wrap
            then Eval.singleton e' fflow
            else
-             let flow1 = raise_c_alarm AIntegerOverflow exp.erange ~bottom:false man.lattice fflow in
+             let flow1 = raise_c_integer_overflow_alarm e typ exp.erange man fflow in
              Eval.singleton e' flow1
         ) e flow |>
       Option.return
@@ -425,7 +426,7 @@ struct
              if is_explicit_cast && !opt_ignore_cast_alarm then
                  Eval.singleton (mk_unop (O_wrap(rmin, rmax)) e ~etyp:(to_num_type t) range) fflow
              else
-               let flow1 = raise_c_alarm AIntegerOverflow exp.erange ~bottom:false man.lattice fflow in
+               let flow1 = raise_c_integer_overflow_alarm e' t exp.erange man fflow in
                Eval.singleton (mk_unop (O_wrap(rmin, rmax)) e ~etyp:(to_num_type t) range) flow1
           ) e' flow |>
         Option.return
@@ -487,7 +488,7 @@ struct
     if is_c_int_type t then
       let l,u = rangeof t in
       let vv = match ekind vv with E_var (vv, _) -> vv | _ -> assert false in
-      Framework.Common.Var_bounds.add_var_bounds_flow vv (C_int_interval (l,u)) flow |>
+      Framework.Transformers.Value.Nonrel.add_var_bounds_flow vv (C_int_interval (l,u)) flow |>
       Post.return
     else
       Post.return flow
@@ -579,7 +580,7 @@ struct
       Post.bind (fun flow ->
           if is_c_int_type v.etyp then
             let vv = match ekind vv with E_var (vv,_) -> vv | _ -> assert false in
-            Framework.Common.Var_bounds.remove_var_bounds_flow vv flow |>
+            Framework.Transformers.Value.Nonrel.remove_var_bounds_flow vv flow |>
             Post.return
           else
             Post.return flow

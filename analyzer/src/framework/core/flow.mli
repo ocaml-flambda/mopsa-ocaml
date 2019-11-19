@@ -82,6 +82,10 @@ val set : token -> 'a -> 'a lattice -> 'a flow -> 'a flow
 (** [set tk a lat flow] overwrites the binding of token [tk] in [flow]
     with the abstract element [a]. *)
 
+val set_bottom : token -> 'a flow -> 'a flow
+(** [set_bottom tk lat flow] overwrites the binding of token [tk] in [flow]
+    with a ⊥ environment. *)
+
 val copy : token -> token -> 'a lattice -> 'a flow -> 'a flow -> 'a flow
 (** [copy tk1 tk2 lat flow1 flow2] copies the environment at token
     [tk1] in [flow1] into token [tk2] in [flow2] *)

@@ -39,6 +39,8 @@ module Domain =
       ieval = {provides = [Zone.Z_py, Zone.Z_py; Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
     }
 
+    let alarms = []
+
     let rec eval zs exp man flow =
       let range = exp.erange in
       match ekind exp with

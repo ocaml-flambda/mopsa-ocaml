@@ -39,6 +39,8 @@ module Domain =
       ieval = {provides = []; uses = [Zone.Z_py, Zone.Z_py]}
     }
 
+    let alarms = []
+
     let init _ _ flow = flow
 
     let exec zone stmt man flow =

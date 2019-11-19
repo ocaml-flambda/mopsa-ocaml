@@ -119,3 +119,6 @@ val expr_vars : expr -> var list
 
 val stmt_vars : stmt -> var list
 (** Extract variables from a statement *)
+
+val get_orig_expr : expr -> expr
+(** Get the original version of an evaluated expression *)
