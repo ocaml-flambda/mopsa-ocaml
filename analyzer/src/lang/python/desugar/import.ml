@@ -258,7 +258,7 @@ module Domain =
               | _ -> VisitParts exp) (fun s -> VisitParts s) e in
           add_type_alias v ee;
           (* add to map *)
-          {stmt with skind = S_block []},
+          {stmt with skind = S_block ([], [])},
           List.filter (fun var -> compare_var var v <> 0) globals,
           flow
 
@@ -266,7 +266,7 @@ module Domain =
         | S_py_import (s, _, _)
         | S_py_import_from (s, _, _, _) ->
           debug "hum, maybe we should import %s first" s;
-          {stmt with skind = S_block []}, globals, man.exec stmt flow
+          {stmt with skind = S_block ([], [])}, globals, man.exec stmt flow
 
 
         (* FIXME: and substitution for other modules? *)
@@ -337,7 +337,7 @@ module Domain =
                         )
               in
               let flow = Result.apply (fun _ f -> f) (Flow.join man.lattice) (Flow.meet man.lattice) r in
-              {stmt with skind = S_block []}, globals, flow
+              {stmt with skind = S_block ([], [])}, globals, flow
 
 
             | S_py_function f ->
@@ -354,7 +354,7 @@ module Domain =
                       py_funcs_exceptions =
                         (debug "for %a, py_func_body = %a" pp_var f.py_func_var pp_stmt f.py_func_body;
                           match skind f.py_func_body with
-                         | S_block ({skind = S_py_raise (Some e)}::_) -> [e]
+                         | S_block ({skind = S_py_raise (Some e)}::_, _) -> [e]
                          | _ -> []);
                       py_funcs_types_in = f.py_func_types_in;
                       py_funcs_type_out = f.py_func_type_out;
@@ -372,22 +372,22 @@ module Domain =
               else
                 add_typed (addr, None) in
               debug "done";
-              {stmt with skind = S_block []}, globals, flow
+              {stmt with skind = S_block ([], [])}, globals, flow
             | _ -> assert false
           end
 
-        | S_block(block) ->
+        | S_block(block, _) ->
           let newblock, newglobals, newflow = List.fold_left (fun (nb, ng, nf) s ->
               let news, g, nf = parse basename s ng nf in
               match skind news with
-              | S_block [] -> nb, g, nf
+              | S_block ([], _)-> nb, g, nf
               | _ -> news::nb, g, nf
             ) ([], globals, flow) block in
           let newblock = List.rev newblock in
-          {stmt with skind = S_block newblock}, newglobals, newflow
+          {stmt with skind = S_block (newblock, [])}, newglobals, newflow
 
         | S_expression {ekind = (E_constant C_py_ellipsis)} ->
-          {stmt with skind = S_block []}, globals, flow
+          {stmt with skind = S_block ([], [])}, globals, flow
 
         | _ -> panic_at range "stmt %a not supported in stubs file %s" pp_stmt stmt name
       in
