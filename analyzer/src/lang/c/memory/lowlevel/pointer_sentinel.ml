@@ -275,9 +275,9 @@ struct
 
       (* Check if an initializer has a pointer type *)
       let is_non_pointer = function
-        | C_flat_none (_,t)
-        | C_flat_expr(_,t)
-        | C_flat_fill(_,t,_) ->
+        | C_flat_none (_,_,t)
+        | C_flat_expr(_,_,t)
+        | C_flat_fill(_,_,_,t) ->
           not (is_c_pointer_type t)
       in
 
@@ -290,29 +290,23 @@ struct
       in
 
       (* Find the position of the sentinel and accumulate pointers before it *)
-      let rec aux o init flow : ('a,Z.t*Z.t*expr option*expr list) result =
+      let rec aux init flow : ('a,Z.t*Z.t*expr option*expr list) result =
         match init with
         | [] -> Result.singleton (size, size, None, []) flow
 
-        | C_flat_none (n,_) :: tl  ->
+        | C_flat_none (n,o,_) :: tl  ->
           let sentinel = if is_global then mk_c_null range else mk_c_invalid_pointer range in
           Result.singleton (o,o,Some sentinel,[]) flow
 
         | hd :: _ when is_non_pointer hd -> raise NonPointerFound
 
-        | (C_flat_fill (e,_,_) as hd):: tl
-        | (C_flat_expr (e,_) as hd):: tl ->
-          let step =
-            match hd with
-            | C_flat_expr _ -> ptr_size
-            | C_flat_fill (_,_,n) -> Z.mul n ptr_size
-            | _ -> assert false
-          in
+        | C_flat_fill (e,o,_,_) :: tl
+        | C_flat_expr (e,o,_) :: tl ->
           is_sentinel_expr e man flow >>$ fun b flow ->
           if b then
             Result.singleton (o,o,Some e,[]) flow
           else
-              aux (Z.add o step) tl flow >>$ fun (o1,o2,at,before) flow ->
+              aux tl flow >>$ fun (o1,o2,at,before) flow ->
               Result.singleton (o1,o2,at,e::before) flow
       in
       (* Initialize the sentinel variable *)
@@ -323,7 +317,7 @@ struct
       man.post ~zone:Z_u_num (mk_add sentinel range) flow >>= fun _ flow ->
 
       try
-        aux Z.zero flat_init flow >>$ fun (o1,o2,ate,beforel) flow ->
+        aux flat_init flow >>$ fun (o1,o2,ate,beforel) flow ->
         let pos =
           if Z.equal o1 o2
           then mk_z o1 range

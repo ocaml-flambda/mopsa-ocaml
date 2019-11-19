@@ -196,9 +196,9 @@ struct
 
       (* Check if an initializer has a pointer type *)
       let is_non_pointer = function
-        | C_flat_none (_,t)
-        | C_flat_expr(_,t)
-        | C_flat_fill(_,t,_) ->
+        | C_flat_none (_,_,t)
+        | C_flat_expr(_,_,t)
+        | C_flat_fill(_,_,_,t) ->
           not (is_c_pointer_type t)
       in
 
@@ -215,15 +215,15 @@ struct
         match init with
         | [] -> Result.singleton [] flow
 
-        | C_flat_none (n,_) :: tl  ->
+        | C_flat_none (n,_,_) :: tl  ->
           let e = if is_global then mk_c_null range else mk_c_invalid_pointer range in
           aux tl flow >>$ fun el flow ->
           Result.singleton (e::el) flow
 
         | hd :: _ when is_non_pointer hd -> raise NonPointerFound
 
-        | C_flat_fill (e,_,_):: tl
-        | C_flat_expr (e,_) :: tl ->
+        | C_flat_fill (e,_,_,_):: tl
+        | C_flat_expr (e,_,_) :: tl ->
           aux tl flow >>$ fun el flow ->
           Result.singleton (e::el) flow
       in

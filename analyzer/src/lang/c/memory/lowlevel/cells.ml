@@ -297,19 +297,33 @@ struct
 
   let alarms = [A_c_out_of_bound_cls; A_c_null_deref_cls; A_c_use_after_free_cls; A_c_invalid_deref_cls; Stubs.Alarms.A_stub_invalid_requires_cls]
 
+
   (** {2 Command-line options} *)
   (** ************************ *)
 
   (** Maximal number of expanded cells when dereferencing a pointer *)
-  let opt_expand = ref 1
+  let opt_deref_expand = ref 1
 
   let () =
     register_domain_option name {
-      key = "-cell-expand";
+      key = "-cell-deref-expand";
       category = "C";
-      doc = " maximal number of expanded cells";
-      spec = ArgExt.Set_int opt_expand;
+      doc = " maximal number of expanded cells when dereferencing a pointer";
+      spec = ArgExt.Set_int opt_deref_expand;
       default = "1";
+    }
+
+
+  (** Maximal number of expanded cells when initializing a variable *)
+  let opt_init_expand = ref 10
+
+  let () =
+    register_domain_option name {
+      key = "-cell-init-expand";
+      category = "C";
+      doc = " maximal number of expanded cells when initializing a variable";
+      spec = ArgExt.Set_int opt_init_expand;
+      default = "10";
     }
 
 
@@ -679,7 +693,7 @@ struct
 
                 (* Iterate over [l, u] *)
                 let rec aux i o =
-                  if i = !opt_expand
+                  if i = !opt_deref_expand
                   then
                     if Z.gt o u
                     then []
@@ -1018,33 +1032,33 @@ struct
     in
 
 
-    (* Initialize cells, but expand at most !opt_expand cells, as
-       defined by the option -cell-expand *)
-    let rec aux o i l flow =
-      if i = !opt_expand || List.length l = 0
+    (* Initialize cells, but expand at most !opt_init_expand cells, as
+       defined by the option -cell-init-expand *)
+    let rec aux i l flow =
+      if i = !opt_init_expand || List.length l = 0
       then Post.return flow
       else
-        let c, init, tl, o' =
+        let c, init, tl =
           match l with
-          | C_flat_expr (e,t) :: tl ->
+          | C_flat_expr (e,o,t) :: tl ->
             let c = mk_cell (V v) o t in
             let init = Some (C_init_expr e) in
-            c, init, tl, Z.add o (sizeof_type t)
+            c, init, tl
 
-          | C_flat_none(n,t) :: tl ->
+          | C_flat_none(n,o,t) :: tl ->
             let c = mk_cell (V v) o t in
             let init = None in
-            let tl' = if Z.equal n Z.one then tl else C_flat_none(Z.pred n,t) :: tl in
-            c, init, tl', Z.add o (sizeof_type t)
+            let tl' = if Z.equal n Z.one then tl else C_flat_none(Z.pred n,Z.add o (sizeof_type t),t) :: tl in
+            c, init, tl'
 
-          | C_flat_fill(e,t,n) :: tl ->
+          | C_flat_fill(e,n,o,t) :: tl ->
             let c = mk_cell (V v) o t in
             let init = Some (C_init_expr e) in
-            let tl' = if Z.equal n Z.one then tl else C_flat_fill(e,t,Z.pred n) :: tl in
-            c, init, tl', Z.add o (sizeof_type t)
+            let tl' = if Z.equal n Z.one then tl else C_flat_fill(e,Z.pred n,Z.add o (sizeof_type t),t) :: tl in
+            c, init, tl'
 
-
-          | l -> panic "?? %a" Pp.pp_c_init (C_init_flat l)
+          | l ->
+            panic "cells: unsupported initializer %a" Pp.pp_c_init (C_init_flat l)
         in
         (* Evaluate the initialization into a scalar expression *)
         (
@@ -1074,9 +1088,9 @@ struct
         man.post ~zone:Z_c_scalar stmt flow |>
 
         Post.bind @@ fun flow ->
-        aux o' (i + 1) tl flow
+        aux (i + 1) tl flow
     in
-    aux Z.zero 0 flat_init flow
+    aux 0 flat_init flow
 
 
   (** 𝕊⟦ *p = e; ⟧ *)
