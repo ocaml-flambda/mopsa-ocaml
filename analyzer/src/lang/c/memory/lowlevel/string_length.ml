@@ -219,7 +219,7 @@ struct
 
         | C_flat_expr (e,o,t) :: tl ->
           begin
-            match expr_to_z e with
+            match c_expr_to_z e with
             | Some e ->
               if Z.equal e Z.zero
               then o, o
