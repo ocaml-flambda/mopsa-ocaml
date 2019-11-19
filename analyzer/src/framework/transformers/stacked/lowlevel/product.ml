@@ -62,6 +62,15 @@ struct
     end
     )
 
+  let alarms =
+    List.sort_uniq compare
+      (fold_module
+      { f = fun (type a) (m: a stack) acc ->
+            let module S = (val m) in
+            S.alarms @ acc
+      }
+      Spec.pool [])
+
 
   let interface =
     fold_module {

@@ -47,7 +47,7 @@ open Universal.Zone
 open Zone
 open Common.Base
 open Common.Points_to
-open Alarms
+open Common.Alarms
 
 
 module Domain =
@@ -80,6 +80,7 @@ struct
     }
   }
 
+  let alarms = []
 
   (** {2 Variable of string lengths} *)
   (** ****************************** *)
@@ -143,6 +144,23 @@ struct
   (** {2 Abstract transformers} *)
   (** ************************* *)
 
+  (** Get the base and offset pointed by ptr. Since we do not track invalid
+     dereferences, we ignore invalid pointers.
+  *)
+  let eval_pointed_base_offset ptr range man flow =
+    man.eval ptr ~zone:(Zone.Z_c_low_level, Z_c_points_to) flow >>$ fun pt flow ->
+    match ekind pt with
+    | E_c_points_to P_null
+    | E_c_points_to P_invalid
+    | E_c_points_to (P_block (D _, _))
+    | E_c_points_to P_top ->
+      Result.empty_singleton flow
+
+    | E_c_points_to (P_block (base, offset)) ->
+      Result.singleton (base, offset) flow
+
+    | _ -> assert false
+
 
   let is_memory_base base =
     match base with
@@ -192,41 +210,40 @@ struct
       let length = mk_length_var (V v) range in
 
       (* Find the position of the first zero *)
-      let rec aux o l =
-        match l with
-        | [] -> o, o
+      let rec aux = function
+        | [] -> size, size
 
-        | C_flat_none _ :: tl when is_global -> o, o
+        | C_flat_none (_,o,_) :: tl when is_global -> o, o
 
-        | C_flat_none _ :: tl -> o, size
+        | C_flat_none (_,o,_) :: tl -> o, size
 
-        | C_flat_expr (e,t) :: tl ->
+        | C_flat_expr (e,o,t) :: tl ->
           begin
             match expr_to_z e with
             | Some e ->
               if Z.equal e Z.zero
               then o, o
-              else aux (Z.add o (sizeof_type t)) tl
+              else aux tl
 
             | None ->
               (* FIXME: test the value of the expression *)
               o, size
           end
 
-        | C_flat_fill (e,t,n) :: tl ->
+        | C_flat_fill (e,n,o,t) :: tl ->
           begin
             match expr_to_z e with
             | Some e ->
               if Z.equal e Z.zero
               then o, o
-              else aux (Z.add o (Z.mul n (sizeof_type t))) tl
+              else aux tl
 
             | None ->
               (* FIXME: test the value of the expression *)
               o, size
           end
       in
-      let o1, o2 = aux Z.zero flat_init in
+      let o1, o2 = aux flat_init in
 
       let init' =
         if Z.equal o1 o2
@@ -317,24 +334,18 @@ struct
         )
       ~felse:(fun flow ->
           (* Unsafe case *)
-          let flow' = raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow in
-          Post.return flow'
+          Flow.set_bottom T_cur flow |>
+          Post.return
         )
       ~zone:Z_u_num man flow
 
 
   (** Assignment abstract transformer for 𝕊⟦ *p = rval; ⟧ *)
   let assign_deref p rval range man flow =
-    eval_pointed_base_offset p range man flow >>$ fun r flow ->
-    match r with
-    | None ->
-      Soundness.warn_at range "ignoring assignment to undetermined valid pointer %a" pp_expr p;
-      Post.return flow
-
-    | Some (base, offset) ->
-      man.eval ~zone:(Z_c_low_level,Z_u_num) rval flow >>$ fun rval flow ->
-      man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow >>$ fun offset flow ->
-      assign_cases base offset rval (under_type p.etyp |> void_to_char) range man flow
+    eval_pointed_base_offset p range man flow >>$ fun (base,offset) flow ->
+    man.eval ~zone:(Z_c_low_level,Z_u_num) rval flow >>$ fun rval flow ->
+    man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow >>$ fun offset flow ->
+    assign_cases base offset rval (under_type p.etyp |> void_to_char) range man flow
 
 
 
@@ -359,7 +370,7 @@ struct
         )
       ~felse:(fun flow ->
           (* Unsafe case *)
-          raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow |>
+          Flow.set_bottom T_cur flow |>
           Post.return
         )
       ~zone:Z_u_num man flow
@@ -424,32 +435,11 @@ struct
           ] ~zone:Z_u_num man flow
         )
       ~felse:(fun flow ->
-          (* Unsafe case *)
-          let flow' = raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow in
-          Post.return flow'
+          (* FIXME: remove qunatifiers from offset *)
+          Flow.set_bottom T_cur flow |>
+          Post.return
         )
       ~zone:Z_u_num man flow
-
-
-  (** Default for tests *p ? 0 *)
-  let assume_default_cases base offset range man flow =
-    (* Quantified offsets cannot be handled numerically, so we just raise a
-       non-deterministic out-of-bound alarm
-    *)
-    if is_expr_quantified offset
-    then
-      raise_c_alarm AOutOfBound range ~bottom:false man.lattice flow |>
-      Post.return
-    else
-      (* Safety condition: offset ⊆ [0, size[ *)
-      eval_base_size base range man flow >>$ fun size flow ->
-      assume
-        (mk_in offset (mk_zero range) size ~right_strict:true range)
-        ~fthen:(fun flow -> Post.return flow)
-        ~felse:(fun flow ->
-            raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow |>
-            Post.return
-          ) ~zone:Z_c_scalar man flow
 
 
 
@@ -467,23 +457,17 @@ struct
       doit lval
     in
 
-    eval_pointed_base_offset p range man flow >>$ fun r flow ->
-    match r with
-    | None ->
-      raise_c_alarm AOutOfBound p.erange ~bottom:false man.lattice flow |>
-      Post.return
+    eval_pointed_base_offset p range man flow >>$ fun (base,offset) flow ->
+    if not (is_memory_base base)
+    then Post.return flow
 
-    | Some (base,offset) ->
-      if not (is_memory_base base)
-      then assume_default_cases base offset range man flow
+    else if op = O_ne && is_expr_forall_quantified offset
+    then assume_quantified_non_zero_cases base offset primed range man flow
 
-      else if op = O_ne && is_expr_quantified offset
-      then assume_quantified_non_zero_cases base offset primed range man flow
+    else if op = O_eq && not (is_expr_forall_quantified offset)
+    then assume_zero_cases base offset primed range man flow
 
-      else if op = O_eq && not (is_expr_quantified offset)
-      then assume_zero_cases base offset primed range man flow
-
-      else assume_default_cases base offset range man flow
+    else Post.return flow
 
 
   (** Add a base to the domain's dimensions *)

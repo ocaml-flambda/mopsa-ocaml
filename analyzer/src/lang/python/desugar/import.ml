@@ -44,6 +44,8 @@ module Domain =
 
     exception Module_not_found of string
 
+    let alarms = []
+
     let rec exec zone stmt man flow =
       let range = srange stmt in
       match skind stmt with

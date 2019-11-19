@@ -60,6 +60,7 @@ struct
     }
   }
 
+  let alarms = [Universal.Iterators.Unittest.A_assert_fail_cls]
 
   let is_rand_function = function
     | "_mopsa_rand_s8"

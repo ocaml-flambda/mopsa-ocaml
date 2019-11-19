@@ -32,6 +32,7 @@ open Log
 open Flow
 open Post
 open Eval
+open Alarm
 
 
 (*==========================================================================*)
@@ -85,6 +86,9 @@ sig
   val interface : interface
   (** Zoning interface *)
 
+  val alarms : alarm_class list
+  (** List of alarms detected by the domain *)
+
 
   (** {2 Transfer functions} *)
   (** ********************** *)
@@ -123,6 +127,7 @@ struct
   let init = D.init
 
   let interface = D.interface
+  let alarms = D.alarms
 
   let exec = D.exec
   let eval = D.eval

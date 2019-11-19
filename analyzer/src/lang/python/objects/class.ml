@@ -40,6 +40,8 @@ struct
     ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
   }
 
+  let alarms = []
+
   let init _ _ flow = flow
 
 

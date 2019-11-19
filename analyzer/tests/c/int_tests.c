@@ -127,3 +127,22 @@ void test_unsafe_left_shift_with_negative_operand() {
   int x = 120 << a;
   _mopsa_assert_unsafe();
 }
+
+void test_int_of_float_cast() {
+  float f1 = 1.0;
+  _mopsa_assert((int)f1 == 1);
+
+  float f2 = 2.8;
+  int i = (int) f2;
+  _mopsa_assert(i == 2);
+}
+
+
+void test_int_of_double_cast() {
+  double f1 = 1.0;
+  _mopsa_assert((int)f1 == 1);
+
+  double f2 = 2.8;
+  int i = (int) f2;
+  _mopsa_assert(i == 2);
+}

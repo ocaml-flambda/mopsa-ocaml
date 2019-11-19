@@ -29,7 +29,7 @@ open Zone
 open Universal.Zone
 open Common.Points_to
 open Common.Base
-open Alarms
+open Common.Alarms
 open Value
 open Static_points_to
 
@@ -61,7 +61,7 @@ struct
   let interface = {
     iexec = {
       provides = [Z_c_scalar];
-      uses = [Universal.Zone.Z_u_num];
+      uses = [Z_c_scalar; Universal.Zone.Z_u_num];
     };
 
 
@@ -76,6 +76,7 @@ struct
     }
   }
 
+  let alarms = [A_c_illegal_pointer_compare_cls; A_c_illegal_pointer_diff_cls]
 
   (** {2 Lattice operators} *)
   (** ===================== *)
@@ -343,7 +344,7 @@ struct
         let flow = set_value_opt p1 v1 man flow |>
                    set_value_opt p2 v2 man
         in
-        let flow = raise_c_alarm Alarms.AIllegalPointerDiff range ~bottom:true man.lattice flow in
+        let flow = raise_c_illegal_pointer_diff p q range man flow in
         [Eval.empty_singleton flow]
     in
 
@@ -380,6 +381,13 @@ struct
            is_c_pointer_type p2.etyp
       ->
       eval_diff p1 p2 exp.erange man flow |>
+      Option.return
+
+    | _ when is_c_pointer_type exp.etyp ->
+      assume (mk_binop exp O_eq (mk_c_null exp.erange) exp.erange)
+        ~fthen:(fun flow -> Eval.singleton (mk_zero exp.erange) flow)
+        ~felse:(fun flow -> Eval.singleton (mk_one exp.erange) flow)
+        ~zone:Z_c_scalar man flow|>
       Option.return
 
     | _ -> None
@@ -642,7 +650,7 @@ struct
         let flow = set_value_opt p1 vv1 man flow |>
                    set_value_opt p2 vv2 man
         in
-        let flow = raise_c_alarm Alarms.AIllegalPointerOrder range ~bottom:true man.lattice flow in
+        let flow = raise_c_illegal_pointer_compare p q range man flow in
         [ Post.return flow ]
     in
     let bottom_case = Flow.set T_cur man.lattice.bottom man.lattice flow |>

@@ -34,6 +34,9 @@ struct
       let name = "python.types.t_int"
     end)
 
+  let alarms = []
+
+
   let interface = {
     iexec = {provides = []; uses = []};
     ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}

@@ -132,6 +132,8 @@ struct
     ieval = { provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]; }
   }
 
+  let alarms = []
+
   let merge _ _ _ = assert false
 
   let print fmt m =

@@ -381,8 +381,8 @@ and value_chain_lowlevel (op:operator) (l:config list) : (module Sig.Value.Lowle
     let module A = (val aa : Sig.Value.Lowlevel.VALUE) in
     let module B = (val bb : Sig.Value.Lowlevel.VALUE) in
     match op with
-    | O_disjoint ->
-      let module C = Transformers.Value.Lowlevel.Disjoint.Make(A)(B) in
+    | O_union ->
+      let module C = Transformers.Value.Lowlevel.Union.Make(A)(B) in
       (module C)
 
     | _ -> assert false
@@ -480,7 +480,7 @@ let domains file : string list =
         apply = (fun s d -> get_names s @ get_names d);
         compose = (fun l -> List.map get_names l |> List.flatten);
         product = (fun l r -> List.map get_names l |> List.flatten);
-        disjoint = (fun l -> List.map get_names l |> List.flatten);
+        union = (fun l -> List.map get_names l |> List.flatten);
     }
     and get_names json = Visitor.visit name_visitor json in
     get_names domain

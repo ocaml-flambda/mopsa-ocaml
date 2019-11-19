@@ -78,6 +78,7 @@ struct
     }
   }
 
+  let alarms = []
 
   (** Initialization of environments *)
   (** ============================== *)
@@ -287,7 +288,7 @@ struct
                man.exec (mk_assign ii (mk_c_builtin_call "_mopsa_range_s32" [l;u] s32 range) range)
     in
     let every_argv_cell = mk_c_subscript_access argv (mk_expr (Stubs.Ast.E_stub_quantified(FORALL,i,S_interval(l,u))) ~etyp:s32 range) range in
-    let flow = man.exec (mk_assume (mk_binop every_argv_cell O_eq arg_weak range) range) flow |>
+    let flow = man.exec (mk_assume (mk_binop every_argv_cell O_eq arg_weak ~etyp:u8 range) range) flow |>
                man.exec (mk_remove ii range)
     in
 

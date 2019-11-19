@@ -71,3 +71,8 @@ let print range printer flow =
   match !opt_format with
   | F_text -> Text.print range printer flow !opt_file
   | F_json -> Json.print range printer flow !opt_file
+
+let list_alarms (alarms:alarm_class list) =
+  match !opt_format with
+  | F_text -> Text.list_alarms alarms !opt_file
+  | F_json -> Json.list_alarms alarms !opt_file

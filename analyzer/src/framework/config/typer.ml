@@ -64,7 +64,7 @@ and structure =
 and operator =
   | O_seq
   | O_compose
-  | O_disjoint
+  | O_union
 
 let signature config = config.signature
 
@@ -91,7 +91,7 @@ let pp_signature fmt = function
 let pp_operator fmt = function
   | O_seq -> pp_print_string fmt " ; "
   | O_compose -> pp_print_string fmt " o "
-  | O_disjoint -> pp_print_string fmt " ∨ "
+  | O_union -> pp_print_string fmt " ∨ "
 
 let rec pp_config fmt config =
   match config.structure with
@@ -344,7 +344,7 @@ let rec domain_visitor spec = {
     apply = (fun s d -> apply spec (stack_or_functor spec s) (domain spec d));
     nonrel = (fun v -> nonrel spec (value spec v));
     product = (fun l r -> product spec (List.map (domain spec) l) r);
-    disjoint = (fun l -> assert false);
+    union = (fun l -> assert false);
   }
 
 (** Create a domain configuration from a json object *)
@@ -363,7 +363,7 @@ and stack_visitor spec = {
     apply = (fun s d -> assert false);
     nonrel = (fun v -> assert false);
     product = (fun l r -> product spec (List.map (stack spec) l) r);
-    disjoint = (fun l -> assert false);
+    union = (fun l -> assert false);
   }
 
 (** Create a stack configuration from a json object *)
@@ -391,7 +391,7 @@ and value_visitor spec = {
     apply = (fun s d -> assert false);
     nonrel = (fun v -> assert false);
     product = (fun l r -> product spec (List.map (value spec) l) r);
-    disjoint = (fun l -> List.map (value spec) l |> chain spec O_disjoint);
+    union = (fun l -> List.map (value spec) l |> chain spec O_union);
   }
 
 (** Create a value configuration from a json object *)

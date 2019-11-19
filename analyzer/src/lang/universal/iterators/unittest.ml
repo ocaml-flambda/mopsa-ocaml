@@ -91,24 +91,21 @@ let () =
 
 
 (* Analysis alarms *)
-type alarm_category += A_assert_fail
-type alarm_detail += A_assert_fail_condition of expr (** condition *)
+type alarm_class += A_assert_fail_cls
+type alarm_body += A_assert_fail_condition of expr (** condition *)
 
 
 let () =
-  register_alarm_category {
-    compare = (fun next a1 a2 ->
-        match a1, a2 with
-        | A_assert_fail, A_assert_fail -> 0
-        | _ -> next a1 a2
-      );
-    print = (fun next fmt a ->
+  register_alarm_class (fun next fmt a ->
         match a with
-        | A_assert_fail -> Format.fprintf fmt "Assertion fail"
+        | A_assert_fail_cls -> Format.fprintf fmt "Assertion fail"
         | _ -> next fmt a
+    );
+  register_alarm_body {
+    classifier = (fun next -> function
+        | A_assert_fail_condition _ -> A_assert_fail_cls
+        | a -> next a
       );
-  };
-  register_alarm_detail {
     compare = (fun next a1 a2 ->
         match a1, a2 with
         | A_assert_fail_condition(c1), A_assert_fail_condition(c2) -> compare_expr c1 c2
@@ -125,11 +122,7 @@ let () =
 
 let raise_assert_fail ?(force=false) cond range man flow =
   let cs = Flow.get_callstack flow in
-  let alarm = mk_alarm
-      A_assert_fail
-      ~detail:(A_assert_fail_condition cond)
-      range ~cs
-  in
+  let alarm = mk_alarm (A_assert_fail_condition cond) range ~cs in
   Flow.raise_alarm alarm ~bottom:true ~force man.lattice flow
 
 
@@ -155,6 +148,7 @@ struct
     ieval = {provides = []; uses = []};
   }
 
+  let alarms = []
 
   (* Initialization *)
   (* ============== *)

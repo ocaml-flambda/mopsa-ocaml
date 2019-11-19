@@ -52,6 +52,8 @@ struct
         Eval.singleton (mk_py_object (addr, oe) range)
       )
 
+  let alarms = []
+
   let rec eval zs exp man flow =
     let range = exp.erange in
     match ekind exp with

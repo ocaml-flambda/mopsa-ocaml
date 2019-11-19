@@ -63,6 +63,8 @@ struct
     ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
   }
 
+  let alarms = []
+
   let init prog man flow =
     set_env T_cur empty man flow
 
@@ -546,7 +548,7 @@ struct
           man.eval (mk_py_isinstance_builtin e (get_orig_vname v) range) flow
           |> Option.return
 
-        | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)} as pattern, i) when get_orig_vname c.py_cls_a_var = "Type" ->
+        | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)}, i) when get_orig_vname c.py_cls_a_var = "Type" ->
           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
           Eval.bind (fun ee flow ->
               assume (mk_py_issubclass ee i range) man flow
@@ -557,7 +559,7 @@ struct
             )
           |> Option.return
 
-        | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)} as pattern, {ekind = E_py_tuple [args; out]}) when get_orig_vname c.py_cls_a_var = "Callable" ->
+        | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)}, {ekind = E_py_tuple [args; out]}) when get_orig_vname c.py_cls_a_var = "Callable" ->
           Exceptions.panic_at range "Callable type annotation currently unsupported"
 
         | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)} as pattern, i) when get_orig_vname c.py_cls_a_var = "Pattern" ->

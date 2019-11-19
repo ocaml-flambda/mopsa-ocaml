@@ -123,9 +123,7 @@ let widen (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
 
 
 let print (pp: Format.formatter -> 'a -> unit) fmt flow =
-  Format.fprintf fmt "@[<v>%a@,alarms: %a@]"
-    (TokenMap.print pp) flow.tmap
-    AlarmMap.print (AlarmMap.of_set flow.alarms)
+  TokenMap.print pp fmt flow.tmap
 
 
 let get (tk: token) (lattice: 'a lattice) (flow: 'a flow) : 'a =
@@ -133,6 +131,9 @@ let get (tk: token) (lattice: 'a lattice) (flow: 'a flow) : 'a =
 
 let set (tk: token) (a: 'a) (lattice:'a lattice) (flow: 'a flow) : 'a flow =
   { flow with tmap = TokenMap.set tk a lattice flow.tmap }
+
+let set_bottom tk flow =
+  { flow with tmap = TokenMap.remove tk flow.tmap }
 
 let copy (tk1:token) (tk2:token) (lattice:'a lattice) (flow1:'a flow) (flow2:'a flow) : 'a flow =
   let ctx = Context.get_most_recent flow1.ctx flow2.ctx in

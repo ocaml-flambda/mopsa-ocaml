@@ -173,6 +173,7 @@ struct
     }
   }
 
+  let alarms = []
 
   (** Initialization of environments *)
   (** ============================== *)
@@ -343,7 +344,10 @@ struct
       (* Second case: return NULL when all intervals may differ from the target interval *)
       let case2 =
         if Table.for_all (fun _ itv' ->
-            let itv1, itv2 = Itv.compare O_ne itv itv' true in
+            let itv1, itv2 = match Bot.bot_absorb2 Itv.I.filter_neq itv itv' with
+              | Bot.BOT -> Itv.bottom, Itv.bottom
+              | Bot.Nb (itv1,itv2) -> Nb itv1, Nb itv2
+            in
             not @@ Itv.is_bottom itv1 &&
             not @@ Itv.is_bottom itv2
           ) a.others

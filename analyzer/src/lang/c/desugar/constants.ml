@@ -50,6 +50,7 @@ struct
     ieval = {provides = [Z_c, Z_c_low_level]; uses = []};
   }
 
+  let alarms = []
 
   (** Initialization *)
   (** ============== *)
