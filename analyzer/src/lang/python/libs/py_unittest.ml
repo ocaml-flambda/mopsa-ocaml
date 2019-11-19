@@ -49,7 +49,7 @@ module Domain =
 
     let test_functions_from_cls (cls: Ast.py_clsdec) : Ast.py_fundec list =
       match skind cls.py_cls_body with
-      | S_block stmts ->
+      | S_block (stmts, _) ->
         List.fold_left (fun tests stmt ->
             match skind stmt with
             | S_py_function f when String.sub f.py_func_var.vname 0 4 = "test" ->
