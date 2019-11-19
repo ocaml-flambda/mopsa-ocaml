@@ -1034,31 +1034,31 @@ struct
 
     (* Initialize cells, but expand at most !opt_init_expand cells, as
        defined by the option -cell-init-expand *)
-    let rec aux o i l flow =
+    let rec aux i l flow =
       if i = !opt_init_expand || List.length l = 0
       then Post.return flow
       else
-        let c, init, tl, o' =
+        let c, init, tl =
           match l with
-          | C_flat_expr (e,t) :: tl ->
+          | C_flat_expr (e,o,t) :: tl ->
             let c = mk_cell (V v) o t in
             let init = Some (C_init_expr e) in
-            c, init, tl, Z.add o (sizeof_type t)
+            c, init, tl
 
-          | C_flat_none(n,t) :: tl ->
+          | C_flat_none(n,o,t) :: tl ->
             let c = mk_cell (V v) o t in
             let init = None in
-            let tl' = if Z.equal n Z.one then tl else C_flat_none(Z.pred n,t) :: tl in
-            c, init, tl', Z.add o (sizeof_type t)
+            let tl' = if Z.equal n Z.one then tl else C_flat_none(Z.pred n,Z.add o (sizeof_type t),t) :: tl in
+            c, init, tl'
 
-          | C_flat_fill(e,t,n) :: tl ->
+          | C_flat_fill(e,n,o,t) :: tl ->
             let c = mk_cell (V v) o t in
             let init = Some (C_init_expr e) in
-            let tl' = if Z.equal n Z.one then tl else C_flat_fill(e,t,Z.pred n) :: tl in
-            c, init, tl', Z.add o (sizeof_type t)
+            let tl' = if Z.equal n Z.one then tl else C_flat_fill(e,Z.pred n,Z.add o (sizeof_type t),t) :: tl in
+            c, init, tl'
 
-
-          | l -> panic "?? %a" Pp.pp_c_init (C_init_flat l)
+          | l ->
+            panic "cells: unsupported initializer %a" Pp.pp_c_init (C_init_flat l)
         in
         (* Evaluate the initialization into a scalar expression *)
         (
@@ -1088,9 +1088,9 @@ struct
         man.post ~zone:Z_c_scalar stmt flow |>
 
         Post.bind @@ fun flow ->
-        aux o' (i + 1) tl flow
+        aux (i + 1) tl flow
     in
-    aux Z.zero 0 flat_init flow
+    aux 0 flat_init flow
 
 
   (** 𝕊⟦ *p = e; ⟧ *)

@@ -210,41 +210,40 @@ struct
       let length = mk_length_var (V v) range in
 
       (* Find the position of the first zero *)
-      let rec aux o l =
-        match l with
-        | [] -> o, o
+      let rec aux = function
+        | [] -> size, size
 
-        | C_flat_none _ :: tl when is_global -> o, o
+        | C_flat_none (_,o,_) :: tl when is_global -> o, o
 
-        | C_flat_none _ :: tl -> o, size
+        | C_flat_none (_,o,_) :: tl -> o, size
 
-        | C_flat_expr (e,t) :: tl ->
+        | C_flat_expr (e,o,t) :: tl ->
           begin
             match expr_to_z e with
             | Some e ->
               if Z.equal e Z.zero
               then o, o
-              else aux (Z.add o (sizeof_type t)) tl
+              else aux tl
 
             | None ->
               (* FIXME: test the value of the expression *)
               o, size
           end
 
-        | C_flat_fill (e,t,n) :: tl ->
+        | C_flat_fill (e,n,o,t) :: tl ->
           begin
             match expr_to_z e with
             | Some e ->
               if Z.equal e Z.zero
               then o, o
-              else aux (Z.add o (Z.mul n (sizeof_type t))) tl
+              else aux tl
 
             | None ->
               (* FIXME: test the value of the expression *)
               o, size
           end
       in
-      let o1, o2 = aux Z.zero flat_init in
+      let o1, o2 = aux flat_init in
 
       let init' =
         if Z.equal o1 o2

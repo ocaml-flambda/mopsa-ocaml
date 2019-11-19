@@ -202,9 +202,15 @@ let pp_scope fmt s =
 
 (** Flat variable initialization *)
 type c_flat_init =
-  | C_flat_expr of expr * typ       (** Init expression *)
-  | C_flat_none of Z.t * typ        (** Uninitialized bytes *)
-  | C_flat_fill of expr * typ * Z.t (** Filler expression *)
+  | C_flat_expr of expr (** initialization expression *) * Z.t (** offset *) * typ (** type *)
+  (** Expression initializer *)
+
+  | C_flat_none of Z.t (** number of duplicates *) * Z.t (** offset *) * typ (** type *)
+  (** Uninitialized bytes *)
+
+  | C_flat_fill of expr (** filler expression *) * Z.t (** number of duplicates *) * Z.t (** offset *) * typ (** type *)
+  (** Filler initializer *)
+
 
 (** Variable initialization. *)
 type c_var_init =
