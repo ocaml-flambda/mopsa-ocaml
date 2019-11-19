@@ -342,11 +342,8 @@ struct
         Eval.bind @@ fun pt flow ->
 
         match ekind pt with
-        | E_c_points_to (P_block (V v,_)) when is_c_scalar_type v.vtyp ->
-          Eval.singleton (mk_c_address_of (mk_var v exp.erange) exp.erange) flow
-
         | E_c_points_to (P_block (V v,_)) ->
-          Eval.singleton (mk_var v exp.erange) flow
+          Eval.singleton (mk_c_cast (mk_c_address_of (mk_var v exp.erange) exp.erange) (T_c_pointer T_c_void) exp.erange) flow
 
         | E_c_points_to (P_block (S str,_)) ->
           Eval.singleton (mk_c_string str exp.erange) flow
@@ -362,11 +359,10 @@ struct
           Eval.singleton (mk_top (T_c_pointer T_c_void) exp.erange) flow
 
         | E_c_points_to P_null ->
-          Eval.singleton (mk_c_cast (mk_int 0 exp.erange) (T_c_pointer T_c_void) exp.erange) flow
+          Eval.singleton (mk_c_null exp.erange) flow
 
         | E_c_points_to P_invalid ->
-          warn_at exp.erange "base(%a) where %a %a not supported" pp_expr e pp_expr e pp_expr pt;
-          Eval.singleton (mk_top (T_c_pointer T_c_void) exp.erange) flow
+          Eval.singleton (mk_c_invalid_pointer exp.erange) flow
 
         | _ -> panic_at exp.erange "base(%a) where %a %a not supported" pp_expr e pp_expr e pp_expr pt
       )

@@ -115,6 +115,7 @@ module AlarmSet : SetExtSig.S with type elt = alarm
 
 (** {2 Alarm indexation} *)
 (** ******************** *)
+
 module type SETMAP =
 sig
   type k
@@ -132,3 +133,5 @@ module ClassMap : SETMAP with type k = alarm_class
 val index_alarm_set_by_range : AlarmSet.t -> RangeMap.t
 
 val index_alarm_set_by_class : AlarmSet.t -> ClassMap.t
+
+val count_alarms : AlarmSet.t -> int

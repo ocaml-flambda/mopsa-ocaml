@@ -36,7 +36,7 @@
  */
 
 /*$
- * // TODO requires: no_overlap(__src, __dest, __len);
+ * requires: no_overlap(__src, __dest, __len);
  * requires: size(__src) >= __len;
  * requires: size(__dest) >= __len;
  *
@@ -197,9 +197,8 @@ char *strcpy (char *__restrict __dest, const char *__restrict __src);
 
 /*$
  * local: size_t src_len = strlen(__src);
- * requires: no_overlap(__src, __dest, src_len);
- * requires: size(__dest) >= src_len or 
- *           size(__dest) >= __len;
+ * requires: no_overlap(__src, __dest, __len);
+ * requires: size(__dest) >= __len;
  *
  * case "zero" {
  *   assumes: __len > src_len + 1;

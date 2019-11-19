@@ -114,6 +114,22 @@ struct
       ) f.range
 
 
+  let join_alarms f1 f2 flow =
+    match AlarmSet.subset (Flow.get_alarms f1) (Flow.get_alarms flow),
+          AlarmSet.subset (Flow.get_alarms f2) (Flow.get_alarms flow)
+    with
+    | false,true
+    | true,false ->
+      (* Only one evaluation detected alarms, so ignore them *)
+      Flow.get_alarms flow
+
+    | true, true
+    | false, false ->
+      (* Both evaluations behave similarly, so keep them *)
+      AlarmSet.union (Flow.get_alarms f1) (Flow.get_alarms f2)
+
+
+
   let rec eval_formula
       (cond_to_stmt: expr -> range -> stmt)
       (f: formula with_range)
@@ -126,22 +142,26 @@ struct
       man.exec (cond_to_stmt e f.range) flow
 
     | F_binop (AND, f1, f2) ->
-      let flow = eval_formula cond_to_stmt f1 man flow in
-      eval_formula cond_to_stmt f2 man flow
+      eval_formula cond_to_stmt f1 man flow |>
+      eval_formula cond_to_stmt f2 man
 
     | F_binop (OR, f1, f2) ->
       let f1 = eval_formula cond_to_stmt f1 man flow in
       let f2 = eval_formula cond_to_stmt f2 man flow in
-
-      Flow.join man.lattice f1 f2
+      let alarms = join_alarms f1 f2 flow in
+      Flow.join man.lattice f1 f2 |>
+      Flow.set_alarms alarms
 
 
     | F_binop (IMPLIES, f1, f2) ->
       let nf1 = eval_formula mk_assume (negate_formula f1) man flow in
-      let f1 = eval_formula mk_assume f1 man flow in
-      let f2 = eval_formula cond_to_stmt f2 man f1 in
+      let f2 = eval_formula mk_assume f1 man flow |>
+               eval_formula cond_to_stmt f2 man
+      in
+      let alarms = join_alarms nf1 f2 flow in
 
-      Flow.join man.lattice nf1 f2
+      Flow.join man.lattice nf1 f2 |>
+      Flow.set_alarms alarms
 
 
     | F_not ff ->
