@@ -287,6 +287,8 @@ struct
     ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj; Universal.Zone.Z_u_heap, Z_any; Universal.Zone.Z_u, Z_any]}
   }
 
+  let alarms = []
+
   let polytype_leq pty pty' (* env env' *) =
     (* FIXME *)
     compare_polytype pty pty' = 0

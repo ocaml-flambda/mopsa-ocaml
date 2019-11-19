@@ -26,7 +26,6 @@
 open Ast.All
 open Core.All
 open Sig.Value.Lowlevel
-open Common.Var_bounds
 
 
 
@@ -36,6 +35,64 @@ open Common.Var_bounds
 type _ id += D_nonrel : 'v vmodule -> (var,'v) Lattices.Partial_map.map id
 
 
+
+
+(** {2 Variable bounds} *)
+(** ******************* *)
+
+(** Context for saving invariants of variables bounds *)
+let var_bounds_ctx =
+  let module K = Context.GenUnitKey(struct
+      type t = constant VarMap.t
+      let print fmt m =
+        Format.fprintf fmt "variables bounds: %a"
+          (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
+             (fun fmt (v,b) -> Format.fprintf fmt "%a: %a" pp_var v pp_constant b)
+          ) (VarMap.bindings m)
+    end)
+  in
+  K.key
+
+
+(** Add the bounds of a variable to context *)
+let add_var_bounds_ctx v b uctx =
+  let m = try Context.ufind var_bounds_ctx uctx with Not_found -> VarMap.empty in
+  Context.uadd var_bounds_ctx (VarMap.add v b m) uctx
+
+
+(** Add the bounds of a variable to flow *)
+let add_var_bounds_flow v b flow =
+  let ctx = add_var_bounds_ctx v b (Flow.get_unit_ctx flow) in
+  Flow.set_unit_ctx ctx flow
+
+
+(** Remove the bounds of a variable from context *)
+let remove_var_bounds_ctx v ctx =
+  try
+    let m = Context.ufind var_bounds_ctx ctx in
+    let mm = VarMap.remove v m in
+    Context.uadd var_bounds_ctx mm ctx
+  with Not_found -> ctx
+
+
+(** Remove the bounds of a variable from flow *)
+let remove_var_bounds_flow v flow =
+  let ctx = remove_var_bounds_ctx v (Flow.get_unit_ctx flow) in
+  Flow.set_unit_ctx ctx flow
+
+
+(** Find the bounds of a variable in context *)
+let find_var_bounds_ctx_opt v uctx =
+  try
+    let m = Context.ufind var_bounds_ctx uctx in
+    try Some (VarMap.find v m)
+    with Not_found -> None
+  with Not_found -> None
+
+
+
+(** {2 Generic non-relational merger} *)
+(** ********************************* *)
 
 (** Generic merge operation for non-relational domains *)
 let generic_nonrel_merge ~top ~add ~remove ~find ~meet pre (a1, log1) (a2, log2) =
@@ -63,6 +120,8 @@ let generic_nonrel_merge ~top ~add ~remove ~find ~meet pre (a1, log1) (a2, log2)
   meet a1' a2'
 
 
+(** {2 Non-relational domain} *)
+(** ************************* *)
 
 module Make(Value: VALUE) =
 struct

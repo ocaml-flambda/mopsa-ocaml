@@ -25,7 +25,7 @@ let channels = ref []
 let print_color = ref true
 let print_all = ref false
 let colors = [
-  ("red", 160);
+  ("red", 9);
   ("green", 0x28);
   ("yellow", 0xbe);
   ("blue", 4);

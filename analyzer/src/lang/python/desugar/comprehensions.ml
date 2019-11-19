@@ -43,6 +43,8 @@ module Domain =
       ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
     }
 
+    let alarms = []
+
     let unfold_comprehension expr comprehensions base append range =
          let tmp_acc = mk_range_attr_var range "tmp_acc" T_any in
          let acc_var = mk_var tmp_acc range in

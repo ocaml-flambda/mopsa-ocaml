@@ -26,7 +26,7 @@ TARGET_NATIVES = mopsa
 mopsa = framework mopsa lang main
 
 # Framework
-framework = ast core lattices engines common transformers output config hooks
+framework = ast core lattices engines transformers output config hooks
 framework.ast = program typ operator constant var expr stmt visitor all
 framework.core = query context zone callstack alarm token log lattice        \
 		 soundness flow result eval post id interface channel sig    \
@@ -69,13 +69,13 @@ lang.repl = frontend
 lang.stubs = ast zone alarms iterator
 
 # C
-lang.c = ast pp visitor zone frontend alarms common desugar libs iterators memory hooks
-lang.c.common = base points_to quantified_offset scope_update
+lang.c = ast pp visitor zone frontend common desugar libs iterators memory hooks
+lang.c.common = base alarms points_to quantified_offset scope_update
 lang.c.iterators = program switch loops goto interproc
 lang.c.desugar = conditions constants
 lang.c.memory = structured lowlevel scalars packing
 lang.c.memory.structured = flat
-lang.c.memory.lowlevel = cells string_literals string_length pointer_smashing pointer_sentinel reductions
+lang.c.memory.lowlevel = cells string_length pointer_smashing pointer_sentinel reductions
 lang.c.memory.lowlevel.reductions = cell_pointer_sentinel cell_pointer_smashing
 lang.c.memory.scalars = pointers machine_numbers
 lang.c.memory.scalars.pointers = value static_points_to domain

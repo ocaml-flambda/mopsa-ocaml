@@ -39,6 +39,8 @@ module Domain =
       ieval = {provides = []; uses = []}
     }
 
+    let alarms = []
+
     let rec exec zone stmt man flow =
       let range = srange stmt in
       match skind stmt with

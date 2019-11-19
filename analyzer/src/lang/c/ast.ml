@@ -202,9 +202,15 @@ let pp_scope fmt s =
 
 (** Flat variable initialization *)
 type c_flat_init =
-  | C_flat_expr of expr * typ       (** Init expression *)
-  | C_flat_none of Z.t * typ        (** Uninitialized bytes *)
-  | C_flat_fill of expr * typ * Z.t (** Filler expression *)
+  | C_flat_expr of expr (** initialization expression *) * Z.t (** offset *) * typ (** type *)
+  (** Expression initializer *)
+
+  | C_flat_none of Z.t (** number of duplicates *) * Z.t (** offset *) * typ (** type *)
+  (** Uninitialized bytes *)
+
+  | C_flat_fill of expr (** filler expression *) * Z.t (** number of duplicates *) * Z.t (** offset *) * typ (** type *)
+  (** Filler initializer *)
+
 
 (** Variable initialization. *)
 type c_var_init =
@@ -1064,16 +1070,16 @@ let is_c_deref e =
   | _ -> false
 
 
-let is_pointer_offset_quantified p =
+let is_pointer_offset_forall_quantified p =
   let open Stubs.Ast in
   match ekind p with
-  | E_binop(_,e1,e2) when is_c_num_type e2.etyp -> is_expr_quantified e2
-  | E_binop(_,e1,e2) when is_c_num_type e1.etyp -> is_expr_quantified e1
+  | E_binop(_,e1,e2) when is_c_num_type e2.etyp -> is_expr_forall_quantified e2
+  | E_binop(_,e1,e2) when is_c_num_type e1.etyp -> is_expr_forall_quantified e1
   | _ -> false
 
-let is_lval_offset_quantified e =
+let is_lval_offset_forall_quantified e =
   let open Stubs.Ast in
   match remove_casts e |> ekind with
-  | E_c_deref(p) -> is_pointer_offset_quantified p
-  | E_c_array_subscript(_,o) -> is_expr_quantified o
+  | E_c_deref(p) -> is_pointer_offset_forall_quantified p
+  | E_c_array_subscript(_,o) -> is_expr_forall_quantified o
   | _ -> false

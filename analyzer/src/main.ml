@@ -105,6 +105,6 @@ let () =
 
       with
         e ->
-        let t = Timing.stop t in
+        let t = try Timing.stop t with Not_found -> 0. in
         Output.Factory.panic ~btrace:(Printexc.get_backtrace()) e t files
     ) ()
