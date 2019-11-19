@@ -297,19 +297,33 @@ struct
 
   let alarms = [A_c_out_of_bound_cls; A_c_null_deref_cls; A_c_use_after_free_cls; A_c_invalid_deref_cls; Stubs.Alarms.A_stub_invalid_requires_cls]
 
+
   (** {2 Command-line options} *)
   (** ************************ *)
 
   (** Maximal number of expanded cells when dereferencing a pointer *)
-  let opt_expand = ref 1
+  let opt_deref_expand = ref 1
 
   let () =
     register_domain_option name {
-      key = "-cell-expand";
+      key = "-cell-deref-expand";
       category = "C";
-      doc = " maximal number of expanded cells";
-      spec = ArgExt.Set_int opt_expand;
+      doc = " maximal number of expanded cells when dereferencing a pointer";
+      spec = ArgExt.Set_int opt_deref_expand;
       default = "1";
+    }
+
+
+  (** Maximal number of expanded cells when initializing a variable *)
+  let opt_init_expand = ref 10
+
+  let () =
+    register_domain_option name {
+      key = "-cell-init-expand";
+      category = "C";
+      doc = " maximal number of expanded cells when initializing a variable";
+      spec = ArgExt.Set_int opt_init_expand;
+      default = "10";
     }
 
 
@@ -679,7 +693,7 @@ struct
 
                 (* Iterate over [l, u] *)
                 let rec aux i o =
-                  if i = !opt_expand
+                  if i = !opt_deref_expand
                   then
                     if Z.gt o u
                     then []
@@ -1018,10 +1032,10 @@ struct
     in
 
 
-    (* Initialize cells, but expand at most !opt_expand cells, as
-       defined by the option -cell-expand *)
+    (* Initialize cells, but expand at most !opt_init_expand cells, as
+       defined by the option -cell-init-expand *)
     let rec aux o i l flow =
-      if i = !opt_expand || List.length l = 0
+      if i = !opt_init_expand || List.length l = 0
       then Post.return flow
       else
         let c, init, tl, o' =
