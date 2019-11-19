@@ -72,25 +72,33 @@ struct
     }
 
 
-  (** Get the locations and expressions of cases in a switch statements *)
+  (** Get the locations and expressions of cases in a switch
+      statements. Cases are ordered similarly to their occurance
+      locations in the source code. 
+  *)
   let get_cases body =
-    Visitor.fold_stmt
-      (fun acc e -> Keep acc )
-      (fun (cases,default) s ->
-         match skind s with
-         | S_c_switch _ ->
-           (* Do not go inside nested switches *)
-           Keep (cases,default)
+    (* The visitor preserves the order of occurance in source code *)
+    let cases, default = Visitor.fold_stmt
+        (fun acc e -> Keep acc )
+        (fun (cases,default) s ->
+           match skind s with
+           | S_c_switch _ ->
+             (* Do not go inside nested switches *)
+             Keep (cases,default)
 
-         | S_c_switch_case (e,_) ->
-           Keep ((e,s.srange) :: cases,default)
+           | S_c_switch_case (e,_) ->
+             (* Note: cases are added in reverse order here. They need
+                to be reversed when returned.  *)
+             Keep ((e,s.srange) :: cases,default)
 
-         | S_c_switch_default _ ->
-           Keep (cases,Some s.srange)
+           | S_c_switch_default _ ->
+             Keep (cases,Some s.srange)
 
-         | _ -> VisitParts (cases,default)
-      )
-      ([],None) body
+           | _ -> VisitParts (cases,default)
+        )
+        ([],None) body
+    in
+    List.rev cases, default
 
 
   (** Computation of post-conditions *)
@@ -104,9 +112,6 @@ struct
 
     (* Get the ranges of cases *)
     let cases,default = get_cases body in
-
-    (* Sort cases by their location *)
-    let cases = List.sort (fun (_,r1) (_,r2) -> compare_range r1 r2) cases in
 
     (* Iterate over cases, filter the input environments with the case
        condition and jump to case body *)
