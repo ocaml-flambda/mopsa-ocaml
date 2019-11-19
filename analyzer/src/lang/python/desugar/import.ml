@@ -156,7 +156,7 @@ module Domain =
           in
           add_builtin_function (addr, None) ()
 
-        | S_block(block) ->
+        | S_block(block,_) ->
           List.iter (parse base) block
 
         | S_py_import(name, _, _) when is_builtin_name name -> ()

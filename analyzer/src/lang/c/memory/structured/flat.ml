@@ -542,7 +542,7 @@ struct
       Eval.singleton rval flow |>
       Option.return
 
-    | E_c_statement {skind = S_block l} ->
+    | E_c_statement {skind = S_block (l,local_vars)} ->
       begin
         match List.rev l with
         | {skind = S_expression e}::q ->
@@ -550,6 +550,7 @@ struct
           let stmt' = mk_block q' (erange exp) in
           let flow' = man.exec stmt' flow in
           man.eval ~zone:(Z_c, Z_c_low_level) e flow' |>
+          Eval.add_cleaners (List.map (fun v -> mk_remove_var v exp.erange) local_vars) |>
           Option.return
 
         | _ -> panic "E_c_statement %a not supported" pp_expr exp

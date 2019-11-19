@@ -56,10 +56,11 @@ struct
       man.post ~zone (mk_assume e stmt.srange) flow |>
       Option.return
 
-    | S_block(block) ->
+    | S_block(block,local_vars) ->
       Some (
-        List.fold_left (fun acc stmt -> man.exec ~zone stmt acc) flow block |>
-        Post.return
+        let flow = List.fold_left (fun acc stmt -> man.exec ~zone stmt acc) flow block in
+        let flow = List.fold_left (fun acc var -> man.exec ~zone (mk_remove_var var stmt.srange) acc) flow local_vars in
+        Post.return flow
       )
 
     | S_if(cond, s1, s2) ->

@@ -130,8 +130,9 @@ let simplify_func ctx (f:func) =
        let before1, e1, after1 = simplify_expr call e1 in
        if is_void t then
          let cond = S_if (e1,
-                          simplify_expr_stmt call e2,
-                          simplify_expr_stmt call e3), r in
+                          simplify_expr_stmt call e2 |> make_block,
+                          simplify_expr_stmt call e3 |> make_block), r
+         in
          before1@[cond], expr_void r, after1
        else
          let before2, e2, after2 = simplify_expr call e2 in
@@ -141,8 +142,8 @@ let simplify_func ctx (f:func) =
          let create = S_local_declaration tmp, r in
          let cond =
            S_if (e1,
-                 before2@[S_expression (E_assign (tmp_var, e2), t, r), r]@after2,
-                 before3@[S_expression (E_assign (tmp_var, e3), t, r), r]@after3), r
+                 before2@[S_expression (E_assign (tmp_var, e2), t, r), r]@after2 |> make_block,
+                 before3@[S_expression (E_assign (tmp_var, e3), t, r), r]@after3 |> make_block), r
          in
          before1@[create;cond], tmp_var, after1
 
@@ -182,8 +183,8 @@ let simplify_func ctx (f:func) =
          let create = S_local_declaration tmp, r in
          let cond =
            S_if (e1,
-                 [S_expression (E_assign (tmp_var, expr_bool_true r), t, r), r],
-                 before2@[S_expression (E_assign (tmp_var, e2), t, r), r]@after2), r
+                 [S_expression (E_assign (tmp_var, expr_bool_true r), t, r), r] |> make_block,
+                 before2@[S_expression (E_assign (tmp_var, e2), t, r), r]@after2 |> make_block), r
          in
          before1@[create;cond], tmp_var, after1
 
@@ -198,8 +199,8 @@ let simplify_func ctx (f:func) =
          let create = S_local_declaration tmp, r in
          let cond =
            S_if (e1,
-                 before2@[S_expression (E_assign (tmp_var, e2), t, r), r]@after2,
-                 [S_expression (E_assign (tmp_var, expr_bool_false r), t, r), r]), r
+                 before2@[S_expression (E_assign (tmp_var, e2), t, r), r]@after2 |> make_block,
+                 [S_expression (E_assign (tmp_var, expr_bool_false r), t, r), r] |> make_block), r
          in
          before1@[create;cond], tmp_var, after1
 
@@ -324,7 +325,7 @@ let simplify_func ctx (f:func) =
         | [] ->
            acc, expr_void r, []
       in
-      doit [] b
+      doit [] b.blk_stmts
 
 
   (* case of toplevel (statement) expressions: the returned value is not used *)
@@ -334,8 +335,9 @@ let simplify_func ctx (f:func) =
     | E_conditional (e1,e2,e3) ->
        let before1, e1, after1 = simplify_expr call e1 in
        let cond = S_if (e1,
-                        simplify_expr_stmt call e2,
-                        simplify_expr_stmt call e3), r in
+                        simplify_expr_stmt call e2 |> make_block,
+                        simplify_expr_stmt call e3 |> make_block), r
+       in
        before1@[cond]@after1
 
     | E_assign _ ->
@@ -375,7 +377,7 @@ let simplify_func ctx (f:func) =
        before@[S_expression e, r]@after
 
    | E_statement b ->
-      List.concat (List.map (simplify_stmt call) b)
+      List.concat (List.map (simplify_stmt call) b.blk_stmts)
 
   and simplify_init (call:bool) (i:init) : (statement list) * init * (statement list) =
     match i with
@@ -443,10 +445,10 @@ let simplify_func ctx (f:func) =
        in
        [S_for (simplify_block call b1, e2, e3, simplify_block call b4), r]
 
-    | S_jump (S_return (Some e1)) ->
+    | S_jump (S_return (Some e1, u)) ->
        let before1, e1, after1 = simplify_expr call e1 in
        let before1, e1 = remove_after before1 e1 after1 in
-       scope_temp r (before1@[S_jump (S_return (Some e1)), r])
+       scope_temp r (before1@[S_jump (S_return (Some e1, u)), r])
 
     | S_jump (S_switch (e1,b1)) ->
        let before1, e1, after1 = simplify_expr call e1 in
@@ -456,8 +458,8 @@ let simplify_func ctx (f:func) =
     | S_jump _ | S_target _ ->
        [s,r]
 
-  and simplify_block (call:bool) (l:statement list) : (statement list) =
-    List.concat (List.map (simplify_stmt call) l)
+  and simplify_block (call:bool) (b:block) : block =
+    make_block (List.concat (List.map (simplify_stmt call) b.blk_stmts))
 
   (* use a temporary to remove the 'after' part of a triple *)
   (* before; e; after -> before; tmp = e; after; <e> *)
@@ -474,21 +476,21 @@ let simplify_func ctx (f:func) =
   and as_expr before ((_,t,r) as e) after : expr =
     let before, e = remove_after before e after in
     if before = [] then e
-    else E_statement (before@[S_expression e, r]), t, r
+    else E_statement (before@[S_expression e, r] |> make_block), t, r
 
   (* converts back a statement list to an expression *)
   and as_expr_stmt l t r : expr =
     match l with
     | [S_expression e,_] -> e
     | [] -> expr_void r
-    | _ -> E_statement l, t, r
+    | _ -> E_statement (make_block l), t, r
 
   (* encolse in a S_block if the block contains variable declaration to limit their scope *)
-  and scope_temp range (b:block) : block =
-    let has_decl = List.exists (function (S_local_declaration _,_) -> true | _ -> false) b in
-    if has_decl then [S_block b,range] else b
+  and scope_temp range (s:statement list) : statement list =
+    let b = make_block s in
+    if b.blk_local_vars = [] then s else [S_block b,range] 
 
   in
   match f.func_body with
-  | Some body -> f.func_body <- Some (simplify_block false body)
+  | Some body -> f.func_body <- Some (simplify_block false body |> resolve_scope)
   | None -> ()

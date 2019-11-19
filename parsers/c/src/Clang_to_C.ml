@@ -133,8 +133,17 @@ let new_uid ctx =
 
 let find_function name ctx =
   Hashtbl.find ctx.ctx_funcs name
-  
-    
+
+let empty_scope () = {
+    scope_var_added = [];
+    scope_var_removed = [];
+  }
+
+let empty_block = {
+    blk_stmts = [];
+    blk_local_vars = [];
+  }
+
 let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comment list) (macros:C.macro list) =
 
   
@@ -687,8 +696,8 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
       (match f.C.function_body with
        | None -> ()
        | Some b ->
-          func.func_body <-            
-            Some (deblock (stmt (Some func) b));
+          func.func_body <-
+            Some (stmt (Some func) b |> deblock |> resolve_scope);
           func.func_range <- range
       );
       if !simplify then simplify_func ctx.ctx_simplify func;
@@ -708,15 +717,15 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
 
     | C.NullStmt -> []
 
-    | C.BreakStmt _ -> [S_jump S_break, range]
+    | C.BreakStmt _ -> [S_jump (S_break (empty_scope())), range]
 
-    | C.ContinueStmt _ -> [S_jump S_continue, range]
+    | C.ContinueStmt _ -> [S_jump (S_continue (empty_scope())), range]
 
-    | C.GotoStmt (lbl,_) -> [S_jump (S_goto lbl.C.name_print), range]
+    | C.GotoStmt (lbl,_) -> [S_jump (S_goto (lbl.C.name_print, empty_scope())), range]
 
-    | C.ReturnStmt (Some e) ->  [S_jump (S_return (Some (expr func e))), range]
+    | C.ReturnStmt (Some e) ->  [S_jump (S_return (Some (expr func e), empty_scope())), range]
 
-    | C.ReturnStmt None -> [S_jump (S_return None), range]
+    | C.ReturnStmt None -> [S_jump (S_return (None, empty_scope())), range]
 
     | C.SwitchStmt s ->
        if s.C.switch_init <> None
@@ -730,11 +739,11 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
        (* TODO: constant folding? *)
        if s.C.case_end <> None
        then error range "unsupported case statement extension" "";
-       (S_target (S_case (expr func s.C.case_value)), range)::
+       (S_target (S_case (expr func s.C.case_value, empty_scope())), range)::
          (stmt func s.C.case_stmt)
        
     | C.DefaultStmt s ->
-       (S_target S_default, range)::(stmt func s)
+       (S_target (S_default (empty_scope())), range)::(stmt func s)
 
     | C.LabelStmt (lbl,s) ->
        (S_target (S_label lbl.C.name_print), range)::(stmt func s)
@@ -771,10 +780,10 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
          | None -> error range "if without a condition" ""
          | Some c -> expr func c
        and t = match s.C.if_then with
-         | None -> []
+         | None -> empty_block
          | Some s -> deblock (stmt func s)
        and e = match s.C.if_else with
-         | None -> []
+         | None -> empty_block
          | Some s -> deblock (stmt func s)
        in
        [S_if (c,t,e), range]
@@ -791,7 +800,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
 
     | C.ForStmt s ->
        let i = match s.C.for_init with
-         | None -> []
+         | None -> empty_block
          | Some s -> deblock (stmt func s)
        and c = match s.C.for_cond with
          | None -> None
@@ -810,9 +819,9 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
     | s -> error range "unhandled statement" (C.stmt_kind_name s)                 
 
   (* remove useless levels of blocks *)
-  and deblock = function
-    | [S_block b,_] -> deblock b
-    | l -> l
+  and deblock (l:statement list) : block = match l with
+    | [S_block b,_] -> deblock b.blk_stmts
+    | _ -> make_block l
              
              
   (* translate expressions *)

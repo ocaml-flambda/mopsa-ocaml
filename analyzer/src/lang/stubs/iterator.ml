@@ -154,7 +154,7 @@ struct
 
 
     | F_binop (IMPLIES, f1, f2) ->
-      let nf1 = eval_formula mk_assume (negate_formula f1) man flow in
+      let nf1 = eval_formula cond_to_stmt (negate_formula f1) man flow in
       let f2 = eval_formula mk_assume f1 man flow |>
                eval_formula cond_to_stmt f2 man
       in

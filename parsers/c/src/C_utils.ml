@@ -650,13 +650,171 @@ let rec zero_init range (t:typ) : init =
 
 
 
-(** {2 Expressions utilities} *)
+(** {2 Statement utilities} *)
 
 
-let declarations_in_block (b:block) : variable list =
-  ListExt.map_filter (function (S_local_declaration v,_) -> Some v | _ -> None) b
-(** Returns the local variables declared in the block.
-    Does not include the variables declared in sub-blocks.
+let make_block (s:statement list) : block =
+  let v =
+    (* local variables declared in s, but not in sub-blocks *)
+    ListExt.map_filter (function (S_local_declaration v,_) -> Some v | _ -> None) s
+  in
+  { blk_stmts = s; blk_local_vars = v; }
+(** Creates a block from a list of statements.
+    Computes the list of local variables declared in the block and not 
+    in sub-blocks.
+ *)
+
+
+module VarSet =
+  SetExt.Make(struct
+      type t = variable
+      let compare a b = compare a.var_uid b.var_uid
+    end)
+
+
+let resolve_scope (b:block) : block =
+
+  let gotos = ref []
+  and labels = Hashtbl.create 16
+  in
+
+  (* update a scope updated, give source and destination scopes *)
+  let update u src dst =
+    u.scope_var_added   <- VarSet.elements (VarSet.diff dst src);
+    u.scope_var_removed <- VarSet.elements (VarSet.diff src dst)
+  in
+
+  (* iterate on statements and expressions;
+     fix break/continue/return scope;
+     goto/switch scope are fixed after the iteration
+   *)
+  let rec stmt ((cur,brk,cnt,swt) as ctx) (s,r) =
+    match s with
+    | S_local_declaration _ -> ()
+    | S_expression e -> expr ctx e
+    | S_block b -> block ctx b
+    | S_if (e,b1,b2) -> expr ctx e; block ctx b1; block ctx b2
+
+    | S_while (e,b) | S_do_while (b,e) ->
+       (* new scope for break and continue *)
+       let ctx = cur, cur, cur, swt in
+       expr ctx e; block ctx b
+
+    | S_for (i,eo1,eo2,b) ->
+       block ctx i;
+       (* add the for init variable (if any) to the scope of the for *)
+       let cur = VarSet.union cur (VarSet.of_list i.blk_local_vars) in
+       (* new scope for break and continue *)
+       let ctx = cur, cur, cur, swt in
+       expr_opt ctx eo1;
+       expr_opt ctx eo2;
+       block ctx b
+
+    | S_jump (S_goto (label, upd)) ->
+       (* remember gotos to fix them later *)
+       gotos := (label,r,upd,cur)::(!gotos)
+
+    | S_jump (S_break upd) ->
+       (* jump from current to break scope *)
+       update upd cur brk
+
+    | S_jump (S_continue upd) ->
+       (* jump from current to continue scope *)
+       update upd cur cnt
+
+    | S_jump (S_return (_, upd)) ->
+       (* jump from current to function return (empty scope) *)
+       update upd cur VarSet.empty
+
+    | S_jump (S_switch (e,b)) ->
+       expr ctx e;
+       (* new scope for break, remember the scope at switck for cases *)
+       let ctx = cur, cur, cnt, cur in
+       block ctx b
+
+    | S_target (S_label label) ->
+       (* remember label scopes to fix gotos later *)
+       Hashtbl.add labels label cur
+
+    | S_target (S_case (e,upd)) ->
+       expr ctx e;
+       (* jump from switch point to current scope *)
+       update upd swt cur
+
+    | S_target (S_default upd) ->
+       (* jump from switch point to current scope *)
+       update upd swt cur
+
+  and block (cur,brk,cnt,swt) b =
+    List.fold_left
+      (fun cur sr ->
+        stmt (cur,brk,cnt,swt) sr;
+        (* add declated local variables to the scope along the way *)
+        let cur = match fst sr with
+          | S_local_declaration v -> VarSet.add v cur
+          | _ -> cur
+        in
+        cur
+      )
+      cur b.blk_stmts
+    |> ignore
+
+  and expr ctx (e,_,_) =
+    match e with
+    | E_conditional (e1,e2,e3) -> List.iter (expr ctx) [e1;e2;e3]
+
+    | E_array_subscript (e1,e2)
+    | E_compound_assign (e1,_,_,e2,_)
+    | E_binary (_,e1,e2)
+    | E_assign (e1,e2)
+    | E_comma (e1,e2)
+    | E_atomic (_,e1,e2) -> List.iter (expr ctx) [e1;e2]
+
+    | E_member_access (e1,_,_)
+    | E_arrow_access (e1,_,_)
+    | E_unary (_,e1)
+    | E_increment (_,_,e1)
+    | E_address_of e1
+    | E_deref e1
+    | E_cast (e1,_)
+    | E_var_args e1 -> expr ctx e1
+
+    | E_call (e,el) -> expr ctx e; Array.iter (expr ctx) el
+
+    | E_character_literal _
+    | E_integer_literal _
+    | E_float_literal _
+    | E_string_literal _
+    | E_compound_literal _
+    | E_variable _
+    | E_function _
+    | E_predefined _ -> ()
+
+    | E_statement b -> block ctx b
+
+  and expr_opt ctx eo = match eo with
+    | None -> () | Some e -> expr ctx e
+
+  in
+  (* update block in-place *)
+  let e = VarSet.empty in
+  block (e,e,e,e) b;
+  (* fix goto *)
+  List.iter
+    (fun (lbl,range,upd,src) ->
+      try
+        let dst = Hashtbl.find labels lbl in
+        update upd src dst
+      with Not_found ->
+        failwith (Printf.sprintf "%s: unknown label '%s'"
+                    (Clang_dump.string_of_range range) lbl)
+    )
+    !gotos;
+  (* return the block *)
+  b
+(** Fill-in scope_update information in the AST.
+    The block is modified in-place, and returned.
+    Call after AST transformations that may change variable scopes.
  *)
 
 

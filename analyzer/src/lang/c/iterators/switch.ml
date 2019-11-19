@@ -23,188 +23,179 @@
 
 open Mopsa
 open Framework.Core.Sig.Domain.Stateless
+open Universal.Iterators.Loops
 open Ast
+open Zone
 
-(*==========================================================================*)
-(**                            {2 Flow tokens}                              *)
-(*==========================================================================*)
-
-type token +=
-  | TSwitch
-  (** Switch environments uncaught by previous cases. *)
-
-let () =
-  register_token {
-    compare = (fun next tk -> next tk);
-    print   = (fun next fmt tk ->
-        match tk with
-        | TSwitch -> Format.fprintf fmt "switch"
-        | _ -> next fmt tk
-      );
-  };
-  ()
-
-
-(*==========================================================================*)
-(**                     {2 Flow-insensitive context}                        *)
-(*==========================================================================*)
-
-let switch_expr_ctx =
-  let module C = Context.GenUnitKey(
-    struct
-
-      type t = expr
-      (** Condition expression of the most enclosing switch statement. *)
-
-      let print fmt cond =
-        Format.fprintf fmt "Switch expr: %a" pp_expr cond
-    end
-    )
-  in
-  C.key
-
-let get_switch_cond flow =
-  Flow.get_ctx flow |>
-  Context.find_unit switch_expr_ctx
-
-let set_switch_cond cond flow =
-  Flow.set_ctx (
-    Flow.get_ctx flow |>
-    Context.add_unit switch_expr_ctx cond
-  ) flow
-
-let remove_switch_cond flow =
-  Flow.set_ctx (
-    Flow.get_ctx flow |>
-    Context.remove_unit switch_expr_ctx
-  ) flow
-
-(*==========================================================================*)
-(**                        {2 Abstract domain}                              *)
-(*==========================================================================*)
 
 module Domain =
 struct
 
-  (** Domain identification *)
-  (** ===================== *)
+
+  (** {2 Domain header} *)
+  (** ***************** *)
 
   include GenStatelessDomainId(struct
       let name = "c.iterators.switch"
     end)
 
 
-  (** Zoning definition *)
-  (** ================= *)
 
   let interface = {
-    iexec = {provides = [Zone.Z_c]; uses = []};
+    iexec = {provides = [Z_c]; uses = []};
     ieval = {provides = []; uses = []};
   }
 
+
   let alarms = []
 
-  (** Initialization *)
-  (** ============== *)
+  (** {2 Initialization} *)
+  (** ****************** *)
 
   let init _ _ flow =  flow
+
+
+  (** {2 Token for cases flows} *)
+  (** ************************* *)
+
+  type token += T_c_switch_case of range
+
+  let () =
+    register_token {
+      print = (fun next fmt -> function
+          | T_c_switch_case range -> Format.fprintf fmt "switch-case(%a)" pp_range range
+          | t -> next fmt t
+        );
+      compare = (fun next t1 t2 ->
+          match t1,t2 with
+          | T_c_switch_case r1, T_c_switch_case r2 -> compare_range r1 r2
+          | _ -> next t1 t2
+        );
+    }
+
+
+  (** Get the locations and expressions of cases in a switch
+      statements. Cases are ordered similarly to their occurance
+      locations in the source code. 
+  *)
+  let get_cases body =
+    (* The visitor preserves the order of occurance in source code *)
+    let cases, default = Visitor.fold_stmt
+        (fun acc e -> Keep acc )
+        (fun (cases,default) s ->
+           match skind s with
+           | S_c_switch _ ->
+             (* Do not go inside nested switches *)
+             Keep (cases,default)
+
+           | S_c_switch_case (e,_) ->
+             (* Note: cases are added in reverse order here. They need
+                to be reversed when returned.  *)
+             Keep ((e,s.srange) :: cases,default)
+
+           | S_c_switch_default _ ->
+             Keep (cases,Some s.srange)
+
+           | _ -> VisitParts (cases,default)
+        )
+        ([],None) body
+    in
+    List.rev cases, default
 
 
   (** Computation of post-conditions *)
   (** ============================== *)
 
+  (** 𝕊⟦ switch (e) body ⟧ *)
+  let exec_switch e body range man flow =
+    (* Save initial state before removing the break flows *)
+    let flow0 = flow in
+    let flow = Flow.remove T_break flow in
+
+    (* Get the ranges of cases *)
+    let cases,default = get_cases body in
+
+    (* Iterate over cases, filter the input environments with the case
+       condition and jump to case body *)
+    let rec iter cases flow =
+      match cases with
+      | [] -> flow
+      | (e',r) :: tl ->
+        (* Filter the environments *)
+        let cond = mk_binop e O_eq e' ~etyp:u8 range in
+        assume_flow cond ~zone:Z_c
+          ~fthen:(fun flow ->
+              (* Case reachable, so save cur in the flow of the case before removing cur *)
+              let cur = Flow.get T_cur man.lattice flow in
+              Flow.set (T_c_switch_case r) cur man.lattice flow |>
+              Flow.remove T_cur
+            )
+          ~felse:(fun flow ->
+              (* Case unreachable, so check the next cases *)
+              iter tl flow
+            )
+          man flow
+    in
+
+    let flow = iter cases flow in
+
+    (* Put the remaining cur environments in the flow of the default case. If
+       no default case is present, save cur in no_default. *)
+    let flow, no_default =
+      let cur = Flow.get T_cur man.lattice flow in
+      match default with
+      | None ->
+        let flow = Flow.remove T_cur flow in
+        flow, cur
+      | Some r ->
+        let flow = Flow.set (T_c_switch_case r) cur man.lattice flow |>
+                   Flow.remove T_cur
+        in
+        flow, man.lattice.bottom
+    in
+
+    (* Execute the body of the switch statement *)
+    let flow = man.exec body flow in
+
+    (* Merge cur, break and no_default environments *)
+    let flow = Flow.add T_cur no_default man.lattice flow |>
+               Flow.add T_cur (Flow.get T_break man.lattice flow) man.lattice
+    in
+
+    (* Restore the previous break environments *)
+    let flow = Flow.set T_break (Flow.get T_break man.lattice flow0) man.lattice flow in
+
+    Post.return flow
+
+
+  (* 𝕊⟦ case e: ⟧ *)
+  (* 𝕊⟦ default: ⟧ *)
+  let exec_case_or_default upd range man flow =
+    (* Get the case environments and update their scope *)
+    let env = Flow.get (T_c_switch_case range) man.lattice flow in
+    let env' = Flow.singleton (Flow.get_ctx flow) T_cur env |>
+               Common.Scope_update.update_scope upd range man |>
+               Flow.get T_cur man.lattice
+    in
+    (* Merge them with cur *)
+    let flow = Flow.add T_cur env' man.lattice flow |>
+               Flow.remove (T_c_switch_case range)
+    in
+    Post.return flow
+
+
   let exec zone stmt man flow =
     match skind stmt with
     | S_c_switch(e, body) ->
-
-      (* Save current switch expression to be stored back in flow at
-         the end of body of switch *)
-      let cur_switch_expr =
-        try Some (get_switch_cond flow)
-        with Not_found -> None
-      in
-
-      (* Save T_cur env in TSwitch token, then reset T_cur and T_break. *)
-      let cur = Flow.get T_cur man.lattice flow in
-      let flow0 = Flow.set TSwitch cur man.lattice flow |>
-                  Flow.remove T_cur |>
-                  Flow.remove Universal.Iterators.Loops.T_break
-      in
-
-      (* Store e in the annotations and execute body. *)
-      let flow0' = set_switch_cond e flow0 in
-
-      let flow1 = man.exec body flow0' in
-
-      (* Merge resulting T_cur, T_break and TSwitch (in case when there is no default case) *)
-      let ctx = Flow.get_unit_ctx flow1 in
-      let cur =
-        man.lattice.join
-          ctx
-          (Flow.get T_cur man.lattice flow1)
-          (Flow.get Universal.Iterators.Loops.T_break man.lattice flow1)
-        |>
-        man.lattice.join
-          ctx
-          (Flow.get TSwitch man.lattice flow1)
-
-      in
-      (* Put the merge into T_cur and restore previous T_break and TSwitch. *)
-      let flow2 = Flow.set T_cur cur man.lattice flow1 |>
-                  Flow.set
-                    Universal.Iterators.Loops.T_break
-                    (Flow.get Universal.Iterators.Loops.T_break man.lattice flow) man.lattice |>
-                  Flow.set TSwitch (Flow.get TSwitch man.lattice flow) man.lattice
-      in
-
-      (* Puts back switch expression *)
-      let flow3 = match cur_switch_expr with
-        | None -> remove_switch_cond flow2
-        | Some e -> set_switch_cond e flow2
-      in
-
-      Post.return flow3 |>
+      exec_switch e body stmt.srange man flow |>
       Option.return
 
-    | S_c_switch_case(e) ->
-      (* Look up expression in switch *)
-      let e0 =
-        try get_switch_cond flow
-        with Not_found -> Exceptions.panic_at stmt.srange
-                            "Could not find KSwitchExpr token in annotations at %a"
-                            pp_range (srange stmt)
-      in
-
-      let flow0 = Flow.set T_cur (Flow.get TSwitch man.lattice flow) man.lattice flow in
-      assume
-        (mk_binop e0 O_eq e stmt.srange ~etyp:u8)
-        ~fthen:(fun true_flow ->
-            Flow.set TSwitch man.lattice.bottom man.lattice true_flow
-            |> Post.return)
-        ~felse:(fun false_flow ->
-            let cur = Flow.get T_cur man.lattice false_flow in
-            Flow.set T_cur man.lattice.bottom man.lattice false_flow |>
-            Flow.set TSwitch cur man.lattice |>
-            Post.return
-          )
-        man flow0 |>
-      Post.bind (fun flow0 ->
-          Flow.add T_cur (Flow.get T_cur man.lattice flow) man.lattice flow0 |>
-          Post.return
-        ) |>
+    | S_c_switch_case(_,upd) ->
+      exec_case_or_default upd stmt.srange man flow |>
       Option.return
 
-    | S_c_switch_default ->
-      let ctx = Flow.get_unit_ctx flow in
-      let cur = man.lattice.join
-          ctx
-          (Flow.get TSwitch man.lattice flow)
-          (Flow.get T_cur man.lattice flow)
-      in
-      let flow = Flow.set T_cur cur man.lattice flow |>
-                 Flow.set TSwitch man.lattice.bottom man.lattice
-      in
-      Post.return flow |>
+    | S_c_switch_default upd ->
+      exec_case_or_default upd stmt.srange man flow |>
       Option.return
 
     | _ -> None

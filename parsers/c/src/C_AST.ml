@@ -270,7 +270,7 @@ type typ =
      mutable func_parameters: variable array; (** function parameters *)
      mutable func_body: block option; (** function body *)
      mutable func_static_vars: variable list; (** static variables declared in the function *)
-     mutable func_local_vars: variable list; (** local variables declared in the function (exclusing parameters) *)
+     mutable func_local_vars: variable list; (** local variables declared in the function (excluding parameters) *)
      mutable func_variadic: bool; (** whether the has a variable number of arguments *)
      mutable func_range: range;
      mutable func_com: comment list; (** comments associated to the declaration *)
@@ -281,7 +281,10 @@ type typ =
 
  and statement = statement_kind * range
 
- and block = statement list
+ and block = {
+     blk_stmts: statement list; (** statements in the block *)
+     blk_local_vars: variable list; (** local variables declared within the block (excluding sub-blocks); these should be deallocated when exiting the block *)
+   }
 
  and statement_kind =
    | S_local_declaration of variable (** local variable declaration *)
@@ -309,19 +312,29 @@ type typ =
    (** target of a jump *)
 
  and jump_kind =
-   | S_goto of string
-   | S_break
-   | S_continue
-   | S_return of expr option
+   | S_goto of string * scope_update
+   | S_break of scope_update
+   | S_continue of scope_update
+   | S_return of expr option * scope_update
    | S_switch of expr * block
  (** various ways to jump *)
 
-
  and target_kind =
    | S_label of string
-   | S_case of expr
-   | S_default
+   | S_case of expr * scope_update
+   | S_default of scope_update
  (** various targets of jumps *)
+
+ and scope_update = {
+     mutable scope_var_added:   variable list;
+     mutable scope_var_removed: variable list;
+   }
+ (** variables to remove and to add (uninitialized) when jumping into
+     another scope;
+     may be attached to a jump source (break, continue, return, goto)
+     or a jump target (switch case and default), depending on
+     what's more convinient
+  *)
 
 
  and expr = expr_kind * type_qual * range
