@@ -388,10 +388,13 @@ struct
                is)
           |> Option.return
 
+        | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)}, i) when get_orig_vname c.py_cls_a_var = "Type" ->
+          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) i flow
+          |> Option.return
 
         | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)} as e, i) when
             (* issue: if object.__new__(e) renames addresses used in i, this is not caught... *)
-            List.for_all (fun n -> get_orig_vname c.py_cls_a_var <> n) ["List"; "Tuple"; "Dict"; "Optional"; "Union"] ->
+            List.for_all (fun n -> get_orig_vname c.py_cls_a_var <> n) ["List"; "Tuple"; "Dict"; "Optional"; "Union"; "Type"] ->
           begin match c.py_cls_a_abases with
             | [] ->
               man.eval (mk_py_call (mk_py_object (find_builtin "object.__new__") range) [e] range) flow
@@ -542,6 +545,18 @@ struct
         | E_var (v, mode) when is_builtin_name @@ get_orig_vname v ->
           man.eval (mk_py_isinstance_builtin e (get_orig_vname v) range) flow
           |> Option.return
+
+        | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_user c, _)}, _)} as pattern, i) when get_orig_vname c.py_cls_var = "Type" ->
+          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
+          Eval.bind (fun ee flow ->
+              assume (mk_py_issubclass ee i range) man flow
+                ~fthen:(fun flow ->
+                    man.eval (mk_py_true range) flow)
+                ~felse:(fun flow ->
+                    Eval.empty_singleton (Flow.bottom_from flow))
+            )
+          |> Option.return
+
 
         | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_user c, _)}, _)} as pattern, i) when get_orig_vname c.py_cls_var = "Pattern" ->
           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
