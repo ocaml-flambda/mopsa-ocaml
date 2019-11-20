@@ -24,6 +24,8 @@
             "c.desugar.constants",
             "c.desugar.conditions",
 
+            "c.memory.variable_length_array",
+
 	    // Libraries
             "c.libs.compiler",
             "c.libs.mopsalib",
