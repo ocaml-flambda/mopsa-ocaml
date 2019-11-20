@@ -120,9 +120,6 @@ struct
       panic_at range "multi-dimensional variable length arrays not supported"
     ;
 
-    (* Add arr as a base in the underlying memory abstraction *)
-    man.post ~zone:Z_c_low_level (mk_add_var arr range) flow >>$ fun () flow ->
-
     (* Add the length variable to the environment *)
     let len = mk_variable_length_var arr in
     man.post ~zone:Z_c_scalar (mk_add_var len range) flow >>$ fun () flow ->
@@ -133,7 +130,10 @@ struct
         (under_array_type arr.vtyp |> void_to_char |> sizeof_type |> (fun z -> mk_z z range))
         range
     in
-    man.post ~zone:Z_c_scalar (mk_assign (mk_var len range) ee range) flow
+    man.post ~zone:Z_c_scalar (mk_assign (mk_var len range) ee range) flow >>$ fun () flow ->
+
+    (* Add arr as a base in the underlying memory abstraction *)
+    man.post ~zone:Z_c_low_level (mk_add_var arr range) flow
 
 
   (** 𝕊⟦ remove arr; ⟧ *)
