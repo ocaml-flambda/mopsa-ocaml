@@ -28,10 +28,9 @@
 open Ast.All
 open Core.All
 open Sig.Stacked.Reduction
-open Sig.Stacked.Lowlevel
-open Stack_list
+open Sig.Stacked.Intermediate
 open Log
-
+open Stack_list
 
 
 
@@ -62,100 +61,83 @@ struct
     end
     )
 
-  let alarms =
-    List.sort_uniq compare
-      (fold_module
-      { f = fun (type a) (m: a stack) acc ->
-            let module S = (val m) in
-            S.alarms @ acc
-      }
-      Spec.pool [])
-
-
   let interface =
-    fold_module {
-      f = fun (type a) (m: a stack) acc ->
-        let module S = (val m) in
-        Interface.concat acc S.interface
-    } Spec.pool Interface.empty
+    let f = fun (type a) (m:a stack) acc ->
+      let module S = (val m) in
+      Interface.concat acc S.interface
+    in
+    fold { f } Spec.pool Interface.empty
 
+  let alarms =
+    let f = fun (type a) (m:a stack) acc ->
+      let module S = (val m) in
+      S.alarms @ acc
+    in
+    fold { f } Spec.pool [] |>
+    List.sort_uniq compare
 
   let bottom : t =
-    make {
-      f = fun (type a) (m:a stack) ->
-        let module S = (val m) in
-        S.bottom
-    } Spec.pool
-
+    let f = fun (type a) (m:a stack) ->
+      let module S = (val m) in
+      S.bottom
+    in
+    create { f } Spec.pool
 
   let top : t =
-    make {
-      f = fun (type a) (m:a stack) ->
-        let module S = (val m) in
-        S.top
-    } Spec.pool
+    let f = fun (type a) (m:a stack) ->
+      let module S = (val m) in
+      S.top
+    in
+    create { f } Spec.pool
 
 
   let print fmt a =
-    iter {
-      f = fun (type a) (m: a stack) aa ->
-        let module S = (val m) in
-        S.print fmt aa
-    } Spec.pool a
-
+    let f = fun (type a) (m: a stack) fmt aa ->
+      let module S = (val m) in
+      S.print fmt aa
+    in
+    print { f } Spec.pool "" fmt a
 
   let is_bottom a =
-    exists {
-      f = fun (type a) (m: a stack) aa ->
-        let module S = (val m) in
-        S.is_bottom aa
-    } Spec.pool a
-
+    let f = fun (type a) (m: a stack) aa ->
+      let module S = (val m) in
+      S.is_bottom aa
+    in
+    exists { f } Spec.pool a
 
 
   (** {2 Lattice operators} *)
   (** ********************* *)
 
-  let subset man ctx a1 a2 =
-    let b, (a1, a2) = for_all_fold_man {
-        f = fun (type a) (m: a stack) man (a1,a2) ->
-          let module S = (val m) in
-          let b,a1,a2 = S.subset man ctx a1 a2 in
-          b, (a1,a2)
-      } Spec.pool man (a1,a2)
+  let subset sman ctx (a1,s1) (a2,s2) =
+    let f = fun (type a) (m: a stack) acc (a1,s1) (a2,s2) ->
+      let module S = (val m) in
+      let b, s1, s2 = S.subset sman ctx (a1,s1) (a2,s2) in
+      b && acc, s1, s2
     in
-    b, a1, a2
+    fold_ext2 { f } Spec.pool true (a1,s1) (a2,s2)
 
+  let join sman ctx (a1,s1) (a2,s2) =
+    let f = fun (type a) (m: a stack) (a1,s1) (a2,s2) ->
+      let module S = (val m) in
+      S.join sman ctx (a1,s1) (a2,s2)
+    in
+    apply_ext2 { f } Spec.pool (a1,s1) (a2,s2)
 
-  let join man ctx a1 a2 =
-    let a, (a1,a2) = make_fold_man {
-        f = fun (type a) (m: a stack) man (a1,a2) ->
-          let module S = (val m) in
-          let a,a1,a2 = S.join man ctx a1 a2 in
-          a,(a1,a2)
-      } Spec.pool man (a1, a2) in
-    a,a1,a2
+  let meet sman ctx (a1,s1) (a2,s2) =
+    let f = fun (type a) (m: a stack) (a1,s1) (a2,s2) ->
+      let module S = (val m) in
+      S.meet sman ctx (a1,s1) (a2,s2)
+    in
+    apply_ext2 { f } Spec.pool (a1,s1) (a2,s2)
 
-
-  let meet man ctx a1 a2 =
-    let a, (a1,a2) = make_fold_man {
-        f = fun (type a) (m: a stack) man (a1,a2) ->
-          let module S = (val m) in
-          let a,a1,a2 = S.meet man ctx a1 a2 in
-          a,(a1,a2)
-      } Spec.pool man (a1, a2) in
-    a,a1,a2
-
-
-  let widen man ctx a1 a2 =
-    let a, (a1,a2,stable) = make_fold_man {
-        f = fun (type a) (m: a stack) man (a1,a2,stable) ->
-          let module S = (val m) in
-          let a,a1,a2,stable' = S.widen man ctx a1 a2 in
-          a,(a1,a2,stable&&stable')
-      } Spec.pool man (a1, a2, true) in
-    a,a1,a2,stable
-
+  let widen sman ctx (a1,s1) (a2,s2) =
+    let f = fun (type a) (m: a stack) (a1,s1) (a2,s2) stable ->
+      let module S = (val m) in
+      let a, s1, s2, stable' = S.widen sman ctx (a1,s1) (a2,s2) in
+      a, s1, s2, stable && stable'
+    in
+    fold_apply_ext2 { f } Spec.pool (a1,s1) (a2,s2) true
 
   let merge pre (a1,log1) (a2,log2) =
     Exceptions.panic ~loc:__LOC__ "merge not implemented"
@@ -166,16 +148,17 @@ struct
   (** **************************** *)
 
   let init prog (man:('a,t,'s) man) flow =
-    fold_man {
-      f = fun (type a) (m:a stack) man flow ->
-        let module S = (val m) in
-        S.init prog man flow
-    } Spec.pool man flow
+    let f = fun (type a) (m:a stack) (man:('a,a,'s) man) flow ->
+      let module S = (val m) in
+      S.init prog man flow
+    in
+    man_fold { f } Spec.pool man flow
 
 
 
   (** {2 Merging functions} *)
   (** ********************* *)
+
 
   (** Merge the conflicts of two flows using logs *)
   let merge_flows ~merge_alarms man pre (flow1,log1) (flow2,log2) =
@@ -276,10 +259,10 @@ struct
       ) r
 
 
-  (** {2 Abstract transformer} *)
-  (** ************************ *)
 
-  (** Manager used by reductions *)
+  (** {2 Reduction manager} *)
+  (** ********************* *)
+
   let rman (man:('a,t,'s) man) : ('a,'s) rman = {
     lattice = man.lattice;
     post = man.post;
@@ -346,33 +329,36 @@ struct
   }
 
 
+  (** {2 Abstract transformer} *)
+  (** ************************ *)
+
   (** Return a coverage bit mask indicating which domains provide an
-     [exec] transfer function for [zone]
+      [exec] transfer function for [zone]
   *)
   let get_exec_coverage zone : bool list =
-    make_list {
-      f = fun (type a) (m:a stack) ->
-        let module S = (val m) in
-        Interface.sat_exec zone S.interface
-    } Spec.pool
+    let f = fun (type a) (m:a stack) ->
+      let module S = (val m) in
+      Interface.sat_exec zone S.interface
+    in
+    map { f } Spec.pool
 
 
   (* Apply [exec] transfer function pointwise over all domains *)
   let exec_pointwise zone coverage stmt man flow : 'a post option list option =
-    let posts, ctx = fold_man_pair {
-        f = fun (type a) (m:a stack) (man:('a,a,'s) man) covered (acc,ctx) ->
-          let module S = (val m) in
-          if not covered then
-            None :: acc, ctx
-          else
-            let flow' = Flow.set_ctx ctx flow in
-            match S.exec zone stmt man flow' with
-            | None -> None :: acc, ctx
-            | Some post ->
-              let ctx' = Post.get_ctx post in
-              Some post :: acc, ctx'
-      } (combine Spec.pool coverage) man ([], Flow.get_ctx flow)
+    let f = fun (type a) (m:a stack) covered (man:('a,a,'s) man) (acc,ctx) ->
+      let module S = (val m) in
+      if not covered then
+        None :: acc, ctx
+      else
+        let flow' = Flow.set_ctx ctx flow in
+        match S.exec zone stmt man flow' with
+        | None -> None :: acc, ctx
+        | Some post ->
+          let ctx' = Post.get_ctx post in
+          Some post :: acc, ctx'
     in
+
+    let posts, ctx = man_fold_combined { f } Spec.pool coverage man ([], Flow.get_ctx flow) in
     let posts = List.map (Option.lift (Post.set_ctx ctx)) posts |>
                 List.rev
     in
@@ -388,15 +374,6 @@ struct
     Result.return rr flow
 
 
-  (** Apply reduction rules on a post-conditions *)
-  let reduce_post stmt man pre post =
-    let rman = rman man in
-    List.fold_left (fun pointwise rule ->
-        let module R = (val rule : EXEC_REDUCTION) in
-        Post.bind (R.reduce stmt rman pre) post
-      ) post Spec.srules
-
-
   (** Entry point of abstract transformers *)
   let exec zone =
     let coverage = get_exec_coverage zone in
@@ -405,8 +382,7 @@ struct
        Option.lift @@ fun pointwise ->
        merge_inter_conflicts man flow pointwise |>
        simplify_pointwise_post |>
-       merge_intra_conflicts man flow |>
-       reduce_post stmt man flow
+       merge_intra_conflicts man flow
     )
 
 
@@ -415,30 +391,30 @@ struct
 
   (* Compute the coverage bit mask of domains providing an [eval] for [zone] *)
   let get_eval_coverage zone : bool list =
-    make_list {
-      f = fun (type a) (m:a stack) ->
-        let module S = (val m) in
-        Interface.sat_eval zone S.interface
-    } Spec.pool
+    let f = fun (type a) (m:a stack) ->
+      let module S = (val m) in
+      Interface.sat_eval zone S.interface
+    in
+    map { f } Spec.pool
 
 
   (** Compute pointwise evaluations over the pool of domains *)
   let eval_pointwise zone coverage exp man flow : 'a eval option list option =
-    let pointwise, ctx = fold_man_pair {
-        f = fun (type a) (m:a stack) (man:('a,a,'s) man) covered (acc,ctx) ->
-          let module S = (val m) in
-          if not covered then
-            None :: acc, ctx
-          else
-            let flow' = Flow.set_ctx ctx flow in
-            match S.eval zone exp man flow' with
-            | None -> None :: acc, ctx
-            | Some evl ->
-              let evl = Eval.remove_duplicates man.lattice evl in
-              let ctx' = Eval.get_ctx evl in
-              Some evl :: acc, ctx'
-      } (combine Spec.pool coverage) man ([], Flow.get_ctx flow)
+    let f = fun (type a) (m:a stack) covered (man:('a,a,'s) man) (acc,ctx) ->
+      let module S = (val m) in
+      if not covered then
+        None :: acc, ctx
+      else
+        let flow' = Flow.set_ctx ctx flow in
+        match S.eval zone exp man flow' with
+        | None -> None :: acc, ctx
+        | Some evl ->
+          let evl = Eval.remove_duplicates man.lattice evl in
+          let ctx' = Eval.get_ctx evl in
+          Some evl :: acc, ctx'
     in
+
+    let pointwise, ctx = man_fold_combined { f } Spec.pool coverage man ([], Flow.get_ctx flow) in
     let pointwise = List.map (Option.lift (Eval.set_ctx ctx)) pointwise |>
                     List.rev
     in
@@ -447,14 +423,16 @@ struct
     else None
 
 
+
+
   (** Apply reduction rules on a pointwise evaluation *)
   let reduce_pointwise_eval exp man (pointwise:('a,expr option option list) result) : 'a eval =
-    let rman = rman man in
+    let eman = rman man in
     (* Let reduction rules roll out imprecise evaluations from [pointwise] *)
     let pointwise = List.fold_left (fun pointwise rule ->
         let module R = (val rule : EVAL_REDUCTION) in
         pointwise |> Result.bind_some @@ fun el flow ->
-        R.reduce exp rman el flow
+        R.reduce exp eman el flow
       ) pointwise Spec.erules
     in
     (* For performance reasons, we keep only one evaluation in each conjunction.
@@ -486,12 +464,12 @@ struct
   (** ***************** *)
 
   let ask query man flow =
-    fold_man {
-      f = fun (type a) (m:a stack) (man:('a,a,'s) man) acc ->
-        let module S = (val m) in
-        S.ask query man flow |>
-        Option.neutral2 (meet_query query) acc
-    } Spec.pool man None
+    let f = fun (type a) (m:a stack) (man:('a,a,'s) man) acc ->
+      let module S = (val m) in
+      S.ask query man flow |>
+      Option.neutral2 (meet_query query) acc
+    in
+    man_fold { f } Spec.pool man None
 
 
   (** {2 Broadcast reductions} *)
@@ -514,19 +492,19 @@ end
 *)
 
 
-type pool = P : 'a stack_list -> pool
+type pool = S : 'a stack_list -> pool
 
 let type_stack (type a) (s : (module STACK with type t = a)) =
-    let module S = (val s) in
-    (module S : STACK with type t = a)
+  let module S = (val s) in
+  (module S : STACK with type t = a)
 
 let rec type_stack_pool : (module STACK) list -> pool = function
-  | [] -> P Nil
+  | [] -> S Nil
   | hd :: tl ->
     let module S = (val hd) in
     let s = type_stack (module S) in
-    let P tl = type_stack_pool tl in
-    P (Cons (s, tl))
+    let S tl = type_stack_pool tl in
+    S (Cons (s, tl))
 
 let make
     (stacks: (module STACK) list)
@@ -534,7 +512,7 @@ let make
     (srules: (module EXEC_REDUCTION) list)
   : (module STACK) =
 
-  let P pool = type_stack_pool stacks in
+  let S pool = type_stack_pool stacks in
 
   let create_product (type a) (pool: a stack_list) =
     let module S = Make(
