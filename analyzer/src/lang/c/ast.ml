@@ -1083,3 +1083,10 @@ let is_lval_offset_forall_quantified e =
   | E_c_deref(p) -> is_pointer_offset_forall_quantified p
   | E_c_array_subscript(_,o) -> is_expr_forall_quantified o
   | _ -> false
+
+
+(** Check if v is declared as a variable length array *)
+let is_c_variable_length_array_type t =
+  match remove_typedef_qual t with
+  | T_c_array(_, C_array_length_expr _) -> true
+  | _ -> false

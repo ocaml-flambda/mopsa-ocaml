@@ -103,11 +103,6 @@ struct
     let v = mk_bytes_var addr in
     mk_var v ~mode:addr.addr_mode range
 
-  let mk_size addr elm range =
-    let bytes = mk_bytes addr range in
-    if Z.equal elm Z.one
-    then bytes
-    else mk_binop bytes O_div (mk_z elm range) ~etyp:bytes.etyp range
 
 
   (** Computation of post-conditions *)
@@ -244,18 +239,11 @@ struct
   let eval_base_bytes base range man flow =
     let open Common.Base in
     match base with
-    | V var ->
-      Eval.singleton (mk_z (sizeof_type var.vtyp) range ~typ:ul) flow
-
-    | S str ->
-      Eval.singleton (mk_int (String.length str + 1) range ~typ:ul) flow
-
     | A addr ->
       Eval.singleton (mk_bytes addr range) flow
 
-    | Z -> panic ~loc:__LOC__ "bytes: addresses not supported"
-
-    | _ -> assert false
+    | _ ->
+      eval_base_size base range (Sig.Stacked.Manager.of_domain_man man) flow
 
 
   let eval zone exp man flow =
@@ -310,23 +298,18 @@ struct
         in
 
         match ekind pt with
-        | E_c_points_to (P_block (V var,_)) ->
-          Eval.singleton (mk_z (Z.div (sizeof_type var.vtyp) elm) exp.erange ~typ:ul) flow
-
-        | E_c_points_to (P_block (S str,_)) ->
-          Eval.singleton (mk_z (Z.div (Z.of_int (String.length str + 1)) elm) exp.erange ~typ:ul) flow
-
-        | E_c_points_to (P_block (A addr,_)) ->
-          Eval.singleton (mk_size addr elm exp.erange) flow
-
-        | E_c_points_to (P_block (Z,_)) -> panic ~loc:__LOC__ "eval_base_size: addresses not supported"
+        | E_c_points_to (P_block (base,_)) ->
+          eval_base_bytes base exp.erange man flow >>$ fun bytes flow ->
+          if Z.equal elm Z.one
+          then Eval.singleton bytes flow
+          else Eval.singleton (mk_binop bytes O_div (mk_z elm exp.erange) ~etyp:bytes.etyp exp.erange) flow
 
         | E_c_points_to P_top ->
           Soundness.warn_at exp.erange "ignoring size computation of ⊤ pointer";
           let _,max = rangeof ul in
           Eval.singleton (mk_z_interval Z.one max exp.erange) flow
 
-        | E_c_points_to P_null 
+        | E_c_points_to P_null
         | E_c_points_to P_invalid ->
           warn_at exp.erange "size(%a) where %a %a not supported" pp_expr e pp_expr e pp_expr pt;
           Eval.singleton (mk_top ul exp.erange) flow

@@ -124,3 +124,28 @@ void test_weak_update() {
   _mopsa_assert_exists(a[1] == 1);
   _mopsa_assert_exists(a[1] == 3);
 }
+
+
+/************************/
+/* Variable-size arrays */
+/************************/
+
+void test_variable_size_array_with_constant_expression() {
+  int n = 10;
+  int a[n];
+  a[0] = 1;
+  _mopsa_assert_safe();
+  a[9] = 1;
+  _mopsa_assert_safe();
+  a[10] = 0;
+  _mopsa_assert_unsafe();
+}
+
+void test_variable_size_array() {
+  int n = _mopsa_range_int(1,10);
+  int a[n];
+  a[0] = 1;
+  _mopsa_assert_safe();
+  a[10] = 0;
+  _mopsa_assert_unsafe();
+}
