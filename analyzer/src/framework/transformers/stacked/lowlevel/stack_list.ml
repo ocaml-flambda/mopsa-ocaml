@@ -19,10 +19,10 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Heterogeneous lists of modules of stack domains *)
+(** Pool of stack domains *)
 
 
-open Core
+open Core.All
 open Sig.Stacked.Lowlevel
 
 
