@@ -82,6 +82,7 @@ lang.c.memory.scalars = pointers machine_numbers
 lang.c.memory.scalars.pointers = value static_points_to domain
 lang.c.memory.packing = static_scope reductions
 lang.c.libs = builtins clib mopsalib compiler variadic cstubs
+lang.c.libs.clib.formatted_io = placeholder parser lexer format_string fscanf fprintf
 lang.c.libs.clib.file_descriptor = slot table domain
 lang.c.hooks = profiler
 

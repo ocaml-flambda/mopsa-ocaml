@@ -19,13 +19,19 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Evaluation of printf functions *)
+(** Evaluation of fprintf-derived functions *)
 
 open Mopsa
 open Framework.Core.Sig.Domain.Stateless
 open Universal.Ast
 open Ast
+open Universal.Zone
 open Zone
+open Common.Points_to
+open Common.Base
+open Common.Alarms
+open Format_string
+open Placeholder
 
 
 module Domain =
@@ -35,7 +41,7 @@ struct
   (** ===================== *)
 
   include GenStatelessDomainId(struct
-      let name = "c.libs.clib.print"
+      let name = "c.libs.clib.formatted_io.fprint"
     end)
 
 
@@ -51,30 +57,70 @@ struct
       provides = [
         Z_c, Z_c_low_level
       ];
-      uses = []
+      uses = [
+        Z_c,Z_c_points_to;
+        Z_c,Z_u_num
+      ]
     }
   }
 
   let alarms = []
 
+
   (** {2 Transfer functions} *)
   (** ====================== *)
 
-  let init _ _ flow =  flow
+  let init prog man flow =  flow
+
 
   let exec zone stmt man flow = None
 
+  (** Check the correct type of an argument *)
+  let check_arg arg placeholder range man flow =
+    match placeholder with
+    | Int t ->
+      let typ = T_c_integer t in
+      let exp = mk_c_cast arg typ arg.erange in
+      man.eval ~zone:(Z_c,Z_u_num) exp flow >>$ fun _ flow ->
+      Post.return flow
 
-  (** {2 Evaluation entry point} *)
-  (** ========================== *)
+    | Float t ->
+      let typ = T_c_float t in
+      let exp = mk_c_cast arg typ arg.erange in
+      man.eval ~zone:(Z_c,Z_u_num) exp flow >>$ fun _ flow ->
+      Post.return flow
 
-  (** Evaluate arguments into scalar values *)
-  let eval_args args man flow =
-    Result.bind_list args (fun e flow ->
-        if is_c_num_type e.etyp
-        then man.eval ~zone:(Z_c,Universal.Zone.Z_u_num) e flow
-        else man.eval ~zone:(Z_c,Z_c_scalar) e flow
-      ) flow
+    | _ ->
+      assert false
+
+  (** Check that arguments correspond to the format *)
+  let check_args format args range man flow =
+    parse_fprintf_format format range man flow >>$ fun placeholders flow ->
+    let nb_required = List.length placeholders in
+    let nb_given = List.length args in
+    if nb_required > nb_given then
+      let man' = Sig.Stacked.Manager.of_domain_man man in
+      raise_c_insufficient_format_args_alarm nb_required nb_given range man' flow |>
+      Post.return
+    else
+      let rec iter placeholders args flow =
+        match placeholders, args with
+        | ph :: tlp, arg :: tla ->
+          check_arg arg ph range man flow >>$ fun () flow ->
+          iter tlp tla flow
+        | _ -> Post.return flow
+      in
+      iter placeholders args flow
+
+
+  (** Check that the stream is open *)
+  let check_stream stream range man flow =
+    assert false
+
+
+  (** Update the destination of sprintf *)
+  let update_sprintf_destination dst range man flow =
+    assert false
 
 
   (** Evaluation entry point *)
@@ -84,14 +130,15 @@ struct
     (* 𝔼⟦ printf(...) ⟧ *)
     | E_c_builtin_call("printf", format :: args)
     | E_c_builtin_call("__printf_chk", format :: args) ->
-      eval_args args man flow >>$? fun _ flow ->
+      check_args format args exp.erange man flow >>$? fun () flow ->
       Eval.singleton (mk_top s32 exp.erange) flow |>
       Option.return
 
     (* 𝔼⟦ fprintf(...) ⟧ *)
     | E_c_builtin_call("fprintf", stream :: format :: args)
     | E_c_builtin_call("__fprintf_chk", stream :: _ :: format :: args) ->
-      eval_args args man flow >>$? fun _ flow ->
+      check_stream stream exp.erange man flow >>$? fun () flow ->
+      check_args format args exp.erange man flow >>$? fun () flow ->
       Eval.singleton (mk_top s32 exp.erange) flow |>
       Option.return
 
@@ -99,7 +146,8 @@ struct
     | E_c_builtin_call("sprintf", dst :: format :: args)
     | E_c_builtin_call("__sprintf_chk", dst :: _ :: _ :: format :: args)
     | E_c_builtin_call("__builtin___sprintf_chk", dst :: _ :: _ :: format :: args) ->
-      eval_args args man flow >>$? fun _ flow ->
+      check_args format args exp.erange man flow >>$? fun () flow ->
+      update_sprintf_destination dst exp.erange man flow >>$? fun () flow ->
       Eval.singleton (mk_top s32 exp.erange) flow |>
       Option.return
 
