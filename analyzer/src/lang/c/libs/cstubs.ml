@@ -398,8 +398,7 @@ struct
       Option.return |> Option.lift @@ Eval.bind @@ fun pt flow ->
 
       begin match ekind pt with
-        | E_c_points_to (P_block (A { addr_kind = A_stub_resource res' }, _))
-        | E_c_points_to (P_block (D ({ addr_kind = A_stub_resource res' },_), _)) ->
+        | E_c_points_to (P_block (A { addr_kind = A_stub_resource res' }, _)) ->
           if res = res' then
             Eval.singleton (mk_one exp.erange ~typ:u8) flow
           else

@@ -64,7 +64,7 @@ struct
     }
   }
 
-  let alarms = []
+  let alarms = [A_c_insufficient_format_args_cls; A_c_null_deref_cls; A_c_invalid_deref_cls; A_c_use_after_free_cls]
 
 
   (** {2 Transfer functions} *)
@@ -81,17 +81,21 @@ struct
     | Int t ->
       let typ = T_c_integer t in
       let exp = mk_c_cast arg typ arg.erange in
-      man.eval ~zone:(Z_c,Z_u_num) exp flow >>$ fun _ flow ->
+      man.eval ~zone:(Z_c_scalar,Z_u_num) exp flow >>$ fun _ flow ->
       Post.return flow
 
     | Float t ->
       let typ = T_c_float t in
       let exp = mk_c_cast arg typ arg.erange in
-      man.eval ~zone:(Z_c,Z_u_num) exp flow >>$ fun _ flow ->
+      man.eval ~zone:(Z_c_scalar,Z_u_num) exp flow >>$ fun _ flow ->
       Post.return flow
 
-    | _ ->
-      assert false
+    | Pointer ->
+      Post.return flow
+
+    | String ->
+      assert_valid_string arg range man flow
+
 
   (** Check that arguments correspond to the format *)
   let check_args format args range man flow =
@@ -105,22 +109,21 @@ struct
     else
       let rec iter placeholders args flow =
         match placeholders, args with
+        | [], [] -> Post.return flow
+
         | ph :: tlp, arg :: tla ->
+          man.eval ~zone:(Z_c,Z_c_scalar) arg flow >>$ fun arg flow ->
           check_arg arg ph range man flow >>$ fun () flow ->
           iter tlp tla flow
-        | _ -> Post.return flow
+
+        | [], arg :: tla ->
+          man.eval ~zone:(Z_c,Z_c_scalar) arg flow >>$ fun _ flow ->
+          iter [] tla flow
+
+        | _ -> assert false
       in
       iter placeholders args flow
 
-
-  (** Check that the stream is open *)
-  let check_stream stream range man flow =
-    assert false
-
-
-  (** Update the destination of sprintf *)
-  let update_sprintf_destination dst range man flow =
-    assert false
 
 
   (** Evaluation entry point *)
@@ -137,7 +140,7 @@ struct
     (* 𝔼⟦ fprintf(...) ⟧ *)
     | E_c_builtin_call("fprintf", stream :: format :: args)
     | E_c_builtin_call("__fprintf_chk", stream :: _ :: format :: args) ->
-      check_stream stream exp.erange man flow >>$? fun () flow ->
+      assert_valid_stream stream exp.erange man flow >>$? fun () flow ->
       check_args format args exp.erange man flow >>$? fun () flow ->
       Eval.singleton (mk_top s32 exp.erange) flow |>
       Option.return
@@ -147,7 +150,7 @@ struct
     | E_c_builtin_call("__sprintf_chk", dst :: _ :: _ :: format :: args)
     | E_c_builtin_call("__builtin___sprintf_chk", dst :: _ :: _ :: format :: args) ->
       check_args format args exp.erange man flow >>$? fun () flow ->
-      update_sprintf_destination dst exp.erange man flow >>$? fun () flow ->
+      memrand dst exp.erange man flow >>$? fun () flow ->
       Eval.singleton (mk_top s32 exp.erange) flow |>
       Option.return
 

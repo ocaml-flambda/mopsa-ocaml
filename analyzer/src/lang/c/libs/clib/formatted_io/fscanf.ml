@@ -59,7 +59,7 @@ struct
     }
   }
 
-  let alarms = [A_c_insufficient_format_args_cls]
+  let alarms = [A_c_insufficient_format_args_cls; A_c_null_deref_cls; A_c_invalid_deref_cls; A_c_use_after_free_cls]
 
   (** {2 Transfer functions} *)
   (** ====================== *)
@@ -78,18 +78,20 @@ struct
     | Int t ->
       let typ = T_c_integer t in
       let ptr = T_c_pointer typ in
+      assert_valid_ptr arg range man flow >>$ fun () flow ->
       man.post (mk_assign (mk_c_deref (mk_c_cast arg ptr range) range) (mk_top typ range) range) flow
 
     | Float t ->
       let typ = T_c_float t in
       let ptr = T_c_pointer typ in
+      assert_valid_ptr arg range man flow >>$ fun () flow ->
       man.post (mk_assign (mk_c_deref (mk_c_cast arg ptr range) range) (mk_top typ range) range) flow
 
     | Pointer ->
       assert false
 
     | String ->
-      assert false
+      memrand arg range man flow
 
 
   (** Assign arbitrary values to arguments *)
@@ -119,19 +121,21 @@ struct
 
     (* 𝔼⟦ scanf ⟧ *)
     | E_c_builtin_call("scanf", format :: args) ->
-      assign_args format args exp.erange man flow >>$? fun _ flow ->
+      assign_args format args exp.erange man flow >>$? fun () flow ->
       Eval.singleton (mk_top s32 exp.erange) flow |>
       Option.return
 
     (* 𝔼⟦ fscanf ⟧ *)
     | E_c_builtin_call("fscanf", stream :: format :: args) ->
-      assign_args format args exp.erange man flow >>$? fun _ flow ->
+      assert_valid_stream stream exp.erange man flow >>$? fun () flow ->
+      assign_args format args exp.erange man flow >>$? fun () flow ->
       Eval.singleton (mk_top s32 exp.erange) flow |>
       Option.return
 
       (* 𝔼⟦ sscanf ⟧ *)
     | E_c_builtin_call("sscanf", src :: format :: args) ->
-      assign_args format args exp.erange man flow >>$? fun _ flow ->
+      assign_args format args exp.erange man flow >>$? fun () flow ->
+      assert_valid_string src exp.erange man flow >>$? fun () flow ->
       Eval.singleton (mk_top s32 exp.erange) flow |>
       Option.return
 
