@@ -81,13 +81,13 @@ struct
     | Int t ->
       let typ = T_c_integer t in
       let exp = mk_c_cast arg typ arg.erange in
-      man.eval ~zone:(Z_c_scalar,Z_u_num) exp flow >>$ fun _ flow ->
+      man.eval ~zone:(Z_c,Z_u_num) exp flow >>$ fun _ flow ->
       Post.return flow
 
     | Float t ->
       let typ = T_c_float t in
       let exp = mk_c_cast arg typ arg.erange in
-      man.eval ~zone:(Z_c_scalar,Z_u_num) exp flow >>$ fun _ flow ->
+      man.eval ~zone:(Z_c,Z_u_num) exp flow >>$ fun _ flow ->
       Post.return flow
 
     | Pointer ->
@@ -112,7 +112,6 @@ struct
         | [], [] -> Post.return flow
 
         | ph :: tlp, arg :: tla ->
-          man.eval ~zone:(Z_c,Z_c_scalar) arg flow >>$ fun arg flow ->
           check_arg arg ph range man flow >>$ fun () flow ->
           iter tlp tla flow
 

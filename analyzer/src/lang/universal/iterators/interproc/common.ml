@@ -256,7 +256,7 @@ let inline f params locals body ret range man flow =
   in
   match ret with
   | None ->
-    Eval.empty_singleton flow
+    Eval.singleton (mk_unit range) flow
 
   | Some v ->
     Eval.singleton (mk_var v range) flow ~cleaners:(

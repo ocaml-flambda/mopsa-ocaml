@@ -723,6 +723,8 @@ let mul e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_mult e2 range ~etyp:typ
 let div e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_div e2 range ~etyp:typ
 let _mod e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_mod e2 range ~etyp:typ
 
+let mk_unit range = mk_constant C_unit ~etyp:T_unit range
+
 let mk_bool b range = mk_constant ~etyp:T_bool (C_bool b) range
 let mk_true = mk_bool true
 let mk_false = mk_bool false

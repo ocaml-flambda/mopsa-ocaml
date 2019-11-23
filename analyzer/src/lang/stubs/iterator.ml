@@ -414,7 +414,7 @@ struct
 
       begin match return with
         | None ->
-          Eval.empty_singleton flow |>
+          Eval.singleton (mk_unit exp.erange) flow |>
           Option.return
 
         | Some v ->

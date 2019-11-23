@@ -13,7 +13,6 @@ rule read =
   | "-"         { debug "-";MINUS }
   | "0"         { ZERO }
   | "#"         { SHARP }
-  | "$"         { DOLLAR }
   | num         { NUM }
   | "*"         { STAR }
   | "."         { DOT }

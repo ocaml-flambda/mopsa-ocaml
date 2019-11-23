@@ -91,6 +91,7 @@ struct
       assert false
 
     | String ->
+      Soundness.warn_at range "ignore out-of-bound access to %a" pp_expr arg;
       memrand arg range man flow
 
 

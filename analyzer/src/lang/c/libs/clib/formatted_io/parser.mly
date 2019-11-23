@@ -25,12 +25,10 @@
   open Ast
   open Placeholder
 
-  let debug fmt = Debug.debug ~channel:"foo" fmt
-
 %}
 
 %token PERCENT
-%token PLUS MINUS ZERO SHARP DOLLAR
+%token PLUS MINUS ZERO SHARP
 %token NUM STAR DOT
 %token H HH L LL
 %token D I U F G E A P S X O C
@@ -54,38 +52,35 @@ fprintf_place_holder_list:
   | hd=fprintf_place_holder tl=fprintf_place_holder_list { hd @ tl }
 
 fprintf_place_holder:
-  | PERCENT o=fprintf_options t=length_type { o @ [t] }
+  | PERCENT fprintf_flag_list w=fprintf_width p=fprintf_precision t=typ { w @ p @ [t] }
 
-fprintf_options:
- | p=fprintf_parameter { p }
 
-fprintf_parameter:
-  | NUM DOLLAR f=fprintf_flag { f }
-  |            f=fprintf_flag { f }
+fprintf_flag_list:
+  | { }
+  | fprintf_flag fprintf_flag_list { }
 
 fprintf_flag:
-  | PLUS  w=fprintf_width { w }
-  | MINUS w=fprintf_width { w }
-  | ZERO  w=fprintf_width { w }
-  | SHARP w=fprintf_width { w }
-  |       w=fprintf_width { w }
+  | PLUS  {  }
+  | MINUS {  }
+  | ZERO  {  }
+  | SHARP {  }
 
 fprintf_width:
-  | NUM  p=fprintf_precision { p }
-  | STAR p=fprintf_precision { Int C_unsigned_int :: p }
-  |      p=fprintf_precision { p }
+  | NUM   { [] }
+  | STAR  { [Int C_unsigned_int] }
+  |       { [] }
 
 fprintf_precision:
   | DOT NUM  { [] }
   | DOT STAR { [ Int C_unsigned_int ] }
   |          { [] }
 
-length_type:
+typ:
   (* Char *)
   | C                      { Int C_signed_char }
 
   (* Signed integers *)
-  | D | H D | HH D         { debug "signed int"; Int C_signed_int }
+  | D | H D | HH D         { Int C_signed_int }
   | I | H I | HH I         { Int C_signed_int }
   | L D | L I              { Int C_signed_long }
   | LL D | LL I            { Int C_signed_long_long }
@@ -106,6 +101,7 @@ length_type:
 
 
 (** Parser of fscanf format *)
+
 parse_fscanf:
   | l=fscanf_place_holder_list EOF { l }
 
@@ -115,8 +111,8 @@ fscanf_place_holder_list:
   | PERCENT hd=fscanf_place_holder tl=fscanf_place_holder_list   { hd :: tl }
 
 fscanf_place_holder:
-  | w=fscanf_width { w }
+  | fscanf_width t=typ { t }
 
 fscanf_width:
-  | NUM  t=length_type { t }
-  |      t=length_type { t }
+  | NUM {  }
+  |     {  }
