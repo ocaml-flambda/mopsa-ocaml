@@ -656,7 +656,6 @@ void *realloc (void *__ptr, size_t __size);
  *
  * case "free" {
  *   assumes:  __ptr != NULL;
- *   requires: __ptr in Memory;
  *   requires: offset(__ptr) == 0;
  *   free:     __ptr;
  * }
