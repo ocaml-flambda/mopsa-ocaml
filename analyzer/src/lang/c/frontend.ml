@@ -837,6 +837,7 @@ and from_stub_expr ctx exp =
     in mk_expr ekind exp.range  ~etyp:(from_typ ctx exp.content.typ)
   in
   bind_range_expr exp @@ function
+  | E_top t -> E_constant (C_top (from_typ ctx t))
   | E_int n -> E_constant (C_int n)
   | E_float f -> E_constant (C_float f)
   | E_string s -> E_constant (C_string s)

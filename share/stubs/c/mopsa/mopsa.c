@@ -80,9 +80,10 @@ void _mopsa_assert_valid_string(char *s);
 
 /*$
  * requires: valid_ptr(s);
- * assigns: s[0, size(s) - 1];
+ * assigns: s[i, j];
+ * ensures: forall unsigned int k in [i,j]: (s[k])' == top(char);
  */
-void _mopsa_memrand(char *s);
+void _mopsa_memrand(char *s, unsigned int i, unsigned int j);
 
 
 /*$

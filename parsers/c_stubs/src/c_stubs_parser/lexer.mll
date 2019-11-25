@@ -33,6 +33,7 @@ let _ =
   List.iter (fun (a,b) -> Hashtbl.add keywords a b)
     [
      (* Constants *)
+     "top",      TOP;
      "true",     TRUE;
      "false",    FALSE;
      "INVALID",  INVALID;
