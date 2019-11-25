@@ -52,7 +52,6 @@
 
 %}
 
-%token PERCENT
 %token PLUS MINUS ZERO SHARP
 %token <int> NUM
 %token STAR DOT
@@ -79,7 +78,7 @@ output_placeholder_list:
   | hd=output_placeholder tl=output_placeholder_list { hd @ tl }
 
 output_placeholder:
-  | PERCENT output_flag_list w=output_width p=output_precision t=typ { mk_output_placeholder w p t }
+  | output_flag_list w=output_width p=output_precision t=typ { mk_output_placeholder w p t }
 
 
 output_flag_list:
@@ -134,8 +133,8 @@ parse_input_format:
 
 input_placeholder_list:
   | { [] }
-  | PERCENT STAR input_placeholder tl=input_placeholder_list { tl }
-  | PERCENT hd=input_placeholder tl=input_placeholder_list   { hd :: tl }
+  | STAR input_placeholder tl=input_placeholder_list { tl }
+  | hd=input_placeholder tl=input_placeholder_list   { hd :: tl }
 
 input_placeholder:
   | w=input_width t=typ { mk_input_placeholder w t }
