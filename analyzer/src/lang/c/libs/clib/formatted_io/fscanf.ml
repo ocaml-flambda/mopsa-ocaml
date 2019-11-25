@@ -74,7 +74,7 @@ struct
 
 
   let assign_arg arg placeholder range man flow =
-    match placeholder with
+    match placeholder.ip_typ with
     | Int t ->
       let typ = T_c_integer t in
       let ptr = T_c_pointer typ in
@@ -91,13 +91,16 @@ struct
       assert false
 
     | String ->
-      Soundness.warn_at range "ignore out-of-bound access to %a" pp_expr arg;
-      memrand arg range man flow
+      let w = match placeholder.ip_width with
+        | None -> mk_top ul range
+        | Some n -> mk_int (n-1) ~typ:ul range
+      in
+      memrand arg (mk_zero range) w range man flow
 
 
   (** Assign arbitrary values to arguments *)
   let assign_args format args range man flow =
-    parse_fscanf_format format range man flow >>$ fun placeholders flow ->
+    parse_input_format format range man flow >>$ fun placeholders flow ->
     let nb_required = List.length placeholders in
     let nb_given = List.length args in
     if nb_required > nb_given then

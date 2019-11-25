@@ -25,55 +25,82 @@
   open Ast
   open Placeholder
 
+
+  let mk_output_placeholder width precision typ =
+    let mk w p t = {
+	op_width = w;
+	op_precision = p;
+	op_typ = t;
+      }
+    in
+    let width_arg_placeholder = match snd width with
+      | true -> [mk None None (Int C_unsigned_int)]
+      | _ -> []
+    in
+    let precision_arg_placeholder = match snd precision with
+      | true -> [mk None None (Int C_unsigned_int)]
+      | _ -> []
+    in
+    width_arg_placeholder @ precision_arg_placeholder @ [mk (fst width) (fst precision) typ]
+
+
+  let mk_input_placeholder width typ =
+    {
+      ip_width = width;
+      ip_typ = typ;
+    }
+
 %}
 
 %token PERCENT
 %token PLUS MINUS ZERO SHARP
-%token NUM STAR DOT
+%token <int> NUM
+%token STAR DOT
 %token H HH L LL
 %token D I U F G E A P S X O C
 %token EOF
 
-%start parse_fprintf
-%start parse_fscanf
+%start parse_output_format
+%start parse_input_format
 
-%type <Placeholder.placeholder list> parse_fprintf
-%type <Placeholder.placeholder list> parse_fscanf
+%type <Placeholder.output_placeholder list> parse_output_format
+%type <Placeholder.intput_placeholder list> parse_input_format
 
 %%
 
-(** Parser of fprintf format *)
 
-parse_fprintf:
-  |  l=fprintf_place_holder_list EOF { l }
+(** Parser of output formats *)
 
-fprintf_place_holder_list:
+parse_output_format:
+  |  l=output_placeholder_list EOF { l }
+
+output_placeholder_list:
   | { [] }
-  | hd=fprintf_place_holder tl=fprintf_place_holder_list { hd @ tl }
+  | hd=output_placeholder tl=output_placeholder_list { hd @ tl }
 
-fprintf_place_holder:
-  | PERCENT fprintf_flag_list w=fprintf_width p=fprintf_precision t=typ { w @ p @ [t] }
+output_placeholder:
+  | PERCENT output_flag_list w=output_width p=output_precision t=typ { mk_output_placeholder w p t }
 
 
-fprintf_flag_list:
+output_flag_list:
   | { }
-  | fprintf_flag fprintf_flag_list { }
+  | output_flag output_flag_list { }
 
-fprintf_flag:
+output_flag:
   | PLUS  {  }
   | MINUS {  }
   | ZERO  {  }
   | SHARP {  }
 
-fprintf_width:
-  | NUM   { [] }
-  | STAR  { [Int C_unsigned_int] }
-  |       { [] }
+output_width:
+  | n=NUM { Some n, false }
+  | STAR  { None, true }
+  |       { None, false }
 
-fprintf_precision:
-  | DOT NUM  { [] }
-  | DOT STAR { [ Int C_unsigned_int ] }
-  |          { [] }
+output_precision:
+  | DOT n=NUM { Some n, false }
+  | DOT STAR  { None, true }
+  |           { None, false }
 
 typ:
   (* Char *)
@@ -100,19 +127,19 @@ typ:
 
 
 
-(** Parser of fscanf format *)
+(** Parser of input format *)
 
-parse_fscanf:
-  | l=fscanf_place_holder_list EOF { l }
+parse_input_format:
+  | l=input_placeholder_list EOF { l }
 
-fscanf_place_holder_list:
+input_placeholder_list:
   | { [] }
-  | PERCENT STAR fscanf_place_holder tl=fscanf_place_holder_list { tl }
-  | PERCENT hd=fscanf_place_holder tl=fscanf_place_holder_list   { hd :: tl }
+  | PERCENT STAR input_placeholder tl=input_placeholder_list { tl }
+  | PERCENT hd=input_placeholder tl=input_placeholder_list   { hd :: tl }
 
-fscanf_place_holder:
-  | fscanf_width t=typ { t }
+input_placeholder:
+  | w=input_width t=typ { mk_input_placeholder w t }
 
-fscanf_width:
-  | NUM {  }
-  |     {  }
+input_width:
+  | n=NUM { Some n }
+  |       { None }

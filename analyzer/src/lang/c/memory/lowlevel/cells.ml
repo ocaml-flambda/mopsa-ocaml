@@ -953,8 +953,20 @@ struct
             Eval.singleton (mk_top typ range) flow
           )
         ~felse:(fun flow ->
-            (* FIXME: remove qunatifiers from offset *)
-            raise_c_out_bound_alarm ~base ~offset ~size range man flow |>
+            let offset' = Visitor.map_expr
+                (fun ee ->
+                   match ekind ee with
+                   | E_stub_quantified(_,v,_) ->
+                     let c = mk_cell (V v) Z.zero v.vtyp in
+                     let ee' = mk_numeric_cell_var_expr c ee.erange in
+                     Keep ee'
+                   | _ -> VisitParts ee
+                )
+                (fun s -> VisitParts s)
+                offset
+            in
+            man.eval ~zone:(Z_c_scalar,Z_u_num) offset' flow >>$ fun offset' flow ->
+            raise_c_out_bound_alarm ~base ~offset:offset' ~size range man flow |>
             Eval.empty_singleton
           )
         ~zone:Z_u_num man flow

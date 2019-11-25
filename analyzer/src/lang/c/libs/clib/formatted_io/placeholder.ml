@@ -23,10 +23,25 @@
 
 open Ast
 
-type placeholder =
+(** C type of a placeholder *)
+type placeholder_type =
   | Int of c_integer_type
   | Float of c_float_type
   | Pointer
   | String
+
+(** Placeholder for output streams, e.g. printf *)
+type output_placeholder = {
+  op_width: int option;
+  op_precision: int option;
+  op_typ: placeholder_type;
+}
+
+(** Placeholder for input streams, e.g. scanf *)
+type intput_placeholder = {
+  ip_width: int option;
+  ip_typ: placeholder_type;
+}
+  
 
   

@@ -20,7 +20,7 @@
 (****************************************************************************)
 
 
-(** Parser entry point for parsing format strings *)
+(** Entry point for parsing format strings *)
 
 open Mopsa
 open Framework.Core.Sig.Domain.Manager
@@ -32,6 +32,7 @@ open Common.Points_to
 open Common.Alarms
 
 
+(** Evaluate an expression of format string into a string *)
 let eval_format_string format range man flow =
   man.eval ~zone:(Z_c,Z_c_points_to) format flow >>$ fun pt flow ->
   let man' = Core.Sig.Stacked.Manager.of_domain_man man in
@@ -56,14 +57,16 @@ let eval_format_string format range man flow =
     Result.empty_singleton flow
 
 
-let parse_fprintf_format (format:expr) range man flow =
+(** Parse an output format *)
+let parse_output_format (format:expr) range man flow =
   eval_format_string format range man flow >>$ fun fmt flow ->
-  let placeholders = Parser.parse_fprintf Lexer.read (Lexing.from_string fmt) in
+  let placeholders = Parser.parse_output_format Lexer.read (Lexing.from_string fmt) in
   Result.singleton placeholders flow
 
 
 
-let parse_fscanf_format (format:expr) range man flow =
+(** Parse an input format *)
+let parse_input_format (format:expr) range man flow =
   eval_format_string format range man flow >>$ fun fmt flow ->
-  let placeholders = Parser.parse_fscanf Lexer.read (Lexing.from_string fmt) in
+  let placeholders = Parser.parse_input_format Lexer.read (Lexing.from_string fmt) in
   Result.singleton placeholders flow

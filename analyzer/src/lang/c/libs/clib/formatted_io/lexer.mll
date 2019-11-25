@@ -13,7 +13,7 @@ rule read =
   | "-"         { debug "-";MINUS }
   | "0"         { ZERO }
   | "#"         { SHARP }
-  | num         { NUM }
+  | num         { NUM (int_of_string (Lexing.lexeme lexbuf))}
   | "*"         { STAR }
   | "."         { DOT }
   | "hh" | "HH"	{ HH }

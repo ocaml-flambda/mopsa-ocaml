@@ -1140,10 +1140,10 @@ let assert_valid_ptr (p:expr) range man flow =
 
 
 (** Randomize an entire array *)
-let memrand (p:expr) range man flow =
+let memrand (p:expr) (i:expr) (j:expr) range man flow =
   let open Sig.Domain.Manager in
   let f = find_c_fundec_by_name "_mopsa_memrand" flow in
-  let stmt = mk_c_call_stmt f [p] range in
+  let stmt = mk_c_call_stmt f [p; i; j] range in
   man.post stmt flow
 
   

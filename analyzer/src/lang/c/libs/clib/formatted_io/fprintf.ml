@@ -77,7 +77,7 @@ struct
 
   (** Check the correct type of an argument *)
   let check_arg arg placeholder range man flow =
-    match placeholder with
+    match placeholder.op_typ with
     | Int t ->
       let typ = T_c_integer t in
       let exp = mk_c_cast arg typ arg.erange in
@@ -99,7 +99,7 @@ struct
 
   (** Check that arguments correspond to the format *)
   let check_args format args range man flow =
-    parse_fprintf_format format range man flow >>$ fun placeholders flow ->
+    parse_output_format format range man flow >>$ fun placeholders flow ->
     let nb_required = List.length placeholders in
     let nb_given = List.length args in
     if nb_required > nb_given then
@@ -149,7 +149,7 @@ struct
     | E_c_builtin_call("__sprintf_chk", dst :: _ :: _ :: format :: args)
     | E_c_builtin_call("__builtin___sprintf_chk", dst :: _ :: _ :: format :: args) ->
       check_args format args exp.erange man flow >>$? fun () flow ->
-      memrand dst exp.erange man flow >>$? fun () flow ->
+      memrand dst (mk_zero ~typ:ul exp.erange) (mk_top ul exp.erange) exp.erange man flow >>$? fun () flow ->
       Eval.singleton (mk_top s32 exp.erange) flow |>
       Option.return
 
