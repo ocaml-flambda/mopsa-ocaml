@@ -204,7 +204,7 @@ struct
             assume cond
               ~fthen:(fun flow -> Post.return flow)
               ~felse:(fun flow ->
-                  Common.Alarms.raise_c_out_bound_alarm ~base ~offset ~size range man' flow |>
+                  raise_c_out_bound_quantified_alarm ~base ~min ~max ~size range man' flow |>
                   Post.return
                 )
               ~zone:Z_u_num man flow

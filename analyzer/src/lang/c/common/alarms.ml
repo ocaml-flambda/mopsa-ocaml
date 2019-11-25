@@ -66,6 +66,15 @@ let raise_c_out_bound_alarm ~base ~offset ~size range man flow =
   let alarm = mk_alarm (A_c_out_of_bound(base,offset_itv,size_itv)) range ~cs in
   Flow.raise_alarm alarm ~bottom:true man.lattice flow
 
+let raise_c_out_bound_quantified_alarm ~base ~min ~max ~size range man flow =
+  let cs = Flow.get_callstack flow in
+  let min_itv = man.ask (mk_int_interval_query min) flow in
+  let max_itv = man.ask (mk_int_interval_query max) flow in
+  let offset_itv = I.join_bot min_itv max_itv in
+  let size_itv = man.ask (mk_int_interval_query size) flow in
+  let alarm = mk_alarm (A_c_out_of_bound(base,offset_itv,size_itv)) range ~cs in
+  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+
 let raise_c_null_deref_alarm pointer range man flow =
   let cs = Flow.get_callstack flow in
   let pointer' = get_orig_expr pointer in
