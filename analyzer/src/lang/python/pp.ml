@@ -80,6 +80,8 @@ let () =
     );
   register_expr_pp (fun default fmt exp ->
       match ekind exp with
+      | E_py_ll_hasattr (e, attr) -> Format.fprintf fmt "E_py_ll_hasattr(%a, %a)" pp_expr e pp_expr attr
+      | E_py_ll_getattr (e, attr) -> Format.fprintf fmt "E_py_ll_getattr(%a, %a)" pp_expr e pp_expr attr
       | E_py_annot e -> fprintf fmt "(annot) %a" pp_expr e
       | E_py_undefined true -> fprintf fmt "global undef"
       | E_py_undefined false -> fprintf fmt "local undef"

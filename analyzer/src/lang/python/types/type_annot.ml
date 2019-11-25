@@ -420,7 +420,7 @@ struct
                           | _ -> assert false) types
                     | _ ->
                       Exceptions.panic_at range "tname %a, abase %a" pp_expr (List.hd c.py_cls_a_abases) pp_expr abase in
-                  debug "here, tnames=%a" (Format.pp_print_list Format.pp_print_string) tnames ;
+                  debug "here, tnames=%a, cur = %a" (Format.pp_print_list Format.pp_print_string) tnames TVMap.print (get_env T_cur man flow);
                   let substi =
                     Visitor.map_expr
                       (fun expr -> match ekind expr with
@@ -434,7 +434,8 @@ struct
                          | E_py_call (
                              {ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)},
                              {ekind = E_var (vname, _)}::_, []) ->
-                           Keep (ESet.choose begin match TVMap.find_opt (Class vname) (get_env T_cur man flow) with
+                           Keep (
+                             try ESet.choose @@ match TVMap.find_opt (Class vname) (get_env T_cur man flow) with
                                | Some s -> s
                                | None ->
                                  debug "vname = %a@\n" pp_var vname;
@@ -444,7 +445,7 @@ struct
                                  | V_addr_attr ({addr_kind = A_py_instance {addr_kind = A_py_class (C_annot c', _)}} as addr, attr) when compare_var c.py_cls_a_var c'.py_cls_a_var = 0 ->
                                    Option.default (ESet.singleton expr) (TVMap.find_opt (Class (mk_addr_attr {addr with addr_mode = WEAK} attr T_any)) (get_env T_cur man flow))
                                  | _ -> ESet.singleton expr
-                             end)
+                             with Not_found -> expr)
                          | _ -> VisitParts expr
                       )
                       (fun stmt -> VisitParts stmt)

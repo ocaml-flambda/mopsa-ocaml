@@ -58,9 +58,24 @@ let fill_some (old: 'a option list) (news: 'b list) : 'b option list =
     ) (news, []) old |> snd |> List.rev
 
 
+
 let () =
   register_expr_visitor (fun default exp ->
       match ekind exp with
+      | E_py_ll_hasattr(e1, e2) ->
+         {exprs = [e1; e2]; stmts = [];},
+         (fun parts -> let e1, e2 = match parts.exprs with
+                         | [e1; e2] -> e1, e2
+                         | _ -> assert false in
+                       {exp with ekind = E_py_ll_hasattr(e1, e2)})
+
+      | E_py_ll_getattr(e1, e2) ->
+         {exprs = [e1; e2]; stmts = [];},
+         (fun parts -> let e1, e2 = match parts.exprs with
+                         | [e1; e2] -> e1, e2
+                         | _ -> assert false in
+                       {exp with ekind = E_py_ll_getattr(e1, e2)})
+
       | E_py_undefined _ -> leaf exp
 
       | E_py_object _ -> leaf exp

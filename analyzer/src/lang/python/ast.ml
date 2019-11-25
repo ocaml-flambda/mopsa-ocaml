@@ -208,7 +208,10 @@ type expr_kind +=
   | E_py_annot of expr
   (* checking type annotations using stubs *)
   | E_py_check_annot of expr * expr
-
+  (** low-level hasattribute working at the object level only *)
+  | E_py_ll_hasattr of expr (** object *) * expr (** attribute name *)
+  (** low-level attribute access working at the object level only *)
+  | E_py_ll_getattr of expr (** object *) * expr (** attribute name *)
 
 
 (*==========================================================================*)
