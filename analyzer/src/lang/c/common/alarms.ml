@@ -246,7 +246,7 @@ let () =
           ]
 
         | A_c_insufficient_format_args(r1,g1), A_c_insufficient_format_args(r2,g2) ->
-          Compare.pair (-) (-) (r1,g1) (r2,g2)
+          Compare.pair compare compare (r1,g1) (r2,g2)
 
         | _ -> next a1 a2
       );
