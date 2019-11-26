@@ -88,7 +88,7 @@ class int(object):
     def __floordiv__(self, other): pass
     def __format__(self): pass
     def __ge__(self, other): pass
-    def __getattribute__(self, attr): pass
+    # def __getattribute__(self, attr): pass
     def __getnewargs__(self): pass
     def __gt__(self, other): pass
     def __hash__(self): pass
@@ -150,7 +150,7 @@ class float(object):
     def __floordiv__(self, other): pass
     def __format__(self): pass
     def __ge__(self, other): pass
-    def __getattribute__(self, attr): pass
+    # def __getattribute__(self, attr): pass
     def __getnewargs__(self): pass
     def __gt__(self, other): pass
     def __hash__(self): pass
@@ -190,7 +190,7 @@ class complex(object):
     def __floordiv__(self, other): pass
     def __format__(self): pass
     def __ge__(self, other): pass
-    def __getattribute__(self, attr): pass
+    # def __getattribute__(self, attr): pass
     def __getnewargs__(self): pass
     def __gt__(self, other): pass
     def __hash__(self): pass
@@ -225,7 +225,7 @@ class str(object):
     def __eq__(self, other): pass
     def __format__(self): pass
     def __ge__(self, other): pass
-    def __getattribute__(self, attr): pass
+    # def __getattribute__(self, attr): pass
     def __getitem__(self, i): pass
     def __getnewargs__(self): pass
     def __gt__(self, other): pass
@@ -295,7 +295,7 @@ class generator(object):
     def __del__(self): pass
     def __eq__(self): pass
     def __format__(self): pass
-    def __getattribute__(self): pass
+    # def __getattribute__(self): pass
     def __iter__(self): pass
     def __repr__(self): pass
     def __next__(self): pass
@@ -309,7 +309,7 @@ class list(object):
     def __delitem__(self, k): pass
     def __eq__(self, o): pass
     def __ge__(self, o): pass
-    def __getattribute__(self, a): pass
+    # def __getattribute__(self, a): pass
     def __getitem__(self, k): pass
     def __gt__(self, o): pass
     def __iadd__(self, o): pass
