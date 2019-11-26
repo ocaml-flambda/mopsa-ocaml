@@ -24,6 +24,7 @@
 
 open Mopsa
 open Framework.Core.Sig.Domain.Manager
+open Universal.Ast
 open Ast
 open Placeholder
 open Ast
@@ -51,6 +52,14 @@ let eval_format_string format range man flow =
 
   | E_c_points_to (P_block (S fmt, offset)) when is_c_expr_equals_z offset Z.zero ->
     Result.singleton fmt flow
+
+  | E_c_points_to (P_block (S fmt, offset)) ->
+    assume (mk_binop offset O_eq (mk_zero (erange offset)) (erange offset))
+      ~fthen:(fun flow -> Result.singleton fmt flow)
+      ~felse:(fun flow ->
+          Soundness.warn_at range "unsupported format string";
+          Result.empty_singleton flow)
+      ~zone:Z_c_scalar man flow
 
   | _ ->
     Soundness.warn_at range "unsupported format string";
