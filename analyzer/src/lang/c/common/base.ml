@@ -28,73 +28,80 @@ open Zone
 
 (** lv base *)
 type base =
-  | V of var (** program variable *)
-  | A of addr (** resource address *)
-  | D of addr * range (** deallocated resource address with deallocation range *)
-  | S of string (** string literal *)
+  | ValidVar    of var   (** valid variable in an active stack frame *)
+
+  | InvalidVar  of var   (** invalid variable in a dead stack frame *) *
+                  range  (** return location *)
+
+  | ValidAddr   of addr  (** valid allocated address *)
+
+  | InvalidAddr of addr  (** invalid deallocated address *) *
+                   range (** deallocation location *)
+
+  | String      of string (** string literal *)
+
 
 let pp_base fmt = function
-  | V v -> pp_var fmt v
-  | A (a) -> pp_addr fmt a
-  | D (a,r) -> Format.fprintf fmt "✗%a" pp_addr a
-  | S s -> Format.fprintf fmt "\"%s\"" s
+  | ValidVar v -> pp_var fmt v
+  | InvalidVar (v,_) -> Format.fprintf fmt "✗%a" pp_var v
+  | ValidAddr (a) -> pp_addr fmt a
+  | InvalidAddr (a,r) -> Format.fprintf fmt "✗%a" pp_addr a
+  | String s -> Format.fprintf fmt "\"%s\"" s
 
 
 let base_uniq_name b =
   match b with
-  | V v -> v.vname
-  | A _
-  | D _ ->
+  | ValidVar v -> v.vname
+  | InvalidVar (v,_) -> "✗" ^ v.vname
+  | ValidAddr _ | InvalidAddr _ ->
     let () = pp_base Format.str_formatter b in
     Format.flush_str_formatter ()
-  | S s -> s
+  | String s -> s
 
 let compare_base b b' = match b, b' with
-  | V v, V v' -> compare_var v v'
-  | A a, A a' -> compare_addr a a'
-  | D (a,r), D(a',r') -> Compare.pair compare_addr compare_range (a,r) (a',r')
-  | S s, S s' -> compare s s'
+  | ValidVar v, ValidVar v' -> compare_var v v'
+  | InvalidVar(v,r), InvalidVar(v',r') -> Compare.pair compare_var compare_range (v,r) (v',r')
+  | ValidAddr a, ValidAddr a' -> compare_addr a a'
+  | InvalidAddr(a,r), InvalidAddr(a',r') -> Compare.pair compare_addr compare_range (a,r) (a',r')
+  | String s, String s' -> compare s s'
   | _ -> compare b b'
 
 
 let base_size =
   function
-  | V v -> sizeof_type v.vtyp
-  | S s -> Z.of_int @@ String.length s
-  | A _ -> panic ~loc:__LOC__ "base_size: addresses not supported"
-  | D _ -> panic ~loc:__LOC__ "base_size: deallocated addresses not supported"
+  | ValidVar v | InvalidVar(v,_) -> sizeof_type v.vtyp
+  | String s -> Z.of_int @@ String.length s
+  | ValidAddr _ | InvalidAddr _ -> panic ~loc:__LOC__ "base_size: addresses not supported"
 
 let base_mode =
   function
-  | V v -> STRONG
-  | S s -> STRONG
-  | A a -> a.addr_mode
-  | D(a,_) -> a.addr_mode
+  | ValidVar _ | InvalidVar _ | String _ -> STRONG
+  | ValidAddr a | InvalidAddr(a,_) -> a.addr_mode
 
 
 let is_base_readonly = function
-  | S _ -> true
+  | String _ -> true
   | _ -> false
 
 
 (** Evaluate the size of a base in bytes *)
 let eval_base_size base ?(via=Z_any) range (man:('a,'t,'s) Core.Sig.Stacked.Lowlevel.man) flow =
   match base with
-  | V var when is_c_variable_length_array_type var.vtyp ->
+  | ValidVar var | InvalidVar(var,_)
+    when is_c_variable_length_array_type var.vtyp ->
     let bytes_expr = mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, mk_var var range)) range ~etyp:ul in
     man.eval ~zone:(Z_c_low_level, Z_c_scalar) ~via bytes_expr flow
 
-  | V var ->
+  | ValidVar var | InvalidVar(var,_) ->
     Eval.singleton (mk_z (sizeof_type var.vtyp) range ~typ:ul) flow
 
-  | S str ->
+  | String str ->
     Eval.singleton (mk_int (String.length str + 1) range ~typ:ul) flow
 
-  | A addr ->
+  | ValidAddr addr | InvalidAddr(addr,_)  ->
     let bytes_expr = mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, mk_addr addr range)) range ~etyp:ul in
     man.eval ~zone:(Z_c_low_level, Z_c_scalar) ~via bytes_expr flow
 
-  | D _ -> panic ~loc:__LOC__ "eval_base_size: deallocated addresses not supported"
 
 module Base =
 struct

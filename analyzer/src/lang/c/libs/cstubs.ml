@@ -118,7 +118,7 @@ struct
       man.eval ~zone:(Z_c, Z_c_points_to) p flow >>$? fun pt flow ->
 
       begin match ekind pt with
-        | E_c_points_to (P_block (A ({ addr_kind = A_stub_resource _ } as addr), _)) ->
+        | E_c_points_to (P_block (ValidAddr ({ addr_kind = A_stub_resource _ } as addr), _)) ->
           (* Remove the bytes attribute before removing the address *)
           let stmt' = mk_remove_var (mk_bytes_var addr) stmt.srange in
           let flow' = man.exec ~zone:Z_c_scalar stmt' flow in
@@ -131,7 +131,7 @@ struct
           Post.return |>
           Option.return
 
-        | E_c_points_to (P_block (D ({ addr_kind = A_stub_resource _ }, drange), _)) ->
+        | E_c_points_to (P_block (InvalidAddr ({ addr_kind = A_stub_resource _ }, drange), _)) ->
           Common.Alarms.(raise_c_double_free_alarm p drange stmt.srange (Sig.Stacked.Manager.of_domain_man man) flow) |>
           Post.return |>
           Option.return
@@ -176,7 +176,7 @@ struct
           raise_c_invalid_deref_alarm ptr range man' flow |>
           Result.empty_singleton
 
-        | E_c_points_to (P_block (D (_,r), offset)) ->
+        | E_c_points_to (P_block (InvalidAddr (_,r), offset)) ->
           raise_c_use_after_free_alarm ptr r range man' flow |>
           Result.empty_singleton
 
@@ -239,7 +239,7 @@ struct
   let eval_base_bytes base range man flow =
     let open Common.Base in
     match base with
-    | A addr ->
+    | ValidAddr addr ->
       Eval.singleton (mk_bytes addr range) flow
 
     | _ ->
@@ -325,15 +325,14 @@ struct
         Eval.bind @@ fun pt flow ->
 
         match ekind pt with
-        | E_c_points_to (P_block (V v,_)) ->
+        | E_c_points_to (P_block (ValidVar v,_)) ->
           Eval.singleton (mk_c_cast (mk_c_address_of (mk_var v exp.erange) exp.erange) (T_c_pointer T_c_void) exp.erange) flow
 
-        | E_c_points_to (P_block (S str,_)) ->
+        | E_c_points_to (P_block (String str,_)) ->
           Eval.singleton (mk_c_string str exp.erange) flow
 
-        | E_c_points_to (P_block (A addr,_)) ->
+        | E_c_points_to (P_block (ValidAddr addr,_)) ->
           Eval.singleton (mk_addr addr exp.erange) flow
-
 
         | E_c_points_to P_top ->
           Soundness.warn_at exp.erange "ignoring base computation of ⊤ pointer";
@@ -380,7 +379,7 @@ struct
       Option.return |> Option.lift @@ Eval.bind @@ fun pt flow ->
 
       begin match ekind pt with
-        | E_c_points_to (P_block (A ({ addr_kind = A_stub_resource _ } as addr), _)) ->
+        | E_c_points_to (P_block (ValidAddr ({ addr_kind = A_stub_resource _ } as addr), _)) ->
           let exp' = { exp with ekind = E_stub_attribute(mk_addr addr exp.erange, attr) }  in
           man.eval exp' flow
 
@@ -396,8 +395,8 @@ struct
       Option.return |> Option.lift @@ Eval.bind @@ fun pt flow ->
 
       begin match ekind pt with
-        | E_c_points_to (P_block (A { addr_kind = A_stub_resource res' }, _))
-        | E_c_points_to (P_block (D ({ addr_kind = A_stub_resource res' },_), _)) ->
+        | E_c_points_to (P_block (ValidAddr { addr_kind = A_stub_resource res' }, _))
+        | E_c_points_to (P_block (InvalidAddr ({ addr_kind = A_stub_resource res' },_), _)) ->
           if res = res' then
             Eval.singleton (mk_one exp.erange ~typ:u8) flow
           else

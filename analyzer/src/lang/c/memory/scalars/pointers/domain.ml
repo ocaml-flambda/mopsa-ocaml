@@ -497,8 +497,8 @@ struct
 
   (** Free an allocated address and update all pointers pointing to it *)
   let free_addr addr range man flow =
-    let base = A addr in
-    let base' = D (addr, range) in
+    let base = ValidAddr addr in
+    let base' = InvalidAddr (addr, range) in
     let flow' = map_env T_cur (fun a ->
         let a' = Map.map (fun v ->
             if not (Value.mem_base base v)
@@ -534,8 +534,8 @@ struct
 
   (** Rename a pointed address *)
   let rename_addr addr1 addr2 range man flow =
-    let base1 = A addr1 in
-    let base2 = A addr2 in
+    let base1 = ValidAddr addr1 in
+    let base2 = ValidAddr addr2 in
     map_env T_cur (Map.map (Value.rename_base base1 base2)) man flow |>
     Post.return
 

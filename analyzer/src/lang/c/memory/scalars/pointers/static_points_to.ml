@@ -81,7 +81,7 @@ let rec eval_opt exp : static_points_to option =
     Top |> Option.return
 
   | E_addr (addr) ->
-    AddrOf(A addr, mk_zero exp.erange) |> Option.return
+    AddrOf(ValidAddr addr, mk_zero exp.erange) |> Option.return
 
   | E_c_deref { ekind = E_c_address_of e } ->
     eval_opt e
@@ -89,7 +89,7 @@ let rec eval_opt exp : static_points_to option =
   | E_c_address_of e ->
     begin match remove_casts e |> ekind with
       | E_var (v, _) ->
-        AddrOf (V v, mk_zero exp.erange) |>
+        AddrOf (ValidVar v, mk_zero exp.erange) |>
         Option.return
 
       | E_constant (C_top _) ->
@@ -115,10 +115,10 @@ let rec eval_opt exp : static_points_to option =
     Fun f |> Option.return
 
   | E_constant (C_c_string (s, _)) ->
-    AddrOf(S s, mk_zero exp.erange) |> Option.return
+    AddrOf(String s, mk_zero exp.erange) |> Option.return
 
   | E_var (a, _) when is_c_array_type a.vtyp ->
-    AddrOf(V a, mk_zero exp.erange) |> Option.return
+    AddrOf(ValidVar a, mk_zero exp.erange) |> Option.return
 
   | E_c_deref a when is_c_array_type (under_type a.etyp) ->
     eval_opt a
