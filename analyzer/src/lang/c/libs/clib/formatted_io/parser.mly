@@ -52,10 +52,10 @@
 
 %}
 
-%token PLUS MINUS ZERO SHARP
+%token PLUS MINUS ZERO SHARP SPACE
 %token <int> NUM
 %token STAR DOT
-%token H HH L LL
+%token H HH L LL CAP_L
 %token D I U F G E A P S X O C
 %token EOF
 
@@ -78,7 +78,7 @@ output_placeholder_list:
   | hd=output_placeholder tl=output_placeholder_list { hd @ tl }
 
 output_placeholder:
-  | output_flag_list w=output_width p=output_precision t=typ { mk_output_placeholder w p t }
+  | output_flag_list w=output_width p=output_precision t=output_typ { mk_output_placeholder w p t }
 
 
 output_flag_list:
@@ -90,6 +90,7 @@ output_flag:
   | MINUS {  }
   | ZERO  {  }
   | SHARP {  }
+  | SPACE {  }
 
 output_width:
   | n=NUM { Some n, false }
@@ -101,23 +102,27 @@ output_precision:
   | DOT STAR  { None, true }
   |           { None, false }
 
-typ:
+output_typ:
   (* Char *)
-  | C                      { Int C_signed_char }
+  | C                      { Int C_unsigned_char }
 
   (* Signed integers *)
-  | D | H D | HH D         { Int C_signed_int }
-  | I | H I | HH I         { Int C_signed_int }
-  | L D | L I              { Int C_signed_long }
+  | HH D | HH I            { Int C_signed_char }
+  | H D  | H I             { Int C_signed_short }
+  | D    | I               { Int C_signed_int }
+  | L D  | L I             { Int C_signed_long }
   | LL D | LL I            { Int C_signed_long_long }
 
   (* Unsigned integers *)
-  | U | H U | HH U | X | O { Int C_unsigned_int }
-  | L U                    { Int C_unsigned_long }
-  | LL U                   { Int C_unsigned_long_long }
+  | HH U | HH X | HH O     { Int C_unsigned_char }
+  | H U  | H X  | H O      { Int C_unsigned_short }
+  | U    | X    | O        { Int C_unsigned_int }
+  | L U  | L X  | L O      { Int C_unsigned_long }
+  | LL U | LL X | LL O     { Int C_unsigned_long_long }
 
   (* Floats *)
-  | F | L F | E | L E | G | L G | A | L A { Float C_double }
+  | E | F | G | A          { Float C_double }
+  | CAP_L E | CAP_L F | CAP_L G | CAP_L A  { Float C_long_double }
 
   (* String and pointers *)
   | S                      { String }
@@ -137,8 +142,35 @@ input_placeholder_list:
   | hd=input_placeholder tl=input_placeholder_list   { hd :: tl }
 
 input_placeholder:
-  | w=input_width t=typ { mk_input_placeholder w t }
+  | w=input_width t=input_typ { mk_input_placeholder w t }
 
 input_width:
   | n=NUM { Some n }
   |       { None }
+
+input_typ:
+  (* Char *)
+  | C                      { Int C_unsigned_char }
+
+  (* Signed integers *)
+  | HH D | HH I            { Int C_signed_char }
+  | H D  | H I             { Int C_signed_short }
+  | D    | I               { Int C_signed_int }
+  | L D  | L I             { Int C_signed_long }
+  | CAP_L D | CAP_L I      { Int C_signed_long_long }
+
+  (* Unsigned integers *)
+  | HH U | HH X | HH O           { Int C_unsigned_char }
+  | H U  | H X  | H O            { Int C_unsigned_short }
+  | U    | X    | O              { Int C_unsigned_int }
+  | L U  | L X  | L O            { Int C_unsigned_long }
+  | CAP_L U | CAP_L X | CAP_L O  { Int C_unsigned_long_long }
+
+  (* Floats *)
+  | E | F | G | A                          { Float C_float }
+  | L E | L F | L G | L A                  { Float C_double }
+  | CAP_L E | CAP_L F | CAP_L G | CAP_L A  { Float C_long_double }
+
+  (* String and pointers *)
+  | S                      { String }
+  | P                      { Pointer }

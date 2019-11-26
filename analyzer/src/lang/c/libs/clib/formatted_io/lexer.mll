@@ -6,6 +6,11 @@
 
 let num = ['0'-'9'] ['0'-'9']*
 
+(* TODO:
+   - map z, j, t to size_t, intmax_t, ptrdiff_t instead of long long
+   - detect unsupported n, $, *
+*)
+
 rule read =
   parse
   | "%%"        { format:= false; read lexbuf }
@@ -13,14 +18,19 @@ rule read =
   | "+"         { if !format then PLUS else read lexbuf }
   | "-"         { if !format then MINUS else read lexbuf }
   | "0"         { if !format then ZERO else read lexbuf }
+  | " "         { if !format then SPACE else read lexbuf }
   | "#"         { if !format then SHARP else read lexbuf }
   | num         { if !format then NUM (int_of_string (Lexing.lexeme lexbuf)) else read lexbuf }
   | "*"         { if !format then STAR else read lexbuf }
   | "."         { if !format then DOT else read lexbuf }
-  | "hh" | "HH"	{ if !format then HH else read lexbuf }
-  | "h" | "h"   { if !format then H else read lexbuf }
-  | "ll" | "LL" { if !format then LL else read lexbuf }
-  | "l" | "L"   { if !format then L else read lexbuf }
+  | "hh" 	{ if !format then HH else read lexbuf }
+  | "h"         { if !format then H else read lexbuf }
+  | "ll"        { if !format then LL else read lexbuf }
+  | "l"         { if !format then L else read lexbuf }
+  | "L"         { if !format then CAP_L else read lexbuf }
+  | "z"         { if !format then LL else read lexbuf }
+  | "t"         { if !format then LL else read lexbuf }
+  | "j"         { if !format then LL else read lexbuf }
   | "d"         { if !format then D else read lexbuf }
   | "i"         { if !format then I else read lexbuf }
   | "u"         { if !format then U else read lexbuf }
