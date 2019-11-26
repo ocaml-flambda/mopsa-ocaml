@@ -349,8 +349,7 @@ struct
       when is_interesting_base (ValidAddr addr1) &&
            is_interesting_base (ValidAddr addr2)
       ->
-      rename_base (ValidAddr addr1) (ValidAddr addr2) stmt.srange man flow >>=? fun _ flow ->
-      man.post ~zone:Z_c_scalar stmt flow |>
+      rename_base (ValidAddr addr1) (ValidAddr addr2) stmt.srange man flow |>
       Option.return
 
     | S_assign({ ekind = E_c_deref p} as lval, rval) when is_c_pointer_type lval.etyp ->
