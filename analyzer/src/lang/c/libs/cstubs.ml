@@ -334,8 +334,6 @@ struct
         | E_c_points_to (P_block (A addr,_)) ->
           Eval.singleton (mk_addr addr exp.erange) flow
 
-        | E_c_points_to (P_block (Z,_)) ->
-          Eval.singleton (mk_c_cast (mk_top u32 exp.erange) (T_c_pointer T_c_void) exp.erange) flow
 
         | E_c_points_to P_top ->
           Soundness.warn_at exp.erange "ignoring base computation of ⊤ pointer";

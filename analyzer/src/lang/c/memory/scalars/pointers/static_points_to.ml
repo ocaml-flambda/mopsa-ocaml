@@ -137,7 +137,7 @@ let rec eval_opt exp : static_points_to option =
     Eval (v, mode, mk_zero exp.erange) |> Option.return
 
   | x when is_c_int_type exp.etyp ->
-    AddrOf(Common.Base.Z, exp) |> Option.return
+    Invalid |> Option.return
 
   | _ ->
     warn_at exp.erange "evaluation of pointer expression %a not supported" pp_expr exp;

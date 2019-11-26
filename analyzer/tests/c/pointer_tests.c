@@ -75,13 +75,6 @@ void test_null_deref() {
   _mopsa_assert_unsafe();
 }
 
-void test_compare_pointers_with_int_values() {
-  int *p = (int*)1;
-  int *q = (int*)2;
-  int *r = (int*)1;
-  _mopsa_assert(p != q);
-  _mopsa_assert(p == r);
-}
 
 /*
  * Pointers to arrays
