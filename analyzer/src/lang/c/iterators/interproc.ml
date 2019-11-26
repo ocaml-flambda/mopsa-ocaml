@@ -75,23 +75,23 @@ struct
   let exec zone stmt man flow =
     match skind stmt with
     | S_c_return (Some e,upd) ->
-      let range = stmt.srange in
-      let ret, rrange = Context.find_unit return_key (Flow.get_ctx flow) in
+      let ret = Context.find_unit return_key (Flow.get_ctx flow) in
+      let rrange = get_last_call_site flow in
       let flow =
         man.exec (mk_add_var ret rrange) flow |>
-        man.exec (mk_assign (mk_var ret rrange) e range) |>
-        update_scope upd range man
+        man.exec (mk_assign (mk_var ret rrange) e rrange) |>
+        update_scope upd rrange man
       in
       let cur = Flow.get T_cur man.lattice flow in
-      Flow.add (T_return (range, true)) cur man.lattice flow |>
+      Flow.add (T_return (stmt.srange, true)) cur man.lattice flow |>
       Flow.remove T_cur |>
       Post.return |> Option.return
 
     | S_c_return (None,upd) ->
-      let range = stmt.srange in
-      let flow = update_scope upd range man flow in
+      let rrange = get_last_call_site flow in
+      let flow = update_scope upd rrange man flow in
       let cur = Flow.get T_cur man.lattice flow in
-      Flow.add (T_return (range, false)) cur man.lattice flow |>
+      Flow.add (T_return (stmt.srange, false)) cur man.lattice flow |>
       Flow.remove T_cur |>
       Post.return |> Option.return
 

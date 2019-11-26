@@ -25,6 +25,7 @@ open Mopsa
 open Framework.Core.Sig.Stacked.Manager
 open Universal.Numeric.Common
 open Base
+open Ast
 
 
 type alarm_class +=
@@ -322,7 +323,16 @@ let () =
             Z.pp_print (Z.pred bits)
 
         | A_c_dangling_deref(p,v,r) ->
-          Format.fprintf fmt "%a points to %a which lifetime ended after %a" pp_expr p pp_var v pp_range r
+          begin match v.vkind with
+            | V_cvar { cvar_scope = Variable_local f }
+            | V_cvar { cvar_scope = Variable_parameter f }->
+              Format.fprintf fmt "%a points to dangling local variable %a of function %s called at %a"
+                pp_expr p pp_var v f.c_func_org_name pp_range r
+
+            | _ ->
+              Format.fprintf fmt "%a points to dangling local variable %a"
+                pp_expr p pp_var v
+          end
 
         | _ -> next fmt a
       );

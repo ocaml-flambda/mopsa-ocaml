@@ -66,7 +66,8 @@ struct
     let range = stmt.srange in
     match skind stmt with
     | S_return (Some e) ->
-      let ret, rrange = Context.find_unit return_key (Flow.get_ctx flow) in
+      let ret = Context.find_unit return_key (Flow.get_ctx flow) in
+      let rrange = get_last_call_site flow in
       let flow =
         man.exec (mk_add_var ret rrange) flow |>
         man.exec (mk_assign (mk_var ret rrange) e range) in
