@@ -57,25 +57,32 @@ let eval_format_string format range man flow =
     assume (mk_binop offset O_eq (mk_zero (erange offset)) (erange offset))
       ~fthen:(fun flow -> Result.singleton fmt flow)
       ~felse:(fun flow ->
-          Soundness.warn_at range "unsupported format string";
+          Soundness.warn_at range "unsupported format string: non-constant";
           Result.empty_singleton flow)
       ~zone:Z_c_scalar man flow
 
   | _ ->
-    Soundness.warn_at range "unsupported format string";
+    Soundness.warn_at range "unsupported format string: non-constant";
     Result.empty_singleton flow
 
 
+(** Parse a format according to parser *)
+let parse_format parser (format:expr) range man flow =
+  eval_format_string format range man flow >>$ fun fmt flow ->
+  let lex = Lexing.from_string fmt in
+  try
+    let placeholders = parser Lexer.read lex in
+    Result.singleton placeholders flow
+  with _ ->
+    (* lexer / parser error *)
+    Soundness.warn_at range "unsupported format string: char %i of \"%s\""
+      lex.lex_start_p.pos_cnum fmt;
+    Result.empty_singleton flow
+
 (** Parse an output format *)
 let parse_output_format (format:expr) range man flow =
-  eval_format_string format range man flow >>$ fun fmt flow ->
-  let placeholders = Parser.parse_output_format Lexer.read (Lexing.from_string fmt) in
-  Result.singleton placeholders flow
-
-
+  parse_format Parser.parse_output_format format range man flow
 
 (** Parse an input format *)
 let parse_input_format (format:expr) range man flow =
-  eval_format_string format range man flow >>$ fun fmt flow ->
-  let placeholders = Parser.parse_input_format Lexer.read (Lexing.from_string fmt) in
-  Result.singleton placeholders flow
+  parse_format Parser.parse_input_format format range man flow

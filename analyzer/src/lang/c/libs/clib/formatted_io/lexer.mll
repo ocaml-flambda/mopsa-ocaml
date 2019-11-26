@@ -31,18 +31,16 @@ rule read =
   | "z"         { if !format then LL else read lexbuf }
   | "t"         { if !format then LL else read lexbuf }
   | "j"         { if !format then LL else read lexbuf }
-  | "d"         { if !format then D else read lexbuf }
-  | "i"         { if !format then I else read lexbuf }
-  | "u"         { if !format then U else read lexbuf }
-  | "f" | "F"   { if !format then F else read lexbuf }
-  | "g" | "G"   { if !format then G else read lexbuf }
-  | "a" | "A"   { if !format then A else read lexbuf }
-  | "p"         { if !format then P else read lexbuf }
-  | "s"		{ if !format then S else read lexbuf }
-  | "x" | "X"	{ if !format then X else read lexbuf }
-  | "o"	  	{ if !format then O else read lexbuf }
-  | "c" 	{ if !format then C else read lexbuf }
+  | "d"         { if !format then (format := false; D) else read lexbuf }
+  | "i"         { if !format then (format := false; I) else read lexbuf }
+  | "u"         { if !format then (format := false; U) else read lexbuf }
+  | "f" | "F"   { if !format then (format := false; F) else read lexbuf }
+  | "g" | "G"   { if !format then (format := false; G) else read lexbuf }
+  | "a" | "A"   { if !format then (format := false; A) else read lexbuf }
+  | "p"         { if !format then (format := false; P) else read lexbuf }
+  | "s"		{ if !format then (format := false; S) else read lexbuf }
+  | "x" | "X"	{ if !format then (format := false; X) else read lexbuf }
+  | "o"	  	{ if !format then (format := false; O) else read lexbuf }
+  | "c" 	{ if !format then (format := false; C) else read lexbuf }
   | eof         { EOF }
   | _           { format := false; read lexbuf }
-
-
