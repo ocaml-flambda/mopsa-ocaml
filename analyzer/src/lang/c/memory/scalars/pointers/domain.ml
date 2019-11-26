@@ -60,7 +60,7 @@ struct
 
   let interface = {
     iexec = {
-      provides = [Z_c_scalar];
+      provides = [Z_c_scalar; Z_c_points_to];
       uses = [Z_c_scalar; Universal.Zone.Z_u_num];
     };
 
@@ -458,7 +458,7 @@ struct
 
 
   (* Declaration of a scalar pointer variable *)
-  let declare_var v init scope range man flow =
+  let declare_pointer_var v init scope range man flow =
     match scope, init with
     (** Uninitialized global variable *)
     | Variable_global, None | Variable_file_static _, None ->
@@ -480,45 +480,21 @@ struct
 
 
   (** Add a pointer variable to the support of the non-rel map *)
-  let add_var p range man flow =
+  let add_pointer_var p range man flow =
     let o = mk_offset p STRONG range in
     map_env T_cur (Map.add p Value.top) man flow |>
     man.post ~zone:(Universal.Zone.Z_u_num) (mk_add o range)
 
 
-
   (** Remove a pointer variable from the support of the non-rel map *)
-  let remove_var p range man flow =
+  let remove_pointer_var p range man flow =
     let flow = map_env T_cur (Map.remove p) man flow in
     let o = mk_offset p STRONG range in
     man.post ~zone:(Universal.Zone.Z_u_num) (mk_remove o range) flow
 
 
-
-  (** Free an allocated address and update all pointers pointing to it *)
-  let free_addr addr range man flow =
-    let base = ValidAddr addr in
-    let base' = InvalidAddr (addr, range) in
-    let flow' = map_env T_cur (fun a ->
-        let a' = Map.map (fun v ->
-            if not (Value.mem_base base v)
-            then v
-            else
-            if addr.addr_mode = STRONG
-            then Value.remove_base base v |>
-                 Value.add_base base'
-            else Value.add_base base' v
-          ) a
-        in
-        a'
-      ) man flow
-    in
-    Post.return flow'
-
-
-
   (** Rename a pointer variable *)
-  let rename_var p1 p2 range man flow =
+  let rename_pointer_var p1 p2 range man flow =
     let flow' = map_env T_cur (Map.rename p1 p2) man flow in
 
     (* Rename the offset if present *)
@@ -531,13 +507,46 @@ struct
       Post.return flow'
 
 
+  (** Rename a base *)
+  let exec_rename_base e e' range man flow =
+    let base = match ekind e with
+      | E_var (v,_) -> ValidVar v
+      | E_addr a -> ValidAddr a
+      | _ -> assert false
+    in
+    let base' = match ekind e' with
+      | E_var (v,_) -> ValidVar v
+      | E_addr a -> ValidAddr a
+      | _ -> assert false
+    in
+   map_env T_cur (Map.map (Value.rename_base base base')) man flow |>
+   Post.return
+    
 
-  (** Rename a pointed address *)
-  let rename_addr addr1 addr2 range man flow =
-    let base1 = ValidAddr addr1 in
-    let base2 = ValidAddr addr2 in
-    map_env T_cur (Map.map (Value.rename_base base1 base2)) man flow |>
-    Post.return
+
+  (** Remove a base *)
+  let exec_remove_base e range man flow =
+    let valid_base, invalid_base = match ekind e with
+      | E_var (v,_) -> ValidVar v, InvalidVar (v,range)
+      | E_addr a -> ValidAddr a, InvalidAddr(a,range)
+      | _ -> assert false
+    in
+    let flow = map_env T_cur (fun a ->
+        let a' = Map.map (fun v ->
+            if not (Value.mem_base valid_base v)
+            then v
+            else
+            if base_mode valid_base = STRONG
+            then Value.remove_base valid_base v |>
+                 Value.add_base invalid_base
+            else Value.add_base invalid_base v
+          ) a
+        in
+        a'
+      ) man flow
+    in
+    Post.return flow
+
 
 
   (** Filter equal pointers *)
@@ -665,7 +674,7 @@ struct
   let exec zone stmt man flow =
     match skind stmt with
     | S_c_declaration(p,init,scope) when is_c_pointer_type p.vtyp ->
-      declare_var p init scope stmt.srange man flow |>
+      declare_pointer_var p init scope stmt.srange man flow |>
       Option.return
 
     | S_assign({ekind = E_var(p, mode)}, q) when is_c_pointer_type p.vtyp ->
@@ -673,27 +682,29 @@ struct
       Option.return
 
     | S_add { ekind = E_var (p, _) } when is_c_pointer_type p.vtyp ->
-      add_var p stmt.srange man flow |>
+      add_pointer_var p stmt.srange man flow |>
+      Option.return
+
+    | S_remove e when zone = Z_c_points_to ->
+      exec_remove_base e stmt.srange man flow |>
+      Option.return
+
+    | S_rename(e,e') when zone = Z_c_points_to ->
+      exec_rename_base e e' stmt.srange man flow |>
       Option.return
 
     | S_remove { ekind = E_var (p, _) } when is_c_pointer_type p.vtyp ->
-      remove_var p stmt.srange man flow |>
+      remove_pointer_var p stmt.srange man flow |>
       Option.return
 
-    | S_remove { ekind = E_addr addr } ->
-      free_addr addr stmt.srange man flow |>
-      Option.return
 
     | S_rename({ekind = E_var (p1, _)}, {ekind = E_var (p2, _)})
       when is_c_pointer_type p1.vtyp &&
            is_c_pointer_type p2.vtyp
       ->
-      rename_var p1 p2 stmt.srange man flow |>
+      rename_pointer_var p1 p2 stmt.srange man flow |>
       Option.return
 
-    | S_rename ({ekind = E_addr addr1}, {ekind = E_addr addr2}) ->
-      rename_addr addr1 addr2 stmt.srange man flow |>
-      Option.return
 
     (* S⟦ ?(p == q) ⟧ *)
     | S_assume({ ekind = E_binop(O_eq, p, q) })

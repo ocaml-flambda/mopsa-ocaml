@@ -596,6 +596,10 @@ struct
       raise_c_use_after_free_alarm ptr r range man flow |>
       Result.empty_singleton
 
+    | E_c_points_to (P_block (InvalidVar (v,r), offset)) ->
+      raise_c_dangling_deref_alarm ptr v r range man flow |>
+      Result.empty_singleton
+
     | E_c_points_to (P_block (base, offset)) ->
       Result.singleton (Some (base, offset)) flow
 
@@ -1201,22 +1205,14 @@ struct
     Post.bind @@ fun flow ->
 
     (* Remove base1 and add base2 *)
-    let flow = map_env T_cur (fun a ->
+    map_env T_cur (fun a ->
         {
           a with
           bases = BaseSet.remove base1 a.bases |>
                   BaseSet.add base2;
         }
-      ) man flow
-    in
-
-    (* Forward the rename statement to scalar domains in case of addresses *)
-    match base1, base2 with
-    | ValidAddr addr1, ValidAddr addr2 ->
-      man.post ~zone:Z_c_scalar (mk_rename (mk_addr addr1 range) (mk_addr addr2 range) range) flow
-
-    | _ ->
-      Post.return flow
+      ) man flow |>
+    Post.return
 
 
   (* 𝕊⟦ rename target[i1][i2]...[in]' into target[i1][i2]...[in],
@@ -1373,6 +1369,10 @@ struct
 
     | S_remove { ekind = E_var (v, _) } when is_c_type v.vtyp ->
       exec_remove (ValidVar v) stmt.srange man flow |>
+      Option.return
+
+    | S_remove { ekind = E_addr a } ->
+      exec_remove (ValidAddr a) stmt.srange man flow |>
       Option.return
 
     | S_rename({ ekind = E_var (v1, _) }, { ekind = E_var (v2, _) }) ->

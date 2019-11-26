@@ -46,7 +46,7 @@ struct
   let interface= {
     iexec = {
       provides = [Z_c];
-      uses = [Z_c; Z_c_scalar; Z_c_low_level; Z_u_num]
+      uses = [Z_c; Z_c_scalar; Z_c_low_level; Z_u_num; Z_c_points_to]
     };
 
     ieval = {
@@ -159,6 +159,7 @@ struct
       let bytes2 = mk_bytes_var addr2 in
       man.exec ~zone:Z_c_scalar (mk_rename_var bytes1 bytes2 stmt.srange) flow |>
       man.exec ~zone:Z_c_low_level stmt |>
+      man.exec ~zone:Z_c_points_to stmt |>
       Post.return |>
       Option.return
 
@@ -180,6 +181,9 @@ struct
           raise_c_use_after_free_alarm ptr r range man' flow |>
           Result.empty_singleton
 
+        | E_c_points_to (P_block (InvalidVar (v,r), offset)) ->
+          raise_c_dangling_deref_alarm ptr v r range man' flow |>
+          Result.empty_singleton
 
         | E_c_points_to P_top ->
           Soundness.warn_at range "ignoring requirement check due to ⊤ pointer %a" pp_expr ptr;

@@ -40,7 +40,7 @@ type alarm_class +=
   | A_c_double_free_cls
   | A_c_no_next_va_arg_cls
   | A_c_read_only_modification_cls
-
+  | A_c_dangling_deref_cls
 
 type alarm_body +=
   | A_c_out_of_bound of base (** accessed base *) * int_itv (** offset interval *) * int_itv (** base_size *)
@@ -55,6 +55,7 @@ type alarm_body +=
   | A_c_illegal_pointer_compare of expr (** first pointer *) * expr (** second pointer *)
   | A_c_divide_by_zero of expr (** denominator *)
   | A_c_invalid_bit_shift of expr (** shift expression *) * int_itv (** shift value *) * typ (** shifted type *)
+  | A_c_dangling_deref of expr (** pointer *) * var (** pointed variable *) * range (** return location *)
 
 
 let raise_c_out_bound_alarm ~base ~offset ~size range man flow =
@@ -134,6 +135,11 @@ let raise_c_invalid_bit_shift_alarm shift typ range man flow =
   let alarm = mk_alarm (A_c_invalid_bit_shift(shift',shift_itv,typ)) range ~cs in
   Flow.raise_alarm alarm ~bottom:true man.lattice flow
 
+let raise_c_dangling_deref_alarm ptr var ret_range range man flow =
+  let cs = Flow.get_callstack flow in
+  let ptr' = get_orig_expr ptr in
+  let alarm = mk_alarm (A_c_dangling_deref(ptr',var,ret_range)) range ~cs in
+  Flow.raise_alarm alarm ~bottom:true man.lattice flow
 
 let () =
   register_alarm_class (fun default fmt a ->
@@ -150,6 +156,7 @@ let () =
       | A_c_no_next_va_arg_cls -> Format.fprintf fmt "No next argument for va_arg"
       | A_c_invalid_bit_shift_cls -> Format.fprintf fmt "Invald bit-shift"
       | A_c_read_only_modification_cls -> Format.fprintf fmt "Modification of a readonly memory"
+      | A_c_dangling_deref_cls -> Format.fprintf fmt "Dangling pointer dereference"
       | _ -> default fmt a
     )
 
@@ -169,6 +176,7 @@ let () =
         | A_c_no_next_va_arg _ -> A_c_no_next_va_arg_cls
         | A_c_invalid_bit_shift _ -> A_c_invalid_bit_shift_cls
         | A_c_read_only_modification _ -> A_c_read_only_modification_cls
+        | A_c_dangling_deref _ -> A_c_dangling_deref_cls
         | _ -> next a
       );
     compare = (fun next a1 a2 ->
@@ -233,6 +241,13 @@ let () =
             (fun () -> compare_expr e1 e2);
             (fun () -> compare_int_interval i1 i2);
             (fun () -> compare_typ t1 t2);
+          ]
+
+        | A_c_dangling_deref(p1,v1,r1), A_c_dangling_deref(p2,v2,r2) ->
+          Compare.compose [
+            (fun () -> compare_expr p1 p2);
+            (fun () -> compare_var v1 v2);
+            (fun () -> compare_range r1 r2);
           ]
 
         | _ -> next a1 a2
@@ -305,6 +320,9 @@ let () =
             pp_const_or_interval_not_eq i
             pp_typ t
             Z.pp_print (Z.pred bits)
+
+        | A_c_dangling_deref(p,v,r) ->
+          Format.fprintf fmt "%a points to %a which lifetime ended after %a" pp_expr p pp_var v pp_range r
 
         | _ -> next fmt a
       );
