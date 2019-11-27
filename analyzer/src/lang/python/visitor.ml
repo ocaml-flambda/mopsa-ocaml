@@ -76,6 +76,13 @@ let () =
                          | _ -> assert false in
                        {exp with ekind = E_py_ll_getattr(e1, e2)})
 
+      | E_py_ll_setattr(e1, e2, e3) ->
+        {exprs = [e1; e2; e3]; stmts = [];},
+        (fun parts -> let e1, e2, e3 = match parts.exprs with
+             | [e1; e2; e3] -> e1, e2, e3
+             | _ -> assert false in
+           {exp with ekind = E_py_ll_setattr(e1, e2, e3)})
+
       | E_py_undefined _ -> leaf exp
 
       | E_py_object _ -> leaf exp

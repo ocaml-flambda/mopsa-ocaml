@@ -175,9 +175,22 @@ module Domain =
              )
          |> Option.return
 
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "setattr")}, _)}, [lval; attr; rval], []) ->
+        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_attr lval "__setattr__" range) [attr; rval] range) flow
+        |> Option.return
+
       | _ -> None
 
-    let exec _ _ _ _ = None
+    let exec zone stmt man flow =
+      let range = stmt.srange in
+      match skind stmt with
+      | S_assign({ekind = E_py_attribute(lval, attr)}, rval) ->
+        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_attr lval "__setattr__" range) [mk_constant T_any (C_string attr) range; rval] range) flow
+        |> Eval.bind (fun e flow -> Post.return flow)
+        |> Option.return
+
+      | _ -> None
+
     let ask _ _ _ = None
   end
 

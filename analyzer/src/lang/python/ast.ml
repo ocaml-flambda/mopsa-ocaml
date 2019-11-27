@@ -212,6 +212,8 @@ type expr_kind +=
   | E_py_ll_hasattr of expr (** object *) * expr (** attribute name *)
   (** low-level attribute access working at the object level only *)
   | E_py_ll_getattr of expr (** object *) * expr (** attribute name *)
+  (** low-level attribute setter working at the object level only *)
+  | E_py_ll_setattr of expr (** object *) * expr (** attribute name *) * expr (* expression to bind to obj.attr *)
 
 
 (*==========================================================================*)
