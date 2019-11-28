@@ -192,8 +192,12 @@ struct
           Eval.singleton (mk_py_bool (List.exists (fun v -> get_orig_vname v = attr) globals) range) flow
         | A_py_class (C_builtin _, _)
         | A_py_class (C_annot _, _)
+        | A_py_function (F_builtin _)
         | A_py_module _ ->
           Eval.singleton (mk_py_bool (is_builtin_attribute (object_of_expr e) attr) range) flow
+
+        | A_py_function f ->
+          Eval.singleton (mk_py_false range) flow
 
         | A_py_class (C_user c, b) ->
           Eval.singleton (mk_py_bool (List.exists (fun v -> get_orig_vname v = attr) c.py_cls_static_attributes) range) flow
@@ -237,7 +241,7 @@ struct
           Eval.singleton (mk_py_false range) flow
 
         | _ ->
-          Exceptions.panic_at range "%a@\n" pp_expr e
+          Exceptions.panic_at range "has %a attr %s?@\n" pp_expr e attr
       end
       |> Option.return
 

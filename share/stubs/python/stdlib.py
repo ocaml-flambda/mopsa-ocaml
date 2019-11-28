@@ -58,6 +58,7 @@ class object:
 
 class type(object):
     def __new__(cls, args): pass
+    def __getattribute__(self, attr): pass
     def __init__(self): pass
     def __call__(self, args): pass
     def __repr__(self): pass
