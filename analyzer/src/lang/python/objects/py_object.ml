@@ -72,6 +72,8 @@ struct
       man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range) flow |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__getattribute__")}, _)}, [instance; attribute], []) ->
+
+
       assume (mk_expr (E_py_ll_hasattr (instance, attribute)) range)
         ~fthen:(fun flow ->
             debug "instance attribute found locally@\n";
@@ -172,7 +174,11 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__setattr__")}, _)}, [lval; attr; rval], []) ->
       (* FIXME: data descriptors usw *)
-      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_setattr (lval, attr, rval)) range) flow
+      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_setattr (lval, attr, Some rval)) range) flow
+      |> Option.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__delattr__")}, _)}, [lval; attr], []) ->
+      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_setattr (lval, attr, None)) range) flow
       |> Option.return
 
     | _ -> None

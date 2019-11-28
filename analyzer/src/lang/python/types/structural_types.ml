@@ -282,7 +282,7 @@ struct
       end
       |> Option.return
 
-    | E_py_ll_setattr({ekind = E_py_object (alval, objexpr)} as lval, attr, rval) ->
+    | E_py_ll_setattr({ekind = E_py_object (alval, objexpr)} as lval, attr, Some rval) ->
       let attr = match ekind attr with
         | E_constant (C_string s) -> s
         | E_py_object (_, Some {ekind = E_constant (C_string s)}) -> s
@@ -314,6 +314,9 @@ struct
 
         | _ -> assert false
       end
+
+    | E_py_ll_setattr({ekind = E_py_object (alval, objexpr)} as lval, attr, None) ->
+      panic_at range "attribute deletion unsupported yet"
 
     | _ ->
       None

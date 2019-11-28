@@ -179,6 +179,11 @@ module Domain =
         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_attr lval "__setattr__" range) [attr; rval] range) flow
         |> Option.return
 
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "delattr")}, _)}, [lval; attr], []) ->
+        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_attr lval "__delattr__" range) [attr] range) flow
+        |> Option.return
+
+
       | _ -> None
 
     let exec zone stmt man flow =

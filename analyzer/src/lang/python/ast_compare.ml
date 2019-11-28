@@ -44,11 +44,11 @@ let () =
         Compare.compose
           [ (fun () -> compare_expr e11 e21);
             (fun () -> compare_expr e21 e22); ]
-      | E_py_ll_setattr (e11, e12, e13), E_py_ll_setattr (e21, e22, e23) ->
+      | E_py_ll_setattr (e11, e12, oe13), E_py_ll_setattr (e21, e22, oe23) ->
         Compare.compose
           [ (fun () -> compare_expr e11 e21);
             (fun () -> compare_expr e21 e22);
-            (fun () -> compare_expr e13 e23); ]
+            (fun () -> Option.compare compare_expr oe13 oe23); ]
       | E_py_annot e1, E_py_annot e2 -> compare_expr e1 e2
       | E_py_undefined b1, E_py_undefined b2 -> Pervasives.compare b1 b2
       | E_py_object (a1, oe1), E_py_object (a2, oe2) ->
