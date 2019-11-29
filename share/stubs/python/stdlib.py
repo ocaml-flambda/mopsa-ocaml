@@ -68,8 +68,11 @@ class type(object):
 class function(object):
     def __new__(cls, args): pass
     def __call__(self, args): pass
-    def __get__(self): pass
+    # def __get__(self): pass
     def __repr__(self): pass
+
+# class builtin_function_or_method(object):
+#     def __call__(self, args): pass
 
 class method(object):
     def __new__(cls, args): pass
