@@ -19,6 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
+
 (** Lattice of partial inversible maps with heterogeneous support sets. *)
 
 
@@ -233,10 +234,9 @@ struct
       | BOT -> BOT
       | TOP -> TOP
       | Nbt m ->
-        if KeySet.mem k m.top_keys then a else
         match vs with
         | TOP -> Nbt { top_keys = KeySet.add k m.top_keys; relations = Relation.remove_image k m.relations }
-        | Nt vs -> Nbt { m with relations = Relation.add_image_set k vs m.relations }
+        | Nt vs -> Nbt { top_keys = KeySet.remove k m.top_keys; relations = Relation.set_image k vs m.relations }
 
 
   let rename (k: Key.t) (k': Key.t) (a:t) : t =
