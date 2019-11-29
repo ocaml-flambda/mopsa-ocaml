@@ -113,7 +113,7 @@ char *bind_textdomain_codeset (const char *__domainname, const char *__codeset);
 char _gettext_buf[GETTEXT_BUF_SIZE];
 
 #if IDENTITY_GETTEXT
-char *gettext (const char *__msgid) { return __msgid; }
+char *gettext (const char *__msgid) { return (char*)__msgid; }
 #else
 /*$
  * requires: valid_string(__msgid);
@@ -134,7 +134,7 @@ char *gettext (const char *__msgid);
 #if IDENTITY_GETTEXT
 char *dcgettext (const char *__domainname, const char *__msgid,
 		 int __category)
-{ return __msgid; }
+{ return (char*)__msgid; }
 #else
 /*$
  * requires: valid_string(__msgid);
