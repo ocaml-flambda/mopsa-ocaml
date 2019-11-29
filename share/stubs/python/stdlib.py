@@ -50,6 +50,7 @@ class object:
 
     def __format__(self): pass
     def __getattribute__(self, attr): pass
+    def __delattr__(self, attr): pass
     def __hash__(self, attr): pass
     def __reduce__(self): pass
     def __setattr__(self, attr, v): pass
@@ -59,6 +60,7 @@ class object:
 class type(object):
     def __new__(cls, args): pass
     def __getattribute__(self, attr): pass
+    def __setattr__(self, attr): pass
     def __init__(self): pass
     def __call__(self, args): pass
     def __repr__(self): pass

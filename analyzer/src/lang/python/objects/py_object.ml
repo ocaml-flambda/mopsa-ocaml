@@ -90,6 +90,11 @@ struct
           in search_mro mro flow)
       |> Option.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "type.__setattr__")}, _)}, [lval; attr; rval], []) ->
+      (* FIXME: data descriptors *)
+      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_setattr (lval, attr, Some rval)) range) flow
+      |> Option.return
+
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__getattribute__")}, _)}, [instance; attribute], []) ->
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type instance range) flow |>
       Eval.bind (fun class_of_exp flow ->
@@ -114,10 +119,14 @@ struct
                     man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_getattr (mk_py_object cls range, attribute)) range) flow |>
                     Eval.bind (fun obj' flow ->
                         assume
-                          (mk_binop (mk_expr (E_py_ll_hasattr (obj', (mk_string "__get__" range))) range) O_py_and (mk_expr (E_py_ll_hasattr (obj', (mk_string "__set__" range))) range) range) (* FIXME: __set__ or __del__ *)
+                          (mk_binop (mk_py_hasattr obj' "__get__" range) O_py_and (mk_py_hasattr obj' "__set__" range) range)
+                       (* FIXMES:
+                          1) it's __set__ or __del__
+                          2) also,  GenericGetAttrWithDict uses low level field accesses (like descr->ob_type->tp_descr_get), but these fields get inherited during type creation according to the doc, so even a low-level access actually is something more complicated. The clean fix would be to handle this at class creation for special fields.
+                       *)
                           man flow
                           ~fthen:(fun flow ->
-                              man.eval (mk_py_call (mk_expr (E_py_ll_getattr (obj', (mk_string "__get__" range))) range) [obj'; instance; class_of_exp] range) flow
+                              man.eval (mk_py_call (mk_py_attr obj' "__get__" range) [instance; class_of_exp] range) flow
                             )
                           ~felse:(fun flow ->
                               assume
@@ -146,12 +155,61 @@ struct
       |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__setattr__")}, _)}, [lval; attr; rval], []) ->
-      (* FIXME: data descriptors usw *)
-      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_setattr (lval, attr, Some rval)) range) flow
+      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type lval range) flow |>
+      Eval.bind (fun class_of_lval flow ->
+          let mro = mro (object_of_expr class_of_lval) in
+          let rec search_mro mro flow = match mro with
+            | [] ->
+              man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_setattr (lval, attr, Some rval)) range) flow
+            | cls :: tl ->
+              assume
+                (mk_expr (E_py_ll_hasattr (mk_py_object cls range, attr)) range)
+                man flow
+                ~fthen:(fun flow ->
+                    man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_getattr (mk_py_object cls range, attr)) range) flow |>
+                    Eval.bind (fun obj' flow ->
+                        assume (mk_py_hasattr obj' "__set__" range)
+                          man flow
+                          ~fthen:(fun flow ->
+                              man.eval (mk_py_call (mk_py_attr obj' "__set__" range) [lval; rval] range) flow
+                            )
+                          ~felse:(
+                            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_setattr (lval, attr, Some rval)) range)
+                          )
+                      )
+                  )
+                ~felse:(search_mro tl)
+          in search_mro mro flow
+        )
       |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__delattr__")}, _)}, [lval; attr], []) ->
-      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_setattr (lval, attr, None)) range) flow
+      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type lval range) flow |>
+      Eval.bind (fun class_of_lval flow ->
+          let mro = mro (object_of_expr class_of_lval) in
+          let rec search_mro mro flow = match mro with
+            | [] ->
+              man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_setattr (lval, attr, None)) range) flow
+            | cls :: tl ->
+              assume
+                (mk_expr (E_py_ll_hasattr (mk_py_object cls range, attr)) range)
+                man flow
+                ~fthen:(fun flow ->
+                    man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_getattr (mk_py_object cls range, attr)) range) flow |>
+                    Eval.bind (fun obj' flow ->
+                        assume (mk_py_hasattr obj' "__delete__" range)
+                          man flow
+                          ~fthen:(fun flow ->
+                              man.eval (mk_py_call (mk_py_attr obj' "__delete__" range) [lval] range) flow
+                            )
+                          ~felse:(
+                            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_setattr (lval, attr, None)) range)
+                          )
+                      )
+                  )
+                ~felse:(search_mro tl)
+          in search_mro mro flow
+        )
       |> Option.return
 
     | _ -> None

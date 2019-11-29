@@ -258,10 +258,9 @@ struct
       man.eval (mk_py_none range) flow
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "print")}, _)}, [obj], [])  ->
-      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) obj flow |>
-      Eval.bind (fun eobj flow ->
-          man.eval (mk_py_none range) flow)
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "print")}, _)}, objs, [])  ->
+      bind_list objs (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+      bind_some (fun eobj flow -> man.eval (mk_py_none range) flow)
       |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "hash")}, _)}, args, []) ->

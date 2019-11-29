@@ -80,6 +80,8 @@ struct
              proceed "module"
            | E_py_object ({addr_kind = A_py_method _}, _) ->
              proceed "method"
+           | E_py_object ({addr_kind = A_py_function _}, _) ->
+             proceed "function"
            | E_py_object ({addr_kind = A_py_class _}, _) ->
              proceed "type"
            | _ -> Exceptions.panic_at range "type: todo: %a@\n" pp_expr arg
