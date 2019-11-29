@@ -33,7 +33,7 @@ end
 
 module Make(Elt: ELT) =
 struct
-  module Set = Set.Make(Elt)
+  module Set = SetExt.Make(Elt)
 
   type v = Set.t
 

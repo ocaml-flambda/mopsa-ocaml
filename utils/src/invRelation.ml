@@ -139,6 +139,9 @@ module Make(Dom: OrderedType)(CoDom: OrderedType) = struct
   let mem x y r =
     CoDomSet.mem y (image x r)
 
+  let mem_domain x r =
+    DomMap.mem x r.img
+
         
   let of_list l =
     List.fold_left (fun r (x,y) -> add x y r) empty l

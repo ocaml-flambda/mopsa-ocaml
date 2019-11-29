@@ -19,7 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Abstraction of sets of partial maps. *)
+(** Lattice of partial maps with heterogeneous support sets. *)
 
 open Bot_top
 open Core.Lattice

@@ -31,143 +31,143 @@ open Zone
 open Universal.Zone
 open Common.Points_to
 open Common.Base
+open Top
 
 
 
 (** {2 Pointer values} *)
 (** ****************** *)
+module PointerValue =
+struct
 
-type ptr =
-  | Null (** Null pointer *)
-  | Invalid (** Invalid pointer, such as non-null integers casted to pointers *)
-  | Base of base (** Pointer to a base (i.e. a memory block) *)
-  | Fun of c_fundec (** Function pointer *)
+  type t =
+    | Null (** Null pointer *)
+    | Invalid (** Invalid pointer, such as non-null integers casted to pointer *)
+    | Base of base (** Pointer to a base (i.e. a memory block) *)
+    | Fun of c_fundec (** Function pointer *)
 
-let compare_pointer p1 p2 =
-  match p1, p2 with
-  | Null, Null -> 0
-  | Invalid, Invalid -> 0
-  | Base b1, Base b2 -> compare_base b1 b2
-  | Fun f1, Fun f2 -> compare f1.c_func_unique_name f2.c_func_unique_name
-  | _ -> compare p1 p2
+  let compare p1 p2 =
+    match p1, p2 with
+    | Null, Null -> 0
+    | Invalid, Invalid -> 0
+    | Base b1, Base b2 -> compare_base b1 b2
+    | Fun f1, Fun f2 -> compare f1.c_func_unique_name f2.c_func_unique_name
+    | _ -> compare p1 p2
 
-let pp_pointer fmt v =
-  match v with
-  | Null -> Format.pp_print_string fmt "NULL"
-  | Invalid -> Format.pp_print_string fmt "INVALID"
-  | Base b -> pp_base fmt b
-  | Fun f -> Format.fprintf fmt "λ%s" f.c_func_org_name
-
+  let print fmt v =
+    match v with
+    | Null -> Format.pp_print_string fmt "NULL"
+    | Invalid -> Format.pp_print_string fmt "INVALID"
+    | Base b -> pp_base fmt b
+    | Fun f -> Format.fprintf fmt "λ%s" f.c_func_org_name
+end
 
 
 (** {2 Sets of pointer values} *)
 (** ************************** *)
 
-module PointerSet = Framework.Lattices.Powerset.Make
-    (struct
-      type t = ptr
-      let compare = compare_pointer
-      let print = pp_pointer
-    end)
+module PointerSet =
+struct
 
-include PointerSet
+  include Framework.Lattices.Powerset.Make(PointerValue)
 
 
-(** {2 Utility functions} *)
-(** ********************* *)
-
-(** NULL address *)
-let null : t = singleton Null
+  (** NULL address *)
+  let null : t = singleton Null
 
 
-(** INVALID address *)
-let invalid : t = singleton Invalid
+  (** INVALID address *)
+  let invalid : t = singleton Invalid
 
 
-(** Base address *)
-let base (b:base) : t = singleton (Base b)
+  (** Base address *)
+  let base (b:base) : t = singleton (Base b)
 
 
-(** Function address *)
-let cfun (f:c_fundec) : t = singleton (Fun f)
+  (** Function address *)
+  let cfun (f:c_fundec) : t = singleton (Fun f)
 
 
-(** Check if the pointer *may* point to valid base addresses *)
-let is_valid (a:t) : bool =
-  try exists (function
-      | Base _ -> true
-      | _ -> false
-    ) a
-  with Top.Found_TOP -> true
+  (** Check if the pointer *may* point to valid base addresses *)
+  let is_valid (a:t) : bool =
+    top_apply (Set.exists (function
+        | Base _ -> true
+        | _ -> false
+      )) true a
 
 
-(** Fold over pointed objects *)
-let fold_points_to
-    (f: t -> points_to -> 'a -> 'a)
-    (a:t)
-    (offset:expr)
-    (init:'a)
-  : 'a
-  =
-  try fold (fun p acc ->
-      match p with
-      | Null -> f null P_null acc
-      | Invalid -> f invalid P_invalid acc
-      | Base b -> f (base b) (P_block(b,offset)) acc
-      | Fun func -> f (cfun func) (P_fun func) acc
-    ) a init
-  with Top.Found_TOP ->
-    f a P_top init
-
-
-(** Check if a base belongs to an abstract value *)
-let mem_base (b:base) (a:t) : bool =
-  mem (Base b) a
-
-
-(** Add a base to an abstract value *)
-let add_base (b:base) (a:t) : t =
-  add (Base b) a
-
-
-(** Remove a base from an abstract value *)
-let remove_base (b:base) (a:t) : t =
-  remove (Base b) a
-
-
-(** Rename a base *)
-let rename_base (b1:base) (b2:base) (a:t) : t =
-  if not (mem_base b1 a)
-  then a
-  else remove_base b1 a |>
-       add_base b2
-
-
-(** Test if an abstract value is a singleton element *)
-let is_singleton a =
-  try cardinal a = 1 (* FIXME: computing the cardinal for this check is inefficient *)
-  with Top.Found_TOP -> false
+  (** Fold over pointed objects *)
+  let fold_points_to
+      (f: t -> points_to -> 'a -> 'a)
+      (a:t)
+      (offset:expr)
+      (init:'a)
+    : 'a
+    =
+    match a with
+    | TOP -> f a P_top init
+    | Nt s ->
+      Set.fold (fun p acc ->
+          match p with
+          | Null -> f null P_null acc
+          | Invalid -> f invalid P_invalid acc
+          | Base b -> f (base b) (P_block(b,offset)) acc
+          | Fun func -> f (cfun func) (P_fun func) acc
+        ) s init
 
 
 
-(** Compute the difference between an abstract value and a singleton *)
-let singleton_diff (a1:t) (a2:t) : t =
-  if is_singleton a2
-  then PointerSet.diff a1 a2
-  else a1
+  (** Check if a base belongs to an abstract value *)
+  let mem_base (b:base) (a:t) : bool =
+    mem (Base b) a
 
 
-(** Filter valid pointers *)
-let filter_valid a =
-  filter (function
-      | Base _ | Fun _ -> true
-      | Null | Invalid -> false
-    ) a
+  (** Add a base to an abstract value *)
+  let add_base (b:base) (a:t) : t =
+    add (Base b) a
 
 
-(** Filter non-valid pointers *)
-let filter_non_valid a =
-  filter (function
-      | Base _ | Fun _ -> false
-      | Null | Invalid -> true
-    ) a
+  (** Remove a base from an abstract value *)
+  let remove_base (b:base) (a:t) : t =
+    remove (Base b) a
+
+
+  (** Rename a base *)
+  let rename_base (b1:base) (b2:base) (a:t) : t =
+    if not (mem_base b1 a)
+    then a
+    else remove_base b1 a |>
+         add_base b2
+
+
+  (** Test if an abstract value is a singleton element *)
+  let is_singleton a =
+    top_apply (fun s ->
+        Set.cardinal s = 1 (* FIXME: computing the cardinal for this check is inefficient *)
+      ) false a
+
+
+
+  (** Compute the difference between an abstract value and a singleton *)
+  let singleton_diff (a1:t) (a2:t) : t =
+    if is_singleton a2
+    then diff a1 a2
+    else a1
+
+
+  (** Filter valid pointers *)
+  let filter_valid a =
+    filter (function
+        | Base _ | Fun _ -> true
+        | Null | Invalid -> false
+      ) a
+
+
+  (** Filter non-valid pointers *)
+  let filter_non_valid a =
+    filter (function
+        | Base _ | Fun _ -> false
+        | Null | Invalid -> true
+      ) a
+
+end

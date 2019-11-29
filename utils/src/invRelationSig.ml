@@ -156,6 +156,10 @@ module type S = sig
   (** [mem x y r] returns [true] if the binding ([x],[y]) is present in [r].
    *)
 
+  val mem_domain: dom -> t -> bool
+  (** [mem x r] returns [true] if a binding ([x],-) is present in [r].
+  *)
+
   val of_list: binding list -> t
   (** [of_list l] returns a relation constructed from the list of bindings. *)
 
