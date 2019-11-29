@@ -52,6 +52,8 @@ let nb_clang_threads = ref 4
 let opt_enable_cache = ref true
 (** Enable the parser cache. *)
 
+let opt_warn_all = ref false
+(** Display all compiler warnings *)
 
 let () =
   register_language_option "c" {
@@ -94,6 +96,13 @@ let () =
     category = "C";
     doc = " disable the cache of the Clang parser.";
     spec = ArgExt.Clear opt_enable_cache;
+    default = "unset";
+  };
+  register_language_option "c" {
+    key = "-Wall";
+    category = "C";
+    doc = " display compiler warnings.";
+    spec = ArgExt.Set opt_warn_all;
     default = "unset";
   };
   ()
@@ -220,11 +229,12 @@ and parse_file (cmd: string) ?nb (opts: string list) (file: string) enable_cache
   Mutex.unlock frontend_mutex;
   let opts' = ("-I" ^ (Paths.resolve_stub "c" "mopsa")) ::
               ("-include" ^ "mopsa.h") ::
+              "-Wall" ::
               (List.map (fun dir -> "-I" ^ dir) !opt_include_dirs) @
               !opt_clang @
               opts
   in
-  C_parser.parse_file cmd file opts' enable_cache ignore ctx
+  C_parser.parse_file cmd file opts' !opt_warn_all enable_cache ignore ctx
 
 
 and parse_stubs ctx () =
