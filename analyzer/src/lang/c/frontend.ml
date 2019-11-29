@@ -221,7 +221,7 @@ and parse_db (dbfile: string) ctx : unit =
             Sys.chdir cwd;
             raise x
          )
-       | _ -> warn "ignoring file %s" src.source_path
+       | _ -> if !opt_warn_all then warn "ignoring file %s" src.source_path
     ) srcs
 
 and parse_file (cmd: string) ?nb (opts: string list) (file: string) enable_cache ignore ctx =
