@@ -22,18 +22,27 @@
 (** Common exceptions and warnings *)
 
 
+
 (** {2 Warnings} *)
 (** =-=-=-=-=-=- *)
 
-let warn fmt = Debug.warn fmt
+let warn = Debug.warn
 
-let warn_at range fmt =
-  Format.kasprintf (fun str ->
-      Debug.warn "%a: %s" Location.pp_range range str
-    ) fmt
+let warn_at = Debug.warn_at
+
 
 (** {2 Panic exceptions} *)
 (** =-=-=-=-=-=-=-=-=-=- *)
+
+let pp fmt = Debug.debug ~channel:"panic" fmt
+
+let () = Debug.add_channel "panic"
+
+let pp_at range fmt =
+  Format.kasprintf (fun str ->
+      pp "%a: %s" Location.pp_range range str
+    ) fmt
+
 
 exception Panic of string (** message *) * string (** OCaml line of code *)
 exception PanicAt of Location.range * string (** message *) * string (** OCaml line of code *)
@@ -41,15 +50,11 @@ exception PanicAt of Location.range * string (** message *) * string (** OCaml l
 (** Raise a panic exception using a formatted string *)
 let panic ?(loc="") fmt =
   Format.kasprintf (fun str ->
-      if loc = "" then warn "panic: %s" str
-      else warn "panic raised in %s: %s" loc str;
       raise (Panic (str, loc))
     ) fmt
 
 let panic_at ?(loc="") range fmt =
   Format.kasprintf (fun str ->
-      if loc = "" then warn_at range "panic: %s" str
-      else warn_at range "panic raised in %s: %s" loc str;
       raise (PanicAt (range, str, loc))
     ) fmt
 
