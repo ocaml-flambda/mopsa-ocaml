@@ -212,6 +212,15 @@ struct
   let find_opt (k: Key.t) (a:t) : ValueSet.t with_top option =
     try Some (find k a) with Not_found -> None
 
+  let remove_singleton (k: Key.t) (v:Value.t) (a:t) : t =
+    match a with
+    | BOT -> BOT
+    | TOP -> TOP
+    | Nbt m when KeySet.mem k m.top_keys -> a
+    | Nbt m ->
+      Nbt { m with relations = Relation.remove k v m.relations }
+
+
   let remove (k: Key.t) (a:t) : t =
     match a with
     | BOT -> BOT
@@ -273,5 +282,13 @@ struct
           add k (f vs) acc
         ) a empty
 
+  let find_inverse (v:Value.t) (a:t) : KeySet.t with_top =
+    match a with
+    | BOT -> Nt (KeySet.empty)
+    | TOP -> TOP
+    | Nbt m ->
+      let s1 = Relation.inverse v m.relations in
+      let s2 = m.top_keys in
+      Nt (KeySet.union s1 s2)
 
 end

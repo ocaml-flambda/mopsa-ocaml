@@ -521,7 +521,15 @@ struct
       | E_addr a -> ValidAddr a
       | _ -> assert false
     in
-   map_env T_cur (Map.map (PointerSet.rename_base base base')) man flow |>
+    map_env T_cur (fun a ->
+        match Map.find_inverse (PointerValue.Base base) a with
+        | TOP -> a
+        | Nt pset ->
+          Map.KeySet.fold (fun p acc ->
+              Map.remove_singleton p (PointerValue.Base base) acc |>
+              Map.add_singleton p (PointerValue.Base base')
+            ) pset a
+      ) man flow |>
    Post.return
     
 
@@ -534,17 +542,19 @@ struct
       | _ -> assert false
     in
     let flow = map_env T_cur (fun a ->
-        let a' = Map.map (fun v ->
-            if not (PointerSet.mem_base valid_base v)
-            then v
-            else
-            if base_mode valid_base = STRONG
-            then PointerSet.remove_base valid_base v |>
-                 PointerSet.add_base invalid_base
-            else PointerSet.add_base invalid_base v
-          ) a
-        in
-        a'
+        match Map.find_inverse (PointerValue.Base valid_base) a with
+        | TOP -> a
+        | Nt pset ->
+          if base_mode valid_base = STRONG
+          then
+            Map.KeySet.fold (fun p acc ->
+                Map.remove_singleton p (PointerValue.Base valid_base) acc |>
+                Map.add_singleton p (PointerValue.Base invalid_base)
+              ) pset a
+          else
+            Map.KeySet.fold (fun p acc ->
+                Map.add_singleton p (PointerValue.Base invalid_base) acc
+              ) pset a
       ) man flow
     in
     Post.return flow
