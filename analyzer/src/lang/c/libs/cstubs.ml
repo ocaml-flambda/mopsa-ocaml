@@ -311,7 +311,7 @@ struct
 
         | E_c_points_to P_null
         | E_c_points_to P_invalid ->
-          warn_at exp.erange "size(%a) where %a %a not supported" pp_expr e pp_expr e pp_expr pt;
+          Soundness.warn_at exp.erange "size(%a) where %a %a not supported" pp_expr e pp_expr e pp_expr pt;
           Eval.singleton (mk_top ul exp.erange) flow
 
 

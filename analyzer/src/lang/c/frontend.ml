@@ -212,7 +212,7 @@ and parse_db (dbfile: string) ctx : unit =
             Sys.chdir cwd;
             raise x
          )
-       | _ -> Exceptions.warn "ignoring file %s\n%!" src.source_path
+       | _ -> warn "ignoring file %s" src.source_path
     ) srcs
 
 and parse_file (cmd: string) ?nb (opts: string list) (file: string) enable_cache ignore ctx =
