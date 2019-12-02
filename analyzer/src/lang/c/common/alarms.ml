@@ -326,7 +326,7 @@ let () =
           begin match v.vkind with
             | V_cvar { cvar_scope = Variable_local f }
             | V_cvar { cvar_scope = Variable_parameter f }->
-              Format.fprintf fmt "%a points to dangling local variable %a of function %s called at %a"
+              Format.fprintf fmt "%a points to dangling local variable %a of function %s deallocated at %a"
                 pp_expr p pp_var v f.c_func_org_name pp_range r
 
             | _ ->
