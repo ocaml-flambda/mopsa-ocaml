@@ -105,7 +105,7 @@ struct
       match skind stmt with
       | S_c_declaration (var,init,scope) ->
         let v = Map.find var a in
-        Some (Map.add var v acc)
+        Some (Map.set var v acc)
 
       | S_rename ( {ekind = E_addr addr1}, {ekind = E_addr addr2} ) ->
         Some acc
@@ -125,16 +125,16 @@ struct
     let a, block' = patch_block block' a' a in
 
     Framework.Transformers.Value.Nonrel.generic_nonrel_merge pre (a,block) (a',block')
-      ~top:Top.TOP ~add:Map.add ~find:Map.find ~remove:Map.remove ~meet:Map.meet
+      ~top:Top.TOP ~add:Map.set ~find:Map.find ~remove:Map.remove ~meet:Map.meet
 
 
   let add p v mode a =
     if mode = STRONG
-    then Map.add p v a
+    then Map.set p v a
 
     else
       let old = Map.find p a in
-      Map.add p (PointerSet.join v old) a
+      Map.set p (PointerSet.join v old) a
 
 
 
@@ -273,7 +273,7 @@ struct
       let a = get_env T_cur man flow in
       let values = Map.find p a in
       let evals = PointerSet.fold_points_to (fun v pt acc ->
-          let flow = set_env T_cur (Map.add p v a) man flow in
+          let flow = set_env T_cur (Map.set p v a) man flow in
           Eval.singleton (mk_c_points_to pt exp.erange) flow :: acc
         ) values offset' []
       in
@@ -465,13 +465,13 @@ struct
     (** Uninitialized global variable *)
     | Variable_global, None | Variable_file_static _, None ->
       (* The variable is initialized with NULL (C99 6.7.8.10) *)
-      map_env T_cur (Map.add v PointerSet.null) man flow |>
+      map_env T_cur (Map.set v PointerSet.null) man flow |>
       Post.return
 
     (** Uninitialized local variable *)
     | Variable_local _, None | Variable_func_static _, None ->
       (* The value of the variable is undetermined (C99 6.7.8.10) *)
-      map_env T_cur (Map.add v PointerSet.invalid) man flow |>
+      map_env T_cur (Map.set v PointerSet.invalid) man flow |>
       Post.return
 
     | _, Some (C_init_expr e) ->
@@ -484,7 +484,7 @@ struct
   (** Add a pointer variable to the support of the non-rel map *)
   let add_pointer_var p range man flow =
     let o = mk_offset p STRONG range in
-    map_env T_cur (Map.add p PointerSet.top) man flow |>
+    map_env T_cur (Map.set p PointerSet.top) man flow |>
     man.post ~zone:(Universal.Zone.Z_u_num) (mk_add o range)
 
 
@@ -525,10 +525,8 @@ struct
         match Map.find_inverse (PointerValue.Base base) a with
         | TOP -> a
         | Nt pset ->
-          Map.KeySet.fold (fun p acc ->
-              Map.remove_singleton p (PointerValue.Base base) acc |>
-              Map.add_singleton p (PointerValue.Base base')
-            ) pset a
+          Map.add_inverse (PointerValue.Base base') pset a |>
+          Map.remove_inverse (PointerValue.Base base)
       ) man flow |>
    Post.return
     
@@ -547,14 +545,10 @@ struct
         | Nt pset ->
           if base_mode valid_base = STRONG
           then
-            Map.KeySet.fold (fun p acc ->
-                Map.remove_singleton p (PointerValue.Base valid_base) acc |>
-                Map.add_singleton p (PointerValue.Base invalid_base)
-              ) pset a
+            Map.remove_inverse (PointerValue.Base valid_base) a |>
+            Map.add_inverse (PointerValue.Base invalid_base) pset
           else
-            Map.KeySet.fold (fun p acc ->
-                Map.add_singleton p (PointerValue.Base invalid_base) acc
-              ) pset a
+            Map.add_inverse (PointerValue.Base invalid_base) pset a
       ) man flow
     in
     Post.return flow

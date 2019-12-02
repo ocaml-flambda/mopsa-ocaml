@@ -37,7 +37,7 @@ framework.core.sig.domain = manager lowlevel intermediate simplified         \
                             stateless reduction
 framework.core.sig.stacked = manager lowlevel intermediate stateless reduction
 framework.core.sig.functor = simplified
-framework.lattices = partial_map partial_inversible_map powerset powersetwithunder
+framework.lattices = partial_map partial_inversible_map_sig partial_inversible_map powerset_sig powerset powersetwithunder
 framework.engines = engine automatic interactive
 framework.transformers = value domain stacked
 framework.transformers.stacked.lowlevel = stack_list compose product sequence

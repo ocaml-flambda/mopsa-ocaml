@@ -20,7 +20,13 @@
 (****************************************************************************)
 
 
-(** Lattice of partial inversible maps with heterogeneous support sets. *)
+(** Lattice of partial inversible maps.
+
+    Sets of partial maps M ∈ ℘(𝕂 ⇀ 𝕍) from concrete keys set 𝕂 to
+    concrete values set 𝕍 are abstracted as a set of partial maps ℳ ∈ 
+    𝕂 ⇀ (℘(𝕍) ∪ {⊤}).
+*)
+
 
 
 open Bot_top
@@ -44,6 +50,7 @@ module Make
 =
 struct
 
+
   (** Inversible relations between keys and values *)
   module Relation = InvRelation.Make(Key)(Value)
 
@@ -57,21 +64,25 @@ struct
 
 
   (** Inversible maps are represented as a set of relations between keys and
-     values and a set of keys mapped to ⊤
+      values, in addition to a set of keys mapped to ⊤
   *)
   type map = {
     relations: Relation.t;
     top_keys: Relation.DomSet.t
   }
 
+
   (** Type of inversible maps with ⊤ and ⊥ *)
   type t = map with_bot_top
+
 
   (** ⊥ element *)
   let bottom : t = BOT
 
+
   (** ⊤ element *)
   let top : t = TOP
+
 
   (** Check whether [a] is ⊥ *)
   let is_bottom (a:t) : bool =
@@ -79,96 +90,6 @@ struct
     | BOT -> true
     | TOP -> false
     | Nbt m -> false
-
-  (** Singleton of empty map *)
-  let empty : t = Nbt { relations = Relation.empty; top_keys = KeySet.empty }
-
-
-  (** Remove a set of keys from a relation *)
-  let remove_relation_keys (keys:KeySet.t) (rel:Relation.t) : Relation.t =
-    KeySet.fold Relation.remove_image keys rel
-
-
-  (** Inclusion test. *)
-  let subset (a1:t) (a2:t) : bool =
-    if a1 == a2 then true else
-    match a1, a2 with
-    | BOT, _ -> true
-    | _, BOT -> false
-    | _, TOP -> true
-    | TOP, _ -> false
-    | Nbt m1, Nbt m2 ->
-      (* Remove keys of m1 that valuate to ⊤ in m2 *)
-      let m1' = { m1 with relations = remove_relation_keys m2.top_keys m1.relations } in
-      Relation.subset m1'.relations m2.relations &&
-      KeySet.subset m1'.top_keys m2.top_keys
-
-
-  (** Join two sets of partial maps. *)
-  let join (a1:t) (a2:t) : t =
-    if a1 == a2 then a1 else
-      match a1, a2 with
-      | BOT, x | x, BOT -> x
-      | TOP, _ | _, TOP -> TOP
-      | Nbt m1, Nbt m2 ->
-        (* Remove keys that valuate to ⊤ in m1 or m2 *)
-        let top_keys = KeySet.union m1.top_keys m2.top_keys in
-        let m1' = { m1 with relations = remove_relation_keys top_keys m1.relations } in
-        let m2' = { m2 with relations = remove_relation_keys top_keys m2.relations } in
-        Nbt {
-          relations = Relation.union m1'.relations m2'.relations;
-          top_keys = top_keys;
-        }
-
-  (** Meet. *)
-  let meet (a1:t) (a2:t) : t =
-    if a1 == a2 then a1 else
-      match a1, a2 with
-      | BOT, x | x, BOT -> BOT
-      | TOP, x | x, TOP -> x
-      | Nbt m1, Nbt m2 ->
-        (* If the key of singular binding does not belong to m1.top_keys or
-           m2.top_keys, then the map becomes ⊥ *)
-        try
-          Nbt (
-            let relations = Relation.fold2
-                (fun k1 v1 acc ->
-                   if KeySet.mem k1 m2.top_keys
-                   then Relation.add k1 v1 acc
-                   else raise Bot.Found_BOT
-                )
-                (fun k2 v2 acc ->
-                   if KeySet.mem k2 m1.top_keys
-                   then Relation.add k2 v2 acc
-                   else raise Bot.Found_BOT
-                )
-                (fun k v acc -> Relation.add k v acc)
-                m1.relations m2.relations Relation.empty
-            in
-            let top_keys = KeySet.inter m1.top_keys m2.top_keys in
-            { relations; top_keys }
-          )
-        with Bot.Found_BOT -> bottom
-
-  (** Widening operator *)
-  let widen ctx (a1:t) (a2:t) : t =
-    let a2 = join a1 a2 in
-    if a1 == a2 then a1 else
-      match a1, a2 with
-      | BOT, x | x, BOT -> x
-      | TOP, x | x, TOP -> TOP
-      | Nbt m1, Nbt m2 ->
-        (* Add to m2.top_keys the keys of the new relations *)
-        let new_top_keys = Relation.fold2_diff
-            (fun _ _ acc -> acc)
-            (fun k _ acc -> KeySet.add k acc)
-            m1.relations m2.relations KeySet.empty
-        in
-        (* Remove top_keys from m2 *)
-        Nbt {
-          relations = remove_relation_keys new_top_keys m2.relations;
-          top_keys = KeySet.union m2.top_keys new_top_keys
-        }
 
 
   (** Printing. *)
@@ -204,7 +125,104 @@ struct
         ) m.top_keys
 
 
-  (** Find the set of values attached to a key *)
+  (** Singleton of empty map *)
+  let empty : t = Nbt { relations = Relation.empty; top_keys = KeySet.empty }
+
+
+  (** Remove a set of keys from a relation *)
+  let remove_relation_keys (keys:KeySet.t) (rel:Relation.t) : Relation.t =
+    KeySet.fold Relation.remove_image keys rel
+
+
+  (** Inclusion test. *)
+  let subset (a1:t) (a2:t) : bool =
+    if a1 == a2 then true else
+    match a1, a2 with
+    | BOT, _ -> true
+    | _, BOT -> false
+    | _, TOP -> true
+    | TOP, _ -> false
+    | Nbt m1, Nbt m2 ->
+      (* Remove keys of m1 that valuate to ⊤ in m2 *)
+      let m1' = { m1 with relations = remove_relation_keys m2.top_keys m1.relations } in
+      Relation.subset m1'.relations m2.relations &&
+      KeySet.subset m1'.top_keys m2.top_keys
+
+
+  (** Join two sets of partial maps. *)
+  let join (a1:t) (a2:t) : t =
+    if a1 == a2 then a1 else
+    match a1, a2 with
+      | BOT, x | x, BOT -> x
+      | TOP, _ | _, TOP -> TOP
+      | Nbt m1, Nbt m2 ->
+        (* Remove keys that valuate to ⊤ in m1 or m2 *)
+        let top_keys = KeySet.union m1.top_keys m2.top_keys in
+        let m1' = { m1 with relations = remove_relation_keys top_keys m1.relations } in
+        let m2' = { m2 with relations = remove_relation_keys top_keys m2.relations } in
+        Nbt {
+          relations = Relation.union m1'.relations m2'.relations;
+          top_keys = top_keys;
+        }
+
+
+  (** Meet. *)
+  let meet (a1:t) (a2:t) : t =
+    if a1 == a2 then a1 else
+    match a1, a2 with
+      | BOT, x | x, BOT -> BOT
+      | TOP, x | x, TOP -> x
+      | Nbt m1, Nbt m2 ->
+        (* In addition to bindings that are part of the two relations,
+           keep the bindings that are in one relation only if the key
+           belongs to ⊤ keys of the other abstract element.
+        *)
+        try
+          Nbt (
+            let relations = Relation.fold2
+                (fun k1 v1 acc ->
+                   (* Check if k1 is mapped to ⊤ in m2 *)
+                   if KeySet.mem k1 m2.top_keys
+                   then Relation.add k1 v1 acc
+                   else raise Bot.Found_BOT
+                )
+                (fun k2 v2 acc ->
+                   (* Check if k2 is mapped to ⊤ in m1 *)
+                   if KeySet.mem k2 m1.top_keys
+                   then Relation.add k2 v2 acc
+                   else raise Bot.Found_BOT
+                )
+                (fun k v acc -> Relation.add k v acc)
+                m1.relations m2.relations Relation.empty
+            in
+            let top_keys = KeySet.inter m1.top_keys m2.top_keys in
+            { relations; top_keys }
+          )
+        with Bot.Found_BOT -> bottom
+
+
+  (** Widening operator *)
+  let widen ctx (a1:t) (a2:t) : t =
+    let a2 = join a1 a2 in
+    if a1 == a2 then a1 else
+      match a1, a2 with
+      | BOT, x | x, BOT -> x
+      | TOP, x | x, TOP -> TOP
+      | Nbt m1, Nbt m2 ->
+        (* Find the keys that belong only to m2, i.e. new relations. These keys will be mapped to ⊤. *)
+        let instable_keys = Relation.fold2_diff
+            (fun _ _ acc -> acc)
+            (fun k _ acc -> KeySet.add k acc)
+            m1.relations m2.relations KeySet.empty
+        in
+        (* Remove instable_keys from m2 relations and add them to top_keys *)
+        Nbt {
+          relations = remove_relation_keys instable_keys m2.relations;
+          top_keys = KeySet.union m2.top_keys instable_keys
+        }
+
+
+  (** Find the set of values attached to a key. Raise [Not_found] of the key is not found. *)
   let find (k: Key.t) (a:t) : ValueSet.t with_top =
     match a with
     | BOT -> Nt ValueSet.empty
@@ -213,18 +231,18 @@ struct
       if KeySet.mem k m.top_keys then TOP else Nt (Relation.image k m.relations)
 
 
-  let find_opt (k: Key.t) (a:t) : ValueSet.t with_top option =
-    try Some (find k a) with Not_found -> None
-
-  let remove_singleton (k: Key.t) (v:Value.t) (a:t) : t =
+  (** Find keys attached to value [v] in [a] *)
+  let find_inverse (v:Value.t) (a:t) : KeySet.t with_top =
     match a with
-    | BOT -> BOT
+    | BOT -> Nt (KeySet.empty)
     | TOP -> TOP
-    | Nbt m when KeySet.mem k m.top_keys -> a
     | Nbt m ->
-      Nbt { m with relations = Relation.remove k v m.relations }
+      let s1 = Relation.inverse v m.relations in
+      let s2 = m.top_keys in
+      Nt (KeySet.union s1 s2)
 
 
+  (** Remove all bindings [(k,-)] in [a] *)
   let remove (k: Key.t) (a:t) : t =
     match a with
     | BOT -> BOT
@@ -232,14 +250,19 @@ struct
     | Nbt m ->
       Nbt { relations = Relation.remove_image k m.relations; top_keys = KeySet.remove k m.top_keys }
 
-  let add_singleton (k: Key.t) (v:Value.t) (a:t) : t =
+
+  (** Remove all bindings [(-,v)] in [a] *)
+  let remove_inverse (v:Value.t) (a:t) : t =
     match a with
     | BOT -> BOT
     | TOP -> TOP
     | Nbt m ->
-      if KeySet.mem k m.top_keys then a else Nbt { m with relations = Relation.add k v m.relations }
+      Nbt { m with relations = Relation.remove_inverse v m.relations }
 
-  let add (k: Key.t) (vs:ValueSet.t with_top) (a:t) : t =
+
+
+  (** Add bindings [(k,vs)] to [a]. Previous bindings are overwritten. *)
+  let set (k: Key.t) (vs:ValueSet.t with_top) (a:t) : t =
     match vs with
     | Nt s when ValueSet.is_empty s -> BOT
     | _ ->
@@ -252,16 +275,31 @@ struct
         | Nt vs -> Nbt { top_keys = KeySet.remove k m.top_keys; relations = Relation.set_image k vs m.relations }
 
 
+  (** [add_inverse v ks a] adds the binding [(k,{v} ∪ find k a)] to [a], where [k] ∈ [ks]. *)
+  let add_inverse (v:Value.t) (ks:KeySet.t) (a:t) : t =
+    match a with
+    | BOT -> BOT
+    | TOP -> TOP
+    | Nbt m ->
+      Nbt { m with relations = Relation.add_inverse_set v ks m.relations }
+
+
+  (** Rename key [k] to [k'] *)
   let rename (k: Key.t) (k': Key.t) (a:t) : t =
     let v = find k a in
     let a = remove k a in
-    add k' v a
+    set k' v a
 
 
+  (** Create a map with singleton binding [(k,{v})] *)
   let singleton (k:Key.t) (v:Value.t) : t =
-    add_singleton k v empty
+    Nbt {
+      top_keys = KeySet.empty;
+      relations = Relation.singleton k v;
+    }
 
 
+  (** Check whether a binding [(k,-)] exists in [a] *)
   let mem (k:Key.t) (a:t) : bool =
     match a with
     | BOT -> false
@@ -269,6 +307,7 @@ struct
     | Nbt m -> Relation.mem_domain k m.relations ||
                KeySet.mem k m.top_keys
 
+  (** [fold f a init] folds function [f] over elements [(k,vs)] *)
   let fold (f:Key.t -> ValueSet.t with_top -> 'a -> 'a) (a:t) (init:'a) : 'a =
     match a with
     | BOT -> init
@@ -277,22 +316,15 @@ struct
       KeySet.fold (fun k acc -> f k TOP acc) m.top_keys init |>
       Relation.fold_domain (fun k vs acc -> f k (Nt vs) acc) m.relations
 
+  (** Replace bindings [(k,vs)] in [a] with [(k,f vs)] *)
   let map (f:ValueSet.t with_top -> ValueSet.t with_top) (a:t) : t =
     match a with
     | BOT -> BOT
     | TOP -> TOP
     | Nbt m ->
       fold (fun k vs acc ->
-          add k (f vs) acc
+          set k (f vs) acc
         ) a empty
 
-  let find_inverse (v:Value.t) (a:t) : KeySet.t with_top =
-    match a with
-    | BOT -> Nt (KeySet.empty)
-    | TOP -> TOP
-    | Nbt m ->
-      let s1 = Relation.inverse v m.relations in
-      let s2 = m.top_keys in
-      Nt (KeySet.union s1 s2)
 
 end

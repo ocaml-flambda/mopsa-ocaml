@@ -19,7 +19,12 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Lattice of partial maps with heterogeneous support sets. *)
+(** Lattice of partial maps.
+
+    Sets of partial maps M ∈ ℘(𝕂 ⇀ 𝕍) from concrete keys set 𝕂 to
+    concrete values set 𝕍 are abstracted as a partial map ℳ ∈ (𝕂⇀𝒱)
+    that binds concrete keys to abstract values.
+*)
 
 open Bot_top
 open Core.Lattice
