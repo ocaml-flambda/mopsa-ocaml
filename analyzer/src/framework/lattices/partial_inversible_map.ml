@@ -111,7 +111,7 @@ struct
            if Relation.is_empty rel then ()
            else
              Relation.iter_domain (fun k vs ->
-                 Format.fprintf fmt "%a ⇀ @[%a@],@,"
+                 Format.fprintf fmt "%a ⇀ @[<h>%a@],@,"
                    Key.print k
                    (ValueSet.fprint SetExt.printer_default Value.print) vs
                ) rel
@@ -281,7 +281,9 @@ struct
     | BOT -> BOT
     | TOP -> TOP
     | Nbt m ->
-      Nbt { m with relations = Relation.add_inverse_set v ks m.relations }
+      (* Do not add bindings for keys k ∈ m.top_keys *)
+      let ks' = KeySet.diff ks m.top_keys in
+      Nbt { m with relations = Relation.add_inverse_set v ks' m.relations }
 
 
   (** Rename key [k] to [k'] *)
