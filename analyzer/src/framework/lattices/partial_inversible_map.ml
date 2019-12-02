@@ -132,11 +132,15 @@ struct
         try
           Nbt (
             let relations = Relation.fold2
-                (fun k1 _ acc ->
-                   if KeySet.mem k1 m2.top_keys then acc else raise Bot.Found_BOT
+                (fun k1 v1 acc ->
+                   if KeySet.mem k1 m2.top_keys
+                   then Relation.add k1 v1 acc
+                   else raise Bot.Found_BOT
                 )
-                (fun k2 _ acc ->
-                   if KeySet.mem k2 m1.top_keys then acc else raise Bot.Found_BOT
+                (fun k2 v2 acc ->
+                   if KeySet.mem k2 m1.top_keys
+                   then Relation.add k2 v2 acc
+                   else raise Bot.Found_BOT
                 )
                 (fun k v acc -> Relation.add k v acc)
                 m1.relations m2.relations Relation.empty
