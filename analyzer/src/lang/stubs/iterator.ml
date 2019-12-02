@@ -158,11 +158,7 @@ struct
       let f2 = eval_formula mk_assume f1 man flow |>
                eval_formula cond_to_stmt f2 man
       in
-      let alarms = join_alarms nf1 f2 flow in
-
-      Flow.join man.lattice nf1 f2 |>
-      Flow.set_alarms alarms
-
+      Flow.join man.lattice nf1 f2
 
     | F_not ff ->
       let ff' = negate_formula ff in
