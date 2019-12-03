@@ -163,7 +163,10 @@ let starts_with pref s =
   let pl,sl = String.length pref, String.length s in
   (sl >= pl) && (String.sub s 0 pl = pref)
 
-
+(* whether string s ends with suffix *)
+let ends_with suffix s =
+  let sxl,sl = String.length suffix, String.length s in
+  (sl >= sxl) && (String.sub s (sl - sxl) sxl = suffix)
 
 (* ensures that a filename has an absolute path
    and is normalized (no . nor ..)
