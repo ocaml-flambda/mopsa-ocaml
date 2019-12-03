@@ -148,4 +148,5 @@ val get_executable_sources : db -> string -> source list
 val log : bool ref
 val logfile : out_channel ref
 val starts_with : string -> string -> bool
+val ends_with : string -> string -> bool
 val absolute_path : string -> string
