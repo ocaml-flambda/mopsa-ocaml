@@ -179,21 +179,26 @@ struct
         *)
         try
           Nbt (
-            let relations = Relation.fold2
-                (fun k1 v1 acc ->
+            let relations = Relation.map2_domain
+                (fun k1 vs1 ->
                    (* Check if k1 is mapped to ⊤ in m2 *)
                    if KeySet.mem k1 m2.top_keys
-                   then Relation.add k1 v1 acc
+                   then vs1
                    else raise Bot.Found_BOT
                 )
-                (fun k2 v2 acc ->
+                (fun k2 vs2 ->
                    (* Check if k2 is mapped to ⊤ in m1 *)
                    if KeySet.mem k2 m1.top_keys
-                   then Relation.add k2 v2 acc
+                   then vs2
                    else raise Bot.Found_BOT
                 )
-                (fun k v acc -> Relation.add k v acc)
-                m1.relations m2.relations Relation.empty
+                (fun k vs1 vs2 ->
+                   let vs = ValueSet.inter vs1 vs2 in
+                   if ValueSet.is_empty vs
+                   then raise Bot.Found_BOT
+                   else vs
+                )
+                m1.relations m2.relations
             in
             let top_keys = KeySet.inter m1.top_keys m2.top_keys in
             { relations; top_keys }

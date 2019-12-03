@@ -359,6 +359,18 @@ module type S = sig
       The domain elements are considered in increasing order.
    *)
 
+  val map2_domain: (dom -> codom_set -> codom_set) -> (dom -> codom_set -> codom_set)  -> (dom -> codom_set -> codom_set -> codom_set) -> t -> t -> t
+  (** [map2 f1 f2 f r1 r2] is similar to [map_domain] but applies [f1]
+      on domain elements present only in [r1], [f2] on domain elements
+      present only in [r2] and [f] on common domain elements.
+      The bindings are passed to [f], [f1], [f2] in increasing order of domain elements.
+  *)
+
+  (** [map_domain f r] returns a new relation where the image set [ys] of
+      [x] in [r] is replaced with [f x ys].
+      The domain elements are considered in increasing order.
+  *)
+
   val for_all_domain: (dom -> codom_set -> bool) -> t -> bool
   (** [for_all_domain f r] returns true if [f x ys] is true for every
       domain element [x] and its image set [ys] in [r].
