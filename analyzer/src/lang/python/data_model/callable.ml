@@ -48,6 +48,8 @@ module Domain =
     let eval zs exp man flow =
       let range = erange exp in
       match ekind exp with
+      | E_py_call({ekind = E_py_object _}, _, _) -> None
+
       | E_py_call(f, args, kwargs) when List.for_all (fun (so, _) -> so <> None) kwargs ->
         let start = Timing.start () in
         debug "Calling %a from %a" pp_expr exp pp_range exp.erange;

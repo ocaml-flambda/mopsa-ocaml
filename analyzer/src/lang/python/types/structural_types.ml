@@ -284,7 +284,7 @@ struct
           let flow = set_env T_cur cur man flow in
           (* now we create an attribute var *)
           let attr_var = mk_addr_attr alval attr T_any in
-          man.exec ~zone:Zone.Z_py_obj (mk_assign (mk_var attr_var range) rval range) flow
+          man.exec ~zone:Zone.Z_py (mk_assign (mk_var attr_var range) rval range) flow
           |> man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range)
           |> Option.return
 
