@@ -94,7 +94,6 @@ struct
                           assume (mk_py_hasattr attribute "__get__" range)
                             man flow
                             ~fthen:(fun flow ->
-                              debug "HERE!";
                               Soundness.warn_at range "FIXME: a NULL argument has been replaced with a None during evaluation";
                               man.eval
                                 (mk_py_call
@@ -148,52 +147,48 @@ struct
         )
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "type.__setattr__")}, _)}, [lval; attr; rval], []) ->
-      (* FIXME: data descriptors *)
-      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_setattr (lval, attr, Some rval)) range) flow
-      |> Option.return
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__getattribute__")}, _)}, [instance; attribute], []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__getattribute__")}, _)}, [instance; attribute], []) ->
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type instance range) flow |>
       Eval.bind (fun class_of_exp flow ->
           let mro = mro (object_of_expr class_of_exp) in
           debug "mro of %a: %a" pp_expr class_of_exp (Format.pp_print_list (fun fmt (a, _) -> pp_addr fmt a)) mro;
           search_mro man attribute
             ~cls_found:(fun cls flow ->
-                    (* FIXME: disjunction between instances an non-instances *)
-                    man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_getattr (mk_py_object cls range, attribute)) range) flow |>
-                    Eval.bind (fun obj' flow ->
-                        assume
-                          (mk_binop (mk_py_hasattr obj' "__get__" range) O_py_and (mk_py_hasattr obj' "__set__" range) range)
-                          (* FIXMES:
-                             1) it's __set__ or __del__
-                             2) also,  GenericGetAttrWithDict uses low level field accesses (like descr->ob_type->tp_descr_get), but these fields get inherited during type creation according to the doc, so even a low-level access actually is something more complicated. The clean fix would be to handle this at class creation for special fields.
-                          *)
-                          man flow
-                          ~fthen:(fun flow ->
-                              (* FIXME: I guess it's E_py_ll_getattr rather than mk_py_attr *)
-                              man.eval (mk_py_call (mk_py_attr obj' "__get__" range) [instance; class_of_exp] range) flow
-                            )
-                          ~felse:(fun flow ->
-                              assume
-                                (mk_expr (E_py_ll_hasattr (instance, attribute)) range)
-                                man flow
-                                ~fthen:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_getattr(instance, attribute)) range))
-                                ~felse:(fun flow ->
-                                  assume
-                                    (mk_py_isinstance_builtin obj' "function" range)
-                                    man flow
-                                    ~fthen:(fun flow ->
-                                        debug "obj'=%a; exp=%a@\n" pp_expr obj' pp_expr instance;
-                                        eval_alloc man (A_py_method (object_of_expr obj', instance)) range flow |>
-                                        bind_some (fun addr flow ->
-                                            let obj = (addr, None) in
-                                            Eval.singleton (mk_py_object obj range) flow)
-                                      )
-                                    ~felse:(Eval.singleton obj')
-                                )
-                            )
-                      )
+                (* FIXME: disjunction between instances an non-instances *)
+                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_getattr (mk_py_object cls range, attribute)) range) flow |>
+                Eval.bind (fun obj' flow ->
+                    assume
+                      (mk_binop (mk_py_hasattr obj' "__get__" range) O_py_and (mk_py_hasattr obj' "__set__" range) range)
+                      (* FIXMES:
+                         1) it's __set__ or __del__
+                         2) also,  GenericGetAttrWithDict uses low level field accesses (like descr->ob_type->tp_descr_get), but these fields get inherited during type creation according to the doc, so even a low-level access actually is something more complicated. The clean fix would be to handle this at class creation for special fields.
+                      *)
+                      man flow
+                      ~fthen:(fun flow ->
+                          (* FIXME: I guess it's E_py_ll_getattr rather than mk_py_attr *)
+                          man.eval (mk_py_call (mk_py_attr obj' "__get__" range) [instance; class_of_exp] range) flow
+                        )
+                      ~felse:(fun flow ->
+                          assume
+                            (mk_expr (E_py_ll_hasattr (instance, attribute)) range)
+                            man flow
+                            ~fthen:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_getattr(instance, attribute)) range))
+                            ~felse:(fun flow ->
+                                assume
+                                  (mk_py_isinstance_builtin obj' "function" range)
+                                  man flow
+                                  ~fthen:(fun flow ->
+                                      debug "obj'=%a; exp=%a@\n" pp_expr obj' pp_expr instance;
+                                      eval_alloc man (A_py_method (object_of_expr obj', instance)) range flow |>
+                                      bind_some (fun addr flow ->
+                                          let obj = (addr, None) in
+                                          Eval.singleton (mk_py_object obj range) flow)
+                                    )
+                                  ~felse:(Eval.singleton obj')
+                              )
+                        )
+                  )
               )
             ~nothing_found:(fun flow ->
                 assume
@@ -210,6 +205,7 @@ struct
         )
       |> Option.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "type.__setattr__")}, _)}, [lval; attr; rval], [])
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__setattr__")}, _)}, [lval; attr; rval], []) ->
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type lval range) flow |>
       Eval.bind (fun class_of_lval flow ->
@@ -233,6 +229,7 @@ struct
         )
       |> Option.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "type.__delattr__")}, _)}, [lval; attr], [])
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__delattr__")}, _)}, [lval; attr], []) ->
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type lval range) flow |>
       Eval.bind (fun class_of_lval flow ->
@@ -255,6 +252,10 @@ struct
             range mro flow
         )
       |> Option.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__init_subclass__")}, _)}, cls::args, []) ->
+      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range) flow |> Option.return
+
 
     | _ -> None
 

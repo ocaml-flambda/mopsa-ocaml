@@ -56,6 +56,7 @@ class object:
     def __setattr__(self, attr, v): pass
     def __sizeof__(self): pass
     def __str__(self): pass
+    def __init_subclass__(cls): pass
 
 class type(object):
     def __new__(cls, args): pass
