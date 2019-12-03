@@ -56,6 +56,10 @@
  */
 
 
+/*$$
+ * predicate valid_ptr_range(p, i, j):
+ *   forall int k in [i,j]: valid_ptr(p+k);
+ */
 
 /*$
  * local:   char * str = new Memory;
@@ -64,3 +68,28 @@
  * ensures: return == str;
  */
 static char *_mopsa_new_valid_string();
+
+
+/*$
+ * requires: valid_ptr(p);
+ */
+void _mopsa_assert_valid_ptr(void *p);
+
+
+/*$
+ * requires: valid_string(s);
+ */
+void _mopsa_assert_valid_string(char *s);
+
+
+/*$
+ * requires: valid_ptr_range(s, i, j);
+ * assigns: s[i, j];
+ */
+void _mopsa_memrand(char *s, unsigned int i, unsigned int j);
+
+
+/*$
+ * requires: stream in File;
+ */
+void _mopsa_assert_valid_stream(void* stream);

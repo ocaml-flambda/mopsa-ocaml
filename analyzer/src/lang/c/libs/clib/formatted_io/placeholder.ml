@@ -19,69 +19,29 @@
 (*                                                                          *)
 (****************************************************************************)
 
+(** Types corresponding to placeholders of format strings *)
 
-(** List of builtin functions *)
-let builtin_functions = Hashtbl.create 16
+open Ast
 
-let _ =
-  List.iter (fun a -> Hashtbl.add builtin_functions a ()) [
-      "__builtin_constant_p";
-      "__builtin_expect";
+(** C type of a placeholder *)
+type placeholder_type =
+  | Int of c_integer_type
+  | Float of c_float_type
+  | Pointer
+  | String
 
-      "__builtin_va_start";
-      "__builtin_va_end";
-      "__builtin_va_copy";
+(** Placeholder for output streams, e.g. printf *)
+type output_placeholder = {
+  op_width: int option;
+  op_precision: int option;
+  op_typ: placeholder_type;
+}
 
-      "printf";
-      "__printf_chk";
-      "fprintf";
-      "__fprintf_chk";
-      "sprintf";
-      "__sprintf_chk";
-      "__builtin___sprintf_chk";
-      "fscanf";
-      "scanf";
-      "sscanf";
+(** Placeholder for input streams, e.g. scanf *)
+type intput_placeholder = {
+  ip_width: int option;
+  ip_typ: placeholder_type;
+}
+  
 
-      "_mopsa_rand_s8";
-      "_mopsa_rand_u8";
-      "_mopsa_rand_s16";
-      "_mopsa_rand_u16";
-      "_mopsa_rand_s32";
-      "_mopsa_rand_u32";
-      "_mopsa_rand_s64";
-      "_mopsa_rand_u64";
-      "_mopsa_rand_float";
-      "_mopsa_rand_double";
-      "_mopsa_rand_void_pointer";
-
-      "_mopsa_range_s8";
-      "_mopsa_range_u8";
-      "_mopsa_range_s16";
-      "_mopsa_range_u16";
-      "_mopsa_range_s32";
-      "_mopsa_range_u32";
-      "_mopsa_range_s64";
-      "_mopsa_range_u64";
-      "_mopsa_range_int";
-      "_mopsa_range_float";
-      "_mopsa_range_double";
-
-      "_mopsa_invalid_pointer";
-
-      "_mopsa_panic";
-      "_mopsa_print";
-
-      "_mopsa_assume";
-
-      "_mopsa_assert_exists";
-      "_mopsa_assert";
-      "_mopsa_assert_safe";
-      "_mopsa_assert_unsafe";
-
-      "_mopsa_register_file_resource";
-      "_mopsa_register_file_resource_at";
-      "_mopsa_find_file_resource"
-    ]
-
-let is_builtin_function = Hashtbl.mem builtin_functions
+  

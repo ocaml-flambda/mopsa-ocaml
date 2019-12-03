@@ -368,6 +368,10 @@ let binop_type prj t1 t2 =
 let rec visit_expr e prj func =
   bind_range e @@ fun ee ->
   let kind, typ = match ee with
+    | E_top t ->
+      let t = visit_qual_typ t prj func in
+      Ast.E_top t, t
+
     | E_int(n, NO_SUFFIX) -> Ast.E_int(n), int_type
 
     | E_int(n, LONG) -> Ast.E_int(n), long_type

@@ -537,8 +537,8 @@ int putw (int __w, FILE *__stream);
 
 /*$
  * requires: __stream in File;
- * requires: size(__s) >= __n;
- * assigns:  __s[0, size(__s) - 1];
+ * requires: valid_ptr_range(__s, 0, __n);
+ * assigns:  __s[0, __n];
  * ensures:  valid_primed_string(__s);
  * ensures:  (return == __s) or (return == NULL);
  */
@@ -554,8 +554,8 @@ char *gets (char *__s);
 /*$
  * // TODO: not thread-safe
  * requires: __stream in File;
- * requires: size(__s) >= __n;
- * assigns:  __s[0, size(__s) - 1];
+ * requires: valid_ptr_range(__s, 0, __n);
+ * assigns:  __s[0, __n];
  * ensures:  valid_primed_string(__s);
  * ensures:  (return == __s) or (return == NULL);
  */
@@ -644,7 +644,7 @@ int ungetc (int __c, FILE *__stream);
 
 /*$
  * requires: __stream in File;
- * requires: size(__ptr) >= __size * __n;
+ * requires: valid_ptr_range(__ptr, 0, __size * __n - 1);
  * assigns:  __ptr[0, __size * __n - 1];
  * ensures:  return in [0, __n];
  */
@@ -653,7 +653,7 @@ size_t fread (void *__restrict __ptr, size_t __size,
 
 /*$
  * requires: __s in File;
- * requires: size(__ptr) >= __size * __n;
+ * requires: valid_ptr_range(__ptr, 0, __size * __n - 1);
  * ensures:  return in [0, __n];
  */
 size_t fwrite (const void *__restrict __ptr, size_t __size,
@@ -681,7 +681,7 @@ int fputs_unlocked (const char *__restrict __s,
 /*$
  * // TODO: not thread-safe
  * requires: __stream in File;
- * requires: size(__ptr) >= __size * __n;
+ * requires: valid_ptr_range(__ptr, 0, __size * __n - 1);
  * assigns:  __ptr[0, __size * __n - 1];
  * ensures:  return in [0, __n];
  */
@@ -691,6 +691,7 @@ size_t fread_unlocked (void *__restrict __ptr, size_t __size,
 /*$
  * // TODO: not thread-safe
  * requires: __stream in File;
+ * requires: valid_ptr_range(__ptr, 0, __size * __n - 1);
  * requires: size(__ptr) >= __size * __n;
  * ensures:  return in [0, __n];
  */
@@ -938,26 +939,6 @@ int ftrylockfile (FILE *__stream);
  * requires: __stream in File;
  */
 void funlockfile (FILE *__stream);
-
-
-
-/*$
- * requires: valid_ptr(__s);
- *
- * case "nop" {
- *   assumes: __maxlen == 0;
- * }
- *
- * case "print" {
- *   assumes: __maxlen >= 1;
- *   requires: size(__s) >= __maxlen;
- *   assigns:  __s[0, __maxlen - 1];
- *   ensures: exists int i in [0, __maxlen - 1]: (__s[i])' == 0;
- * }
- *
- * ensures: return in [0, size(__s) - 1];
- */
-int snprintf (char *__restrict __s, size_t __maxlen, const char *__restrict __format, ...);
 
 
 

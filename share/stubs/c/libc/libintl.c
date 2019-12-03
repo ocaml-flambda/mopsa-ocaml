@@ -26,6 +26,13 @@
 
 #include <libintl.h>
 
+
+/* If true, gettext returns its argument string unchanged.
+   This makes it possible to check printf formats that use gettext.
+ */
+#define IDENTITY_GETTEXT 1
+
+
 #define DOMAIN_NAME_BUF_SIZE 100
 
 char *_domain_name_buf = NULL;
@@ -105,6 +112,9 @@ char *bind_textdomain_codeset (const char *__domainname, const char *__codeset);
 #define GETTEXT_BUF_SIZE 100
 char _gettext_buf[GETTEXT_BUF_SIZE];
 
+#if IDENTITY_GETTEXT
+char *gettext (const char *__msgid) { return (char*)__msgid; }
+#else
 /*$
  * requires: valid_string(__msgid);
  *
@@ -119,7 +129,13 @@ char _gettext_buf[GETTEXT_BUF_SIZE];
  * }
  */
 char *gettext (const char *__msgid);
+#endif
 
+#if IDENTITY_GETTEXT
+char *dcgettext (const char *__domainname, const char *__msgid,
+		 int __category)
+{ return (char*)__msgid; }
+#else
 /*$
  * requires: valid_string(__msgid);
  *
@@ -135,6 +151,7 @@ char *gettext (const char *__msgid);
  */
 char *dcgettext (const char *__domainname, const char *__msgid,
 		 int __category);
+#endif
 
 /*$
  * warn: "unsupported stub";

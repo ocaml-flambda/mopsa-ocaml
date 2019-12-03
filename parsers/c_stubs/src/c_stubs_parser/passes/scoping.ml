@@ -80,7 +80,7 @@ let visit_option f o scope =
 let rec visit_expr (e:expr with_range) scope =
   bind_pair_range e @@ fun expr ->
   match expr with
-  | E_int _ | E_float _ | E_invalid
+  | E_top _ | E_int _ | E_float _ | E_invalid
   | E_string _ | E_char _ | E_return ->
     expr, scope
 

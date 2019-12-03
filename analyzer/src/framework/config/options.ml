@@ -152,6 +152,15 @@ let () =
     default = "";
   }
 
+(** Warnings *)
+let () =
+  register_builtin_option {
+    key = "-no-warning";
+    category = "Debugging";
+    doc = " deactivate warning messages";
+    spec = ArgExt.Clear Debug.print_warnings;
+    default = "";
+  }
 
 (** Active hooks *)
 let () =

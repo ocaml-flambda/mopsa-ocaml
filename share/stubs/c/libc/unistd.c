@@ -106,6 +106,7 @@ int close (int __fd);
  * requires: size(__buf) >= __nbytes;
  *
  * case "success" {
+ *   requires: valid_ptr_range(__buf, 0, __nbytes - 1);
  *   assigns: __buf[0, __nbytes - 1];
  *   ensures: return in [0, __nbytes];
  * }
@@ -150,6 +151,7 @@ ssize_t pwrite (int __fd, const void *__buf, size_t __n,
  * case "success" {
  *   local: int fd0 = new FileDescriptor;
  *   local: int fd1 = new FileDescriptor;
+ *   requires: valid_ptr_range(__pipedes, 0, 1);
  *   assigns: __pipedes[0,1];
  *   ensures: (__pipedes[0])' == fd0;
  *   ensures: (__pipedes[1])' == fd1;

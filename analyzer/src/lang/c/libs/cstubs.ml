@@ -204,7 +204,7 @@ struct
             assume cond
               ~fthen:(fun flow -> Post.return flow)
               ~felse:(fun flow ->
-                  Common.Alarms.raise_c_out_bound_alarm ~base ~offset ~size range man' flow |>
+                  raise_c_out_bound_quantified_alarm ~base ~min ~max ~size range man' flow |>
                   Post.return
                 )
               ~zone:Z_u_num man flow
@@ -311,7 +311,7 @@ struct
 
         | E_c_points_to P_null
         | E_c_points_to P_invalid ->
-          warn_at exp.erange "size(%a) where %a %a not supported" pp_expr e pp_expr e pp_expr pt;
+          Soundness.warn_at exp.erange "size(%a) where %a %a not supported" pp_expr e pp_expr e pp_expr pt;
           Eval.singleton (mk_top ul exp.erange) flow
 
 
@@ -398,8 +398,7 @@ struct
       Option.return |> Option.lift @@ Eval.bind @@ fun pt flow ->
 
       begin match ekind pt with
-        | E_c_points_to (P_block (A { addr_kind = A_stub_resource res' }, _))
-        | E_c_points_to (P_block (D ({ addr_kind = A_stub_resource res' },_), _)) ->
+        | E_c_points_to (P_block (A { addr_kind = A_stub_resource res' }, _)) ->
           if res = res' then
             Eval.singleton (mk_one exp.erange ~typ:u8) flow
           else

@@ -83,7 +83,10 @@ struct
   (** Initialization of environments *)
   (** ============================== *)
 
-  let init _ _ flow =  flow
+  let init prog man flow =
+    match prog.prog_kind with
+    | C_program p -> set_c_program p flow
+    | _ -> flow
 
 
   (** Computation of post-conditions *)

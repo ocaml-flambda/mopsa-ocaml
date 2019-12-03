@@ -656,7 +656,6 @@ void *realloc (void *__ptr, size_t __size);
  *
  * case "free" {
  *   assumes:  __ptr != NULL;
- *   requires: __ptr in Memory;
  *   requires: offset(__ptr) == 0;
  *   free:     __ptr;
  * }
@@ -742,10 +741,6 @@ void *aligned_alloc (size_t __alignment, size_t __size);
  */
 void abort (void);
 
-/*$
- * warn: "unsupported stub atexit";
- */
-int atexit (void (*__func) (void));
 
 #if defined __USE_ISOC11 || defined __USE_ISOCXX11
 
