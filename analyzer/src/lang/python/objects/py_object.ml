@@ -29,6 +29,19 @@ open Universal.Ast
 open Alarms
 
 
+let mk_py_ll_hasattr instance attr range =
+  mk_expr (E_py_ll_hasattr(instance, attr)) range
+
+let mk_py_ll_getattr instance attr range =
+  mk_expr (E_py_ll_getattr(instance, attr)) range
+
+let mk_py_ll_setattr instance attr valu range =
+  mk_expr (E_py_ll_setattr(instance, attr, Some valu)) range
+
+let mk_py_ll_delattr instance attr range =
+  mk_expr (E_py_ll_setattr(instance, attr, None)) range
+
+
 module Domain =
 struct
 
@@ -45,11 +58,12 @@ struct
 
   let exec _ _ _ _ = None
 
+
   let rec search_mro man attr ~cls_found ~nothing_found range mro flow =
     match mro with
     | [] -> nothing_found flow
     | cls :: tl ->
-      assume (mk_expr (E_py_ll_hasattr(mk_py_object cls range, attr)) range)
+      assume (mk_py_ll_hasattr (mk_py_object cls range) attr range)
         man flow
         ~fthen:(cls_found cls)
         ~felse:(search_mro man attr ~cls_found ~nothing_found range tl)
@@ -89,7 +103,8 @@ struct
                 let mro_ptype = mro (object_of_expr ptype) in
                 search_mro man attribute
                   ~cls_found:(fun cls flow ->
-                      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_getattr (mk_py_object cls range, attribute)) range) flow |>
+                      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)
+                        (mk_py_ll_getattr (mk_py_object cls range) attribute range) flow |>
                       Eval.bind (fun attribute flow ->
                           assume (mk_py_hasattr attribute "__get__" range)
                             man flow
@@ -97,7 +112,7 @@ struct
                               Soundness.warn_at range "FIXME: a NULL argument has been replaced with a None during evaluation";
                               man.eval
                                 (mk_py_call
-                                   (mk_expr (E_py_ll_getattr(attribute, mk_string "__get__" range)) range)
+                                   (mk_py_ll_getattr attribute (mk_string "__get__" range) range)
                                    [mk_py_none range; ptype]
                                    range
                                 ) flow
@@ -123,13 +138,17 @@ struct
           let mro_metatype = mro (object_of_expr metatype) in
           search_mro man attribute
             ~cls_found:(fun cls flow ->
-                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_getattr (mk_py_object cls range, attribute)) range) flow |>
+                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)
+                  (mk_py_ll_getattr (mk_py_object cls range) attribute range)
+                  flow |>
                 Eval.bind (fun obj' flow ->
                     assume
                       (mk_py_hasattr obj' "__get__" range)
                       man flow
                       ~fthen:(fun flow ->
-                          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_getattr(obj', mk_string "__get__" range)) range) flow |>
+                          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)
+                            (mk_py_ll_getattr obj' (mk_string "__get__" range) range)
+                            flow |>
                           Eval.bind (fun meta_get flow ->
                               assume
                                 (mk_py_hasattr obj' "__set__" range)
@@ -155,7 +174,9 @@ struct
           debug "mro of %a: %a" pp_expr class_of_exp (Format.pp_print_list (fun fmt (a, _) -> pp_addr fmt a)) mro;
           search_mro man attribute
             ~cls_found:(fun cls flow ->
-                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_getattr (mk_py_object cls range, attribute)) range) flow |>
+                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)
+                  (mk_py_ll_getattr (mk_py_object cls range) attribute range)
+                  flow |>
                 Eval.bind (fun obj' flow ->
                     assume
                       (mk_binop (mk_py_hasattr obj' "__get__" range) O_py_and (mk_py_hasattr obj' "__set__" range) range)
@@ -165,14 +186,13 @@ struct
                       *)
                       man flow
                       ~fthen:(fun flow ->
-                          (* FIXME: I guess it's E_py_ll_getattr rather than mk_py_attr *)
                           man.eval (mk_py_call (mk_py_attr obj' "__get__" range) [instance; class_of_exp] range) flow
                         )
                       ~felse:(fun flow ->
                           assume
-                            (mk_expr (E_py_ll_hasattr (instance, attribute)) range)
+                            (mk_py_ll_hasattr instance attribute range)
                             man flow
-                            ~fthen:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_getattr(instance, attribute)) range))
+                            ~fthen:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_ll_getattr instance attribute range))
                             ~felse:(fun flow ->
                                 assume
                                   (mk_py_isinstance_builtin obj' "function" range)
@@ -191,9 +211,9 @@ struct
               )
             ~nothing_found:(fun flow ->
                 assume
-                  (mk_expr (E_py_ll_hasattr (instance, attribute)) range)
+                  (mk_py_ll_hasattr instance attribute range)
                   man flow
-                  ~fthen:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_getattr(instance, attribute)) range))
+                  ~fthen:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_ll_getattr instance attribute range))
                   ~felse:(fun flow ->
                       debug "No attribute found for %a@\n" pp_expr instance;
                       Format.fprintf Format.str_formatter "'%a' object has no attribute '%s'" pp_expr instance (match ekind attribute with | E_constant (C_string attr) -> attr | _ -> assert false);
@@ -211,7 +231,7 @@ struct
           let mro = mro (object_of_expr class_of_lval) in
           search_mro man attr
             ~cls_found:(fun cls flow ->
-                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_getattr (mk_py_object cls range, attr)) range) flow |>
+                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_ll_getattr (mk_py_object cls range) attr range) flow |>
                 Eval.bind (fun obj' flow ->
                     assume (mk_py_hasattr obj' "__set__" range)
                       man flow
@@ -219,11 +239,13 @@ struct
                           man.eval (mk_py_call (mk_py_attr obj' "__set__" range) [lval; rval] range) flow
                         )
                       ~felse:(
-                        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_setattr (lval, attr, Some rval)) range)
+                        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)
+                          (mk_py_ll_setattr lval attr rval range)
                       )
                   )
               )
-            ~nothing_found:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_setattr (lval, attr, Some rval)) range))
+            ~nothing_found:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)
+                              (mk_py_ll_setattr lval attr rval range))
             range mro flow
         )
       |> Option.return
@@ -235,7 +257,8 @@ struct
           let mro = mro (object_of_expr class_of_lval) in
           search_mro man attr
             ~cls_found:(fun cls flow ->
-                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_getattr (mk_py_object cls range, attr)) range) flow |>
+                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)
+                  (mk_py_ll_getattr (mk_py_object cls range) attr range) flow |>
                 Eval.bind (fun obj' flow ->
                     assume (mk_py_hasattr obj' "__delete__" range)
                       man flow
@@ -243,11 +266,13 @@ struct
                           man.eval (mk_py_call (mk_py_attr obj' "__delete__" range) [lval] range) flow
                         )
                       ~felse:(
-                        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_setattr (lval, attr, None)) range)
+                        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)
+                          (mk_py_ll_delattr lval attr range)
                       )
                   )
               )
-            ~nothing_found:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_setattr (lval, attr, None)) range))
+            ~nothing_found:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)
+                              (mk_py_ll_delattr lval attr range))
             range mro flow
         )
       |> Option.return
