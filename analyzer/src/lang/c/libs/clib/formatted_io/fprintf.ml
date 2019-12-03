@@ -68,7 +68,8 @@ struct
     A_c_insufficient_format_args_cls;
     A_c_null_deref_cls;
     A_c_invalid_deref_cls;
-    A_c_use_after_free_cls
+    A_c_use_after_free_cls;
+    A_c_incorrect_format_arg_cls
   ]
 
 
@@ -85,42 +86,44 @@ struct
     match placeholder.op_typ with
     | Int t ->
       let typ = T_c_integer t in
-      if not (is_c_int_type arg.etyp) then
-                warn_at arg.erange "format expects argument of type '%a', but %a has type '%a'"
-          pp_typ typ
-          pp_expr (get_orig_expr arg)
-          pp_typ arg.etyp
-      ;
+      let flow =
+        if not (is_c_int_type arg.etyp) then
+          raise_c_incorrect_format_arg_alarm typ arg arg.erange (Sig.Stacked.Manager.of_domain_man man) flow
+        else
+          flow
+      in
       let exp = mk_c_cast arg typ arg.erange in
       man.eval ~zone:(Z_c,Z_u_num) exp flow >>$ fun _ flow ->
       Post.return flow
 
     | Float t ->
       let typ = T_c_float t in
-      if not (is_c_float_type arg.etyp) then
-        warn_at arg.erange "format expects argument of type '%a', but '%a' has type '%a'"
-          pp_typ typ
-          pp_expr (get_orig_expr arg)
-          pp_typ arg.etyp
-      ;
+      let flow =
+        if not (is_c_float_type arg.etyp) then
+          raise_c_incorrect_format_arg_alarm typ arg arg.erange (Sig.Stacked.Manager.of_domain_man man) flow
+        else
+          flow
+      in
       let exp = mk_c_cast arg typ arg.erange in
       man.eval ~zone:(Z_c,Z_u_num) exp flow >>$ fun _ flow ->
       Post.return flow
 
     | Pointer ->
-      if not (is_c_pointer_type arg.etyp) then
-        warn_at arg.erange "format expects a pointer argument, but '%a' has type '%a'"
-          pp_expr (get_orig_expr arg)
-          pp_typ arg.etyp
-      ;
+      let flow =
+        if not (is_c_pointer_type arg.etyp) then
+          raise_c_incorrect_format_arg_alarm (T_c_pointer void) arg arg.erange (Sig.Stacked.Manager.of_domain_man man) flow
+        else
+          flow
+      in
       Post.return flow
 
     | String ->
-      if not (is_c_pointer_type arg.etyp) then
-        warn_at arg.erange "format expects a pointer argument, but '%a' has type '%a'"
-          pp_expr (get_orig_expr arg)
-          pp_typ arg.etyp
-      ;
+      let flow =
+        if not (is_c_pointer_type arg.etyp) then
+          raise_c_incorrect_format_arg_alarm (T_c_pointer s8) arg arg.erange (Sig.Stacked.Manager.of_domain_man man) flow
+        else
+          flow
+      in
       assert_valid_string arg range man flow
 
 

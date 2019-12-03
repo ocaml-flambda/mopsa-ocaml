@@ -63,7 +63,8 @@ struct
     A_c_insufficient_format_args_cls;
     A_c_null_deref_cls;
     A_c_invalid_deref_cls;
-    A_c_use_after_free_cls
+    A_c_use_after_free_cls;
+    A_c_incorrect_format_arg_cls
   ]
 
   (** {2 Transfer functions} *)
@@ -83,24 +84,24 @@ struct
     | Int t ->
       let typ = T_c_integer t in
       let ptr = T_c_pointer typ in
-      if not (is_c_pointer_type arg.etyp) || not (is_c_int_type @@ under_type arg.etyp) then
-        warn_at arg.erange "format expects argument of type '%a', but %a has type '%a'"
-          pp_typ ptr
-          pp_expr (get_orig_expr arg)
-          pp_typ arg.etyp
-      ;
+      let flow =
+        if not (is_c_pointer_type arg.etyp) || not (is_c_int_type @@ under_type arg.etyp) then
+          raise_c_incorrect_format_arg_alarm ptr arg arg.erange (Sig.Stacked.Manager.of_domain_man man) flow
+        else
+          flow
+      in
       assert_valid_ptr arg range man flow >>$ fun () flow ->
       man.post (mk_assign (mk_c_deref (mk_c_cast arg ptr range) range) (mk_top typ range) range) flow
 
     | Float t ->
       let typ = T_c_float t in
       let ptr = T_c_pointer typ in
-      if not (is_c_pointer_type arg.etyp) || not (is_c_float_type @@ under_type arg.etyp) then
-        warn_at arg.erange "format expects argument of type '%a', but %a has type '%a'"
-          pp_typ ptr
-          pp_expr (get_orig_expr arg)
-          pp_typ arg.etyp
-      ;
+      let flow =
+        if not (is_c_pointer_type arg.etyp) || not (is_c_float_type @@ under_type arg.etyp) then
+          raise_c_incorrect_format_arg_alarm ptr arg arg.erange (Sig.Stacked.Manager.of_domain_man man) flow
+        else
+          flow
+      in
       assert_valid_ptr arg range man flow >>$ fun () flow ->
       man.post (mk_assign (mk_c_deref (mk_c_cast arg ptr range) range) (mk_top typ range) range) flow
 
@@ -108,11 +109,12 @@ struct
       assert false
 
     | String ->
-      if not (is_c_pointer_type arg.etyp) then
-        warn_at arg.erange "format expects a pointer argument, but %a has type '%a'"
-          pp_expr (get_orig_expr arg)
-          pp_typ arg.etyp
-      ;
+      let flow =
+        if not (is_c_pointer_type arg.etyp) then
+          raise_c_incorrect_format_arg_alarm (T_c_pointer s8) arg arg.erange (Sig.Stacked.Manager.of_domain_man man) flow
+        else
+          flow
+      in
       let w = match placeholder.ip_width with
         | None -> mk_top ul range
         | Some n -> mk_int (n-1) ~typ:ul range
