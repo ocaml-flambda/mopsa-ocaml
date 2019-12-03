@@ -157,12 +157,11 @@ struct
       | TOP, _ | _, TOP -> TOP
       | Nbt m1, Nbt m2 ->
         (* Remove keys that valuate to ⊤ in m1 or m2 *)
-        let top_keys = KeySet.union m1.top_keys m2.top_keys in
-        let m1' = { m1 with relations = remove_relation_keys top_keys m1.relations } in
-        let m2' = { m2 with relations = remove_relation_keys top_keys m2.relations } in
+        let m1' = { m1 with relations = remove_relation_keys m2.top_keys m1.relations } in
+        let m2' = { m2 with relations = remove_relation_keys m1.top_keys m2.relations } in
         Nbt {
           relations = Relation.union m1'.relations m2'.relations;
-          top_keys = top_keys;
+          top_keys = KeySet.union m1.top_keys m2.top_keys;
         }
 
 
