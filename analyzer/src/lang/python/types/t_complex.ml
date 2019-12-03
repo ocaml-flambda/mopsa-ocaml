@@ -49,8 +49,7 @@ module Domain =
         Addr_env.Domain.allocate_builtin man range flow "complex" (Some exp) |> Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "complex.__new__")}, _)}, [cls], []) ->
-         (* FIXME?*)
-         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_py_complex range) flow |> Option.return
+        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_py_complex range) flow |> Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("complex.__new__" as f))}, _)}, [cls; arg], []) ->
         Utils.check_instances_disj f man flow range [arg] [["float"; "int"; "str"]] (fun _ -> man.eval (mk_py_top T_py_complex range))

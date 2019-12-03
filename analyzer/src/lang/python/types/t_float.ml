@@ -56,11 +56,9 @@ module Domain =
         Eval.singleton (mk_py_object (Addr_env.addr_float (), None) range) flow |> Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "float.__new__")}, _)}, [cls], []) ->
-         (* FIXME?*)
          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top (T_float F_DOUBLE) range) flow |> Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "float.__new__")}, _)}, [cls; arg], []) ->
-         (* FIXME?*)
          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) arg flow |>
            Eval.bind (fun el flow ->
                assume

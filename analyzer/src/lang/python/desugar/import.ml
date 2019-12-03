@@ -269,7 +269,6 @@ module Domain =
           {stmt with skind = S_block ([], [])}, globals, man.exec stmt flow
 
 
-        (* FIXME: and substitution for other modules? *)
         | S_py_annot _
         | S_py_class _
         | S_py_function _ ->

@@ -447,7 +447,10 @@ class slice(object):
     def __new__(self, args): pass
 
 class NotImplementedType(object): pass
-class NoneType(object): pass
+
+class NoneType(object):
+    @mopsa.stub
+    def __bool__(self): return False
     # def __eq__(self, other): pass
 
 @mopsa.unsupported

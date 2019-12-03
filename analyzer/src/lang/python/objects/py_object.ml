@@ -155,7 +155,6 @@ struct
           debug "mro of %a: %a" pp_expr class_of_exp (Format.pp_print_list (fun fmt (a, _) -> pp_addr fmt a)) mro;
           search_mro man attribute
             ~cls_found:(fun cls flow ->
-                (* FIXME: disjunction between instances an non-instances *)
                 man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_getattr (mk_py_object cls range, attribute)) range) flow |>
                 Eval.bind (fun obj' flow ->
                     assume

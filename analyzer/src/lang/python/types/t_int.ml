@@ -68,12 +68,10 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_class (C_builtin "bool", _)}, _)}, [arg], [])
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "bool.__new__")}, _)}, [_; arg], []) ->
-      (* FIXME: check: According to the documentation: By default,
-         an object is considered true unless its class defines
-         either a __bool__() method that returns False or a __l
-         en__() method that returns zero, when called with the
-         object.  *)
-
+      (* According to the documentation: By default, an object is
+         considered true unless its class defines either a __bool__()
+         method that returns False or a __l en__() method that returns
+         zero, when called with the object.  *)
       man.eval arg flow |>
       Eval.bind (fun earg flow ->
           assume (mk_py_isinstance_builtin earg "bool" range)
@@ -108,13 +106,9 @@ struct
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow |> Option.return
 
     | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "int.__new__")}, _)} as f), [cls; arg], []) ->
-      (* FIXME *)
-      debug "ok, let's move on@\n";
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) {exp with ekind = E_py_call(f, [cls; arg; mk_int 10 range], [])} flow |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "int.__new__")}, _)}, [cls; str; base], []) ->
-      (* FIXME?*)
-      debug "ok@\n";
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow |> Option.return
 
     (* 𝔼⟦ int.__op__(e1, e2) | op ∈ {==, !=, <, ...} ⟧ *)
@@ -141,7 +135,7 @@ struct
                     man true_flow
                 )
               ~felse:(fun false_flow ->
-                  Format.fprintf Format.str_formatter "descriptor '%s' requires a 'int' object but received '%a'" f pp_expr e1; (* FIXME: could be cleaner I guess *)
+                  Format.fprintf Format.str_formatter "descriptor '%s' requires a 'int' object but received '%a'" f pp_expr e1;
                   let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) false_flow in
                   Eval.empty_singleton flow)
               man flow

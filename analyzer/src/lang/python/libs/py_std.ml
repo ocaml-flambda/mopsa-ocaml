@@ -126,7 +126,6 @@ struct
                     Eval.bind (fun len flow ->
                         assume
                           (mk_py_isinstance_builtin len "int" range)
-                          (* FIXME: i guess the condition is actually more subtle, like castable to int or something *)
                           ~fthen:(fun true_flow ->
                               Eval.singleton len true_flow)
                           ~felse:(fun false_flow ->
