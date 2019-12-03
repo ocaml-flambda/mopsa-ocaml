@@ -52,7 +52,7 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind=A_py_class (C_builtin "type", _)}, _)}, args, []) ->
       None
 
-    | E_py_call({ekind = E_py_object cls} as ecls, args, kwargs) when isclass cls ->
+    | E_py_call({ekind = E_py_object (({addr_kind=A_py_class _}, _) as cls)} as ecls, args, kwargs) ->
       debug "class call  %a@\n@\n" pp_expr exp;
       (* Call __new__ *)
       bind_list args (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>

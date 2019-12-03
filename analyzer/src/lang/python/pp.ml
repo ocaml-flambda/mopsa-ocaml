@@ -54,7 +54,6 @@ let () =
     | T_py_not_implemented -> pp_print_string fmt "notimplemented"
     | T_py_none -> pp_print_string fmt "none"
     | T_py_complex -> pp_print_string fmt "complex"
-    | T_py_empty -> pp_print_string fmt "empty"
     | T_py_bytes -> pp_print_string fmt "bytes"
     | _ -> default fmt typ
     );
@@ -63,7 +62,6 @@ let () =
       | C_py_none -> pp_print_string fmt "C_py_None"
       | C_py_not_implemented -> pp_print_string fmt "NotImplemented"
       | C_py_imag j -> fprintf fmt "%aj" pp_print_float j
-      | C_py_empty -> pp_print_string fmt "empty"
       | c -> default fmt c
     );
   register_operator_pp (fun default fmt -> function

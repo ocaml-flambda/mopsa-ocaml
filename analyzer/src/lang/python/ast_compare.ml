@@ -35,7 +35,6 @@ let () =
       | C_py_none, C_py_none
       | C_py_ellipsis, C_py_ellipsis
       | C_py_not_implemented, C_py_not_implemented
-      | C_py_empty, C_py_empty -> 0
       | _ -> default c1 c2);
   register_expr_compare (fun default e1 e2 ->
       match ekind e1, ekind e2 with
