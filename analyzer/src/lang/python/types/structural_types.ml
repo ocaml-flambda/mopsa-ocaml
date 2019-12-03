@@ -292,7 +292,23 @@ struct
       end
 
     | E_py_ll_setattr({ekind = E_py_object (alval, objexpr)}, attr, None) ->
-      panic_at range "attribute deletion unsupported yet"
+      let attr = match ekind attr with
+        | E_constant (C_string s) -> s
+        | E_py_object (_, Some {ekind = E_constant (C_string s)}) -> s
+        | _ -> assert false in
+      begin match akind alval with
+        | A_py_class _ ->
+          panic_at range "attribute deletion currently unsupported for classes"
+        | _ ->
+          let cur = get_env T_cur man flow in
+          let old_attrset = AMap.find alval cur in
+          let flow =
+            if AttrSet.mem_u attr old_attrset then
+              set_env T_cur (AMap.add alval (AttrSet.remove attr old_attrset) cur) man flow
+            else flow in
+          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range) flow |>
+          Option.return
+      end
 
     | _ ->
       None
