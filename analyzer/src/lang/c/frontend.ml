@@ -361,6 +361,7 @@ and from_function =
       c_func_variadic = func.func_variadic;
       c_func_stub = None;
       c_func_range = from_range func.func_range;
+      c_func_name_range = from_range func.func_name_range;
     }
 
 (** {2 Scope update} *)
