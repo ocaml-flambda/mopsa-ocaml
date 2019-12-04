@@ -62,7 +62,8 @@ int eaccess (const char *__name, int __type);
 #ifdef __USE_ATFILE
 
 /*$
- * requires: __fd in FileDescriptor;
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: f in FileRes;
  * local: int r = access(__file, __type);
  * ensures: return == r;
  */
@@ -71,7 +72,8 @@ int faccessat (int __fd, const char *__file, int __type, int __flag);
 #endif
 
 /*$
- * requires: __fd in FileDescriptor;
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: f in FileRes;
  * requires: __whence in [0, __whence];
  *
  * case "success" {
@@ -86,12 +88,12 @@ int faccessat (int __fd, const char *__file, int __type, int __flag);
 __off_t lseek (int __fd, __off_t __offset, int __whence);
 
 /*$
- * requires: __fd in FileDescriptor;
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: f in FileRes;
  *
  * case "success" {
- *   local:   void* addr = _mopsa_find_file_resource(__fd);
- *   free:    addr;
  *   ensures: return == 0;
+ *   free:    f;
  * }
  *
  * case "failure" {
@@ -102,11 +104,11 @@ __off_t lseek (int __fd, __off_t __offset, int __whence);
 int close (int __fd);
 
 /*$
- * requires: __fd in FileDescriptor;
- * requires: size(__buf) >= __nbytes;
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: f in FileRes;
+ * requires: valid_ptr_range(__buf, 0, __nbytes - 1);
  *
  * case "success" {
- *   requires: valid_ptr_range(__buf, 0, __nbytes - 1);
  *   assigns: __buf[0, __nbytes - 1];
  *   ensures: return in [0, __nbytes];
  * }
@@ -119,8 +121,9 @@ int close (int __fd);
 ssize_t read (int __fd, void *__buf, size_t __nbytes);
 
 /*$
- * requires: __fd in FileDescriptor;
- * requires: size(__buf) >= __n;
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: f in FileRes;
+ * requires: valid_ptr_range(__buf, 0, __n - 1);
  *
  * case "success" {
  *   ensures: return in [0, __n];
@@ -149,8 +152,10 @@ ssize_t pwrite (int __fd, const void *__buf, size_t __n,
 
 /*$
  * case "success" {
- *   local: int fd0 = new FileDescriptor;
- *   local: int fd1 = new FileDescriptor;
+ *   local:   void *f0 = new FileRes;
+ *   local:   void *f1 = new FileRes;
+ *   local:   int fd0 = _mopsa_register_file_resource(f0);
+ *   local:   int fd1 = _mopsa_register_file_resource(f1);
  *   requires: valid_ptr_range(__pipedes, 0, 1);
  *   assigns: __pipedes[0,1];
  *   ensures: (__pipedes[0])' == fd0;
@@ -234,10 +239,11 @@ int chown (const char *__file, __uid_t __owner, __gid_t __group);
 #if defined __USE_XOPEN_EXTENDED || defined __USE_XOPEN2K8
 
 /*$
- * requires: __fd in FileDescriptor;
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: f in FileRes;
  * requires: __owner >= 0;
  * requires: __group >= 0;
- * 
+ *
  * case "success" {
  *   ensures: return == 0;
  * }
@@ -263,11 +269,12 @@ int lchown (const char *__file, __uid_t __owner, __gid_t __group);
 #ifdef __USE_ATFILE
 
 /*$
- * requires: __fd in FileDescriptor;
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: f in FileRes;
  * requires: valid_string(__file);
  * requires: __owner >= 0;
  * requires: __group >= 0;
- * 
+ *
  * case "success" {
  *   ensures: return == 0;
  * }
@@ -300,8 +307,9 @@ int chdir (const char *__path);
 #if defined __USE_XOPEN_EXTENDED || defined __USE_XOPEN2K8
 
 /*$
- * requires: __fd in FileDescriptor;
- * 
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: f in FileRes;
+ *
  * case "success" {
  *   ensures: return == 0;
  * }
@@ -385,10 +393,11 @@ char *getwd (char *__buf);
 #endif
 
 /*$
- * requires: __fd in FileDescriptor;
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: f in FileRes;
  *
  * case "success" {
- *   local:   void *f = new FileRes;
+ *   local:   void *f2 = new FileRes;
  *   local:   int fd = _mopsa_register_file_resource(f);
  *   ensures: return == fd;
  * }
@@ -401,17 +410,19 @@ char *getwd (char *__buf);
 int dup (int __fd);
 
 /*$
- * requires: __fd in FileDescriptor;
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * local:    void* f2 = _mopsa_find_file_resource(__fd2);
+ * requires: f in FileRes;
  *
  * case "newfd" {
- *   assumes: not __fd2 in FileDescriptor;
- *   local: void *f = new FileRes;
- *   local: int x = _mopsa_register_file_resource_at(f, __fd2);
+ *   assumes: not f2 in FileRes;
+ *   local: void *f3 = new FileRes;
+ *   local: int x = _mopsa_register_file_resource_at(f3, __fd2);
  *   ensures: return == __fd2;
  * }
  *
  * case "reopen" {
- *   assumes: __fd2 in FileDescriptor;
+ *   assumes: f2 in FileDescriptor;
  *   ensures: return == __fd2;
  * }
  *
@@ -456,7 +467,8 @@ int execve (const char *__path, char *const __argv[],
 #ifdef __USE_XOPEN2K8
 
 /*$
- * requires: __fd in FileDescriptor;
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: f in FileRes;
  * requires: forall int i in [0, size(__argv) - 1]:
  *             valid_string(__argv[i]);
  * requires: forall int i in [0, size(__envp) - 1]:
