@@ -1606,7 +1606,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateFunctionDecl(const FunctionDecl *o
   check_null(org, "FunctionDecl");
   const FunctionDecl *x = org;
   //x = x->getCanonicalDecl();
-  WITH_CACHE_TUPLE(cacheMisc, ret, x, 14, {
+  WITH_CACHE_TUPLE(cacheMisc, ret, x, 15, {
       Store_uid(ret, 0);
       Store_field(ret, 1, TranslateNamedDecl(x));
       Store_field_option(ret, 2, x->hasBody() && x->doesThisDeclarationHaveABody(), TranslateStmt(x->getBody()));
@@ -1617,11 +1617,12 @@ CAMLprim value MLTreeBuilderVisitor::TranslateFunctionDecl(const FunctionDecl *o
       Store_field(ret, 7, TranslateQualType(x->getReturnType()));
       Store_field_array(ret, 8, x->getNumParams(), TranslateParmVarDecl(x->getParamDecl(i)));
       Store_field(ret, 9, loc.TranslateSourceRange(org->getSourceRange()));
-      Store_field(ret, 10, com.TranslateRawCommentOpt(Context->getRawCommentForDeclNoCache(org)));
+      Store_field(ret, 10, loc.TranslateSourceRange(org->getNameInfo().getSourceRange()));
+      Store_field(ret, 11, com.TranslateRawCommentOpt(Context->getRawCommentForDeclNoCache(org)));
       // C++
-      Store_field_option(ret, 11, x->getPrimaryTemplate (), TranslateFunctionTemplateSpecializationDecl(x));
-      Store_field_option(ret, 12, x->isOverloadedOperator(), TranslateOverloadedOperatorKind(x->getOverloadedOperator(), NULL));
-      Store_field_option(ret, 13, isa<CXXMethodDecl>(x), TranslateCXXMethodDecl(cast<CXXMethodDecl>(x)));
+      Store_field_option(ret, 12, x->getPrimaryTemplate (), TranslateFunctionTemplateSpecializationDecl(x));
+      Store_field_option(ret, 13, x->isOverloadedOperator(), TranslateOverloadedOperatorKind(x->getOverloadedOperator(), NULL));
+      Store_field_option(ret, 14, isa<CXXMethodDecl>(x), TranslateCXXMethodDecl(cast<CXXMethodDecl>(x)));
     });
   CAMLreturn(ret);
 }

@@ -204,8 +204,6 @@ struct
 
   let rec lfp count delay cond body man flow_init flow =
     debug "lfp called, range = %a, count = %d" (* @\n flow = %a@\n*) pp_range body.srange count (* (Flow.print man.lattice) flow *);
-    if count > 10 then
-      warn_at body.srange "lfp computation at iteration #%d" count;
     let flow' = Flow.remove T_continue flow |>
                 Flow.remove T_break |>
                 man.exec (mk_assume cond cond.erange) |>

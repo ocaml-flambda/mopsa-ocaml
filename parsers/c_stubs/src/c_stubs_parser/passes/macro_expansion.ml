@@ -54,6 +54,10 @@ and expand_macro_to_type macro macros enums =
 and visit_expr macros enums expr =
   bind_range expr @@ fun e ->
   match e with
+  | E_top t ->
+    let t = visit_type macros enums t in
+    E_top t
+
   | E_int _ | E_float _ | E_invalid
   | E_string _ | E_char _ | E_return ->
     e

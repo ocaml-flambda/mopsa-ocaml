@@ -272,7 +272,8 @@ type typ =
      mutable func_static_vars: variable list; (** static variables declared in the function *)
      mutable func_local_vars: variable list; (** local variables declared in the function (excluding parameters) *)
      mutable func_variadic: bool; (** whether the has a variable number of arguments *)
-     mutable func_range: range;
+     mutable func_range: range; (** range of the full declaration *)
+     mutable func_name_range: range; (** range of the name part of the declaration *)
      mutable func_com: comment list; (** comments associated to the declaration *)
    }
 

@@ -171,10 +171,10 @@ struct
       eval_quantified_formula cond_to_stmt EXISTS v s ff f.range man flow
 
     | F_in (e, S_interval (l, u)) ->
-      man.exec (mk_assume (mk_in e l u f.range) f.range) flow
+      man.exec (cond_to_stmt (mk_in e l u f.range) f.range) flow
 
     | F_in (e, S_resource res ) ->
-      man.exec (mk_assume (mk_stub_resource_mem e res f.range) f.range) flow
+      man.exec (cond_to_stmt (mk_stub_resource_mem e res f.range) f.range) flow
 
 
   (** Evaluate a quantified formula and its eventual negation *)
@@ -410,7 +410,7 @@ struct
 
       begin match return with
         | None ->
-          Eval.empty_singleton flow |>
+          Eval.singleton (mk_unit exp.erange) flow |>
           Option.return
 
         | Some v ->

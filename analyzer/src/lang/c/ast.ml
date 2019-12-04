@@ -172,7 +172,8 @@ type c_fundec = {
   mutable c_func_static_vars: var list; (** static variables declared in the function *)
   mutable c_func_local_vars: var list; (** local variables declared in the function (excluding parameters) *)
   mutable c_func_variadic: bool; (** whether the has a variable number of arguments *)
-  mutable c_func_range: range;
+  mutable c_func_range: range; (** location range of the declaration *)
+  mutable c_func_name_range: range; (** location range of the name in the declaration *)
   mutable c_func_stub: Stubs.Ast.stub_func option; (** stub comment *)
 }
 (** Function descriptor. *)
@@ -414,6 +415,25 @@ type c_program = {
 
 type prog_kind +=
   | C_program of c_program
+
+
+
+(** Flow-insensitive context to keep the analyzed C program *)
+let c_program_ctx =
+  let module K = Context.GenUnitKey(struct
+      type t = c_program
+      let print fmt prog = Format.fprintf fmt "C program"
+    end)
+  in
+  K.key
+
+(** Set the C program in the flow *)
+let set_c_program prog flow =
+  Flow.set_ctx (Flow.get_ctx flow |> Context.add_unit c_program_ctx prog) flow
+
+(** Get the C program from the flow *)
+let get_c_program flow =
+  Flow.get_ctx flow |> Context.find_unit c_program_ctx
 
 
 (*==========================================================================*)
@@ -1090,3 +1110,41 @@ let is_c_variable_length_array_type t =
   match remove_typedef_qual t with
   | T_c_array(_, C_array_length_expr _) -> true
   | _ -> false
+
+(** Find the definition of a C function *)
+let find_c_fundec_by_name name flow =
+  let prog = get_c_program flow in
+  List.find (fun f -> f.c_func_org_name = name) prog.c_functions
+
+(** Check if a pointer points to a nul-terminated array *)
+let assert_valid_string (p:expr) range man flow =
+  let open Sig.Domain.Manager in
+  let f = find_c_fundec_by_name "_mopsa_assert_valid_string" flow in
+  let stmt = mk_c_call_stmt f [p] range in
+  man.post stmt flow
+
+
+(** Check if a pointer points to a valid stream *)
+let assert_valid_stream (p:expr) range man flow =
+  let open Sig.Domain.Manager in
+  let f = find_c_fundec_by_name "_mopsa_assert_valid_stream" flow in
+  let stmt = mk_c_call_stmt f [p] range in
+  man.post stmt flow
+
+
+(** Check if a pointer is valid *)
+let assert_valid_ptr (p:expr) range man flow =
+  let open Sig.Domain.Manager in
+  let f = find_c_fundec_by_name "_mopsa_assert_valid_ptr" flow in
+  let stmt = mk_c_call_stmt f [p] range in
+  man.post stmt flow
+
+
+(** Randomize an entire array *)
+let memrand (p:expr) (i:expr) (j:expr) range man flow =
+  let open Sig.Domain.Manager in
+  let f = find_c_fundec_by_name "_mopsa_memrand" flow in
+  let stmt = mk_c_call_stmt f [p; i; j] range in
+  man.post stmt flow
+
+  

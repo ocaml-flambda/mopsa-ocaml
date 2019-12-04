@@ -957,8 +957,7 @@ struct
             Eval.singleton (mk_top typ range) flow
           )
         ~felse:(fun flow ->
-            (* FIXME: remove qunatifiers from offset *)
-            raise_c_out_bound_alarm ~base ~offset ~size range man flow |>
+            raise_c_out_bound_quantified_alarm ~base ~min ~max ~size range man flow |>
             Eval.empty_singleton
           )
         ~zone:Z_u_num man flow

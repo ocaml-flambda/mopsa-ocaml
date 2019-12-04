@@ -42,6 +42,8 @@ type alarm_class +=
   | A_c_no_next_va_arg_cls
   | A_c_read_only_modification_cls
   | A_c_dangling_deref_cls
+  | A_c_insufficient_format_args_cls
+  | A_c_incorrect_format_arg_cls
 
 type alarm_body +=
   | A_c_out_of_bound of base (** accessed base *) * int_itv (** offset interval *) * int_itv (** base_size *)
@@ -57,11 +59,22 @@ type alarm_body +=
   | A_c_divide_by_zero of expr (** denominator *)
   | A_c_invalid_bit_shift of expr (** shift expression *) * int_itv (** shift value *) * typ (** shifted type *)
   | A_c_dangling_deref of expr (** pointer *) * var (** pointed variable *) * range (** return location *)
+  | A_c_insufficient_format_args of int (** number of required arguments *) * int (** number of given arguments *)
+  | A_c_incorrect_format_arg of typ (** expected type *) * expr (** argument *)
 
 
 let raise_c_out_bound_alarm ~base ~offset ~size range man flow =
   let cs = Flow.get_callstack flow in
   let offset_itv = man.ask (mk_int_interval_query offset) flow in
+  let size_itv = man.ask (mk_int_interval_query size) flow in
+  let alarm = mk_alarm (A_c_out_of_bound(base,offset_itv,size_itv)) range ~cs in
+  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+
+let raise_c_out_bound_quantified_alarm ~base ~min ~max ~size range man flow =
+  let cs = Flow.get_callstack flow in
+  let min_itv = man.ask (mk_int_interval_query min) flow in
+  let max_itv = man.ask (mk_int_interval_query max) flow in
+  let offset_itv = I.join_bot min_itv max_itv in
   let size_itv = man.ask (mk_int_interval_query size) flow in
   let alarm = mk_alarm (A_c_out_of_bound(base,offset_itv,size_itv)) range ~cs in
   Flow.raise_alarm alarm ~bottom:true man.lattice flow
@@ -142,6 +155,17 @@ let raise_c_dangling_deref_alarm ptr var ret_range range man flow =
   let alarm = mk_alarm (A_c_dangling_deref(ptr',var,ret_range)) range ~cs in
   Flow.raise_alarm alarm ~bottom:true man.lattice flow
 
+let raise_c_insufficient_format_args_alarm required given range man flow =
+  let cs = Flow.get_callstack flow in
+  let alarm = mk_alarm (A_c_insufficient_format_args(required,given)) range ~cs in
+  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+
+let raise_c_incorrect_format_arg_alarm typ arg range man flow =
+  let cs = Flow.get_callstack flow in
+  let alarm = mk_alarm (A_c_incorrect_format_arg(typ,get_orig_expr arg)) range ~cs in
+  Flow.raise_alarm alarm ~bottom:false man.lattice flow
+
+
 let () =
   register_alarm_class (fun default fmt a ->
       match a with
@@ -158,6 +182,8 @@ let () =
       | A_c_invalid_bit_shift_cls -> Format.fprintf fmt "Invald bit-shift"
       | A_c_read_only_modification_cls -> Format.fprintf fmt "Modification of a readonly memory"
       | A_c_dangling_deref_cls -> Format.fprintf fmt "Dangling pointer dereference"
+      | A_c_insufficient_format_args_cls -> Format.fprintf fmt "Inufficient number of format arguments"
+      | A_c_incorrect_format_arg_cls -> Format.fprintf fmt "Incorrect type of format argument"
       | _ -> default fmt a
     )
 
@@ -178,6 +204,8 @@ let () =
         | A_c_invalid_bit_shift _ -> A_c_invalid_bit_shift_cls
         | A_c_read_only_modification _ -> A_c_read_only_modification_cls
         | A_c_dangling_deref _ -> A_c_dangling_deref_cls
+        | A_c_insufficient_format_args _ -> A_c_insufficient_format_args_cls
+        | A_c_incorrect_format_arg _ -> A_c_incorrect_format_arg_cls
         | _ -> next a
       );
     compare = (fun next a1 a2 ->
@@ -250,6 +278,12 @@ let () =
             (fun () -> compare_var v1 v2);
             (fun () -> compare_range r1 r2);
           ]
+
+        | A_c_insufficient_format_args(r1,g1), A_c_insufficient_format_args(r2,g2) ->
+          Compare.pair compare compare (r1,g1) (r2,g2)
+
+        | A_c_incorrect_format_arg(t1,e1), A_c_incorrect_format_arg(t2,e2) ->
+          Compare.pair compare_typ compare_expr (t1,e1) (t2,e2)
 
         | _ -> next a1 a2
       );
@@ -333,6 +367,15 @@ let () =
               Format.fprintf fmt "%a points to dangling local variable %a"
                 pp_expr p pp_var v
           end
+
+        | A_c_insufficient_format_args(required,given) ->
+          Format.fprintf fmt "%d argument%a given while %d argument%a required"
+            given Debug.plurial_int given
+            required Debug.plurial_int required
+
+        | A_c_incorrect_format_arg(typ,arg) ->
+          Format.fprintf fmt "format expects argument of type '%a', but '%a' has type '%a'"
+            pp_typ typ pp_expr arg pp_typ arg.etyp
 
         | _ -> next fmt a
       );

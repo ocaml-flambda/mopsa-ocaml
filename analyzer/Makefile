@@ -82,6 +82,7 @@ lang.c.memory.scalars = pointers machine_numbers
 lang.c.memory.scalars.pointers = value static_points_to domain
 lang.c.memory.packing = static_scope reductions
 lang.c.libs = builtins clib mopsalib compiler variadic cstubs
+lang.c.libs.clib.formatted_io = placeholder parser lexer format_string fscanf fprintf
 lang.c.libs.clib.file_descriptor = slot table domain
 lang.c.hooks = profiler
 
@@ -130,22 +131,52 @@ python-tests: mopsa
 	@ - $(foreach test, $(shell find $(TESTS) -name "*tests.py"), \
 		echo ""; \
 		echo "Running test $(test)"; \
-		$(MOPSAROOT)/bin/mopsa-python -unittest $(MOPSAPARAM) $(test); \
+		$(MOPSAROOT)/bin/mopsa-python -no-warning -unittest $(MOPSAPARAM) $(test); \
 	)
 
 c-tests: mopsa
 	@ - $(foreach test, $(shell find $(TESTS) -name "*tests.c"), \
 		echo ""; \
 		echo "Running test $(test)"; \
-		$(MOPSAROOT)/bin/mopsa-c -unittest $(MOPSAPARAM) $(test); \
+		$(MOPSAROOT)/bin/mopsa-c -no-warning -unittest $(MOPSAPARAM) $(test); \
 	)
 
 universal-tests: mopsa
 	@ - $(foreach test, $(shell find $(TESTS) -name "*tests.u"), \
 		echo ""; \
 		echo "Running test $(test)"; \
-		$(MOPSAROOT)/bin/mopsa-universal -unittest $(MOPSAPARAM) $(test); \
+		$(MOPSAROOT)/bin/mopsa-universal -no-warning -unittest $(MOPSAPARAM) $(test); \
 	)
 
 
 tests: c-tests python-tests universal-tests
+
+
+
+# install
+
+inst_src  := ../bin
+inst_bins := $(foreach f, $(wildcard $(inst_src)/*), $(shell basename $f))
+
+install:
+	@mkdir -p $(PREFIX)/bin
+	@for i in $(inst_bins); do \
+		if test -f $(inst_src)/$$i; then \
+			echo -e "$(INSTALLMSG)     bin/$$i"; \
+			cp -f $(inst_src)/$$i $(PREFIX)/bin/$$i; \
+		fi; \
+	done
+	@mkdir -p $(PREFIX)/share
+	@echo -e "$(INSTALLMSG)     share/mopsa"
+	@cp -r -f ../share/mopsa $(PREFIX)/share
+
+uninstall:
+	@for i in $(inst_bins); do \
+		if test -f $(inst_src)/$$i; then \
+			echo -e "$(UINSTALLMSG)     bin/$$i"; \
+			rm -f $(PREFIX)/bin/$$i; \
+		fi; \
+	done
+	@echo -e "$(UINSTALLMSG)     share/mopsa"
+	@rm -rf $(PREFIX)/share/mopsa
+
