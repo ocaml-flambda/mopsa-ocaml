@@ -205,6 +205,10 @@ type expr_kind +=
   | E_py_multi_compare of expr (* left *)
                       * operator list (* ops *)
                       * expr list (* comparators *)
+  | E_py_annot of expr
+  (* checking type annotations using stubs *)
+  | E_py_check_annot of expr * expr
+
 
 
 (*==========================================================================*)
@@ -227,6 +231,39 @@ type py_fundec = {
   py_func_ret_var: var
 }
 
+type py_func_sig =
+  {
+    py_funcs_parameters: var list;
+    py_funcs_defaults: bool list; (* true iff argument has default *)
+    py_funcs_exceptions: expr list;
+    py_funcs_types_in: expr option list;
+    py_funcs_type_out: expr option;
+  }
+
+
+type py_func_annot = {
+  py_funca_var: var;
+  py_funca_decors: expr list;
+  py_funca_range: range;
+  py_funca_ret_var: var;
+  py_funca_sig: py_func_sig list;
+}
+
+let pp_py_func_sig (fmt: Format.formatter) (sign: py_func_sig) =
+  (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ") (fun fmt (p, a) ->
+       Format.fprintf fmt "%a: %a" pp_var p (Option.print pp_expr) a))
+    fmt (List.combine sign.py_funcs_parameters sign.py_funcs_types_in)
+
+let pp_py_func_annot (fmt:Format.formatter) (a:py_func_annot) =
+  List.iter (fun sign ->
+      Format.fprintf fmt "%a%a(%a) -> %a: ...@\n"
+          (fun fmt _ -> if a.py_funca_decors = [] then Format.fprintf fmt ""
+           else Format.fprintf fmt "@%a@\n" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ") pp_expr) a.py_funca_decors) ()
+          pp_var a.py_funca_var
+          pp_py_func_sig sign
+          (Option.print pp_expr) sign.py_funcs_type_out
+    ) a.py_funca_sig
+
 (** A Python class *)
 type py_clsdec = {
   py_cls_var : var; (** class object variable *)
@@ -238,6 +275,14 @@ type py_clsdec = {
   py_cls_range : range; (** range of the class *)
 }
 
+type py_cls_annot = {
+  py_cls_a_var : var;
+  py_cls_a_body : stmt;
+  py_cls_a_bases : expr list;
+  py_cls_a_abases : expr list; (* bases from the typing module, hopefully *)
+  py_cls_a_static_attributes: var list;
+  py_cls_a_range : range;
+}
 
 
 (** Exception handler *)
@@ -277,6 +322,9 @@ type stmt_kind +=
 
   (** increment assignments *)
   | S_py_aug_assign of expr * operator * expr
+
+  (** type annotations for variables *)
+  | S_py_annot of expr * expr
 
   (** for loops *)
   | S_py_for of expr (** target *) *
@@ -372,6 +420,10 @@ let mk_raise exc range =
 
 let mk_py_call func args range =
   mk_expr (E_py_call (func, args, [])) range
+
+let mk_py_kall func args kwargs range =
+  (* call with kwargs *)
+  mk_expr (E_py_call (func, args, kwargs)) range
 
 let mk_py_attr obj attr ?(etyp=T_any) range =
   mk_expr (E_py_attribute (obj, attr)) ~etyp range

@@ -41,9 +41,9 @@ val join : 'a eval  -> 'a eval  -> 'a eval
 
 val meet : 'a eval  -> 'a eval  -> 'a eval
 
-val join_list : empty:('a eval) -> 'a eval list -> 'a eval
+val join_list : empty:(unit -> 'a eval) -> 'a eval list -> 'a eval
 
-val meet_list : empty:('a eval) -> 'a eval list -> 'a eval
+val meet_list : empty:(unit -> 'a eval) -> 'a eval list -> 'a eval
 
 val print: Format.formatter -> 'a eval -> unit
 

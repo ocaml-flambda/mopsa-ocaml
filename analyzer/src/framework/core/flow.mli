@@ -82,6 +82,10 @@ val set : token -> 'a -> 'a lattice -> 'a flow -> 'a flow
 (** [set tk a lat flow] overwrites the binding of token [tk] in [flow]
     with the abstract element [a]. *)
 
+val set_bottom : token -> 'a flow -> 'a flow
+(** [set_bottom tk lat flow] overwrites the binding of token [tk] in [flow]
+    with a ⊥ environment. *)
+
 val copy : token -> token -> 'a lattice -> 'a flow -> 'a flow -> 'a flow
 (** [copy tk1 tk2 lat flow1 flow2] copies the environment at token
     [tk1] in [flow1] into token [tk2] in [flow2] *)
@@ -128,7 +132,7 @@ val get_token_map : 'a flow -> 'a TokenMap.t
 
 val add_alarm : ?force:bool -> alarm -> 'a lattice -> 'a flow -> 'a flow
 
-val raise_alarm : alarm -> ?bottom:bool -> 'a lattice -> 'a flow -> 'a flow
+val raise_alarm : ?force:bool -> ?bottom:bool -> alarm -> 'a lattice -> 'a flow -> 'a flow
 
 val get_alarms : 'a flow -> AlarmSet.t
 
@@ -147,3 +151,6 @@ val set_callstack : cs -> 'a flow -> 'a flow
 val push_callstack : string -> Location.range -> 'a flow -> 'a flow
 
 val pop_callstack : 'a flow -> Callstack.call * 'a flow
+
+val bottom_from : 'a flow -> 'a flow
+(** Empty set of flows *)

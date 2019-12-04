@@ -19,42 +19,21 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Alarms for C runtime errors *)
+
+(** Utility functions for updating the scope due to jump statements *)
 
 open Mopsa
-
-type alarm_category +=
-  | AOutOfBound
-  | ANullDeref
-  | AInvalidDeref
-  | ADivideByZero
-  | AIntegerOverflow
-  | AIllegalPointerDiff
-  | AIllegalPointerOrder
-  | AVaArgNoNext
-  | AReadOnlyModification
+open Sig.Domain.Manager
+open Universal.Ast
+open Ast
 
 
-let raise_c_alarm a range ?(bottom=false) lattice flow =
-  let cs = Flow.get_callstack flow in
-  let alarm = mk_alarm a range ~cs in
-  Flow.raise_alarm alarm ~bottom lattice flow
-
-
-let () =
-  register_alarm_category {
-      compare = (fun default a b -> default a b);
-      print = (fun default fmt a ->
-          match a with
-          | AOutOfBound -> Format.fprintf fmt "Out of bound access"
-          | ANullDeref -> Format.fprintf fmt "Null pointer dereference"
-          | AInvalidDeref -> Format.fprintf fmt "Invalid pointer dereference"
-          | ADivideByZero -> Format.fprintf fmt "Division by zero"
-          | AIntegerOverflow -> Format.fprintf fmt "Integer overflow"
-          | AIllegalPointerDiff -> Format.fprintf fmt "Illegal pointer difference"
-          | AIllegalPointerOrder -> Format.fprintf fmt "Illegal pointer comparison"
-          | AVaArgNoNext -> Format.fprintf fmt "No next argument for va_arg"
-          | AReadOnlyModification -> Format.fprintf fmt "Modification of a readonly memory"
-          | _ -> default fmt a
-        );
-    };
+(* Update the scope by removing/adding variables as indicated by [upd] *)
+let update_scope upd range man flow =
+  let flow = List.fold_left (fun flow v ->
+      man.exec (mk_remove_var v range) flow
+    ) flow upd.c_scope_var_removed
+  in
+  List.fold_left (fun acc v ->
+      man.exec (mk_c_declaration v None (var_scope v) range) acc
+    ) flow upd.c_scope_var_added

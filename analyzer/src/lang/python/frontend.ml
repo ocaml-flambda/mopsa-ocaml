@@ -33,6 +33,7 @@ let debug fmt = Debug.debug ~channel:"python.frontend" fmt
 let rec parse_program (files: string list) : program =
   match files with
   | [filename] ->
+    debug "parsing %s" filename;
     let ast, counter = Py_parser.Main.parse_file ~counter:(Framework.Ast.Var.get_vcounter_val ()) filename in
     Framework.Ast.Var.start_vcounter_at counter;
     {
@@ -73,6 +74,11 @@ and from_stmt (stmt: Py_parser.Ast.stmt) : stmt =
     | S_assign (x, e) ->
       S_assign (from_exp x, from_exp e)
 
+    | S_type_annot (x, e) ->
+      let expr = from_exp e in
+      let expr = {expr with ekind = E_py_annot expr} in
+      S_py_annot (from_exp x, expr)
+
     | S_expression e ->
       Universal.Ast.S_expression (from_exp e)
 
@@ -90,7 +96,7 @@ and from_stmt (stmt: Py_parser.Ast.stmt) : stmt =
       Universal.Ast.S_continue
 
     | S_block sl ->
-      Universal.Ast.S_block (List.map from_stmt sl)
+      Universal.Ast.S_block (List.map from_stmt sl, [])
 
     | S_aug_assign (x, op, e) ->
       S_py_aug_assign(from_exp x, from_binop op, from_exp e)
@@ -168,7 +174,7 @@ and from_stmt (stmt: Py_parser.Ast.stmt) : stmt =
         from_stmt body
       )
 
-    | S_pass -> Universal.Ast.S_block []
+    | S_pass -> Universal.Ast.S_block ([],[])
 
     | S_delete e -> S_py_delete (from_exp e)
 
@@ -181,7 +187,7 @@ and from_stmt (stmt: Py_parser.Ast.stmt) : stmt =
 (** Translate an optional statement into en eventual empty one *)
 and from_stmt_option : Location.range -> Py_parser.Ast.stmt option -> stmt
   = fun none_case_range -> function
-    | None -> {skind = Universal.Ast.S_block []; srange = none_case_range}
+    | None -> {skind = Universal.Ast.S_block ([],[]); srange = none_case_range}
     | Some s -> from_stmt s
 
 and from_exp_option : Py_parser.Ast.expr option -> expr option

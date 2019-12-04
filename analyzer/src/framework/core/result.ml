@@ -132,11 +132,19 @@ let map_cases
 
 
 (** Map outputs of a result *)
-let map (f:'r->'r) (r:('a,'r) result) : ('a,'r) result =
+let map (f:'r->'s) (r:('a,'r) result) : ('a,'s) result =
   map_cases (fun case ->
-      match case.case_output with
-      | Some o -> { case with case_output = Some (f o) }
-      | None -> case
+      let output = match case.case_output with
+        | Some o -> Some (f o)
+        | None -> None
+      in
+      {
+        case_output = output;
+        case_flow = case.case_flow;
+        case_alarms = case.case_alarms;
+        case_log = case.case_log;
+        case_cleaners = case.case_cleaners;
+      }
     ) r
   
 
@@ -286,14 +294,14 @@ let meet (r1:('a,'r) result) (r2:('a,'r) result) : ('a,'r) result =
 (** Join a list of results *)
 let join_list ~empty (l: ('a,'r) result list) : ('a,'r) result =
   match l with
-  | [] -> empty
+  | [] -> empty ()
   | hd :: tl -> List.fold_left join hd tl
 
 
 (** Meet a list of results *)
 let meet_list ~empty (l: ('a,'r) result list) : ('a,'r) result =
   match l with
-  | [] -> empty
+  | [] -> empty ()
   | hd :: tl -> List.fold_left meet hd tl
 
 

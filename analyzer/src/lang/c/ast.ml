@@ -170,9 +170,10 @@ type c_fundec = {
   mutable c_func_parameters: var list; (** function parameters *)
   mutable c_func_body: stmt option; (** function body *)
   mutable c_func_static_vars: var list; (** static variables declared in the function *)
-  mutable c_func_local_vars: var list; (** local variables declared in the function (exclusing parameters) *)
+  mutable c_func_local_vars: var list; (** local variables declared in the function (excluding parameters) *)
   mutable c_func_variadic: bool; (** whether the has a variable number of arguments *)
-  mutable c_func_range: range;
+  mutable c_func_range: range; (** location range of the declaration *)
+  mutable c_func_name_range: range; (** location range of the name in the declaration *)
   mutable c_func_stub: Stubs.Ast.stub_func option; (** stub comment *)
 }
 (** Function descriptor. *)
@@ -202,9 +203,15 @@ let pp_scope fmt s =
 
 (** Flat variable initialization *)
 type c_flat_init =
-  | C_flat_expr of expr * typ       (** Init expression *)
-  | C_flat_none of Z.t * typ        (** Uninitialized bytes *)
-  | C_flat_fill of expr * typ * Z.t (** Filler expression *)
+  | C_flat_expr of expr (** initialization expression *) * Z.t (** offset *) * typ (** type *)
+  (** Expression initializer *)
+
+  | C_flat_none of Z.t (** number of duplicates *) * Z.t (** offset *) * typ (** type *)
+  (** Uninitialized bytes *)
+
+  | C_flat_fill of expr (** filler expression *) * Z.t (** number of duplicates *) * Z.t (** offset *) * typ (** type *)
+  (** Filler initializer *)
+
 
 (** Variable initialization. *)
 type c_var_init =
@@ -333,6 +340,24 @@ type expr_kind +=
 
   | E_c_atomic of int (** operation *) * expr * expr
 
+
+
+
+(*==========================================================================*)
+                           (** {2 Scope update} *)
+(*==========================================================================*)
+
+
+type c_scope_update = {
+  c_scope_var_added:   var list;
+  c_scope_var_removed: var list;
+}
+(** Scope update information for jump statements *)
+
+
+
+
+
 (*==========================================================================*)
                            (** {2 Statements} *)
 (*==========================================================================*)
@@ -357,7 +382,16 @@ type stmt_kind +=
   (** for loop; the scope of the locals declared in the init block
       is the while for loop *)
 
-  | S_c_goto of string
+  | S_c_return of expr option * c_scope_update
+  (** return statement *)
+
+  | S_c_break of c_scope_update
+  (** break statement *)
+
+  | S_c_continue of c_scope_update
+  (** continue statement *)
+
+  | S_c_goto of string * c_scope_update
   (** goto statements. *)
 
   | S_c_switch of expr * stmt
@@ -366,10 +400,10 @@ type stmt_kind +=
   | S_c_label of string
   (** statement label. *)
 
-  | S_c_switch_case of expr
+  | S_c_switch_case of expr * c_scope_update
   (** case of a switch statement. *)
 
-  | S_c_switch_default
+  | S_c_switch_default of c_scope_update
   (** default case of switch statements. *)
 
 
@@ -381,6 +415,25 @@ type c_program = {
 
 type prog_kind +=
   | C_program of c_program
+
+
+
+(** Flow-insensitive context to keep the analyzed C program *)
+let c_program_ctx =
+  let module K = Context.GenUnitKey(struct
+      type t = c_program
+      let print fmt prog = Format.fprintf fmt "C program"
+    end)
+  in
+  K.key
+
+(** Set the C program in the flow *)
+let set_c_program prog flow =
+  Flow.set_ctx (Flow.get_ctx flow |> Context.add_unit c_program_ctx prog) flow
+
+(** Get the C program from the flow *)
+let get_c_program flow =
+  Flow.get_ctx flow |> Context.find_unit c_program_ctx
 
 
 (*==========================================================================*)
@@ -1025,22 +1078,73 @@ let is_c_expr_equals_z e z =
   | Some n -> Z.equal n z
 
 
+let is_c_constant e =
+  match c_expr_to_z e with
+  | None -> false
+  | Some _ -> true
+
+
 let is_c_deref e =
   match remove_casts e |> ekind with
   | E_c_deref _ -> true
   | _ -> false
 
 
-let is_pointer_offset_quantified p =
+let is_pointer_offset_forall_quantified p =
   let open Stubs.Ast in
   match ekind p with
-  | E_binop(_,e1,e2) when is_c_num_type e2.etyp -> is_expr_quantified e2
-  | E_binop(_,e1,e2) when is_c_num_type e1.etyp -> is_expr_quantified e1
+  | E_binop(_,e1,e2) when is_c_num_type e2.etyp -> is_expr_forall_quantified e2
+  | E_binop(_,e1,e2) when is_c_num_type e1.etyp -> is_expr_forall_quantified e1
   | _ -> false
 
-let is_lval_offset_quantified e =
+let is_lval_offset_forall_quantified e =
   let open Stubs.Ast in
   match remove_casts e |> ekind with
-  | E_c_deref(p) -> is_pointer_offset_quantified p
-  | E_c_array_subscript(_,o) -> is_expr_quantified o
+  | E_c_deref(p) -> is_pointer_offset_forall_quantified p
+  | E_c_array_subscript(_,o) -> is_expr_forall_quantified o
   | _ -> false
+
+
+(** Check if v is declared as a variable length array *)
+let is_c_variable_length_array_type t =
+  match remove_typedef_qual t with
+  | T_c_array(_, C_array_length_expr _) -> true
+  | _ -> false
+
+(** Find the definition of a C function *)
+let find_c_fundec_by_name name flow =
+  let prog = get_c_program flow in
+  List.find (fun f -> f.c_func_org_name = name) prog.c_functions
+
+(** Check if a pointer points to a nul-terminated array *)
+let assert_valid_string (p:expr) range man flow =
+  let open Sig.Domain.Manager in
+  let f = find_c_fundec_by_name "_mopsa_assert_valid_string" flow in
+  let stmt = mk_c_call_stmt f [p] range in
+  man.post stmt flow
+
+
+(** Check if a pointer points to a valid stream *)
+let assert_valid_stream (p:expr) range man flow =
+  let open Sig.Domain.Manager in
+  let f = find_c_fundec_by_name "_mopsa_assert_valid_stream" flow in
+  let stmt = mk_c_call_stmt f [p] range in
+  man.post stmt flow
+
+
+(** Check if a pointer is valid *)
+let assert_valid_ptr (p:expr) range man flow =
+  let open Sig.Domain.Manager in
+  let f = find_c_fundec_by_name "_mopsa_assert_valid_ptr" flow in
+  let stmt = mk_c_call_stmt f [p] range in
+  man.post stmt flow
+
+
+(** Randomize an entire array *)
+let memrand (p:expr) (i:expr) (j:expr) range man flow =
+  let open Sig.Domain.Manager in
+  let f = find_c_fundec_by_name "_mopsa_memrand" flow in
+  let stmt = mk_c_call_stmt f [p; i; j] range in
+  man.post stmt flow
+
+  

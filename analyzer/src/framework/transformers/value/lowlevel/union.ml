@@ -19,10 +19,10 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** [Disjoint ∈ 𝒱 × 𝒱 → 𝒱] creates an exclusive disjunction of two value
-    abstractions. The resulting value can be one of the argument abstractions,
-    but not both of them in the same time. This is useful when variables have
-    a single static type.
+(** [Union ∈ 𝒱 × 𝒱 → 𝒱] creates a sum type of two value abstractions.
+    The resulting value can be one of the argument abstractions, but not both
+    of them in the same time. This is useful when variables have a single
+    static type.
 *)
 
 open Ast.All
@@ -33,34 +33,92 @@ open Id
 open Query
 
 
+type ('a,'b) t =
+  | BOT
+  | V1 of 'a
+  | V2 of 'b
+  | TOP
+
+
+let get_left (type a) (v: a vmodule) (a:(a,'b) t) : a =
+  let module V = (val v) in
+  match a with
+  | V1 x -> x
+  | BOT | V2 _ -> V.bottom
+  | TOP -> V.top
+
+
+let get_right (type b) (v: b vmodule) (a:('a,b) t) : b =
+  let module V = (val v) in
+  match a with
+  | V2 x -> x
+  | BOT | V1 _ -> V.bottom
+  | TOP -> V.top
+
+
+let set_left (type a) (v: a vmodule) (x:a) (a:(a,'b) t) : (a,'b) t =
+  let module V = (val v) in
+  match a with
+  | V1 _ -> V1 x
+  | BOT | V2 _ | TOP -> a
+
+
+let set_right (type b) (v: b vmodule) (x:b) (a:('a,b) t) : ('a,b) t =
+  let module V = (val v) in
+  match a with
+  | V2 _ -> V2 x
+  | BOT | V1 _ | TOP -> a
+
+
+type _ id += V_union : 'a vmodule * 'b vmodule -> ('a,'b) t id
+
+
 module Make(V1:VALUE)(V2:VALUE) : VALUE =
 struct
 
   (** {2 Header of the abstraction} *)
   (** ***************************** *)
 
-  type t =
-    | BOT
-    | V1 of V1.t
-    | V2 of V2.t
-    | TOP
+  let name = "framework.combiners.value.union"
 
-  include GenValueId(
-    struct
-      type nonrec t = t
-      let name = "framework.combiners.value.disjoint"
-      let display = V1.display ^ " ⊎ " ^ V2.display
-    end
-    )
+  type nonrec t = (V1.t,V2.t) t
+
+  let id = V_union((module V1),(module V2))
+
+  let () =
+    let open Eq in
+    register_id {
+      eq = (
+        let f : type a. a id -> (a, t) eq option =
+          function
+          | V_union (v1,v2) ->
+            let module VV1 = (val v1) in
+            let module VV2 = (val v2) in
+            begin
+              match equal_id VV1.id V1.id with
+              | Some Eq ->
+                begin match equal_id VV2.id V2.id with
+                  | Some Eq -> Some Eq
+                  | None -> None
+                end
+              | None -> None
+            end
+          | _ -> None
+        in
+        f
+      );
+    }
+
+  let display = V1.display ^ " ⊎ " ^ V2.display
 
   let zones = V1.zones @ V2.zones
 
-  let types = V1.types @ V2.types
+  let mem_type t = V1.mem_type t || V2.mem_type t
 
   let bottom = BOT
 
   let top = TOP
-  
+
   let print fmt v =
     match v with
     | BOT -> Format.pp_print_string fmt Bot.bot_string
@@ -136,34 +194,21 @@ struct
     set = (fun v2 v -> man.set (V2 v2) v);
   }
 
-  let get man id a =
-    match V1.get (v1_man man) id a with
-    | Some v -> Some v
-    | None -> V2.get (v2_man man) id a
-
-  let set man id v a =
-    match V1.set (v1_man man) id v a with
-    | Some v -> Some v
-    | None -> V2.set (v2_man man) id v a
-
-
 
   (** {2 Forward semantics} *)
   (** ********************* *)
 
   let is_v1_type t =
-    List.exists (fun t' -> compare_typ t t' = 0) V1.types
+    V1.mem_type t
 
   let is_v2_type t =
-    List.exists (fun t' -> compare_typ t t' = 0) V2.types
+    V2.mem_type t
 
-  let of_constant t c =
-    if is_v1_type t then
-      V1 (V1.of_constant t c)
-    else if is_v2_type t then
-      V2 (V2.of_constant t c)
+  let constant t c =
+    if is_v1_type t then V1 (V1.constant t c)
+    else if is_v2_type t then V2 (V2.constant t c)
     else
-      Exceptions.panic "of_constant called on unsupported constant %a of type %a"
+      Exceptions.panic "unsupported constant %a of type %a"
         ~loc:__LOC__
         pp_constant c
         pp_typ t
@@ -249,17 +294,10 @@ struct
   (** ******************** *)
 
   let ask man q =
-    let a = V1.ask (v1_man man) q in
-    let b = V2.ask (v2_man man) q in
-    Option.neutral2 (join_query q) a b
+    let r1 = V1.ask (v1_man man) q in
+    let r2 = V2.ask (v2_man man) q in
+    Option.neutral2 (join_vquery q) r1 r2
 
-
-  (** {2 Reduction refiner} *)
-  (** ********************* *)
-
-  let refine man channel v =
-    V1.refine (v1_man man) channel v |>
-    Core.Channel.bind @@ V2.refine (v2_man man) channel
 
 
 

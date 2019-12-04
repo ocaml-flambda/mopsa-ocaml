@@ -20,57 +20,49 @@
 (****************************************************************************)
 
 
-(** Var_bounds - Context for saving invariants of variables bounds *)
+open Mopsa
+open Framework.Core.Sig.Domain.Stateless
+open Ast
+open Addr
+open MapExt
+open Universal.Ast
 
-open Ast.All
-open Core
+module Domain =
+  struct
 
+    include GenStatelessDomainId(struct
+        let name = "python.libs.typing"
+      end)
 
-let var_bounds_ctx =
-  let module K = Context.GenUnitKey(struct
-      type t = constant VarMap.t
-      let print fmt m =
-        Format.fprintf fmt "variables bounds: %a"
-          (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
-             (fun fmt (v,b) -> Format.fprintf fmt "%a: %a" pp_var v pp_constant b)
-          ) (VarMap.bindings m)
-    end)
-  in
-  K.key
+    let alarms = []
 
+    let interface = {
+      iexec = { provides = []; uses = [] };
+      ieval = { provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj] }
+    }
 
-(** Add the bounds of a variable to context *)
-let add_var_bounds_ctx v b uctx =
-  let m = try Context.ufind var_bounds_ctx uctx with Not_found -> VarMap.empty in
-  Context.uadd var_bounds_ctx (VarMap.add v b m) uctx
+    let init prog man flow =
+      flow
 
+    let exec _ _ _ _ = None
 
-(** Add the bounds of a variable to flow *)
-let add_var_bounds_flow v b flow =
-  let ctx = add_var_bounds_ctx v b (Flow.get_unit_ctx flow) in
-  Flow.set_unit_ctx ctx flow
-
-
-(** Remove the bounds of a variable from context *)
-let remove_var_bounds_ctx v ctx =
-  try
-    let m = Context.ufind var_bounds_ctx ctx in
-    let mm = VarMap.remove v m in
-    Context.uadd var_bounds_ctx mm ctx
-  with Not_found -> ctx
-
-
-(** Remove the bounds of a variable from flow *)
-let remove_var_bounds_flow v flow =
-  let ctx = remove_var_bounds_ctx v (Flow.get_unit_ctx flow) in
-  Flow.set_unit_ctx ctx flow
+    let eval zones exp man flow =
+      let range = erange exp in
+      match ekind exp with
+      | E_py_annot {ekind = E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_user c, _)}, _)}, {ekind = E_py_tuple annots}) } when get_orig_vname c.py_cls_var = "Union" ->
+        (* FIXME: we could eval i as a tuple, but then we would be somehow stuck I think *)
+        bind_list (List.map (fun (e:expr) -> mk_expr (E_py_annot e) range) annots) (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+        bind_some (fun types flow ->
+            Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow)
+              (List.map (fun e -> Eval.singleton e flow) types)
+          )
+        |> Option.return
 
 
-(** Find the bounds of a variable in context *)
-let find_var_bounds_ctx_opt v uctx =
-  try
-    let m = Context.ufind var_bounds_ctx uctx in
-    try Some (VarMap.find v m)
-    with Not_found -> None
-  with Not_found -> None
+      | _ -> None
 
+    let ask _ _ _ = None
+
+  end
+
+let () = Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)

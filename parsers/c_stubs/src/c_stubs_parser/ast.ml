@@ -94,6 +94,7 @@ and warn = string
 (** *=*=*=*=*=*=*=* *)
 
 and expr_kind =
+  | E_top       of C_AST.type_qual
   | E_int       of Z.t
   | E_float     of float
   | E_string    of string
@@ -178,6 +179,7 @@ let pp_builtin = Cst.pp_builtin
 
 let rec pp_expr fmt exp =
   match exp.content.kind with
+  | E_top(t) -> fprintf fmt "⊤(%a)" pp_c_qual_typ t
   | E_int n -> Z.pp_print fmt n
   | E_float f -> pp_print_float fmt f
   | E_string s -> fprintf fmt "\"%s\"" s

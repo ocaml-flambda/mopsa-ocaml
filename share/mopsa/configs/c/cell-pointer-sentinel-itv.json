@@ -23,12 +23,14 @@
             "c.desugar.constants",
             "c.desugar.conditions",
 
+            "c.memory.variable_length_array",
+
 	    // Libraries
             "c.libs.compiler",
             "c.libs.mopsalib",
             "c.libs.clib.file_descriptor",
-            "c.libs.clib.print",
-            "c.libs.clib.scanf",
+            "c.libs.clib.formatted_io.fprint",
+            "c.libs.clib.formatted_io.fscanf",
             "c.libs.variadic",
 	    "c.libs.cstubs",
 
@@ -57,7 +59,7 @@
                 },
 		"on": {
                     "nonrel": {
-			"disjoint": [
+			"union": [
 			    "universal.numeric.values.intervals.float",
                             "universal.numeric.values.intervals.integer"
 			]

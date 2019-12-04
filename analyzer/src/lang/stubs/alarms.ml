@@ -23,22 +23,46 @@
 
 open Mopsa
 open Ast
+open Sig.Stacked.Manager
 
-type alarm_category +=
-  | A_stub_invalid_require
 
-let raise_invalid_require range ?(bottom=false) lattice flow =
+type alarm_class +=
+  | A_stub_invalid_requires_cls
+
+
+type alarm_body +=
+  | A_stub_invalid_requires_condition of expr
+
+let raise_stub_invalid_requires cond range man flow =
   let cs = Flow.get_callstack flow in
-  let alarm = mk_alarm A_stub_invalid_require range ~cs in
-  Flow.raise_alarm alarm ~bottom lattice flow
+  let cond' = get_orig_expr cond in
+  let alarm = mk_alarm (A_stub_invalid_requires_condition cond') range ~cs in
+  Flow.raise_alarm alarm ~bottom:true man.lattice flow
 
 
 let () =
-  register_alarm_category {
-      compare = (fun default a b -> default a b);
-      print = (fun default fmt a ->
+  register_alarm_class (fun default fmt a ->
+      match a with
+      | A_stub_invalid_requires_cls -> Format.fprintf fmt "Invalid stub requirement"
+      | _ -> default fmt a
+    )
+
+
+let () =
+  register_alarm_body {
+    classifier = (fun next -> function
+        | A_stub_invalid_requires_condition _ -> A_stub_invalid_requires_cls
+        | a -> next a
+      );
+    compare = (fun next a1 a2 ->
+        match a1, a2 with
+        | A_stub_invalid_requires_condition e1, A_stub_invalid_requires_condition e2 ->
+          compare_expr e1 e2
+        | _ -> next a1 a2
+      );
+      print = (fun next fmt a ->
           match a with
-          | A_stub_invalid_require -> Format.fprintf fmt "Invalid stub requirement"
-          | _ -> default fmt a
+          | A_stub_invalid_requires_condition e -> Format.fprintf fmt "invalid requirement %a" pp_expr e
+          | _ -> next fmt a
         );
     };

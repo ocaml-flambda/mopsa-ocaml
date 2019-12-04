@@ -93,7 +93,10 @@ let mk_return_var call =
   mkv uniq_name (V_return call) call.etyp
 
 
-(* Context to keep return variable *)
+
+(** {2 Context to keep return variable} *)
+(** =================================== *)
+
 let return_key =
   let module K = Context.GenUnitKey(
     struct
@@ -253,7 +256,7 @@ let inline f params locals body ret range man flow =
   in
   match ret with
   | None ->
-    Eval.empty_singleton flow
+    Eval.singleton (mk_unit range) flow
 
   | Some v ->
     Eval.singleton (mk_var v range) flow ~cleaners:(

@@ -293,6 +293,9 @@ let compile ckind db args =
     | "-c"::rest ->
        mode := CC_COMPILE;
        doit rest
+    | ("-M"|"-MM"|"-MP")::rest ->
+       mode := CC_NOTHING;
+       doit rest
 
     | "-o"::o::rest ->
        (* out file *)
@@ -325,6 +328,16 @@ let compile ckind db args =
     | "--"::rest ->
        (* finish with files *)
        srcs := (!srcs)@(List.map absolute_path rest)
+
+    | "-plugin"::v::rest when ends_with "liblto_plugin.so" v ->
+       (* FIXME: this is a temporary fix for ignoring link time
+          optimization.  In some systems, ld is called after creating
+          an executable for performing link time optimization. Ignoring
+          this step *should* keep the DB correct, but a better test is
+          necessary to be sure about that.
+       *)
+       mode := CC_NOTHING;
+       ()
 
     | x::rest ->
        if starts_with "-Wl," x then

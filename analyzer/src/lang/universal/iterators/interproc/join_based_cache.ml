@@ -46,6 +46,8 @@ struct
     ieval = { provides = [Z_u, Z_any]; uses = [Z_u, Z_any] };
   }
 
+  let alarms = []
+
   let debug fmt = Debug.debug ~channel:name fmt
 
   module Fctx = Context.GenPolyKey(
@@ -97,6 +99,7 @@ struct
       in
       let params, locals, body, in_flow_cur = init_fun_params func args range man in_flow_cur in
       let in_flow_other = Flow.remove T_cur in_flow in
+      (* FIXME: join in_flow_other even if inline returns empty singleton. This means is done in sequential cache with a full Result.bind doing the join *)
       let ret = match func.fun_return_type with
         | None -> None
         | Some _ ->

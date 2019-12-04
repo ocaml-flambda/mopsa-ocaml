@@ -22,6 +22,7 @@
 (** Common constructs for points-to evaluations. *)
 
 open Mopsa
+open Universal.Ast
 open Base
 open Alarms
 
@@ -31,20 +32,21 @@ open Alarms
 type points_to =
   | P_fun of Ast.c_fundec
   | P_block of base (** base *) * expr (** offset *)
-  | P_valid
   | P_null
   | P_invalid
+  | P_top
 
 let pp_points_to fmt = function
   | P_fun f -> Format.fprintf fmt "(fp %s)" f.Ast.c_func_org_name
   | P_block(base, offset) -> Format.fprintf fmt "(%a, %a)" pp_base base pp_expr offset
-  | P_valid -> Format.pp_print_string fmt "Valid"
   | P_null -> Format.pp_print_string fmt "NULL"
   | P_invalid -> Format.pp_print_string fmt "Invalid"
+  | P_top -> Format.pp_print_string fmt "⊤"
 
 let compare_points_to p1 p2 =
   match p1, p2 with
-  | P_fun f1, P_fun f2 -> compare f1.Ast.c_func_unique_name f2.Ast.c_func_unique_name
+  | P_fun f1, P_fun f2 ->
+    compare f1.Ast.c_func_unique_name f2.Ast.c_func_unique_name
   | P_block (b1, o1), P_block (b2, o2) ->
     Compare.compose [
       (fun () -> compare_base b1 b2);
@@ -73,8 +75,9 @@ let mk_c_points_to_invalid range =
 let mk_c_points_to_fun f range =
   mk_c_points_to (P_fun f) range
 
-let mk_c_points_to_valid range =
-  mk_c_points_to P_valid range
+let mk_c_points_to_top range =
+  mk_c_points_to P_top range
+
 
 let () =
   register_expr_with_visitor {
@@ -111,25 +114,3 @@ let () =
         | _ -> Process
       );
   }
-
-
-
-let eval_pointed_base_offset ptr range (man:('a,'t,'s) Core.Sig.Stacked.Lowlevel.man) flow =
-  man.eval ptr ~zone:(Zone.Z_c_low_level, Z_c_points_to) flow >>$ fun pt flow ->
-
-  match ekind pt with
-  | E_c_points_to P_null ->
-    raise_c_alarm ANullDeref range ~bottom:true man.lattice flow |>
-    Result.empty_singleton
-
-  | E_c_points_to P_invalid ->
-    raise_c_alarm AInvalidDeref range ~bottom:true man.lattice flow |>
-    Result.empty_singleton
-
-  | E_c_points_to (P_block (base, offset)) ->
-    Result.singleton (Some (base, offset)) flow
-
-  | E_c_points_to P_valid ->
-    Result.singleton None flow
-
-  | _ -> assert false

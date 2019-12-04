@@ -109,6 +109,7 @@ struct
     ieval = { provides = []; uses = [] };
   }
 
+  let alarms = []
 
   (** {3 Cache of last fixpoint} *)
   (** ************************** *)
@@ -150,7 +151,7 @@ struct
           | _ -> false
         ) m in
       Some (LoopHeadMap.choose mf |> snd |> Flow.join man.lattice flow)
-      
+
     with Not_found ->
       (debug "no ctx found";
        None)
@@ -250,7 +251,7 @@ struct
         let flag, flow1', flow2' = unroll (i - 1) cond body man (Flow.copy_ctx flow2 flow1) in
         flag, flow1', Flow.join man.lattice flow2 flow2'
 
-  
+
   let rec exec zone stmt (man:('a,unit) man) flow =
     match skind stmt with
     | S_while(cond, body) ->

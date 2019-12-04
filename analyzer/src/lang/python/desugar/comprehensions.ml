@@ -43,6 +43,8 @@ module Domain =
       ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
     }
 
+    let alarms = []
+
     let unfold_comprehension expr comprehensions base append range =
          let tmp_acc = mk_range_attr_var range "tmp_acc" T_any in
          let acc_var = mk_var tmp_acc range in
@@ -51,7 +53,7 @@ module Domain =
               mk_stmt (S_expression (mk_py_call append (acc_var::expr) range)) range
            | (target, iter, conds)::tl ->
               let i_conds = List.rev conds in
-              let empty_stmt = mk_stmt (Universal.Ast.S_block []) range in
+              let empty_stmt = mk_block [] range in
               let if_stmt = List.fold_left (fun acc cond ->
                                 mk_stmt (Ast.S_py_if (cond, acc, empty_stmt)) range
                               ) (unfold_lc tl) i_conds in

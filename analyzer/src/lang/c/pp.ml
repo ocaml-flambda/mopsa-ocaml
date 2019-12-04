@@ -74,9 +74,9 @@ let rec pp_c_init fmt = function
          ~pp_sep:(fun fmt () -> fprintf fmt ", ")
          (fun fmt init ->
             match init with
-            | C_flat_expr (e,t) -> fprintf fmt "%a:%a" pp_expr e pp_c_type_short t
-            | C_flat_none (n,t) -> fprintf fmt "None:%a * %a" pp_c_type_short t Z.pp_print n
-            | C_flat_fill (e,t,n) -> fprintf fmt "%a:%a * %a" pp_expr e pp_c_type_short t Z.pp_print n
+            | C_flat_expr (e,o,t) -> fprintf fmt "%a:%a:%a" pp_expr e Z.pp_print o pp_c_type_short t
+            | C_flat_none (n,o,t) -> fprintf fmt "None:%a:%a * %a" Z.pp_print o pp_c_type_short t Z.pp_print n
+            | C_flat_fill (e,n,o,t) -> fprintf fmt "%a:%a:%a * %a" pp_expr e Z.pp_print o pp_c_type_short t Z.pp_print n
          )
       ) l
 
@@ -194,10 +194,14 @@ let () =
         fprintf fmt "@[<v 4>switch (%a) {@,%a@]@,}"
           pp_expr cond
           pp_stmt body
-      | S_c_switch_case(e) -> fprintf fmt "case %a:" pp_expr e
-      | S_c_switch_default -> fprintf fmt "default:"
+      | S_c_return(None,_) -> fprintf fmt "return;"
+      | S_c_return(Some e,_) -> fprintf fmt "return %a;" pp_expr e
+      | S_c_break _ -> fprintf fmt "break;"
+      | S_c_continue _ -> fprintf fmt "continue;"
+      | S_c_switch_case(e,_) -> fprintf fmt "case %a:" pp_expr e
+      | S_c_switch_default _ -> fprintf fmt "default:"
       | S_c_label l -> fprintf fmt "%s:" l
-      | S_c_goto l -> fprintf fmt "goto %s;" l
+      | S_c_goto (l,_) -> fprintf fmt "goto %s;" l
       | S_c_goto_stab s -> fprintf fmt "@[<v 4>goto_stab {@,%a@]@,};" pp_stmt s
       | _ -> default fmt stmt
     );

@@ -27,8 +27,17 @@ tau = 6.283185307179586
 inf = float('inf')
 nan = float('nan')
 
-def sin(x): return mopsa.random_float(-1, 1)
-def cos(x): return mopsa.random_float(-1, 1)
+def sin(x):
+    if isinstance(x, int) or isinstance(x, float):
+        return mopsa.random_float(-1, 1)
+    else:
+        raise TypeError
+def cos(x):
+    if isinstance(x, int) or isinstance(x, float):
+        return mopsa.random_float(-1, 1)
+    else:
+        raise TypeError
+
 
 def acos(x): return mopsa.random_float(0, pi) # -1 <= x <= 1
 def asin(x): return mopsa.random_float(-pi/2, pi/2) # -1 <= x <= 1

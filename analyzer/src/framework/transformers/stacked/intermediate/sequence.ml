@@ -51,6 +51,8 @@ struct
 
   let interface = Core.Interface.concat S1.interface S2.interface
 
+  let alarms = S1.alarms @ S2.alarms |> List.sort_uniq compare
+
   let bottom = S1.bottom, S2.bottom
 
   let top = S1.top, S2.top

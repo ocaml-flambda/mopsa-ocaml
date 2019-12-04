@@ -124,6 +124,52 @@ and formula =
   | F_in     of expr * set
 
 
+let compare_resource = C_stubs_parser.Ast.compare_resource
+
+let compare_set s1 s2 =
+  match s1, s2 with
+  | S_interval(a1, b1), S_interval(a2, b2) ->
+    Compare.compose [
+      (fun () -> compare_expr a1 a2);
+      (fun () -> compare_expr b1 b2);
+    ]
+
+  | S_resource r1, S_resource r2 ->
+    compare_resource r1 r2
+
+  | _ ->
+    compare s1 s2
+
+let rec compare_formula f1 f2 =
+  match f1.content, f2.content with
+  | F_expr e1, F_expr e2 -> compare_expr e1 e2
+  | F_binop(o1, f1, g1), F_binop(o2, f2, g2) ->
+    Compare.compose [
+      (fun () -> compare o1 o2);
+      (fun () -> compare_formula f1 f2);
+      (fun () -> compare_formula g1 g2);
+    ]
+  | F_not f1, F_not f2 -> compare_formula f1 f2
+  | F_forall(v1,s1,f1), F_forall(v2,s2,f2) ->
+    Compare.compose [
+      (fun () -> compare_var v1 v2);
+      (fun () -> compare_set s1 s2);
+      (fun () -> compare_formula f1 f2);
+    ]
+  | F_exists(v1,s1,f1), F_exists(v2,s2,f2) ->
+    Compare.compose [
+      (fun () -> compare_var v1 v2);
+      (fun () -> compare_set s1 s2);
+      (fun () -> compare_formula f1 f2);
+    ]
+  | F_in(e1,s1), F_in(e2,s2) ->
+    Compare.compose [
+      (fun () -> compare_expr e1 e2);
+      (fun () -> compare_set s1 s2)
+    ]
+  | x,y -> compare x y
+
+
 (** {2 Expressions} *)
 (*  =-=-=-=-=-=-=-= *)
 
@@ -164,7 +210,10 @@ type expr_kind +=
 
 type stmt_kind +=
   | S_stub_directive of stub_directive
-  (** Initialization of a variable with a stub *)
+  (** A call to a stub directive, which are stub functions called at the
+      initialization of the analysis. Useful to initialize variables with stub
+      formulas.
+  *)
 
   | S_stub_free of expr
   (** Release a resource *)
@@ -184,6 +233,10 @@ type stmt_kind +=
                               expr  (** index lower bound *) *
                               expr  (** index upper bound *)
                             ) list
+
+  | S_stub_requires of expr
+  (** Filter the current environments that verify a condition, and raise an
+      alarm if the condition may be violated. *)
 
 
 (** {2 Heap addresses for resources} *)
@@ -226,12 +279,12 @@ let mk_stub_resource_mem e res range =
 let mk_stub_primed e range =
   mk_expr (E_stub_primed e) ~etyp:e.etyp range
 
-(** Check whether an expression is quantified? *)
-let is_expr_quantified e =
+(** Check whether an expression is universally quantified? *)
+let is_expr_forall_quantified e =
   Visitor.fold_expr
     (fun acc e ->
        match ekind e with
-       | E_stub_quantified _ -> Keep true
+       | E_stub_quantified (FORALL,_,_) -> Keep true
        | _ -> VisitParts acc
     )
     (fun acc s -> VisitParts acc)
@@ -250,6 +303,8 @@ let mk_stub_assigns t offsets range =
 let mk_stub_rename_primed t offsets range =
   mk_stmt (S_stub_rename_primed (t, offsets)) range
 
+let mk_stub_requires cond range =
+  mk_stmt (S_stub_requires cond) range
 
 let is_stub_primed e =
   fold_expr
@@ -283,21 +338,39 @@ and visit_expr visitor e =
 let mk_stub_alloc_resource res range =
   mk_expr (E_stub_alloc res) range
 
-let compare_resource = C_stubs_parser.Ast.compare_resource
 
-let compare_set s1 s2 =
-  match s1, s2 with
-  | S_interval(a1, b1), S_interval(a2, b2) ->
-    Compare.compose [
-      (fun () -> compare_expr a1 a2);
-      (fun () -> compare_expr b1 b2);
-    ]
+let negate_log_binop : log_binop -> log_binop = function
+  | AND -> OR
+  | OR -> AND
+  | IMPLIES -> assert false
 
-  | S_resource r1, S_resource r2 ->
-    compare_resource r1 r2
 
-  | _ ->
-    compare s1 s2
+let flip_quantified_var v s f =
+  visit_expr_in_formula
+    (fun e ->
+       match ekind e with
+       | E_stub_quantified(FORALL, vv, s) when compare_var v vv = 0 ->
+         VisitParts { e with ekind = E_stub_quantified(EXISTS, v, s) }
+
+       | E_stub_quantified(EXISTS, vv, s) when compare_var v vv = 0 ->
+         VisitParts { e with ekind = E_stub_quantified(FORALL, v, s) }
+
+       | _ -> VisitParts e
+    ) f
+
+let flip_quantified_vars s f =
+  visit_expr_in_formula
+    (fun e ->
+       match ekind e with
+       | E_stub_quantified(FORALL, v, s) ->
+         VisitParts { e with ekind = E_stub_quantified(EXISTS, v, s) }
+
+       | E_stub_quantified(EXISTS, v, s) ->
+         VisitParts { e with ekind = E_stub_quantified(FORALL, v, s) }
+
+       | _ -> VisitParts e
+    ) f
+
 
 (** {2 Pretty printers} *)
 (** =-=-=-=-=-=-=-=-=-= *)
@@ -529,6 +602,9 @@ let () =
             (fun () -> Compare.list (Compare.pair compare_expr compare_expr) offsets1 offsets2);
           ]
 
+        | S_stub_requires(e1), S_stub_requires(e2) ->
+          compare_expr e1 e2
+
         | _ -> next s1 s2
       );
 
@@ -543,6 +619,10 @@ let () =
         | S_stub_assigns(t, offsets) -> panic "visitor for S_stub_assigns not supported"
 
         | S_stub_rename_primed(t, offsets) -> panic "visitor for S_stub_rename_primed not supported"
+
+        | S_stub_requires e ->
+          { exprs = [e]; stmts = [] },
+          (function { exprs = [e] } -> { s with skind = S_stub_requires e } | _ -> assert false)
 
         | _ -> next s
       );
@@ -578,6 +658,10 @@ let () =
                     pp_expr b
                )
             ) offsets
+
+        | S_stub_requires e ->
+          fprintf fmt "requires %a;" pp_expr e
+
         | _ -> next fmt s
       );
   }

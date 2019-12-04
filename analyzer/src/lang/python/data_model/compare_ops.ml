@@ -41,6 +41,8 @@ module Domain = struct
     ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
   }
 
+  let alarms = []
+
   let init _ _ flow = flow
 
 
@@ -119,7 +121,8 @@ module Domain = struct
                                 Eval.bind (fun rcmp flow ->
                                     assume (mk_py_isinstance rcmp not_implemented_type range) man flow
                                       ~fthen:(fun flow ->
-                                          let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) flow in
+                                          Format.fprintf Format.str_formatter "'%s' not supported between instances of '%a' and '%a'" op_fun pp_addr_kind (akind @@ fst cls1) pp_addr_kind (akind @@ fst cls2);
+                                          let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow in
                                           Eval.empty_singleton flow
                                         )
                                       ~felse:(fun flow ->

@@ -41,6 +41,8 @@ module Domain =
       ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
     }
 
+    let alarms = []
+
     let init _ _ flow = flow
 
     let eval zs exp (man:('a, unit) man) (flow:'a flow) =
@@ -134,7 +136,9 @@ module Domain =
                                    panic_at range "evaluating 'in' operator using __getitem__ not supported"
                                  )
                                ~felse:(fun false_flow ->
-                                   let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow in
+                                   Format.fprintf Format.str_formatter "argument of type '%a' is not iterable" pp_addr_kind (akind @@ fst @@ object_of_expr cls2);
+                                   let msg = Format.flush_str_formatter () in
+                                   let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow in
                                    Eval.empty_singleton flow
                                  )
                                man false_flow

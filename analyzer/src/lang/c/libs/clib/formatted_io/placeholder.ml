@@ -19,54 +19,29 @@
 (*                                                                          *)
 (****************************************************************************)
 
+(** Types corresponding to placeholders of format strings *)
 
-(** Context for stocking widening thresholds *)
+open Ast
 
-open Ast.All
-open Core
+(** C type of a placeholder *)
+type placeholder_type =
+  | Int of c_integer_type
+  | Float of c_float_type
+  | Pointer
+  | String
 
+(** Placeholder for output streams, e.g. printf *)
+type output_placeholder = {
+  op_width: int option;
+  op_precision: int option;
+  op_typ: placeholder_type;
+}
 
-(** Widening thresholds are represented as a set of expressions *)
-module Thresholds = SetExt.Make(struct type t = expr let compare = compare_expr end)
+(** Placeholder for input streams, e.g. scanf *)
+type intput_placeholder = {
+  ip_width: int option;
+  ip_typ: placeholder_type;
+}
+  
 
-
-(** Context key for indexing widening thresholds within the context table *)
-let widening_thresholds_ctx_key =
-  let module K = Context.GenUnitKey(
-    struct
-      type t = Thresholds.t
-      let print fmt t =
-        Format.fprintf fmt "widening thresholds: %a"
-          (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_expr)
-          (Thresholds.elements t)
-    end
-  )
-  in
-  K.key
-
-
-(** Add a condition expression to widening thresholds *)
-let add_widening_threshold cond flow =
-  let ctx = Flow.get_ctx flow in
-  let thresholds = try Context.find_unit widening_thresholds_ctx_key ctx with Not_found -> Thresholds.empty in
-  let thresholds' = Thresholds.add cond thresholds in
-  let ctx' = Context.add_unit widening_thresholds_ctx_key thresholds' ctx in
-  Flow.set_ctx ctx' flow
-
-
-(** Return the list of widening thresholds *)
-let get_widening_thresholds flow =
-  let ctx = Flow.get_ctx flow in
-  try Context.find_unit widening_thresholds_ctx_key ctx |>
-      Thresholds.elements
-  with Not_found -> []
-
-
-(** Fold over widening thresholds *)
-let fold_widening_thresholds f x0 flow =
-  let ctx = Flow.get_ctx flow in
-  try
-    let thresholds = Context.find_unit widening_thresholds_ctx_key ctx in
-    Thresholds.fold f thresholds x0
-  with Not_found ->
-    x0
+  

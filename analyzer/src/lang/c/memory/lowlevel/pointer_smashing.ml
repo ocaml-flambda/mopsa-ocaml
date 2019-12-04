@@ -31,7 +31,7 @@ open Universal.Zone
 open Zone
 open Common.Base
 open Common.Points_to
-open Alarms
+open Common.Alarms
 
 
 module Domain =
@@ -64,6 +64,7 @@ struct
     }
   }
 
+  let alarms = []
 
   (** {2 Auxiliary variables} *)
   (** *********************** *)
@@ -137,6 +138,24 @@ struct
   (** ************************* *)
 
 
+  (** Get the base and offset pointed by ptr. Since we do not track invalid
+      dereferences, we ignore invalid pointers.
+  *)
+  let eval_pointed_base_offset ptr range man flow =
+    man.eval ptr ~zone:(Zone.Z_c_low_level, Z_c_points_to) flow >>$ fun pt flow ->
+    match ekind pt with
+    | E_c_points_to P_null
+    | E_c_points_to P_invalid
+    | E_c_points_to (P_block (D _, _))
+    | E_c_points_to P_top ->
+      Result.empty_singleton flow
+
+    | E_c_points_to (P_block (base, offset)) ->
+      Result.singleton (base, offset) flow
+
+    | _ -> assert false
+
+
   (** Predicate defining interesting bases for which the domain will
       track the sentinel position.
   *)
@@ -177,9 +196,9 @@ struct
 
       (* Check if an initializer has a pointer type *)
       let is_non_pointer = function
-        | C_flat_none (_,t)
-        | C_flat_expr(_,t)
-        | C_flat_fill(_,t,_) ->
+        | C_flat_none (_,_,t)
+        | C_flat_expr(_,_,t)
+        | C_flat_fill(_,_,_,t) ->
           not (is_c_pointer_type t)
       in
 
@@ -194,19 +213,17 @@ struct
       (* Collect pointers initializations *)
       let rec aux init flow : ('a,expr list) result =
         match init with
-        | [] -> debug "1";Result.singleton [] flow
+        | [] -> Result.singleton [] flow
 
-        | C_flat_none (n,_) :: tl  ->
-          debug "3";
+        | C_flat_none (n,_,_) :: tl  ->
           let e = if is_global then mk_c_null range else mk_c_invalid_pointer range in
           aux tl flow >>$ fun el flow ->
           Result.singleton (e::el) flow
 
-        | hd :: _ when is_non_pointer hd -> debug "2";raise NonPointerFound
+        | hd :: _ when is_non_pointer hd -> raise NonPointerFound
 
-        | C_flat_fill (e,_,_):: tl
-        | C_flat_expr (e,_) :: tl ->
-          debug "4";
+        | C_flat_fill (e,_,_,_):: tl
+        | C_flat_expr (e,_,_) :: tl ->
           aux tl flow >>$ fun el flow ->
           Result.singleton (e::el) flow
       in
@@ -233,35 +250,25 @@ struct
 
   (** Assignment abstract transformer for 𝕊⟦ *p = rval; ⟧ *)
   let assign_deref p rval range man flow =
-    eval_pointed_base_offset p range man flow >>$ fun r flow ->
-    match r with
-    | None ->
-      (* Undetermined base and offset *)
-      Soundness.warn_at range "ignoring assignment to undetermined lval *%a = %a;"
-        pp_expr p
-        pp_expr rval
-      ;
-      Post.return flow
-
-    | Some (base,offset) ->
-      eval_base_size base range man flow >>$ fun size flow ->
-      man.eval ~zone:(Z_c_scalar,Z_u_num) size flow >>$ fun size flow ->
-      man.eval ~zone:(Z_c_scalar,Z_u_num) offset flow >>$ fun offset flow ->
-      assume
-        (mk_in offset (mk_zero range) (sub size (mk_z ptr_size range) range) range)
-        ~fthen:(fun flow ->
-            if is_interesting_base base then
-              man.eval ~zone:(Z_c_low_level,Z_c_scalar) rval flow >>$ fun rval flow ->
-              let smash_weak = mk_smash_var base range |> weaken in
-              man.post ~zone:Z_c_scalar (mk_assign smash_weak rval range) flow
-            else
-              Post.return flow
-          )
-        ~felse:(fun flow ->
-            raise_c_alarm AOutOfBound range ~bottom:false man.lattice flow |>
-            Post.return
-          )
-        ~zone:Z_u_num man flow
+    eval_pointed_base_offset p range man flow >>$ fun (base,offset) flow ->
+    eval_base_size base range man flow >>$ fun size flow ->
+    man.eval ~zone:(Z_c_scalar,Z_u_num) size flow >>$ fun size flow ->
+    man.eval ~zone:(Z_c_scalar,Z_u_num) offset flow >>$ fun offset flow ->
+    assume
+      (mk_in offset (mk_zero range) (sub size (mk_z ptr_size range) range) range)
+      ~fthen:(fun flow ->
+          if is_interesting_base base then
+            man.eval ~zone:(Z_c_low_level,Z_c_scalar) rval flow >>$ fun rval flow ->
+            let smash_weak = mk_smash_var base range |> weaken in
+            man.post ~zone:Z_c_scalar (mk_assign smash_weak rval range) flow
+          else
+            Post.return flow
+        )
+      ~felse:(fun flow ->
+          Flow.set_bottom T_cur flow |>
+          Post.return
+        )
+      ~zone:Z_u_num man flow
 
 
 
@@ -307,7 +314,7 @@ struct
     let smash1 = mk_smash_var base1 range in
     let smash2 = mk_smash_var base2 range in
     man.post ~zone:Z_c_scalar (mk_rename smash1 smash2 range) flow
-    
+
 
   (** Remove the auxiliary variables of a base *)
   let remove_base base range man flow =
@@ -379,62 +386,13 @@ struct
   let eval_deref exp primed range man flow =
     let p = match ekind exp with E_c_deref p -> p | _ -> assert false in
     let t = exp.etyp in
-    eval_pointed_base_offset p range man flow >>$ fun r flow ->
-    match r with
-    | None ->
-      (* Undetermined (valid) base *)
-      raise_c_alarm AOutOfBound range ~bottom:false man.lattice flow |>
-      Eval.singleton (mk_top t range)
+    eval_pointed_base_offset p range man flow >>$ fun (base,offset) flow ->
 
-    | Some (base,offset) when not (is_expr_quantified offset) ->
-      debug "eval non quantified %a" pp_expr offset;
-      eval_base_size base range man flow >>$ fun size flow ->
-      man.eval ~zone:(Z_c_scalar,Z_u_num) size flow >>$ fun size flow ->
-      man.eval ~zone:(Z_c_scalar,Z_u_num) offset flow >>$ fun offset flow ->
-      assume
-        (mk_in offset (mk_zero range) (sub size (mk_z ptr_size range) range) range)
-        ~fthen:(fun flow ->
-            if is_interesting_base base then
-              let smash_weak = mk_smash_var base ~primed range |> weaken in
-              Eval.singleton smash_weak flow
-            else
-              Eval.singleton (mk_top t range) flow
-          )
-        ~felse:(fun flow ->
-            raise_c_alarm AOutOfBound range ~bottom:false man.lattice flow |>
-            Eval.empty_singleton
-          )
-        ~zone:Z_u_num man flow
-
-    | Some (base,offset) when is_expr_quantified offset ->
-      debug "eval quantified %a" pp_expr offset;
-      eval_base_size base range man flow >>$ fun size flow ->
-      man.eval ~zone:(Z_c_scalar,Z_u_num) size flow >>$ fun size flow ->
-      let min, max = Common.Quantified_offset.bound offset in
-      man.eval ~zone:(Z_c, Z_u_num) min flow >>$ fun min flow ->
-      man.eval ~zone:(Z_c, Z_u_num) max flow >>$ fun max flow ->
-      (* Safety condition: [min, max] ⊆ [0, size - ptr [ *)
-      assume
-      (
-        mk_binop
-          (mk_in min (mk_zero range) (sub size (mk_z ptr_size range) range) range)
-          O_log_and
-          (mk_in max (mk_zero range) (sub size (mk_z ptr_size range) range) range)
-          range
-      )
-      ~fthen:(fun flow ->
-          if is_interesting_base base then
-            let smash_weak = mk_smash_var base ~primed range |> weaken in
-            Eval.singleton smash_weak flow
-          else
-            Eval.singleton (mk_top t range) flow
-        )
-      ~felse:(fun flow ->
-          raise_c_alarm AOutOfBound range ~bottom:false man.lattice flow |>
-          Eval.empty_singleton
-        ) ~zone:Z_u_num man flow
-
-    | _ -> assert false
+    if is_interesting_base base then
+      let smash_weak = mk_smash_var base ~primed range |> weaken in
+      Eval.singleton smash_weak flow
+    else
+      Eval.singleton (mk_top t range) flow
 
 
 

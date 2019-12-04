@@ -10,4 +10,5 @@ int main() {
   int x = 10;
   int y = _mopsa_range_int(2, 5);
   int z = remainder(x, y);
+  _mopsa_print(x,y,z);
 }

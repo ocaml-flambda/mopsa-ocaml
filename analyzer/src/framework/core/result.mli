@@ -92,7 +92,7 @@ val map_opt : ('r -> 's option option) -> ('a,'r) result -> ('a,'s) result
 
 
 (** Map outputs of a result *)
-val map : ('r->'r) -> ('a,'r) result -> ('a,'r) result
+val map : ('r->'s) -> ('a,'r) result -> ('a,'s) result
 
 
 (** [apply f join meet r] collapses a formula to a single value
@@ -132,11 +132,11 @@ val meet : ('a,'r) result -> ('a,'r) result -> ('a,'r) result
 
 
 (** Join a list of results *)
-val join_list : empty:('a,'r) result -> ('a,'r) result list -> ('a,'r) result
+val join_list : empty:(unit -> ('a,'r) result) -> ('a,'r) result list -> ('a,'r) result
 
 
 (** Meet a list of results *)
-val meet_list : empty:('a,'r) result -> ('a,'r) result list -> ('a,'r) result
+val meet_list : empty:(unit -> ('a,'r) result) -> ('a,'r) result list -> ('a,'r) result
 
 
 (** Merge flows of conjunctions of two results and keep outputs unmodified *)

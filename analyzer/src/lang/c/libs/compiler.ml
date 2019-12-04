@@ -55,6 +55,7 @@ struct
     }
   }
 
+  let alarms = []
   
   (** {2 Transfer functions} *)
   (** ====================== *)

@@ -487,16 +487,17 @@ class MLLocationTranslator {
 
  private:
   SourceManager& src;
+  const LangOptions &opts;
   Cache cacheLoc;
   Cache cacheFile;
   value invalid_file;
 
 public:
-  CAMLprim value TranslateSourceLocation(SourceLocation a);
+  CAMLprim value TranslateSourceLocation(SourceLocation a, int offset = 0);
   CAMLprim value TranslateSourceRange(SourceRange a);
 
-  MLLocationTranslator(SourceManager& src)
-    : src(src), cacheLoc("location"), cacheFile("filename") {
+  MLLocationTranslator(SourceManager& src, const LangOptions &opts)
+    : src(src), opts(opts), cacheLoc("location"), cacheFile("filename") {
     invalid_file = caml_copy_string("<invalid>");
     caml_register_global_root(&invalid_file);
   }
@@ -509,7 +510,7 @@ public:
 
 };
 
-CAMLprim value MLLocationTranslator::TranslateSourceLocation(SourceLocation a) {
+CAMLprim value MLLocationTranslator::TranslateSourceLocation(SourceLocation a, int offset) {
   CAMLparam0();
   CAMLlocal2(ret,tmp);
   unsigned raw = a.getRawEncoding();
@@ -527,8 +528,10 @@ CAMLprim value MLLocationTranslator::TranslateSourceLocation(SourceLocation a) {
           tmp = caml_copy_string(filename);
           cacheFile.store(filename, tmp);
         }
+        // Clang counts lines & columns starting from 1
+        // we count lines from 1 but columns from 0
         Store_field(ret, 0, Val_int(loc.getLine()));
-        Store_field(ret, 1, Val_int(loc.getColumn()));
+        Store_field(ret, 1, Val_int(loc.getColumn()-1+offset));
         Store_field(ret, 2, tmp);
       }
       else {
@@ -548,8 +551,16 @@ CAMLprim value MLLocationTranslator::TranslateSourceRange(SourceRange a) {
   CAMLparam0();
   CAMLlocal1(ret);
   ret = caml_alloc_tuple(2);
+  // from the begining of the first token...
   Store_field(ret, 0, TranslateSourceLocation(a.getBegin()));
-  Store_field(ret, 1, TranslateSourceLocation(a.getEnd()));
+  // ...to the last character of the last token (if possible)
+  SourceLocation end(clang::Lexer::getLocForEndOfToken(a.getEnd(),0,src,opts));
+  if (src.getPresumedLoc(end).isValid()) {
+    Store_field(ret, 1, TranslateSourceLocation(end));
+  }
+  else {
+    Store_field(ret, 1, TranslateSourceLocation(a.getEnd(), 1));
+  }
   CAMLreturn(ret);
 }
 
@@ -1595,7 +1606,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateFunctionDecl(const FunctionDecl *o
   check_null(org, "FunctionDecl");
   const FunctionDecl *x = org;
   //x = x->getCanonicalDecl();
-  WITH_CACHE_TUPLE(cacheMisc, ret, x, 14, {
+  WITH_CACHE_TUPLE(cacheMisc, ret, x, 15, {
       Store_uid(ret, 0);
       Store_field(ret, 1, TranslateNamedDecl(x));
       Store_field_option(ret, 2, x->hasBody() && x->doesThisDeclarationHaveABody(), TranslateStmt(x->getBody()));
@@ -1606,11 +1617,12 @@ CAMLprim value MLTreeBuilderVisitor::TranslateFunctionDecl(const FunctionDecl *o
       Store_field(ret, 7, TranslateQualType(x->getReturnType()));
       Store_field_array(ret, 8, x->getNumParams(), TranslateParmVarDecl(x->getParamDecl(i)));
       Store_field(ret, 9, loc.TranslateSourceRange(org->getSourceRange()));
-      Store_field(ret, 10, com.TranslateRawCommentOpt(Context->getRawCommentForDeclNoCache(org)));
+      Store_field(ret, 10, loc.TranslateSourceRange(org->getNameInfo().getSourceRange()));
+      Store_field(ret, 11, com.TranslateRawCommentOpt(Context->getRawCommentForDeclNoCache(org)));
       // C++
-      Store_field_option(ret, 11, x->getPrimaryTemplate (), TranslateFunctionTemplateSpecializationDecl(x));
-      Store_field_option(ret, 12, x->isOverloadedOperator(), TranslateOverloadedOperatorKind(x->getOverloadedOperator(), NULL));
-      Store_field_option(ret, 13, isa<CXXMethodDecl>(x), TranslateCXXMethodDecl(cast<CXXMethodDecl>(x)));
+      Store_field_option(ret, 12, x->getPrimaryTemplate (), TranslateFunctionTemplateSpecializationDecl(x));
+      Store_field_option(ret, 13, x->isOverloadedOperator(), TranslateOverloadedOperatorKind(x->getOverloadedOperator(), NULL));
+      Store_field_option(ret, 14, isa<CXXMethodDecl>(x), TranslateCXXMethodDecl(cast<CXXMethodDecl>(x)));
     });
   CAMLreturn(ret);
 }
@@ -4701,12 +4713,6 @@ CAML_EXPORT value mlclang_parse(value command, value target, value name, value a
   SourceManager& src = ci.getSourceManager();
   src.setMainFileID(src.createFileID(pFile,SourceLocation(),SrcMgr::C_User));
 
-  // custom diagnostics
-  MLLocationTranslator loc(src);
-  MLDiagnostics* diag = new MLDiagnostics(loc);
-  MLCommentTranslator com(src, loc);
-  ci.getDiagnostics().setClient(diag);
-
   // headers
   // TODO: setting ResourceDir and calling GetResourcesPath does not seem to work
   // we use AddPath directly for now
@@ -4720,6 +4726,14 @@ CAML_EXPORT value mlclang_parse(value command, value target, value name, value a
   Preprocessor &pp = ci.getPreprocessor();
   pp.getBuiltinInfo().initializeBuiltins(pp.getIdentifierTable(),
                                          pp.getLangOpts());
+
+  // locations
+  MLLocationTranslator loc(src, pp.getLangOpts());
+
+  // custom diagnostics
+  MLDiagnostics* diag = new MLDiagnostics(loc);
+  MLCommentTranslator com(src, loc);
+  ci.getDiagnostics().setClient(diag);
 
   // parsing
   ci.setASTConsumer(llvm::make_unique<MLTreeBuilderConsumer>(loc, &tmp, src, com));

@@ -36,8 +36,10 @@ module Domain =
 
     let interface = {
       iexec = {provides = [Zone.Z_py]; uses = []};
-      ieval = {provides = []; uses = [Zone.Z_py, Zone.Z_py]}
+      ieval = {provides = []; uses = []}
     }
+
+    let alarms = []
 
     let init _ _ flow = flow
 

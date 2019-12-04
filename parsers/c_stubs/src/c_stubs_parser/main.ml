@@ -137,6 +137,7 @@ let parse_directive_comment
       func_local_vars = [];
       func_variadic = false;
       func_range = range;
+      func_name_range = range;
       func_com = com;
     }
   in

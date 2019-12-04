@@ -26,7 +26,7 @@ TARGET_NATIVES = mopsa
 mopsa = framework mopsa lang main
 
 # Framework
-framework = ast core lattices engines common transformers output config hooks
+framework = ast core lattices engines transformers output config hooks
 framework.ast = program typ operator constant var expr stmt visitor all
 framework.core = query context zone callstack alarm token log lattice        \
 		 soundness flow result eval post id interface channel sig    \
@@ -37,10 +37,11 @@ framework.core.sig.domain = manager lowlevel intermediate simplified         \
                             stateless reduction
 framework.core.sig.stacked = manager lowlevel intermediate stateless reduction
 framework.core.sig.functor = simplified
-framework.lattices = partial_map powerset
+framework.lattices = partial_map powerset powersetwithunder
 framework.engines = engine automatic interactive
-framework.common = widening_threshold var_bounds
 framework.transformers = value domain stacked
+framework.transformers.stacked.lowlevel = stack_list compose product sequence
+framework.transformers.stacked.intermediate = stack_list product sequence
 framework.output = text json factory
 framework.config = paths visitor typer parser options
 framework.hooks = logs
@@ -54,7 +55,7 @@ lang.universal.iterators = unittest program intraproc scalar interproc loops
 lang.universal.iterators.interproc = common inlining sequential_cache join_based_cache
 lang.universal.heap = policies recency
 lang.universal.numeric = rounding common values relational reductions
-lang.universal.numeric.values = intervals congruences
+lang.universal.numeric.values = intervals congruences zero
 lang.universal.numeric.values.intervals = integer float
 lang.universal.numeric.packing = strategy functor
 lang.universal.numeric.relational = apron_manager binding apron_transformer \
@@ -69,18 +70,19 @@ lang.repl = frontend
 lang.stubs = ast zone alarms iterator
 
 # C
-lang.c = ast pp visitor zone frontend alarms common desugar libs iterators memory hooks
-lang.c.common = base points_to quantified_offset
+lang.c = ast pp visitor zone frontend common desugar libs iterators memory hooks
+lang.c.common = base alarms points_to quantified_offset scope_update
 lang.c.iterators = program switch loops goto interproc
 lang.c.desugar = conditions constants
-lang.c.memory = structured lowlevel scalars packing
+lang.c.memory = variable_length_array structured lowlevel scalars packing
 lang.c.memory.structured = flat
-lang.c.memory.lowlevel = cells string_literals string_length pointer_smashing pointer_sentinel reductions
+lang.c.memory.lowlevel = cells string_length pointer_smashing pointer_sentinel reductions
 lang.c.memory.lowlevel.reductions = cell_pointer_sentinel cell_pointer_smashing
 lang.c.memory.scalars = pointers machine_numbers
-lang.c.memory.scalars.pointers = value symbolic domain
+lang.c.memory.scalars.pointers = value static_points_to domain
 lang.c.memory.packing = static_scope reductions
 lang.c.libs = builtins clib mopsalib compiler variadic cstubs
+lang.c.libs.clib.formatted_io = placeholder parser lexer format_string fscanf fprintf
 lang.c.libs.clib.file_descriptor = slot table domain
 lang.c.hooks = profiler
 
@@ -88,12 +90,13 @@ lang.c.hooks = profiler
 
 # Python
 lang.python = ast addr utils visitor operators pp ast_compare frontend zone  \
-              alarms libs desugar objects data_model types flows program
-lang.python.libs = math py_mopsa py_std
-lang.python.objects = class function range nones data_container_utils py_list tuple dict py_set
+              alarms libs desugar objects data_model values types  flows program
+lang.python.libs = math py_mopsa py_std py_unittest py_typing
+lang.python.objects = lambda class function range nones data_container_utils py_list tuple dict py_set py_object iterable
 lang.python.data_model = callable arith_ops compare_ops aug_assign	\
                          attribute subscript
-lang.python.types = typing addr_env typechecking t_string t_int t_float t_complex
+lang.python.types = structural_types nominal_types addr_env t_string t_int t_float t_complex type_annot
+lang.python.values = py_string
 
 
 # Packages
@@ -128,21 +131,21 @@ python-tests: mopsa
 	@ - $(foreach test, $(shell find $(TESTS) -name "*tests.py"), \
 		echo ""; \
 		echo "Running test $(test)"; \
-		$(MOPSAROOT)/bin/mopsa-python -unittest $(MOPSAPARAM) $(test); \
+		$(MOPSAROOT)/bin/mopsa-python -no-warning -unittest $(MOPSAPARAM) $(test); \
 	)
 
 c-tests: mopsa
 	@ - $(foreach test, $(shell find $(TESTS) -name "*tests.c"), \
 		echo ""; \
 		echo "Running test $(test)"; \
-		$(MOPSAROOT)/bin/mopsa-c -unittest $(MOPSAPARAM) $(test); \
+		$(MOPSAROOT)/bin/mopsa-c -no-warning -unittest $(MOPSAPARAM) $(test); \
 	)
 
 universal-tests: mopsa
 	@ - $(foreach test, $(shell find $(TESTS) -name "*tests.u"), \
 		echo ""; \
 		echo "Running test $(test)"; \
-		$(MOPSAROOT)/bin/mopsa-universal -unittest $(MOPSAPARAM) $(test); \
+		$(MOPSAROOT)/bin/mopsa-universal -no-warning -unittest $(MOPSAPARAM) $(test); \
 	)
 
 

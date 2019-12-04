@@ -52,10 +52,10 @@ let () =
         fun next query a b ->
           match query with
           | Q_allocated_addresses ->
-            a @ b
+            assert false
           | Q_select_allocated_addresses _ ->
             (* is that ok? *)
-            a @ b
+            assert false
           | _ -> next.meet_query query a b
       in f
     );
@@ -94,6 +94,7 @@ struct
 
   let top = Pool.top
 
+  let alarms = []
 
   (** Lattice operators *)
   (** ================= *)
@@ -179,10 +180,10 @@ struct
   (** *********** *)
 
   let eval zone expr man flow =
+    let range = erange expr in
     match ekind expr with
-    | E_alloc_addr(addr_kind) ->
+    | E_alloc_addr(addr_kind, STRONG) ->
       let pool = get_env T_cur man flow in
-      let range = expr.erange in
 
       let recent_addr = Policy.mk_addr addr_kind STRONG range flow in
 
@@ -203,6 +204,19 @@ struct
       (* Add the recent address *)
       map_env T_cur (Pool.add recent_addr) man flow' |>
       Eval.singleton (mk_addr recent_addr range) |>
+      Option.return
+
+    | E_alloc_addr(addr_kind, WEAK) ->
+      let pool = get_env T_cur man flow in
+      let weak_addr = Policy.mk_addr addr_kind WEAK range flow in
+
+      let flow' =
+        if Pool.mem weak_addr pool then
+          flow
+        else
+          map_env T_cur (Pool.add weak_addr) man flow
+      in
+      Eval.singleton (mk_addr weak_addr range) flow' |>
       Option.return
 
 

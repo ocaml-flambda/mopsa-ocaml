@@ -38,6 +38,8 @@ struct
     ieval = { provides = []; uses = [Z_u,Z_u_num] };
   }
 
+  let alarms = []
+
   let init prog man flow = flow
 
   let desugar e man flow =
