@@ -185,7 +185,6 @@ struct
 
     (* The initial flow is a singleton ⊤ environment *)
     let flow0 = Flow.singleton ctx T_cur man.lattice.top in
-    debug "flow0 = %a" (Flow.print man.lattice.print) flow0;
 
     (* Initialize domains *)
     Domain.init prog man flow0
