@@ -58,7 +58,7 @@
 
 /*$$
  * predicate valid_ptr_range(p, i, j):
- *   forall int k in [i,j]: valid_ptr(p+k);
+ *   i >= j implies forall int k in [i,j]: valid_ptr(p+k);
  */
 
 /*$
