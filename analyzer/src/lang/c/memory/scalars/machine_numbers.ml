@@ -365,7 +365,6 @@ struct
            let e' = mk_unop (O_wrap(rmin, rmax)) e ~etyp:(to_num_type typ) range in
            if not (is_signed typ) && not !opt_detect_unsigned_wrap
            then
-             let () = warn_at range "unsigned integer overflow in %a" pp_expr (get_orig_expr exp) in
              Eval.singleton e' fflow
            else
              let flow1 = raise_c_integer_overflow_alarm e typ exp.erange man fflow in
@@ -426,7 +425,6 @@ struct
           (fun e tflow -> Eval.singleton {e with etyp = to_num_type t} tflow)
           (fun e fflow ->
              if is_explicit_cast && !opt_ignore_cast_alarm then
-               let () = warn_at range "cast overflow in %a" pp_expr (get_orig_expr exp) in
                Eval.singleton (mk_unop (O_wrap(rmin, rmax)) e ~etyp:(to_num_type t) range) fflow
              else
                let flow1 = raise_c_integer_overflow_alarm e' t exp.erange man fflow in

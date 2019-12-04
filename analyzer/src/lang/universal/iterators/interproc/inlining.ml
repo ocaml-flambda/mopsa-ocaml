@@ -91,6 +91,11 @@ struct
     let range = erange exp in
     match ekind exp with
     | E_call({ekind = E_function (User_defined f)}, args) ->
+
+      if man.lattice.is_bottom (Flow.get T_cur man.lattice flow)
+      then Eval.empty_singleton flow |> Option.return
+      else
+
       let params, locals, body, flow = init_fun_params f args range man flow in
       let ret = match f.fun_return_type with
         | None -> None

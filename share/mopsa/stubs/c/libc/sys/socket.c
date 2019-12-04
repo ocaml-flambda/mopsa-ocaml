@@ -21,27 +21,55 @@
 
 /* Stubs for <sys/socket.h> */
 
+#include <errno.h>
 #include <sys/socket.h>
 
 
 /*$
- * local: int fd = new FileDescriptor;
- * ensures: return == fd;
+ * case "safe" {
+ *   local:   void *f = new FileRes;
+ *   local:   int fd = _mopsa_register_file_resource(f);
+ *   ensures: return == fd;
+ * }
+ *
+ * case "error" {
+ *   assigns: _errno;
+ *   ensures: return == -1;
+ * }
  */
 int socket (int __domain, int __type, int __protocol);
 
 
 
 /*$
- * requires: __fd in FileDescriptor;
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: f in FileRes;
+ *
+ * case "safe" {
+ *   ensures: return == 0;
+ * }
+ *
+ * case "error" {
+ *   assigns: _errno;
+ *   ensures: return == -1;
+ * }
  */
 int connect (int __fd, const struct sockaddr * __addr, socklen_t __len);
 
 
 /*$
- * requires: __fd in FileDescriptor;
- * requires: size(__buf) >= __n;
- * assigns: ((char*)__buf)[0, __n - 1];
- * ensures: return in [-1, __n];
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: f in FileRes;
+ * requires: valid_ptr_range(__buf, 0, __n - 1);
+ *
+ * case "safe" {
+ *   assigns: ((char*)__buf)[0, __n - 1];
+ *   ensures: return in [0, __n];
+ * }
+ *
+ * case "error" {
+ *   assigns: _errno;
+ *   ensures: return == -1;
+ * }
  */
 ssize_t recv (int __fd, void *__buf, size_t __n, int __flags);

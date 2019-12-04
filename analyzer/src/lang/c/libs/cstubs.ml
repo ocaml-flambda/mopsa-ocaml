@@ -332,7 +332,7 @@ struct
           Eval.singleton (mk_c_string str exp.erange) flow
 
         | E_c_points_to (P_block (A addr,_)) ->
-          Eval.singleton (mk_addr addr exp.erange) flow
+          Eval.singleton (mk_c_cast (mk_addr addr exp.erange) (T_c_pointer T_c_void) exp.erange) flow
 
         | E_c_points_to (P_block (Z,_)) ->
           Eval.singleton (mk_c_cast (mk_top u32 exp.erange) (T_c_pointer T_c_void) exp.erange) flow
@@ -345,6 +345,9 @@ struct
           Eval.singleton (mk_c_null exp.erange) flow
 
         | E_c_points_to P_invalid ->
+          Eval.singleton (mk_c_invalid_pointer exp.erange) flow
+
+        | E_c_points_to (P_block (D (addr,_),_)) ->
           Eval.singleton (mk_c_invalid_pointer exp.erange) flow
 
         | _ -> panic_at exp.erange "base(%a) where %a %a not supported" pp_expr e pp_expr e pp_expr pt
