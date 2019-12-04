@@ -178,7 +178,7 @@ struct
         *)
         try
           Nbt (
-            let relations = Relation.map2_domain
+            let relations = Relation.map2zo_domain
                 (fun k1 vs1 ->
                    (* Check if k1 is mapped to ⊤ in m2 *)
                    if KeySet.mem k1 m2.top_keys

@@ -359,11 +359,27 @@ module type S = sig
       The domain elements are considered in increasing order.
    *)
 
-  val map2_domain: (dom -> codom_set -> codom_set) -> (dom -> codom_set -> codom_set)  -> (dom -> codom_set -> codom_set -> codom_set) -> t -> t -> t
-  (** [map2 f1 f2 f r1 r2] is similar to [map_domain] but applies [f1]
-      on domain elements present only in [r1], [f2] on domain elements
-      present only in [r2] and [f] on common domain elements.
-      The bindings are passed to [f], [f1], [f2] in increasing order of domain elements.
+  val map2_domain: (dom -> codom_set -> codom_set -> codom_set) -> t -> t -> t
+  (** [map2_domain f r1 r2] is similar to [map_domain] but applies [f]
+      to pairs of image sets [ys1] and [ys2] corresponding to the same
+      domain element [x] in [r1] and [r2] respectively.
+      [r1] and [r2] must have the same domain set.
+      The bindings are passed to [f] in increasing order of domain elements.
+  *)
+
+  val map2o_domain: (dom -> codom_set -> codom_set) -> (dom -> codom_set -> codom_set)  -> (dom -> codom_set -> codom_set -> codom_set) -> t -> t -> t
+  (** [map2_domain f1 f2 f r1 r2] is similar to [map2_domain] but accepts
+      relations with different domain sets. To get a new binding, [f1]
+      is used for domain elements appearing only in [r1], [f2] for
+      domain elements appearing only in [r2] and [f] for common domain
+      elements.
+      The bindings are passed in increasing order of domain elements.
+  *)
+
+  val map2zo_domain: (dom -> codom_set -> codom_set) -> (dom -> codom_set -> codom_set)  -> (dom -> codom_set -> codom_set -> codom_set) -> t -> t -> t
+  (** [map2zo_domain f1 f2 f r1 r2] is similar to [map2o_domain] but
+      [f] is not called on physically equal image sets.
+      The bindings are passed in increasing order of domain elements.
   *)
 
   (** [map_domain f r] returns a new relation where the image set [ys] of
