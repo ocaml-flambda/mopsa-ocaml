@@ -601,6 +601,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
         | _ -> false
       in
       let range = f.C.function_range in
+      let name_range = f.C.function_name_range in
       (* get previous definition *)
       let rec find_extern = function
         | [] -> None
@@ -630,6 +631,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
              func_static_vars = [];
              func_local_vars = [];
              func_range = range;
+             func_name_range = name_range;
              func_variadic = f.C.function_is_variadic;
              func_com = [];
            }
@@ -698,7 +700,8 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
        | Some b ->
           func.func_body <-
             Some (stmt (Some func) b |> deblock |> resolve_scope);
-          func.func_range <- range
+          func.func_range <- range;
+          func.func_name_range <- name_range
       );
       if !simplify then simplify_func ctx.ctx_simplify func;
       func

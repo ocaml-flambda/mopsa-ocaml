@@ -172,7 +172,8 @@ type c_fundec = {
   mutable c_func_static_vars: var list; (** static variables declared in the function *)
   mutable c_func_local_vars: var list; (** local variables declared in the function (excluding parameters) *)
   mutable c_func_variadic: bool; (** whether the has a variable number of arguments *)
-  mutable c_func_range: range;
+  mutable c_func_range: range; (** location range of the declaration *)
+  mutable c_func_name_range: range; (** location range of the name in the declaration *)
   mutable c_func_stub: Stubs.Ast.stub_func option; (** stub comment *)
 }
 (** Function descriptor. *)
