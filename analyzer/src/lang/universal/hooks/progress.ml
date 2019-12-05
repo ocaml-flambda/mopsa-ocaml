@@ -48,7 +48,7 @@ struct
   (** Entry of the progression table *)
   type entry = {
     name: string;                   (** Name of the function *)
-    range: range;                   (** Location of the function *)
+    mutable range: range option;    (** Location of the last analyzed statement *)
     all_stmt_range_set: RangeSet.t; (** Location of all statements in the function body *)
     mutable analyzed_stmt_range_set: RangeSet.t; (** Locations of analyzed statements *)
     nb_all_stmt: int;               (** Total number of statements *)
@@ -57,7 +57,11 @@ struct
 
   (** Print an entry of the progress table *)
   let pp_entry fmt e =
-    fprintf fmt "%s: %d%%" e.name (100*e.nb_analyzed_stmt/e.nb_all_stmt)
+    match e.range with
+    | None -> fprintf fmt "%s %d%%" e.name (100*e.nb_analyzed_stmt/e.nb_all_stmt)
+    | Some r ->
+      let pos = get_range_start r in
+      fprintf fmt "%s:%d %d%%" e.name pos.pos_line (100*e.nb_analyzed_stmt/e.nb_all_stmt)
 
 
   (** {2 Utilities for moving the terminam cursor} *)
@@ -95,7 +99,7 @@ struct
     let all_stmt_range_set = get_function_statements f in
     let entry = {
       name = f.fun_name;
-      range = f.fun_range;
+      range = None;
       all_stmt_range_set;
       analyzed_stmt_range_set = RangeSet.empty;
       nb_all_stmt = RangeSet.cardinal all_stmt_range_set;
@@ -115,6 +119,7 @@ struct
       if not @@ RangeSet.mem range entry.all_stmt_range_set then ()
       else if RangeSet.mem range entry.analyzed_stmt_range_set then ()
       else (
+        entry.range <- Some range;
         entry.analyzed_stmt_range_set <- RangeSet.add range entry.analyzed_stmt_range_set;
         entry.nb_analyzed_stmt <- entry.nb_analyzed_stmt + 1;
         clear_line ();
