@@ -94,22 +94,25 @@ let mk_return_var call =
 
 
 
-(** {2 Context to keep return variable} *)
+(** {2 Contexts to keep return variable} *)
 (** =================================== *)
 
 let return_key =
   let module K = Context.GenUnitKey(
     struct
-      type t = var * range
-      let print fmt vs =
-        Format.fprintf fmt "Return vars: %a" (fun fmt (v, r) -> Format.fprintf fmt "(%a at %a)" pp_var v pp_range r) vs
+      type t = var
+      let print fmt v =
+        Format.fprintf fmt "Return var: %a" pp_var v
     end
     )
   in
   K.key
 
 
-
+let get_last_call_site flow =
+  let cs = Flow.get_callstack flow in
+  let hd, _ = Callstack.pop cs in
+  hd.call_site
 
 (** {2 Recursion checks} *)
 (** ==================== *)
@@ -199,7 +202,7 @@ let exec_fun_body f body ret range man flow =
     | None -> None, flow
     | Some ret ->
       (try Some (Context.find_unit return_key (Flow.get_ctx flow)) with Not_found -> None),
-      Flow.set_ctx (Context.add_unit return_key (ret, range) (Flow.get_ctx flow)) flow in
+      Flow.set_ctx (Context.add_unit return_key ret (Flow.get_ctx flow)) flow in
 
   (* Execute the body of the function *)
   let flow2 = man.exec body flow1 in

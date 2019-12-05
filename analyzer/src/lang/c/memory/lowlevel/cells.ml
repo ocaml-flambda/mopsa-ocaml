@@ -191,10 +191,10 @@ struct
   (** Construct the variable name associated to a cell *)
   let mk_cell_var_name c =
     let () = match c.base with
-      | V { vkind = V_c_cell c } ->
+      | ValidVar { vkind = V_c_cell c } ->
         panic "recursive creation of cell %a" pp_cell c
 
-      | V v ->
+      | ValidVar v ->
         Format.fprintf Format.str_formatter "⟨%s,%a,%a⟩%s"
           v.vname
           Z.pp_print c.offset
@@ -474,7 +474,7 @@ struct
           with
           | NotPossible ->
             match c.base with
-            | S s ->
+            | String s ->
               let len = String.length s in
               if Z.equal c.offset (Z.of_int len) then
                 Some (mk_zero range)
@@ -574,8 +574,8 @@ struct
 
 
   let is_interesting_base = function
-    | V _
-    | A _ -> true
+    | ValidVar _
+    | ValidAddr _ -> true
 
     | _ -> false
 
@@ -592,8 +592,12 @@ struct
       raise_c_invalid_deref_alarm ptr range man flow |>
       Result.empty_singleton
 
-    | E_c_points_to (P_block (D (_,r), offset)) ->
+    | E_c_points_to (P_block (InvalidAddr (_,r), offset)) ->
       raise_c_use_after_free_alarm ptr r range man flow |>
+      Result.empty_singleton
+
+    | E_c_points_to (P_block (InvalidVar (v,r), offset)) ->
+      raise_c_dangling_deref_alarm ptr v r range man flow |>
       Result.empty_singleton
 
     | E_c_points_to (P_block (base, offset)) ->
@@ -1026,7 +1030,7 @@ struct
 
     (* Add the base *)
     let flow = map_env T_cur (fun a ->
-        { a with bases = BaseSet.add (V v) a.bases }
+        { a with bases = BaseSet.add (ValidVar v) a.bases }
       ) man flow
     in
 
@@ -1040,18 +1044,18 @@ struct
         let c, init, tl =
           match l with
           | C_flat_expr (e,o,t) :: tl ->
-            let c = mk_cell (V v) o t in
+            let c = mk_cell (ValidVar v) o t in
             let init = Some (C_init_expr e) in
             c, init, tl
 
           | C_flat_none(n,o,t) :: tl ->
-            let c = mk_cell (V v) o t in
+            let c = mk_cell (ValidVar v) o t in
             let init = None in
             let tl' = if Z.equal n Z.one then tl else C_flat_none(Z.pred n,Z.add o (sizeof_type t),t) :: tl in
             c, init, tl'
 
           | C_flat_fill(e,n,o,t) :: tl ->
-            let c = mk_cell (V v) o t in
+            let c = mk_cell (ValidVar v) o t in
             let init = Some (C_init_expr e) in
             let tl' = if Z.equal n Z.one then tl else C_flat_fill(e,Z.pred n,Z.add o (sizeof_type t),t) :: tl in
             c, init, tl'
@@ -1130,8 +1134,8 @@ struct
 
   let exec_add b range man flow =
     match b with
-    | V v when is_c_scalar_type v.vtyp ->
-      let c = mk_cell (V v) Z.zero v.vtyp in
+    | ValidVar v when is_c_scalar_type v.vtyp ->
+      let c = mk_cell (ValidVar v) Z.zero v.vtyp in
       add_cell c range man flow
 
     | _ ->
@@ -1200,22 +1204,14 @@ struct
     Post.bind @@ fun flow ->
 
     (* Remove base1 and add base2 *)
-    let flow = map_env T_cur (fun a ->
+    map_env T_cur (fun a ->
         {
           a with
           bases = BaseSet.remove base1 a.bases |>
                   BaseSet.add base2;
         }
-      ) man flow
-    in
-
-    (* Forward the rename statement to scalar domains in case of addresses *)
-    match base1, base2 with
-    | A addr1, A addr2 ->
-      man.post ~zone:Z_c_scalar (mk_rename (mk_addr addr1 range) (mk_addr addr2 range) range) flow
-
-    | _ ->
-      Post.return flow
+      ) man flow |>
+    Post.return
 
 
   (* 𝕊⟦ rename target[i1][i2]...[in]' into target[i1][i2]...[in],
@@ -1340,7 +1336,7 @@ struct
 
     | S_assign(({ekind = E_var(v, STRONG)} as lval), e) when is_c_scalar_type v.vtyp ->
       Some (
-        let c = mk_cell (V v) Z.zero v.vtyp in
+        let c = mk_cell (ValidVar v) Z.zero v.vtyp in
         let flow = map_env T_cur (fun a -> { a with cells = CellSet.add c a.cells }) man flow in
 
         let v = mk_cell_var c in
@@ -1362,24 +1358,28 @@ struct
 
 
     | S_add { ekind = E_var (v, _) } ->
-      exec_add (V v) stmt.srange man flow |>
+      exec_add (ValidVar v) stmt.srange man flow |>
       Option.return
 
 
     | S_add { ekind = E_addr addr } ->
-      exec_add (A addr) stmt.srange man flow |>
+      exec_add (ValidAddr addr) stmt.srange man flow |>
       Option.return
 
     | S_remove { ekind = E_var (v, _) } when is_c_type v.vtyp ->
-      exec_remove (V v) stmt.srange man flow |>
+      exec_remove (ValidVar v) stmt.srange man flow |>
+      Option.return
+
+    | S_remove { ekind = E_addr a } ->
+      exec_remove (ValidAddr a) stmt.srange man flow |>
       Option.return
 
     | S_rename({ ekind = E_var (v1, _) }, { ekind = E_var (v2, _) }) ->
-      exec_rename (V v1) (V v2) stmt.srange man flow |>
+      exec_rename (ValidVar v1) (ValidVar v2) stmt.srange man flow |>
       Option.return
 
     | S_rename({ ekind = E_addr addr1 }, { ekind = E_addr addr2 }) ->
-      exec_rename (A addr1) (A addr2) stmt.srange man flow |>
+      exec_rename (ValidAddr addr1) (ValidAddr addr2) stmt.srange man flow |>
       Option.return
 
     | S_stub_assigns _ ->

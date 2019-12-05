@@ -25,6 +25,7 @@ open Mopsa
 open Framework.Core.Sig.Stacked.Manager
 open Universal.Numeric.Common
 open Base
+open Ast
 
 
 type alarm_class +=
@@ -40,9 +41,9 @@ type alarm_class +=
   | A_c_double_free_cls
   | A_c_no_next_va_arg_cls
   | A_c_read_only_modification_cls
+  | A_c_dangling_deref_cls
   | A_c_insufficient_format_args_cls
   | A_c_incorrect_format_arg_cls
-
 
 type alarm_body +=
   | A_c_out_of_bound of base (** accessed base *) * int_itv (** offset interval *) * int_itv (** base_size *)
@@ -57,6 +58,7 @@ type alarm_body +=
   | A_c_illegal_pointer_compare of expr (** first pointer *) * expr (** second pointer *)
   | A_c_divide_by_zero of expr (** denominator *)
   | A_c_invalid_bit_shift of expr (** shift expression *) * int_itv (** shift value *) * typ (** shifted type *)
+  | A_c_dangling_deref of expr (** pointer *) * var (** pointed variable *) * range (** return location *)
   | A_c_insufficient_format_args of int (** number of required arguments *) * int (** number of given arguments *)
   | A_c_incorrect_format_arg of typ (** expected type *) * expr (** argument *)
 
@@ -147,6 +149,12 @@ let raise_c_invalid_bit_shift_alarm shift typ range man flow =
   let alarm = mk_alarm (A_c_invalid_bit_shift(shift',shift_itv,typ)) range ~cs in
   Flow.raise_alarm alarm ~bottom:true man.lattice flow
 
+let raise_c_dangling_deref_alarm ptr var ret_range range man flow =
+  let cs = Flow.get_callstack flow in
+  let ptr' = get_orig_expr ptr in
+  let alarm = mk_alarm (A_c_dangling_deref(ptr',var,ret_range)) range ~cs in
+  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+
 let raise_c_insufficient_format_args_alarm required given range man flow =
   let cs = Flow.get_callstack flow in
   let alarm = mk_alarm (A_c_insufficient_format_args(required,given)) range ~cs in
@@ -173,6 +181,7 @@ let () =
       | A_c_no_next_va_arg_cls -> Format.fprintf fmt "No next argument for va_arg"
       | A_c_invalid_bit_shift_cls -> Format.fprintf fmt "Invald bit-shift"
       | A_c_read_only_modification_cls -> Format.fprintf fmt "Modification of a readonly memory"
+      | A_c_dangling_deref_cls -> Format.fprintf fmt "Dangling pointer dereference"
       | A_c_insufficient_format_args_cls -> Format.fprintf fmt "Inufficient number of format arguments"
       | A_c_incorrect_format_arg_cls -> Format.fprintf fmt "Incorrect type of format argument"
       | _ -> default fmt a
@@ -194,6 +203,7 @@ let () =
         | A_c_no_next_va_arg _ -> A_c_no_next_va_arg_cls
         | A_c_invalid_bit_shift _ -> A_c_invalid_bit_shift_cls
         | A_c_read_only_modification _ -> A_c_read_only_modification_cls
+        | A_c_dangling_deref _ -> A_c_dangling_deref_cls
         | A_c_insufficient_format_args _ -> A_c_insufficient_format_args_cls
         | A_c_incorrect_format_arg _ -> A_c_incorrect_format_arg_cls
         | _ -> next a
@@ -260,6 +270,13 @@ let () =
             (fun () -> compare_expr e1 e2);
             (fun () -> compare_int_interval i1 i2);
             (fun () -> compare_typ t1 t2);
+          ]
+
+        | A_c_dangling_deref(p1,v1,r1), A_c_dangling_deref(p2,v2,r2) ->
+          Compare.compose [
+            (fun () -> compare_expr p1 p2);
+            (fun () -> compare_var v1 v2);
+            (fun () -> compare_range r1 r2);
           ]
 
         | A_c_insufficient_format_args(r1,g1), A_c_insufficient_format_args(r2,g2) ->
@@ -338,6 +355,18 @@ let () =
             pp_const_or_interval_not_eq i
             pp_typ t
             Z.pp_print (Z.pred bits)
+
+        | A_c_dangling_deref(p,v,r) ->
+          begin match v.vkind with
+            | V_cvar { cvar_scope = Variable_local f }
+            | V_cvar { cvar_scope = Variable_parameter f }->
+              Format.fprintf fmt "%a points to dangling local variable %a of function %s deallocated at %a"
+                pp_expr p pp_var v f.c_func_org_name pp_range r
+
+            | _ ->
+              Format.fprintf fmt "%a points to dangling local variable %a"
+                pp_expr p pp_var v
+          end
 
         | A_c_insufficient_format_args(required,given) ->
           Format.fprintf fmt "%d argument%a given while %d argument%a required"

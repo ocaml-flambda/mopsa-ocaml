@@ -119,7 +119,7 @@ struct
   let mk_length_var base ?(primed=false) ?(mode=base_mode base) range =
     let name =
       let () = match base with
-        | V v ->
+        | ValidVar v ->
           Format.fprintf Format.str_formatter "length(%s)%s"
             v.vname
             (if primed then "'" else "")
@@ -152,7 +152,7 @@ struct
     match ekind pt with
     | E_c_points_to P_null
     | E_c_points_to P_invalid
-    | E_c_points_to (P_block (D _, _))
+    | E_c_points_to (P_block (InvalidAddr _, _))
     | E_c_points_to P_top ->
       Result.empty_singleton flow
 
@@ -165,19 +165,19 @@ struct
   let is_memory_base base =
     match base with
     (* Accept only arrays of chars *)
-    | V v when is_c_type v.vtyp &&
+    | ValidVar v when is_c_type v.vtyp &&
                is_c_array_type v.vtyp &&
                under_array_type v.vtyp |> remove_typedef_qual |> sizeof_type |> Z.equal Z.one
       ->
       true
 
-    | S _ -> true
+    | String _ -> true
 
-    | A { addr_kind = A_stub_resource "Memory" }
-    | A { addr_kind = A_stub_resource "ReadOnlyMemory" }
-    | A { addr_kind = A_stub_resource "String"}
-    | A { addr_kind = A_stub_resource "ReadOnlyString" }
-    | A { addr_kind = A_stub_resource "arg" }
+    | ValidAddr { addr_kind = A_stub_resource "Memory" }
+    | ValidAddr { addr_kind = A_stub_resource "ReadOnlyMemory" }
+    | ValidAddr { addr_kind = A_stub_resource "String"}
+    | ValidAddr { addr_kind = A_stub_resource "ReadOnlyString" }
+    | ValidAddr { addr_kind = A_stub_resource "arg" }
       -> true
 
     | _ -> false
@@ -185,7 +185,7 @@ struct
 
   (** Declaration of a C variable *)
   let declare_variable v init scope range man flow =
-    if not (is_memory_base (V v))
+    if not (is_memory_base (ValidVar v))
     then
       Post.return flow
 
@@ -207,7 +207,7 @@ struct
 
       let size = sizeof_type v.vtyp in
 
-      let length = mk_length_var (V v) range in
+      let length = mk_length_var (ValidVar v) range in
 
       (* Find the position of the first zero *)
       let rec aux = function
@@ -357,7 +357,7 @@ struct
 
     let length =
       match base with
-      | S str -> mk_z (Z.of_int @@ String.length str) range
+      | String str -> mk_z (Z.of_int @@ String.length str) range
       | _ -> mk_length_var base ~primed range
     in
 
@@ -388,7 +388,7 @@ struct
 
     let length =
       match base with
-      | S str -> mk_z (Z.of_int @@ String.length str) range
+      | String str -> mk_z (Z.of_int @@ String.length str) range
       | _ -> mk_length_var base ~primed range
     in
     let mk_bottom flow = Flow.set T_cur man.lattice.bottom man.lattice flow in
@@ -473,7 +473,7 @@ struct
   (** Add a base to the domain's dimensions *)
   let add_base base ?(primed=false) range man flow =
     match base with
-    | S _ ->
+    | String _ ->
       Post.return flow
 
     | _ ->
@@ -518,7 +518,7 @@ struct
             (mk_binop
                (mk_binop l O_eq (mk_zero range) range)
                O_log_and
-               (mk_binop u O_eq (sub size (mk_z (sizeof_type t) range) range) range)
+               (mk_binop u O_eq (sub size (mk_z (sizeof_type (void_to_char t)) range) range) range)
                range
             )
             ~fthen:(fun flow ->
@@ -587,28 +587,27 @@ struct
       Option.return
 
     | S_add { ekind = E_var (v, _) } when not (is_c_scalar_type v.vtyp) ->
-      add_base (V v) stmt.srange man flow |>
+      add_base (ValidVar v) stmt.srange man flow |>
       Option.return
 
-    | S_add { ekind = E_addr addr } when is_memory_base (A addr) ->
-      add_base (A addr) stmt.srange man flow |>
+    | S_add { ekind = E_addr addr } when is_memory_base (ValidAddr addr) ->
+      add_base (ValidAddr addr) stmt.srange man flow |>
       Option.return
 
 
     | S_rename ({ ekind = E_var (v1,_) }, { ekind = E_var (v2,_) })
-      when is_memory_base (V v1) &&
-           is_memory_base (V v2)
+      when is_memory_base (ValidVar v1) &&
+           is_memory_base (ValidVar v2)
       ->
-      rename_base (V v1) (V v2) stmt.srange man flow |>
+      rename_base (ValidVar v1) (ValidVar v2) stmt.srange man flow |>
       Option.return
 
 
     | S_rename ({ ekind = E_addr addr1 }, { ekind = E_addr addr2 })
-      when is_memory_base (A addr1) &&
-           is_memory_base (A addr2)
+      when is_memory_base (ValidAddr addr1) &&
+           is_memory_base (ValidAddr addr2)
       ->
-      rename_base (A addr1) (A addr2) stmt.srange man flow >>=? fun _ flow ->
-      man.post ~zone:Z_c_scalar stmt flow |>
+      rename_base (ValidAddr addr1) (ValidAddr addr2) stmt.srange man flow |>
       Option.return
 
     | S_assign({ ekind = E_c_deref p}, rval)

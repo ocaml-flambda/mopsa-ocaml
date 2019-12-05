@@ -430,7 +430,7 @@ struct
       begin
         man.eval ~zone:(Z_c,Z_c_points_to) f flow >>$ fun p flow ->
         match ekind p with
-        | E_c_points_to (P_block(A addr,_)) ->
+        | E_c_points_to (P_block(ValidAddr addr,_)) ->
           insert_addr addr exp.erange man flow
 
         | _ ->
@@ -445,7 +445,7 @@ struct
         man.eval ~zone:(Z_c,Z_c_points_to) f flow >>$ fun p flow ->
         man.eval ~zone:(Z_c,Z_u_num) fd flow >>$ fun fd flow ->
         match ekind p with
-        | E_c_points_to (P_block(A addr,_)) ->
+        | E_c_points_to (P_block(ValidAddr addr,_)) ->
           insert_addr_at addr fd exp.erange man flow
 
         | _ ->

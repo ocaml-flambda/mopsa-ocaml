@@ -30,6 +30,8 @@ open Ast
 open Zone
 open Universal.Zone
 open Stubs.Ast
+open Common.Base
+open Common.Points_to
 
 
 module Domain =
@@ -47,7 +49,8 @@ struct
       provides = [Z_c];
       uses = [
         Z_c_low_level;
-        Z_c
+        Z_c;
+        Z_c_points_to
       ]
     };
 
@@ -387,6 +390,25 @@ struct
     man.post ~zone:Z_c_low_level stmt flow
 
 
+  (** 𝕊⟦ remove base ⟧ *)
+  let remove base range man flow =
+    (* 1. Remove the contents of the base from the low-level abstractions.
+       2. Remove the base from the pointer domain. 
+    *)
+    let stmt = mk_remove base range in
+    man.post ~zone:Z_c_low_level stmt flow >>$ fun () flow ->
+    man.post ~zone:Z_c_points_to stmt flow
+
+
+  (** 𝕊⟦ rename (e,e') ⟧ *)
+  let rename e e' range man flow =
+    (* Similarly to remove, we rename the contents and the base *)
+    let stmt = mk_rename e e' range in
+    man.post ~zone:Z_c_low_level stmt flow >>$ fun () flow ->
+    man.post ~zone:Z_c_points_to stmt flow
+    
+  
+
   let exec zone stmt man flow =
     match skind stmt with
     | S_c_declaration(v, init, scope) ->
@@ -405,6 +427,14 @@ struct
 
     | S_assume(e) ->
       assume e stmt.srange man flow |>
+      Option.return
+
+    | S_remove e ->
+      remove e stmt.srange man flow |>
+      Option.return
+
+    | S_rename(e,e') ->
+      rename e e' stmt.srange man flow |>
       Option.return
 
     | S_expression e when is_c_num_type e.etyp ->

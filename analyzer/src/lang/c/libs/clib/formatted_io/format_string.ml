@@ -46,14 +46,14 @@ let eval_format_string format range man flow =
     raise_c_invalid_deref_alarm format range man' flow |>
     Result.empty_singleton
 
-  | E_c_points_to (P_block (D (_,r), _)) ->
+  | E_c_points_to (P_block (InvalidAddr (_,r), _)) ->
     raise_c_use_after_free_alarm format r range man' flow |>
     Result.empty_singleton
 
-  | E_c_points_to (P_block (S fmt, offset)) when is_c_expr_equals_z offset Z.zero ->
+  | E_c_points_to (P_block (String fmt, offset)) when is_c_expr_equals_z offset Z.zero ->
     Result.singleton fmt flow
 
-  | E_c_points_to (P_block (S fmt, offset)) ->
+  | E_c_points_to (P_block (String fmt, offset)) ->
     assume (mk_binop offset O_eq (mk_zero (erange offset)) (erange offset))
       ~fthen:(fun flow -> Result.singleton fmt flow)
       ~felse:(fun flow ->
