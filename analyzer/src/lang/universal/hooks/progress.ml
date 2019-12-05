@@ -25,6 +25,7 @@ open Location
 open Mopsa
 open Format
 open Ast
+open Zone
 
 
 module Hook =
@@ -35,7 +36,7 @@ struct
 
   let name = "progress"
   let exec_zones = [Z_any]
-  let eval_zones = [Z_any,Z_any]
+  let eval_zones = [Z_u,Z_any]
 
 
   (** {2 Entries of the progress table} *)
