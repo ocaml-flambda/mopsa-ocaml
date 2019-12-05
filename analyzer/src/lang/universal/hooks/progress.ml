@@ -48,7 +48,7 @@ struct
   (** Entry of the progression table *)
   type entry = {
     name: string;                   (** Name of the function *)
-    mutable range: range option;    (** Location of the last analyzed statement *)
+    mutable range: range option;    (** Location of the currently analyzed statement *)
     all_stmt_range_set: RangeSet.t; (** Location of all statements in the function body *)
     mutable analyzed_stmt_range_set: RangeSet.t; (** Locations of analyzed statements *)
     nb_all_stmt: int;               (** Total number of statements *)
@@ -95,7 +95,7 @@ struct
 
 
   (** Insert a new entry in the progress table *)
-  let push f =
+  let before_call f =
     let all_stmt_range_set = get_function_statements f in
     let entry = {
       name = f.fun_name;
@@ -110,26 +110,8 @@ struct
     printf "@.%a@?" pp_entry entry
 
 
-  (** Update the progress table after a statement is analyzed *)
-  let update range =
-    if Stack.is_empty table
-    then ()
-    else (
-      let entry = Stack.top table in
-      if not @@ RangeSet.mem range entry.all_stmt_range_set then ()
-      else if RangeSet.mem range entry.analyzed_stmt_range_set then ()
-      else (
-        entry.range <- Some range;
-        entry.analyzed_stmt_range_set <- RangeSet.add range entry.analyzed_stmt_range_set;
-        entry.nb_analyzed_stmt <- entry.nb_analyzed_stmt + 1;
-        clear_line ();
-        printf "%a@?" pp_entry entry
-      )
-    )
-
-
   (** Remove the head function from the progress table *)
-  let pop () =
+  let after_call () =
     let _ = Stack.pop table in
     (* Clear the current line (displaying the progress of the removed entry) 
        and move the cursor to the line before.
@@ -141,7 +123,37 @@ struct
       clear_line ();
       printf "%a@?" pp_entry (Stack.top table)
     )
-  
+
+
+  (** Update the progress table before a statement is analyzed *)
+  let before_stmt range =
+    if Stack.is_empty table
+    then ()
+    else (
+      let entry = Stack.top table in
+      if not @@ RangeSet.mem range entry.all_stmt_range_set then ()
+      else (
+        entry.range <- Some range;
+        clear_line ();
+        printf "%a@?" pp_entry entry
+      )
+    )
+
+  (** Update the progress table after a statement is analyzed *)
+  let after_stmt range =
+    if Stack.is_empty table
+    then ()
+    else (
+      let entry = Stack.top table in
+      if not @@ RangeSet.mem range entry.all_stmt_range_set then ()
+      else if RangeSet.mem range entry.analyzed_stmt_range_set then ()
+      else (
+        entry.analyzed_stmt_range_set <- RangeSet.add range entry.analyzed_stmt_range_set;
+        entry.nb_analyzed_stmt <- entry.nb_analyzed_stmt + 1;
+        clear_line ();
+        printf "%a@?" pp_entry entry
+      )
+    )  
 
   
 
@@ -157,22 +169,22 @@ struct
   (** ******************* *)
 
   let on_before_exec zone stmt man flow =
-    ()
+    before_stmt stmt.srange
 
 
   let on_after_exec zone stmt man post =
-    update stmt.srange
+    after_stmt stmt.srange
 
 
   let on_before_eval zone exp man flow =
     match ekind exp with
-    | E_call ({ ekind = E_function (User_defined f) }, args) -> push f
+    | E_call ({ ekind = E_function (User_defined f) }, args) -> before_call f
     | _ -> ()
 
 
   let on_after_eval zone exp man evl =
     match ekind exp with
-    | E_call ({ ekind = E_function (User_defined f) }, args) -> pop ()
+    | E_call ({ ekind = E_function (User_defined f) }, args) -> after_call ()
     | _ -> ()
 
   let on_finish man flow = ()
