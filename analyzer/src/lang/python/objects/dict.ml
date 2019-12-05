@@ -129,8 +129,8 @@ struct
       |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dict.__new__")}, _)}, cls :: _, []) ->
-      man.eval (mk_expr (E_py_dict ([],[])) range) flow
-      |> Option.return
+      Utils.new_wrapper man range flow "dict" cls
+        ~fthennew:(man.eval (mk_expr (E_py_dict ([],[])) range))
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.__init__" as f))}, _)}, args, [])
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.update" as f))}, _)}, args, []) ->

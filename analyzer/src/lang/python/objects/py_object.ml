@@ -280,6 +280,13 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__init_subclass__")}, _)}, cls::args, []) ->
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range) flow |> Option.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__repr__" as f))}, _)}, args, [])
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__str__" as f))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args
+        ["object"]
+        (fun _ flow -> man.eval (mk_py_top T_string range) flow)
+      |> Option.return
+
 
     | _ -> None
 

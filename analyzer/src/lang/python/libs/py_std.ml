@@ -274,6 +274,27 @@ struct
         )
       |> Option.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "repr")}, _)}, [v], [])  ->
+      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type v range) flow |>
+      Eval.bind (fun etype flow ->
+          assume
+            (mk_py_hasattr etype "__repr__" range)
+            man flow
+            ~fthen:(fun flow ->
+                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_attr etype "__repr__" range) [] range) flow |>
+                Eval.bind (fun repro flow ->
+                    assume (mk_py_isinstance_builtin repro "str" range) man flow
+                      ~fthen:(Eval.singleton repro)
+                      ~felse:(fun flow ->  man.exec (Utils.mk_builtin_raise_msg "TypeError" "__repr__ returned non-string" range) flow |> Eval.empty_singleton)
+                  )
+              )
+            ~felse:(
+              (* there is a default implementation saying "<%s object at %p>" % (name(type(v)), v as addr I guess *)
+              man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_string range)
+            )
+        )
+      |> Option.return
+
 
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, args, []) when StringMap.mem f stub_base ->

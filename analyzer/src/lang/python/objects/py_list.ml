@@ -285,10 +285,9 @@ struct
            man.eval (mk_py_none range))
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__new__")}, _)}, args, []) ->
-      (* todo: check that first arg is list class *)
-      man.eval (mk_expr (E_py_list []) range) flow
-      |> Option.return
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__new__")}, _)}, cls::args, []) ->
+      Utils.new_wrapper man range flow "list" cls
+        ~fthennew:(man.eval (mk_expr (E_py_list []) range))
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.__init__" as f))}, _)}, args, [])
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.extend" as f))}, _)}, args, []) ->

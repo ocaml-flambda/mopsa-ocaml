@@ -100,16 +100,17 @@ struct
         )
       |> Option.return
 
-
-
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "int.__new__")}, _)}, [cls], []) ->
-      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow |> Option.return
+      Utils.new_wrapper man range flow "int" cls
+        ~fthennew:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range))
 
     | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "int.__new__")}, _)} as f), [cls; arg], []) ->
-      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) {exp with ekind = E_py_call(f, [cls; arg; mk_int 10 range], [])} flow |> Option.return
+      Utils.new_wrapper man range flow "int" cls
+        ~fthennew:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) {exp with ekind = E_py_call(f, [cls; arg; mk_int 10 range], [])})
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "int.__new__")}, _)}, [cls; str; base], []) ->
-      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow |> Option.return
+      Utils.new_wrapper man range flow "int" cls
+        ~fthennew:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range))
 
     (* 𝔼⟦ int.__op__(e1, e2) | op ∈ {==, !=, <, ...} ⟧ *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
@@ -190,6 +191,14 @@ struct
       Utils.check_instances f man flow range args
         ["int"]
         (fun _ flow -> man.eval (mk_py_top T_bool range) flow)
+      |> Option.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("int.__str__" as f))}, _)}, args, [])
+    (* todo: weird, tp_str set to 0 in longobject.c *)
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("int.__repr__" as f))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args
+        ["int"]
+        (fun _ flow -> man.eval (mk_py_top T_string range) flow)
       |> Option.return
 
     | _ -> None
