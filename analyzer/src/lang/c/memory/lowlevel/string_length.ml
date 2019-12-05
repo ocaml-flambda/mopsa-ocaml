@@ -518,7 +518,7 @@ struct
             (mk_binop
                (mk_binop l O_eq (mk_zero range) range)
                O_log_and
-               (mk_binop u O_eq (sub size (mk_z (sizeof_type t) range) range) range)
+               (mk_binop u O_eq (sub size (mk_z (sizeof_type (void_to_char t)) range) range) range)
                range
             )
             ~fthen:(fun flow ->
