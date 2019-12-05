@@ -50,7 +50,7 @@ framework.hooks = logs
 lang = universal repl stubs c python
 
 # Universal
-lang.universal = ast frontend zone iterators heap numeric packing
+lang.universal = ast frontend zone iterators heap numeric packing hooks
 lang.universal.iterators = unittest program intraproc scalar interproc loops
 lang.universal.iterators.interproc = common inlining sequential_cache join_based_cache
 lang.universal.heap = policies recency
