@@ -38,57 +38,44 @@ struct
   let eval_zones = [Z_any,Z_any]
 
 
-  (** {2 Progression table entries} *)
-  (** ***************************** *)
+  (** {2 Entries of the progress table} *)
+  (** ********************************* *)
 
   (** Set of location ranges *)
   module RangeSet = SetExt.Make(struct type t = range let compare = compare_range end)
 
   (** Entry of the progression table *)
   type entry = {
-    name: string; (** Name of the function *)
-    range: range; (** Location of the function *)
+    name: string;                   (** Name of the function *)
+    range: range;                   (** Location of the function *)
     all_stmt_range_set: RangeSet.t; (** Location of all statements in the function body *)
     mutable analyzed_stmt_range_set: RangeSet.t; (** Locations of analyzed statements *)
-    nb_all_stmt: int; (** Total number of statements *)
-    mutable nb_analyzed_stmt: int; (** Number of analyzed statements *)
+    nb_all_stmt: int;               (** Total number of statements *)
+    mutable nb_analyzed_stmt: int;  (** Number of analyzed statements *)
   }
 
-  (** Print a progression entry *)
+  (** Print an entry of the progress table *)
   let pp_entry fmt e =
     fprintf fmt "%s: %d%%" e.name (100*e.nb_analyzed_stmt/e.nb_all_stmt)
+
+
+  (** {2 Utilities for moving the terminam cursor} *)
+  (** ******************************************** *)
+
+  (** Clear the current line and move the cursor at its beginning *)
+  let clear_line () =
+    printf "\027[2K\r@?"
+
+  (** Move the cursor one line above *)
+  let up_line () =
+    printf "\027[1A@?"
 
 
   (** {2 Progression table} *)
   (** ********************* *)
 
-  (** Progression table *)
+  (** Progression table as a stack of entries *)
   let table : entry Stack.t = Stack.create ()
-
-  let clear_line () =
-    printf "\027[2K\r@?"
-
-  let up_line () =
-    printf "\027[1A@?"
-
-  let print_head () =
-    printf "%a@?" pp_entry (Stack.top table)
-
-  let print_after_push () =
-    printf "@.%a@?" pp_entry (Stack.top table)
-
-  let print_after_pop () =
-    clear_line ();
-    if Stack.is_empty table then ()
-    else (
-      up_line ();
-      clear_line ();
-      print_head ()
-    )
-
-  let print_after_update () =
-    clear_line ();
-    print_head ()
 
 
   (** Return the set of statements in the body of a function *)
@@ -115,7 +102,7 @@ struct
     }
     in
     Stack.push entry table;
-    print_after_push ()
+    printf "@.%a@?" pp_entry entry
 
 
   (** Update the progress table after a statement is analyzed *)
@@ -129,7 +116,8 @@ struct
       else (
         entry.analyzed_stmt_range_set <- RangeSet.add range entry.analyzed_stmt_range_set;
         entry.nb_analyzed_stmt <- entry.nb_analyzed_stmt + 1;
-        print_after_update ()
+        clear_line ();
+        printf "%a@?" pp_entry entry
       )
     )
 
@@ -137,8 +125,16 @@ struct
   (** Remove the head function from the progress table *)
   let pop () =
     let _ = Stack.pop table in
-    print_after_pop ();
-    ()
+    (* Clear the current line (displaying the progress of the removed entry) 
+       and move the cursor to the line before.
+    *)
+    clear_line ();
+    if Stack.is_empty table then ()
+    else (
+      up_line ();
+      clear_line ();
+      printf "%a@?" pp_entry (Stack.top table)
+    )
   
 
   
