@@ -139,3 +139,17 @@ let strip_object (e:expr) =
       E_py_object (addr, oe)
     | _ -> assert false in
   {e with ekind}
+
+let new_wrapper man range flow newcls argcls ~fthennew =
+  man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) argcls flow |>
+  Eval.bind (fun ecls flow ->
+      assume
+        (Addr.mk_py_issubclass_builtin_r argcls newcls range)
+        man flow
+        ~fthen:fthennew
+        ~felse:(fun flow ->
+            Format.fprintf Format.str_formatter "%s.__new__(%a): %a is not a subtype of int" newcls pp_expr argcls pp_expr ecls;
+            man.exec (mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |>
+            Eval.empty_singleton)
+    )
+  |> Option.return

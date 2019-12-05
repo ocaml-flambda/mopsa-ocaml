@@ -58,11 +58,13 @@ struct
     let range = exp.erange in
     match ekind exp with
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("slice.__new__" as f))}, _)}, cls :: args, []) ->
-      let intornone = ["int"; "NoneType"] in
-      Utils.check_instances_disj f man flow range args
-        [intornone; intornone; intornone]
-        (fun _ flow -> allocate_builtin man range flow "slice" (Some exp))
-      |> Option.return
+      Utils.new_wrapper man range flow "slice" cls
+        ~fthennew:(fun flow ->
+            let intornone = ["int"; "NoneType"] in
+            Utils.check_instances_disj f man flow range args
+              [intornone; intornone; intornone]
+              (fun _ flow -> allocate_builtin man range flow "slice" (Some exp))
+          )
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__new__")}, _)} as call, cls :: [up], []) ->
       let args' = (mk_constant T_int (C_int (Z.of_int 0)) range)::up::(mk_constant T_int (C_int (Z.of_int 1)) range)::[] in
@@ -75,10 +77,12 @@ struct
       |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range.__new__" as f))}, _)}, cls :: args, []) ->
-      Utils.check_instances f man flow range args
-        ["int"; "int"; "int"]
-        (fun args flow -> allocate_builtin man range flow "range" (Some exp))
-      |> Option.return
+      Utils.new_wrapper man range flow "range" cls
+        ~fthennew:(fun flow ->
+            Utils.check_instances f man flow range args
+              ["int"; "int"; "int"]
+              (fun args flow -> allocate_builtin man range flow "range" (Some exp))
+          )
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__contains__")}, _)}, args, []) ->
       (* isinstance(arg1, range) && isinstance(arg2, int) ? *)

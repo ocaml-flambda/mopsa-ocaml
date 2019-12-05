@@ -56,38 +56,38 @@ module Domain =
         Eval.singleton (mk_py_object (Addr_env.addr_float (), None) range) flow |> Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "float.__new__")}, _)}, [cls], []) ->
-         (* FIXME?*)
-         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top (T_float F_DOUBLE) range) flow |> Option.return
+        Utils.new_wrapper man range flow "float" cls
+          ~fthennew:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top (T_float F_DOUBLE) range))
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "float.__new__")}, _)}, [cls; arg], []) ->
-         (* FIXME?*)
-         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) arg flow |>
-           Eval.bind (fun el flow ->
-               assume
-                 (mk_py_isinstance_builtin el "float" range)
-                 ~fthen:(fun flow ->
-                   man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top (T_float F_DOUBLE) range) flow)
-                 ~felse:(fun flow ->
-                   assume
-                     (mk_py_isinstance_builtin el "int" range)
-                     ~fthen:(fun flow ->
-                       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top (T_float F_DOUBLE) range) flow)
-                     ~felse:(fun flow ->
-                       assume
-                         (mk_py_isinstance_builtin el "str" range)
-                         ~fthen:(fun flow ->
-                           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top (T_float F_DOUBLE) range) flow)
-                         ~felse:(fun flow ->
-                             Format.fprintf Format.str_formatter "float() argument must be a string or a number, not '%a'" pp_expr el;
-                           man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |>
-                             Eval.empty_singleton)
-                         man flow)
-                     man flow
-                 )
-                 man flow
-             )
-         |> Option.return
-
+        Utils.new_wrapper man range flow "float" cls
+          ~fthennew:(fun flow ->
+              man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) arg flow |>
+              Eval.bind (fun el flow ->
+                  assume
+                    (mk_py_isinstance_builtin el "float" range)
+                    ~fthen:(fun flow ->
+                        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top (T_float F_DOUBLE) range) flow)
+                    ~felse:(fun flow ->
+                        assume
+                          (mk_py_isinstance_builtin el "int" range)
+                          ~fthen:(fun flow ->
+                              man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top (T_float F_DOUBLE) range) flow)
+                          ~felse:(fun flow ->
+                              assume
+                                (mk_py_isinstance_builtin el "str" range)
+                                ~fthen:(fun flow ->
+                                    man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top (T_float F_DOUBLE) range) flow)
+                                ~felse:(fun flow ->
+                                    Format.fprintf Format.str_formatter "float() argument must be a string or a number, not '%a'" pp_expr el;
+                                    man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |>
+                                    Eval.empty_singleton)
+                                man flow)
+                          man flow
+                      )
+                    man flow
+                )
+            )
 
       (* 𝔼⟦ float.__op__(e1, e2) | op ∈ {==, !=, <, ...} ⟧ *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])

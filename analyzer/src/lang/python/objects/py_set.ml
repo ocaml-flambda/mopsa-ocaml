@@ -102,10 +102,9 @@ struct
       |> Option.return
 
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "set.__new__")}, _)}, args, []) ->
-      (* todo: check that first arg is set class *)
-      man.eval (mk_expr (E_py_set []) range) flow
-      |> Option.return
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "set.__new__")}, _)}, cls::args, []) ->
+      Utils.new_wrapper man range flow "set" cls
+        ~fthennew:(man.eval (mk_expr (E_py_set []) range))
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__init__" as f))}, _)}, args, []) ->
       Utils.check_instances f man flow range args

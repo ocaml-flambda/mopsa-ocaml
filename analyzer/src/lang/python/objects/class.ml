@@ -52,7 +52,7 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind=A_py_class (C_builtin "type", _)}, _)}, args, []) ->
       None
 
-    | E_py_call({ekind = E_py_object cls} as ecls, args, kwargs) when isclass cls ->
+    | E_py_call({ekind = E_py_object (({addr_kind=A_py_class _}, _) as cls)} as ecls, args, kwargs) ->
       debug "class call  %a@\n@\n" pp_expr exp;
       (* Call __new__ *)
       bind_list args (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
@@ -122,8 +122,10 @@ struct
                   let obj = (addr, None) in
                   let flow = man.exec (mk_assign (mk_var cls.py_cls_var range) (mk_py_object obj range) range) flow in
                   debug "Body of class is %a@\n" pp_stmt cls.py_cls_body;
-                  man.exec cls.py_cls_body flow |>
-                  Post.return
+                  let flow = man.exec cls.py_cls_body flow in
+                  let parent = List.hd @@ List.tl mro in
+                  man.eval (mk_py_call (mk_py_object_attr parent "__init_subclass__" range) [mk_py_object obj range] range) flow |>
+                  Eval.bind (fun _ flow -> Post.return flow)
                 )
             with C3_lin_failure ->
               Exceptions.warn "C3 linearization failure during class declaration %a@\n" pp_var cls.py_cls_var;

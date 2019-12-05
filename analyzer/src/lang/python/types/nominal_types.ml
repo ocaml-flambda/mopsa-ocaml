@@ -80,6 +80,8 @@ struct
              proceed "module"
            | E_py_object ({addr_kind = A_py_method _}, _) ->
              proceed "method"
+           | E_py_object ({addr_kind = A_py_function _}, _) ->
+             proceed "function"
            | E_py_object ({addr_kind = A_py_class _}, _) ->
              proceed "type"
            | _ -> Exceptions.panic_at range "type: todo: %a@\n" pp_expr arg
@@ -108,7 +110,9 @@ struct
           let addr_attr = addr_of_eobject eattr in
           debug "match %a %a" pp_addr addr_obj pp_addr addr_attr;
           match akind addr_obj, akind addr_attr with
-          (* FIXME: isinstance _, object *)
+          | _, A_py_class (C_builtin "object", _) ->
+            man.eval (mk_py_true range) flow
+
           | A_py_class _, A_py_class (C_builtin c, _) ->
             man.eval (mk_py_bool (c = "type") range) flow
 

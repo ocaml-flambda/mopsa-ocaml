@@ -126,7 +126,6 @@ struct
                     Eval.bind (fun len flow ->
                         assume
                           (mk_py_isinstance_builtin len "int" range)
-                          (* FIXME: i guess the condition is actually more subtle, like castable to int or something *)
                           ~fthen:(fun true_flow ->
                               Eval.singleton len true_flow)
                           ~felse:(fun false_flow ->
@@ -258,10 +257,9 @@ struct
       man.eval (mk_py_none range) flow
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "print")}, _)}, [obj], [])  ->
-      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) obj flow |>
-      Eval.bind (fun eobj flow ->
-          man.eval (mk_py_none range) flow)
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "print")}, _)}, objs, [])  ->
+      bind_list objs (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+      bind_some (fun eobj flow -> man.eval (mk_py_none range) flow)
       |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "hash")}, _)}, args, []) ->
@@ -273,6 +271,27 @@ struct
           if List.length eargs <> 1 then tyerror flow else
             let el = List.hd eargs in
             man.eval (mk_py_call (mk_py_object_attr (object_of_expr el) "__hash__" range) [] range) flow
+        )
+      |> Option.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "repr")}, _)}, [v], [])  ->
+      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type v range) flow |>
+      Eval.bind (fun etype flow ->
+          assume
+            (mk_py_hasattr etype "__repr__" range)
+            man flow
+            ~fthen:(fun flow ->
+                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_attr etype "__repr__" range) [] range) flow |>
+                Eval.bind (fun repro flow ->
+                    assume (mk_py_isinstance_builtin repro "str" range) man flow
+                      ~fthen:(Eval.singleton repro)
+                      ~felse:(fun flow ->  man.exec (Utils.mk_builtin_raise_msg "TypeError" "__repr__ returned non-string" range) flow |> Eval.empty_singleton)
+                  )
+              )
+            ~felse:(
+              (* there is a default implementation saying "<%s object at %p>" % (name(type(v)), v as addr I guess *)
+              man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_string range)
+            )
         )
       |> Option.return
 

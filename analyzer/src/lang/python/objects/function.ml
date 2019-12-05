@@ -56,7 +56,6 @@ module Domain =
             (List.map (fun v -> match vkind v with | V_uniq (s, _) -> s | _ -> assert false) pyfundec.py_func_parameters)
             pyfundec.py_func_defaults in
         (* Replace default_args by kwargs *)
-        (* FIXME: terrible complexity *)
         let py_func_defaults = List.fold_left (fun acc (oname, e) ->
             match oname with
             | None -> assert false

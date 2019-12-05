@@ -121,7 +121,6 @@ struct
         flow)
         |> Post.return |> Option.return
 
-    (* FIXME: remove vars / rename / ... not caught in the zone yet ? :/ *)
     | S_remove {ekind = E_var (v, _)} ->
       let cur = get_env T_cur man flow in
       begin if SMap.mem v cur then
@@ -134,18 +133,12 @@ struct
     | _ ->  None
 
   let eval zs exp man flow = None
-    (* let cur = get_env T_cur man flow in
-     * match ekind exp with
-     *   | E_var (v, mode) when SMap.mem v cur ->
-     *     assert false
-     *   | _ -> None *)
 
   let ask : type r. r query -> ('a, t) man -> 'a flow -> r option = fun query man flow ->
     match query with
     | Q_strings_of_var v ->
       let cur = get_env T_cur man flow in
-      (* FIXME *)
-      Some (try StringSet.choose @@ SMap.find v cur with Not_found -> "")
+      Some (StringSet.fold (fun str acc -> acc ^ " \\/ " ^ str) (Option.default StringSet.empty (SMap.find_opt v cur)) "")
 
     | _ -> None
 

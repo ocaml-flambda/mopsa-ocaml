@@ -129,8 +129,8 @@ struct
       |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dict.__new__")}, _)}, cls :: _, []) ->
-      man.eval (mk_expr (E_py_dict ([],[])) range) flow
-      |> Option.return
+      Utils.new_wrapper man range flow "dict" cls
+        ~fthennew:(man.eval (mk_expr (E_py_dict ([],[])) range))
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.__init__" as f))}, _)}, args, [])
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.update" as f))}, _)}, args, []) ->
@@ -162,7 +162,6 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.copy" as f))}, _)}, args, []) ->
       Utils.check_instances f man flow range args ["dict"]
         (fun args flow ->
-           (* FIXME: to test *)
            let var_k, var_v = extract_vars (List.hd args) in
            man.eval (mk_expr (E_py_dict ([mk_var ~mode:WEAK var_k range], [mk_var ~mode:WEAK var_v range])) range) flow
         )

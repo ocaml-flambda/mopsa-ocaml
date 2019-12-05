@@ -48,7 +48,6 @@ let () =
   register_join_akind (fun default ak1 ak2 ->
       match ak1, ak2 with
       | A_py_list r1, A_py_list r2 -> A_py_list (Rangeset.union r1 r2)
-      (* FIXME: this makes a cascade of matches. Any way to specialize the code? *)
       | _ -> default ak1 ak2);
   register_is_data_container (fun default ak -> match ak with
       | A_py_list _ -> true
@@ -175,8 +174,6 @@ struct
            let listl, listr = match args with [l; r] -> l, r | _ -> assert false in
            let elsl_var = var_of_eobj listl in
            let elsr_var = var_of_eobj listr in
-           (* FIXME: try to reuse other functions? in the impl, list_concat (Objects/listobject.c) is not reusing anything *)
-
            (* First, allocate new addr for the list, and new addr for the list elements *)
            (* Then assign the el addr to both addresses above *)
            let addr_list = mk_alloc_addr (A_py_list (Rangeset.singleton range)) range in
@@ -288,10 +285,9 @@ struct
            man.eval (mk_py_none range))
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__new__")}, _)}, args, []) ->
-      (* todo: check that first arg is list class *)
-      man.eval (mk_expr (E_py_list []) range) flow
-      |> Option.return
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__new__")}, _)}, cls::args, []) ->
+      Utils.new_wrapper man range flow "list" cls
+        ~fthennew:(man.eval (mk_expr (E_py_list []) range))
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.__init__" as f))}, _)}, args, [])
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.extend" as f))}, _)}, args, []) ->

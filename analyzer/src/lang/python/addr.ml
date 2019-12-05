@@ -31,15 +31,6 @@ let debug fmt = Debug.debug ~channel:"python.addr" fmt
 (**                           {2 Addresses}                                 *)
 (*==========================================================================*)
 
-
-(** Parameters of instances of some builtin-in types *)
-type obj_param =
-  | List of py_object (* the address of the iterated list used by listiter *)
-  | Tuple of py_object
-  | Dict of py_object
-  | Range of py_object
-  | Generator of py_fundec
-
 (** Classes *)
 type class_address =
   | C_builtin of string (* name of a built-in class *)
@@ -246,21 +237,6 @@ let is_builtin_class_function cls f =
   | Some (cls', _) -> cls = cls' && is_builtin_name f
 
 
-(** Class name of an atomic type *)
-let atomic_type_to_class_name (t: typ) : string=
-  let open Universal.Ast in
-  match t with
-  | T_int -> "int"
-  | T_float F_DOUBLE -> "float"
-  | T_bool -> "bool"
-  | T_string -> "str"
-  | T_py_none -> "NoneType"
-  | T_py_complex -> "complex"
-  | T_py_not_implemented -> "NotImplementedType"
-  | _ -> assert false
-
-
-
 (*==========================================================================*)
 (**                      {2 Utility functions}                              *)
 (*==========================================================================*)
@@ -280,36 +256,11 @@ let mro (obj: py_object) : py_object list =
   | A_py_class (c, b) -> b
   | _ -> assert false
 
-
-(** Check class membership of an instance *)
-let isinstance obj cls =
-  match kind_of_object obj, kind_of_object cls with
-  | A_py_class _, A_py_class (C_builtin "type", _)-> true
-  | A_py_class _, _ -> false
-  | _ -> (* FIXME *) assert false
-
-let isclass obj =
-  match kind_of_object obj with
-  | A_py_class
-      _
-      (* ((C_user _ | C_unsupported _ | C_builtin _), _) *)
-    -> true
-  | _ -> false
-
-let is_not_implemented r =
-  let o = object_of_expr r in
-  isinstance o (find_builtin "NotImplementedType")
-
-let is_none r =
-  let o = object_of_expr r in
-  isinstance o (find_builtin "NoneType")
-
 let mk_py_z_interval l u range =
   mk_z_interval l u range
 
 let mk_py_float_interval l u range =
   mk_float_interval l u range
-
 
 let mk_py_issubclass e1 e2 range =
   mk_py_call (mk_py_object (find_builtin "issubclass") range) [e1; e2] range
@@ -321,7 +272,6 @@ let mk_py_issubclass_builtin_r e builtin range =
 let mk_py_issubclass_builtin_l builtin e range =
   let obj = find_builtin builtin in
   mk_py_issubclass (mk_py_object obj range) e range
-
 
 let mk_py_issubclass_builtin2 blt1 blt2 range =
   let obj1 = find_builtin blt1 in

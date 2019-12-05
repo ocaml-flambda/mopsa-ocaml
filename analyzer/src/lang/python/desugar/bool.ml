@@ -79,7 +79,6 @@ module Domain =
 
       (* E⟦ e1 or e2 ⟧ *)
       | E_binop(O_py_or, e1, e2) ->
-        (* FIXME: combinatoric explosion *)
          man.eval (Utils.mk_builtin_call "bool" [e1] range) flow |>
            Eval.bind (fun be1 flow1 ->
                assume be1
@@ -89,8 +88,6 @@ module Domain =
                      man.eval e2 false_flow)
                  man flow1)
          |> Option.return
-      (* combinatorial explosion *)
-      (* man.eval (mk_expr (E_py_if ((Utils.mk_builtin_call "bool" [e1] range), e1, e2)) range) flow |> Option.return *)
 
       (* E⟦ e1 is not e2 ⟧ *)
       | E_binop(O_py_is_not, e1, e2) ->

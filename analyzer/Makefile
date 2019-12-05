@@ -89,7 +89,7 @@ lang.c.hooks = profiler
 
 
 # Python
-lang.python = ast addr utils visitor operators pp ast_compare frontend zone  \
+lang.python = ast addr zone utils visitor operators pp ast_compare frontend   \
               alarms libs desugar objects data_model values types  flows program
 lang.python.libs = math py_mopsa py_std py_unittest py_typing
 lang.python.objects = lambda class function range nones data_container_utils py_list tuple dict py_set py_object iterable

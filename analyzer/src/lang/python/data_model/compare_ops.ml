@@ -45,95 +45,102 @@ module Domain = struct
 
   let init _ _ flow = flow
 
-
-  (* check equality by inspecting types and instance addresses. Return
-     None when comparison can not be determined. *)
-  (* let is_equal (e1: expr) (e2: expr) : bool option =
-   *   let o1 = object_of_expr e1 and o2 = object_of_expr e2 in
-   *   let cls1 = Addr.class_of_object o1 and cls2 = Addr.class_of_object o2 in
-   *   (\* different type => not equal *\)
-   *   if compare_py_object cls1 cls2 <> 0 then Some false
-   *   else (\* different addresses => not equal *\)
-   *     if compare_py_object o1 o2 <> 0 then
-   *       Some false
-   *     else (\* same strong addresses => equal *\)
-   *       if not (Addr.is_weak o1) || not (Addr.is_weak o2) then
-   *         Some true
-   *       else (\* cannot say anything with weak addresses *\)
-   *         None *)
-
   let eval zs exp man flow =
     let range = erange exp in
     match ekind exp with
-    | E_binop(op, e1, e2) when is_comp_op op (*&& is_py_expr e1 && is_py_expr e2*) ->
-      debug "compare op@\n";
+    | E_binop(op, e1, e2) when is_comp_op op ->
+      (* Cpython: object.c, function do_richcompare *)
+      let is_notimplemented x =
+        let not_implemented_type = mk_py_object (find_builtin "NotImplementedType") range in
+        mk_py_isinstance x not_implemented_type range in
+
       bind_list [e1; e2] (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
       bind_some (fun el flow ->
-          let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
+      let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
 
-          let op_fun, rop_fun =
-            match op with
-            | O_eq -> "__eq__", "__eq__"
-            | O_ne -> "__ne__", "__ne__"
-            | O_lt -> "__lt__", "__gt__"
-            | O_le -> "__le__", "__ge__"
-            | O_gt -> "__gt__", "__lt__"
-            | O_ge -> "__ge__", "__le__"
-            | _ -> assert false
-          in
+      let op_fun, rop_fun =
+        match op with
+        | O_eq -> "__eq__", "__eq__"
+        | O_ne -> "__ne__", "__ne__"
+        | O_lt -> "__lt__", "__gt__"
+        | O_le -> "__le__", "__ge__"
+        | O_gt -> "__gt__", "__lt__"
+        | O_ge -> "__ge__", "__le__"
+        | _ -> assert false
+      in
 
-          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type e1 range) flow |>
-          Eval.bind (fun cls1 flow ->
-              let cls1 = object_of_expr cls1 in
-              man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type e2 range) flow |>
-              Eval.bind (fun cls2 flow ->
-                  let cls2 = object_of_expr cls2 in
-                  man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object_attr cls1 op_fun range) [e1; e2] range) flow |>
+      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type e1 range) flow |>
+      Eval.bind (fun ocls1 flow ->
+      let cls1 = object_of_expr ocls1 in
+      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type e2 range) flow |>
+      Eval.bind (fun ocls2 flow ->
+      let cls2 = object_of_expr ocls2 in
+      let is_same_type = compare_py_object cls1 cls2 = 0 in
+
+      let call_op checked_reverse flow =
+        let switch flow =
+          match op with
+          | O_eq | O_ne ->
+            assume (mk_expr (E_binop(O_py_is, e1, e2)) range) man flow
+              ~fthen:(man.eval (mk_py_bool (O_eq =  op) range))
+              ~felse:(man.eval (mk_py_bool (O_eq <> op) range))
+          | _ ->
+            Format.fprintf Format.str_formatter "'%s' not supported between instances of '%a' and '%a'" op_fun pp_addr_kind (akind @@ fst cls1) pp_addr_kind (akind @@ fst cls2);
+            let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow in
+            Eval.empty_singleton flow
+            in
+        let check_reverse flow =
+          if not checked_reverse then
+            assume (mk_py_hasattr ocls2 rop_fun range)
+              man flow
+              ~fthen:(fun flow ->
+                  man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)
+                    (mk_py_call (mk_py_object_attr cls2 rop_fun range) [e2; e1] range) flow |>
                   Eval.bind (fun cmp flow ->
-                      let not_implemented_type = mk_py_type (mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range) range in
-                      let expr = mk_py_isinstance cmp not_implemented_type range in
-                      debug "Expr is %a@\n" pp_expr expr;
-                      assume
-                        expr
-                        ~fthen:(fun true_flow ->
-                            (* FIXME: subclass priority check is not implemented *)
-                            begin
-                              (* FIXME: really necessary? *)
-                              match op with
-                              | O_eq | O_ne ->
-                                assume
-                                  (mk_expr (E_binop(O_py_is, e1, e2)) range)
-                                  ~fthen:(fun flow ->
-                                      match op with
-                                      | O_eq -> man.eval (mk_py_true range) flow
-                                      | O_ne -> man.eval (mk_py_false range) flow
-                                      | _ -> assert false)
-                                  ~felse:(fun flow ->
-                                      match op with
-                                      | O_eq -> man.eval (mk_py_false range) flow
-                                      | O_ne -> man.eval (mk_py_true range) flow
-                                      | _ -> assert false)
-                                  (* TODO *)
-                                  (* ~fboth:(fun flow1 flow2 -> Eval.singleton (mk_py_top T_bool range) flow) *)
-                                  man flow
-                              | _ ->
-                                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object_attr cls2 rop_fun range) [e2; e1] range) flow |>
-                                Eval.bind (fun rcmp flow ->
-                                    assume (mk_py_isinstance rcmp not_implemented_type range) man flow
-                                      ~fthen:(fun flow ->
-                                          Format.fprintf Format.str_formatter "'%s' not supported between instances of '%a' and '%a'" op_fun pp_addr_kind (akind @@ fst cls1) pp_addr_kind (akind @@ fst cls2);
-                                          let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow in
-                                          Eval.empty_singleton flow
-                                        )
-                                      ~felse:(fun flow ->
-                                          Eval.singleton rcmp flow
-                                        )
-                                  )
-                            end)
-                        ~felse:(fun false_flow ->
-                            Eval.singleton cmp flow)
-                        man flow)))) |> Option.return
-        | _ -> None
+                      assume (is_notimplemented cmp) man flow
+                        ~fthen:switch
+                        ~felse:(Eval.singleton cmp)
+                    )
+                )
+              ~felse:switch
+          else
+            switch flow in
+        assume (mk_py_hasattr ocls1 op_fun range)
+          man flow
+          ~fthen:(fun flow ->
+              man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)
+                (mk_py_call (mk_py_object_attr cls1 op_fun range) [e1; e2] range) flow |>
+              Eval.bind (fun cmp flow ->
+                  assume (is_notimplemented cmp)
+                    man flow
+                    ~fthen:check_reverse
+                    ~felse:(Eval.singleton cmp)
+
+                )
+            )
+          ~felse:check_reverse
+      in
+
+      assume
+        (mk_binop (mk_py_bool is_same_type range) O_py_and
+           (mk_binop (mk_py_issubclass ocls2 ocls1 range) O_py_and
+              (mk_py_hasattr ocls2 rop_fun range) range) range)
+        man flow
+        ~fthen:(fun flow ->
+            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)
+              (mk_py_call (mk_py_object_attr cls2 rop_fun range) [e2; e1] range) flow |>
+            Eval.bind (fun cmp flow ->
+                assume (is_notimplemented cmp)
+                  man flow
+                  ~fthen:(call_op true)
+                  ~felse:(Eval.singleton cmp)
+              )
+          )
+        ~felse:(call_op false)
+        )))
+      |> Option.return
+
+    | _ -> None
 
   let exec _ _ _ _ = None
   let ask _ _ _ = None

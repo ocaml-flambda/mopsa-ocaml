@@ -50,7 +50,6 @@ module Domain =
       let range = erange exp in
       match ekind exp with
       | E_py_annot {ekind = E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_user c, _)}, _)}, {ekind = E_py_tuple annots}) } when get_orig_vname c.py_cls_var = "Union" ->
-        (* FIXME: we could eval i as a tuple, but then we would be somehow stuck I think *)
         bind_list (List.map (fun (e:expr) -> mk_expr (E_py_annot e) range) annots) (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
         bind_some (fun types flow ->
             Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow)
