@@ -136,10 +136,36 @@ module Domain =
         |> Option.return
 
       | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.__new__")}, _)}), [cls; obj], []) ->
-        (* check if obj has str method, run it, check return type (can't be notimplemented) *)
-        (* otherwise, call __repr__. Or repr? *)
-        (* FIXME!*)
-        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_string range) flow |> Option.return
+        (* from unicode_new in unicodeobject.c
+           1) if type is not str then call unicode_subtype_new (not handled but asserts that type is subtype of str)
+           2) other cases unhandled too
+           3) call PyObject_Str if encoding and errors are set to null  ()
+           4) otherwise call PyUnicode_FromEncodedObject (not handled) *)
+        (* now, PyObject_Str defined in object.c:
+           1) unhandled cases
+           2) if no __str__ field call repr bltin / PyObject_Repr
+           3) otherwise call __str__ and check return type to be str *)
+        (* now PyObject_Repr defined in object.c:
+           1) unhandled cases
+           2) if no __repr__ field, there is a default implementation saying "<%s object at %p>" % (name(type(v)), v as addr I guess)
+           3) otherwise call repr, check return type to be str *)
+        (* short version: we handle call to __str__ and repr *)
+        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type obj range) flow |>
+        Eval.bind (fun etype flow ->
+            assume
+              (mk_py_hasattr etype "__str__" range) man flow
+              ~fthen:(fun flow ->
+                  man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_attr etype "__str__" range) [obj] range) flow |>
+                  Eval.bind (fun stro flow ->
+                      assume (mk_py_isinstance_builtin stro "str" range) man flow
+                        ~fthen:(Eval.singleton stro)
+                        ~felse:(fun flow -> man.exec (Utils.mk_builtin_raise_msg "TypeError" "__str__ returned non-string" range) flow |> Eval.empty_singleton)
+                    )
+                )
+              ~felse:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object (find_builtin "repr") range) [obj] range))
+          )
+        |> Option.return
+        (* man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_string range) flow |> Option.return *)
 
       (* 𝔼⟦ str.__op__(e1, e2) | op ∈ {==, !=, <, ...} ⟧ *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
