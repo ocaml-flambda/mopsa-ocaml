@@ -336,7 +336,7 @@ struct
           Eval.singleton (mk_c_string str exp.erange) flow
 
         | E_c_points_to (P_block (ValidAddr addr,_)) ->
-          Eval.singleton (mk_addr addr exp.erange) flow
+          Eval.singleton (mk_c_cast (mk_addr addr exp.erange) (T_c_pointer T_c_void) exp.erange) flow
 
         | E_c_points_to P_top ->
           Soundness.warn_at exp.erange "ignoring base computation of ⊤ pointer";
@@ -346,6 +346,10 @@ struct
           Eval.singleton (mk_c_null exp.erange) flow
 
         | E_c_points_to P_invalid ->
+          Eval.singleton (mk_c_invalid_pointer exp.erange) flow
+
+        | E_c_points_to (P_block (InvalidVar _,_))
+        | E_c_points_to (P_block (InvalidAddr _,_)) ->
           Eval.singleton (mk_c_invalid_pointer exp.erange) flow
 
         | _ -> panic_at exp.erange "base(%a) where %a %a not supported" pp_expr e pp_expr e pp_expr pt

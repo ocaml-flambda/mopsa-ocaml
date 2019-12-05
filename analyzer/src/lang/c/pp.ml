@@ -138,7 +138,7 @@ let () =
     );
   register_constant_pp (fun next fmt c ->
       match c with
-      | C_c_character(c, C_char_ascii) -> fprintf fmt "'%c'" (char_of_int @@ Z.to_int c)
+      | C_c_character(c, C_char_ascii) -> fprintf fmt "'\\x%s'" (Z.format "%X" c)
       | C_c_character(c, C_char_wide) -> fprintf fmt "L'\\x%s'" (Z.format "%X" c)
       | C_c_character(c, C_char_utf8) -> panic ~loc:__LOC__ "utf8 char not supported"
       | C_c_character(c, C_char_utf16) -> panic ~loc:__LOC__ "utf16 char not supported"

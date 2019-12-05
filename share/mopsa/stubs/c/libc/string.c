@@ -36,9 +36,9 @@
  */
 
 /*$
+ * requires: valid_ptr(__src);
+ * requires: valid_ptr(__dest);
  * requires: no_overlap(__src, __dest, __len);
- * requires: size(__src) >= __len;
- * requires: size(__dest) >= __len;
  *
  * case "copy" {
  *   assumes: __len >= 1;
@@ -58,8 +58,6 @@ void *memcpy (void *__restrict __dest, const void *__restrict __src,
               size_t __len);
 
 /*$
- * requires: size(__src) >= __len;
- * requires: size(__dest) >= __len;
  * requires: valid_ptr_range(__src, 0, __len - 1);
  * requires: valid_ptr_range(__dest, 0, __len - 1);
  * assigns: __dest[0, __len - 1];
@@ -102,7 +100,6 @@ void *memccpy (void *__restrict __dest, const void *__restrict __src,
 #endif /* Misc || X/Open.  */
 
 /*$
- * requires: size(__dest) >= __len;
  * requires: valid_ptr_range(__dest, 0, __len - 1);
  * assigns: __dest[0, __len - 1];
  * ensures: forall int i in [0, __len - 1]: (((unsigned char*)__dest)[i])' == __ch;

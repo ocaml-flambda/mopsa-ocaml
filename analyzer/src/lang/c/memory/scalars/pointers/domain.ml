@@ -638,15 +638,25 @@ struct
     let v2, o2, p2 = Static_points_to.eval q |>
                      eval_static_points_to man flow
     in
-    (* Case 1: p and q point to the same base *)
+    let v1_valid, v1_invalid = PointerSet.filter_valid v1, PointerSet.filter_non_valid v1 in
+    let v2_valid, v2_invalid = PointerSet.filter_valid v2, PointerSet.filter_non_valid v2 in
+
+    (* Case 1: p or q point to invalid bases *)
+    let invalid_base_case =
+      if PointerSet.is_bottom v1_invalid && PointerSet.is_bottom v2_invalid
+      then []
+      else
+        let flow = raise_c_illegal_pointer_compare p q range man flow in
+        [ Post.return flow ]
+    in
+
+    (* Case 2: p and q point to the same valid base *)
     let same_base_case =
-      let v = PointerSet.meet v1 v2 in
+      let v = PointerSet.meet v1_valid v2_valid in
       if PointerSet.is_bottom v
       then []
       else
         [
-          remove_offset_opt p1 v1 v range man flow >>$ fun () flow ->
-          remove_offset_opt p2 v2 v range man flow >>$ fun () flow ->
           match mk_offset_constraint_opt op p1 v1 o1 p2 v2 o2 range with
           | None -> Post.return flow
           | Some cond ->
@@ -655,10 +665,10 @@ struct
         ]
     in
 
-    (* Case 2: p and q point to different bases *)
+    (* Case 2: p and q point to different valid bases *)
     let different_base_case =
-      let vv1 = PointerSet.singleton_diff v1 v2 in
-      let vv2 = PointerSet.singleton_diff v2 v1 in
+      let vv1 = PointerSet.singleton_diff v1_valid v2_valid in
+      let vv2 = PointerSet.singleton_diff v2_valid v1_valid in
       if PointerSet.is_bottom vv1 || PointerSet.is_bottom vv2
       then []
       else
@@ -671,7 +681,7 @@ struct
     let bottom_case = Flow.set T_cur man.lattice.bottom man.lattice flow |>
                       Post.return
     in
-    Post.join_list (same_base_case @ different_base_case) ~empty:(fun () -> bottom_case)
+    Post.join_list (invalid_base_case @ same_base_case @ different_base_case) ~empty:(fun () -> bottom_case)
 
 
 
