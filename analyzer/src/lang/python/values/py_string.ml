@@ -138,7 +138,8 @@ struct
     match query with
     | Q_strings_of_var v ->
       let cur = get_env T_cur man flow in
-      Some (StringSet.fold (fun str acc -> acc ^ " \\/ " ^ str) (Option.default StringSet.empty (SMap.find_opt v cur)) "")
+      let s = StringSet.fold (fun str acc -> acc ^ " \\/ " ^ str) (Option.default StringSet.empty (SMap.find_opt v cur)) "" in
+      Some (String.sub s 4 (String.length s - 4))
 
     | _ -> None
 

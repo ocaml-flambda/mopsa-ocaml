@@ -307,6 +307,13 @@ module Domain =
           )
         |> Option.return
 
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__repr__" as f))}, _)}, args, [])
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__str__" as f))}, _)}, args, []) ->
+        Utils.check_instances f man flow range args
+          ["str"]
+          (fun eargs flow -> Eval.singleton (List.hd eargs) flow)
+        |> Option.return
+
 
       | _ -> None
 
