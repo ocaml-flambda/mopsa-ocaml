@@ -26,17 +26,15 @@ open Location
 let debug fmt = Debug.debug ~channel:"c_stubs_parser.main" fmt
 
 (** Check whether a comment is a stub comment *)
-let is_stub_comment com =
-  match com with
-  | [com] ->
-    let comment = com.Clang_AST.com_text |>
-                  String.trim
-    in
-    let lexeme = "/*$" in
-    let start = String.sub comment 0 (String.length lexeme) in
-    start = lexeme
-
-  | _ -> false
+let find_stub_comment_opt com_list =
+  List.find_opt (fun com ->
+      let comment = com.Clang_AST.com_text |>
+                    String.trim
+      in
+      let lexeme = "/*$" in
+      let start = String.sub comment 0 (String.length lexeme) in
+      start = lexeme
+    ) com_list
 
 
 (** Parse the stub specification from comments of a function *)
@@ -49,9 +47,9 @@ let parse_function_comment
     (stubs:(string,Cst.stub) Hashtbl.t)
   : Ast.stub option
   =
-  if not (is_stub_comment func.func_com) then None
-  else
-    let com = List.hd func.func_com in
+  match find_stub_comment_opt func.func_com with
+  | None -> None
+  | Some com ->
     let comment = com.com_text in
     let file = com.com_range.range_begin.loc_file in
     let line = com.com_range.range_begin.loc_line in
