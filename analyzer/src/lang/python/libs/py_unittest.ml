@@ -111,6 +111,7 @@ module Domain =
         Py_mopsa.check man (Utils.mk_builtin_call "bool" [cond] range) range flow
         |> Option.return
 
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertFalse")}, _)}, [test; cond; _], [])
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertFalse")}, _)}, [test; cond], []) ->
          Py_mopsa.check man (mk_not cond range) range flow
          |> Option.return
