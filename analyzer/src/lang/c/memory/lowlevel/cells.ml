@@ -1218,84 +1218,69 @@ struct
      ∀ i1 ∈ [l1,u1], ..., in ∈ [ln,un] ⟧
   *)
   let exec_rename_primed target bounds range man flow =
-    match bounds with
-    | [] when not (is_c_scalar_type target.etyp) ->
-      panic_at range
-        "non-scalar %a' can not be unprimed without specifying the assigned offsets"
-        pp_expr target
+    let p = match bounds with
+      | [] -> mk_c_address_of target range
+      | _ -> target
+    in
+    man.eval p ~zone:(Z_c_low_level, Z_c_points_to) flow >>$ fun pt flow ->
+    match ekind pt with
+    | E_c_points_to P_top | E_c_points_to P_null | E_c_points_to P_invalid ->
+      Post.return flow
 
-    | [] ->
-      (* target should be a scalar lval *)
-      begin
-        expand (mk_c_address_of target range) range man flow >>$ fun expansion flow ->
-        match expansion with
-        | Cell c ->
-          rename_cell { c with primed = true } c range man flow
+    | E_c_points_to (P_block(base, offset)) ->
+      (* Get cells with the same base *)
+      let a = get_env T_cur man flow in
+      let same_base_cells = CellSet.filter (fun c ->
+          compare_base base c.base = 0
+        ) a.cells
+      in
 
-        | _ -> assert false
-      end
+      (* Compute the offset interval *)
+      let itv =
+        (* First, get the flattened expressions of the lower and upper bounds *)
+        let l, u, t =
+          let rec doit accl accu t =
+            function
+            | [] -> accl, accu, t
+            | [(l, u)] ->
+              (mk_offset_bound accl l t), (mk_offset_bound accu u t), t
+            | (l, u) :: tl ->
+              doit (mk_offset_bound accl l t) (mk_offset_bound accu u t) (under_type t |> void_to_char) tl
 
-    | _ :: _ ->
-      (* target is pointer, so resolve it and compute the affected offsets *)
-      man.eval ~zone:(Z_c_low_level, Z_c_points_to) target flow >>$ fun pt flow ->
-      match ekind pt with
-      | E_c_points_to P_top | E_c_points_to P_null | E_c_points_to P_invalid ->
-        Post.return flow
-
-      | E_c_points_to (P_block(base, offset)) ->
-        (* Get cells with the same base *)
-        let a = get_env T_cur man flow in
-        let same_base_cells = CellSet.filter (fun c ->
-            compare_base base c.base = 0
-          ) a.cells
-        in
-
-        (* Compute the offset interval *)
-        let itv =
-          (* First, get the flattened expressions of the lower and upper bounds *)
-          let l, u =
-            let rec doit accl accu t =
-              function
-              | [] -> accl, accu
-              | [(l, u)] ->
-                (mk_offset_bound accl l t), (mk_offset_bound accu u t)
-              | (l, u) :: tl ->
-                doit (mk_offset_bound accl l t) (mk_offset_bound accu u t) (under_type t |> void_to_char) tl
-
-            (* Utility function that returns the expression of an offset bound *)
-            and mk_offset_bound before bound t =
-              let elem_size = sizeof_type t in
-              add before (
-                mul bound (mk_z elem_size range) range ~typ:T_int
-              ) range ~typ:T_int
-            in
-            doit offset offset (under_type target.etyp |> void_to_char) bounds
+          (* Utility function that returns the expression of an offset bound *)
+          and mk_offset_bound before bound t =
+            let elem_size = sizeof_type t in
+            add before (
+              mul bound (mk_z elem_size range) range ~typ:T_int
+            ) range ~typ:T_int
           in
-
-          (* Compute the interval of the bounds *)
-          let itv1 = compute_bound l man flow in
-          let itv2 = compute_bound u man flow in
-
-          (* Compute the interval of the assigned cells *)
-          Itv.join itv1 itv2
+          doit offset offset (under_type p.etyp |> void_to_char) bounds
         in
+        (* Compute the interval of the bounds *)
+        let elem_size = sizeof_type t in
+        let itv1 = compute_bound l man flow in
+        let itv2 = compute_bound (add u (mk_z (Z.pred elem_size) range) range) man flow in
+
+        (* Compute the interval of the assigned cells *)
+        Itv.join itv1 itv2
+      in
 
 
-        (* Search for primed cells that reside withing the assigned offsets and rename them *)
-        CellSet.fold (fun c acc ->
-            if not (Itv.mem c.offset itv)
-            then acc
-            else if c.primed then
-              (* Primed cells are unprimed by renaming them *)
-              Post.bind (rename_cell c { c with primed = false } range man) acc
-            else if not (CellSet.mem { c with primed = true } same_base_cells) then
-              (* Remove unprimed cells that have no primed version *)
-              Post.bind (remove_cell c range man) acc
-            else
-              acc
-          ) same_base_cells (Post.return flow)
+      (* Search for primed cells that reside withing the assigned offsets and rename them *)
+      CellSet.fold (fun c acc ->
+          if not (Itv.mem c.offset itv)
+          then acc
+          else if c.primed then
+            (* Primed cells are unprimed by renaming them *)
+            Post.bind (rename_cell c { c with primed = false } range man) acc
+          else if not (CellSet.mem { c with primed = true } same_base_cells) then
+            (* Remove unprimed cells that have no primed version *)
+            Post.bind (remove_cell c range man) acc
+          else
+            acc
+        ) same_base_cells (Post.return flow)
 
-      | _ -> assert false
+    | _ -> assert false
 
 
   (** 𝕊⟦ requires cond; ⟧ *)
