@@ -354,6 +354,9 @@ let binop_type prj t1 t2 =
   | T_pointer _, T_integer _ -> t1
   | T_integer _, T_pointer _ -> t2
 
+  | T_array _, T_integer _ -> t1
+  | T_integer _, T_array _ -> t2
+
   | T_pointer (T_void,_), T_pointer _ -> t2
   | T_pointer _, T_pointer (T_void,_) -> t1
   | T_pointer (p1,_), T_pointer (p2,_) when compare p1 p2 = 0 -> t1
