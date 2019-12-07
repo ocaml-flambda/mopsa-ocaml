@@ -33,8 +33,8 @@ let rec exprs_in_init = function
   | C_init_flat l ->
     List.fold_left (fun acc init ->
         match init with
-        | C_flat_expr (e,_) -> e :: acc
-        | C_flat_fill (e,_,_) -> e :: acc
+        | C_flat_expr (e,_,_) -> e :: acc
+        | C_flat_fill (e,_,_,_) -> e :: acc
         | _ -> acc
       ) [] l
 
@@ -221,6 +221,13 @@ let () =
             {stmt with skind = S_c_for(init, cond, incr, body)}
           | _ -> assert false
         )
+      | S_c_break _ -> leaf stmt
+      | S_c_continue _ -> leaf stmt
+      | S_c_return (None,_) -> leaf stmt
+      | S_c_return (Some e,update) ->
+        {exprs=[e]; stmts=[]},
+        (function | {exprs=[e]} -> {stmt with skind = S_c_return(Some e,update)}
+                  | _ -> assert false)
       | S_c_goto _ -> leaf stmt
       | S_c_goto_stab stmt ->
         {exprs = []; stmts = [stmt]},
@@ -235,13 +242,13 @@ let () =
           | _ -> assert false
         )
       | S_c_label _ -> leaf stmt
-      | S_c_switch_case(case) ->
+      | S_c_switch_case(case,update) ->
         {exprs = [case]; stmts = []},
         (function
-          | {exprs = [case]; stmts = []} -> {stmt with skind = S_c_switch_case(case)}
+          | {exprs = [case]; stmts = []} -> {stmt with skind = S_c_switch_case(case,update)}
           | _ -> assert false
         )
-      | S_c_switch_default -> leaf stmt
+      | S_c_switch_default _ -> leaf stmt
 
       | _ -> default stmt
     );

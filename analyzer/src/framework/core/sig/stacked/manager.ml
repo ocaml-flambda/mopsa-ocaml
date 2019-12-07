@@ -103,46 +103,48 @@ let map_sub_env (tk:token) (f:'s -> 's) (man:('a,'t,'s) man) (flow:'a flow) : 'a
 let assume
     cond ?(zone=any_zone)
     ~fthen ~felse
+    ?(negate=mk_not)
     man flow
   =
   let then_post = man.post ~zone (mk_assume cond cond.erange) flow in
   let flow = Flow.set_ctx (Post.get_ctx then_post) flow in
-  let else_post = man.post ~zone (mk_assume (mk_not cond cond.erange) cond.erange) flow in
+  let else_post = man.post ~zone (mk_assume (negate cond cond.erange) cond.erange) flow in
 
   let then_res = then_post >>$? fun () then_flow ->
     if man.lattice.is_bottom (Flow.get T_cur man.lattice then_flow)
+       && Alarm.AlarmSet.subset (Flow.get_alarms then_flow) (Flow.get_alarms flow)
     then None
     else Some (fthen then_flow)
   in
 
   let else_res = else_post >>$? fun () else_flow ->
     if man.lattice.is_bottom (Flow.get T_cur man.lattice else_flow)
+       && Alarm.AlarmSet.subset (Flow.get_alarms else_flow) (Flow.get_alarms flow)
     then None
     else Some (felse else_flow)
   in
 
-  match then_res, else_res with
-  | Some r, None -> r
-  | None, Some r -> r
-  | Some r1, Some r2 -> Result.join r1 r2
-  | None, None -> Result.empty flow
+  match Option.neutral2 Result.join then_res else_res with
+  | None -> Result.empty_singleton flow
+  | Some r -> r
 
 
 let assume_flow
     ?(zone=any_zone) cond
     ~fthen ~felse
+    ?(negate=mk_not)
     man flow
   =
   let then_flow = man.exec ~zone (mk_assume cond cond.erange) flow in
   let flow = Flow.set_ctx (Flow.get_ctx then_flow) flow in
-  let else_flow = man.exec ~zone (mk_assume (mk_not cond cond.erange) cond.erange) flow in
+  let else_flow = man.exec ~zone (mk_assume (negate cond cond.erange) cond.erange) flow in
 
   match man.lattice.is_bottom (Flow.get T_cur man.lattice then_flow),
         man.lattice.is_bottom (Flow.get T_cur man.lattice else_flow)
   with
   | false, true -> fthen then_flow
   | true, false -> felse else_flow
-  | true, true -> flow
+  | true, true -> Flow.join man.lattice then_flow else_flow
   | false, false ->
     let then_res = fthen then_flow in
     let else_flow' = Flow.copy_ctx then_res else_flow in
@@ -209,3 +211,23 @@ let post_to_flow man post =
     (Flow.join man.lattice)
     (Flow.join man.lattice)
     post
+
+
+(* Transform a domain manager into a stack manager on unit *)
+let of_domain_man (man:('a,'t) Domain.Manager.man) : ('a,'t,unit) man =
+  {
+    lattice = man.lattice;
+    get = man.get;
+    set = man.set;
+    get_sub = (fun _ -> ());
+    set_sub = (fun _ a -> a);
+    exec = man.exec;
+    post = man.post;
+    eval = man.eval;
+    ask = man.ask;
+    get_log = man.get_log;
+    set_log = man.set_log;
+    get_sub_log = (fun _ -> Log.empty);
+    set_sub_log =  (fun _ l -> l);
+    merge_sub = (fun _ _ _ -> ());
+  }

@@ -45,6 +45,7 @@ let bottom ctx alarms : 'a flow = {
   alarms;
 }
 
+
 let top ctx : 'a flow = {
   tmap = TokenMap.top;
   ctx;
@@ -122,9 +123,9 @@ let widen (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
 
 
 let print (pp: Format.formatter -> 'a -> unit) fmt flow =
-  Format.fprintf fmt "@[<v>%a@,alarms: %a@]"
+  Format.fprintf fmt "@[%a@\n|alarms| = %d@]"
     (TokenMap.print pp) flow.tmap
-    AlarmMap.print (AlarmMap.of_set flow.alarms)
+    (count_alarms flow.alarms)
 
 
 let get (tk: token) (lattice: 'a lattice) (flow: 'a flow) : 'a =
@@ -132,6 +133,9 @@ let get (tk: token) (lattice: 'a lattice) (flow: 'a flow) : 'a =
 
 let set (tk: token) (a: 'a) (lattice:'a lattice) (flow: 'a flow) : 'a flow =
   { flow with tmap = TokenMap.set tk a lattice flow.tmap }
+
+let set_bottom tk flow =
+  { flow with tmap = TokenMap.remove tk flow.tmap }
 
 let copy (tk1:token) (tk2:token) (lattice:'a lattice) (flow1:'a flow) (flow2:'a flow) : 'a flow =
   let ctx = Context.get_most_recent flow1.ctx flow2.ctx in
@@ -192,8 +196,8 @@ let add_alarm ?(force=false) alarm lattice flow =
   then flow
   else { flow with alarms = AlarmSet.add alarm flow.alarms }
 
-let raise_alarm alarm ?(bottom=false) lattice flow =
-  let flow = add_alarm alarm lattice flow in
+let raise_alarm ?(force=false) ?(bottom=false) alarm lattice flow =
+  let flow = add_alarm ~force alarm lattice flow in
   if not bottom
   then flow
   else set T_cur lattice.bottom lattice flow
@@ -234,3 +238,6 @@ let pop_callstack flow =
                Callstack.pop
   in
   hd, set_callstack cs flow
+
+let bottom_from flow : 'a flow =
+  bottom (get_ctx flow) (get_alarms flow)

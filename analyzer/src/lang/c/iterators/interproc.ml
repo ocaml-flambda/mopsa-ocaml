@@ -27,7 +27,8 @@ open Universal.Ast
 open Ast
 open Zone
 open Common.Points_to
-
+open Common.Scope_update
+open Universal.Iterators.Interproc.Common
 
 module Domain =
 struct
@@ -46,7 +47,7 @@ struct
 
   let interface = {
     iexec = {
-      provides = [];
+      provides = [Z_c];
       uses = []
     };
 
@@ -60,6 +61,7 @@ struct
     }
   }
 
+  let alarms = []
 
   (** Initialization of environments *)
   (** ============================== *)
@@ -70,7 +72,31 @@ struct
   (** Computation of post-conditions *)
   (** ============================== *)
 
-  let exec zone stmt man flow  = None
+  let exec zone stmt man flow =
+    match skind stmt with
+    | S_c_return (Some e,upd) ->
+      let ret = Context.find_unit return_key (Flow.get_ctx flow) in
+      let rrange = get_last_call_site flow in
+      let flow =
+        man.exec (mk_add_var ret rrange) flow |>
+        man.exec (mk_assign (mk_var ret rrange) e rrange) |>
+        update_scope upd rrange man
+      in
+      let cur = Flow.get T_cur man.lattice flow in
+      Flow.add (T_return (stmt.srange, true)) cur man.lattice flow |>
+      Flow.remove T_cur |>
+      Post.return |> Option.return
+
+    | S_c_return (None,upd) ->
+      let rrange = get_last_call_site flow in
+      let flow = update_scope upd rrange man flow in
+      let cur = Flow.get T_cur man.lattice flow in
+      Flow.add (T_return (stmt.srange, false)) cur man.lattice flow |>
+      Flow.remove T_cur |>
+      Post.return |> Option.return
+
+
+    | _ -> None
 
 
   (** Evaluation of expressions *)
@@ -104,7 +130,13 @@ struct
         let fundec' = {
           fun_name = fundec.c_func_unique_name;
           fun_parameters = fundec.c_func_parameters;
-          fun_locvars = fundec.c_func_local_vars;
+          fun_locvars = [];
+          (* FIXME: This is a temporary fix to avoid double removal of
+             local variables. The field fun_locvars is used by the
+             Universal iterator at the end of the call to clean the
+             environment. Since the environment is automatically
+             cleaned by the scope mechanism, local variables are
+             removed twice. *)
           fun_body = {skind = S_c_goto_stab (body); srange = srange body};
           fun_return_type = if is_c_void_type fundec.c_func_return then None else Some fundec.c_func_return;
           fun_return_var = ret_var;

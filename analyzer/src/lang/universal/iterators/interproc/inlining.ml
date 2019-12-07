@@ -48,6 +48,7 @@ struct
     ieval = { provides = [Z_u, Z_any]; uses = [] };
   }
 
+  let alarms = []
 
   (** Initialization *)
   (** ============== *)
@@ -65,7 +66,8 @@ struct
     let range = stmt.srange in
     match skind stmt with
     | S_return (Some e) ->
-      let ret, rrange = Context.find_unit return_key (Flow.get_ctx flow) in
+      let ret = Context.find_unit return_key (Flow.get_ctx flow) in
+      let rrange = get_last_call_site flow in
       let flow =
         man.exec (mk_add_var ret rrange) flow |>
         man.exec (mk_assign (mk_var ret rrange) e range) in
@@ -90,6 +92,11 @@ struct
     let range = erange exp in
     match ekind exp with
     | E_call({ekind = E_function (User_defined f)}, args) ->
+
+      if man.lattice.is_bottom (Flow.get T_cur man.lattice flow)
+      then Eval.empty_singleton flow |> Option.return
+      else
+
       let params, locals, body, flow = init_fun_params f args range man flow in
       let ret = match f.fun_return_type with
         | None -> None

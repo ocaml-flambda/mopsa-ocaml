@@ -44,7 +44,7 @@ open Universal.Zone
 open Zone
 open Common.Base
 open Common.Points_to
-open Alarms
+open Common.Alarms
 module Itv = Universal.Numeric.Values.Intervals.Integer.Value
 
 
@@ -161,7 +161,7 @@ struct
   let rangeof_int_cell c =
     assert(is_int_cell c);
     rangeof (cell_type c)
-  
+
 
 
   (** {2 Cell variables} *)
@@ -191,10 +191,10 @@ struct
   (** Construct the variable name associated to a cell *)
   let mk_cell_var_name c =
     let () = match c.base with
-      | V { vkind = V_c_cell c } ->
+      | ValidVar { vkind = V_c_cell c } ->
         panic "recursive creation of cell %a" pp_cell c
 
-      | V v ->
+      | ValidVar v ->
         Format.fprintf Format.str_formatter "⟨%s,%a,%a⟩%s"
           v.vname
           Z.pp_print c.offset
@@ -210,7 +210,7 @@ struct
   let mk_cell_var c : var =
     let name = mk_cell_var_name c in
     mkv name (V_c_cell c) (cell_type c)
-  
+
 
   (** Create a variable from a numeric cell *)
   let mk_numeric_cell_var_expr c range : expr =
@@ -228,7 +228,7 @@ struct
     else mk_c_cast (mk_var v ~mode:(base_mode c.base) range) typ range
 
 
-    
+
   (** {2 Domain header} *)
   (** ***************** *)
 
@@ -295,20 +295,35 @@ struct
     }
   }
 
+  let alarms = [A_c_out_of_bound_cls; A_c_null_deref_cls; A_c_use_after_free_cls; A_c_invalid_deref_cls; Stubs.Alarms.A_stub_invalid_requires_cls]
+
 
   (** {2 Command-line options} *)
   (** ************************ *)
 
   (** Maximal number of expanded cells when dereferencing a pointer *)
-  let opt_expand = ref 1
+  let opt_deref_expand = ref 1
 
   let () =
     register_domain_option name {
-      key = "-cell-expand";
+      key = "-cell-deref-expand";
       category = "C";
-      doc = " maximal number of expanded cells";
-      spec = ArgExt.Set_int opt_expand;
+      doc = " maximal number of expanded cells when dereferencing a pointer";
+      spec = ArgExt.Set_int opt_deref_expand;
       default = "1";
+    }
+
+
+  (** Maximal number of expanded cells when initializing a variable *)
+  let opt_init_expand = ref 10
+
+  let () =
+    register_domain_option name {
+      key = "-cell-init-expand";
+      category = "C";
+      doc = " maximal number of expanded cells when initializing a variable";
+      spec = ArgExt.Set_int opt_init_expand;
+      default = "10";
     }
 
 
@@ -379,6 +394,7 @@ struct
       None
 
     | None ->
+      if not (is_c_int_type @@ cell_type c) then None else
       match find_cell_opt
               (fun c' ->
                  is_int_cell c' &&
@@ -458,7 +474,7 @@ struct
           with
           | NotPossible ->
             match c.base with
-            | S s ->
+            | String s ->
               let len = String.length s in
               if Z.equal c.offset (Z.of_int len) then
                 Some (mk_zero range)
@@ -558,10 +574,39 @@ struct
 
 
   let is_interesting_base = function
-    | V _
-    | A _ -> true
+    | ValidVar _
+    | ValidAddr _ -> true
 
     | _ -> false
+
+
+  let eval_pointed_base_offset ptr range man flow =
+    man.eval ptr ~zone:(Zone.Z_c_low_level, Z_c_points_to) flow >>$ fun pt flow ->
+
+    match ekind pt with
+    | E_c_points_to P_null ->
+      raise_c_null_deref_alarm ptr range man flow |>
+      Result.empty_singleton
+
+    | E_c_points_to P_invalid ->
+      raise_c_invalid_deref_alarm ptr range man flow |>
+      Result.empty_singleton
+
+    | E_c_points_to (P_block (InvalidAddr (_,r), offset)) ->
+      raise_c_use_after_free_alarm ptr r range man flow |>
+      Result.empty_singleton
+
+    | E_c_points_to (P_block (InvalidVar (v,r), offset)) ->
+      raise_c_dangling_deref_alarm ptr v r range man flow |>
+      Result.empty_singleton
+
+    | E_c_points_to (P_block (base, offset)) ->
+      Result.singleton (Some (base, offset)) flow
+
+    | E_c_points_to P_top ->
+      Result.singleton None flow
+
+    | _ -> assert false
 
 
   (** Expand a pointer dereference into a cell. *)
@@ -569,9 +614,8 @@ struct
     eval_pointed_base_offset p range man flow >>$ fun pp flow ->
     match pp with
     | None ->
-      (* Valid pointer but unknown offset *)
-      raise_c_alarm AOutOfBound range ~bottom:false man.lattice flow |>
-      Result.singleton Top
+      Soundness.warn_at range "ignoring ⊤ pointer %a" pp_expr p;
+      Result.singleton Top flow
 
     | Some (base,offset) ->
       let typ = under_type p.etyp |> void_to_char in
@@ -582,27 +626,22 @@ struct
 
       (* Convert the size and the offset to numeric *)
       man.eval ~zone:(Z_c_scalar,Z_u_num) size flow >>$ fun size flow ->
-
       man.eval ~zone:(Z_c_scalar,Z_u_num) offset flow >>$ fun offset flow ->
 
       (* Try static check *)
       match expr_to_z size, expr_to_z offset with
-      | Some size, Some offset ->
-        if Z.gt elm size then
-          panic_at range
-            "%a points to a cell of size %a, which is greater than the size %a of its base %a"
-            pp_expr p
-            Z.pp_print elm
-            Z.pp_print size
-            pp_base base
-        ;
-        if Z.leq Z.zero offset &&
-           Z.leq offset (Z.sub size elm)
+      | Some s, Some o ->
+        if Z.gt elm s then
+          let flow = raise_c_out_bound_alarm ~base ~offset ~size range man flow in
+          Result.empty_singleton flow
+        else
+        if Z.leq Z.zero o &&
+           Z.leq o (Z.sub s elm)
         then
-          let c = mk_cell base offset typ in
+          let c = mk_cell base o typ in
           Result.singleton (Cell c) flow
         else
-          let flow = raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow in
+          let flow = raise_c_out_bound_alarm ~base ~offset ~size range man flow in
           Result.empty_singleton flow
 
       | _ ->
@@ -644,8 +683,8 @@ struct
                     match uu with
                     | Some size -> Z.sub size elm
                     | None ->
-                      (* We are in trouble: the size is not bounded! 
-                         So we assume that it does not exceed the range of unsigned long, usually used for size_t 
+                      (* We are in trouble: the size is not bounded!
+                         So we assume that it does not exceed the range of unsigned long, usually used for size_t
                       *)
                       let _, uuu = rangeof ul in
                       Soundness.warn_at range
@@ -658,7 +697,7 @@ struct
 
                 (* Iterate over [l, u] *)
                 let rec aux i o =
-                  if i = !opt_expand
+                  if i = !opt_deref_expand
                   then
                     if Z.gt o u
                     then []
@@ -677,10 +716,10 @@ struct
                       Result.singleton (Cell c) flow :: aux (i + 1) (Z.add o step)
                 in
                 let evals = aux 0 l in
-                Result.join_list ~empty:(Result.empty_singleton flow) evals
+                Result.join_list ~empty:(fun () -> Result.empty_singleton flow) evals
             )
           ~felse:(fun flow ->
-              let flow = raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow in
+              let flow = raise_c_out_bound_alarm ~base ~offset ~size range man flow in
               Result.empty_singleton flow
             )
           man flow
@@ -837,8 +876,10 @@ struct
     expand p range man flow >>$ fun expansion flow ->
     let t = under_type p.etyp in
     match expansion with
-    | Top | Region _ ->
-      (* ⊤ pointer or expand threshold exceeded => use the whole value interval *)
+    | Top ->
+      Eval.singleton (mk_top (void_to_char t) range) flow
+
+    | Region _ ->
       Eval.singleton (mk_top (void_to_char t) range) flow
 
     | Cell c ->
@@ -885,14 +926,14 @@ struct
 
   (** 𝔼⟦ *(p + ∀i) ⟧ *)
   let eval_deref_quantified p range man flow =
-    let elm = under_type p.etyp |> void_to_char in
+    let typ = under_type p.etyp |> void_to_char in
     eval_pointed_base_offset p range man flow >>$ fun pp flow ->
 
     match pp with
     | None ->
       (* Valid pointer but unknown offset *)
-      raise_c_alarm AOutOfBound range ~bottom:false man.lattice flow |>
-      Eval.singleton (mk_top elm range)
+      Soundness.warn_at range "ignoring ⊤ pointer %a" pp_expr p;
+      Eval.singleton (mk_top typ range) flow
 
     | Some (base,offset) ->
       eval_base_size base range man flow >>$ fun size flow ->
@@ -902,7 +943,7 @@ struct
       man.eval ~zone:(Z_c, Z_u_num) min flow >>$ fun min flow ->
       man.eval ~zone:(Z_c, Z_u_num) max flow >>$ fun max flow ->
 
-      let limit = sub size (mk_z (sizeof_type elm) range) range in
+      let limit = sub size (mk_z (sizeof_type typ) range) range in
 
       (* Safety condition: [min, max] ⊆ [0, size - |elm|] *)
       assume (
@@ -913,11 +954,10 @@ struct
           range
       )
         ~fthen:(fun flow ->
-            Eval.singleton (mk_top elm range) flow
+            Eval.singleton (mk_top typ range) flow
           )
         ~felse:(fun flow ->
-            debug "out-of-bound in %a" (Flow.print man.lattice.print) flow;
-            raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow |>
+            raise_c_out_bound_quantified_alarm ~base ~min ~max ~size range man flow |>
             Eval.empty_singleton
           )
         ~zone:Z_u_num man flow
@@ -931,14 +971,14 @@ struct
       Option.return
 
     | E_c_deref p when under_type p.etyp |> void_to_char |> is_c_scalar_type &&
-                       not (is_pointer_offset_quantified p)
+                       not (is_pointer_offset_forall_quantified p)
       ->
       eval_deref_scalar_pointer p false exp.erange man flow |>
       Option.return
 
 
     | E_c_deref p when under_type p.etyp |> is_c_function_type &&
-                       not (is_pointer_offset_quantified p)
+                       not (is_pointer_offset_forall_quantified p)
       ->
       eval_deref_function_pointer p exp.erange man flow |>
       Option.return
@@ -947,15 +987,15 @@ struct
       eval_address_of lval exp.erange man flow |>
       Option.return
 
-    | E_stub_primed lval when not (is_lval_offset_quantified lval) ->
+    | E_stub_primed lval when not (is_lval_offset_forall_quantified lval) ->
       eval_deref_scalar_pointer (mk_c_address_of lval exp.erange) true exp.erange man flow |>
       Option.return
 
-    | E_c_deref p when is_pointer_offset_quantified p ->
+    | E_c_deref p when is_pointer_offset_forall_quantified p ->
       eval_deref_quantified p exp.erange man flow |>
       Option.return
 
-    | E_stub_primed e when is_lval_offset_quantified e -> 
+    | E_stub_primed e when is_lval_offset_forall_quantified e ->
       eval_deref_quantified (mk_c_address_of e exp.erange) exp.erange man flow |>
       Option.return
 
@@ -963,6 +1003,11 @@ struct
     | E_stub_builtin_call((VALID_PTR | VALID_FLOAT) as f, e) ->
       man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow >>$? fun e flow ->
       Eval.singleton (mk_expr (E_stub_builtin_call(f, e)) ~etyp:exp.etyp exp.erange) flow |>
+      Option.return
+
+    | E_stub_quantified(EXISTS, v, _) ->
+      let e = mk_var v exp.erange in
+      man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow |>
       Option.return
 
     | _ -> None
@@ -985,38 +1030,38 @@ struct
 
     (* Add the base *)
     let flow = map_env T_cur (fun a ->
-        { a with bases = BaseSet.add (V v) a.bases }
+        { a with bases = BaseSet.add (ValidVar v) a.bases }
       ) man flow
     in
 
 
-    (* Initialize cells, but expand at most !opt_expand cells, as
-       defined by the option -cell-expand *)
-    let rec aux o i l flow =
-      if i = !opt_expand || List.length l = 0
+    (* Initialize cells, but expand at most !opt_init_expand cells, as
+       defined by the option -cell-init-expand *)
+    let rec aux i l flow =
+      if i = !opt_init_expand || List.length l = 0
       then Post.return flow
       else
-        let c, init, tl, o' =
+        let c, init, tl =
           match l with
-          | C_flat_expr (e,t) :: tl ->
-            let c = mk_cell (V v) o t in
+          | C_flat_expr (e,o,t) :: tl ->
+            let c = mk_cell (ValidVar v) o t in
             let init = Some (C_init_expr e) in
-            c, init, tl, Z.add o (sizeof_type t)
+            c, init, tl
 
-          | C_flat_none(n,t) :: tl ->
-            let c = mk_cell (V v) o t in
+          | C_flat_none(n,o,t) :: tl ->
+            let c = mk_cell (ValidVar v) o t in
             let init = None in
-            let tl' = if Z.equal n Z.one then tl else C_flat_none(Z.pred n,t) :: tl in
-            c, init, tl', Z.add o (sizeof_type t)
+            let tl' = if Z.equal n Z.one then tl else C_flat_none(Z.pred n,Z.add o (sizeof_type t),t) :: tl in
+            c, init, tl'
 
-          | C_flat_fill(e,t,n) :: tl ->
-            let c = mk_cell (V v) o t in
+          | C_flat_fill(e,n,o,t) :: tl ->
+            let c = mk_cell (ValidVar v) o t in
             let init = Some (C_init_expr e) in
-            let tl' = if Z.equal n Z.one then tl else C_flat_fill(e,t,Z.pred n) :: tl in
-            c, init, tl', Z.add o (sizeof_type t)
+            let tl' = if Z.equal n Z.one then tl else C_flat_fill(e,Z.pred n,Z.add o (sizeof_type t),t) :: tl in
+            c, init, tl'
 
-
-          | l -> panic "?? %a" Pp.pp_c_init (C_init_flat l)
+          | l ->
+            panic "cells: unsupported initializer %a" Pp.pp_c_init (C_init_flat l)
         in
         (* Evaluate the initialization into a scalar expression *)
         (
@@ -1046,9 +1091,9 @@ struct
         man.post ~zone:Z_c_scalar stmt flow |>
 
         Post.bind @@ fun flow ->
-        aux o' (i + 1) tl flow
+        aux (i + 1) tl flow
     in
-    aux Z.zero 0 flat_init flow
+    aux 0 flat_init flow
 
 
   (** 𝕊⟦ *p = e; ⟧ *)
@@ -1057,21 +1102,26 @@ struct
     expand p range man flow >>$ fun expansion flow ->
     match expansion with
     | Top ->
-      Soundness.warn_at range "ignoring assignment to undetermined lval *%a = %a;"
+      Soundness.warn_at range "ignoring assignment to ⊤ pointer *%a = %a;"
         pp_expr p
         pp_expr e
       ;
       Post.return flow
 
     | Cell { base } when is_base_readonly base ->
-      let flow = raise_c_alarm AReadOnlyModification ~bottom:true range man.lattice flow in
+      let flow = raise_c_read_only_modification_alarm base range man flow in
       Post.return flow
 
     | Cell c ->
       man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow >>$ fun e flow ->
       assign_cell c e mode range man flow
 
-    | Region (base,itv) ->
+    | Region (base,itv) when is_c_num_type e.etyp ->
+      man.eval ~zone:(Z_c_low_level,Z_u_num) e flow >>$ fun e flow ->
+      assign_region base itv range man flow
+
+    | Region (base,itv)  ->
+      man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow >>$ fun e flow ->
       assign_region base itv range man flow
 
 
@@ -1084,8 +1134,8 @@ struct
 
   let exec_add b range man flow =
     match b with
-    | V v when is_c_scalar_type v.vtyp ->
-      let c = mk_cell (V v) Z.zero v.vtyp in
+    | ValidVar v when is_c_scalar_type v.vtyp ->
+      let c = mk_cell (ValidVar v) Z.zero v.vtyp in
       add_cell c range man flow
 
     | _ ->
@@ -1107,7 +1157,6 @@ struct
 
   (** Rename bases and their cells *)
   let exec_rename base1 base2 range man flow =
-    debug "rename %a into %a" pp_base base1 pp_base base2;
     let a = get_env T_cur man flow in
 
     (* Cell renaming function *)
@@ -1115,9 +1164,7 @@ struct
 
     (* Cells of base1 *)
     let cells1 = CellSet.filter (fun c ->
-        let x = compare_base c.base base1 in
-        if x = 0 then debug "%a should be renamed %a" pp_cell c pp_cell (to_base2 c);
-        x = 0
+        compare_base c.base base1 = 0
       ) a.cells
     in
 
@@ -1128,21 +1175,28 @@ struct
         (* If base2 is not already present => rename the cells *)
         fun c flow ->
           let c' = to_base2 c in
-          debug "rename %a into %a" pp_cell c pp_cell c';
           let v = mk_cell_var c in
           let v' = mk_cell_var c' in
+          let flow = map_env T_cur (fun a ->
+              { a with cells = CellSet.remove c a.cells |>
+                               CellSet.add c' }
+            ) man flow in
           let stmt = mk_rename_var v v' range in
           man.post ~zone:Z_c_scalar stmt flow
       else
         (* Otherwise, assign with weak update *)
         fun c flow ->
           let c' = to_base2 c in
-          debug "weak copy %a to %a" pp_cell c pp_cell c';
           let v = mk_cell_var c in
           let v' = mk_cell_var c' in
-          let stmt = mk_assign (mk_var v' range) (mk_var v ~mode:WEAK range) range in
+          let flow = map_env T_cur (fun a ->
+              { a with cells = CellSet.remove c a.cells |>
+                               CellSet.add c' }
+            ) man flow in
+          let stmt = mk_assign (mk_var v' ~mode:WEAK range) (mk_var v range) range in
           man.post ~zone:Z_c_scalar stmt flow >>= fun _ flow ->
-          remove_cell c range man flow
+          let stmt = mk_remove_var v range in
+          man.post ~zone:Z_c_scalar stmt flow
     in
 
     (* Apply copy function *)
@@ -1150,22 +1204,14 @@ struct
     Post.bind @@ fun flow ->
 
     (* Remove base1 and add base2 *)
-    let flow = map_env T_cur (fun a ->
+    map_env T_cur (fun a ->
         {
           a with
           bases = BaseSet.remove base1 a.bases |>
                   BaseSet.add base2;
         }
-      ) man flow
-    in
-
-    (* Forward the rename statement to scalar domains in case of addresses *)
-    match base1, base2 with
-    | A addr1, A addr2 ->
-      man.post ~zone:Z_c_scalar (mk_rename (mk_addr addr1 range) (mk_addr addr2 range) range) flow
-
-    | _ ->
-      Post.return flow
+      ) man flow |>
+    Post.return
 
 
   (* 𝕊⟦ rename target[i1][i2]...[in]' into target[i1][i2]...[in],
@@ -1193,7 +1239,7 @@ struct
       (* target is pointer, so resolve it and compute the affected offsets *)
       man.eval ~zone:(Z_c_low_level, Z_c_points_to) target flow >>$ fun pt flow ->
       match ekind pt with
-      | E_c_points_to P_valid | E_c_points_to P_null | E_c_points_to P_invalid ->
+      | E_c_points_to P_top | E_c_points_to P_null | E_c_points_to P_invalid ->
         Post.return flow
 
       | E_c_points_to (P_block(base, offset)) ->
@@ -1252,6 +1298,35 @@ struct
       | _ -> assert false
 
 
+  (** 𝕊⟦ requires cond; ⟧ *)
+  let exec_stub_requires cond range man flow =
+    assume cond
+      ~fthen:(fun flow ->
+          Post.return flow
+        )
+      ~felse:(fun flow ->
+          Stubs.Alarms.raise_stub_invalid_requires cond range man flow |>
+          Post.return
+        )
+      ~negate:(fun e range ->
+          let ee = map_expr
+              (fun e ->
+                 match ekind e with
+                 | E_stub_quantified(FORALL, v, s) ->
+                   VisitParts { e with ekind = E_stub_quantified(EXISTS, v, s) }
+
+                 | E_stub_quantified(EXISTS, v, s) ->
+                   VisitParts { e with ekind = E_stub_quantified(FORALL, v, s) }
+
+                 | _ -> VisitParts e
+              )
+              (fun s -> VisitParts s)
+              e
+          in
+          mk_not ee range
+        )
+      ~zone:Z_c_low_level man flow
+
 
   let exec zone stmt man flow =
     match skind stmt with
@@ -1261,7 +1336,7 @@ struct
 
     | S_assign(({ekind = E_var(v, STRONG)} as lval), e) when is_c_scalar_type v.vtyp ->
       Some (
-        let c = mk_cell (V v) Z.zero v.vtyp in
+        let c = mk_cell (ValidVar v) Z.zero v.vtyp in
         let flow = map_env T_cur (fun a -> { a with cells = CellSet.add c a.cells }) man flow in
 
         let v = mk_cell_var c in
@@ -1283,24 +1358,28 @@ struct
 
 
     | S_add { ekind = E_var (v, _) } ->
-      exec_add (V v) stmt.srange man flow |>
+      exec_add (ValidVar v) stmt.srange man flow |>
       Option.return
 
 
     | S_add { ekind = E_addr addr } ->
-      exec_add (A addr) stmt.srange man flow |>
+      exec_add (ValidAddr addr) stmt.srange man flow |>
       Option.return
 
     | S_remove { ekind = E_var (v, _) } when is_c_type v.vtyp ->
-      exec_remove (V v) stmt.srange man flow |>
+      exec_remove (ValidVar v) stmt.srange man flow |>
+      Option.return
+
+    | S_remove { ekind = E_addr a } ->
+      exec_remove (ValidAddr a) stmt.srange man flow |>
       Option.return
 
     | S_rename({ ekind = E_var (v1, _) }, { ekind = E_var (v2, _) }) ->
-      exec_rename (V v1) (V v2) stmt.srange man flow |>
+      exec_rename (ValidVar v1) (ValidVar v2) stmt.srange man flow |>
       Option.return
 
     | S_rename({ ekind = E_addr addr1 }, { ekind = E_addr addr2 }) ->
-      exec_rename (A addr1) (A addr2) stmt.srange man flow |>
+      exec_rename (ValidAddr addr1) (ValidAddr addr2) stmt.srange man flow |>
       Option.return
 
     | S_stub_assigns _ ->
@@ -1309,6 +1388,10 @@ struct
 
     | S_stub_rename_primed(lval, bounds) ->
       exec_rename_primed lval bounds stmt.srange man flow |>
+      Option.return
+
+    | S_stub_requires e ->
+      exec_stub_requires e stmt.srange man flow |>
       Option.return
 
 

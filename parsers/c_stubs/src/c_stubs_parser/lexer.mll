@@ -33,6 +33,7 @@ let _ =
   List.iter (fun (a,b) -> Hashtbl.add keywords a b)
     [
      (* Constants *)
+     "top",      TOP;
      "true",     TRUE;
      "false",    FALSE;
      "INVALID",  INVALID;
@@ -136,8 +137,10 @@ let line_comment = "//" [^ '\n' '\r']*
 
 rule read =
   parse
-  | white                 { read lexbuf }
-  | newline (white* "*")? { new_line lexbuf; read lexbuf }  
+  | begin_delimeter  { BEGIN }
+
+  | white            { read lexbuf }
+  | newline          { new_line lexbuf; skip_line_header lexbuf }
 
   | int unsigned_long_suffix       { INT_CONST (z_of_int_literal (Lexing.lexeme lexbuf), UNSIGNED_LONG) }
   | int unsigned_long_long_suffix  { INT_CONST (z_of_int_literal (Lexing.lexeme lexbuf), UNSIGNED_LONG_LONG) }
@@ -205,11 +208,6 @@ rule read =
   | "="    { ASSIGN }
 
   | "//"   { read_comment lexbuf; read lexbuf }
-
-  | begin_delimeter  { BEGIN }
-  | end_delimeter    { END }
-
-  | newline white* end_delimeter    { new_line lexbuf; END }
   
   | line_comment  { read lexbuf }
   | "/*"          { ignore_block_comment lexbuf; read lexbuf } 
@@ -247,3 +245,11 @@ and ignore_block_comment =
   | [^ '\n' '\r'] { ignore_block_comment lexbuf }
   | newline       { new_line lexbuf; ignore_block_comment lexbuf }
   | _ { raise (SyntaxError ("Illegal string character #3: " ^ Lexing.lexeme lexbuf)) }
+
+and skip_line_header =
+  parse
+  | newline       { new_line lexbuf; skip_line_header lexbuf }
+  | white         { skip_line_header lexbuf }
+  | "*"           { read lexbuf }
+  | end_delimeter { END }
+  | _             { read lexbuf }

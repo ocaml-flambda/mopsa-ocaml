@@ -19,7 +19,12 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Abstraction of sets of partial maps. *)
+(** Lattice of partial maps.
+
+    Sets of partial maps M ∈ ℘(𝕂 ⇀ 𝕍) from concrete keys set 𝕂 to
+    concrete values set 𝕍 are abstracted as a partial map ℳ ∈ (𝕂⇀𝒱)
+    that binds concrete keys to abstract values.
+*)
 
 open Bot_top
 open Core.Lattice
@@ -150,6 +155,13 @@ struct
     | TOP -> Value.top
     | Nbt m -> PMap.find k m
 
+
+  let find_opt (k: Key.t) (a:t) : 'a option =
+    match a with
+    | BOT -> Some Value.bottom
+    | TOP -> Some Value.top
+    | Nbt m -> PMap.find_opt k m
+
   let remove (k: Key.t) (a:t) : t =
     match a with
     | BOT -> BOT
@@ -220,6 +232,19 @@ struct
     | Nbt m ->
       Nbt (PMap.mapi f m) |>
       canonize
+
+  let map_p (f:Key.t * Value.t -> Key.t * 'a) (a:t) : (Key.t, 'a) map =
+    match a with
+    | BOT -> BOT
+    | TOP -> TOP
+    | Nbt m ->
+      Nbt (PMap.fold (fun k v acc ->
+          let k',v' = f (k,v) in
+          PMap.add k' v' acc
+        ) m (PMap.empty ~compare:Key.compare))
+      |>
+      canonize
+
 
   let bindings (a:t) : (Key.t * 'a) list =
     match a with

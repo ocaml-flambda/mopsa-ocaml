@@ -78,11 +78,15 @@ struct
     }
   }
 
+  let alarms = []
 
   (** Initialization of environments *)
   (** ============================== *)
 
-  let init _ _ flow =  flow
+  let init prog man flow =
+    match prog.prog_kind with
+    | C_program p -> set_c_program p flow
+    | _ -> flow
 
 
   (** Computation of post-conditions *)
@@ -150,13 +154,13 @@ struct
     | None -> panic "entry function %s is not defined" f.c_func_org_name
     | Some stmt ->
       let f' = { f with c_func_parameters = [] } in
-      let stmt = mk_c_call_stmt f' [] f.c_func_range in
+      let stmt = mk_c_call_stmt f' [] f.c_func_name_range in
       man.post stmt flow
 
 
   (** Initialize argc and argv with concrete values and execute the body of main *)
   let call_main_with_concrete_args main args man flow =
-    let range = main.c_func_range in
+    let range = main.c_func_name_range in
 
     (* argc is set to |args| + 1 *)
     let nargs = List.length args in
@@ -219,7 +223,7 @@ struct
 
   (** Initialize argc and argv with symbolic arguments *)
   let call_main_with_symbolic_args main functions man flow =
-    let range = main.c_func_range in
+    let range = main.c_func_name_range in
 
     let argc_var, argv_var = match main.c_func_parameters with
       | [v1;v2] -> v1,v2
@@ -287,7 +291,7 @@ struct
                man.exec (mk_assign ii (mk_c_builtin_call "_mopsa_range_s32" [l;u] s32 range) range)
     in
     let every_argv_cell = mk_c_subscript_access argv (mk_expr (Stubs.Ast.E_stub_quantified(FORALL,i,S_interval(l,u))) ~etyp:s32 range) range in
-    let flow = man.exec (mk_assume (mk_binop every_argv_cell O_eq arg_weak range) range) flow |>
+    let flow = man.exec (mk_assume (mk_binop every_argv_cell O_eq arg_weak ~etyp:u8 range) range) flow |>
                man.exec (mk_remove ii range)
     in
 
@@ -360,7 +364,7 @@ struct
         let tests =
           tests |> List.map (fun test ->
               let name = test.c_func_org_name in
-              let stmt = mk_c_call_stmt test [] test.c_func_range in
+              let stmt = mk_c_call_stmt test [] test.c_func_name_range in
               (name, stmt)
             )
         in

@@ -135,6 +135,13 @@ let cache = {
   eval = EvalCache.empty;
 }
 
+let find_exec_hooks zone cache =
+  try ExecCache.find zone cache.exec
+  with Not_found -> []
+
+let find_eval_hooks zone cache =
+  try EvalCache.find zone cache.eval
+  with Not_found -> []
 
 
 (** Initialization *)
@@ -160,6 +167,14 @@ let init_hooks interface ctx =
         ExecCache.add zone selected_hooks cache
       ) ExecCache.empty
   in
+  
+  (* Remove duplicates in the exec cache *)
+  let exec_cache = ExecCache.map (List.sort_uniq (fun h1 h2 ->
+      let module H1 = (val h1 : HOOK) in
+      let module H2 = (val h2 : HOOK) in
+      compare H1.name H2.name
+    )) exec_cache
+  in
 
   (* Add all hooks if the zone is Z_any *)
   let exec_cache = ExecCache.add Z_any !active_hooks exec_cache in
@@ -179,6 +194,14 @@ let init_hooks interface ctx =
       ) EvalCache.empty
   in
 
+  (* Remove duplicates in the eval cache *)
+  let eval_cache = EvalCache.map (List.sort_uniq (fun h1 h2 ->
+      let module H1 = (val h1 : HOOK) in
+      let module H2 = (val h2 : HOOK) in
+      compare H1.name H2.name
+    )) eval_cache
+  in
+
   (* Add all hooks if the zone is Z_any*Z_any *)
   let eval_cache = EvalCache.add (Z_any,Z_any) !active_hooks eval_cache in
 
@@ -191,7 +214,7 @@ let init_hooks interface ctx =
 
 (** Fire [on_before_exec] event *)
 let on_before_exec zone stmt man flow =
-  let hooks = ExecCache.find zone cache.exec in
+  let hooks = find_exec_hooks zone cache in
   List.fold_left (fun ctx hook ->
       let flow = Flow.set_ctx ctx flow in
       let module H = (val hook : HOOK) in
@@ -202,7 +225,7 @@ let on_before_exec zone stmt man flow =
 
 (** Fire [on_after_exec] event *)
 let on_after_exec zone stmt man post =
-  let hooks = ExecCache.find zone cache.exec in
+  let hooks = find_exec_hooks zone cache in
   List.fold_left (fun ctx hook ->
       let post = Post.set_ctx ctx post in
       let module H = (val hook : HOOK) in
@@ -211,23 +234,23 @@ let on_after_exec zone stmt man post =
 
 
 (** Fire [on_before_eval] event *)
-let on_before_eval zone stmt man flow =
-  let hooks = EvalCache.find zone cache.eval in
+let on_before_eval zone exp man flow =
+  let hooks = find_eval_hooks zone cache in
   List.fold_left (fun ctx hook ->
       let flow = Flow.set_ctx ctx flow in
       let module H = (val hook : HOOK) in
-      H.on_before_eval zone stmt man flow
+      H.on_before_eval zone exp man flow
     ) (Flow.get_ctx flow) hooks
 
 
 
 (** Fire [on_after_eval] event *)
-let on_after_eval zone stmt man eval =
-  let hooks = EvalCache.find zone cache.eval in
+let on_after_eval zone exp man eval =
+  let hooks = find_eval_hooks zone cache in
   List.fold_left (fun ctx hook ->
       let eval = Eval.set_ctx ctx eval in
       let module H = (val hook : HOOK) in
-      H.on_after_eval zone stmt man eval
+      H.on_after_eval zone exp man eval
     ) (Eval.get_ctx eval) hooks
 
 

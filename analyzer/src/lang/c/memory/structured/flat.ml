@@ -29,6 +29,9 @@ open Universal.Ast
 open Ast
 open Zone
 open Universal.Zone
+open Stubs.Ast
+open Common.Base
+open Common.Points_to
 
 
 module Domain =
@@ -46,7 +49,8 @@ struct
       provides = [Z_c];
       uses = [
         Z_c_low_level;
-        Z_c
+        Z_c;
+        Z_c_points_to
       ]
     };
 
@@ -60,6 +64,7 @@ struct
     };
   }
 
+  let alarms = []
 
   (** {2 Initialization procedure} *)
   (** ============================ *)
@@ -108,51 +113,54 @@ struct
 
   (** The following functions flatten the initialization expression
       into a list of scalar initializations *)
-  let rec flatten_init init typ range =
+  let rec flatten_init init offset typ range =
     debug "flatten_init: %a (%a)" (Option.print Pp.pp_c_init) init pp_typ typ;
-    if is_c_scalar_type typ then flatten_scalar_init init typ range else
-    if is_c_array_type typ  then flatten_array_init init typ range else
-    if is_c_record_type typ then flatten_record_init init typ range
+    if is_c_scalar_type typ then flatten_scalar_init init offset typ range else
+    if is_c_array_type typ  then flatten_array_init init offset typ range else
+    if is_c_record_type typ then flatten_record_init init offset typ range
     else panic_at ~loc:__LOC__ range
         "init %a of type %a not supported"
         (Option.print Pp.pp_c_init) init pp_typ typ
 
-  and flatten_scalar_init init typ range =
+  and flatten_scalar_init init offset typ range =
+    debug "flatten_scalar_init at %a" Z.pp_print offset;
     match init with
-    | None                 -> [C_flat_none (Z.one, typ)]
-    | Some (C_init_expr e) -> [C_flat_expr (e,typ)]
+    | None                 -> [C_flat_none (Z.one, offset, typ)]
+    | Some (C_init_expr e) -> [C_flat_expr (e,offset, typ)]
     | Some init -> panic_at range "unsupported scalar initializer %a for type %a" Pp.pp_c_init init pp_typ typ;
 
-  and flatten_array_init init typ range =
+  and flatten_array_init init offset typ range =
+    debug "flatten_array_init at %a" Z.pp_print offset;
     let n = get_array_constant_length typ in
     let under_typ = under_array_type typ in
     match init with
     | None ->
       if is_c_scalar_type under_typ then
-        [C_flat_none (n,under_typ)]
+        [C_flat_none (n,offset,under_typ)]
       else
         let nn = Z.mul n (sizeof_type under_typ) in
-        [C_flat_none (nn,u8)]
+        [C_flat_none (nn,offset,u8)]
 
     | Some (C_init_list (l, filler)) ->
       let rec aux i =
+        let o = Z.add offset (Z.mul (Z.of_int i) (sizeof_type under_typ)) in
         if Z.equal (Z.of_int i) n
         then [] else
         if i < List.length l
-        then flatten_init (Some (List.nth l i)) under_typ range @ aux (i + 1)
+        then flatten_init (Some (List.nth l i)) o under_typ range @ aux (i + 1)
         else
           let remain = Z.sub n (Z.of_int i) in
           match filler with
           | None ->
             if is_c_scalar_type under_typ then
-              [C_flat_none (remain,under_typ)]
+              [C_flat_none (remain,o,under_typ)]
             else
               let nn = Z.mul remain (sizeof_type under_typ) in
-              [C_flat_none (nn,u8)]
+              [C_flat_none (nn,o,u8)]
 
           | Some (C_init_list([], Some (C_init_expr e)))
           | Some (C_init_expr e) ->
-            [C_flat_fill (e, under_typ, remain)]
+            [C_flat_fill (e, remain, o,under_typ)]
 
           | Some x -> panic_at range "initialization filler %a not supported" Pp.pp_c_init x
       in
@@ -160,26 +168,28 @@ struct
 
     | Some (Ast.C_init_expr {ekind = E_constant(C_c_string (s, _))}) ->
       let rec aux i =
+        let o = Z.add offset (Z.mul (Z.of_int i) (sizeof_type under_typ)) in
         if Z.equal (Z.of_int i) n
         then []
 
         else if i < String.length s
-        then C_flat_expr (mk_c_character (String.get s i) range, under_typ) :: aux (i + 1)
+        then C_flat_expr (mk_c_character (String.get s i) range, o, under_typ) :: aux (i + 1)
 
         else if i = String.length s
-        then C_flat_expr (mk_c_character (char_of_int 0) range, under_typ) :: aux (i + 1)
+        then C_flat_expr (mk_c_character (char_of_int 0) range, o, under_typ) :: aux (i + 1)
 
-        else [C_flat_none (Z.sub n (Z.of_int i), s8)]
+        else [C_flat_none (Z.sub n (Z.of_int i), o, s8)]
       in
       aux 0
 
     | Some (Ast.C_init_expr e) ->
       let rec aux i =
+        let o = Z.add offset (Z.mul (Z.of_int i) (sizeof_type under_typ)) in
         if Z.equal (Z.of_int i) n
         then []
         else
           let init' = Some (C_init_expr (mk_lowlevel_subscript_access e (mk_int i range) under_typ range)) in
-          flatten_init init' under_typ range @ aux (i + 1)
+          flatten_init init' o under_typ range @ aux (i + 1)
       in
       aux 0
 
@@ -188,7 +198,8 @@ struct
              Pp.pp_c_init (Option.none_to_exn init)
 
 
-  and flatten_record_init init typ range =
+  and flatten_record_init init offset typ range =
+    debug "flatten_record_init at %a" Z.pp_print offset;
     let fields =
       match remove_typedef_qual typ with
       | T_c_record{c_record_fields} -> c_record_fields
@@ -196,25 +207,27 @@ struct
     in
     match init with
     | None ->
-      let rec aux = function
+      let rec aux offset = function
         | [] -> []
         | field :: tl ->
-          let init = flatten_init None field.c_field_type range in
-          init @ aux tl
+          let init = flatten_init None offset field.c_field_type range in
+          let o = Z.add offset (Z.of_int field.c_field_offset) in
+          init @ aux o tl
       in
-      aux fields
+      aux offset fields
 
     | Some (C_init_list(l, None)) ->
       let rec aux l records =
         match records with
         | [] -> []
         | field :: tl ->
+          let o = Z.add offset (Z.of_int field.c_field_offset) in
           match l with
           | [] ->
-            let init = flatten_init None field.c_field_type range in
+            let init = flatten_init None o field.c_field_type range in
             init @ aux l tl
           | init :: tll ->
-            let init = flatten_init (Some init) field.c_field_type range in
+            let init = flatten_init (Some init) o field.c_field_type range in
             init @ aux tll tl
       in
       aux l fields
@@ -234,10 +247,14 @@ struct
         | T_c_record{c_record_fields} -> c_record_fields
         | _ -> assert false
       in
-      fields' |> List.fold_left (fun acc field ->
+      let rec aux = function
+        | [] -> []
+        | field :: tl ->
+          let o = Z.add offset (Z.of_int field.c_field_offset) in
           let init = Some (C_init_expr (mk_lowlevel_member_access e field.c_field_index range)) in
-          acc @ flatten_init init field.c_field_type range
-        ) []
+          flatten_init init o field.c_field_type range @ aux tl
+      in
+      aux fields'
 
 
     | _ -> panic_at ~loc:__LOC__ range "initialization %a is not supported"
@@ -262,12 +279,35 @@ struct
       man.eval ~zone:(Z_c,Z_c_low_level) e flow >>$ fun e flow ->
       Result.singleton (C_init_expr e) flow
 
+
     | C_init_list(l, filler) ->
-      Result.bind_list l
-        (fun init flow -> to_lowlevel_init init range man flow) flow
-      >>$ fun l flow ->
-      to_lowlevel_init_opt filler range man flow >>$ fun filler flow ->
-      Result.singleton (C_init_list(l, filler)) flow
+      let exception NonConstantInit in
+      (* Check if all initializers in l are constant, so we can do a
+         static transformation.
+      *)
+      begin try
+          let l' = List.map (function
+              | C_init_expr e ->
+                let z = match c_expr_to_z e with
+                  | Some z -> z
+                  | None -> raise NonConstantInit
+                in
+                C_init_expr (mk_z z ~typ:e.etyp e.erange)
+              | _ -> raise NonConstantInit
+            ) l
+          in
+          to_lowlevel_init_opt filler range man flow >>$ fun filler flow ->
+          let init' = C_init_list (l',filler) in
+          Result.singleton init' flow
+
+        (* When an initializer is not a constant, we use dynamic evaluation to simplify it *)
+        with NonConstantInit ->
+          Result.bind_list l
+            (fun init flow -> to_lowlevel_init init range man flow) flow
+          >>$ fun l flow ->
+          to_lowlevel_init_opt filler range man flow >>$ fun filler flow ->
+          Result.singleton (C_init_list(l, filler)) flow
+      end
 
     | _ -> panic_at range
              "initialization expression %a not supported"
@@ -277,7 +317,7 @@ struct
   (** 𝕊⟦ type v = init; ⟧ *)
   let declare v init scope range man flow =
     to_lowlevel_init_opt init range man flow >>$ fun init flow ->
-    let flat_init = flatten_init init v.vtyp range in
+    let flat_init = flatten_init init Z.zero v.vtyp range in
     let init' = C_init_flat flat_init in
     man.post ~zone:Z_c_low_level (mk_c_declaration v (Some init') scope range) flow
 
@@ -350,6 +390,25 @@ struct
     man.post ~zone:Z_c_low_level stmt flow
 
 
+  (** 𝕊⟦ remove base ⟧ *)
+  let remove base range man flow =
+    (* 1. Remove the contents of the base from the low-level abstractions.
+       2. Remove the base from the pointer domain. 
+    *)
+    let stmt = mk_remove base range in
+    man.post ~zone:Z_c_low_level stmt flow >>$ fun () flow ->
+    man.post ~zone:Z_c_points_to stmt flow
+
+
+  (** 𝕊⟦ rename (e,e') ⟧ *)
+  let rename e e' range man flow =
+    (* Similarly to remove, we rename the contents and the base *)
+    let stmt = mk_rename e e' range in
+    man.post ~zone:Z_c_low_level stmt flow >>$ fun () flow ->
+    man.post ~zone:Z_c_points_to stmt flow
+    
+  
+
   let exec zone stmt man flow =
     match skind stmt with
     | S_c_declaration(v, init, scope) ->
@@ -370,6 +429,14 @@ struct
       assume e stmt.srange man flow |>
       Option.return
 
+    | S_remove e ->
+      remove e stmt.srange man flow |>
+      Option.return
+
+    | S_rename(e,e') ->
+      rename e e' stmt.srange man flow |>
+      Option.return
+
     | S_expression e when is_c_num_type e.etyp ->
       Some (
         man.eval ~zone:(Z_c,Z_u_num) e flow >>$ fun e flow ->
@@ -386,6 +453,12 @@ struct
       Some (
         man.eval ~zone:(Z_c,Z_c_low_level) e flow >>$ fun e flow ->
         Post.return flow
+      )
+
+    | S_stub_requires e ->
+      Some (
+        man.eval ~zone:(Z_c,Z_c_low_level) e flow >>$ fun e flow ->
+        man.post ~zone:Z_c_low_level (mk_stub_requires e stmt.srange) flow
       )
 
     | _ -> None
@@ -499,7 +572,7 @@ struct
       Eval.singleton rval flow |>
       Option.return
 
-    | E_c_statement {skind = S_block l} ->
+    | E_c_statement {skind = S_block (l,local_vars)} ->
       begin
         match List.rev l with
         | {skind = S_expression e}::q ->
@@ -507,6 +580,7 @@ struct
           let stmt' = mk_block q' (erange exp) in
           let flow' = man.exec stmt' flow in
           man.eval ~zone:(Z_c, Z_c_low_level) e flow' |>
+          Eval.add_cleaners (List.map (fun v -> mk_remove_var v exp.erange) local_vars) |>
           Option.return
 
         | _ -> panic "E_c_statement %a not supported" pp_expr exp

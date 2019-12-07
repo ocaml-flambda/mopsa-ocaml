@@ -43,6 +43,8 @@ struct
     ieval = {provides = []; uses = []}
   }
 
+  let alarms = []
+
   let init _ _ flow = flow
 
   let eval _ _ _ _ = None
@@ -125,15 +127,14 @@ struct
     Flow.fold (fun acc tk env ->
         match tk with
         | Alarms.T_py_exception (e, s, k) ->
-          let a = Alarms.APyException in
-          let x = Alarms.XPyException (e,s) in
+          let a = Alarms.A_py_uncaught_exception (e,s) in
           let alarm =
             match k with
             | Alarms.Py_exc_unprecise ->
-              mk_alarm a ~detail:x unprecise_exception_range ~cs:Callstack.empty
+              mk_alarm a unprecise_exception_range ~cs:Callstack.empty
 
             | Alarms.Py_exc_with_callstack (range,cs) ->
-              mk_alarm a ~detail:x range ~cs
+              mk_alarm a range ~cs
           in
           Flow.add_alarm alarm ~force:true man.lattice acc
         | _ -> acc
@@ -142,16 +143,6 @@ struct
 
   let exec zone stmt man flow  =
     match skind stmt with
-    | S_program ({ prog_kind = Py_program(globals, body) }, _)
-      when not !Universal.Iterators.Unittest.unittest_flag ->
-      (* Initialize global variables *)
-      init_globals man globals (srange stmt) flow |>
-      (* Execute the body *)
-      man.exec body |>
-      collect_uncaught_exceptions man |>
-      Post.return |>
-      Option.return
-
     | S_program ({ prog_kind = Py_program(globals, body) }, _)
       when !Universal.Iterators.Unittest.unittest_flag ->
       (* Initialize global variables *)
@@ -167,6 +158,16 @@ struct
       collect_uncaught_exceptions man |>
       Post.return |>
       Option.return
+
+    | S_program ({ prog_kind = Py_program(globals, body) }, _) ->
+      (* Initialize global variables *)
+      init_globals man globals (srange stmt) flow |>
+      (* Execute the body *)
+      man.exec body |>
+      collect_uncaught_exceptions man |>
+      Post.return |>
+      Option.return
+
 
 
     | _ -> None

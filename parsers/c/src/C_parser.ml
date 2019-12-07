@@ -33,6 +33,7 @@ let parse_file
     (command:string)
     (file:string)
     (opts:string list)
+    (warn_all:bool)
     (enable_cache:bool)
     (only_parse:bool)
     (ctx:Clang_to_C.context)
@@ -56,25 +57,26 @@ let parse_file
   in
 
   if not is_error then (
-    List.iter (fun d ->
-        match d.Clang_AST.diag_level with
-        | Level_Warning ->
-          let pos = Location.mk_pos
-              d.diag_loc.loc_file
-              d.diag_loc.loc_line
-              d.diag_loc.loc_column
-          in
-          let range = Location.mk_orig_range pos pos in
-          Exceptions.warn_at range "%s" d.diag_message
-        | _ -> ()
-      ) r.parse_diag;
+    if warn_all then
+      List.iter (fun d ->
+          match d.Clang_AST.diag_level with
+          | Level_Warning ->
+            let pos = Location.mk_pos
+                d.diag_loc.loc_file
+                d.diag_loc.loc_line
+                d.diag_loc.loc_column
+            in
+            let range = Location.mk_orig_range pos pos in
+            Exceptions.warn_at range "%s" d.diag_message
+          | _ -> ()
+        ) r.parse_diag;
     if only_parse then ()
     else (
       Mutex.lock ctx_mutex;
       (try
-          Clang_to_C.add_translation_unit
-            ctx (Filename.basename file)
-            r.parse_decl r.parse_comments r.parse_macros;
+         Clang_to_C.add_translation_unit
+           ctx (Filename.basename file)
+           r.parse_decl r.parse_comments r.parse_macros;
        with x -> Mutex.unlock ctx_mutex; raise x);
       Mutex.unlock ctx_mutex
     )

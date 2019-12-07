@@ -33,7 +33,6 @@ type constant +=
   | C_py_none
   | C_py_not_implemented
   | C_py_imag of float
-  | C_py_empty (** empty value of heap objects inheriting from object *)
 
 
 (*==========================================================================*)
@@ -45,7 +44,6 @@ type typ +=
   | T_py_not_implemented
   | T_py_complex
   | T_py_none
-  | T_py_empty
   | T_py_bytes
 
 
@@ -205,6 +203,15 @@ type expr_kind +=
   | E_py_multi_compare of expr (* left *)
                       * operator list (* ops *)
                       * expr list (* comparators *)
+  | E_py_annot of expr
+  (* checking type annotations using stubs *)
+  | E_py_check_annot of expr * expr
+  (** low-level hasattribute working at the object level only *)
+  | E_py_ll_hasattr of expr (** object *) * expr (** attribute name *)
+  (** low-level attribute access working at the object level only *)
+  | E_py_ll_getattr of expr (** object *) * expr (** attribute name *)
+  (** low-level attribute setter working at the object level only *)
+  | E_py_ll_setattr of expr (** object *) * expr (** attribute name *) * expr option (* expression to bind to obj.attr, or None if we want to delete obj.attr (as tp_setattr behaves in cpython) *)
 
 
 (*==========================================================================*)
@@ -227,6 +234,39 @@ type py_fundec = {
   py_func_ret_var: var
 }
 
+type py_func_sig =
+  {
+    py_funcs_parameters: var list;
+    py_funcs_defaults: bool list; (* true iff argument has default *)
+    py_funcs_exceptions: expr list;
+    py_funcs_types_in: expr option list;
+    py_funcs_type_out: expr option;
+  }
+
+
+type py_func_annot = {
+  py_funca_var: var;
+  py_funca_decors: expr list;
+  py_funca_range: range;
+  py_funca_ret_var: var;
+  py_funca_sig: py_func_sig list;
+}
+
+let pp_py_func_sig (fmt: Format.formatter) (sign: py_func_sig) =
+  (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ") (fun fmt (p, a) ->
+       Format.fprintf fmt "%a: %a" pp_var p (Option.print pp_expr) a))
+    fmt (List.combine sign.py_funcs_parameters sign.py_funcs_types_in)
+
+let pp_py_func_annot (fmt:Format.formatter) (a:py_func_annot) =
+  List.iter (fun sign ->
+      Format.fprintf fmt "%a%a(%a) -> %a: ...@\n"
+          (fun fmt _ -> if a.py_funca_decors = [] then Format.fprintf fmt ""
+           else Format.fprintf fmt "@%a@\n" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ") pp_expr) a.py_funca_decors) ()
+          pp_var a.py_funca_var
+          pp_py_func_sig sign
+          (Option.print pp_expr) sign.py_funcs_type_out
+    ) a.py_funca_sig
+
 (** A Python class *)
 type py_clsdec = {
   py_cls_var : var; (** class object variable *)
@@ -238,6 +278,14 @@ type py_clsdec = {
   py_cls_range : range; (** range of the class *)
 }
 
+type py_cls_annot = {
+  py_cls_a_var : var;
+  py_cls_a_body : stmt;
+  py_cls_a_bases : expr list;
+  py_cls_a_abases : expr list; (* bases from the typing module, hopefully *)
+  py_cls_a_static_attributes: var list;
+  py_cls_a_range : range;
+}
 
 
 (** Exception handler *)
@@ -277,6 +325,9 @@ type stmt_kind +=
 
   (** increment assignments *)
   | S_py_aug_assign of expr * operator * expr
+
+  (** type annotations for variables *)
+  | S_py_annot of expr * expr
 
   (** for loops *)
   | S_py_for of expr (** target *) *
@@ -373,6 +424,10 @@ let mk_raise exc range =
 let mk_py_call func args range =
   mk_expr (E_py_call (func, args, [])) range
 
+let mk_py_kall func args kwargs range =
+  (* call with kwargs *)
+  mk_expr (E_py_call (func, args, kwargs)) range
+
 let mk_py_attr obj attr ?(etyp=T_any) range =
   mk_expr (E_py_attribute (obj, attr)) ~etyp range
 
@@ -381,9 +436,6 @@ let mk_py_object (addr, e) range =
 
 let mk_py_object_attr obj attr ?(etyp=T_any) range =
   mk_py_attr (mk_py_object obj range) attr ~etyp range
-
-let mk_py_empty range =
-  mk_constant C_py_empty ~etyp:T_py_empty range
 
 let mk_py_bool b range =
   mk_constant (C_bool b) ~etyp:T_bool range
@@ -405,33 +457,6 @@ let addr_of_object (obj:py_object) : Universal.Ast.addr =
 
 let value_of_object (obj:py_object) : expr option =
   snd obj
-
-let rec is_py_expr e =
-  match ekind e with
-  | E_py_undefined _
-  | E_py_object _
-  | E_py_list _
-  | E_py_index_subscript _
-  | E_py_slice_subscript _
-  | E_py_attribute _
-  | E_py_dict _
-  | E_py_set _
-  | E_py_generator_comprehension _
-  | E_py_list_comprehension _
-  | E_py_set_comprehension _
-  | E_py_dict_comprehension _
-  | E_py_call _
-  | E_py_yield _
-  | E_py_if _
-  | E_py_tuple _
-  | E_py_bytes _
-  | E_py_lambda _
-  | E_py_multi_compare _
-  | E_constant _ -> true
-  | E_var _ (*FIXME {vkind = V_orig}*) -> true
-  | E_unop(_, e) -> is_py_expr e
-  | E_binop(_, e1, e2) -> is_py_expr e1 && is_py_expr e2
-  | _ -> false
 
 let mk_py_none range =
   mk_constant ~etyp:T_py_none C_py_none range

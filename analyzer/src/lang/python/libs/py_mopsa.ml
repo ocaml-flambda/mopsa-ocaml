@@ -51,6 +51,8 @@ module Domain =
       ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
     }
 
+    let alarms = []
+
     (*==========================================================================*)
     (**                       {2 Transfer functions }                           *)
     (*==========================================================================*)
@@ -100,7 +102,6 @@ module Domain =
               let tmp = mktmp () in
               let l = Utils.mk_builtin_call "float" [l] range in
               let u = Utils.mk_builtin_call "float" [u] range in
-              (* FIXME: T_float *)
               let flow = man.exec (mk_assign (mk_var tmp range) (mk_top (T_float F_DOUBLE) range) range) flow |>
                            man.exec (mk_assume (mk_py_in (mk_var tmp range) l u range) range)
               in
@@ -218,7 +219,6 @@ module Domain =
                    Flow.filter (fun tk _ -> match tk with T_py_exception (exn, _, _) when List.mem exn good_exns -> debug "Foundit@\n"; false | _ -> true) |>
                    Flow.set T_cur cur man.lattice
         in
-        (* FIXME:  mk_py_int ?*)
         debug "flow = %a@\n" (Flow.print man.lattice.print) flow;
         man.eval (mk_py_false exp.erange) flow
         |> Option.return

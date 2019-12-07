@@ -1,0 +1,38 @@
+opam-version: "2.0"
+name: "mopsa"
+maintainer: "Antoine Miné <antoine.mine@lip6.fr>"
+authors: [
+  "Matthieu Journault"
+  "Antoine Miné"
+  "Raphaël Monat"
+  "Abdelraouf Ouadjaout"
+]
+homepage: [
+  "https://gitlab.com/mopsa/mopsa"
+  "http://mopsa.lip6.fr/"
+]
+bug-reports: "https://gitlab.com/mopsa/mopsa/issues"
+dev-repo: "git+https://gitlab.com/mopsa/mopsa.git"
+license: "LGPL"
+build: [
+  [make]
+]
+install: [
+  [make "PREFIX=%{prefix}%" "install"]
+]
+depends: [
+  "apron"
+  "menhir"
+  "mlgmpidl"
+  "ocaml" {>= "4.07.1"}
+  "ocamlfind"
+  "conf-libclang"
+  "yojson"
+  "zarith"
+]
+available: [ arch = "x86_64" & os = "linux" ]
+synopsis: "MOPSA: a Modular and Open Platform for Static Analysis using abstract interpretation"
+description: """
+MOPSA is a generic framework for building sound static analyzers based on the theory of abstract interpretation. It features a modular architecture for supporting different kinds of languages, iterators, and abstract domains.
+For the moment, MOPSA can analyze programs written in a subset of C and Python.
+"""

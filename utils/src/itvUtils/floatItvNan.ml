@@ -36,7 +36,12 @@ module II = IntItv
 
        
 type t =
-  { itv:  FI.t with_bot; (** Interval of non-special values. Bounds cannot be NaN nor infinities. *)
+  { itv:  FI.t with_bot;
+    (** Interval of non-special values. 
+        Bounds cannot be NaN. 
+        Bounds can be infinities to represent non-infinity floats outside the range of doubles.
+     *)
+    
     nan:  bool; (** Whether to include NaN. *)
     pinf: bool; (** Whether to include +∞. *)
     minf: bool; (** Whether to include -∞. *)
@@ -51,15 +56,22 @@ type t =
 let is_valid (a:t) : bool =
   match a.itv with
   | BOT -> true
-  | Nb i -> F.is_finite i.FI.lo && F.is_finite i.FI.up && i.FI.lo <= i.FI.up
+  | Nb i ->
+     not (F.is_nan i.FI.lo || i.FI.lo = infinity) &&
+     not (F.is_nan i.FI.up || i.FI.up = neg_infinity) &&
+     i.FI.lo <= i.FI.up
 (** All elements of type t whould satisfy this predicate. *)  
 
           
 type prec =
-  [ `SINGLE (** 32-bit single precision *)
-  | `DOUBLE (** 64-bit double precision *)
+  [ `SINGLE      (** 32-bit single precision *)
+  | `DOUBLE      (** 64-bit double precision *)
+  | `LONG_DOUBLE (** anything larger than 64-bit double precision floats *)
+  | `REAL        (** real arithmetic *)
   ]
-(** Precision. *)
+(** Precision.
+    All bounds are represented as double, whatever the precision.
+ *)
                    
 type round =
   [ `NEAR  (** To nearest *)
@@ -87,11 +99,14 @@ let specials : t = { itv = BOT; nan = true; pinf = true; minf = true; }
 
 let of_float (lo:float) (up:float) : t =
   if lo > up then bot
-  else if not (F.is_finite lo) || not (F.is_finite up)
+  else if F.is_nan lo || lo = infinity || F.is_nan up || up = neg_infinity
   then invalid_arg (Printf.sprintf "FloatItvNan.of_float: invalid bound [%g,%g]" lo up)
   else  { bot with itv = Nb { FI.lo; FI.up; }; }
 (** Float set reduced to an interval of non-special values.
-    lo and up should not be infinity nor NaN.
+    lo should not be +oo nor NaN.
+    up should not be -oo nor NaN.
+    We can have lo = -oo and up = +oo to represent sets of non-infinity
+    floats larger than the range of double.
  *)
 
 let of_interval (a:FI.t) : t =
@@ -138,6 +153,14 @@ let double : t =
   of_float (-. F.Double.max_normal) F.Double.max_normal
 (** Non-special double precision floats. *)  
 
+let long_double : t =
+  of_float neg_infinity infinity
+(** Non-special long doubles. *)
+
+let real : t =
+  of_float neg_infinity infinity
+(** Reals. *)
+  
 let single_special : t =
   add_special single
 (** Single precision floats with specials. *)
@@ -145,6 +168,10 @@ let single_special : t =
 let double_special : t =
   add_special double
 (** Double precision floats with specials. *)
+
+let long_double_special : t =
+  add_special long_double
+(** Long double precision floats with specials. *)
 
 
 
@@ -433,24 +460,51 @@ let is_log_neq_false = is_log_eq
 
 
 let fix_itv (prec:prec) (x:t) : t =
-  let m = F.max_normal prec in
-  match x.itv with
-  | BOT -> x
-  | Nb i ->
-     let lo,minf,nan1 =
-       if F.is_nan i.FI.lo then -. m, false, true
-       else if i.FI.lo < -. m then -. m, true, false
-       else i.FI.lo, false, false
-     and up,pinf,nan2 =
-       if F.is_nan i.FI.up then m, false, true
-       else if i.FI.up > m then m, true, false
-       else i.FI.up, false, false
-     in
-     { itv = FI.of_float_bot lo up;
-       nan = x.nan || nan1 || nan2;
-       minf = x.minf || minf;
-       pinf = x.pinf || pinf;
-     }
+  match prec with
+  | (`SINGLE | `DOUBLE) as prec ->
+     (* map infinite and NaN bounds back to finite bounds and set flags *)
+     let m = F.max_normal prec in
+     (match x.itv with
+     | BOT -> x
+     | Nb i ->
+        let lo,minf,nan1 =
+          if F.is_nan i.FI.lo then -. m, false, true
+          else if i.FI.lo < -. m then -. m, true, false
+          else i.FI.lo, false, false
+        and up,pinf,nan2 =
+          if F.is_nan i.FI.up then m, false, true
+          else if i.FI.up > m then m, true, false
+          else i.FI.up, false, false
+        in
+        { itv = FI.of_float_bot lo up;
+          nan = x.nan || nan1 || nan2;
+          minf = x.minf || minf;
+          pinf = x.pinf || pinf;
+        })
+
+  | `LONG_DOUBLE ->
+     (* keep infinite bounds to infinity and set flags *)
+     (match x.itv with
+      | BOT -> x
+      | Nb i ->
+        let lo,minf,nan1 =
+          if F.is_nan i.FI.lo then neg_infinity, true, true
+          else if i.FI.lo = neg_infinity then neg_infinity, true, false
+          else i.FI.lo, false, false
+        and up,pinf,nan2 =
+          if F.is_nan i.FI.up then infinity, true, true
+          else if i.FI.up = infinity then infinity, true, false
+          else i.FI.up, false, false
+        in
+        { itv = FI.of_float_bot lo up;
+          nan = x.nan || nan1 || nan2;
+          minf = x.minf || minf;
+          pinf = x.pinf || pinf;
+     })
+
+  | `REAL ->
+     (* no flags *)
+     { bot with itv = x.itv; }
 (* Utility to fix interval bounds after an operation.
    NaN, infinities and overflowing bounds are reset to maximal
    bounds according to the precision, and the nan, minf, and pinf fields
@@ -474,12 +528,17 @@ let abs (x:t) : t =
     minf = false;
   }
 (** Absolute value. *)
-  
+
+
+let fix_prec (prec:prec) : FI.prec = match prec with
+  | `SINGLE -> `SINGLE
+  | `DOUBLE ->  `DOUBLE
+  | `REAL | `LONG_DOUBLE -> `REAL
      
 let add (prec:prec) (round:round) (x:t) (y:t) =
   fix_itv
     prec
-    { itv = bot_lift2 (FI.add (prec:>FI.prec) round) x.itv y.itv;
+    { itv = bot_lift2 (FI.add (fix_prec prec) round) x.itv y.itv;
       nan = x.nan || y.nan || (x.pinf && y.minf) || (x.minf && y.pinf);
       pinf = (x.pinf && y.pinf) || (x.pinf && contains_finite y) || (y.pinf && contains_finite x);
       minf = (x.minf && y.minf) || (x.minf && contains_finite y) || (y.minf && contains_finite x);
@@ -489,7 +548,7 @@ let add (prec:prec) (round:round) (x:t) (y:t) =
 let sub (prec:prec) (round:round) (x:t) (y:t) =
   fix_itv
     prec
-    { itv = bot_lift2 (FI.sub (prec:>FI.prec) round) x.itv y.itv;
+    { itv = bot_lift2 (FI.sub (fix_prec prec) round) x.itv y.itv;
       nan = x.nan || y.nan || (x.pinf && y.pinf) || (x.minf && y.minf);
       pinf = (x.pinf && y.minf) || (x.pinf && contains_finite y) || (y.minf && contains_finite x);
       minf = (x.minf && y.pinf) || (x.minf && contains_finite y) || (y.pinf && contains_finite x);
@@ -505,7 +564,7 @@ let mul (prec:prec) (round:round) (x:t) (y:t) =
   in
   fix_itv
     prec
-    { itv = bot_lift2 (FI.mul (prec:>FI.prec) round) x.itv y.itv;
+    { itv = bot_lift2 (FI.mul (fix_prec prec) round) x.itv y.itv;
       nan = x.nan || y.nan || (xz && yi) || (xi && yz);
       pinf = (x.pinf && yp) || (x.minf && ym) || (y.pinf && xp) || (y.minf && xm);
       minf = (x.pinf && ym) || (x.minf && yp) || (y.pinf && xm) || (y.minf && xp);
@@ -522,7 +581,7 @@ let div (prec:prec) (round:round) (x:t) (y:t) =
   let r = 
     fix_itv
       prec
-      { itv = bot_absorb2 (FI.div (prec:>FI.prec) round) x.itv y.itv;
+      { itv = bot_absorb2 (FI.div (fix_prec prec) round) x.itv y.itv;
         nan = x.nan || y.nan || (xi && yi) || (xz && yz);
         pinf = yz || (x.pinf && yp) || (x.minf && ym);
         minf = yz || (x.pinf && ym) || (x.minf && yp);
@@ -547,7 +606,7 @@ let fmod (prec:prec) (round:round) (x:t) (y:t) : t =
 let square (prec:prec) (round:round) (x:t) : t =
   fix_itv
     prec
-    { itv = bot_lift1 (FI.square (prec:>FI.prec) round) x.itv;
+    { itv = bot_lift1 (FI.square (fix_prec prec) round) x.itv;
       nan = x.nan;
       pinf = x.pinf || x.minf;
       minf = false;
@@ -558,7 +617,7 @@ let square (prec:prec) (round:round) (x:t) : t =
 let sqrt (prec:prec) (round:round) (x:t) : t =
   fix_itv
     prec
-    { itv = bot_absorb1 (FI.sqrt (prec:>FI.prec) round) x.itv;
+    { itv = bot_absorb1 (FI.sqrt (fix_prec prec) round) x.itv;
       nan = x.nan || (contains_negative_strict x);
       pinf = x.pinf;
       minf = false;
@@ -567,23 +626,23 @@ let sqrt (prec:prec) (round:round) (x:t) : t =
 
   
 let round_int (prec:prec) (round:round) (x:t) : t =
-  fix_itv prec { x with itv = bot_lift1 (FI.round_int (prec:>FI.prec) round) x.itv; }
+  fix_itv prec { x with itv = bot_lift1 (FI.round_int (fix_prec prec) round) x.itv; }
 (** Round to integer. *)
   
 let round (prec:prec) (round:round) (x:t) : t =
-  fix_itv prec { x with itv = bot_lift1 (FI.round (prec:>FI.prec) round) x.itv; }
+  fix_itv prec { x with itv = bot_lift1 (FI.round (fix_prec prec) round) x.itv; }
 (** Round to float. *)
 
 let of_int (prec:prec) (round:round) (x:int) (y:int) : t =
-  fix_itv prec { bot with itv = Nb (FI.of_int (prec:>FI.prec) round x y); }
+  fix_itv prec { bot with itv = Nb (FI.of_int (fix_prec prec) round x y); }
 (** Conversion from integer range. *)
 
 let of_int64 (prec:prec) (round:round) (x:int64) (y:int64) : t =
-  fix_itv prec { bot with itv = Nb (FI.of_int64 (prec:>FI.prec) round x y); }
+  fix_itv prec { bot with itv = Nb (FI.of_int64 (fix_prec prec) round x y); }
 (** Conversion from int64 range. *)
 
 let of_z (prec:prec) (round:round) (x:Z.t) (y:Z.t) : t =
-  fix_itv prec { bot with itv = Nb (FI.of_z (prec:>FI.prec) round x y); }
+  fix_itv prec { bot with itv = Nb (FI.of_z (fix_prec prec) round x y); }
 (** Conversion from integer range. *)
 
 let to_z (x:t) : (Z.t * Z.t) with_bot =
@@ -592,10 +651,15 @@ let to_z (x:t) : (Z.t * Z.t) with_bot =
 
 let of_float_prec (prec:prec) (round:round) (lo:float) (up:float) : t =
   let r = FI.of_float_bot lo up in  
-  fix_itv prec { bot with itv = bot_lift1 (FI.round (prec:>FI.prec) round) r; }
+  fix_itv prec { bot with itv = bot_lift1 (FI.round (fix_prec prec) round) r; }
 (** From bounds, with rounding, precision and handling of specials. *)  
      
 let of_int_itv (prec:prec) (round:round) ((lo,up):II.t) : t =
+  let prec,round = match prec with
+    | `SINGLE -> `SINGLE, round
+    | `DOUBLE -> `DOUBLE, round
+    | `REAL | `LONG_DOUBLE -> `DOUBLE, `ANY
+  in
   let lo = match lo, round with
     | B.Finite l, `NEAR -> F.of_z prec `NEAR l
     | B.Finite l, (`DOWN | `ANY) -> F.of_z prec `DOWN l
@@ -647,7 +711,7 @@ let lift_filter_itv f x y =
 
 let filter_leq (prec:prec) (x:t) (y:t) : t * t =
   (* compare finite with finite *)
-  let ix, iy = lift_filter_itv (FI.filter_leq (prec:>FI.prec)) x y in
+  let ix, iy = lift_filter_itv (FI.filter_leq (fix_prec prec)) x y in
   (* compare finite with infinity *)
   let ix = if y.pinf then x.itv else ix
   and iy = if x.minf then y.itv else iy
@@ -657,7 +721,7 @@ let filter_leq (prec:prec) (x:t) (y:t) : t * t =
 
 let filter_lt (prec:prec) (x:t) (y:t) : t * t =
   (* compare finite with finite *)
-  let ix, iy = lift_filter_itv (FI.filter_lt (prec:>FI.prec)) x y in
+  let ix, iy = lift_filter_itv (FI.filter_lt (fix_prec prec)) x y in
   (* compare finite with infinity *)
   let ix = if y.pinf then x.itv else ix
   and iy = if x.minf then y.itv else iy
@@ -684,7 +748,7 @@ let rec filter_neq (prec:prec) (x:t) (y:t) : t * t =
     else if x.minf then x, { y with minf = false; }
     else
       (* case: remove finite value *)
-      let ix,iy = match bot_absorb2 (FI.filter_neq (prec:>FI.prec)) x.itv y.itv with
+      let ix,iy = match bot_absorb2 (FI.filter_neq (fix_prec prec)) x.itv y.itv with
         | BOT -> BOT, BOT
         | Nb (xx,yy) -> Nb xx, Nb yy
       in
@@ -736,7 +800,7 @@ let bwd_generic2  (prec:prec) (round:round) f (x:t) (y:t) (r:t) : t * t =
     | _, _, BOT -> bot, bot
     | BOT,_,_ | _,BOT,_ -> x, y
     | Nb xx, Nb yy, Nb rr ->
-       match f (prec:>FI.prec) round xx yy rr with
+       match f (fix_prec prec) round xx yy rr with
        | BOT -> x, y
        | Nb (ix,iy) ->
           meet x (fix_itv prec { bot with itv = Nb ix; }),
@@ -779,7 +843,7 @@ let bwd_generic1 (prec:prec) (round:round) f (x:t) (r:t) : t =
     | _, BOT -> bot
     | BOT, _ -> x
     | Nb ix, Nb ir ->
-       let itv = f (prec:>FI.prec) round ix ir in
+       let itv = f (fix_prec prec) round ix ir in
        meet x (fix_itv prec { bot with itv; })
               
 let bwd_round_int (prec:prec) (round:round) (x:t) (r:t) : t =
@@ -802,7 +866,7 @@ let bwd_of_int_itv (prec:prec) (round:round) ((lo,up):II.t) (r:t)
     : II.t_with_bot =
   match r.itv with
   | Nb i ->
-     let i = FI.unround_int (prec:>FI.prec) round i in
+     let i = FI.unround_int (fix_prec prec) round i in
      let l =
        if F.is_finite i.lo && not r.minf
        then B.Finite (Z.of_float i.lo)

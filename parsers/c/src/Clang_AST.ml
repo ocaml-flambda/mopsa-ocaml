@@ -223,7 +223,8 @@ type name = {
      function_storage_class: storage_class; (** Storage class as written in the source. *)
      function_return_type: type_qual;
      function_params: param_var_decl array;
-     function_range: range;
+     function_range: range; (** Range of the declaration. *)
+     function_name_range: range; (** Range of the name in the declaration. *)
      function_com: comment list;
 
      (* C++ *)

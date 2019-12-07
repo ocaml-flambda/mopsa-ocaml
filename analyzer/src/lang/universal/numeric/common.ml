@@ -36,9 +36,14 @@ type int_itv = I.t_with_bot
 type _ query +=
   | Q_int_interval : expr -> int_itv query (** Query to evaluate the integer interval of an expression *)
   | Q_fast_int_interval : expr -> int_itv query (** Query handled by non-relational domains only *)
+  | VQ_to_int_interval : int_itv query (** Value query to cast an abstract value to integers *)
 
 let mk_int_interval_query ?(fast=true) e =
   if fast then Q_fast_int_interval e else Q_int_interval e
+
+let pp_int_interval fmt itv = I.fprint_bot fmt itv
+
+let compare_int_interval itv1 itv2 = I.compare_bot itv1 itv2
 
 let () =
   register_query {
@@ -48,6 +53,7 @@ let () =
           match query with
           | Q_int_interval _ -> I.join_bot a b
           | Q_fast_int_interval _ -> I.join_bot a b
+          | VQ_to_int_interval -> I.join_bot a b
           | _ -> next.join_query query a b
       in
       f
@@ -58,6 +64,7 @@ let () =
           match query with
           | Q_int_interval e -> I.meet_bot a b
           | Q_fast_int_interval e -> I.meet_bot a b
+          | VQ_to_int_interval -> I.meet_bot a b
           | _ -> next.meet_query query a b
       in
       f
@@ -106,6 +113,53 @@ let () =
               (Bot.BOT, C.minf_inf)
               (fun (c,i) -> (Bot.Nb i, c))
 
+          | _ -> next.meet_query query a b
+      in
+      f
+    );
+  }
+
+
+
+(** {2 Float intervals} *)
+(** ******************* *)
+
+
+module F = ItvUtils.FloatItvNan
+
+
+(** Float intervals *)
+type float_itv = F.t
+
+type _ query +=
+  | Q_float_interval : expr -> float_itv query (** Query to evaluate the float interval of an expression, with infinities and NaN *)
+  | VQ_to_float_interval : float_itv query (** Value query to cast an abstract value to a float interval *)
+
+let mk_float_interval_query e =
+  Q_float_interval e
+
+let pp_float_interval fmt itv = F.fprint F.dfl_fmt fmt itv
+
+let compare_float_interval itv1 itv2 = F.compare itv1 itv2
+
+let () =
+  register_query {
+    join = (
+      let f : type r. query_pool -> r query -> r -> r -> r =
+        fun next query a b ->
+          match query with
+          | Q_float_interval _ -> F.join a b
+          | VQ_to_float_interval -> F.join a b
+          | _ -> next.join_query query a b
+      in
+      f
+    );
+    meet = (
+      let f : type r. query_pool -> r query -> r -> r -> r =
+        fun next query a b ->
+          match query with
+          | Q_float_interval e -> F.meet a b
+          | VQ_to_float_interval -> F.meet a b
           | _ -> next.meet_query query a b
       in
       f

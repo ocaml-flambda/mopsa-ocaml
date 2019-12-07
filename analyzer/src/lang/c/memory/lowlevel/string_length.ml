@@ -47,7 +47,7 @@ open Universal.Zone
 open Zone
 open Common.Base
 open Common.Points_to
-open Alarms
+open Common.Alarms
 
 
 module Domain =
@@ -80,6 +80,7 @@ struct
     }
   }
 
+  let alarms = []
 
   (** {2 Variable of string lengths} *)
   (** ****************************** *)
@@ -118,7 +119,7 @@ struct
   let mk_length_var base ?(primed=false) ?(mode=base_mode base) range =
     let name =
       let () = match base with
-        | V v ->
+        | ValidVar v ->
           Format.fprintf Format.str_formatter "length(%s)%s"
             v.vname
             (if primed then "'" else "")
@@ -143,23 +144,40 @@ struct
   (** {2 Abstract transformers} *)
   (** ************************* *)
 
+  (** Get the base and offset pointed by ptr. Since we do not track invalid
+     dereferences, we ignore invalid pointers.
+  *)
+  let eval_pointed_base_offset ptr range man flow =
+    man.eval ptr ~zone:(Zone.Z_c_low_level, Z_c_points_to) flow >>$ fun pt flow ->
+    match ekind pt with
+    | E_c_points_to P_null
+    | E_c_points_to P_invalid
+    | E_c_points_to (P_block (InvalidAddr _, _))
+    | E_c_points_to P_top ->
+      Result.empty_singleton flow
+
+    | E_c_points_to (P_block (base, offset)) ->
+      Result.singleton (base, offset) flow
+
+    | _ -> assert false
+
 
   let is_memory_base base =
     match base with
     (* Accept only arrays of chars *)
-    | V v when is_c_type v.vtyp &&
+    | ValidVar v when is_c_type v.vtyp &&
                is_c_array_type v.vtyp &&
                under_array_type v.vtyp |> remove_typedef_qual |> sizeof_type |> Z.equal Z.one
       ->
       true
 
-    | S _ -> true
+    | String _ -> true
 
-    | A { addr_kind = A_stub_resource "Memory" }
-    | A { addr_kind = A_stub_resource "ReadOnlyMemory" }
-    | A { addr_kind = A_stub_resource "String"}
-    | A { addr_kind = A_stub_resource "ReadOnlyString" }
-    | A { addr_kind = A_stub_resource "arg" }
+    | ValidAddr { addr_kind = A_stub_resource "Memory" }
+    | ValidAddr { addr_kind = A_stub_resource "ReadOnlyMemory" }
+    | ValidAddr { addr_kind = A_stub_resource "String"}
+    | ValidAddr { addr_kind = A_stub_resource "ReadOnlyString" }
+    | ValidAddr { addr_kind = A_stub_resource "arg" }
       -> true
 
     | _ -> false
@@ -167,7 +185,7 @@ struct
 
   (** Declaration of a C variable *)
   let declare_variable v init scope range man flow =
-    if not (is_memory_base (V v))
+    if not (is_memory_base (ValidVar v))
     then
       Post.return flow
 
@@ -189,44 +207,43 @@ struct
 
       let size = sizeof_type v.vtyp in
 
-      let length = mk_length_var (V v) range in
+      let length = mk_length_var (ValidVar v) range in
 
       (* Find the position of the first zero *)
-      let rec aux o l =
-        match l with
-        | [] -> o, o
+      let rec aux = function
+        | [] -> size, size
 
-        | C_flat_none _ :: tl when is_global -> o, o
+        | C_flat_none (_,o,_) :: tl when is_global -> o, o
 
-        | C_flat_none _ :: tl -> o, size
+        | C_flat_none (_,o,_) :: tl -> o, size
 
-        | C_flat_expr (e,t) :: tl ->
+        | C_flat_expr (e,o,t) :: tl ->
           begin
-            match expr_to_z e with
+            match c_expr_to_z e with
             | Some e ->
               if Z.equal e Z.zero
               then o, o
-              else aux (Z.add o (sizeof_type t)) tl
+              else aux tl
 
             | None ->
               (* FIXME: test the value of the expression *)
               o, size
           end
 
-        | C_flat_fill (e,t,n) :: tl ->
+        | C_flat_fill (e,n,o,t) :: tl ->
           begin
             match expr_to_z e with
             | Some e ->
               if Z.equal e Z.zero
               then o, o
-              else aux (Z.add o (Z.mul n (sizeof_type t))) tl
+              else aux tl
 
             | None ->
               (* FIXME: test the value of the expression *)
               o, size
           end
       in
-      let o1, o2 = aux Z.zero flat_init in
+      let o1, o2 = aux flat_init in
 
       let init' =
         if Z.equal o1 o2
@@ -317,48 +334,30 @@ struct
         )
       ~felse:(fun flow ->
           (* Unsafe case *)
-          let flow' = raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow in
-          Post.return flow'
+          Flow.set_bottom T_cur flow |>
+          Post.return
         )
       ~zone:Z_u_num man flow
 
 
   (** Assignment abstract transformer for 𝕊⟦ *p = rval; ⟧ *)
   let assign_deref p rval range man flow =
-    man.eval ~zone:(Z_c_low_level, Z_c_points_to) p flow >>$ fun pt flow ->
-
-    match ekind pt with
-    | E_c_points_to P_null ->
-      raise_c_alarm ANullDeref p.erange ~bottom:true man.lattice flow |>
-      Post.return
-
-    | E_c_points_to P_invalid ->
-      raise_c_alarm AInvalidDeref p.erange ~bottom:true man.lattice flow |>
-      Post.return
-
-    | E_c_points_to P_valid ->
-      Soundness.warn_at range "ignoring assignment to undetermined valid pointer %a" pp_expr p;
-      Post.return flow
-
-    | E_c_points_to (P_block (base, offset)) ->
-      man.eval ~zone:(Z_c_low_level,Z_u_num) rval flow >>$ fun rval flow ->
-      man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow >>$ fun offset flow ->
-      assign_cases base offset rval (under_type p.etyp |> void_to_char) range man flow
-
-    | _ -> assert false
+    eval_pointed_base_offset p range man flow >>$ fun (base,offset) flow ->
+    man.eval ~zone:(Z_c_low_level,Z_u_num) rval flow >>$ fun rval flow ->
+    man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow >>$ fun offset flow ->
+    assign_cases base offset rval (under_type p.etyp |> void_to_char) range man flow
 
 
 
   (** Cases of the abstract transformer for tests *(p + i) == 0 *)
   let assume_zero_cases base offset primed range man flow =
-    debug "assume_zero: base = %a, offset = %a" pp_base base pp_expr offset;
     eval_base_size base range man flow >>$ fun size flow ->
     man.eval ~zone:(Z_c_scalar, Z_u_num) size flow >>$ fun size flow ->
     man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow >>$ fun offset flow ->
 
     let length =
       match base with
-      | S str -> mk_z (Z.of_int @@ String.length str) range
+      | String str -> mk_z (Z.of_int @@ String.length str) range
       | _ -> mk_length_var base ~primed range
     in
 
@@ -371,7 +370,7 @@ struct
         )
       ~felse:(fun flow ->
           (* Unsafe case *)
-          raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow |>
+          Flow.set_bottom T_cur flow |>
           Post.return
         )
       ~zone:Z_u_num man flow
@@ -379,7 +378,6 @@ struct
 
   (** Cases of the abstract transformer for tests *(p + ∀i) != 0 *)
   let assume_quantified_non_zero_cases base offset primed range man flow =
-    debug "assume_quantified_non_zero: base = %a, offset = %a" pp_base base pp_expr offset;
     (** Get symbolic bounds of the offset *)
     let min, max = Common.Quantified_offset.bound offset in
 
@@ -390,7 +388,7 @@ struct
 
     let length =
       match base with
-      | S str -> mk_z (Z.of_int @@ String.length str) range
+      | String str -> mk_z (Z.of_int @@ String.length str) range
       | _ -> mk_length_var base ~primed range
     in
     let mk_bottom flow = Flow.set T_cur man.lattice.bottom man.lattice flow in
@@ -437,33 +435,11 @@ struct
           ] ~zone:Z_u_num man flow
         )
       ~felse:(fun flow ->
-          (* Unsafe case *)
-          let flow' = raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow in
-          Post.return flow'
+          (* FIXME: remove qunatifiers from offset *)
+          Flow.set_bottom T_cur flow |>
+          Post.return
         )
       ~zone:Z_u_num man flow
-
-
-  (** Default for tests *p ? 0 *)
-  let assume_default_cases base offset range man flow =
-    debug "assume_default_cases: base = %a, offset = %a" pp_base base pp_expr offset;
-    (* Quantified offsets cannot be handled numerically, so we just raise a
-       non-deterministic out-of-bound alarm
-    *)
-    if is_expr_quantified offset
-    then
-      raise_c_alarm AOutOfBound range ~bottom:false man.lattice flow |>
-      Post.return
-    else
-      (* Safety condition: offset ⊆ [0, size[ *)
-      eval_base_size base range man flow >>$ fun size flow ->
-      assume
-        (mk_in offset (mk_zero range) size ~right_strict:true range)
-        ~fthen:(fun flow -> Post.return flow)
-        ~felse:(fun flow ->
-            raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow |>
-            Post.return
-          ) ~zone:Z_c_scalar man flow
 
 
 
@@ -481,30 +457,23 @@ struct
       doit lval
     in
 
-    eval_pointed_base_offset p range man flow >>$ fun r flow ->
-    match r with
-    | None ->
-      raise_c_alarm AOutOfBound p.erange ~bottom:false man.lattice flow |>
-      Post.return
+    eval_pointed_base_offset p range man flow >>$ fun (base,offset) flow ->
+    if not (is_memory_base base)
+    then Post.return flow
 
-    | Some (base,offset) ->
-      debug "base = %a, offset = %a" pp_base base pp_expr offset;
-      if not (is_memory_base base)
-      then assume_default_cases base offset range man flow
+    else if op = O_ne && is_expr_forall_quantified offset
+    then assume_quantified_non_zero_cases base offset primed range man flow
 
-      else if op = O_ne && is_expr_quantified offset
-      then assume_quantified_non_zero_cases base offset primed range man flow
+    else if op = O_eq && not (is_expr_forall_quantified offset)
+    then assume_zero_cases base offset primed range man flow
 
-      else if op = O_eq && not (is_expr_quantified offset)
-      then assume_zero_cases base offset primed range man flow
-
-      else assume_default_cases base offset range man flow
+    else Post.return flow
 
 
   (** Add a base to the domain's dimensions *)
   let add_base base ?(primed=false) range man flow =
     match base with
-    | S _ ->
+    | String _ ->
       Post.return flow
 
     | _ ->
@@ -549,7 +518,7 @@ struct
             (mk_binop
                (mk_binop l O_eq (mk_zero range) range)
                O_log_and
-               (mk_binop u O_eq (sub size (mk_z (sizeof_type t) range) range) range)
+               (mk_binop u O_eq (sub size (mk_z (sizeof_type (void_to_char t)) range) range) range)
                range
             )
             ~fthen:(fun flow ->
@@ -579,7 +548,7 @@ struct
       Post.return flow
 
 
-    | E_c_points_to P_valid ->
+    | E_c_points_to P_top ->
       Soundness.warn_at range "rename of %a not supported because it can not be resolved"
         pp_expr target
       ;
@@ -618,28 +587,27 @@ struct
       Option.return
 
     | S_add { ekind = E_var (v, _) } when not (is_c_scalar_type v.vtyp) ->
-      add_base (V v) stmt.srange man flow |>
+      add_base (ValidVar v) stmt.srange man flow |>
       Option.return
 
-    | S_add { ekind = E_addr addr } when is_memory_base (A addr) ->
-      add_base (A addr) stmt.srange man flow |>
+    | S_add { ekind = E_addr addr } when is_memory_base (ValidAddr addr) ->
+      add_base (ValidAddr addr) stmt.srange man flow |>
       Option.return
 
 
     | S_rename ({ ekind = E_var (v1,_) }, { ekind = E_var (v2,_) })
-      when is_memory_base (V v1) &&
-           is_memory_base (V v2)
+      when is_memory_base (ValidVar v1) &&
+           is_memory_base (ValidVar v2)
       ->
-      rename_base (V v1) (V v2) stmt.srange man flow |>
+      rename_base (ValidVar v1) (ValidVar v2) stmt.srange man flow |>
       Option.return
 
 
     | S_rename ({ ekind = E_addr addr1 }, { ekind = E_addr addr2 })
-      when is_memory_base (A addr1) &&
-           is_memory_base (A addr2)
+      when is_memory_base (ValidAddr addr1) &&
+           is_memory_base (ValidAddr addr2)
       ->
-      rename_base (A addr1) (A addr2) stmt.srange man flow >>=? fun _ flow ->
-      man.post ~zone:Z_c_scalar stmt flow |>
+      rename_base (ValidAddr addr1) (ValidAddr addr2) stmt.srange man flow |>
       Option.return
 
     | S_assign({ ekind = E_c_deref p}, rval)

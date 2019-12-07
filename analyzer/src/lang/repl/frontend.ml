@@ -307,6 +307,8 @@ module Domain = struct
     ieval = {provides = []; uses = []};
   }
 
+  let alarms = []
+
   let init prog man flow = flow
 
   let exec zone stmt man flow =

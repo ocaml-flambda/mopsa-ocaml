@@ -185,7 +185,6 @@ struct
 
     (* The initial flow is a singleton ⊤ environment *)
     let flow0 = Flow.singleton ctx T_cur man.lattice.top in
-    debug "flow0 = %a" (Flow.print man.lattice.print) flow0;
 
     (* Initialize domains *)
     Domain.init prog man flow0
@@ -225,7 +224,10 @@ struct
       let post = Cache.exec fexec zone stmt man flow in
       let ctx = Hook.on_after_exec zone stmt man post in
       Post.set_ctx ctx post
-    with Exceptions.Panic(msg, line) -> raise (Exceptions.PanicAt(stmt.srange, msg, line))
+    with Exceptions.Panic(msg, line) ->
+      Printexc.raise_with_backtrace
+        (Exceptions.PanicAt(stmt.srange, msg, line))
+        (Printexc.get_raw_backtrace())
 
 
   let exec ?(zone = any_zone) (stmt: stmt) man (flow: Domain.t flow) : Domain.t flow =
@@ -341,12 +343,8 @@ struct
                   pp_zone2 zone
 
     in
-    (* Update the eprev field in returned expressions to indicate the
-       previous form of the result *)
-    let ret' = Eval.map (fun e -> { e with eprev = Some exp }) ret in
-
-    let ctx = Hook.on_after_eval zone exp man ret' in
-    Eval.set_ctx ctx ret'
+    let ctx = Hook.on_after_eval zone exp man ret in
+    Eval.set_ctx ctx ret
 
 
   and eval_over_paths paths exp man flow =
@@ -386,9 +384,15 @@ struct
              | None -> None
              | Some evl ->
                let evl' = Eval.remove_duplicates man.lattice evl in
-               Some evl'
+               (* Update the eprev field in returned expressions to indicate the
+                  previous form of the result *)
+               let evl'' = Eval.map (fun ee -> { ee with eprev = Some e }) evl' in
+               Some evl''
            ) (z1, z2) exp man flow
-         with Exceptions.Panic(msg,line) -> raise (Exceptions.PanicAt (exp.erange,msg,line))
+         with Exceptions.Panic(msg, line) ->
+           Printexc.raise_with_backtrace
+             (Exceptions.PanicAt(exp.erange, msg, line))
+             (Printexc.get_raw_backtrace())
         )
       with
       | Some evl -> Some evl
@@ -413,7 +417,10 @@ struct
             Option.lift @@ bind_some @@ fun exprs flow ->
             let exp' = builder {exprs; stmts = []} in
             debug "%a -> %a" pp_expr exp pp_expr exp';
-            Eval.singleton exp' flow
+            (* Update the eprev field in returned expressions to
+               indicate the previous form of the result *)
+            let exp'' = { exp' with eprev = Some exp } in
+            Eval.singleton exp'' flow
 
           | _ ->
             debug "%a is a leaf expression" pp_expr exp;

@@ -38,6 +38,8 @@ struct
     ieval = { provides = []; uses = [] };
   }
 
+  let alarms = []
+
   let init prog man flow = flow
 
 

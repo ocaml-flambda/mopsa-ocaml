@@ -38,6 +38,8 @@ sig
 end
 
 
+type _ id += V_product : 'a vlist -> 'a id
+
 
 (** Factory functor *)
 module Make(Spec: SPEC) : VALUE with type t = Spec.t =
@@ -48,21 +50,49 @@ struct
 
   type t = Spec.t
 
-  include GenValueId(
-    struct
-      type nonrec t = t
+  let id = V_product Spec.pool
 
-      let name = "framework.combiners.value.product"
-
-      let display =
-        let f = fun (type a) (m:a vmodule) ->
-          let module Value = (val m) in
-          Value.display
+  let () =
+    let open Eq in
+    register_id {
+      eq = (
+        let f : type a. a id -> (a, t) eq option =
+          function
+          | V_product (vl) ->
+            let rec iter : type b c. b vlist -> c vlist -> (b,c) eq option =
+              fun l1 l2 ->
+                match l1,l2 with
+                | Nil,Nil -> Some Eq
+                | Cons(hd1,tl1), Cons(hd2,tl2)->
+                  let module V1 = (val hd1) in
+                  let module V2 = (val hd2) in
+                  begin match equal_id V1.id V2.id with
+                    | Some Eq ->
+                      begin match iter tl1 tl2 with
+                        | Some Eq -> Some Eq
+                        | None -> None
+                      end
+                    | None -> None
+                  end
+                | _ -> None
+            in
+            iter vl Spec.pool
+          | _ -> None
         in
-        let l = vlist_map { f } Spec.pool in
-        "(" ^ (String.concat " ∧ " l) ^ ")"
-    end
-    )
+        f
+      );
+    }
+
+
+  let name = "framework.combiners.value.product"
+
+  let display =
+    let f = fun (type a) (m:a vmodule) ->
+      let module Value = (val m) in
+      Value.display
+    in
+    let l = vlist_map { f } Spec.pool in
+    "(" ^ (String.concat " ∧ " l) ^ ")"
 
   let zones =
     let f = fun (type a) (m:a vmodule) ->
@@ -72,13 +102,12 @@ struct
     vlist_map { f } Spec.pool |>
     List.flatten
 
-  let types =
+  let mem_type t =
     let f = fun (type a) (m:a vmodule) ->
         let module Value = (val m) in
-        Value.types
+        Value.mem_type t
     in
-    vlist_map { f } Spec.pool |>
-    List.flatten
+    vlist_exists0 { f } Spec.pool
 
 
   let bottom =
@@ -138,14 +167,13 @@ struct
     in
     vlist_apply2 { f } Spec.pool v v'
 
-  let mem_types types t =
-    List.exists (fun  t' -> compare_typ t t' = 0) types
+  let mem_types types t = types t
 
-  let of_constant t c =
+  let constant t c =
     let f = fun (type a) (m:a vmodule) ->
       let module Value = (val m) in
-      if mem_types Value.types t then
-        Value.of_constant t c
+      if Value.mem_type t then
+        Value.constant t c
       else
         Exceptions.panic "of_constant called on unsupported constant %a of type %a"
           ~loc:__LOC__
@@ -206,7 +234,7 @@ struct
   let unop man t op v =
     let f = fun (type a) (m:a vmodule) man ->
       let module Value = (val m) in
-      if mem_types Value.types t then
+      if Value.mem_type t then
         Value.unop man t op v
       else
         Exceptions.panic "unop called on unsupported operator %a of type %a"
@@ -221,7 +249,7 @@ struct
   let binop man t op v1 v2 =
     let f = fun (type a) (m:a vmodule) man ->
       let module Value = (val m) in
-      if mem_types Value.types t then
+      if Value.mem_type t then
         Value.binop man t op v1 v2
       else
         Exceptions.panic "binop called on unsupported operator %a of type %a"
@@ -243,7 +271,7 @@ struct
   let bwd_unop man t op v r =
     let f = fun (type a) (m:a vmodule) man ->
       let module Value = (val m) in
-      if mem_types Value.types t then
+      if Value.mem_type t then
         Value.bwd_unop man t op v r
       else
         Exceptions.panic "bwd_unop called on unsupported operator %a of type %a"
@@ -257,7 +285,7 @@ struct
   let bwd_binop man t op v1 v2 r =
     let f = fun (type a) (m:a vmodule) man ->
       let module Value = (val m) in
-      if mem_types Value.types t then
+      if Value.mem_type t then
         Value.bwd_binop man t op v1 v2 r
       else
         Exceptions.panic "bwd_binop called on unsupported operator %a of type %a"
@@ -272,7 +300,7 @@ struct
   let compare man t op v1 v2 r =
     let f = fun (type a) (m:a vmodule) man ->
       let module Value = (val m) in
-      if mem_types Value.types t then
+      if Value.mem_type t then
         Value.compare man t op v1 v2 r
       else
         Exceptions.panic "compare called on unsupported operator %a of type %a"
@@ -282,22 +310,6 @@ struct
     in
     vlist_man_apply_pair { f } Spec.pool man |>
     reduce_pair
-
-  let get man id v =
-    let f = fun (type a) (m:a vmodule) man ->
-      let module Value = (val m) in
-      Value.get man id v
-    in
-    vlist_ret_man_opt { f } Spec.pool man
-
-  let set man id v vv =
-    let f = fun (type a) (m:a vmodule) man ->
-      let module Value = (val m) in
-      Value.set man id v vv
-    in
-    vlist_ret_man_opt { f } Spec.pool man |>
-    Option.lift @@ fun a ->
-    man.set (reduce @@ man.get a) a
 
 
   let ask man query =
@@ -311,16 +323,10 @@ struct
     | [hd] -> Some hd
     | hd :: tl ->
       let r =
-        List.fold_left (fun acc r -> meet_query query acc r) hd tl
+        List.fold_left (fun acc r -> meet_vquery query acc r) hd tl
       in
       Some r
 
-  let refine man channel v =
-    let f = fun (type a) (m:a vmodule) man acc ->
-      let module Value = (val m) in
-      Core.Channel.bind (Value.refine man channel) acc
-    in
-    vlist_man_fold { f } Spec.pool man (Core.Channel.return v)
 
 end
 

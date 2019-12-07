@@ -54,7 +54,6 @@ let () =
     | T_py_not_implemented -> pp_print_string fmt "notimplemented"
     | T_py_none -> pp_print_string fmt "none"
     | T_py_complex -> pp_print_string fmt "complex"
-    | T_py_empty -> pp_print_string fmt "empty"
     | T_py_bytes -> pp_print_string fmt "bytes"
     | _ -> default fmt typ
     );
@@ -63,7 +62,6 @@ let () =
       | C_py_none -> pp_print_string fmt "C_py_None"
       | C_py_not_implemented -> pp_print_string fmt "NotImplemented"
       | C_py_imag j -> fprintf fmt "%aj" pp_print_float j
-      | C_py_empty -> pp_print_string fmt "empty"
       | c -> default fmt c
     );
   register_operator_pp (fun default fmt -> function
@@ -80,6 +78,10 @@ let () =
     );
   register_expr_pp (fun default fmt exp ->
       match ekind exp with
+      | E_py_ll_hasattr (e, attr) -> Format.fprintf fmt "E_py_ll_hasattr(%a, %a)" pp_expr e pp_expr attr
+      | E_py_ll_getattr (e, attr) -> Format.fprintf fmt "E_py_ll_getattr(%a, %a)" pp_expr e pp_expr attr
+      | E_py_ll_setattr (e, attr, ovalu) -> Format.fprintf fmt "E_py_ll_setattr(%a, %a, %a)" pp_expr e pp_expr attr (Option.print pp_expr) ovalu
+      | E_py_annot e -> fprintf fmt "(annot) %a" pp_expr e
       | E_py_undefined true -> fprintf fmt "global undef"
       | E_py_undefined false -> fprintf fmt "local undef"
       | E_py_object obj -> pp_py_object fmt obj
@@ -191,6 +193,8 @@ let () =
       | E_py_bytes(s) ->
         fprintf fmt "b\"%s\"" s
 
+      | E_py_check_annot (e1, e2) -> fprintf fmt "check_annot(%a, %a)" pp_expr e1 pp_expr e2
+
       | _ -> default fmt exp
     );
 
@@ -246,6 +250,11 @@ let () =
           pp_expr x
           pp_operator op
           pp_expr e
+
+      | S_py_annot(x, typ) ->
+        fprintf fmt "%a: %a"
+          pp_expr x
+          pp_expr typ
 
       | S_py_for(target, iter, body, orelse) ->
         fprintf fmt "for %a in %a:@\n@[<h 2>  %a@]@\nelse:@\n@[<h 2>  %a@]"

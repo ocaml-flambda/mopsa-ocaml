@@ -173,6 +173,7 @@ struct
     }
   }
 
+  let alarms = []
 
   (** Initialization of environments *)
   (** ============================== *)
@@ -258,7 +259,7 @@ struct
         let flow' = set_env T_cur not_inserted man flow in
         insert_addr_others addr range man flow'
     in
-    Eval.join_list ~empty:(Eval.empty_singleton flow) (case1 @ case2)
+    Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (case1 @ case2)
 
 
 
@@ -301,7 +302,7 @@ struct
       )
       ~zone:Z_u_num
       man flow
-      
+
 
   (** {2 Find the address of a numeric file descriptor} *)
   (** ================================================= *)
@@ -319,7 +320,7 @@ struct
           assume (mk_binop i O_eq (mk_int j range) range) ~zone:Universal.Zone.Z_u_num
             ~fthen:(fun flow ->
                 List.map (fun addr -> Eval.singleton (mk_addr addr range) flow) addrs |>
-                Eval.join_list ~empty:(Eval.empty_singleton flow)
+                Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow)
               )
             ~felse:(fun flow ->
                 find_addr_first (j + 1) tl flow
@@ -343,7 +344,10 @@ struct
       (* Second case: return NULL when all intervals may differ from the target interval *)
       let case2 =
         if Table.for_all (fun _ itv' ->
-            let itv1, itv2 = Itv.compare O_ne itv itv' true in
+            let itv1, itv2 = match Bot.bot_absorb2 Itv.I.filter_neq itv itv' with
+              | Bot.BOT -> Itv.bottom, Itv.bottom
+              | Bot.Nb (itv1,itv2) -> Nb itv1, Nb itv2
+            in
             not @@ Itv.is_bottom itv1 &&
             not @@ Itv.is_bottom itv2
           ) a.others
@@ -352,7 +356,7 @@ struct
         else
           []
       in
-      Eval.join_list (case1 @ case2) ~empty:(Eval.empty_singleton flow)
+      Eval.join_list (case1 @ case2) ~empty:(fun () -> Eval.empty_singleton flow)
     in
     find_addr_first 0 a.first flow
 
@@ -426,7 +430,7 @@ struct
       begin
         man.eval ~zone:(Z_c,Z_c_points_to) f flow >>$ fun p flow ->
         match ekind p with
-        | E_c_points_to (P_block(A addr,_)) ->
+        | E_c_points_to (P_block(ValidAddr addr,_)) ->
           insert_addr addr exp.erange man flow
 
         | _ ->
@@ -441,7 +445,7 @@ struct
         man.eval ~zone:(Z_c,Z_c_points_to) f flow >>$ fun p flow ->
         man.eval ~zone:(Z_c,Z_u_num) fd flow >>$ fun fd flow ->
         match ekind p with
-        | E_c_points_to (P_block(A addr,_)) ->
+        | E_c_points_to (P_block(ValidAddr addr,_)) ->
           insert_addr_at addr fd exp.erange man flow
 
         | _ ->

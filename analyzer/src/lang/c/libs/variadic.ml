@@ -29,7 +29,7 @@ open Universal.Ast
 open Ast
 open Zone
 module Itv = Universal.Numeric.Values.Intervals.Integer.Value
-
+open Common.Alarms
 
 module Domain =
 struct
@@ -56,10 +56,14 @@ struct
         Z_c, Z_c_low_level
       ];
       uses = [
-        Z_c, Common.Points_to.Z_c_points_to
+        Z_c, Common.Points_to.Z_c_points_to;
+        Z_c_scalar, Universal.Zone.Z_u_num
       ]
     }
   }
+
+  let alarms = [A_c_out_of_bound_cls; A_c_no_next_va_arg_cls]
+
   (** Flow-insensitive annotations *)
   (** ============================ *)
 
@@ -182,20 +186,23 @@ struct
     man.eval ap ~zone:(Z_c, Z_c_points_to) flow >>$ fun pt flow ->
 
     match ekind pt with
-    | E_c_points_to (P_block (V ap, offset)) ->
-      (* We do not consider the case of arrays of va_list *)
+    | E_c_points_to (P_block (ValidVar ap, offset)) ->
       let base_size = sizeof_type ap.vtyp in
       let elem_size = sizeof_type (under_type ap.vtyp) in
-      if not (Z.equal base_size elem_size) then panic_at range "arrays of va_list not supported";
+
+      (* We do not consider the case of arrays of va_list *)
+      if not (Z.equal base_size elem_size)
+      then panic_at range "arrays of va_list not supported";
 
       (* In this case, only offset 0 is OK *)
       assume
-        (mk_binop offset O_eq (mk_zero range) range)
+        (mk_binop offset O_eq (mk_zero range) ~etyp:u8 range)
         ~fthen:(fun flow ->
             Result.singleton ap flow
           )
         ~felse:(fun flow ->
-            Alarms.raise_c_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow |>
+            man.eval offset ~zone:(Z_c_scalar,Universal.Zone.Z_u_num) flow >>$ fun offset flow ->
+            raise_c_out_bound_alarm ~base:(ValidVar ap) ~offset ~size:(mk_z base_size range) range (Core.Sig.Stacked.Manager.of_domain_man man) flow |>
             Result.empty_singleton
           )
         ~zone:Z_c
@@ -254,11 +261,11 @@ struct
             ) itv
           in
 
-          Eval.join_list evl ~empty:(Eval.empty_singleton flow)
+          Eval.join_list evl ~empty:(fun () -> Eval.empty_singleton flow)
         )
       ~felse:(fun flow ->
           (* Raise an alarm since no next argument can be fetched by va_arg *)
-          let flow' = Alarms.raise_c_alarm Alarms.AVaArgNoNext range ~bottom:true man.lattice flow in
+          let flow' = raise_c_no_next_va_arg ~va_list:ap ~counter:valc ~args:unnamed range (Sig.Stacked.Manager.of_domain_man man) flow in
           Eval.empty_singleton flow'
         )
       ~zone:Universal.Zone.Z_u_num

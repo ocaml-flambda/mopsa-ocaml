@@ -22,10 +22,11 @@
 (** Debug - Conditional debugging with channel filtering. *)
 
 let channels = ref []
+let print_warnings = ref true
 let print_color = ref true
 let print_all = ref false
 let colors = [
-  ("red", 160);
+  ("red", 9);
   ("green", 0x28);
   ("yellow", 0xbe);
   ("blue", 4);
@@ -50,6 +51,7 @@ let add_channel ch =
     let re = Str.regexp ch' in
     channels := re :: !channels
 
+
 (* Parse a list of channels separated by ',' *)
 let parse opt =
   Str.split (Str.regexp ",") opt |>
@@ -64,7 +66,8 @@ let can_print channel =
   !channels |> List.exists (fun re -> Str.string_match re channel 0)
 
 (** Gives a random map of channel colors *)
-let random_color channel = (Hashtbl.hash channel mod 26) * 10 + 2
+let random_color channel =
+  (Hashtbl.hash channel mod 26) * 9 + 2
 
 let color c pp fmt x =
   if !print_color then
@@ -87,8 +90,6 @@ let debug ?(channel = "debug") fmt =
     Format.ifprintf Format.std_formatter fmt
 
 
-let warn fmt = debug ~channel:"warning" fmt
-
 let info fmt =
     if can_print "info" then
       Format.kasprintf (fun str ->
@@ -99,6 +100,35 @@ let info fmt =
 
 let plurial_list fmt l = if List.length l <= 1 then () else Format.pp_print_string fmt "s"
 let plurial_int fmt n = if n <= 1 then () else Format.pp_print_string fmt "s"
+
+let panic fmt =
+  Format.kasprintf (fun str ->
+        Format.printf "%a: %s@." (color_str "red") "panic" str
+      ) fmt
+
+let panic_at range fmt =
+  Format.kasprintf (fun str ->
+      Format.printf "%a: panic: %s@." (color "red" Location.pp_range) range str
+    ) fmt
+
+
+let warn fmt =
+  if !print_warnings then
+    Format.kasprintf (fun str ->
+        Format.printf "%a: %s@." (color_str "orange") "warning" str
+      ) fmt
+  else
+    Format.ifprintf Format.std_formatter fmt
+
+
+let warn_at range fmt =
+    if !print_warnings then
+      Format.kasprintf (fun str ->
+          Format.printf "%a: warning: %s@." (color "orange" Location.pp_range) range str
+        ) fmt
+    else
+      Format.ifprintf Format.std_formatter fmt
+
 
 
 (* simple detection of terminal coloring capabilities, using TERM variable;

@@ -49,7 +49,7 @@ open Universal.Zone
 open Zone
 open Common.Base
 open Common.Points_to
-open Alarms
+open Common.Alarms
 
 
 module Domain =
@@ -83,6 +83,7 @@ struct
     }
   }
 
+  let alarms = []
 
   (** {2 Auxiliary variables} *)
   (** *********************** *)
@@ -189,13 +190,29 @@ struct
   (** {2 Abstract transformers} *)
   (** ************************* *)
 
+  (** Get the base and offset pointed by ptr. Since we do not track invalid
+     dereferences, we ignore invalid pointers.
+  *)
+  let eval_pointed_base_offset ptr range man flow =
+    man.eval ptr ~zone:(Zone.Z_c_low_level, Z_c_points_to) flow >>$ fun pt flow ->
+    match ekind pt with
+    | E_c_points_to P_null
+    | E_c_points_to P_invalid
+    | E_c_points_to (P_block (InvalidAddr _, _))
+    | E_c_points_to P_top ->
+      Result.empty_singleton flow
+
+    | E_c_points_to (P_block (base, offset)) ->
+      Result.singleton (base, offset) flow
+
+    | _ -> assert false
 
   (** Predicate defining interesting bases for which the domain will
       track the sentinel position.
   *)
   let is_interesting_base base =
     match base with
-    | V v when is_c_type v.vtyp && is_c_array_type v.vtyp ->
+    | ValidVar v when is_c_type v.vtyp && is_c_array_type v.vtyp ->
       (* Accept only arrays with pointers or records of pointers *)
       let rec aux t =
         match remove_typedef_qual t with
@@ -207,9 +224,9 @@ struct
       in
       aux v.vtyp
 
-    | A { addr_kind = A_stub_resource "Memory" } -> true
+    | ValidAddr { addr_kind = A_stub_resource "Memory" } -> true
 
-    | A { addr_kind = A_stub_resource "argv" } -> true
+    | ValidAddr { addr_kind = A_stub_resource "argv" } -> true
 
     | _ -> false
 
@@ -231,14 +248,15 @@ struct
         (* If the above heuristics fails, fall back to dynamic evaluations *)
         man.eval e ~zone:(zone,Z_c_points_to) flow >>$ fun pt flow ->
         match ekind pt with
+        | E_c_points_to P_top -> Result.join (Result.singleton true flow) (Result.singleton false flow)
         | E_c_points_to (P_null | P_invalid) -> Result.singleton true flow
-        | E_c_points_to (P_block _ | P_valid | P_fun _) -> Result.singleton false flow
+        | E_c_points_to (P_block _ | P_fun _) -> Result.singleton false flow
         | _ -> assert false
 
 
   (** Declaration of a C variable *)
   let declare_variable v init scope range man flow =
-    if not (is_interesting_base (V v))
+    if not (is_interesting_base (ValidVar v))
     then Post.return flow
 
     else
@@ -257,9 +275,9 @@ struct
 
       (* Check if an initializer has a pointer type *)
       let is_non_pointer = function
-        | C_flat_none (_,t)
-        | C_flat_expr(_,t)
-        | C_flat_fill(_,t,_) ->
+        | C_flat_none (_,_,t)
+        | C_flat_expr(_,_,t)
+        | C_flat_fill(_,_,_,t) ->
           not (is_c_pointer_type t)
       in
 
@@ -272,40 +290,34 @@ struct
       in
 
       (* Find the position of the sentinel and accumulate pointers before it *)
-      let rec aux o init flow : ('a,Z.t*Z.t*expr option*expr list) result =
+      let rec aux init flow : ('a,Z.t*Z.t*expr option*expr list) result =
         match init with
         | [] -> Result.singleton (size, size, None, []) flow
 
-        | C_flat_none (n,_) :: tl  ->
+        | C_flat_none (n,o,_) :: tl  ->
           let sentinel = if is_global then mk_c_null range else mk_c_invalid_pointer range in
           Result.singleton (o,o,Some sentinel,[]) flow
 
         | hd :: _ when is_non_pointer hd -> raise NonPointerFound
 
-        | (C_flat_fill (e,_,_) as hd):: tl
-        | (C_flat_expr (e,_) as hd):: tl ->
-          let step =
-            match hd with
-            | C_flat_expr _ -> ptr_size
-            | C_flat_fill (_,_,n) -> Z.mul n ptr_size
-            | _ -> assert false
-          in
+        | C_flat_fill (e,o,_,_) :: tl
+        | C_flat_expr (e,o,_) :: tl ->
           is_sentinel_expr e man flow >>$ fun b flow ->
           if b then
             Result.singleton (o,o,Some e,[]) flow
           else
-              aux (Z.add o step) tl flow >>$ fun (o1,o2,at,before) flow ->
+              aux tl flow >>$ fun (o1,o2,at,before) flow ->
               Result.singleton (o1,o2,at,e::before) flow
       in
       (* Initialize the sentinel variable *)
-      let sentinel = mk_sentinel_var (V v) range in
-      let at = mk_at_var (V v) range in
-      let before = mk_before_var (V v) range in
+      let sentinel = mk_sentinel_var (ValidVar v) range in
+      let at = mk_at_var (ValidVar v) range in
+      let before = mk_before_var (ValidVar v) range in
 
       man.post ~zone:Z_u_num (mk_add sentinel range) flow >>= fun _ flow ->
 
       try
-        aux Z.zero flat_init flow >>$ fun (o1,o2,ate,beforel) flow ->
+        aux flat_init flow >>$ fun (o1,o2,ate,beforel) flow ->
         let pos =
           if Z.equal o1 o2
           then mk_z o1 range
@@ -361,7 +373,8 @@ struct
     eval_base_size base range man flow >>$ fun size flow ->
     man.eval ~zone:(Z_c_scalar,Z_u_num) size flow  >>$ fun size flow ->
 
-    (* Safety condition: offset ∈ [0, size - pointer_size] *)
+    (* Safety condition: offset ∈ [0, size - pointer_size]. This test is
+       optional as the domain does not raise out-of-bound alarms *)
     assume ~zone:Z_u_num
       (mk_in offset (mk_zero range) (sub size (mk_z ptr_size range) range) range)
       ~fthen:(fun flow ->
@@ -480,36 +493,18 @@ struct
 
         )
       ~felse:(fun flow ->
-          (* Unsafe case *)
-          raise_c_alarm AOutOfBound range ~bottom:false man.lattice flow |>
+          (* Unsafe case. No alarm is raised as this should be done by other domains *)
+          Flow.set_bottom T_cur flow |>
           Post.return
         ) man flow
 
 
   (** Assignment abstract transformer for 𝕊⟦ *p = rval; ⟧ *)
   let assign_deref p rval range man flow =
-    man.eval ~zone:(Z_c_low_level, Z_c_points_to) p flow >>$ fun pt flow ->
-
-    match ekind pt with
-    | E_c_points_to P_null ->
-      raise_c_alarm Alarms.ANullDeref p.erange ~bottom:true man.lattice flow |>
-      Post.return
-
-    | E_c_points_to P_invalid ->
-      raise_c_alarm Alarms.AInvalidDeref p.erange ~bottom:true man.lattice flow |>
-      Post.return
-
-    | E_c_points_to P_valid ->
-      Soundness.warn_at range "unsound assignment to valid pointer %a" pp_expr p;
-      raise_c_alarm Alarms.AOutOfBound p.erange ~bottom:false man.lattice flow |>
-      Post.return
-
-    | E_c_points_to (P_block (base, offset)) ->
-      man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow >>$ fun offset flow ->
-      man.eval ~zone:(Z_c_low_level,Z_c_scalar) rval flow >>$ fun rval flow ->
-      assign_cases base offset rval range man flow
-
-    | _ -> assert false
+    eval_pointed_base_offset p range man flow >>$ fun (base,offset) flow ->
+    man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow >>$ fun offset flow ->
+    man.eval ~zone:(Z_c_low_level,Z_c_scalar) rval flow >>$ fun rval flow ->
+    assign_cases base offset rval range man flow
 
 
   (** Cases of the transfer function of quantified tests 𝕊⟦ *(base + ∀offset) op q ⟧ *)
@@ -606,7 +601,7 @@ struct
         )
       ~felse:(fun flow ->
           (* Unsafe case *)
-          raise_c_alarm AOutOfBound range ~bottom:true man.lattice flow |>
+          Flow.set_bottom T_cur flow |>
           Post.return
         )
       ~zone:Z_u_num man flow
@@ -627,28 +622,11 @@ struct
       doit p
     in
 
-    man.eval ~zone:(Z_c_low_level, Z_c_points_to) pp flow >>$ fun pt flow ->
-
-    match ekind pt with
-    | E_c_points_to P_null ->
-      raise_c_alarm ANullDeref p.erange ~bottom:true man.lattice flow |>
-      Post.return
-
-    | E_c_points_to P_invalid ->
-      raise_c_alarm AInvalidDeref p.erange ~bottom:true man.lattice flow |>
-      Post.return
-
-    | E_c_points_to (P_block (base, offset)) when is_interesting_base base ->
+    eval_pointed_base_offset pp range man flow >>$ fun (base,offset) flow ->
+    if is_interesting_base base then
       assume_quantified_cases op base offset primed q range man flow
-
-    | E_c_points_to (P_block (base, offset)) ->
+    else
       Post.return flow
-
-    | E_c_points_to P_valid ->
-      raise_c_alarm AOutOfBound p.erange ~bottom:false man.lattice flow |>
-      Post.return
-
-    | _ -> assert false
 
 
 
@@ -726,32 +704,31 @@ struct
   (** Transformers entry point *)
   let exec zone stmt man flow =
     match skind stmt with
-    | S_c_declaration (v,init,scope) when is_interesting_base (V v) ->
+    | S_c_declaration (v,init,scope) when is_interesting_base (ValidVar v) ->
       declare_variable v init scope stmt.srange man flow |>
       Option.return
 
-    | S_add { ekind = E_var (v, _) } when is_interesting_base (V v) ->
-      add_base (V v) stmt.srange man flow |>
+    | S_add { ekind = E_var (v, _) } when is_interesting_base (ValidVar v) ->
+      add_base (ValidVar v) stmt.srange man flow |>
       Option.return
 
-    | S_add { ekind = E_addr addr } when is_interesting_base (A addr) ->
-      add_base (A addr) stmt.srange man flow |>
+    | S_add { ekind = E_addr addr } when is_interesting_base (ValidAddr addr) ->
+      add_base (ValidAddr addr) stmt.srange man flow |>
       Option.return
 
     | S_rename ({ ekind = E_var (v1,_) }, { ekind = E_var (v2,_) })
-      when is_interesting_base (V v1) &&
-           is_interesting_base (V v2)
+      when is_interesting_base (ValidVar v1) &&
+           is_interesting_base (ValidVar v2)
       ->
-      rename_base (V v1) (V v2) stmt.srange man flow |>
+      rename_base (ValidVar v1) (ValidVar v2) stmt.srange man flow |>
       Option.return
 
 
     | S_rename ({ ekind = E_addr addr1 }, { ekind = E_addr addr2 })
-      when is_interesting_base (A addr1) &&
-           is_interesting_base (A addr2)
+      when is_interesting_base (ValidAddr addr1) &&
+           is_interesting_base (ValidAddr addr2)
       ->
-      rename_base (A addr1) (A addr2) stmt.srange man flow >>=? fun _ flow ->
-      man.post ~zone:Z_c_scalar stmt flow |>
+      rename_base (ValidAddr addr1) (ValidAddr addr2) stmt.srange man flow |>
       Option.return
 
     | S_assign({ ekind = E_c_deref p} as lval, rval) when is_c_pointer_type lval.etyp ->
@@ -762,8 +739,8 @@ struct
     | S_assume({ekind = E_binop(O_eq, lval, q)})
     | S_assume({ekind = E_unop(O_log_not, {ekind = E_binop(O_ne, lval, q)})})
       when is_c_pointer_type lval.etyp &&
-           is_lval_offset_quantified lval &&
-           not (is_expr_quantified q) &&
+           is_lval_offset_forall_quantified lval &&
+           not (is_expr_forall_quantified q) &&
            is_c_deref lval
       ->
       assume_quantified O_eq lval q stmt.srange man flow |>
@@ -773,16 +750,16 @@ struct
     | S_assume({ekind = E_binop(O_ne, lval, q)})
     | S_assume({ekind = E_unop(O_log_not, {ekind = E_binop(O_eq, lval, q)})})
       when is_c_pointer_type lval.etyp &&
-           is_lval_offset_quantified lval &&
-           not (is_lval_offset_quantified q) &&
+           is_lval_offset_forall_quantified lval &&
+           not (is_lval_offset_forall_quantified q) &&
            is_c_deref lval
       ->
       assume_quantified O_ne lval q stmt.srange man flow |>
       Option.return
 
 
-    | S_remove { ekind = E_var (v, _) } when is_interesting_base (V v) ->
-      remove_base (V v) stmt.srange man flow |>
+    | S_remove { ekind = E_var (v, _) } when is_interesting_base (ValidVar v) ->
+      remove_base (ValidVar v) stmt.srange man flow |>
       Option.return
 
 
@@ -863,8 +840,8 @@ struct
         )
       ~felse:(fun flow ->
           (* Unsafe case *)
-          let flow' = raise_c_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow in
-          Eval.empty_singleton flow'
+          Flow.set_bottom T_cur flow |>
+          Eval.empty_singleton
         ) man flow
 
 
@@ -923,8 +900,8 @@ struct
         )
       ~felse:(fun flow ->
           (* Unsafe case *)
-          let flow' = raise_c_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow in
-          Eval.empty_singleton flow'
+          Flow.set_bottom T_cur flow |>
+          Eval.empty_singleton
         ) man flow
 
 
@@ -932,38 +909,19 @@ struct
   (** Abstract evaluation of a dereference *)
   let eval_deref exp primed range man flow =
     let p = match ekind exp with E_c_deref p -> p | _ -> assert false in
-    man.eval ~zone:(Z_c_low_level, Z_c_points_to) p flow |>
-    Eval.bind @@ fun pt flow ->
-
-    match ekind pt with
-    | E_c_points_to P_null ->
-      raise_c_alarm Alarms.ANullDeref p.erange ~bottom:true man.lattice flow |>
-      Eval.empty_singleton
-
-    | E_c_points_to P_invalid ->
-      raise_c_alarm Alarms.AInvalidDeref p.erange ~bottom:true man.lattice flow |>
-      Eval.empty_singleton
-
-    | E_c_points_to (P_block (base, offset))
-      when is_interesting_base base &&
-           not (is_expr_quantified offset)
-      ->
+    eval_pointed_base_offset p range man flow >>$ fun (base,offset) flow ->
+    if is_interesting_base base &&
+       not (is_expr_forall_quantified offset)
+    then
       man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow |>
       Eval.bind @@ fun offset flow ->
       eval_deref_cases base offset (under_type p.etyp) primed range man flow
-
-    | E_c_points_to (P_block (base, offset))
-      when is_interesting_base base &&
-           is_expr_quantified offset
-      ->
+    else if is_interesting_base base &&
+            is_expr_forall_quantified offset
+    then
       eval_quantified_deref_cases base offset (under_type p.etyp) primed range man flow
-
-    | E_c_points_to (P_block _)
-    | E_c_points_to P_valid ->
-      raise_c_alarm Alarms.AOutOfBound p.erange ~bottom:false man.lattice flow |>
-      Eval.singleton (mk_top (under_type p.etyp |> void_to_char) range)
-
-    | _ -> assert false
+    else
+      Eval.singleton (mk_top (under_type p.etyp |> void_to_char) range) flow
 
 
 

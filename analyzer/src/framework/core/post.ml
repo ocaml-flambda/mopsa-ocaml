@@ -46,6 +46,8 @@ let print pp fmt post =
 let join (p1:'a post) (p2:'a post) : 'a post =
   Result.join p1 p2
 
+let join_list ~empty l =
+  Result.join_list ~empty l
 
 
 let meet (p1:'a post) (p2:'a post) : 'a post =
@@ -53,12 +55,12 @@ let meet (p1:'a post) (p2:'a post) : 'a post =
 
 
 
-let join_list ~(empty:'a post) (l:'a post list) : 'a post =
+let join_list ~(empty:unit -> 'a post) (l:'a post list) : 'a post =
   Result.join_list ~empty l
 
 
 
-let meet_list ~(empty:'a post) (l:'a post list) : 'a post =
+let meet_list ~(empty:unit -> 'a post) (l:'a post list) : 'a post =
   Result.join_list ~empty l
 
 

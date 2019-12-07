@@ -46,6 +46,8 @@ struct
     ieval = { provides = [Z_u, Z_any]; uses = [Z_u, Z_any] };
   }
 
+  let alarms = []
+
   let debug fmt = Debug.debug ~channel:name fmt
 
   module Fctx = Context.GenPolyKey(
@@ -91,12 +93,18 @@ struct
     let range = erange exp in
     match ekind exp with
     | E_call({ekind = E_function (User_defined func)} as f, args) ->
+
+      if man.lattice.is_bottom (Flow.get T_cur man.lattice flow)
+      then Eval.empty_singleton flow |> Option.return
+      else
+
       let in_flow = flow in
       let in_flow_cur = Flow.bottom (Flow.get_ctx in_flow) (Flow.get_alarms in_flow) |>
                         Flow.set T_cur (Flow.get T_cur man.lattice in_flow) man.lattice
       in
       let params, locals, body, in_flow_cur = init_fun_params func args range man in_flow_cur in
       let in_flow_other = Flow.remove T_cur in_flow in
+      (* FIXME: join in_flow_other even if inline returns empty singleton. This means is done in sequential cache with a full Result.bind doing the join *)
       let ret = match func.fun_return_type with
         | None -> None
         | Some _ ->

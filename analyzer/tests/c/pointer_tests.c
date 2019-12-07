@@ -54,10 +54,6 @@ void test_null_is_zero() {
 }
 
 
-void test_refine_top_pointer() {
-  int *p = (int*)_mopsa_rand_pointer();
-  if (p) _mopsa_assert(p != NULL);
-}
 
 
 int *global;
@@ -79,13 +75,6 @@ void test_null_deref() {
   _mopsa_assert_unsafe();
 }
 
-void test_compare_pointers_with_int_values() {
-  int *p = (int*)1;
-  int *q = (int*)2;
-  int *r = (int*)1;
-  _mopsa_assert(p != q);
-  _mopsa_assert(p == r);
-}
 
 /*
  * Pointers to arrays
@@ -305,4 +294,38 @@ void test_string2_1bptr_macro() {
 
   int *p3 = &x;
   _mopsa_assert(!__string2_1bptr_p(p3));
+}
+
+
+
+/*
+ * Tests of dangling pointers
+ */
+
+int* f1() {
+  int x;
+  int *p;
+  p = &x;
+  return p;
+}
+
+void test_deref_dangling_pointer() {
+  int *q;
+  q = f1();
+  int x = *q;
+  _mopsa_assert_unsafe();
+}
+
+struct { int *p; } s;
+
+void f2() {
+  int x;
+  s.p = &x;
+}
+
+void test_deref_dangling_pointer_in_struct() {
+  int *q;
+  f2();
+  int x = *(s.p);
+  _mopsa_assert_unsafe();
 }

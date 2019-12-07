@@ -79,6 +79,13 @@
             pos_bol = pos.pos_cnum
         }
 
+    let newlinen lexbuf n =
+        let pos = lexbuf.lex_curr_p in
+        lexbuf.lex_curr_p <- {
+            pos with pos_lnum = pos.pos_lnum + n;
+            pos_bol = pos.pos_cnum
+        }
+
     let buffer = ref (Buffer.create 0)
 
     let stack = ref [0]
@@ -88,6 +95,23 @@
         | _ -> raise (LexingError "incorrect indentation")
 
     let open_pars = ref 0
+
+    let count_newlines s =
+      let result = ref 0 in
+      let pos = ref 0 in
+      while !pos < String.length s - 1 do
+        if !pos < String.length s - 2 && s.[!pos] = '\r' && s.[!pos+1] = '\n' then
+          begin
+            incr result;
+            incr pos;
+          end
+        else if s.[!pos] = '\n' || s.[!pos] = '\r' then
+          incr result;
+        incr pos;
+      done;
+      if !pos < String.length s && (s.[!pos] = '\n' || s.[!pos] = '\r') then
+        incr result;
+      !result
 }
 
 let space = ' ' | '\t'
@@ -134,6 +158,7 @@ let floatnumber = pointfloat | exponentfloat
 (* Imaginary literals *)
 let imagnumber = (floatnumber | digitpart) ("j" | "J")
 
+
 rule token = parse
     | (space | comment)+        { token lexbuf }
     (* Line-joining *)
@@ -179,9 +204,15 @@ rule token = parse
     | "<>"                      { [NEQ] }
     | "!="                      { [NEQ] }
     (* Delimiters *)
-    | ',' (space | endline)* ']'            { decr open_pars; [COMMARSQ] }
-    | ',' (space | endline)* ')'            { decr open_pars; [COMMARPAR] }
-    | ',' (space | endline)* '}'            { decr open_pars; [COMMARBRA] }
+    | ',' ((space | endline)* as x) ']'            { decr open_pars;
+                                                     newlinen lexbuf (count_newlines x);
+                                                     [COMMARSQ] } (* newline lexbuf? *)
+    | ',' ((space | endline)* as x) ')'            { decr open_pars;
+                                                     newlinen lexbuf (count_newlines x);
+                                                     [COMMARPAR] }
+    | ',' ((space | endline)* as x) '}'            { decr open_pars;
+                                                     newlinen lexbuf (count_newlines x);
+                                                     [COMMARBRA] }
     | "("                       { incr open_pars; [LPAR] }
     | ")"                       { decr open_pars; [RPAR] }
     | "["                       { incr open_pars; [LSQ] }
@@ -346,7 +377,6 @@ and long_dq_prefix = parse
     | "\\v"                   { (Char.chr 11) :: (long_dq_prefix lexbuf) }
     | _ as c                  { (c) :: (long_dq_prefix lexbuf) }
 (* TODO : Deal with \ooo, \xhh, \uxxxx and \Uxxxx according to the doc *)
-
  {
     (* Useful for debug *)
     let print_token = function

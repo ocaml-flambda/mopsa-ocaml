@@ -30,7 +30,7 @@ type 'a visitor = {
   leaf : string -> 'a;
   seq : json list -> 'a;
   compose : json list -> 'a;
-  disjoint : json list -> 'a;
+  union : json list -> 'a;
   apply : json -> json -> 'a;
   nonrel : json -> 'a;
   product : json list -> string list -> 'a;
