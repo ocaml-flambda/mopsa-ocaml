@@ -55,6 +55,9 @@ let opt_enable_cache = ref true
 let opt_warn_all = ref false
 (** Display all compiler warnings *)
 
+let opt_use_stub = ref []
+(** Lists of functions that the body will be replaced by a stub *)
+
 let () =
   register_language_option "c" {
     key = "-I";
@@ -104,6 +107,13 @@ let () =
     doc = " display compiler warnings.";
     spec = ArgExt.Set opt_warn_all;
     default = "unset";
+  };
+  register_language_option "c" {
+    key = "-use-stub";
+    category = "C";
+    doc = " list of functions for which the stub is used instead of the declaration.";
+    spec = ArgExt.Set_string_list opt_use_stub;
+    default = "";
   };
   ()
 
@@ -227,6 +237,7 @@ and parse_db (dbfile: string) ctx : unit =
 and parse_file (cmd: string) ?nb (opts: string list) (file: string) enable_cache ignore ctx =
   Mutex.lock frontend_mutex;
   Mutex.unlock frontend_mutex;
+  debug "parsing file %s" file;
   let opts' = ("-I" ^ (Paths.resolve_stub "c" "mopsa")) ::
               ("-include" ^ "mopsa.h") ::
               "-Wall" ::
@@ -299,9 +310,8 @@ and from_project prj =
       f.c_func_static_vars <- List.map (from_var ctx) o.func_static_vars;
       f.c_func_local_vars <- List.map (from_var ctx) o.func_local_vars;
       f.c_func_body <- from_body_option ctx (from_range o.func_range) o.func_body;
-      (* Parse stub when the function has no body *)
-      match f.c_func_body with
-      | None | Some { skind = S_block ([],_) } ->
+      (* Parse stub of the function does not have a body or if it was listed  *)
+      if f.c_func_body = None || List.mem f.c_func_org_name !opt_use_stub then
         begin
           try
             f.c_func_stub <- from_stub_comment ctx o;
@@ -309,7 +319,7 @@ and from_project prj =
           with (StubAliasFound alias) ->
             (f, o, alias) :: funcs_with_alias
         end
-      | _ ->
+      else
         funcs_with_alias
     ) [] funcs_and_origins
   in
@@ -746,6 +756,7 @@ and from_stub_comment ctx f =
     Some (from_stub_func ctx f stub)
 
 and from_stub_func ctx f stub =
+  debug "parsing stub %s" f.func_org_name;
   {
     stub_func_name     = stub.stub_name;
     stub_func_params   = List.map (from_var ctx) (Array.to_list f.func_parameters);

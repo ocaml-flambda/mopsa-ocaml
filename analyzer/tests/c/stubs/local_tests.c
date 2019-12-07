@@ -8,7 +8,7 @@ int incr(int x);
  * local : int yy = incr(y);
  * ensures: return == xx + yy;
  */
-int sum_incr(int x, int y) {}
+int sum_incr(int x, int y);
 
 void test_local() {
   int x = 1;
