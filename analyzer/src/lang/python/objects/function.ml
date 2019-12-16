@@ -59,19 +59,15 @@ module Domain =
         |> Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("wrapper_descriptor.__get__", _))}, _)}, [descr; instance; typeofinst], []) ->
-        assume (mk_py_isinstance_builtin instance "NoneType" range) man flow
-          ~fthen:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) descr)
-          ~felse:(fun flow ->
-              eval_alloc man (A_py_method (object_of_expr descr, instance, "method-wrapper")) range flow |>
-              bind_some (fun addr flow ->
-                  let obj = (addr, None) in
-                  Eval.singleton (mk_py_object obj range) flow)
-            )
+        (* FIXME: No NoneType case otherwise issues on NoneType.__bool__ *) (* to investigate depending on the class of the getter *)
+        eval_alloc man (A_py_method (object_of_expr descr, instance, "method-wrapper")) range flow |>
+        bind_some (fun addr flow ->
+            let obj = (addr, None) in
+            Eval.singleton (mk_py_object obj range) flow)
         |> Option.return
 
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("method_descriptor.__get__", _))}, _)}, [descr; instance; typeofinst], []) ->
-
         assume (mk_py_isinstance_builtin instance "NoneType" range) man flow
           ~fthen:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) descr)
           ~felse:(fun flow ->
@@ -224,7 +220,7 @@ module Domain =
            if Libs.Py_mopsa.is_unsupported_fundec func then F_unsupported (get_orig_vname func.py_func_var) else
              if Libs.Py_mopsa.is_builtin_fundec func then
                let name = Libs.Py_mopsa.builtin_fundec_name func in
-               F_builtin (name, Libs.Py_mopsa.builtin_type_name func)
+               F_builtin (name, Libs.Py_mopsa.builtin_type_name "function" func)
              else F_user func
          in
          eval_alloc man (A_py_function kind) stmt.srange flow |>

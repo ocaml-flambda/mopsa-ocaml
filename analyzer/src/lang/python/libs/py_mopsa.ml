@@ -329,12 +329,12 @@ let builtin_clsdec_name clsdec =
   | _ -> assert false
 
 
-let builtin_type_name fundec =
+let builtin_type_name default fundec =
   let decor = List.find_opt (fun exp -> match ekind exp with
       | E_py_call({ekind = E_py_attribute({ekind = E_var( {vkind = V_uniq ("mopsa",_)}, _)}, "type")}, [{ekind = E_constant (C_string name)}], []) -> true
       | _ -> false) fundec.py_func_decors  in
   match decor with
-  | None -> "builtin_function_or_method"
+  | None -> default
   | Some {ekind = E_py_call({ekind = E_py_attribute({ekind = E_var( {vkind = V_uniq ("mopsa",_)}, _)}, "type")}, [{ekind = E_constant (C_string name)}], [])} -> name
   | _ -> assert false
 

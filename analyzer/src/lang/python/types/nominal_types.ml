@@ -82,8 +82,10 @@ struct
              proceed t
            | E_py_object ({addr_kind = A_py_function (F_builtin (fname, ftype))}, _) ->
              proceed ftype
-           | E_py_object ({addr_kind = A_py_function (F_user _)}, _) ->
+           | E_py_object ({addr_kind = A_py_function (F_annot _)}, _) ->
              proceed "function"
+           | E_py_object ({addr_kind = A_py_function (F_user f)}, _) ->
+             proceed (Libs.Py_mopsa.builtin_type_name "function" f)
            | E_py_object ({addr_kind = A_py_class _}, _) ->
              proceed "type"
            | _ -> Exceptions.panic_at range "type: todo: %a@\n" pp_expr arg
@@ -121,8 +123,12 @@ struct
           | A_py_function (F_builtin (_, ftype)), A_py_class (C_builtin c, _) ->
             man.eval (mk_py_bool (c = ftype) range) flow
 
-          | A_py_function _, A_py_class (C_builtin c, _) ->
+          | A_py_function (F_user f), A_py_class (C_builtin c, _) ->
+            man.eval (mk_py_bool (c = Libs.Py_mopsa.builtin_type_name "function" f) range) flow
+
+          | A_py_function (F_annot _), A_py_class (C_builtin c, _) ->
             man.eval (mk_py_bool (c = "function") range) flow
+
 
           | A_py_instance cls, A_py_class (c, mro) ->
             begin match List.find_opt
