@@ -60,10 +60,24 @@ module Domain =
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("wrapper_descriptor.__get__", _))}, _)}, [descr; instance; typeofinst], []) ->
         (* FIXME: No NoneType case otherwise issues on NoneType.__bool__ *) (* to investigate depending on the class of the getter *)
-        eval_alloc man (A_py_method (object_of_expr descr, instance, "method-wrapper")) range flow |>
-        bind_some (fun addr flow ->
-            let obj = (addr, None) in
-            Eval.singleton (mk_py_object obj range) flow)
+        assume
+          (mk_py_isinstance_builtin instance "NoneType" range) man flow
+          ~fthen:(fun flow ->
+              assume (mk_py_isinstance instance typeofinst range) man flow
+                ~fthen:(fun flow ->
+                  eval_alloc man (A_py_method (object_of_expr descr, instance, "method-wrapper")) range flow |>
+                  bind_some (fun addr flow ->
+                      let obj = (addr, None) in
+                      Eval.singleton (mk_py_object obj range) flow)
+                )
+                ~felse:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) descr)
+            )
+          ~felse:(fun flow ->
+              eval_alloc man (A_py_method (object_of_expr descr, instance, "method-wrapper")) range flow |>
+              bind_some (fun addr flow ->
+                  let obj = (addr, None) in
+                  Eval.singleton (mk_py_object obj range) flow)
+            )
         |> Option.return
 
 
