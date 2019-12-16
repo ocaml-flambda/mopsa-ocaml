@@ -60,7 +60,7 @@ module Domain =
 
          let fail_case =
            debug "checking fail";
-           let flow = man.exec (mk_assume (mk_not e e.erange) (tag_range range "fail case assume")) flow in
+           let flow = man.exec (mk_assume (mk_py_not e e.erange) (tag_range range "fail case assume")) flow in
            if Flow.is_bottom man.lattice flow then
              let _ = debug "no fail" in
              Flow.bottom (Flow.get_ctx flow) (Flow.get_alarms flow)

@@ -98,13 +98,13 @@ module Domain =
     let eval zones exp man flow =
       let range = erange exp in
       match ekind exp with
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, args, []) when StringMap.mem f stub_base ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f,_))}, _)}, args, []) when StringMap.mem f stub_base ->
         debug "function %s in stub_base, processing@\n" f;
         let {in_args; out_type} = StringMap.find f stub_base in
         process_simple f man flow range args in_args out_type
         |> Option.return
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("math.frexp" as f))}, _)}, args, []) ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("math.frexp" as f, _))}, _)}, args, []) ->
         Utils.check_instances f man flow range args
           ["float"]
           (fun args flow ->
@@ -116,7 +116,7 @@ module Domain =
 
       (* math.fsum is handled in the list abstraction *)
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("math.modf" as f))}, _)}, args, []) ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("math.modf" as f, _))}, _)}, args, []) ->
         Utils.check_instances f man flow range args
           ["float"]
           (fun args flow ->

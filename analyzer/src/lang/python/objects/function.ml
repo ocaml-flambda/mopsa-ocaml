@@ -47,7 +47,43 @@ module Domain =
     let eval zs exp man flow =
       let range = erange exp in
       match ekind exp with
-        (* 𝔼⟦ f() | isinstance(f, function) ⟧ *)
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("function.__get__", _))}, _)}, [descr; instance; typeofinst], []) ->
+        assume (mk_py_isinstance_builtin instance "NoneType" range) man flow
+          ~fthen:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) descr)
+          ~felse:(fun flow ->
+              eval_alloc man (A_py_method (object_of_expr descr, instance, "method")) range flow |>
+              bind_some (fun addr flow ->
+                  let obj = (addr, None) in
+                  Eval.singleton (mk_py_object obj range) flow)
+            )
+        |> Option.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("wrapper_descriptor.__get__", _))}, _)}, [descr; instance; typeofinst], []) ->
+        assume (mk_py_isinstance_builtin instance "NoneType" range) man flow
+          ~fthen:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) descr)
+          ~felse:(fun flow ->
+              eval_alloc man (A_py_method (object_of_expr descr, instance, "method-wrapper")) range flow |>
+              bind_some (fun addr flow ->
+                  let obj = (addr, None) in
+                  Eval.singleton (mk_py_object obj range) flow)
+            )
+        |> Option.return
+
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("method_descriptor.__get__", _))}, _)}, [descr; instance; typeofinst], []) ->
+
+        assume (mk_py_isinstance_builtin instance "NoneType" range) man flow
+          ~fthen:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) descr)
+          ~felse:(fun flow ->
+              eval_alloc man (A_py_method (object_of_expr descr, instance, "builtin_function_or_method")) range flow |>
+              bind_some (fun addr flow ->
+                  let obj = (addr, None) in
+                  Eval.singleton (mk_py_object obj range) flow)
+            )
+        |> Option.return
+
+
+    (* 𝔼⟦ f() | isinstance(f, function) ⟧ *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function(F_user pyfundec)}, _)}, args, kwargs) ->
         debug "args: %a@\n" (Format.pp_print_list pp_expr) args;
         debug "kwargs: %a@\n" (Format.pp_print_list (fun fmt (so, e) -> Format.fprintf fmt "%a~>%a" (Option.print Format.pp_print_string) so pp_expr e)) kwargs;
@@ -66,7 +102,7 @@ module Domain =
         (* First check the correct number of arguments *)
         let default_args, nondefault_args = List.partition (function None -> false | _ -> true) py_func_defaults in
         Option.return @@
-        if List.length pyfundec.py_func_parameters < List.length nondefault_args then
+        if List.length args < List.length nondefault_args then
           (
             debug "Too few arguments!@\n";
             let missing = List.length nondefault_args - List.length pyfundec.py_func_parameters in
@@ -88,10 +124,10 @@ module Domain =
           )
         else
           (
-            debug "|params| = %d" (List.length pyfundec.py_func_parameters);
-            debug "|args| = %d" (List.length args);
-            debug "|default| = %d" (List.length default_args);
-            debug "|non-default| = %d" (List.length nondefault_args);
+            debug "|params| = %d (%a)" (List.length pyfundec.py_func_parameters) (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_var) pyfundec.py_func_parameters;
+            debug "|args| = %d (%a)" (List.length args) (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_expr) args;
+            debug "|default| = %d (%a)" (List.length default_args) (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") (Option.print pp_expr)) default_args;
+            debug "|non-default| = %d (%a)" (List.length nondefault_args) (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") (Option.print pp_expr)) nondefault_args;
             let args =
               if List.length args = (List.length pyfundec.py_func_parameters) then
                 args
@@ -169,7 +205,7 @@ module Domain =
               )
           )
       (* 𝔼⟦ f() | isinstance(f, method) ⟧ *)
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_method(f, e)}, _)}, args, []) ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_method(f, e, t)}, _)}, args, []) ->
         let exp' = mk_py_call (mk_py_object f range) (e :: args) range in
         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) exp' flow |> Option.return
 
@@ -188,7 +224,7 @@ module Domain =
            if Libs.Py_mopsa.is_unsupported_fundec func then F_unsupported (get_orig_vname func.py_func_var) else
              if Libs.Py_mopsa.is_builtin_fundec func then
                let name = Libs.Py_mopsa.builtin_fundec_name func in
-               F_builtin name
+               F_builtin (name, Libs.Py_mopsa.builtin_type_name func)
              else F_user func
          in
          eval_alloc man (A_py_function kind) stmt.srange flow |>

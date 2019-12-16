@@ -129,13 +129,13 @@ module Domain =
         Addr_env.Domain.allocate_builtin man range flow "bytes" (Some exp) |> Option.return
 
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, args, []) when StringMap.mem f stub_base ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, args, []) when StringMap.mem f stub_base ->
         debug "function %s in stub_base, processing@\n" f;
         let {in_args; out_type} = StringMap.find f stub_base in
         process_simple f man flow range args in_args out_type
         |> Option.return
 
-      | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.__new__")}, _)}), [cls; obj], []) ->
+      | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__new__", _))}, _)}), [cls; obj], []) ->
         (* from unicode_new in unicodeobject.c
            1) if type is not str then call unicode_subtype_new (not handled but asserts that type is subtype of str)
            2) other cases unhandled too
@@ -168,7 +168,7 @@ module Domain =
         (* man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_string range) flow |> Option.return *)
 
       (* 𝔼⟦ str.__op__(e1, e2) | op ∈ {==, !=, <, ...} ⟧ *)
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, [e1; e2], [])
         when is_compare_op_fun "str" f ->
         bind_list [e1; e2] (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
         bind_some (fun el flow ->
@@ -193,7 +193,7 @@ module Domain =
           )
         |>  Option.return
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, [e1; e2], [])
         when is_str_binop_fun f ->
         bind_list [e1; e2] (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
         bind_some (fun el flow ->
@@ -219,7 +219,7 @@ module Domain =
         |>  Option.return
 
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__mod__" as f))}, _)}, args, []) ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__mod__" as f, _))}, _)}, args, []) ->
         Utils.check_instances ~arguments_after_check:1 f man flow range args ["str"]
           (fun eargs flow ->
              (* TODO: constant strings are kept in the objects, so we could raise less alarms *)
@@ -231,19 +231,19 @@ module Domain =
           )
         |> Option.return
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__getitem__" as f))}, _)}, args, []) ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__getitem__" as f, _))}, _)}, args, []) ->
         Utils.check_instances_disj f man flow range args
           [["str"]; ["int"; "slice"]]
           (fun _ flow -> man.eval (mk_py_top T_string range) flow)
         |> Option.return
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bytes.__getitem__" as f))}, _)}, args, []) ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bytes.__getitem__" as f, _))}, _)}, args, []) ->
         Utils.check_instances_disj f man flow range args
           [["bytes"]; ["int"; "slice"]]
           (fun _ flow -> man.eval (mk_py_top T_py_bytes range) flow)
         |> Option.return
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__iter__" as f))}, _)}, args, []) ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__iter__" as f, _))}, _)}, args, []) ->
         Utils.check_instances f man flow range args
           ["str"]
           (fun args flow ->
@@ -260,7 +260,7 @@ module Domain =
           )
         |> Option.return
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str_iterator.__next__" as f))}, _)}, args, []) ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str_iterator.__next__" as f, _))}, _)}, args, []) ->
         Utils.check_instances f man flow range args
           ["str_iterator"]
           (fun _ flow ->
@@ -272,12 +272,12 @@ module Domain =
           )
         |> Option.return
 
-      | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.encode")}, _)}) as caller, [arg], [])
-      | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "bytes.decode")}, _)}) as caller, [arg], []) ->
+      | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.encode", _))}, _)}) as caller, [arg], [])
+      | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bytes.decode", _))}, _)}) as caller, [arg], []) ->
         let encoding = mk_expr (E_constant (C_string "utf-8")) range in
         eval zs {exp with ekind = E_py_call(caller, [arg; encoding], [])} man flow
 
-      | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.encode" as f))}, _)}), [arg; encoding], []) ->
+      | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.encode" as f, _))}, _)}), [arg; encoding], []) ->
         (* FIXME: check encoding? *)
         Utils.check_instances f man flow range [arg; encoding]
           ["str"; "str"]
@@ -292,7 +292,7 @@ module Domain =
           )
         |> Option.return
 
-      | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bytes.decode" as f))}, _)}), [arg; encoding], []) ->
+      | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bytes.decode" as f, _))}, _)}), [arg; encoding], []) ->
         (* FIXME: check encoding? *)
         Utils.check_instances f man flow range [arg; encoding]
           ["bytes"; "str"]
@@ -307,8 +307,8 @@ module Domain =
           )
         |> Option.return
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__repr__" as f))}, _)}, args, [])
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__str__" as f))}, _)}, args, []) ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__repr__" as f, _))}, _)}, args, [])
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__str__" as f, _))}, _)}, args, []) ->
         Utils.check_instances f man flow range args
           ["str"]
           (fun eargs flow -> Eval.singleton (List.hd eargs) flow)

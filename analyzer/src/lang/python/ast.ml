@@ -400,6 +400,9 @@ let mk_py_in ?(strict = false) ?(left_strict = false) ?(right_strict = false) v 
       (mk_binop v O_le e2 erange)
       erange
 
+let mk_py_not exp range =
+  mk_unop O_py_not exp range
+
 let mk_except typ name body =
   {
     py_excpt_type = typ;

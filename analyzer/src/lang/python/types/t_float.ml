@@ -55,11 +55,11 @@ module Domain =
       | E_constant (C_float _) ->
         Eval.singleton (mk_py_object (Addr_env.addr_float (), None) range) flow |> Option.return
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "float.__new__")}, _)}, [cls], []) ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("float.__new__", _))}, _)}, [cls], []) ->
         Utils.new_wrapper man range flow "float" cls
           ~fthennew:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top (T_float F_DOUBLE) range))
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "float.__new__")}, _)}, [cls; arg], []) ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("float.__new__", _))}, _)}, [cls; arg], []) ->
         Utils.new_wrapper man range flow "float" cls
           ~fthennew:(fun flow ->
               man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) arg flow |>
@@ -90,7 +90,7 @@ module Domain =
             )
 
       (* 𝔼⟦ float.__op__(e1, e2) | op ∈ {==, !=, <, ...} ⟧ *)
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, [e1; e2], [])
         when is_compare_op_fun "float" f ->
         bind_list [e1; e2] (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
         bind_some (fun el flow ->
@@ -129,7 +129,7 @@ module Domain =
           )
         |>  Option.return
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, [e1; e2], [])
            when is_arith_binop_fun "float" f ->
          bind_list [e1; e2] (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
            bind_some (fun el flow ->
@@ -159,7 +159,7 @@ module Domain =
              )
          |>  Option.return
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e], [])
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, [e], [])
            when is_arith_unop_fun f ->
          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
            Eval.bind (fun el flow ->
@@ -175,7 +175,7 @@ module Domain =
          |> Option.return
 
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("float.__hash__" as f))}, _)}, args, []) ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("float.__hash__" as f, _))}, _)}, args, []) ->
         Utils.check_instances f man flow range args ["float"] (fun _ -> man.eval (mk_py_top T_int range))
         |> Option.return
 

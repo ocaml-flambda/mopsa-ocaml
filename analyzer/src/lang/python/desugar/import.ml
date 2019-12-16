@@ -210,7 +210,7 @@ module Domain =
           let kind =
             if Libs.Py_mopsa.is_stub_fundec fundec then F_user fundec else
             if Libs.Py_mopsa.is_unsupported_fundec fundec then F_unsupported name
-            else F_builtin name
+            else F_builtin (name, Libs.Py_mopsa.builtin_type_name fundec)
           in
           let addr = {
             addr_kind = A_py_function kind;

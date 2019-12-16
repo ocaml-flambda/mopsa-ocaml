@@ -78,9 +78,11 @@ struct
              Eval.singleton (mk_py_object (find_builtin s) range) flow
            | E_py_object ({addr_kind = A_py_module m}, _) ->
              proceed "module"
-           | E_py_object ({addr_kind = A_py_method _}, _) ->
-             proceed "method"
-           | E_py_object ({addr_kind = A_py_function _}, _) ->
+           | E_py_object ({addr_kind = A_py_method (_, _, t)}, _) ->
+             proceed t
+           | E_py_object ({addr_kind = A_py_function (F_builtin (fname, ftype))}, _) ->
+             proceed ftype
+           | E_py_object ({addr_kind = A_py_function (F_user _)}, _) ->
              proceed "function"
            | E_py_object ({addr_kind = A_py_class _}, _) ->
              proceed "type"
@@ -88,7 +90,7 @@ struct
         )
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "issubclass")}, _)}, [cls; cls'], []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("issubclass", _))}, _)}, [cls; cls'], []) ->
       bind_list [cls; cls'] (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
       bind_some (fun evals flow ->
           let cls, cls' = match evals with [e1; e2] -> e1, e2 | _ -> assert false in
@@ -100,7 +102,7 @@ struct
           | _ -> assert false)
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "isinstance")}, _)}, [obj; attr], []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("isinstance", _))}, _)}, [obj; attr], []) ->
       (* TODO: if v is a class inheriting from protocol we should check the attributes *)
       bind_list [obj; attr] (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
       bind_some (fun evals flow ->
@@ -115,6 +117,9 @@ struct
 
           | A_py_class _, A_py_class (C_builtin c, _) ->
             man.eval (mk_py_bool (c = "type") range) flow
+
+          | A_py_function (F_builtin (_, ftype)), A_py_class (C_builtin c, _) ->
+            man.eval (mk_py_bool (c = ftype) range) flow
 
           | A_py_function _, A_py_class (C_builtin c, _) ->
             man.eval (mk_py_bool (c = "function") range) flow
@@ -173,8 +178,8 @@ struct
           | A_py_module _, A_py_class (C_builtin c, _) ->
             man.eval (mk_py_bool (c = "module" || c = "object") range) flow
 
-          | A_py_method _, A_py_class (C_builtin c, _) ->
-            man.eval (mk_py_bool (c = "method" || c = "object") range) flow
+          | A_py_method (_, _, t), A_py_class (C_builtin c, _) ->
+            man.eval (mk_py_bool (c = t || c = "object") range) flow
 
           | _ -> assert false
         )

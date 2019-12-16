@@ -396,12 +396,14 @@ struct
       Eval.singleton (mk_py_object (addr_notimplemented (), None) range) flow |> Option.return
 
     | E_unop(O_log_not, e') ->
+      (* bool is called in desugar/bool *)
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e' (*(Utils.mk_builtin_call "bool" [e'] range)*) flow |>
       Eval.bind
-        (fun exp flow ->
-           match ekind exp with
+        (fun ee' flow ->
+           match ekind ee' with
+           (* FIXME: weird cases *)
            | E_constant (C_top T_bool) ->
-             Eval.singleton exp flow
+             Eval.singleton ee' flow
            | E_constant (C_bool true) ->
              Eval.singleton (mk_py_false range) flow
            | E_constant (C_bool false) ->
@@ -411,9 +413,9 @@ struct
            | E_py_object (a, _) when compare_addr a (addr_false ()) = 0 ->
              man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_true range) flow
            | E_py_object (a, _) when compare_addr a (addr_bool_top ()) = 0 ->
-             Eval.singleton exp flow
+             Eval.singleton ee' flow
            | _ ->
-             Exceptions.panic "not ni on %a@\n" pp_expr exp
+             panic_at range "o_log_not ni on %a" pp_expr ee'
         )
       |> Option.return
 

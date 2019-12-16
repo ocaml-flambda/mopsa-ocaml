@@ -217,7 +217,7 @@ struct
                     | _ ->
                       mk_expr (E_py_check_annot (arg, ant)) range in
                   man.exec (mk_assume e range) flow_in,
-                  Flow.join man.lattice (man.exec (mk_assume (mk_not e range) range) flow_in) flow_notin
+                  Flow.join man.lattice (man.exec (mk_assume (mk_py_not e range) range) flow_in) flow_notin
               )  (flow, Flow.bottom_from flow) in_args in_types in
           let apply_sig flow signature =
             debug "[%a] apply_sig %a" pp_var pyannot.py_funca_var pp_py_func_sig signature;
