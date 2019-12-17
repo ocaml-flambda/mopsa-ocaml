@@ -107,8 +107,20 @@ module Domain =
         |> Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("classmethod.__get__", _))}, _)}, [self; inst; typ], []) ->
-        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object (find_builtin "method") range) [mk_py_attr self "__func__" range ; mk_py_type inst range] range) flow |>
-        Option.return
+        assume (mk_py_isinstance_builtin inst "NoneType" range) man flow
+          ~fthen:(fun flow ->
+              assume (mk_py_isinstance inst typ range) man flow
+                ~fthen:(
+                  man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object (find_builtin "method") range) [mk_py_attr self "__func__" range ; mk_py_type inst range] range)
+                )
+                ~felse:(
+                  man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object (find_builtin "method") range) [mk_py_attr self "__func__" range ; typ] range)
+                )
+            )
+          ~felse:(
+            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object (find_builtin "method") range) [mk_py_attr self "__func__" range ; mk_py_type inst range] range)
+          )
+        |>  Option.return
 
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("staticmethod.__get__", _))}, _)}, [self; _; _], []) ->

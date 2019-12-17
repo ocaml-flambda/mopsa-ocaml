@@ -353,7 +353,7 @@ struct
               (Eval.empty_singleton flow :: acc, Flow.get_ctx flow)
 
             | Undef_local ->
-              debug "Incoming UnboundLocalError, on var %a, range %a, cs = %a @\n" pp_var v pp_range range Callstack.print (Flow.get_callstack flow);
+              debug "Incoming UnboundLocalError, on var %a, range %a, cs = %a @\ncur = %a@\n" pp_var v pp_range range Callstack.print (Flow.get_callstack flow) man.lattice.print (Flow.get T_cur man.lattice flow);
               Format.fprintf Format.str_formatter "local variable '%a' referenced before assignment" pp_var v;
               let flow = man.exec (Utils.mk_builtin_raise_msg "UnboundLocalError" (Format.flush_str_formatter ()) range) flow in
               (Eval.empty_singleton flow :: acc, Flow.get_ctx flow)
@@ -426,8 +426,11 @@ struct
           begin match ekind e1, ekind e2 with
             | E_py_object (a1, _), E_py_object (a2, _) when
                 compare_addr a1 a2 = 0 &&
-                (compare_addr a1 (addr_notimplemented ()) = 0 || compare_addr a1 (addr_none ()) = 0) ->
+                (compare_addr a1 (addr_notimplemented ()) = 0 || compare_addr a1 (addr_none ()) = 0 ||
+                 compare_addr a2 (addr_notimplemented ()) = 0 || compare_addr a2 (addr_none ()) = 0) ->
               man.eval (mk_py_true range) flow
+            | E_py_object (a1, _), E_py_object (a2, _) when compare_addr_kind (akind a1) (akind a2) <> 0 ->
+              man.eval (mk_py_false range) flow
             | _ -> man.eval (mk_py_top T_bool range) flow
           end
         )

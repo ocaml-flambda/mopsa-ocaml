@@ -201,6 +201,7 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.get" as f, _))}, _)}, args, []) ->
       Utils.check_instances ~arguments_after_check:2 f man flow range args ["dict"]
         (fun args flow ->
+           debug "at range %a, flow = %a@\n" pp_range range (Flow.print man.lattice.print) flow;
            let var_k, var_v = extract_vars (List.hd args) in
 
            let eval_r = man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var var_v range) flow in
@@ -208,8 +209,7 @@ struct
            let flow = Flow.set_ctx (Eval.get_ctx eval_r) flow in
            let default = man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (List.nth args 2) flow  in
 
-           Eval.join_list~empty:(fun () -> Eval.empty_singleton flow) (default :: (Eval.copy_ctx default eval_r) :: [])
-
+           Eval.join_list ~empty:(fun () -> Eval.empty_singleton (Flow.set_ctx (Eval.get_ctx default) flow)) (default :: (Eval.copy_ctx default eval_r) :: [])
         )
       |> Option.return
 
