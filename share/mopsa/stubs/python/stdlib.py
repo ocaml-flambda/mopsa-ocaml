@@ -780,8 +780,14 @@ class bytes(object):
 @mopsa.unsupported
 class bytes_iterator(object): pass
 
-@mopsa.unsupported
-class classmethod(object): pass
+class classmethod(object):
+    def __init__(self, func): pass
+    def __get__(self): pass
+
+class staticmethod(object):
+    def __init__(self, func): pass
+    def __get__(self): pass
+
 
 @mopsa.unsupported
 class frozenset(object): pass
@@ -795,8 +801,6 @@ class memoryview(object): pass
 @mopsa.unsupported
 class property(object): pass
 
-@mopsa.unsupported
-class staticmethod(object): pass
 
 @mopsa.unsupported
 class super(object): pass
