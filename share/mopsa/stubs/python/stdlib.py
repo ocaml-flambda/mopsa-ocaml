@@ -788,6 +788,10 @@ class staticmethod(object):
     def __get__(self): pass
 
 
+class property(object):
+    def __init__(self, fget): pass
+    def __get__(self): pass
+
 @mopsa.unsupported
 class frozenset(object): pass
 
@@ -796,10 +800,6 @@ class map(object): pass
 
 @mopsa.unsupported
 class memoryview(object): pass
-
-@mopsa.unsupported
-class property(object): pass
-
 
 @mopsa.unsupported
 class super(object): pass

@@ -100,11 +100,9 @@ module Domain =
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("classmethod.__init__", _))}, _)}, [self; func], [])
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("staticmethod.__init__", _))}, _)}, [self; func], []) ->
-        (
-          man.exec (mk_assign (mk_py_attr self "__func__" range) func range) flow |>
-          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range)
-        )
-        |> Option.return
+        man.exec (mk_assign (mk_py_attr self "__func__" range) func range) flow |>
+        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range) |>
+        Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("classmethod.__get__", _))}, _)}, [self; inst; typ], []) ->
         assume (mk_py_isinstance_builtin inst "NoneType" range) man flow
@@ -125,6 +123,24 @@ module Domain =
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("staticmethod.__get__", _))}, _)}, [self; _; _], []) ->
         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_attr self "__func__" range) flow |> Option.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("property.__get__", _))}, _)}, [self; instance; _], []) ->
+        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_attr self "fget" range) [instance] range) flow |> Option.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("property.__init__", _))}, _)} as called, [self; getter], []) ->
+        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) {exp with ekind = E_py_call(called, [self; getter; mk_py_none range; mk_py_none range; mk_py_none range], [])} flow |> Option.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("property.__init__", _))}, _)} as called, [self; getter; setter], []) ->
+        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) {exp with ekind = E_py_call(called, [self; getter; setter; mk_py_none range; mk_py_none range], [])} flow |> Option.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("property.__init__", _))}, _)} as called, [self; getter; setter; deleter], []) ->
+        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) {exp with ekind = E_py_call(called, [self; getter; setter; deleter; mk_py_none range], [])} flow |> Option.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("property.__init__", _))}, _)}, [self; getter; setter; deleter; doc], []) ->
+        let assignments = [("fget", getter); ("fset", setter); ("fdel", deleter); ("__doc__", doc)] in
+        man.exec (mk_block (List.map (fun (field, arg) -> mk_assign (mk_py_attr self field range) arg range)  assignments) range) flow |>
+        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range) |>
+        Option.return
 
 
     (* 𝔼⟦ f() | isinstance(f, function) ⟧ *)
