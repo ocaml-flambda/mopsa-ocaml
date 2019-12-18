@@ -205,11 +205,9 @@ struct
            let var_k, var_v = extract_vars (List.hd args) in
 
            let eval_r = man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var var_v range) flow in
-
-           let flow = Flow.set_ctx (Eval.get_ctx eval_r) flow in
            let default = man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (List.nth args 2) flow  in
 
-           Eval.join_list ~empty:(fun () -> Eval.empty_singleton (Flow.set_ctx (Eval.get_ctx default) flow)) (default :: (Eval.copy_ctx default eval_r) :: [])
+           Eval.join default eval_r
         )
       |> Option.return
 

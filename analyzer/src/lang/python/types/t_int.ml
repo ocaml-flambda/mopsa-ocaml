@@ -121,7 +121,7 @@ struct
           let addr_group a = a.addr_group in
           match addr_group @@ fst @@ object_of_expr e1, addr_group @@ fst @@ object_of_expr e2 with
           | Addr_env.G_py_bool (Some b1), Addr_env.G_py_bool (Some b2) ->
-            Eval.singleton (mk_py_bool (b1 = b2) range) flow
+            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_bool (b1 = b2) range) flow
           | _ ->
             assume
               (mk_py_isinstance_builtin e1 "int" range)
