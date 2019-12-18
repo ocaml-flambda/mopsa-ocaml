@@ -188,14 +188,11 @@ struct
 
   (** Merge tokens T_cur and T_continue into T_cur *)
   let merge_cur_and_continue man flow =
-    Flow.map (fun tk eabs ->
-        match tk with
-        | T_cur ->
-          let cont = Flow.get T_continue man.lattice flow in
-          man.lattice.join (Flow.get_unit_ctx flow) eabs cont
-        | T_continue -> man.lattice.bottom
-        | _ -> eabs
-      ) flow
+    let cur = Flow.get T_cur man.lattice flow in
+    let cont = Flow.get T_continue man.lattice flow in
+    let ctx = Flow.get_unit_ctx flow in
+    Flow.set T_cur (man.lattice.join ctx cur cont) man.lattice flow |>
+    Flow.remove T_continue
 
 
   let init prog man flow =

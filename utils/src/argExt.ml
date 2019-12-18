@@ -114,6 +114,13 @@ let parse (args:arg list) (handler:string -> unit) (rest:string list -> unit) (m
              help ();
              exit 2
            )
+         and get_arg_list () = match arg, tl with
+           | Some x, tl -> String.split_on_char ',' x, tl
+           | None, x::tl -> String.split_on_char ',' x, tl
+           | None, [] ->
+             Printf.eprintf "%s: option %s requires an argument\n" progname opt;
+             help ();
+             exit 2
          in
          if List.exists (fun x -> x.key = opt) args then (
            let arg = List.find (fun x -> x.key = opt) args in
@@ -165,8 +172,8 @@ let parse (args:arg list) (handler:string -> unit) (rest:string list -> unit) (m
               eat tl
               
            | Set_string_list f ->
-              let v, tl = get_arg () in
-              f := (!f)@[v];
+              let v, tl = get_arg_list () in
+              f := (!f)@v;
               eat tl
               
            | Symbol (l,f) ->

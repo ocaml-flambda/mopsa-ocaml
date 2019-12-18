@@ -5,7 +5,7 @@
  * assigns: *p;
  * ensures: (*p)' == v;
  */
-void set(int*p, int v) {}
+void set(int*p, int v);
 
 void test_assign_int() {
   int x = 1;
@@ -21,7 +21,7 @@ void test_assign_int() {
  * assigns: *p;
  * ensures: (*p)' == 'a';
  */
-void set_to_a(char*p) {}
+void set_to_a(char*p) ;
 
 void test_assign_char() {
   char x;
@@ -37,7 +37,7 @@ void test_assign_char() {
  * assigns: *p;
  * ensures: (*p)' == *p + s;
  */
-void incr(int*p, int s) {}
+void incr(int*p, int s) ;
 
 void test_assign_int_with_relation() {
   int x = 1;
@@ -54,7 +54,7 @@ void test_assign_int_with_relation() {
  * assigns: *ptr;
  * ensures: (*ptr)' == *ptr + s;
  */
-void advance(int**ptr, int s) {}
+void advance(int**ptr, int s) ;
 
 void test_assign_ptr() {
   int a [5] = {0, 1, 2, 3, 4};
@@ -73,7 +73,7 @@ void test_assign_ptr() {
  * assigns: *q;
  * ensures: (*p)' == *q and (*q)' == *p;
  */
-void swap(int*p, int*q) {}
+void swap(int*p, int*q) ;
 
 void test_assign_two_scalars() {
   int x = 1;
@@ -119,6 +119,50 @@ void test_assign_array_partially() {
 }
 
 
+/*$
+ * assigns: p[0,9];
+ */
+void rand_array(int p[10]);
+
+void test_assign_array_full() {
+  int a[10];
+  a[0] = 1;
+  a[1] = 1;
+  a[9] = 1;
+  rand_array(a);
+  _mopsa_assert_exists(a[0] == 0);
+  _mopsa_assert_exists(a[0] == 100);
+  _mopsa_assert_exists(a[9] == 200);
+}
+
+
+/* Assignments of structs */
+/* ********************** */
+
+struct s {
+  int n;
+  int *p;
+  int a[10];
+};
+
+/*$
+ * assigns: *p;
+ */
+void rand_struct(struct s *p);
+
+void test_assign_struct() {
+  struct s x;
+  int v;
+  x.n = 10;
+  x.p = &v;
+  x.a[0] = 5;
+  rand_struct(&x);
+  _mopsa_assert_exists(x.n != 10);
+  _mopsa_assert_exists(x.p != &v);
+  _mopsa_assert_exists(x.a[0] != 5);
+}
+  
+  
 
 
 /* Assign global variables */

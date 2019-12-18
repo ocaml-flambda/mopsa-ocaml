@@ -29,7 +29,7 @@ The documentation and example files of the MOPSA software are distributed under 
 * camlidl
 * zlib
 
-## Installation 
+## Installation
 
 ### DEB-based distributions
 
@@ -67,3 +67,7 @@ make
 ./bin/mopsa-python -debug=python.flows._ foo.py
 ./bin/mopsa-c -unittest -debug=_unittest_summary analyzer/tests/c/int_tests.c
 ```
+
+### Python Analysis
+
+See `doc/python/type_analysis.md`.

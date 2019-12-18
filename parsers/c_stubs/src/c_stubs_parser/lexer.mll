@@ -108,45 +108,60 @@ let _ =
               Z.of_string (Str.matched_group 1 n)
        else
 	      assert false
+
+   exception EndDelimiterFound
 }
 
-let int = '-'? ['0'-'9'] ['0'-'9']*
+let digit = ['0' - '9']
+let bindigit = ['0' '1']
+let octdigit = ['0' - '7']
+let hexdigit = digit | (['a' - 'f' 'A' - 'F'])
+let nonzerodigit = ['1' - '9']
+let decinteger = nonzerodigit (['_'] | digit)* | '0' (['_'] '0')*
+let bininteger = '0' ('b' | 'B') (['_'] | bindigit)+
+let octinteger = '0' ('o' | 'O') (['_'] | octdigit)+
+let hexinteger = '0' ('x' | 'X') (['_'] | hexdigit)+
+let integer = decinteger | bininteger | octinteger | hexinteger
 
 let long_suffix = 'l' | 'L'
 let unsigned_long_suffix = "ul" | "UL"
 let long_long_suffix = "ll" | "LL"
 let unsigned_long_long_suffix = "ull" | "ULL"
 
-let digit = ['0' - '9']
 let digitpart = digit (['_'] | digit)*
 let exponent = ('e' | 'E') ('+' | '-')? digitpart 
 let fraction = '.' digitpart
 let pointfloat = digitpart* fraction | digitpart '.'
 let exponentfloat = (digitpart | pointfloat) exponent
-let float = '-'? (pointfloat | exponentfloat)
+let float = (pointfloat | exponentfloat)
 
 let white = [' ' '\t']+
 let newline = '\r' | '\n' | "\r\n"
+let newline_with_stars = newline white* '*'?
                  
 let id = ['a'-'z' 'A'-'Z' '_'] ['a'-'z' 'A'-'Z' '0'-'9' '_']*
 
-let begin_delimeter = "/*$" | "/*$$" | "/*$$$"
-let end_delimeter = "*/"
+let begin_delimiter = "/*$" | "/*$$" | "/*$$$"
+let end_delimiter = "*/"
+let newline_with_end_delimiter = newline white* end_delimiter
 
 let line_comment = "//" [^ '\n' '\r']*
 
 rule read =
   parse
-  | begin_delimeter  { BEGIN }
+  | begin_delimiter  { BEGIN }
+  | end_delimiter    { END }
+  | newline_with_end_delimiter    { new_line lexbuf; END } 
 
-  | white            { read lexbuf }
-  | newline          { new_line lexbuf; skip_line_header lexbuf }
 
-  | int unsigned_long_suffix       { INT_CONST (z_of_int_literal (Lexing.lexeme lexbuf), UNSIGNED_LONG) }
-  | int unsigned_long_long_suffix  { INT_CONST (z_of_int_literal (Lexing.lexeme lexbuf), UNSIGNED_LONG_LONG) }
-  | int long_long_suffix           { INT_CONST (z_of_int_literal (Lexing.lexeme lexbuf), LONG_LONG) }
-  | int long_suffix                { INT_CONST (z_of_int_literal (Lexing.lexeme lexbuf), LONG) }
-  | int                            { INT_CONST (z_of_int_literal (Lexing.lexeme lexbuf), NO_SUFFIX) }
+  | white              { read lexbuf }
+  | newline_with_stars { new_line lexbuf; read lexbuf }
+
+  | integer unsigned_long_suffix       { INT_CONST (z_of_int_literal (Lexing.lexeme lexbuf), UNSIGNED_LONG) }
+  | integer unsigned_long_long_suffix  { INT_CONST (z_of_int_literal (Lexing.lexeme lexbuf), UNSIGNED_LONG_LONG) }
+  | integer long_long_suffix           { INT_CONST (z_of_int_literal (Lexing.lexeme lexbuf), LONG_LONG) }
+  | integer long_suffix                { INT_CONST (z_of_int_literal (Lexing.lexeme lexbuf), LONG) }
+  | integer                            { INT_CONST (z_of_int_literal (Lexing.lexeme lexbuf), NO_SUFFIX) }
 
   | float    { FLOAT_CONST (float_of_string (Lexing.lexeme lexbuf)) }
 
@@ -168,8 +183,6 @@ rule read =
     }
 
   | "'"      { PRIME }
-
-  | id as x  { try Hashtbl.find keywords x with Not_found -> IDENT x }
 
   | '['      { LBRACK }
   | ']'      { RBRACK }
@@ -207,12 +220,11 @@ rule read =
 
   | "="    { ASSIGN }
 
-  | "//"   { read_comment lexbuf; read lexbuf }
-  
-  | line_comment  { read lexbuf }
-  | "/*"          { ignore_block_comment lexbuf; read lexbuf } 
+  | "//"   { try read_comment lexbuf; read lexbuf with EndDelimiterFound -> END }
 
   | eof      { EOF }
+
+  | id as x  { try Hashtbl.find keywords x with Not_found -> IDENT x }
 
   | _ { raise (SyntaxError ("Unexpected char: " ^ Lexing.lexeme lexbuf)) }
 
@@ -235,21 +247,7 @@ and read_string buf =
 
 and read_comment = 
   parse
-  | [^ '\n' '\r'] { read_comment lexbuf }
-  | newline       { new_line lexbuf; () }
+  | [^ '\n' '\r']      { read_comment lexbuf }
+  | newline_with_end_delimiter { new_line lexbuf; raise EndDelimiterFound }
+  | newline_with_stars { new_line lexbuf; () }
   | _ { raise (SyntaxError ("Illegal string character #2: " ^ Lexing.lexeme lexbuf)) }
-
-and ignore_block_comment = 
-  parse
-  | "*/"          { () }
-  | [^ '\n' '\r'] { ignore_block_comment lexbuf }
-  | newline       { new_line lexbuf; ignore_block_comment lexbuf }
-  | _ { raise (SyntaxError ("Illegal string character #3: " ^ Lexing.lexeme lexbuf)) }
-
-and skip_line_header =
-  parse
-  | newline       { new_line lexbuf; skip_line_header lexbuf }
-  | white         { skip_line_header lexbuf }
-  | "*"           { read lexbuf }
-  | end_delimeter { END }
-  | _             { read lexbuf }
