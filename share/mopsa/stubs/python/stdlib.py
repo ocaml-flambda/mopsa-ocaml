@@ -765,9 +765,8 @@ class slice(object):
 class NotImplementedType(object): pass
 
 class NoneType(object):
-    @mopsa.stub
     @mopsa.type("wrapper_descriptor")
-    def __bool__(self): return False
+    def __bool__(self): pass
      # def __eq__(self, other): pass
 
 @mopsa.unsupported

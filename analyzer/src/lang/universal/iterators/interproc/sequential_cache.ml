@@ -85,7 +85,9 @@ struct
     try
       let cache = Context.find_poly Fctx.key (Flow.get_ctx in_flow) in
       let flows = StringMap.find funname cache in
-      Some (List.find (fun (flow_in, _, _) -> Flow.subset man.lattice in_flow flow_in) flows)
+      Some (List.find (fun (flow_in, _, _) ->
+          Flow.subset man.lattice in_flow flow_in
+        ) flows)
     with Not_found -> None
 
 

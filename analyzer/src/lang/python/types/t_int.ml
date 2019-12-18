@@ -100,6 +100,12 @@ struct
         )
       |> Option.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("NoneType.__bool__" as f, _))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args ["NoneType"] (fun eargs flow ->
+          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_false range) flow
+        )
+      |> Option.return
+
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("int.__new__", _))}, _)}, [cls], []) ->
       Utils.new_wrapper man range flow "int" cls
         ~fthennew:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range))
