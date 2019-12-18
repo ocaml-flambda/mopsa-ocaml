@@ -19,7 +19,7 @@
 #                                                                            #
 ##############################################################################
 
-from typing import Union, Optional, Dict
+from typing import Union, Optional, Dict, Generic, AnyStr
 import posixpath as path
 
 environ : Dict[str, str]
@@ -28,6 +28,9 @@ sep: str
 _PathType = path._PathType
 _FdOrPathType = Union[int, _PathType]
 
+
+class PathLike(Generic[AnyStr]):
+    def __fspath__(self) -> AnyStr: ...
 
 class stat_result:
     # For backward compatibility, the return value of stat() is also

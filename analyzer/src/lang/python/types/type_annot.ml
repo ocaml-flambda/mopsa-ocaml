@@ -186,6 +186,7 @@ struct
 
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function(F_annot pyannot)}, _)}, args, kwargs) ->
+      (* FIXME: handle decorators... *)
       bind_list args man.eval flow |>
       bind_some (fun args flow ->
           let sigs = List.filter (fun sign ->
@@ -430,7 +431,7 @@ struct
                              {ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)},
                              {ekind = E_constant (C_string s)}::_, []) ->
                            (* FIXME: égalité entre s et tname à gérer mieux que ça ? *)
-                           Keep (ESet.choose @@ Option.default (ESet.singleton expr) (TVMap.find_opt (Global s) (get_env T_cur man flow)))
+                           Keep (try ESet.choose @@ (TVMap.find (Global s) (get_env T_cur man flow)) with Not_found -> expr)
                          | E_py_call (
                              {ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)},
                              {ekind = E_var (vname, _)}::_, []) ->
@@ -474,8 +475,7 @@ struct
           |> Option.return
 
 
-        | E_py_index_subscript ({ekind = E_py_object _} as e1, e2) ->
-          warn_at range "E_py_annot subscript e1=%a e2=%a now in the wild" pp_expr e1 pp_expr e2;
+        | E_py_index_subscript ({ekind = E_py_object _}, e2) ->
           None
 
         | E_py_index_subscript (e1, e2) ->
@@ -591,8 +591,7 @@ struct
           |> Option.return
           (* big disjunction on check_annot(e, t) for t in types *)
 
-        | E_py_index_subscript ({ekind = E_py_object _} as e1, e2) ->
-          warn_at range "E_py_check_annot subscript e1=%a e2=%a now in the wild" pp_expr e1 pp_expr e2;
+        | E_py_index_subscript ({ekind = E_py_object _}, e2) ->
           None
 
         | E_py_index_subscript (e1, e2) ->
@@ -631,7 +630,6 @@ struct
             List.fold_left (fun flows_caught typ ->
               let cur = get_env T_cur man flow in
               if not @@ TVMap.mem key cur then
-                let () = warn_at range "undef in cur: %a" man.lattice.print (Flow.get T_cur man.lattice flow) in
                 flows_caught
               else
                 let flow = set_env T_cur (TVMap.add key (ESet.singleton typ) cur) man flow in

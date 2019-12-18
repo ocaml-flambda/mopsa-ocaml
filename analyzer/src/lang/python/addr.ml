@@ -216,6 +216,7 @@ let is_builtin_attribute base attr =
     | A_py_class(C_builtin name, _) | A_py_module(M_builtin name) ->
       is_builtin_name (mk_dot_name (Some name) attr)
     | A_py_class (C_annot c, _) ->
+      debug "searching for %s" (mk_dot_name (Some (get_orig_vname c.py_cls_a_var)) attr);
       is_builtin_name (mk_dot_name (Some (get_orig_vname c.py_cls_a_var)) attr)
     | _ -> false
 

@@ -249,7 +249,7 @@ module Domain =
         | Py_program(g, b) -> g, b
         | _ -> assert false in
       let rec parse basename stmt globals flow : stmt * var list * 'a flow  =
-        debug "parse %a" pp_stmt stmt;
+        debug "parse (basename=%a) %a" (Option.print Format.pp_print_string) basename pp_stmt stmt;
         let range = srange stmt in
         match skind stmt with
         | S_assign ({ekind = E_var (v, _)}, e) ->

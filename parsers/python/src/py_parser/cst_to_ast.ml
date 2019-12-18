@@ -62,7 +62,7 @@ and translate_stmt (stmt: Cst.stmt) : Ast.stmt =
         | None, [], [], None, _ ->
           List.map (fun v -> fst v) args
         | _ ->
-          Exceptions.panic_at range "Unsupported function arguments"
+          Exceptions.panic_at range "Unsupported function arguments in %s" id
       in
       let defaults = List.map (fun (e: Cst.expr) ->
           match e.ekind with
@@ -363,7 +363,7 @@ and translate_expr (expr: Cst.expr) : Ast.expr =
         | None, [], [], None, _ ->
           List.map (fun v -> fst v) args
         | _ ->
-          Exceptions.panic_at range "Unsupported function arguments"
+          Exceptions.panic_at range "Unsupported function arguments (lambda function)"
       in
       let defaults = List.map (fun (e: Cst.expr) ->
           match e.ekind with

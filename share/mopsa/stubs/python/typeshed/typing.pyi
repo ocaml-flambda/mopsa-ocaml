@@ -19,8 +19,12 @@ class Generic:
 
 class Protocol(Generic): pass
 
+#Iterator[AnyStr],
+class IO(Generic[AnyStr]):
+    name : str
+    def close(self) -> None: ...
+    def read(self, n: int = ...) -> AnyStr: ...
 
-class IO: pass
 class List: pass
 class Match: pass
 class Optional(Generic[TypeVar('T')]): pass

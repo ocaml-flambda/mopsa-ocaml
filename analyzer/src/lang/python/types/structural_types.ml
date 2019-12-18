@@ -164,10 +164,15 @@ struct
         | A_py_module (M_user(name, globals)) ->
           Eval.singleton (mk_py_bool (List.exists (fun v -> get_orig_vname v = attr) globals) range) flow
         | A_py_class (C_builtin _, _)
-        | A_py_class (C_annot _, _)
         | A_py_function (F_builtin _)
         | A_py_module _ ->
           Eval.singleton (mk_py_bool (is_builtin_attribute (object_of_expr e) attr) range) flow
+
+        | A_py_class (C_annot c, _) ->
+          Eval.singleton (mk_py_bool (
+              List.exists (fun v -> get_orig_vname v = attr) c.py_cls_a_static_attributes
+              || is_builtin_attribute (object_of_expr e) attr
+                                       ) range) flow
 
         | A_py_function f ->
           Eval.singleton (mk_py_false range) flow
@@ -243,7 +248,21 @@ struct
           Eval.singleton (mk_py_object (find_builtin_attribute (object_of_expr e) attr) range) flow
 
         | A_py_class (C_annot c, _) ->
-          Eval.singleton (mk_py_object (find_builtin_attribute (object_of_expr e) attr) range) flow
+          let rec find_annot stmt = match skind stmt with
+            | S_block (s, _) -> List.fold_left
+                             (fun acc st ->
+                                match acc with
+                                | None -> find_annot st
+                                | Some _ -> acc
+                             ) None s
+            | S_py_annot({ekind = E_var(v, _)}, annot) when get_orig_vname v = attr -> Some annot
+            | _ -> None in
+          let obj =
+            try
+              mk_py_object (find_builtin_attribute (object_of_expr e) attr) range
+            with Not_found ->
+              Option.none_to_exn @@ find_annot c.py_cls_a_body in
+          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) obj  flow
 
 
         | A_py_class (C_user c, b) ->
