@@ -225,7 +225,7 @@ module Domain =
                       (mk_block (List.mapi (fun i v ->
                            let e =
                              (* Initialize locals with the same name of a builtin with its address *)
-                             if is_builtin_name (get_orig_vname v) then (mk_py_object (find_builtin (get_orig_vname v)) range)
+                             if is_builtin_var v then (mk_py_object (find_builtin (get_orig_vname v)) range)
                              else mk_expr (E_py_undefined false) range
                            in
                            mk_assign (mk_var v range) e range

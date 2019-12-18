@@ -317,7 +317,7 @@ struct
 
     | E_py_annot e ->
       begin match ekind e with
-        | E_var (v, mode) when is_builtin_name @@ get_orig_vname v ->
+        | E_var (v, mode) when is_builtin_var v ->
           let name = get_orig_vname v in
           begin match name with
             | "bool" ->
@@ -545,7 +545,7 @@ struct
 
     | E_py_check_annot (e, annot) ->
       begin match ekind annot with
-        | E_var (v, mode) when is_builtin_name @@ get_orig_vname v ->
+        | E_var (v, mode) when is_builtin_var v ->
           man.eval (mk_py_isinstance_builtin e (get_orig_vname v) range) flow
           |> Option.return
 

@@ -198,6 +198,11 @@ let is_builtin_name name =
   let exists = fun tbl -> Hashtbl.mem tbl name in
   exists classes || exists functions || exists modules || exists typed_functions
 
+let is_builtin_var v =
+  match vkind v with
+  | V_uniq _ -> is_builtin_name @@ get_orig_vname v
+  | _ -> false
+
 let is_builtin_module name = Hashtbl.mem modules name
 let find_builtin_module name = Hashtbl.find modules name
 

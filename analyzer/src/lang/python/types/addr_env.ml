@@ -340,10 +340,10 @@ struct
             let flow = set_env T_cur (AMap.add v (ASet.singleton a) cur) man flow in
             let flow = Flow.set_ctx annots flow in
             match a with
-            | Undef_global when is_builtin_name (get_orig_vname v) ->
+            | Undef_global when is_builtin_var v ->
               (Eval.singleton (mk_py_object (find_builtin (get_orig_vname v)) range) flow :: acc, annots)
 
-            | Undef_local when is_builtin_name (get_orig_vname v) ->
+            | Undef_local when is_builtin_var v ->
               (Eval.singleton (mk_py_object (find_builtin @@ get_orig_vname v) range) flow :: acc, annots)
 
             | Undef_global ->
@@ -367,7 +367,7 @@ struct
         let evals = List.map (Eval.set_ctx annot) evals in
         evals |> Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow)
         |> Option.return
-      else if is_builtin_name @@ get_orig_vname v then
+      else if is_builtin_var v then
         (* let () = debug "bla %s %s %d" v.org_vname v.uniq_vname v.vuid in *)
         (* man.eval (mk_py_object (find_builtin v.org_vname) range) flow |> Option.return *)
         let () = debug "is it a builtin?" in
