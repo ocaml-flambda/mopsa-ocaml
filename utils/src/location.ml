@@ -156,7 +156,7 @@ let from_lexing_pos pos =
   in {
     pos_file = pos.pos_fname;
     pos_line = pos.pos_lnum;
-    pos_column = pos.pos_cnum - pos.pos_bol + 2;
+    pos_column = pos.pos_cnum - pos.pos_bol;
   }
 
 let from_lexing_range pos1 pos2 =
