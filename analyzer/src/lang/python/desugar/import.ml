@@ -314,13 +314,16 @@ module Domain =
                           let obases = match ebases with
                             | [] -> [find_builtin "object"]
                             | _ -> List.map object_of_expr ebases in
+                          let ebases = match ebases with
+                            | [] -> [mk_py_object (find_builtin "object") range]
+                            | _ -> ebases in
                           let name = mk_dot_name basename (get_orig_vname c.py_cls_var) in
                           let py_cls_a_body, globals, flow = parse (Some name) c.py_cls_body globals flow in
                           debug "body of %s: %a" name pp_stmt py_cls_a_body;
                           let newc =
                             { py_cls_a_var = set_orig_vname name c.py_cls_var;
                               py_cls_a_body;
-                              py_cls_a_bases = bases;
+                              py_cls_a_bases = ebases;
                               py_cls_a_static_attributes = c.py_cls_static_attributes;
                               py_cls_a_abases = abases;
                               py_cls_a_range = c.py_cls_range;

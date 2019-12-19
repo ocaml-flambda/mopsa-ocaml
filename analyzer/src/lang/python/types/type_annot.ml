@@ -112,7 +112,9 @@ struct
               | E_py_call ({ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)}, {ekind = E_constant (C_string s)}::types, []) ->
                 (s, types)
               | _ -> Exceptions.panic_at range "process_tyvar %a" pp_expr e in
-            let typevars = match ekind @@ List.hd c.py_cls_a_abases with
+            let typevars =
+              if c.py_cls_a_abases = [] then [] else
+              match ekind @@ List.hd c.py_cls_a_abases with
               | E_py_index_subscript (_, vars) ->
                 begin match ekind vars with
                   | E_py_call _ -> (process_tyvar vars)::[]
@@ -186,6 +188,7 @@ struct
 
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function(F_annot pyannot)}, _)}, args, kwargs) ->
+      let exception Invalid_sig in
       (* FIXME: handle decorators... *)
       bind_list args man.eval flow |>
       bind_some (fun args flow ->
@@ -262,8 +265,15 @@ struct
                       filter ntl (List.tl types) dtl atl (List.hd types :: acctypes, expr ::accargs)
                   end
                 | _, _, [] -> List.rev acctypes, List.rev accargs
-                | _ -> assert false
+                | _ -> raise Invalid_sig
+                  (* ;
+                   * panic_at range "filter names=%a defaults=%a args=%a" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_var) names
+                   *        (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") Format.pp_print_bool) defaults
+                   *        (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_expr) args *)
               in
+              debug "calling filter names=%a _ defaults=%a args=%a" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_var) signature.py_funcs_parameters
+                (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") Format.pp_print_bool) signature.py_funcs_defaults
+                         (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_expr) args;
               filter signature.py_funcs_parameters signature.py_funcs_types_in signature.py_funcs_defaults args ([], [])
             in
             let flow_ok, flow_notok = filter_sig in_types in_args flow in
@@ -296,21 +306,24 @@ struct
               man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow |> Eval.empty_singleton)
             (let evals, remaining =
                (List.fold_left (fun (acc, remaining_flow) sign ->
-                    let nflow, flow_notok, ntypevars, ret_var = apply_sig remaining_flow sign in
-                    debug "nflow after apply_sig = %a@\n" (Flow.print man.lattice.print) nflow;
-                    let cur = get_env T_cur man nflow in
-                    let ncur = TVMap.filter (fun tyvar _ -> not (TVMap.mem tyvar ntypevars && match tyvar with | Global _ -> true | Class _ -> false)) cur in
-                    let nflow = set_env T_cur ncur man nflow in
-                    debug "nflow = %a@\n" (Flow.print man.lattice.print) nflow;
-                    if Flow.is_bottom man.lattice nflow then (acc, flow_notok)
-                    else
-                      let ret = (Eval.singleton (mk_var ret_var range) nflow ~cleaners:([mk_remove_var ret_var range]) |> Eval.bind (man.eval)) in
-                      debug "raised_exn %d" (List.length sign.py_funcs_exceptions);
-                      let raised_exn = List.map (fun exn ->
-                          man.exec (mk_stmt (S_py_raise (Some exn)) range) flow |>
-                          Eval.empty_singleton
-                        ) sign.py_funcs_exceptions in
-                      ret::raised_exn @ acc, flow_notok
+                    try
+                      let nflow, flow_notok, ntypevars, ret_var = apply_sig remaining_flow sign in
+                      debug "nflow after apply_sig = %a@\n" (Flow.print man.lattice.print) nflow;
+                      let cur = get_env T_cur man nflow in
+                      let ncur = TVMap.filter (fun tyvar _ -> not (TVMap.mem tyvar ntypevars && match tyvar with | Global _ -> true | Class _ -> false)) cur in
+                      let nflow = set_env T_cur ncur man nflow in
+                      debug "nflow = %a@\n" (Flow.print man.lattice.print) nflow;
+                      if Flow.is_bottom man.lattice nflow then (acc, flow_notok)
+                      else
+                        let ret = (Eval.singleton (mk_var ret_var range) nflow ~cleaners:([mk_remove_var ret_var range]) |> Eval.bind (man.eval)) in
+                        debug "raised_exn %d" (List.length sign.py_funcs_exceptions);
+                        let raised_exn = List.map (fun exn ->
+                            man.exec (mk_stmt (S_py_raise (Some exn)) range) flow |>
+                            Eval.empty_singleton
+                          ) sign.py_funcs_exceptions in
+                        ret::raised_exn @ acc, flow_notok
+                    with Invalid_sig ->
+                      (acc, remaining_flow)
                   ) ([], flow) sigs) in
              (man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) remaining |> Eval.empty_singleton) :: evals)
         )
