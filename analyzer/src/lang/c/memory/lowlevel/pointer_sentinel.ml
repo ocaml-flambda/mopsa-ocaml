@@ -647,7 +647,11 @@ struct
   (** Declare a block as assigned by adding the primed auxiliary variables *)
   (* FIXME: not yet implemented *)
   let stub_assigns target offsets range man flow =
-    man.eval target ~zone:(Z_c_low_level,Z_c_points_to) flow >>$ fun pt flow ->
+    let p = match offsets with
+      | [] -> mk_c_address_of target range
+      | _  -> target
+    in
+    man.eval p ~zone:(Z_c_low_level,Z_c_points_to) flow >>$ fun pt flow ->
     match ekind pt with
     | E_c_points_to (P_block (base, _)) when is_interesting_base base ->
       let sentinel = mk_sentinel_var base range in
