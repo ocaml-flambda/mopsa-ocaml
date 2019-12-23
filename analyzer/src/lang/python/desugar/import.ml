@@ -156,7 +156,7 @@ module Domain =
                   let prog = Frontend.parse_program [filename] in
                   let globals, body =
                     match prog.prog_kind with
-                    | Py_program(globals, body) -> globals, body
+                    | Py_program(_, globals, body) -> globals, body
                     | _ -> assert false
                   in
                   let addr = {
@@ -183,7 +183,10 @@ module Domain =
       then panic "builtin module %s not found" file;
 
       let path = dir ^ "/" ^ file in
-      let stmt = Frontend.parse_file path in
+      let stmt =
+        match (Frontend.parse_program [path]).prog_kind with
+        | Ast.Py_program (_, _, b) -> b
+        | _ -> assert false in
       (* FIXME: pour les fonctions récursives, ça marche ça ? *)
       (* pour les variables globales : collecter les variables globales, puis faire des man.exec dessus ? *)
       (* et pour les modules normaux, il y a aussi un pb sur les noms de variables, non ? *)
@@ -246,7 +249,7 @@ module Domain =
       debug "import_stubs_module %s %s" base name;
       let prog = Frontend.parse_program [(base ^ "/" ^ name ^ ".pyi")] in
       let globals, stmts = match prog.prog_kind with
-        | Py_program(g, b) -> g, b
+        | Py_program(_, g, b) -> g, b
         | _ -> assert false in
       let rec parse basename stmt globals flow : stmt * var list * 'a flow  =
         debug "parse (basename=%a) %a" (Option.print Format.pp_print_string) basename pp_stmt stmt;

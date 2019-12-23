@@ -361,6 +361,7 @@ type stmt_kind +=
 
 type prog_kind +=
   | Py_program of
+      string (** name *) *
       var list (** global variables *) *
       stmt (** body *)
 

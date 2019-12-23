@@ -35,9 +35,12 @@ let rec parse_program (files: string list) : program =
   | [filename] ->
     debug "parsing %s" filename;
     let ast, counter = Py_parser.Main.parse_file ~counter:(Framework.Ast.Var.get_vcounter_val ()) filename in
+    let body = from_stmt ast.prog_body in
+    Hooks.Coverage.Hook.add_file filename body;
+    let globals = List.map from_var ast.prog_globals in
     Framework.Ast.Var.start_vcounter_at counter;
     {
-      prog_kind = from_program filename ast;
+      prog_kind = Ast.Py_program (filename, globals, body);
       prog_range = mk_program_range [filename];
     }
 
@@ -45,10 +48,10 @@ let rec parse_program (files: string list) : program =
 
   | _ -> panic "analysis of multiple files not supported"
 
-and parse_file (filename: string) =
-  let ast, counter = Py_parser.Main.parse_file ~counter:(Framework.Ast.Var.get_vcounter_val ()) filename in
-  Framework.Ast.Var.start_vcounter_at counter;
-  from_stmt ast.prog_body
+(* and parse_file (filename: string) =
+ *   let ast, counter = Py_parser.Main.parse_file ~counter:(Framework.Ast.Var.get_vcounter_val ()) filename in
+ *   Framework.Ast.Var.start_vcounter_at counter;
+ *   from_stmt ast.prog_body *)
 
 (** Create a Universal.var variable from Py_parser.Ast.var *)
 and from_var (v:Py_parser.Ast.var) =
@@ -60,10 +63,10 @@ and from_var (v:Py_parser.Ast.var) =
   mk_uniq_var v.name v.uid T_any
 
 (** Translate a Python program into a stmt *)
-and from_program filename (p: Py_parser.Ast.program) : prog_kind =
-  let body = from_stmt p.prog_body in
-  let globals = List.map from_var p.prog_globals in
-  Ast.Py_program (globals, body)
+(* and from_program filename (p: Py_parser.Ast.program) : prog_kind =
+ *   let body = from_stmt p.prog_body in
+ *   let globals = List.map from_var p.prog_globals in
+ *   Ast.Py_program (filename, globals, body) *)
 
 
 (** Translation of a Python statement *)
