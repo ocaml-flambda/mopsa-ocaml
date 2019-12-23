@@ -38,6 +38,8 @@ struct
 
   module RangeSet = SetExt.Make(struct type t = range let compare = compare_range end)
 
+  (* on voudrait juste les lignes en fait ? *)
+  (* mais il faut éviter lignes 100-200 sur un appel de fonction, vu qu'on veut plus de précision ensuite. il faut faire des cas particuliers? *)
   type entry = {
     all_ranges: RangeSet.t;
     mutable analyzed_ranges: RangeSet.t
@@ -53,6 +55,7 @@ struct
            | Universal.Ast.S_block _ -> VisitParts acc
            | S_py_function f -> VisitParts acc (* special range for class/function declaration? *)
            | S_py_class _ -> VisitParts acc
+           | S_py_if (e, _, _) -> VisitParts (RangeSet.add e.erange acc)
            | _ -> VisitParts (RangeSet.add s.srange acc)
         )
         RangeSet.empty body in
@@ -105,7 +108,10 @@ struct
         let rec process_file lineno =
           try
             let l = input_line file in
-            if RangeSet.exists (fun r -> get_range_line r = lineno) entry.analyzed_ranges then (* okay, statement reached *)
+            if RangeSet.exists (fun r ->
+                let start = get_range_start r in
+                let stop = get_range_end r in
+                get_pos_line start <= lineno && lineno <= get_pos_line stop) entry.analyzed_ranges then (* okay, statement reached *)
               Format.fprintf ocf "\027[38;5;%dm %s\027[0m@." (List.assoc "green" Debug.colors) l
             else
               (* statement not analyzed *)
