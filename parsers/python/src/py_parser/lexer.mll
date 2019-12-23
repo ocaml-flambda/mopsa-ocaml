@@ -127,6 +127,7 @@ let identifier = id_start id_continue*
 (* Strings *)
 let stringprefix =  "u" | "U"
 let rawstringprefix = "r" | "R"
+let fstringprefix = "f"
 let escapeseq = "\\" _
 
 (* Bytestrings *)
@@ -251,6 +252,8 @@ rule token = parse
         { [BYTES (let x = long_dq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
     | stringprefix? "\"\"\""
         { [STR (let x = long_dq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
+    | fstringprefix? "\"\"\""
+        { [STR (let x = long_dq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
     | rawbyteprefix  "'''"
         { [BYTES (let x = unesc_long_sq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
     | rawstringprefix  "'''"
@@ -258,6 +261,8 @@ rule token = parse
     | byteprefix  "'''"
         { [BYTES (let x = long_sq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
     | stringprefix? "'''"
+        { [STR (let x = long_sq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
+    | fstringprefix? "'''"
         { [STR (let x = long_sq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
     (* Short string literals *)
     | rawbyteprefix  '\''
@@ -268,6 +273,8 @@ rule token = parse
         { [BYTES (let x = sq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
     | stringprefix? '\''
         { [STR  (let x = sq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
+    | fstringprefix? '\''
+        { [STR  (let x = sq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
     | rawbyteprefix  '"'
         { [BYTES (let x = unesc_dq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
     | rawstringprefix  '"'
@@ -275,6 +282,8 @@ rule token = parse
     | byteprefix '"'
         { [BYTES (let x = dq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
     | stringprefix? '"'
+        { [STR (let x = dq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
+    | fstringprefix? '"'
         { [STR (let x = dq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
     | eof                       { [EOF] }
     | _ as c                    { raise (LexingError ("illegal character (unicode not supported) : " ^ String.make 1 c)) }
