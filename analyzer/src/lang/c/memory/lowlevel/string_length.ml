@@ -183,76 +183,31 @@ struct
     | _ -> false
 
 
-  (** Declaration of a C variable *)
-  let declare_variable v init scope range man flow =
-    if not (is_memory_base (ValidVar v))
-    then
+  (** Add a base to the domain's dimensions *)
+  let add_base base ?(primed=false) range man flow =
+    match base with
+    | String _ ->
       Post.return flow
 
-    else
-      (* Since we are in the Z_low_level zone, we assume that init has
-         been translated by a structured domain into a flatten
-         initialization *)
-      let flat_init =
-        match init with
-        | Some (C_init_flat l) -> l
-        | _ -> assert false
-      in
+    | _ ->
+      (* Add the length of the base to the numeric domain and
+         initialize it with the interval [0, size(@)]
+      *)
+      eval_base_size base range man flow >>$ fun size flow ->
+      man.eval ~zone:(Z_c_scalar, Z_u_num) size flow >>$ fun size flow ->
 
-      let is_global =
-        match scope with
-        | Variable_func_static _ | Variable_local _ | Variable_parameter _ -> false
-        | _ -> true
-      in
-
-      let size = sizeof_type v.vtyp in
-
-      let length = mk_length_var (ValidVar v) range in
-
-      (* Find the position of the first zero *)
-      let rec aux = function
-        | [] -> size, size
-
-        | C_flat_none (_,o,_) :: tl when is_global -> o, o
-
-        | C_flat_none (_,o,_) :: tl -> o, size
-
-        | C_flat_expr (e,o,t) :: tl ->
-          begin
-            match c_expr_to_z e with
-            | Some e ->
-              if Z.equal e Z.zero
-              then o, o
-              else aux tl
-
-            | None ->
-              (* FIXME: test the value of the expression *)
-              o, size
-          end
-
-        | C_flat_fill (e,n,o,t) :: tl ->
-          begin
-            match expr_to_z e with
-            | Some e ->
-              if Z.equal e Z.zero
-              then o, o
-              else aux tl
-
-            | None ->
-              (* FIXME: test the value of the expression *)
-              o, size
-          end
-      in
-      let o1, o2 = aux flat_init in
-
-      let init' =
-        if Z.equal o1 o2
-        then mk_z o1 range
-        else mk_z_interval o1 o2 range
-      in
+      let length = mk_length_var base ~primed range in
 
       man.post ~zone:Z_u_num (mk_add length range) flow >>= fun _ flow ->
-      man.post ~zone:Z_u_num (mk_assign length init' range) flow
+      man.post ~zone:Z_u_num (mk_assume (mk_in length (mk_zero range) size range) range) flow
+
+  
+  (** Declaration of a C variable *)
+  let declare_variable v scope range man flow =
+    let base = ValidVar v in
+    if not (is_memory_base base)
+    then Post.return flow
+    else add_base base range man flow
 
 
 
@@ -470,28 +425,14 @@ struct
     else Post.return flow
 
 
-  (** Add a base to the domain's dimensions *)
-  let add_base base ?(primed=false) range man flow =
-    match base with
-    | String _ ->
-      Post.return flow
-
-    | _ ->
-      (* Add the length of the base to the numeric domain and
-         initialize it with the interval [0, size(@)]
-      *)
-      eval_base_size base range man flow >>$ fun size flow ->
-      man.eval ~zone:(Z_c_scalar, Z_u_num) size flow >>$ fun size flow ->
-
-      let length = mk_length_var base ~primed range in
-
-      man.post ~zone:Z_u_num (mk_add length range) flow >>= fun _ flow ->
-      man.post ~zone:Z_u_num (mk_assume (mk_in length (mk_zero range) size range) range) flow
-
 
   (** Declare a block as assigned by adding the primed length variable *)
   let stub_assigns target offsets range man flow =
-    man.eval target ~zone:(Z_c_low_level,Z_c_points_to) flow >>$ fun pt flow ->
+    let p = match offsets with
+      | [] -> mk_c_address_of target range
+      | _  -> target
+    in
+    man.eval p ~zone:(Z_c_low_level,Z_c_points_to) flow >>$ fun pt flow ->
     match ekind pt with
     | E_c_points_to (P_block (base, _)) when is_memory_base base ->
       add_base base ~primed:true range man flow
@@ -502,7 +443,11 @@ struct
 
   (** Rename primed variables introduced by a stub *)
   let rename_primed target offsets range man flow =
-    man.eval target ~zone:(Z_c_low_level,Z_c_points_to) flow >>$ fun pt flow ->
+    let p = match offsets with
+      | [] -> mk_c_address_of target range
+      | _  -> target
+    in
+    man.eval p ~zone:(Z_c_low_level,Z_c_points_to) flow >>$ fun pt flow ->
     match ekind pt with
     | E_c_points_to (P_block (base, _)) when is_memory_base base ->
       (* Check if the modified offsets range over the entire base, so we can
@@ -583,7 +528,7 @@ struct
   let exec zone stmt man flow =
     match skind stmt with
     | S_c_declaration (v,init,scope) when not (is_c_scalar_type v.vtyp) ->
-      declare_variable v init scope stmt.srange man flow |>
+      declare_variable v scope stmt.srange man flow |>
       Option.return
 
     | S_add { ekind = E_var (v, _) } when not (is_c_scalar_type v.vtyp) ->

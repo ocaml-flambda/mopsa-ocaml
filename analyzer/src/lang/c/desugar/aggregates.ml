@@ -19,12 +19,16 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** This abstract domain destructs the structured C memory into a flat memory
-    containing only scalars.
+(** Desugar accesses to aggregates into accesses to scalar arrays using
+    pointer arithmetics.
+
+    This domains translates subscript accesses `a[i]` and field accesses `s.f`
+    into dereferences of scalar pointers. This is useful for low-level memory
+    abstractions to handle the full C language.
 *)
 
 open Mopsa
-open Framework.Core.Sig.Stacked.Stateless
+open Framework.Core.Sig.Domain.Stateless
 open Universal.Ast
 open Ast
 open Zone
@@ -41,7 +45,7 @@ struct
   (** ================ *)
 
   include GenStatelessDomainId(struct
-      let name = "c.memory.structured.flat"
+      let name = "c.desugar.aggregates"
     end)
 
   let interface = {
@@ -111,6 +115,13 @@ struct
   (** {2 Abstract transformers} *)
   (** ========================= *)
 
+  let (>>|) x (l1,l2) = (x::l1,l2)
+
+  let (>>-) x (l1,l2) = (l1,x::l2)
+
+  let (>>+) (l1,l2) (l1',l2') = (l1@l1'),(l2@l2')
+
+
   (** The following functions flatten the initialization expression
       into a list of scalar initializations *)
   let rec flatten_init init offset typ range =
@@ -125,8 +136,8 @@ struct
   and flatten_scalar_init init offset typ range =
     debug "flatten_scalar_init at %a" Z.pp_print offset;
     match init with
-    | None                 -> [C_flat_none (Z.one, offset, typ)]
-    | Some (C_init_expr e) -> [C_flat_expr (e,offset, typ)]
+    | None                 -> [],[(None,Z.one, offset, typ)]
+    | Some (C_init_expr e) -> [(e,offset, typ)],[]
     | Some init -> panic_at range "unsupported scalar initializer %a for type %a" Pp.pp_c_init init pp_typ typ;
 
   and flatten_array_init init offset typ range =
@@ -136,31 +147,32 @@ struct
     match init with
     | None ->
       if is_c_scalar_type under_typ then
-        [C_flat_none (n,offset,under_typ)]
+        [],[(None,n,offset,under_typ)]
       else
         let nn = Z.mul n (sizeof_type under_typ) in
-        [C_flat_none (nn,offset,u8)]
+        [],[(None,nn,offset,u8)]
 
     | Some (C_init_list (l, filler)) ->
       let rec aux i =
         let o = Z.add offset (Z.mul (Z.of_int i) (sizeof_type under_typ)) in
         if Z.equal (Z.of_int i) n
-        then [] else
+        then [],[]
+        else
         if i < List.length l
-        then flatten_init (Some (List.nth l i)) o under_typ range @ aux (i + 1)
+        then flatten_init (Some (List.nth l i)) o under_typ range >>+ aux (i + 1)
         else
           let remain = Z.sub n (Z.of_int i) in
           match filler with
           | None ->
             if is_c_scalar_type under_typ then
-              [C_flat_none (remain,o,under_typ)]
+              [],[(None,remain,o,under_typ)]
             else
               let nn = Z.mul remain (sizeof_type under_typ) in
-              [C_flat_none (nn,o,u8)]
+              [],[(None,nn,o,u8)]
 
           | Some (C_init_list([], Some (C_init_expr e)))
           | Some (C_init_expr e) ->
-            [C_flat_fill (e, remain, o,under_typ)]
+            [],[(Some e, remain, o,under_typ)]
 
           | Some x -> panic_at range "initialization filler %a not supported" Pp.pp_c_init x
       in
@@ -170,15 +182,15 @@ struct
       let rec aux i =
         let o = Z.add offset (Z.mul (Z.of_int i) (sizeof_type under_typ)) in
         if Z.equal (Z.of_int i) n
-        then []
+        then [],[]
 
         else if i < String.length s
-        then C_flat_expr (mk_c_character (String.get s i) range, o, under_typ) :: aux (i + 1)
+        then (mk_c_character (String.get s i) range, o, under_typ) >>| aux (i + 1)
 
         else if i = String.length s
-        then C_flat_expr (mk_c_character (char_of_int 0) range, o, under_typ) :: aux (i + 1)
+        then (mk_c_character (char_of_int 0) range, o, under_typ) >>| aux (i + 1)
 
-        else [C_flat_none (Z.sub n (Z.of_int i), o, s8)]
+        else [],[(None,Z.sub n (Z.of_int i), o, s8)]
       in
       aux 0
 
@@ -186,10 +198,10 @@ struct
       let rec aux i =
         let o = Z.add offset (Z.mul (Z.of_int i) (sizeof_type under_typ)) in
         if Z.equal (Z.of_int i) n
-        then []
+        then [],[]
         else
           let init' = Some (C_init_expr (mk_lowlevel_subscript_access e (mk_int i range) under_typ range)) in
-          flatten_init init' o under_typ range @ aux (i + 1)
+          flatten_init init' o under_typ range >>+ aux (i + 1)
       in
       aux 0
 
@@ -208,27 +220,27 @@ struct
     match init with
     | None ->
       let rec aux offset = function
-        | [] -> []
+        | [] -> [],[]
         | field :: tl ->
           let init = flatten_init None offset field.c_field_type range in
           let o = Z.add offset (Z.of_int field.c_field_offset) in
-          init @ aux o tl
+          init >>+ aux o tl
       in
       aux offset fields
 
     | Some (C_init_list(l, None)) ->
       let rec aux l records =
         match records with
-        | [] -> []
+        | [] -> [],[]
         | field :: tl ->
           let o = Z.add offset (Z.of_int field.c_field_offset) in
           match l with
           | [] ->
             let init = flatten_init None o field.c_field_type range in
-            init @ aux l tl
+            init >>+ aux l tl
           | init :: tll ->
             let init = flatten_init (Some init) o field.c_field_type range in
-            init @ aux tll tl
+            init >>+ aux tll tl
       in
       aux l fields
 
@@ -248,11 +260,11 @@ struct
         | _ -> assert false
       in
       let rec aux = function
-        | [] -> []
+        | [] -> [],[]
         | field :: tl ->
           let o = Z.add offset (Z.of_int field.c_field_offset) in
           let init = Some (C_init_expr (mk_lowlevel_member_access e field.c_field_index range)) in
-          flatten_init init o field.c_field_type range @ aux tl
+          flatten_init init o field.c_field_type range >>+ aux tl
       in
       aux fields'
 
@@ -260,66 +272,65 @@ struct
     | _ -> panic_at ~loc:__LOC__ range "initialization %a is not supported"
              Pp.pp_c_init (Option.none_to_exn init)
 
-
-
-  (** Evaluate init expressions into low-level expressions *)
-  let rec to_lowlevel_init_opt init range man flow =
-    match init with
-    | None ->
-      Result.singleton None flow
-
-    | Some init ->
-      to_lowlevel_init init range man flow >>$ fun init flow ->
-      Result.singleton (Some init) flow
-
-
-  and to_lowlevel_init init range man flow =
-    match init with
-    | C_init_expr e ->
-      man.eval ~zone:(Z_c,Z_c_low_level) e flow >>$ fun e flow ->
-      Result.singleton (C_init_expr e) flow
-
-
-    | C_init_list(l, filler) ->
-      let exception NonConstantInit in
-      (* Check if all initializers in l are constant, so we can do a
-         static transformation.
-      *)
-      begin try
-          let l' = List.map (function
-              | C_init_expr e ->
-                let z = match c_expr_to_z e with
-                  | Some z -> z
-                  | None -> raise NonConstantInit
-                in
-                C_init_expr (mk_z z ~typ:e.etyp e.erange)
-              | _ -> raise NonConstantInit
-            ) l
-          in
-          to_lowlevel_init_opt filler range man flow >>$ fun filler flow ->
-          let init' = C_init_list (l',filler) in
-          Result.singleton init' flow
-
-        (* When an initializer is not a constant, we use dynamic evaluation to simplify it *)
-        with NonConstantInit ->
-          Result.bind_list l
-            (fun init flow -> to_lowlevel_init init range man flow) flow
-          >>$ fun l flow ->
-          to_lowlevel_init_opt filler range man flow >>$ fun filler flow ->
-          Result.singleton (C_init_list(l, filler)) flow
-      end
-
-    | _ -> panic_at range
-             "initialization expression %a not supported"
-             Pp.pp_c_init init
-
+  
 
   (** 𝕊⟦ type v = init; ⟧ *)
   let declare v init scope range man flow =
-    to_lowlevel_init_opt init range man flow >>$ fun init flow ->
-    let flat_init = flatten_init init Z.zero v.vtyp range in
-    let init' = C_init_flat flat_init in
-    man.post ~zone:Z_c_low_level (mk_c_declaration v (Some init') scope range) flow
+    (* Forward the declaration to low-level domains but translate initializations into assignments *)
+    man.post ~zone:(Z_c_low_level) (mk_c_declaration v None scope range) flow >>$ fun () flow ->
+    let initl,fill = flatten_init init Z.zero v.vtyp range in
+
+    (* Scalar variables can be handed directly by the underlying low-level domain *)
+    if is_c_scalar_type v.vtyp then
+      match initl with
+      | [e,o,t] ->
+        let stmt = mk_assign (mk_var v range) e range in
+        man.post stmt flow
+
+      | [] when is_c_global_scope scope ->
+        let stmt = mk_assign (mk_var v range) (mk_zero range) range in
+        man.post stmt flow
+
+      | _ ->
+        Post.return flow
+    else
+      (* Initialization of aggregate types is decomposed into sequence of assignments *)
+      match initl, fill with
+      (* Uninitialized global variables are filled with 0 *)
+      | [], _ when is_c_global_scope scope ->
+        let i = mk_zero range in
+        let j = mk_z (sizeof_type v.vtyp |> Z.pred) range in
+        let p = mk_c_cast (mk_c_address_of (mk_var v range) range) (pointer_type s8) range in
+        memset p (mk_zero range) i j range man flow 
+
+      (* Create a block of low-level assignments *)
+      | _ ->
+        (* But before fill with 0 if the variable is partially initialized *)
+        begin
+          if fill = []
+          then Post.return flow
+          else
+            let i = mk_zero range in
+            let j = mk_z (sizeof_type v.vtyp |> Z.pred) range in
+            let p = mk_c_cast (mk_c_address_of (mk_var v range) range) (pointer_type s8) range in
+            memset p (mk_zero range) i j range man flow
+        end >>$ fun () flow ->
+        (* Do the assignments *)
+        let stmt = mk_block (List.map (fun (e,o,t) ->
+            (* *(( t* )( char* )(&v) + o)) = e; *)
+            mk_assign (mk_c_deref (mk_c_cast
+                                     (mk_binop
+                                        (mk_c_cast (mk_c_address_of (mk_var v range) range) (pointer_type s8) range)
+                                        O_plus
+                                        (mk_z o range)
+                                        ~etyp:(pointer_type s8) range
+                                     )
+                                     (pointer_type t) range
+                                  ) range) e range
+          ) initl) range
+        in
+        man.post stmt flow
+
 
 
   (** 𝕊⟦ lval = e; ⟧ when lval is scalar *)
@@ -519,6 +530,11 @@ struct
     Eval.singleton exp' flow
 
 
+  (** 𝔼⟦ &( *p ) ⟧ = p *)
+  let address_of_deref p range man flow =
+      man.eval ~zone:(Z_c, Z_c_low_level) p flow
+  
+
   (** 𝔼⟦ &(a[i]) ⟧ = a + i *)
   let address_of_array_subscript a i exp range man flow =
       man.eval ~zone:(Z_c, Z_c_low_level) a flow |>
@@ -568,6 +584,10 @@ struct
       arrow_access p i f exp exp.erange man flow |>
       Option.return
 
+    | E_c_address_of { ekind = E_c_deref p } ->
+      address_of_deref p exp.erange man flow |>
+      Option.return
+
     | E_c_address_of { ekind = E_c_array_subscript(a,i) } ->
       address_of_array_subscript a i exp exp.erange man flow |>
       Option.return
@@ -608,4 +628,4 @@ struct
 end
 
 let () =
-  Framework.Core.Sig.Stacked.Stateless.register_stack (module Domain)
+  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)

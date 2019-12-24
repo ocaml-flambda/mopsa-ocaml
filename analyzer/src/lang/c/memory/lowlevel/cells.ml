@@ -314,18 +314,6 @@ struct
     }
 
 
-  (** Maximal number of expanded cells when initializing a variable *)
-  let opt_init_expand = ref 10
-
-  let () =
-    register_domain_option name {
-      key = "-cell-init-expand";
-      category = "C";
-      doc = " maximal number of expanded cells when initializing a variable";
-      spec = ArgExt.Set_int opt_init_expand;
-      default = "10";
-    }
-
 
   (** {2 Utility functions for cells} *)
   (** =============================== *)
@@ -1017,83 +1005,24 @@ struct
   (** {2 Abstract transformers} *)
   (** ************************* *)
 
-  (** 𝕊⟦ type v = init; ⟧  *)
-  let exec_declare v init scope range man flow =
-    (* Since we are in the Z_low_level zone, we assume that init has
-       been translated by a structured domain into a flatten
-       initialization *)
-    let flat_init =
-      match init with
-      | Some (C_init_flat l) -> l
-      | _ -> assert false
-    in
-
-    (* Add the base *)
+  (** 𝕊⟦ type v; ⟧  *)
+  let exec_declare v scope range man flow =
+    (* Add v to the bases *)
+    let base = ValidVar v in
     let flow = map_env T_cur (fun a ->
-        { a with bases = BaseSet.add (ValidVar v) a.bases }
+        { a with bases = BaseSet.add base a.bases }
       ) man flow
     in
-
-
-    (* Initialize cells, but expand at most !opt_init_expand cells, as
-       defined by the option -cell-init-expand *)
-    let rec aux i l flow =
-      if i = !opt_init_expand || List.length l = 0
-      then Post.return flow
-      else
-        let c, init, tl =
-          match l with
-          | C_flat_expr (e,o,t) :: tl ->
-            let c = mk_cell (ValidVar v) o t in
-            let init = Some (C_init_expr e) in
-            c, init, tl
-
-          | C_flat_none(n,o,t) :: tl ->
-            let c = mk_cell (ValidVar v) o t in
-            let init = None in
-            let tl' = if Z.equal n Z.one then tl else C_flat_none(Z.pred n,Z.add o (sizeof_type t),t) :: tl in
-            c, init, tl'
-
-          | C_flat_fill(e,n,o,t) :: tl ->
-            let c = mk_cell (ValidVar v) o t in
-            let init = Some (C_init_expr e) in
-            let tl' = if Z.equal n Z.one then tl else C_flat_fill(e,Z.pred n,Z.add o (sizeof_type t),t) :: tl in
-            c, init, tl'
-
-          | l ->
-            panic "cells: unsupported initializer %a" Pp.pp_c_init (C_init_flat l)
-        in
-        (* Evaluate the initialization into a scalar expression *)
-        (
-          match init, is_c_global_scope scope with
-          | None, _ -> Result.singleton None flow
-
-          | _, true -> Result.singleton init flow
-
-          | Some (C_init_expr e), false ->
-            man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow >>$ fun e flow ->
-            Result.singleton (Some (C_init_expr e)) flow
-
-          | _ -> assert false
-        )
-        |>
-        bind_some @@ fun init flow ->
-
-        (* Add the cell *)
-        let flow = map_env T_cur (fun a ->
-            { a with cells = CellSet.add c a.cells }
-          ) man flow
-        in
-
-        (* Initialize the associated variable *)
-        let v = mk_cell_var c in
-        let stmt = mk_c_declaration v init scope range in
-        man.post ~zone:Z_c_scalar stmt flow |>
-
-        Post.bind @@ fun flow ->
-        aux (i + 1) tl flow
-    in
-    aux 0 flat_init flow
+    (* If v is a scalar variable, add it to the scalar domain *)
+    if is_c_scalar_type v.vtyp then
+      let c = mk_cell base Z.zero v.vtyp in      
+      let vv = mk_cell_var c in
+      map_env T_cur (fun a ->
+        { a with cells = CellSet.add c a.cells }
+      ) man flow |>
+      man.post ~zone:Z_c_scalar (mk_c_declaration vv None scope range)
+    else
+      Post.return flow
 
 
   (** 𝕊⟦ *p = e; ⟧ *)
@@ -1316,7 +1245,7 @@ struct
   let exec zone stmt man flow =
     match skind stmt with
     | S_c_declaration (v,init,scope) ->
-      exec_declare v init scope stmt.srange man flow |>
+      exec_declare v scope stmt.srange man flow |>
       Option.return
 
     | S_assign(({ekind = E_var(v, STRONG)} as lval), e) when is_c_scalar_type v.vtyp ->

@@ -201,24 +201,12 @@ let pp_scope fmt s =
   | Variable_file_static _ -> "file static"
   | Variable_func_static _ -> "func static")
 
-(** Flat variable initialization *)
-type c_flat_init =
-  | C_flat_expr of expr (** initialization expression *) * Z.t (** offset *) * typ (** type *)
-  (** Expression initializer *)
-
-  | C_flat_none of Z.t (** number of duplicates *) * Z.t (** offset *) * typ (** type *)
-  (** Uninitialized bytes *)
-
-  | C_flat_fill of expr (** filler expression *) * Z.t (** number of duplicates *) * Z.t (** offset *) * typ (** type *)
-  (** Filler initializer *)
-
 
 (** Variable initialization. *)
 type c_var_init =
   | C_init_expr of expr
   | C_init_list of c_var_init list (** specified elements *) * c_var_init option (** filler *)
   | C_init_implicit of typ
-  | C_init_flat of c_flat_init list
 
 
 type cvar = {
@@ -1148,3 +1136,17 @@ let memrand (p:expr) (i:expr) (j:expr) range man flow =
   man.post stmt flow
 
   
+(** Set elements of an array with the same value [c] *)
+let memset (p:expr) (c:expr) (i:expr) (j:expr) range man flow =
+  let open Sig.Domain.Manager in
+  let f = find_c_fundec_by_name "_mopsa_memset" flow in
+  let stmt = mk_c_call_stmt f [p; c; i; j] range in
+  man.post stmt flow
+
+
+(** Copy elements of an array *)
+let memcpy (dst:expr) (src:expr) (i:expr) (j:expr) range man flow =
+  let open Sig.Domain.Manager in
+  let f = find_c_fundec_by_name "_mopsa_memcpy" flow in
+  let stmt = mk_c_call_stmt f [dst; src; i; j] range in
+  man.post stmt flow

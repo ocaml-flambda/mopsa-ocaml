@@ -176,75 +176,18 @@ struct
     | _ -> false
 
 
+  (** Add a base to the domain's dimensions *)
+  let add_base base range man flow =
+    if is_interesting_base base then
+      let smash = mk_smash_var base range in
+      man.post ~zone:Z_c_scalar (mk_add smash range) flow
+    else
+      Post.return flow
+
 
   (** Declaration of a C variable *)
-  let declare_variable v init scope range man flow =
-    if not (is_interesting_base (ValidVar v))
-    then Post.return flow
-
-    else
-      (* Since we are in the Z_low_level zone, we assume that init has
-         been translated by a structured domain into a flatten
-         initialization *)
-      let flat_init = match init with
-        | Some (C_init_flat l) -> l
-        | _ -> assert false
-      in
-
-      (* Exception raised when a non-pointer initializer is found *)
-      let exception NonPointerFound in
-
-      (* Check if an initializer has a pointer type *)
-      let is_non_pointer = function
-        | C_flat_none (_,_,t)
-        | C_flat_expr(_,_,t)
-        | C_flat_fill(_,_,_,t) ->
-          not (is_c_pointer_type t)
-      in
-
-      let is_global =
-        match scope with
-        | Variable_func_static _
-        | Variable_local _
-        | Variable_parameter _ -> false
-        | _ -> true
-      in
-
-      (* Collect pointers initializations *)
-      let rec aux init flow : ('a,expr list) result =
-        match init with
-        | [] -> Result.singleton [] flow
-
-        | C_flat_none (n,_,_) :: tl  ->
-          let e = if is_global then mk_c_null range else mk_c_invalid_pointer range in
-          aux tl flow >>$ fun el flow ->
-          Result.singleton (e::el) flow
-
-        | hd :: _ when is_non_pointer hd -> raise NonPointerFound
-
-        | C_flat_fill (e,_,_,_):: tl
-        | C_flat_expr (e,_,_) :: tl ->
-          aux tl flow >>$ fun el flow ->
-          Result.singleton (e::el) flow
-      in
-
-      let smash = mk_smash_var (ValidVar v) range in
-      man.post ~zone:Z_c_scalar (mk_add smash range) flow >>= fun _ flow ->
-      try
-        aux flat_init flow >>$ fun el flow ->
-        match el with
-        | [] -> Post.return flow
-        | hd :: tl ->
-          man.post ~zone:Z_c_scalar (mk_assign smash hd range) flow >>= fun _ flow ->
-          let smash_weak = weaken smash in
-          List.fold_left (fun acc ptr ->
-              acc >>= fun _ flow ->
-              man.post ~zone:Z_c_scalar (mk_assign smash_weak ptr range) flow
-            ) (Post.return flow) tl
-
-      with NonPointerFound ->
-        (* Non-pointer value found in the initializers *)
-        Post.return flow
+  let declare_variable v scope range man flow =
+    add_base (ValidVar v) range man flow
 
 
 
@@ -272,19 +215,14 @@ struct
 
 
 
-  (** Add a base to the domain's dimensions *)
-  let add_base base range man flow =
-    if is_interesting_base base then
-      let smash = mk_smash_var base range in
-      man.post ~zone:Z_c_scalar (mk_add smash range) flow
-    else
-      Post.return flow
-
-
 
   (** Declare a block as assigned by adding the primed auxiliary variables *)
   let stub_assigns target offsets range man flow =
-    man.eval target ~zone:(Z_c_low_level,Z_c_points_to) flow >>$ fun pt flow ->
+    let p = match offsets with
+      | [] -> mk_c_address_of target range
+      | _  -> target
+    in
+    man.eval p ~zone:(Z_c_low_level,Z_c_points_to) flow >>$ fun pt flow ->
     match ekind pt with
     | E_c_points_to (P_block (base, _)) when is_interesting_base base ->
       let smash' = mk_smash_var base ~primed:true range in
@@ -297,7 +235,11 @@ struct
   (** Rename primed variables introduced by a stub *)
   (* FIXME: not yet implemented *)
   let rename_primed target offsets range man flow : 'a post =
-    man.eval target ~zone:(Z_c_low_level,Z_c_points_to) flow >>$ fun pt flow ->
+    let p = match offsets with
+      | [] -> mk_c_address_of target range
+      | _  -> target
+    in
+    man.eval p ~zone:(Z_c_low_level,Z_c_points_to) flow >>$ fun pt flow ->
     match ekind pt with
     | E_c_points_to (P_block (base, _)) when is_interesting_base base ->
       let smash = mk_smash_var base range ~primed:false |> weaken in
@@ -326,7 +268,7 @@ struct
   let exec zone stmt man flow =
     match skind stmt with
     | S_c_declaration (v,init,scope) when is_interesting_base (ValidVar v) ->
-      declare_variable v init scope stmt.srange man flow |>
+      declare_variable v scope stmt.srange man flow |>
       Option.return
 
     | S_add { ekind = E_var (v, _) } when is_interesting_base (ValidVar v) ->

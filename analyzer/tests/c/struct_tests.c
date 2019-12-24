@@ -20,15 +20,22 @@ void test_array_of_structs() {
   _mopsa_assert(a[0].x + a[1].x == 3);
 }
 
-void test_initialization_with_expression_list() {
+void test_full_initialization_with_expression_list() {
   point p = {1, 2};
   _mopsa_assert(p.x == 1);
+  _mopsa_assert(p.y == 2);
+}
+
+void test_partial_initialization_with_expression_list() {
+  point p = { 1 };
+  _mopsa_assert(p.x == 1);
+  _mopsa_assert_exists(p.y == 0);
 }
 
 point global_point;
 
 void test_initialization_uninitialized_global_struct() {
-  _mopsa_assert(global_point.x == 0);
+  _mopsa_assert_exists(global_point.x == 0);
 }
 
 void test_initialization_with_designated_names() {
