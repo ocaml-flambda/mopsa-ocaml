@@ -201,24 +201,12 @@ let pp_scope fmt s =
   | Variable_file_static _ -> "file static"
   | Variable_func_static _ -> "func static")
 
-(** Flat variable initialization *)
-type c_flat_init =
-  | C_flat_expr of expr (** initialization expression *) * Z.t (** offset *) * typ (** type *)
-  (** Expression initializer *)
-
-  | C_flat_none of Z.t (** number of duplicates *) * Z.t (** offset *) * typ (** type *)
-  (** Uninitialized bytes *)
-
-  | C_flat_fill of expr (** filler expression *) * Z.t (** number of duplicates *) * Z.t (** offset *) * typ (** type *)
-  (** Filler initializer *)
-
 
 (** Variable initialization. *)
 type c_var_init =
   | C_init_expr of expr
   | C_init_list of c_var_init list (** specified elements *) * c_var_init option (** filler *)
   | C_init_implicit of typ
-  | C_init_flat of c_flat_init list
 
 
 type cvar = {

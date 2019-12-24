@@ -68,17 +68,6 @@ let rec pp_c_init fmt = function
   | C_init_list(l, _) -> fprintf fmt "{%a}"
                            (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_c_init) l
   | C_init_implicit t -> assert false
-  | C_init_flat l ->
-    fprintf fmt "{| %a |}"
-      (pp_print_list
-         ~pp_sep:(fun fmt () -> fprintf fmt ", ")
-         (fun fmt init ->
-            match init with
-            | C_flat_expr (e,o,t) -> fprintf fmt "%a:%a:%a" pp_expr e Z.pp_print o pp_c_type_short t
-            | C_flat_none (n,o,t) -> fprintf fmt "None:%a:%a * %a" Z.pp_print o pp_c_type_short t Z.pp_print n
-            | C_flat_fill (e,n,o,t) -> fprintf fmt "%a:%a:%a * %a" pp_expr e Z.pp_print o pp_c_type_short t Z.pp_print n
-         )
-      ) l
 
 
 
