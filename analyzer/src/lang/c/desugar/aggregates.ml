@@ -19,12 +19,16 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** This abstract domain destructs the structured C memory into a flat memory
-    containing only scalars.
+(** Desugar accesses to aggregates into accesses to scalar arrays using
+    pointer arithmetics.
+
+    This domains translates subscript accesses `a[i]` and field accesses `s.f`
+    into dereferences of scalar pointers. This is useful for low-level memory
+    abstractions to handle the full C language.
 *)
 
 open Mopsa
-open Framework.Core.Sig.Stacked.Stateless
+open Framework.Core.Sig.Domain.Stateless
 open Universal.Ast
 open Ast
 open Zone
@@ -41,7 +45,7 @@ struct
   (** ================ *)
 
   include GenStatelessDomainId(struct
-      let name = "c.memory.structured.flat"
+      let name = "c.desugar.aggregates"
     end)
 
   let interface = {
@@ -519,6 +523,11 @@ struct
     Eval.singleton exp' flow
 
 
+  (** 𝔼⟦ &( *p ) ⟧ = p *)
+  let address_of_deref p range man flow =
+      man.eval ~zone:(Z_c, Z_c_low_level) p flow
+  
+
   (** 𝔼⟦ &(a[i]) ⟧ = a + i *)
   let address_of_array_subscript a i exp range man flow =
       man.eval ~zone:(Z_c, Z_c_low_level) a flow |>
@@ -568,6 +577,10 @@ struct
       arrow_access p i f exp exp.erange man flow |>
       Option.return
 
+    | E_c_address_of { ekind = E_c_deref p } ->
+      address_of_deref p exp.erange man flow |>
+      Option.return
+
     | E_c_address_of { ekind = E_c_array_subscript(a,i) } ->
       address_of_array_subscript a i exp exp.erange man flow |>
       Option.return
@@ -608,4 +621,4 @@ struct
 end
 
 let () =
-  Framework.Core.Sig.Stacked.Stateless.register_stack (module Domain)
+  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
