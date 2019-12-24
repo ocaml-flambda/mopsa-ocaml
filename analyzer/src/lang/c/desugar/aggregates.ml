@@ -357,41 +357,53 @@ struct
         | T_c_record{c_record_fields; c_record_kind} -> c_record_fields, c_record_kind
         | _ -> assert false
       in
-      match record_kind with
-      | C_struct ->
-        fields |> List.fold_left (fun acc field ->
-            let lval = mk_c_member_access lval field range in
-            let rval = mk_c_member_access rval field range in
-            if is_c_array_type field.c_field_type
-            then begin
-              Soundness.warn_at range "copy of array %a ignored" pp_expr rval;
-              acc
-            end
-            else
-              let stmt = mk_assign lval rval range in
-              Post.bind (man.post ~zone:Z_c stmt) acc
-          ) (Post.return flow)
 
-      | C_union ->
-        let fieldopt, _ = List.fold_left (fun (accfield, accsize) field ->
-            let size = field.c_field_type |> sizeof_type in
-            if Z.geq size accsize then
-              (Some field, size)
-            else (accfield, accsize)
-          ) (None, Z.zero) fields
-        in
-        match fieldopt with
-        | Some field when is_c_array_type field.c_field_type ->
-          Soundness.warn_at range "copy of array %a ignored" pp_expr rval;
-          Post.return flow
+      (* Get the fields to copy *)
+      let fields = 
+        match record_kind with
+        | C_struct -> fields
+        | C_union ->
+          (* In case of union get the field with the greatest size *)
+          let fieldopt, _ = List.fold_left (fun (accfield, accsize) field ->
+              let size = field.c_field_type |> sizeof_type in
+              if Z.geq size accsize then
+                (Some field, size)
+              else (accfield, accsize)
+            ) (None, Z.zero) fields
+          in
+          match fieldopt with
+          | Some field -> [field]
+          | None -> panic_at range "[%s] all fields have size 0" name
+      in
 
-        | Some field ->
-          let lval = mk_c_member_access lval field range in
-          let rval = mk_c_member_access rval field range in
-          let stmt = mk_assign lval rval range in
-          man.post ~zone:Z_c stmt flow
+      (* Now copy the fields *)
+      fields |> List.fold_left (fun acc field ->
+          let lval' = mk_c_member_access lval field range in
+          let rval' = mk_c_member_access rval field range in
+          match field.c_field_type |> remove_typedef_qual with
 
-        | None -> panic_at range "[%s] all fields have size 0" name
+          | T_c_array(t,C_array_length_cst n) ->
+            (* In case of an array we need to copy cell by cell *)
+            let rec aux i acc =
+              if Z.equal i n
+              then acc
+              else
+                let lval'' = mk_c_subscript_access lval' (mk_z i range) range in
+                let rval'' = mk_c_subscript_access rval' (mk_z i range) range in
+                let stmt = mk_assign lval'' rval'' range in
+                Post.bind (man.post ~zone:Z_c stmt) acc |>
+                aux (Z.succ i)
+            in
+            aux Z.zero acc
+
+          | T_c_array _ ->
+            (* Flexible array members are not copied (CC99 6.7.2.1.22) *)
+            acc
+
+          | _ ->
+            let stmt = mk_assign lval' rval' range in
+            Post.bind (man.post ~zone:Z_c stmt) acc
+        ) (Post.return flow)
 
 
   (** 𝕊⟦ ?e ⟧ *)

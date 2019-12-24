@@ -1,4 +1,5 @@
 #include "mopsa.h"
+#include <stdlib.h>
 
 typedef struct {
   char x;
@@ -55,6 +56,16 @@ void test_struct_copy() {
   _mopsa_assert(p.x == q.x);
 }
 
+typedef struct { int a; int b[10]; } s1;
+
+void test_struct_copy_with_arrays() {
+  s1 p = {.a = 1, .b = {2, 3} };
+  s1 q;
+  q = p;
+  _mopsa_assert(p.a == q.a);
+  _mopsa_assert(p.b[0] == q.b[0]);
+}
+
 
 typedef struct {
   int* f;
@@ -76,4 +87,16 @@ void test_allamigeon() {
   _mopsa_assert_safe();
   a[1][1].f[10] = 20;
   _mopsa_assert_unsafe();
+}
+
+
+typedef struct { int a; int b[] } fs;
+
+void test_flexible_array_members() {
+  int n = 10;
+  fs *p = (fs*)malloc(sizeof(fs) + sizeof(int [n]));
+  if (p) {
+    p->b[5] = 10;
+    _mopsa_assert_safe();
+  }
 }
