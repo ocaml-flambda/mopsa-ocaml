@@ -8,7 +8,7 @@
 unsigned char glob[5];
 
 void test_global_init_with_zero() {
-  _mopsa_assert(glob[0] == 0);
+  _mopsa_assert_exists(glob[0] == 0);
 }
 
 void test_initialization() {

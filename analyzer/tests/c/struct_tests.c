@@ -28,7 +28,7 @@ void test_initialization_with_expression_list() {
 point global_point;
 
 void test_initialization_uninitialized_global_struct() {
-  _mopsa_assert(global_point.x == 0);
+  _mopsa_assert_exists(global_point.x == 0);
 }
 
 void test_initialization_with_designated_names() {

@@ -279,15 +279,44 @@ struct
     (* Forward the declaration to low-level domains but translate initializations into assignments *)
     man.post ~zone:(Z_c_low_level) (mk_c_declaration v None scope range) flow >>$ fun () flow ->
     let initl,fill = flatten_init init Z.zero v.vtyp range in
-    let stmt =
-      match is_c_scalar_type v.vtyp, initl, fill with
-      (* Declaration of scalar variables do not need to decomposition into low-level assignments *)
-      | true, [e,o,t], [] ->
-        mk_assign (mk_var v range) e range
+
+    (* Scalar variables can be handed directly by the underlying low-level domain *)
+    if is_c_scalar_type v.vtyp then
+      match initl with
+      | [e,o,t] ->
+        let stmt = mk_assign (mk_var v range) e range in
+        man.post stmt flow
+
+      | [] when is_c_global_scope scope ->
+        let stmt = mk_assign (mk_var v range) (mk_zero range) range in
+        man.post stmt flow
+
+      | _ ->
+        Post.return flow
+    else
+      (* Initialization of aggregate types is decomposed into sequence of assignments *)
+      match initl, fill with
+      (* Uninitialized global variables are filled with 0 *)
+      | [], _ when is_c_global_scope scope ->
+        let i = mk_zero range in
+        let j = mk_z (sizeof_type v.vtyp |> Z.pred) range in
+        let p = mk_c_cast (mk_c_address_of (mk_var v range) range) (pointer_type s8) range in
+        memset p (mk_zero range) i j range man flow 
 
       (* Create a block of low-level assignments *)
       | _ ->
-        mk_block (List.map (fun (e,o,t) ->
+        (* But before fill with 0 if the variable is partially initialized *)
+        begin
+          if fill = []
+          then Post.return flow
+          else
+            let i = mk_zero range in
+            let j = mk_z (sizeof_type v.vtyp |> Z.pred) range in
+            let p = mk_c_cast (mk_c_address_of (mk_var v range) range) (pointer_type s8) range in
+            memset p (mk_zero range) i j range man flow
+        end >>$ fun () flow ->
+        (* Do the assignments *)
+        let stmt = mk_block (List.map (fun (e,o,t) ->
             (* *(( t* )( char* )(&v) + o)) = e; *)
             mk_assign (mk_c_deref (mk_c_cast
                                      (mk_binop
@@ -299,9 +328,9 @@ struct
                                      (pointer_type t) range
                                   ) range) e range
           ) initl) range
-    in
-    man.post ~zone:Z_c stmt flow
-    
+        in
+        man.post stmt flow
+
 
 
   (** 𝕊⟦ lval = e; ⟧ when lval is scalar *)

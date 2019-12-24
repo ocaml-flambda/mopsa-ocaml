@@ -1136,3 +1136,17 @@ let memrand (p:expr) (i:expr) (j:expr) range man flow =
   man.post stmt flow
 
   
+(** Set elements of an array with the same value [c] *)
+let memset (p:expr) (c:expr) (i:expr) (j:expr) range man flow =
+  let open Sig.Domain.Manager in
+  let f = find_c_fundec_by_name "_mopsa_memset" flow in
+  let stmt = mk_c_call_stmt f [p; c; i; j] range in
+  man.post stmt flow
+
+
+(** Copy elements of an array *)
+let memcpy (dst:expr) (src:expr) (i:expr) (j:expr) range man flow =
+  let open Sig.Domain.Manager in
+  let f = find_c_fundec_by_name "_mopsa_memcpy" flow in
+  let stmt = mk_c_call_stmt f [dst; src; i; j] range in
+  man.post stmt flow

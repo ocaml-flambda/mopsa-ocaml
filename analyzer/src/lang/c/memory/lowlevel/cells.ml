@@ -314,18 +314,6 @@ struct
     }
 
 
-  (** Maximal number of expanded cells when initializing a variable *)
-  let opt_init_expand = ref 10
-
-  let () =
-    register_domain_option name {
-      key = "-cell-init-expand";
-      category = "C";
-      doc = " maximal number of expanded cells when initializing a variable";
-      spec = ArgExt.Set_int opt_init_expand;
-      default = "10";
-    }
-
 
   (** {2 Utility functions for cells} *)
   (** =============================== *)
