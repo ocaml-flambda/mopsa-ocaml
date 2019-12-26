@@ -306,10 +306,28 @@ let () =
         {exprs = [e]; stmts = [];},
         (fun parts -> {stmt with skind = S_py_raise(Some (List.hd parts.exprs))})
       | S_py_try(body, excepts, orelse, finally) ->
-        {exprs = []; stmts = [body; orelse; finally];},
+        let py_excs, py_bodies = List.fold_left (fun (acce, accb) el ->
+            match el.py_excpt_type with
+            | None -> (acce, el.py_excpt_body::accb)
+            | Some e -> (e::acce, el.py_excpt_body::accb)) ([], []) excepts
+        in
+        let py_excs, py_bodies = List.rev py_excs, List.rev py_bodies in
+        {exprs = py_excs; stmts = body::orelse::finally::py_bodies;},
         (function
-          | {stmts = [body'; orelse'; finally']} -> {stmt with skind = S_py_try(body', excepts, orelse', finally')}
+          | {exprs; stmts = body' :: orelse' :: finally' :: bodies} ->
+            let opy_excs = fill_some (List.map (fun x -> x.py_excpt_type) excepts) exprs in
+            let excepts' = List.rev @@ List.fold_left2 (fun acc (oty, stmt) except ->
+                {
+                  py_excpt_type = oty;
+                  py_excpt_name = except.py_excpt_name;
+                  py_excpt_body = stmt
+                } :: acc
+              ) [] (List.combine opy_excs py_bodies) excepts in
+            {stmt with skind = S_py_try(body', excepts', orelse', finally')}
           | _ -> assert false)
+
+
+
       | S_py_while(test, body, orelse) ->
         {exprs = [test]; stmts = [body; orelse];},
         (function
