@@ -37,8 +37,6 @@ struct
   let exec_zones = [Z_any]
   let eval_zones = [Z_py,Z_any]
 
-  module RangeSet = SetExt.Make(struct type t = range let compare = compare_range end)
-
   let compare_stmt_andrange s1 s2 =
     Compare.compose
       [ (fun () -> compare_range s1.srange s2.srange);
@@ -80,7 +78,7 @@ struct
            if List.length parts.stmts > 0 then
              VisitParts (ExprSet.union exprs acce, accs)
            else
-             Keep (ExprSet.union exprs acce, accs)
+             Keep (ExprSet.union exprs acce, StmtSet.add s accs)
            (*   VisitParts (RangeSet.add s.srange acc)
             * match skind s with
             * |
@@ -95,6 +93,9 @@ struct
             * | _ -> VisitParts (RangeSet.add s.srange acc) *)
         )
         (ExprSet.empty, StmtSet.empty) body in
+    Debug.debug ~channel:"coverage" "init_exprs = @[%a@]@.init_stmts = @[%a@]@."
+      (ExprSet.fprint SetExt.printer_default pp_expr_with_range) init_exprs
+      (StmtSet.fprint SetExt.printer_default pp_stmt_with_range) init_stmts;
     Hashtbl.add table filename
       {never_analyzed_exprs = init_exprs;
        never_analyzed_stmts = init_stmts;
@@ -128,42 +129,28 @@ struct
           entry.reachable_stmts <- StmtSet.add stmt entry.reachable_stmts
 
   let on_after_exec zone stmt man post = ()
-  (*   match skind stmt with
-   *   | S_py_function _ | S_py_class _ | Universal.Ast.S_block _ -> ()
-   *   | S_assign (_, {ekind = E_py_object _}) -> () (\* FIXME to avoid __init__ = <<function init>> *\)
-   *   | Universal.Ast.S_expression {ekind = E_py_call({ekind = E_py_object ({addr_kind = Addr.A_py_function (F_user _)}, _)}, _, _)} -> ()
-   *   | _ ->
-   *     let range = srange stmt in
-   *     let file = get_range_file range in
-   *     let entry = Hashtbl.find table file in
-   *     if RangeSet.mem range entry.all_ranges then
-   *       (\* if  get_pos_line (get_range_end range) = get_pos_line (get_range_start range) then *\)
-   *       (\* FIXME: the fixme above wasn't working, so we keep only one-line statements (alternative tag the whole range used for inner evaluations) *\)
-   *       let () = entry.analyzed_ranges <- RangeSet.add range entry.analyzed_ranges in
-   *       if (match skind stmt with | Universal.Ast.S_return _ -> false | _ -> true) &&  Result.apply (fun _ flow -> man.lattice.is_bottom (Flow.get T_cur man.lattice flow)) (||) (&&) post then
-   *         Debug.debug ~channel:"coverage" "bottom? stmt %a, range %a" pp_stmt stmt pp_range range
-   *     (\* else
-   *      *   Debug.debug ~channel:"coverage" "stmt %a, range %a" pp_stmt stmt pp_range range *\)
-   *
-   * (\* si TOUT les post_exec sur une range sont à bottom on peut ajouter une info? Par contre il faut se méfier si seulement une seule chose est à bottom et pas les autres *\) *)
-
 
   let on_before_eval zone exp man flow =
     let range = erange exp in
     let file = get_range_file range in
     let entry = Hashtbl.find table file in
+    (* Debug.debug ~channel:"coverage" "considering %a@.ExprSet = %a@." pp_expr_with_range exp (ExprSet.fprint SetExt.printer_default pp_expr_with_range) entry.reachable_exprs; *)
     if ExprSet.mem exp entry.never_analyzed_exprs then
-      let () = entry.never_analyzed_exprs <- ExprSet.remove exp  entry.never_analyzed_exprs in
+      (* let () = Debug.debug ~channel:"coverage" "never analyzed@." in *)
+      let () = entry.never_analyzed_exprs <- ExprSet.remove exp entry.never_analyzed_exprs in
       if is_cur_bottom man flow then
         entry.always_bottom_exprs <- ExprSet.add exp entry.always_bottom_exprs
       else
+        (* let () = Debug.debug ~channel:"coverage" "added to reachables@." in *)
         entry.reachable_exprs <- ExprSet.add exp entry.reachable_exprs
     else if ExprSet.mem exp entry.always_bottom_exprs && not @@ is_cur_bottom man flow then
+      (* let () = Debug.debug ~channel:"coverage" "always bottom@." in *)
       let () = entry.always_bottom_exprs <- ExprSet.remove exp entry.always_bottom_exprs in
       entry.reachable_exprs <- ExprSet.add exp entry.reachable_exprs
+    (* else
+     *   Debug.debug ~channel:"coverage" "wtf@." *)
 
-  let on_after_eval zone exp man evl =
-    ()
+  let on_after_eval zone exp man evl = ()
 
   let is_comment l =
     let lt = String.trim l in
@@ -173,7 +160,7 @@ struct
     let open Unix in
     let open Filename in
     let time = Unix.localtime (Unix.gettimeofday ()) in
-    let dirname = Format.asprintf "/tmp/coverage_%2d_%2d_%4d_%2d%2d%2d"
+    let dirname = Format.asprintf "/tmp/coverage_%02d_%02d_%04d_%02d%02d%02d"
         time.tm_mday
         (time.tm_mon+1)
         (time.tm_year+1900)
@@ -181,75 +168,83 @@ struct
         time.tm_min
         time.tm_sec in
     let () = Unix.mkdir dirname 0o755 in
-    Format.printf "Coverage:@.";
-    Hashtbl.iter (fun filename entry ->
-        let whole_size = ListExt.fold_left (+) 0 (List.map StmtSet.cardinal [entry.never_analyzed_stmts; entry.always_bottom_stmts; entry.reachable_stmts]) in
-        let size = ListExt.fold_left (+) 0 (List.map StmtSet.cardinal [entry.always_bottom_stmts; entry.reachable_stmts]) in
-        Format.printf "\t%s: %.2f%@." filename (100. *. (float_of_int size) /. (float_of_int whole_size))
-      ) table;
+    (* Format.printf "Coverage:@.";
+     * Hashtbl.iter (fun filename entry ->
+     *     let whole_size = ListExt.fold_left (+) 0 (List.map StmtSet.cardinal [entry.never_analyzed_stmts; entry.always_bottom_stmts; entry.reachable_stmts]) in
+     *     let size = ListExt.fold_left (+) 0 (List.map StmtSet.cardinal [entry.always_bottom_stmts; entry.reachable_stmts]) in
+     *     Format.printf "\t%s: %.2f%% @." filename (100. *. (float_of_int size) /. (float_of_int whole_size))
+     *   ) table; *)
     Hashtbl.iter (fun filename entry ->
         let fname = remove_extension @@ basename filename in
+        if fname = "mopsa" || fname = "stdlib" then () else
         let oc = open_out (dirname ^ "/" ^ fname ^ ".cov") in
+        (* let ocf = Format.std_formatter in *)
         let ocf = Format.formatter_of_out_channel oc in
         let file = open_in filename in
+        let covered_lines = ref 0 in
         let rec process_file lineno =
           let search_stmt = (fun s ->
               let r = s.srange in
               let start = get_range_start r in
               let stop = get_range_end r in
-              (* if *) get_pos_line start <= lineno && lineno <= get_pos_line stop (* then *)
-              (*   let () = Debug.debug ~channel:"coverage" "%d: %a" lineno pp_stmt s in true
-                 * else false *)
+              get_pos_line start <= lineno && lineno <= get_pos_line stop
             ) in
           let search_expr = (fun e ->
                 let r = e.erange in
                 let start = get_range_start r in
                 let stop = get_range_end r in
-                get_pos_line start = lineno && lineno = get_pos_line stop) in
+                (* Debug.debug ~channel:"coverage" "search_expr %d %a (%a--%a)" lineno pp_expr e pp_position start pp_position stop; *)
+                get_pos_line start = lineno && lineno = get_pos_line stop
+            ) in
           try
             let l = input_line file in
-            if is_comment l then
+            if is_comment l || l = "" then
+              let () = incr covered_lines in
               Format.fprintf ocf "%s@." l
             else if StmtSet.exists search_stmt entry.reachable_stmts then (* okay, statement reached *)
+              let () = incr covered_lines in
               Format.fprintf ocf "\027[38;5;%dm%s\027[0m@." (List.assoc "green" Debug.colors) l
             else if StmtSet.exists search_stmt entry.always_bottom_stmts then
+              let () = incr covered_lines in
               Format.fprintf ocf "\027[38;5;%dm%s\027[0m@." (List.assoc "yellow" Debug.colors) l
             else
-              begin match ExprSet.find_first_opt search_expr entry.reachable_exprs with
+              begin
+                match ExprSet.choose_opt @@ ExprSet.filter search_expr entry.reachable_exprs with
               | Some e ->
+                let () = incr covered_lines in
                 let range = e.erange in
                 let n = String.length l in
-                let cols, cole = get_pos_column @@ get_range_start range,
-                                 get_pos_column @@ get_range_end range in
+                let cols, cole = 0, n
+                                   (*get_pos_column @@ get_range_start range,
+                                     get_pos_column @@ get_range_end range *) in
                 Format.fprintf ocf "%s\027[38;5;%dm%s\027[0m%s@."
                   (String.sub l 0 cols)
                   (List.assoc "green" Debug.colors)
                   (String.sub l cols (cole-cols))
                   (String.sub l cole (n-cole))
               | None ->
-                begin match ExprSet.find_first_opt search_expr entry.always_bottom_exprs with
+                begin match ExprSet.choose_opt @@ ExprSet.filter search_expr entry.always_bottom_exprs with
                   | Some e ->
+                    let () = incr covered_lines in
                     let range = e.erange in
                     let n = String.length l in
-                    let cols, cole = get_pos_column @@ get_range_start range,
-                                     get_pos_column @@ get_range_end range in
+                    let cols, cole = 0, n (*get_pos_column @@ get_range_start range,
+                                            get_pos_column @@ get_range_end range *) in
                     Format.fprintf ocf "%s\027[38;5;%dm%s\027[0m%s@."
                       (String.sub l 0 cols)
                       (List.assoc "yellow" Debug.colors)
                       (String.sub l cols (cole-cols))
                       (String.sub l cole (n-cole))
                   | None ->
-                (* statement not analyzed *)
+                    (* statement not analyzed *)
                     Format.fprintf ocf "\027[38;5;%dm%s\027[0m@." (List.assoc "red" Debug.colors) l
                 end
               end;
             process_file (lineno+1)
-          with End_of_file -> close_in file in
+          with End_of_file ->
+            let () = Format.printf "(Yet inaccurate) Coverage of %s: %.2f%%@." filename (100. *. float_of_int  !covered_lines /. (float_of_int lineno)) in
+            close_in file in
           process_file 1;
-        (* RangeSet.iter (fun r ->
-         *     let st = get_range_start r in
-         *     let en = get_range_end r in
-         *     Format.fprintf ocf "%d:%d-%d:%d@." (get_pos_line st) (get_pos_column st) (get_pos_line en) (get_pos_column en)) entry.all_ranges; *)
         flush oc;
         close_out oc
       ) table
