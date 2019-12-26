@@ -47,7 +47,10 @@ module Domain =
     let exec zone stmt man flow =
       let range = srange stmt in
       match skind stmt with
-      | S_py_while (test, body, orelse) ->
+      | S_py_while (test, body, orelse) -> (* FIXME: orelse *)
+        let () = match skind orelse with
+        | S_block ([], _) -> ()
+        | _ -> Soundness.warn_at range "else after while not supported" in
         let start = Timing.start () in
         let res = man.exec
             (mk_while
