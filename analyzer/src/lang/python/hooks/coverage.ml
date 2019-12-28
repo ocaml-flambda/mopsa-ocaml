@@ -20,7 +20,6 @@
 (****************************************************************************)
 
 (* A prototype hook for displaying analysis coverage. Currently a POC *)
-(* TODO: endroits à bottom. Pourquoi ne pas plutôt collecter les statements feuille au début et ensuite reconnaître ceux là? *)
 
 open Location
 open Mopsa
@@ -50,8 +49,6 @@ struct
   module ExprSet = SetExt.Make(struct type t = expr let compare = compare_expr_andrange end)
   module StmtSet = SetExt.Make(struct type t = stmt let compare = compare_stmt_andrange end)
 
-  (* on voudrait juste les lignes en fait ? *)
-  (* mais il faut éviter lignes 100-200 sur un appel de fonction, vu qu'on veut plus de précision ensuite. il faut faire des cas particuliers? *)
   type entry = {
     mutable never_analyzed_exprs : ExprSet.t;
     mutable never_analyzed_stmts : StmtSet.t;
@@ -64,6 +61,7 @@ struct
   let table : (string, entry) Hashtbl.t = Hashtbl.create 1
 
   let add_file filename body =
+    (* when adding a file, we collect all leaf statements (ie statements not containing stmts themselves), and toplevel expressions defined in those statements. We will then work only on those collected statements (except for a few hacks in on_after_eval *)
     let init_exprs, init_stmts =
       Visitor.fold_stmt
         (fun acc e -> VisitParts acc)
@@ -79,23 +77,11 @@ struct
              VisitParts (ExprSet.union exprs acce, accs)
            else
              Keep (ExprSet.union exprs acce, StmtSet.add s accs)
-           (*   VisitParts (RangeSet.add s.srange acc)
-            * match skind s with
-            * |
-            * | Universal.Ast.S_block _ -> VisitParts acc
-            * | S_py_function f -> VisitParts acc (\* special range for class/function declaration? *\)
-            * | S_py_class _ -> VisitParts acc
-            * | S_py_if (e, _, _) -> VisitParts (RangeSet.add e.erange acc)
-            * | S_py_for (target, iterator, _, _) ->
-            *   VisitParts (RangeSet.add target.erange (RangeSet.add iterator.erange acc))
-            * | Universal.Ast.S_return _ -> Keep (RangeSet.add s.srange acc)
-            * | S_py_aug_assign _ -> Keep (RangeSet.add s.srange acc)
-            * | _ -> VisitParts (RangeSet.add s.srange acc) *)
         )
         (ExprSet.empty, StmtSet.empty) body in
-    Debug.debug ~channel:"coverage" "init_exprs = @[%a@]@.init_stmts = @[%a@]@."
-      (ExprSet.fprint SetExt.printer_default pp_expr_with_range) init_exprs
-      (StmtSet.fprint SetExt.printer_default pp_stmt_with_range) init_stmts;
+    (* Debug.debug ~channel:"coverage" "init_exprs = @[%a@]@.init_stmts = @[%a@]@."
+     *   (ExprSet.fprint SetExt.printer_default pp_expr_with_range) init_exprs
+     *   (StmtSet.fprint SetExt.printer_default pp_stmt_with_range) init_stmts; *)
     Hashtbl.add table filename
       {never_analyzed_exprs = init_exprs;
        never_analyzed_stmts = init_stmts;
@@ -111,7 +97,8 @@ struct
 
   let on_before_exec zone stmt man flow =
     match skind stmt with
-    | S_py_function _ | S_py_class _ | Universal.Ast.S_block _ -> ()
+    | S_py_function _ | S_py_class _ -> ()
+    | Universal.Ast.S_block (l, _) when l <> [] -> ()
     | S_assign (_, {ekind = E_py_object _}) -> ()
     | Universal.Ast.S_expression {ekind = E_py_call({ekind = E_py_object ({addr_kind = Addr.A_py_function (F_user _)}, _)}, _, _)} -> ()
     | _ ->
@@ -134,23 +121,39 @@ struct
     let range = erange exp in
     let file = get_range_file range in
     let entry = Hashtbl.find table file in
-    (* Debug.debug ~channel:"coverage" "considering %a@.ExprSet = %a@." pp_expr_with_range exp (ExprSet.fprint SetExt.printer_default pp_expr_with_range) entry.reachable_exprs; *)
     if ExprSet.mem exp entry.never_analyzed_exprs then
-      (* let () = Debug.debug ~channel:"coverage" "never analyzed@." in *)
       let () = entry.never_analyzed_exprs <- ExprSet.remove exp entry.never_analyzed_exprs in
       if is_cur_bottom man flow then
         entry.always_bottom_exprs <- ExprSet.add exp entry.always_bottom_exprs
       else
-        (* let () = Debug.debug ~channel:"coverage" "added to reachables@." in *)
         entry.reachable_exprs <- ExprSet.add exp entry.reachable_exprs
     else if ExprSet.mem exp entry.always_bottom_exprs && not @@ is_cur_bottom man flow then
-      (* let () = Debug.debug ~channel:"coverage" "always bottom@." in *)
       let () = entry.always_bottom_exprs <- ExprSet.remove exp entry.always_bottom_exprs in
       entry.reachable_exprs <- ExprSet.add exp entry.reachable_exprs
-    (* else
-     *   Debug.debug ~channel:"coverage" "wtf@." *)
 
-  let on_after_eval zone exp man evl = ()
+  let on_after_eval zone exp man evl =
+    match ekind exp with
+    (* to highlight the def bla(params): if bla is ever called *)
+    | E_py_call ({ekind = E_py_object ({addr_kind = Addr.A_py_function (F_user f)}, _)} as caller, _, _) ->
+      let start = get_range_start f.py_func_range in
+      let stop =
+        let r = get_range_start f.py_func_body.srange in
+        mk_pos (get_pos_file r) (max (get_pos_line r - 1) (get_pos_line start)) 80 in
+      let range = mk_orig_range start stop in
+      let entry = Hashtbl.find table (get_range_file range) in
+      entry.reachable_exprs <- ExprSet.add {caller with erange=range} entry.reachable_exprs
+
+    (* to highlight the class Bla: if an object is ever instantiated *)
+    | E_py_call ({ekind = E_py_object ({addr_kind = Addr.A_py_class (C_user c, _)}, _)} as caller, _, _) ->
+      let start = get_range_start c.py_cls_range in
+      let stop =
+        let r = get_range_start c.py_cls_body.srange in
+        mk_pos (get_pos_file r) (max (get_pos_line r - 1) (get_pos_line start)) 80 in
+      let range = mk_orig_range start stop in
+      let entry = Hashtbl.find table (get_range_file range) in
+      entry.reachable_exprs <- ExprSet.add {caller with erange=range} entry.reachable_exprs
+
+    | _ -> ()
 
   let is_comment l =
     let lt = String.trim l in
@@ -168,17 +171,11 @@ struct
         time.tm_min
         time.tm_sec in
     let () = Unix.mkdir dirname 0o755 in
-    (* Format.printf "Coverage:@.";
-     * Hashtbl.iter (fun filename entry ->
-     *     let whole_size = ListExt.fold_left (+) 0 (List.map StmtSet.cardinal [entry.never_analyzed_stmts; entry.always_bottom_stmts; entry.reachable_stmts]) in
-     *     let size = ListExt.fold_left (+) 0 (List.map StmtSet.cardinal [entry.always_bottom_stmts; entry.reachable_stmts]) in
-     *     Format.printf "\t%s: %.2f%% @." filename (100. *. (float_of_int size) /. (float_of_int whole_size))
-     *   ) table; *)
+    Format.printf "Detailed coverage files are being written in %s@." dirname;
     Hashtbl.iter (fun filename entry ->
         let fname = remove_extension @@ basename filename in
-        if fname = "mopsa" || fname = "stdlib" then () else
+        if fname = "mopsa" || fname = "stdlib" || extension (basename filename) <> ".py" then () else
         let oc = open_out (dirname ^ "/" ^ fname ^ ".cov") in
-        (* let ocf = Format.std_formatter in *)
         let ocf = Format.formatter_of_out_channel oc in
         let file = open_in filename in
         let covered_lines = ref 0 in
@@ -187,24 +184,29 @@ struct
               let r = s.srange in
               let start = get_range_start r in
               let stop = get_range_end r in
+              (match r with
+               | R_tagged (s, _) ->
+                 String.sub s 0 8 = "implicit"
+              | _ -> true ) &&
               get_pos_line start <= lineno && lineno <= get_pos_line stop
             ) in
           let search_expr = (fun e ->
                 let r = e.erange in
                 let start = get_range_start r in
                 let stop = get_range_end r in
-                (* Debug.debug ~channel:"coverage" "search_expr %d %a (%a--%a)" lineno pp_expr e pp_position start pp_position stop; *)
                 get_pos_line start = lineno && lineno = get_pos_line stop
             ) in
           try
             let l = input_line file in
-            if is_comment l || l = "" then
+            if is_comment l || l = "" || List.mem (String.trim l) ["else:"; "try:"]  then
+              (*  FIXME: better treatment of else/try... *)
               let () = incr covered_lines in
               Format.fprintf ocf "%s@." l
             else if StmtSet.exists search_stmt entry.reachable_stmts then (* okay, statement reached *)
               let () = incr covered_lines in
               Format.fprintf ocf "\027[38;5;%dm%s\027[0m@." (List.assoc "green" Debug.colors) l
             else if StmtSet.exists search_stmt entry.always_bottom_stmts then
+              let () = Format.printf "always bottom: %a" pp_stmt_with_range (StmtSet.choose @@ StmtSet.filter search_stmt entry.always_bottom_stmts) in
               let () = incr covered_lines in
               Format.fprintf ocf "\027[38;5;%dm%s\027[0m@." (List.assoc "yellow" Debug.colors) l
             else
@@ -212,11 +214,11 @@ struct
                 match ExprSet.choose_opt @@ ExprSet.filter search_expr entry.reachable_exprs with
               | Some e ->
                 let () = incr covered_lines in
-                let range = e.erange in
                 let n = String.length l in
                 let cols, cole = 0, n
-                                   (*get_pos_column @@ get_range_start range,
-                                     get_pos_column @@ get_range_end range *) in
+                (* to highlight only the expression and not the whole line *)
+                                   (*min 0 (get_pos_column @@ get_range_start e.erange),
+                                     max (get_pos_column @@ get_range_end e.erange) n*) in
                 Format.fprintf ocf "%s\027[38;5;%dm%s\027[0m%s@."
                   (String.sub l 0 cols)
                   (List.assoc "green" Debug.colors)
@@ -225,11 +227,12 @@ struct
               | None ->
                 begin match ExprSet.choose_opt @@ ExprSet.filter search_expr entry.always_bottom_exprs with
                   | Some e ->
+                    let () = Format.printf "always bottom: %a" pp_expr_with_range e in
                     let () = incr covered_lines in
-                    let range = e.erange in
                     let n = String.length l in
-                    let cols, cole = 0, n (*get_pos_column @@ get_range_start range,
-                                            get_pos_column @@ get_range_end range *) in
+                    let cols, cole = 0, n
+                      (*min 0 (get_pos_column @@ get_range_start e.erange),
+                        max (get_pos_column @@ get_range_end e.erange) n*) in
                     Format.fprintf ocf "%s\027[38;5;%dm%s\027[0m%s@."
                       (String.sub l 0 cols)
                       (List.assoc "yellow" Debug.colors)
@@ -242,13 +245,12 @@ struct
               end;
             process_file (lineno+1)
           with End_of_file ->
-            let () = Format.printf "(Yet inaccurate) Coverage of %s: %.2f%%@." filename (100. *. float_of_int  !covered_lines /. (float_of_int lineno)) in
+            let () = Format.printf "Coverage of %s: %.2f%%@." filename (100. *. float_of_int  !covered_lines /. (float_of_int (lineno - 1))) in
             close_in file in
           process_file 1;
-        flush oc;
+          flush oc;
         close_out oc
       ) table
-
 end
 
 let () =

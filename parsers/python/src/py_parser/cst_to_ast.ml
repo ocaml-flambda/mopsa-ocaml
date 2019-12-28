@@ -680,14 +680,11 @@ and add_implicit_return range l =
   match l with
   | [] -> [{skind = S_return {ekind = E_none; erange = range}; srange = range}]
   | l ->
-    let last_stmt = List.hd @@ List.rev l in
+    let last_stmt = ListExt.last l in
     let last_pos = Location.get_range_end last_stmt.srange in
     let range = Location.tag_range (
-        if Location.get_pos_column last_pos <> 0 then
-          Location.mk_orig_range last_pos last_pos
-        else
-          let last_pos_before = {last_pos with pos_line = last_pos.pos_line - 1} in
-          Location.mk_orig_range last_pos_before last_pos_before
+        let last_pos_before = {last_pos with pos_line = last_pos.pos_line - 1} in
+        Location.mk_orig_range last_pos_before last_pos_before
       ) "implicit_return" in
     match last_stmt.skind with
     | S_return _ -> l
