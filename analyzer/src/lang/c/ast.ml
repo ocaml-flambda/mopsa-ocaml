@@ -170,9 +170,10 @@ type c_fundec = {
   mutable c_func_parameters: var list; (** function parameters *)
   mutable c_func_body: stmt option; (** function body *)
   mutable c_func_static_vars: var list; (** static variables declared in the function *)
-  mutable c_func_local_vars: var list; (** local variables declared in the function (exclusing parameters) *)
+  mutable c_func_local_vars: var list; (** local variables declared in the function (excluding parameters) *)
   mutable c_func_variadic: bool; (** whether the has a variable number of arguments *)
-  mutable c_func_range: range;
+  mutable c_func_range: range; (** location range of the declaration *)
+  mutable c_func_name_range: range; (** location range of the name in the declaration *)
   mutable c_func_stub: Stubs.Ast.stub_func option; (** stub comment *)
 }
 (** Function descriptor. *)
@@ -200,18 +201,12 @@ let pp_scope fmt s =
   | Variable_file_static _ -> "file static"
   | Variable_func_static _ -> "func static")
 
-(** Flat variable initialization *)
-type c_flat_init =
-  | C_flat_expr of expr * typ       (** Init expression *)
-  | C_flat_none of Z.t * typ        (** Uninitialized bytes *)
-  | C_flat_fill of expr * typ * Z.t (** Filler expression *)
 
 (** Variable initialization. *)
 type c_var_init =
   | C_init_expr of expr
   | C_init_list of c_var_init list (** specified elements *) * c_var_init option (** filler *)
   | C_init_implicit of typ
-  | C_init_flat of c_flat_init list
 
 
 type cvar = {
@@ -333,6 +328,24 @@ type expr_kind +=
 
   | E_c_atomic of int (** operation *) * expr * expr
 
+
+
+
+(*==========================================================================*)
+                           (** {2 Scope update} *)
+(*==========================================================================*)
+
+
+type c_scope_update = {
+  c_scope_var_added:   var list;
+  c_scope_var_removed: var list;
+}
+(** Scope update information for jump statements *)
+
+
+
+
+
 (*==========================================================================*)
                            (** {2 Statements} *)
 (*==========================================================================*)
@@ -357,7 +370,16 @@ type stmt_kind +=
   (** for loop; the scope of the locals declared in the init block
       is the while for loop *)
 
-  | S_c_goto of string
+  | S_c_return of expr option * c_scope_update
+  (** return statement *)
+
+  | S_c_break of c_scope_update
+  (** break statement *)
+
+  | S_c_continue of c_scope_update
+  (** continue statement *)
+
+  | S_c_goto of string * c_scope_update
   (** goto statements. *)
 
   | S_c_switch of expr * stmt
@@ -366,10 +388,10 @@ type stmt_kind +=
   | S_c_label of string
   (** statement label. *)
 
-  | S_c_switch_case of expr
+  | S_c_switch_case of expr * c_scope_update
   (** case of a switch statement. *)
 
-  | S_c_switch_default
+  | S_c_switch_default of c_scope_update
   (** default case of switch statements. *)
 
 
@@ -381,6 +403,25 @@ type c_program = {
 
 type prog_kind +=
   | C_program of c_program
+
+
+
+(** Flow-insensitive context to keep the analyzed C program *)
+let c_program_ctx =
+  let module K = Context.GenUnitKey(struct
+      type t = c_program
+      let print fmt prog = Format.fprintf fmt "C program"
+    end)
+  in
+  K.key
+
+(** Set the C program in the flow *)
+let set_c_program prog flow =
+  Flow.set_ctx (Flow.get_ctx flow |> Context.add_unit c_program_ctx prog) flow
+
+(** Get the C program from the flow *)
+let get_c_program flow =
+  Flow.get_ctx flow |> Context.find_unit c_program_ctx
 
 
 (*==========================================================================*)
@@ -657,20 +698,20 @@ let int_rangeof t =
   (Z.to_int a, Z.to_int b)
 
 (** [wrap_expr e (l,h)] expression needed to bring back [e] in range ([l],[h]) *)
-let wrap_expr (e: expr) ((l,h) : int * int) range : expr =
+let wrap_expr (e: expr) ((l,h) : Z.t * Z.t) range : expr =
     let open Universal.Ast in
   add
-    (mk_int l range)
+    (mk_z l range)
     (_mod
        (sub
           e
-          (mk_int l range)
+          (mk_z l range)
           range
        )
        (add
           (sub
-             (mk_int h range)
-             (mk_int l range)
+             (mk_z h range)
+             (mk_z l range)
              range
           )
           (mk_one range)
@@ -681,7 +722,7 @@ let wrap_expr (e: expr) ((l,h) : int * int) range : expr =
     range
 
 (** [wrap v (l,h)] expression needed to bring back [v] in range ([l],[h]) *)
-let wrap (v : var) ((l,h) : int * int) range : expr =
+let wrap (v : var) ((l,h) : Z.t * Z.t) range : expr =
   wrap_expr (mk_var v (tag_range range "v")) (l,h) range
 
 
@@ -729,6 +770,7 @@ let is_c_scalar_type ( t : typ) =
 let is_c_pointer_type ( t : typ) =
   match remove_typedef_qual t with
   | T_c_pointer _ -> true
+  | T_c_array _ -> true
   | _ -> false
 
 let is_c_void_type (t:typ) =
@@ -781,6 +823,11 @@ let under_type (t: typ) : typ =
   | T_c_pointer _ -> under_pointer_type t
   | _ -> failwith "[under_type] called with a non array/pointer argument"
 
+let void_to_char t =
+  match remove_typedef_qual t with
+  | T_c_void -> T_c_integer C_signed_char
+  | _ -> t
+
 let get_array_constant_length t =
   match remove_typedef_qual t with
   | T_c_array(_, C_array_length_cst n) -> n
@@ -822,7 +869,7 @@ let mk_c_member_access r f range =
   mk_expr (E_c_member_access (r, f.c_field_index, f.c_field_org_name)) ~etyp:f.c_field_type range
 
 let mk_c_subscript_access a i range =
-  mk_expr (E_c_array_subscript (a, i)) ~etyp:(under_array_type a.etyp) range
+  mk_expr (E_c_array_subscript (a, i)) ~etyp:(under_type a.etyp) range
 
 let mk_c_character c range =
   mk_constant (C_c_character ((Z.of_int @@ int_of_char c), C_char_ascii)) range ~etyp:(T_c_integer(C_unsigned_char))
@@ -837,7 +884,12 @@ let s16 = T_c_integer(C_signed_short)
 let u16 = T_c_integer(C_unsigned_short)
 let s32 = T_c_integer(C_signed_int)
 let u32 = T_c_integer(C_unsigned_int)
+let s64 = T_c_integer(C_signed_long)
+let u64 = T_c_integer(C_unsigned_long)
 let ul = T_c_integer(C_unsigned_long)
+let sl = T_c_integer(C_signed_long)
+let ull = T_c_integer(C_unsigned_long_long)
+let sll = T_c_integer(C_signed_long_long)
 let array_type typ size = T_c_array(typ,C_array_length_cst size)
 
 let type_of_string s = T_c_array(s8, C_array_length_cst (Z.of_int (1 + String.length s)))
@@ -845,14 +897,20 @@ let type_of_string s = T_c_array(s8, C_array_length_cst (Z.of_int (1 + String.le
 let mk_c_string s range =
   mk_constant (C_c_string (s, C_char_ascii)) range ~etyp:(type_of_string s)
 
-let mk_c_call f args range =
+let mk_c_fun_typ f =
   let ftype = {
     c_ftype_return = f.c_func_return;
     c_ftype_params = List.map (fun p -> p.vtyp) f.c_func_parameters;
     c_ftype_variadic = f.c_func_variadic;
   }
   in
-  mk_expr (E_call (mk_expr (E_c_function f) range ~etyp:(T_c_function (Some ftype)), args)) range ~etyp:(f.c_func_return)
+  T_c_function (Some ftype)
+
+let mk_c_call f args range =
+  mk_expr (E_call (mk_expr (E_c_function f) range ~etyp:(mk_c_fun_typ f), args)) range ~etyp:(f.c_func_return)
+
+let mk_c_builtin_call builtin args typ range =
+  mk_expr (E_c_builtin_call (builtin,args)) range ~etyp:typ
 
 let mk_c_call_stmt f args range =
   let exp = mk_c_call f args range in
@@ -929,18 +987,9 @@ let () =
     )
 
 let range_cond e_mint rmin rmax range =
-  let condle = {ekind = E_binop(O_le, e_mint, mk_z rmax (tag_range range "wrap_le_z"));
-                etyp  = T_bool;
-                erange = tag_range range "wrap_le"
-               } in
-  let condge = {ekind = E_binop(O_ge, e_mint, mk_z rmin (tag_range range "wrap_ge_z"));
-                etyp  = T_bool;
-                erange = tag_range range "wrap_ge"
-               } in
-  {ekind = E_binop(O_log_and, condle, condge);
-   etyp = T_bool;
-   erange = tag_range range "wrap_full"
-  }
+  let condle = mk_binop e_mint O_le (mk_z rmax range) ~etyp:T_bool range in
+  let condge = mk_binop e_mint O_ge (mk_z rmin range) ~etyp:T_bool range in
+  mk_binop condle O_log_and condge ~etyp:T_bool range
 
 let rec remove_casts e =
   match ekind e with
@@ -959,6 +1008,22 @@ let rec c_expr_to_z (e:expr) : Z.t option =
     c_expr_to_z e' |> Option.bind @@ fun n ->
     Some (Z.neg n)
 
+  | E_unop (O_bit_invert, e') ->
+    c_expr_to_z e' |> Option.bind @@ fun n ->
+    Some (Z.lognot n)
+
+  | E_unop (O_log_not, e') ->
+    c_expr_to_z e' |> Option.bind @@ fun n ->
+    if Z.equal n Z.zero then Some Z.one else Some Z.zero
+
+  | E_binop(O_c_and, e1, e2) ->
+    c_expr_to_z e1 |> Option.bind @@ fun n1 ->
+    if Z.equal n1 Z.zero then Some Z.zero else c_expr_to_z e2
+
+  | E_binop(O_c_or, e1, e2) ->
+    c_expr_to_z e1 |> Option.bind @@ fun n1 ->
+    if Z.equal n1 Z.zero then c_expr_to_z e2 else Some Z.one
+
   | E_binop(op, e1, e2) ->
     c_expr_to_z e1 |> Option.bind @@ fun n1 ->
     c_expr_to_z e2 |> Option.bind @@ fun n2 ->
@@ -968,6 +1033,10 @@ let rec c_expr_to_z (e:expr) : Z.t option =
       | O_minus -> Some (Z.sub n1 n2)
       | O_mult -> Some (Z.mul n1 n2)
       | O_div -> if Z.equal n2 Z.zero then None else Some (Z.div n1 n2)
+      | O_bit_lshift -> begin try Some (Z.shift_left n1 (Z.to_int n2)) with _ -> None end
+      | O_bit_rshift -> begin try Some (Z.shift_right n1 (Z.to_int n2)) with _ -> None end
+      | O_bit_and -> Some (Z.logand n1 n2)
+      | O_bit_or -> Some (Z.logor n1 n2)
       | O_eq -> Some (if Z.equal n1 n2 then Z.one else Z.zero)
       | O_ne -> Some (if Z.equal n1 n2 then Z.zero else Z.one)
       | O_gt -> Some (if Z.gt n1 n2 then Z.one else Z.zero)
@@ -983,6 +1052,11 @@ let rec c_expr_to_z (e:expr) : Z.t option =
     then c_expr_to_z e1
     else c_expr_to_z e2
 
+  | E_c_cast(ee,_) when is_c_int_type e.etyp ->
+    c_expr_to_z ee |> Option.bind @@ fun n ->
+    let a,b = rangeof e.etyp in
+    if Z.leq a n && Z.leq n b then Some n else None
+
   | _ -> None
 
 
@@ -990,3 +1064,89 @@ let is_c_expr_equals_z e z =
   match c_expr_to_z e with
   | None -> false
   | Some n -> Z.equal n z
+
+
+let is_c_constant e =
+  match c_expr_to_z e with
+  | None -> false
+  | Some _ -> true
+
+
+let is_c_deref e =
+  match remove_casts e |> ekind with
+  | E_c_deref _ -> true
+  | _ -> false
+
+
+let is_pointer_offset_forall_quantified p =
+  let open Stubs.Ast in
+  match ekind p with
+  | E_binop(_,e1,e2) when is_c_num_type e2.etyp -> is_expr_forall_quantified e2
+  | E_binop(_,e1,e2) when is_c_num_type e1.etyp -> is_expr_forall_quantified e1
+  | _ -> false
+
+let is_lval_offset_forall_quantified e =
+  let open Stubs.Ast in
+  match remove_casts e |> ekind with
+  | E_c_deref(p) -> is_pointer_offset_forall_quantified p
+  | E_c_array_subscript(_,o) -> is_expr_forall_quantified o
+  | _ -> false
+
+
+(** Check if v is declared as a variable length array *)
+let is_c_variable_length_array_type t =
+  match remove_typedef_qual t with
+  | T_c_array(_, C_array_length_expr _) -> true
+  | _ -> false
+
+(** Find the definition of a C function *)
+let find_c_fundec_by_name name flow =
+  let prog = get_c_program flow in
+  List.find (fun f -> f.c_func_org_name = name) prog.c_functions
+
+(** Check if a pointer points to a nul-terminated array *)
+let assert_valid_string (p:expr) range man flow =
+  let open Sig.Domain.Manager in
+  let f = find_c_fundec_by_name "_mopsa_assert_valid_string" flow in
+  let stmt = mk_c_call_stmt f [p] range in
+  man.post stmt flow
+
+
+(** Check if a pointer points to a valid stream *)
+let assert_valid_stream (p:expr) range man flow =
+  let open Sig.Domain.Manager in
+  let f = find_c_fundec_by_name "_mopsa_assert_valid_stream" flow in
+  let stmt = mk_c_call_stmt f [p] range in
+  man.post stmt flow
+
+
+(** Check if a pointer is valid *)
+let assert_valid_ptr (p:expr) range man flow =
+  let open Sig.Domain.Manager in
+  let f = find_c_fundec_by_name "_mopsa_assert_valid_ptr" flow in
+  let stmt = mk_c_call_stmt f [p] range in
+  man.post stmt flow
+
+
+(** Randomize an entire array *)
+let memrand (p:expr) (i:expr) (j:expr) range man flow =
+  let open Sig.Domain.Manager in
+  let f = find_c_fundec_by_name "_mopsa_memrand" flow in
+  let stmt = mk_c_call_stmt f [p; i; j] range in
+  man.post stmt flow
+
+  
+(** Set elements of an array with the same value [c] *)
+let memset (p:expr) (c:expr) (i:expr) (j:expr) range man flow =
+  let open Sig.Domain.Manager in
+  let f = find_c_fundec_by_name "_mopsa_memset" flow in
+  let stmt = mk_c_call_stmt f [p; c; i; j] range in
+  man.post stmt flow
+
+
+(** Copy elements of an array *)
+let memcpy (dst:expr) (src:expr) (i:expr) (j:expr) range man flow =
+  let open Sig.Domain.Manager in
+  let f = find_c_fundec_by_name "_mopsa_memcpy" flow in
+  let stmt = mk_c_call_stmt f [dst; src; i; j] range in
+  man.post stmt flow

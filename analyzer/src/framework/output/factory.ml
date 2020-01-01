@@ -22,6 +22,7 @@
 (** Render the output of an analysis depending on the selected engine. *)
 
 open Core.Sig.Domain.Lowlevel
+open Core.Alarm
 
 type format =
   | F_text (* Textual output *)
@@ -34,29 +35,27 @@ type format =
 let opt_format = ref F_text
 let opt_file = ref None
 let opt_display_lastflow = ref false
+let opt_silent = ref false
 
 (* Result rendering *)
 (* ---------------- *)
 
 (* Print collected alarms in the desired output format *)
 let report man flow time files =
-  let alarms = Core.Flow.fold (fun acc tk env ->
-      match tk with
-      | Core.Alarm.T_alarm a -> a :: acc
-      | _ -> acc
-    ) [] flow
-  in
-  let return_v = if List.length alarms > 0 then 1 else 0 in
+  let alarms = Core.Flow.get_alarms flow in
+  let return_v = if !opt_silent || AlarmSet.is_empty alarms then 0 else 1 in
   let lf = if !opt_display_lastflow then Some flow else None in
   let _ = match !opt_format with
     | F_text -> Text.report ~flow:lf man alarms time files !opt_file
     | F_json -> Json.report man alarms time files !opt_file in
   return_v
 
-let panic ?btrace exn files =
-  match !opt_format with
-  | F_text -> Text.panic ?btrace exn files !opt_file
-  | F_json -> Json.panic ?btrace exn files !opt_file
+let panic ?btrace exn time files =
+  let () = match !opt_format with
+    | F_text -> Text.panic ?btrace exn files time !opt_file
+    | F_json -> Json.panic ?btrace exn files time !opt_file
+  in
+  if !opt_silent then 0 else 2
 
 let help (args:ArgExt.arg list) =
   match !opt_format with
@@ -67,3 +66,13 @@ let list_domains (domains:string list) =
   match !opt_format with
   | F_text -> Text.list_domains domains !opt_file
   | F_json -> Json.list_domains domains !opt_file
+
+let print range printer flow =
+  match !opt_format with
+  | F_text -> Text.print range printer flow !opt_file
+  | F_json -> Json.print range printer flow !opt_file
+
+let list_alarms (alarms:alarm_class list) =
+  match !opt_format with
+  | F_text -> Text.list_alarms alarms !opt_file
+  | F_json -> Json.list_alarms alarms !opt_file

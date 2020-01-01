@@ -27,42 +27,76 @@ open Zone
 open Id
 open Lattice
 open Flow
+open Post
 open Eval
+open Result
 
 
-(* Product evaluations *)
-type ('e, 'a) peval = ('e, 'a) eval option list
+(** {2 Types} *)
+(** ********* *)
 
-(** Manager used by eval reduction rules *)
-type ('a,'s) eman = {
+
+(** Product evaluations *)
+type prod_eval = expr option option list
+
+
+(** Manager used by reduction rules *)
+type ('a,'s) rman = {
   lattice : 'a lattice;
-  get_man : 't. 't domain -> ('a, 't, 's) Manager.man;
-  get_eval : 't. 't domain -> (expr, 'a) peval -> (expr, 'a) eval option;
-  set_eval : 't. 't domain -> (expr, 'a) eval option -> (expr, 'a) peval -> (expr, 'a) peval;
-  exec : ?zone:zone -> stmt -> 'a flow -> 'a flow;
+  get_man : 't. 't id -> ('a, 't, 's) Manager.man;
+  get_eval : 't. 't id -> prod_eval -> expr option;
+  del_eval : 't. 't id -> prod_eval -> prod_eval;
+  post : ?zone:zone -> stmt -> 'a flow -> 'a post;
 }
 
 
+(** {2 Reductions} *)
+(** ************** *)
 
-(** Signature of a reduction rule *)
-module type EREDUCTION =
+(** Signature of a reduction rule for post-conditions *)
+module type EXEC_REDUCTION =
 sig
   val name   : string
-  val reduce : expr -> ('a,'s) eman -> (expr,'a) peval  -> (expr,'a) peval
+  val reduce : stmt -> ('a,'s) rman -> 'a flow -> 'a flow  -> 'a post
 end
 
 
-(** Registered reductions *)
-let reductions : (module EREDUCTION) list ref = ref []
+(** Signature of a reduction rule for evaluations *)
+module type EVAL_REDUCTION =
+sig
+  val name   : string
+  val reduce : expr -> ('a,'s) rman -> prod_eval -> 'a flow  -> ('a, prod_eval) result
+end
 
 
-(** Register a new reduction *)
+
+(** {2 Registration} *)
+(** **************** *)
+
+(** Registered eval reductions *)
+let eval_reductions : (module EVAL_REDUCTION) list ref = ref []
+
+(** Registered exec reductions *)
+let exec_reductions : (module EXEC_REDUCTION) list ref = ref []
+
+(** Register a new eval reduction *)
 let register_eval_reduction rule =
-  reductions := rule :: !reductions
+  eval_reductions := rule :: !eval_reductions
 
-(** Find a reduction by its name *)
+(** Register a new exec reduction *)
+let register_exec_reduction rule =
+  exec_reductions := rule :: !exec_reductions
+
+(** Find an eval reduction by its name *)
 let find_eval_reduction name =
   List.find (fun v ->
-      let module V = (val v : EREDUCTION) in
+      let module V = (val v : EVAL_REDUCTION) in
       compare V.name name = 0
-    ) !reductions
+    ) !eval_reductions
+
+(** Find an exec reduction by its name *)
+let find_exec_reduction name =
+  List.find (fun v ->
+      let module V = (val v : EXEC_REDUCTION) in
+      compare V.name name = 0
+    ) !exec_reductions

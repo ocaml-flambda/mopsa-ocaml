@@ -33,6 +33,23 @@ open Interface
 open Token
 open Channel
 
+
+
+(*==========================================================================*)
+(**                         {2 Domain manager}                              *)
+(*==========================================================================*)
+
+
+(** Simplified domains are given a simplified manager providing access to
+    queries on the pre-condition only 
+*)
+type man = {
+  ask : 'r. 'r Query.query -> 'r;
+}
+
+
+
+
 module type DOMAIN =
 sig
 
@@ -42,7 +59,7 @@ sig
   type t
   (** Type of an abstract elements. *)
 
-  val id : t domain
+  val id : t id
   (** Domain identifier *)
 
   val name : string
@@ -104,7 +121,7 @@ sig
   val init : program -> t
   (** Initial abstract element *)
 
-  val exec : stmt -> t -> t option
+  val exec : uctx -> stmt -> man -> t -> t option
   (** Computation of post-conditions *)
 
   val ask : 'r Query.query -> t -> 'r option
@@ -134,7 +151,7 @@ struct
 
   let init prog man flow =
     let a' = D.init prog in
-    Intermediate.set_domain_env T_cur a' man flow
+    Intermediate.set_env T_cur a' man flow
 
 
   let interface = {
@@ -148,36 +165,51 @@ struct
     }
   }
 
+  let alarms = []
+
   let exec zone stmt man flow =
     match skind stmt with
     | S_assign _ | S_assume _ | S_add _ | S_remove _ | S_rename _
     | S_project _ | S_fold _ | S_expand _ | S_forget _
       ->
-      let a = Intermediate.get_domain_env T_cur man flow in
+      let a = Intermediate.get_env T_cur man flow in
 
       if D.is_bottom a
       then Post.return flow |>
            Option.return
 
       else
-        D.exec stmt a |>
+        let simplified_man = {
+          ask = (
+            let f : type r. r Query.query -> r = fun query ->
+              man.ask query flow
+             in
+             f
+            );
+        }
+        in
+        D.exec (Flow.get_unit_ctx flow) stmt simplified_man a |>
         Option.lift @@ fun a' ->
-        Intermediate.set_domain_env T_cur a' man flow |>
+        Intermediate.set_env T_cur a' man flow |>
         Post.return |>
-        Intermediate.log_post_stmt stmt man
+        Result.map_log (fun log ->
+            man.set_log (
+              man.get_log log |> Log.append stmt
+            ) log
+          )
 
     | _ -> None
 
   let eval zone exp man flow = None
 
   let ask query man flow =
-    D.ask query (Intermediate.get_domain_env T_cur man flow)
+    D.ask query (Intermediate.get_env T_cur man flow)
 
   let refine channel man flow =
-    D.refine channel (Intermediate.get_domain_env T_cur man flow) |>
+    D.refine channel (Intermediate.get_env T_cur man flow) |>
     Channel.bind @@ fun a ->
 
-    Intermediate.set_domain_env T_cur a man flow |>
+    Intermediate.set_env T_cur a man flow |>
     Channel.return
 
 end

@@ -152,6 +152,41 @@ let () =
     default = "";
   }
 
+(** Warnings *)
+let () =
+  register_builtin_option {
+    key = "-no-warning";
+    category = "Debugging";
+    doc = " deactivate warning messages";
+    spec = ArgExt.Clear Debug.print_warnings;
+    default = "";
+  }
+
+(** Active hooks *)
+let () =
+  register_builtin_option {
+    key = "-hook";
+    category = "Configuration";
+    doc = " activate a hook";
+    spec = ArgExt.String (fun s ->
+        try Core.Hook.activate_hook s
+        with Not_found -> Exceptions.panic "hook %s not found" s
+      );
+    default = "";
+  }
+
+
+(** Size of the cache *)
+let () =
+  register_builtin_option {
+    key = "-cache";
+    category = "Configuration";
+    doc = " size of the analysis cache";
+    spec = ArgExt.Set_int Core.Cache.opt_cache;
+    default = "5";
+  }
+
+
 (** Debug channels *)
 let () =
   register_builtin_option {
@@ -173,11 +208,25 @@ let () =
 let () =
   register_builtin_option {
     key = "-list";
-    category = "Configuration";
+    category = "Help";
     doc = " list available domains; if a configuration is specified, only used domains are listed";
     spec = ArgExt.Unit_delayed (fun () ->
         let domains = Parser.domains !Parser.opt_config in
         Output.Factory.list_domains domains
+      );
+    default = "";
+  }
+
+(** List of alarms *)
+let () =
+  register_builtin_option {
+    key = "-alarms";
+    category = "Help";
+    doc = " list the alarms captured by the selected configuration";
+    spec = ArgExt.Unit_delayed (fun () ->
+        let _, domain = Parser.parse !Parser.opt_config in
+        let module Domain = (val domain) in
+        Output.Factory.list_alarms Domain.alarms
       );
     default = "";
   }
@@ -211,6 +260,17 @@ let () =
   }
 
 
+(** Ignore alarms when returning a value to the shell *)
+let () =
+  register_builtin_option {
+    key = "-silent";
+    category = "Output";
+    doc = " do not return a non-zero value when detecting alarms";
+    spec = ArgExt.Set Output.Factory.opt_silent;
+    default = "unset";
+  }
+
+
 (** Output stream *)
 let () =
   register_builtin_option {
@@ -220,27 +280,6 @@ let () =
     spec = ArgExt.String (fun s -> Output.Factory.opt_file := Some s);
     default = "";
   }
-
-(** Logs activation *)
-let () =
-  register_builtin_option {
-    key = "-log";
-    category = "Debugging";
-    doc = " activate logs";
-    spec = ArgExt.Set Core.Debug_tree.opt_log;
-    default = "false";
-  }
-
-(** Short logs *)
-let () =
-  register_builtin_option {
-    key = "-short-log";
-    category = "Debugging";
-    doc = " display logs without abstract states";
-    spec = ArgExt.Set Core.Debug_tree.opt_short_log;
-    default = "false";
-  }
-
 
 
 (** Help message *)

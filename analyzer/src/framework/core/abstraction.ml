@@ -19,16 +19,16 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** An abstraction is the encapsulation of the overall abstract domain used by
-    the analyzer.
+(** An abstraction is the encapsulation of the top-level abstract domain used
+    by the analyzer.
 
-    There are three main differences with domains. First, maps of zoned
-    transfer functions are constructed at creation. Second, transfer functions
-    are not partial functions and return always a result. Finally, post
-    conditions of statements are merged into flows.
+    There are two main differences with domains. First, transfer functions are
+    indexed by zones to enable a faster access. Second, transfer functions are 
+    not partial functions and return always a result.
 *)
 
 open Token
+open Sig.Domain.Lowlevel
 open Context
 open Ast.All
 open Lattice
@@ -38,6 +38,7 @@ open Post
 open Zone
 open Query
 open Log
+open Result
 
 
 type ('a, 't) man = ('a, 't) Sig.Domain.Lowlevel.man = {
@@ -49,9 +50,9 @@ type ('a, 't) man = ('a, 't) Sig.Domain.Lowlevel.man = {
   set : 't -> 'a -> 'a;
 
   (** Analyzer transfer functions *)
-  post : ?zone:zone -> stmt -> 'a flow -> 'a post;
   exec : ?zone:zone -> stmt -> 'a flow -> 'a flow;
-  eval : ?zone:(zone * zone) -> ?via:zone -> expr -> 'a flow -> (expr, 'a) eval;
+  post : ?zone:zone -> stmt -> 'a flow -> 'a post;
+  eval : ?zone:(zone * zone) -> ?via:zone -> expr -> 'a flow -> 'a eval;
   ask : 'r. 'r Query.query -> 'a flow -> 'r;
 
   (** Accessors to the domain's merging logs *)
@@ -89,6 +90,7 @@ sig
 
   val widen: (t, t) man -> uctx -> t -> t -> t
 
+  val merge : t -> t * log -> t * log -> t
 
 
   (** {2 Transfer functions} *)
@@ -100,7 +102,7 @@ sig
 
   val post : ?zone:zone -> stmt -> (t, t) man -> t flow -> t post
 
-  val eval : ?zone:(zone * zone) -> ?via:zone -> expr -> (t, t) man -> t flow -> (expr, t) eval
+  val eval : ?zone:(zone * zone) -> ?via:zone -> expr -> (t, t) man -> t flow -> t eval
 
   val ask  : 'r Query.query -> (t, t) man -> t flow -> 'r
 
@@ -115,7 +117,7 @@ end
 let debug fmt = Debug.debug ~channel:"framework.core.abstraction" fmt
 
 
-(** Encapsulate a domain into an abstraction *)
+(** Encapsulate a domain into a top-level abstraction *)
 module Make(Domain:Sig.Domain.Lowlevel.DOMAIN)
   : ABSTRACTION with type t = Domain.t
 =
@@ -144,6 +146,8 @@ struct
   let meet man a a' = Domain.meet man a a'
 
   let widen man ctx a a' = Domain.widen man ctx a a'
+
+  let merge = Domain.merge
 
 
   (** {2 Caches and zone maps} *)
@@ -176,9 +180,11 @@ struct
               Context.add_unit Callstack.ctx_key Callstack.empty
     in
 
+    (* Initialize hooks *)
+    let ctx = Hook.init_hooks Domain.interface ctx in
+
     (* The initial flow is a singleton ⊤ environment *)
     let flow0 = Flow.singleton ctx T_cur man.lattice.top in
-    debug "flow0 = %a" (Flow.print man.lattice) flow0;
 
     (* Initialize domains *)
     Domain.init prog man flow0
@@ -207,23 +213,26 @@ struct
       ) map
 
   let post ?(zone = any_zone) (stmt: stmt) man (flow: Domain.t flow) : Domain.t post =
-    Debug_tree.reach stmt.srange;
-    Debug_tree.exec stmt zone man.lattice flow;
+    let ctx = Hook.on_before_exec zone stmt man flow in
+    let flow = Flow.set_ctx ctx flow in
 
-    let timer = Timing.start () in
     let fexec =
       try ExecMap.find zone exec_map
       with Not_found -> Exceptions.panic_at stmt.srange "exec for %a not found" pp_zone zone
     in
-    let post = Cache.exec fexec zone stmt man flow in
+    try
+      let post = Cache.exec fexec zone stmt man flow in
+      let ctx = Hook.on_after_exec zone stmt man post in
+      Post.set_ctx ctx post
+    with Exceptions.Panic(msg, line) ->
+      Printexc.raise_with_backtrace
+        (Exceptions.PanicAt(stmt.srange, msg, line))
+        (Printexc.get_raw_backtrace())
 
-    Debug_tree.exec_done stmt zone (Timing.stop timer) man.lattice post;
-    post
 
   let exec ?(zone = any_zone) (stmt: stmt) man (flow: Domain.t flow) : Domain.t flow =
     let post = post ~zone stmt man flow in
-    Post.to_flow man.lattice post
-
+    post_to_flow man post
 
 
   (** {2 Evaluation of expressions} *)
@@ -273,8 +282,8 @@ struct
 
   (** Evaluation of expressions. *)
   let rec eval ?(zone = (any_zone, any_zone)) ?(via=any_zone) exp man flow =
-    Debug_tree.eval exp zone man.lattice flow;
-    let timer = Timing.start () in
+    let ctx = Hook.on_before_eval zone exp man flow in
+    let flow = Flow.set_ctx ctx flow in
 
     let ret =
       (* Check whether exp is already in the desired zone *)
@@ -287,6 +296,7 @@ struct
           try find_eval_paths_via zone via eval_map
           with Not_found -> Exceptions.panic_at exp.erange "eval for %a not found" pp_zone2 zone
         in
+
         match eval_over_paths paths exp man flow with
         | Some evl -> evl
         | None ->
@@ -294,34 +304,48 @@ struct
           | Keep -> Eval.singleton exp flow
 
           | Process ->
-            Exceptions.warn_at exp.erange "%a not evaluated" pp_expr exp;
-            Eval.singleton exp flow
+            if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
+            then Eval.empty_singleton flow
+            else Exceptions.panic_at exp.erange
+                "unable to evaluate %a in zone %a"
+                pp_expr exp
+                pp_zone2 zone
+
 
           | Visit ->
             let open Ast.Visitor in
             let parts, builder = split_expr exp in
             match parts with
             | {exprs; stmts = []} ->
-              Eval.eval_list
+              Result.bind_list exprs
                 (fun exp flow ->
                    match eval_over_paths paths exp man flow with
                    | None ->
-                     Exceptions.warn_at exp.erange "%a not evaluated" pp_expr exp;
-                     Eval.singleton exp flow
+                     if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
+                     then Eval.empty_singleton flow
+                     else Exceptions.panic_at exp.erange
+                         "unable to evaluate %a in zone %a"
+                         pp_expr exp
+                         pp_zone2 zone
 
                    | Some evl -> evl
-                )
-                exprs flow
-              |>
-              Eval.bind @@ fun exprs flow ->
+                ) flow |>
+              bind_some @@ fun exprs flow ->
               let exp = builder {exprs; stmts = []} in
               Eval.singleton exp flow
 
-            | _ -> Eval.singleton exp flow
-    in
+            | _ ->
+              if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
+              then Eval.empty_singleton flow
+              else Exceptions.panic_at exp.erange
+                  "unable to evaluate %a in zone %a"
+                  pp_expr exp
+                  pp_zone2 zone
 
-    Debug_tree.eval_done exp zone (Timing.stop timer) ret;
-    ret
+    in
+    let ctx = Hook.on_after_eval zone exp man ret in
+    Eval.set_ctx ctx ret
+
 
   and eval_over_paths paths exp man flow =
     match paths with
@@ -343,9 +367,8 @@ struct
 
     | (z1, z2, path, feval) :: tl ->
       eval_hop z1 z2 feval man exp flow |>
-      Option.bind @@
-      Eval.bind_opt @@
-      eval_over_path tl man
+      Option.bind @@ bind_some_opt @@ fun e flow ->
+      eval_over_path tl man e flow
 
   and eval_hop z1 z2 feval man exp flow =
     debug "trying eval %a in hop %a" pp_expr exp pp_zone2 (z1, z2);
@@ -355,13 +378,31 @@ struct
       Option.return
 
     | other_action ->
-      match Cache.eval feval (z1, z2) exp man flow with
+      match
+        (try Cache.eval (fun e man flow ->
+             match feval e man flow with
+             | None -> None
+             | Some evl ->
+               let evl' = Eval.remove_duplicates man.lattice evl in
+               (* Update the eprev field in returned expressions to indicate the
+                  previous form of the result *)
+               let evl'' = Eval.map (fun ee -> { ee with eprev = Some e }) evl' in
+               Some evl''
+           ) (z1, z2) exp man flow
+         with Exceptions.Panic(msg, line) ->
+           Printexc.raise_with_backtrace
+             (Exceptions.PanicAt(exp.erange, msg, line))
+             (Printexc.get_raw_backtrace())
+        )
+      with
       | Some evl -> Some evl
       | None ->
         match other_action with
         | Keep -> assert false
 
+
         | Process ->
+          (* No answer from domains, so let's try other eval paths, if any. *)
           debug "no answer";
           None
 
@@ -371,13 +412,19 @@ struct
           let parts, builder = split_expr exp in
           match parts with
           | {exprs; stmts = []} ->
-            Eval.eval_list_opt (eval_hop z1 z2 feval man) exprs flow |>
-            Option.lift @@ Eval.bind @@ fun exprs flow ->
+            debug "eval parts of %a" pp_expr exp;
+            bind_list_opt exprs (eval_hop z1 z2 feval man) flow |>
+            Option.lift @@ bind_some @@ fun exprs flow ->
             let exp' = builder {exprs; stmts = []} in
             debug "%a -> %a" pp_expr exp pp_expr exp';
-            Eval.singleton exp' flow
+            (* Update the eprev field in returned expressions to
+               indicate the previous form of the result *)
+            let exp'' = { exp' with eprev = Some exp } in
+            Eval.singleton exp'' flow
 
-          | _ -> None
+          | _ ->
+            debug "%a is a leaf expression" pp_expr exp;
+            None
 
   (* Filter paths that pass through [via] zone *)
   and find_eval_paths_via (src, dst) via map =

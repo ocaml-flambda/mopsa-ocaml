@@ -39,6 +39,8 @@ module Domain =
       ieval = {provides = []; uses = [Zone.Z_py, Zone.Z_py_obj]}
     }
 
+    let alarms = []
+
     let init _ _ flow = flow
 
     let rec exec zone stmt man flow =
@@ -77,7 +79,7 @@ module Domain =
           [mk_except
              (Some (mk_py_object (find_builtin "StopIteration") (tag_range range "stop iter")))
              None
-             (Utils.mk_builtin_raise "ValueError" (tag_range range "error raise"))
+             (Utils.mk_builtin_raise_msg "ValueError" "not enough values to unpack" (tag_range range "error raise"))
           ]
           (mk_nop (tag_range range "empty try else"))
           (mk_nop (tag_range range "empty try finally"))

@@ -23,11 +23,12 @@
 
 open Mopsa
 open Framework.Core.Sig.Domain.Stateless
-open Memory.Common.Points_to
 open Universal.Ast
 open Ast
 open Zone
-
+open Common.Points_to
+open Common.Scope_update
+open Universal.Iterators.Interproc.Common
 
 module Domain =
 struct
@@ -46,7 +47,7 @@ struct
 
   let interface = {
     iexec = {
-      provides = [];
+      provides = [Z_c];
       uses = []
     };
 
@@ -60,6 +61,7 @@ struct
     }
   }
 
+  let alarms = []
 
   (** Initialization of environments *)
   (** ============================== *)
@@ -70,11 +72,42 @@ struct
   (** Computation of post-conditions *)
   (** ============================== *)
 
-  let exec zone stmt man flow  = None
+  let exec zone stmt man flow =
+    match skind stmt with
+    | S_c_return (Some e,upd) ->
+      let ret = Context.find_unit return_key (Flow.get_ctx flow) in
+      let rrange = get_last_call_site flow in
+      let flow =
+        man.exec (mk_add_var ret rrange) flow |>
+        man.exec (mk_assign (mk_var ret rrange) e rrange) |>
+        update_scope upd rrange man
+      in
+      let cur = Flow.get T_cur man.lattice flow in
+      Flow.add (T_return (stmt.srange, true)) cur man.lattice flow |>
+      Flow.remove T_cur |>
+      Post.return |> Option.return
+
+    | S_c_return (None,upd) ->
+      let rrange = get_last_call_site flow in
+      let flow = update_scope upd rrange man flow in
+      let cur = Flow.get T_cur man.lattice flow in
+      Flow.add (T_return (stmt.srange, false)) cur man.lattice flow |>
+      Flow.remove T_cur |>
+      Post.return |> Option.return
+
+
+    | _ -> None
 
 
   (** Evaluation of expressions *)
   (** ========================= *)
+
+  (** Check if there is a recursive call to a function *)
+  let is_recursive_call f flow =
+    let open Callstack in
+    let cs = Flow.get_callstack flow in
+    List.exists (fun c -> c.call_fun = f.c_func_unique_name) cs
+
 
   (** Eval a function call *)
   let eval_call fundec args range man flow =
@@ -84,15 +117,28 @@ struct
       man.eval ~zone:(Zone.Z_c, Zone.Z_c_low_level) exp' flow
     else
       match fundec with
+      | _ when is_recursive_call fundec flow ->
+        Soundness.warn_at range "ignoring recursive call of function %s in %a" fundec.c_func_org_name pp_range range;
+        if is_c_void_type fundec.c_func_return then
+          Eval.empty_singleton flow
+        else
+          Eval.singleton (mk_top fundec.c_func_return range) flow
+
       | {c_func_body = Some body; c_func_stub = None; c_func_variadic = false} ->
         let open Universal.Ast in
         let ret_var = mktmp ~typ:fundec.c_func_return () in
         let fundec' = {
           fun_name = fundec.c_func_unique_name;
           fun_parameters = fundec.c_func_parameters;
-          fun_locvars = fundec.c_func_local_vars;
+          fun_locvars = [];
+          (* FIXME: This is a temporary fix to avoid double removal of
+             local variables. The field fun_locvars is used by the
+             Universal iterator at the end of the call to clean the
+             environment. Since the environment is automatically
+             cleaned by the scope mechanism, local variables are
+             removed twice. *)
           fun_body = {skind = S_c_goto_stab (body); srange = srange body};
-          fun_return_type = Some fundec.c_func_return;
+          fun_return_type = if is_c_void_type fundec.c_func_return then None else Some fundec.c_func_return;
           fun_return_var = ret_var;
           fun_range = fundec.c_func_range;
         }
@@ -109,8 +155,12 @@ struct
         let exp' = Stubs.Ast.mk_stub_call stub args range in
         man.eval ~zone:(Stubs.Zone.Z_stubs, any_zone) exp' flow
 
-      | {c_func_body = None; c_func_org_name} ->
-        panic_at range "no implementation found for function %s" c_func_org_name
+      | {c_func_body = None; c_func_org_name; c_func_return} ->
+        Soundness.warn_at range "ignoring side effects of calling undefined function %s" c_func_org_name;
+        if is_c_void_type c_func_return then
+          Eval.empty_singleton flow
+        else
+          Eval.singleton (mk_top c_func_return range) flow
 
 
   let eval zone exp man flow =
@@ -123,14 +173,24 @@ struct
       Option.return
 
     | E_call(f, args) ->
-      man.eval ~zone:(Zone.Z_c, Z_c_points_to) f flow |>
-      Eval.bind_some @@ fun f flow ->
+      man.eval ~zone:(Zone.Z_c, Z_c_points_to) f flow >>$? fun ff flow ->
 
-      begin match ekind f with
+      begin match ekind ff with
         | E_c_points_to (P_fun f) ->
-          eval_call f args exp.erange man flow
+          eval_call f args exp.erange man flow |>
+          Option.return
 
-        | _ -> assert false
+        | _ ->
+          Soundness.warn_at exp.erange
+            "ignoring side-effect of undetermined function pointer %a"
+            pp_expr f
+          ;
+          if is_c_void_type exp.etyp then
+            Eval.empty_singleton flow |>
+            Option.return
+          else
+            Eval.singleton (mk_top exp.etyp exp.erange) flow |>
+            Option.return
       end
 
     | _ -> None

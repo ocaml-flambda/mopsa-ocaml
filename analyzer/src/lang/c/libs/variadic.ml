@@ -29,7 +29,7 @@ open Universal.Ast
 open Ast
 open Zone
 module Itv = Universal.Numeric.Values.Intervals.Integer.Value
-
+open Common.Alarms
 
 module Domain =
 struct
@@ -56,10 +56,14 @@ struct
         Z_c, Z_c_low_level
       ];
       uses = [
-        Z_c, Memory.Common.Points_to.Z_c_points_to
+        Z_c, Common.Points_to.Z_c_points_to;
+        Z_c_scalar, Universal.Zone.Z_u_num
       ]
     }
   }
+
+  let alarms = [A_c_out_of_bound_cls; A_c_no_next_va_arg_cls]
+
   (** Flow-insensitive annotations *)
   (** ============================ *)
 
@@ -154,17 +158,14 @@ struct
 
     (* Call the function with only named arguments *)
     let fundec' = {fundec with c_func_variadic = false} in
-    man.eval (mk_c_call fundec' named range) flow |>
-
-    (* Remove unnamed arguments and the annotation *)
-    Eval.map_flow (fun flow ->
-        let flow =
-          List.fold_left (fun flow unnamed ->
-              man.exec ~zone:Z_c_low_level (mk_remove_var unnamed range) flow
-            ) flow vars
-        in
-        pop_unnamed_args flow
-      )
+    man.eval (mk_c_call fundec' named range) flow >>= fun ret flow ->
+    let flow =
+      List.fold_left (fun flow unnamed ->
+          man.exec ~zone:Z_c_low_level (mk_remove_var unnamed range) flow
+        ) flow vars |>
+      pop_unnamed_args
+    in
+    Eval.return ret flow
 
 
   (* Create a counter variable for a va_list *)
@@ -181,26 +182,28 @@ struct
 
   (* Resolve a pointer to a va_list *)
   let resolve_va_list ap range man flow =
-    let open Memory.Common.Points_to in
-    man.eval ap ~zone:(Z_c, Z_c_points_to) flow |>
-    Eval.bind @@ fun pt flow ->
+    let open Common.Points_to in
+    man.eval ap ~zone:(Z_c, Z_c_points_to) flow >>$ fun pt flow ->
 
     match ekind pt with
-    | E_c_points_to (P_block (V ap, offset)) ->
-      (* We do not consider the case of arrays of va_list *)
+    | E_c_points_to (P_block (ValidVar ap, offset)) ->
       let base_size = sizeof_type ap.vtyp in
       let elem_size = sizeof_type (under_type ap.vtyp) in
-      if not (Z.equal base_size elem_size) then panic_at range "arrays of va_list not supported";
+
+      (* We do not consider the case of arrays of va_list *)
+      if not (Z.equal base_size elem_size)
+      then panic_at range "arrays of va_list not supported";
 
       (* In this case, only offset 0 is OK *)
-      assume_eval
-        (mk_binop offset O_eq (mk_zero range) range)
+      assume
+        (mk_binop offset O_eq (mk_zero range) ~etyp:u8 range)
         ~fthen:(fun flow ->
-            Eval.singleton ap flow
+            Result.singleton ap flow
           )
         ~felse:(fun flow ->
-            raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow |>
-            Eval.empty_singleton
+            man.eval offset ~zone:(Z_c_scalar,Universal.Zone.Z_u_num) flow >>$ fun offset flow ->
+            raise_c_out_bound_alarm ~base:(ValidVar ap) ~offset ~size:(mk_z base_size range) range (Core.Sig.Stacked.Manager.of_domain_man man) flow |>
+            Result.empty_singleton
           )
         ~zone:Z_c
         man flow
@@ -218,8 +221,7 @@ struct
         pp_var param
     ;
 
-    resolve_va_list ap range man flow |>
-    Eval.bind @@ fun ap flow ->
+    resolve_va_list ap range man flow >>$ fun ap flow ->
 
     (* Initialize the counter *)
     let valc = mk_valc_var ap range in
@@ -232,18 +234,17 @@ struct
   let va_arg ap typ range man flow =
     let _, unnamed = get_unnamed_args flow in
 
-    resolve_va_list ap range man flow |>
-    Eval.bind @@ fun ap flow ->
+    resolve_va_list ap range man flow >>$ fun ap flow ->
 
     let valc = mk_valc_var ap range in
 
     (* Check that value of the counter does not exceed the number of
        unnamed arguments *)
-    assume_eval
+    assume
       (mk_binop valc O_lt (mk_int (List.length unnamed) range) range)
       ~fthen:(fun flow ->
           (* Compute the interval of the counter *)
-          let itv = man.ask (Universal.Numeric.Common.Q_int_interval valc) flow |>
+          let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query valc) flow |>
                     Itv.meet (Itv.of_int 0 (List.length unnamed - 1))
           in
 
@@ -260,11 +261,11 @@ struct
             ) itv
           in
 
-          Eval.join_list evl ~empty:(Eval.empty_singleton flow)
+          Eval.join_list evl ~empty:(fun () -> Eval.empty_singleton flow)
         )
       ~felse:(fun flow ->
           (* Raise an alarm since no next argument can be fetched by va_arg *)
-          let flow' = raise_alarm Alarms.AVaArgNoNext range ~bottom:true man.lattice flow in
+          let flow' = raise_c_no_next_va_arg ~va_list:ap ~counter:valc ~args:unnamed range (Sig.Stacked.Manager.of_domain_man man) flow in
           Eval.empty_singleton flow'
         )
       ~zone:Universal.Zone.Z_u_num
@@ -273,8 +274,7 @@ struct
 
   (** Evaluate calls to va_end *)
   let va_end ap range man flow =
-    resolve_va_list ap range man flow |>
-    Eval.bind @@ fun ap flow ->
+    resolve_va_list ap range man flow >>$ fun ap flow ->
 
     let valc = mk_valc_var ap range in
 

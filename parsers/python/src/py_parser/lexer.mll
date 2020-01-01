@@ -72,12 +72,7 @@
     | "await" -> AWAIT
     | _ -> IDENT s
 
-    let newline lexbuf =
-        let pos = lexbuf.lex_curr_p in
-        lexbuf.lex_curr_p <- {
-            pos with pos_lnum = pos.pos_lnum + 1;
-            pos_bol = pos.pos_cnum
-        }
+    let new_line_n lexbuf n = for i = 0 to (n-1) do new_line lexbuf done
 
     let buffer = ref (Buffer.create 0)
 
@@ -88,6 +83,23 @@
         | _ -> raise (LexingError "incorrect indentation")
 
     let open_pars = ref 0
+
+    let count_newlines s =
+      let result = ref 0 in
+      let pos = ref 0 in
+      while !pos < String.length s - 1 do
+        if !pos < String.length s - 2 && s.[!pos] = '\r' && s.[!pos+1] = '\n' then
+          begin
+            incr result;
+            incr pos;
+          end
+        else if s.[!pos] = '\n' || s.[!pos] = '\r' then
+          incr result;
+        incr pos;
+      done;
+      if !pos < String.length s && (s.[!pos] = '\n' || s.[!pos] = '\r') then
+        incr result;
+      !result
 }
 
 let space = ' ' | '\t'
@@ -134,11 +146,12 @@ let floatnumber = pointfloat | exponentfloat
 (* Imaginary literals *)
 let imagnumber = (floatnumber | digitpart) ("j" | "J")
 
+
 rule token = parse
     | (space | comment)+        { token lexbuf }
     (* Line-joining *)
-    | '\\' endline              { newline lexbuf; token lexbuf }
-    | ';' (space | comment)* '\n' { newline lexbuf;
+    | '\\' endline              { new_line lexbuf; token lexbuf }
+    | ';' (space | comment)* '\n' { new_line lexbuf;
                                     let n = indentation lexbuf in
                                     match !stack with
                                         | m :: _ when m < n ->
@@ -146,7 +159,7 @@ rule token = parse
                                             [SEMICOLEND;  INDENT]
                                         | _ -> SEMICOLEND  :: unindent n
                                 }
-    | '\n'                      { newline lexbuf;
+    | '\n'                      { new_line lexbuf;
                                     let n = indentation lexbuf in
 				    if !open_pars > 0 then token lexbuf else
                                     match !stack with
@@ -179,9 +192,15 @@ rule token = parse
     | "<>"                      { [NEQ] }
     | "!="                      { [NEQ] }
     (* Delimiters *)
-    | ',' (space | endline)* ']'            { decr open_pars; [COMMARSQ] }
-    | ',' (space | endline)* ')'            { decr open_pars; [COMMARPAR] }
-    | ',' (space | endline)* '}'            { decr open_pars; [COMMARBRA] }
+    | ',' ((space | endline)* as x) ']'            { decr open_pars;
+                                                     new_line_n lexbuf (count_newlines x);
+                                                     [COMMARSQ] } (* newline lexbuf? *)
+    | ',' ((space | endline)* as x) ')'            { decr open_pars;
+                                                     new_line_n lexbuf (count_newlines x);
+                                                     [COMMARPAR] }
+    | ',' ((space | endline)* as x) '}'            { decr open_pars;
+                                                     new_line_n lexbuf (count_newlines x);
+                                                     [COMMARBRA] }
     | "("                       { incr open_pars; [LPAR] }
     | ")"                       { decr open_pars; [RPAR] }
     | "["                       { incr open_pars; [LSQ] }
@@ -250,18 +269,18 @@ rule token = parse
 
 and indentation = parse
     | (space | comment)* '\n'
-        { newline lexbuf; indentation lexbuf }
+        { new_line lexbuf; indentation lexbuf }
     | space* as s   { String.length s }
 
 and unesc_dq_prefix = parse
     | eof           { raise (LexingError ("unterminated string")) }
-    | "\\\n"        { newline lexbuf; unesc_dq_prefix lexbuf }
+    | "\\\n"        { new_line lexbuf; unesc_dq_prefix lexbuf }
     | "\""          { [] }
     | _ as c        { (c) :: (unesc_dq_prefix lexbuf) }
 
 and dq_prefix = parse
     | eof           { raise (LexingError ("unterminated string")) }
-    | "\\\n"        { newline lexbuf; dq_prefix lexbuf }
+    | "\\\n"        { new_line lexbuf; dq_prefix lexbuf }
     | "\""          { [] }
     | "\\\\"        {  '\\' :: (dq_prefix lexbuf) }
     | "\\\'"        {  '\'' :: (dq_prefix lexbuf) }
@@ -277,13 +296,13 @@ and dq_prefix = parse
 
 and unesc_sq_prefix = parse
     | eof           { raise (LexingError ("unterminated string")) }
-    | "\\\n"        { newline lexbuf; unesc_sq_prefix lexbuf }
+    | "\\\n"        { new_line lexbuf; unesc_sq_prefix lexbuf }
     | "\'"          { [] }
     | _ as c        { (c) :: (unesc_sq_prefix lexbuf) }
 
 and sq_prefix = parse
     | eof           { raise (LexingError ("unterminated string")) }
-    | "\\\n"        { newline lexbuf; sq_prefix lexbuf }
+    | "\\\n"        { new_line lexbuf; sq_prefix lexbuf }
     | "\'"          { [] }
     | "\\\\"        {  '\\' :: (sq_prefix lexbuf) }
     | "\\\'"        {  '\'' :: (sq_prefix lexbuf) }
@@ -299,16 +318,16 @@ and sq_prefix = parse
 
 and unesc_long_sq_prefix = parse
     | eof                     { raise (LexingError ("unterminated string")) }
-    | "\\\n" | endline        { newline lexbuf; unesc_long_sq_prefix lexbuf }
+    | "\\\n" | endline        { new_line lexbuf; unesc_long_sq_prefix lexbuf }
     | "\'\'\'"                { [] }
     | _ as c                  { (c) :: (unesc_long_sq_prefix lexbuf) }
 
 and long_sq_prefix = parse
     | eof                     { raise (LexingError ("unterminated string")) }
-    | '\\' endline            { newline lexbuf; long_sq_prefix lexbuf }
+    | '\\' endline            { new_line lexbuf; long_sq_prefix lexbuf }
     | endline "\'\'\'"        { [] }
-    | endline                 { newline lexbuf; ('\n') :: long_sq_prefix lexbuf }
-    | "\\\n"                  { newline lexbuf; ('\n') :: long_sq_prefix lexbuf }
+    | endline                 { new_line lexbuf; ('\n') :: long_sq_prefix lexbuf }
+    | "\\\n"                  { new_line lexbuf; ('\n') :: long_sq_prefix lexbuf }
     | "\'\'\'"                { [] }
     | "\\\\"                  {  '\\' :: (long_sq_prefix lexbuf) }
     | "\\\'"                  {  '\'' :: (long_sq_prefix lexbuf) }
@@ -324,15 +343,15 @@ and long_sq_prefix = parse
 
 and unesc_long_dq_prefix = parse
     | eof                     { raise (LexingError ("unterminated string")) }
-    | "\\\n" | endline        { newline lexbuf; unesc_long_dq_prefix lexbuf }
+    | "\\\n" | endline        { new_line lexbuf; unesc_long_dq_prefix lexbuf }
     | "\"\"\""                { [] }
     | _ as c                  { (c) :: (unesc_long_dq_prefix lexbuf) }
 
 and long_dq_prefix = parse
     | eof                     { raise (LexingError ("unterminated string")) }
-    | '\\' endline            { newline lexbuf; long_dq_prefix lexbuf }
+    | '\\' endline            { new_line lexbuf; long_dq_prefix lexbuf }
     | endline "\'\'\'"        { [] }
-    | "\\\n" | endline        { newline lexbuf; ('\n') :: long_dq_prefix lexbuf }
+    | "\\\n" | endline        { new_line lexbuf; ('\n') :: long_dq_prefix lexbuf }
     | "\"\"\""                { [] }
     | "\\\\"                  {  '\\' :: (long_dq_prefix lexbuf) }
     | "\\\'"                  {  '\'' :: (long_dq_prefix lexbuf) }
@@ -346,7 +365,6 @@ and long_dq_prefix = parse
     | "\\v"                   { (Char.chr 11) :: (long_dq_prefix lexbuf) }
     | _ as c                  { (c) :: (long_dq_prefix lexbuf) }
 (* TODO : Deal with \ooo, \xhh, \uxxxx and \Uxxxx according to the doc *)
-
  {
     (* Useful for debug *)
     let print_token = function

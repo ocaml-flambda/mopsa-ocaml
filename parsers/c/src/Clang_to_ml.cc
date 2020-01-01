@@ -487,16 +487,17 @@ class MLLocationTranslator {
 
  private:
   SourceManager& src;
+  const LangOptions &opts;
   Cache cacheLoc;
   Cache cacheFile;
   value invalid_file;
 
 public:
-  CAMLprim value TranslateSourceLocation(SourceLocation a);
+  CAMLprim value TranslateSourceLocation(SourceLocation a, int offset = 0);
   CAMLprim value TranslateSourceRange(SourceRange a);
 
-  MLLocationTranslator(SourceManager& src)
-    : src(src), cacheLoc("location"), cacheFile("filename") {
+  MLLocationTranslator(SourceManager& src, const LangOptions &opts)
+    : src(src), opts(opts), cacheLoc("location"), cacheFile("filename") {
     invalid_file = caml_copy_string("<invalid>");
     caml_register_global_root(&invalid_file);
   }
@@ -509,7 +510,7 @@ public:
 
 };
 
-CAMLprim value MLLocationTranslator::TranslateSourceLocation(SourceLocation a) {
+CAMLprim value MLLocationTranslator::TranslateSourceLocation(SourceLocation a, int offset) {
   CAMLparam0();
   CAMLlocal2(ret,tmp);
   unsigned raw = a.getRawEncoding();
@@ -527,8 +528,10 @@ CAMLprim value MLLocationTranslator::TranslateSourceLocation(SourceLocation a) {
           tmp = caml_copy_string(filename);
           cacheFile.store(filename, tmp);
         }
+        // Clang counts lines & columns starting from 1
+        // we count lines from 1 but columns from 0
         Store_field(ret, 0, Val_int(loc.getLine()));
-        Store_field(ret, 1, Val_int(loc.getColumn()));
+        Store_field(ret, 1, Val_int(loc.getColumn()-1+offset));
         Store_field(ret, 2, tmp);
       }
       else {
@@ -548,8 +551,16 @@ CAMLprim value MLLocationTranslator::TranslateSourceRange(SourceRange a) {
   CAMLparam0();
   CAMLlocal1(ret);
   ret = caml_alloc_tuple(2);
+  // from the begining of the first token...
   Store_field(ret, 0, TranslateSourceLocation(a.getBegin()));
-  Store_field(ret, 1, TranslateSourceLocation(a.getEnd()));
+  // ...to the last character of the last token (if possible)
+  SourceLocation end(clang::Lexer::getLocForEndOfToken(a.getEnd(),0,src,opts));
+  if (src.getPresumedLoc(end).isValid()) {
+    Store_field(ret, 1, TranslateSourceLocation(end));
+  }
+  else {
+    Store_field(ret, 1, TranslateSourceLocation(a.getEnd(), 1));
+  }
   CAMLreturn(ret);
 }
 
@@ -1161,7 +1172,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateFriendDecl(const FriendDecl *org) 
   check_null(org, "FriendDecl");
   const FriendDecl *x = org;
   //x = x->getCanonicalDecl();
-  WITH_CACHE_TUPLE(cacheMisc2, ret, org, 6, {
+  WITH_CACHE_TUPLE(cacheMisc2, ret, x, 6, {
       Store_field_option(ret, 0, x->getFriendType(), TranslateQualType(x->getFriendType()->getType()));
       Store_field_option(ret, 1, x->getFriendDecl(), TranslateDecl(x->getFriendDecl()));
       Store_field(ret, 2, Val_bool(x->isUnsupportedFriend()));
@@ -1553,7 +1564,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateVarDecl(const VarDecl *org) {
   check_null(org, "TranslateVarDecl");
   const VarDecl *x = org;
   //x = x->getCanonicalDecl();
-  WITH_CACHE_TUPLE(cacheMisc, ret, org, 10, {
+  WITH_CACHE_TUPLE(cacheMisc, ret, x, 10, {
       Store_uid(ret, 0);
       Store_field(ret, 1, TranslateNamedDecl(x));
       Store_field(ret, 2, TranslateQualType(x->getType()));
@@ -1595,7 +1606,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateFunctionDecl(const FunctionDecl *o
   check_null(org, "FunctionDecl");
   const FunctionDecl *x = org;
   //x = x->getCanonicalDecl();
-  WITH_CACHE_TUPLE(cacheMisc, ret, org, 14, {
+  WITH_CACHE_TUPLE(cacheMisc, ret, x, 15, {
       Store_uid(ret, 0);
       Store_field(ret, 1, TranslateNamedDecl(x));
       Store_field_option(ret, 2, x->hasBody() && x->doesThisDeclarationHaveABody(), TranslateStmt(x->getBody()));
@@ -1606,11 +1617,12 @@ CAMLprim value MLTreeBuilderVisitor::TranslateFunctionDecl(const FunctionDecl *o
       Store_field(ret, 7, TranslateQualType(x->getReturnType()));
       Store_field_array(ret, 8, x->getNumParams(), TranslateParmVarDecl(x->getParamDecl(i)));
       Store_field(ret, 9, loc.TranslateSourceRange(org->getSourceRange()));
-      Store_field(ret, 10, com.TranslateRawCommentOpt(Context->getRawCommentForDeclNoCache(org)));
+      Store_field(ret, 10, loc.TranslateSourceRange(org->getNameInfo().getSourceRange()));
+      Store_field(ret, 11, com.TranslateRawCommentOpt(Context->getRawCommentForDeclNoCache(org)));
       // C++
-      Store_field_option(ret, 11, x->getPrimaryTemplate (), TranslateFunctionTemplateSpecializationDecl(x));
-      Store_field_option(ret, 12, x->isOverloadedOperator(), TranslateOverloadedOperatorKind(x->getOverloadedOperator(), NULL));
-      Store_field_option(ret, 13, isa<CXXMethodDecl>(x), TranslateCXXMethodDecl(cast<CXXMethodDecl>(x)));
+      Store_field_option(ret, 12, x->getPrimaryTemplate (), TranslateFunctionTemplateSpecializationDecl(x));
+      Store_field_option(ret, 13, x->isOverloadedOperator(), TranslateOverloadedOperatorKind(x->getOverloadedOperator(), NULL));
+      Store_field_option(ret, 14, isa<CXXMethodDecl>(x), TranslateCXXMethodDecl(cast<CXXMethodDecl>(x)));
     });
   CAMLreturn(ret);
 }
@@ -2284,7 +2296,11 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
 
       GENERATE_NODE_INDIRECT(GenericSelectionExpr, ret, node, 3, {
           Store_field(ret, 0, TranslateExpr(x->getControllingExpr()));
+#if CLANG_VERSION_MAJOR >= 9
+          Store_field_array(ret, 1, x->getNumAssocs(), TranslateExpr(x->getAssocExprs()[i]));
+#else
           Store_field_array(ret, 1, x->getNumAssocs(), TranslateExpr(x->getAssocExpr(i)));
+#endif
           Store_field(ret, 2, Val_int(x->getResultIndex()));
         });
 
@@ -2495,7 +2511,11 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
           Store_field(ret, 0, TranslateQualType(x->getAllocatedType()));
           Store_field_option(ret, 1, x->getOperatorNew(), TranslateFunctionDecl(x->getOperatorNew()));
           Store_field_option(ret, 2, x->getOperatorDelete(), TranslateFunctionDecl(x->getOperatorDelete()));
+#if CLANG_VERSION_MAJOR >= 9
+          Store_field_option(ret, 3, x->isArray() && x->getArraySize().hasValue(), TranslateExpr(x->getArraySize().getValue()));
+#else
           Store_field_option(ret, 3, x->isArray(), TranslateExpr(x->getArraySize()));
+#endif
           Store_field(ret, 4, Val_bool(x->isGlobalNew()));
           int r = 0;
           switch (x->getInitializationStyle()) {
@@ -2586,8 +2606,8 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
         });
 
       GENERATE_NODE(FunctionParmPackExpr, ret, node, 2, {
-          Store_field(ret, 0, TranslateParmVarDecl(x->getParameterPack()));
-          Store_field_array(ret, 1, x->getNumExpansions(), TranslateParmVarDecl(x->getExpansion(i)));
+          Store_field(ret, 0, TranslateVarDecl(x->getParameterPack()));
+          Store_field_array(ret, 1, x->getNumExpansions(), TranslateVarDecl(x->getExpansion(i)));
         });
 
       GENERATE_NODE_INDIRECT(MaterializeTemporaryExpr, ret, node, 4, {
@@ -4114,7 +4134,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateEnumConstantDecl(const EnumConstan
   check_null(org, "TranslateEnumConstantDecl");
   const EnumConstantDecl* x = org;
   //x = x->getCanonicalDecl();
-  WITH_CACHE_TUPLE(cacheMisc, ret, org, 5, {
+  WITH_CACHE_TUPLE(cacheMisc, ret, x, 5, {
       Store_uid(ret, 0);
       Store_field(ret, 1, TranslateNamedDecl(x));
       Store_field(ret, 2, TranslateAPSInt(x->getInitVal()));
@@ -4132,7 +4152,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateEnumDecl(const EnumDecl * org) {
   check_null(org, "TranslateEnumDecl");
   const EnumDecl * x = org;
   //x = x->getCanonicalDecl();
-  WITH_CACHE_TUPLE(cacheMisc, ret, org, 11, {
+  WITH_CACHE_TUPLE(cacheMisc, ret, x, 11, {
       Store_uid(ret, 0);
       Store_field(ret, 1, TranslateNamedDecl(x));
       Store_field(ret, 2, Val_int(x->getNumPositiveBits()));
@@ -4156,7 +4176,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateFieldDecl(const FieldDecl * org) {
   check_null(org, "TranslateFieldDecl");
   const FieldDecl * x = org;
   //x = x->getCanonicalDecl();
-  WITH_CACHE_TUPLE(cacheMisc2, ret, org, 12, {
+  WITH_CACHE_TUPLE(cacheMisc2, ret, x, 12, {
       const RecordDecl* d = x->getParent();
       Store_uid(ret, 0);
       Store_field(ret, 1, TranslateNamedDecl(x));
@@ -4198,7 +4218,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateRecordDecl(const RecordDecl * org)
   check_null(org, "TranslateRecordDecl");
   const RecordDecl *x = org;
   //x = dyn_cast<RecordDecl>(x->getCanonicalDecl());
-  WITH_CACHE_TUPLE(cacheMisc, ret, org, 19, {
+  WITH_CACHE_TUPLE(cacheMisc, ret, x, 19, {
       Store_uid(ret, 0);
       Store_field(ret, 1, TranslateNamedDecl(x));
       int kind;
@@ -4282,7 +4302,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateTypedefNameDecl(const TypedefNameD
   const TypedefNameDecl * x = org;
   // NOTE: the canonical decl may sometimes miss its name!
   // x = dyn_cast<TypedefDecl>(x->getCanonicalDecl());
-  WITH_CACHE_TUPLE(cacheMisc, ret, org, 5, {
+  WITH_CACHE_TUPLE(cacheMisc, ret, x, 5, {
       Store_uid(ret, 0);
       Store_field(ret, 1, TranslateNamedDecl(x));
       Store_field(ret, 2, TranslateQualType(x->getUnderlyingType()));
@@ -4693,12 +4713,6 @@ CAML_EXPORT value mlclang_parse(value command, value target, value name, value a
   SourceManager& src = ci.getSourceManager();
   src.setMainFileID(src.createFileID(pFile,SourceLocation(),SrcMgr::C_User));
 
-  // custom diagnostics
-  MLLocationTranslator loc(src);
-  MLDiagnostics* diag = new MLDiagnostics(loc);
-  MLCommentTranslator com(src, loc);
-  ci.getDiagnostics().setClient(diag);
-
   // headers
   // TODO: setting ResourceDir and calling GetResourcesPath does not seem to work
   // we use AddPath directly for now
@@ -4712,6 +4726,14 @@ CAML_EXPORT value mlclang_parse(value command, value target, value name, value a
   Preprocessor &pp = ci.getPreprocessor();
   pp.getBuiltinInfo().initializeBuiltins(pp.getIdentifierTable(),
                                          pp.getLangOpts());
+
+  // locations
+  MLLocationTranslator loc(src, pp.getLangOpts());
+
+  // custom diagnostics
+  MLDiagnostics* diag = new MLDiagnostics(loc);
+  MLCommentTranslator com(src, loc);
+  ci.getDiagnostics().setClient(diag);
 
   // parsing
   ci.setASTConsumer(llvm::make_unique<MLTreeBuilderConsumer>(loc, &tmp, src, com));

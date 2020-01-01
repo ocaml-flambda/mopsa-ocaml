@@ -24,12 +24,87 @@
 open Mopsa
 open Ast
 
+(* Assumes: List.length (List.flatten old_struct) = List.length new_els *)
+(* Ensures: list list structure is the same between old_struct and the output *)
+let recompose (old_struct : 'a list list) (new_els: 'a list) : 'a list list =
+  let rec aux (old_struct: 'a list list) (new_els: 'a list) (acc_cur: 'a list) : 'a list list =
+    match old_struct with
+    | [] ->
+      assert(new_els = []);
+      assert(acc_cur = []);
+      []
+    | oldhdl :: oldtll ->
+      begin match oldhdl with
+      | [] -> List.rev acc_cur :: aux oldtll new_els []
+      | ohd :: otl ->
+        begin match new_els with
+          | [] -> assert false
+          | ehd :: etl -> aux (otl :: oldtll) etl (ehd :: acc_cur)
+        end
+      end
+  in aux old_struct new_els []
+
+(* Assumes: there are as many non-none elements in old as they are in news *)
+(* Ensures: the structure from old is preserved but with the new values provided in news *)
+let fill_some (old: 'a option list) (news: 'b list) : 'b option list =
+  List.fold_left (fun (news, acc) old_el ->
+      match old_el with
+      | None -> (news, None :: acc)
+      | Some _ ->
+        begin match news with
+          | [] -> assert false
+          | hdn :: tln -> (tln, Some hdn :: acc)
+        end
+    ) (news, []) old |> snd |> List.rev
+
+
+
 let () =
   register_expr_visitor (fun default exp ->
       match ekind exp with
+      | E_py_ll_hasattr(e1, e2) ->
+         {exprs = [e1; e2]; stmts = [];},
+         (fun parts -> let e1, e2 = match parts.exprs with
+                         | [e1; e2] -> e1, e2
+                         | _ -> assert false in
+                       {exp with ekind = E_py_ll_hasattr(e1, e2)})
+
+      | E_py_ll_getattr(e1, e2) ->
+         {exprs = [e1; e2]; stmts = [];},
+         (fun parts -> let e1, e2 = match parts.exprs with
+                         | [e1; e2] -> e1, e2
+                         | _ -> assert false in
+                       {exp with ekind = E_py_ll_getattr(e1, e2)})
+
+      | E_py_ll_setattr(e1, e2, Some e3) ->
+        {exprs = [e1; e2; e3]; stmts = [];},
+        (fun parts -> let e1, e2, e3 = match parts.exprs with
+             | [e1; e2; e3] -> e1, e2, e3
+             | _ -> assert false in
+           {exp with ekind = E_py_ll_setattr(e1, e2, Some e3)})
+
+      | E_py_ll_setattr(e1, e2, None) ->
+        {exprs = [e1; e2]; stmts = [];},
+        (fun parts -> let e1, e2 = match parts.exprs with
+             | [e1; e2; e3] -> e1, e2
+             | _ -> assert false in
+           {exp with ekind = E_py_ll_setattr(e1, e2, None)})
+
       | E_py_undefined _ -> leaf exp
 
       | E_py_object _ -> leaf exp
+
+      | E_py_annot e ->
+        {exprs = [e]; stmts = [];},
+        (fun parts -> {exp with ekind = E_py_annot (List.hd parts.exprs)})
+
+      | E_py_check_annot (e1, e2) ->
+        {exprs = [e1; e2]; stmts = [];},
+        (function
+          | {exprs = [v1; v2]} -> {exp with ekind = E_py_check_annot(v1, v2)}
+          | _ -> assert false
+        )
+
 
       | E_py_list elts ->
         {exprs = elts; stmts = [];},
@@ -89,20 +164,26 @@ let () =
       | E_py_list_comprehension(e, comprhs)
       | E_py_set_comprehension(e, comprhs)
       | E_py_generator_comprehension(e, comprhs) ->
-        let iters, targets = comprhs |> List.fold_left (fun acc (target, iter, conds) ->
-            match conds with
-            | [] ->
-              iter :: fst acc, target :: snd acc
-            | _ -> assert false
-          ) ([], [])
+        let open Universal.Ast in
+        let iters, targets, conds = comprhs |> List.fold_left (fun (acc1, acc2, acc3) (target, iter, conds) ->
+            (* todo: do not change conds into stmts, use the structure of comprhs in the rebuild function to know if sth is an iter or a compr *)
+            iter :: acc1, target :: acc2, (Universal.Ast.mk_block (List.map (fun x -> Universal.Ast.mk_expr_stmt x exp.erange) conds) exp.erange) :: acc3
+          ) ([], [], [])
         in
-        {exprs = e :: iters; stmts = []},
+        {exprs = e :: iters; stmts = conds},
         (function
-          | {exprs = e :: iters} ->
+          | {exprs = e :: iters; stmts = conds} ->
             let comprhs =
-              List.combine iters targets |>
-              List.fold_left (fun acc (iter, target) ->
-                  (target, iter, []) :: acc
+              List.combine (List.combine iters targets) conds |>
+              List.fold_left (fun acc ((iter, target), conds) ->
+                  (target, iter,
+                   match skind conds with
+                   | S_block (l,_) -> List.map
+                                    (fun x -> match skind x with
+                                       | S_expression e -> e
+                                       | _ -> assert false) l
+                   | _ -> assert false
+                  ) :: acc
                 ) []
             in
             begin
@@ -189,8 +270,37 @@ let () =
         {exprs = cls.py_cls_bases; stmts = [cls.py_cls_body];},
         (function {exprs = bases; stmts = [body]} -> {stmt with skind = S_py_class({cls with py_cls_body = body; py_cls_bases = bases})} | _ -> assert false)
       | S_py_function(func) ->
-        {exprs = []; stmts = [func.py_func_body];},
-        (fun parts -> {stmt with skind = S_py_function({func with py_func_body = List.hd parts.stmts})})
+        (* FIXME: filter_map in 4.08 *)
+        let filter_map f l =
+          List.fold_left (fun acc el ->
+              match f el with
+              | None -> acc
+              | Some v -> v :: acc
+            ) [] l |> List.rev in
+        let defaults = filter_map (fun x -> x) func.py_func_defaults in
+        let decors = func.py_func_decors in
+        let types_in = filter_map (fun x -> x) func.py_func_types_in in
+        let type_out = match func.py_func_type_out with | None -> [] | Some x -> [x] in
+        let all = [defaults; decors; types_in; type_out] in
+        let allf = List.flatten all in
+        {exprs = allf; stmts = [func.py_func_body];},
+        (function
+          | {exprs; stmts = [body]} ->
+            let nall = recompose all exprs in
+            begin match nall with
+              | [def; dec; tyin; tyout] ->
+                let ndefaults = fill_some func.py_func_defaults def in
+                let ndecors = dec in
+                let ntypes_in = fill_some func.py_func_types_in tyin in
+                let ntype_out = List.hd @@ fill_some [func.py_func_type_out] tyout in
+                {stmt with skind = S_py_function({func with py_func_defaults = ndefaults;
+                                                            py_func_decors = ndecors;
+                                                            py_func_types_in = ntypes_in;
+                                                            py_func_type_out = ntype_out;
+                                                            py_func_body = body})}
+              | _ -> assert false end
+          | _ -> assert false
+        )
       | S_py_raise(None) -> leaf stmt
       | S_py_raise(Some e) ->
         {exprs = [e]; stmts = [];},
@@ -230,12 +340,18 @@ let () =
         (function {exprs = [e]} -> {stmt with skind = S_py_multi_assign(targets, e)} | _ -> assert false)
 
       | S_py_aug_assign(x, op, e) ->
-        {exprs = [e]; stmts = []},
+        {exprs = [x; e]; stmts = []},
         (function
-          | {exprs = [e]} -> {stmt with skind = S_py_aug_assign(x, op, e)}
+          | {exprs = [x; e]} -> {stmt with skind = S_py_aug_assign(x, op, e)}
           | _ -> assert false
         )
 
+      | S_py_annot(x, typ) ->
+        {exprs = [x; typ]; stmts = []},
+        (function
+          | {exprs = [x; typ]} -> {stmt with skind = S_py_annot(x, typ)}
+          | _ -> assert false
+        )
 
       | S_py_import _ -> leaf stmt
       | S_py_import_from _ -> leaf stmt

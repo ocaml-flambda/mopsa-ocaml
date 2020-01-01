@@ -200,7 +200,7 @@ let rec add_stmt (c:ctx) (pre:node) (post:node) (s:stmt) : unit =
      add_stmt c tnode post s1;
      add_stmt c fnode post s2
      
-  | S_block l ->
+  | S_block (l,locals) ->
      let rec add pre post = function
        | [] ->
           (* empty block: connect pre and post nodes with skip *)
@@ -217,7 +217,8 @@ let rec add_stmt (c:ctx) (pre:node) (post:node) (s:stmt) : unit =
           (* add the rest between node and post *)
           add node post b
      in
-     add pre post l
+     let rems = List.map (fun v -> mk_remove_var v (srange s)) locals in
+     add pre post (l@rems)
 
 
   | S_while (e,s) ->
@@ -280,20 +281,29 @@ let rec add_stmt (c:ctx) (pre:node) (post:node) (s:stmt) : unit =
      
   (* atomic statements: add an edge with the statement *)
 
+  (* framework *)
   | S_assign _
   | S_assume _
-  | S_rename _
+  | S_add _
   | S_remove _
-  | S_project _
-  | S_expression _
-  | S_simple_assert _
-  | S_assert _
-  | S_print ->
-     let tmps, assigns, s = extract_calls_stmt s in
-     let adds, rems = mk_add_tmps tmps, mk_remove_tmps tmps in
-     let blk = adds @ assigns @ [s] @ rems in
-     add_edge c (srange s) [T_cur,pre] [T_cur,post] blk
+  | S_rename _
+  | S_forget _
+  | S_expand _
+  | S_fold _
 
+  (* universal *)
+  | S_expression _
+  | S_assert _
+  | S_satisfy _
+  | S_print
+  | S_free_addr _
+    ->
+    
+    let tmps, assigns, s = extract_calls_stmt s in
+    let adds, rems = mk_add_tmps tmps, mk_remove_tmps tmps in
+    let blk = adds @ assigns @ [s] @ rems in
+    add_edge c (srange s) [T_cur,pre] [T_cur,post] blk
+      
   (* unknown *)
 
   | _ ->

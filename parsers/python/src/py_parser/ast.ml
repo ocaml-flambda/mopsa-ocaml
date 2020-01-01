@@ -55,6 +55,8 @@ and stmt_kind =
     of expr (** target *) *
        expr (** value *)
 
+  | S_type_annot of expr (** target *) * expr (** value *)
+
   | S_expression
     of expr (** expression statements *)
 
@@ -133,7 +135,8 @@ and func = {
   func_body: stmt; (** function body *)
   func_is_generator: bool; (** is the function a generator? *)
   func_decors: expr list;
-  func_return: expr option;
+  func_types_in: expr option list; (* type of the arguments *)
+  func_type_out: expr option; (* type of the return *)
   func_range: Location.range;
 }
 
@@ -162,6 +165,7 @@ and expr = {
 }
 
 and expr_kind =
+  | E_ellipsis
     | E_true
 
     | E_false

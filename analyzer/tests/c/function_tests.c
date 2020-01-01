@@ -75,3 +75,18 @@ void test_struct_array_argument() {
   reset_struct_array(arr);
   _mopsa_assert(arr[0].x == 0);
 }
+
+
+/* Test of procedures */
+/* ****************** */
+
+int proc_g;
+
+void proc(int x) {
+  proc_g = x;
+}
+
+void test_procedure() {
+  proc(10);
+  _mopsa_assert(proc_g == 10);
+}

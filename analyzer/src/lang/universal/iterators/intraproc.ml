@@ -22,7 +22,7 @@
 (** Intra-procedural iterator for blocks, assignments and tests *)
 
 open Mopsa
-open Framework.Core.Sig.Domain.Stateless
+open Sig.Domain.Stateless
 open Ast
 
 
@@ -40,36 +40,43 @@ struct
     ieval = { provides = []; uses = [] };
   }
 
+  let alarms = []
+
   let init prog man flow = flow
 
   let exec zone stmt man flow =
     match skind stmt with
     | S_expression(e) when is_universal_type e.etyp || e.etyp = T_any ->
       Some (
-        man.eval e flow |>
-        post_eval man @@ fun e flow ->
+        man.eval e flow >>$ fun e flow ->
         Post.return flow
       )
 
-    | S_block(block) ->
+    | S_assume { ekind = E_unop (O_log_not, { ekind = E_unop (O_log_not, e) }) } ->
+      man.post ~zone (mk_assume e stmt.srange) flow |>
+      Option.return
+
+    | S_block(block,local_vars) ->
       Some (
-        List.fold_left (fun acc stmt -> man.exec ~zone stmt acc) flow block |>
-        Post.return
+        let flow = List.fold_left (fun acc stmt -> man.exec ~zone stmt acc) flow block in
+        let flow = List.fold_left (fun acc var -> man.exec ~zone (mk_remove_var var stmt.srange) acc) flow local_vars in
+        Post.return flow
       )
 
     | S_if(cond, s1, s2) ->
-      let range = srange stmt in
-      let block1 = mk_block [mk_assume cond range; s1] range in
-      let block2 = mk_block [mk_assume (mk_not cond range) range; s2] range in
-      let flows = Flow.map_list man.exec [block1; block2] flow in
-      let flow' = Flow.join_list man.lattice ~ctx:(Flow.get_ctx flow) flows in
-      Some (Post.return flow')
+      let then_flow = man.exec (mk_assume cond cond.erange) flow |>
+                      man.exec s1
+      in
+      let else_flow = Flow.copy_ctx then_flow flow |>
+                      man.exec (mk_assume (mk_not cond cond.erange) cond.erange) |>
+                      man.exec s2
+      in
+      Flow.join man.lattice then_flow else_flow |>
+      Post.return |>
+      Option.return
 
     | S_print ->
-      Debug.debug ~channel:"print" "%a@\n  @[%a@]"
-        pp_position (srange stmt |> get_range_start)
-        (Flow.print man.lattice) flow
-      ;
+      Framework.Output.Factory.print (srange stmt) (Flow.print man.lattice.print) flow;
       Some (Post.return flow)
 
     | _ -> None

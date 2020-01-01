@@ -23,7 +23,6 @@
 
 open Mopsa
 open Core.Sig.Value.Lowlevel
-module Simplified = Core.Sig.Value.Simplified
 open Rounding
 open Ast
 open Bot
@@ -51,12 +50,7 @@ struct
 
   let zones = [Zone.Z_u_num]
 
-  let types = [
-    T_float F_SINGLE;
-    T_float F_DOUBLE;
-    T_float F_LONG_DOUBLE;
-    T_float F_REAL
-  ]
+  let mem_type = function T_float _ -> true | _ -> false
 
 
   let () =
@@ -67,7 +61,13 @@ struct
 
   let bottom = I.bot
 
-  let top = I.double_special
+  let top_of_prec = function
+    | F_SINGLE -> I.single_special
+    | F_DOUBLE -> I.double_special
+    | F_LONG_DOUBLE -> I.long_double_special
+    | F_REAL -> I.real
+
+  let top = top_of_prec F_LONG_DOUBLE
 
   let is_bottom = I.is_bot
 
@@ -77,21 +77,18 @@ struct
 
   let meet (a1:t) (a2:t) : t = I.meet a1 a2
 
-  let widen (a1:t) (a2:t) : t = I.widen a1 a2
+  let widen ctx (a1:t) (a2:t) : t = I.widen a1 a2
 
   let print fmt (a:t) = I.fprint I.dfl_fmt fmt a
 
-  let get man id' a = Simplified.leaf_get man id id' a
-
-  let set man id' v a = Simplified.leaf_set man id id' v a
 
   (** Arithmetic operators *)
 
   let prec : float_prec -> I.prec = function
     | F_SINGLE -> `SINGLE
     | F_DOUBLE -> `DOUBLE
-    | F_LONG_DOUBLE -> panic "unhandled `DOUBLE intervals"
-    | F_REAL -> panic "unhandled `REAL intervals"
+    | F_LONG_DOUBLE -> `LONG_DOUBLE
+    | F_REAL -> `REAL
 
   let round () : I.round =
     match !opt_float_rounding with
@@ -100,8 +97,8 @@ struct
     | Apron.Texpr1.Up -> `UP
     | Apron.Texpr1.Down -> `DOWN
     | Apron.Texpr1.Rnd -> `ANY
-
-  let of_constant t c =
+                        
+  let constant t c =
     match t, c with
     | T_float p, C_float i ->
        I.of_float_prec (prec p) (round ()) i i
@@ -119,25 +116,30 @@ struct
        I.zero
 
     | T_float _, C_bool true ->
-       I.one
+      I.one
+
+    | T_float p, C_top (T_float pp) when p = pp ->
+      top_of_prec p
 
     | _ -> top
 
-  let unop man t op v = Simplified.lift_unop (fun op a ->
+  let unop man t op v = lift_simplified_unop (fun op a ->
       match t with
       | T_float p ->
         (match op with
          | O_minus -> I.neg a
          | O_plus  -> a
          | O_sqrt  -> I.sqrt (prec p) (round ()) a
-         | O_cast  ->
-           let int_itv = man.cast Integer.Value.id v in
+         | O_cast (T_int, T_float p)  ->
+           let int_itv = man.ask (ValueQuery (v,Common.VQ_to_int_interval)) in
            I.of_int_itv_bot (prec p) (round ()) int_itv
-         | _ -> top)
+         (* this seems to return top every time. Why don't we use
+            I.round_int (prec p) (round ()) a ? *)
+         | _ -> top_of_prec p)
       | _ -> top
     ) man t op v
 
-  let binop man t op a1 a2 = Simplified.lift_binop (fun op a1 a2 ->
+  let binop man t op a1 a2 = lift_simplified_binop (fun op a1 a2 ->
       match t with
       | T_float p ->
         (match op with
@@ -146,13 +148,13 @@ struct
          | O_mult  -> I.mul (prec p) (round ()) a1 a2
          | O_div   -> I.div (prec p) (round ()) a1 a2
          | O_mod   -> I.fmod (prec p) (round ()) a1 a2
-         | _ -> top)
+         | _ -> top_of_prec p)
       | _ -> top
     ) man t op a1 a2
 
-  let filter man a b = Simplified.lift_filter (fun a b -> a) man a b
+  let filter man a b = lift_simplified_filter (fun a b -> a) man a b
 
-  let bwd_unop man t op a r = Simplified.lift_bwd_unop (fun op a r ->
+  let bwd_unop man t op a r = lift_simplified_bwd_unop (fun op a r ->
         match t with
         | T_float p ->
           (match op with
@@ -163,7 +165,7 @@ struct
         |_ -> a
       ) man t op a r
 
-  let bwd_binop man t op a1 a2 r = Simplified.lift_bwd_binop (fun op a1 a2 r ->
+  let bwd_binop man t op a1 a2 r = lift_simplified_bwd_binop (fun op a1 a2 r ->
       match t with
       | T_float p ->
         (match op with
@@ -176,27 +178,38 @@ struct
       | _ -> a1,a2
     ) man t op a1 a2 r
 
-  let compare man t op a1 a2 r = Simplified.lift_compare (fun op a1 a2 r ->
+  let compare man t op a1 a2 r = lift_simplified_compare (fun op a1 a2 r ->
       match t with
       | T_float p ->
-        (match r, op with
+         (match r, op with
          | true, O_eq | false, O_ne -> I.filter_eq  (prec p) a1 a2
          | true, O_ne | false, O_eq -> I.filter_neq (prec p) a1 a2
          | true, O_lt -> I.filter_lt  (prec p) a1 a2
          | true, O_le -> I.filter_leq (prec p) a1 a2
          | true, O_gt -> I.filter_gt  (prec p) a1 a2
          | true, O_ge -> I.filter_geq (prec p) a1 a2
-         | false, O_lt -> I.filter_lt_false  (prec p) a1 a2
          | false, O_le -> I.filter_leq_false (prec p) a1 a2
-         | false, O_gt -> I.filter_gt_false  (prec p) a1 a2
+         | false, O_lt -> I.filter_lt_false  (prec p) a1 a2
          | false, O_ge -> I.filter_geq_false (prec p) a1 a2
+         | false, O_gt -> I.filter_gt_false  (prec p) a1 a2
          | _ -> a1,a2)
       | _ -> a1,a2
     ) man t op a1 a2 r
 
-  let ask man q = None
 
-  let refine man channel v = Channel.return v
+  let ask : type r. ('a,t) man -> ('a,r) vquery -> r option =
+    fun man q ->
+    match q with
+    | NormalQuery(Common.Q_float_interval e) ->
+      man.eval e |>
+      man.get |>
+      Option.return
+
+    | ValueQuery(a,Common.VQ_to_float_interval) ->
+      man.get a |>
+      Option.return
+
+    | _ -> None
 
 
 end

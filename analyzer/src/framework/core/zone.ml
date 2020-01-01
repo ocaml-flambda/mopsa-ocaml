@@ -42,13 +42,14 @@ open Expr
 type zone = ..
 
 type zone +=
-  | Z_any            (** matches any defined zone *)
   | Z_under of zone  (** matches any sub-zone *)
   | Z_above of zone  (** matches any sup-zone *)
 
-let any_zone = Z_any
 let under_zone z = Z_under z
+
 let above_zone z = Z_above z
+
+let debug fmt = Debug.debug ~channel:"framework.core.zone" fmt
 
 let rec compare_zone (z1: zone) (z2: zone) : int =
   if z1 == z2 then 0
@@ -79,17 +80,35 @@ and zone_action =
   | Visit
   | Process
 
+
 (* Map pairing zones with their definitions *)
 module ZoneMap = Map.Make(struct type t = zone let compare = compare_zone end)
 
-let zones : zone_info ZoneMap.t ref = ref ZoneMap.empty
+let zones = ref ZoneMap.empty
 
 let register_zone info =
   zones := ZoneMap.add info.zone info !zones;
   ()
 
-(* Matching predicates *)
-(* ------------------- *)
+
+(* Wildcard zone *)
+(* ------------- *)
+
+type zone += Z_any  (** matches any defined zone *)
+
+let () =
+  register_zone {
+    zone = Z_any;
+    zone_subset = None;
+    zone_name = "*";
+    zone_eval = (fun e -> Visit);
+  }
+
+let any_zone = Z_any    
+
+
+(* Comparison predicates *)
+(* --------------------- *)
 
 let rec subset (z1: zone) (z2: zone) : bool =
   match z1, z2 with
@@ -129,7 +148,6 @@ let sat_zone2 export zz =
 
 let rec pp_zone fmt (z: zone) =
   match z with
-  | Z_any -> Format.fprintf fmt "*"
   | Z_under z -> Format.fprintf fmt "↓ %a" pp_zone z
   | Z_above z -> Format.fprintf fmt "↑ %a" pp_zone z
   | _ ->
@@ -171,37 +189,35 @@ let pp_eval_path fmt (zp:path) =
 *)
 
 let eval_template exp z =
-  let template =
+  let template : expr -> zone_action =
     try
       let info = ZoneMap.find z !zones in
       info.zone_eval
     with Not_found ->
-      (* Default template: call eval of domains *)
-      (fun exp -> Process)
+      Exceptions.panic_at exp.erange "zone %a not found during the evaluation of %a"
+        pp_zone z
+        pp_expr exp
   in
 
-  (* Evaluate expression by structural induction *)
-  let rec aux exp =
-    match template exp with
-    | Keep -> Keep
-    | Process -> Process
-    | Visit ->
-      (* Check whether all sub-expressions are part of the zone *)
-      let evals =
-        Visitor.fold_expr
-          (fun acc exp ->
-             VisitParts ((template exp) :: acc)
-          )
-          (fun acc stmt ->
-             VisitParts (Process :: acc)
-          )
-          [] exp
-      in
-      if List.for_all (function Keep -> true | _ -> false) evals
-      then Keep
-      else Visit
-  in
-  aux exp
+  match template exp with
+  | Keep -> Keep
+  | Process -> Process
+  | Visit ->
+    (* Check whether all sub-expressions are part of the zone *)
+    let rec mem e =
+      match template e with
+      | Keep -> true
+      | Process -> false
+      | Visit ->
+        if Visitor.is_leaf_expr e
+        then false
+        else
+          Visitor.fold_sub_expr
+            (fun acc ee -> Visitor.Keep (acc && mem ee))
+            (fun acc stmt -> Visitor.Keep false)
+            true e
+    in
+    if mem exp then Keep else Visit
 
 
 (** {2 Eval graph}

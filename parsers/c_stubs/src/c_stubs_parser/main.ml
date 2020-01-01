@@ -26,17 +26,15 @@ open Location
 let debug fmt = Debug.debug ~channel:"c_stubs_parser.main" fmt
 
 (** Check whether a comment is a stub comment *)
-let is_stub_comment com =
-  match com with
-  | [com] ->
-    let comment = com.Clang_AST.com_text |>
-                  String.trim
-    in
-    let lexeme = "/*$" in
-    let start = String.sub comment 0 (String.length lexeme) in
-    start = lexeme
-
-  | _ -> false
+let find_stub_comment_opt com_list =
+  List.find_opt (fun com ->
+      let comment = com.Clang_AST.com_text |>
+                    String.trim
+      in
+      let lexeme = "/*$" in
+      let start = String.sub comment 0 (String.length lexeme) in
+      start = lexeme
+    ) com_list
 
 
 (** Parse the stub specification from comments of a function *)
@@ -49,9 +47,9 @@ let parse_function_comment
     (stubs:(string,Cst.stub) Hashtbl.t)
   : Ast.stub option
   =
-  if not (is_stub_comment func.func_com) then None
-  else
-    let com = List.hd func.func_com in
+  match find_stub_comment_opt func.func_com with
+  | None -> None
+  | Some com ->
     let comment = com.com_text in
     let file = com.com_range.range_begin.loc_file in
     let line = com.com_range.range_begin.loc_line in
@@ -137,6 +135,7 @@ let parse_directive_comment
       func_local_vars = [];
       func_variadic = false;
       func_range = range;
+      func_name_range = range;
       func_com = com;
     }
   in
@@ -179,13 +178,13 @@ let parse_global_predicate_comment com =
     (* Parse the comment *)
     try
       let cst = Parser.parse_stub Lexer.read buf in
-      Option.apply [] (fun cst ->
+      Option.apply (fun cst ->
           List.fold_left (fun acc section ->
               match section with
               | Cst.S_predicate pred -> pred :: acc
               | _ -> acc
             ) [] cst.content
-        ) cst
+        ) [] cst
     with
     | Lexer.SyntaxError s ->
       let range = Location.from_lexing_range (Lexing.lexeme_start_p buf) (Lexing.lexeme_end_p buf) in

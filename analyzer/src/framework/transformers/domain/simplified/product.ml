@@ -427,82 +427,195 @@ struct
 
 
   let reduction_man : Spec.t man = {
-    get = (fun id a ->
-        Exceptions.panic ~loc:__LOC__ "get not implemented"
+    (* Get the abstract element of a domain *)
+    get = (
+        let doit : type a. a id -> t -> a = fun id a ->
+          let f : type b. b dmodule -> b -> a option = fun m aa ->
+            let module Domain = (val m) in
+            match equal_id id Domain.id with
+            | Some Eq -> Some aa
+            | None -> None
+          in
+          match map_opt { f } Spec.pool a with
+          | Some r -> r
+          | None -> raise Not_found
+        in
+        doit
       );
 
-    set = (fun id v a ->
-        Exceptions.panic ~loc:__LOC__ "set not implemented"
-      );
+    (* Set the abstract element of a domain *)
+    set = (
+      let doit : type a. a id -> a -> t -> t = fun id v a ->
+        let f : type b. b dmodule -> b -> b option = fun m _ ->
+          let module Domain = (val m) in
+          match equal_id id Domain.id with
+          | Some Eq -> Some v
+          | None -> None
+        in
+        match apply_opt { f } Spec.pool a with
+        | Some r -> r
+        | None -> raise Not_found
+      in
+      doit
+    );
 
+    (* Get the abstract value of a variable *)
     get_value = (
-      let doit : type v. v value -> var -> t -> v =
-        fun (type v) (id:v value)  var a ->
-        let open Value.Nonrel in
-
+      let doit : type v. v id -> var -> t -> v =
+        fun (type v) (id:v id)  var a ->
+          let open Value.Nonrel in
+          let open Bot_top in
+          let open Lattices.Partial_map in
         let f : type a. a dmodule -> a -> v option =
           fun m aa ->
             let module Domain = (val m) in
-
             match Domain.id with
-            | D_nonrel_id vmodule ->
-              let module Value = (val vmodule) in
-              let v = VarMap.find var aa ~bottomv:Value.bottom ~topv:Value.top in
-
-              let man : (Value.t,Value.t) Sig.Value.Lowlevel.man = {
-                get = (fun v -> v);
-                set = (fun v _ -> v);
-                eval = (fun e -> assert false);
-                cast = (fun id v -> assert false);
-              }
+            (* The value is extracted from non-relational environments *)
+            | D_nonrel vmodule ->
+              let module V = (val vmodule) in
+              (* Extract the value of the variable. This is not the
+                 final result, as the required value may be embedded
+                 in a product 
+              *)
+              let v = match aa with
+                | TOP -> V.top
+                | BOT -> V.bottom
+                | Nbt map -> PMap.find var map
               in
 
-              Value.get man id v
+              (* Iterate over the value combiners to find the required id *)
+              let rec iter : type w. w id -> w -> v option =
+                fun id' v' ->
+                  (* Check if id' corresponds to what we are searching for *)
+                  match equal_id id' id with
+                  | Some Eq -> Some v'
+                  | None ->
+                    (* Otherwise, search in the arguments of the combiners *)
+                    match id' with
 
+                    (* Case of values combined as a sum typ *)
+                    | Value.Lowlevel.Union.V_union(v1,v2) ->
+                      let module V1 = (val v1) in
+                      begin match iter V1.id (Value.Lowlevel.Union.get_left v1 v') with
+                        | Some r -> Some r
+                        | None ->
+                          let module V2 = (val v2) in
+                          match iter V2.id (Value.Lowlevel.Union.get_right v2 v') with
+                          | Some r -> Some r
+                          | None -> None
+                      end
+
+                    (* Case of values combined in a product *)
+                    | Value.Lowlevel.Product.V_product(vl) ->
+                      let open Core.Sig.Value.Lowlevel in
+                      let rec iter2: type z. z vlist -> z -> v option =
+                        fun vl v' ->
+                          match vl,v' with
+                          | Nil,() -> None
+                          | Cons(hd,tl),(hdv,tlv) ->
+                            let module Z = (val hd) in
+                            match iter Z.id hdv with
+                            | Some r -> Some r
+                            | None -> iter2 tl tlv
+                      in
+                      iter2 vl v'
+                          
+                    (* Not found *)
+                    | _ -> None
+              in
+              iter V.id v
             | _ -> None
-        in
-
-        match map_opt { f } Spec.pool a with
-        | Some r -> r
-        | None -> Exceptions.panic "value of %a not found" pp_var var
-
+          in
+          match map_opt { f } Spec.pool a with
+          | Some r -> r
+          | None -> raise Not_found
       in
       doit
     );
 
     set_value = (
-        let doit : type v. v value -> var -> v -> t -> t =
-          fun (type v) (id:v value) var v a ->
+        let doit : type v. v id -> var -> v -> t -> t =
+          fun (type v) (id:v id) var v a ->
             let open Value.Nonrel in
-
+            let open Bot_top in
+            let open Lattices.Partial_map in
             let f : type a. a dmodule -> a -> a option =
               fun m aa ->
                 let module Domain = (val m) in
 
                 match Domain.id with
-                | D_nonrel_id vmodule ->
-                  let module Value = (val vmodule) in
-                  let x = VarMap.find var aa ~bottomv:Value.bottom ~topv:Value.top in
-
-                  let man : (Value.t,Value.t) Sig.Value.Lowlevel.man = {
-                    get = (fun v -> v);
-                    set = (fun v _ -> v);
-                    eval = (fun e -> assert false);
-                    cast = (fun id v -> assert false);
-                  }
+                (* The value is set in non-relational environments *)
+                | D_nonrel vmodule ->
+                  let module V = (val vmodule) in
+                  (* Get the old value of the variable. The given
+                     value [v] will be put *inside* it (in case of composed values). *)
+                  let old = match aa with
+                    | TOP -> V.top
+                    | BOT -> V.bottom
+                    | Nbt map -> PMap.find var map
                   in
 
-                  begin match Value.set man id v x with
-                    | Some x' -> Some (VarMap.add var x' aa ~is_bottomv:Value.is_bottom)
-                    | None -> None
-                  end
+                  (* Iterate over the structure of [old] to put [v] in the right place *)
+                  let rec iter: type w x. w id -> x id -> w -> x -> w option =
+                    fun id' id v' v ->
+                      (* Check if id' corresponds to what we are searching for *)
+                      match equal_id id' id with
+                      | Some Eq -> Some v
+                      | None ->
+                        (* Otherwise, search in the operands of value combiners *)
+                        match id' with
 
+                        (* Case of values combined as a sum typ *)
+                        | Value.Lowlevel.Union.V_union(v1,v2) ->
+                          let module V1 = (val v1) in
+                          begin match iter V1.id id (Value.Lowlevel.Union.get_left v1 v') v with
+                            | Some r -> Some (Value.Lowlevel.Union.set_left v1 r v')
+                            | None ->
+                              let module V2 = (val v2) in
+                              match iter V2.id id (Value.Lowlevel.Union.get_right v2 v') v with
+                              | Some r -> Some (Value.Lowlevel.Union.set_right v2 r v')
+                              | None -> None
+                          end
+
+                        (* Case of values combined in a product *)
+                        | Value.Lowlevel.Product.V_product(vl) ->
+                          let open Core.Sig.Value.Lowlevel in
+                          let rec iter2: type z. z vlist -> z -> z option =
+                            fun vl v' ->
+                              match vl,v' with
+                              | Nil,() -> None
+                              | Cons(hd,tl),(hdv,tlv) ->
+                                let module Z = (val hd) in
+                                match iter Z.id id hdv v with
+                                | Some r -> Some (r,tlv)
+                                | None ->
+                                  match iter2 tl tlv with
+                                  | None -> None
+                                  | Some r -> Some (hdv,r)
+                          in
+                          iter2 vl v'
+
+                        (* Not found *)
+                        | _ -> None
+                  in
+
+                  begin match iter V.id id old v with
+                    | None -> None
+                    | Some v' ->
+                      if V.is_bottom v' then Some BOT
+                      else
+                        match aa with
+                        | TOP -> Some TOP
+                        | BOT -> Some BOT
+                        | Nbt map -> Some (Nbt (PMap.add var v' map))
+                  end
+                  
                 | _ -> None
             in
 
             match apply_opt { f } Spec.pool a with
             | Some r -> r
-            | None -> Exceptions.panic "value of %a not updated" pp_var var
+            | None -> raise Not_found
 
         in
         doit
@@ -521,20 +634,20 @@ struct
     refine = refine_lfp;
   }
 
-  let reduce stmt pre post =
+  let reduce ctx stmt pre post =
     List.fold_left (fun acc rule ->
         let module R = (val rule : REDUCTION) in
-        R.reduce stmt reduction_man pre acc
+        R.reduce ctx stmt reduction_man pre acc
       ) post Spec.rules
 
-  let exec stmt a =
+  let exec ctx stmt man a =
     let f = fun (type a) (m: a dmodule) aa ->
       let module Domain = (val m) in
-      Domain.exec stmt aa
+      Domain.exec ctx stmt man aa
     in
     apply_opt { f } Spec.pool a |>
     Option.lift @@ fun a' ->
-    reduce stmt a a'
+    reduce ctx stmt a a'
 
 
 end

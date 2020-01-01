@@ -44,8 +44,6 @@ type 'a structure = parts * (parts -> 'a)
 let leaf (x: 'a) : 'a structure =
   {exprs = []; stmts = []}, (fun _ -> x)
 
-
-
 (*==========================================================================*)
 (**                           {2 Registration}                              *)
 (*==========================================================================*)
@@ -133,6 +131,13 @@ let split_expr (expr : expr) : expr structure = !expr_visit_chain expr
 
 let split_stmt (stmt : stmt) : stmt structure = !stmt_visit_chain stmt
 
+let is_leaf_expr e =
+  let parts, _ = split_expr e in
+  List.length parts.exprs = 0 && List.length parts.stmts = 0
+
+let is_leaf_stmt s =
+  let parts, _ = split_stmt s in
+  List.length parts.exprs = 0 && List.length parts.stmts = 0
 
 (*==========================================================================*)
 (**                            {2 Visitors}                                 *)
@@ -212,8 +217,17 @@ and fold_stmt
     let x2 = List.fold_left (fold_expr fe fs) x1 parts.exprs in
     List.fold_left (fold_stmt fe fs) x2 parts.stmts
 
+
+let fold_sub_expr
+    (fe: 'a -> expr -> 'a action)
+    (fs: 'a -> stmt -> 'a action) x0 e =
+  let parts, _ = split_expr e in
+  let x2 = List.fold_left (fold_expr fe fs) x0 parts.exprs in
+  List.fold_left (fold_stmt fe fs) x2 parts.stmts
+
+
 (** Combination of map and fold for expressions *)
-and fold_map_expr
+let rec fold_map_expr
     (fme  : 'a -> expr -> ('a * expr) action)
     (fms  : 'a -> stmt -> ('a * stmt) action)
     (x0   : 'a)
@@ -286,3 +300,22 @@ let stmt_vars (s: stmt) : var list =
     )
     (fun acc s -> VisitParts acc)
     [] s
+
+
+(** Get the original version of an evaluated expression *)
+let rec get_orig_expr e =
+  match e.eprev with
+  | Some ee ->
+    get_orig_expr ee
+
+  | None ->
+    let rec iter ee =
+      match ee.eprev with
+      | None -> ee
+      | Some eee -> iter eee
+    in
+    map_expr
+      (fun ee -> VisitParts (iter ee))
+      (fun s -> VisitParts s)
+      e
+      

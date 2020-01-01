@@ -25,8 +25,34 @@ module Callstack = Callstack
 
 module Context = Context
 
+module Result = Result
+
+type ('a,'r) result = ('a,'r) Result.result
+
+let bind_full = Result.bind_full
+let (>>*) = Result.(>>*)
+
+let bind_full_opt = Result.bind_full_opt
+let (>>*?) = Result.(>>*?)
+
+let bind = Result.bind
+let (>>=) = Result.(>>=)
+
+let bind_opt = Result.bind_opt
+let (>>=?) = Result.(>>=?)
+
+let bind_some = Result.bind_some
+let (>>$) = Result.(>>$)
+
+let bind_some_opt = Result.bind_some_opt
+let (>>$?) = Result.(>>$?)
+
+let bind_list = Result.bind_list
+let bind_list_opt = Result.bind_list_opt
+
+
 module Eval = Eval
-type ('e, 'a) eval = ('e, 'a) Eval.eval
+type 'a eval = 'a Eval.eval
 
 module Flow = Flow
 type 'a flow = 'a Flow.flow
@@ -52,3 +78,7 @@ module Interface = Interface
 module Sig = Sig
 
 module Channel = Channel
+
+module Soundness = Soundness
+
+module Hook = Hook

@@ -8,7 +8,7 @@
 unsigned char glob[5];
 
 void test_global_init_with_zero() {
-  _mopsa_assert(glob[0] == 0);
+  _mopsa_assert_exists(glob[0] == 0);
 }
 
 void test_initialization() {
@@ -58,7 +58,7 @@ void test_array_out_of_bound_with_constant_index() {
   int a[100];
   int j = 100;
   int x = a[j];
-  _mopsa_assert_error(OUT_OF_BOUND);
+  _mopsa_assert_unsafe();
 }
 
 void test_array_safe_access_with_constant() {
@@ -84,14 +84,14 @@ void test_array_out_of_bound_access_with_range() {
   int a[100];
   int j = _mopsa_range_int(100, 200);
   int x = a[j];
-  _mopsa_assert_error(OUT_OF_BOUND);
+  _mopsa_assert_unsafe();
 }
 
 void test_may_array_out_of_bound_access_with_range() {
   int a[100];
   int j = _mopsa_range_int(10, 200);
   int x = a[j];
-  _mopsa_assert_error_exists(OUT_OF_BOUND);
+  _mopsa_assert_unsafe();
 }
 
 void test_array_safe_access_with_range_in_lval() {
@@ -123,4 +123,29 @@ void test_weak_update() {
   _mopsa_assert_exists(a[0] == 3);
   _mopsa_assert_exists(a[1] == 1);
   _mopsa_assert_exists(a[1] == 3);
+}
+
+
+/************************/
+/* Variable-size arrays */
+/************************/
+
+void test_variable_size_array_with_constant_expression() {
+  int n = 10;
+  int a[n];
+  a[0] = 1;
+  _mopsa_assert_safe();
+  a[9] = 1;
+  _mopsa_assert_safe();
+  a[10] = 0;
+  _mopsa_assert_unsafe();
+}
+
+void test_variable_size_array() {
+  int n = _mopsa_range_int(1,10);
+  int a[n];
+  a[0] = 1;
+  _mopsa_assert_safe();
+  a[10] = 0;
+  _mopsa_assert_unsafe();
 }

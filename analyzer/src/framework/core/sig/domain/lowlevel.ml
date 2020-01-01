@@ -42,7 +42,7 @@ open Interface
 open Log
 open Manager
 open Channel
-
+open Alarm
 
 
 (*==========================================================================*)
@@ -59,9 +59,9 @@ type ('a, 't) man = ('a,'t) Manager.man = {
   set : 't -> 'a -> 'a;
 
   (** Analyzer transfer functions *)
-  post : ?zone:zone -> stmt -> 'a flow -> 'a post;
   exec : ?zone:zone -> stmt -> 'a flow -> 'a flow;
-  eval : ?zone:(zone * zone) -> ?via:zone -> expr -> 'a flow -> (expr, 'a) eval;
+  post : ?zone:zone -> stmt -> 'a flow -> 'a post;
+  eval : ?zone:(zone * zone) -> ?via:zone -> expr -> 'a flow -> 'a eval;
   ask : 'r. 'r Query.query -> 'a flow -> 'r;
 
   (** Accessors to the domain's merging logs *)
@@ -86,7 +86,7 @@ sig
   type t
   (** Type of an abstract elements. *)
 
-  val id : t domain
+  val id : t id
   (** Domain identifier *)
 
   val name : string
@@ -94,6 +94,9 @@ sig
 
   val interface : interface
   (** Interface of the domain *)
+
+  val alarms : alarm_class list
+  (** List of alarm classes detected by the domain *)
 
   val bottom: t
   (** Least abstract element of the lattice. *)
@@ -148,7 +151,7 @@ sig
   val exec : zone -> stmt -> ('a, t) man -> 'a flow -> 'a post option
   (** Post-state of statements *)
 
-  val eval : (zone * zone) -> expr -> ('a, t) man -> 'a flow -> (expr, 'a) eval option
+  val eval : (zone * zone) -> expr -> ('a, t) man -> 'a flow -> 'a eval option
   (** Evaluation of expressions *)
 
   val ask  : 'r Query.query -> ('a, t) man -> 'a flow -> 'r option
@@ -166,38 +169,23 @@ end
 (*==========================================================================*)
 
 
-let set_domain_env = Manager.set_domain_env
+let set_env = Manager.set_env
 
-let get_domain_env = Manager.get_domain_env
+let get_env = Manager.get_env
 
-let map_domain_env = Manager.map_domain_env
-
-let mem_domain_env = Manager.mem_domain_env
+let map_env = Manager.map_env
 
 let assume = Manager.assume
 
-let assume_eval = Manager.assume_eval
-
-let assume_post = Manager.assume_post
+let assume_flow = Manager.assume_flow
 
 let switch = Manager.switch
-
-let switch_eval = Manager.switch_eval
-
-let switch_post = Manager.switch_post
-
-let exec_eval = Manager.exec_eval
-
-let post_eval = Manager.post_eval
-
-let post_eval_with_cleaners = Manager.post_eval_with_cleaners
 
 let exec_stmt_on_all_flows = Manager.exec_stmt_on_all_flows
 
 let exec_block_on_all_flows = Manager.exec_block_on_all_flows
 
-let log_post_stmt = Manager.log_post_stmt
-
+let post_to_flow = Manager.post_to_flow
 
 
 (*==========================================================================*)
@@ -211,7 +199,12 @@ struct
   include D
   let exec zone stmt man flow =
     D.exec zone stmt man flow |>
-    Option.lift @@ log_post_stmt stmt man
+    Option.lift @@ fun res ->
+    Result.map_log (fun log ->
+        man.set_log (
+          man.get_log log |> Log.append stmt
+        ) log
+      ) res
 end
 
 let domains : (module DOMAIN) list ref = ref []

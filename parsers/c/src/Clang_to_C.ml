@@ -77,6 +77,8 @@ type context = {
     ctx_tu_typedefs: (C.uid,typedef) Hashtbl.t;
     ctx_tu_vars: (C.uid,variable) Hashtbl.t;
     ctx_tu_funcs: (C.uid,func) Hashtbl.t;
+    ctx_tu_static_funcs: (string,func) Hashtbl.t;
+    ctx_tu_static_vars: (string,variable) Hashtbl.t;
 
     (* shared among all TU *)
     mutable ctx_uid: uid; (* counter to generate new uid *)
@@ -109,6 +111,8 @@ let create_context (project_name:string) (info:C.target_info) =
     ctx_tu_typedefs = Hashtbl.create 16;
     ctx_tu_vars = Hashtbl.create 16;
     ctx_tu_funcs = Hashtbl.create 16;
+    ctx_tu_static_vars = Hashtbl.create 16;
+    ctx_tu_static_funcs = Hashtbl.create 16;
     ctx_uid = 0;
     ctx_enums = Hashtbl.create 16;
     ctx_enum_vals = Hashtbl.create 16;
@@ -117,7 +121,7 @@ let create_context (project_name:string) (info:C.target_info) =
     ctx_vars = Hashtbl.create 16;
     ctx_funcs = Hashtbl.create 16;
     ctx_names = Hashtbl.create 16;
-    ctx_simplify = C_simplify.create_context ();
+    ctx_simplify = C_simplify.create_context info;
     ctx_comments = RangeMap.empty;
     ctx_macros = Hashtbl.create 16;
   }
@@ -129,8 +133,17 @@ let new_uid ctx =
 
 let find_function name ctx =
   Hashtbl.find ctx.ctx_funcs name
-  
-    
+
+let empty_scope () = {
+    scope_var_added = [];
+    scope_var_removed = [];
+  }
+
+let empty_block = {
+    blk_stmts = [];
+    blk_local_vars = [];
+  }
+
 let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comment list) (macros:C.macro list) =
 
   
@@ -152,15 +165,6 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
     unique
   in
 
-  let error range msg arg =
-    failwith (Printf.sprintf "%s: %s: %s" (C.string_of_range range) msg arg)
-
-  and warning range msg arg =
-    (* Printf.eprintf "WARNING %s: %s: %s\n" (C.string_of_range range) msg arg *)
-    ()
-
-  in
-
   
   (* init *)
   (* **** *)
@@ -170,6 +174,8 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
   Hashtbl.clear ctx.ctx_tu_typedefs;
   Hashtbl.clear ctx.ctx_tu_vars;
   Hashtbl.clear ctx.ctx_tu_funcs;
+  Hashtbl.clear ctx.ctx_tu_static_vars;
+  Hashtbl.clear ctx.ctx_tu_static_funcs;
 
   let tu = {
       tu_uid = new_uid ctx;
@@ -529,6 +535,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
       in
       let prev =
         if not (variable_is_global kind) then None
+        else if variable_is_file_static kind then Hashtbl.find_opt ctx.ctx_tu_static_vars org_name
         else find_extern (Hashtbl.find_all ctx.ctx_vars org_name)
       in
       (* merge types *)
@@ -565,6 +572,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
       in
       if variable_is_global kind && prev = None then Hashtbl.add ctx.ctx_vars org_name var;
       Hashtbl.add ctx.ctx_tu_vars v.C.var_uid var;
+      if variable_is_file_static kind then Hashtbl.add ctx.ctx_tu_static_vars org_name var;
       (* init *)
       if var.var_kind = Variable_extern && (kind = Variable_global || var.var_init <> None)
       then var.var_kind <- Variable_global;
@@ -593,13 +601,14 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
         | _ -> false
       in
       let range = f.C.function_range in
+      let name_range = f.C.function_name_range in
       (* get previous definition *)
       let rec find_extern = function
         | [] -> None
         | f::r -> if f.func_is_static then find_extern r else Some f
       in
-       let prev =
-        if static then None
+      let prev =
+        if static then Hashtbl.find_opt ctx.ctx_tu_static_funcs org_name
         else find_extern (Hashtbl.find_all ctx.ctx_funcs org_name)
       in
       (* create structure *)
@@ -622,11 +631,13 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
              func_static_vars = [];
              func_local_vars = [];
              func_range = range;
+             func_name_range = name_range;
              func_variadic = f.C.function_is_variadic;
              func_com = [];
            }
       in
       if prev = None then Hashtbl.add ctx.ctx_funcs org_name func;
+      if static then Hashtbl.replace ctx.ctx_tu_static_funcs org_name func;
       Hashtbl.add ctx.ctx_tu_funcs f.C.function_uid func;
       (* fill in parameters & return *)
       let params = 
@@ -687,9 +698,10 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
       (match f.C.function_body with
        | None -> ()
        | Some b ->
-          func.func_body <-            
-            Some (deblock (stmt (Some func) b));
-          func.func_range <- range
+          func.func_body <-
+            Some (stmt (Some func) b |> deblock |> resolve_scope);
+          func.func_range <- range;
+          func.func_name_range <- name_range
       );
       if !simplify then simplify_func ctx.ctx_simplify func;
       func
@@ -708,15 +720,15 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
 
     | C.NullStmt -> []
 
-    | C.BreakStmt _ -> [S_jump S_break, range]
+    | C.BreakStmt _ -> [S_jump (S_break (empty_scope())), range]
 
-    | C.ContinueStmt _ -> [S_jump S_continue, range]
+    | C.ContinueStmt _ -> [S_jump (S_continue (empty_scope())), range]
 
-    | C.GotoStmt (lbl,_) -> [S_jump (S_goto lbl.C.name_print), range]
+    | C.GotoStmt (lbl,_) -> [S_jump (S_goto (lbl.C.name_print, empty_scope())), range]
 
-    | C.ReturnStmt (Some e) ->  [S_jump (S_return (Some (expr func e))), range]
+    | C.ReturnStmt (Some e) ->  [S_jump (S_return (Some (expr func e), empty_scope())), range]
 
-    | C.ReturnStmt None -> [S_jump (S_return None), range]
+    | C.ReturnStmt None -> [S_jump (S_return (None, empty_scope())), range]
 
     | C.SwitchStmt s ->
        if s.C.switch_init <> None
@@ -730,11 +742,11 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
        (* TODO: constant folding? *)
        if s.C.case_end <> None
        then error range "unsupported case statement extension" "";
-       (S_target (S_case (expr func s.C.case_value)), range)::
+       (S_target (S_case (expr func s.C.case_value, empty_scope())), range)::
          (stmt func s.C.case_stmt)
        
     | C.DefaultStmt s ->
-       (S_target S_default, range)::(stmt func s)
+       (S_target (S_default (empty_scope())), range)::(stmt func s)
 
     | C.LabelStmt (lbl,s) ->
        (S_target (S_label lbl.C.name_print), range)::(stmt func s)
@@ -771,10 +783,10 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
          | None -> error range "if without a condition" ""
          | Some c -> expr func c
        and t = match s.C.if_then with
-         | None -> []
+         | None -> empty_block
          | Some s -> deblock (stmt func s)
        and e = match s.C.if_else with
-         | None -> []
+         | None -> empty_block
          | Some s -> deblock (stmt func s)
        in
        [S_if (c,t,e), range]
@@ -791,7 +803,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
 
     | C.ForStmt s ->
        let i = match s.C.for_init with
-         | None -> []
+         | None -> empty_block
          | Some s -> deblock (stmt func s)
        and c = match s.C.for_cond with
          | None -> None
@@ -810,9 +822,9 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
     | s -> error range "unhandled statement" (C.stmt_kind_name s)                 
 
   (* remove useless levels of blocks *)
-  and deblock = function
-    | [S_block b,_] -> deblock b
-    | l -> l
+  and deblock (l:statement list) : block = match l with
+    | [S_block b,_] -> deblock b.blk_stmts
+    | _ -> make_block l
              
              
   (* translate expressions *)

@@ -68,17 +68,6 @@ let rec pp_c_init fmt = function
   | C_init_list(l, _) -> fprintf fmt "{%a}"
                            (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_c_init) l
   | C_init_implicit t -> assert false
-  | C_init_flat l ->
-    fprintf fmt "{| %a |}"
-      (pp_print_list
-         ~pp_sep:(fun fmt () -> fprintf fmt ", ")
-         (fun fmt init ->
-            match init with
-            | C_flat_expr (e,t) -> fprintf fmt "%a:%a" pp_expr e pp_c_type_short t
-            | C_flat_none (n,t) -> fprintf fmt "None:%a * %a" pp_c_type_short t Z.pp_print n
-            | C_flat_fill (e,t,n) -> fprintf fmt "%a:%a * %a" pp_expr e pp_c_type_short t Z.pp_print n
-         )
-      ) l
 
 
 
@@ -138,7 +127,7 @@ let () =
     );
   register_constant_pp (fun next fmt c ->
       match c with
-      | C_c_character(c, C_char_ascii) -> fprintf fmt "'%c'" (char_of_int @@ Z.to_int c)
+      | C_c_character(c, C_char_ascii) -> fprintf fmt "'\\x%s'" (Z.format "%X" c)
       | C_c_character(c, C_char_wide) -> fprintf fmt "L'\\x%s'" (Z.format "%X" c)
       | C_c_character(c, C_char_utf8) -> panic ~loc:__LOC__ "utf8 char not supported"
       | C_c_character(c, C_char_utf16) -> panic ~loc:__LOC__ "utf16 char not supported"
@@ -155,7 +144,7 @@ let () =
     );
   register_expr_pp (fun default fmt expr ->
       match ekind expr with
-      | E_c_conditional(cond, body, orelse) -> fprintf fmt "%a ? %a : %a" pp_expr cond pp_expr body pp_expr orelse
+      | E_c_conditional(cond, body, orelse) -> fprintf fmt "(%a ? %a : %a)" pp_expr cond pp_expr body pp_expr orelse
       | E_c_array_subscript(arr, idx) -> fprintf fmt "%a[%a]" pp_expr arr pp_expr idx
       | E_c_member_access(rcd, idx, fld) -> fprintf fmt "%a.%s" pp_expr rcd fld
       | E_c_function(f) -> pp_print_string fmt f.c_func_org_name
@@ -169,7 +158,7 @@ let () =
       | E_c_address_of (e) -> fprintf fmt "&%a" pp_expr e
       | E_c_deref(p) -> fprintf fmt "*%a" pp_expr p
       | E_c_cast(e, true) -> fprintf fmt "(%a) %a" pp_typ (etyp expr) pp_expr e
-      | E_c_cast(e, false) -> fprintf fmt "%a" pp_expr e
+      | E_c_cast(e, false) -> pp_expr fmt e
       | E_c_statement s -> fprintf fmt "@[<v 4>{@,%a@]@,}" pp_stmt s
       | E_c_var_args e -> fprintf fmt "__builtin_va_arg(%a)" pp_expr e
       | E_c_predefined _ -> assert false
@@ -183,8 +172,8 @@ let () =
       | S_c_for (init,cond,it,stmts) ->
         fprintf fmt "@[<v 4>for (%a;%a;%a) {@,%a@]@,}"
           pp_stmt init
-          (Printers.print_option pp_expr) cond
-          (Printers.print_option pp_expr) it
+          (Option.print pp_expr) cond
+          (Option.print pp_expr) it
           pp_stmt stmts
       | S_c_do_while (body,cond) ->
         fprintf fmt "@[<v 4>do {@,%a@]@, while (%a);"
@@ -194,10 +183,14 @@ let () =
         fprintf fmt "@[<v 4>switch (%a) {@,%a@]@,}"
           pp_expr cond
           pp_stmt body
-      | S_c_switch_case(e) -> fprintf fmt "case %a:" pp_expr e
-      | S_c_switch_default -> fprintf fmt "default:"
+      | S_c_return(None,_) -> fprintf fmt "return;"
+      | S_c_return(Some e,_) -> fprintf fmt "return %a;" pp_expr e
+      | S_c_break _ -> fprintf fmt "break;"
+      | S_c_continue _ -> fprintf fmt "continue;"
+      | S_c_switch_case(e,_) -> fprintf fmt "case %a:" pp_expr e
+      | S_c_switch_default _ -> fprintf fmt "default:"
       | S_c_label l -> fprintf fmt "%s:" l
-      | S_c_goto l -> fprintf fmt "goto %s;" l
+      | S_c_goto (l,_) -> fprintf fmt "goto %s;" l
       | S_c_goto_stab s -> fprintf fmt "@[<v 4>goto_stab {@,%a@]@,};" pp_stmt s
       | _ -> default fmt stmt
     );

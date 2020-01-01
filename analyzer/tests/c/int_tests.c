@@ -50,7 +50,7 @@ void test_divide_by_constant() {
   int a = 4 / 2;
   _mopsa_assert_safe();
   int c = a / (1 - 1);
-  _mopsa_assert_error(DIVISION_BY_ZERO);
+  _mopsa_assert_unsafe();
 }
 
 void test_divide_by_variable() {
@@ -59,7 +59,7 @@ void test_divide_by_variable() {
   _mopsa_assert_safe();
   int y = x - 1;
   int c = a / y;
-  _mopsa_assert_error(DIVISION_BY_ZERO);
+  _mopsa_assert_unsafe();
 }
 
 void test_divide_by_range() {
@@ -68,14 +68,14 @@ void test_divide_by_range() {
   _mopsa_assert_safe();
   int y = x + 2;
   int c = a / y;
-  _mopsa_assert_error_exists(DIVISION_BY_ZERO);
+  _mopsa_assert_unsafe();
 }
 
 int test_overflow() {
   unsigned char c = 25;
   unsigned char d = 6;
   unsigned char e = 10 * c + d;
-  _mopsa_assert_error_exists(INTEGER_OVERFLOW);
+  _mopsa_assert_unsafe();
 }
 
 int test_condition_value() {
@@ -94,11 +94,55 @@ int test_condition_value() {
   _mopsa_assert(b4 == 0);
 }
 
+void test_safe_right_shift() {
+  int x = 120 >> 4;
+  _mopsa_assert_safe();
+  _mopsa_assert(x == 7);
+}
 
-/* void test_interval_congruence_reduction() { */
-/*   int i = 1; */
-/*   while (i <= 10) { */
-/*     i = i + 2; */
-/*   } */
-/*   _mopsa_assert(i == 11); */
-/* } */
+void test_unsafe_right_shift_with_large_operand() {
+  int x = 120 >> 99;
+  _mopsa_assert_unsafe();
+}
+
+void test_unsafe_right_shift_with_negative_operand() {
+  int a = -1;
+  int x = 120 >> a;
+  _mopsa_assert_unsafe();
+}
+
+void test_safe_left_shift() {
+  int x = 120 << 4;
+  _mopsa_assert_safe();
+  _mopsa_assert(x == 1920);
+}
+
+void test_unsafe_left_shift_with_large_operand() {
+  int x = 120 << 99;
+  _mopsa_assert_unsafe();
+}
+
+void test_unsafe_left_shift_with_negative_operand() {
+  int a = -1;
+  int x = 120 << a;
+  _mopsa_assert_unsafe();
+}
+
+void test_int_of_float_cast() {
+  float f1 = 1.0;
+  _mopsa_assert((int)f1 == 1);
+
+  float f2 = 2.8;
+  int i = (int) f2;
+  _mopsa_assert(i == 2);
+}
+
+
+void test_int_of_double_cast() {
+  double f1 = 1.0;
+  _mopsa_assert((int)f1 == 1);
+
+  double f2 = 2.8;
+  int i = (int) f2;
+  _mopsa_assert(i == 2);
+}

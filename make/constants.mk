@@ -48,6 +48,8 @@ BIN = bin
 DOC = doc
 LIB = lib
 
+PREFIX ?= /usr/local
+
 ifeq ($(VERBOSE),1)
   QUIET =
 else
@@ -57,7 +59,7 @@ endif
 #PKGS += unix str
 INCLUDES := $(INCLUDES) -I $(BUILD) $(LIBS:%=-I %) $(foreach lib,$(MOPSALIBS),-I $(call lib_src_dir,$(lib)) -I $(call lib_dir,$(lib)))
 
-OCAMLFLAGS := -thread -bin-annot -safe-string -absname $(INCLUDES) $(OCAMLFLAGS) -g
+OCAMLFLAGS := -thread -bin-annot -safe-string -absname $(INCLUDES) $(OCAMLFLAGS) -g -w @8
 CFLAGS := $(CFLAGS) $(INCLUDES)
 CXXFLAGS := $(CXXFLAGS) $(INCLUDES)
 LDFLAGS := $(LDFLAGS) -L$(BUILD)
@@ -77,6 +79,7 @@ GRAY=\033[90m
 CYAN=\033[36m
 LIGHT_CYAN=\033[96m
 RED=\033[39m
+LIGHTRED=\033[31m
 
 # Colorful target messages
 GENMSG=$(GRAY)[GEN]$(END)
@@ -89,3 +92,5 @@ CMXMSG=$(BLUE)[CMX]$(END)
 CCMSG=$(MAGENTA)[CC ]$(END)
 CXXMSG=$(LIGHT_MAGENTA)[CXX]$(END)
 LNKMSG=$(GREEN)[LNK]$(END)
+INSTALLMSG=$(LIGHTRED)[INS]$(END)
+UINSTALLMSG=$(LIGHTRED)[UIN]$(END)

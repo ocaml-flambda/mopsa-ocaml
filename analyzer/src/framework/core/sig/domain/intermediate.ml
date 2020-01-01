@@ -43,6 +43,7 @@ open Zone
 open Id
 open Interface
 open Channel
+open Alarm
 
 
 (*==========================================================================*)
@@ -64,9 +65,9 @@ type ('a, 't) man = ('a,'t) Lowlevel.man = {
   set : 't -> 'a -> 'a;
 
   (** Analyzer transfer functions *)
-  post : ?zone:zone -> stmt -> 'a flow -> 'a post;
   exec : ?zone:zone -> stmt -> 'a flow -> 'a flow;
-  eval : ?zone:(zone * zone) -> ?via:zone -> expr -> 'a flow -> (expr, 'a) eval;
+  post: ?zone:zone -> stmt -> 'a flow -> 'a post;
+  eval : ?zone:(zone * zone) -> ?via:zone -> expr -> 'a flow -> 'a eval;
   ask : 'r. 'r Query.query -> 'a flow -> 'r;
 
   (** Accessors to the domain's merging logs *)
@@ -92,7 +93,7 @@ sig
   type t
   (** Type of an abstract elements. *)
 
-  val id : t domain
+  val id : t id
   (** Domain identifier *)
 
   val name : string
@@ -100,6 +101,9 @@ sig
 
   val interface : interface
   (** Interface of the domain *)
+
+  val alarms : alarm_class list
+  (** List of alarms detected by the domain *)
 
   val bottom: t
   (** Least abstract element of the lattice. *)
@@ -153,7 +157,7 @@ sig
   val exec : zone -> stmt -> ('a, t) man -> 'a flow -> 'a post option
   (** Post-state of statements *)
 
-  val eval : (zone * zone) -> expr -> ('a, t) man -> 'a flow -> (expr, 'a) eval option
+  val eval : (zone * zone) -> expr -> ('a, t) man -> 'a flow -> 'a eval option
   (** Evaluation of expressions *)
 
   val ask  : 'r Query.query -> ('a, t) man -> 'a flow -> 'r option
@@ -191,6 +195,8 @@ struct
   let name = D.name
 
   let interface = D.interface
+
+  let alarms = D.alarms
 
   let bottom = D.bottom
 
@@ -239,38 +245,23 @@ end
 (*==========================================================================*)
 
 
-let set_domain_env = Lowlevel.set_domain_env
+let set_env = Lowlevel.set_env
 
-let get_domain_env = Lowlevel.get_domain_env
+let get_env = Lowlevel.get_env
 
-let map_domain_env = Lowlevel.map_domain_env
-
-let mem_domain_env = Lowlevel.mem_domain_env
+let map_env = Lowlevel.map_env
 
 let assume = Lowlevel.assume
 
-let assume_eval = Lowlevel.assume_eval
-
-let assume_post = Lowlevel.assume_post
+let assume_flow = Manager.assume_flow
 
 let switch = Lowlevel.switch
-
-let switch_eval = Lowlevel.switch_eval
-
-let switch_post = Lowlevel.switch_post
-
-let exec_eval = Lowlevel.exec_eval
-
-let post_eval = Lowlevel.post_eval
-
-let post_eval_with_cleaners = Lowlevel.post_eval_with_cleaners
 
 let exec_stmt_on_all_flows = Lowlevel.exec_stmt_on_all_flows
 
 let exec_block_on_all_flows = Lowlevel.exec_block_on_all_flows
 
-let log_post_stmt = Lowlevel.log_post_stmt
-
+let post_to_flow = Lowlevel.post_to_flow
 
 (*==========================================================================*)
 (**                          {2 Registration}                               *)
@@ -283,7 +274,12 @@ struct
   include D
   let exec zone stmt man flow =
     D.exec zone stmt man flow |>
-    Option.lift @@ log_post_stmt stmt man
+    Option.lift @@ fun res ->
+    Result.map_log (fun log ->
+        man.set_log (
+          man.get_log log |> Log.append stmt
+        ) log
+      ) res
 end
 
 let domains : (module DOMAIN) list ref = ref []
@@ -310,5 +306,3 @@ let names () =
       let module D = (val dom : DOMAIN) in
       D.name
     ) !domains
-
-

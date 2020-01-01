@@ -60,7 +60,8 @@ def bench_spectral_norm(loops):
             u = eval_AtA_times_u(v)
 
         vBv = vv = 0
-
+        # false alarm because we don't know range(10) will create a
+        # nonempty iterator
         for ue, ve in zip(u, v):
             vBv += ue * ve
             vv += ve * ve

@@ -205,8 +205,8 @@ struct
     | E_constant(C_int_interval (a,b)) ->
       Apron.Texpr1.Cst(
         Apron.Coeff.i_of_scalar
-          (Apron.Scalar.of_float @@ Z.to_float a)
-          (Apron.Scalar.of_float @@ Z.to_float b)
+          (Apron.Scalar.of_mpq @@ Mpq.of_string @@ Z.to_string a)
+          (Apron.Scalar.of_mpq @@ Mpq.of_string @@ Z.to_string b)
       ), abs, bnd, l
 
     | E_constant(C_float_interval (a,b)) ->
@@ -217,7 +217,7 @@ struct
       ), abs, bnd, l
 
     | E_constant(C_int n) ->
-      Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_float @@ Z.to_float n)),
+      Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_mpq @@ Mpq.of_string @@ Z.to_string n)),
       abs, bnd, l
 
     | E_constant(C_float f) ->
@@ -245,9 +245,9 @@ struct
     | E_unop (O_plus, e) ->
       exp_to_apron e (abs,bnd) l
 
-    | E_unop(O_cast, e) ->
+    | E_unop(O_cast(t1, t2), e) ->
       let e', abs, bnd, l = exp_to_apron e (abs,bnd) l in
-      let typ' = typ_to_apron e.etyp in
+      let typ' = typ_to_apron t2 in
       Apron.Texpr1.Unop(Apron.Texpr1.Cast, e', typ', !opt_float_rounding), abs, bnd, l
 
     | E_unop(O_minus, e) ->

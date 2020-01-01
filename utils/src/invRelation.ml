@@ -139,6 +139,9 @@ module Make(Dom: OrderedType)(CoDom: OrderedType) = struct
   let mem x y r =
     CoDomSet.mem y (image x r)
 
+  let mem_domain x r =
+    DomMap.mem x r.img
+
         
   let of_list l =
     List.fold_left (fun r (x,y) -> add x y r) empty l
@@ -331,6 +334,26 @@ module Make(Dom: OrderedType)(CoDom: OrderedType) = struct
     DomMap.fold
       (fun x i r -> set_image x (f x i) r)
       r.img empty
+
+  let map2_domain f r1 r2 =
+    DomMap.fold2
+      (fun x ys1 ys2 r -> set_image x (f x ys1 ys2) r)
+      r1.img r2.img r1
+
+  let map2o_domain f1 f2 f r1 r2 =
+    DomMap.fold2o
+      (fun x ys r -> set_image x (f1 x ys) r)
+      (fun x ys r -> set_image x (f2 x ys) r)
+      (fun x ys1 ys2 r -> set_image x (f x ys1 ys2) r)
+      r1.img r2.img r1
+
+  let map2zo_domain f1 f2 f r1 r2 =
+    DomMap.fold2zo
+      (fun x ys r -> set_image x (f1 x ys) r)
+      (fun x ys r -> set_image x (f2 x ys) r)
+      (fun x ys1 ys2 r -> set_image x (f x ys1 ys2) r)
+      r1.img r2.img r1
+
 
   let for_all_domain f r =
     DomMap.for_all f r.img

@@ -25,6 +25,7 @@
    functions if required *)
 
 open Mopsa
+open Sig.Domain.Stateless
 open Addr
 open Ast
 open Universal.Ast
@@ -41,6 +42,8 @@ struct
     iexec = {provides = [Zone.Z_py]; uses = []};
     ieval = {provides = []; uses = []}
   }
+
+  let alarms = []
 
   let init _ _ flow = flow
 
@@ -118,18 +121,28 @@ struct
     in
     mk_stmt (Universal.Ast.S_unit_tests (tests)) range
 
+  let unprecise_exception_range = mk_fresh_range ()
+
+  let collect_uncaught_exceptions man flow =
+    Flow.fold (fun acc tk env ->
+        match tk with
+        | Alarms.T_py_exception (e, s, k) ->
+          let a = Alarms.A_py_uncaught_exception (e,s) in
+          let alarm =
+            match k with
+            | Alarms.Py_exc_unprecise ->
+              mk_alarm a unprecise_exception_range ~cs:Callstack.empty
+
+            | Alarms.Py_exc_with_callstack (range,cs) ->
+              mk_alarm a range ~cs
+          in
+          Flow.add_alarm alarm ~force:true man.lattice acc
+        | _ -> acc
+      ) flow flow
+
 
   let exec zone stmt man flow  =
     match skind stmt with
-    | S_program ({ prog_kind = Py_program(globals, body) }, _)
-      when not !Universal.Iterators.Unittest.unittest_flag ->
-      (* Initialize global variables *)
-      init_globals man globals (srange stmt) flow |>
-      (* Execute the body *)
-      man.exec body |>
-      Post.return |>
-      Option.return
-
     | S_program ({ prog_kind = Py_program(globals, body) }, _)
       when !Universal.Iterators.Unittest.unittest_flag ->
       (* Initialize global variables *)
@@ -141,8 +154,20 @@ struct
       (* Collect test functions *)
       let tests = get_test_functions body in
       let stmt = mk_py_unit_tests tests (srange stmt) in
-      Post.return (man.exec stmt flow2) |>
+      man.exec stmt flow2 |>
+      collect_uncaught_exceptions man |>
+      Post.return |>
       Option.return
+
+    | S_program ({ prog_kind = Py_program(globals, body) }, _) ->
+      (* Initialize global variables *)
+      init_globals man globals (srange stmt) flow |>
+      (* Execute the body *)
+      man.exec body |>
+      collect_uncaught_exceptions man |>
+      Post.return |>
+      Option.return
+
 
 
     | _ -> None

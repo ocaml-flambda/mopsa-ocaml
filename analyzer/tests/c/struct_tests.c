@@ -1,4 +1,5 @@
 #include "mopsa.h"
+#include <stdlib.h>
 
 typedef struct {
   char x;
@@ -20,15 +21,22 @@ void test_array_of_structs() {
   _mopsa_assert(a[0].x + a[1].x == 3);
 }
 
-void test_initialization_with_expression_list() {
+void test_full_initialization_with_expression_list() {
   point p = {1, 2};
   _mopsa_assert(p.x == 1);
+  _mopsa_assert(p.y == 2);
+}
+
+void test_partial_initialization_with_expression_list() {
+  point p = { 1 };
+  _mopsa_assert(p.x == 1);
+  _mopsa_assert_exists(p.y == 0);
 }
 
 point global_point;
 
 void test_initialization_uninitialized_global_struct() {
-  _mopsa_assert(global_point.x == 0);
+  _mopsa_assert_exists(global_point.x == 0);
 }
 
 void test_initialization_with_designated_names() {
@@ -46,6 +54,16 @@ void test_struct_copy() {
   point p = {.x = 1, .y = 2};
   point q = p;
   _mopsa_assert(p.x == q.x);
+}
+
+typedef struct { int a; int b[10]; } s1;
+
+void test_struct_copy_with_arrays() {
+  s1 p = {.a = 1, .b = {2, 3} };
+  s1 q;
+  q = p;
+  _mopsa_assert(p.a == q.a);
+  _mopsa_assert(p.b[0] == q.b[0]);
 }
 
 
@@ -68,5 +86,17 @@ void test_allamigeon() {
   a[1][1].f[2] = 10;
   _mopsa_assert_safe();
   a[1][1].f[10] = 20;
-  _mopsa_assert_error(OUT_OF_BOUND);
+  _mopsa_assert_unsafe();
+}
+
+
+typedef struct { int a; int b[] } fs;
+
+void test_flexible_array_members() {
+  int n = 10;
+  fs *p = (fs*)malloc(sizeof(fs) + sizeof(int [n]));
+  if (p) {
+    p->b[5] = 10;
+    _mopsa_assert_safe();
+  }
 }

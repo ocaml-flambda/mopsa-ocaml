@@ -18,7 +18,7 @@ The documentation and example files of the MOPSA software are distributed under 
 
 ## Dependencies
 
-* ocaml (version >= 4.06.0)
+* ocaml (version >= 4.07.1)
 * apron
 * clang (version >= 5.x)
 * zarith
@@ -29,7 +29,7 @@ The documentation and example files of the MOPSA software are distributed under 
 * camlidl
 * zlib
 
-## Installation 
+## Installation
 
 ### DEB-based distributions
 
@@ -38,7 +38,7 @@ Tested on Ubuntu 16.04:
 ```shell
 sudo apt install build-essential m4 opam clang-5.0 llvm-5.0-dev libclang-5.0-dev libgmp-dev libmpfr-dev zlib1g-dev
 opam init
-opam switch 4.06.0
+opam switch 4.07.1
 eval `opam config env`
 opam install apron zarith menhir yojson
 make
@@ -52,7 +52,7 @@ Tested on Fedora 27:
 ```shell
 sudo dnf install git m4 redhat-rpm-config patch opam clang-devel-5.0.? llvm-devel-5.0.? gmp-devel mpfr-devel zlib-devel make which
 opam init
-opam switch 4.06.0
+opam switch 4.07.1
 eval $(opam config env)
 opam install apron zarith menhir yojson
 make
@@ -67,3 +67,7 @@ make
 ./bin/mopsa-python -debug=python.flows._ foo.py
 ./bin/mopsa-c -unittest -debug=_unittest_summary analyzer/tests/c/int_tests.c
 ```
+
+### Python Analysis
+
+See `doc/python/type_analysis.md`.

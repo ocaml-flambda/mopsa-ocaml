@@ -103,6 +103,7 @@ and formula =
 (** *************** *)
 
 and expr =
+  | E_top       of c_qual_typ
   | E_int       of Z.t * int_suffix
   | E_float     of float
   | E_string    of string
@@ -269,6 +270,7 @@ let pp_list pp sep fmt l =
 
 let rec pp_expr fmt exp =
   match get_content exp with
+  | E_top(t) -> fprintf fmt "⊤(%a)" pp_c_qual_typ t
   | E_int (n, suffix) -> fprintf fmt "%a%a" Z.pp_print n pp_int_suffix suffix
   | E_float f -> pp_print_float fmt f
   | E_string s -> fprintf fmt "\"%s\"" s

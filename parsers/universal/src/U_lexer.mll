@@ -50,6 +50,8 @@ let _ =
 
      (* expression operators *)
      "rand",   TOK_RAND;
+     "randf",   TOK_RANDF;
+     "round",  TOK_ROUND;
 
      (* control flow *)
      "while",  TOK_WHILE;
@@ -62,6 +64,7 @@ let _ =
 
      (* special statements *)
      "assert", TOK_ASSERT;
+     "assume", TOK_ASSUME;
      "print",  TOK_PRINT;
    ]
 

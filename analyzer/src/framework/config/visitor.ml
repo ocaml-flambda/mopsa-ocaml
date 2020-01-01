@@ -30,7 +30,7 @@ type 'a visitor = {
   leaf : string -> 'a;
   seq : json list -> 'a;
   compose : json list -> 'a;
-  disjoint : json list -> 'a;
+  union : json list -> 'a;
   apply : json -> json -> 'a;
   nonrel : json -> 'a;
   product : json list -> string list -> 'a;
@@ -44,7 +44,7 @@ let rec visit visitor json =
   | `Assoc obj when List.mem_assoc "apply" obj -> visit_apply visitor obj
   | `Assoc obj when List.mem_assoc "nonrel" obj -> visit_nonrel visitor obj
   | `Assoc obj when List.mem_assoc "product" obj -> visit_product visitor obj
-  | `Assoc obj when List.mem_assoc "disjoint" obj -> visit_disjoint visitor obj
+  | `Assoc obj when List.mem_assoc "union" obj -> visit_union visitor obj
   | _ -> Exceptions.panic "parsing error: configuration not supported@  %a"
            (pretty_print ~std:true) json
 
@@ -67,9 +67,9 @@ and visit_nonrel visitor obj =
   let v = List.assoc "nonrel" obj in
   visitor.nonrel v
 
-and visit_disjoint visitor obj =
-  let l = List.assoc "disjoint" obj |> to_list in
-  visitor.disjoint l
+and visit_union visitor obj =
+  let l = List.assoc "union" obj |> to_list in
+  visitor.union l
 
 and visit_product visitor obj =
   let l = List.assoc "product" obj |> to_list in

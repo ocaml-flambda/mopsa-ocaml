@@ -1,8 +1,9 @@
 #include <string.h>
 
 int main(int argc, char *argv[]) {
-  int a[3];
-  int b[3] = {1, 2, 3};
-  memcpy(a, b, 3);
+  char a[10] = "toto";
+  char b[10];
+  memcpy(b, a, 10);
+  _mopsa_print();
   return 0;
 }

@@ -38,21 +38,57 @@ struct
     ieval = { provides = []; uses = [] };
   }
 
+  let alarms = []
+
   let init prog man flow = flow
 
-  let exec zone stmt man flow =
-    match skind stmt with
-    | S_program ({ prog_kind = P_universal{universal_main} }, _) ->
-      Some (
-        man.exec universal_main flow |>
-        Post.return
-      )
-
-    | _ -> None
 
   let eval zone exp man flow = None
 
+
   let ask query man flow = None
+
+
+  (** Execute tests in a unit test program *)
+  let exec_tests main fundecs range man flow =
+    (* Execute main body *)
+    let flow = man.exec main flow in
+
+    (* Search for test functions *)
+    let tests = List.filter (fun f ->
+        let name = f.fun_name in
+        if String.length name < 5 then false
+        else String.sub name 0 4 = "test"
+      ) fundecs
+    in
+
+    (* Execute tests *)
+    let stmt = mk_stmt (S_unit_tests (
+        tests |> List.map (fun f ->
+            f.fun_name, mk_expr_stmt (mk_call f [] f.fun_range) range
+          )
+      )) range
+    in
+    man.exec stmt flow
+    
+  
+
+  let exec zone stmt man flow =
+    match skind stmt with
+    | S_program ({ prog_kind = P_universal{universal_main} }, _)
+      when not !Unittest.unittest_flag ->
+      man.exec universal_main flow |>
+      Post.return |>
+      Option.return
+
+    | S_program ({ prog_kind = P_universal{universal_main; universal_fundecs} }, _)
+      when !Unittest.unittest_flag ->
+      exec_tests universal_main universal_fundecs stmt.srange man flow |>
+      Post.return |>
+      Option.return
+
+    | _ -> None
+
 
 end
 

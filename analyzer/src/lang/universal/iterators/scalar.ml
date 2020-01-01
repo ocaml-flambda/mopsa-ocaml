@@ -38,6 +38,8 @@ struct
     ieval = { provides = []; uses = [Z_u,Z_u_num] };
   }
 
+  let alarms = []
+
   let init prog man flow = flow
 
   let desugar e man flow =
@@ -45,24 +47,16 @@ struct
 
   let exec zone stmt man flow =
     match skind stmt with
-    | S_assign(x, e) when Core.Zone.eval_template x Z_u_num <> Keep ||
-                          Core.Zone.eval_template e Z_u_num <> Keep
-      ->
-      desugar x man flow |>
-      Option.return |> Option.lift @@
-      post_eval man @@ fun x flow ->
+    | S_assign(x, e) when is_numeric_type e.etyp ->
+      desugar x man flow >>$? fun x flow ->
+      desugar e man flow >>$? fun e flow ->
+      man.post ~zone:Z_u_num (mk_assign x e stmt.srange) flow |>
+      Option.return
 
-      desugar e man flow |>
-      post_eval man @@ fun e flow ->
-
-      man.post ~zone:Z_u_num (mk_assign x e stmt.srange) flow
-
-    | S_assume e when Core.Zone.eval_template e Z_u_num <> Keep ->
-      desugar e man flow |>
-      Option.return |> Option.lift @@
-      post_eval man @@ fun e flow ->
-
-      man.post ~zone:Z_u_num (mk_assume e stmt.srange) flow
+    | S_assume e when is_numeric_type e.etyp ->
+      desugar e man flow >>$? fun e flow ->
+      man.post ~zone:Z_u_num (mk_assume e stmt.srange) flow |>
+      Option.return
 
 
     | _ -> None

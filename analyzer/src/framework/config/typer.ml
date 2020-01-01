@@ -35,6 +35,7 @@ type abstraction =
   | A_domain
   | A_stack
   | A_value
+  | A_functor
 
 (** Signature levels of an abstraction *)
 type signature =
@@ -54,7 +55,7 @@ type config = {
 and structure =
   | S_leaf    of string (** Leaf configuration with a name *)
   | S_chain   of operator * config list (** Chain configurations connected by an operator *)
-  | S_apply   of config * config (** Application of a stack on a domain *)
+  | S_apply   of config * config (** Application of a stack or a functor on a domain *)
   | S_product of config list * string list (** Reduced product *)
   | S_nonrel  of config (** Non-relational domain *)
   | S_cast    of config (** Cast of a configuration to a lower signature *)
@@ -63,7 +64,7 @@ and structure =
 and operator =
   | O_seq
   | O_compose
-  | O_disjoint
+  | O_union
 
 let signature config = config.signature
 
@@ -79,6 +80,7 @@ let pp_abstraction fmt = function
   | A_domain -> pp_print_string fmt "𝒟"
   | A_stack -> pp_print_string fmt "𝒮"
   | A_value -> pp_print_string fmt "𝒱"
+  | A_functor -> pp_print_string fmt "𝓕"
 
 let pp_signature fmt = function
   | S_lowlevel -> pp_print_string fmt "lowlevel"
@@ -89,7 +91,7 @@ let pp_signature fmt = function
 let pp_operator fmt = function
   | O_seq -> pp_print_string fmt " ; "
   | O_compose -> pp_print_string fmt " o "
-  | O_disjoint -> pp_print_string fmt " ∨ "
+  | O_union -> pp_print_string fmt " ∨ "
 
 let rec pp_config fmt config =
   match config.structure with
@@ -125,7 +127,7 @@ let rec pp_config fmt config =
 (** A specification determines which transformers are provided by the framework *)
 type spec = {
   chain   : abstraction -> operator -> signature -> bool;
-  apply   : signature -> bool;
+  apply   : abstraction -> signature -> bool;
   product : abstraction -> signature -> bool;
 }
 
@@ -172,7 +174,7 @@ let subset (s1:signature) (s2:signature) =
   | _ -> false
 
 
-let strict_subset (s1:signature) (s2:signature) =  
+let strict_subset (s1:signature) (s2:signature) =
   if s1 = s2 then false
   else subset s1 s2
 
@@ -259,17 +261,18 @@ let product spec l r =
     structure = S_product (l',r);
   }
 
-let apply spec stack domain =
-  let stack, domain = unify stack domain in
-  let s = signature stack in
-  let s' = find_available_signature s spec.apply in
-  let stack = cast s' stack in
+let apply spec f domain =
+  let f, domain = unify f domain in
+  let s = signature f in
+  let s' = find_available_signature s (spec.apply (abstraction f)) in
+  let f = cast s' f in
   let domain = cast s' domain in
   {
     abstraction = A_domain;
     signature = s';
-    structure = S_apply (stack, domain);
+    structure = S_apply (f, domain);
   }
+
 
 let nonrel spec value =
   let value = cast S_lowlevel value in
@@ -306,6 +309,15 @@ let leaf_stack name =
     structure = S_leaf name
   }
 
+let leaf_stack_or_functor name =
+  if Core.Sig.Functor.Simplified.mem_functor name then
+    {
+      abstraction = A_functor;
+      signature = S_simplified;
+      structure = S_leaf name;
+    }
+  else
+    leaf_stack name
 
 let leaf_value name =
   let signature =
@@ -329,10 +341,10 @@ let rec domain_visitor spec = {
     leaf = leaf_domain;
     seq = (fun l -> List.map (domain spec) l |> chain spec O_seq);
     compose = (fun l -> assert false);
-    apply = (fun s d -> apply spec (stack spec s) (domain spec d));
+    apply = (fun s d -> apply spec (stack_or_functor spec s) (domain spec d));
     nonrel = (fun v -> nonrel spec (value spec v));
     product = (fun l r -> product spec (List.map (domain spec) l) r);
-    disjoint = (fun l -> assert false);
+    union = (fun l -> assert false);
   }
 
 (** Create a domain configuration from a json object *)
@@ -340,8 +352,8 @@ and domain spec json : config =
   visit (domain_visitor spec) json
 
 
-(** {2 Stacks} *)
-(** ********** *)
+(** {2 Stacks and functors} *)
+(** *********************** *)
 
 (** Configuration visitor for a stack object *)
 and stack_visitor spec = {
@@ -351,13 +363,22 @@ and stack_visitor spec = {
     apply = (fun s d -> assert false);
     nonrel = (fun v -> assert false);
     product = (fun l r -> product spec (List.map (stack spec) l) r);
-    disjoint = (fun l -> assert false);
+    union = (fun l -> assert false);
   }
 
 (** Create a stack configuration from a json object *)
 and stack spec json : config =
   visit (stack_visitor spec) json
 
+
+(** Configuration visitor for a stack object *)
+and stack_or_functor_visitor spec = {
+  (stack_visitor spec) with
+  leaf = leaf_stack_or_functor;
+}
+
+and stack_or_functor spec json : config =
+  visit (stack_or_functor_visitor spec) json
 
 (** {2 Values} *)
 (** ********** *)
@@ -370,7 +391,7 @@ and value_visitor spec = {
     apply = (fun s d -> assert false);
     nonrel = (fun v -> assert false);
     product = (fun l r -> product spec (List.map (value spec) l) r);
-    disjoint = (fun l -> List.map (value spec) l |> chain spec O_disjoint);
+    union = (fun l -> List.map (value spec) l |> chain spec O_union);
   }
 
 (** Create a value configuration from a json object *)

@@ -28,40 +28,102 @@ open Addr
 open Universal.Ast
 
 module Domain =
-  struct
+struct
 
-    include GenStatelessDomainId(struct
-        let name = "python.objects.range"
-      end)
+  include GenStatelessDomainId(struct
+      let name = "python.objects.range"
+    end)
 
-    let interface = {
-      iexec = {provides = []; uses = []};
-      ieval = {provides = [Zone.Z_py, Zone.Z_py; Zone.Z_py, Zone.Z_py_obj]; uses = []}
-    }
+  let interface = {
+    iexec = {provides = []; uses = []};
+    ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
+  }
 
-    let rec eval zs exp man flow =
-      let range = exp.erange in
-      match ekind exp with
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__new__")}, _)} as call, cls :: [up], []) ->
-        let args' = (mk_constant T_int (C_int (Z.of_int 0)) range)::up::(mk_constant T_int (C_int (Z.of_int 1)) range)::[] in
-        man.eval {exp with ekind = E_py_call(call, cls :: args', [])} flow
-        |> Option.return
+  let allocate_builtin ?(mode=STRONG) man range flow bltin oe =
+    (* allocate addr, and map this addr to inst bltin *)
+    let range = tag_range range "alloc_%s" bltin in
+    let cls = fst @@ find_builtin bltin in
+    man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr ~mode:mode (A_py_instance cls) range) flow |>
+    Eval.bind (fun eaddr flow ->
+        let addr = match ekind eaddr with
+          | E_addr a -> a
+          | _ -> assert false in
+        man.exec ~zone:Zone.Z_py_obj (mk_add eaddr range) flow |>
+        Eval.singleton (mk_py_object (addr, oe) range)
+      )
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__new__")}, _)} as call, cls :: [down; up], []) ->
-        let args' = down::up::(mk_constant T_int (C_int (Z.of_int 1)) range)::[] in
-        man.eval {exp with ekind = E_py_call(call, cls :: args', [])} flow
-        |> Option.return
+  let alarms = []
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range_iterator.__iter__")}, _)}, [self], []) ->
-        man.eval self flow |> Option.return
+  let rec eval zs exp man flow =
+    let range = exp.erange in
+    match ekind exp with
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("slice.__new__" as f))}, _)}, cls :: args, []) ->
+      Utils.new_wrapper man range flow "slice" cls
+        ~fthennew:(fun flow ->
+            let intornone = ["int"; "NoneType"] in
+            Utils.check_instances_disj f man flow range args
+              [intornone; intornone; intornone]
+              (fun _ flow -> allocate_builtin man range flow "slice" (Some exp))
+          )
 
-      | _ -> None
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__new__")}, _)} as call, cls :: [up], []) ->
+      let args' = (mk_constant T_int (C_int (Z.of_int 0)) range)::up::(mk_constant T_int (C_int (Z.of_int 1)) range)::[] in
+      man.eval {exp with ekind = E_py_call(call, cls :: args', [])} flow
+      |> Option.return
 
-    let init _ _ flow = flow
-    let exec _ _ _ _ = None
-    let ask _ _ _ = None
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__new__")}, _)} as call, cls :: [down; up], []) ->
+      let args' = down::up::(mk_constant T_int (C_int (Z.of_int 1)) range)::[] in
+      man.eval {exp with ekind = E_py_call(call, cls :: args', [])} flow
+      |> Option.return
 
-  end
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range.__new__" as f))}, _)}, cls :: args, []) ->
+      Utils.new_wrapper man range flow "range" cls
+        ~fthennew:(fun flow ->
+            Utils.check_instances f man flow range args
+              ["int"; "int"; "int"]
+              (fun args flow -> allocate_builtin man range flow "range" (Some exp))
+          )
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__contains__")}, _)}, args, []) ->
+      (* isinstance(arg1, range) && isinstance(arg2, int) ? *)
+      Exceptions.panic "todo: %a@\n" pp_expr exp
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__len__")}, _)}, [arg], []) ->
+      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) arg flow |>
+      Eval.bind (fun arg flow ->
+          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow
+          (* TODO: which one is better? *)
+          (* process_constant man flow range "int" addr_integers *)
+        )
+      |> Option.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range.__iter__" as f))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args
+        ["range"]
+        (fun r flow -> allocate_builtin man range flow "range_iterator" (Some exp))
+      |> Option.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range_iterator.__next__" as f))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args
+        ["range_iterator"]
+        (fun _ flow ->
+           let res = man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow in
+           let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
+           Eval.join_list (Eval.copy_ctx stopiteration res :: stopiteration :: []) ~empty:(fun () -> Eval.empty_singleton flow)
+        )
+      |> Option.return
+
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range_iterator.__iter__")}, _)}, [self], []) ->
+      man.eval self flow |> Option.return
+
+    | _ -> None
+
+  let init _ _ flow = flow
+  let exec _ _ _ _ = None
+  let ask _ _ _ = None
+
+end
 
 let () =
   Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)

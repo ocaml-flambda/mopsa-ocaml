@@ -81,6 +81,9 @@ val source_kind_name : source_kind -> string
 val print_file : string -> file -> unit
 val print_db : db -> unit
 
+val print_file_json : file -> unit
+val print_db_json : db -> unit
+
 
 (** {1 Apply file operations to DB} *)
 
@@ -145,4 +148,5 @@ val get_executable_sources : db -> string -> source list
 val log : bool ref
 val logfile : out_channel ref
 val starts_with : string -> string -> bool
+val ends_with : string -> string -> bool
 val absolute_path : string -> string

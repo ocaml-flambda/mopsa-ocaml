@@ -41,3 +41,11 @@ clean:
 	$(MAKE) -C parsers/python clean
 	$(MAKE) -C parsers/universal clean
 	$(MAKE) -C analyzer clean
+
+install:
+	$(MAKE) -C analyzer install
+	$(MAKE) -C parsers/c install
+
+uninstall:
+	$(MAKE) -C analyzer uninstall
+	$(MAKE) -C parsers/c uninstall

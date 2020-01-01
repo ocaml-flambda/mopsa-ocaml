@@ -21,56 +21,67 @@
 
 
 (** List of builtin functions *)
-let is_builtin_function = function
-  | "__builtin_constant_p"
+let builtin_functions = Hashtbl.create 16
 
-  | "__builtin_va_start"
-  | "__builtin_va_end"
-  | "__builtin_va_copy"
+let _ =
+  List.iter (fun a -> Hashtbl.add builtin_functions a ()) [
+      "__builtin_constant_p";
+      "__builtin_expect";
 
-  | "printf"
-  | "fprintf"
-  | "__printf_chk"
-  | "__fprintf_chk"
-  | "__builtin___sprintf_chk"
+      "__builtin_va_start";
+      "__builtin_va_end";
+      "__builtin_va_copy";
 
-  | "_mopsa_rand_s8"
-  | "_mopsa_rand_u8"
-  | "_mopsa_rand_s16"
-  | "_mopsa_rand_u16"
-  | "_mopsa_rand_s32"
-  | "_mopsa_rand_u32"
-  | "_mopsa_rand_float"
-  | "_mopsa_rand_double"
-  | "_mopsa_rand_void_pointer"
+      "printf";
+      "__printf_chk";
+      "fprintf";
+      "__fprintf_chk";
+      "sprintf";
+      "__sprintf_chk";
+      "__builtin___sprintf_chk";
+      "fscanf";
+      "scanf";
+      "sscanf";
 
-  | "_mopsa_range_s8"
-  | "_mopsa_range_u8"
-  | "_mopsa_range_s16"
-  | "_mopsa_range_u16"
-  | "_mopsa_range_s32"
-  | "_mopsa_range_u32"
-  | "_mopsa_range_int"
-  | "_mopsa_range_float"
-  | "_mopsa_range_double"
+      "_mopsa_rand_s8";
+      "_mopsa_rand_u8";
+      "_mopsa_rand_s16";
+      "_mopsa_rand_u16";
+      "_mopsa_rand_s32";
+      "_mopsa_rand_u32";
+      "_mopsa_rand_s64";
+      "_mopsa_rand_u64";
+      "_mopsa_rand_float";
+      "_mopsa_rand_double";
+      "_mopsa_rand_void_pointer";
 
-  | "_mopsa_invalid_pointer"
+      "_mopsa_range_s8";
+      "_mopsa_range_u8";
+      "_mopsa_range_s16";
+      "_mopsa_range_u16";
+      "_mopsa_range_s32";
+      "_mopsa_range_u32";
+      "_mopsa_range_s64";
+      "_mopsa_range_u64";
+      "_mopsa_range_int";
+      "_mopsa_range_float";
+      "_mopsa_range_double";
 
-  | "_mopsa_panic"
-  | "_mopsa_print"
+      "_mopsa_invalid_pointer";
 
-  | "_mopsa_assume"
+      "_mopsa_panic";
+      "_mopsa_print";
 
-  | "_mopsa_assert_exists"
-  | "_mopsa_assert"
-  | "_mopsa_assert_safe"
-  | "_mopsa_assert_unsafe"
-  | "_mopsa_assert_error"
-  | "_mopsa_assert_error_exists"
-  | "_mopsa_assert_error_at_line"
+      "_mopsa_assume";
 
-  | "_mopsa_file_description_to_descriptor"
-  | "_mopsa_file_descriptor_to_description"
-    -> true
+      "_mopsa_assert_exists";
+      "_mopsa_assert";
+      "_mopsa_assert_safe";
+      "_mopsa_assert_unsafe";
 
-  | _ -> false
+      "_mopsa_register_file_resource";
+      "_mopsa_register_file_resource_at";
+      "_mopsa_find_file_resource"
+    ]
+
+let is_builtin_function = Hashtbl.mem builtin_functions

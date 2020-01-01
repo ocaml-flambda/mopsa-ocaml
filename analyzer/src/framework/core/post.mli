@@ -19,37 +19,31 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Post-states with journaling flows. *)
+(** Post - Post-states of statement execution. *)
 
 open Ast.Stmt
 open Token
 open Flow
 open Log
 open Context
+open Result
 open Lattice
 
-type 'a post
 
-val return : 'a flow -> 'a post
+type 'a post = ('a, unit) result
 
-val print : 'a lattice -> Format.formatter -> 'a post -> unit
+val return : ?log:log -> ?cleaners:block -> 'a flow -> 'a post
 
-val print_log : Format.formatter -> 'a post -> unit
+val print : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a post -> unit
 
 val join : 'a post -> 'a post -> 'a post
 
-val merge : (token -> ('a*log) -> ('a*log) -> ('a*log)) -> 'a post -> 'a post -> 'a post
+val join_list : empty:(unit -> 'a post) -> 'a post list -> 'a post
 
-val meet : 'a lattice -> 'a post -> 'a post -> 'a post
+val meet : 'a post -> 'a post -> 'a post
 
 val get_ctx : 'a post -> 'a ctx
 
 val set_ctx : 'a ctx -> 'a post -> 'a post
 
 val bind : ('a flow -> 'a post) -> 'a post -> 'a post
-
-val map_log : (token -> log -> log) -> 'a post -> 'a post
-
-val map : (token -> 'a -> log -> 'b * log) -> 'b Context.ctx -> 'a post -> 'b post
-
-val to_flow : 'a lattice -> 'a post -> 'a flow

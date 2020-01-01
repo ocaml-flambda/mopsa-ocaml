@@ -36,9 +36,10 @@ type expr_kind = ..
 
 (** An expression is identified by a kind, a type and a location *)
 type expr = {
-  ekind: expr_kind;
-  etyp: typ;
-  erange: Location.range;
+  ekind: expr_kind; (** kind of the expression *)
+  etyp: typ; (** type of the expression *)
+  erange: Location.range; (** range of the expression *)
+  eprev: expr option; (** previous form of the expression *)
 }
 
 
@@ -130,7 +131,7 @@ let () =
 
     print = (fun next fmt e ->
         match ekind e with
-        | E_unop(op, e) -> fprintf fmt "%a (%a)" pp_operator op pp_expr e
+        | E_unop(op, e) -> fprintf fmt "%a(%a)" pp_operator op pp_expr e
         | E_binop(op, e1, e2) -> fprintf fmt "(%a %a %a)" pp_expr e1 pp_operator op pp_expr e2
         | _ -> next fmt e
       );
@@ -143,10 +144,11 @@ let () =
 
 let mk_expr
     ?(etyp = T_any)
+    ?(eprev = None)
     ekind
     erange
   =
-  {ekind; etyp; erange}
+  {ekind; etyp; erange; eprev}
 
 let mk_var v ?(mode = STRONG) erange =
   mk_expr ~etyp:v.vtyp (E_var(v, mode)) erange
@@ -166,4 +168,4 @@ let mk_constant ~etyp c = mk_expr ~etyp (E_constant c)
 
 let mk_top typ range = mk_constant (C_top typ) ~etyp:typ range
 
-let mk_not e = mk_unop O_log_not e ~etyp:e.etyp
+let mk_not e range = mk_unop O_log_not e ~etyp:e.etyp range

@@ -40,6 +40,8 @@ module Domain = struct
     ieval = {provides = []; uses = []}
   }
 
+  let alarms = []
+
   let init _ _ flow = flow
   let eval _ _ _ _ = None
 
@@ -49,15 +51,15 @@ module Domain = struct
     match skind stmt with
     | S_py_aug_assign(x, op, e) ->
        let x0 = x in
-       Eval.eval_list (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) [e; x] flow |>
-         post_eval man (fun el flow ->
+       bind_list [e; x] (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+       bind_some (fun el flow ->
              let e, x = match el with [e; x] -> e, x | _ -> assert false in
 
              let op_fun = Operators.binop_to_incr_fun op in
              man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)  (mk_py_type x range) flow |>
-               post_eval man (fun cls flow ->
+             bind_some (fun cls flow ->
                    let cls = object_of_expr cls in
-                   assume_post
+                   assume
                      (Utils.mk_object_hasattr cls op_fun range)
                      man
                      ~fthen:(fun true_flow ->

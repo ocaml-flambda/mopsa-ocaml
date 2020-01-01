@@ -25,6 +25,7 @@
 *)
 
 open Mopsa
+open Sig.Domain.Stateless
 open Lexing
 open Universal.Ast
 open Universal.Frontend
@@ -222,7 +223,7 @@ let rec repl_loop ctx man flow =
             let stmt = parse_stmt ctx str in
             pf "%s@[<v 4>X♯ ≜ 𝕊⟦%a@]⟧ =@]%s@." col_out pp_stmt stmt col_reset;
             let flow = man.exec stmt flow in
-            pf "%s@[<v 4>%a@]%s@." col_out (Flow.print man.lattice) flow col_reset;
+            pf "%s@[<v 4>%a@]%s@." col_out (Flow.print man.lattice.print) flow col_reset;
             ctx, flow
 
          | VarDecl ->
@@ -235,7 +236,7 @@ let rec repl_loop ctx man flow =
                 pf "variable %a : %a declared@." pp_var v pp_typ (vtyp v)
               ) vars;
             pf "%s@[<v 4>X♯ ≜%s@." col_out col_reset;
-            pf "%s%a%s@." col_out (Flow.print man.lattice) flow col_reset;
+            pf "%s%a%s@." col_out (Flow.print man.lattice.print) flow col_reset;
             ctx, flow
 
          | FunDecl ->
@@ -305,6 +306,8 @@ module Domain = struct
     iexec = {provides = [Z_u]; uses = []};
     ieval = {provides = []; uses = []};
   }
+
+  let alarms = []
 
   let init prog man flow = flow
 

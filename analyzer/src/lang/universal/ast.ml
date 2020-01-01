@@ -130,10 +130,10 @@ let () =
 
 type operator +=
   (* Unary operators *)
-  | O_sqrt         (** Square root *)
-  | O_bit_invert   (** bitwise ~ *)
+  | O_sqrt              (** Square root *)
+  | O_bit_invert        (** bitwise ~ *)
   | O_wrap of Z.t * Z.t (** wrap *)
-  | O_cast         (** Cast *)
+  | O_cast of typ * typ (** Cast *)
 
   (* Binary operators *)
   | O_plus       (** + *)
@@ -178,7 +178,7 @@ let () =
         | O_bit_xor    -> pp_print_string fmt "^"
         | O_bit_rshift -> pp_print_string fmt ">>"
         | O_bit_lshift -> pp_print_string fmt "<<"
-        | O_cast       -> pp_print_string fmt "cast"
+        | O_cast(t1,t2)    -> fprintf fmt "cast[%a->%a]" pp_typ t1 pp_typ t2
         | op           -> default fmt op
       );
   }
@@ -249,7 +249,7 @@ type addr = {
 let akind addr = addr.addr_kind
 
 let pp_addr fmt a =
-  if a.addr_group = G_all then
+  if compare_addr_group a.addr_group G_all = 0 then
     fprintf fmt "@@%a:*:%s"
       pp_addr_kind a.addr_kind
       (match a.addr_mode with WEAK -> "w" | STRONG -> "s")
@@ -259,8 +259,8 @@ let pp_addr fmt a =
       (* Using Hashtbl.hash leads to collisions. Hashtbl.hash is
          equivalent to Hashtbl.hash_param 10 100. By increasing the
          number of meaningful nodes to encounter, collisions are less
-         likely to happen. 
-      *) 
+         likely to happen.
+      *)
       (Hashtbl.hash_param 30 100 a.addr_group)
       (match a.addr_mode with WEAK -> "w" | STRONG -> "s")
 
@@ -292,7 +292,7 @@ let () =
       );
     print = (fun next fmt v ->
         match vkind v with
-        | V_addr_attr _ -> Format.pp_print_string fmt v.vname
+        | V_addr_attr (addr, attr) -> Format.fprintf fmt "%a.%s" pp_addr addr attr
         | _ -> next fmt v
       )
   }
@@ -396,7 +396,7 @@ type expr_kind +=
   | E_subscript of expr * expr
 
   (** Allocation of an address on the heap *)
-  | E_alloc_addr of addr_kind
+  | E_alloc_addr of addr_kind * mode
 
   (** Head address. *)
   | E_addr of addr
@@ -426,8 +426,11 @@ let () =
             (fun () -> compare_expr i1 i2);
           ]
 
-        | E_alloc_addr(ak1), E_alloc_addr(ak2) ->
-          compare_addr_kind ak1 ak2
+        | E_alloc_addr(ak1, m1), E_alloc_addr(ak2, m2) ->
+          Compare.compose [
+            (fun () -> compare_addr_kind ak1 ak2);
+            (fun () -> compare_mode m1 m2);
+          ]
 
         | E_addr(a1), E_addr(a2) ->
           compare_addr a1 a2
@@ -448,7 +451,7 @@ let () =
           fprintf fmt "%a(%a)"
             pp_expr f
             (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_expr) args
-        | E_alloc_addr(akind) -> fprintf fmt "alloc(%a)" pp_addr_kind akind
+        | E_alloc_addr(akind, mode) -> fprintf fmt "alloc(%a, %a)" pp_addr_kind akind pp_mode mode
         | E_addr (addr) -> fprintf fmt "%a" pp_addr addr
         | E_len exp -> Format.fprintf fmt "|%a|" pp_expr exp
         | _ -> default fmt exp
@@ -488,7 +491,7 @@ type stmt_kind +=
 
    | S_if of expr (** condition *) * stmt (** then branch *) * stmt (** else branch *)
 
-   | S_block of stmt list (** Sequence block of statements *)
+   | S_block of stmt list (** Sequence block of statements *) * var list (** local variables declared within the block *)
 
    | S_return of expr option (** Function return with an optional return expression *)
 
@@ -503,15 +506,11 @@ type stmt_kind +=
    | S_unit_tests of (string * stmt) list (** list of unit tests and their names *)
    (** Unit tests suite *)
 
-   | S_simple_assert of expr * bool * bool
-   (** Unit tests simple assertions :
-       S_simple_assert(cond,b,b') = b is_bottom(assume(b' cond))
-       where b exp is understood as:
-        f b = true then exp else not exp
-   *)
-
    | S_assert of expr
    (** Unit tests assertions *)
+
+   | S_satisfy of expr
+   (** Unit tests satisfiability check *)
 
    | S_print
    (** Print the abstract flow map at current location *)
@@ -532,7 +531,8 @@ let () =
             (fun () -> compare_stmt else1 else2);
           ]
 
-        | S_block(sl1), S_block(sl2) -> Compare.list compare_stmt sl1 sl2
+        | S_block(sl1,vl1), S_block(sl2,vl2) ->
+          Compare.pair (Compare.list compare_stmt) (Compare.list compare_var) (sl1,vl1) (sl2,vl2)
 
         | S_return(e1), S_return(e2) -> Compare.option compare_expr e1 e2
 
@@ -545,14 +545,9 @@ let () =
         | S_unit_tests(tl1), S_unit_tests(tl2) ->
           Compare.list (fun (t1, _) (t2, _) -> Pervasives.compare t1 t2) tl1 tl2
 
-        | S_simple_assert(e1,b1,b1'), S_simple_assert(e2,b2,b2') ->
-          Compare.compose [
-            (fun () -> compare_expr e1 e2);
-            (fun () -> Pervasives.compare b1 b2);
-            (fun () -> Pervasives.compare b1' b2');
-          ]
-
         | S_assert(e1), S_assert(e2) -> compare_expr e1 e2
+
+        | S_satisfy(e1), S_satisfy(e2) -> compare_expr e1 e2
 
         | S_free_addr a1, S_free_addr a2 ->
           compare_addr a1 a2
@@ -564,9 +559,9 @@ let () =
         | S_expression(e) -> fprintf fmt "%a;" pp_expr e
         | S_if(e, s1, s2) ->
           fprintf fmt "@[<v 4>if (%a) {@,%a@]@,@[<v 4>} else {@,%a@]@,}" pp_expr e pp_stmt s1 pp_stmt s2
-        | S_block[] -> fprintf fmt "pass"
-        | S_block[s] -> pp_stmt fmt s
-        | S_block(l) ->
+        | S_block([],_) -> fprintf fmt "pass"
+        | S_block([s],_) -> pp_stmt fmt s
+        | S_block(l,_) ->
           fprintf fmt "@[<v>";
           pp_print_list
             ~pp_sep:(fun fmt () -> fprintf fmt "@,")
@@ -582,14 +577,7 @@ let () =
         | S_continue -> pp_print_string fmt "continue;"
         | S_unit_tests (tests) -> pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") (fun fmt (name, test) -> fprintf fmt "test %s:@\n  @[%a@]" name pp_stmt test) fmt tests
         | S_assert e -> fprintf fmt "assert(%a);" pp_expr e
-        | S_simple_assert(e,b,b') ->
-          begin
-            match b,b' with
-            | true, true -> fprintf fmt "is_bottom(assume(%a))" pp_expr e
-            | true, false -> fprintf fmt "is_bottom(assume(!%a))" pp_expr e
-            | false, false -> fprintf fmt "!is_bottom(assume(!%a))" pp_expr e
-            | false, true -> fprintf fmt "!is_bottom(assume(%a))" pp_expr e
-          end
+        | S_satisfy e -> fprintf fmt "sat(%a);" pp_expr e
         | S_print -> fprintf fmt "print();"
         | S_free_addr a -> fprintf fmt "free_addr(%a);" pp_addr a
         | _ -> default fmt stmt
@@ -613,9 +601,9 @@ let () =
           {exprs = [e]; stmts = [s]},
           (fun parts -> {stmt with skind = S_while(List.hd parts.exprs, List.hd parts.stmts)})
 
-        | S_block(sl) ->
+        | S_block(sl,vl) ->
           {exprs = []; stmts = sl},
-          (fun parts -> {stmt with skind = S_block(parts.stmts)})
+          (fun parts -> {stmt with skind = S_block(parts.stmts,vl)})
 
         | S_return(None) -> leaf stmt
 
@@ -627,9 +615,10 @@ let () =
           {exprs = [e]; stmts = []},
           (function {exprs = [e]} -> {stmt with skind = S_assert(e)} | _ -> assert false)
 
-        | S_simple_assert(e,b,b') ->
+
+        | S_satisfy(e) ->
           {exprs = [e]; stmts = []},
-          (function {exprs = [e]} -> {stmt with skind = S_simple_assert(e,b,b')} | _ -> assert false)
+          (function {exprs = [e]} -> {stmt with skind = S_satisfy(e)} | _ -> assert false)
 
         | S_unit_tests(tests) ->
           let tests_names, tests_bodies = List.split tests in
@@ -661,7 +650,6 @@ let rec is_universal_type t =
 
   | _ -> false
 
-let mk_not e = mk_unop O_log_not e
 
 let mk_int i ?(typ=T_int) erange =
   mk_constant ~etyp:typ (C_int (Z.of_int i)) erange
@@ -734,14 +722,16 @@ let mul e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_mult e2 range ~etyp:typ
 let div e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_div e2 range ~etyp:typ
 let _mod e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_mod e2 range ~etyp:typ
 
+let mk_unit range = mk_constant C_unit ~etyp:T_unit range
+
 let mk_bool b range = mk_constant ~etyp:T_bool (C_bool b) range
 let mk_true = mk_bool true
 let mk_false = mk_bool false
 
-let mk_addr addr range = mk_expr ~etyp:T_addr (E_addr addr) range
+let mk_addr addr ?(etyp=T_addr) range = mk_expr ~etyp (E_addr addr) range
 
-let mk_alloc_addr addr_kind range =
-  mk_expr (E_alloc_addr addr_kind) ~etyp:T_addr range
+let mk_alloc_addr ?(mode=STRONG) addr_kind range =
+  mk_expr (E_alloc_addr (addr_kind, mode)) ~etyp:T_addr range
 
 let is_int_type = function
   | T_int | T_bool -> true
@@ -763,16 +753,10 @@ let is_math_type = function
 let mk_assert e range =
   mk_stmt (S_assert e) range
 
-let mk_simple_assert e b1 b2 range =
-  mk_stmt (S_simple_assert (e, b1, b2)) range
+let mk_satisfy e range =
+  mk_stmt (S_satisfy e) range
 
-let mk_assert_reachable range =
-  mk_simple_assert (mk_one range) true false range
-
-let mk_assert_unreachable range =
-  mk_simple_assert (mk_one range) true true range
-
-let mk_block block = mk_stmt (S_block block)
+let mk_block block ?(vars=[]) range = mk_stmt (S_block (block,vars)) range
 
 let mk_nop range = mk_block [] range
 
@@ -786,10 +770,13 @@ let mk_free_addr a range =
   mk_stmt (S_free_addr a) range
 
 let mk_call fundec args range =
-  mk_expr (E_call (
-      mk_expr (E_function (User_defined fundec)) range,
-      args
-    )) range
+  mk_expr
+    (E_call (
+        mk_expr (E_function (User_defined fundec)) range,
+        args
+      ))
+    ~etyp:(match fundec.fun_return_type with None -> T_any | Some t -> t)
+    range
 
 let mk_expr_stmt e =
   mk_stmt (S_expression e)

@@ -51,10 +51,13 @@ val register_stmt_with_visitor : stmt vinfo -> unit
 
 val register_stmt_visitor : ((stmt -> stmt structure) -> stmt -> stmt structure) -> unit
 
-val split_expr : expr ->expr structure
+val split_expr : expr -> expr structure
 
 val split_stmt : stmt -> stmt structure
 
+val is_leaf_expr : expr -> bool
+
+val is_leaf_stmt : stmt -> bool
 
 (** Kinds of returned actions by a visitor *)
 type 'a action =
@@ -67,7 +70,7 @@ val map_expr :
     (expr -> expr action) ->
     (stmt -> stmt action) ->
     expr -> expr
-(** [map_expr fe fs e] transforms the exprression [e] into a new one,
+(** [map_expr fe fs e] transforms the expression [e] into a new one,
     by splitting [fe e] into its sub-parts, applying [map_expr fe fs] and
     [map_stmt fe fs] on them, and finally gathering the results with
     the builder of [fe e].
@@ -85,6 +88,12 @@ val fold_expr :
   ('a -> stmt -> 'a action) ->
   'a -> expr -> 'a
 (** Folding function for expressions  *)
+
+
+val fold_sub_expr :
+  ('a -> expr -> 'a action) ->
+  ('a -> stmt -> 'a action) ->
+  'a -> expr -> 'a
 
 
 val fold_stmt :
@@ -110,3 +119,6 @@ val expr_vars : expr -> var list
 
 val stmt_vars : stmt -> var list
 (** Extract variables from a statement *)
+
+val get_orig_expr : expr -> expr
+(** Get the original version of an evaluated expression *)

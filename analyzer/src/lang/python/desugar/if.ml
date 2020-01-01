@@ -38,6 +38,8 @@ module Domain =
       ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
     }
 
+    let alarms = []
+
     let init _ _ flow = flow
 
     let eval zs exp man flow =
@@ -66,7 +68,7 @@ module Domain =
       match skind stmt with
       | S_py_if (test, sthen, selse) ->
         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (Utils.mk_builtin_call "bool" [test] range) flow |>
-        post_eval man (fun exp flow ->
+        bind_some (fun exp flow ->
             man.exec ~zone:Zone.Z_py (mk_if exp sthen selse range) flow |> Post.return
           )
         |> Option.return

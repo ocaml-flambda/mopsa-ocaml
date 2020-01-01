@@ -54,15 +54,14 @@ let () =
     | T_py_not_implemented -> pp_print_string fmt "notimplemented"
     | T_py_none -> pp_print_string fmt "none"
     | T_py_complex -> pp_print_string fmt "complex"
-    | T_py_empty -> pp_print_string fmt "empty"
     | T_py_bytes -> pp_print_string fmt "bytes"
     | _ -> default fmt typ
     );
   register_constant_pp (fun default fmt -> function
+      | C_py_ellipsis -> pp_print_string fmt "C_py_ellipsis"
       | C_py_none -> pp_print_string fmt "C_py_None"
       | C_py_not_implemented -> pp_print_string fmt "NotImplemented"
       | C_py_imag j -> fprintf fmt "%aj" pp_print_float j
-      | C_py_empty -> pp_print_string fmt "empty"
       | c -> default fmt c
     );
   register_operator_pp (fun default fmt -> function
@@ -79,6 +78,10 @@ let () =
     );
   register_expr_pp (fun default fmt exp ->
       match ekind exp with
+      | E_py_ll_hasattr (e, attr) -> Format.fprintf fmt "E_py_ll_hasattr(%a, %a)" pp_expr e pp_expr attr
+      | E_py_ll_getattr (e, attr) -> Format.fprintf fmt "E_py_ll_getattr(%a, %a)" pp_expr e pp_expr attr
+      | E_py_ll_setattr (e, attr, ovalu) -> Format.fprintf fmt "E_py_ll_setattr(%a, %a, %a)" pp_expr e pp_expr attr (Option.print pp_expr) ovalu
+      | E_py_annot e -> fprintf fmt "(annot) %a" pp_expr e
       | E_py_undefined true -> fprintf fmt "global undef"
       | E_py_undefined false -> fprintf fmt "local undef"
       | E_py_object obj -> pp_py_object fmt obj
@@ -88,8 +91,11 @@ let () =
         fprintf fmt "[%a]"
           (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_expr) elts
       | E_py_tuple(elts) ->
-        fprintf fmt "(%a)"
-          (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_expr) elts
+        if List.length elts = 1 then
+          fprintf fmt "(%a,)" pp_expr (List.hd elts)
+        else
+          fprintf fmt "(%a)"
+            (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_expr) elts
       | E_py_set(elts) ->
         fprintf fmt "{%a}"
           (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_expr) elts
@@ -187,6 +193,8 @@ let () =
       | E_py_bytes(s) ->
         fprintf fmt "b\"%s\"" s
 
+      | E_py_check_annot (e1, e2) -> fprintf fmt "check_annot(%a, %a)" pp_expr e1 pp_expr e2
+
       | _ -> default fmt exp
     );
 
@@ -200,10 +208,17 @@ let () =
           pp_stmt cls.py_cls_body
 
       | S_py_function(func) ->
-        fprintf fmt "%a@\ndef %a(%a):@\n@[<h 2>  %a@]"
+        fprintf fmt "%a@\ndef %a(%a)%a:@\n@[<h 2>  %a@]"
           (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") (fun fmt d -> fprintf fmt "@@%a" pp_expr d)) func.py_func_decors
           pp_var func.py_func_var
-          (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_var) func.py_func_parameters
+          (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") (fun fmt (var, oty) ->
+               match oty with
+               | None -> pp_var fmt var
+               | Some ty -> fprintf fmt "%a: %a" pp_var var pp_expr ty
+             )) (List.map2 (fun  x y -> (x, y)) func.py_func_parameters func.py_func_types_in)
+          (fun fmt oty -> match oty with
+             | None -> ()
+             | Some ty -> fprintf fmt " -> %a" pp_expr ty) func.py_func_type_out
           pp_stmt func.py_func_body
 
       | S_py_try(body, excepts, orelse, final) ->
@@ -235,6 +250,11 @@ let () =
           pp_expr x
           pp_operator op
           pp_expr e
+
+      | S_py_annot(x, typ) ->
+        fprintf fmt "%a: %a"
+          pp_expr x
+          pp_expr typ
 
       | S_py_for(target, iter, body, orelse) ->
         fprintf fmt "for %a in %a:@\n@[<h 2>  %a@]@\nelse:@\n@[<h 2>  %a@]"

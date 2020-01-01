@@ -1,0 +1,4 @@
+#!/bin/bash
+
+MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/.."
+MOPSADB=${MOPSADB-`pwd`/mopsa.db} PATH=${MOPSADIR}/bin/mopsa-wrappers:${PATH} $@

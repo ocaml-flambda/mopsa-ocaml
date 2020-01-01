@@ -61,7 +61,9 @@ let compare cs cs' =
 let empty : cs = []
 
 let is_empty (cs:cs) =
-  List.length cs = 0
+  match cs with
+  | [] -> true
+  | _ -> false
 
 let ctx_key =
   let module K = Context.GenUnitKey(
@@ -74,17 +76,13 @@ let ctx_key =
   in
   K.key
 
-let get flow : cs =
-  Flow.get_ctx flow |>
-  Context.find_unit ctx_key
 
-let set cs flow =
-  Flow.set_ctx (Flow.get_ctx flow |> Context.add_unit ctx_key cs) flow
+let push f range cs =
+  { call_fun = f; call_site = range} :: cs
 
-let push f range flow =
-  let cs = get flow in
-  set ({ call_fun = f; call_site = range} :: cs) flow
+exception EmptyCallstack
 
-let pop flow =
-  let cs = get flow in
-  List.hd cs, set (List.tl cs) flow
+let pop cs =
+  match cs with
+  | [] -> raise EmptyCallstack
+  | _ -> List.hd cs, List.tl cs

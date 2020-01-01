@@ -23,16 +23,20 @@
 
 open Yojson.Basic
 open ArgExt
+open Core.Alarm
+open Core.Soundness
+
 
 let print out json =
   let channel =
     match out with
     | None -> stdout
-    | Some file -> open_out file
+    | Some file ->
+       open_out_gen [Open_append; Open_wronly; Open_creat] 0o644 file
   in
   Yojson.Basic.pretty_to_channel channel json
 
-let render_pos pos : json =
+let render_pos pos =
   let file = Location.get_pos_file pos in
   let line = Location.get_pos_line pos in
   let column = Location.get_pos_column pos in
@@ -43,40 +47,58 @@ let render_pos pos : json =
   ]
 
 
-let render_range range : json =
+let render_range range =
   `Assoc [
     "start", render_pos (Location.get_range_start range);
     "end", render_pos (Location.get_range_end range)
   ]
 
-let render_call (c:Core.Callstack.call) : json =
+let render_call (c:Core.Callstack.call)  =
   `Assoc [
     "function", `String c.call_fun;
     "range", render_range c.call_site;
   ]
 
-let render_callstack cs : json =
+let render_callstack cs  =
   `List (List.map render_call cs)
 
-let render_alarm alarm : json =
+let render_alarm_class alarm =
   let title =
-    let () = Core.Alarm.pp_alarm_title Format.str_formatter alarm in
+    let () = pp_alarm_class Format.str_formatter alarm in
     Format.flush_str_formatter ()
   in
-  let range, cs = alarm.Core.Alarm.alarm_trace in
+  `String title
+
+let render_alarm alarm  =
+  let range = Core.Alarm.get_alarm_range alarm in
+  let cs = Core.Alarm.get_alarm_callstack alarm in
   `Assoc [
-    "title", `String title;
+    "title", render_alarm_class (Core.Alarm.get_alarm_class alarm);
     "range", render_range range;
     "callstack", render_callstack cs;
   ]
 
-let render_var var : json =
+let render_warning w  =
+  match w.warn_range with
+  | None ->
+    `Assoc [
+      "message", `String w.warn_message;
+    ]
+
+  | Some r ->
+    `Assoc [
+      "message", `String w.warn_message;
+      "range", render_range r;
+    ]
+    
+
+let render_var var  =
   `String var.Ast.Var.vname
 
-let render_value value : json =
+let render_value value  =
   `String value
 
-let render_env (var,value) : json =
+let render_env (var,value)  =
   `Assoc [
     "var", render_var var;
     "val"   , render_value value;
@@ -84,17 +106,18 @@ let render_env (var,value) : json =
 
 
 let report ?(flow=None) man alarms time files out : unit =
-  let json : json = `Assoc [
+  let json  = `Assoc [
       "success", `Bool true;
       "time", `Float time;
       "files", `List (List.map (fun f -> `String f) files);
-      "alarms", `List (List.map render_alarm alarms)
+      "alarms", `List (AlarmSet.elements alarms |> List.map render_alarm);
+      "warnings", `List (List.map render_warning (get_warnings ()));
     ]
   in
   print out json
 
 
-let panic ?(btrace="<none>") exn files out =
+let panic ?(btrace="<none>") exn files time out =
   let open Exceptions in
   let error =
     match exn with
@@ -104,8 +127,9 @@ let panic ?(btrace="<none>") exn files out =
     | SyntaxErrorList l -> String.concat ", " (List.map snd l)
     |  _ -> Printexc.to_string exn
   in
-  let json : json = `Assoc [
+  let json  = `Assoc [
       "success", `Bool false;
+      "time", `Float time;
       "files", `List (List.map (fun f -> `String f) files);
       "exception", `String error;
       "backtrace", `String btrace;
@@ -114,7 +138,7 @@ let panic ?(btrace="<none>") exn files out =
   print out json
 
 let help (args:arg list) out =
-  let json : json = `List (
+  let json  = `List (
       args |>
       List.map (fun arg ->
           `Assoc [
@@ -143,9 +167,28 @@ let help (args:arg list) out =
   print out json
 
 let list_domains (domains:string list) out =
-  let json : json = `List (
+  let json = `List (
       domains |>
       List.map (fun d -> `String d)
     )
+  in
+  print out json
+
+let list_alarms alarms out =
+  let json = `List (
+      List.map render_alarm_class alarms
+    )
+  in
+  print out json
+
+let print range printer flow out =
+  printer Format.str_formatter flow;
+  let str = Format.flush_str_formatter () in
+  let json =
+    `Assoc [
+       "channel", `String "print";
+       "range", render_range range;
+       "msg", `String str;
+     ]
   in
   print out json

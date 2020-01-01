@@ -24,6 +24,7 @@
 open Mopsa
 open Ast
 open Bot
+open Core.Sig.Value.Lowlevel
 
 
 module Value =
@@ -43,7 +44,7 @@ struct
 
   let zones = [Zone.Z_u_num]
 
-  let types = [T_int; T_bool]
+  let mem_type = function T_int | T_bool -> true | _ -> false
 
   let bottom = BOT
 
@@ -58,11 +59,11 @@ struct
 
   let meet (a1:t) (a2:t) : t = I.meet_bot a1 a2
 
-  let widen (a1:t) (a2:t) : t = I.widen_bot a1 a2
+  let widen ctx (a1:t) (a2:t) : t = I.widen_bot a1 a2
 
   let print fmt (a:t) = I.fprint_bot fmt a
 
-  let of_constant = function
+  let constant t = function
     | C_int i ->
        Nb (I.of_z i i)
 
@@ -82,19 +83,20 @@ struct
   let of_z z1 z2 : t = Nb (I.of_z z1 z2)
   let of_int n1 n2 : t = Nb (I.of_int n1 n2)
 
-  let unop op a =
-    match op with
+  let unop man t op v = lift_simplified_unop (fun op a ->
+      match op with
       | O_log_not -> bot_lift1 I.log_not a
       | O_minus  -> bot_lift1 I.neg a
       | O_plus  -> a
-      | O_wrap(l, u) ->
-        let rep =  bot_lift1 (fun itv -> I.wrap itv l u) a in
-        let () = debug "O_wrap done : %a [%a-%a] : %a" print a Z.pp_print l Z.pp_print u print rep in
-        rep
+      | O_wrap(l, u) -> bot_lift1 (fun itv -> I.wrap itv l u) a
       | O_bit_invert -> bot_lift1 I.bit_not a
+      | O_cast (T_float _, T_int) ->
+        let float_itv = man.ask (ValueQuery (v,Common.VQ_to_float_interval)) in
+        ItvUtils.FloatItvNan.to_int_itv float_itv
       | _ -> top
+    ) man t op v
 
-  let binop op a1 a2 =
+  let binop man = lift_simplified_binop (fun op a1 a2 ->
       match op with
       | O_plus   -> bot_lift2 I.add a1 a2
       | O_minus  -> bot_lift2 I.sub a1 a2
@@ -116,12 +118,14 @@ struct
       | O_bit_rshift -> bot_absorb2 I.shift_right a1 a2
       | O_bit_lshift -> bot_absorb2 I.shift_left a1 a2
       | _     -> top
+    ) man
 
-  let filter a b =
+  let filter man = lift_simplified_filter (fun a b ->
       if b then bot_absorb1 I.meet_nonzero a
       else bot_absorb1 I.meet_zero a
+    ) man
 
-  let bwd_unop op a r =
+  let bwd_unop man = lift_simplified_bwd_unop (fun op a r ->
       try
         let a, r = bot_to_exn a, bot_to_exn r in
         let aa = match op with
@@ -129,15 +133,15 @@ struct
           | O_wrap(l,u) -> bot_to_exn (I.bwd_wrap a (l,u) r)
           | O_bit_invert -> bot_to_exn (I.bwd_bit_not a r)
           | _ ->
-            let () = Exceptions.panic "following backward %a unary operator is not yet implemented"
-                pp_operator op in
-            assert false
+            warn "Intervals.Integer: no backward evaluation for operator %a" pp_operator op;
+            bot_to_exn (I.bwd_default_unary a r)
         in
         Nb aa
       with Found_BOT ->
         bottom
+    ) man
 
-  let bwd_binop op a1 a2 r =
+  let bwd_binop man = lift_simplified_bwd_binop (fun op a1 a2 r ->
       try
         let a1, a2, r = bot_to_exn a1, bot_to_exn a2, bot_to_exn r in
         let aa1, aa2 =
@@ -164,11 +168,12 @@ struct
         Nb aa1, Nb aa2
       with Found_BOT ->
         bottom, bottom
+    ) man
 
-  let compare op a1 a2 r =
+  let compare man = lift_simplified_compare (fun op a1 a2 r ->
       try
         let a1, a2 = bot_to_exn a1, bot_to_exn a2 in
-        let op = if r then op else negate_comparison op in
+        let op = if r then op else negate_comparison_op op in
         let aa1, aa2 =
           match op with
           | O_eq -> bot_to_exn (I.filter_eq a1 a2)
@@ -182,6 +187,38 @@ struct
         Nb aa1, Nb aa2
       with Found_BOT ->
         bottom, bottom
+    ) man
+
+
+  (** {2 Query handlers} *)
+
+  let ask : type r. ('a,t) man -> ('a,r) vquery -> r option =
+    fun man q ->
+    match q with
+    | NormalQuery(Common.Q_int_interval e) ->
+      man.eval e |>
+      man.get |>
+      Option.return
+
+    | NormalQuery(Common.Q_fast_int_interval e) ->
+      man.eval e |>
+      man.get |>
+      Option.return
+
+    | NormalQuery(Common.Q_int_congr_interval e) ->
+      (man.eval e |> man.get, Common.C.minf_inf) |> Option.return
+
+
+    | ValueQuery(a,Common.VQ_to_int_interval) ->
+      man.get a |>
+      Option.return
+
+    | _ -> None
+
+
+
+  (** {2 Utility functions} *)
+
 
   let z_of_z2 z z' round =
     let open Z in
@@ -278,24 +315,10 @@ struct
       iter a
 
 
-  (** {2 Query handlers} *)
 
-  let ask : type r. r query -> (expr -> t) -> r option =
-    fun query eval ->
-      match query with
-      | Common.Q_int_interval e ->
-        eval e |> Option.return
-
-      | Common.Q_int_congr_interval e ->
-        (eval e, Common.C.minf_inf) |> Option.return
-
-      | _ -> None
-
-
-  let refine channel v = Channel.return v
 
 end
 
 
 let () =
-  Core.Sig.Value.Simplified.register_value (module Value)
+  Core.Sig.Value.Lowlevel.register_value (module Value)

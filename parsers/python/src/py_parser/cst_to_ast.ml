@@ -61,7 +61,8 @@ and translate_stmt (stmt: Cst.stmt) : Ast.stmt =
         match vararg, kwonlyargs, kw_defaults, kwarg, defaults with
         | None, [], [], None, _ ->
           List.map (fun v -> fst v) args
-        | _ -> failwith "Unsupported function arguments"
+        | _ ->
+          Exceptions.panic_at range "Unsupported function arguments"
       in
       let defaults = List.map (fun (e: Cst.expr) ->
           match e.ekind with
@@ -69,6 +70,10 @@ and translate_stmt (stmt: Cst.stmt) : Ast.stmt =
           | _ -> Some (translate_expr e)
         ) defaults
       in
+      (* List.iter (fun (arg, ty) ->
+       *     debug "%s: arg %s : %a" id arg (Option.print Pp.print_exp) (translate_expr_option2 ty)
+       *   ) args;
+       * debug "return %s: %a" id (Option.print Pp.print_exp) (translate_expr_option2 return); *)
       let lvals, globals, nonlocals = find_scopes_in_block body in
       let locals = List.filter (fun v -> not (List.mem v (parameters @ globals @ nonlocals))) lvals in
       S_function {
@@ -81,7 +86,8 @@ and translate_stmt (stmt: Cst.stmt) : Ast.stmt =
         func_body = {skind = S_block (List.map translate_stmt body |> add_implicit_return range); srange = range};
         func_is_generator = detect_yield_in_function body;
         func_decors = List.map translate_expr decors;
-        func_return = translate_expr_option2 return;
+        func_types_in = List.map (fun (_, e) -> translate_expr_option2 e) args;
+        func_type_out = translate_expr_option2 return;
         func_range = range;
       }
 
@@ -216,10 +222,13 @@ and translate_stmt (stmt: Cst.stmt) : Ast.stmt =
     | Assert (test, msg) ->
       S_assert (translate_expr test, translate_expr_option2 msg)
 
+    | AnnAssign (var, typ, expr) ->
+      let tya = {skind = S_type_annot (translate_expr var, translate_expr typ); srange = range} in
+      Option.apply (fun expr -> S_block (translate_stmt {skind=(Assign ([var], expr)); srange=range} :: tya :: [])) tya.skind expr
+
     (* Not supported statements *)
     | ImportFrom _ -> failwith "Import from not supported"
     | AsyncFunctionDef (_,_,_,_,_) -> failwith "async not supported"
-    | AnnAssign _ -> failwith "Annotated assign not supported"
     | AsyncFor _ -> failwith "Async not supported"
     | AsyncWith (_,_) -> failwith "Async not supported"
     | With ([], _) -> failwith "With not supported"
@@ -353,7 +362,8 @@ and translate_expr (expr: Cst.expr) : Ast.expr =
         match vararg, kwonlyargs, kw_defaults, kwarg, defaults with
         | None, [], [], None, _ ->
           List.map (fun v -> fst v) args
-        | _ -> failwith "Unsupported function arguments"
+        | _ ->
+          Exceptions.panic_at range "Unsupported function arguments"
       in
       let defaults = List.map (fun (e: Cst.expr) ->
           match e.ekind with
@@ -369,13 +379,29 @@ and translate_expr (expr: Cst.expr) : Ast.expr =
 
     | Bytes s -> E_bytes s
 
+    | Ellipsis -> E_ellipsis
+
+    | Subscript (value, ExtSlice s, ctx) ->
+      if List.for_all (fun sl -> match sl with | Index _ -> true | _ -> false) s then
+        let els = List.map (fun sl -> match sl with | Index i -> i | _ -> assert false) s in
+        E_index_subscript (
+          translate_expr value,
+          translate_expr {ekind = (Tuple (els, ctx)); erange = range}
+        )
+      else
+        failwith "Subscript with ExtSlice not supported"
+      (* debug "subscript value = %a, |extslice|=%d" Pp.print_exp (translate_expr value) (List.length s);
+       * let rec f fmt = function
+       *   | Slice (a, b, c) -> Format.fprintf fmt "slice[%a, %a, %a]" (Option.print Pp.print_exp) (translate_expr_option2 a) (Option.print Pp.print_exp) (translate_expr_option2 b) (Option.print Pp.print_exp) (translate_expr_option2 c)
+       *   | ExtSlice l -> Format.fprintf fmt "%a" (Format.pp_print_list ~pp_sep:(fun fmt _ -> Format.pp_print_string fmt ", ") f) l
+       *   | Index i -> Format.fprintf fmt "index[%a]" Pp.print_exp (translate_expr i) in
+       * debug "extslice = %a" f sl; *)
+
     (* Not supported expressions *)
     | YieldFrom _ -> failwith "yield from not supported"
     | Await _ -> failwith "await not supported"
     | FormattedValue (v, conv, f_spec) -> failwith "Formatted value not supported"
     | JoinedStr (vals) -> failwith "JoinedStr not supported"
-    | Subscript _ -> failwith "Subscript not supported"
-    | Ellipsis -> failwith "Ellipsis not supported"
     | Starred (v, ctx) -> failwith "Starred not supported"
     | Null -> failwith "Null not supported"
   in
@@ -468,9 +494,12 @@ and find_lvals_in_stmt stmt =
   | Assert _ | Raise _ | Return _ | Delete _
   | Global _| Nonlocal _ | Expr _ | Pass | Break | Continue
     -> []
+
+  | AnnAssign (t, _, _) ->
+    find_lvals_in_expr t
+
   (* Not supported statements *)
   | AsyncFunctionDef (_,_,_,_,_) -> failwith "async not supported"
-  | AnnAssign _ -> failwith "Annotated assign not supported"
   | AsyncFor _ -> failwith "Async not supported"
   | AsyncWith (_,_) -> failwith "Async not supported"
 
@@ -562,9 +591,12 @@ and find_scopes_in_stmt stmt =
 
   | Assert _ | Raise _ | Return _ | Delete _ | Expr _ | Pass | Break | Continue
     -> [], [], []
+
+  | AnnAssign (t, _, _) ->
+    (find_lvals_in_expr t), [], []
+
   (* Not supported statements *)
   | AsyncFunctionDef (_,_,_,_,_) -> failwith "async not supported"
-  | AnnAssign _ -> failwith "Annotated assign not supported"
   | AsyncFor _ -> failwith "Async not supported"
   | AsyncWith (_,_) -> failwith "Async not supported"
 
@@ -598,11 +630,10 @@ and find_globals_in_stmt stmt =
     find_globals_in_block body
 
   | Assign _ | AugAssign _ | Nonlocal _ | Import _ | Assert _ | ImportFrom _
-  | Raise _ | Return _ | Delete _ | Expr _ | Pass | Break | Continue
+  | Raise _ | Return _ | Delete _ | Expr _ | Pass | Break | Continue | AnnAssign _
     -> []
   (* Not supported statements *)
   | AsyncFunctionDef (_,_,_,_,_) -> failwith "async not supported"
-  | AnnAssign _ -> failwith "Annotated assign not supported"
   | AsyncFor _ -> failwith "Async not supported"
   | AsyncWith (_,_) -> failwith "Async not supported"
 
@@ -617,7 +648,7 @@ and detect_yield_in_function body =
   and detect_yield_in_stmt stmt =
     let skind, range = stmt.skind, stmt.srange in
     match skind with
-    | Expr e | Assign(_, e) | AugAssign(_, _, e) -> detect_yield_in_expr e
+    | Expr e | Assign(_, e) | AugAssign(_, _, e) | AnnAssign (_, _, Some e) -> detect_yield_in_expr e
     (* Compound statements *)
     | For (_, _, body, orelse)
     | While (_, body, orelse)
@@ -631,10 +662,9 @@ and detect_yield_in_function body =
     | FunctionDef _ | ClassDef _ -> false
     (* Atomic statements *)
     | Import _ | ImportFrom _ | Assert _ | Raise _ | Return _ | Delete _
-    | Pass | Break | Continue | Global _ | Nonlocal _ -> false
+    | Pass | Break | Continue | Global _ | Nonlocal _ | AnnAssign (_, _, None) -> false
     (* Not supported statements *)
     | AsyncFunctionDef (_,_,_,_,_) -> failwith "async not supported"
-    | AnnAssign _ -> failwith "Annotated assign not supported"
     | AsyncFor _ -> failwith "Async not supported"
     | AsyncWith (_,_) -> failwith "Async not supported"
 

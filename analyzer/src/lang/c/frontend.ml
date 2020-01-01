@@ -52,6 +52,11 @@ let nb_clang_threads = ref 4
 let opt_enable_cache = ref true
 (** Enable the parser cache. *)
 
+let opt_warn_all = ref false
+(** Display all compiler warnings *)
+
+let opt_use_stub = ref []
+(** Lists of functions that the body will be replaced by a stub *)
 
 let () =
   register_language_option "c" {
@@ -95,6 +100,20 @@ let () =
     doc = " disable the cache of the Clang parser.";
     spec = ArgExt.Clear opt_enable_cache;
     default = "unset";
+  };
+  register_language_option "c" {
+    key = "-Wall";
+    category = "C";
+    doc = " display compiler warnings.";
+    spec = ArgExt.Set opt_warn_all;
+    default = "unset";
+  };
+  register_language_option "c" {
+    key = "-use-stub";
+    category = "C";
+    doc = " list of functions for which the stub is used instead of the declaration.";
+    spec = ArgExt.Set_string_list opt_use_stub;
+    default = "";
   };
   ()
 
@@ -212,20 +231,21 @@ and parse_db (dbfile: string) ctx : unit =
             Sys.chdir cwd;
             raise x
          )
-       | _ -> Exceptions.warn "ignoring file %s\n%!" src.source_path
+       | _ -> if !opt_warn_all then warn "ignoring file %s" src.source_path
     ) srcs
 
 and parse_file (cmd: string) ?nb (opts: string list) (file: string) enable_cache ignore ctx =
   Mutex.lock frontend_mutex;
-  Core.Debug_tree.parse ~cmd ?nb file;
   Mutex.unlock frontend_mutex;
+  debug "parsing file %s" file;
   let opts' = ("-I" ^ (Paths.resolve_stub "c" "mopsa")) ::
               ("-include" ^ "mopsa.h") ::
+              "-Wall" ::
               (List.map (fun dir -> "-I" ^ dir) !opt_include_dirs) @
               !opt_clang @
               opts
   in
-  C_parser.parse_file cmd file opts' enable_cache ignore ctx
+  C_parser.parse_file cmd file opts' !opt_warn_all enable_cache ignore ctx
 
 
 and parse_stubs ctx () =
@@ -290,11 +310,17 @@ and from_project prj =
       f.c_func_static_vars <- List.map (from_var ctx) o.func_static_vars;
       f.c_func_local_vars <- List.map (from_var ctx) o.func_local_vars;
       f.c_func_body <- from_body_option ctx (from_range o.func_range) o.func_body;
-      try
-        f.c_func_stub <- from_stub_comment ctx o;
+      (* Parse stub of the function does not have a body or if it was listed  *)
+      if f.c_func_body = None || List.mem f.c_func_org_name !opt_use_stub then
+        begin
+          try
+            f.c_func_stub <- from_stub_comment ctx o;
+            funcs_with_alias
+          with (StubAliasFound alias) ->
+            (f, o, alias) :: funcs_with_alias
+        end
+      else
         funcs_with_alias
-      with (StubAliasFound alias) ->
-        (f, o, alias) :: funcs_with_alias
     ) [] funcs_and_origins
   in
 
@@ -345,8 +371,17 @@ and from_function =
       c_func_variadic = func.func_variadic;
       c_func_stub = None;
       c_func_range = from_range func.func_range;
+      c_func_name_range = from_range func.func_name_range;
     }
 
+(** {2 Scope update} *)
+(** **************** *)
+
+and from_scope_update ctx (upd:C_AST.scope_update) : Ast.c_scope_update =
+  {
+    c_scope_var_added = List.map (from_var ctx) upd.scope_var_added;
+    c_scope_var_removed = List.map (from_var ctx) upd.scope_var_removed;
+  }
 
 (** {2 Statements} *)
 (** ============== *)
@@ -362,22 +397,25 @@ and from_stmt ctx ((skind, range): C_AST.statement) : stmt =
     | C_AST.S_block block -> from_block ctx srange block |> Framework.Ast.Stmt.skind
     | C_AST.S_if (cond, body, orelse) -> Universal.Ast.S_if (from_expr ctx cond, from_block ctx srange body, from_block ctx srange orelse)
     | C_AST.S_while (cond, body) -> Universal.Ast.S_while (from_expr ctx cond, from_block ctx srange body)
-    | C_AST.S_do_while (body, cond) -> Ast.S_c_do_while (from_block ctx srange body, from_expr ctx cond)
-    | C_AST.S_for (init, test, increm, body) -> Ast.S_c_for(from_block ctx srange init, from_expr_option ctx test, from_expr_option ctx increm, from_block ctx srange body)
-    | C_AST.S_jump (C_AST.S_goto label) -> S_c_goto label
-    | C_AST.S_jump (C_AST.S_break) -> Universal.Ast.S_break
-    | C_AST.S_jump (C_AST.S_continue) -> Universal.Ast.S_continue
-    | C_AST.S_jump (C_AST.S_return None) -> Universal.Ast.S_return None
-    | C_AST.S_jump (C_AST.S_return (Some e)) -> Universal.Ast.S_return (Some (from_expr ctx e))
+    | C_AST.S_do_while (body, cond) -> S_c_do_while (from_block ctx srange body, from_expr ctx cond)
+    | C_AST.S_for (init, test, increm, body) -> S_c_for(from_block ctx srange init, from_expr_option ctx test, from_expr_option ctx increm, from_block ctx srange body)
+    | C_AST.S_jump (C_AST.S_goto (label, upd)) -> S_c_goto (label,from_scope_update ctx upd)
+    | C_AST.S_jump (C_AST.S_break upd) -> S_c_break (from_scope_update ctx upd)
+    | C_AST.S_jump (C_AST.S_continue upd) -> S_c_continue (from_scope_update ctx upd)
+    | C_AST.S_jump (C_AST.S_return (None, upd)) -> S_c_return (None,from_scope_update ctx upd)
+    | C_AST.S_jump (C_AST.S_return (Some e, upd)) -> S_c_return (Some (from_expr ctx e), from_scope_update ctx upd)
     | C_AST.S_jump (C_AST.S_switch (cond, body)) -> Ast.S_c_switch (from_expr ctx cond, from_block ctx srange body)
-    | C_AST.S_target(C_AST.S_case(e)) -> Ast.S_c_switch_case(from_expr ctx e)
-    | C_AST.S_target(C_AST.S_default) -> Ast.S_c_switch_default
+    | C_AST.S_target(C_AST.S_case(e,upd)) -> S_c_switch_case(from_expr ctx e, from_scope_update ctx upd)
+    | C_AST.S_target(C_AST.S_default upd) -> S_c_switch_default (from_scope_update ctx upd)
     | C_AST.S_target(C_AST.S_label l) -> Ast.S_c_label l
   in
   {skind; srange}
 
 and from_block ctx range (block: C_AST.block) : stmt =
-  mk_block (List.map (from_stmt ctx) block) range
+  mk_block
+    (List.map (from_stmt ctx) block.blk_stmts)
+    ~vars:(List.map (from_var ctx) block.blk_local_vars)
+    range
 
 and from_block_option ctx (range: Location.range) (block: C_AST.block option) : stmt =
   match block with
@@ -428,7 +466,7 @@ and from_expr ctx ((ekind, tc , range) : C_AST.expr) : expr =
     | C_AST.E_compound_literal _ -> Exceptions.panic_at erange "E_compound_literal not supported"
     | C_AST.E_atomic (_,_,_) -> Exceptions.panic_at erange "E_atomic not supported"
   in
-  {ekind; erange; etyp}
+  mk_expr ekind erange ~etyp
 
 and from_expr_option ctx : C_AST.expr option -> expr option = function
   | None -> None
@@ -718,6 +756,7 @@ and from_stub_comment ctx f =
     Some (from_stub_func ctx f stub)
 
 and from_stub_func ctx f stub =
+  debug "parsing stub %s" f.func_org_name;
   {
     stub_func_name     = stub.stub_name;
     stub_func_params   = List.map (from_var ctx) (Array.to_list f.func_parameters);
@@ -817,9 +856,10 @@ and from_stub_set ctx s =
 and from_stub_expr ctx exp =
   let bind_range_expr (exp:C_stubs_parser.Ast.expr with_range) f =
     let ekind = f exp.content.kind
-    in { ekind; erange = exp.range; etyp = from_typ ctx exp.content.typ }
+    in mk_expr ekind exp.range  ~etyp:(from_typ ctx exp.content.typ)
   in
   bind_range_expr exp @@ function
+  | E_top t -> E_constant (C_top (from_typ ctx t))
   | E_int n -> E_constant (C_int n)
   | E_float f -> E_constant (C_float f)
   | E_string s -> E_constant (C_string s)

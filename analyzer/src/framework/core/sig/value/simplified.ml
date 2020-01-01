@@ -28,6 +28,7 @@ open Query
 open Channel
 open Lowlevel
 
+
 module type VALUE =
 sig
 
@@ -37,7 +38,7 @@ sig
   type t
   (** Type of the abstract value. *)
 
-  val id : t value
+  val id : t id
   (** Identifier of the value domain *)
 
   val name : string
@@ -49,7 +50,7 @@ sig
   val zones : Zone.zone list
   (** Zones in which the value abstraction is defined *)
 
-  val types : typ list
+  val mem_type : typ -> bool
   (** Types abstracted by the domain *)
 
   val bottom: t
@@ -78,7 +79,7 @@ sig
   val meet: t -> t -> t
   (** [meet a1 a2] computes a lower bound of [a1] and [a2]. *)
 
-  val widen: t -> t -> t
+  val widen: uctx -> t -> t -> t
   (** [widen ctx a1 a2] computes an upper bound of [a1] and [a2] that
       ensures stabilization of ascending chains. *)
 
@@ -86,7 +87,7 @@ sig
   (** {2 Forward semantics} *)
   (** ********************* *)
 
-  val of_constant : constant -> t
+  val constant : constant -> t
   (** Create a singleton abstract value from a constant. *)
 
   val unop : operator -> t -> t
@@ -130,58 +131,9 @@ sig
   *)
 
 
-  (** {2 Query handler} *)
-  (** ***************** *)
-
-  val ask : 'r query -> (expr -> t) -> 'r option
-
-
-  (** {2 Reduction refinement} *)
-  (** ************************ *)
-
-  val refine : channel -> t -> t with_channel
-
-
-
 end
 
 
-(*==========================================================================*)
-(**                      {2 Low-level lifters}                              *)
-(*==========================================================================*)
-
-let lift_unop unop (man:('a,'t) man) (t:typ) (op:operator) (a:'a) : 't = unop op (man.get a)
-
-let lift_binop binop man t op a b = binop op (man.get a) (man.get b)
-
-let lift_filter filter man v b =  filter (man.get v) b
-
-let lift_bwd_unop bwd_unop man t op v r = bwd_unop op (man.get v) (man.get r)
-
-let lift_bwd_binop bwd_binop man t op a b r = bwd_binop op (man.get a) (man.get b) (man.get r)
-
-let lift_compare compare man t op a b r = compare op (man.get a) (man.get b) r
-
-let lift_ask ask man q = ask q (fun e -> man.eval e |> man.get)
-
-let lift_refine refine man channel v =
-  refine channel (man.get v) |>
-  Channel.bind @@ fun r ->
-
-  man.set r v |>
-  Channel.return
-
-let leaf_get :type t s. ('a,t) man -> t value -> s value -> 'a -> s option =
-  fun man id1 id2 a ->
-    match Id.value_id_eq id1 id2 with
-    | Some Eq.Eq -> Some (man.get a)
-    | None -> None
-
-let leaf_set :type t s. ('a,t) man -> t value -> s value -> s -> 'a -> 'a option =
-  fun man id1 id2 v a ->
-    match Id.value_id_eq id1 id2 with
-    | Some Eq.Eq -> Some (man.set v a)
-    | None -> None
 
 (** Lift a general-purpose signature to a low-level one *)
 module MakeLowlevel(Value:VALUE) : Lowlevel.VALUE with type t = Value.t =
@@ -193,7 +145,7 @@ struct
   let name = Value.name
   let display = Value.display
   let zones = Value.zones
-  let types = Value.types
+  let mem_type = Value.mem_type
   let bottom = Value.bottom
   let top = Value.top
   let is_bottom = Value.is_bottom
@@ -203,43 +155,34 @@ struct
   let widen = Value.widen
   let print = Value.print
 
-  let get man id a = leaf_get man Value.id id a
-  let set man id v a = leaf_set man Value.id id v a
-
 
   (** {2 Forward semantics} *)
   (** ********************* *)
 
-  let of_constant t c = Value.of_constant c
+  let constant t c = Value.constant c
 
-  let unop man t op a = lift_unop Value.unop man t op a
+  let unop man t op a = lift_simplified_unop Value.unop man t op a
 
-  let binop man t op a b = lift_binop Value.binop man t op a b
+  let binop man t op a b = lift_simplified_binop Value.binop man t op a b
 
-  let filter man a b = lift_filter Value.filter man a b
+  let filter man a b = lift_simplified_filter Value.filter man a b
 
 
   (** {2 Backward semantics} *)
   (** ********************** *)
 
-  let bwd_unop man t op v r = lift_bwd_unop Value.bwd_unop man t op v r
+  let bwd_unop man t op v r = lift_simplified_bwd_unop Value.bwd_unop man t op v r
 
-  let bwd_binop man t op v1 v2 r = lift_bwd_binop Value.bwd_binop man t op v1 v2 r
+  let bwd_binop man t op v1 v2 r = lift_simplified_bwd_binop Value.bwd_binop man t op v1 v2 r
 
-  let compare man t op v1 v2 b = lift_compare Value.compare man t op v1 v2 b
+  let compare man t op v1 v2 b = lift_simplified_compare Value.compare man t op v1 v2 b
 
 
   (** {2 Evaluation query} *)
   (** ******************** *)
 
-  let ask man q = lift_ask Value.ask man q
+  let ask man q = None
 
-
-  (** {2 Reduction refinement} *)
-  (** ************************ *)
-
-  let refine man channel a =
-    lift_refine Value.refine man channel a
 
 end
 

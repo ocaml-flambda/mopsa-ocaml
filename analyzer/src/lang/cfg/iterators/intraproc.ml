@@ -68,6 +68,7 @@ struct
     ieval = { provides = []; uses = [] };
   }
 
+  let alarms = []
 
   let init prog man flow = flow
 
@@ -214,11 +215,11 @@ struct
     
     (* all together now *)
     let flow = flow_in flow in
-    debug "CFG iteration started:@\nabs = @[%a@]" (Flow.print man.lattice) flow;
+    debug "CFG iteration started:@\nabs = @[%a@]" (Flow.print man.lattice.print) flow;
     let flow = analyze_component cfg.cfg_order flow in
-    debug "CFG iteration finished:@\nabs = @[%a@]" (Flow.print man.lattice) flow;
+    debug "CFG iteration finished:@\nabs = @[%a@]" (Flow.print man.lattice.print) flow;
     let flow = flow |> flow_out |> cleanup in
-    debug "returned flow:@\nabs = @[%a@]" (Flow.print man.lattice) flow;
+    debug "returned flow:@\nabs = @[%a@]" (Flow.print man.lattice.print) flow;
     flow
 
 

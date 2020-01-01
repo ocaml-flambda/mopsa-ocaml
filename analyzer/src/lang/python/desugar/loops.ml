@@ -38,6 +38,8 @@ module Domain =
       ieval = {provides = []; uses = []}
     }
 
+    let alarms = []
+
     let init _ _ flow = flow
     let eval _ _ _ _ = None
 
@@ -67,16 +69,16 @@ module Domain =
         let start = Timing.start () in
         let res =
           man.eval iterable flow  |>
-          exec_eval man (fun iterabletmp flow ->
+          bind_some (fun iterabletmp flow ->
               man.eval (Utils.mk_builtin_call "iter" [iterabletmp] range) flow |>
-              exec_eval man (fun tmp flow ->
+              bind_some (fun tmp flow ->
                   let l_else =
                     match skind orelse with
-                    | S_block [] -> [mk_stmt S_break range]
+                    | S_block ([],_) -> [mk_stmt S_break range]
                     | _ -> [orelse; mk_stmt S_break range] in
                   let inner_block  =
                     begin match skind body with
-                      | S_block l ->
+                      | S_block (l,_) ->
                         (mk_block
                            ((Utils.mk_try_stopiteration
                                (mk_assign
@@ -103,12 +105,13 @@ module Domain =
                           inner_block
                           range
                   in
-                  man.exec stmt flow
+                  man.exec stmt flow |>
+                  Post.return
                 )
             )
         in
         Debug.debug ~channel:"profiling" "for loop at range %a: %.4f" pp_range range (Timing.stop start);
-        res |> Post.return |> Option.return
+        res |> Option.return
 
       | _ -> None
 

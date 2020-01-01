@@ -90,9 +90,9 @@ let to_typ (t:typ) (e:expr) : expr =
   else
     match orgt, t with
     | (T_int | T_float _), (T_int | T_float _) ->
-       mk_unop O_cast e ~etyp:t range
+       mk_unop (O_cast (orgt,t)) e ~etyp:t range
     | _ ->
-       Exceptions.panic "cannot convert expression %a of type %a to type %a" pp_expr e pp_typ orgt pp_typ t
+      Exceptions.panic "cannot convert expression %a of type %a to type %a" pp_expr e pp_typ orgt pp_typ t
 
 let from_binop (t: typ) (b: U.binary_op) : operator =
   match t, b with
@@ -129,6 +129,7 @@ let from_unop (t: typ) (b: U.unary_op) : operator =
   | T_int, AST_NOT           -> O_log_not
   | T_float f, AST_UNARY_PLUS  -> O_plus
   | T_float f, AST_UNARY_MINUS -> O_minus
+  | T_float f, AST_ROUND -> O_cast (T_float f, T_int)
   | _ -> Exceptions.panic "operator %a cannot be used with type %a" U_ast_printer.print_unary_op b pp_typ t
 
 let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: fun_context option): expr =
@@ -250,6 +251,9 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
   | AST_rand((l, _), (u, _)) ->
     mk_z_interval (Z.of_string l) (Z.of_string u) range
 
+  | AST_randf((l, _), (u, _)) ->
+    mk_float_interval (float_of_string l) (float_of_string u) range
+
   | AST_array_access((e1, ext1), (e2, ext2)) ->
     begin
       let e1o = e1 in
@@ -257,18 +261,8 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
       let e2 = from_expr e2 ext2 var_ctx fun_ctx in
       let e2 = to_typ T_int e2 in
       match etyp e1 with
-      | T_string ->
-        {
-          ekind = E_subscript(e1, e2);
-          etyp  = T_char;
-          erange= range
-        }
-      | T_array t ->
-        {
-          ekind = E_subscript(e1, e2);
-          etyp  = t;
-          erange= range
-        }
+      | T_string -> mk_expr (E_subscript(e1, e2)) ~etyp:T_char range
+      | T_array t -> mk_expr (E_subscript(e1, e2)) ~etyp:t range
       | _ -> Exceptions.panic_at ext
                "%a is of type %a and can not be subscripted"
                U_ast_printer.print_expr e1o
@@ -280,12 +274,7 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
       let e1 = from_expr e ext var_ctx fun_ctx in
       match etyp e1 with
       | T_string
-      | T_array _ ->
-        {
-          ekind = E_len e1;
-          etyp  = T_int;
-          erange= range
-        }
+      | T_array _ -> mk_expr (E_len e1) ~etyp:T_int range
       | _ -> Exceptions.panic_at ext "%a is of type %a and can not be lengthed"
                U_ast_printer.print_expr e
                (pp_typ) (etyp e1)
@@ -387,6 +376,11 @@ let rec from_stmt (s: U.stat) (ext: U.extent) (var_ctx: var_context) (fun_ctx: f
   | AST_assert (e, ext) ->
     let e = from_expr e ext var_ctx fun_ctx in
     mk_assert e range
+
+  | AST_assume (e, ext) ->
+    let e = from_expr e ext var_ctx fun_ctx in
+    mk_assume e range
+
 
   | AST_print ->
     mk_stmt S_print range

@@ -59,7 +59,6 @@ let parse_options f () =
 
 (** Call the appropriate frontend to parse the input sources *)
 let parse_program lang files =
-  Framework.Core.Debug_tree.phase "parsing";
   match lang with
   | "universal" -> Lang.Universal.Frontend.parse_program files
   | "c" -> Lang.C.Frontend.parse_program files
@@ -74,6 +73,7 @@ let parse_program lang files =
 
 let () =
   exit @@ parse_options (fun files args ->
+      let t = Timing.start () in
       try
         let lang, domain = Config.Parser.parse !Config.Parser.opt_config in
 
@@ -95,20 +95,17 @@ let () =
           )
         in
 
-        let t = Timing.start () in
-
-        Debug_tree.phase "computing initial environments";
         let flow = Engine.init prog in
-
-        Debug_tree.phase "starting the analysis";
         let stmt = mk_stmt (S_program (prog, args)) prog.prog_range in
         let res = Engine.exec stmt flow in
         let t = Timing.stop t in
-
+        Hook.on_finish Engine.man res;
         Output.Factory.report Engine.man res t files
 
 
 
       with
-        e -> Output.Factory.panic ~btrace:(Printexc.get_backtrace()) e files; 2
+        e ->
+        let t = try Timing.stop t with Not_found -> 0. in
+        Output.Factory.panic ~btrace:(Printexc.get_backtrace()) e t files
     ) ()

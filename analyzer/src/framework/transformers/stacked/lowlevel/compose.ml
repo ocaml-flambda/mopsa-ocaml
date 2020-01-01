@@ -51,6 +51,8 @@ struct
 
   let interface = Core.Interface.concat S1.interface S2.interface
 
+  let alarms = S1.alarms @ S2.alarms |> List.sort_uniq compare
+
   let bottom = S1.bottom, S2.bottom
 
   let top = S1.top, S2.top
@@ -86,6 +88,7 @@ struct
     let man2 = s2_man man in
     {
       man with
+      exec = man2.exec;
       get = (fun a -> man.get a |> fst);
       set = (fun a1 a -> man.set (a1, man.get a |> snd) a);
       get_sub = (fun a -> man2.get a, man.get_sub a);
@@ -100,9 +103,6 @@ struct
       set_sub_log = (fun l log ->
           man2.set_log (Log.first l) log |>
           man.set_sub_log (Log.second l)
-        );
-      exec_sub = (fun ?(zone=any_zone) stmt flow ->
-          man2.post ~zone stmt flow
         );
       merge_sub = (fun (pre1,pre2) ((a1,a2), log) ((a1',a2'), log') ->
           S2.merge pre1 (a1, Log.first log) (a1', Log.first log'),
