@@ -129,6 +129,10 @@ and func = {
   func_var: var; (** function object variable *)
   func_parameters: var list; (** list of parameters variables *)
   func_defaults: expr option list; (** list of default parameters values *)
+  func_vararg: var option; (* variable argument arg (usually *args), if any *)
+  func_kwonly_args: var list; (* list of keyword-only arguments *)
+  func_kwonly_defaults: expr option list; (* default values associated to keyword-only arguments *)
+  func_kwarg: var option; (* keyword-based variable argument (usually **kwargs) if any *)
   func_locals: var list; (** list of local variables *)
   func_globals: var list; (** list of variables declared as global *)
   func_nonlocals: var list; (** list of variables declared as nonlocal *)
@@ -242,7 +246,7 @@ and expr_kind =
 
     (** Yield expression *)
     | E_yield of expr
-
+    | E_yield_from of expr
     (** Binary operator expressions *)
     | E_binop of
         expr (** left operand *) * binop * expr (** right operand *)

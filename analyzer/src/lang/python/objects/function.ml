@@ -148,6 +148,8 @@ module Domain =
         debug "args: %a@\n" (Format.pp_print_list pp_expr) args;
         debug "kwargs: %a@\n" (Format.pp_print_list (fun fmt (so, e) -> Format.fprintf fmt "%a~>%a" (Option.print Format.pp_print_string) so pp_expr e)) kwargs;
         debug "user-defined function call on %s@\n" pyfundec.py_func_var.vname;
+        if not (pyfundec.py_func_vararg = None && pyfundec.py_func_kwonly_args = [] && pyfundec.py_func_kwarg = None) then
+          panic_at range "Calls using vararg, keyword-only args or kwargs are not supported";
         let param_and_args = List.combine
             (List.map (fun v -> match vkind v with | V_uniq (s, _) -> s | _ -> assert false) pyfundec.py_func_parameters)
             pyfundec.py_func_defaults in

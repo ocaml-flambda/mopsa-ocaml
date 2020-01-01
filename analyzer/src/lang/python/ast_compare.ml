@@ -95,6 +95,7 @@ let () =
                                    (fun () -> compare_expr e1 e2) ]) kwargs1 kwargs2);
           ]
 
+      | E_py_yield_from e1, E_py_yield_from e2
       | E_py_yield e1, E_py_yield e2 ->
         compare_expr e1 e2
 

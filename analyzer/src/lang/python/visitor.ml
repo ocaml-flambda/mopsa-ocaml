@@ -157,6 +157,10 @@ let () =
         {exprs = [e]; stmts = [];},
         (function {exprs = [e]} -> {exp with ekind = E_py_yield(e)} | _ -> assert false)
 
+      | E_py_yield_from(e) ->
+        {exprs = [e]; stmts = [];},
+        (function {exprs = [e]} -> {exp with ekind = E_py_yield_from(e)} | _ -> assert false)
+
       | E_py_if(test, body, orelse) ->
         {exprs = [test; body; orelse]; stmts = [];},
         (function {exprs = [test; body; orelse]} -> {exp with ekind = E_py_if(test, body, orelse)} | _ -> assert false)

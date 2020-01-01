@@ -122,6 +122,8 @@ let () =
           ) keywords
       | E_py_yield(e) ->
         fprintf fmt "yield %a" pp_expr e
+      | E_py_yield_from(e) ->
+        fprintf fmt "yield from %a" pp_expr e
       | E_py_if (test, body, orelse) ->
         fprintf fmt
           "%a if %a else %a"
@@ -208,7 +210,7 @@ let () =
           pp_stmt cls.py_cls_body
 
       | S_py_function(func) ->
-        fprintf fmt "%a@\ndef %a(%a)%a:@\n@[<h 2>  %a@]"
+        fprintf fmt "%a@\ndef %a(%a%a%s%a%a)%a:@\n@[<h 2>  %a@]"
           (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") (fun fmt d -> fprintf fmt "@@%a" pp_expr d)) func.py_func_decors
           pp_var func.py_func_var
           (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") (fun fmt (var, oty) ->
@@ -216,6 +218,10 @@ let () =
                | None -> pp_var fmt var
                | Some ty -> fprintf fmt "%a: %a" pp_var var pp_expr ty
              )) (List.map2 (fun  x y -> (x, y)) func.py_func_parameters func.py_func_types_in)
+          (Option.print ~none:"" ~some:", *" pp_var) func.py_func_vararg
+          (match func.py_func_vararg with | None -> "" | _ -> ", ")
+          (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_var) func.py_func_kwonly_args
+          (Option.print ~none:"" ~some:", **" pp_var) func.py_func_kwarg
           (fun fmt oty -> match oty with
              | None -> ()
              | Some ty -> fprintf fmt " -> %a" pp_expr ty) func.py_func_type_out

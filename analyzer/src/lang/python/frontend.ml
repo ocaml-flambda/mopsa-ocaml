@@ -116,6 +116,10 @@ and from_stmt (stmt: Py_parser.Ast.stmt) : stmt =
         py_func_var = from_var f.func_var;
         py_func_parameters = List.map from_var f.func_parameters;
         py_func_defaults = List.map from_exp_option f.func_defaults;
+        py_func_vararg = Option.lift from_var f.func_vararg;
+        py_func_kwonly_args = List.map from_var f.func_kwonly_args;
+        py_func_kwonly_defaults = List.map from_exp_option f.func_kwonly_defaults;
+        py_func_kwarg = Option.lift from_var f.func_kwarg;
         py_func_locals = List.map from_var f.func_locals;
         py_func_body = from_stmt f.func_body;
         py_func_is_generator = f.func_is_generator;
@@ -288,6 +292,10 @@ and from_exp exp =
 
     | E_yield e ->
       E_py_yield(from_exp e),
+      T_any
+
+    | E_yield_from e ->
+      E_py_yield_from(from_exp e),
       T_any
 
     | E_if(test, body, orelse) ->
