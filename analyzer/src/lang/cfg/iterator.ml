@@ -19,6 +19,8 @@
 (*                                                                          *)
 (****************************************************************************)
 
+(** DEPRECATED: NOT COMPILED IN *)
+
 (** General iterator on Control Flow Graphs. *)
 
 open Mopsa

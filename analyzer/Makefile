@@ -67,7 +67,7 @@ lang.universal.packing = static
 lang.repl = frontend
 
 # CFG
-lang.cfg = ast pp visitor frontend iterator iterators
+lang.cfg = ast pp visitor frontend iterators
 lang.cfg.iterators = intraproc
 
 # Stubs
