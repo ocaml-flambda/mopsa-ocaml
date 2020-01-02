@@ -245,7 +245,7 @@ struct
               end;
             process_file (lineno+1)
           with End_of_file ->
-            let () = Format.printf "Coverage of %s: %.2f%%@." filename (100. *. float_of_int  !covered_lines /. (float_of_int (lineno - 1))) in
+            let () = Format.printf "Coverage of %s: %.2f%% (%d lines)@." filename (100. *. float_of_int  !covered_lines /. (float_of_int (lineno - 1))) !covered_lines in
             close_in file in
           process_file 1;
           flush oc;

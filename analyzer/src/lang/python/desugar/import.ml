@@ -75,7 +75,7 @@ module Domain =
 
       | S_py_import_from(modul, name, _, vmodul) ->
         (* FIXME: objects defined in modul other than name should not appear *)
-        debug "importing module %s" name;
+        debug "importing %s from module %s" name modul;
         let obj, flow, ispyi = import_module man modul range flow in
         debug "import ok, adding a few eq";
         (* FIXME: terrible disjunction *)
@@ -148,6 +148,7 @@ module Domain =
                 else
                   let () = warn_at range "module %s not found (searched in %s and in %s and in the current directory)" name dir (dir ^ "/typeshed/") in
                   raise (Module_not_found name) in
+              let () = debug "importing file %s" filename in
               let (a, e), body, is_stub, flow =
                 if filename = dir ^ "/typeshed/" ^ name ^ ".pyi" then
                   let o, b, flow = import_stubs_module man (dir ^ "/typeshed") name flow in
