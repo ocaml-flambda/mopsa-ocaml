@@ -128,7 +128,7 @@ include $(MOPSAROOT)/make/main.mk
 # Tests
 TESTS = tests
 
-.PHONY: python-tests c-tests universal-tests
+.PHONY: python-tests c-tests universal-tests cfg-tests
 
 python-tests: mopsa
 	@ - $(foreach test, $(shell find $(TESTS) -name "*tests.py"), \
@@ -151,8 +151,15 @@ universal-tests: mopsa
 		$(MOPSAROOT)/bin/mopsa-universal -no-warning -unittest $(MOPSAPARAM) $(test); \
 	)
 
+cfg-tests: mopsa
+	@ - $(foreach test, $(shell find $(TESTS) -name "*tests.u"), \
+		echo ""; \
+		echo "Running test $(test) (cfg)"; \
+		$(MOPSAROOT)/bin/mopsa-cfg -no-warning -unittest $(MOPSAPARAM) $(test); \
+	)
 
-tests: c-tests python-tests universal-tests
+
+tests: c-tests python-tests universal-tests cfg-tests
 
 
 

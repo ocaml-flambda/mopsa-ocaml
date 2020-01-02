@@ -209,9 +209,12 @@ let compare_edge_id = Range.compare
 (** Associate a flow to each CFG node.
     We can store abstract information for the whole graph in a 
     single abstract state, using node flows.
+    We also associate a flow to cache the post-image of each CFG edge.
  *)
 type token +=
-   | T_node of node_id
+  | T_cfg_node of node_id
+  | T_cfg_edge_post of edge_id * port
+  | T_cfg_entry of port
 
 (** Flow for true and false branch of tests. *)            
 type token +=

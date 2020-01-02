@@ -78,14 +78,20 @@ let () =
   register_token
     { compare = (fun next t1 t2 ->
         match t1, t2 with
-        | T_node l1, T_node l2 -> compare_node_id l1 l2
+        | T_cfg_node l1, T_cfg_node l2 -> compare_node_id l1 l2
+        | T_cfg_edge_post (e1,p1), T_cfg_edge_post (e2,p2) ->
+          Compare.pair compare_edge_id compare_token (e1,p1) (e2,p2)
+        | T_cfg_entry p1, T_cfg_entry p2 -> compare_token p1 p2
         | T_true, T_true -> 0
         | T_false, T_false -> 0
         | _ -> next t1 t2
       );
       print = (fun next fmt t ->
         match t with
-        | T_node l -> pp_node_id fmt l
+        | T_cfg_node l -> pp_node_id fmt l
+        | T_cfg_edge_post(e,p) ->
+          Format.fprintf fmt "-%a->%a" pp_edge_id e pp_token p
+        | T_cfg_entry p -> Format.fprintf fmt "->%a" pp_token p
         | T_true -> Format.pp_print_string fmt "true"
         | T_false -> Format.pp_print_string fmt "false"
         | _ -> next fmt t

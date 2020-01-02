@@ -24,6 +24,7 @@
 open Option
 open Mopsa
 open Universal.Ast
+open Universal.Iterators.Interproc.Common
 open Ast
 open Flow
 
@@ -161,7 +162,7 @@ let add_block_after (c:ctx) range (src:node) (blk:stmt list) : node =
     let src' = add_node c (copy_node_id (CFG.node_id src)) in
     add_edge c range [T_cur,src] [T_cur,src'] blk;
     src'
-
+    
 (* Insert a block before the dst node. *)
 let add_block_before (c:ctx) range (dst:node) (blk:stmt list) : node =
   if blk = [] then dst else
@@ -179,108 +180,120 @@ let rec add_stmt (c:ctx) (pre:node) (post:node) (s:stmt) : unit =
   match skind s with
 
   (* compound statements *)
-
+  
   | S_if (e,s1,s2) ->
-     let tmps, assigns, e = extract_calls_expr e in
-     let adds, rems = mk_add_tmps tmps, mk_remove_tmps tmps in
-     
-     (* add nodes begining the true and false branches *)
-     let tloc = mk_fresh_node_id (get_range_start (srange s1))
-     and floc = mk_fresh_node_id (get_range_end (srange s2)) in
-     let tnode = add_node c tloc
-     and fnode = add_node c floc in
-     
-     (* add test edge *)
-     let blk = adds @ assigns @ [mk_test e (erange e)] in
-     add_edge c (erange e) [T_cur,pre] [T_true,tnode; T_false,fnode] blk;
-     let tnode = add_block_after c (erange e) tnode rems
-     and fnode = add_block_after c (erange e) fnode rems in
-     
-     (* add branches *)
-     add_stmt c tnode post s1;
-     add_stmt c fnode post s2
-     
+    let tmps, assigns, e = extract_calls_expr e in
+    let adds, rems = mk_add_tmps tmps, mk_remove_tmps tmps in
+    
+    (* add nodes begining the true and false branches *)
+    let tloc = mk_fresh_node_id (get_range_start (srange s1))
+    and floc = mk_fresh_node_id (get_range_end (srange s2)) in
+    let tnode = add_node c tloc
+    and fnode = add_node c floc in
+    
+    (* add test edge *)
+    let blk = adds @ assigns @ [mk_test e (erange e)] in
+    add_edge c (erange e) [T_cur,pre] [T_true,tnode; T_false,fnode] blk;
+    let tnode = add_block_after c (erange e) tnode rems
+    and fnode = add_block_after c (erange e) fnode rems in
+    
+    (* add branches *)
+    add_stmt c tnode post s1;
+    add_stmt c fnode post s2
+      
   | S_block (l,locals) ->
-     let rec add pre post = function
-       | [] ->
-          (* empty block: connect pre and post nodes with skip *)
-          add_edge c (srange s) [T_cur,pre] [T_cur,post] []
-       | [s] ->
-          (* connect pre to post with statement *)
-          add_stmt c pre post s
-       | a::b ->
-          (* add a new node after the first statement *)
-          let loc = mk_fresh_node_id (get_range_start (srange a)) in
-          let node = add_node c loc in
-          (* add the first statement between pre and node *)
-          add_stmt c pre node a;
-          (* add the rest between node and post *)
-          add node post b
-     in
-     let rems = List.map (fun v -> mk_remove_var v (srange s)) locals in
-     add pre post (l@rems)
-
+    let rec add pre post = function
+      | [] ->
+        (* empty block: connect pre and post nodes with skip *)
+        add_edge c (srange s) [T_cur,pre] [T_cur,post] []
+      | [s] ->
+        (* connect pre to post with statement *)
+        add_stmt c pre post s
+      | a::b ->
+        (* add a new node after the first statement *)
+        let loc = mk_fresh_node_id (get_range_start (srange a)) in
+        let node = add_node c loc in
+        (* add the first statement between pre and node *)
+        add_stmt c pre node a;
+        (* add the rest between node and post *)
+        add node post b
+    in
+    let rems = List.map (fun v -> mk_remove_var v (srange s)) locals in
+    add pre post (l@rems)
+      
 
   | S_while (e,s) ->
-     let tmps, assigns, e = extract_calls_expr e in
-     let adds, rems = mk_add_tmps tmps, mk_remove_tmps tmps in
-     
-     (* add node at the begining of the loop body *)
-     let loc = mk_fresh_node_id (get_range_start (srange s)) in
-     let entry = add_node c loc in
+    let tmps, assigns, e = extract_calls_expr e in
+    let adds, rems = mk_add_tmps tmps, mk_remove_tmps tmps in
+    
+    (* add node at the begining of the loop body *)
+    let loc = mk_fresh_node_id (get_range_start (srange s)) in
+    let entry = add_node c loc in
 
-     (* add test edge *)
+    (* add test edge *)
      let blk = adds @ assigns @ [mk_test e (erange e)] in
-     let post' = add_block_before c (erange e) post rems in
-     add_edge c (erange e) [T_cur,pre] [T_true,entry; T_false,post'] blk;
-
+    let post' = add_block_before c (erange e) post rems in
+    add_edge c (erange e) [T_cur,pre] [T_true,entry; T_false,post'] blk;
+    
      (* add body *)
-     let c = 
-       { c with
-         ctx_break = post::c.ctx_break;
-         ctx_continue = pre::c.ctx_continue;
-       }
-     in
-     let entry = add_block_after c (erange e) entry rems in
-     add_stmt c entry pre s
-     
+    let c = 
+      { c with
+        ctx_break = post::c.ctx_break;
+        ctx_continue = pre::c.ctx_continue;
+      }
+    in
+    let entry = add_block_after c (erange e) entry rems in
+    add_stmt c entry pre s
+      
 
   (* jump statements *)
-                   
+      
   | S_return None ->
-     if c.ctx_return_var <> None then
-       Exceptions.panic "return without an expression for non-void function at %a" pp_range (srange s);
-     (* jump to return node *)
-     add_edge c (srange s) [T_cur,pre] [T_cur,c.ctx_return] []
-
+    (* translate into a simple jump to the exit node *)
+    if c.ctx_return_var <> None then
+      Exceptions.panic "return without an expression for non-void function at %a" pp_range (srange s);
+    (* jump to return node *)
+    add_edge c (srange s) [T_cur,pre] [T_cur,c.ctx_return] []
+      
   | S_return (Some e) ->
-     let tmps, assigns, e = extract_calls_expr e in
-     let adds, rems = mk_add_tmps tmps, mk_remove_tmps tmps in
-     (* assigns expression to return variable *)
-     let ret =
-       match c.ctx_return_var with
-       | Some var -> mk_var var (erange e)
-       | None ->
-          Exceptions.panic "return with an expression for void function at %a" pp_range (srange s);
-     in
-     let blk = adds @ assigns @ [mk_assign ret e (erange e)] @ rems in
-     (* jump to return node *)
-     add_edge c (srange s) [T_cur,pre] [T_cur,c.ctx_return] blk
-
+    (* translate to a simple "return tmp_var" and jump to the exit node *)
+    let tmps, assigns, e = extract_calls_expr e in
+    let adds, rems = mk_add_tmps tmps, mk_remove_tmps tmps in
+    (* assigns expression to return variable *)
+    let ret, retvar =
+      match c.ctx_return_var with
+      | Some var -> var, mk_var var (erange e)
+      | None ->
+        Exceptions.panic "return with an expression for void function at %a" pp_range (srange s);
+    in
+    let assign_stmt = mk_assign retvar e (erange e) in
+    let return_stmt = mk_stmt (S_return (Some retvar)) (erange e) in
+    let addret = mk_add_var ret (erange e) in
+    let remret = mk_remove_var ret (erange e) in
+    (* intermediate node *)
+    let loc = mk_fresh_node_id (get_range_start (srange s)) in
+    let med = add_node c loc in
+    (* from cur to return flow *)
+    add_edge
+      c (srange s) [T_cur,pre] [T_return (srange s,true),med]
+      (adds @ assigns @ [addret; assign_stmt; return_stmt]);
+    (* from intermediate to exit node *)
+    add_edge c (srange s) [T_cur,med] [T_cur,c.ctx_return] (remret::rems)
+      
   | S_break ->
-     if c.ctx_break = [] then
-       Exceptions.panic "break without a loop at %a" pp_range (srange s);
-     (* goto edge (skip statement) *)
-     add_edge c (srange s) [T_cur,pre] [T_cur,List.hd c.ctx_break] []
-
+    if c.ctx_break = [] then
+      Exceptions.panic "break without a loop at %a" pp_range (srange s);
+    (* goto edge (skip statement) *)
+    add_edge c (srange s) [T_cur,pre] [T_cur,List.hd c.ctx_break] []
+      
   | S_continue ->
-     if c.ctx_continue = [] then
-       Exceptions.panic "continue without a loop at %a" pp_range (srange s);
-     (* goto edge (skip statement) *)
-     add_edge c (srange s) [T_cur,pre] [T_cur,List.hd c.ctx_continue] []
-     
+    if c.ctx_continue = [] then
+      Exceptions.panic "continue without a loop at %a" pp_range (srange s);
+    (* goto edge (skip statement) *)
+    add_edge c (srange s) [T_cur,pre] [T_cur,List.hd c.ctx_continue] []
+      
   (* atomic statements: add an edge with the statement *)
-
+      
   (* framework *)
   | S_assign _
   | S_assume _
@@ -346,7 +359,8 @@ let convert_fundec (f:fundec) =
     | Some t -> Some f.fun_return_var
   in
   (* convert the body in-place *)
-  f.fun_body <- convert_stmt ~name:f.fun_name ?ret f.fun_body
+  f.fun_body <- convert_stmt ~name:f.fun_name ?ret f.fun_body;
+  debug "CFG for function %s:@.%a@." f.fun_name pp_stmt f.fun_body
 
 
 (** Converts a full universal program. *)  
