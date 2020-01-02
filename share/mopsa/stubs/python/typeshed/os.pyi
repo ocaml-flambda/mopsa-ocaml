@@ -19,11 +19,12 @@
 #                                                                            #
 ##############################################################################
 
-from typing import Union, Optional, Dict, Generic, AnyStr
+from typing import Union, Optional, Dict, Generic, AnyStr, Iterator, ContextManager, overload, Any, Callable, Set
 import posixpath as path
 
 environ : Dict[str, str]
 sep: str
+name: str
 
 _PathType = path._PathType
 _FdOrPathType = Union[int, _PathType]
@@ -54,3 +55,40 @@ class stat_result:
     st_ctime_ns: int  # platform dependent (time of most recent metadata change on Unix, or the time of creation on Windows) in nanoseconds
 
 def stat(path: _FdOrPathType, dir_fd: Optional[int] = ..., follow_symlinks: bool = ...) -> stat_result: ...
+
+def open(file: _PathType, flags: int, mode: int = ..., *, dir_fd: Optional[int] = ...) -> int: ...
+
+def stat(path: _FdOrPathType, *, dir_fd: Optional[int] = ..., follow_symlinks: bool = ...) -> stat_result: ...
+def unlink(path: _PathType, *, dir_fd: Optional[int] = ...) -> None: ...
+def rmdir(path: _PathType, *, dir_fd: Optional[int] = ...) -> None: ...
+
+class DirEntry(PathLike[AnyStr]):
+    # This is what the scandir interator yields
+    # The constructor is hidden
+
+    name: AnyStr
+    path: AnyStr
+    def inode(self) -> int: ...
+    def is_dir(self, *, follow_symlinks: bool = ...) -> bool: ...
+    def is_file(self, *, follow_symlinks: bool = ...) -> bool: ...
+    def is_symlink(self) -> bool: ...
+    def stat(self, *, follow_symlinks: bool = ...) -> stat_result: ...
+
+    def __fspath__(self) -> AnyStr: ...
+
+
+class _ScandirIterator(Iterator[DirEntry[AnyStr]],ContextManager[_ScandirIterator[AnyStr]]):
+    def __next__(self) -> DirEntry[AnyStr]: ...
+    def close(self) -> None: ...
+
+@overload
+def scandir() -> _ScandirIterator[str]: ...
+@overload
+def scandir(path: int) -> _ScandirIterator[str]: ...
+@overload
+def scandir(path: Union[AnyStr, PathLike[AnyStr]]) -> _ScandirIterator[AnyStr]: ...
+
+
+supports_dir_fd: Set[Callable[..., Any]]
+supports_fd: Set[Callable[..., Any]]
+supports_follow_symlinks: Set[Callable[..., Any]]
