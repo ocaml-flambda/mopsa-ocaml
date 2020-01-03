@@ -847,6 +847,10 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
        E_conditional (expr func c.C.cond_cond, expr func c.C.cond_true, expr func c.C.cond_false),
        typ, range
 
+    | C.BinaryConditionalOperator c ->
+       E_binary_conditional (expr func c.C.bcond_cond, expr func c.C.bcond_false),
+       typ, range
+
     | C.ArraySubscriptExpr e ->
        E_array_subscript (expr func e.C.subscript_base, expr func e.C.subscript_index),
        typ, range

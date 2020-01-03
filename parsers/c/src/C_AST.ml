@@ -342,7 +342,10 @@ type typ =
 
  and expr_kind =
    | E_conditional of expr (** condition *) * expr (** then *) * expr (** else *)
- (** ?: ternary operator *)
+   (** ?: ternary operator *)
+
+   | E_binary_conditional of expr (** condition and then *) * expr (** else *)
+   (** binary version of the ?: operator *)
 
    | E_array_subscript of expr (** array *) * expr (** index *)
    (** Array access. *)

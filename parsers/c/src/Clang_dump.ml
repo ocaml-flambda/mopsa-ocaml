@@ -467,6 +467,7 @@ let type_kind_name t =
 let expr_kind_name e =
   match e with
   | ConditionalOperator _ -> "ConditionalOperator"
+  | BinaryConditionalOperator _ -> "BinaryConditionalOperator"
   | AddrLabelExpr _ -> "AddrLabelExpr"
   | ArrayInitIndexExpr -> "ArrayInitIndexExpr"
   | ArrayInitLoopExpr _ -> "ArrayInitLoopExpr"
@@ -1137,7 +1138,9 @@ module P = struct
 
     (* C *)
     | ConditionalOperator { cond_cond=e1; cond_true=e2; cond_false=e3; } ->
-       p ch "ConditionalOperator(%a ? %a : %a)" expr e1 expr e1 expr e3
+       p ch "ConditionalOperator(%a ? %a : %a)" expr e1 expr e2 expr e3
+    | BinaryConditionalOperator { bcond_cond=e1; bcond_false=e2; } ->
+       p ch "BinaryConditionalOperator(%a ? : %a)" expr e1 expr e2
     | AddrLabelExpr l -> p ch "&&%a" name l
     | ArrayInitIndexExpr -> p ch "InitIndex"
     | ArrayInitLoopExpr { array_init_source=o; array_init_init=e; array_init_size=s; } ->

@@ -460,6 +460,7 @@ and from_expr ctx ((ekind, tc , range) : C_AST.expr) : expr =
     | C_AST.E_var_args e -> Ast.E_c_var_args (from_expr ctx e)
     | C_AST.E_conditional (cond,e1,e2) -> Ast.E_c_conditional(from_expr ctx cond, from_expr ctx e1, from_expr ctx e2)
 
+    | C_AST.E_binary_conditional (_,_) -> Exceptions.panic_at erange "E_binary_conditional not supported"
     | C_AST.E_compound_assign (_,_,_,_,_) -> Exceptions.panic_at erange "E_compound_assign not supported"
     | C_AST.E_comma (_,_) -> Exceptions.panic_at erange "E_comma not supported"
     | C_AST.E_increment (_,_,_) -> Exceptions.panic_at erange "E_increment not supported"
