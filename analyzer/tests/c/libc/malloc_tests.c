@@ -8,7 +8,7 @@
 /* Utility function */
 void *safe_malloc(size_t n) {
   void *p = malloc(n);
-  if (p == NULL) abort();
+  if (p == NULL) exit(0);
   return p;
 }
 
