@@ -521,7 +521,7 @@ and noexcept_result =
 
  and array_size =
    | Size_Constant of Z.t (** C arrays with a specified constant size. *)
-   | Size_Variable of expr (** C array with a specified size that is not an integer-constant-expression *)
+   | Size_Variable of expr option (** C array with a specified size that is not an integer-constant-expression *)
    | Size_Incomplete (** C array with an unspecified size *)
    | Size_Dependent (** (C++) array with dependent size *)
  (** Array size *)

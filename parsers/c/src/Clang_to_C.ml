@@ -224,7 +224,8 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
         *)
        let len = match a.C.array_size with
          | C.Size_Constant cst -> Length_cst cst
-         | C.Size_Variable e -> Length_expr (expr None e)
+         | C.Size_Variable (Some e) -> Length_expr (expr None e)
+         | C.Size_Variable None -> No_length
          | C.Size_Incomplete -> No_length
          | _ -> error range "unhandled array size" (C.string_of_type t)
        in

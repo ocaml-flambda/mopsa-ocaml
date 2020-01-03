@@ -980,7 +980,8 @@ module P = struct
           | Size_Normal -> "" | Size_Static -> "static "| Size_Star -> "*")
          (fun ch -> function
            | Size_Constant c -> p ch "%s" (Z.to_string c)
-           | Size_Variable e -> expr ch e
+           | Size_Variable (Some e) -> expr ch e
+           | Size_Variable None -> ()
            | Size_Incomplete -> ()
            | Size_Dependent -> ()
          ) a.array_size 

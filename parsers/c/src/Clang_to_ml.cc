@@ -3780,7 +3780,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateArrayType(const ArrayType * node) 
           Store_field(tmp, 0, TranslateAPInt(x->getSize()));
         });
       GENERATE_NODE(VariableArrayType, tmp, node, 1, {
-          Store_field(tmp, 0, TranslateExpr(x->getSizeExpr()));
+          Store_field_option(tmp, 0, x->getSizeExpr(), TranslateExpr(x->getSizeExpr()));
         });
       GENERATE_NODE_CONSTANT(IncompleteArrayType, tmp, node);
       GENERATE_NODE_CONSTANT(DependentSizedArrayType, tmp, node);
