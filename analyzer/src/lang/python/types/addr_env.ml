@@ -192,6 +192,13 @@ struct
                 end |>
                 Post.return
 
+              | E_constant (C_top T_any) ->
+                let cur = get_env T_cur man flow in
+                let aset = ASet.top in
+                set_env T_cur (add v aset cur) man flow
+                |> Post.return
+
+
               | _ -> Exceptions.panic_at range "%a@\n" pp_expr e
           )
       |> Option.return

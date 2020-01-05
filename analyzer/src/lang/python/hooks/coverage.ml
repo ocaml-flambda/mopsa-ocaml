@@ -171,6 +171,7 @@ struct
         time.tm_min
         time.tm_sec in
     let () = Unix.mkdir dirname 0o755 in
+    let total_lineno = ref 0 in
     Format.printf "Detailed coverage files are being written in %s@." dirname;
     Hashtbl.iter (fun filename entry ->
         let fname = remove_extension @@ basename filename in
@@ -206,7 +207,7 @@ struct
               let () = incr covered_lines in
               Format.fprintf ocf "\027[38;5;%dm%s\027[0m@." (List.assoc "green" Debug.colors) l
             else if StmtSet.exists search_stmt entry.always_bottom_stmts then
-              let () = Format.printf "always bottom: %a" pp_stmt_with_range (StmtSet.choose @@ StmtSet.filter search_stmt entry.always_bottom_stmts) in
+              (* let () = Format.printf "always bottom: %a" pp_stmt_with_range (StmtSet.choose @@ StmtSet.filter search_stmt entry.always_bottom_stmts) in *)
               let () = incr covered_lines in
               Format.fprintf ocf "\027[38;5;%dm%s\027[0m@." (List.assoc "yellow" Debug.colors) l
             else
@@ -227,7 +228,7 @@ struct
               | None ->
                 begin match ExprSet.choose_opt @@ ExprSet.filter search_expr entry.always_bottom_exprs with
                   | Some e ->
-                    let () = Format.printf "always bottom: %a" pp_expr_with_range e in
+                    (* let () = Format.printf "always bottom: %a" pp_expr_with_range e in *)
                     let () = incr covered_lines in
                     let n = String.length l in
                     let cols, cole = 0, n
@@ -246,11 +247,13 @@ struct
             process_file (lineno+1)
           with End_of_file ->
             let () = Format.printf "Coverage of %s: %.2f%% (%d lines)@." filename (100. *. float_of_int  !covered_lines /. (float_of_int (lineno - 1))) !covered_lines in
+            total_lineno := !total_lineno + !covered_lines;
             close_in file in
           process_file 1;
           flush oc;
         close_out oc
-      ) table
+      ) table;
+    Format.printf "In total, %d lines were analyzed@." !total_lineno
 end
 
 let () =

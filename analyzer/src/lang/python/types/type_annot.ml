@@ -41,8 +41,8 @@ struct
       | Class c1, Class c2 -> compare_var c1 c2
       | _ -> Pervasives.compare t1 t2
     let print fmt t  = match t with
-      | Global s -> Format.pp_print_string fmt s
-      | Class v -> pp_var fmt v
+      | Global s -> Format.fprintf fmt "Global %a" Format.pp_print_string s
+      | Class v -> Format.fprintf fmt "Class %a" pp_var v
   end)
 
 
@@ -119,9 +119,11 @@ struct
                 begin match ekind vars with
                   | E_py_call _ -> (process_tyvar vars)::[]
                   | E_py_tuple vs -> List.rev @@ List.fold_left (fun acc var ->  (process_tyvar var)::acc) [] vs
-                  | _ -> assert false
+                  | E_var _ -> []
+                  | _ -> panic_at range "vars = %a" pp_expr vars
                 end
               | _ -> assert false in
+            debug "typevars = %a" (Format.pp_print_list Format.pp_print_string) (List.map fst typevars);
             let nextinmro =
               let rec search aftergeneric mro = match mro with
                 | [] -> assert false
@@ -193,7 +195,7 @@ struct
       bind_list args man.eval flow |>
       bind_some (fun args flow ->
           let sigs = List.filter (fun sign ->
-              let ndefaults = List.fold_left (fun count el -> if el then count + 1 else count) 0 sign.py_funcs_defaults in
+              let ndefaults  = List.fold_left (fun count el -> if el then count + 1 else count) 0 sign.py_funcs_defaults in
               debug "filter %a at range %a -> [%d; %d]; |args| = %d, |kwargs| = %d" pp_py_func_sig sign pp_range range (List.length sign.py_funcs_types_in - ndefaults) (List.length sign.py_funcs_types_in) (List.length args) (List.length kwargs);
               List.length sign.py_funcs_types_in - ndefaults <= List.length args + List.length kwargs &&
               List.length args + List.length kwargs <= List.length sign.py_funcs_types_in) pyannot.py_funca_sig in
@@ -230,6 +232,7 @@ struct
             (* il faut enelver des trucs là, je veux pas enlever les variables de classe *)
             debug "new_typevars: %a" TVMap.print new_typevars;
             debug "cur: %a" TVMap.print cur;
+            debug "kwargs: %a" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") (fun fmt (argn, argv) -> Format.fprintf fmt "(%a, %a)" (Option.print Format.pp_print_string) argn pp_expr argv)) kwargs;
             let ncur = TVMap.fold2zo
                 TVMap.add
                 TVMap.add
@@ -244,13 +247,17 @@ struct
               (* we need to add kwargs to args smartly here *)
               (* failwith "otodkwargs"; *)
               let rec filter names types defaults args (acctypes, accargs) =
+                debug "calling filter names=%a; types=_; defaults=%a; args=%a"
+                  (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_var) names
+                  (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") Format.pp_print_bool) defaults
+                  (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_expr) args;
                 match names, defaults, args with
                 | nhd::ntl, dhd::dtl, ahd::atl ->
                   begin match List.find_opt (fun (vo, expr) -> match vo with
                       | None -> false
                       | Some v -> v = get_orig_vname nhd) kwargs with
                   | None ->
-                    if dhd then
+                    if dhd && List.length args = 0 (* List.length names > List.length args *) then
                       (* if the argument is optional and not replaced in the kwargs *)
                       (* the default argument has its default value, we don't check anything *)
                       filter ntl (List.tl types) dtl args (acctypes, accargs)
@@ -265,39 +272,40 @@ struct
                       filter ntl (List.tl types) dtl atl (List.hd types :: acctypes, expr ::accargs)
                   end
                 | _, _, [] -> List.rev acctypes, List.rev accargs
-                | _ -> raise Invalid_sig
+                | _ ->
+                  debug "%d %d %d; raising Invalid_sig" (List.length names) (List.length defaults) (List.length args);
+                  raise Invalid_sig
                   (* ;
                    * panic_at range "filter names=%a defaults=%a args=%a" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_var) names
                    *        (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") Format.pp_print_bool) defaults
                    *        (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_expr) args *)
               in
-              debug "calling filter names=%a _ defaults=%a args=%a" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_var) signature.py_funcs_parameters
-                (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") Format.pp_print_bool) signature.py_funcs_defaults
-                         (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_expr) args;
               filter signature.py_funcs_parameters signature.py_funcs_types_in signature.py_funcs_defaults args ([], [])
             in
             let flow_ok, flow_notok = filter_sig in_types in_args flow in
-            let annot_out =
-              let e = Option.none_to_exn signature.py_funcs_type_out in
-              Visitor.map_expr
-                (fun expr -> match ekind expr with
-                   | E_py_call ({ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)} as tv, {ekind = E_constant (C_string s)}::types, []) when is_method ->
-                     Keep {expr with ekind = E_py_call (tv, (
-                              mk_var
-                                (mk_addr_attr (match ekind @@ List.hd args with
-                                     | E_py_object (a, _) -> a
-                                     | _ -> assert false) s T_any)
-                                range
-                            )::types, [])}
-                   | _ -> VisitParts expr)
-                (fun stmt -> VisitParts stmt)
-                e
-            in
             let ret_var = mk_range_attr_var range "ret_var" T_any in
-            man.exec (mk_add_var ret_var range) flow_ok |>
-            man.exec (mk_stmt (S_py_annot (mk_var ret_var range,
-                                           mk_expr (E_py_annot annot_out) range))
-                        range), flow_notok, new_typevars, ret_var
+            begin match signature.py_funcs_type_out with
+              | Some e ->
+                debug "out = %a" pp_expr e;
+                let annot_out = Visitor.map_expr
+                  (fun expr -> match ekind expr with
+                     | E_py_call ({ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)} as tv, {ekind = E_constant (C_string s)}::types, []) when is_method ->
+                       Keep {expr with ekind = E_py_call (tv, (
+                           mk_var
+                             (mk_addr_attr (match ekind @@ List.hd args with
+                                  | E_py_object (a, _) -> a
+                                  | _ -> assert false) s T_any)
+                             range
+                         )::types, [])}
+                     | _ -> VisitParts expr)
+                  (fun stmt -> VisitParts stmt)
+                  e in
+              man.exec (mk_add_var ret_var range) flow_ok |>
+              man.exec (mk_stmt (S_py_annot (mk_var ret_var range,
+                                             mk_expr (E_py_annot annot_out) range))
+                          range), flow_notok, new_typevars, ret_var
+              | None -> assert false
+            end
           in
           let msg = Format.fprintf Format.str_formatter "%a(%a) does not match any signature provided in the stubs" pp_var pyannot.py_funca_var (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ") pp_expr) args;
             Format.flush_str_formatter () in
@@ -306,6 +314,10 @@ struct
               man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow |> Eval.empty_singleton)
             (let evals, remaining =
                (List.fold_left (fun (acc, remaining_flow) sign ->
+                    let is_noreturn =
+                      match sign.py_funcs_type_out with
+                      | Some {ekind = E_var (v, _)} -> get_orig_vname v = "NoReturn"
+                      | _ -> false in
                     try
                       let nflow, flow_notok, ntypevars, ret_var = apply_sig remaining_flow sign in
                       debug "nflow after apply_sig = %a@\n" (Flow.print man.lattice.print) nflow;
@@ -315,13 +327,16 @@ struct
                       debug "nflow = %a@\n" (Flow.print man.lattice.print) nflow;
                       if Flow.is_bottom man.lattice nflow then (acc, flow_notok)
                       else
-                        let ret = (Eval.singleton (mk_var ret_var range) nflow ~cleaners:([mk_remove_var ret_var range]) |> Eval.bind (man.eval)) in
-                        debug "raised_exn %d" (List.length sign.py_funcs_exceptions);
                         let raised_exn = List.map (fun exn ->
                             man.exec (mk_stmt (S_py_raise (Some exn)) range) flow |>
                             Eval.empty_singleton
                           ) sign.py_funcs_exceptions in
-                        ret::raised_exn @ acc, flow_notok
+                        let () = debug "raised_exn %d" (List.length sign.py_funcs_exceptions) in
+                        if is_noreturn then
+                          raised_exn @ acc, flow_notok
+                        else
+                          let ret = (Eval.singleton (mk_var ret_var range) nflow ~cleaners:([mk_remove_var ret_var range]) |> Eval.bind (man.eval)) in
+                          ret::raised_exn @ acc, flow_notok
                     with Invalid_sig ->
                       (acc, remaining_flow)
                   ) ([], flow) sigs) in
@@ -432,6 +447,8 @@ struct
                                        {ekind = E_constant (C_string s)}::_, [])
                             when get_orig_vname v = "Generic" || get_orig_vname v = "Protocol" -> s
                           | _ -> assert false) types
+                    | E_py_index_subscript ({ekind = E_var (v, _)},
+                                            {ekind = E_var _}) -> []
                     | _ ->
                       Exceptions.panic_at range "tname %a, abase %a" pp_expr (List.hd c.py_cls_a_abases) pp_expr abase in
                   debug "here, tnames=%a, cur = %a" (Format.pp_print_list Format.pp_print_string) tnames TVMap.print (get_env T_cur man flow);
@@ -467,6 +484,10 @@ struct
                   let types = match ekind substi with
                     | E_py_tuple t -> t
                     | _ -> [substi] in
+                  debug "types=%a" (Format.pp_print_list pp_expr) types;
+                  let types = if tnames = [] then
+                      let () = warn_at range "something wrong with types/tnames type_annot" in
+                      [] else types in
                   let flow =
                     List.fold_left2 (fun flow tname ctype  ->
                         set_env T_cur (TVMap.add (Class (mk_addr_attr addr tname T_any))
@@ -562,19 +583,43 @@ struct
           man.eval (mk_py_isinstance_builtin e (get_orig_vname v) range) flow
           |> Option.return
 
+        | E_constant (C_py_none) ->
+          man.eval (mk_py_isinstance_builtin e "NoneType" range) flow |> Option.return
+
+        | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, cmro)}, _)}, i) when
+            List.exists (fun (v, _) ->
+                match akind v with
+                | A_py_class (C_annot cv, _) -> get_orig_vname cv.py_cls_a_var = "Protocol" (* if Protocol[T], we should check T too, but this isn't done currently *)
+                | _ -> false) cmro ->
+          let attrs_check_expr =
+            if c.py_cls_a_static_attributes = [] then mk_py_true range else
+              List.fold_left (fun acc el -> mk_binop (mk_py_hasattr e (get_orig_vname el) range) O_py_and acc range)
+                (mk_py_hasattr e (get_orig_vname (List.hd c.py_cls_a_static_attributes)) range)
+                (List.tl c.py_cls_a_static_attributes) in
+          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) attrs_check_expr flow |> Option.return
+
         | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)}, i) when get_orig_vname c.py_cls_a_var = "Type" ->
           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
           Eval.bind (fun ee flow ->
-              assume (mk_py_issubclass ee i range) man flow
-                ~fthen:(fun flow ->
-                    man.eval (mk_py_true range) flow)
-                ~felse:(fun flow ->
-                    Eval.empty_singleton (Flow.bottom_from flow))
+              match ekind ee with
+              | E_py_object ({addr_kind = A_py_class _}, _) ->
+                assume (mk_py_issubclass ee i range) man flow
+                  ~fthen:(fun flow ->
+                      man.eval (mk_py_true range) flow)
+                  ~felse:(fun flow ->
+                      Eval.empty_singleton (Flow.bottom_from flow))
+              | _ -> Eval.empty_singleton (Flow.bottom_from flow)
             )
           |> Option.return
 
         | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)}, {ekind = E_py_tuple [args; out]}) when get_orig_vname c.py_cls_a_var = "Callable" ->
-          Exceptions.panic_at range "Callable type annotation currently unsupported"
+          assume (mk_py_hasattr e "__call__" range) man flow
+            ~fthen:(fun flow ->
+                Soundness.warn_at range "Callable type annotation partially supported";
+                  man.eval (mk_py_true range) flow
+              )
+            ~felse:(man.eval (mk_py_false range))
+          |> Option.return
 
         | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)} as pattern, i) when get_orig_vname c.py_cls_a_var = "Pattern" ->
           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
@@ -603,6 +648,10 @@ struct
           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) conds flow
           |> Option.return
           (* big disjunction on check_annot(e, t) for t in types *)
+
+        | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)}, i) when get_orig_vname c.py_cls_a_var = "Optional" ->
+          let mk_cannot a = {exp with ekind = E_py_check_annot(e, a)} in
+          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_binop (mk_cannot i) O_py_or (mk_cannot (mk_py_none range)) range) flow |> Option.return
 
         | E_py_index_subscript ({ekind = E_py_object _}, e2) ->
           None
@@ -638,6 +687,7 @@ struct
             | E_constant (C_string s) -> Keys.Global s
             | E_var (v, _) -> Keys.Class v
             | _ -> assert false in
+          debug "key = %a" Keys.print key;
           let flows_ok =
             if Flow.is_bottom man.lattice flow then [] else
             List.fold_left (fun flows_caught typ ->

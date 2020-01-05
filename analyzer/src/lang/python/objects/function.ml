@@ -267,8 +267,8 @@ module Domain =
               )
           )
       (* 𝔼⟦ f() | isinstance(f, method) ⟧ *)
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_method(f, e, t)}, _)}, args, []) ->
-        let exp' = mk_py_call (mk_py_object f range) (e :: args) range in
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_method(f, e, t)}, _)}, args, kwargs) ->
+        let exp' = mk_py_kall (mk_py_object f range) (e :: args) kwargs range in
         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) exp' flow |> Option.return
 
 
