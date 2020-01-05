@@ -19,19 +19,20 @@
 #                                                                            #
 ##############################################################################
 
-from typing import Union, Optional, Dict, Generic, AnyStr, Iterator, ContextManager, overload, Any, Callable, Set
+from typing import Union, Optional, Dict, Generic, AnyStr, Iterator, ContextManager, overload, Any, Callable, Set, Text, Protocol, IO
 import posixpath as path
 
 environ : Dict[str, str]
 sep: str
 name: str
 
-_PathType = path._PathType
+class PathLike(Protocol[AnyStr]):
+    def __fspath__(self) -> AnyStr: ...
+
+_PathType = Union[bytes, Text, PathLike] # cheating _PathType = path._PathType
 _FdOrPathType = Union[int, _PathType]
 
 
-class PathLike(Generic[AnyStr]):
-    def __fspath__(self) -> AnyStr: ...
 
 class stat_result:
     # For backward compatibility, the return value of stat() is also
@@ -57,10 +58,12 @@ class stat_result:
 def stat(path: _FdOrPathType, dir_fd: Optional[int] = ..., follow_symlinks: bool = ...) -> stat_result: ...
 
 def open(file: _PathType, flags: int, mode: int = ..., *, dir_fd: Optional[int] = ...) -> int: ...
+def remove(path: _PathType, *, dir_fd: Optional[int] = ...) -> None: ...
 
 def stat(path: _FdOrPathType, *, dir_fd: Optional[int] = ..., follow_symlinks: bool = ...) -> stat_result: ...
 def unlink(path: _PathType, *, dir_fd: Optional[int] = ...) -> None: ...
 def rmdir(path: _PathType, *, dir_fd: Optional[int] = ...) -> None: ...
+def makedirs(name: _PathType, mode: int = ..., exist_ok: bool = ...) -> None: ...
 
 class DirEntry(PathLike[AnyStr]):
     # This is what the scandir interator yields

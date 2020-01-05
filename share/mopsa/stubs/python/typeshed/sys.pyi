@@ -19,12 +19,13 @@
 #                                                                            #
 ##############################################################################
 
-import mopsa
+from typing import List, NoReturn
 
-HIGHEST_PROTOCOL = mopsa.random_int()
+# maxsize = mopsa.random_int()
+path: List[str]
+argv: List[str]
+version_info = (3, 7)
+base_prefix: str
 
-@mopsa.unsupported
-def dumps(obj, proto): pass
-
-@mopsa.unsupported
-def loads(d): pass
+def exit(arg: object = ...) -> NoReturn:
+    raise SystemExit()

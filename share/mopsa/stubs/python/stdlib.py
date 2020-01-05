@@ -409,6 +409,8 @@ class str(object):
     @mopsa.type("wrapper_descriptor")
     def __mod__(self, other): pass
     @mopsa.type("wrapper_descriptor")
+    def __rmod__(self, other): pass
+    @mopsa.type("wrapper_descriptor")
     def __mul__(self, other): pass
     @mopsa.type("wrapper_descriptor")
     def __ne__(self, other): pass
@@ -439,8 +441,6 @@ class str(object):
     def expandtabs(self): pass
     @mopsa.type("method_descriptor")
     def find(self): pass
-    @mopsa.type("method_descriptor")
-    def format(self): pass
     @mopsa.type("method_descriptor")
     def format(self): pass
     @mopsa.type("method_descriptor")
@@ -642,6 +642,8 @@ class dict(object):
     def __setitem__(self, k, v): pass
     @mopsa.type("wrapper_descriptor")
     def __iter__(self): pass
+    @mopsa.type("wrapper_descriptor")
+    def __len__(self): pass
     @mopsa.type("method_descriptor")
     def __contains__(self, k): pass
     @mopsa.type("method_descriptor")
@@ -662,6 +664,8 @@ class dict(object):
     def values(self): pass
     @mopsa.type("method_descriptor")
     def items(self): pass
+    @mopsa.type("method_descriptor")
+    def setdefault(self): pass
 
 class dict_values(object):
     @mopsa.type("wrapper_descriptor")
@@ -676,6 +680,8 @@ class dict_valueiterator(object):
 class dict_keys(object):
     @mopsa.type("wrapper_descriptor")
     def __iter__(self): pass
+    @mopsa.type("wrapper_descriptor")
+    def __len__(self): pass
 
 class dict_keyiterator(object):
     @mopsa.type("wrapper_descriptor")
@@ -686,6 +692,8 @@ class dict_keyiterator(object):
 class dict_items(object):
     @mopsa.type("wrapper_descriptor")
     def __iter__(self): pass
+    @mopsa.type("wrapper_descriptor")
+    def __len__(self): pass
 
 class dict_itemiterator(object):
     @mopsa.type("wrapper_descriptor")
@@ -703,6 +711,8 @@ class range(object):
     def __contains__(self, v): pass
     @mopsa.type("wrapper_descriptor")
     def __getitem__(self, k): pass
+    @mopsa.type("method_descriptor")
+    def __reversed__(self): pass
 
 class range_iterator(object):
     @mopsa.type("wrapper_descriptor")
@@ -775,6 +785,14 @@ class bytearray(object): pass
 class bytes(object):
     @mopsa.type("wrapper_descriptor")
     def __getitem__(self, i): pass
+    @mopsa.type("wrapper_descriptor")
+    def __len__(self, i): pass
+    @mopsa.type("method_descriptor")
+    def decode(self): pass
+    @mopsa.type("method_descriptor")
+    def split(self): pass
+    @mopsa.type("method_descriptor")
+    def strip(self): pass
 
 @mopsa.unsupported
 class bytes_iterator(object): pass
@@ -801,8 +819,9 @@ class map(object): pass
 @mopsa.unsupported
 class memoryview(object): pass
 
-@mopsa.unsupported
-class super(object): pass
+class super(object):
+    def __init__(self, cls): pass
+    def __get__(self): pass
 
 class BaseException(object):
     @mopsa.type("wrapper_descriptor")
