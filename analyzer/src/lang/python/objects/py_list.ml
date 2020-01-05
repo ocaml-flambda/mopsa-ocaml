@@ -389,8 +389,9 @@ struct
       |> Option.return
 
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.reverse" as f, _))}, _)}, args, [])
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.sort" as f, _))}, _)}, args, []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.reverse" as f, _))}, _)}, args, kwargs)
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.sort" as f, _))}, _)}, args, kwargs) ->
+      if kwargs <> [] then warn_at range "list.sort/reverse kwargs ignored";
       Utils.check_instances f man flow range args
         ["list"]
         (fun _ flow -> man.eval (mk_py_none range) flow)
@@ -612,6 +613,29 @@ struct
            man.eval (mk_expr (E_py_list [mk_py_top T_string range; mk_py_top T_string range]) range) flow
         )
       |> Option.return
+
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bytes.split", _))}, _)} as call, [str], []) ->
+      (* rewrite into str.split(str, " ", -1) *)
+      let args' = (mk_py_top T_py_bytes range) :: (mk_constant T_int (C_int (Z.of_int 1)) range) :: [] in
+      man.eval {exp with ekind = E_py_call(call, str :: args', [])} flow
+      |> Option.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bytes.split", _))}, _)} as call , [str; split], []) ->
+      (* rewrite into str.split(str, split, -1) *)
+      let args' = (mk_constant T_int (C_int (Z.of_int 1)) range) :: [] in
+      man.eval {exp with ekind = E_py_call(call, str :: split :: args', [])} flow
+      |> Option.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bytes.split" as f, _))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args
+        ["bytes"; "bytes"; "int"]
+        (fun eargs flow ->
+           (* FIXME: notok, as one strong element. Fixed by adding to tops, but terrible *)
+           man.eval (mk_expr (E_py_list [mk_py_top T_py_bytes range; mk_py_top T_py_bytes range]) range) flow
+        )
+      |> Option.return
+
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.splitlines" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args

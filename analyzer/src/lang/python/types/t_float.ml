@@ -179,6 +179,11 @@ module Domain =
         Utils.check_instances f man flow range args ["float"] (fun _ -> man.eval (mk_py_top T_int range))
         |> Option.return
 
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("float.__bool__" as f, _))}, _)}, args, []) ->
+        Utils.check_instances f man flow range args ["float"] (fun _ -> man.eval (mk_py_top T_bool range))
+        |> Option.return
+
+
       | _ -> None
 
     let exec _ _ _ _ = None

@@ -103,6 +103,13 @@ struct
         (fun r flow -> allocate_builtin man range flow "range_iterator" (Some exp))
       |> Option.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range.__reversed__" as f, _))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args
+        ["range"]
+        (fun r flow -> allocate_builtin man range flow "range_iterator" (Some exp))
+      |> Option.return
+
+
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range_iterator.__next__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args
         ["range_iterator"]

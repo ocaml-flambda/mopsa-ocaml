@@ -296,7 +296,6 @@ struct
       |> Option.return
 
 
-
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, args, []) when StringMap.mem f stub_base ->
       debug "function %s in stub_base, processing@\n" f;
       let {in_args; out_type} = StringMap.find f stub_base in
@@ -315,10 +314,9 @@ struct
       |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_class (C_builtin "reversed", _)}, _)}, args, [])  ->
-      (* Utils.check_instances man flow range args ["list"]
-       *   (fun eargs flow ->
-       *      let hd = List.hd eargs in *)
-      man.eval (Utils.mk_builtin_call "list.__reversed__" args range) flow
+      (* FIXME: reversed_new_impl *)
+      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_attr (List.hd args) "__reversed__" range) [] range) flow
+      (* man.eval (Utils.mk_builtin_call "list.__reversed__" args range) flow *)
       |> Option.return
 
     (* FIXME: in libs.py_std or flows.exn? *)
@@ -362,10 +360,12 @@ struct
         )
       |> Option.return
 
-
-
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("all" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args ["list"] (fun _ -> man.eval (mk_py_top T_bool range))
+      |> Option.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("round" as f, _))}, _)}, args, []) ->
+      Utils.check_instances_disj f man flow range args [["float"; "int"]] (fun _ -> man.eval (mk_py_top T_int range))
       |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("divmod", _))}, _)}, args, []) ->

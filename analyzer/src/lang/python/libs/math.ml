@@ -84,8 +84,8 @@ module Domain =
       add_signature "math.log"       ["float"; "float"]  "float" |>
       add_signature "math.log1p"     ["float"]           "float" |>
       add_signature "math.log10"     ["float"]           "float" |>
-      add_signature "math.log2"      ["float"]           "float" |>
-      add_signature "math.sqrt"      ["float"]           "float"
+      add_signature "math.log2"      ["float"]           "float"
+      (* add_signature "math.sqrt"      ["float"]           "float" *)
 
     let process_simple f man flow range exprs instances return =
       Utils.check_instances f man flow range exprs instances (fun _ flow -> man.eval (mk_py_top return range) flow)
@@ -126,7 +126,12 @@ module Domain =
           )
         |> Option.return
 
-
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("math.sqrt" as f, _))}, _)}, args, []) ->
+        Utils.check_instances_disj f man flow range args
+          [["int"; "float"]]
+          (fun args ->
+             man.eval (mk_py_top (T_float F_DOUBLE) range))
+        |> Option.return
 
       | _ -> None
 

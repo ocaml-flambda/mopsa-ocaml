@@ -44,16 +44,18 @@ module Domain =
         | "int" -> T_int
         | "float" -> T_float F_DOUBLE
         | "str" -> T_string
+        | "bytes" -> T_py_bytes
         | "NoneType" -> T_py_none
         | "NotImplementedType" -> T_py_not_implemented
         | _ -> assert false in
       StringMap.add funname {in_args; out_type} db
 
     let stub_base =
-      let str = "str" and int = "int" and bool = "bool" in
+      let str = "str" and int = "int" and bool = "bool" and bytes = "bytes" in
       StringMap.empty |>
       add_signature "str.__contains__" [str; str] bool |>
       add_signature "str.__len__" [str] int |>
+      add_signature "bytes.__len__" [bytes] int |>
       add_signature "str.__mul__" [str; int] str |>
       add_signature "str.__rmul__" [str; int] str |>
 
@@ -231,6 +233,18 @@ module Domain =
           )
         |> Option.return
 
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__rmod__" as f, _))}, _)}, args, []) ->
+        Utils.check_instances ~arguments_after_check:1 f man flow range args ["str"]
+          (fun eargs flow ->
+             (* TODO: constant strings are kept in the objects, so we could raise less alarms *)
+             let tyerror_f = man.exec (Utils.mk_builtin_raise_msg "ValueError" "incomplete format" range) flow in
+             let flow = Flow.copy_ctx tyerror_f flow in
+             let res = man.eval (mk_py_top T_string range) flow in
+             let tyerror = tyerror_f |> Eval.empty_singleton in
+             Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Eval.copy_ctx res tyerror :: res :: [])
+          )
+        |> Option.return
+
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__getitem__" as f, _))}, _)}, args, []) ->
         Utils.check_instances_disj f man flow range args
           [["str"]; ["int"; "slice"]]
@@ -307,6 +321,13 @@ module Domain =
           )
         |> Option.return
 
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bytes.strip" as f, _))}, _)}, args, []) ->
+        Utils.check_instances f man flow range args
+          ["bytes"]
+          (fun eargs flow -> man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_py_bytes range) flow)
+        |> Option.return
+
+
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__repr__" as f, _))}, _)}, args, [])
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__str__" as f, _))}, _)}, args, []) ->
         Utils.check_instances f man flow range args
@@ -314,6 +335,27 @@ module Domain =
           (fun eargs flow -> Eval.singleton (List.hd eargs) flow)
         |> Option.return
 
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.format" as f, _))}, _)}, args, kwargs) ->
+        Utils.check_instances ~arguments_after_check:(List.length args - 1) f man flow range args ["str"]
+          (fun eargs flow ->
+             (* TODO: constant strings are kept in the objects, so we could raise less alarms *)
+             let tyerror_f = man.exec (Utils.mk_builtin_raise_msg "ValueError" "incomplete format" range) flow in
+             let flow = Flow.copy_ctx tyerror_f flow in
+             let res = man.eval (mk_py_top T_string range) flow in
+             let tyerror = tyerror_f |> Eval.empty_singleton in
+             Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Eval.copy_ctx res tyerror :: res :: [])
+          )
+        |> Option.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.index" as f, _))}, _)}, args, []) ->
+        Utils.check_instances f man flow range args
+          ["str"; "str"]
+          (fun eargs flow ->
+             Eval.join
+               (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow)
+               (man.exec (Utils.mk_builtin_raise_msg "ValueError" "substring not found" range) flow |> Eval.empty_singleton)
+          )
+        |> Option.return
 
       | _ -> None
 

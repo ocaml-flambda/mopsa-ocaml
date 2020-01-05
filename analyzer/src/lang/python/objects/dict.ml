@@ -248,6 +248,22 @@ struct
         )
       |> Option.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.setdefault", _))}, _)} as call, dict::key::[], []) ->
+      man.eval {exp with ekind=E_py_call(call, dict::key::(mk_py_none range)::[], [])} flow |> Option.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.setdefault" as f, _))}, _)}, args, []) ->
+      Utils.check_instances f ~arguments_after_check:2 man flow range args ["dict"]
+        (fun args flow ->
+           let dict, key, default = match args with a::b::c::[] -> a,b,c | _ -> assert false in
+           let var_k, var_v = extract_vars dict in
+
+           let flow = man.exec (mk_assign (mk_var var_k ~mode:WEAK range) key range) flow in
+           let flow = man.exec (mk_assign (mk_var var_v ~mode:WEAK range) default range) flow in
+           man.eval (mk_var var_v range) flow
+        )
+      |> Option.return
+
+
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.items" as n, _))}, _)}, args, [])
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.keys" as n, _))}, _)}, args, [])
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.values" as n, _))}, _)}, args, []) ->
@@ -360,6 +376,32 @@ struct
             ~felse:(Libs.Py_mopsa.check man (mk_py_false range) range)
         )
       |> Option.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.__len__" as f, _))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args
+        ["dict"]
+        (fun args flow ->
+           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow
+        )
+      |> Option.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict_items.__len__" as f, _))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args
+        ["dict_items"]
+        (fun args flow ->
+           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow
+        )
+      |> Option.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict_keys.__len__" as f, _))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args
+        ["dict_keys"]
+        (fun args flow ->
+           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow
+        )
+      |> Option.return
+
+
 
     | E_py_annot {ekind = E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)}, i) } when get_orig_vname c.py_cls_a_var = "Dict" ->
       let addr_dict = mk_alloc_addr (A_py_dict (Rangeset.singleton range, Rangeset.singleton range)) range in
