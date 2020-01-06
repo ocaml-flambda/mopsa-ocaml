@@ -793,15 +793,19 @@ class bytes(object):
     def split(self): pass
     @mopsa.type("method_descriptor")
     def strip(self): pass
+    @mopsa.type("method_descriptor")
+    def replace(self): pass
 
 @mopsa.unsupported
 class bytes_iterator(object): pass
 
 class classmethod(object):
+    def __new__(self, func): pass
     def __init__(self, func): pass
     def __get__(self): pass
 
 class staticmethod(object):
+    def __new__(self, func): pass
     def __init__(self, func): pass
     def __get__(self): pass
 

@@ -66,6 +66,10 @@ struct
              Eval.singleton (mk_py_object (cls, None) range) flow
            | E_py_object ({addr_kind = Objects.Py_list.A_py_list _}, _) ->
              proceed "list"
+           | E_py_object ({addr_kind = Objects.Function.A_py_classmethod _}, _) ->
+             proceed "classmethod"
+           | E_py_object ({addr_kind = Objects.Function.A_py_staticmethod _}, _) ->
+             proceed "staticmethod"
            | E_py_object ({addr_kind = Objects.Py_set.A_py_set _}, _) ->
              proceed "set"
            | E_py_object ({addr_kind = Objects.Dict.A_py_dict _}, _) ->
@@ -172,7 +176,7 @@ struct
               | Objects.Tuple.A_py_tuple _ -> "tuple"
               | _ -> assert false in
             assume (mk_py_issubclass_builtin_l str_addr eattr range) man flow
-              ~fthen:(man.eval (mk_py_false range))
+              ~fthen:(man.eval (mk_py_true range))
               ~felse:(man.eval (mk_py_false range))
 
           | Objects.Py_list.A_py_iterator (s, _, _), A_py_class (C_builtin c, _) ->
@@ -186,6 +190,23 @@ struct
 
           | A_py_method (_, _, t), A_py_class (C_builtin c, _) ->
             man.eval (mk_py_bool (c = t || c = "object") range) flow
+
+          | Objects.Function.A_py_classmethod _, A_py_class (C_builtin "classmethod", b) ->
+            man.eval (mk_py_true range) flow
+
+          | Objects.Function.A_py_staticmethod _, A_py_class (C_builtin "staticmethod", b) ->
+            man.eval (mk_py_true range) flow
+
+          | Objects.Function.A_py_classmethod _, A_py_class (c, b) ->
+            assume (mk_py_issubclass_builtin_l "classmethod" eattr range) man flow
+              ~fthen:(man.eval (mk_py_true range))
+              ~felse:(man.eval (mk_py_false range))
+
+          | Objects.Function.A_py_staticmethod _, A_py_class (c, b) ->
+            assume (mk_py_issubclass_builtin_l "staticmethod" eattr range) man flow
+              ~fthen:(man.eval (mk_py_true range))
+              ~felse:(man.eval (mk_py_false range))
+
 
           | _ -> assert false
         )
