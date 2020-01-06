@@ -61,7 +61,8 @@ struct
     StringMap.empty |>
     add_signature "bin" ["int"] "str" |>
     add_signature "chr" ["int"] "str" |>
-    add_signature "ord" ["str"] "int"
+    add_signature "ord" ["str"] "int" |>
+    add_signature "hex" ["int"] "str"
 
   let process_simple f man flow range exprs instances return =
     Utils.check_instances f man flow range exprs instances (fun _ flow -> man.eval (mk_py_top return range) flow)

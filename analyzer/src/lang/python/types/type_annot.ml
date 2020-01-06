@@ -363,6 +363,9 @@ struct
              *   warn_at range "any annot";
              *   (\* FIXME man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_any range) flow *\)
              *   Addr_env.Domain.allocate_builtin ~mode:WEAK man range flow "object" (Some e) *)
+            | "object" ->
+              warn_at range "Any transformed into object here";
+              Addr_env.Domain.allocate_builtin ~mode:WEAK man range flow (get_orig_vname v) (Some e)
             | _ ->
               Addr_env.Domain.allocate_builtin ~mode:WEAK man range flow (get_orig_vname v) (Some e)
           end
