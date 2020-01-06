@@ -359,6 +359,10 @@ struct
               (fun s -> Eval.singleton (mk_py_object (s (), None) range) flow) Addr_env.addr_notimplemented
             | "NoneType" ->
               (fun s -> Eval.singleton (mk_py_object (s (), None) range) flow) Addr_env.addr_none
+            (* | "Any" ->
+             *   warn_at range "any annot";
+             *   (\* FIXME man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_any range) flow *\)
+             *   Addr_env.Domain.allocate_builtin ~mode:WEAK man range flow "object" (Some e) *)
             | _ ->
               Addr_env.Domain.allocate_builtin ~mode:WEAK man range flow (get_orig_vname v) (Some e)
           end
@@ -554,16 +558,24 @@ struct
 
         | E_py_call ({ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)}, {ekind = E_var (v, _)}::types, []) ->
           let cur = get_env T_cur man flow in
-          let tycur = TVMap.find (Class v) cur in
+          let tycur = try TVMap.find (Class v) cur with Not_found ->
+            let () = Soundness.warn_at range "cheating in type annots" in ESet.of_list types in
           debug "tycur = %a@\n" ESet.print tycur;
           begin match ESet.cardinal tycur with
           | 0 ->
             Flow.bottom_from flow |>
             Eval.empty_singleton
           | _ ->
-            assert (ESet.cardinal tycur = 1);
-            let ty = ESet.choose tycur in
-            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) {exp with ekind = E_py_annot ty} flow
+            Eval.join_list
+              ~empty:(fun () -> assert false)
+              (List.map
+                 (fun t ->
+                    let flow = set_env T_cur (TVMap.add (Class v) (ESet.singleton t) cur) man flow in
+                    man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) {exp with ekind = E_py_annot t} flow)
+                 (ESet.elements tycur))
+            (* assert (ESet.cardinal tycur = 1);
+             * let ty = ESet.choose tycur in
+             * man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) {exp with ekind = E_py_annot ty} flow *)
           end |> Option.return
 
         | E_constant C_py_none ->

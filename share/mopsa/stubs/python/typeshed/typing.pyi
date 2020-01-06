@@ -1,6 +1,7 @@
 class overload: pass
 class runtime_checkable: pass
-Any = object # cheating, removed the ()
+# class Any: pass # = object # cheating, removed the ()
+Any = object
 class TypeVar: pass
 
 class NoReturn: pass
@@ -71,20 +72,20 @@ class BinaryIO(IO[bytes]):
     # @abstractmethod
     def __enter__(self) -> BinaryIO: ...
 
-# class TextIO(IO[str]):
-#     # TODO use abstractproperty
-#     @property
-#     def buffer(self) -> BinaryIO: ...
-#     @property
-#     def encoding(self) -> str: ...
-#     @property
-#     def errors(self) -> Optional[str]: ...
-#     @property
-#     def line_buffering(self) -> int: ...  # int on PyPy, bool on CPython
-#     @property
-#     def newlines(self) -> Any: ...  # None, str or tuple
-# #    @abstractmethod
-#     def __enter__(self) -> TextIO: ...
+class TextIO(IO[str]):
+    # TODO use abstractproperty
+    @property
+    def buffer(self) -> BinaryIO: ...
+    @property
+    def encoding(self) -> str: ...
+    @property
+    def errors(self) -> Optional[str]: ...
+    @property
+    def line_buffering(self) -> int: ...  # int on PyPy, bool on CPython
+    @property
+    def newlines(self) -> Any: ...  # None, str or tuple
+#    @abstractmethod
+    def __enter__(self) -> TextIO: ...
 
 class List: pass
 class Set(_Collection[_T_co], Generic[_T_co]):

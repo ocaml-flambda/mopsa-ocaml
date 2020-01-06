@@ -19,7 +19,7 @@
 #                                                                            #
 ##############################################################################
 
-from typing import List, NoReturn
+from typing import List, NoReturn, TextIO
 
 # maxsize = mopsa.random_int()
 path: List[str]
@@ -29,3 +29,7 @@ base_prefix: str
 
 def exit(arg: object = ...) -> NoReturn:
     raise SystemExit()
+
+stdin: TextIO
+stdout: TextIO
+stderr: TextIO

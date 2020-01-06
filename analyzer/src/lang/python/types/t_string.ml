@@ -70,6 +70,7 @@ module Domain =
       add_signature "str.lower" [str] str |>
       add_signature "str.lstrip" [str] str |>
       add_signature "str.replace" [str; str; str] str |>
+      add_signature "bytes.replace" [bytes; bytes; bytes] bytes |>
       add_signature "str.rfind" [str; str] int |>
       add_signature "str.rjust" [str; int] str |>
       add_signature "str.rstrip" [str] str |>

@@ -383,8 +383,8 @@ struct
             | A_py_class (c, b) ->
               begin match c with
                 | C_builtin name | C_unsupported name -> name
-                | C_user c -> get_orig_vname c.py_cls_var
-                | C_annot c -> get_orig_vname c.py_cls_a_var
+                | C_user c -> get_orig_vname ~warn:false c.py_cls_var
+                | C_annot c -> get_orig_vname ~warn:false c.py_cls_a_var
               end
             | _ -> assert false
           in

@@ -452,7 +452,7 @@ struct
         Option.return @@
         fun fmt var_as_string ->
         let cur = get_env T_cur man flow in
-        let cur_v = AMap.filter (fun var _ -> get_orig_vname var = var_as_string) cur in
+        let cur_v = AMap.filter (fun var _ -> get_orig_vname ~warn:false var = var_as_string) cur in
         Format.fprintf fmt "%a@\n" AMap.print cur_v;
         AMap.fold (fun var aset () ->
             ASet.fold (fun addr () ->

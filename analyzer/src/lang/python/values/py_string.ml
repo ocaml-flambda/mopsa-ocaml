@@ -138,8 +138,12 @@ struct
     match query with
     | Q_strings_of_var v ->
       let cur = get_env T_cur man flow in
-      let s = StringSet.fold (fun str acc -> acc ^ " \\/ " ^ str) (Option.default StringSet.empty (SMap.find_opt v cur)) "" in
-      Some (String.sub s 4 (String.length s - 4))
+      let strset = Option.default StringSet.empty (SMap.find_opt v cur) in
+      if StringSet.is_top strset then
+        let () = warn "Q_strings_of_var top" in Some "T"
+      else
+        let s = StringSet.fold (fun str acc -> acc ^ " \\/ " ^ str) strset "" in
+        Some (String.sub s 4 (String.length s - 4))
 
     | _ -> None
 
