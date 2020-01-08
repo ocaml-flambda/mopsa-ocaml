@@ -554,8 +554,8 @@ class list(object):
     def __gt__(self, o): pass
     @mopsa.type("wrapper_descriptor")
     def __iadd__(self, o): pass
-    @mopsa.type("wrapper_descriptor")
-    def __imul__(self, o): pass
+    # @mopsa.type("wrapper_descriptor")
+    # def __imul__(self, o): pass
     def __new__(self, o): pass
     @mopsa.type("wrapper_descriptor")
     def __init__(self, itr): pass

@@ -52,7 +52,8 @@ module Domain =
       let range = erange exp in
       match ekind exp with
       | E_constant (C_top (T_float _))
-      | E_constant (C_float _) ->
+      | E_constant (C_float _)
+      | E_constant (C_float_interval _) ->
         Eval.singleton (mk_py_object (Addr_env.addr_float (), None) range) flow |> Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("float.__new__", _))}, _)}, [cls], []) ->

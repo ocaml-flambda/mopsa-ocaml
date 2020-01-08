@@ -94,10 +94,10 @@ module Domain =
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.random_float", _))}, _)}, [l; u], []) ->
          begin
            match ekind l, ekind u with
-           | E_constant (C_float l), E_constant (C_float u) -> Eval.singleton (mk_py_float_interval l u range) flow
-           | E_constant (C_float l), E_constant (C_int u) -> Eval.singleton (mk_py_float_interval l (Z.to_float u) range) flow
-           | E_constant (C_int l), E_constant (C_float u) -> Eval.singleton (mk_py_float_interval (Z.to_float l) u range) flow
-           | E_constant (C_int l), E_constant (C_int u) -> Eval.singleton (mk_py_float_interval (Z.to_float l) (Z.to_float u) range) flow
+           | E_constant (C_float l), E_constant (C_float u) -> man.eval  (mk_py_float_interval l u range) flow
+           | E_constant (C_float l), E_constant (C_int u) -> man.eval (mk_py_float_interval l (Z.to_float u) range) flow
+           | E_constant (C_int l), E_constant (C_float u) -> man.eval (mk_py_float_interval (Z.to_float l) u range) flow
+           | E_constant (C_int l), E_constant (C_int u) -> man.eval (mk_py_float_interval (Z.to_float l) (Z.to_float u) range) flow
            | _ ->
               let tmp = mktmp () in
               let l = Utils.mk_builtin_call "float" [l] range in

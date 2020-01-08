@@ -321,8 +321,18 @@ struct
                              man.eval (mk_py_none range)
                            )
                          ~felse:(fun flow ->
-                             Format.fprintf Format.str_formatter "%a is not iterable" pp_expr list;
-                             man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |> Eval.empty_singleton)
+                             assume (mk_py_isinstance_builtin other "zip" range) man flow
+                               ~fthen:(fun flow ->
+                                   let var_l1, var_l2 = match ekind other with
+                                     | E_py_object ({addr_kind = A_py_iterator (_, [{addr_kind = A_py_list _} as a1; {addr_kind = A_py_list _} as a2], _)}, _) -> var_of_addr a1, var_of_addr a2
+                                     | _ -> assert false in
+                                   man.exec (mk_assign (mk_var var_els ~mode:WEAK range) (mk_expr (E_py_tuple [mk_var var_l1 ~mode:WEAK range; mk_var var_l2 ~mode:WEAK range]) range) range) flow |>
+                                   man.eval (mk_py_none range)
+                                 )
+                               ~felse:(fun flow ->
+                                   Format.fprintf Format.str_formatter "%a is not iterable" pp_expr list;
+                                   man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |> Eval.empty_singleton)
+                                 )
                      )
                )
         )

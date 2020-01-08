@@ -174,6 +174,11 @@ module Domain =
          let exp' = Utils.mk_builtin_call "unittest.ExceptionContext" [exn] range in
          man.eval exp' flow |> Option.return
 
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertRaises", _))}, _)}, _, _) ->
+         Py_mopsa.check man (mk_py_top T_bool range) range flow
+         |> Option.return
+
+
       (* | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "unittest.ExceptionContext.__exit__")}, _)},[self; typ; exn; trace], []) ->
        *    assume
        *      (mk_binop exn O_eq (mk_py_none range) range)
