@@ -322,7 +322,7 @@ rule token = parse
           [STR  (start, stop, str)] }
     | rawbyteprefix  '"'
         { [BYTES (let x = unesc_dq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
-    | rawstringprefix  '"'
+    | rawstringprefix '"'
         {
           let start = lexbuf.lex_curr_p in
           let str = let x = unesc_dq_prefix lexbuf in String.concat "" (List.map (String.make 1) x) in
@@ -353,7 +353,8 @@ and indentation = parse
 and unesc_dq_prefix = parse
     | eof           { raise (LexingError ("unterminated string")) }
     | "\\\n"        { newline lexbuf; unesc_dq_prefix lexbuf }
-    | "\""          { [] }
+    (* | "\\\""        { '\\' :: '\"' :: unesc_dq_prefix lexbuf } *)
+    | '"'           { [] }
     | _ as c        { (c) :: (unesc_dq_prefix lexbuf) }
 
 and dq_prefix = parse
@@ -375,7 +376,8 @@ and dq_prefix = parse
 and unesc_sq_prefix = parse
     | eof           { raise (LexingError ("unterminated string")) }
     | "\\\n"        { newline lexbuf; unesc_sq_prefix lexbuf }
-    | "\'"          { [] }
+    (* | "\\\'"        { '\\' :: '\'' :: unesc_sq_prefix lexbuf } *)
+    | '\''          { [] }
     | _ as c        { (c) :: (unesc_sq_prefix lexbuf) }
 
 and sq_prefix = parse
@@ -403,7 +405,7 @@ and unesc_long_sq_prefix = parse
 and long_sq_prefix = parse
     | eof                     { raise (LexingError ("unterminated string")) }
     | '\\' endline            { newline lexbuf; long_sq_prefix lexbuf }
-    | endline "\'\'\'"        { [] }
+    | endline "\'\'\'"        { newline lexbuf; [] }
     | endline                 { newline lexbuf; ('\n') :: long_sq_prefix lexbuf }
     | "\\\n"                  { newline lexbuf; ('\n') :: long_sq_prefix lexbuf }
     | "\'\'\'"                { [] }
