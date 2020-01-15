@@ -47,10 +47,7 @@ module Domain =
     let exec zone stmt man flow =
       let range = srange stmt in
       match skind stmt with
-      | S_py_while (test, body, orelse) -> (* FIXME: orelse *)
-        let () = match skind orelse with
-        | S_block ([], _) -> ()
-        | _ -> Soundness.warn_at range "else after while not supported" in
+      | S_py_while (test, body, {skind = S_block ([], _)}) ->
         let start = Timing.start () in
         let res = man.exec
             (mk_while
@@ -62,6 +59,21 @@ module Domain =
                   |> Option.return in
         Debug.debug ~channel:"profiling" "while loop at range %a: %.4f" pp_range range (Timing.stop start);
         res
+
+      | S_py_while (test, body, orelse) ->
+        (* the else clause is supposed to be applied when the loop exits, and when this is not due to a break *)
+        warn_at range "else/while statement not precise";
+        let start = Timing.start () in
+        let res = man.exec
+            (mk_while
+               (Utils.mk_builtin_call "bool" [test] range)
+               body
+               range
+            ) flow in
+        let res = Flow.join man.lattice res (man.exec orelse res) in
+        Debug.debug ~channel:"profiling" "while loop at range %a: %.4f" pp_range range (Timing.stop start);
+        res |> Post.return |> Option.return
+
 
       | S_py_for(target, iterable, body, orelse) ->
         (* iter is better than iterable.__iter__, as the error
