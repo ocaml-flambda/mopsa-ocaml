@@ -22,9 +22,9 @@
 (** Entry point of the analyzer. *)
 
 open Framework
-open Framework.Ast.All
-open Framework.Core
-open Framework.Config.Options
+open Ast.All
+open Core
+open Config.Options
 
 (** {2 Command-line options} *)
 (** ************************ *)
@@ -59,12 +59,11 @@ let parse_options f () =
 
 (** Call the appropriate frontend to parse the input sources *)
 let parse_program lang files =
-  match lang with
-  | "universal" -> Lang.Universal.Frontend.parse_program files
-  | "c" -> Lang.C.Frontend.parse_program files
-  | "python" -> Lang.Python.Frontend.parse_program files
-  | "repl" -> Lang.Repl.Frontend.parse_program files
-  | _ -> Exceptions.panic "Unknown language"
+  try
+    let front = find_language_frontend lang in
+    front.parse files
+  with Not_found ->
+    Exceptions.panic "No front-end found for language %s" lang
 
 
 (** {2 Entry point} *)
@@ -90,7 +89,7 @@ let () =
             else
               let module E = Engines.Automatic.Make(Abstraction) in
               (module E)
-            : Framework.Engines.Engine.ENGINE with type t = Domain.t
+            : Engines.Engine.ENGINE with type t = Domain.t
           )
         in
 
