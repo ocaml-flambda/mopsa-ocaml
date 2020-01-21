@@ -18,7 +18,7 @@ The documentation and example files of the MOPSA software are distributed under 
 
 ## Dependencies
 
-* ocaml (version >= 4.07.1)
+* ocaml (version >= 4.07.0)
 * apron
 * clang (version >= 5.x)
 * zarith
@@ -41,6 +41,7 @@ opam init
 opam switch 4.07.1
 eval `opam config env`
 opam install apron zarith menhir yojson
+./configure
 make
 
 ```
@@ -55,6 +56,7 @@ opam init
 opam switch 4.07.1
 eval $(opam config env)
 opam install apron zarith menhir yojson
+./configure
 make
 
 ```
