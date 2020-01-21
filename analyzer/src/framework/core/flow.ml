@@ -77,7 +77,7 @@ let join (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
 
 let join_list lattice ~empty l =
   match l with
-  | [] -> empty
+  | [] -> empty ()
   | [f] -> f
   | hd :: tl ->
     let ctx  = List.fold_left (fun acc f ->
@@ -149,6 +149,10 @@ let add (tk: token) (a: 'a) (lattice: 'a lattice) (flow: 'a flow) : 'a flow =
   let a' = get tk lattice flow in
   let aa = lattice.join (Context.get_unit flow.ctx) a a' in
   set tk aa lattice flow
+
+let rename (tki: token) (tko: token) (lattice: 'a lattice) (flow: 'a flow) : 'a flow =
+  let ai = get tki lattice flow in
+  add tko ai lattice flow
 
 let remove (tk: token) (flow: 'a flow) : 'a flow =
   { flow with tmap = TokenMap.remove tk flow.tmap }

@@ -370,7 +370,7 @@ struct
     (* Join flows *)
     (* FIXME: when the cases do not define a partitioning, we need
          to do something else *)
-    Flow.join_list man.lattice flows ~empty:flow
+    Flow.join_list man.lattice flows ~empty:(fun () -> flow)
 
 
   (** Entry point of expression evaluations *)

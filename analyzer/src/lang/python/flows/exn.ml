@@ -94,13 +94,27 @@ module Domain =
                           man.exec orelse
         in
 
+        let apply_finally finally flow =
+          let open Universal.Iterators.Loops in
+          let open Universal.Iterators.Interproc.Common in
+          Flow.fold (fun acc tk env ->
+              match tk with
+              | T_break | T_continue | T_return _ | T_py_exception _ ->
+                Flow.singleton (Flow.get_ctx acc) T_cur env |>
+                man.exec finally |>
+                Flow.rename T_cur tk man.lattice |>
+                Flow.join man.lattice acc
+              | _ ->
+                Flow.add tk env man.lattice acc
+            ) (Flow.bottom_from flow) flow in
+
         (* Execute finally body *)
         let flow_caught_finally =
           Flow.join man.lattice orelse_flow flow_caught |>
-          man.exec finally in
+          apply_finally finally in
         let flow_uncaught = Flow.copy_ctx flow_caught_finally flow_uncaught in
         let flow_uncaught_finally =
-          man.exec finally flow_uncaught in
+          apply_finally finally flow_uncaught in
         let flow = Flow.join man.lattice flow_caught_finally flow_uncaught_finally in
 
         (* Restore old exceptions *)
