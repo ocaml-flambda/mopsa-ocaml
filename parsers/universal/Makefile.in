@@ -1,3 +1,5 @@
+# @configure_input@
+
 ##############################################################################
 #                                                                            #
 #  This file is part of MOPSA, a Modular Open Platform for Static Analysis.  #
@@ -19,15 +21,17 @@
 #                                                                            #
 ##############################################################################
 
+# Targets
 TARGET_LIBS = mlUniversalParser
 
 # Packs
 mlUniversalParser = U_ast U_ast_printer U_parser U_lexer U_file_parser
 
 
-# MOPSA
-MOPSAROOT = ../..
+# MOPSA libraries
 MOPSALIBS := utils:utils
 
 
+# MOPSA make rules
+MOPSAROOT = @top_srcdir@
 include $(MOPSAROOT)/make/main.mk

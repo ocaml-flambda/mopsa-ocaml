@@ -1,3 +1,5 @@
+# @configure_input@
+
 ##############################################################################
 #                                                                            #
 #  This file is part of MOPSA, a Modular Open Platform for Static Analysis.  #
@@ -20,36 +22,27 @@
 ##############################################################################
 
 
-# Framework packs
-framework = ast core lattices engines transformers output config hooks
-framework.ast = program frontend typ operator constant var expr stmt visitor all
-framework.core = query context zone callstack alarm token log lattice        \
-		 soundness flow result eval post id interface channel sig    \
-                 hook cache abstraction all
-framework.core.sig = value domain stacked functor
-framework.core.sig.value = lowlevel simplified reduction
-framework.core.sig.domain = manager lowlevel intermediate simplified         \
-                            stateless reduction
-framework.core.sig.stacked = manager lowlevel intermediate stateless reduction
-framework.core.sig.functor = simplified
-framework.lattices = partial_map partial_inversible_map_sig partial_inversible_map powerset_sig powerset powersetwithunder
-framework.engines = engine automatic interactive
-framework.transformers = value domain stacked
-framework.transformers.stacked.lowlevel = stack_list compose product sequence
-framework.transformers.stacked.intermediate = stack_list product sequence
-framework.output = text json factory
-framework.config = paths visitor typer parser options
-framework.hooks = logs
+# Targets
+TARGET_CLIBS = utils
 
 
+# Packs
+utils = bot compare location debug exceptions option dnf setExt setExtSig \
+	setP listExt mapExtSig mapExt mapExtPoly invRelation invRelationSig \
+	equiv mapPolyHet mapP relation relationSig valueSig timing \
+        top bot_top itvUtils congUtils bitfields graphSig graph argExt lineEdit \
+        typeExt eq
+itvUtils = float intBound intItv floatItv floatItvNan
 
-# Packages
-PKGS += str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith threads
+
+# C files
+C_SRC = itvUtils/floats_x86_64.c
 
 
-# MOPSA libraries
-MOPSALIBS += utils:utils
+# External packages, as given to ocamlfind
+PKGS = str gmp zarith camlidl threads
 
-# this is needed for ocamlrun to find our dll*.so when running the bytecode bynary
-# TODO: find a better way
-DLLPATHS += -dllpath `pwd`/$(MOPSAROOT)/utils/lib
+
+# MOPSA make rules
+MOPSAROOT = @top_srcdir@
+include $(MOPSAROOT)/make/main.mk

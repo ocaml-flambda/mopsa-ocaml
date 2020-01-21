@@ -97,4 +97,4 @@ $(MLY:$(SRC)/%.mly=$(BUILD)/%.ml): $(BUILD)/%.ml: $(SRC)/%.mly
 	@mkdir -p $(@D)
 	@echo -e "$(DEPMSG)	$(ML_$@)"
 	$(QUIET)$(OCAMLFIND) $(OCAMLDEP) $(INCLUDES) -absname $(DEPFLAGS_$@) > $@
-	@$(SED) -i 's/\bsrc\b/_build/g' $@
+	$(QUIET)$(SED) -i 's/\bsrc\b/_build/g' $@

@@ -1,3 +1,5 @@
+# @configure_input@
+
 ##############################################################################
 #                                                                            #
 #  This file is part of MOPSA, a Modular Open Platform for Static Analysis.  #
@@ -19,65 +21,63 @@
 #                                                                            #
 ##############################################################################
 
-TARGET_CLIBS = mlClangParser
-TARGET_NATIVES = wrapper
+
+# Targets
+TARGET_NATIVES = mopsa
+TARGET_LIBS = mopsa
+
+
 
 # Packs
-mlClangParser = Clang_AST Clang_utils Clang_dump Clang_parser Clang_parser_cache C_AST C_print C_utils C_simplify Clang_to_C C_parser Build_DB
+mopsa = framework mopsa lang main
 
-wrapper = Build_DB Build_wrapper
+# Universal domains
+include src/framework/Makefile
+include src/lang/universal/Makefile
+include src/lang/repl/Makefile
 
-# C++ files
-CC_SRC = Clang_to_ml.cc
+# C domains
+ifneq (@disable_c@,yes)
+include src/lang/stubs/Makefile
+include src/lang/c/Makefile
+endif
 
-#External packages, as given to ocamlfind
-PKGS = str unix zarith
-
-
-# Flags
-
-OCAMLC = ocamlc -g -cc "$(CXX)"
-OCAMLOPT = ocamlopt -cc "$(CXX)"
-
-LLVMCONFIG := $(if $(shell which llvm-config), llvm-config, $(lastword $(sort $(wildcard /usr/bin/llvm-config-*))))
-CLANG := $(if $(shell which clang), clang, $(lastword $(sort $(wildcard /usr/bin/clang-[0-9]*))))
-CLANGRESOURCE := $(shell $(CLANG) -print-resource-dir)
-
-CXXFLAGS := -fPIC  -I $(shell ocamlc -where) $(shell $(LLVMCONFIG) --cxxflags) -Wno-strict-aliasing "-DCLANGRESOURCE=\"$(CLANGRESOURCE)\"" $(CXXFLAGS)
-
-LDFLAGS := $(shell $(LLVMCONFIG) --ldflags) $(LDFLAGS)
-CCLIBS := -lclangFrontend -lclangSerialization -lclangDriver -lclangTooling -lclangParse -lclangSema \
-  -lclangAnalysis -lclangEdit -lclangAST -lclangLex -lclangBasic -lclang \
-  $(shell $(LLVMCONFIG) --libs --system-libs) \
-  -lstdc++
-
-# MOPSA
-MOPSAROOT = ../..
-MOPSALIBS := utils:utils
+# Python domains
+ifneq (@disable_python@,yes)
+include src/lang/python/Makefile
+endif
 
 
-
+# MOPSA make rules
+MOPSAROOT = @top_srcdir@
 include $(MOPSAROOT)/make/main.mk
 
 
-# install
 
-inst_src  := ../../bin/mopsa-wrappers
+
+# Install
+
+inst_src  := $(MOPSAROOT)/bin
 inst_bins := $(foreach f, $(wildcard $(inst_src)/*), $(shell basename $f))
 
 install:
-	@mkdir -p $(PREFIX)/bin/mopsa-wrappers
+	@mkdir -p @prefix@/bin
 	@for i in $(inst_bins); do \
-		echo -e "$(INSTALLMSG)     bin/mopsa-wrappers/$$i"; \
-		if [ $$i = "mopsa-wrapper" ]; then \
-			cp -f $(inst_src)/$$i $(PREFIX)/bin/mopsa-wrappers/$$i; \
-		else \
-			ln -s -f $(PREFIX)/bin/mopsa-wrappers/mopsa-wrapper $(PREFIX)/bin/mopsa-wrappers/$$i; \
+		if test -f $(inst_src)/$$i; then \
+			echo -e "$(INSTALLMSG)     bin/$$i"; \
+			cp -f $(inst_src)/$$i @prefix@/bin/$$i; \
 		fi; \
 	done
+	@mkdir -p @prefix@/share
+	@echo -e "$(INSTALLMSG)     share/mopsa"
+	@cp -r -f $(MOPSAROOT)/share/mopsa @prefix@/share
 
 uninstall:
-	@echo -e "$(UINSTALLMSG)     bin/mopsa-wrappers"
-	@rm -rf $(PREFIX)/bin/mopsa-wrappers
-
-
+	@for i in $(inst_bins); do \
+		if test -f $(inst_src)/$$i; then \
+			echo -e "$(UINSTALLMSG)     bin/$$i"; \
+			rm -f @prefix@/bin/$$i; \
+		fi; \
+	done
+	@echo -e "$(UINSTALLMSG)     share/mopsa"
+	@rm -rf @prefix@/share/mopsa

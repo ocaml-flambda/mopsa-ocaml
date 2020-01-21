@@ -23,6 +23,8 @@ parsers/c_stubs/lib/**
 parsers/c_stubs/Makefile
 bench/**
 autom4te.cache/**
+config.log
+config.status
 Makefile
 *.native
 *.byte
