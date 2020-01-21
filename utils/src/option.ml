@@ -90,10 +90,10 @@ let none_to_exn (a:'a option) : 'a =
 let exn_to_none (f:'a ->'b)  (x:'a) : 'b option =
   try Some (f x) with Found_None -> None
 
-let print pp fmt x =
+let print ?(none="None") ?(some="") pp fmt x =
   match x with
-  | None -> Format.fprintf fmt "None"
-  | Some a -> pp fmt a
+  | None -> Format.fprintf fmt "%s" none
+  | Some a -> Format.fprintf fmt "%s%a" some pp a
 
 let return x = Some x
 

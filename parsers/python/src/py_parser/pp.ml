@@ -204,6 +204,8 @@ and print_exp fmt exp =
       print_exp orelse
   | E_yield(e) ->
     fprintf fmt "yield %a" print_exp e
+  | E_yield_from(e) ->
+    fprintf fmt "yield from %a" print_exp e
   | E_binop(e1, op, e2) ->
     fprintf fmt "( %a ) %a ( %a )"
       print_exp e1

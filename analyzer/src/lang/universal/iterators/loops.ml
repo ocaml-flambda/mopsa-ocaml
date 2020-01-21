@@ -93,6 +93,8 @@ let () =
 (**                            {2 Domain}                                   *)
 (*==========================================================================*)
 
+let nestedness = ref 0
+
 module Domain  =
 struct
 
@@ -252,6 +254,8 @@ struct
   let rec exec zone stmt (man:('a,unit) man) flow =
     match skind stmt with
     | S_while(cond, body) ->
+      incr nestedness;
+      Debug.debug ~channel:"nested" "nestedness: %d" !nestedness;
       debug "while %a:" (* @\nflow = @[%a@] *) pp_range stmt.srange (* (Flow.print man.lattice) flow *);
 
       let flow0 = Flow.remove T_continue flow |>
@@ -293,7 +297,7 @@ struct
                  Flow.set T_continue (Flow.get T_continue man.lattice flow) man.lattice
       in
 
-
+      decr nestedness;
       Some (Post.return res1)
 
     | S_break ->

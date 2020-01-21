@@ -27,8 +27,20 @@ open Framework.Core.Sig.Domain.Stateless
 open Ast
 open Callstack
 
+let name = "universal.iterators.interproc.common"
+let debug fmt = Debug.debug ~channel:name fmt
 
-let debug fmt = Debug.debug ~channel:"universal.iterators.interproc.common" fmt
+let opt_continue_on_recursive_call : bool ref = ref true
+
+
+let () =
+  register_domain_option name {
+    key = "-stop-rec";
+    category = "Interprocedural Analysis";
+    doc = "";
+    spec = ArgExt.Clear opt_continue_on_recursive_call;
+    default = " continue with top during recursive calls"
+  }
 
 
 (** {2 Return flow token} *)
@@ -244,8 +256,11 @@ let inline f params locals body ret range man flow =
         match ret with
         | None -> flow
         | Some v ->
-          man.exec (mk_add_var v range) flow |>
-          man.exec (mk_assign (mk_var v range) (mk_top v.vtyp range) range)
+          if !opt_continue_on_recursive_call then
+            man.exec (mk_add_var v range) flow |>
+            man.exec (mk_assign (mk_var v range) (mk_top v.vtyp range) range)
+          else
+            panic_at range "recursive call on function %s" f.fun_name
       end
 
     | false ->

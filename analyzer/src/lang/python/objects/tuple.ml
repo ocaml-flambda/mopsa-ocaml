@@ -100,7 +100,7 @@ struct
         )
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("tuple.__contains__" as f))}, _)}, args, []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("tuple.__contains__" as f, _))}, _)}, args, []) ->
       Utils.check_instances ~arguments_after_check:1 f man flow range args
         ["tuple"]
         (fun eargs flow ->
@@ -118,25 +118,32 @@ struct
         )
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("tuple.__getitem__" as f))}, _)}, args, []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("tuple.__getitem__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args
         ["tuple"; "int"]
         (fun eargs flow ->
+           let exception Nonconstantinteger  in
            let tuple = List.hd eargs in
-           let pos = match ekind (List.hd (List.tl args)) with
-             | E_constant (C_int z) -> Z.to_int z
-             | _ -> Exceptions.panic "tuple.__getitem__ over non-constant integer" in
            let tuple_vars = var_of_eobj tuple in
-           if 0 <= pos && pos < List.length tuple_vars then
-             let () = debug "ok@\n" in
-             man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var ~mode:STRONG (List.nth tuple_vars pos) range) flow
-           else
-             man.exec ~zone:Zone.Z_py_obj (Utils.mk_builtin_raise_msg "IndexError" "tuple index out of range" range) flow |>
-             Eval.empty_singleton
+           try
+             let pos = match ekind (List.hd (List.tl args)) with
+               | E_constant (C_int z) -> Z.to_int z
+               | _ -> raise Nonconstantinteger in
+             if 0 <= pos && pos < List.length tuple_vars then
+               let () = debug "ok@\n" in
+               man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var ~mode:STRONG (List.nth tuple_vars pos) range) flow
+             else
+               man.exec ~zone:Zone.Z_py (Utils.mk_builtin_raise_msg "IndexError" "tuple index out of range" range) flow |>
+               Eval.empty_singleton
+           with Nonconstantinteger ->
+             Eval.join_list ~empty:(fun () -> assert false)
+               ((man.exec ~zone:Zone.Z_py (Utils.mk_builtin_raise_msg "IndexError" "tuple index out of range" range) flow |>
+                 Eval.empty_singleton)
+                :: (List.map (fun var -> man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var ~mode:STRONG var range) flow) tuple_vars))
         )
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("tuple.__iter__" as f))}, _)}, args, []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("tuple.__iter__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args
         ["tuple"]
         (fun args flow ->
@@ -155,7 +162,7 @@ struct
         )
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "tuple_iterator.__next__")}, _)}, [iterator], []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("tuple_iterator.__next__", _))}, _)}, [iterator], []) ->
       (* todo: checks? *)
       (* ugly assign iterator = iterator at pos+1... *)
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) iterator flow |>

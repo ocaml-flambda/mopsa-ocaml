@@ -196,6 +196,7 @@ type expr_kind +=
               expr list (** arguments *) *
               (string option * expr) list (** keywords (None id for **kwargs) *)
   | E_py_yield of expr
+  | E_py_yield_from of expr
   | E_py_if of expr (** test *) * expr (** body *) * expr (** orelse *)
   | E_py_tuple of expr list
   | E_py_bytes of string
@@ -224,6 +225,10 @@ type py_fundec = {
   py_func_var: var; (** function object variable *)
   py_func_parameters: var list; (** list of parameters variables *)
   py_func_defaults: expr option list; (** list of default parameters values *)
+  py_func_vararg: var option; (* variable argument arg (usually *args), if any *)
+  py_func_kwonly_args: var list; (* list of keyword-only arguments *)
+  py_func_kwonly_defaults: expr option list; (* default values associated to keyword-only arguments *)
+  py_func_kwarg: var option; (* keyword-based variable argument (usually **kwargs) if any *)
   py_func_locals: var list; (** list of local variables *)
   py_func_body: stmt; (** function body *)
   py_func_is_generator: bool; (** is the function a generator? *)
@@ -361,6 +366,7 @@ type stmt_kind +=
 
 type prog_kind +=
   | Py_program of
+      string (** name *) *
       var list (** global variables *) *
       stmt (** body *)
 
@@ -399,6 +405,9 @@ let mk_py_in ?(strict = false) ?(left_strict = false) ?(right_strict = false) v 
       O_py_and
       (mk_binop v O_le e2 erange)
       erange
+
+let mk_py_not exp range =
+  mk_unop O_py_not exp range
 
 let mk_except typ name body =
   {

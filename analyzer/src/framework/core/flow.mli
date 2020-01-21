@@ -60,7 +60,7 @@ val subset : 'a lattice -> 'a flow -> 'a flow -> bool
 val join : 'a lattice -> 'a flow -> 'a flow -> 'a flow
 (** Abstraction union operator. *)
 
-val join_list : 'a lattice -> empty:'a flow -> 'a flow list -> 'a flow
+val join_list : 'a lattice -> empty:(unit -> 'a flow) -> 'a flow list -> 'a flow
 (** Union over a list of flows *)
 
 val meet : 'a lattice -> 'a flow -> 'a flow -> 'a flow
@@ -95,11 +95,18 @@ val add : token -> 'a -> 'a lattice -> 'a flow -> 'a flow
    of [tk] in [flow].  It is equivalent to [set tk (lat.join a (get tk
    lat flow)) flow] *)
 
+val rename : token -> token -> 'a lattice -> 'a flow -> 'a flow
+(** [rename tki tko flow] appends (by union) the environment of tki to
+   the existing binding of [tka] in [flow].  It is equivalent to [add
+   tko (get tki flow) flow] *)
+
 val remove : token -> 'a flow -> 'a flow
 (** [remove tk flow] removes token [tk] from the map of [flow] *)
 
 val filter : (token -> 'a -> bool) -> 'a flow -> 'a flow
 (** [filter f flow] keeps in [flow] all tokens [tk] verifying [f tk = true] *)
+
+val partition : (token -> 'a -> bool) -> 'a flow -> 'a flow * 'a flow
 
 val map : (token -> 'a -> 'a) -> 'a flow -> 'a flow
 

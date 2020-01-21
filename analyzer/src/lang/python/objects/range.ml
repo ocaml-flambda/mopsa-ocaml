@@ -57,7 +57,7 @@ struct
   let rec eval zs exp man flow =
     let range = exp.erange in
     match ekind exp with
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("slice.__new__" as f))}, _)}, cls :: args, []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("slice.__new__" as f, _))}, _)}, cls :: args, []) ->
       Utils.new_wrapper man range flow "slice" cls
         ~fthennew:(fun flow ->
             let intornone = ["int"; "NoneType"] in
@@ -66,17 +66,17 @@ struct
               (fun _ flow -> allocate_builtin man range flow "slice" (Some exp))
           )
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__new__")}, _)} as call, cls :: [up], []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range.__new__", _))}, _)} as call, cls :: [up], []) ->
       let args' = (mk_constant T_int (C_int (Z.of_int 0)) range)::up::(mk_constant T_int (C_int (Z.of_int 1)) range)::[] in
       man.eval {exp with ekind = E_py_call(call, cls :: args', [])} flow
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__new__")}, _)} as call, cls :: [down; up], []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range.__new__", _))}, _)} as call, cls :: [down; up], []) ->
       let args' = down::up::(mk_constant T_int (C_int (Z.of_int 1)) range)::[] in
       man.eval {exp with ekind = E_py_call(call, cls :: args', [])} flow
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range.__new__" as f))}, _)}, cls :: args, []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range.__new__" as f, _))}, _)}, cls :: args, []) ->
       Utils.new_wrapper man range flow "range" cls
         ~fthennew:(fun flow ->
             Utils.check_instances f man flow range args
@@ -84,11 +84,11 @@ struct
               (fun args flow -> allocate_builtin man range flow "range" (Some exp))
           )
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__contains__")}, _)}, args, []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range.__contains__", _))}, _)}, args, []) ->
       (* isinstance(arg1, range) && isinstance(arg2, int) ? *)
       Exceptions.panic "todo: %a@\n" pp_expr exp
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__len__")}, _)}, [arg], []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range.__len__", _))}, _)}, [arg], []) ->
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) arg flow |>
       Eval.bind (fun arg flow ->
           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow
@@ -97,13 +97,20 @@ struct
         )
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range.__iter__" as f))}, _)}, args, []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range.__iter__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args
         ["range"]
         (fun r flow -> allocate_builtin man range flow "range_iterator" (Some exp))
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range_iterator.__next__" as f))}, _)}, args, []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range.__reversed__" as f, _))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args
+        ["range"]
+        (fun r flow -> allocate_builtin man range flow "range_iterator" (Some exp))
+      |> Option.return
+
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range_iterator.__next__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args
         ["range_iterator"]
         (fun _ flow ->
@@ -114,7 +121,7 @@ struct
       |> Option.return
 
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range_iterator.__iter__")}, _)}, [self], []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range_iterator.__iter__", _))}, _)}, [self], []) ->
       man.eval self flow |> Option.return
 
     | _ -> None

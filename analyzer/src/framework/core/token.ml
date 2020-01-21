@@ -79,7 +79,7 @@ struct
 
   let is_empty (tmap: 'a t) : bool =
     top_dfl1 false Map.is_empty tmap
-  
+
   let is_top (lattice: 'a lattice) (tmap: 'a t) : bool =
     top_dfl1 true (fun _ -> false) tmap
 
@@ -174,6 +174,13 @@ struct
 
   let filter (f: token -> 'a -> bool) (tmap: 'a t) : 'a t =
     top_lift1 (Map.filter f) tmap
+
+  let partition (f: token -> 'a -> bool) (tmap: 'a t) : 'a t * 'a t =
+    match tmap with
+    | TOP -> TOP, TOP
+    | Nt a ->
+      let l, r = Map.partition f a in
+      Nt l, Nt r
 
   let map (f: token -> 'a -> 'b) (tmap: 'a t) : 'b t =
     top_lift1 (Map.mapi f) tmap

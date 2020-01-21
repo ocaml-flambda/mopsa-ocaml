@@ -40,6 +40,7 @@ def random_string(): pass
 def stub(f): pass
 def unsupported(f): pass
 def builtin(f, name): pass
+def typedas(name): pass # default is builtin_function_or_method in stdlib.py
 
 # Assertions used in the type analysis
 def assert_list_of(l, ty): pass

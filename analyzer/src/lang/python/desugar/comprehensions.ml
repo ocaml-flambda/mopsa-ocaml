@@ -61,9 +61,16 @@ module Domain =
                                 if_stmt,
                                 empty_stmt)) range in
          let clean_targets = List.fold_left
-             (fun acc (target, _, _) -> match ekind target with
-                | E_var (v, _) -> (mk_remove_var v range)::acc
-                | _ -> Exceptions.panic "Comprehension: target %a is not a variable...@\n" pp_expr target) [] comprehensions in
+             (fun acc (target, _, _) ->
+                Visitor.fold_expr
+                  (fun acc expr ->
+                     debug "expr = %a" pp_expr expr;
+                     match ekind expr with
+                     | E_var (v, _) -> Keep (mk_remove_var v range ::acc)
+                     | E_py_tuple t -> VisitParts acc
+                     | _ -> Exceptions.panic "Comprehension: target %a is not a variable...@\n" pp_expr target
+                  ) (fun acc stmt -> assert false) [] target
+             ) [] comprehensions in
          let stmt = mk_block ((mk_assign acc_var base range) :: (unfold_lc comprehensions) :: clean_targets) range in
          stmt, tmp_acc
 

@@ -102,11 +102,11 @@ struct
       |> Option.return
 
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "set.__new__")}, _)}, cls::args, []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__new__", _))}, _)}, cls::args, []) ->
       Utils.new_wrapper man range flow "set" cls
         ~fthennew:(man.eval (mk_expr (E_py_set []) range))
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__init__" as f))}, _)}, args, []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__init__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args
         ["set"]
         (fun eargs flow ->
@@ -114,7 +114,7 @@ struct
         )
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.clear" as f))}, _)}, args, []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.clear" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args ["set"]
         (fun args flow ->
            let set = List.hd args in
@@ -124,14 +124,14 @@ struct
         )
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__contains__" as f))}, _)}, args, []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__contains__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f ~arguments_after_check:1 man flow range args ["set"]
         (fun args flow ->
            man.eval (mk_py_top T_bool range) flow)
       |> Option.return
 
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, args, [])
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, args, [])
       when is_compare_op_fun "set" f ->
       Utils.check_instances ~arguments_after_check:1 f man flow range args ["set"]
         (fun eargs flow ->
@@ -145,7 +145,7 @@ struct
       |> Option.return
 
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__iter__" as f))}, _)}, args, []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__iter__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args
         ["set"]
         (fun args flow ->
@@ -162,7 +162,7 @@ struct
         )
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "set_iterator.__next__")}, _)}, [iterator], []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set_iterator.__next__", _))}, _)}, [iterator], []) ->
       (* todo: checks ? *)
       man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) iterator flow |>
       Eval.bind (fun iterator flow ->
@@ -177,11 +177,11 @@ struct
         )
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "set_iterator.__iter__")}, _)}, [iterator], []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set_iterator.__iter__", _))}, _)}, [iterator], []) ->
       (* todo: checks ? *)
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) iterator flow |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__len__" as f))}, _)}, args, []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__len__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args
         ["set"]
         (fun args flow ->
@@ -189,7 +189,7 @@ struct
         )
       |> Option.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.add" as f))}, _)}, args, []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.add" as f, _))}, _)}, args, []) ->
       Utils.check_instances f ~arguments_after_check:1 man flow range args
         ["set"]
         (fun args flow ->
@@ -201,7 +201,7 @@ struct
       |> Option.return
 
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_set_of")}, _)}, args, []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.assert_set_of", _))}, _)}, args, []) ->
       bind_list args man.eval flow |>
       bind_some (fun eargs flow ->
           let set, set_v = match eargs with [d;e] -> d,e | _ -> assert false in

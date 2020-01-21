@@ -222,8 +222,7 @@ let addr_group_compare_chain : (addr_group -> addr_group -> int) ref =
 let addr_group_pp_chain : (Format.formatter -> addr_group -> unit) ref =
   ref (fun fmt g ->
       match g with
-      | G_all -> Format.pp_print_string fmt "*"
-      | _ -> panic "addr_group_pp_chain: unknown address"
+      | _ -> Format.pp_print_string fmt "*"
     )
 
 let pp_addr_group fmt ak =
@@ -249,22 +248,10 @@ type addr = {
 let akind addr = addr.addr_kind
 
 let pp_addr fmt a =
-  if compare_addr_group a.addr_group G_all = 0 then
-    fprintf fmt "@@%a:*:%s"
-      pp_addr_kind a.addr_kind
-      (match a.addr_mode with WEAK -> "w" | STRONG -> "s")
-  else
-    fprintf fmt "@@%a:%xd:%s"
-      pp_addr_kind a.addr_kind
-      (* Using Hashtbl.hash leads to collisions. Hashtbl.hash is
-         equivalent to Hashtbl.hash_param 10 100. By increasing the
-         number of meaningful nodes to encounter, collisions are less
-         likely to happen.
-      *)
-      (Hashtbl.hash_param 30 100 a.addr_group)
-      (match a.addr_mode with WEAK -> "w" | STRONG -> "s")
-
-
+  fprintf fmt "@@%a:%a:%s"
+    pp_addr_kind a.addr_kind
+    pp_addr_group a.addr_group
+    (match a.addr_mode with WEAK -> "w" | STRONG -> "s")
 
 let compare_addr a b =
   if a == b then 0

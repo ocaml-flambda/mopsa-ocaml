@@ -124,15 +124,15 @@ def finditer(pattern: Pattern[AnyStr], string: AnyStr,
 @overload
 def sub(pattern: AnyStr, repl: AnyStr, string: AnyStr, count: int = ...,
         flags: _FlagsType = ...) -> AnyStr: ...
-@overload
-def sub(pattern: AnyStr, repl: Callable[[Match[AnyStr]], AnyStr],
-        string: AnyStr, count: int = ..., flags: _FlagsType = ...) -> AnyStr: ...
+# @overload
+# def sub(pattern: AnyStr, repl: Callable[[Match[AnyStr]], AnyStr],
+#         string: AnyStr, count: int = ..., flags: _FlagsType = ...) -> AnyStr: ...
 @overload
 def sub(pattern: Pattern[AnyStr], repl: AnyStr, string: AnyStr, count: int = ...,
         flags: _FlagsType = ...) -> AnyStr: ...
-@overload
-def sub(pattern: Pattern[AnyStr], repl: Callable[[Match[AnyStr]], AnyStr],
-        string: AnyStr, count: int = ..., flags: _FlagsType = ...) -> AnyStr: ...
+# @overload
+# def sub(pattern: Pattern[AnyStr], repl: Callable[[Match[AnyStr]], AnyStr],
+#         string: AnyStr, count: int = ..., flags: _FlagsType = ...) -> AnyStr: ...
 
 @overload
 def subn(pattern: AnyStr, repl: AnyStr, string: AnyStr, count: int = ...,

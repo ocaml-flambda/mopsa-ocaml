@@ -51,7 +51,7 @@
 %token <Z.t> INT
 %token <float> FLOAT
 %token <string> IMAG
-%token <string> STR
+%token <Lexing.position * Lexing.position * string> STR
 %token <string> BYTES
 
 %token INDENT DEDENT NEWLINE
@@ -274,7 +274,9 @@ simple_stmt:
 ;
 
 small_stmt:
-    small_stmt_kind {{skind = $1; srange = from_lexing_range $startpos $endpos}}
+  small_stmt_kind { match $1 with
+                    | Expr e -> {skind = $1; srange = e.erange}
+                    | _ -> {skind = $1; srange= from_lexing_range $startpos $endpos}}
 ;
 
 small_stmt_kind:
@@ -682,7 +684,7 @@ atom:
     | atom_dict         { $1 }
     | name              { {erange = from_lexing_range $startpos $endpos; ekind = Name ($1, Load)} }
     | number            { {erange = from_lexing_range $startpos $endpos; ekind = Num $1} }
-    | strings           { {erange = from_lexing_range $startpos $endpos; ekind = Str $1} }
+    | strings           { let start, stop, str = $1 in {erange = from_lexing_range start stop; ekind = Str str} }
     | bytes             { {erange = from_lexing_range $startpos $endpos; ekind = Bytes $1} }
     | DOT DOT DOT       { {erange = from_lexing_range $startpos $endpos; ekind = Ellipsis} }
     | NONE              { {erange = from_lexing_range $startpos $endpos; ekind = NameConstant SNone} }
@@ -729,7 +731,9 @@ number:
 
 strings:
     | STR           { $1 }
-    | STR strings   { ($1) ^ ($2) }
+    | STR strings   { let start1, stop1, str1 = $1 in
+                      let start2, stop2, str2 = $2 in
+                      (start1, stop2, str1^str2) }
 ;
 
 bytes:
