@@ -365,9 +365,9 @@ struct
              *   Addr_env.Domain.allocate_builtin ~mode:WEAK man range flow "object" (Some e) *)
             | "object" ->
               warn_at range "Any transformed into object here";
-              Addr_env.Domain.allocate_builtin ~mode:WEAK man range flow (get_orig_vname v) (Some e)
+              T_string.Domain.allocate_builtin ~mode:WEAK man range flow (get_orig_vname v) (Some e)
             | _ ->
-              Addr_env.Domain.allocate_builtin ~mode:WEAK man range flow (get_orig_vname v) (Some e)
+              T_string.Domain.allocate_builtin ~mode:WEAK man range flow (get_orig_vname v) (Some e)
           end
           |> Option.return
 
@@ -743,8 +743,11 @@ struct
 
   let ask _ _ _ = None
   let refine channel man flow = Channel.return flow
-  let merge _ _ _ = assert false
-
+  let merge pre (a, log) (a', log') =
+    if a == a' then a
+    else if Log.is_empty log' then a
+    else if Log.is_empty log then a'
+    else let () = debug "pre=%a@.a=%alog=%a@.a'=%alog'=%a@." print pre print a Log.print log print a' Log.print log' in assert false
 end
 
 let () =

@@ -149,7 +149,7 @@ module Domain =
                                       let flow = Flow.fold (fun acc tk env ->
                                           match tk with
                                           | Alarms.T_py_exception _ ->
-                                            warn_at range "call to __getattribute__ failed with token %anow trying __getattr__" pp_token tk;
+                                            warn_at range "call to __getattribute__ failed with token %a now trying __getattr__" pp_token tk;
                                             Flow.add T_cur env man.lattice acc
                                           | _ -> Flow.add tk env man.lattice acc) (Flow.bottom_from flow) flow in
                                       let flow = Flow.join man.lattice flow_exn_before flow in

@@ -22,7 +22,7 @@
 (** An environment is a total map from variables to addresses. *)
 
 open Mopsa
-open Sig.Domain.Intermediate
+open Sig.Stacked.Intermediate
 open Ast
 open Addr
 open Universal.Ast
@@ -121,6 +121,10 @@ struct
       (ASet)
 
   include AMap
+  let subset _ _ (l1, r1) (l2, r2)  = AMap.subset l1 l2, r1, r2
+  let join _ _ (l1, r1) (l2, r2) = AMap.join l1 l2, r1, r2
+  let meet _ _ (l1, r1) (l2, r2) = AMap.meet l1 l2, r1, r2
+  let widen _ uctx (l1, r1) (l2, r2) = AMap.widen uctx l1 l2, r1, r2, false (* FIXME: or true? *)
 
   include Framework.Core.Id.GenDomainId(struct
       type nonrec t = t
@@ -445,7 +449,7 @@ struct
 
     | _ -> None
 
-  let ask : type r. r query -> ('a, t) man -> 'a flow -> r option =
+  let ask : type r. r query -> ('a, t, 's) man -> 'a flow -> r option =
     fun query man flow ->
       match query with
       | Framework.Engines.Interactive.Q_print_var ->
@@ -471,4 +475,4 @@ struct
 end
 
 let () =
-  Framework.Core.Sig.Domain.Intermediate.register_domain (module Domain);
+  Framework.Core.Sig.Stacked.Intermediate.register_stack (module Domain);

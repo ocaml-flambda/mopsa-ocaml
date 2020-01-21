@@ -148,7 +148,11 @@ struct
     | _ -> None
 
   let refine channel man flow = Channel.return flow
-  let merge _ _ _ = assert false
+  let merge pre (a, log) (a', log') =
+    if a == a' then a
+    else if Log.is_empty log' then a
+    else if Log.is_empty log then a'
+    else let () = debug "pre=%a@.a=%alog=%a@.a'=%alog'=%a@." print pre print a Log.print log print a' Log.print log' in assert false
 end
 
 let () = Framework.Core.Sig.Domain.Intermediate.register_domain (module Domain);

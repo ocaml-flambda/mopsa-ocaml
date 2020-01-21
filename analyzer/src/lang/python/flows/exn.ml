@@ -112,9 +112,11 @@ module Domain =
         let flow_caught_finally =
           Flow.join man.lattice orelse_flow flow_caught |>
           apply_finally finally in
+
         let flow_uncaught = Flow.copy_ctx flow_caught_finally flow_uncaught in
         let flow_uncaught_finally =
           apply_finally finally flow_uncaught in
+
         let flow = Flow.join man.lattice flow_caught_finally flow_uncaught_finally in
 
         (* Restore old exceptions *)

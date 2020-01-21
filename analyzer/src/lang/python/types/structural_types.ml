@@ -85,7 +85,12 @@ struct
     Format.fprintf fmt "attributes: @[%a@]@\n"
       AMap.print d
 
-  let merge _ _ _ = assert false
+  let merge pre (a, log) (a', log') =
+    if a == a' then a
+    else if Log.is_empty log' then a
+    else if Log.is_empty log then a'
+    else let () = debug "pre=%a@.a=%alog=%a@.a'=%alog'=%a@." print pre print a Log.print log print a' Log.print log' in assert false
+
 
   let init progr man flow =
     set_env T_cur empty man flow

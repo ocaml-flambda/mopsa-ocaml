@@ -117,19 +117,36 @@ module Domain =
             -> true
       | _ -> false
 
+
+    let allocate_builtin ?(mode=STRONG) man range flow bltin oe =
+      (* allocate addr, and map this addr to inst bltin *)
+      let range = tag_range range "alloc_%s" bltin in
+      let cls = fst @@ find_builtin bltin in
+      man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr ~mode:mode (A_py_instance cls) range) flow |>
+      Eval.bind (fun eaddr flow ->
+          let addr = match ekind eaddr with
+            | E_addr a -> a
+            | _ -> assert false in
+          man.exec ~zone:Zone.Z_py_obj (mk_add eaddr range) flow |>
+          Eval.singleton (mk_py_object (addr, oe) range)
+        )
+
+
+
+
     let rec eval zs exp (man: ('a, unit) man) (flow:'a flow) =
       let range = erange exp in
       match ekind exp with
       | E_constant (C_top T_string) ->
-        Addr_env.Domain.allocate_builtin man range flow "str" (Some exp) |> Option.return
+        allocate_builtin man range flow "str" (Some exp) |> Option.return
 
       | E_constant (C_string s) ->
-        Addr_env.Domain.allocate_builtin man range flow "str" (Some exp) |> Option.return
+        allocate_builtin man range flow "str" (Some exp) |> Option.return
       (* we keep s in the expression of the returned object *)
 
       | E_constant (C_top T_py_bytes)
       | E_py_bytes _ ->
-        Addr_env.Domain.allocate_builtin man range flow "bytes" (Some exp) |> Option.return
+        allocate_builtin man range flow "bytes" (Some exp) |> Option.return
 
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, args, []) when StringMap.mem f stub_base ->
