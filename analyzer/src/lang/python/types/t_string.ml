@@ -44,16 +44,18 @@ module Domain =
         | "int" -> T_int
         | "float" -> T_float F_DOUBLE
         | "str" -> T_string
+        | "bytes" -> T_py_bytes
         | "NoneType" -> T_py_none
         | "NotImplementedType" -> T_py_not_implemented
         | _ -> assert false in
       StringMap.add funname {in_args; out_type} db
 
     let stub_base =
-      let str = "str" and int = "int" and bool = "bool" in
+      let str = "str" and int = "int" and bool = "bool" and bytes = "bytes" in
       StringMap.empty |>
       add_signature "str.__contains__" [str; str] bool |>
       add_signature "str.__len__" [str] int |>
+      add_signature "bytes.__len__" [bytes] int |>
       add_signature "str.__mul__" [str; int] str |>
       add_signature "str.__rmul__" [str; int] str |>
 
@@ -68,6 +70,7 @@ module Domain =
       add_signature "str.lower" [str] str |>
       add_signature "str.lstrip" [str] str |>
       add_signature "str.replace" [str; str; str] str |>
+      add_signature "bytes.replace" [bytes; bytes; bytes] bytes |>
       add_signature "str.rfind" [str; str] int |>
       add_signature "str.rjust" [str; int] str |>
       add_signature "str.rstrip" [str] str |>
@@ -114,28 +117,45 @@ module Domain =
             -> true
       | _ -> false
 
+
+    let allocate_builtin ?(mode=STRONG) man range flow bltin oe =
+      (* allocate addr, and map this addr to inst bltin *)
+      let range = tag_range range "alloc_%s" bltin in
+      let cls = fst @@ find_builtin bltin in
+      man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr ~mode:mode (A_py_instance cls) range) flow |>
+      Eval.bind (fun eaddr flow ->
+          let addr = match ekind eaddr with
+            | E_addr a -> a
+            | _ -> assert false in
+          man.exec ~zone:Zone.Z_py_obj (mk_add eaddr range) flow |>
+          Eval.singleton (mk_py_object (addr, oe) range)
+        )
+
+
+
+
     let rec eval zs exp (man: ('a, unit) man) (flow:'a flow) =
       let range = erange exp in
       match ekind exp with
       | E_constant (C_top T_string) ->
-        Addr_env.Domain.allocate_builtin man range flow "str" (Some exp) |> Option.return
+        allocate_builtin man range flow "str" (Some exp) |> Option.return
 
       | E_constant (C_string s) ->
-        Addr_env.Domain.allocate_builtin man range flow "str" (Some exp) |> Option.return
+        allocate_builtin man range flow "str" (Some exp) |> Option.return
       (* we keep s in the expression of the returned object *)
 
       | E_constant (C_top T_py_bytes)
       | E_py_bytes _ ->
-        Addr_env.Domain.allocate_builtin man range flow "bytes" (Some exp) |> Option.return
+        allocate_builtin man range flow "bytes" (Some exp) |> Option.return
 
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, args, []) when StringMap.mem f stub_base ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, args, []) when StringMap.mem f stub_base ->
         debug "function %s in stub_base, processing@\n" f;
         let {in_args; out_type} = StringMap.find f stub_base in
         process_simple f man flow range args in_args out_type
         |> Option.return
 
-      | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.__new__")}, _)}), [cls; obj], []) ->
+      | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__new__", _))}, _)}), [cls; obj], []) ->
         (* from unicode_new in unicodeobject.c
            1) if type is not str then call unicode_subtype_new (not handled but asserts that type is subtype of str)
            2) other cases unhandled too
@@ -168,7 +188,7 @@ module Domain =
         (* man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_string range) flow |> Option.return *)
 
       (* 𝔼⟦ str.__op__(e1, e2) | op ∈ {==, !=, <, ...} ⟧ *)
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, [e1; e2], [])
         when is_compare_op_fun "str" f ->
         bind_list [e1; e2] (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
         bind_some (fun el flow ->
@@ -193,7 +213,7 @@ module Domain =
           )
         |>  Option.return
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, [e1; e2], [])
         when is_str_binop_fun f ->
         bind_list [e1; e2] (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
         bind_some (fun el flow ->
@@ -219,7 +239,7 @@ module Domain =
         |>  Option.return
 
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__mod__" as f))}, _)}, args, []) ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__mod__" as f, _))}, _)}, args, []) ->
         Utils.check_instances ~arguments_after_check:1 f man flow range args ["str"]
           (fun eargs flow ->
              (* TODO: constant strings are kept in the objects, so we could raise less alarms *)
@@ -231,19 +251,31 @@ module Domain =
           )
         |> Option.return
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__getitem__" as f))}, _)}, args, []) ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__rmod__" as f, _))}, _)}, args, []) ->
+        Utils.check_instances ~arguments_after_check:1 f man flow range args ["str"]
+          (fun eargs flow ->
+             (* TODO: constant strings are kept in the objects, so we could raise less alarms *)
+             let tyerror_f = man.exec (Utils.mk_builtin_raise_msg "ValueError" "incomplete format" range) flow in
+             let flow = Flow.copy_ctx tyerror_f flow in
+             let res = man.eval (mk_py_top T_string range) flow in
+             let tyerror = tyerror_f |> Eval.empty_singleton in
+             Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Eval.copy_ctx res tyerror :: res :: [])
+          )
+        |> Option.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__getitem__" as f, _))}, _)}, args, []) ->
         Utils.check_instances_disj f man flow range args
           [["str"]; ["int"; "slice"]]
           (fun _ flow -> man.eval (mk_py_top T_string range) flow)
         |> Option.return
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bytes.__getitem__" as f))}, _)}, args, []) ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bytes.__getitem__" as f, _))}, _)}, args, []) ->
         Utils.check_instances_disj f man flow range args
           [["bytes"]; ["int"; "slice"]]
           (fun _ flow -> man.eval (mk_py_top T_py_bytes range) flow)
         |> Option.return
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__iter__" as f))}, _)}, args, []) ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__iter__" as f, _))}, _)}, args, []) ->
         Utils.check_instances f man flow range args
           ["str"]
           (fun args flow ->
@@ -260,7 +292,7 @@ module Domain =
           )
         |> Option.return
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str_iterator.__next__" as f))}, _)}, args, []) ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str_iterator.__next__" as f, _))}, _)}, args, []) ->
         Utils.check_instances f man flow range args
           ["str_iterator"]
           (fun _ flow ->
@@ -272,12 +304,12 @@ module Domain =
           )
         |> Option.return
 
-      | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.encode")}, _)}) as caller, [arg], [])
-      | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "bytes.decode")}, _)}) as caller, [arg], []) ->
+      | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.encode", _))}, _)}) as caller, [arg], [])
+      | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bytes.decode", _))}, _)}) as caller, [arg], []) ->
         let encoding = mk_expr (E_constant (C_string "utf-8")) range in
         eval zs {exp with ekind = E_py_call(caller, [arg; encoding], [])} man flow
 
-      | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.encode" as f))}, _)}), [arg; encoding], []) ->
+      | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.encode" as f, _))}, _)}), [arg; encoding], []) ->
         (* FIXME: check encoding? *)
         Utils.check_instances f man flow range [arg; encoding]
           ["str"; "str"]
@@ -292,7 +324,7 @@ module Domain =
           )
         |> Option.return
 
-      | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bytes.decode" as f))}, _)}), [arg; encoding], []) ->
+      | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bytes.decode" as f, _))}, _)}), [arg; encoding], []) ->
         (* FIXME: check encoding? *)
         Utils.check_instances f man flow range [arg; encoding]
           ["bytes"; "str"]
@@ -307,6 +339,41 @@ module Domain =
           )
         |> Option.return
 
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bytes.strip" as f, _))}, _)}, args, []) ->
+        Utils.check_instances f man flow range args
+          ["bytes"]
+          (fun eargs flow -> man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_py_bytes range) flow)
+        |> Option.return
+
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__repr__" as f, _))}, _)}, args, [])
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__str__" as f, _))}, _)}, args, []) ->
+        Utils.check_instances f man flow range args
+          ["str"]
+          (fun eargs flow -> Eval.singleton (List.hd eargs) flow)
+        |> Option.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.format" as f, _))}, _)}, args, kwargs) ->
+        Utils.check_instances ~arguments_after_check:(List.length args - 1) f man flow range args ["str"]
+          (fun eargs flow ->
+             (* TODO: constant strings are kept in the objects, so we could raise less alarms *)
+             let tyerror_f = man.exec (Utils.mk_builtin_raise_msg "ValueError" "incomplete format" range) flow in
+             let flow = Flow.copy_ctx tyerror_f flow in
+             let res = man.eval (mk_py_top T_string range) flow in
+             let tyerror = tyerror_f |> Eval.empty_singleton in
+             Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Eval.copy_ctx res tyerror :: res :: [])
+          )
+        |> Option.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.index" as f, _))}, _)}, args, []) ->
+        Utils.check_instances f man flow range args
+          ["str"; "str"]
+          (fun eargs flow ->
+             Eval.join
+               (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow)
+               (man.exec (Utils.mk_builtin_raise_msg "ValueError" "substring not found" range) flow |> Eval.empty_singleton)
+          )
+        |> Option.return
 
       | _ -> None
 

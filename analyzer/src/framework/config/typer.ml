@@ -213,9 +213,10 @@ let smallest_signature (l:config list) : signature =
 
 (** Find the highest signature below [s] verifying the predicate [pred] *)
 let rec find_available_signature s pred =
-  if pred s
-  then s
-  else find_available_signature (downgrade s) pred
+  if pred s then s else
+    let ss = downgrade s in
+    if ss = s then Exceptions.panic "no operator for signature %a" pp_signature s
+    else find_available_signature ss pred
 
 (** Create a chain of a list of unified configurations *)
 let unified_chain spec op l =

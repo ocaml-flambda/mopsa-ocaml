@@ -22,7 +22,7 @@
 (** An environment is a total map from variables to addresses. *)
 
 open Mopsa
-open Sig.Domain.Intermediate
+open Sig.Stacked.Intermediate
 open Ast
 open Addr
 open Universal.Ast
@@ -121,6 +121,10 @@ struct
       (ASet)
 
   include AMap
+  let subset _ _ (l1, r1) (l2, r2)  = AMap.subset l1 l2, r1, r2
+  let join _ _ (l1, r1) (l2, r2) = AMap.join l1 l2, r1, r2
+  let meet _ _ (l1, r1) (l2, r2) = AMap.meet l1 l2, r1, r2
+  let widen _ uctx (l1, r1) (l2, r2) = AMap.widen uctx l1 l2, r1, r2, false (* FIXME: or true? *)
 
   include Framework.Core.Id.GenDomainId(struct
       type nonrec t = t
@@ -191,6 +195,13 @@ struct
                   flow
                 end |>
                 Post.return
+
+              | E_constant (C_top T_any) ->
+                let cur = get_env T_cur man flow in
+                let aset = ASet.top in
+                set_env T_cur (add v aset cur) man flow
+                |> Post.return
+
 
               | _ -> Exceptions.panic_at range "%a@\n" pp_expr e
           )
@@ -340,10 +351,10 @@ struct
             let flow = set_env T_cur (AMap.add v (ASet.singleton a) cur) man flow in
             let flow = Flow.set_ctx annots flow in
             match a with
-            | Undef_global when is_builtin_name (get_orig_vname v) ->
+            | Undef_global when is_builtin_var v ->
               (Eval.singleton (mk_py_object (find_builtin (get_orig_vname v)) range) flow :: acc, annots)
 
-            | Undef_local when is_builtin_name (get_orig_vname v) ->
+            | Undef_local when is_builtin_var v ->
               (Eval.singleton (mk_py_object (find_builtin @@ get_orig_vname v) range) flow :: acc, annots)
 
             | Undef_global ->
@@ -353,7 +364,7 @@ struct
               (Eval.empty_singleton flow :: acc, Flow.get_ctx flow)
 
             | Undef_local ->
-              debug "Incoming UnboundLocalError, on var %a, range %a, cs = %a @\n" pp_var v pp_range range Callstack.print (Flow.get_callstack flow);
+              debug "Incoming UnboundLocalError, on var %a, range %a, cs = %a @\ncur = %a@\n" pp_var v pp_range range Callstack.print (Flow.get_callstack flow) man.lattice.print (Flow.get T_cur man.lattice flow);
               Format.fprintf Format.str_formatter "local variable '%a' referenced before assignment" pp_var v;
               let flow = man.exec (Utils.mk_builtin_raise_msg "UnboundLocalError" (Format.flush_str_formatter ()) range) flow in
               (Eval.empty_singleton flow :: acc, Flow.get_ctx flow)
@@ -367,7 +378,7 @@ struct
         let evals = List.map (Eval.set_ctx annot) evals in
         evals |> Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow)
         |> Option.return
-      else if is_builtin_name @@ get_orig_vname v then
+      else if is_builtin_var v then
         (* let () = debug "bla %s %s %d" v.org_vname v.uniq_vname v.vuid in *)
         (* man.eval (mk_py_object (find_builtin v.org_vname) range) flow |> Option.return *)
         let () = debug "is it a builtin?" in
@@ -396,12 +407,14 @@ struct
       Eval.singleton (mk_py_object (addr_notimplemented (), None) range) flow |> Option.return
 
     | E_unop(O_log_not, e') ->
+      (* bool is called in desugar/bool *)
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e' (*(Utils.mk_builtin_call "bool" [e'] range)*) flow |>
       Eval.bind
-        (fun exp flow ->
-           match ekind exp with
+        (fun ee' flow ->
+           match ekind ee' with
+           (* FIXME: weird cases *)
            | E_constant (C_top T_bool) ->
-             Eval.singleton exp flow
+             Eval.singleton ee' flow
            | E_constant (C_bool true) ->
              Eval.singleton (mk_py_false range) flow
            | E_constant (C_bool false) ->
@@ -411,9 +424,9 @@ struct
            | E_py_object (a, _) when compare_addr a (addr_false ()) = 0 ->
              man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_true range) flow
            | E_py_object (a, _) when compare_addr a (addr_bool_top ()) = 0 ->
-             Eval.singleton exp flow
+             Eval.singleton ee' flow
            | _ ->
-             Exceptions.panic "not ni on %a@\n" pp_expr exp
+             panic_at range "o_log_not ni on %a" pp_expr ee'
         )
       |> Option.return
 
@@ -424,25 +437,26 @@ struct
           begin match ekind e1, ekind e2 with
             | E_py_object (a1, _), E_py_object (a2, _) when
                 compare_addr a1 a2 = 0 &&
-                (compare_addr a1 (addr_notimplemented ()) = 0 || compare_addr a1 (addr_none ()) = 0) ->
+                (compare_addr a1 (addr_notimplemented ()) = 0 || compare_addr a1 (addr_none ()) = 0 ||
+                 compare_addr a2 (addr_notimplemented ()) = 0 || compare_addr a2 (addr_none ()) = 0) ->
               man.eval (mk_py_true range) flow
+            | E_py_object (a1, _), E_py_object (a2, _) when compare_addr_kind (akind a1) (akind a2) <> 0 ->
+              man.eval (mk_py_false range) flow
             | _ -> man.eval (mk_py_top T_bool range) flow
           end
         )
       |> Option.return
 
-
-
     | _ -> None
 
-  let ask : type r. r query -> ('a, t) man -> 'a flow -> r option =
+  let ask : type r. r query -> ('a, t, 's) man -> 'a flow -> r option =
     fun query man flow ->
       match query with
       | Framework.Engines.Interactive.Q_print_var ->
         Option.return @@
         fun fmt var_as_string ->
         let cur = get_env T_cur man flow in
-        let cur_v = AMap.filter (fun var _ -> get_orig_vname var = var_as_string) cur in
+        let cur_v = AMap.filter (fun var _ -> get_orig_vname ~warn:false var = var_as_string) cur in
         Format.fprintf fmt "%a@\n" AMap.print cur_v;
         AMap.fold (fun var aset () ->
             ASet.fold (fun addr () ->
@@ -461,4 +475,4 @@ struct
 end
 
 let () =
-  Framework.Core.Sig.Domain.Intermediate.register_domain (module Domain);
+  Framework.Core.Sig.Stacked.Intermediate.register_stack (module Domain);

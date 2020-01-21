@@ -1,0 +1,5 @@
+#!/bin/bash
+MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/.."
+CONFIG=python/polymorphic-types.json
+
+${MOPSADIR}/bin/mopsa -config=${CONFIG}  -widening-delay=0 -loop-unrolling=2 -unprecise-exn=IndexError -unprecise-exn=ValueError -unprecise-exn=KeyError -unprecise-exn=OverflowError $@ #-debug=warning $@

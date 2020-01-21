@@ -138,12 +138,21 @@ struct
     match query with
     | Q_strings_of_var v ->
       let cur = get_env T_cur man flow in
-      Some (StringSet.fold (fun str acc -> acc ^ " \\/ " ^ str) (Option.default StringSet.empty (SMap.find_opt v cur)) "")
+      let strset = Option.default StringSet.empty (SMap.find_opt v cur) in
+      if StringSet.is_top strset then
+        let () = warn "Q_strings_of_var top" in Some "T"
+      else
+        let s = StringSet.fold (fun str acc -> acc ^ " \\/ " ^ str) strset "" in
+        Some (String.sub s 4 (String.length s - 4))
 
     | _ -> None
 
   let refine channel man flow = Channel.return flow
-  let merge _ _ _ = assert false
+  let merge pre (a, log) (a', log') =
+    if a == a' then a
+    else if Log.is_empty log' then a
+    else if Log.is_empty log then a'
+    else let () = debug "pre=%a@.a=%alog=%a@.a'=%alog'=%a@." print pre print a Log.print log print a' Log.print log' in assert false
 end
 
 let () = Framework.Core.Sig.Domain.Intermediate.register_domain (module Domain);

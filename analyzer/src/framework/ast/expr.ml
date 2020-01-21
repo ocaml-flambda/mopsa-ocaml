@@ -109,6 +109,9 @@ let compare_expr e1 e2 =
 let pp_expr fmt e =
   TypeExt.print expr_pp_chain fmt e
 
+let pp_expr_with_range fmt e =
+  Format.fprintf fmt "%a@%a" (TypeExt.print expr_pp_chain) e pp_range e.erange
+
 let () =
   register_expr {
     compare = (fun next e1 e2 ->

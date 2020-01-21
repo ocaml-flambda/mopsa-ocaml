@@ -48,7 +48,7 @@ struct
   let rec eval zones exp man flow =
     let range = erange exp in
     match ekind exp with
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.join" as f))}, _)}, args, []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.join" as f, _))}, _)}, args, []) ->
       bind_list args man.eval flow |>
       bind_some
         (fun eargs flow ->

@@ -85,7 +85,12 @@ struct
     Format.fprintf fmt "attributes: @[%a@]@\n"
       AMap.print d
 
-  let merge _ _ _ = assert false
+  let merge pre (a, log) (a', log') =
+    if a == a' then a
+    else if Log.is_empty log' then a
+    else if Log.is_empty log then a'
+    else let () = debug "pre=%a@.a=%alog=%a@.a'=%alog'=%a@." print pre print a Log.print log print a' Log.print log' in assert false
+
 
   let init progr man flow =
     set_env T_cur empty man flow
@@ -164,16 +169,41 @@ struct
         | A_py_module (M_user(name, globals)) ->
           Eval.singleton (mk_py_bool (List.exists (fun v -> get_orig_vname v = attr) globals) range) flow
         | A_py_class (C_builtin _, _)
-        | A_py_class (C_annot _, _)
         | A_py_function (F_builtin _)
         | A_py_module _ ->
           Eval.singleton (mk_py_bool (is_builtin_attribute (object_of_expr e) attr) range) flow
+
+        | A_py_class (C_annot c, _) ->
+          Eval.singleton (mk_py_bool (
+              List.exists (fun v -> get_orig_vname v = attr) c.py_cls_a_static_attributes
+              || is_builtin_attribute (object_of_expr e) attr
+                                       ) range) flow
 
         | A_py_function f ->
           Eval.singleton (mk_py_false range) flow
 
         | A_py_class (C_user c, b) ->
-          Eval.singleton (mk_py_bool (List.exists (fun v -> get_orig_vname v = attr) c.py_cls_static_attributes) range) flow
+          if (List.exists (fun v -> get_orig_vname v = attr) c.py_cls_static_attributes) then
+            Eval.singleton (mk_py_true range) flow
+          else
+            let cur = get_env T_cur man flow in
+            let oaset = AMap.find_opt addr cur in
+            begin match oaset with
+              | None -> Eval.singleton (mk_py_false range) flow
+              | Some aset ->
+                if AttrSet.mem_u attr aset then
+                  Eval.singleton (mk_py_true range) flow
+                else if AttrSet.mem_o attr aset then
+                  let cur_t = AMap.add addr (AttrSet.add_u attr aset) cur in
+                  let cur_f = AMap.add addr (AttrSet.remove attr aset) cur in
+                  let flow_t = set_env T_cur cur_t man flow in
+                  let flow_f = set_env T_cur cur_f man flow in
+                  Eval.join
+                    (Eval.singleton (mk_py_true range) flow_t)
+                    (Eval.singleton (mk_py_false range) flow_f)
+                else
+                  Eval.singleton (mk_py_false range) flow
+            end
 
         | A_py_instance _ ->
           let cur = get_env T_cur man flow in
@@ -243,12 +273,32 @@ struct
           Eval.singleton (mk_py_object (find_builtin_attribute (object_of_expr e) attr) range) flow
 
         | A_py_class (C_annot c, _) ->
-          Eval.singleton (mk_py_object (find_builtin_attribute (object_of_expr e) attr) range) flow
+          let rec find_annot stmt = match skind stmt with
+            | S_block (s, _) -> List.fold_left
+                             (fun acc st ->
+                                match acc with
+                                | None -> find_annot st
+                                | Some _ -> acc
+                             ) None s
+            | S_py_annot({ekind = E_var(v, _)}, annot) when get_orig_vname v = attr -> Some annot
+            | _ -> None in
+          let obj =
+            try
+              mk_py_object (find_builtin_attribute (object_of_expr e) attr) range
+            with Not_found ->
+              Option.none_to_exn @@ find_annot c.py_cls_a_body in
+          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) obj  flow
 
 
         | A_py_class (C_user c, b) ->
-          let f = List.find (fun x -> get_orig_vname x = attr) c.py_cls_static_attributes in
-          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var f range) flow
+          let f = List.find_opt (fun x -> get_orig_vname x = attr) c.py_cls_static_attributes in
+          begin match f with
+            | Some f ->
+              man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var f range) flow
+            | None ->
+              let attr_var = mk_addr_attr addr attr T_any in
+              man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var attr_var range) flow
+          end
 
         | A_py_instance _ ->
           (* there should be a positive hasattr before, so we just evaluate the addr_attr var *)
@@ -279,7 +329,13 @@ struct
         | E_py_object (alval, _), _ ->
           debug "in here!@\n";
           let cur = get_env T_cur man flow in
-          let old_inst = AMap.find alval cur in
+          let old_inst =
+            try
+              AMap.find alval cur
+            with Not_found ->
+              let () = warn_at range "during setattr over %a, fields not found, put to emptyset by default" pp_expr lval in
+              AttrSet.empty
+          in
           let cur = AMap.add alval ((if alval.addr_mode = STRONG then AttrSet.add_u else AttrSet.add_o) attr old_inst) cur in
           let flow = set_env T_cur cur man flow in
           (* now we create an attribute var *)
@@ -310,6 +366,10 @@ struct
           Option.return
       end
 
+    | E_py_ll_setattr(e, attr, o) ->
+      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
+      Eval.bind (fun e flow -> man.eval {exp with ekind = E_py_ll_setattr(e, attr, o)} flow) |> Option.return
+
     | _ ->
       None
 
@@ -328,8 +388,8 @@ struct
             | A_py_class (c, b) ->
               begin match c with
                 | C_builtin name | C_unsupported name -> name
-                | C_user c -> get_orig_vname c.py_cls_var
-                | C_annot c -> get_orig_vname c.py_cls_a_var
+                | C_user c -> get_orig_vname ~warn:false c.py_cls_var
+                | C_annot c -> get_orig_vname ~warn:false c.py_cls_a_var
               end
             | _ -> assert false
           in

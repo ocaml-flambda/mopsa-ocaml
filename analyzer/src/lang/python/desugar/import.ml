@@ -75,7 +75,7 @@ module Domain =
 
       | S_py_import_from(modul, name, _, vmodul) ->
         (* FIXME: objects defined in modul other than name should not appear *)
-        debug "importing module %s" name;
+        debug "importing %s from module %s" name modul;
         let obj, flow, ispyi = import_module man modul range flow in
         debug "import ok, adding a few eq";
         (* FIXME: terrible disjunction *)
@@ -148,6 +148,7 @@ module Domain =
                 else
                   let () = warn_at range "module %s not found (searched in %s and in %s and in the current directory)" name dir (dir ^ "/typeshed/") in
                   raise (Module_not_found name) in
+              let () = debug "importing file %s" filename in
               let (a, e), body, is_stub, flow =
                 if filename = dir ^ "/typeshed/" ^ name ^ ".pyi" then
                   let o, b, flow = import_stubs_module man (dir ^ "/typeshed") name flow in
@@ -156,7 +157,7 @@ module Domain =
                   let prog = Frontend.parse_program [filename] in
                   let globals, body =
                     match prog.prog_kind with
-                    | Py_program(globals, body) -> globals, body
+                    | Py_program(_, globals, body) -> globals, body
                     | _ -> assert false
                   in
                   let addr = {
@@ -183,7 +184,10 @@ module Domain =
       then panic "builtin module %s not found" file;
 
       let path = dir ^ "/" ^ file in
-      let stmt = Frontend.parse_file path in
+      let stmt =
+        match (Frontend.parse_program [path]).prog_kind with
+        | Ast.Py_program (_, _, b) -> b
+        | _ -> assert false in
       (* FIXME: pour les fonctions récursives, ça marche ça ? *)
       (* pour les variables globales : collecter les variables globales, puis faire des man.exec dessus ? *)
       (* et pour les modules normaux, il y a aussi un pb sur les noms de variables, non ? *)
@@ -210,7 +214,9 @@ module Domain =
           let kind =
             if Libs.Py_mopsa.is_stub_fundec fundec then F_user fundec else
             if Libs.Py_mopsa.is_unsupported_fundec fundec then F_unsupported name
-            else F_builtin name
+            else F_builtin (name, Libs.Py_mopsa.builtin_type_name
+                              (if name = "stdlib" then "builtin_function_or_method" else "function")
+                              fundec)
           in
           let addr = {
             addr_kind = A_py_function kind;
@@ -244,10 +250,10 @@ module Domain =
       debug "import_stubs_module %s %s" base name;
       let prog = Frontend.parse_program [(base ^ "/" ^ name ^ ".pyi")] in
       let globals, stmts = match prog.prog_kind with
-        | Py_program(g, b) -> g, b
+        | Py_program(_, g, b) -> g, b
         | _ -> assert false in
       let rec parse basename stmt globals flow : stmt * var list * 'a flow  =
-        debug "parse %a" pp_stmt stmt;
+        debug "parse (basename=%a) %a" (Option.print Format.pp_print_string) basename pp_stmt stmt;
         let range = srange stmt in
         match skind stmt with
         | S_assign ({ekind = E_var (v, _)}, e) ->
@@ -312,13 +318,16 @@ module Domain =
                           let obases = match ebases with
                             | [] -> [find_builtin "object"]
                             | _ -> List.map object_of_expr ebases in
+                          let ebases = match ebases with
+                            | [] -> [mk_py_object (find_builtin "object") range]
+                            | _ -> ebases in
                           let name = mk_dot_name basename (get_orig_vname c.py_cls_var) in
                           let py_cls_a_body, globals, flow = parse (Some name) c.py_cls_body globals flow in
                           debug "body of %s: %a" name pp_stmt py_cls_a_body;
                           let newc =
                             { py_cls_a_var = set_orig_vname name c.py_cls_var;
                               py_cls_a_body;
-                              py_cls_a_bases = bases;
+                              py_cls_a_bases = ebases;
                               py_cls_a_static_attributes = c.py_cls_static_attributes;
                               py_cls_a_abases = abases;
                               py_cls_a_range = c.py_cls_range;
@@ -353,7 +362,10 @@ module Domain =
                       py_funcs_exceptions =
                         (debug "for %a, py_func_body = %a" pp_var f.py_func_var pp_stmt f.py_func_body;
                           match skind f.py_func_body with
-                         | S_block ({skind = S_py_raise (Some e)}::_, _) -> [e]
+                          | S_block (s, _) ->
+                            List.fold_left (fun acc st -> match skind st with
+                                | S_py_raise (Some e) -> e::acc
+                                | _ -> acc) [] s
                          | _ -> []);
                       py_funcs_types_in = f.py_func_types_in;
                       py_funcs_type_out = f.py_func_type_out;
@@ -385,7 +397,8 @@ module Domain =
           let newblock = List.rev newblock in
           {stmt with skind = S_block (newblock, [])}, newglobals, newflow
 
-        | S_expression {ekind = (E_constant C_py_ellipsis)} ->
+        | S_expression {ekind = (E_constant C_py_ellipsis)}
+        | S_expression {ekind = (E_constant (C_string _))} ->
           {stmt with skind = S_block ([], [])}, globals, flow
 
         | _ -> panic_at range "stmt %a not supported in stubs file %s" pp_stmt stmt name

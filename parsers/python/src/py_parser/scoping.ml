@@ -68,17 +68,26 @@ and translate_stmt (scope: (var list) * (var list)) stmt =
     let func_locals = List.map create_new_uid f.func_locals in
     let func_parameters = List.map create_new_uid f.func_parameters in
     let func_defaults = List.map (translate_expr_option scope) f.func_defaults in
+    let func_vararg = Option.lift create_new_uid f.func_vararg in
+    let func_kwonly_args = List.map create_new_uid f.func_kwonly_args in
+    let func_kwonly_defaults = List.map (translate_expr_option scope) f.func_kwonly_defaults in
+    let func_kwarg = Option.lift create_new_uid f.func_kwarg in
     let func_decors = List.map (translate_expr scope) f.func_decors in
     let func_types_in = List.map (translate_expr_option scope) f.func_types_in in
     let func_type_out = translate_expr_option scope f.func_type_out in
-    let parent_scope = List.filter (fun v -> List.for_all (fun v' -> v.name != v'.name ) (func_locals @ func_parameters)) lscope in
-    let new_lscope = func_var :: func_parameters @ func_locals @ func_nonlocals @ parent_scope in
+    let other_parameters = (match func_vararg with | None -> [] | Some v -> [v]) @ func_kwonly_args @ (match func_kwarg with | None -> [] | Some v -> [v]) in
+    let parent_scope = List.filter (fun v -> List.for_all (fun v' -> v.name != v'.name ) (func_locals @ func_parameters @ other_parameters)) lscope in
+    let new_lscope = func_var :: func_parameters @ other_parameters @ func_locals @ func_nonlocals @ parent_scope in
     { stmt with
       skind = S_function {
           func_var;
           func_body = translate_stmt (globals, new_lscope) f.func_body;
           func_parameters;
           func_defaults;
+          func_vararg;
+          func_kwonly_args;
+          func_kwonly_defaults;
+          func_kwarg;
           func_nonlocals;
           func_locals;
           func_globals;
@@ -224,6 +233,9 @@ and translate_expr scope expr =
 
   | E_yield expr  ->
     {expr with ekind = E_yield (translate_expr scope expr)}
+
+  | E_yield_from expr  ->
+    {expr with ekind = E_yield_from (translate_expr scope expr)}
 
   | E_lambda l ->
     let (globals, lscope) = scope in

@@ -81,7 +81,7 @@ module Domain =
                    ~fthen:(fun flow ->
                        man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_kall (mk_py_attr f "__call__" range) args kwargs range) flow)
                    ~felse:(fun flow ->
-                       debug "callable/E_py_call, on %a@\n" pp_expr f; assert false
+                       panic_at range "callable/E_py_call, on %a, exp=%a@\n" pp_expr f pp_expr exp
                      )
                    man flow
             ) in

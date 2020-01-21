@@ -186,13 +186,12 @@ let mk_range_attr_var range attr typ =
 
 
 (** Return the original name of variables with UIDs *)
-let get_orig_vname v =
+let get_orig_vname ?(warn=true) v =
   match v.vkind with
   | V_uniq (orig,_) -> orig
   | _ ->
-    Exceptions.warn "variable %a does not have an original name" pp_var v;
+    if warn then Exceptions.warn "variable %a does not have an original name" pp_var v;
     v.vname
-
 
 (** Change the original name of variables with UIDs *)
 let set_orig_vname name v =
