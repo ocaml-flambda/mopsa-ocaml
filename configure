@@ -2958,12 +2958,12 @@ fi
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for ocamlc version" >&5
 $as_echo_n "checking for ocamlc version... " >&6; }
 OCAML_VERSION=`$OCAMLC -version`
-MIN_OCAML_VERSION="4.07.1"
+MIN_OCAML_VERSION="4.07.0"
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: $OCAML_VERSION" >&5
 $as_echo "$OCAML_VERSION" >&6; }
 V=`printf "$OCAML_VERSION\n$MIN_OCAML_VERSION\n" | sort -V | head -n 1`
 if test "$V" != "$MIN_OCAML_VERSION"; then
-  as_fn_error $? "Mopsa requires ocamlc version >= $MIN_OCAML_VERSION" "$LINENO" 5]
+  as_fn_error $? "Mopsa requires ocamlc version >= $MIN_OCAML_VERSION" "$LINENO" 5
 fi
 
 if test -n "$ac_tool_prefix"; then

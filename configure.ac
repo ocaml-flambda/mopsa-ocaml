@@ -48,11 +48,11 @@ fi
 
 AC_MSG_CHECKING([for ocamlc version])
 OCAML_VERSION=`$OCAMLC -version`
-MIN_OCAML_VERSION="4.07.1"
+MIN_OCAML_VERSION="4.07.0"
 AC_MSG_RESULT([$OCAML_VERSION])
 V=`printf "$OCAML_VERSION\n$MIN_OCAML_VERSION\n" | sort -V | head -n 1`
 if test "$V" != "$MIN_OCAML_VERSION"; then
-  AC_MSG_ERROR([Mopsa requires ocamlc version >= $MIN_OCAML_VERSION])]
+  AC_MSG_ERROR([Mopsa requires ocamlc version >= $MIN_OCAML_VERSION])
 fi
 
 AC_CHECK_TOOL(OCAMLFIND,ocamlfind,no)
