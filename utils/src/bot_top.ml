@@ -56,3 +56,9 @@ let bot_top_included (f:'a->'b->bool) (a:'a with_bot_top) (b:'b with_bot_top) : 
 
 let bot_top_compare (cmp:'a -> 'a -> int) (a:'a with_bot_top) (b:'a with_bot_top) : int =
   match a,b with BOT,BOT -> 0 | BOT,_ -> -1 | _,BOT -> 1 | TOP,TOP -> 0 | TOP,_ -> -1 | _,TOP -> 1 | Nbt x, Nbt y -> cmp x y
+
+let bot_top_fprint f ch x =
+  match x with
+  | TOP -> Format.pp_print_string ch Top.top_string
+  | BOT -> Format.pp_print_string ch Bot.bot_string
+  | Nbt x -> f ch x

@@ -338,11 +338,21 @@ and stack_chain_intermediate (op:operator) (l:config list) : (module Sig.Stacked
 and stack_product_intermediate (l:config list) (rules:string list) : (module Sig.Stacked.Intermediate.STACK) =
   let ll = List.map stack_intermediate l in
   let rules = List.map (fun name ->
-      try Sig.Stacked.Reduction.find_eval_reduction name
-      with Not_found -> Exceptions.panic "reduction %s not found" name
-    ) rules
+      try
+        Some (Sig.Stacked.Reduction.find_eval_reduction name), None
+      with Not_found ->
+      try
+        None, Some (Sig.Stacked.Reduction.find_exec_reduction name)
+      with Not_found ->
+        Exceptions.panic "reduction %s not found" name
+    ) rules in
+  let rerules, rsrules = List.fold_left (fun (eacc, sacc) (oe, os) ->
+      match oe, os with
+      | Some e, None -> (e::eacc), sacc
+      | None, Some s -> eacc, (s::sacc)
+      | _ -> assert false) ([], []) rules
   in
-  Transformers.Stacked.Intermediate.Product.make ll rules []
+  Transformers.Stacked.Intermediate.Product.make ll (List.rev rerules) (List.rev rsrules)
 
 and stack_cast_intermediate (config:config) : (module Sig.Stacked.Intermediate.STACK) =
   match config.signature with

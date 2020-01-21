@@ -174,7 +174,12 @@ struct
           let slog1 = man.get_sub_log log1 in
           let slog2 = man.get_sub_log log2 in
 
-          let merged = man.merge_sub
+          (* debug "intermediate ||is_empty = %b" (Log.is_empty slog1 || Log.is_empty slog2); *)
+          let merged =
+            (* if Log.is_empty slog1 then man.get_sub a2
+             * else if Log.is_empty slog2 then man.get_sub a1
+             * else *)
+              man.merge_sub
               p
               (man.get_sub a1, slog1)
               (man.get_sub a2, slog2)
