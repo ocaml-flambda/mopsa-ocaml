@@ -3577,6 +3577,7 @@ $as_echo "not found" >&6; }
 fi
 
 
+LLVMCONFIG_EXTRA=""
 if test -n "$ac_tool_prefix"; then
   # Extract the first word of "${ac_tool_prefix}llvm-config", so it can be a program name with args.
 set dummy ${ac_tool_prefix}llvm-config; ac_word=$2
@@ -3670,12 +3671,105 @@ else
 fi
 
 if test "x$LLVMCONFIG" = "x"; then
-  LLVMCONFIG = `ls /usr/bin/llvm-config* | sort -V -r | head -n 1`
+  LLVMCONFIG=`ls /usr/bin/llvm-config* | sort -V -r | head -n 1`
   if test "x$LLVMCONFIG" = "x"; then
     { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: llvm-config not found. C analyzer will not be compiled." >&5
 $as_echo "$as_me: WARNING: llvm-config not found. C analyzer will not be compiled." >&2;}
+  else
+    LLVMCONFIG_EXTRA=`printf $LLVMCONFIG | sed "s/llvm-config//g"`
+    if test -n "$ac_tool_prefix"; then
+  # Extract the first word of "${ac_tool_prefix}llvm-config$LLVMCONFIG_EXTRA", so it can be a program name with args.
+set dummy ${ac_tool_prefix}llvm-config$LLVMCONFIG_EXTRA; ac_word=$2
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
+$as_echo_n "checking for $ac_word... " >&6; }
+if ${ac_cv_prog_LLVMCONFIG+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  if test -n "$LLVMCONFIG"; then
+  ac_cv_prog_LLVMCONFIG="$LLVMCONFIG" # Let the user override the test.
+else
+as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+for as_dir in $PATH
+do
+  IFS=$as_save_IFS
+  test -z "$as_dir" && as_dir=.
+    for ac_exec_ext in '' $ac_executable_extensions; do
+  if as_fn_executable_p "$as_dir/$ac_word$ac_exec_ext"; then
+    ac_cv_prog_LLVMCONFIG="${ac_tool_prefix}llvm-config$LLVMCONFIG_EXTRA"
+    $as_echo "$as_me:${as_lineno-$LINENO}: found $as_dir/$ac_word$ac_exec_ext" >&5
+    break 2
   fi
+done
+  done
+IFS=$as_save_IFS
 
+fi
+fi
+LLVMCONFIG=$ac_cv_prog_LLVMCONFIG
+if test -n "$LLVMCONFIG"; then
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $LLVMCONFIG" >&5
+$as_echo "$LLVMCONFIG" >&6; }
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+
+
+fi
+if test -z "$ac_cv_prog_LLVMCONFIG"; then
+  ac_ct_LLVMCONFIG=$LLVMCONFIG
+  # Extract the first word of "llvm-config$LLVMCONFIG_EXTRA", so it can be a program name with args.
+set dummy llvm-config$LLVMCONFIG_EXTRA; ac_word=$2
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
+$as_echo_n "checking for $ac_word... " >&6; }
+if ${ac_cv_prog_ac_ct_LLVMCONFIG+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  if test -n "$ac_ct_LLVMCONFIG"; then
+  ac_cv_prog_ac_ct_LLVMCONFIG="$ac_ct_LLVMCONFIG" # Let the user override the test.
+else
+as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+for as_dir in $PATH
+do
+  IFS=$as_save_IFS
+  test -z "$as_dir" && as_dir=.
+    for ac_exec_ext in '' $ac_executable_extensions; do
+  if as_fn_executable_p "$as_dir/$ac_word$ac_exec_ext"; then
+    ac_cv_prog_ac_ct_LLVMCONFIG="llvm-config$LLVMCONFIG_EXTRA"
+    $as_echo "$as_me:${as_lineno-$LINENO}: found $as_dir/$ac_word$ac_exec_ext" >&5
+    break 2
+  fi
+done
+  done
+IFS=$as_save_IFS
+
+fi
+fi
+ac_ct_LLVMCONFIG=$ac_cv_prog_ac_ct_LLVMCONFIG
+if test -n "$ac_ct_LLVMCONFIG"; then
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_ct_LLVMCONFIG" >&5
+$as_echo "$ac_ct_LLVMCONFIG" >&6; }
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+
+  if test "x$ac_ct_LLVMCONFIG" = x; then
+    LLVMCONFIG=""
+  else
+    case $cross_compiling:$ac_tool_warned in
+yes:)
+{ $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: using cross tools not prefixed with host triplet" >&5
+$as_echo "$as_me: WARNING: using cross tools not prefixed with host triplet" >&2;}
+ac_tool_warned=yes ;;
+esac
+    LLVMCONFIG=$ac_ct_LLVMCONFIG
+  fi
+else
+  LLVMCONFIG="$ac_cv_prog_LLVMCONFIG"
+fi
+
+  fi
 fi
 
 if test "x$LLVMCONFIG" != "x"; then
@@ -3685,21 +3779,17 @@ $as_echo_n "checking for LLVM version... " >&6; }
   MIN_LLVM_VERSION="5.0"
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: $LLVM_VERSION" >&5
 $as_echo "$LLVM_VERSION" >&6; }
-  V=`printf "$LLVM_VERSION\n$MIN_LLVM_VERSION\n" | sort -V | head -n 1`
 
+  V=`printf "$LLVM_VERSION\n$MIN_LLVM_VERSION\n" | sort -V | head -n 1`
   if test "$V" != "$MIN_LLVM_VERSION"; then
     { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: Mopsa requires LLVM version >= $MIN_LLVM_VERSION. C analyzer will not be compiled." >&5
 $as_echo "$as_me: WARNING: Mopsa requires LLVM version >= $MIN_LLVM_VERSION. C analyzer will not be compiled." >&2;}
     LLVMCONFIG=""
 
-  fi
-
-fi
-
-
-if test -n "$ac_tool_prefix"; then
-  # Extract the first word of "${ac_tool_prefix}clang", so it can be a program name with args.
-set dummy ${ac_tool_prefix}clang; ac_word=$2
+  else
+    if test -n "$ac_tool_prefix"; then
+  # Extract the first word of "${ac_tool_prefix}clang$LLVMCONFIG_EXTRA", so it can be a program name with args.
+set dummy ${ac_tool_prefix}clang$LLVMCONFIG_EXTRA; ac_word=$2
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
 $as_echo_n "checking for $ac_word... " >&6; }
 if ${ac_cv_prog_CLANG+:} false; then :
@@ -3715,7 +3805,7 @@ do
   test -z "$as_dir" && as_dir=.
     for ac_exec_ext in '' $ac_executable_extensions; do
   if as_fn_executable_p "$as_dir/$ac_word$ac_exec_ext"; then
-    ac_cv_prog_CLANG="${ac_tool_prefix}clang"
+    ac_cv_prog_CLANG="${ac_tool_prefix}clang$LLVMCONFIG_EXTRA"
     $as_echo "$as_me:${as_lineno-$LINENO}: found $as_dir/$ac_word$ac_exec_ext" >&5
     break 2
   fi
@@ -3738,8 +3828,8 @@ fi
 fi
 if test -z "$ac_cv_prog_CLANG"; then
   ac_ct_CLANG=$CLANG
-  # Extract the first word of "clang", so it can be a program name with args.
-set dummy clang; ac_word=$2
+  # Extract the first word of "clang$LLVMCONFIG_EXTRA", so it can be a program name with args.
+set dummy clang$LLVMCONFIG_EXTRA; ac_word=$2
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
 $as_echo_n "checking for $ac_word... " >&6; }
 if ${ac_cv_prog_ac_ct_CLANG+:} false; then :
@@ -3755,7 +3845,7 @@ do
   test -z "$as_dir" && as_dir=.
     for ac_exec_ext in '' $ac_executable_extensions; do
   if as_fn_executable_p "$as_dir/$ac_word$ac_exec_ext"; then
-    ac_cv_prog_ac_ct_CLANG="clang"
+    ac_cv_prog_ac_ct_CLANG="clang$LLVMCONFIG_EXTRA"
     $as_echo "$as_me:${as_lineno-$LINENO}: found $as_dir/$ac_word$ac_exec_ext" >&5
     break 2
   fi
@@ -3789,15 +3879,9 @@ else
   CLANG="$ac_cv_prog_CLANG"
 fi
 
-if test "x$CLANG" = "x"; then
-  CLANG = `ls /usr/bin/clang* | sort -V -r | head -n 1`
-  if test "x$CLANG" = "x"; then
-    { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: clang not found. C analyzer will not be compiled." >&5
-$as_echo "$as_me: WARNING: clang not found. C analyzer will not be compiled." >&2;}
   fi
 
 fi
-
 
 
 

@@ -113,13 +113,16 @@ fi
 
 
 dnl Checking for llvm
+LLVMCONFIG_EXTRA=""
 AC_CHECK_TOOL(LLVMCONFIG,llvm-config)
 if test "x$LLVMCONFIG" = "x"; then
-  LLVMCONFIG = `ls /usr/bin/llvm-config* | sort -V -r | head -n 1`
+  LLVMCONFIG=`ls /usr/bin/llvm-config* | sort -V -r | head -n 1`
   if test "x$LLVMCONFIG" = "x"; then
     AC_MSG_WARN([llvm-config not found. C analyzer will not be compiled.])
+  else
+    LLVMCONFIG_EXTRA=`printf $LLVMCONFIG | sed "s/llvm-config//g"`
+    AC_CHECK_TOOL(LLVMCONFIG,llvm-config$LLVMCONFIG_EXTRA)
   fi
-  AC_SUBST([LLVMCONFIG])
 fi
 
 if test "x$LLVMCONFIG" != "x"; then
@@ -127,27 +130,17 @@ if test "x$LLVMCONFIG" != "x"; then
   LLVM_VERSION=`$LLVMCONFIG --version`
   MIN_LLVM_VERSION="5.0"
   AC_MSG_RESULT([$LLVM_VERSION])
-  V=`printf "$LLVM_VERSION\n$MIN_LLVM_VERSION\n" | sort -V | head -n 1`
 
+  V=`printf "$LLVM_VERSION\n$MIN_LLVM_VERSION\n" | sort -V | head -n 1`
   if test "$V" != "$MIN_LLVM_VERSION"; then
     AC_MSG_WARN([Mopsa requires LLVM version >= $MIN_LLVM_VERSION. C analyzer will not be compiled.])
     LLVMCONFIG=""
     AC_SUBST([LLVMCONFIG])
+  else
+    AC_CHECK_TOOL(CLANG,clang$LLVMCONFIG_EXTRA)
   fi
 
 fi
-
-
-dnl Checking for clang
-AC_CHECK_TOOL(CLANG,clang)
-if test "x$CLANG" = "x"; then
-  CLANG = `ls /usr/bin/clang* | sort -V -r | head -n 1`
-  if test "x$CLANG" = "x"; then
-    AC_MSG_WARN([clang not found. C analyzer will not be compiled.])
-  fi
-  AC_SUBST([CLANG])
-fi
-
 
 
 
