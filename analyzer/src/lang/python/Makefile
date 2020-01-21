@@ -1,0 +1,38 @@
+##############################################################################
+#                                                                            #
+#  This file is part of MOPSA, a Modular Open Platform for Static Analysis.  #
+#                                                                            #
+#  Copyright (C) 2017-2019 The MOPSA Project.                                #
+#                                                                            #
+#  This program is free software: you can redistribute it and/or modify      #
+#  it under the terms of the GNU Lesser General Public License as published  #
+#  by the Free Software Foundation, either version 3 of the License, or      #
+#  (at your option) any later version.                                       #
+#                                                                            #
+#  This program is distributed in the hope that it will be useful,           #
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+#  GNU Lesser General Public License for more details.                       #
+#                                                                            #
+#  You should have received a copy of the GNU Lesser General Public License  #
+#  along with this program.  If not, see <http://www.gnu.org/licenses/>.     #
+#                                                                            #
+##############################################################################
+
+
+
+# Python
+lang += python
+lang.python = ast addr zone utils visitor operators pp ast_compare frontend   \
+              alarms libs desugar objects data_model values types  flows program
+lang.python.libs = math py_mopsa py_std py_unittest py_typing
+lang.python.objects = lambda class function range nones data_container_utils py_list tuple dict py_set py_object iterable
+lang.python.data_model = callable arith_ops compare_ops aug_assign	\
+                         attribute subscript
+lang.python.types = structural_types nominal_types addr_env t_string t_int t_float t_complex type_annot
+lang.python.values = py_string
+
+
+
+# MOPSA libraries
+MOPSALIBS += parsers/python:mlPythonParser
