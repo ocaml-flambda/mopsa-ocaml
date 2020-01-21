@@ -150,12 +150,13 @@ let add (tk: token) (a: 'a) (lattice: 'a lattice) (flow: 'a flow) : 'a flow =
   let aa = lattice.join (Context.get_unit flow.ctx) a a' in
   set tk aa lattice flow
 
-let rename (tki: token) (tko: token) (lattice: 'a lattice) (flow: 'a flow) : 'a flow =
-  let ai = get tki lattice flow in
-  add tko ai lattice flow
-
 let remove (tk: token) (flow: 'a flow) : 'a flow =
   { flow with tmap = TokenMap.remove tk flow.tmap }
+
+let rename (tki: token) (tko: token) (lattice: 'a lattice) (flow: 'a flow) : 'a flow =
+  let ai = get tki lattice flow in
+  remove tki flow |>
+  add tko ai lattice
 
 let filter (f: token -> 'a -> bool) (flow: 'a flow) : 'a flow =
   { flow with tmap = TokenMap.filter f flow.tmap }
