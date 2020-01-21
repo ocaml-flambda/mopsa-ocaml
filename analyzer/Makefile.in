@@ -24,12 +24,13 @@
 
 # Targets
 TARGET_NATIVES = mopsa
-TARGET_LIBS = mopsa
+TARGET_LIBS = libmopsa
 
 
 
 # Packs
 mopsa = framework mopsa lang main
+libmopsa = framework mopsa lang
 
 # Universal domains
 include src/framework/Makefile
