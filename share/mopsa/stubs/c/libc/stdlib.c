@@ -738,9 +738,14 @@ void *aligned_alloc (size_t __alignment, size_t __size);
 #endif
 
 /*$
- * ensures: 1 == 0;
+ * requires: 1 == 0;
  */
 void abort (void);
+
+/*$
+ * requires: 1 == 0;
+ */
+void __builtin_abort (void);
 
 
 #if defined __USE_ISOC11 || defined __USE_ISOCXX11

@@ -35,11 +35,11 @@
 	    "c.libs.cstubs",
 
             // Memory model
+            "c.desugar.aggregates",
 	    {
                 "apply": {
                     "compose": [
                         "universal.heap.recency.callstack_range",
-                        "c.memory.structured.flat",
                         "c.memory.lowlevel.cells",
 			{
                             "seq": [

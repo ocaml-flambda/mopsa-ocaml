@@ -253,101 +253,26 @@ struct
         | E_c_points_to (P_block _ | P_fun _) -> Result.singleton false flow
         | _ -> assert false
 
+  
+  (** Add a base to the domain's dimensions *)
+  let add_base base range man flow =
+    eval_base_size base range man flow >>$ fun size flow ->
+    man.eval ~zone:(Z_c_scalar, Z_u_num) size flow >>$ fun size flow ->
+
+    let sentinel = mk_sentinel_var base range in
+    let at = mk_at_var base range in
+
+    man.post ~zone:Z_u_num (mk_add sentinel range) flow >>= fun _ flow ->
+    man.post ~zone:Z_u_num (mk_assign sentinel (mk_zero range) range) flow >>= fun _ flow ->
+    man.post ~zone:Z_c_scalar (mk_add at range) flow
+
 
   (** Declaration of a C variable *)
-  let declare_variable v init scope range man flow =
-    if not (is_interesting_base (ValidVar v))
+  let declare_variable v scope range man flow =
+    let base = ValidVar v in
+    if not (is_interesting_base base)
     then Post.return flow
-
-    else
-      (* Since we are in the Z_low_level zone, we assume that init has
-         been translated by a structured domain into a flatten
-         initialization *)
-      let flat_init = match init with
-        | Some (C_init_flat l) -> l
-        | _ -> assert false
-      in
-
-      let size = sizeof_type v.vtyp in
-
-      (* Exception raised when a non-pointer initializer is found *)
-      let exception NonPointerFound in
-
-      (* Check if an initializer has a pointer type *)
-      let is_non_pointer = function
-        | C_flat_none (_,_,t)
-        | C_flat_expr(_,_,t)
-        | C_flat_fill(_,_,_,t) ->
-          not (is_c_pointer_type t)
-      in
-
-      let is_global =
-        match scope with
-        | Variable_func_static _
-        | Variable_local _
-        | Variable_parameter _ -> false
-        | _ -> true
-      in
-
-      (* Find the position of the sentinel and accumulate pointers before it *)
-      let rec aux init flow : ('a,Z.t*Z.t*expr option*expr list) result =
-        match init with
-        | [] -> Result.singleton (size, size, None, []) flow
-
-        | C_flat_none (n,o,_) :: tl  ->
-          let sentinel = if is_global then mk_c_null range else mk_c_invalid_pointer range in
-          Result.singleton (o,o,Some sentinel,[]) flow
-
-        | hd :: _ when is_non_pointer hd -> raise NonPointerFound
-
-        | C_flat_fill (e,o,_,_) :: tl
-        | C_flat_expr (e,o,_) :: tl ->
-          is_sentinel_expr e man flow >>$ fun b flow ->
-          if b then
-            Result.singleton (o,o,Some e,[]) flow
-          else
-              aux tl flow >>$ fun (o1,o2,at,before) flow ->
-              Result.singleton (o1,o2,at,e::before) flow
-      in
-      (* Initialize the sentinel variable *)
-      let sentinel = mk_sentinel_var (ValidVar v) range in
-      let at = mk_at_var (ValidVar v) range in
-      let before = mk_before_var (ValidVar v) range in
-
-      man.post ~zone:Z_u_num (mk_add sentinel range) flow >>= fun _ flow ->
-
-      try
-        aux flat_init flow >>$ fun (o1,o2,ate,beforel) flow ->
-        let pos =
-          if Z.equal o1 o2
-          then mk_z o1 range
-          else mk_z_interval o1 o2 range
-        in
-        man.post ~zone:Z_u_num (mk_assign sentinel pos range) flow >>= fun _ flow ->
-
-        begin match ate with
-          | None -> Post.return flow
-          | Some ptr ->
-            man.post ~zone:Z_c_scalar (mk_add at range) flow >>= fun _ flow ->
-            man.post ~zone:Z_c_scalar (mk_assign at ptr range) flow
-        end >>= fun _ flow ->
-
-
-        match beforel with
-        | [] -> Post.return flow
-        | hd :: tl ->
-          man.post ~zone:Z_c_scalar (mk_add before range) flow >>= fun _ flow ->
-          man.post ~zone:Z_c_scalar (mk_assign before hd range) flow >>= fun _ flow ->
-          let before_weak = weaken before in
-          List.fold_left (fun acc ptr ->
-              acc >>= fun _ flow ->
-              man.post ~zone:Z_c_scalar (mk_assign before_weak ptr range) flow
-            ) (Post.return flow) tl
-
-      with NonPointerFound ->
-        (* Non-pointer value found in the initializers *)
-        man.post ~zone:Z_u_num (mk_assign sentinel (mk_zero range) range) flow >>= fun _ flow ->
-        man.post ~zone:Z_c_scalar (mk_add at range) flow
+    else add_base base range man flow
 
 
   (* Execute [exists] when the set of pointers before the sentinel is non-empty, [empty] otherwise *)
@@ -630,24 +555,14 @@ struct
 
 
 
-  (** Add a base to the domain's dimensions *)
-  let add_base base range man flow =
-    eval_base_size base range man flow >>$ fun size flow ->
-    man.eval ~zone:(Z_c_scalar, Z_u_num) size flow >>$ fun size flow ->
-
-    let sentinel = mk_sentinel_var base range in
-    let at = mk_at_var base range in
-
-    man.post ~zone:Z_u_num (mk_add sentinel range) flow >>= fun _ flow ->
-    man.post ~zone:Z_u_num (mk_assign sentinel (mk_zero range) range) flow >>= fun _ flow ->
-    man.post ~zone:Z_c_scalar (mk_add at range) flow
-
-
-
   (** Declare a block as assigned by adding the primed auxiliary variables *)
   (* FIXME: not yet implemented *)
   let stub_assigns target offsets range man flow =
-    man.eval target ~zone:(Z_c_low_level,Z_c_points_to) flow >>$ fun pt flow ->
+    let p = match offsets with
+      | [] -> mk_c_address_of target range
+      | _  -> target
+    in
+    man.eval p ~zone:(Z_c_low_level,Z_c_points_to) flow >>$ fun pt flow ->
     match ekind pt with
     | E_c_points_to (P_block (base, _)) when is_interesting_base base ->
       let sentinel = mk_sentinel_var base range in
@@ -704,8 +619,8 @@ struct
   (** Transformers entry point *)
   let exec zone stmt man flow =
     match skind stmt with
-    | S_c_declaration (v,init,scope) when is_interesting_base (ValidVar v) ->
-      declare_variable v init scope stmt.srange man flow |>
+    | S_c_declaration (v,None,scope) when is_interesting_base (ValidVar v) ->
+      declare_variable v scope stmt.srange man flow |>
       Option.return
 
     | S_add { ekind = E_var (v, _) } when is_interesting_base (ValidVar v) ->

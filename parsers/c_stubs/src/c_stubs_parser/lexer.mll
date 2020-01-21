@@ -110,6 +110,15 @@ let _ =
 	      assert false
 
    exception EndDelimiterFound
+
+   (* Update lexbuf position after a new line. [s] represents a string places just
+      after the new line that was read in the same regexp. *)
+   let new_line lexbuf s =
+       let pos = lexbuf.lex_curr_p in
+        lexbuf.lex_curr_p <- { pos with
+            pos_lnum = pos.pos_lnum + 1;
+            pos_bol = pos.pos_cnum - (String.length s)
+        }
 }
 
 let digit = ['0' - '9']
@@ -137,13 +146,11 @@ let float = (pointfloat | exponentfloat)
 
 let white = [' ' '\t']+
 let newline = '\r' | '\n' | "\r\n"
-let newline_with_stars = newline white* '*'?
                  
 let id = ['a'-'z' 'A'-'Z' '_'] ['a'-'z' 'A'-'Z' '0'-'9' '_']*
 
 let begin_delimiter = "/*$" | "/*$$" | "/*$$$"
 let end_delimiter = "*/"
-let newline_with_end_delimiter = newline white* end_delimiter
 
 let line_comment = "//" [^ '\n' '\r']*
 
@@ -151,11 +158,11 @@ rule read =
   parse
   | begin_delimiter  { BEGIN }
   | end_delimiter    { END }
-  | newline_with_end_delimiter    { new_line lexbuf; END } 
 
 
   | white              { read lexbuf }
-  | newline_with_stars { new_line lexbuf; read lexbuf }
+  | newline (white* end_delimiter as s)    { new_line lexbuf s; END } 
+  | newline (white* '*'? as s) { new_line lexbuf s; read lexbuf }
 
   | integer unsigned_long_suffix       { INT_CONST (z_of_int_literal (Lexing.lexeme lexbuf), UNSIGNED_LONG) }
   | integer unsigned_long_long_suffix  { INT_CONST (z_of_int_literal (Lexing.lexeme lexbuf), UNSIGNED_LONG_LONG) }
@@ -248,6 +255,6 @@ and read_string buf =
 and read_comment = 
   parse
   | [^ '\n' '\r']      { read_comment lexbuf }
-  | newline_with_end_delimiter { new_line lexbuf; raise EndDelimiterFound }
-  | newline_with_stars { new_line lexbuf; () }
+  | newline (white* end_delimiter as s) { new_line lexbuf s; raise EndDelimiterFound }
+  | newline (white* '*'? as s) { new_line lexbuf s; () }
   | _ { raise (SyntaxError ("Illegal string character #2: " ^ Lexing.lexeme lexbuf)) }

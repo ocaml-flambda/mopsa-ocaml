@@ -178,7 +178,7 @@ let rec prio_expr ((e,_,_):expr) =
   | E_cast (ee,IMPLICIT) when ignore_implicit_casts -> prio_expr ee
   | E_comma _ -> 0
   | E_compound_assign _ | E_assign _ -> 1
-  | E_conditional _ -> 2
+  | E_conditional _ | E_binary_conditional _ -> 2
   | E_binary (O_logical LOGICAL_OR,_,_) -> 3
   | E_binary (O_logical LOGICAL_AND,_,_) -> 4
   | E_binary (O_arithmetic BIT_OR,_,_) -> 5
@@ -317,6 +317,11 @@ and c_buf_expr indent buf ((e,t,_) as ee:expr) =
         (bp_paren (prio_expr e1 <= prio) (c_buf_expr indent)) e1
         (bp_paren (prio_expr e2 <= prio) (c_buf_expr indent)) e2
         (bp_paren (prio_expr e3 <= prio) (c_buf_expr indent)) e3
+
+  | E_binary_conditional (e1,e2) ->
+     bp buf "%a ? : %a"
+        (bp_paren (prio_expr e1 <= prio) (c_buf_expr indent)) e1
+        (bp_paren (prio_expr e2 <= prio) (c_buf_expr indent)) e2
 
   | E_array_subscript (e1,e2) ->
      bp buf "%a[%a]"
