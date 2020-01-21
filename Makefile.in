@@ -71,6 +71,7 @@ endif
 
 distclean: clean
 	rm -f 	Makefile			\
+		make/constants.mk               \
 		utils/Makefile			\
 		parsers/universal/Makefile	\
 		parsers/c/Makefile	 	\
