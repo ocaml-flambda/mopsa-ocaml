@@ -3671,7 +3671,7 @@ else
 fi
 
 if test "x$LLVMCONFIG" = "x"; then
-  LLVMCONFIG=`ls /usr/bin/llvm-config* | sort -V -r | head -n 1`
+  LLVMCONFIG=`ls /usr/bin/llvm-config* | xargs basename | sort -V -r | head -n 1`
   if test "x$LLVMCONFIG" = "x"; then
     { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: llvm-config not found. C analyzer will not be compiled." >&5
 $as_echo "$as_me: WARNING: llvm-config not found. C analyzer will not be compiled." >&2;}

@@ -116,7 +116,7 @@ dnl Checking for llvm
 LLVMCONFIG_EXTRA=""
 AC_CHECK_TOOL(LLVMCONFIG,llvm-config)
 if test "x$LLVMCONFIG" = "x"; then
-  LLVMCONFIG=`ls /usr/bin/llvm-config* | sort -V -r | head -n 1`
+  LLVMCONFIG=`ls /usr/bin/llvm-config* | xargs basename | sort -V -r | head -n 1`
   if test "x$LLVMCONFIG" = "x"; then
     AC_MSG_WARN([llvm-config not found. C analyzer will not be compiled.])
   else
