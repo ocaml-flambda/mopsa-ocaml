@@ -21,59 +21,83 @@
 #                                                                            #
 ##############################################################################
 
-TARGET = mopsa
+## Globals
+SHELL 		:= /bin/bash
+CC 		?= @CC@
+CXX 		?= @CXX@
 
-.PHONY: all clean distclean
-
-all:
-	$(MAKE) -C utils
-ifneq (@disable_c@,yes)
-	$(MAKE) -C parsers/c
-	$(MAKE) -C parsers/c_stubs
-endif
-ifneq (@disable_python@,yes)
-	$(MAKE) -C parsers/python
-endif
-	$(MAKE) -C parsers/universal
-	$(MAKE) -C analyzer
+OCAMLFIND 	?= @OCAMLFIND@
+OCAMLC 		?= @OCAMLC@
+OCAMLOPT 	?= @OCAMLOPT@
+OCAMLDEP 	?= @OCAMLDEP@
+OCAMLMKLIB 	?= @OCAMLMKLIB@
+OCAMLLEX 	?= @OCAMLLEX@
+MENHIR 		?= @MENHIR@
 
 
+OBJSUFFIX 	= o
+LIBSUFFIX 	= a
+DLLSUFFIX 	= so
+EXE 		=
 
-clean:
-	$(MAKE) -C utils clean
-ifneq (@disable_c@,yes)
-	$(MAKE) -C parsers/c clean
-	$(MAKE) -C parsers/c_stubs clean
-endif
-ifneq (@disable_python@,yes)
-	$(MAKE) -C parsers/python clean
-endif
-	$(MAKE) -C parsers/universal clean
-	$(MAKE) -C analyzer clean
+SED 		= @SED@
 
+SRC 		= src
+TESTS 		= tests
+BUILD 		= _build
+BIN 		= bin
+DOC 		= doc
+LIB 		= lib
 
+PREFIX 		?= @prefix@
 
-install:
-	$(MAKE) -C analyzer install
-ifneq (@disable_c@,yes)
-	$(MAKE) -C parsers/c install
+ifeq ($(VERBOSE),1)
+  QUIET =
+else
+  QUIET = @
 endif
 
+#PKGS += unix str
+INCLUDES := \
+  $(INCLUDES) \
+  -I $(BUILD) \
+  $(LIBS:%=-I %) \
+  $(foreach lib,$(MOPSALIBS),\
+    -I $(call lib_src_dir,$(lib)) \
+    -I $(call lib_dir,$(lib)))
 
+OCAMLFLAGS := -thread -bin-annot -safe-string -absname $(INCLUDES) $(OCAMLFLAGS) -g -w @8
+CFLAGS := $(CFLAGS) $(INCLUDES)
+CXXFLAGS := $(CXXFLAGS) $(INCLUDES)
+LDFLAGS := $(LDFLAGS) -L$(BUILD)
 
-uninstall:
-	$(MAKE) -C analyzer uninstall
-ifneq (@disable_c@,yes)
-	$(MAKE) -C parsers/c uninstall
-endif
+# Colors
+END=\033[0m
+GREEN=\033[32m
+LIGHT_GREEN=\033[92m
+YELLOW=\033[33m
+LIGHT_YELLOW=\033[93m
+BLUE=\033[34m
+LIGHT_BLUE=\033[94m
+MAGENTA=\033[35m
+LIGHT_MAGENTA=\033[95m
+LIGHT_GRAY=\033[37m
+GRAY=\033[90m
+CYAN=\033[36m
+LIGHT_CYAN=\033[96m
+RED=\033[39m
+LIGHTRED=\033[31m
 
-
-
-distclean: clean
-	rm -f 	Makefile			\
-		utils/Makefile			\
-		parsers/universal/Makefile	\
-		parsers/c/Makefile	 	\
-		parsers/c_stubs/Makefile 	\
-		parsers/python/Makefile		\
-		analyzer/Makefile
+# Colorful target messages
+GENMSG=$(GRAY)[GEN]$(END)
+DEPMSG=$(GRAY)[DEP]$(END)
+MLLMSG=$(LIGHT_YELLOW)[MLL]$(END)
+MLYMSG=$(YELLOW)[MLY]$(END)
+CMIMSG=$(CYAN)[CMI]$(END)
+CMOMSG=$(LIGHT_BLUE)[CMO]$(END)
+CMXMSG=$(BLUE)[CMX]$(END)
+CCMSG=$(MAGENTA)[CC ]$(END)
+CXXMSG=$(LIGHT_MAGENTA)[CXX]$(END)
+LNKMSG=$(GREEN)[LNK]$(END)
+INSTALLMSG=$(LIGHTRED)[INS]$(END)
+UINSTALLMSG=$(LIGHTRED)[UIN]$(END)

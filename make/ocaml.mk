@@ -81,20 +81,20 @@ $(MLY:$(SRC)/%.mly=$(BUILD)/%.ml): $(BUILD)/%.ml: $(SRC)/%.mly
 %.cmx:
 	@mkdir -p $(@D)
 	@echo -e "$(CMXMSG)	$(ML_$@)"
-	$(QUIET)$(OCAMLFIND)  $(OCAMLOPT) -package "$(PKGS)" $(OCAMLFLAGS) $(OCAMLFLAGS_$@) -o $@
+	$(QUIET)$(OCAMLFIND) ocamlopt -package "$(PKGS)" $(OCAMLFLAGS) $(OCAMLFLAGS_$@) -o $@
 
 %.cmo:
 	@mkdir -p $(@D)
 	@echo -e "$(CMOMSG)	$(ML_$@)"
-	$(QUIET)$(OCAMLFIND) $(OCAMLC) -package "$(PKGS)" $(OCAMLFLAGS) $(OCAMLFLAGS_$@) -o $@
+	$(QUIET)$(OCAMLFIND) ocamlc -package "$(PKGS)" $(OCAMLFLAGS) $(OCAMLFLAGS_$@) -o $@
 
 %.cmi:
 	@mkdir -p $(@D)
 	@echo -e "$(CMIMSG)	$(MLI_$@)"
-	$(QUIET)$(OCAMLFIND)  $(OCAMLC) -package "$(PKGS)" $(OCAMLFLAGS) $(OCAMLFLAGS_$@) -o $@
+	$(QUIET)$(OCAMLFIND) ocamlc -package "$(PKGS)" $(OCAMLFLAGS) $(OCAMLFLAGS_$@) -o $@
 
 %.dep: | $(ML_AUTOGEN) $(MLI_AUTOGEN)
 	@mkdir -p $(@D)
 	@echo -e "$(DEPMSG)	$(ML_$@)"
-	$(QUIET)$(OCAMLFIND) $(OCAMLDEP) $(INCLUDES) -absname $(DEPFLAGS_$@) > $@
+	$(QUIET)$(OCAMLFIND) ocamldep $(INCLUDES) -absname $(DEPFLAGS_$@) > $@
 	$(QUIET)$(SED) -i 's/\bsrc\b/_build/g' $@

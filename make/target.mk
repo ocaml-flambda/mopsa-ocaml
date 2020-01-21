@@ -44,7 +44,7 @@ define NATIVE_template =
 
  $$(TARGET_$(1)): $$(TOP_CMX_$(1))
 	@echo -e "$(LNKMSG)	$$@"
-	$$(QUIET)$$(OCAMLFIND) $$(OCAMLOPT) $$(OCAMLFLAGS) -cclib "$$(LDFLAGS)" -package "$$(PKGS)" -linkpkg  $$(LIBCMXA) $$+ -o $$@
+	$$(QUIET)$$(OCAMLFIND) ocamlopt $$(OCAMLFLAGS) -cclib "$$(LDFLAGS)" -package "$$(PKGS)" -linkpkg  $$(LIBCMXA) $$+ -o $$@
 endef
 
 
@@ -54,7 +54,7 @@ define LIB_template =
 
  $$(TARGET_$(1)): $$(TOP_CMX_$(1))
 	@echo -e "$(LNKMSG)	$$@"
-	$$(QUIET)$$(OCAMLFIND) $$(OCAMLOPT) $$(OCAMLFLAGS) -cclib "$$(LDFLAGS)" -a -o $$@ -package "$$(PKGS)" $$+
+	$$(QUIET)$$(OCAMLFIND) ocamlopt $$(OCAMLFLAGS) -cclib "$$(LDFLAGS)" -a -o $$@ -package "$$(PKGS)" $$+
 	@mkdir -p $$(LIB)
 	@cp $$(BUILD)/*.*  $$(LIB)
 endef
@@ -81,7 +81,7 @@ define BYTE_template =
 
  $$(TARGET_$(1)): $$(TOP_CMO_$(1))
 	@echo -e "$(LNKMSG)	$$@"
-	$$(QUIET)$$(OCAMLFIND) $$(OCAMLC) $$(OCAMLFLAGS) -cclib "$$(LDFLAGS)" -package "$$(PKGS)" -linkpkg $$(LIBCMA) $$(DLLPATHS) $$+ -o $$@
+	$$(QUIET)$$(OCAMLFIND) ocamlc $$(OCAMLFLAGS) -cclib "$$(LDFLAGS)" -package "$$(PKGS)" -linkpkg $$(LIBCMA) $$(DLLPATHS) $$+ -o $$@
 endef
 
 
@@ -91,7 +91,7 @@ define BYTELIB_template =
 
  $$(TARGET_$(1)): $$(TOP_CMO_$(1))
 	@echo -e "$(LNKMSG)	$$@"
-	$$(QUIET)$$(OCAMLFIND) $$(OCAMLC) $$(OCAMLFLAGS) -cclib "$$(LDFLAGS)" -a -o $$@ -package "$$(PKGS)" $$+
+	$$(QUIET)$$(OCAMLFIND) ocamlc $$(OCAMLFLAGS) -cclib "$$(LDFLAGS)" -a -o $$@ -package "$$(PKGS)" $$+
 	@mkdir -p $$(LIB)
 	@cp $$(BUILD)/*.*  $$(LIB)
 endef
