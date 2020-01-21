@@ -87,6 +87,8 @@ sig
 
   val filter : (token -> 'a -> bool) -> 'a t -> 'a t
 
+  val partition : (token -> 'a -> bool) -> 'a t -> 'a t * 'a t
+
   val map : (token -> 'a -> 'b) -> 'a t -> 'b t
 
   val fold : ('b -> token -> 'a -> 'b)  -> 'b -> 'a t -> 'b

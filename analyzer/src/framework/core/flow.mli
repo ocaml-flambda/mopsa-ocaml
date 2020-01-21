@@ -101,6 +101,8 @@ val remove : token -> 'a flow -> 'a flow
 val filter : (token -> 'a -> bool) -> 'a flow -> 'a flow
 (** [filter f flow] keeps in [flow] all tokens [tk] verifying [f tk = true] *)
 
+val partition : (token -> 'a -> bool) -> 'a flow -> 'a flow * 'a flow
+
 val map : (token -> 'a -> 'a) -> 'a flow -> 'a flow
 
 val fold : ('b -> token -> 'a -> 'b)  -> 'b -> 'a flow -> 'b

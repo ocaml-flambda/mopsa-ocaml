@@ -203,8 +203,12 @@ struct
                   )
               )
             ~nothing_found:(tryinstance ~fother:(fun flow ->
-                debug "No attribute found for %a@\n" pp_expr instance;
-                Format.fprintf Format.str_formatter "'%a' object has no attribute '%s'" pp_expr instance (match ekind attribute with | E_constant (C_string attr) -> attr | _ -> assert false);
+                debug "No attribute found for %a, attr = %a@\n" pp_expr instance pp_expr attribute;
+                Format.fprintf Format.str_formatter "'%a' object has no attribute '%s'" pp_expr instance
+                  (match ekind attribute with
+                   | E_constant (C_string attr) -> attr
+                   | E_py_object ({addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "str", _)}}, Some {ekind = E_constant (C_string attr)}) -> attr
+                   | _ -> assert false);
                 man.exec (Utils.mk_builtin_raise_msg "AttributeError" (Format.flush_str_formatter ()) range) flow |>
                 Eval.empty_singleton)
               )

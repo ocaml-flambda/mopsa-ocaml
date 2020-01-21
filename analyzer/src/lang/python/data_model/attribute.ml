@@ -133,7 +133,32 @@ module Domain =
                            ~felse:(fun flow -> search_mro flow tl)
                            man flow in
                      Eval.bind (fun getattribute flow ->
-                         man.eval (mk_py_call getattribute [exp; c_attr] range) flow
+                         bind_list [exp; c_attr] man.eval flow |>
+                         bind_some (fun ee flow ->
+                             let exp, c_attr = match ee with [e1;e2] -> e1, e2 | _ -> assert false in
+                             (* FIXME(?): we split the flow to remove the exn tokens. If some appear afterwards (hopefully it's only AttributeErrors), we remove them and put it back to cur *)
+                             let flow_exn_before, flow = Flow.partition (fun tk _ -> match tk with
+                                 | Alarms.T_py_exception _ -> true
+                                 | _ -> false) flow in
+                             man.eval (mk_py_call getattribute [exp; c_attr] range) flow |>
+                             bind_opt (fun oattr flow ->
+                                 Some
+                                   (match oattr with
+                                    | None ->
+                                      (* exn, let's call getattr, and change exn flow into cur *)
+                                      let flow = Flow.fold (fun acc tk env ->
+                                          match tk with
+                                          | Alarms.T_py_exception _ ->
+                                            warn_at range "call to __getattribute__ failed with token %anow trying __getattr__" pp_token tk;
+                                            Flow.add T_cur env man.lattice acc
+                                          | _ -> Flow.add tk env man.lattice acc) (Flow.bottom_from flow) flow in
+                                      let flow = Flow.join man.lattice flow_exn_before flow in
+                                      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_attr class_of_exp "__getattr__" range) [exp; c_attr] range) flow
+                                    | Some attr -> Eval.singleton attr (Flow.join man.lattice flow_exn_before flow)
+                                   )
+                               )
+                             |> Option.none_to_exn
+                           )
                          (* let tmp = mk_range_attr_var range "tmp_getattr" T_any in
                           * let stmt =
                           *   mk_stmt

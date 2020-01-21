@@ -156,6 +156,11 @@ let remove (tk: token) (flow: 'a flow) : 'a flow =
 let filter (f: token -> 'a -> bool) (flow: 'a flow) : 'a flow =
   { flow with tmap = TokenMap.filter f flow.tmap }
 
+let partition (f: token -> 'a -> bool) (flow: 'a flow) : 'a flow * 'a flow =
+  let l, r = TokenMap.partition f flow.tmap in
+  { flow with tmap = l }, { flow with tmap = r }
+
+
 let map (f: token -> 'a -> 'a) (flow: 'a flow) : 'a flow =
   { flow with tmap = TokenMap.map f flow.tmap }
 
