@@ -126,12 +126,16 @@ LLVMCONFIG_EXTRA=""
 AC_CHECK_TOOL(LLVMCONFIG,llvm-config)
 if test "x$LLVMCONFIG" = "x"; then
   # If llvm-config is not found, try to search for llvm-config-XXX
-  LLVMCONFIG=`ls /usr/bin/llvm-config* | xargs basename | sort -V -r | head -n 1`
+  AC_MSG_CHECKING([for llvm-config-X])
+  # FIXME: we are searching only in /usr/bin and /usr/local/bin. We should generalize to $PATH
+  LLVMCONFIG=`find /usr/bin /usr/local/bin -name 'llvm-config*' -exec basename {} \; | sort -V -r | head -n 1`
   if test "x$LLVMCONFIG" = "x"; then
+    AC_MSG_RESULT([no])
     AC_MSG_WARN([llvm-config not found. C analyzer will not be compiled.])
   else
+    AC_MSG_RESULT([$LLVMCONFIG])
+    AC_SUBST([LLVMCONFIG])
     LLVMCONFIG_EXTRA=`printf $LLVMCONFIG | $SED "s/llvm-config//g"`
-    AC_CHECK_TOOL(LLVMCONFIG,llvm-config$LLVMCONFIG_EXTRA)
   fi
 fi
 
