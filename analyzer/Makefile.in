@@ -82,3 +82,38 @@ uninstall:
 	done
 	@echo -e "$(UINSTALLMSG)     share/mopsa"
 	@rm -rf @prefix@/share/mopsa
+
+
+# Tests
+.PHONY: tests universal-tests
+
+TESTS = universal-tests
+universal-tests.directory = tests/universal
+universal-tests.extension = u
+universal-tests.analyzer = mopsa-universal
+
+ifneq (@disable_c@,yes)
+TESTS += c-tests
+.PHONY: c-tests
+c-tests.directory = tests/c
+c-tests.extension = c
+c-tests.analyzer = mopsa-c
+endif
+
+ifneq (@disable_python@,yes)
+TESTS += python-tests
+.PHONY: python-tests
+python-tests.directory = tests/python
+python-tests.extension = py
+python-tests.analyzer = mopsa-python
+endif
+
+
+tests: $(TESTS)
+
+$(TESTS):
+	@ - $(foreach test, $(shell find $($@.directory) -name "*tests.$($@.extension)"), \
+		echo ""; \
+		echo "Running test $(test)"; \
+		$(MOPSAROOT)/bin/$($@.analyzer) -no-warning -unittest $(MOPSAPARAM) $(test); \
+	)

@@ -23,7 +23,7 @@
 
 TARGET = mopsa
 
-.PHONY: all clean distclean
+.PHONY: all tests clean distclean
 
 all:
 	$(MAKE) -C utils
@@ -37,6 +37,9 @@ endif
 	$(MAKE) -C parsers/universal
 	$(MAKE) -C analyzer
 
+
+tests:
+	$(MAKE) -C analyzer tests
 
 
 clean:
