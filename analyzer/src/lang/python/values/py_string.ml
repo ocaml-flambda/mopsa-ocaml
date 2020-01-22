@@ -132,7 +132,23 @@ struct
 
     | _ ->  None
 
-  let eval zs exp man flow = None
+  let eval zs exp man flow =
+    let range = erange exp in
+    match ekind exp with
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__add__", _))}, _)}, [{ekind = E_py_object(_, Some e1)}; {ekind = E_py_object(_, Some e2)}], []) ->
+      debug "here";
+      Some
+        (* begin match ekind e1, ekind e2 with
+         * | E_constant (C_string s1), E_constant (C_string s2) ->
+         *   man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_string (s1 ^ s2) range) flow
+         * | E_constant (C_top T_string), E_constant (C_string _)
+         * | E_constant (C_string _), E_constant (C_top T_string)
+         * | E_constant (C_top T_string), E_constant (C_top T_string) ->
+         *   man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_string range) flow
+         * | _ -> assert false
+         * end *)
+        (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_string range) flow)
+    | _ -> None
 
   let ask : type r. r query -> ('a, t) man -> 'a flow -> r option = fun query man flow ->
     match query with

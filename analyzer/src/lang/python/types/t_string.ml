@@ -50,7 +50,11 @@ module Domain =
         | _ -> assert false in
       StringMap.add funname {in_args; out_type} db
 
-    let stub_base =
+  let extract_oobject e = match ekind e with
+    | E_py_object (_, Some a) -> a
+    | _ -> assert false
+
+  let stub_base =
       let str = "str" and int = "int" and bool = "bool" and bytes = "bytes" in
       StringMap.empty |>
       add_signature "str.__contains__" [str; str] bool |>
@@ -213,7 +217,7 @@ module Domain =
           )
         |>  Option.return
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, [e1; e2], [])
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)} as caller, [e1; e2], [])
         when is_str_binop_fun f ->
         bind_list [e1; e2] (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
         bind_some (fun el flow ->
@@ -224,7 +228,16 @@ module Domain =
                   assume
                     (mk_py_isinstance_builtin e2 "str" range)
                     ~fthen:(fun true_flow ->
-                        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_string range) true_flow)
+                        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_string range) true_flow
+                        (* fixme: just to perform the addr alloc, clearly not the best *)
+                        |> Eval.bind (fun res flow ->
+                            match ekind res with
+                            | E_py_object (addr, _) ->
+                              Eval.singleton {res with ekind = E_py_object(addr,
+                                                                           Some (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) range ~etyp:T_string))} flow
+                            | _ -> assert false
+                          )
+                      )
                     ~felse:(fun false_flow ->
                         let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
                         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) expr false_flow)

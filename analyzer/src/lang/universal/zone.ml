@@ -29,6 +29,7 @@ type zone +=
   | Z_u_num
   | Z_u_heap
   | Z_u_tree
+  | Z_u_string
 
 let () =
   register_zone {
@@ -85,6 +86,24 @@ let () =
         (* ------------------------------------------- *)
         | E_alloc_addr _
         | E_addr _                           -> Keep
+        (* ------------------------------------------- *)
+        | _                                  -> Process
+      );
+  };
+
+  register_zone {
+    zone = Z_u_string;
+    zone_subset = Some Z_u;
+    zone_name = "U/Str";
+    zone_eval = (fun exp ->
+        match ekind exp with
+        (* ------------------------------------------- *)
+        | E_constant _
+        | E_var _
+          when etyp exp = T_string           -> Keep
+        (* ------------------------------------------- *)
+        | E_unop _
+        | E_binop _                          -> Visit
         (* ------------------------------------------- *)
         | _                                  -> Process
       );
