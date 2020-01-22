@@ -71,7 +71,16 @@
                       "python.objects.dict",
                       "python.objects.set",
                       "python.objects.iterable",
-                      "python.values.string"
+                      {
+                          "nonrel": {
+                              "union": [
+		                  "universal.numeric.values.intervals.float",
+                                  "universal.numeric.values.intervals.integer"
+                              ]
+                          }
+                      },
+                      //  FIXME?
+                      {   "nonrel": "universal.numeric.values.strings"}
                   ]
                 }
             }

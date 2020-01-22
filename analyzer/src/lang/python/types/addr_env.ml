@@ -132,7 +132,7 @@ struct
     end)
 
   let interface = {
-    iexec = { provides = [Zone.Z_py]; uses = [Zone.Z_py; Zone.Z_py_obj]; };
+    iexec = { provides = [Zone.Z_py]; uses = [Zone.Z_py; Zone.Z_py_obj; Universal.Zone.Z_u_num; Universal.Zone.Z_u_string]; };
     ieval = { provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]; }
   }
 
@@ -189,8 +189,12 @@ struct
               | E_py_object (addr, Some expr) ->
                 let flow = assign_addr man v (PyAddr.Def addr) mode flow in
                 begin match akind addr with
-                | A_py_instance s when compare_addr s (fst @@ find_builtin "str") = 0 ->
-                  man.exec ~zone:Zone.Z_py_obj (mk_assign evar e range) flow
+                | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} ->
+                  man.exec ~zone:Universal.Zone.Z_u_string (mk_assign evar expr range) flow
+
+                | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}
+                | A_py_instance {addr_kind = A_py_class (C_builtin "float", _)} ->
+                  man.exec ~zone:Universal.Zone.Z_u_num (mk_assign evar expr range) flow
                 | _ ->
                   flow
                 end |>

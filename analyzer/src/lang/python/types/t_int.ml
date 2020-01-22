@@ -39,7 +39,7 @@ struct
 
   let interface = {
     iexec = {provides = []; uses = []};
-    ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
+    ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj; Z_any, Universal.Zone.Z_u_num]}
   }
 
   let init _ _ flow = flow
@@ -49,6 +49,10 @@ struct
     | "int.__neg__"
     | "int.__invert__" -> true
     | _ -> false
+
+  let extract_oobject e = match ekind e with
+    | E_py_object (_, Some a) -> a
+    | _ -> assert false
 
   let eval zs exp man flow =
     let range = erange exp in
@@ -63,8 +67,9 @@ struct
       Eval.singleton (mk_py_object (Addr_env.addr_false (), None) range) flow |> Option.return
 
     | E_constant (C_top T_int)
-    | E_constant (C_int _) ->
-      Eval.singleton (mk_py_object (Addr_env.addr_integers (), None) range) flow |> Option.return
+    | E_constant (C_int _)
+    | E_constant (C_int_interval _) ->
+      Eval.singleton (mk_py_object (Addr_env.addr_integers (), Some {exp with etyp=T_int}) range) flow |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_class (C_builtin "bool", _)}, _)}, [arg], [])
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bool.__new__", _))}, _)}, [_; arg], []) ->
@@ -135,7 +140,14 @@ struct
                   assume
                     (mk_py_isinstance_builtin e2 "int" range)
                     ~fthen:(fun true_flow ->
-                        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_bool range) true_flow)
+                        (* FIXME: best way? *)
+                        assume
+                          (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) ~etyp:T_int range) man true_flow
+                          ~zone:Universal.Zone.Z_u_num
+                          ~fthen:(fun flow -> man.eval (mk_py_true range) flow)
+                          ~felse:(fun flow -> man.eval (mk_py_false range) flow)
+                          (* man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_bool range) true_flow *)
+                      )
                     ~felse:(fun false_flow ->
                         let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
                         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) expr false_flow)
@@ -164,7 +176,8 @@ struct
                       | "int.__truediv__"
                       | "int.__rtruediv__" ->
                         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top (T_float F_DOUBLE) range) true_flow
-                      | _ -> man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) true_flow)
+                      | _ ->
+                        Eval.singleton (mk_py_object (Addr_env.addr_integers (), Some (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) range ~etyp:T_int)) range) flow)
                   ~felse:(fun false_flow ->
                       let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
                       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) expr false_flow)
@@ -185,7 +198,7 @@ struct
           assume
             (mk_py_isinstance_builtin e "int" range)
             ~fthen:(fun true_flow ->
-                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) true_flow)
+                Eval.singleton (mk_py_object (Addr_env.addr_integers (), Some (mk_unop (Operators.methfun_to_unop f) (extract_oobject el) range ~etyp:T_int)) range) true_flow)
             ~felse:(fun false_flow ->
                 let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
                 man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) expr false_flow)
@@ -196,7 +209,14 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("int.__bool__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args
         ["int"]
-        (fun _ flow -> man.eval (mk_py_top T_bool range) flow)
+        (fun e flow ->
+           (* FIXME: best way? *)
+           assume
+             (mk_binop (extract_oobject @@ List.hd e) O_eq (mk_int 0 ~typ:T_int range) ~etyp:T_int range) man flow
+             ~zone:Universal.Zone.Z_u_num
+             ~fthen:(fun flow -> man.eval (mk_py_false range) flow)
+             ~felse:(fun flow -> man.eval (mk_py_true range) flow)
+        )
       |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("int.__str__" as f, _))}, _)}, args, [])
@@ -206,6 +226,16 @@ struct
         ["int"]
         (fun _ flow -> man.eval (mk_py_top T_string range) flow)
       |> Option.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("int.__float__" as f, _))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args
+        ["int"]
+        (fun e flow ->
+           let res = man.eval ~zone:(Z_any, Universal.Zone.Z_u_num) (mk_unop (O_cast (T_float F_DOUBLE, T_int)) ~etyp:(T_float F_DOUBLE) (extract_oobject @@ List.hd e) range) flow |>
+                     Eval.bind (fun e flow -> Eval.singleton (mk_py_object (Addr_env.addr_float (), Some e) range) flow) in
+           let overflow = man.exec (Utils.mk_builtin_raise_msg "OverflowError" "int too large to convert to float" range) flow |> Eval.empty_singleton in
+           Eval.join_list (Eval.copy_ctx overflow res :: overflow :: []) ~empty:(fun () -> assert false)
+        ) |> Option.return
 
     | _ -> None
 
