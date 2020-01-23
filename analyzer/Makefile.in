@@ -23,7 +23,7 @@
 
 
 # Targets
-TARGET_NATIVES = mopsa
+TARGET_BINS = mopsa
 TARGET_LIBS = libmopsa
 
 

@@ -19,29 +19,40 @@
 #                                                                            #
 ##############################################################################
 
-##################
-## Dependencies ##
-##################
+######################
+## CMI dependencies ##
+######################
 
 $(MLI:$(SRC)/%.mli=$(BUILD)/%.cmi): $(BUILD)/%.cmi: $(SRC)/%.mli | $(BUILD)/%.mli.dep
-$(MLI:$(SRC)/%=$(BUILD)/%.dep): $(BUILD)/%.dep: $(SRC)/%
+$(MLY:$(SRC)/%.mly=$(BUILD)/%.cmi): $(BUILD)/%.cmi: $(BUILD)/%.mli | $(BUILD)/%.mli.dep
+
+
+######################
+## CMO dependencies ##
+######################
+
+$(ML:$(SRC)/%.ml=$(BUILD)/%.cmo): $(BUILD)/%.cmo: $(SRC)/%.ml | $(BUILD)/%.ml.dep
+$(MLL:$(SRC)/%.mll=$(BUILD)/%.cmo): $(BUILD)/%.cmo: $(BUILD)/%.ml | $(BUILD)/%.ml.dep
+$(MLY:$(SRC)/%.mly=$(BUILD)/%.cmo): $(BUILD)/%.cmo: $(BUILD)/%.ml $(BUILD)/%.cmi | $(BUILD)/%.ml.dep
+
+######################
+## CMX dependencies ##
+######################
 
 $(ML:$(SRC)/%.ml=$(BUILD)/%.cmx): $(BUILD)/%.cmx: $(SRC)/%.ml | $(BUILD)/%.ml.dep
-$(MLI:$(SRC)/%.mli=$(BUILD)/%.cmx): $(BUILD)/%.cmx: $(BUILD)/%.cmi
-$(MLI:$(SRC)/%.mli=$(BUILD)/%.cmo): $(BUILD)/%.cmo: $(BUILD)/%.cmi
-$(ML:$(SRC)/%.ml=$(BUILD)/%.cmo): $(BUILD)/%.cmo: $(SRC)/%.ml | $(BUILD)/%.ml.dep
-$(ML:$(SRC)/%=$(BUILD)/%.dep): $(BUILD)/%.dep: $(SRC)/%
-
 $(MLL:$(SRC)/%.mll=$(BUILD)/%.cmx): $(BUILD)/%.cmx: $(BUILD)/%.ml | $(BUILD)/%.ml.dep
-$(MLL:$(SRC)/%.mll=$(BUILD)/%.cmo): $(BUILD)/%.cmo: $(BUILD)/%.ml | $(BUILD)/%.ml.dep
-$(MLL:$(SRC)/%.mll=$(BUILD)/%.ml.dep): $(BUILD)/%.ml.dep: $(BUILD)/%.ml
+$(MLY:$(SRC)/%.mly=$(BUILD)/%.cmx): $(BUILD)/%.cmx: $(BUILD)/%.ml | $(BUILD)/%.ml.dep
 
-$(MLY:$(SRC)/%.mly=$(BUILD)/%.cmx): $(BUILD)/%.cmx: $(BUILD)/%.ml $(BUILD)/%.cmi | $(BUILD)/%.ml.dep
-$(MLY:$(SRC)/%.mly=$(BUILD)/%.cmo): $(BUILD)/%.cmo: $(BUILD)/%.ml $(BUILD)/%.cmi | $(BUILD)/%.ml.dep
-$(MLY:$(SRC)/%.mly=$(BUILD)/%.cmi): $(BUILD)/%.cmi: $(BUILD)/%.mli | $(BUILD)/%.mli.dep
-$(MLY:$(SRC)/%.mly=$(BUILD)/%.mli): $(BUILD)/%.mli: $(BUILD)/%.ml
+######################
+## DEP dependencies ##
+######################
+
+$(MLI:$(SRC)/%=$(BUILD)/%.dep): $(BUILD)/%.dep: $(SRC)/%
+$(ML:$(SRC)/%=$(BUILD)/%.dep): $(BUILD)/%.dep: $(SRC)/%
+$(MLL:$(SRC)/%.mll=$(BUILD)/%.ml.dep): $(BUILD)/%.ml.dep: $(BUILD)/%.ml
 $(MLY:$(SRC)/%.mly=$(BUILD)/%.ml.dep): $(BUILD)/%.ml.dep: $(BUILD)/%.ml
 $(MLY:$(SRC)/%.mly=$(BUILD)/%.mli.dep): $(BUILD)/%.mli.dep: $(BUILD)/%.mli
+
 
 .SECONDEXPANSION:
 $(PACKS:%=$(BUILD)/%.cmx): $(BUILD)/%.cmx : $$(PACK_DEPS_$$@) $$(PACK_DIR_$$@)
@@ -67,6 +78,8 @@ $(MLL:$(SRC)/%.mll=$(BUILD)/%.ml): $(BUILD)/%.ml: $(SRC)/%.mll
 ## Menhir recipes ##
 ####################
 
+$(MLY:$(SRC)/%.mly=$(BUILD)/%.mli): $(BUILD)/%.mli: $(BUILD)/%.ml
+
 $(MLY:$(SRC)/%.mly=$(BUILD)/%.ml): $(BUILD)/%.ml: $(SRC)/%.mly
 	@mkdir -p $(@D)
 	@echo -e "$(MLYMSG)	$^"
@@ -91,10 +104,10 @@ $(MLY:$(SRC)/%.mly=$(BUILD)/%.ml): $(BUILD)/%.ml: $(SRC)/%.mly
 %.cmi:
 	@mkdir -p $(@D)
 	@echo -e "$(CMIMSG)	$(MLI_$@)"
-	$(QUIET)$(OCAMLFIND) ocamlc -package "$(PKGS)" $(OCAMLFLAGS) $(OCAMLFLAGS_$@) -o $@
+	$(QUIET)$(OCAMLFIND) ocamlopt -package "$(PKGS)" $(OCAMLFLAGS) $(OCAMLFLAGS_$@) -o $@
 
 %.dep: | $(ML_AUTOGEN) $(MLI_AUTOGEN)
 	@mkdir -p $(@D)
 	@echo -e "$(DEPMSG)	$(ML_$@)"
-	$(QUIET)$(OCAMLFIND) ocamldep $(INCLUDES) -absname $(DEPFLAGS_$@) > $@
+	$(QUIET)$(OCAMLFIND) ocamldep $(INCLUDES) -absname $(DEPFLAGS) $(DEPFLAGS_$@) > $@
 	$(QUIET)$(SED) -i 's/\bsrc\b/_build/g' $@
