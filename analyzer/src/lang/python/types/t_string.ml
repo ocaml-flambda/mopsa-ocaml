@@ -60,8 +60,6 @@ module Domain =
       add_signature "str.__contains__" [str; str] bool |>
       add_signature "str.__len__" [str] int |>
       add_signature "bytes.__len__" [bytes] int |>
-      add_signature "str.__mul__" [str; int] str |>
-      add_signature "str.__rmul__" [str; int] str |>
 
       add_signature "str.capitalize" [str] str |>
       add_signature "str.casefold" [str] str |>
@@ -251,6 +249,22 @@ module Domain =
           )
         |>  Option.return
 
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__rmul__" as f, _))}, _)}, args, [])
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__mul__" as f, _))}, _)}, args, []) ->
+        Utils.check_instances f man flow range args ["str"; "int"]
+          (fun eargs flow ->
+             let e1, e2 = match eargs with [a; b] -> a, b | _ -> assert false in
+             man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_string range) flow
+             (* fixme: just to perform the addr alloc, clearly not the best *)
+             |> Eval.bind (fun res flow ->
+                 match ekind res with
+                 | E_py_object (addr, _) ->
+                   Eval.singleton {res with ekind = E_py_object(addr,
+                                                                Some (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) range ~etyp:T_string))} flow
+                 | _ -> assert false
+               )
+          )
+        |> Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__mod__" as f, _))}, _)}, args, []) ->
         Utils.check_instances ~arguments_after_check:1 f man flow range args ["str"]

@@ -50,12 +50,12 @@ framework.hooks = logs
 lang = universal repl stubs c python
 
 # Universal
-lang.universal = ast frontend zone iterators heap numeric packing hooks
+lang.universal = ast frontend zone iterators heap numeric strings packing hooks
 lang.universal.iterators = unittest program intraproc scalar interproc loops
 lang.universal.iterators.interproc = common inlining sequential_cache join_based_cache
 lang.universal.heap = policies recency
 lang.universal.numeric = rounding common values relational reductions
-lang.universal.numeric.values = intervals congruences zero strings
+lang.universal.numeric.values = intervals congruences zero
 lang.universal.numeric.values.intervals = integer float
 lang.universal.numeric.packing = strategy functor
 lang.universal.numeric.relational = apron_manager binding apron_transformer \
@@ -89,7 +89,7 @@ lang.c.hooks = profiler
 
 # Python
 lang.python = ast addr zone utils visitor operators pp ast_compare hooks frontend   \
-              alarms libs desugar objects data_model values types  flows program
+              alarms libs desugar objects data_model types flows program
 lang.python.libs = math py_mopsa py_std py_unittest py_typing
 lang.python.objects = lambda class range nones data_container_utils function  py_list tuple dict py_set py_object iterable
 lang.python.data_model = callable arith_ops compare_ops aug_assign	\

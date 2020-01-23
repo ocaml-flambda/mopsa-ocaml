@@ -79,8 +79,7 @@
                               ]
                           }
                       },
-                      //  FIXME?
-                      {   "nonrel": "universal.numeric.values.strings"}
+                      "universal.strings.powerset"
                   ]
                 }
             }
