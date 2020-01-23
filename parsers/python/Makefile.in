@@ -1,3 +1,5 @@
+# @configure_input@
+
 # Copyright (c) 2017-2019 Aymeric Fromherz and The MOPSA Project
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -18,18 +20,23 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+
+# Targets
 TARGET_LIBS = mlPythonParser
+
 
 # Packs
 mlPythonParser = py_parser
 py_parser = cst parser lexer builtins ast pp cst_to_ast scoping main
 
+
 # Packages
 PKGS = zarith
 
-# MOPSA
-MOPSAROOT = ../..
+# MOPSA libraries
 MOPSALIBS := utils:utils
 
 
+# MOPSA make rules
+MOPSAROOT = @top_srcdir@
 include $(MOPSAROOT)/make/main.mk

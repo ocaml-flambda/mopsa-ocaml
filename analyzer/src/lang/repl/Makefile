@@ -19,33 +19,7 @@
 #                                                                            #
 ##############################################################################
 
-TARGET = mopsa
 
-.PHONY: all tests clean
-
-all:
-	$(MAKE) -C utils
-	$(MAKE) -C parsers/c
-	$(MAKE) -C parsers/c_stubs
-	$(MAKE) -C parsers/python
-	$(MAKE) -C parsers/universal
-	$(MAKE) -C analyzer
-
-tests:
-	$(MAKE) -C analyzer tests
-
-clean:
-	$(MAKE) -C utils clean
-	$(MAKE) -C parsers/c clean
-	$(MAKE) -C parsers/c_stubs clean
-	$(MAKE) -C parsers/python clean
-	$(MAKE) -C parsers/universal clean
-	$(MAKE) -C analyzer clean
-
-install:
-	$(MAKE) -C analyzer install
-	$(MAKE) -C parsers/c install
-
-uninstall:
-	$(MAKE) -C analyzer uninstall
-	$(MAKE) -C parsers/c uninstall
+# REPL
+lang += repl
+lang.repl = frontend

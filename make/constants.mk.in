@@ -1,3 +1,5 @@
+# @configure_input@
+
 ##############################################################################
 #                                                                            #
 #  This file is part of MOPSA, a Modular Open Platform for Static Analysis.  #
@@ -20,35 +22,37 @@
 ##############################################################################
 
 ## Globals
-SHELL := /bin/bash
-CC ?= cc
-CXX ?= g++
+SHELL 		:= /bin/bash
+CC 		?= @CC@
+CXX 		?= @CXX@
 
-OCAMLFIND ?= ocamlfind
-OCAMLC ?= ocamlc
-OCAMLOPT ?= ocamlopt
-OCAMLDEP ?= ocamldep
-OCAMLMKLIB ?= ocamlmklib
-OCAMLDOC ?= ocamldoc
-OCAMLLEX ?= ocamllex
-MENHIR ?= menhir
-OCPPACK ?= ocp-pack
+OCAMLFIND 	?= @OCAMLFIND@
+OCAMLC 		?= @OCAMLC@
+OCAMLOPT 	?= @OCAMLOPT@
+OCAMLDEP 	?= @OCAMLDEP@
+OCAMLMKLIB 	?= @OCAMLMKLIB@
+OCAMLLEX 	?= @OCAMLLEX@
+MENHIR 		?= @MENHIR@
 
-OBJSUFFIX = o
-LIBSUFFIX = a
-DLLSUFFIX = so
-EXE =
+LLVMCONFIG      ?= @LLVMCONFIG@
+CLANG           ?= @CLANG@
 
-SED = sed
 
-SRC = src
-TESTS = tests
-BUILD = _build
-BIN = bin
-DOC = doc
-LIB = lib
+OBJSUFFIX 	= o
+LIBSUFFIX 	= a
+DLLSUFFIX 	= so
+EXE 		=
 
-PREFIX ?= /usr/local
+SED 		= @SED@
+
+SRC 		= src
+TESTS 		= tests
+BUILD 		= _build
+BIN 		= bin
+DOC 		= doc
+LIB 		= lib
+
+PREFIX 		?= @prefix@
 
 ifeq ($(VERBOSE),1)
   QUIET =
@@ -57,9 +61,20 @@ else
 endif
 
 #PKGS += unix str
-INCLUDES := $(INCLUDES) -I $(BUILD) $(LIBS:%=-I %) $(foreach lib,$(MOPSALIBS),-I $(call lib_src_dir,$(lib)) -I $(call lib_dir,$(lib)))
+INCLUDES := \
+  $(INCLUDES) \
+  -I $(BUILD) \
+  $(LIBS:%=-I %) \
+  $(foreach lib,$(MOPSALIBS),\
+    -I $(call lib_src_dir,$(lib)) \
+    -I $(call lib_dir,$(lib)))
 
 OCAMLFLAGS := -thread -bin-annot -safe-string -absname $(INCLUDES) $(OCAMLFLAGS) -g -w @8
+ifneq (@enable_byte@,true)
+  DEPFLAGS := -native
+else
+  DEPFLAGS :=
+endif
 CFLAGS := $(CFLAGS) $(INCLUDES)
 CXXFLAGS := $(CXXFLAGS) $(INCLUDES)
 LDFLAGS := $(LDFLAGS) -L$(BUILD)

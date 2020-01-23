@@ -19,21 +19,25 @@
 #                                                                            #
 ##############################################################################
 
-.PHONY: $(TARGET_NATIVES) $(TARGET_LIBS) $(TARGET_BYTES) $(TARGET_BYTELIBS) $(TARGET_CLIBS)
+.PHONY: $(TARGET_BINS) $(TARGET_LIBS) $(TARGET_CLIBS)
 
-all: $(MERLIN) $(TARGET_NATIVES) $(TARGET_LIBS) $(TARGET_CLIBS)
+all: $(MERLIN) $(TARGET_BINS) $(TARGET_LIBS) $(TARGET_CLIBS)
 
 clean:
 	$(QUIET)rm -rf $(BUILD)/* $(LIB)/* $(MERLIN)
 
 
-$(TARGET_NATIVES): %: $(BUILD)/%.native
+$(TARGET_BINS): %: $(BUILD)/%.native
+
+ifeq (@enable_byte@,yes)
+$(TARGET_BINS): %: $(BUILD)/%.byte
+endif
 
 $(TARGET_LIBS): %: $(BUILD)/%.cmxa
 
-$(TARGET_NATIVES): %: $(BUILD)/%.byte
-
+ifeq (@enable_byte@,yes)
 $(TARGET_LIBS): %: $(BUILD)/%.cma
+endif
 
 $(TARGET_CLIBS): %: $(BUILD)/lib%.a
 
@@ -44,7 +48,7 @@ define NATIVE_template =
 
  $$(TARGET_$(1)): $$(TOP_CMX_$(1))
 	@echo -e "$(LNKMSG)	$$@"
-	$$(QUIET)$$(OCAMLFIND) $$(OCAMLOPT) $$(OCAMLFLAGS) -cclib "$$(LDFLAGS)" -package "$$(PKGS)" -linkpkg  $$(LIBCMXA) $$+ -o $$@
+	$$(QUIET)$$(OCAMLFIND) ocamlopt $$(OCAMLFLAGS) -cclib "$$(LDFLAGS)" -package "$$(PKGS)" -linkpkg  $$(LIBCMXA) $$+ -o $$@
 endef
 
 
@@ -54,7 +58,7 @@ define LIB_template =
 
  $$(TARGET_$(1)): $$(TOP_CMX_$(1))
 	@echo -e "$(LNKMSG)	$$@"
-	$$(QUIET)$$(OCAMLFIND) $$(OCAMLOPT) $$(OCAMLFLAGS) -cclib "$$(LDFLAGS)" -a -o $$@ -package "$$(PKGS)" $$+
+	$$(QUIET)$$(OCAMLFIND) ocamlopt $$(OCAMLFLAGS) -cclib "$$(LDFLAGS)" -a -o $$@ -package "$$(PKGS)" $$+
 	@mkdir -p $$(LIB)
 	@cp $$(BUILD)/*.*  $$(LIB)
 endef
@@ -81,7 +85,7 @@ define BYTE_template =
 
  $$(TARGET_$(1)): $$(TOP_CMO_$(1))
 	@echo -e "$(LNKMSG)	$$@"
-	$$(QUIET)$$(OCAMLFIND) $$(OCAMLC) $$(OCAMLFLAGS) -cclib "$$(LDFLAGS)" -package "$$(PKGS)" -linkpkg $$(LIBCMA) $$(DLLPATHS) $$+ -o $$@
+	$$(QUIET)$$(OCAMLFIND) ocamlc $$(OCAMLFLAGS) -cclib "$$(LDFLAGS)" -package "$$(PKGS)" -linkpkg $$(LIBCMA) $$(DLLPATHS) $$+ -o $$@
 endef
 
 
@@ -91,7 +95,7 @@ define BYTELIB_template =
 
  $$(TARGET_$(1)): $$(TOP_CMO_$(1))
 	@echo -e "$(LNKMSG)	$$@"
-	$$(QUIET)$$(OCAMLFIND) $$(OCAMLC) $$(OCAMLFLAGS) -cclib "$$(LDFLAGS)" -a -o $$@ -package "$$(PKGS)" $$+
+	$$(QUIET)$$(OCAMLFIND) ocamlc $$(OCAMLFLAGS) -cclib "$$(LDFLAGS)" -a -o $$@ -package "$$(PKGS)" $$+
 	@mkdir -p $$(LIB)
 	@cp $$(BUILD)/*.*  $$(LIB)
 endef
@@ -116,10 +120,12 @@ define BYTECLIB_template =
 endef
 
 ifneq ($(MAKECMDGOALS),clean)
-$(foreach target,$(TARGET_NATIVES),$(eval $(call NATIVE_template,$(target))))
+$(foreach target,$(TARGET_BINS),$(eval $(call NATIVE_template,$(target))))
 $(foreach target,$(TARGET_LIBS),$(eval $(call LIB_template,$(target))))
 $(foreach target,$(TARGET_CLIBS),$(eval $(call CLIB_template,$(target))))
-$(foreach target,$(TARGET_NATIVES),$(eval $(call BYTE_template,$(target))))
+ifeq (@enable_byte@,yes)
+$(foreach target,$(TARGET_BINS),$(eval $(call BYTE_template,$(target))))
 $(foreach target,$(TARGET_LIBS),$(eval $(call BYTELIB_template,$(target))))
 $(foreach target,$(TARGET_CLIBS),$(eval $(call BYTECLIB_template,$(target))))
+endif
 endif

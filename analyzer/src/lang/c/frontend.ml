@@ -995,3 +995,11 @@ and from_stub_directive ctx stub =
     stub_directive_locals  = List.map (from_stub_local ctx) stub.stub_locals;
     stub_directive_assigns = List.map (from_stub_assigns ctx) stub.stub_assigns;
   }
+
+
+(* Front-end registration *)
+let () =
+  register_frontend {
+    lang = "c";
+    parse = parse_program;
+  }

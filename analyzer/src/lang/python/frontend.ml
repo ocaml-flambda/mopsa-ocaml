@@ -422,3 +422,11 @@ and from_unop = function
   | USub -> Universal.Ast.O_minus
   | UAdd -> Universal.Ast.O_plus
   | Invert -> Universal.Ast.O_bit_invert
+
+
+(* Front-end registration *)
+let () =
+  register_frontend {
+    lang = "python";
+    parse = parse_program;
+  }

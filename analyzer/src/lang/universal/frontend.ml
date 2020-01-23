@@ -537,3 +537,11 @@ let rec parse_program (files: string list): program =
   | [] -> panic "no input file"
 
   | _ -> panic "analysis of multiple files not supported"
+
+
+(* Front-end registration *)
+let () =
+  register_frontend {
+    lang = "universal";
+    parse = parse_program;
+  }
