@@ -132,52 +132,43 @@ module Domain =
                            ~fthen:(fun flow -> man.eval (mk_expr (E_py_ll_getattr (mk_py_object cls range, mk_string "__getattribute__" range)) range) flow)
                            ~felse:(fun flow -> search_mro flow tl)
                            man flow in
+                     search_mro flow mro |>
                      Eval.bind (fun getattribute flow ->
                          bind_list [exp; c_attr] man.eval flow |>
                          bind_some (fun ee flow ->
                              let exp, c_attr = match ee with [e1;e2] -> e1, e2 | _ -> assert false in
-                             (* FIXME(?): we split the flow to remove the exn tokens. If some appear afterwards (hopefully it's only AttributeErrors), we remove them and put it back to cur *)
-                             let flow_exn_before, flow = Flow.partition (fun tk _ -> match tk with
-                                 | Alarms.T_py_exception _ -> true
-                                 | _ -> false) flow in
-                             man.eval (mk_py_call getattribute [exp; c_attr] range) flow |>
-                             bind_opt (fun oattr flow ->
-                                 Some
-                                   (match oattr with
-                                    | None ->
-                                      (* exn, let's call getattr, and change exn flow into cur *)
-                                      let flow = Flow.fold (fun acc tk env ->
-                                          match tk with
-                                          | Alarms.T_py_exception _ ->
-                                            warn_at range "call to __getattribute__ failed with token %a now trying __getattr__" pp_token tk;
-                                            Flow.add T_cur env man.lattice acc
-                                          | _ -> Flow.add tk env man.lattice acc) (Flow.bottom_from flow) flow in
-                                      let flow = Flow.join man.lattice flow_exn_before flow in
-                                      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_attr class_of_exp "__getattr__" range) [exp; c_attr] range) flow
-                                    | Some attr -> Eval.singleton attr (Flow.join man.lattice flow_exn_before flow)
-                                   )
-                               )
-                             |> Option.none_to_exn
+                             assume (mk_py_hasattr exp attr range) man flow
+                               ~fthen:(fun flow ->
+                                   (* FIXME(?): we split the flow to remove the exn tokens. If some appear afterwards (hopefully it's only AttributeErrors), we remove them and put it back to cur *)
+                                   let flow_exn_before, flow = Flow.partition (fun tk _ -> match tk with
+                                       | Alarms.T_py_exception _ -> true
+                                       | _ -> false) flow in
+                                   man.eval (mk_py_call getattribute [exp; c_attr] range) flow |>
+                                   bind_opt (fun oattr flow ->
+                                       Some
+                                         (match oattr with
+                                          | None ->
+                                            (* exn, let's call getattr, and change exn flow into cur *)
+                                            let flow = Flow.fold (fun acc tk env ->
+                                                match tk with
+                                                | Alarms.T_py_exception _ ->
+                                                  warn_at range "call to __getattribute__ failed with token %a now trying __getattr__" pp_token tk;
+                                                  Flow.add T_cur env man.lattice acc
+                                                | _ -> Flow.add tk env man.lattice acc) (Flow.bottom_from flow) flow in
+                                            let flow = Flow.join man.lattice flow_exn_before flow in
+                                            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_attr class_of_exp "__getattr__" range) [exp; c_attr] range) flow
+                                          | Some attr -> Eval.singleton attr (Flow.join man.lattice flow_exn_before flow)
+                                         )
+                                     )
+                                   |> Option.none_to_exn
+                                 )
+                               ~felse:(fun flow ->
+                                   man.eval (mk_py_call getattribute [exp; c_attr] range) flow
+                                 )
                            )
-                         (* let tmp = mk_range_attr_var range "tmp_getattr" T_any in
-                          * let stmt =
-                          *   mk_stmt
-                          *     (S_py_try (mk_assign (mk_var tmp range) (mk_py_call getattribute [exp; c_attr] range) range,
-                          *                [{py_excpt_type = Some (mk_py_object (find_builtin "AttributeError") range);
-                          *                  py_excpt_name=None;
-                          *                  py_excpt_body=
-                          *                    mk_assign (mk_var tmp range) (mk_py_call (mk_py_attr class_of_exp "__getattr__" range) [exp; c_attr] range)
-                          *                      range
-                          *                 }], mk_block [] range, mk_block [] range))
-                          *     range in
-                          * man.exec ~zone:Zone.Z_py stmt flow |>
-                          * man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var tmp range)  |>
-                          * Eval.add_cleaners [mk_remove_var tmp range] *)
                        )
-                       (search_mro flow mro)
                    )
            )
-         (* FIXME: getattr case / slot_tp_getattr_hook *)
          |> Option.return
 
 
