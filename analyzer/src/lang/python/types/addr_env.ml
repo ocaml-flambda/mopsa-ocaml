@@ -124,7 +124,7 @@ struct
   let subset _ _ (l1, r1) (l2, r2)  = AMap.subset l1 l2, r1, r2
   let join _ _ (l1, r1) (l2, r2) = AMap.join l1 l2, r1, r2
   let meet _ _ (l1, r1) (l2, r2) = AMap.meet l1 l2, r1, r2
-  let widen _ uctx (l1, r1) (l2, r2) = AMap.widen uctx l1 l2, r1, r2, false (* FIXME: or true? *)
+  let widen _ uctx (l1, r1) (l2, r2) = AMap.widen uctx l1 l2, r1, r2, true
 
   include Framework.Core.Id.GenDomainId(struct
       type nonrec t = t
@@ -374,6 +374,24 @@ struct
               (Eval.empty_singleton flow :: acc, Flow.get_ctx flow)
 
             | Def addr ->
+              (* first, let's clean numerical/string variables from other addrs *)
+              let flow = ASet.fold (fun a' flow ->
+                  match a' with
+                  | Def addr' when compare_addr_kind (akind addr) (akind addr') <> 0 -> (* only the kind. If two str addrs, we can't remove anything *)
+                    begin match akind addr' with
+                      | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} ->
+                        debug "removing the string...";
+                        man.exec ~zone:Universal.Zone.Z_u_string (mk_remove_var v range) flow
+                      | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)} ->
+                        (* FIXME FIXME FIXME: we'll remove things if v is either an int or a float *)
+                        man.exec ~zone:Universal.Zone.Z_u_num (mk_remove_var v range) flow
+                      | A_py_instance {addr_kind = A_py_class (C_builtin "float", _)} ->
+                        man.exec ~zone:Universal.Zone.Z_u_num (mk_remove_var v range) flow
+                      | _ ->
+                        flow
+                    end
+                  | _ -> flow
+                ) aset flow in
               let res = man.eval (mk_py_object (addr, Some exp) range) flow in
               let annots = Eval.get_ctx res in
               res :: acc, annots

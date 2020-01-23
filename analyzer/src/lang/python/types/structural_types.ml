@@ -395,12 +395,12 @@ struct
           in
           let message =
             if AttrSet.mem_o "args" (match AMap.find_opt iaddr cur with None -> AttrSet.empty | Some x -> x) then
-              (* FIXME *)
               man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var (mk_addr_attr iaddr "args" T_any) range) flow |>
+              (* FIXME *)
               Eval.apply (fun etuple flow ->
                   let var = List.hd @@ Objects.Tuple.Domain.var_of_eobj etuple in
-                  let r = man.ask (Values.Py_string.Q_strings_of_var var) flow  in
-                  r
+                  (* FIXME *)
+                  Universal.Strings.Powerset.StringPower.choose @@ man.ask (Universal.Strings.Powerset.Q_strings_powerset (mk_var var range)) flow
                 )
                 (fun _ _ -> assert false)
                 (fun _ _ -> assert false)
