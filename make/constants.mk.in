@@ -70,6 +70,11 @@ INCLUDES := \
     -I $(call lib_dir,$(lib)))
 
 OCAMLFLAGS := -thread -bin-annot -safe-string -absname $(INCLUDES) $(OCAMLFLAGS) -g -w @8
+ifneq (@enable_byte@,true)
+  DEPFLAGS := -native
+else
+  DEPFLAGS :=
+endif
 CFLAGS := $(CFLAGS) $(INCLUDES)
 CXXFLAGS := $(CXXFLAGS) $(INCLUDES)
 LDFLAGS := $(LDFLAGS) -L$(BUILD)

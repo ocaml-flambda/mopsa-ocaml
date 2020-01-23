@@ -24,7 +24,7 @@
 
 # Targets
 TARGET_CLIBS = mlClangParser
-TARGET_NATIVES = wrapper
+TARGET_BINS = wrapper
 
 
 

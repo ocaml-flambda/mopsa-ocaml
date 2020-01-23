@@ -26,6 +26,7 @@ AC_INIT([mopsa], [1.0])
 AC_CONFIG_FILES([
  Makefile
  make/constants.mk
+ make/target.mk
  utils/Makefile
  parsers/universal/Makefile
  parsers/c/Makefile
@@ -175,6 +176,13 @@ AC_ARG_ENABLE(
   [python],
   [AS_HELP_STRING([--disable-python], [Turn off Python analysis])],
   [AC_SUBST(disable_python,yes)], [])
+
+
+# Activation of byte compilation
+AC_ARG_ENABLE(
+  [byte],
+  [AS_HELP_STRING([--enable-byte], [Turn on compilation of byte binaries])],
+  [AC_SUBST(enable_byte,yes)], [])
 
 
 

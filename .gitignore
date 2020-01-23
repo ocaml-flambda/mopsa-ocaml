@@ -30,6 +30,8 @@
 
 
 /make/constants.mk
+/make/target.mk
+
 /autom4te.cache/**
 /config.log
 /config.status
