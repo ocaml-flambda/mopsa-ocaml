@@ -171,7 +171,7 @@ struct
     | Lowlevel.Pointer_sentinel.Domain.V_c_before_sentinel (base,_) -> packs_of_base ctx base
     | Scalars.Pointers.Domain.Domain.V_c_ptr_offset vv -> packs_of_var ctx vv
     | Scalars.Machine_numbers.Domain.V_c_num vv -> packs_of_var ctx vv
-    | Libs.Cstubs.Domain.V_c_bytes a -> packs_of_base ctx (ValidAddr a)
+    | Cstubs.Aux_vars.V_c_bytes a -> packs_of_base ctx (ValidAddr a)
     | _ -> []
 
 end

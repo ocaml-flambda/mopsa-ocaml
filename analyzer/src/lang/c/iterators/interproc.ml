@@ -28,6 +28,7 @@ open Ast
 open Zone
 open Common.Points_to
 open Common.Scope_update
+open Common.Builtins
 open Universal.Iterators.Interproc.Common
 
 module Domain =
@@ -111,7 +112,7 @@ struct
 
   (** Eval a function call *)
   let eval_call fundec args range man flow =
-    if Libs.Builtins.is_builtin_function fundec.c_func_org_name
+    if is_builtin_function fundec.c_func_org_name
     then
       let exp' = mk_expr (E_c_builtin_call(fundec.c_func_org_name, args)) ~etyp:fundec.c_func_return range in
       man.eval ~zone:(Zone.Z_c, Zone.Z_c_low_level) exp' flow

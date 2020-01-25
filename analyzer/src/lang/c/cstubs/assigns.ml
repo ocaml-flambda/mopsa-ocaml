@@ -30,6 +30,7 @@ open Ast
 open Zone
 open Universal.Zone
 open Common.Alarms
+open Aux_vars
 
 
 module Domain =
@@ -67,41 +68,6 @@ struct
   let init _ _ flow =  flow
 
 
-  (** Bytes attribute *)
-  (** =============== *)
-
-  type var_kind +=
-    | V_c_bytes of addr
-
-  let pp_bytes fmt addr =
-    Format.fprintf fmt "bytes(%a)" pp_addr addr
-
-  let () =
-    register_var {
-      print = (fun next fmt v ->
-          match v.vkind with
-          | V_c_bytes addr -> pp_bytes fmt addr
-          | _ -> next fmt v
-        );
-
-      compare = (fun next v1 v2 ->
-          match v1.vkind, v2.vkind with
-          | V_c_bytes a1, V_c_bytes a2 -> compare_addr a1 a2
-          | _ -> next v1 v2
-        );
-    }
-
-
-  let mk_bytes_var addr =
-    let name =
-      let () = pp_bytes Format.str_formatter addr in
-      Format.flush_str_formatter ()
-    in
-    mkv name (V_c_bytes addr) (T_c_integer C_unsigned_long)
-
-  let mk_bytes addr range =
-    let v = mk_bytes_var addr in
-    mk_var v ~mode:addr.addr_mode range
 
 
 
