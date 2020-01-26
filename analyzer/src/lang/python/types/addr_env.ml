@@ -75,7 +75,7 @@ let () =
       );
     compare = (fun next g1 g2 ->
         match g1, g2 with
-        | G_py_bool b1, G_py_bool b2 -> Option.compare Pervasives.compare b1 b2
+        | G_py_bool b1, G_py_bool b2 -> OptionExt.compare Stdlib.compare b1 b2
         | G_group (a1, b1), G_group (a2, b2) ->
           Compare.compose
             [(fun () -> compare_addr a1 a2);
@@ -153,23 +153,23 @@ struct
     | S_add ({ekind = E_var (v, mode)}) ->
       let cur = get_env T_cur man flow in
       if mem v cur then
-        flow |> Post.return |> Option.return
+        flow |> Post.return |> OptionExt.return
       else
         let ncur = add v (ASet.singleton Undef_global) cur in
         let () = debug "cur was %a@\nncur is %a@\n" print cur print ncur in
         let flow =  set_env T_cur ncur man flow in
         let () = debug "flow is now %a@\n" (Flow.print man.lattice.print) flow in
-        flow |> Post.return |> Option.return
+        flow |> Post.return |> OptionExt.return
 
     | S_assign({ekind = E_var (v, WEAK)}, {ekind = E_var (w, WEAK)}) ->
       let cur = get_env T_cur man flow in
       if mem w cur then
         if mem v cur then
-          set_env T_cur (add v (ASet.join (find w cur) (find v cur)) cur) man flow |> Post.return |> Option.return
+          set_env T_cur (add v (ASet.join (find w cur) (find v cur)) cur) man flow |> Post.return |> OptionExt.return
         else
-          set_env T_cur (add v (find w cur) cur) man flow |> Post.return |> Option.return
+          set_env T_cur (add v (find w cur) cur) man flow |> Post.return |> OptionExt.return
       else
-        flow |> Post.return |> Option.return
+        flow |> Post.return |> OptionExt.return
 
     (* S⟦ v = e ⟧ *)
     | S_assign(({ekind = E_var (v, mode)} as evar), e) ->
@@ -205,7 +205,7 @@ struct
 
               | _ -> Exceptions.panic_at range "%a@\n" pp_expr e
           )
-      |> Option.return
+      |> OptionExt.return
 
     | S_py_annot ({ekind = E_var (v, mode)}, e) ->
       (* need to make e E_py_annot here or on the frontend *)
@@ -217,7 +217,7 @@ struct
             assign_addr man v (PyAddr.Def addr) mode flow
             |> Post.return
           | _ -> Exceptions.panic_at range "%a@\n" pp_expr e)
-      |> Option.return
+      |> OptionExt.return
 
 
 
@@ -228,7 +228,7 @@ struct
           let elval, erval = match args with [e1;e2] -> e1, e2 | _ -> assert false in
           man.exec ~zone:Zone.Z_py_obj (mk_assign (mk_py_attr elval attr range) erval range) flow |> Post.return
         )
-      |> Option.return
+      |> OptionExt.return
 
 
     | S_remove ({ekind = E_var (v, _)} as var) ->
@@ -238,10 +238,10 @@ struct
         | V_uniq _ when not (Hashtbl.mem type_aliases v) ->
           (* if the variable maps to a list, we should remove the temporary variable associated, ONLY if it's not used by another list *)
           let flow = man.exec (mk_assign var (mk_expr (E_py_undefined true) range) range) flow in
-          flow |> Post.return |> Option.return
+          flow |> Post.return |> OptionExt.return
 
         | _ ->
-          Post.return flow |> Option.return
+          Post.return flow |> OptionExt.return
       end
 
     | S_assume e ->
@@ -260,18 +260,18 @@ struct
         | _ ->
           Exceptions.panic_at range "todo addr_env/assume on %a@\n" pp_expr e
         )
-      |> Option.return
+      |> OptionExt.return
 
     | S_rename ({ekind = E_var (v, mode)}, {ekind = E_var (v', mode')}) ->
       (* FIXME: modes, rename in weak shouldn't erase the old v'? *)
       let cur = get_env T_cur man flow in
       if AMap.mem v cur then
         set_env T_cur (AMap.rename v v' cur) man flow |>
-        Post.return |> Option.return
+        Post.return |> OptionExt.return
       else
         begin match v.vkind with
         | V_addr_attr(a, _) when Objects.Data_container_utils.is_data_container a.addr_kind ->
-          flow |> Post.return |> Option.return
+          flow |> Post.return |> OptionExt.return
         | _ -> assert false (* shouldn't happen *) end
 
     | S_rename (({ekind = E_addr a} as e1), ({ekind = E_addr a'} as e2)) ->
@@ -301,7 +301,7 @@ struct
           man.exec ~zone:Zone.Z_py_obj stmt flow
         | _ -> flow
       end
-      |> Post.return |> Option.return
+      |> Post.return |> OptionExt.return
 
     | _ -> None
 
@@ -310,7 +310,7 @@ struct
     let aset = match mode with
       | STRONG -> ASet.singleton av
       | WEAK ->
-        ASet.add av (Option.default ASet.empty (find_opt v cur))
+        ASet.add av (OptionExt.default ASet.empty (find_opt v cur))
     in
     set_env T_cur (add v aset cur) man flow
 
@@ -377,15 +377,15 @@ struct
           ) aset ([], Flow.get_ctx flow) in
         let evals = List.map (Eval.set_ctx annot) evals in
         evals |> Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow)
-        |> Option.return
+        |> OptionExt.return
       else if is_builtin_var v then
         (* let () = debug "bla %s %s %d" v.org_vname v.uniq_vname v.vuid in *)
-        (* man.eval (mk_py_object (find_builtin v.org_vname) range) flow |> Option.return *)
+        (* man.eval (mk_py_object (find_builtin v.org_vname) range) flow |> OptionExt.return *)
         let () = debug "is it a builtin?" in
         let obj = find_builtin @@ get_orig_vname v in
-        Eval.singleton (mk_py_object obj range) flow |> Option.return
+        Eval.singleton (mk_py_object obj range) flow |> OptionExt.return
       else if is_bottom cur then
-        Eval.empty_singleton flow |> Option.return
+        Eval.empty_singleton flow |> OptionExt.return
       else
         (* let () = warn_at range "NameError on %a that shouldn't happen. Todo: use partial envs and add_var %a" pp_var v (Flow.print man.lattice.print) flow in
          * let () = Format.fprintf Format.str_formatter "name '%s' is not defined" (get_orig_vname v) in
@@ -393,18 +393,18 @@ struct
         (* panic_at range "%a not a builtin, cur = %a" pp_var v print cur *)
         let () = debug "not a builtin..." in
         Eval.empty_singleton flow |>
-        Option.return
+        OptionExt.return
 
     (* todo: should be moved to zone system? useless? *)
     | E_py_object ({addr_kind = A_py_instance _}, _) ->
-      Eval.singleton exp flow |> Option.return
+      Eval.singleton exp flow |> OptionExt.return
 
     (* FIXME: clean *)
     | E_constant C_py_none ->
-      Eval.singleton (mk_py_object (addr_none (), None) range) flow |> Option.return
+      Eval.singleton (mk_py_object (addr_none (), None) range) flow |> OptionExt.return
 
     | E_constant C_py_not_implemented ->
-      Eval.singleton (mk_py_object (addr_notimplemented (), None) range) flow |> Option.return
+      Eval.singleton (mk_py_object (addr_notimplemented (), None) range) flow |> OptionExt.return
 
     | E_unop(O_log_not, e') ->
       (* bool is called in desugar/bool *)
@@ -428,7 +428,7 @@ struct
            | _ ->
              panic_at range "o_log_not ni on %a" pp_expr ee'
         )
-      |> Option.return
+      |> OptionExt.return
 
     | E_binop(O_py_is, e1, e2) ->
       bind_list [e1;e2] (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
@@ -445,7 +445,7 @@ struct
             | _ -> man.eval (mk_py_top T_bool range) flow
           end
         )
-      |> Option.return
+      |> OptionExt.return
 
     | _ -> None
 
@@ -453,7 +453,7 @@ struct
     fun query man flow ->
       match query with
       | Framework.Engines.Interactive.Q_print_var ->
-        Option.return @@
+        OptionExt.return @@
         fun fmt var_as_string ->
         let cur = get_env T_cur man flow in
         let cur_v = AMap.filter (fun var _ -> get_orig_vname ~warn:false var = var_as_string) cur in

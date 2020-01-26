@@ -164,7 +164,7 @@ struct
     | E_c_builtin_call("__printf_chk", _ :: format :: args) ->
       check_args format args exp.erange man flow >>$? fun () flow ->
       Eval.singleton (mk_top s32 exp.erange) flow |>
-      Option.return
+      OptionExt.return
 
     (* 𝔼⟦ fprintf(...) ⟧ *)
     | E_c_builtin_call("fprintf", stream :: format :: args)
@@ -172,7 +172,7 @@ struct
       assert_valid_stream stream exp.erange man flow >>$? fun () flow ->
       check_args format args exp.erange man flow >>$? fun () flow ->
       Eval.singleton (mk_top s32 exp.erange) flow |>
-      Option.return
+      OptionExt.return
 
     (* 𝔼⟦ sprintf(...) ⟧ *)
     | E_c_builtin_call("sprintf", dst :: format :: args)
@@ -181,7 +181,7 @@ struct
       check_args format args exp.erange man flow >>$? fun () flow ->
       memrand dst (mk_zero ~typ:ul exp.erange) (mk_top ul exp.erange) exp.erange man flow >>$? fun () flow ->
       Eval.singleton (mk_top s32 exp.erange) flow |>
-      Option.return
+      OptionExt.return
 
 
     | _ -> None

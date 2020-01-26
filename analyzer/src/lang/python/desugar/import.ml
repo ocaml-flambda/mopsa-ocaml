@@ -65,12 +65,12 @@ module Domain =
           in
           man.exec (mk_assign (mk_var v range) (mk_py_object obj range) range) flow |>
           Post.return |>
-          Option.return
+          OptionExt.return
         with Module_not_found m ->
           Format.fprintf Format.str_formatter "No module named '%s'" m;
           man.exec
             (Utils.mk_builtin_raise_msg "ModuleNotFoundError" (Format.flush_str_formatter ()) range)
-            flow |> Post.return |> Option.return
+            flow |> Post.return |> OptionExt.return
         end
 
       | S_py_import_from(modul, name, _, vmodul) ->
@@ -98,7 +98,7 @@ module Domain =
                 let stmt = mk_assign (mk_var vmodul range) (mk_var v range) range in
                 man.exec stmt flow
             end
-            |> Post.return |> Option.return
+            |> Post.return |> OptionExt.return
           | _ -> assert false
         else
          let e =
@@ -119,7 +119,7 @@ module Domain =
          let () = debug "assign %a!" pp_stmt stmt in
          man.exec stmt flow |>
          Post.return |>
-         Option.return
+         OptionExt.return
 
       | _ ->
          None
@@ -253,7 +253,7 @@ module Domain =
         | Py_program(_, g, b) -> g, b
         | _ -> assert false in
       let rec parse basename stmt globals flow : stmt * var list * 'a flow  =
-        debug "parse (basename=%a) %a" (Option.print Format.pp_print_string) basename pp_stmt stmt;
+        debug "parse (basename=%a) %a" (OptionExt.print Format.pp_print_string) basename pp_stmt stmt;
         let range = srange stmt in
         match skind stmt with
         | S_assign ({ekind = E_var (v, _)}, e) ->
@@ -341,10 +341,10 @@ module Domain =
                           let addr = {addr with addr_kind = A_py_class (C_annot newc, mro)} in
                           debug "add_typed %a" pp_addr addr;
                           let () = add_typed (addr, None) in
-                          Result.empty flow
+                          Cases.empty_singleton flow
                         )
               in
-              let flow = Result.apply (fun _ f -> f) (Flow.join man.lattice) (Flow.meet man.lattice) r in
+              let flow = Cases.apply (fun _ f -> f) (Flow.join man.lattice) (Flow.meet man.lattice) r in
               {stmt with skind = S_block ([], [])}, globals, flow
 
 
@@ -358,7 +358,7 @@ module Domain =
                   py_funca_sig =
                     [{
                       py_funcs_parameters = f.py_func_parameters;
-                      py_funcs_defaults = List.map (Option.apply (fun _ -> true) false) f.py_func_defaults;
+                      py_funcs_defaults = List.map (OptionExt.apply (fun _ -> true) false) f.py_func_defaults;
                       py_funcs_exceptions =
                         (debug "for %a, py_func_body = %a" pp_var f.py_func_var pp_stmt f.py_func_body;
                           match skind f.py_func_body with

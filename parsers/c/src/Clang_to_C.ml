@@ -1106,7 +1106,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
       if Hashtbl.mem ctx.ctx_macros macro.C.macro_name then
         begin
           let old_macro = Hashtbl.find ctx.ctx_macros macro.C.macro_name in
-          if Compare.list Pervasives.compare
+          if Compare.list Stdlib.compare
               macro.macro_contents old_macro.macro_contents
              != 0
           then

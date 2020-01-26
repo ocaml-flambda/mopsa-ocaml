@@ -574,36 +574,36 @@ struct
     match ekind pt with
     | E_c_points_to P_null ->
       raise_c_null_deref_alarm ptr range man flow |>
-      Result.empty_singleton
+      Cases.empty_singleton
 
     | E_c_points_to P_invalid ->
       raise_c_invalid_deref_alarm ptr range man flow |>
-      Result.empty_singleton
+      Cases.empty_singleton
 
     | E_c_points_to (P_block (InvalidAddr (_,r), offset)) ->
       raise_c_use_after_free_alarm ptr r range man flow |>
-      Result.empty_singleton
+      Cases.empty_singleton
 
     | E_c_points_to (P_block (InvalidVar (v,r), offset)) ->
       raise_c_dangling_deref_alarm ptr v r range man flow |>
-      Result.empty_singleton
+      Cases.empty_singleton
 
     | E_c_points_to (P_block (base, offset)) ->
-      Result.singleton (Some (base, offset)) flow
+      Cases.singleton (Some (base, offset)) flow
 
     | E_c_points_to P_top ->
-      Result.singleton None flow
+      Cases.singleton None flow
 
     | _ -> assert false
 
 
   (** Expand a pointer dereference into a cell. *)
-  let expand p range man flow : ('a, expansion) result =
+  let expand p range man flow : ('a, expansion) cases =
     eval_pointed_base_offset p range man flow >>$ fun pp flow ->
     match pp with
     | None ->
       Soundness.warn_at range "ignoring ⊤ pointer %a" pp_expr p;
-      Result.singleton Top flow
+      Cases.singleton Top flow
 
     | Some (base,offset) ->
       let typ = under_type p.etyp |> void_to_char in
@@ -621,16 +621,16 @@ struct
       | Some s, Some o ->
         if Z.gt elm s then
           let flow = raise_c_out_bound_alarm ~base ~offset ~size range man flow in
-          Result.empty_singleton flow
+          Cases.empty_singleton flow
         else
         if Z.leq Z.zero o &&
            Z.leq o (Z.sub s elm)
         then
           let c = mk_cell base o typ in
-          Result.singleton (Cell c) flow
+          Cases.singleton (Cell c) flow
         else
           let flow = raise_c_out_bound_alarm ~base ~offset ~size range man flow in
-          Result.empty_singleton flow
+          Cases.empty_singleton flow
 
       | _ ->
 
@@ -643,7 +643,7 @@ struct
           ~fthen:(fun flow ->
               (* Expand only interesting bases *)
               if not @@ is_interesting_base base
-              then Result.singleton Top flow
+              then Cases.singleton Top flow
               else
                 (* Compute the interval and create a finite number of cells *)
                 let itv, (stride,_) = man.ask (Universal.Numeric.Common.Q_int_congr_interval offset) flow in
@@ -694,21 +694,21 @@ struct
                       let flow = man.exec ~zone:Z_u_num (mk_assume (mk_binop offset O_ge (mk_z o range) range) range) flow in
                       if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
                       then []
-                      else [Result.singleton region flow]
+                      else [Cases.singleton region flow]
                   else
                     let flow = man.exec ~zone:Z_u_num (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow in
                     if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
                     then aux (i + 1) (Z.add o step)
                     else
                       let c = mk_cell base o typ in
-                      Result.singleton (Cell c) flow :: aux (i + 1) (Z.add o step)
+                      Cases.singleton (Cell c) flow :: aux (i + 1) (Z.add o step)
                 in
                 let evals = aux 0 l in
-                Result.join_list ~empty:(fun () -> Result.empty_singleton flow) evals
+                Cases.join_list ~empty:(fun () -> Cases.empty_singleton flow) evals
             )
           ~felse:(fun flow ->
               let flow = raise_c_out_bound_alarm ~base ~offset ~size range man flow in
-              Result.empty_singleton flow
+              Cases.empty_singleton flow
             )
           man flow
 
@@ -956,47 +956,47 @@ struct
     match ekind exp with
     | E_var (v,STRONG) when is_c_scalar_type v.vtyp ->
       eval_deref_scalar_pointer (mk_c_address_of exp exp.erange) false exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     | E_c_deref p when under_type p.etyp |> void_to_char |> is_c_scalar_type &&
                        not (is_pointer_offset_forall_quantified p)
       ->
       eval_deref_scalar_pointer p false exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
 
     | E_c_deref p when under_type p.etyp |> is_c_function_type &&
                        not (is_pointer_offset_forall_quantified p)
       ->
       eval_deref_function_pointer p exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     | E_c_address_of lval ->
       eval_address_of lval exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     | E_stub_primed lval when not (is_lval_offset_forall_quantified lval) ->
       eval_deref_scalar_pointer (mk_c_address_of lval exp.erange) true exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     | E_c_deref p when is_pointer_offset_forall_quantified p ->
       eval_deref_quantified p exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     | E_stub_primed e when is_lval_offset_forall_quantified e ->
       eval_deref_quantified (mk_c_address_of e exp.erange) exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
 
     | E_stub_builtin_call((VALID_PTR | VALID_FLOAT) as f, e) ->
       man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow >>$? fun e flow ->
       Eval.singleton (mk_expr (E_stub_builtin_call(f, e)) ~etyp:exp.etyp exp.erange) flow |>
-      Option.return
+      OptionExt.return
 
     | E_stub_quantified(EXISTS, v, _) ->
       let e = mk_var v exp.erange in
       man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow |>
-      Option.return
+      OptionExt.return
 
     | _ -> None
 
@@ -1246,7 +1246,7 @@ struct
     match skind stmt with
     | S_c_declaration (v,init,scope) ->
       exec_declare v scope stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | S_assign(({ekind = E_var(v, STRONG)} as lval), e) when is_c_scalar_type v.vtyp ->
       Some (
@@ -1263,50 +1263,50 @@ struct
 
     | S_assign(({ekind = E_c_deref(p)}), e) when is_c_scalar_type @@ under_type p.etyp ->
       exec_assign p e STRONG stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
 
     | S_assume(e) ->
       exec_assume e stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
 
     | S_add { ekind = E_var (v, _) } ->
       exec_add (ValidVar v) stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
 
     | S_add { ekind = E_addr addr } ->
       exec_add (ValidAddr addr) stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | S_remove { ekind = E_var (v, _) } when is_c_type v.vtyp ->
       exec_remove (ValidVar v) stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | S_remove { ekind = E_addr a } ->
       exec_remove (ValidAddr a) stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | S_rename({ ekind = E_var (v1, _) }, { ekind = E_var (v2, _) }) ->
       exec_rename (ValidVar v1) (ValidVar v2) stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | S_rename({ ekind = E_addr addr1 }, { ekind = E_addr addr2 }) ->
       exec_rename (ValidAddr addr1) (ValidAddr addr2) stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | S_stub_assigns _ ->
       Post.return flow |>
-      Option.return
+      OptionExt.return
 
     | S_stub_rename_primed(lval, bounds) ->
       exec_rename_primed lval bounds stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | S_stub_requires e ->
       exec_stub_requires e stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
 
     | _ -> None

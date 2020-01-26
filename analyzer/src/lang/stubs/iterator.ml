@@ -411,14 +411,14 @@ struct
       begin match return with
         | None ->
           Eval.singleton (mk_unit exp.erange) flow |>
-          Option.return
+          OptionExt.return
 
         | Some v ->
           Eval.singleton (mk_var v exp.erange) flow ~cleaners:(
             mk_remove_var v exp.erange ::
             List.map (fun param -> mk_remove_var param exp.erange) stub.stub_func_params
           ) |>
-          Option.return
+          OptionExt.return
       end
 
     | _ -> None
@@ -437,7 +437,7 @@ struct
       let flow = clean_post stub.stub_directive_locals stub.stub_directive_assigns stub.stub_directive_range man flow in
 
       Post.return flow |>
-      Option.return
+      OptionExt.return
 
     | _ -> None
 

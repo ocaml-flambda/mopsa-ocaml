@@ -172,8 +172,8 @@ let () =
       | S_c_for (init,cond,it,stmts) ->
         fprintf fmt "@[<v 4>for (%a;%a;%a) {@,%a@]@,}"
           pp_stmt init
-          (Option.print pp_expr) cond
-          (Option.print pp_expr) it
+          (OptionExt.print pp_expr) cond
+          (OptionExt.print pp_expr) it
           pp_stmt stmts
       | S_c_do_while (body,cond) ->
         fprintf fmt "@[<v 4>do {@,%a@]@, while (%a);"
@@ -212,7 +212,7 @@ let () =
                pp_typ f.c_func_return
                f.c_func_org_name
                (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_var) f.c_func_parameters
-               (Option.print pp_stmt) f.c_func_body
+               (OptionExt.print pp_stmt) f.c_func_body
           )
           fmt funs
         ;

@@ -97,8 +97,8 @@ let () =
     compare = (fun next c1 c2 ->
         match c1, c2 with
         | C_int z1, C_int z2 -> Z.compare z1 z2
-        | C_float f1, C_float f2 -> Pervasives.compare f1 f2
-        | C_string s1, C_string s2 -> Pervasives.compare s1 s2
+        | C_float f1, C_float f2 -> Stdlib.compare f1 f2
+        | C_string s1, C_string s2 -> Stdlib.compare s1 s2
         | C_int_interval(z1, z1'), C_int_interval(z2, z2') ->
           Compare.compose [
             (fun () -> Z.compare z1 z2);
@@ -106,8 +106,8 @@ let () =
           ]
         | C_float_interval(f1, f1'), C_float_interval(f2, f2') ->
           Compare.compose [
-            (fun () -> Pervasives.compare f1 f2);
-            (fun () -> Pervasives.compare f1' f2')
+            (fun () -> Stdlib.compare f1 f2);
+            (fun () -> Stdlib.compare f1' f2')
           ]
         | _ -> next c1 c2
       );
@@ -319,8 +319,8 @@ type fun_expr =
   | Builtin of fun_builtin
 
 let compare_fun_expr x y = match x, y with
-  | User_defined a, User_defined b -> Pervasives.compare a.fun_name b.fun_name
-  | Builtin a, Builtin b -> Pervasives.compare a b
+  | User_defined a, User_defined b -> Stdlib.compare a.fun_name b.fun_name
+  | Builtin a, Builtin b -> Stdlib.compare a b
   | _ -> 1
 
 
@@ -530,7 +530,7 @@ let () =
           ]
 
         | S_unit_tests(tl1), S_unit_tests(tl2) ->
-          Compare.list (fun (t1, _) (t2, _) -> Pervasives.compare t1 t2) tl1 tl2
+          Compare.list (fun (t1, _) (t2, _) -> Stdlib.compare t1 t2) tl1 tl2
 
         | S_assert(e1), S_assert(e2) -> compare_expr e1 e2
 

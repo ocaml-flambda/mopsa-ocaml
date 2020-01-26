@@ -621,8 +621,8 @@ let read_line_tc ctx =
     raise x
 
     
-(** Line edition, with fall-back to Pervasives.read_line if there is no terminal control. *)
+(** Line edition, with fall-back to Stdlib.read_line if there is no terminal control. *)
 let read_line ctx =
   if tc_available () then read_line_tc ctx
-  else Pervasives.read_line ()
+  else Stdlib.read_line ()
   

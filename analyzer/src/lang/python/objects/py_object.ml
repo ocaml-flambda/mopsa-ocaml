@@ -90,10 +90,10 @@ struct
                 Eval.singleton (mk_py_object (addr, None) range)
               )
         )
-      |> Option.return
+      |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__init__", _))}, _)}, args, []) ->
-      man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range) flow |> Option.return
+      man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range) flow |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("type.__getattribute__", _))}, _)}, [ptype; attribute], []) ->
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type ptype range) flow |>
@@ -124,7 +124,7 @@ struct
                   ~nothing_found:(fun flow ->
                       match o_meta_get, o_meta_attribute with
                       | Some meta_get, _ ->
-                        man.eval (mk_py_call meta_get [Option.none_to_exn o_meta_attribute; ptype; metatype] range) flow
+                        man.eval (mk_py_call meta_get [OptionExt.none_to_exn o_meta_attribute; ptype; metatype] range) flow
                       | None, Some meta_attribute ->
                         Eval.singleton meta_attribute flow
                       | None, None ->
@@ -165,7 +165,7 @@ struct
             range mro_metatype flow
 
         )
-      |> Option.return
+      |> OptionExt.return
 
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__getattribute__", _))}, _)}, [instance; attribute], []) ->
@@ -214,7 +214,7 @@ struct
               )
             range mro flow
         )
-      |> Option.return
+      |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("type.__setattr__", _))}, _)}, [lval; attr; rval], [])
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__setattr__", _))}, _)}, [lval; attr; rval], []) ->
@@ -240,7 +240,7 @@ struct
                               (mk_py_ll_setattr lval attr rval range))
             range mro flow
         )
-      |> Option.return
+      |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("type.__delattr__", _))}, _)}, [lval; attr], [])
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__delattr__", _))}, _)}, [lval; attr], []) ->
@@ -267,17 +267,17 @@ struct
                               (mk_py_ll_delattr lval attr range))
             range mro flow
         )
-      |> Option.return
+      |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__init_subclass__", _))}, _)}, cls::args, []) ->
-      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range) flow |> Option.return
+      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range) flow |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__repr__" as f, _))}, _)}, args, [])
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__str__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args
         ["object"]
         (fun _ flow -> man.eval (mk_py_top T_string range) flow)
-      |> Option.return
+      |> OptionExt.return
 
 
     | _ -> None

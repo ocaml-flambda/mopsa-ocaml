@@ -259,7 +259,7 @@ type py_func_annot = {
 
 let pp_py_func_sig (fmt: Format.formatter) (sign: py_func_sig) =
   (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ") (fun fmt (p, a) ->
-       Format.fprintf fmt "%a: %a" pp_var p (Option.print pp_expr) a))
+       Format.fprintf fmt "%a: %a" pp_var p (OptionExt.print pp_expr) a))
     fmt (List.combine sign.py_funcs_parameters sign.py_funcs_types_in)
 
 let pp_py_func_annot (fmt:Format.formatter) (a:py_func_annot) =
@@ -269,7 +269,7 @@ let pp_py_func_annot (fmt:Format.formatter) (a:py_func_annot) =
            else Format.fprintf fmt "@%a@\n" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ") pp_expr) a.py_funca_decors) ()
           pp_var a.py_funca_var
           pp_py_func_sig sign
-          (Option.print pp_expr) sign.py_funcs_type_out
+          (OptionExt.print pp_expr) sign.py_funcs_type_out
     ) a.py_funca_sig
 
 (** A Python class *)

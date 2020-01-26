@@ -233,8 +233,8 @@ let () =
         match vkind v1, vkind v2 with
         | V_cvar cvar1, V_cvar cvar2 ->
           Compare.compose [
-            (fun () -> Pervasives.compare cvar1.cvar_uid cvar2.cvar_uid);
-            (fun () -> Pervasives.compare cvar1.cvar_uniq_name cvar2.cvar_uniq_name)
+            (fun () -> Stdlib.compare cvar1.cvar_uid cvar2.cvar_uid);
+            (fun () -> Stdlib.compare cvar1.cvar_uniq_name cvar2.cvar_uniq_name)
           ]
 
         | _ -> next v1 v2
@@ -1005,28 +1005,28 @@ let rec c_expr_to_z (e:expr) : Z.t option =
   | E_constant (C_c_character (ch,_)) -> Some ch
 
   | E_unop (O_minus, e') ->
-    c_expr_to_z e' |> Option.bind @@ fun n ->
+    c_expr_to_z e' |> OptionExt.bind @@ fun n ->
     Some (Z.neg n)
 
   | E_unop (O_bit_invert, e') ->
-    c_expr_to_z e' |> Option.bind @@ fun n ->
+    c_expr_to_z e' |> OptionExt.bind @@ fun n ->
     Some (Z.lognot n)
 
   | E_unop (O_log_not, e') ->
-    c_expr_to_z e' |> Option.bind @@ fun n ->
+    c_expr_to_z e' |> OptionExt.bind @@ fun n ->
     if Z.equal n Z.zero then Some Z.one else Some Z.zero
 
   | E_binop(O_c_and, e1, e2) ->
-    c_expr_to_z e1 |> Option.bind @@ fun n1 ->
+    c_expr_to_z e1 |> OptionExt.bind @@ fun n1 ->
     if Z.equal n1 Z.zero then Some Z.zero else c_expr_to_z e2
 
   | E_binop(O_c_or, e1, e2) ->
-    c_expr_to_z e1 |> Option.bind @@ fun n1 ->
+    c_expr_to_z e1 |> OptionExt.bind @@ fun n1 ->
     if Z.equal n1 Z.zero then c_expr_to_z e2 else Some Z.one
 
   | E_binop(op, e1, e2) ->
-    c_expr_to_z e1 |> Option.bind @@ fun n1 ->
-    c_expr_to_z e2 |> Option.bind @@ fun n2 ->
+    c_expr_to_z e1 |> OptionExt.bind @@ fun n1 ->
+    c_expr_to_z e2 |> OptionExt.bind @@ fun n2 ->
     begin
       match op with
       | O_plus -> Some (Z.add n1 n2)
@@ -1047,13 +1047,13 @@ let rec c_expr_to_z (e:expr) : Z.t option =
     end
 
   | E_c_conditional(cond,e1,e2) ->
-    c_expr_to_z cond |> Option.bind @@ fun c ->
+    c_expr_to_z cond |> OptionExt.bind @@ fun c ->
     if not (Z.equal c Z.zero)
     then c_expr_to_z e1
     else c_expr_to_z e2
 
   | E_c_cast(ee,_) when is_c_int_type e.etyp ->
-    c_expr_to_z ee |> Option.bind @@ fun n ->
+    c_expr_to_z ee |> OptionExt.bind @@ fun n ->
     let a,b = rangeof e.etyp in
     if Z.leq a n && Z.leq n b then Some n else None
 

@@ -93,8 +93,8 @@ let check_instances ?(arguments_after_check=0) funname man flow range exprs inst
       man.exec (mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |>
       Eval.empty_singleton
   in
-  Result.bind_list exprs man.eval flow |>
-  Result.bind_some (fun exprs flow -> aux 1 exprs exprs instances flow)
+  Cases.bind_list exprs man.eval flow |>
+  Cases.bind_some (fun exprs flow -> aux 1 exprs exprs instances flow)
 
 let check_instances_disj ?(arguments_after_check=0) funname man flow range exprs instances processing =
   (* FIXME: error messages *)
@@ -129,8 +129,8 @@ let check_instances_disj ?(arguments_after_check=0) funname man flow range exprs
       man.exec (mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |>
       Eval.empty_singleton
   in
-  Result.bind_list exprs man.eval flow |>
-  Result.bind_some (fun exprs flow -> aux 1 exprs exprs instances flow)
+  Cases.bind_list exprs man.eval flow |>
+  Cases.bind_some (fun exprs flow -> aux 1 exprs exprs instances flow)
 
 let strip_object (e:expr) =
   let ekind = match ekind e with
@@ -152,4 +152,4 @@ let new_wrapper man range flow newcls argcls ~fthennew =
             man.exec (mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |>
             Eval.empty_singleton)
     )
-  |> Option.return
+  |> OptionExt.return

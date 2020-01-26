@@ -230,7 +230,7 @@ struct
   let ask query man flow =
     let reply1 = S.ask query (s_man man) flow in
     let reply2 = D.ask query (d_man man) flow in
-    Option.neutral2 (join_query query) reply1 reply2
+    OptionExt.neutral2 (join_query query) reply1 reply2
 
   (** Reduction refinement *)
   let refine channel man flow =

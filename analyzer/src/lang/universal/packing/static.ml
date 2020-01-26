@@ -284,7 +284,7 @@ struct
     let () = Cache.add cache v packs in
     List.fold_left (fun acc pack ->
         let aa = try Map.find pack acc with Not_found -> Domain.top in
-        let aa' = Domain.exec ctx stmt man aa |> Option.none_to_exn in
+        let aa' = Domain.exec ctx stmt man aa |> OptionExt.none_to_exn in
         Map.add pack aa' acc
       ) a packs
 
@@ -300,7 +300,7 @@ struct
         let aa = try Map.find pack acc with Not_found -> Domain.top in
         let e' = resolve_expr_missing_vars ctx pack man e in
         let stmt' = { stmt with skind = S_assign (lval, e') } in
-        let aa' = Domain.exec ctx stmt' man aa |> Option.none_to_exn in
+        let aa' = Domain.exec ctx stmt' man aa |> OptionExt.none_to_exn in
         Map.add pack aa' acc
       ) a packs
 
@@ -311,11 +311,11 @@ struct
     match skind stmt with
     | S_add {ekind = E_var _} ->
       exec_add_var ctx stmt man a |>
-      Option.return
+      OptionExt.return
 
     | S_assign ({ekind = E_var _}, _) ->
       exec_assign_var ctx stmt man a |>
-      Option.return
+      OptionExt.return
 
     | _ ->
       let has_vars = Visitor.fold_stmt
@@ -331,7 +331,7 @@ struct
         if not has_vars then
           let a' = Map.map (fun aa ->
               Domain.exec ctx stmt man aa |>
-              Option.none_to_exn
+              OptionExt.none_to_exn
             ) a
           in
           Some a'
@@ -341,12 +341,12 @@ struct
           let a' = Set.fold (fun pack acc ->
               let aa = try Map.find pack acc with Not_found -> Domain.top in
               let stmt' = resolve_stmt_missing_vars ctx pack man stmt in
-              let aa' = Domain.exec ctx stmt' man aa |> Option.none_to_exn in
+              let aa' = Domain.exec ctx stmt' man aa |> OptionExt.none_to_exn in
               Map.add pack aa' acc
             ) packs a
           in
           Some a'
-      with Option.Found_None -> None
+      with OptionExt.Found_None -> None
 
 
   (** Handler of queries *)
@@ -361,7 +361,7 @@ struct
       let rec loop = function
         | [] -> None
         | r :: tl ->
-          Option.neutral2 (meet_query q) r (loop tl)
+          OptionExt.neutral2 (meet_query q) r (loop tl)
       in
       loop rep
 

@@ -69,7 +69,7 @@ struct
                   )
             )
         )
-      |> Option.return
+      |> OptionExt.return
 
     | E_py_slice_subscript(obj, start, stop, step) ->
       bind_list [obj; start; stop; step] (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
@@ -94,7 +94,7 @@ struct
                   )
             )
         )
-      |> Option.return
+      |> OptionExt.return
 
     | _ -> None
 
@@ -123,7 +123,7 @@ struct
                    )
              )
         )
-      |> Option.return
+      |> OptionExt.return
 
     | S_assign({ekind = E_py_slice_subscript (obj, start, stop, step)}, exp) ->
       bind_list [exp; obj; start; stop; step] (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
@@ -147,7 +147,7 @@ struct
                   )
             )
         )
-      |> Option.return
+      |> OptionExt.return
 
     | _ -> None
 

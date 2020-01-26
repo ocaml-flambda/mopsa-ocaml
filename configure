@@ -2934,7 +2934,7 @@ $as_echo "$ac_cv_path_SED" >&6; }
 
 
 # Minimal versions
-MIN_OCAML_VERSION="4.07.0"
+MIN_OCAML_VERSION="4.08.0"
 MIN_LLVM_VERSION="5.0"
 
 

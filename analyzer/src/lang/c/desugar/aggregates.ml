@@ -125,13 +125,13 @@ struct
   (** The following functions flatten the initialization expression
       into a list of scalar initializations *)
   let rec flatten_init init offset typ range =
-    debug "flatten_init: %a (%a)" (Option.print Pp.pp_c_init) init pp_typ typ;
+    debug "flatten_init: %a (%a)" (OptionExt.print Pp.pp_c_init) init pp_typ typ;
     if is_c_scalar_type typ then flatten_scalar_init init offset typ range else
     if is_c_array_type typ  then flatten_array_init init offset typ range else
     if is_c_record_type typ then flatten_record_init init offset typ range
     else panic_at ~loc:__LOC__ range
         "init %a of type %a not supported"
-        (Option.print Pp.pp_c_init) init pp_typ typ
+        (OptionExt.print Pp.pp_c_init) init pp_typ typ
 
   and flatten_scalar_init init offset typ range =
     debug "flatten_scalar_init at %a" Z.pp_print offset;
@@ -207,7 +207,7 @@ struct
 
     | _ -> panic_at range ~loc:__LOC__
              "flatten_array_init: %a is not supported"
-             Pp.pp_c_init (Option.none_to_exn init)
+             Pp.pp_c_init (OptionExt.none_to_exn init)
 
 
   and flatten_record_init init offset typ range =
@@ -270,7 +270,7 @@ struct
 
 
     | _ -> panic_at ~loc:__LOC__ range "initialization %a is not supported"
-             Pp.pp_c_init (Option.none_to_exn init)
+             Pp.pp_c_init (OptionExt.none_to_exn init)
 
   
 
@@ -436,29 +436,29 @@ struct
     match skind stmt with
     | S_c_declaration(v, init, scope) ->
       declare v init scope stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | S_assign(lval, e)
     | S_expression { ekind = E_c_assign (lval, e) } when is_c_scalar_type lval.etyp ->
       assign_scalar lval e stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | S_assign(lval, e)
     | S_expression { ekind = E_c_assign (lval, e) } when is_c_record_type lval.etyp ->
       assign_record lval e stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | S_assume(e) ->
       assume e stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | S_remove e ->
       remove e stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | S_rename(e,e') ->
       rename e e' stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | S_expression e when is_c_num_type e.etyp ->
       Some (
@@ -490,7 +490,7 @@ struct
         flow |> bind_list bounds (fun (l,u) flow ->
             man.eval ~zone:(Z_c,Z_c_low_level) l flow >>$ fun l flow ->
             man.eval ~zone:(Z_c,Z_c_low_level) u flow >>$ fun u flow ->
-            Result.singleton (l,u) flow
+            Cases.singleton (l,u) flow
           ) >>$ fun bounds flow ->
         man.post ~zone:Z_c_low_level { stmt with skind = S_stub_rename_primed(lval, bounds) } flow
       )
@@ -586,34 +586,34 @@ struct
     match ekind exp with
     | E_c_array_subscript(a, i) ->
       array_subscript a i exp exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     | E_c_member_access (s, i, f) ->
       member_access s i f exp exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     | E_c_arrow_access(p, i, f) ->
       arrow_access p i f exp exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     | E_c_address_of { ekind = E_c_deref p } ->
       address_of_deref p exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     | E_c_address_of { ekind = E_c_array_subscript(a,i) } ->
       address_of_array_subscript a i exp exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     | E_c_address_of { ekind = E_c_arrow_access(p, i, f) } ->
       address_of_arrow_access p i f exp exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     | E_c_assign(lval, rval) ->
       man.eval rval ~zone:(Z_c, Z_c_low_level) flow >>$? fun rval flow ->
       man.eval lval ~zone:(Z_c, Z_c_low_level) flow >>$? fun lval flow ->
       let flow = man.exec ~zone:Z_c_low_level (mk_assign lval rval exp.erange) flow in
       Eval.singleton rval flow |>
-      Option.return
+      OptionExt.return
 
     | E_c_statement {skind = S_block (l,local_vars)} ->
       begin
@@ -624,14 +624,14 @@ struct
           let flow' = man.exec stmt' flow in
           man.eval ~zone:(Z_c, Z_c_low_level) e flow' |>
           Eval.add_cleaners (List.map (fun v -> mk_remove_var v exp.erange) local_vars) |>
-          Option.return
+          OptionExt.return
 
         | _ -> panic "E_c_statement %a not supported" pp_expr exp
       end
 
     | E_c_statement {skind = S_expression e} ->
       man.eval ~zone:(Z_c, Z_c_low_level) e flow |>
-      Option.return
+      OptionExt.return
 
     | _ -> None
 

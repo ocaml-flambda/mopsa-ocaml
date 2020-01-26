@@ -74,7 +74,7 @@ module Domain = struct
                      flow
                  )
            )
-       |> Option.return
+       |> OptionExt.return
 
     | _ -> None
 

@@ -26,10 +26,10 @@ open Flow
 open Ast.Stmt
 open Ast.Expr
 open Context
-open Result
+open Cases
 open Log
 
-type 'a eval = ('a, expr) result
+type 'a eval = ('a, expr) cases
 
 val return : ?cleaners:block -> ?log:log -> expr option -> 'a flow -> 'a eval
 
@@ -55,7 +55,7 @@ val set_ctx : 'a ctx -> 'a eval -> 'a eval
 
 val copy_ctx : 'a eval -> 'a eval -> 'a eval
 
-val bind : (expr -> 'a flow -> ('a,'r) result) -> 'a eval -> ('a,'r) result
+val bind : (expr -> 'a flow -> ('a,'r) cases) -> 'a eval -> ('a,'r) cases
 
 val apply : (expr -> 'a flow -> 'b) -> ('b -> 'b -> 'b) -> ('b -> 'b -> 'b) -> 'b -> 'a eval -> 'b
 

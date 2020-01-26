@@ -99,7 +99,7 @@ struct
               man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:WEAK els_var range) el range) acc) flow ls in
           Eval.singleton (mk_py_object (addr_set, None) range) flow
         )
-      |> Option.return
+      |> OptionExt.return
 
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__new__", _))}, _)}, cls::args, []) ->
@@ -112,7 +112,7 @@ struct
         (fun eargs flow ->
            man.eval (mk_py_none range) flow
         )
-      |> Option.return
+      |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.clear" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args ["set"]
@@ -122,13 +122,13 @@ struct
            man.exec (mk_remove_var var_els range) flow |>
            man.eval (mk_py_none range)
         )
-      |> Option.return
+      |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__contains__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f ~arguments_after_check:1 man flow range args ["set"]
         (fun args flow ->
            man.eval (mk_py_top T_bool range) flow)
-      |> Option.return
+      |> OptionExt.return
 
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, args, [])
@@ -142,7 +142,7 @@ struct
                  let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
                  man.eval expr flow)
         )
-      |> Option.return
+      |> OptionExt.return
 
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__iter__" as f, _))}, _)}, args, []) ->
@@ -160,7 +160,7 @@ struct
                Eval.singleton (mk_py_object (addr_it, None) range) flow
              )
         )
-      |> Option.return
+      |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set_iterator.__next__", _))}, _)}, [iterator], []) ->
       (* todo: checks ? *)
@@ -175,11 +175,11 @@ struct
           let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
           Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Eval.copy_ctx stopiteration els::stopiteration::[])
         )
-      |> Option.return
+      |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set_iterator.__iter__", _))}, _)}, [iterator], []) ->
       (* todo: checks ? *)
-      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) iterator flow |> Option.return
+      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) iterator flow |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__len__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args
@@ -187,7 +187,7 @@ struct
         (fun args flow ->
            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow
         )
-      |> Option.return
+      |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.add" as f, _))}, _)}, args, []) ->
       Utils.check_instances f ~arguments_after_check:1 man flow range args
@@ -198,7 +198,7 @@ struct
            let var_els = var_of_eobj set in
            man.exec (mk_assign (mk_var var_els ~mode:WEAK range) element range) flow |>
            man.eval (mk_py_none range))
-      |> Option.return
+      |> OptionExt.return
 
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.assert_set_of", _))}, _)}, args, []) ->
@@ -214,7 +214,7 @@ struct
               )
             ~felse:(Libs.Py_mopsa.check man (mk_py_false range) range)
         )
-      |> Option.return
+      |> OptionExt.return
 
 
     | _ -> None
@@ -228,7 +228,7 @@ struct
       let va' = var_of_addr a' in
       debug "renaming %a into %a@\n" pp_var va pp_var va';
       man.exec ~zone:Zone.Z_py (mk_rename_var va va' range) flow
-      |> Post.return |> Option.return
+      |> Post.return |> OptionExt.return
 
     | _ -> None
 

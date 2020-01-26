@@ -77,7 +77,7 @@ module Domain =
          let call_radd man ocondtocheck flow ~felseradd =
            let hasradd = Utils.mk_object_hasattr cls2 rop_fun range in
            assume
-             (if ocondtocheck = None then hasradd else (mk_binop hasradd O_py_and (Option.none_to_exn ocondtocheck) range))
+             (if ocondtocheck = None then hasradd else (mk_binop hasradd O_py_and (OptionExt.none_to_exn ocondtocheck) range))
              man flow
              ~fthen:(fun flow ->
                  man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object_attr cls2 rop_fun range) [e2; e1] range) flow |>
@@ -116,7 +116,7 @@ module Domain =
            )
            )
          )
-         |> Option.return
+         |> OptionExt.return
 
 
       | E_unop(op, e) when is_arith_op op ->
@@ -141,7 +141,7 @@ module Domain =
                   man flow
               )
           )
-        |> Option.return
+        |> OptionExt.return
       | _ -> None
 
     let exec _ _ _ _ = None

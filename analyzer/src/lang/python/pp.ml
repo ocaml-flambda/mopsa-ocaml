@@ -80,7 +80,7 @@ let () =
       match ekind exp with
       | E_py_ll_hasattr (e, attr) -> Format.fprintf fmt "E_py_ll_hasattr(%a, %a)" pp_expr e pp_expr attr
       | E_py_ll_getattr (e, attr) -> Format.fprintf fmt "E_py_ll_getattr(%a, %a)" pp_expr e pp_expr attr
-      | E_py_ll_setattr (e, attr, ovalu) -> Format.fprintf fmt "E_py_ll_setattr(%a, %a, %a)" pp_expr e pp_expr attr (Option.print pp_expr) ovalu
+      | E_py_ll_setattr (e, attr, ovalu) -> Format.fprintf fmt "E_py_ll_setattr(%a, %a, %a)" pp_expr e pp_expr attr (OptionExt.print pp_expr) ovalu
       | E_py_annot e -> fprintf fmt "(annot) %a" pp_expr e
       | E_py_undefined true -> fprintf fmt "global undef"
       | E_py_undefined false -> fprintf fmt "local undef"
@@ -218,10 +218,10 @@ let () =
                | None -> pp_var fmt var
                | Some ty -> fprintf fmt "%a: %a" pp_var var pp_expr ty
              )) (List.map2 (fun  x y -> (x, y)) func.py_func_parameters func.py_func_types_in)
-          (Option.print ~none:"" ~some:", *" pp_var) func.py_func_vararg
+          (OptionExt.print ~none:"" ~some:", *" pp_var) func.py_func_vararg
           (match func.py_func_vararg with | None -> "" | _ -> ", ")
           (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_var) func.py_func_kwonly_args
-          (Option.print ~none:"" ~some:", **" pp_var) func.py_func_kwarg
+          (OptionExt.print ~none:"" ~some:", **" pp_var) func.py_func_kwarg
           (fun fmt oty -> match oty with
              | None -> ()
              | Some ty -> fprintf fmt " -> %a" pp_expr ty) func.py_func_type_out

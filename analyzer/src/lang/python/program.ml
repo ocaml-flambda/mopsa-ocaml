@@ -157,7 +157,7 @@ struct
       man.exec stmt flow2 |>
       collect_uncaught_exceptions man |>
       Post.return |>
-      Option.return
+      OptionExt.return
 
     | S_program ({ prog_kind = Py_program(_, globals, body) }, _) ->
       (* Initialize global variables *)
@@ -166,7 +166,7 @@ struct
       man.exec body |>
       collect_uncaught_exceptions man |>
       Post.return |>
-      Option.return
+      OptionExt.return
 
 
 
