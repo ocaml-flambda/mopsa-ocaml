@@ -61,7 +61,7 @@ let () =
             ]
           | A_py_dict_view (s1, a1), A_py_dict_view (s2, a2) ->
             Compare.compose [
-              (fun () -> Pervasives.compare s1 s2);
+              (fun () -> Stdlib.compare s1 s2);
               (fun () -> compare_addr a1 a2);
             ]
           | _ -> default a1 a2);})

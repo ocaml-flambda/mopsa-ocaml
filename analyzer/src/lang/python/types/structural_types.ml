@@ -53,7 +53,7 @@ struct
   module AttrSet = Framework.Lattices.Powersetwithunder.Make(
     struct
       type t = string
-      let compare = Pervasives.compare
+      let compare = Stdlib.compare
       let print = Format.pp_print_string
     end)
 

@@ -233,8 +233,8 @@ let () =
         match vkind v1, vkind v2 with
         | V_cvar cvar1, V_cvar cvar2 ->
           Compare.compose [
-            (fun () -> Pervasives.compare cvar1.cvar_uid cvar2.cvar_uid);
-            (fun () -> Pervasives.compare cvar1.cvar_uniq_name cvar2.cvar_uniq_name)
+            (fun () -> Stdlib.compare cvar1.cvar_uid cvar2.cvar_uid);
+            (fun () -> Stdlib.compare cvar1.cvar_uniq_name cvar2.cvar_uniq_name)
           ]
 
         | _ -> next v1 v2

@@ -148,7 +148,7 @@ module Domain =
                    debug "ok@\n";
                    let tk =
                      if List.exists (fun x ->
-                         Pervasives.compare x exc_str = 0) !opt_unprecise_exn then
+                         Stdlib.compare x exc_str = 0) !opt_unprecise_exn then
                        let exp = Utils.strip_object exp in
                        mk_py_unprecise_exception exp exc_str (* we don't keep the message for unprecise exns *)
                      else

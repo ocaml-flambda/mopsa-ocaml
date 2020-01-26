@@ -67,7 +67,7 @@ let pp_var fmt v = TypeExt.print var_pp_chain fmt v
 
 (** Internal compare chain over variable kinds *)
 let var_compare_chain = TypeExt.mk_compare_chain (fun v1 v2 ->
-    Pervasives.compare v1.vkind v2.vkind
+    Stdlib.compare v1.vkind v2.vkind
   )
 
 
@@ -76,7 +76,7 @@ let compare_var v1 v2 =
   if v1 == v2 then 0
   else Compare.compose [
       (fun () -> TypeExt.compare var_compare_chain v1 v2);
-      (fun () -> Pervasives.compare v1.vname v2.vname);
+      (fun () -> Stdlib.compare v1.vname v2.vname);
       (fun () -> compare_typ v1.vtyp v2.vtyp);
     ]
 
@@ -205,10 +205,10 @@ let () =
     compare = (fun next v1 v2 ->
         match vkind v1, vkind v2 with
         | V_uniq (orig,uid), V_uniq (orig',uid') ->
-          Pervasives.compare uid uid'
+          Stdlib.compare uid uid'
 
         | V_tmp (uid), V_tmp (uid') ->
-          Pervasives.compare uid uid'
+          Stdlib.compare uid uid'
 
         | V_var_attr (v,attr), V_var_attr (v',attr') ->
           Compare.compose [

@@ -59,7 +59,7 @@ let () =
           (* we may return different things at one same location (for example due to disjunctions *)
           Compare.compose
             [ (fun () -> compare_range r1 r2);
-              (fun () -> Pervasives.compare b1 b2);
+              (fun () -> Stdlib.compare b1 b2);
             ]
         | _ -> next tk1 tk2
       );

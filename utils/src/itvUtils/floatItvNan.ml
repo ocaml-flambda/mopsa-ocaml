@@ -220,9 +220,9 @@ let contains (x:float) (a:t) =
 let compare (a:t) (b:t) : int =
   Compare.compose
     [(fun () -> FI.compare_bot a.itv b.itv);
-     (fun () -> Pervasives.compare a.nan  b.nan);
-     (fun () -> Pervasives.compare a.minf b.minf);
-     (fun () -> Pervasives.compare a.pinf b.pinf);
+     (fun () -> Stdlib.compare a.nan  b.nan);
+     (fun () -> Stdlib.compare a.minf b.minf);
+     (fun () -> Stdlib.compare a.pinf b.pinf);
     ]
 (** A total ordering returning -1, 0, or 1. *)
   

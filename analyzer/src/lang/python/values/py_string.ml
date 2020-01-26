@@ -28,7 +28,7 @@ open Universal.Ast
 module StringSet = Framework.Lattices.Powerset.Make(
   struct
     type t = string
-    let compare = Pervasives.compare
+    let compare = Stdlib.compare
     let print = Format.pp_print_string
   end)
 

@@ -37,9 +37,9 @@ struct
     type t = Global of string | Class of var
     let compare t1 t2 =
       match t1, t2 with
-      | Global s1, Global s2 -> Pervasives.compare s1 s2
+      | Global s1, Global s2 -> Stdlib.compare s1 s2
       | Class c1, Class c2 -> compare_var c1 c2
-      | _ -> Pervasives.compare t1 t2
+      | _ -> Stdlib.compare t1 t2
     let print fmt t  = match t with
       | Global s -> Format.fprintf fmt "Global %a" Format.pp_print_string s
       | Class v -> Format.fprintf fmt "Class %a" pp_var v

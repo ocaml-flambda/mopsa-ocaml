@@ -56,7 +56,7 @@ let rec compare_zone (z1: zone) (z2: zone) : int =
   else match z1, z2 with
     | Z_under z1, Z_under z2 -> compare_zone z1 z2
     | Z_above z1, Z_above z2 -> compare_zone z1 z2
-    | _ -> Pervasives.compare z1 z2
+    | _ -> Stdlib.compare z1 z2
 
 let compare_zone2 = Compare.pair compare_zone compare_zone
 

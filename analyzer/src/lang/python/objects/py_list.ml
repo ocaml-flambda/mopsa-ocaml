@@ -69,9 +69,9 @@ let () =
           | A_py_list v1, A_py_list v2 -> Rangeset.compare v1 v2
           | A_py_iterator (s1, a1, d1), A_py_iterator (s2, a2, d2) ->
             Compare.compose [
-              (fun () -> Pervasives.compare s1 s2);
+              (fun () -> Stdlib.compare s1 s2);
               (fun () -> Compare.list compare_addr a1 a2);
-              (fun () -> Compare.option Pervasives.compare d1 d2);
+              (fun () -> Compare.option Stdlib.compare d1 d2);
             ]
           | _ -> default a1 a2);})
 

@@ -75,7 +75,7 @@ let () =
       );
     compare = (fun next g1 g2 ->
         match g1, g2 with
-        | G_py_bool b1, G_py_bool b2 -> Option.compare Pervasives.compare b1 b2
+        | G_py_bool b1, G_py_bool b2 -> Option.compare Stdlib.compare b1 b2
         | G_group (a1, b1), G_group (a2, b2) ->
           Compare.compose
             [(fun () -> compare_addr a1 a2);
