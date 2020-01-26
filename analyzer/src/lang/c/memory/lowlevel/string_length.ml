@@ -529,15 +529,15 @@ struct
     match skind stmt with
     | S_c_declaration (v,init,scope) when not (is_c_scalar_type v.vtyp) ->
       declare_variable v scope stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | S_add { ekind = E_var (v, _) } when not (is_c_scalar_type v.vtyp) ->
       add_base (ValidVar v) stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | S_add { ekind = E_addr addr } when is_memory_base (ValidAddr addr) ->
       add_base (ValidAddr addr) stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
 
     | S_rename ({ ekind = E_var (v1,_) }, { ekind = E_var (v2,_) })
@@ -545,7 +545,7 @@ struct
            is_memory_base (ValidVar v2)
       ->
       rename_base (ValidVar v1) (ValidVar v2) stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
 
     | S_rename ({ ekind = E_addr addr1 }, { ekind = E_addr addr2 })
@@ -553,13 +553,13 @@ struct
            is_memory_base (ValidAddr addr2)
       ->
       rename_base (ValidAddr addr1) (ValidAddr addr2) stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | S_assign({ ekind = E_c_deref p}, rval)
       when under_type p.etyp |> void_to_char |> is_c_num_type
       ->
       assign_deref p rval stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     (* 𝕊⟦ *(p + i) == 0 ⟧ *)
     | S_assume({ ekind = E_binop(O_eq, lval, n)})
@@ -569,7 +569,7 @@ struct
            is_zero_expr n
       ->
       assume_zero O_eq lval stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     (* 𝕊⟦ !*(p + i) ⟧ *)
     | S_assume({ ekind = E_unop(O_log_not,lval)})
@@ -577,7 +577,7 @@ struct
            is_deref_expr lval
       ->
       assume_zero O_eq lval stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     (* 𝕊⟦ *(p + i) != 0 ⟧ *)
     | S_assume({ ekind = E_binop(O_ne, lval, n)})
@@ -587,7 +587,7 @@ struct
            is_zero_expr n
       ->
       assume_zero O_ne lval stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     (* 𝕊⟦ *(p + i) ⟧ *)
     | S_assume(lval)
@@ -595,12 +595,12 @@ struct
            is_deref_expr lval
       ->
       assume_zero O_ne lval stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
 
     | S_stub_assigns(target, offsets) ->
       stub_assigns target offsets stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
 
     | S_stub_rename_primed (target, offsets) when is_c_type target.etyp &&
@@ -608,7 +608,7 @@ struct
                                                   (not (is_c_pointer_type target.etyp) || List.length offsets > 0)
       ->
       rename_primed target offsets stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | _ -> None
 

@@ -240,8 +240,8 @@ struct
 
   (** Offset conditions for comparing two pointers *)
   let mk_offset_constraint_opt op p1 v1 o1 p2 v2 o2 range =
-    mk_offset_opt p1 v1 o1 range |> Option.bind @@ fun e1 ->
-    mk_offset_opt p2 v2 o2 range |> Option.bind @@ fun e2 ->
+    mk_offset_opt p1 v1 o1 range |> OptionExt.bind @@ fun e1 ->
+    mk_offset_opt p2 v2 o2 range |> OptionExt.bind @@ fun e2 ->
     Some (mk_binop e1 op e2 ~etyp:T_int range)
 
 
@@ -262,7 +262,7 @@ struct
 
   (** Evaluation a pointer expression into a points-to expression *)
   let eval_points_to exp man flow =
-    Static_points_to.eval_opt exp |> Option.lift @@ fun ptr ->
+    Static_points_to.eval_opt exp |> OptionExt.lift @@ fun ptr ->
 
     match ptr with
     | AddrOf (base, offset) ->
@@ -324,8 +324,8 @@ struct
                    set_value_opt p2 v man
         in
         let ee =
-          mk_offset_opt p1 v o1 range |> Option.bind @@ fun o1 ->
-          mk_offset_opt p2 v o2 range |> Option.bind @@ fun o2 ->
+          mk_offset_opt p1 v o1 range |> OptionExt.bind @@ fun o1 ->
+          mk_offset_opt p2 v o2 range |> OptionExt.bind @@ fun o2 ->
           let e = sub o1 o2 range in
           if Z.equal elem_size Z.one
           then Some e
@@ -375,7 +375,7 @@ struct
         | tt -> mul (mk_z (sizeof_type tt) ~typ:t1 exp.erange) diff ~typ:t1 exp.erange
       in
       man.eval ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) exp' flow |>
-      Option.return
+      OptionExt.return
 
     (* 𝔼⟦ p1 - p2 ⟧ *)
     | E_binop(O_minus, p1, p2)
@@ -383,14 +383,14 @@ struct
            is_c_pointer_type p2.etyp
       ->
       eval_diff p1 p2 exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     | _ when is_c_pointer_type exp.etyp ->
       assume (mk_binop exp O_eq (mk_c_null exp.erange) exp.erange)
         ~fthen:(fun flow -> Eval.singleton (mk_zero exp.erange) flow)
         ~felse:(fun flow -> Eval.singleton (mk_one exp.erange) flow)
         ~zone:Z_c_scalar man flow|>
-      Option.return
+      OptionExt.return
 
     | _ -> None
 
@@ -691,27 +691,27 @@ struct
     match skind stmt with
     | S_c_declaration(p,init,scope) when is_c_pointer_type p.vtyp ->
       declare_pointer_var p init scope stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | S_assign({ekind = E_var(p, mode)}, q) when is_c_pointer_type p.vtyp ->
       assign p q mode stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | S_add { ekind = E_var (p, _) } when is_c_pointer_type p.vtyp ->
       add_pointer_var p stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | S_remove e when zone = Z_c_points_to ->
       exec_remove_base e stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | S_rename(e,e') when zone = Z_c_points_to ->
       exec_rename_base e e' stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | S_remove { ekind = E_var (p, _) } when is_c_pointer_type p.vtyp ->
       remove_pointer_var p stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
 
     | S_rename({ekind = E_var (p1, _)}, {ekind = E_var (p2, _)})
@@ -719,7 +719,7 @@ struct
            is_c_pointer_type p2.vtyp
       ->
       rename_pointer_var p1 p2 stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
 
     (* S⟦ ?(p == q) ⟧ *)
@@ -729,7 +729,7 @@ struct
            is_c_pointer_type q.etyp
       ->
       assume_eq p q stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     (* S⟦ ?(p != q) ⟧ *)
     | S_assume ({ ekind = E_binop(O_ne, p, q) })
@@ -738,7 +738,7 @@ struct
            is_c_pointer_type q.etyp
       ->
       assume_ne p q stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
 
     (* S⟦ ?(p op q) | op ∈ {<, <=, >, >=} ⟧ *)
@@ -747,7 +747,7 @@ struct
            is_c_pointer_type q.etyp
       ->
       assume_order op p q stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     (* S⟦ ?!(p op q) | op ∈ {<, <=, >, >=} ⟧ *)
     | S_assume ({ ekind = E_unop (O_log_not, { ekind = E_binop((O_lt | O_le | O_gt | O_ge) as op, p, q) })})
@@ -755,7 +755,7 @@ struct
            is_c_pointer_type q.etyp
       ->
       assume_order (negate_comparison_op op) p q stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     (* S⟦ ?NULL ⟧ *)
     | S_assume ({ ekind = E_c_cast({ ekind = E_constant (C_int n) } as exp, _) })
@@ -763,21 +763,21 @@ struct
            Z.equal n Z.zero ->
       Flow.set T_cur man.lattice.bottom man.lattice flow |>
       Post.return |>
-      Option.return
+      OptionExt.return
 
     (* S⟦ ?NULL ⟧ *)
     | S_assume ({ ekind = E_unop (O_log_not, { ekind = E_c_cast({ ekind = E_constant (C_int n) } as exp, _) }) })
       when is_c_pointer_type exp.etyp &&
            Z.equal n Z.zero ->
       Post.return flow |>
-      Option.return
+      OptionExt.return
 
     (* S⟦ ?INVALID ⟧ *)
     (* S⟦ ?!INVALID ⟧ *)
     | S_assume ({ ekind = E_constant (C_c_invalid) })
     | S_assume ({ ekind = E_unop (O_log_not, { ekind = E_constant (C_c_invalid) }) }) ->
       Post.return flow |>
-      Option.return
+      OptionExt.return
 
     (* S⟦ ?⊤ ⟧ *)
     (* S⟦ ?!⊤ ⟧ *)
@@ -785,46 +785,46 @@ struct
     | S_assume ({ ekind = E_unop (O_log_not, { ekind = E_constant (C_top t) }) })
       when is_c_pointer_type t ->
       Post.return flow |>
-      Option.return
+      OptionExt.return
 
     (* S⟦ ?p ⟧ *)
     | S_assume ({ ekind = E_var _ } as exp)
     | S_assume ({ ekind = E_c_cast({ ekind = E_var _ },_) } as exp)
       when is_c_pointer_type exp.etyp ->
       assume_ne exp (mk_zero stmt.srange ~typ:(T_c_pointer T_c_void)) stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     (* S⟦ ?!p ⟧ *)
     | S_assume ({ ekind = E_unop (O_log_not, ({ekind = E_var _} as exp)) })
     | S_assume ({ ekind = E_unop (O_log_not, ({ ekind = E_c_cast({ ekind = E_var _ },_) } as exp)) })
       when is_c_pointer_type exp.etyp ->
       assume_eq exp (mk_zero stmt.srange ~typ:(T_c_pointer T_c_void)) stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
 
     (* S⟦ ?"..." ⟧ *)
     | S_assume ({ ekind = E_constant (C_c_string _) }) ->
       Post.return flow |>
-      Option.return
+      OptionExt.return
 
     (* S⟦ ?!"..." ⟧ *)
     | S_assume ({ ekind = E_unop(O_log_not, ({ekind = E_constant (C_c_string _)})) }) ->
       Flow.set T_cur man.lattice.bottom man.lattice flow |>
       Post.return |>
-      Option.return
+      OptionExt.return
 
     (* S⟦ (t)p ⟧ *)
     | S_assume ({ ekind = E_c_cast(p, _) })
       when is_c_pointer_type p.etyp ->
       man.post ~zone (mk_assume p stmt.srange) flow |>
-      Option.return
+      OptionExt.return
 
 
     (* S⟦ !(t)p ⟧ *)
     | S_assume ({ ekind = E_unop (O_log_not, ({ ekind = E_c_cast(p, _) })) })
       when is_c_pointer_type p.etyp ->
       man.post ~zone (mk_assume (mk_not p stmt.srange) stmt.srange) flow |>
-      Option.return
+      OptionExt.return
 
 
 

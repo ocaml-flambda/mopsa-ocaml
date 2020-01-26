@@ -91,7 +91,7 @@ struct
                   Flow.remove T_cur
       in
       Post.return flow0 |>
-      Option.return
+      OptionExt.return
 
     | S_c_label s ->
       (* Moves flow in goto label inside current *)
@@ -100,7 +100,7 @@ struct
                   Flow.remove (T_goto s)
       in
       Post.return flow0 |>
-      Option.return
+      OptionExt.return
 
     | S_c_goto_stab stmt' ->
       (* Stabilization statement for backward gotos *)
@@ -140,7 +140,7 @@ struct
       in
       let flow2 = Flow.join man.lattice gotos flow1_minus_gotos in
       Post.return flow2 |>
-      Option.return
+      OptionExt.return
 
     | _ -> None
 

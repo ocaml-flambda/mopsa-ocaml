@@ -293,22 +293,22 @@ struct
     (* 𝔼⟦ variadic f(...) ⟧ *)
     | E_call ({ ekind = E_c_function ({c_func_variadic = true} as fundec)}, args) ->
       call_variadic_function fundec args exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     (* 𝔼⟦ va_start(ap, param) ⟧ *)
     | E_c_builtin_call("__builtin_va_start", [ap; { ekind = E_var (param, _) }]) ->
       va_start ap param exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     (* 𝔼⟦ va_arg(ap) ⟧ *)
     | E_c_var_args(ap) ->
       va_arg ap exp.etyp exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     (* 𝔼⟦ va_end(ap) ⟧ *)
     | E_c_builtin_call("__builtin_va_end", [ap]) ->
       va_end ap exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     (* 𝔼⟦ va_copy(src, dst) ⟧ *)
     | E_c_builtin_call("__builtin_va_copy", [src; dst]) ->

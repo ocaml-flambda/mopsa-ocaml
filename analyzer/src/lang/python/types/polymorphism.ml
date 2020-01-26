@@ -120,7 +120,7 @@ struct
   let rec exec zone stmt man flow =
     match skind stmt with
     | S_assign ({ekind = E_var (v, _)}, {ekind = E_py_undefined _}) -> None
-    | S_assign ({ekind = E_var (v, _)}, _) -> Option.return @@ Post.return flow
+    | S_assign ({ekind = E_var (v, _)}, _) -> OptionExt.return @@ Post.return flow
     | _ -> None
 
   let rec eval zones exp man flow = None

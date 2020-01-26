@@ -89,28 +89,28 @@ struct
       let cur =
         SMap.add v (match mode with
         | WEAK ->
-          let old_s = Option.default (StringSet.empty) (SMap.find_opt v cur) in
+          let old_s = OptionExt.default (StringSet.empty) (SMap.find_opt v cur) in
           StringSet.add s old_s
         | STRONG -> StringSet.singleton s)
           cur in
       set_env T_cur cur man flow
-      |> Post.return |> Option.return
+      |> Post.return |> OptionExt.return
 
     | S_assign ({ekind = E_var (v, mode)}, {ekind = E_py_object ({addr_kind = A_py_instance scls},
                                                                  Some {ekind = E_constant (C_top T_string)})}) when compare_addr scls (fst @@ find_builtin "str") = 0 ->
       let cur = get_env T_cur man flow in
       set_env T_cur (SMap.add v StringSet.top cur) man flow
-      |> Post.return |> Option.return
+      |> Post.return |> OptionExt.return
 
     | S_assign ({ekind = E_var (v, mode)}, {ekind = E_py_object ({addr_kind = A_py_instance scls},
                                                                  Some {ekind = E_var (v', mode')})}) when
         compare_addr scls (fst @@ find_builtin "str") = 0 ->
       let cur = get_env T_cur man flow in
       debug "old cur = %a@\n" print cur;
-      let set_v' = Option.default StringSet.empty (SMap.find_opt v' cur) in
+      let set_v' = OptionExt.default StringSet.empty (SMap.find_opt v' cur) in
       let cur = match mode with
         | WEAK ->
-          let set_v = Option.default StringSet.empty (SMap.find_opt v cur) in
+          let set_v = OptionExt.default StringSet.empty (SMap.find_opt v cur) in
           SMap.add v (StringSet.join set_v set_v') cur
         | STRONG -> SMap.add v set_v' cur in
       debug "cur = %a@\n" print cur;
@@ -119,7 +119,7 @@ struct
         set_env T_cur cur man flow
       else
         flow)
-        |> Post.return |> Option.return
+        |> Post.return |> OptionExt.return
 
     | S_remove {ekind = E_var (v, _)} ->
       let cur = get_env T_cur man flow in
@@ -128,7 +128,7 @@ struct
         else
           flow
       end
-      |> Post.return |> Option.return
+      |> Post.return |> OptionExt.return
 
     | _ ->  None
 
@@ -138,7 +138,7 @@ struct
     match query with
     | Q_strings_of_var v ->
       let cur = get_env T_cur man flow in
-      let strset = Option.default StringSet.empty (SMap.find_opt v cur) in
+      let strset = OptionExt.default StringSet.empty (SMap.find_opt v cur) in
       if StringSet.is_top strset then
         let () = warn "Q_strings_of_var top" in Some "T"
       else

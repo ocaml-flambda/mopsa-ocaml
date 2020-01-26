@@ -956,47 +956,47 @@ struct
     match ekind exp with
     | E_var (v,STRONG) when is_c_scalar_type v.vtyp ->
       eval_deref_scalar_pointer (mk_c_address_of exp exp.erange) false exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     | E_c_deref p when under_type p.etyp |> void_to_char |> is_c_scalar_type &&
                        not (is_pointer_offset_forall_quantified p)
       ->
       eval_deref_scalar_pointer p false exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
 
     | E_c_deref p when under_type p.etyp |> is_c_function_type &&
                        not (is_pointer_offset_forall_quantified p)
       ->
       eval_deref_function_pointer p exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     | E_c_address_of lval ->
       eval_address_of lval exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     | E_stub_primed lval when not (is_lval_offset_forall_quantified lval) ->
       eval_deref_scalar_pointer (mk_c_address_of lval exp.erange) true exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     | E_c_deref p when is_pointer_offset_forall_quantified p ->
       eval_deref_quantified p exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     | E_stub_primed e when is_lval_offset_forall_quantified e ->
       eval_deref_quantified (mk_c_address_of e exp.erange) exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
 
     | E_stub_builtin_call((VALID_PTR | VALID_FLOAT) as f, e) ->
       man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow >>$? fun e flow ->
       Eval.singleton (mk_expr (E_stub_builtin_call(f, e)) ~etyp:exp.etyp exp.erange) flow |>
-      Option.return
+      OptionExt.return
 
     | E_stub_quantified(EXISTS, v, _) ->
       let e = mk_var v exp.erange in
       man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow |>
-      Option.return
+      OptionExt.return
 
     | _ -> None
 
@@ -1246,7 +1246,7 @@ struct
     match skind stmt with
     | S_c_declaration (v,init,scope) ->
       exec_declare v scope stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | S_assign(({ekind = E_var(v, STRONG)} as lval), e) when is_c_scalar_type v.vtyp ->
       Some (
@@ -1263,50 +1263,50 @@ struct
 
     | S_assign(({ekind = E_c_deref(p)}), e) when is_c_scalar_type @@ under_type p.etyp ->
       exec_assign p e STRONG stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
 
     | S_assume(e) ->
       exec_assume e stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
 
     | S_add { ekind = E_var (v, _) } ->
       exec_add (ValidVar v) stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
 
     | S_add { ekind = E_addr addr } ->
       exec_add (ValidAddr addr) stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | S_remove { ekind = E_var (v, _) } when is_c_type v.vtyp ->
       exec_remove (ValidVar v) stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | S_remove { ekind = E_addr a } ->
       exec_remove (ValidAddr a) stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | S_rename({ ekind = E_var (v1, _) }, { ekind = E_var (v2, _) }) ->
       exec_rename (ValidVar v1) (ValidVar v2) stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | S_rename({ ekind = E_addr addr1 }, { ekind = E_addr addr2 }) ->
       exec_rename (ValidAddr addr1) (ValidAddr addr2) stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | S_stub_assigns _ ->
       Post.return flow |>
-      Option.return
+      OptionExt.return
 
     | S_stub_rename_primed(lval, bounds) ->
       exec_rename_primed lval bounds stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | S_stub_requires e ->
       exec_stub_requires e stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
 
     | _ -> None

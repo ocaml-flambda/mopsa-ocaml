@@ -269,22 +269,22 @@ struct
     match skind stmt with
     | S_c_declaration (v,init,scope) when is_interesting_base (ValidVar v) ->
       declare_variable v scope stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | S_add { ekind = E_var (v, _) } when is_interesting_base (ValidVar v) ->
       add_base (ValidVar v) stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | S_add { ekind = E_addr addr } when is_interesting_base (ValidAddr addr) ->
       add_base (ValidAddr addr) stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | S_rename ({ ekind = E_var (v1,_) }, { ekind = E_var (v2,_) })
       when is_interesting_base (ValidVar v1) &&
            is_interesting_base (ValidVar v2)
       ->
       rename_base (ValidVar v1) (ValidVar v2) stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
 
     | S_rename ({ ekind = E_addr addr1 }, { ekind = E_addr addr2 })
@@ -292,21 +292,21 @@ struct
            is_interesting_base (ValidAddr addr2)
       ->
       rename_base (ValidAddr addr1) (ValidAddr addr2) stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | S_assign({ ekind = E_c_deref p} as lval, rval) when is_c_pointer_type lval.etyp ->
       assign_deref p rval stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
 
     | S_remove { ekind = E_var (v, _) } when is_interesting_base (ValidVar v) ->
       remove_base (ValidVar v) stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
 
     | S_stub_assigns(target, offsets) ->
       stub_assigns target offsets stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
 
     | S_stub_rename_primed (target, offsets) when is_c_type target.etyp &&
@@ -314,7 +314,7 @@ struct
                                                   (not (is_c_pointer_type target.etyp) || List.length offsets > 0)
       ->
       rename_primed target offsets stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | _ -> None
 
@@ -345,14 +345,14 @@ struct
            under_type p.etyp |> void_to_char |> is_c_scalar_type
       ->
       eval_deref exp false exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     | E_stub_primed ({ ekind = E_c_deref p } as e)
       when is_c_pointer_type exp.etyp &&
            under_type p.etyp |> void_to_char |> is_c_scalar_type
       ->
       eval_deref e true exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
 
     | _ -> None

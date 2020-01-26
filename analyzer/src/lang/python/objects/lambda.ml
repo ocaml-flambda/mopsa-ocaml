@@ -70,7 +70,7 @@ module Domain =
         eval_alloc man (A_py_function fun_addr) range flow |>
         bind_some (fun addr flow ->
             Eval.singleton (mk_py_object (addr, None) range) flow)
-        |> Option.return
+        |> OptionExt.return
 
 
       | _ -> None

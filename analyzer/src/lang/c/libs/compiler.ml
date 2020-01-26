@@ -82,11 +82,11 @@ struct
         | _ -> mk_z_interval Z.zero Z.one ~typ:s32 exp.erange
       in
       Eval.singleton ret flow |>
-      Option.return
+      OptionExt.return
 
     | E_c_builtin_call("__builtin_expect", [e;v]) ->
       man.eval e ~zone:(Z_c,Z_c_low_level) flow |>
-      Option.return
+      OptionExt.return
 
 
     | _ -> None

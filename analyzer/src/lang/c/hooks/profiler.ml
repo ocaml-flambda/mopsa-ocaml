@@ -171,14 +171,14 @@ struct
 
   let on_before_eval zone exp man flow =
     get_function_name_opt exp |>
-    Option.apply (fun fname ->
+    OptionExt.apply (fun fname ->
         handle_call fname
       ) ()
 
 
   let on_after_eval zone exp man eval =
     get_function_name_opt exp |>
-    Option.apply (fun fname ->
+    OptionExt.apply (fun fname ->
         handle_return fname
       ) ()
 

@@ -211,7 +211,7 @@ struct
   include S
   let exec zone stmt man flow =
     S.exec zone stmt man flow |>
-    Option.lift @@ fun res ->
+    OptionExt.lift @@ fun res ->
     Cases.map_log (fun log ->
         man.set_log (
           man.get_log log |> Log.append stmt

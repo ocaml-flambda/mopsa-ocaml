@@ -193,7 +193,7 @@ struct
 
         (* For the other tokens, compute the meet of the environments *)
         | _ ->
-          Option.absorb2 (fun a1 a2 ->
+          OptionExt.absorb2 (fun a1 a2 ->
               let a = man.lattice.meet ctx a1 a2 in
               if man.lattice.is_bottom a then None else Some a
             ) oa1 oa2
@@ -217,13 +217,13 @@ struct
         | None :: tl, Cons(hds,tls) ->
           aux tls tl (tlman man) |>
           Cases.bind @@ fun after flow ->
-          let after,alarms = Option.none_to_exn after in
+          let after,alarms = OptionExt.none_to_exn after in
           Cases.singleton (None :: after, alarms) flow
 
         | Some r :: tl, Cons(hds,tls) ->
           aux tls tl (tlman man) |>
           Cases.bind_full @@ fun after after_flow after_log after_cleaners ->
-          let after,alarms = Option.none_to_exn after in
+          let after,alarms = OptionExt.none_to_exn after in
           r |> Cases.bind_full @@ fun rr flow log cleaners ->
           let module S = (val hds) in
           if after |> List.exists (function Some _ -> true | None -> false) then
@@ -364,7 +364,7 @@ struct
     in
 
     let posts, ctx = man_fold_combined { f } Spec.pool coverage man ([], Flow.get_ctx flow) in
-    let posts = List.map (Option.lift (Post.set_ctx ctx)) posts |>
+    let posts = List.map (OptionExt.lift (Post.set_ctx ctx)) posts |>
                 List.rev
     in
     if List.exists (function Some _ -> true | None -> false) posts
@@ -375,7 +375,7 @@ struct
   (** Simplify a pointwise post-state by changing lists of unit into unit *)
   let simplify_pointwise_post (pointwise:('a,unit option option list) cases) : 'a post =
     pointwise |> Cases.bind @@ fun r flow ->
-    let rr = r |> Option.lift (fun rr -> ()) in
+    let rr = r |> OptionExt.lift (fun rr -> ()) in
     Cases.return rr flow
 
 
@@ -384,7 +384,7 @@ struct
     let coverage = get_exec_coverage zone in
     (fun stmt man flow ->
        exec_pointwise zone coverage stmt man flow |>
-       Option.lift @@ fun pointwise ->
+       OptionExt.lift @@ fun pointwise ->
        merge_inter_conflicts man flow pointwise |>
        simplify_pointwise_post |>
        merge_intra_conflicts man flow
@@ -420,7 +420,7 @@ struct
     in
 
     let pointwise, ctx = man_fold_combined { f } Spec.pool coverage man ([], Flow.get_ctx flow) in
-    let pointwise = List.map (Option.lift (Eval.set_ctx ctx)) pointwise |>
+    let pointwise = List.map (OptionExt.lift (Eval.set_ctx ctx)) pointwise |>
                     List.rev
     in
     if List.exists (function Some _ -> true | None -> false) pointwise
@@ -458,7 +458,7 @@ struct
     let coverage = get_eval_coverage zone in
     (fun exp man flow ->
        eval_pointwise zone coverage exp man flow |>
-       Option.lift @@ fun pointwise ->
+       OptionExt.lift @@ fun pointwise ->
        merge_inter_conflicts man flow pointwise |>
        reduce_pointwise_eval exp man |>
        merge_intra_conflicts man flow
@@ -472,7 +472,7 @@ struct
     let f = fun (type a) (m:a stack) (man:('a,a,'s) man) acc ->
       let module S = (val m) in
       S.ask query man flow |>
-      Option.neutral2 (meet_query query) acc
+      OptionExt.neutral2 (meet_query query) acc
     in
     man_fold { f } Spec.pool man None
 

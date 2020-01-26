@@ -196,9 +196,9 @@ struct
   let merge(f: token -> 'a option -> 'a option -> 'a option) (lattice: 'a lattice) (tmap1: 'a t) (tmap2: 'a t) : 'a t =
     top_lift2
       (Map.map2zo
-         (fun tk v1 -> Option.default lattice.bottom (f tk (Some v1) None))
-         (fun tk v2 -> Option.default lattice.bottom (f tk None (Some v2)))
-         (fun tk v1 v2 -> Option.default lattice.bottom (f tk (Some v1) (Some v2)))
+         (fun tk v1 -> OptionExt.default lattice.bottom (f tk (Some v1) None))
+         (fun tk v2 -> OptionExt.default lattice.bottom (f tk None (Some v2)))
+         (fun tk v1 v2 -> OptionExt.default lattice.bottom (f tk (Some v1) (Some v2)))
       )
       tmap1 tmap2
 

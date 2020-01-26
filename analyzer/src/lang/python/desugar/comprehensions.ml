@@ -88,7 +88,7 @@ module Domain =
          man.exec stmt flow |>
            man.eval acc_var |>
            Eval.add_cleaners [mk_remove_var tmp_acc range] |>
-           Option.return
+           OptionExt.return
 
       | E_py_set_comprehension (expr, comprehensions) ->
          let set = find_builtin "set" in
@@ -100,7 +100,7 @@ module Domain =
          man.exec stmt flow |>
            man.eval acc_var |>
            Eval.add_cleaners [mk_remove_var tmp_acc range] |>
-           Option.return
+           OptionExt.return
 
       | E_py_dict_comprehension (key, value, comprehensions) ->
          let dict = find_builtin "dict" in
@@ -112,7 +112,7 @@ module Domain =
          man.exec stmt flow |>
            man.eval acc_var |>
            Eval.add_cleaners [mk_remove_var tmp_acc range] |>
-           Option.return
+           OptionExt.return
 
       | E_py_generator_comprehension (expr, comprehensions) ->
          Debug.warn "No desugaring for generator comprehensions@\n"; None

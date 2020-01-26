@@ -55,7 +55,7 @@ module Domain =
                assign_iter man el exp range flow
              (*   |> Post.of_flow
               * ) *)
-         (* |> OptionExt.return *)
+         (* |> OptionExt.xt.return *)
 
       | _ -> None
 
@@ -89,7 +89,7 @@ module Domain =
       man.exec stmt flow |>
       exec_stmt_on_all_flows (mk_remove_var tmp range) man |>
       Post.return |>
-      Option.return
+      OptionExt.return
 
 
     let eval _ _ _ _ = None

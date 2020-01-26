@@ -152,4 +152,4 @@ let new_wrapper man range flow newcls argcls ~fthennew =
             man.exec (mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |>
             Eval.empty_singleton)
     )
-  |> Option.return
+  |> OptionExt.return

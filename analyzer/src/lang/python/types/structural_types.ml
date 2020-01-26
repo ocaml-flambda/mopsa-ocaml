@@ -112,15 +112,15 @@ struct
         in
         set_env T_cur cur man flow |>
         Post.return |>
-        Option.return
+        OptionExt.return
       else
         let () = warn_at (srange stmt) "%a => addr %a not in cur.abs_heap, nothing done" pp_stmt stmt pp_addr a in
         Post.return flow |>
-        Option.return
+        OptionExt.return
     | S_assign ({ekind = E_addr _}, _) ->
       debug "nothing to do@\n";
       Post.return flow |>
-      Option.return
+      OptionExt.return
 
     | S_rename ({ekind = E_addr ({addr_kind = A_py_instance _ } as a)}, {ekind = E_addr a'}) ->
       (* | S_rename ({ekind = E_addr ({addr_kind = A_py_var _ } as a)}, {ekind = E_addr a'}) -> *)
@@ -144,7 +144,7 @@ struct
       let flow = set_env T_cur ncur man flow in
       man.exec to_rename_stmt flow |>
       Post.return |>
-      Option.return
+      OptionExt.return
 
     | S_add ({ekind = E_addr a}) ->
       debug "S_add";
@@ -153,7 +153,7 @@ struct
       debug "S_add ok?";
       set_env T_cur ncur man flow |>
       Post.return |>
-      Option.return
+      OptionExt.return
 
     | _ -> None
 
@@ -246,7 +246,7 @@ struct
         | _ ->
           Exceptions.panic_at range "has %a attr %s?@\n" pp_expr e attr
       end
-      |> Option.return
+      |> OptionExt.return
 
     | E_py_ll_getattr({ekind = E_py_object ((addr, objexpr) as obj)} as e, attr) ->
       let attr = match ekind attr with
@@ -286,7 +286,7 @@ struct
             try
               mk_py_object (find_builtin_attribute (object_of_expr e) attr) range
             with Not_found ->
-              Option.none_to_exn @@ find_annot c.py_cls_a_body in
+              OptionExt.none_to_exn @@ find_annot c.py_cls_a_body in
           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) obj  flow
 
 
@@ -307,7 +307,7 @@ struct
 
         | _ -> Exceptions.panic_at range "ll_getattr: todo %a, attr=%s in@\n%a" pp_addr addr attr (Flow.print man.lattice.print) flow
       end
-      |> Option.return
+      |> OptionExt.return
 
     | E_py_ll_setattr({ekind = E_py_object (alval, objexpr)} as lval, attr, Some rval) ->
       let attr = match ekind attr with
@@ -320,7 +320,7 @@ struct
             let var = List.find (fun v -> get_orig_vname v = attr) c.py_cls_static_attributes in
             man.exec (mk_assign (mk_var var range) rval range) flow
             |> man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range)
-            |> Option.return
+            |> OptionExt.return
           else
             Exceptions.panic_at range "Adding an attribute to a *class* is not supported yet"
         (* todo: enelver l'ancien c.py_cls_dec et ajouter le nouveau ave cla bonne variable, avant de faire la même assignation *)
@@ -342,7 +342,7 @@ struct
           let attr_var = mk_addr_attr alval attr T_any in
           man.exec ~zone:Zone.Z_py (mk_assign (mk_var attr_var range) rval range) flow
           |> man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range)
-          |> Option.return
+          |> OptionExt.return
 
         | _ -> assert false
       end
@@ -363,12 +363,12 @@ struct
               set_env T_cur (AMap.add alval (AttrSet.remove attr old_attrset) cur) man flow
             else flow in
           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range) flow |>
-          Option.return
+          OptionExt.return
       end
 
     | E_py_ll_setattr(e, attr, o) ->
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
-      Eval.bind (fun e flow -> man.eval {exp with ekind = E_py_ll_setattr(e, attr, o)} flow) |> Option.return
+      Eval.bind (fun e flow -> man.eval {exp with ekind = E_py_ll_setattr(e, attr, o)} flow) |> OptionExt.return
 
     | _ ->
       None
@@ -413,7 +413,7 @@ struct
         Some (exc, message)
 
       | Q_print_addr_related_info addr ->
-        Option.return @@
+        OptionExt.return @@
         fun fmt ->
         let cur = get_env T_cur man flow in
         let addrs = AMap.filter (fun a _ -> compare_addr a addr = 0) cur in

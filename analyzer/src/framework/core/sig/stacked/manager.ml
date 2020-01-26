@@ -124,7 +124,7 @@ let assume
     else Some (felse else_flow)
   in
 
-  match Option.neutral2 Cases.join then_res else_res with
+  match OptionExt.neutral2 Cases.join then_res else_res with
   | None -> Cases.empty_singleton flow
   | Some r -> r
 
@@ -176,7 +176,7 @@ let switch
     | (cond, t) :: q ->
       let r = one cond flow t in
       let rr = aux q in
-      Option.neutral2 Cases.join r rr
+      OptionExt.neutral2 Cases.join r rr
   in
   match aux cases with
   | None -> assert false

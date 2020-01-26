@@ -153,7 +153,7 @@ let map_opt (f:'r -> 's option option) (r:('a,'r) cases) : ('a,'s) cases =
            | None -> None
            | Some rr -> Some (Dnf.singleton { case with case_result = rr })
       )
-      (Option.neutral2 Dnf.mk_or) (Option.neutral2 Dnf.mk_and)
+      (OptionExt.neutral2 Dnf.mk_or) (OptionExt.neutral2 Dnf.mk_and)
       r.cases_dnf
   in
   match cases with
@@ -303,14 +303,14 @@ let bind_full_opt
       (fun ctx case ->
          let flow' = Flow.create ctx case.case_alarms case.case_flow in
          let r' = f case.case_result flow' case.case_log case.case_cleaners in
-         let ctx = Option.apply get_ctx ctx r' in
+         let ctx = OptionExt.apply get_ctx ctx r' in
          (ctx,r')
       )
-      (Option.neutral2 join)
-      (Option.neutral2 meet)
+      (OptionExt.neutral2 join)
+      (OptionExt.neutral2 meet)
       (get_ctx r) r.cases_dnf
   in
-  Option.lift (set_ctx ctx) ret
+  OptionExt.lift (set_ctx ctx) ret
 
 
 let (>>*?) r f = bind_full_opt f r
@@ -319,7 +319,7 @@ let (>>*?) r f = bind_full_opt f r
 
 let bind_full f r =
   bind_full_opt (fun e flow log cleaners -> Some (f e flow log cleaners)) r |>
-  Option.none_to_exn
+  OptionExt.none_to_exn
 
 let (>>*) r f = bind_full f r
 
@@ -331,8 +331,8 @@ let bind_opt
   : ('a,'s) cases option =
   r |> bind_full_opt (fun r flow log cleaners ->
       f r flow |>
-      Option.lift (add_cleaners cleaners) |>
-      Option.lift (concat_log log)
+      OptionExt.lift (add_cleaners cleaners) |>
+      OptionExt.lift (concat_log log)
     )
 
 
@@ -341,7 +341,7 @@ let (>>=?) r f = bind_opt f r
 
 let bind f r =
   bind_opt (fun e flow -> Some (f e flow)) r |>
-  Option.none_to_exn
+  OptionExt.none_to_exn
 
 let (>>=) r f = bind f r
 
@@ -366,7 +366,7 @@ let bind_some
   : ('a,'s) cases
   =
   bind_some_opt (fun r flow -> Some (f r flow)) r |>
-  Option.none_to_exn
+  OptionExt.none_to_exn
 
 
 let (>>$) r f = bind_some f r
@@ -382,27 +382,27 @@ let bind_list_opt
     match l with
     | e :: tl ->
       f e flow |>
-      Option.absorb @@ bind_some_opt @@ fun e' flow ->
+      OptionExt.absorb @@ bind_some_opt @@ fun e' flow ->
       aux tl flow |>
-      Option.lift @@ bind_some @@ fun tl' flow ->
+      OptionExt.lift @@ bind_some @@ fun tl' flow ->
       singleton (e'::tl') flow
 
 
     | [] ->
       singleton [] flow |>
-      Option.return
+      OptionExt.return
   in
   aux l flow
 
 
 let bind_list l f flow =
   bind_list_opt l (fun e flow -> Some (f e flow)) flow |>
-  Option.none_to_exn
+  OptionExt.none_to_exn
 
 
 let remove_duplicates compare lattice r =
   let ctx = r.cases_ctx in
-  let compare_case case case' = Option.compare compare case.case_result case'.case_result in
+  let compare_case case case' = OptionExt.compare compare case.case_result case'.case_result in
   let rec simplify_conj conj =
     match conj with
     | [] -> conj

@@ -150,11 +150,11 @@ struct
     match skind stmt with
     | S_c_declaration(v,None,_) when is_c_variable_length_array_type v.vtyp ->
       exec_declare v stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | S_remove { ekind = E_var(v,_) } when is_c_variable_length_array_type v.vtyp ->
       exec_remove v stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | _ -> None
 
@@ -172,7 +172,7 @@ struct
     match ekind exp with
     | E_stub_builtin_call(BYTES, { ekind = E_var(v,_) }) when is_c_variable_length_array_type v.vtyp ->
       eval_bytes v exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     | _ -> None
 

@@ -64,21 +64,21 @@ module Domain =
       let range = erange exp in
       match ekind exp with
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.random_bool", _))}, _)}, [], []) ->
-         man.eval (mk_py_top T_bool range) flow |> Option.return
+         man.eval (mk_py_top T_bool range) flow |> OptionExt.return
 
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.random_float", _))}, _)}, [], []) ->
-         man.eval (mk_py_top (T_float F_DOUBLE) range) flow |> Option.return
+         man.eval (mk_py_top (T_float F_DOUBLE) range) flow |> OptionExt.return
 
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.random_string", _))}, _)}, [], []) ->
-         man.eval (mk_py_top T_string range) flow |> Option.return
+         man.eval (mk_py_top T_string range) flow |> OptionExt.return
 
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.random_int", _))}, _)}, [], []) ->
-         man.eval (mk_py_top T_int range) flow |> Option.return
+         man.eval (mk_py_top T_int range) flow |> OptionExt.return
 
       (* | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_int")}, _)}, [
        *                {ekind = E_constant (C_int l)}; {ekind = E_constant (C_int u)}
        *              ], []) ->
-       *    man.eval (mk_py_z_interval l u range) flow |> Option.return *)
+       *    man.eval (mk_py_z_interval l u range) flow |> OptionExt.return *)
 
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.random_int", _))}, _)}, [l; u], []) ->
               let tmp = mktmp () in
@@ -89,7 +89,7 @@ module Domain =
               in
               man.eval (mk_var tmp range) flow |>
               Eval.add_cleaners [mk_remove_var tmp range] |>
-              Option.return
+              OptionExt.return
 
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.random_float", _))}, _)}, [l; u], []) ->
          begin
@@ -108,25 +108,25 @@ module Domain =
               man.eval (mk_var tmp range) flow |> Eval.add_cleaners [mk_remove_var tmp range]
               (* Eval.singleton (mk_var tmp range) ~cleaners:[mk_remove_var tmp range] flow *)
          end
-         |> Option.return
+         |> OptionExt.return
 
       (* Calls to mopsa.assert_equal function *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.assert_equal", _))}, _)}, [x; y], []) ->
          let range = erange exp in
          check man (mk_binop x O_eq y (tag_range range "eq")) range flow
-         |> Option.return
+         |> OptionExt.return
 
       (* Calls to mopsa assert function *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.massert", _))}, _)}, [x], []) ->
          let range = erange exp in
          check man x range flow
-         |> Option.return
+         |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.assert_exists", _))}, _)}, [cond], [])  ->
          let stmt = {skind = S_satisfy(cond); srange = exp.erange} in
          let flow = man.exec stmt flow in
          Eval.singleton (mk_py_true exp.erange) flow
-         |> Option.return
+         |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.assert_safe", _))}, _)}, [], [])  ->
          begin
@@ -155,10 +155,10 @@ module Domain =
              in
              debug "Flow is now %a@\n" (Flow.print man.lattice.print) flow;
              man.eval (mk_py_true exp.erange) flow
-             |> Option.return
+             |> OptionExt.return
            with BottomFound ->
              Eval.empty_singleton flow
-             |> Option.return
+             |> OptionExt.return
          end
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.assert_unsafe", _))}, _)}, [], [])  ->
@@ -184,8 +184,8 @@ module Domain =
                         Flow.filter (fun tk _ -> match tk with T_py_exception _ -> false | _ -> true) |>
                         Flow.set T_cur cur man.lattice
              in
-             Eval.singleton (mk_py_true exp.erange) flow |> Option.return
-           with BottomFound -> Eval.empty_singleton flow |> Option.return
+             Eval.singleton (mk_py_true exp.erange) flow |> OptionExt.return
+           with BottomFound -> Eval.empty_singleton flow |> OptionExt.return
          end
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.assert_exception", _))}, _)}, [{ekind = cls} as assert_exn], []) ->
@@ -221,7 +221,7 @@ module Domain =
         in
         debug "flow = %a@\n" (Flow.print man.lattice.print) flow;
         man.eval (mk_py_false exp.erange) flow
-        |> Option.return
+        |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.ignore_exception", _))}, _)}, [{ekind = cls} as assert_exn], []) ->
          debug "begin ignore_exception(%a) on %a" pp_expr assert_exn (Flow.print man.lattice.print) flow;
@@ -241,7 +241,7 @@ module Domain =
              | _ -> Flow.set tk env man.lattice acc) (Flow.bottom ctx alarms) flow
          in
          debug "Final flow = %a" (Flow.print man.lattice.print) flow;
-         man.eval none flow |> Option.return
+         man.eval none flow |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.assert_exception_exists", _))}, _)}, [{ekind = cls} as assert_exn], [])  ->
         debug "begin assert_exception_exists";
@@ -265,7 +265,7 @@ module Domain =
                    man.exec stmt |> Flow.set T_cur cur man.lattice in
         debug "flow = %a" (Flow.print man.lattice.print) flow;
         man.eval (mk_py_true exp.erange) flow
-        |> Option.return
+        |> OptionExt.return
 
       | _ ->
          None

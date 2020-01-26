@@ -256,15 +256,15 @@ struct
     match ekind exp with
     | E_c_builtin_call(f, []) when is_rand_function f ->
       mk_rand (extract_rand_type f) exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     | E_c_builtin_call(f, [l;u]) when is_range_function f ->
       mk_range (extract_range_type f) l u exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     | E_c_builtin_call("_mopsa_invalid_pointer", []) ->
       Eval.singleton (mk_c_invalid_pointer exp.erange) flow |>
-      Option.return
+      OptionExt.return
 
     | E_c_builtin_call("_mopsa_panic", [msg]) ->
       let rec remove_cast e =
@@ -281,32 +281,32 @@ struct
     | E_c_builtin_call("_mopsa_print", []) ->
        Framework.Output.Factory.print (erange exp) (Flow.print man.lattice.print) flow;
        Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
-       Option.return
+       OptionExt.return
 
     | E_c_builtin_call("_mopsa_print", args) ->
       Framework.Output.Factory.print (erange exp) (print_values args man) flow;
       Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
-      Option.return
+      OptionExt.return
 
 
     | E_c_builtin_call("_mopsa_assume", [cond]) ->
       let stmt = mk_assume cond exp.erange in
       let flow = man.exec stmt flow in
       Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
-      Option.return
+      OptionExt.return
 
 
     | E_c_builtin_call("_mopsa_assert", [cond]) ->
       let stmt = mk_assert cond exp.erange in
       let flow = man.exec stmt flow in
       Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
-      Option.return
+      OptionExt.return
 
     | E_c_builtin_call("_mopsa_assert_exists", [cond]) ->
       let stmt = mk_satisfy cond exp.erange in
       let flow = man.exec stmt flow in
       Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
-      Option.return
+      OptionExt.return
 
 
     | E_c_builtin_call("_mopsa_assert_safe", []) ->
@@ -317,7 +317,7 @@ struct
         else Universal.Iterators.Unittest.raise_assert_fail exp exp.erange man ~force:true flow
       in
       Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
-      Option.return
+      OptionExt.return
 
     | E_c_builtin_call("_mopsa_assert_unsafe", []) ->
       let is_safe = Flow.get_alarms flow |> AlarmSet.is_empty in
@@ -327,7 +327,7 @@ struct
         else Universal.Iterators.Unittest.raise_assert_fail exp exp.erange ~force:true man flow
       in
       Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
-      Option.return
+      OptionExt.return
 
 
     | _ -> None

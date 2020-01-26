@@ -96,7 +96,7 @@ struct
                    Eval.empty_singleton
                  )
         )
-      |> Option.return
+      |> OptionExt.return
 
     | _ -> None
 

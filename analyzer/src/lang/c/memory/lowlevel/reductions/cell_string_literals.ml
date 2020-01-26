@@ -43,7 +43,7 @@ struct
     let oe2 = man.get_eval strings evals in
 
     (* Reduce only when both domains did an evaluation *)
-    Option.apply2
+    OptionExt.apply2
       (fun e1 e2 ->
          match ekind e1, ekind e2 with
           (* Constants from the string literals domain should be precise *)

@@ -125,7 +125,7 @@ module Domain =
             | T_py_exception _ -> Flow.add tk env man.lattice acc
             | _ -> acc
           ) flow old_flow |>
-        Post.return |> Option.return
+        Post.return |> OptionExt.return
 
       | S_py_raise(Some exp) ->
         debug "Raising %a@\n" pp_expr exp;
@@ -177,7 +177,7 @@ module Domain =
                flow
            )
         )
-        |> Option.return
+        |> OptionExt.return
 
       | S_py_raise None ->
         panic_at stmt.srange "exceptions: re-raise previous caught exception not supported"

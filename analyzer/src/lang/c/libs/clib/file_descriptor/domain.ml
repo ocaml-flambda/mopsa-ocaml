@@ -415,7 +415,7 @@ struct
     | S_remove({ekind = E_addr ({ addr_kind = A_stub_resource "FileRes"} as addr)}) ->
       remove addr man flow |>
       Post.return |>
-      Option.return
+      OptionExt.return
 
     | _ -> None
 
@@ -436,7 +436,7 @@ struct
         | _ ->
           Eval.singleton (mk_int (-1) ~typ:s8 exp.erange) flow
       end
-      |> Option.return
+      |> OptionExt.return
 
 
     (* 𝔼⟦ _mopsa_register_file_resource_at(f) ⟧ *)
@@ -451,14 +451,14 @@ struct
         | _ ->
           Eval.singleton (mk_int (-1) ~typ:s8 exp.erange) flow
       end
-      |> Option.return
+      |> OptionExt.return
 
 
     (* 𝔼⟦ _mopsa_find_file_resource(fd) ⟧ *)
     | E_c_builtin_call("_mopsa_find_file_resource", [fd]) ->
       man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) fd flow >>$? fun fd flow ->
       find_addr fd exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
 
     (* 𝔼⟦ n in FileDescriptor ⟧ *)
@@ -472,7 +472,7 @@ struct
       in
 
       Eval.singleton exp' flow |>
-      Option.return
+      OptionExt.return
 
 
     | _ -> None

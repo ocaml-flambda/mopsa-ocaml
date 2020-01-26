@@ -162,7 +162,7 @@ struct
       (fun stmt man flow ->
          match f1 stmt (d1_man man) flow with
          | Some post ->
-           Option.return post
+           OptionExt.return post
 
          | None ->
            f2 stmt (d2_man man) flow
@@ -208,7 +208,7 @@ struct
   let ask query man flow =
     let reply1 = D1.ask query (d1_man man) flow in
     let reply2 = D2.ask query (d2_man man) flow in
-    Option.neutral2 (join_query query) reply1 reply2
+    OptionExt.neutral2 (join_query query) reply1 reply2
 
 
   (** Reduction refinement *)

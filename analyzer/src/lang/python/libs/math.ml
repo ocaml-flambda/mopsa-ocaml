@@ -102,7 +102,7 @@ module Domain =
         debug "function %s in stub_base, processing@\n" f;
         let {in_args; out_type} = StringMap.find f stub_base in
         process_simple f man flow range args in_args out_type
-        |> Option.return
+        |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("math.frexp" as f, _))}, _)}, args, []) ->
         Utils.check_instances f man flow range args
@@ -112,7 +112,7 @@ module Domain =
                                   [mk_py_top (T_float F_DOUBLE) range; mk_py_top T_int range]
                                ) range)  flow
           )
-        |> Option.return
+        |> OptionExt.return
 
       (* math.fsum is handled in the list abstraction *)
 
@@ -124,14 +124,14 @@ module Domain =
                                   [mk_py_top (T_float F_DOUBLE) range; mk_py_top (T_float F_DOUBLE) range]
                                ) range)  flow
           )
-        |> Option.return
+        |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("math.sqrt" as f, _))}, _)}, args, []) ->
         Utils.check_instances_disj f man flow range args
           [["int"; "float"]]
           (fun args ->
              man.eval (mk_py_top (T_float F_DOUBLE) range))
-        |> Option.return
+        |> OptionExt.return
 
       | _ -> None
 

@@ -74,7 +74,7 @@ struct
                      Format.fprintf fmt "in_flow = %a@\nout_flow = %a@\noexpr = %a@\n"
                        (Flow.print p) in_flow
                        (Flow.print p) out_flow
-                       (Option.print pp_expr) oexpr)
+                       (OptionExt.print pp_expr) oexpr)
                      fmt list
              )
           )
@@ -116,7 +116,7 @@ struct
     | E_call({ekind = E_function (User_defined func)}, args) ->
 
       if man.lattice.is_bottom (Flow.get T_cur man.lattice flow)
-      then Eval.empty_singleton flow |> Option.return
+      then Eval.empty_singleton flow |> OptionExt.return
       else
 
       let in_flow = flow in
@@ -160,7 +160,7 @@ struct
           debug "reusing something in function %s@\nchanging in_flow=%a@\ninto out_flow=%a@\n" func.fun_name (Flow.print man.lattice.print) in_flow (Flow.print man.lattice.print) out_flow;
           Cases.return oout_expr (Flow.join man.lattice in_flow_other out_flow)
       end
-      |> Option.return
+      |> OptionExt.return
 
 
 

@@ -188,15 +188,15 @@ struct
     match skind stmt with
     | S_c_switch(e, body) ->
       exec_switch e body stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | S_c_switch_case(_,upd) ->
       exec_case_or_default upd stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | S_c_switch_default upd ->
       exec_case_or_default upd stmt.srange man flow |>
-      Option.return
+      OptionExt.return
 
     | _ -> None
 

@@ -36,7 +36,7 @@ let pp_warning fmt w =
 
 let compare_warning w1 w2 =
   Compare.compose [
-    (fun () -> Option.compare compare_range w1.warn_range w2.warn_range);
+    (fun () -> OptionExt.compare compare_range w1.warn_range w2.warn_range);
     (fun () -> compare w1.warn_message w2.warn_message);
   ]
 
