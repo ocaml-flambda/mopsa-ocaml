@@ -186,7 +186,7 @@ val bind_opt :
 (** Same as [bind_full_opt], but without passing cleaners and logs to the partial transfer function. *)
 
 
-val (>>>?) :
+val (>>=?) :
   ('a,'r) cases ->
   ('r option -> 'a flow -> ('a,'s) cases option) ->
   ('a,'s) cases option
@@ -201,7 +201,7 @@ val bind :
 (** Same as [bind_full], but without passing cleaners and logs to the transfer function. *)
 
 
-val (>>>) :
+val (>>=) :
   ('a,'r) cases ->
   ('r option -> 'a flow -> ('a,'s) cases) ->
   ('a,'s) cases

@@ -48,7 +48,7 @@ struct
          match ekind e1, ekind e2 with
          | _, E_constant (C_top _) ->
            let evals = man.del_eval smashing evals in
-           Result.singleton evals flow
+           Cases.singleton evals flow
 
          | E_constant (C_top _),_ ->
            let evals = man.del_eval cells evals in

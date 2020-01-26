@@ -336,14 +336,14 @@ let bind_opt
     )
 
 
-let (>>>?) r f = bind_opt f r
+let (>>=?) r f = bind_opt f r
 
 
 let bind f r =
   bind_opt (fun e flow -> Some (f e flow)) r |>
   Option.none_to_exn
 
-let (>>>) r f = bind f r
+let (>>=) r f = bind f r
 
 
 let bind_some_opt

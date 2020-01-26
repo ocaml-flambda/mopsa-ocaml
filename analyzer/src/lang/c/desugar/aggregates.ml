@@ -490,7 +490,7 @@ struct
         flow |> bind_list bounds (fun (l,u) flow ->
             man.eval ~zone:(Z_c,Z_c_low_level) l flow >>$ fun l flow ->
             man.eval ~zone:(Z_c,Z_c_low_level) u flow >>$ fun u flow ->
-            Result.singleton (l,u) flow
+            Cases.singleton (l,u) flow
           ) >>$ fun bounds flow ->
         man.post ~zone:Z_c_low_level { stmt with skind = S_stub_rename_primed(lval, bounds) } flow
       )

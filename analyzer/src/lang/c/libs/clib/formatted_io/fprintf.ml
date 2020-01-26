@@ -129,7 +129,7 @@ struct
 
   (** Check that arguments correspond to the format *)
   let check_args format args range man flow =
-    let$ placeholders,flow = parse_output_format format range man flow in
+    parse_output_format format range man flow >>$ fun placeholders flow ->
     let nb_required = List.length placeholders in
     let nb_given = List.length args in
     if nb_required > nb_given then

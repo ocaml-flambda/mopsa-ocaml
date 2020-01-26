@@ -598,7 +598,7 @@ struct
 
 
   (** Expand a pointer dereference into a cell. *)
-  let expand p range man flow : ('a, expansion) result =
+  let expand p range man flow : ('a, expansion) cases =
     eval_pointed_base_offset p range man flow >>$ fun pp flow ->
     match pp with
     | None ->

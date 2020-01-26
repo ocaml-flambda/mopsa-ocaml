@@ -236,21 +236,21 @@ struct
   let is_sentinel_expr ?(zone=Z_c_low_level) e man flow =
     (* Try static checks *)
     match ekind (remove_casts e) with
-    | E_c_address_of _            -> Result.singleton false flow
-    | E_constant (C_c_string _)   -> Result.singleton false flow
+    | E_c_address_of _            -> Cases.singleton false flow
+    | E_constant (C_c_string _)   -> Cases.singleton false flow
     | E_var (v,_)
-      when is_c_array_type v.vtyp -> Result.singleton false flow
-    | E_constant C_c_invalid      -> Result.singleton true flow
+      when is_c_array_type v.vtyp -> Cases.singleton false flow
+    | E_constant C_c_invalid      -> Cases.singleton true flow
     | _ ->
       match c_expr_to_z (remove_casts e) with
-      | Some e -> Result.singleton (Z.equal e Z.zero) flow
+      | Some e -> Cases.singleton (Z.equal e Z.zero) flow
       | None ->
         (* If the above heuristics fails, fall back to dynamic evaluations *)
         man.eval e ~zone:(zone,Z_c_points_to) flow >>$ fun pt flow ->
         match ekind pt with
-        | E_c_points_to P_top -> Result.join (Result.singleton true flow) (Result.singleton false flow)
-        | E_c_points_to (P_null | P_invalid) -> Result.singleton true flow
-        | E_c_points_to (P_block _ | P_fun _) -> Result.singleton false flow
+        | E_c_points_to P_top -> Cases.join (Cases.singleton true flow) (Cases.singleton false flow)
+        | E_c_points_to (P_null | P_invalid) -> Cases.singleton true flow
+        | E_c_points_to (P_block _ | P_fun _) -> Cases.singleton false flow
         | _ -> assert false
 
   

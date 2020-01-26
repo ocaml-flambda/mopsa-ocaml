@@ -36,10 +36,10 @@ let bind_full_opt = Cases.bind_full_opt
 let (>>*?) = Cases.(>>*?)
 
 let bind = Cases.bind
-let (>>>) = Cases.(>>>)
+let (>>=) = Cases.(>>=)
 
 let bind_opt = Cases.bind_opt
-let (>>>?) = Cases.(>>>?)
+let (>>=?) = Cases.(>>=?)
 
 
 let bind_some = Cases.bind_some

@@ -145,7 +145,7 @@ let switch
     | [] -> Some (f acc)
     | x :: tl ->
       let s = mk_assume x x.erange in
-      man.post ~zone s acc >>>? fun _ acc' ->
+      man.post ~zone s acc >>=? fun _ acc' ->
       if Flow.get T_cur man.lattice acc' |> man.lattice.is_bottom then
         None
       else
