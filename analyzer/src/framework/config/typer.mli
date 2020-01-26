@@ -81,15 +81,15 @@ type spec = {
 
 
 (** Create a domain configuration from a json object *)
-val domain : spec -> json -> config
+val domain : spec -> Yojson.Basic.t -> config
 
 
 (** Create a stack configuration from a json object *)
-val stack : spec -> json -> config
+val stack : spec -> Yojson.Basic.t -> config
 
 
 (** Create a value configuration from a json object *)
-val value : spec -> json -> config
+val value : spec -> Yojson.Basic.t -> config
 
 (** Cast a configuration to a given signature *)
 val cast : signature -> config -> config
