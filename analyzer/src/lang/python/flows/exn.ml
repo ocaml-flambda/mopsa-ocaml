@@ -132,7 +132,7 @@ module Domain =
         (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) exp flow |>
          bind_full (fun exp flow log cleaners ->
              match exp with
-             | None -> Result.return None flow ~log ~cleaners
+             | None -> Cases.return None flow ~log ~cleaners
              | Some exp ->
              (* match ekind exp with
               * | E_py_object obj -> *)

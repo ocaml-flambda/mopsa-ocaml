@@ -52,7 +52,7 @@ struct
 
          | E_constant (C_top _),_ ->
            let evals = man.del_eval cells evals in
-           Result.singleton evals flow
+           Cases.singleton evals flow
 
          (* If both domains returned variables, refine the results *)
          | E_var _, E_var _
@@ -65,18 +65,18 @@ struct
              let evals = man.del_eval cells evals |>
                          man.del_eval smashing
              in
-             Result.singleton evals flow
+             Cases.singleton evals flow
            else
              let evals = man.del_eval smashing evals in
-             Result.singleton evals flow
+             Cases.singleton evals flow
 
 
          (* Otherwise, keep the cell evaluation *)
          | _, _ ->
            let evals = man.del_eval smashing evals in
-           Result.singleton evals flow
+           Cases.singleton evals flow
       )
-      (Result.singleton evals flow)
+      (Cases.singleton evals flow)
       oe1 oe2
 
 end

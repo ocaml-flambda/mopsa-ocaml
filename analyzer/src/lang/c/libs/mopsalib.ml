@@ -152,7 +152,7 @@ struct
     let evl = man.eval ~zone:(Z_c,Z_u_num) exp flow in
     Format.fprintf fmt "%s = %a"
       display
-      (Result.print (fun fmt e flow ->
+      (Cases.print_some (fun fmt e flow ->
            let itv = man.ask (mk_int_interval_query e) flow in
            pp_int_interval fmt itv
          )
@@ -163,7 +163,7 @@ struct
     let evl = man.eval ~zone:(Z_c,Z_u_num) exp flow in
     Format.fprintf fmt "%s = %a"
       display
-      (Result.print (fun fmt e flow ->
+      (Cases.print_some (fun fmt e flow ->
            let itv = man.ask (mk_float_interval_query e) flow in
            pp_float_interval fmt itv
          )
@@ -175,13 +175,13 @@ struct
     let evl = man.eval ~zone:(Z_c,Z_c_points_to) exp flow in
     Format.fprintf fmt "%s ⇝ %a"
       display
-      (Result.print (fun fmt e flow ->
+      (Cases.print_some (fun fmt e flow ->
            match ekind e with
            | E_c_points_to (P_block(base,offset)) ->
              let evl = man.eval ~zone:(Z_c_scalar,Z_u_num) offset flow in
              Format.fprintf fmt "&(%a%a)"
                pp_base base
-               (Result.print (fun fmt e flow ->
+               (Cases.print_some (fun fmt e flow ->
                     let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query e) flow in
                     Universal.Numeric.Values.Intervals.Integer.Value.print fmt itv
                   )

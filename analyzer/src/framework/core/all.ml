@@ -25,30 +25,32 @@ module Callstack = Callstack
 
 module Context = Context
 
-module Result = Result
+module Cases = Cases
 
-type ('a,'r) result = ('a,'r) Result.result
+type ('a,'r) cases = ('a,'r) Cases.cases
 
-let bind_full = Result.bind_full
-let (>>*) = Result.(>>*)
+let bind_full = Cases.bind_full
+let (>>*) = Cases.(>>*)
 
-let bind_full_opt = Result.bind_full_opt
-let (>>*?) = Result.(>>*?)
+let bind_full_opt = Cases.bind_full_opt
+let (>>*?) = Cases.(>>*?)
 
-let bind = Result.bind
-let (>>=) = Result.(>>=)
+let bind = Cases.bind
+let (>>>) = Cases.(>>>)
 
-let bind_opt = Result.bind_opt
-let (>>=?) = Result.(>>=?)
+let bind_opt = Cases.bind_opt
+let (>>>?) = Cases.(>>>?)
 
-let bind_some = Result.bind_some
-let (>>$) = Result.(>>$)
 
-let bind_some_opt = Result.bind_some_opt
-let (>>$?) = Result.(>>$?)
+let bind_some = Cases.bind_some
+let (>>$) = Cases.(>>$)
 
-let bind_list = Result.bind_list
-let bind_list_opt = Result.bind_list_opt
+
+let bind_some_opt = Cases.bind_some_opt
+let (>>$?) = Cases.(>>$?)
+
+let bind_list = Cases.bind_list
+let bind_list_opt = Cases.bind_list_opt
 
 
 module Eval = Eval

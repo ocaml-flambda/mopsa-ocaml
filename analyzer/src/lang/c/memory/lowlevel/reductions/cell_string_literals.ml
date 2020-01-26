@@ -52,14 +52,14 @@ struct
           | _, E_constant (C_int_interval _) ->
             (* Remove cell evaluation *)
             let evals = man.del_eval cells evals in
-            Result.singleton evals flow
+            Cases.singleton evals flow
 
           (* Otherwise, keep cells *)
           | _ ->
             let evals = man.del_eval strings evals in
-            Result.singleton evals flow
+            Cases.singleton evals flow
       )
-      (Result.singleton evals flow)
+      (Cases.singleton evals flow)
       oe1 oe2
 
 end

@@ -198,12 +198,12 @@ struct
       assume
         (mk_binop offset O_eq (mk_zero range) ~etyp:u8 range)
         ~fthen:(fun flow ->
-            Result.singleton ap flow
+            Cases.singleton ap flow
           )
         ~felse:(fun flow ->
             man.eval offset ~zone:(Z_c_scalar,Universal.Zone.Z_u_num) flow >>$ fun offset flow ->
             raise_c_out_bound_alarm ~base:(ValidVar ap) ~offset ~size:(mk_z base_size range) range (Core.Sig.Stacked.Manager.of_domain_man man) flow |>
-            Result.empty_singleton
+            Cases.empty_singleton
           )
         ~zone:Z_c
         man flow

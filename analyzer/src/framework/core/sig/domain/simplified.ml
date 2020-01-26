@@ -192,7 +192,7 @@ struct
         Option.lift @@ fun a' ->
         Intermediate.set_env T_cur a' man flow |>
         Post.return |>
-        Result.map_log (fun log ->
+        Cases.map_log (fun log ->
             man.set_log (
               man.get_log log |> Log.append stmt
             ) log

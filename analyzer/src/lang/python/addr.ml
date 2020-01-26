@@ -65,7 +65,7 @@ let eval_alloc man kind range flow =
   man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) exp flow |>
   Eval.bind (fun exp flow ->
       match ekind exp with
-      | E_addr (addr) -> Result.singleton addr flow
+      | E_addr (addr) -> Cases.singleton addr flow
       | _ -> panic "eval_alloc: allocation returned a non-address express %a" pp_expr exp
     )
 

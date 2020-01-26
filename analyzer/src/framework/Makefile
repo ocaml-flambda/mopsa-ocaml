@@ -24,7 +24,7 @@
 framework = ast core lattices engines transformers output config hooks runner
 framework.ast = program frontend typ operator constant var expr stmt visitor all
 framework.core = query context zone callstack alarm token log lattice        \
-		 soundness flow result eval post id interface channel sig    \
+		 soundness flow cases eval post id interface channel sig    \
                  hook cache abstraction all
 framework.core.sig = value domain stacked functor
 framework.core.sig.value = lowlevel simplified reduction

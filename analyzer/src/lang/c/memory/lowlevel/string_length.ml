@@ -154,10 +154,10 @@ struct
     | E_c_points_to P_invalid
     | E_c_points_to (P_block (InvalidAddr _, _))
     | E_c_points_to P_top ->
-      Result.empty_singleton flow
+      Cases.empty_singleton flow
 
     | E_c_points_to (P_block (base, offset)) ->
-      Result.singleton (base, offset) flow
+      Cases.singleton (base, offset) flow
 
     | _ -> assert false
 

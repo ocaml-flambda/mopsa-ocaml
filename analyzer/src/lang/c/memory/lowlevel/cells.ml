@@ -574,25 +574,25 @@ struct
     match ekind pt with
     | E_c_points_to P_null ->
       raise_c_null_deref_alarm ptr range man flow |>
-      Result.empty_singleton
+      Cases.empty_singleton
 
     | E_c_points_to P_invalid ->
       raise_c_invalid_deref_alarm ptr range man flow |>
-      Result.empty_singleton
+      Cases.empty_singleton
 
     | E_c_points_to (P_block (InvalidAddr (_,r), offset)) ->
       raise_c_use_after_free_alarm ptr r range man flow |>
-      Result.empty_singleton
+      Cases.empty_singleton
 
     | E_c_points_to (P_block (InvalidVar (v,r), offset)) ->
       raise_c_dangling_deref_alarm ptr v r range man flow |>
-      Result.empty_singleton
+      Cases.empty_singleton
 
     | E_c_points_to (P_block (base, offset)) ->
-      Result.singleton (Some (base, offset)) flow
+      Cases.singleton (Some (base, offset)) flow
 
     | E_c_points_to P_top ->
-      Result.singleton None flow
+      Cases.singleton None flow
 
     | _ -> assert false
 
@@ -603,7 +603,7 @@ struct
     match pp with
     | None ->
       Soundness.warn_at range "ignoring ⊤ pointer %a" pp_expr p;
-      Result.singleton Top flow
+      Cases.singleton Top flow
 
     | Some (base,offset) ->
       let typ = under_type p.etyp |> void_to_char in
@@ -621,16 +621,16 @@ struct
       | Some s, Some o ->
         if Z.gt elm s then
           let flow = raise_c_out_bound_alarm ~base ~offset ~size range man flow in
-          Result.empty_singleton flow
+          Cases.empty_singleton flow
         else
         if Z.leq Z.zero o &&
            Z.leq o (Z.sub s elm)
         then
           let c = mk_cell base o typ in
-          Result.singleton (Cell c) flow
+          Cases.singleton (Cell c) flow
         else
           let flow = raise_c_out_bound_alarm ~base ~offset ~size range man flow in
-          Result.empty_singleton flow
+          Cases.empty_singleton flow
 
       | _ ->
 
@@ -643,7 +643,7 @@ struct
           ~fthen:(fun flow ->
               (* Expand only interesting bases *)
               if not @@ is_interesting_base base
-              then Result.singleton Top flow
+              then Cases.singleton Top flow
               else
                 (* Compute the interval and create a finite number of cells *)
                 let itv, (stride,_) = man.ask (Universal.Numeric.Common.Q_int_congr_interval offset) flow in
@@ -694,21 +694,21 @@ struct
                       let flow = man.exec ~zone:Z_u_num (mk_assume (mk_binop offset O_ge (mk_z o range) range) range) flow in
                       if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
                       then []
-                      else [Result.singleton region flow]
+                      else [Cases.singleton region flow]
                   else
                     let flow = man.exec ~zone:Z_u_num (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow in
                     if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
                     then aux (i + 1) (Z.add o step)
                     else
                       let c = mk_cell base o typ in
-                      Result.singleton (Cell c) flow :: aux (i + 1) (Z.add o step)
+                      Cases.singleton (Cell c) flow :: aux (i + 1) (Z.add o step)
                 in
                 let evals = aux 0 l in
-                Result.join_list ~empty:(fun () -> Result.empty_singleton flow) evals
+                Cases.join_list ~empty:(fun () -> Cases.empty_singleton flow) evals
             )
           ~felse:(fun flow ->
               let flow = raise_c_out_bound_alarm ~base ~offset ~size range man flow in
-              Result.empty_singleton flow
+              Cases.empty_singleton flow
             )
           man flow
 

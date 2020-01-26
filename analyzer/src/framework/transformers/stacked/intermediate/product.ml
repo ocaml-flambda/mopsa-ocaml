@@ -202,29 +202,29 @@ struct
 
 
   (** Merge the conflicts between distinct domains in a pointwise result *)
-  let merge_inter_conflicts man pre (pointwise:('a,'r) result option list) : ('a,'r option option list) result =
-    let rec aux : type t. t stack_list -> ('a,'r) result option list -> ('a,t,'s) man -> ('a,'r option option list * alarm_class list) result =
+  let merge_inter_conflicts man pre (pointwise:('a,'r) cases option list) : ('a,'r option option list) cases =
+    let rec aux : type t. t stack_list -> ('a,'r) cases option list -> ('a,t,'s) man -> ('a,'r option option list * alarm_class list) cases =
       fun pool pointwise man ->
         match pointwise, pool with
         | [None], _ ->
-          Result.singleton ([None],[]) pre
+          Cases.singleton ([None],[]) pre
 
         | [Some r], Cons(s,Nil) ->
-          r |> Result.bind @@ fun rr flow ->
+          r |> Cases.bind @@ fun rr flow ->
           let module S = (val s) in
-          Result.singleton ([Some rr],S.alarms) flow
+          Cases.singleton ([Some rr],S.alarms) flow
 
         | None :: tl, Cons(hds,tls) ->
           aux tls tl (tlman man) |>
-          Result.bind @@ fun after flow ->
+          Cases.bind @@ fun after flow ->
           let after,alarms = Option.none_to_exn after in
-          Result.singleton (None :: after, alarms) flow
+          Cases.singleton (None :: after, alarms) flow
 
         | Some r :: tl, Cons(hds,tls) ->
           aux tls tl (tlman man) |>
-          Result.bind_full @@ fun after after_flow after_log after_cleaners ->
+          Cases.bind_full @@ fun after after_flow after_log after_cleaners ->
           let after,alarms = Option.none_to_exn after in
-          r |> Result.bind_full @@ fun rr flow log cleaners ->
+          r |> Cases.bind_full @@ fun rr flow log cleaners ->
           let module S = (val hds) in
           if after |> List.exists (function Some _ -> true | None -> false) then
             let hdman = hdman man in
@@ -245,21 +245,21 @@ struct
             let flow = merge_flows ~merge_alarms man pre (flow,log) (after_flow,after_log) in
             let log = Log.concat log after_log in
             let cleaners = cleaners @ after_cleaners in
-            Result.return (Some (Some rr :: after, S.alarms @ alarms |> List.sort_uniq compare)) flow ~cleaners ~log
+            Cases.return (Some (Some rr :: after, S.alarms @ alarms |> List.sort_uniq compare)) flow ~cleaners ~log
           else
-            Result.return (Some (Some rr :: after, S.alarms @ alarms |> List.sort_uniq compare)) flow ~cleaners ~log
+            Cases.return (Some (Some rr :: after, S.alarms @ alarms |> List.sort_uniq compare)) flow ~cleaners ~log
 
 
         | _ -> assert false
     in
     aux Spec.pool pointwise man |>
-    Result.map (fun (r,alarms) -> r)
+    Cases.map (fun (r,alarms) -> r)
 
 
 
   (** Merge the conflicts emerging from the same domain *)
-  let merge_intra_conflicts man pre (r:('a,'r) result) : ('a,'r) result =
-    Result.merge_conjunctions_flow (fun (flow1,log1) (flow2,log2) ->
+  let merge_intra_conflicts man pre (r:('a,'r) cases) : ('a,'r) cases =
+    Cases.map_fold_conjunctions (fun (flow1,log1) (flow2,log2) ->
         merge_flows ~merge_alarms:AlarmSet.inter man pre (flow1,log1) (flow2,log2)
       ) r
 
@@ -373,10 +373,10 @@ struct
 
 
   (** Simplify a pointwise post-state by changing lists of unit into unit *)
-  let simplify_pointwise_post (pointwise:('a,unit option option list) result) : 'a post =
-    pointwise |> Result.bind @@ fun r flow ->
+  let simplify_pointwise_post (pointwise:('a,unit option option list) cases) : 'a post =
+    pointwise |> Cases.bind @@ fun r flow ->
     let rr = r |> Option.lift (fun rr -> ()) in
-    Result.return rr flow
+    Cases.return rr flow
 
 
   (** Entry point of abstract transformers *)
@@ -431,12 +431,12 @@ struct
 
 
   (** Apply reduction rules on a pointwise evaluation *)
-  let reduce_pointwise_eval exp man (pointwise:('a,expr option option list) result) : 'a eval =
+  let reduce_pointwise_eval exp man (pointwise:('a,expr option option list) cases) : 'a eval =
     let eman = rman man in
     (* Let reduction rules roll out imprecise evaluations from [pointwise] *)
     let pointwise = List.fold_left (fun pointwise rule ->
         let module R = (val rule : EVAL_REDUCTION) in
-        pointwise |> Result.bind_some @@ fun el flow ->
+        pointwise |> Cases.bind_some @@ fun el flow ->
         R.reduce exp eman el flow
       ) pointwise Spec.erules
     in
@@ -444,7 +444,7 @@ struct
        THE CHOICE IS ARBITRARY: keep the first non-None result using the
        order of domains in the configuration file.
     *)
-    let evl = pointwise |> Result.map_opt (fun el ->
+    let evl = pointwise |> Cases.map_opt (fun el ->
         try List.find (function Some _ -> true | None -> false) el
         with Not_found -> None
       )

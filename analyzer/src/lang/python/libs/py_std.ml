@@ -267,8 +267,8 @@ struct
       let tyerror = fun flow ->
         Format.fprintf Format.str_formatter "hash() takes exactly one argument (%d given)" (List.length args);
         man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |> Eval.empty_singleton in
-      Result.bind_list args man.eval flow |>
-      Result.bind_some (fun eargs flow ->
+      Cases.bind_list args man.eval flow |>
+      Cases.bind_some (fun eargs flow ->
           if List.length eargs <> 1 then tyerror flow else
             let el = List.hd eargs in
             man.eval (mk_py_call (mk_py_object_attr (object_of_expr el) "__hash__" range) [] range) flow

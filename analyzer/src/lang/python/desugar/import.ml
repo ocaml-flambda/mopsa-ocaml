@@ -341,10 +341,10 @@ module Domain =
                           let addr = {addr with addr_kind = A_py_class (C_annot newc, mro)} in
                           debug "add_typed %a" pp_addr addr;
                           let () = add_typed (addr, None) in
-                          Result.empty flow
+                          Cases.empty_singleton flow
                         )
               in
-              let flow = Result.apply (fun _ f -> f) (Flow.join man.lattice) (Flow.meet man.lattice) r in
+              let flow = Cases.apply (fun _ f -> f) (Flow.join man.lattice) (Flow.meet man.lattice) r in
               {stmt with skind = S_block ([], [])}, globals, flow
 
 

@@ -38,7 +38,7 @@ open Post
 open Zone
 open Query
 open Log
-open Result
+open Cases
 
 
 type ('a, 't) man = ('a, 't) Sig.Domain.Lowlevel.man = {
@@ -317,7 +317,7 @@ struct
             let parts, builder = split_expr exp in
             match parts with
             | {exprs; stmts = []} ->
-              Result.bind_list exprs
+              Cases.bind_list exprs
                 (fun exp flow ->
                    match eval_over_paths paths exp man flow with
                    | None ->

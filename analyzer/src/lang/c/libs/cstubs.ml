@@ -171,19 +171,19 @@ struct
         match ekind pt with
         | E_c_points_to P_null ->
           raise_c_null_deref_alarm ptr range man' flow |>
-          Result.empty_singleton
+          Cases.empty_singleton
 
         | E_c_points_to P_invalid ->
           raise_c_invalid_deref_alarm ptr range man' flow |>
-          Result.empty_singleton
+          Cases.empty_singleton
 
         | E_c_points_to (P_block (InvalidAddr (_,r), offset)) ->
           raise_c_use_after_free_alarm ptr r range man' flow |>
-          Result.empty_singleton
+          Cases.empty_singleton
 
         | E_c_points_to (P_block (InvalidVar (v,r), offset)) ->
           raise_c_dangling_deref_alarm ptr v r range man' flow |>
-          Result.empty_singleton
+          Cases.empty_singleton
 
         | E_c_points_to P_top ->
           Soundness.warn_at range "ignoring requirement check due to ⊤ pointer %a" pp_expr ptr;

@@ -275,7 +275,7 @@ struct
   let exec zone stmt man flow =
     D.exec zone stmt man flow |>
     Option.lift @@ fun res ->
-    Result.map_log (fun log ->
+    Cases.map_log (fun log ->
         man.set_log (
           man.get_log log |> Log.append stmt
         ) log
