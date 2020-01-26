@@ -54,7 +54,7 @@ struct
 
     | S_assume { ekind = E_unop (O_log_not, { ekind = E_unop (O_log_not, e) }) } ->
       man.post ~zone (mk_assume e stmt.srange) flow |>
-      Option.return
+      OptionExt.return
 
     | S_block(block,local_vars) ->
       Some (
@@ -73,7 +73,7 @@ struct
       in
       Flow.join man.lattice then_flow else_flow |>
       Post.return |>
-      Option.return
+      OptionExt.return
 
     | S_print ->
       Framework.Output.Factory.print (srange stmt) (Flow.print man.lattice.print) flow;

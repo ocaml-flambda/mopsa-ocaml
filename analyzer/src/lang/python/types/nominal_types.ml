@@ -94,7 +94,7 @@ struct
              proceed "type"
            | _ -> Exceptions.panic_at range "type: todo: %a@\n" pp_expr arg
         )
-      |> Option.return
+      |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("issubclass", _))}, _)}, [cls; cls'], []) ->
       bind_list [cls; cls'] (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
@@ -106,7 +106,7 @@ struct
           | A_py_class (c, mro), A_py_class (c', mro') ->
             Eval.singleton (mk_py_bool (class_le (c, mro) (c', mro')) range) flow
           | _ -> panic_at range "%a, cls=%a, cls'=%a" pp_expr exp pp_expr cls pp_expr cls')
-      |> Option.return
+      |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("isinstance", _))}, _)}, [obj; attr], []) ->
       (* TODO: if v is a class inheriting from protocol we should check the attributes *)
@@ -210,7 +210,7 @@ struct
 
           | _ -> assert false
         )
-      |> Option.return
+      |> OptionExt.return
 
     | _ -> None
 

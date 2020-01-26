@@ -54,17 +54,17 @@ struct
     let range = erange exp in
     match ekind exp with
     | E_constant (C_top T_bool) ->
-      Eval.singleton (mk_py_object (Addr_env.addr_bool_top (), None) range) flow |> Option.return
+      Eval.singleton (mk_py_object (Addr_env.addr_bool_top (), None) range) flow |> OptionExt.return
 
     | E_constant (C_bool true) ->
-      Eval.singleton (mk_py_object (Addr_env.addr_true (), None) range) flow |> Option.return
+      Eval.singleton (mk_py_object (Addr_env.addr_true (), None) range) flow |> OptionExt.return
 
     | E_constant (C_bool false) ->
-      Eval.singleton (mk_py_object (Addr_env.addr_false (), None) range) flow |> Option.return
+      Eval.singleton (mk_py_object (Addr_env.addr_false (), None) range) flow |> OptionExt.return
 
     | E_constant (C_top T_int)
     | E_constant (C_int _) ->
-      Eval.singleton (mk_py_object (Addr_env.addr_integers (), None) range) flow |> Option.return
+      Eval.singleton (mk_py_object (Addr_env.addr_integers (), None) range) flow |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_class (C_builtin "bool", _)}, _)}, [arg], [])
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bool.__new__", _))}, _)}, [_; arg], []) ->
@@ -98,13 +98,13 @@ struct
               )
             man flow
         )
-      |> Option.return
+      |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("NoneType.__bool__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args ["NoneType"] (fun eargs flow ->
           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_false range) flow
         )
-      |> Option.return
+      |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("int.__new__", _))}, _)}, [cls], []) ->
       Utils.new_wrapper man range flow "int" cls
@@ -147,7 +147,7 @@ struct
                   Eval.empty_singleton flow)
               man flow
         )
-      |>  Option.return
+      |>  OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, [e1; e2], [])
       when is_arith_binop_fun "int" f ->
@@ -176,7 +176,7 @@ struct
                 Eval.empty_singleton flow)
             man flow
         )
-      |>  Option.return
+      |>  OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, [e], [])
       when is_arith_unop_fun f ->
@@ -191,13 +191,13 @@ struct
                 man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) expr false_flow)
             man flow
         )
-      |> Option.return
+      |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("int.__bool__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args
         ["int"]
         (fun _ flow -> man.eval (mk_py_top T_bool range) flow)
-      |> Option.return
+      |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("int.__str__" as f, _))}, _)}, args, [])
     (* todo: weird, tp_str set to 0 in longobject.c *)
@@ -205,7 +205,7 @@ struct
       Utils.check_instances f man flow range args
         ["int"]
         (fun _ flow -> man.eval (mk_py_top T_string range) flow)
-      |> Option.return
+      |> OptionExt.return
 
     | _ -> None
 

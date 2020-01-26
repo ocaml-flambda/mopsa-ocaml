@@ -138,7 +138,7 @@ module Domain = struct
           )
         ~felse:(call_op false)
         )))
-      |> Option.return
+      |> OptionExt.return
 
     | _ -> None
 

@@ -48,10 +48,10 @@ module Domain =
       match skind stmt with
       (* S⟦ assert(e, msg) ⟧ *)
       | S_py_assert ({ekind = E_constant (C_bool true)}, msg)->
-         Post.return flow |> Option.return
+         Post.return flow |> OptionExt.return
 
       | S_py_assert ({ekind = E_constant (C_bool false)}, msg)->
-         man.exec (Utils.mk_builtin_raise "AssertionError" range) flow |> Post.return |> Option.return
+         man.exec (Utils.mk_builtin_raise "AssertionError" range) flow |> Post.return |> OptionExt.return
 
       | S_py_assert (e, msg)->
          man.eval e flow |>
@@ -71,7 +71,7 @@ module Domain =
          in
          Flow.join man.lattice ok_case fail_case
          |> Post.return
-         |> Option.return
+         |> OptionExt.return
 
       | _ -> None
 

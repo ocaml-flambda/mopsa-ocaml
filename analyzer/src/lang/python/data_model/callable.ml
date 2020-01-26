@@ -86,7 +86,7 @@ module Domain =
                    man flow
             ) in
         Debug.debug ~channel:"profiling" "Call %a: %.4f at range %a" pp_expr f (Timing.stop start) pp_range range;
-        res |> Option.return
+        res |> OptionExt.return
 
       | E_py_call(f, args, _) ->
         panic_at range "calls with **kwargs not supported"

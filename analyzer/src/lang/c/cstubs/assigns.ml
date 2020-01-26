@@ -78,7 +78,7 @@ struct
     match skind stmt with
     | S_stub_free { ekind = E_addr (addr) } ->
       Post.return flow |>
-      Option.return
+      OptionExt.return
 
     | S_stub_free p ->
       man.eval ~zone:(Z_c, Z_c_points_to) p flow >>$? fun pt flow ->
@@ -95,23 +95,23 @@ struct
           let stmt'' = mk_stub_free (mk_addr addr stmt.srange) stmt.srange in
           man.exec stmt'' flow' |>
           Post.return |>
-          Option.return
+          OptionExt.return
 
         | E_c_points_to (P_block (InvalidAddr ({ addr_kind = A_stub_resource _ }, drange), _)) ->
           Common.Alarms.(raise_c_double_free_alarm p drange stmt.srange (Sig.Stacked.Manager.of_domain_man man) flow) |>
           Post.return |>
-          Option.return
+          OptionExt.return
 
         | E_c_points_to P_null ->
           Post.return flow |>
-          Option.return
+          OptionExt.return
 
         | E_c_points_to P_top ->
           Soundness.warn_at stmt.srange
             "ignoring free statement because of undetermined resource pointer"
           ;
           Post.return flow |>
-          Option.return
+          OptionExt.return
 
 
         | _ ->
@@ -127,7 +127,7 @@ struct
       man.exec ~zone:Z_c_low_level stmt |>
       man.exec ~zone:Z_c_points_to stmt |>
       Post.return |>
-      Option.return
+      OptionExt.return
 
     | S_stub_requires { ekind = E_stub_builtin_call(VALID_PTR, ptr) } ->
       Some (
@@ -137,19 +137,19 @@ struct
         match ekind pt with
         | E_c_points_to P_null ->
           raise_c_null_deref_alarm ptr range man' flow |>
-          Result.empty_singleton
+          Cases.empty_singleton
 
         | E_c_points_to P_invalid ->
           raise_c_invalid_deref_alarm ptr range man' flow |>
-          Result.empty_singleton
+          Cases.empty_singleton
 
         | E_c_points_to (P_block (InvalidAddr (_,r), offset)) ->
           raise_c_use_after_free_alarm ptr r range man' flow |>
-          Result.empty_singleton
+          Cases.empty_singleton
 
         | E_c_points_to (P_block (InvalidVar (v,r), offset)) ->
           raise_c_dangling_deref_alarm ptr v r range man' flow |>
-          Result.empty_singleton
+          Cases.empty_singleton
 
         | E_c_points_to P_top ->
           Soundness.warn_at range "ignoring requirement check due to ⊤ pointer %a" pp_expr ptr;
@@ -223,7 +223,7 @@ struct
       (* Allocate in the heap *)
       let alloc = mk_alloc_addr (A_stub_resource res) exp.erange in
       man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) alloc flow |>
-      Option.return |> Option.lift @@ Eval.bind @@ fun exp flow ->
+      OptionExt.return |> OptionExt.lift @@ Eval.bind @@ fun exp flow ->
 
       begin match ekind exp with
       | E_addr addr ->
@@ -237,7 +237,7 @@ struct
 
     | E_stub_builtin_call(BYTES, { ekind = E_addr addr }) ->
       Eval.singleton (mk_var (mk_bytes_var addr) exp.erange) flow |>
-      Option.return
+      OptionExt.return
 
 
     | E_stub_builtin_call(BYTES, e) ->
@@ -350,7 +350,7 @@ struct
 
     | E_stub_attribute(p, attr) ->
       man.eval ~zone:(Z_c, Z_c_points_to) p flow |>
-      Option.return |> Option.lift @@ Eval.bind @@ fun pt flow ->
+      OptionExt.return |> OptionExt.lift @@ Eval.bind @@ fun pt flow ->
 
       begin match ekind pt with
         | E_c_points_to (P_block (ValidAddr ({ addr_kind = A_stub_resource _ } as addr), _)) ->
@@ -366,7 +366,7 @@ struct
 
     | E_stub_resource_mem(p, res) ->
       man.eval ~zone:(Z_c, Z_c_points_to) p flow |>
-      Option.return |> Option.lift @@ Eval.bind @@ fun pt flow ->
+      OptionExt.return |> OptionExt.lift @@ Eval.bind @@ fun pt flow ->
 
       begin match ekind pt with
         | E_c_points_to (P_block (ValidAddr { addr_kind = A_stub_resource res' }, _))

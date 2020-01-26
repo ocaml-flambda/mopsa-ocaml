@@ -165,7 +165,7 @@ struct
         let tmap = Flow.get_token_map flow in
         let alarms = Flow.get_alarms flow in
         let evls = EvalCache.find (zone,exp,tmap,alarms) eval_cache in
-        Option.lift (fun evl ->
+        OptionExt.lift (fun evl ->
             let ctx = Context.get_most_recent (Eval.get_ctx evl) (Flow.get_ctx flow) in
             Eval.set_ctx ctx evl
           ) evls

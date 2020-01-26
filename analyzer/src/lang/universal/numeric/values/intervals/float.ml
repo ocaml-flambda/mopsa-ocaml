@@ -203,11 +203,11 @@ struct
     | NormalQuery(Common.Q_float_interval e) ->
       man.eval e |>
       man.get |>
-      Option.return
+      OptionExt.return
 
     | ValueQuery(a,Common.VQ_to_float_interval) ->
       man.get a |>
-      Option.return
+      OptionExt.return
 
     | _ -> None
 

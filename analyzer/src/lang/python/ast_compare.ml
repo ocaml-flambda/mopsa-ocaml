@@ -31,7 +31,7 @@ open Format
 let () =
   register_constant_compare (fun default c1 c2 ->
       match c1, c2 with
-      | C_py_imag f1, C_py_imag f2 -> Pervasives.compare f1 f2
+      | C_py_imag f1, C_py_imag f2 -> Stdlib.compare f1 f2
       | C_py_none, C_py_none
       | C_py_ellipsis, C_py_ellipsis
       | C_py_not_implemented, C_py_not_implemented
@@ -47,9 +47,9 @@ let () =
         Compare.compose
           [ (fun () -> compare_expr e11 e21);
             (fun () -> compare_expr e21 e22);
-            (fun () -> Option.compare compare_expr oe13 oe23); ]
+            (fun () -> OptionExt.compare compare_expr oe13 oe23); ]
       | E_py_annot e1, E_py_annot e2 -> compare_expr e1 e2
-      | E_py_undefined b1, E_py_undefined b2 -> Pervasives.compare b1 b2
+      | E_py_undefined b1, E_py_undefined b2 -> Stdlib.compare b1 b2
       | E_py_object (a1, oe1), E_py_object (a2, oe2) ->
         Compare.compose
           [ (fun () -> compare_addr a1 a2);
@@ -72,7 +72,7 @@ let () =
       | E_py_attribute (e1, s1), E_py_attribute (e2, s2) ->
         Compare.compose
           [ (fun () -> compare_expr e1 e2);
-            (fun () -> Pervasives.compare s1 s2);
+            (fun () -> Stdlib.compare s1 s2);
           ]
 
       | E_py_dict (k1, v1), E_py_dict (k2, v2) ->
@@ -91,7 +91,7 @@ let () =
           [ (fun () -> compare_expr f1 f2);
             (fun () -> Compare.list compare_expr args1 args2);
             (fun () -> Compare.list (fun (so1, e1) (so2, e2) ->
-                 Compare.compose [ (fun () -> Compare.option Pervasives.compare so1 so2);
+                 Compare.compose [ (fun () -> Compare.option Stdlib.compare so1 so2);
                                    (fun () -> compare_expr e1 e2) ]) kwargs1 kwargs2);
           ]
 
@@ -107,7 +107,7 @@ let () =
 
 
       | E_py_bytes b1, E_py_bytes b2 ->
-        Pervasives.compare b1 b2
+        Stdlib.compare b1 b2
 
       | E_py_lambda _, E_py_lambda _
       | E_py_multi_compare _, E_py_multi_compare _ -> Exceptions.panic "compare py"
@@ -130,7 +130,7 @@ let () =
             (fun () -> Compare.list compare_var c1.py_cls_static_attributes c2.py_cls_static_attributes);
             (fun () -> Compare.list compare_expr c1.py_cls_bases c2.py_cls_bases);
             (fun () -> Compare.list compare_expr c1.py_cls_decors c2.py_cls_decors);
-            (fun () -> Compare.list (Compare.pair (Compare.option Pervasives.compare) compare_expr) c1.py_cls_keywords c2.py_cls_keywords);
+            (fun () -> Compare.list (Compare.pair (Compare.option Stdlib.compare) compare_expr) c1.py_cls_keywords c2.py_cls_keywords);
             (fun () -> compare_range c1.py_cls_range c2.py_cls_range);
           ]
 
@@ -141,7 +141,7 @@ let () =
             (fun () -> Compare.list compare_var f1.py_func_parameters f2.py_func_parameters);
             (fun () -> Compare.list (Compare.option compare_expr) f1.py_func_defaults f2.py_func_defaults);
             (fun () -> compare_stmt f1.py_func_body f2.py_func_body);
-            (fun () -> Pervasives.compare f1.py_func_is_generator f2.py_func_is_generator);
+            (fun () -> Stdlib.compare f1.py_func_is_generator f2.py_func_is_generator);
             (fun () -> Compare.list compare_expr f1.py_func_decors f2.py_func_decors);
             (fun () -> compare_range f1.py_func_range f2.py_func_range);
           ]
@@ -202,14 +202,14 @@ let () =
 
       | S_py_import (m1, a1, r1), S_py_import (m2, a2, r2) ->
         Compare.compose
-          [ (fun () -> Pervasives.compare m1 m2);
+          [ (fun () -> Stdlib.compare m1 m2);
             (fun () -> Compare.option compare_var a1 a2);
             (fun () -> compare_var r1 r2); ]
 
       | S_py_import_from (m1, n1, r1, v1), S_py_import_from (m2, n2, r2, v2) ->
         Compare.compose
-          [ (fun () -> Pervasives.compare m1 m2);
-            (fun () -> Pervasives.compare n1 n2);
+          [ (fun () -> Stdlib.compare m1 m2);
+            (fun () -> Stdlib.compare n1 n2);
             (fun () -> compare_var r1 r2);
             (fun () -> compare_var v1 v2); ]
 

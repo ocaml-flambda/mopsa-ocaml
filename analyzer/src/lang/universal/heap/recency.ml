@@ -171,7 +171,7 @@ struct
       let stmt' = mk_remove (mk_addr addr stmt.srange) stmt.srange in
       man.exec stmt' flow' |>
       Post.return |>
-      Option.return
+      OptionExt.return
 
     | _ -> None
 
@@ -204,7 +204,7 @@ struct
       (* Add the recent address *)
       map_env T_cur (Pool.add recent_addr) man flow' |>
       Eval.singleton (mk_addr recent_addr range) |>
-      Option.return
+      OptionExt.return
 
     | E_alloc_addr(addr_kind, WEAK) ->
       let pool = get_env T_cur man flow in
@@ -217,7 +217,7 @@ struct
           map_env T_cur (Pool.add weak_addr) man flow
       in
       Eval.singleton (mk_addr weak_addr range) flow' |>
-      Option.return
+      OptionExt.return
 
 
     | _ -> None

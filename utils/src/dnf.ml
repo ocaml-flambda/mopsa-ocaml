@@ -235,13 +235,13 @@ let merge
             List.fold_left (fun (acc1,acc2) a ->
                 List.fold_left (fun (acc1,acc2) b ->
                     let a', b' = f a b in
-                    Option.neutral2 mk_and a' acc1,
-                    Option.neutral2 mk_and b' acc2
+                    OptionExt.neutral2 mk_and a' acc1,
+                    OptionExt.neutral2 mk_and b' acc2
                   ) (acc1,acc2) conj2
               ) (None, None) conj1
           in
-          Option.neutral2 mk_or conj1' acc1,
-          Option.neutral2 mk_or conj2' acc2
+          OptionExt.neutral2 mk_or conj1' acc1,
+          OptionExt.neutral2 mk_or conj2' acc2
         ) (acc1,acc2) dnf2
     ) (None, None) dnf1
 
@@ -256,14 +256,14 @@ let merge_fold
             List.fold_left (fun (acc1,acc2,acc) a ->
                 List.fold_left (fun (acc1,acc2,acc) b ->
                     let a', b', acc = f acc a b in
-                    Option.neutral2 mk_and a' acc1,
-                    Option.neutral2 mk_and b' acc2,
+                    OptionExt.neutral2 mk_and a' acc1,
+                    OptionExt.neutral2 mk_and b' acc2,
                     acc
                   ) (acc1,acc2,acc) conj2
               ) (None, None,acc) conj1
           in
-          Option.neutral2 mk_or conj1' acc1,
-          Option.neutral2 mk_or conj2' acc2,
+          OptionExt.neutral2 mk_or conj1' acc1,
+          OptionExt.neutral2 mk_or conj2' acc2,
           acc
         ) (acc1,acc2,acc) dnf2
     ) (None, None,init) dnf1

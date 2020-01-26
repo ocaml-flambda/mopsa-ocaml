@@ -27,49 +27,49 @@ open Flow
 open Log
 open Context
 open Lattice
-open Result
+open Cases
 
 
-type 'a post = ('a, unit) result
+type 'a post = ('a, unit) cases
 
 
 let return ?(log=Log.empty) ?(cleaners=[]) flow : 'a post =
-  Result.return (Some ()) ~log ~cleaners flow
+  Cases.return (Some ()) ~log ~cleaners flow
 
 
 let print pp fmt post =
-  Result.print_full (fun fmt _ flow ->
+  Cases.print (fun fmt _ flow ->
       Flow.print pp fmt flow
     ) fmt post
 
 
 let join (p1:'a post) (p2:'a post) : 'a post =
-  Result.join p1 p2
+  Cases.join p1 p2
 
 let join_list ~empty l =
-  Result.join_list ~empty l
+  Cases.join_list ~empty l
 
 
 let meet (p1:'a post) (p2:'a post) : 'a post =
-  Result.meet p1 p2
+  Cases.meet p1 p2
 
 
 
 let join_list ~(empty:unit -> 'a post) (l:'a post list) : 'a post =
-  Result.join_list ~empty l
+  Cases.join_list ~empty l
 
 
 
 let meet_list ~(empty:unit -> 'a post) (l:'a post list) : 'a post =
-  Result.join_list ~empty l
+  Cases.join_list ~empty l
 
 
 let get_ctx (p:'a post) : 'a ctx =
-  Result.get_ctx p
+  Cases.get_ctx p
 
 
 let set_ctx (ctx:'a ctx) (p:'a post) : 'a post =
-  Result.set_ctx ctx p
+  Cases.set_ctx ctx p
 
 
-let bind f post = Result.bind (fun _ flow -> f flow) post
+let bind f post = Cases.bind (fun _ flow -> f flow) post

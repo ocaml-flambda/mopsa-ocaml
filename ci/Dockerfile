@@ -9,9 +9,11 @@ FROM ubuntu:latest
 # configuration: required packages
 ##
 
-ENV APT_DEPS build-essential lsb-release m4 opam llvm-6.0-dev libclang-6.0-dev clang-6.0 libgmp-dev libmpfr-dev zlib1g-dev
-ENV OPAM_SWITCH 4.07.0
-ENV OPAM_DEPS apron ocp-pack-split zarith menhir yojson javalib
+ENV APT_DEPS build-essential lsb-release m4 llvm-6.0-dev libclang-6.0-dev \
+    	     clang-6.0 libgmp-dev libmpfr-dev zlib1g-dev pkg-config wget  \
+	     unzip bubblewrap git
+ENV OPAM_SWITCH 4.08.0
+ENV OPAM_DEPS apron zarith menhir yojson javalib
 
 
 # install system packages as root
@@ -26,6 +28,13 @@ RUN \
     adduser --disabled-password --gecos 'Mopsa' mopsa
 
 
+# install opam
+##
+
+COPY install-opam.sh /tmp
+RUN sh /tmp/install-opam.sh
+    
+
 # log in as mopsa
 #
 
@@ -39,12 +48,11 @@ ENV LC_ALL C.UTF-8
 ##
 
 RUN \
-    opam init -y && \
-    opam config setup -a && \
-    eval `opam config -y env` && \
+    opam init --disable-sandboxing -y && \
+    eval $(opam env) && \
     opam update -y && \
-    opam switch -y -j 8 $OPAM_SWITCH && \
-    eval `opam config -y env` && \
+    opam switch create -y -j 8 $OPAM_SWITCH && \
+    eval $(opam env) && \
     opam install -y -j 8 $OPAM_DEPS && \
     echo && \
     echo "All done!" && \

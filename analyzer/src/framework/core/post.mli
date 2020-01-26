@@ -26,11 +26,11 @@ open Token
 open Flow
 open Log
 open Context
-open Result
+open Cases
 open Lattice
 
 
-type 'a post = ('a, unit) result
+type 'a post = ('a, unit) cases
 
 val return : ?log:log -> ?cleaners:block -> 'a flow -> 'a post
 

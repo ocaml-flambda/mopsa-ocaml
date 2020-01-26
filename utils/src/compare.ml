@@ -76,4 +76,4 @@ let option p q r =
   if q == r then 0
   else match q, r with
     | Some x, Some y -> p x y
-    | _ -> Pervasives.compare q r
+    | _ -> Stdlib.compare q r

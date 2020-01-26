@@ -18,7 +18,7 @@ The documentation and example files of the MOPSA software are distributed under 
 
 ## Dependencies
 
-* ocaml (version >= 4.07.0)
+* ocaml (version >= 4.08.0)
 * apron
 * clang (version >= 5.x)
 * zarith
