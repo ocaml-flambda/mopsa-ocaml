@@ -19,7 +19,8 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Common transfer functions for handling C stubs *)
+(** Execution of stub assignments *)
+
 
 open Mopsa
 open Framework.Core.Sig.Domain.Stateless
@@ -33,6 +34,7 @@ open Common.Alarms
 open Aux_vars
 
 
+
 module Domain =
 struct
 
@@ -41,26 +43,23 @@ struct
   (** ===================== *)
 
   include GenStatelessDomainId(struct
-      let name = "c.libs.cstubs"
+      let name = "c.cstubs.assigns"
     end)
 
   let interface= {
     iexec = {
       provides = [Z_c];
-      uses = [Z_c; Z_c_scalar; Z_c_low_level; Z_u_num; Z_c_points_to]
+      uses     = [Z_c_low_level]
     };
 
     ieval = {
-      provides = [Z_c_low_level, Z_c_scalar];
-      uses = [
-        Z_c, Z_c_points_to;
-        Z_c_low_level, Z_c_points_to;
-        Z_c_scalar, Z_u_num
-      ]
+      provides = [];
+      uses     = [];
     }
   }
 
-  let alarms = [Common.Alarms.A_c_double_free_cls]
+  let alarms = []
+
 
   (** Initialization of environments *)
   (** ============================== *)
@@ -68,136 +67,27 @@ struct
   let init _ _ flow =  flow
 
 
-
-
-
   (** Computation of post-conditions *)
   (** ============================== *)
 
+  let exec_stub_assigns target ofssets range man flow =
+    assert false
+
+
+  let exec_stub_rename_primed target offsets range man flow =
+    assert false
+
+
   let exec zone stmt man flow  =
     match skind stmt with
-    | S_stub_free { ekind = E_addr (addr) } ->
-      Post.return flow |>
+    | S_stub_assigns(target,offsets) ->
+      exec_stub_assigns target offsets stmt.srange man flow |>
       OptionExt.return
 
-    | S_stub_free p ->
-      man.eval ~zone:(Z_c, Z_c_points_to) p flow >>$? fun pt flow ->
-
-      begin match ekind pt with
-        | E_c_points_to (P_block (ValidAddr ({ addr_kind = A_stub_resource _ } as addr), _)) ->
-          (* Remove the bytes attribute before removing the address *)
-          let stmt' = mk_remove_var (mk_bytes_var addr) stmt.srange in
-          let flow' = man.exec ~zone:Z_c_scalar stmt' flow in
-
-          let stmt' = mk_free_addr addr stmt.srange in
-          let flow' = man.exec stmt' flow' in
-
-          let stmt'' = mk_stub_free (mk_addr addr stmt.srange) stmt.srange in
-          man.exec stmt'' flow' |>
-          Post.return |>
-          OptionExt.return
-
-        | E_c_points_to (P_block (InvalidAddr ({ addr_kind = A_stub_resource _ }, drange), _)) ->
-          Common.Alarms.(raise_c_double_free_alarm p drange stmt.srange (Sig.Stacked.Manager.of_domain_man man) flow) |>
-          Post.return |>
-          OptionExt.return
-
-        | E_c_points_to P_null ->
-          Post.return flow |>
-          OptionExt.return
-
-        | E_c_points_to P_top ->
-          Soundness.warn_at stmt.srange
-            "ignoring free statement because of undetermined resource pointer"
-          ;
-          Post.return flow |>
-          OptionExt.return
-
-
-        | _ ->
-          panic_at stmt.srange "resources.common: free(p | p %a) not supported" pp_expr pt
-      end
-
-    | S_rename ({ ekind = E_addr ({ addr_kind = A_stub_resource _ } as addr1) },
-                { ekind = E_addr ({ addr_kind = A_stub_resource _ } as addr2) })
-      ->
-      let bytes1 = mk_bytes_var addr1 in
-      let bytes2 = mk_bytes_var addr2 in
-      man.exec ~zone:Z_c_scalar (mk_rename_var bytes1 bytes2 stmt.srange) flow |>
-      man.exec ~zone:Z_c_low_level stmt |>
-      man.exec ~zone:Z_c_points_to stmt |>
-      Post.return |>
+    | S_stub_rename_primed(target,offsets) ->
+      exec_stub_rename_primed target offsets stmt.srange man flow |>
       OptionExt.return
-
-    | S_stub_requires { ekind = E_stub_builtin_call(VALID_PTR, ptr) } ->
-      Some (
-        let range = stmt.srange in
-        let man' = Sig.Stacked.Manager.of_domain_man man in
-        man.eval ptr ~zone:(Z_c, Z_c_points_to) flow >>$ fun pt flow ->
-        match ekind pt with
-        | E_c_points_to P_null ->
-          raise_c_null_deref_alarm ptr range man' flow |>
-          Cases.empty_singleton
-
-        | E_c_points_to P_invalid ->
-          raise_c_invalid_deref_alarm ptr range man' flow |>
-          Cases.empty_singleton
-
-        | E_c_points_to (P_block (InvalidAddr (_,r), offset)) ->
-          raise_c_use_after_free_alarm ptr r range man' flow |>
-          Cases.empty_singleton
-
-        | E_c_points_to (P_block (InvalidVar (v,r), offset)) ->
-          raise_c_dangling_deref_alarm ptr v r range man' flow |>
-          Cases.empty_singleton
-
-        | E_c_points_to P_top ->
-          Soundness.warn_at range "ignoring requirement check due to ⊤ pointer %a" pp_expr ptr;
-          Post.return flow
-
-        | E_c_points_to (P_block (base, offset)) ->
-          if is_expr_forall_quantified offset
-          then
-            Common.Base.eval_base_size base range man' flow >>$ fun size flow ->
-            man.eval ~zone:(Z_c_scalar,Z_u_num) size flow >>$ fun size flow ->
-            let min, max = Common.Quantified_offset.bound offset in
-            man.eval ~zone:(Z_c, Z_u_num) min flow >>$ fun min flow ->
-            man.eval ~zone:(Z_c, Z_u_num) max flow >>$ fun max flow ->
-            let elm = under_type ptr.etyp |> void_to_char |> (fun t -> mk_z (sizeof_type t) range) in
-            let limit = sub size elm range in
-            let cond = mk_binop
-                (mk_in min (mk_zero range) limit range)
-                O_log_and
-                (mk_in max (mk_zero range) limit range)
-                range
-            in
-            assume cond
-              ~fthen:(fun flow -> Post.return flow)
-              ~felse:(fun flow ->
-                  raise_c_out_bound_quantified_alarm ~base ~min ~max ~size range man' flow |>
-                  Post.return
-                )
-              ~zone:Z_u_num man flow
-
-          (* Valid base + non-quantified offset *)
-          else
-            Common.Base.eval_base_size base range man' flow >>$ fun size flow ->
-            man.eval ~zone:(Z_c_scalar,Z_u_num) size flow >>$ fun size flow ->
-            man.eval ~zone:(Z_c_scalar,Z_u_num) offset flow >>$ fun offset flow ->
-            let elm = under_type ptr.etyp |> void_to_char |> (fun t -> mk_z (sizeof_type t) range) in
-            let limit = sub size elm range in
-            let cond = mk_in offset (mk_zero range) limit range in
-            assume cond
-              ~fthen:(fun flow -> Post.return flow)
-              ~felse:(fun flow ->
-                  Common.Alarms.raise_c_out_bound_alarm ~base ~offset ~size range man' flow |>
-                  Post.return
-                )
-              ~zone:Z_u_num man flow
-
-        | _ -> assert false
-      )
-
+      
     | _ -> None
 
 

@@ -165,10 +165,10 @@ struct
     match v.vkind with
     | V_cvar _ -> packs_of_base ctx (ValidVar v)
     | Lowlevel.Cells.Domain.V_c_cell ({base = ValidVar v} as c) when is_c_scalar_type v.vtyp -> packs_of_base ctx c.base
-    | Lowlevel.String_length.Domain.V_c_string_length (base,_) -> packs_of_base ctx base
-    | Lowlevel.Pointer_sentinel.Domain.V_c_sentinel (base,_) -> packs_of_base ctx base
-    | Lowlevel.Pointer_sentinel.Domain.V_c_at_sentinel (base,_) -> packs_of_base ctx base
-    | Lowlevel.Pointer_sentinel.Domain.V_c_before_sentinel (base,_) -> packs_of_base ctx base
+    | Lowlevel.String_length.Domain.V_c_string_length (base) -> packs_of_base ctx base
+    | Lowlevel.Pointer_sentinel.Domain.V_c_sentinel (base) -> packs_of_base ctx base
+    | Lowlevel.Pointer_sentinel.Domain.V_c_at_sentinel (base) -> packs_of_base ctx base
+    | Lowlevel.Pointer_sentinel.Domain.V_c_before_sentinel (base) -> packs_of_base ctx base
     | Scalars.Pointers.Domain.Domain.V_c_ptr_offset vv -> packs_of_var ctx vv
     | Scalars.Machine_numbers.Domain.V_c_num vv -> packs_of_var ctx vv
     | Cstubs.Aux_vars.V_c_bytes a -> packs_of_base ctx (ValidAddr a)

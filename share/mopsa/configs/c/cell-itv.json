@@ -32,7 +32,12 @@
             "c.libs.clib.formatted_io.fprint",
             "c.libs.clib.formatted_io.fscanf",
             "c.libs.variadic",
-	    "c.libs.cstubs",
+
+	    // C stubs
+	    "c.cstubs.builtins",
+	    "c.cstubs.requires",
+	    "c.cstubs.resources",
+	    "c.cstubs.assigns",
 
             // Memory model
             "c.desugar.aggregates",

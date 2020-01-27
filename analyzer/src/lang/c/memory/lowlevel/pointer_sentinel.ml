@@ -90,36 +90,33 @@ struct
 
   (** Registration of a new var kinds for auxiliary variables *)
   type var_kind +=
-    | V_c_sentinel        of base * bool
-    | V_c_before_sentinel of base * bool
-    | V_c_at_sentinel     of base * bool
+    | V_c_sentinel        of base
+    | V_c_before_sentinel of base
+    | V_c_at_sentinel     of base
 
 
   let () =
     register_var {
       print = (fun next fmt v ->
           match v.vkind with
-          | V_c_sentinel (base,primed) ->
-            Format.fprintf fmt "sentinel(%a)%s" pp_base base (if primed then "'" else "")
+          | V_c_sentinel (base) ->
+            Format.fprintf fmt "sentinel(%a)" pp_base base
 
-          | V_c_before_sentinel (base,primed) ->
-            Format.fprintf fmt "before-sentinel(%a)%s" pp_base base (if primed then "'" else "")
+          | V_c_before_sentinel (base) ->
+            Format.fprintf fmt "before-sentinel(%a)" pp_base base
 
-          | V_c_at_sentinel (base,primed) ->
-            Format.fprintf fmt "at-sentinel(%a)%s" pp_base base (if primed then "'" else "")
+          | V_c_at_sentinel (base) ->
+            Format.fprintf fmt "at-sentinel(%a)" pp_base base
 
           | _ -> next fmt v
         );
 
       compare = (fun next v1 v2 ->
           match v1.vkind, v2.vkind with
-          | V_c_sentinel(b1,p1), V_c_sentinel(b2,p2)
-          | V_c_before_sentinel(b1,p1), V_c_before_sentinel(b2,p2)
-          | V_c_at_sentinel(b1,p1), V_c_at_sentinel(b2,p2) ->
-            Compare.compose [
-              (fun () -> compare_base b1 b2);
-              (fun () -> compare p1 p2);
-            ]
+          | V_c_sentinel(b1), V_c_sentinel(b2)
+          | V_c_before_sentinel(b1), V_c_before_sentinel(b2)
+          | V_c_at_sentinel(b1), V_c_at_sentinel(b2) ->
+            compare_base b1 b2
 
           | _ -> next v1 v2
         );
@@ -140,27 +137,27 @@ struct
       Note that the returned variable has a mathematical integer type,
       not a C int type.
   *)
-  let mk_sentinel_var base ?(primed=false) ?(mode=base_mode base) range : expr =
-    let name = "sentinel(" ^ (base_uniq_name base) ^ ")" ^ (if primed then "'" else "") in
-    let v = mkv name (V_c_sentinel (base,primed)) T_int in
+  let mk_sentinel_var base ?(mode=base_mode base) range : expr =
+    let name = "sentinel(" ^ (base_uniq_name base) ^ ")" in
+    let v = mkv name (V_c_sentinel (base)) T_int in
     mk_var v ~mode range
 
 
   (** Create the auxiliary before-sentinel(base) variable representing
       valid pointers before sentinel(base).
   *)
-  let mk_before_var base ?(primed=false) ?(mode=STRONG) range : expr =
-    let name = "before-sentinel(" ^ (base_uniq_name base) ^ ")" ^ (if primed then "'" else "") in
-    let v = mkv name (V_c_before_sentinel (base,primed)) (T_c_pointer T_c_void) in
+  let mk_before_var base ?(mode=STRONG) range : expr =
+    let name = "before-sentinel(" ^ (base_uniq_name base) ^ ")" in
+    let v = mkv name (V_c_before_sentinel (base)) (T_c_pointer T_c_void) in
     mk_var v ~mode range
 
 
   (** Create the auxiliary at-sentinel(base) variable representing the
      pointer at the sentinel.
   *)
-  let mk_at_var base ?(primed=false) range : expr =
-    let name = "at-sentinel(" ^ (base_uniq_name base) ^ ")" ^ (if primed then "'" else "") in
-    let v = mkv name (V_c_at_sentinel (base,primed)) (T_c_pointer T_c_void) in
+  let mk_at_var base range : expr =
+    let name = "at-sentinel(" ^ (base_uniq_name base) ^ ")" in
+    let v = mkv name (V_c_at_sentinel (base)) (T_c_pointer T_c_void) in
     mk_var v ~mode:STRONG range
 
 
@@ -433,7 +430,7 @@ struct
 
 
   (** Cases of the transfer function of quantified tests 𝕊⟦ *(base + ∀offset) op q ⟧ *)
-  let assume_quantified_cases op base offset primed q range man flow =
+  let assume_quantified_cases op base offset q range man flow =
     (** Get symbolic bounds of the offset *)
     let min, max = Common.Quantified_offset.bound offset in
 
@@ -536,12 +533,11 @@ struct
 
   (** Entry point of the transfer function of quantified tests 𝕊⟦ *(p + ∀i) op q ⟧ *)
   let assume_quantified op p q range man flow =
-    let pp, primed =
+    let pp =
       let rec doit e =
         match ekind e with
-        | E_c_deref pp -> pp, false
+        | E_c_deref pp -> pp
         | E_c_cast(ee, _) -> doit ee
-        | E_stub_primed e -> fst (doit e), true
         | _ -> panic_at range "assume_quantified_zero: invalid argument %a" pp_expr p;
       in
       doit p
@@ -549,39 +545,10 @@ struct
 
     eval_pointed_base_offset pp range man flow >>$ fun (base,offset) flow ->
     if is_interesting_base base then
-      assume_quantified_cases op base offset primed q range man flow
+      assume_quantified_cases op base offset q range man flow
     else
       Post.return flow
 
-
-
-  (** Declare a block as assigned by adding the primed auxiliary variables *)
-  (* FIXME: not yet implemented *)
-  let stub_assigns target offsets range man flow =
-    let p = match offsets with
-      | [] -> mk_c_address_of target range
-      | _  -> target
-    in
-    man.eval p ~zone:(Z_c_low_level,Z_c_points_to) flow >>$ fun pt flow ->
-    match ekind pt with
-    | E_c_points_to (P_block (base, _)) when is_interesting_base base ->
-      let sentinel = mk_sentinel_var base range in
-      let at = mk_at_var base range in
-      let before = mk_before_var base range in
-
-      man.post ~zone:Z_u_num (mk_add sentinel range) flow >>= fun _ flow ->
-      man.post ~zone:Z_u_num (mk_assign sentinel (mk_zero range) range) flow >>= fun _ flow ->
-      man.post ~zone:Z_c_scalar (mk_add at range) flow >>= fun _ flow ->
-      man.post ~zone:Z_c_scalar (mk_remove before range) flow
-
-    | _ -> Post.return flow
-
-
-
-  (** Rename primed variables introduced by a stub *)
-  (* FIXME: not yet implemented *)
-  let rename_primed target offsets range man flow : 'a post =
-    Post.return flow
 
 
 
@@ -678,17 +645,6 @@ struct
       OptionExt.return
 
 
-    | S_stub_assigns(target, offsets) ->
-      stub_assigns target offsets stmt.srange man flow |>
-      OptionExt.return
-
-
-    | S_stub_rename_primed (target, offsets) when is_c_type target.etyp &&
-                                                  not (is_c_num_type target.etyp) &&
-                                                  (not (is_c_pointer_type target.etyp) || List.length offsets > 0)
-      ->
-      rename_primed target offsets stmt.srange man flow |>
-      OptionExt.return
 
     | _ -> None
 
@@ -697,7 +653,7 @@ struct
   (** ************************ *)
 
   (** Cases of the abstraction evaluations *)
-  let eval_deref_cases base offset typ primed range man flow =
+  let eval_deref_cases base offset typ range man flow =
     eval_base_size base range man flow >>$ fun size flow ->
     man.eval ~zone:(Z_c_scalar,Z_u_num) size flow  >>$ fun size flow ->
 
@@ -709,9 +665,9 @@ struct
           then Eval.singleton (mk_top typ range) flow
 
           else
-            let sentinel = mk_sentinel_var base ~primed range in
-            let before = mk_before_var base ~primed range in
-            let at = mk_at_var base ~primed range in
+            let sentinel = mk_sentinel_var base range in
+            let before = mk_before_var base range in
+            let at = mk_at_var base range in
             let ptr = mk_z ptr_size range in
             let top = mk_top void_ptr range in
 
@@ -762,7 +718,7 @@ struct
 
 
   (** Cases of the abstraction evaluations of *(p + ∀i) *)
-  let eval_quantified_deref_cases base offset typ primed range man flow =
+  let eval_quantified_deref_cases base offset typ  range man flow =
     eval_base_size base range man flow >>$ fun size flow ->
     man.eval ~zone:(Z_c_scalar,Z_u_num) size flow  >>$ fun size flow ->
 
@@ -783,8 +739,8 @@ struct
           range
       )
       ~fthen:(fun flow ->
-          let sentinel = mk_sentinel_var base ~primed range in
-          let before = mk_before_var base ~primed range in
+          let sentinel = mk_sentinel_var base range in
+          let before = mk_before_var base range in
           let top = mk_top void_ptr range in
 
           switch ~zone:Z_c_scalar [
@@ -822,7 +778,7 @@ struct
 
 
   (** Abstract evaluation of a dereference *)
-  let eval_deref exp primed range man flow =
+  let eval_deref exp range man flow =
     let p = match ekind exp with E_c_deref p -> p | _ -> assert false in
     eval_pointed_base_offset p range man flow >>$ fun (base,offset) flow ->
     if is_interesting_base base &&
@@ -830,11 +786,11 @@ struct
     then
       man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow |>
       Eval.bind @@ fun offset flow ->
-      eval_deref_cases base offset (under_type p.etyp) primed range man flow
+      eval_deref_cases base offset (under_type p.etyp) range man flow
     else if is_interesting_base base &&
             is_expr_forall_quantified offset
     then
-      eval_quantified_deref_cases base offset (under_type p.etyp) primed range man flow
+      eval_quantified_deref_cases base offset (under_type p.etyp) range man flow
     else
       Eval.singleton (mk_top (under_type p.etyp |> void_to_char) range) flow
 
@@ -847,14 +803,7 @@ struct
       when is_c_pointer_type exp.etyp &&
            under_type p.etyp |> void_to_char |> is_c_scalar_type
       ->
-      eval_deref exp false exp.erange man flow |>
-      OptionExt.return
-
-    | E_stub_primed ({ ekind = E_c_deref p } as e)
-      when is_c_pointer_type exp.etyp &&
-           under_type p.etyp |> void_to_char |> is_c_scalar_type
-      ->
-      eval_deref e true exp.erange man flow |>
+      eval_deref exp exp.erange man flow |>
       OptionExt.return
 
 

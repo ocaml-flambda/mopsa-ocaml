@@ -70,26 +70,23 @@ struct
   (** *********************** *)
 
   (** Registration of the smash auxiliary variable *)
-  type var_kind += V_c_pointer_smash   of base * bool
+  type var_kind += V_c_pointer_smash  of base
 
 
   let () =
     register_var {
       print = (fun next fmt v ->
           match v.vkind with
-          | V_c_pointer_smash (base,primed) ->
-            Format.fprintf fmt "smash(%a)%s" pp_base base (if primed then "'" else "")
+          | V_c_pointer_smash (base) ->
+            Format.fprintf fmt "smash(%a)" pp_base base
 
           | _ -> next fmt v
         );
 
       compare = (fun next v1 v2 ->
           match v1.vkind, v2.vkind with
-          | V_c_pointer_smash(b1,p1), V_c_pointer_smash(b2,p2) ->
-            Compare.compose [
-              (fun () -> compare_base b1 b2);
-              (fun () -> compare p1 p2);
-            ]
+          | V_c_pointer_smash(b1), V_c_pointer_smash(b2) ->
+            compare_base b1 b2
 
           | _ -> next v1 v2
         );
@@ -105,9 +102,9 @@ struct
 
 
   (** Create the auxiliary variable smash(base). *)
-  let mk_smash_var base ?(primed=false) range : expr =
-    let name = "smash(" ^ (base_uniq_name base) ^ ")" ^ (if primed then "'" else "") in
-    let v = mkv name (V_c_pointer_smash (base,primed)) (T_c_pointer T_c_void) in
+  let mk_smash_var base range : expr =
+    let name = "smash(" ^ (base_uniq_name base) ^ ")" in
+    let v = mkv name (V_c_pointer_smash (base)) (T_c_pointer T_c_void) in
     mk_var v range
 
 
@@ -215,42 +212,6 @@ struct
 
 
 
-
-  (** Declare a block as assigned by adding the primed auxiliary variables *)
-  let stub_assigns target offsets range man flow =
-    let p = match offsets with
-      | [] -> mk_c_address_of target range
-      | _  -> target
-    in
-    man.eval p ~zone:(Z_c_low_level,Z_c_points_to) flow >>$ fun pt flow ->
-    match ekind pt with
-    | E_c_points_to (P_block (base, _)) when is_interesting_base base ->
-      let smash' = mk_smash_var base ~primed:true range in
-      man.post ~zone:Z_c_scalar (mk_add smash' range) flow
-
-    | _ -> Post.return flow
-
-
-
-  (** Rename primed variables introduced by a stub *)
-  (* FIXME: not yet implemented *)
-  let rename_primed target offsets range man flow : 'a post =
-    let p = match offsets with
-      | [] -> mk_c_address_of target range
-      | _  -> target
-    in
-    man.eval p ~zone:(Z_c_low_level,Z_c_points_to) flow >>$ fun pt flow ->
-    match ekind pt with
-    | E_c_points_to (P_block (base, _)) when is_interesting_base base ->
-      let smash = mk_smash_var base range ~primed:false |> weaken in
-      let smash' = mk_smash_var base range ~primed:true in
-      man.post ~zone:Z_c_scalar (mk_assign smash smash' range) flow >>= fun _ flow ->
-      man.post ~zone:Z_c_scalar (mk_remove smash' range) flow
-
-    | _ ->
-      Post.return flow
-
-
   (** Rename the auxiliary variables associated to a base *)
   let rename_base base1 base2 range man flow =
     let smash1 = mk_smash_var base1 range in
@@ -304,18 +265,6 @@ struct
       OptionExt.return
 
 
-    | S_stub_assigns(target, offsets) ->
-      stub_assigns target offsets stmt.srange man flow |>
-      OptionExt.return
-
-
-    | S_stub_rename_primed (target, offsets) when is_c_type target.etyp &&
-                                                  not (is_c_num_type target.etyp) &&
-                                                  (not (is_c_pointer_type target.etyp) || List.length offsets > 0)
-      ->
-      rename_primed target offsets stmt.srange man flow |>
-      OptionExt.return
-
     | _ -> None
 
 
@@ -324,13 +273,13 @@ struct
 
 
   (** Abstract evaluation of a dereference *)
-  let eval_deref exp primed range man flow =
+  let eval_deref exp range man flow =
     let p = match ekind exp with E_c_deref p -> p | _ -> assert false in
     let t = exp.etyp in
     eval_pointed_base_offset p range man flow >>$ fun (base,offset) flow ->
 
     if is_interesting_base base then
-      let smash_weak = mk_smash_var base ~primed range |> weaken in
+      let smash_weak = mk_smash_var base range |> weaken in
       Eval.singleton smash_weak flow
     else
       Eval.singleton (mk_top t range) flow
@@ -344,14 +293,7 @@ struct
       when is_c_pointer_type exp.etyp &&
            under_type p.etyp |> void_to_char |> is_c_scalar_type
       ->
-      eval_deref exp false exp.erange man flow |>
-      OptionExt.return
-
-    | E_stub_primed ({ ekind = E_c_deref p } as e)
-      when is_c_pointer_type exp.etyp &&
-           under_type p.etyp |> void_to_char |> is_c_scalar_type
-      ->
-      eval_deref e true exp.erange man flow |>
+      eval_deref exp exp.erange man flow |>
       OptionExt.return
 
 

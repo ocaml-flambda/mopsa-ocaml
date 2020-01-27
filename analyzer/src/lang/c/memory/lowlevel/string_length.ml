@@ -87,27 +87,22 @@ struct
 
   (** Registration of a new var kind for length variables *)
   type var_kind +=
-    | V_c_string_length of base * bool (* is it primed? *)
+    | V_c_string_length of base
 
   let () =
     register_var {
       print = (fun next fmt v ->
           match v.vkind with
-          | V_c_string_length (base,primed) ->
-            Format.fprintf fmt "length(%a)%s"
-              pp_base base
-              (if primed then "'" else "")
+          | V_c_string_length (base) ->
+            Format.fprintf fmt "length(%a)" pp_base base
 
           | _ -> next fmt v
         );
 
       compare = (fun next v1 v2 ->
           match v1.vkind, v2.vkind with
-          | V_c_string_length(b1,p1), V_c_string_length(b2,p2) ->
-            Compare.compose [
-              (fun () -> compare_base b1 b2);
-              (fun () -> compare p1 p2);
-            ]
+          | V_c_string_length(b1), V_c_string_length(b2) ->
+            compare_base b1 b2
 
           | _ -> next v1 v2
         );
@@ -116,22 +111,20 @@ struct
   (** Create a length variable. The returned variable is a
       mathematical integer, not a C variable.
   *)
-  let mk_length_var base ?(primed=false) ?(mode=base_mode base) range =
+  let mk_length_var base ?(mode=base_mode base) range =
     let name =
       let () = match base with
         | ValidVar v ->
-          Format.fprintf Format.str_formatter "length(%s)%s"
+          Format.fprintf Format.str_formatter "length(%s)"
             v.vname
-            (if primed then "'" else "")
 
         | _ ->
-          Format.fprintf Format.str_formatter "length(%a)%s"
+          Format.fprintf Format.str_formatter "length(%a)"
             pp_base base
-            (if primed then "'" else "")
       in
       Format.flush_str_formatter ()
     in
-    let v = mkv name (V_c_string_length (base,primed)) T_int in
+    let v = mkv name (V_c_string_length (base)) T_int in
     mk_var v ~mode range
 
 
@@ -184,7 +177,7 @@ struct
 
 
   (** Add a base to the domain's dimensions *)
-  let add_base base ?(primed=false) range man flow =
+  let add_base base range man flow =
     match base with
     | String _ ->
       Post.return flow
@@ -196,7 +189,7 @@ struct
       eval_base_size base range man flow >>$ fun size flow ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) size flow >>$ fun size flow ->
 
-      let length = mk_length_var base ~primed range in
+      let length = mk_length_var base range in
 
       man.post ~zone:Z_u_num (mk_add length range) flow >>= fun _ flow ->
       man.post ~zone:Z_u_num (mk_assume (mk_in length (mk_zero range) size range) range) flow
@@ -305,7 +298,7 @@ struct
 
 
   (** Cases of the abstract transformer for tests *(p + i) == 0 *)
-  let assume_zero_cases base offset primed range man flow =
+  let assume_zero_cases base offset range man flow =
     eval_base_size base range man flow >>$ fun size flow ->
     man.eval ~zone:(Z_c_scalar, Z_u_num) size flow >>$ fun size flow ->
     man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow >>$ fun offset flow ->
@@ -313,7 +306,7 @@ struct
     let length =
       match base with
       | String str -> mk_z (Z.of_int @@ String.length str) range
-      | _ -> mk_length_var base ~primed range
+      | _ -> mk_length_var base range
     in
 
     (* Safety condition: offset ⊆ [0, size[ *)
@@ -332,7 +325,7 @@ struct
 
 
   (** Cases of the abstract transformer for tests *(p + ∀i) != 0 *)
-  let assume_quantified_non_zero_cases base offset primed range man flow =
+  let assume_quantified_non_zero_cases base offset range man flow =
     (** Get symbolic bounds of the offset *)
     let min, max = Common.Quantified_offset.bound offset in
 
@@ -344,7 +337,7 @@ struct
     let length =
       match base with
       | String str -> mk_z (Z.of_int @@ String.length str) range
-      | _ -> mk_length_var base ~primed range
+      | _ -> mk_length_var base range
     in
     let mk_bottom flow = Flow.set T_cur man.lattice.bottom man.lattice flow in
 
@@ -401,12 +394,11 @@ struct
 
   (** Abstract transformer for tests *p op 0 *)
   let assume_zero op lval range man flow =
-    let p, primed =
+    let p =
       let rec doit e =
         match ekind e with
-        | E_c_deref p -> p, false
+        | E_c_deref p -> p
         | E_c_cast(ee, _) -> doit ee
-        | E_stub_primed e -> fst (doit e), true
         | _ -> panic_at range "assume_zero: invalid argument %a" pp_expr lval;
       in
       doit lval
@@ -417,90 +409,13 @@ struct
     then Post.return flow
 
     else if op = O_ne && is_expr_forall_quantified offset
-    then assume_quantified_non_zero_cases base offset primed range man flow
+    then assume_quantified_non_zero_cases base offset range man flow
 
     else if op = O_eq && not (is_expr_forall_quantified offset)
-    then assume_zero_cases base offset primed range man flow
+    then assume_zero_cases base offset range man flow
 
     else Post.return flow
 
-
-
-  (** Declare a block as assigned by adding the primed length variable *)
-  let stub_assigns target offsets range man flow =
-    let p = match offsets with
-      | [] -> mk_c_address_of target range
-      | _  -> target
-    in
-    man.eval p ~zone:(Z_c_low_level,Z_c_points_to) flow >>$ fun pt flow ->
-    match ekind pt with
-    | E_c_points_to (P_block (base, _)) when is_memory_base base ->
-      add_base base ~primed:true range man flow
-
-    | _ ->
-      Post.return flow
-
-
-  (** Rename primed variables introduced by a stub *)
-  let rename_primed target offsets range man flow =
-    let p = match offsets with
-      | [] -> mk_c_address_of target range
-      | _  -> target
-    in
-    man.eval p ~zone:(Z_c_low_level,Z_c_points_to) flow >>$ fun pt flow ->
-    match ekind pt with
-    | E_c_points_to (P_block (base, _)) when is_memory_base base ->
-      (* Check if the modified offsets range over the entire base, so we can
-         do a strong update of the length variable *)
-      begin match offsets with
-        | [(l,u)] ->
-          eval_base_size base range man flow >>$ fun size flow ->
-          man.eval ~zone:(Z_c_scalar,Z_u_num) size flow >>$ fun size flow ->
-          man.eval ~zone:(Z_c,Z_u_num) l flow >>$ fun l flow ->
-          man.eval ~zone:(Z_c,Z_u_num) u flow >>$ fun u flow ->
-          let t = under_type target.etyp in
-          assume
-            (mk_binop
-               (mk_binop l O_eq (mk_zero range) range)
-               O_log_and
-               (mk_binop u O_eq (sub size (mk_z (sizeof_type (void_to_char t)) range) range) range)
-               range
-            )
-            ~fthen:(fun flow ->
-                let length = mk_length_var base range ~primed:false in
-                let length' = mk_length_var base range ~primed:true in
-                man.post ~zone:Z_u_num (mk_assign length length' range) flow >>= fun _ flow ->
-                man.post ~zone:Z_u_num (mk_remove length' range) flow
-              )
-            ~felse:(fun flow ->
-                let length = mk_length_var base range ~primed:false ~mode:WEAK in
-                let length' = mk_length_var base range ~primed:true in
-                man.post ~zone:Z_u_num (mk_assign length length' range) flow >>= fun _ flow ->
-                man.post ~zone:Z_u_num (mk_remove length' range) flow
-              ) ~zone:Z_u_num man flow
-
-        | _ ->
-          let length = mk_length_var base range ~primed:false ~mode:WEAK in
-          let length' = mk_length_var base range ~primed:true in
-          man.post ~zone:Z_u_num (mk_assign length length' range) flow >>= fun _ flow ->
-          man.post ~zone:Z_u_num (mk_remove length' range) flow
-      end
-
-    | E_c_points_to (P_block _) ->
-      Post.return flow
-
-    | E_c_points_to (P_null | P_invalid) ->
-      Post.return flow
-
-
-    | E_c_points_to P_top ->
-      Soundness.warn_at range "rename of %a not supported because it can not be resolved"
-        pp_expr target
-      ;
-      Post.return flow
-
-
-    | _ -> assert false
 
 
   (** Rename the length variable associated to a base *)
@@ -513,7 +428,6 @@ struct
   let rec is_deref_expr e =
     match ekind e with
     | E_c_deref _ -> true
-    | E_stub_primed ee -> is_deref_expr ee
     | E_c_cast (ee, _) -> is_deref_expr ee
     | _ -> false
 
@@ -598,17 +512,6 @@ struct
       OptionExt.return
 
 
-    | S_stub_assigns(target, offsets) ->
-      stub_assigns target offsets stmt.srange man flow |>
-      OptionExt.return
-
-
-    | S_stub_rename_primed (target, offsets) when is_c_type target.etyp &&
-                                                  not (is_c_num_type target.etyp) &&
-                                                  (not (is_c_pointer_type target.etyp) || List.length offsets > 0)
-      ->
-      rename_primed target offsets stmt.srange man flow |>
-      OptionExt.return
 
     | _ -> None
 

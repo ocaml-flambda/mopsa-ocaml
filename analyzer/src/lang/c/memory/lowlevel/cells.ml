@@ -67,7 +67,6 @@ struct
     base   : Base.t;
     offset : Z.t;
     typ    : cell_typ;
-    primed : bool;
   }
 
 
@@ -85,7 +84,6 @@ struct
       (fun () -> compare_base c1.base c2.base);
       (fun () -> Z.compare c1.offset c2.offset);
       (fun () -> compare_cell_typ c1.typ c2.typ);
-      (fun () -> compare c1.primed c2.primed);
     ]
 
 
@@ -98,19 +96,17 @@ struct
 
   (** Pretty printer of cells *)
   let pp_cell fmt c =
-    Format.fprintf fmt "⟨%a,%a,%a⟩%s"
+    Format.fprintf fmt "⟨%a,%a,%a⟩"
       pp_base c.base
       Z.pp_print c.offset
       pp_cell_typ c.typ
-      (if c.primed then "'" else "")
 
 
   (** Create a cell *)
-  let mk_cell base offset ?(primed=false) typ =
+  let mk_cell base offset typ =
     {
       base;
       offset;
-      primed;
       typ =
         if is_c_num_type typ then Numeric (remove_typedef_qual typ)
         else if is_c_pointer_type typ then Pointer
@@ -195,11 +191,10 @@ struct
         panic "recursive creation of cell %a" pp_cell c
 
       | ValidVar v ->
-        Format.fprintf Format.str_formatter "⟨%s,%a,%a⟩%s"
+        Format.fprintf Format.str_formatter "⟨%s,%a,%a⟩"
           v.vname
           Z.pp_print c.offset
           pp_cell_typ c.typ
-          (if c.primed then "'" else "")
 
       | _ -> pp_cell Format.str_formatter c
     in
@@ -295,7 +290,7 @@ struct
     }
   }
 
-  let alarms = [A_c_out_of_bound_cls; A_c_null_deref_cls; A_c_use_after_free_cls; A_c_invalid_deref_cls; Stubs.Alarms.A_stub_invalid_requires_cls]
+  let alarms = [A_c_out_of_bound_cls; A_c_null_deref_cls; A_c_use_after_free_cls; A_c_invalid_deref_cls]
 
 
   (** {2 Command-line options} *)
@@ -388,8 +383,7 @@ struct
                  is_int_cell c' &&
                  Z.equal (sizeof_cell c') (sizeof_cell c) &&
                  compare_base c.base (c'.base) = 0 &&
-                 Z.equal c.offset c'.offset &&
-                 c.primed = c'.primed
+                 Z.equal c.offset c'.offset
               ) a
       with
       | Some (c') ->
@@ -404,8 +398,7 @@ struct
               compare_base c.base (c'.base) = 0 &&
               Z.lt b (sizeof_cell c') &&
               is_int_cell c' &&
-              compare_typ (cell_type c) (T_c_integer(C_unsigned_char)) = 0 &&
-              c.primed = c'.primed
+              compare_typ (cell_type c) (T_c_integer(C_unsigned_char)) = 0
             ) a
         with
         | Some (c') ->
@@ -433,7 +426,6 @@ struct
                         base = cc.base;
                         offset = Z.add c.offset (Z.of_int i);
                         typ = Numeric t';
-                        primed = cc.primed;
                       }
                     ) c
                   in
@@ -859,7 +851,7 @@ struct
   (** ************************ *)
 
   (** 𝔼⟦ *p ⟧ where p is a pointer to a scalar *)
-  let eval_deref_scalar_pointer p primed range man flow =
+  let eval_deref_scalar_pointer p range man flow =
     (* Expand *p into cells *)
     expand p range man flow >>$ fun expansion flow ->
     let t = under_type p.etyp in
@@ -871,7 +863,6 @@ struct
       Eval.singleton (mk_top (void_to_char t) range) flow
 
     | Cell c ->
-      let c = { c with primed } in
       add_cell c range man flow >>= fun _ flow ->
       let v =
         if is_pointer_cell c then
@@ -955,13 +946,13 @@ struct
   let eval zone exp man flow =
     match ekind exp with
     | E_var (v,STRONG) when is_c_scalar_type v.vtyp ->
-      eval_deref_scalar_pointer (mk_c_address_of exp exp.erange) false exp.erange man flow |>
+      eval_deref_scalar_pointer (mk_c_address_of exp exp.erange) exp.erange man flow |>
       OptionExt.return
 
     | E_c_deref p when under_type p.etyp |> void_to_char |> is_c_scalar_type &&
                        not (is_pointer_offset_forall_quantified p)
       ->
-      eval_deref_scalar_pointer p false exp.erange man flow |>
+      eval_deref_scalar_pointer p exp.erange man flow |>
       OptionExt.return
 
 
@@ -975,16 +966,9 @@ struct
       eval_address_of lval exp.erange man flow |>
       OptionExt.return
 
-    | E_stub_primed lval when not (is_lval_offset_forall_quantified lval) ->
-      eval_deref_scalar_pointer (mk_c_address_of lval exp.erange) true exp.erange man flow |>
-      OptionExt.return
 
     | E_c_deref p when is_pointer_offset_forall_quantified p ->
       eval_deref_quantified p exp.erange man flow |>
-      OptionExt.return
-
-    | E_stub_primed e when is_lval_offset_forall_quantified e ->
-      eval_deref_quantified (mk_c_address_of e exp.erange) exp.erange man flow |>
       OptionExt.return
 
 
@@ -1143,104 +1127,6 @@ struct
     Post.return
 
 
-  (* 𝕊⟦ rename target[i1][i2]...[in]' into target[i1][i2]...[in],
-     ∀ i1 ∈ [l1,u1], ..., in ∈ [ln,un] ⟧
-  *)
-  let exec_rename_primed target bounds range man flow =
-    let p = match bounds with
-      | [] -> mk_c_address_of target range
-      | _ -> target
-    in
-    man.eval p ~zone:(Z_c_low_level, Z_c_points_to) flow >>$ fun pt flow ->
-    match ekind pt with
-    | E_c_points_to P_top | E_c_points_to P_null | E_c_points_to P_invalid ->
-      Post.return flow
-
-    | E_c_points_to (P_block(base, offset)) ->
-      (* Get cells with the same base *)
-      let a = get_env T_cur man flow in
-      let same_base_cells = CellSet.filter (fun c ->
-          compare_base base c.base = 0
-        ) a.cells
-      in
-
-      (* Compute the offset interval *)
-      let itv =
-        (* First, get the flattened expressions of the lower and upper bounds *)
-        let l, u, t =
-          let rec doit accl accu t =
-            function
-            | [] -> accl, accu, t
-            | [(l, u)] ->
-              (mk_offset_bound accl l t), (mk_offset_bound accu u t), t
-            | (l, u) :: tl ->
-              doit (mk_offset_bound accl l t) (mk_offset_bound accu u t) (under_type t |> void_to_char) tl
-
-          (* Utility function that returns the expression of an offset bound *)
-          and mk_offset_bound before bound t =
-            let elem_size = sizeof_type t in
-            add before (
-              mul bound (mk_z elem_size range) range ~typ:T_int
-            ) range ~typ:T_int
-          in
-          doit offset offset (under_type p.etyp |> void_to_char) bounds
-        in
-        (* Compute the interval of the bounds *)
-        let elem_size = sizeof_type t in
-        let itv1 = compute_bound l man flow in
-        let itv2 = compute_bound (add u (mk_z (Z.pred elem_size) range) range) man flow in
-
-        (* Compute the interval of the assigned cells *)
-        Itv.join itv1 itv2
-      in
-
-
-      (* Search for primed cells that reside withing the assigned offsets and rename them *)
-      CellSet.fold (fun c acc ->
-          if not (Itv.mem c.offset itv)
-          then acc
-          else if c.primed then
-            (* Primed cells are unprimed by renaming them *)
-            Post.bind (rename_cell c { c with primed = false } range man) acc
-          else if not (CellSet.mem { c with primed = true } same_base_cells) then
-            (* Remove unprimed cells that have no primed version *)
-            Post.bind (remove_cell c range man) acc
-          else
-            acc
-        ) same_base_cells (Post.return flow)
-
-    | _ -> assert false
-
-
-  (** 𝕊⟦ requires cond; ⟧ *)
-  let exec_stub_requires cond range man flow =
-    assume cond
-      ~fthen:(fun flow ->
-          Post.return flow
-        )
-      ~felse:(fun flow ->
-          Stubs.Alarms.raise_stub_invalid_requires cond range man flow |>
-          Post.return
-        )
-      ~negate:(fun e range ->
-          let ee = map_expr
-              (fun e ->
-                 match ekind e with
-                 | E_stub_quantified(FORALL, v, s) ->
-                   VisitParts { e with ekind = E_stub_quantified(EXISTS, v, s) }
-
-                 | E_stub_quantified(EXISTS, v, s) ->
-                   VisitParts { e with ekind = E_stub_quantified(FORALL, v, s) }
-
-                 | _ -> VisitParts e
-              )
-              (fun s -> VisitParts s)
-              e
-          in
-          mk_not ee range
-        )
-      ~zone:Z_c_low_level man flow
-
 
   let exec zone stmt man flow =
     match skind stmt with
@@ -1298,14 +1184,6 @@ struct
 
     | S_stub_assigns _ ->
       Post.return flow |>
-      OptionExt.return
-
-    | S_stub_rename_primed(lval, bounds) ->
-      exec_rename_primed lval bounds stmt.srange man flow |>
-      OptionExt.return
-
-    | S_stub_requires e ->
-      exec_stub_requires e stmt.srange man flow |>
       OptionExt.return
 
 
