@@ -81,7 +81,23 @@ struct
         ~fthennew:(fun flow ->
             Utils.check_instances f man flow range args
               ["int"; "int"; "int"]
-              (fun args flow -> allocate_builtin man range flow "range" (Some exp))
+              (fun args flow ->
+                 let start, stop, step = match args with a::b::c::[] -> a, b, c | _ -> assert false in
+                 let alloc_range = tag_range range "alloc_%s" "range" in
+                 let cls = fst @@ find_builtin "range" in
+                 man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr ~mode:STRONG (A_py_instance cls) alloc_range) flow |>
+                 Eval.bind (fun eaddr flow ->
+                     let addr = match ekind eaddr with
+                       | E_addr a -> a
+                       | _ -> assert false in
+                     let obj = mk_py_object (addr, None) range in
+                     man.exec ~zone:Zone.Z_py_obj (mk_add eaddr range) flow |>
+                     man.exec ~zone:Zone.Z_py (mk_assign (mk_py_attr obj "start" range) start range) |>
+                     man.exec ~zone:Zone.Z_py (mk_assign (mk_py_attr obj "stop" range) stop range) |>
+                     man.exec ~zone:Zone.Z_py (mk_assign (mk_py_attr obj "step" range) step range) |>
+                     Eval.singleton obj
+                   )
+              )
           )
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range.__contains__", _))}, _)}, args, []) ->
@@ -100,7 +116,25 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range.__iter__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args
         ["range"]
-        (fun r flow -> allocate_builtin man range flow "range_iterator" (Some exp))
+        (fun r flow ->
+           let range_obj = List.hd r in
+           let alloc_range = tag_range range "alloc_%s" "range" in
+           let cls = fst @@ find_builtin "range_iterator" in
+           man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr ~mode:STRONG (A_py_instance cls) alloc_range) flow |>
+           Eval.bind (fun eaddr flow ->
+               let addr = match ekind eaddr with
+                 | E_addr a -> a
+                 | _ -> assert false in
+               let obj = mk_py_object (addr, None) range in
+               flow |>
+               man.exec ~zone:Zone.Z_py_obj (mk_add eaddr range) |>
+               man.exec ~zone:Zone.Z_py (mk_assign (mk_py_attr obj "start" range) (mk_py_attr range_obj "start" range) range) |>
+               man.exec ~zone:Zone.Z_py (mk_assign (mk_py_attr obj "stop" range) (mk_py_attr range_obj "stop" range) range) |>
+               man.exec ~zone:Zone.Z_py (mk_assign (mk_py_attr obj "step" range) (mk_py_attr range_obj "step" range) range) |>
+               man.exec ~zone:Zone.Z_py (mk_assign (mk_py_attr obj "index" range) (mk_int 0 ~typ:T_int range) range) |>
+               (* FIXME: rangeobject:874: no stop but a len field. These are CPython fields and not attributes too *)
+               Eval.singleton obj )
+        )
       |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range.__reversed__" as f, _))}, _)}, args, []) ->
@@ -113,10 +147,30 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range_iterator.__next__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args
         ["range_iterator"]
-        (fun _ flow ->
-           let res = man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow in
-           let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
-           Eval.join_list (Eval.copy_ctx stopiteration res :: stopiteration :: []) ~empty:(fun () -> Eval.empty_singleton flow)
+        (fun rangeit flow ->
+           let rangeit = List.hd rangeit in
+           let start = mk_py_attr rangeit "start" range in
+           let step = mk_py_attr rangeit "step" range in
+           let index = mk_py_attr rangeit "index" range in
+           let stop = mk_py_attr rangeit "stop" range in
+           assume
+             (mk_binop
+               (mk_binop start O_plus (mk_binop index O_mult step range) range)
+               O_lt
+               stop
+               range
+             )
+             ~zone:Zone.Z_py man flow
+             ~fthen:(fun flow ->
+                 man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_binop start O_plus (mk_binop index O_mult step range) range) flow |>
+                 Eval.bind (fun e flow ->
+                     man.exec (mk_assign index (mk_binop index O_plus (mk_int 1 ~typ:T_int range) range) range) flow
+                     |> Eval.singleton e)
+               )
+             ~felse:(fun flow ->
+                   man.exec (Utils.mk_builtin_raise "StopIteration" range) flow
+                   |> Eval.empty_singleton
+               )
         )
       |> Option.return
 
