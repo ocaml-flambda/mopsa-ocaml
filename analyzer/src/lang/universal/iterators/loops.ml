@@ -65,6 +65,8 @@ let opt_loop_unrolling : int ref = ref 1
 
 let opt_loop_use_cache : bool ref = ref true
 
+let opt_loop_decreasing_it : bool ref = ref false
+
 let () =
   register_domain_option name {
     key = "-widening-delay";
@@ -86,6 +88,13 @@ let () =
     doc = " do not use cache for loops";
     spec = ArgExt.Clear opt_loop_use_cache;
     default = "use cache";
+  };
+  register_domain_option name {
+    key = "-loop-decr-it";
+    category = "Loops";
+    doc = " enable decreasing iteration";
+    spec = ArgExt.Set opt_loop_decreasing_it;
+    default = "disabled";
   }
 
 
@@ -250,6 +259,14 @@ struct
         let flag, flow1', flow2' = unroll (i - 1) cond body man (Flow.copy_ctx flow2 flow1) in
         flag, flow1', Flow.join man.lattice flow2 flow2'
 
+  let decr_iteration cond body man flow_init flow =
+    Flow.remove T_continue flow |>
+    Flow.remove T_break |>
+    man.exec (mk_assume cond cond.erange) |>
+    man.exec body |>
+    merge_cur_and_continue man |>
+    Flow.join man.lattice flow_init
+
 
   let rec exec zone stmt (man:('a,unit) man) flow =
     match skind stmt with
@@ -282,6 +299,10 @@ struct
           flow_init
         else
           let flow_lfp = lfp 0 !opt_loop_widening_delay cond body man flow_init flow_init in
+          let flow_lfp =
+            if !opt_loop_decreasing_it then
+              decr_iteration cond body man flow_init flow_lfp
+            else flow_lfp in
           let flow_lfp = if !opt_loop_use_cache then store_fixpoint man flow_lfp (stmt.srange, Flow.get_callstack flow_lfp) else flow_lfp in
           flow_lfp in
 
