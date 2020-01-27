@@ -193,6 +193,7 @@ struct
                   man.exec ~zone:Universal.Zone.Z_u_string (mk_assign evar expr range) flow
 
                 | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}
+                | A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)}
                 | A_py_instance {addr_kind = A_py_class (C_builtin "float", _)} ->
                   man.exec ~zone:Universal.Zone.Z_u_num (mk_assign evar expr range) flow
                 | _ ->
@@ -237,7 +238,8 @@ struct
 
     | S_remove ({ekind = E_var (v, _)} as var) ->
       let flow = map_env T_cur (remove v) man flow in
-      let flow = man.exec ~zone:Zone.Z_py_obj (mk_remove_var v range) flow in
+      (* FIXME? *)
+      (* let flow = man.exec ~zone:Zone.Z_py_obj (mk_remove_var v range) flow in *)
       begin match v.vkind with
         | V_uniq _ when not (Hashtbl.mem type_aliases v) ->
           (* if the variable maps to a list, we should remove the temporary variable associated, ONLY if it's not used by another list *)
@@ -269,14 +271,27 @@ struct
     | S_rename ({ekind = E_var (v, mode)}, {ekind = E_var (v', mode')}) ->
       (* FIXME: modes, rename in weak shouldn't erase the old v'? *)
       let cur = get_env T_cur man flow in
-      if AMap.mem v cur then
-        set_env T_cur (AMap.rename v v' cur) man flow |>
-        Post.return |> Option.return
-      else
-        begin match v.vkind with
-        | V_addr_attr(a, _) when Objects.Data_container_utils.is_data_container a.addr_kind ->
-          flow |> Post.return |> Option.return
-        | _ -> assert false (* shouldn't happen *) end
+      begin match AMap.find_opt v cur with
+        | Some aset ->
+          let flow = ASet.fold
+              (fun addr flow ->
+                 match addr with
+                 | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "str", _)}} ->
+                   man.exec ~zone:Universal.Zone.Z_u_string stmt flow
+                 | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)}}
+                 | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}}
+                 | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "float", _)}} ->
+                   man.exec ~zone:Universal.Zone.Z_u_num stmt flow
+                 | _ -> flow
+              ) aset flow  in
+          set_env T_cur (AMap.rename v v' cur) man flow |>
+          Post.return |> Option.return
+        | None ->
+          begin match v.vkind with
+            | V_addr_attr(a, _) when Objects.Data_container_utils.is_data_container a.addr_kind ->
+              flow |> Post.return |> Option.return
+            | _ -> assert false (* shouldn't happen *) end
+      end
 
     | S_rename (({ekind = E_addr a} as e1), ({ekind = E_addr a'} as e2)) ->
       let cur = get_env T_cur man flow in
@@ -382,8 +397,9 @@ struct
                       | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} ->
                         debug "removing the string...";
                         man.exec ~zone:Universal.Zone.Z_u_string (mk_remove_var v range) flow
-                      | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)} ->
-                        (* FIXME FIXME FIXME: we'll remove things if v is either an int or a float *)
+                      | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}
+                      | A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)} ->
+                       (* FIXME FIXME FIXME: we'll remove things if v is either an int or a float *)
                         man.exec ~zone:Universal.Zone.Z_u_num (mk_remove_var v range) flow
                       | A_py_instance {addr_kind = A_py_class (C_builtin "float", _)} ->
                         man.exec ~zone:Universal.Zone.Z_u_num (mk_remove_var v range) flow
