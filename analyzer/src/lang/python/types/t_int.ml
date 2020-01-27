@@ -58,13 +58,13 @@ struct
     let range = erange exp in
     match ekind exp with
     | E_constant (C_top T_bool) ->
-      Eval.singleton (mk_py_object (Addr_env.addr_bool_top (), None) range) flow |> Option.return
+      Eval.singleton (mk_py_object (Addr_env.addr_bool_top (), Some (mk_top T_int range)) range) flow |> Option.return
 
     | E_constant (C_bool true) ->
-      Eval.singleton (mk_py_object (Addr_env.addr_true (), None) range) flow |> Option.return
+      Eval.singleton (mk_py_object (Addr_env.addr_true (), Some (mk_int 1 ~typ:T_int range)) range) flow |> Option.return
 
     | E_constant (C_bool false) ->
-      Eval.singleton (mk_py_object (Addr_env.addr_false (), None) range) flow |> Option.return
+      Eval.singleton (mk_py_object (Addr_env.addr_false (), Some (mk_int 0 ~typ:T_int range)) range) flow |> Option.return
 
     | E_constant (C_top T_int)
     | E_constant (C_int _)
