@@ -48,7 +48,7 @@ struct
     )
 
 
-  let zones = [Zone.Z_u_num]
+  let zones = [Zone.Z_u_num; Zone.Z_u_float]
 
   let mem_type = function T_float _ -> true | _ -> false
 
@@ -97,7 +97,7 @@ struct
     | Apron.Texpr1.Up -> `UP
     | Apron.Texpr1.Down -> `DOWN
     | Apron.Texpr1.Rnd -> `ANY
-                        
+
   let constant t c =
     match t, c with
     | T_float p, C_float i ->

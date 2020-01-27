@@ -81,7 +81,7 @@ let () =
 
   register_zone {
     zone = Z_u_int;
-    zone_subset = Some Z_u_int;
+    zone_subset = Some Z_u;
     zone_name = "U/Int";
     zone_eval = (fun exp ->
         match ekind exp with
@@ -99,7 +99,7 @@ let () =
 
     register_zone {
     zone = Z_u_float;
-    zone_subset = Some Z_u;
+    zone_subset = None;
     zone_name = "U/Float";
     zone_eval = (fun exp ->
         match ekind exp with
