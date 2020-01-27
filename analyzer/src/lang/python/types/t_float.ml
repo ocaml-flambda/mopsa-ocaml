@@ -36,7 +36,7 @@ module Domain =
 
     let interface = {
       iexec = {provides = []; uses = []};
-      ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj; Z_any, Universal.Zone.Z_u_num]}
+      ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj; Z_any, Universal.Zone.Z_u_float]}
     }
 
     let alarms = []
@@ -108,7 +108,7 @@ module Domain =
                     ~fthen:(fun flow ->
                         assume
                           (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) ~etyp:(T_float F_DOUBLE) range) man flow
-                          ~zone:Universal.Zone.Z_u_num
+                          ~zone:Universal.Zone.Z_u_float
                           ~fthen:(fun flow -> man.eval (mk_py_true range) flow)
                           ~felse:(fun flow -> man.eval (mk_py_false range) flow)
                       )
@@ -119,7 +119,7 @@ module Domain =
                               Eval.bind (fun e2 flow ->
                                   assume
                                     (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) ~etyp:(T_float F_DOUBLE) range) man flow
-                                    ~zone:Universal.Zone.Z_u_num
+                                    ~zone:Universal.Zone.Z_u_float
                                     ~fthen:(fun flow -> man.eval (mk_py_true range) flow)
                                     ~felse:(fun flow -> man.eval (mk_py_false range) flow)
                                 )
@@ -197,7 +197,7 @@ module Domain =
              assume
                (mk_binop (extract_oobject @@ List.hd e) O_eq (mk_float 0. range) ~etyp:(T_float F_DOUBLE) range)
                man flow
-               ~zone:Universal.Zone.Z_u_num
+               ~zone:Universal.Zone.Z_u_float
                ~fthen:(fun flow -> man.eval (mk_py_false range) flow)
                ~felse:(fun flow -> man.eval (mk_py_true range) flow)
           )

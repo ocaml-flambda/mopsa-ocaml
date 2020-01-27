@@ -124,7 +124,7 @@ struct
 
   let interface = {
     iexec = { provides = [Zone.Z_u_string]; uses = []; };
-    ieval = { provides = [Zone.Z_u, Zone.Z_u_string];           uses = [Zone.Z_u, Zone.Z_u_string; Zone.Z_u, Zone.Z_u_num]; }
+    ieval = { provides = [Zone.Z_u, Zone.Z_u_string];           uses = [Zone.Z_u, Zone.Z_u_string; Zone.Z_u, Zone.Z_u_int]; }
   }
 
   let exec zone stmt (man: ('a, t) Core.Sig.Domain.Intermediate.man) (flow: 'a flow) : 'a post option =
@@ -181,7 +181,7 @@ struct
           let cur = Core.Sig.Domain.Intermediate.get_env T_cur man flow in
           let strings_e = Nonrel.eval e cur |> Option.none_to_exn |> snd in
           Eval.join_list ~empty:(fun () -> failwith "todo")
-            (Value.fold (fun s acc -> (man.eval ~zone:(Zone.Z_u, Zone.Z_u_num) (mk_int (String.length s) range) flow) :: acc) strings_e [])
+            (Value.fold (fun s acc -> (man.eval ~zone:(Zone.Z_u, Zone.Z_u_int) (mk_int (String.length s) range) flow) :: acc) strings_e [])
         )
       |> Option.return
 

@@ -27,6 +27,8 @@ open Ast
 type zone +=
   | Z_u
   | Z_u_num
+  | Z_u_int
+  | Z_u_float
   | Z_u_heap
   | Z_u_tree
   | Z_u_string
@@ -76,6 +78,43 @@ let () =
         | _                                  -> Process
       );
   };
+
+  register_zone {
+    zone = Z_u_int;
+    zone_subset = Some Z_u_int;
+    zone_name = "U/Int";
+    zone_eval = (fun exp ->
+        match ekind exp with
+        (* ------------------------------------------- *)
+        | E_constant _
+        | E_var _
+          when is_int_type (etyp exp)    -> Keep
+        (* ------------------------------------------- *)
+        | E_unop _
+        | E_binop _                          -> Visit
+        (* ------------------------------------------- *)
+        | _                                  -> Process
+      );
+  };
+
+    register_zone {
+    zone = Z_u_float;
+    zone_subset = Some Z_u;
+    zone_name = "U/Float";
+    zone_eval = (fun exp ->
+        match ekind exp with
+        (* ------------------------------------------- *)
+        | E_constant _
+        | E_var _
+          when is_float_type (etyp exp)    -> Keep
+        (* ------------------------------------------- *)
+        | E_unop _
+        | E_binop _                          -> Visit
+        (* ------------------------------------------- *)
+        | _                                  -> Process
+      );
+  };
+
 
   register_zone {
     zone = Z_u_heap;

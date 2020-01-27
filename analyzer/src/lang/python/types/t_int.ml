@@ -39,7 +39,7 @@ struct
 
   let interface = {
     iexec = {provides = []; uses = []};
-    ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj; Z_any, Universal.Zone.Z_u_num]}
+    ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj; Z_any, Universal.Zone.Z_u_int]}
   }
 
   let init _ _ flow = flow
@@ -143,7 +143,7 @@ struct
                         (* FIXME: best way? *)
                         assume
                           (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) ~etyp:T_int range) man true_flow
-                          ~zone:Universal.Zone.Z_u_num
+                          ~zone:Universal.Zone.Z_u_int
                           ~fthen:(fun flow -> man.eval (mk_py_true range) flow)
                           ~felse:(fun flow -> man.eval (mk_py_false range) flow)
                           (* man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_bool range) true_flow *)
@@ -213,7 +213,7 @@ struct
            (* FIXME: best way? *)
            assume
              (mk_binop (extract_oobject @@ List.hd e) O_eq (mk_int 0 ~typ:T_int range) ~etyp:T_int range) man flow
-             ~zone:Universal.Zone.Z_u_num
+             ~zone:Universal.Zone.Z_u_int
              ~fthen:(fun flow -> man.eval (mk_py_false range) flow)
              ~felse:(fun flow -> man.eval (mk_py_true range) flow)
         )
@@ -231,7 +231,7 @@ struct
       Utils.check_instances f man flow range args
         ["int"]
         (fun e flow ->
-           let res = man.eval ~zone:(Z_any, Universal.Zone.Z_u_num) (mk_unop (O_cast (T_float F_DOUBLE, T_int)) ~etyp:(T_float F_DOUBLE) (extract_oobject @@ List.hd e) range) flow |>
+           let res = man.eval ~zone:(Z_any, Universal.Zone.Z_u_int) (mk_unop (O_cast (T_float F_DOUBLE, T_int)) ~etyp:(T_float F_DOUBLE) (extract_oobject @@ List.hd e) range) flow |>
                      Eval.bind (fun e flow -> Eval.singleton (mk_py_object (Addr_env.addr_float (), Some e) range) flow) in
            let overflow = man.exec (Utils.mk_builtin_raise_msg "OverflowError" "int too large to convert to float" range) flow |> Eval.empty_singleton in
            Eval.join_list (Eval.copy_ctx overflow res :: overflow :: []) ~empty:(fun () -> assert false)

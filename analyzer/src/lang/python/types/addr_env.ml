@@ -132,7 +132,7 @@ struct
     end)
 
   let interface = {
-    iexec = { provides = [Zone.Z_py]; uses = [Zone.Z_py; Zone.Z_py_obj; Universal.Zone.Z_u_num; Universal.Zone.Z_u_string]; };
+    iexec = { provides = [Zone.Z_py]; uses = [Zone.Z_py; Zone.Z_py_obj; Universal.Zone.Z_u_int; Universal.Zone.Z_u_float; Universal.Zone.Z_u_string]; };
     ieval = { provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]; }
   }
 
@@ -191,11 +191,11 @@ struct
                 begin match akind addr with
                 | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} ->
                   man.exec ~zone:Universal.Zone.Z_u_string (mk_assign evar expr range) flow
-
                 | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}
-                | A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)}
+                | A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)} ->
+                  man.exec ~zone:Universal.Zone.Z_u_int (mk_assign evar expr range) flow
                 | A_py_instance {addr_kind = A_py_class (C_builtin "float", _)} ->
-                  man.exec ~zone:Universal.Zone.Z_u_num (mk_assign evar expr range) flow
+                  man.exec ~zone:Universal.Zone.Z_u_float (mk_assign evar expr range) flow
                 | _ ->
                   flow
                 end |>
@@ -279,9 +279,10 @@ struct
                  | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "str", _)}} ->
                    man.exec ~zone:Universal.Zone.Z_u_string stmt flow
                  | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)}}
-                 | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}}
+                 | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}} ->
+                   man.exec ~zone:Universal.Zone.Z_u_int stmt flow
                  | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "float", _)}} ->
-                   man.exec ~zone:Universal.Zone.Z_u_num stmt flow
+                   man.exec ~zone:Universal.Zone.Z_u_float stmt flow
                  | _ -> flow
               ) aset flow  in
           set_env T_cur (AMap.rename v v' cur) man flow |>
@@ -400,9 +401,9 @@ struct
                       | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}
                       | A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)} ->
                        (* FIXME FIXME FIXME: we'll remove things if v is either an int or a float *)
-                        man.exec ~zone:Universal.Zone.Z_u_num (mk_remove_var v range) flow
+                        man.exec ~zone:Universal.Zone.Z_u_int (mk_remove_var v range) flow
                       | A_py_instance {addr_kind = A_py_class (C_builtin "float", _)} ->
-                        man.exec ~zone:Universal.Zone.Z_u_num (mk_remove_var v range) flow
+                        man.exec ~zone:Universal.Zone.Z_u_float (mk_remove_var v range) flow
                       | _ ->
                         flow
                     end
