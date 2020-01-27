@@ -58,7 +58,6 @@ module Domain =
       let str = "str" and int = "int" and bool = "bool" and bytes = "bytes" in
       StringMap.empty |>
       add_signature "str.__contains__" [str; str] bool |>
-      add_signature "str.__len__" [str] int |>
       add_signature "bytes.__len__" [bytes] int |>
 
       add_signature "str.capitalize" [str] str |>
@@ -399,6 +398,14 @@ module Domain =
              Eval.join
                (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow)
                (man.exec (Utils.mk_builtin_raise_msg "ValueError" "substring not found" range) flow |> Eval.empty_singleton)
+          )
+        |> Option.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__len__" as f, _))}, _)}, args, []) ->
+        Utils.check_instances f man flow range args ["str"]
+          (fun eargs flow ->
+             man.eval ~zone:(Universal.Zone.Z_u, Universal.Zone.Z_u_string) (mk_expr (E_len (extract_oobject @@ List.hd eargs)) range) flow |>
+             Eval.bind (fun l flow -> man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) l flow)
           )
         |> Option.return
 
