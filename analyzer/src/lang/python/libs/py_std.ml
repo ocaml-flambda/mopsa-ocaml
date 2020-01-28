@@ -348,7 +348,11 @@ struct
           else
             let v = List.hd eargs in
             assume (mk_py_isinstance_builtin v "int" range) man flow
-              ~fthen:(man.eval (mk_py_top T_int range))
+              ~fthen:(fun flow ->
+                  assume (mk_binop v O_ge (mk_int 0 ~typ:T_int range) range) man flow
+                    ~fthen:(fun flow -> man.eval v flow)
+                    ~felse:(fun flow -> man.eval (mk_unop O_minus v range) flow)
+                )
               ~felse:(fun flow ->
                   assume (mk_py_isinstance_builtin v "float" range) man flow
                     ~fthen:(man.eval (mk_py_top (T_float F_DOUBLE) range))
