@@ -177,7 +177,10 @@ struct
                       | "int.__rtruediv__" ->
                         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top (T_float F_DOUBLE) range) true_flow
                       | _ ->
-                        Eval.singleton (mk_py_object (Addr_env.addr_integers (), Some (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) range ~etyp:T_int)) range) flow)
+                        if is_reverse_operator f then
+                          Eval.singleton (mk_py_object (Addr_env.addr_integers (), Some (mk_binop (extract_oobject e2) (Operators.methfun_to_binop f) (extract_oobject e1) range ~etyp:T_int)) range) flow
+                        else
+                          Eval.singleton (mk_py_object (Addr_env.addr_integers (), Some (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) range ~etyp:T_int)) range) flow)
                   ~felse:(fun false_flow ->
                       let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
                       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) expr false_flow)

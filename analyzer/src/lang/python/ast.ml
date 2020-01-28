@@ -120,6 +120,24 @@ let is_arith_binop_fun cl str =
     | "__rxor__" -> cl = "int"
     | _ -> false
 
+let is_reverse_operator str =
+  let splitted = String.split_on_char '.' str in
+  let l = ListExt.nth splitted (ListExt.length splitted - 1) in
+  match l with
+    | "__radd__"
+    | "__rfloordiv__"
+    | "__rmod__"
+    | "__rmul__"
+    | "__rpow__"
+    | "__rtruediv__"
+    | "__rsub__"
+    | "__rand__"
+    | "__rrshift__"
+    | "__rlshift__"
+    | "__ror__"
+    | "__rxor__" -> true
+    | _ -> false
+
 let is_comp_op = function
   | O_eq
   | O_ne
