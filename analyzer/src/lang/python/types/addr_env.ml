@@ -146,6 +146,11 @@ struct
   let init prog man flow =
     set_env T_cur empty man flow
 
+  let change_var_type t evar =
+    match ekind evar with
+    | E_var (v, mode) -> {evar with ekind = E_var ({v with vtyp=t}, mode); etyp=t}
+    | _ -> assert false
+
   let rec exec zone stmt man flow =
     debug "exec %a@\n" pp_stmt stmt;
     let range = srange stmt in
@@ -190,12 +195,12 @@ struct
                 let flow = assign_addr man v (PyAddr.Def addr) mode flow in
                 begin match akind addr with
                 | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} ->
-                  man.exec ~zone:Universal.Zone.Z_u_string (mk_assign evar expr range) flow
+                  man.exec ~zone:Universal.Zone.Z_u_string (mk_assign (change_var_type T_string evar) expr range) flow
                 | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}
                 | A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)} ->
-                  man.exec ~zone:Universal.Zone.Z_u_int (mk_assign evar expr range) flow
+                  man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (change_var_type T_int evar) expr range) flow
                 | A_py_instance {addr_kind = A_py_class (C_builtin "float", _)} ->
-                  man.exec ~zone:Universal.Zone.Z_u_float (mk_assign evar expr range) flow
+                  man.exec ~zone:Universal.Zone.Z_u_float (mk_assign (change_var_type (T_float F_DOUBLE) evar) expr range) flow
                 | _ ->
                   flow
                 end |>
@@ -268,7 +273,7 @@ struct
         )
       |> Option.return
 
-    | S_rename ({ekind = E_var (v, mode)}, {ekind = E_var (v', mode')}) ->
+    | S_rename (({ekind = E_var (v, mode)} as l), ({ekind = E_var (v', mode')} as r)) ->
       (* FIXME: modes, rename in weak shouldn't erase the old v'? *)
       let cur = get_env T_cur man flow in
       begin match AMap.find_opt v cur with
@@ -277,12 +282,18 @@ struct
               (fun addr flow ->
                  match addr with
                  | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "str", _)}} ->
-                   man.exec ~zone:Universal.Zone.Z_u_string stmt flow
+                   man.exec ~zone:Universal.Zone.Z_u_string
+                     {stmt with skind = S_rename(change_var_type T_string l, change_var_type T_string r)}
+                     flow
                  | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)}}
                  | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}} ->
-                   man.exec ~zone:Universal.Zone.Z_u_int stmt flow
+                   man.exec ~zone:Universal.Zone.Z_u_int
+                     {stmt with skind = S_rename (change_var_type T_int l, change_var_type T_int r)}
+                        flow
                  | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "float", _)}} ->
-                   man.exec ~zone:Universal.Zone.Z_u_float stmt flow
+                   man.exec ~zone:Universal.Zone.Z_u_float
+                     {stmt with skind = S_rename (change_var_type (T_float F_DOUBLE) l, change_var_type (T_float F_DOUBLE) r)}
+                     flow
                  | _ -> flow
               ) aset flow  in
           set_env T_cur (AMap.rename v v' cur) man flow |>
@@ -394,21 +405,31 @@ struct
               let flow = ASet.fold (fun a' flow ->
                   match a' with
                   | Def addr' when compare_addr_kind (akind addr) (akind addr') <> 0 -> (* only the kind. If two str addrs, we can't remove anything *)
-                    begin match akind addr' with
+                    debug "removing other numerical vars";
+                    let f = begin match akind addr' with
                       | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} ->
-                        debug "removing the string...";
-                        man.exec ~zone:Universal.Zone.Z_u_string (mk_remove_var v range) flow
+                        man.exec ~zone:Universal.Zone.Z_u_string (mk_remove_var {v with vtyp = T_string} range) flow
                       | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}
                       | A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)} ->
                        (* FIXME FIXME FIXME: we'll remove things if v is either an int or a float *)
-                        man.exec ~zone:Universal.Zone.Z_u_int (mk_remove_var v range) flow
+                        man.exec ~zone:Universal.Zone.Z_u_int (mk_remove_var {v with vtyp = T_int} range) flow
                       | A_py_instance {addr_kind = A_py_class (C_builtin "float", _)} ->
-                        man.exec ~zone:Universal.Zone.Z_u_float (mk_remove_var v range) flow
+                        man.exec ~zone:Universal.Zone.Z_u_float (mk_remove_var {v with vtyp = (T_float F_DOUBLE)} range) flow
                       | _ ->
                         flow
-                    end
+                    end in
+                    debug "done"; f
                   | _ -> flow
                 ) aset flow in
+              let exp = match akind addr with
+                | A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)}
+                | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)} ->
+                  change_var_type T_int exp
+                | A_py_instance {addr_kind = A_py_class (C_builtin "float", _)} ->
+                  change_var_type (T_float F_DOUBLE) exp
+                | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} ->
+                  change_var_type T_string exp
+                | _ -> exp in
               let res = man.eval (mk_py_object (addr, Some exp) range) flow in
               let annots = Eval.get_ctx res in
               res :: acc, annots
@@ -492,6 +513,7 @@ struct
     fun query man flow ->
       match query with
       | Framework.Engines.Interactive.Q_print_var ->
+        (* FIXME: values printing *)
         Option.return @@
         fun fmt var_as_string ->
         let cur = get_env T_cur man flow in
