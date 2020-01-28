@@ -19,7 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Management of primed variables. *)
+(** Generic handler of assigns clauses and primed variables. *)
 
 
 open Mopsa
@@ -31,6 +31,8 @@ open Ast
 open Zone
 open Universal.Zone
 open Common.Base
+open Common.Alarms
+open Common.Points_to
 
 
 
@@ -49,13 +51,13 @@ struct
      should create a single primed base a'.
   *)
 
-  module BaseSet = Framework.Lattices.Powerset.Make(struct
+  module PrimedBases = Framework.Lattices.Powerset.Make(struct
       type t = base
       let compare = compare_base
       let print = pp_base
     end)
 
-  type t = BaseSet.t
+  type t = PrimedBases.t
 
 
   (** Domain identification *)
@@ -63,7 +65,7 @@ struct
 
   include GenDomainId(struct
       type nonrec t = t
-      let name = "c.cstubs.primed"
+      let name = "c.cstubs.assigns"
     end)
 
   let interface= {
@@ -80,7 +82,28 @@ struct
 
   let alarms = []
 
+  let print fmt (a:t) : unit =
+    Format.fprintf fmt "assigns: %a@\n" PrimedBases.print a
 
+
+  (** Lattice operators *)
+  (** ================= *)
+
+  let bottom : t = PrimedBases.bottom
+
+  let top : t = PrimedBases.top
+
+  let is_bottom (a:t) : bool = false
+
+  let subset (a:t) (b:t) : bool = PrimedBases.subset a b
+
+  let join (a:t) (b:t) : t = PrimedBases.join a b
+
+  let meet (a:t) (b:t) : t = PrimedBases.meet a b
+
+  let widen ctx (a:t) (b:t) : t = PrimedBases.join a b
+
+  let merge p (a,l) (b,k) = PrimedBases.join a b
 
 
   (** Initialization of environments *)
@@ -92,8 +115,46 @@ struct
   (** Computation of post-conditions *)
   (** ============================== *)
 
-  let exec_stub_assigns target ofssets range man flow =
+  let exec_assign_base base offset assigned_offset range man flow =
     assert false
+
+  let exec_stub_assigns target offsets range man flow =
+    let ptr = match offsets with
+      | [] -> mk_c_address_of target range
+      | _ -> target
+    in
+    man.eval ptr ~zone:(Z_c,Z_c_points_to) flow >>$ fun p flow ->
+    let man' = Core.Sig.Stacked.Manager.of_domain_man man in
+    match ekind p with
+    | E_c_points_to P_null ->
+      raise_c_null_deref_alarm ptr range man' flow |>
+      Cases.empty_singleton
+
+    | E_c_points_to P_invalid ->
+      raise_c_invalid_deref_alarm ptr range man' flow |>
+      Cases.empty_singleton
+
+    | E_c_points_to (P_block (InvalidAddr (_,r), offset)) ->
+      raise_c_use_after_free_alarm ptr r range man' flow |>
+      Cases.empty_singleton
+
+    | E_c_points_to (P_block (InvalidVar (v,r), offset)) ->
+      raise_c_dangling_deref_alarm ptr v r range man' flow |>
+      Cases.empty_singleton
+
+    | E_c_points_to (P_block (base, offset)) when is_base_readonly base ->
+      raise_c_read_only_modification_alarm base range man' flow |>
+      Cases.empty_singleton
+
+    | E_c_points_to (P_block (base, offset))  ->
+      exec_assign_base base offset offsets range man flow
+
+    | E_c_points_to P_top ->
+      Soundness.warn_at range "ignoring ⊤ pointer %a" pp_expr (get_orig_expr ptr);
+      Cases.empty_singleton flow
+
+    | _ -> assert false
+
 
 
   let exec_stub_rename_primed target offsets range man flow =
@@ -131,7 +192,9 @@ struct
 
   let ask _ _ _ = None
 
+  let refine _ _ _ = assert false
+
 end
 
 let () =
-  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Domain.Intermediate.register_domain (module Domain)

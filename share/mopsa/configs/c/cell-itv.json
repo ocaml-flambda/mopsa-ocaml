@@ -37,7 +37,7 @@
 	    "c.cstubs.builtins",
 	    "c.cstubs.requires",
 	    "c.cstubs.resources",
-	    "c.cstubs.primed",
+	    "c.cstubs.assigns",
 
             // Memory model
             "c.desugar.aggregates",
