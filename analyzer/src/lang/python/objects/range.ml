@@ -20,6 +20,7 @@
 (****************************************************************************)
 
 (** Range objects. *)
+(* FIXME: range(1, 10, -1) ; range(10, 1, 1) ; range(1, 3, 0) *)
 
 open Mopsa
 open Sig.Domain.Stateless
@@ -126,6 +127,7 @@ struct
                  | E_addr a -> a
                  | _ -> assert false in
                let obj = mk_py_object (addr, None) range in
+               (* FIXME: replace stop by length which should be computed, see rangeobject.c:197 *)
                flow |>
                man.exec ~zone:Zone.Z_py_obj (mk_add eaddr range) |>
                man.exec ~zone:Zone.Z_py (mk_assign (mk_py_attr obj "start" range) (mk_py_attr range_obj "start" range) range) |>
@@ -133,7 +135,7 @@ struct
                man.exec ~zone:Zone.Z_py (mk_assign (mk_py_attr obj "step" range) (mk_py_attr range_obj "step" range) range) |>
                man.exec ~zone:Zone.Z_py (mk_assign (mk_py_attr obj "index" range) (mk_int 0 ~typ:T_int range) range) |>
                (* FIXME: rangeobject:874: no stop but a len field. These are CPython fields and not attributes too *)
-               Eval.singleton obj )
+               Eval.singleton obj)
         )
       |> Option.return
 
@@ -162,10 +164,7 @@ struct
              )
              ~zone:Zone.Z_py man flow
              ~fthen:(fun flow ->
-                 man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_binop start O_plus (mk_binop index O_mult step range) range) flow |>
-                 Eval.bind (fun e flow ->
-                     man.exec (mk_assign index (mk_binop index O_plus (mk_int 1 ~typ:T_int range) range) range) flow
-                     |> Eval.singleton e)
+                 man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_binop start O_plus (mk_binop index O_mult step range) range) flow |> Eval.add_cleaners [mk_assign index (mk_binop index O_plus (mk_int 1 ~typ:T_int range) range) range]
                )
              ~felse:(fun flow ->
                    man.exec (Utils.mk_builtin_raise "StopIteration" range) flow
