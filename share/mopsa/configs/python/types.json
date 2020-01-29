@@ -71,9 +71,8 @@
                       "python.objects.dict",
                       "python.objects.set",
                       "python.objects.iterable",
-                      { "nonrel": "universal.numeric.values.intervals.integer" },
-                      { "nonrel": "universal.numeric.values.intervals.float" },
-                      "universal.strings.powerset"
+                      "universal.strings.powerset",
+                      "python.types.dummy_numeric"
                   ]
                 }
             }
