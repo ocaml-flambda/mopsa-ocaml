@@ -152,6 +152,13 @@ struct
     | _      -> assert false
 
 
+  let mk_primed_address base offset typ range =
+    let primed = mk_primed_base_expr base range in
+    (* ( t* )( ( char* )&primed + offset ) *)
+    mk_c_cast (add (mk_c_cast (mk_c_address_of primed range) (T_c_pointer s8) range) ~typ:(T_c_pointer s8) offset range) (T_c_pointer typ) range
+
+
+
   (** Computation of post-conditions *)
   (** ============================== *)
 
@@ -169,28 +176,40 @@ struct
       
 
   (** Declare an assigned base *)
-  let exec_assign_base base target assigned_indices range man flow =
+  let exec_assign_base base offset typ assigned_indices range man flow =
     (* Expand base to a primed copy *)
     expand_primed_base base range man flow >>$ fun () flow ->
 
-    (* Convert the assigned indices to temporary quantified variables *)
-    let quant_indices_with_tmps = List.map (fun (a,b) ->
-        let tmp = mktmp ~typ:s32 () in
-        mk_stub_quantified FORALL tmp (S_interval(a,b)) range, tmp
-      ) assigned_indices
-    in
+    match assigned_indices with
+    | [] ->
+      (* Prime the target *)
+      let primed_target = mk_primed_address base offset typ range in
+      let lval = mk_c_deref primed_target range in
+      man.post (mk_forget lval range) ~zone:Z_c flow
 
-    (* Create the assigned lval and cleaners for temporary quantified variables *)
-    let lval, cleaners = List.fold_left (fun (acc,cleaners) (i,tmp) ->
-        mk_c_subscript_access acc i range,
-        mk_remove_var tmp range :: cleaners
-      ) (target,[]) quant_indices_with_tmps
-    in
+    | _ ->
 
-    (* Execute `forget lval` *)
-    man.post (mk_forget lval range) ~zone:Z_c flow >>$ fun () flow ->
-    man.post (mk_block cleaners range) ~zone:Z_c flow
-    
+      (* Convert the assigned indices to temporary quantified variables *)
+      let quant_indices_with_tmps = List.map (fun (a,b) ->
+          let tmp = mktmp ~typ:s32 () in
+          mk_stub_quantified FORALL tmp (S_interval(a,b)) range, tmp
+        ) assigned_indices
+      in
+
+      (* Prime the target *)
+      let primed_target = mk_primed_address base offset (under_type typ) range in
+
+      (* Create the assigned lval and cleaners for temporary quantified variables *)
+      let lval, cleaners = List.fold_left (fun (acc,cleaners) (i,tmp) ->
+          mk_c_subscript_access acc i range,
+          mk_remove_var tmp range :: cleaners
+        ) (primed_target,[]) quant_indices_with_tmps
+      in
+
+      (* Execute `forget lval` *)
+      man.post (mk_forget lval range) ~zone:Z_c flow >>$ fun () flow ->
+      man.post (mk_block cleaners range) ~zone:Z_c flow
+
 
 
   (** Execute `assigns: target[a1..b1]..[an..bn];` *)
@@ -222,8 +241,8 @@ struct
       raise_c_read_only_modification_alarm base range man' flow |>
       Cases.empty_singleton
 
-    | E_c_points_to (P_block (base, _))  ->
-      exec_assign_base base target assigned_indices range man flow
+    | E_c_points_to (P_block (base, offset))  ->
+      exec_assign_base base offset target.etyp assigned_indices range man flow
 
     | E_c_points_to P_top ->
       Soundness.warn_at range "ignoring ⊤ pointer %a" pp_expr (get_orig_expr ptr);
@@ -269,10 +288,8 @@ struct
 
 
   let eval_primed_base base offset typ range man flow =
-    let primed = mk_primed_base_expr base range in
-    (* *(( t* )( ( char* )&primed + offset )) *)
-    let e = mk_c_deref (mk_c_cast (add (mk_c_cast (mk_c_address_of primed range) (T_c_pointer s8) range) ~typ:(T_c_pointer s8) offset range) (T_c_pointer typ) range) range in
-    Eval.singleton e flow
+    let p = mk_primed_address base offset typ range in
+    Eval.singleton (mk_c_deref p range) flow
     
 
   let eval_stub_primed e range man flow =
