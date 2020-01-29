@@ -1122,7 +1122,7 @@ struct
 
   (** Forget the value of an lval *)
   let exec_forget lval range man flow =
-    (* Get the pointed cells *)
+    (* Get the pointed base *)
     let ptr = match ekind lval with
       | E_var _   -> mk_c_address_of lval range
       | E_c_deref(p) -> p
@@ -1133,9 +1133,15 @@ struct
     | E_c_points_to(P_block(base,offset)) ->
       (* Compute the interval of the offset *)
       let itv = offset_interval offset range man flow in
+      (* Add the size of the pointed cells *)
+      let itv = Bot.bot_lift2 ItvUtils.IntItv.add itv (Itv.of_z Z.zero (sizeof_type (under_type ptr.etyp))) in
       (* Forget all affected cells *)
       let a = get_env T_cur man flow in
-      let cells = find_cells (fun c -> compare_base c.base base = 0 &&  Itv.mem c.offset itv) a in
+      let cells = find_cells (fun c ->
+          compare_base c.base base = 0 &&
+          Itv.mem c.offset itv
+        ) a
+      in
       List.fold_left (fun acc c -> Post.bind (forget_cell c range man) acc) (Post.return flow) cells
 
     | _ -> Post.return flow
