@@ -227,12 +227,8 @@ type stmt_kind +=
                       ) list
 
 
-  (** Rename primed variables of an assigned object *)
-  | S_stub_rename_primed of expr  (** modified pointer *) *
-                            (
-                              expr  (** index lower bound *) *
-                              expr  (** index upper bound *)
-                            ) list
+  (** Rename primed variables *)
+  | S_stub_rename_primed
 
   | S_stub_requires of expr
   (** Filter the current environments that verify a condition, and raise an
@@ -300,8 +296,8 @@ let mk_stub_free e range =
 let mk_stub_assigns t offsets range =
   mk_stmt (S_stub_assigns (t, offsets)) range
 
-let mk_stub_rename_primed t offsets range =
-  mk_stmt (S_stub_rename_primed (t, offsets)) range
+let mk_stub_rename_primed range =
+  mk_stmt S_stub_rename_primed range
 
 let mk_stub_requires cond range =
   mk_stmt (S_stub_requires cond) range
@@ -596,11 +592,7 @@ let () =
             (fun () -> Compare.list (Compare.pair compare_expr compare_expr) offsets1 offsets2);
           ]
 
-        | S_stub_rename_primed(t1, offsets1), S_stub_rename_primed(t2, offsets2) ->
-          Compare.compose [
-            (fun () -> compare_expr t1 t2);
-            (fun () -> Compare.list (Compare.pair compare_expr compare_expr) offsets1 offsets2);
-          ]
+        | S_stub_rename_primed, S_stub_rename_primed -> 0
 
         | S_stub_requires(e1), S_stub_requires(e2) ->
           compare_expr e1 e2
@@ -618,7 +610,7 @@ let () =
 
         | S_stub_assigns(t, offsets) -> panic "visitor for S_stub_assigns not supported"
 
-        | S_stub_rename_primed(t, offsets) -> panic "visitor for S_stub_rename_primed not supported"
+        | S_stub_rename_primed -> leaf s
 
         | S_stub_requires e ->
           { exprs = [e]; stmts = [] },
@@ -647,17 +639,7 @@ let () =
                )
             ) offsets
 
-        | S_stub_rename_primed(t,offsets) ->
-          fprintf fmt "rename primed %a%a;"
-            pp_expr t
-            (pp_print_list
-               ~pp_sep:(fun fmt () -> ())
-               (fun fmt (a, b) ->
-                  fprintf fmt "[%a .. %a]"
-                    pp_expr a
-                    pp_expr b
-               )
-            ) offsets
+        | S_stub_rename_primed -> fprintf fmt "rename primed;"
 
         | S_stub_requires e ->
           fprintf fmt "requires %a;" pp_expr e

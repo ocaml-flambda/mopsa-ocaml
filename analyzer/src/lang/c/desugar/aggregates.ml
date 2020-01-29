@@ -504,16 +504,6 @@ struct
         man.post ~zone:Z_c_low_level (mk_stub_requires e stmt.srange) flow
       )
 
-    | S_stub_rename_primed(lval, bounds) ->
-      Some (
-        man.eval ~zone:(Z_c,Z_c_low_level) lval flow >>$ fun lval flow ->
-        flow |> bind_list bounds (fun (l,u) flow ->
-            man.eval ~zone:(Z_c,Z_c_low_level) l flow >>$ fun l flow ->
-            man.eval ~zone:(Z_c,Z_c_low_level) u flow >>$ fun u flow ->
-            Cases.singleton (l,u) flow
-          ) >>$ fun bounds flow ->
-        man.post ~zone:Z_c_low_level { stmt with skind = S_stub_rename_primed(lval, bounds) } flow
-      )
 
     | _ -> None
 

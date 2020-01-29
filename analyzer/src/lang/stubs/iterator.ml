@@ -296,20 +296,14 @@ struct
              ) flow
 
 
-  (** Remove locals and old copies of assigned variables *)
-  let clean_post locals assigns range man flow =
-    let block1 =
+  (** Remove locals *)
+  let clean_post locals range man flow =
+    let block =
       List.fold_left (fun block l ->
           mk_remove_var l.content.lvar range :: block
         ) [] locals
     in
-    let block2 =
-      List.fold_left (fun block a ->
-          let t = a.content.assign_target in
-          mk_stub_rename_primed t a.content.assign_offset range :: block
-        ) block1 assigns
-    in
-    man.exec (mk_block block2 range) flow
+    man.exec (mk_block block range) flow
 
 
   let exec_free free man flow =
@@ -341,7 +335,7 @@ struct
       ) flow case.case_body |>
 
     (* Clean case post state *)
-    clean_post case.case_locals case.case_assigns case.case_range man
+    clean_post case.case_locals case.case_range man
 
 
   (** Execute the body of a stub *)
@@ -373,6 +367,14 @@ struct
     Flow.join_list man.lattice flows ~empty:(fun () -> flow)
 
 
+  (** Rename primed variables *)
+  let rename_primed assigns range man flow =
+    (* Check if there are assigned variables *)
+    if assigns = []
+    then flow
+    else man.exec (mk_stub_rename_primed range) flow
+
+
   (** Entry point of expression evaluations *)
   let eval zone exp man flow =
     match ekind exp with
@@ -402,8 +404,11 @@ struct
       (* Evaluate the body of the stb *)
       let flow = exec_body stub.stub_func_body return man flow in
 
-      (* Clean locals and primes *)
-      let flow = clean_post stub.stub_func_locals stub.stub_func_assigns stub.stub_func_range man flow in
+      (* Clean locals *)
+      let flow = clean_post stub.stub_func_locals stub.stub_func_range man flow in
+
+      (* Rename primed targets if present *)
+      let flow = rename_primed stub.stub_func_assigns stub.stub_func_range man flow in
 
       (* Restore the callstack *)
       let flow = Flow.set_callstack cs flow in
@@ -433,8 +438,11 @@ struct
       (* Evaluate the body of the stub *)
       let flow = exec_body stub.stub_directive_body None man flow in
 
-      (* Clean locals and primes *)
-      let flow = clean_post stub.stub_directive_locals stub.stub_directive_assigns stub.stub_directive_range man flow in
+      (* Clean locals *)
+      let flow = clean_post stub.stub_directive_locals stub.stub_directive_range man flow in
+
+      (* Rename primes *)
+      let flow = rename_primed stub.stub_directive_assigns stub.stub_directive_range man flow in
 
       Post.return flow |>
       OptionExt.return

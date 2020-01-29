@@ -221,33 +221,20 @@ struct
 
 
   (** Rename primed bases to original names *)
-  let exec_rename_primed_base base range man flow =
-    (* Check if base is in the set of assigned bases *)
-    let a = get_env T_cur man flow in
-    if not (AssignedBases.mem base a) then Post.return flow
-    else
-      (* Remove it from assigned bases *)
-      let a = AssignedBases.remove base a in
-      let flow = set_env T_cur a man flow in
-      (* Rename the primed base *)
-      let unprimed = mk_base_expr base range in
-      let primed = mk_primed_base_expr base range in
-      let stmt = mk_rename primed unprimed range in
-      man.post stmt ~zone:Z_c_low_level flow
+  let rename_primed_base base range man flow =
+    let unprimed = mk_base_expr base range in
+    let primed = mk_primed_base_expr base range in
+    let stmt = mk_rename primed unprimed range in
+    man.post stmt ~zone:Z_c_low_level flow
 
   
   (** Rename primed targets to original names *)
-  let exec_stub_rename_primed target assigned_indices range man flow =
-    let ptr = match assigned_indices with
-      | [] -> mk_c_address_of target range
-      | _ -> target
-    in
-    man.eval ptr ~zone:(Z_c,Z_c_points_to) flow >>$ fun p flow ->
-    match ekind p with
-    | E_c_points_to(P_block(({ base_valid = true } as base),_)) ->
-      exec_rename_primed_base base range man flow
-
-    | _ -> Cases.empty_singleton flow
+  let exec_stub_rename_primed range man flow =
+    let a = get_env T_cur man flow in
+    let flow = set_env T_cur AssignedBases.empty man flow in
+    AssignedBases.fold (fun base acc ->
+        Post.bind (rename_primed_base base range man) acc
+      ) a (Post.return flow)
 
 
   let exec zone stmt man flow  =
@@ -256,8 +243,8 @@ struct
       exec_stub_assigns target offsets stmt.srange man flow |>
       OptionExt.return
 
-    | S_stub_rename_primed(target,offsets) ->
-      exec_stub_rename_primed target offsets stmt.srange man flow |>
+    | S_stub_rename_primed ->
+      exec_stub_rename_primed stmt.srange man flow |>
       OptionExt.return
 
     | _ -> None
