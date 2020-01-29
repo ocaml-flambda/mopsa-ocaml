@@ -36,6 +36,7 @@ def combinations(l):
 
 PI = 3.14159265358979323
 SOLAR_MASS = 4 * PI * PI
+mopsa.ignore_exception(OverflowError)
 DAYS_PER_YEAR = 365.24
 
 BODIES = {
