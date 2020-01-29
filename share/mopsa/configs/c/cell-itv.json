@@ -34,10 +34,10 @@
             "c.libs.variadic",
 
 	    // C stubs
+	    "c.cstubs.assigns",
 	    "c.cstubs.builtins",
 	    "c.cstubs.requires",
 	    "c.cstubs.resources",
-	    "c.cstubs.assigns",
 
             // Memory model
             "c.desugar.aggregates",

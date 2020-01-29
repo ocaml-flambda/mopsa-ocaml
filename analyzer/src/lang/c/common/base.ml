@@ -116,7 +116,9 @@ let is_base_readonly b =
 let eval_base_size base ?(via=Z_any) range (man:('a,'t,'s) Core.Sig.Stacked.Lowlevel.man) flow =
   match base.base_kind with
   | Var var
-    when is_c_variable_length_array_type var.vtyp ->
+    when is_c_variable_length_array_type var.vtyp ||
+         is_c_no_length_array_type var.vtyp
+    ->
     let bytes_expr = mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, mk_var var range)) range ~etyp:ul in
     man.eval ~zone:(Z_c_low_level, Z_c_scalar) ~via bytes_expr flow
 

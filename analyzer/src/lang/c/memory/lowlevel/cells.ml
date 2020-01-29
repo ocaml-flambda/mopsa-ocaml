@@ -1109,15 +1109,17 @@ struct
 
   (** Compute the interval of an offset *)
   let offset_interval offset range man flow : Itv.t =
+    let interval e =
+      let evl = man.eval e ~zone:(Z_c, Z_u_num) flow in
+      Eval.apply (fun ee flow -> man.ask (Universal.Numeric.Common.mk_int_interval_query ee) flow) Itv.join Itv.meet Itv.bottom evl
+    in
     if is_expr_forall_quantified offset then
       let min, max = Common.Quantified_offset.bound offset in
-      let min_evl = man.eval ~zone:(Z_c, Z_u_num) min flow in
-      let max_evl = man.eval ~zone:(Z_c, Z_u_num) max flow in
-      let min_itv = Eval.apply (fun min flow -> man.ask (Universal.Numeric.Common.mk_int_interval_query min) flow) Itv.join Itv.meet Itv.bottom min_evl in
-      let max_itv = Eval.apply (fun max flow -> man.ask (Universal.Numeric.Common.mk_int_interval_query max) flow) Itv.join Itv.meet Itv.bottom max_evl in
+      let min_itv = interval min in
+      let max_itv = interval max in
       Itv.join min_itv max_itv
     else
-      man.ask (Universal.Numeric.Common.mk_int_interval_query offset) flow
+      interval offset
 
 
   (** Forget the value of an lval *)
@@ -1134,7 +1136,8 @@ struct
       (* Compute the interval of the offset *)
       let itv = offset_interval offset range man flow in
       (* Add the size of the pointed cells *)
-      let itv = Bot.bot_lift2 ItvUtils.IntItv.add itv (Itv.of_z Z.zero (sizeof_type (under_type ptr.etyp))) in
+      let size = sizeof_type (under_type ptr.etyp |> void_to_char) in
+      let itv = Bot.bot_lift2 ItvUtils.IntItv.add itv (Itv.of_z Z.zero (Z.pred size)) in
       (* Forget all affected cells *)
       let a = get_env T_cur man flow in
       let cells = find_cells (fun c ->

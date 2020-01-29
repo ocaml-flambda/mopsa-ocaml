@@ -1099,6 +1099,12 @@ let is_c_variable_length_array_type t =
   | T_c_array(_, C_array_length_expr _) -> true
   | _ -> false
 
+(** Check if v is declared as an array without length (as for many auxiliary variables) *)
+let is_c_no_length_array_type t =
+  match remove_typedef_qual t with
+  | T_c_array(_, C_array_no_length) -> true
+  | _ -> false
+
 (** Find the definition of a C function *)
 let find_c_fundec_by_name name flow =
   let prog = get_c_program flow in
