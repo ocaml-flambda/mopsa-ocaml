@@ -3,4 +3,4 @@
 MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/.."
 CONFIG=python/default.json
 
-${MOPSADIR}/bin/mopsa -config=${CONFIG}  -unprecise-exn=IndexError -unprecise-exn=ValueError -unprecise-exn=KeyError -unprecise-exn=OverflowError -loop-decr-it $@
+${MOPSADIR}/bin/mopsa -config=${CONFIG} -loop-decr-it -loop-unrolling=2 $@
