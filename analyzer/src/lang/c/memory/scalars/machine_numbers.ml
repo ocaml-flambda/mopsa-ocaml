@@ -608,6 +608,11 @@ struct
       man.post (mk_expand e' el' stmt.srange) ~zone:Z_u_num flow |>
       OptionExt.return
 
+    | S_forget v when is_c_num_type v.etyp ->
+      let vv = mk_num_var_expr v in
+      man.post (mk_forget vv stmt.srange) ~zone:Z_u_num flow |>
+      OptionExt.return
+
     | _ -> None
 
 
