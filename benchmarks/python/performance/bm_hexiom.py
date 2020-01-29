@@ -682,8 +682,6 @@ def test_main():
     mopsa.ignore_exception(IndexError)
     mopsa.ignore_exception(KeyError)
     mopsa.ignore_exception(ValueError)
-    mopsa.assert_exception_exists(UnboundLocalError)
-    mopsa.ignore_exception(UnboundLocalError)
     mopsa.assert_exception_exists(AssertionError)
     mopsa.ignore_exception(AssertionError)
     mopsa.assert_exception_exists(Exception)

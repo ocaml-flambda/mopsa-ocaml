@@ -162,6 +162,7 @@ def test_main():
     res = bench_nbody(100, DEFAULT_REFERENCE, DEFAULT_ITERATIONS)
     mopsa.ignore_exception(ValueError)
     mopsa.ignore_exception(KeyError)
+    mopsa.ignore_exception(OverflowError)
     mopsa.assert_exception_exists(UnboundLocalError)
     mopsa.ignore_exception(UnboundLocalError)
     mopsa.ignore_exception(IndexError)
