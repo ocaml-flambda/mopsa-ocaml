@@ -70,7 +70,7 @@ module Domain =
               Eval.singleton (mk_py_object (find_builtin_attribute cls attr) range) flow
             else
               search_mro tl in
-        search_mro mro |> Option.return
+        search_mro mro |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("getattr", _))}, _)}, e::attr::[], [])  ->
         man.eval attr flow |>
@@ -84,7 +84,7 @@ module Domain =
                 ~felse:(fun flow ->
                     panic_at range "getattr with attr=%a" pp_expr eattr)
           )
-        |> Option.return
+        |> OptionExt.return
 
       (* Other attributes *)
       | E_py_attribute (e, attr) ->
@@ -114,7 +114,7 @@ module Domain =
                if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom then
                  let oexp = object_of_expr exp in
                  let oname = oobject_name oexp in
-                 if oname <> None && is_builtin_name (Option.none_to_exn oname) && is_builtin_attribute oexp attr then
+                 if oname <> None && is_builtin_name (OptionExt.none_to_exn oname) && is_builtin_attribute oexp attr then
                    let rese = mk_py_object (find_builtin_attribute oexp attr) range in
                    Eval.singleton rese flow
                  else
@@ -160,7 +160,7 @@ module Domain =
                                           | Some attr -> Eval.singleton attr (Flow.join man.lattice flow_exn_before flow)
                                          )
                                      )
-                                   |> Option.none_to_exn
+                                   |> OptionExt.none_to_exn
                                  )
                                ~felse:(fun flow ->
                                    man.eval (mk_py_call getattribute [exp; c_attr] range) flow
@@ -169,8 +169,7 @@ module Domain =
                        )
                    )
            )
-         |> Option.return
-
+         |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("hasattr", _))}, _)}, [obj; attr], []) ->
          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) obj flow |>
@@ -219,15 +218,15 @@ module Domain =
                  )
                  man flow
              )
-         |> Option.return
+         |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("setattr", _))}, _)}, [lval; attr; rval], []) ->
         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_attr lval "__setattr__" range) [attr; rval] range) flow
-        |> Option.return
+        |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("delattr", _))}, _)}, [lval; attr], []) ->
         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_attr lval "__delattr__" range) [attr] range) flow
-        |> Option.return
+        |> OptionExt.return
 
 
       | _ -> None
@@ -238,7 +237,7 @@ module Domain =
       | S_assign({ekind = E_py_attribute(lval, attr)}, rval) ->
         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_attr (mk_py_type lval range) "__setattr__" range) [lval; mk_constant T_any (C_string attr) range; rval] range) flow
         |> Eval.bind (fun e flow -> Post.return flow)
-        |> Option.return
+        |> OptionExt.return
 
       | _ -> None
 

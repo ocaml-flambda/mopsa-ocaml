@@ -35,7 +35,7 @@ open GraphSig
 module IdGeneric(T : sig type t end) : (ID_TYPE with type t = T.t) =
 struct
   type t = T.t
-  let compare (x:t) (y:t) = Pervasives.compare x y
+  let compare (x:t) (y:t) = Stdlib.compare x y
   let equal (x:t) (y:t) = (x = y)
   let hash (x:t) = Hashtbl.hash x
 end

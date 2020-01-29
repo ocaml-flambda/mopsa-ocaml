@@ -155,7 +155,7 @@ struct
       man.eval ~zone:(Zone.Z_u, Zone.Z_u_string) e1 flow |>
       Eval.bind (fun e1 flow ->
           let cur = Core.Sig.Domain.Intermediate.get_env T_cur man flow in
-          let strings_e1 = Nonrel.eval e1 cur |> Option.none_to_exn |> snd in
+          let strings_e1 = Nonrel.eval e1 cur |> OptionExt.none_to_exn |> snd in
           let itv_e2 = man.ask (Numeric.Common.Q_int_interval e2) flow in
           (* FIXME: arbitrary constants... *)
           if ItvUtils.IntItv.size @@ Bot.bot_to_exn itv_e2 <= (Z.of_int 5) && Value.cardinal strings_e1 <= 3 then
@@ -173,17 +173,17 @@ struct
           else
             Eval.singleton (mk_top T_string range) flow
         )
-      |> Option.return
+      |> OptionExt.return
 
     | E_len e ->
       man.eval ~zone:(Zone.Z_u, Zone.Z_u_string) e flow |>
       Eval.bind (fun e flow ->
           let cur = Core.Sig.Domain.Intermediate.get_env T_cur man flow in
-          let strings_e = Nonrel.eval e cur |> Option.none_to_exn |> snd in
+          let strings_e = Nonrel.eval e cur |> OptionExt.none_to_exn |> snd in
           Eval.join_list ~empty:(fun () -> failwith "todo")
             (Value.fold (fun s acc -> (man.eval ~zone:(Zone.Z_u, Zone.Z_u_int) (mk_int (String.length s) range) flow) :: acc) strings_e [])
         )
-      |> Option.return
+      |> OptionExt.return
 
     | _ -> None
 
@@ -193,12 +193,12 @@ struct
     match query with
     | Q_strings_powerset e ->
       man.eval ~zone:(Zone.Z_u, Zone.Z_u_string) e flow |>
-      Result.apply
+      Cases.apply
         (fun oe flow ->
            let cur = Core.Sig.Domain.Intermediate.get_env T_cur man flow in
-           Nonrel.eval (Option.none_to_exn oe) cur |> Option.lift snd
+           Nonrel.eval (OptionExt.none_to_exn oe) cur |> OptionExt.lift snd
 
-        ) (Option.lift2 StringPower.join) (Option.lift2 StringPower.meet)
+        ) (OptionExt.lift2 StringPower.join) (OptionExt.lift2 StringPower.meet)
 
     | _ -> Lifted.ask query man flow
 

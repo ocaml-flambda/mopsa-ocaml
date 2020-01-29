@@ -139,22 +139,22 @@ module Domain =
       let range = erange exp in
       match ekind exp with
       | E_constant (C_top T_string) ->
-        allocate_builtin man range flow "str" (Some exp) |> Option.return
+        allocate_builtin man range flow "str" (Some exp) |> OptionExt.return
 
       | E_constant (C_string s) ->
-        allocate_builtin man range flow "str" (Some exp) |> Option.return
+        allocate_builtin man range flow "str" (Some exp) |> OptionExt.return
       (* we keep s in the expression of the returned object *)
 
       | E_constant (C_top T_py_bytes)
       | E_py_bytes _ ->
-        allocate_builtin man range flow "bytes" (Some exp) |> Option.return
+        allocate_builtin man range flow "bytes" (Some exp) |> OptionExt.return
 
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, args, []) when StringMap.mem f stub_base ->
         debug "function %s in stub_base, processing@\n" f;
         let {in_args; out_type} = StringMap.find f stub_base in
         process_simple f man flow range args in_args out_type
-        |> Option.return
+        |> OptionExt.return
 
       | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__new__", _))}, _)}), [cls; obj], []) ->
         (* from unicode_new in unicodeobject.c
@@ -185,8 +185,8 @@ module Domain =
                 )
               ~felse:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object (find_builtin "repr") range) [obj] range))
           )
-        |> Option.return
-        (* man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_string range) flow |> Option.return *)
+        |> OptionExt.return
+        (* man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_string range) flow |> OptionExt.return *)
 
       (* 𝔼⟦ str.__op__(e1, e2) | op ∈ {==, !=, <, ...} ⟧ *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, [e1; e2], [])
@@ -212,9 +212,9 @@ module Domain =
                   Eval.empty_singleton flow)
               man flow
           )
-        |>  Option.return
+        |>  OptionExt.return
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)} as caller, [e1; e2], [])
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, [e1; e2], [])
         when is_str_binop_fun f ->
         bind_list [e1; e2] (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
         bind_some (fun el flow ->
@@ -246,7 +246,7 @@ module Domain =
                   Eval.empty_singleton flow)
               man flow
           )
-        |>  Option.return
+        |>  OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__rmul__" as f, _))}, _)}, args, [])
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__mul__" as f, _))}, _)}, args, []) ->
@@ -263,7 +263,7 @@ module Domain =
                  | _ -> assert false
                )
           )
-        |> Option.return
+        |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__mod__" as f, _))}, _)}, args, []) ->
         Utils.check_instances ~arguments_after_check:1 f man flow range args ["str"]
@@ -275,7 +275,7 @@ module Domain =
              let tyerror = tyerror_f |> Eval.empty_singleton in
              Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Eval.copy_ctx res tyerror :: res :: [])
           )
-        |> Option.return
+        |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__rmod__" as f, _))}, _)}, args, []) ->
         Utils.check_instances ~arguments_after_check:1 f man flow range args ["str"]
@@ -287,19 +287,19 @@ module Domain =
              let tyerror = tyerror_f |> Eval.empty_singleton in
              Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Eval.copy_ctx res tyerror :: res :: [])
           )
-        |> Option.return
+        |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__getitem__" as f, _))}, _)}, args, []) ->
         Utils.check_instances_disj f man flow range args
           [["str"]; ["int"; "slice"]]
           (fun _ flow -> man.eval (mk_py_top T_string range) flow)
-        |> Option.return
+        |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bytes.__getitem__" as f, _))}, _)}, args, []) ->
         Utils.check_instances_disj f man flow range args
           [["bytes"]; ["int"; "slice"]]
           (fun _ flow -> man.eval (mk_py_top T_py_bytes range) flow)
-        |> Option.return
+        |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__iter__" as f, _))}, _)}, args, []) ->
         Utils.check_instances f man flow range args
@@ -316,7 +316,7 @@ module Domain =
                  Eval.singleton (mk_py_object (it_addr, None) range) flow
                )
           )
-        |> Option.return
+        |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str_iterator.__next__" as f, _))}, _)}, args, []) ->
         Utils.check_instances f man flow range args
@@ -328,7 +328,7 @@ module Domain =
              let stopiteration = stopiteration_f |> Eval.empty_singleton in
              Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Eval.copy_ctx els stopiteration :: els :: [])
           )
-        |> Option.return
+        |> OptionExt.return
 
       | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.encode", _))}, _)}) as caller, [arg], [])
       | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bytes.decode", _))}, _)}) as caller, [arg], []) ->
@@ -348,7 +348,7 @@ module Domain =
                [ Eval.empty_singleton lookuperr_f;
                  man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_constant (C_top T_py_bytes)) range) (Flow.copy_ctx lookuperr_f flow)]
           )
-        |> Option.return
+        |> OptionExt.return
 
       | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bytes.decode" as f, _))}, _)}), [arg; encoding], []) ->
         (* FIXME: check encoding? *)
@@ -363,13 +363,13 @@ module Domain =
                [ Eval.empty_singleton lookuperr_f;
                  man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_constant (C_top T_string)) range) (Flow.copy_ctx lookuperr_f flow)]
           )
-        |> Option.return
+        |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bytes.strip" as f, _))}, _)}, args, []) ->
         Utils.check_instances f man flow range args
           ["bytes"]
           (fun eargs flow -> man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_py_bytes range) flow)
-        |> Option.return
+        |> OptionExt.return
 
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__repr__" as f, _))}, _)}, args, [])
@@ -377,7 +377,7 @@ module Domain =
         Utils.check_instances f man flow range args
           ["str"]
           (fun eargs flow -> Eval.singleton (List.hd eargs) flow)
-        |> Option.return
+        |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.format" as f, _))}, _)}, args, kwargs) ->
         Utils.check_instances ~arguments_after_check:(List.length args - 1) f man flow range args ["str"]
@@ -389,7 +389,7 @@ module Domain =
              let tyerror = tyerror_f |> Eval.empty_singleton in
              Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Eval.copy_ctx res tyerror :: res :: [])
           )
-        |> Option.return
+        |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.index" as f, _))}, _)}, args, []) ->
         Utils.check_instances f man flow range args
@@ -399,7 +399,7 @@ module Domain =
                (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow)
                (man.exec (Utils.mk_builtin_raise_msg "ValueError" "substring not found" range) flow |> Eval.empty_singleton)
           )
-        |> Option.return
+        |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__len__" as f, _))}, _)}, args, []) ->
         Utils.check_instances f man flow range args ["str"]
@@ -407,7 +407,7 @@ module Domain =
              man.eval ~zone:(Universal.Zone.Z_u, Universal.Zone.Z_u_string) (mk_expr (E_len (extract_oobject @@ List.hd eargs)) range) flow |>
              Eval.bind (fun l flow -> man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) l flow)
           )
-        |> Option.return
+        |> OptionExt.return
 
       | _ -> None
 

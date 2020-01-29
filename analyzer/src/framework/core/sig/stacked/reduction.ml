@@ -29,7 +29,7 @@ open Lattice
 open Flow
 open Post
 open Eval
-open Result
+open Cases
 
 
 (** {2 Types} *)
@@ -65,7 +65,7 @@ end
 module type EVAL_REDUCTION =
 sig
   val name   : string
-  val reduce : expr -> ('a,'s) rman -> prod_eval -> 'a flow  -> ('a, prod_eval) result
+  val reduce : expr -> ('a,'s) rman -> prod_eval -> 'a flow  -> ('a, prod_eval) cases
 end
 
 

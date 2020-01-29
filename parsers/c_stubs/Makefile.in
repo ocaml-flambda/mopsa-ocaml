@@ -1,3 +1,5 @@
+# @configure_input@
+
 ##############################################################################
 #                                                                            #
 #  This file is part of MOPSA, a Modular Open Platform for Static Analysis.  #
@@ -29,9 +31,10 @@ c_stubs_parser.passes = macro_expansion predicate_expansion scoping cst_to_ast
 # Packages
 PKGS = zarith
 
-# MOPSA
-MOPSAROOT = ../..
+# MOPSA libraries
 MOPSALIBS := utils:utils parsers/c:mlClangParser
 
 
+# MOPSA make rules
+MOPSAROOT = @top_srcdir@
 include $(MOPSAROOT)/make/main.mk

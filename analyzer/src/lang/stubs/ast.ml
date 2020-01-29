@@ -254,7 +254,7 @@ let () =
       );
     compare = (fun next ak1 ak2 ->
         match ak1, ak2 with
-        | A_stub_resource res1, A_stub_resource res2 -> Pervasives.compare res1 res2
+        | A_stub_resource res1, A_stub_resource res2 -> Stdlib.compare res1 res2
         | _ -> next ak1 ak2
       );
   }

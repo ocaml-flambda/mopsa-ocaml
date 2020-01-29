@@ -46,7 +46,7 @@ module Domain =
       let range = erange exp in
       match ekind exp with
       | E_constant (C_top T_py_complex) ->
-        T_string.Domain.allocate_builtin man range flow "complex" (Some exp) |> Option.return
+        T_string.Domain.allocate_builtin man range flow "complex" (Some exp) |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("complex.__new__", _))}, _)}, [cls], []) ->
         Utils.new_wrapper man range flow "complex" cls
@@ -54,14 +54,14 @@ module Domain =
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("complex.__new__" as f, _))}, _)}, [cls; arg], []) ->
         Utils.check_instances_disj f man flow range [arg] [["float"; "int"; "str"]] (fun _ -> man.eval (mk_py_top T_py_complex range))
-        |> Option.return
+        |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("complex.__new__" as f, _))}, _)}, [cls; arg1; arg2], []) ->
         Utils.check_instances_disj f man flow range [arg1; arg2] [["float"; "int"; "str"]; ["float"; "int"; "str"]] (fun _ -> man.eval (mk_py_top T_py_complex range))
-        |> Option.return
+        |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("complex.__new__", _))}, _)}, args, []) ->
-        man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton |> Option.return
+        man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton |> OptionExt.return
 
       | _ -> None
 

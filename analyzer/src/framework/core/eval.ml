@@ -28,64 +28,50 @@ open Token
 open Flow
 open Zone
 open Context
-open Result
+open Cases
 
 
-type 'a eval = ('a,expr) result
+type 'a eval = ('a,expr) cases
 
-let return ?(cleaners=[]) ?(log=Log.empty) e flow : 'a eval = Result.return e flow ~cleaners ~log
+let return ?(cleaners=[]) ?(log=Log.empty) e flow : 'a eval = Cases.return e flow ~cleaners ~log
 
-let singleton ?(cleaners=[]) e flow : 'a eval = Result.singleton e flow ~cleaners
+let singleton ?(cleaners=[]) e flow : 'a eval = Cases.singleton e flow ~cleaners
 
-
-let empty flow : 'a eval = Result.empty flow
-
-let empty_singleton = empty
-
+let empty_singleton = empty_singleton
 
 let join (evl1:'a eval) (evl2:'a eval) : 'a eval =
-  Result.join evl1 evl2
-
+  Cases.join evl1 evl2
 
 let meet (evl1:'a eval) (evl2:'a eval) : 'a eval =
-  Result.meet evl1 evl2
-
+  Cases.meet evl1 evl2
 
 let join_list ~(empty:unit -> 'a eval) (l:'a eval list) : 'a eval =
-  Result.join_list ~empty l
-
+  Cases.join_list ~empty l
 
 let meet_list ~(empty:unit -> 'a eval) (l:'a eval list) : 'a eval =
-  Result.join_list ~empty l
-
+  Cases.join_list ~empty l
 
 let print fmt (evl: 'a eval) : unit =
-  Result.print (fun fmt e flow ->
+  Cases.print_some (fun fmt e flow ->
       pp_expr fmt e
     ) fmt evl
 
-
 let add_cleaners cleaners evl : 'a eval =
-  Result.add_cleaners cleaners evl
-
+  Cases.add_cleaners cleaners evl
 
 let get_ctx (evl:'a eval) : 'a ctx =
-  Result.get_ctx evl
-
+  Cases.get_ctx evl
 
 let set_ctx (ctx:'a ctx) (evl:'a eval) : 'a eval =
-  Result.set_ctx ctx evl
-
+  Cases.set_ctx ctx evl
 
 let copy_ctx (src:'a eval) (dst:'a eval) : 'a eval =
-  Result.copy_ctx src dst
+  Cases.copy_ctx src dst
 
-
-let bind = Result.bind_some
-
+let bind = Cases.bind_some
 
 let apply f join meet empty evl =
-  Result.apply
+  Cases.apply
     (fun oe flow ->
        match oe with
        | Some e -> f e flow
@@ -93,8 +79,8 @@ let apply f join meet empty evl =
     )
     join meet evl
 
-let map = Result.map
+let map = Cases.map
 
-let remove_duplicates lattice evl = Result.remove_duplicates compare_expr lattice evl
+let remove_duplicates lattice evl = Cases.remove_duplicates compare_expr lattice evl
 
-let cardinal = Result.cardinal
+let cardinal = Cases.cardinal

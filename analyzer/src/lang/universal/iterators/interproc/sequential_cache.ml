@@ -74,7 +74,7 @@ struct
                      Format.fprintf fmt "in_flow = %a@\nout_flow = %a@\noexpr = %a@\n"
                        (Flow.print p) in_flow
                        (Flow.print p) out_flow
-                       (Option.print pp_expr) oexpr)
+                       (OptionExt.print pp_expr) oexpr)
                      fmt list
              )
           )
@@ -116,7 +116,7 @@ struct
     | E_call({ekind = E_function (User_defined func)}, args) ->
 
       if man.lattice.is_bottom (Flow.get T_cur man.lattice flow)
-      then Eval.empty_singleton flow |> Option.return
+      then Eval.empty_singleton flow |> OptionExt.return
       else
 
       let in_flow = flow in
@@ -134,14 +134,14 @@ struct
                 let out_flow_cur = exec_block_on_all_flows cleaners man out_flow_cur in
                 let out_flow = Flow.join man.lattice out_flow_cur out_flow_other in
                 let flow = store_signature func.fun_name in_flow_cur oeval_res out_flow in
-                Result.return oeval_res (Flow.join man.lattice in_flow_other flow) ~log
+                Cases.return oeval_res (Flow.join man.lattice in_flow_other flow) ~log
 
               | Some eval_res ->
                 (* we have to perform a full bind in order to add
                    in_flow_other to the flow even in the case of an
                    empty eval *)
                 man.eval eval_res out_flow |>
-                Result.bind (fun oeval_res out_flow ->
+                Cases.bind (fun oeval_res out_flow ->
                     match oeval_res with
                     | None ->
                       Eval.empty_singleton (Flow.join man.lattice in_flow_other out_flow)
@@ -151,16 +151,16 @@ struct
                       let out_flow_cur = exec_block_on_all_flows cleaners man out_flow_cur in
                       let out_flow = Flow.join man.lattice out_flow_cur out_flow_other in
                       let flow = store_signature func.fun_name in_flow_cur (Some eval_res) out_flow in
-                      Result.return (Some eval_res) (Flow.join man.lattice in_flow_other flow) ~log
+                      Cases.return (Some eval_res) (Flow.join man.lattice in_flow_other flow) ~log
                   )
             )
 
         | Some (_, oout_expr, out_flow) ->
           Debug.debug ~channel:"profiling" "reusing %s at range %a" func.fun_name pp_range func.fun_range;
           debug "reusing something in function %s@\nchanging in_flow=%a@\ninto out_flow=%a@\n" func.fun_name (Flow.print man.lattice.print) in_flow (Flow.print man.lattice.print) out_flow;
-          Result.return oout_expr (Flow.join man.lattice in_flow_other out_flow)
+          Cases.return oout_expr (Flow.join man.lattice in_flow_other out_flow)
       end
-      |> Option.return
+      |> OptionExt.return
 
 
 

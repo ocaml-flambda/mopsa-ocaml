@@ -2,7 +2,7 @@
 #                                                                            #
 #  This file is part of MOPSA, a Modular Open Platform for Static Analysis.  #
 #                                                                            #
-#  Copyright (C) 2019 The MOPSA Project.                                     #
+#  Copyright (C) 2017-2019 The MOPSA Project.                                #
 #                                                                            #
 #  This program is free software: you can redistribute it and/or modify      #
 #  it under the terms of the GNU Lesser General Public License as published  #
@@ -19,15 +19,19 @@
 #                                                                            #
 ##############################################################################
 
-TARGET_LIBS = mlUniversalParser
-
-# Packs
-mlUniversalParser = U_ast U_ast_printer U_parser U_lexer U_file_parser
 
 
-# MOPSA
-MOPSAROOT = ../..
-MOPSALIBS := utils:utils
+# Python
+lang += python
+lang.python = ast addr zone utils visitor operators pp ast_compare hooks frontend   \
+              alarms libs desugar objects data_model types  flows program
+lang.python.libs = math py_mopsa py_std py_unittest py_typing
+lang.python.objects = lambda class range nones data_container_utils function  py_list tuple dict py_set py_object iterable
+lang.python.data_model = callable arith_ops compare_ops aug_assign	\
+                         attribute subscript
+lang.python.types = structural_types nominal_types addr_env polymorphism t_string t_int t_float t_complex type_annot
 
 
-include $(MOPSAROOT)/make/main.mk
+
+# MOPSA libraries
+MOPSALIBS += parsers/python:mlPythonParser

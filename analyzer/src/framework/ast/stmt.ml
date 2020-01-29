@@ -106,7 +106,7 @@ let stmt_compare_chain = TypeExt.mk_compare_chain (fun s1 s2 ->
         (fun () -> Compare.list compare_expr el el')
       ]
 
-    | _ -> Pervasives.compare s1 s2
+    | _ -> Stdlib.compare s1 s2
   )
 
 let compare_stmt s1 s2 =

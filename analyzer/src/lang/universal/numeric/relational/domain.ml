@@ -201,12 +201,12 @@ struct
     match skind stmt with
     | S_add { ekind = E_var (var, _) } ->
       add_missing_vars (a,bnd) [var] |>
-      Option.return
+      OptionExt.return
 
     | S_remove { ekind = E_var (var, _) }
     | S_forget { ekind = E_var (var, _) } ->
       forget_var var (a,bnd) |>
-      Option.return
+      OptionExt.return
 
 
     | S_rename ({ ekind = E_var (var1, _) }, { ekind = E_var (var2, _) }) ->
@@ -215,7 +215,7 @@ struct
       let v1, bnd = Binding.var_to_apron bnd var1 in
       let v2, bnd = Binding.var_to_apron bnd var2 in
       (Apron.Abstract1.rename_array ApronManager.man a [| v1  |] [| v2 |], bnd) |>
-      Option.return
+      OptionExt.return
 
     | S_project vars
       when List.for_all (function { ekind = E_var _ } -> true | _ -> false) vars
@@ -254,7 +254,7 @@ struct
     | S_assign({ ekind = E_var (var, WEAK) } as lval, e) ->
       let lval' = { lval with ekind = E_var(var, STRONG) } in
       exec ctx {stmt with skind = S_assign(lval', e)} man (a,bnd) |>
-      Option.lift @@ fun (a',bnd') ->
+      OptionExt.lift @@ fun (a',bnd') ->
       join (a,bnd) (a', bnd')
 
     | S_fold( {ekind = E_var (v, _)}, vl)
@@ -344,7 +344,7 @@ struct
                    remove_tmp l
           in
           Some (a', bnd)
-        with UnsupportedExpression -> Option.return (a,bnd)
+        with UnsupportedExpression -> OptionExt.return (a,bnd)
       end
 
     | _ -> None
@@ -384,19 +384,19 @@ struct
       match query with
       | Common.Q_int_interval e ->
         eval_interval e (abs,bnd) |>
-        Option.return
+        OptionExt.return
 
       | Common.Q_int_congr_interval e ->
         (eval_interval e (abs,bnd), Common.C.minf_inf) |>
-        Option.return
+        OptionExt.return
 
       | Q_related_vars v ->
         related_vars v (abs,bnd) |>
-        Option.return
+        OptionExt.return
 
       | Q_constant_vars ->
         constant_vars (abs,bnd) |>
-        Option.return
+        OptionExt.return
 
 
       | _ -> None

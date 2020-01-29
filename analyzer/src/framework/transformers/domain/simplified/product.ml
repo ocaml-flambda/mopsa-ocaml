@@ -407,7 +407,7 @@ struct
       let f = fun (type a) (m: a dmodule) acc aa ->
         let module Domain = (val m) in
         let rep = Domain.ask query aa in
-        Option.neutral2 (fun rep acc ->
+        OptionExt.neutral2 (fun rep acc ->
             meet_query query rep acc
           ) rep acc
       in
@@ -646,7 +646,7 @@ struct
       Domain.exec ctx stmt man aa
     in
     apply_opt { f } Spec.pool a |>
-    Option.lift @@ fun a' ->
+    OptionExt.lift @@ fun a' ->
     reduce ctx stmt a a'
 
 

@@ -19,22 +19,7 @@
 #                                                                            #
 ##############################################################################
 
-TARGET_CLIBS = utils
 
-utils = bot compare location debug exceptions option dnf setExt setExtSig \
-	setP listExt mapExtSig mapExt mapExtPoly invRelation invRelationSig \
-	equiv mapPolyHet mapP relation relationSig valueSig timing \
-        top bot_top itvUtils congUtils bitfields graphSig graph argExt lineEdit \
-        typeExt eq
-itvUtils = float intBound intItv floatItv floatItvNan
-
-# C files
-C_SRC = itvUtils/floats_x86_64.c
-
-# External packages, as given to ocamlfind
-PKGS = str gmp zarith camlidl threads
-
-
-MOPSAROOT = ..
-
-include $(MOPSAROOT)/make/main.mk
+# REPL
+lang += repl
+lang.repl = frontend

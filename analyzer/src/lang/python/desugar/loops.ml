@@ -56,7 +56,7 @@ module Domain =
                range
             ) flow
                   |> Post.return
-                  |> Option.return in
+                  |> OptionExt.return in
         Debug.debug ~channel:"profiling" "while loop at range %a: %.4f" pp_range range (Timing.stop start);
         res
 
@@ -72,7 +72,7 @@ module Domain =
             ) flow in
         let res = Flow.join man.lattice res (man.exec orelse res) in
         Debug.debug ~channel:"profiling" "while loop at range %a: %.4f" pp_range range (Timing.stop start);
-        res |> Post.return |> Option.return
+        res |> Post.return |> OptionExt.return
 
 
       | S_py_for(target, iterable, body, orelse) ->
@@ -126,7 +126,7 @@ module Domain =
             )
         in
         Debug.debug ~channel:"profiling" "for loop at range %a: %.4f" pp_range range (Timing.stop start);
-        res |> Option.return
+        res |> OptionExt.return
 
       | _ -> None
 

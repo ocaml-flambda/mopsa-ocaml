@@ -52,7 +52,7 @@ let compare_points_to p1 p2 =
       (fun () -> compare_base b1 b2);
       (fun () -> compare_expr o1 o2);
     ]
-  | _, _ -> Pervasives.compare p1 p2
+  | _, _ -> Stdlib.compare p1 p2
 
 
 

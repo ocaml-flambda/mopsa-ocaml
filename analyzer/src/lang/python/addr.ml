@@ -65,7 +65,7 @@ let eval_alloc man kind range flow =
   man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) exp flow |>
   Eval.bind (fun exp flow ->
       match ekind exp with
-      | E_addr (addr) -> Result.singleton addr flow
+      | E_addr (addr) -> Cases.singleton addr flow
       | _ -> panic "eval_alloc: allocation returned a non-address express %a" pp_expr exp
     )
 
@@ -421,7 +421,7 @@ let () =
            | A_py_class (c1, _), A_py_class (c2, _) ->
              begin match c1, c2 with
                | C_builtin s1, C_builtin s2
-               | C_unsupported s1, C_unsupported s2 -> Pervasives.compare s1 s2
+               | C_unsupported s1, C_unsupported s2 -> Stdlib.compare s1 s2
                | C_user c1, C_user c2 -> compare_var c1.py_cls_var c2.py_cls_var
                | C_annot c1, C_annot c2 -> compare_var c1.py_cls_a_var c2.py_cls_a_var;
                | _, _ -> default a1 a2
@@ -430,9 +430,9 @@ let () =
              begin match f1, f2 with
                | F_builtin (s1, t1), F_builtin (s2, t2) ->
                  Compare.compose
-                   [(fun () -> Pervasives.compare s1 s2);
-                    (fun () -> Pervasives.compare t1 t2)]
-               | F_unsupported s1, F_unsupported s2 -> Pervasives.compare s1 s2
+                   [(fun () -> Stdlib.compare s1 s2);
+                    (fun () -> Stdlib.compare t1 t2)]
+               | F_unsupported s1, F_unsupported s2 -> Stdlib.compare s1 s2
                | F_user u1, F_user u2 -> compare_var u1.py_func_var u2.py_func_var
                | F_annot f1, F_annot f2 -> compare_var f1.py_funca_var f2.py_funca_var
                | _, _ -> default a1 a2
@@ -440,7 +440,7 @@ let () =
            | A_py_module m1, A_py_module m2 ->
              begin match m1, m2 with
                | M_user (s1, _), M_user (s2, _)
-               | M_builtin s1, M_builtin s2 -> Pervasives.compare s1 s2
+               | M_builtin s1, M_builtin s2 -> Stdlib.compare s1 s2
                | _, _ -> default a1 a2
              end
            | A_py_method ((addr1, oexpr1), expr1, t1), A_py_method ((addr2, oexpr2), expr2, t2) ->
@@ -448,7 +448,7 @@ let () =
                [ (fun () -> compare_addr addr1 addr2);
                  (fun () -> Compare.option compare_expr oexpr1 oexpr2);
                  (fun () -> compare_expr expr1 expr2);
-                 (fun () -> Pervasives.compare t1 t2);]
+                 (fun () -> Stdlib.compare t1 t2);]
            | _ -> default a1 a2)
     }
   )

@@ -58,7 +58,7 @@ module Domain =
       | E_constant (C_top (T_float _))
       | E_constant (C_float _)
       | E_constant (C_float_interval _) ->
-        Eval.singleton (mk_py_object (Addr_env.addr_float (), Some {exp with etyp=(T_float F_DOUBLE)}) range) flow |> Option.return
+        Eval.singleton (mk_py_object (Addr_env.addr_float (), Some {exp with etyp=(T_float F_DOUBLE)}) range) flow |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("float.__new__", _))}, _)}, [cls], []) ->
         Utils.new_wrapper man range flow "float" cls
@@ -135,7 +135,7 @@ module Domain =
                   Format.fprintf Format.str_formatter "descriptor '%s' requires a 'float' object but received '%a'" f pp_expr e1;
                   man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |> Eval.empty_singleton)
           )
-        |>  Option.return
+        |>  OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, [e1; e2], [])
            when is_arith_binop_fun "float" f ->
@@ -167,7 +167,7 @@ module Domain =
                      let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) false_flow in
                      Eval.empty_singleton flow)
              )
-         |>  Option.return
+         |>  OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, [e], [])
            when is_arith_unop_fun f ->
@@ -183,12 +183,12 @@ module Domain =
                    man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) expr false_flow)
                  man flow
              )
-         |> Option.return
+         |> OptionExt.return
 
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("float.__hash__" as f, _))}, _)}, args, []) ->
         Utils.check_instances f man flow range args ["float"] (fun _ -> man.eval (mk_py_top T_int range))
-        |> Option.return
+        |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("float.__bool__" as f, _))}, _)}, args, []) ->
         Utils.check_instances f man flow range args ["float"]
@@ -201,7 +201,7 @@ module Domain =
                ~fthen:(fun flow -> man.eval (mk_py_false range) flow)
                ~felse:(fun flow -> man.eval (mk_py_true range) flow)
           )
-        |> Option.return
+        |> OptionExt.return
 
 
       | _ -> None

@@ -183,7 +183,7 @@ struct
       debug "Starting tests";
       let flow1 = execute_test_functions tests man flow in
       Post.return flow1 |>
-      Option.return
+      OptionExt.return
 
     | S_assert(cond) ->
       let range = srange stmt in
@@ -195,17 +195,17 @@ struct
           )
         man flow
       |> Post.return
-      |> Option.return
+      |> OptionExt.return
 
     | S_satisfy(cond) ->
       let flow' = man.exec (mk_assume cond stmt.srange) flow in
       if not @@ man.lattice.is_bottom @@ Flow.get T_cur man.lattice flow' then
         Post.return flow |>
-        Option.return
+        OptionExt.return
       else
         raise_assert_fail cond stmt.srange man flow |>
         Post.return |>
-        Option.return
+        OptionExt.return
 
 
     | _ -> None

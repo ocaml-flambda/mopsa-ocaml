@@ -1,3 +1,5 @@
+# @configure_input@
+
 ##############################################################################
 #                                                                            #
 #  This file is part of MOPSA, a Modular Open Platform for Static Analysis.  #
@@ -21,31 +23,61 @@
 
 TARGET = mopsa
 
-.PHONY: all tests clean
+.PHONY: all tests clean distclean
 
 all:
 	$(MAKE) -C utils
+ifneq (@disable_c@,yes)
 	$(MAKE) -C parsers/c
 	$(MAKE) -C parsers/c_stubs
+endif
+ifneq (@disable_python@,yes)
 	$(MAKE) -C parsers/python
+endif
 	$(MAKE) -C parsers/universal
 	$(MAKE) -C analyzer
+
 
 tests:
 	$(MAKE) -C analyzer tests
 
+
 clean:
 	$(MAKE) -C utils clean
+ifneq (@disable_c@,yes)
 	$(MAKE) -C parsers/c clean
 	$(MAKE) -C parsers/c_stubs clean
+endif
+ifneq (@disable_python@,yes)
 	$(MAKE) -C parsers/python clean
+endif
 	$(MAKE) -C parsers/universal clean
 	$(MAKE) -C analyzer clean
 
+
+
 install:
 	$(MAKE) -C analyzer install
+ifneq (@disable_c@,yes)
 	$(MAKE) -C parsers/c install
+endif
+
+
 
 uninstall:
 	$(MAKE) -C analyzer uninstall
+ifneq (@disable_c@,yes)
 	$(MAKE) -C parsers/c uninstall
+endif
+
+
+
+distclean: clean
+	rm -f 	Makefile			\
+		make/constants.mk               \
+		utils/Makefile			\
+		parsers/universal/Makefile	\
+		parsers/c/Makefile	 	\
+		parsers/c_stubs/Makefile 	\
+		parsers/python/Makefile		\
+		analyzer/Makefile

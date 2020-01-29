@@ -198,12 +198,12 @@ struct
       assume
         (mk_binop offset O_eq (mk_zero range) ~etyp:u8 range)
         ~fthen:(fun flow ->
-            Result.singleton ap flow
+            Cases.singleton ap flow
           )
         ~felse:(fun flow ->
             man.eval offset ~zone:(Z_c_scalar,Universal.Zone.Z_u_num) flow >>$ fun offset flow ->
             raise_c_out_bound_alarm ~base:(ValidVar ap) ~offset ~size:(mk_z base_size range) range (Core.Sig.Stacked.Manager.of_domain_man man) flow |>
-            Result.empty_singleton
+            Cases.empty_singleton
           )
         ~zone:Z_c
         man flow
@@ -293,22 +293,22 @@ struct
     (* 𝔼⟦ variadic f(...) ⟧ *)
     | E_call ({ ekind = E_c_function ({c_func_variadic = true} as fundec)}, args) ->
       call_variadic_function fundec args exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     (* 𝔼⟦ va_start(ap, param) ⟧ *)
     | E_c_builtin_call("__builtin_va_start", [ap; { ekind = E_var (param, _) }]) ->
       va_start ap param exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     (* 𝔼⟦ va_arg(ap) ⟧ *)
     | E_c_var_args(ap) ->
       va_arg ap exp.etyp exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     (* 𝔼⟦ va_end(ap) ⟧ *)
     | E_c_builtin_call("__builtin_va_end", [ap]) ->
       va_end ap exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     (* 𝔼⟦ va_copy(src, dst) ⟧ *)
     | E_c_builtin_call("__builtin_va_copy", [src; dst]) ->

@@ -43,14 +43,14 @@ struct
     let oe2 = man.get_eval sentinel evals in
 
     (* Reduce only when both domains did an evaluation *)
-    Option.apply2
+    OptionExt.apply2
       (fun e1 e2 ->
          match ekind e1, ekind e2 with
          | _, E_constant (C_top _)
          | E_constant (C_int _), _
          | E_constant (C_c_character _), _ ->
            let evals = man.del_eval sentinel evals in
-           Result.singleton evals flow
+           Cases.singleton evals flow
 
          (* If the cell domain returned a cell variable, refine it if possible *)
          | E_var _, _
@@ -63,18 +63,18 @@ struct
              let evals = man.del_eval cells evals |>
                          man.del_eval sentinel
              in
-             Result.singleton evals flow
+             Cases.singleton evals flow
            else
              let evals = man.del_eval sentinel evals in
-             Result.singleton evals flow
+             Cases.singleton evals flow
 
 
          (* Otherwise, keep the sentinel evaluation *)
          | _, _ ->
            let evals = man.del_eval cells evals in
-           Result.singleton evals flow
+           Cases.singleton evals flow
       )
-      (Result.singleton evals flow)
+      (Cases.singleton evals flow)
       oe1 oe2
 
 end

@@ -28,12 +28,12 @@ open Yojson.Basic.Util
 
 type 'a visitor = {
   leaf : string -> 'a;
-  seq : json list -> 'a;
-  compose : json list -> 'a;
-  union : json list -> 'a;
-  apply : json -> json -> 'a;
-  nonrel : json -> 'a;
-  product : json list -> string list -> 'a;
+  seq : Yojson.Basic.t list -> 'a;
+  compose : Yojson.Basic.t list -> 'a;
+  union : Yojson.Basic.t list -> 'a;
+  apply : Yojson.Basic.t -> Yojson.Basic.t -> 'a;
+  nonrel : Yojson.Basic.t -> 'a;
+  product : Yojson.Basic.t list -> string list -> 'a;
 }
 
 let rec visit visitor json =

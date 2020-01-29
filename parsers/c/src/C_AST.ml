@@ -38,7 +38,7 @@ module UidMap = Map.Make(struct type t=uid let compare=compare end)
 module StringMap = Map.Make(String)
 
 type range = Clang_AST.range
-module RangeMap = MapExt.Make(struct type t = range let compare = Pervasives.compare end)
+module RangeMap = MapExt.Make(struct type t = range let compare = Stdlib.compare end)
 (** Source locations. *)
 
 type comment = Clang_AST.comment

@@ -72,16 +72,16 @@ let advance_offset (op:operator) (ptr:static_points_to) (o:expr) typ range : sta
 let rec eval_opt exp : static_points_to option =
   match ekind exp with
   | E_constant(C_int n) when Z.equal n Z.zero ->
-    Null |> Option.return
+    Null |> OptionExt.return
 
   | E_constant(C_c_invalid) ->
-    Invalid |> Option.return
+    Invalid |> OptionExt.return
 
   | E_constant(C_top t) when is_c_pointer_type t ->
-    Top |> Option.return
+    Top |> OptionExt.return
 
   | E_addr (addr) ->
-    AddrOf(ValidAddr addr, mk_zero exp.erange) |> Option.return
+    AddrOf(ValidAddr addr, mk_zero exp.erange) |> OptionExt.return
 
   | E_c_deref { ekind = E_c_address_of e } ->
     eval_opt e
@@ -90,15 +90,15 @@ let rec eval_opt exp : static_points_to option =
     begin match remove_casts e |> ekind with
       | E_var (v, _) ->
         AddrOf (ValidVar v, mk_zero exp.erange) |>
-        Option.return
+        OptionExt.return
 
       | E_constant (C_top _) ->
         Top |>
-        Option.return
+        OptionExt.return
 
       | E_c_function f ->
         Fun f |>
-        Option.return
+        OptionExt.return
 
       | E_c_deref p ->
         eval_opt p
@@ -112,13 +112,13 @@ let rec eval_opt exp : static_points_to option =
     eval_opt e
 
   | E_c_function f ->
-    Fun f |> Option.return
+    Fun f |> OptionExt.return
 
   | E_constant (C_c_string (s, _)) ->
-    AddrOf(String s, mk_zero exp.erange) |> Option.return
+    AddrOf(String s, mk_zero exp.erange) |> OptionExt.return
 
   | E_var (a, _) when is_c_array_type a.vtyp ->
-    AddrOf(ValidVar a, mk_zero exp.erange) |> Option.return
+    AddrOf(ValidVar a, mk_zero exp.erange) |> OptionExt.return
 
   | E_c_deref a when is_c_array_type (under_type a.etyp) ->
     eval_opt a
@@ -130,14 +130,14 @@ let rec eval_opt exp : static_points_to option =
       else e2, e1
     in
     eval_opt p |>
-    Option.lift @@ fun ptr ->
+    OptionExt.lift @@ fun ptr ->
     advance_offset op ptr i p.etyp exp.erange
 
   | E_var (v, mode) when is_c_pointer_type v.vtyp ->
-    Eval (v, mode, mk_zero exp.erange) |> Option.return
+    Eval (v, mode, mk_zero exp.erange) |> OptionExt.return
 
   | x when is_c_int_type exp.etyp ->
-    Invalid |> Option.return
+    Invalid |> OptionExt.return
 
   | _ ->
     warn_at exp.erange "evaluation of pointer expression %a not supported" pp_expr exp;

@@ -40,30 +40,30 @@ let eval_format_string format range man flow =
   match ekind pt with
   | E_c_points_to P_null ->
     raise_c_null_deref_alarm format range man' flow |>
-    Result.empty_singleton
+    Cases.empty_singleton
 
   | E_c_points_to P_invalid ->
     raise_c_invalid_deref_alarm format range man' flow |>
-    Result.empty_singleton
+    Cases.empty_singleton
 
   | E_c_points_to (P_block (InvalidAddr (_,r), _)) ->
     raise_c_use_after_free_alarm format r range man' flow |>
-    Result.empty_singleton
+    Cases.empty_singleton
 
   | E_c_points_to (P_block (String fmt, offset)) when is_c_expr_equals_z offset Z.zero ->
-    Result.singleton fmt flow
+    Cases.singleton fmt flow
 
   | E_c_points_to (P_block (String fmt, offset)) ->
     assume (mk_binop offset O_eq (mk_zero (erange offset)) (erange offset))
-      ~fthen:(fun flow -> Result.singleton fmt flow)
+      ~fthen:(fun flow -> Cases.singleton fmt flow)
       ~felse:(fun flow ->
           Soundness.warn_at range "unsupported format string: non-constant";
-          Result.empty_singleton flow)
+          Cases.empty_singleton flow)
       ~zone:Z_c_scalar man flow
 
   | _ ->
     Soundness.warn_at range "unsupported format string: non-constant";
-    Result.empty_singleton flow
+    Cases.empty_singleton flow
 
 
 (** Parse a format according to parser *)
@@ -72,12 +72,12 @@ let parse_format parser (format:expr) range man flow =
   let lex = Lexing.from_string fmt in
   try
     let placeholders = parser Lexer.read lex in
-    Result.singleton placeholders flow
+    Cases.singleton placeholders flow
   with _ ->
     (* lexer / parser error *)
     Soundness.warn_at range "unsupported format string: char %i of \"%s\""
       lex.lex_start_p.pos_cnum fmt;
-    Result.empty_singleton flow
+    Cases.empty_singleton flow
 
 (** Parse an output format *)
 let parse_output_format (format:expr) range man flow =

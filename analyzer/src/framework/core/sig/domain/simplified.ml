@@ -176,7 +176,7 @@ struct
 
       if D.is_bottom a
       then Post.return flow |>
-           Option.return
+           OptionExt.return
 
       else
         let simplified_man = {
@@ -189,10 +189,10 @@ struct
         }
         in
         D.exec (Flow.get_unit_ctx flow) stmt simplified_man a |>
-        Option.lift @@ fun a' ->
+        OptionExt.lift @@ fun a' ->
         Intermediate.set_env T_cur a' man flow |>
         Post.return |>
-        Result.map_log (fun log ->
+        Cases.map_log (fun log ->
             man.set_log (
               man.get_log log |> Log.append stmt
             ) log

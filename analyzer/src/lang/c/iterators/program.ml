@@ -332,12 +332,12 @@ struct
       (* Special processing for main for initializing argc and argv*)
       if !opt_entry_function = "main" then
         call_main entry args c_functions man flow |>
-        Option.return
+        OptionExt.return
       else
       if List.length entry.c_func_parameters = 0 then
         (* Otherwise execute the body *)
         exec_entry_body entry man flow |>
-        Option.return
+        OptionExt.return
       else
         panic "entry function %s with arguments not supported" entry.c_func_org_name
 
@@ -375,7 +375,7 @@ struct
       let stmt = mk_c_unit_tests tests in
       man.exec stmt flow1 |>
       Post.return |>
-      Option.return
+      OptionExt.return
 
     | _ -> None
 

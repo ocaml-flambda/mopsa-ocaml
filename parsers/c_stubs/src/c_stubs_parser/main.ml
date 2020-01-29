@@ -178,7 +178,7 @@ let parse_global_predicate_comment com =
     (* Parse the comment *)
     try
       let cst = Parser.parse_stub Lexer.read buf in
-      Option.apply (fun cst ->
+      OptionExt.apply (fun cst ->
           List.fold_left (fun acc section ->
               match section with
               | Cst.S_predicate pred -> pred :: acc
