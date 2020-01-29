@@ -175,8 +175,10 @@ struct
                             Eval.bind (fun eaddr_list flow ->
                                 let addr_list = addr_of_expr eaddr_list in
                                 let slicedlist_var = var_of_addr addr_list in
-                                let flow = man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:WEAK slicedlist_var range) (mk_var ~mode:WEAK var_els range) range) flow in
-                                Eval.singleton (mk_py_object (addr_list, None) range) flow
+                                flow |>
+                                  man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:WEAK slicedlist_var range) (mk_var ~mode:WEAK var_els range) range) |>
+                                  man.exec ~zone:Zone.Z_py (mk_assign (mk_var (length_var_of_addr addr_list) range) (mk_py_top T_int range) range) |>
+                                Eval.singleton (mk_py_object (addr_list, None) range)
                               )
                           )
                         ~felse:(fun flow ->
@@ -532,24 +534,26 @@ struct
           let it_pos = itindex_var_of_eobj iterator in
           assume (mk_binop (mk_var it_pos range) O_lt (mk_var len_els range) range) man flow
             ~fthen:(fun flow ->
-                let els = man.eval (mk_var var_els ~mode:WEAK range) flow in
-                OptionExt.none_to_exn @@ bind_opt (fun oels flow ->
-                    Some begin match oels with
-                    (* FIXME *)
-                    | None ->
-                      warn_at range "does this still happen in the types?";
-                      man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton
+              debug "comp: fthen!";
+              let els = man.eval (mk_var var_els ~mode:WEAK range) flow in
+              OptionExt.none_to_exn @@ bind_opt (fun oels flow ->
+                                           Some begin match oels with
+                                             (* FIXME *)
+                                             | None ->
+                                                warn_at range "does this still happen in the types?";
+                                                man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton
 
-                    | Some e ->
-                      man.exec (mk_assign (mk_var it_pos range)
-                                  (mk_binop (mk_var it_pos range) O_plus (mk_int 1 range) range) range) flow |>
-                      Eval.singleton e
-                    end
-                  ) els
-              )
+                                             | Some e ->
+                                                man.exec (mk_assign (mk_var it_pos range)
+                                                            (mk_binop (mk_var it_pos range) O_plus (mk_int 1 range) range) range) flow |>
+                                                  Eval.singleton e
+                                             end
+                                         ) els
+            )
             ~felse:(fun flow ->
-                man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton
-              )
+              debug "comp: felse!";
+              man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton
+            )
         )
       |> OptionExt.return
 
