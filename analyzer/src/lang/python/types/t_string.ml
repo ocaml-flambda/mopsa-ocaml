@@ -200,7 +200,14 @@ module Domain =
                   assume
                     (mk_py_isinstance_builtin e2 "str" range)
                     ~fthen:(fun true_flow ->
-                        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_bool range) true_flow)
+                      (* FIXME: best way? *)
+                        assume
+                          (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) ~etyp:T_int range) man true_flow
+                          ~zone:Universal.Zone.Z_u_string
+                          ~fthen:(fun flow -> man.eval (mk_py_true range) flow)
+                          ~felse:(fun flow -> man.eval (mk_py_false range) flow)
+                    (* man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_bool range) true_flow *)
+                    )
                     ~felse:(fun false_flow ->
                         let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
                         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) expr false_flow)

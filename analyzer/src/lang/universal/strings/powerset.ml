@@ -103,7 +103,33 @@ struct
   let bwd_unop _ _ _ _ _ = failwith "ni"
   let bwd_binop _ _ _ _ _  = failwith "ni"
 
-  let compare _ _ _ _ _ _ = failwith "ni"
+  let compare man t op a1 a2 r =
+    lift_simplified_compare (fun op a1 a2 r ->
+        match t with
+        | T_string ->
+           if is_top a1 || is_top a2 then a1, a2 else
+           (*
+             { v1 \in a1 | \exists v2 \in a2, v1 op v2 == r },
+             { v2 \in a2 | \exists v1 \in a1, v1 op v2 == r }
+            *)
+           let filter left right =
+             StringPower.fold (fun ell acc ->
+                 if StringPower.exists (fun elr ->
+                        begin match op with
+                        | O_eq -> ell =  elr
+                        | O_ne -> ell <> elr
+                        | O_lt -> ell <  elr
+                        | O_le -> ell <= elr
+                        | O_gt -> ell >  elr
+                        | O_ge -> ell >= elr
+                        | _ -> assert false
+                        end = r)
+                      right then StringPower.add ell acc
+                     else acc
+               ) left StringPower.empty in
+           filter a1 a2, filter a2 a1
+        | _ -> a1, a2
+      ) man t op a1 a2 r
 
   (** {2 Query handlers} *)
 
