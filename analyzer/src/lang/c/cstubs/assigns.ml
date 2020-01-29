@@ -119,6 +119,19 @@ struct
   type var_kind +=
     | V_c_primed_base of base
 
+  let () = register_var {
+      print = (fun next fmt v ->
+          match v.vkind with
+          | V_c_primed_base base -> Format.fprintf fmt "%a'" pp_base base
+          | _ -> next fmt v
+        );
+      compare = (fun next v1 v2 ->
+          match v1.vkind, v2.vkind with
+          | V_c_primed_base b1, V_c_primed_base b2 -> compare_base b1 b2
+          | _ -> next v1 v2
+        );
+    }
+
   let mk_primed_base_var base =
     let vkind = V_c_primed_base base in
     let vname = base_uniq_name base ^ "'" in
