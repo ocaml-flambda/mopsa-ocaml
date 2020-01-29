@@ -60,6 +60,7 @@ def test_main():
     points = POINTS
     benchmark(points)
     mopsa.ignore_exception(IndexError)
+    mopsa.ignore_exception(OverflowError)
     mopsa.assert_safe()
 
 # if __name__ == "__main__":

@@ -80,4 +80,5 @@ def test_main():
     bench_spectral_norm(50)
     mopsa.assert_exception_exists(UnboundLocalError)
     mopsa.ignore_exception(UnboundLocalError)
+    mopsa.ignore_exception(OverflowError)
     mopsa.assert_safe()
