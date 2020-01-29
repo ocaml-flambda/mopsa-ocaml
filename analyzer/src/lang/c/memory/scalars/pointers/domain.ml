@@ -684,6 +684,43 @@ struct
     Post.join_list (invalid_base_case @ same_base_case @ different_base_case) ~empty:(fun () -> bottom_case)
 
 
+  (** Expand pointer p and its offset to pointers ql *)
+  let expand_pointer_var p ql range man flow =
+    (* Expand pointed bases *)
+    let a = get_env T_cur man flow in
+    let value = Map.find p a in
+    let a = List.fold_left (fun acc q ->
+        Map.set q value acc
+      ) a ql
+    in
+    let flow = set_env T_cur a man flow in
+    (* Expand the offset if present *)
+    if PointerSet.is_valid value then
+      let o = mk_offset p STRONG range in
+      let ol = List.map (fun q -> mk_offset q STRONG range) ql in
+      let stmt = mk_expand o ol range in
+      man.post stmt ~zone:Z_u_num flow
+    else
+      Post.return flow
+
+
+  (** Forget the value of pointer p *)
+  let forget_pointer_var p range man flow =
+    (* Forget the bases *)
+    let a = get_env T_cur man flow in
+    let a' = Map.set p PointerSet.top a in
+    let flow = set_env T_cur a' man flow in
+    (* Forget the offset. If not already present, just add it *)
+    let o = mk_offset p STRONG range in
+    let stmt =
+      if PointerSet.is_valid (Map.find p a) then
+        mk_forget o range
+      else
+        mk_add o range
+    in
+    man.post stmt ~zone:Z_u_num flow
+
+
 
 
   (** Entry point of abstract transformers *)
@@ -719,6 +756,18 @@ struct
            is_c_pointer_type p2.vtyp
       ->
       rename_pointer_var p1 p2 stmt.srange man flow |>
+      OptionExt.return
+
+    | S_expand({ekind = E_var(p,_)}, ql)
+      when is_c_pointer_type p.vtyp &&
+           List.for_all (function { ekind = E_var(q,_) } -> is_c_pointer_type q.vtyp | _ -> false) ql
+      ->
+      let ql = List.map (function { ekind = E_var(q, _) } -> q | _ -> assert false) ql in
+      expand_pointer_var p ql stmt.srange man flow |>
+      OptionExt.return
+
+    | S_forget({ekind = E_var(p,_)}) when is_c_pointer_type p.vtyp ->
+      forget_pointer_var p stmt.srange man flow |>
       OptionExt.return
 
 

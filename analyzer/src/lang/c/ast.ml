@@ -1080,9 +1080,9 @@ let is_c_deref e =
 
 let is_pointer_offset_forall_quantified p =
   let open Stubs.Ast in
-  match ekind p with
-  | E_binop(_,e1,e2) when is_c_num_type e2.etyp -> is_expr_forall_quantified e2
-  | E_binop(_,e1,e2) when is_c_num_type e1.etyp -> is_expr_forall_quantified e1
+  match remove_casts p |> ekind with
+  | E_binop(_,e1,e2) when is_c_pointer_type e1.etyp -> is_expr_forall_quantified e2
+  | E_binop(_,e1,e2) when is_c_pointer_type e2.etyp -> is_expr_forall_quantified e1
   | _ -> false
 
 let is_lval_offset_forall_quantified e =

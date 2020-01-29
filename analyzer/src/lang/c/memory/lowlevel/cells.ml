@@ -1079,8 +1079,12 @@ struct
   let exec_rename base1 base2 range man flow =
     let a = get_env T_cur man flow in
 
-    (* Cell renaming function *)
-    let to_base2 c = { c with base = base2 } in
+    (* Remove base1 and add base2 *)
+    let a = { a with
+              bases = BaseSet.remove base1 a.bases |>
+                      BaseSet.add base2; }
+    in
+    let flow = set_env T_cur a man flow in
 
     (* Cells of base1 *)
     let cells1 = CellSet.filter (fun c ->
@@ -1088,50 +1092,27 @@ struct
       ) a.cells
     in
 
-
-    (* Cell copy function, depends on the presence of base2 *)
-    let copy =
-      if not (BaseSet.mem base2 a.bases) then
-        (* If base2 is not already present => rename the cells *)
-        fun c flow ->
-          let c' = to_base2 c in
-          let v = mk_cell_var c in
-          let v' = mk_cell_var c' in
-          let flow = map_env T_cur (fun a ->
-              { a with cells = CellSet.remove c a.cells |>
-                               CellSet.add c' }
-            ) man flow in
-          let stmt = mk_rename_var v v' range in
-          man.post ~zone:Z_c_scalar stmt flow
-      else
-        (* Otherwise, assign with weak update *)
-        fun c flow ->
-          let c' = to_base2 c in
-          let v = mk_cell_var c in
-          let v' = mk_cell_var c' in
-          let flow = map_env T_cur (fun a ->
-              { a with cells = CellSet.remove c a.cells |>
-                               CellSet.add c' }
-            ) man flow in
-          let stmt = mk_assign (mk_var v' ~mode:WEAK range) (mk_var v range) range in
-          man.post ~zone:Z_c_scalar stmt flow >>= fun _ flow ->
-          let stmt = mk_remove_var v range in
-          man.post ~zone:Z_c_scalar stmt flow
+    (* Cells of base2 *)
+    let cells2 = CellSet.filter (fun c ->
+        compare_base c.base base2 = 0
+      ) a.cells
     in
 
-    (* Apply copy function *)
-    CellSet.fold (fun c acc -> Post.bind (copy c) acc) cells1 (Post.return flow) |>
-    Post.bind @@ fun flow ->
+    (* Remove cells of base2 *)
+    let post = CellSet.fold (fun c2 acc -> Post.bind (remove_cell c2 range man) acc) cells2 (Post.return flow) in
 
-    (* Remove base1 and add base2 *)
-    map_env T_cur (fun a ->
-        {
-          a with
-          bases = BaseSet.remove base1 a.bases |>
-                  BaseSet.add base2;
-        }
-      ) man flow |>
-    Post.return
+    (* Rename the cells1 to cells2 *)
+    CellSet.fold (fun c1 acc ->
+        let c2 = { c1 with base = base2 } in
+        let v1 = mk_cell_var c1 in
+        let v2 = mk_cell_var c2 in
+        let flow = map_env T_cur (fun a ->
+            { a with cells = CellSet.remove c1 a.cells |>
+                             CellSet.add c2 }
+          ) man flow in
+        let stmt = mk_rename_var v1 v2 range in
+        man.post ~zone:Z_c_scalar stmt flow
+      ) cells1 post
 
 
   (** Expand a base into a set of bases *)

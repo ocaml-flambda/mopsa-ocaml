@@ -602,6 +602,12 @@ struct
       man.post ~zone:Z_u_num (mk_assume (to_compare_expr e') stmt.srange) flow |>
       OptionExt.return
 
+    | S_expand(e,el) when is_c_num_type e.etyp && List.for_all (fun ee -> is_c_num_type ee.etyp) el ->
+      man.eval e ~zone:(Z_c_scalar,Z_u_num) flow >>$? fun e' flow ->
+      bind_list el (man.eval ~zone:(Z_c_scalar,Z_u_num)) flow >>$? fun el' flow ->
+      man.post (mk_expand e' el' stmt.srange) ~zone:Z_u_num flow |>
+      OptionExt.return
+
     | _ -> None
 
 
