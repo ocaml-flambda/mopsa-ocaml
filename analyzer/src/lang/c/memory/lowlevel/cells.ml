@@ -771,6 +771,17 @@ struct
       ) (Post.return flow) overlappings
 
 
+  let rename_cell c1 c2 range man flow =
+    let v1 = mk_cell_var c1 in
+    let v2 = mk_cell_var c2 in
+    let flow = map_env T_cur (fun a ->
+        { a with cells = CellSet.remove c1 a.cells |>
+                         CellSet.add c2 }
+      ) man flow in
+    let stmt = mk_rename_var v1 v2 range in
+    man.post ~zone:Z_c_scalar stmt flow
+
+
   let assign_cell c e mode range man flow =
     let flow = map_env T_cur (fun a ->
         { a with cells = CellSet.add c a.cells }
@@ -786,30 +797,6 @@ struct
 
   let assign_region base itv range man flow =
     remove_region_overlappings base itv range man flow
-
-
-  (** Rename a cell and its associated scalar variable *)
-  let rename_cell old_cell new_cell range man flow =
-    (* Add the old cell in case it has not been accessed before so
-       that its constraints are added in the sub domain
-    *)
-    add_cell old_cell range man flow |>
-    Post.bind @@ fun flow ->
-
-    (* Remove the old cell and add the new one *)
-    let flow =
-      map_env T_cur (fun a ->
-          { a with cells = CellSet.remove old_cell a.cells |>
-                           CellSet.add new_cell
-          }
-        ) man flow
-    in
-
-    let oldv = mk_cell_var old_cell in
-    let newv = mk_cell_var new_cell in
-    let stmt = mk_rename_var oldv newv range in
-    man.post ~zone:Z_c_scalar stmt flow
-
 
 
   (** Remove all cells already realized *)
@@ -837,9 +824,6 @@ struct
 
 
   let forget_cell c range man flow =
-    let a = get_env T_cur man flow in
-    let a = { a with cells = CellSet.remove c a.cells } in
-    let flow = set_env T_cur a man flow in
     let v = mk_cell_var c in
     let stmt = mk_forget_var v range in
     man.post stmt ~zone:Z_c_scalar flow
@@ -1101,17 +1085,10 @@ struct
     (* Remove cells of base2 *)
     let post = CellSet.fold (fun c2 acc -> Post.bind (remove_cell c2 range man) acc) cells2 (Post.return flow) in
 
-    (* Rename the cells1 to cells2 *)
+    (* Rename cells in base1 by rebasing to base2 *)
     CellSet.fold (fun c1 acc ->
         let c2 = { c1 with base = base2 } in
-        let v1 = mk_cell_var c1 in
-        let v2 = mk_cell_var c2 in
-        let flow = map_env T_cur (fun a ->
-            { a with cells = CellSet.remove c1 a.cells |>
-                             CellSet.add c2 }
-          ) man flow in
-        let stmt = mk_rename_var v1 v2 range in
-        man.post ~zone:Z_c_scalar stmt flow
+        Post.bind (rename_cell c1 c2 range man) acc
       ) cells1 post
 
 
