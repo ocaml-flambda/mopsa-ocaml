@@ -131,10 +131,10 @@ struct
               match oeval_res with
               | None ->
                 let out_flow_cur, out_flow_other = split_cur_from_others man out_flow in
-                let out_flow_cur = exec_block_on_all_flows cleaners man out_flow_cur in
+                (* let out_flow_cur = exec_block_on_all_flows cleaners man out_flow_cur in *)
                 let out_flow = Flow.join man.lattice out_flow_cur out_flow_other in
                 let flow = store_signature func.fun_name in_flow_cur oeval_res out_flow in
-                Cases.return oeval_res (Flow.join man.lattice in_flow_other flow) ~log
+                Cases.return oeval_res (Flow.join man.lattice in_flow_other flow) ~log ~cleaners:cleaners
 
               | Some eval_res ->
                 (* we have to perform a full bind in order to add
@@ -148,10 +148,10 @@ struct
                     | Some eval_res ->
                       debug "eval_res = %a@\ncleaners = %a@\n" pp_expr eval_res pp_stmt (mk_block cleaners range);
                       let out_flow_cur, out_flow_other = split_cur_from_others man out_flow in
-                      let out_flow_cur = exec_block_on_all_flows cleaners man out_flow_cur in
+                      (* let out_flow_cur = exec_block_on_all_flows cleaners man out_flow_cur in *)
                       let out_flow = Flow.join man.lattice out_flow_cur out_flow_other in
                       let flow = store_signature func.fun_name in_flow_cur (Some eval_res) out_flow in
-                      Cases.return (Some eval_res) (Flow.join man.lattice in_flow_other flow) ~log
+                      Cases.return (Some eval_res) (Flow.join man.lattice in_flow_other flow) ~log ~cleaners:cleaners
                   )
             )
 
