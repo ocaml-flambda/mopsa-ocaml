@@ -242,7 +242,9 @@ struct
 
 
     | S_remove ({ekind = E_var (v, _)} as var) ->
-      let flow = map_env T_cur (remove v) man flow in
+       let cur = get_env T_cur man flow in
+       let aset = AMap.find_opt v cur in
+       let flow = set_env T_cur (AMap.remove v cur) man flow  in
       (* FIXME? *)
       (* let flow = man.exec ~zone:Zone.Z_py_obj (mk_remove_var v range) flow in *)
       begin match v.vkind with
@@ -252,7 +254,19 @@ struct
           flow |> Post.return |> OptionExt.return
 
         | _ ->
-          Post.return flow |> OptionExt.return
+           let flow = OptionExt.apply (fun aset ->
+                          ASet.fold (fun pyaddr flow ->
+                              match pyaddr with
+                              | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "str", _)}} ->
+                                 man.exec ~zone:Universal.Zone.Z_u_string (mk_remove_var {v with vtyp = T_string} range) flow
+                              | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)}}
+                                | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}} ->
+                                 man.exec ~zone:Universal.Zone.Z_u_int (mk_remove_var {v with vtyp = T_int} range) flow
+                              | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "float", _)}}  ->
+                                 man.exec ~zone:Universal.Zone.Z_u_float (mk_remove_var {v with vtyp = (T_float F_DOUBLE)} range) flow
+                              | _ -> flow
+                            ) aset flow) flow aset  in
+           flow |> Post.return |> OptionExt.return
       end
 
     | S_assume e ->
