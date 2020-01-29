@@ -195,7 +195,7 @@ struct
     match ekind pt with
     | E_c_points_to P_null
     | E_c_points_to P_invalid
-    | E_c_points_to (P_block (InvalidAddr _, _))
+    | E_c_points_to (P_block ({ base_valid = false }, _))
     | E_c_points_to P_top ->
       Cases.empty_singleton flow
 
@@ -209,7 +209,7 @@ struct
   *)
   let is_interesting_base base =
     match base with
-    | ValidVar v when is_c_type v.vtyp && is_c_array_type v.vtyp ->
+    | { base_kind = Var v; base_valid = true } when is_c_type v.vtyp && is_c_array_type v.vtyp ->
       (* Accept only arrays with pointers or records of pointers *)
       let rec aux t =
         match remove_typedef_qual t with
@@ -221,9 +221,9 @@ struct
       in
       aux v.vtyp
 
-    | ValidAddr { addr_kind = A_stub_resource "Memory" } -> true
+    | { base_kind = Addr { addr_kind = A_stub_resource "Memory" }; base_valid = true } -> true
 
-    | ValidAddr { addr_kind = A_stub_resource "argv" } -> true
+    | { base_kind = Addr { addr_kind = A_stub_resource "argv" }; base_valid = true } -> true
 
     | _ -> false
 
@@ -266,7 +266,7 @@ struct
 
   (** Declaration of a C variable *)
   let declare_variable v scope range man flow =
-    let base = ValidVar v in
+    let base = mk_var_base v in
     if not (is_interesting_base base)
     then Post.return flow
     else add_base base range man flow
@@ -586,31 +586,31 @@ struct
   (** Transformers entry point *)
   let exec zone stmt man flow =
     match skind stmt with
-    | S_c_declaration (v,None,scope) when is_interesting_base (ValidVar v) ->
+    | S_c_declaration (v,None,scope) when is_interesting_base (mk_var_base v) ->
       declare_variable v scope stmt.srange man flow |>
       OptionExt.return
 
-    | S_add { ekind = E_var (v, _) } when is_interesting_base (ValidVar v) ->
-      add_base (ValidVar v) stmt.srange man flow |>
+    | S_add { ekind = E_var (v, _) } when is_interesting_base (mk_var_base v) ->
+      add_base (mk_var_base v) stmt.srange man flow |>
       OptionExt.return
 
-    | S_add { ekind = E_addr addr } when is_interesting_base (ValidAddr addr) ->
-      add_base (ValidAddr addr) stmt.srange man flow |>
+    | S_add { ekind = E_addr addr } when is_interesting_base (mk_addr_base addr) ->
+      add_base (mk_addr_base addr) stmt.srange man flow |>
       OptionExt.return
 
     | S_rename ({ ekind = E_var (v1,_) }, { ekind = E_var (v2,_) })
-      when is_interesting_base (ValidVar v1) &&
-           is_interesting_base (ValidVar v2)
+      when is_interesting_base (mk_var_base v1) &&
+           is_interesting_base (mk_var_base v2)
       ->
-      rename_base (ValidVar v1) (ValidVar v2) stmt.srange man flow |>
+      rename_base (mk_var_base v1) (mk_var_base v2) stmt.srange man flow |>
       OptionExt.return
 
 
     | S_rename ({ ekind = E_addr addr1 }, { ekind = E_addr addr2 })
-      when is_interesting_base (ValidAddr addr1) &&
-           is_interesting_base (ValidAddr addr2)
+      when is_interesting_base (mk_addr_base addr1) &&
+           is_interesting_base (mk_addr_base addr2)
       ->
-      rename_base (ValidAddr addr1) (ValidAddr addr2) stmt.srange man flow |>
+      rename_base (mk_addr_base addr1) (mk_addr_base addr2) stmt.srange man flow |>
       OptionExt.return
 
     | S_assign({ ekind = E_c_deref p} as lval, rval) when is_c_pointer_type lval.etyp ->
@@ -640,8 +640,8 @@ struct
       OptionExt.return
 
 
-    | S_remove { ekind = E_var (v, _) } when is_interesting_base (ValidVar v) ->
-      remove_base (ValidVar v) stmt.srange man flow |>
+    | S_remove { ekind = E_var (v, _) } when is_interesting_base (mk_var_base v) ->
+      remove_base (mk_var_base v) stmt.srange man flow |>
       OptionExt.return
 
 

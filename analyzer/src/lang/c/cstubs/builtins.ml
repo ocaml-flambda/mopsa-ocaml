@@ -82,8 +82,8 @@ struct
 
   let eval_base_bytes base range man flow =
     let open Common.Base in
-    match base with
-    | ValidAddr addr ->
+    match base.base_kind with
+    | Addr addr ->
       Eval.singleton (mk_bytes addr range) flow
 
     | _ ->
@@ -153,13 +153,13 @@ struct
         Eval.bind @@ fun pt flow ->
 
         match ekind pt with
-        | E_c_points_to (P_block (ValidVar v,_)) ->
+        | E_c_points_to (P_block ({ base_kind = Var v; base_valid = true; },_)) ->
           Eval.singleton (mk_c_cast (mk_c_address_of (mk_var v exp.erange) exp.erange) (T_c_pointer T_c_void) exp.erange) flow
 
-        | E_c_points_to (P_block (String str,_)) ->
+        | E_c_points_to (P_block ({ base_kind = String str },_)) ->
           Eval.singleton (mk_c_string str exp.erange) flow
 
-        | E_c_points_to (P_block (ValidAddr addr,_)) ->
+        | E_c_points_to (P_block ({ base_kind = Addr addr; base_valid = true; },_)) ->
           Eval.singleton (mk_c_cast (mk_addr addr exp.erange) (T_c_pointer T_c_void) exp.erange) flow
 
         | E_c_points_to P_top ->
@@ -172,8 +172,7 @@ struct
         | E_c_points_to P_invalid ->
           Eval.singleton (mk_c_invalid_pointer exp.erange) flow
 
-        | E_c_points_to (P_block (InvalidVar _,_))
-        | E_c_points_to (P_block (InvalidAddr _,_)) ->
+        | E_c_points_to (P_block ({ base_valid = false; },_)) ->
           Eval.singleton (mk_c_invalid_pointer exp.erange) flow
 
         | _ -> panic_at exp.erange "base(%a) where %a %a not supported" pp_expr e pp_expr e pp_expr pt

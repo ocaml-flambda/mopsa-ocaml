@@ -512,13 +512,13 @@ struct
   (** Rename a base *)
   let exec_rename_base e e' range man flow =
     let base = match ekind e with
-      | E_var (v,_) -> ValidVar v
-      | E_addr a -> ValidAddr a
+      | E_var (v,_) -> mk_var_base v
+      | E_addr a -> mk_addr_base a
       | _ -> assert false
     in
     let base' = match ekind e' with
-      | E_var (v,_) -> ValidVar v
-      | E_addr a -> ValidAddr a
+      | E_var (v,_) -> mk_var_base v
+      | E_addr a -> mk_addr_base a
       | _ -> assert false
     in
     map_env T_cur (fun a ->
@@ -535,8 +535,8 @@ struct
   (** Remove a base *)
   let exec_remove_base e range man flow =
     let valid_base, invalid_base = match ekind e with
-      | E_var (v,_) -> ValidVar v, InvalidVar (v,range)
-      | E_addr a -> ValidAddr a, InvalidAddr(a,range)
+      | E_var (v,_) -> mk_var_base v, mk_var_base v ~valid:false ~invalidation_range:(Some range)
+      | E_addr a -> mk_addr_base a, mk_addr_base a ~valid:false ~invalidation_range:(Some range)
       | _ -> assert false
     in
     let flow = map_env T_cur (fun a ->

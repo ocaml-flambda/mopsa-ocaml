@@ -30,6 +30,9 @@ open Ast
 open Zone
 module Itv = Universal.Numeric.Values.Intervals.Integer.Value
 open Common.Alarms
+open Common.Base
+
+
 
 module Domain =
 struct
@@ -186,7 +189,7 @@ struct
     man.eval ap ~zone:(Z_c, Z_c_points_to) flow >>$ fun pt flow ->
 
     match ekind pt with
-    | E_c_points_to (P_block (ValidVar ap, offset)) ->
+    | E_c_points_to (P_block ({ base_kind = Var ap; base_valid = true }, offset)) ->
       let base_size = sizeof_type ap.vtyp in
       let elem_size = sizeof_type (under_type ap.vtyp) in
 
@@ -202,7 +205,7 @@ struct
           )
         ~felse:(fun flow ->
             man.eval offset ~zone:(Z_c_scalar,Universal.Zone.Z_u_num) flow >>$ fun offset flow ->
-            raise_c_out_bound_alarm ~base:(ValidVar ap) ~offset ~size:(mk_z base_size range) range (Core.Sig.Stacked.Manager.of_domain_man man) flow |>
+            raise_c_out_bound_alarm ~base:(mk_var_base ap) ~offset ~size:(mk_z base_size range) range (Core.Sig.Stacked.Manager.of_domain_man man) flow |>
             Cases.empty_singleton
           )
         ~zone:Z_c

@@ -73,45 +73,47 @@ struct
 
   (** Packs of a base memory block *)
   let packs_of_base ctx b =
-    match b with
+    if b.base_valid = false then []
+    else
+    match b.base_kind with
     (* Special global variables for gettext functions *)
-    | ValidVar { vkind = V_cvar {cvar_scope = Variable_global; cvar_orig_name} }
-    | ValidVar { vkind = V_cvar {cvar_scope = Variable_file_static _; cvar_orig_name} } when cvar_orig_name = "_gettext_buf" ->
+    | Var { vkind = V_cvar {cvar_scope = Variable_global; cvar_orig_name} }
+    | Var { vkind = V_cvar {cvar_scope = Variable_file_static _; cvar_orig_name} } when cvar_orig_name = "_gettext_buf" ->
       [Locals "gettext"; Locals "dcgettext"]
 
     (* Local temporary variables *)
-    | ValidVar { vkind = V_cvar {cvar_scope = Variable_local f; cvar_orig_name}; vtyp }
-    | ValidVar { vkind = V_cvar {cvar_scope = Variable_func_static f; cvar_orig_name}; vtyp }
+    | Var { vkind = V_cvar {cvar_scope = Variable_local f; cvar_orig_name}; vtyp }
+    | Var { vkind = V_cvar {cvar_scope = Variable_func_static f; cvar_orig_name}; vtyp }
       when cvar_orig_name = "__SAST_tmp" ->
       []
 
     (* Local variables *)
-    | ValidVar { vkind = V_cvar {cvar_scope = Variable_local f}; vtyp }
-    | ValidVar { vkind = V_cvar {cvar_scope = Variable_func_static f}; vtyp }
+    | Var { vkind = V_cvar {cvar_scope = Variable_local f}; vtyp }
+    | Var { vkind = V_cvar {cvar_scope = Variable_func_static f}; vtyp }
       ->
       [Locals f.c_func_unique_name]
 
     (* argc parameter *)
-    | ValidVar { vkind = V_cvar {cvar_scope = Variable_parameter f; cvar_orig_name} }
+    | Var { vkind = V_cvar {cvar_scope = Variable_parameter f; cvar_orig_name} }
       when f.c_func_org_name = "main" &&
            cvar_orig_name = "argc"
       ->
       [Locals "main"; Locals "getopt"; Locals "getopt_long"; Locals "getopt_long_only"]
 
     (* argv and its auxiliary variables *)
-    | ValidAddr { addr_kind = Stubs.Ast.A_stub_resource "argv" }
-    | ValidAddr { addr_kind = Stubs.Ast.A_stub_resource "arg" } ->
+    | Addr { addr_kind = Stubs.Ast.A_stub_resource "argv" }
+    | Addr { addr_kind = Stubs.Ast.A_stub_resource "arg" } ->
       [Locals "main"; Locals "getopt"; Locals "getopt_long"; Locals "getopt_long_only"]
 
     (* optind variable *)
-    | ValidVar { vkind = V_cvar {cvar_scope = Variable_global; cvar_orig_name} }
+    | Var { vkind = V_cvar {cvar_scope = Variable_global; cvar_orig_name} }
       when cvar_orig_name = "optind"
       ->
       [Locals "main"; Locals "getopt"; Locals "getopt_long"; Locals "getopt_long_only"]
 
 
     (* Formal parameters are part of the caller and the callee packs *)
-    | ValidVar { vkind = V_cvar {cvar_scope = Variable_parameter f} } ->
+    | Var { vkind = V_cvar {cvar_scope = Variable_parameter f} } ->
       let cs = Context.ufind Callstack.ctx_key ctx in
       if Callstack.is_empty cs
       then [Locals f.c_func_unique_name]
@@ -124,7 +126,7 @@ struct
           [Locals f.c_func_unique_name; Locals caller.call_fun]
 
     (* Return variables are also part of the caller and the callee packs *)
-    | ValidVar { vkind = Universal.Iterators.Interproc.Common.V_return call } ->
+    | Var { vkind = Universal.Iterators.Interproc.Common.V_return call } ->
       let cs = Context.ufind Callstack.ctx_key ctx in
       if Callstack.is_empty cs
       then []
@@ -148,7 +150,7 @@ struct
           [Locals f1.call_fun; Locals f2.call_fun]
 
     (* Temporary variables are considered as locals *)
-    | ValidVar { vkind = V_tmp _ } ->
+    | Var { vkind = V_tmp _ } ->
       let cs = Context.ufind Callstack.ctx_key ctx in
       if Callstack.is_empty cs
       then []
@@ -163,15 +165,15 @@ struct
   (** Packing function returning packs of a variable *)
   let rec packs_of_var ctx v =
     match v.vkind with
-    | V_cvar _ -> packs_of_base ctx (ValidVar v)
-    | Lowlevel.Cells.Domain.V_c_cell ({base = ValidVar v} as c) when is_c_scalar_type v.vtyp -> packs_of_base ctx c.base
+    | V_cvar _ -> packs_of_base ctx (mk_var_base v)
+    | Lowlevel.Cells.Domain.V_c_cell ({base = { base_kind = Var v; base_valid = true}} as c) when is_c_scalar_type v.vtyp -> packs_of_base ctx c.base
     | Lowlevel.String_length.Domain.V_c_string_length (base) -> packs_of_base ctx base
     | Lowlevel.Pointer_sentinel.Domain.V_c_sentinel (base) -> packs_of_base ctx base
     | Lowlevel.Pointer_sentinel.Domain.V_c_at_sentinel (base) -> packs_of_base ctx base
     | Lowlevel.Pointer_sentinel.Domain.V_c_before_sentinel (base) -> packs_of_base ctx base
     | Scalars.Pointers.Domain.Domain.V_c_ptr_offset vv -> packs_of_var ctx vv
     | Scalars.Machine_numbers.Domain.V_c_num vv -> packs_of_var ctx vv
-    | Cstubs.Aux_vars.V_c_bytes a -> packs_of_base ctx (ValidAddr a)
+    | Cstubs.Aux_vars.V_c_bytes a -> packs_of_base ctx (mk_addr_base a)
     | _ -> []
 
 end

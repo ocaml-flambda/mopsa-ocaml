@@ -91,11 +91,11 @@ struct
       raise_c_invalid_deref_alarm ptr range man' flow |>
       Cases.empty_singleton
 
-    | E_c_points_to (P_block (InvalidAddr (_,r), offset)) ->
+    | E_c_points_to (P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset)) ->
       raise_c_use_after_free_alarm ptr r range man' flow |>
       Cases.empty_singleton
 
-    | E_c_points_to (P_block (InvalidVar (v,r), offset)) ->
+    | E_c_points_to (P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset)) ->
       raise_c_dangling_deref_alarm ptr v r range man' flow |>
       Cases.empty_singleton
 

@@ -77,7 +77,7 @@ struct
   let exec_stub_free p range man flow =
     man.eval ~zone:(Z_c, Z_c_points_to) p flow >>$ fun pt flow ->
     match ekind pt with
-    | E_c_points_to (P_block (ValidAddr ({ addr_kind = A_stub_resource _ } as addr), _)) ->
+    | E_c_points_to (P_block ({ base_kind = Addr ({ addr_kind = A_stub_resource _ } as addr); base_valid = true }, _)) ->
       (* Remove the bytes attribute before removing the address *)
       let stmt' = mk_remove_var (mk_bytes_var addr) range in
       let flow' = man.exec ~zone:Z_c_scalar stmt' flow in
@@ -89,7 +89,7 @@ struct
       man.exec stmt'' flow' |>
       Post.return
 
-    | E_c_points_to (P_block (InvalidAddr ({ addr_kind = A_stub_resource _ }, drange), _)) ->
+    | E_c_points_to (P_block ({ base_kind = Addr { addr_kind = A_stub_resource _ }; base_valid = false; base_invalidation_range = Some drange }, _)) ->
       Common.Alarms.(raise_c_double_free_alarm p drange range (Sig.Stacked.Manager.of_domain_man man) flow) |>
       Post.return
 
@@ -159,8 +159,7 @@ struct
   let eval_stub_resource_mem p res range man flow =
     man.eval ~zone:(Z_c, Z_c_points_to) p flow >>$ fun pt flow ->
     match ekind pt with
-    | E_c_points_to (P_block (ValidAddr { addr_kind = A_stub_resource res' }, _))
-    | E_c_points_to (P_block (InvalidAddr ({ addr_kind = A_stub_resource res' },_), _)) ->
+    | E_c_points_to (P_block ({ base_kind = Addr { addr_kind = A_stub_resource res' } }, _)) ->
       if res = res' then
         Eval.singleton (mk_one range ~typ:u8) flow
       else
