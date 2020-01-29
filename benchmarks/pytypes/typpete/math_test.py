@@ -48,6 +48,7 @@ def test_main():
     aq = math.tan(x)
     ar = math.tanh(x)
 
+    mopsa.ignore_exception(OverflowError)
     mopsa.assert_safe()
     mopsa.massert(isinstance(a, float))
     mopsa.massert(isinstance(aa, bool))

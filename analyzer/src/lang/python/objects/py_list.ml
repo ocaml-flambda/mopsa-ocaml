@@ -354,7 +354,7 @@ struct
            assume (mk_py_isinstance_builtin other "list" range) man flow
              ~fthen:(fun flow ->
                  let var_sndels = var_of_eobj other in
-                 let len_sndels = var_of_eobj other in
+                 let len_sndels = length_var_of_eobj other in
                  flow |>
                  man.exec ~zone:Zone.Z_py (mk_assign (mk_var var_els ~mode:WEAK range) (mk_var var_sndels ~mode:WEAK range) range) |>
                  man.exec ~zone:Zone.Z_py (mk_assign (mk_var len_els range)

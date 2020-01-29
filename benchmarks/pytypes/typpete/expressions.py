@@ -8,6 +8,7 @@ def test_main():
     d = (a, b, c)
     e = {a}
     f = (a & 2 * 3) - 33 / 2
+    mopsa.ignore_exception(OverflowError)
     g = b + [1]
     h = ~a
     i = a if a else h
