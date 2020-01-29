@@ -228,6 +228,16 @@ let addr_group_pp_chain : (Format.formatter -> addr_group -> unit) ref =
 let pp_addr_group fmt ak =
   !addr_group_pp_chain fmt ak
 
+let pp_addr_group_hash fmt (g:addr_group) =
+  Format.fprintf fmt "%xd"
+    (* Using Hashtbl.hash leads to collisions. Hashtbl.hash is
+       equivalent to Hashtbl.hash_param 10 100. By increasing the
+       number of meaningful nodes to encounter, collisions are less
+       likely to happen.
+    *)
+    (Hashtbl.hash_param 30 100 g)
+
+
 let compare_addr_group a1 a2 =
   if a1 == a2 then 0 else !addr_group_compare_chain a1 a2
 
@@ -252,6 +262,7 @@ let pp_addr fmt a =
     pp_addr_kind a.addr_kind
     pp_addr_group a.addr_group
     (match a.addr_mode with WEAK -> "w" | STRONG -> "s")
+
 
 let compare_addr a b =
   if a == b then 0
