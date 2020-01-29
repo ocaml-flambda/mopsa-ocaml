@@ -63,19 +63,21 @@ struct
 
   module Fctx = Context.GenPolyKey(
     struct
-      type 'a t = ('a flow * expr option * 'a flow) list StringMap.t
+      type 'a t = ('a flow * expr option * 'a flow * stmt list) list StringMap.t
       let print p fmt ctx = Format.fprintf fmt "Function cache context (py): %a@\n"
           (StringMap.fprint
              MapExt.printer_default
              (fun fmt s -> Format.fprintf fmt "%s" s)
              (fun fmt list ->
                 Format.pp_print_list
-                  (fun fmt (in_flow, oexpr, out_flow) ->
-                     Format.fprintf fmt "in_flow = %a@\nout_flow = %a@\noexpr = %a@\n"
+                  (fun fmt (in_flow, oexpr, out_flow, cleaners) ->
+                     Format.fprintf fmt "in_flow = %a@\nout_flow = %a@\noexpr = %a@\ncleaners = %a@\n"
                        (Flow.print p) in_flow
                        (Flow.print p) out_flow
-                       (OptionExt.print pp_expr) oexpr)
-                     fmt list
+                       (OptionExt.print pp_expr) oexpr
+                       (Format.pp_print_list pp_stmt) cleaners
+                  )
+                  fmt list
              )
           )
           ctx
@@ -85,18 +87,18 @@ struct
     try
       let cache = Context.find_poly Fctx.key (Flow.get_ctx in_flow) in
       let flows = StringMap.find funname cache in
-      Some (List.find (fun (flow_in, _, _) ->
+      Some (List.find (fun (flow_in, _, _, _) ->
           Flow.subset man.lattice in_flow flow_in
         ) flows)
     with Not_found -> None
 
 
-  let store_signature funname in_flow eval_res out_flow =
+  let store_signature funname in_flow eval_res out_flow cleaners =
     let old_ctx = try Context.find_poly Fctx.key (Flow.get_ctx out_flow) with Not_found -> StringMap.empty in
     let old_sig = try StringMap.find funname old_ctx with Not_found -> [] in
     let new_sig =
-      if List.length old_sig < !opt_universal_modular_interproc_cache_size then (in_flow, eval_res, out_flow)::old_sig
-      else (in_flow, eval_res, out_flow) :: (List.rev @@ List.tl @@ List.rev old_sig) in
+      if List.length old_sig < !opt_universal_modular_interproc_cache_size then (in_flow, eval_res, out_flow, cleaners)::old_sig
+      else (in_flow, eval_res, out_flow, cleaners) :: (List.rev @@ List.tl @@ List.rev old_sig) in
     let new_ctx = StringMap.add funname new_sig old_ctx in
     Flow.set_ctx (Context.add_poly Fctx.key new_ctx (Flow.get_ctx out_flow)) out_flow
 
@@ -133,7 +135,7 @@ struct
                 let out_flow_cur, out_flow_other = split_cur_from_others man out_flow in
                 (* let out_flow_cur = exec_block_on_all_flows cleaners man out_flow_cur in *)
                 let out_flow = Flow.join man.lattice out_flow_cur out_flow_other in
-                let flow = store_signature func.fun_name in_flow_cur oeval_res out_flow in
+                let flow = store_signature func.fun_name in_flow_cur oeval_res out_flow cleaners in
                 Cases.return oeval_res (Flow.join man.lattice in_flow_other flow) ~log ~cleaners:cleaners
 
               | Some eval_res ->
@@ -150,15 +152,15 @@ struct
                       let out_flow_cur, out_flow_other = split_cur_from_others man out_flow in
                       (* let out_flow_cur = exec_block_on_all_flows cleaners man out_flow_cur in *)
                       let out_flow = Flow.join man.lattice out_flow_cur out_flow_other in
-                      let flow = store_signature func.fun_name in_flow_cur (Some eval_res) out_flow in
+                      let flow = store_signature func.fun_name in_flow_cur (Some eval_res) out_flow cleaners in
                       Cases.return (Some eval_res) (Flow.join man.lattice in_flow_other flow) ~log ~cleaners:cleaners
                   )
             )
 
-        | Some (_, oout_expr, out_flow) ->
+        | Some (_, oout_expr, out_flow, cleaners) ->
           Debug.debug ~channel:"profiling" "reusing %s at range %a" func.fun_name pp_range func.fun_range;
           debug "reusing something in function %s@\nchanging in_flow=%a@\ninto out_flow=%a@\n" func.fun_name (Flow.print man.lattice.print) in_flow (Flow.print man.lattice.print) out_flow;
-          Cases.return oout_expr (Flow.join man.lattice in_flow_other out_flow)
+          Cases.return oout_expr (Flow.join man.lattice in_flow_other out_flow) ~cleaners:cleaners
       end
       |> OptionExt.return
 
