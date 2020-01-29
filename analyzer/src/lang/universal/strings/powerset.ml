@@ -30,7 +30,7 @@ open Core.Sig.Value.Lowlevel
 module StringPower = Framework.Lattices.Powerset.Make
     (struct
       type t = string
-      let compare = Pervasives.compare
+      let compare = Stdlib.compare
       let print = Format.pp_print_string
     end)
 
@@ -184,7 +184,7 @@ struct
           let strings_e1 = Nonrel.eval e1 cur |> OptionExt.none_to_exn |> snd in
           let itv_e2 = man.ask (Numeric.Common.Q_int_interval e2) flow in
           (* FIXME: arbitrary constants... *)
-          if ItvUtils.IntItv.size @@ Bot.bot_to_exn itv_e2 <= (Z.of_int 5) && Value.cardinal strings_e1 <= 3 then
+          if ItvUtils.IntItv.is_bounded @@ Bot.bot_to_exn itv_e2 && ItvUtils.IntItv.size @@ Bot.bot_to_exn itv_e2 <= (Z.of_int 5) && Value.cardinal strings_e1 <= 3 then
             let results =
               Value.fold (fun str acc ->
                   List.fold_left (fun acc nb ->

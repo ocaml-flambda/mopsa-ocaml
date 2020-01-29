@@ -60,7 +60,15 @@ module Domain =
 
     let eval _ _ _ _ = None
 
-    let ask _ _ _ = None
+    let ask : type r. r query -> ('a, unit) Core.Sig.Domain.Stateless.man -> 'a flow -> r option =
+      fun query man flow ->
+      match query with
+      | Universal.Numeric.Common.Q_int_interval e ->
+         Some (Nb Universal.Numeric.Common.I.minf_inf)
+      | Universal.Numeric.Common.Q_float_interval e ->
+         Some (Universal.Numeric.Common.F.infinities)
+      | _ -> None
+
 
   end
 
