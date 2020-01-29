@@ -166,15 +166,30 @@ struct
         let () = debug "flow is now %a@\n" (Flow.print man.lattice.print) flow in
         flow |> Post.return |> OptionExt.return
 
-    | S_assign({ekind = E_var (v, WEAK)}, {ekind = E_var (w, WEAK)}) ->
-      let cur = get_env T_cur man flow in
-      if mem w cur then
-        if mem v cur then
-          set_env T_cur (add v (ASet.join (find w cur) (find v cur)) cur) man flow |> Post.return |> OptionExt.return
-        else
-          set_env T_cur (add v (find w cur) cur) man flow |> Post.return |> OptionExt.return
-      else
-        flow |> Post.return |> OptionExt.return
+    | S_assign(({ekind = E_var (v, WEAK)} as vl), ({ekind = E_var (w, WEAK)} as vr)) ->
+       let cur = get_env T_cur man flow in
+       begin match AMap.find_opt w cur with
+       | None -> flow |> Post.return |> OptionExt.return
+       | Some aset ->
+          let flow = ASet.fold
+                       (fun pyaddr flow ->
+                         let cstmt = fun t -> {stmt with skind = S_assign(change_var_type t vl, change_var_type t vr)} in
+                         match pyaddr with
+                         | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "str", _)}} ->
+                            man.exec ~zone:Universal.Zone.Z_u_string (cstmt T_string) flow
+                         | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)}}
+                           | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}} ->
+                            man.exec ~zone:Universal.Zone.Z_u_int (cstmt T_int) flow
+                         | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "float", _)}}  ->
+                            man.exec ~zone:Universal.Zone.Z_u_float (cstmt (T_float F_DOUBLE)) flow
+                         | _ -> flow
+                       ) aset flow in
+          if mem v cur then
+            set_env T_cur (add v (ASet.join (find w cur) (find v cur)) cur) man flow |> Post.return |> OptionExt.return
+          else
+            set_env T_cur (add v (find w cur) cur) man flow |> Post.return |> OptionExt.return
+       end
+
 
     (* S⟦ v = e ⟧ *)
     | S_assign(({ekind = E_var (v, mode)} as evar), e) ->
