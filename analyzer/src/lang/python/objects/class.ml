@@ -64,7 +64,7 @@ struct
                 (mk_py_isinstance inst ecls range)
                 ~fthen:(fun flow ->
                     debug "init!@\n";
-                    man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_kall (mk_py_object_attr cls "__init__" range) (inst :: (*e*)args) kwargs range) flow |>
+                    man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_kall (mk_py_object_attr cls "__init__" range) (inst :: eargs) kwargs range) flow |>
                     Eval.bind (fun r flow ->
                         assume
                           (mk_py_isinstance_builtin r "NoneType" range)

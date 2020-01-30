@@ -137,7 +137,7 @@ module Domain =
                          bind_list [exp; c_attr] man.eval flow |>
                          bind_some (fun ee flow ->
                              let exp, c_attr = match ee with [e1;e2] -> e1, e2 | _ -> assert false in
-                             assume (mk_py_hasattr exp attr range) man flow
+                             assume (mk_py_hasattr exp "__getattr__" range) man flow
                                ~fthen:(fun flow ->
                                    (* FIXME(?): we split the flow to remove the exn tokens. If some appear afterwards (hopefully it's only AttributeErrors), we remove them and put it back to cur *)
                                    let flow_exn_before, flow = Flow.partition (fun tk _ -> match tk with
@@ -163,8 +163,8 @@ module Domain =
                                    |> OptionExt.none_to_exn
                                  )
                                ~felse:(fun flow ->
-                                   man.eval (mk_py_call getattribute [exp; c_attr] range) flow
-                                 )
+                                 man.eval (mk_py_call getattribute [exp; c_attr] range) flow
+                               )
                            )
                        )
                    )
