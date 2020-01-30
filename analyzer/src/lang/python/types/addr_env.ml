@@ -232,14 +232,25 @@ struct
           )
       |> OptionExt.return
 
-    | S_py_annot ({ekind = E_var (v, mode)}, e) ->
+    | S_py_annot ({ekind = E_var (v, mode)} as evar, e) ->
       (* need to make e E_py_annot here or on the frontend *)
       (* then handle E_py_annot in typing, to perform an allocation? *)
       (* what about non builtins? *)
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
       bind_some (fun e flow -> match ekind e with
           | E_py_object (addr, _) ->
-            assign_addr man v (PyAddr.Def addr) mode flow
+            begin match akind addr with
+              | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} ->
+                man.exec ~zone:Universal.Zone.Z_u_string (mk_assign (change_var_type T_string evar) (mk_py_top T_string range) range) flow
+              | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}
+              | A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)} ->
+                man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (change_var_type T_int evar) (mk_py_top T_int range) range) flow
+              | A_py_instance {addr_kind = A_py_class (C_builtin "float", _)} ->
+                man.exec ~zone:Universal.Zone.Z_u_float (mk_assign (change_var_type (T_float F_DOUBLE) evar) (mk_py_top (T_float F_DOUBLE) range) range) flow
+              | _ ->
+                flow
+            end |>
+            assign_addr man v (PyAddr.Def addr) mode
             |> Post.return
           | _ -> Exceptions.panic_at range "%a@\n" pp_expr e)
       |> OptionExt.return

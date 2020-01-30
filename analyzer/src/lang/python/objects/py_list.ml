@@ -790,9 +790,12 @@ struct
       Eval.bind (fun eaddr_list flow ->
           let addr_list = addr_of_expr eaddr_list in
           let els_var = var_of_addr addr_list in
+          let len_var = length_var_of_addr addr_list in
           let stmt = mk_stmt (S_py_annot (mk_var ~mode:WEAK els_var range, mk_expr (E_py_annot i) range)) range in
-          man.exec ~zone:Zone.Z_py stmt flow |>
-          Eval.singleton (mk_py_object (addr_list, None) range)
+          flow |>
+            man.exec ~zone:Zone.Z_py stmt |>
+            man.exec ~zone:Zone.Z_py (mk_assign (mk_var len_var range) (mk_py_top T_int range) range) |>
+            Eval.singleton (mk_py_object (addr_list, None) range)
         )
       |> OptionExt.return
 
