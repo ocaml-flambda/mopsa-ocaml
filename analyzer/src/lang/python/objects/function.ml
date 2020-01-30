@@ -90,13 +90,16 @@ module Domain =
       let range = erange exp in
       match ekind exp with
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("method.__new__", _))}, _)}, [meth; func; inst], []) ->
-        (* FIXME: meth should be a subtype of method *)
-        eval_alloc man (A_py_method (object_of_expr func, inst, "method")) range flow |>
-        bind_some (fun addr flow ->
-            let obj = (addr, None) in
-            Eval.singleton (mk_py_object obj range) flow
-          )
-        |> OptionExt.return
+         (* FIXME: meth should be a subtype of method *)
+         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) func flow |>
+           Eval.bind (fun func flow ->
+               eval_alloc man (A_py_method (object_of_expr func, inst, "method")) range flow |>
+                 bind_some (fun addr flow ->
+                     let obj = (addr, None) in
+                     Eval.singleton (mk_py_object obj range) flow
+                   )
+             )
+         |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("function.__get__", _))}, _)}, [descr; instance; typeofinst], []) ->
         assume (mk_py_isinstance_builtin instance "NoneType" range) man flow
