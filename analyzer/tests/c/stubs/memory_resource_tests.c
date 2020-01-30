@@ -58,3 +58,23 @@ void test_weak_alloc() {
   _mopsa_assert_exists(p[0] == 1);
   _mopsa_assert_exists(p[0] == 2);
 }
+
+
+/*$
+ * assigns: a[0,1];
+ * ensures: (a[0])' == 10;
+ */
+void modify_two_first_elements(char *a);
+
+void test_assign_weak_alloc() {
+  char *p = weak_malloc_(100);
+  p[0] = 1;
+  p[1] = 2;
+  p[2] = 3;
+  modify_two_first_elements(p);
+  _mopsa_assert_exists(p[0] == 1);
+  _mopsa_assert_exists(p[0] == 10);
+  _mopsa_assert_exists(p[1] == 2);
+  _mopsa_assert_exists(p[1] == 100);
+  _mopsa_assert(p[2] == 3);
+}

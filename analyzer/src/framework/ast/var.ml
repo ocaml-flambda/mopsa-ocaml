@@ -73,12 +73,7 @@ let pp_mode fmt = function
 
 
 (** Pretty printer of variables *)
-let pp_var fmt v =
-  Format.fprintf fmt "%a%a"
-    (TypeExt.print var_pp_chain) v
-    (fun fmt -> function
-       | STRONG -> ()
-       | WEAK   -> Format.fprintf fmt ":w") v.vmode
+let pp_var fmt v = TypeExt.print var_pp_chain fmt v
 
 
 (** Internal compare chain over variable kinds *)

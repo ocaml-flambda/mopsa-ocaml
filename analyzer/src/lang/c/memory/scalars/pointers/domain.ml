@@ -179,7 +179,7 @@ struct
       let () = Format.fprintf Format.str_formatter "offset(%s)" p.vname in
       Format.flush_str_formatter ()
     in
-    mkv name (V_c_ptr_offset p) T_int
+    mkv name (V_c_ptr_offset p) T_int ~mode:p.vmode
 
 
   (** Create the offset expression of a pointer *)
