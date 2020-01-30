@@ -782,14 +782,14 @@ struct
     man.post ~zone:Z_c_scalar stmt flow
 
 
-  let assign_cell c e mode range man flow =
+  let assign_cell c e range man flow =
     let flow = map_env T_cur (fun a ->
         { a with cells = CellSet.add c a.cells }
       ) man flow
     in
 
     let v = mk_cell_var c in
-    let vv = mk_var v ~mode range in
+    let vv = mk_var v ~mode:(base_mode c.base) range in
     let stmt = mk_assign vv e range in
     man.post ~zone:Z_c_scalar stmt flow >>= fun _ flow ->
     remove_cell_overlappings c range man flow
@@ -936,7 +936,7 @@ struct
 
   let eval zone exp man flow =
     match ekind exp with
-    | E_var (v,STRONG) when is_c_scalar_type v.vtyp ->
+    | E_var (v,_) when is_c_scalar_type v.vtyp ->
       eval_deref_scalar_pointer (mk_c_address_of exp exp.erange) exp.erange man flow |>
       OptionExt.return
 
@@ -1000,8 +1000,13 @@ struct
       Post.return flow
 
 
-  (** 𝕊⟦ *p = e; ⟧ *)
-  let exec_assign p e mode range man flow =
+  (** 𝕊⟦ x = e; ⟧ *)
+  let exec_assign x e range man flow =
+    let p = match ekind x with
+      | E_var _     -> mk_c_address_of x range
+      | E_c_deref p -> p
+      | _           -> assert false
+    in
     (* Expand *p into cells *)
     expand p range man flow >>$ fun expansion flow ->
     match expansion with
@@ -1018,7 +1023,7 @@ struct
 
     | Cell c ->
       man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow >>$ fun e flow ->
-      assign_cell c e mode range man flow
+      assign_cell c e range man flow
 
     | Region (base,itv) when is_c_num_type e.etyp ->
       man.eval ~zone:(Z_c_low_level,Z_u_num) e flow >>$ fun e flow ->
@@ -1148,7 +1153,7 @@ struct
       List.fold_left (fun acc c -> Post.bind (forget_cell c range man) acc) (Post.return flow) cells
 
     | _ -> Post.return flow
-  
+
 
   let is_base_expr e =
     match ekind e with
@@ -1168,21 +1173,8 @@ struct
       exec_declare v scope stmt.srange man flow |>
       OptionExt.return
 
-    | S_assign(({ekind = E_var(v, STRONG)} as lval), e) when is_c_scalar_type v.vtyp ->
-      Some (
-        let c = mk_cell (mk_var_base v) Z.zero v.vtyp in
-        let flow = map_env T_cur (fun a -> { a with cells = CellSet.add c a.cells }) man flow in
-
-        let v = mk_cell_var c in
-        man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow >>$ fun e flow ->
-        let stmt = mk_assign (mk_var v lval.erange) e stmt.srange in
-        man.post ~zone:Z_c_scalar stmt flow |>
-
-        Post.bind @@ remove_cell_overlappings c stmt.srange man
-      )
-
-    | S_assign(({ekind = E_c_deref(p)}), e) when is_c_scalar_type @@ under_type p.etyp ->
-      exec_assign p e STRONG stmt.srange man flow |>
+    | S_assign(x, e) when is_c_scalar_type x.etyp ->
+      exec_assign x e stmt.srange man flow |>
       OptionExt.return
 
 
