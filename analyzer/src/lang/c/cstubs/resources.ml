@@ -77,10 +77,15 @@ struct
   let exec_stub_free p range man flow =
     man.eval ~zone:(Z_c, Z_c_points_to) p flow >>$ fun pt flow ->
     match ekind pt with
-    | E_c_points_to (P_block ({ base_kind = Addr ({ addr_kind = A_stub_resource _ } as addr); base_valid = true }, _)) ->
+    | E_c_points_to (P_block ({ base_kind = Addr ({ addr_kind = A_stub_resource _ } as addr); base_valid = true }, _, mode)) ->
       (* Remove the bytes attribute before removing the address *)
-      let stmt' = mk_remove_var (mk_bytes_var addr) range in
-      let flow' = man.exec ~zone:Z_c_scalar stmt' flow in
+      let flow' =
+        if addr.addr_mode = STRONG then
+          let stmt' = mk_remove_var (mk_bytes_var addr) range in
+          man.exec ~zone:Z_c_scalar stmt' flow
+        else
+          flow
+      in
 
       let stmt' = mk_free_addr addr range in
       let flow' = man.exec stmt' flow' in
@@ -89,7 +94,7 @@ struct
       man.exec stmt'' flow' |>
       Post.return
 
-    | E_c_points_to (P_block ({ base_kind = Addr { addr_kind = A_stub_resource _ }; base_valid = false; base_invalidation_range = Some drange }, _)) ->
+    | E_c_points_to (P_block ({ base_kind = Addr { addr_kind = A_stub_resource _ }; base_valid = false; base_invalidation_range = Some drange }, _, _)) ->
       Common.Alarms.(raise_c_double_free_alarm p drange range (Sig.Stacked.Manager.of_domain_man man) flow) |>
       Post.return
 
@@ -131,7 +136,7 @@ struct
       ->
       exec_stub_rename_resource addr1 addr2 stmt man flow |>
       OptionExt.return
-  
+
 
     | _ -> None
 
@@ -153,13 +158,13 @@ struct
       Eval.singleton exp flow'
 
     | _ -> assert false
-    
+
 
 
   let eval_stub_resource_mem p res range man flow =
     man.eval ~zone:(Z_c, Z_c_points_to) p flow >>$ fun pt flow ->
     match ekind pt with
-    | E_c_points_to (P_block ({ base_kind = Addr { addr_kind = A_stub_resource res' } }, _)) ->
+    | E_c_points_to (P_block ({ base_kind = Addr { addr_kind = A_stub_resource res' } }, _, _)) ->
       if res = res' then
         Eval.singleton (mk_one range ~typ:u8) flow
       else
@@ -177,7 +182,7 @@ struct
     | E_stub_alloc res ->
       eval_stub_alloc res exp.erange man flow |>
       OptionExt.return
-  
+
     | E_stub_resource_mem(p, res) ->
       eval_stub_resource_mem p res exp.erange man flow |>
       OptionExt.return

@@ -129,7 +129,7 @@ struct
 
 
   let add p v mode a =
-    if mode = STRONG
+    if var_mode p mode = STRONG
     then Map.set p v a
 
     else
@@ -192,9 +192,9 @@ struct
   (** ============================================== *)
 
   (** Evaluate a static points-to expression *)
-  let eval_static_points_to man flow (p:static_points_to) : (PointerSet.t * expr option * (var * mode) option) =
+  let eval_static_points_to man flow (p:static_points_to) : (PointerSet.t * expr option * (var * mode option) option) =
     match p with
-    | AddrOf (b, o) ->
+    | AddrOf (b, o, mode) ->
       PointerSet.base b, Some o, None
 
     | Eval(q, mode, o) ->
@@ -265,8 +265,8 @@ struct
     Static_points_to.eval_opt exp |> OptionExt.lift @@ fun ptr ->
 
     match ptr with
-    | AddrOf (base, offset) ->
-      Eval.singleton (mk_c_points_to_bloc base offset exp.erange) flow
+    | AddrOf (base, offset, mode) ->
+      Eval.singleton (mk_c_points_to_bloc base offset mode exp.erange) flow
 
     | Eval (p, mode, offset) ->
       let offset' = mk_binop (mk_offset p mode exp.erange) O_plus offset ~etyp:T_int exp.erange in
@@ -418,7 +418,7 @@ struct
   let assign p q mode range man flow =
     let o = mk_offset p mode range in
     match Static_points_to.eval q with
-    | AddrOf (b, offset) ->
+    | AddrOf (b, offset, mode) ->
       let flow' = map_env T_cur (add p (PointerSet.base b) mode) man flow in
 
       man.eval offset ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) flow' >>$ fun offset flow' ->
@@ -439,19 +439,19 @@ struct
         man.eval offset' ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) flow' >>$ fun offset' flow ->
         man.post ~zone:(Universal.Zone.Z_u_num) (mk_assign o offset' range) flow'
       else
-        remove_offset o mode range man flow'
+        remove_offset o (var_mode p mode) range man flow'
 
     | Fun f ->
       map_env T_cur (add p (PointerSet.cfun f) mode) man flow |>
-      remove_offset o mode range man
+      remove_offset o (var_mode p mode) range man
 
     | Invalid ->
       map_env T_cur (add p PointerSet.invalid mode) man flow  |>
-      remove_offset o mode range man
+      remove_offset o (var_mode p mode) range man
 
     | Null ->
       map_env T_cur (add p PointerSet.null mode) man flow |>
-      remove_offset o mode range man
+      remove_offset o (var_mode p mode) range man
 
     | Top ->
       map_env T_cur (add p PointerSet.top mode) man flow |>
@@ -475,7 +475,7 @@ struct
       Post.return
 
     | _, Some (C_init_expr e) ->
-      assign v e STRONG range man flow
+      assign v e None range man flow
 
     | _ -> assert false
 
@@ -483,7 +483,7 @@ struct
 
   (** Add a pointer variable to the support of the non-rel map *)
   let add_pointer_var p range man flow =
-    let o = mk_offset p STRONG range in
+    let o = mk_offset p None range in
     map_env T_cur (Map.set p PointerSet.top) man flow |>
     man.post ~zone:(Universal.Zone.Z_u_num) (mk_add o range)
 
@@ -491,7 +491,7 @@ struct
   (** Remove a pointer variable from the support of the non-rel map *)
   let remove_pointer_var p range man flow =
     let flow = map_env T_cur (Map.remove p) man flow in
-    let o = mk_offset p STRONG range in
+    let o = mk_offset p None range in
     man.post ~zone:(Universal.Zone.Z_u_num) (mk_remove o range) flow
 
 
@@ -502,8 +502,8 @@ struct
     (* Rename the offset if present *)
     let a1 = get_env T_cur man flow |> Map.find p1 in
     if PointerSet.is_valid a1 then
-      let o1 = mk_offset p1 STRONG range in
-      let o2 = mk_offset p2 STRONG range in
+      let o1 = mk_offset p1 None range in
+      let o2 = mk_offset p2 None range in
       man.post ~zone:(Universal.Zone.Z_u_num) (mk_rename o1 o2 range) flow'
     else
       Post.return flow'
@@ -696,8 +696,8 @@ struct
     let flow = set_env T_cur a man flow in
     (* Expand the offset if present *)
     if PointerSet.is_valid value then
-      let o = mk_offset p STRONG range in
-      let ol = List.map (fun q -> mk_offset q STRONG range) ql in
+      let o = mk_offset p None range in
+      let ol = List.map (fun q -> mk_offset q None range) ql in
       let stmt = mk_expand o ol range in
       man.post stmt ~zone:Z_u_num flow
     else
@@ -711,7 +711,7 @@ struct
     let a' = Map.set p PointerSet.top a in
     let flow = set_env T_cur a' man flow in
     (* Forget the offset. If not already present, just add it *)
-    let o = mk_offset p STRONG range in
+    let o = mk_offset p None range in
     let stmt =
       if PointerSet.is_valid (Map.find p a) then
         mk_forget o range

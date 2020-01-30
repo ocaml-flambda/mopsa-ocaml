@@ -102,8 +102,9 @@ let base_size b =
 
 let base_mode b =
   match b.base_kind with
-  | Var _ | String _ -> STRONG
+  | Var v -> v.vmode
   | Addr a -> a.addr_mode
+  | String _ -> STRONG
 
 
 let is_base_readonly b =

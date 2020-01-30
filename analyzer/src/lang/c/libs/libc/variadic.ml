@@ -189,7 +189,7 @@ struct
     man.eval ap ~zone:(Z_c, Z_c_points_to) flow >>$ fun pt flow ->
 
     match ekind pt with
-    | E_c_points_to (P_block ({ base_kind = Var ap; base_valid = true }, offset)) ->
+    | E_c_points_to (P_block ({ base_kind = Var ap; base_valid = true }, offset, mode)) ->
       let base_size = sizeof_type ap.vtyp in
       let elem_size = sizeof_type (under_type ap.vtyp) in
 

@@ -227,7 +227,7 @@ struct
 
   (** Expressions annotated with abstract values; useful for assignment and compare. *)
   type aexpr =
-    | A_var of var * mode * Value.t
+    | A_var of var * mode option * Value.t
     | A_cst of constant * Value.t
     | A_unop of operator * typ  * aexpr * Value.t
     | A_binop of operator * typ * aexpr * Value.t * aexpr * Value.t
@@ -306,7 +306,7 @@ struct
       then bottom
 
       else
-      if mode = STRONG
+      if var_mode var mode = STRONG
       then add ctx var r' a
 
       else a
@@ -364,7 +364,7 @@ struct
       let v = find var a in
       let w = Value.filter (man a) v r in
       (if Value.is_bottom w then bottom else
-       if mode = STRONG then add ctx var w a
+       if var_mode var mode = STRONG then add ctx var w a
        else a
       ) |>
       OptionExt.return
@@ -431,7 +431,7 @@ struct
       eval e map |> OptionExt.lift @@ fun (_, v) ->
       let map' = add ctx var v map in
       begin
-        match mode with
+        match var_mode var mode with
         | STRONG -> map'
         | WEAK -> join map map'
       end

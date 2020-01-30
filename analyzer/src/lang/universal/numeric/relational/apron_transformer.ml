@@ -224,11 +224,11 @@ struct
       Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_float f)),
       abs, bnd, l
 
-    | E_var (x, STRONG) ->
+    | E_var (x, mode) when var_mode x mode = STRONG ->
       let xx, bnd = Binding.var_to_apron bnd x in
       Apron.Texpr1.Var(xx), abs, bnd, l
 
-    | E_var (x, WEAK) ->
+    | E_var (x, mode) when var_mode x mode = WEAK ->
       let x' = mktmp ~typ:exp.etyp () in
       let x_apr, bnd = Binding.var_to_apron bnd x in
       let x_apr', bnd = Binding.var_to_apron bnd x' in

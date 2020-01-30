@@ -279,7 +279,7 @@ struct
         visit_expr_in_formula
           (fun e ->
              match ekind e with
-             | E_stub_return -> Keep { e with ekind = E_var (v, STRONG) }
+             | E_stub_return -> Keep { e with ekind = E_var (v, None) }
              | _ -> VisitParts e
           )
           e.content

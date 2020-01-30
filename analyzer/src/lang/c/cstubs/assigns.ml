@@ -98,19 +98,21 @@ struct
     in
     mkv vname vkind vtyp
 
-  let mk_primed_base_expr base range =
-    mk_var (mk_primed_base_var base) range
 
-  let mk_base_expr base range =
+  let mk_primed_base_expr base mode range =
+    mk_var (mk_primed_base_var base) ~mode range
+
+
+  let mk_base_expr base mode range =
     match base.base_kind with
-    | Var v  -> mk_var v range
+    | Var v  -> mk_var v ~mode range
     | Addr a -> mk_addr a range
     | _      -> assert false
 
 
   (** Create the expression ( typ* )( ( char* )&base' + offset ) *)
-  let mk_primed_address base offset typ range =
-    let primed = mk_primed_base_expr base range in
+  let mk_primed_address base offset mode typ range =
+    let primed = mk_primed_base_expr base mode range in
     mk_c_cast
       ( add
           (mk_c_cast (mk_c_address_of primed range) (T_c_pointer s8) range)
@@ -125,6 +127,12 @@ struct
   (** Computation of post-conditions *)
   (** ============================== *)
 
+  module BaseModeSet = SetExt.Make
+      (struct
+        type t = base * mode option
+        let compare = Compare.pair compare_base (Compare.option compare_mode)
+      end)
+
   (* Collect assigned bases *)
   let assigned_bases assigns range man flow =
     List.fold_left (fun acc assign ->
@@ -135,33 +143,33 @@ struct
         let pp = man.eval ptr ~zone:(Z_c,Z_c_points_to) flow in
         Cases.fold_some (fun p flow acc ->
             match ekind p with
-            | E_c_points_to(P_block ({ base_valid = true } as base, _ )) ->
-              BaseSet.add base acc
+            | E_c_points_to(P_block ({ base_valid = true } as base, _, mode)) ->
+              BaseModeSet.add (base,mode) acc
             | _ -> acc
           ) pp acc
-      ) BaseSet.empty assigns
+      ) BaseModeSet.empty assigns
 
   (** Expand base to a primed copy *)
   let expand_primed_base base range man flow =
-    let primed = mk_primed_base_expr base range in
-    man.post (mk_expand (mk_base_expr base range) [primed] range) ~zone:Z_c_low_level flow
+    let primed = mk_primed_base_expr base None range in
+    man.post (mk_expand (mk_base_expr base None range) [primed] range) ~zone:Z_c_low_level flow
 
 
   (** Prepare primed copies of assigned bases *)
   let exec_stub_prepare_all_assigns assigns range man flow =
     (* Expand assigned bases to primed copies *)
     let bases = assigned_bases assigns range man flow in
-    BaseSet.fold (fun base acc ->
+    BaseModeSet.fold (fun (base,mode) acc ->
         Post.bind (expand_primed_base base range man) acc
       ) bases (Post.return flow)
 
 
   (** Declare an assigned base *)
-  let exec_assign_base base offset typ assigned_indices range man flow =
+  let exec_assign_base base offset mode typ assigned_indices range man flow =
     match assigned_indices with
     | [] ->
       (* Prime the target *)
-      let primed_target = mk_primed_address base offset typ range in
+      let primed_target = mk_primed_address base offset mode typ range in
       let lval = mk_c_deref primed_target range in
       man.post (mk_forget lval range) ~zone:Z_c flow
 
@@ -175,7 +183,7 @@ struct
       in
 
       (* Prime the target *)
-      let primed_target = mk_primed_address base offset (under_type typ) range in
+      let primed_target = mk_primed_address base offset mode (under_type typ) range in
 
       (* Create the assigned lval and cleaners for temporary quantified variables *)
       let lval, cleaners = List.fold_left (fun (acc,cleaners) (i,tmp) ->
@@ -207,20 +215,20 @@ struct
       raise_c_invalid_deref_alarm ptr range man' flow |>
       Cases.empty_singleton
 
-    | E_c_points_to (P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset)) ->
+    | E_c_points_to (P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
       raise_c_use_after_free_alarm ptr r range man' flow |>
       Cases.empty_singleton
 
-    | E_c_points_to (P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset)) ->
+    | E_c_points_to (P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
       raise_c_dangling_deref_alarm ptr v r range man' flow |>
       Cases.empty_singleton
 
-    | E_c_points_to (P_block (base, offset)) when is_base_readonly base ->
+    | E_c_points_to (P_block (base, offset, _)) when is_base_readonly base ->
       raise_c_read_only_modification_alarm base range man' flow |>
       Cases.empty_singleton
 
-    | E_c_points_to (P_block (base, offset))  ->
-      exec_assign_base base offset target.etyp assigned_indices range man flow
+    | E_c_points_to (P_block (base, offset, mode))  ->
+      exec_assign_base base offset mode target.etyp assigned_indices range man flow
 
     | E_c_points_to P_top ->
       Soundness.warn_at range "ignoring ⊤ pointer %a" pp_expr (get_orig_expr ptr);
@@ -231,9 +239,9 @@ struct
 
 
   (** Rename primed bases to original names *)
-  let rename_primed_base base range man flow =
-    let unprimed = mk_base_expr base range in
-    let primed = mk_primed_base_expr base range in
+  let rename_primed_base base mode range man flow =
+    let unprimed = mk_base_expr base mode range in
+    let primed = mk_primed_base_expr base mode range in
     let stmt = mk_rename primed unprimed range in
     man.post stmt ~zone:Z_c_low_level flow
 
@@ -242,8 +250,8 @@ struct
   let exec_stub_clean_all_assigns assigns range man flow =
     (* Rename primed copies to original version *)
     let bases = assigned_bases assigns range man flow in
-    BaseSet.fold (fun base acc ->
-        Post.bind (rename_primed_base base range man) acc
+    BaseModeSet.fold (fun (base,mode) acc ->
+        Post.bind (rename_primed_base base mode range man) acc
       ) bases (Post.return flow)
 
 
@@ -270,8 +278,8 @@ struct
   (** ========================= *)
 
 
-  let eval_primed_base base offset typ range man flow =
-    let p = mk_primed_address base offset typ range in
+  let eval_primed_base base offset mode typ range man flow =
+    let p = mk_primed_address base offset mode typ range in
     Eval.singleton (mk_c_deref p range) flow
 
 
@@ -288,20 +296,20 @@ struct
       raise_c_invalid_deref_alarm ptr range man' flow |>
       Cases.empty_singleton
 
-    | E_c_points_to (P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset)) ->
+    | E_c_points_to (P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
       raise_c_use_after_free_alarm ptr r range man' flow |>
       Cases.empty_singleton
 
-    | E_c_points_to (P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset)) ->
+    | E_c_points_to (P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
       raise_c_dangling_deref_alarm ptr v r range man' flow |>
       Cases.empty_singleton
 
-    | E_c_points_to (P_block (base, offset)) when is_base_readonly base ->
+    | E_c_points_to (P_block (base, offset, _)) when is_base_readonly base ->
       raise_c_read_only_modification_alarm base range man' flow |>
       Cases.empty_singleton
 
-    | E_c_points_to (P_block (base, offset))  ->
-      eval_primed_base base offset e.etyp range man flow
+    | E_c_points_to (P_block (base, offset, mode))  ->
+      eval_primed_base base offset mode e.etyp range man flow
 
     | E_c_points_to P_top ->
       Soundness.warn_at range "ignoring ⊤ pointer %a" pp_expr (get_orig_expr ptr);

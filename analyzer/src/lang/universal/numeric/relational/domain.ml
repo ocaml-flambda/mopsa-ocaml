@@ -236,7 +236,7 @@ struct
         bnd
       )
 
-    | S_assign({ ekind = E_var (var, STRONG) }, e) ->
+    | S_assign({ ekind = E_var (var, mode) }, e) when var_mode var mode = STRONG ->
       let a, bnd = add_missing_vars (a,bnd) (var :: (Visitor.expr_vars e)) in
       let v = Binding.mk_apron_var var in
       begin try
@@ -251,8 +251,8 @@ struct
           exec ctx (mk_remove_var var stmt.srange) man (a,bnd)
       end
 
-    | S_assign({ ekind = E_var (var, WEAK) } as lval, e) ->
-      let lval' = { lval with ekind = E_var(var, STRONG) } in
+    | S_assign({ ekind = E_var (var, mode) } as lval, e) when var_mode var mode = WEAK ->
+      let lval' = { lval with ekind = E_var(var, Some STRONG) } in
       exec ctx {stmt with skind = S_assign(lval', e)} man (a,bnd) |>
       OptionExt.lift @@ fun (a',bnd') ->
       join (a,bnd) (a', bnd')

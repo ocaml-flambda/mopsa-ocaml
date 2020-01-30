@@ -91,11 +91,11 @@ struct
       raise_c_invalid_deref_alarm ptr range man' flow |>
       Cases.empty_singleton
 
-    | E_c_points_to (P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset)) ->
+    | E_c_points_to (P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
       raise_c_use_after_free_alarm ptr r range man' flow |>
       Cases.empty_singleton
 
-    | E_c_points_to (P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset)) ->
+    | E_c_points_to (P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
       raise_c_dangling_deref_alarm ptr v r range man' flow |>
       Cases.empty_singleton
 
@@ -103,7 +103,7 @@ struct
       Soundness.warn_at range "ignoring requirement check due to ⊤ pointer %a" pp_expr ptr;
       Post.return flow
 
-    | E_c_points_to (P_block (base, offset)) ->
+    | E_c_points_to (P_block (base, offset, _)) ->
       if is_expr_forall_quantified offset
       then
         Common.Base.eval_base_size base range man' flow >>$ fun size flow ->

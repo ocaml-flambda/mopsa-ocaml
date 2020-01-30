@@ -62,6 +62,6 @@ let mk_bytes_var addr =
   in
   mkv name (V_c_bytes addr) (T_c_integer C_unsigned_long)
 
-let mk_bytes addr range =
+let mk_bytes addr mode range =
   let v = mk_bytes_var addr in
-  mk_var v ~mode:addr.addr_mode range
+  mk_var v ~mode range

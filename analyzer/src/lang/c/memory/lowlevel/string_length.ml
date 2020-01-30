@@ -111,7 +111,7 @@ struct
   (** Create a length variable. The returned variable is a
       mathematical integer, not a C variable.
   *)
-  let mk_length_var base ?(mode=base_mode base) range =
+  let mk_length_var base ?(mode=None) range =
     let name =
       let () =
         Format.fprintf Format.str_formatter "length(%s)"
@@ -119,7 +119,7 @@ struct
       in
       Format.flush_str_formatter ()
     in
-    let v = mkv name (V_c_string_length (base)) T_int in
+    let v = mkv name (V_c_string_length (base)) T_int ~mode:(base_mode base) in
     mk_var v ~mode range
 
 
@@ -140,12 +140,12 @@ struct
     match ekind pt with
     | E_c_points_to P_null
     | E_c_points_to P_invalid
-    | E_c_points_to (P_block ({ base_valid = false }, _))
+    | E_c_points_to (P_block ({ base_valid = false }, _, _))
     | E_c_points_to P_top ->
       Cases.empty_singleton flow
 
-    | E_c_points_to (P_block (base, offset)) ->
-      Cases.singleton (base, offset) flow
+    | E_c_points_to (P_block (base, offset, mode)) ->
+      Cases.singleton (base, offset, mode) flow
 
     | _ -> assert false
 
@@ -200,11 +200,11 @@ struct
 
 
   (** Cases of the assignment abstract transformer *)
-  let assign_cases base offset rhs typ range man flow =
+  let assign_cases base offset rhs mode typ range man flow =
     eval_base_size base range man flow >>$ fun size flow ->
     man.eval ~zone:(Z_c_scalar, Z_u_num) size flow >>$ fun size flow ->
 
-    let length = mk_length_var base range in
+    let length = mk_length_var base ~mode range in
 
     (* Compute the offset in bytes *)
     let elm_size = sizeof_type typ in
@@ -285,15 +285,15 @@ struct
 
   (** Assignment abstract transformer for 𝕊⟦ *p = rval; ⟧ *)
   let assign_deref p rval range man flow =
-    eval_pointed_base_offset p range man flow >>$ fun (base,offset) flow ->
+    eval_pointed_base_offset p range man flow >>$ fun (base,offset,mode) flow ->
     man.eval ~zone:(Z_c_low_level,Z_u_num) rval flow >>$ fun rval flow ->
     man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow >>$ fun offset flow ->
-    assign_cases base offset rval (under_type p.etyp |> void_to_char) range man flow
+    assign_cases base offset rval mode (under_type p.etyp |> void_to_char) range man flow
 
 
 
   (** Cases of the abstract transformer for tests *(p + i) == 0 *)
-  let assume_zero_cases base offset range man flow =
+  let assume_zero_cases base offset mode range man flow =
     eval_base_size base range man flow >>$ fun size flow ->
     man.eval ~zone:(Z_c_scalar, Z_u_num) size flow >>$ fun size flow ->
     man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow >>$ fun offset flow ->
@@ -301,7 +301,7 @@ struct
     let length =
       match base.base_kind with
       | String str -> mk_z (Z.of_int @@ String.length str) range
-      | _ -> mk_length_var base range
+      | _ -> mk_length_var base ~mode range
     in
 
     (* Safety condition: offset ⊆ [0, size[ *)
@@ -320,7 +320,7 @@ struct
 
 
   (** Cases of the abstract transformer for tests *(p + ∀i) != 0 *)
-  let assume_quantified_non_zero_cases base offset range man flow =
+  let assume_quantified_non_zero_cases base offset mode range man flow =
     (** Get symbolic bounds of the offset *)
     let min, max = Common.Quantified_offset.bound offset in
 
@@ -332,7 +332,7 @@ struct
     let length =
       match base.base_kind with
       | String str -> mk_z (Z.of_int @@ String.length str) range
-      | _ -> mk_length_var base range
+      | _ -> mk_length_var base ~mode range
     in
     let mk_bottom flow = Flow.set T_cur man.lattice.bottom man.lattice flow in
 
@@ -399,15 +399,15 @@ struct
       doit lval
     in
 
-    eval_pointed_base_offset p range man flow >>$ fun (base,offset) flow ->
+    eval_pointed_base_offset p range man flow >>$ fun (base,offset,mode) flow ->
     if not (is_memory_base base)
     then Post.return flow
 
     else if op = O_ne && is_expr_forall_quantified offset
-    then assume_quantified_non_zero_cases base offset range man flow
+    then assume_quantified_non_zero_cases base offset mode range man flow
 
     else if op = O_eq && not (is_expr_forall_quantified offset)
-    then assume_zero_cases base offset range man flow
+    then assume_zero_cases base offset mode range man flow
 
     else Post.return flow
 

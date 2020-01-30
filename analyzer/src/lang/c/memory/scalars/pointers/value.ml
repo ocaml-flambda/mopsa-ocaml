@@ -111,7 +111,7 @@ struct
           match p with
           | Null -> f null P_null acc
           | Invalid -> f invalid P_invalid acc
-          | Base b -> f (base b) (P_block(b,offset)) acc
+          | Base b -> f (base b) (P_block(b,offset,None)) acc
           | Fun func -> f (cfun func) (P_fun func) acc
         ) s init
 

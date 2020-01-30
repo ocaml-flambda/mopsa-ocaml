@@ -121,8 +121,8 @@ struct
           let els_keys, els_vals = var_of_addr addr_dict in
           let flow = List.fold_left2 (fun acc key valu ->
               acc |>
-              man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:WEAK els_keys range) key range) |>
-              man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:WEAK els_vals range) valu range)
+              man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:(Some WEAK) els_keys range) key range) |>
+              man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:(Some WEAK) els_vals range) valu range)
             ) flow ks vs in
           Eval.singleton (mk_py_object (addr_dict, None) range) flow
         )
@@ -141,8 +141,8 @@ struct
            let dict, snddict = match eargs with l::s::[] -> l, s | _ -> assert false in
            let var_keys, var_values = extract_vars dict in
            let var_sndkeys, var_sndvalues = extract_vars dict in
-           man.exec (mk_assign (mk_var var_keys ~mode:WEAK range) (mk_var var_sndkeys ~mode:WEAK range) range) flow |>
-           man.exec (mk_assign (mk_var var_values ~mode:WEAK range) (mk_var var_sndvalues ~mode:WEAK range) range) |>
+           man.exec (mk_assign (mk_var var_keys ~mode:(Some WEAK) range) (mk_var var_sndkeys ~mode:(Some WEAK) range) range) flow |>
+           man.exec (mk_assign (mk_var var_values ~mode:(Some WEAK) range) (mk_var var_sndvalues ~mode:(Some WEAK) range) range) |>
            man.eval (mk_py_none range)
         )
       |> OptionExt.return
@@ -153,8 +153,8 @@ struct
         (fun args flow ->
            let dict, key, value = match args with [d;k;v] -> d,k,v | _ -> assert false in
            let var_keys, var_values = extract_vars dict in
-           man.exec (mk_assign (mk_var ~mode:WEAK var_keys range) key range) flow |>
-           man.exec (mk_assign (mk_var ~mode:WEAK var_values range) value range) |>
+           man.exec (mk_assign (mk_var ~mode:(Some WEAK) var_keys range) key range) flow |>
+           man.exec (mk_assign (mk_var ~mode:(Some WEAK) var_values range) value range) |>
            man.eval (mk_py_none range)
         )
       |> OptionExt.return
@@ -163,7 +163,7 @@ struct
       Utils.check_instances f man flow range args ["dict"]
         (fun args flow ->
            let var_k, var_v = extract_vars (List.hd args) in
-           man.eval (mk_expr (E_py_dict ([mk_var ~mode:WEAK var_k range], [mk_var ~mode:WEAK var_v range])) range) flow
+           man.eval (mk_expr (E_py_dict ([mk_var ~mode:(Some WEAK) var_k range], [mk_var ~mode:(Some WEAK) var_v range])) range) flow
         )
       |> OptionExt.return
 
@@ -257,8 +257,8 @@ struct
            let dict, key, default = match args with a::b::c::[] -> a,b,c | _ -> assert false in
            let var_k, var_v = extract_vars dict in
 
-           let flow = man.exec (mk_assign (mk_var var_k ~mode:WEAK range) key range) flow in
-           let flow = man.exec (mk_assign (mk_var var_v ~mode:WEAK range) default range) flow in
+           let flow = man.exec (mk_assign (mk_var var_k ~mode:(Some WEAK) range) key range) flow in
+           let flow = man.exec (mk_assign (mk_var var_v ~mode:(Some WEAK) range) default range) flow in
            man.eval (mk_var var_v range) flow
         )
       |> OptionExt.return
@@ -317,7 +317,7 @@ struct
              | E_py_object ({addr_kind = Py_list.A_py_iterator ("dict_keyiterator", [a], _)}, _) -> a
              | _ -> assert false in
            let var_k = kvar_of_addr dict_addr in
-           let els = man.eval (mk_var var_k ~mode:WEAK range) flow in
+           let els = man.eval (mk_var var_k ~mode:(Some WEAK) range) flow in
 
            let flow = Flow.set_ctx (Eval.get_ctx els) flow in
            let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
@@ -332,7 +332,7 @@ struct
              | E_py_object ({addr_kind = Py_list.A_py_iterator ("dict_valueiterator", [a], _)}, _) -> a
              | _ -> assert false in
            let var_v = vvar_of_addr dict_addr in
-           let els = man.eval (mk_var var_v ~mode:WEAK range) flow in
+           let els = man.eval (mk_var var_v ~mode:(Some WEAK) range) flow in
 
            let flow = Flow.set_ctx (Eval.get_ctx els) flow in
            let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
@@ -347,8 +347,8 @@ struct
              | E_py_object ({addr_kind = Py_list.A_py_iterator ("dict_itemiterator", [a], _)}, _) -> a
              | _ -> assert false in
            let var_k, var_v = var_of_addr dict_addr in
-           let els = man.eval (mk_expr (E_py_tuple [mk_var var_k ~mode:WEAK range;
-                                                    mk_var var_v ~mode:WEAK range]) range) flow in
+           let els = man.eval (mk_expr (E_py_tuple [mk_var var_k ~mode:(Some WEAK) range;
+                                                    mk_var var_v ~mode:(Some WEAK) range]) range) flow in
            let flow = Flow.set_ctx (Eval.get_ctx els) flow in
            let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
            Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Eval.copy_ctx stopiteration els :: stopiteration :: [])
@@ -366,9 +366,9 @@ struct
                 Libs.Py_mopsa.check man
                   (Utils.mk_builtin_call "bool" [
                       (mk_binop
-                         (mk_py_isinstance (mk_var ~mode:WEAK var_k range) type_k range)
+                         (mk_py_isinstance (mk_var ~mode:(Some WEAK) var_k range) type_k range)
                          O_py_and
-                         (mk_py_isinstance (mk_var ~mode:WEAK var_v range) type_v range)
+                         (mk_py_isinstance (mk_var ~mode:(Some WEAK) var_v range) type_v range)
                          range)
                     ] range)
                   range flow
@@ -415,7 +415,7 @@ struct
           let stmts = mk_block (
               List.map (fun (var, annot) ->
                   mk_stmt (S_py_annot
-                             (mk_var ~mode:WEAK var range,
+                             (mk_var ~mode:(Some WEAK) var range,
                               mk_expr (E_py_annot annot) range)
                           ) range
                 ) [(keys_var, ty_key); (values_var, ty_value)]) range in

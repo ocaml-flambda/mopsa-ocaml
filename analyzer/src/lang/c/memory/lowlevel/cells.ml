@@ -203,23 +203,23 @@ struct
   (** Create a variable from a cell *)
   let mk_cell_var c : var =
     let name = mk_cell_uniq_name c in
-    mkv name (V_c_cell c) (cell_type c)
+    mkv name (V_c_cell c) (cell_type c) ~mode:(base_mode c.base)
 
 
   (** Create a variable from a numeric cell *)
-  let mk_numeric_cell_var_expr c range : expr =
+  let mk_numeric_cell_var_expr c ?(mode=None) range : expr =
     assert(is_numeric_cell c);
     let v = mk_cell_var c in
-    mk_var v ~mode:(base_mode c.base) range
+    mk_var v ~mode range
 
 
   (** Create a variable from a pointer cell *)
-  let mk_pointer_cell_var_expr c typ range : expr =
+  let mk_pointer_cell_var_expr c ?(mode=None) typ range : expr =
     assert(is_pointer_cell c);
     let v = mk_cell_var c in
     if is_c_void_type (under_type typ)
-    then mk_var v ~mode:(base_mode c.base) range
-    else mk_c_cast (mk_var v ~mode:(base_mode c.base) range) typ range
+    then mk_var v ~mode range
+    else mk_c_cast (mk_var v ~mode range) typ range
 
 
 
@@ -547,7 +547,7 @@ struct
 
   (** Possible results of a cell expansion *)
   type expansion =
-    | Cell of cell
+    | Cell of cell * mode option
     | Region of base * Itv.t
     | Top
 
@@ -571,16 +571,16 @@ struct
       raise_c_invalid_deref_alarm ptr range man flow |>
       Cases.empty_singleton
 
-    | E_c_points_to (P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset)) ->
+    | E_c_points_to (P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
       raise_c_use_after_free_alarm ptr r range man flow |>
       Cases.empty_singleton
 
-    | E_c_points_to (P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset)) ->
+    | E_c_points_to (P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
       raise_c_dangling_deref_alarm ptr v r range man flow |>
       Cases.empty_singleton
 
-    | E_c_points_to (P_block (base, offset)) ->
-      Cases.singleton (Some (base, offset)) flow
+    | E_c_points_to (P_block (base, offset, mode)) ->
+      Cases.singleton (Some (base, offset, mode)) flow
 
     | E_c_points_to P_top ->
       Cases.singleton None flow
@@ -596,7 +596,7 @@ struct
       Soundness.warn_at range "ignoring ⊤ pointer %a" pp_expr p;
       Cases.singleton Top flow
 
-    | Some (base,offset) ->
+    | Some (base,offset,mode) ->
       let typ = under_type p.etyp |> void_to_char in
       let elm = sizeof_type typ in
 
@@ -618,7 +618,7 @@ struct
            Z.leq o (Z.sub s elm)
         then
           let c = mk_cell base o typ in
-          Cases.singleton (Cell c) flow
+          Cases.singleton (Cell (c,mode)) flow
         else
           let flow = raise_c_out_bound_alarm ~base ~offset ~size range man flow in
           Cases.empty_singleton flow
@@ -692,7 +692,7 @@ struct
                     then aux (i + 1) (Z.add o step)
                     else
                       let c = mk_cell base o typ in
-                      Cases.singleton (Cell c) flow :: aux (i + 1) (Z.add o step)
+                      Cases.singleton (Cell (c,mode)) flow :: aux (i + 1) (Z.add o step)
                 in
                 let evals = aux 0 l in
                 Cases.join_list ~empty:(fun () -> Cases.empty_singleton flow) evals
@@ -782,14 +782,14 @@ struct
     man.post ~zone:Z_c_scalar stmt flow
 
 
-  let assign_cell c e range man flow =
+  let assign_cell c e mode range man flow =
     let flow = map_env T_cur (fun a ->
         { a with cells = CellSet.add c a.cells }
       ) man flow
     in
 
     let v = mk_cell_var c in
-    let vv = mk_var v ~mode:(base_mode c.base) range in
+    let vv = mk_var v ~mode range in
     let stmt = mk_assign vv e range in
     man.post ~zone:Z_c_scalar stmt flow >>= fun _ flow ->
     remove_cell_overlappings c range man flow
@@ -853,13 +853,13 @@ struct
     | Region _ ->
       Eval.singleton (mk_top (void_to_char t) range) flow
 
-    | Cell c ->
+    | Cell (c,mode) ->
       add_cell c range man flow >>= fun _ flow ->
       let v =
         if is_pointer_cell c then
-          mk_pointer_cell_var_expr c t range
+          mk_pointer_cell_var_expr c ~mode t range
         else
-          mk_numeric_cell_var_expr c range
+          mk_numeric_cell_var_expr c ~mode range
       in
       Eval.singleton v flow
 
@@ -905,7 +905,7 @@ struct
       Soundness.warn_at range "ignoring ⊤ pointer %a" pp_expr p;
       Eval.singleton (mk_top typ range) flow
 
-    | Some (base,offset) ->
+    | Some (base,offset,mode) ->
       eval_base_size base range man flow >>$ fun size flow ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) size flow >>$ fun size flow ->
 
@@ -990,7 +990,7 @@ struct
     in
     (* If v is a scalar variable, add it to the scalar domain *)
     if is_c_scalar_type v.vtyp then
-      let c = mk_cell base Z.zero v.vtyp in      
+      let c = mk_cell base Z.zero v.vtyp in
       let vv = mk_cell_var c in
       map_env T_cur (fun a ->
         { a with cells = CellSet.add c a.cells }
@@ -1017,13 +1017,13 @@ struct
       ;
       Post.return flow
 
-    | Cell { base } when is_base_readonly base ->
+    | Cell ({ base },_) when is_base_readonly base ->
       let flow = raise_c_read_only_modification_alarm base range man flow in
       Post.return flow
 
-    | Cell c ->
+    | Cell (c,mode) ->
       man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow >>$ fun e flow ->
-      assign_cell c e range man flow
+      assign_cell c e mode range man flow
 
     | Region (base,itv) when is_c_num_type e.etyp ->
       man.eval ~zone:(Z_c_low_level,Z_u_num) e flow >>$ fun e flow ->
@@ -1137,7 +1137,7 @@ struct
     in
     man.eval ptr ~zone:(Z_c_low_level,Z_c_points_to) flow >>$ fun p flow ->
     match ekind p with
-    | E_c_points_to(P_block(base,offset)) ->
+    | E_c_points_to(P_block(base,offset,mode)) ->
       (* Compute the interval of the offset *)
       let itv = offset_interval offset range man flow in
       (* Add the size of the pointed cells *)

@@ -108,19 +108,6 @@ struct
     mk_var v range
 
 
-  (** Create a weak copy of a smash variable *)
-  let weaken v =
-    match ekind v with
-    | E_var (vv,WEAK) -> v
-    | E_var (vv, STRONG) -> { v with ekind = E_var (vv,WEAK) }
-    | _ -> assert false
-
-  (** Create a strong copy of a smash variable *)
-  let strongify v =
-    match ekind v with
-    | E_var (vv,STRONG) -> v
-    | E_var (vv, WEAK) -> { v with ekind = E_var (vv,STRONG) }
-    | _ -> assert false
 
 
 
@@ -143,12 +130,12 @@ struct
     match ekind pt with
     | E_c_points_to P_null
     | E_c_points_to P_invalid
-    | E_c_points_to (P_block ({ base_valid = false }, _))
+    | E_c_points_to (P_block ({ base_valid = false }, _, _))
     | E_c_points_to P_top ->
       Cases.empty_singleton flow
 
-    | E_c_points_to (P_block (base, offset)) ->
-      Cases.singleton (base, offset) flow
+    | E_c_points_to (P_block (base, offset, mode)) ->
+      Cases.singleton (base, offset, mode) flow
 
     | _ -> assert false
 
@@ -190,7 +177,7 @@ struct
 
   (** Assignment abstract transformer for 𝕊⟦ *p = rval; ⟧ *)
   let assign_deref p rval range man flow =
-    eval_pointed_base_offset p range man flow >>$ fun (base,offset) flow ->
+    eval_pointed_base_offset p range man flow >>$ fun (base,offset,mode) flow ->
     eval_base_size base range man flow >>$ fun size flow ->
     man.eval ~zone:(Z_c_scalar,Z_u_num) size flow >>$ fun size flow ->
     man.eval ~zone:(Z_c_scalar,Z_u_num) offset flow >>$ fun offset flow ->
@@ -199,7 +186,7 @@ struct
       ~fthen:(fun flow ->
           if is_interesting_base base then
             man.eval ~zone:(Z_c_low_level,Z_c_scalar) rval flow >>$ fun rval flow ->
-            let smash_weak = mk_smash_var base range |> weaken in
+            let smash_weak = mk_smash_var base range |> weaken_var_expr in
             man.post ~zone:Z_c_scalar (mk_assign smash_weak rval range) flow
           else
             Post.return flow
@@ -276,10 +263,10 @@ struct
   let eval_deref exp range man flow =
     let p = match ekind exp with E_c_deref p -> p | _ -> assert false in
     let t = exp.etyp in
-    eval_pointed_base_offset p range man flow >>$ fun (base,offset) flow ->
+    eval_pointed_base_offset p range man flow >>$ fun (base,offset,mode) flow ->
 
     if is_interesting_base base then
-      let smash_weak = mk_smash_var base range |> weaken in
+      let smash_weak = mk_smash_var base range |> weaken_var_expr in
       Eval.singleton smash_weak flow
     else
       Eval.singleton (mk_top t range) flow

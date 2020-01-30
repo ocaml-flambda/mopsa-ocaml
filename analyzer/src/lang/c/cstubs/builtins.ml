@@ -80,11 +80,11 @@ struct
   (** ========================= *)
 
 
-  let eval_base_bytes base range man flow =
+  let eval_base_bytes base mode range man flow =
     let open Common.Base in
     match base.base_kind with
     | Addr addr ->
-      Eval.singleton (mk_bytes addr range) flow
+      Eval.singleton (mk_bytes addr mode range) flow
 
     | _ ->
       eval_base_size base range (Sig.Stacked.Manager.of_domain_man man) flow
@@ -104,8 +104,8 @@ struct
         Eval.bind @@ fun pt flow ->
 
         match ekind pt with
-        | E_c_points_to (P_block (base,_)) ->
-          eval_base_bytes base exp.erange man flow
+        | E_c_points_to (P_block (base,_,mode)) ->
+          eval_base_bytes base mode exp.erange man flow
 
         | E_c_points_to P_top ->
           Soundness.warn_at exp.erange "ignoring size computation of ⊤ pointer";
@@ -126,8 +126,8 @@ struct
         in
 
         match ekind pt with
-        | E_c_points_to (P_block (base,_)) ->
-          eval_base_bytes base exp.erange man flow >>$ fun bytes flow ->
+        | E_c_points_to (P_block (base,_,mode)) ->
+          eval_base_bytes base mode exp.erange man flow >>$ fun bytes flow ->
           if Z.equal elm Z.one
           then Eval.singleton bytes flow
           else Eval.singleton (mk_binop bytes O_div (mk_z elm exp.erange) ~etyp:bytes.etyp exp.erange) flow
@@ -153,13 +153,13 @@ struct
         Eval.bind @@ fun pt flow ->
 
         match ekind pt with
-        | E_c_points_to (P_block ({ base_kind = Var v; base_valid = true; },_)) ->
-          Eval.singleton (mk_c_cast (mk_c_address_of (mk_var v exp.erange) exp.erange) (T_c_pointer T_c_void) exp.erange) flow
+        | E_c_points_to (P_block ({ base_kind = Var v; base_valid = true; },_,mode)) ->
+          Eval.singleton (mk_c_cast (mk_c_address_of (mk_var v ~mode exp.erange) exp.erange) (T_c_pointer T_c_void) exp.erange) flow
 
-        | E_c_points_to (P_block ({ base_kind = String str },_)) ->
+        | E_c_points_to (P_block ({ base_kind = String str },_,_)) ->
           Eval.singleton (mk_c_string str exp.erange) flow
 
-        | E_c_points_to (P_block ({ base_kind = Addr addr; base_valid = true; },_)) ->
+        | E_c_points_to (P_block ({ base_kind = Addr addr; base_valid = true; },_,_)) ->
           Eval.singleton (mk_c_cast (mk_addr addr exp.erange) (T_c_pointer T_c_void) exp.erange) flow
 
         | E_c_points_to P_top ->
@@ -172,7 +172,7 @@ struct
         | E_c_points_to P_invalid ->
           Eval.singleton (mk_c_invalid_pointer exp.erange) flow
 
-        | E_c_points_to (P_block ({ base_valid = false; },_)) ->
+        | E_c_points_to (P_block ({ base_valid = false; },_,_)) ->
           Eval.singleton (mk_c_invalid_pointer exp.erange) flow
 
         | _ -> panic_at exp.erange "base(%a) where %a %a not supported" pp_expr e pp_expr e pp_expr pt
@@ -183,8 +183,8 @@ struct
         man.eval ~zone:(Z_c_low_level,Z_c_points_to) p flow >>$ fun pt flow ->
         let range = exp.erange in
         match ekind pt with
-        | E_c_points_to(P_block(b, o)) ->
-          eval_base_bytes b range man flow >>$ fun size flow ->
+        | E_c_points_to(P_block(b, o, m)) ->
+          eval_base_bytes b m range man flow >>$ fun size flow ->
           man.eval size ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) flow >>$ fun size flow ->
           let elm = under_type p.etyp |> void_to_char |> (fun t -> mk_z (sizeof_type t) range) in
           (* Check validity of the offset *)
@@ -207,7 +207,7 @@ struct
         man.eval ~zone:(Z_c_low_level,Z_c_points_to) e flow |>
         Eval.bind @@ fun pt flow ->
         match ekind pt with
-        | E_c_points_to(P_block(_,o)) -> Eval.singleton o flow
+        | E_c_points_to(P_block(_,o,_)) -> Eval.singleton o flow
         | _ -> Eval.singleton (mk_top ul exp.erange) flow
       )
 
