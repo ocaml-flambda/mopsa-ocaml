@@ -367,12 +367,17 @@ struct
     Flow.join_list man.lattice flows ~empty:(fun () -> flow)
 
 
-  (** Rename primed variables *)
-  let rename_primed assigns range man flow =
+  let prepare_all_assigns assigns range man flow =
     (* Check if there are assigned variables *)
     if assigns = []
     then flow
-    else man.exec (mk_stub_rename_primed range) flow
+    else man.exec (mk_stub_prepare_all_assigns assigns range) flow
+
+  let clean_all_assigns assigns range man flow =
+    (* Check if there are assigned variables *)
+    if assigns = []
+    then flow
+    else man.exec (mk_stub_clean_all_assigns assigns range) flow
 
 
   (** Entry point of expression evaluations *)
@@ -391,6 +396,9 @@ struct
       (* Initialize parameters *)
       let flow = init_params args stub.stub_func_params exp.erange man flow in
 
+      (* Prepare assignments *)
+      let flow = prepare_all_assigns stub.stub_func_assigns stub.stub_func_range man flow in
+
       (* Create the return variable *)
       let return, flow =
         match stub.stub_func_return_type with
@@ -407,8 +415,8 @@ struct
       (* Clean locals *)
       let flow = clean_post stub.stub_func_locals stub.stub_func_range man flow in
 
-      (* Rename primed targets if present *)
-      let flow = rename_primed stub.stub_func_assigns stub.stub_func_range man flow in
+      (* Clean assignments *)
+      let flow = clean_all_assigns stub.stub_func_assigns stub.stub_func_range man flow in
 
       (* Restore the callstack *)
       let flow = Flow.set_callstack cs flow in
@@ -435,14 +443,17 @@ struct
   let exec zone stmt man flow =
     match skind stmt with
     | S_stub_directive (stub) ->
+      (* Prepare assignments *)
+      let flow = prepare_all_assigns stub.stub_directive_assigns stub.stub_directive_range man flow in
+
       (* Evaluate the body of the stub *)
       let flow = exec_body stub.stub_directive_body None man flow in
 
       (* Clean locals *)
       let flow = clean_post stub.stub_directive_locals stub.stub_directive_range man flow in
 
-      (* Rename primes *)
-      let flow = rename_primed stub.stub_directive_assigns stub.stub_directive_range man flow in
+      (* Clean assignments *)
+      let flow = clean_all_assigns stub.stub_directive_assigns stub.stub_directive_range man flow in
 
       Post.return flow |>
       OptionExt.return

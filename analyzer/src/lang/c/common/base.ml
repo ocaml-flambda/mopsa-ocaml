@@ -139,3 +139,6 @@ struct
   let compare = compare_base
   let print = pp_base
 end
+
+
+module BaseSet = SetExt.Make(Base)

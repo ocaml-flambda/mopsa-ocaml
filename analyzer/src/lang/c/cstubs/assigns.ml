@@ -23,7 +23,7 @@
 
 
 open Mopsa
-open Framework.Core.Sig.Domain.Intermediate
+open Framework.Core.Sig.Domain.Stateless
 open Universal.Ast
 open Stubs.Ast
 open Common.Points_to
@@ -39,33 +39,11 @@ open Common.Points_to
 module Domain =
 struct
 
-  (** Abstract element *)
-  (** ================ *)
-
-  (* We keep the set of assigned bases in order to create a primed copy only
-     once when encountering a sequence of assigns clauses. For example, the
-     sequence:
-
-        assigns: a[0];
-        assigns: a[1];
-
-     should create a single primed base a'.
-  *)
-
-  module AssignedBases = Framework.Lattices.Powerset.Make(struct
-      type t = base
-      let compare = compare_base
-      let print = pp_base
-    end)
-
-  type t = AssignedBases.t
-
 
   (** Domain identification *)
   (** ===================== *)
 
-  include GenDomainId(struct
-      type nonrec t = t
+  include GenStatelessDomainId(struct
       let name = "c.cstubs.assigns"
     end)
 
@@ -83,34 +61,12 @@ struct
 
   let alarms = []
 
-  let print fmt (a:t) : unit =
-    Format.fprintf fmt "assigns: %a@\n" AssignedBases.print a
-
-
-  (** Lattice operators *)
-  (** ================= *)
-
-  let bottom : t = AssignedBases.bottom
-
-  let top : t = AssignedBases.top
-
-  let is_bottom (a:t) : bool = false
-
-  let subset (a:t) (b:t) : bool = AssignedBases.subset a b
-
-  let join (a:t) (b:t) : t = AssignedBases.join a b
-
-  let meet (a:t) (b:t) : t = AssignedBases.meet a b
-
-  let widen ctx (a:t) (b:t) : t = AssignedBases.join a b
-
-  let merge p (a,l) (b,k) = AssignedBases.join a b
 
 
   (** Initialization of environments *)
   (** ============================== *)
 
-  let init prog man flow =  set_env T_cur AssignedBases.empty man flow
+  let init prog man flow = flow
 
 
   (** Auxiliary variables of primed bases *)
@@ -152,34 +108,56 @@ struct
     | _      -> assert false
 
 
+  (** Create the expression ( typ* )( ( char* )&base' + offset ) *)
   let mk_primed_address base offset typ range =
     let primed = mk_primed_base_expr base range in
-    (* ( t* )( ( char* )&primed + offset ) *)
-    mk_c_cast (add (mk_c_cast (mk_c_address_of primed range) (T_c_pointer s8) range) ~typ:(T_c_pointer s8) offset range) (T_c_pointer typ) range
+    mk_c_cast
+      ( add
+          (mk_c_cast (mk_c_address_of primed range) (T_c_pointer s8) range)
+          offset
+          ~typ:(T_c_pointer s8)
+          range )
+      (T_c_pointer typ)
+      range
 
 
 
   (** Computation of post-conditions *)
   (** ============================== *)
 
-  (** Expand base to a primed copy if not done before *)
+  (* Collect assigned bases *)
+  let assigned_bases assigns range man flow =
+    List.fold_left (fun acc assign ->
+        let ptr = match assign.assign_offset with
+          | [] -> mk_c_address_of assign.assign_target range
+          | _ -> assign.assign_target
+        in
+        let pp = man.eval ptr ~zone:(Z_c,Z_c_points_to) flow in
+        Cases.fold_some (fun p flow acc ->
+            match ekind p with
+            | E_c_points_to(P_block ({ base_valid = true } as base, _ )) ->
+              BaseSet.add base acc
+            | _ -> acc
+          ) pp acc
+      ) BaseSet.empty assigns
+
+  (** Expand base to a primed copy *)
   let expand_primed_base base range man flow =
-    let a = get_env T_cur man flow in
-    if AssignedBases.mem base a then
-      Post.return flow
-    else
-      let a' = AssignedBases.add base a in
-      let flow' = set_env T_cur a' man flow in
-      let primed = mk_primed_base_expr base range in
-      man.post (mk_expand (mk_base_expr base range) [primed] range) ~zone:Z_c_low_level flow'
-      
-      
+    let primed = mk_primed_base_expr base range in
+    man.post (mk_expand (mk_base_expr base range) [primed] range) ~zone:Z_c_low_level flow
+
+
+  (** Prepare primed copies of assigned bases *)
+  let exec_stub_prepare_all_assigns assigns range man flow =
+    (* Expand assigned bases to primed copies *)
+    let bases = assigned_bases assigns range man flow in
+    BaseSet.fold (fun base acc ->
+        Post.bind (expand_primed_base base range man) acc
+      ) bases (Post.return flow)
+
 
   (** Declare an assigned base *)
   let exec_assign_base base offset typ assigned_indices range man flow =
-    (* Expand base to a primed copy *)
-    expand_primed_base base range man flow >>$ fun () flow ->
-
     match assigned_indices with
     | [] ->
       (* Prime the target *)
@@ -259,24 +237,29 @@ struct
     let stmt = mk_rename primed unprimed range in
     man.post stmt ~zone:Z_c_low_level flow
 
-  
-  (** Rename primed targets to original names *)
-  let exec_stub_rename_primed range man flow =
-    let a = get_env T_cur man flow in
-    let flow = set_env T_cur AssignedBases.empty man flow in
-    AssignedBases.fold (fun base acc ->
+
+  (** Clean state from primed bases *)
+  let exec_stub_clean_all_assigns assigns range man flow =
+    (* Rename primed copies to original version *)
+    let bases = assigned_bases assigns range man flow in
+    BaseSet.fold (fun base acc ->
         Post.bind (rename_primed_base base range man) acc
-      ) a (Post.return flow)
+      ) bases (Post.return flow)
+
 
 
   let exec zone stmt man flow  =
     match skind stmt with
-    | S_stub_assigns(target,offsets) ->
-      exec_stub_assigns target offsets stmt.srange man flow |>
+    | S_stub_prepare_all_assigns al ->
+      exec_stub_prepare_all_assigns al stmt.srange man flow |>
       OptionExt.return
 
-    | S_stub_rename_primed ->
-      exec_stub_rename_primed stmt.srange man flow |>
+    | S_stub_assigns a ->
+      exec_stub_assigns a.assign_target a.assign_offset stmt.srange man flow |>
+      OptionExt.return
+
+    | S_stub_clean_all_assigns al ->
+      exec_stub_clean_all_assigns al stmt.srange man flow |>
       OptionExt.return
 
     | _ -> None
@@ -290,7 +273,7 @@ struct
   let eval_primed_base base offset typ range man flow =
     let p = mk_primed_address base offset typ range in
     Eval.singleton (mk_c_deref p range) flow
-    
+
 
   let eval_stub_primed e range man flow =
     let ptr = mk_c_address_of e range in
@@ -347,4 +330,4 @@ struct
 end
 
 let () =
-  Framework.Core.Sig.Domain.Intermediate.register_domain (module Domain)
+  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
