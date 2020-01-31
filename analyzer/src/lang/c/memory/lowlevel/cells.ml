@@ -814,6 +814,7 @@ struct
   let expand_cell c cl range man flow =
     let a = get_env T_cur man flow in
     (* Add cells in cl to state a *)
+    (* FIXME: do we need to add the cell variable? *)
     let a = { a with cells = CellSet.join a.cells (CellSet.of_list cl) } in
     let flow = set_env T_cur a man flow in
     (* Expand cell variables *)

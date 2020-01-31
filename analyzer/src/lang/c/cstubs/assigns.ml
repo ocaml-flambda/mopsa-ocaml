@@ -147,6 +147,7 @@ struct
   (** Expand base to a primed copy *)
   let expand_primed_base base range man flow =
     let primed = mk_primed_base_expr base range in
+    man.post (mk_add primed range) ~zone:Z_c_low_level flow >>$ fun () flow ->
     man.post (mk_expand (mk_base_expr base range) [primed] range) ~zone:Z_c_low_level flow
 
 
