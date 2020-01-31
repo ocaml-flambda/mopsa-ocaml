@@ -187,6 +187,12 @@ struct
         in
         acc'
 
+      | S_expand({ekind = E_var(var,_)}, vl) ->
+        let vars = List.map (function { ekind = E_var(v,_) } -> v | _ -> assert false) vl in
+        let acc', _ = List.fold_left (fun acc v -> forget_var v acc) (acc,bnd) vars in
+        acc'
+
+
       | S_assume _ ->
         acc
 

@@ -111,6 +111,10 @@ let generic_nonrel_merge ~top ~add ~remove ~find ~meet pre (a1, log1) (a2, log2)
     | S_remove { ekind = E_var (var, _) } ->
       remove var acc
 
+    | S_expand({ekind = E_var(var,_)}, vl) ->
+      let vars = List.map (function { ekind = E_var(v,_) } -> v | _ -> assert false) vl in
+      List.fold_left (fun acc v -> add v top acc) acc vars
+
     | S_assume e -> acc
 
     | _ -> Exceptions.panic ~loc:__LOC__ "merge: unsupported statement %a" pp_stmt stmt
