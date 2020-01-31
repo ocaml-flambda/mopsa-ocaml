@@ -407,7 +407,7 @@ struct
             )
           |> OptionExt.return
 
-        | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)}, i) when get_orig_vname c.py_cls_a_var = "OptionExt.l" ->
+        | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)}, i) when get_orig_vname c.py_cls_a_var = "Optional" ->
           Eval.join_list
             ~empty:(fun () -> assert false)
             (List.map (fun e -> man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow)
@@ -432,7 +432,7 @@ struct
 
         | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)} as e, i) when
             (* issue: if object.__new__(e) renames addresses used in i, this is not caught... *)
-            List.for_all (fun n -> get_orig_vname c.py_cls_a_var <> n) ["List"; "Tuple"; "Dict"; "OptionExt.l"; "Union"; "Type"] ->
+            List.for_all (fun n -> get_orig_vname c.py_cls_a_var <> n) ["List"; "Tuple"; "Dict"; "Optional"; "Union"; "Type"] ->
           begin match c.py_cls_a_abases with
             | [] ->
               man.eval (mk_py_call (mk_py_object (find_builtin "object.__new__") range) [e] range) flow
@@ -664,7 +664,7 @@ struct
           |> OptionExt.return
           (* big disjunction on check_annot(e, t) for t in types *)
 
-        | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)}, i) when get_orig_vname c.py_cls_a_var = "OptionExt.l" ->
+        | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)}, i) when get_orig_vname c.py_cls_a_var = "Optional" ->
           let mk_cannot a = {exp with ekind = E_py_check_annot(e, a)} in
           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_binop (mk_cannot i) O_py_or (mk_cannot (mk_py_none range)) range) flow |> OptionExt.return
 
