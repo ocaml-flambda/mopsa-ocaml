@@ -72,7 +72,7 @@ struct
 
 
   (** Packs of a base memory block *)
-  let packs_of_base ctx b =
+  let rec packs_of_base ctx b =
     if b.base_valid = false then []
     else
     match b.base_kind with
@@ -158,6 +158,10 @@ struct
         let callee, _ = Callstack.pop cs in
         [Locals callee.call_fun]
 
+    (* Primed variables *)
+    | Var { vkind = Cstubs.Assigns.Domain.V_c_primed_base b } ->
+      packs_of_base ctx b
+
     | _ ->
       []
 
@@ -174,6 +178,7 @@ struct
     | Scalars.Pointers.Domain.Domain.V_c_ptr_offset vv -> packs_of_var ctx vv
     | Scalars.Machine_numbers.Domain.V_c_num vv -> packs_of_var ctx vv
     | Cstubs.Aux_vars.V_c_bytes a -> packs_of_base ctx (mk_addr_base a)
+    | Cstubs.Assigns.Domain.V_c_primed_base b -> packs_of_base ctx b
     | _ -> []
 
 end
