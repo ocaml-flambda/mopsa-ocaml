@@ -95,20 +95,21 @@ module Domain =
            (Utils.mk_object_hasattr cls1 op_fun range)
            man flow
            ~fthen:(fun flow ->
-               call_radd man (Some (mk_py_issubclass ocls2 ocls1 range)) flow
-                 ~felseradd:(fun flow ->
-                     man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object_attr cls1 op_fun range) [e1; e2] range) flow |>
-                     Eval.bind (fun r flow ->
-                         assume (is_notimplemented r)
-                           man flow
-                           ~fthen:(fun flow ->
-                               if is_same_type then typerr flow
-                               else call_radd man None flow ~felseradd:(typerr)
-                             )
-                           ~felse:(Eval.singleton r)
+             let call_add flow =
+               man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object_attr cls1 op_fun range) [e1; e2] range) flow |>
+                 Eval.bind (fun r flow ->
+                     assume (is_notimplemented r)
+                       man flow
+                       ~fthen:(fun flow ->
+                         if is_same_type then typerr flow
+                         else call_radd man None flow ~felseradd:(typerr)
                        )
-                   )
-             )
+                       ~felse:(Eval.singleton r)
+                   ) in
+             if is_same_type then call_add flow else
+               call_radd man (Some (mk_py_issubclass ocls2 ocls1 range)) flow
+                 ~felseradd:call_add
+           )
            ~felse:(fun flow ->
                if is_same_type then typerr flow
                else call_radd man None flow ~felseradd:(typerr)

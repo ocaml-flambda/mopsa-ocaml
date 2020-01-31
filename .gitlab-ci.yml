@@ -224,41 +224,65 @@ test-py 3/3:
     PY_FILE: 'exception_tests.py'
   extends: .test-py
 
-bench-typy 1/7:
+bench-typy 1/12:
   variables:
     PY_FILE: 'bm_float.py'
   extends: .bench-typy
 
-bench-typy 2/7:
+bench-typy 2/12:
   variables:
     PY_FILE: 'bm_fannkuch.py'
   extends: .bench-typy
 
-bench-typy 3/7:
+bench-typy 3/12:
   variables:
     PY_FILE: 'bm_chaos.py'
   extends: .bench-typy
 
-bench-typy 4/7:
+bench-typy 4/12:
   variables:
     PY_FILE: 'bm_nbody.py'
   extends: .bench-typy
 
-bench-typy 5/7:
+bench-typy 5/12:
   variables:
     PY_FILE: 'bm_spectral_norm.py'
   extends: .bench-typy
 
-bench-typy 6/7:
+bench-typy 6/12:
   variables:
     PY_FILE: 'bm_unpack_sequence.py'
   extends: .bench-typy
 
-bench-typy 7/7:
+bench-typy 7/12:
   variables:
     PY_FILE: 'bm_hexiom.py'
   extends: .bench-typy
 
+bench-typy 8/12:
+  variables:
+    PY_FILE: 'bm_raytrace.py'
+  extends: .bench-typy
+
+bench-typy 9/12:
+  variables:
+    PY_FILE: 'bm_scimark.py'
+  extends: .bench-typy
+
+bench-typy 10/12:
+  variables:
+    PY_FILE: 'bm_richards.py'
+  extends: .bench-typy
+
+bench-typy 11/12:
+  variables:
+    PY_FILE: 'bm_go.py'
+  extends: .bench-typy
+
+bench-typy 12/12:
+  variables:
+    PY_FILE: 'bm_regex_v8.py'
+  extends: .bench-typy
 
 bench-typpete 1/43:
   variables:

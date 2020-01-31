@@ -57,10 +57,10 @@ struct
       (* Call __new__ *)
       bind_list args (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
         bind_some (fun eargs flow ->
-            let flow, tmps, _ = List.fold_left (fun (flow, tmps, count) eargn ->
-                                 let tmp = mk_var (mk_range_attr_var range (string_of_int count) T_any) range in
-                                 man.exec ~zone:Zone.Z_py (mk_assign tmp eargn range) flow, tmp::tmps, count+1
-                               ) (flow, [], 0) eargs in
+            let flow, tmps = List.fold_left (fun (flow, tmps) eargn ->
+                                 let tmp = mk_var (mk_range_attr_var eargn.erange "" T_any) eargn.erange in
+                                 man.exec ~zone:Zone.Z_py (mk_assign tmp eargn range) flow, tmp::tmps
+                               ) (flow, []) eargs in
             let tmps = List.rev tmps in
             let new_call = mk_py_kall (mk_py_object_attr cls "__new__" range) ((mk_py_object cls range) :: tmps) kwargs range in
             man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) new_call flow |>

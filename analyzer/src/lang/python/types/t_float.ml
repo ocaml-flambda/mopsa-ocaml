@@ -148,7 +148,11 @@ module Domain =
                    assume
                      (mk_py_isinstance_builtin e2 "float" range) man flow
                      ~fthen:(fun flow ->
-                        Eval.singleton (mk_py_object (Addr_env.addr_float (), Some (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) range ~etyp:(T_float F_DOUBLE))) range) flow)
+                       if is_reverse_operator f then
+                         Eval.singleton (mk_py_object (Addr_env.addr_float (), Some (mk_binop (extract_oobject e2) (Operators.methfun_to_binop f) (extract_oobject e1) range ~etyp:(T_float F_DOUBLE))) range) flow
+                       else
+                         Eval.singleton (mk_py_object (Addr_env.addr_float (), Some (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) range ~etyp:(T_float F_DOUBLE))) range) flow
+                     )
                      ~felse:(fun flow ->
                        assume
                          (mk_py_isinstance_builtin e2 "int" range) man flow
