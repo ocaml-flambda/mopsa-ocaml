@@ -453,6 +453,70 @@ struct
 
 
 
+  (** Cases of the abstract transformer for tests *(p + ∀i) == 0 *)
+  let assume_quantified_zero_cases base offset mode range man flow =
+    (** Get symbolic bounds of the offset *)
+    let min, max = Common.Quantified_offset.bound offset in
+
+    eval_base_size base range man flow >>$ fun size flow ->
+    man.eval ~zone:(Z_c_scalar, Z_u_num) size flow >>$ fun size flow ->
+    man.eval ~zone:(Z_c, Z_u_num) min flow >>$ fun min flow ->
+    man.eval ~zone:(Z_c, Z_u_num) max flow >>$ fun max flow ->
+
+    let length =
+      match base.base_kind with
+      | String str -> mk_z (Z.of_int @@ String.length str) range
+      | _ -> mk_length_var base ~mode range
+    in
+    let mk_bottom flow = Flow.bottom_from flow in
+
+    (* Safety condition: [min, max] ⊆ [0, size[ *)
+    assume (
+      mk_binop
+        (mk_in min (mk_zero range) size ~right_strict:true range)
+        O_log_and
+        (mk_in max (mk_zero range) size ~right_strict:true range)
+        range
+    )
+      ~fthen:(fun flow ->
+          switch [
+            (* Range condition: min < length
+
+               |--------|***********|********|-------|->
+               0       min        length    max     size
+
+                      ∃ i ∈ [min, max] : s[i] != 0
+            *)
+            (* Transformation: ⊥ *)
+            [
+              mk_binop min O_lt length range;
+            ],
+            (fun flow -> Post.return (mk_bottom flow))
+            ;
+
+            (* Range condition: min >= length
+
+               |--------|----------|************|-------|->
+               0       length     min          max     size
+            *)
+            (* Transformation: nop *)
+            [
+              mk_binop min O_ge length range;
+            ],
+            (fun flow -> Post.return flow)
+            ;
+
+
+          ] ~zone:Z_u_num man flow
+        )
+      ~felse:(fun flow ->
+          (* FIXME: remove qunatifiers from offset *)
+          Flow.set_bottom T_cur flow |>
+          Post.return
+        )
+      ~zone:Z_u_num man flow
+
+
   (** Abstract transformer for tests *p op 0 *)
   let assume_zero op lval range man flow =
     let p =
@@ -466,11 +530,14 @@ struct
     in
 
     eval_pointed_base_offset p range man flow >>$ fun (base,offset,mode) flow ->
-    if not (is_memory_base base)
+    if not (is_interesting_base base)
     then Post.return flow
 
     else if op = O_ne && is_expr_forall_quantified offset
     then assume_quantified_non_zero_cases base offset mode range man flow
+
+    else if op = O_eq && is_expr_forall_quantified offset
+    then assume_quantified_zero_cases base offset mode range man flow
 
     else if op = O_eq && not (is_expr_forall_quantified offset)
     then assume_zero_cases base offset mode range man flow
@@ -478,19 +545,12 @@ struct
     else Post.return flow
 
 
-
-  (** Rename the length variable associated to a base *)
-  let rename_base base1 base2 range man flow =
-    let length1 = mk_length_var base1 range in
-    let length2 = mk_length_var base2 range in
-    man.post ~zone:Z_u_num (mk_rename length1 length2 range) flow
-
-
-  let rec is_deref_expr e =
-    match ekind e with
-    | E_c_deref _ -> true
-    | E_c_cast (ee, _) -> is_deref_expr ee
-    | _ -> false
+  (** Test first if n == 0, and then call assume_zero to do the work *)
+  let assume_not_sure_zero op lval n range man flow =
+    assume (mk_binop n O_eq (mk_zero range) range)
+      ~fthen:(fun flow -> assume_zero op lval range man flow)
+      ~felse:(fun flow -> Post.return flow)
+      ~zone:Z_c_low_level man flow
 
 
   let rec is_zero_expr e =
@@ -538,9 +598,9 @@ struct
     | S_assume({ ekind = E_unop(O_log_not, { ekind = E_binop(O_ne, lval, n)} )})
       when is_c_int_type lval.etyp &&
            is_deref_expr lval &&
-           is_zero_expr n
+           not (is_expr_forall_quantified n)
       ->
-      assume_zero O_eq lval stmt.srange man flow |>
+      assume_not_sure_zero O_eq lval n stmt.srange man flow |>
       OptionExt.return
 
     (* 𝕊⟦ !*(p + i) ⟧ *)
@@ -556,9 +616,9 @@ struct
     | S_assume({ ekind = E_unop(O_log_not, { ekind = E_binop(O_eq, lval, n)} )})
       when is_c_int_type lval.etyp &&
            is_deref_expr lval &&
-           is_zero_expr n
+           not (is_expr_forall_quantified n)
       ->
-      assume_zero O_ne lval stmt.srange man flow |>
+      assume_not_sure_zero O_ne lval n stmt.srange man flow |>
       OptionExt.return
 
     (* 𝕊⟦ *(p + i) ⟧ *)
