@@ -119,8 +119,8 @@ let generic_nonrel_merge ~top ~add ~remove ~find ~meet pre (a1, log1) (a2, log2)
 
     | _ -> Exceptions.panic ~loc:__LOC__ "merge: unsupported statement %a" pp_stmt stmt
   in
-  let a2' = List.fold_left (fun acc stmt -> patch stmt a1 acc) a2 log1 in
-  let a1' = List.fold_left (fun acc stmt -> patch stmt a2 acc) a1 log2 in
+  let a2' = List.fold_left (fun acc stmt -> patch stmt a1 acc) a2 (List.rev log1) in
+  let a1' = List.fold_left (fun acc stmt -> patch stmt a2 acc) a1 (List.rev log2) in
   meet a1' a2'
 
 
@@ -205,7 +205,9 @@ struct
     with Not_found -> Exceptions.warn "variable %a not found" pp_var v; raise Not_found
 
 
-  let merge pre (a1, log1) (a2, log2) = generic_nonrel_merge ~top:Value.top ~add ~remove ~find ~meet pre (a1, log1) (a2, log2)
+  let merge pre (a1, log1) (a2, log2) =
+    debug "generic_nonrel_merge:@.pre = %a@.a1 = %a@.log1 = %a@.a2 = %a@.log2 = %a" VarMap.print pre VarMap.print a1 pp_block log1 VarMap.print a2 pp_block log2;
+    generic_nonrel_merge ~top:Value.top ~add ~remove ~find ~meet pre (a1, log1) (a2, log2)
 
 
   (* Constrain the value of a variable with its bounds *)
