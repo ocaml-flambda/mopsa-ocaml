@@ -421,16 +421,15 @@ struct
       (* Restore the callstack *)
       let flow = Flow.set_callstack cs flow in
 
+      let cleaners = List.map (fun param -> mk_remove_var param exp.erange) stub.stub_func_params in
+
       begin match return with
         | None ->
-          Eval.singleton (mk_unit exp.erange) flow |>
+          Eval.singleton (mk_unit exp.erange) flow ~cleaners |>
           OptionExt.return
 
         | Some v ->
-          Eval.singleton (mk_var v exp.erange) flow ~cleaners:(
-            mk_remove_var v exp.erange ::
-            List.map (fun param -> mk_remove_var param exp.erange) stub.stub_func_params
-          ) |>
+          Eval.singleton (mk_var v exp.erange) flow ~cleaners:(mk_remove_var v exp.erange :: cleaners) |>
           OptionExt.return
       end
 
