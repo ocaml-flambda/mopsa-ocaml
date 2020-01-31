@@ -41,6 +41,7 @@ let () =
     default = "false";
   }
 
+let enable_logs = ref true
 
 module Hook =
 struct
@@ -147,71 +148,76 @@ struct
   (** ******************* *)
 
   let on_before_exec zone stmt man flow =
-    reach stmt.srange;
-    if !opt_short_logs then
-      indent "%a in zone %a"
-        pp_S stmt
-        pp_zone zone
-        ~symbol:BEGIN
-    else
-      indent "%a @,in %a @,and zone %a"
-        pp_S stmt
-        (Flow.print man.lattice.print) flow
-        pp_zone zone
-        ~symbol:BEGIN
-    ;
-    Stack.push (Sys.time ()) stack
-
+    if !enable_logs then (
+      reach stmt.srange;
+      if !opt_short_logs then
+        indent "%a in zone %a"
+          pp_S stmt
+          pp_zone zone
+          ~symbol:BEGIN
+      else
+        indent "%a @,in %a @,and zone %a"
+          pp_S stmt
+          (Flow.print man.lattice.print) flow
+          pp_zone zone
+          ~symbol:BEGIN
+      ;
+        Stack.push (Sys.time ()) stack
+    )
 
   let on_after_exec zone stmt man post =
-    let time = Sys.time () -. Stack.pop stack in
-    if !opt_short_logs then
-      indent "%a done in zone %a [%.4fs]"
-        pp_S stmt
-        pp_zone zone
-        time
-        ~symbol:END
-    else
-      indent "%a done in zone %a [%.4fs]@ -->  %a"
-        pp_S stmt
-        pp_zone zone
-        time
-        (Post.print man.lattice.print) post
-        ~symbol:END
-
+    if !enable_logs then (
+      let time = Sys.time () -. Stack.pop stack in
+      if !opt_short_logs then
+        indent "%a done in zone %a [%.4fs]"
+          pp_S stmt
+          pp_zone zone
+          time
+          ~symbol:END
+      else
+        indent "%a done in zone %a [%.4fs]@ -->  %a"
+          pp_S stmt
+          pp_zone zone
+          time
+          (Post.print man.lattice.print) post
+          ~symbol:END
+    )
 
   let on_before_eval zone exp man flow =
-    if !opt_short_logs then
-      indent "%a in zone %a"
-        pp_E exp
-        pp_zone2 zone
-        ~symbol:BEGIN
-    else
-      indent "%a @,in %a @,and zone %a"
-        pp_E exp
-        (Flow.print man.lattice.print) flow
-        pp_zone2 zone
-        ~symbol:BEGIN
+    if !enable_logs then (
+      if !opt_short_logs then
+        indent "%a in zone %a"
+          pp_E exp
+          pp_zone2 zone
+          ~symbol:BEGIN
+      else
+        indent "%a @,in %a @,and zone %a"
+          pp_E exp
+          (Flow.print man.lattice.print) flow
+          pp_zone2 zone
+          ~symbol:BEGIN
     ;
-    Stack.push (Sys.time ()) stack
-
+      Stack.push (Sys.time ()) stack
+    )
 
   let on_after_eval zone exp man evl =
-    let time = Sys.time () -. Stack.pop stack in
-    if !opt_short_logs then
-      indent "%a = %a done in zone %a [%.4fs]"
-        pp_E exp
-        Eval.print evl
-        pp_zone2 zone
-        time
-        ~symbol:END
-    else
-      indent "%a done in zone %a [%.4fs]@ -->  %a"
-        pp_E exp
-        pp_zone2 zone
-        time
-        Eval.print evl
-        ~symbol:END
+    if !enable_logs then (
+      let time = Sys.time () -. Stack.pop stack in
+      if !opt_short_logs then
+        indent "%a = %a done in zone %a [%.4fs]"
+          pp_E exp
+          Eval.print evl
+          pp_zone2 zone
+          time
+          ~symbol:END
+      else
+        indent "%a done in zone %a [%.4fs]@ -->  %a"
+          pp_E exp
+          pp_zone2 zone
+          time
+          Eval.print evl
+          ~symbol:END
+    )
 
   let on_finish man flow = ()
 

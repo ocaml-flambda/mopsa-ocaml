@@ -149,8 +149,8 @@ struct
     printf "  token            print the flow tokens of the abstract state@.";
     printf "  cs               print the current call stack@.";
     printf "  w[here]          show current program point@.";
-    printf "  l[og] {on|off}   activate/deactivate short logging@.";
-    printf "  llog {on|off}   activate/deactivate complete logging@.";
+    printf "  l[og] {on|off}   activate/deactivate complete logging@.";
+    printf "  sl               toggle short/complete logging@.";
     printf "  h[elp]           print this message@.";
     ()
 
@@ -192,6 +192,17 @@ struct
         print_usage ();
         read_command range ()
 
+      | "log on" | "l on" ->
+         Hooks.Logs.enable_logs := true;
+         read_command range ()
+
+      | "log off" | "l off" ->
+         Hooks.Logs.enable_logs := false;
+         read_command range ()
+
+      | "sl" ->
+         Hooks.Logs.opt_short_logs := not !Hooks.Logs.opt_short_logs;
+         read_command range ()
 
       | "" -> (
         match !last_command with
