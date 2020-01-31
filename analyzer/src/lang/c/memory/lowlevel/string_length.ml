@@ -517,19 +517,8 @@ struct
       ~zone:Z_u_num man flow
 
 
-  (** Abstract transformer for tests *p op 0 *)
-  let assume_zero op lval range man flow =
-    let p =
-      let rec doit e =
-        match ekind e with
-        | E_c_deref p -> p
-        | E_c_cast(ee, _) -> doit ee
-        | _ -> panic_at range "assume_zero: invalid argument %a" pp_expr lval;
-      in
-      doit lval
-    in
-
-    eval_pointed_base_offset p range man flow >>$ fun (base,offset,mode) flow ->
+  (** Abstract transformer for tests *(base+offset) op 0 *)
+  let assume_zero_base op base offset mode range man flow =
     if not (is_interesting_base base)
     then Post.return flow
 
@@ -545,12 +534,44 @@ struct
     else Post.return flow
 
 
+  (** Abstract transformer for tests *p op 0 *)
+  let assume_zero op lval range man flow =
+    let p =
+      let rec doit e =
+        match ekind e with
+        | E_c_deref p -> p
+        | E_c_cast(ee, _) -> doit ee
+        | _ -> panic_at range "assume_zero: invalid argument %a" pp_expr lval;
+      in
+      doit lval
+    in
+
+    eval_pointed_base_offset p range man flow >>$ fun (base,offset,mode) flow ->
+    if not (is_interesting_base base)
+    then Post.return flow
+    else assume_zero_base op base offset mode range man flow
+
+
   (** Test first if n == 0, and then call assume_zero to do the work *)
   let assume_not_sure_zero op lval n range man flow =
-    assume (mk_binop n O_eq (mk_zero range) range)
-      ~fthen:(fun flow -> assume_zero op lval range man flow)
-      ~felse:(fun flow -> Post.return flow)
-      ~zone:Z_c_low_level man flow
+    let p =
+      let rec doit e =
+        match ekind e with
+        | E_c_deref p -> p
+        | E_c_cast(ee, _) -> doit ee
+        | _ -> panic_at range "assume_zero: invalid argument %a" pp_expr lval;
+      in
+      doit lval
+    in
+
+    eval_pointed_base_offset p range man flow >>$ fun (base,offset,mode) flow ->
+    if not (is_interesting_base base)
+    then Post.return flow
+    else
+      assume (mk_binop n O_eq (mk_zero range) range)
+        ~fthen:(fun flow -> assume_zero_base op base offset mode range man flow)
+        ~felse:(fun flow -> Post.return flow)
+        ~zone:Z_c_low_level man flow
 
 
   let rec is_zero_expr e =
