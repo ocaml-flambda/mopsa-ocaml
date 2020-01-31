@@ -58,9 +58,11 @@ let rec concat log1 log2 =
 let empty = L_empty
 
 (** Test if a log is empty *)
-let is_empty log =
+let rec is_empty log =
   match log with
   | L_empty -> true
+  | L_tuple(l1,l2) -> is_empty l1 && is_empty l2
+  | L_singleton([],ll) -> is_empty ll
   | _ -> false
 
 let tuple (fst, snd) =

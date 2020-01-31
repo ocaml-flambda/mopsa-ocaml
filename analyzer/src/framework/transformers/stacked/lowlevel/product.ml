@@ -191,20 +191,24 @@ struct
           let slog1 = man.get_sub_log log1 in
           let slog2 = man.get_sub_log log2 in
 
-          debug "lowlevel ||is_empty = %b" (Log.is_empty slog1 || Log.is_empty slog2);
-          let merged =
-            if Log.is_empty slog1 then man.get_sub a2
-            else if Log.is_empty slog2 then man.get_sub a1
+          let a1,a2 =
+            if Log.is_empty slog1 then
+              let merged = man.get_sub a2 in
+              let a1 = man.set_sub merged a1 in
+              a1,a2
+            else if Log.is_empty slog2 then
+              let merged = man.get_sub a1 in
+              let a2 = man.set_sub merged a2 in
+              a1,a2
             else
-              man.merge_sub
-                p
-                (man.get_sub a1, slog1)
-                (man.get_sub a2, slog2)
+              let merged = man.merge_sub p
+                  (man.get_sub a1, slog1)
+                  (man.get_sub a2, slog2)
+              in
+              let a1 = man.set_sub merged a1 in
+              let a2 = man.set_sub merged a2 in
+              a1,a2
           in
-
-          let a1 = man.set_sub merged a1 in
-          let a2 = man.set_sub merged a2 in
-
           let a = man.lattice.meet ctx a1 a2 in
           if man.lattice.is_bottom a then None else Some a
 
