@@ -1155,18 +1155,6 @@ struct
     | _ -> Post.return flow
 
 
-  let is_base_expr e =
-    match ekind e with
-    | E_var(v,_) -> is_c_type v.vtyp
-    | E_addr _   -> true
-    | _ -> false
-
-  let expr_to_base e =
-    match ekind e with
-    | E_var(v,_) -> mk_var_base v
-    | E_addr a   -> mk_addr_base a
-    | _ -> assert false
-
   let exec zone stmt man flow =
     match skind stmt with
     | S_c_declaration (v,init,scope) ->

@@ -113,6 +113,22 @@ let is_base_readonly b =
   | _ -> false
 
 
+let is_base_expr e =
+  match ekind e with
+  | E_var(v,_)                -> is_c_type v.vtyp
+  | E_addr _                  -> true
+  | E_constant (C_c_string _) -> true
+  | _ -> false
+
+
+let expr_to_base e =
+  match ekind e with
+  | E_var(v,_)                    -> mk_var_base v
+  | E_addr a                      -> mk_addr_base a
+  | E_constant (C_c_string (s,_)) -> mk_string_base s
+  | _ -> assert false
+
+
 (** Evaluate the size of a base in bytes *)
 let eval_base_size base ?(via=Z_any) range (man:('a,'t,'s) Core.Sig.Stacked.Lowlevel.man) flow =
   match base.base_kind with

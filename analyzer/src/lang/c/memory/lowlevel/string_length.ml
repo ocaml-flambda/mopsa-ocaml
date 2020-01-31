@@ -150,12 +150,13 @@ struct
     | _ -> assert false
 
 
-  let is_memory_base base =
+  let is_interesting_base base =
     match base with
     (* Accept only arrays of chars *)
-    | { base_kind = Var v; base_valid = true } when is_c_type v.vtyp &&
-               is_c_array_type v.vtyp &&
-               under_array_type v.vtyp |> remove_typedef_qual |> sizeof_type |> Z.equal Z.one
+    | { base_kind = Var v; base_valid = true }
+      when is_c_type v.vtyp &&
+           is_c_array_type v.vtyp &&
+           under_array_type v.vtyp |> remove_typedef_qual |> sizeof_type |> Z.equal Z.one
       ->
       true
 
@@ -173,27 +174,92 @@ struct
 
   (** Add a base to the domain's dimensions *)
   let add_base base range man flow =
-    match base.base_kind with
-    | String _ ->
+    if not (is_interesting_base base) then Post.return flow
+    else match base.base_kind with
+      | String _ ->
+        Post.return flow
+
+      | _ ->
+        (* Add the length of the base to the numeric domain and
+           initialize it with the interval [0, size(@)]
+        *)
+        eval_base_size base range man flow >>$ fun size flow ->
+        man.eval ~zone:(Z_c_scalar, Z_u_num) size flow >>$ fun size flow ->
+
+        let length = mk_length_var base range in
+
+        man.post ~zone:Z_u_num (mk_add length range) flow >>= fun _ flow ->
+        man.post ~zone:Z_u_num (mk_assume (mk_in length (mk_zero range) size range) range) flow
+
+
+  let remove_base base range man flow =
+    if not (is_interesting_base base) then Post.return flow
+    else match base.base_kind with
+      | String _ ->
+        Post.return flow
+
+      | _ ->
+        let length = mk_length_var base range in
+        man.post ~zone:Z_u_num (mk_remove length range) flow
+
+
+  (** Rename the length variable associated to a base *)
+  let rename_base base1 base2 range man flow =
+    if not (is_interesting_base base1) then Post.return flow else
+    if not (is_interesting_base base2) then remove_base base1 range man flow
+    else
+      let length1 = mk_length_var base1 range in
+      let length2 = mk_length_var base2 range in
+      man.post ~zone:Z_u_num (mk_rename length1 length2 range) flow
+
+
+  (** Expand the length variable of a base *)
+  let expand_base base1 bases range man flow =
+    if not (is_interesting_base base1) then Post.return flow else
+    if List.exists (fun b -> not (is_interesting_base b)) bases then panic_at range "expand %a not supported" pp_base base1
+    else
+      let length1 = mk_length_var base1 range in
+      let lengths = List.map (fun b -> mk_length_var b range) bases in
+      man.post ~zone:Z_u_num (mk_expand length1 lengths range) flow
+
+
+  (** Forget the value of the length variable of a base *)
+  let forget e range man flow =
+    (* Get the pointed base *)
+    let ptr = match ekind e with
+      | E_var _   -> mk_c_address_of e range
+      | E_c_deref(p) -> p
+      | _ -> assert false
+    in
+    man.eval ptr ~zone:(Z_c_low_level,Z_c_points_to) flow >>$ fun p flow ->
+    match ekind p with
+    | E_c_points_to(P_block({ base_kind = String _ },offset,mode)) ->
       Post.return flow
 
-    | _ ->
-      (* Add the length of the base to the numeric domain and
-         initialize it with the interval [0, size(@)]
-      *)
+    | E_c_points_to(P_block(base,offset,mode)) when is_interesting_base base ->
+      (* FIXME: we can do better by checking if the offset affect the length of the string *)
+      let length = mk_length_var base range in
       eval_base_size base range man flow >>$ fun size flow ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) size flow >>$ fun size flow ->
-
-      let length = mk_length_var base range in
-
-      man.post ~zone:Z_u_num (mk_add length range) flow >>= fun _ flow ->
+      man.post ~zone:Z_u_num (mk_forget length range) flow >>$ fun () flow ->
       man.post ~zone:Z_u_num (mk_assume (mk_in length (mk_zero range) size range) range) flow
 
-  
+
+    | _ -> Post.return flow
+
+
+  let rec is_deref_expr e =
+    match ekind e with
+    | E_c_deref _ -> true
+    | E_c_cast (ee, _) -> is_deref_expr ee
+    | _ -> false
+
+
+
   (** Declaration of a C variable *)
   let declare_variable v scope range man flow =
     let base = mk_var_base v in
-    if not (is_memory_base base)
+    if not (is_interesting_base base)
     then Post.return flow
     else add_base base range man flow
 
@@ -220,7 +286,7 @@ struct
     (* Check that offset ∈ [0, size - elm_size] *)
     assume (mk_in offset (mk_zero range) (sub size (mk_z elm_size range) range) range)
       ~fthen:(fun flow ->
-          if not (is_memory_base base)
+          if not (is_interesting_base base)
           then
             Post.return flow
 
@@ -440,28 +506,25 @@ struct
       declare_variable v scope stmt.srange man flow |>
       OptionExt.return
 
-    | S_add { ekind = E_var (v, _) } when not (is_c_scalar_type v.vtyp) ->
-      add_base (mk_var_base v) stmt.srange man flow |>
-      OptionExt.return
-
-    | S_add { ekind = E_addr addr } when is_memory_base (mk_addr_base addr) ->
-      add_base (mk_addr_base addr) stmt.srange man flow |>
+    | S_add e when is_base_expr e ->
+      add_base (expr_to_base e) stmt.srange man flow |>
       OptionExt.return
 
 
-    | S_rename ({ ekind = E_var (v1,_) }, { ekind = E_var (v2,_) })
-      when is_memory_base (mk_var_base v1) &&
-           is_memory_base (mk_var_base v2)
-      ->
-      rename_base (mk_var_base v1) (mk_var_base v2) stmt.srange man flow |>
+    | S_rename (e1,e2) when is_base_expr e1 && is_base_expr e2 ->
+      rename_base (expr_to_base e1) (expr_to_base e2) stmt.srange man flow |>
       OptionExt.return
 
+    | S_expand(e,el) when is_base_expr e && List.for_all is_base_expr el ->
+      expand_base (expr_to_base e) (List.map expr_to_base el) stmt.srange man flow |>
+      OptionExt.return
 
-    | S_rename ({ ekind = E_addr addr1 }, { ekind = E_addr addr2 })
-      when is_memory_base (mk_addr_base addr1) &&
-           is_memory_base (mk_addr_base addr2)
-      ->
-      rename_base (mk_addr_base addr1) (mk_addr_base addr2) stmt.srange man flow |>
+    | S_forget(e) ->
+      forget e stmt.srange man flow |>
+      OptionExt.return
+
+    | S_remove(e) when is_base_expr e ->
+      remove_base (expr_to_base e) stmt.srange man flow |>
       OptionExt.return
 
     | S_assign({ ekind = E_c_deref p}, rval)
