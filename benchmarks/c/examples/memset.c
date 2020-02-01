@@ -1,6 +1,6 @@
 #include <string.h>
 
-int main(int argc, char *argv[]) {
+int main() {
   char a[10];
   memset(a, 0, 10);
   int l = strlen(a);

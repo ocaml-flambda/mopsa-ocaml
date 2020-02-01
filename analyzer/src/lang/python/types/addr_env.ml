@@ -161,7 +161,7 @@ struct
         let () = debug "flow is now %a@\n" (Flow.print man.lattice.print) flow in
         flow |> Post.return |> OptionExt.return
 
-    | S_assign({ekind = E_var (v, WEAK)}, {ekind = E_var (w, WEAK)}) ->
+    | S_assign({ekind = E_var (v, vmode)}, {ekind = E_var (w, wmode)}) when var_mode v vmode = WEAK && var_mode w wmode = WEAK ->
       let cur = get_env T_cur man flow in
       if mem w cur then
         if mem v cur then
@@ -307,7 +307,7 @@ struct
 
   and assign_addr man v av mode flow =
     let cur = get_env T_cur man flow in
-    let aset = match mode with
+    let aset = match var_mode v mode with
       | STRONG -> ASet.singleton av
       | WEAK ->
         ASet.add av (OptionExt.default ASet.empty (find_opt v cur))

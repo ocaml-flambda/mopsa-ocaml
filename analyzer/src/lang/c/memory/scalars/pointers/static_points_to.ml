@@ -31,8 +31,8 @@ open Common.Base
 
 (** Static points-to values *)
 type static_points_to =
-  | AddrOf of base * expr
-  | Eval of var * mode * expr
+  | AddrOf of base * expr * mode option
+  | Eval of var * mode option * expr
   | Fun of c_fundec
   | Null
   | Invalid
@@ -52,7 +52,7 @@ let advance_offset (op:operator) (ptr:static_points_to) (o:expr) typ range : sta
   in
 
   match ptr with
-  | AddrOf (b, oo) -> AddrOf (b, advance oo)
+  | AddrOf (b, oo, mode) -> AddrOf (b, advance oo, mode)
 
   | Eval (p, mode, oo) -> Eval (p, mode, advance oo)
 
@@ -81,15 +81,15 @@ let rec eval_opt exp : static_points_to option =
     Top |> OptionExt.return
 
   | E_addr (addr) ->
-    AddrOf(ValidAddr addr, mk_zero exp.erange) |> OptionExt.return
+    AddrOf(mk_addr_base addr, mk_zero exp.erange, None) |> OptionExt.return
 
   | E_c_deref { ekind = E_c_address_of e } ->
     eval_opt e
 
   | E_c_address_of e ->
     begin match remove_casts e |> ekind with
-      | E_var (v, _) ->
-        AddrOf (ValidVar v, mk_zero exp.erange) |>
+      | E_var (v, mode) ->
+        AddrOf (mk_var_base v, mk_zero exp.erange, mode) |>
         OptionExt.return
 
       | E_constant (C_top _) ->
@@ -115,10 +115,10 @@ let rec eval_opt exp : static_points_to option =
     Fun f |> OptionExt.return
 
   | E_constant (C_c_string (s, _)) ->
-    AddrOf(String s, mk_zero exp.erange) |> OptionExt.return
+    AddrOf(mk_string_base s, mk_zero exp.erange, None) |> OptionExt.return
 
-  | E_var (a, _) when is_c_array_type a.vtyp ->
-    AddrOf(ValidVar a, mk_zero exp.erange) |> OptionExt.return
+  | E_var (a, mode) when is_c_array_type a.vtyp ->
+    AddrOf(mk_var_base a, mk_zero exp.erange, mode) |> OptionExt.return
 
   | E_c_deref a when is_c_array_type (under_type a.etyp) ->
     eval_opt a

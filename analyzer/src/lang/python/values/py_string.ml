@@ -87,7 +87,7 @@ struct
                                                                  Some {ekind = E_constant (C_string s)})}) when compare_addr scls (fst @@ find_builtin "str") = 0 ->
       let cur = get_env T_cur man flow in
       let cur =
-        SMap.add v (match mode with
+        SMap.add v (match var_mode v mode with
         | WEAK ->
           let old_s = OptionExt.default (StringSet.empty) (SMap.find_opt v cur) in
           StringSet.add s old_s
@@ -108,7 +108,7 @@ struct
       let cur = get_env T_cur man flow in
       debug "old cur = %a@\n" print cur;
       let set_v' = OptionExt.default StringSet.empty (SMap.find_opt v' cur) in
-      let cur = match mode with
+      let cur = match var_mode v mode with
         | WEAK ->
           let set_v = OptionExt.default StringSet.empty (SMap.find_opt v cur) in
           SMap.add v (StringSet.join set_v set_v') cur

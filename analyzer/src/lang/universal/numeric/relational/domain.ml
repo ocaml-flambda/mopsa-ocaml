@@ -117,7 +117,6 @@ struct
         (Array.of_list int_vars)
         (Array.of_list float_vars)
     in
-    debug "|vars| = %d" (Apron.Environment.size env');
     Apron.Abstract1.change_environment ApronManager.man a env' false,
     bnd
 
@@ -187,13 +186,19 @@ struct
         in
         acc'
 
+      | S_expand({ekind = E_var(var,_)}, vl) ->
+        let vars = List.map (function { ekind = E_var(v,_) } -> v | _ -> assert false) vl in
+        let acc', _ = List.fold_left (fun acc v -> forget_var v acc) (acc,bnd) vars in
+        acc'
+
+
       | S_assume _ ->
         acc
 
       | _ -> panic ~loc:__LOC__ "merge: unsupported statement %a" pp_stmt stmt
     in
-    let a1' = List.fold_left (fun acc stmt -> patch stmt a1 acc) a2 log1 in
-    let a2' = List.fold_left (fun acc stmt -> patch stmt a2 acc) a1 log2 in
+    let a1' = List.fold_left (fun acc stmt -> patch stmt a1 acc) a2 (List.rev log1) in
+    let a2' = List.fold_left (fun acc stmt -> patch stmt a2 acc) a1 (List.rev log2) in
     meet (a1',bnd) (a2',bnd)
 
 
@@ -236,7 +241,7 @@ struct
         bnd
       )
 
-    | S_assign({ ekind = E_var (var, STRONG) }, e) ->
+    | S_assign({ ekind = E_var (var, mode) }, e) when var_mode var mode = STRONG ->
       let a, bnd = add_missing_vars (a,bnd) (var :: (Visitor.expr_vars e)) in
       let v = Binding.mk_apron_var var in
       begin try
@@ -251,8 +256,8 @@ struct
           exec ctx (mk_remove_var var stmt.srange) man (a,bnd)
       end
 
-    | S_assign({ ekind = E_var (var, WEAK) } as lval, e) ->
-      let lval' = { lval with ekind = E_var(var, STRONG) } in
+    | S_assign({ ekind = E_var (var, mode) } as lval, e) when var_mode var mode = WEAK ->
+      let lval' = { lval with ekind = E_var(var, Some STRONG) } in
       exec ctx {stmt with skind = S_assign(lval', e)} man (a,bnd) |>
       OptionExt.lift @@ fun (a',bnd') ->
       join (a,bnd) (a', bnd')

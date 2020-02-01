@@ -576,7 +576,7 @@ let visit_case case prj func =
     case_locals = locals;
     case_assigns = assigns;
     case_range = case.range;
-  }
+  }, assigns
 
 let visit_section sect prj func =
   match sect with
@@ -584,7 +584,9 @@ let visit_section sect prj func =
     let leaf, locals, assigns = visit_leaf leaf prj func in
     Ast.S_leaf leaf, locals, assigns
 
-  | S_case case -> S_case (visit_case case prj func), [], []
+  | S_case case ->
+    let case, assigns = visit_case case prj func in
+    S_case (case), [], assigns
 
   | S_predicate pred -> assert false
   | S_alias alias -> assert false

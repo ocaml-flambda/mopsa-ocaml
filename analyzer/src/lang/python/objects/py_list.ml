@@ -118,7 +118,7 @@ struct
           let els_var = var_of_addr addr_list in
           (* let flow = man.exec (mk_add_var els_var range) flow in *)
           let flow = List.fold_left (fun acc el ->
-              let stmt = mk_assign (mk_var ~mode:WEAK els_var range) el range in
+              let stmt = mk_assign (mk_var ~mode:(Some WEAK) els_var range) el range in
               (* debug "fold_left %a@\n" pp_stmt stmt; *)
               man.exec ~zone:Zone.Z_py stmt acc) flow ls in
           Eval.singleton (mk_py_object (addr_list, None) range) flow
@@ -148,7 +148,7 @@ struct
                             Eval.bind (fun eaddr_list flow ->
                                 let addr_list = addr_of_expr eaddr_list in
                                 let slicedlist_var = var_of_addr addr_list in
-                                let flow = man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:WEAK slicedlist_var range) (mk_var ~mode:WEAK var_els range) range) flow in
+                                let flow = man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:(Some WEAK) slicedlist_var range) (mk_var ~mode:(Some WEAK) var_els range) range) flow in
                                 Eval.singleton (mk_py_object (addr_list, None) range) flow
                               )
                           )
@@ -182,9 +182,9 @@ struct
                let alist_addr = addr_of_expr list_addr in
                let els_res_var = var_of_addr alist_addr in
                let flow = List.fold_left (fun acc el ->
-                   man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:WEAK els_res_var range) el range) acc)
-                   flow [mk_var ~mode:WEAK elsl_var range;
-                         mk_var ~mode:WEAK elsr_var range] in
+                   man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:(Some WEAK) els_res_var range) el range) acc)
+                   flow [mk_var ~mode:(Some WEAK) elsl_var range;
+                         mk_var ~mode:(Some WEAK) elsr_var range] in
                Eval.singleton (mk_py_object (alist_addr, None) range) flow
              )
         )
@@ -209,7 +209,7 @@ struct
                  let indexerror_f = man.exec (Utils.mk_builtin_raise_msg "IndexError" "list assignment index out of range" range) flow in
                  let flow = Flow.copy_ctx indexerror_f flow in
 
-                 let assignment_f = man.exec (mk_assign (mk_var ~mode:WEAK var_els range) value range) flow in
+                 let assignment_f = man.exec (mk_assign (mk_var ~mode:(Some WEAK) var_els range) value range) flow in
                  let indexerror_f = Flow.copy_ctx assignment_f indexerror_f in
 
                  let assignment = man.eval (mk_py_none range) assignment_f in
@@ -255,7 +255,7 @@ struct
            Eval.bind (fun eaddr_list flow ->
                let addr_list = addr_of_expr eaddr_list in
                let els_var = var_of_addr addr_list in
-               let flow = man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:WEAK els_var range) (mk_var ~mode:WEAK els_list range) range) flow in
+               let flow = man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:(Some WEAK) els_var range) (mk_var ~mode:(Some WEAK) els_list range) range) flow in
                Eval.singleton (mk_py_object (addr_list, None) range) flow
              )
         )
@@ -271,7 +271,7 @@ struct
            let list, element = match args with | [l; e] -> l, e | _ -> assert false in
            debug "list: %a@\nelement = %a@\nflow = %a@\n" pp_expr list pp_expr element (Flow.print man.lattice.print) flow;
            let var_els = var_of_eobj list in
-           man.exec (mk_assign (mk_var var_els ~mode:WEAK range) element range) flow |>
+           man.exec (mk_assign (mk_var var_els ~mode:(Some WEAK) range) element range) flow |>
            man.eval (mk_py_none range))
       |> OptionExt.return
 
@@ -281,7 +281,7 @@ struct
         (fun args flow ->
            let list, index, element = match args with | [l; i; e] -> l, i, e | _ -> assert false in
            let var_els = var_of_eobj list in
-           man.exec (mk_assign (mk_var var_els ~mode:WEAK range) element range) flow |>
+           man.exec (mk_assign (mk_var var_els ~mode:(Some WEAK) range) element range) flow |>
            man.eval (mk_py_none range))
       |> OptionExt.return
 
@@ -300,14 +300,14 @@ struct
            assume (mk_py_isinstance_builtin other "list" range) man flow
              ~fthen:(fun flow ->
                  let var_sndels = var_of_eobj other in
-                 man.exec (mk_assign (mk_var var_els ~mode:WEAK range) (mk_var var_sndels ~mode:WEAK range) range) flow |>
+                 man.exec (mk_assign (mk_var var_els ~mode:(Some WEAK) range) (mk_var var_sndels ~mode:(Some WEAK) range) range) flow |>
                  man.eval (mk_py_none range)
                )
              ~felse:(fun flow ->
                  assume (mk_py_isinstance_builtin other "range" range) man flow
                    ~fthen:(fun flow ->
                        (* TODO: more precision on top (for range) *)
-                       man.exec (mk_assign (mk_var var_els ~mode:WEAK range) (mk_py_top T_int range) range) flow  |>
+                       man.exec (mk_assign (mk_var var_els ~mode:(Some WEAK) range) (mk_py_top T_int range) range) flow  |>
                        man.eval (mk_py_none range)
                      )
                    (* TODO: if object has iter field call it and then call next *)
@@ -317,7 +317,7 @@ struct
                              let var_sndels = match ekind other with
                                | E_py_object ({addr_kind = A_py_iterator (_, [{addr_kind = A_py_list _} as a], _)}, _) -> var_of_addr a
                                | _ -> assert false in
-                             man.exec (mk_assign (mk_var var_els ~mode:WEAK range) (mk_var var_sndels ~mode:WEAK range) range) flow |>
+                             man.exec (mk_assign (mk_var var_els ~mode:(Some WEAK) range) (mk_var var_sndels ~mode:(Some WEAK) range) range) flow |>
                              man.eval (mk_py_none range)
                            )
                          ~felse:(fun flow ->
@@ -326,7 +326,7 @@ struct
                                    let var_l1, var_l2 = match ekind other with
                                      | E_py_object ({addr_kind = A_py_iterator (_, [{addr_kind = A_py_list _} as a1; {addr_kind = A_py_list _} as a2], _)}, _) -> var_of_addr a1, var_of_addr a2
                                      | _ -> assert false in
-                                   man.exec (mk_assign (mk_var var_els ~mode:WEAK range) (mk_expr (E_py_tuple [mk_var var_l1 ~mode:WEAK range; mk_var var_l2 ~mode:WEAK range]) range) range) flow |>
+                                   man.exec (mk_assign (mk_var var_els ~mode:(Some WEAK) range) (mk_expr (E_py_tuple [mk_var var_l1 ~mode:(Some WEAK) range; mk_var var_l2 ~mode:(Some WEAK) range]) range) range) flow |>
                                    man.eval (mk_py_none range)
                                  )
                                ~felse:(fun flow ->
@@ -380,7 +380,7 @@ struct
            let var_els = var_of_eobj list in
            let eval_indexerror = man.exec (Utils.mk_builtin_raise_msg "IndexError" "pop from empty list" range) flow
                                  |> Eval.empty_singleton in
-           let eval_el = man.eval (mk_var ~mode:WEAK var_els range) flow in
+           let eval_el = man.eval (mk_var ~mode:(Some WEAK) var_els range) flow in
            Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Eval.copy_ctx eval_indexerror eval_el :: eval_indexerror :: [])
         )
       |> OptionExt.return
@@ -435,7 +435,7 @@ struct
             | E_py_object ({addr_kind = A_py_iterator (s, [a], _)}, _) when s = it_name -> a
             | _ -> assert false in
           let var_els = var_of_addr list_addr in
-          let els = man.eval (mk_var var_els ~mode:WEAK range) it_flow in
+          let els = man.eval (mk_var var_els ~mode:(Some WEAK) range) it_flow in
           debug "Result = %a" (Cases.print (fun fmt e flow -> Format.fprintf fmt "%a@\n%a@\n@\n" (OptionExt.print pp_expr) e (Flow.print man.lattice.print) flow)) els;
           OptionExt.none_to_exn @@ Cases.bind_opt
             (fun oels flow ->
@@ -496,7 +496,7 @@ struct
               ~fthen:(fun flow ->
                   (* FIXME: we're assuming that we use the list abstraction *)
                   let var_els_in_ty = var_of_eobj in_ty in
-                  assume (mk_py_isinstance_builtin (mk_var ~mode:WEAK var_els_in_ty range) "float" range) man flow
+                  assume (mk_py_isinstance_builtin (mk_var ~mode:(Some WEAK) var_els_in_ty range) "float" range) man flow
                     ~fthen:(man.eval (mk_py_top (T_float F_DOUBLE) range))
                     ~felse:(fun flow ->
                         man.exec (Utils.mk_builtin_raise_msg "TypeError" "must be real number" range) flow |>
@@ -548,7 +548,7 @@ struct
             | _ -> Exceptions.panic "%a@\n" pp_expr iterator in
           let var_els = var_of_addr list_addr in
           let els = man.eval (mk_expr (E_py_tuple [mk_top T_int range;
-                                                   mk_var var_els ~mode:WEAK range]) range) flow in
+                                                   mk_var var_els ~mode:(Some WEAK) range]) range) flow in
           let flow = Flow.set_ctx (Eval.get_ctx els) flow in
           let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
           Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Eval.copy_ctx stopiteration els::stopiteration::[])
@@ -593,8 +593,8 @@ struct
             | _ -> Exceptions.panic "%a@\n" pp_expr iterator in
           let var_els1 = var_of_addr list1_addr in
           let var_els2 = var_of_addr list2_addr in
-          let els = man.eval (mk_expr (E_py_tuple [mk_var var_els1 ~mode:WEAK range;
-                                                   mk_var var_els2 ~mode:WEAK range]) range) flow in
+          let els = man.eval (mk_expr (E_py_tuple [mk_var var_els1 ~mode:(Some WEAK) range;
+                                                   mk_var var_els2 ~mode:(Some WEAK) range]) range) flow in
           let flow = Flow.set_ctx (Eval.get_ctx els) flow in
           let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
           Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Eval.copy_ctx stopiteration els::stopiteration::[])
@@ -669,7 +669,7 @@ struct
             ~fthen:(fun flow ->
                 let var = var_of_eobj list in
                 Libs.Py_mopsa.check man
-                  (mk_py_isinstance (mk_var ~mode:WEAK var range) type_v range)
+                  (mk_py_isinstance (mk_var ~mode:(Some WEAK) var range) type_v range)
                   range flow
               )
             ~felse:(Libs.Py_mopsa.check man (mk_py_false range) range)
@@ -682,7 +682,7 @@ struct
       Eval.bind (fun eaddr_list flow ->
           let addr_list = addr_of_expr eaddr_list in
           let els_var = var_of_addr addr_list in
-          let stmt = mk_stmt (S_py_annot (mk_var ~mode:WEAK els_var range, mk_expr (E_py_annot i) range)) range in
+          let stmt = mk_stmt (S_py_annot (mk_var ~mode:(Some WEAK) els_var range, mk_expr (E_py_annot i) range)) range in
           man.exec ~zone:Zone.Z_py stmt flow |>
           Eval.singleton (mk_py_object (addr_list, None) range)
         )

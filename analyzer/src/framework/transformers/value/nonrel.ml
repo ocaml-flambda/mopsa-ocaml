@@ -111,12 +111,16 @@ let generic_nonrel_merge ~top ~add ~remove ~find ~meet pre (a1, log1) (a2, log2)
     | S_remove { ekind = E_var (var, _) } ->
       remove var acc
 
+    | S_expand({ekind = E_var(var,_)}, vl) ->
+      let vars = List.map (function { ekind = E_var(v,_) } -> v | _ -> assert false) vl in
+      List.fold_left (fun acc v -> add v top acc) acc vars
+
     | S_assume e -> acc
 
     | _ -> Exceptions.panic ~loc:__LOC__ "merge: unsupported statement %a" pp_stmt stmt
   in
-  let a2' = List.fold_left (fun acc stmt -> patch stmt a1 acc) a2 log1 in
-  let a1' = List.fold_left (fun acc stmt -> patch stmt a2 acc) a1 log2 in
+  let a2' = List.fold_left (fun acc stmt -> patch stmt a1 acc) a2 (List.rev log1) in
+  let a1' = List.fold_left (fun acc stmt -> patch stmt a2 acc) a1 (List.rev log2) in
   meet a1' a2'
 
 
@@ -201,7 +205,9 @@ struct
     with Not_found -> Exceptions.warn "variable %a not found" pp_var v; raise Not_found
 
 
-  let merge pre (a1, log1) (a2, log2) = generic_nonrel_merge ~top:Value.top ~add ~remove ~find ~meet pre (a1, log1) (a2, log2)
+  let merge pre (a1, log1) (a2, log2) =
+    debug "generic_nonrel_merge:@.pre = %a@.a1 = %a@.log1 = %a@.a2 = %a@.log2 = %a" VarMap.print pre VarMap.print a1 pp_block log1 VarMap.print a2 pp_block log2;
+    generic_nonrel_merge ~top:Value.top ~add ~remove ~find ~meet pre (a1, log1) (a2, log2)
 
 
   (* Constrain the value of a variable with its bounds *)
@@ -227,7 +233,7 @@ struct
 
   (** Expressions annotated with abstract values; useful for assignment and compare. *)
   type aexpr =
-    | A_var of var * mode * Value.t
+    | A_var of var * mode option * Value.t
     | A_cst of constant * Value.t
     | A_unop of operator * typ  * aexpr * Value.t
     | A_binop of operator * typ * aexpr * Value.t * aexpr * Value.t
@@ -306,7 +312,7 @@ struct
       then bottom
 
       else
-      if mode = STRONG
+      if var_mode var mode = STRONG
       then add ctx var r' a
 
       else a
@@ -364,7 +370,7 @@ struct
       let v = find var a in
       let w = Value.filter (man a) v r in
       (if Value.is_bottom w then bottom else
-       if mode = STRONG then add ctx var w a
+       if var_mode var mode = STRONG then add ctx var w a
        else a
       ) |>
       OptionExt.return
@@ -431,7 +437,7 @@ struct
       eval e map |> OptionExt.lift @@ fun (_, v) ->
       let map' = add ctx var v map in
       begin
-        match mode with
+        match var_mode var mode with
         | STRONG -> map'
         | WEAK -> join map map'
       end

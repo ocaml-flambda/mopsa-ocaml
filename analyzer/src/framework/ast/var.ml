@@ -35,30 +35,41 @@ open Typ
 (** Languages can extend this type to add new kinds of variables *)
 type var_kind = ..
 
+(** Access mode of a variable *)
+type mode =
+  | STRONG (** Strong variables represent a single concrete variable *)
+  | WEAK   (** Weak variables represent multiple concrete variables *)
+
 
 (** Program variables *)
 type var = {
   vname : string;     (** unique variable name *)
   vkind : var_kind;   (** language-dependent info on the variable *)
-  vtyp  : typ;        (** type of the variable. *)
+  vtyp  : typ;        (** type of the variable *)
+  vmode : mode;       (** access mode of the variable *)
 }
 
 
 (** Accessor functions *)
 let vname v = v.vname
 let vkind v = v.vkind
-let vtyp v = v.vtyp
-
+let vtyp  v = v.vtyp
+let vmode v = v.vmode
 
 (** Create a variable with a name, a kind and a type *)
-let mkv name kind typ =
-  {vname = name; vkind = kind; vtyp = typ}
+let mkv name kind ?(mode=STRONG) typ =
+  {vname = name; vkind = kind; vtyp = typ; vmode = mode }
 
 
 (** Internal pretty printer chain over variable kinds *)
 let var_pp_chain = TypeExt.mk_print_chain (fun fmt v ->
     Format.pp_print_string fmt v.vname
   )
+
+
+let pp_mode fmt = function
+  | STRONG -> Format.fprintf fmt "STRONG"
+  | WEAK   -> Format.fprintf fmt "WEAK"
 
 
 (** Pretty printer of variables *)
@@ -70,6 +81,7 @@ let var_compare_chain = TypeExt.mk_compare_chain (fun v1 v2 ->
     Stdlib.compare v1.vkind v2.vkind
   )
 
+let compare_mode (m1:mode) (m2:mode) = compare m1 m2
 
 (** Total order between variables *)
 let compare_var v1 v2 =
@@ -78,6 +90,7 @@ let compare_var v1 v2 =
       (fun () -> TypeExt.compare var_compare_chain v1 v2);
       (fun () -> Stdlib.compare v1.vname v2.vname);
       (fun () -> compare_typ v1.vtyp v2.vtyp);
+      (fun () -> compare_mode v1.vmode v2.vmode);
     ]
 
 
@@ -198,6 +211,12 @@ let set_orig_vname name v =
   let uid = match v.vkind with V_uniq (_,uid) -> uid | _ -> assert false in
   mk_uniq_var name uid v.vtyp
 
+
+(** Return the weakest mode between m1 and m2 *)
+let weakest_mode m1 m2 =
+  match m1, m2 with
+  | STRONG, STRONG -> STRONG
+  | _              -> WEAK
 
 (** Registration of the common variable kinds *)
 let () =

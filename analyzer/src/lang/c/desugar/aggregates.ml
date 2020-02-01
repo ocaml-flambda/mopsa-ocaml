@@ -430,7 +430,19 @@ struct
     man.post ~zone:Z_c_low_level stmt flow >>$ fun () flow ->
     man.post ~zone:Z_c_points_to stmt flow
     
-  
+
+  let forget e range man flow =
+    man.eval ~zone:(Z_c,Z_c_low_level) e flow >>$ fun e flow ->
+    let stmt = mk_forget e range in
+    man.post ~zone:Z_c_low_level stmt flow
+
+
+  let expand e el range man flow =
+    man.eval ~zone:(Z_c,Z_c_low_level) e flow >>$ fun e flow ->
+    bind_list el (man.eval ~zone:(Z_c,Z_c_low_level)) flow >>$ fun el flow ->
+    let stmt = mk_expand e el range in
+    man.post ~zone:Z_c_low_level stmt flow
+
 
   let exec zone stmt man flow =
     match skind stmt with
@@ -460,6 +472,14 @@ struct
       rename e e' stmt.srange man flow |>
       OptionExt.return
 
+    | S_forget(e) ->
+      forget e stmt.srange man flow |>
+      OptionExt.return
+
+    | S_expand(e,el) ->
+      expand e el stmt.srange man flow |>
+      OptionExt.return
+
     | S_expression e when is_c_num_type e.etyp ->
       Some (
         man.eval ~zone:(Z_c,Z_u_num) e flow >>$ fun e flow ->
@@ -484,16 +504,6 @@ struct
         man.post ~zone:Z_c_low_level (mk_stub_requires e stmt.srange) flow
       )
 
-    | S_stub_rename_primed(lval, bounds) ->
-      Some (
-        man.eval ~zone:(Z_c,Z_c_low_level) lval flow >>$ fun lval flow ->
-        flow |> bind_list bounds (fun (l,u) flow ->
-            man.eval ~zone:(Z_c,Z_c_low_level) l flow >>$ fun l flow ->
-            man.eval ~zone:(Z_c,Z_c_low_level) u flow >>$ fun u flow ->
-            Cases.singleton (l,u) flow
-          ) >>$ fun bounds flow ->
-        man.post ~zone:Z_c_low_level { stmt with skind = S_stub_rename_primed(lval, bounds) } flow
-      )
 
     | _ -> None
 
