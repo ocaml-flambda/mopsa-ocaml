@@ -33,7 +33,7 @@ open Universal.Zone
 open Common.Base
 open Common.Alarms
 open Common.Points_to
-
+open Aux_vars
 
 
 module Domain =
@@ -67,60 +67,6 @@ struct
   (** ============================== *)
 
   let init prog man flow = flow
-
-
-  (** Auxiliary variables of primed bases *)
-  (** =================================== *)
-
-  type var_kind +=
-    | V_c_primed_base of base
-
-  let () = register_var {
-      print = (fun next fmt v ->
-          match v.vkind with
-          | V_c_primed_base base -> Format.fprintf fmt "%a'" pp_base base
-          | _ -> next fmt v
-        );
-      compare = (fun next v1 v2 ->
-          match v1.vkind, v2.vkind with
-          | V_c_primed_base b1, V_c_primed_base b2 -> compare_base b1 b2
-          | _ -> next v1 v2
-        );
-    }
-
-  let mk_primed_base_var base =
-    let vkind = V_c_primed_base base in
-    let vname = base_uniq_name base ^ "'" in
-    let vtyp = match base.base_kind with
-      | Var v  -> v.vtyp
-      | Addr a -> T_c_array(s8,C_array_no_length)
-      | _      -> assert false
-    in
-    mkv vname vkind vtyp ~mode:STRONG
-
-
-  let mk_primed_base_expr base range =
-    mk_var (mk_primed_base_var base) range
-
-
-  let mk_base_expr base range =
-    match base.base_kind with
-    | Var v  -> mk_var v range
-    | Addr a -> mk_addr a range
-    | _      -> assert false
-
-
-  (** Create the expression ( typ* )( ( char* )&base' + offset ) *)
-  let mk_primed_address base offset typ range =
-    let primed = mk_primed_base_expr base range in
-    mk_c_cast
-      ( add
-          (mk_c_cast (mk_c_address_of primed range) (T_c_pointer s8) range)
-          offset
-          ~typ:(T_c_pointer s8)
-          range )
-      (T_c_pointer typ)
-      range
 
 
 

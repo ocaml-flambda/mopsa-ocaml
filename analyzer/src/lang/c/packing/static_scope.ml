@@ -158,8 +158,8 @@ struct
         let callee, _ = Callstack.pop cs in
         [Locals callee.call_fun]
 
-    (* Primed variables *)
-    | Var { vkind = Cstubs.Assigns.Domain.V_c_primed_base b } ->
+    (* Primed bases are in the same pack as the original ones *)
+    | Var { vkind = Cstubs.Aux_vars.V_c_primed_base b } ->
       packs_of_base ctx b
 
     | _ ->
@@ -170,15 +170,15 @@ struct
   let rec packs_of_var ctx v =
     match v.vkind with
     | V_cvar _ -> packs_of_base ctx (mk_var_base v)
-    | Lowlevel.Cells.Domain.V_c_cell ({base = { base_kind = Var v; base_valid = true}} as c) when is_c_scalar_type v.vtyp -> packs_of_base ctx c.base
-    | Lowlevel.String_length.Domain.V_c_string_length (base) -> packs_of_base ctx base
-    | Lowlevel.Pointer_sentinel.Domain.V_c_sentinel (base) -> packs_of_base ctx base
-    | Lowlevel.Pointer_sentinel.Domain.V_c_at_sentinel (base) -> packs_of_base ctx base
-    | Lowlevel.Pointer_sentinel.Domain.V_c_before_sentinel (base) -> packs_of_base ctx base
-    | Scalars.Pointers.Domain.Domain.V_c_ptr_offset vv -> packs_of_var ctx vv
-    | Scalars.Machine_numbers.Domain.V_c_num vv -> packs_of_var ctx vv
+    | Memory.Lowlevel.Cells.Domain.V_c_cell ({base = { base_kind = Var v; base_valid = true}} as c) when is_c_scalar_type v.vtyp -> packs_of_base ctx c.base
+    | Memory.Lowlevel.String_length.Domain.V_c_string_length (base) -> packs_of_base ctx base
+    | Memory.Lowlevel.Pointer_sentinel.Domain.V_c_sentinel (base) -> packs_of_base ctx base
+    | Memory.Lowlevel.Pointer_sentinel.Domain.V_c_at_sentinel (base) -> packs_of_base ctx base
+    | Memory.Lowlevel.Pointer_sentinel.Domain.V_c_before_sentinel (base) -> packs_of_base ctx base
+    | Memory.Scalars.Pointers.Domain.Domain.V_c_ptr_offset vv -> packs_of_var ctx vv
+    | Memory.Scalars.Machine_numbers.Domain.V_c_num vv -> packs_of_var ctx vv
     | Cstubs.Aux_vars.V_c_bytes a -> packs_of_base ctx (mk_addr_base a)
-    | Cstubs.Assigns.Domain.V_c_primed_base b -> packs_of_base ctx b
+    | Cstubs.Aux_vars.V_c_primed_base b -> packs_of_base ctx b
     | _ -> []
 
 end
