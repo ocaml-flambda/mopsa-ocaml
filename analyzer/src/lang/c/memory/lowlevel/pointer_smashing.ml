@@ -198,18 +198,53 @@ struct
       ~zone:Z_u_num man flow
 
 
+  (** Remove the auxiliary variables of a base *)
+  let remove_base base range man flow =
+    if not (is_interesting_base base) then
+      Post.return flow
+    else
+      let smash = mk_smash_var base range in
+      man.post ~zone:Z_c_scalar (mk_remove smash range) flow
+
 
   (** Rename the auxiliary variables associated to a base *)
   let rename_base base1 base2 range man flow =
-    let smash1 = mk_smash_var base1 range in
-    let smash2 = mk_smash_var base2 range in
-    man.post ~zone:Z_c_scalar (mk_rename smash1 smash2 range) flow
+    if not (is_interesting_base base1) then Post.return flow else
+    if not (is_interesting_base base2) then remove_base base1 range man flow
+    else
+      let smash1 = mk_smash_var base1 range in
+      let smash2 = mk_smash_var base2 range in
+      man.post ~zone:Z_c_scalar (mk_rename smash1 smash2 range) flow
 
 
-  (** Remove the auxiliary variables of a base *)
-  let remove_base base range man flow =
-    let smash = mk_smash_var base range in
-    man.post ~zone:Z_c_scalar (mk_remove smash range) flow
+  (** Expand the auxiliary variable of a base *)
+  let expand_base base1 bases range man flow =
+    if not (is_interesting_base base1) then Post.return flow else
+    if List.exists (fun b -> not (is_interesting_base b)) bases then panic_at range "expand %a not supported" pp_base base1
+    else
+      let smash1 = mk_smash_var base1 range in
+      let smashes = List.map (fun b -> mk_smash_var b range) bases in
+      man.post ~zone:Z_c_scalar (mk_expand smash1 smashes range) flow
+
+  (** Forget the value of the smash variable of a base *)
+  let forget e range man flow =
+    (* Get the pointed base *)
+    let ptr = match ekind e with
+      | E_var _   -> mk_c_address_of e range
+      | E_c_deref(p) -> p
+      | _ -> assert false
+    in
+    man.eval ptr ~zone:(Z_c_low_level,Z_c_points_to) flow >>$ fun p flow ->
+    match ekind p with
+    | E_c_points_to(P_block({ base_kind = String _ },offset,mode)) ->
+      Post.return flow
+
+    | E_c_points_to(P_block(base,offset,mode)) when is_interesting_base base ->
+      let smash = mk_smash_var base range in
+      man.post ~zone:Z_c_scalar (mk_forget smash range) flow
+
+    | _ -> Post.return flow
+
 
 
   (** Transformers entry point *)
@@ -219,36 +254,29 @@ struct
       declare_variable v scope stmt.srange man flow |>
       OptionExt.return
 
-    | S_add { ekind = E_var (v, _) } when is_interesting_base (mk_var_base v) ->
-      add_base (mk_var_base v) stmt.srange man flow |>
-      OptionExt.return
-
-    | S_add { ekind = E_addr addr } when is_interesting_base (mk_addr_base addr) ->
-      add_base (mk_addr_base addr) stmt.srange man flow |>
-      OptionExt.return
-
-    | S_rename ({ ekind = E_var (v1,_) }, { ekind = E_var (v2,_) })
-      when is_interesting_base (mk_var_base v1) &&
-           is_interesting_base (mk_var_base v2)
-      ->
-      rename_base (mk_var_base v1) (mk_var_base v2) stmt.srange man flow |>
+      | S_add e when is_base_expr e ->
+      add_base (expr_to_base e) stmt.srange man flow |>
       OptionExt.return
 
 
-    | S_rename ({ ekind = E_addr addr1 }, { ekind = E_addr addr2 })
-      when is_interesting_base (mk_addr_base addr1) &&
-           is_interesting_base (mk_addr_base addr2)
-      ->
-      rename_base (mk_addr_base addr1) (mk_addr_base addr2) stmt.srange man flow |>
+    | S_rename (e1,e2) when is_base_expr e1 && is_base_expr e2 ->
+      rename_base (expr_to_base e1) (expr_to_base e2) stmt.srange man flow |>
+      OptionExt.return
+
+    | S_expand(e,el) when is_base_expr e && List.for_all is_base_expr el ->
+      expand_base (expr_to_base e) (List.map expr_to_base el) stmt.srange man flow |>
+      OptionExt.return
+
+    | S_forget(e) ->
+      forget e stmt.srange man flow |>
+      OptionExt.return
+
+    | S_remove(e) when is_base_expr e ->
+      remove_base (expr_to_base e) stmt.srange man flow |>
       OptionExt.return
 
     | S_assign({ ekind = E_c_deref p} as lval, rval) when is_c_pointer_type lval.etyp ->
       assign_deref p rval stmt.srange man flow |>
-      OptionExt.return
-
-
-    | S_remove { ekind = E_var (v, _) } when is_interesting_base (mk_var_base v) ->
-      remove_base (mk_var_base v) stmt.srange man flow |>
       OptionExt.return
 
 
