@@ -117,7 +117,6 @@ struct
         (Array.of_list int_vars)
         (Array.of_list float_vars)
     in
-    debug "|vars| = %d" (Apron.Environment.size env');
     Apron.Abstract1.change_environment ApronManager.man a env' false,
     bnd
 
