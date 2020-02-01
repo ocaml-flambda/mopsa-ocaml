@@ -108,9 +108,16 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range.__len__", _))}, _)}, [arg], []) ->
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) arg flow |>
       Eval.bind (fun arg flow ->
-          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow
-          (* TODO: which one is better? *)
-          (* process_constant man flow range "int" addr_integers *)
+          let ra s = mk_py_attr arg s range in
+          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)
+            (mk_binop
+               (mk_binop
+                  (ra "stop")
+                  O_minus
+                  (ra "start")
+                  range
+               )
+               O_py_floor_div (ra "step") range) flow
         )
       |> OptionExt.return
 

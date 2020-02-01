@@ -365,10 +365,18 @@ struct
                  assume (mk_py_isinstance_builtin other "range" range) man flow
                    ~fthen:(fun flow ->
                        (* FIXME: length precision *)
-                       (* TODO: more precision on top (for range) *)
+                     (* TODO: more precision on top (for range) *)
+                     let ra a = mk_py_attr other a range in
                        flow |>
-                       man.exec (mk_assign (mk_var len_els range) (mk_py_top T_int range) range) |>
-                       man.exec (mk_assign (mk_var var_els ~mode:WEAK range) (mk_py_top T_int range) range)  |>
+                         man.exec (mk_assign (mk_var len_els range)
+                                     (mk_py_call (mk_py_object (find_builtin_function "len") range) [other] range)
+                                     range) |>
+
+                         man.exec (mk_assign (mk_var var_els ~mode:WEAK range) (mk_py_top T_int range) range)  |>
+                         man.exec (mk_assume (mk_binop
+                                                (mk_binop (ra "start") O_le (mk_var var_els range) range)
+                                                O_py_and
+                                                (mk_binop (mk_var var_els range) O_lt (ra "stop") range) range) range) |>
                        man.eval (mk_py_none range)
                      )
                    (* TODO: if object has iter field call it and then call next *)
