@@ -674,6 +674,27 @@ struct
                       Z.sub uuu elm
                 in
 
+                let nb = Z.div (Z.sub u l) step in
+                if nb > Z.of_int !opt_deref_expand then
+                  (* top *)
+                  let region = Region (base, Itv.of_z l u) in
+                  let flow = man.exec ~zone:Z_u_num (mk_assume (mk_binop offset O_ge (mk_z l range) range) range) flow in
+                  if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
+                  then Cases.empty_singleton flow
+                  else Cases.singleton region flow
+                else
+                (* Iterate over [l, u] *)
+                  let rec aux o =
+                    let flow = man.exec ~zone:Z_u_num (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow in
+                    if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
+                    then aux (Z.add o step)
+                    else
+                      let c = mk_cell base o typ in
+                      Cases.singleton (Cell (c,mode)) flow :: aux (Z.add o step)
+                  in
+                  let evals = aux l in
+                  Cases.join_list ~empty:(fun () -> Cases.empty_singleton flow) evals
+                    (*
                 (* Iterate over [l, u] *)
                 let rec aux i o =
                   if i = !opt_deref_expand
@@ -696,6 +717,7 @@ struct
                 in
                 let evals = aux 0 l in
                 Cases.join_list ~empty:(fun () -> Cases.empty_singleton flow) evals
+*)
             )
           ~felse:(fun flow ->
               let flow = raise_c_out_bound_alarm ~base ~offset ~size range man flow in
