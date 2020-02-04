@@ -685,12 +685,15 @@ struct
                 else
                 (* Iterate over [l, u] *)
                   let rec aux o =
-                    let flow = man.exec ~zone:Z_u_num (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow in
-                    if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
-                    then aux (Z.add o step)
+                    if Z.gt o u
+                    then []
                     else
-                      let c = mk_cell base o typ in
-                      Cases.singleton (Cell (c,mode)) flow :: aux (Z.add o step)
+                      let flow = man.exec ~zone:Z_u_num (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow in
+                      if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
+                      then aux (Z.add o step)
+                      else
+                        let c = mk_cell base o typ in
+                        Cases.singleton (Cell (c,mode)) flow :: aux (Z.add o step)
                   in
                   let evals = aux l in
                   Cases.join_list ~empty:(fun () -> Cases.empty_singleton flow) evals
