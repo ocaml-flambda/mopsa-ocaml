@@ -244,6 +244,26 @@ module Make(Dom: OrderedType)(CoDom: OrderedType) = struct
 
 
 
+  (* slice operations *)
+
+
+  let map_slice f r a b =
+    DomMap.map_slice (fun k s -> CoDomSet.map (fun x -> f k x) s) r a b
+
+  let iter_slice f r a b =
+    DomMap.iter_slice (fun k s -> CoDomSet.iter (fun x -> f k x) s) r a b
+
+  let fold_slice f r a b acc =
+    DomMap.fold_slice (fun k s acc -> CoDomSet.fold (fun x acc -> f k x acc) s acc) r a b acc
+
+  let for_all_slice f r a b =
+    DomMap.for_all_slice (fun k s -> CoDomSet.for_all (fun x -> f k x) s) r a b
+
+  let exists_slice f r a b =
+    DomMap.for_all_slice (fun k s -> CoDomSet.for_all (fun x -> f k x) s) r a b
+
+
+
   (* domain operations *)
     
   let iter_domain f r =

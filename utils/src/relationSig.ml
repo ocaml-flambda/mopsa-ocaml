@@ -205,6 +205,39 @@ module type S = sig
    *)
 
 
+  val map_slice: (dom -> codom -> codom) -> t -> dom -> dom -> t
+  (** [map_slice f r k1 k2] only applies [f] to bindings with domain greater
+      or equal to [k1] and smaller or equal to [k2] to constructed relation
+      is returned. Bindings with domain outside this range in [r] are put
+      unchanged in the result.
+  *)
+
+  val iter_slice: (dom -> codom -> unit) -> t -> dom -> dom -> unit
+  (** [iter_slice f r k1 k2] is similar to [iter f r], but only calls
+      [f] on bindings with domain greater or equal to [k1] and smaller
+      or equal to [k2].
+  *)
+
+  val fold_slice: (dom -> codom -> 'a -> 'a) -> t -> dom -> dom -> 'a -> 'a
+  (** [fold_slice f r k1 k2 a] is similar to [fold f r], but only calls
+      [f] on bindings with domain greater or equal to [k1] and smaller
+      or equal to [k2].
+  *)
+
+  val for_all_slice: (dom -> codom -> bool) -> t -> dom -> dom -> bool
+  (** [for_all_slice f r k1 k2 a] is similar to [for_all f r], but only calls
+      [f] on bindings with domain greater or equal to [k1] and smaller
+      or equal to [k2].
+      It is as if, outside this range, [f k a = true] and has no effect.
+  *)
+
+  val exists_slice: (dom -> codom -> bool) -> t -> dom -> dom -> bool
+  (** [exists_slice f r k1 k2 a] is similar to [exists f r], but only calls
+      [f] on bindings with domain greater or equal to [k1] and smaller
+      or equal to [k2].
+      It is as if, outside this range, [f k a = false] and has no effect.
+  *)
+
 
   (** {2 Set operations} *)
 
