@@ -69,6 +69,9 @@ let top_compare (cmp:'a -> 'a -> int) (a:'a with_top) (b:'a with_top) : int =
 let top_dfl1 (dfl:'b) (f:'a->'c) (a:'a with_top) : 'c =
   match a with TOP -> dfl | Nt x -> f x
 
+let top_dfl2 (dfl:'c) (f:'a-> 'b->'c) (a:'a with_top) (b:'b with_top): 'c =
+  match a,b with Nt x, Nt y -> f x y | _ -> dfl
+
 
 (** {2 Exceptions} *)
 
