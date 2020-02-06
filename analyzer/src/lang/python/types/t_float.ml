@@ -84,7 +84,7 @@ module Domain =
                                 ~fthen:(fun flow ->
                                     man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top (T_float F_DOUBLE) range) flow)
                                 ~felse:(fun flow ->
-                                  let msg = Format.fprintf Format.str_formatter "float() argument must be a string or a number, not '%a'" pp_expr el in
+                                  let msg = Format.asprintf "float() argument must be a string or a number, not '%a'" pp_expr el in
                                     man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow |>
                                     Eval.empty_singleton)
                                 man flow)
