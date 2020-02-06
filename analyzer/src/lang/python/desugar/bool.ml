@@ -133,11 +133,10 @@ module Domain =
                                    panic_at range "evaluating 'in' operator using __getitem__ not supported"
                                  )
                                ~felse:(fun false_flow ->
-                                   Format.fprintf Format.str_formatter "argument of type '%a' is not iterable" pp_addr_kind (akind @@ fst @@ object_of_expr cls2);
-                                   let msg = Format.flush_str_formatter () in
-                                   let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow in
-                                   Eval.empty_singleton flow
-                                 )
+                                 let msg = Format.asprintf "argument of type '%a' is not iterable" pp_addr_kind (akind @@ fst @@ object_of_expr cls2) in
+                                 let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow in
+                                 Eval.empty_singleton flow
+                               )
                                man false_flow
                            )
                          man false_flow

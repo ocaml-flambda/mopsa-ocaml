@@ -62,8 +62,8 @@ module Domain =
       | E_py_attribute ({ekind = E_py_object ({addr_kind = A_py_class (C_builtin c, mro)}, _)}, attr) ->
         let rec search_mro mro = match mro with
           | [] ->
-            Format.fprintf Format.str_formatter "'%s' object has no attribute '%s'" c attr;
-            man.exec (Utils.mk_builtin_raise_msg "AttributeError" (Format.flush_str_formatter ()) range) flow |>
+             let msg = Format.asprintf "'%s' object has no attribute '%s'" c attr in
+            man.exec (Utils.mk_builtin_raise_msg "AttributeError" msg range) flow |>
             Eval.empty_singleton
           | cls::tl ->
             if is_builtin_attribute cls attr then
@@ -96,8 +96,8 @@ module Domain =
              | E_py_object ({addr_kind = A_py_class (C_builtin c, mro)}, _) ->
                let rec search_mro mro = match mro with
                  | [] ->
-                   Format.fprintf Format.str_formatter "'%s' object has no attribute '%s'" c attr;
-                   man.exec (Utils.mk_builtin_raise_msg "AttributeError" (Format.flush_str_formatter ()) range) flow |>
+                    let msg = Format.asprintf "'%s' object has no attribute '%s'" c attr in
+                   man.exec (Utils.mk_builtin_raise_msg "AttributeError" msg range) flow |>
                    Eval.empty_singleton
                  | cls::tl ->
                    if is_builtin_attribute cls attr then

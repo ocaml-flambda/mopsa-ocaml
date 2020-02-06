@@ -63,8 +63,8 @@ struct
                     man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) exp' true_flow
                   )
                 ~felse:(fun false_flow ->
-                    Format.fprintf Format.str_formatter "'%a' object is not subscriptable" pp_addr_kind (akind @@ fst @@ object_of_expr cls);
-                    let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) false_flow in
+                  let msg = Format.asprintf "'%a' object is not subscriptable" pp_addr_kind (akind @@ fst @@ object_of_expr cls) in
+                    let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow in
                     Eval.empty_singleton flow
                   )
             )
@@ -88,8 +88,8 @@ struct
                       )
                   )
                 ~felse:(fun false_flow ->
-                    Format.fprintf Format.str_formatter "'%a' object is not subscriptable" pp_addr_kind (akind @@ fst @@ object_of_expr cls);
-                    let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) false_flow in
+                  let msg = Format.asprintf "'%a' object is not subscriptable" pp_addr_kind (akind @@ fst @@ object_of_expr cls) in
+                    let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow in
                     Eval.empty_singleton flow
                   )
             )
@@ -118,8 +118,8 @@ struct
                      man.exec {stmt with skind = S_expression(exp')} true_flow |> Post.return
                    )
                  ~felse:(fun false_flow ->
-                     Format.fprintf Format.str_formatter "'%a' object does not support item assignment" pp_addr_kind (akind @@ fst @@ object_of_expr cls);
-                     man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) false_flow |> Post.return
+                   let msg = Format.asprintf "'%a' object does not support item assignment" pp_addr_kind (akind @@ fst @@ object_of_expr cls) in
+                   man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow |> Post.return
                    )
              )
         )
@@ -142,8 +142,8 @@ struct
                       )
                   )
                 ~felse:(fun false_flow ->
-                     Format.fprintf Format.str_formatter "'%a' object does not support item assignment" pp_addr_kind (akind @@ fst @@ object_of_expr cls);
-                     man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) false_flow |> Post.return
+                  let msg = Format.asprintf "'%a' object does not support item assignment" pp_addr_kind (akind @@ fst @@ object_of_expr cls) in
+                  man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow |> Post.return
                   )
             )
         )

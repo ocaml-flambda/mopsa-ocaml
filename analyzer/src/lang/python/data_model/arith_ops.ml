@@ -71,8 +71,8 @@ module Domain =
 
          let is_same_type = compare_py_object cls1 cls2 = 0 in
          let typerr flow =
-           let () = Format.fprintf Format.str_formatter "unsupported operand type(s) for '%a': '%a' and '%a'" pp_operator op pp_addr_kind (akind @@ fst cls1) pp_addr_kind (akind @@ fst cls2) in
-           let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow in
+           let msg = Format.asprintf "unsupported operand type(s) for '%a': '%a' and '%a'" pp_operator op pp_addr_kind (akind @@ fst cls1) pp_addr_kind (akind @@ fst cls2) in
+           let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow in
            Eval.empty_singleton flow in
          let call_radd man ocondtocheck flow ~felseradd =
            let hasradd = Utils.mk_object_hasattr cls2 rop_fun range in
@@ -135,8 +135,8 @@ module Domain =
                       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object_attr cls op_fun range) [e] range) true_flow
                     )
                   ~felse:(fun false_flow ->
-                      Format.fprintf Format.str_formatter "bad operand type for unary '%s': '%a'" op_fun pp_addr_kind (akind @@ fst cls);
-                      let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) false_flow in
+                    let msg = Format.asprintf "bad operand type for unary '%s': '%a'" op_fun pp_addr_kind (akind @@ fst cls) in
+                      let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow in
                       Eval.empty_singleton flow
                     )
                   man flow

@@ -248,9 +248,9 @@ module Domain =
           (
             debug "Too few arguments!@\n";
             let missing = List.length nondefault_args - List.length pyfundec.py_func_parameters in
-            Format.fprintf Format.str_formatter "%s() missing %d required positional argument%s" pyfundec.py_func_var.vname missing (if missing > 1 then "s" else "");
+            let msg = Format.asprintf "%s() missing %d required positional argument%s" pyfundec.py_func_var.vname missing (if missing > 1 then "s" else "") in
             let flow =
-              man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) exp.erange) flow
+              man.exec (Utils.mk_builtin_raise_msg "TypeError" msg exp.erange) flow
             in
             Eval.empty_singleton flow
           )
@@ -258,9 +258,9 @@ module Domain =
         if List.length args > (List.length pyfundec.py_func_parameters) then
           (
             debug "Too many arguments!@\n";
-            Format.fprintf Format.str_formatter "%s() takes %d positional arguments but %d were given" pyfundec.py_func_var.vname (List.length pyfundec.py_func_parameters) (List.length args);
+            let msg = Format.asprintf "%s() takes %d positional arguments but %d were given" pyfundec.py_func_var.vname (List.length pyfundec.py_func_parameters) (List.length args) in
             let flow =
-              man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) exp.erange) flow
+              man.exec (Utils.mk_builtin_raise_msg "TypeError" msg exp.erange) flow
             in
             Eval.empty_singleton flow
           )
@@ -308,9 +308,9 @@ module Domain =
             if List.length args <> (List.length pyfundec.py_func_parameters) then
               (
                 debug "The number of arguments is not good@\n";
-                Format.fprintf Format.str_formatter "%s() has too few arguments" pyfundec.py_func_var.vname;
+                let msg = Format.asprintf "%s() has too few arguments" pyfundec.py_func_var.vname in
                 let flow =
-                  man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) exp.erange) flow
+                  man.exec (Utils.mk_builtin_raise_msg "TypeError" msg exp.erange) flow
                 in
                 Eval.empty_singleton flow
               )

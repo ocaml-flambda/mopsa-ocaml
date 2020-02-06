@@ -153,10 +153,10 @@ struct
                 man.eval (mk_and conds) flow
             | Some _ -> assert false
             | None ->
-              let ic, imro = match akind cls with
-                | A_py_class (c, m) -> c, m
-                | _ -> assert false in
-              man.eval (mk_py_bool (class_le (ic, imro) (c, mro)) range) flow
+               let ic, imro = match akind cls with
+                 | A_py_class (c, m) -> c, m
+                 | _ -> assert false in
+               man.eval (mk_py_bool (class_le (ic, imro) (c, mro)) range) flow
             end
 
           | Objects.Py_list.A_py_list _, A_py_class (C_builtin "list", _)

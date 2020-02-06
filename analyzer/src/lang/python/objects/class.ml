@@ -28,6 +28,10 @@ open Addr
 open Universal.Ast
 
 
+
+
+
+
 module Domain =
 struct
 
@@ -78,8 +82,8 @@ struct
                               (mk_py_isinstance_builtin r "NoneType" range)
                               ~fthen:(fun flow -> man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) inst flow)
                               ~felse:(fun flow ->
-                                Format.fprintf Format.str_formatter "__init__() should return None, not %a" pp_expr r;
-                                let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow in
+                                let msg = Format.asprintf "__init__() should return None, not %a" pp_expr r in
+                                let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow in
                                 Eval.empty_singleton flow
                               )
                               man flow

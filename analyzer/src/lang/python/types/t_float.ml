@@ -84,8 +84,8 @@ module Domain =
                                 ~fthen:(fun flow ->
                                     man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top (T_float F_DOUBLE) range) flow)
                                 ~felse:(fun flow ->
-                                    Format.fprintf Format.str_formatter "float() argument must be a string or a number, not '%a'" pp_expr el;
-                                    man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |>
+                                  let msg = Format.fprintf Format.str_formatter "float() argument must be a string or a number, not '%a'" pp_expr el in
+                                    man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow |>
                                     Eval.empty_singleton)
                                 man flow)
                           man flow
@@ -132,8 +132,8 @@ module Domain =
                     (* ) *)
                 )
               ~felse:(fun flow ->
-                  Format.fprintf Format.str_formatter "descriptor '%s' requires a 'float' object but received '%a'" f pp_expr e1;
-                  man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |> Eval.empty_singleton)
+                let msg = Format.asprintf "descriptor '%s' requires a 'float' object but received '%a'" f pp_expr e1 in
+                man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow |> Eval.empty_singleton)
           )
         |>  OptionExt.return
 
@@ -167,9 +167,9 @@ module Domain =
                        )
                    )
                  ~felse:(fun false_flow ->
-                     Format.fprintf Format.str_formatter "descriptor '%s' requires a 'float' object but received '%a'" f pp_expr e1;
-                     let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) false_flow in
-                     Eval.empty_singleton flow)
+                   let msg = Format.asprintf "descriptor '%s' requires a 'float' object but received '%a'" f pp_expr e1 in
+                   let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow in
+                   Eval.empty_singleton flow)
              )
          |>  OptionExt.return
 

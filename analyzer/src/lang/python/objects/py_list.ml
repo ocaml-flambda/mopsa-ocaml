@@ -182,15 +182,15 @@ struct
                               )
                           )
                         ~felse:(fun flow ->
-                            Format.fprintf Format.str_formatter "list indices must be integers or slices, not %a" pp_addr_kind (akind @@ fst @@ object_of_expr index);
-                            man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |>
+                          let msg = Format.asprintf "list indices must be integers or slices, not %a" pp_addr_kind (akind @@ fst @@ object_of_expr index) in
+                            man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow |>
                             Eval.empty_singleton
                           )
                     )
               )
             ~felse:(fun flow ->
-                Format.fprintf Format.str_formatter "descriptor '__getitem__' requires a 'list' object but received %a" pp_addr_kind (akind @@ fst @@ object_of_expr list);
-                man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |>
+              let msg = Format.asprintf "descriptor '__getitem__' requires a 'list' object but received %a" pp_addr_kind (akind @@ fst @@ object_of_expr list) in
+              man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow |>
                 Eval.empty_singleton
               )
         )
@@ -263,8 +263,8 @@ struct
                        man.eval (mk_py_call (mk_py_object (find_builtin "list.extend") range) [list; value] range) flow
                      )
                    ~felse:(fun flow ->
-                       Format.fprintf Format.str_formatter "list indices must be integers or slices, not %a" pp_addr_kind (akind @@ fst @@ object_of_expr index);
-                       man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |>
+                       let msg = Format.asprintf "list indices must be integers or slices, not %a" pp_addr_kind (akind @@ fst @@ object_of_expr index) in
+                       man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow |>
                        Eval.empty_singleton
                      )
                )
@@ -407,8 +407,8 @@ struct
                                    man.eval (mk_py_none range)
                                  )
                                ~felse:(fun flow ->
-                                   Format.fprintf Format.str_formatter "%a is not iterable" pp_expr list;
-                                   man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |> Eval.empty_singleton)
+                                 let msg = Format.asprintf "%a is not iterable" pp_expr list in
+                                   man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow |> Eval.empty_singleton)
                                  )
                      )
                )
@@ -439,8 +439,8 @@ struct
       Utils.check_instances f ~arguments_after_check:1 man flow range args
         ["list"]
         (fun args flow ->
-           Format.fprintf Format.str_formatter "%a is not in list" pp_expr (List.hd @@ List.tl args);
-           let eval_verror_f = man.exec (Utils.mk_builtin_raise_msg "ValueError" (Format.flush_str_formatter ()) range) flow in
+          let msg = Format.asprintf "%a is not in list" pp_expr (List.hd @@ List.tl args) in
+           let eval_verror_f = man.exec (Utils.mk_builtin_raise_msg "ValueError" msg range) flow in
            let flow = Flow.copy_ctx eval_verror_f flow in
            let eval_verror = Eval.empty_singleton eval_verror_f in
            let eval_res = man.eval (mk_py_top T_int range) flow in
@@ -620,13 +620,13 @@ struct
                       )
                 )
               ~felse:(fun flow ->
-                  Format.fprintf Format.str_formatter "%a is not iterable" pp_expr in_ty;
-                  man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |>
+                let msg = Format.asprintf "%a is not iterable" pp_expr in_ty in
+                  man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow |>
                   Eval.empty_singleton
                 )
           else
-            let () = Format.fprintf Format.str_formatter "fsum() takes exactly one argument (%d given)" (List.length args) in
-            man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |>
+            let msg = Format.asprintf "fsum() takes exactly one argument (%d given)" (List.length args) in
+            man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow |>
             Eval.empty_singleton
         )
       |> OptionExt.return

@@ -137,8 +137,7 @@ let report ?(flow=None) man alarms time files out =
                          l,
                          ""
                      in
-                     let () = Format.fprintf Format.str_formatter "%s%a%s" s1 (Debug.color_str "red") s2 s3 in
-                     Format.flush_str_formatter ()
+                     Format.asprintf "%s%a%s" s1 (Debug.color_str "red") s2 s3
                    in
 
                    (* Print the highlighted lines *)

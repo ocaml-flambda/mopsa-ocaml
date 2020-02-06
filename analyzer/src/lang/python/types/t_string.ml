@@ -214,8 +214,8 @@ module Domain =
                     man true_flow
                 )
               ~felse:(fun false_flow ->
-                  Format.fprintf Format.str_formatter "descriptor '%s' requires a 'str' object but received '%a'" f pp_expr e1;
-                  let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) false_flow in
+                let msg = Format.asprintf "descriptor '%s' requires a 'str' object but received '%a'" f pp_expr e1 in
+                  let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow in
                   Eval.empty_singleton flow)
               man flow
           )
@@ -248,8 +248,8 @@ module Domain =
                     man true_flow
                 )
               ~felse:(fun false_flow ->
-                  Format.fprintf Format.str_formatter "descriptor '%s' requires a 'str' object but received '%a'" f pp_expr e1;
-                  let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) false_flow in
+                let msg = Format.asprintf "descriptor '%s' requires a 'str' object but received '%a'" f pp_expr e1 in
+                let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow in
                   Eval.empty_singleton flow)
               man flow
           )
@@ -348,7 +348,7 @@ module Domain =
           ["str"; "str"]
           (fun eargs flow ->
              let earg, eencoding = match eargs with [e1;e2] -> e1, e2 | _ -> assert false in
-             let msg = Format.fprintf Format.str_formatter "unknown encoding: %a" pp_expr eencoding; Format.flush_str_formatter () in
+             let msg = Format.asprintf "unknown encoding: %a" pp_expr eencoding in
              let lookuperr_f = man.exec (Utils.mk_builtin_raise_msg "LookupError" msg range) flow in
              Eval.join_list
                ~empty:(fun () -> assert false)
@@ -363,7 +363,7 @@ module Domain =
           ["bytes"; "str"]
           (fun eargs flow ->
              let earg, eencoding = match eargs with [e1;e2] -> e1, e2 | _ -> assert false in
-             let msg = Format.fprintf Format.str_formatter "unknown encoding: %a" pp_expr eencoding; Format.flush_str_formatter () in
+             let msg = Format.asprintf "unknown encoding: %a" pp_expr eencoding in
              let lookuperr_f = man.exec (Utils.mk_builtin_raise_msg "LookupError" msg range) flow in
              Eval.join_list
                ~empty:(fun () -> assert false)

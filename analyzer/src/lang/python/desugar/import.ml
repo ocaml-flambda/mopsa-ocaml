@@ -67,9 +67,10 @@ module Domain =
           Post.return |>
           OptionExt.return
         with Module_not_found m ->
-          Format.fprintf Format.str_formatter "No module named '%s'" m;
           man.exec
-            (Utils.mk_builtin_raise_msg "ModuleNotFoundError" (Format.flush_str_formatter ()) range)
+            (Utils.mk_builtin_raise_msg "ModuleNotFoundError" (
+                 Format.asprintf "No module named '%s'" m
+               ) range)
             flow |> Post.return |> OptionExt.return
         end
 

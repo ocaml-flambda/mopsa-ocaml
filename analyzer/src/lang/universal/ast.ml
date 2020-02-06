@@ -285,10 +285,7 @@ let () =
   }
 
 let mk_addr_attr addr attr typ =
-  let name =
-    let () = Format.fprintf Format.str_formatter "%a.%s" pp_addr addr attr in
-    Format.flush_str_formatter ()
-  in
+  let name = Format.asprintf "%a.%s" pp_addr addr attr in
   mkv name (V_addr_attr (addr,attr)) typ
 
 

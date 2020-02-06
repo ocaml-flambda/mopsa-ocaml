@@ -430,14 +430,14 @@ struct
 
             | Undef_global ->
               debug "Incoming NameError, on var %a, range %a, cs = %a @\n" pp_var v pp_range range Callstack.print (Flow.get_callstack flow);
-              Format.fprintf Format.str_formatter "name '%a' is not defined" pp_var v;
-              let flow = man.exec (Utils.mk_builtin_raise_msg "NameError" (Format.flush_str_formatter ()) range) flow in
+              let msg = Format.asprintf "name '%a' is not defined" pp_var v in
+              let flow = man.exec (Utils.mk_builtin_raise_msg "NameError" msg range) flow in
               (Eval.empty_singleton flow :: acc, Flow.get_ctx flow)
 
             | Undef_local ->
               debug "Incoming UnboundLocalError, on var %a, range %a, cs = %a @\ncur = %a@\n" pp_var v pp_range range Callstack.print (Flow.get_callstack flow) man.lattice.print (Flow.get T_cur man.lattice flow);
-              Format.fprintf Format.str_formatter "local variable '%a' referenced before assignment" pp_var v;
-              let flow = man.exec (Utils.mk_builtin_raise_msg "UnboundLocalError" (Format.flush_str_formatter ()) range) flow in
+              let msg = Format.asprintf "local variable '%a' referenced before assignment" pp_var v in
+              let flow = man.exec (Utils.mk_builtin_raise_msg "UnboundLocalError" msg range) flow in
               (Eval.empty_singleton flow :: acc, Flow.get_ctx flow)
 
             | Def addr ->

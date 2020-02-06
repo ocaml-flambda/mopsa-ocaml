@@ -93,16 +93,14 @@ struct
                           (Utils.mk_hasattr iter "__next__" range)
                           ~fthen:(fun true_flow -> Eval.singleton iter true_flow)
                           ~felse:(fun false_flow ->
-                              Format.fprintf Format.str_formatter "iter() returned non-iterator of type '%a'" pp_addr_kind (akind @@ fst @@ object_of_expr iter);
-                              let msg = Format.flush_str_formatter () in
-                              man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow |>
+                            let msg = Format.asprintf "iter() returned non-iterator of type '%a'" pp_addr_kind (akind @@ fst @@ object_of_expr iter) in
+                            man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow |>
                               Eval.empty_singleton)
                           man flow
                       )
                   )
                 ~felse:(fun false_flow ->
-                    Format.fprintf Format.str_formatter "'%a' object is not iterable" pp_addr_kind (akind @@ fst cls);
-                    let msg = Format.flush_str_formatter () in
+                    let msg = Format.asprintf "'%a' object is not iterable" pp_addr_kind (akind @@ fst cls) in
                     man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow |>
                     Eval.empty_singleton)
                 man flow
@@ -130,16 +128,15 @@ struct
                           ~fthen:(fun true_flow ->
                               Eval.singleton len true_flow)
                           ~felse:(fun false_flow ->
-                              Format.fprintf Format.str_formatter "'%a' object cannot be interpreted as an integer" pp_addr_kind (akind @@ fst @@ object_of_expr len);
-                              let msg = Format.flush_str_formatter () in
+                              let msg = Format.asprintf "'%a' object cannot be interpreted as an integer" pp_addr_kind (akind @@ fst @@ object_of_expr len) in
                               man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow |>
                               Eval.empty_singleton)
                           man flow
                       )
                   )
                 ~felse:(fun false_flow ->
-                    Format.fprintf Format.str_formatter "object of type '%a' has no len()" pp_addr_kind (akind @@ fst cls);
-                    man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) false_flow |>
+                  let msg = Format.asprintf "object of type '%a' has no len()" pp_addr_kind (akind @@ fst cls) in
+                  man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow |>
                     Eval.empty_singleton)
                 man flow
             )
@@ -161,8 +158,8 @@ struct
                     man.eval (mk_py_call (mk_py_object_attr cls "__next__" range) [obj] range) true_flow
                   )
                 ~felse:(fun false_flow ->
-                    Format.fprintf Format.str_formatter "'%a' object is not an iterator" pp_addr_kind (akind @@ fst cls);
-                    man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) false_flow |>
+                  let msg = Format.asprintf "'%a' object is not an iterator" pp_addr_kind (akind @@ fst cls) in
+                    man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow |>
                     Eval.empty_singleton)
                 man flow
             )
@@ -170,10 +167,10 @@ struct
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("input", _))}, _)}, args, [])  ->
-      let tyerror = fun flow ->
-        Format.fprintf Format.str_formatter "input expected at most 1 arguments, got %d" (List.length args);
-        man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |> Eval.empty_singleton in
-      if List.length args <= 1 then
+       let tyerror = fun flow ->
+         let msg = Format.asprintf "input expected at most 1 arguments, got %d" (List.length args) in
+         man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow |> Eval.empty_singleton in
+       if List.length args <= 1 then
         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_string range) flow |> OptionExt.return
       else
         tyerror flow |> OptionExt.return
@@ -230,11 +227,11 @@ struct
       let pass = mk_block [] range in
 
       let assign_iter = mk_assign iter_var (Utils.mk_builtin_call "iter" [iterable] range) range in
-      Format.fprintf Format.str_formatter "%s() arg is an empty sequence" s;
+      let msg = Format.asprintf "%s() arg is an empty sequence" s in
       let assign_max =
         Utils.mk_try_stopiteration
           (mk_assign maxi_var (Utils.mk_builtin_call "next" [iter_var] range) range)
-          (Utils.mk_builtin_raise_msg "ValueError" (Format.flush_str_formatter ()) range)
+          (Utils.mk_builtin_raise_msg "ValueError" msg range)
           range in
       let for_stmt = mk_stmt (S_py_for (target_var, iter_var,
                                         mk_if (mk_binop target_var comp_op maxi_var range)
@@ -265,8 +262,8 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("hash", _))}, _)}, args, []) ->
       let tyerror = fun flow ->
-        Format.fprintf Format.str_formatter "hash() takes exactly one argument (%d given)" (List.length args);
-        man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |> Eval.empty_singleton in
+        let msg = Format.asprintf "hash() takes exactly one argument (%d given)" (List.length args) in
+        man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow |> Eval.empty_singleton in
       Cases.bind_list args man.eval flow |>
       Cases.bind_some (fun eargs flow ->
           if List.length eargs <> 1 then tyerror flow else
@@ -343,8 +340,8 @@ struct
       bind_list args man.eval flow |>
       bind_some (fun eargs flow ->
           if List.length eargs <> 1 then
-            let () = Format.fprintf Format.str_formatter "abs() takes exactly one argument (%d given)" (List.length args) in
-            man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |> Eval.empty_singleton
+            let msg = Format.asprintf "abs() takes exactly one argument (%d given)" (List.length args) in
+            man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow |> Eval.empty_singleton
           else
             let v = List.hd eargs in
             assume (mk_py_isinstance_builtin v "int" range) man flow
@@ -357,8 +354,8 @@ struct
                   assume (mk_py_isinstance_builtin v "float" range) man flow
                     ~fthen:(man.eval (mk_py_top (T_float F_DOUBLE) range))
                     ~felse:(fun flow ->
-                        Format.fprintf Format.str_formatter "bad operand type for abs()";  (* FIXME *)
-                        man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |>
+                      let msg = Format.asprintf "bad operand type for abs()" in  (* FIXME *)
+                        man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow |>
                         Eval.empty_singleton
                       )
                 )
