@@ -592,7 +592,12 @@ struct
       Utils.check_instances f man flow range args
         ["list"]
         (fun args flow ->
-          Eval.singleton (mk_py_object (Addr_env.addr_integers (), Some {(mk_var (length_var_of_eobj @@ List.hd args) range) with etyp=T_int}) range) flow
+          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow |>
+            Eval.bind (fun eint flow ->
+                match ekind eint with
+                | E_py_object (addr, _) ->
+                   Eval.singleton {eint with ekind = E_py_object (addr, Some {(mk_var (length_var_of_eobj @@ List.hd args) range) with etyp=T_int})} flow
+                | _ -> assert false)
         )
       |> OptionExt.return
 
