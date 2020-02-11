@@ -45,7 +45,15 @@
                 "apply": {
                     "compose": [
                         "universal.heap.recency.callstack_range",
-                        "c.memory.lowlevel.cells",
+                        {
+                            "product":[
+                                "c.memory.lowlevel.cells",
+                                "c.memory.lowlevel.string_literal"
+                            ],
+                            "reductions": [
+                                "c.memory.lowlevel.reductions.cell_string_literal"
+                            ]
+                        },
 			{
                             "seq": [
 				"c.memory.scalars.pointer",
