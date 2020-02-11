@@ -198,7 +198,7 @@ struct
 
   let find v a =
     try find v a
-    with Not_found -> Exceptions.warn "variable %a not found" pp_var v; raise Not_found
+    with Not_found -> Exceptions.warn "nonrel: variable %a not found" pp_var v; raise Not_found
 
 
   let merge pre (a1, log1) (a2, log2) = generic_nonrel_merge ~top:Value.top ~add ~remove ~find ~meet pre (a1, log1) (a2, log2)

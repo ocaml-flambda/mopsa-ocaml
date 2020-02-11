@@ -162,3 +162,13 @@ let bind_list_args man args flow range zone (f: var list -> 'b flow -> ('b, 'c) 
   let stmt = Universal.Ast.mk_block stmt range in
   f vars (man.exec ~zone:zone stmt flow) |>
     Cases.add_cleaners (List.map (fun x -> mk_remove_var x range) vars)
+
+
+let change_var_type t v =
+  { v with vtyp = t;
+           vname = Format.asprintf "%s:%a" v.vname pp_typ v.vtyp }
+
+let change_evar_type t evar =
+  match ekind evar with
+  | E_var (v, mode) -> {evar with ekind = E_var (change_var_type t v, mode); etyp=t}
+  | _ -> assert false

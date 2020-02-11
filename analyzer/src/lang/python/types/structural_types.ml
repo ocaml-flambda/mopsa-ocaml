@@ -400,7 +400,7 @@ struct
               Eval.apply (fun etuple flow ->
                   let var = List.hd @@ Objects.Tuple.Domain.var_of_eobj etuple in
                   (* FIXME *)
-                  let pset = man.ask (Universal.Strings.Powerset.Q_strings_powerset (mk_var {var with vtyp=T_string} range)) flow in
+                  let pset = man.ask (Universal.Strings.Powerset.Q_strings_powerset (mk_var (Utils.change_var_type T_string var) range)) flow in
                   if Universal.Strings.Powerset.Value.is_top pset then "T"
                   else Universal.Strings.Powerset.StringPower.choose pset
                 )

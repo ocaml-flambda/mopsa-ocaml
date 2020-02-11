@@ -146,11 +146,6 @@ struct
   let init prog man flow =
     set_env T_cur empty man flow
 
-  let change_var_type t evar =
-    match ekind evar with
-    | E_var (v, mode) -> {evar with ekind = E_var ({v with vtyp=t}, mode); etyp=t}
-    | _ -> assert false
-
   let rec exec zone stmt man flow =
     debug "exec %a@\n" pp_stmt stmt;
     let range = srange stmt in
@@ -173,7 +168,7 @@ struct
        | Some aset ->
           let flow = ASet.fold
                        (fun pyaddr flow ->
-                         let cstmt = fun t -> {stmt with skind = S_assign(change_var_type t vl, change_var_type t vr)} in
+                         let cstmt = fun t -> {stmt with skind = S_assign(Utils.change_evar_type t vl, Utils.change_evar_type t vr)} in
                          match pyaddr with
                          | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "str", _)}} ->
                             man.exec ~zone:Universal.Zone.Z_u_string (cstmt T_string) flow
@@ -210,12 +205,12 @@ struct
                 let flow = assign_addr man v (PyAddr.Def addr) mode flow in
                 begin match akind addr with
                 | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} ->
-                  man.exec ~zone:Universal.Zone.Z_u_string (mk_assign (change_var_type T_string evar) expr range) flow
+                  man.exec ~zone:Universal.Zone.Z_u_string (mk_assign (Utils.change_evar_type T_string evar) expr range) flow
                 | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}
                 | A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)} ->
-                  man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (change_var_type T_int evar) expr range) flow
+                  man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (Utils.change_evar_type T_int evar) expr range) flow
                 | A_py_instance {addr_kind = A_py_class (C_builtin "float", _)} ->
-                  man.exec ~zone:Universal.Zone.Z_u_float (mk_assign (change_var_type (T_float F_DOUBLE) evar) expr range) flow
+                  man.exec ~zone:Universal.Zone.Z_u_float (mk_assign (Utils.change_evar_type (T_float F_DOUBLE) evar) expr range) flow
                 | _ ->
                   flow
                 end |>
@@ -241,12 +236,12 @@ struct
           | E_py_object (addr, _) ->
             begin match akind addr with
               | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} ->
-                man.exec ~zone:Universal.Zone.Z_u_string (mk_assign (change_var_type T_string evar) (mk_py_top T_string range) range) flow
+                man.exec ~zone:Universal.Zone.Z_u_string (mk_assign (Utils.change_evar_type T_string evar) (mk_py_top T_string range) range) flow
               | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}
               | A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)} ->
-                man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (change_var_type T_int evar) (mk_py_top T_int range) range) flow
+                man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (Utils.change_evar_type T_int evar) (mk_py_top T_int range) range) flow
               | A_py_instance {addr_kind = A_py_class (C_builtin "float", _)} ->
-                man.exec ~zone:Universal.Zone.Z_u_float (mk_assign (change_var_type (T_float F_DOUBLE) evar) (mk_py_top (T_float F_DOUBLE) range) range) flow
+                man.exec ~zone:Universal.Zone.Z_u_float (mk_assign (Utils.change_evar_type (T_float F_DOUBLE) evar) (mk_py_top (T_float F_DOUBLE) range) range) flow
               | _ ->
                 flow
             end |>
@@ -271,6 +266,21 @@ struct
        let cur = get_env T_cur man flow in
        let aset = AMap.find_opt v cur in
        let flow = set_env T_cur (AMap.remove v cur) man flow  in
+       let flow = OptionExt.apply (fun aset ->
+                      fst @@ ASet.fold (fun pyaddr (flow, int_already) ->
+                                 (* if int has already been removed, we shouldn't do it again. Happens due to int/bool duality *)
+                          match pyaddr with
+                          | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "str", _)}} ->
+                             man.exec ~zone:Universal.Zone.Z_u_string (mk_remove_var (Utils.change_var_type T_string v) range) flow, int_already
+                          | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)}}
+                            | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}} ->
+                             if int_already then flow, int_already
+                             else
+                               man.exec ~zone:Universal.Zone.Z_u_int (mk_remove_var (Utils.change_var_type T_int v) range) flow, true
+                          | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "float", _)}}  ->
+                             man.exec ~zone:Universal.Zone.Z_u_float (mk_remove_var (Utils.change_var_type (T_float F_DOUBLE) v) range) flow, int_already
+                          | _ -> flow, int_already
+                        ) aset (flow, false)) flow aset  in
       (* FIXME? *)
       (* let flow = man.exec ~zone:Zone.Z_py_obj (mk_remove_var v range) flow in *)
       begin match v.vkind with
@@ -280,18 +290,6 @@ struct
           flow |> Post.return |> OptionExt.return
 
         | _ ->
-           let flow = OptionExt.apply (fun aset ->
-                          ASet.fold (fun pyaddr flow ->
-                              match pyaddr with
-                              | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "str", _)}} ->
-                                 man.exec ~zone:Universal.Zone.Z_u_string (mk_remove_var {v with vtyp = T_string} range) flow
-                              | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)}}
-                                | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}} ->
-                                 man.exec ~zone:Universal.Zone.Z_u_int (mk_remove_var {v with vtyp = T_int} range) flow
-                              | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "float", _)}}  ->
-                                 man.exec ~zone:Universal.Zone.Z_u_float (mk_remove_var {v with vtyp = (T_float F_DOUBLE)} range) flow
-                              | _ -> flow
-                            ) aset flow) flow aset  in
            flow |> Post.return |> OptionExt.return
       end
 
@@ -317,25 +315,26 @@ struct
       (* FIXME: modes, rename in weak shouldn't erase the old v'? *)
       let cur = get_env T_cur man flow in
       begin match AMap.find_opt v cur with
-        | Some aset ->
-          let flow = ASet.fold
-              (fun addr flow ->
+      | Some aset ->
+          let flow, _ = ASet.fold
+              (fun addr (flow, int_already) ->
                  match addr with
                  | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "str", _)}} ->
                    man.exec ~zone:Universal.Zone.Z_u_string
-                     {stmt with skind = S_rename(change_var_type T_string l, change_var_type T_string r)}
-                     flow
+                     {stmt with skind = S_rename(Utils.change_evar_type T_string l, Utils.change_evar_type T_string r)}
+                     flow, int_already
                  | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)}}
                  | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}} ->
-                   man.exec ~zone:Universal.Zone.Z_u_int
-                     {stmt with skind = S_rename (change_var_type T_int l, change_var_type T_int r)}
-                        flow
+                    if int_already then flow, int_already
+                    else man.exec ~zone:Universal.Zone.Z_u_int
+                     {stmt with skind = S_rename (Utils.change_evar_type T_int l, Utils.change_evar_type T_int r)}
+                        flow, true
                  | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "float", _)}} ->
                    man.exec ~zone:Universal.Zone.Z_u_float
-                     {stmt with skind = S_rename (change_var_type (T_float F_DOUBLE) l, change_var_type (T_float F_DOUBLE) r)}
-                     flow
-                 | _ -> flow
-              ) aset flow  in
+                     {stmt with skind = S_rename (Utils.change_evar_type (T_float F_DOUBLE) l, Utils.change_evar_type (T_float F_DOUBLE) r)}
+                     flow, int_already
+                 | _ -> flow, int_already
+              ) aset (flow, false)  in
           set_env T_cur (AMap.rename v v' cur) man flow |>
           Post.return |> OptionExt.return
         | None ->
@@ -448,13 +447,18 @@ struct
                     debug "removing other numerical vars";
                     let f = begin match akind addr' with
                       | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} ->
-                        man.exec ~zone:Universal.Zone.Z_u_string (mk_remove_var {v with vtyp = T_string} range) flow
+                        man.exec ~zone:Universal.Zone.Z_u_string (mk_remove_var (Utils.change_var_type T_string v) range) flow
                       | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}
                       | A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)} ->
-                       (* FIXME FIXME FIXME: we'll remove things if v is either an int or a float *)
-                        man.exec ~zone:Universal.Zone.Z_u_int (mk_remove_var {v with vtyp = T_int} range) flow
+                         begin match akind addr with
+                         | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}
+                           | A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)} ->
+                            flow
+                         | _ ->
+                            man.exec ~zone:Universal.Zone.Z_u_int (mk_remove_var (Utils.change_var_type T_int v) range) flow
+                         end
                       | A_py_instance {addr_kind = A_py_class (C_builtin "float", _)} ->
-                        man.exec ~zone:Universal.Zone.Z_u_float (mk_remove_var {v with vtyp = (T_float F_DOUBLE)} range) flow
+                        man.exec ~zone:Universal.Zone.Z_u_float (mk_remove_var (Utils.change_var_type (T_float F_DOUBLE) v) range) flow
                       | _ ->
                         flow
                     end in
@@ -464,11 +468,11 @@ struct
               let exp = match akind addr with
                 | A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)}
                 | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)} ->
-                  change_var_type T_int exp
+                  Utils.change_evar_type T_int exp
                 | A_py_instance {addr_kind = A_py_class (C_builtin "float", _)} ->
-                  change_var_type (T_float F_DOUBLE) exp
+                  Utils.change_evar_type (T_float F_DOUBLE) exp
                 | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} ->
-                  change_var_type T_string exp
+                  Utils.change_evar_type T_string exp
                 | _ -> exp in
               let res = man.eval (mk_py_object (addr, Some exp) range) flow in
               let annots = Eval.get_ctx res in
