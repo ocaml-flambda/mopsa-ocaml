@@ -146,6 +146,29 @@ struct
   let init prog man flow =
     set_env T_cur empty man flow
 
+  let fold_intfloatstr man v flow fstmt =
+    let cur = get_env T_cur man flow in
+    let oaset = AMap.find_opt v cur in
+    match oaset with
+    | None -> flow
+    | Some aset ->
+       (* FIXME: if we explicitly define things below, we could use ASet.mem *)
+       let str, intb, float = ASet.fold (fun pyaddr (str, intb, float) ->
+                                  match pyaddr with
+                                  | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "str", _)}} ->
+                                     (true, intb, float)
+                                  | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)}}
+                                    | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}} ->
+                                     (str, true, float)
+                                  | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "float", _)}} ->
+                                     (str, intb, true)
+                                  | _ -> (str, intb, float)
+                                ) aset (false, false, false) in
+       let flow = if str then man.exec ~zone:Universal.Zone.Z_u_string (fstmt T_string) flow  else flow in
+       let flow = if intb then man.exec ~zone:Universal.Zone.Z_u_int (fstmt T_int) flow else flow in
+       let flow = if float then man.exec ~zone:Universal.Zone.Z_u_float (fstmt (T_float F_DOUBLE)) flow else flow in
+       flow
+
   let rec exec zone stmt man flow =
     debug "exec %a@\n" pp_stmt stmt;
     let range = srange stmt in
@@ -166,6 +189,7 @@ struct
        begin match AMap.find_opt w cur with
        | None -> flow |> Post.return |> OptionExt.return
        | Some aset ->
+          (* FIXME FIXME FIXME FIXME: what happens if multiple float/... instances? *)
           let flow = ASet.fold
                        (fun pyaddr flow ->
                          let cstmt = fun t -> {stmt with skind = S_assign(Utils.change_evar_type t vl, Utils.change_evar_type t vr)} in
@@ -202,19 +226,20 @@ struct
                 assign_addr man v (PyAddr.Def addr) mode flow |> Post.return
 
               | E_py_object (addr, Some expr) ->
-                let flow = assign_addr man v (PyAddr.Def addr) mode flow in
-                begin match akind addr with
-                | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} ->
-                  man.exec ~zone:Universal.Zone.Z_u_string (mk_assign (Utils.change_evar_type T_string evar) expr range) flow
-                | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}
-                | A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)} ->
-                  man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (Utils.change_evar_type T_int evar) expr range) flow
-                | A_py_instance {addr_kind = A_py_class (C_builtin "float", _)} ->
-                  man.exec ~zone:Universal.Zone.Z_u_float (mk_assign (Utils.change_evar_type (T_float F_DOUBLE) evar) expr range) flow
-                | _ ->
-                  flow
-                end |>
-                Post.return
+                 let flow = assign_addr man v (PyAddr.Def addr) mode flow in
+                 debug "calling values for %a" pp_addr addr;
+                 begin match akind addr with
+                 | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} ->
+                    man.exec ~zone:Universal.Zone.Z_u_string (mk_assign (Utils.change_evar_type T_string evar) expr range) flow
+                 | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}
+                   | A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)} ->
+                    man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (Utils.change_evar_type T_int evar) expr range) flow
+                 | A_py_instance {addr_kind = A_py_class (C_builtin "float", _)} ->
+                    man.exec ~zone:Universal.Zone.Z_u_float (mk_assign (Utils.change_evar_type (T_float F_DOUBLE) evar) expr range) flow
+                 | _ ->
+                    flow
+                 end |>
+                   Post.return
 
               | E_constant (C_top T_any) ->
                 let cur = get_env T_cur man flow in
@@ -263,35 +288,18 @@ struct
 
 
     | S_remove ({ekind = E_var (v, _)} as var) ->
+       let flow = fold_intfloatstr man v flow (fun t -> mk_remove_var (Utils.change_var_type t v) range) in
        let cur = get_env T_cur man flow in
-       let aset = AMap.find_opt v cur in
-       let flow = set_env T_cur (AMap.remove v cur) man flow  in
-       let flow = OptionExt.apply (fun aset ->
-                      fst @@ ASet.fold (fun pyaddr (flow, int_already) ->
-                                 (* if int has already been removed, we shouldn't do it again. Happens due to int/bool duality *)
-                          match pyaddr with
-                          | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "str", _)}} ->
-                             man.exec ~zone:Universal.Zone.Z_u_string (mk_remove_var (Utils.change_var_type T_string v) range) flow, int_already
-                          | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)}}
-                            | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}} ->
-                             if int_already then flow, int_already
-                             else
-                               man.exec ~zone:Universal.Zone.Z_u_int (mk_remove_var (Utils.change_var_type T_int v) range) flow, true
-                          | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "float", _)}}  ->
-                             man.exec ~zone:Universal.Zone.Z_u_float (mk_remove_var (Utils.change_var_type (T_float F_DOUBLE) v) range) flow, int_already
-                          | _ -> flow, int_already
-                        ) aset (flow, false)) flow aset  in
-      (* FIXME? *)
-      (* let flow = man.exec ~zone:Zone.Z_py_obj (mk_remove_var v range) flow in *)
-      begin match v.vkind with
-        | V_uniq _ when not (Hashtbl.mem type_aliases v) ->
+       let flow = set_env T_cur (AMap.remove v cur) man flow in
+       begin match v.vkind with
+       | V_uniq _ when not (Hashtbl.mem type_aliases v) ->
           (* if the variable maps to a list, we should remove the temporary variable associated, ONLY if it's not used by another list *)
           let flow = man.exec (mk_assign var (mk_expr (E_py_undefined true) range) range) flow in
           flow |> Post.return |> OptionExt.return
 
-        | _ ->
-           flow |> Post.return |> OptionExt.return
-      end
+       | _ ->
+          flow |> Post.return |> OptionExt.return
+       end
 
     | S_assume e ->
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
@@ -312,37 +320,21 @@ struct
       |> OptionExt.return
 
     | S_rename (({ekind = E_var (v, mode)} as l), ({ekind = E_var (v', mode')} as r)) ->
-      (* FIXME: modes, rename in weak shouldn't erase the old v'? *)
-      let cur = get_env T_cur man flow in
-      begin match AMap.find_opt v cur with
-      | Some aset ->
-          let flow, _ = ASet.fold
-              (fun addr (flow, int_already) ->
-                 match addr with
-                 | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "str", _)}} ->
-                   man.exec ~zone:Universal.Zone.Z_u_string
-                     {stmt with skind = S_rename(Utils.change_evar_type T_string l, Utils.change_evar_type T_string r)}
-                     flow, int_already
-                 | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)}}
-                 | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}} ->
-                    if int_already then flow, int_already
-                    else man.exec ~zone:Universal.Zone.Z_u_int
-                     {stmt with skind = S_rename (Utils.change_evar_type T_int l, Utils.change_evar_type T_int r)}
-                        flow, true
-                 | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "float", _)}} ->
-                   man.exec ~zone:Universal.Zone.Z_u_float
-                     {stmt with skind = S_rename (Utils.change_evar_type (T_float F_DOUBLE) l, Utils.change_evar_type (T_float F_DOUBLE) r)}
-                     flow, int_already
-                 | _ -> flow, int_already
-              ) aset (flow, false)  in
+       (* FIXME: modes, rename in weak shouldn't erase the old v'? *)
+       let flow = fold_intfloatstr man v flow (fun t ->
+                      {stmt with skind = S_rename (Utils.change_evar_type t l,
+                                                   Utils.change_evar_type t r)}) in
+       let cur = get_env T_cur man flow in
+       begin match AMap.find_opt v cur with
+       | Some aset ->
           set_env T_cur (AMap.rename v v' cur) man flow |>
-          Post.return |> OptionExt.return
-        | None ->
+            Post.return |> OptionExt.return
+       | None ->
           begin match v.vkind with
-            | V_addr_attr(a, _) when Objects.Data_container_utils.is_data_container a.addr_kind ->
-              flow |> Post.return |> OptionExt.return
-            | _ -> assert false (* shouldn't happen *) end
-      end
+          | V_addr_attr(a, _) when Objects.Data_container_utils.is_data_container a.addr_kind ->
+             flow |> Post.return |> OptionExt.return
+          | _ -> assert false (* shouldn't happen *) end
+       end
 
     | S_rename (({ekind = E_addr a} as e1), ({ekind = E_addr a'} as e2)) ->
       let cur = get_env T_cur man flow in
