@@ -348,7 +348,4 @@ def test_types():
     # mopsa.ignore_exception(TypeError)
     mopsa.assert_safe()
 
-def test_values():
-    import mopsa
-    main()
-    mopsa.assert_safe()
+def test_values(): test_types()

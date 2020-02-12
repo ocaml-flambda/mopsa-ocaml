@@ -689,8 +689,4 @@ def test_types():
     mopsa.assert_safe()
 
 
-def test_values():
-    import mopsa
-
-    main(10, 36)
-    mopsa.assert_safe()
+def test_values(): test_types()

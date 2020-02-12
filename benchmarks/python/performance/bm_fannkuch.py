@@ -60,16 +60,4 @@ def test_types():
     mopsa.ignore_exception(IndexError)
     mopsa.assert_safe()
 
-def test_values():
-    import mopsa
-
-    arg = DEFAULT_ARG
-    fannkuch(arg)
-    mopsa.assert_safe()
-
-
-# if __name__ == "__main__":
-#     # runner = perf.Runner()
-#     arg = DEFAULT_ARG
-#     # runner.bench_func('fannkuch', fannkuch, arg)
-#     fannkuch(arg)
+def test_values(): test_types()

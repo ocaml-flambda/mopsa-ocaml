@@ -1790,7 +1790,7 @@ def test_types():
 
 def test_values():
     bench_regex_v8(10)
-#    mopsa.ignore_exception(IndexError)
+    mopsa.ignore_exception(IndexError)
     mopsa.assert_safe()
 
 
