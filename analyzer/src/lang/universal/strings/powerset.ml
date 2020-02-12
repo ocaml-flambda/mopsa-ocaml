@@ -177,7 +177,7 @@ struct
   let eval zones expr (man: ('a, t) Core.Sig.Domain.Intermediate.man) flow =
     let range = erange expr in
     match ekind expr with
-    | E_binop (O_mult, e1, e2) ->
+    | E_binop (O_mult, e1, e2) when etyp e1 = T_string && etyp e2 = T_int->
       man.eval ~zone:(Zone.Z_u, Zone.Z_u_string) e1 flow |>
       Eval.bind (fun e1 flow ->
           let cur = Core.Sig.Domain.Intermediate.get_env T_cur man flow in
@@ -201,7 +201,7 @@ struct
         )
       |> OptionExt.return
 
-    | E_len e ->
+    | E_len e when etyp e = T_string ->
       man.eval ~zone:(Zone.Z_u, Zone.Z_u_string) e flow |>
       Eval.bind (fun e flow ->
           let cur = Core.Sig.Domain.Intermediate.get_env T_cur man flow in

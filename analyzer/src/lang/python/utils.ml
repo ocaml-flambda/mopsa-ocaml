@@ -170,3 +170,7 @@ let change_evar_type t evar =
   match ekind evar with
   | E_var (v, mode) -> {evar with ekind = E_var (change_var_type t v, mode); etyp=t}
   | _ -> assert false
+
+let extract_oobject e = match ekind e with
+  | E_py_object (_, Some a) -> a
+  | _ -> assert false
