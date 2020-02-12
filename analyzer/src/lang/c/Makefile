@@ -23,7 +23,7 @@
 
 # C packs
 lang += c
-lang.c = ast pp visitor zone frontend common desugar libs iterators cstubs memory hooks packing
+lang.c = ast pp visitor zone frontend common desugar libs iterators cstubs memory packing
 lang.c.common = builtins base alarms points_to quantified_offset scope_update
 lang.c.iterators = program switch loops goto interproc
 lang.c.desugar = conditions constants aggregates
@@ -36,7 +36,6 @@ lang.c.cstubs = aux_vars resources assigns requires builtins
 lang.c.libs = libc libmopsa compiler_builtins
 lang.c.libs.libc.formatted_io = placeholder parser lexer format_string fscanf fprintf
 lang.c.libs.libc.file_descriptor = slot table domain
-lang.c.hooks = profiler
 lang.c.packing = static_scope reductions
 
 
