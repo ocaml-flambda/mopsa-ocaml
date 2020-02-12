@@ -35,7 +35,7 @@ module Domain =
       end)
 
     let interface = {
-      iexec = {provides = [Zone.Z_py]; uses = []};
+      iexec = {provides = [Zone.Z_py]; uses = [Zone.Z_py]};
       ieval = {provides = []; uses = []}
     }
 
@@ -47,29 +47,12 @@ module Domain =
       let range = srange stmt in
       match skind stmt with
       (* S⟦ assert(e, msg) ⟧ *)
-      | S_py_assert ({ekind = E_constant (C_bool true)}, msg)->
-         Post.return flow |> OptionExt.return
-
-      | S_py_assert ({ekind = E_constant (C_bool false)}, msg)->
-         man.exec (Utils.mk_builtin_raise "AssertionError" range) flow |> Post.return |> OptionExt.return
-
       | S_py_assert (e, msg)->
-         man.eval e flow |>
-         bind_some_opt  @@ fun e flow ->
-         let ok_case = man.exec (mk_assume e (tag_range range "safe case assume")) flow in
-
-         let fail_case =
-           debug "checking fail";
-           let flow = man.exec (mk_assume (mk_py_not e e.erange) (tag_range range "fail case assume")) flow in
-           if Flow.is_bottom man.lattice flow then
-             let _ = debug "no fail" in
-             Flow.bottom (Flow.get_ctx flow) (Flow.get_alarms flow)
-           else
-             man.exec (
-               Utils.mk_builtin_raise "AssertionError" (tag_range range "fail case raise")
-             ) flow
-         in
-         Flow.join man.lattice ok_case fail_case
+         Flow.join
+           man.lattice
+           (man.exec (mk_assume e range) flow)
+           (man.exec (mk_assume (mk_py_not e range) range) flow |>
+              man.exec (Utils.mk_builtin_raise "AssertionError" range))
          |> Post.return
          |> OptionExt.return
 

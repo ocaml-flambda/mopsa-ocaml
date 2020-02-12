@@ -93,9 +93,10 @@ Vector.RIGHT = Vector(1, 0, 0)
 Vector.UP = Vector(0, 1, 0)
 Vector.OUT = Vector(0, 0, 1)
 
-assert Vector.RIGHT.reflectThrough(Vector.UP) == Vector.RIGHT
-assert Vector(-1, -1, 0).reflectThrough(Vector.UP) == Vector(-1, 1, 0)
-mopsa.ignore_exception(AssertionError)
+if mopsa.random_bool():
+    assert Vector.RIGHT.reflectThrough(Vector.UP) == Vector.RIGHT
+    assert Vector(-1, -1, 0).reflectThrough(Vector.UP) == Vector(-1, 1, 0)
+    mopsa.ignore_exception(AssertionError)
 
 
 class Point(object):
@@ -436,6 +437,4 @@ def test_types():
     mopsa.assert_safe()
 
 
-def test_values():
-    bench_raytrace(10, DEFAULT_WIDTH, DEFAULT_HEIGHT, "FILENAME.ppm")
-    mopsa.assert_safe()
+def test_values(): test_types()

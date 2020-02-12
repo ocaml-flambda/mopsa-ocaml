@@ -391,17 +391,19 @@ struct
                        (* FIXME: length precision *)
                      (* TODO: more precision on top (for range) *)
                      let ra a = mk_py_attr other a range in
+                     let flow =
                        flow |>
-                         man.exec (mk_assign (mk_var len_els range)
-                                     (mk_py_call (mk_py_object (find_builtin_function "len") range) [other] range)
-                                     range) |>
-
-                         man.exec (mk_assign (mk_var var_els ~mode:WEAK range) (mk_py_top T_int range) range)  |>
-                         man.exec (mk_assume (mk_binop
+                         man.exec ~zone:Zone.Z_py (mk_assign (mk_var var_els ~mode:WEAK range) (mk_py_top T_int range) range)  |>
+                         man.exec ~zone:Zone.Z_py (mk_assume (mk_binop
                                                 (mk_binop (ra "start") O_le (mk_var var_els range) range)
                                                 O_py_and
-                                                (mk_binop (mk_var var_els range) O_lt (ra "stop") range) range) range) |>
-                       man.eval (mk_py_none range)
+                                                (mk_binop (mk_var var_els range) O_lt (ra "stop") range) range) range) in
+                     man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)
+                       (mk_py_call (mk_py_object (find_builtin_function "len") range) [other] range) flow |>
+                       Eval.bind (fun len flow ->
+                           man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (mk_var len_els range) (Utils.extract_oobject len) range) flow |>
+                             man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range)
+                         )
                      )
                    (* TODO: if object has iter field call it and then call next *)
                    ~felse:(fun flow ->
@@ -487,7 +489,7 @@ struct
              (mk_binop
                 (mk_binop (Utils.extract_oobject popindex) O_lt (mk_var len_els range) range)
                 O_log_and
-                (mk_binop (mk_unop O_minus (mk_var len_els range) range) O_le (Utils.extract_oobject popindex)  range)
+                (mk_binop (mk_unop O_minus (mk_var len_els range) ~etyp:T_int range) O_le (Utils.extract_oobject popindex)  range)
                 range
              )
              ~zone:Universal.Zone.Z_u_int man flow
