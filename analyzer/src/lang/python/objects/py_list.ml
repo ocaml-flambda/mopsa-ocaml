@@ -192,9 +192,12 @@ struct
                            )
                      )
                      ~felse:(fun flow ->
-                       let msg = Format.asprintf "list indices must be integers or slices, not %a" pp_addr_kind (akind @@ fst @@ object_of_expr index) in
-                       man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow |>
-                         Eval.empty_singleton
+                       man.eval index ~zone:(Zone.Z_py, Zone.Z_py_obj) flow |>
+                         Eval.bind (fun index flow ->
+                             let msg = Format.asprintf "list indices must be integers or slices, not %a" pp_addr_kind (akind @@ fst @@ object_of_expr index) in
+                             man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow |>
+                               Eval.empty_singleton
+                           )
                      )
                  )
              )
