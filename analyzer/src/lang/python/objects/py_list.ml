@@ -500,7 +500,8 @@ struct
                  man.eval (mk_var ~mode:WEAK var_els range)
                )
              ~felse:(fun flow ->
-                 assume (mk_binop (mk_var len_els range) O_eq (mk_int 0 range) range)
+               assume (mk_binop (mk_var len_els range) O_eq (mk_int 0 range) range)
+                 ~zone:Universal.Zone.Z_u_int
                    man flow
                    ~fthen:(fun flow ->
                        man.exec (Utils.mk_builtin_raise_msg "IndexError" "pop from empty list" range) flow |> Eval.empty_singleton)
