@@ -153,8 +153,9 @@ struct
              ~fthen:(fun flow ->
                assume (mk_py_isinstance_builtin index "int" range) man flow
                  ~fthen:(fun flow ->
-                   man.eval list ~zone:(Zone.Z_py, Zone.Z_py_obj) flow |>
-                     Eval.bind (fun list flow ->
+                   Cases.bind_list eargs (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+                     Cases.bind_some (fun eargs flow ->
+                         let list, index = match eargs with [l; i] -> l, i | _ -> assert false in
                          let var_els = var_of_eobj list in
                          let length_list = length_var_of_eobj list in
                          assume
