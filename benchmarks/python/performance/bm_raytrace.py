@@ -429,9 +429,13 @@ def add_cmdline_args(cmd, args):
     # runner.bench_time_func('raytrace', bench_raytrace,
     #                        args.width, args.height,
     #                        args.filename)
-def test_main():
-
+def test_types():
     bench_raytrace(10, DEFAULT_WIDTH, DEFAULT_HEIGHT, "FILENAME.ppm")
     mopsa.ignore_exception(OverflowError)
     mopsa.ignore_exception(ValueError)
+    mopsa.assert_safe()
+
+
+def test_values():
+    bench_raytrace(10, DEFAULT_WIDTH, DEFAULT_HEIGHT, "FILENAME.ppm")
     mopsa.assert_safe()

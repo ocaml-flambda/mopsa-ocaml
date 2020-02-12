@@ -159,7 +159,7 @@ def bench_nbody(loops, reference, iterations):
     # args = runner.parse_args()
     # runner.bench_time_func('nbody', bench_nbody,
     #                        args.reference, args.iterations)
-def test_main():
+def test_types():
     res = bench_nbody(100, DEFAULT_REFERENCE, DEFAULT_ITERATIONS)
     mopsa.ignore_exception(ValueError)
     mopsa.ignore_exception(KeyError)
@@ -167,4 +167,11 @@ def test_main():
 #    mopsa.assert_exception_exists(UnboundLocalError)
     mopsa.ignore_exception(UnboundLocalError)
     mopsa.ignore_exception(IndexError)
+    mopsa.assert_safe()
+
+
+def test_values():
+    res = bench_nbody(100, DEFAULT_REFERENCE, DEFAULT_ITERATIONS)
+    mopsa.ignore_exception(ValueError)
+    mopsa.ignore_exception(KeyError)
     mopsa.assert_safe()

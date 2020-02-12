@@ -413,7 +413,7 @@ def add_cmdline_args(cmd, args):
     # else:
     #     benchmarks = sorted(BENCHMARKS)
 
-def test_main():
+def test_types():
     bench_SOR(10, 100,10,Array2D)
     bench_SparseMatMult(10, 1000, 50*1000)
     bench_MonteCarlo(10, 100*1000)
@@ -422,6 +422,18 @@ def test_main():
     import mopsa
     mopsa.ignore_exception(IndexError)
     mopsa.ignore_exception(OverflowError)
+    mopsa.assert_safe()
+
+def test_values():
+    bench_SOR(10, 100,10,Array2D)
+    bench_SparseMatMult(10, 1000, 50*1000)
+    bench_MonteCarlo(10, 100*1000)
+    bench_LU(10, 100)
+    bench_FFT(10, 1024,50)
+    import mopsa
+    mopsa.ignore_exception(OverflowError)
+    mopsa.assert_safe()
+
 
     # for bench in benchmarks:
     #     name = 'scimark_%s' % bench

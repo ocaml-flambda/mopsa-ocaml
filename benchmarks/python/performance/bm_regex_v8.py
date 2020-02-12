@@ -1783,10 +1783,16 @@ def bench_regex_v8(loops):
     return 0
 
 #if __name__ == "__main__":
-def test_main():
+def test_types():
     bench_regex_v8(10)
     mopsa.ignore_exception(IndexError)
     mopsa.assert_safe()
+
+def test_values():
+    bench_regex_v8(10)
+#    mopsa.ignore_exception(IndexError)
+    mopsa.assert_safe()
+
 
 # if __name__ == '__main__':
 #     runner = perf.Runner()

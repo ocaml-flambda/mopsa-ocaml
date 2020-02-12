@@ -1,7 +1,8 @@
 variables:
   MOPSA_C: "./bin/mopsa-c -unittest"
   MOPSA_U: "./bin/mopsa-universal -unittest"
-  MOPSA_PY: "./bin/mopsa-python-types -unittest"
+  MOPSA_PYTYP: "./bin/mopsa-python-types -unittest -unittest-filter=test_types"
+  MOPSA_PYVAL: "./bin/mopsa-python       -unittest -unittest-filter=test_values"
   DOCKER_DRIVER: overlay2
   GIT_STRATEGY: fetch
 
@@ -46,7 +47,8 @@ build_job:
   script:
     - eval `opam config env`
     - echo $PY_FILE
-    - $MOPSA_PY analyzer/tests/python/types/$PY_FILE
+    - ./bin/mopsa-python -unittest analyzer/tests/python/$PY_FILE
+#    - ./bin/mopsa-python-types -unittest analyzer/tests/python/types/$PY_FILE
 
 .bench-typpete:
   stage: benchmarks
@@ -54,7 +56,7 @@ build_job:
   script:
     - eval `opam config env`
     - echo $PY_FILE
-    - $MOPSA_PY benchmarks/pytypes/typpete/$PY_FILE
+    - $MOPSA_PYTYP benchmarks/pytypes/typpete/$PY_FILE
 
 .bench-typy:
   stage: benchmarks
@@ -62,7 +64,8 @@ build_job:
   script:
     - eval `opam config env`
     - echo $PY_FILE
-    - $MOPSA_PY benchmarks/python/performance/$PY_FILE
+    - $MOPSA_PYTYP benchmarks/python/performance/$PY_FILE
+    - $MOPSA_PYVAL benchmarks/python/performance/$PY_FILE
 
 
 test-c 1/25:

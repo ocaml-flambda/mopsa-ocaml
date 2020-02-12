@@ -52,13 +52,21 @@ def fannkuch(n):
         else:
             return max_flips
 
-def test_main():
+def test_types():
     import mopsa
 
     arg = DEFAULT_ARG
     fannkuch(arg)
     mopsa.ignore_exception(IndexError)
     mopsa.assert_safe()
+
+def test_values():
+    import mopsa
+
+    arg = DEFAULT_ARG
+    fannkuch(arg)
+    mopsa.assert_safe()
+
 
 # if __name__ == "__main__":
 #     # runner = perf.Runner()

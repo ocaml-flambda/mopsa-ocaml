@@ -675,7 +675,7 @@ def add_cmdline_args(cmd, args):
     # runner.metadata['hexiom_level'] = args.level
 
     # runner.bench_time_func('hexiom', main, args.level)
-def test_main():
+def test_types():
     import mopsa
 
     main(10, 36)
@@ -686,4 +686,11 @@ def test_main():
     mopsa.ignore_exception(AssertionError)
     mopsa.assert_exception_exists(Exception)
     mopsa.ignore_exception(Exception)
+    mopsa.assert_safe()
+
+
+def test_values():
+    import mopsa
+
+    main(10, 36)
     mopsa.assert_safe()

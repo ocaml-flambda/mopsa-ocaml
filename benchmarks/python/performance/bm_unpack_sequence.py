@@ -428,18 +428,6 @@ def bench_list_unpacking(loops):
     return do_unpacking(loops, x)
 
 
-def bench_all(loops):
-    dt2 = bench_list_unpacking(loops)
-    mopsa.assert_exception_exists(ValueError)
-    mopsa.ignore_exception(ValueError)
-    mopsa.assert_safe()
-    dt1 = bench_tuple_unpacking(loops)
-    mopsa.assert_safe()
-    # on perd 20s en changeant l'ordre
-    # j'ai l'impression que les tuples prennent moins de temps que les listes aussi (de manière non négligeable)
-    return 0 # dt1 + dt2
-
-
 # def add_cmdline_args(cmd, args):
 #     if args.benchmark:
 #         cmd.append(args.benchmark)
@@ -465,6 +453,20 @@ def bench_all(loops):
     #     func = bench_all
 
     # runner.bench_time_func(name, func, inner_loops=400)
-def test_main():
+def test_types():
     import mopsa
-    bench_all(400)
+    loops = 400
+    dt2 = bench_list_unpacking(loops)
+    mopsa.assert_exception_exists(ValueError)
+    mopsa.ignore_exception(ValueError)
+    mopsa.assert_safe()
+    dt1 = bench_tuple_unpacking(loops)
+    mopsa.assert_safe()
+
+def test_values():
+    import mopsa
+    loops = 400
+    dt2 = bench_list_unpacking(loops)
+    mopsa.assert_safe()
+    dt1 = bench_tuple_unpacking(loops)
+    mopsa.assert_safe()

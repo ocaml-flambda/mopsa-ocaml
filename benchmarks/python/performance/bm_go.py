@@ -454,16 +454,15 @@ def versus_cpu():
 
 
 # if __name__ == "__main__":
-def test_main():
-    kw = {}
-    # if perf.python_has_jit():
-    #     # PyPy needs to compute more warmup values to warmup its JIT
-    #     kw['warmups'] = 50
-    # runner = perf.Runner(**kw)
-    # runner.metadata['description'] = "Test the performance of the Go benchmark"
-    # runner.bench_func('go', versus_cpu)
+def test_types():
     versus_cpu()
     mopsa.ignore_exception(IndexError)
     mopsa.ignore_exception(OverflowError)
     mopsa.ignore_exception(AttributeError)
+    mopsa.assert_safe()
+
+
+def test_values():
+    versus_cpu()
+#    mopsa.ignore_exception(IndexError)
     mopsa.assert_safe()

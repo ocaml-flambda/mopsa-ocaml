@@ -424,10 +424,18 @@ class Richards(object):
 #if __name__ == "__main__":
     # runner = perf.Runner()
     # runner.metadata['description'] = "The Richards benchmark"
-def test_main():
+def test_types():
     richard = Richards()
     richard.run(10) #runner.bench_func('richards', richard.run, 1)
     mopsa.ignore_exception(Exception)
     mopsa.ignore_exception(IndexError)
+    mopsa.ignore_exception(ValueError)
+    mopsa.assert_safe()
+
+
+def test_values():
+    richard = Richards()
+    richard.run(10) #runner.bench_func('richards', richard.run, 1)
+    mopsa.ignore_exception(Exception)
     mopsa.ignore_exception(ValueError)
     mopsa.assert_safe()

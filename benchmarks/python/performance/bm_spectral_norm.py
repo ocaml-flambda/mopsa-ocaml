@@ -75,10 +75,16 @@ def bench_spectral_norm(loops):
     #     'MathWorld: "Hundred-Dollar, Hundred-Digit Challenge Problems", '
     #     'Challenge #3.')
     # runner.bench_time_func('spectral_norm', bench_spectral_norm)
-def test_main():
+def test_types():
     import mopsa
     bench_spectral_norm(50)
     mopsa.assert_exception_exists(UnboundLocalError)
     mopsa.ignore_exception(UnboundLocalError)
     mopsa.ignore_exception(OverflowError)
+    mopsa.assert_safe()
+
+
+def test_values():
+    import mopsa
+    bench_spectral_norm(50)
     mopsa.assert_safe()

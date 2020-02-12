@@ -338,7 +338,7 @@ def main():#runner, args):
 
     # args = runner.parse_args()
     # main(runner, args)
-def test_main():
+def test_types():
     import mopsa
     main()
     mopsa.ignore_exception(ValueError)
@@ -346,4 +346,9 @@ def test_main():
     mopsa.ignore_exception(IndexError)
     # mopsa.assert_exception_exists(TypeError) the typeerror is no longer raised due to a better precision
     # mopsa.ignore_exception(TypeError)
+    mopsa.assert_safe()
+
+def test_values():
+    import mopsa
+    main()
     mopsa.assert_safe()

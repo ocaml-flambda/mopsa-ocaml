@@ -54,7 +54,7 @@ def benchmark(n):
         p.normalize()
     return maximize(points)
 
-def test_main():
+def test_types():
     import mopsa
 
     points = POINTS
@@ -62,6 +62,15 @@ def test_main():
     mopsa.ignore_exception(IndexError)
     mopsa.ignore_exception(OverflowError)
     mopsa.assert_safe()
+
+def test_values():
+    import mopsa
+
+    points = POINTS
+    benchmark(points)
+    mopsa.ignore_exception(OverflowError)
+    mopsa.assert_safe()
+
 
 # if __name__ == "__main__":
 #     # runner = perf.Runner()
