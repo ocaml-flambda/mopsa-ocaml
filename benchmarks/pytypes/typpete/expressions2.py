@@ -1,7 +1,7 @@
 import mopsa
 
 
-def test_main():
+def test_types():
     condition = True
     q = [3] if condition else [2]
     r = [2.0] and [1, 2]

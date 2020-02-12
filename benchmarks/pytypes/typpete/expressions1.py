@@ -1,6 +1,6 @@
 import mopsa
 
-def test_main():
+def test_types():
     a = 1 + 2 / 3
     mopsa.ignore_exception(OverflowError)
     a += 0

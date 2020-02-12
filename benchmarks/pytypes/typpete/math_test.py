@@ -1,7 +1,7 @@
 import math
 import mopsa
 
-def test_main():
+def test_types():
     x = math.pi
 
     a = math.acos(x)

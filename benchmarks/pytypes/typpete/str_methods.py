@@ -1,6 +1,6 @@
 import mopsa
 
-def test_main():
+def test_types():
     a = "abcd"
     b = a.capitalize()
     c = b.center(4, "a")

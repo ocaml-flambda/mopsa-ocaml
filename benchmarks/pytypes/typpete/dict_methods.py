@@ -1,6 +1,6 @@
 import mopsa
 
-def test_main():
+def test_types():
     x = dict()
     x[2.0] = "string"
     y = x.copy()

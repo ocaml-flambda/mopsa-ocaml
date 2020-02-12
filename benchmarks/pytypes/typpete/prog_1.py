@@ -1,6 +1,6 @@
 import mopsa
 
-def test_main():
+def test_types():
     n, m = 1, 2
     a = [''] * n
     for i in range(n):

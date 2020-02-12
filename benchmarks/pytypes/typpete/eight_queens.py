@@ -29,7 +29,7 @@ def add_queen(queens):
     return [1]
     # raise BailOut
 
-def test_main():
+def test_types():
     r_queens = add_queen([])
     print(r_queens)
     # todo: move back to generator instead of list

@@ -1,6 +1,6 @@
 import mopsa
 
-def test_main():
+def test_types():
     a = 1
     b = [a, 2]
     c = {a: b[0]}

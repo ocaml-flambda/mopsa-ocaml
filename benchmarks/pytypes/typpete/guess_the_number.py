@@ -1,6 +1,6 @@
 import mopsa
 
-def test_main():
+def test_types():
     guesses_made = 0
 
     print('Hello! What is your name?\n')

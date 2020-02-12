@@ -1,6 +1,6 @@
 import mopsa
 
-def test_main():
+def test_types():
     n = int(input())
     w = int(input())
     arr = [int(x) for x in input().split(" ")]

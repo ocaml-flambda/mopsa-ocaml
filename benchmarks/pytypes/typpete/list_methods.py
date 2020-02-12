@@ -1,6 +1,6 @@
 import mopsa
 
-def test_main():
+def test_types():
     x = []
 
     y = x.count("b")
