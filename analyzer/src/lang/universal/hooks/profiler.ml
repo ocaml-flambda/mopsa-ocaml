@@ -90,43 +90,42 @@ struct
   let cur : timing ref = ref { callstack = []; time = 0. }
 
 
-  (** {2 Call detection} *)
-  (** ****************** *)
+  (** {2 Call stack observer} *)
+  (** *********************** *)
 
-  (** A call is detected when the depth of the call stack increases *)
-  let detect_call cs =
+  (** Update the state when a call is detected *)
+  let call_detected (call:Callstack.call) =
+    (* First, stop the timer of previous call, save it in the queue
+       and create a new timing record *)
+    let t = Sys.time () in
+    let timing = { !cur with time = t -. !cur.time } in
+    Queue.push timing records;
+    let timing = { callstack = call.call_fun :: !cur.callstack ; time = t; } in
+    cur := timing
+
+
+  (** Update the state when a return is detected *)
+  let return_detected () =
+    (* Stop the timer of the returning call, save it in the queue and
+       restore the timing record of the previous call *)
+    let t = Sys.time () in
+    let timing = { !cur with time = t -. !cur.time } in
+    Queue.push timing records;
+    let timing = { callstack = List.tl !cur.callstack ; time = t; } in
+    cur := timing
+
+
+  (** Observe the call stack and update the timing records *)
+  let observe_callstack (cs:Callstack.cs) range =
     let depth = Callstack.length cs in
-    let cur_depth = List.length !cur.callstack - 1 in
+    (* Decrease by 1 the current depth to take into account the first
+       hidden %program call, added by init but not present in the call
+       stack *)
+    let cur_depth = List.length !cur.callstack - 1 in 
     if depth = cur_depth then () else
-    if depth = cur_depth + 1 then
-      (* Call detected. First, stop the timer of previous call, save
-         it in the queue and create a new timing record *)
-      let t = Sys.time () in
-      let timing = { !cur with time = t -. !cur.time } in
-      Queue.push timing records;
-      let call = Callstack.top cs in
-      debug "call to %s, cur = %a, depth = %d, cur_depth = %d" call.call_fun pp_timing !cur depth cur_depth;
-      let timing = { callstack = call.call_fun :: !cur.callstack ; time = t; } in
-      cur := timing
-    else panic "call detection: unsupported call stack configuration: current = %d, previous = %d" cur_depth depth
-
-
-  (** A return is detected when the depth of the call stack is decreased *)
-  let detect_return cs =
-    let depth = Callstack.length cs in
-    let cur_depth = List.length !cur.callstack - 1 in
-    if depth = cur_depth then () else
-    if depth = cur_depth - 1 then
-      (* Return detected. Stop the timer of the returning call, save
-         it in the queue and restore the timing record of the previous
-         call *)
-      let t = Sys.time () in
-      debug "return from %s, cur = %a, depth = %d, cur_depth = %d" (List.hd !cur.callstack) pp_timing !cur depth cur_depth;
-      let timing = { !cur with time = t -. !cur.time } in
-      Queue.push timing records;
-      let timing = { callstack = List.tl !cur.callstack ; time = t; } in
-      cur := timing
-    else panic "return detection: unsupported call stack configuration: current = %d, previous = %d" cur_depth depth
+    if depth = cur_depth + 1 then call_detected (Callstack.top cs) else
+    if depth = cur_depth - 1 then return_detected ()
+    else panic_at range "unsupported call stack configuration: current = %d, previous = %d" cur_depth depth
 
 
   (** {2 Statistics} *)
@@ -195,14 +194,14 @@ struct
 
 
   let on_before_exec zone stmt man flow =
-    detect_call (Flow.get_callstack flow)
+    observe_callstack (Flow.get_callstack flow) stmt.srange
 
   let on_after_exec zone stmt man post = ()
     
   let on_before_eval zone exp man flow = ()
     
   let on_after_eval zone exp man eval =
-    detect_return (Eval.get_ctx eval |> Context.find_unit Callstack.ctx_key)
+    observe_callstack (Eval.get_ctx eval |> Context.find_unit Callstack.ctx_key) exp.erange
 
   let on_finish man flow =
     let t = Sys.time () in
