@@ -364,6 +364,18 @@ struct
       end
       |> Post.return |> OptionExt.return
 
+    | S_remove {ekind = E_addr a} ->
+       let cur = get_env T_cur man flow in
+       let ncur = AMap.map (ASet.remove (Def a)) cur in
+       let flow = set_env T_cur ncur man flow in
+       begin match akind a with
+       | A_py_instance _ ->
+          man.exec ~zone:Zone.Z_py_obj stmt flow
+       | ak when Objects.Data_container_utils.is_data_container ak ->
+          man.exec ~zone:Zone.Z_py_obj stmt flow
+       | _ -> flow
+       end |> Post.return |> OptionExt.return
+
     | _ -> None
 
   and assign_addr man v av mode flow =
