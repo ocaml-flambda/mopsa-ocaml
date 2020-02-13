@@ -144,7 +144,16 @@ struct
       let flow = set_env T_cur ncur man flow in
       man.exec to_rename_stmt flow |>
       Post.return |>
-      OptionExt.return
+        OptionExt.return
+
+    | S_remove {ekind = E_addr ({addr_kind = A_py_instance _} as a)} ->
+       let cur = get_env T_cur man flow in
+       let old_a = find a cur in
+       let to_remove_stmt = mk_block (AttrSet.fold_u (fun attr removes ->
+                                          mk_remove_var (mk_addr_attr a attr T_any) range :: removes) old_a []) range in
+       let ncur = remove a cur in
+       let flow = set_env T_cur ncur man flow in
+       man.exec to_remove_stmt flow |> Post.return |> OptionExt.return
 
     | S_add ({ekind = E_addr a}) ->
       debug "S_add";

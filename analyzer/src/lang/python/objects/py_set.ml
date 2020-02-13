@@ -223,6 +223,12 @@ struct
   let exec zone stmt man flow =
     let range = srange stmt in
     match skind stmt with
+    | S_remove {ekind = E_addr ({addr_kind = A_py_set _} as a)} ->
+       let va = var_of_addr a in
+       flow |>
+         man.exec ~zone:Zone.Z_py (mk_remove_var va range) |>
+         Post.return |> OptionExt.return
+
     | S_rename ({ekind = E_addr ({addr_kind = A_py_set _} as a)}, {ekind = E_addr a'}) ->
       let va = var_of_addr a in
       let va' = var_of_addr a' in

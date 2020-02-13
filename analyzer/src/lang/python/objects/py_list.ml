@@ -713,15 +713,23 @@ struct
   let exec zone stmt man flow =
     let range = srange stmt in
     match skind stmt with
+    | S_remove {ekind = E_addr ({addr_kind = A_py_list _} as a)} ->
+       let va = var_of_addr a in
+       flow |>
+         man.exec ~zone:Zone.Z_py (mk_remove_var va range) |>
+         Post.return |> OptionExt.return
+
     | S_rename ({ekind = E_addr ({addr_kind = A_py_list _} as a)}, {ekind = E_addr a'}) ->
       (* FIXME: I guess we could just do it for every data_container. Maybe add a data_container domain on top of them performing the renaming?*)
       (* working on lists entails smashed element variable being index by the address, meaning we need to rename them *)
       let va = var_of_addr a in
       let va' = var_of_addr a' in
       debug "renaming %a into %a@\n" pp_var va pp_var va';
-      let flow = man.exec ~zone:Zone.Z_py (mk_rename_var va va' range) flow in
+      let flow = flow |>
+      man.exec ~zone:Zone.Z_py (mk_rename_var va va' range) in
+      flow |> Post.return |> OptionExt.return
       (* FIXME: now we need to do the same for iterators based on this address, but it's complicated *)
-      (* let to_rename = []
+      (* let to_rename =
        *     man.ask (Universal.Heap.Recency.Q_select_allocated_addresses
        *                            (fun addr -> match akind addr with
        *                               | A_py_iterator (_, l, _) ->
@@ -729,8 +737,8 @@ struct
        *                               | _ -> false)
        *                         )
        *                 flow
-       * in
-       * List.fold_left (fun flow iterator ->
+       *     in
+       *     List.fold_left (fun flow iterator ->
        *     let new_iterator = match akind iterator with
        *       | A_py_iterator (name, addrs, pos) ->
        *         let new_addrs = List.map (fun addr ->
@@ -738,12 +746,8 @@ struct
        *         {iterator with addr_kind = A_py_iterator(name, new_addrs, pos)}
        *       | _ -> assert false
        *     in
-       *     man.exec ~zone:Universal.Zone.Z_u_heap (mk_rename (mk_addr iterator range) (mk_addr new_iterator range) range) flow
+       *     man.exec ~zone:Zone.Z_py (mk_rename (mk_addr iterator range) (mk_addr new_iterator range) range) flow
        *   ) flow to_rename *)
-      flow
-      |> Post.return |> OptionExt.return
-
-
 
     | _ -> None
 

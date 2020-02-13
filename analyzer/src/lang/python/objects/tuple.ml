@@ -208,6 +208,10 @@ struct
   let exec zone stmt man flow =
     let range = srange stmt in
     match skind stmt with
+    | S_remove {ekind = E_addr ({addr_kind = A_py_tuple _} as a)} ->
+       let vas = var_of_addr a in
+       List.fold_left (fun flow v -> man.exec ~zone:Zone.Z_py (mk_remove_var v range) flow) flow vas |> Post.return |> OptionExt.return
+
     | S_rename ({ekind = E_addr ({addr_kind = A_py_tuple _} as a)}, {ekind = E_addr a'}) ->
       let vas = var_of_addr a in
       let vas' = var_of_addr a' in

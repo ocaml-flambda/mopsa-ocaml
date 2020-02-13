@@ -197,8 +197,11 @@ struct
           (* Otherwise, we make the previous recent address as an old one *)
           let old_addr = Policy.mk_addr addr_kind WEAK range flow in
           debug "rename %a to %a" pp_addr recent_addr pp_addr old_addr;
-          map_env T_cur (Pool.add old_addr) man flow |>
-          man.exec (mk_rename (mk_addr recent_addr range) (mk_addr old_addr range) range)
+          let nflow = map_env T_cur (Pool.add old_addr) man flow |>
+                        man.exec (mk_rename (mk_addr recent_addr range) (mk_addr old_addr range) range) in
+          if not (Pool.mem old_addr pool) then nflow
+          else
+            Flow.join man.lattice nflow (man.exec (mk_remove (mk_addr recent_addr range) range) flow)
       in
 
       (* Add the recent address *)
