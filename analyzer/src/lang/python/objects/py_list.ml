@@ -101,11 +101,13 @@ struct
     Utils.change_var_type T_int v
 
   let length_var_of_addr a = match akind a with
-    | A_py_list _ -> mk_addr_attr a "list_length" T_any |> Utils.change_var_type T_int
+    | A_py_list _ ->
+       mk_addr_attr a "list_length" T_any |> Utils.change_var_type T_int
     | _ -> assert false
 
   let var_of_addr a = match akind a with
-    | A_py_list _ -> mk_addr_attr a "list" T_any
+    | A_py_list _ ->
+       {(mk_addr_attr a "list" T_any) with vmode = WEAK}
     | _ -> assert false
 
   let var_of_eobj e = match ekind e with
@@ -137,7 +139,7 @@ struct
           let els_var = var_of_addr addr_list in
           (* let flow = man.exec (mk_add_var els_var range) flow in *)
           let flow = List.fold_left (fun acc el ->
-              let stmt = mk_assign (mk_var ~mode:WEAK els_var range) el range in
+              let stmt = mk_assign (mk_var els_var range) el range in
               (* debug "fold_left %a@\n" pp_stmt stmt; *)
               man.exec ~zone:Zone.Z_py stmt acc) flow ls in
           man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (mk_var (length_var_of_addr addr_list) range) (mk_int (List.length ls) ~typ:T_int range) range) flow |>
@@ -185,7 +187,7 @@ struct
                                Eval.bind (fun list flow ->
                                    let var_els = var_of_eobj list in
                                    flow |>
-                                     man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:WEAK slicedlist_var range) (mk_var ~mode:WEAK var_els range) range) |>
+                                     man.exec ~zone:Zone.Z_py (mk_assign (mk_var slicedlist_var range) (mk_var var_els range) range) |>
                                      man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (mk_var (length_var_of_addr addr_list) range) (mk_py_top T_int range) range) |>
                                      Eval.singleton (mk_py_object (addr_list, None) range)
                                  )
@@ -232,9 +234,9 @@ struct
                            let elsr_length = length_var_of_eobj listr in
 
                            let flow = List.fold_left (fun acc el ->
-                                          man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:WEAK els_res_var range) el range) acc)
-                                        flow [mk_var ~mode:WEAK elsl_var range;
-                                              mk_var ~mode:WEAK elsr_var range] in
+                                          man.exec ~zone:Zone.Z_py (mk_assign (mk_var els_res_var range) el range) acc)
+                                        flow [mk_var elsl_var range;
+                                              mk_var elsr_var range] in
                            man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (mk_var els_res_length range)
                                                                     (mk_binop (mk_var elsl_length range) O_plus (mk_var elsr_length range) ~etyp:T_int range) range) flow |>
                              Eval.singleton (mk_py_object (alist_addr, None) range)
@@ -270,7 +272,7 @@ struct
                    )
                    ~zone:Universal.Zone.Z_u_int man flow
                    ~fthen:(fun flow ->
-                       man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:WEAK var_els range) value range) flow |> man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range)
+                       man.exec ~zone:Zone.Z_py (mk_assign (mk_var var_els range) value range) flow |> man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range)
                      )
                    ~felse:(fun flow ->
                        man.exec (Utils.mk_builtin_raise_msg "IndexError" "list assignment index out of range" range) flow |>
@@ -323,7 +325,7 @@ struct
                            let els_list = var_of_eobj list in
                            let len_list = length_var_of_eobj list in
 
-                           let flow = man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:WEAK els_var range) (mk_var ~mode:WEAK els_list range) range) flow in
+                           let flow = man.exec ~zone:Zone.Z_py (mk_assign (mk_var els_var range) (mk_var els_list range) range) flow in
                            man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (mk_var els_len range)
                                                                     (mk_binop (mk_var len_list range) O_mult (Utils.extract_oobject int) ~etyp:T_int range) range) flow |>
                              Eval.singleton (mk_py_object (addr_list, None) range)
@@ -345,7 +347,7 @@ struct
            let var_els = var_of_eobj list in
            let len_els = length_var_of_eobj list in
            flow |>
-           man.exec ~zone:Zone.Z_py (mk_assign (mk_var var_els ~mode:WEAK range) element range) |>
+           man.exec ~zone:Zone.Z_py (mk_assign (mk_var var_els range) element range) |>
            man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (mk_var len_els range)
                                        (mk_binop (mk_var len_els range) O_plus (mk_int 1 range) ~etyp:T_int range) range) |>
            man.eval (mk_py_none range))
@@ -359,7 +361,7 @@ struct
            let var_els = var_of_eobj list in
            let len_els = length_var_of_eobj list in
            flow |>
-           man.exec ~zone:Zone.Z_py (mk_assign (mk_var var_els ~mode:WEAK range) element range)  |>
+           man.exec ~zone:Zone.Z_py (mk_assign (mk_var var_els range) element range)  |>
            man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (mk_var len_els range)
                                        (mk_binop (mk_var len_els range) O_plus (mk_int 1 range) ~etyp:T_int range) range) |>
            man.eval (mk_py_none range))
@@ -383,7 +385,7 @@ struct
                  let var_sndels = var_of_eobj other in
                  let len_sndels = length_var_of_eobj other in
                  flow |>
-                 man.exec ~zone:Zone.Z_py (mk_assign (mk_var var_els ~mode:WEAK range) (mk_var var_sndels ~mode:WEAK range) range) |>
+                 man.exec ~zone:Zone.Z_py (mk_assign (mk_var var_els range) (mk_var var_sndels range) range) |>
                  man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (mk_var len_els range)
                              (mk_binop (mk_var len_els range) O_plus (mk_var len_sndels range) ~etyp:T_int range) range) |>
                  man.eval (mk_py_none range)
@@ -396,7 +398,7 @@ struct
                      let ra a = mk_py_attr other a range in
                      let flow =
                        flow |>
-                         man.exec ~zone:Zone.Z_py (mk_assign (mk_var var_els ~mode:WEAK range) (mk_py_top T_int range) range)  |>
+                         man.exec ~zone:Zone.Z_py (mk_assign (mk_var var_els range) (mk_py_top T_int range) range)  |>
                          man.exec ~zone:Zone.Z_py (mk_assume (mk_binop
                                                 (mk_binop (ra "start") O_le (mk_var var_els range) range)
                                                 O_py_and
@@ -416,10 +418,9 @@ struct
                                | E_py_object ({addr_kind = A_py_iterator (_, [{addr_kind = A_py_list _} as a], _)}, _) -> var_of_addr a, length_var_of_addr a
                                | _ -> assert false in
                              flow |>
-                             man.exec ~zone:Zone.Z_py (mk_assign (mk_var var_els ~mode:WEAK range) (mk_var var_sndels ~mode:WEAK range) range) |>
+                             man.exec ~zone:Zone.Z_py (mk_assign (mk_var var_els range) (mk_var var_sndels range) range) |>
                              man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (mk_var len_els range)
                              (mk_binop (mk_var len_els range) O_plus (mk_var len_sndels range) ~etyp:T_int range) range) |>
-
                              man.eval (mk_py_none range)
                            )
                          ~felse:(fun flow ->
@@ -429,7 +430,7 @@ struct
                                      | E_py_object ({addr_kind = A_py_iterator (_, [{addr_kind = A_py_list _} as a1; {addr_kind = A_py_list _} as a2], _)}, _) -> var_of_addr a1, length_var_of_addr a1, var_of_addr a2, length_var_of_addr a2
                                      | _ -> assert false in
                                    flow |>
-                                   man.exec (mk_assign (mk_var var_els ~mode:WEAK range) (mk_expr (E_py_tuple [mk_var var_l1 ~mode:WEAK range; mk_var var_l2 ~mode:WEAK range]) range) range) |>
+                                   man.exec (mk_assign (mk_var var_els range) (mk_expr (E_py_tuple [mk_var var_l1 range; mk_var var_l2 range]) range) range) |>
                                    man.exec (mk_assign (mk_var len_els range)
                                                (mk_py_call (mk_py_object (find_builtin "min") range) [mk_var len_l1 range; mk_var len_l2 range] range)
                                              range) |>
@@ -500,7 +501,7 @@ struct
                  flow |>
                  man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (mk_var len_els range)
                                              (mk_binop (mk_var len_els range) O_minus (mk_int 1 range) ~etyp:T_int range) range) |>
-                 man.eval (mk_var ~mode:WEAK var_els range)
+                 man.eval (mk_var var_els range)
                )
              ~felse:(fun flow ->
                assume (mk_binop (mk_var len_els range) O_eq (mk_int 0 range) range)
@@ -574,7 +575,7 @@ struct
             ~zone:Universal.Zone.Z_u_int man flow
             ~fthen:(fun flow ->
               debug "comp: fthen!";
-              let els = man.eval (mk_var var_els ~mode:WEAK range) flow in
+              let els = man.eval (mk_var var_els range) flow in
               OptionExt.none_to_exn @@ bind_opt (fun oels flow ->
                                            Some begin match oels with
                                              (* FIXME *)
@@ -649,7 +650,7 @@ struct
               ~fthen:(fun flow ->
                   (* FIXME: we're assuming that we use the list abstraction *)
                   let var_els_in_ty = var_of_eobj in_ty in
-                  assume (mk_py_isinstance_builtin (mk_var ~mode:WEAK var_els_in_ty range) "float" range) man flow
+                  assume (mk_py_isinstance_builtin (mk_var var_els_in_ty range) "float" range) man flow
                     ~fthen:(man.eval (mk_py_top (T_float F_DOUBLE) range))
                     ~felse:(fun flow ->
                         man.exec (Utils.mk_builtin_raise_msg "TypeError" "must be real number" range) flow |>
@@ -701,7 +702,7 @@ struct
             | _ -> Exceptions.panic "%a@\n" pp_expr iterator in
           let var_els = var_of_addr list_addr in
           let els = man.eval (mk_expr (E_py_tuple [mk_top T_int range;
-                                                   mk_var var_els ~mode:WEAK range]) range) flow in
+                                                   mk_var var_els range]) range) flow in
           let flow = Flow.set_ctx (Eval.get_ctx els) flow in
           let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
           Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Eval.copy_ctx stopiteration els::stopiteration::[])
@@ -746,8 +747,8 @@ struct
             | _ -> Exceptions.panic "%a@\n" pp_expr iterator in
           let var_els1 = var_of_addr list1_addr in
           let var_els2 = var_of_addr list2_addr in
-          let els = man.eval (mk_expr (E_py_tuple [mk_var var_els1 ~mode:WEAK range;
-                                                   mk_var var_els2 ~mode:WEAK range]) range) flow in
+          let els = man.eval (mk_expr (E_py_tuple [mk_var var_els1 range;
+                                                   mk_var var_els2 range]) range) flow in
           let flow = Flow.set_ctx (Eval.get_ctx els) flow in
           let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
           Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Eval.copy_ctx stopiteration els::stopiteration::[])
@@ -822,7 +823,7 @@ struct
             ~fthen:(fun flow ->
                 let var = var_of_eobj list in
                 Libs.Py_mopsa.check man
-                  (mk_py_isinstance (mk_var ~mode:WEAK var range) type_v range)
+                  (mk_py_isinstance (mk_var var range) type_v range)
                   range flow
               )
             ~felse:(Libs.Py_mopsa.check man (mk_py_false range) range)
@@ -836,7 +837,7 @@ struct
           let addr_list = addr_of_expr eaddr_list in
           let els_var = var_of_addr addr_list in
           let len_var = length_var_of_addr addr_list in
-          let stmt = mk_stmt (S_py_annot (mk_var ~mode:WEAK els_var range, mk_expr (E_py_annot i) range)) range in
+          let stmt = mk_stmt (S_py_annot (mk_var els_var range, mk_expr (E_py_annot i) range)) range in
           flow |>
             man.exec ~zone:Zone.Z_py stmt |>
             man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (mk_var len_var range) (mk_py_top T_int range) range) |>

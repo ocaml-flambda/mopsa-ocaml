@@ -250,7 +250,7 @@ and from_exp exp =
       T_any
 
     | E_id v ->
-      E_var (from_var v, STRONG),
+      E_var (from_var v, None),
       T_any
 
     | E_binop (left, op, right) ->

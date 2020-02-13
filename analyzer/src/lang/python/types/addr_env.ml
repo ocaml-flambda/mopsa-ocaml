@@ -184,7 +184,7 @@ struct
         let () = debug "flow is now %a@\n" (Flow.print man.lattice.print) flow in
         flow |> Post.return |> OptionExt.return
 
-    | S_assign(({ekind = E_var (v, WEAK)} as vl), ({ekind = E_var (w, WEAK)} as vr)) ->
+    | S_assign(({ekind = E_var (v, vmode)} as vl), ({ekind = E_var (w, wmode)} as wl)) when var_mode v vmode = WEAK && var_mode w wmode = WEAK ->
        let cur = get_env T_cur man flow in
        begin match AMap.find_opt w cur with
        | None -> flow |> Post.return |> OptionExt.return
@@ -192,7 +192,7 @@ struct
           (* FIXME FIXME FIXME FIXME: what happens if multiple float/... instances? *)
           let flow = ASet.fold
                        (fun pyaddr flow ->
-                         let cstmt = fun t -> {stmt with skind = S_assign(Utils.change_evar_type t vl, Utils.change_evar_type t vr)} in
+                         let cstmt = fun t -> {stmt with skind = S_assign(Utils.change_evar_type t vl, Utils.change_evar_type t wl)} in
                          match pyaddr with
                          | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "str", _)}} ->
                             man.exec ~zone:Universal.Zone.Z_u_string (cstmt T_string) flow
@@ -208,7 +208,6 @@ struct
           else
             set_env T_cur (add v (find w cur) cur) man flow |> Post.return |> OptionExt.return
        end
-
 
     (* S⟦ v = e ⟧ *)
     | S_assign(({ekind = E_var (v, mode)} as evar), e) ->
@@ -369,7 +368,7 @@ struct
 
   and assign_addr man v av mode flow =
     let cur = get_env T_cur man flow in
-    let aset = match mode with
+    let aset = match var_mode v mode with
       | STRONG -> ASet.singleton av
       | WEAK ->
         ASet.add av (OptionExt.default ASet.empty (find_opt v cur))

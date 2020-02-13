@@ -67,7 +67,6 @@ struct
     base   : Base.t;
     offset : Z.t;
     typ    : cell_typ;
-    primed : bool;
   }
 
 
@@ -85,7 +84,6 @@ struct
       (fun () -> compare_base c1.base c2.base);
       (fun () -> Z.compare c1.offset c2.offset);
       (fun () -> compare_cell_typ c1.typ c2.typ);
-      (fun () -> compare c1.primed c2.primed);
     ]
 
 
@@ -98,19 +96,17 @@ struct
 
   (** Pretty printer of cells *)
   let pp_cell fmt c =
-    Format.fprintf fmt "⟨%a,%a,%a⟩%s"
+    Format.fprintf fmt "⟨%a,%a,%a⟩"
       pp_base c.base
       Z.pp_print c.offset
       pp_cell_typ c.typ
-      (if c.primed then "'" else "")
 
 
   (** Create a cell *)
-  let mk_cell base offset ?(primed=false) typ =
+  let mk_cell base offset typ =
     {
       base;
       offset;
-      primed;
       typ =
         if is_c_num_type typ then Numeric (remove_typedef_qual typ)
         else if is_c_pointer_type typ then Pointer
@@ -188,57 +184,153 @@ struct
     }
 
 
-  (** Construct the variable name associated to a cell *)
-  let mk_cell_var_name c =
-    let () = match c.base with
-      | ValidVar { vkind = V_c_cell c } ->
+  (** Construct a unique name associated to a cell *)
+  let mk_cell_uniq_name c =
+    match c.base.base_kind with
+    | Var { vkind = V_c_cell c } ->
         panic "recursive creation of cell %a" pp_cell c
 
-      | ValidVar v ->
-        Format.fprintf Format.str_formatter "⟨%s,%a,%a⟩%s"
-          v.vname
+    | _ ->
+      let () =
+        Format.fprintf Format.str_formatter "⟨%s,%a,%a⟩"
+          (base_uniq_name c.base)
           Z.pp_print c.offset
           pp_cell_typ c.typ
-          (if c.primed then "'" else "")
-
-      | _ -> pp_cell Format.str_formatter c
-    in
-    Format.flush_str_formatter ()
+      in
+      Format.flush_str_formatter ()
 
 
   (** Create a variable from a cell *)
   let mk_cell_var c : var =
-    let name = mk_cell_var_name c in
-    mkv name (V_c_cell c) (cell_type c)
+    let name = mk_cell_uniq_name c in
+    mkv name (V_c_cell c) (cell_type c) ~mode:(base_mode c.base)
 
 
   (** Create a variable from a numeric cell *)
-  let mk_numeric_cell_var_expr c range : expr =
+  let mk_numeric_cell_var_expr c ?(mode=None) range : expr =
     assert(is_numeric_cell c);
     let v = mk_cell_var c in
-    mk_var v ~mode:(base_mode c.base) range
+    mk_var v ~mode range
 
 
   (** Create a variable from a pointer cell *)
-  let mk_pointer_cell_var_expr c typ range : expr =
+  let mk_pointer_cell_var_expr c ?(mode=None) typ range : expr =
     assert(is_pointer_cell c);
     let v = mk_cell_var c in
     if is_c_void_type (under_type typ)
-    then mk_var v ~mode:(base_mode c.base) range
-    else mk_c_cast (mk_var v ~mode:(base_mode c.base) range) typ range
+    then mk_var v ~mode range
+    else mk_c_cast (mk_var v ~mode range) typ range
+
+
+
+  (** {2 Cell sets} *)
+  (** ************* *)
+
+  (** Cell sets are partitionned by base and then by offset to
+      improve the efficiency.
+  *)
+
+  module Cell = struct
+      type t = cell
+      let compare = compare_cell
+      let print = pp_cell
+    end
+
+  module Off = struct
+    type t = Z.t
+    let compare = Z.compare
+    let print = Z.pp_print
+  end
+
+  module Cells = Framework.Lattices.Powerset.Make(Cell)
+
+  module OffCells = Framework.Lattices.Pointwise.Make(Off)(Cells)
+
+  module CellSet = Framework.Lattices.Pointwise.Make(Base)(OffCells)
+
+
+  (* Max size of cells, used to get a safe offset range to look for
+     overlapping cells
+  *)
+  let max_sizeof_cell = Z.of_int 16
+
+
+  let cell_set_add (c:cell) (m:CellSet.t) : CellSet.t =
+    (* check that max_sizeof_cell is safe, to be sure *)
+    assert (sizeof_cell c <= max_sizeof_cell);
+    CellSet.apply c.base (OffCells.apply c.offset (Cells.add c)) m
+
+  let cell_set_remove (c:cell) (m:CellSet.t) : CellSet.t =
+    CellSet.apply c.base (OffCells.apply c.offset (Cells.remove c)) m
+
+  let cell_set_mem (c:cell) (m:CellSet.t) : bool =
+    CellSet.find c.base m |> OffCells.find c.offset |> Cells.mem c
+
+  (** Folds only cells at base [b] and with offsets between [lo] and [hi],
+      included.
+  *)
+  let cell_set_fold_range
+      (f:cell -> 'a -> 'a)
+      (b:Base.t) (lo:Z.t) (hi:Z.t) (m:CellSet.t)
+      (acc:'a) : 'a =
+    OffCells.fold_slice
+      (fun o s acc -> Cells.fold (fun c acc -> f c acc) s acc)
+      (CellSet.find b m) lo hi acc
+
+  (** Returns the cells satisfying [f] in the [lo], [hi] offset range. *)
+  let cell_set_filter_range
+      (f:cell -> bool)
+      (b:Base.t) (lo:Z.t) (hi:Z.t) (m:CellSet.t) : cell list =
+    cell_set_fold_range (fun (c:cell) (l:cell list) -> if f c then c::l else l) b lo hi m []
+
+  (** Returns the cells satisfying [f] only considering cells that overlap
+      an offset range [lo], [hi] included.
+  *)
+  let cell_set_filter_overlapping_range
+      (f:cell -> bool)
+      (b:Base.t) (lo:Z.t) (hi:Z.t) (m:CellSet.t) : cell list =
+    cell_set_filter_range
+      (fun c -> c.offset  <= hi && lo < Z.add c.offset (sizeof_cell c) && f c)
+      b (Z.sub lo max_sizeof_cell) hi m
+
+  (** Returns the cells satisfying [f] only considering cells that overlap
+      [c] (including [c] itself, if it is in the map).
+  *)
+  let cell_set_filter_overlapping_cell_range
+      (f:cell -> bool) (c:cell) (m:CellSet.t) : cell list =
+    cell_set_filter_overlapping_range
+      f c.base c.offset (Z.pred (Z.add c.offset (sizeof_cell c))) m
+
+  (** Returns all the cells that overlap [c] but are different from [c]. *)
+  let cell_set_find_overlapping_cell (c:cell) (m:CellSet.t) : cell list =
+    cell_set_filter_overlapping_cell_range
+      (fun c' -> compare_cell c c' <> 0) c m
+
+  (** Returns all the cells that overlap an interval (bounds included). *)
+  let cell_set_find_overlapping_itv (b:Base.t) (i:Itv.t) (m:CellSet.t) : cell list =
+    match i with
+    | Bot.BOT -> []
+    | Bot.Nb (lo,hi) ->
+      (* get interval bounds as Z.t *)
+      let lo = match lo with Finite f -> f | _ -> Z.zero in
+      let hi = match hi with
+        | Finite f -> f
+        | _ -> match OffCells.max_binding (CellSet.find b m) with
+          | Some (f,_) -> f
+          | _ -> Z.zero
+      in
+      cell_set_filter_overlapping_range (fun _ -> true) b lo hi m
+
+  (** All cells in a base. *)
+  let cell_set_find_base (b:Base.t) (m:CellSet.t) : cell list =
+    OffCells.fold
+      (fun _ s l -> Cells.fold (fun c l -> c :: l) s l)
+      (CellSet.find b m) []
 
 
 
   (** {2 Domain header} *)
   (** ***************** *)
-
-
-  (** Set of memory cells *)
-  module CellSet = Framework.Lattices.Powerset.Make(struct
-      type t = cell
-      let compare = compare_cell
-      let print = pp_cell
-    end)
 
 
   (** Set of bases. Needed during unification to determine whether a
@@ -295,7 +387,7 @@ struct
     }
   }
 
-  let alarms = [A_c_out_of_bound_cls; A_c_null_deref_cls; A_c_use_after_free_cls; A_c_invalid_deref_cls; Stubs.Alarms.A_stub_invalid_requires_cls]
+  let alarms = [A_c_out_of_bound_cls; A_c_null_deref_cls; A_c_use_after_free_cls; A_c_invalid_deref_cls]
 
 
   (** {2 Command-line options} *)
@@ -317,7 +409,7 @@ struct
 
   (** {2 Utility functions for cells} *)
   (** =============================== *)
-
+(*
   (** [find_cell_opt f a] finds the cell in [a.cells] verifying
       predicate [f]. None is returned if such cells is not found. *)
   let find_cell_opt (f:cell->bool) (a:t) =
@@ -369,7 +461,7 @@ struct
           not (Itv.meet itv itv' |> Itv.is_bottom)
         )
       ) a
-
+*)
 
 
   (** {2 Unification of cells} *)
@@ -377,38 +469,36 @@ struct
 
   (** [phi c a range] returns a constraint expression over cell [c] found in [a] *)
   let phi (c:cell) (a:t) range : expr option =
-    match find_cell_opt (fun c' -> compare_cell c c' = 0) a with
-    | Some c ->
-      None
+    if cell_set_mem c a.cells then None
 
-    | None ->
-      if not (is_c_int_type @@ cell_type c) then None else
-      match find_cell_opt
-              (fun c' ->
-                 is_int_cell c' &&
-                 Z.equal (sizeof_cell c') (sizeof_cell c) &&
-                 compare_base c.base (c'.base) = 0 &&
-                 Z.equal c.offset c'.offset &&
-                 c.primed = c'.primed
-              ) a
+    else if not (is_c_int_type @@ cell_type c) then None
+
+    else
+      match
+        cell_set_filter_range
+          (fun c' ->
+             is_int_cell c' &&
+             Z.equal (sizeof_cell c') (sizeof_cell c)
+          )
+          c.base c.offset c.offset a.cells
       with
-      | Some (c') ->
+      | c'::_ ->
         let v = mk_numeric_cell_var_expr c' range in
         Some (wrap_expr v (rangeof_int_cell c) range)
 
-      | None ->
+      | [] ->
         match
-          find_cell_opt ( fun c' ->
-              let b = Z.sub c.offset c'.offset in
-              Z.geq b Z.zero &&
-              compare_base c.base (c'.base) = 0 &&
-              Z.lt b (sizeof_cell c') &&
-              is_int_cell c' &&
-              compare_typ (cell_type c) (T_c_integer(C_unsigned_char)) = 0 &&
-              c.primed = c'.primed
-            ) a
+          cell_set_filter_overlapping_cell_range
+            (fun c' ->
+               let b = Z.sub c.offset c'.offset in
+               Z.geq b Z.zero &&
+               Z.lt b (sizeof_cell c') &&
+               is_int_cell c' &&
+               compare_typ (cell_type c) (T_c_integer(C_unsigned_char)) = 0
+            )
+            c a.cells
         with
-        | Some (c') ->
+        | c'::_ ->
           let b = Z.sub c.offset c'.offset in
           let base = (Z.pow (Z.of_int 2) (8 * Z.to_int b))  in
           let v = mk_numeric_cell_var_expr c' range in
@@ -420,7 +510,7 @@ struct
             )
           )
 
-        | None ->
+        | [] ->
           let exception NotPossible in
           try
             if is_int_cell c then
@@ -433,13 +523,12 @@ struct
                         base = cc.base;
                         offset = Z.add c.offset (Z.of_int i);
                         typ = Numeric t';
-                        primed = cc.primed;
                       }
                     ) c
                   in
-                  match find_cell_opt (fun c' -> compare_cell c' tobein = 0) a with
-                  | Some (c') -> aux (i+1) (c' :: l)
-                  | None -> raise NotPossible
+                  if cell_set_mem tobein a.cells
+                  then aux (i+1) (tobein :: l)
+                  else raise NotPossible
                 else
                   List.rev l
               in
@@ -461,7 +550,7 @@ struct
               raise NotPossible
           with
           | NotPossible ->
-            match c.base with
+            match c.base.base_kind with
             | String s ->
               let len = String.length s in
               if Z.equal c.offset (Z.of_int len) then
@@ -483,7 +572,7 @@ struct
 
   (** Add a cell in the underlying domain using the simplified manager *)
   let add_cell_simplified c a range man ctx s =
-    if CellSet.mem c a.cells ||
+    if cell_set_mem c a.cells ||
        (* not (is_c_scalar_type c.typ) || *)
        not (BaseSet.mem c.base a.bases)
     then s
@@ -505,21 +594,22 @@ struct
   (** [unify a a'] finds non-common cells in [a] and [a'] and adds them. *)
   let unify man ctx (a,s) (a',s') =
     let range = mk_fresh_range () in
-    if CellSet.is_empty a.cells  then s, s' else
-    if CellSet.is_empty a'.cells then s, s'
-    else
-      try
-        let diff' = CellSet.diff a.cells a'.cells in
-        let diff = CellSet.diff a'.cells a.cells in
-        CellSet.fold (fun c s ->
-            add_cell_simplified c a range man ctx s
-          ) diff s
-        ,
-        CellSet.fold (fun c s' ->
-            add_cell_simplified c a' range man ctx s'
-          ) diff' s'
-      with Top.Found_TOP ->
-        s, s'
+    CellSet.fold2
+      (fun _ m1 m2 acc ->
+         OffCells.fold2
+           (fun _ s1 s2 acc ->
+              Cells.fold
+                (fun c s -> add_cell_simplified c a range man ctx s)
+                (Cells.diff s2 s1) (fst acc)
+              ,
+              Cells.fold
+                (fun c s -> add_cell_simplified c a range man ctx s)
+                (Cells.diff s1 s2) (snd acc)
+
+           )
+           m1 m2 acc
+      )
+      a.cells a'.cells (s,s')
 
 
   (** {2 Lattice operators} *)
@@ -556,14 +646,14 @@ struct
 
   (** Possible results of a cell expansion *)
   type expansion =
-    | Cell of cell
+    | Cell of cell * mode option
     | Region of base * Itv.t
     | Top
 
 
   let is_interesting_base = function
-    | ValidVar _
-    | ValidAddr _ -> true
+    | { base_valid = true; base_kind = Var _ }  -> true
+    | { base_valid = true; base_kind = Addr _ } -> true
 
     | _ -> false
 
@@ -580,16 +670,16 @@ struct
       raise_c_invalid_deref_alarm ptr range man flow |>
       Cases.empty_singleton
 
-    | E_c_points_to (P_block (InvalidAddr (_,r), offset)) ->
+    | E_c_points_to (P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
       raise_c_use_after_free_alarm ptr r range man flow |>
       Cases.empty_singleton
 
-    | E_c_points_to (P_block (InvalidVar (v,r), offset)) ->
+    | E_c_points_to (P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
       raise_c_dangling_deref_alarm ptr v r range man flow |>
       Cases.empty_singleton
 
-    | E_c_points_to (P_block (base, offset)) ->
-      Cases.singleton (Some (base, offset)) flow
+    | E_c_points_to (P_block (base, offset, mode)) ->
+      Cases.singleton (Some (base, offset, mode)) flow
 
     | E_c_points_to P_top ->
       Cases.singleton None flow
@@ -605,7 +695,7 @@ struct
       Soundness.warn_at range "ignoring ⊤ pointer %a" pp_expr p;
       Cases.singleton Top flow
 
-    | Some (base,offset) ->
+    | Some (base,offset,mode) ->
       let typ = under_type p.etyp |> void_to_char in
       let elm = sizeof_type typ in
 
@@ -627,7 +717,7 @@ struct
            Z.leq o (Z.sub s elm)
         then
           let c = mk_cell base o typ in
-          Cases.singleton (Cell c) flow
+          Cases.singleton (Cell (c,mode)) flow
         else
           let flow = raise_c_out_bound_alarm ~base ~offset ~size range man flow in
           Cases.empty_singleton flow
@@ -683,28 +773,30 @@ struct
                       Z.sub uuu elm
                 in
 
-                (* Iterate over [l, u] *)
-                let rec aux i o =
-                  if i = !opt_deref_expand
-                  then
+                let nb = Z.div (Z.sub u l) step in
+                if nb > Z.of_int !opt_deref_expand then
+                  (* too many cases -> top *)
+                  let region = Region (base, Itv.of_z l u) in
+                  let flow = man.exec ~zone:Z_u_num (mk_assume (mk_binop offset O_ge (mk_z l range) range) range) flow in
+                  if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
+                  then Cases.empty_singleton flow
+                  else Cases.singleton region flow
+                else
+                  (* few cases -> iterate fully over [l, u] *)
+                  let rec aux o =
                     if Z.gt o u
                     then []
                     else
-                      let region = Region (base, Itv.of_z o u) in
-                      let flow = man.exec ~zone:Z_u_num (mk_assume (mk_binop offset O_ge (mk_z o range) range) range) flow in
+                      let flow = man.exec ~zone:Z_u_num (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow in
                       if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
-                      then []
-                      else [Cases.singleton region flow]
-                  else
-                    let flow = man.exec ~zone:Z_u_num (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow in
-                    if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
-                    then aux (i + 1) (Z.add o step)
-                    else
-                      let c = mk_cell base o typ in
-                      Cases.singleton (Cell c) flow :: aux (i + 1) (Z.add o step)
-                in
-                let evals = aux 0 l in
-                Cases.join_list ~empty:(fun () -> Cases.empty_singleton flow) evals
+                      then aux (Z.add o step)
+                      else
+                        let c = mk_cell base o typ in
+                        Cases.singleton (Cell (c,mode)) flow :: aux (Z.add o step)
+                  in
+                  let evals = aux l in
+                  Cases.join_list ~empty:(fun () -> Cases.empty_singleton flow) evals
+
             )
           ~felse:(fun flow ->
               let flow = raise_c_out_bound_alarm ~base ~offset ~size range man flow in
@@ -724,7 +816,7 @@ struct
     let flow = add_base c.base man flow in
     let a = get_env T_cur man flow in
 
-    if CellSet.mem c a.cells (* || not (is_c_scalar_type c.typ) *)
+    if cell_set_mem c a.cells (* || not (is_c_scalar_type c.typ) *)
     then Post.return flow
     else
       let v = mk_cell_var c in
@@ -733,7 +825,7 @@ struct
 
       if is_pointer_cell c
       then
-        set_env T_cur { a with cells = CellSet.add c a.cells } man flow |>
+        set_env T_cur { a with cells = cell_set_add c a.cells } man flow |>
         Post.return
       else
         begin
@@ -746,13 +838,13 @@ struct
         end
         |>
         Post.bind @@ fun flow ->
-        set_env T_cur { a with cells = CellSet.add c a.cells } man flow |>
+        set_env T_cur { a with cells = cell_set_add c a.cells } man flow |>
         Post.return
 
   (* Remove a cell and its associated scalar variable *)
   let remove_cell c range man flow =
     let flow = map_env T_cur (fun a ->
-        { a with cells = CellSet.remove c a.cells }
+        { a with cells = cell_set_remove c a.cells }
       ) man flow
     in
     let v = mk_cell_var c in
@@ -763,8 +855,7 @@ struct
   (** Remove cells overlapping with cell [c] *)
   let remove_cell_overlappings c range man flow =
     let a = get_env T_cur man flow in
-    let overlappings = get_cell_overlappings c a in
-
+    let overlappings = cell_set_find_overlapping_cell c a.cells in
     List.fold_left (fun acc c' ->
         Post.bind (remove_cell c' range man) acc
       ) (Post.return flow) overlappings
@@ -773,16 +864,26 @@ struct
   (** Remove cells overlapping with cell [c] *)
   let remove_region_overlappings base itv range man flow =
     let a = get_env T_cur man flow in
-    let overlappings = get_region_overlappings base itv a in
-
+    let overlappings = cell_set_find_overlapping_itv base itv a.cells in
     List.fold_left (fun acc c' ->
         Post.bind (remove_cell c' range man) acc
       ) (Post.return flow) overlappings
 
 
+  let rename_cell c1 c2 range man flow =
+    let v1 = mk_cell_var c1 in
+    let v2 = mk_cell_var c2 in
+    let flow = map_env T_cur (fun a ->
+        { a with cells = cell_set_remove c1 a.cells |>
+                         cell_set_add c2 }
+      ) man flow in
+    let stmt = mk_rename_var v1 v2 range in
+    man.post ~zone:Z_c_scalar stmt flow
+
+
   let assign_cell c e mode range man flow =
     let flow = map_env T_cur (fun a ->
-        { a with cells = CellSet.add c a.cells }
+        { a with cells = cell_set_add c a.cells }
       ) man flow
     in
 
@@ -797,53 +898,22 @@ struct
     remove_region_overlappings base itv range man flow
 
 
-  (** Rename a cell and its associated scalar variable *)
-  let rename_cell old_cell new_cell range man flow =
-    (* Add the old cell in case it has not been accessed before so
-       that its constraints are added in the sub domain
-    *)
-    add_cell old_cell range man flow |>
-    Post.bind @@ fun flow ->
-
-    (* Remove the old cell and add the new one *)
-    let flow =
-      map_env T_cur (fun a ->
-          { a with cells = CellSet.remove old_cell a.cells |>
-                           CellSet.add new_cell
-          }
-        ) man flow
-    in
-
-    let oldv = mk_cell_var old_cell in
-    let newv = mk_cell_var new_cell in
-    let stmt = mk_rename_var oldv newv range in
-    man.post ~zone:Z_c_scalar stmt flow
+  let expand_cell c cl range man flow =
+    (* Add cells in cl to the state *)
+    let flow = map_env T_cur (fun a ->
+        { a with cells = List.fold_left (fun s c -> cell_set_add c s) a.cells cl; }
+      ) man flow in
+    (* Expand cell variables *)
+    let v = mk_cell_var c in
+    let vl = List.map mk_cell_var cl in
+    let stmt = mk_expand_var v vl range in
+    man.post stmt ~zone:Z_c_scalar flow
 
 
-
-
-
-  (** Compute the interval of a C expression *)
-  let compute_bound ?(zone=(Z_c_low_level, Z_u_num)) e man flow =
-    let evl = man.eval ~zone e flow in
-    Eval.apply
-      (fun ee flow ->
-         man.ask (Universal.Numeric.Common.mk_int_interval_query ee) flow
-      )
-      Itv.join Itv.meet Itv.bottom
-      evl
-
-
-  (** Remove all cells already realized *)
-  let remove_all_cells range man flow =
-    let a = get_env T_cur man flow in
-
-    if CellSet.is_top a.cells
-    then Post.return flow
-
-    else CellSet.fold (fun c acc ->
-        Post.bind (remove_cell c range man) acc
-      ) a.cells (Post.return flow)
+  let forget_cell c range man flow =
+    let v = mk_cell_var c in
+    let stmt = mk_forget_var v range in
+    man.post stmt ~zone:Z_c_scalar flow
 
 
   (** {2 Initial state} *)
@@ -859,7 +929,7 @@ struct
   (** ************************ *)
 
   (** 𝔼⟦ *p ⟧ where p is a pointer to a scalar *)
-  let eval_deref_scalar_pointer p primed range man flow =
+  let eval_deref_scalar_pointer p range man flow =
     (* Expand *p into cells *)
     expand p range man flow >>$ fun expansion flow ->
     let t = under_type p.etyp in
@@ -870,14 +940,13 @@ struct
     | Region _ ->
       Eval.singleton (mk_top (void_to_char t) range) flow
 
-    | Cell c ->
-      let c = { c with primed } in
+    | Cell (c,mode) ->
       add_cell c range man flow >>= fun _ flow ->
       let v =
         if is_pointer_cell c then
-          mk_pointer_cell_var_expr c t range
+          mk_pointer_cell_var_expr c ~mode t range
         else
-          mk_numeric_cell_var_expr c range
+          mk_numeric_cell_var_expr c ~mode range
       in
       Eval.singleton v flow
 
@@ -923,7 +992,7 @@ struct
       Soundness.warn_at range "ignoring ⊤ pointer %a" pp_expr p;
       Eval.singleton (mk_top typ range) flow
 
-    | Some (base,offset) ->
+    | Some (base,offset,mode) ->
       eval_base_size base range man flow >>$ fun size flow ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) size flow >>$ fun size flow ->
 
@@ -954,14 +1023,14 @@ struct
 
   let eval zone exp man flow =
     match ekind exp with
-    | E_var (v,STRONG) when is_c_scalar_type v.vtyp ->
-      eval_deref_scalar_pointer (mk_c_address_of exp exp.erange) false exp.erange man flow |>
+    | E_var (v,_) when is_c_scalar_type v.vtyp ->
+      eval_deref_scalar_pointer (mk_c_address_of exp exp.erange) exp.erange man flow |>
       OptionExt.return
 
     | E_c_deref p when under_type p.etyp |> void_to_char |> is_c_scalar_type &&
                        not (is_pointer_offset_forall_quantified p)
       ->
-      eval_deref_scalar_pointer p false exp.erange man flow |>
+      eval_deref_scalar_pointer p exp.erange man flow |>
       OptionExt.return
 
 
@@ -975,16 +1044,9 @@ struct
       eval_address_of lval exp.erange man flow |>
       OptionExt.return
 
-    | E_stub_primed lval when not (is_lval_offset_forall_quantified lval) ->
-      eval_deref_scalar_pointer (mk_c_address_of lval exp.erange) true exp.erange man flow |>
-      OptionExt.return
 
     | E_c_deref p when is_pointer_offset_forall_quantified p ->
       eval_deref_quantified p exp.erange man flow |>
-      OptionExt.return
-
-    | E_stub_primed e when is_lval_offset_forall_quantified e ->
-      eval_deref_quantified (mk_c_address_of e exp.erange) exp.erange man flow |>
       OptionExt.return
 
 
@@ -1008,25 +1070,30 @@ struct
   (** 𝕊⟦ type v; ⟧  *)
   let exec_declare v scope range man flow =
     (* Add v to the bases *)
-    let base = ValidVar v in
+    let base = mk_var_base v in
     let flow = map_env T_cur (fun a ->
         { a with bases = BaseSet.add base a.bases }
       ) man flow
     in
     (* If v is a scalar variable, add it to the scalar domain *)
     if is_c_scalar_type v.vtyp then
-      let c = mk_cell base Z.zero v.vtyp in      
+      let c = mk_cell base Z.zero v.vtyp in
       let vv = mk_cell_var c in
       map_env T_cur (fun a ->
-        { a with cells = CellSet.add c a.cells }
+        { a with cells = cell_set_add c a.cells }
       ) man flow |>
       man.post ~zone:Z_c_scalar (mk_c_declaration vv None scope range)
     else
       Post.return flow
 
 
-  (** 𝕊⟦ *p = e; ⟧ *)
-  let exec_assign p e mode range man flow =
+  (** 𝕊⟦ x = e; ⟧ *)
+  let exec_assign x e range man flow =
+    let p = match ekind x with
+      | E_var _     -> mk_c_address_of x range
+      | E_c_deref p -> p
+      | _           -> assert false
+    in
     (* Expand *p into cells *)
     expand p range man flow >>$ fun expansion flow ->
     match expansion with
@@ -1037,11 +1104,11 @@ struct
       ;
       Post.return flow
 
-    | Cell { base } when is_base_readonly base ->
+    | Cell ({ base },_) when is_base_readonly base ->
       let flow = raise_c_read_only_modification_alarm base range man flow in
       Post.return flow
 
-    | Cell c ->
+    | Cell (c,mode) ->
       man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow >>$ fun e flow ->
       assign_cell c e mode range man flow
 
@@ -1063,8 +1130,8 @@ struct
 
   let exec_add b range man flow =
     match b with
-    | ValidVar v when is_c_scalar_type v.vtyp ->
-      let c = mk_cell (ValidVar v) Z.zero v.vtyp in
+    | { base_kind = Var v; base_valid = true; } when is_c_scalar_type v.vtyp ->
+      let c = mk_cell b Z.zero v.vtyp in
       add_cell c range man flow
 
     | _ ->
@@ -1078,7 +1145,7 @@ struct
   let exec_remove b range man flow =
     let a = get_env T_cur man flow in
     let flow = set_env T_cur { a with bases = BaseSet.remove b a.bases } man flow in
-    let cells = find_cells (fun c -> compare_base c.base b = 0) a in
+    let cells = cell_set_find_base b a.cells in
     List.fold_left (fun acc c ->
         Post.bind (remove_cell c range man) acc
       ) (Post.return flow) cells
@@ -1088,158 +1155,83 @@ struct
   let exec_rename base1 base2 range man flow =
     let a = get_env T_cur man flow in
 
-    (* Cell renaming function *)
-    let to_base2 c = { c with base = base2 } in
+    (* Remove base1 and add base2 *)
+    let a = { a with
+              bases = BaseSet.remove base1 a.bases |>
+                      BaseSet.add base2; }
+    in
+    let flow = set_env T_cur a man flow in
 
     (* Cells of base1 *)
-    let cells1 = CellSet.filter (fun c ->
-        compare_base c.base base1 = 0
-      ) a.cells
+    let cells1 = cell_set_find_base base1 a.cells in
+
+    (* Cells of base2 *)
+    let cells2 = cell_set_find_base base2 a.cells in
+
+    (* Remove cells of base2 *)
+    let post = List.fold_left (fun acc c2 -> Post.bind (remove_cell c2 range man) acc) (Post.return flow) cells2 in
+
+    (* Rename cells in base1 by rebasing to base2 *)
+    List.fold_left
+      (fun acc c1 ->
+         let c2 = { c1 with base = base2 } in
+         Post.bind (rename_cell c1 c2 range man) acc
+      )
+      post cells1
+
+
+  (** Expand a base into a set of bases *)
+  let exec_expand b bl range man flow =
+    let a = get_env T_cur man flow in
+    (* Add the list of bases bl to abstract state a *)
+    let a = { a with bases = BaseSet.union a.bases (BaseSet.of_list bl) } in
+    (* Get the cells of base b *)
+    let cells = cell_set_find_base b a.cells in
+    (* Expand each cell *)
+    List.fold_left (fun acc c ->
+        (* Create the corresponding expanded cells *)
+        let cl = List.map (fun bb -> { c with base = bb } ) bl in
+        Post.bind (expand_cell c cl range man) acc
+      ) (Post.return flow) cells
+
+
+  (** Compute the interval of an offset *)
+  let offset_interval offset range man flow : Itv.t =
+    let interval e =
+      let evl = man.eval e ~zone:(Z_c, Z_u_num) flow in
+      Eval.apply (fun ee flow -> man.ask (Universal.Numeric.Common.mk_int_interval_query ee) flow) Itv.join Itv.meet Itv.bottom evl
     in
+    if is_expr_forall_quantified offset then
+      let min, max = Common.Quantified_offset.bound offset in
+      let min_itv = interval min in
+      let max_itv = interval max in
+      Itv.join min_itv max_itv
+    else
+      interval offset
 
 
-    (* Cell copy function, depends on the presence of base2 *)
-    let copy =
-      if not (BaseSet.mem base2 a.bases) then
-        (* If base2 is not already present => rename the cells *)
-        fun c flow ->
-          let c' = to_base2 c in
-          let v = mk_cell_var c in
-          let v' = mk_cell_var c' in
-          let flow = map_env T_cur (fun a ->
-              { a with cells = CellSet.remove c a.cells |>
-                               CellSet.add c' }
-            ) man flow in
-          let stmt = mk_rename_var v v' range in
-          man.post ~zone:Z_c_scalar stmt flow
-      else
-        (* Otherwise, assign with weak update *)
-        fun c flow ->
-          let c' = to_base2 c in
-          let v = mk_cell_var c in
-          let v' = mk_cell_var c' in
-          let flow = map_env T_cur (fun a ->
-              { a with cells = CellSet.remove c a.cells |>
-                               CellSet.add c' }
-            ) man flow in
-          let stmt = mk_assign (mk_var v' ~mode:WEAK range) (mk_var v range) range in
-          man.post ~zone:Z_c_scalar stmt flow >>= fun _ flow ->
-          let stmt = mk_remove_var v range in
-          man.post ~zone:Z_c_scalar stmt flow
+  (** Forget the value of an lval *)
+  let exec_forget lval range man flow =
+    (* Get the pointed base *)
+    let ptr = match ekind lval with
+      | E_var _   -> mk_c_address_of lval range
+      | E_c_deref(p) -> p
+      | _ -> assert false
     in
-
-    (* Apply copy function *)
-    CellSet.fold (fun c acc -> Post.bind (copy c) acc) cells1 (Post.return flow) |>
-    Post.bind @@ fun flow ->
-
-    (* Remove base1 and add base2 *)
-    map_env T_cur (fun a ->
-        {
-          a with
-          bases = BaseSet.remove base1 a.bases |>
-                  BaseSet.add base2;
-        }
-      ) man flow |>
-    Post.return
-
-
-  (* 𝕊⟦ rename target[i1][i2]...[in]' into target[i1][i2]...[in],
-     ∀ i1 ∈ [l1,u1], ..., in ∈ [ln,un] ⟧
-  *)
-  let exec_rename_primed target bounds range man flow =
-    let p = match bounds with
-      | [] -> mk_c_address_of target range
-      | _ -> target
-    in
-    man.eval p ~zone:(Z_c_low_level, Z_c_points_to) flow >>$ fun pt flow ->
-    match ekind pt with
-    | E_c_points_to P_top | E_c_points_to P_null | E_c_points_to P_invalid ->
-      Post.return flow
-
-    | E_c_points_to (P_block(base, offset)) ->
-      (* Get cells with the same base *)
+    man.eval ptr ~zone:(Z_c_low_level,Z_c_points_to) flow >>$ fun p flow ->
+    match ekind p with
+    | E_c_points_to(P_block(base,offset,mode)) ->
+      (* Compute the interval of the offset *)
+      let itv = offset_interval offset range man flow in
+      (* Add the size of the pointed cells *)
+      let size = sizeof_type (under_type ptr.etyp |> void_to_char) in
+      let itv = Bot.bot_lift2 ItvUtils.IntItv.add itv (Itv.of_z Z.zero (Z.pred size)) in
+      (* Forget all affected cells *)
       let a = get_env T_cur man flow in
-      let same_base_cells = CellSet.filter (fun c ->
-          compare_base base c.base = 0
-        ) a.cells
-      in
+      let cells = cell_set_find_overlapping_itv base itv a.cells in
+      List.fold_left (fun acc c -> Post.bind (forget_cell c range man) acc) (Post.return flow) cells
 
-      (* Compute the offset interval *)
-      let itv =
-        (* First, get the flattened expressions of the lower and upper bounds *)
-        let l, u, t =
-          let rec doit accl accu t =
-            function
-            | [] -> accl, accu, t
-            | [(l, u)] ->
-              (mk_offset_bound accl l t), (mk_offset_bound accu u t), t
-            | (l, u) :: tl ->
-              doit (mk_offset_bound accl l t) (mk_offset_bound accu u t) (under_type t |> void_to_char) tl
-
-          (* Utility function that returns the expression of an offset bound *)
-          and mk_offset_bound before bound t =
-            let elem_size = sizeof_type t in
-            add before (
-              mul bound (mk_z elem_size range) range ~typ:T_int
-            ) range ~typ:T_int
-          in
-          doit offset offset (under_type p.etyp |> void_to_char) bounds
-        in
-        (* Compute the interval of the bounds *)
-        let elem_size = sizeof_type t in
-        let itv1 = compute_bound l man flow in
-        let itv2 = compute_bound (add u (mk_z (Z.pred elem_size) range) range) man flow in
-
-        (* Compute the interval of the assigned cells *)
-        Itv.join itv1 itv2
-      in
-
-
-      (* Search for primed cells that reside withing the assigned offsets and rename them *)
-      CellSet.fold (fun c acc ->
-          if not (Itv.mem c.offset itv)
-          then acc
-          else if c.primed then
-            (* Primed cells are unprimed by renaming them *)
-            Post.bind (rename_cell c { c with primed = false } range man) acc
-          else if not (CellSet.mem { c with primed = true } same_base_cells) then
-            (* Remove unprimed cells that have no primed version *)
-            Post.bind (remove_cell c range man) acc
-          else
-            acc
-        ) same_base_cells (Post.return flow)
-
-    | _ -> assert false
-
-
-  (** 𝕊⟦ requires cond; ⟧ *)
-  let exec_stub_requires cond range man flow =
-    assume cond
-      ~fthen:(fun flow ->
-          Post.return flow
-        )
-      ~felse:(fun flow ->
-          Stubs.Alarms.raise_stub_invalid_requires cond range man flow |>
-          Post.return
-        )
-      ~negate:(fun e range ->
-          let ee = map_expr
-              (fun e ->
-                 match ekind e with
-                 | E_stub_quantified(FORALL, v, s) ->
-                   VisitParts { e with ekind = E_stub_quantified(EXISTS, v, s) }
-
-                 | E_stub_quantified(EXISTS, v, s) ->
-                   VisitParts { e with ekind = E_stub_quantified(FORALL, v, s) }
-
-                 | _ -> VisitParts e
-              )
-              (fun s -> VisitParts s)
-              e
-          in
-          mk_not ee range
-        )
-      ~zone:Z_c_low_level man flow
+    | _ -> Post.return flow
 
 
   let exec zone stmt man flow =
@@ -1248,21 +1240,8 @@ struct
       exec_declare v scope stmt.srange man flow |>
       OptionExt.return
 
-    | S_assign(({ekind = E_var(v, STRONG)} as lval), e) when is_c_scalar_type v.vtyp ->
-      Some (
-        let c = mk_cell (ValidVar v) Z.zero v.vtyp in
-        let flow = map_env T_cur (fun a -> { a with cells = CellSet.add c a.cells }) man flow in
-
-        let v = mk_cell_var c in
-        man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow >>$ fun e flow ->
-        let stmt = mk_assign (mk_var v lval.erange) e stmt.srange in
-        man.post ~zone:Z_c_scalar stmt flow |>
-
-        Post.bind @@ remove_cell_overlappings c stmt.srange man
-      )
-
-    | S_assign(({ekind = E_c_deref(p)}), e) when is_c_scalar_type @@ under_type p.etyp ->
-      exec_assign p e STRONG stmt.srange man flow |>
+    | S_assign(x, e) when is_c_scalar_type x.etyp ->
+      exec_assign x e stmt.srange man flow |>
       OptionExt.return
 
 
@@ -1271,41 +1250,31 @@ struct
       OptionExt.return
 
 
-    | S_add { ekind = E_var (v, _) } ->
-      exec_add (ValidVar v) stmt.srange man flow |>
+    | S_add e when is_base_expr e ->
+      exec_add (expr_to_base e) stmt.srange man flow |>
       OptionExt.return
 
 
-    | S_add { ekind = E_addr addr } ->
-      exec_add (ValidAddr addr) stmt.srange man flow |>
+    | S_remove e when is_base_expr e ->
+      exec_remove (expr_to_base e) stmt.srange man flow |>
       OptionExt.return
 
-    | S_remove { ekind = E_var (v, _) } when is_c_type v.vtyp ->
-      exec_remove (ValidVar v) stmt.srange man flow |>
+
+    | S_rename(e1,e2) when is_base_expr e1 && is_base_expr e2 ->
+      exec_rename (expr_to_base e1) (expr_to_base e2) stmt.srange man flow |>
       OptionExt.return
 
-    | S_remove { ekind = E_addr a } ->
-      exec_remove (ValidAddr a) stmt.srange man flow |>
+    | S_expand(e,el) when is_base_expr e &&
+                          List.for_all is_base_expr el ->
+      exec_expand (expr_to_base e) (List.map expr_to_base el) stmt.srange man flow |>
       OptionExt.return
 
-    | S_rename({ ekind = E_var (v1, _) }, { ekind = E_var (v2, _) }) ->
-      exec_rename (ValidVar v1) (ValidVar v2) stmt.srange man flow |>
-      OptionExt.return
-
-    | S_rename({ ekind = E_addr addr1 }, { ekind = E_addr addr2 }) ->
-      exec_rename (ValidAddr addr1) (ValidAddr addr2) stmt.srange man flow |>
+    | S_forget(e) ->
+      exec_forget e stmt.srange man flow |>
       OptionExt.return
 
     | S_stub_assigns _ ->
       Post.return flow |>
-      OptionExt.return
-
-    | S_stub_rename_primed(lval, bounds) ->
-      exec_rename_primed lval bounds stmt.srange man flow |>
-      OptionExt.return
-
-    | S_stub_requires e ->
-      exec_stub_requires e stmt.srange man flow |>
       OptionExt.return
 
 

@@ -82,7 +82,7 @@ val map : ('r->'s) -> ('a,'r) cases -> ('a,'s) cases
 val map_opt : ('r -> 's option option) -> ('a,'r) cases -> ('a,'s) cases
 (** [map_opt f c] replaces each maps each result [ri] of case [ci] in
     [c] with [Option.get (f ri)]. If [f ri] returns [None], the case is
-    removed. 
+    removed.
 *)
 
 
@@ -100,6 +100,10 @@ val apply : ('r option -> 'a flow -> 'b) -> ('b -> 'b -> 'b) -> ('b -> 'b -> 'b)
 val apply_full : ('r option -> 'a flow -> log -> block -> 'b) -> ('b -> 'b -> 'b) -> ('b -> 'b -> 'b) -> ('a,'r) cases -> 'b
 (** Similar to [apply] but passes to [f] also logs and cleaners *)
 
+
+val fold : ('r option -> 'a flow -> 'b -> 'b) -> ('a,'r) cases -> 'b -> 'b
+
+val fold_some : ('r -> 'a flow -> 'b -> 'b) -> ('a,'r) cases -> 'b -> 'b
 
 
 val print :

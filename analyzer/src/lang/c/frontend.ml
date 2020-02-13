@@ -442,7 +442,7 @@ and from_expr ctx ((ekind, tc , range) : C_AST.expr) : expr =
     | C_AST.E_float_literal f -> Universal.Ast.(E_constant (C_float (float_of_string f)))
     | C_AST.E_character_literal (c, k)  -> E_constant(Ast.C_c_character (c, from_character_kind k))
     | C_AST.E_string_literal (s, k) -> Universal.Ast.(E_constant (C_c_string (s, from_character_kind k)))
-    | C_AST.E_variable v -> E_var (from_var ctx v, STRONG)
+    | C_AST.E_variable v -> E_var (from_var ctx v, None)
     | C_AST.E_function f -> Ast.E_c_function (find_function_in_context ctx f)
     | C_AST.E_call (f, args) -> Universal.Ast.E_call(from_expr ctx f, Array.map (from_expr ctx) args |> Array.to_list)
     | C_AST.E_unary (op, e) -> E_unop (from_unary_operator op etyp, from_expr ctx e)
@@ -866,7 +866,7 @@ and from_stub_expr ctx exp =
   | E_string s -> E_constant (C_string s)
   | E_char c -> E_constant (C_c_character (Z.of_int c, Ast.C_char_ascii)) (* FIXME: support other character kinds *)
   | E_invalid -> E_constant C_c_invalid
-  | E_var v -> E_var (from_var ctx v, STRONG)
+  | E_var v -> E_var (from_var ctx v, None)
   | E_unop (op, e) -> E_unop(from_stub_expr_unop op, from_stub_expr ctx e)
   | E_binop (op, e1, e2) -> E_binop(from_stub_expr_binop op, from_stub_expr ctx e1, from_stub_expr ctx e2)
   | E_addr_of e -> E_c_address_of(from_stub_expr ctx e)

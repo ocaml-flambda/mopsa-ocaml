@@ -177,7 +177,7 @@ struct
       display
       (Cases.print_some (fun fmt e flow ->
            match ekind e with
-           | E_c_points_to (P_block(base,offset)) ->
+           | E_c_points_to (P_block(base,offset,mode)) ->
              let evl = man.eval ~zone:(Z_c_scalar,Z_u_num) offset flow in
              Format.fprintf fmt "&(%a%a)"
                pp_base base

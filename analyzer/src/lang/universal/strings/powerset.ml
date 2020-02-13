@@ -65,7 +65,7 @@ struct
       type nonrec t = t
       let name = "universal.strings.powerset"
       let display = "strings"
-    end)
+            end)
 
   let zones = [Zone.Z_u_string]
 
@@ -152,6 +152,9 @@ struct
     iexec = { provides = [Zone.Z_u_string]; uses = []; };
     ieval = { provides = [Zone.Z_u, Zone.Z_u_string];           uses = [Zone.Z_u, Zone.Z_u_string; Zone.Z_u, Zone.Z_u_int]; }
   }
+
+  let debug fmt = Debug.debug ~channel:name fmt
+
 
   let exec zone stmt (man: ('a, t) Core.Sig.Domain.Intermediate.man) (flow: 'a flow) : 'a post option =
     match skind stmt with

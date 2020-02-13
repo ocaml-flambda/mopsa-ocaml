@@ -26,79 +26,126 @@ open Universal.Ast
 open Ast
 open Zone
 
-(** lv base *)
-type base =
-  | ValidVar    of var   (** valid variable in an active stack frame *)
 
-  | InvalidVar  of var   (** invalid variable in a dead stack frame *) *
-                  range  (** return location *)
+(** Kinds of bases *)
+type base_kind =
+  | Var    of var    (** Stack variable *)
+  | Addr   of addr   (** Heap address *)
+  | String of string (** String literal *)
 
-  | ValidAddr   of addr  (** valid allocated address *)
+(** Bases *)
+type base = {
+  base_kind : base_kind;
+  base_valid : bool;
+  base_invalidation_range : range option;
+}
 
-  | InvalidAddr of addr  (** invalid deallocated address *) *
-                   range (** deallocation location *)
 
-  | String      of string (** string literal *)
-
-
-let pp_base fmt = function
-  | ValidVar v -> pp_var fmt v
-  | InvalidVar (v,_) -> Format.fprintf fmt "✗%a" pp_var v
-  | ValidAddr (a) -> pp_addr fmt a
-  | InvalidAddr (a,r) -> Format.fprintf fmt "✗%a" pp_addr a
+let pp_base_kind fmt = function
+  | Var v -> pp_var fmt v
+  | Addr (a) -> pp_addr fmt a
   | String s -> Format.fprintf fmt "\"%s\"" s
 
+let pp_base fmt b =
+  Format.fprintf fmt "%s%a"
+    (if b.base_valid then "" else "✗")
+    pp_base_kind b.base_kind
 
-let base_uniq_name b =
-  match b with
-  | ValidVar v -> v.vname
-  | InvalidVar (v,_) -> "✗" ^ v.vname
-  | ValidAddr _ | InvalidAddr _ ->
-    let () = pp_base Format.str_formatter b in
-    Format.flush_str_formatter ()
-  | String s -> s
-
-let compare_base b b' = match b, b' with
-  | ValidVar v, ValidVar v' -> compare_var v v'
-  | InvalidVar(v,r), InvalidVar(v',r') -> Compare.pair compare_var compare_range (v,r) (v',r')
-  | ValidAddr a, ValidAddr a' -> compare_addr a a'
-  | InvalidAddr(a,r), InvalidAddr(a',r') -> Compare.pair compare_addr compare_range (a,r) (a',r')
+let compare_base_kind b b' = match b, b' with
+  | Var v, Var v' -> compare_var v v'
+  | Addr a, Addr a' -> compare_addr a a'
   | String s, String s' -> compare s s'
   | _ -> compare b b'
 
+let compare_base b b' =
+  Compare.compose [
+    (fun () -> compare_base_kind b.base_kind b'.base_kind);
+    (fun () -> compare b.base_valid b'.base_valid);
+    (fun () -> Compare.option compare_range b.base_invalidation_range b'.base_invalidation_range);
+  ]
 
-let base_size =
-  function
-  | ValidVar v | InvalidVar(v,_) -> sizeof_type v.vtyp
+let mk_base ?(valid=true) ?(invalidation_range=None) kind =
+  { base_kind = kind;
+    base_valid = valid;
+    base_invalidation_range = invalidation_range; }
+
+
+let mk_var_base ?(valid=true) ?(invalidation_range=None) v =
+  mk_base (Var v) ~valid ~invalidation_range
+
+
+let mk_addr_base ?(valid=true) ?(invalidation_range=None) a =
+  mk_base (Addr a) ~valid ~invalidation_range
+
+let mk_string_base s =
+  mk_base (String s) ~valid:true ~invalidation_range:None
+
+let base_kind_uniq_name b =
+  match b with
+  | Var v -> v.vname
+  | Addr a ->
+    let () = pp_addr Format.str_formatter a in
+    Format.flush_str_formatter ()
+  | String s -> s
+
+
+let base_uniq_name b =
+  let name = base_kind_uniq_name b.base_kind in
+  if b.base_valid then name else "✗" ^ name
+
+
+let base_size b =
+  match b.base_kind with
+  | Var v -> sizeof_type v.vtyp
   | String s -> Z.of_int @@ String.length s
-  | ValidAddr _ | InvalidAddr _ -> panic ~loc:__LOC__ "base_size: addresses not supported"
+  | Addr a -> panic ~loc:__LOC__ "base_size: addresses not supported"
 
-let base_mode =
-  function
-  | ValidVar _ | InvalidVar _ | String _ -> STRONG
-  | ValidAddr a | InvalidAddr(a,_) -> a.addr_mode
+let base_mode b =
+  match b.base_kind with
+  | Var v -> v.vmode
+  | Addr a -> a.addr_mode
+  | String _ -> STRONG
 
 
-let is_base_readonly = function
+let is_base_readonly b =
+  match b.base_kind with
   | String _ -> true
   | _ -> false
 
 
+let is_base_expr e =
+  match ekind e with
+  | E_var(v,_)                -> is_c_type v.vtyp
+  | E_addr _                  -> true
+  | E_constant (C_c_string _) -> true
+  | _ -> false
+
+
+let expr_to_base e =
+  match ekind e with
+  | E_var(v,_)                    -> mk_var_base v
+  | E_addr a                      -> mk_addr_base a
+  | E_constant (C_c_string (s,_)) -> mk_string_base s
+  | _ -> assert false
+
+
 (** Evaluate the size of a base in bytes *)
 let eval_base_size base ?(via=Z_any) range (man:('a,'t,'s) Core.Sig.Stacked.Lowlevel.man) flow =
-  match base with
-  | ValidVar var | InvalidVar(var,_)
-    when is_c_variable_length_array_type var.vtyp ->
+  match base.base_kind with
+  | Var var
+    when is_c_variable_length_array_type var.vtyp ||
+         is_c_no_length_array_type var.vtyp
+    ->
     let bytes_expr = mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, mk_var var range)) range ~etyp:ul in
     man.eval ~zone:(Z_c_low_level, Z_c_scalar) ~via bytes_expr flow
 
-  | ValidVar var | InvalidVar(var,_) ->
+  | Var var ->
     Eval.singleton (mk_z (sizeof_type var.vtyp) range ~typ:ul) flow
 
   | String str ->
     Eval.singleton (mk_int (String.length str + 1) range ~typ:ul) flow
 
-  | ValidAddr addr | InvalidAddr(addr,_)  ->
+  | Addr addr ->
     let bytes_expr = mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, mk_addr addr range)) range ~etyp:ul in
     man.eval ~zone:(Z_c_low_level, Z_c_scalar) ~via bytes_expr flow
 
@@ -109,3 +156,6 @@ struct
   let compare = compare_base
   let print = pp_base
 end
+
+
+module BaseSet = SetExt.Make(Base)

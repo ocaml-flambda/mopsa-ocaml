@@ -31,6 +31,7 @@ open Ast
 open Zone
 open Common.Points_to
 open Common.Alarms
+open Common.Base
 
 
 (** Evaluate an expression of format string into a string *)
@@ -46,14 +47,14 @@ let eval_format_string format range man flow =
     raise_c_invalid_deref_alarm format range man' flow |>
     Cases.empty_singleton
 
-  | E_c_points_to (P_block (InvalidAddr (_,r), _)) ->
+  | E_c_points_to (P_block ({ base_kind = Addr addr; base_valid = false; base_invalidation_range = Some r}, _, _)) ->
     raise_c_use_after_free_alarm format r range man' flow |>
     Cases.empty_singleton
 
-  | E_c_points_to (P_block (String fmt, offset)) when is_c_expr_equals_z offset Z.zero ->
+  | E_c_points_to (P_block ({ base_kind = String fmt }, offset, _)) when is_c_expr_equals_z offset Z.zero ->
     Cases.singleton fmt flow
 
-  | E_c_points_to (P_block (String fmt, offset)) ->
+  | E_c_points_to (P_block ({ base_kind = String fmt }, offset, _)) ->
     assume (mk_binop offset O_eq (mk_zero (erange offset)) (erange offset))
       ~fthen:(fun flow -> Cases.singleton fmt flow)
       ~felse:(fun flow ->

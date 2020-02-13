@@ -137,7 +137,7 @@ let map (f:'r->'s) (r:('a,'r) cases) : ('a,'s) cases =
         case_cleaners = case.case_cleaners;
       }
     ) r
-  
+
 
 
 (** Map each case with with function [f] if the return value is
@@ -243,6 +243,32 @@ let map_fold_conjunctions
     ) l
   in
   { r with cases_dnf = Dnf.from_list l' }
+
+
+let fold
+    (f:'r option -> 'a flow -> 'b -> 'b)
+    (c:('a,'r) cases)
+    (init:'b)
+  : 'b =
+  let flat_cases = Dnf.to_list c.cases_dnf |>
+                   List.flatten
+  in
+  List.fold_left (fun acc case ->
+      let flow = Flow.create c.cases_ctx case.case_alarms case.case_flow in
+      f case.case_result flow acc
+    ) init flat_cases
+
+
+let fold_some
+    (f:'r -> 'a flow -> 'b -> 'b)
+    (c:('a,'r) cases)
+    (init:'b)
+  : 'b =
+  fold (fun r flow acc ->
+      match r with
+      | None -> acc
+      | Some rr -> f rr flow acc
+    ) c init
 
 
 (****************************************************************************)

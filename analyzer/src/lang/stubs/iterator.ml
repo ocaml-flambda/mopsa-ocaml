@@ -279,7 +279,7 @@ struct
         visit_expr_in_formula
           (fun e ->
              match ekind e with
-             | E_stub_return -> Keep { e with ekind = E_var (v, STRONG) }
+             | E_stub_return -> Keep { e with ekind = E_var (v, None) }
              | _ -> VisitParts e
           )
           e.content
@@ -296,20 +296,14 @@ struct
              ) flow
 
 
-  (** Remove locals and old copies of assigned variables *)
-  let clean_post locals assigns range man flow =
-    let block1 =
+  (** Remove locals *)
+  let clean_post locals range man flow =
+    let block =
       List.fold_left (fun block l ->
           mk_remove_var l.content.lvar range :: block
         ) [] locals
     in
-    let block2 =
-      List.fold_left (fun block a ->
-          let t = a.content.assign_target in
-          mk_stub_rename_primed t a.content.assign_offset range :: block
-        ) block1 assigns
-    in
-    man.exec (mk_block block2 range) flow
+    man.exec (mk_block block range) flow
 
 
   let exec_free free man flow =
@@ -341,7 +335,7 @@ struct
       ) flow case.case_body |>
 
     (* Clean case post state *)
-    clean_post case.case_locals case.case_assigns case.case_range man
+    clean_post case.case_locals case.case_range man
 
 
   (** Execute the body of a stub *)
@@ -373,6 +367,19 @@ struct
     Flow.join_list man.lattice flows ~empty:(fun () -> flow)
 
 
+  let prepare_all_assigns assigns range man flow =
+    (* Check if there are assigned variables *)
+    if assigns = []
+    then flow
+    else man.exec (mk_stub_prepare_all_assigns assigns range) flow
+
+  let clean_all_assigns assigns range man flow =
+    (* Check if there are assigned variables *)
+    if assigns = []
+    then flow
+    else man.exec (mk_stub_clean_all_assigns assigns range) flow
+
+
   (** Entry point of expression evaluations *)
   let eval zone exp man flow =
     match ekind exp with
@@ -389,6 +396,9 @@ struct
       (* Initialize parameters *)
       let flow = init_params args stub.stub_func_params exp.erange man flow in
 
+      (* Prepare assignments *)
+      let flow = prepare_all_assigns stub.stub_func_assigns stub.stub_func_range man flow in
+
       (* Create the return variable *)
       let return, flow =
         match stub.stub_func_return_type with
@@ -402,22 +412,24 @@ struct
       (* Evaluate the body of the stb *)
       let flow = exec_body stub.stub_func_body return man flow in
 
-      (* Clean locals and primes *)
-      let flow = clean_post stub.stub_func_locals stub.stub_func_assigns stub.stub_func_range man flow in
+      (* Clean locals *)
+      let flow = clean_post stub.stub_func_locals stub.stub_func_range man flow in
+
+      (* Clean assignments *)
+      let flow = clean_all_assigns stub.stub_func_assigns stub.stub_func_range man flow in
 
       (* Restore the callstack *)
       let flow = Flow.set_callstack cs flow in
 
+      let cleaners = List.map (fun param -> mk_remove_var param exp.erange) stub.stub_func_params in
+
       begin match return with
         | None ->
-          Eval.singleton (mk_unit exp.erange) flow |>
+          Eval.singleton (mk_unit exp.erange) flow ~cleaners |>
           OptionExt.return
 
         | Some v ->
-          Eval.singleton (mk_var v exp.erange) flow ~cleaners:(
-            mk_remove_var v exp.erange ::
-            List.map (fun param -> mk_remove_var param exp.erange) stub.stub_func_params
-          ) |>
+          Eval.singleton (mk_var v exp.erange) flow ~cleaners:(mk_remove_var v exp.erange :: cleaners) |>
           OptionExt.return
       end
 
@@ -430,11 +442,17 @@ struct
   let exec zone stmt man flow =
     match skind stmt with
     | S_stub_directive (stub) ->
+      (* Prepare assignments *)
+      let flow = prepare_all_assigns stub.stub_directive_assigns stub.stub_directive_range man flow in
+
       (* Evaluate the body of the stub *)
       let flow = exec_body stub.stub_directive_body None man flow in
 
-      (* Clean locals and primes *)
-      let flow = clean_post stub.stub_directive_locals stub.stub_directive_assigns stub.stub_directive_range man flow in
+      (* Clean locals *)
+      let flow = clean_post stub.stub_directive_locals stub.stub_directive_range man flow in
+
+      (* Clean assignments *)
+      let flow = clean_all_assigns stub.stub_directive_assigns stub.stub_directive_range man flow in
 
       Post.return flow |>
       OptionExt.return

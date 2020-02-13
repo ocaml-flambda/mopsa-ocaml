@@ -591,9 +591,9 @@ module Make(Ord: OrderedType) =
       | Empty -> Empty
       | Node (l,k,d,r,h) ->
           let c1, c2 = Ord.compare k lo, Ord.compare k hi in
-          let l = if c1 > 0 then map_slice f l lo k else l in
+          let l = if c1 > 0 then map_slice f l lo hi else l in
           let d = if c1 >= 0 && c2 <= 0 then f k d else d in
-          let r = if c2 < 0 then map_slice f r k hi else r in
+          let r = if c2 < 0 then map_slice f r lo hi else r in
           Node (l,k,d,r,h)
 
     let rec iter_slice f m lo hi =
@@ -601,36 +601,36 @@ module Make(Ord: OrderedType) =
       | Empty -> ()
       | Node (l,k,d,r,_) ->
           let c1, c2 = Ord.compare k lo, Ord.compare k hi in
-          if c1 > 0 then iter_slice f l lo k;
+          if c1 > 0 then iter_slice f l lo hi;
           if c1 >= 0 && c2 <= 0 then f k d;
-          if c2 < 0 then iter_slice f r k hi
+          if c2 < 0 then iter_slice f r lo hi
 
     let rec fold_slice f m lo hi acc =
       match m with
       | Empty -> acc
       | Node (l,k,d,r,_) ->
           let c1, c2 = Ord.compare k lo, Ord.compare k hi in
-          let acc = if c1 > 0 then fold_slice f l lo k acc else acc in
+          let acc = if c1 > 0 then fold_slice f l lo hi acc else acc in
           let acc = if c1 >= 0 && c2 <= 0 then f k d acc else acc in
-          if c2 < 0 then fold_slice f r k hi acc else acc
+          if c2 < 0 then fold_slice f r lo hi acc else acc
 
     let rec for_all_slice f m lo hi =
       match m with
       | Empty -> true
       | Node (l,k,d,r,_) ->
           let c1, c2 = Ord.compare k lo, Ord.compare k hi in
-          (c1 <= 0 || for_all_slice f l lo k) &&
+          (c1 <= 0 || for_all_slice f l lo hi) &&
           (c1 < 0 || c2 > 0 || f k d) &&
-          (c2 >= 0 || for_all_slice f r k hi)
+          (c2 >= 0 || for_all_slice f r lo hi)
 
     let rec exists_slice f m lo hi =
       match m with
       | Empty -> false
       | Node (l,k,d,r,_) ->
           let c1, c2 = Ord.compare k lo, Ord.compare k hi in
-          (c1 > 0 && exists_slice f l lo k) ||
+          (c1 > 0 && exists_slice f l lo hi) ||
           (c1 >= 0 && c2 <= 0 && f k d) ||
-          (c2 < 0 && exists_slice f r k hi)
+          (c2 < 0 && exists_slice f r lo hi)
 
 
     (* key set comparison *)

@@ -128,7 +128,7 @@ struct
       | _ -> panic ~loc:__LOC__ "non integer type %a" pp_typ t
 
   let mk_num_var v =
-    mkv v.vname (V_c_num v) (to_num_type v.vtyp)
+    mkv v.vname (V_c_num v) (to_num_type v.vtyp) ~mode:v.vmode
 
   let mk_num_var_expr e =
     match ekind e with
@@ -600,6 +600,17 @@ struct
     | S_assume(e) when is_c_num_type e.etyp || is_numeric_type e.etyp || e.etyp = T_any ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e' flow ->
       man.post ~zone:Z_u_num (mk_assume (to_compare_expr e') stmt.srange) flow |>
+      OptionExt.return
+
+    | S_expand(e,el) when is_c_num_type e.etyp && List.for_all (fun ee -> is_c_num_type ee.etyp) el ->
+      man.eval e ~zone:(Z_c_scalar,Z_u_num) flow >>$? fun e' flow ->
+      bind_list el (man.eval ~zone:(Z_c_scalar,Z_u_num)) flow >>$? fun el' flow ->
+      man.post (mk_expand e' el' stmt.srange) ~zone:Z_u_num flow |>
+      OptionExt.return
+
+    | S_forget v when is_c_num_type v.etyp ->
+      let vv = mk_num_var_expr v in
+      man.post (mk_forget vv stmt.srange) ~zone:Z_u_num flow |>
       OptionExt.return
 
     | _ -> None

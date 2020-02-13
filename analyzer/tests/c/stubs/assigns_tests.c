@@ -88,10 +88,10 @@ void test_assign_two_scalars() {
 /* ********************* */
 
 /*$
- * assigns: a[1, 1];
- * ensures: (a[1])' == n;
+ * assigns: p[1, 1];
+ * ensures: (p[1])' == n;
  */
-void init_second(int *a, int n);
+void init_second(int *p, int n);
 
 void test_assign_array() {
   int a[10] = {1, 2, 3};
@@ -103,10 +103,10 @@ void test_assign_array() {
 
 
 /*$
- * assigns: a[0, size(a) - 1];
- * ensures: (a[1])' == n;
+ * assigns: p[0, size(p) - 1];
+ * ensures: (p[1])' == n;
  */
-void partial_init_second(int *a, int n);
+void partial_init_second(int *p, int n);
 
 void test_assign_array_partially() {
   int a[10];

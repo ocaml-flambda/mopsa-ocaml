@@ -63,7 +63,7 @@ struct
                    assume (mk_py_isinstance_builtin iterable "list" range) man flow
                      ~fthen:(fun flow ->
                          let var_iterable = Py_list.Domain.var_of_eobj iterable in
-                         assume (mk_py_isinstance_builtin (mk_var ~mode:WEAK var_iterable range) "str" range) man flow
+                         assume (mk_py_isinstance_builtin (mk_var ~mode:(Some WEAK) var_iterable range) "str" range) man flow
                            ~fthen:(man.eval (mk_py_top T_string range))
                            ~felse:(fun flow ->
                                man.exec (Utils.mk_builtin_raise_msg "TypeError" "sequence item: expected str instance" range) flow |>
@@ -76,7 +76,7 @@ struct
                                let vars_tuple = Tuple.Domain.var_of_eobj iterable in
                                let assume_all =
                                  List.fold_left (fun acc var ->
-                                     mk_binop acc O_py_and (mk_py_isinstance_builtin (mk_var ~mode:WEAK var range) "str" range) range) (mk_py_true range) vars_tuple in
+                                     mk_binop acc O_py_and (mk_py_isinstance_builtin (mk_var ~mode:(Some WEAK) var range) "str" range) range) (mk_py_true range) vars_tuple in
                                assume assume_all man flow
                                  ~fthen:(man.eval (mk_py_top T_string range))
                                  ~felse:(fun flow ->

@@ -96,7 +96,7 @@ struct
           let addr_set = addr_of_expr eaddr_set in
           let els_var = var_of_addr addr_set in
           let flow = List.fold_left (fun acc el ->
-              man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:WEAK els_var range) el range) acc) flow ls in
+              man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:(Some WEAK) els_var range) el range) acc) flow ls in
           Eval.singleton (mk_py_object (addr_set, None) range) flow
         )
       |> OptionExt.return
@@ -170,7 +170,7 @@ struct
             | E_py_object ({addr_kind = Py_list.A_py_iterator (s, [a], _)}, _) when s = "set_iterator" -> a
             | _ -> assert false in
           let var_els = var_of_addr set_addr in
-          let els = man.eval (mk_var var_els ~mode:WEAK range) flow in
+          let els = man.eval (mk_var var_els ~mode:(Some WEAK) range) flow in
           let flow = Flow.set_ctx (Eval.get_ctx els) flow in
           let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
           Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Eval.copy_ctx stopiteration els::stopiteration::[])
@@ -196,7 +196,7 @@ struct
            let set, element = match args with | [l; e] -> l, e | _ -> assert false in
            debug "set: %a@\n" pp_expr set;
            let var_els = var_of_eobj set in
-           man.exec (mk_assign (mk_var var_els ~mode:WEAK range) element range) flow |>
+           man.exec (mk_assign (mk_var var_els ~mode:(Some WEAK) range) element range) flow |>
            man.eval (mk_py_none range))
       |> OptionExt.return
 
@@ -209,7 +209,7 @@ struct
             ~fthen:(fun flow ->
                 let var = var_of_eobj set in
                 Libs.Py_mopsa.check man
-                  (mk_py_isinstance (mk_var ~mode:WEAK var range) set_v range)
+                  (mk_py_isinstance (mk_var ~mode:(Some WEAK) var range) set_v range)
                   range flow
               )
             ~felse:(Libs.Py_mopsa.check man (mk_py_false range) range)
