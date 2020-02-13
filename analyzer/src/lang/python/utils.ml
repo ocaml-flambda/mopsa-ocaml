@@ -164,7 +164,7 @@ let bind_list_args man args flow range zone (f: var list -> 'b flow -> ('b, 'c) 
     Cases.add_cleaners (List.map (fun x -> mk_remove_var x range) vars)
 
 
-let change_var_type t v = mkv (Format.asprintf "%s:%a" v.vname pp_typ t) v.vkind t
+let change_var_type t v = mkv (Format.asprintf "%s:%a" v.vname pp_typ t) ~mode:v.vmode v.vkind t
 
 let change_evar_type t evar =
   match ekind evar with
