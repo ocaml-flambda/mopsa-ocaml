@@ -84,46 +84,48 @@ module Domain =
         let start = Timing.start () in
         let res =
           man.eval iterable flow  |>
-          bind_some (fun iterabletmp flow ->
-              man.eval (Utils.mk_builtin_call "iter" [iterabletmp] range) flow |>
-              bind_some (fun tmp flow ->
-                  let l_else =
-                    match skind orelse with
-                    | S_block ([],_) -> [mk_stmt S_break range]
-                    | _ -> [orelse; mk_stmt S_break range] in
-                  let inner_block  =
-                    begin match skind body with
+            bind_some (fun iterabletmp flow ->
+                Utils.bind_list_args man [Utils.mk_builtin_call "iter" [iterabletmp] range] flow range Zone.Z_py (fun vars flow ->
+                    let tmp = mk_var (List.hd vars) range in
+              (* man.eval (Utils.mk_builtin_call "iter" [iterabletmp] range) flow |>
+               * bind_some (fun tmp flow -> *)
+                    let l_else =
+                      match skind orelse with
+                      | S_block ([],_) -> [mk_stmt S_break range]
+                      | _ -> [orelse; mk_stmt S_break range] in
+                    let inner_block  =
+                      begin match skind body with
                       | S_block (l,_) ->
-                        (mk_block
-                           ((Utils.mk_try_stopiteration
+                         (mk_block
+                            ((Utils.mk_try_stopiteration
+                                (mk_assign
+                                   target
+                                   (Utils.mk_builtin_call "next" [tmp] range)
+                                   range
+                                )
+                                (mk_block l_else range)
+                                range) :: l) range)
+                      | _ ->
+                         (mk_block
+                            [Utils.mk_try_stopiteration
                                (mk_assign
                                   target
                                   (Utils.mk_builtin_call "next" [tmp] range)
                                   range
                                )
-                               (mk_block l_else range)
-                               range) :: l) range)
-                      | _ ->
-                        (mk_block
-                           [Utils.mk_try_stopiteration
-                              (mk_assign
-                                 target
-                                 (Utils.mk_builtin_call "next" [tmp] range)
-                                 range
-                              )
-                              (mk_block l_else range) range
-                           ; body] range)
-                    end in
-                  let stmt =
-                        mk_while
-                          (mk_py_true range)
-                          inner_block
-                          range
-                  in
-                  man.exec stmt flow |>
-                  Post.return
-                )
-            )
+                               (mk_block l_else range) range
+                            ; body] range)
+                      end in
+                    let stmt =
+                      mk_while
+                        (mk_py_true range)
+                        inner_block
+                        range
+                    in
+                    man.exec stmt flow |>
+                      Post.return
+                  )
+              )
         in
         Debug.debug ~channel:"profiling" "for loop at range %a: %.4f" pp_range range (Timing.stop start);
         res |> OptionExt.return
