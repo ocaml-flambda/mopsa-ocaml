@@ -19,7 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Hook to profile function calls *)
+(** Hook to profile time spent in analyzing function calls *)
 
 open Mopsa
 open Hook
@@ -90,9 +90,49 @@ struct
   let cur : timing ref = ref { callstack = []; time = 0. }
 
 
+  (** {2 Call detection} *)
+  (** ****************** *)
+
+  (** A call is detected when the depth of the call stack increases *)
+  let detect_call cs =
+    let depth = Callstack.length cs in
+    let cur_depth = List.length !cur.callstack - 1 in
+    if depth = cur_depth then () else
+    if depth = cur_depth + 1 then
+      (* Call detected. First, stop the timer of previous call, save
+         it in the queue and create a new timing record *)
+      let t = Sys.time () in
+      let timing = { !cur with time = t -. !cur.time } in
+      Queue.push timing records;
+      let call = Callstack.top cs in
+      debug "call to %s, cur = %a, depth = %d, cur_depth = %d" call.call_fun pp_timing !cur depth cur_depth;
+      let timing = { callstack = call.call_fun :: !cur.callstack ; time = t; } in
+      cur := timing
+    else panic "call detection: unsupported call stack configuration: current = %d, previous = %d" cur_depth depth
+
+
+  (** A return is detected when the depth of the call stack is decreased *)
+  let detect_return cs =
+    let depth = Callstack.length cs in
+    let cur_depth = List.length !cur.callstack - 1 in
+    if depth = cur_depth then () else
+    if depth = cur_depth - 1 then
+      (* Return detected. Stop the timer of the returning call, save
+         it in the queue and restore the timing record of the previous
+         call *)
+      let t = Sys.time () in
+      debug "return from %s, cur = %a, depth = %d, cur_depth = %d" (List.hd !cur.callstack) pp_timing !cur depth cur_depth;
+      let timing = { !cur with time = t -. !cur.time } in
+      Queue.push timing records;
+      let timing = { callstack = List.tl !cur.callstack ; time = t; } in
+      cur := timing
+    else panic "return detection: unsupported call stack configuration: current = %d, previous = %d" cur_depth depth
+
+
   (** {2 Statistics} *)
   (** ************** *)
 
+  (** Export timing records as flame graph samples *)
   let export_flame_graph () =
     let o = open_out !opt_flame_graph_output in
     let fmt = Format.formatter_of_out_channel o in
@@ -153,42 +193,16 @@ struct
     let timing = { callstack = ["%program"]; time = t } in
     cur := timing
 
-  let update_state cs =
-    let depth = Callstack.length cs in
-    let cur_depth = List.length !cur.callstack - 1 in
-    if depth = cur_depth then () else
-    if depth = cur_depth + 1 then
-      (* Call detected. First, stop the timer of previous call, save
-         it in the queue and create a new timing record *)
-      let t = Sys.time () in
-      let timing = { !cur with time = t -. !cur.time } in
-      Queue.push timing records;
-      let call = Callstack.top cs in
-      debug "call to %s, cur = %a, depth = %d, cur_depth = %d" call.call_fun pp_timing !cur depth cur_depth;
-      let timing = { callstack = call.call_fun :: !cur.callstack ; time = t; } in
-      cur := timing
-    else if depth = cur_depth - 1 then
-      (* Return detected. Stop the timer of the returning call, save
-         it in the queue and restore the timing record of the previous
-         call *)
-      let t = Sys.time () in
-      debug "return from %s, cur = %a, depth = %d, cur_depth = %d" (List.hd !cur.callstack) pp_timing !cur depth cur_depth;
-      let timing = { !cur with time = t -. !cur.time } in
-      Queue.push timing records;
-      let timing = { callstack = List.tl !cur.callstack ; time = t; } in
-      cur := timing
-    else
-      panic "depth = %d, cur_depth = %d, cs = %a, cur = %a" depth cur_depth Callstack.print cs pp_timing !cur
 
   let on_before_exec zone stmt man flow =
-    update_state (Flow.get_callstack flow)
+    detect_call (Flow.get_callstack flow)
 
   let on_after_exec zone stmt man post = ()
     
   let on_before_eval zone exp man flow = ()
     
   let on_after_eval zone exp man eval =
-    update_state (Eval.get_ctx eval |> Context.find_unit Callstack.ctx_key)
+    detect_return (Eval.get_ctx eval |> Context.find_unit Callstack.ctx_key)
 
   let on_finish man flow =
     let t = Sys.time () in
