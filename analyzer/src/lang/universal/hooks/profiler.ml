@@ -55,6 +55,18 @@ struct
       default = "";
     }
 
+
+  (** Resolution of the flame graph samples *)
+  let opt_flame_graph_resolution = ref "ms"
+
+  let () = register_builtin_option {
+      key = "-flamegraph-resolution";
+      category = "Profiling";
+      doc = " resolution of the flame graph samples";
+      spec = ArgExt.Symbol (["s"; "ms"; "us"; "ns"], (fun r -> opt_flame_graph_resolution := r));
+      default = "ms";
+    }
+
       
 
   (** {2 Timing records} *)
@@ -65,11 +77,6 @@ struct
     callstack : string list; (** Call stack *)
     time      : float;       (** Time spent in the function *)
   }
-
-  let pp_timing fmt t =
-    Format.fprintf fmt "%a %d"
-      (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ";") Format.pp_print_string) (List.rev t.callstack)
-      (1000000.0 *. t.time |> int_of_float)
 
 
   (** Collection of past timing records *)
@@ -120,13 +127,28 @@ struct
   (** {2 Statistics} *)
   (** ************** *)
 
+  (** Print a timing record as a flame graph sample *)
+  let pp_timing_sample fmt t =
+    let resolution = match !opt_flame_graph_resolution with
+      | "s"  -> 1.0
+      | "ms" -> 1000.0
+      | "us" -> 1000000.0
+      | "ns" -> 1000000000.0
+      | _    -> assert false
+    in
+    Format.fprintf fmt "%a %d"
+      (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ";") Format.pp_print_string) (List.rev t.callstack)
+      (resolution *. t.time |> int_of_float)
+
+
   (** Export timing records as flame graph samples *)
   let export_flame_graph () =
     let o = open_out !opt_flame_graph_path in
     let fmt = Format.formatter_of_out_channel o in
     Queue.iter (fun t ->
-        Format.fprintf fmt "%a@.%!" pp_timing t
+        Format.fprintf fmt "%a@.%!" pp_timing_sample t
       ) records
+
 
   (** Print the statistics table *)
   let print_stats () =
