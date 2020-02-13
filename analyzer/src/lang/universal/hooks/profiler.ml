@@ -44,26 +44,15 @@ struct
   (** {2 Command-line options} *)
   (** ************************ *)
 
-  (** Export results as flame graph samples *)
-  let opt_export_flame_graph = ref false
+  (** Path of the output flame graph samples file *)
+  let opt_flame_graph_path = ref ""
 
   let () = register_builtin_option {
       key = "-flamegraph";
       category = "Profiling";
-      doc = " export profiling results as flame graph samples";
-      spec = ArgExt.Set opt_export_flame_graph;
-      default = "false";
-    }
-
-  (** Path to the output flame graph file *)
-  let opt_flame_graph_output = ref "mopsa.log"
-
-  let () = register_builtin_option {
-      key = "-flamegraph-output";
-      category = "Profiling";
-      doc = " path to output flame graph data file";
-      spec = ArgExt.Set_string opt_flame_graph_output;
-      default = "mopsa.flamegraph.data";
+      doc = " path where flame graphs samples are saved";
+      spec = ArgExt.Set_string opt_flame_graph_path;
+      default = "";
     }
 
       
@@ -133,7 +122,7 @@ struct
 
   (** Export timing records as flame graph samples *)
   let export_flame_graph () =
-    let o = open_out !opt_flame_graph_output in
+    let o = open_out !opt_flame_graph_path in
     let fmt = Format.formatter_of_out_channel o in
     Queue.iter (fun t ->
         Format.fprintf fmt "%a@.%!" pp_timing t
@@ -207,7 +196,7 @@ struct
     let t = Sys.time () in
     let timing = { !cur with time = t -. !cur.time } in
     Queue.push timing records;
-    if !opt_export_flame_graph then export_flame_graph ();
+    if !opt_flame_graph_path <> "" then export_flame_graph ();
     print_stats ()
 
 
