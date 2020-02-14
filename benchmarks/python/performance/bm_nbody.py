@@ -174,4 +174,5 @@ def test_values():
     res = bench_nbody(100, DEFAULT_REFERENCE, DEFAULT_ITERATIONS)
     mopsa.ignore_exception(ValueError)
     mopsa.ignore_exception(KeyError)
+    mopsa.ignore_exception(UnboundLocalError)
     mopsa.assert_safe()
