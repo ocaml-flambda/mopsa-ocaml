@@ -104,7 +104,7 @@ let generic_nonrel_merge ~top ~add ~remove ~find ~meet pre (a1, log1) (a2, log2)
       add var top acc
 
     | S_rename ( {ekind = E_var (var1, _)}, {ekind = E_var (var2, _)} ) ->
-      let v = find var2 a in
+      let v = find var2 a (srange stmt) in
       remove var1 acc |>
       add var2 v
 
@@ -200,9 +200,9 @@ struct
 
   let debug fmt = Debug.debug ~channel:name fmt
 
-  let find v a =
+  let find v a r =
     try find v a
-    with Not_found -> Exceptions.warn "nonrel: variable %a not found" pp_var v; raise Not_found
+    with Not_found -> Exceptions.warn "nonrel: variable %a not found at range %a, domain:@.%a" pp_var v Location.pp_range r print a; raise Not_found
 
 
   let merge pre (a1, log1) (a2, log2) =
@@ -272,7 +272,7 @@ struct
   and eval (e:expr) (a:t) : (aexpr * Value.t) option =
     match ekind e with
     | E_var(var, mode) ->
-      let v = find var a in
+      let v = find var a e.erange in
       (A_var (var, mode, v), v) |>
       OptionExt.return
 
@@ -343,6 +343,7 @@ struct
      if r=false, keep the states that may falsify the expression
   *)
   let rec filter ctx (e:expr) (r:bool) (a:t) : t option =
+    let range = erange e in
     match ekind e with
 
     | E_unop (O_log_not, e) ->
@@ -367,7 +368,7 @@ struct
       OptionExt.return
 
     | E_var(var, mode) ->
-      let v = find var a in
+      let v = find var a range in
       let w = Value.filter (man a) v r in
       (if Value.is_bottom w then bottom else
        if var_mode var mode = STRONG then add ctx var w a
@@ -399,6 +400,7 @@ struct
   let zones = Value.zones
 
   let exec ctx stmt man (map:t) : t option =
+    let range = srange stmt in
     match skind stmt with
     | S_remove { ekind = E_var (v, _) }  ->
       VarMap.remove v map |>
@@ -424,7 +426,7 @@ struct
       OptionExt.return
 
     | S_rename ({ ekind = E_var (var1, _) }, { ekind = E_var (var2, _) }) ->
-      let v = find var1 map in
+      let v = find var1 map range in
       VarMap.remove var1 map |>
       VarMap.add var2 v |>
       OptionExt.return
@@ -450,7 +452,7 @@ struct
           | _ -> assert false
         ) vl
       in
-      let value = find v map in
+      let value = find v map range in
       List.fold_left (fun acc v' ->
           add ctx v' value acc
         ) map vl |>
