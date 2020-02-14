@@ -32,7 +32,7 @@ open Data_container_utils
 type addr_kind +=
   | A_py_dict of Rangeset.t * Rangeset.t
   (* variables where the smashed elements are stored (one for the keys and one for the values *)
-  | A_py_dict_view of string (* name *) * addr (* addr of the dictionary *)
+  | A_py_dict_view of string (* name *) * Rangeset.t (* addr of the dictionary *)
 
 
 let () =
@@ -41,8 +41,9 @@ let () =
       | A_py_dict (k1, v1), A_py_dict (k2, v2) -> A_py_dict ((Rangeset.union k1 k2), (Rangeset.union v1 v2))
       | _ -> default ak1 ak2);
   register_is_data_container (fun default ak -> match ak with
-      | A_py_dict _ -> true
-      | _ -> default ak)
+                                                | A_py_dict _ -> true
+                                                | A_py_dict_view _ -> true
+                                                | _ -> default ak)
 
 
 let () =
@@ -50,7 +51,7 @@ let () =
       print = (fun default fmt a ->
           match a with
           | A_py_dict (keys, values) -> fprintf fmt "dict[%a, %a]" (fun fmt -> Rangeset.iter (fun ra -> pp_range fmt ra)) keys (fun fmt -> Rangeset.iter (fun ra -> pp_range fmt ra)) values
-          | A_py_dict_view (s, a) -> fprintf fmt "%s[%a]" s pp_addr a
+          | A_py_dict_view (s, a) -> fprintf fmt "%s[%a]" s (fun fmt -> Rangeset.iter (fun ra -> pp_range fmt ra)) a
           | _ -> default fmt a);
       compare = (fun default a1 a2 ->
           match a1, a2 with
@@ -62,7 +63,7 @@ let () =
           | A_py_dict_view (s1, a1), A_py_dict_view (s2, a2) ->
             Compare.compose [
               (fun () -> Stdlib.compare s1 s2);
-              (fun () -> compare_addr a1 a2);
+              (fun () -> Rangeset.compare a1 a2);
             ]
           | _ -> default a1 a2);})
 
@@ -95,6 +96,8 @@ struct
     | A_py_dict _ -> mk_addr_attr a "dict_key" T_any,
                      mk_addr_attr a "dict_val" T_any
     | _ -> assert false
+
+  let viewseq_of_addr a = mk_addr_attr a "view_seq" T_any
 
   let addr_of_expr exp = match ekind exp with
     | E_addr a -> a
@@ -277,14 +280,12 @@ struct
       Utils.check_instances n man flow range args ["dict"]
         (fun args flow ->
            let dict = List.hd args in
-           let dict_addr = match ekind dict with
-             | E_py_object ({addr_kind = A_py_dict _} as a, _) -> a
-             | _ -> assert false in
-           let a = mk_alloc_addr (A_py_dict_view (viewname, dict_addr)) range in
+           let a = mk_alloc_addr (A_py_dict_view (viewname, Rangeset.singleton range)) range in
            man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) a flow |>
            Eval.bind (fun addr_it flow ->
                let addr_it = match ekind addr_it with E_addr a -> a | _ -> assert false in
-               Eval.singleton (mk_py_object (addr_it, None) range) flow
+               man.exec ~zone:Zone.Z_py (mk_assign (mk_var (viewseq_of_addr addr_it) range) dict range) flow |>
+               Eval.singleton (mk_py_object (addr_it, None) range)
              )
         )
       |> OptionExt.return
@@ -299,13 +300,16 @@ struct
         | _ -> assert false in
       Utils.check_instances n man flow range args [case]
         (fun args flow ->
-           let a = mk_alloc_addr (Py_list.A_py_iterator (itname, Rangeset.singleton range, None)) range in
-           man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) a flow |>
-           Eval.bind (fun addr_it flow ->
-               let addr_it = match ekind addr_it with E_addr a -> a | _ -> assert false in
-               man.exec ~zone:Zone.Z_py (mk_assign (mk_var (Py_list.Domain.itseq_of_addr addr_it) range) (List.hd args) range) flow |>
-               Eval.singleton (mk_py_object (addr_it, None) range)
-             )
+          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var (viewseq_of_addr @@ addr_of_eobj @@ List.hd args) range) flow |>
+            Eval.bind (fun dict_eobj flow ->
+                let a = mk_alloc_addr (Py_list.A_py_iterator (itname, Rangeset.singleton range, None)) range in
+                man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) a flow |>
+                  Eval.bind (fun addr_it flow ->
+                      let addr_it = match ekind addr_it with E_addr a -> a | _ -> assert false in
+                      man.exec ~zone:Zone.Z_py (mk_assign (mk_var (Py_list.Domain.itseq_of_addr addr_it) range) dict_eobj range) flow |>
+                        Eval.singleton (mk_py_object (addr_it, None) range)
+                    )
+              )
         )
       |> OptionExt.return
 
@@ -444,6 +448,15 @@ struct
          man.exec ~zone:Zone.Z_py (mk_remove_var kva range) |>
          man.exec ~zone:Zone.Z_py (mk_remove_var vva range) |>
          Post.return |> OptionExt.return
+
+    | S_remove {ekind = E_addr ({addr_kind = A_py_dict_view _} as a)} ->
+       let va = viewseq_of_addr a in
+       flow |> man.exec ~zone:Zone.Z_py (mk_remove_var va range) |> Post.return |> OptionExt.return
+
+    | S_rename ({ekind = E_addr ({addr_kind = A_py_dict_view _} as a)}, {ekind = E_addr a'}) ->
+       let va = viewseq_of_addr a in
+       let va' = viewseq_of_addr a' in
+       man.exec ~zone:Zone.Z_py (mk_rename_var va va' range) flow |> Post.return |> OptionExt.return
 
     | _ -> None
 

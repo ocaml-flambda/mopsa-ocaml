@@ -85,7 +85,7 @@ module Domain =
         let res =
           man.eval iterable flow  |>
             bind_some (fun iterabletmp flow ->
-                Utils.bind_list_args man [Utils.mk_builtin_call "iter" [iterabletmp] range] flow range Zone.Z_py (fun vars flow ->
+                Utils.bind_list_args man [Utils.mk_builtin_call "iter" [iterabletmp] iterable.erange] flow range Zone.Z_py (fun vars flow ->
                     let tmp = mk_var (List.hd vars) range in
               (* man.eval (Utils.mk_builtin_call "iter" [iterabletmp] range) flow |>
                * bind_some (fun tmp flow -> *)

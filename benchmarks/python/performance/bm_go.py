@@ -394,7 +394,7 @@ class UCTNode:
         if not parentvisits:
             return winrate
         nodevisits = self.wins + self.losses
-        return winrate + math.sqrt((math.log(float(parentvisits))) / (5 * nodevisits)) # cheating: no explicit float cast
+        return winrate + math.sqrt((math.log(float(parentvisits), math.e)) / (5 * nodevisits)) # cheating: no explicit float cast, optional math.e in 2nd argument
 
     def best_child(self):
         maxscore = -1

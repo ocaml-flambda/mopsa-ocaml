@@ -714,7 +714,7 @@ struct
            man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) a flow |>
            Eval.bind (fun eaddr_it flow ->
                let addr_it = match ekind eaddr_it with | E_addr a -> a | _ -> assert false in
-               man.exec ~zone:Zone.Z_py (mk_assign (mk_var (itseq_of_eobj eaddr_it) range) list range) flow |>
+               man.exec ~zone:Zone.Z_py (mk_assign (mk_var (itseq_of_addr addr_it) range) list range) flow |>
                Eval.singleton (mk_py_object (addr_it, None) range)
              )
         )
