@@ -65,6 +65,8 @@ let is_empty (cs:cs) =
   | [] -> true
   | _ -> false
 
+let length (cs:cs) : int = List.length cs
+
 let ctx_key =
   let module K = Context.GenUnitKey(
     struct
@@ -86,3 +88,7 @@ let pop cs =
   match cs with
   | [] -> raise EmptyCallstack
   | _ -> List.hd cs, List.tl cs
+
+let top (cs:cs) : call =
+  try List.hd cs
+  with Failure _ -> raise EmptyCallstack

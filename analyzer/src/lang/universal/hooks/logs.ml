@@ -21,9 +21,7 @@
 
 (** Hook for displaying analysis logs as a tree *)
 
-open Location
-open Ast.Expr
-open Ast.Stmt
+open Mopsa
 open Format
 open Core.All
 open Sig.Domain.Manager

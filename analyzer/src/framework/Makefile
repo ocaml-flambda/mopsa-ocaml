@@ -39,7 +39,6 @@ framework.transformers.stacked.lowlevel = stack_list compose product sequence
 framework.transformers.stacked.intermediate = stack_list product sequence
 framework.output = text json factory
 framework.config = paths visitor typer parser options
-framework.hooks = logs
 
 
 
