@@ -146,38 +146,35 @@ struct
 
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__iter__" as f, _))}, _)}, args, []) ->
-       failwith "tofix"
-      (* Utils.check_instances f man flow range args
-       *   ["set"]
-       *   (fun args flow ->
-       *      let set = match args with | [l] -> l | _ -> assert false in
-       *      let set_addr = match ekind set with
-       *        | E_py_object ({addr_kind = A_py_set _} as a, _) -> a
-       *        | _ -> assert false in
-       *      let a = mk_alloc_addr (Py_list.A_py_iterator ("set_iterator", [set_addr], None)) range in
-       *      man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) a flow |>
-       *      Eval.bind (fun eaddr_it flow ->
-       *          let addr_it = match ekind eaddr_it with | E_addr a -> a | _ -> assert false in
-       *          Eval.singleton (mk_py_object (addr_it, None) range) flow
-       *        )
-       *   )
-       * |> OptionExt.return *)
+      Utils.check_instances f man flow range args
+        ["set"]
+        (fun args flow ->
+           let set = match args with | [l] -> l | _ -> assert false in
+           let a = mk_alloc_addr (Py_list.A_py_iterator ("set_iterator", Rangeset.singleton range, None)) range in
+           man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) a flow |>
+           Eval.bind (fun eaddr_it flow ->
+               let addr_it = match ekind eaddr_it with | E_addr a -> a | _ -> assert false in
+               man.exec ~zone:Zone.Z_py (mk_assign (mk_var (Py_list.Domain.itseq_of_addr addr_it) range) set range) flow |>
+               Eval.singleton (mk_py_object (addr_it, None) range)
+             )
+        )
+      |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set_iterator.__next__", _))}, _)}, [iterator], []) ->
       (* todo: checks ? *)
-      (* man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) iterator flow |>
-       * Eval.bind (fun iterator flow ->
-       *     let set_addr = match ekind iterator with
-       *       | E_py_object ({addr_kind = Py_list.A_py_iterator (s, [a], _)}, _) when s = "set_iterator" -> a
-       *       | _ -> assert false in
-       *     let var_els = var_of_addr set_addr in
-       *     let els = man.eval (mk_var var_els ~mode:(Some WEAK) range) flow in
-       *     let flow = Flow.set_ctx (Eval.get_ctx els) flow in
-       *     let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
-       *     Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Eval.copy_ctx stopiteration els::stopiteration::[])
-       *   )
-       * |> OptionExt.return *)
-       failwith "tofix"
+       man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) iterator flow |>
+         Eval.bind (fun iterator flow ->
+             man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var (Py_list.Domain.itseq_of_eobj iterator) range) flow |>
+               Eval.bind (fun set_eobj flow ->
+                   let var_els = var_of_eobj set_eobj in
+                   let els = man.eval (mk_var var_els ~mode:(Some WEAK) range) flow in
+                   let flow = Flow.set_ctx (Eval.get_ctx els) flow in
+                   let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
+                   Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Eval.copy_ctx stopiteration els::stopiteration::[])
+                 )
+           )
+       |> OptionExt.return
+
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set_iterator.__iter__", _))}, _)}, [iterator], []) ->
       (* todo: checks ? *)
