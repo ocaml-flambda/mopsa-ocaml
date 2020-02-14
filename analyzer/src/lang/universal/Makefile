@@ -35,7 +35,7 @@ lang.universal.numeric.relational = apron_manager binding apron_transformer \
                                     domain instances
 lang.universal.numeric.reductions = intervals_congruences intervals_rel
 lang.universal.packing = static
-
+lang.universal.hooks = logs progress profiler
 
 
 # MOPSA
