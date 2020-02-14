@@ -157,7 +157,7 @@ let new_wrapper man range flow newcls argcls ~fthennew =
 let bind_list_args man args flow range zone (f: var list -> 'b flow -> ('b, 'c) Cases.cases) =
   let stmt, vars = List.fold_left (fun (stmts, vars) arg ->
                        let tmp = mk_range_attr_var arg.erange "bla" T_any in
-                       (mk_assign (mk_var tmp arg.erange) arg range) :: stmts, tmp :: vars
+                       (mk_assign (mk_var tmp arg.erange) arg arg.erange) :: stmts, tmp :: vars
                      ) ([], []) (List.rev args) in
   let stmt = Universal.Ast.mk_block stmt range in
   f vars (man.exec ~zone:zone stmt flow) |>

@@ -152,16 +152,16 @@ struct
                       | None ->
                         TVMap.add (Class tyvar) etypes cur
                       | Some set ->
-                        if ESet.subset set etypes then
-                          TVMap.add (Class tyvar) set cur
-                        else
-                          Exceptions.panic_at range "conflict for typevar %a, global set %a and class set %a differ" pp_var tyvar ESet.print set ESet.print etypes
+                         if ESet.subset set etypes then
+                           TVMap.add (Class tyvar) set cur
+                         else
+                           Exceptions.panic_at range "conflict for typevar %a, global set %a and class set %a differ" pp_var tyvar ESet.print set ESet.print etypes
                       end
                     | Some set ->
-                      if ESet.equal set etypes then
-                        cur
-                      else
-                        Exceptions.panic_at range "conflict for typevar %a, sets %a and %a differ" pp_var tyvar ESet.print set ESet.print etypes
+                       if ESet.subset set etypes then
+                         cur
+                       else
+                         Exceptions.panic_at range "conflict for typevar %a, sets %a and %a differ" pp_var tyvar ESet.print set ESet.print etypes
                   ) cur typevars in
                 let flow = set_env T_cur ncur man flow in
                 Eval.singleton eobj flow
