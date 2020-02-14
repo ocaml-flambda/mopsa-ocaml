@@ -343,7 +343,7 @@ struct
         ["list"]
         (fun args flow ->
            let list, element = match args with | [l; e] -> l, e | _ -> assert false in
-           debug "list: %a@\nelement = %a@\nflow = %a@\n" pp_expr list pp_expr element (Flow.print man.lattice.print) flow;
+           (* debug "list: %a@\nelement = %a@\nflow = %a@\n" pp_expr list pp_expr element (Flow.print man.lattice.print) flow; *)
            let var_els = var_of_eobj list in
            let len_els = length_var_of_eobj list in
            flow |>
@@ -549,12 +549,13 @@ struct
            let list_addr = match ekind list with
              | E_py_object ({addr_kind = A_py_list _} as a, _) -> a
              | _ -> assert false in
-           let a = mk_alloc_addr (A_py_iterator ("list_iterator", [list_addr], None)) range in
+           let a = mk_alloc_addr ~mode:list_addr.addr_mode (A_py_iterator ("list_iterator", [list_addr], None)) range in
            man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) a flow |>
-           Eval.bind (fun eaddr_it flow ->
-               let addr_it = match ekind eaddr_it with | E_addr a -> a | _ -> assert false in
-               man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (mk_var (itindex_var_of_addr addr_it) range) (mk_int 0 range) range) flow |>
-               Eval.singleton (mk_py_object (addr_it, None) range)
+             Eval.bind (fun eaddr_it flow ->
+                 let addr_it = match ekind eaddr_it with | E_addr a -> a | _ -> assert false in
+                 assert (addr_it.addr_mode = list_addr.addr_mode);
+                 man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (mk_var (itindex_var_of_addr addr_it) range) (mk_int 0 range) range) flow |>
+                   Eval.singleton (mk_py_object (addr_it, None) range)
              )
         )
       |> OptionExt.return
@@ -889,27 +890,30 @@ struct
       let flow = flow |>
       man.exec ~zone:Zone.Z_py (mk_rename_var va va' range) |>
       man.exec ~zone:Universal.Zone.Z_u_int (mk_rename_var la la' range) in
-      flow |> Post.return |> OptionExt.return
       (* FIXME: now we need to do the same for iterators based on this address, but it's complicated *)
-      (* let to_rename =
-       *     man.ask (Universal.Heap.Recency.Q_select_allocated_addresses
-       *                            (fun addr -> match akind addr with
-       *                               | A_py_iterator (_, l, _) ->
-       *                                 List.exists (fun a_l -> compare_addr a_l a = 0) l
-       *                               | _ -> false)
-       *                         )
-       *                 flow
-       *     in
-       *     List.fold_left (fun flow iterator ->
-       *     let new_iterator = match akind iterator with
-       *       | A_py_iterator (name, addrs, pos) ->
-       *         let new_addrs = List.map (fun addr ->
-       *             if compare_addr addr a = 0 then a' else addr) addrs in
-       *         {iterator with addr_kind = A_py_iterator(name, new_addrs, pos)}
-       *       | _ -> assert false
-       *     in
-       *     man.exec ~zone:Zone.Z_py (mk_rename (mk_addr iterator range) (mk_addr new_iterator range) range) flow
-       *   ) flow to_rename *)
+      let to_rename =
+          man.ask (Universal.Heap.Recency.Q_select_allocated_addresses
+                                 (fun addr -> match akind addr with
+                                    | A_py_iterator (_, l, _) ->
+                                      List.exists (fun a_l -> compare_addr a_l a = 0) l
+                                    | _ -> false)
+                              )
+                      flow
+      in
+      List.fold_left (fun flow iterator ->
+          let new_iterator = match akind iterator with
+            | A_py_iterator (name, addrs, pos) ->
+               let new_addrs = List.map (fun addr ->
+                                   if compare_addr addr a = 0 then a' else addr) addrs in
+               {iterator with addr_kind = A_py_iterator(name, new_addrs, pos);
+                              addr_mode = a'.addr_mode
+               }
+            | _ -> assert false
+          in
+          debug "renaming %a into %a" pp_addr iterator pp_addr new_iterator;
+          man.exec ~zone:Zone.Z_py (mk_rename (mk_addr iterator range) (mk_addr new_iterator range) range) flow
+        ) flow to_rename
+    |> Post.return |> OptionExt.return
 
     | _ -> None
 
