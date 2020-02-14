@@ -63,7 +63,7 @@ struct
     end)
 
   let interface = {
-    iexec = {provides = [Zone.Z_py_obj]; uses = [Zone.Z_py_obj]};
+    iexec = {provides = [Zone.Z_py_obj]; uses = [Zone.Z_py_obj; Zone.Z_py]};
     ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj; Universal.Zone.Z_u_heap, Z_any]}
   }
 
@@ -148,16 +148,14 @@ struct
         ["tuple"]
         (fun args flow ->
            let tuple = List.hd args in
-           let tuple_addr = match ekind tuple with
-             | E_py_object ({addr_kind = A_py_tuple _} as a, _) -> a
-             | _ -> assert false in
-           let addr_iterator = mk_alloc_addr (Py_list.A_py_iterator ("tuple_iterator", [tuple_addr], Some 0)) range in
+           let addr_iterator = mk_alloc_addr (Py_list.A_py_iterator ("tuple_iterator", Rangeset.singleton range, Some 0)) range in
            man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_iterator flow |>
            Eval.bind (fun addr_it flow ->
                let addr_it = match ekind addr_it with
                  | E_addr a -> a
                  | _ -> assert false in
-               Eval.singleton (mk_py_object (addr_it, None) range) flow
+               man.exec ~zone:Zone.Z_py (mk_assign (mk_var (Py_list.Domain.itseq_of_addr addr_it) range) tuple range) flow |>
+               Eval.singleton (mk_py_object (addr_it, None) range)
              )
         )
       |> OptionExt.return
@@ -167,19 +165,22 @@ struct
       (* ugly assign iterator = iterator at pos+1... *)
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) iterator flow |>
       Eval.bind (fun eiterator flow ->
-          let tuple_it_addr, tuple_addr, tuple_pos = match ekind eiterator with
-            | E_py_object ({addr_kind = Py_list.A_py_iterator (s, [a], d)} as addr, _) when s = "tuple_iterator" -> addr, a, d
+          let tuple_it_addr, tuple_it_range, tuple_pos = match ekind eiterator with
+            | E_py_object ({addr_kind = Py_list.A_py_iterator (s, r, d)} as addr, _) when s = "tuple_iterator" -> addr, r, d
             | _ -> assert false in
-          let vars_els = var_of_addr tuple_addr in
-          match tuple_pos with
-          | Some d when d < List.length vars_els ->
-            let () = debug "exec incoming@\n" in
-            let flow = man.exec ~zone:Zone.Z_py
-                         (mk_rename (mk_addr tuple_it_addr range)
-                            (mk_addr {tuple_it_addr with addr_kind = Py_list.A_py_iterator ("tuple_iterator", [tuple_addr], Some (d+1))} range) range) flow in
-            man.eval (mk_var ~mode:(Some STRONG) (List.nth vars_els d) range) flow
-          | _ ->
-            man.exec ~zone:Zone.Z_py (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton
+          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var (Py_list.Domain.itseq_of_eobj eiterator) range) flow |>
+            Eval.bind (fun tuple_eobj flow ->
+                let vars_els = var_of_eobj tuple_eobj in
+                match tuple_pos with
+                | Some d when d < List.length vars_els ->
+                   let () = debug "exec incoming@\n" in
+                   let flow = man.exec ~zone:Zone.Z_py
+                                (mk_rename (mk_addr tuple_it_addr range)
+                                   (mk_addr {tuple_it_addr with addr_kind = Py_list.A_py_iterator ("tuple_iterator", tuple_it_range, Some (d+1))} range) range) flow in
+                   man.eval (mk_var ~mode:(Some STRONG) (List.nth vars_els d) range) flow
+                | _ ->
+                   man.exec ~zone:Zone.Z_py (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton
+              )
         )
       |> OptionExt.return
 

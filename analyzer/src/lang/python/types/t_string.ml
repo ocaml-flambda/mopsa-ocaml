@@ -309,21 +309,22 @@ module Domain =
         |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__iter__" as f, _))}, _)}, args, []) ->
-        Utils.check_instances f man flow range args
-          ["str"]
-          (fun args flow ->
-             let str = List.hd args in
-             let str_addr = match ekind str with
-               | E_py_object (a, _) -> a
-               | _ -> assert false in
-             let it_addr = mk_alloc_addr (Objects.Py_list.A_py_iterator ("str_iterator", [str_addr], None)) range in
-             man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) it_addr flow |>
-             Eval.bind (fun eit_addr flow ->
-                 let it_addr = match ekind eit_addr with E_addr a -> a | _ -> assert false in
-                 Eval.singleton (mk_py_object (it_addr, None) range) flow
-               )
-          )
-        |> OptionExt.return
+         failwith "tofix"
+        (* Utils.check_instances f man flow range args
+         *   ["str"]
+         *   (fun args flow ->
+         *      let str = List.hd args in
+         *      let str_addr = match ekind str with
+         *        | E_py_object (a, _) -> a
+         *        | _ -> assert false in
+         *      let it_addr = mk_alloc_addr (Objects.Py_list.A_py_iterator ("str_iterator", [str_addr], None)) range in
+         *      man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) it_addr flow |>
+         *      Eval.bind (fun eit_addr flow ->
+         *          let it_addr = match ekind eit_addr with E_addr a -> a | _ -> assert false in
+         *          Eval.singleton (mk_py_object (it_addr, None) range) flow
+         *        )
+         *   )
+         * |> OptionExt.return *)
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str_iterator.__next__" as f, _))}, _)}, args, []) ->
         Utils.check_instances f man flow range args
