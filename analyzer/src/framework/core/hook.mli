@@ -107,10 +107,25 @@ val register_stateless_hook : (module STATELESS_HOOK) -> unit
 (** Register a new stateless hook *)
 
 val activate_hook : string -> unit
-(** Activate a hook *)
+(** Activate a registered hook *)
 
-val init_hooks : interface -> 'a ctx -> 'a ctx
-(** Initialize all hooks *)
+val find_hook : string -> (module HOOK)
+(** Find a registered hook *)
+
+val mem_hook : string -> bool
+(** Check whether a hook exits *)
+
+val deactivate_hook : string -> ('a,'a) man -> 'a flow -> unit
+(** Deactivate an active hook *)
+
+val init : interface -> unit
+(** Initialize hooks manager *)
+
+val init_hook : string -> 'a ctx -> 'a ctx
+(** Initialize an active hook *)
+
+val init_active_hooks : 'a ctx -> 'a ctx
+(** Initialize all active hooks *)
 
 val on_before_exec : zone -> stmt -> ('a,'a) man -> 'a flow -> 'a ctx
 (** Call [on_before_exec] on all hooks attached to [zone] *)
