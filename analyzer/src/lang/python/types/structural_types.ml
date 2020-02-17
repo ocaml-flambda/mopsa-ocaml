@@ -295,7 +295,11 @@ struct
             try
               mk_py_object (find_builtin_attribute (object_of_expr e) attr) range
             with Not_found ->
-              OptionExt.none_to_exn @@ find_annot c.py_cls_a_body in
+              match List.find_opt (fun x -> get_orig_vname x = attr) c.py_cls_a_static_attributes with
+              | Some f -> Hashtbl.find type_aliases f
+              | None ->
+                 let () = debug "body = %a" pp_stmt c.py_cls_a_body in
+                 OptionExt.none_to_exn @@ find_annot c.py_cls_a_body in
           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) obj  flow
 
 
