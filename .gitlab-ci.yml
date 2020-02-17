@@ -57,8 +57,6 @@ build_job:
     - echo $PY_FILE
     - ./bin/mopsa-python -unittest analyzer/tests/python/$PY_FILE
 
-
-
 .bench-typpete:
   stage: benchmarks
   dependencies: [build_job]
@@ -237,67 +235,83 @@ test-pyty 3/3:
   extends: .test-pyty
 
 test-py 1/16:
-  variables: PY_FILE: 'bool_tests.py'
+  variables:
+    PY_FILE: 'bool_tests.py'
   extends: .test-py
 
 test-py 2/16:
-  variables: PY_FILE: 'builtins_tests.py'
+  variables:
+    PY_FILE: 'builtins_tests.py'
   extends: .test-py
 
 test-py 3/16:
-  variables: PY_FILE: 'class_tests.py'
+  variables:
+    PY_FILE: 'class_tests.py'
   extends: .test-py
 
 test-py 4/16:
-  variables: PY_FILE: 'dict_tests.py'
+  variables:
+    PY_FILE: 'dict_tests.py'
   extends: .test-py
 
 test-py 5/16:
-  variables: PY_FILE: 'exception_tests.py'
+  variables:
+    PY_FILE: 'exception_tests.py'
   extends: .test-py
 
 test-py 6/16:
-  variables: PY_FILE: 'float_tests.py'
+  variables:
+    PY_FILE: 'float_tests.py'
   extends: .test-py
 
 test-py 7/16:
-  variables: PY_FILE: 'function_tests.py'
+  variables:
+    PY_FILE: 'function_tests.py'
   extends: .test-py
 
 test-py 8/16:
-  variables: PY_FILE: 'generator_tests.py'
+  variables:
+    PY_FILE: 'generator_tests.py'
   extends: .test-py
 
 test-py 9/16:
-  variables: PY_FILE: 'int_tests.py'
+  variables:
+    PY_FILE: 'int_tests.py'
   extends: .test-py
 
 test-py 10/16:
-  variables: PY_FILE: 'iter_assign_tests.py'
+  variables:
+    PY_FILE: 'iter_assign_tests.py'
   extends: .test-py
 
 test-py 11/16:
-  variables: PY_FILE: 'list_tests.py'
+  variables:
+    PY_FILE: 'list_tests.py'
   extends: .test-py
 
 test-py 12/16:
-  variables: PY_FILE: 'loop_tests.py'
+  variables:
+    PY_FILE: 'loop_tests.py'
   extends: .test-py
 
 test-py 13/16:
-  variables: PY_FILE: 'misc_tests.py'
+  variables:
+    PY_FILE: 'misc_tests.py'
   extends: .test-py
 
 test-py 14/16:
-  variables: PY_FILE: 'operator_tests.py'
+  variables:
+    PY_FILE: 'operator_tests.py'
   extends: .test-py
 
 test-py 15/16:
-  variables: PY_FILE: 'str_tests.py'
+  variables:
+    PY_FILE: 'str_tests.py'
   extends: .test-py
 
 test-py 16/16:
-  variables: PY_FILE: 'with_tests.py'
+  variables:
+    PY_FILE: 'with_tests.py'
   extends: .test-py
 
 bench-typy 1/12:
