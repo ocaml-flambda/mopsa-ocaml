@@ -672,7 +672,14 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.__contains__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f ~arguments_after_check:1 man flow range args ["list"]
         (fun args flow ->
-           man.eval (mk_py_top T_bool range) flow)
+          let list, el = match args with a::b::[] -> a, b | _ -> assert false in
+          assume
+            (mk_binop (mk_var (var_of_eobj list) range) O_eq el range)
+            man flow
+            ~zone:Zone.Z_py
+            ~fthen:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_true range))
+            ~felse:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_false range))
+        )
       |> OptionExt.return
 
 

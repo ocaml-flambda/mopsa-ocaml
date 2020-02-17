@@ -324,9 +324,10 @@ struct
         | E_py_object (_, Some {ekind = E_constant (C_string s)}) -> s
         | _ -> assert false in
       begin match ekind lval, ekind rval with
-        | E_py_object ({addr_kind = A_py_class (C_user c, b)} as alval, _ ), E_py_object (arval, _) when alval.addr_mode = STRONG ->
-          if List.exists (fun v -> get_orig_vname v = attr) c.py_cls_static_attributes then
+      | E_py_object ({addr_kind = A_py_class (C_user c, b)}, _ ), _ ->
+           if List.exists (fun v -> get_orig_vname v = attr) c.py_cls_static_attributes then
             let var = List.find (fun v -> get_orig_vname v = attr) c.py_cls_static_attributes in
+            let () = debug "using c.py_cls_static_attributes with var = %a" pp_var var in
             man.exec (mk_assign (mk_var var range) rval range) flow
             |> man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range)
             |> OptionExt.return
