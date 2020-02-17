@@ -129,8 +129,10 @@ struct
     | Env    (** Print the current  abstract environment associated to token T_cur *)
     | Value of string (** Print the value of a variable *)
     | Where  (** Show current program point *)
-    | Token  (** Show the flow tokens in the current abstract state *)
+    | Tokens  (** Show the flow tokens in the current abstract state *)
     | Callstack (** Show current callstack *)
+    | LoadHook of string (** Activate a hook *)
+    | UnloadHook of string (** Deactivate a hook *)
 
 
   (** Reference to the last received command *)
@@ -145,12 +147,12 @@ struct
     printf "  s[tep]           analyze until next program point in the level beneath@.";
     printf "  p[rint]          print the abstract state@.";
     printf "  e[nv]            print the current abstract environment@.";
-    printf "  e[nv] <var>      print the value of a variable in the current abstract environment@.";
-    printf "  token            print the flow tokens of the abstract state@.";
-    printf "  cs               print the current call stack@.";
+    (* printf "  e[nv] <var>      print the value of a variable in the current abstract environment@."; *)
+    printf "  t[okens]         print the flow tokens of the abstract state@.";
+    printf "  c[allstack]      print the current call stack@.";
     printf "  w[here]          show current program point@.";
-    printf "  l[og] {on|off}   activate/deactivate complete logging@.";
-    printf "  sl               toggle short/complete logging@.";
+    printf "  l[oad] <hook>    activate a hook@.";
+    printf "  u[nload] <hook>  deactivate a hook@.";
     printf "  h[elp]           print this message@.";
     ()
 
@@ -179,30 +181,18 @@ struct
     print_prompt range ();
     let l =  LineEdit.read_line linedit_ctx |> String.trim in
     let c = match l with
-      | "run"   | "r"   -> Run
-      | "next"  | "n"   -> Next
-      | "step"  | "s"   -> Step
-      | "print" | "p"   -> Print
-      | "env"   | "e"   -> Env
-      | "where" | "w"   -> Where
-      | "token"         -> Token
-      | "cs"            -> Callstack
+      | "run"       | "r"   -> Run
+      | "next"      | "n"   -> Next
+      | "step"      | "s"   -> Step
+      | "print"     | "p"   -> Print
+      | "env"       | "e"   -> Env
+      | "where"     | "w"   -> Where
+      | "tokens"    | "t"   -> Tokens
+      | "callstack" | "c"   -> Callstack
 
       | "help"  | "h"   ->
         print_usage ();
         read_command range ()
-
-      | "log on" | "l on" ->
-         Hooks.Logs.enable_logs := true;
-         read_command range ()
-
-      | "log off" | "l off" ->
-         Hooks.Logs.enable_logs := false;
-         read_command range ()
-
-      | "sl" ->
-         Hooks.Logs.opt_short_logs := not !Hooks.Logs.opt_short_logs;
-         read_command range ()
 
       | "" -> (
         match !last_command with
@@ -231,11 +221,25 @@ struct
           read_command range ()
         )
 
+        (* else
+         * if Str.string_match (Str.regexp "\\(e\\|env\\) \\(.*\\\)") l 0
+         * then (
+         *   let var = Str.matched_group 2 l in
+         *   Value var
+         * ) *)
+
         else
-        if Str.string_match (Str.regexp "\\(e\\|env\\) \\(.*\\)") l 0
+        if Str.string_match (Str.regexp "\\(l\\|load\\) \\(.*\\)") l 0
         then (
-          let var = Str.matched_group 2 l in
-          Value var
+          let hook = Str.matched_group 2 l in
+          LoadHook hook
+        )
+
+        else
+        if Str.string_match (Str.regexp "\\(u\\|unload\\) \\(.*\\)") l 0
+        then (
+          let hook = Str.matched_group 2 l in
+          UnloadHook hook
         )
 
         else (
@@ -329,7 +333,7 @@ struct
             break := true;
             ret
 
-          | Token ->
+          | Tokens ->
             let tokens = Flow.fold (fun acc tk _ -> tk::acc) [] flow in
             printf "%a@." (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") pp_token) tokens;
             interact ~where:false action range flow
@@ -359,6 +363,26 @@ struct
           | Where ->
             pp_action std_formatter (action, flow);
             interact ~where:false action range flow
+
+          | LoadHook hook ->
+            if not (Hook.mem_hook hook) then (
+              printf "Hook '%s' not found@." hook;
+              interact ~where:false action range flow
+            ) else (
+              Hook.activate_hook hook;
+              let ctx = Hook.init_hook hook (Flow.get_ctx flow) in
+              let flow = Flow.set_ctx ctx flow in
+              interact ~where:false action range flow
+            )
+
+          | UnloadHook hook ->
+            if not (Hook.mem_hook hook) then (
+              printf "Hook '%s' not found@." hook;
+            interact ~where:false action range flow
+            ) else (
+              Hook.deactivate_hook hook man flow;
+              interact ~where:false action range flow
+            )
         )
 
       with Sys.Break ->
