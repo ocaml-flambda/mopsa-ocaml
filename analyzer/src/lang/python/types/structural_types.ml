@@ -324,35 +324,31 @@ struct
         | E_py_object (_, Some {ekind = E_constant (C_string s)}) -> s
         | _ -> assert false in
       begin match ekind lval, ekind rval with
-      | E_py_object ({addr_kind = A_py_class (C_user c, b)}, _ ), _ ->
-           if List.exists (fun v -> get_orig_vname v = attr) c.py_cls_static_attributes then
-            let var = List.find (fun v -> get_orig_vname v = attr) c.py_cls_static_attributes in
-            let () = debug "using c.py_cls_static_attributes with var = %a" pp_var var in
-            man.exec (mk_assign (mk_var var range) rval range) flow
-            |> man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range)
-            |> OptionExt.return
-          else
-            Exceptions.panic_at range "Adding an attribute to a *class* is not supported yet"
-        (* todo: enelver l'ancien c.py_cls_dec et ajouter le nouveau ave cla bonne variable, avant de faire la même assignation *)
-        | E_py_object ({addr_kind = A_py_class (_)}, _ ), E_py_object (arval, _) ->
-          Exceptions.panic_at range "Attr assignment on non user-defined classes not supported yet.@\n"
-        | E_py_object (alval, _), _ ->
-          debug "in here!@\n";
-          let cur = get_env T_cur man flow in
-          let old_inst =
-            try
-              AMap.find alval cur
-            with Not_found ->
-              let () = warn_at range "during setattr over %a, fields not found, put to emptyset by default" pp_expr lval in
-              AttrSet.empty
-          in
-          let cur = AMap.add alval ((if alval.addr_mode = STRONG then AttrSet.add_u else AttrSet.add_o) attr old_inst) cur in
-          let flow = set_env T_cur cur man flow in
-          (* now we create an attribute var *)
-          let attr_var = mk_addr_attr alval attr T_any in
-          man.exec ~zone:Zone.Z_py (mk_assign (mk_var attr_var range) rval range) flow
-          |> man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range)
-          |> OptionExt.return
+      | E_py_object ({addr_kind = A_py_class (C_user c, b)}, _ ), _ when List.exists (fun v -> get_orig_vname v = attr) c.py_cls_static_attributes ->
+         let var = List.find (fun v -> get_orig_vname v = attr) c.py_cls_static_attributes in
+         let () = debug "using c.py_cls_static_attributes with var = %a" pp_var var in
+         man.exec (mk_assign (mk_var var range) rval range) flow
+         |> man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range)
+         |> OptionExt.return
+      | E_py_object ({addr_kind = A_py_class (_)}, _ ), E_py_object (arval, _) ->
+         Exceptions.panic_at range "Attr assignment on non user-defined classes not supported yet.@\n"
+      | E_py_object (alval, _), _ ->
+         debug "in here!@\n";
+         let cur = get_env T_cur man flow in
+         let old_inst =
+           try
+             AMap.find alval cur
+           with Not_found ->
+             let () = warn_at range "during setattr over %a, fields not found, put to emptyset by default" pp_expr lval in
+             AttrSet.empty
+         in
+         let cur = AMap.add alval ((if alval.addr_mode = STRONG then AttrSet.add_u else AttrSet.add_o) attr old_inst) cur in
+         let flow = set_env T_cur cur man flow in
+         (* now we create an attribute var *)
+         let attr_var = mk_addr_attr alval attr T_any in
+         man.exec ~zone:Zone.Z_py (mk_assign (mk_var attr_var range) rval range) flow
+         |> man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range)
+         |> OptionExt.return
 
         | _ -> assert false
       end
