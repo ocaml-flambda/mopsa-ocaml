@@ -41,6 +41,14 @@ build_job:
     - echo $U_FILE
     - $MOPSA_U analyzer/tests/universal/$U_FILE
 
+.test-pyty:
+  stage: test
+  dependencies: [build_job]
+  script:
+    - eval `opam config env`
+    - echo $PY_FILE
+    - ./bin/mopsa-python-types -unittest analyzer/tests/python/types/$PY_FILE
+
 .test-py:
   stage: test
   dependencies: [build_job]
@@ -48,7 +56,8 @@ build_job:
     - eval `opam config env`
     - echo $PY_FILE
     - ./bin/mopsa-python -unittest analyzer/tests/python/$PY_FILE
-#    - ./bin/mopsa-python-types -unittest analyzer/tests/python/types/$PY_FILE
+
+
 
 .bench-typpete:
   stage: benchmarks
@@ -212,19 +221,83 @@ test-u 3/3:
     U_FILE: 'loop_tests.u'
   extends: .test-u
 
-test-py 1/3:
+test-pyty 1/3:
   variables:
     PY_FILE: 'int_tests.py'
-  extends: .test-py
+  extends: .test-pyty
 
-test-py 2/3:
+test-pyty 2/3:
   variables:
     PY_FILE: 'misc_tests.py'
-  extends: .test-py
+  extends: .test-pyty
 
-test-py 3/3:
+test-pyty 3/3:
   variables:
     PY_FILE: 'exception_tests.py'
+  extends: .test-pyty
+
+test-py 1/16:
+  variables: PY_FILE: 'bool_tests.py'
+  extends: .test-py
+
+test-py 2/16:
+  variables: PY_FILE: 'builtins_tests.py'
+  extends: .test-py
+
+test-py 3/16:
+  variables: PY_FILE: 'class_tests.py'
+  extends: .test-py
+
+test-py 4/16:
+  variables: PY_FILE: 'dict_tests.py'
+  extends: .test-py
+
+test-py 5/16:
+  variables: PY_FILE: 'exception_tests.py'
+  extends: .test-py
+
+test-py 6/16:
+  variables: PY_FILE: 'float_tests.py'
+  extends: .test-py
+
+test-py 7/16:
+  variables: PY_FILE: 'function_tests.py'
+  extends: .test-py
+
+test-py 8/16:
+  variables: PY_FILE: 'generator_tests.py'
+  extends: .test-py
+
+test-py 9/16:
+  variables: PY_FILE: 'int_tests.py'
+  extends: .test-py
+
+test-py 10/16:
+  variables: PY_FILE: 'iter_assign_tests.py'
+  extends: .test-py
+
+test-py 11/16:
+  variables: PY_FILE: 'list_tests.py'
+  extends: .test-py
+
+test-py 12/16:
+  variables: PY_FILE: 'loop_tests.py'
+  extends: .test-py
+
+test-py 13/16:
+  variables: PY_FILE: 'misc_tests.py'
+  extends: .test-py
+
+test-py 14/16:
+  variables: PY_FILE: 'operator_tests.py'
+  extends: .test-py
+
+test-py 15/16:
+  variables: PY_FILE: 'str_tests.py'
+  extends: .test-py
+
+test-py 16/16:
+  variables: PY_FILE: 'with_tests.py'
   extends: .test-py
 
 bench-typy 1/12:
