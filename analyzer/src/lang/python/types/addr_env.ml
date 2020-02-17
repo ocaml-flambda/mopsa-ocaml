@@ -379,6 +379,14 @@ struct
        | _ -> flow
        end |> Post.return |> OptionExt.return
 
+    | S_py_delete {ekind = E_var (v, _)} ->
+       Soundness.warn_at range "%a not properly supported" pp_stmt stmt;
+       man.exec ~zone:Zone.Z_py (mk_remove_var v range) flow |> Post.return |> OptionExt.return
+
+    | S_py_delete _ ->
+       Soundness.warn_at range "%a not supported, ignored" pp_stmt stmt;
+       flow |> Post.return |> OptionExt.return
+
     | _ -> None
 
   and assign_addr man v av mode flow =
