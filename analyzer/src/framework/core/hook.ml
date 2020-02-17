@@ -94,40 +94,52 @@ struct
 end
 
 
+(** Registered hooks *)
+let hooks : (string,(module HOOK)) Hashtbl.t = Hashtbl.create 16
 
-(** List of registered hoolks *)
-let hooks : (module HOOK) list ref = ref []
+(** Active hooks *)
+let active_hooks : (string,(module HOOK)) Hashtbl.t = Hashtbl.create 16
 
-(** List of active hooks *)
-let active_hooks : (module HOOK) list ref = ref []
+(** Initialized hooks *)
+let initialized_hooks : (string,(module HOOK)) Hashtbl.t = Hashtbl.create 16
+
 
 (** Register a new hook *)
 let register_hook hook =
-  hooks := hook :: !hooks
+  let module H = (val hook : HOOK) in
+  Hashtbl.add hooks H.name hook
+
 
 (** Register a new stateless hook *)
 let register_stateless_hook hook =
   let module H = (val hook : STATELESS_HOOK) in
-  hooks := (module MakeStatefulHook(H)) :: !hooks
+  Hashtbl.add hooks H.name (module MakeStatefulHook(H))
 
+(** Check whether a hook exists *)
+let mem_hook name : bool =
+  Hashtbl.mem hooks name
 
-(** Activate a hook *)
-let activate_hook name =
-  let rec iter = function
-    | [] -> raise Not_found
-    | hook :: tl ->
-      let module H = (val hook : HOOK) in
-      if H.name = name then active_hooks := hook :: !active_hooks else iter tl
-  in
-  iter !hooks
+(** Find a hook by name *)
+let find_hook (name:string) : (module HOOK) =
+  Hashtbl.find hooks name
+
+(** Set of hooks *)
+module HookSet = SetExt.Make
+    (struct
+      type t = (module HOOK)
+      let compare (h1:(module HOOK)) (h2:(module HOOK)) =
+        let module H1 = (val h1) in
+        let module H2 = (val h2) in
+        compare H1.name H2.name
+    end)
 
 (** Caches of hooks, indexed by used zones *)
 module ExecCache = MapExt.Make(struct type t = zone let compare = compare_zone end)
 module EvalCache = MapExt.Make(struct type t = zone*zone let compare = compare_zone2 end)
 
 type cache = {
-  mutable exec : (module HOOK) list ExecCache.t;
-  mutable eval : (module HOOK) list EvalCache.t;
+  mutable exec : HookSet.t ExecCache.t;
+  mutable eval : HookSet.t EvalCache.t;
 }
 
 let cache = {
@@ -135,127 +147,122 @@ let cache = {
   eval = EvalCache.empty;
 }
 
+
+(** Initialize internals *)
+let init interface =
+  cache.exec <- List.fold_left (fun acc zone ->
+      ExecCache.add zone HookSet.empty acc
+    ) ExecCache.empty interface.iexec.uses;
+  cache.exec <- ExecCache.add Z_any HookSet.empty cache.exec;
+
+  cache.eval <- List.fold_left (fun acc zone ->
+      EvalCache.add zone HookSet.empty acc
+    ) EvalCache.empty interface.ieval.uses;
+  cache.eval <- EvalCache.add (Z_any,Z_any) HookSet.empty cache.eval
+
+
+(** Initialize an active hook *)
+let init_hook hook ctx =
+  if Hashtbl.mem initialized_hooks hook then ctx else
+  if not (Hashtbl.mem active_hooks hook) then Exceptions.panic "Inactive hook %s cannot be initialized" hook
+  else
+    let h = find_hook hook in
+    let module H = (val h : HOOK) in
+    let () = Hashtbl.add initialized_hooks hook (module H) in
+
+    cache.exec <- ExecCache.fold (fun zone hooks acc ->
+        if List.exists (fun z -> sat_zone z zone) H.exec_zones
+        then ExecCache.add zone (HookSet.add h hooks) acc
+        else acc
+      ) cache.exec cache.exec;
+
+    cache.eval <- EvalCache.fold (fun zone hooks acc ->
+        if List.exists (fun z -> sat_zone2 z zone) H.eval_zones
+        then EvalCache.add zone (HookSet.add h hooks) acc
+        else acc
+      ) cache.eval cache.eval;
+
+    H.init ctx
+
+
+(** Initialize all active hooks *)
+let init_active_hooks ctx =
+  Hashtbl.fold (fun name hook ctx ->
+      init_hook name ctx
+    ) active_hooks ctx
+
+
+(** Activate a registered hook *)
+let activate_hook name =
+  let module H = (val find_hook name) in
+  Hashtbl.add active_hooks name (module H)
+
+
+(** Deactivate an active hook *)
+let deactivate_hook name man flow =
+  if not (Hashtbl.mem active_hooks name) then ()
+  else
+    let h = Hashtbl.find active_hooks name in
+    let module H = (val h : HOOK) in
+    H.on_finish man flow;
+    Hashtbl.remove active_hooks name;
+    Hashtbl.remove initialized_hooks name;
+    cache.exec <- ExecCache.map (HookSet.remove h) cache.exec;
+    cache.eval <- EvalCache.map (HookSet.remove h) cache.eval
+
+
 let find_exec_hooks zone cache =
   try ExecCache.find zone cache.exec
-  with Not_found -> []
+  with Not_found -> HookSet.empty
 
 let find_eval_hooks zone cache =
   try EvalCache.find zone cache.eval
-  with Not_found -> []
-
-
-(** Initialization *)
-let init_hooks interface ctx =
-  (* Initialize all hooks *)
-  let ctx = List.fold_left (fun ctx hook ->
-      let module H = (val hook : HOOK) in
-      H.init ctx
-    ) ctx !active_hooks
-  in
-
-  (* Build the exec caches *)
-  let exec_cache =
-    interface.iexec.uses |>
-    List.fold_left (fun cache zone ->
-        let selected_hooks = List.fold_left (fun acc hook ->
-            let module H = (val hook : HOOK) in
-            if List.exists (fun z -> sat_zone z zone) H.exec_zones
-            then hook :: acc
-            else acc
-          ) [] !active_hooks
-        in
-        ExecCache.add zone selected_hooks cache
-      ) ExecCache.empty
-  in
-  
-  (* Remove duplicates in the exec cache *)
-  let exec_cache = ExecCache.map (List.sort_uniq (fun h1 h2 ->
-      let module H1 = (val h1 : HOOK) in
-      let module H2 = (val h2 : HOOK) in
-      compare H1.name H2.name
-    )) exec_cache
-  in
-
-  (* Add all hooks if the zone is Z_any *)
-  let exec_cache = ExecCache.add Z_any !active_hooks exec_cache in
-
-  (* Build the eval caches *)
-  let eval_cache =
-    interface.ieval.uses |>
-    List.fold_left (fun cache zone2 ->
-        let selected_hooks = List.fold_left (fun acc hook ->
-            let module H = (val hook : HOOK) in
-            if List.exists (fun z2 -> sat_zone2 z2 zone2) H.eval_zones
-            then hook :: acc
-            else acc
-          ) [] !active_hooks
-        in
-        EvalCache.add zone2 selected_hooks cache
-      ) EvalCache.empty
-  in
-
-  (* Remove duplicates in the eval cache *)
-  let eval_cache = EvalCache.map (List.sort_uniq (fun h1 h2 ->
-      let module H1 = (val h1 : HOOK) in
-      let module H2 = (val h2 : HOOK) in
-      compare H1.name H2.name
-    )) eval_cache
-  in
-
-  (* Add all hooks if the zone is Z_any*Z_any *)
-  let eval_cache = EvalCache.add (Z_any,Z_any) !active_hooks eval_cache in
-
-  cache.exec <- exec_cache;
-  cache.eval <- eval_cache;
-
-  ctx
-
+  with Not_found -> HookSet.empty
 
 
 (** Fire [on_before_exec] event *)
 let on_before_exec zone stmt man flow =
   let hooks = find_exec_hooks zone cache in
-  List.fold_left (fun ctx hook ->
+  HookSet.fold (fun hook ctx ->
       let flow = Flow.set_ctx ctx flow in
       let module H = (val hook : HOOK) in
       H.on_before_exec zone stmt man flow
-    ) (Flow.get_ctx flow) hooks
+    ) hooks (Flow.get_ctx flow)
 
 
 
 (** Fire [on_after_exec] event *)
 let on_after_exec zone stmt man post =
   let hooks = find_exec_hooks zone cache in
-  List.fold_left (fun ctx hook ->
+  HookSet.fold (fun hook ctx ->
       let post = Post.set_ctx ctx post in
       let module H = (val hook : HOOK) in
       H.on_after_exec zone stmt man post
-    ) (Post.get_ctx post) hooks
+    ) hooks (Post.get_ctx post)
 
 
 (** Fire [on_before_eval] event *)
 let on_before_eval zone exp man flow =
   let hooks = find_eval_hooks zone cache in
-  List.fold_left (fun ctx hook ->
+  HookSet.fold (fun hook ctx ->
       let flow = Flow.set_ctx ctx flow in
       let module H = (val hook : HOOK) in
       H.on_before_eval zone exp man flow
-    ) (Flow.get_ctx flow) hooks
+    ) hooks (Flow.get_ctx flow)
 
 
 
 (** Fire [on_after_eval] event *)
 let on_after_eval zone exp man eval =
   let hooks = find_eval_hooks zone cache in
-  List.fold_left (fun ctx hook ->
+  HookSet.fold (fun hook ctx ->
       let eval = Eval.set_ctx ctx eval in
       let module H = (val hook : HOOK) in
       H.on_after_eval zone exp man eval
-    ) (Eval.get_ctx eval) hooks
+    ) hooks (Eval.get_ctx eval)
 
 
 let on_finish man flow =
-  List.iter (fun hook ->
-      let module H = (val hook : HOOK) in
-      H.on_finish man flow
-    ) !active_hooks
+  Hashtbl.iter (fun name hook ->
+      deactivate_hook name man flow
+    ) active_hooks

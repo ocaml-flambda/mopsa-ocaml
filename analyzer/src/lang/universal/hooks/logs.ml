@@ -27,26 +27,21 @@ open Core.All
 open Sig.Domain.Manager
 
 
-(** Command-line option for printing logs without abstract states *)
-let opt_short_logs = ref false
+(** Logs options *)
+module type OPTIONS =
+sig
+  val name  : string
+  val short : bool
+end
 
-let () =
-  Config.Options.register_builtin_option {
-    key = "-short-logs";
-    category = "Debugging";
-    doc = " show analysis logs without abstract states";
-    spec = ArgExt.Set opt_short_logs;
-    default = "false";
-  }
-
-
-module Hook =
+module Hook(Options:OPTIONS) =
 struct
 
   (** {2 Hook header} *)
   (** *************** *)
 
-  let name = "logs"
+  let name = Options.name
+
   let exec_zones = [Z_any]
   let eval_zones = [Z_any,Z_any]
 
@@ -57,7 +52,7 @@ struct
   (* We use a stack for keeping the duration of exec and eval *)
   let stack = Stack.create ()
 
-  let init ctx = ()
+  let init ctx = Stack.clear stack
 
 
   (** {2 Indentation} *)
@@ -99,7 +94,7 @@ struct
     Format.kasprintf (fun str ->
         (* Split the message into lines *)
         let lines = String.split_on_char '\n' str in
-        let cur_level = Stack.length stack in
+        let cur_level = max (Stack.length stack) 0 in
 
         match lines with
         | [] -> ()
@@ -140,13 +135,17 @@ struct
   let pp_E fmt exp =
     fprintf fmt "@[<v 3>E [| %a@] |]" pp_expr exp
 
+  let get_timing () =
+    try Sys.time () -. Stack.pop stack
+    with Stack.Empty -> Float.nan
+
 
   (** {2 Events handlers} *)
   (** ******************* *)
 
   let on_before_exec zone stmt man flow =
     reach stmt.srange;
-    if !opt_short_logs then
+    if Options.short then
       indent "%a in zone %a"
         pp_S stmt
         pp_zone zone
@@ -162,8 +161,8 @@ struct
 
 
   let on_after_exec zone stmt man post =
-    let time = Sys.time () -. Stack.pop stack in
-    if !opt_short_logs then
+    let time = get_timing () in
+    if Options.short then
       indent "%a done in zone %a [%.4fs]"
         pp_S stmt
         pp_zone zone
@@ -179,7 +178,7 @@ struct
 
 
   let on_before_eval zone exp man flow =
-    if !opt_short_logs then
+    if Options.short then
       indent "%a in zone %a"
         pp_E exp
         pp_zone2 zone
@@ -195,8 +194,8 @@ struct
 
 
   let on_after_eval zone exp man evl =
-    let time = Sys.time () -. Stack.pop stack in
-    if !opt_short_logs then
+    let time = get_timing () in
+    if Options.short then
       indent "%a = %a done in zone %a [%.4fs]"
         pp_E exp
         Eval.print evl
@@ -211,9 +210,11 @@ struct
         Eval.print evl
         ~symbol:END
 
-  let on_finish man flow = ()
+  let on_finish man flow =
+    Stack.clear stack
 
 end
 
 let () =
-  Core.Hook.register_stateless_hook (module Hook)
+  Core.Hook.register_stateless_hook (module Hook(struct let name = "logs" let short = false end));
+  Core.Hook.register_stateless_hook (module Hook(struct let name = "short-logs" let short = true end))
