@@ -25,6 +25,9 @@ from typing import List, NoReturn, TextIO
 path: List[str]
 argv: List[str]
 version_info = (3, 7)
+
+maxsize = 9223372036854775807
+
 base_prefix: str
 
 def exit(arg: object = ...) -> NoReturn:

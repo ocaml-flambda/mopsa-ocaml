@@ -466,6 +466,7 @@ def test_types():
 
 def test_values():
     versus_cpu()
+    mopsa.ignore_exception(IndexError)
     mopsa.ignore_exception(OverflowError)
     mopsa.ignore_exception(AttributeError)
     mopsa.assert_safe()
