@@ -464,4 +464,8 @@ def test_types():
     mopsa.assert_safe()
 
 
-def test_values(): test_types()
+def test_values():
+    versus_cpu()
+    mopsa.ignore_exception(OverflowError)
+    mopsa.ignore_exception(AttributeError)
+    mopsa.assert_safe()
