@@ -1,6 +1,6 @@
 #!/bin/bash
 
 MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/.."
-CONFIG=python/numeric.json
+CONFIG=python/values.json
 
 ${MOPSADIR}/bin/mopsa -config=${CONFIG} -loop-decr-it -loop-unrolling=2 $@
