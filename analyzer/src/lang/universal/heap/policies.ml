@@ -24,109 +24,71 @@
 open Mopsa
 open Ast
 
-(** {2 Signature of a grouping policy} *)
-(** ================================== *)
+type addr_group +=
+   | G_range of range
+   | G_stack_range of Callstack.cs * range
+   | G_stack of Callstack.cs
 
-
-module type POLICY =
-sig
-  val name : string
-  val mk_addr : addr_kind -> mode -> range -> 'a flow -> addr
-end
-
-
-
-(** {2 Grouping of addresses by callstack and range *)
-(** =============================================== *)
-
-module StackRangePolicy : POLICY = struct
-
-  type addr_group +=
-    | G_stack_range of Callstack.cs * range
-
-  let name = "callstack_range"
-
-  let mk_addr kind mode range flow =
-    let cs = Flow.get_callstack flow in
-    {
-      addr_kind = kind;
-      addr_mode = mode;
-      addr_group = G_stack_range (cs,range)
-    }
-
-  let () =
-    register_addr_group {
+let () =
+  register_addr_group {
       compare = (fun next g1 g2 ->
-          match g1, g2 with
-          | G_stack_range(cs,r), G_stack_range(cs',r') ->
-            Compare.compose
-              [
-                (fun () -> Callstack.compare cs cs');
-                (fun () -> compare_range r r');
-              ]
-
-          | _ -> next g1 g2
-        );
+        match g1, g2 with
+        | G_range r, G_range r' ->
+           compare_range r r'
+        | G_stack_range (cs, r), G_stack_range (cs', r') ->
+           Compare.compose
+             [ (fun () -> Callstack.compare cs cs');
+               (fun () -> compare_range r r'); ]
+        | G_stack(cs), G_stack(cs') ->
+           Callstack.compare cs cs'
+        | _ -> next g1 g2
+      );
       print = (fun next fmt g ->
-          match g with
-          | G_stack_range(cs,r) -> pp_addr_group_hash fmt g
-          | _ -> next fmt g
-        );
-    }
-end
-
-
-
-(** {2 Grouping of addresses by callstack} *)
-(** ====================================== *)
-
-module StackPolicy : POLICY = struct
-
-  type addr_group +=
-    | G_stack of Callstack.cs
-
-  let name = "callstack"
-
-  let mk_addr kind mode range flow =
-    let cs = Flow.get_callstack flow in
-    {
-      addr_kind = kind;
-      addr_mode = mode;
-      addr_group = G_stack (cs)
+        match g with
+        | G_range r -> pp_range fmt r
+        | G_stack_range(cs, r) -> pp_addr_group_hash fmt g
+        | G_stack(cs) -> pp_addr_group_hash fmt g
+        | _ -> next fmt g
+      );
     }
 
+let mk_addr_range addr_kind addr_mode range uctx =
+  { addr_kind;
+    addr_mode;
+    addr_group = G_range range }
 
-  let () =
-    register_addr_group {
-      compare = (fun next g1 g2 ->
-          match g1, g2 with
-          | G_stack(cs), G_stack(cs') ->
-            Callstack.compare cs cs'
+let mk_addr_stack_range addr_kind addr_mode range uctx =
+  let cs = Context.ufind Callstack.ctx_key uctx in
+  { addr_kind;
+    addr_mode;
+    addr_group = G_stack_range (cs, range) }
 
-          | _ -> next g1 g2
-        );
-      print = (fun next fmt g ->
-          match g with
-          | G_stack(cs) -> pp_addr_group_hash fmt g
-          | _ -> next fmt g
-        );
+let mk_addr_stack addr_kind addr_mode range uctx =
+  let cs = Context.ufind Callstack.ctx_key uctx in
+  { addr_kind;
+    addr_mode;
+    addr_group = G_stack cs }
+
+let mk_addr_all addr_kind addr_mode range uctx  =
+  { addr_kind; addr_mode; addr_group = G_all }
+
+let mk_addr_chain : (addr_kind -> mode -> range -> Context.uctx -> addr) ref =
+  ref (fun ak _ _ _ -> panic "unknown addr_kind %a" pp_addr_kind ak)
+let mk_addr ak m r uctx = !mk_addr_chain ak m r uctx
+let register_mk_addr f = mk_addr_chain := f !mk_addr_chain
+
+let register_option (opt: string ref) (domain_name: string) (key: string) (descr: string) =
+  register_domain_option domain_name {
+      key;
+      category = "Allocation Policy";
+      doc = Format.asprintf " allocation policy used for %s (all, range, callstack, range_callstack)" descr;
+      spec = ArgExt.Set_string opt;
+      default = !opt;
     }
-end
 
-
-
-(** {2 Group all addresses} *)
-(** ======================= *)
-
-module AllPolicy : POLICY = struct
-
-  let name = "all"
-
-  let mk_addr kind mode range flow =
-    {
-      addr_kind = kind;
-      addr_mode = mode;
-      addr_group = G_all
-    }
-
-end
+let of_string opt = match opt with
+    | "all" -> mk_addr_all
+    | "range" -> mk_addr_range
+    | "callstack" -> mk_addr_stack
+    | "range_callstack" -> mk_addr_stack_range
+    | _ -> panic "unknown policy %s" opt
