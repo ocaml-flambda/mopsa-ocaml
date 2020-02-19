@@ -31,7 +31,7 @@ build_job:
   script:
     - eval `opam config env`
     - echo $C_FILE
-#    - $MOPSA_C analyzer/tests/c/$C_FILE
+    - $MOPSA_C analyzer/tests/c/$C_FILE
 
 .test-u:
   stage: test
