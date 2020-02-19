@@ -34,6 +34,12 @@ let name = "python.objects.set"
 type addr_kind +=
   | A_py_set
 
+let () = register_addr_kind_nominal_type (fun default ak ->
+             match ak with
+             | A_py_set -> "set"
+             | _ -> default ak)
+
+
 let () =
   register_is_data_container (fun default ak -> match ak with
       | A_py_set -> true

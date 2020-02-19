@@ -37,6 +37,13 @@ type addr_kind +=
   | A_py_dict_view of string (* name *)
 
 
+let () = register_addr_kind_nominal_type (fun default ak ->
+             match ak with
+             | A_py_dict -> "dict"
+             | A_py_dict_view s -> s
+             | _ -> default ak)
+
+
 let () =
   register_is_data_container (fun default ak -> match ak with
                                                 | A_py_dict -> true

@@ -510,3 +510,7 @@ let () =
       doit
     );
   }
+
+let nominal_type_of_addr_kind : (addr_kind -> string) ref = ref (fun ak -> panic "unknown nominal type for addr_kind %a" pp_addr_kind ak)
+let register_addr_kind_nominal_type f  = nominal_type_of_addr_kind := f !nominal_type_of_addr_kind
+let addr_kind_find_nominal_type ak = !nominal_type_of_addr_kind ak

@@ -32,6 +32,12 @@ type addr_kind +=
   | A_py_staticmethod
   | A_py_classmethod
 
+let () = register_addr_kind_nominal_type (fun default ak ->
+             match ak with
+             | A_py_staticmethod ->  "staticmethod"
+             | A_py_classmethod ->  "classmethod"
+             | _ -> default ak)
+
 let () =
   register_is_data_container (fun default ak -> match ak with
       | A_py_classmethod -> false
