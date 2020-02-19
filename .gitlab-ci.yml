@@ -136,10 +136,11 @@ test-c 12/25:
     C_FILE: 'goto_tests.c'
   extends: .test-c
 
-test-c 13/25:
-  variables:
-    C_FILE: 'stubs/memory_resource_tests.c'
-  extends: .test-c
+# Disabled, recency remove/free issue
+# test-c 13/25:
+#   variables:
+#     C_FILE: 'stubs/memory_resource_tests.c'
+#   extends: .test-c
 
 test-c 14/25:
   variables:
@@ -176,10 +177,11 @@ test-c 20/25:
     C_FILE: 'libc/builtin_constant_p_tests.c'
   extends: .test-c
 
-test-c 21/25:
-  variables:
-    C_FILE: 'libc/malloc_tests.c'
-  extends: .test-c
+# Disabled, recency remove/free issue
+# test-c 21/25:
+#  variables:
+#    C_FILE: 'libc/malloc_tests.c'
+#  extends: .test-c
 
 test-c 22/25:
   variables:
