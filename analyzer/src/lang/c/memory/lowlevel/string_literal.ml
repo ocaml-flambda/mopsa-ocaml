@@ -72,6 +72,16 @@ struct
   let init prog man flow = flow
 
 
+  (** {2 Utility functions} *)
+  (** ********************* *)
+
+  (** [is_char_deref lval] checks whether [lval] is a dereference of a char pointer *)
+  let is_char_deref lval =
+    match remove_casts lval |> ekind with
+    | E_c_deref p -> Z.(sizeof_type (under_type p.etyp |> void_to_char) = one)
+    | _ -> false
+
+
   (** {2 Abstract transformers} *)
   (** ************************* *)
 
@@ -251,7 +261,7 @@ struct
     (* 𝕊⟦ *(p + i) == 0 ⟧ *)
     | S_assume({ ekind = E_binop(O_eq, lval, n)})
     | S_assume({ ekind = E_unop(O_log_not, { ekind = E_binop(O_ne, lval, n)} )})
-      when is_c_int_type lval.etyp &&
+      when is_char_deref lval &&
            is_lval_offset_forall_quantified lval &&
            not (is_expr_forall_quantified n)
       ->
@@ -260,7 +270,7 @@ struct
 
     (* 𝕊⟦ !*(p + i) ⟧ *)
     | S_assume({ ekind = E_unop(O_log_not,lval)})
-      when is_c_int_type lval.etyp &&
+      when is_char_deref lval &&
            is_lval_offset_forall_quantified lval
       ->
       assume_quantified_zero O_eq lval stmt.srange man flow |>
@@ -269,7 +279,7 @@ struct
     (* 𝕊⟦ *(p + i) != 0 ⟧ *)
     | S_assume({ ekind = E_binop(O_ne, lval, n)})
     | S_assume({ ekind = E_unop(O_log_not, { ekind = E_binop(O_eq, lval, n)} )})
-      when is_c_int_type lval.etyp &&
+      when is_char_deref lval &&
            is_lval_offset_forall_quantified lval &&
            not (is_expr_forall_quantified n)
       ->
@@ -278,7 +288,7 @@ struct
 
     (* 𝕊⟦ *(p + i) ⟧ *)
     | S_assume(lval)
-      when is_c_int_type lval.etyp &&
+      when is_char_deref lval &&
            is_lval_offset_forall_quantified lval
       ->
       assume_quantified_zero O_ne lval stmt.srange man flow |>
@@ -332,7 +342,7 @@ struct
 
   let eval zone exp man flow =
     match ekind exp with
-    | E_c_deref(p) when is_c_int_type exp.etyp &&
+    | E_c_deref(p) when is_char_deref exp &&
                         not (is_pointer_offset_forall_quantified p)
       ->
       eval_deref p exp.erange man flow |>
