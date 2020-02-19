@@ -39,6 +39,7 @@ open Zone
 open Query
 open Log
 open Cases
+open Interface
 
 
 type ('a, 't) man = ('a, 't) Sig.Domain.Lowlevel.man = {
@@ -181,7 +182,8 @@ struct
     in
 
     (* Initialize hooks *)
-    let ctx = Hook.init_hooks Domain.interface ctx in
+    let () = Hook.init Domain.interface in
+    let ctx = Hook.init_active_hooks ctx in
 
     (* The initial flow is a singleton ⊤ environment *)
     let flow0 = Flow.singleton ctx T_cur man.lattice.top in

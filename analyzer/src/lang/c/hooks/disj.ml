@@ -19,76 +19,65 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Call stacks are represented as sequences of call sites
-   (ranges). They are saved as annotations in flows. *)
+(** Profiler hook to track the amount of disjunctions *)
 
-open Location
+open Mopsa
+open Hook
+open Ast
+open Zone
 
-type call = {
-  call_fun:  string;
-  call_site: range;
-}
+let threshold = ref 8
 
-type cs = call list
+module Hook =
+struct
 
-let pp_call fmt c =
-  Format.fprintf fmt "%s@%a"
-    c.call_fun
-    pp_range c.call_site
 
-let pp_call_stack fmt (cs:cs) =
-  Format.pp_print_list
-    ~pp_sep:(fun fmt () -> Format.pp_print_string fmt " → ")
-    pp_call
-    fmt cs
+  (** {2 Hook header} *)
+  (** *************** *)
 
-let print fmt (cs:cs) =
-  Format.pp_print_list
-    ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
-    pp_call
-    fmt cs
+  let name = "c.hooks.disj"
 
-let compare_call c c' =
-  if c == c' then 0
-  else Compare.compose [
-    (fun () -> compare c.call_fun c'.call_fun);
-    (fun () -> compare_range c.call_site c'.call_site);
-  ]
+  let exec_zones = [Z_any]
+  let eval_zones = [Z_any,Z_any]
 
-let compare cs cs' =
-  Compare.list compare_call cs cs'
+  let init ctx = ()
 
-let empty : cs = []
 
-let is_empty (cs:cs) =
-  match cs with
-  | [] -> true
-  | _ -> false
+  (** {2 Events handlers} *)
+  (** ******************* *)
 
-let length (cs:cs) : int = List.length cs
+  let on_before_exec zone stmt man flow =
+    ()
 
-let ctx_key =
-  let module K = Context.GenUnitKey(
-    struct
-      type t = cs
-      let print fmt cs =
-        Format.fprintf fmt "Callstack: %a" print cs
-    end
+
+  let max_nb = ref 1
+
+  let on_after_exec zone stmt man flow =
+    let nb = Cases.cardinal flow in
+    let nb2 = Cases.fold_some (fun _ f i -> Flow.fold (fun i _ _ -> i + 1) i f) flow 0 in
+    if nb2 >= !threshold then (      
+      max_nb := max !max_nb nb2;
+      Format.printf "exec: %i / %i (max=%i): %a %a@." nb nb2 !max_nb pp_range (srange stmt) pp_stmt stmt
     )
-  in
-  K.key
+
+  let on_before_eval zone exp man flow =
+    ()
 
 
-let push f range cs =
-  { call_fun = f; call_site = range} :: cs
+  let max_nb = ref 1
+  
+  let on_after_eval zone exp man eval =
+    let nb = Cases.cardinal eval in
+    if nb >= !threshold then (      
+      max_nb := max !max_nb nb;
+      Format.printf "eval: %i (max=%i): %a %a@." nb !max_nb pp_range (erange exp) pp_expr exp;
+      ignore (Cases.map (fun e -> Format.printf "  %a@." pp_expr e; e) eval)
+    )
+  
+  let on_finish man flow =
+    ()
+  
+end
 
-exception EmptyCallstack
-
-let pop cs =
-  match cs with
-  | [] -> raise EmptyCallstack
-  | _ -> List.hd cs, List.tl cs
-
-let top (cs:cs) : call =
-  try List.hd cs
-  with Failure _ -> raise EmptyCallstack
+let () =
+  register_stateless_hook (module Hook)
