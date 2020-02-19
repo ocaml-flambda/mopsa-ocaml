@@ -39,17 +39,20 @@ open Universal.Ast
 open Callstack
 open Data_container_utils
 
-let name = "python.objects.list"
-
 type addr_kind +=
-  | A_py_list
+  | A_py_list of Rangeset.t (* rangeset because a list may be a summarization of list allocated at different ranges *)
   | A_py_iterator of string (* iterator kind (list_iterator, ...) *)
+                     * Rangeset.t (* addr list  (* addr of the containers iterated on *)*)
                      * int option (* potential position in the iterator, just used for tuples I think... FIXME *)
 
 
 let () =
+  register_join_akind (fun default ak1 ak2 ->
+      match ak1, ak2 with
+      | A_py_list r1, A_py_list r2 -> A_py_list (Rangeset.union r1 r2)
+      | _ -> default ak1 ak2);
   register_is_data_container (fun default ak -> match ak with
-      | A_py_list -> true
+      | A_py_list _ -> true
       | A_py_iterator _ -> true
       | _ -> default ak)
 
@@ -58,30 +61,29 @@ let () =
   Format.(register_addr_kind {
       print = (fun default fmt a ->
           match a with
-          | A_py_list -> fprintf fmt "list"
-          | A_py_iterator (s, d) ->
+          | A_py_list r -> fprintf fmt "list[%a]" (fun fmt -> Rangeset.iter (fun ra -> pp_range fmt ra)) r
+          | A_py_iterator (s, r, d) ->
             begin match d with
-            | None -> fprintf fmt "%s" s
-            | Some d -> fprintf fmt "%s#%d" s d end
+            | None -> fprintf fmt "%s@%a" s (fun fmt -> Rangeset.iter (fun ra -> pp_range fmt ra)) r
+            | Some d -> fprintf fmt "%s@%a#%d]" s  (fun fmt -> Rangeset.iter (fun ra -> pp_range fmt ra)) r d end
           | _ -> default fmt a);
       compare = (fun default a1 a2 ->
           match a1, a2 with
-          | A_py_iterator (s1, d1), A_py_iterator (s2, d2) ->
+          | A_py_list v1, A_py_list v2 -> Rangeset.compare v1 v2
+          | A_py_iterator (s1, a1, d1), A_py_iterator (s2, a2, d2) ->
             Compare.compose [
               (fun () -> Stdlib.compare s1 s2);
+              (fun () -> Rangeset.compare a1 a2);
               (fun () -> Compare.option Stdlib.compare d1 d2);
             ]
           | _ -> default a1 a2);})
 
 
-let opt_py_list_allocation_policy : string ref = ref "all"
-let () = Universal.Heap.Policies.register_option opt_py_list_allocation_policy name "-py-list-alloc-pol" "smashed lists"
-
 module Domain =
 struct
 
   include GenStatelessDomainId(struct
-      let name = name
+      let name = "python.objects.list"
     end)
 
   let interface = {
@@ -92,16 +94,12 @@ struct
   let alarms = []
 
   let init (prog:program) man flow =
-    Universal.Heap.Policies.register_mk_addr (fun default ak -> match ak with
-                                                                      | A_py_list
-                                                                      | A_py_iterator _ -> (Universal.Heap.Policies.of_string !opt_py_list_allocation_policy) ak
-                                                                      | _ -> default ak);
     flow
 
   let itindex_var_of_addr a =
     let v = match akind a with
-    | A_py_iterator ("list_iterator", _) -> mk_addr_attr a "it_index" T_any
-    | A_py_iterator ("list_reverseiterator", _) -> mk_addr_attr a "it_index" T_any
+    | A_py_iterator ("list_iterator", _, _) -> mk_addr_attr a "it_index" T_any
+    | A_py_iterator ("list_reverseiterator", _, _) -> mk_addr_attr a "it_index" T_any
     | _ -> assert false in
     Utils.change_var_type T_int v
 
@@ -120,12 +118,12 @@ struct
 
 
   let length_var_of_addr a = match akind a with
-    | A_py_list ->
+    | A_py_list _ ->
        mk_addr_attr a "list_length" T_any |> Utils.change_var_type T_int
     | _ -> assert false
 
   let var_of_addr a = match akind a with
-    | A_py_list ->
+    | A_py_list _ ->
        {(mk_addr_attr a "list" T_any) with vmode = WEAK}
     | _ -> assert false
 
@@ -151,7 +149,7 @@ struct
     | E_py_list ls ->
       debug "Skipping list.__new__, list.__init__ for now@\n";
 
-      let addr_list = mk_alloc_addr A_py_list range in
+      let addr_list = mk_alloc_addr (A_py_list (Rangeset.singleton range)) range in
       man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_list flow |>
       Eval.bind (fun eaddr_list flow ->
           let addr_list = addr_of_expr eaddr_list in
@@ -197,7 +195,7 @@ struct
                  ~felse:(fun flow ->
                    assume (mk_py_isinstance_builtin index "slice" range) man flow
                      ~fthen:(fun flow ->
-                       let addr_list = mk_alloc_addr A_py_list range in
+                       let addr_list = mk_alloc_addr (A_py_list (Rangeset.singleton range)) range in
                        man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_list flow |>
                          Eval.bind (fun eaddr_list flow ->
                              let addr_list = addr_of_expr eaddr_list in
@@ -238,7 +236,7 @@ struct
              (fun _ flow ->
                (* First, allocate new addr for the list, and new addr for the list elements *)
                (* Then assign the el addr to both addresses above *)
-               let addr_list = mk_alloc_addr A_py_list range in
+               let addr_list = mk_alloc_addr (A_py_list (Rangeset.singleton range)) range in
                man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_list flow |>
                  Eval.bind (fun list_addr flow ->
                      let alist_addr = addr_of_expr list_addr in
@@ -331,7 +329,7 @@ struct
            let evargs = List.map (fun x -> mk_var x range) vargs in
            Utils.check_instances f man flow range evargs ["list"; "int"]
              (fun _ flow ->
-               let addr_list = mk_alloc_addr A_py_list range in
+               let addr_list = mk_alloc_addr (A_py_list (Rangeset.singleton range)) range in
                (* WOOPS: this alloc may trigger an address renaming invalidating els_list and len_list *)
                man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_list flow |>
                  Eval.bind (fun eaddr_list flow ->
@@ -354,7 +352,7 @@ struct
          )
        |> OptionExt.return
 
-    | E_py_object ({addr_kind = A_py_list}, e) ->
+    | E_py_object ({addr_kind = A_py_list _}, e) ->
       Eval.singleton exp flow |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.append" as f, _))}, _)}, args, []) ->
@@ -575,9 +573,9 @@ struct
         (fun args flow ->
            let list = match args with | [l] -> l | _ -> assert false in
            let list_addr = match ekind list with
-             | E_py_object ({addr_kind = A_py_list} as a, _) -> a
+             | E_py_object ({addr_kind = A_py_list _} as a, _) -> a
              | _ -> assert false in
-           let a = mk_alloc_addr ~mode:list_addr.addr_mode (A_py_iterator ("list_iterator", None)) range in
+           let a = mk_alloc_addr ~mode:list_addr.addr_mode (A_py_iterator ("list_iterator", Rangeset.singleton range, None)) range in
            man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) a flow |>
              Eval.bind (fun eaddr_it flow ->
                  let addr_it = match ekind eaddr_it with | E_addr a -> a | _ -> assert false in
@@ -644,7 +642,7 @@ struct
         ["list"]
         (fun args flow ->
            let list = match args with | [l] -> l | _ -> assert false in
-           let a = mk_alloc_addr (A_py_iterator ("list_reverseiterator", None)) range in
+           let a = mk_alloc_addr (A_py_iterator ("list_reverseiterator", Rangeset.singleton range, None)) range in
            man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) a flow |>
            Eval.bind (fun eaddr_it flow ->
                (* FIXME list_reverseiterator index *)
@@ -719,7 +717,7 @@ struct
         ["type"; "list"]
         (fun args flow ->
            let list = match args with | [_; l] -> l | _ -> assert false in
-           let a = mk_alloc_addr (A_py_iterator ("enumerate", None)) range in
+           let a = mk_alloc_addr (A_py_iterator ("enumerate", Rangeset.singleton range, None)) range in
            man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) a flow |>
            Eval.bind (fun eaddr_it flow ->
                let addr_it = match ekind eaddr_it with | E_addr a -> a | _ -> assert false in
@@ -758,7 +756,7 @@ struct
         ["type"; "list"; "list"]
         (fun args flow ->
            let list1, list2 = match args with | [_; l1; l2] -> l1, l2 | _ -> assert false in
-           let a = mk_alloc_addr (A_py_iterator ("zip", None)) range in
+           let a = mk_alloc_addr (A_py_iterator ("zip", Rangeset.singleton range, None)) range in
            man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) a flow |>
            Eval.bind (fun eaddr_it flow ->
                let addr_it = match ekind eaddr_it with
@@ -873,7 +871,7 @@ struct
       |> OptionExt.return
 
     | E_py_annot {ekind = E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)}, i) } when get_orig_vname c.py_cls_a_var = "List" ->
-      let addr_list = mk_alloc_addr A_py_list range in
+      let addr_list = mk_alloc_addr (A_py_list (Rangeset.singleton range)) range in
       man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_list flow |>
       Eval.bind (fun eaddr_list flow ->
           let addr_list = addr_of_expr eaddr_list in
@@ -894,7 +892,7 @@ struct
             man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) tocheck flow |>
             bind_some (fun iterator flow ->
                 let list_addr = match ekind iterator with
-                  | E_py_object ({addr_kind = A_py_list} as a, _) -> a
+                  | E_py_object ({addr_kind = A_py_list r} as a, _) -> a
                   | _ -> Exceptions.panic "should be a list: %a@\nflow = %a@\n" pp_expr iterator (Flow.print man.lattice.print) flow in
                 let var_els = var_of_addr list_addr in
                 man.eval (mk_expr (E_py_check_annot (mk_var var_els range, i)) range) flow
@@ -912,7 +910,7 @@ struct
   let exec zone stmt man flow =
     let range = srange stmt in
     match skind stmt with
-    | S_remove {ekind = E_addr ({addr_kind = A_py_list} as a)} ->
+    | S_remove {ekind = E_addr ({addr_kind = A_py_list _} as a)} ->
        let va = var_of_addr a in
        let la = length_var_of_addr a in
        flow |>
@@ -929,7 +927,7 @@ struct
        let va' = itseq_of_addr a' in
        man.exec ~zone:Zone.Z_py (mk_rename_var va va' range) flow |> Post.return |> OptionExt.return
 
-    | S_rename ({ekind = E_addr ({addr_kind = A_py_list} as a)}, {ekind = E_addr a'}) ->
+    | S_rename ({ekind = E_addr ({addr_kind = A_py_list _} as a)}, {ekind = E_addr a'}) ->
       (* FIXME: I guess we could just do it for every data_container. Maybe add a data_container domain on top of them performing the renaming?*)
       (* working on lists entails smashed element variable being index by the address, meaning we need to rename them *)
       let va = var_of_addr a in
@@ -971,7 +969,7 @@ struct
   let ask : type r. r query -> ('a, unit) man -> 'a flow -> r option =
     fun query man flow ->
     match query with
-    | Q_print_addr_related_info ({addr_kind = A_py_list} as addr) ->
+    | Q_print_addr_related_info ({addr_kind = A_py_list _} as addr) ->
       OptionExt.return @@
       fun fmt ->
       Format.fprintf fmt "%a, length: %a"

@@ -49,7 +49,7 @@
             {
                 "apply": {
                     "compose": [
-                        "universal.heap.recency",
+                        "universal.heap.recency.all",
                         // {
                         //     "product": [
                         //         "python.types.addr_env",
