@@ -28,17 +28,35 @@ open Ast
 open Addr
 open Universal.Ast
 
+let name = "python.objects.range"
+
+let opt_py_range_allocation_policy : string ref = ref "all"
+let () = Universal.Heap.Policies.register_option opt_py_range_allocation_policy name "-py-range-alloc-pol" "range objects"
+
+
 module Domain =
 struct
 
   include GenStatelessDomainId(struct
-      let name = "python.objects.range"
-    end)
+              let name = name
+            end)
 
   let interface = {
     iexec = {provides = []; uses = []};
     ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
   }
+
+  let init _ _ flow =
+    (* FIXME: a bit dangerous to perform the registration on the same
+       kind in two files, now it depends on the compilation
+       order. Hopefully Addr is compiled before this *)
+    Universal.Heap.Policies.register_mk_addr
+      (fun default ak -> match ak with
+                         | A_py_instance {addr_kind = A_py_class (C_builtin "range", _)}
+                           | A_py_instance {addr_kind = A_py_class (C_builtin "range_iterator", _)} ->
+                            (Universal.Heap.Policies.of_string !opt_py_range_allocation_policy) ak
+                         | _ -> default ak);
+    flow
 
   let allocate_builtin ?(mode=STRONG) man range flow bltin oe =
     (* allocate addr, and map this addr to inst bltin *)
@@ -186,7 +204,6 @@ struct
 
     | _ -> None
 
-  let init _ _ flow = flow
   let exec _ _ _ _ = None
   let ask _ _ _ = None
 

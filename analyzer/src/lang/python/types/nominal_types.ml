@@ -78,7 +78,6 @@ struct
               proceed "type"
            | E_py_object ({addr_kind}, _) ->
               proceed (addr_kind_find_nominal_type addr_kind)
-
            | _ -> Exceptions.panic_at range "type: todo: %a@\n" pp_expr arg
         )
       |> OptionExt.return

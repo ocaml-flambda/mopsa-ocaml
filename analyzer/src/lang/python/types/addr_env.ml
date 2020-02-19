@@ -320,7 +320,6 @@ struct
        |> OptionExt.return
 
     | S_rename (({ekind = E_var (v, mode)} as l), ({ekind = E_var (v', mode')} as r)) ->
-       Debug.debug ~channel:"207" "rename %a, flow = %a" pp_stmt stmt man.lattice.print (Flow.get T_cur man.lattice flow);
        (* FIXME: modes, rename in weak shouldn't erase the old v'? *)
        let flow = fold_intfloatstr man v flow (fun t ->
                       {stmt with skind = S_rename (Utils.change_evar_type t l,
