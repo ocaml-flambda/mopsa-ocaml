@@ -64,21 +64,21 @@ struct
            match ekind earg with
            | E_py_object ({addr_kind = A_py_instance cls}, _) ->
              Eval.singleton (mk_py_object (cls, None) range) flow
-           | E_py_object ({addr_kind = Objects.Py_list.A_py_list _}, _) ->
+           | E_py_object ({addr_kind = Objects.Py_list.A_py_list}, _) ->
              proceed "list"
            | E_py_object ({addr_kind = Objects.Function.A_py_classmethod _}, _) ->
              proceed "classmethod"
            | E_py_object ({addr_kind = Objects.Function.A_py_staticmethod _}, _) ->
              proceed "staticmethod"
-           | E_py_object ({addr_kind = Objects.Py_set.A_py_set _}, _) ->
+           | E_py_object ({addr_kind = Objects.Py_set.A_py_set}, _) ->
              proceed "set"
-           | E_py_object ({addr_kind = Objects.Dict.A_py_dict _}, _) ->
+           | E_py_object ({addr_kind = Objects.Dict.A_py_dict}, _) ->
              proceed "dict"
            | E_py_object ({addr_kind = Objects.Tuple.A_py_tuple _}, _) ->
              proceed "tuple"
-           | E_py_object ({addr_kind = Objects.Py_list.A_py_iterator (s, _, _)}, _) ->
+           | E_py_object ({addr_kind = Objects.Py_list.A_py_iterator (s, _)}, _) ->
              Eval.singleton (mk_py_object (find_builtin s) range) flow
-           | E_py_object ({addr_kind = Objects.Dict.A_py_dict_view (s, _)}, _) ->
+           | E_py_object ({addr_kind = Objects.Dict.A_py_dict_view s}, _) ->
              Eval.singleton (mk_py_object (find_builtin s) range) flow
            | E_py_object ({addr_kind = A_py_module m}, _) ->
              proceed "module"
@@ -159,30 +159,30 @@ struct
                man.eval (mk_py_bool (class_le (ic, imro) (c, mro)) range) flow
             end
 
-          | Objects.Py_list.A_py_list _, A_py_class (C_builtin "list", _)
-          | Objects.Py_set.A_py_set _, A_py_class (C_builtin "set", _)
-          | Objects.Dict.A_py_dict _, A_py_class (C_builtin "dict", _)
+          | Objects.Py_list.A_py_list, A_py_class (C_builtin "list", _)
+          | Objects.Py_set.A_py_set, A_py_class (C_builtin "set", _)
+          | Objects.Dict.A_py_dict, A_py_class (C_builtin "dict", _)
           | Objects.Tuple.A_py_tuple _, A_py_class (C_builtin "tuple", _) ->
             man.eval (mk_py_true range) flow
 
-          | Objects.Py_list.A_py_list _, A_py_class (c, b)
-          | Objects.Py_set.A_py_set _, A_py_class (c, b)
-          | Objects.Dict.A_py_dict _, A_py_class (c, b)
+          | Objects.Py_list.A_py_list, A_py_class (c, b)
+          | Objects.Py_set.A_py_set, A_py_class (c, b)
+          | Objects.Dict.A_py_dict, A_py_class (c, b)
           | Objects.Tuple.A_py_tuple _, A_py_class (c, b) ->
             let str_addr = match akind addr_obj with
-              | Objects.Py_list.A_py_list _ -> "list"
-              | Objects.Py_set.A_py_set _ -> "set"
-              | Objects.Dict.A_py_dict _ -> "dict"
+              | Objects.Py_list.A_py_list -> "list"
+              | Objects.Py_set.A_py_set -> "set"
+              | Objects.Dict.A_py_dict -> "dict"
               | Objects.Tuple.A_py_tuple _ -> "tuple"
               | _ -> assert false in
             assume (mk_py_issubclass_builtin_l str_addr eattr range) man flow
               ~fthen:(man.eval (mk_py_true range))
               ~felse:(man.eval (mk_py_false range))
 
-          | Objects.Py_list.A_py_iterator (s, _, _), A_py_class (C_builtin c, _) ->
+          | Objects.Py_list.A_py_iterator (s, _), A_py_class (C_builtin c, _) ->
             man.eval (mk_py_bool (c = s) range) flow
 
-          | Objects.Dict.A_py_dict_view (s, _), A_py_class (C_builtin c, _) ->
+          | Objects.Dict.A_py_dict_view s, A_py_class (C_builtin c, _) ->
             man.eval (mk_py_bool (c = s) range) flow
 
           | A_py_module _, A_py_class (C_builtin c, _) ->

@@ -29,15 +29,12 @@ open Addr
 open Universal.Ast
 open Data_container_utils
 
+let name = "python.objects.tuple"
+
 type addr_kind +=
-  | A_py_tuple of Rangeset.t list
-  (* variables where the expanded elements are stored *)
+  | A_py_tuple of int (* number of elements *)
 
 let () =
-  register_join_akind (fun default ak1 ak2 ->
-      match ak1, ak2 with
-      | A_py_tuple ts1, A_py_tuple ts2 -> A_py_tuple (List.map2 Rangeset.union ts1 ts2)
-      | _ -> default ak1 ak2);
   register_is_data_container (fun default ak -> match ak with
       | A_py_tuple _ -> true
       | _ -> default ak)
@@ -46,20 +43,23 @@ let () =
   Format.(register_addr_kind {
       print = (fun default fmt a ->
           match a with
-          | A_py_tuple vars -> fprintf fmt "tuple[%a]" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") (fun fmt -> Rangeset.iter (fun ra -> pp_range fmt ra))) vars
+          | A_py_tuple i -> fprintf fmt "tuple[%d]" i
           | _ -> default fmt a);
       compare = (fun default a1 a2 ->
           match a1, a2 with
           | A_py_tuple t1, A_py_tuple t2 ->
-            Compare.list Rangeset.compare t1 t2
+             Stdlib.compare t1 t2
           | _ -> default a1 a2);})
+
+let opt_py_tuple_allocation_policy : string ref = ref "all"
+let () = Universal.Heap.Policies.register_option opt_py_tuple_allocation_policy name "-py-tuple-alloc-pol" "expanded tuples"
 
 
 module Domain =
 struct
 
   include GenStatelessDomainId(struct
-      let name = "python.objects.tuple"
+              let name = name
     end)
 
   let interface = {
@@ -69,10 +69,19 @@ struct
 
   let alarms = []
 
-  let init (prog:program) man flow = flow
+  let init (prog:program) man flow =
+    Universal.Heap.Policies.register_mk_addr (fun default ak -> match ak with
+                                                                | A_py_tuple _ ->
+                                                                   (Universal.Heap.Policies.of_string !opt_py_tuple_allocation_policy) ak
+                                                                | _ -> default ak);
+    flow
 
   let var_of_addr a = match akind a with
-    | A_py_tuple s -> List.mapi (fun i _ -> mk_addr_attr a ("tuple[" ^ string_of_int i ^ "]") T_any) s
+    | A_py_tuple s ->
+       let rec process i aux =
+         if i = -1 then aux
+         else process (i-1) ((mk_addr_attr a ("tuple[" ^ string_of_int i ^ "]") T_any)::aux)
+       in List.rev (process (s-1) [])
     | _ -> assert false
 
   let var_of_eobj e = match ekind e with
@@ -88,7 +97,7 @@ struct
     let range = erange exp in
     match ekind exp with
     | E_py_tuple els ->
-      let addr_tuple = mk_alloc_addr (A_py_tuple (List.map (fun _ -> Rangeset.singleton range) els)) range in
+      let addr_tuple = mk_alloc_addr (A_py_tuple (List.length els)) range in
       man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_tuple flow |>
       Eval.bind (fun eaddr_tuple flow ->
           let addr_tuple = addr_of_expr eaddr_tuple in
@@ -148,7 +157,7 @@ struct
         ["tuple"]
         (fun args flow ->
            let tuple = List.hd args in
-           let addr_iterator = mk_alloc_addr (Py_list.A_py_iterator ("tuple_iterator", Rangeset.singleton range, Some 0)) range in
+           let addr_iterator = mk_alloc_addr (Py_list.A_py_iterator ("tuple_iterator", Some 0)) range in
            man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_iterator flow |>
            Eval.bind (fun addr_it flow ->
                let addr_it = match ekind addr_it with
@@ -165,8 +174,8 @@ struct
       (* ugly assign iterator = iterator at pos+1... *)
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) iterator flow |>
       Eval.bind (fun eiterator flow ->
-          let tuple_it_addr, tuple_it_range, tuple_pos = match ekind eiterator with
-            | E_py_object ({addr_kind = Py_list.A_py_iterator (s, r, d)} as addr, _) when s = "tuple_iterator" -> addr, r, d
+          let tuple_it_addr, tuple_pos = match ekind eiterator with
+            | E_py_object ({addr_kind = Py_list.A_py_iterator (s, d)} as addr, _) when s = "tuple_iterator" -> addr, d
             | _ -> assert false in
           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var (Py_list.Domain.itseq_of_eobj eiterator) range) flow |>
             Eval.bind (fun tuple_eobj flow ->
@@ -176,7 +185,7 @@ struct
                    let () = debug "exec incoming@\n" in
                    let flow = man.exec ~zone:Zone.Z_py
                                 (mk_rename (mk_addr tuple_it_addr range)
-                                   (mk_addr {tuple_it_addr with addr_kind = Py_list.A_py_iterator ("tuple_iterator", tuple_it_range, Some (d+1))} range) range) flow in
+                                   (mk_addr {tuple_it_addr with addr_kind = Py_list.A_py_iterator ("tuple_iterator", Some (d+1))} range) range) flow in
                    man.eval (mk_var ~mode:(Some STRONG) (List.nth vars_els d) range) flow
                 | _ ->
                    man.exec ~zone:Zone.Z_py (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton
@@ -189,7 +198,7 @@ struct
       let i = match ekind i with
         | E_py_tuple i -> i
         | _ -> assert false in
-      let addr_tuple = mk_alloc_addr (A_py_tuple (List.map (fun _ -> Rangeset.singleton range) i)) range in
+      let addr_tuple = mk_alloc_addr (A_py_tuple (List.length i)) range in
       man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_tuple flow |>
       Eval.bind (fun eaddr_tuple flow ->
           let addr_tuple = addr_of_expr eaddr_tuple in
