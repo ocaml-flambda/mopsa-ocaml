@@ -58,6 +58,9 @@ let () =
 
 let opt_py_set_allocation_policy : string ref = ref "all"
 let () = Universal.Heap.Policies.register_option opt_py_set_allocation_policy name "-py-set-alloc-pol" "smashed sets"
+           (fun default ak -> match ak with
+                              | A_py_set -> (Universal.Heap.Policies.of_string !opt_py_set_allocation_policy) ak
+                              | _ -> default ak)
 
 
 module Domain =
@@ -75,11 +78,7 @@ struct
 
   let alarms = []
 
-  let init (prog:program) man flow =
-    Universal.Heap.Policies.register_mk_addr (fun default ak -> match ak with
-                                                                | A_py_set -> (Universal.Heap.Policies.of_string !opt_py_set_allocation_policy) ak
-                                                                | _ -> default ak);
-    flow
+  let init (prog:program) man flow = flow
 
   let var_of_addr a = match akind a with
     | A_py_set -> mk_addr_attr a "set" T_any

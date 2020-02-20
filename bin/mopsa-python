@@ -3,4 +3,4 @@
 MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/.."
 CONFIG=python/values.json
 
-${MOPSADIR}/bin/mopsa -config=${CONFIG} -loop-decr-it -loop-unrolling=2 -py-list-alloc-pol=range -py-tuple-alloc-pol=range -py-dict-alloc-pol=range $@
+${MOPSADIR}/bin/mopsa -config=${CONFIG} -loop-decr-it -loop-unrolling=2 -py-list-alloc-pol=range -py-tuple-alloc-pol=range -py-dict-alloc-pol=range -default-alloc-pol=all $@

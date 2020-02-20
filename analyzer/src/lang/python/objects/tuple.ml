@@ -58,6 +58,10 @@ let () =
 
 let opt_py_tuple_allocation_policy : string ref = ref "all"
 let () = Universal.Heap.Policies.register_option opt_py_tuple_allocation_policy name "-py-tuple-alloc-pol" "expanded tuples"
+           (fun default ak -> match ak with
+                              | A_py_tuple _ ->
+                                 (Universal.Heap.Policies.of_string !opt_py_tuple_allocation_policy) ak
+                              | _ -> default ak)
 
 
 module Domain =
@@ -74,12 +78,7 @@ struct
 
   let alarms = []
 
-  let init (prog:program) man flow =
-    Universal.Heap.Policies.register_mk_addr (fun default ak -> match ak with
-                                                                | A_py_tuple _ ->
-                                                                   (Universal.Heap.Policies.of_string !opt_py_tuple_allocation_policy) ak
-                                                                | _ -> default ak);
-    flow
+  let init (prog:program) man flow = flow
 
   let var_of_addr a = match akind a with
     | A_py_tuple s ->

@@ -67,6 +67,11 @@ let () =
 
 let opt_py_dict_allocation_policy : string ref = ref "all"
 let () = Universal.Heap.Policies.register_option opt_py_dict_allocation_policy name "-py-dict-alloc-pol" "smashed dictionaries"
+           (fun default ak -> match ak with
+                              | A_py_dict
+                              | A_py_dict_view _ ->
+                                 (Universal.Heap.Policies.of_string !opt_py_dict_allocation_policy) ak
+                              | _ -> default ak)
 
 module Domain =
 struct
@@ -82,13 +87,7 @@ struct
 
   let alarms = []
 
-  let init (prog:program) man flow =
-    Universal.Heap.Policies.register_mk_addr (fun default ak -> match ak with
-                                                                | A_py_dict
-                                                                  | A_py_dict_view _ ->
-                                                                   (Universal.Heap.Policies.of_string !opt_py_dict_allocation_policy) ak
-                                                                | _ -> default ak);
-    flow
+  let init (prog:program) man flow = flow
 
   let kvar_of_addr a = match akind a with
     | A_py_dict -> mk_addr_attr a "dict_key" T_any

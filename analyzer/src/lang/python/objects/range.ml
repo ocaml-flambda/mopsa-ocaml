@@ -30,8 +30,36 @@ open Universal.Ast
 
 let name = "python.objects.range"
 
+type addr_kind +=
+   | A_py_range
+   | A_py_range_iterator
+
+let () =
+  Format.(register_addr_kind {
+      print = (fun default fmt a ->
+          match a with
+          | A_py_range -> fprintf fmt "range"
+          | A_py_range_iterator -> fprintf fmt "range_iterator"
+          | _ -> default fmt a
+      );
+      compare = (fun default a1 a2 ->
+          match a1, a2 with
+          | _ -> default a1 a2);})
+
+
+let () = register_addr_kind_nominal_type (fun default ak ->
+             match ak with
+             | A_py_range -> "range"
+             | A_py_range_iterator -> "range_iterator"
+             | _ -> default ak)
+
 let opt_py_range_allocation_policy : string ref = ref "all"
 let () = Universal.Heap.Policies.register_option opt_py_range_allocation_policy name "-py-range-alloc-pol" "range objects"
+           (fun default ak -> match ak with
+                              | A_py_range
+                                | A_py_range_iterator ->
+                                    (Universal.Heap.Policies.of_string !opt_py_range_allocation_policy) ak
+                              | _ -> default ak);
 
 
 module Domain =
@@ -46,17 +74,7 @@ struct
     ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
   }
 
-  let init _ _ flow =
-    (* FIXME: a bit dangerous to perform the registration on the same
-       kind in two files, now it depends on the compilation
-       order. Hopefully Addr is compiled before this *)
-    Universal.Heap.Policies.register_mk_addr
-      (fun default ak -> match ak with
-                         | A_py_instance {addr_kind = A_py_class (C_builtin "range", _)}
-                           | A_py_instance {addr_kind = A_py_class (C_builtin "range_iterator", _)} ->
-                            (Universal.Heap.Policies.of_string !opt_py_range_allocation_policy) ak
-                         | _ -> default ak);
-    flow
+  let init _ _ flow = flow
 
   let allocate_builtin ?(mode=STRONG) man range flow bltin oe =
     (* allocate addr, and map this addr to inst bltin *)
@@ -103,8 +121,7 @@ struct
               (fun args flow ->
                  let start, stop, step = match args with a::b::c::[] -> a, b, c | _ -> assert false in
                  let alloc_range = tag_range range "alloc_%s" "range" in
-                 let cls = fst @@ find_builtin "range" in
-                 man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr ~mode:STRONG (A_py_instance cls) alloc_range) flow |>
+                 man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr ~mode:STRONG A_py_range alloc_range) flow |>
                  Eval.bind (fun eaddr flow ->
                      let addr = match ekind eaddr with
                        | E_addr a -> a
@@ -145,8 +162,7 @@ struct
         (fun r flow ->
            let range_obj = List.hd r in
            let alloc_range = tag_range range "alloc_%s" "range" in
-           let cls = fst @@ find_builtin "range_iterator" in
-           man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr ~mode:STRONG (A_py_instance cls) alloc_range) flow |>
+           man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr ~mode:STRONG A_py_range_iterator alloc_range) flow |>
            Eval.bind (fun eaddr flow ->
                let addr = match ekind eaddr with
                  | E_addr a -> a
@@ -167,7 +183,22 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range.__reversed__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args
         ["range"]
-        (fun r flow -> allocate_builtin man range flow "range_iterator" (Some exp))
+        (fun r flow ->
+          let r = List.hd r in
+          (* FIXME corner cases, see range_reverse in rangeobject.c *)
+          let start = mk_py_attr r "start" range in
+          let step = mk_py_attr r "step" range in
+          let len = mk_py_call (mk_py_object (find_builtin_function "range.__len__") range) [r] range in
+          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)
+            (mk_py_call (mk_py_object (find_builtin_function "range.__iter__") range)
+               [mk_py_call (mk_py_object (find_builtin "range") range)
+                  [ mk_binop (mk_binop start O_minus step range) O_plus (mk_binop len O_mult step range) range;
+                    mk_binop start O_minus step range;
+                    mk_unop O_minus step range
+                  ]
+                  range]
+               range) flow
+        )
       |> OptionExt.return
 
 

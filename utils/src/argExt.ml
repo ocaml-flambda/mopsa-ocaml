@@ -20,14 +20,14 @@
 (****************************************************************************)
 
 (** Command-line options.
-    Replacement for [Arg] from the standard library 
+    Replacement for [Arg] from the standard library
  *)
 
 type spec =
   | Unit of (unit -> unit)
 
   | Unit_delayed of (unit -> unit)
-  (** [Unit_delayed] functions are only executed after parsing all 
+  (** [Unit_delayed] functions are only executed after parsing all
       the arguments, in the order they appear on the command-line.
    *)
 
@@ -54,7 +54,7 @@ type arg = {
 }
 
 
-(** Replacement for [Arg.parse]. 
+(** Replacement for [Arg.parse].
     Adds delayed Unit arguments.
  *)
 let parse (args:arg list) (handler:string -> unit) (rest:string list -> unit) (msg:string) (help:unit -> unit) : unit =
@@ -99,7 +99,7 @@ let parse (args:arg list) (handler:string -> unit) (rest:string list -> unit) (m
            else
              a, None
          in
-         (* get option argument, either after '=' or in the next 
+         (* get option argument, either after '=' or in the next
             command-line argument *)
          let get_arg () = match arg, tl with
            | Some x, tl -> x, tl
@@ -125,57 +125,57 @@ let parse (args:arg list) (handler:string -> unit) (rest:string list -> unit) (m
          if List.exists (fun x -> x.key = opt) args then (
            let arg = List.find (fun x -> x.key = opt) args in
            match arg.spec with
-           
+
            | Unit_delayed f ->
               noarg ();
               delayed := (!delayed)@[f];
               eat tl
-              
+
            | Unit f ->
               noarg ();
               f ();
               eat tl
-              
+
            | Set r ->
               noarg ();
               r := true;
               eat tl
-              
+
            | Clear r ->
               noarg ();
               r := false;
               eat tl
-              
+
            | Bool f ->
               let v, tl = get_arg () in
               f (to_bool a v);
               eat tl
-            
+
            | Int f ->
               let v, tl = get_arg () in
               f (to_int a v);
               eat tl
-            
+
            | Set_int f ->
               let v, tl = get_arg () in
               f := to_int a v;
               eat tl
-            
+
            | String f ->
               let v, tl = get_arg () in
               f v;
               eat tl
-            
+
            | Set_string f ->
               let v, tl = get_arg () in
               f := v;
               eat tl
-              
+
            | Set_string_list f ->
               let v, tl = get_arg_list () in
               f := (!f)@v;
               eat tl
-              
+
            | Symbol (l,f) ->
               let v, tl = get_arg () in
               if not (List.mem v l) then (
@@ -199,4 +199,3 @@ let parse (args:arg list) (handler:string -> unit) (rest:string list -> unit) (m
   eat opts;
   (* now execute all delayed actions *)
   List.iter (fun f -> f ()) !delayed
-         
