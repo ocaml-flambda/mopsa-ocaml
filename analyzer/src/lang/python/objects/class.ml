@@ -59,32 +59,41 @@ struct
     | E_py_call({ekind = E_py_object (({addr_kind=A_py_class _}, _) as cls)} as ecls, args, kwargs) ->
       debug "class call  %a@\n@\n" pp_expr exp;
       (* Call __new__ *)
-      Utils.bind_list_args man args flow range Zone.Z_py
-        (fun args flow ->
-          let tmps = List.map (fun x -> mk_var x range) args in
-          let new_call = mk_py_kall (mk_py_object_attr cls "__new__" range) ((mk_py_object cls range) :: tmps) kwargs range in
-          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) new_call flow |>
-            Eval.bind (fun inst flow ->
-                assume
-                  (mk_py_isinstance inst ecls range)
-                  ~fthen:(fun flow ->
-                    debug "init!@\n";
-                    man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_kall (mk_py_object_attr cls "__init__" range) (inst :: tmps) kwargs range) flow |>
-                      Eval.bind (fun r flow ->
-                          assume
-                            (mk_py_isinstance_builtin r "NoneType" range)
-                            ~fthen:(fun flow -> man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) inst flow)
-                            ~felse:(fun flow ->
-                              let msg = Format.asprintf "__init__() should return None, not %a" pp_expr r in
-                              let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow in
-                              Eval.empty_singleton flow
-                            )
-                            man flow
-                  ))
-                  ~felse:(fun flow -> Eval.singleton inst flow)
-                  man flow
-              )
-        )
+      bind_list args (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+        bind_some (fun eargs flow ->
+            let flow, tmps = List.fold_left (fun (flow, tmps) eargn ->
+                                 let tmp = mk_var (mk_range_attr_var eargn.erange "" T_any) eargn.erange
+ in
+                                 man.exec ~zone:Zone.Z_py (mk_assign tmp eargn range) flow, tmp::tmps
+                               ) (flow, []) eargs in
+            let tmps = List.rev tmps in
+            let new_call = mk_py_kall (mk_py_object_attr cls "__new__" range) ((mk_py_object cls range)
+:: tmps) kwargs range in
+            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) new_call flow |>
+              Eval.add_cleaners (List.map (fun x -> match ekind x with
+                                                    | E_var (x, _) -> mk_remove_var x range
+                                                    | _ -> assert false) tmps) |>
+              Eval.bind (fun inst flow ->
+                  assume
+                    (mk_py_isinstance inst ecls range)
+                    ~fthen:(fun flow ->
+                      debug "init!@\n";
+                      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_kall (mk_py_object_attr cls "__init__" range) (inst :: tmps) kwargs range) flow |>
+                        Eval.bind (fun r flow ->
+                            assume
+                              (mk_py_isinstance_builtin r "NoneType" range)
+                              ~fthen:(fun flow -> man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) inst flow)
+                              ~felse:(fun flow ->
+                                let msg = Format.asprintf "__init__() should return None, not %a" pp_expr r in
+                                let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow in
+                                Eval.empty_singleton flow
+                              )
+                              man flow
+                    ))
+                    ~felse:(fun flow -> Eval.singleton inst flow)
+                    man flow
+                )
+          )
       |> OptionExt.return
 
     | _ -> None
