@@ -64,6 +64,7 @@ let name = "universal.heap.recency"
 
 let opt_default_allocation_policy : string ref = ref "range_callstack"
 let () = Policies.register_option opt_default_allocation_policy name "-default-alloc-pol" "default"
+           (fun _ ak -> (Policies.of_string !opt_default_allocation_policy) ak);
 
 (** {2 Domain definition} *)
 (** ===================== *)
@@ -157,9 +158,7 @@ struct
   (** Initialization *)
   (** ============== *)
 
-  let init prog man flow =
-    Policies.register_mk_addr (fun _ ak -> (Policies.of_string !opt_default_allocation_policy) ak);
-    set_env T_cur Pool.empty man flow
+  let init prog man flow = set_env T_cur Pool.empty man flow
 
 
   (** Post-conditions *)

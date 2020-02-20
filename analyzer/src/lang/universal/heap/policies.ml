@@ -77,14 +77,16 @@ let mk_addr_chain : (addr_kind -> mode -> range -> Context.uctx -> addr) ref =
 let mk_addr ak m r uctx = !mk_addr_chain ak m r uctx
 let register_mk_addr f = mk_addr_chain := f !mk_addr_chain
 
-let register_option (opt: string ref) (domain_name: string) (key: string) (descr: string) =
+let register_option (opt: string ref) (domain_name: string) (key: string) (descr: string) f =
   register_domain_option domain_name {
       key;
       category = "Allocation Policy";
       doc = Format.asprintf " allocation policy used for %s (all, range, callstack, range_callstack)" descr;
-      spec = ArgExt.Set_string opt;
+      spec = ArgExt.Symbol (["all"; "range"; "callstack"; "range_callstack"],
+                            (function s -> opt := s));
       default = !opt;
-    }
+    };
+  register_mk_addr f
 
 let of_string opt = match opt with
     | "all" -> mk_addr_all
