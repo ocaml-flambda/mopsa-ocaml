@@ -73,7 +73,7 @@ let mk_addr_all addr_kind addr_mode range uctx  =
   { addr_kind; addr_mode; addr_group = G_all }
 
 let mk_addr_chain : (addr_kind -> mode -> range -> Context.uctx -> addr) ref =
-  ref (fun ak _ _ _ -> panic "unknown addr_kind %a" pp_addr_kind ak)
+  ref (fun ak _ _ _ -> assert false)
 let mk_addr ak m r uctx = !mk_addr_chain ak m r uctx
 let register_mk_addr f = mk_addr_chain := f !mk_addr_chain
 
