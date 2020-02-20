@@ -78,7 +78,11 @@ let () = register_addr_kind_nominal_type (fun default ak ->
              match ak with
              | A_py_list -> "list"
              | A_py_iterator (s, _) -> s
-             | _ -> default ak)
+             | _ -> default ak);
+         register_addr_kind_structural_type (fun default ak s ->
+             match ak with
+             | A_py_list | A_py_iterator _ -> false
+             | _ -> default ak s)
 
 
 let opt_py_list_allocation_policy : string ref = ref "all"

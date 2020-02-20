@@ -41,7 +41,12 @@ let () = register_addr_kind_nominal_type (fun default ak ->
              match ak with
              | A_py_dict -> "dict"
              | A_py_dict_view s -> s
-             | _ -> default ak)
+             | _ -> default ak);
+         register_addr_kind_structural_type (fun default ak s ->
+             match ak with
+             | A_py_dict | A_py_dict_view _ -> false
+             | _ -> default ak s)
+
 
 
 let () =

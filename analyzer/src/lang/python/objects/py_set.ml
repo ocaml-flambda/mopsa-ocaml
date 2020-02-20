@@ -37,7 +37,12 @@ type addr_kind +=
 let () = register_addr_kind_nominal_type (fun default ak ->
              match ak with
              | A_py_set -> "set"
-             | _ -> default ak)
+             | _ -> default ak);
+         register_addr_kind_structural_type (fun default ak s ->
+             match ak with
+             | A_py_set -> false
+             | _ -> default ak s)
+
 
 
 let () =

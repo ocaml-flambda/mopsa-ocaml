@@ -30,34 +30,12 @@ open Universal.Ast
 
 let name = "python.objects.range"
 
-type addr_kind +=
-   | A_py_range
-   | A_py_range_iterator
-
-let () =
-  Format.(register_addr_kind {
-      print = (fun default fmt a ->
-          match a with
-          | A_py_range -> fprintf fmt "range"
-          | A_py_range_iterator -> fprintf fmt "range_iterator"
-          | _ -> default fmt a
-      );
-      compare = (fun default a1 a2 ->
-          match a1, a2 with
-          | _ -> default a1 a2);})
-
-
-let () = register_addr_kind_nominal_type (fun default ak ->
-             match ak with
-             | A_py_range -> "range"
-             | A_py_range_iterator -> "range_iterator"
-             | _ -> default ak)
 
 let opt_py_range_allocation_policy : string ref = ref "all"
 let () = Universal.Heap.Policies.register_option opt_py_range_allocation_policy name "-py-range-alloc-pol" "range objects"
            (fun default ak -> match ak with
-                              | A_py_range
-                                | A_py_range_iterator ->
+                              | A_py_instance {addr_kind = A_py_class (C_builtin "range", _)}
+                                | A_py_instance {addr_kind = A_py_class (C_builtin "range_iterator", _)} ->
                                     (Universal.Heap.Policies.of_string !opt_py_range_allocation_policy) ak
                               | _ -> default ak);
 
@@ -121,7 +99,7 @@ struct
               (fun args flow ->
                  let start, stop, step = match args with a::b::c::[] -> a, b, c | _ -> assert false in
                  let alloc_range = tag_range range "alloc_%s" "range" in
-                 man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr ~mode:STRONG A_py_range alloc_range) flow |>
+                 man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr ~mode:STRONG (A_py_instance (fst @@ find_builtin "range")) alloc_range) flow |>
                  Eval.bind (fun eaddr flow ->
                      let addr = match ekind eaddr with
                        | E_addr a -> a
@@ -162,7 +140,7 @@ struct
         (fun r flow ->
            let range_obj = List.hd r in
            let alloc_range = tag_range range "alloc_%s" "range" in
-           man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr ~mode:STRONG A_py_range_iterator alloc_range) flow |>
+           man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr ~mode:STRONG (A_py_instance (fst @@ find_builtin "range_iterator")) alloc_range) flow |>
            Eval.bind (fun eaddr flow ->
                let addr = match ekind eaddr with
                  | E_addr a -> a

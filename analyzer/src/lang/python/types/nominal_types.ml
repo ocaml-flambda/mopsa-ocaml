@@ -90,7 +90,7 @@ struct
           let addr_cls' = match ekind cls' with | E_py_object (a, _) -> a | _ -> assert false in
           match akind addr_cls, akind addr_cls' with
           | A_py_class (c, mro), A_py_class (c', mro') ->
-            Eval.singleton (mk_py_bool (class_le (c, mro) (c', mro')) range) flow
+             man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_bool (class_le (c, mro) (c', mro')) range) flow
           | _ -> panic_at range "%a, cls=%a, cls'=%a" pp_expr exp pp_expr cls pp_expr cls')
       |> OptionExt.return
 
