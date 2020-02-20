@@ -210,7 +210,9 @@ struct
           let cur = Core.Sig.Domain.Intermediate.get_env T_cur man flow in
           let strings_e = Nonrel.eval e cur |> OptionExt.none_to_exn |> snd in
           Eval.join_list ~empty:(fun () -> failwith "todo")
-            (Value.fold (fun s acc -> (man.eval ~zone:(Zone.Z_u, Zone.Z_u_int) (mk_int (String.length s) range) flow) :: acc) strings_e [])
+            (if Value.is_top strings_e then
+               man.eval ~zone:(Zone.Z_u, Zone.Z_u_int) (mk_top T_int range) flow :: []
+             else Value.fold (fun s acc -> (man.eval ~zone:(Zone.Z_u, Zone.Z_u_int) (mk_int (String.length s) range) flow) :: acc) strings_e [])
         )
       |> OptionExt.return
 

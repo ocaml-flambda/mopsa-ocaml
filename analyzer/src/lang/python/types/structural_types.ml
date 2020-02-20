@@ -296,7 +296,12 @@ struct
               mk_py_object (find_builtin_attribute (object_of_expr e) attr) range
             with Not_found ->
               match List.find_opt (fun x -> get_orig_vname x = attr) c.py_cls_a_static_attributes with
-              | Some f -> Hashtbl.find type_aliases f
+              | Some f ->
+                 begin try Hashtbl.find type_aliases f
+                 with Not_found ->
+                   let () = debug "body = %a" pp_stmt c.py_cls_a_body in
+                   OptionExt.none_to_exn @@ find_annot c.py_cls_a_body
+                 end
               | None ->
                  let () = debug "body = %a" pp_stmt c.py_cls_a_body in
                  OptionExt.none_to_exn @@ find_annot c.py_cls_a_body in
