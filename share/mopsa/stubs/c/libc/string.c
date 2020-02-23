@@ -416,6 +416,14 @@ char *__builtin_strchr (const char *__s, int __c);
 
 /*$
  * requires: valid_string(__s);
+ *
+ * case "found" {
+ *   ensures: exists int i in [0, size(__s) - 1]: return == __s + i;
+ * }
+ *
+ * case "notfound" {
+ *   ensures: return == NULL;
+ * }
  */
 char *strrchr (const char *__s, int __c);
 
