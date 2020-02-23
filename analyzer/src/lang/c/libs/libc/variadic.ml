@@ -157,7 +157,7 @@ struct
     in
 
     (* Put vars in the annotation *)
-    let flow = push_unnamed_args (last,vars) flow in
+    let flow = push_unnamed_args (last, List.rev vars) flow in
 
     (* Call the function with only named arguments *)
     let fundec' = {fundec with c_func_variadic = false} in
