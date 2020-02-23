@@ -873,9 +873,8 @@ and from_stub_expr ctx exp =
   | E_deref p -> E_c_deref(from_stub_expr ctx p)
   | E_cast (t, explicit, e) -> E_c_cast(from_stub_expr ctx e, explicit)
   | E_subscript (a, i) -> E_c_array_subscript(from_stub_expr ctx a, from_stub_expr ctx i)
-  | E_member (s, f) -> E_c_member_access(from_stub_expr ctx s, find_field_index s.content.typ f, f)
-  | E_attribute (o, f) -> E_stub_attribute(from_stub_expr ctx o, f)
-  | E_arrow (p, f) -> E_c_arrow_access(from_stub_expr ctx p, find_field_index (under_type p.content.typ) f, f)
+  | E_member (s, i, f) -> E_c_member_access(from_stub_expr ctx s, i, f)
+  | E_arrow (p, i, f) -> E_c_arrow_access(from_stub_expr ctx p, i, f)
   | E_builtin_call (PRIMED, arg) -> E_stub_primed(from_stub_expr ctx arg)
   | E_builtin_call (f, arg) -> E_stub_builtin_call(from_stub_builtin f, from_stub_expr ctx arg)
   | E_return -> E_stub_return

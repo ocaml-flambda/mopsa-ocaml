@@ -104,10 +104,6 @@ and visit_expr macros enums expr =
     let s = visit_expr macros enums s  in
     E_member (s, f)
 
-  | E_attribute (o, f) ->
-    let o = visit_expr macros enums o in
-    E_attribute (o, f)
-
   | E_arrow (p, f) ->
     let p = visit_expr macros enums p in
     E_arrow (p, f)
