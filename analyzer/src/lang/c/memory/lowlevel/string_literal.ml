@@ -312,29 +312,32 @@ struct
       (* Maximal interval, to keep itv bounded *)
       let length = Z.of_int (String.length str) in
       let max = I.of_z Z.zero length in
-      let itv' = I.meet_bot itv (Bot.Nb max) |> Bot.bot_to_exn in
-      (* Get the interval of possible chars *)
-      let indexes = I.to_list itv' in
-      let char_at i =
-        let chr =
-          if i = length
-          then Z.zero
-          else str.[Z.to_int i] |> Char.code |> Z.of_int
-        in
-        I.cst chr
-      in
-      let chars = List.fold_left (fun acc i ->
-          char_at i :: acc
-        ) [char_at (List.hd indexes)] (List.tl indexes)
-      in
-      let l,u =
-        match I.join_list chars |> Bot.bot_to_exn with
-        | I.B.Finite l, I.B.Finite u -> l,u
-        | _ -> assert false
-      in
-      if Z.equal l u
-      then Eval.singleton (mk_z l ~typ:(under_type p.etyp) range) flow
-      else Eval.singleton (mk_z_interval l u ~typ:(under_type p.etyp) range) flow
+      begin match I.meet_bot itv (Bot.Nb max) with
+        | Bot.BOT -> Eval.empty_singleton flow
+        | Bot.Nb itv' ->
+          (* Get the interval of possible chars *)
+          let indexes = I.to_list itv' in
+          let char_at i =
+            let chr =
+              if i = length
+              then Z.zero
+              else str.[Z.to_int i] |> Char.code |> Z.of_int
+            in
+            I.cst chr
+          in
+          let chars = List.fold_left (fun acc i ->
+              char_at i :: acc
+            ) [char_at (List.hd indexes)] (List.tl indexes)
+          in
+          let l,u =
+            match I.join_list chars |> Bot.bot_to_exn with
+            | I.B.Finite l, I.B.Finite u -> l,u
+            | _ -> assert false
+          in
+          if Z.equal l u
+          then Eval.singleton (mk_z l ~typ:(under_type p.etyp) range) flow
+          else Eval.singleton (mk_z_interval l u ~typ:(under_type p.etyp) range) flow
+      end
 
     | _ ->
       Eval.singleton (mk_top (under_type p.etyp) range) flow
