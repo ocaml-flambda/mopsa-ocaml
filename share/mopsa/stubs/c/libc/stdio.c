@@ -270,8 +270,6 @@ int fflush_unlocked (FILE *__stream);
 // TODO: not implemented fcloseall
 
 /*$
- * warn: "fopen: characters in argument __modes are not validated";
- *
  * requires: valid_string(__filename);
  * requires: valid_string(__modes);
  *
@@ -289,8 +287,6 @@ FILE *fopen (const char *__restrict __filename,
              const char *__restrict __modes);
 
 /*$
- * warn: "freopen: characters in argument __modes are not validated";
- *
  * requires: valid_string(__filename);
  * requires: valid_string(__modes);
  * requires: __stream in File;
@@ -513,6 +509,11 @@ int fputc_unlocked (int __c, FILE *__stream);
  * // TODO: not thread-safe
  * requires: __stream in File;
  * ensures: (return == (unsigned char) __c) or (return == EOF);
+ */
+int putc (int __c, FILE *__stream);
+
+/*$
+ * alias: putc;
  */
 int putc_unlocked (int __c, FILE *__stream);
 

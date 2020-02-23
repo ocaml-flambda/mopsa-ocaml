@@ -48,6 +48,8 @@
 #include "pwd.c"
 #include "sys/resource.c"
 #include "sys/utsname.c"
+#include "sys/time.c"
+#include "sys/wait.c"
 
 /* TODO: include math library only when -lm is used */
 #include "math.c"

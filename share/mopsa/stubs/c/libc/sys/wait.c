@@ -19,29 +19,31 @@
 /*                                                                          */
 /****************************************************************************/
 
-/* Stubs for functions defined in signal.h */
-
-#include <signal.h>
-
-/*$
- * warn: "unsupported stub";
- */
-int kill (__pid_t __pid, int __sig);
-
+#include <sys/wait.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 
 /*$
- * case "safe" {
- *   ensures: return in [0, 1];
- * }
+ * assigns: _errno;
+ * assigns: *__usage;
+ * assigns: *__stat_loc;
  *
- * case "failure" {
- *   ensures: return == -1;
- * }
+ * ensures: return >= -1;
+ * ensures: (__stat_loc != NULL) implies ((*__stat_loc)' in [0,255]); // FIXME: is this sound?
+ *
+ * ensures: 
+ *   (__usage != NULL) implies (
+ *         (__usage->ru_utime.tv_sec)'  in [0, 2000000000] // 30 years :)
+ *     and (__usage->ru_utime.tv_usec)' in [0, 1000000]
+ *     and (__usage->ru_stime.tv_sec)'  in [0, 2000000000]
+ *     and (__usage->ru_stime.tv_usec)' in [0, 1000000]
+ *     and (__usage->ru_maxrss)' >= 0
+ *     and (__usage->ru_minflt)' >= 0
+ *     and (__usage->ru_majflt)' >= 0
+ *     and (__usage->ru_inblock)' >= 0
+ *     and (__usage->ru_oublock)' >= 0
+ *     and (__usage->ru_nvcsw)' >= 0
+ *     and (__usage->ru_nivcsw)' >= 0
+ *   );
  */
-int sigismember (const sigset_t *__set, int __signo);
-
-
-/*$
- * 
- */
-sighandler_t signal (int __sig, __sighandler_t __handler);
+pid_t wait3 (int *__stat_loc, int __options, struct rusage * __usage);

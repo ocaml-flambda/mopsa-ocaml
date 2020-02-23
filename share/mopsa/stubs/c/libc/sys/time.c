@@ -19,29 +19,24 @@
 /*                                                                          */
 /****************************************************************************/
 
-/* Stubs for functions defined in signal.h */
+#include <sys/time.h>
 
-#include <signal.h>
+long int _last_time;
+
+/*$$$
+ * assigns: _last_time;
+ * ensures: _last_time' in [0, 2000000000]; // we are somewhere between 1970 and 2030
+ */
 
 /*$
- * warn: "unsupported stub";
+ * requires: __tz == NULL;
+ * requires: valid_ptr(__tv);
+ * assigns: _last_time;
+ * assigns: __tv->tv_sec;
+ * assigns: __tv->tv_usec;
+ * ensures: _last_time' in [_last_time + 1, 2000000000];
+ * ensures: (__tv->tv_sec)' == _last_time';
+ * ensures: (__tv->tv_usec)' in [0, 1000000];
+ * ensures: return == 0;
  */
-int kill (__pid_t __pid, int __sig);
-
-
-/*$
- * case "safe" {
- *   ensures: return in [0, 1];
- * }
- *
- * case "failure" {
- *   ensures: return == -1;
- * }
- */
-int sigismember (const sigset_t *__set, int __signo);
-
-
-/*$
- * 
- */
-sighandler_t signal (int __sig, __sighandler_t __handler);
+int gettimeofday (struct timeval *__restrict __tv, __timezone_ptr_t __tz);

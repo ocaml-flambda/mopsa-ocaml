@@ -793,8 +793,8 @@ void _Exit (int __status);
  * requires: valid_string(__name);
  *
  * case "success" {
- *   local:    char* r = new ReadOnlyMemory;
- *   ensures:  size(r) in [1, INT_MAX];
+ *   local:    char* r = new GetEnvString;
+ *   ensures:  size(r) == INT_MAX;
  *   ensures:  return == r;
  *   ensures:  valid_string(return);
  * }
