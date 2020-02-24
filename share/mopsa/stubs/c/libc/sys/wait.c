@@ -23,6 +23,9 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 
+// FIXME: wait3 before glibc 2.24 is not yet supported due to the union-type parameter of __stat_loc
+#if __GLIBC_MINOR__ >= 24
+
 /*$
  * assigns: _errno;
  * assigns: *__usage;
@@ -47,3 +50,5 @@
  *   );
  */
 pid_t wait3 (int *__stat_loc, int __options, struct rusage * __usage);
+
+#endif // __GLIBC_MINOR__ >= 24
