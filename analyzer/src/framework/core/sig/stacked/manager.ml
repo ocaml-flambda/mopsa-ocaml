@@ -160,28 +160,27 @@ let switch
   =
   let rec one (cond : expr list) acc f =
     match cond with
-    | [] -> Some (f acc)
+    | [] -> f acc
     | x :: tl ->
       let s = mk_assume x x.erange in
-      man.post ~zone s acc >>=? fun _ acc' ->
+      man.post ~zone s acc >>$ fun _ acc' ->
       if Flow.get T_cur man.lattice acc' |> man.lattice.is_bottom then
-        None
+        Cases.empty_singleton acc'
       else
         one tl acc' f
   in
   let rec aux cases =
     match cases with
-    | [] -> None
+    | [] -> assert false
+
+    | [(cond, t)] -> one cond flow t
 
     | (cond, t) :: q ->
       let r = one cond flow t in
       let rr = aux q in
-      OptionExt.neutral2 Cases.join r rr
+      Cases.join r rr
   in
-  match aux cases with
-  | None -> assert false
-
-  | Some x -> x
+  aux cases
 
 
 let exec_stmt_on_all_flows stmt man flow =
