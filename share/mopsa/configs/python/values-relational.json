@@ -71,7 +71,22 @@
                       "python.objects.dict",
                       "python.objects.set",
                       "python.objects.iterable",
-                      "universal.numeric.relational",
+                      {
+                          "product": [
+                              {
+                                  "nonrel": {
+			              "union": [
+			                  "universal.numeric.values.intervals.float",
+                                          "universal.numeric.values.intervals.integer"
+			              ]
+		                  }
+                              },
+                              "universal.numeric.relational"
+                          ],
+                          "reductions": [
+                              "universal.numeric.reductions.intervals_rel"
+                          ]
+                      },
                       "universal.strings.powerset"
                   ]
                 }

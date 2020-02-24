@@ -96,10 +96,13 @@ module Domain =
          (* FIXME: meth should be a subtype of method *)
          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) func flow |>
            Eval.bind (fun func flow ->
-               eval_alloc man (A_py_method (object_of_expr func, inst, "method")) range flow |>
-                 bind_some (fun addr flow ->
-                     let obj = (addr, None) in
-                     Eval.singleton (mk_py_object obj range) flow
+               man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) inst flow |>
+                 Eval.bind (fun inst flow ->
+                     eval_alloc man (A_py_method (object_of_expr func, inst, "method")) range flow |>
+                       bind_some (fun addr flow ->
+                           let obj = (addr, None) in
+                           Eval.singleton (mk_py_object obj range) flow
+                         )
                    )
              )
          |> OptionExt.return
