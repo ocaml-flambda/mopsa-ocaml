@@ -86,7 +86,7 @@ let () = register_addr_kind_nominal_type (fun default ak ->
 
 
 let opt_py_list_allocation_policy : string ref = ref "all"
-let () = Universal.Heap.Policies.register_option opt_py_list_allocation_policy name "-py-list-alloc-pol" "smashed lists"
+let () = Universal.Heap.Policies.register_option opt_py_list_allocation_policy name "-py-list-alloc-pol" "for smashed lists"
            (fun default ak -> match ak with
                               | A_py_list
                               | A_py_iterator _ ->

@@ -57,7 +57,7 @@ let () =
           | _ -> default a1 a2);})
 
 let opt_py_tuple_allocation_policy : string ref = ref "all"
-let () = Universal.Heap.Policies.register_option opt_py_tuple_allocation_policy name "-py-tuple-alloc-pol" "expanded tuples"
+let () = Universal.Heap.Policies.register_option opt_py_tuple_allocation_policy name "-py-tuple-alloc-pol" "for expanded tuples"
            (fun default ak -> match ak with
                               | A_py_tuple _ ->
                                  (Universal.Heap.Policies.of_string !opt_py_tuple_allocation_policy) ak
@@ -85,7 +85,7 @@ struct
        let rec process i aux =
          if i = -1 then aux
          else process (i-1) ((mk_addr_attr a ("tuple[" ^ string_of_int i ^ "]") T_any)::aux)
-       in List.rev (process (s-1) [])
+       in process (s-1) []
     | _ -> assert false
 
   let var_of_eobj e = match ekind e with
@@ -106,6 +106,7 @@ struct
       Eval.bind (fun eaddr_tuple flow ->
           let addr_tuple = addr_of_expr eaddr_tuple in
           let els_vars = var_of_addr addr_tuple in
+          debug "els_vars = %a@.els = %a" (Format.pp_print_list pp_var) els_vars (Format.pp_print_list pp_expr) els;
           let flow = List.fold_left2 (fun acc vari eli ->
               man.exec ~zone:Zone.Z_py
                 (mk_assign (mk_var ~mode:(Some STRONG) vari range) eli range) acc) flow els_vars els in

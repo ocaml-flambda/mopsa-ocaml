@@ -62,7 +62,7 @@ let () =
           | _ -> default a1 a2);})
 
 let opt_py_set_allocation_policy : string ref = ref "all"
-let () = Universal.Heap.Policies.register_option opt_py_set_allocation_policy name "-py-set-alloc-pol" "smashed sets"
+let () = Universal.Heap.Policies.register_option opt_py_set_allocation_policy name "-py-set-alloc-pol" "for smashed sets"
            (fun default ak -> match ak with
                               | A_py_set -> (Universal.Heap.Policies.of_string !opt_py_set_allocation_policy) ak
                               | _ -> default ak)

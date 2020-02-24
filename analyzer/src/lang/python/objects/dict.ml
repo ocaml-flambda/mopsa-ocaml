@@ -71,7 +71,7 @@ let () =
 
 
 let opt_py_dict_allocation_policy : string ref = ref "all"
-let () = Universal.Heap.Policies.register_option opt_py_dict_allocation_policy name "-py-dict-alloc-pol" "smashed dictionaries"
+let () = Universal.Heap.Policies.register_option opt_py_dict_allocation_policy name "-py-dict-alloc-pol" "for smashed dictionaries"
            (fun default ak -> match ak with
                               | A_py_dict
                               | A_py_dict_view _ ->

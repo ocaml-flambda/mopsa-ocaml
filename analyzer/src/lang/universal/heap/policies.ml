@@ -81,7 +81,7 @@ let register_option (opt: string ref) (domain_name: string) (key: string) (descr
   register_domain_option domain_name {
       key;
       category = "Allocation Policy";
-      doc = Format.asprintf " allocation policy used for %s (all, range, callstack, range_callstack)" descr;
+      doc = Format.asprintf " allocation policy used %s" descr;
       spec = ArgExt.Symbol (["all"; "range"; "callstack"; "range_callstack"],
                             (function s -> opt := s));
       default = !opt;

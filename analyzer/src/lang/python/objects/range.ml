@@ -32,7 +32,7 @@ let name = "python.objects.range"
 
 
 let opt_py_range_allocation_policy : string ref = ref "all"
-let () = Universal.Heap.Policies.register_option opt_py_range_allocation_policy name "-py-range-alloc-pol" "range objects"
+let () = Universal.Heap.Policies.register_option opt_py_range_allocation_policy name "-py-range-alloc-pol" "for range objects"
            (fun default ak -> match ak with
                               | A_py_instance {addr_kind = A_py_class (C_builtin "range", _)}
                                 | A_py_instance {addr_kind = A_py_class (C_builtin "range_iterator", _)} ->

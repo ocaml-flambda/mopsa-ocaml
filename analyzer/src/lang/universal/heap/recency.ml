@@ -32,6 +32,7 @@ open Zone
 type _ query +=
   | Q_allocated_addresses : addr list query
   | Q_select_allocated_addresses : (addr -> bool) -> addr list query
+  | Q_alive_addresses : addr list query
 
 let () =
   register_query {
@@ -42,7 +43,8 @@ let () =
           | Q_allocated_addresses -> a @ b
           | Q_select_allocated_addresses _ ->
             (* is that ok? *)
-            a @ b
+             a @ b
+          | Q_alive_addresses -> List.sort_uniq compare_addr (a @ b)
           | _ -> next.join_query query a b
       in f
     );
@@ -54,7 +56,8 @@ let () =
             assert false
           | Q_select_allocated_addresses _ ->
             (* is that ok? *)
-            assert false
+             assert false
+          | Q_alive_addresses -> assert false
           | _ -> next.meet_query query a b
       in f
     );
@@ -63,7 +66,7 @@ let () =
 let name = "universal.heap.recency"
 
 let opt_default_allocation_policy : string ref = ref "range_callstack"
-let () = Policies.register_option opt_default_allocation_policy name "-default-alloc-pol" "default"
+let () = Policies.register_option opt_default_allocation_policy name "-default-alloc-pol" "by default"
            (fun _ ak -> (Policies.of_string !opt_default_allocation_policy) ak);
 
 (** {2 Domain definition} *)
