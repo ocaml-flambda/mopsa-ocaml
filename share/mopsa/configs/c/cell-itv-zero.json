@@ -44,7 +44,7 @@
 	    {
                 "apply": {
                     "compose": [
-                        "universal.heap.recency.callstack_range",
+                        "universal.heap.recency",
                         "c.memory.lowlevel.cells",
 			{
                             "seq": [

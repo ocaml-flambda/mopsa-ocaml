@@ -29,17 +29,25 @@ open Addr
 open Universal.Ast
 open Data_container_utils
 
+let name = "python.objects.set"
 
 type addr_kind +=
-  | A_py_set of Rangeset.t (* variable where the smashed elements are stored *)
+  | A_py_set
+
+let () = register_addr_kind_nominal_type (fun default ak ->
+             match ak with
+             | A_py_set -> "set"
+             | _ -> default ak);
+         register_addr_kind_structural_type (fun default ak s ->
+             match ak with
+             | A_py_set -> false
+             | _ -> default ak s)
+
+
 
 let () =
-  register_join_akind (fun default ak1 ak2 ->
-      match ak1, ak2 with
-      | A_py_set r1, A_py_set r2 -> A_py_set (Rangeset.union r1 r2)
-      | _ -> default ak1 ak2);
   register_is_data_container (fun default ak -> match ak with
-      | A_py_set _ -> true
+      | A_py_set -> true
       | _ -> default ak)
 
 
@@ -47,19 +55,24 @@ let () =
   Format.(register_addr_kind {
       print = (fun default fmt a ->
           match a with
-          | A_py_set r -> fprintf fmt "set[%a]" (fun fmt -> Rangeset.iter (fun ra -> pp_range fmt ra)) r
+          | A_py_set -> fprintf fmt "set"
           | _ -> default fmt a);
       compare = (fun default a1 a2 ->
           match a1, a2 with
-          | A_py_set v1, A_py_set v2 -> Rangeset.compare v1 v2
           | _ -> default a1 a2);})
+
+let opt_py_set_allocation_policy : string ref = ref "all"
+let () = Universal.Heap.Policies.register_option opt_py_set_allocation_policy name "-py-set-alloc-pol" "for smashed sets"
+           (fun default ak -> match ak with
+                              | A_py_set -> (Universal.Heap.Policies.of_string !opt_py_set_allocation_policy) ak
+                              | _ -> default ak)
 
 
 module Domain =
 struct
 
   include GenStatelessDomainId(struct
-      let name = "python.objects.set"
+      let name = name
     end)
 
 
@@ -73,7 +86,7 @@ struct
   let init (prog:program) man flow = flow
 
   let var_of_addr a = match akind a with
-    | A_py_set _ -> mk_addr_attr a "set" T_any
+    | A_py_set -> mk_addr_attr a "set" T_any
     | _ -> assert false
 
   let var_of_eobj e = match ekind e with
@@ -90,7 +103,7 @@ struct
     | E_py_set ls ->
       debug "Skipping set.__new__, set.__init__ for now@\n";
 
-      let addr_set = mk_alloc_addr (A_py_set (Rangeset.singleton range)) range in
+      let addr_set = mk_alloc_addr A_py_set range in
       man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_set flow |>
       Eval.bind (fun eaddr_set flow ->
           let addr_set = addr_of_expr eaddr_set in
@@ -150,7 +163,7 @@ struct
         ["set"]
         (fun args flow ->
            let set = match args with | [l] -> l | _ -> assert false in
-           let a = mk_alloc_addr (Py_list.A_py_iterator ("set_iterator", Rangeset.singleton range, None)) range in
+           let a = mk_alloc_addr (Py_list.A_py_iterator ("set_iterator", None)) range in
            man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) a flow |>
            Eval.bind (fun eaddr_it flow ->
                let addr_it = match ekind eaddr_it with | E_addr a -> a | _ -> assert false in
@@ -222,13 +235,13 @@ struct
   let exec zone stmt man flow =
     let range = srange stmt in
     match skind stmt with
-    | S_remove {ekind = E_addr ({addr_kind = A_py_set _} as a)} ->
+    | S_remove {ekind = E_addr ({addr_kind = A_py_set} as a)} ->
        let va = var_of_addr a in
        flow |>
          man.exec ~zone:Zone.Z_py (mk_remove_var va range) |>
          Post.return |> OptionExt.return
 
-    | S_rename ({ekind = E_addr ({addr_kind = A_py_set _} as a)}, {ekind = E_addr a'}) ->
+    | S_rename ({ekind = E_addr ({addr_kind = A_py_set} as a)}, {ekind = E_addr a'}) ->
       let va = var_of_addr a in
       let va' = var_of_addr a' in
       debug "renaming %a into %a@\n" pp_var va pp_var va';

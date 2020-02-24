@@ -29,33 +29,36 @@ open Universal.Ast
 open Data_container_utils
 
 type addr_kind +=
-  | A_py_staticmethod of Rangeset.t
-  | A_py_classmethod of Rangeset.t
+  | A_py_staticmethod
+  | A_py_classmethod
 
+let () = register_addr_kind_nominal_type (fun default ak ->
+             match ak with
+             | A_py_staticmethod ->  "staticmethod"
+             | A_py_classmethod ->  "classmethod"
+             | _ -> default ak)
 
 let () =
-  register_join_akind (fun default ak1 ak2 ->
-      match ak1, ak2 with
-      | A_py_staticmethod r1, A_py_staticmethod r2 -> A_py_staticmethod (Rangeset.union r1 r2)
-      | A_py_classmethod r1, A_py_classmethod r2 -> A_py_classmethod (Rangeset.union r1 r2)
-      | _ -> default ak1 ak2);
   register_is_data_container (fun default ak -> match ak with
-      | A_py_classmethod _ -> false
-      | A_py_staticmethod _ -> false
+      | A_py_classmethod -> false
+      | A_py_staticmethod -> false
       | _ -> default ak)
 
 let () =
   Format.(register_addr_kind {
       print = (fun default fmt a ->
           match a with
-          | A_py_staticmethod r -> fprintf fmt "staticmethod[%a]" (fun fmt -> Rangeset.iter (fun ra -> pp_range fmt ra)) r
-          | A_py_classmethod r -> fprintf fmt "classmethod[%a]" (fun fmt -> Rangeset.iter (fun ra -> pp_range fmt ra)) r
+          | A_py_staticmethod -> fprintf fmt "staticmethod"
+          | A_py_classmethod -> fprintf fmt "classmethod"
           | _ -> default fmt a);
       compare = (fun default a1 a2 ->
           match a1, a2 with
-          | A_py_staticmethod v1, A_py_staticmethod v2 -> Rangeset.compare v1 v2
-          | A_py_classmethod v1, A_py_classmethod v2 -> Rangeset.compare v1 v2
           | _ -> default a1 a2);})
+
+let () = Universal.Heap.Policies.register_mk_addr (fun default ak ->
+             match ak with
+             | A_py_staticmethod | A_py_classmethod -> Universal.Heap.Policies.mk_addr_range ak
+             | _ -> default ak)
 
 module Domain =
   struct
@@ -70,7 +73,7 @@ module Domain =
     }
 
     let var_of_addr a = match akind a with
-      | A_py_staticmethod _ | A_py_classmethod _ -> mk_addr_attr a "__func__" T_any
+      | A_py_staticmethod | A_py_classmethod -> mk_addr_attr a "__func__" T_any
       | _ -> assert false
 
     let var_of_eobj e = match ekind e with
@@ -93,10 +96,13 @@ module Domain =
          (* FIXME: meth should be a subtype of method *)
          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) func flow |>
            Eval.bind (fun func flow ->
-               eval_alloc man (A_py_method (object_of_expr func, inst, "method")) range flow |>
-                 bind_some (fun addr flow ->
-                     let obj = (addr, None) in
-                     Eval.singleton (mk_py_object obj range) flow
+               man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) inst flow |>
+                 Eval.bind (fun inst flow ->
+                     eval_alloc man (A_py_method (object_of_expr func, inst, "method")) range flow |>
+                       bind_some (fun addr flow ->
+                           let obj = (addr, None) in
+                           Eval.singleton (mk_py_object obj range) flow
+                         )
                    )
              )
          |> OptionExt.return
@@ -146,8 +152,8 @@ module Domain =
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("classmethod.__new__" as s, _))}, _)}, [cls; func], [])
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("staticmethod.__new__" as s, _))}, _)}, [cls; func], []) ->
         let addr_func = mk_alloc_addr (match List.hd (String.split_on_char '.' s) with
-            | "staticmethod" -> A_py_staticmethod (Rangeset.singleton range)
-            | "classmethod" -> A_py_classmethod (Rangeset.singleton range)
+            | "staticmethod" -> A_py_staticmethod
+            | "classmethod" -> A_py_classmethod
             | _ -> assert false
           ) range in
         man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_func flow |>

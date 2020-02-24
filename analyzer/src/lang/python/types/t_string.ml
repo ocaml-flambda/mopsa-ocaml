@@ -313,7 +313,7 @@ module Domain =
           ["str"]
           (fun args flow ->
              let str = List.hd args in
-             let it_addr = mk_alloc_addr (Objects.Py_list.A_py_iterator ("str_iterator", Objects.Data_container_utils.Rangeset.singleton range, None)) range in
+             let it_addr = mk_alloc_addr (Objects.Py_list.A_py_iterator ("str_iterator", None)) range in
              man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) it_addr flow |>
              Eval.bind (fun eit_addr flow ->
                  let it_addr = match ekind eit_addr with E_addr a -> a | _ -> assert false in
@@ -337,7 +337,7 @@ module Domain =
 
       | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.encode", _))}, _)}) as caller, [arg], [])
       | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bytes.decode", _))}, _)}) as caller, [arg], []) ->
-        let encoding = mk_expr (E_constant (C_string "utf-8")) range in
+        let encoding = mk_string "utf-8" range in
         eval zs {exp with ekind = E_py_call(caller, [arg; encoding], [])} man flow
 
       | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.encode" as f, _))}, _)}), [arg; encoding], []) ->
@@ -345,13 +345,17 @@ module Domain =
         Utils.check_instances f man flow range [arg; encoding]
           ["str"; "str"]
           (fun eargs flow ->
-             let earg, eencoding = match eargs with [e1;e2] -> e1, e2 | _ -> assert false in
-             let msg = Format.asprintf "unknown encoding: %a" pp_expr eencoding in
-             let lookuperr_f = man.exec (Utils.mk_builtin_raise_msg "LookupError" msg range) flow in
-             Eval.join_list
-               ~empty:(fun () -> assert false)
-               [ Eval.empty_singleton lookuperr_f;
-                 man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_constant (C_top T_py_bytes)) range) (Flow.copy_ctx lookuperr_f flow)]
+            let earg, eencoding = match eargs with [e1;e2] -> e1, e2 | _ -> assert false in
+            assume (mk_binop eencoding O_eq (mk_string "utf-8" range) range) man flow
+              ~zone:Zone.Z_py
+              ~fthen:(fun flow ->
+                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_constant (C_top T_py_bytes)) range) flow
+              )
+              ~felse:(fun flow ->
+                let msg = Format.asprintf "unknown encoding: %a" pp_expr eencoding in
+                man.exec (Utils.mk_builtin_raise_msg "LookupError" msg range) flow |>
+                Eval.empty_singleton
+              )
           )
         |> OptionExt.return
 
@@ -360,13 +364,15 @@ module Domain =
         Utils.check_instances f man flow range [arg; encoding]
           ["bytes"; "str"]
           (fun eargs flow ->
-             let earg, eencoding = match eargs with [e1;e2] -> e1, e2 | _ -> assert false in
-             let msg = Format.asprintf "unknown encoding: %a" pp_expr eencoding in
-             let lookuperr_f = man.exec (Utils.mk_builtin_raise_msg "LookupError" msg range) flow in
-             Eval.join_list
-               ~empty:(fun () -> assert false)
-               [ Eval.empty_singleton lookuperr_f;
-                 man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_constant (C_top T_string)) range) (Flow.copy_ctx lookuperr_f flow)]
+            let earg, eencoding = match eargs with [e1;e2] -> e1, e2 | _ -> assert false in
+            assume (mk_binop eencoding O_eq (mk_string "utf-8" range) range) man flow
+              ~zone:Zone.Z_py
+              ~fthen:(fun flow ->
+                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_constant (C_top T_string)) range) flow)
+              ~felse:(fun flow ->
+                let msg = Format.asprintf "unknown encoding: %a" pp_expr eencoding in
+                man.exec (Utils.mk_builtin_raise_msg "LookupError" msg range) flow |>
+                  Eval.empty_singleton)
           )
         |> OptionExt.return
 

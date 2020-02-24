@@ -479,6 +479,11 @@ let () =
           | _ -> default a1 a2);})
 
 
+let () = Universal.Heap.Policies.register_mk_addr
+           (fun default ak -> match ak with
+                              | A_py_class _ | A_py_method _ | A_py_module _ | A_py_function _ | A_py_instance _ -> Universal.Heap.Policies.mk_addr_all ak
+                              | _ -> default ak)
+
 type _ query += Q_print_addr_related_info : addr -> ((Format.formatter -> unit) query)
 
 let () =
@@ -505,3 +510,12 @@ let () =
       doit
     );
   }
+
+let nominal_type_of_addr_kind : (addr_kind -> string) ref = ref (fun ak -> panic "unknown nominal type for addr_kind %a" pp_addr_kind ak)
+
+let structural_type_of_addr_kind : (addr_kind -> string -> bool) ref = ref (fun ak s -> panic "unknown structural type for addr_kind %a" pp_addr_kind ak)
+
+let register_addr_kind_nominal_type f  = nominal_type_of_addr_kind := f !nominal_type_of_addr_kind
+let register_addr_kind_structural_type f  = structural_type_of_addr_kind := f !structural_type_of_addr_kind
+let addr_kind_find_nominal_type ak = !nominal_type_of_addr_kind ak
+let addr_kind_find_structural_type ak s  = !structural_type_of_addr_kind ak s

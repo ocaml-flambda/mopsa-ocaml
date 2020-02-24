@@ -27,12 +27,12 @@ open Mopsa
 open Framework.Core.Sig.Stacked.Intermediate
 open Ast
 open Zone
-open Policies
-
+(* open Policies *)
 
 type _ query +=
   | Q_allocated_addresses : addr list query
   | Q_select_allocated_addresses : (addr -> bool) -> addr list query
+  | Q_alive_addresses : addr list query
 
 let () =
   register_query {
@@ -43,7 +43,8 @@ let () =
           | Q_allocated_addresses -> a @ b
           | Q_select_allocated_addresses _ ->
             (* is that ok? *)
-            a @ b
+             a @ b
+          | Q_alive_addresses -> List.sort_uniq compare_addr (a @ b)
           | _ -> next.join_query query a b
       in f
     );
@@ -55,18 +56,25 @@ let () =
             assert false
           | Q_select_allocated_addresses _ ->
             (* is that ok? *)
-            assert false
+             assert false
+          | Q_alive_addresses -> assert false
           | _ -> next.meet_query query a b
       in f
     );
   }
 
+let name = "universal.heap.recency"
+
+let opt_default_allocation_policy : string ref = ref "range_callstack"
+let () = Policies.register_option opt_default_allocation_policy name "-default-alloc-pol" "by default"
+           (fun _ ak -> (Policies.of_string !opt_default_allocation_policy) ak);
 
 (** {2 Domain definition} *)
 (** ===================== *)
 
-module Domain(Policy: POLICY) =
+module Domain =
 struct
+
 
   (** Domain header *)
   (** ============= *)
@@ -83,7 +91,7 @@ struct
 
   include GenDomainId(struct
       type nonrec t = t
-      let name = "universal.heap.recency" ^ "." ^ Policy.name
+      let name = name
     end)
 
   let print fmt pool =
@@ -153,8 +161,7 @@ struct
   (** Initialization *)
   (** ============== *)
 
-  let init prog man flow =
-    set_env T_cur Pool.empty man flow
+  let init prog man flow = set_env T_cur Pool.empty man flow
 
 
   (** Post-conditions *)
@@ -185,7 +192,7 @@ struct
     | E_alloc_addr(addr_kind, STRONG) ->
       let pool = get_env T_cur man flow in
 
-      let recent_addr = Policy.mk_addr addr_kind STRONG range flow in
+      let recent_addr = Policies.mk_addr addr_kind STRONG range (Flow.get_unit_ctx flow) in
 
       (* Change the sub-domain *)
       let flow' =
@@ -195,7 +202,7 @@ struct
           flow
         else
           (* Otherwise, we make the previous recent address as an old one *)
-          let old_addr = Policy.mk_addr addr_kind WEAK range flow in
+          let old_addr = Policies.mk_addr addr_kind WEAK range (Flow.get_unit_ctx flow) in
           debug "rename %a to %a" pp_addr recent_addr pp_addr old_addr;
           let nflow = map_env T_cur (Pool.add old_addr) man flow |>
                         man.exec (mk_rename (mk_addr recent_addr range) (mk_addr old_addr range) range) in
@@ -211,7 +218,7 @@ struct
 
     | E_alloc_addr(addr_kind, WEAK) ->
       let pool = get_env T_cur man flow in
-      let weak_addr = Policy.mk_addr addr_kind WEAK range flow in
+      let weak_addr = Policies.mk_addr addr_kind WEAK range (Flow.get_unit_ctx flow) in
 
       let flow' =
         if Pool.mem weak_addr pool then
@@ -234,6 +241,7 @@ struct
     | Q_allocated_addresses ->
       let pool = get_env T_cur man flow in
       Some (Pool.elements pool)
+
     | Q_select_allocated_addresses f ->
       let pool = get_env T_cur man flow in
       Some (
@@ -249,12 +257,5 @@ end
 
 
 
-
-module Heap1 = Domain(StackRangePolicy)
-module Heap2 = Domain(StackPolicy)
-module Heap3 = Domain(AllPolicy)
-
 let () =
-  Framework.Core.Sig.Stacked.Intermediate.register_stack (module Heap1);
-  Framework.Core.Sig.Stacked.Intermediate.register_stack (module Heap2);
-  Framework.Core.Sig.Stacked.Intermediate.register_stack (module Heap3)
+  Framework.Core.Sig.Stacked.Intermediate.register_stack (module Domain)

@@ -270,7 +270,7 @@ let help (args:ArgExt.arg list) out =
               print_default arg.default
           | _ ->
             print out "    %s %s%a@." arg.key arg.doc print_default arg.default
-        ) args
+        ) (List.sort Stdlib.compare args)
     ) groups
 
 let list_domains (domains:string list) out =

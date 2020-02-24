@@ -29,6 +29,7 @@ open Universal.Ast
 open Data_model.Attribute
 open Alarms
 
+
 (*FIXME: can iterators over addresses be renamed? *)
 
 
@@ -320,7 +321,6 @@ struct
        |> OptionExt.return
 
     | S_rename (({ekind = E_var (v, mode)} as l), ({ekind = E_var (v', mode')} as r)) ->
-       Debug.debug ~channel:"207" "rename %a, flow = %a" pp_stmt stmt man.lattice.print (Flow.get T_cur man.lattice flow);
        (* FIXME: modes, rename in weak shouldn't erase the old v'? *)
        let flow = fold_intfloatstr man v flow (fun t ->
                       {stmt with skind = S_rename (Utils.change_evar_type t l,
@@ -585,6 +585,16 @@ struct
                 | _ -> ()
               ) aset ()
           ) cur_v ()
+
+      | Universal.Heap.Recency.Q_alive_addresses ->
+         let cur = get_env T_cur man flow in
+         let aset = AMap.fold (fun _ aset acc ->
+                        ASet.join aset acc) cur ASet.empty in
+         OptionExt.return @@ List.rev @@
+           ASet.fold (fun pyaddr acc -> match pyaddr with
+                                        | Def a -> a :: acc
+                                        | _ -> acc) aset []
+
 
       | _ -> None
 
