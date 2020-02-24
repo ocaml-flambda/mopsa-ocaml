@@ -306,38 +306,42 @@ struct
     man.eval p ~zone:(Z_c_low_level, Z_c_points_to) flow >>$ fun pt flow ->
     match ekind pt with
     | E_c_points_to (P_block ({ base_kind = String str }, offset, mode)) ->
-      (* Get the interval of the offset *)
-      man.eval offset ~zone:(Z_c_scalar,Z_u_num) flow >>$ fun offset flow ->
-      let itv = man.ask (mk_int_interval_query offset) flow in
-      (* Maximal interval, to keep itv bounded *)
       let length = Z.of_int (String.length str) in
-      let max = I.of_z Z.zero length in
-      begin match I.meet_bot itv (Bot.Nb max) with
-        | Bot.BOT -> Eval.empty_singleton flow
-        | Bot.Nb itv' ->
-          (* Get the interval of possible chars *)
-          let indexes = I.to_list itv' in
-          let char_at i =
-            let chr =
-              if i = length
-              then Z.zero
-              else str.[Z.to_int i] |> Char.code |> Z.of_int
-            in
-            I.cst chr
-          in
-          let chars = List.fold_left (fun acc i ->
-              char_at i :: acc
-            ) [char_at (List.hd indexes)] (List.tl indexes)
-          in
-          let l,u =
-            match I.join_list chars |> Bot.bot_to_exn with
-            | I.B.Finite l, I.B.Finite u -> l,u
-            | _ -> assert false
-          in
-          if Z.equal l u
-          then Eval.singleton (mk_z l ~typ:(under_type p.etyp) range) flow
-          else Eval.singleton (mk_z_interval l u ~typ:(under_type p.etyp) range) flow
-      end
+      man.eval offset ~zone:(Z_c_scalar,Z_u_num) flow >>$ fun offset flow ->
+      switch [
+        [mk_binop offset O_eq (mk_z length range) range],
+        (fun flow -> Eval.singleton (mk_zero ~typ:(under_type p.etyp) range) flow);
+
+        [mk_in offset (mk_zero range) (mk_z (Z.pred length) range) range],
+        (fun flow ->
+           (* Get the interval of the offset *)
+           let itv = man.ask (mk_int_interval_query offset) flow in
+           (* itv should be included in [0,length-1] *)
+           let max = I.of_z Z.zero (Z.pred length) in
+           begin match I.meet_bot itv (Bot.Nb max) with
+             | Bot.BOT -> Eval.empty_singleton flow
+             | Bot.Nb itv' ->
+               (* Get the interval of possible chars *)
+               let indexes = I.to_list itv' in
+               let char_at i =
+                 let chr = str.[Z.to_int i] |> Char.code |> Z.of_int in
+                 I.cst chr
+               in
+               let chars = List.fold_left (fun acc i ->
+                   char_at i :: acc
+                 ) [char_at (List.hd indexes)] (List.tl indexes)
+               in
+               let l,u =
+                 match I.join_list chars |> Bot.bot_to_exn with
+                 | I.B.Finite l, I.B.Finite u -> l,u
+                 | _ -> assert false
+               in
+               if Z.equal l u
+               then Eval.singleton (mk_z l ~typ:(under_type p.etyp) range) flow
+               else Eval.singleton (mk_z_interval l u ~typ:(under_type p.etyp) range) flow
+           end
+        )
+      ] ~zone:Z_u_num man flow
 
     | _ ->
       Eval.singleton (mk_top (under_type p.etyp) range) flow
