@@ -241,6 +241,7 @@ struct
     | Q_allocated_addresses ->
       let pool = get_env T_cur man flow in
       Some (Pool.elements pool)
+
     | Q_select_allocated_addresses f ->
       let pool = get_env T_cur man flow in
       Some (

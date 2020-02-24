@@ -29,6 +29,7 @@ open Universal.Ast
 open Data_model.Attribute
 open Alarms
 
+
 (*FIXME: can iterators over addresses be renamed? *)
 
 
@@ -584,6 +585,16 @@ struct
                 | _ -> ()
               ) aset ()
           ) cur_v ()
+
+      | Universal.Heap.Recency.Q_alive_addresses ->
+         let cur = get_env T_cur man flow in
+         let aset = AMap.fold (fun _ aset acc ->
+                        ASet.join aset acc) cur ASet.empty in
+         OptionExt.return @@ List.rev @@
+           ASet.fold (fun pyaddr acc -> match pyaddr with
+                                        | Def a -> a :: acc
+                                        | _ -> acc) aset []
+
 
       | _ -> None
 
