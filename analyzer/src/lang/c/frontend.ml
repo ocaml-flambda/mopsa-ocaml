@@ -28,6 +28,7 @@ open Universal.Ast
 open Stubs.Ast
 open Ast
 
+
 let debug fmt = Debug.debug ~channel:"c.frontend" fmt
 
 
@@ -153,10 +154,47 @@ type ctx = {
   (* cache of enum values of the project *)
 }
 
+let input_files : string list ref = ref []
+(** List of input files *)
+
 
 let find_function_in_context ctx (f: C_AST.func) =
   try StringMap.find f.func_unique_name ctx.ctx_fun
   with Not_found -> Exceptions.panic "Could not find function %s in context" f.func_unique_name
+
+
+(* Get the list of system headers encountered during parsing *)
+let get_parsed_system_headers (ctx:Clang_to_C.context) : string list =
+  let is_header f = Filename.extension f = ".h" in
+  let is_system_header f = is_header f && not (List.mem f !input_files) in
+  List.filter is_system_header (Clang_to_C.get_parsed_files ctx)
+
+
+(* Get the list of all stub source files *)
+let get_all_stubs () =
+  let rec iter dir =
+    if not (Sys.is_directory dir) then []
+    else
+      Sys.readdir dir |>
+      Array.fold_left
+        (fun acc f ->
+           let ff = Filename.concat dir f in
+           if Sys.is_directory ff then iter ff @ acc else ff :: acc
+        ) []
+  in
+  iter (Filename.concat (Config.Paths.get_lang_stubs_dir "c" ()) "libc")
+
+
+(* Find the stub of a given header file *)
+let find_stubs_of_header header stubs =
+  let stubs_dir = Filename.concat (Config.Paths.get_lang_stubs_dir "c" ()) "libc" in
+  let stubd_dir_len = String.length stubs_dir in
+  List.filter (fun stub ->
+      let h = Filename.chop_extension stub ^ ".h" in
+      let relative_h = String.sub h stubd_dir_len (String.length h - stubd_dir_len) in
+      let regexp = Str.regexp (".*" ^ relative_h ^ "$") in
+      Str.string_match regexp header 0
+    ) stubs
 
 
 (** {2 Entry point} *)
@@ -175,6 +213,7 @@ let rec parse_program (files: string list) =
   let target = get_target_info (get_default_target_options ()) in
   let ctx = Clang_to_C.create_context "project" target in
   let nb = List.length files in
+  input_files := [];
   ListExt.par_iteri
     !nb_clang_threads
     (fun i file ->
@@ -192,9 +231,12 @@ let rec parse_program (files: string list) =
   }
 
 and parse_db (dbfile: string) ctx : unit =
+  if not (Sys.file_exists dbfile) then panic "file %s not found" dbfile;
+
   let open Clang_parser in
   let open Clang_to_C in
   let open Build_DB in
+
   let db = load_db dbfile in
   let execs = get_executables db in
   let exec =
@@ -214,6 +256,7 @@ and parse_db (dbfile: string) ctx : unit =
   in
   let srcs = get_executable_sources db exec in
   let nb = List.length srcs in
+  input_files := [];
   ListExt.par_iteri
     !nb_clang_threads
     (fun i src ->
@@ -235,6 +278,7 @@ and parse_db (dbfile: string) ctx : unit =
     ) srcs
 
 and parse_file (cmd: string) ?nb (opts: string list) (file: string) enable_cache ignore ctx =
+  if not (Sys.file_exists file) then panic "file %s not found" file;
   Mutex.lock frontend_mutex;
   Mutex.unlock frontend_mutex;
   debug "parsing file %s" file;
@@ -245,19 +289,45 @@ and parse_file (cmd: string) ?nb (opts: string list) (file: string) enable_cache
               !opt_clang @
               opts
   in
+  input_files := file :: !input_files;
   C_parser.parse_file cmd file opts' !opt_warn_all enable_cache ignore ctx
 
 
 and parse_stubs ctx () =
   (** Add Mopsa stubs *)
   parse_file "clang" [] (Config.Paths.resolve_stub "c" "mopsa/mopsa.c") false false ctx;
+  if !opt_without_libc then ()
+  else
+    (** Add stubs of the included headers *)
+    let headers = get_parsed_system_headers ctx in
+    if headers = [] then ()
+    else
+      let module Set = SetExt.StringSet in
+      let all_stubs = get_all_stubs () in
+      let rec iter past wq =
+        if Set.is_empty wq then ()
+        else
+          let h = Set.choose wq in
+          let wq' = Set.remove h wq in
+          if Set.mem h past then
+            iter past wq'
+          else
+            let past' = Set.add h past in
+            (* Get the stubs of the header *)
+            let stubs = find_stubs_of_header h all_stubs in
+            let new_headers = List.fold_left (fun acc stub ->
+                (* Parse the stub and collect new parsed headers *)
+                let before = Clang_to_C.get_parsed_files ctx |> Set.of_list in
+                parse_file "clang" [] stub false false ctx;
+                let after = Clang_to_C.get_parsed_files ctx  |> Set.of_list in
+                Set.diff after before |>
+                Set.union acc
+              ) Set.empty stubs
+            in
+            iter past' (Set.union new_headers wq)
+      in
+      iter Set.empty (Set.of_list headers)
 
-  (** Add stubs of the standard library *)
-  if not !opt_without_libc then
-    parse_file "clang" [] (Config.Paths.resolve_stub "c" "libc/libc.c") false false ctx
-  ;
-
-  ()
 
 
 and from_project prj =
