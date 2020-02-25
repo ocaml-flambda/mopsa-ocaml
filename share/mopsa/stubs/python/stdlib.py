@@ -771,6 +771,8 @@ class tuple_iterator(object):
 
 class slice(object):
     def __new__(self, args): pass
+    @mopsa.type("method_descriptor")
+    def indices(self, length): pass
 
 class NotImplementedType(object): pass
 
