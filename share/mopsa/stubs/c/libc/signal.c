@@ -44,4 +44,4 @@ int sigismember (const sigset_t *__set, int __signo);
 /*$
  * 
  */
-sighandler_t signal (int __sig, __sighandler_t __handler);
+__sighandler_t signal (int __sig, __sighandler_t __handler);
