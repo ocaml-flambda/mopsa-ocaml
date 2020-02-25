@@ -304,29 +304,30 @@ and parse_stubs ctx () =
     else
       let module Set = SetExt.StringSet in
       let all_stubs = get_all_stubs () in
-      let rec iter past wq =
+      let rec iter past_headers past_stubs wq =
         if Set.is_empty wq then ()
         else
           let h = Set.choose wq in
           let wq' = Set.remove h wq in
-          if Set.mem h past then
-            iter past wq'
+          if Set.mem h past_headers then
+            iter past_headers past_stubs wq'
           else
-            let past' = Set.add h past in
             (* Get the stubs of the header *)
             let stubs = find_stubs_of_header h all_stubs in
             let new_headers = List.fold_left (fun acc stub ->
-                (* Parse the stub and collect new parsed headers *)
-                let before = Clang_to_C.get_parsed_files ctx |> Set.of_list in
-                parse_file "clang" [] stub false false ctx;
-                let after = Clang_to_C.get_parsed_files ctx  |> Set.of_list in
-                Set.diff after before |>
-                Set.union acc
+                if Set.mem stub past_stubs then acc
+                else
+                  (* Parse the stub and collect new parsed headers *)
+                  let before = Clang_to_C.get_parsed_files ctx |> Set.of_list in
+                  parse_file "clang" [] stub false false ctx;
+                  let after = Clang_to_C.get_parsed_files ctx  |> Set.of_list in
+                  Set.diff after before |>
+                  Set.union acc
               ) Set.empty stubs
             in
-            iter past' (Set.union new_headers wq)
+            iter (Set.add h past_headers) (Set.union (Set.of_list stubs) past_stubs) (Set.union new_headers wq)
       in
-      iter Set.empty (Set.of_list headers)
+      iter Set.empty Set.empty (Set.of_list headers)
 
 
 
