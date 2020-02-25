@@ -37,7 +37,15 @@ let () = Universal.Heap.Policies.register_option opt_py_range_allocation_policy 
                               | A_py_instance {addr_kind = A_py_class (C_builtin "range", _)}
                                 | A_py_instance {addr_kind = A_py_class (C_builtin "range_iterator", _)} ->
                                     (Universal.Heap.Policies.of_string !opt_py_range_allocation_policy) ak
-                              | _ -> default ak);
+                              | _ -> default ak)
+
+let opt_py_slice_allocation_policy : string ref = ref "all"
+let () = Universal.Heap.Policies.register_option opt_py_slice_allocation_policy name "-py-slice-alloc-pol" "for slice objects"
+           (fun default ak -> match ak with
+                              | A_py_instance {addr_kind = A_py_class (C_builtin "slice", _)} ->
+                                    (Universal.Heap.Policies.of_string !opt_py_slice_allocation_policy) ak
+                              | _ -> default ak)
+
 
 
 module Domain =
@@ -78,8 +86,102 @@ struct
             let intornone = ["int"; "NoneType"] in
             Utils.check_instances_disj f man flow range args
               [intornone; intornone; intornone]
-              (fun _ flow -> allocate_builtin man range flow "slice" (Some exp))
-          )
+              (fun _ flow ->
+                let start, stop, step = match args with a::b::c::[] -> a,b,c | _ -> assert false in
+                man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr ~mode:STRONG (A_py_instance (fst @@ find_builtin "slice")) (tag_range range "alloc_slice")) flow |>
+                Eval.bind (fun eaddr flow ->
+                    let addr = match ekind eaddr with
+                      | E_addr a -> a
+                      | _ -> assert false in
+                    let obj = mk_py_object (addr, None) range in
+                    man.exec ~zone:Zone.Z_py_obj (mk_add eaddr range) flow |>
+                    man.exec ~zone:Zone.Z_py (mk_assign (mk_py_attr obj "start" range) start range) |>
+                    man.exec ~zone:Zone.Z_py (mk_assign (mk_py_attr obj "stop" range) stop range) |>
+                    man.exec ~zone:Zone.Z_py (mk_assign (mk_py_attr obj "step" range) step range) |>
+                    Eval.singleton obj
+                  )
+              )
+        )
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("slice.indices" as f, _))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args
+        ["slice"; "int"]
+        (fun eargs flow ->
+          let slice, length = match eargs with a::b::[] -> a, b | _ -> assert false in
+          (* assumes that _PySlice_GetLongIndices and PySlice_Unpack+PySlice_AdjustIndices carry the same meaning in sliceobject.c *)
+          let py_ssize_t_max (*FIXME. should be sys.maxsize *) = mk_z (Z.of_string "9223372036854775807") ?typ:(Some T_int) range in
+          let py_ssize_t_min = mk_binop (mk_unop O_minus py_ssize_t_max range) O_minus (mk_int 1 ?typ:(Some T_int) range) range in
+          (* fixme: potentiel overflow over int start/stop/step (in new or here?) *)
+          let _step = mk_range_attr_var range "step" T_any in
+          let _start = mk_range_attr_var range "start" T_any in
+          let _stop = mk_range_attr_var range "stop" T_any in
+
+          let step = mk_py_attr slice "step" range in
+          let start = mk_py_attr slice "start" range in
+          let stop = mk_py_attr slice "stop" range in
+
+
+          let zero = mk_int 0 range in
+          let one = mk_int 1 range in
+          let mone = mk_int (-1) range in
+
+          let unpack__step = mk_assign (mk_var _step range) (mk_expr (E_py_if (mk_py_isinstance_builtin step "NoneType" range,
+                                                            one,
+                                                            step)) range) range in
+          let unpack__start = mk_assign (mk_var _start range)
+                             (mk_expr (E_py_if (mk_py_isinstance_builtin start "NoneType" range,
+                                                mk_expr (E_py_if (
+                                                             mk_binop (mk_var _step range) O_lt zero range,
+                                                             py_ssize_t_max,
+                                                             zero)) range,
+                                                start)) range) range in
+          let unpack__stop = mk_assign (mk_var _stop range)
+                               (mk_expr (E_py_if (mk_py_isinstance_builtin stop "NoneType" range,
+                                                  mk_expr (E_py_if (
+                                                               mk_binop (mk_var _step range) O_lt zero range,
+                                                               py_ssize_t_min,
+                                                               py_ssize_t_max
+                                                    )) range,
+                                                  stop)) range) range in
+
+
+          let adjust_st st =
+            mk_if
+              (mk_binop st O_lt zero range)
+              (mk_block
+                 [mk_assign st (mk_binop st O_plus length range) range;
+                  mk_if
+                    (mk_binop st O_lt zero range)
+                    (mk_assign st (mk_expr (E_py_if (mk_binop (mk_var _step range) O_lt zero range,
+                                                     mone,
+                                                     zero)) range) range)
+                    (mk_nop range)
+                    range
+                 ]
+                 range)
+              (mk_if
+                 (mk_binop st O_ge length range)
+                 (mk_assign st (mk_expr (E_py_if (mk_binop (mk_var _step range) O_lt zero range,
+                                                  mk_binop length O_minus one range,
+                                                  length)) range) range)
+                 (mk_nop range)
+                 range) range
+          in
+          let adjust__start = adjust_st (mk_var _start range) in
+          let adjust__stop = adjust_st (mk_var _stop range) in
+
+          man.exec ~zone:Zone.Z_py (mk_block [unpack__step; unpack__start; unpack__stop; adjust__start; adjust__stop] range) flow |>
+            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_tuple [mk_var _start range;
+                                                                            mk_var _stop range;
+                                                                            mk_var _step range]) range) |>
+            Eval.add_cleaners [mk_remove_var _step range;
+                               mk_remove_var _start range;
+                               mk_remove_var _stop range]
+
+        )
+      |> OptionExt.return
+
+
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range.__new__", _))}, _)} as call, cls :: [up], []) ->
       let args' = (mk_constant T_int (C_int (Z.of_int 0)) range)::up::(mk_constant T_int (C_int (Z.of_int 1)) range)::[] in

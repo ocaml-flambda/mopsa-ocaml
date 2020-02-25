@@ -164,17 +164,17 @@ struct
 
       let addr_list = mk_alloc_addr A_py_list range in
       man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_list flow |>
-      Eval.bind (fun eaddr_list flow ->
-          let addr_list = addr_of_expr eaddr_list in
-          let els_var = var_of_addr addr_list in
-          (* let flow = man.exec (mk_add_var els_var range) flow in *)
-          let flow = List.fold_left (fun acc el ->
-              let stmt = mk_assign (mk_var els_var range) el range in
-              (* debug "fold_left %a@\n" pp_stmt stmt; *)
-              man.exec ~zone:Zone.Z_py stmt acc) flow ls in
-          man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (mk_var (length_var_of_addr addr_list) range) (mk_int (List.length ls) ~typ:T_int range) range) flow |>
-          Eval.singleton (mk_py_object (addr_list, None) range)
-        )
+        Eval.bind (fun eaddr_list flow ->
+            let addr_list = addr_of_expr eaddr_list in
+            let els_var = var_of_addr addr_list in
+            (* let flow = man.exec (mk_add_var els_var range) flow in *)
+            let flow = List.fold_left (fun acc el ->
+                           let stmt = mk_assign (mk_var els_var range) el range in
+                           (* debug "fold_left %a@\n" pp_stmt stmt; *)
+                           man.exec ~zone:Zone.Z_py stmt acc) flow ls in
+            man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (mk_var (length_var_of_addr addr_list) range) (mk_int (List.length ls) ~typ:T_int range) range) flow |>
+              Eval.singleton (mk_py_object (addr_list, None) range)
+          )
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.__getitem__", _))}, _)}, args, []) ->
@@ -208,6 +208,7 @@ struct
                  ~felse:(fun flow ->
                    assume (mk_py_isinstance_builtin index "slice" range) man flow
                      ~fthen:(fun flow ->
+                       debug "slice!";
                        let addr_list = mk_alloc_addr A_py_list range in
                        man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_list flow |>
                          Eval.bind (fun eaddr_list flow ->
@@ -215,11 +216,86 @@ struct
                              let slicedlist_var = var_of_addr addr_list in
                              man.eval list ~zone:(Zone.Z_py, Zone.Z_py_obj) flow |>
                                Eval.bind (fun list flow ->
-                                   let var_els = var_of_eobj list in
-                                   flow |>
-                                     man.exec ~zone:Zone.Z_py (mk_assign (mk_var slicedlist_var range) (mk_var var_els range) range) |>
-                                     man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (mk_var (length_var_of_addr addr_list) range) (mk_py_top T_int range) range) |>
-                                     Eval.singleton (mk_py_object (addr_list, None) range)
+                                   man.eval (mk_py_call (mk_py_attr index "indices" range) [mk_py_call (mk_py_attr list "__len__" range) [] range] range) ~zone:(Zone.Z_py, Zone.Z_py_obj) flow |>
+                                     Eval.bind (fun tuple_indices flow ->
+                                         let get_nth n =
+                                           mk_py_call (mk_py_attr tuple_indices "__getitem__" range) [mk_int n range] range in
+                                          Cases.bind_list [get_nth 0; get_nth 1; get_nth 2] (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+                                           Cases.bind_some (fun sss flow ->
+                                                 let start, stop, step = match List.map Utils.extract_oobject sss with
+                                                   | [a;b;c] -> a, b, c
+                                                   | _ -> assert false in
+                                                 let var_els = var_of_eobj list in
+                                                 let new_length = mk_var (length_var_of_addr addr_list) range in
+                                                 flow |>
+                                                   man.exec ~zone:Zone.Z_py (mk_assign (mk_var slicedlist_var range) (mk_var var_els range) range) |>
+                                                   switch
+                                                     [
+                                                       [
+                                                         mk_binop ~etyp:T_int step O_lt (mk_zero ~typ:T_int range) range;
+                                                         mk_binop ~etyp:T_int stop O_lt start range
+                                                       ],
+                                                       (fun flow -> Post.return @@ man.exec ~zone:Universal.Zone.Z_u_int
+                                                          (mk_assign new_length (mk_binop ~etyp:T_int
+                                                                                   (
+                                                                                     mk_binop ~etyp:T_int
+                                                                                       (mk_binop ~etyp:T_int
+                                                                                          start
+                                                                                          O_minus
+                                                                                          (mk_binop ~etyp:T_int stop O_plus (mk_one ~typ:T_int range) range)
+                                                                                          range)
+                                                                                       O_div
+                                                                                       (mk_unop O_minus ~etyp:T_int step range)
+                                                                                       range
+                                                                                   )
+                                                                                   O_plus
+                                                                                   (mk_one ~typ:T_int range)
+                                                                                   range
+                                                             ) range) flow);
+
+                                                       [
+                                                         mk_not (mk_binop ~etyp:T_int step O_lt (mk_zero ~typ:T_int range) range) range;
+                                                         mk_binop ~etyp:T_int start O_lt stop range
+                                                       ],
+                                                       (fun flow -> Post.return @@ man.exec ~zone:Universal.Zone.Z_u_int
+                                                          (mk_assign new_length (mk_binop ~etyp:T_int
+                                                                                   (
+                                                                                     mk_binop ~etyp:T_int
+                                                                                       (mk_binop ~etyp:T_int
+                                                                                          stop
+                                                                                          O_minus
+                                                                                          (mk_binop ~etyp:T_int
+                                                                                             start
+                                                                                             O_plus
+                                                                                             (mk_one ~typ:T_int range)
+                                                                                             range)
+                                                                                          range)
+                                                                                       O_div
+                                                                                       step
+                                                                                       range
+                                                                                   )
+                                                                                   O_plus
+                                                                                   (mk_one ~typ:T_int range)
+                                                                                   range)
+                                                             range) flow
+                                                       );
+
+                                                       [mk_binop
+                                                          (mk_binop (mk_binop ~etyp:T_int step O_lt (mk_zero ~typ:T_int range) range) O_log_and (mk_not (mk_binop ~etyp:T_int stop O_lt start range) range) range)
+                                                          O_log_or
+                                                          (mk_binop (mk_not (mk_binop ~etyp:T_int step O_lt (mk_zero ~typ:T_int range) range) range) O_log_and (mk_not (mk_binop ~etyp:T_int start O_lt stop range) range) range)
+                                                          range
+                                                       ],
+                                                       (fun flow -> Post.return @@ man.exec ~zone:Universal.Zone.Z_u_int
+                                                           (mk_assign new_length (mk_zero ~typ:T_int range) range) flow
+                                                       )
+                                                     ]
+                                                     ~zone:Universal.Zone.Z_u_int man
+                                                     >>$ fun () flow ->
+                                                   (* man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (mk_var (length_var_of_addr addr_list) range) (mk_py_top T_int range) range) |> *)
+                                                   Eval.singleton (mk_py_object (addr_list, None) range) flow
+                                             )
+                                       )
                                  )
                            )
                      )
