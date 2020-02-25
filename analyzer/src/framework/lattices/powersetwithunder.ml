@@ -33,7 +33,7 @@ end
 module Make(Elt: ELT) =
 struct
 
-  module Set = Set.Make(Elt)
+  module Set = SetExt.Make(Elt)
   module USet = Make(Elt)
 
   (* Lower approximation *)
@@ -104,18 +104,22 @@ struct
 
   open Format
   let print fmt (su:t) =
-    bot_fprint (fun fmt (l, u) ->
-        let l = Set.elements l in
-        fprintf fmt "@[<h>{";
-        if l = [] then fprintf fmt "∅"
+    bot_fprint (fun fmt (l, u) (* lower, upper *) ->
+        let le = Set.elements l in
+        fprintf fmt "@[<h>{U=";
+        if le = [] then fprintf fmt "∅"
         else
           fprintf fmt "@[<h>{%a}@]"
             (pp_print_list
                ~pp_sep:(fun fmt () -> fprintf fmt ",@ ")
                Elt.print
-            ) l
+            ) le
         ;
-        fprintf fmt ", %a}@]"
-          USet.print u) fmt su
+        let ud = USet.diff u (Nt l) in
+        if USet.cardinal ud = 0 then
+          fprintf fmt ", O=U}@]"
+        else
+          fprintf fmt ", O=U ∪ %a}@]"
+            USet.print ud) fmt su
 
 end
