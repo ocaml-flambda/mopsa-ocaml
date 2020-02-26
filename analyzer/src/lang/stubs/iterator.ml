@@ -28,6 +28,8 @@ open Ast
 open Zone
 open Alarms
 
+
+
 module Domain =
 struct
 
@@ -45,15 +47,36 @@ struct
 
   let alarms = []
 
+
   (** Initialization of environments *)
   (** ============================== *)
 
   let init prog man flow = flow
 
 
+  (** {2 Command-line options} *)
+  (** ************************ *)
+
+  let opt_stub_ignored_cases : string list ref = ref []
+  (** List of ignored stub cases *)
+
+  let () = register_builtin_option {
+      key      = "-stub-ignore-case";
+      doc      = " list of stub cases to ignore";
+      category = "Stubs";
+      spec     = ArgExt.Set_string_list opt_stub_ignored_cases;
+      default  = "";
+    }
+
+  (** Check whether a case is ignored *)
+  let is_case_ignored stub case : bool =
+    match stub with
+    | None -> false
+    | Some s -> List.mem (s.stub_func_name ^ "." ^ case.case_label) !opt_stub_ignored_cases
+
+
   (** Evaluation of expressions *)
   (** ========================= *)
-
 
   (** Negate a formula *)
   let rec negate_formula (f:formula with_range) : formula with_range =
@@ -136,7 +159,7 @@ struct
       (man:('a, unit) man)
       (flow:'a flow)
     : 'a flow =
-    debug "@[<v 2>eval formula %a@;in %a" pp_formula f (Flow.print man.lattice.print) flow;
+    (* debug "@[<v 2>eval formula %a@;in %a" pp_formula f (Flow.print man.lattice.print) flow; *)
     match f.content with
     | F_expr e ->
       man.exec (cond_to_stmt e f.range) flow
@@ -329,7 +352,6 @@ struct
 
   (** Execute the body of a case section *)
   let exec_case case return man flow =
-    (* Execute leaf sections *)
     List.fold_left (fun acc leaf ->
         exec_leaf leaf return man acc
       ) flow case.case_body |>
@@ -339,7 +361,7 @@ struct
 
 
   (** Execute the body of a stub *)
-  let exec_body body return man flow =
+  let exec_body ?(stub=None) body return man flow =
     (* Execute leaf sections *)
     let flow = List.fold_left (fun flow section ->
         match section with
@@ -351,7 +373,7 @@ struct
     (* Execute case sections separately *)
     let flows, ctx = List.fold_left (fun (acc,ctx) section ->
         match section with
-        | S_case case ->
+        | S_case case when not (is_case_ignored stub case) ->
           let flow = Flow.set_ctx ctx flow in
           let flow' = exec_case case return man flow in
           flow':: acc, Flow.get_ctx flow'
@@ -410,7 +432,7 @@ struct
       in
 
       (* Evaluate the body of the stb *)
-      let flow = exec_body stub.stub_func_body return man flow in
+      let flow = exec_body ~stub:(Some stub) stub.stub_func_body return man flow in
 
       (* Clean locals *)
       let flow = clean_post stub.stub_func_locals stub.stub_func_range man flow in

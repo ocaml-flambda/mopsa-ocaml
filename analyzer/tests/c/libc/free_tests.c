@@ -1,3 +1,5 @@
+#include <stdlib.h>
+
 /*
  * Tests of the free function
  */

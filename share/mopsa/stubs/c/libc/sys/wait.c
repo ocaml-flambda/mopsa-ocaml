@@ -19,35 +19,36 @@
 /*                                                                          */
 /****************************************************************************/
 
-/*
- * Entry point of the libc
+#include <sys/wait.h>
+#include <sys/time.h>
+#include <sys/resource.h>
+
+// FIXME: wait3 before glibc 2.24 is not yet supported due to the union-type parameter of __stat_loc
+#if __GLIBC_MINOR__ >= 24
+
+/*$
+ * assigns: _errno;
+ * assigns: *__usage;
+ * assigns: *__stat_loc;
+ *
+ * ensures: return >= -1;
+ * ensures: (__stat_loc != NULL) implies ((*__stat_loc)' in [0,255]); // FIXME: is this sound?
+ *
+ * ensures: 
+ *   (__usage != NULL) implies (
+ *         (__usage->ru_utime.tv_sec)'  in [0, 2000000000] // 30 years :)
+ *     and (__usage->ru_utime.tv_usec)' in [0, 1000000]
+ *     and (__usage->ru_stime.tv_sec)'  in [0, 2000000000]
+ *     and (__usage->ru_stime.tv_usec)' in [0, 1000000]
+ *     and (__usage->ru_maxrss)' >= 0
+ *     and (__usage->ru_minflt)' >= 0
+ *     and (__usage->ru_majflt)' >= 0
+ *     and (__usage->ru_inblock)' >= 0
+ *     and (__usage->ru_oublock)' >= 0
+ *     and (__usage->ru_nvcsw)' >= 0
+ *     and (__usage->ru_nivcsw)' >= 0
+ *   );
  */
+pid_t wait3 (int *__stat_loc, int __options, struct rusage * __usage);
 
-#include "errno.c"
-#include "assert.c"
-#include "stdio.c"
-#include "stdio_ext.c"
-#include "stdlib.c"
-#include "unistd.c"
-#include "string.c"
-#include "getopt.c"
-#include "locale.c"
-#include "libintl.c"
-#include "utmp.c"
-#include "utmpx.c"
-#include "signal.c"
-#include "error.c"
-#include "builtins.c"
-#include "sys/socket.c"
-#include "arpa/inet.c"
-#include "netinet/in.c"
-#include "fcntl.c"
-#include "inttypes.c"
-#include "langinfo.c"
-#include "time.c"
-#include "pwd.c"
-#include "sys/resource.c"
-#include "sys/utsname.c"
-
-/* TODO: include math library only when -lm is used */
-#include "math.c"
+#endif // __GLIBC_MINOR__ >= 24

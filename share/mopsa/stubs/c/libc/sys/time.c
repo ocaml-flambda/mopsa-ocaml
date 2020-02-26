@@ -19,30 +19,24 @@
 /*                                                                          */
 /****************************************************************************/
 
-#include <time.h>
-#include <errno.h>
-#include "mopsa_libc_utils.h"
+#include <sys/time.h>
+
+long int _last_time;
+
+/*$$$
+ * assigns: _last_time;
+ * ensures: _last_time' in [0, 2000000000]; // we are somewhere between 1970 and 2030
+ */
 
 /*$
- * requires: valid_ptr(__requested_time);
- *
- * case "success" {
- *   ensures: return == 0;
- * }
- *
- * case "interrupted-with-remaining" {
- *   assumes: __remaining != NULL;
- *   assigns: __remaining;
- *   assigns: _errno;
- *   ensures: _errno' == EINTR;
- *   ensures: return == -1;
- * }
- *
- * case "interrupted-without-remaining" {
- *   assumes: __remaining == NULL;
- *   assigns: _errno;
- *   ensures: return == -1;
- * }
+ * requires: __tz == NULL;
+ * requires: valid_ptr(__tv);
+ * assigns: _last_time;
+ * assigns: __tv->tv_sec;
+ * assigns: __tv->tv_usec;
+ * ensures: _last_time' in [_last_time + 1, 2000000000];
+ * ensures: (__tv->tv_sec)' == _last_time';
+ * ensures: (__tv->tv_usec)' in [0, 1000000];
+ * ensures: return == 0;
  */
-int nanosleep (const struct timespec *__requested_time,
-		      struct timespec *__remaining);
+int gettimeofday (struct timeval *__restrict __tv, __timezone_ptr_t __tz);

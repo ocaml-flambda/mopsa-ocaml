@@ -78,7 +78,12 @@ struct
   (** [is_char_deref lval] checks whether [lval] is a dereference of a char pointer *)
   let is_char_deref lval =
     match remove_casts lval |> ekind with
-    | E_c_deref p -> Z.(sizeof_type (under_type p.etyp |> void_to_char) = one)
+    | E_c_deref p ->
+      begin match under_type p.etyp |> remove_qual with
+        | T_c_void -> true
+        | T_c_integer (C_signed_char | C_unsigned_char) -> true
+        | _ -> false
+      end
     | _ -> false
 
 
@@ -242,8 +247,8 @@ struct
     assume_quantified_op_zero op str offset range man flow
 
 
-  (** Test first if n == 0, and then call assume_zero to do the work *)
-  let assume_not_sure_quantified_zero op lval n range man flow =
+  (** Abstract transformer for tests *(lval + ∀offset) op n *)
+  let assume_quantified op lval n range man flow =
     extract_string_base lval range man flow >>$ fun (str,offset) flow ->
     match c_expr_to_z offset with
     | Some n when Z.(n != zero) -> Post.return flow
@@ -255,20 +260,43 @@ struct
         ~zone:Z_c_low_level man flow
 
 
+  (** Abstract transformer for tests *(p + i) == n *)
+  let assume_eq_const (lval:expr) (n:Z.t) range man flow =
+    extract_string_base lval range man flow >>$ fun (str,offset) flow ->
+    let len = String.length str in
+    (* When n = 0, require that offset = len(str) *)
+    if Z.(n = zero) then
+      man.post (mk_assume (mk_binop offset O_eq (mk_int len range) range) range) ~zone:Z_c_scalar flow
+    else
+      (* Search for the first and last positions of `n` in `str` *)
+      let c = Z.to_int n |> Char.chr in
+      if not (String.contains str c) then
+        Post.return (Flow.bottom_from flow)
+      else
+        let l = String.index str c in
+        let u = String.rindex str c in
+        let pos =
+          if l = u then mk_int l range
+          else mk_int_interval l u range
+        in
+        (* Require that offset is equal to pos *)
+        man.post (mk_assume (mk_binop offset O_eq pos range) range) ~zone:Z_c_scalar flow
+
+
   (** Transformers entry point *)
   let exec zone stmt man flow =
     match skind stmt with
-    (* 𝕊⟦ *(p + i) == 0 ⟧ *)
+    (* 𝕊⟦ *(p + ∀i) == 0 ⟧ *)
     | S_assume({ ekind = E_binop(O_eq, lval, n)})
     | S_assume({ ekind = E_unop(O_log_not, { ekind = E_binop(O_ne, lval, n)} )})
       when is_char_deref lval &&
            is_lval_offset_forall_quantified lval &&
            not (is_expr_forall_quantified n)
       ->
-      assume_not_sure_quantified_zero O_eq lval n stmt.srange man flow |>
+      assume_quantified O_eq lval n stmt.srange man flow |>
       OptionExt.return
 
-    (* 𝕊⟦ !*(p + i) ⟧ *)
+    (* 𝕊⟦ !*(p + ∀i) ⟧ *)
     | S_assume({ ekind = E_unop(O_log_not,lval)})
       when is_char_deref lval &&
            is_lval_offset_forall_quantified lval
@@ -276,17 +304,17 @@ struct
       assume_quantified_zero O_eq lval stmt.srange man flow |>
       OptionExt.return
 
-    (* 𝕊⟦ *(p + i) != 0 ⟧ *)
+    (* 𝕊⟦ *(p + ∀i) != 0 ⟧ *)
     | S_assume({ ekind = E_binop(O_ne, lval, n)})
     | S_assume({ ekind = E_unop(O_log_not, { ekind = E_binop(O_eq, lval, n)} )})
       when is_char_deref lval &&
            is_lval_offset_forall_quantified lval &&
            not (is_expr_forall_quantified n)
       ->
-      assume_not_sure_quantified_zero O_ne lval n stmt.srange man flow |>
+      assume_quantified O_ne lval n stmt.srange man flow |>
       OptionExt.return
 
-    (* 𝕊⟦ *(p + i) ⟧ *)
+    (* 𝕊⟦ *(p + ∀i) ⟧ *)
     | S_assume(lval)
       when is_char_deref lval &&
            is_lval_offset_forall_quantified lval
@@ -294,6 +322,16 @@ struct
       assume_quantified_zero O_ne lval stmt.srange man flow |>
       OptionExt.return
 
+    (* 𝕊⟦ *(p + i) == n ⟧ *)
+    | S_assume({ ekind = E_binop(O_eq, lval, n)})
+    | S_assume({ ekind = E_unop(O_log_not, { ekind = E_binop(O_ne, lval, n)} )})
+      when is_char_deref lval &&
+           not (is_expr_forall_quantified lval) &&
+           not (is_expr_forall_quantified n) &&
+           is_c_constant n
+      ->
+      assume_eq_const lval (c_expr_to_z n |> Option.get) stmt.srange man flow |>
+      OptionExt.return
 
     | _ -> None
 
@@ -306,38 +344,42 @@ struct
     man.eval p ~zone:(Z_c_low_level, Z_c_points_to) flow >>$ fun pt flow ->
     match ekind pt with
     | E_c_points_to (P_block ({ base_kind = String str }, offset, mode)) ->
-      (* Get the interval of the offset *)
-      man.eval offset ~zone:(Z_c_scalar,Z_u_num) flow >>$ fun offset flow ->
-      let itv = man.ask (mk_int_interval_query offset) flow in
-      (* Maximal interval, to keep itv bounded *)
       let length = Z.of_int (String.length str) in
-      let max = I.of_z Z.zero length in
-      begin match I.meet_bot itv (Bot.Nb max) with
-        | Bot.BOT -> Eval.empty_singleton flow
-        | Bot.Nb itv' ->
-          (* Get the interval of possible chars *)
-          let indexes = I.to_list itv' in
-          let char_at i =
-            let chr =
-              if i = length
-              then Z.zero
-              else str.[Z.to_int i] |> Char.code |> Z.of_int
-            in
-            I.cst chr
-          in
-          let chars = List.fold_left (fun acc i ->
-              char_at i :: acc
-            ) [char_at (List.hd indexes)] (List.tl indexes)
-          in
-          let l,u =
-            match I.join_list chars |> Bot.bot_to_exn with
-            | I.B.Finite l, I.B.Finite u -> l,u
-            | _ -> assert false
-          in
-          if Z.equal l u
-          then Eval.singleton (mk_z l ~typ:(under_type p.etyp) range) flow
-          else Eval.singleton (mk_z_interval l u ~typ:(under_type p.etyp) range) flow
-      end
+      man.eval offset ~zone:(Z_c_scalar,Z_u_num) flow >>$ fun offset flow ->
+      switch [
+        [mk_binop offset O_eq (mk_z length range) range],
+        (fun flow -> Eval.singleton (mk_zero ~typ:(under_type p.etyp) range) flow);
+
+        [mk_in offset (mk_zero range) (mk_z (Z.pred length) range) range],
+        (fun flow ->
+           (* Get the interval of the offset *)
+           let itv = man.ask (mk_int_interval_query offset) flow in
+           (* itv should be included in [0,length-1] *)
+           let max = I.of_z Z.zero (Z.pred length) in
+           begin match I.meet_bot itv (Bot.Nb max) with
+             | Bot.BOT -> Eval.empty_singleton flow
+             | Bot.Nb itv' ->
+               (* Get the interval of possible chars *)
+               let indexes = I.to_list itv' in
+               let char_at i =
+                 let chr = str.[Z.to_int i] |> Char.code |> Z.of_int in
+                 I.cst chr
+               in
+               let chars = List.fold_left (fun acc i ->
+                   char_at i :: acc
+                 ) [char_at (List.hd indexes)] (List.tl indexes)
+               in
+               let l,u =
+                 match I.join_list chars |> Bot.bot_to_exn with
+                 | I.B.Finite l, I.B.Finite u -> l,u
+                 | _ -> assert false
+               in
+               if Z.equal l u
+               then Eval.singleton (mk_z l ~typ:(under_type p.etyp) range) flow
+               else Eval.singleton (mk_z_interval l u ~typ:(under_type p.etyp) range) flow
+           end
+        )
+      ] ~zone:Z_u_num man flow
 
     | _ ->
       Eval.singleton (mk_top (under_type p.etyp) range) flow
