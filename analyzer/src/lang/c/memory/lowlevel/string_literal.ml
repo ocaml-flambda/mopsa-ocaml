@@ -78,7 +78,12 @@ struct
   (** [is_char_deref lval] checks whether [lval] is a dereference of a char pointer *)
   let is_char_deref lval =
     match remove_casts lval |> ekind with
-    | E_c_deref p -> Z.(sizeof_type (under_type p.etyp |> void_to_char) = one)
+    | E_c_deref p ->
+      begin match under_type p.etyp |> remove_qual with
+        | T_c_void -> true
+        | T_c_integer (C_signed_char | C_unsigned_char) -> true
+        | _ -> false
+      end
     | _ -> false
 
 
@@ -242,8 +247,8 @@ struct
     assume_quantified_op_zero op str offset range man flow
 
 
-  (** Test first if n == 0, and then call assume_zero to do the work *)
-  let assume_not_sure_quantified_zero op lval n range man flow =
+  (** Abstract transformer for tests *(lval + ∀offset) op n *)
+  let assume_quantified op lval n range man flow =
     extract_string_base lval range man flow >>$ fun (str,offset) flow ->
     match c_expr_to_z offset with
     | Some n when Z.(n != zero) -> Post.return flow
@@ -255,20 +260,43 @@ struct
         ~zone:Z_c_low_level man flow
 
 
+  (** Abstract transformer for tests *(p + i) == n *)
+  let assume_eq_const (lval:expr) (n:Z.t) range man flow =
+    extract_string_base lval range man flow >>$ fun (str,offset) flow ->
+    let len = String.length str in
+    (* When n = 0, require that offset = len(str) *)
+    if Z.(n = zero) then
+      man.post (mk_assume (mk_binop offset O_eq (mk_int len range) range) range) ~zone:Z_c_scalar flow
+    else
+      (* Search for the first and last positions of `n` in `str` *)
+      let c = Z.to_int n |> Char.chr in
+      if not (String.contains str c) then
+        Post.return (Flow.bottom_from flow)
+      else
+        let l = String.index str c in
+        let u = String.rindex str c in
+        let pos =
+          if l = u then mk_int l range
+          else mk_int_interval l u range
+        in
+        (* Require that offset is equal to pos *)
+        man.post (mk_assume (mk_binop offset O_eq pos range) range) ~zone:Z_c_scalar flow
+
+
   (** Transformers entry point *)
   let exec zone stmt man flow =
     match skind stmt with
-    (* 𝕊⟦ *(p + i) == 0 ⟧ *)
+    (* 𝕊⟦ *(p + ∀i) == 0 ⟧ *)
     | S_assume({ ekind = E_binop(O_eq, lval, n)})
     | S_assume({ ekind = E_unop(O_log_not, { ekind = E_binop(O_ne, lval, n)} )})
       when is_char_deref lval &&
            is_lval_offset_forall_quantified lval &&
            not (is_expr_forall_quantified n)
       ->
-      assume_not_sure_quantified_zero O_eq lval n stmt.srange man flow |>
+      assume_quantified O_eq lval n stmt.srange man flow |>
       OptionExt.return
 
-    (* 𝕊⟦ !*(p + i) ⟧ *)
+    (* 𝕊⟦ !*(p + ∀i) ⟧ *)
     | S_assume({ ekind = E_unop(O_log_not,lval)})
       when is_char_deref lval &&
            is_lval_offset_forall_quantified lval
@@ -276,17 +304,17 @@ struct
       assume_quantified_zero O_eq lval stmt.srange man flow |>
       OptionExt.return
 
-    (* 𝕊⟦ *(p + i) != 0 ⟧ *)
+    (* 𝕊⟦ *(p + ∀i) != 0 ⟧ *)
     | S_assume({ ekind = E_binop(O_ne, lval, n)})
     | S_assume({ ekind = E_unop(O_log_not, { ekind = E_binop(O_eq, lval, n)} )})
       when is_char_deref lval &&
            is_lval_offset_forall_quantified lval &&
            not (is_expr_forall_quantified n)
       ->
-      assume_not_sure_quantified_zero O_ne lval n stmt.srange man flow |>
+      assume_quantified O_ne lval n stmt.srange man flow |>
       OptionExt.return
 
-    (* 𝕊⟦ *(p + i) ⟧ *)
+    (* 𝕊⟦ *(p + ∀i) ⟧ *)
     | S_assume(lval)
       when is_char_deref lval &&
            is_lval_offset_forall_quantified lval
@@ -294,6 +322,16 @@ struct
       assume_quantified_zero O_ne lval stmt.srange man flow |>
       OptionExt.return
 
+    (* 𝕊⟦ *(p + i) == n ⟧ *)
+    | S_assume({ ekind = E_binop(O_eq, lval, n)})
+    | S_assume({ ekind = E_unop(O_log_not, { ekind = E_binop(O_ne, lval, n)} )})
+      when is_char_deref lval &&
+           not (is_expr_forall_quantified lval) &&
+           not (is_expr_forall_quantified n) &&
+           is_c_constant n
+      ->
+      assume_eq_const lval (c_expr_to_z n |> Option.get) stmt.srange man flow |>
+      OptionExt.return
 
     | _ -> None
 
