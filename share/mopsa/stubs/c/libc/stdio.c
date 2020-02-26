@@ -463,10 +463,10 @@ int getchar (void);
 
 /*$
  * // TODO: not thread-safe
- * requires: __fp in File;
+ * requires: __stream in File;
  * ensures: return in [0, 127] or return == EOF;
  */
-int getc_unlocked (FILE *__fp);
+int getc_unlocked (FILE *__stream);
 
 /*$
  * // TODO: not thread-safe
@@ -477,10 +477,10 @@ int getchar_unlocked (void);
 
 /*$
  * // TODO: not thread-safe
- * requires: __fp in File;
+ * requires: __stream in File;
  * ensures: return in [0, 127] or return == EOF;
  */
-int fgetc_unlocked (FILE *__fp);
+int fgetc_unlocked (FILE *__stream);
 
 
 /*$
