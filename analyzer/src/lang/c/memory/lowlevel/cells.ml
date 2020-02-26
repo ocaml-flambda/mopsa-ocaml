@@ -549,26 +549,8 @@ struct
             else
               raise NotPossible
           with
-          | NotPossible ->
-            match c.base.base_kind with
-            | String s ->
-              let len = String.length s in
-              if Z.equal c.offset (Z.of_int len) then
-                Some (mk_zero range)
-              else
-                Some (mk_int (String.get s (Z.to_int c.offset) |> int_of_char) range)
+          | NotPossible -> None
 
-            | _ ->
-              if is_int_cell c then
-                let a,b = rangeof_int_cell c in
-                Some (mk_z_interval a b range)
-              else if is_float_cell c then
-                let prec = get_c_float_precision (cell_type c) in
-                Some (mk_top (T_float prec) range)
-              else if is_pointer_cell c then
-                panic_at range ~loc:__LOC__ "phi called on a pointer cell %a" pp_cell c
-              else
-                None
 
   (** Add a cell in the underlying domain using the simplified manager *)
   let add_cell_simplified c a range man ctx s =
