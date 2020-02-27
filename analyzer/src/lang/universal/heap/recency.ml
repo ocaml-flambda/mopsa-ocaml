@@ -29,10 +29,19 @@ open Ast
 open Zone
 (* open Policies *)
 
+module Pool = Framework.Lattices.Powerset.Make(
+                  struct
+                    type t = addr
+                    let compare = compare_addr
+                    let print = pp_addr
+                  end
+                )
+
 type _ query +=
   | Q_allocated_addresses : addr list query
   | Q_select_allocated_addresses : (addr -> bool) -> addr list query
   | Q_alive_addresses : addr list query
+  | Q_alive_addresses_aspset : Pool.t query
 
 let () =
   register_query {
@@ -45,6 +54,7 @@ let () =
             (* is that ok? *)
              a @ b
           | Q_alive_addresses -> List.sort_uniq compare_addr (a @ b)
+          | Q_alive_addresses_aspset -> Pool.join a b
           | _ -> next.join_query query a b
       in f
     );
@@ -58,6 +68,7 @@ let () =
             (* is that ok? *)
              assert false
           | Q_alive_addresses -> assert false
+          | Q_alive_addresses_aspset -> Pool.meet a b
           | _ -> next.meet_query query a b
       in f
     );
@@ -72,20 +83,34 @@ let () = Policies.register_option opt_default_allocation_policy name "-default-a
 (** {2 Domain definition} *)
 (** ===================== *)
 
+type stmt_kind +=
+   | S_perform_gc
+
+let () =
+  register_stmt_with_visitor {
+      compare = (fun next s1 s2 ->
+        match skind s1, skind s2 with
+        | _ -> next s1 s2);
+
+      print = (fun default fmt stmt ->
+        match skind stmt with
+        | S_perform_gc -> Format.fprintf fmt "Abstract GC call"
+        | _ -> default fmt stmt);
+
+      visit = (fun default stmt ->
+        match skind stmt with
+        | S_perform_gc -> leaf stmt
+        | _ -> default stmt);
+    }
+
+
+
 module Domain =
 struct
 
 
   (** Domain header *)
   (** ============= *)
-
-  module Pool = Framework.Lattices.Powerset.Make(
-    struct
-      type t = addr
-      let compare = compare_addr
-      let print = pp_addr
-    end
-    )
 
   type t = Pool.t
 
@@ -153,7 +178,7 @@ struct
   (** ================= *)
 
   let interface = {
-    iexec = {provides = [Z_u_heap]; uses = []};
+    iexec = {provides = [Z_u_heap]; uses = [Z_any]};
     ieval = {provides = [Z_u_heap, Z_any]; uses = []};
   }
 
@@ -168,6 +193,7 @@ struct
   (** *************** *)
 
   let exec zone stmt man flow =
+    let range = srange stmt in
     match skind stmt with
     (* 𝕊⟦ free(addr); ⟧ *)
     | S_free_addr addr ->
@@ -179,6 +205,17 @@ struct
       man.exec stmt' flow' |>
       Post.return |>
       OptionExt.return
+
+    | S_perform_gc ->
+       let all = get_env T_cur man flow in
+       let alive = man.ask Q_alive_addresses_aspset flow in
+       let dead = Pool.diff all alive in
+       debug "|dead| = %d@.dead = %a" (Pool.cardinal dead) Pool.print dead;
+       let trange = tag_range range "agc" in
+       let flow = set_env T_cur alive man flow in
+       Pool.fold (fun addr flow ->
+           man.exec (mk_remove (mk_addr addr trange) trange) flow) dead flow
+       |> Post.return |> OptionExt.return
 
     | _ -> None
 
@@ -254,7 +291,6 @@ struct
   let refine channel man flow = Channel.return flow
 
 end
-
 
 
 let () =

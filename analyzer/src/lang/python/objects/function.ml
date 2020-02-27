@@ -28,6 +28,8 @@ open Addr
 open Universal.Ast
 open Data_container_utils
 
+let name = "python.objects.function"
+
 type addr_kind +=
   | A_py_staticmethod
   | A_py_classmethod
@@ -60,11 +62,21 @@ let () = Universal.Heap.Policies.register_mk_addr (fun default ak ->
              | A_py_staticmethod | A_py_classmethod -> Universal.Heap.Policies.mk_addr_range ak
              | _ -> default ak)
 
+let opt_gc_after_functioncall = ref false
+let () =
+  register_domain_option name {
+      key = "-gc";
+      category = "Python";
+      doc = " perform abstract garbage collection after function calls";
+      spec = ArgExt.Set opt_gc_after_functioncall;
+      default = "";
+    }
+
 module Domain =
   struct
 
     include GenStatelessDomainId(struct
-        let name = "python.objects.function"
+        let name = name
       end)
 
     let interface = {
@@ -349,7 +361,14 @@ module Domain =
                 } in
 
                 man.eval (mk_call fundec args exp.erange) flow |>
-                Eval.bind (man.eval)
+                  Eval.bind (fun res flow ->
+                      begin
+                        if !opt_gc_after_functioncall then
+                          man.exec (mk_stmt Universal.Heap.Recency.S_perform_gc range) flow
+                        else
+                          flow
+                      end |>
+                        man.eval res)
               )
           )
       (* 𝔼⟦ f() | isinstance(f, method) ⟧ *)

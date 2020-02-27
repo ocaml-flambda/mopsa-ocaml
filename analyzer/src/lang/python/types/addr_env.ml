@@ -87,7 +87,6 @@ let () =
   }
 
 
-(* FIXME: I'm pretty sure this is going to fail as builtins won't be registered at this point *)
 let addr_none () = {addr_group = G_all; addr_kind = A_py_instance (fst @@ find_builtin "NoneType"); addr_mode = STRONG}
 let addr_notimplemented () = {addr_group = G_all; addr_kind = A_py_instance (fst @@ find_builtin "NotImplementedType"); addr_mode = STRONG}
 let addr_integers () = {addr_group = G_all; addr_kind = A_py_instance (fst @@ find_builtin "int"); addr_mode = WEAK}
@@ -587,19 +586,27 @@ struct
           ) cur_v ()
 
       | Universal.Heap.Recency.Q_alive_addresses ->
+           let cur = get_env T_cur man flow in
+           let aset = AMap.fold (fun _ aset acc ->
+                          ASet.join aset acc) cur ASet.empty in
+           List.rev @@
+             ASet.fold (fun pyaddr acc -> match pyaddr with
+                                          | Def a -> a :: acc
+                                          | _ -> acc) aset []
+         |> OptionExt.return
+
+      | Universal.Heap.Recency.Q_alive_addresses_aspset ->
          let cur = get_env T_cur man flow in
          let aset = AMap.fold (fun _ aset acc ->
                         ASet.join aset acc) cur ASet.empty in
-         OptionExt.return @@ List.rev @@
-           ASet.fold (fun pyaddr acc -> match pyaddr with
-                                        | Def a -> a :: acc
-                                        | _ -> acc) aset []
-
+         ASet.fold (fun pyaddr acc -> match pyaddr with
+                                      | Def a -> Universal.Heap.Recency.Pool.add a acc
+                                      | _ -> acc) aset Universal.Heap.Recency.Pool.empty
+         |> OptionExt.return
 
       | _ -> None
 
   let refine channel man flow = Channel.return flow
-
 
 end
 
