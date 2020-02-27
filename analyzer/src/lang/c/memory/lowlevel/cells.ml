@@ -387,7 +387,10 @@ struct
     }
   }
 
-  let alarms = [A_c_out_of_bound_cls; A_c_null_deref_cls; A_c_use_after_free_cls; A_c_invalid_deref_cls]
+  let alarms = [ A_c_out_of_bound;
+                 A_c_null_deref;
+                 A_c_use_after_free;
+                 A_c_invalid_deref ]
 
 
   (** {2 Command-line options} *)
@@ -645,19 +648,19 @@ struct
 
     match ekind pt with
     | E_c_points_to P_null ->
-      raise_c_null_deref_alarm ptr range man flow |>
+      raise_c_null_deref_alarm ptr man flow |>
       Cases.empty_singleton
 
     | E_c_points_to P_invalid ->
-      raise_c_invalid_deref_alarm ptr range man flow |>
+      raise_c_invalid_deref_alarm ptr man flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
-      raise_c_use_after_free_alarm ptr r range man flow |>
+      raise_c_use_after_free_alarm ptr r man flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
-      raise_c_dangling_deref_alarm ptr v r range man flow |>
+      raise_c_dangling_deref_alarm ptr v r man flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block (base, offset, mode)) ->
@@ -692,7 +695,7 @@ struct
       match expr_to_z size, expr_to_z offset with
       | Some s, Some o ->
         if Z.gt elm s then
-          let flow = raise_c_out_bound_alarm ~base ~offset ~size range man flow in
+          let flow = raise_c_out_bound_alarm base size offset typ range man flow in
           Cases.empty_singleton flow
         else
         if Z.leq Z.zero o &&
@@ -701,7 +704,7 @@ struct
           let c = mk_cell base o typ in
           Cases.singleton (Cell (c,mode)) flow
         else
-          let flow = raise_c_out_bound_alarm ~base ~offset ~size range man flow in
+          let flow = raise_c_out_bound_alarm base size offset typ range man flow in
           Cases.empty_singleton flow
 
       | _ ->
@@ -781,7 +784,7 @@ struct
 
             )
           ~felse:(fun flow ->
-              let flow = raise_c_out_bound_alarm ~base ~offset ~size range man flow in
+              let flow = raise_c_out_bound_alarm base size offset typ range man flow in
               Cases.empty_singleton flow
             )
           man flow
@@ -996,7 +999,7 @@ struct
             Eval.singleton (mk_top typ range) flow
           )
         ~felse:(fun flow ->
-            raise_c_out_bound_quantified_alarm ~base ~min ~max ~size range man flow |>
+            raise_c_quantified_out_bound_alarm base size min max typ range man flow |>
             Eval.empty_singleton
           )
         ~zone:Z_u_num man flow
@@ -1087,7 +1090,7 @@ struct
       Post.return flow
 
     | Cell ({ base },_) when is_base_readonly base ->
-      let flow = raise_c_read_only_modification_alarm base range man flow in
+      let flow = raise_c_modify_read_only_alarm p base man flow in
       Post.return flow
 
     | Cell (c,mode) ->

@@ -22,36 +22,36 @@
 open Mopsa
 
 
-type alarm_class += A_py_uncaught_exception_cls
-type alarm_body += A_py_uncaught_exception of expr * string
+type alarm_class   += A_py_uncaught_exception
+type alarm_message += A_py_uncaught_exception_msg of expr * string
 
 
 let raise_py_uncaught_exception_alarm exn name range lattice flow =
   let cs = Flow.get_callstack flow in
-  let alarm = mk_alarm (A_py_uncaught_exception (exn,name)) range ~cs in
+  let alarm = mk_alarm (A_py_uncaught_exception_msg (exn,name)) cs range in
   Flow.raise_alarm alarm ~bottom:false lattice flow
 
 
 let () =
   register_alarm_class (fun default fmt a ->
         match a with
-        | A_py_uncaught_exception_cls -> Format.fprintf fmt "Uncaught Python exception"
+        | A_py_uncaught_exception -> Format.fprintf fmt "Uncaught Python exception"
         | _ -> default fmt a
       );
-  register_alarm_body {
+  register_alarm_message {
     classifier = (fun next -> function
-        | A_py_uncaught_exception _ -> A_py_uncaught_exception_cls
+        | A_py_uncaught_exception_msg _ -> A_py_uncaught_exception
         | a -> next a
       );
     compare = (fun default a a' ->
         match a, a' with
-        | A_py_uncaught_exception (e, s), A_py_uncaught_exception (e', s') ->
+        | A_py_uncaught_exception_msg (e, s), A_py_uncaught_exception_msg (e', s') ->
           compare_expr e e'
         | _ -> default a a'
       );
     print = (fun default fmt a ->
         match a with
-        | A_py_uncaught_exception (e, s) -> Format.fprintf fmt "Uncaught Python exception: %s" s
+        | A_py_uncaught_exception_msg (e, s) -> Format.fprintf fmt "Uncaught Python exception: %s" s
         | _ -> default fmt a
       );
     }

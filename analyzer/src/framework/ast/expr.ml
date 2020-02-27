@@ -178,3 +178,13 @@ let mk_constant ~etyp c = mk_expr ~etyp (E_constant c)
 let mk_top typ range = mk_constant (C_top typ) ~etyp:typ range
 
 let mk_not e range = mk_unop O_log_not e ~etyp:e.etyp range
+
+module ExprSet = SetExt.Make(struct
+    type t = expr
+    let compare = compare_expr
+  end)
+
+module ExprMap = MapExt.Make(struct
+    type t = expr
+    let compare = compare_expr
+  end)

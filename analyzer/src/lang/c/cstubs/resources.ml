@@ -60,7 +60,7 @@ struct
     }
   }
 
-  let alarms = [Common.Alarms.A_c_double_free_cls]
+  let alarms = [Common.Alarms.A_c_double_free]
 
   (** Initialization of environments *)
   (** ============================== *)
@@ -95,7 +95,7 @@ struct
       Post.return
 
     | E_c_points_to (P_block ({ base_kind = Addr { addr_kind = A_stub_resource _ }; base_valid = false; base_invalidation_range = Some drange }, _, _)) ->
-      Common.Alarms.(raise_c_double_free_alarm p drange range (Sig.Stacked.Manager.of_domain_man man) flow) |>
+      raise_c_double_free_alarm p drange (Sig.Stacked.Manager.of_domain_man man) flow |>
       Post.return
 
     | E_c_points_to P_null ->

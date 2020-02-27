@@ -19,14 +19,17 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Alarms of potential runtime errors inferred by the analysis. *)
+(** Alarms are potential bugs in the target program. They are reported
+    by abstract domains during the analysis. *)
 
 
 
 (** {2 Alarm classes} *)
-(** ******************** *)
+(** ***************** *)
 
-(** Alarm are categorized into a finite set of classes *)
+(** Classes of reported alarms. This extensible type should contain
+   simple constructors without arguments to simplify declaration of
+   alarms handled by abstract domains. *)
 type alarm_class = ..
 
 
@@ -35,47 +38,56 @@ val pp_alarm_class : Format.formatter -> alarm_class -> unit
 
 
 (** Register an new alarm class. There is no need for registering a
-    compare function, since classes are simple variants without
+    compare function, since classes are simple constructors without
     arguments. *)
 val register_alarm_class : alarm_class TypeExt.print -> unit
 
 
 
-(** {2 Alarm bodies} *)
+(** {2 Alarm messages} *)
 (** **************** *)
 
-(** Alarm body provides details about the context of the alarm, such
-    as expression intervals, expected values, etc.*)
-type alarm_body = ..
+(** Alarm messages provide details about an alarm, such as values of expression, etc.*)
+type alarm_message = ..
 
 
-(** Compare two alarm bodies *)
-val compare_alarm_body : alarm_body -> alarm_body -> int
+(** Chaining function to get the class of an alarm message *)
+type alarm_classifier = (alarm_message -> alarm_class) -> alarm_message -> alarm_class
 
 
-(** Pretty printer of alarm body *)
-val pp_alarm_body : Format.formatter -> alarm_body -> unit
+(** Get the class of an alarm message *)
+val classify_alarm_message : alarm_message -> alarm_class
 
 
-(** Chaining function to get the class of an alarm body *)
-type alarm_classifier = (alarm_body -> alarm_class) -> alarm_body -> alarm_class
+(** Compare two alarm messages *)
+val compare_alarm_message : alarm_message -> alarm_message -> int
 
 
-(** Get the class of an alarm body *)
-val classify_alarm_body : alarm_body -> alarm_class
+(** Pretty printer of a collection of alarm messages of the same alarm class raised at the same program location. *)
+val pp_grouped_alarm_message : alarm_class -> Format.formatter -> alarm_message list -> unit
 
 
-
-(** Registration information of an alarm body *)
-type alarm_body_info = {
+(** Registration information of a grouped alarm message *)
+type grouped_alarm_message_info = {
   classifier: alarm_classifier;
-  compare : alarm_body TypeExt.compare;
-  print : alarm_body TypeExt.print;
+  compare : alarm_message TypeExt.compare;
+  print : (Format.formatter -> alarm_message list -> alarm_class -> unit) -> Format.formatter -> alarm_message list -> alarm_class -> unit;
 }
-  
 
-(** Register a new alarm body *)
-val register_alarm_body : alarm_body_info -> unit
+(** Registration information of a non-grouped alarm message *)
+type alarm_message_info = {
+  classifier: alarm_classifier;
+  compare : alarm_message TypeExt.compare;
+  print : alarm_message TypeExt.print;
+}
+
+
+(** Register a new alarm message *)
+val register_alarm_message : alarm_message_info -> unit
+
+
+(** Register a new grouped alarm message *)
+val register_grouped_alarm_message : grouped_alarm_message_info -> unit
 
 
 
@@ -87,14 +99,13 @@ type alarm
 
 
 (** Create an alarm instance *)
-val mk_alarm : alarm_body -> ?cs:Callstack.cs -> Location.range -> alarm
-
+val mk_alarm : alarm_message -> Callstack.cs -> Location.range -> alarm
 
 (** Get the class of an alarm *)
 val get_alarm_class : alarm -> alarm_class
 
-(** Get the body of an alarm *)
-val get_alarm_body : alarm -> alarm_body
+(** Get the message of an alarm *)
+val get_alarm_message : alarm -> alarm_message
 
 (** Get the range of an alarm *)
 val get_alarm_range : alarm -> Location.range
@@ -104,9 +115,6 @@ val get_alarm_callstack : alarm -> Callstack.cs
 
 (** Compare two alarms *)
 val compare_alarm : alarm -> alarm -> int
-
-(** Pretty printer of alarms *)
-val pp_alarm : Format.formatter -> alarm -> unit
 
 
 (** Sets of alarms *)

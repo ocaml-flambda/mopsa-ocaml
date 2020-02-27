@@ -26,12 +26,12 @@ let print_warnings = ref true
 let print_color = ref true
 let print_all = ref false
 let colors = [
+  ("white", 1);
   ("red", 9);
   ("green", 0x28);
   ("yellow", 0xbe);
   ("blue", 4);
-  ("lightblue", 75);
-  ("magenta", 0x5c);
+  ("magenta", 5);
   ("fushia", 13);
   ("orange", 0xd0);
   ("Teal", 6);
@@ -77,6 +77,13 @@ let color c pp fmt x =
     Format.fprintf fmt "%a" pp x
 
 let color_str c fmt s = color c Format.pp_print_string fmt s
+
+let bold pp fmt x =
+  if !print_color then
+    Format.fprintf fmt "\027[1m%a\027[0m" pp x
+  else
+    Format.fprintf fmt "%a" pp x
+
 
 let debug ?(channel = "debug") fmt =
   if can_print channel then
