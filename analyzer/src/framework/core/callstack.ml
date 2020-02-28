@@ -25,7 +25,8 @@
 open Location
 
 type call = {
-  call_fun:  string;
+  call_fun_orig_name:  string;
+  call_fun_uniq_name:  string;
   call_site: range;
 }
 
@@ -33,7 +34,7 @@ type cs = call list
 
 let pp_call fmt c =
   Format.fprintf fmt "%s@%a"
-    c.call_fun
+    c.call_fun_orig_name
     pp_range c.call_site
 
 let pp_call_stack fmt (cs:cs) =
@@ -51,7 +52,7 @@ let print fmt (cs:cs) =
 let compare_call c c' =
   if c == c' then 0
   else Compare.compose [
-    (fun () -> compare c.call_fun c'.call_fun);
+    (fun () -> compare c.call_fun_uniq_name c'.call_fun_uniq_name);
     (fun () -> compare_range c.call_site c'.call_site);
   ]
 
@@ -79,8 +80,10 @@ let ctx_key =
   K.key
 
 
-let push f range cs =
-  { call_fun = f; call_site = range} :: cs
+let push orig ?(uniq=orig) range cs =
+  { call_fun_orig_name = orig;
+    call_fun_uniq_name = uniq;
+    call_site = range } :: cs
 
 exception EmptyCallstack
 

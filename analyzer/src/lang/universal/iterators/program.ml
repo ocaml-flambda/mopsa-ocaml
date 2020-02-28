@@ -56,7 +56,7 @@ struct
 
     (* Search for test functions *)
     let tests = List.filter (fun f ->
-        let name = f.fun_name in
+        let name = f.fun_orig_name in
         if String.length name < 5 then false
         else String.sub name 0 4 = "test"
       ) fundecs
@@ -65,7 +65,7 @@ struct
     (* Execute tests *)
     let stmt = mk_stmt (S_unit_tests (
         tests |> List.map (fun f ->
-            f.fun_name, mk_expr_stmt (mk_call f [] f.fun_range) range
+            f.fun_orig_name, mk_expr_stmt (mk_call f [] f.fun_range) range
           )
       )) range
     in

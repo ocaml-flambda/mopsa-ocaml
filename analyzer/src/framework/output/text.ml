@@ -162,7 +162,7 @@ let report ?(flow=None) man alarms time files out =
               (* Print the alarm instance *)
               let file_name = get_range_relative_file range in
               let fun_name = match CallstackSet.elements callstacks with
-                | (c::_) :: _ -> c.call_fun
+                | (c::_) :: _ -> c.call_fun_orig_name
                 | _ -> "<>"
               in
               print out "@.%a: In function '%a':@.@[<v 2>%a: %a@,@,%a@,%a%a@]@.@."
@@ -185,7 +185,7 @@ let report ?(flow=None) man alarms time files out =
                             (fun fmt c ->
                                fprintf fmt "\tfrom %a: %s"
                                  pp_relative_range c.Callstack.call_site
-                                 c.Callstack.call_fun
+                                 c.Callstack.call_fun_orig_name
                             )
                          ) cs
                      in

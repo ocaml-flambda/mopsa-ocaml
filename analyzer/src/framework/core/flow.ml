@@ -237,10 +237,10 @@ let set_callstack cs flow =
     Context.add_unit Callstack.ctx_key cs
   ) flow
 
-let push_callstack fname range flow =
+let push_callstack fname ?(uniq=fname) range flow =
   set_callstack (
     get_callstack flow |>
-    Callstack.push fname range
+    Callstack.push fname ~uniq range
   ) flow
 
 let pop_callstack flow =
