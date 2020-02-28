@@ -28,6 +28,10 @@ open Location
 open Format
 
 
+(** Command-line option to enable display of alarms call stacks *)
+let opt_show_callstacks = ref false
+
+
 let print out fmt =
   let formatter =
     match out with
@@ -161,13 +165,39 @@ let report ?(flow=None) man alarms time files out =
                 | (c::_) :: _ -> c.call_fun
                 | _ -> "<>"
               in
-              print out "@.%a: In function '%a':@.@[<v 2>%a: %a@,@,%a@,%a@]@.@."
+              print out "@.%a: In function '%a':@.@[<v 2>%a: %a@,@,%a@,%a%a@]@.@."
                 (Debug.bold pp_print_string) file_name
                 (Debug.bold pp_print_string) fun_name
                 (Debug.bold pp_relative_range) range
                 (Debug.color "magenta" pp_alarm_class) cls
                 highlight_range range
                 (pp_grouped_alarm_message cls) (AlarmMessageSet.elements messages)
+                (fun fmt callstacks ->
+                   if not !opt_show_callstacks then ()
+                   else
+                     let pp_callstack i fmt cs =
+                       fprintf fmt "@[<v>Call stack%a:@,%a@]"
+                         (fun fmt -> function
+                            | None   -> ()
+                            | Some i -> fprintf fmt " %d" (i+1)
+                         ) i
+                         (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+                            (fun fmt c ->
+                               fprintf fmt "\tfrom %a: %s"
+                                 pp_relative_range c.Callstack.call_site
+                                 c.Callstack.call_fun
+                            )
+                         ) cs
+                     in
+                     match CallstackSet.elements callstacks with
+                     | [] -> ()
+                     | [cs] -> pp_callstack None fmt cs
+                     | csl    ->
+                       let csl' = List.mapi (fun i cs -> (i,cs)) csl in
+                       pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+                         (fun fmt (i,cs) -> pp_callstack (Some i) fmt cs)
+                         fmt csl';
+                ) callstacks
               ;
               sub_total + 1
             ) range_map 0

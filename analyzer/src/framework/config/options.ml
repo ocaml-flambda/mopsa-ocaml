@@ -282,6 +282,15 @@ let () =
   }
 
 
+let () =
+  register_builtin_option {
+    key = "-show-call-stacks";
+    category = "Output";
+    doc = " display the call stacks when reporting alarms in text format";
+    spec = ArgExt.Set Output.Text.opt_show_callstacks;
+    default = "false";
+  }
+
 (** Help message *)
 let help () =
   let options =
