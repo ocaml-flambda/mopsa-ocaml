@@ -364,11 +364,11 @@ module Domain =
                   Eval.bind (fun res flow ->
                       begin
                         if !opt_gc_after_functioncall then
-                          man.exec (mk_stmt Universal.Heap.Recency.S_perform_gc range) flow
+                          Eval.add_cleaners [mk_stmt Universal.Heap.Recency.S_perform_gc range]
                         else
-                          flow
-                      end |>
-                        man.eval res)
+                          fun x -> x
+                      end @@
+                        man.eval res flow )
               )
           )
       (* 𝔼⟦ f() | isinstance(f, method) ⟧ *)
