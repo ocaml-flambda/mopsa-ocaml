@@ -188,19 +188,17 @@ let () =
                  | _ -> assert false
               ) BaseMap.empty messages
           in
-          fprintf fmt "@[<v>%a@]"
-            (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-               (fun fmt (base,(size,offset,elm)) ->
-                  fprintf fmt "accessing %a byte%a at offset%a %a of %a of size %a byte%a"
-                    pp_const_or_interval elm
-                    pp_interval_plurial elm
-                    pp_interval_cardinal_plurial offset
-                    pp_const_or_interval offset
-                    pp_base_verbose base
-                    pp_const_or_interval size
-                    pp_interval_plurial size
-               )
-            ) (BaseMap.bindings m)
+          pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+            (fun fmt (base,(size,offset,elm)) ->
+               fprintf fmt "accessing %a byte%a at offset%a %a of %a of size %a byte%a"
+                 pp_const_or_interval elm
+                 pp_interval_plurial elm
+                 pp_interval_cardinal_plurial offset
+                 pp_const_or_interval offset
+                 pp_base_verbose base
+                 pp_const_or_interval size
+                 pp_interval_plurial size
+            ) fmt (BaseMap.bindings m)
 
         | cls -> next fmt messages cls
       );
@@ -337,16 +335,14 @@ let () =
                  | _ -> assert false
               ) ExprMap.empty messages
           in
-          fprintf fmt "@[<v>%a@]"
-            (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-               (fun fmt (e,(v,vv)) ->
-                  fprintf fmt "'%a' has value %a %a %a"
-                    (Debug.bold pp_expr) e
-                    pp_const_or_interval v
-                    pp_const_or_interval_not_eq v
-                    pp_const_or_interval vv
-               )
-            ) (ExprMap.bindings m)
+          pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+            (fun fmt (e,(v,vv)) ->
+               fprintf fmt "'%a' has value %a %a %a"
+                 (Debug.bold pp_expr) e
+                 pp_const_or_interval v
+                 pp_const_or_interval_not_eq v
+                 pp_const_or_interval vv
+            ) fmt (ExprMap.bindings m)
 
         | cls -> next fmt messages cls
       );
@@ -701,17 +697,15 @@ let () =
                  | _ -> assert false
               ) VarMap.empty messages
           in
-          fprintf fmt "@[<v>%a@]"
-            (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-               (fun fmt (va,(counter,nargs)) ->
-                  fprintf fmt "va_arg called %a time%a on a va_list object '%a' with %a argument%a"
-                    pp_const_or_interval counter
-                    pp_interval_plurial counter
-                    pp_var va
-                    pp_const_or_interval nargs
-                    pp_interval_plurial nargs
-               )
-            ) (VarMap.bindings m)
+          pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+            (fun fmt (va,(counter,nargs)) ->
+               fprintf fmt "va_arg called %a time%a on a va_list object '%a' with %a argument%a"
+                 pp_const_or_interval counter
+                 pp_interval_plurial counter
+                 pp_var va
+                 pp_const_or_interval nargs
+                 pp_interval_plurial nargs
+            ) fmt (VarMap.bindings m)
 
         | cls -> next fmt messages cls
       );

@@ -63,12 +63,10 @@ let pp_grouped_alarm_message cls fmt messages =
   try
     !pp_grouped_alarm_message_chain fmt messages cls
   with Not_found ->
-    Format.(fprintf fmt "@[<v>%a@]"
-              (pp_print_list
-                 ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-                 (TypeExt.print pp_alarm_message_chain)
-              ) messages
-           )
+    Format.(pp_print_list
+              ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+              (TypeExt.print pp_alarm_message_chain)
+           ) fmt messages
 
 
 let alarm_classifer_chain : (alarm_message -> alarm_class) ref = ref (fun _ -> failwith "classifier: unknown alarm message")

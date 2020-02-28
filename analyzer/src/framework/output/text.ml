@@ -109,21 +109,17 @@ let highlight_range fmt range =
       let s2 = String.make (c2 - c1) '^' in
       let s3 = String.make (c3 - c2) ' ' in
       fprintf fmt "@,%s%a%s" s1 (Debug.color_str "red") s2 s3
-    in  
+    in
 
     (* Print the highlighted lines *)
     let lines = get_bug_lines 1 in
     close_in f;
-    fprintf fmt "@[<v>%a@]"
-      (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,") highlight_bug) lines
-    ;
+    pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,") highlight_bug fmt lines;
 
     (* Underline bug if the number of lines is 1 *)
     match lines with
     | [bug] -> underline_bug fmt bug
     | _ -> ()
-      
-      
 
 
 let report ?(flow=None) man alarms time files out =
@@ -160,15 +156,15 @@ let report ?(flow=None) man alarms time files out =
               in
 
               (* Print the alarm instance *)
-              let file_name = get_range_file range in
+              let file_name = get_range_relative_file range in
               let fun_name = match CallstackSet.elements callstacks with
                 | (c::_) :: _ -> c.call_fun
                 | _ -> "<>"
               in
-              print out "@.%a: In function '%a':@.@[<v 2>%a: %a@,%a@,%a@]@.@."
+              print out "@.%a: In function '%a':@.@[<v 2>%a: %a@,@,%a@,%a@]@.@."
                 (Debug.bold pp_print_string) file_name
                 (Debug.bold pp_print_string) fun_name
-                (Debug.bold pp_range) range
+                (Debug.bold pp_relative_range) range
                 (Debug.color "magenta" pp_alarm_class) cls
                 highlight_range range
                 (pp_grouped_alarm_message cls) (AlarmMessageSet.elements messages)
