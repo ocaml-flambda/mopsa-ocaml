@@ -46,7 +46,7 @@ let pp_const_or_interval_not_eq fmt itv =
   match itv with
   | Bot.Nb (l,u) when I.B.eq l u -> fprintf fmt "∉"
   | _ -> fprintf fmt "⊈"
-  
+
 
 let pp_interval_plurial fmt itv =
   match itv with
@@ -67,7 +67,7 @@ let pp_base_verbose fmt base =
   | Addr a   -> fprintf fmt "dynamically allocated block"
   | String s when String.length s > 20 -> fprintf fmt "string \"%s...\"" (String.escaped (String.sub s 0 20))
   | String s -> fprintf fmt "string \"%s\"" (String.escaped s)
-  
+
 
 (** {2 NULL pointer dereference} *)
 (** **************************** *)
@@ -289,8 +289,8 @@ type alarm_class   += A_c_integer_overflow
 type alarm_message += A_c_integer_overflow_msg of expr (** integer expression *) *
                                                   int_itv (** expression value *)
                    |  A_c_cast_integer_overflow_msg of expr (** integer expression *) *
-                                                        int_itv (** expression value *) *
-                                                        typ (** cast type *)
+                                                       int_itv (** expression value *) *
+                                                       typ (** cast type *)
 
 let () =
   register_alarm_class (fun next fmt -> function
@@ -317,31 +317,37 @@ let () =
       );
     print = (fun next fmt messages -> function
         | A_c_integer_overflow ->
-          (* Group by expressions *)
+          (* Get the target type. As this is a static information, it should
+             be the same for all messages. *)
+          let t = match messages with
+            | A_c_integer_overflow_msg(e,_) :: _ -> e.etyp
+            | A_c_cast_integer_overflow_msg(_,_,t) :: _ -> t
+            | _ -> assert false
+          in
+          let l,u = rangeof t in
+          let type_range = I.of_z l u in
+
+          (* Group values by expressions *)
           let m = List.fold_left
               (fun acc -> function
                  | A_c_integer_overflow_msg(e,v) ->
-                   let oldv,oldvv = try ExprMap.find e acc with Not_found -> (Bot.BOT,Bot.BOT) in
+                   let oldv = try ExprMap.find e acc with Not_found -> Bot.BOT in
                    let v = I.join_bot oldv v in
-                   let l,u = rangeof e.etyp in
-                   let vv = Bot.Nb (I.of_z l u) |> I.join_bot oldvv in
-                   ExprMap.add e (v,vv) acc
+                   ExprMap.add e v acc
                  | A_c_cast_integer_overflow_msg(e,v,t) ->
-                   let oldv,oldvv = try ExprMap.find e acc with Not_found -> Bot.BOT,Bot.BOT in
+                   let oldv = try ExprMap.find e acc with Not_found -> Bot.BOT in
                    let v = I.join_bot oldv v in
-                   let l,u = rangeof t in
-                   let vv = Bot.Nb (I.of_z l u) |> I.join_bot oldvv in
-                   ExprMap.add e (v,vv) acc
+                   ExprMap.add e v acc
                  | _ -> assert false
               ) ExprMap.empty messages
           in
           pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-            (fun fmt (e,(v,vv)) ->
-               fprintf fmt "'%a' has value %a %a %a"
+            (fun fmt (e,v) ->
+               fprintf fmt "'%a' has value %a that is larger than the range of '%a' = %a"
                  (Debug.bold pp_expr) e
                  pp_const_or_interval v
-                 pp_const_or_interval_not_eq v
-                 pp_const_or_interval vv
+                 (Debug.bold pp_typ) t
+                 I.fprint type_range
             ) fmt (ExprMap.bindings m)
 
         | cls -> next fmt messages cls
@@ -699,7 +705,7 @@ let () =
           in
           pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
             (fun fmt (va,(counter,nargs)) ->
-               fprintf fmt "va_arg called %a time%a on a va_list object '%a' with %a argument%a"
+               fprintf fmt "va_arg called %a time%a on va_list object '%a' with %a argument%a"
                  pp_const_or_interval counter
                  pp_interval_plurial counter
                  pp_var va
@@ -843,6 +849,3 @@ let raise_c_modify_read_only_alarm ptr base man flow =
   let cs = Flow.get_callstack flow in
   let alarm = mk_alarm (A_c_modify_read_only_msg(get_orig_expr ptr, base)) cs ptr.erange in
   Flow.raise_alarm alarm ~bottom:true man.lattice flow
-
-
-
