@@ -232,6 +232,8 @@ module Domain =
 
         | S_py_import(name, _, _) when is_builtin_name name -> ()
 
+        | Universal.Heap.Recency.S_perform_gc -> ()
+
         | _ -> panic "stmt %a not supported in %s" pp_stmt stmt file
 
       in
