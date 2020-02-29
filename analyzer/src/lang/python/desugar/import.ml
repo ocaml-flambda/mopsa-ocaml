@@ -399,9 +399,9 @@ module Domain =
           {stmt with skind = S_block (newblock, [])}, newglobals, newflow
 
         | S_expression {ekind = (E_constant C_py_ellipsis)}
-        | S_expression {ekind = (E_constant (C_string _))}
-        (* | Universal.Heap.Recency.S_perform_gc ->
-         *   {stmt with skind = S_block ([], [])}, globals, flow *)
+        | S_expression {ekind = (E_constant (C_string _))} ->
+          (* | Universal.Heap.Recency.S_perform_gc -> *)
+            {stmt with skind = S_block ([], [])}, globals, flow
 
         | _ -> panic_at range "stmt %a not supported in stubs file %s" pp_stmt stmt name
       in
