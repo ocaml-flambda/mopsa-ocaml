@@ -87,6 +87,9 @@ and from_stmt (stmt: Py_parser.Ast.stmt) : stmt =
     | S_assign (x, ({ekind = E_call _} as e)) when !opt_gc_after_functioncall ->
        Universal.Ast.S_block ([mk_stmt (S_assign (from_exp x, from_exp e)) srange'; mk_stmt Universal.Heap.Recency.S_perform_gc srange'], [])
 
+    | S_expression ({ekind = E_call _} as e) when !opt_gc_after_functioncall ->
+       Universal.Ast.S_block ([mk_stmt (Universal.Ast.S_expression (from_exp e)) srange'; mk_stmt Universal.Heap.Recency.S_perform_gc srange'], [])
+
     | S_assign (x, e) ->
       S_assign (from_exp x, from_exp e)
 
