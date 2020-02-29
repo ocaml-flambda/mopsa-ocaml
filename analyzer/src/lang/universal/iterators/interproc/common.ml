@@ -30,16 +30,6 @@ open Callstack
 let name = "universal.iterators.interproc.common"
 let debug fmt = Debug.debug ~channel:name fmt
 
-let opt_gc_after_functioncall = ref false
-let () =
-  register_domain_option name {
-      key = "-gc";
-      category = "Python";
-      doc = " perform abstract garbage collection after function calls";
-      spec = ArgExt.Set opt_gc_after_functioncall;
-      default = "";
-    }
-
 let opt_continue_on_recursive_call : bool ref = ref true
 
 
@@ -270,16 +260,13 @@ let inline f params locals body ret range man flow =
       end
 
     | false ->
-       let flow = exec_fun_body f body ret range man flow in
+      exec_fun_body f body ret range man flow |>
       (* Remove local variables from the environment. Remove of parameters is
          postponed after finishing the statement, to keep relations between
          the passed arguments and the return value. *)
-       (if !opt_gc_after_functioncall then
-         man.exec (mk_stmt S_perform_gc range) flow
-       else flow) |>
-         man.exec (mk_block (List.map (fun v ->
-                                 mk_remove_var v range
-                               ) locals) range)
+      man.exec (mk_block (List.map (fun v ->
+          mk_remove_var v range
+        ) locals) range)
   in
   match ret with
   | None ->
