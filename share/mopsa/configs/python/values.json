@@ -50,6 +50,7 @@
                 "apply": {
                     "compose": [
                         "universal.heap.recency",
+                        "python.types.addr_env"
                         // {
                         //     "product": [
                         //         "python.types.addr_env",
@@ -57,7 +58,6 @@
                         //     ],
                         //     "reductions": ["python.types.reductions.polymorphism"]
                         // }
-                        "python.types.addr_env"
                     ]
                 },
                 "on":

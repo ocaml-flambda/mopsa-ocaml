@@ -62,15 +62,6 @@ let () = Universal.Heap.Policies.register_mk_addr (fun default ak ->
              | A_py_staticmethod | A_py_classmethod -> Universal.Heap.Policies.mk_addr_range ak
              | _ -> default ak)
 
-let opt_gc_after_functioncall = ref false
-let () =
-  register_domain_option name {
-      key = "-gc";
-      category = "Python";
-      doc = " perform abstract garbage collection after function calls";
-      spec = ArgExt.Set opt_gc_after_functioncall;
-      default = "";
-    }
 
 module Domain =
   struct
@@ -80,7 +71,7 @@ module Domain =
       end)
 
     let interface = {
-      iexec = {provides = [Zone.Z_py]; uses = []};
+      iexec = {provides = [Zone.Z_py]; uses = [Universal.Zone.Z_u_heap]};
       ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
     }
 
@@ -362,13 +353,14 @@ module Domain =
 
                 man.eval (mk_call fundec args exp.erange) flow |>
                   Eval.bind (fun res flow ->
-                      begin
-                        if !opt_gc_after_functioncall then
-                          Eval.add_cleaners [mk_stmt Universal.Heap.Recency.S_perform_gc range]
-                        else
-                          fun x -> x
-                      end @@
-                        man.eval res flow )
+                      (* les ajouter dans l'ast au frontend ? *)
+                      (* begin
+                       *   if !opt_gc_after_functioncall then
+                       *     man.exec ~zone:Universal.Zone.Z_u_heap (mk_stmt Universal.Heap.Recency.S_perform_gc range) flow
+                       *   else
+                       *     flow
+                       * end |> *)
+                        man.eval res flow)
               )
           )
       (* 𝔼⟦ f() | isinstance(f, method) ⟧ *)
