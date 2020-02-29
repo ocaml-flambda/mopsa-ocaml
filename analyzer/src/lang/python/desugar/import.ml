@@ -232,8 +232,6 @@ module Domain =
 
         | S_py_import(name, _, _) when is_builtin_name name -> ()
 
-        | Universal.Heap.Recency.S_perform_gc -> ()
-
         | _ -> panic "stmt %a not supported in %s" pp_stmt stmt file
 
       in
@@ -401,8 +399,10 @@ module Domain =
           {stmt with skind = S_block (newblock, [])}, newglobals, newflow
 
         | S_expression {ekind = (E_constant C_py_ellipsis)}
-        | S_expression {ekind = (E_constant (C_string _))} ->
+        | S_expression {ekind = (E_constant (C_string _))}
+        | Universal.Heap.Recency.S_perform_gc ->
           {stmt with skind = S_block ([], [])}, globals, flow
+
 
         | _ -> panic_at range "stmt %a not supported in stubs file %s" pp_stmt stmt name
       in
