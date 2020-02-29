@@ -27,16 +27,6 @@ open Lexing
 open Ast
 open Utils
 
-let opt_gc_after_functioncall = ref false
-let () =
-  register_domain_option "python.frontend" {
-      key = "-gc";
-      category = "Python";
-      doc = " perform abstract garbage collection after function calls";
-      spec = ArgExt.Set opt_gc_after_functioncall;
-      default = "";
-    }
-
 let debug fmt = Debug.debug ~channel:"python.frontend" fmt
 
 (** Entry point of the frontend *)
@@ -84,8 +74,8 @@ and from_stmt (stmt: Py_parser.Ast.stmt) : stmt =
   let srange' = stmt.srange in
   let skind' =
     match stmt.skind with
-    | S_assign (x, ({ekind = E_call _} as e)) when !opt_gc_after_functioncall ->
-       Universal.Ast.S_block ([mk_stmt (S_assign (from_exp x, from_exp e)) srange'; mk_stmt Universal.Heap.Recency.S_perform_gc srange'], [])
+    (* | S_assign (x, ({ekind = E_call _} as e)) when !opt_gc_after_functioncall ->
+     *    Universal.Ast.S_block ([mk_stmt (S_assign (from_exp x, from_exp e)) srange'; mk_stmt Universal.Heap.Recency.S_perform_gc srange'], []) *)
 
     | S_assign (x, e) ->
       S_assign (from_exp x, from_exp e)

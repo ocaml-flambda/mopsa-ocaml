@@ -83,26 +83,6 @@ let () = Policies.register_option opt_default_allocation_policy name "-default-a
 (** {2 Domain definition} *)
 (** ===================== *)
 
-type stmt_kind +=
-   | S_perform_gc
-
-let () =
-  register_stmt_with_visitor {
-      compare = (fun next s1 s2 ->
-        match skind s1, skind s2 with
-        | _ -> next s1 s2);
-
-      print = (fun default fmt stmt ->
-        match skind stmt with
-        | S_perform_gc -> Format.fprintf fmt "Abstract GC call"
-        | _ -> default fmt stmt);
-
-      visit = (fun default stmt ->
-        match skind stmt with
-        | S_perform_gc -> leaf stmt
-        | _ -> default stmt);
-    }
-
 
 
 module Domain =
@@ -234,13 +214,11 @@ struct
       (* Change the sub-domain *)
       let flow' =
         if not (Pool.mem recent_addr pool) then
-          let () = debug "first allocation@\n" in
           (* First time we allocate at this site, so no change to the sub-domain. *)
           flow
         else
           (* Otherwise, we make the previous recent address as an old one *)
           let old_addr = Policies.mk_addr addr_kind WEAK range (Flow.get_unit_ctx flow) in
-          debug "rename %a to %a" pp_addr recent_addr pp_addr old_addr;
           let nflow = map_env T_cur (Pool.add old_addr) man flow |>
                         man.exec (mk_rename (mk_addr recent_addr range) (mk_addr old_addr range) range) in
           if not (Pool.mem old_addr pool) then nflow

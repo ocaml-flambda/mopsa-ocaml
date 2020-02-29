@@ -831,3 +831,24 @@ struct
       ;
       fprintf fmt "}@]"
 end
+
+
+type stmt_kind +=
+   | S_perform_gc
+
+let () =
+  register_stmt_with_visitor {
+      compare = (fun next s1 s2 ->
+        match skind s1, skind s2 with
+        | _ -> next s1 s2);
+
+      print = (fun default fmt stmt ->
+        match skind stmt with
+        | S_perform_gc -> Format.fprintf fmt "Abstract GC call"
+        | _ -> default fmt stmt);
+
+      visit = (fun default stmt ->
+        match skind stmt with
+        | S_perform_gc -> leaf stmt
+        | _ -> default stmt);
+    }
