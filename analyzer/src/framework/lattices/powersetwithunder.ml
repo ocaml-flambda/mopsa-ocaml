@@ -20,7 +20,6 @@
 (****************************************************************************)
 
 open Bot
-open Powerset
 
 module type ELT =
 sig
@@ -34,7 +33,7 @@ module Make(Elt: ELT) =
 struct
 
   module Set = SetExt.Make(Elt)
-  module USet = Make(Elt)
+  module USet = Powerset.Make(Elt)
 
   (* Lower approximation *)
   type l = Set.t
