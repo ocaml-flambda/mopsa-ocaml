@@ -215,6 +215,7 @@ struct
        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
          bind_some
            (fun e flow ->
+             Debug.debug ~channel:"debugrecency" "assign_addr %a, e = %a" pp_var v pp_expr e;
              match ekind e with
              | E_py_undefined true ->
                 assign_addr man v PyAddr.Undef_global mode flow |> Post.return
@@ -223,6 +224,7 @@ struct
                 assign_addr man v PyAddr.Undef_local mode flow |> Post.return
 
              | E_py_object (addr, None) ->
+                Debug.debug ~channel:"debugrecency" "assign_addr %a %a" pp_var v pp_addr addr;
                 assign_addr man v (PyAddr.Def addr) mode flow |> Post.return
 
              | E_py_object (addr, Some expr) ->
@@ -366,9 +368,12 @@ struct
        end
        |> Post.return |> OptionExt.return
 
+    | S_remove {ekind = E_addr {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin s, _)}}} when List.mem s ["int"; "float"; "bool"; "NoneType"; "NotImplementedType"; "str"] ->
+       flow |> Post.return |> OptionExt.return
+
     | S_remove {ekind = E_addr a} ->
        let cur = get_env T_cur man flow in
-       let ncur = AMap.map (ASet.remove (Def a)) cur in
+       let ncur = AMap.map (ASet.remove (Def a)) cur in (* FIXME: if Aset = empty, remove it? *)
        let flow = set_env T_cur ncur man flow in
        begin match akind a with
        | A_py_instance _ ->
@@ -502,6 +507,7 @@ struct
         let obj = find_builtin @@ get_orig_vname v in
         Eval.singleton (mk_py_object obj range) flow |> OptionExt.return
       else if is_bottom cur then
+        let () = debug "cur to bottom, empty singleton" in
         Eval.empty_singleton flow |> OptionExt.return
       else
         (* let () = warn_at range "NameError on %a that shouldn't happen. Todo: use partial envs and add_var %a" pp_var v (Flow.print man.lattice.print) flow in
@@ -587,7 +593,7 @@ struct
 
       | Universal.Heap.Recency.Q_alive_addresses ->
            let cur = get_env T_cur man flow in
-           let aset = AMap.fold (fun _ aset acc ->
+           let aset = AMap.fold (fun var aset acc ->
                           ASet.join aset acc) cur ASet.empty in
            List.rev @@
              ASet.fold (fun pyaddr acc -> match pyaddr with
@@ -595,13 +601,46 @@ struct
                                           | _ -> acc) aset []
          |> OptionExt.return
 
+      (* | Universal.Heap.Recency.Q_alive_addresses_aspset ->
+       *    let cur = get_env T_cur man flow in
+       *    let aset = AMap.fold (fun _ aset acc ->
+       *                   ASet.join aset acc) cur ASet.empty in
+       *    ASet.fold (fun pyaddr acc -> match pyaddr with
+       *                                 | Def a -> Universal.Heap.Recency.Pool.add a acc
+       *                                 | _ -> acc) aset Universal.Heap.Recency.Pool.empty
+       *    |> OptionExt.return *)
+
       | Universal.Heap.Recency.Q_alive_addresses_aspset ->
+         let open Universal.Heap.Recency in
          let cur = get_env T_cur man flow in
-         let aset = AMap.fold (fun _ aset acc ->
-                        ASet.join aset acc) cur ASet.empty in
-         ASet.fold (fun pyaddr acc -> match pyaddr with
-                                      | Def a -> Universal.Heap.Recency.Pool.add a acc
-                                      | _ -> acc) aset Universal.Heap.Recency.Pool.empty
+         let usualmap, addrattrsmap = AMap.partition (fun v _ -> match vkind v with
+                                                                 | V_addr_attr _ -> false
+                                                                 | _ -> true) cur in
+         let vars_to_check = List.map fst (AMap.bindings usualmap) in
+         let pool_of_aset aset start = ASet.fold (fun pyaddr acc -> match pyaddr with
+                                                                    | Def a -> Pool.add a acc
+                                                                    | _ -> acc) aset start in
+         let rec find_alive_addrs_usualvars alive_addrs to_check =
+           match to_check with
+           | [] -> alive_addrs
+           | hd :: tl ->
+              let aset = AMap.find hd usualmap in
+              find_alive_addrs_usualvars (pool_of_aset aset alive_addrs) tl in
+         let find_alive_addrs_attrs alive_addrs =
+           AMap.fold (fun var aset new_alive ->
+               match vkind var with
+               | V_addr_attr (a, _) ->
+                  if Pool.mem a alive_addrs then
+                    pool_of_aset aset new_alive
+                  else new_alive
+               | _ -> assert false
+             ) addrattrsmap alive_addrs in
+         let alive_addrs = find_alive_addrs_usualvars Pool.empty vars_to_check in
+         let rec lfp f init =
+           let r = f init in
+           if Pool.equal r init then init
+           else lfp f r in
+         lfp find_alive_addrs_attrs alive_addrs
          |> OptionExt.return
 
       | _ -> None

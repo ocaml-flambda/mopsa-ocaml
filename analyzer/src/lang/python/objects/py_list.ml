@@ -292,7 +292,6 @@ struct
                                                      ]
                                                      ~zone:Universal.Zone.Z_u_int man
                                                      >>$ fun () flow ->
-                                                   (* man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (mk_var (length_var_of_addr addr_list) range) (mk_py_top T_int range) range) |> *)
                                                    Eval.singleton (mk_py_object (addr_list, None) range) flow
                                              )
                                        )
@@ -1007,9 +1006,17 @@ struct
          man.exec ~zone:Universal.Zone.Z_u_int (mk_remove_var la range) |>
          Post.return |> OptionExt.return
 
-    | S_remove {ekind = E_addr ({addr_kind = A_py_iterator _} as a)} ->
+    | S_remove {ekind = E_addr ({addr_kind = A_py_iterator (kind, _)} as a)} ->
        let va = itseq_of_addr a in
-       flow |> man.exec ~zone:Zone.Z_py (mk_remove_var va range) |> Post.return |> OptionExt.return
+       let flow = man.exec ~zone:Zone.Z_py (mk_remove_var va range) flow in
+       flow |>
+         (
+           if kind = "list_iterator" || kind = "list_reverseiterator" then
+             man.exec ~zone:Universal.Zone.Z_u_int (mk_remove_var (itindex_var_of_addr a) range)
+           else
+             fun x -> x
+         )
+       |> Post.return |> OptionExt.return
 
     | S_rename ({ekind = E_addr ({addr_kind = A_py_iterator _} as a)}, {ekind = E_addr a'}) ->
        let va = itseq_of_addr a in

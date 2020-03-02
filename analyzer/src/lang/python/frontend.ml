@@ -28,6 +28,8 @@ open Ast
 open Utils
 
 let opt_gc_after_functioncall = ref false
+let opt_gc_percent_calls = ref 10 (* 10% *)
+let gc_call = ref 0
 let () =
   register_domain_option "python.frontend" {
       key = "-gc";
@@ -85,10 +87,16 @@ and from_stmt (stmt: Py_parser.Ast.stmt) : stmt =
   let skind' =
     match stmt.skind with
     | S_assign (x, ({ekind = E_call _} as e)) when !opt_gc_after_functioncall ->
-       Universal.Ast.S_block ([mk_stmt (S_assign (from_exp x, from_exp e)) srange'; mk_stmt Universal.Heap.Recency.S_perform_gc srange'], [])
+       incr gc_call;
+       if !gc_call mod (100 / !opt_gc_percent_calls) = 0 then
+         Universal.Ast.S_block ([mk_stmt (S_assign (from_exp x, from_exp e)) srange'; mk_stmt Universal.Heap.Recency.S_perform_gc srange'], [])
+       else S_assign (from_exp x, from_exp e)
 
     | S_expression ({ekind = E_call _} as e) when !opt_gc_after_functioncall ->
-       Universal.Ast.S_block ([mk_stmt (Universal.Ast.S_expression (from_exp e)) srange'; mk_stmt Universal.Heap.Recency.S_perform_gc srange'], [])
+       incr gc_call;
+       if !gc_call mod (100 / !opt_gc_percent_calls) = 0 then
+         Universal.Ast.S_block ([mk_stmt (Universal.Ast.S_expression (from_exp e)) srange'; mk_stmt Universal.Heap.Recency.S_perform_gc srange'], [])
+       else Universal.Ast.S_expression (from_exp e)
 
     | S_assign (x, e) ->
       S_assign (from_exp x, from_exp e)
