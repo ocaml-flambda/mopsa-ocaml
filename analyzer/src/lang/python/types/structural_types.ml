@@ -153,7 +153,7 @@ struct
           warn "unable to perform %a in the structural types (guess is the instance addr wasn't added upon creation)" pp_stmt stmt;
           flow |> Post.return |> OptionExt.return
        | Some old_a ->
-          let to_remove_stmt = mk_block (AttrSet.fold_u (fun attr removes ->
+          let to_remove_stmt = mk_block (AttrSet.fold_uo (fun attr removes ->
                                              mk_remove_var (mk_addr_attr a attr T_any) range :: removes) old_a []) range in
           let ncur = remove a cur in
           let flow = set_env T_cur ncur man flow in

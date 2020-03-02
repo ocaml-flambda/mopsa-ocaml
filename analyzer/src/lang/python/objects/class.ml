@@ -61,8 +61,9 @@ struct
       (* Call __new__ *)
       bind_list args (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
         bind_some (fun eargs flow ->
+            let cs = Flow.get_callstack flow in
             let flow, tmps = List.fold_left (fun (flow, tmps) eargn ->
-                                 let tmp = mk_var (mk_range_attr_var eargn.erange "" T_any) eargn.erange
+                                 let tmp = mk_var (mk_range_attr_var eargn.erange (Format.asprintf "%xd" (Hashtbl.hash_param 30 100 cs)) T_any) eargn.erange
  in
                                  man.exec ~zone:Zone.Z_py (mk_assign tmp eargn range) flow, tmp::tmps
                                ) (flow, []) eargs in

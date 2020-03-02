@@ -89,6 +89,15 @@ module Domain =
                  man flow1)
          |> OptionExt.return
 
+      | E_binop(O_log_or, e1, e2) ->
+         assume e1 man flow
+           ~fthen:(fun true_flow ->
+             man.eval e1 true_flow)
+           ~felse:(fun false_flow ->
+             man.eval e2 false_flow)
+         |> OptionExt.return
+
+
       (* E⟦ e1 is not e2 ⟧ *)
       | E_binop(O_py_is_not, e1, e2) ->
          man.eval (mk_not (mk_binop e1 O_py_is e2 range) range) flow |> OptionExt.return
