@@ -25,7 +25,7 @@
  */
 
 #include <libintl.h>
-
+#include <stddef.h>
 
 /* If true, gettext returns its argument string unchanged.
    This makes it possible to check printf formats that use gettext.

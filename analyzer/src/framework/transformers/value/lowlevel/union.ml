@@ -296,7 +296,7 @@ struct
   let ask man q =
     let r1 = V1.ask (v1_man man) q in
     let r2 = V2.ask (v2_man man) q in
-    Option.neutral2 (join_vquery q) r1 r2
+    OptionExt.neutral2 (join_vquery q) r1 r2
 
 
 

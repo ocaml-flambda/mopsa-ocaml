@@ -56,7 +56,7 @@ struct
         (List.mapi (fun i v ->
              let e =
                (* Initialize globals with the same name of a builtin with its address *)
-               if is_builtin_name @@ get_orig_vname v then (mk_py_object (find_builtin @@ get_orig_vname v) range)
+               if is_builtin_var v then (mk_py_object (find_builtin @@ get_orig_vname v) range)
                else mk_expr (E_py_undefined true) range
              in
              mk_assign (mk_var v range) e range
@@ -143,7 +143,7 @@ struct
 
   let exec zone stmt man flow  =
     match skind stmt with
-    | S_program ({ prog_kind = Py_program(globals, body) }, _)
+    | S_program ({ prog_kind = Py_program(_, globals, body) }, _)
       when !Universal.Iterators.Unittest.unittest_flag ->
       (* Initialize global variables *)
       let flow1 = init_globals man  globals (srange stmt) flow in
@@ -157,16 +157,16 @@ struct
       man.exec stmt flow2 |>
       collect_uncaught_exceptions man |>
       Post.return |>
-      Option.return
+      OptionExt.return
 
-    | S_program ({ prog_kind = Py_program(globals, body) }, _) ->
+    | S_program ({ prog_kind = Py_program(_, globals, body) }, _) ->
       (* Initialize global variables *)
       init_globals man globals (srange stmt) flow |>
       (* Execute the body *)
       man.exec body |>
       collect_uncaught_exceptions man |>
       Post.return |>
-      Option.return
+      OptionExt.return
 
 
 

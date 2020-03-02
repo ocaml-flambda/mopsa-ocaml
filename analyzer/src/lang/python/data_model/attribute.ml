@@ -70,7 +70,21 @@ module Domain =
               Eval.singleton (mk_py_object (find_builtin_attribute cls attr) range) flow
             else
               search_mro tl in
-        search_mro mro |> Option.return
+        search_mro mro |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("getattr", _))}, _)}, e::attr::[], [])  ->
+        man.eval attr flow |>
+        Eval.bind (fun eattr flow ->
+            match ekind eattr with
+            | E_py_object (_, Some {ekind = E_constant (C_string attr)}) ->
+              man.eval (mk_py_attr e attr range) flow
+            | _ ->
+              assume (mk_py_isinstance_builtin eattr "str" range) man flow
+                ~fthen:(fun flow -> man.eval (mk_py_top T_any range) flow)
+                ~felse:(fun flow ->
+                    panic_at range "getattr with attr=%a" pp_expr eattr)
+          )
+        |> OptionExt.return
 
       (* Other attributes *)
       | E_py_attribute (e, attr) ->
@@ -100,7 +114,7 @@ module Domain =
                if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom then
                  let oexp = object_of_expr exp in
                  let oname = oobject_name oexp in
-                 if oname <> None && is_builtin_name (Option.none_to_exn oname) && is_builtin_attribute oexp attr then
+                 if oname <> None && is_builtin_name (OptionExt.none_to_exn oname) && is_builtin_attribute oexp attr then
                    let rese = mk_py_object (find_builtin_attribute oexp attr) range in
                    Eval.singleton rese flow
                  else
@@ -119,14 +133,55 @@ module Domain =
                            ~felse:(fun flow -> search_mro flow tl)
                            man flow in
                      Eval.bind (fun getattribute flow ->
-                         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call getattribute [exp; c_attr] range) flow)
+                         bind_list [exp; c_attr] man.eval flow |>
+                         bind_some (fun ee flow ->
+                             let exp, c_attr = match ee with [e1;e2] -> e1, e2 | _ -> assert false in
+                             (* FIXME(?): we split the flow to remove the exn tokens. If some appear afterwards (hopefully it's only AttributeErrors), we remove them and put it back to cur *)
+                             let flow_exn_before, flow = Flow.partition (fun tk _ -> match tk with
+                                 | Alarms.T_py_exception _ -> true
+                                 | _ -> false) flow in
+                             man.eval (mk_py_call getattribute [exp; c_attr] range) flow |>
+                             bind_opt (fun oattr flow ->
+                                 Some
+                                   (match oattr with
+                                    | None ->
+                                      (* exn, let's call getattr, and change exn flow into cur *)
+                                      let flow = Flow.fold (fun acc tk env ->
+                                          match tk with
+                                          | Alarms.T_py_exception _ ->
+                                            warn_at range "call to __getattribute__ failed with token %a now trying __getattr__" pp_token tk;
+                                            Flow.add T_cur env man.lattice acc
+                                          | _ -> Flow.add tk env man.lattice acc) (Flow.bottom_from flow) flow in
+                                      let flow = Flow.join man.lattice flow_exn_before flow in
+                                      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_attr class_of_exp "__getattr__" range) [exp; c_attr] range) flow
+                                    | Some attr -> Eval.singleton attr (Flow.join man.lattice flow_exn_before flow)
+                                   )
+                               )
+                             |> OptionExt.none_to_exn
+                           )
+                         (* let tmp = mk_range_attr_var range "tmp_getattr" T_any in
+                          * let stmt =
+                          *   mk_stmt
+                          *     (S_py_try (mk_assign (mk_var tmp range) (mk_py_call getattribute [exp; c_attr] range) range,
+                          *                [{py_excpt_type = Some (mk_py_object (find_builtin "AttributeError") range);
+                          *                  py_excpt_name=None;
+                          *                  py_excpt_body=
+                          *                    mk_assign (mk_var tmp range) (mk_py_call (mk_py_attr class_of_exp "__getattr__" range) [exp; c_attr] range)
+                          *                      range
+                          *                 }], mk_block [] range, mk_block [] range))
+                          *     range in
+                          * man.exec ~zone:Zone.Z_py stmt flow |>
+                          * man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var tmp range)  |>
+                          * Eval.add_cleaners [mk_remove_var tmp range] *)
+                       )
                        (search_mro flow mro)
                    )
            )
-         |> Option.return
+         (* FIXME: getattr case / slot_tp_getattr_hook *)
+         |> OptionExt.return
 
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "hasattr")}, _)}, [obj; attr], []) ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("hasattr", _))}, _)}, [obj; attr], []) ->
          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) obj flow |>
            Eval.bind (fun eobj flow ->
              match ekind eobj with
@@ -173,15 +228,15 @@ module Domain =
                  )
                  man flow
              )
-         |> Option.return
+         |> OptionExt.return
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "setattr")}, _)}, [lval; attr; rval], []) ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("setattr", _))}, _)}, [lval; attr; rval], []) ->
         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_attr lval "__setattr__" range) [attr; rval] range) flow
-        |> Option.return
+        |> OptionExt.return
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "delattr")}, _)}, [lval; attr], []) ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("delattr", _))}, _)}, [lval; attr], []) ->
         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_attr lval "__delattr__" range) [attr] range) flow
-        |> Option.return
+        |> OptionExt.return
 
 
       | _ -> None
@@ -190,9 +245,9 @@ module Domain =
       let range = stmt.srange in
       match skind stmt with
       | S_assign({ekind = E_py_attribute(lval, attr)}, rval) ->
-        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_attr lval "__setattr__" range) [mk_constant T_any (C_string attr) range; rval] range) flow
+        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_attr (mk_py_type lval range) "__setattr__" range) [lval; mk_constant T_any (C_string attr) range; rval] range) flow
         |> Eval.bind (fun e flow -> Post.return flow)
-        |> Option.return
+        |> OptionExt.return
 
       | _ -> None
 

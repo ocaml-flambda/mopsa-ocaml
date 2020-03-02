@@ -763,6 +763,7 @@ let resolve_scope (b:block) : block =
     match e with
     | E_conditional (e1,e2,e3) -> List.iter (expr ctx) [e1;e2;e3]
 
+    | E_binary_conditional (e1,e2)
     | E_array_subscript (e1,e2)
     | E_compound_assign (e1,_,_,e2,_)
     | E_binary (_,e1,e2)

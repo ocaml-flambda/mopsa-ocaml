@@ -112,6 +112,7 @@ and resource = C_stubs_parser.Ast.resource
 and builtin = C_stubs_parser.Ast.builtin
 
 
+
 (** {2 Formulas} *)
 (** ************ *)
 
@@ -123,6 +124,10 @@ and formula =
   | F_exists of var * set * formula with_range
   | F_in     of expr * set
 
+
+let compare_assigns a1 a2 =
+  Compare.pair compare_expr (Compare.list (Compare.pair compare_expr compare_expr))
+    (a1.assign_target, a2.assign_offset) (a2.assign_target, a2.assign_offset)
 
 let compare_resource = C_stubs_parser.Ast.compare_resource
 
@@ -218,25 +223,21 @@ type stmt_kind +=
   | S_stub_free of expr
   (** Release a resource *)
 
-
-  (** Declare an assigned object *)
-  | S_stub_assigns of expr  (** modified pointer *) *
-                      (
-                        expr  (** index lower bound *) *
-                        expr  (** index upper bound *)
-                      ) list
-
-
-  (** Rename primed variables of an assigned object *)
-  | S_stub_rename_primed of expr  (** modified pointer *) *
-                            (
-                              expr  (** index lower bound *) *
-                              expr  (** index upper bound *)
-                            ) list
-
   | S_stub_requires of expr
   (** Filter the current environments that verify a condition, and raise an
       alarm if the condition may be violated. *)
+
+
+  | S_stub_prepare_all_assigns of assigns list
+  (** Prepare primed copies of assigned objects *)
+
+
+  | S_stub_assigns of assigns
+  (** Declare an assigned object *)
+
+
+  | S_stub_clean_all_assigns of assigns list
+  (** Clean the post-state of primed copies *)
 
 
 (** {2 Heap addresses for resources} *)
@@ -254,7 +255,7 @@ let () =
       );
     compare = (fun next ak1 ak2 ->
         match ak1, ak2 with
-        | A_stub_resource res1, A_stub_resource res2 -> Pervasives.compare res1 res2
+        | A_stub_resource res1, A_stub_resource res2 -> Stdlib.compare res1 res2
         | _ -> next ak1 ak2
       );
   }
@@ -297,11 +298,14 @@ let mk_stub_directive stub range =
 let mk_stub_free e range =
   mk_stmt (S_stub_free e) range
 
-let mk_stub_assigns t offsets range =
-  mk_stmt (S_stub_assigns (t, offsets)) range
+let mk_stub_prepare_all_assigns assigns range =
+  mk_stmt (S_stub_prepare_all_assigns (List.map get_content assigns)) range
 
-let mk_stub_rename_primed t offsets range =
-  mk_stmt (S_stub_rename_primed (t, offsets)) range
+let mk_stub_assigns t offset range =
+  mk_stmt (S_stub_assigns { assign_target = t; assign_offset = offset}) range
+
+let mk_stub_clean_all_assigns assigns range =
+  mk_stmt (S_stub_clean_all_assigns (List.map get_content assigns)) range
 
 let mk_stub_requires cond range =
   mk_stmt (S_stub_requires cond) range
@@ -590,17 +594,11 @@ let () =
         | S_stub_free(e1), S_stub_free(e2) ->
           compare_expr e1 e2
 
-        | S_stub_assigns(t1, offsets1), S_stub_assigns(t2, offsets2) ->
-          Compare.compose [
-            (fun () -> compare_expr t1 t2);
-            (fun () -> Compare.list (Compare.pair compare_expr compare_expr) offsets1 offsets2);
-          ]
+        | S_stub_assigns a1, S_stub_assigns a2 -> compare_assigns a1 a2
 
-        | S_stub_rename_primed(t1, offsets1), S_stub_rename_primed(t2, offsets2) ->
-          Compare.compose [
-            (fun () -> compare_expr t1 t2);
-            (fun () -> Compare.list (Compare.pair compare_expr compare_expr) offsets1 offsets2);
-          ]
+        | S_stub_prepare_all_assigns a1, S_stub_prepare_all_assigns a2
+        | S_stub_clean_all_assigns a1, S_stub_clean_all_assigns a2 ->
+          Compare.list compare_assigns a1 a2
 
         | S_stub_requires(e1), S_stub_requires(e2) ->
           compare_expr e1 e2
@@ -616,9 +614,11 @@ let () =
           { exprs = [e]; stmts = [] },
           (function { exprs = [e] } -> { s with skind = S_stub_free e } | _ -> assert false)
 
-        | S_stub_assigns(t, offsets) -> panic "visitor for S_stub_assigns not supported"
+        | S_stub_assigns _ -> panic "visitor for S_stub_assigns not supported"
 
-        | S_stub_rename_primed(t, offsets) -> panic "visitor for S_stub_rename_primed not supported"
+        | S_stub_prepare_all_assigns _ -> panic "visitor for S_stub_assigns not supported"
+
+        | S_stub_clean_all_assigns _ -> panic "visitor for S_stub_assigns not supported"
 
         | S_stub_requires e ->
           { exprs = [e]; stmts = [] },
@@ -635,29 +635,18 @@ let () =
 
         | S_stub_free e -> fprintf fmt "free(%a);" pp_expr e
 
-        | S_stub_assigns(t,offsets) ->
-          fprintf fmt "assigns: %a%a;"
-            pp_expr t
-            (pp_print_list
-               ~pp_sep:(fun fmt () -> ())
-               (fun fmt (a, b) ->
-                  fprintf fmt "[%a .. %a]"
-                    pp_expr a
-                    pp_expr b
+        | S_stub_assigns assigns ->
+          fprintf fmt "assigns  : %a%a;"
+            pp_expr assigns.assign_target
+            (pp_print_list ~pp_sep:(fun fmt () -> ())
+               (fun fmt (l, u) ->
+                  fprintf fmt "[%a .. %a]" pp_expr l pp_expr u
                )
-            ) offsets
+            ) assigns.assign_offset
 
-        | S_stub_rename_primed(t,offsets) ->
-          fprintf fmt "rename primed %a%a;"
-            pp_expr t
-            (pp_print_list
-               ~pp_sep:(fun fmt () -> ())
-               (fun fmt (a, b) ->
-                  fprintf fmt "[%a .. %a]"
-                    pp_expr a
-                    pp_expr b
-               )
-            ) offsets
+        | S_stub_prepare_all_assigns _ -> fprintf fmt "prepare assigns;"
+
+        | S_stub_clean_all_assigns _ -> fprintf fmt "clean assigns;"
 
         | S_stub_requires e ->
           fprintf fmt "requires %a;" pp_expr e

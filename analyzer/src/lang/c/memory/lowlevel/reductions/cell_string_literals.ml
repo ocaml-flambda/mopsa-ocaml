@@ -43,7 +43,7 @@ struct
     let oe2 = man.get_eval strings evals in
 
     (* Reduce only when both domains did an evaluation *)
-    Option.apply2
+    OptionExt.apply2
       (fun e1 e2 ->
          match ekind e1, ekind e2 with
           (* Constants from the string literals domain should be precise *)
@@ -52,14 +52,14 @@ struct
           | _, E_constant (C_int_interval _) ->
             (* Remove cell evaluation *)
             let evals = man.del_eval cells evals in
-            Result.singleton evals flow
+            Cases.singleton evals flow
 
           (* Otherwise, keep cells *)
           | _ ->
             let evals = man.del_eval strings evals in
-            Result.singleton evals flow
+            Cases.singleton evals flow
       )
-      (Result.singleton evals flow)
+      (Cases.singleton evals flow)
       oe1 oe2
 
 end

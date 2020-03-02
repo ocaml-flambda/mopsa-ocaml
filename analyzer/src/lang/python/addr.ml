@@ -40,7 +40,7 @@ type class_address =
 
 (** Functions *)
 type function_address =
-  | F_builtin of string (* name of a builtin function *)
+  | F_builtin of string * string (* name of a builtin function, and its type (among builtin_function_or_method, wrapper_descriptor, method_descriptor usually) *)
   | F_user of py_fundec (* declaration of a user function *)
   | F_unsupported of string (** unsupported function *)
   | F_annot of py_func_annot (* function annotations *)
@@ -54,7 +54,7 @@ type module_address =
 type addr_kind +=
   | A_py_class of class_address (** class *) * py_object list (** mro *)
   | A_py_function of function_address (** function *)
-  | A_py_method of py_object (** address of the function to bind *) * expr (** method instance *)
+  | A_py_method of py_object (** address of the function to bind *) * expr (** method instance *) * string  (* type. method or method-wrapper or ... *)
   | A_py_module of module_address
 
 
@@ -65,7 +65,7 @@ let eval_alloc man kind range flow =
   man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) exp flow |>
   Eval.bind (fun exp flow ->
       match ekind exp with
-      | E_addr (addr) -> Result.singleton addr flow
+      | E_addr (addr) -> Cases.singleton addr flow
       | _ -> panic "eval_alloc: allocation returned a non-address express %a" pp_expr exp
     )
 
@@ -109,7 +109,7 @@ let oobject_name obj =
   let some = fun x -> Some x in
   match kind_of_object obj with
   | A_py_class(C_builtin name, _) | A_py_class(C_unsupported name, _)
-  | A_py_function(F_builtin name) | A_py_function(F_unsupported name)
+  | A_py_function(F_builtin (name, _)) | A_py_function(F_unsupported name)
   | A_py_module(M_builtin name) | A_py_module(M_user (name, _))
     -> some name
   | A_py_function(F_user f) -> some @@ get_orig_vname f.py_func_var
@@ -184,6 +184,8 @@ let find_builtin name =
   with Not_found ->
     search modules
 
+let find_builtin_function = Hashtbl.find functions
+
 
 let is_object_unsupported obj =
   match kind_of_object obj with
@@ -195,6 +197,11 @@ let is_object_unsupported obj =
 let is_builtin_name name =
   let exists = fun tbl -> Hashtbl.mem tbl name in
   exists classes || exists functions || exists modules || exists typed_functions
+
+let is_builtin_var v =
+  match vkind v with
+  | V_uniq _ -> is_builtin_name @@ get_orig_vname v
+  | _ -> false
 
 let is_builtin_module name = Hashtbl.mem modules name
 let find_builtin_module name = Hashtbl.find modules name
@@ -209,6 +216,7 @@ let is_builtin_attribute base attr =
     | A_py_class(C_builtin name, _) | A_py_module(M_builtin name) ->
       is_builtin_name (mk_dot_name (Some name) attr)
     | A_py_class (C_annot c, _) ->
+      debug "searching for %s" (mk_dot_name (Some (get_orig_vname c.py_cls_a_var)) attr);
       is_builtin_name (mk_dot_name (Some (get_orig_vname c.py_cls_a_var)) attr)
     | _ -> false
 
@@ -399,8 +407,9 @@ let () =
            | A_py_class(C_annot c, _) -> fprintf fmt "ua{%a}" pp_var c.py_cls_a_var;
            | A_py_function(F_user f) -> fprintf fmt "function %a" pp_var f.py_func_var
            | A_py_function(F_annot f) -> fprintf fmt "f-annot %a@\n%a" pp_var f.py_funca_var Ast.pp_py_func_annot f
-           | A_py_function((F_builtin f | F_unsupported f)) -> fprintf fmt "builtin-function %s" f
-           | A_py_method(f, e) -> fprintf fmt "method %a of %a" pp_addr (addr_of_object f) pp_expr e
+           | A_py_function(F_builtin (f, t)) -> fprintf fmt "%s %s" t f
+           | A_py_function(F_unsupported f) -> fprintf fmt "unsupported-builtin %s" f
+           | A_py_method(f, e, t) -> fprintf fmt "%s %a of %a" t pp_addr (addr_of_object f) pp_expr e
            | A_py_module(M_builtin(m)) -> fprintf fmt "module %s" m
            | A_py_module(M_user(m, globals)) -> fprintf fmt "module %s[defined globals = %a]" m
                            (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_var) globals
@@ -412,15 +421,18 @@ let () =
            | A_py_class (c1, _), A_py_class (c2, _) ->
              begin match c1, c2 with
                | C_builtin s1, C_builtin s2
-               | C_unsupported s1, C_unsupported s2 -> Pervasives.compare s1 s2
+               | C_unsupported s1, C_unsupported s2 -> Stdlib.compare s1 s2
                | C_user c1, C_user c2 -> compare_var c1.py_cls_var c2.py_cls_var
                | C_annot c1, C_annot c2 -> compare_var c1.py_cls_a_var c2.py_cls_a_var;
                | _, _ -> default a1 a2
              end
            | A_py_function f1, A_py_function f2 ->
              begin match f1, f2 with
-               | F_builtin s1, F_builtin s2
-               | F_unsupported s1, F_unsupported s2 -> Pervasives.compare s1 s2
+               | F_builtin (s1, t1), F_builtin (s2, t2) ->
+                 Compare.compose
+                   [(fun () -> Stdlib.compare s1 s2);
+                    (fun () -> Stdlib.compare t1 t2)]
+               | F_unsupported s1, F_unsupported s2 -> Stdlib.compare s1 s2
                | F_user u1, F_user u2 -> compare_var u1.py_func_var u2.py_func_var
                | F_annot f1, F_annot f2 -> compare_var f1.py_funca_var f2.py_funca_var
                | _, _ -> default a1 a2
@@ -428,14 +440,15 @@ let () =
            | A_py_module m1, A_py_module m2 ->
              begin match m1, m2 with
                | M_user (s1, _), M_user (s2, _)
-               | M_builtin s1, M_builtin s2 -> Pervasives.compare s1 s2
+               | M_builtin s1, M_builtin s2 -> Stdlib.compare s1 s2
                | _, _ -> default a1 a2
              end
-           | A_py_method ((addr1, oexpr1), expr1), A_py_method ((addr2, oexpr2), expr2) ->
+           | A_py_method ((addr1, oexpr1), expr1, t1), A_py_method ((addr2, oexpr2), expr2, t2) ->
              Compare.compose
                [ (fun () -> compare_addr addr1 addr2);
                  (fun () -> Compare.option compare_expr oexpr1 oexpr2);
-                 (fun () -> compare_expr expr1 expr2); ]
+                 (fun () -> compare_expr expr1 expr2);
+                 (fun () -> Stdlib.compare t1 t2);]
            | _ -> default a1 a2)
     }
   )

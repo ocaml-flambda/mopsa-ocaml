@@ -49,17 +49,17 @@ module Domain =
       let range = erange exp in
       match ekind exp with
       | E_unop(O_py_not, e) ->
-        man.eval (Utils.mk_builtin_call "bool" [e] range) flow |>
+        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (Utils.mk_builtin_call "bool" [e] range) flow |>
         Eval.bind (fun ee flow ->
-            man.eval (mk_not ee range) flow)
-        |> Option.return
+            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_not ee range) flow)
+        |> OptionExt.return
 
         (* E⟦ e1 and e2 ⟧ *)
       | E_binop(O_py_and, {ekind = E_constant (C_bool true)}, e2) ->
-         man.eval e2 flow |> Option.return
+         man.eval e2 flow |> OptionExt.return
 
       | E_binop(O_py_and, {ekind = E_constant (C_bool false)}, e2) ->
-         Eval.singleton (mk_py_false range) flow |> Option.return
+         Eval.singleton (mk_py_false range) flow |> OptionExt.return
 
       | E_binop(O_py_and, e1, e2) ->
         man.eval (Utils.mk_builtin_call "bool" [e1] range) flow |>
@@ -69,13 +69,13 @@ module Domain =
               ~felse:(fun false_flow -> man.eval e1 false_flow)
               flow1
           )
-        |> Option.return
+        |> OptionExt.return
 
       (* | E_binop(O_py_or, {ekind = E_constant (C_bool true)}, e2) ->
-       *    Eval.singleton (mk_py_true range) flow |> Option.return
+       *    Eval.singleton (mk_py_true range) flow |> OptionExt.return
        *
        * | E_binop(O_py_or, {ekind = E_constant (C_bool false)}, e2) ->
-       *    man.eval e2 flow |> Option.return *)
+       *    man.eval e2 flow |> OptionExt.return *)
 
       (* E⟦ e1 or e2 ⟧ *)
       | E_binop(O_py_or, e1, e2) ->
@@ -87,11 +87,11 @@ module Domain =
                  ~felse:(fun false_flow ->
                      man.eval e2 false_flow)
                  man flow1)
-         |> Option.return
+         |> OptionExt.return
 
       (* E⟦ e1 is not e2 ⟧ *)
       | E_binop(O_py_is_not, e1, e2) ->
-         man.eval (mk_not (mk_binop e1 O_py_is e2 range) range) flow |> Option.return
+         man.eval (mk_not (mk_binop e1 O_py_is e2 range) range) flow |> OptionExt.return
 
       (* E⟦ e1 in e2 ⟧ *)
       | E_binop(O_py_in, e1, e2) ->
@@ -143,12 +143,12 @@ module Domain =
                          man false_flow
                      ) man flow
                )
-             |> Option.return
+             |> OptionExt.return
            )
 
       (* E⟦ e1 in e2 ⟧ *)
       | E_binop(O_py_not_in, e1, e2) ->
-         man.eval (mk_not (mk_binop e1 O_py_in e2 range) range) flow |> Option.return
+         man.eval (mk_not (mk_binop e1 O_py_in e2 range) range) flow |> OptionExt.return
 
       (* E⟦ e1 op e2 op e3 ... ⟧ *)
       | E_py_multi_compare(left, ops, rights) ->
@@ -173,7 +173,7 @@ module Domain =
                    )
              in
              aux left flow (List.combine ops rights)
-           ) |> Option.return
+           ) |> OptionExt.return
 
       | _ -> None
 

@@ -79,13 +79,13 @@ struct
       when not !Unittest.unittest_flag ->
       man.exec universal_main flow |>
       Post.return |>
-      Option.return
+      OptionExt.return
 
     | S_program ({ prog_kind = P_universal{universal_main; universal_fundecs} }, _)
       when !Unittest.unittest_flag ->
       exec_tests universal_main universal_fundecs stmt.srange man flow |>
       Post.return |>
-      Option.return
+      OptionExt.return
 
     | _ -> None
 

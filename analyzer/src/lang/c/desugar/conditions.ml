@@ -79,7 +79,7 @@ struct
             man.eval ~zone:(Z_c, Z_c_low_level) e2 flow
           )
         ~zone:Z_c_scalar man flow |>
-      Option.return
+      OptionExt.return
 
     | E_binop(O_c_and, e1, e2) ->
       man.eval e1 ~zone:(Z_c,Z_c_scalar) flow >>$? fun e1 flow ->
@@ -92,7 +92,7 @@ struct
           )
         ~zone:Z_c_scalar
         man flow |>
-      Option.return
+      OptionExt.return
 
     | E_binop(O_c_or, e1, e2) ->
       man.eval e1 ~zone:(Z_c,Z_c_scalar) flow >>$? fun e1 flow ->
@@ -104,7 +104,7 @@ struct
             man.eval ~zone:(Z_c, Z_c_low_level) e2 flow
           )
          ~zone:Z_c_scalar man flow |>
-      Option.return
+      OptionExt.return
 
     | _ -> None
 

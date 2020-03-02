@@ -93,7 +93,6 @@ let () =
         | E_stub_resource_mem _
         | E_stub_quantified _
         | E_stub_builtin_call _
-        | E_stub_primed _
         | E_unop _
         | E_binop _
         | E_c_cast _

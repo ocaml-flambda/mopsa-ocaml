@@ -94,13 +94,15 @@ type context = {
 
     ctx_simplify: C_simplify.context;
 
+    mutable ctx_files : SetExt.StringSet.t; (** set of parsed files *)
+
     (* comments are stored in a map so that we can remove duplicates *)
     mutable ctx_comments: comment list RangeMap.t;
     ctx_macros: (string,macro) Hashtbl.t;
   }
 (** Structure used internally during project parsing & linking. *)
 
-                 
+
 
 let create_context (project_name:string) (info:C.target_info) =
   { ctx_name = project_name;
@@ -122,6 +124,7 @@ let create_context (project_name:string) (info:C.target_info) =
     ctx_funcs = Hashtbl.create 16;
     ctx_names = Hashtbl.create 16;
     ctx_simplify = C_simplify.create_context info;
+    ctx_files = SetExt.StringSet.empty;
     ctx_comments = RangeMap.empty;
     ctx_macros = Hashtbl.create 16;
   }
@@ -144,7 +147,7 @@ let empty_block = {
     blk_local_vars = [];
   }
 
-let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comment list) (macros:C.macro list) =
+let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: string list) (coms:comment list) (macros:C.macro list) =
 
   
   (* utilities *)
@@ -224,7 +227,8 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
         *)
        let len = match a.C.array_size with
          | C.Size_Constant cst -> Length_cst cst
-         | C.Size_Variable e -> Length_expr (expr None e)
+         | C.Size_Variable (Some e) -> Length_expr (expr None e)
+         | C.Size_Variable None -> No_length
          | C.Size_Incomplete -> No_length
          | _ -> error range "unhandled array size" (C.string_of_type t)
        in
@@ -847,6 +851,10 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
        E_conditional (expr func c.C.cond_cond, expr func c.C.cond_true, expr func c.C.cond_false),
        typ, range
 
+    | C.BinaryConditionalOperator c ->
+       E_binary_conditional (expr func c.C.bcond_cond, expr func c.C.bcond_false),
+       typ, range
+
     | C.ArraySubscriptExpr e ->
        E_array_subscript (expr func e.C.subscript_base, expr func e.C.subscript_index),
        typ, range
@@ -1081,6 +1089,9 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
   | _ -> error decl.C.decl_range "expected TranslationUnitDecl" (C.decl_kind_name decl.C.decl_kind)
   );
 
+  (* add parsed files *)
+  ctx.ctx_files <- SetExt.StringSet.(union ctx.ctx_files (of_list files));
+
   (* add comments, merging duplicates *)
   let c =
     List.fold_left
@@ -1101,7 +1112,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
       if Hashtbl.mem ctx.ctx_macros macro.C.macro_name then
         begin
           let old_macro = Hashtbl.find ctx.ctx_macros macro.C.macro_name in
-          if Compare.list Pervasives.compare
+          if Compare.list Stdlib.compare
               macro.macro_contents old_macro.macro_contents
              != 0
           then
@@ -1130,7 +1141,10 @@ let link_project ctx =
     proj_records = cvt ctx.ctx_records (fun t -> t.record_unique_name);
     proj_vars = cvt ctx.ctx_vars (fun t -> t.var_unique_name);
     proj_funcs = cvt ctx.ctx_funcs (fun t -> t.func_unique_name);
+    proj_files = ctx.ctx_files |> SetExt.StringSet.elements;
     proj_comments = ctx.ctx_comments;
     proj_macros = cvt ctx.ctx_macros (fun t -> t.macro_name);
   }
 
+
+let get_parsed_files ctx = ctx.ctx_files |> SetExt.StringSet.elements

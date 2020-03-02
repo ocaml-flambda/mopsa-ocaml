@@ -622,36 +622,36 @@ module Make(Ord: OrderedType) =
       | Empty -> ()
       | Node {l;v;r} ->
           let c1, c2 = Ord.compare v lo, Ord.compare v hi in
-          if c1 > 0 then iter_slice f l lo v;
+          if c1 > 0 then iter_slice f l lo hi;
           if c1 >= 0 && c2 <= 0 then f v;
-          if c2 < 0 then iter_slice f r v hi
+          if c2 < 0 then iter_slice f r lo hi
 
     let rec fold_slice f m lo hi acc =
       match m with
       | Empty -> acc
       | Node {l;v;r} ->
           let c1, c2 = Ord.compare v lo, Ord.compare v hi in
-          let acc = if c1 > 0 then fold_slice f l lo v acc else acc in
+          let acc = if c1 > 0 then fold_slice f l lo hi acc else acc in
           let acc = if c1 >= 0 && c2 <= 0 then f v acc else acc in
-          if c2 < 0 then fold_slice f r v hi acc else acc
+          if c2 < 0 then fold_slice f r lo hi acc else acc
 
     let rec for_all_slice f m lo hi =
       match m with
       | Empty -> true
       | Node {l;v;r} ->
           let c1, c2 = Ord.compare v lo, Ord.compare v hi in
-          (c1 <= 0 || for_all_slice f l lo v) &&
+          (c1 <= 0 || for_all_slice f l lo hi) &&
           (c1 < 0 || c2 > 0 || f v) &&
-          (c2 >= 0 || for_all_slice f r v hi)
+          (c2 >= 0 || for_all_slice f r lo hi)
 
     let rec exists_slice f m lo hi =
       match m with
       | Empty -> false
       | Node {l;v;r} ->
           let c1, c2 = Ord.compare v lo, Ord.compare v hi in
-          (c1 > 0 && exists_slice f l lo v) ||
+          (c1 > 0 && exists_slice f l lo hi) ||
           (c1 >= 0 && c2 <= 0 && f v) ||
-          (c2 < 0 && exists_slice f r v hi)
+          (c2 < 0 && exists_slice f r lo hi)
 
       
     (* new versions, optimised with _diff functions *)

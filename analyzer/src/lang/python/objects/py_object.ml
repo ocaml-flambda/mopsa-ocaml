@@ -58,7 +58,7 @@ struct
 
   let exec _ _ _ _ = None
 
-
+  (* corresponding to _PyType_Lookup *)
   let rec search_mro man attr ~cls_found ~nothing_found range mro flow =
     match mro with
     | [] -> nothing_found flow
@@ -71,7 +71,8 @@ struct
   let rec eval zs exp man flow =
     let range = erange exp in
     match ekind exp with
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__new__")}, _)}, args, []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("type.__new__", _))}, _)}, args, kwargs)
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__new__", _))}, _)}, args, kwargs) ->
       bind_list args (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
       bind_some (fun args flow ->
           match args with
@@ -89,12 +90,12 @@ struct
                 Eval.singleton (mk_py_object (addr, None) range)
               )
         )
-      |> Option.return
+      |> OptionExt.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__init__")}, _)}, args, []) ->
-      man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range) flow |> Option.return
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__init__", _))}, _)}, args, []) ->
+      man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range) flow |> OptionExt.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "type.__getattribute__")}, _)}, [ptype; attribute], []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("type.__getattribute__", _))}, _)}, [ptype; attribute], []) ->
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type ptype range) flow |>
       Eval.bind (fun metatype flow ->
           let lookintype o_meta_attribute o_meta_get flow =
@@ -106,14 +107,14 @@ struct
                       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)
                         (mk_py_ll_getattr (mk_py_object cls range) attribute range) flow |>
                       Eval.bind (fun attribute flow ->
-                          assume (mk_py_hasattr attribute "__get__" range)
+                          assume (mk_py_hasattr (mk_py_type attribute range) "__get__" range)
                             man flow
                             ~fthen:(fun flow ->
-                              Soundness.warn_at range "FIXME: a NULL argument has been replaced with a None during evaluation";
+                                (* FIXME: a NULL argument has been replaced with a None during evaluation *)
                               man.eval
                                 (mk_py_call
-                                   (mk_py_ll_getattr attribute (mk_string "__get__" range) range)
-                                   [mk_py_none range; ptype]
+                                   (mk_py_attr (mk_py_type attribute range) "__get__" range)
+                                   [attribute; mk_py_none range; ptype]
                                    range
                                 ) flow
                             )
@@ -123,7 +124,7 @@ struct
                   ~nothing_found:(fun flow ->
                       match o_meta_get, o_meta_attribute with
                       | Some meta_get, _ ->
-                        man.eval (mk_py_call meta_get [ptype; metatype] range) flow
+                        man.eval (mk_py_call meta_get [OptionExt.none_to_exn o_meta_attribute; ptype; metatype] range) flow
                       | None, Some meta_attribute ->
                         Eval.singleton meta_attribute flow
                       | None, None ->
@@ -141,91 +142,82 @@ struct
                 man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)
                   (mk_py_ll_getattr (mk_py_object cls range) attribute range)
                   flow |>
-                Eval.bind (fun obj' flow ->
+                Eval.bind (fun meta_attribute flow ->
                     assume
-                      (mk_py_hasattr obj' "__get__" range)
+                      (mk_py_hasattr (mk_py_type meta_attribute range) "__get__" range)
                       man flow
                       ~fthen:(fun flow ->
                           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)
-                            (mk_py_ll_getattr obj' (mk_string "__get__" range) range)
+                            (mk_py_attr (mk_py_type meta_attribute range) "__get__" range)
                             flow |>
                           Eval.bind (fun meta_get flow ->
                               assume
-                                (mk_py_hasattr obj' "__set__" range)
+                                (mk_py_hasattr (mk_py_type meta_attribute range) "__set__" range)
                                 man flow
-                                ~fthen:(man.eval (mk_py_call meta_get [ptype; metatype] range))
-                                ~felse:(lookintype (Some obj') (Some meta_get))
+                                ~fthen:(man.eval (mk_py_call meta_get [meta_attribute; ptype; metatype] range))
+                                ~felse:(lookintype (Some meta_attribute) (Some meta_get))
                             )
                         )
-                      ~felse:(lookintype (Some obj') None)
+                      ~felse:(lookintype (Some meta_attribute) None)
                   )
               )
             ~nothing_found:(lookintype None None)
             range mro_metatype flow
 
         )
-      |> Option.return
+      |> OptionExt.return
 
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__getattribute__")}, _)}, [instance; attribute], []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__getattribute__", _))}, _)}, [instance; attribute], []) ->
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type instance range) flow |>
       Eval.bind (fun class_of_exp flow ->
           let mro = mro (object_of_expr class_of_exp) in
           debug "mro of %a: %a" pp_expr class_of_exp (Format.pp_print_list (fun fmt (a, _) -> pp_addr fmt a)) mro;
+          let tryinstance ~fother flow =
+            assume (mk_py_ll_hasattr instance attribute range) man flow
+              ~fthen:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_ll_getattr instance attribute range))
+              ~felse:fother in
           search_mro man attribute
             ~cls_found:(fun cls flow ->
                 man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)
                   (mk_py_ll_getattr (mk_py_object cls range) attribute range)
                   flow |>
-                Eval.bind (fun obj' flow ->
+                Eval.bind (fun descr flow ->
                     assume
-                      (mk_binop (mk_py_hasattr obj' "__get__" range) O_py_and (mk_py_hasattr obj' "__set__" range) range)
+                      (mk_py_hasattr (mk_py_type descr range) "__get__" range)
                       (* FIXMES:
                          1) it's __set__ or __del__
                          2) also,  GenericGetAttrWithDict uses low level field accesses (like descr->ob_type->tp_descr_get), but these fields get inherited during type creation according to the doc, so even a low-level access actually is something more complicated. The clean fix would be to handle this at class creation for special fields.
+
+                         get/set ~> https://docs.python.org/3/c-api/typeobj.html#cols
                       *)
+
+                      (* hasattr is bad but needed for inheritance, to see *)
                       man flow
                       ~fthen:(fun flow ->
-                          man.eval (mk_py_call (mk_py_attr obj' "__get__" range) [instance; class_of_exp] range) flow
+                          assume (mk_binop (mk_py_hasattr (mk_py_type descr range) "__set__" range) O_py_or (mk_py_hasattr (mk_py_type descr range) "__del__" range) range) man flow
+                            ~fthen:(man.eval (mk_py_call (mk_py_attr (mk_py_type descr range) "__get__" range) [descr; instance; class_of_exp] range))
+                            ~felse:(tryinstance ~fother:(man.eval (mk_py_call (mk_py_attr (mk_py_type descr range) "__get__" range) [descr; instance; class_of_exp] range)))
                         )
-                      ~felse:(fun flow ->
-                          assume
-                            (mk_py_ll_hasattr instance attribute range)
-                            man flow
-                            ~fthen:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_ll_getattr instance attribute range))
-                            ~felse:(fun flow ->
-                                assume
-                                  (mk_py_isinstance_builtin obj' "function" range)
-                                  man flow
-                                  ~fthen:(fun flow ->
-                                      debug "obj'=%a; exp=%a@\n" pp_expr obj' pp_expr instance;
-                                      eval_alloc man (A_py_method (object_of_expr obj', instance)) range flow |>
-                                      bind_some (fun addr flow ->
-                                          let obj = (addr, None) in
-                                          Eval.singleton (mk_py_object obj range) flow)
-                                    )
-                                  ~felse:(Eval.singleton obj')
-                              )
-                        )
+                      ~felse:(tryinstance ~fother:(Eval.singleton descr))
                   )
               )
-            ~nothing_found:(fun flow ->
-                assume
-                  (mk_py_ll_hasattr instance attribute range)
-                  man flow
-                  ~fthen:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_ll_getattr instance attribute range))
-                  ~felse:(fun flow ->
-                      debug "No attribute found for %a@\n" pp_expr instance;
-                      Format.fprintf Format.str_formatter "'%a' object has no attribute '%s'" pp_expr instance (match ekind attribute with | E_constant (C_string attr) -> attr | _ -> assert false);
-                      man.exec (Utils.mk_builtin_raise_msg "AttributeError" (Format.flush_str_formatter ()) range) flow |>
-                      Eval.empty_singleton)
+            ~nothing_found:(tryinstance ~fother:(fun flow ->
+                debug "No attribute found for %a, attr = %a@\n" pp_expr instance pp_expr attribute;
+                Format.fprintf Format.str_formatter "'%a' object has no attribute '%s'" pp_expr instance
+                  (match ekind attribute with
+                   | E_constant (C_string attr) -> attr
+                   | E_py_object ({addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "str", _)}}, Some {ekind = E_constant (C_string attr)}) -> attr
+                   | _ -> assert false);
+                man.exec (Utils.mk_builtin_raise_msg "AttributeError" (Format.flush_str_formatter ()) range) flow |>
+                Eval.empty_singleton)
               )
             range mro flow
         )
-      |> Option.return
+      |> OptionExt.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "type.__setattr__")}, _)}, [lval; attr; rval], [])
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__setattr__")}, _)}, [lval; attr; rval], []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("type.__setattr__", _))}, _)}, [lval; attr; rval], [])
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__setattr__", _))}, _)}, [lval; attr; rval], []) ->
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type lval range) flow |>
       Eval.bind (fun class_of_lval flow ->
           let mro = mro (object_of_expr class_of_lval) in
@@ -248,10 +240,10 @@ struct
                               (mk_py_ll_setattr lval attr rval range))
             range mro flow
         )
-      |> Option.return
+      |> OptionExt.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "type.__delattr__")}, _)}, [lval; attr], [])
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__delattr__")}, _)}, [lval; attr], []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("type.__delattr__", _))}, _)}, [lval; attr], [])
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__delattr__", _))}, _)}, [lval; attr], []) ->
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type lval range) flow |>
       Eval.bind (fun class_of_lval flow ->
           let mro = mro (object_of_expr class_of_lval) in
@@ -275,17 +267,17 @@ struct
                               (mk_py_ll_delattr lval attr range))
             range mro flow
         )
-      |> Option.return
+      |> OptionExt.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__init_subclass__")}, _)}, cls::args, []) ->
-      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range) flow |> Option.return
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__init_subclass__", _))}, _)}, cls::args, []) ->
+      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range) flow |> OptionExt.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__repr__" as f))}, _)}, args, [])
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__str__" as f))}, _)}, args, []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__repr__" as f, _))}, _)}, args, [])
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__str__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args
         ["object"]
         (fun _ flow -> man.eval (mk_py_top T_string range) flow)
-      |> Option.return
+      |> OptionExt.return
 
 
     | _ -> None

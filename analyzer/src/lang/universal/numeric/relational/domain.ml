@@ -117,7 +117,6 @@ struct
         (Array.of_list int_vars)
         (Array.of_list float_vars)
     in
-    debug "|vars| = %d" (Apron.Environment.size env');
     Apron.Abstract1.change_environment ApronManager.man a env' false,
     bnd
 
@@ -187,13 +186,18 @@ struct
         in
         acc'
 
+      | S_expand({ekind = E_var(var,_)}, vl) ->
+        let vars = List.map (function { ekind = E_var(v,_) } -> v | _ -> assert false) vl in
+        let acc', _ = List.fold_left (fun acc v -> forget_var v acc) (acc,bnd) vars in
+        acc'
+
       | S_assume _ ->
         acc
 
       | _ -> panic ~loc:__LOC__ "merge: unsupported statement %a" pp_stmt stmt
     in
-    let a1' = List.fold_left (fun acc stmt -> patch stmt a1 acc) a2 log1 in
-    let a2' = List.fold_left (fun acc stmt -> patch stmt a2 acc) a1 log2 in
+    let a1' = List.fold_left (fun acc stmt -> patch stmt a1 acc) a2 (List.rev log1) in
+    let a2' = List.fold_left (fun acc stmt -> patch stmt a2 acc) a1 (List.rev log2) in
     meet (a1',bnd) (a2',bnd)
 
 
@@ -201,12 +205,12 @@ struct
     match skind stmt with
     | S_add { ekind = E_var (var, _) } ->
       add_missing_vars (a,bnd) [var] |>
-      Option.return
+      OptionExt.return
 
     | S_remove { ekind = E_var (var, _) }
     | S_forget { ekind = E_var (var, _) } ->
       forget_var var (a,bnd) |>
-      Option.return
+      OptionExt.return
 
 
     | S_rename ({ ekind = E_var (var1, _) }, { ekind = E_var (var2, _) }) ->
@@ -215,7 +219,7 @@ struct
       let v1, bnd = Binding.var_to_apron bnd var1 in
       let v2, bnd = Binding.var_to_apron bnd var2 in
       (Apron.Abstract1.rename_array ApronManager.man a [| v1  |] [| v2 |], bnd) |>
-      Option.return
+      OptionExt.return
 
     | S_project vars
       when List.for_all (function { ekind = E_var _ } -> true | _ -> false) vars
@@ -236,7 +240,7 @@ struct
         bnd
       )
 
-    | S_assign({ ekind = E_var (var, STRONG) }, e) ->
+    | S_assign({ ekind = E_var (var, mode) }, e) when var_mode var mode = STRONG ->
       let a, bnd = add_missing_vars (a,bnd) (var :: (Visitor.expr_vars e)) in
       let v = Binding.mk_apron_var var in
       begin try
@@ -251,10 +255,10 @@ struct
           exec ctx (mk_remove_var var stmt.srange) man (a,bnd)
       end
 
-    | S_assign({ ekind = E_var (var, WEAK) } as lval, e) ->
-      let lval' = { lval with ekind = E_var(var, STRONG) } in
+    | S_assign({ ekind = E_var (var, mode) } as lval, e) when var_mode var mode = WEAK ->
+      let lval' = { lval with ekind = E_var(var, Some STRONG) } in
       exec ctx {stmt with skind = S_assign(lval', e)} man (a,bnd) |>
-      Option.lift @@ fun (a',bnd') ->
+      OptionExt.lift @@ fun (a',bnd') ->
       join (a,bnd) (a', bnd')
 
     | S_fold( {ekind = E_var (v, _)}, vl)
@@ -290,10 +294,7 @@ struct
       in
       let v, bnd = Binding.var_to_apron bnd v in
       let vl, bnd = Binding.vars_to_apron bnd vl in
-      let abs = Apron.Abstract1.expand ApronManager.man a
-          v (Array.of_list vl) in
-      let env = Apron.Environment.remove (Apron.Abstract1.env abs) [| v |] in
-      let abs' = Apron.Abstract1.change_environment ApronManager.man abs env false in
+      let abs' = Apron.Abstract1.expand ApronManager.man a v (Array.of_list vl) in
       Some (abs', bnd)
 
     | S_assume(e) -> begin
@@ -344,7 +345,7 @@ struct
                    remove_tmp l
           in
           Some (a', bnd)
-        with UnsupportedExpression -> Option.return (a,bnd)
+        with UnsupportedExpression -> OptionExt.return (a,bnd)
       end
 
     | _ -> None
@@ -384,19 +385,19 @@ struct
       match query with
       | Common.Q_int_interval e ->
         eval_interval e (abs,bnd) |>
-        Option.return
+        OptionExt.return
 
       | Common.Q_int_congr_interval e ->
         (eval_interval e (abs,bnd), Common.C.minf_inf) |>
-        Option.return
+        OptionExt.return
 
       | Q_related_vars v ->
         related_vars v (abs,bnd) |>
-        Option.return
+        OptionExt.return
 
       | Q_constant_vars ->
         constant_vars (abs,bnd) |>
-        Option.return
+        OptionExt.return
 
 
       | _ -> None

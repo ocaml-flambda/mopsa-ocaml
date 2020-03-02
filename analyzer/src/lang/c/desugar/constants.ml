@@ -73,7 +73,7 @@ struct
     | Some z ->
       debug "%a simplified into %a" pp_expr exp Z.pp_print z;
       Eval.singleton (mk_z z ~typ:exp.etyp exp.erange) flow |>
-      Option.return
+      OptionExt.return
 
 
   (** Query handler *)

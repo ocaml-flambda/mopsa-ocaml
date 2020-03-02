@@ -55,7 +55,7 @@ module Domain =
             Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow)
               (List.map (fun e -> Eval.singleton e flow) types)
           )
-        |> Option.return
+        |> OptionExt.return
 
 
       | _ -> None

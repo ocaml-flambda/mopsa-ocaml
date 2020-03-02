@@ -47,11 +47,22 @@
             "python.types.t_complex",
 
             {
-                "apply": "universal.heap.recency.all",
+                "apply": {
+                    "compose": [
+                        "universal.heap.recency.all",
+                        // {
+                        //     "product": [
+                        //         "python.types.addr_env",
+                        //         "python.types.polymorphism"
+                        //     ],
+                        //     "reductions": ["python.types.reductions.polymorphism"]
+                        // }
+                        "python.types.addr_env"
+                    ]
+                },
                 "on":
                 { "seq":
                   [
-                      "python.types.addr_env",
                       "python.types.nominal_types",
                       "python.types.structural_types",
                       "python.types.type_annot",

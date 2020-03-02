@@ -26,7 +26,36 @@ open Sig.Domain.Stateless
 open Ast
 open Addr
 open Universal.Ast
+open Data_container_utils
 
+type addr_kind +=
+  | A_py_staticmethod of Rangeset.t
+  | A_py_classmethod of Rangeset.t
+
+
+let () =
+  register_join_akind (fun default ak1 ak2 ->
+      match ak1, ak2 with
+      | A_py_staticmethod r1, A_py_staticmethod r2 -> A_py_staticmethod (Rangeset.union r1 r2)
+      | A_py_classmethod r1, A_py_classmethod r2 -> A_py_classmethod (Rangeset.union r1 r2)
+      | _ -> default ak1 ak2);
+  register_is_data_container (fun default ak -> match ak with
+      | A_py_classmethod _ -> false
+      | A_py_staticmethod _ -> false
+      | _ -> default ak)
+
+let () =
+  Format.(register_addr_kind {
+      print = (fun default fmt a ->
+          match a with
+          | A_py_staticmethod r -> fprintf fmt "staticmethod[%a]" (fun fmt -> Rangeset.iter (fun ra -> pp_range fmt ra)) r
+          | A_py_classmethod r -> fprintf fmt "classmethod[%a]" (fun fmt -> Rangeset.iter (fun ra -> pp_range fmt ra)) r
+          | _ -> default fmt a);
+      compare = (fun default a1 a2 ->
+          match a1, a2 with
+          | A_py_staticmethod v1, A_py_staticmethod v2 -> Rangeset.compare v1 v2
+          | A_py_classmethod v1, A_py_classmethod v2 -> Rangeset.compare v1 v2
+          | _ -> default a1 a2);})
 
 module Domain =
   struct
@@ -40,18 +69,164 @@ module Domain =
       ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
     }
 
+    let var_of_addr a = match akind a with
+      | A_py_staticmethod _ | A_py_classmethod _ -> mk_addr_attr a "__func__" T_any
+      | _ -> assert false
+
+    let var_of_eobj e = match ekind e with
+      | E_py_object (a, _) -> var_of_addr a
+      | _ -> assert false
+
+    let addr_of_expr exp = match ekind exp with
+      | E_addr a -> a
+      | _ -> assert false
+
     let alarms = []
+
 
     let init _ _ flow = flow
 
     let eval zs exp man flow =
       let range = erange exp in
       match ekind exp with
-        (* 𝔼⟦ f() | isinstance(f, function) ⟧ *)
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("method.__new__", _))}, _)}, [meth; func; inst], []) ->
+        (* FIXME: meth should be a subtype of method *)
+        eval_alloc man (A_py_method (object_of_expr func, inst, "method")) range flow |>
+        bind_some (fun addr flow ->
+            let obj = (addr, None) in
+            Eval.singleton (mk_py_object obj range) flow
+          )
+        |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("function.__get__", _))}, _)}, [descr; instance; typeofinst], []) ->
+        assume (mk_py_isinstance_builtin instance "NoneType" range) man flow
+          ~fthen:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) descr)
+          ~felse:(
+            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object (find_builtin "method") range) [descr; instance] range)
+            )
+        |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("wrapper_descriptor.__get__", _))}, _)}, [descr; instance; typeofinst], []) ->
+        (* FIXME: No NoneType case otherwise issues on NoneType.__bool__ *) (* to investigate depending on the class of the getter *)
+        assume
+          (mk_py_isinstance_builtin instance "NoneType" range) man flow
+          ~fthen:(fun flow ->
+              assume (mk_py_isinstance instance typeofinst range) man flow
+                ~fthen:(fun flow ->
+                  eval_alloc man (A_py_method (object_of_expr descr, instance, "method-wrapper")) range flow |>
+                  bind_some (fun addr flow ->
+                      let obj = (addr, None) in
+                      Eval.singleton (mk_py_object obj range) flow)
+                )
+                ~felse:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) descr)
+            )
+          ~felse:(fun flow ->
+              eval_alloc man (A_py_method (object_of_expr descr, instance, "method-wrapper")) range flow |>
+              bind_some (fun addr flow ->
+                  let obj = (addr, None) in
+                  Eval.singleton (mk_py_object obj range) flow)
+            )
+        |> OptionExt.return
+
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("method_descriptor.__get__", _))}, _)}, [descr; instance; typeofinst], []) ->
+        assume (mk_py_isinstance_builtin instance "NoneType" range) man flow
+          ~fthen:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) descr)
+          ~felse:(fun flow ->
+              eval_alloc man (A_py_method (object_of_expr descr, instance, "builtin_function_or_method")) range flow |>
+              bind_some (fun addr flow ->
+                  let obj = (addr, None) in
+                  Eval.singleton (mk_py_object obj range) flow)
+            )
+        |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("classmethod.__new__" as s, _))}, _)}, [cls; func], [])
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("staticmethod.__new__" as s, _))}, _)}, [cls; func], []) ->
+        let addr_func = mk_alloc_addr (match List.hd (String.split_on_char '.' s) with
+            | "staticmethod" -> A_py_staticmethod (Rangeset.singleton range)
+            | "classmethod" -> A_py_classmethod (Rangeset.singleton range)
+            | _ -> assert false
+          ) range in
+        man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_func flow |>
+        Eval.bind (fun eaddr_list flow ->
+            let addr_func = addr_of_expr eaddr_list in
+            let func_var = var_of_addr addr_func in
+            man.exec (mk_assign (mk_var func_var range) func range) flow |>
+            Eval.singleton (mk_py_object (addr_func, None) range)
+          )
+        |> OptionExt.return
+
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("classmethod.__init__", _))}, _)}, [self; func], [])
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("staticmethod.__init__", _))}, _)}, [self; func], []) ->
+        (* begin match ekind func with
+         *   | E_py_object ({addr_kind = A_py_function f} as faddr, _) ->
+         *     man.exec (mk_assign (mk_var (mk_addr_attr faddr "__func__" T_any) range) func range) flow |>
+         *     (\* man.exec (mk_assign (mk_py_attr self "__func__" range) func range) flow |> *\)
+         *     man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range) |>
+         *     OptionExt.return
+         *   | _ -> assert false
+         * end *)
+        (* man.exec (mk_assign (mk_py_attr self "__func__" range) func range) flow |> *)
+        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range) flow |>
+        OptionExt.return
+
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("classmethod.__get__", _))}, _)}, [self; inst; typ], []) ->
+        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) self flow |>
+        Eval.bind (fun self flow ->
+            let var_func = var_of_eobj self in
+            assume (mk_py_isinstance_builtin inst "NoneType" range) man flow
+              ~fthen:(fun flow ->
+                  assume (mk_py_isinstance inst typ range) man flow
+                    ~fthen:(
+                      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object (find_builtin "method") range) [mk_var var_func range ; mk_py_type inst range] range)
+                    )
+                    ~felse:(
+                      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object (find_builtin "method") range) [mk_var var_func range ; typ] range)
+                    )
+                )
+              ~felse:(
+                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object (find_builtin "method") range) [mk_var var_func range ;  mk_py_type inst range] range)
+              )
+          )
+        |>  OptionExt.return
+
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("staticmethod.__get__", _))}, _)}, [self; _; _], []) ->
+        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) self flow |>
+        Eval.bind (fun self flow ->
+            let var_func = var_of_eobj self in
+            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var var_func range) flow
+          )
+        |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("property.__get__", _))}, _)}, [self; instance; _], []) ->
+        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_attr self "fget" range) [instance] range) flow |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("property.__init__", _))}, _)} as called, [self; getter], []) ->
+        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) {exp with ekind = E_py_call(called, [self; getter; mk_py_none range; mk_py_none range; mk_py_none range], [])} flow |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("property.__init__", _))}, _)} as called, [self; getter; setter], []) ->
+        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) {exp with ekind = E_py_call(called, [self; getter; setter; mk_py_none range; mk_py_none range], [])} flow |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("property.__init__", _))}, _)} as called, [self; getter; setter; deleter], []) ->
+        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) {exp with ekind = E_py_call(called, [self; getter; setter; deleter; mk_py_none range], [])} flow |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("property.__init__", _))}, _)}, [self; getter; setter; deleter; doc], []) ->
+        let assignments = [("fget", getter); ("fset", setter); ("fdel", deleter); ("__doc__", doc)] in
+        man.exec (mk_block (List.map (fun (field, arg) -> mk_assign (mk_py_attr self field range) arg range)  assignments) range) flow |>
+        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range) |>
+        OptionExt.return
+
+
+    (* 𝔼⟦ f() | isinstance(f, function) ⟧ *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function(F_user pyfundec)}, _)}, args, kwargs) ->
         debug "args: %a@\n" (Format.pp_print_list pp_expr) args;
-        debug "kwargs: %a@\n" (Format.pp_print_list (fun fmt (so, e) -> Format.fprintf fmt "%a~>%a" (Option.print Format.pp_print_string) so pp_expr e)) kwargs;
+        debug "kwargs: %a@\n" (Format.pp_print_list (fun fmt (so, e) -> Format.fprintf fmt "%a~>%a" (OptionExt.print Format.pp_print_string) so pp_expr e)) kwargs;
         debug "user-defined function call on %s@\n" pyfundec.py_func_var.vname;
+        if not (pyfundec.py_func_vararg = None && pyfundec.py_func_kwonly_args = [] && pyfundec.py_func_kwarg = None) then
+          panic_at range "Calls using vararg, keyword-only args or kwargs are not supported";
         let param_and_args = List.combine
             (List.map (fun v -> match vkind v with | V_uniq (s, _) -> s | _ -> assert false) pyfundec.py_func_parameters)
             pyfundec.py_func_defaults in
@@ -65,8 +240,8 @@ module Domain =
         let py_func_defaults = List.map snd py_func_defaults in
         (* First check the correct number of arguments *)
         let default_args, nondefault_args = List.partition (function None -> false | _ -> true) py_func_defaults in
-        Option.return @@
-        if List.length pyfundec.py_func_parameters < List.length nondefault_args then
+        OptionExt.return @@
+        if List.length args < List.length nondefault_args then
           (
             debug "Too few arguments!@\n";
             let missing = List.length nondefault_args - List.length pyfundec.py_func_parameters in
@@ -88,10 +263,10 @@ module Domain =
           )
         else
           (
-            debug "|params| = %d" (List.length pyfundec.py_func_parameters);
-            debug "|args| = %d" (List.length args);
-            debug "|default| = %d" (List.length default_args);
-            debug "|non-default| = %d" (List.length nondefault_args);
+            debug "|params| = %d (%a)" (List.length pyfundec.py_func_parameters) (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_var) pyfundec.py_func_parameters;
+            debug "|args| = %d (%a)" (List.length args) (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_expr) args;
+            debug "|default| = %d (%a)" (List.length default_args) (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") (OptionExt.print pp_expr)) default_args;
+            debug "|non-default| = %d (%a)" (List.length nondefault_args) (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") (OptionExt.print pp_expr)) nondefault_args;
             let args =
               if List.length args = (List.length pyfundec.py_func_parameters) then
                 args
@@ -145,7 +320,7 @@ module Domain =
                       (mk_block (List.mapi (fun i v ->
                            let e =
                              (* Initialize locals with the same name of a builtin with its address *)
-                             if is_builtin_name (get_orig_vname v) then (mk_py_object (find_builtin (get_orig_vname v)) range)
+                             if is_builtin_var v then (mk_py_object (find_builtin (get_orig_vname v)) range)
                              else mk_expr (E_py_undefined false) range
                            in
                            mk_assign (mk_var v range) e range
@@ -169,12 +344,20 @@ module Domain =
               )
           )
       (* 𝔼⟦ f() | isinstance(f, method) ⟧ *)
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_method(f, e)}, _)}, args, []) ->
-        let exp' = mk_py_call (mk_py_object f range) (e :: args) range in
-        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) exp' flow |> Option.return
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_method(f, e, t)}, _)}, args, kwargs) ->
+        let exp' = mk_py_kall (mk_py_object f range) (e :: args) kwargs range in
+        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) exp' flow |> OptionExt.return
 
 
       | _ -> None
+
+    let decors_to_call fundec =
+      List.filter (fun expr -> match ekind expr with
+          | E_py_attribute({ekind = E_var( {vkind = V_uniq ("mopsa",_)}, _)}, _)
+          | E_py_attribute({ekind = E_var( {vkind = V_uniq ("typing",_)}, _)}, _)
+          | E_py_call({ekind = E_py_attribute({ekind = E_var( {vkind = V_uniq ("mopsa",_)}, _)}, _)}, _, _) -> false
+          | _ -> true
+        ) fundec.py_func_decors
 
     let exec zone stmt man flow =
       let range = srange stmt in
@@ -188,7 +371,7 @@ module Domain =
            if Libs.Py_mopsa.is_unsupported_fundec func then F_unsupported (get_orig_vname func.py_func_var) else
              if Libs.Py_mopsa.is_builtin_fundec func then
                let name = Libs.Py_mopsa.builtin_fundec_name func in
-               F_builtin name
+               F_builtin (name, Libs.Py_mopsa.builtin_type_name "function" func)
              else F_user func
          in
          eval_alloc man (A_py_function kind) stmt.srange flow |>
@@ -199,12 +382,12 @@ module Domain =
              man.exec
                (mk_assign
                   (mk_var func.py_func_var range)
-                  (mk_py_object obj range)
+                  (List.fold_left (fun acc decor -> mk_py_call decor [acc] range) (mk_py_object obj range) (decors_to_call func))
                   range
                ) flow
              |> Post.return
            )
-         |> Option.return
+         |> OptionExt.return
       | _ ->
         None
 

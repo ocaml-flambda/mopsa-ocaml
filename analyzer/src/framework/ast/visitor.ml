@@ -106,13 +106,39 @@ let stmt_visit_chain : (stmt -> stmt structure) ref =
             | _ -> assert false
           )
 
-      | S_rename _
-      | S_add _
-      | S_remove _
-      | S_forget _
-      | S_project _
-      | S_expand _
-      | S_fold _ -> leaf stmt
+      | S_rename(e,e') ->
+        { exprs = [e;e']; stmts = [] },
+        (function | { exprs = [e;e'] } -> { stmt with skind = S_rename(e,e') }
+                  | _ -> assert false)
+
+      | S_add(e) ->
+        { exprs = [e]; stmts = [] },
+        (function | { exprs = [e] } -> { stmt with skind = S_add(e) }
+                  | _ -> assert false)
+
+      | S_remove(e) ->
+        { exprs = [e]; stmts = [] },
+        (function | { exprs = [e] } -> { stmt with skind = S_remove(e) }
+                  | _ -> assert false)
+
+      | S_forget(e) ->
+        { exprs = [e]; stmts = [] },
+        (function | { exprs = [e] } -> { stmt with skind = S_forget(e) }
+                  | _ -> assert false)
+
+      | S_project(el) ->
+        { exprs = el; stmts = [] },
+        (function | { exprs } -> { stmt with skind = S_project(exprs) })
+
+      | S_expand(e,el) ->
+        { exprs = e::el; stmts = [] },
+        (function | { exprs = e::el } -> { stmt with skind = S_expand(e,el) }
+                  | _ -> assert false)
+
+      | S_fold(e,el) ->
+        { exprs = e::el; stmts = [] },
+        (function | { exprs = e::el } -> { stmt with skind = S_fold(e,el) }
+                  | _ -> assert false)
 
       | _ -> Exceptions.panic "stmt_visit_chain: unknown statement"
     )
@@ -318,4 +344,3 @@ let rec get_orig_expr e =
       (fun ee -> VisitParts (iter ee))
       (fun s -> VisitParts s)
       e
-      

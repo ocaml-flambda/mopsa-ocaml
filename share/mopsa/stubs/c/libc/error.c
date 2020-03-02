@@ -26,7 +26,7 @@
 /*$
  * ensures: 1 == 0;
  */
-void error (int __status, int __errnum, const char *__format, ...) { }
+void error (int __status, int __errnum, const char *__format, ...);
 
 
 /*$

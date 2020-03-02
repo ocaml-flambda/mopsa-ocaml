@@ -738,9 +738,14 @@ void *aligned_alloc (size_t __alignment, size_t __size);
 #endif
 
 /*$
- * ensures: 1 == 0;
+ * requires: 1 == 0;
  */
 void abort (void);
+
+/*$
+ * requires: 1 == 0;
+ */
+void __builtin_abort (void);
 
 
 #if defined __USE_ISOC11 || defined __USE_ISOCXX11
@@ -788,8 +793,8 @@ void _Exit (int __status);
  * requires: valid_string(__name);
  *
  * case "success" {
- *   local:    char* r = new ReadOnlyMemory;
- *   ensures:  size(r) in [1, INT_MAX];
+ *   local:    char* r = new GetEnvString;
+ *   ensures:  size(r) == INT_MAX;
  *   ensures:  return == r;
  *   ensures:  valid_string(return);
  * }

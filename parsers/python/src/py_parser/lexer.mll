@@ -115,6 +115,7 @@ let identifier = id_start id_continue*
 (* Strings *)
 let stringprefix =  "u" | "U"
 let rawstringprefix = "r" | "R"
+let fstringprefix = "f"
 let escapeseq = "\\" _
 
 (* Bytestrings *)
@@ -234,36 +235,101 @@ rule token = parse
     | rawbyteprefix "\"\"\""
         { [BYTES (let x = unesc_long_dq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
     | rawstringprefix  "\"\"\""
-        { [STR (let x = unesc_long_dq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
+        {
+          let start = lexbuf.lex_curr_p in
+          let str =
+            let x = unesc_long_dq_prefix lexbuf in
+            String.concat "" (List.map (String.make 1) x) in
+          let stop = lexbuf.lex_curr_p in
+          [STR (start, stop, str)]
+        }
     | byteprefix "\"\"\""
         { [BYTES (let x = long_dq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
     | stringprefix? "\"\"\""
-        { [STR (let x = long_dq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
+        {
+          let start = lexbuf.lex_curr_p in
+          let str =
+            let x = long_dq_prefix lexbuf in
+            String.concat "" (List.map (String.make 1) x) in
+          let stop = lexbuf.lex_curr_p in
+          [STR (start, stop, str)] }
+    | fstringprefix? "\"\"\""
+        {
+          let start = lexbuf.lex_curr_p in
+          let str =
+            let x = long_dq_prefix lexbuf in
+            String.concat "" (List.map (String.make 1) x) in
+          let stop = lexbuf.lex_curr_p in
+          [STR (start, stop, str)] }
     | rawbyteprefix  "'''"
         { [BYTES (let x = unesc_long_sq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
     | rawstringprefix  "'''"
-        { [STR (let x = unesc_long_sq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
+        {
+          let start = lexbuf.lex_curr_p in
+          let str = let x = unesc_long_sq_prefix lexbuf in String.concat "" (List.map (String.make 1) x) in
+          let stop = lexbuf.lex_curr_p in
+          [STR (start, stop, str)] }
     | byteprefix  "'''"
         { [BYTES (let x = long_sq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
     | stringprefix? "'''"
-        { [STR (let x = long_sq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
+        {
+          let start = lexbuf.lex_curr_p in
+          let str = let x = long_sq_prefix lexbuf in String.concat "" (List.map (String.make 1) x) in
+          let stop = lexbuf.lex_curr_p in
+          [STR (start, stop, str)] }
+    | fstringprefix? "'''"
+        {
+          let start = lexbuf.lex_curr_p in
+          let str = let x = long_sq_prefix lexbuf in String.concat "" (List.map (String.make 1) x) in
+          let stop = lexbuf.lex_curr_p in
+          [STR (start, stop, str)]
+        }
     (* Short string literals *)
     | rawbyteprefix  '\''
         { [BYTES (let x = unesc_sq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
     | rawstringprefix  '\''
-        { [STR (let x = unesc_sq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
+        {
+          let start = lexbuf.lex_curr_p in
+          let str = let x = unesc_sq_prefix lexbuf in String.concat "" (List.map (String.make 1) x) in
+          let stop = lexbuf.lex_curr_p in
+          [STR (start, stop, str)] }
     | byteprefix '\''
         { [BYTES (let x = sq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
     | stringprefix? '\''
-        { [STR  (let x = sq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
+        {
+          let start = lexbuf.lex_curr_p in
+          let str = let x = sq_prefix lexbuf in String.concat "" (List.map (String.make 1) x) in
+          let stop = lexbuf.lex_curr_p in
+          [STR  (start, stop, str)]
+        }
+    | fstringprefix? '\''
+        {
+          let start = lexbuf.lex_curr_p in
+          let str = let x = sq_prefix lexbuf in String.concat "" (List.map (String.make 1) x) in
+          let stop = lexbuf.lex_curr_p in
+          [STR  (start, stop, str)] }
     | rawbyteprefix  '"'
         { [BYTES (let x = unesc_dq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
-    | rawstringprefix  '"'
-        { [STR (let x = unesc_dq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
+    | rawstringprefix '"'
+        {
+          let start = lexbuf.lex_curr_p in
+          let str = let x = unesc_dq_prefix lexbuf in String.concat "" (List.map (String.make 1) x) in
+          let stop = lexbuf.lex_curr_p in
+          [STR (start, stop, str)] }
     | byteprefix '"'
         { [BYTES (let x = dq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
     | stringprefix? '"'
-        { [STR (let x = dq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
+        {
+          let start = lexbuf.lex_curr_p in
+          let str = let x = dq_prefix lexbuf in String.concat "" (List.map (String.make 1) x) in
+          let stop = lexbuf.lex_curr_p in
+          [STR (start, stop, str)] }
+    | fstringprefix? '"'
+        {
+          let start = lexbuf.lex_curr_p in
+          let str = let x = dq_prefix lexbuf in String.concat "" (List.map (String.make 1) x) in
+          let stop = lexbuf.lex_curr_p in
+          [STR (start, stop, str)] }
     | eof                       { [EOF] }
     | _ as c                    { raise (LexingError ("illegal character (unicode not supported) : " ^ String.make 1 c)) }
 
@@ -275,7 +341,8 @@ and indentation = parse
 and unesc_dq_prefix = parse
     | eof           { raise (LexingError ("unterminated string")) }
     | "\\\n"        { new_line lexbuf; unesc_dq_prefix lexbuf }
-    | "\""          { [] }
+    (* | "\\\""        { '\\' :: '\"' :: unesc_dq_prefix lexbuf } *)
+    | '"'           { [] }
     | _ as c        { (c) :: (unesc_dq_prefix lexbuf) }
 
 and dq_prefix = parse
@@ -297,7 +364,8 @@ and dq_prefix = parse
 and unesc_sq_prefix = parse
     | eof           { raise (LexingError ("unterminated string")) }
     | "\\\n"        { new_line lexbuf; unesc_sq_prefix lexbuf }
-    | "\'"          { [] }
+    (* | "\\\'"        { '\\' :: '\'' :: unesc_sq_prefix lexbuf } *)
+    | '\''          { [] }
     | _ as c        { (c) :: (unesc_sq_prefix lexbuf) }
 
 and sq_prefix = parse
@@ -325,7 +393,7 @@ and unesc_long_sq_prefix = parse
 and long_sq_prefix = parse
     | eof                     { raise (LexingError ("unterminated string")) }
     | '\\' endline            { new_line lexbuf; long_sq_prefix lexbuf }
-    | endline "\'\'\'"        { [] }
+    | endline "\'\'\'"        { new_line lexbuf; [] }
     | endline                 { new_line lexbuf; ('\n') :: long_sq_prefix lexbuf }
     | "\\\n"                  { new_line lexbuf; ('\n') :: long_sq_prefix lexbuf }
     | "\'\'\'"                { [] }
@@ -373,7 +441,7 @@ and long_dq_prefix = parse
         | INT i -> "INT " ^ (Z.to_string i) ^ " "
         | FLOAT f-> "FLOAT "^ (string_of_float f) ^ " "
         | IMAG s-> "IMAG " ^ s ^ " "
-        | STR s-> "STR " ^ s ^ " "
+        | STR (_, _, s)-> "STR " ^ s ^ " "
         | BYTES s -> "BYTES " ^ s ^" "
 
         | INDENT  -> "INDENT "

@@ -20,6 +20,7 @@
 (****************************************************************************)
 
 include Program
+include Frontend
 include Typ
 include Operator
 include Constant

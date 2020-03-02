@@ -80,7 +80,7 @@ struct
                 man flow
             )
         )
-      |> Option.return
+      |> OptionExt.return
 
     | _ -> None
 
@@ -132,7 +132,7 @@ struct
               man.exec (Utils.mk_builtin_raise_msg "TypeError" "Cannot create a consistent method resolution order (MRO)" range) flow
               |> Post.return
         )
-      |> Option.return
+      |> OptionExt.return
 
     | _ -> None
 

@@ -67,20 +67,20 @@ struct
     match skind stmt with
     | S_return (Some e) ->
       let ret = Context.find_unit return_key (Flow.get_ctx flow) in
-      let rrange = get_last_call_site flow in
+      let rrange = tag_range (get_last_call_site flow) "return" in
       let flow =
         man.exec (mk_add_var ret rrange) flow |>
-        man.exec (mk_assign (mk_var ret rrange) e range) in
+        man.exec (mk_assign (mk_var ret rrange) e rrange) in
       let cur = Flow.get T_cur man.lattice flow in
-      Flow.add (T_return (range, true)) cur man.lattice flow |>
+      Flow.add (T_return (rrange, true)) cur man.lattice flow |>
       Flow.remove T_cur |>
-      Post.return |> Option.return
+      Post.return |> OptionExt.return
 
     | S_return None ->
       let cur = Flow.get T_cur man.lattice flow in
-      Flow.add (T_return (range, false)) cur man.lattice flow |>
+      Flow.add (T_return (tag_range range "return", false)) cur man.lattice flow |>
       Flow.remove T_cur |>
-      Post.return |> Option.return
+      Post.return |> OptionExt.return
 
     | _ -> None
 
@@ -94,7 +94,7 @@ struct
     | E_call({ekind = E_function (User_defined f)}, args) ->
 
       if man.lattice.is_bottom (Flow.get T_cur man.lattice flow)
-      then Eval.empty_singleton flow |> Option.return
+      then Eval.empty_singleton flow |> OptionExt.return
       else
 
       let params, locals, body, flow = init_fun_params f args range man flow in
@@ -103,7 +103,7 @@ struct
         | Some _ -> Some (mk_return_var exp)
       in
       inline f params locals body ret range man flow
-      |> Option.return
+      |> OptionExt.return
 
     | _ -> None
 

@@ -43,7 +43,6 @@
 int access (const char *__name, int __type);
 
 
-#ifdef __USE_GNU
 
 /*$
  * local: int r = access(__name, __type);
@@ -57,9 +56,6 @@ int euidaccess (const char *__name, int __type);
  */
 int eaccess (const char *__name, int __type);
 
-#endif
-
-#ifdef __USE_ATFILE
 
 /*$
  * local:    void* f = _mopsa_find_file_resource(__fd);
@@ -69,7 +65,6 @@ int eaccess (const char *__name, int __type);
  */
 int faccessat (int __fd, const char *__file, int __type, int __flag);
 
-#endif
 
 /*$
  * local:    void* f = _mopsa_find_file_resource(__fd);
@@ -170,7 +165,6 @@ ssize_t pwrite (int __fd, const void *__buf, size_t __n,
  */
 int pipe (int __pipedes[2]);
 
-#ifdef __USE_GNU
 
 /*$
  * local:   int r = pipe(__pipedes);
@@ -178,7 +172,6 @@ int pipe (int __pipedes[2]);
  */
 int pipe2 (int __pipedes[2], int __flags);
 
-#endif
 
 /*$
  * warn: "unsupported stub";
@@ -190,7 +183,6 @@ unsigned int alarm (unsigned int __seconds);
  */
 unsigned int sleep (unsigned int __seconds);
 
-#if (defined __USE_XOPEN_EXTENDED && !defined __USE_XOPEN2K8) || defined __USE_MISC
 
 /*$
  * warn: "unsupported stub";
@@ -210,7 +202,6 @@ __useconds_t ualarm (__useconds_t __value, __useconds_t __interval);
  */
 int usleep (__useconds_t __useconds);
 
-#endif
 
 /*$
  * // NOTE: waits until EINTR, so, always return an error!
@@ -235,8 +226,6 @@ int pause (void);
  */
 int chown (const char *__file, __uid_t __owner, __gid_t __group);
 
-
-#if defined __USE_XOPEN_EXTENDED || defined __USE_XOPEN2K8
 
 /*$
  * local:    void* f = _mopsa_find_file_resource(__fd);
@@ -263,10 +252,6 @@ int fchown (int __fd, __uid_t __owner, __gid_t __group);
  */
 int lchown (const char *__file, __uid_t __owner, __gid_t __group);
 
-#endif
-
-
-#ifdef __USE_ATFILE
 
 /*$
  * local:    void* f = _mopsa_find_file_resource(__fd);
@@ -287,7 +272,6 @@ int lchown (const char *__file, __uid_t __owner, __gid_t __group);
 int fchownat (int __fd, const char *__file, __uid_t __owner,
               __gid_t __group, int __flag);
 
-#endif
 
 /*$
  * requires: valid_string(__path);
@@ -304,8 +288,6 @@ int fchownat (int __fd, const char *__file, __uid_t __owner,
 int chdir (const char *__path);
 
 
-#if defined __USE_XOPEN_EXTENDED || defined __USE_XOPEN2K8
-
 /*$
  * local:    void* f = _mopsa_find_file_resource(__fd);
  * requires: f in FileRes;
@@ -320,8 +302,6 @@ int chdir (const char *__path);
  * }
  */
 int fchdir (int __fd);
-
-#endif
 
 /*$
  * requires: __buf != NULL implies size(__buf) >= __size;
@@ -353,7 +333,6 @@ int fchdir (int __fd);
  */
 char *getcwd (char *__buf, size_t __size);
 
-#ifdef	__USE_GNU
 
 /*$
  * case "success" {
@@ -370,9 +349,6 @@ char *getcwd (char *__buf, size_t __size);
  */
 char *get_current_dir_name (void);
 
-#endif
-
-#if (defined __USE_XOPEN_EXTENDED && !defined __USE_XOPEN2K8) || defined __USE_MISC
 
 /*$
  * requires: size(__buf) >= PATH_MAX;
@@ -390,7 +366,6 @@ char *get_current_dir_name (void);
  */
 char *getwd (char *__buf);
 
-#endif
 
 /*$
  * local:    void* f = _mopsa_find_file_resource(__fd);
@@ -433,7 +408,6 @@ int dup (int __fd);
  */
 int dup2 (int __fd, int __fd2);
 
-#ifdef __USE_GNU
 
 /*$
  * local:   int r = dup2(__fd, __fd2);
@@ -441,7 +415,6 @@ int dup2 (int __fd, int __fd2);
  */
 int dup3 (int __fd, int __fd2, int __flags);
 
-#endif
 
 // TODO: environ / __environ
 
@@ -464,7 +437,6 @@ int dup3 (int __fd, int __fd2, int __flags);
 int execve (const char *__path, char *const __argv[],
             char *const __envp[]);
 
-#ifdef __USE_XOPEN2K8
 
 /*$
  * local:    void* f = _mopsa_find_file_resource(__fd);
@@ -485,12 +457,21 @@ int execve (const char *__path, char *const __argv[],
  */
 int fexecve (int __fd, char *const __argv[], char *const __envp[]);
 
-#endif
 
 /*$
  * requires: valid_string(__path);
- * requires: forall int i in [0, size(__argv) - 1]:
- *             valid_string(__argv[i]);
+ * requires: valid_ptr(__argv);
+ * requires: valid_ptr(__argv + 1);
+ * requires: valid_string(__argv[0]);
+ *
+ * case "no-args" {
+ *   assumes: __argv[1] == NULL;
+ * }
+ *
+ * case "with-args" {
+ *   assumes: __argv[1] != NULL;
+ *   requires: forall int i in [1, size(__argv) - 1]: valid_string(__argv[i]);
+ * }
  *
  * case "success" {
  *   ensures: 0 == 1; // TODO: does not terminate
@@ -537,16 +518,19 @@ int execl (const char *__path, const char *__arg, ...);
 
 /*$
  * requires: valid_string(__file);
- * requires: forall int i in [0, size(__argv) - 1]:
- *             valid_string(__argv[i]);
+ * requires: valid_ptr(__argv);
+ * requires: valid_ptr(__argv + 1);
+ * requires: valid_string(__argv[0]);
  *
- * case "success" {
- *   ensures: 0 == 1; // TODO: does not terminate
+ * assigns: _errno;
+ *
+ * case "no-args" {
+ *   assumes: __argv[1] == NULL;
  * }
  *
- * case "failure" {
- *    assigns: _errno;
- *    ensures: return == -1;
+ * case "with-args" {
+ *   assumes: __argv[1] != NULL;
+ *   requires: forall int i in [1, size(__argv) - 1]: valid_string(__argv[i]);
  * }
  */
 int execvp (const char *__file, char *const __argv[]);
@@ -567,7 +551,6 @@ int execvp (const char *__file, char *const __argv[]);
  */
 int execlp (const char *__file, const char *__arg, ...);
 
-#ifdef __USE_GNU
 
 /*$
  * requires: valid_string(__file);
@@ -588,10 +571,6 @@ int execlp (const char *__file, const char *__arg, ...);
 int execvpe (const char *__file, char *const __argv[],
              char *const __envp[]);
 
-#endif
-
-
-#if defined __USE_MISC || defined __USE_XOPEN
 
 /*$
  * case "success" { }
@@ -603,7 +582,6 @@ int execvpe (const char *__file, char *const __argv[],
  */
 int nice (int __inc);
 
-#endif
 
 /*$
  * ensures: 0 == 1; // does not terminate
@@ -644,7 +622,6 @@ long int fpathconf (int __fd, int __name);
  */
 long int sysconf (int __name);
 
-#ifdef	__USE_POSIX2
 
 /*$
  * requires: __buf != NULL implies size(__buf) >= __len;
@@ -668,7 +645,6 @@ long int sysconf (int __name);
  */
 size_t confstr (int __name, char *__buf, size_t __len);
 
-#endif
 
 /*$
  * ensures: return >= 0;
@@ -691,7 +667,6 @@ __pid_t getpgrp (void);
  */
 __pid_t __getpgid (__pid_t __pid);
 
-#if defined __USE_XOPEN_EXTENDED || defined __USE_XOPEN2K8
 
 /*$
  * requires: __pid >= 0;
@@ -699,7 +674,6 @@ __pid_t __getpgid (__pid_t __pid);
  */
 __pid_t getpgid (__pid_t __pid);
 
-#endif
 
 /*$
  * requires: __pid >= 0;
@@ -716,7 +690,6 @@ __pid_t getpgid (__pid_t __pid);
  */
 int setpgid (__pid_t __pid, __pid_t __pgid);
 
-#if defined __USE_MISC || defined __USE_XOPEN_EXTENDED
 
 /*$
  * case "success" {
@@ -730,7 +703,6 @@ int setpgid (__pid_t __pid, __pid_t __pgid);
  */
 int setpgrp (void);
 
-#endif
 
 /*$
  * case "success" {
@@ -744,7 +716,6 @@ int setpgrp (void);
  */
 __pid_t setsid (void);
 
-#if defined __USE_XOPEN_EXTENDED || defined __USE_XOPEN2K8
 
 /*$
  * requires: __pid >= 0;
@@ -760,7 +731,6 @@ __pid_t setsid (void);
  */
 __pid_t getsid (__pid_t __pid);
 
-#endif
 
 /*$
  * ensures: return >= 0;
@@ -798,14 +768,12 @@ __gid_t getegid (void);
  */
 int getgroups (int __size, __gid_t __list[]);
 
-#ifdef	__USE_GNU
 
 /*$
  * requires: __gid >= 0;
  */
 int group_member (__gid_t __gid);
 
-#endif
 
 /*$
  * requires: __uid >= 0;
@@ -821,7 +789,6 @@ int group_member (__gid_t __gid);
  */
 int setuid (__uid_t __uid);
 
-#if defined __USE_MISC || defined __USE_XOPEN_EXTENDED
 
 /*$
  * requires: __ruid >= 0;
@@ -838,9 +805,6 @@ int setuid (__uid_t __uid);
  */
 int setreuid (__uid_t __ruid, __uid_t __euid);
 
-#endif
-
-#ifdef __USE_XOPEN2K
 
 /*$
  * requires: __uid >= 0;
@@ -856,7 +820,6 @@ int setreuid (__uid_t __ruid, __uid_t __euid);
  */
 int seteuid (__uid_t __uid);
 
-#endif
 
 /*$
  * requires: __gid >= 0;
@@ -872,7 +835,6 @@ int seteuid (__uid_t __uid);
  */
 int setgid (__gid_t __gid);
 
-#if defined __USE_MISC || defined __USE_XOPEN_EXTENDED
 
 /*$
  * requires: __rgid >= 0;
@@ -889,9 +851,6 @@ int setgid (__gid_t __gid);
  */
 int setregid (__gid_t __rgid, __gid_t __egid);
 
-#endif
-
-#ifdef __USE_XOPEN2K
 
 /*$
  * requires: __gid >= 0;
@@ -907,9 +866,6 @@ int setregid (__gid_t __rgid, __gid_t __egid);
  */
 int setegid (__gid_t __gid);
 
-#endif
-
-#ifdef __USE_GNU
 
 /*$
  * case "success" {
@@ -979,11 +935,8 @@ int setresuid (__uid_t __ruid, __uid_t __euid, __uid_t __suid);
  */
 int setresgid (__gid_t __rgid, __gid_t __egid, __gid_t __sgid);
 
-#endif
 
 /*$
- * warn: "unsupported stub";
- *
  * case "success" {
  *   ensures: return >= 0;
  * }
@@ -995,7 +948,6 @@ int setresgid (__gid_t __rgid, __gid_t __egid, __gid_t __sgid);
  */
 __pid_t fork (void);
 
-#if (defined __USE_XOPEN_EXTENDED && !defined __USE_XOPEN2K8) || defined __USE_MISC
 
 /*$
  * warn: "unsupported stub";
@@ -1011,7 +963,6 @@ __pid_t fork (void);
  */
 __pid_t vfork (void);
 
-#endif
 
 static char _ttyname_buf[PATH_MAX];
 
@@ -1062,14 +1013,12 @@ int ttyname_r (int __fd, char *__buf, size_t __buflen);
  */
 int isatty (int __fd);
 
-#ifdef __USE_MISC
 
 /*$
  * ensures: return >= -1;
  */
 int ttyslot (void);
 
-#endif
 
 /*$
  * requires: valid_string(__from);
@@ -1086,7 +1035,6 @@ int ttyslot (void);
  */
 int link (const char *__from, const char *__to);
 
-#ifdef __USE_ATFILE
 
 /*$
  * requires: valid_string(__from);
@@ -1106,9 +1054,6 @@ int link (const char *__from, const char *__to);
 int linkat (int __fromfd, const char *__from, int __tofd,
             const char *__to, int __flags);
 
-#endif
-
-#if defined __USE_XOPEN_EXTENDED || defined __USE_XOPEN2K
 
 /*$
  * requires: valid_string(__from);
@@ -1143,9 +1088,6 @@ int symlink (const char *__from, const char *__to);
 ssize_t readlink (const char *__restrict __path,
                   char *__restrict __buf, size_t __len);
 
-#endif
-
-#ifdef __USE_ATFILE
 
 /*$
  * requires: valid_string(__from);
@@ -1183,7 +1125,6 @@ int symlinkat (const char *__from, int __tofd,
 ssize_t readlinkat (int __fd, const char *__restrict __path,
                     char *__restrict __buf, size_t __len);
 
-#endif
 
 /*$
  * requires: valid_string(__name);
@@ -1199,7 +1140,6 @@ ssize_t readlinkat (int __fd, const char *__restrict __path,
  */
 int unlink (const char *__name);
 
-#ifdef __USE_ATFILE
 
 /*$
  * requires: __fd in FileDescriptor;
@@ -1216,7 +1156,6 @@ int unlink (const char *__name);
  */
 int unlinkat (int __fd, const char *__name, int __flag);
 
-#endif
 
 /*$
  * requires: valid_string(__path);
@@ -1270,7 +1209,6 @@ static char _getlogin_buf[LOGIN_NAME_MAX];
  */
 char *getlogin (void);
 
-#ifdef __USE_POSIX199506
 
 /*$
  * requires: size(__buf) >= __buflen;
@@ -1288,9 +1226,6 @@ char *getlogin (void);
  */
 int getlogin_r (char *__buf, size_t __buflen);
 
-#endif
-
-#ifdef	__USE_MISC
 
 /*$
  * requires: valid_string(__name);
@@ -1306,10 +1241,6 @@ int getlogin_r (char *__buf, size_t __buflen);
  */
 int setlogin (const char *__name);
 
-#endif
-
-
-#if defined __USE_XOPEN_EXTENDED || defined __USE_XOPEN2K
 
 /*$
  * requires: size(__buf) >= __buflen;
@@ -1327,10 +1258,6 @@ int setlogin (const char *__name);
  */
 int gethostbuf (char *__buf, size_t __buflen);
 
-#endif
-
-
-#if defined __USE_MISC
 
 /*$
  * requires: size(__name) >= __len;
@@ -1472,10 +1399,6 @@ void setusershell (void);
  */
 int daemon (int __nochdir, int __noclose);
 
-#endif
-
-
-#if defined __USE_MISC || (defined __USE_XOPEN && !defined __USE_XOPEN2K)
 
 /*$
  * requires: valid_string(__path);
@@ -1521,7 +1444,6 @@ static char _getpass_buf[PASS_MAX];
  */
 char *getpass (const char *__prompt);
 
-#endif
 
 /*$
  * requires: __fd in FileDescriptor;
@@ -1538,8 +1460,6 @@ char *getpass (const char *__prompt);
 int fsync (int __fd);
 
 
-#ifdef __USE_GNU
-
 /*$
  * requires: __fd in FileDescriptor;
  *
@@ -1554,10 +1474,6 @@ int fsync (int __fd);
  */
 int syncfs (int __fd);
 
-#endif
-
-
-#if defined __USE_MISC || defined __USE_XOPEN_EXTENDED
 
 /*$
  * //empty contract
@@ -1569,26 +1485,19 @@ long int gethostid (void);
  */
 void sync (void);
 
-# if defined __USE_MISC || !defined __USE_XOPEN2K
 
 /*$
- * warn: "not portable; use sysconf(SC_PAGESIZE) instead";
+ * //warn: "not portable; use sysconf(SC_PAGESIZE) instead";
  * ensures: return >= 1;
  */
 int getpagesize (void);
 
 /*$
- * warn: "not portable; use sysconf(SC_OPEN_MAX) instead";
+ * //warn: "not portable; use sysconf(SC_OPEN_MAX) instead";
  * ensures: return >= 1;
  */
 int getdtablesize (void);
 
-# endif
-
-#endif
-
-
-#if defined __USE_XOPEN_EXTENDED || defined __USE_XOPEN2K8
 
 /*$
  * requires: valid_string(__file);
@@ -1604,9 +1513,6 @@ int getdtablesize (void);
  */
 int truncate (const char *__file, __off_t __length);
 
-#endif
-
-#if defined __USE_POSIX199309 || defined __USE_XOPEN_EXTENDED || defined __USE_XOPEN2K
 
 /*$
  * requires: __fd in FileDescriptor;
@@ -1622,10 +1528,6 @@ int truncate (const char *__file, __off_t __length);
  */
 int ftruncate (int __fd, __off_t __length);
 
-#endif
-
-
-#if (defined __USE_XOPEN_EXTENDED && !defined __USE_XOPEN2K) || defined __USE_MISC
 
 /*$
  * warn: "unsupported stub; use malloc";
@@ -1646,10 +1548,6 @@ int brk (void *__addr);
  */
 void *sbrk (intptr_t __delta);
 
-#endif
-
-
-#ifdef __USE_MISC
 
 /*$
  * warn: "unsupported stub";
@@ -1657,10 +1555,6 @@ void *sbrk (intptr_t __delta);
  */
 long int syscall (long int __sysno, ...);
 
-#endif
-
-
-#if (defined __USE_MISC || defined __USE_XOPEN_EXTENDED) && !defined F_LOCK
 
 /*$
  * requires: __fd in FileDescriptor;
@@ -1677,15 +1571,12 @@ long int syscall (long int __sysno, ...);
  */
 int lockf (int __fd, int __cmd, __off_t __len);
 
-#endif
-
-#ifdef __USE_GNU
 
 /*$
  * requires: __infd in FileDescriptor;
  * requires: __outfd in FileDescriptor;
- * requires: __pinoff != NULL or size(__pinoff) >= _sizeof_off64_t;
- * requires: __poutoff != NULL or size(__poutoff) >= _sizeof_off64_t;
+ * requires: __pinoff != NULL or size(__pinoff) >= sizeof_type(__off64_t);
+ * requires: __poutoff != NULL or size(__poutoff) >= sizeof_type(__off64_t);
  *
  * case "pinoff" {
  *   assumes: __pinoff != NULL;
@@ -1709,9 +1600,6 @@ int lockf (int __fd, int __cmd, __off_t __len);
 ssize_t copy_file_range (int __infd, __off64_t *__pinoff,
 			 int __outfd, __off64_t *__poutoff,
 			 size_t __length, unsigned int __flags);
-#endif
-
-#if defined __USE_POSIX199309 || defined __USE_UNIX98
 
 /*$
  * requires: __fildes in FileDescriptor;
@@ -1727,10 +1615,6 @@ ssize_t copy_file_range (int __infd, __off64_t *__pinoff,
  */
 int fdatasync (int __fildes);
 
-#endif
-
-
-#ifdef	__USE_XOPEN
 
 /*$
  * // TODO: allocation policy is not documented, assuming dynamic allocation
@@ -1784,12 +1668,10 @@ void encrypt (char *__glibc_block, int __edflag);
 void swab (const void *__restrict __from, void *__restrict __to,
            ssize_t __n);
 
-#endif
 
 // NOTE: ctermid and cuserid defined in stdio.c
 // pthread_atfork should be defined in pthread.c
 
-#ifdef __USE_MISC
 
 /*$
  * requires: __length <= 256;
@@ -1807,4 +1689,3 @@ void swab (const void *__restrict __from, void *__restrict __to,
  */
 int getentropy (void *__buffer, size_t __length);
 
-#endif

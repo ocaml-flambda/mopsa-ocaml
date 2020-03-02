@@ -160,7 +160,7 @@ struct
           | BOT -> Intervals.Integer.Value.bottom, C.minf_inf
           | Nb cc -> Intervals.Integer.Value.top, cc
         in
-        Option.return ret
+        OptionExt.return ret
 
       | _ -> None
 

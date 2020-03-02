@@ -110,23 +110,28 @@ let report ?(flow=None) man alarms time files out =
 
                    (* Highlight bug region *)
                    and highlight_bug i l =
+                     let safe_sub l s e =
+                       try String.sub l s e
+                       with Invalid_argument _ ->
+                         let () = Debug.warn_at range "issue on sub %s %d %d" l s e in
+                         String.sub l (min 0 s) (max 0 (min e ((String.length l) - s))) in
                      let n = String.length l in
                      (* prints from c1 to c2 included *)
                      let c1 = get_pos_column start_pos in
                      let c2 = get_pos_column end_pos in
                      let s1,s2,s3 =
                        if i = get_pos_line start_pos && i = get_pos_line end_pos then
-                         String.sub l 0 c1,
-                         String.sub l c1 (c2-c1),
-                         String.sub l c2 (n-c2)
+                         safe_sub l 0 c1,
+                         safe_sub l c1 (c2-c1),
+                         safe_sub l c2 (n-c2)
                        else if i = get_pos_line start_pos && i = get_pos_line end_pos then
-                         String.sub l 0 c1,
-                         String.sub l c1 (n-c1),
+                         safe_sub l 0 c1,
+                         safe_sub l c1 (n-c1),
                          ""
                        else if i = get_pos_line end_pos then
                          "",
-                         String.sub l 0 c2,
-                         String.sub l c2 (n-c2)
+                         safe_sub l 0 c2,
+                         safe_sub l c2 (n-c2)
                        else
                          "",
                          l,

@@ -28,7 +28,7 @@ open Universal.Ast
 module StringSet = Framework.Lattices.Powerset.Make(
   struct
     type t = string
-    let compare = Pervasives.compare
+    let compare = Stdlib.compare
     let print = Format.pp_print_string
   end)
 
@@ -87,30 +87,30 @@ struct
                                                                  Some {ekind = E_constant (C_string s)})}) when compare_addr scls (fst @@ find_builtin "str") = 0 ->
       let cur = get_env T_cur man flow in
       let cur =
-        SMap.add v (match mode with
+        SMap.add v (match var_mode v mode with
         | WEAK ->
-          let old_s = Option.default (StringSet.empty) (SMap.find_opt v cur) in
+          let old_s = OptionExt.default (StringSet.empty) (SMap.find_opt v cur) in
           StringSet.add s old_s
         | STRONG -> StringSet.singleton s)
           cur in
       set_env T_cur cur man flow
-      |> Post.return |> Option.return
+      |> Post.return |> OptionExt.return
 
     | S_assign ({ekind = E_var (v, mode)}, {ekind = E_py_object ({addr_kind = A_py_instance scls},
                                                                  Some {ekind = E_constant (C_top T_string)})}) when compare_addr scls (fst @@ find_builtin "str") = 0 ->
       let cur = get_env T_cur man flow in
       set_env T_cur (SMap.add v StringSet.top cur) man flow
-      |> Post.return |> Option.return
+      |> Post.return |> OptionExt.return
 
     | S_assign ({ekind = E_var (v, mode)}, {ekind = E_py_object ({addr_kind = A_py_instance scls},
                                                                  Some {ekind = E_var (v', mode')})}) when
         compare_addr scls (fst @@ find_builtin "str") = 0 ->
       let cur = get_env T_cur man flow in
       debug "old cur = %a@\n" print cur;
-      let set_v' = Option.default StringSet.empty (SMap.find_opt v' cur) in
-      let cur = match mode with
+      let set_v' = OptionExt.default StringSet.empty (SMap.find_opt v' cur) in
+      let cur = match var_mode v mode with
         | WEAK ->
-          let set_v = Option.default StringSet.empty (SMap.find_opt v cur) in
+          let set_v = OptionExt.default StringSet.empty (SMap.find_opt v cur) in
           SMap.add v (StringSet.join set_v set_v') cur
         | STRONG -> SMap.add v set_v' cur in
       debug "cur = %a@\n" print cur;
@@ -119,7 +119,7 @@ struct
         set_env T_cur cur man flow
       else
         flow)
-        |> Post.return |> Option.return
+        |> Post.return |> OptionExt.return
 
     | S_remove {ekind = E_var (v, _)} ->
       let cur = get_env T_cur man flow in
@@ -128,7 +128,7 @@ struct
         else
           flow
       end
-      |> Post.return |> Option.return
+      |> Post.return |> OptionExt.return
 
     | _ ->  None
 
@@ -138,12 +138,21 @@ struct
     match query with
     | Q_strings_of_var v ->
       let cur = get_env T_cur man flow in
-      Some (StringSet.fold (fun str acc -> acc ^ " \\/ " ^ str) (Option.default StringSet.empty (SMap.find_opt v cur)) "")
+      let strset = OptionExt.default StringSet.empty (SMap.find_opt v cur) in
+      if StringSet.is_top strset then
+        let () = warn "Q_strings_of_var top" in Some "T"
+      else
+        let s = StringSet.fold (fun str acc -> acc ^ " \\/ " ^ str) strset "" in
+        Some (String.sub s 4 (String.length s - 4))
 
     | _ -> None
 
   let refine channel man flow = Channel.return flow
-  let merge _ _ _ = assert false
+  let merge pre (a, log) (a', log') =
+    if a == a' then a
+    else if Log.is_empty log' then a
+    else if Log.is_empty log then a'
+    else let () = debug "pre=%a@.a=%alog=%a@.a'=%alog'=%a@." print pre print a Log.print log print a' Log.print log' in assert false
 end
 
 let () = Framework.Core.Sig.Domain.Intermediate.register_domain (module Domain);

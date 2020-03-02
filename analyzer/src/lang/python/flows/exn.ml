@@ -94,13 +94,29 @@ module Domain =
                           man.exec orelse
         in
 
+        let apply_finally finally flow =
+          let open Universal.Iterators.Loops in
+          let open Universal.Iterators.Interproc.Common in
+          Flow.fold (fun acc tk env ->
+              match tk with
+              | T_break | T_continue | T_return _ | T_py_exception _ ->
+                Flow.singleton (Flow.get_ctx acc) T_cur env |>
+                man.exec finally |>
+                Flow.rename T_cur tk man.lattice |>
+                Flow.join man.lattice acc
+              | _ ->
+                Flow.add tk env man.lattice acc
+            ) (Flow.bottom_from flow) flow in
+
         (* Execute finally body *)
         let flow_caught_finally =
           Flow.join man.lattice orelse_flow flow_caught |>
-          man.exec finally in
+          apply_finally finally in
+
         let flow_uncaught = Flow.copy_ctx flow_caught_finally flow_uncaught in
         let flow_uncaught_finally =
-          man.exec finally flow_uncaught in
+          apply_finally finally flow_uncaught in
+
         let flow = Flow.join man.lattice flow_caught_finally flow_uncaught_finally in
 
         (* Restore old exceptions *)
@@ -109,14 +125,14 @@ module Domain =
             | T_py_exception _ -> Flow.add tk env man.lattice acc
             | _ -> acc
           ) flow old_flow |>
-        Post.return |> Option.return
+        Post.return |> OptionExt.return
 
       | S_py_raise(Some exp) ->
         debug "Raising %a@\n" pp_expr exp;
         (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) exp flow |>
          bind_full (fun exp flow log cleaners ->
              match exp with
-             | None -> Result.return None flow ~log ~cleaners
+             | None -> Cases.return None flow ~log ~cleaners
              | Some exp ->
              (* match ekind exp with
               * | E_py_object obj -> *)
@@ -132,7 +148,7 @@ module Domain =
                    debug "ok@\n";
                    let tk =
                      if List.exists (fun x ->
-                         Pervasives.compare x exc_str = 0) !opt_unprecise_exn then
+                         Stdlib.compare x exc_str = 0) !opt_unprecise_exn then
                        let exp = Utils.strip_object exp in
                        mk_py_unprecise_exception exp exc_str (* we don't keep the message for unprecise exns *)
                      else
@@ -161,7 +177,7 @@ module Domain =
                flow
            )
         )
-        |> Option.return
+        |> OptionExt.return
 
       | S_py_raise None ->
         panic_at stmt.srange "exceptions: re-raise previous caught exception not supported"
