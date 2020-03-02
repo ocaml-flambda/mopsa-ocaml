@@ -51,6 +51,7 @@ OCAMLOPT = ocamlopt -cc "$(CXX)"
 CLANGRESOURCE := $(shell @CLANG@ -print-resource-dir)
 
 CXXFLAGS := \
+	-Wall -Wno-comment\
 	-fPIC  \
 	-I $(shell ocamlc -where) \
 	$(shell @LLVMCONFIG@ --cxxflags) \
