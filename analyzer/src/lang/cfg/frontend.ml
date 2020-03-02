@@ -383,3 +383,10 @@ let convert_program (p:program) =
 let parse_program (files: string list) : program =
   convert_program (Universal.Frontend.parse_program files)
   
+
+(** Front-end registration *)
+let () =
+  register_frontend {
+    lang = "cfg";
+    parse = parse_program;
+  }

@@ -36,6 +36,8 @@ libmopsa = framework mopsa lang
 include src/framework/Makefile
 include src/lang/universal/Makefile
 include src/lang/repl/Makefile
+
+# CFG domains
 include src/lang/cfg/Makefile
 
 # C domains
@@ -86,14 +88,14 @@ uninstall:
 
 
 # Tests
-.PHONY: tests universal-tests
+.PHONY: tests universal-tests cfg-tests
 
 TESTS = universal-tests
 universal-tests.directory = tests/universal
 universal-tests.extension = u
 universal-tests.analyzer = mopsa-universal
 
-TESTS = cfg-tests
+TESTS += cfg-tests
 cfg-tests.directory = tests/universal
 cfg-tests.extension = u
 cfg-tests.analyzer = mopsa-cfg
@@ -120,6 +122,6 @@ tests: $(TESTS)
 $(TESTS):
 	@ - $(foreach test, $(shell find $($@.directory) -name "*tests.$($@.extension)"), \
 		echo ""; \
-		echo "Running test $(test)"; \
+		echo "Running test $($@.analyzer) $(test)"; \
 		$(MOPSAROOT)/bin/$($@.analyzer) -no-warning -unittest $(MOPSAPARAM) $(test); \
 	)
