@@ -93,6 +93,8 @@ let () =
 (**                            {2 Domain}                                   *)
 (*==========================================================================*)
 
+let nestedness = ref 0
+
 module Domain  =
 struct
 
@@ -188,14 +190,11 @@ struct
 
   (** Merge tokens T_cur and T_continue into T_cur *)
   let merge_cur_and_continue man flow =
-    Flow.map (fun tk eabs ->
-        match tk with
-        | T_cur ->
-          let cont = Flow.get T_continue man.lattice flow in
-          man.lattice.join (Flow.get_unit_ctx flow) eabs cont
-        | T_continue -> man.lattice.bottom
-        | _ -> eabs
-      ) flow
+    let cur = Flow.get T_cur man.lattice flow in
+    let cont = Flow.get T_continue man.lattice flow in
+    let ctx = Flow.get_unit_ctx flow in
+    Flow.set T_cur (man.lattice.join ctx cur cont) man.lattice flow |>
+    Flow.remove T_continue
 
 
   let init prog man flow =
@@ -215,7 +214,19 @@ struct
     let cur' = Flow.get T_cur man.lattice flow' in
     let is_sub = man.lattice.subset (Flow.get_unit_ctx flow') cur' cur in
     debug "lfp range %a is_sub: %b" pp_range body.srange is_sub;
-    if is_sub then flow'
+    if is_sub then
+      (* Add a decreasing iteration if new alarms are reported *)
+      if AlarmSet.subset (Flow.get_alarms flow') (Flow.get_alarms flow_init) then
+        flow'
+      else
+        let () = debug "decreasing iteration" in
+        Flow.remove T_continue flow' |>
+        Flow.remove T_break |>
+        Flow.remove_alarms |>
+        man.exec (mk_assume cond cond.erange) |>
+        man.exec body |>
+        merge_cur_and_continue man |>
+        Flow.join man.lattice flow_init
     else if delay = 0 then
       let wcur = man.lattice.widen (Flow.get_unit_ctx flow') cur cur' in
       let wflow = Flow.set T_cur wcur man.lattice flow' in
@@ -255,6 +266,8 @@ struct
   let rec exec zone stmt (man:('a,unit) man) flow =
     match skind stmt with
     | S_while(cond, body) ->
+      incr nestedness;
+      Debug.debug ~channel:"nested" "nestedness: %d" !nestedness;
       debug "while %a:" (* @\nflow = @[%a@] *) pp_range stmt.srange (* (Flow.print man.lattice) flow *);
 
       let flow0 = Flow.remove T_continue flow |>
@@ -296,7 +309,7 @@ struct
                  Flow.set T_continue (Flow.get T_continue man.lattice flow) man.lattice
       in
 
-
+      decr nestedness;
       Some (Post.return res1)
 
     | S_break ->

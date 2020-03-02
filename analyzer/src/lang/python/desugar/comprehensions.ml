@@ -61,9 +61,16 @@ module Domain =
                                 if_stmt,
                                 empty_stmt)) range in
          let clean_targets = List.fold_left
-             (fun acc (target, _, _) -> match ekind target with
-                | E_var (v, _) -> (mk_remove_var v range)::acc
-                | _ -> Exceptions.panic "Comprehension: target %a is not a variable...@\n" pp_expr target) [] comprehensions in
+             (fun acc (target, _, _) ->
+                Visitor.fold_expr
+                  (fun acc expr ->
+                     debug "expr = %a" pp_expr expr;
+                     match ekind expr with
+                     | E_var (v, _) -> Keep (mk_remove_var v range ::acc)
+                     | E_py_tuple t -> VisitParts acc
+                     | _ -> Exceptions.panic "Comprehension: target %a is not a variable...@\n" pp_expr target
+                  ) (fun acc stmt -> assert false) [] target
+             ) [] comprehensions in
          let stmt = mk_block ((mk_assign acc_var base range) :: (unfold_lc comprehensions) :: clean_targets) range in
          stmt, tmp_acc
 
@@ -81,7 +88,7 @@ module Domain =
          man.exec stmt flow |>
            man.eval acc_var |>
            Eval.add_cleaners [mk_remove_var tmp_acc range] |>
-           Option.return
+           OptionExt.return
 
       | E_py_set_comprehension (expr, comprehensions) ->
          let set = find_builtin "set" in
@@ -93,7 +100,7 @@ module Domain =
          man.exec stmt flow |>
            man.eval acc_var |>
            Eval.add_cleaners [mk_remove_var tmp_acc range] |>
-           Option.return
+           OptionExt.return
 
       | E_py_dict_comprehension (key, value, comprehensions) ->
          let dict = find_builtin "dict" in
@@ -105,7 +112,7 @@ module Domain =
          man.exec stmt flow |>
            man.eval acc_var |>
            Eval.add_cleaners [mk_remove_var tmp_acc range] |>
-           Option.return
+           OptionExt.return
 
       | E_py_generator_comprehension (expr, comprehensions) ->
          Debug.warn "No desugaring for generator comprehensions@\n"; None

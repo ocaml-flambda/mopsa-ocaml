@@ -43,21 +43,10 @@ type expr = {
 }
 
 
-(** Mode of a variable expression *)
-type mode =
-  | STRONG
-  | WEAK
-
-let compare_mode = compare
-
-let pp_mode fmt mode =
-  match mode with
-  | STRONG -> Format.fprintf fmt "STRONG"
-  | WEAK   -> Format.fprintf fmt "WEAK"
 
 (** Some basic expressions *)
 type expr_kind +=
-  | E_var of var * mode
+  | E_var of var * mode option
   (** variables *)
 
   | E_constant of constant
@@ -77,22 +66,23 @@ let erange (e: expr) = e.erange
 
 let expr_compare_chain = TypeExt.mk_compare_chain (fun e1 e2 ->
       match ekind e1, ekind e2 with
-      | E_var(v1, s1), E_var(v2, s2) ->
+      | E_var(v1, m1), E_var(v2, m2) ->
         Compare.compose [
           (fun () -> compare_var v1 v2);
-          (fun () -> compare_mode s1 s2)
+          (fun () -> Compare.option compare_mode m1 m2)
         ]
       | E_constant c1, E_constant c2 -> compare_constant c1 c2
 
-      | _ -> Pervasives.compare (ekind e1) (ekind e2)
+      | _ -> Stdlib.compare (ekind e1) (ekind e2)
   )
 
 
 let expr_pp_chain = TypeExt.mk_print_chain (fun fmt expr ->
     match ekind expr with
     | E_constant c -> pp_constant fmt c
-    | E_var(v, STRONG) -> pp_var fmt v
-    | E_var(v, WEAK) -> Format.fprintf fmt "weak(%a)" pp_var v
+    | E_var(v, None) -> pp_var fmt v
+    | E_var(v, Some STRONG) -> Format.fprintf fmt "strong(%a)" pp_var v
+    | E_var(v, Some WEAK) -> Format.fprintf fmt "weak(%a)" pp_var v
     | _ -> failwith "Pp: Unknown expression"
   )
 
@@ -108,6 +98,9 @@ let compare_expr e1 e2 =
 
 let pp_expr fmt e =
   TypeExt.print expr_pp_chain fmt e
+
+let pp_expr_with_range fmt e =
+  Format.fprintf fmt "%a@%a" (TypeExt.print expr_pp_chain) e pp_range e.erange
 
 let () =
   register_expr {
@@ -150,13 +143,29 @@ let mk_expr
   =
   {ekind; etyp; erange; eprev}
 
-let mk_var v ?(mode = STRONG) erange =
+let mk_var v ?(mode = None) erange =
   mk_expr ~etyp:v.vtyp (E_var(v, mode)) erange
 
-let var_mode (e:expr) : mode =
-  match ekind e with
-  | E_var (_, mode) -> mode
+let var_mode (v:var) (omode: mode option) : mode =
+  match omode with
+  | None   -> v.vmode
+  | Some m -> m
+
+
+let weaken_var_expr v =
+  match ekind v with
+  | E_var (vv, Some WEAK)                 -> v
+  | E_var (vv, None) when vv.vmode = WEAK -> v
+  | E_var (vv, _)                         -> { v with ekind = E_var (vv,Some WEAK) }
   | _ -> assert false
+
+let strongify_var_expr v =
+  match ekind v with
+  | E_var (vv,Some STRONG)                 -> v
+  | E_var (vv,None) when vv.vmode = STRONG -> v
+  | E_var (vv, _)                          -> { v with ekind = E_var (vv,Some STRONG) }
+  | _ -> assert false
+
 
 let mk_binop left op right ?(etyp = T_any) erange =
   mk_expr (E_binop (op, left, right)) ~etyp erange

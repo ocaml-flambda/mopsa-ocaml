@@ -38,7 +38,7 @@ module UidMap = Map.Make(struct type t=uid let compare=compare end)
 module StringMap = Map.Make(String)
 
 type range = Clang_AST.range
-module RangeMap = MapExt.Make(struct type t = range let compare = Pervasives.compare end)
+module RangeMap = MapExt.Make(struct type t = range let compare = Stdlib.compare end)
 (** Source locations. *)
 
 type comment = Clang_AST.comment
@@ -342,7 +342,10 @@ type typ =
 
  and expr_kind =
    | E_conditional of expr (** condition *) * expr (** then *) * expr (** else *)
- (** ?: ternary operator *)
+   (** ?: ternary operator *)
+
+   | E_binary_conditional of expr (** condition and then *) * expr (** else *)
+   (** binary version of the ?: operator *)
 
    | E_array_subscript of expr (** array *) * expr (** index *)
    (** Array access. *)
@@ -423,6 +426,7 @@ type typ =
      proj_vars: variable StringMap.t; (** variables with global lifetime, by unique name *)
      proj_funcs: func StringMap.t; (** functions, by unique name *)
 
+     proj_files: string list; (** list of parsed files *)
      proj_comments: comment list RangeMap.t; (** all comments *)
      proj_macros : macro StringMap.t; (** macros, by name *)
    }

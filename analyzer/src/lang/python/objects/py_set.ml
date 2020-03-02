@@ -96,25 +96,25 @@ struct
           let addr_set = addr_of_expr eaddr_set in
           let els_var = var_of_addr addr_set in
           let flow = List.fold_left (fun acc el ->
-              man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:WEAK els_var range) el range) acc) flow ls in
+              man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:(Some WEAK) els_var range) el range) acc) flow ls in
           Eval.singleton (mk_py_object (addr_set, None) range) flow
         )
-      |> Option.return
+      |> OptionExt.return
 
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "set.__new__")}, _)}, cls::args, []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__new__", _))}, _)}, cls::args, []) ->
       Utils.new_wrapper man range flow "set" cls
         ~fthennew:(man.eval (mk_expr (E_py_set []) range))
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__init__" as f))}, _)}, args, []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__init__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args
         ["set"]
         (fun eargs flow ->
            man.eval (mk_py_none range) flow
         )
-      |> Option.return
+      |> OptionExt.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.clear" as f))}, _)}, args, []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.clear" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args ["set"]
         (fun args flow ->
            let set = List.hd args in
@@ -122,16 +122,16 @@ struct
            man.exec (mk_remove_var var_els range) flow |>
            man.eval (mk_py_none range)
         )
-      |> Option.return
+      |> OptionExt.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__contains__" as f))}, _)}, args, []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__contains__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f ~arguments_after_check:1 man flow range args ["set"]
         (fun args flow ->
            man.eval (mk_py_top T_bool range) flow)
-      |> Option.return
+      |> OptionExt.return
 
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, args, [])
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, args, [])
       when is_compare_op_fun "set" f ->
       Utils.check_instances ~arguments_after_check:1 f man flow range args ["set"]
         (fun eargs flow ->
@@ -142,10 +142,10 @@ struct
                  let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
                  man.eval expr flow)
         )
-      |> Option.return
+      |> OptionExt.return
 
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__iter__" as f))}, _)}, args, []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__iter__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args
         ["set"]
         (fun args flow ->
@@ -160,9 +160,9 @@ struct
                Eval.singleton (mk_py_object (addr_it, None) range) flow
              )
         )
-      |> Option.return
+      |> OptionExt.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "set_iterator.__next__")}, _)}, [iterator], []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set_iterator.__next__", _))}, _)}, [iterator], []) ->
       (* todo: checks ? *)
       man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) iterator flow |>
       Eval.bind (fun iterator flow ->
@@ -170,38 +170,38 @@ struct
             | E_py_object ({addr_kind = Py_list.A_py_iterator (s, [a], _)}, _) when s = "set_iterator" -> a
             | _ -> assert false in
           let var_els = var_of_addr set_addr in
-          let els = man.eval (mk_var var_els ~mode:WEAK range) flow in
+          let els = man.eval (mk_var var_els ~mode:(Some WEAK) range) flow in
           let flow = Flow.set_ctx (Eval.get_ctx els) flow in
           let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
           Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Eval.copy_ctx stopiteration els::stopiteration::[])
         )
-      |> Option.return
+      |> OptionExt.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "set_iterator.__iter__")}, _)}, [iterator], []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set_iterator.__iter__", _))}, _)}, [iterator], []) ->
       (* todo: checks ? *)
-      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) iterator flow |> Option.return
+      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) iterator flow |> OptionExt.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__len__" as f))}, _)}, args, []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__len__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args
         ["set"]
         (fun args flow ->
            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow
         )
-      |> Option.return
+      |> OptionExt.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.add" as f))}, _)}, args, []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.add" as f, _))}, _)}, args, []) ->
       Utils.check_instances f ~arguments_after_check:1 man flow range args
         ["set"]
         (fun args flow ->
            let set, element = match args with | [l; e] -> l, e | _ -> assert false in
            debug "set: %a@\n" pp_expr set;
            let var_els = var_of_eobj set in
-           man.exec (mk_assign (mk_var var_els ~mode:WEAK range) element range) flow |>
+           man.exec (mk_assign (mk_var var_els ~mode:(Some WEAK) range) element range) flow |>
            man.eval (mk_py_none range))
-      |> Option.return
+      |> OptionExt.return
 
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_set_of")}, _)}, args, []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.assert_set_of", _))}, _)}, args, []) ->
       bind_list args man.eval flow |>
       bind_some (fun eargs flow ->
           let set, set_v = match eargs with [d;e] -> d,e | _ -> assert false in
@@ -209,12 +209,12 @@ struct
             ~fthen:(fun flow ->
                 let var = var_of_eobj set in
                 Libs.Py_mopsa.check man
-                  (mk_py_isinstance (mk_var ~mode:WEAK var range) set_v range)
+                  (mk_py_isinstance (mk_var ~mode:(Some WEAK) var range) set_v range)
                   range flow
               )
             ~felse:(Libs.Py_mopsa.check man (mk_py_false range) range)
         )
-      |> Option.return
+      |> OptionExt.return
 
 
     | _ -> None
@@ -228,7 +228,7 @@ struct
       let va' = var_of_addr a' in
       debug "renaming %a into %a@\n" pp_var va pp_var va';
       man.exec ~zone:Zone.Z_py (mk_rename_var va va' range) flow
-      |> Post.return |> Option.return
+      |> Post.return |> OptionExt.return
 
     | _ -> None
 

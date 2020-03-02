@@ -102,6 +102,7 @@ let rec expr_one target range (t:typ) =
 (*
   Removed:
   - E_conditional
+  - E_binary_conditional
   - E_compound_assign
   - E_comma
   - E_increment
@@ -144,6 +145,29 @@ let simplify_func ctx (f:func) =
            S_if (e1,
                  before2@[S_expression (E_assign (tmp_var, e2), t, r), r]@after2 |> make_block,
                  before3@[S_expression (E_assign (tmp_var, e3), t, r), r]@after3 |> make_block), r
+         in
+         before1@[create;cond], tmp_var, after1
+
+    (* e1 ? : e2 -> if (e1) tmp = e1; else tmp = e2; <tmp> 
+       the side-effects of e1 are executed only once
+    *)
+    | E_binary_conditional (e1,e2) ->
+       let before1, e1, after1 = simplify_expr call e1 in
+       if is_void t then
+         let cond = S_if (e1,
+                          [] |> make_block,
+                          simplify_expr_stmt call e2 |> make_block), r
+         in
+         before1@[cond], expr_void r, after1
+       else
+         let before2, e2, after2 = simplify_expr call e2 in
+         let tmp = make_temp ctx r f t in
+         let tmp_var = E_variable tmp, t, r in
+         let create = S_local_declaration tmp, r in
+         let cond =
+           S_if (e1,
+                 [S_expression (E_assign (tmp_var, e1), t, r), r] |> make_block,
+                 before2@[S_expression (E_assign (tmp_var, e2), t, r), r]@after2 |> make_block), r
          in
          before1@[create;cond], tmp_var, after1
 
@@ -337,6 +361,14 @@ let simplify_func ctx (f:func) =
        let cond = S_if (e1,
                         simplify_expr_stmt call e2 |> make_block,
                         simplify_expr_stmt call e3 |> make_block), r
+       in
+       before1@[cond]@after1
+
+    | E_binary_conditional (e1,e2) ->
+       let before1, e1, after1 = simplify_expr call e1 in
+       let cond = S_if (e1,
+                        [] |> make_block,
+                        simplify_expr_stmt call e2 |> make_block), r
        in
        before1@[cond]@after1
 

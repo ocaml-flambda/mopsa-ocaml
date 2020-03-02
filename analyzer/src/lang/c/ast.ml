@@ -201,24 +201,12 @@ let pp_scope fmt s =
   | Variable_file_static _ -> "file static"
   | Variable_func_static _ -> "func static")
 
-(** Flat variable initialization *)
-type c_flat_init =
-  | C_flat_expr of expr (** initialization expression *) * Z.t (** offset *) * typ (** type *)
-  (** Expression initializer *)
-
-  | C_flat_none of Z.t (** number of duplicates *) * Z.t (** offset *) * typ (** type *)
-  (** Uninitialized bytes *)
-
-  | C_flat_fill of expr (** filler expression *) * Z.t (** number of duplicates *) * Z.t (** offset *) * typ (** type *)
-  (** Filler initializer *)
-
 
 (** Variable initialization. *)
 type c_var_init =
   | C_init_expr of expr
   | C_init_list of c_var_init list (** specified elements *) * c_var_init option (** filler *)
   | C_init_implicit of typ
-  | C_init_flat of c_flat_init list
 
 
 type cvar = {
@@ -245,8 +233,8 @@ let () =
         match vkind v1, vkind v2 with
         | V_cvar cvar1, V_cvar cvar2 ->
           Compare.compose [
-            (fun () -> Pervasives.compare cvar1.cvar_uid cvar2.cvar_uid);
-            (fun () -> Pervasives.compare cvar1.cvar_uniq_name cvar2.cvar_uniq_name)
+            (fun () -> Stdlib.compare cvar1.cvar_uid cvar2.cvar_uid);
+            (fun () -> Stdlib.compare cvar1.cvar_uniq_name cvar2.cvar_uniq_name)
           ]
 
         | _ -> next v1 v2
@@ -1017,28 +1005,28 @@ let rec c_expr_to_z (e:expr) : Z.t option =
   | E_constant (C_c_character (ch,_)) -> Some ch
 
   | E_unop (O_minus, e') ->
-    c_expr_to_z e' |> Option.bind @@ fun n ->
+    c_expr_to_z e' |> OptionExt.bind @@ fun n ->
     Some (Z.neg n)
 
   | E_unop (O_bit_invert, e') ->
-    c_expr_to_z e' |> Option.bind @@ fun n ->
+    c_expr_to_z e' |> OptionExt.bind @@ fun n ->
     Some (Z.lognot n)
 
   | E_unop (O_log_not, e') ->
-    c_expr_to_z e' |> Option.bind @@ fun n ->
+    c_expr_to_z e' |> OptionExt.bind @@ fun n ->
     if Z.equal n Z.zero then Some Z.one else Some Z.zero
 
   | E_binop(O_c_and, e1, e2) ->
-    c_expr_to_z e1 |> Option.bind @@ fun n1 ->
+    c_expr_to_z e1 |> OptionExt.bind @@ fun n1 ->
     if Z.equal n1 Z.zero then Some Z.zero else c_expr_to_z e2
 
   | E_binop(O_c_or, e1, e2) ->
-    c_expr_to_z e1 |> Option.bind @@ fun n1 ->
+    c_expr_to_z e1 |> OptionExt.bind @@ fun n1 ->
     if Z.equal n1 Z.zero then c_expr_to_z e2 else Some Z.one
 
   | E_binop(op, e1, e2) ->
-    c_expr_to_z e1 |> Option.bind @@ fun n1 ->
-    c_expr_to_z e2 |> Option.bind @@ fun n2 ->
+    c_expr_to_z e1 |> OptionExt.bind @@ fun n1 ->
+    c_expr_to_z e2 |> OptionExt.bind @@ fun n2 ->
     begin
       match op with
       | O_plus -> Some (Z.add n1 n2)
@@ -1059,13 +1047,13 @@ let rec c_expr_to_z (e:expr) : Z.t option =
     end
 
   | E_c_conditional(cond,e1,e2) ->
-    c_expr_to_z cond |> Option.bind @@ fun c ->
+    c_expr_to_z cond |> OptionExt.bind @@ fun c ->
     if not (Z.equal c Z.zero)
     then c_expr_to_z e1
     else c_expr_to_z e2
 
   | E_c_cast(ee,_) when is_c_int_type e.etyp ->
-    c_expr_to_z ee |> Option.bind @@ fun n ->
+    c_expr_to_z ee |> OptionExt.bind @@ fun n ->
     let a,b = rangeof e.etyp in
     if Z.leq a n && Z.leq n b then Some n else None
 
@@ -1092,9 +1080,9 @@ let is_c_deref e =
 
 let is_pointer_offset_forall_quantified p =
   let open Stubs.Ast in
-  match ekind p with
-  | E_binop(_,e1,e2) when is_c_num_type e2.etyp -> is_expr_forall_quantified e2
-  | E_binop(_,e1,e2) when is_c_num_type e1.etyp -> is_expr_forall_quantified e1
+  match remove_casts p |> ekind with
+  | E_binop(_,e1,e2) when is_c_pointer_type e1.etyp -> is_expr_forall_quantified e2
+  | E_binop(_,e1,e2) when is_c_pointer_type e2.etyp -> is_expr_forall_quantified e1
   | _ -> false
 
 let is_lval_offset_forall_quantified e =
@@ -1109,6 +1097,12 @@ let is_lval_offset_forall_quantified e =
 let is_c_variable_length_array_type t =
   match remove_typedef_qual t with
   | T_c_array(_, C_array_length_expr _) -> true
+  | _ -> false
+
+(** Check if v is declared as an array without length (as for many auxiliary variables) *)
+let is_c_no_length_array_type t =
+  match remove_typedef_qual t with
+  | T_c_array(_, C_array_no_length) -> true
   | _ -> false
 
 (** Find the definition of a C function *)
@@ -1148,3 +1142,17 @@ let memrand (p:expr) (i:expr) (j:expr) range man flow =
   man.post stmt flow
 
   
+(** Set elements of an array with the same value [c] *)
+let memset (p:expr) (c:expr) (i:expr) (j:expr) range man flow =
+  let open Sig.Domain.Manager in
+  let f = find_c_fundec_by_name "_mopsa_memset" flow in
+  let stmt = mk_c_call_stmt f [p; c; i; j] range in
+  man.post stmt flow
+
+
+(** Copy elements of an array *)
+let memcpy (dst:expr) (src:expr) (i:expr) (j:expr) range man flow =
+  let open Sig.Domain.Manager in
+  let f = find_c_fundec_by_name "_mopsa_memcpy" flow in
+  let stmt = mk_c_call_stmt f [dst; src; i; j] range in
+  man.post stmt flow

@@ -35,9 +35,12 @@ let rec parse_program (files: string list) : program =
   | [filename] ->
     debug "parsing %s" filename;
     let ast, counter = Py_parser.Main.parse_file ~counter:(Framework.Ast.Var.get_vcounter_val ()) filename in
+    let body = from_stmt ast.prog_body in
+    Hooks.Coverage.Hook.add_file filename body;
+    let globals = List.map from_var ast.prog_globals in
     Framework.Ast.Var.start_vcounter_at counter;
     {
-      prog_kind = from_program filename ast;
+      prog_kind = Ast.Py_program (filename, globals, body);
       prog_range = mk_program_range [filename];
     }
 
@@ -45,10 +48,10 @@ let rec parse_program (files: string list) : program =
 
   | _ -> panic "analysis of multiple files not supported"
 
-and parse_file (filename: string) =
-  let ast, counter = Py_parser.Main.parse_file ~counter:(Framework.Ast.Var.get_vcounter_val ()) filename in
-  Framework.Ast.Var.start_vcounter_at counter;
-  from_stmt ast.prog_body
+(* and parse_file (filename: string) =
+ *   let ast, counter = Py_parser.Main.parse_file ~counter:(Framework.Ast.Var.get_vcounter_val ()) filename in
+ *   Framework.Ast.Var.start_vcounter_at counter;
+ *   from_stmt ast.prog_body *)
 
 (** Create a Universal.var variable from Py_parser.Ast.var *)
 and from_var (v:Py_parser.Ast.var) =
@@ -60,10 +63,10 @@ and from_var (v:Py_parser.Ast.var) =
   mk_uniq_var v.name v.uid T_any
 
 (** Translate a Python program into a stmt *)
-and from_program filename (p: Py_parser.Ast.program) : prog_kind =
-  let body = from_stmt p.prog_body in
-  let globals = List.map from_var p.prog_globals in
-  Ast.Py_program (globals, body)
+(* and from_program filename (p: Py_parser.Ast.program) : prog_kind =
+ *   let body = from_stmt p.prog_body in
+ *   let globals = List.map from_var p.prog_globals in
+ *   Ast.Py_program (filename, globals, body) *)
 
 
 (** Translation of a Python statement *)
@@ -113,6 +116,10 @@ and from_stmt (stmt: Py_parser.Ast.stmt) : stmt =
         py_func_var = from_var f.func_var;
         py_func_parameters = List.map from_var f.func_parameters;
         py_func_defaults = List.map from_exp_option f.func_defaults;
+        py_func_vararg = OptionExt.lift from_var f.func_vararg;
+        py_func_kwonly_args = List.map from_var f.func_kwonly_args;
+        py_func_kwonly_defaults = List.map from_exp_option f.func_kwonly_defaults;
+        py_func_kwarg = OptionExt.lift from_var f.func_kwarg;
         py_func_locals = List.map from_var f.func_locals;
         py_func_body = from_stmt f.func_body;
         py_func_is_generator = f.func_is_generator;
@@ -243,7 +250,7 @@ and from_exp exp =
       T_any
 
     | E_id v ->
-      E_var (from_var v, STRONG),
+      E_var (from_var v, None),
       T_any
 
     | E_binop (left, op, right) ->
@@ -285,6 +292,10 @@ and from_exp exp =
 
     | E_yield e ->
       E_py_yield(from_exp e),
+      T_any
+
+    | E_yield_from e ->
+      E_py_yield_from(from_exp e),
       T_any
 
     | E_if(test, body, orelse) ->
@@ -411,3 +422,11 @@ and from_unop = function
   | USub -> Universal.Ast.O_minus
   | UAdd -> Universal.Ast.O_plus
   | Invert -> Universal.Ast.O_bit_invert
+
+
+(* Front-end registration *)
+let () =
+  register_frontend {
+    lang = "python";
+    parse = parse_program;
+  }

@@ -32,7 +32,7 @@ open Eval
 open Post
 open Log
 open Context
-open Result
+open Cases
 
 
 let debug fmt = Debug.debug ~channel:"framework.core.sig.stacked.manager" fmt
@@ -124,8 +124,8 @@ let assume
     else Some (felse else_flow)
   in
 
-  match Option.neutral2 Result.join then_res else_res with
-  | None -> Result.empty_singleton flow
+  match OptionExt.neutral2 Cases.join then_res else_res with
+  | None -> Cases.empty_singleton flow
   | Some r -> r
 
 
@@ -153,35 +153,34 @@ let assume_flow
 
 
 let switch
-    (cases : (expr list * ('a Flow.flow -> ('a,'r) Result.result)) list)
+    (cases : (expr list * ('a Flow.flow -> ('a,'r) cases)) list)
     ?(zone = any_zone)
     man flow
-  : ('a,'r) result
+  : ('a,'r) cases
   =
   let rec one (cond : expr list) acc f =
     match cond with
-    | [] -> Some (f acc)
+    | [] -> f acc
     | x :: tl ->
       let s = mk_assume x x.erange in
-      man.post ~zone s acc >>=? fun _ acc' ->
+      man.post ~zone s acc >>$ fun _ acc' ->
       if Flow.get T_cur man.lattice acc' |> man.lattice.is_bottom then
-        None
+        Cases.empty_singleton acc'
       else
         one tl acc' f
   in
   let rec aux cases =
     match cases with
-    | [] -> None
+    | [] -> assert false
+
+    | [(cond, t)] -> one cond flow t
 
     | (cond, t) :: q ->
       let r = one cond flow t in
       let rr = aux q in
-      Option.neutral2 Result.join r rr
+      Cases.join r rr
   in
-  match aux cases with
-  | None -> assert false
-
-  | Some x -> x
+  aux cases
 
 
 let exec_stmt_on_all_flows stmt man flow =
@@ -206,7 +205,7 @@ let exec_block_on_all_flows block man flow =
 
 
 let post_to_flow man post =
-  Result.apply_full
+  Cases.apply_full
     (fun _ flow _ cleaners -> exec_block_on_all_flows cleaners man flow )
     (Flow.join man.lattice)
     (Flow.join man.lattice)

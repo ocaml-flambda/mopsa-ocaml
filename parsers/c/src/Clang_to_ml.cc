@@ -2015,6 +2015,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateTemplateName(const TemplateName& x
 /* expr_kind with argument */
 enum {
   MLTAG_ConditionalOperator,
+  MLTAG_BinaryConditionalOperator,
   MLTAG_AddrLabelExpr,
   MLTAG_ArrayInitLoopExpr,
   MLTAG_ArraySubscriptExpr,
@@ -2182,6 +2183,11 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
           Store_field(ret, 0, TranslateExpr(x->getCond()));
           Store_field(ret, 1, TranslateExpr(x->getTrueExpr()));
           Store_field(ret, 2, TranslateExpr(x->getFalseExpr()));
+        });
+
+      GENERATE_NODE_INDIRECT(BinaryConditionalOperator, ret, node, 2, {
+          Store_field(ret, 0, TranslateExpr(x->getCond()));
+          Store_field(ret, 1, TranslateExpr(x->getFalseExpr()));
         });
 
       GENERATE_NODE(AddrLabelExpr, ret, node, 1, {
@@ -3774,7 +3780,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateArrayType(const ArrayType * node) 
           Store_field(tmp, 0, TranslateAPInt(x->getSize()));
         });
       GENERATE_NODE(VariableArrayType, tmp, node, 1, {
-          Store_field(tmp, 0, TranslateExpr(x->getSizeExpr()));
+          Store_field_option(tmp, 0, x->getSizeExpr(), TranslateExpr(x->getSizeExpr()));
         });
       GENERATE_NODE_CONSTANT(IncompleteArrayType, tmp, node);
       GENERATE_NODE_CONSTANT(DependentSizedArrayType, tmp, node);

@@ -62,6 +62,19 @@ struct
     }
 
 
+  (** Symbolic main arguments. *)
+  let opt_symbolic_args = ref false
+
+  let () =
+    register_domain_option name {
+      key = "-c-symbolic-args";
+      category = "C";
+      doc = " call main with symbolic argc and argv";
+      spec = ArgExt.Set opt_symbolic_args;
+      default = "false";
+    }
+
+
 
   (** Zoning definition *)
   (** ================= *)
@@ -305,9 +318,11 @@ struct
 
   let call_main main args functions man flow =
     if List.length main.c_func_parameters = 2 then
-      match args with
-      | Some args -> call_main_with_concrete_args main args man flow
-      | None      -> call_main_with_symbolic_args main functions man flow
+      match !opt_symbolic_args, args with
+      | false, None      -> call_main_with_concrete_args main [] man flow
+      | false, Some args -> call_main_with_concrete_args main args man flow
+      | true, None       -> call_main_with_symbolic_args main functions man flow
+      | true, Some args  -> panic "-c-symbolic-main-args used with concrete arguments"
     else
       exec_entry_body main man flow
 
@@ -332,12 +347,12 @@ struct
       (* Special processing for main for initializing argc and argv*)
       if !opt_entry_function = "main" then
         call_main entry args c_functions man flow |>
-        Option.return
+        OptionExt.return
       else
       if List.length entry.c_func_parameters = 0 then
         (* Otherwise execute the body *)
         exec_entry_body entry man flow |>
-        Option.return
+        OptionExt.return
       else
         panic "entry function %s with arguments not supported" entry.c_func_org_name
 
@@ -375,7 +390,7 @@ struct
       let stmt = mk_c_unit_tests tests in
       man.exec stmt flow1 |>
       Post.return |>
-      Option.return
+      OptionExt.return
 
     | _ -> None
 

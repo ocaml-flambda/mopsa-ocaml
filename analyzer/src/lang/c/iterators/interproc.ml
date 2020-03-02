@@ -28,6 +28,7 @@ open Ast
 open Zone
 open Common.Points_to
 open Common.Scope_update
+open Common.Builtins
 open Universal.Iterators.Interproc.Common
 
 module Domain =
@@ -85,7 +86,7 @@ struct
       let cur = Flow.get T_cur man.lattice flow in
       Flow.add (T_return (stmt.srange, true)) cur man.lattice flow |>
       Flow.remove T_cur |>
-      Post.return |> Option.return
+      Post.return |> OptionExt.return
 
     | S_c_return (None,upd) ->
       let rrange = get_last_call_site flow in
@@ -93,7 +94,7 @@ struct
       let cur = Flow.get T_cur man.lattice flow in
       Flow.add (T_return (stmt.srange, false)) cur man.lattice flow |>
       Flow.remove T_cur |>
-      Post.return |> Option.return
+      Post.return |> OptionExt.return
 
 
     | _ -> None
@@ -111,7 +112,7 @@ struct
 
   (** Eval a function call *)
   let eval_call fundec args range man flow =
-    if Libs.Builtins.is_builtin_function fundec.c_func_org_name
+    if is_builtin_function fundec.c_func_org_name
     then
       let exp' = mk_expr (E_c_builtin_call(fundec.c_func_org_name, args)) ~etyp:fundec.c_func_return range in
       man.eval ~zone:(Zone.Z_c, Zone.Z_c_low_level) exp' flow
@@ -170,7 +171,7 @@ struct
 
     | E_call({ ekind = E_c_function f}, args) ->
       eval_call f args exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     | E_call(f, args) ->
       man.eval ~zone:(Zone.Z_c, Z_c_points_to) f flow >>$? fun ff flow ->
@@ -178,7 +179,7 @@ struct
       begin match ekind ff with
         | E_c_points_to (P_fun f) ->
           eval_call f args exp.erange man flow |>
-          Option.return
+          OptionExt.return
 
         | _ ->
           Soundness.warn_at exp.erange
@@ -187,10 +188,10 @@ struct
           ;
           if is_c_void_type exp.etyp then
             Eval.empty_singleton flow |>
-            Option.return
+            OptionExt.return
           else
             Eval.singleton (mk_top exp.etyp exp.erange) flow |>
-            Option.return
+            OptionExt.return
       end
 
     | _ -> None

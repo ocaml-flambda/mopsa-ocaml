@@ -521,7 +521,7 @@ and noexcept_result =
 
  and array_size =
    | Size_Constant of Z.t (** C arrays with a specified constant size. *)
-   | Size_Variable of expr (** C array with a specified size that is not an integer-constant-expression *)
+   | Size_Variable of expr option (** C array with a specified size that is not an integer-constant-expression *)
    | Size_Incomplete (** C array with an unspecified size *)
    | Size_Dependent (** (C++) array with dependent size *)
  (** Array size *)
@@ -688,6 +688,9 @@ and access_specifier =
 
    | ConditionalOperator of conditional_operator
    (** The ?: ternary operator *)
+
+   | BinaryConditionalOperator of binary_conditional_operator
+   (** Binary version of the ?: operator *)
 
    | AddrLabelExpr of (** label *) name
    (** The GNU address of label extension, representing &&label *)
@@ -924,6 +927,12 @@ and access_specifier =
      cond_false: expr; (** false expression *)
    }
  (** The ?: ternary operator *)
+
+ and binary_conditional_operator = {
+     bcond_cond: expr; (** condition and true expression *)
+     bcond_false: expr; (** false expression *)
+   }
+ (** Binary version of the ?: operator (GNU extension) *)
 
  and array_init_loop_expr = {
      array_init_source: opaque_expr; (** source array *)

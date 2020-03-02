@@ -97,8 +97,8 @@ let () =
     compare = (fun next c1 c2 ->
         match c1, c2 with
         | C_int z1, C_int z2 -> Z.compare z1 z2
-        | C_float f1, C_float f2 -> Pervasives.compare f1 f2
-        | C_string s1, C_string s2 -> Pervasives.compare s1 s2
+        | C_float f1, C_float f2 -> Stdlib.compare f1 f2
+        | C_string s1, C_string s2 -> Stdlib.compare s1 s2
         | C_int_interval(z1, z1'), C_int_interval(z2, z2') ->
           Compare.compose [
             (fun () -> Z.compare z1 z2);
@@ -106,8 +106,8 @@ let () =
           ]
         | C_float_interval(f1, f1'), C_float_interval(f2, f2') ->
           Compare.compose [
-            (fun () -> Pervasives.compare f1 f2);
-            (fun () -> Pervasives.compare f1' f2')
+            (fun () -> Stdlib.compare f1 f2);
+            (fun () -> Stdlib.compare f1' f2')
           ]
         | _ -> next c1 c2
       );
@@ -222,12 +222,21 @@ let addr_group_compare_chain : (addr_group -> addr_group -> int) ref =
 let addr_group_pp_chain : (Format.formatter -> addr_group -> unit) ref =
   ref (fun fmt g ->
       match g with
-      | G_all -> Format.pp_print_string fmt "*"
-      | _ -> panic "addr_group_pp_chain: unknown address"
+      | _ -> Format.pp_print_string fmt "*"
     )
 
 let pp_addr_group fmt ak =
   !addr_group_pp_chain fmt ak
+
+let pp_addr_group_hash fmt (g:addr_group) =
+  Format.fprintf fmt "%xd"
+    (* Using Hashtbl.hash leads to collisions. Hashtbl.hash is
+       equivalent to Hashtbl.hash_param 10 100. By increasing the
+       number of meaningful nodes to encounter, collisions are less
+       likely to happen.
+    *)
+    (Hashtbl.hash_param 30 100 g)
+
 
 let compare_addr_group a1 a2 =
   if a1 == a2 then 0 else !addr_group_compare_chain a1 a2
@@ -249,21 +258,10 @@ type addr = {
 let akind addr = addr.addr_kind
 
 let pp_addr fmt a =
-  if compare_addr_group a.addr_group G_all = 0 then
-    fprintf fmt "@@%a:*:%s"
-      pp_addr_kind a.addr_kind
-      (match a.addr_mode with WEAK -> "w" | STRONG -> "s")
-  else
-    fprintf fmt "@@%a:%xd:%s"
-      pp_addr_kind a.addr_kind
-      (* Using Hashtbl.hash leads to collisions. Hashtbl.hash is
-         equivalent to Hashtbl.hash_param 10 100. By increasing the
-         number of meaningful nodes to encounter, collisions are less
-         likely to happen.
-      *)
-      (Hashtbl.hash_param 30 100 a.addr_group)
-      (match a.addr_mode with WEAK -> "w" | STRONG -> "s")
-
+  fprintf fmt "@@%a:%a:%s"
+    pp_addr_kind a.addr_kind
+    pp_addr_group a.addr_group
+    (match a.addr_mode with WEAK -> "w" | STRONG -> "s")
 
 
 let compare_addr a b =
@@ -332,8 +330,8 @@ type fun_expr =
   | Builtin of fun_builtin
 
 let compare_fun_expr x y = match x, y with
-  | User_defined a, User_defined b -> Pervasives.compare a.fun_name b.fun_name
-  | Builtin a, Builtin b -> Pervasives.compare a b
+  | User_defined a, User_defined b -> Stdlib.compare a.fun_name b.fun_name
+  | Builtin a, Builtin b -> Stdlib.compare a b
   | _ -> 1
 
 
@@ -543,7 +541,7 @@ let () =
           ]
 
         | S_unit_tests(tl1), S_unit_tests(tl2) ->
-          Compare.list (fun (t1, _) (t2, _) -> Pervasives.compare t1 t2) tl1 tl2
+          Compare.list (fun (t1, _) (t2, _) -> Stdlib.compare t1 t2) tl1 tl2
 
         | S_assert(e1), S_assert(e2) -> compare_expr e1 e2
 

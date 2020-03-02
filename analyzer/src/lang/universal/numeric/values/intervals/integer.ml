@@ -198,20 +198,20 @@ struct
     | NormalQuery(Common.Q_int_interval e) ->
       man.eval e |>
       man.get |>
-      Option.return
+      OptionExt.return
 
     | NormalQuery(Common.Q_fast_int_interval e) ->
       man.eval e |>
       man.get |>
-      Option.return
+      OptionExt.return
 
     | NormalQuery(Common.Q_int_congr_interval e) ->
-      (man.eval e |> man.get, Common.C.minf_inf) |> Option.return
+      (man.eval e |> man.get, Common.C.minf_inf) |> OptionExt.return
 
 
     | ValueQuery(a,Common.VQ_to_int_interval) ->
       man.get a |>
-      Option.return
+      OptionExt.return
 
     | _ -> None
 

@@ -55,10 +55,10 @@ module Domain =
                          range
                       ) flow
          in
-         let exp' = {exp with ekind = E_var (tmp, STRONG)} in
+         let exp' = {exp with ekind = E_var (tmp, None)} in
          man.eval exp' flow |>
            Eval.add_cleaners [mk_remove_var tmp (tag_range range "cleaner")] |>
-           Option.return
+           OptionExt.return
 
       | _ -> None
 
@@ -71,7 +71,7 @@ module Domain =
         bind_some (fun exp flow ->
             man.exec ~zone:Zone.Z_py (mk_if exp sthen selse range) flow |> Post.return
           )
-        |> Option.return
+        |> OptionExt.return
 
       | _ -> None
 

@@ -82,8 +82,8 @@ module Domain = struct
           match op with
           | O_eq | O_ne ->
             assume (mk_expr (E_binop(O_py_is, e1, e2)) range) man flow
-              ~fthen:(man.eval (mk_py_bool (O_eq =  op) range))
-              ~felse:(man.eval (mk_py_bool (O_eq <> op) range))
+              ~fthen:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_bool (O_eq =  op) range))
+              ~felse:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_bool (O_eq <> op) range))
           | _ ->
             Format.fprintf Format.str_formatter "'%s' not supported between instances of '%a' and '%a'" op_fun pp_addr_kind (akind @@ fst cls1) pp_addr_kind (akind @@ fst cls2);
             let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow in
@@ -138,7 +138,7 @@ module Domain = struct
           )
         ~felse:(call_op false)
         )))
-      |> Option.return
+      |> OptionExt.return
 
     | _ -> None
 

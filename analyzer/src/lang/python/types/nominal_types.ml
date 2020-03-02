@@ -66,6 +66,10 @@ struct
              Eval.singleton (mk_py_object (cls, None) range) flow
            | E_py_object ({addr_kind = Objects.Py_list.A_py_list _}, _) ->
              proceed "list"
+           | E_py_object ({addr_kind = Objects.Function.A_py_classmethod _}, _) ->
+             proceed "classmethod"
+           | E_py_object ({addr_kind = Objects.Function.A_py_staticmethod _}, _) ->
+             proceed "staticmethod"
            | E_py_object ({addr_kind = Objects.Py_set.A_py_set _}, _) ->
              proceed "set"
            | E_py_object ({addr_kind = Objects.Dict.A_py_dict _}, _) ->
@@ -78,17 +82,21 @@ struct
              Eval.singleton (mk_py_object (find_builtin s) range) flow
            | E_py_object ({addr_kind = A_py_module m}, _) ->
              proceed "module"
-           | E_py_object ({addr_kind = A_py_method _}, _) ->
-             proceed "method"
-           | E_py_object ({addr_kind = A_py_function _}, _) ->
+           | E_py_object ({addr_kind = A_py_method (_, _, t)}, _) ->
+             proceed t
+           | E_py_object ({addr_kind = A_py_function (F_builtin (fname, ftype))}, _) ->
+             proceed ftype
+           | E_py_object ({addr_kind = A_py_function (F_annot _)}, _) ->
              proceed "function"
+           | E_py_object ({addr_kind = A_py_function (F_user f)}, _) ->
+             proceed (Libs.Py_mopsa.builtin_type_name "function" f)
            | E_py_object ({addr_kind = A_py_class _}, _) ->
              proceed "type"
            | _ -> Exceptions.panic_at range "type: todo: %a@\n" pp_expr arg
         )
-      |> Option.return
+      |> OptionExt.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "issubclass")}, _)}, [cls; cls'], []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("issubclass", _))}, _)}, [cls; cls'], []) ->
       bind_list [cls; cls'] (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
       bind_some (fun evals flow ->
           let cls, cls' = match evals with [e1; e2] -> e1, e2 | _ -> assert false in
@@ -97,10 +105,10 @@ struct
           match akind addr_cls, akind addr_cls' with
           | A_py_class (c, mro), A_py_class (c', mro') ->
             Eval.singleton (mk_py_bool (class_le (c, mro) (c', mro')) range) flow
-          | _ -> assert false)
-      |> Option.return
+          | _ -> panic_at range "%a, cls=%a, cls'=%a" pp_expr exp pp_expr cls pp_expr cls')
+      |> OptionExt.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "isinstance")}, _)}, [obj; attr], []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("isinstance", _))}, _)}, [obj; attr], []) ->
       (* TODO: if v is a class inheriting from protocol we should check the attributes *)
       bind_list [obj; attr] (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
       bind_some (fun evals flow ->
@@ -116,8 +124,15 @@ struct
           | A_py_class _, A_py_class (C_builtin c, _) ->
             man.eval (mk_py_bool (c = "type") range) flow
 
-          | A_py_function _, A_py_class (C_builtin c, _) ->
+          | A_py_function (F_builtin (_, ftype)), A_py_class (C_builtin c, _) ->
+            man.eval (mk_py_bool (c = ftype) range) flow
+
+          | A_py_function (F_user f), A_py_class (C_builtin c, _) ->
+            man.eval (mk_py_bool (c = Libs.Py_mopsa.builtin_type_name "function" f) range) flow
+
+          | A_py_function (F_annot _), A_py_class (C_builtin c, _) ->
             man.eval (mk_py_bool (c = "function") range) flow
+
 
           | A_py_instance cls, A_py_class (c, mro) ->
             begin match List.find_opt
@@ -161,7 +176,7 @@ struct
               | Objects.Tuple.A_py_tuple _ -> "tuple"
               | _ -> assert false in
             assume (mk_py_issubclass_builtin_l str_addr eattr range) man flow
-              ~fthen:(man.eval (mk_py_false range))
+              ~fthen:(man.eval (mk_py_true range))
               ~felse:(man.eval (mk_py_false range))
 
           | Objects.Py_list.A_py_iterator (s, _, _), A_py_class (C_builtin c, _) ->
@@ -173,12 +188,29 @@ struct
           | A_py_module _, A_py_class (C_builtin c, _) ->
             man.eval (mk_py_bool (c = "module" || c = "object") range) flow
 
-          | A_py_method _, A_py_class (C_builtin c, _) ->
-            man.eval (mk_py_bool (c = "method" || c = "object") range) flow
+          | A_py_method (_, _, t), A_py_class (C_builtin c, _) ->
+            man.eval (mk_py_bool (c = t || c = "object") range) flow
+
+          | Objects.Function.A_py_classmethod _, A_py_class (C_builtin "classmethod", b) ->
+            man.eval (mk_py_true range) flow
+
+          | Objects.Function.A_py_staticmethod _, A_py_class (C_builtin "staticmethod", b) ->
+            man.eval (mk_py_true range) flow
+
+          | Objects.Function.A_py_classmethod _, A_py_class (c, b) ->
+            assume (mk_py_issubclass_builtin_l "classmethod" eattr range) man flow
+              ~fthen:(man.eval (mk_py_true range))
+              ~felse:(man.eval (mk_py_false range))
+
+          | Objects.Function.A_py_staticmethod _, A_py_class (c, b) ->
+            assume (mk_py_issubclass_builtin_l "staticmethod" eattr range) man flow
+              ~fthen:(man.eval (mk_py_true range))
+              ~felse:(man.eval (mk_py_false range))
+
 
           | _ -> assert false
         )
-      |> Option.return
+      |> OptionExt.return
 
     | _ -> None
 

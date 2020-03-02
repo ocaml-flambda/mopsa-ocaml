@@ -58,7 +58,7 @@
 
 /*$$
  * predicate valid_ptr_range(p, i, j):
- *   i >= j implies forall int k in [i,j]: valid_ptr(p+k);
+ *   j >= i implies forall int k in [i,j]: valid_ptr(p+k);
  */
 
 /*$
@@ -93,3 +93,20 @@ void _mopsa_memrand(char *s, unsigned int i, unsigned int j);
  * requires: stream in File;
  */
 void _mopsa_assert_valid_stream(void* stream);
+
+
+/*$
+ * requires: valid_ptr_range(s, i, j);
+ * assigns: s[i, j];
+ * ensures: forall unsigned int k in [i,j]: (s[k])' == c;
+ */
+void _mopsa_memset(char *s, char c, unsigned int i, unsigned int j);
+
+
+/*$
+ * requires: valid_ptr_range(dst, i, j);
+ * requires: valid_ptr_range(src, i, j);
+ * assigns: dst[i, j];
+ * ensures: forall unsigned int k in [i,j]: (dst[k])' == src[k];
+ */
+void _mopsa_memcpy(char *dst, char *src, unsigned int i, unsigned int j);

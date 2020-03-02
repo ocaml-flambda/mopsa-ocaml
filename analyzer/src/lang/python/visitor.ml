@@ -157,6 +157,10 @@ let () =
         {exprs = [e]; stmts = [];},
         (function {exprs = [e]} -> {exp with ekind = E_py_yield(e)} | _ -> assert false)
 
+      | E_py_yield_from(e) ->
+        {exprs = [e]; stmts = [];},
+        (function {exprs = [e]} -> {exp with ekind = E_py_yield_from(e)} | _ -> assert false)
+
       | E_py_if(test, body, orelse) ->
         {exprs = [test; body; orelse]; stmts = [];},
         (function {exprs = [test; body; orelse]} -> {exp with ekind = E_py_if(test, body, orelse)} | _ -> assert false)
@@ -306,10 +310,28 @@ let () =
         {exprs = [e]; stmts = [];},
         (fun parts -> {stmt with skind = S_py_raise(Some (List.hd parts.exprs))})
       | S_py_try(body, excepts, orelse, finally) ->
-        {exprs = []; stmts = [body; orelse; finally];},
+        let py_excs, py_bodies = List.fold_left (fun (acce, accb) el ->
+            match el.py_excpt_type with
+            | None -> (acce, el.py_excpt_body::accb)
+            | Some e -> (e::acce, el.py_excpt_body::accb)) ([], []) excepts
+        in
+        let py_excs, py_bodies = List.rev py_excs, List.rev py_bodies in
+        {exprs = py_excs; stmts = body::orelse::finally::py_bodies;},
         (function
-          | {stmts = [body'; orelse'; finally']} -> {stmt with skind = S_py_try(body', excepts, orelse', finally')}
+          | {exprs; stmts = body' :: orelse' :: finally' :: bodies} ->
+            let opy_excs = fill_some (List.map (fun x -> x.py_excpt_type) excepts) exprs in
+            let excepts' = List.rev @@ List.fold_left2 (fun acc (oty, stmt) except ->
+                {
+                  py_excpt_type = oty;
+                  py_excpt_name = except.py_excpt_name;
+                  py_excpt_body = stmt
+                } :: acc
+              ) [] (List.combine opy_excs py_bodies) excepts in
+            {stmt with skind = S_py_try(body', excepts', orelse', finally')}
           | _ -> assert false)
+
+
+
       | S_py_while(test, body, orelse) ->
         {exprs = [test]; stmts = [body; orelse];},
         (function
@@ -321,17 +343,22 @@ let () =
           | {exprs = [test']; stmts = [sthen'; selse']} -> {stmt with skind = S_py_if(test', sthen', selse')}
           | _ -> assert false)
 
-      | S_py_for(({ekind = E_py_tuple _ | E_py_list _} as target), iter, body, orelse) ->
-        {exprs = [iter]; stmts = [];},
-        (function
-          | {exprs = [iter]; stmts = [];} -> {stmt with skind = S_py_for(target, iter, body, orelse)}
-          | _ -> assert false)
+      (* | S_py_for(({ekind = E_py_tuple inner | E_py_list inner} as target), iter, body, orelse) ->
+       *   {exprs = iter::inner; stmts = [body; orelse];},
+       *   (function
+       *     | {exprs = iter::inner; stmts = [body; orelse];} -> {stmt with skind = S_py_for({target with ekind =
+       *                                                                                                    match ekind target with
+       *                                                                                                    | E_py_tuple _ -> E_py_tuple inner
+       *                                                                                                    | E_py_list _ -> E_py_list inner
+       *                                                                                                    | _ -> assert false
+       *                                                                                     }, iter, body, orelse)}
+       *     | _ -> assert false) *)
 
 
       | S_py_for(target, iter, body, orelse) ->
-        {exprs = [iter]; stmts = []},
+        {exprs = iter::target::[]; stmts = [body; orelse]},
         (function
-          | {exprs = [iter]; stmts = []} -> {stmt with skind = S_py_for(target, iter, body, orelse)}
+          | {exprs = iter::target::[]; stmts = [body; orelse]} -> {stmt with skind = S_py_for(target, iter, body, orelse)}
           | _ -> assert false)
 
 

@@ -53,6 +53,10 @@ module Domain =
             { py_func_var = mk_range_attr_var range lname T_any;
               py_func_parameters = l.py_lambda_parameters;
               py_func_defaults = l.py_lambda_defaults;
+              py_func_vararg = None;
+              py_func_kwonly_args = [];
+              py_func_kwonly_defaults = [];
+              py_func_kwarg = None;
               py_func_locals = [];
               py_func_body =
                 mk_stmt (S_return (Some l.py_lambda_body)) range;
@@ -66,7 +70,7 @@ module Domain =
         eval_alloc man (A_py_function fun_addr) range flow |>
         bind_some (fun addr flow ->
             Eval.singleton (mk_py_object (addr, None) range) flow)
-        |> Option.return
+        |> OptionExt.return
 
 
       | _ -> None

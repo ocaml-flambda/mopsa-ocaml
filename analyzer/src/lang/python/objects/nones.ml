@@ -40,7 +40,7 @@
  *       match ekind exp with
  *       (\* 𝔼⟦ None ⟧ *\)
  *       | E_constant (C_py_none) ->
- *          Eval.singleton (mk_py_none range) flow |> OptionExt.return
+ *          Eval.singleton (mk_py_none range) flow |> OptionExt.xt.return
  *       | _ -> None
  *
  *     let init _ _ flow = Some flow

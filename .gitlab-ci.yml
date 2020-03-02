@@ -16,6 +16,7 @@ build_job:
   stage: build
   script:
     - eval `opam config env`
+    - ./configure
     - make -j
   artifacts:
     paths:

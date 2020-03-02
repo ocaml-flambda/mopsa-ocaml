@@ -481,8 +481,8 @@ let var_init_of_function (var_ctx: var_context) var_ctx_map (fun_ctx: fun_contex
 
 
 let from_fundec (f: U.fundec) (var_ctx: var_context): T.fundec =
-  let typ = Option.lift from_typ f.return_type in
-  let ret_var = mktmp ~typ:(Option.default T_int typ) () in
+  let typ = OptionExt.lift from_typ f.return_type in
+  let ret_var = mktmp ~typ:(OptionExt.default T_int typ) () in
   {
     fun_name = f.funname;
     fun_range = from_extent f.range;
@@ -537,3 +537,11 @@ let rec parse_program (files: string list): program =
   | [] -> panic "no input file"
 
   | _ -> panic "analysis of multiple files not supported"
+
+
+(* Front-end registration *)
+let () =
+  register_frontend {
+    lang = "universal";
+    parse = parse_program;
+  }

@@ -416,6 +416,14 @@ char *__builtin_strchr (const char *__s, int __c);
 
 /*$
  * requires: valid_string(__s);
+ *
+ * case "found" {
+ *   ensures: exists int i in [0, size(__s) - 1]: return == __s + i;
+ * }
+ *
+ * case "notfound" {
+ *   ensures: return == NULL;
+ * }
  */
 char *strrchr (const char *__s, int __c);
 
@@ -432,9 +440,10 @@ char *strrchr (const char *__s, int __c);
  *
  * case "non empty string" {
  *   assumes: __s[0] != 0;
- *   ensures: return in [1, size(__s) - 1];
- *   ensures: __s[return] == 0;
- *   ensures: forall unsigned int k in [0, return - 1]: __s[k] != 0;
+ *   ensures: exists unsigned int i in [1, size(__s) - 1]:
+ *              ( __s[i] == 0 and 
+ *                (forall unsigned int j in [0, i - 1]: __s[j] != 0) and
+ *                return == i );
  * }
  *
  */

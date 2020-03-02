@@ -38,7 +38,8 @@ open Post
 open Zone
 open Query
 open Log
-open Result
+open Cases
+open Interface
 
 
 type ('a, 't) man = ('a, 't) Sig.Domain.Lowlevel.man = {
@@ -181,7 +182,8 @@ struct
     in
 
     (* Initialize hooks *)
-    let ctx = Hook.init_hooks Domain.interface ctx in
+    let () = Hook.init Domain.interface in
+    let ctx = Hook.init_active_hooks ctx in
 
     (* The initial flow is a singleton ⊤ environment *)
     let flow0 = Flow.singleton ctx T_cur man.lattice.top in
@@ -317,7 +319,7 @@ struct
             let parts, builder = split_expr exp in
             match parts with
             | {exprs; stmts = []} ->
-              Result.bind_list exprs
+              Cases.bind_list exprs
                 (fun exp flow ->
                    match eval_over_paths paths exp man flow with
                    | None ->
@@ -367,7 +369,7 @@ struct
 
     | (z1, z2, path, feval) :: tl ->
       eval_hop z1 z2 feval man exp flow |>
-      Option.bind @@ bind_some_opt @@ fun e flow ->
+      OptionExt.bind @@ bind_some_opt @@ fun e flow ->
       eval_over_path tl man e flow
 
   and eval_hop z1 z2 feval man exp flow =
@@ -375,7 +377,7 @@ struct
     match Zone.eval_template exp z2 with
     | Keep ->
       Eval.singleton exp flow |>
-      Option.return
+      OptionExt.return
 
     | other_action ->
       match
@@ -414,7 +416,7 @@ struct
           | {exprs; stmts = []} ->
             debug "eval parts of %a" pp_expr exp;
             bind_list_opt exprs (eval_hop z1 z2 feval man) flow |>
-            Option.lift @@ bind_some @@ fun exprs flow ->
+            OptionExt.lift @@ bind_some @@ fun exprs flow ->
             let exp' = builder {exprs; stmts = []} in
             debug "%a -> %a" pp_expr exp pp_expr exp';
             (* Update the eprev field in returned expressions to

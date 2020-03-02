@@ -58,11 +58,16 @@ and translate_stmt (stmt: Cst.stmt) : Ast.stmt =
     | FunctionDef (id, args, body, decors, return) ->
       let (args, vararg, kwonlyargs, kw_defaults, kwarg, defaults) = args in
       let parameters =
-        match vararg, kwonlyargs, kw_defaults, kwarg, defaults with
-        | None, [], [], None, _ ->
-          List.map (fun v -> fst v) args
-        | _ ->
-          Exceptions.panic_at range "Unsupported function arguments"
+        List.map fst args
+        (* match vararg, kwonlyargs, kw_defaults, kwarg, defaults with
+         * | None, [], [], None, _ ->
+         *   List.map (fun v -> fst v) args
+         * | _ ->
+         *   let convert_print a = OptionExt.bind (fun (id, eo) -> Some {ekind=E_tuple [{ekind=E_id (translate_var id); erange=range}; translate_expr_option range eo]; erange=range}) a in
+         *   Exceptions.panic_at range "Unsupported function arguments in %s@\nvararg=%a, |kwonlyargs|=%d, |kw_defaults|=%d, kwarg=%a, |defaults|=%d" id
+         *     (OptionExt.print Pp.print_exp) (convert_print vararg)
+         *     (List.length kwonlyargs) (List.length kw_defaults)
+         *     (OptionExt.print Pp.print_exp) (convert_print kwarg) (List.length defaults) *)
       in
       let defaults = List.map (fun (e: Cst.expr) ->
           match e.ekind with
@@ -71,14 +76,20 @@ and translate_stmt (stmt: Cst.stmt) : Ast.stmt =
         ) defaults
       in
       (* List.iter (fun (arg, ty) ->
-       *     debug "%s: arg %s : %a" id arg (Option.print Pp.print_exp) (translate_expr_option2 ty)
+       *     debug "%s: arg %s : %a" id arg (OptionExt.print Pp.print_exp) (translate_expr_option2 ty)
        *   ) args;
-       * debug "return %s: %a" id (Option.print Pp.print_exp) (translate_expr_option2 return); *)
+       * debug "return %s: %a" id (OptionExt.print Pp.print_exp) (translate_expr_option2 return); *)
       let lvals, globals, nonlocals = find_scopes_in_block body in
       let locals = List.filter (fun v -> not (List.mem v (parameters @ globals @ nonlocals))) lvals in
       S_function {
         func_var = translate_var id;
         func_parameters = List.map translate_var parameters;
+        func_vararg = OptionExt.lift (fun (x, _) -> translate_var x) vararg;
+        func_kwonly_args = List.map (fun (x, _) -> translate_var x) kwonlyargs;
+        func_kwonly_defaults = List.map (fun (e: Cst.expr) -> match e.ekind with
+            | Null -> None
+            | _ -> Some (translate_expr e)) kw_defaults;
+        func_kwarg = OptionExt.lift (fun (x, _) -> translate_var x) kwarg;
         func_defaults = defaults;
         func_locals = List.sort_uniq compare locals |> List.map translate_var;
         func_globals = List.sort_uniq compare globals |> List.map translate_var;
@@ -224,7 +235,7 @@ and translate_stmt (stmt: Cst.stmt) : Ast.stmt =
 
     | AnnAssign (var, typ, expr) ->
       let tya = {skind = S_type_annot (translate_expr var, translate_expr typ); srange = range} in
-      Option.apply (fun expr -> S_block (translate_stmt {skind=(Assign ([var], expr)); srange=range} :: tya :: [])) tya.skind expr
+      OptionExt.apply (fun expr -> S_block (translate_stmt {skind=(Assign ([var], expr)); srange=range} :: tya :: [])) tya.skind expr
 
     (* Not supported statements *)
     | ImportFrom _ -> failwith "Import from not supported"
@@ -293,6 +304,8 @@ and translate_expr (expr: Cst.expr) : Ast.expr =
       )
     | Yield eo ->
       E_yield (translate_expr_option range eo)
+    | YieldFrom e ->
+      E_yield_from (translate_expr e)
     | Compare (left, [op], [right]) ->
       E_binop (
         translate_expr left,
@@ -363,7 +376,7 @@ and translate_expr (expr: Cst.expr) : Ast.expr =
         | None, [], [], None, _ ->
           List.map (fun v -> fst v) args
         | _ ->
-          Exceptions.panic_at range "Unsupported function arguments"
+          Exceptions.panic_at range "Unsupported function arguments (lambda function)"
       in
       let defaults = List.map (fun (e: Cst.expr) ->
           match e.ekind with
@@ -392,13 +405,12 @@ and translate_expr (expr: Cst.expr) : Ast.expr =
         failwith "Subscript with ExtSlice not supported"
       (* debug "subscript value = %a, |extslice|=%d" Pp.print_exp (translate_expr value) (List.length s);
        * let rec f fmt = function
-       *   | Slice (a, b, c) -> Format.fprintf fmt "slice[%a, %a, %a]" (Option.print Pp.print_exp) (translate_expr_option2 a) (Option.print Pp.print_exp) (translate_expr_option2 b) (Option.print Pp.print_exp) (translate_expr_option2 c)
+       *   | Slice (a, b, c) -> Format.fprintf fmt "slice[%a, %a, %a]" (OptionExt.print Pp.print_exp) (translate_expr_option2 a) (OptionExt.print Pp.print_exp) (translate_expr_option2 b) (OptionExt.print Pp.print_exp) (translate_expr_option2 c)
        *   | ExtSlice l -> Format.fprintf fmt "%a" (Format.pp_print_list ~pp_sep:(fun fmt _ -> Format.pp_print_string fmt ", ") f) l
        *   | Index i -> Format.fprintf fmt "index[%a]" Pp.print_exp (translate_expr i) in
        * debug "extslice = %a" f sl; *)
 
     (* Not supported expressions *)
-    | YieldFrom _ -> failwith "yield from not supported"
     | Await _ -> failwith "await not supported"
     | FormattedValue (v, conv, f_spec) -> failwith "Formatted value not supported"
     | JoinedStr (vals) -> failwith "JoinedStr not supported"
@@ -521,10 +533,9 @@ and find_lvals_in_expr expr =
   | Attribute _ | Subscript _ -> []
   (* Non-lval expressions *)
   | BoolOp _ | BinOp _ | UnaryOp _ | Dict _ | Set _ | ListComp _ | SetComp _
-  | DictComp _ | GeneratorExp _ | Yield _ | Compare _ | Call _ | Num _ | Str _ | NameConstant _ | Lambda _ | Bytes _ -> []
+  | DictComp _ | GeneratorExp _ | Yield _ | Compare _ | Call _ | Num _ | Str _ | NameConstant _ | Lambda _ | Bytes _ | YieldFrom _ -> []
   (* Not supported expressions *)
   | IfExp (test, body, orelse) -> failwith "IfExp not supported"
-  | YieldFrom _ -> failwith "yield from not supported"
   | Await _ -> failwith "await not supported"
   | FormattedValue (v, conv, f_spec) -> failwith "Formatted value not supported"
   | JoinedStr (vals) -> failwith "JoinedStr not supported"
@@ -671,6 +682,7 @@ and detect_yield_in_function body =
   and detect_yield_in_expr expr =
     match expr.ekind with
     | Yield _ -> true
+    | YieldFrom _ -> true
     | _ -> false
 
   in
@@ -680,7 +692,12 @@ and add_implicit_return range l =
   match l with
   | [] -> [{skind = S_return {ekind = E_none; erange = range}; srange = range}]
   | l ->
-    let last_stmt = List.hd @@ List.rev l in
+    let last_stmt = ListExt.last l in
+    let last_pos = Location.get_range_end last_stmt.srange in
+    let range = Location.tag_range (
+        let last_pos_before = {last_pos with pos_line = last_pos.pos_line - 1} in
+        Location.mk_orig_range last_pos_before last_pos_before
+      ) "implicit_return" in
     match last_stmt.skind with
     | S_return _ -> l
     | _ -> l @ [{skind = S_return {ekind = E_none; erange = range}; srange = range}]

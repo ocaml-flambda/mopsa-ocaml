@@ -79,7 +79,7 @@ struct
 
   let is_empty (tmap: 'a t) : bool =
     top_dfl1 false Map.is_empty tmap
-  
+
   let is_top (lattice: 'a lattice) (tmap: 'a t) : bool =
     top_dfl1 true (fun _ -> false) tmap
 
@@ -175,6 +175,13 @@ struct
   let filter (f: token -> 'a -> bool) (tmap: 'a t) : 'a t =
     top_lift1 (Map.filter f) tmap
 
+  let partition (f: token -> 'a -> bool) (tmap: 'a t) : 'a t * 'a t =
+    match tmap with
+    | TOP -> TOP, TOP
+    | Nt a ->
+      let l, r = Map.partition f a in
+      Nt l, Nt r
+
   let map (f: token -> 'a -> 'b) (tmap: 'a t) : 'b t =
     top_lift1 (Map.mapi f) tmap
 
@@ -189,9 +196,9 @@ struct
   let merge(f: token -> 'a option -> 'a option -> 'a option) (lattice: 'a lattice) (tmap1: 'a t) (tmap2: 'a t) : 'a t =
     top_lift2
       (Map.map2zo
-         (fun tk v1 -> Option.default lattice.bottom (f tk (Some v1) None))
-         (fun tk v2 -> Option.default lattice.bottom (f tk None (Some v2)))
-         (fun tk v1 v2 -> Option.default lattice.bottom (f tk (Some v1) (Some v2)))
+         (fun tk v1 -> OptionExt.default lattice.bottom (f tk (Some v1) None))
+         (fun tk v2 -> OptionExt.default lattice.bottom (f tk None (Some v2)))
+         (fun tk v1 v2 -> OptionExt.default lattice.bottom (f tk (Some v1) (Some v2)))
       )
       tmap1 tmap2
 

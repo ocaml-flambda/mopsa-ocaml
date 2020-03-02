@@ -106,7 +106,7 @@ let stmt_compare_chain = TypeExt.mk_compare_chain (fun s1 s2 ->
         (fun () -> Compare.list compare_expr el el')
       ]
 
-    | _ -> Pervasives.compare s1 s2
+    | _ -> Stdlib.compare s1 s2
   )
 
 let compare_stmt s1 s2 =
@@ -151,6 +151,9 @@ let stmt_pp_chain = TypeExt.mk_print_chain (fun fmt stmt ->
 
 
 let pp_stmt fmt stmt = TypeExt.print stmt_pp_chain fmt stmt
+
+let pp_stmt_with_range fmt stmt =
+  Format.fprintf fmt "%a@%a" (TypeExt.print stmt_pp_chain) stmt Location.pp_range stmt.srange
 
 let pp_block fmt (block:block) =
   fprintf fmt "@[<v>";

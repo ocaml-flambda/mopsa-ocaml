@@ -95,7 +95,7 @@ struct
     | E_call({ekind = E_function (User_defined func)} as f, args) ->
 
       if man.lattice.is_bottom (Flow.get T_cur man.lattice flow)
-      then Eval.empty_singleton flow |> Option.return
+      then Eval.empty_singleton flow |> OptionExt.return
       else
 
       let in_flow = flow in
@@ -141,7 +141,7 @@ struct
                 ) params
             )
       end
-      |> Option.return
+      |> OptionExt.return
 
 
 

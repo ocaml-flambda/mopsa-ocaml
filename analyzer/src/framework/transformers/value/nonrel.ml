@@ -111,12 +111,16 @@ let generic_nonrel_merge ~top ~add ~remove ~find ~meet pre (a1, log1) (a2, log2)
     | S_remove { ekind = E_var (var, _) } ->
       remove var acc
 
+    | S_expand({ekind = E_var(var,_)}, vl) ->
+      let vars = List.map (function { ekind = E_var(v,_) } -> v | _ -> assert false) vl in
+      List.fold_left (fun acc v -> add v top acc) acc vars
+
     | S_assume e -> acc
 
     | _ -> Exceptions.panic ~loc:__LOC__ "merge: unsupported statement %a" pp_stmt stmt
   in
-  let a2' = List.fold_left (fun acc stmt -> patch stmt a1 acc) a2 log1 in
-  let a1' = List.fold_left (fun acc stmt -> patch stmt a2 acc) a1 log2 in
+  let a2' = List.fold_left (fun acc stmt -> patch stmt a1 acc) a2 (List.rev log1) in
+  let a1' = List.fold_left (fun acc stmt -> patch stmt a2 acc) a1 (List.rev log2) in
   meet a1' a2'
 
 
@@ -201,7 +205,9 @@ struct
     with Not_found -> Exceptions.warn "variable %a not found" pp_var v; raise Not_found
 
 
-  let merge pre (a1, log1) (a2, log2) = generic_nonrel_merge ~top:Value.top ~add ~remove ~find ~meet pre (a1, log1) (a2, log2)
+  let merge pre (a1, log1) (a2, log2) =
+    debug "generic_nonrel_merge:@.pre = %a@.a1 = %a@.log1 = %a@.a2 = %a@.log2 = %a" VarMap.print pre VarMap.print a1 pp_block log1 VarMap.print a2 pp_block log2;
+    generic_nonrel_merge ~top:Value.top ~add ~remove ~find ~meet pre (a1, log1) (a2, log2)
 
 
   (* Constrain the value of a variable with its bounds *)
@@ -227,7 +233,7 @@ struct
 
   (** Expressions annotated with abstract values; useful for assignment and compare. *)
   type aexpr =
-    | A_var of var * mode * Value.t
+    | A_var of var * mode option * Value.t
     | A_cst of constant * Value.t
     | A_unop of operator * typ  * aexpr * Value.t
     | A_binop of operator * typ * aexpr * Value.t * aexpr * Value.t
@@ -249,7 +255,7 @@ struct
     set = (fun v _ -> v);
     eval = (fun e ->
         eval e a |>
-        Option.default (A_unsupported,Value.top) |>
+        OptionExt.default (A_unsupported,Value.top) |>
         snd
       );
     ask = (fun vq ->
@@ -268,25 +274,25 @@ struct
     | E_var(var, mode) ->
       let v = find var a in
       (A_var (var, mode, v), v) |>
-      Option.return
+      OptionExt.return
 
     | E_constant(c) ->
       let v = Value.constant e.etyp c in
       (A_cst (c, v), v) |>
-      Option.return
+      OptionExt.return
 
     | E_unop (op,e1) ->
-      eval e1 a |> Option.bind @@ fun (ae1, v1) ->
+      eval e1 a |> OptionExt.bind @@ fun (ae1, v1) ->
       let v = Value.unop (man a) e.etyp op v1 in
       (A_unop (op, e.etyp, ae1, v1), v) |>
-      Option.return
+      OptionExt.return
 
     | E_binop (op,e1,e2) ->
-      eval e1 a |> Option.bind @@ fun (ae1, v1) ->
-      eval e2 a |> Option.bind @@ fun (ae2, v2) ->
+      eval e1 a |> OptionExt.bind @@ fun (ae1, v1) ->
+      eval e2 a |> OptionExt.bind @@ fun (ae2, v2) ->
       let v = Value.binop (man a) e.etyp op v1 v2 in
       (A_binop (op, e.etyp, ae1, v1, ae2, v2), v) |>
-      Option.return
+      OptionExt.return
 
     | _ ->
       (* unsupported -> ⊤ *)
@@ -306,7 +312,7 @@ struct
       then bottom
 
       else
-      if mode = STRONG
+      if var_mode var mode = STRONG
       then add ctx var r' a
 
       else a
@@ -343,44 +349,44 @@ struct
       filter ctx e (not r) a
 
     | E_binop (O_log_and, e1, e2) ->
-      filter ctx e1 r a |> Option.bind @@ fun a1 ->
-      filter ctx e2 r a |> Option.bind @@ fun a2 ->
+      filter ctx e1 r a |> OptionExt.bind @@ fun a1 ->
+      filter ctx e2 r a |> OptionExt.bind @@ fun a2 ->
       (if r then meet else join) a1 a2 |>
-      Option.return
+      OptionExt.return
 
     | E_binop (O_log_or, e1, e2) ->
-      filter ctx e1 r a |> Option.bind @@ fun a1 ->
-      filter ctx e2 r a |> Option.bind @@ fun a2 ->
+      filter ctx e1 r a |> OptionExt.bind @@ fun a1 ->
+      filter ctx e2 r a |> OptionExt.bind @@ fun a2 ->
       (if r then join else meet) a1 a2 |>
-      Option.return
+      OptionExt.return
 
     | E_constant c ->
       let v = Value.constant e.etyp c in
       let w = Value.filter (man a) v r in
       (if Value.is_bottom w then bottom else a) |>
-      Option.return
+      OptionExt.return
 
     | E_var(var, mode) ->
       let v = find var a in
       let w = Value.filter (man a) v r in
       (if Value.is_bottom w then bottom else
-       if mode = STRONG then add ctx var w a
+       if var_mode var mode = STRONG then add ctx var w a
        else a
       ) |>
-      Option.return
+      OptionExt.return
 
     (* arithmetic comparison part, handled by Value *)
     | E_binop (op, e1, e2) ->
       (* evaluate forward each argument expression *)
-      eval e1 a |> Option.bind @@ fun (ae1,v1) ->
-      eval e2 a |> Option.bind @@ fun (ae2,v2) ->
+      eval e1 a |> OptionExt.bind @@ fun (ae1,v1) ->
+      eval e2 a |> OptionExt.bind @@ fun (ae2,v2) ->
 
       (* apply comparison *)
       let r1, r2 = Value.compare (man a) e1.etyp op v1 v2 r in
 
       (* propagate backward on both argument expressions *)
       refine ctx ae2 v2 r2 @@ refine ctx ae1 v1 r1 a |>
-      Option.return
+      OptionExt.return
 
     | _ -> assert false
 
@@ -396,13 +402,13 @@ struct
     match skind stmt with
     | S_remove { ekind = E_var (v, _) }  ->
       VarMap.remove v map |>
-      Option.return
+      OptionExt.return
 
     | S_add { ekind = E_var (v, _) } ->
       (* Check of the variable is already present *)
       if VarMap.mem v map
-      then Option.return map
-      else Option.return @@ VarMap.add v Value.top map
+      then OptionExt.return map
+      else OptionExt.return @@ VarMap.add v Value.top map
 
 
     | S_project vars
@@ -415,23 +421,23 @@ struct
       VarMap.fold (fun v _ acc ->
           if List.exists (fun v' -> compare_var v v' = 0) vars then acc else VarMap.remove v acc
         ) map map |>
-      Option.return
+      OptionExt.return
 
     | S_rename ({ ekind = E_var (var1, _) }, { ekind = E_var (var2, _) }) ->
       let v = find var1 map in
       VarMap.remove var1 map |>
       VarMap.add var2 v |>
-      Option.return
+      OptionExt.return
 
     | S_forget { ekind = E_var (var, _) } ->
       add ctx var Value.top map |>
-      Option.return
+      OptionExt.return
 
     | S_assign ({ ekind= E_var (var, mode) }, e)  ->
-      eval e map |> Option.lift @@ fun (_, v) ->
+      eval e map |> OptionExt.lift @@ fun (_, v) ->
       let map' = add ctx var v map in
       begin
-        match mode with
+        match var_mode var mode with
         | STRONG -> map'
         | WEAK -> join map map'
       end
@@ -448,7 +454,7 @@ struct
       List.fold_left (fun acc v' ->
           add ctx v' value acc
         ) map vl |>
-      Option.return
+      OptionExt.return
 
     (* FIXME: check weak variables in rhs *)
     | S_assume e ->

@@ -28,6 +28,7 @@ open Universal.Ast
 open Stubs.Ast
 open Ast
 
+
 let debug fmt = Debug.debug ~channel:"c.frontend" fmt
 
 
@@ -54,6 +55,9 @@ let opt_enable_cache = ref true
 
 let opt_warn_all = ref false
 (** Display all compiler warnings *)
+
+let opt_use_stub = ref []
+(** Lists of functions that the body will be replaced by a stub *)
 
 let () =
   register_language_option "c" {
@@ -105,6 +109,13 @@ let () =
     spec = ArgExt.Set opt_warn_all;
     default = "unset";
   };
+  register_language_option "c" {
+    key = "-use-stub";
+    category = "C";
+    doc = " list of functions for which the stub is used instead of the declaration.";
+    spec = ArgExt.Set_string_list opt_use_stub;
+    default = "";
+  };
   ()
 
 
@@ -143,10 +154,47 @@ type ctx = {
   (* cache of enum values of the project *)
 }
 
+let input_files : string list ref = ref []
+(** List of input files *)
+
 
 let find_function_in_context ctx (f: C_AST.func) =
   try StringMap.find f.func_unique_name ctx.ctx_fun
   with Not_found -> Exceptions.panic "Could not find function %s in context" f.func_unique_name
+
+
+(* Get the list of system headers encountered during parsing *)
+let get_parsed_system_headers (ctx:Clang_to_C.context) : string list =
+  let is_header f = Filename.extension f = ".h" in
+  let is_system_header f = is_header f && not (List.mem f !input_files) in
+  List.filter is_system_header (Clang_to_C.get_parsed_files ctx)
+
+
+(* Get the list of all stub source files *)
+let get_all_stubs () =
+  let rec iter dir =
+    if not (Sys.is_directory dir) then []
+    else
+      Sys.readdir dir |>
+      Array.fold_left
+        (fun acc f ->
+           let ff = Filename.concat dir f in
+           if Sys.is_directory ff then iter ff @ acc else ff :: acc
+        ) []
+  in
+  iter (Filename.concat (Config.Paths.get_lang_stubs_dir "c" ()) "libc")
+
+
+(* Find the stub of a given header file *)
+let find_stubs_of_header header stubs =
+  let stubs_dir = Filename.concat (Config.Paths.get_lang_stubs_dir "c" ()) "libc" in
+  let stubd_dir_len = String.length stubs_dir in
+  List.filter (fun stub ->
+      let h = Filename.chop_extension stub ^ ".h" in
+      let relative_h = String.sub h stubd_dir_len (String.length h - stubd_dir_len) in
+      let regexp = Str.regexp (".*" ^ relative_h ^ "$") in
+      Str.string_match regexp header 0
+    ) stubs
 
 
 (** {2 Entry point} *)
@@ -165,6 +213,7 @@ let rec parse_program (files: string list) =
   let target = get_target_info (get_default_target_options ()) in
   let ctx = Clang_to_C.create_context "project" target in
   let nb = List.length files in
+  input_files := [];
   ListExt.par_iteri
     !nb_clang_threads
     (fun i file ->
@@ -182,9 +231,12 @@ let rec parse_program (files: string list) =
   }
 
 and parse_db (dbfile: string) ctx : unit =
+  if not (Sys.file_exists dbfile) then panic "file %s not found" dbfile;
+
   let open Clang_parser in
   let open Clang_to_C in
   let open Build_DB in
+
   let db = load_db dbfile in
   let execs = get_executables db in
   let exec =
@@ -204,6 +256,7 @@ and parse_db (dbfile: string) ctx : unit =
   in
   let srcs = get_executable_sources db exec in
   let nb = List.length srcs in
+  input_files := [];
   ListExt.par_iteri
     !nb_clang_threads
     (fun i src ->
@@ -225,8 +278,10 @@ and parse_db (dbfile: string) ctx : unit =
     ) srcs
 
 and parse_file (cmd: string) ?nb (opts: string list) (file: string) enable_cache ignore ctx =
+  if not (Sys.file_exists file) then panic "file %s not found" file;
   Mutex.lock frontend_mutex;
   Mutex.unlock frontend_mutex;
+  debug "parsing file %s" file;
   let opts' = ("-I" ^ (Paths.resolve_stub "c" "mopsa")) ::
               ("-include" ^ "mopsa.h") ::
               "-Wall" ::
@@ -234,19 +289,46 @@ and parse_file (cmd: string) ?nb (opts: string list) (file: string) enable_cache
               !opt_clang @
               opts
   in
+  input_files := file :: !input_files;
   C_parser.parse_file cmd file opts' !opt_warn_all enable_cache ignore ctx
 
 
 and parse_stubs ctx () =
   (** Add Mopsa stubs *)
   parse_file "clang" [] (Config.Paths.resolve_stub "c" "mopsa/mopsa.c") false false ctx;
+  if !opt_without_libc then ()
+  else
+    (** Add stubs of the included headers *)
+    let headers = get_parsed_system_headers ctx in
+    if headers = [] then ()
+    else
+      let module Set = SetExt.StringSet in
+      let all_stubs = get_all_stubs () in
+      let rec iter past_headers past_stubs wq =
+        if Set.is_empty wq then ()
+        else
+          let h = Set.choose wq in
+          let wq' = Set.remove h wq in
+          if Set.mem h past_headers then
+            iter past_headers past_stubs wq'
+          else
+            (* Get the stubs of the header *)
+            let stubs = find_stubs_of_header h all_stubs in
+            let new_headers = List.fold_left (fun acc stub ->
+                if Set.mem stub past_stubs then acc
+                else
+                  (* Parse the stub and collect new parsed headers *)
+                  let before = Clang_to_C.get_parsed_files ctx |> Set.of_list in
+                  parse_file "clang" [] stub false false ctx;
+                  let after = Clang_to_C.get_parsed_files ctx  |> Set.of_list in
+                  Set.diff after before |>
+                  Set.union acc
+              ) Set.empty stubs
+            in
+            iter (Set.add h past_headers) (Set.union (Set.of_list stubs) past_stubs) (Set.union new_headers wq)
+      in
+      iter Set.empty Set.empty (Set.of_list headers)
 
-  (** Add stubs of the standard library *)
-  if not !opt_without_libc then
-    parse_file "clang" [] (Config.Paths.resolve_stub "c" "libc/libc.c") false false ctx
-  ;
-
-  ()
 
 
 and from_project prj =
@@ -299,9 +381,8 @@ and from_project prj =
       f.c_func_static_vars <- List.map (from_var ctx) o.func_static_vars;
       f.c_func_local_vars <- List.map (from_var ctx) o.func_local_vars;
       f.c_func_body <- from_body_option ctx (from_range o.func_range) o.func_body;
-      (* Parse stub when the function has no body *)
-      match f.c_func_body with
-      | None | Some { skind = S_block ([],_) } ->
+      (* Parse stub of the function does not have a body or if it was listed  *)
+      if f.c_func_body = None || List.mem f.c_func_org_name !opt_use_stub then
         begin
           try
             f.c_func_stub <- from_stub_comment ctx o;
@@ -309,7 +390,7 @@ and from_project prj =
           with (StubAliasFound alias) ->
             (f, o, alias) :: funcs_with_alias
         end
-      | _ ->
+      else
         funcs_with_alias
     ) [] funcs_and_origins
   in
@@ -432,7 +513,7 @@ and from_expr ctx ((ekind, tc , range) : C_AST.expr) : expr =
     | C_AST.E_float_literal f -> Universal.Ast.(E_constant (C_float (float_of_string f)))
     | C_AST.E_character_literal (c, k)  -> E_constant(Ast.C_c_character (c, from_character_kind k))
     | C_AST.E_string_literal (s, k) -> Universal.Ast.(E_constant (C_c_string (s, from_character_kind k)))
-    | C_AST.E_variable v -> E_var (from_var ctx v, STRONG)
+    | C_AST.E_variable v -> E_var (from_var ctx v, None)
     | C_AST.E_function f -> Ast.E_c_function (find_function_in_context ctx f)
     | C_AST.E_call (f, args) -> Universal.Ast.E_call(from_expr ctx f, Array.map (from_expr ctx) args |> Array.to_list)
     | C_AST.E_unary (op, e) -> E_unop (from_unary_operator op etyp, from_expr ctx e)
@@ -450,6 +531,7 @@ and from_expr ctx ((ekind, tc , range) : C_AST.expr) : expr =
     | C_AST.E_var_args e -> Ast.E_c_var_args (from_expr ctx e)
     | C_AST.E_conditional (cond,e1,e2) -> Ast.E_c_conditional(from_expr ctx cond, from_expr ctx e1, from_expr ctx e2)
 
+    | C_AST.E_binary_conditional (_,_) -> Exceptions.panic_at erange "E_binary_conditional not supported"
     | C_AST.E_compound_assign (_,_,_,_,_) -> Exceptions.panic_at erange "E_compound_assign not supported"
     | C_AST.E_comma (_,_) -> Exceptions.panic_at erange "E_comma not supported"
     | C_AST.E_increment (_,_,_) -> Exceptions.panic_at erange "E_increment not supported"
@@ -746,6 +828,7 @@ and from_stub_comment ctx f =
     Some (from_stub_func ctx f stub)
 
 and from_stub_func ctx f stub =
+  debug "parsing stub %s" f.func_org_name;
   {
     stub_func_name     = stub.stub_name;
     stub_func_params   = List.map (from_var ctx) (Array.to_list f.func_parameters);
@@ -854,16 +937,15 @@ and from_stub_expr ctx exp =
   | E_string s -> E_constant (C_string s)
   | E_char c -> E_constant (C_c_character (Z.of_int c, Ast.C_char_ascii)) (* FIXME: support other character kinds *)
   | E_invalid -> E_constant C_c_invalid
-  | E_var v -> E_var (from_var ctx v, STRONG)
+  | E_var v -> E_var (from_var ctx v, None)
   | E_unop (op, e) -> E_unop(from_stub_expr_unop op, from_stub_expr ctx e)
   | E_binop (op, e1, e2) -> E_binop(from_stub_expr_binop op, from_stub_expr ctx e1, from_stub_expr ctx e2)
   | E_addr_of e -> E_c_address_of(from_stub_expr ctx e)
   | E_deref p -> E_c_deref(from_stub_expr ctx p)
   | E_cast (t, explicit, e) -> E_c_cast(from_stub_expr ctx e, explicit)
   | E_subscript (a, i) -> E_c_array_subscript(from_stub_expr ctx a, from_stub_expr ctx i)
-  | E_member (s, f) -> E_c_member_access(from_stub_expr ctx s, find_field_index s.content.typ f, f)
-  | E_attribute (o, f) -> E_stub_attribute(from_stub_expr ctx o, f)
-  | E_arrow (p, f) -> E_c_arrow_access(from_stub_expr ctx p, find_field_index (under_type p.content.typ) f, f)
+  | E_member (s, i, f) -> E_c_member_access(from_stub_expr ctx s, i, f)
+  | E_arrow (p, i, f) -> E_c_arrow_access(from_stub_expr ctx p, i, f)
   | E_builtin_call (PRIMED, arg) -> E_stub_primed(from_stub_expr ctx arg)
   | E_builtin_call (f, arg) -> E_stub_builtin_call(from_stub_builtin f, from_stub_expr ctx arg)
   | E_return -> E_stub_return
@@ -982,4 +1064,12 @@ and from_stub_directive ctx stub =
     stub_directive_range   = stub.stub_range;
     stub_directive_locals  = List.map (from_stub_local ctx) stub.stub_locals;
     stub_directive_assigns = List.map (from_stub_assigns ctx) stub.stub_assigns;
+  }
+
+
+(* Front-end registration *)
+let () =
+  register_frontend {
+    lang = "c";
+    parse = parse_program;
   }

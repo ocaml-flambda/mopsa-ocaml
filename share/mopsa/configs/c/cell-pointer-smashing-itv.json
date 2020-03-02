@@ -25,21 +25,26 @@
 
             "c.memory.variable_length_array",
 
-            // Libraries
+	    // Libraries
             "c.libs.compiler",
             "c.libs.mopsalib",
             "c.libs.clib.file_descriptor",
             "c.libs.clib.formatted_io.fprint",
             "c.libs.clib.formatted_io.fscanf",
             "c.libs.variadic",
-	    "c.libs.cstubs",
+
+	    // C stubs
+	    "c.cstubs.assigns",
+	    "c.cstubs.builtins",
+	    "c.cstubs.requires",
+	    "c.cstubs.resources",
 
             // Memory model
+            "c.desugar.aggregates",
 	    {
                 "apply": {
                     "compose": [
                         "universal.heap.recency.callstack_range",
-                        "c.memory.structured.flat",
                         {
 			    "product": [
 				"c.memory.lowlevel.cells",

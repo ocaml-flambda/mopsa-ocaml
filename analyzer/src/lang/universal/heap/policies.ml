@@ -69,10 +69,7 @@ module StackRangePolicy : POLICY = struct
         );
       print = (fun next fmt g ->
           match g with
-          | G_stack_range(cs,r) ->
-            Format.fprintf fmt "(%a, %a)"
-              Callstack.pp_call_stack cs
-              pp_range r
+          | G_stack_range(cs,r) -> pp_addr_group_hash fmt g
           | _ -> next fmt g
         );
     }
@@ -110,8 +107,7 @@ module StackPolicy : POLICY = struct
         );
       print = (fun next fmt g ->
           match g with
-          | G_stack(cs) ->
-            Callstack.pp_call_stack fmt cs
+          | G_stack(cs) -> pp_addr_group_hash fmt g
           | _ -> next fmt g
         );
     }
