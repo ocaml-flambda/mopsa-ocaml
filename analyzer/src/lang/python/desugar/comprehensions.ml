@@ -69,7 +69,7 @@ module Domain =
                      | E_var (v, _) -> Keep (mk_remove_var v range ::acc)
                      | E_py_tuple t -> VisitParts acc
                      | _ -> Exceptions.panic "Comprehension: target %a is not a variable...@\n" pp_expr target
-                  ) (fun acc stmt -> assert false) [] target
+                  ) (fun acc stmt -> assert false) acc target
              ) [] comprehensions in
          let stmt = mk_block ((mk_assign acc_var base range) :: (unfold_lc comprehensions) :: clean_targets) range in
          stmt, tmp_acc
