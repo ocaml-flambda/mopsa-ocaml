@@ -111,19 +111,19 @@ struct
           let generic_call = { exp with ekind = E_call(f,[]); erange = func.fun_range } in
           Some (mk_return_var generic_call)
       in
-      begin match find_signature man func.fun_name in_flow_cur with
+      begin match find_signature man func.fun_uniq_name in_flow_cur with
         | None ->
-          Debug.debug ~channel:"profiling" "inlining %s at range %a" func.fun_name pp_range range;
+          Debug.debug ~channel:"profiling" "inlining %s at range %a" func.fun_orig_name pp_range range;
           inline func params locals body ret range man in_flow_cur >>= fun ret out_flow ->
-          debug "%s: out_flow = %a" func.fun_name man.lattice.print (Flow.get T_cur man.lattice out_flow);
-          let flow = store_signature man.lattice func.fun_name in_flow_cur out_flow in
-          debug "%s: flow = %a" func.fun_name man.lattice.print (Flow.get T_cur man.lattice flow);
+          debug "%s: out_flow = %a" func.fun_orig_name man.lattice.print (Flow.get T_cur man.lattice out_flow);
+          let flow = store_signature man.lattice func.fun_uniq_name in_flow_cur out_flow in
+          debug "%s: flow = %a" func.fun_orig_name man.lattice.print (Flow.get T_cur man.lattice flow);
           let flow' = Flow.join man.lattice in_flow_other flow in
-          debug "%s: flow' = %a" func.fun_name man.lattice.print (Flow.get T_cur man.lattice flow');
+          debug "%s: flow' = %a" func.fun_orig_name man.lattice.print (Flow.get T_cur man.lattice flow');
           Eval.return ret flow'
 
         | Some (_,  out_flow) ->
-          Debug.debug ~channel:"profiling" "reusing %s at range %a" func.fun_name pp_range range;
+          Debug.debug ~channel:"profiling" "reusing %s at range %a" func.fun_orig_name pp_range range;
           let flow = Flow.join man.lattice in_flow_other out_flow |>
                      man.exec (mk_block (List.map (fun v ->
                          mk_remove_var v range

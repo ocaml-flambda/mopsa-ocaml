@@ -230,3 +230,13 @@ let concat_blocks b1 b2 =
   List.fold_left (fun acc c ->
       if List.memq c acc then acc else c :: acc
     ) b2 b1
+
+module StmtSet = SetExt.Make(struct
+    type t = stmt
+    let compare = compare_stmt
+  end)
+
+module StmtMap = MapExt.Make(struct
+    type t = stmt
+    let compare = compare_stmt
+  end)

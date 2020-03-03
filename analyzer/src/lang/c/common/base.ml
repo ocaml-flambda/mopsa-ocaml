@@ -44,7 +44,7 @@ type base = {
 let pp_base_kind fmt = function
   | Var v -> pp_var fmt v
   | Addr (a) -> pp_addr fmt a
-  | String s -> Format.fprintf fmt "\"%s\"" s
+  | String s -> Format.fprintf fmt "\"%s\"" (String.escaped s)
 
 let pp_base fmt b =
   Format.fprintf fmt "%s%a"
@@ -159,3 +159,4 @@ end
 
 
 module BaseSet = SetExt.Make(Base)
+module BaseMap = MapExt.Make(Base)

@@ -77,7 +77,7 @@ struct
       (* __builtin_constant_ determines if [e] is known 
          to be constant at compile time *)
       let ret =
-        match ekind e with
+        match remove_casts e |> ekind with
         | E_constant _ -> mk_one ~typ:s32 exp.erange
         | _ -> mk_z_interval Z.zero Z.one ~typ:s32 exp.erange
       in

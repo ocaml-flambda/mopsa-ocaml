@@ -63,7 +63,9 @@ struct
     }
   }
 
-  let alarms = [A_c_integer_overflow_cls; A_c_divide_by_zero_cls; A_c_invalid_bit_shift_cls]
+  let alarms = [ A_c_integer_overflow;
+                 A_c_divide_by_zero;
+                 A_c_invalid_shift ]
 
   (** Command-line options *)
   (** ==================== *)
@@ -324,16 +326,16 @@ struct
                               (e    |> etyp |> is_c_int_type &&
                                e'   |> etyp |> is_c_int_type)
       ->
-      let t = e.etyp in
+      let e0 = e in
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e flow ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e' flow >>$? fun e' flow ->
-      check_shift e' t range
+      check_shift e' e0.etyp range
         (fun tflow ->
            let exp' = mk_binop e op e' ~etyp:(to_num_type exp.etyp) range in
            Eval.singleton exp' tflow
         )
         (fun fflow ->
-           let flow' = raise_c_invalid_bit_shift_alarm e' t exp.erange man fflow in
+           let flow' = raise_c_invalid_shift_alarm e0 e' man flow fflow in
            Eval.empty_singleton flow'
         ) man flow |>
       OptionExt.return
@@ -346,7 +348,7 @@ struct
       check_overflow typ man range
         (fun e tflow -> Eval.singleton e tflow)
         (fun e fflow ->
-           let flow1 = raise_c_integer_overflow_alarm e typ exp.erange man fflow in
+           let flow1 = raise_c_integer_overflow_alarm e man flow fflow in
            Eval.singleton (mk_unop (O_wrap(rmin, rmax)) e ~etyp:(to_num_type typ) range) flow1
         ) e flow |>
       OptionExt.return
@@ -367,7 +369,7 @@ struct
            then
              Eval.singleton e' fflow
            else
-             let flow1 = raise_c_integer_overflow_alarm e typ exp.erange man fflow in
+             let flow1 = raise_c_integer_overflow_alarm e man flow fflow in
              Eval.singleton e' flow1
         ) e flow |>
       OptionExt.return
@@ -427,7 +429,7 @@ struct
              if is_explicit_cast && !opt_ignore_cast_alarm then
                Eval.singleton (mk_unop (O_wrap(rmin, rmax)) e ~etyp:(to_num_type t) range) fflow
              else
-               let flow1 = raise_c_integer_overflow_alarm e' t exp.erange man fflow in
+               let flow1 = raise_c_cast_integer_overflow_alarm e' exp.etyp man flow fflow in
                Eval.singleton (mk_unop (O_wrap(rmin, rmax)) e ~etyp:(to_num_type t) range) flow1
           ) e' flow |>
         OptionExt.return

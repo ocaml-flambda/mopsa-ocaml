@@ -330,7 +330,8 @@ module Domain =
 
                 (* let ret_var = mkfresh_ranged (tag_range range "ret_var") () in *)
                 let fundec = {
-                  fun_name = pyfundec.py_func_var.vname;
+                  fun_orig_name = pyfundec.py_func_var.vname;
+                  fun_uniq_name = pyfundec.py_func_var.vname;
                   fun_parameters = pyfundec.py_func_parameters;
                   fun_locvars = pyfundec.py_func_locals;
                   fun_body = pyfundec.py_func_body;

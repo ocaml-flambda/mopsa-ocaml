@@ -135,12 +135,12 @@ let check_recursion f range flow =
   let cs = Flow.get_callstack flow in
   if cs = [] then false
   else
-    List.exists (fun cs -> Callstack.compare_call cs {call_fun=f.fun_name; call_site=range} = 0) (List.tl cs)
+    List.exists (fun cs -> Callstack.compare_call cs {call_fun_orig_name=f.fun_orig_name; call_fun_uniq_name=f.fun_uniq_name; call_site=range} = 0) (List.tl cs)
 
 let check_nested_calls f range flow =
   let cs = Flow.get_callstack flow in
   if cs = [] then false
-  else List.exists (fun call -> call.call_fun = f) (List.tl cs)
+  else List.exists (fun call -> call.call_fun_uniq_name = f) (List.tl cs)
 
 
 
@@ -159,11 +159,11 @@ let init_fun_params f args range man flow =
   in
 
   (* Update call stack *)
-  let flow1 = Flow.push_callstack f.fun_name range flow0 in
+  let flow1 = Flow.push_callstack f.fun_orig_name ~uniq:f.fun_uniq_name range flow0 in
 
-  if check_nested_calls f.fun_name range flow1 then
+  if check_nested_calls f.fun_uniq_name range flow1 then
     begin
-      debug "nested calls detected on %s, performing parameters and locvar renaming" f.fun_name;
+      debug "nested calls detected on %s, performing parameters and locvar renaming" f.fun_orig_name;
       (* Add parameters and local variables to the environment *)
       let add_range = (fun p -> mk_attr_var p (Format.fprintf Format.str_formatter "%a" pp_range range;
                                                Format.flush_str_formatter ()) p.vtyp) in
@@ -269,7 +269,7 @@ let inline f params locals body ret range man flow =
     | true ->
       begin
         Soundness.warn_at range
-          "recursive call on function %s ignored" f.fun_name
+          "recursive call on function %s ignored" f.fun_orig_name
         ;
         match ret with
         | None -> Post.return flow
@@ -279,7 +279,7 @@ let inline f params locals body ret range man flow =
             man.exec (mk_assign (mk_var v range) (mk_top v.vtyp range) range) |>
             Post.return
           else
-            panic_at range "recursive call on function %s" f.fun_name
+            panic_at range "recursive call on function %s" f.fun_orig_name
       end
 
     | false ->

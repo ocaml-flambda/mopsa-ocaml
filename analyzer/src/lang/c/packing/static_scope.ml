@@ -173,7 +173,7 @@ struct
         then [Locals f.c_func_unique_name]
         else
           let caller, _ = Callstack.pop cs' in
-          [Locals f.c_func_unique_name; Locals caller.call_fun]
+          [Locals f.c_func_unique_name; Locals caller.call_fun_uniq_name]
 
     (* Return variables are also part of the caller and the callee packs *)
     | Var { vkind = Universal.Iterators.Interproc.Common.V_return call } ->
@@ -187,17 +187,17 @@ struct
         *)
         let f1, cs' = Callstack.pop cs in
         let fname = match ekind call with
-          | E_call ({ekind = E_function (User_defined f)},_) -> f.fun_name
+          | E_call ({ekind = E_function (User_defined f)},_) -> f.fun_uniq_name
           | Stubs.Ast.E_stub_call(f,_) -> f.stub_func_name
           | _ -> assert false
         in
         if Callstack.is_empty cs'
-        then [Locals f1.call_fun]
-        else if f1.call_fun <> fname
-        then [Locals f1.call_fun]
+        then [Locals f1.call_fun_uniq_name]
+        else if f1.call_fun_uniq_name <> fname
+        then [Locals f1.call_fun_uniq_name]
         else
           let f2, _ = Callstack.pop cs' in
-          [Locals f1.call_fun; Locals f2.call_fun]
+          [Locals f1.call_fun_uniq_name; Locals f2.call_fun_uniq_name]
 
     (* Primed bases are in the same pack as the original ones *)
     | Var { vkind = Cstubs.Aux_vars.V_c_primed_base b } ->
