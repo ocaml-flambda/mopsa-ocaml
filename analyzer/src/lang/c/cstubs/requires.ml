@@ -121,8 +121,8 @@ struct
         in
         assume cond
           ~fthen:(fun flow -> Post.return flow)
-          ~felse:(fun flow ->
-              raise_c_quantified_out_bound_alarm base size min max (under_type ptr.etyp) range man' flow |>
+          ~felse:(fun eflow ->
+              raise_c_quantified_out_bound_alarm base size min max (under_type ptr.etyp) range man' flow eflow |>
               Post.return
             )
           ~zone:Z_u_num man flow
@@ -137,8 +137,8 @@ struct
         let cond = mk_in offset (mk_zero range) limit range in
         assume cond
           ~fthen:(fun flow -> Post.return flow)
-          ~felse:(fun flow ->
-              raise_c_out_bound_alarm base size offset (under_type ptr.etyp) range man' flow |>
+          ~felse:(fun eflow ->
+              raise_c_out_bound_alarm base size offset (under_type ptr.etyp) range man' flow eflow |>
               Post.return
             )
           ~zone:Z_u_num man flow

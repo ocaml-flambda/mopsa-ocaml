@@ -695,7 +695,7 @@ struct
       match expr_to_z size, expr_to_z offset with
       | Some s, Some o ->
         if Z.gt elm s then
-          let flow = raise_c_out_bound_alarm base size offset typ range man flow in
+          let flow = raise_c_out_bound_alarm base size offset typ range man flow flow in
           Cases.empty_singleton flow
         else
         if Z.leq Z.zero o &&
@@ -704,7 +704,7 @@ struct
           let c = mk_cell base o typ in
           Cases.singleton (Cell (c,mode)) flow
         else
-          let flow = raise_c_out_bound_alarm base size offset typ range man flow in
+          let flow = raise_c_out_bound_alarm base size offset typ range man flow flow in
           Cases.empty_singleton flow
 
       | _ ->
@@ -783,8 +783,8 @@ struct
                   Cases.join_list ~empty:(fun () -> Cases.empty_singleton flow) evals
 
             )
-          ~felse:(fun flow ->
-              let flow = raise_c_out_bound_alarm base size offset typ range man flow in
+          ~felse:(fun eflow ->
+              let flow = raise_c_out_bound_alarm base size offset typ range man flow eflow in
               Cases.empty_singleton flow
             )
           man flow
@@ -998,8 +998,8 @@ struct
         ~fthen:(fun flow ->
             Eval.singleton (mk_top typ range) flow
           )
-        ~felse:(fun flow ->
-            raise_c_quantified_out_bound_alarm base size min max typ range man flow |>
+        ~felse:(fun eflow ->
+            raise_c_quantified_out_bound_alarm base size min max typ range man flow eflow |>
             Eval.empty_singleton
           )
         ~zone:Z_u_num man flow

@@ -203,9 +203,9 @@ struct
         ~fthen:(fun flow ->
             Cases.singleton ap flow
           )
-        ~felse:(fun flow ->
+        ~felse:(fun eflow ->
             man.eval offset ~zone:(Z_c_scalar,Universal.Zone.Z_u_num) flow >>$ fun offset flow ->
-            raise_c_out_var_bound_alarm ap offset (under_type ap.vtyp) range (Core.Sig.Stacked.Manager.of_domain_man man) flow |>
+            raise_c_out_var_bound_alarm ap offset (under_type ap.vtyp) range (Core.Sig.Stacked.Manager.of_domain_man man) flow eflow |>
             Cases.empty_singleton
           )
         ~zone:Z_c
@@ -266,9 +266,9 @@ struct
 
           Eval.join_list evl ~empty:(fun () -> Eval.empty_singleton flow)
         )
-      ~felse:(fun _ ->
+      ~felse:(fun eflow ->
           (* Raise an alarm since no next argument can be fetched by va_arg *)
-          let flow' = raise_c_insufficient_variadic_args ap valc unnamed range (Sig.Stacked.Manager.of_domain_man man) flow in
+          let flow' = raise_c_insufficient_variadic_args ap valc unnamed range (Sig.Stacked.Manager.of_domain_man man) flow eflow in
           Eval.empty_singleton flow'
         )
       ~zone:Universal.Zone.Z_u_num

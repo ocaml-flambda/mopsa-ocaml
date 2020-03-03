@@ -204,43 +204,43 @@ let () =
       );
   }
 
-let raise_c_out_var_bound_alarm var offset typ range man flow =
-  let cs = Flow.get_callstack flow in
-  let offset_itv = man.ask (mk_int_interval_query offset) flow in
+let raise_c_out_var_bound_alarm var offset typ range man input_flow error_flow =
+  let cs = Flow.get_callstack error_flow in
+  let offset_itv = man.ask (mk_int_interval_query offset) input_flow in
   let size_itv = sizeof_type var.vtyp |> I.cst in
   let alarm = mk_alarm (A_c_out_of_bound_msg(mk_var_base var,Bot.Nb size_itv, offset_itv, typ)) cs range in
-  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+  Flow.raise_alarm alarm ~bottom:true man.lattice error_flow
 
-let raise_c_out_addr_bound_alarm addr size offset typ range man flow =
-  let cs = Flow.get_callstack flow in
-  let offset_itv = man.ask (mk_int_interval_query offset) flow in
-  let size_itv = man.ask (mk_int_interval_query size) flow in
+let raise_c_out_addr_bound_alarm addr size offset typ range man input_flow error_flow =
+  let cs = Flow.get_callstack error_flow in
+  let offset_itv = man.ask (mk_int_interval_query offset) input_flow in
+  let size_itv = man.ask (mk_int_interval_query size) input_flow in
   let alarm = mk_alarm (A_c_out_of_bound_msg(mk_addr_base addr, size_itv, offset_itv, typ)) cs range in
-  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+  Flow.raise_alarm alarm ~bottom:true man.lattice error_flow
 
-let raise_c_out_string_bound_alarm str ?(typ=s8) offset range man flow =
-  let cs = Flow.get_callstack flow in
-  let offset_itv = man.ask (mk_int_interval_query offset) flow in
+let raise_c_out_string_bound_alarm str ?(typ=s8) offset range man input_flow error_flow =
+  let cs = Flow.get_callstack error_flow in
+  let offset_itv = man.ask (mk_int_interval_query offset) input_flow in
   let size_itv = String.length str |> I.cst_int in
   let alarm = mk_alarm (A_c_out_of_bound_msg(mk_string_base str,Bot.Nb size_itv, offset_itv, typ)) cs range in
-  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+  Flow.raise_alarm alarm ~bottom:true man.lattice error_flow
 
-let raise_c_out_bound_alarm base size offset typ range man flow =
-  let cs = Flow.get_callstack flow in
-  let offset_itv = man.ask (mk_int_interval_query offset) flow in
-  let size_itv = man.ask (mk_int_interval_query size) flow in
+let raise_c_out_bound_alarm base size offset typ range man input_flow error_flow =
+  let cs = Flow.get_callstack error_flow in
+  let offset_itv = man.ask (mk_int_interval_query offset) input_flow in
+  let size_itv = man.ask (mk_int_interval_query size) input_flow in
   let alarm = mk_alarm (A_c_out_of_bound_msg(base, size_itv, offset_itv, typ)) cs range in
-  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+  Flow.raise_alarm alarm ~bottom:true man.lattice error_flow
 
 
-let raise_c_quantified_out_bound_alarm base size min max typ range man flow =
-  let cs = Flow.get_callstack flow in
-  let min_itv = man.ask (mk_int_interval_query min) flow in
-  let max_itv = man.ask (mk_int_interval_query max) flow in
+let raise_c_quantified_out_bound_alarm base size min max typ range man input_flow error_flow =
+  let cs = Flow.get_callstack error_flow in
+  let min_itv = man.ask (mk_int_interval_query min) input_flow in
+  let max_itv = man.ask (mk_int_interval_query max) input_flow in
   let offset_itv = I.join_bot min_itv max_itv in
-  let size_itv = man.ask (mk_int_interval_query size) flow in
+  let size_itv = man.ask (mk_int_interval_query size) input_flow in
   let alarm = mk_alarm (A_c_out_of_bound_msg(base,size_itv, offset_itv, typ)) cs range in
-  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+  Flow.raise_alarm alarm ~bottom:true man.lattice error_flow
 
 
 
@@ -355,19 +355,19 @@ let () =
   }
 
 
-let raise_c_integer_overflow_alarm exp man flow =
-  let cs = Flow.get_callstack flow in
+let raise_c_integer_overflow_alarm exp man input_flow error_flow =
+  let cs = Flow.get_callstack error_flow in
   let exp' = get_orig_expr exp in
-  let itv = man.ask (mk_int_interval_query exp) flow in
+  let itv = man.ask (mk_int_interval_query exp) input_flow in
   let alarm = mk_alarm (A_c_integer_overflow_msg(exp',itv)) cs exp'.erange in
-  Flow.raise_alarm alarm ~bottom:false man.lattice flow
+  Flow.raise_alarm alarm ~bottom:false man.lattice error_flow
 
-let raise_c_cast_integer_overflow_alarm exp t man flow =
-  let cs = Flow.get_callstack flow in
+let raise_c_cast_integer_overflow_alarm exp t man input_flow error_flow =
+  let cs = Flow.get_callstack error_flow in
   let exp' = get_orig_expr exp in
-  let itv = man.ask (mk_int_interval_query exp) flow in
+  let itv = man.ask (mk_int_interval_query exp) input_flow in
   let alarm = mk_alarm (A_c_cast_integer_overflow_msg(exp',itv,t)) cs exp'.erange in
-  Flow.raise_alarm alarm ~bottom:false man.lattice flow
+  Flow.raise_alarm alarm ~bottom:false man.lattice error_flow
 
 
 (** {2 Invalid shift} *)
@@ -425,12 +425,12 @@ let () =
 
 
 
-let raise_c_invalid_shift_alarm e shift man flow =
-  let cs = Flow.get_callstack flow in
+let raise_c_invalid_shift_alarm e shift man input_flow error_flow =
+  let cs = Flow.get_callstack error_flow in
   let shift' = get_orig_expr shift in
-  let shift_itv = man.ask (mk_int_interval_query shift) flow in
+  let shift_itv = man.ask (mk_int_interval_query shift) input_flow in
   let alarm = mk_alarm (A_c_invalid_shift_msg(e,shift',shift_itv)) cs shift.erange in
-  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+  Flow.raise_alarm alarm ~bottom:true man.lattice error_flow
 
 
 
@@ -718,12 +718,12 @@ let () =
   }
 
 
-let raise_c_insufficient_variadic_args va_list counter args range man flow =
-  let cs = Flow.get_callstack flow in
+let raise_c_insufficient_variadic_args va_list counter args range man input_flow error_flow =
+  let cs = Flow.get_callstack error_flow in
   let nargs = List.length args in
-  let counter_itv = man.ask (mk_int_interval_query counter) flow in
+  let counter_itv = man.ask (mk_int_interval_query counter) input_flow in
   let alarm = mk_alarm (A_c_insufficient_variadic_args_msg(va_list,counter_itv,nargs)) cs range in
-  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+  Flow.raise_alarm alarm ~bottom:true man.lattice error_flow
 
 
 

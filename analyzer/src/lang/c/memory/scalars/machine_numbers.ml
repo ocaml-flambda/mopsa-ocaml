@@ -335,7 +335,7 @@ struct
            Eval.singleton exp' tflow
         )
         (fun fflow ->
-           let flow' = raise_c_invalid_shift_alarm e0 e' man fflow in
+           let flow' = raise_c_invalid_shift_alarm e0 e' man flow fflow in
            Eval.empty_singleton flow'
         ) man flow |>
       OptionExt.return
@@ -348,7 +348,7 @@ struct
       check_overflow typ man range
         (fun e tflow -> Eval.singleton e tflow)
         (fun e fflow ->
-           let flow1 = raise_c_integer_overflow_alarm e man fflow in
+           let flow1 = raise_c_integer_overflow_alarm e man flow fflow in
            Eval.singleton (mk_unop (O_wrap(rmin, rmax)) e ~etyp:(to_num_type typ) range) flow1
         ) e flow |>
       OptionExt.return
@@ -369,7 +369,7 @@ struct
            then
              Eval.singleton e' fflow
            else
-             let flow1 = raise_c_integer_overflow_alarm e man fflow in
+             let flow1 = raise_c_integer_overflow_alarm e man flow fflow in
              Eval.singleton e' flow1
         ) e flow |>
       OptionExt.return
@@ -429,7 +429,7 @@ struct
              if is_explicit_cast && !opt_ignore_cast_alarm then
                Eval.singleton (mk_unop (O_wrap(rmin, rmax)) e ~etyp:(to_num_type t) range) fflow
              else
-               let flow1 = raise_c_cast_integer_overflow_alarm e' exp.etyp man fflow in
+               let flow1 = raise_c_cast_integer_overflow_alarm e' exp.etyp man flow fflow in
                Eval.singleton (mk_unop (O_wrap(rmin, rmax)) e ~etyp:(to_num_type t) range) flow1
           ) e' flow |>
         OptionExt.return
