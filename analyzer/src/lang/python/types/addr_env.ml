@@ -612,35 +612,32 @@ struct
 
       | Universal.Heap.Recency.Q_alive_addresses_aspset ->
          let open Universal.Heap.Recency in
+         let module AddrMap = Map.Make(struct type t = addr let compare = compare_addr end) in
          let cur = get_env T_cur man flow in
-         let usualmap, addrattrsmap = AMap.partition (fun v _ -> match vkind v with
-                                                                 | V_addr_attr _ -> false
-                                                                 | _ -> true) cur in
-         let vars_to_check = List.map fst (AMap.bindings usualmap) in
          let pool_of_aset aset start = ASet.fold (fun pyaddr acc -> match pyaddr with
                                                                     | Def a -> Pool.add a acc
                                                                     | _ -> acc) aset start in
-         let rec find_alive_addrs_usualvars alive_addrs to_check =
+         let tocheck, cur, reverseaddrattrmap =
+           AMap.fold (fun var aset (tocheck, cur, reverseaddrattrmap) ->
+               let aset = pool_of_aset aset Pool.empty in
+               match vkind var with
+               | V_addr_attr (a, _) ->
+                  let old_vset = OptionExt.default VarSet.empty (AddrMap.find_opt a reverseaddrattrmap) in
+                  (tocheck, VarMap.add var aset cur, AddrMap.add a (VarSet.add var old_vset) reverseaddrattrmap)
+               | _ ->
+                  (var::tocheck, VarMap.add var aset cur, reverseaddrattrmap)) cur ([], VarMap.empty, AddrMap.empty) in
+         let rec find_alive_addrs alive_addrs to_check =
            match to_check with
            | [] -> alive_addrs
            | hd :: tl ->
-              let aset = AMap.find hd usualmap in
-              find_alive_addrs_usualvars (pool_of_aset aset alive_addrs) tl in
-         let find_alive_addrs_attrs alive_addrs =
-           AMap.fold (fun var aset new_alive ->
-               match vkind var with
-               | V_addr_attr (a, _) ->
-                  if Pool.mem a alive_addrs then
-                    pool_of_aset aset new_alive
-                  else new_alive
-               | _ -> assert false
-             ) addrattrsmap alive_addrs in
-         let alive_addrs = find_alive_addrs_usualvars Pool.empty vars_to_check in
-         let rec lfp f init =
-           let r = f init in
-           if Pool.equal r init then init
-           else lfp f r in
-         lfp find_alive_addrs_attrs alive_addrs
+              let aset = VarMap.find hd cur in
+              let to_check = Pool.fold (fun addr acc ->
+                                 match AddrMap.find_opt addr reverseaddrattrmap with
+                                 | None -> acc
+                                 | Some vars -> VarSet.elements vars @ acc
+                               ) aset tl in
+              find_alive_addrs (Pool.join aset alive_addrs) to_check in
+         find_alive_addrs Pool.empty tocheck
          |> OptionExt.return
 
       | _ -> None

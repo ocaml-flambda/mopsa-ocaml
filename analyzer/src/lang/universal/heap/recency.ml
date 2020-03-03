@@ -210,7 +210,7 @@ struct
        let all = get_env T_cur man flow in
        let alive = man.ask Q_alive_addresses_aspset flow in
        let dead = Pool.diff all alive in
-       debug "|dead| = %d@.dead = %a" (Pool.cardinal dead) Pool.print dead;
+       debug "at %a, |dead| = %d@.dead = %a" pp_range range (Pool.cardinal dead) Pool.print dead;
        let trange = tag_range range "agc" in
        let flow = set_env T_cur alive man flow in
        Pool.fold (fun addr flow ->
@@ -234,13 +234,13 @@ struct
       (* Change the sub-domain *)
       let flow' =
         if not (Pool.mem recent_addr pool) then
-          let () = debug "first allocation@\n" in
+          (* let () = debug "first allocation@\n" in *)
           (* First time we allocate at this site, so no change to the sub-domain. *)
           flow
         else
           (* Otherwise, we make the previous recent address as an old one *)
           let old_addr = Policies.mk_addr addr_kind WEAK range (Flow.get_unit_ctx flow) in
-          debug "rename %a to %a" pp_addr recent_addr pp_addr old_addr;
+          (* debug "rename %a to %a" pp_addr recent_addr pp_addr old_addr; *)
           let nflow = map_env T_cur (Pool.add old_addr) man flow |>
                         man.exec (mk_rename (mk_addr recent_addr range) (mk_addr old_addr range) range) in
           if not (Pool.mem old_addr pool) then nflow

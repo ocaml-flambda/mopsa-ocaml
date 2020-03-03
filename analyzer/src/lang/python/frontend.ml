@@ -28,7 +28,7 @@ open Ast
 open Utils
 
 let opt_gc_after_functioncall = ref false
-let opt_gc_percent_calls = ref 10 (* 10% *)
+let opt_gc_percent_calls = ref 100 (* 10% *)
 let gc_call = ref 0
 let () =
   register_domain_option "python.frontend" {
