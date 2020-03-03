@@ -354,6 +354,8 @@ struct
               (fun s -> Eval.singleton (mk_py_object (s (), None) range) flow) Addr_env.addr_integers
             | "float" ->
               (fun s -> Eval.singleton (mk_py_object (s (), None) range) flow) Addr_env.addr_float
+            | "str" ->
+              (fun s -> Eval.singleton (mk_py_object (s (), None) range) flow) Addr_env.addr_strings
             | "NotImplementedType" ->
               (fun s -> Eval.singleton (mk_py_object (s (), None) range) flow) Addr_env.addr_notimplemented
             | "NoneType" ->

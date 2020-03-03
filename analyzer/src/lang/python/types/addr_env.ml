@@ -91,6 +91,7 @@ let addr_none () = {addr_group = G_all; addr_kind = A_py_instance (fst @@ find_b
 let addr_notimplemented () = {addr_group = G_all; addr_kind = A_py_instance (fst @@ find_builtin "NotImplementedType"); addr_mode = STRONG}
 let addr_integers () = {addr_group = G_all; addr_kind = A_py_instance (fst @@ find_builtin "int"); addr_mode = WEAK}
 let addr_float () = {addr_group = G_all; addr_kind = A_py_instance (fst @@ find_builtin "float"); addr_mode = WEAK}
+let addr_strings () = {addr_group = G_all; addr_kind = A_py_instance (fst @@ find_builtin "string"); addr_mode = WEAK}
 let addr_true () = {addr_group = G_py_bool (Some true); addr_kind = A_py_instance (fst @@ find_builtin "bool"); addr_mode = STRONG}
 let addr_false () = {addr_group = G_py_bool (Some false); addr_kind = A_py_instance (fst @@ find_builtin "bool"); addr_mode = STRONG}
 let addr_bool_top () = {addr_group = G_py_bool None; addr_kind = A_py_instance (fst @@ find_builtin "bool"); addr_mode = WEAK}
@@ -98,6 +99,7 @@ let addr_bool_top () = {addr_group = G_py_bool None; addr_kind = A_py_instance (
 
 module Domain =
 struct
+
 
   module ASet =
     (struct
@@ -121,15 +123,19 @@ struct
       (ASet)
 
   include AMap
-  let subset _ _ (l1, r1) (l2, r2)  = AMap.subset l1 l2, r1, r2
-  let join _ _ (l1, r1) (l2, r2) = AMap.join l1 l2, r1, r2
-  let meet _ _ (l1, r1) (l2, r2) = AMap.meet l1 l2, r1, r2
-  let widen _ uctx (l1, r1) (l2, r2) = AMap.widen uctx l1 l2, r1, r2, true
-
   include Framework.Core.Id.GenDomainId(struct
       type nonrec t = t
       let name = "python.types.addr_env"
     end)
+
+  let subset _ _ (l1, r1) (l2, r2)  = AMap.subset l1 l2, r1, r2
+    (* let r1, r2, r3 = AMap.subset l1 l2, r1, r2 in
+     * if not r1 then Debug.debug ~channel:"explain" "%s not sub@." name;
+     * r1, r2, r3 *)
+
+  let join _ _ (l1, r1) (l2, r2) = AMap.join l1 l2, r1, r2
+  let meet _ _ (l1, r1) (l2, r2) = AMap.meet l1 l2, r1, r2
+  let widen _ uctx (l1, r1) (l2, r2) = AMap.widen uctx l1 l2, r1, r2, true
 
   let interface = {
     iexec = { provides = [Zone.Z_py]; uses = [Zone.Z_py; Zone.Z_py_obj; Universal.Zone.Z_u_int; Universal.Zone.Z_u_float; Universal.Zone.Z_u_string]; };
@@ -154,17 +160,10 @@ struct
        flow
     | Some aset ->
        (* FIXME: if we explicitly define things below, we could use ASet.mem *)
-       let str, intb, float = ASet.fold (fun pyaddr (str, intb, float) ->
-                                  match pyaddr with
-                                  | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "str", _)}} ->
-                                     (true, intb, float)
-                                  | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)}}
-                                    | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}} ->
-                                     (str, true, float)
-                                  | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "float", _)}} ->
-                                     (str, intb, true)
-                                  | _ -> (str, intb, float)
-                                ) aset (false, false, false) in
+       let check_baddr a = ASet.mem (Def (a ())) aset in
+       let intb = check_baddr addr_integers || check_baddr addr_true || check_baddr addr_false || check_baddr addr_bool_top in
+       let float = check_baddr addr_float in
+       let str = check_baddr addr_strings in
        let flow = if str then man.exec ~zone:Universal.Zone.Z_u_string (fstmt T_string) flow  else flow in
        let flow = if intb then man.exec ~zone:Universal.Zone.Z_u_int (fstmt T_int) flow else flow in
        let flow = if float then man.exec ~zone:Universal.Zone.Z_u_float (fstmt (T_float F_DOUBLE)) flow else flow in
@@ -215,7 +214,6 @@ struct
        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
          bind_some
            (fun e flow ->
-             Debug.debug ~channel:"debugrecency" "assign_addr %a, e = %a" pp_var v pp_expr e;
              match ekind e with
              | E_py_undefined true ->
                 assign_addr man v PyAddr.Undef_global mode flow |> Post.return
@@ -224,7 +222,6 @@ struct
                 assign_addr man v PyAddr.Undef_local mode flow |> Post.return
 
              | E_py_object (addr, None) ->
-                Debug.debug ~channel:"debugrecency" "assign_addr %a %a" pp_var v pp_addr addr;
                 assign_addr man v (PyAddr.Def addr) mode flow |> Post.return
 
              | E_py_object (addr, Some expr) ->
@@ -601,44 +598,44 @@ struct
                                           | _ -> acc) aset []
          |> OptionExt.return
 
-      (* | Universal.Heap.Recency.Q_alive_addresses_aspset ->
-       *    let cur = get_env T_cur man flow in
-       *    let aset = AMap.fold (fun _ aset acc ->
-       *                   ASet.join aset acc) cur ASet.empty in
-       *    ASet.fold (fun pyaddr acc -> match pyaddr with
-       *                                 | Def a -> Universal.Heap.Recency.Pool.add a acc
-       *                                 | _ -> acc) aset Universal.Heap.Recency.Pool.empty
-       *    |> OptionExt.return *)
-
       | Universal.Heap.Recency.Q_alive_addresses_aspset ->
-         let open Universal.Heap.Recency in
-         let module AddrMap = Map.Make(struct type t = addr let compare = compare_addr end) in
          let cur = get_env T_cur man flow in
-         let pool_of_aset aset start = ASet.fold (fun pyaddr acc -> match pyaddr with
-                                                                    | Def a -> Pool.add a acc
-                                                                    | _ -> acc) aset start in
-         let tocheck, cur, reverseaddrattrmap =
-           AMap.fold (fun var aset (tocheck, cur, reverseaddrattrmap) ->
-               let aset = pool_of_aset aset Pool.empty in
-               match vkind var with
-               | V_addr_attr (a, _) ->
-                  let old_vset = OptionExt.default VarSet.empty (AddrMap.find_opt a reverseaddrattrmap) in
-                  (tocheck, VarMap.add var aset cur, AddrMap.add a (VarSet.add var old_vset) reverseaddrattrmap)
-               | _ ->
-                  (var::tocheck, VarMap.add var aset cur, reverseaddrattrmap)) cur ([], VarMap.empty, AddrMap.empty) in
-         let rec find_alive_addrs alive_addrs to_check =
-           match to_check with
-           | [] -> alive_addrs
-           | hd :: tl ->
-              let aset = VarMap.find hd cur in
-              let to_check = Pool.fold (fun addr acc ->
-                                 match AddrMap.find_opt addr reverseaddrattrmap with
-                                 | None -> acc
-                                 | Some vars -> VarSet.elements vars @ acc
-                               ) aset tl in
-              find_alive_addrs (Pool.join aset alive_addrs) to_check in
-         find_alive_addrs Pool.empty tocheck
+         let aset = AMap.fold (fun _ aset acc ->
+                        ASet.join aset acc) cur ASet.empty in
+         ASet.fold (fun pyaddr acc -> match pyaddr with
+                                      | Def a -> Universal.Heap.Recency.Pool.add a acc
+                                      | _ -> acc) aset Universal.Heap.Recency.Pool.empty
          |> OptionExt.return
+
+      (* | Universal.Heap.Recency.Q_alive_addresses_aspset ->
+       *    let open Universal.Heap.Recency in
+       *    let module AddrMap = Map.Make(struct type t = addr let compare = compare_addr end) in
+       *    let cur = get_env T_cur man flow in
+       *    let pool_of_aset aset start = ASet.fold (fun pyaddr acc -> match pyaddr with
+       *                                                               | Def a -> Pool.add a acc
+       *                                                               | _ -> acc) aset start in
+       *    let tocheck, cur, reverseaddrattrmap =
+       *      AMap.fold (fun var aset (tocheck, cur, reverseaddrattrmap) ->
+       *          let aset = pool_of_aset aset Pool.empty in
+       *          match vkind var with
+       *          | V_addr_attr (a, _) ->
+       *             let old_vset = OptionExt.default VarSet.empty (AddrMap.find_opt a reverseaddrattrmap) in
+       *             (tocheck, VarMap.add var aset cur, AddrMap.add a (VarSet.add var old_vset) reverseaddrattrmap)
+       *          | _ ->
+       *             (var::tocheck, VarMap.add var aset cur, reverseaddrattrmap)) cur ([], VarMap.empty, AddrMap.empty) in
+       *    let rec find_alive_addrs alive_addrs to_check =
+       *      match to_check with
+       *      | [] -> alive_addrs
+       *      | hd :: tl ->
+       *         let aset = VarMap.find hd cur in
+       *         let to_check = Pool.fold (fun addr acc ->
+       *                            match AddrMap.find_opt addr reverseaddrattrmap with
+       *                            | None -> acc
+       *                            | Some vars -> VarSet.elements vars @ acc
+       *                          ) aset tl in
+       *         find_alive_addrs (Pool.join aset alive_addrs) to_check in
+       *    find_alive_addrs Pool.empty tocheck
+       *    |> OptionExt.return *)
 
       | _ -> None
 

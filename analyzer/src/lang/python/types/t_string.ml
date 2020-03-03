@@ -138,12 +138,9 @@ module Domain =
     let rec eval zs exp (man: ('a, unit) man) (flow:'a flow) =
       let range = erange exp in
       match ekind exp with
+      | E_constant (C_string _)
       | E_constant (C_top T_string) ->
-        allocate_builtin man range flow "str" (Some exp) |> OptionExt.return
-
-      | E_constant (C_string s) ->
-        allocate_builtin man range flow "str" (Some exp) |> OptionExt.return
-      (* we keep s in the expression of the returned object *)
+         Eval.singleton (mk_py_object (Addr_env.addr_strings (), Some {exp with etyp=T_string}) range) flow |> OptionExt.return
 
       | E_constant (C_top T_py_bytes)
       | E_py_bytes _ ->
