@@ -91,7 +91,7 @@ let addr_none () = {addr_group = G_all; addr_kind = A_py_instance (fst @@ find_b
 let addr_notimplemented () = {addr_group = G_all; addr_kind = A_py_instance (fst @@ find_builtin "NotImplementedType"); addr_mode = STRONG}
 let addr_integers () = {addr_group = G_all; addr_kind = A_py_instance (fst @@ find_builtin "int"); addr_mode = WEAK}
 let addr_float () = {addr_group = G_all; addr_kind = A_py_instance (fst @@ find_builtin "float"); addr_mode = WEAK}
-let addr_strings () = {addr_group = G_all; addr_kind = A_py_instance (fst @@ find_builtin "string"); addr_mode = WEAK}
+let addr_strings () = {addr_group = G_all; addr_kind = A_py_instance (fst @@ find_builtin "str"); addr_mode = WEAK}
 let addr_true () = {addr_group = G_py_bool (Some true); addr_kind = A_py_instance (fst @@ find_builtin "bool"); addr_mode = STRONG}
 let addr_false () = {addr_group = G_py_bool (Some false); addr_kind = A_py_instance (fst @@ find_builtin "bool"); addr_mode = STRONG}
 let addr_bool_top () = {addr_group = G_py_bool None; addr_kind = A_py_instance (fst @@ find_builtin "bool"); addr_mode = WEAK}
