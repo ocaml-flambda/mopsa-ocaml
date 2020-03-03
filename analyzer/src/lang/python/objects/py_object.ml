@@ -191,11 +191,10 @@ struct
 
                          get/set ~> https://docs.python.org/3/c-api/typeobj.html#cols
                       *)
-
                       (* hasattr is bad but needed for inheritance, to see *)
                       man flow
                       ~fthen:(fun flow ->
-                        assume (mk_binop (mk_py_hasattr (mk_py_type descr range) "__set__" range) O_log_or (mk_py_hasattr (mk_py_type descr range) "__del__" range) range) man flow
+                        assume (mk_binop (mk_py_hasattr (mk_py_type descr range) "__set__" range) O_py_or (mk_py_hasattr (mk_py_type descr range) "__del__" range) range) man flow
                             ~fthen:(man.eval (mk_py_call (mk_py_attr (mk_py_type descr range) "__get__" range) [descr; instance; class_of_exp] range))
                             ~felse:(tryinstance ~fother:(man.eval (mk_py_call (mk_py_attr (mk_py_type descr range) "__get__" range) [descr; instance; class_of_exp] range)))
                         )

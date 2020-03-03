@@ -226,7 +226,7 @@ struct
       let cleaners = List.map (fun x -> mk_remove_var x range) [iter; maxi; target] in
       let pass = mk_block [] range in
 
-      let assign_iter = mk_assign iter_var (Utils.mk_builtin_call "iter" [iterable] range) range in
+      let assign_iter = mk_assign iter_var (Utils.mk_builtin_call "iter" [{iterable with erange = tag_range iterable.erange "assign_iter"}] (tag_range range "assign_iter")) (tag_range range "assign_iter") in
       let msg = Format.asprintf "%s() arg is an empty sequence" s in
       let assign_max =
         Utils.mk_try_stopiteration
