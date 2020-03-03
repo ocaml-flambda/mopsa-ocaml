@@ -359,8 +359,8 @@ let convert_fundec (f:fundec) =
     | Some t -> Some f.fun_return_var
   in
   (* convert the body in-place *)
-  f.fun_body <- convert_stmt ~name:f.fun_name ?ret f.fun_body;
-  debug "CFG for function %s:@.%a@." f.fun_name pp_stmt f.fun_body
+  f.fun_body <- convert_stmt ~name:f.fun_orig_name ?ret f.fun_body;
+  debug "CFG for function %s:@.%a@." f.fun_orig_name pp_stmt f.fun_body
 
 
 (** Converts a full universal program. *)  
