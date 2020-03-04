@@ -111,7 +111,7 @@ module Domain =
                           ~zone:Universal.Zone.Z_u_float
                           ~fthen:(fun flow -> man.eval (mk_py_true range) flow)
                           ~felse:(fun flow -> man.eval (mk_py_false range) flow)
-                        |> T_int.Domain.merge_tf_top man range
+                        (* |> T_int.Domain.merge_tf_top man range *)
                       )
                     ~felse:(fun flow ->
                         assume (mk_py_isinstance_builtin e2 "int" range) man flow
@@ -123,7 +123,7 @@ module Domain =
                                     ~zone:Universal.Zone.Z_u_float
                                     ~fthen:(fun flow -> man.eval (mk_py_true range) flow)
                                     ~felse:(fun flow -> man.eval (mk_py_false range) flow)
-                                  |> T_int.Domain.merge_tf_top man range
+                                  (* |> T_int.Domain.merge_tf_top man range *)
                                 )
                             )
                           ~felse:(fun flow ->
@@ -206,7 +206,7 @@ module Domain =
                ~zone:Universal.Zone.Z_u_float
                ~fthen:(fun flow -> man.eval (mk_py_false range) flow)
                ~felse:(fun flow -> man.eval (mk_py_true range) flow)
-             |> T_int.Domain.merge_tf_top man range
+             (* |> T_int.Domain.merge_tf_top man range *)
           )
         |> OptionExt.return
 

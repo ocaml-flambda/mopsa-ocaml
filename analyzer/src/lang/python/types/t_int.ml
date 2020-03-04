@@ -50,26 +50,27 @@ struct
     | "int.__invert__" -> true
     | _ -> false
 
-  let merge_tf_top man range c =
-    if Cases.cardinal c = 2 then
-      let () = debug "2 cases, we're good!" in
-      let t, f, oflow = Cases.fold (fun oe flow (ftrue, ffalse, oflow) ->
-                            if oflow <> None && Flow.subset man.lattice flow (OptionExt.none_to_exn oflow) then
-                              (ftrue, ffalse, oflow)
-                            else
-                              match oe with
-                              | Some e when compare_expr e (mk_py_object (Addr_env.addr_true (), Some (mk_int 1 ~typ:T_int e.erange)) e.erange) = 0 ->
-                                 (true, ffalse, OptionExt.apply (fun flow' -> Some (Flow.join man.lattice flow flow')) (Some flow) oflow)
-                              | Some e when compare_expr e (mk_py_object (Addr_env.addr_false (), Some (mk_int 0 ~typ:T_int e.erange)) e.erange) = 0 ->
-                                 (ftrue, true, OptionExt.apply (fun flow' -> Some (Flow.join man.lattice flow flow')) (Some flow) oflow)
-                              | _ -> (ftrue, ffalse, oflow)
-                          ) c (false, false, None) in
-      let () = debug "t = %b, f = %b" t f in
-      if t && f then
-        man.eval (mk_py_top T_bool range) (OptionExt.none_to_exn oflow)
-      else
-        c
-    else c
+  (* FIXME: I'd like to merge only if true/false have different flows *)
+  (* let merge_tf_top man range c =
+   *   if Cases.cardinal c = 2 then
+   *     let () = debug "2 cases, we're good!" in
+   *     let t, f, oflow = Cases.fold (fun oe flow (ftrue, ffalse, oflow) ->
+   *                           if oflow <> None && not (Flow.subset man.lattice flow (OptionExt.none_to_exn oflow)) then
+   *                             (ftrue, ffalse, oflow)
+   *                           else
+   *                             match oe with
+   *                             | Some e when compare_expr e (mk_py_object (Addr_env.addr_true (), Some (mk_int 1 ~typ:T_int e.erange)) e.erange) = 0 ->
+   *                                (true, ffalse, OptionExt.apply (fun flow' -> Some (Flow.join man.lattice flow flow')) (Some flow) oflow)
+   *                             | Some e when compare_expr e (mk_py_object (Addr_env.addr_false (), Some (mk_int 0 ~typ:T_int e.erange)) e.erange) = 0 ->
+   *                                (ftrue, true, OptionExt.apply (fun flow' -> Some (Flow.join man.lattice flow flow')) (Some flow) oflow)
+   *                             | _ -> (ftrue, ffalse, oflow)
+   *                         ) c (false, false, None) in
+   *     let () = debug "t = %b, f = %b" t f in
+   *     if t && f then
+   *       man.eval (mk_py_top T_bool range) (OptionExt.none_to_exn oflow)
+   *     else
+   *       c
+   *   else c *)
 
 
   let eval zs exp (man: ('a, unit) Framework.Core.Sig.Domain.Stateless.man) (flow: 'a flow) =
@@ -242,7 +243,7 @@ struct
              ~zone:Universal.Zone.Z_u_int
              ~fthen:(fun flow -> man.eval (mk_py_false range) flow)
              ~felse:(fun flow -> man.eval (mk_py_true range) flow)
-           |> merge_tf_top man range
+           (* |> merge_tf_top man range *)
         )
       |> OptionExt.return
 
