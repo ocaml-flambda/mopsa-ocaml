@@ -203,6 +203,7 @@ module Domain =
                           ~zone:Universal.Zone.Z_u_string
                           ~fthen:(fun flow -> man.eval (mk_py_true range) flow)
                           ~felse:(fun flow -> man.eval (mk_py_false range) flow)
+                        |> T_int.Domain.merge_tf_top man range
                     (* man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_bool range) true_flow *)
                     )
                     ~felse:(fun false_flow ->
