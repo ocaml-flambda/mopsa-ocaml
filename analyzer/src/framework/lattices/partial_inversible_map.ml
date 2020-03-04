@@ -264,6 +264,24 @@ struct
       Nbt { m with relations = Relation.remove_inverse v m.relations }
 
 
+  (** [filter f a] keeps all bindings [(k,vs)] in [a] such that [f k vs] is true *)
+  let filter (f:Key.t -> ValueSet.t with_top -> bool) (a:t) : t =
+    match a with
+    | BOT -> BOT
+    | TOP -> TOP
+    | Nbt m ->
+      Nbt { relations = Relation.filter_domain (fun k vs -> f k (Top.Nt vs)) m.relations;
+            top_keys  = KeySet.filter (fun k -> f k Top.TOP) m.top_keys }
+
+  (** [filter_inverse f a] keeps all inverse bindings [(v,ks)] in [a] such that [f v ks] is true *)
+  let filter_inverse (f:Value.t -> KeySet.t -> bool) (a:t) : t =
+    match a with
+    | BOT -> BOT
+    | TOP -> TOP
+    | Nbt m -> Nbt { m with relations = Relation.filter_codomain f m.relations }
+
+  (* val filter_inverse : (value -> KeySet.t -> bool) -> t
+   * (\** [filter_inverse f a] keeps all inverse bindings [(v,ks)] in [a] such that [f v ks] is true *\) *)
 
   (** Add bindings [(k,vs)] to [a]. Previous bindings are overwritten. *)
   let set (k: Key.t) (vs:ValueSet.t with_top) (a:t) : t =

@@ -532,8 +532,22 @@ struct
    Post.return
     
 
+  (** Destroy a base *)
+  let exec_destroy_base e range man flow =
+    let b = expr_to_base e in
+    let base = PointerValue.Base (expr_to_base e) in
+    (* Remove the base from the inverse map *)
+    map_env T_cur (Map.remove_inverse base) man flow |>
+    (* Remove also invalid bases *)
+    map_env T_cur (Map.filter_inverse (fun base' _ ->
+        match base' with
+        | PointerValue.Base { base_valid = false; base_kind } -> compare_base_kind b.base_kind base_kind <> 0
+        | _ -> true
+      )) man |>
+    Post.return
 
-  (** Remove a base *)
+
+  (** Invalidate a base *)
   let exec_remove_base e range man flow =
     let valid_base, invalid_base = match ekind e with
       | E_var (v,_) -> mk_var_base v, mk_var_base v ~valid:false ~invalidation_range:(Some range)
@@ -741,6 +755,10 @@ struct
 
     | S_remove e when zone = Z_c_points_to ->
       exec_remove_base e stmt.srange man flow |>
+      OptionExt.return
+
+    | S_destroy e when zone = Z_c_points_to ->
+      exec_destroy_base e stmt.srange man flow |>
       OptionExt.return
 
     | S_rename(e,e') when zone = Z_c_points_to ->

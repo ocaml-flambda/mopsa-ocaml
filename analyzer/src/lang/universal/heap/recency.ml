@@ -162,14 +162,20 @@ struct
 
   let exec zone stmt man flow =
     match skind stmt with
-    (* 𝕊⟦ free(addr); ⟧ *)
-    | S_free_addr addr ->
-      let flow' =
-        if addr.addr_mode = WEAK then flow
-        else map_env T_cur (Pool.remove addr) man flow
+    (* 𝕊⟦ remove(addr); ⟧ *)
+    | S_remove {ekind = E_addr addr} ->
+      let flow =
+        if addr.addr_mode = STRONG then
+          map_env T_cur (Pool.remove addr) man flow
+        else
+          flow
       in
-      let stmt' = mk_remove (mk_addr addr stmt.srange) stmt.srange in
-      man.exec stmt' flow' |>
+      Post.return flow |>
+      OptionExt.return
+
+    (* 𝕊⟦ destroy(addr); ⟧ *)
+    | S_destroy {ekind = E_addr addr} ->
+      map_env T_cur (Pool.remove addr) man flow |>
       Post.return |>
       OptionExt.return
 
@@ -198,10 +204,11 @@ struct
           let old_addr = Policy.mk_addr addr_kind WEAK range flow in
           debug "rename %a to %a" pp_addr recent_addr pp_addr old_addr;
           let nflow = map_env T_cur (Pool.add old_addr) man flow |>
-                        man.exec (mk_rename (mk_addr recent_addr range) (mk_addr old_addr range) range) in
+                      man.exec (mk_rename (mk_addr recent_addr range) (mk_addr old_addr range) range) in
           if not (Pool.mem old_addr pool) then nflow
           else
-            Flow.join man.lattice nflow (man.exec (mk_remove (mk_addr recent_addr range) range) flow)
+            man.exec (mk_destroy_addr recent_addr range) flow |>
+            Flow.join man.lattice nflow
       in
 
       (* Add the recent address *)

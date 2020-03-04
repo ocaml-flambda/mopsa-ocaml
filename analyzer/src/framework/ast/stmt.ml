@@ -42,7 +42,10 @@ type stmt_kind +=
   (** Add a dimension to the abstract environments. *)
 
   | S_remove of expr
-  (** Remove a dimension from the abstract environments. *)
+  (** Remove a dimension and invalidate all references to it. *)
+
+  | S_destroy of expr
+  (** Remove a dimension and all references to it *)
 
   | S_rename of expr (** old *) * expr (** new *)
   (** Rename the first dimension into the second one *)
@@ -90,6 +93,8 @@ let stmt_compare_chain = TypeExt.mk_compare_chain (fun s1 s2 ->
 
     | S_remove(e1), S_remove(e2) -> compare_expr e1 e2
 
+    | S_destroy(e1), S_destroy(e2) -> compare_expr e1 e2
+
     | S_add(e1), S_add(e2) -> compare_expr e1 e2
 
     | S_project(el1), S_project(el2) -> Compare.list compare_expr el1 el2
@@ -117,6 +122,8 @@ let stmt_pp_chain = TypeExt.mk_print_chain (fun fmt stmt ->
     | S_program (prog,args) -> pp_program fmt prog
 
     | S_remove(e) -> fprintf fmt "remove(%a)" pp_expr e
+
+    | S_destroy(e) -> fprintf fmt "destroy(%a)" pp_expr e
 
     | S_add(e) -> fprintf fmt "add(%a)" pp_expr e
 
@@ -187,6 +194,11 @@ let mk_remove v = mk_stmt (S_remove v)
 
 let mk_remove_var v range =
   mk_remove (mk_var v range) range
+
+let mk_destroy v = mk_stmt (S_destroy v)
+
+let mk_destroy_var v range =
+  mk_destroy (mk_var v range) range
 
 let mk_add v = mk_stmt (S_add v)
 

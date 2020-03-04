@@ -47,7 +47,7 @@ struct
   let interface= {
     iexec = {
       provides = [Z_c];
-      uses = [Z_c_scalar; Z_c_low_level; Z_c_points_to]
+      uses = [Z_c; Z_c_scalar; Z_c_low_level; Z_u_heap]
     };
 
     ieval = {
@@ -79,21 +79,19 @@ struct
     match ekind pt with
     | E_c_points_to (P_block ({ base_kind = Addr ({ addr_kind = A_stub_resource _ } as addr); base_valid = true }, _, mode)) ->
       (* Remove the bytes attribute before removing the address *)
-      let flow' =
+      let flow =
         if addr.addr_mode = STRONG then
           let stmt' = mk_remove_var (mk_bytes_var addr) range in
           man.exec ~zone:Z_c_scalar stmt' flow
         else
           flow
       in
+      (* Remove the contents and invalidate pointers *)
+      let stmt' = mk_remove_addr addr range in
+      man.post stmt' ~zone:Z_c flow >>$ fun () flow ->
+      man.post stmt' ~zone:Z_u_heap flow
 
-      let stmt' = mk_free_addr addr range in
-      let flow' = man.exec stmt' flow' in
-
-      let stmt'' = mk_stub_free (mk_addr addr range) range in
-      man.exec stmt'' flow' |>
-      Post.return
-
+  
     | E_c_points_to (P_block ({ base_kind = Addr { addr_kind = A_stub_resource _ }; base_valid = false; base_invalidation_range = Some drange }, _, _)) ->
       raise_c_double_free_alarm p drange (Sig.Stacked.Manager.of_domain_man man) flow |>
       Post.return

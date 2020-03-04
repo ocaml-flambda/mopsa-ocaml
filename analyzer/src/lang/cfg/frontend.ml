@@ -299,6 +299,7 @@ let rec add_stmt (c:ctx) (pre:node) (post:node) (s:stmt) : unit =
   | S_assume _
   | S_add _
   | S_remove _
+  | S_destroy _
   | S_rename _
   | S_forget _
   | S_expand _
@@ -309,7 +310,6 @@ let rec add_stmt (c:ctx) (pre:node) (post:node) (s:stmt) : unit =
   | S_assert _
   | S_satisfy _
   | S_print
-  | S_free_addr _
     ->
     
     let tmps, assigns, s = extract_calls_stmt s in

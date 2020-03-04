@@ -514,8 +514,6 @@ type stmt_kind +=
    | S_print
    (** Print the abstract flow map at current location *)
 
-   | S_free_addr of addr (** release an address *)
-
 
 let () =
   register_stmt_with_visitor {
@@ -548,8 +546,6 @@ let () =
 
         | S_satisfy(e1), S_satisfy(e2) -> compare_expr e1 e2
 
-        | S_free_addr a1, S_free_addr a2 ->
-          compare_addr a1 a2
         | _ -> next s1 s2
       );
 
@@ -578,7 +574,6 @@ let () =
         | S_assert e -> fprintf fmt "assert(%a);" pp_expr e
         | S_satisfy e -> fprintf fmt "sat(%a);" pp_expr e
         | S_print -> fprintf fmt "print();"
-        | S_free_addr a -> fprintf fmt "free_addr(%a);" pp_addr a
         | _ -> default fmt stmt
       );
 
@@ -626,8 +621,6 @@ let () =
              let tests = List.combine tests_names tests_bodies in
              {stmt with skind = S_unit_tests(tests)}
           )
-
-        | S_free_addr _ -> leaf stmt
 
         | S_print -> leaf stmt
 
@@ -765,9 +758,6 @@ let mk_if cond body orelse range =
 let mk_while cond body range =
   mk_stmt (S_while (cond, body)) range
 
-let mk_free_addr a range =
-  mk_stmt (S_free_addr a) range
-
 let mk_call fundec args range =
   mk_expr
     (E_call (
@@ -779,6 +769,12 @@ let mk_call fundec args range =
 
 let mk_expr_stmt e =
   mk_stmt (S_expression e)
+
+let mk_remove_addr a range =
+  mk_remove (mk_addr a range) range
+
+let mk_destroy_addr a range =
+  mk_destroy (mk_addr a range) range
 
 let rec expr_to_z (e: expr) : Z.t option =
   match ekind e with
