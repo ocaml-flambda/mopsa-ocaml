@@ -15,10 +15,11 @@ def run_mopsa(mopsa_name, mopsa_options, file_name, runs=1):
         rt += stop - start
     return rt / runs
 
-
-def f(options):
-    base_config = { "Type Analysis": "./bin/mopsa-python-types",
-                "Value Analysis": "./bin/mopsa-python" }
+def f(percent=100):
+    options = { "GC": ["-gc", f"-gc-percent={percent}"] }
+    print(f"GC percent: {percent}")
+    base_config = { "Type Analysis": "../bin/mopsa-python-types",
+                "Value Analysis": "../bin/mopsa-python" }
     files = ["bm_chaos.py", "bm_deltablue.py", "bm_fannkuch.py", "bm_float.py", "bm_go.py", "bm_hexiom.py", "bm_nbody.py", "bm_nqueens.py", "bm_pidigits.py", "bm_raytrace.py", "bm_regex_v8.py", "bm_richards.py", "bm_scimark.py", "bm_spectral_norm.py", "bm_unpack_sequence.py"]
     s = "| Filename              "
     for config_name, config_str in base_config.items():
@@ -53,11 +54,9 @@ def f(options):
         for option_name, option_str in options.items():
             err = 100 * (total_noopt[config_name, option_name] - total_opt[config_name, option_name]) / total_noopt[config_name, option_name]
             print(f"| {total_noopt[config_name, option_name]:19.3f}s | {total_opt[config_name, option_name]:19.3f}s | {err:6.2f}% ", end="", flush=True)
-    print("|")
+    print("|\n")
 
 
-for x in [1, 25, 50, 75, 100]:
-    options = { "GC": ["-gc", f"-gc-percent={x}"] }
-    print(f"GC percent: {x}")
-    f(options)
-    print("\n")
+if __name__ == "__main__":
+    for x in [1, 25, 50, 75, 100]:
+        f(x)
