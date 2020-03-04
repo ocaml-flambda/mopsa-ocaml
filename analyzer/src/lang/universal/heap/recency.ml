@@ -78,8 +78,11 @@ let name = "universal.heap.recency"
 
 let opt_default_allocation_policy : string ref = ref "range_callstack"
 let () = Policies.register_option opt_default_allocation_policy name "-default-alloc-pol" "by default"
-           (fun _ ak -> (Policies.of_string !opt_default_allocation_policy) ak);
+           (fun _ ak -> (Policies.of_string !opt_default_allocation_policy) ak)
 
+let gc_time = ref 0.
+let gc_nb_collections = ref 0
+let gc_nb_addr_collected = ref 0
 (** {2 Domain definition} *)
 (** ===================== *)
 
@@ -135,7 +138,9 @@ struct
   let is_bottom _ = false
 
   let subset man ctx (a,s) (a',s') =
-    Pool.subset a a', s, s'
+    let r1, r2, r3 = Pool.subset a a', s, s' in
+    (* if not r1 then Debug.debug ~channel:"explain" "%s not sub@.a' \ a = %a@." name Pool.print (Pool.diff a' a); *)
+    r1, r2, r3
 
   let join man ctx (a,s) (a',s') =
     Pool.join a a', s, s'
@@ -207,15 +212,20 @@ struct
       OptionExt.return
 
     | S_perform_gc ->
+       let startt = Sys.time () in
        let all = get_env T_cur man flow in
        let alive = man.ask Q_alive_addresses_aspset flow in
        let dead = Pool.diff all alive in
        debug "at %a, |dead| = %d@.dead = %a" pp_range range (Pool.cardinal dead) Pool.print dead;
        let trange = tag_range range "agc" in
        let flow = set_env T_cur alive man flow in
-       Pool.fold (fun addr flow ->
-           man.exec (mk_remove (mk_addr addr trange) trange) flow) dead flow
-       |> Post.return |> OptionExt.return
+       let flow = Pool.fold (fun addr flow ->
+                      man.exec (mk_remove (mk_addr addr trange) trange) flow) dead flow in
+       let delta = Sys.time () -. startt in
+       gc_time := !gc_time +. delta;
+       incr gc_nb_collections;
+       gc_nb_addr_collected := !gc_nb_addr_collected + (Pool.cardinal dead);
+       flow |> Post.return |> OptionExt.return
 
     | _ -> None
 
