@@ -107,7 +107,7 @@ struct
   let is_recursive_call f flow =
     let open Callstack in
     let cs = Flow.get_callstack flow in
-    List.exists (fun c -> c.call_fun = f.c_func_unique_name) cs
+    List.exists (fun c -> c.call_fun_uniq_name = f.c_func_unique_name) cs
 
 
   (** Eval a function call *)
@@ -129,7 +129,8 @@ struct
         let open Universal.Ast in
         let ret_var = mktmp ~typ:fundec.c_func_return () in
         let fundec' = {
-          fun_name = fundec.c_func_unique_name;
+          fun_orig_name = fundec.c_func_org_name;
+          fun_uniq_name = fundec.c_func_unique_name;
           fun_parameters = fundec.c_func_parameters;
           fun_locvars = [];
           (* FIXME: This is a temporary fix to avoid double removal of

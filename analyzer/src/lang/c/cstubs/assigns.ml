@@ -149,23 +149,23 @@ struct
     let man' = Core.Sig.Stacked.Manager.of_domain_man man in
     match ekind p with
     | E_c_points_to P_null ->
-      raise_c_null_deref_alarm ptr range man' flow |>
+      raise_c_null_deref_alarm ptr man' flow |>
       Cases.empty_singleton
 
     | E_c_points_to P_invalid ->
-      raise_c_invalid_deref_alarm ptr range man' flow |>
+      raise_c_invalid_deref_alarm ptr man' flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
-      raise_c_use_after_free_alarm ptr r range man' flow |>
+      raise_c_use_after_free_alarm ptr r man' flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
-      raise_c_dangling_deref_alarm ptr v r range man' flow |>
+      raise_c_dangling_deref_alarm ptr v r man' flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block (base, offset, _)) when is_base_readonly base ->
-      raise_c_read_only_modification_alarm base range man' flow |>
+      raise_c_modify_read_only_alarm ptr base man' flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block (base, offset, mode))  ->
@@ -237,23 +237,23 @@ struct
     let man' = Core.Sig.Stacked.Manager.of_domain_man man in
     match ekind p with
     | E_c_points_to P_null ->
-      raise_c_null_deref_alarm ptr range man' flow |>
+      raise_c_null_deref_alarm ptr man' flow |>
       Cases.empty_singleton
 
     | E_c_points_to P_invalid ->
-      raise_c_invalid_deref_alarm ptr range man' flow |>
+      raise_c_invalid_deref_alarm ptr man' flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
-      raise_c_use_after_free_alarm ptr r range man' flow |>
+      raise_c_use_after_free_alarm ptr r man' flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
-      raise_c_dangling_deref_alarm ptr v r range man' flow |>
+      raise_c_dangling_deref_alarm ptr v r man' flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block (base, offset, _)) when is_base_readonly base ->
-      raise_c_read_only_modification_alarm base range man' flow |>
+      raise_c_modify_read_only_alarm ptr base man' flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block (base, offset, mode))  ->

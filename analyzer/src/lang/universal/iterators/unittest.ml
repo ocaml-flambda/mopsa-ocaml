@@ -91,38 +91,36 @@ let () =
 
 
 (* Analysis alarms *)
-type alarm_class += A_assert_fail_cls
-type alarm_body += A_assert_fail_condition of expr (** condition *)
+type alarm_class   += A_assert_fail
+type alarm_message += A_assert_fail_msg of expr (** condition *)
 
 
 let () =
-  register_alarm_class (fun next fmt a ->
-        match a with
-        | A_assert_fail_cls -> Format.fprintf fmt "Assertion fail"
-        | _ -> next fmt a
+  register_alarm_class (fun next fmt -> function
+      | A_assert_fail -> Format.fprintf fmt "Assertion fail"
+      | a -> next fmt a
     );
-  register_alarm_body {
+  register_alarm_message {
     classifier = (fun next -> function
-        | A_assert_fail_condition _ -> A_assert_fail_cls
+        | A_assert_fail_msg _ -> A_assert_fail
         | a -> next a
       );
     compare = (fun next a1 a2 ->
         match a1, a2 with
-        | A_assert_fail_condition(c1), A_assert_fail_condition(c2) -> compare_expr c1 c2
+        | A_assert_fail_msg(c1), A_assert_fail_msg(c2) -> compare_expr c1 c2
         | _ -> next a1 a2
       );
-    print = (fun next fmt a ->
-        match a with
-        | A_assert_fail_condition(cond) -> Format.fprintf fmt "Assertion %a violated" pp_expr cond
-        | _ -> next fmt a
+    print = (fun next fmt -> function
+        | A_assert_fail_msg(cond) -> Format.fprintf fmt "Assertion '%a' violated" (Debug.bold pp_expr) cond
+        | a -> next fmt a
       );
   };
   ()
 
 
-let raise_assert_fail ?(force=false) cond range man flow =
+let raise_assert_fail ?(force=false) cond man flow =
   let cs = Flow.get_callstack flow in
-  let alarm = mk_alarm (A_assert_fail_condition cond) range ~cs in
+  let alarm = mk_alarm (A_assert_fail_msg cond) cs cond.erange in
   Flow.raise_alarm alarm ~bottom:true ~force man.lattice flow
 
 
@@ -186,12 +184,11 @@ struct
       OptionExt.return
 
     | S_assert(cond) ->
-      let range = srange stmt in
       assume_flow
         cond
         ~fthen:(fun safe_flow -> safe_flow)
         ~felse:(fun fail_flow ->
-            raise_assert_fail cond range man fail_flow
+            raise_assert_fail cond man fail_flow
           )
         man flow
       |> Post.return
@@ -203,7 +200,7 @@ struct
         Post.return flow |>
         OptionExt.return
       else
-        raise_assert_fail cond stmt.srange man flow |>
+        raise_assert_fail cond man flow |>
         Post.return |>
         OptionExt.return
 

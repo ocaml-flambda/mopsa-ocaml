@@ -484,7 +484,8 @@ let from_fundec (f: U.fundec) (var_ctx: var_context): T.fundec =
   let typ = OptionExt.lift from_typ f.return_type in
   let ret_var = mktmp ~typ:(OptionExt.default T_int typ) () in
   {
-    fun_name = f.funname;
+    fun_orig_name = f.funname;
+    fun_uniq_name = f.funname;
     fun_range = from_extent f.range;
     fun_parameters = List.map (fun ((_, v), ext) -> from_var v ext var_ctx) f.parameters;
     fun_locvars = List.map (fun ((((_, v), _), _), ext) -> from_var v ext var_ctx) f.locvars;

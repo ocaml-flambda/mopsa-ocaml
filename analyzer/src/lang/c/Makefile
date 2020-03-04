@@ -28,15 +28,15 @@ lang.c.common = builtins base alarms points_to quantified_offset scope_update
 lang.c.iterators = program switch loops goto interproc
 lang.c.desugar = conditions constants aggregates
 lang.c.memory = variable_length_array lowlevel scalars
-lang.c.memory.lowlevel = cells string_length pointer_smashing pointer_sentinel reductions
-lang.c.memory.lowlevel.reductions = cell_pointer_sentinel cell_pointer_smashing
+lang.c.memory.lowlevel = cells string_literal string_length pointer_smashing pointer_sentinel reductions
+lang.c.memory.lowlevel.reductions = cell_string_literal cell_pointer_sentinel cell_pointer_smashing
 lang.c.memory.scalars = pointers machine_numbers
 lang.c.memory.scalars.pointers = value static_points_to domain
 lang.c.cstubs = aux_vars resources assigns requires builtins
 lang.c.libs = libc libmopsa compiler_builtins
 lang.c.libs.libc.formatted_io = placeholder parser lexer format_string fscanf fprintf
 lang.c.libs.libc.file_descriptor = slot table domain
-lang.c.hooks = profiler disj
+lang.c.hooks = disj
 lang.c.packing = static_scope reductions
 
 

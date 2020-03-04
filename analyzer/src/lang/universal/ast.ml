@@ -310,7 +310,8 @@ let mk_addr_attr addr attr typ =
 
 (** Function definition *)
 type fundec = {
-  fun_name: string; (** unique name of the function *)
+  fun_orig_name: string; (** original name of the function *)
+  fun_uniq_name: string; (** unique name of the function *)
   fun_range: range; (** function range *)
   fun_parameters: var list; (** list of parameters *)
   fun_locvars : var list; (** list of local variables *)
@@ -330,7 +331,7 @@ type fun_expr =
   | Builtin of fun_builtin
 
 let compare_fun_expr x y = match x, y with
-  | User_defined a, User_defined b -> Stdlib.compare a.fun_name b.fun_name
+  | User_defined a, User_defined b -> Stdlib.compare a.fun_uniq_name b.fun_uniq_name
   | Builtin a, Builtin b -> Stdlib.compare a b
   | _ -> 1
 
@@ -361,7 +362,7 @@ let () =
                         | None -> pp_print_string fmt "void"
                         | Some t -> pp_typ fmt t
                      ) f.fun_return_type
-                     Format.pp_print_string f.fun_name
+                     Format.pp_print_string f.fun_orig_name
                      (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ")
                         (fun fmt v -> Format.fprintf fmt "%a %a"
                             pp_typ v.vtyp
@@ -444,7 +445,7 @@ let () =
           fprintf fmt "[@[<h>%a@]]"
             (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_expr) el
         | E_subscript(v, e) -> fprintf fmt "%a[%a]" pp_expr v pp_expr e
-        | E_function(f) -> fprintf fmt "fun %s" (match f with | User_defined f -> f.fun_name | Builtin f -> f.name)
+        | E_function(f) -> fprintf fmt "fun %s" (match f with | User_defined f -> f.fun_orig_name | Builtin f -> f.name)
         | E_call(f, args) ->
           fprintf fmt "%a(%a)"
             pp_expr f

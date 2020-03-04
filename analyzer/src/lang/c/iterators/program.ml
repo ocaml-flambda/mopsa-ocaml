@@ -62,6 +62,19 @@ struct
     }
 
 
+  (** Symbolic main arguments. *)
+  let opt_symbolic_args = ref false
+
+  let () =
+    register_domain_option name {
+      key = "-c-symbolic-args";
+      category = "C";
+      doc = " call main with symbolic argc and argv";
+      spec = ArgExt.Set opt_symbolic_args;
+      default = "false";
+    }
+
+
 
   (** Zoning definition *)
   (** ================= *)
@@ -305,9 +318,11 @@ struct
 
   let call_main main args functions man flow =
     if List.length main.c_func_parameters = 2 then
-      match args with
-      | Some args -> call_main_with_concrete_args main args man flow
-      | None      -> call_main_with_symbolic_args main functions man flow
+      match !opt_symbolic_args, args with
+      | false, None      -> call_main_with_concrete_args main [] man flow
+      | false, Some args -> call_main_with_concrete_args main args man flow
+      | true, None       -> call_main_with_symbolic_args main functions man flow
+      | true, Some args  -> panic "-c-symbolic-main-args used with concrete arguments"
     else
       exec_entry_body main man flow
 

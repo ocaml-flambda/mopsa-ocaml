@@ -40,15 +40,15 @@ let eval_format_string format range man flow =
   let man' = Core.Sig.Stacked.Manager.of_domain_man man in
   match ekind pt with
   | E_c_points_to P_null ->
-    raise_c_null_deref_alarm format range man' flow |>
+    raise_c_null_deref_alarm format man' flow |>
     Cases.empty_singleton
 
   | E_c_points_to P_invalid ->
-    raise_c_invalid_deref_alarm format range man' flow |>
+    raise_c_invalid_deref_alarm format man' flow |>
     Cases.empty_singleton
 
   | E_c_points_to (P_block ({ base_kind = Addr addr; base_valid = false; base_invalidation_range = Some r}, _, _)) ->
-    raise_c_use_after_free_alarm format r range man' flow |>
+    raise_c_use_after_free_alarm format r man' flow |>
     Cases.empty_singleton
 
   | E_c_points_to (P_block ({ base_kind = String fmt }, offset, _)) when is_c_expr_equals_z offset Z.zero ->

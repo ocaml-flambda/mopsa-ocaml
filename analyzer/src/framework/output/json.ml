@@ -55,7 +55,7 @@ let render_range range =
 
 let render_call (c:Core.Callstack.call)  =
   `Assoc [
-    "function", `String c.call_fun;
+    "function", `String c.call_fun_orig_name;
     "range", render_range c.call_site;
   ]
 

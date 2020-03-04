@@ -132,7 +132,7 @@ let () =
       | C_c_character(c, C_char_utf8) -> panic ~loc:__LOC__ "utf8 char not supported"
       | C_c_character(c, C_char_utf16) -> panic ~loc:__LOC__ "utf16 char not supported"
       | C_c_character(c, C_char_utf32) -> panic ~loc:__LOC__ "utf32 char not supported"
-      | C_c_string(s, _) -> fprintf fmt "\"%s\"" s
+      | C_c_string(s, _) -> fprintf fmt "\"%s\"" (String.escaped s)
       | C_c_invalid -> fprintf fmt "INVALID"
       | _ -> next fmt c
     );

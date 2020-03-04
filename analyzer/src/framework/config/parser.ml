@@ -79,6 +79,7 @@ let spec = {
       | A_domain, S_simplified -> true
       | A_stack, S_intermediate -> true
       | A_stack, S_lowlevel -> true
+      | A_value, S_lowlevel -> true
       | _ -> false
     );
 

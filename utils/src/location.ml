@@ -49,6 +49,15 @@ let compare_pos (pos1: pos) (pos2: pos) =
     (fun () -> compare pos1.pos_column pos2.pos_column);
   ]
 
+(** Return the relative path of `file` w.r.t. the current working directory *)
+let relative_path file =
+  let wd = Sys.getcwd () in
+  if Str.string_match (Str.regexp ("^" ^ wd ^ "/.+")) file 0 then
+    let n1 = String.length wd in
+    let n2 = String.length file in
+    "./" ^ String.sub file (n1 + 1) (n2 - n1 - 1)
+  else
+    file
 
 
 (** {2 Ranges} *)
@@ -126,6 +135,10 @@ let get_range_file r =
   | R_orig(pos, _) -> pos.pos_file
   | R_program [p] -> p
   | _ -> failwith "get_range_file: invalid argument"
+
+let get_range_relative_file r =
+  get_range_file r |>
+  relative_path
 
 let get_range_line r =
   let pos = get_range_start r in
@@ -221,10 +234,14 @@ let compare_with_range cmp a b =
 (** {2 Pretty printers} *)
 (** =================== *)
 
-let rec pp_position fmt pos =
+
+let pp_position fmt pos =
   Format.fprintf fmt "%s:%d:%d" pos.pos_file pos.pos_line pos.pos_column
 
-and pp_range fmt range =
+let pp_relative_position fmt pos =
+  Format.fprintf fmt "%s:%d:%d" (relative_path pos.pos_file) pos.pos_line pos.pos_column
+
+let rec pp_range fmt range =
   match range with
   | R_program pl ->
     Format.fprintf fmt "{%a}"
@@ -256,3 +273,37 @@ and pp_range fmt range =
   | R_fresh uid -> Format.fprintf fmt "<%d>" uid
 
   | R_tagged (t, r) -> Format.fprintf fmt "%a::%s" pp_range r t
+
+
+let rec pp_relative_range fmt range =
+  match range with
+  | R_program pl ->
+    Format.fprintf fmt "{%a}"
+      (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") Format.pp_print_string) pl
+
+  | R_orig (pos1, pos2) when pos1.pos_file == pos2.pos_file
+                          && pos1.pos_line == pos2.pos_line
+                          && pos1.pos_column == pos2.pos_column ->
+    pp_relative_position fmt pos1
+
+  | R_orig (pos1, pos2) when pos1.pos_file == pos2.pos_file
+                          && pos1.pos_line == pos2.pos_line ->
+    Format.fprintf fmt "%s:%d.%d-%d"
+      (relative_path pos1.pos_file)
+      pos1.pos_line
+      pos1.pos_column pos2.pos_column
+
+  | R_orig (pos1, pos2) when pos1.pos_file == pos2.pos_file ->
+    Format.fprintf fmt "%s:%d.%d-%d.%d"
+      (relative_path pos1.pos_file)
+      pos1.pos_line pos1.pos_column
+      pos2.pos_line pos2.pos_column
+
+  | R_orig (pos1, pos2) ->
+    Format.fprintf fmt "%a-%a"
+      pp_relative_position pos1
+      pp_relative_position pos2
+
+  | R_fresh uid -> Format.fprintf fmt "<%d>" uid
+
+  | R_tagged (t, r) -> Format.fprintf fmt "%a::%s" pp_relative_range r t

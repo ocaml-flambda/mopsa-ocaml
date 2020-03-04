@@ -58,11 +58,11 @@ let parse_options f () =
 
 (** Call the appropriate frontend to parse the input sources *)
 let parse_program lang files =
-  try
-    let front = find_language_frontend lang in
-    front.parse files
-  with Not_found ->
-    Exceptions.panic "No front-end found for language %s" lang
+  let front =
+    try find_language_frontend lang
+    with Not_found -> Exceptions.panic "No front-end found for language %s" lang
+  in
+  front.parse files
 
 
 

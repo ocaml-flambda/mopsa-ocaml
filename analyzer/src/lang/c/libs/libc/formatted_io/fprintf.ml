@@ -65,11 +65,11 @@ struct
   }
 
   let alarms = [
-    A_c_insufficient_format_args_cls;
-    A_c_null_deref_cls;
-    A_c_invalid_deref_cls;
-    A_c_use_after_free_cls;
-    A_c_incorrect_format_arg_cls
+    A_c_insufficient_format_args;
+    A_c_null_deref;
+    A_c_invalid_deref;
+    A_c_use_after_free;
+    A_c_invalid_format_arg_type
   ]
 
 
@@ -88,7 +88,7 @@ struct
       let typ = T_c_integer t in
       let flow =
         if not (is_c_int_type arg.etyp) then
-          raise_c_incorrect_format_arg_alarm typ arg arg.erange (Sig.Stacked.Manager.of_domain_man man) flow
+          raise_c_invalid_format_arg_type_alarm arg typ (Sig.Stacked.Manager.of_domain_man man) flow
         else
           flow
       in
@@ -100,7 +100,7 @@ struct
       let typ = T_c_float t in
       let flow =
         if not (is_c_float_type arg.etyp) then
-          raise_c_incorrect_format_arg_alarm typ arg arg.erange (Sig.Stacked.Manager.of_domain_man man) flow
+          raise_c_invalid_format_arg_type_alarm arg typ (Sig.Stacked.Manager.of_domain_man man) flow
         else
           flow
       in
@@ -111,7 +111,7 @@ struct
     | Pointer ->
       let flow =
         if not (is_c_pointer_type arg.etyp) then
-          raise_c_incorrect_format_arg_alarm (T_c_pointer void) arg arg.erange (Sig.Stacked.Manager.of_domain_man man) flow
+          raise_c_invalid_format_arg_type_alarm arg (T_c_pointer void) (Sig.Stacked.Manager.of_domain_man man) flow
         else
           flow
       in
@@ -120,7 +120,7 @@ struct
     | String ->
       let flow =
         if not (is_c_pointer_type arg.etyp) then
-          raise_c_incorrect_format_arg_alarm (T_c_pointer s8) arg arg.erange (Sig.Stacked.Manager.of_domain_man man) flow
+          raise_c_invalid_format_arg_type_alarm arg (T_c_pointer s8) (Sig.Stacked.Manager.of_domain_man man) flow
         else
           flow
       in

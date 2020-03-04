@@ -19,87 +19,84 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Alarm -- Potential bugs inferred by abstract domains. *)
+(** Alarms are potential bugs in the target program. They are reported
+    by abstract domains during the analysis. *)
 
 open Location
 
 
 
-(** {2 Alarm classes} *)
-(** ******************** *)
+(** {2 Alarms classes} *)
+(** ****************** *)
 
-(** Alarm are categorized into a finite set of classes *)
 type alarm_class = ..
 
 
-(** Chain of pretty printers for alarm classes *)
 let pp_alarm_class_chain = TypeExt.mk_print_chain (fun fmt alarm -> failwith "Pp: Unknown alarm class")
 
 
-(** Pretty printer of alarm classes *)
 let pp_alarm_class = TypeExt.print pp_alarm_class_chain
 
 
-(** Register an new alarm class. There is no need for registering a
-    compare function, since classes are simple variants without
-    arguments. *)
 let register_alarm_class pp = TypeExt.register_print pp pp_alarm_class_chain
 
 
 
-(** {2 Alarm bodies} *)
-(** **************** *)
+(** {2 Alarm messages} *)
+(** ****************** *)
 
-(** Alarm body provides details about the context of the alarm, such
-    as expression intervals, expected values, etc.*)
-type alarm_body = ..
+type alarm_message = ..
 
+type alarm_classifier = (alarm_message -> alarm_class) -> alarm_message -> alarm_class
 
-(** Chain of compare functions for alarm body  *)
-let compare_alarm_body_chain = TypeExt.mk_compare_chain compare
+let compare_alarm_message_chain = TypeExt.mk_compare_chain compare
 
+let compare_alarm_message = TypeExt.compare compare_alarm_message_chain
 
-(** Compare two alarm bodies *)
-let compare_alarm_body = TypeExt.compare compare_alarm_body_chain
+let pp_grouped_alarm_message_chain : (Format.formatter -> alarm_message list -> alarm_class -> unit) ref =
+  ref (fun fmt messages cls -> raise Not_found)
 
+let pp_alarm_message_chain : alarm_message TypeExt.print_chain =
+  TypeExt.mk_print_chain (fun fmt alarm -> raise Not_found)
 
-(** Chain of pretty printers of alarm bodies *)
-let pp_alarm_body_chain = TypeExt.mk_print_chain (fun fmt alarm -> failwith "Pp: Unknown alarm body")
-
-
-(** Pretty printer of alarm body *)
-let pp_alarm_body = TypeExt.print pp_alarm_body_chain
-
-
-(** Chaining function to get the class of an alarm body *)
-type alarm_classifier = (alarm_body -> alarm_class) -> alarm_body -> alarm_class
-
-
-(** Chain of alarm classifiers *)
-let alarm_classifer_chain : (alarm_body -> alarm_class) ref = ref (fun _ -> failwith "classifier: unknown alarm body")
+let pp_grouped_alarm_message cls fmt messages =
+  try
+    !pp_grouped_alarm_message_chain fmt messages cls
+  with Not_found ->
+    Format.(pp_print_list
+              ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+              (TypeExt.print pp_alarm_message_chain)
+           ) fmt messages
 
 
-(** Get the class of an alarm body *)
-let classify_alarm_body d = !alarm_classifer_chain d
+let alarm_classifer_chain : (alarm_message -> alarm_class) ref = ref (fun _ -> failwith "classifier: unknown alarm message")
 
+let classify_alarm_message d = !alarm_classifer_chain d
 
-(** Register an alarm classifer *)
 let register_alarm_classifier c = alarm_classifer_chain := c !alarm_classifer_chain
 
-
-(** Registration information of an alarm body *)
-type alarm_body_info = {
+type grouped_alarm_message_info = {
   classifier: alarm_classifier;
-  compare : alarm_body TypeExt.compare;
-  print : alarm_body TypeExt.print;
+  compare : alarm_message TypeExt.compare;
+  print : (Format.formatter -> alarm_message list -> alarm_class -> unit) -> Format.formatter -> alarm_message list -> alarm_class -> unit;
 }
-  
 
-(** Register a new alarm body *)
-let register_alarm_body info =
+type alarm_message_info = {
+  classifier: alarm_classifier;
+  compare : alarm_message TypeExt.compare;
+  print : alarm_message TypeExt.print;
+}
+
+let register_grouped_alarm_message (info:grouped_alarm_message_info) =
   register_alarm_classifier info.classifier;
-  TypeExt.register_compare info.compare compare_alarm_body_chain;
-  TypeExt.register_print info.print pp_alarm_body_chain;
+  TypeExt.register_compare info.compare compare_alarm_message_chain;
+  pp_grouped_alarm_message_chain := info.print !pp_grouped_alarm_message_chain
+  
+  
+let register_alarm_message (info:alarm_message_info) =
+  register_alarm_classifier info.classifier;
+  TypeExt.register_compare info.compare compare_alarm_message_chain;
+  TypeExt.register_print info.print pp_alarm_message_chain;
 
 
 
@@ -109,23 +106,23 @@ let register_alarm_body info =
 
   (** Alarm instance *)
 type alarm = {
-  alarm_body : alarm_body;
+  alarm_message : alarm_message;
   alarm_range : range;
   alarm_callstack : Callstack.cs;
 }
 
 
-let mk_alarm body ?(cs=Callstack.empty) range =
+let mk_alarm message cs range =
   {
-    alarm_body = body;
+    alarm_message = message;
     alarm_range = range;
     alarm_callstack= cs;
   }
 
 
-let get_alarm_class alarm = classify_alarm_body alarm.alarm_body
+let get_alarm_class alarm = classify_alarm_message alarm.alarm_message
 
-let get_alarm_body alarm = alarm.alarm_body
+let get_alarm_message alarm = alarm.alarm_message
 
 let get_alarm_callstack alarm = alarm.alarm_callstack
 
@@ -134,7 +131,7 @@ let get_alarm_range alarm = alarm.alarm_range
 let compare_alarm a1 a2 =
   if a1 == a2 then 0
   else Compare.compose [
-      (fun () -> compare_alarm_body a1.alarm_body a2.alarm_body);
+      (fun () -> compare_alarm_message a1.alarm_message a2.alarm_message);
       (fun () -> compare_range a1.alarm_range a2.alarm_range);
       (fun () -> Callstack.compare a1.alarm_callstack a2.alarm_callstack);
     ]
@@ -146,16 +143,6 @@ let compare_alarm_by_class a1 a2 =
       (fun () -> compare_range a1.alarm_range a2.alarm_range);
       (fun () -> Callstack.compare a1.alarm_callstack a2.alarm_callstack);
     ]
-
-let pp_alarm fmt alarm =
-  let open Format in
-  fprintf fmt "@[<v>%a: %a@,%a@]@,"
-    pp_range (get_alarm_range alarm)
-    pp_alarm_body (get_alarm_body alarm)
-    (Format.pp_print_list
-       ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-       (fun fmt c -> fprintf fmt "\tfrom %a: %s" pp_range c.Callstack.call_site c.Callstack.call_fun)
-    ) (get_alarm_callstack alarm)
 
 
 
@@ -171,9 +158,9 @@ struct
     end)
 
   (** Intersection of alarms. We do not take into account the alarm
-     body. This is important in reduced products in order to keep
-     alarms that have the same class but differ in the reported
-     details *)
+      message. This is important in reduced products in order to keep
+      alarms that have the same class but differ in the reported
+      details *)
   let inter s1 s2 =
     let weak_mem a s = exists (fun a' -> compare_alarm_by_class a a' = 0) s in
     fold2

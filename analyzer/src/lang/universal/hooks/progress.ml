@@ -98,7 +98,7 @@ struct
   let before_call f =
     let all_stmt_range_set = get_function_statements f in
     let entry = {
-      name = f.fun_name;
+      name = f.fun_orig_name;
       range = None;
       all_stmt_range_set;
       analyzed_stmt_range_set = RangeSet.empty;

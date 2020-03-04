@@ -426,6 +426,7 @@ type typ =
      proj_vars: variable StringMap.t; (** variables with global lifetime, by unique name *)
      proj_funcs: func StringMap.t; (** functions, by unique name *)
 
+     proj_files: string list; (** list of parsed files *)
      proj_comments: comment list RangeMap.t; (** all comments *)
      proj_macros : macro StringMap.t; (** macros, by name *)
    }

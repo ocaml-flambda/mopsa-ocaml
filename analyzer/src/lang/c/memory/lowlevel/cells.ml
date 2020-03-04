@@ -387,7 +387,10 @@ struct
     }
   }
 
-  let alarms = [A_c_out_of_bound_cls; A_c_null_deref_cls; A_c_use_after_free_cls; A_c_invalid_deref_cls]
+  let alarms = [ A_c_out_of_bound;
+                 A_c_null_deref;
+                 A_c_use_after_free;
+                 A_c_invalid_deref ]
 
 
   (** {2 Command-line options} *)
@@ -549,26 +552,8 @@ struct
             else
               raise NotPossible
           with
-          | NotPossible ->
-            match c.base.base_kind with
-            | String s ->
-              let len = String.length s in
-              if Z.equal c.offset (Z.of_int len) then
-                Some (mk_zero range)
-              else
-                Some (mk_int (String.get s (Z.to_int c.offset) |> int_of_char) range)
+          | NotPossible -> None
 
-            | _ ->
-              if is_int_cell c then
-                let a,b = rangeof_int_cell c in
-                Some (mk_z_interval a b range)
-              else if is_float_cell c then
-                let prec = get_c_float_precision (cell_type c) in
-                Some (mk_top (T_float prec) range)
-              else if is_pointer_cell c then
-                panic_at range ~loc:__LOC__ "phi called on a pointer cell %a" pp_cell c
-              else
-                None
 
   (** Add a cell in the underlying domain using the simplified manager *)
   let add_cell_simplified c a range man ctx s =
@@ -663,19 +648,19 @@ struct
 
     match ekind pt with
     | E_c_points_to P_null ->
-      raise_c_null_deref_alarm ptr range man flow |>
+      raise_c_null_deref_alarm ptr man flow |>
       Cases.empty_singleton
 
     | E_c_points_to P_invalid ->
-      raise_c_invalid_deref_alarm ptr range man flow |>
+      raise_c_invalid_deref_alarm ptr man flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
-      raise_c_use_after_free_alarm ptr r range man flow |>
+      raise_c_use_after_free_alarm ptr r man flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
-      raise_c_dangling_deref_alarm ptr v r range man flow |>
+      raise_c_dangling_deref_alarm ptr v r man flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block (base, offset, mode)) ->
@@ -710,7 +695,7 @@ struct
       match expr_to_z size, expr_to_z offset with
       | Some s, Some o ->
         if Z.gt elm s then
-          let flow = raise_c_out_bound_alarm ~base ~offset ~size range man flow in
+          let flow = raise_c_out_bound_alarm base size offset typ range man flow flow in
           Cases.empty_singleton flow
         else
         if Z.leq Z.zero o &&
@@ -719,7 +704,7 @@ struct
           let c = mk_cell base o typ in
           Cases.singleton (Cell (c,mode)) flow
         else
-          let flow = raise_c_out_bound_alarm ~base ~offset ~size range man flow in
+          let flow = raise_c_out_bound_alarm base size offset typ range man flow flow in
           Cases.empty_singleton flow
 
       | _ ->
@@ -798,8 +783,8 @@ struct
                   Cases.join_list ~empty:(fun () -> Cases.empty_singleton flow) evals
 
             )
-          ~felse:(fun flow ->
-              let flow = raise_c_out_bound_alarm ~base ~offset ~size range man flow in
+          ~felse:(fun eflow ->
+              let flow = raise_c_out_bound_alarm base size offset typ range man flow eflow in
               Cases.empty_singleton flow
             )
           man flow
@@ -1013,8 +998,8 @@ struct
         ~fthen:(fun flow ->
             Eval.singleton (mk_top typ range) flow
           )
-        ~felse:(fun flow ->
-            raise_c_out_bound_quantified_alarm ~base ~min ~max ~size range man flow |>
+        ~felse:(fun eflow ->
+            raise_c_quantified_out_bound_alarm base size min max typ range man flow eflow |>
             Eval.empty_singleton
           )
         ~zone:Z_u_num man flow
@@ -1105,7 +1090,7 @@ struct
       Post.return flow
 
     | Cell ({ base },_) when is_base_readonly base ->
-      let flow = raise_c_read_only_modification_alarm base range man flow in
+      let flow = raise_c_modify_read_only_alarm p base man flow in
       Post.return flow
 
     | Cell (c,mode) ->

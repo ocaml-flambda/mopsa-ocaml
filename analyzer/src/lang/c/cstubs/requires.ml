@@ -61,11 +61,11 @@ struct
     }
   }
 
-  let alarms = [ A_c_out_of_bound_cls;
-                 A_c_null_deref_cls;
-                 A_c_use_after_free_cls;
-                 A_c_invalid_deref_cls;
-                 Stubs.Alarms.A_stub_invalid_requires_cls ]
+  let alarms = [ A_c_out_of_bound;
+                 A_c_null_deref;
+                 A_c_use_after_free;
+                 A_c_invalid_deref;
+                 Stubs.Alarms.A_stub_invalid_requires ]
 
   (** Initialization of environments *)
   (** ============================== *)
@@ -84,19 +84,19 @@ struct
     man.eval ptr ~zone:(Z_c, Z_c_points_to) flow >>$ fun pt flow ->
     match ekind pt with
     | E_c_points_to P_null ->
-      raise_c_null_deref_alarm ptr range man' flow |>
+      raise_c_null_deref_alarm ptr man' flow |>
       Cases.empty_singleton
 
     | E_c_points_to P_invalid ->
-      raise_c_invalid_deref_alarm ptr range man' flow |>
+      raise_c_invalid_deref_alarm ptr man' flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
-      raise_c_use_after_free_alarm ptr r range man' flow |>
+      raise_c_use_after_free_alarm ptr r  man' flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
-      raise_c_dangling_deref_alarm ptr v r range man' flow |>
+      raise_c_dangling_deref_alarm ptr v r man' flow |>
       Cases.empty_singleton
 
     | E_c_points_to P_top ->
@@ -121,8 +121,8 @@ struct
         in
         assume cond
           ~fthen:(fun flow -> Post.return flow)
-          ~felse:(fun flow ->
-              raise_c_out_bound_quantified_alarm ~base ~min ~max ~size range man' flow |>
+          ~felse:(fun eflow ->
+              raise_c_quantified_out_bound_alarm base size min max (under_type ptr.etyp) range man' flow eflow |>
               Post.return
             )
           ~zone:Z_u_num man flow
@@ -137,8 +137,8 @@ struct
         let cond = mk_in offset (mk_zero range) limit range in
         assume cond
           ~fthen:(fun flow -> Post.return flow)
-          ~felse:(fun flow ->
-              Common.Alarms.raise_c_out_bound_alarm ~base ~offset ~size range man' flow |>
+          ~felse:(fun eflow ->
+              raise_c_out_bound_alarm base size offset (under_type ptr.etyp) range man' flow eflow |>
               Post.return
             )
           ~zone:Z_u_num man flow

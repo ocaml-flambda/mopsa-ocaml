@@ -241,7 +241,7 @@ let rec repl_loop ctx man flow =
 
          | FunDecl ->
             let ctx, fdec = parse_fundec ctx str in
-            pf "function %s declared@." fdec.fun_name;
+            pf "function %s declared@." fdec.fun_orig_name;
             ctx, flow
 
     with

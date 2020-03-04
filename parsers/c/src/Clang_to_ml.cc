@@ -763,7 +763,7 @@ public:
   CAMLprim value TranslateNamedDecl(const NamedDecl *x);
 
   explicit MLTreeBuilderVisitor(MLLocationTranslator& loc, ASTContext *Context, SourceManager& src, MLCommentTranslator& com) :
-    Context(Context), loc(loc), src(src), com(com),
+    src(src), Context(Context), loc(loc), com(com),
     cacheType("type"), cacheTypeQual("type_qual"), cacheDecl("decl"), cacheStmt("stmt"),
     cacheExpr("expr"), cacheMisc("misc"), cacheMisc2("misc2"), cacheMisc3("misc3"),
     uid(0)
@@ -2404,7 +2404,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
           int r = 0;
           // manual copy, as x->getBytes() is not necessarily 0-terminated
           tmp = caml_alloc_string(x->getByteLength());
-          memcpy(String_val(tmp), x->getBytes().data(), x->getByteLength());
+          memcpy(const_cast<char*>String_val(tmp), x->getBytes().data(), x->getByteLength());
           Store_field(ret, 0, tmp);
           switch (x->getKind()) {
             GENERATE_CASE_PREFIX(r, StringLiteral::, Char_, Ascii);
@@ -4674,7 +4674,7 @@ private:
 
 public:
   explicit MLTreeBuilderConsumer(MLLocationTranslator& loc, value* ret, SourceManager& src, MLCommentTranslator& com)
-    : ret(ret), loc(loc), src(src), com(com)
+    : ret(ret), loc(loc), com(com), src(src)
   {}
 
   virtual void HandleTranslationUnit(ASTContext &Context) {

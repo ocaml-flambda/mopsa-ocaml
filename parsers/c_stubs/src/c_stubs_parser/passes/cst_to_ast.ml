@@ -172,22 +172,13 @@ let pointed_type t =
   | C_AST.T_array(t', _) -> t'
   | _ -> Exceptions.panic "pointed_type(cst_to_ast.ml): unsupported type %s" (C_print.string_of_type_qual t)
 
-let subscript_type t = pointed_type t
-
-let field_type t f =
+let is_record_typ t =
   match fst (unroll_type t) with
-  | C_AST.T_record r ->
-    begin try
-      let field = Array.to_list r.C_AST.record_fields |>
-                  List.find (fun field -> compare field.C_AST.field_org_name f = 0)
-      in
-      field.field_type
-    with Not_found ->
-      Exceptions.panic "field_type(cst_to_ast.ml): unknown field %s in record %s"
-        f r.C_AST.record_org_name
-  end
-  | _ -> Exceptions.panic "field_type(cst_to_ast.ml): unsupported type %s"
-           (C_print.string_of_type_qual t)
+  | C_AST.T_record _ -> true
+  | _ -> false
+  
+
+let subscript_type t = pointed_type t
 
 let attribute_type obj f =
   Exceptions.warn "attribute_typ: supporting only int attributes";
@@ -201,6 +192,33 @@ let builtin_type f arg =
   | PRIMED -> arg.content.Ast.typ
   | VALID_PTR | VALID_FLOAT | FLOAT_INF | FLOAT_NAN -> bool_type
   | BYTES    -> unsigned_long_type
+
+
+(** {2 Records} *)
+(** *********** *)
+
+let rec find_field t f =
+  match fst (unroll_type t) with
+  | C_AST.T_record r ->
+    let rec aux = function
+      | [] -> raise Not_found
+
+      | field::tl when field.C_AST.field_org_name = f ->
+        field
+
+      (* case of anonymous records *)
+      | field::tl when field.field_org_name = "" && is_record_typ field.field_type ->
+        begin
+          try find_field field.field_type f
+          with Not_found -> aux tl
+        end
+
+      | _::tl -> aux tl
+    in
+    aux (Array.to_list r.C_AST.record_fields)
+
+  | _ -> Exceptions.panic "field_type(cst_to_ast.ml): unsupported type %s"
+           (C_print.string_of_type_qual t)
 
 
 (** {2 Expressions} *)
@@ -448,15 +466,13 @@ let rec visit_expr e prj func =
 
     | E_member(s, f)      ->
       let s = visit_expr s prj func in
-      Ast.E_member(s, f), field_type s.content.typ f
-
-    | E_attribute(o, f)      ->
-      let o = visit_expr o prj func in
-      Ast.E_attribute(o, f), attribute_type o.content.typ f
+      let field = find_field s.content.typ f in
+      Ast.E_member(s, field.field_index, f), field.field_type
 
     | E_arrow(p, f) ->
       let p = visit_expr p prj func in
-      Ast.E_arrow(p, f), field_type (pointed_type p.content.typ) f
+      let field = find_field (pointed_type p.content.typ) f in
+      Ast.E_arrow(p, field.field_index, f), field.field_type
 
     | E_sizeof_expr(e) ->
       let e = visit_expr e prj func in

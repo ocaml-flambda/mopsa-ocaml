@@ -23,6 +23,7 @@
   Main entry point of the C parser
  *)
 
+module StringSet = SetExt.StringSet
 
 let ctx_mutex = Mutex.create ()
 
@@ -76,7 +77,7 @@ let parse_file
       (try
          Clang_to_C.add_translation_unit
            ctx (Filename.basename file)
-           r.parse_decl r.parse_comments r.parse_macros;
+           r.parse_decl r.parse_files r.parse_comments r.parse_macros;
        with x -> Mutex.unlock ctx_mutex; raise x);
       Mutex.unlock ctx_mutex
     )
