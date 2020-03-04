@@ -622,19 +622,21 @@ struct
        *             let old_vset = OptionExt.default VarSet.empty (AddrMap.find_opt a reverseaddrattrmap) in
        *             (tocheck, VarMap.add var aset cur, AddrMap.add a (VarSet.add var old_vset) reverseaddrattrmap)
        *          | _ ->
-       *             (var::tocheck, VarMap.add var aset cur, reverseaddrattrmap)) cur ([], VarMap.empty, AddrMap.empty) in
-       *    let rec find_alive_addrs alive_addrs to_check =
+       *             (VarSet.add var tocheck, VarMap.add var aset cur, reverseaddrattrmap)) cur (VarSet.empty, VarMap.empty, AddrMap.empty) in
+       *    let rec find_alive_addrs alive_addrs to_check discovered =
        *      match to_check with
        *      | [] -> alive_addrs
        *      | hd :: tl ->
        *         let aset = VarMap.find hd cur in
-       *         let to_check = Pool.fold (fun addr acc ->
+       *         let to_check = Pool.fold (fun addr (acc_check, acc_discovered) ->
        *                            match AddrMap.find_opt addr reverseaddrattrmap with
-       *                            | None -> acc
-       *                            | Some vars -> VarSet.elements vars @ acc
-       *                          ) aset tl in
-       *         find_alive_addrs (Pool.join aset alive_addrs) to_check in
-       *    find_alive_addrs Pool.empty tocheck
+       *                            | None -> acc_check, acc_discovered
+       *                            | Some vars ->
+       *                               let to_add = VarSet.diff vars acc_discovered in
+       *                               VarSet.elements to_add @ acc_check, VarSet.union to_add acc_discovered
+       *                          ) aset (tl, discovered) in
+       *         find_alive_addrs (Pool.join aset alive_addrs) (fst to_check) (snd to_check) in
+       *    find_alive_addrs Pool.empty (VarSet.elements tocheck) tocheck
        *    |> OptionExt.return *)
 
       | _ -> None

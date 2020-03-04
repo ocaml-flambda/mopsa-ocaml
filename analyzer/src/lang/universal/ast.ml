@@ -272,7 +272,6 @@ let compare_addr a b =
       (fun () -> compare_mode a.addr_mode b.addr_mode);
     ]
 
-
 (** Address variables *)
 type var_kind +=
   | V_addr_attr of addr * string
@@ -283,8 +282,8 @@ let () =
         match vkind v1, vkind v2 with
         | V_addr_attr (a1,attr1), V_addr_attr (a2,attr2) ->
           Compare.compose [
-            (fun () -> compare attr1 attr2);
-            (fun () -> compare_addr a1 a2)
+            (fun () -> compare_addr a1 a2);
+            (fun () -> compare attr1 attr2)
           ]
         | _ -> next v1 v2
       );

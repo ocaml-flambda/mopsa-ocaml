@@ -29,7 +29,7 @@ lang.python.libs = math py_mopsa py_std py_unittest py_typing
 lang.python.objects = lambda class nones data_container_utils function py_list range tuple dict py_set py_object iterable
 lang.python.data_model = callable arith_ops compare_ops aug_assign	\
                          attribute subscript
-lang.python.types = structural_types nominal_types addr_env polymorphism t_string t_int t_float t_complex dummy_numeric type_annot
+lang.python.types = structural_types nominal_types addr_env polymorphism t_int t_float t_string  t_complex dummy_numeric type_annot
 
 
 

@@ -28,7 +28,7 @@ open Ast
 open Utils
 
 let opt_gc_after_functioncall = ref false
-let opt_gc_percent_calls = ref 100 (* 10% *)
+let opt_gc_percent_calls = ref 100
 let gc_call = ref 0
 let () =
   register_domain_option "python.frontend" {
@@ -37,7 +37,15 @@ let () =
       doc = " perform abstract garbage collection after function calls";
       spec = ArgExt.Set opt_gc_after_functioncall;
       default = "";
+    };
+  register_domain_option "python.frontend" {
+      key = "-gc-percent";
+      category = "Python";
+      doc = " percent of abstract garbage collection calls (default: " ^ string_of_int !opt_gc_percent_calls ^ ")";
+      spec = ArgExt.Set_int opt_gc_percent_calls;
+      default = "";
     }
+
 
 let debug fmt = Debug.debug ~channel:"python.frontend" fmt
 
