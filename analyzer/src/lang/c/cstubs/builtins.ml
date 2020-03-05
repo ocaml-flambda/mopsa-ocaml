@@ -211,6 +211,19 @@ struct
         | _ -> Eval.singleton (mk_top ul exp.erange) flow
       )
 
+
+    | E_stub_builtin_call((VALID_FLOAT | FLOAT_INF | FLOAT_NAN) as op, flt) ->
+      let cls = match op with
+        | VALID_FLOAT -> float_valid
+        | FLOAT_INF -> float_inf
+        | FLOAT_NAN -> float_nan
+        | _ -> assert false
+      in
+      Some (
+        man.eval ~zone:(Z_c, Z_u_num) flt flow >>$ fun flt flow ->
+        Eval.singleton (mk_float_class cls flt exp.erange) flow
+      )
+
     | _ -> None
 
   let ask _ _ _ = None
