@@ -421,13 +421,9 @@ struct
 
 
   (** 𝕊⟦ destroy base ⟧ *)
-  let destroy base range man flow =
+  let invalidate base range man flow =
     man.eval ~zone:(Z_c,Z_c_low_level) base flow >>$ fun base flow ->
-    (* Remove contents *)
-    let stmt = mk_remove base range in
-    man.post ~zone:Z_c_low_level stmt flow >>$ fun () flow ->
-    (* Destroy the address *)
-    let stmt = mk_destroy base range in
+    let stmt = mk_invalidate base range in
     man.post ~zone:Z_c_points_to stmt flow
 
 
@@ -438,6 +434,7 @@ struct
     let stmt = mk_remove base range in
     man.post ~zone:Z_c_low_level stmt flow >>$ fun () flow ->
     (* Invalidate the address *)
+    let stmt = mk_invalidate base range in
     man.post ~zone:Z_c_points_to stmt flow
 
 
@@ -462,7 +459,20 @@ struct
     man.eval ~zone:(Z_c,Z_c_low_level) e flow >>$ fun e flow ->
     bind_list el (man.eval ~zone:(Z_c,Z_c_low_level)) flow >>$ fun el flow ->
     let stmt = mk_expand e el range in
-    man.post ~zone:Z_c_low_level stmt flow
+    (* Expand contents *)
+    man.post ~zone:Z_c_low_level stmt flow >>$ fun () flow ->
+    (* Expand addresses *)
+    man.post ~zone:Z_c_points_to stmt flow
+
+
+  let fold e el range man flow =
+    man.eval ~zone:(Z_c,Z_c_low_level) e flow >>$ fun e flow ->
+    bind_list el (man.eval ~zone:(Z_c,Z_c_low_level)) flow >>$ fun el flow ->
+    let stmt = mk_fold e el range in
+    (* Fold contents *)
+    man.post ~zone:Z_c_low_level stmt flow >>$ fun () flow ->
+    (* Fold addresses *)
+    man.post ~zone:Z_c_points_to stmt flow
 
 
   let exec zone stmt man flow =
@@ -493,8 +503,8 @@ struct
       remove e stmt.srange man flow |>
       OptionExt.return
 
-    | S_destroy e ->
-      destroy e stmt.srange man flow |>
+    | S_invalidate e ->
+      invalidate e stmt.srange man flow |>
       OptionExt.return
 
     | S_rename(e,e') ->
@@ -507,6 +517,10 @@ struct
 
     | S_expand(e,el) ->
       expand e el stmt.srange man flow |>
+      OptionExt.return
+
+    | S_fold(e,el) ->
+      fold e el stmt.srange man flow |>
       OptionExt.return
 
     | S_expression e when is_c_num_type e.etyp ->

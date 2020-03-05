@@ -111,7 +111,8 @@ let generic_nonrel_merge ~top ~add ~remove ~find ~meet pre (a1, log1) (a2, log2)
     | S_remove { ekind = E_var (var, _) } ->
       remove var acc
 
-    | S_expand({ekind = E_var(var,_)}, vl) ->
+    | S_expand({ekind = E_var(var,_)}, vl)
+    | S_fold({ekind = E_var(var,_)}, vl) ->
       let vars = List.map (function { ekind = E_var(v,_) } -> v | _ -> assert false) vl in
       List.fold_left (fun acc v -> add v top acc) acc vars
 
@@ -454,6 +455,30 @@ struct
       List.fold_left (fun acc v' ->
           add ctx v' value acc
         ) map vl |>
+      OptionExt.return
+
+    | S_fold ({ekind = E_var (v, mode)}, vl)
+      when List.for_all (function { ekind = E_var _ } -> true | _ -> false) vl
+      ->
+      (* Collect values of variables vl before removing them from the map *)
+      let value,map' = List.fold_left
+          (fun (accv,accm) -> function
+             | { ekind = E_var (vv, _) } ->
+               let accv' = find vv map |>
+                           Value.join accv
+               in
+               let accm' = remove vv accm in
+               accv',accm'
+             | _ -> assert false
+        ) (Value.bottom,map) vl
+      in
+      let value' =
+        if mem v map then
+          Value.join value (find v map)
+        else
+          value
+      in
+      add ctx v value' map' |>
       OptionExt.return
 
     (* FIXME: check weak variables in rhs *)

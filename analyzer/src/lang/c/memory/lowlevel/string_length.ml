@@ -223,6 +223,16 @@ struct
       man.post ~zone:Z_u_num (mk_expand length1 lengths range) flow
 
 
+  (** Fold the length variable of a base *)
+  let fold_bases base1 bases range man flow =
+    if not (is_interesting_base base1) then Post.return flow else
+    if List.exists (fun b -> not (is_interesting_base b)) bases then panic_at range "fold %a not supported" pp_base base1
+    else
+      let length1 = mk_length_var base1 range in
+      let lengths = List.map (fun b -> mk_length_var b range) bases in
+      man.post ~zone:Z_u_num (mk_fold length1 lengths range) flow
+
+
   (** Forget the value of the length variable of a base *)
   let forget e range man flow =
     (* Get the pointed base *)
@@ -598,6 +608,10 @@ struct
 
     | S_expand(e,el) when is_base_expr e && List.for_all is_base_expr el ->
       expand_base (expr_to_base e) (List.map expr_to_base el) stmt.srange man flow |>
+      OptionExt.return
+
+    | S_fold(e,el) when is_base_expr e && List.for_all is_base_expr el ->
+      fold_bases (expr_to_base e) (List.map expr_to_base el) stmt.srange man flow |>
       OptionExt.return
 
     | S_forget(e) ->

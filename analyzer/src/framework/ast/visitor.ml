@@ -121,9 +121,9 @@ let stmt_visit_chain : (stmt -> stmt structure) ref =
         (function | { exprs = [e] } -> { stmt with skind = S_remove(e) }
                   | _ -> assert false)
 
-      | S_destroy(e) ->
+      | S_invalidate(e) ->
         { exprs = [e]; stmts = [] },
-        (function | { exprs = [e] } -> { stmt with skind = S_destroy(e) }
+        (function | { exprs = [e] } -> { stmt with skind = S_invalidate(e) }
                   | _ -> assert false)
 
       | S_forget(e) ->
