@@ -326,3 +326,12 @@ end
 
 let () =
   Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+
+
+
+(* Front-end registration *)
+let () =
+  register_frontend {
+    lang = "repl";
+    parse = parse_program;
+  }
