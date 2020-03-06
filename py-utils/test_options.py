@@ -2,24 +2,28 @@
 import time
 import subprocess
 import collections
+import os
 
 file_dir = "../../pybenchs/"
 gctime_str = "Total gc time : "
+ocaml_gc_stats = "v=0x400"
 
 def run_mopsa(mopsa_name, mopsa_options, file_name, runs=1):
     rt = 0
     for i in range(runs):
         start = time.time()
-        proc = subprocess.Popen([mopsa_name, file_dir + file_name] + mopsa_options, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        proc = subprocess.Popen([mopsa_name, file_dir + file_name] + mopsa_options, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=dict(os.environ, OCAMLRUNPARAM=ocaml_gc_stats))
         stdout, stderr = proc.communicate()
         stop = time.time()
         rt += stop - start
     stdout = stdout.decode()
+    stderr = stderr.decode()
     try:
         nalarms = int(stdout.split()[-3])
     except ValueError:
         nalarms = 0
-    return rt / runs, nalarms, stdout
+    usedmem = int(stderr.split()[-3]) * 8 / 10**6 # this should be ocaml's top_heap_words, now in MB
+    return rt / runs, nalarms, stdout, usedmem
 
 def f(percent=100, global_options=None):
     if global_options is None:
@@ -30,8 +34,8 @@ def f(percent=100, global_options=None):
                 "Value Analysis": "../bin/mopsa-python" }
     files = ["bm_chaos.py", #"bm_deltablue.py",
              "bm_fannkuch.py", "bm_float.py", "bm_go.py",
-             "bm_hexiom.py", "bm_nbody.py", 
-             # "bm_pidigits.py", 
+             "bm_hexiom.py", "bm_nbody.py",
+             # "bm_pidigits.py",
              "bm_raytrace.py", "bm_regex_v8.py",
              "bm_richards.py", "bm_scimark.py",
              "bm_spectral_norm.py", "bm_unpack_sequence.py"]
@@ -40,7 +44,7 @@ def f(percent=100, global_options=None):
         for option_name, option_str in options.items():
             name1 = f"{config_name}"
             name2 = f"{name1} + {option_name}"
-            s = f"{s}| {name1:19} | {name2:23} | speedup "
+            s = f"{s}| {name1:20} | {name2:28} | speedup "
 
     print(s + "|")
 
@@ -51,15 +55,15 @@ def f(percent=100, global_options=None):
         try:
             for config_name, config_str in base_config.items():
                 for option_name, option_str in options.items():
-                    t_noopt, errs_noopt, _ = run_mopsa(config_str, global_options, f)
-                    t_opt, errs_opt, stdout = run_mopsa(config_str, global_options + option_str, f)
+                    t_noopt, errs_noopt, _, usedmem_noopt = run_mopsa(config_str, global_options, f)
+                    t_opt, errs_opt, stdout, usedmem_opt = run_mopsa(config_str, global_options + option_str, f)
 
                     gc_time = float(stdout[stdout.find(gctime_str)+len(gctime_str):].split()[0])
 
                     total_noopt[config_name, option_name] += t_noopt
                     total_opt[config_name, option_name] += t_opt
                     err = 100 * (t_noopt - t_opt) / t_noopt
-                    print(f"| {t_noopt:13.3f}s ({errs_noopt:>2}) | {t_opt:9.3f}s ({gc_time:5.3f}s, {errs_opt:>2}) | {err:6.2f}% ", end="", flush=True)
+                    print(f"| {t_noopt:7.3f}s ({errs_noopt:>2}, {usedmem_noopt:>3.0f}MB) | {t_opt:7.3f}s ({gc_time:5.3f}s, {errs_opt:>2}, {usedmem_opt:>3.0f}MB) | {err:6.2f}% ", end="", flush=True)
             print("|")
         except KeyboardInterrupt:
             print()
