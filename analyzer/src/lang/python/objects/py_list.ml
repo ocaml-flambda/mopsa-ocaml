@@ -660,14 +660,10 @@ struct
         ["list"]
         (fun args flow ->
            let list = match args with | [l] -> l | _ -> assert false in
-           let list_addr = match ekind list with
-             | E_py_object ({addr_kind = A_py_list} as a, _) -> a
-             | _ -> assert false in
-           let a = mk_alloc_addr ~mode:list_addr.addr_mode (A_py_iterator ("list_iterator", None)) range in
+           let a = mk_alloc_addr (A_py_iterator ("list_iterator", None)) range in
            man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) a flow |>
              Eval.bind (fun eaddr_it flow ->
                  let addr_it = match ekind eaddr_it with | E_addr a -> a | _ -> assert false in
-                 assert (addr_it.addr_mode = list_addr.addr_mode);
                  flow |>
                    man.exec ~zone:Zone.Z_py (mk_assign (mk_var (itseq_of_addr addr_it) range) list range) |>
                  man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (mk_var (itindex_var_of_addr addr_it) range) (mk_int 0 range) range)  |>
