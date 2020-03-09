@@ -43,7 +43,7 @@ def f(percent=100, global_options=None):
         for option_name, option_str in options.items():
             name1 = f"{config_name}"
             name2 = f"{name1} + {option_name}"
-            s = f"{s}| {name1:21} | {name2:29} | speedup (s, MB) "
+            s = f"{s}| {name1:21} | {name2:29} | improvement (s, MB) "
 
     print(s + "|")
 
@@ -61,9 +61,9 @@ def f(percent=100, global_options=None):
 
                     total_noopt[config_name, option_name] += t_noopt
                     total_opt[config_name, option_name] += t_opt
-                    err = int(100 * t_noopt / t_opt - 100)
-                    mem = int(100 * usedmem_noopt / usedmem_opt - 100)
-                    print(f"| {t_noopt:7.3f}s ({errs_noopt:>2}, {usedmem_noopt:>4}MB) | {t_opt:7.3f}s ({gc_time:5.3f}s, {errs_opt:>2}, {usedmem_opt:>4}MB) |    {err:3}%    {mem:3}% ", end="", flush=True)
+                    err = (100 * (t_noopt - t_opt) / t_noopt).__round__()
+                    mem = (100 * (usedmem_noopt - usedmem_opt) / usedmem_noopt).__round__()
+                    print(f"| {t_noopt:7.3f}s ({errs_noopt:>2}, {usedmem_noopt:>4}MB) | {t_opt:7.3f}s ({gc_time:5.3f}s, {errs_opt:>2}, {usedmem_opt:>4}MB) |    {err:3}%    {mem:3}%     ", end="", flush=True)
             print("|")
         except KeyboardInterrupt:
             print()
@@ -83,9 +83,9 @@ def f(percent=100, global_options=None):
 
                     total_noopt[config_name, option_name] += t_noopt
                     total_opt[config_name, option_name] += t_opt
-                    err = int(100 * t_noopt / t_opt - 100)
-                    mem = int(100 * usedmem_noopt / usedmem_opt - 100)
-                    print(f"| {t_noopt:7.3f}s ({errs_noopt:>2}, {usedmem_noopt:>4}MB) | {t_opt:7.3f}s ({gc_time:5.3f}s, {errs_opt:>2}, {usedmem_opt:>4}MB) |    {err:3}%    {mem:3}% ", end="", flush=True)
+                    err = (100 * (t_noopt - t_opt) / t_noopt).__round__()
+                    mem = (100 * (usedmem_noopt - usedmem_opt) / usedmem_noopt).__round__()
+                    print(f"| {t_noopt:7.3f}s ({errs_noopt:>2}, {usedmem_noopt:>4}MB) | {t_opt:7.3f}s ({gc_time:5.3f}s, {errs_opt:>2}, {usedmem_opt:>4}MB) |    {err:3}%    {mem:3}%     ", end="", flush=True)
             print("|")
         except KeyboardInterrupt:
             print()
@@ -97,7 +97,7 @@ def f(percent=100, global_options=None):
     print(f"| {total:21} ", end="", flush=True)
     for config_name, config_str in base_config.items():
         for option_name, option_str in options.items():
-            err = int(100 * total_noopt[config_name, option_name] / total_noopt[config_name, option_name] - 100)
+            err = (100 * (total_noopt[config_name, option_name] - total_opt[config_name, option_name]) / total_noopt[config_name, option_name]).__round__()
             print(f"| {total_noopt[config_name, option_name]:18.3f}s | {total_opt[config_name, option_name]:26.3f}s | {err:6.2f}% ", end="", flush=True)
     print("|\n")
 
