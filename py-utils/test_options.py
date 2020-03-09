@@ -22,7 +22,7 @@ def run_mopsa(mopsa_name, mopsa_options, file_name, runs=1, cwd=None, file_dir="
         nalarms = int(stdout[stdout.find("Total: ") + len("Total: "):].split()[0])
     except ValueError:
         nalarms = 0
-    usedmem = int(stderr.split()[-3]) * 8 / 10**6 # this should be ocaml's top_heap_words, now in MB
+    usedmem = int(int(stderr.split()[-3]) * 8 / 10**6) # this should be ocaml's top_heap_words, now in MB
     return rt / runs, nalarms, stdout, usedmem
 
 def f(percent=100, global_options=None):
@@ -32,21 +32,18 @@ def f(percent=100, global_options=None):
     print(f"GC percent: {percent}, Global options: {global_options}")
     base_config = { "Type Analysis": "../bin/mopsa-python-types",
                 "Value Analysis": "../bin/mopsa-python" }
-    files = []
-    # "bm_chaos.py", #"bm_deltablue.py",
-    # "bm_fannkuch.py", "bm_float.py", "bm_go.py",
-    #          "bm_hexiom.py", "bm_nbody.py",
-    #          # "bm_pidigits.py",
-    #          "bm_raytrace.py", "bm_regex_v8.py",
-    #          "bm_richards.py", "bm_scimark.py",
-    #          "bm_spectral_norm.py", "bm_unpack_sequence.py"]
-    fpp_files = ["choose.py", "processInput.py"]
+    files = ["bm_fannkuch.py", "bm_float.py", "bm_spectral_norm.py",
+             "bm_nbody.py", "bm_chaos.py", "bm_raytrace.py",
+             "bm_scimark.py", "bm_richards.py",
+             "bm_unpack_sequence.py", "bm_go.py", "bm_hexiom.py",
+             "bm_regex_v8.py" ]
+    fpp_files = ["processInput.py", "choose.py"]
     s = "| Filename              "
     for config_name, config_str in base_config.items():
         for option_name, option_str in options.items():
             name1 = f"{config_name}"
             name2 = f"{name1} + {option_name}"
-            s = f"{s}| {name1:21} | {name2:30} | speedup "
+            s = f"{s}| {name1:21} | {name2:29} | speedup "
 
     print(s + "|")
 
