@@ -97,7 +97,7 @@ def f(percent=100, global_options=None):
     print(f"| {total:21} ", end="", flush=True)
     for config_name, config_str in base_config.items():
         for option_name, option_str in options.items():
-            err = 100 * (total_noopt[config_name, option_name] - total_opt[config_name, option_name]) / total_noopt[config_name, option_name]
+            err = int(100 * total_noopt[config_name, option_name] / total_noopt[config_name, option_name] - 100)
             print(f"| {total_noopt[config_name, option_name]:18.3f}s | {total_opt[config_name, option_name]:26.3f}s | {err:6.2f}% ", end="", flush=True)
     print("|\n")
 
