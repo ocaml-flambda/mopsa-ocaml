@@ -61,7 +61,7 @@ def f(percent=100, global_options=None):
 
                     total_noopt[config_name, option_name] += t_noopt
                     total_opt[config_name, option_name] += t_opt
-                    err = 100 * (t_noopt - t_opt) / t_noopt
+                    err = 100 * t_opt / t_noopt
                     print(f"| {t_noopt:7.3f}s ({errs_noopt:>2}, {usedmem_noopt:>4}MB) | {t_opt:7.3f}s ({gc_time:5.3f}s, {errs_opt:>2}, {usedmem_opt:>4}MB) | {err:6.2f}% ", end="", flush=True)
             print("|")
         except KeyboardInterrupt:
@@ -82,7 +82,7 @@ def f(percent=100, global_options=None):
 
                     total_noopt[config_name, option_name] += t_noopt
                     total_opt[config_name, option_name] += t_opt
-                    err = 100 * (t_noopt - t_opt) / t_noopt
+                    err = 100 * t_opt / t_noopt
                     print(f"| {t_noopt:7.3f}s ({errs_noopt:>2}, {usedmem_noopt:>4}MB) | {t_opt:7.3f}s ({gc_time:5.3f}s, {errs_opt:>2}, {usedmem_opt:>4}MB) | {err:6.2f}% ", end="", flush=True)
             print("|")
         except KeyboardInterrupt:
