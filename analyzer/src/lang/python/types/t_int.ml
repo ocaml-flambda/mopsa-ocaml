@@ -77,18 +77,18 @@ struct
     let range = erange exp in
     match ekind exp with
     | E_constant (C_top T_bool) ->
-      Eval.singleton (mk_py_object (Addr_env.addr_bool_top (), Some (mk_top T_int range)) range) flow |> OptionExt.return
+      Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_bool_top, Some (mk_top T_int range)) range) flow |> OptionExt.return
 
     | E_constant (C_bool true) ->
-      Eval.singleton (mk_py_object (Addr_env.addr_true (), Some (mk_int 1 ~typ:T_int range)) range) flow |> OptionExt.return
+      Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_true, Some (mk_int 1 ~typ:T_int range)) range) flow |> OptionExt.return
 
     | E_constant (C_bool false) ->
-      Eval.singleton (mk_py_object (Addr_env.addr_false (), Some (mk_int 0 ~typ:T_int range)) range) flow |> OptionExt.return
+      Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_false, Some (mk_int 0 ~typ:T_int range)) range) flow |> OptionExt.return
 
     | E_constant (C_top T_int)
     | E_constant (C_int _)
     | E_constant (C_int_interval _) ->
-      Eval.singleton (mk_py_object (Addr_env.addr_integers (), Some {exp with etyp=T_int}) range) flow |> OptionExt.return
+      Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_integers, Some {exp with etyp=T_int}) range) flow |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_class (C_builtin "bool", _)}, _)}, [arg], [])
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bool.__new__", _))}, _)}, [_; arg], []) ->
@@ -198,11 +198,11 @@ struct
                         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top (T_float F_DOUBLE) range) true_flow
                       | _ ->
                         if is_reverse_operator f then
-                          Eval.singleton (mk_py_object (Addr_env.addr_integers (), Some (mk_binop (Utils.extract_oobject e2) (match Operators.methfun_to_binop f with
+                          Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_integers, Some (mk_binop (Utils.extract_oobject e2) (match Operators.methfun_to_binop f with
                                                                                                                         | O_py_floor_div -> O_div
                                                                                                                         | x -> x) (Utils.extract_oobject e1) range ~etyp:T_int)) range) flow
                         else
-                          Eval.singleton (mk_py_object (Addr_env.addr_integers (), Some (mk_binop (Utils.extract_oobject e1) (match Operators.methfun_to_binop f with
+                          Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_integers, Some (mk_binop (Utils.extract_oobject e1) (match Operators.methfun_to_binop f with
                                                                                                                         | O_py_floor_div -> O_div
                                                                                                                         | x -> x) (Utils.extract_oobject e2) range ~etyp:T_int)) range) flow)
                   ~felse:(fun false_flow ->
@@ -225,7 +225,7 @@ struct
           assume
             (mk_py_isinstance_builtin e "int" range)
             ~fthen:(fun true_flow ->
-                Eval.singleton (mk_py_object (Addr_env.addr_integers (), Some (mk_unop (Operators.methfun_to_unop f) (Utils.extract_oobject el) range ~etyp:T_int)) range) true_flow)
+                Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_integers, Some (mk_unop (Operators.methfun_to_unop f) (Utils.extract_oobject el) range ~etyp:T_int)) range) true_flow)
             ~felse:(fun false_flow ->
                 let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
                 man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) expr false_flow)
@@ -269,7 +269,7 @@ struct
             man flow
           ~fthen:(fun flow ->
             man.eval ~zone:(Universal.Zone.Z_u, Universal.Zone.Z_u_float) (mk_unop (O_cast (T_int, T_float F_DOUBLE)) ~etyp:(T_float F_DOUBLE) (Utils.extract_oobject @@ List.hd e) range) flow |>
-              Eval.bind (fun e flow -> Eval.singleton (mk_py_object (Addr_env.addr_float (), Some e) range) flow))
+              Eval.bind (fun e flow -> Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_float, Some e) range) flow))
           ~felse:(fun flow ->
             man.exec (Utils.mk_builtin_raise_msg "OverflowError" "int too large to convert to float" range) flow |> Eval.empty_singleton)
         ) |> OptionExt.return

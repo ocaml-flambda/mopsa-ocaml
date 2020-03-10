@@ -58,7 +58,7 @@ module Domain =
       | E_constant (C_top (T_float _))
       | E_constant (C_float _)
       | E_constant (C_float_interval _) ->
-        Eval.singleton (mk_py_object (Addr_env.addr_float (), Some {exp with etyp=(T_float F_DOUBLE)}) range) flow |> OptionExt.return
+        Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_float, Some {exp with etyp=(T_float F_DOUBLE)}) range) flow |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("float.__new__", _))}, _)}, [cls], []) ->
         Utils.new_wrapper man range flow "float" cls
@@ -151,9 +151,9 @@ module Domain =
                      (mk_py_isinstance_builtin e2 "float" range) man flow
                      ~fthen:(fun flow ->
                        if is_reverse_operator f then
-                         Eval.singleton (mk_py_object (Addr_env.addr_float (), Some (mk_binop (extract_oobject e2) (Operators.methfun_to_binop f) (extract_oobject e1) range ~etyp:(T_float F_DOUBLE))) range) flow
+                         Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_float, Some (mk_binop (extract_oobject e2) (Operators.methfun_to_binop f) (extract_oobject e1) range ~etyp:(T_float F_DOUBLE))) range) flow
                        else
-                         Eval.singleton (mk_py_object (Addr_env.addr_float (), Some (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) range ~etyp:(T_float F_DOUBLE))) range) flow
+                         Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_float, Some (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) range ~etyp:(T_float F_DOUBLE))) range) flow
                      )
                      ~felse:(fun flow ->
                        assume
@@ -161,7 +161,7 @@ module Domain =
                          ~fthen:(fun flow ->
                              man.eval (mk_py_call (mk_py_attr e2 "__float__" range) [] range) flow |>
                              Eval.bind (fun e2 flow ->
-                                 Eval.singleton (mk_py_object (Addr_env.addr_float (), Some (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) range ~etyp:(T_float F_DOUBLE))) range) flow)
+                                 Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_float, Some (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) range ~etyp:(T_float F_DOUBLE))) range) flow)
                            )
                          ~felse:(fun flow ->
                            let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
@@ -182,7 +182,7 @@ module Domain =
                assume
                  (mk_py_isinstance_builtin e "float" range)
                  ~fthen:(fun true_flow ->
-                     Eval.singleton (mk_py_object (Addr_env.addr_float (), Some (mk_unop (Operators.methfun_to_unop f) (extract_oobject el) range ~etyp:(T_float F_DOUBLE))) range) true_flow
+                     Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_float, Some (mk_unop (Operators.methfun_to_unop f) (extract_oobject el) range ~etyp:(T_float F_DOUBLE))) range) true_flow
                    )
                  ~felse:(fun false_flow ->
                    let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in

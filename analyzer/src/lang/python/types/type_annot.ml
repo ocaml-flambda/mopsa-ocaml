@@ -349,17 +349,17 @@ struct
           let name = get_orig_vname v in
           begin match name with
             | "bool" ->
-              (fun s -> Eval.singleton (mk_py_object (s (), None) range) flow) Addr_env.addr_bool_top
+               Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_bool_top, None) range) flow
             | "int" ->
-              (fun s -> Eval.singleton (mk_py_object (s (), None) range) flow) Addr_env.addr_integers
+               Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_integers, None) range) flow
             | "float" ->
-              (fun s -> Eval.singleton (mk_py_object (s (), None) range) flow) Addr_env.addr_float
+               Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_float, None) range) flow
             | "str" ->
-              (fun s -> Eval.singleton (mk_py_object (s (), None) range) flow) Addr_env.addr_strings
+               Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_strings, None) range) flow
             | "NotImplementedType" ->
-              (fun s -> Eval.singleton (mk_py_object (s (), None) range) flow) Addr_env.addr_notimplemented
+               Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_notimplemented, None) range) flow
             | "NoneType" ->
-              (fun s -> Eval.singleton (mk_py_object (s (), None) range) flow) Addr_env.addr_none
+               Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_none, None) range) flow
             (* | "Any" ->
              *   warn_at range "any annot";
              *   (\* FIXME man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_any range) flow *\)
@@ -583,7 +583,7 @@ struct
           end |> OptionExt.return
 
         | E_constant C_py_none ->
-          (fun s -> Eval.singleton (mk_py_object (s (), None) range) flow) Addr_env.addr_none |> OptionExt.return
+           Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_none, None) range) flow |> OptionExt.return
 
         | E_py_object ({addr_kind = A_py_class _}, _) ->
           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call e [] range) flow

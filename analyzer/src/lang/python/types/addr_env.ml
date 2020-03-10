@@ -87,14 +87,14 @@ let () =
   }
 
 
-let addr_none () = {addr_group = G_all; addr_kind = A_py_instance (fst @@ find_builtin "NoneType"); addr_mode = STRONG}
-let addr_notimplemented () = {addr_group = G_all; addr_kind = A_py_instance (fst @@ find_builtin "NotImplementedType"); addr_mode = STRONG}
-let addr_integers () = {addr_group = G_all; addr_kind = A_py_instance (fst @@ find_builtin "int"); addr_mode = WEAK}
-let addr_float () = {addr_group = G_all; addr_kind = A_py_instance (fst @@ find_builtin "float"); addr_mode = WEAK}
-let addr_strings () = {addr_group = G_all; addr_kind = A_py_instance (fst @@ find_builtin "str"); addr_mode = WEAK}
-let addr_true () = {addr_group = G_py_bool (Some true); addr_kind = A_py_instance (fst @@ find_builtin "bool"); addr_mode = STRONG}
-let addr_false () = {addr_group = G_py_bool (Some false); addr_kind = A_py_instance (fst @@ find_builtin "bool"); addr_mode = STRONG}
-let addr_bool_top () = {addr_group = G_py_bool None; addr_kind = A_py_instance (fst @@ find_builtin "bool"); addr_mode = WEAK}
+let addr_none = ref None
+let addr_notimplemented = ref None
+let addr_integers = ref None
+let addr_float = ref None
+let addr_strings = ref None
+let addr_true = ref None
+let addr_false = ref None
+let addr_bool_top = ref None
 
 
 module Domain =
@@ -150,6 +150,14 @@ struct
     Format.fprintf fmt "addrs: @[%a@]@\n" AMap.print m
 
   let init prog man flow =
+    addr_none := Some {addr_group = G_all; addr_kind = A_py_instance (fst @@ find_builtin "NoneType"); addr_mode = STRONG};
+    addr_notimplemented := Some {addr_group = G_all; addr_kind = A_py_instance (fst @@ find_builtin "NotImplementedType"); addr_mode = STRONG};
+    addr_integers := Some {addr_group = G_all; addr_kind = A_py_instance (fst @@ find_builtin "int"); addr_mode = WEAK};
+    addr_float := Some {addr_group = G_all; addr_kind = A_py_instance (fst @@ find_builtin "float"); addr_mode = WEAK};
+    addr_strings := Some {addr_group = G_all; addr_kind = A_py_instance (fst @@ find_builtin "str"); addr_mode = WEAK};
+    addr_true := Some {addr_group = G_py_bool (Some true); addr_kind = A_py_instance (fst @@ find_builtin "bool"); addr_mode = STRONG};
+    addr_false := Some {addr_group = G_py_bool (Some false); addr_kind = A_py_instance (fst @@ find_builtin "bool"); addr_mode = STRONG};
+    addr_bool_top := Some {addr_group = G_py_bool None; addr_kind = A_py_instance (fst @@ find_builtin "bool"); addr_mode = WEAK};
     set_env T_cur empty man flow
 
   let fold_intfloatstr man v flow fstmt =
@@ -160,7 +168,7 @@ struct
        flow
     | Some aset ->
        (* FIXME: if we explicitly define things below, we could use ASet.mem *)
-       let check_baddr a = ASet.mem (Def (a ())) aset in
+       let check_baddr a = ASet.mem (Def (OptionExt.none_to_exn !a)) aset in
        let intb = check_baddr addr_integers || check_baddr addr_true || check_baddr addr_false || check_baddr addr_bool_top in
        let float = check_baddr addr_float in
        let str = check_baddr addr_strings in
@@ -307,9 +315,9 @@ struct
              | E_constant (C_top T_bool)
                | E_constant (C_bool true)
                -> Post.return flow
-             | E_py_object (a, _) when compare_addr a (addr_true ()) = 0 || compare_addr a (addr_bool_top ()) = 0
+             | E_py_object (a, _) when compare_addr a (OptionExt.none_to_exn !addr_true) = 0 || compare_addr a (OptionExt.none_to_exn !addr_bool_top) = 0
                -> Post.return flow
-             | E_py_object (a, _) when compare_addr a (addr_false ()) = 0
+             | E_py_object (a, _) when compare_addr a (OptionExt.none_to_exn !addr_false) = 0
                -> Post.return (set_env T_cur bottom man flow)
              | E_constant (C_bool false) ->
                 Post.return (set_env T_cur bottom man flow)
@@ -338,7 +346,8 @@ struct
 
     | S_rename (({ekind = E_addr a} as e1), ({ekind = E_addr a'} as e2)) ->
        let cur = get_env T_cur man flow in
-       let ncur = AMap.map (ASet.map (fun addr -> if addr = Def a then Def a' else addr)) cur in
+       let rename addr = if PyAddr.compare addr (PyAddr.Def a) = 0 then PyAddr.Def a' else addr in
+       let ncur = AMap.map (ASet.map rename) cur in
        let flow = set_env T_cur ncur man flow in
        let to_rename = Flow.fold (fun acc tk d ->
                            match tk with
@@ -421,9 +430,6 @@ struct
         man.exec ~zone:Zone.Z_py_obj (mk_add eaddr range) flow |>
         Eval.singleton (mk_py_object (addr, oe) range)
       )
-
-
-
 
   let eval zs exp man flow =
     let range = erange exp in
@@ -521,10 +527,10 @@ struct
 
     (* FIXME: clean *)
     | E_constant C_py_none ->
-      Eval.singleton (mk_py_object (addr_none (), None) range) flow |> OptionExt.return
+      Eval.singleton (mk_py_object (OptionExt.none_to_exn !addr_none, None) range) flow |> OptionExt.return
 
     | E_constant C_py_not_implemented ->
-      Eval.singleton (mk_py_object (addr_notimplemented (), None) range) flow |> OptionExt.return
+      Eval.singleton (mk_py_object (OptionExt.none_to_exn !addr_notimplemented, None) range) flow |> OptionExt.return
 
     | E_unop(O_log_not, e') ->
       (* bool is called in desugar/bool *)
@@ -539,11 +545,11 @@ struct
              Eval.singleton (mk_py_false range) flow
            | E_constant (C_bool false) ->
              Eval.singleton (mk_py_true range) flow
-           | E_py_object (a, _) when compare_addr a (addr_true ()) = 0 ->
+           | E_py_object (a, _) when compare_addr a (OptionExt.none_to_exn !addr_true) = 0 ->
              man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_false range) flow
-           | E_py_object (a, _) when compare_addr a (addr_false ()) = 0 ->
+           | E_py_object (a, _) when compare_addr a (OptionExt.none_to_exn !addr_false) = 0 ->
              man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_true range) flow
-           | E_py_object (a, _) when compare_addr a (addr_bool_top ()) = 0 ->
+           | E_py_object (a, _) when compare_addr a (OptionExt.none_to_exn !addr_bool_top) = 0 ->
              Eval.singleton ee' flow
            | _ ->
              panic_at range "o_log_not ni on %a" pp_expr ee'
@@ -557,8 +563,8 @@ struct
           begin match ekind e1, ekind e2 with
             | E_py_object (a1, _), E_py_object (a2, _) when
                 compare_addr a1 a2 = 0 &&
-                (compare_addr a1 (addr_notimplemented ()) = 0 || compare_addr a1 (addr_none ()) = 0 ||
-                 compare_addr a2 (addr_notimplemented ()) = 0 || compare_addr a2 (addr_none ()) = 0) ->
+                (compare_addr a1 (OptionExt.none_to_exn !addr_notimplemented) = 0 || compare_addr a1 (OptionExt.none_to_exn !addr_none) = 0 ||
+                 compare_addr a2 (OptionExt.none_to_exn !addr_notimplemented) = 0 || compare_addr a2 (OptionExt.none_to_exn !addr_none) = 0) ->
               man.eval (mk_py_true range) flow
             | E_py_object (a1, _), E_py_object (a2, _) when compare_addr_kind (akind a1) (akind a2) <> 0 ->
               man.eval (mk_py_false range) flow

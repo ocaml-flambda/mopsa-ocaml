@@ -140,7 +140,7 @@ module Domain =
       match ekind exp with
       | E_constant (C_string _)
       | E_constant (C_top T_string) ->
-         Eval.singleton (mk_py_object (Addr_env.addr_strings (), Some {exp with etyp=T_string}) range) flow |> OptionExt.return
+         Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_strings, Some {exp with etyp=T_string}) range) flow |> OptionExt.return
 
       | E_constant (C_top T_py_bytes)
       | E_py_bytes _ ->
