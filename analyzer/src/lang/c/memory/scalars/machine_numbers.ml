@@ -24,6 +24,7 @@
 open Mopsa
 open Framework.Core.Sig.Stacked.Stateless
 open Universal.Ast
+open Stubs.Ast
 open Ast
 open Zone
 open Universal.Zone
@@ -262,6 +263,10 @@ struct
     | _ -> false
 
 
+  let is_predicate_op = function
+    | O_float_class _ -> true
+    | _ -> false
+
   let rec to_compare_expr e =
     match ekind e with
     | E_binop(op, e1, e2) when is_comparison_op op ->
@@ -272,6 +277,9 @@ struct
 
     | E_unop(O_log_not, ee) ->
       { e with ekind = E_unop(O_log_not, to_compare_expr ee) }
+
+    | E_unop (op, _) when is_predicate_op op ->
+      e
 
     | _ ->
       mk_binop e O_ne (mk_zero e.erange) e.erange
@@ -480,8 +488,11 @@ struct
       Eval.singleton (mk_num_var_expr exp) flow |>
       OptionExt.return
 
-    | Stubs.Ast.E_stub_builtin_call(VALID_FLOAT, f) ->
-      panic_at exp.erange "valid_float not supported"
+    | Stubs.Ast.E_stub_builtin_call(VALID_FLOAT as f, e) ->
+      (*      panic_at exp.erange "valid_float not supported"*)
+      man.eval ~zone:(Z_c_scalar,Z_u_num) e flow >>$? fun e flow ->
+      Eval.singleton (mk_expr (E_stub_builtin_call(f, e)) ~etyp:exp.etyp exp.erange) flow |>
+      OptionExt.return
 
     | _ ->
       None

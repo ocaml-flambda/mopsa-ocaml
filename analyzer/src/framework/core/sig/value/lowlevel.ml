@@ -165,6 +165,12 @@ sig
       applying the operation op, the result is in r
   *)
 
+  val predicate : ('a,t) man -> typ -> operator -> 'a -> bool -> t
+  (** Backward evaluation of unary boolean predicates.
+      [predicate man t op x true] returns the subset of x such that x is
+      true.
+      [predicate man t op x false] is similar, but assumes that the predicate is false
+  *)
 
   val compare : ('a,t) man -> typ -> operator -> 'a -> 'a -> bool -> (t * t)
   (** Backward evaluation of boolean comparisons. [compare man t op x y true] returns (x',y') where:
@@ -190,14 +196,17 @@ end
 (**                  {2 Default backward functions}                         *)
 (*==========================================================================*)
 
-let default_bwd_unop ma typ op x r =
-  x
+let default_bwd_unop man typ op x r =
+  man.get x
 
 let default_bwd_binop man typ op x y r =
-  (x, y)
+  (man.get x, man.get y)
+
+let default_predicate man typ op x r =
+  man.get x
 
 let default_compare man typ op x y b =
-  (x, y)
+  (man.get x, man.get y)
 
 
 
@@ -215,6 +224,8 @@ let lift_simplified_filter filter man v b =  filter (man.get v) b
 let lift_simplified_bwd_unop bwd_unop man t op v r = bwd_unop op (man.get v) (man.get r)
 
 let lift_simplified_bwd_binop bwd_binop man t op a b r = bwd_binop op (man.get a) (man.get b) (man.get r)
+
+let lift_simplified_predicate predicate man t op a r = predicate op (man.get a) r
 
 let lift_simplified_compare compare man t op a b r = compare op (man.get a) (man.get b) r
 

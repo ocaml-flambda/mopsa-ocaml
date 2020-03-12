@@ -849,3 +849,45 @@ let raise_c_modify_read_only_alarm ptr base man flow =
   let cs = Flow.get_callstack flow in
   let alarm = mk_alarm (A_c_modify_read_only_msg(get_orig_expr ptr, base)) cs ptr.erange in
   Flow.raise_alarm alarm ~bottom:true man.lattice flow
+
+
+
+(** {2 Float errors} *)
+(** **************** *)
+
+
+type alarm_class   += A_c_invalid_float_class
+type alarm_message += A_c_invalid_float_class_msg of float_itv (** float value *) * string (** expected class *)
+
+let () =
+  register_alarm_class (fun next fmt -> function
+      | A_c_invalid_float_class -> fprintf fmt " Invalid floating-point number class"
+      | a -> next fmt a
+    )
+
+let () =
+  register_alarm_message {
+    classifier = (fun next -> function
+        | A_c_invalid_float_class_msg _ -> A_c_invalid_float_class
+        | a -> next a
+      );
+    compare = (fun next a1 a2 ->
+        match a1, a2 with
+        | A_c_invalid_float_class_msg(f1,m1), A_c_invalid_float_class_msg(f2,m2) ->
+          Compare.compose
+            [ (fun () -> compare_float_interval f1 f2);
+              (fun () -> compare m1 m2)
+            ]
+        | _ -> next a1 a2
+      );
+    print = (fun next fmt -> function
+        | A_c_invalid_float_class_msg(f,msg) -> fprintf fmt "float '%a' may not be %s" (Debug.bold (F.fprint F.dfl_fmt)) f msg
+        | a -> next fmt a
+      );
+  }
+
+let raise_c_invalid_float_class_alarm float msg range man input_flow error_flow =
+  let cs = Flow.get_callstack error_flow in
+  let float_itv = man.ask (mk_float_interval_query float) input_flow in
+  let alarm = mk_alarm (A_c_invalid_float_class_msg (float_itv,msg)) cs range in
+  Flow.raise_alarm alarm ~bottom:true man.lattice error_flow

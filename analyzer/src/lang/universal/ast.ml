@@ -128,6 +128,12 @@ let () =
 (** {2 Universal operators} *)
 (*  *********************** *)
 
+type float_class =
+  { float_valid: bool; (* normal, denormal, +0 or -0 float *)
+    float_inf: bool;   (* +∞ or -∞ *)
+    float_nan: bool;   (* not-a-number *)
+  }
+
 type operator +=
   (* Unary operators *)
   | O_sqrt              (** Square root *)
@@ -149,6 +155,8 @@ type operator +=
   | O_bit_lshift (** << *)
   | O_concat     (** concatenation of arrays and strings *)
 
+  (* Float predicates *)
+  | O_float_class of float_class
 
 let () =
   register_operator {
@@ -179,6 +187,11 @@ let () =
         | O_bit_rshift -> pp_print_string fmt ">>"
         | O_bit_lshift -> pp_print_string fmt "<<"
         | O_cast(t1,t2)    -> fprintf fmt "cast[%a->%a]" pp_typ t1 pp_typ t2
+        | O_float_class c ->
+          Format.fprintf fmt "float_class[%s%s%s]"
+            (if c.float_valid then "valid," else "")
+            (if c.float_inf then "inf," else "")
+            (if c.float_nan then "nan," else "")
         | op           -> default fmt op
       );
   }
@@ -720,6 +733,23 @@ let sub e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_minus e2 range ~etyp:typ
 let mul e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_mult e2 range ~etyp:typ
 let div e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_div e2 range ~etyp:typ
 let _mod e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_mod e2 range ~etyp:typ
+
+
+(* float classes *)
+
+let float_class ?(valid=false) ?(inf=false) ?(nan=false) () =
+  { float_valid = valid; float_inf=inf; float_nan=nan; }
+
+let inv_float_class c =
+  float_class ~valid:(not c.float_valid) ~inf:(not c.float_inf) ~nan:(not c.float_nan) ()
+
+let float_valid = float_class ~valid:true ()
+let float_inf   = float_class ~inf:true ()
+let float_nan   = float_class ~nan:true ()
+
+let mk_float_class (c:float_class) e range =
+  mk_unop (O_float_class c) e ~etyp:T_bool range
+
 
 let mk_unit range = mk_constant C_unit ~etyp:T_unit range
 
