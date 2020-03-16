@@ -549,9 +549,9 @@ int putw (int __w, FILE *__stream);
 
 /*$
  * requires: __stream in File;
- * requires: valid_ptr_range(__s, 0, __n);
- * assigns:  __s[0, __n];
- * ensures:  valid_primed_string(__s);
+ * requires: valid_ptr_range(__s, 0, __n - 1);
+ * assigns:  __s[0, __n - 1];
+ * ensures:  valid_primed_substring(__s, __n - 1);
  * ensures:  (return == __s) or (return == NULL);
  */
 char *fgets (char *__restrict __s, int __n, FILE *__restrict __stream);
@@ -566,9 +566,9 @@ char *gets (char *__s);
 /*$
  * // TODO: not thread-safe
  * requires: __stream in File;
- * requires: valid_ptr_range(__s, 0, __n);
- * assigns:  __s[0, __n];
- * ensures:  valid_primed_string(__s);
+ * requires: valid_ptr_range(__s, 0, __n - 1);
+ * assigns:  __s[0, __n - 1];
+ * ensures:  valid_primed_substring(__s, __n - 1);
  * ensures:  (return == __s) or (return == NULL);
  */
 char *fgets_unlocked (char *__restrict __s, int __n,
