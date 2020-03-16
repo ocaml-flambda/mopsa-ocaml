@@ -483,11 +483,27 @@ int getchar_unlocked (void);
 int fgetc_unlocked (FILE *__stream);
 
 
+
+/*
+ Before glibc 2.28, putc is defined as a macro for _IO_putc
+*/
+#if __GLIBC_MINOR__ <= 28
+
 /*$
  * requires: __fp in File;
  * ensures: (return == (unsigned char) __c) or (return == EOF);
  */
-int _IO_putc (int __c, _FILE_ *__fp);
+int _IO_putc (int __c, _IO_FILE *__fp);
+
+#else
+
+/*$
+ * requires: __stream in File;
+ * ensures: (return == (unsigned char) __c) or (return == EOF);
+ */
+int putc (int __c, FILE *__stream);
+
+#endif
 
 
 /*$
@@ -503,12 +519,6 @@ int putchar (int __c);
  */
 int fputc_unlocked (int __c, FILE *__stream);
 
-
-/*$
- * requires: __stream in File;
- * ensures: (return == (unsigned char) __c) or (return == EOF);
- */
-int putc (int __c, FILE *__stream);
 
 
 /*$
@@ -1030,13 +1040,6 @@ void funlockfile (FILE *__stream);
 /*  * ensures: return in [0, 255] or return == EOF; */
 /*  *\/ */
 /* int _IO_peekc_locked (_IO_FILE *__stream); */
-
-/* /\*$ */
-/*  * // TODO: internal glibc function, undocumented */
-/*  * requires: __stream in File; */
-/*  * ensures: (return == (unsigned char) __c) or (return == EOF); */
-/*  *\/ */
-/* int _IO_putc (int __c, _IO_FILE *__stream); */
 
 /* /\*$ */
 /*  * // TODO: internal glibc function, undocumented */
