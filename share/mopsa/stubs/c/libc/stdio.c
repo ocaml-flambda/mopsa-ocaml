@@ -487,7 +487,7 @@ int fgetc_unlocked (FILE *__stream);
  * requires: __fp in File;
  * ensures: (return == (unsigned char) __c) or (return == EOF);
  */
-int _IO_putc (int __c, FILE *__fp);
+int _IO_putc (int __c, _FILE_ *__fp);
 
 
 /*$
