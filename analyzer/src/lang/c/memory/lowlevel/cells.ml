@@ -1008,6 +1008,10 @@ struct
 
   let eval zone exp man flow =
     match ekind exp with
+    | E_var ({ vkind = V_c_cell _},_) ->
+      Eval.singleton exp flow |>
+      OptionExt.return
+
     | E_var (v,_) when is_c_scalar_type v.vtyp ->
       eval_deref_scalar_pointer (mk_c_address_of exp exp.erange) exp.erange man flow |>
       OptionExt.return
@@ -1040,10 +1044,6 @@ struct
       Eval.singleton (mk_expr (E_stub_builtin_call(f, e)) ~etyp:exp.etyp exp.erange) flow |>
       OptionExt.return
 
-    | E_stub_quantified(EXISTS, v, _) ->
-      let e = mk_var v exp.erange in
-      man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow |>
-      OptionExt.return
 
     | _ -> None
 
