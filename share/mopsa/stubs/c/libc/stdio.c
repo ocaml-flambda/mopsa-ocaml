@@ -484,17 +484,16 @@ int fgetc_unlocked (FILE *__stream);
 
 
 /*$
- * requires: __stream in File;
+ * requires: __fp in File;
  * ensures: (return == (unsigned char) __c) or (return == EOF);
  */
-int _IO_putc (int __c, FILE *__stream);
+int _IO_putc (int __c, FILE *__fp);
 
 
 /*$
  * ensures: (return == (unsigned char) __c) or (return == EOF);
  */
 int putchar (int __c);
-
 
 
 /*$
@@ -506,14 +505,18 @@ int fputc_unlocked (int __c, FILE *__stream);
 
 
 /*$
- * alias: _IO_putc;
+ * requires: __stream in File;
+ * ensures: (return == (unsigned char) __c) or (return == EOF);
  */
 int putc (int __c, FILE *__stream);
 
+
 /*$
- * alias: _IO_putc;
+ * requires: __stream in File;
+ * ensures: (return == (unsigned char) __c) or (return == EOF);
  */
 int putc_unlocked (int __c, FILE *__stream);
+
 
 /*$
  * // TODO: not thread-safe
