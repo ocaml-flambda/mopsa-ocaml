@@ -280,17 +280,27 @@ let mk_stub_resource_mem e res range =
 let mk_stub_primed e range =
   mk_expr (E_stub_primed e) ~etyp:e.etyp range
 
-(** Check whether an expression is universally quantified? *)
-let is_expr_forall_quantified e =
+
+(** Check whether an expression is quantified? *)
+let is_expr_quantified quant e =
   Visitor.fold_expr
     (fun acc e ->
        match ekind e with
-       | E_stub_quantified (FORALL,_,_) -> Keep true
+       | E_stub_quantified (q,_,_) -> Keep (q = quant)
        | _ -> VisitParts acc
     )
     (fun acc s -> VisitParts acc)
     false
     e
+
+
+(** Check whether an expression is universally quantified? *)
+let is_expr_forall_quantified e =
+  is_expr_quantified FORALL e
+
+(** Check whether an expression is existentially quantified? *)
+let is_expr_exists_quantified e =
+  is_expr_quantified EXISTS e
 
 let mk_stub_directive stub range =
   mk_stmt (S_stub_directive stub) range

@@ -202,19 +202,6 @@ struct
 
   (** Evaluate a quantified formula and its eventual negation *)
   and eval_quantified_formula cond_to_stmt q v s f range man flow : 'a flow =
-    (* Add [v] to the environment *)
-    let flow = man.exec (mk_add_var v range) flow in
-
-    (* Constrain the range of [v] *)
-    let post =
-      match s with
-      | S_interval (l, u) ->
-        man.post (mk_assume (mk_in (mk_var v range) l u ~etyp:T_bool range) range) flow
-
-      | _ ->
-        Post.return flow
-    in
-
     (* Replace [v] in [f] with a quantified expression *)
     let f' = visit_expr_in_formula
         (fun e ->
@@ -226,10 +213,7 @@ struct
           )
           f
     in
-
-    Post.bind (fun flow -> eval_formula cond_to_stmt f' man flow |> Post.return) post |>
-    post_to_flow man |>
-    man.exec (mk_remove_var v range)
+    eval_formula cond_to_stmt f' man flow
 
 
 

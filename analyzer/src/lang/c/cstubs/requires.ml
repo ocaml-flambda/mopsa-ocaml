@@ -189,8 +189,36 @@ struct
       ~zone:Z_c man flow
 
 
+  (** 𝕊⟦ ?(∃e) ⟧ *)
+  let exec_assume_with_exists_quantified e range man flow =
+    let vars,ee = fold_map_expr
+        (fun acc e ->
+           match ekind e with
+           | E_stub_quantified(EXISTS, v, S_interval(l,u)) ->
+             Keep (VarMap.add v (l,u) acc, mk_var v range)
+           | _ -> VisitParts (acc,e)
+        )
+        (fun acc s -> VisitParts(acc,s))
+        VarMap.empty e
+    in
+    let stmts,vars = VarMap.fold
+      (fun v (l,u) (accs,accv) ->
+         let ve = mk_var v range in
+         ( mk_add ve range ::
+           mk_assume (mk_in ve l u ~etyp:T_bool range) range ::
+           accs ),
+         v::accv
+      ) vars ([mk_assume ee range], [])
+    in
+    man.post (mk_block stmts range ~vars) flow
+
+
   let exec zone stmt man flow  =
     match skind stmt with
+    | S_assume (e) when is_expr_exists_quantified e ->
+      exec_assume_with_exists_quantified e stmt.srange man flow |>
+      OptionExt.return
+
     | S_stub_requires { ekind = E_stub_builtin_call(VALID_PTR, ptr) } ->
       exec_stub_requires_valid_ptr ptr stmt.srange man flow |>
       OptionExt.return
