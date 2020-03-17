@@ -163,6 +163,7 @@ struct
     | { base_kind = String _ } -> true
 
     | { base_kind = Addr { addr_kind = A_stub_resource "Memory" }; base_valid = true }
+    | { base_kind = Addr { addr_kind = A_stub_resource "alloca" }; base_valid = true }
     | { base_kind = Addr { addr_kind = A_stub_resource "ReadOnlyMemory" }; base_valid = true }
     | { base_kind = Addr { addr_kind = A_stub_resource "String"}; base_valid = true }
     | { base_kind = Addr { addr_kind = A_stub_resource "ReadOnlyString" }; base_valid = true }

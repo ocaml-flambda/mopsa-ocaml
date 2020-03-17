@@ -271,6 +271,9 @@ let mk_stub_call stub args range =
   in
   mk_expr (E_stub_call (stub, args)) ~etyp:t range
 
+let mk_stub_builtin_call builtin arg ~etyp range =
+  mk_expr (E_stub_builtin_call (builtin,arg)) ~etyp range
+
 let mk_stub_quantified quant v s range =
   mk_expr (E_stub_quantified(quant, v, s)) range ~etyp:v.vtyp
 
