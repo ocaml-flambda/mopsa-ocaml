@@ -59,7 +59,8 @@ struct
       provides = [Z_c_scalar, Z_u_num];
       uses = [
         Z_c_scalar, Z_u_num;
-        Z_c_scalar, Z_c_points_to
+        Z_c_scalar, Z_c_points_to;
+        Z_c, Z_u_num
       ];
     }
   }
@@ -492,6 +493,10 @@ struct
       (*      panic_at exp.erange "valid_float not supported"*)
       man.eval ~zone:(Z_c_scalar,Z_u_num) e flow >>$? fun e flow ->
       Eval.singleton (mk_expr (E_stub_builtin_call(f, e)) ~etyp:exp.etyp exp.erange) flow |>
+      OptionExt.return
+
+    | Stubs.Ast.E_stub_quantified(_,v,S_interval _) ->
+      man.eval (mk_var v exp.erange) ~zone:(Z_c,Z_u_num) flow |>
       OptionExt.return
 
     | _ ->

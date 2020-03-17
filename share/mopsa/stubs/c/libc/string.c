@@ -432,20 +432,11 @@ char *strrchr (const char *__s, int __c);
 
 /*$
  * requires: valid_string(__s);
- *
- * case "empty string" {
- *   assumes: __s[0] == 0;
- *   ensures: return == 0;
- * }
- *
- * case "non empty string" {
- *   assumes: __s[0] != 0;
- *   ensures: exists unsigned int i in [1, size(__s) - 1]:
- *              ( __s[i] == 0 and 
- *                (forall unsigned int j in [0, i - 1]: __s[j] != 0) and
- *                return == i );
- * }
- *
+ * ensures:  exists int i in [1, size(__s) - 1]: ( 
+ *             __s[i] == 0 and 
+ *             (forall int j in [0, i - 1]: __s[j] != 0) and
+ *             return == i 
+ *          );
  */
 size_t strlen (const char *__s);
 

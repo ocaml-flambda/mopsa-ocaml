@@ -556,7 +556,10 @@ let () =
           { exprs = [arg]; stmts = [] },
           (function {exprs = [arg]} -> {e with ekind = E_stub_builtin_call(f, arg)} | _ -> assert false)
 
-        | E_stub_quantified _ -> leaf e
+        | E_stub_quantified(_,_,S_resource _) -> leaf e
+        | E_stub_quantified(q,v,S_interval(a,b)) ->
+          { exprs = [a;b]; stmts = [] },
+          (function { exprs = [a;b] } -> { e with ekind = E_stub_quantified(q, v, S_interval(a,b)) } | _ -> assert false)
 
         | E_stub_attribute(o, f) ->
           { exprs = [o]; stmts = [] },

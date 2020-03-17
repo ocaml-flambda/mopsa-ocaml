@@ -966,46 +966,6 @@ struct
         pp_expr lval
 
 
-  (** 𝔼⟦ *(p + ∀i) ⟧ *)
-  let eval_deref_quantified p range man flow =
-    let typ = under_type p.etyp |> void_to_char in
-    eval_pointed_base_offset p range man flow >>$ fun pp flow ->
-
-    match pp with
-    | None ->
-      (* Valid pointer but unknown offset *)
-      Soundness.warn_at range "ignoring ⊤ pointer %a" pp_expr p;
-      Eval.singleton (mk_top typ range) flow
-
-    | Some (base,offset,mode) ->
-      eval_base_size base range man flow >>$ fun size flow ->
-      man.eval ~zone:(Z_c_scalar, Z_u_num) size flow >>$ fun size flow ->
-
-      let min, max = Common.Quantified_offset.bound offset in
-      man.eval ~zone:(Z_c, Z_u_num) min flow >>$ fun min flow ->
-      man.eval ~zone:(Z_c, Z_u_num) max flow >>$ fun max flow ->
-
-      let limit = sub size (mk_z (sizeof_type typ) range) range in
-
-      (* Safety condition: [min, max] ⊆ [0, size - |elm|] *)
-      assume (
-        mk_binop
-          (mk_in min (mk_zero range) limit range)
-          O_log_and
-          (mk_in max (mk_zero range) limit range)
-          range
-      )
-        ~fthen:(fun flow ->
-            Eval.singleton (mk_top typ range) flow
-          )
-        ~felse:(fun eflow ->
-            raise_c_quantified_out_bound_alarm base size min max typ range man flow eflow |>
-            Eval.empty_singleton
-          )
-        ~zone:Z_u_num man flow
-
-
-
   let eval zone exp man flow =
     match ekind exp with
     | E_var ({ vkind = V_c_cell _},_) ->
@@ -1016,26 +976,19 @@ struct
       eval_deref_scalar_pointer (mk_c_address_of exp exp.erange) exp.erange man flow |>
       OptionExt.return
 
-    | E_c_deref p when under_type p.etyp |> void_to_char |> is_c_scalar_type &&
-                       not (is_pointer_offset_forall_quantified p)
+    | E_c_deref p when under_type p.etyp |> void_to_char |> is_c_scalar_type
       ->
       eval_deref_scalar_pointer p exp.erange man flow |>
       OptionExt.return
 
 
-    | E_c_deref p when under_type p.etyp |> is_c_function_type &&
-                       not (is_pointer_offset_forall_quantified p)
+    | E_c_deref p when under_type p.etyp |> is_c_function_type
       ->
       eval_deref_function_pointer p exp.erange man flow |>
       OptionExt.return
 
     | E_c_address_of lval ->
       eval_address_of lval exp.erange man flow |>
-      OptionExt.return
-
-
-    | E_c_deref p when is_pointer_offset_forall_quantified p ->
-      eval_deref_quantified p exp.erange man flow |>
       OptionExt.return
 
 
@@ -1182,17 +1135,8 @@ struct
 
   (** Compute the interval of an offset *)
   let offset_interval offset range man flow : Itv.t =
-    let interval e =
-      let evl = man.eval e ~zone:(Z_c, Z_u_num) flow in
-      Eval.apply (fun ee flow -> man.ask (Universal.Numeric.Common.mk_int_interval_query ee) flow) Itv.join Itv.meet Itv.bottom evl
-    in
-    if is_expr_forall_quantified offset then
-      let min, max = Common.Quantified_offset.bound offset in
-      let min_itv = interval min in
-      let max_itv = interval max in
-      Itv.join min_itv max_itv
-    else
-      interval offset
+    let evl = man.eval offset ~zone:(Z_c, Z_u_num) flow in
+    Eval.apply (fun ee flow -> man.ask (Universal.Numeric.Common.mk_int_interval_query ee) flow) Itv.join Itv.meet Itv.bottom evl
 
 
   (** Forget the value of an lval *)

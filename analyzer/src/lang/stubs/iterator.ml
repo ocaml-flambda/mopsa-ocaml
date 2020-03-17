@@ -159,7 +159,7 @@ struct
       (man:('a, unit) man)
       (flow:'a flow)
     : 'a flow =
-    (* debug "@[<v 2>eval formula %a@;in %a" pp_formula f (Flow.print man.lattice.print) flow; *)
+    debug "@[<hov>eval formula@ %a@]" pp_formula f;
     match f.content with
     | F_expr e ->
       man.exec (cond_to_stmt e f.range) flow
@@ -202,18 +202,38 @@ struct
 
   (** Evaluate a quantified formula and its eventual negation *)
   and eval_quantified_formula cond_to_stmt q v s f range man flow : 'a flow =
-    (* Replace [v] in [f] with a quantified expression *)
-    let f' = visit_expr_in_formula
-        (fun e ->
-           match ekind e with
-           | E_var (vv, _) when compare_var v vv = 0 ->
-             Keep { e with ekind = E_stub_quantified (q, v, s) }
+    (* Check that the set [s] is not empty *)
+    let flow =
+      match s with
+      | S_resource _ -> flow
+      | S_interval(a,b) -> man.exec (mk_assume (mk_binop a O_le b range) range) flow
+    in
+    if man.lattice.is_bottom (Flow.get T_cur man.lattice flow) then
+      flow
+    else
+      (* Add [v] to the environment *)
+      let flow = man.exec (mk_add_var v range) flow in
+      (* Ensure that [v] is in the set [s] *)
+      let flow = match s with
+        | S_resource _ -> flow
+        | S_interval(a,b) -> man.exec (mk_assume (mk_in (mk_var v range) a b range) range) flow
+      in
+      (* Replace [v] in [f] with quantified variables *)
+      let f' = visit_expr_in_formula
+          (fun e ->
+             match ekind e with
+             | E_var (vv, _) when compare_var v vv = 0 ->
+               Keep (mk_stub_quantified q v s range)
 
-           | _ -> VisitParts e
+             | _ -> VisitParts e
           )
           f
-    in
-    eval_formula cond_to_stmt f' man flow
+      in
+      (* Evaluate [f'] *)
+      let flow = eval_formula cond_to_stmt f' man flow in
+      (* Remove [v] from the environment *)
+      man.exec (mk_remove_var v range) flow
+
 
 
 
