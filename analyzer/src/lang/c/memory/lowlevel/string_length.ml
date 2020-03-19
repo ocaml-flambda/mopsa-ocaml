@@ -693,25 +693,7 @@ struct
     else
       match base.base_kind with
       | String str -> eval_string_literal_char str offset range man flow
-      | _ ->
-        let length = mk_length_var base ~mode range in
-        switch [
-          [ le offset (pred length range) range ],
-          (fun flow ->
-             if is_c_signed_int_type (under_type p.etyp) then
-               Eval.join
-                 (Eval.singleton (mk_int_interval (-128) (-1) range) flow)
-                 (Eval.singleton (mk_int_interval (1) (127) range) flow)
-             else
-               Eval.singleton (mk_int_interval 1 255 range) flow
-          );
-
-          [ eq offset length range ],
-          (fun flow -> Eval.singleton (mk_zero range) flow);
-
-          [ ge offset (succ length range) range ],
-          (fun flow -> Eval.singleton (mk_top (under_type p.etyp) range) flow)
-        ] ~zone:Z_c_scalar man flow
+      | _ -> Eval.singleton (mk_top (under_pointer_type p.etyp) range) flow
 
 
   let eval zone exp man flow =
