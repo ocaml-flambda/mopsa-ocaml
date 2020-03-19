@@ -722,8 +722,10 @@ let mk_in ?(strict = false) ?(left_strict = false) ?(right_strict = false) ?(ety
 let mk_zero = mk_int 0
 let mk_one = mk_int 1
 
-let zero = mk_zero
-let one = mk_one
+let universal_constants_range = tag_range (mk_fresh_range ()) "universal-constants"
+
+let zero = mk_zero universal_constants_range
+let one = mk_one universal_constants_range
 
 let of_z = mk_z
 let of_int = mk_int
@@ -732,8 +734,30 @@ let add e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_plus e2 range ~etyp:typ
 let sub e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_minus e2 range ~etyp:typ
 let mul e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_mult e2 range ~etyp:typ
 let div e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_div e2 range ~etyp:typ
-let _mod e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_mod e2 range ~etyp:typ
+let _mod_ e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_mod e2 range ~etyp:typ
 
+let succ e range = add e one range
+let pred e range = sub e one range
+let mk_succ = succ
+let mk_pred = pred
+
+let eq e1 e2 ?(etyp=T_bool) range = mk_binop e1 O_eq e2 ~etyp range
+let ne e1 e2 ?(etyp=T_bool) range = mk_binop e1 O_ne e2 ~etyp range
+let lt e1 e2 ?(etyp=T_bool) range = mk_binop e1 O_lt e2 ~etyp range
+let le e1 e2 ?(etyp=T_bool) range = mk_binop e1 O_le e2 ~etyp range
+let gt e1 e2 ?(etyp=T_bool) range = mk_binop e1 O_gt e2 ~etyp range
+let ge e1 e2 ?(etyp=T_bool) range = mk_binop e1 O_ge e2 ~etyp range
+let mk_eq = eq
+let mk_ne = ne
+let mk_lt = lt
+let mk_le = le
+let mk_gt = gt
+let mk_ge = ge
+
+let log_or e1 e2 ?(etyp=T_bool) range = mk_binop e1 O_log_or e2 ~etyp range
+let log_and e1 e2 ?(etyp=T_bool) range = mk_binop e1 O_log_and e2 ~etyp range
+let mk_log_or = log_or
+let mk_log_and = log_and
 
 (* float classes *)
 

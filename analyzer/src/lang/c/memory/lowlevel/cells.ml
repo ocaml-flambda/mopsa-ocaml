@@ -506,7 +506,7 @@ struct
           let base = (Z.pow (Z.of_int 2) (8 * Z.to_int b))  in
           let v = mk_numeric_cell_var_expr c' range in
           Some (
-            (_mod
+            (_mod_
                (div v (mk_z base range) range)
                (mk_int 256 range)
                range
