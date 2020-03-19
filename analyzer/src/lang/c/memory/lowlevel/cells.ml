@@ -896,6 +896,11 @@ struct
 
 
   let forget_cell c range man flow =
+    let flow = map_env T_cur
+        (fun a ->
+           { a with cells = cell_set_remove c a.cells }
+        ) man flow
+    in
     let v = mk_cell_var c in
     let stmt = mk_forget_var v range in
     man.post stmt ~zone:Z_c_scalar flow
