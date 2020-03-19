@@ -53,7 +53,7 @@ struct
     let lall = List.length alladdr in
     let lreach = List.length reachaddr in
     Format.printf "[GCTEST] reach/all = %d / %d = %f@.unreachables = @[@.%a@]@." lreach lall (if lall = 0 then 0. else float_of_int lreach /. float_of_int lall) (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@.") Ast.pp_addr) (List.filter (fun a -> not @@ List.mem a reachaddr) alladdr);
-    Format.printf "Total gc time : %.3f@.Avg # collected addr: %d" !Heap.Recency.gc_time (if !Heap.Recency.gc_nb_collections = 0 then 0 else !Heap.Recency.gc_nb_addr_collected / !Heap.Recency.gc_nb_collections)
+    Format.printf "Total gc time : %.3f@.Avg # collected addr: %d@.Max heap size: %d@." !Heap.Recency.gc_time (if !Heap.Recency.gc_nb_collections = 0 then 0 else !Heap.Recency.gc_nb_addr_collected / !Heap.Recency.gc_nb_collections) !Heap.Recency.gc_max_heap_size
 
 
 end

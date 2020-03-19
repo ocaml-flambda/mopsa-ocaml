@@ -83,6 +83,7 @@ let () = Policies.register_option opt_default_allocation_policy name "-default-a
 let gc_time = ref 0.
 let gc_nb_collections = ref 0
 let gc_nb_addr_collected = ref 0
+let gc_max_heap_size = ref 0
 (** {2 Domain definition} *)
 (** ===================== *)
 
@@ -139,7 +140,7 @@ struct
 
   let subset man ctx (a,s) (a',s') =
     let r1, r2, r3 = Pool.subset a a', s, s' in
-    (* if not r1 then Debug.debug ~channel:"explain" "%s not sub@.a' \ a = %a@." name Pool.print (Pool.diff a' a); *)
+    if not r1 then Debug.debug ~channel:"explain" "%s not sub@.a' diff a = %a@a diff a' = %a@." name Pool.print (Pool.diff a' a) Pool.print (Pool.diff a a');
     r1, r2, r3
 
   let join man ctx (a,s) (a',s') =
@@ -225,6 +226,7 @@ struct
        gc_time := !gc_time +. delta;
        incr gc_nb_collections;
        gc_nb_addr_collected := !gc_nb_addr_collected + (Pool.cardinal dead);
+       gc_max_heap_size := max !gc_max_heap_size (Pool.cardinal all);
        flow |> Post.return |> OptionExt.return
 
     | _ -> None

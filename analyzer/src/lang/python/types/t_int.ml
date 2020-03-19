@@ -195,16 +195,38 @@ struct
                       match f with
                       | "int.__truediv__"
                       | "int.__rtruediv__" ->
-                        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top (T_float F_DOUBLE) range) true_flow
+                         assume
+                           (mk_binop (if is_reverse_operator f then e1 else e2) O_eq (mk_zero range) range)
+                           man true_flow
+                           ~fthen:(fun flow ->
+                             man.exec (Utils.mk_builtin_raise_msg "ZeroDivisionError" "division by zero" range) flow |> Eval.empty_singleton
+                           )
+                           ~felse:(fun flow ->
+                             if is_reverse_operator f then
+                               Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_float, Some (mk_binop (Utils.extract_oobject e2) (Operators.methfun_to_binop f) (Utils.extract_oobject e1) range ~etyp:(T_float F_DOUBLE))) range) flow
+                             else
+                               Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_float, Some (mk_binop (Utils.extract_oobject e1) (Operators.methfun_to_binop f) (Utils.extract_oobject e2) range ~etyp:(T_float F_DOUBLE))) range) flow
+                           )
                       | _ ->
-                        if is_reverse_operator f then
-                          Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_integers, Some (mk_binop (Utils.extract_oobject e2) (match Operators.methfun_to_binop f with
-                                                                                                                        | O_py_floor_div -> O_div
-                                                                                                                        | x -> x) (Utils.extract_oobject e1) range ~etyp:T_int)) range) flow
-                        else
-                          Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_integers, Some (mk_binop (Utils.extract_oobject e1) (match Operators.methfun_to_binop f with
-                                                                                                                        | O_py_floor_div -> O_div
-                                                                                                                        | x -> x) (Utils.extract_oobject e2) range ~etyp:T_int)) range) flow)
+                         let res =
+                           fun flow ->
+                           if is_reverse_operator f then
+                             Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_integers, Some (mk_binop (Utils.extract_oobject e2) (match Operators.methfun_to_binop f with
+                                                                                                                                                     | O_py_floor_div -> O_div
+                                                                                                                                                     | x -> x) (Utils.extract_oobject e1) range ~etyp:T_int)) range) flow
+                           else
+                             Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_integers, Some (mk_binop (Utils.extract_oobject e1) (match Operators.methfun_to_binop f with
+                                                                                                                                                     | O_py_floor_div -> O_div
+                                                                                                                                                     | x -> x) (Utils.extract_oobject e2) range ~etyp:T_int)) range) flow in
+                         if is_arith_div_fun "int" f then
+                           assume (mk_binop (if is_reverse_operator f then e1 else e2) O_eq (mk_zero range) range) man flow
+                             ~fthen:(fun flow ->
+                               man.exec (Utils.mk_builtin_raise_msg "ZeroDivisionError" "integer division or modulo by zero" range) flow |> Eval.empty_singleton
+                             )
+                             ~felse:res
+                         else res flow
+
+                  )
                   ~felse:(fun false_flow ->
                       let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
                       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) expr false_flow)

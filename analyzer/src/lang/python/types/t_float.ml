@@ -150,10 +150,20 @@ module Domain =
                    assume
                      (mk_py_isinstance_builtin e2 "float" range) man flow
                      ~fthen:(fun flow ->
-                       if is_reverse_operator f then
-                         Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_float, Some (mk_binop (extract_oobject e2) (Operators.methfun_to_binop f) (extract_oobject e1) range ~etyp:(T_float F_DOUBLE))) range) flow
+                       let res = fun flow ->
+                         if is_reverse_operator f then
+                           Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_float, Some (mk_binop (extract_oobject e2) (Operators.methfun_to_binop f) (extract_oobject e1) range ~etyp:(T_float F_DOUBLE))) range) flow
+                         else
+                           Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_float, Some (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) range ~etyp:(T_float F_DOUBLE))) range) flow in
+                       if is_arith_div_fun "float" f then
+                         assume (mk_binop (if is_reverse_operator f then e1 else e2) O_eq (mk_zero range) range)
+                           man flow
+                           ~fthen:(fun flow ->
+                             man.exec (Utils.mk_builtin_raise_msg "ZeroDivisionError" "float division by zero" range) flow |> Eval.empty_singleton
+                           )
+                           ~felse:res
                        else
-                         Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_float, Some (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) range ~etyp:(T_float F_DOUBLE))) range) flow
+                         res flow
                      )
                      ~felse:(fun flow ->
                        assume

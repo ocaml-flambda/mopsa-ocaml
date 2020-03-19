@@ -120,6 +120,20 @@ let is_arith_binop_fun cl str =
     | "__rxor__" -> cl = "int"
     | _ -> false
 
+let is_arith_div_fun cl str =
+  let splitted = String.split_on_char '.' str in
+  let l = ListExt.nth splitted (ListExt.length splitted - 1) in
+  ListExt.hd splitted = cl &&
+    match l with
+    | "__floordiv__"
+    | "__rfloordiv__"
+    | "__mod__"
+    | "__rmod__"
+    | "__truediv__"
+    | "__rtruediv__" -> true
+    | _ -> false
+
+
 let is_reverse_operator str =
   let splitted = String.split_on_char '.' str in
   let l = ListExt.nth splitted (ListExt.length splitted - 1) in
