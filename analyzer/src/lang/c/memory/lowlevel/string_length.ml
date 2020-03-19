@@ -538,8 +538,14 @@ struct
     evl3 >>$ fun min2 flow ->
     evl4 >>$ fun max2 flow ->
 
-    let length1 = mk_length_var base1 ~mode:mode1 range in
-    let length2 = mk_length_var base2 ~mode:mode2 range in
+    let length1 = match base1.base_kind with
+      | String str -> mk_int (String.length str) range
+      | _ -> mk_length_var base1 ~mode:mode1 range
+    in
+    let length2 = match base2.base_kind with
+      | String str -> mk_int (String.length str) range
+      | _ -> mk_length_var base2 ~mode:mode2 range
+    in
 
     let before1 = le max1 (pred length1 range) range in
     let before2 = le max2 (pred length2 range) range in
