@@ -219,7 +219,17 @@ struct
           man.exec ~zone:Zone.Z_py (mk_rename_var v v' range) flow)
         flow vas vas'
       |> Post.return |> OptionExt.return
+
+    | S_fold ({ekind = E_addr ({addr_kind = A_py_tuple _} as a)}, [{ekind = E_addr a'}]) ->
+      let vas = var_of_addr a in
+      let vas' = var_of_addr a' in
+      List.fold_left2 (fun flow v v' ->
+          man.exec ~zone:Zone.Z_py (mk_fold_var v [v'] range) flow)
+        flow vas vas'
+      |> Post.return |> OptionExt.return
+
     | _ -> None
+
 
 
   let ask : type r. r query -> ('a, unit) man -> 'a flow -> r option =

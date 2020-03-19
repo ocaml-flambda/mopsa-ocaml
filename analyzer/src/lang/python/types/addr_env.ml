@@ -274,7 +274,10 @@ struct
           flow |> Post.return |> OptionExt.return
         | _ -> assert false (* shouldn't happen *) end
 
+
+    | S_fold (({ekind = E_addr a'} as e2), [{ekind = E_addr a} as e1])
     | S_rename (({ekind = E_addr a} as e1), ({ekind = E_addr a'} as e2)) ->
+       debug "fold/rename";
       let cur = get_env T_cur man flow in
       let ncur = AMap.map (ASet.map (fun addr -> if addr = Def a then Def a' else addr)) cur in
       let flow = set_env T_cur ncur man flow in
@@ -292,9 +295,13 @@ struct
         else
           flow in
       begin match akind a with
-        | A_py_instance {addr_kind = A_py_class (C_annot _, _)} ->
+      | A_py_instance {addr_kind = A_py_class (C_annot _, _)} ->
+         let skind = match skind stmt with
+           | S_fold _ -> S_fold ({e2 with ekind = E_py_annot e2}, [e1])
+           | S_rename _ -> S_rename ({e1 with ekind = E_py_annot e1}, e2)
+           | _ -> assert false in
           man.exec ~zone:Zone.Z_py_obj stmt flow |>
-          man.exec ~zone:Zone.Z_py_obj {stmt with skind = S_rename ({e1 with ekind = E_py_annot e1}, e2)}
+          man.exec ~zone:Zone.Z_py_obj {stmt with skind}
         | A_py_instance _ ->
           man.exec ~zone:Zone.Z_py_obj stmt flow
         | ak when Objects.Data_container_utils.is_data_container ak ->

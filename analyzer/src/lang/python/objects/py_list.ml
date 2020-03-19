@@ -719,6 +719,13 @@ struct
          man.exec ~zone:Zone.Z_py (mk_remove_var va range) |>
          Post.return |> OptionExt.return
 
+    | S_fold ({ekind = E_addr ({addr_kind = A_py_list _} as a)}, addrs) ->
+       let va = var_of_addr a in
+       let vas = List.map (fun ea' -> match ekind ea' with
+                                      | E_addr ({addr_kind = A_py_list _} as a') -> var_of_addr a'
+                                      | _ -> assert false) addrs in
+       man.exec ~zone:Zone.Z_py (mk_fold_var va vas range) flow |> Post.return |> OptionExt.return
+
     | S_rename ({ekind = E_addr ({addr_kind = A_py_list _} as a)}, {ekind = E_addr a'}) ->
       (* FIXME: I guess we could just do it for every data_container. Maybe add a data_container domain on top of them performing the renaming?*)
       (* working on lists entails smashed element variable being index by the address, meaning we need to rename them *)

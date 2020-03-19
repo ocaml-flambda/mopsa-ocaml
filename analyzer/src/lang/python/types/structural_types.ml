@@ -122,9 +122,27 @@ struct
       Post.return flow |>
       OptionExt.return
 
+    | S_fold ({ekind = E_addr ({addr_kind = A_py_instance _} as a)}, addrs) ->
+       let cur = get_env T_cur man flow in
+       let old_a = find a cur in
+       (* let fold_vars = List.fold_left (fun stmts  (aun  mk_fold_var (mk_addr_attr a attr T_any) (List.map (fun a' -> mk_addr_attr a' attr T_any) addrs) range in *)
+       let newa, ncur, fold_stmts =
+         List.fold_left (fun (newa, ncur, stmts) a' ->
+             match ekind a' with
+             | E_addr a' ->
+                begin match find_opt a' ncur  with
+                 | None -> newa, remove a' cur, stmts
+                 | Some va' ->
+                    AttrSet.join newa va', remove a' cur,
+                    AttrSet.fold_u (fun attr stmts -> mk_fold_var (mk_addr_attr a attr T_any) [mk_addr_attr a' attr T_any] range :: stmts) va' stmts
+                end
+             | _ -> assert false
+           ) (old_a, cur, []) addrs in
+       set_env T_cur (add a newa ncur) man flow |>
+         man.exec (mk_block fold_stmts range) |> Post.return |> OptionExt.return
+
+
     | S_rename ({ekind = E_addr ({addr_kind = A_py_instance _ } as a)}, {ekind = E_addr a'}) ->
-      (* | S_rename ({ekind = E_addr ({addr_kind = A_py_var _ } as a)}, {ekind = E_addr a'}) -> *)
-      (* TODO: le faire autrepart (addr_env), /!\ zones *)
       let cur = get_env T_cur man flow in
       let old_a = find a cur in
       let to_rename_stmt = mk_block (AttrSet.fold_u (fun attr renames ->
