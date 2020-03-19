@@ -274,6 +274,27 @@ struct
           flow |> Post.return |> OptionExt.return
         | _ -> assert false (* shouldn't happen *) end
 
+    | S_fold ({ekind = E_var (v, mode)}, vars) ->
+       let cur = get_env T_cur man flow in
+       begin match AMap.find_opt v cur with
+       | None ->
+          begin match v.vkind with
+          | V_addr_attr(a, _) when Objects.Data_container_utils.is_data_container a.addr_kind ->
+             flow |> Post.return |> OptionExt.return
+          | _ -> assert false (* shouldn't happen *)
+          end
+       | Some av ->
+          let new_av, ncur = List.fold_left (fun (av, ncur) ev' ->
+                                 let v' = match ekind ev' with
+                                   | E_var (v', _) -> v'
+                                   | _ -> assert false in
+                                 match AMap.find_opt v' cur with
+                                 | None -> av, ncur
+                                 | Some av' -> ASet.join av av', AMap.remove v' cur
+                               ) (av, cur) vars in
+          set_env T_cur (AMap.add v new_av ncur) man flow |>
+              Post.return |> OptionExt.return
+       end
 
     | S_fold (({ekind = E_addr a'} as e2), [{ekind = E_addr a} as e1])
     | S_rename (({ekind = E_addr a} as e1), ({ekind = E_addr a'} as e2)) ->

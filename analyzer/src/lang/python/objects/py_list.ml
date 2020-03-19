@@ -727,6 +727,7 @@ struct
 
 
     | S_fold ({ekind = E_addr ({addr_kind = A_py_list _} as a)}, addrs) ->
+       debug "list fold";
        let va = var_of_addr a in
        let vas = List.map (fun ea' -> match ekind ea' with
                                       | E_addr ({addr_kind = A_py_list _} as a') -> var_of_addr a'
