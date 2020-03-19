@@ -69,10 +69,7 @@
                             {
                                 "product": [
                                     "universal.numeric.values.intervals.integer",
-			            "universal.numeric.values.congruences"
-                                ],
-                                "reductions": [
-                                    "universal.numeric.reductions.intervals_congruences"
+			            "universal.numeric.values.zero"
                                 ]
                             }
 			]
