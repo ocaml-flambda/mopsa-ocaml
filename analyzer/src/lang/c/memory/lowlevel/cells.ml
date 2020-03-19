@@ -1135,7 +1135,7 @@ struct
 
   (** Compute the interval of an offset *)
   let offset_interval offset range man flow : Itv.t =
-    let evl = man.eval offset ~zone:(Z_c, Z_u_num) flow in
+    let evl = man.eval offset ~zone:(Z_c_scalar, Z_u_num) flow in
     Eval.apply (fun ee flow -> man.ask (Universal.Numeric.Common.mk_int_interval_query ee) flow) Itv.join Itv.meet Itv.bottom evl
 
 

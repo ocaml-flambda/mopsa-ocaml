@@ -72,7 +72,6 @@ struct
     ieval = {
       provides = [Z_c_low_level, Z_c_scalar];
       uses = [
-        Z_c, Z_u_num;
         Z_c_low_level, Z_u_num;
         Z_c_scalar, Z_u_num;
         Z_c_low_level, Z_c_scalar;
@@ -412,8 +411,8 @@ struct
   let exec_assume_quantified_eq base offset mode n range man flow =
     (** Get symbolic bounds of the offset *)
     let min, max = Common.Quantified_offset.bound offset in
-    man.eval ~zone:(Z_c, Z_u_num) min flow >>$ fun min flow ->
-    man.eval ~zone:(Z_c, Z_u_num) max flow >>$ fun max flow ->
+    man.eval ~zone:(Z_c_scalar, Z_u_num) min flow >>$ fun min flow ->
+    man.eval ~zone:(Z_c_scalar, Z_u_num) max flow >>$ fun max flow ->
 
     let length = mk_length_var base ~mode range in
     eval_base_size base range man flow >>$ fun size flow ->
@@ -462,8 +461,8 @@ struct
   let exec_assume_quantified_ne_zero base offset mode range man flow =
     (** Get symbolic bounds of the offset *)
     let min, max = Common.Quantified_offset.bound offset in
-    man.eval ~zone:(Z_c, Z_u_num) min flow >>$ fun min flow ->
-    man.eval ~zone:(Z_c, Z_u_num) max flow >>$ fun max flow ->
+    man.eval ~zone:(Z_c_scalar, Z_u_num) min flow >>$ fun min flow ->
+    man.eval ~zone:(Z_c_scalar, Z_u_num) max flow >>$ fun max flow ->
 
     let length =
       match base.base_kind with
@@ -526,12 +525,12 @@ struct
 
     (* Get symbolic bounds of quantified offsets *)
     let min1, max1 = Common.Quantified_offset.bound offset1 in
-    let evl1 = man.eval ~zone:(Z_c, Z_u_num) min1 flow in
-    let evl2 = man.eval ~zone:(Z_c, Z_u_num) max1 flow in
+    let evl1 = man.eval ~zone:(Z_c_scalar, Z_u_num) min1 flow in
+    let evl2 = man.eval ~zone:(Z_c_scalar, Z_u_num) max1 flow in
 
     let min2, max2 = Common.Quantified_offset.bound offset2 in
-    let evl3 = man.eval ~zone:(Z_c, Z_u_num) min2 flow in
-    let evl4 = man.eval ~zone:(Z_c, Z_u_num) max2 flow in
+    let evl3 = man.eval ~zone:(Z_c_scalar, Z_u_num) min2 flow in
+    let evl4 = man.eval ~zone:(Z_c_scalar, Z_u_num) max2 flow in
     
     evl1 >>$ fun min1 flow ->
     evl2 >>$ fun max1 flow ->
