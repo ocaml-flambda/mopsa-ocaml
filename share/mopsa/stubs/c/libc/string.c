@@ -61,7 +61,7 @@ void *memcpy (void *__restrict __dest, const void *__restrict __src,
  * requires: valid_ptr_range(__src, 0, __len - 1);
  * requires: valid_ptr_range(__dest, 0, __len - 1);
  * assigns: __dest[0, __len - 1];
- * ensures: forall int i in [0, __len - 1]: ((unsigned char*)__dest[i])' == (unsigned char*)__src[i];
+ * ensures: forall int i in [0, __len - 1]: (((unsigned char*)__dest)[i])' == ((unsigned char*)__src)[i];
  */
 void *memmove (void *__dest, const void *__src, size_t __len);
 
@@ -75,22 +75,22 @@ void *memmove (void *__dest, const void *__src, size_t __len);
  * assigns: __dest[0, __n - 1];
  *
  * case "notfound" {
- *   assumes: forall int i in [0, __n - 1]: (unsigned char*)__src[i] != __c;
- *   ensures: forall int i in [0, __n - 1]: ((unsigned char*)__dest[i])' == (unsigned char*)__src[i];
+ *   assumes: forall int i in [0, __n - 1]: ((unsigned char*)__src)[i] != __c;
+ *   ensures: forall int i in [0, __n - 1]: (((unsigned char*)__dest)[i])' == ((unsigned char*)__src)[i];
  *   ensures: return == NULL;
  * }
  *
  * case "found" {
- *   assumes: exists int i in [0, __n - 1]: (unsigned char*)__src[i] == __c;
+ *   assumes: exists int i in [0, __n - 1]: ((unsigned char*)__src)[i] == __c;
  *   ensures: exists int i in [0, __n - 1]: (
  *              (unsigned char*)__src[i] == __c and
  *              ((unsigned char*)__dest[i])' == __c and
  *              return == (unsigned char*)__src + i + 1 and
  *              forall int j in [0, i - 1]: (
  *                (unsigned char*)__src[j] != __c and
- *                ((unsigned char*)__dest[j])' == (unsigned char*)__src[j]
+ *                ((unsigned char*)__dest[j])' == ((unsigned char*)__src)[j]
  *              ) and
- *              forall int j in [i, __n - 1]: ((unsigned char*)__dest[j])' == (unsigned char*)__dest[j]
+ *              forall int j in [i, __n - 1]: (((unsigned char*)__dest)[j])' == ((unsigned char*)__dest)[j]
  *            );
  * }
  */
@@ -132,16 +132,16 @@ int memcmp (const void *__s1, const void *__s2, size_t __n);
  * requires: size(__s) >= __n;
  *
  * case "found" {
- *   assumes: exists int i in [0, __n - 1]: (unsigned char*)__s[i] == __c;
+ *   assumes: exists int i in [0, __n - 1]: ((unsigned char*)__s)[i] == __c;
  *   ensures: exists int i in [0, __n - 1]: (
  *              (unsigned char*)__s[i] == __c and
- *              forall int j in [0, i - 1]: (unsigned char*)__s[i] != __c and
+ *              forall int j in [0, i - 1]: ((unsigned char*)__s)[i] != __c and
  *              return == (unsigned char*)__s + i
  *            );
  * }
  *
  * case "notfound" {
- *   assumes: forall int i in [0, __n - 1]: (unsigned char*)__s[i] != __c;
+ *   assumes: forall int i in [0, __n - 1]: ((unsigned char*)__s)[i] != __c;
  *   ensures: return == NULL;
  * }
  */
@@ -149,10 +149,10 @@ void *memchr (const void *__s, int __c, size_t __n);
 
 
 /*$
- * requires: exists int i in [0, size(__s) - 1]: (unsigned char*)__s[i] == __c;
+ * requires: exists int i in [0, size(__s) - 1]: ((unsigned char*)__s)[i] == __c;
  * ensures:  exists int i in [0, size(__s) - 1]: (
  *             (unsigned char*)__s[i] == __c and
- *             forall int j in [0, i - 1]: (unsigned char*)__s[i] != __c and
+ *             forall int j in [0, i - 1]: ((unsigned char*)__s)[i] != __c and
  *             return == (unsigned char*)__s + i
  *           );
  */
@@ -169,16 +169,16 @@ void *__rawmemchr (const void *__s, int __c);
  * requires: size(__s) >= __n;
  *
  * case "found" {
- *   assumes: exists int i in [0, __n - 1]: (unsigned char*)__s[i] == __c;
+ *   assumes: exists int i in [0, __n - 1]: ((unsigned char*)__s)[i] == __c;
  *   ensures: exists int i in [0, __n - 1]: (
  *              (unsigned char*)__s[i] == __c and
- *              forall int j in [0, i - 1]: (unsigned char*)__s[i] != __c and
+ *              forall int j in [0, i - 1]: ((unsigned char*)__s)[i] != __c and
  *              return == (unsigned char*)__s + i
  *            );
  * }
  *
  * case "notfound" {
- *   assumes: forall int i in [0, __n - 1]: (unsigned char*)__s[i] != __c;
+ *   assumes: forall int i in [0, __n - 1]: ((unsigned char*)__s)[i] != __c;
  *   ensures: return == NULL;
  * }
  */
