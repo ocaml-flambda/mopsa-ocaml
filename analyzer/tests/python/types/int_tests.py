@@ -26,12 +26,14 @@ def test_div():
     x = 84
     y = 42
     z = x // y
+    mopsa.ignore_exception(ZeroDivisionError)
     mopsa.massert(isinstance(z, int))
 
 def test_div_float():
     x = 84
     y = 43
     z = x / y
+    mopsa.ignore_exception(ZeroDivisionError)
     mopsa.massert(isinstance(z, float))
 
 def test_comps():
