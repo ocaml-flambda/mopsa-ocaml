@@ -719,6 +719,13 @@ struct
          man.exec ~zone:Zone.Z_py (mk_remove_var va range) |>
          Post.return |> OptionExt.return
 
+    | S_invalidate {ekind = E_addr ({addr_kind = A_py_list _} as a)} ->
+       let va = var_of_addr a in
+       flow |>
+         man.exec ~zone:Zone.Z_py (mk_invalidate_var va range) |>
+         Post.return |> OptionExt.return
+
+
     | S_fold ({ekind = E_addr ({addr_kind = A_py_list _} as a)}, addrs) ->
        let va = var_of_addr a in
        let vas = List.map (fun ea' -> match ekind ea' with

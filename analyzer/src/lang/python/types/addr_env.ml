@@ -310,6 +310,8 @@ struct
       end
       |> Post.return |> OptionExt.return
 
+
+    | S_invalidate {ekind = E_addr a}
     | S_remove {ekind = E_addr a} ->
        let cur = get_env T_cur man flow in
        let ncur = AMap.map (ASet.remove (Def a)) cur in
