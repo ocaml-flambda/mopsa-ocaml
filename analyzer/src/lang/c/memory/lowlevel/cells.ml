@@ -902,7 +902,7 @@ struct
         ) man flow
     in
     let v = mk_cell_var c in
-    let stmt = mk_forget_var v range in
+    let stmt = mk_remove_var v range in
     man.post stmt ~zone:Z_c_scalar flow
 
 
