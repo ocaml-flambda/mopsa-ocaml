@@ -203,36 +203,41 @@ struct
   (** Evaluate a quantified formula and its eventual negation *)
   and eval_quantified_formula cond_to_stmt q v s f range man flow : 'a flow =
     (* Check that the set [s] is not empty *)
-    let flow =
+    let cond =
       match s with
-      | S_resource _ -> flow
-      | S_interval(a,b) -> man.exec (mk_assume (mk_binop a O_le b range) range) flow
+      | S_resource _ -> mk_true range
+      | S_interval(a,b) -> mk_binop a O_le b range
     in
-    if man.lattice.is_bottom (Flow.get T_cur man.lattice flow) then
-      flow
-    else
-      (* Add [v] to the environment *)
-      let flow = man.exec (mk_add_var v range) flow in
-      (* Ensure that [v] is in the set [s] *)
-      let flow = match s with
-        | S_resource _ -> flow
-        | S_interval(a,b) -> man.exec (mk_assume (mk_in (mk_var v range) a b range) range) flow
-      in
-      (* Replace [v] in [f] with quantified variables *)
-      let f' = visit_expr_in_formula
-          (fun e ->
-             match ekind e with
-             | E_var (vv, _) when compare_var v vv = 0 ->
-               Keep (mk_stub_quantified q v s range)
+    assume_flow cond
+      ~fthen:(fun flow ->
+          (* Add [v] to the environment *)
+          let flow = man.exec (mk_add_var v range) flow in
+          (* Ensure that [v] is in the set [s] *)
+          let flow = match s with
+            | S_resource _ -> flow
+            | S_interval(a,b) -> man.exec (mk_assume (mk_in (mk_var v range) a b range) range) flow
+          in
+          (* Replace [v] in [f] with quantified variables *)
+          let f' = visit_expr_in_formula
+              (fun e ->
+                 match ekind e with
+                 | E_var (vv, _) when compare_var v vv = 0 ->
+                   Keep (mk_stub_quantified q v s range)
 
-             | _ -> VisitParts e
-          )
-          f
-      in
-      (* Evaluate [f'] *)
-      let flow = eval_formula cond_to_stmt f' man flow in
-      (* Remove [v] from the environment *)
-      man.exec (mk_remove_var v range) flow
+                 | _ -> VisitParts e
+              )
+              f
+          in
+          (* Evaluate [f'] *)
+          let flow = eval_formula cond_to_stmt f' man flow in
+          (* Remove [v] from the environment *)
+          man.exec (mk_remove_var v range) flow
+        )
+      ~felse:(fun flow ->
+          match q with
+          | FORALL -> man.exec (cond_to_stmt (mk_true range) range) flow
+          | EXISTS -> man.exec (cond_to_stmt (mk_false range) range) flow
+        ) man flow
 
 
 
