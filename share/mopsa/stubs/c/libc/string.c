@@ -224,7 +224,7 @@ char *strncpy (char *__restrict __dest,
  * requires: no_overlap(__src, __dest, src_len);
  * requires: valid_ptr_range(__dest, 0, src_len + dest_len + 1);
  * assigns: __dest[0, src_len + dest_len + 1];
- * ensures: forall int i in [0, dest_len - 1]: (__dest[i])' == __dest[i];
+ * ensures: forall int i in [0, (int)dest_len - 1]: (__dest[i])' == __dest[i];
  * ensures: forall int i in [0, src_len]: (__dest[i + dest_len])' == __src[i];
  * ensures: return == __dest;
  */
@@ -239,7 +239,7 @@ char *strcat (char *__restrict __dest, const char *__restrict __src);
  *   assumes: __len > src_len + 1;
  *   requires: valid_ptr_range(__dest, 0, src_len + dest_len);
  *   assigns: __dest[0, src_len + dest_len];
- *   ensures: forall int i in [0, dest_len - 1]: (__dest[i])' == __dest[i];
+ *   ensures: forall int i in [0, (int)dest_len - 1]: (__dest[i])' == __dest[i];
  *   ensures: forall int i in [0, src_len]: (__dest[i + dest_len])' == __src[i];
  *   ensures: return == __dest;
  * }
@@ -248,8 +248,8 @@ char *strcat (char *__restrict __dest, const char *__restrict __src);
  *   assumes: __len <= src_len + 1;
  *   requires: valid_ptr_range(__dest, 0, __len + dest_len);
  *   assigns: __dest[0, __len + dest_len];
- *   ensures: forall int i in [0, dest_len - 1]: (__dest[i])' == __dest[i];
- *   ensures: forall int i in [0, __len - 1]: (__dest[i + dest_len])' == __src[i];
+ *   ensures: forall int i in [0, (int)dest_len - 1]: (__dest[i])' == __dest[i];
+ *   ensures: forall int i in [0, (int)__len - 1]: (__dest[i + dest_len])' == __src[i];
  *   ensures: (__dest[dest_len + __len])' == 0;
  *   ensures: return == __dest;
  * }
