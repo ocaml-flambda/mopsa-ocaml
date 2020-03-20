@@ -27,7 +27,7 @@
  * predicate valid_string(s):
  *   valid_ptr(s) and
  *   size(s) >= 1 and
- *   exists int _i in [0, size(s) - 1]: s[_i] == 0
+ *   exists int _i in [0, size(s) - offset(s) - 1]: s[_i] == 0
  * ;
  */
 
@@ -35,7 +35,7 @@
 /*$$
  * predicate valid_primed_string(s):
  *   valid_ptr(s) and
- *   exists int _i in [0, size(s) - 1]: (s[_i])' == 0
+ *   exists int _i in [0, size(s) - offset(s) - 1]: (s[_i])' == 0
  * ;
  */
 
@@ -58,7 +58,7 @@
 
 /*$$
  * predicate valid_ptr_range(p, i, j):
- *   j >= i implies forall int k in [i,j]: valid_ptr(p+k);
+ *   forall int k in [i, j]: valid_ptr(p+k);
  */
 
 /*$
