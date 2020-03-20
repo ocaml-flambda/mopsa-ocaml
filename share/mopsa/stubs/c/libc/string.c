@@ -237,8 +237,8 @@ char *strcat (char *__restrict __dest, const char *__restrict __src);
  *
  * case "zero-found" {
  *   assumes: __len > src_len + 1;
- *   requires: valid_ptr_range(__dest, 0, src_len + dest_len + 1);
- *   assigns: __dest[0, src_len + dest_len + 1];
+ *   requires: valid_ptr_range(__dest, 0, src_len + dest_len);
+ *   assigns: __dest[0, src_len + dest_len];
  *   ensures: forall int i in [0, dest_len - 1]: (__dest[i])' == __dest[i];
  *   ensures: forall int i in [0, src_len]: (__dest[i + dest_len])' == __src[i];
  *   ensures: return == __dest;
@@ -246,8 +246,8 @@ char *strcat (char *__restrict __dest, const char *__restrict __src);
  *
  * case "zero-not-found" {
  *   assumes: __len <= src_len + 1;
- *   requires: valid_ptr_range(__dest, 0, __len + dest_len + 1);
- *   assigns: __dest[0, __len + dest_len + 1];
+ *   requires: valid_ptr_range(__dest, 0, __len + dest_len);
+ *   assigns: __dest[0, __len + dest_len];
  *   ensures: forall int i in [0, dest_len - 1]: (__dest[i])' == __dest[i];
  *   ensures: forall int i in [0, __len - 1]: (__dest[i + dest_len])' == __src[i];
  *   ensures: (__dest[dest_len + __len])' == 0;
@@ -431,7 +431,7 @@ char *strrchr (const char *__s, int __c);
 
 /*$
  * requires: valid_string(__s);
- * ensures:  exists int i in [1, size(__s) - 1]: ( 
+ * ensures:  exists int i in [0, size(__s) - offset(__s) - 1]: ( 
  *             __s[i] == 0 and 
  *             (forall int j in [0, i - 1]: __s[j] != 0) and
  *             return == i 
