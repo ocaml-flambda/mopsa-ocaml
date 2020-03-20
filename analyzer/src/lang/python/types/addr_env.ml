@@ -288,6 +288,55 @@ struct
        set_env T_cur (AMap.add v new_av ncur) man flow |>
          Post.return |> OptionExt.return
 
+    | S_expand (({ekind = E_var (v, mode)}), vars) ->
+       let cur = get_env T_cur man flow in
+       begin match AMap.find_opt v cur with
+       | None -> flow
+       | Some addrs_v ->
+          let varset = VarSet.of_list (List.map (fun evars -> match ekind evars with
+                                                              | E_var (v, _) -> v
+                                                              | _ -> assert false) vars
+                         ) in
+          let ncur = AMap.mapi (fun var aset -> if VarSet.mem var varset then ASet.join aset addrs_v else aset) cur in
+          set_env T_cur ncur man flow
+       end
+       |> Post.return |> OptionExt.return
+
+    | S_expand (({ekind = E_addr a} as e1), addrs) ->
+       let cur = get_env T_cur man flow in
+       let addrs_aset = List.map (fun eaddr -> match ekind eaddr with
+                                               | E_addr addr -> PyAddr.Def addr
+                                               | _ -> assert false) addrs |> ASet.of_list in
+       let ncur = AMap.map
+                    (fun aset ->
+                      if ASet.mem (Def a) aset then
+                        ASet.join addrs_aset (ASet.remove (Def a) aset)
+                      else aset
+                    ) cur in
+       let flow = set_env T_cur ncur man flow in
+       let flow = Flow.fold (fun acc tk d ->
+              match tk with
+              | T_py_exception ({ekind = E_py_object (oa, oe)} as e, s, k) when compare_addr a oa = 0 ->
+                 List.fold_left (fun acc ea' ->
+                     match ekind ea' with
+                     | E_addr a' ->
+                        Flow.add (T_py_exception ({e with ekind = E_py_object (a', oe)}, s, k)) d man.lattice acc
+                     | _ -> assert false) acc addrs
+              | _ -> Flow.add tk d man.lattice acc) (Flow.bottom (Flow.get_ctx flow) (Flow.get_alarms flow)) flow in
+       begin match akind a with
+       | A_py_instance {addr_kind = A_py_class (C_annot _, _)} ->
+          let skind = S_expand ({e1 with ekind = E_py_annot e1}, addrs) in
+          man.exec ~zone:Zone.Z_py_obj stmt flow |>
+            man.exec ~zone:Zone.Z_py_obj {stmt with skind}
+       | A_py_instance _ ->
+          man.exec ~zone:Zone.Z_py_obj stmt flow
+       | ak when Objects.Data_container_utils.is_data_container ak ->
+          man.exec ~zone:Zone.Z_py_obj stmt flow
+       | _ -> flow
+       end
+       |> Post.return |> OptionExt.return
+
+
     | S_fold (({ekind = E_addr a'} as e2), [{ekind = E_addr a} as e1])
     | S_rename (({ekind = E_addr a} as e1), ({ekind = E_addr a'} as e2)) ->
        debug "fold/rename";

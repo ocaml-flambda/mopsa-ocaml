@@ -122,6 +122,28 @@ struct
       Post.return flow |>
       OptionExt.return
 
+    | S_expand ({ekind = E_addr ({addr_kind = A_py_instance _} as a)}, addrs) ->
+       let cur = get_env T_cur man flow in
+       let attrs = find a cur in
+       let addrs = List.map (fun eaddr -> match ekind eaddr with
+                                          | E_addr a -> a
+                                          | _ -> assert false) addrs in
+       let addrs_attrs =
+         fun attr -> List.map (fun addr -> mk_addr_attr addr attr T_any) addrs in
+       let ncur = List.fold_left (fun cur a ->
+                      AMap.add a
+                        (AttrSet.join
+                           (OptionExt.default AttrSet.empty (AMap.find_opt a cur))
+                           attrs)
+                        cur) cur addrs in
+       let expand_stmts =
+         AttrSet.fold_u (fun attr stmts ->
+             mk_expand_var (mk_addr_attr a attr T_any) (addrs_attrs attr) range :: stmts
+           ) attrs [] in
+       set_env T_cur (remove a ncur) man flow |>
+         man.exec (mk_block expand_stmts range) |> Post.return |> OptionExt.return
+
+
     | S_fold ({ekind = E_addr ({addr_kind = A_py_instance _} as a)}, addrs) ->
        let cur = get_env T_cur man flow in
        let old_a = OptionExt.default AttrSet.empty (find_opt a cur) in

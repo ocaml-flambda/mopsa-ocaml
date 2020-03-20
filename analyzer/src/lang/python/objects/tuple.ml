@@ -233,6 +233,14 @@ struct
         flow vas vas'
       |> Post.return |> OptionExt.return
 
+    | S_expand ({ekind = E_addr ({addr_kind = A_py_tuple _} as a)}, [{ekind = E_addr a'}]) ->
+      let vas = var_of_addr a in
+      let vas' = var_of_addr a' in
+      List.fold_left2 (fun flow v v' ->
+          man.exec ~zone:Zone.Z_py (mk_expand_var v [v'] range) flow)
+        flow vas vas'
+      |> Post.return |> OptionExt.return
+
     | _ -> None
 
 
