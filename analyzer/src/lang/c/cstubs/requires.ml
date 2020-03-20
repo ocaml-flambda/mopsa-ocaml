@@ -109,8 +109,8 @@ struct
         Common.Base.eval_base_size base range man' flow >>$ fun size flow ->
         man.eval ~zone:(Z_c_scalar,Z_u_num) size flow >>$ fun size flow ->
         let min, max = Common.Quantified_offset.bound offset in
-        man.eval ~zone:(Z_c, Z_u_num) min flow >>$ fun min flow ->
-        man.eval ~zone:(Z_c, Z_u_num) max flow >>$ fun max flow ->
+        man.eval ~zone:(Z_c_scalar, Z_u_num) min flow >>$ fun min flow ->
+        man.eval ~zone:(Z_c_scalar, Z_u_num) max flow >>$ fun max flow ->
         let elm = under_type ptr.etyp |> void_to_char |> (fun t -> mk_z (sizeof_type t) range) in
         let limit = sub size elm range in
         let cond = mk_binop
