@@ -408,6 +408,8 @@ struct
   
 
   (** 𝕊⟦ *(p + ∀i) == n ⟧ *)
+  (* FIXME: this transfer function is sound only when the offset is an
+     affine function with coefficient 1, i.e. of the form ∀i + a *)
   let exec_assume_quantified_eq base offset mode n range man flow =
     (** Get symbolic bounds of the offset *)
     let min, max = Common.Quantified_offset.bound offset in
@@ -458,6 +460,8 @@ struct
 
 
   (** 𝕊⟦ *(p + ∀i) != 0 ⟧ *)
+  (* FIXME: this transfer function is sound only when the offset is an
+     affine function with coefficient 1, i.e. of the form ∀i + a *)
   let exec_assume_quantified_ne_zero base offset mode range man flow =
     (** Get symbolic bounds of the offset *)
     let min, max = Common.Quantified_offset.bound offset in
@@ -492,6 +496,8 @@ struct
 
 
   (** 𝕊⟦ *(p + ∀i) ? n ⟧ *)
+  (* FIXME: this transfer function is sound only when the offset is an
+     affine function with coefficient 1, i.e. of the form ∀i + a *)
   let exec_assume_quantified op lval n range man flow =
     eval_pointed_base_offset (mk_c_address_of lval range) range man flow >>$ fun (base,offset,mode) flow ->
     if not (is_interesting_base base) then
@@ -513,6 +519,8 @@ struct
 
 
   (** 𝕊⟦ *(p + ∀i) == *(q + ∀j) ⟧ *)
+  (* FIXME: this transfer function is sound only when the offset is an
+     affine function with coefficient 1, i.e. of the form ∀i + a *)
   let exec_assume_double_quantified_eq lval1 lval2 range man flow =
     let evl1 = eval_pointed_base_offset (mk_c_address_of lval1 range) range man flow in
     let evl2 = eval_pointed_base_offset (mk_c_address_of lval2 range) range man flow in
@@ -569,7 +577,7 @@ struct
       (fun flow -> Cases.empty_singleton (Flow.bottom_from flow));
 
       [ log_and cover1 cover2 range ],
-      (fun flow -> man.post (mk_assume (eq length1 length2 range) range) ~zone:Z_u_num flow);
+      (fun flow -> man.post (mk_assume (eq (sub length1 min1 range) (sub length2 min2 range) range) range) ~zone:Z_u_num flow);
     ] ~zone:Z_u_num man flow
   
 
