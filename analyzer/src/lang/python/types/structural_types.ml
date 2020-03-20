@@ -124,7 +124,7 @@ struct
 
     | S_fold ({ekind = E_addr ({addr_kind = A_py_instance _} as a)}, addrs) ->
        let cur = get_env T_cur man flow in
-       let old_a = find a cur in
+       let old_a = OptionExt.default AttrSet.empty (find_opt a cur) in
        (* let fold_vars = List.fold_left (fun stmts  (aun  mk_fold_var (mk_addr_attr a attr T_any) (List.map (fun a' -> mk_addr_attr a' attr T_any) addrs) range in *)
        let newa, ncur, fold_stmts =
          List.fold_left (fun (newa, ncur, stmts) a' ->
