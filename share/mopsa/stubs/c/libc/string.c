@@ -237,11 +237,11 @@ char *strcpy (char *__restrict __dest, const char *__restrict __src);
 
 /*$
  * local: size_t src_nlen = strnlen(__src, __len);
- * requires: no_overlap(__src, __dest, __len);
- * requires: valid_ptr_range(__dest, 0, __len);
- * assigns: __dest[0, __len];
+ * requires: no_overlap(__src, __dest, __len - 1);
+ * requires: valid_ptr_range(__dest, 0, __len - 1);
+ * assigns: __dest[0, __len - 1];
  * ensures: forall int i in [0, (int)src_nlen - 1]: (__dest[i])' == __src[i];
- * ensures: forall int i in [src_nlen, __len]: (__dest[i])' == 0;
+ * ensures: forall int i in [src_nlen, __len - 1]: (__dest[i])' == 0;
  * ensures: return == __dest;
  */
 char *strncpy (char *__restrict __dest,
