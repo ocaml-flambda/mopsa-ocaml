@@ -183,6 +183,12 @@ struct
       Eval.singleton (mk_top s32 exp.erange) flow |>
       OptionExt.return
 
+    (* 𝔼⟦ snprintf(...) ⟧ *)
+    | E_c_builtin_call("snprintf", dst :: n :: format :: args) ->
+      check_args format args exp.erange man flow >>$? fun () flow ->
+      strnrand dst n exp.erange man flow >>$? fun () flow ->
+      Eval.singleton (mk_top s32 exp.erange) flow |>
+      OptionExt.return
 
     | _ -> None
 

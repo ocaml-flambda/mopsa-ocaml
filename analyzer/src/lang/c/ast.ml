@@ -1153,7 +1153,21 @@ let memrand (p:expr) (i:expr) (j:expr) range man flow =
   let stmt = mk_c_call_stmt f [p; i; j] range in
   man.post stmt flow
 
-  
+(** Randomize a string *)
+let strrand (p:expr) range man flow =
+  let open Sig.Domain.Manager in
+  let f = find_c_fundec_by_name "_mopsa_strrand" flow in
+  let stmt = mk_c_call_stmt f [p] range in
+  man.post stmt flow
+
+(** Randomize a substring *)
+let strnrand (p:expr) (n:expr) range man flow =
+  let open Sig.Domain.Manager in
+  let f = find_c_fundec_by_name "_mopsa_strnrand" flow in
+  let stmt = mk_c_call_stmt f [p; n] range in
+  man.post stmt flow
+
+
 (** Set elements of an array with the same value [c] *)
 let memset (p:expr) (c:expr) (i:expr) (j:expr) range man flow =
   let open Sig.Domain.Manager in
