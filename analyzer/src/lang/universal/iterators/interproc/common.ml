@@ -235,13 +235,14 @@ let exec_fun_body f body ret range man flow =
   (* Restore call stack *)
   let _, flow5 = Flow.pop_callstack flow4 in
 
-  (* Retrieve non-return flows *)
+  (* Retrieve non-cur/return flows *)
   let flow6 =
     Flow.fold
       (fun acc tk env ->
          match tk with
+         | T_cur      -> acc
          | T_return _ -> acc
-         | _ -> Flow.add tk env man.lattice acc
+         | _          -> Flow.add tk env man.lattice acc
       )
       flow5 flow2
   in
@@ -250,7 +251,7 @@ let exec_fun_body f body ret range man flow =
   let postl =
     Flow.fold (fun acc tk env ->
         match tk with
-        | T_return _ ->
+        | T_cur | T_return _ ->
           let flow = Flow.set T_cur env man.lattice flow6 in
           Post.return flow :: acc
 
