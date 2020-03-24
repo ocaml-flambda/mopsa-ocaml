@@ -228,7 +228,7 @@ let exec_fun_body f body ret range man flow =
 
   (* Restore return and callstack contexts *)
   let flow4 = match oldreturn with
-    | None -> flow2
+    | None -> flow3
     | Some ret -> Flow.set_ctx
                     (Context.add_unit return_key ret (Flow.get_ctx flow3)) flow3 in
 
