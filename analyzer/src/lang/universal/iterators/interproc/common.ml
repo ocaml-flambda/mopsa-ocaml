@@ -296,7 +296,11 @@ let inline f params locals body ret range man flow =
   post >>$ fun () flow ->
   match ret with
   | None ->
-    Eval.singleton (mk_unit range) flow
+    Eval.singleton (mk_unit range) flow ~cleaners:(
+      List.map (fun v ->
+          mk_remove_var v range
+        ) params
+    )
 
   | Some v ->
     Eval.singleton (mk_var v range) flow ~cleaners:(
