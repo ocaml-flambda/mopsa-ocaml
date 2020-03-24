@@ -183,7 +183,7 @@ let () =
                    let (olds,oldo,olde) = try BaseMap.find b acc with Not_found -> (Bot.BOT,Bot.BOT,Bot.BOT) in
                    let s = I.join_bot olds s in
                    let o = I.join_bot oldo o in
-                   let e = I.join_bot olde (Bot.Nb (I.cst (sizeof_type t))) in
+                   let e = I.join_bot olde (Bot.Nb (I.cst (sizeof_type (void_to_char t)))) in
                    BaseMap.add b (s,o,e) acc
                  | _ -> assert false
               ) BaseMap.empty messages

@@ -419,15 +419,12 @@ struct
       Eval.singleton exp' flow |>
       OptionExt.return
 
-    | E_c_cast(e, is_explicit_cast) when exp |> etyp |> is_c_int_type &&
-                                         e   |> etyp |> is_c_int_type
+    | E_c_cast(e, is_explicit_cast) when exp |> etyp |> is_c_int_type
       ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e' flow ->
       let t  = etyp exp in
       let t' = etyp e in
-      let r = rangeof t in
-      let r' = rangeof t' in
-      if range_leq r' r then
+      if is_c_int_type t' && range_leq (rangeof t') (rangeof t) then
         Eval.singleton e' flow |>
         OptionExt.return
       else
@@ -435,30 +432,18 @@ struct
         check_overflow t man range
           (fun e tflow -> Eval.singleton {e with etyp = to_num_type t} tflow)
           (fun e fflow ->
-             if is_explicit_cast && !opt_ignore_cast_alarm then
-               Eval.singleton (mk_unop (O_wrap(rmin, rmax)) e ~etyp:(to_num_type t) range) fflow
+             let wrap = mk_unop (O_wrap(rmin, rmax)) e ~etyp:(to_num_type t) range in
+             match ekind e with
+             | E_var _ | E_constant _ ->
+               Eval.singleton wrap fflow
+             | _ ->
+               if is_explicit_cast && !opt_ignore_cast_alarm then
+                 Eval.singleton wrap fflow
              else
                let flow1 = raise_c_cast_integer_overflow_alarm e' exp.etyp man flow fflow in
-               Eval.singleton (mk_unop (O_wrap(rmin, rmax)) e ~etyp:(to_num_type t) range) flow1
+               Eval.singleton wrap flow1
           ) e' flow |>
         OptionExt.return
-    | E_c_cast(e, is_explicit_cast) when exp |> etyp |> is_c_int_type &&
-                                         e   |> etyp |> is_int_type
-      ->
-      man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e' flow ->
-      let t  = etyp exp in
-      let rmin, rmax = rangeof t in
-      check_overflow t man range
-        (fun e tflow -> Eval.singleton {e with etyp = to_num_type t} tflow)
-        (fun e fflow ->
-           if is_explicit_cast && !opt_ignore_cast_alarm then
-             Eval.singleton (mk_unop (O_wrap(rmin, rmax)) e ~etyp:(to_num_type t) range) fflow
-           else
-             let flow1 = raise_c_cast_integer_overflow_alarm e' exp.etyp man flow fflow in
-             Eval.singleton (mk_unop (O_wrap(rmin, rmax)) e ~etyp:(to_num_type t) range) flow1
-        ) e' flow |>
-      OptionExt.return
-
 
     | E_unop(O_log_not, e) when exp |> etyp |> is_c_num_type &&
                                 not (is_compare_expr e)
