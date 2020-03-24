@@ -32,6 +32,9 @@ let _ =
       "__builtin_va_end";
       "__builtin_va_copy";
 
+      "__builtin_alloca";
+      "alloca";
+
       "printf";
       "__printf_chk";
       "fprintf";
@@ -39,6 +42,7 @@ let _ =
       "sprintf";
       "__sprintf_chk";
       "__builtin___sprintf_chk";
+      "snprintf";
       "fscanf";
       "scanf";
       "sscanf";

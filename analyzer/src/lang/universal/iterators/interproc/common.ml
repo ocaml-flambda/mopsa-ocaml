@@ -228,20 +228,21 @@ let exec_fun_body f body ret range man flow =
 
   (* Restore return and callstack contexts *)
   let flow4 = match oldreturn with
-    | None -> flow2
+    | None -> flow3
     | Some ret -> Flow.set_ctx
                     (Context.add_unit return_key ret (Flow.get_ctx flow3)) flow3 in
 
   (* Restore call stack *)
   let _, flow5 = Flow.pop_callstack flow4 in
 
-  (* Retrieve non-return flows *)
+  (* Retrieve non-cur/return flows *)
   let flow6 =
     Flow.fold
       (fun acc tk env ->
          match tk with
+         | T_cur      -> acc
          | T_return _ -> acc
-         | _ -> Flow.add tk env man.lattice acc
+         | _          -> Flow.add tk env man.lattice acc
       )
       flow5 flow2
   in
@@ -250,7 +251,7 @@ let exec_fun_body f body ret range man flow =
   let postl =
     Flow.fold (fun acc tk env ->
         match tk with
-        | T_return _ ->
+        | T_cur | T_return _ ->
           let flow = Flow.set T_cur env man.lattice flow6 in
           Post.return flow :: acc
 
@@ -295,7 +296,11 @@ let inline f params locals body ret range man flow =
   post >>$ fun () flow ->
   match ret with
   | None ->
-    Eval.singleton (mk_unit range) flow
+    Eval.singleton (mk_unit range) flow ~cleaners:(
+      List.map (fun v ->
+          mk_remove_var v range
+        ) params
+    )
 
   | Some v ->
     Eval.singleton (mk_var v range) flow ~cleaners:(

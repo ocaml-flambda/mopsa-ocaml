@@ -587,19 +587,25 @@ long double powl(long double __x, long double __y);
 
 /*$
  * requires: valid_float(__x) and __x >= 0.;
- * ensures:  valid_float(return) and return >= 0.;
+ * ensures:  valid_float(return) and return >= 0;
+ * ensures:  (__x >= 1. implies return <= __x);
+ * ensures:  (__x <= 1. implies return <= 1);
  */
 double sqrt(double __x);
 
 /*$
  * requires: valid_float(__x) and __x >= 0.;
- * ensures:  valid_float(return) and return >= 0.;
+ * ensures:  valid_float(return) and return >= 0;
+ * ensures:  (__x >= 1. implies return <= __x);
+ * ensures:  (__x <= 1. implies return <= 1);
  */
 float sqrtf(float __x);
 
 /*$
  * requires: valid_float(__x) and __x >= 0.;
- * ensures:  valid_float(return) and return >= 0.;
+ * ensures:  valid_float(return) and return >= 0;
+ * ensures:  (__x >= 1. implies return <= __x);
+ * ensures:  (__x <= 1. implies return <= 1);
  */
 long double sqrtl(long double __x);
 

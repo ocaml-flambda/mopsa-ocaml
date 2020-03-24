@@ -271,6 +271,9 @@ let mk_stub_call stub args range =
   in
   mk_expr (E_stub_call (stub, args)) ~etyp:t range
 
+let mk_stub_builtin_call builtin arg ~etyp range =
+  mk_expr (E_stub_builtin_call (builtin,arg)) ~etyp range
+
 let mk_stub_quantified quant v s range =
   mk_expr (E_stub_quantified(quant, v, s)) range ~etyp:v.vtyp
 
@@ -280,17 +283,27 @@ let mk_stub_resource_mem e res range =
 let mk_stub_primed e range =
   mk_expr (E_stub_primed e) ~etyp:e.etyp range
 
-(** Check whether an expression is universally quantified? *)
-let is_expr_forall_quantified e =
+
+(** Check whether an expression is quantified? *)
+let is_expr_quantified quant e =
   Visitor.fold_expr
     (fun acc e ->
        match ekind e with
-       | E_stub_quantified (FORALL,_,_) -> Keep true
+       | E_stub_quantified (q,_,_) -> Keep (q = quant)
        | _ -> VisitParts acc
     )
     (fun acc s -> VisitParts acc)
     false
     e
+
+
+(** Check whether an expression is universally quantified? *)
+let is_expr_forall_quantified e =
+  is_expr_quantified FORALL e
+
+(** Check whether an expression is existentially quantified? *)
+let is_expr_exists_quantified e =
+  is_expr_quantified EXISTS e
 
 let mk_stub_directive stub range =
   mk_stmt (S_stub_directive stub) range
@@ -546,7 +559,10 @@ let () =
           { exprs = [arg]; stmts = [] },
           (function {exprs = [arg]} -> {e with ekind = E_stub_builtin_call(f, arg)} | _ -> assert false)
 
-        | E_stub_quantified _ -> leaf e
+        | E_stub_quantified(_,_,S_resource _) -> leaf e
+        | E_stub_quantified(q,v,S_interval(a,b)) ->
+          { exprs = [a;b]; stmts = [] },
+          (function { exprs = [a;b] } -> { e with ekind = E_stub_quantified(q, v, S_interval(a,b)) } | _ -> assert false)
 
         | E_stub_attribute(o, f) ->
           { exprs = [o]; stmts = [] },

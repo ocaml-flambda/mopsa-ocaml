@@ -27,7 +27,7 @@
  * predicate valid_string(s):
  *   valid_ptr(s) and
  *   size(s) >= 1 and
- *   exists int _i in [0, size(s) - 1]: s[_i] == 0
+ *   exists int _i in [0, size(s) - offset(s) - 1]: s[_i] == 0
  * ;
  */
 
@@ -35,7 +35,7 @@
 /*$$
  * predicate valid_primed_string(s):
  *   valid_ptr(s) and
- *   exists int _i in [0, size(s) - 1]: (s[_i])' == 0
+ *   exists int _i in [0, size(s) - offset(s) - 1]: (s[_i])' == 0
  * ;
  */
 
@@ -58,7 +58,7 @@
 
 /*$$
  * predicate valid_ptr_range(p, i, j):
- *   j >= i implies forall int k in [i,j]: valid_ptr(p+k);
+ *   forall int k in [i, j]: valid_ptr(p+k);
  */
 
 /*$
@@ -81,12 +81,39 @@ void _mopsa_assert_valid_ptr(void *p);
  */
 void _mopsa_assert_valid_string(char *s);
 
+/*$
+ * requires: valid_substring(s,n);
+ */
+void _mopsa_assert_valid_substring(char *s, unsigned int n);
+
 
 /*$
  * requires: valid_ptr_range(s, i, j);
  * assigns: s[i, j];
  */
 void _mopsa_memrand(char *s, unsigned int i, unsigned int j);
+
+
+/*$
+ * requires: valid_ptr_range(s, 0, size(s) - offset(s) - 1);
+ * assigns: s[0, size(s) - offset(s) - 1];
+ * ensures: valid_primed_string(s);
+ */
+void _mopsa_strrand(char *s);
+
+/*$
+ * case "non-empty" {
+ *   assumes: n >= 1;
+ *   requires: valid_ptr_range(s, 0, n - 1);
+ *   assigns: s[0, n - 1];
+ *   ensures: valid_primed_substring(s,n);
+ * }
+ *
+ * case "empty" {
+ *   assumes: n == 0;
+ * }
+ */
+void _mopsa_strnrand(char *s, unsigned int n);
 
 
 /*$
@@ -110,3 +137,4 @@ void _mopsa_memset(char *s, char c, unsigned int i, unsigned int j);
  * ensures: forall unsigned int k in [i,j]: (dst[k])' == src[k];
  */
 void _mopsa_memcpy(char *dst, char *src, unsigned int i, unsigned int j);
+

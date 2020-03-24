@@ -702,7 +702,7 @@ let wrap_expr (e: expr) ((l,h) : Z.t * Z.t) range : expr =
     let open Universal.Ast in
   add
     (mk_z l range)
-    (_mod
+    (_mod_
        (sub
           e
           (mk_z l range)
@@ -725,7 +725,10 @@ let wrap_expr (e: expr) ((l,h) : Z.t * Z.t) range : expr =
 let wrap (v : var) ((l,h) : Z.t * Z.t) range : expr =
   wrap_expr (mk_var v (tag_range range "v")) (l,h) range
 
-
+let is_c_char_type (t:typ) =
+  match remove_typedef_qual t with
+  | T_c_integer (C_signed_char | C_unsigned_char) -> true
+  | _ -> false
 
 (** [is_c_int_type t] tests whether [t] is an integer type *)
 let is_c_int_type ( t : typ) =
@@ -734,6 +737,15 @@ let is_c_int_type ( t : typ) =
   | T_c_enum _ -> true
   | T_c_integer _ -> true
   | _ -> false
+
+let is_c_signed_int_type (t:typ) =
+  match remove_typedef_qual t with
+  | T_c_bool -> false
+  | T_c_enum _ -> false
+  | T_c_integer (C_signed_char | C_signed_short | C_signed_int | C_signed_int128 | C_signed_long | C_signed_long_long) -> true
+  | T_c_integer (C_unsigned_char | C_unsigned_short | C_unsigned_int | C_unsigned_int128 | C_unsigned_long | C_unsigned_long_long) -> false
+  | _ -> false
+
 
 (** [is_c_int_type t] tests whether [t] is a floating point type *)
 let is_c_float_type ( t : typ) =
@@ -1141,7 +1153,21 @@ let memrand (p:expr) (i:expr) (j:expr) range man flow =
   let stmt = mk_c_call_stmt f [p; i; j] range in
   man.post stmt flow
 
-  
+(** Randomize a string *)
+let strrand (p:expr) range man flow =
+  let open Sig.Domain.Manager in
+  let f = find_c_fundec_by_name "_mopsa_strrand" flow in
+  let stmt = mk_c_call_stmt f [p] range in
+  man.post stmt flow
+
+(** Randomize a substring *)
+let strnrand (p:expr) (n:expr) range man flow =
+  let open Sig.Domain.Manager in
+  let f = find_c_fundec_by_name "_mopsa_strnrand" flow in
+  let stmt = mk_c_call_stmt f [p; n] range in
+  man.post stmt flow
+
+
 (** Set elements of an array with the same value [c] *)
 let memset (p:expr) (c:expr) (i:expr) (j:expr) range man flow =
   let open Sig.Domain.Manager in
