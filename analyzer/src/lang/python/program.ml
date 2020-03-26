@@ -121,9 +121,10 @@ struct
     in
     mk_stmt (Universal.Ast.S_unit_tests (tests)) range
 
-  let unprecise_exception_range = mk_fresh_range ()
+  let unprecise_exception_range prog_range =
+    tag_range prog_range "unprecise exception range"
 
-  let collect_uncaught_exceptions man flow =
+  let collect_uncaught_exceptions man prog_range flow =
     Flow.fold (fun acc tk env ->
         match tk with
         | Alarms.T_py_exception (e, s, k) ->
@@ -131,7 +132,7 @@ struct
           let alarm =
             match k with
             | Alarms.Py_exc_unprecise ->
-              mk_alarm a Callstack.empty unprecise_exception_range
+              mk_alarm a Callstack.empty (unprecise_exception_range prog_range)
 
             | Alarms.Py_exc_with_callstack (range,cs) ->
               mk_alarm a cs range
@@ -143,7 +144,7 @@ struct
 
   let exec zone stmt man flow  =
     match skind stmt with
-    | S_program ({ prog_kind = Py_program(_, globals, body) }, _)
+    | S_program ({ prog_kind = Py_program(_, globals, body); prog_range }, _)
       when !Universal.Iterators.Unittest.unittest_flag ->
       (* Initialize global variables *)
       let flow1 = init_globals man  globals (srange stmt) flow in
@@ -155,16 +156,16 @@ struct
       let tests = get_test_functions body in
       let stmt = mk_py_unit_tests tests (srange stmt) in
       man.exec stmt flow2 |>
-      collect_uncaught_exceptions man |>
+      collect_uncaught_exceptions man prog_range |>
       Post.return |>
       OptionExt.return
 
-    | S_program ({ prog_kind = Py_program(_, globals, body) }, _) ->
+    | S_program ({ prog_kind = Py_program(_, globals, body); prog_range }, _) ->
       (* Initialize global variables *)
       init_globals man globals (srange stmt) flow |>
       (* Execute the body *)
       man.exec body |>
-      collect_uncaught_exceptions man |>
+      collect_uncaught_exceptions man prog_range |>
       Post.return |>
       OptionExt.return
 
