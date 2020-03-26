@@ -458,6 +458,7 @@ def versus_cpu():
 # if __name__ == "__main__":
 def test_types():
     versus_cpu()
+    mopsa.ignore_exception(ZeroDivisionError)
     mopsa.ignore_exception(IndexError)
     mopsa.ignore_exception(OverflowError)
     mopsa.ignore_exception(AttributeError)

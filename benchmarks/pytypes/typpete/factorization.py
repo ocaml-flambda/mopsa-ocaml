@@ -33,6 +33,7 @@ def get_all_divisors(n):
 def test_types():
     a = get_all_divisors(2)
 
+    mopsa.ignore_exception(ZeroDivisionError)
     mopsa.assert_safe()
     mopsa.assert_list_of(a, int)
 

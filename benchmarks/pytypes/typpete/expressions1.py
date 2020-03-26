@@ -2,6 +2,7 @@ import mopsa
 
 def test_types():
     a = 1 + 2 / 3
+    mopsa.ignore_exception(ZeroDivisionError)
     mopsa.ignore_exception(OverflowError)
     a += 0
     mopsa.ignore_exception(OverflowError)

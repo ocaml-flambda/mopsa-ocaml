@@ -27,6 +27,7 @@ def test_types():
             print(arr2[i])
     mopsa.ignore_exception(IndexError)
     mopsa.ignore_exception(UnboundLocalError)
+    mopsa.ignore_exception(ZeroDivisionError)
     mopsa.assert_safe()
     mopsa.massert(isinstance(arr, list))
     mopsa.massert(isinstance(arr[0], int))

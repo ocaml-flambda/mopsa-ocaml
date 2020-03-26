@@ -58,6 +58,13 @@ def test_types():
     arg = DEFAULT_ARG
     fannkuch(arg)
     mopsa.ignore_exception(IndexError)
+    mopsa.ignore_exception(ZeroDivisionError)
     mopsa.assert_safe()
 
-def test_values(): test_types()
+def test_values():
+    import mopsa
+
+    arg = DEFAULT_ARG
+    fannkuch(arg)
+    mopsa.ignore_exception(IndexError)
+    mopsa.assert_safe()

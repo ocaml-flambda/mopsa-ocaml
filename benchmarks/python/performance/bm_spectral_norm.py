@@ -78,6 +78,7 @@ def test_types():
     mopsa.assert_exception_exists(UnboundLocalError)
     mopsa.ignore_exception(UnboundLocalError)
     mopsa.ignore_exception(OverflowError)
+    mopsa.ignore_exception(ZeroDivisionError)
     mopsa.assert_safe()
 
 

@@ -20,6 +20,7 @@ def test_types():
                 y = y + b
                 cs = cs + F
 
+    mopsa.ignore_exception(ZeroDivisionError)
     mopsa.ignore_exception(IndexError)
     mopsa.ignore_exception(UnboundLocalError)
     mopsa.assert_safe()

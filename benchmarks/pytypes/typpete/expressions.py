@@ -20,6 +20,7 @@ def test_types():
     oo = o
     pp = p
 
+    mopsa.ignore_exception(ZeroDivisionError)
     mopsa.assert_safe()
     mopsa.massert(isinstance(a, int))
     mopsa.assert_list_of(b, int)
