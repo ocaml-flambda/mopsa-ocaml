@@ -1,5 +1,6 @@
 from array import array
 import math
+import mopsa
 
 # import perf
 # from six.moves import xrange
@@ -48,6 +49,8 @@ class Random(object):
     m1 = (ONE << (MDIG - 2)) + ((ONE << (MDIG - 2)) - ONE)
     m2 = ONE << MDIG // 2
     dm1 = 1.0 / float(m1)
+    mopsa.ignore_exception(ZeroDivisionError)
+    mopsa.ignore_exception(OverflowError)
 
     def __init__(self, seed):
         self.initialize(seed)
