@@ -186,7 +186,8 @@ struct
         in
         acc'
 
-      | S_expand({ekind = E_var(var,_)}, vl) ->
+      | S_expand({ekind = E_var(var,_)}, vl)
+      | S_fold({ekind = E_var(var,_)}, vl) ->
         let vars = List.map (function { ekind = E_var(v,_) } -> v | _ -> assert false) vl in
         let acc', _ = List.fold_left (fun acc v -> forget_var v acc) (acc,bnd) vars in
         acc'
@@ -261,28 +262,6 @@ struct
       OptionExt.lift @@ fun (a',bnd') ->
       join (a,bnd) (a', bnd')
 
-    | S_fold( {ekind = E_var (v, _)}, vl)
-      when List.for_all (function { ekind = E_var _ } -> true | _ -> false) vl ->
-      begin
-        let vl = List.map (function
-            | { ekind = E_var (v, _) } -> v
-            | _ -> assert false
-          ) vl
-        in
-        match vl with
-        | [] -> Exceptions.panic "Can not fold list of size 0"
-        | p::q ->
-          let vars, bnd = Binding.vars_to_apron bnd vl in
-          let abs = Apron.Abstract1.fold ApronManager.man a
-              (Array.of_list vars)
-          in
-          let pp, bnd = Binding.var_to_apron bnd p in
-          let vv, bnd = Binding.var_to_apron bnd v in
-          let abs' = Apron.Abstract1.rename_array ApronManager.man abs
-              [| pp |] [| vv |]
-          in
-          Some (abs', bnd)
-      end
 
     | S_expand({ekind = E_var (v, _)}, vl)
       when List.for_all (function { ekind = E_var _ } -> true | _ -> false) vl
@@ -295,6 +274,19 @@ struct
       let v, bnd = Binding.var_to_apron bnd v in
       let vl, bnd = Binding.vars_to_apron bnd vl in
       let abs' = Apron.Abstract1.expand ApronManager.man a v (Array.of_list vl) in
+      Some (abs', bnd)
+
+    | S_fold({ekind = E_var (v, _)}, vl)
+      when List.for_all (function { ekind = E_var _ } -> true | _ -> false) vl
+      ->
+      let vl = List.map (function
+          | { ekind = E_var (v, _) } -> v
+          | _ -> assert false
+        ) vl
+      in
+      let v, bnd = Binding.var_to_apron bnd v in
+      let vl, bnd = Binding.vars_to_apron bnd vl in
+      let abs' = Apron.Abstract1.fold ApronManager.man a (Array.of_list (v::vl)) in
       Some (abs', bnd)
 
     | S_assume(e) -> begin

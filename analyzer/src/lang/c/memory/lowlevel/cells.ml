@@ -894,6 +894,15 @@ struct
     let stmt = mk_expand_var v vl range in
     man.post stmt ~zone:Z_c_scalar flow
 
+  let fold_cells c cl range man flow =
+    let flow = map_env T_cur (fun a ->
+        { a with cells = List.fold_left (fun s c -> cell_set_remove c s) a.cells cl |>
+                         cell_set_add c }
+      ) man flow in
+    let v = mk_cell_var c in
+    let vl = List.map mk_cell_var cl in
+    let stmt = mk_fold_var v vl range in
+    man.post stmt ~zone:Z_c_scalar flow
 
   let forget_cell c range man flow =
     let flow = map_env T_cur
@@ -1138,6 +1147,55 @@ struct
       ) (Post.return flow) cells
 
 
+  (** Sets of offsets and types, used by exec_fold *)
+  module OffsetTypeSet = SetExt.Make(struct
+      type t = Z.t * cell_typ
+      let compare = Compare.pair Z.compare compare_cell_typ
+    end)
+
+
+  (** Fold a set of bases into a single base *)
+  let exec_fold b bl range man flow =
+    let a = get_env T_cur man flow in
+    (* Add the base b *)
+    let a = { a with bases = BaseSet.add b a.bases } in
+    (* Find common offsets and types of cells in bases bl *)
+    let common =
+      let set_of_base b =
+        cell_set_find_base b a.cells |>
+        List.map (fun c -> c.offset,c.typ) |>
+        OffsetTypeSet.of_list
+      in
+      match bl with
+      | [] -> OffsetTypeSet.empty
+      | b::tl ->
+        let set0 = set_of_base b in
+        let rec iter set = function
+          | [] -> set
+          | b::tl ->
+            let set' = set_of_base b in
+            let set'' = OffsetTypeSet.inter set set' in
+            if OffsetTypeSet.is_empty set'' then set'' else iter set'' tl
+        in
+        iter set0 tl
+    in
+    (* Fold cells *)
+    OffsetTypeSet.fold
+      (fun (o,t) acc ->
+         let c = { base = b; offset = o; typ = t } in
+         let cl = List.map (fun bb -> { c with base = bb }) bl in
+         Post.bind (fold_cells c cl range man) acc
+      ) common (Post.return flow)
+    >>$ fun () flow ->
+
+    (* Remove bases bl *)
+    List.fold_left
+      (fun acc bb ->
+         Post.bind (exec_remove bb range man) acc
+      ) (Post.return flow) bl
+    
+         
+
   (** Compute the interval of an offset *)
   let offset_interval offset range man flow : Itv.t =
     let evl = man.eval offset ~zone:(Z_c_scalar, Z_u_num) flow in
@@ -1201,6 +1259,11 @@ struct
     | S_expand(e,el) when is_base_expr e &&
                           List.for_all is_base_expr el ->
       exec_expand (expr_to_base e) (List.map expr_to_base el) stmt.srange man flow |>
+      OptionExt.return
+
+    | S_fold(e,el) when is_base_expr e &&
+                        List.for_all is_base_expr el ->
+      exec_fold (expr_to_base e) (List.map expr_to_base el) stmt.srange man flow |>
       OptionExt.return
 
     | S_forget(e) ->

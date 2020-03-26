@@ -402,23 +402,41 @@ struct
     man.post ~zone:Z_c_low_level stmt flow
 
 
+  (** 𝕊⟦ add base ⟧ *)
+  let add base range man flow =
+    man.eval ~zone:(Z_c,Z_c_low_level) base flow >>$ fun base flow ->
+    let stmt = mk_add base range in
+    man.post ~zone:Z_c_low_level stmt flow
+
+
+  (** 𝕊⟦ destroy base ⟧ *)
+  let invalidate base range man flow =
+    man.eval ~zone:(Z_c,Z_c_low_level) base flow >>$ fun base flow ->
+    let stmt = mk_invalidate base range in
+    man.post ~zone:Z_c_points_to stmt flow
+
+
   (** 𝕊⟦ remove base ⟧ *)
   let remove base range man flow =
-    (* 1. Remove the contents of the base from the low-level abstractions.
-       2. Remove the base from the pointer domain. 
-    *)
+    man.eval ~zone:(Z_c,Z_c_low_level) base flow >>$ fun base flow ->
+    (* Remove contents *)
     let stmt = mk_remove base range in
     man.post ~zone:Z_c_low_level stmt flow >>$ fun () flow ->
+    (* Invalidate the address *)
+    let stmt = mk_invalidate base range in
     man.post ~zone:Z_c_points_to stmt flow
 
 
   (** 𝕊⟦ rename (e,e') ⟧ *)
   let rename e e' range man flow =
-    (* Similarly to remove, we rename the contents and the base *)
+    man.eval ~zone:(Z_c,Z_c_low_level) e flow >>$ fun e flow ->
+    man.eval ~zone:(Z_c,Z_c_low_level) e' flow >>$ fun e' flow ->
+    (* Rename contents dimensions *)
     let stmt = mk_rename e e' range in
-    man.post ~zone:Z_c_low_level stmt flow >>$ fun () flow ->
+    man.post ~zone:Z_c_low_level stmt flow >>$ fun () flow -> 
+    (* Rename the address *)
     man.post ~zone:Z_c_points_to stmt flow
-    
+
 
   let forget e range man flow =
     man.eval ~zone:(Z_c,Z_c_low_level) e flow >>$ fun e flow ->
@@ -430,7 +448,20 @@ struct
     man.eval ~zone:(Z_c,Z_c_low_level) e flow >>$ fun e flow ->
     bind_list el (man.eval ~zone:(Z_c,Z_c_low_level)) flow >>$ fun el flow ->
     let stmt = mk_expand e el range in
-    man.post ~zone:Z_c_low_level stmt flow
+    (* Expand contents *)
+    man.post ~zone:Z_c_low_level stmt flow >>$ fun () flow ->
+    (* Expand addresses *)
+    man.post ~zone:Z_c_points_to stmt flow
+
+
+  let fold e el range man flow =
+    man.eval ~zone:(Z_c,Z_c_low_level) e flow >>$ fun e flow ->
+    bind_list el (man.eval ~zone:(Z_c,Z_c_low_level)) flow >>$ fun el flow ->
+    let stmt = mk_fold e el range in
+    (* Fold contents *)
+    man.post ~zone:Z_c_low_level stmt flow >>$ fun () flow ->
+    (* Fold addresses *)
+    man.post ~zone:Z_c_points_to stmt flow
 
 
   let exec zone stmt man flow =
@@ -453,8 +484,16 @@ struct
       assume e stmt.srange man flow |>
       OptionExt.return
 
+    | S_add e ->
+      add e stmt.srange man flow |>
+      OptionExt.return
+
     | S_remove e ->
       remove e stmt.srange man flow |>
+      OptionExt.return
+
+    | S_invalidate e ->
+      invalidate e stmt.srange man flow |>
       OptionExt.return
 
     | S_rename(e,e') ->
@@ -467,6 +506,10 @@ struct
 
     | S_expand(e,el) ->
       expand e el stmt.srange man flow |>
+      OptionExt.return
+
+    | S_fold(e,el) ->
+      fold e el stmt.srange man flow |>
       OptionExt.return
 
     | S_expression e when is_c_num_type e.etyp ->

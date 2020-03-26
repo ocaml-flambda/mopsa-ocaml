@@ -225,6 +225,17 @@ struct
       let smashes = List.map (fun b -> mk_smash_var b range) bases in
       man.post ~zone:Z_c_scalar (mk_expand smash1 smashes range) flow
 
+
+  (** Fold the auxiliary variables of a set of bases *)
+  let fold_bases base1 bases range man flow =
+    if not (is_interesting_base base1) then Post.return flow else
+    if List.exists (fun b -> not (is_interesting_base b)) bases then panic_at range "fold %a not supported" pp_base base1
+    else
+      let smash1 = mk_smash_var base1 range in
+      let smashes = List.map (fun b -> mk_smash_var b range) bases in
+      man.post ~zone:Z_c_scalar (mk_fold smash1 smashes range) flow
+
+
   (** Forget the value of the smash variable of a base *)
   let forget e range man flow =
     (* Get the pointed base *)
@@ -264,6 +275,10 @@ struct
 
     | S_expand(e,el) when is_base_expr e && List.for_all is_base_expr el ->
       expand_base (expr_to_base e) (List.map expr_to_base el) stmt.srange man flow |>
+      OptionExt.return
+
+    | S_fold(e,el) when is_base_expr e && List.for_all is_base_expr el ->
+      fold_bases (expr_to_base e) (List.map expr_to_base el) stmt.srange man flow |>
       OptionExt.return
 
     | S_forget(e) ->
