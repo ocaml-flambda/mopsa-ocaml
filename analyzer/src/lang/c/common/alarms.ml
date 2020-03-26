@@ -22,361 +22,872 @@
 (** Alarms for C runtime errors *)
 
 open Mopsa
+open Format
 open Framework.Core.Sig.Stacked.Manager
 open Universal.Numeric.Common
+open Universal.Ast
 open Base
 open Ast
 
 
-type alarm_class +=
-  | A_c_out_of_bound_cls
-  | A_c_null_deref_cls
-  | A_c_invalid_deref_cls
-  | A_c_divide_by_zero_cls
-  | A_c_integer_overflow_cls
-  | A_c_illegal_pointer_diff_cls
-  | A_c_illegal_pointer_compare_cls
-  | A_c_invalid_bit_shift_cls
-  | A_c_use_after_free_cls
-  | A_c_double_free_cls
-  | A_c_no_next_va_arg_cls
-  | A_c_read_only_modification_cls
-  | A_c_dangling_deref_cls
-  | A_c_insufficient_format_args_cls
-  | A_c_incorrect_format_arg_cls
 
-type alarm_body +=
-  | A_c_out_of_bound of base (** accessed base *) * int_itv (** offset interval *) * int_itv (** base_size *)
-  | A_c_null_deref of expr (** pointer *)
-  | A_c_invalid_deref of expr (** pointer *)
-  | A_c_use_after_free of expr (** pointer *) * range (** deallocation site *)
-  | A_c_integer_overflow of expr (** evaluated expression *) * int_itv (** expression value *) * typ (** integer type *)
-  | A_c_no_next_va_arg of var (** va_list variable *) * int_itv (** index *) * int (** number of unnamed arguments *)
-  | A_c_double_free of expr (** pointer *) * range (** deallocation site *)
-  | A_c_read_only_modification of base (** modified base *)
-  | A_c_illegal_pointer_diff of expr (** first pointer *) * expr (** second pointer *)
-  | A_c_illegal_pointer_compare of expr (** first pointer *) * expr (** second pointer *)
-  | A_c_divide_by_zero of expr (** denominator *)
-  | A_c_invalid_bit_shift of expr (** shift expression *) * int_itv (** shift value *) * typ (** shifted type *)
-  | A_c_dangling_deref of expr (** pointer *) * var (** pointed variable *) * range (** return location *)
-  | A_c_insufficient_format_args of int (** number of required arguments *) * int (** number of given arguments *)
-  | A_c_incorrect_format_arg of typ (** expected type *) * expr (** argument *)
+(** {2 Utility print functions} *)
+(** *************************** *)
+
+(** Print an interval depending on its cardinal *)
+let pp_const_or_interval fmt itv =
+  match itv with
+  | Bot.Nb (l,u) when I.B.eq l u -> I.B.fprint fmt l
+  | _ -> I.fprint_bot fmt itv
 
 
-let raise_c_out_bound_alarm ~base ~offset ~size range man flow =
+(** Print the not-member operator of an interval, depending on its cardinal *)
+let pp_const_or_interval_not_eq fmt itv =
+  match itv with
+  | Bot.Nb (l,u) when I.B.eq l u -> fprintf fmt "∉"
+  | _ -> fprintf fmt "⊈"
+
+
+let pp_interval_plurial fmt itv =
+  match itv with
+  | Bot.Nb (I.B.Finite l, I.B.Finite u) when Z.(l = u) && Z.(l = one) -> ()
+  | _ -> fprintf fmt "s"
+
+
+let pp_interval_cardinal_plurial fmt itv =
+  match itv with
+  | Bot.Nb (I.B.Finite l, I.B.Finite u) when Z.(l = u) -> ()
+  | _ -> fprintf fmt "s"
+
+
+
+let pp_base_verbose fmt base =
+  match base.base_kind with
+  | Var v    -> fprintf fmt "variable '%a'" (Debug.bold pp_var) v
+  | Addr a   -> fprintf fmt "dynamically allocated block"
+  | String s when String.length s > 20 -> fprintf fmt "string \"%s...\"" (String.escaped (String.sub s 0 20))
+  | String s -> fprintf fmt "string \"%s\"" (String.escaped s)
+
+
+(** {2 NULL pointer dereference} *)
+(** **************************** *)
+
+type alarm_class   += A_c_null_deref
+type alarm_message += A_c_null_deref_msg of expr
+
+let () =
+  register_alarm_class (fun next fmt -> function
+      | A_c_null_deref -> fprintf fmt "NULL pointer dereference"
+      | a -> next fmt a
+    )
+
+let () =
+  register_alarm_message {
+    classifier = (fun next -> function
+        | A_c_null_deref_msg _ -> A_c_null_deref
+        | a -> next a
+      );
+    compare = (fun next a1 a2 ->
+        match a1, a2 with
+        | A_c_null_deref_msg(p1), A_c_null_deref_msg(p2) -> compare_expr p1 p2
+        | _ -> next a1 a2
+      );
+    print = (fun next fmt -> function
+        | A_c_null_deref_msg(pointer) -> fprintf fmt "pointer '%a' may be null" (Debug.bold pp_expr) pointer
+        | a -> next fmt a
+      );
+  }
+
+let raise_c_null_deref_alarm pointer man flow =
   let cs = Flow.get_callstack flow in
-  let offset_itv = man.ask (mk_int_interval_query offset) flow in
-  let size_itv = man.ask (mk_int_interval_query size) flow in
-  let alarm = mk_alarm (A_c_out_of_bound(base,offset_itv,size_itv)) range ~cs in
+  let pointer' = get_orig_expr pointer in
+  let alarm = mk_alarm (A_c_null_deref_msg(pointer')) cs pointer.erange in
   Flow.raise_alarm alarm ~bottom:true man.lattice flow
 
-let raise_c_out_bound_quantified_alarm ~base ~min ~max ~size range man flow =
+
+(** {2 Invalid pointer dereference} *)
+(** ******************************* *)
+
+type alarm_class   += A_c_invalid_deref
+type alarm_message += A_c_invalid_deref_msg of expr
+
+let () =
+  register_alarm_class (fun next fmt -> function
+      | A_c_invalid_deref -> fprintf fmt "Invalid pointer dereference"
+      | a -> next fmt a
+    )
+
+let () =
+  register_alarm_message {
+    classifier = (fun next -> function
+        | A_c_invalid_deref_msg _ -> A_c_invalid_deref
+        | a -> next a
+      );
+    compare = (fun next a1 a2 ->
+        match a1, a2 with
+        | A_c_invalid_deref_msg(p1), A_c_invalid_deref_msg(p2) -> compare_expr p1 p2
+        | _ -> next a1 a2
+      );
+    print = (fun next fmt -> function
+        | A_c_invalid_deref_msg(pointer) -> fprintf fmt "pointer '%a' may be invalid" (Debug.bold pp_expr) pointer
+        | a -> next fmt a
+      );
+  }
+
+let raise_c_invalid_deref_alarm pointer man flow =
   let cs = Flow.get_callstack flow in
-  let min_itv = man.ask (mk_int_interval_query min) flow in
-  let max_itv = man.ask (mk_int_interval_query max) flow in
+  let pointer' = get_orig_expr pointer in
+  let alarm = mk_alarm (A_c_invalid_deref_msg(pointer')) cs pointer.erange in
+  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+
+
+
+(** {2 Out-of-bound access} *)
+(** *********************** *)
+
+type alarm_class   += A_c_out_of_bound
+type alarm_message += A_c_out_of_bound_msg of base (** accessed base *) *
+                                              int_itv (** base size *) *
+                                              int_itv (** offset *) *
+                                              typ (** accessed type *)
+
+let () =
+  register_alarm_class (fun next fmt -> function
+      | A_c_out_of_bound -> fprintf fmt "Out of bound access"
+      | a -> next fmt a
+    )
+
+let () =
+  register_grouped_alarm_message {
+    classifier = (fun next -> function
+        | A_c_out_of_bound_msg _ -> A_c_out_of_bound
+        | a -> next a
+      );
+    compare = (fun next a1 a2 ->
+        match a1, a2 with
+        | A_c_out_of_bound_msg(b1,s1,o1,t1), A_c_out_of_bound_msg(b2,s2,o2,t2) ->
+          Compare.compose
+            [ (fun () -> compare_base b1 b2);
+              (fun () -> compare_int_interval s1 s2);
+              (fun () -> compare_int_interval o1 o2);
+              (fun () -> compare_typ t1 t2); ]
+
+        | _ -> next a1 a2
+      );
+    print = (fun next fmt messages -> function
+        | A_c_out_of_bound ->
+          (* Group alarms by base *)
+          let m = List.fold_left
+              (fun acc -> function
+                 | A_c_out_of_bound_msg(b,s,o,t) ->
+                   let (olds,oldo,olde) = try BaseMap.find b acc with Not_found -> (Bot.BOT,Bot.BOT,Bot.BOT) in
+                   let s = I.join_bot olds s in
+                   let o = I.join_bot oldo o in
+                   let e = I.join_bot olde (Bot.Nb (I.cst (sizeof_type (void_to_char t)))) in
+                   BaseMap.add b (s,o,e) acc
+                 | _ -> assert false
+              ) BaseMap.empty messages
+          in
+          pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+            (fun fmt (base,(size,offset,elm)) ->
+               fprintf fmt "accessing %a byte%a at offset%a %a of %a of size %a byte%a"
+                 pp_const_or_interval elm
+                 pp_interval_plurial elm
+                 pp_interval_cardinal_plurial offset
+                 pp_const_or_interval offset
+                 pp_base_verbose base
+                 pp_const_or_interval size
+                 pp_interval_plurial size
+            ) fmt (BaseMap.bindings m)
+
+        | cls -> next fmt messages cls
+      );
+  }
+
+let raise_c_out_var_bound_alarm var offset typ range man input_flow error_flow =
+  let cs = Flow.get_callstack error_flow in
+  let offset_itv = man.ask (mk_int_interval_query offset) input_flow in
+  let size_itv = sizeof_type var.vtyp |> I.cst in
+  let alarm = mk_alarm (A_c_out_of_bound_msg(mk_var_base var,Bot.Nb size_itv, offset_itv, typ)) cs range in
+  Flow.raise_alarm alarm ~bottom:true man.lattice error_flow
+
+let raise_c_out_addr_bound_alarm addr size offset typ range man input_flow error_flow =
+  let cs = Flow.get_callstack error_flow in
+  let offset_itv = man.ask (mk_int_interval_query offset) input_flow in
+  let size_itv = man.ask (mk_int_interval_query size) input_flow in
+  let alarm = mk_alarm (A_c_out_of_bound_msg(mk_addr_base addr, size_itv, offset_itv, typ)) cs range in
+  Flow.raise_alarm alarm ~bottom:true man.lattice error_flow
+
+let raise_c_out_string_bound_alarm str ?(typ=s8) offset range man input_flow error_flow =
+  let cs = Flow.get_callstack error_flow in
+  let offset_itv = man.ask (mk_int_interval_query offset) input_flow in
+  let size_itv = String.length str |> I.cst_int in
+  let alarm = mk_alarm (A_c_out_of_bound_msg(mk_string_base str,Bot.Nb size_itv, offset_itv, typ)) cs range in
+  Flow.raise_alarm alarm ~bottom:true man.lattice error_flow
+
+let raise_c_out_bound_alarm base size offset typ range man input_flow error_flow =
+  let cs = Flow.get_callstack error_flow in
+  let offset_itv = man.ask (mk_int_interval_query offset) input_flow in
+  let size_itv = man.ask (mk_int_interval_query size) input_flow in
+  let alarm = mk_alarm (A_c_out_of_bound_msg(base, size_itv, offset_itv, typ)) cs range in
+  Flow.raise_alarm alarm ~bottom:true man.lattice error_flow
+
+
+let raise_c_quantified_out_bound_alarm base size min max typ range man input_flow error_flow =
+  let cs = Flow.get_callstack error_flow in
+  let min_itv = man.ask (mk_int_interval_query min) input_flow in
+  let max_itv = man.ask (mk_int_interval_query max) input_flow in
   let offset_itv = I.join_bot min_itv max_itv in
-  let size_itv = man.ask (mk_int_interval_query size) flow in
-  let alarm = mk_alarm (A_c_out_of_bound(base,offset_itv,size_itv)) range ~cs in
-  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+  let size_itv = man.ask (mk_int_interval_query size) input_flow in
+  let alarm = mk_alarm (A_c_out_of_bound_msg(base,size_itv, offset_itv, typ)) cs range in
+  Flow.raise_alarm alarm ~bottom:true man.lattice error_flow
 
-let raise_c_null_deref_alarm pointer range man flow =
-  let cs = Flow.get_callstack flow in
-  let pointer' = get_orig_expr pointer in
-  let alarm = mk_alarm (A_c_null_deref(pointer')) range ~cs in
-  Flow.raise_alarm alarm ~bottom:true man.lattice flow
 
-let raise_c_invalid_deref_alarm pointer range man flow =
-  let cs = Flow.get_callstack flow in
-  let pointer' = get_orig_expr pointer in
-  let alarm = mk_alarm (A_c_invalid_deref(pointer')) range ~cs in
-  Flow.raise_alarm alarm ~bottom:true man.lattice flow
 
-let raise_c_use_after_free_alarm pointer dealloc_range range man flow =
-  let cs = Flow.get_callstack flow in
-  let pointer' = get_orig_expr pointer in
-  let alarm = mk_alarm (A_c_use_after_free(pointer',dealloc_range)) range ~cs in
-  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+(** {2 Division by zero} *)
+(** ******************** *)
 
-let raise_c_double_free_alarm pointer dealloc_range range man flow =
-  let cs = Flow.get_callstack flow in
-  let pointer' = get_orig_expr pointer in
-  let alarm = mk_alarm (A_c_double_free(pointer',dealloc_range)) range ~cs in
-  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+type alarm_class   += A_c_divide_by_zero
+type alarm_message += A_c_divide_by_zero_msg of expr (** denominator *)
 
-let raise_c_integer_overflow_alarm exp typ range man flow =
-  let cs = Flow.get_callstack flow in
-  let exp' = get_orig_expr exp in
-  let itv = man.ask (mk_int_interval_query exp) flow in
-  let alarm = mk_alarm (A_c_integer_overflow(exp',itv,typ)) range ~cs in
-  Flow.raise_alarm alarm ~bottom:false man.lattice flow
+let () =
+  register_alarm_class (fun next fmt -> function
+      | A_c_divide_by_zero -> fprintf fmt "Division by zero"
+      | a -> next fmt a
+    )
 
-let raise_c_no_next_va_arg ~va_list ~counter ~args range man flow =
-  let cs = Flow.get_callstack flow in
-  let counter_itv = man.ask (mk_int_interval_query counter) flow in
-  let nargs = List.length args in
-  let alarm = mk_alarm (A_c_no_next_va_arg(va_list,counter_itv,nargs)) range ~cs in
-  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+let () =
+  register_alarm_message {
+    classifier = (fun next -> function
+        | A_c_divide_by_zero_msg _ -> A_c_divide_by_zero
+        | a -> next a
+      );
+    compare = (fun next a1 a2 ->
+        match a1, a2 with
+        | A_c_divide_by_zero_msg(e1), A_c_divide_by_zero_msg(e2) -> compare_expr e1 e2
+        | _ -> next a1 a2
+      );
+    print = (fun next fmt -> function
+        | A_c_divide_by_zero_msg(e) -> fprintf fmt "denominator '%a' may be null" (Debug.bold pp_expr) e
+        | a -> next fmt a
+      );
+  }
 
-let raise_c_read_only_modification_alarm base range man flow =
-  let cs = Flow.get_callstack flow in
-  let alarm = mk_alarm (A_c_read_only_modification(base)) range ~cs in
-  Flow.raise_alarm alarm ~bottom:true man.lattice flow
-
-let raise_c_illegal_pointer_diff p1 p2 range man flow =
-  let cs = Flow.get_callstack flow in
-  let p1' = get_orig_expr p1 in
-  let p2' = get_orig_expr p2 in
-  let alarm = mk_alarm (A_c_illegal_pointer_diff(p1',p2')) range ~cs in
-  Flow.raise_alarm alarm ~bottom:true man.lattice flow
-
-let raise_c_illegal_pointer_compare p1 p2 range man flow =
-  let cs = Flow.get_callstack flow in
-  let p1' = get_orig_expr p1 in
-  let p2' = get_orig_expr p2 in
-  let alarm = mk_alarm (A_c_illegal_pointer_compare(p1',p2')) range ~cs in
-  Flow.raise_alarm alarm ~bottom:true man.lattice flow
 
 let raise_c_divide_by_zero_alarm denominator range man flow =
   let cs = Flow.get_callstack flow in
   let denominator' = get_orig_expr denominator in
-  let alarm = mk_alarm (A_c_divide_by_zero(denominator')) range ~cs in
+  let alarm = mk_alarm (A_c_divide_by_zero_msg(denominator')) cs range in
   Flow.raise_alarm alarm ~bottom:true man.lattice flow
 
-let raise_c_invalid_bit_shift_alarm shift typ range man flow =
-  let cs = Flow.get_callstack flow in
-  let shift' = get_orig_expr shift in
-  let shift_itv = man.ask (mk_int_interval_query shift) flow in
-  let alarm = mk_alarm (A_c_invalid_bit_shift(shift',shift_itv,typ)) range ~cs in
-  Flow.raise_alarm alarm ~bottom:true man.lattice flow
 
-let raise_c_dangling_deref_alarm ptr var ret_range range man flow =
-  let cs = Flow.get_callstack flow in
-  let ptr' = get_orig_expr ptr in
-  let alarm = mk_alarm (A_c_dangling_deref(ptr',var,ret_range)) range ~cs in
-  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+(** {2 Integer overflow} *)
+(** ******************** *)
 
-let raise_c_insufficient_format_args_alarm required given range man flow =
-  let cs = Flow.get_callstack flow in
-  let alarm = mk_alarm (A_c_insufficient_format_args(required,given)) range ~cs in
-  Flow.raise_alarm alarm ~bottom:true man.lattice flow
 
-let raise_c_incorrect_format_arg_alarm typ arg range man flow =
-  let cs = Flow.get_callstack flow in
-  let alarm = mk_alarm (A_c_incorrect_format_arg(typ,get_orig_expr arg)) range ~cs in
-  Flow.raise_alarm alarm ~bottom:false man.lattice flow
-
+type alarm_class   += A_c_integer_overflow
+type alarm_message += A_c_integer_overflow_msg of expr (** integer expression *) *
+                                                  int_itv (** expression value *)
+                   |  A_c_cast_integer_overflow_msg of expr (** integer expression *) *
+                                                       int_itv (** expression value *) *
+                                                       typ (** cast type *)
 
 let () =
-  register_alarm_class (fun default fmt a ->
-      match a with
-      | A_c_out_of_bound_cls -> Format.fprintf fmt "Out of bound access"
-      | A_c_null_deref_cls -> Format.fprintf fmt "Null pointer dereference"
-      | A_c_invalid_deref_cls -> Format.fprintf fmt "Invalid pointer dereference"
-      | A_c_divide_by_zero_cls -> Format.fprintf fmt "Division by zero"
-      | A_c_integer_overflow_cls -> Format.fprintf fmt "Integer overflow"
-      | A_c_illegal_pointer_diff_cls -> Format.fprintf fmt "Illegal pointer difference"
-      | A_c_illegal_pointer_compare_cls -> Format.fprintf fmt "Illegal pointer comparison"
-      | A_c_use_after_free_cls -> Format.fprintf fmt "Use after free"
-      | A_c_double_free_cls -> Format.fprintf fmt "Double free"
-      | A_c_no_next_va_arg_cls -> Format.fprintf fmt "No next argument for va_arg"
-      | A_c_invalid_bit_shift_cls -> Format.fprintf fmt "Invald bit-shift"
-      | A_c_read_only_modification_cls -> Format.fprintf fmt "Modification of a readonly memory"
-      | A_c_dangling_deref_cls -> Format.fprintf fmt "Dangling pointer dereference"
-      | A_c_insufficient_format_args_cls -> Format.fprintf fmt "Inufficient number of format arguments"
-      | A_c_incorrect_format_arg_cls -> Format.fprintf fmt "Incorrect type of format argument"
-      | _ -> default fmt a
+  register_alarm_class (fun next fmt -> function
+      | A_c_integer_overflow -> fprintf fmt "Integer overflow"
+      | a -> next fmt a
     )
 
 let () =
-  register_alarm_body {
-    classifier = (fun next a ->
-        match a with
-        | A_c_out_of_bound _ -> A_c_out_of_bound_cls
-        | A_c_null_deref _ -> A_c_null_deref_cls
-        | A_c_invalid_deref _ -> A_c_invalid_deref_cls
-        | A_c_divide_by_zero _ -> A_c_divide_by_zero_cls
-        | A_c_integer_overflow _ -> A_c_integer_overflow_cls
-        | A_c_illegal_pointer_diff _ -> A_c_illegal_pointer_diff_cls
-        | A_c_illegal_pointer_compare _ -> A_c_illegal_pointer_compare_cls
-        | A_c_use_after_free _ -> A_c_use_after_free_cls
-        | A_c_double_free _ -> A_c_double_free_cls
-        | A_c_no_next_va_arg _ -> A_c_no_next_va_arg_cls
-        | A_c_invalid_bit_shift _ -> A_c_invalid_bit_shift_cls
-        | A_c_read_only_modification _ -> A_c_read_only_modification_cls
-        | A_c_dangling_deref _ -> A_c_dangling_deref_cls
-        | A_c_insufficient_format_args _ -> A_c_insufficient_format_args_cls
-        | A_c_incorrect_format_arg _ -> A_c_incorrect_format_arg_cls
-        | _ -> next a
+  register_grouped_alarm_message {
+    classifier = (fun next -> function
+        | A_c_integer_overflow_msg _      -> A_c_integer_overflow
+        | A_c_cast_integer_overflow_msg _ -> A_c_integer_overflow
+        | a -> next a
       );
     compare = (fun next a1 a2 ->
         match a1, a2 with
-        | A_c_out_of_bound(b1,o1,s1), A_c_out_of_bound(b2,o2,s2) ->
-          Compare.compose [
-            (fun () -> compare_base b1 b2);
-            (fun () -> compare_int_interval o1 o2);
-            (fun () -> compare_int_interval s1 s2);
-          ]
+        | A_c_integer_overflow_msg(e1,v1), A_c_integer_overflow_msg(e2,v2) ->
+          Compare.pair compare_expr compare_int_interval (e1,v1) (e2,v2)
 
-        | A_c_null_deref(p1), A_c_null_deref(p2) -> compare_expr p1 p2
-
-        | A_c_invalid_deref(p1), A_c_invalid_deref(p2) -> compare_expr p1 p2
-
-        | A_c_use_after_free(p1,r1), A_c_use_after_free(p2,r2) ->
-          Compare.compose [
-            (fun () -> compare_expr p1 p2);
-            (fun () -> compare_range r1 r2);
-          ]
-
-        | A_c_double_free(p1,r1), A_c_double_free(p2,r2) ->
-          Compare.compose [
-            (fun () -> compare_expr p1 p2);
-            (fun () -> compare_range r1 r2);
-          ]
-
-        | A_c_integer_overflow(e1,v1,t1), A_c_integer_overflow(e2,v2,t2) ->
-          Compare.compose [
-            (fun () -> compare_expr e1 e2);
-            (fun () -> compare_int_interval v1 v2);
-            (fun () -> compare_typ t1 t2);
-          ]
-
-        | A_c_no_next_va_arg(v1,i1,n1), A_c_no_next_va_arg(v2,i2,n2) ->
-          Compare.compose [
-            (fun () -> compare_var v1 v2);
-            (fun () -> compare_int_interval i1 i2);
-            (fun () -> compare n1 n2);
-          ]
-
-        | A_c_read_only_modification(b1), A_c_read_only_modification(b2) ->
-          compare_base b1 b2
-
-        | A_c_illegal_pointer_diff(p1,q1), A_c_illegal_pointer_diff(p2,q2) ->
-          Compare.compose [
-            (fun () -> compare_expr p1 p2);
-            (fun () -> compare_expr q1 q2);
-          ]
-
-        | A_c_illegal_pointer_compare(p1,q1), A_c_illegal_pointer_compare(p2,q2) ->
-          Compare.compose [
-            (fun () -> compare_expr p1 p2);
-            (fun () -> compare_expr q1 q2);
-          ]
-
-        | A_c_divide_by_zero(e1), A_c_divide_by_zero(e2) ->
-          compare_expr e1 e2
-
-        | A_c_invalid_bit_shift(e1,i1,t1), A_c_invalid_bit_shift(e2,i2,t2) ->
-          Compare.compose [
-            (fun () -> compare_expr e1 e2);
-            (fun () -> compare_int_interval i1 i2);
-            (fun () -> compare_typ t1 t2);
-          ]
-
-        | A_c_dangling_deref(p1,v1,r1), A_c_dangling_deref(p2,v2,r2) ->
-          Compare.compose [
-            (fun () -> compare_expr p1 p2);
-            (fun () -> compare_var v1 v2);
-            (fun () -> compare_range r1 r2);
-          ]
-
-        | A_c_insufficient_format_args(r1,g1), A_c_insufficient_format_args(r2,g2) ->
-          Compare.pair compare compare (r1,g1) (r2,g2)
-
-        | A_c_incorrect_format_arg(t1,e1), A_c_incorrect_format_arg(t2,e2) ->
-          Compare.pair compare_typ compare_expr (t1,e1) (t2,e2)
+        | A_c_cast_integer_overflow_msg(e1,v1,t1), A_c_cast_integer_overflow_msg(e2,v2,t2) ->
+          Compare.triple compare_expr compare_int_interval compare_typ (e1,v1,t1) (e2,v2,t2)
 
         | _ -> next a1 a2
       );
-    print = (fun next fmt a ->
-        let pp_const_or_interval fmt itv =
-          match itv with
-          | Bot.Nb (l,u) when I.B.eq l u -> I.B.fprint fmt l
-          | _ -> I.fprint_bot fmt itv
-        in
-        let pp_const_or_interval_not_eq fmt itv =
-          match itv with
-          | Bot.Nb (l,u) when I.B.eq l u -> Format.fprintf fmt "%a ∉" I.B.fprint l
-          | _ -> Format.fprintf fmt "%a ⊈" I.fprint_bot itv
-        in
-        match a with
-        | A_c_out_of_bound(base, offset, size) ->
-          Format.fprintf fmt "offset %a is out of boundaries of %a which has size %a"
-            pp_const_or_interval offset
-            pp_base base
-            pp_const_or_interval size
+    print = (fun next fmt messages -> function
+        | A_c_integer_overflow ->
+          (* Get the target type. As this is a static information, it should
+             be the same for all messages. *)
+          let t = match messages with
+            | A_c_integer_overflow_msg(e,_) :: _ -> e.etyp
+            | A_c_cast_integer_overflow_msg(_,_,t) :: _ -> t
+            | _ -> assert false
+          in
+          let l,u = rangeof t in
+          let type_range = I.of_z l u in
 
-        | A_c_null_deref(pointer) ->
-          Format.fprintf fmt "%a points to a NULL pointer" pp_expr pointer
+          (* Group values by expressions *)
+          let m = List.fold_left
+              (fun acc -> function
+                 | A_c_integer_overflow_msg(e,v) ->
+                   let oldv = try ExprMap.find e acc with Not_found -> Bot.BOT in
+                   let v = I.join_bot oldv v in
+                   ExprMap.add e v acc
+                 | A_c_cast_integer_overflow_msg(e,v,t) ->
+                   let oldv = try ExprMap.find e acc with Not_found -> Bot.BOT in
+                   let v = I.join_bot oldv v in
+                   ExprMap.add e v acc
+                 | _ -> assert false
+              ) ExprMap.empty messages
+          in
+          pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+            (fun fmt (e,v) ->
+               fprintf fmt "'%a' has value %a that is larger than the range of '%a' = %a"
+                 (Debug.bold pp_expr) e
+                 pp_const_or_interval v
+                 (Debug.bold pp_typ) t
+                 I.fprint type_range
+            ) fmt (ExprMap.bindings m)
 
-        | A_c_invalid_deref(pointer) ->
-          Format.fprintf fmt "%a points to an invalid pointer" pp_expr pointer
+        | cls -> next fmt messages cls
+      );
+  }
 
-        | A_c_use_after_free(pointer,r) ->
-          Format.fprintf fmt "%a points to invalid memory deallocated at %a" pp_expr pointer pp_range r
 
-        | A_c_double_free(pointer,r) ->
-          Format.fprintf fmt "memory pointed by %a already deallocated at %a" pp_expr pointer pp_range r
+let raise_c_integer_overflow_alarm exp man input_flow error_flow =
+  let cs = Flow.get_callstack error_flow in
+  let exp' = get_orig_expr exp in
+  let itv = man.ask (mk_int_interval_query exp) input_flow in
+  let alarm = mk_alarm (A_c_integer_overflow_msg(exp',itv)) cs exp'.erange in
+  Flow.raise_alarm alarm ~bottom:false man.lattice error_flow
 
-        | A_c_integer_overflow(e,v,t) ->
-          let l,u = Ast.rangeof t in
-          Format.fprintf fmt "%a has value %a range(%a) = [%a,%a]"
-            pp_expr e
+let raise_c_cast_integer_overflow_alarm exp t man input_flow error_flow =
+  let cs = Flow.get_callstack error_flow in
+  let exp' = get_orig_expr exp in
+  let itv = man.ask (mk_int_interval_query exp) input_flow in
+  let alarm = mk_alarm (A_c_cast_integer_overflow_msg(exp',itv,t)) cs exp'.erange in
+  Flow.raise_alarm alarm ~bottom:false man.lattice error_flow
+
+
+(** {2 Invalid shift} *)
+(** ***************** *)
+
+type alarm_class   += A_c_invalid_shift
+type alarm_message += A_c_invalid_shift_msg of expr (** shifted expression *) *
+                                               expr (** shift expression *) *
+                                               int_itv (** shift value *)
+
+let () =
+  register_alarm_class (fun next fmt -> function
+      | A_c_invalid_shift -> fprintf fmt "Invalid shift"
+      | a -> next fmt a
+    )
+
+let () =
+  register_grouped_alarm_message {
+    classifier = (fun next -> function
+        | A_c_invalid_shift_msg _ -> A_c_invalid_shift
+        | a -> next a
+      );
+    compare = (fun next a1 a2 ->
+        match a1, a2 with
+        | A_c_invalid_shift_msg(e1,s1,v1), A_c_invalid_shift_msg(e2,s2,v2) ->
+          Compare.triple compare_expr compare_expr compare_int_interval (e1,s1,v1) (e2,s2,v2)
+        | _ -> next a1 a2
+      );
+    print = (fun next fmt messages -> function
+        | A_c_invalid_shift ->
+          (* Since alarms are grouped by program location, we should
+             have the same shifted expressions for all
+             messages. *)
+          let e,shift = match messages with
+            | A_c_invalid_shift_msg(e,shift,_) :: _ -> e, shift
+            | _ -> assert false
+          in
+          let v = List.fold_left
+              (fun acc -> function
+                 | A_c_invalid_shift_msg(e,shift,v) -> I.join_bot acc v
+                 | _ -> assert false
+              ) Bot.BOT messages
+          in
+          let bits = Ast.sizeof_type e.etyp |> Z.mul (Z.of_int 8) in
+          let valid_shifts = I.of_z Z.zero (Z.pred bits) in
+          fprintf fmt "shift position '%a' = %a %a [0, %a]"
+            (Debug.bold pp_expr) e
+            pp_const_or_interval v
             pp_const_or_interval_not_eq v
-            pp_typ t
-            Z.pp_print l
-            Z.pp_print u
+            I.fprint valid_shifts
 
-        | A_c_no_next_va_arg(v,i,n) ->
-          Format.fprintf fmt "va_list iterator %a has counter %a which greater than the number of unnamed arguments %d"
-            pp_var v
-            pp_const_or_interval i
-            n
+        | cls -> next fmt messages cls
+      );
+  }
 
-        | A_c_read_only_modification(b) ->
-          Format.fprintf fmt "%a can not be modified" pp_base b
 
-        | A_c_illegal_pointer_compare(p,q) ->
-          Format.fprintf fmt "%a and %a point to different memory blocks"
-            pp_expr p
-            pp_expr q
 
-        | A_c_illegal_pointer_diff(p,q) ->
-          Format.fprintf fmt "%a and %a point to different memory blocks"
-            pp_expr p
-            pp_expr q
+let raise_c_invalid_shift_alarm e shift man input_flow error_flow =
+  let cs = Flow.get_callstack error_flow in
+  let shift' = get_orig_expr shift in
+  let shift_itv = man.ask (mk_int_interval_query shift) input_flow in
+  let alarm = mk_alarm (A_c_invalid_shift_msg(e,shift',shift_itv)) cs shift.erange in
+  Flow.raise_alarm alarm ~bottom:true man.lattice error_flow
 
-        | A_c_divide_by_zero(e) ->
-          Format.fprintf fmt "denominator %a may be null" pp_expr e
 
-        | A_c_invalid_bit_shift(e,i,t) ->
-          let bits = Ast.sizeof_type t |> Z.mul (Z.of_int 8) in
-          Format.fprintf fmt "shift position %a = %a [0, bits(%a) - 1] = [0, %a]"
-            pp_expr e
-            pp_const_or_interval_not_eq i
-            pp_typ t
-            Z.pp_print (Z.pred bits)
 
-        | A_c_dangling_deref(p,v,r) ->
+(** {2 Invalid pointer comparison} *)
+(** ****************************** *)
+
+type alarm_class   += A_c_invalid_pointer_compare
+type alarm_message += A_c_invalid_pointer_compare_msg of expr (** first pointer *) *
+                                                         expr (** second pointer *)
+
+let () =
+  register_alarm_class (fun next fmt -> function
+      | A_c_invalid_pointer_compare -> fprintf fmt "Invalid pointer comparison"
+      | a -> next fmt a
+    )
+
+let () =
+  register_alarm_message {
+    classifier = (fun next -> function
+        | A_c_invalid_pointer_compare_msg _ -> A_c_invalid_pointer_compare
+        | a -> next a
+      );
+    compare = (fun next a1 a2 ->
+        match a1, a2 with
+        | A_c_invalid_pointer_compare_msg(p1,p2), A_c_invalid_pointer_compare_msg(p1',p2') ->
+          Compare.pair compare_expr compare_expr (p1,p2) (p1',p2')
+        | _ -> next a1 a2
+      );
+    print = (fun next fmt -> function
+        | A_c_invalid_pointer_compare_msg(p1,p2) ->
+          fprintf fmt "'%a' and '%a' may point to different memory objects"
+            (Debug.bold pp_expr) p1
+            (Debug.bold pp_expr) p2
+
+        | m -> next fmt m
+      );
+  }
+
+
+let raise_c_invalid_pointer_compare p1 p2 range man flow =
+  let cs = Flow.get_callstack flow in
+  let p1' = get_orig_expr p1 in
+  let p2' = get_orig_expr p2 in
+  let alarm = mk_alarm (A_c_invalid_pointer_compare_msg(p1',p2')) cs range in
+  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+
+
+
+
+(** {2 Invalid pointer subtraction} *)
+(** ******************************* *)
+
+type alarm_class   += A_c_invalid_pointer_sub
+type alarm_message += A_c_invalid_pointer_sub_msg of expr (** first pointer *) *
+                                                     expr (** second pointer *)
+
+let () =
+  register_alarm_class (fun next fmt -> function
+      | A_c_invalid_pointer_sub -> fprintf fmt "Invalid pointer subtraction"
+      | a -> next fmt a
+    )
+
+let () =
+  register_alarm_message {
+    classifier = (fun next -> function
+        | A_c_invalid_pointer_sub_msg _ -> A_c_invalid_pointer_sub
+        | a -> next a
+      );
+    compare = (fun next a1 a2 ->
+        match a1, a2 with
+        | A_c_invalid_pointer_sub_msg(p1,p2), A_c_invalid_pointer_sub_msg(p1',p2') ->
+          Compare.pair compare_expr compare_expr (p1,p2) (p1',p2')
+        | _ -> next a1 a2
+      );
+    print = (fun next fmt -> function
+        | A_c_invalid_pointer_sub_msg(p1,p2) ->
+          fprintf fmt "'%a' and '%a' may point to different memory objects"
+            (Debug.bold pp_expr) p1
+            (Debug.bold pp_expr) p2
+
+        | m -> next fmt m
+      );
+  }
+
+
+let raise_c_invalid_pointer_sub p1 p2 range man flow =
+  let cs = Flow.get_callstack flow in
+  let p1' = get_orig_expr p1 in
+  let p2' = get_orig_expr p2 in
+  let alarm = mk_alarm (A_c_invalid_pointer_sub_msg(p1',p2')) cs range in
+  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+
+
+
+(** {2 Dangling pointer dereference} *)
+(** ******************************** *)
+
+type alarm_class   += A_c_dangling_pointer_deref
+type alarm_message += A_c_dangling_pointer_deref_msg of expr (** pointer *) *
+                                                        var (** pointed variable *) *
+                                                        range (** return location *)
+
+let () =
+  register_alarm_class (fun next fmt -> function
+      | A_c_dangling_pointer_deref -> fprintf fmt "Dangling pointer dereference"
+      | a -> next fmt a
+    )
+
+let () =
+  register_alarm_message {
+    classifier = (fun next -> function
+        | A_c_dangling_pointer_deref_msg _ -> A_c_dangling_pointer_deref
+        | a -> next a
+      );
+    compare = (fun next a1 a2 ->
+        match a1, a2 with
+        | A_c_dangling_pointer_deref_msg(p1,v1,r1), A_c_dangling_pointer_deref_msg(p2,v2,r2) ->
+          Compare.triple compare_expr compare_var compare_range (p1,v1,r1) (p2,v2,r2)
+        | _ -> next a1 a2
+      );
+    print = (fun next fmt -> function
+        | A_c_dangling_pointer_deref_msg(p,v,r) ->
           begin match v.vkind with
             | V_cvar { cvar_scope = Variable_local f }
             | V_cvar { cvar_scope = Variable_parameter f }->
-              Format.fprintf fmt "%a points to dangling local variable %a of function %s deallocated at %a"
-                pp_expr p pp_var v f.c_func_org_name pp_range r
+              fprintf fmt "'%a' points to dangling local variable '%a' of function '%a' deallocated at %a"
+                (Debug.bold pp_expr) p
+                (Debug.bold pp_var) v
+                (Debug.bold pp_print_string) f.c_func_org_name
+                pp_range r
 
             | _ ->
-              Format.fprintf fmt "%a points to dangling local variable %a"
-                pp_expr p pp_var v
+              fprintf fmt "'%a' points to dangling local variable '%a' deallocated at %a"
+                (Debug.bold pp_expr) p
+                (Debug.bold pp_var) v
+                pp_range r
           end
 
-        | A_c_insufficient_format_args(required,given) ->
-          Format.fprintf fmt "%d argument%a given while %d argument%a required"
-            given Debug.plurial_int given
-            required Debug.plurial_int required
-
-        | A_c_incorrect_format_arg(typ,arg) ->
-          Format.fprintf fmt "format expects argument of type '%a', but '%a' has type '%a'"
-            pp_typ typ pp_expr arg pp_typ arg.etyp
-
-        | _ -> next fmt a
+        | m -> next fmt m
       );
   }
+
+
+let raise_c_dangling_deref_alarm ptr var ret_range man flow =
+  let cs = Flow.get_callstack flow in
+  let ptr' = get_orig_expr ptr in
+  let alarm = mk_alarm (A_c_dangling_pointer_deref_msg(ptr',var,ret_range)) cs ptr.erange in
+  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+
+
+(** {2 Use after free} *)
+(** ****************** *)
+
+type alarm_class   += A_c_use_after_free
+type alarm_message += A_c_use_after_free_msg of expr (** pointer *) *
+                                                range (** deallocation site *)
+
+let () =
+  register_alarm_class (fun next fmt -> function
+      | A_c_use_after_free -> fprintf fmt "Use after free"
+      | a -> next fmt a
+    )
+
+let () =
+  register_alarm_message {
+    classifier = (fun next -> function
+        | A_c_use_after_free_msg _ -> A_c_use_after_free
+        | a -> next a
+      );
+    compare = (fun next a1 a2 ->
+        match a1, a2 with
+        | A_c_use_after_free_msg(p1,r1), A_c_use_after_free_msg(p2,r2) ->
+          Compare.pair compare_expr compare_range (p1,r1) (p2,r2)
+        | _ -> next a1 a2
+      );
+    print = (fun next fmt -> function
+        | A_c_use_after_free_msg(p,r) ->
+          fprintf fmt "'%a' points to memory deallocated at %a" (Debug.bold pp_expr) p pp_range r
+
+        | m -> next fmt m
+      );
+  }
+
+
+let raise_c_use_after_free_alarm pointer dealloc_range man flow =
+  let cs = Flow.get_callstack flow in
+  let pointer' = get_orig_expr pointer in
+  let alarm = mk_alarm (A_c_use_after_free_msg(pointer',dealloc_range)) cs pointer'.erange in
+  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+
+
+
+(** {2 Double free} *)
+(** *************** *)
+
+type alarm_class   += A_c_double_free
+type alarm_message += A_c_double_free_msg of expr (** pointer *) *
+                                             range (** deallocation site *)
+
+let () =
+  register_alarm_class (fun next fmt -> function
+      | A_c_double_free -> fprintf fmt "Double free"
+      | a -> next fmt a
+    )
+
+let () =
+  register_alarm_message {
+    classifier = (fun next -> function
+        | A_c_double_free_msg _ -> A_c_double_free
+        | a -> next a
+      );
+    compare = (fun next a1 a2 ->
+        match a1, a2 with
+        | A_c_double_free_msg(p1,r1), A_c_double_free_msg(p2,r2) ->
+          Compare.pair compare_expr compare_range (p1,r1) (p2,r2)
+        | _ -> next a1 a2
+      );
+    print = (fun next fmt -> function
+        | A_c_double_free_msg(p,r) ->
+          fprintf fmt "'%a' points to memory already deallocated at %a"
+            (Debug.bold pp_expr) p
+            pp_range r
+
+        | m -> next fmt m
+      );
+  }
+
+
+let raise_c_double_free_alarm pointer dealloc_range man flow =
+  let cs = Flow.get_callstack flow in
+  let pointer' = get_orig_expr pointer in
+  let alarm = mk_alarm (A_c_double_free_msg(pointer',dealloc_range)) cs pointer'.erange in
+  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+
+
+(** {2 Insufficient variadic arguments} *)
+(** *********************************** *)
+
+type alarm_class   += A_c_insufficient_variadic_args
+type alarm_message += A_c_insufficient_variadic_args_msg of var (** va_list variable *) *
+                                                            int_itv (** va_arg call counter *) *
+                                                            int (** number of passed arguments *)
+
+let () =
+  register_alarm_class (fun next fmt -> function
+      | A_c_insufficient_variadic_args -> fprintf fmt "Insufficient variadic arguments"
+      | a -> next fmt a
+    )
+
+let () =
+  register_grouped_alarm_message {
+    classifier = (fun next -> function
+        | A_c_insufficient_variadic_args_msg _ -> A_c_insufficient_variadic_args
+        | a -> next a
+      );
+    compare = (fun next a1 a2 ->
+        match a1, a2 with
+        | A_c_insufficient_variadic_args_msg(va1,c1,n1), A_c_insufficient_variadic_args_msg(va2,c2,n2) ->
+          Compare.triple compare_var compare_int_interval compare (va1,c1,n1) (va2,c2,n2)
+        | _ -> next a1 a2
+      );
+    print = (fun next fmt messages -> function
+        | A_c_insufficient_variadic_args ->
+          (* Group messages by va_list variables and compute the interval of call counter and the number of passed arguments *)
+          let m = List.fold_left
+              (fun acc -> function
+                 | A_c_insufficient_variadic_args_msg(va,c,n) ->
+                   let (oldc,oldn) = try VarMap.find va acc with Not_found -> (Bot.BOT,Bot.BOT) in
+                   VarMap.add va (I.join_bot oldc c, I.join_bot oldn (Bot.Nb (I.cst_int n))) acc
+                 | _ -> assert false
+              ) VarMap.empty messages
+          in
+          pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+            (fun fmt (va,(counter,nargs)) ->
+               fprintf fmt "va_arg called %a time%a on va_list object '%a' with %a argument%a"
+                 pp_const_or_interval counter
+                 pp_interval_plurial counter
+                 pp_var va
+                 pp_const_or_interval nargs
+                 pp_interval_plurial nargs
+            ) fmt (VarMap.bindings m)
+
+        | cls -> next fmt messages cls
+      );
+  }
+
+
+let raise_c_insufficient_variadic_args va_list counter args range man input_flow error_flow =
+  let cs = Flow.get_callstack error_flow in
+  let nargs = List.length args in
+  let counter_itv = man.ask (mk_int_interval_query counter) input_flow in
+  let alarm = mk_alarm (A_c_insufficient_variadic_args_msg(va_list,counter_itv,nargs)) cs range in
+  Flow.raise_alarm alarm ~bottom:true man.lattice error_flow
+
+
+
+(** {2 Insufficient format arguments} *)
+(** ********************************* *)
+
+type alarm_class   += A_c_insufficient_format_args
+type alarm_message += A_c_insufficient_format_args_msg of int (** number of required arguments *) * int (** number of given arguments *)
+
+let () =
+  register_alarm_class (fun next fmt -> function
+      | A_c_insufficient_format_args -> fprintf fmt "Insufficient format arguments"
+      | a -> next fmt a
+    )
+
+let () =
+  register_alarm_message {
+    classifier = (fun next -> function
+        | A_c_insufficient_format_args_msg _ -> A_c_insufficient_format_args
+        | a -> next a
+      );
+    compare = (fun next a1 a2 ->
+        match a1, a2 with
+        | A_c_insufficient_format_args_msg(r1,g1), A_c_insufficient_format_args_msg(r2,g2) ->
+          Compare.pair compare compare (r1,g1) (r2,g2)
+        | _ -> next a1 a2
+      );
+    print = (fun next fmt -> function
+        | A_c_insufficient_format_args_msg(required,given) ->
+          fprintf fmt "%d argument%a given while %d argument%a required"
+            given Debug.plurial_int given
+            required Debug.plurial_int required
+        | m -> next fmt m
+      );
+  }
+
+
+let raise_c_insufficient_format_args_alarm required given range man flow =
+  let cs = Flow.get_callstack flow in
+  let alarm = mk_alarm (A_c_insufficient_format_args_msg(required,given)) cs range in
+  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+
+
+
+(** {2 Invalid type of format argument} *)
+(** *********************************** *)
+
+type alarm_class   += A_c_invalid_format_arg_type
+type alarm_message += A_c_invalid_format_arg_type_msg of expr (** argument *) * typ (** expected type *)
+
+let () =
+  register_alarm_class (fun next fmt -> function
+      | A_c_invalid_format_arg_type -> fprintf fmt "Invalid type of format argument"
+      | a -> next fmt a
+    )
+
+let () =
+  register_alarm_message {
+    classifier = (fun next -> function
+        | A_c_invalid_format_arg_type_msg _ -> A_c_invalid_format_arg_type
+        | a -> next a
+      );
+    compare = (fun next a1 a2 ->
+        match a1, a2 with
+        | A_c_invalid_format_arg_type_msg(e1,t1), A_c_invalid_format_arg_type_msg(e2,t2) ->
+          Compare.pair compare_expr compare_typ (e1,t1) (e2,t2)
+        | _ -> next a1 a2
+      );
+    print = (fun next fmt -> function
+        | A_c_invalid_format_arg_type_msg(e,t) ->
+          fprintf fmt "format expects argument of type '%a', but '%a' has type '%a'"
+            (Debug.bold pp_typ) t
+            (Debug.bold pp_expr) e
+            (Debug.bold pp_typ) e.etyp
+        | m -> next fmt m
+      );
+  }
+
+
+let raise_c_invalid_format_arg_type_alarm arg typ man flow =
+  let cs = Flow.get_callstack flow in
+  let alarm = mk_alarm (A_c_invalid_format_arg_type_msg(get_orig_expr arg, typ)) cs arg.erange in
+  Flow.raise_alarm alarm ~bottom:false man.lattice flow
+
+
+
+(** {2 Modification of read-only memory} *)
+(** ************************************** *)
+
+type alarm_class   += A_c_modify_read_only
+type alarm_message += A_c_modify_read_only_msg of expr (** pointer *) *
+                                                  base (** pointed base *)
+
+let () =
+  register_alarm_class (fun next fmt -> function
+      | A_c_modify_read_only -> fprintf fmt "Modification of read-only memory"
+      | a -> next fmt a
+    )
+
+let () =
+  register_alarm_message {
+    classifier = (fun next -> function
+        | A_c_modify_read_only_msg _ -> A_c_modify_read_only
+        | a -> next a
+      );
+    compare = (fun next a1 a2 ->
+        match a1, a2 with
+        | A_c_modify_read_only_msg(p1,b1), A_c_modify_read_only_msg(p2,b2) ->
+          Compare.pair compare_expr compare_base (p1,b1) (p2,b2)
+        | _ -> next a1 a2
+      );
+    print = (fun next fmt -> function
+        | A_c_modify_read_only_msg(p,b) ->
+          fprintf fmt "'%a' points to read-only %a"
+            (Debug.bold pp_expr) p
+            pp_base_verbose b
+        | m -> next fmt m
+      );
+  }
+
+
+let raise_c_modify_read_only_alarm ptr base man flow =
+  let cs = Flow.get_callstack flow in
+  let alarm = mk_alarm (A_c_modify_read_only_msg(get_orig_expr ptr, base)) cs ptr.erange in
+  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+
+
+
+(** {2 Float errors} *)
+(** **************** *)
+
+
+type alarm_class   += A_c_invalid_float_class
+type alarm_message += A_c_invalid_float_class_msg of float_itv (** float value *) * string (** expected class *)
+
+let () =
+  register_alarm_class (fun next fmt -> function
+      | A_c_invalid_float_class -> fprintf fmt " Invalid floating-point number class"
+      | a -> next fmt a
+    )
+
+let () =
+  register_alarm_message {
+    classifier = (fun next -> function
+        | A_c_invalid_float_class_msg _ -> A_c_invalid_float_class
+        | a -> next a
+      );
+    compare = (fun next a1 a2 ->
+        match a1, a2 with
+        | A_c_invalid_float_class_msg(f1,m1), A_c_invalid_float_class_msg(f2,m2) ->
+          Compare.compose
+            [ (fun () -> compare_float_interval f1 f2);
+              (fun () -> compare m1 m2)
+            ]
+        | _ -> next a1 a2
+      );
+    print = (fun next fmt -> function
+        | A_c_invalid_float_class_msg(f,msg) -> fprintf fmt "float '%a' may not be %s" (Debug.bold (F.fprint F.dfl_fmt)) f msg
+        | a -> next fmt a
+      );
+  }
+
+let raise_c_invalid_float_class_alarm float msg range man input_flow error_flow =
+  let cs = Flow.get_callstack error_flow in
+  let float_itv = man.ask (mk_float_interval_query float) input_flow in
+  let alarm = mk_alarm (A_c_invalid_float_class_msg (float_itv,msg)) cs range in
+  Flow.raise_alarm alarm ~bottom:true man.lattice error_flow

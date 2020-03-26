@@ -120,6 +120,12 @@ sig
       applying the operation op, the result is in r
   *)
 
+  val predicate : operator -> t -> bool -> t
+  (** Backward evaluation of unary boolean predicates.
+      [predicate op x true] returns the subset of x such that x is
+      true.
+      [predicate op x false] is similar, but assumes that the predicate is false
+  *)
 
   val compare : operator -> t -> t -> bool -> (t * t)
   (** Backward evaluation of boolean comparisons. [compare op x y true] returns (x',y') where:
@@ -175,6 +181,8 @@ struct
 
   let bwd_binop man t op v1 v2 r = lift_simplified_bwd_binop Value.bwd_binop man t op v1 v2 r
 
+  let predicate man t op v b = lift_simplified_predicate Value.predicate man t op v b
+
   let compare man t op v1 v2 b = lift_simplified_compare Value.compare man t op v1 v2 b
 
 
@@ -196,6 +204,9 @@ let default_bwd_unop op x r =
 
 let default_bwd_binop op x y r =
   (x, y)
+
+let default_predicate op x r =
+  x
 
 let default_compare op x y b =
   (x, y)

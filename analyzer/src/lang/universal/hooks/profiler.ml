@@ -96,7 +96,7 @@ struct
     let t = Sys.time () in
     let timing = { !cur with time = t -. !cur.time } in
     Queue.push timing records;
-    let timing = { callstack = call.call_fun :: !cur.callstack ; time = t; } in
+    let timing = { callstack = call.call_fun_orig_name :: !cur.callstack ; time = t; } in
     cur := timing
 
 

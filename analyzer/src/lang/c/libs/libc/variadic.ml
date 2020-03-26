@@ -65,7 +65,7 @@ struct
     }
   }
 
-  let alarms = [A_c_out_of_bound_cls; A_c_no_next_va_arg_cls]
+  let alarms = [A_c_out_of_bound; A_c_insufficient_variadic_args]
 
   (** Flow-insensitive annotations *)
   (** ============================ *)
@@ -157,7 +157,7 @@ struct
     in
 
     (* Put vars in the annotation *)
-    let flow = push_unnamed_args (last,vars) flow in
+    let flow = push_unnamed_args (last, List.rev vars) flow in
 
     (* Call the function with only named arguments *)
     let fundec' = {fundec with c_func_variadic = false} in
@@ -203,9 +203,9 @@ struct
         ~fthen:(fun flow ->
             Cases.singleton ap flow
           )
-        ~felse:(fun flow ->
+        ~felse:(fun eflow ->
             man.eval offset ~zone:(Z_c_scalar,Universal.Zone.Z_u_num) flow >>$ fun offset flow ->
-            raise_c_out_bound_alarm ~base:(mk_var_base ap) ~offset ~size:(mk_z base_size range) range (Core.Sig.Stacked.Manager.of_domain_man man) flow |>
+            raise_c_out_var_bound_alarm ap offset (under_type ap.vtyp) range (Core.Sig.Stacked.Manager.of_domain_man man) flow eflow |>
             Cases.empty_singleton
           )
         ~zone:Z_c
@@ -266,9 +266,9 @@ struct
 
           Eval.join_list evl ~empty:(fun () -> Eval.empty_singleton flow)
         )
-      ~felse:(fun flow ->
+      ~felse:(fun eflow ->
           (* Raise an alarm since no next argument can be fetched by va_arg *)
-          let flow' = raise_c_no_next_va_arg ~va_list:ap ~counter:valc ~args:unnamed range (Sig.Stacked.Manager.of_domain_man man) flow in
+          let flow' = raise_c_insufficient_variadic_args ap valc unnamed range (Sig.Stacked.Manager.of_domain_man man) flow eflow in
           Eval.empty_singleton flow'
         )
       ~zone:Universal.Zone.Z_u_num

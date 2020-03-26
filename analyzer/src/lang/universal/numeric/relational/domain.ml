@@ -191,7 +191,6 @@ struct
         let acc', _ = List.fold_left (fun acc v -> forget_var v acc) (acc,bnd) vars in
         acc'
 
-
       | S_assume _ ->
         acc
 
@@ -295,10 +294,7 @@ struct
       in
       let v, bnd = Binding.var_to_apron bnd v in
       let vl, bnd = Binding.vars_to_apron bnd vl in
-      let abs = Apron.Abstract1.expand ApronManager.man a
-          v (Array.of_list vl) in
-      let env = Apron.Environment.remove (Apron.Abstract1.env abs) [| v |] in
-      let abs' = Apron.Abstract1.change_environment ApronManager.man abs env false in
+      let abs' = Apron.Abstract1.expand ApronManager.man a v (Array.of_list vl) in
       Some (abs', bnd)
 
     | S_assume(e) -> begin

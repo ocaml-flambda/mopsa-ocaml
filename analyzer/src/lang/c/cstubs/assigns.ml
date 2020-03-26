@@ -119,23 +119,27 @@ struct
       (* Convert the assigned indices to temporary quantified variables *)
       let quant_indices_with_tmps = List.map (fun (a,b) ->
           let tmp = mktmp ~typ:s32 () in
-          mk_stub_quantified FORALL tmp (S_interval(a,b)) range, tmp
+          mk_stub_quantified FORALL tmp (S_interval(a,b)) range, tmp, a, b
         ) assigned_indices
       in
 
       (* Prime the target *)
       let primed_target = mk_primed_address base offset (under_type typ) range in
 
-      (* Create the assigned lval and cleaners for temporary quantified variables *)
-      let lval, cleaners = List.fold_left (fun (acc,cleaners) (i,tmp) ->
+      (* Create the assigned lval *)
+      let adds, assumes, lval, cleaners = List.fold_left (fun (adds,assumes,acc,cleaners) (i,tmp,a,b) ->
+          mk_add_var tmp range :: adds,
+          mk_assume (mk_in (mk_var tmp range) a b range) range :: assumes,
           mk_c_subscript_access acc i range,
           mk_remove_var tmp range :: cleaners
-        ) (primed_target,[]) quant_indices_with_tmps
+        ) ([],[],primed_target,[]) quant_indices_with_tmps
       in
 
       (* Execute `forget lval` *)
-      man.post (mk_forget lval range) ~zone:Z_c flow >>$ fun () flow ->
-      man.post (mk_block cleaners range) ~zone:Z_c flow
+      man.post (mk_block adds range) flow >>$ fun () flow ->
+      man.post (mk_block assumes range) flow >>$ fun () flow ->
+      man.post (mk_forget lval range) flow >>$ fun () flow ->
+      man.post (mk_block cleaners range) flow
 
 
 
@@ -149,23 +153,23 @@ struct
     let man' = Core.Sig.Stacked.Manager.of_domain_man man in
     match ekind p with
     | E_c_points_to P_null ->
-      raise_c_null_deref_alarm ptr range man' flow |>
+      raise_c_null_deref_alarm ptr man' flow |>
       Cases.empty_singleton
 
     | E_c_points_to P_invalid ->
-      raise_c_invalid_deref_alarm ptr range man' flow |>
+      raise_c_invalid_deref_alarm ptr man' flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
-      raise_c_use_after_free_alarm ptr r range man' flow |>
+      raise_c_use_after_free_alarm ptr r man' flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
-      raise_c_dangling_deref_alarm ptr v r range man' flow |>
+      raise_c_dangling_deref_alarm ptr v r man' flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block (base, offset, _)) when is_base_readonly base ->
-      raise_c_read_only_modification_alarm base range man' flow |>
+      raise_c_modify_read_only_alarm ptr base man' flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block (base, offset, mode))  ->
@@ -237,23 +241,23 @@ struct
     let man' = Core.Sig.Stacked.Manager.of_domain_man man in
     match ekind p with
     | E_c_points_to P_null ->
-      raise_c_null_deref_alarm ptr range man' flow |>
+      raise_c_null_deref_alarm ptr man' flow |>
       Cases.empty_singleton
 
     | E_c_points_to P_invalid ->
-      raise_c_invalid_deref_alarm ptr range man' flow |>
+      raise_c_invalid_deref_alarm ptr man' flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
-      raise_c_use_after_free_alarm ptr r range man' flow |>
+      raise_c_use_after_free_alarm ptr r man' flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
-      raise_c_dangling_deref_alarm ptr v r range man' flow |>
+      raise_c_dangling_deref_alarm ptr v r man' flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block (base, offset, _)) when is_base_readonly base ->
-      raise_c_read_only_modification_alarm base range man' flow |>
+      raise_c_modify_read_only_alarm ptr base man' flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block (base, offset, mode))  ->

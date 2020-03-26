@@ -42,8 +42,7 @@ int socket (int __domain, int __type, int __protocol);
 
 
 /*$
- * local:    void* f = _mopsa_find_file_resource(__fd);
- * requires: f in FileRes;
+ * requires: __fd in FileDescriptor;
  *
  * case "safe" {
  *   ensures: return == 0;
@@ -58,8 +57,47 @@ int connect (int __fd, const struct sockaddr * __addr, socklen_t __len);
 
 
 /*$
- * local:    void* f = _mopsa_find_file_resource(__fd);
- * requires: f in FileRes;
+ * requires: __fd in FileDescriptor;
+ *
+ * case "safe" {
+ *   ensures: return == 0;
+ * }
+ *
+ * case "error" {
+ *   assigns: _errno;
+ *   ensures: return == -1;
+ * }
+ */
+int bind (int __fd, const struct sockaddr *__addr, socklen_t __len);
+
+
+/*$
+ * requires: __fd in FileDescriptor;
+ * assigns: _errno;
+ * ensures: return in [-1, 0];
+ */
+int listen (int __fd, int __n);
+
+
+/*$
+ * requires: __fd in FileDescriptor;
+ *
+ * case "valid-addr" {
+ *   local:   void *f = new FileRes;
+ *   local:   int fd = _mopsa_register_file_resource(f);
+ *   ensures: return == fd;
+ * }
+ *
+ * case "error" {
+ *   assigns: _errno;
+ *   ensures: return == -1;
+ * }
+ */
+int accept (int __fd, struct sockaddr *__addr, socklen_t *__restrict __addr_len);
+
+
+/*$
+ * requires: __fd in FileDescriptor;
  * requires: valid_ptr_range(__buf, 0, __n - 1);
  *
  * case "safe" {

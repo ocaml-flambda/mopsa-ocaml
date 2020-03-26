@@ -56,6 +56,7 @@ sig
   val is_empty : t -> bool
   val empty : t
   val is_bottom : t -> bool
+  val is_singleton : t -> bool
   val elements : t -> Set.elt list
   val map : (elt -> elt) -> t -> t
   val iter : (elt -> unit) -> t -> unit

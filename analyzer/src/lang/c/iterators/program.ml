@@ -62,6 +62,19 @@ struct
     }
 
 
+  (** Symbolic main arguments. *)
+  let opt_symbolic_args = ref false
+
+  let () =
+    register_domain_option name {
+      key = "-c-symbolic-args";
+      category = "C";
+      doc = " call main with symbolic argc and argv";
+      spec = ArgExt.Set opt_symbolic_args;
+      default = "false";
+    }
+
+
 
   (** Zoning definition *)
   (** ================= *)
@@ -290,7 +303,7 @@ struct
     let flow = man.exec (mk_add ii range) flow |>
                man.exec (mk_assign ii (mk_c_builtin_call "_mopsa_range_s32" [l;u] s32 range) range)
     in
-    let every_argv_cell = mk_c_subscript_access argv (mk_expr (Stubs.Ast.E_stub_quantified(FORALL,i,S_interval(l,u))) ~etyp:s32 range) range in
+    let every_argv_cell = mk_c_subscript_access argv (mk_stub_quantified FORALL i (S_interval(l,u)) range) range in
     let flow = man.exec (mk_assume (mk_binop every_argv_cell O_eq arg_weak ~etyp:u8 range) range) flow |>
                man.exec (mk_remove ii range)
     in
@@ -305,9 +318,11 @@ struct
 
   let call_main main args functions man flow =
     if List.length main.c_func_parameters = 2 then
-      match args with
-      | Some args -> call_main_with_concrete_args main args man flow
-      | None      -> call_main_with_symbolic_args main functions man flow
+      match !opt_symbolic_args, args with
+      | false, None      -> call_main_with_concrete_args main [] man flow
+      | false, Some args -> call_main_with_concrete_args main args man flow
+      | true, None       -> call_main_with_symbolic_args main functions man flow
+      | true, Some args  -> panic "-c-symbolic-main-args used with concrete arguments"
     else
       exec_entry_body main man flow
 

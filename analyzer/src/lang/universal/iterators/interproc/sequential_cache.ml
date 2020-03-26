@@ -124,7 +124,7 @@ struct
       let in_flow = flow in
       let in_flow_cur, in_flow_other = split_cur_from_others man in_flow in
       let params, locals, body, in_flow_cur = init_fun_params func args range man in_flow_cur in
-      begin match find_signature man func.fun_name in_flow_cur with
+      begin match find_signature man func.fun_uniq_name in_flow_cur with
         | None ->
           let ret = mk_range_attr_var range "ret_var" T_any in
           inline func params locals body (Some ret) range man in_flow_cur |>
@@ -135,7 +135,7 @@ struct
                 let out_flow_cur, out_flow_other = split_cur_from_others man out_flow in
                 (* let out_flow_cur = exec_block_on_all_flows cleaners man out_flow_cur in *)
                 let out_flow = Flow.join man.lattice out_flow_cur out_flow_other in
-                let flow = store_signature func.fun_name in_flow_cur oeval_res out_flow cleaners in
+                let flow = store_signature func.fun_uniq_name in_flow_cur oeval_res out_flow cleaners in
                 Cases.return oeval_res (Flow.join man.lattice in_flow_other flow) ~log ~cleaners:cleaners
 
               | Some eval_res ->
@@ -152,14 +152,14 @@ struct
                       let out_flow_cur, out_flow_other = split_cur_from_others man out_flow in
                       (* let out_flow_cur = exec_block_on_all_flows cleaners man out_flow_cur in *)
                       let out_flow = Flow.join man.lattice out_flow_cur out_flow_other in
-                      let flow = store_signature func.fun_name in_flow_cur (Some eval_res) out_flow cleaners in
+                      let flow = store_signature func.fun_uniq_name in_flow_cur (Some eval_res) out_flow cleaners in
                       Cases.return (Some eval_res) (Flow.join man.lattice in_flow_other flow) ~log ~cleaners:cleaners
                   )
             )
 
         | Some (_, oout_expr, out_flow, cleaners) ->
-          Debug.debug ~channel:"profiling" "reusing %s at range %a" func.fun_name pp_range func.fun_range;
-          debug "reusing something in function %s@\nchanging in_flow=%a@\ninto out_flow=%a@\n" func.fun_name (Flow.print man.lattice.print) in_flow (Flow.print man.lattice.print) out_flow;
+          Debug.debug ~channel:"profiling" "reusing %s at range %a" func.fun_orig_name pp_range func.fun_range;
+          debug "reusing something in function %s@\nchanging in_flow=%a@\ninto out_flow=%a@\n" func.fun_orig_name (Flow.print man.lattice.print) in_flow (Flow.print man.lattice.print) out_flow;
           Cases.return oout_expr (Flow.join man.lattice in_flow_other out_flow) ~cleaners:cleaners
       end
       |> OptionExt.return

@@ -33,11 +33,11 @@ val create_context: string -> Clang_AST.target_info -> context
     Returns a context to manipulate the project.
  *)
                                                                           
-val add_translation_unit: context -> string -> Clang_AST.decl -> Clang_AST.comment list -> Clang_AST.macro list -> unit
-(** [add_translation_unit context name decl coms macros] converts a Clang definition
-    of a translation unit with the given name (generally, the source C file)
-    into a cAST and accumulates the definition to the projet.
- *)
+val add_translation_unit: context -> string -> Clang_AST.decl -> string list -> Clang_AST.comment list -> Clang_AST.macro list -> unit
+(** [add_translation_unit context name decl files coms macros] converts a
+   Clang definition of a translation unit with the given name (generally, the
+   source C file) into a cAST and accumulates the definition to the projet.
+   *)
 
 val link_project: context -> C_AST.project
 (** [link_project context] links all the translation units accumulated in the
@@ -64,3 +64,6 @@ val new_uid: context -> C_AST.uid
 
 val find_function : string -> context -> C_AST.func
 (** Find a function by its name. Not_found is raised when the function is missing. *)
+
+val get_parsed_files : context -> string list
+(** Get the list of parsed files *)

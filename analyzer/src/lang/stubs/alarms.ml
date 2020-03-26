@@ -26,32 +26,27 @@ open Ast
 open Sig.Stacked.Manager
 
 
-type alarm_class +=
-  | A_stub_invalid_requires_cls
-
-
-type alarm_body +=
-  | A_stub_invalid_requires_condition of expr
+type alarm_class   += A_stub_invalid_requires
+type alarm_message += A_stub_invalid_requires_condition of expr
 
 let raise_stub_invalid_requires cond range man flow =
   let cs = Flow.get_callstack flow in
   let cond' = get_orig_expr cond in
-  let alarm = mk_alarm (A_stub_invalid_requires_condition cond') range ~cs in
+  let alarm = mk_alarm (A_stub_invalid_requires_condition cond') cs range in
   Flow.raise_alarm alarm ~bottom:true man.lattice flow
 
 
 let () =
-  register_alarm_class (fun default fmt a ->
-      match a with
-      | A_stub_invalid_requires_cls -> Format.fprintf fmt "Invalid stub requirement"
-      | _ -> default fmt a
+  register_alarm_class (fun default fmt -> function
+      | A_stub_invalid_requires -> Format.fprintf fmt "Invalid stub requirement"
+      | a -> default fmt a
     )
 
 
 let () =
-  register_alarm_body {
+  register_alarm_message {
     classifier = (fun next -> function
-        | A_stub_invalid_requires_condition _ -> A_stub_invalid_requires_cls
+        | A_stub_invalid_requires_condition _ -> A_stub_invalid_requires
         | a -> next a
       );
     compare = (fun next a1 a2 ->
@@ -60,9 +55,8 @@ let () =
           compare_expr e1 e2
         | _ -> next a1 a2
       );
-      print = (fun next fmt a ->
-          match a with
-          | A_stub_invalid_requires_condition e -> Format.fprintf fmt "invalid requirement %a" pp_expr e
-          | _ -> next fmt a
-        );
-    };
+      print = (fun next fmt -> function
+        | A_stub_invalid_requires_condition e -> Format.fprintf fmt "invalid requirement '%a'" (Debug.bold pp_expr) e
+        | a -> next fmt a
+      );
+  };

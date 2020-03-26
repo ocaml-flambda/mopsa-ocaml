@@ -28,6 +28,8 @@ open Ast
 open Zone
 open Alarms
 
+
+
 module Domain =
 struct
 
@@ -45,15 +47,36 @@ struct
 
   let alarms = []
 
+
   (** Initialization of environments *)
   (** ============================== *)
 
   let init prog man flow = flow
 
 
+  (** {2 Command-line options} *)
+  (** ************************ *)
+
+  let opt_stub_ignored_cases : string list ref = ref []
+  (** List of ignored stub cases *)
+
+  let () = register_builtin_option {
+      key      = "-stub-ignore-case";
+      doc      = " list of stub cases to ignore";
+      category = "Stubs";
+      spec     = ArgExt.Set_string_list opt_stub_ignored_cases;
+      default  = "";
+    }
+
+  (** Check whether a case is ignored *)
+  let is_case_ignored stub case : bool =
+    match stub with
+    | None -> false
+    | Some s -> List.mem (s.stub_func_name ^ "." ^ case.case_label) !opt_stub_ignored_cases
+
+
   (** Evaluation of expressions *)
   (** ========================= *)
-
 
   (** Negate a formula *)
   let rec negate_formula (f:formula with_range) : formula with_range =
@@ -136,7 +159,7 @@ struct
       (man:('a, unit) man)
       (flow:'a flow)
     : 'a flow =
-    debug "@[<v 2>eval formula %a@;in %a" pp_formula f (Flow.print man.lattice.print) flow;
+    debug "@[<hov>eval formula@ %a@]" pp_formula f;
     match f.content with
     | F_expr e ->
       man.exec (cond_to_stmt e f.range) flow
@@ -179,34 +202,43 @@ struct
 
   (** Evaluate a quantified formula and its eventual negation *)
   and eval_quantified_formula cond_to_stmt q v s f range man flow : 'a flow =
-    (* Add [v] to the environment *)
-    let flow = man.exec (mk_add_var v range) flow in
-
-    (* Constrain the range of [v] *)
-    let post =
+    (* Check that the set [s] is not empty *)
+    let cond =
       match s with
-      | S_interval (l, u) ->
-        man.post (mk_assume (mk_in (mk_var v range) l u ~etyp:T_bool range) range) flow
-
-      | _ ->
-        Post.return flow
+      | S_resource _ -> mk_true range
+      | S_interval(a,b) -> mk_binop a O_le b range
     in
+    assume_flow cond
+      ~fthen:(fun flow ->
+          (* Add [v] to the environment *)
+          let flow = man.exec (mk_add_var v range) flow in
+          (* Ensure that [v] is in the set [s] *)
+          let flow = match s with
+            | S_resource _ -> flow
+            | S_interval(a,b) -> man.exec (mk_assume (mk_in (mk_var v range) a b range) range) flow
+          in
+          (* Replace [v] in [f] with quantified variables *)
+          let f' = visit_expr_in_formula
+              (fun e ->
+                 match ekind e with
+                 | E_var (vv, _) when compare_var v vv = 0 ->
+                   Keep (mk_stub_quantified q v s range)
 
-    (* Replace [v] in [f] with a quantified expression *)
-    let f' = visit_expr_in_formula
-        (fun e ->
-           match ekind e with
-           | E_var (vv, _) when compare_var v vv = 0 ->
-             Keep { e with ekind = E_stub_quantified (q, v, s) }
+                 | _ -> VisitParts e
+              )
+              f
+          in
+          (* Evaluate [f'] *)
+          let flow = eval_formula cond_to_stmt f' man flow in
+          (* Remove [v] from the environment *)
+          man.exec (mk_remove_var v range) flow
+        )
+      ~felse:(fun flow ->
+          match q with
+          | FORALL -> man.exec (cond_to_stmt (mk_true range) range) flow
+          | EXISTS -> man.exec (cond_to_stmt (mk_false range) range) flow
+        ) man flow
 
-           | _ -> VisitParts e
-          )
-          f
-    in
-
-    Post.bind (fun flow -> eval_formula cond_to_stmt f' man flow |> Post.return) post |>
-    post_to_flow man |>
-    man.exec (mk_remove_var v range)
 
 
 
@@ -329,7 +361,6 @@ struct
 
   (** Execute the body of a case section *)
   let exec_case case return man flow =
-    (* Execute leaf sections *)
     List.fold_left (fun acc leaf ->
         exec_leaf leaf return man acc
       ) flow case.case_body |>
@@ -339,7 +370,7 @@ struct
 
 
   (** Execute the body of a stub *)
-  let exec_body body return man flow =
+  let exec_body ?(stub=None) body return man flow =
     (* Execute leaf sections *)
     let flow = List.fold_left (fun flow section ->
         match section with
@@ -351,7 +382,7 @@ struct
     (* Execute case sections separately *)
     let flows, ctx = List.fold_left (fun (acc,ctx) section ->
         match section with
-        | S_case case ->
+        | S_case case when not (is_case_ignored stub case) ->
           let flow = Flow.set_ctx ctx flow in
           let flow' = exec_case case return man flow in
           flow':: acc, Flow.get_ctx flow'
@@ -410,7 +441,7 @@ struct
       in
 
       (* Evaluate the body of the stb *)
-      let flow = exec_body stub.stub_func_body return man flow in
+      let flow = exec_body ~stub:(Some stub) stub.stub_func_body return man flow in
 
       (* Clean locals *)
       let flow = clean_post stub.stub_func_locals stub.stub_func_range man flow in

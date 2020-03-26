@@ -73,7 +73,6 @@ struct
     ieval = {
       provides = [Z_c_low_level, Z_c_scalar];
       uses = [
-        Z_c, Z_u_num;
         Z_c_low_level, Z_u_num;
         Z_c_scalar, Z_u_num;
         Z_c_low_level, Z_c_scalar;
@@ -148,7 +147,7 @@ struct
   *)
   let mk_before_var base ?(mode=None) range : expr =
     let name = "before-sentinel(" ^ (base_uniq_name base) ^ ")" in
-    let v = mkv name (V_c_before_sentinel (base)) (T_c_pointer T_c_void) ~mode:(base_mode base) in
+    let v = mkv name (V_c_before_sentinel (base)) (T_c_pointer T_c_void) ~mode:WEAK in
     mk_var v ~mode range
 
 
@@ -467,10 +466,7 @@ struct
                    *)
                    before_cases sentinel range man flow
                      ~exists:(fun flow -> man.post ~zone:Z_c_scalar (mk_assign (weaken_var_expr before) rval range) flow)
-                     ~empty:(fun flow ->
-                         man.post ~zone:Z_c_scalar (mk_add before range) flow >>$ fun _ flow ->
-                         man.post ~zone:Z_c_scalar (mk_assign before rval range) flow
-                       )
+                     ~empty:(fun flow -> man.post ~zone:Z_c_scalar (mk_assign before rval range) flow)
                    >>$ fun _ flow ->
                    man.post ~zone:Z_u_num (mk_assign sentinel (add sentinel ptr range) range) flow >>$ fun _ flow ->
                    at_cases sentinel size range man flow
@@ -504,8 +500,8 @@ struct
 
     eval_base_size base range man flow >>$ fun size flow ->
     man.eval ~zone:(Z_c_scalar, Z_u_num) size flow >>$ fun size flow ->
-    man.eval ~zone:(Z_c, Z_u_num) min flow >>$ fun min flow ->
-    man.eval ~zone:(Z_c, Z_u_num) max flow >>$ fun max flow ->
+    man.eval ~zone:(Z_c_scalar, Z_u_num) min flow >>$ fun min flow ->
+    man.eval ~zone:(Z_c_scalar, Z_u_num) max flow >>$ fun max flow ->
 
     let sentinel = mk_sentinel_var base ~mode range in
     let at = mk_at_var base ~mode range in
@@ -751,8 +747,8 @@ struct
 
     let min, max = Common.Quantified_offset.bound offset in
 
-    man.eval ~zone:(Z_c, Z_u_num) min flow >>$ fun min flow ->
-    man.eval ~zone:(Z_c, Z_u_num) max flow >>$ fun max flow ->
+    man.eval ~zone:(Z_c_scalar, Z_u_num) min flow >>$ fun min flow ->
+    man.eval ~zone:(Z_c_scalar, Z_u_num) max flow >>$ fun max flow ->
 
     let ptr = mk_z ptr_size range in
 

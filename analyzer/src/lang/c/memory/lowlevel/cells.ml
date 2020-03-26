@@ -387,7 +387,10 @@ struct
     }
   }
 
-  let alarms = [A_c_out_of_bound_cls; A_c_null_deref_cls; A_c_use_after_free_cls; A_c_invalid_deref_cls]
+  let alarms = [ A_c_out_of_bound;
+                 A_c_null_deref;
+                 A_c_use_after_free;
+                 A_c_invalid_deref ]
 
 
   (** {2 Command-line options} *)
@@ -503,7 +506,7 @@ struct
           let base = (Z.pow (Z.of_int 2) (8 * Z.to_int b))  in
           let v = mk_numeric_cell_var_expr c' range in
           Some (
-            (_mod
+            (_mod_
                (div v (mk_z base range) range)
                (mk_int 256 range)
                range
@@ -549,26 +552,8 @@ struct
             else
               raise NotPossible
           with
-          | NotPossible ->
-            match c.base.base_kind with
-            | String s ->
-              let len = String.length s in
-              if Z.equal c.offset (Z.of_int len) then
-                Some (mk_zero range)
-              else
-                Some (mk_int (String.get s (Z.to_int c.offset) |> int_of_char) range)
+          | NotPossible -> None
 
-            | _ ->
-              if is_int_cell c then
-                let a,b = rangeof_int_cell c in
-                Some (mk_z_interval a b range)
-              else if is_float_cell c then
-                let prec = get_c_float_precision (cell_type c) in
-                Some (mk_top (T_float prec) range)
-              else if is_pointer_cell c then
-                panic_at range ~loc:__LOC__ "phi called on a pointer cell %a" pp_cell c
-              else
-                None
 
   (** Add a cell in the underlying domain using the simplified manager *)
   let add_cell_simplified c a range man ctx s =
@@ -663,19 +648,19 @@ struct
 
     match ekind pt with
     | E_c_points_to P_null ->
-      raise_c_null_deref_alarm ptr range man flow |>
+      raise_c_null_deref_alarm ptr man flow |>
       Cases.empty_singleton
 
     | E_c_points_to P_invalid ->
-      raise_c_invalid_deref_alarm ptr range man flow |>
+      raise_c_invalid_deref_alarm ptr man flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
-      raise_c_use_after_free_alarm ptr r range man flow |>
+      raise_c_use_after_free_alarm ptr r man flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
-      raise_c_dangling_deref_alarm ptr v r range man flow |>
+      raise_c_dangling_deref_alarm ptr v r man flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block (base, offset, mode)) ->
@@ -710,7 +695,7 @@ struct
       match expr_to_z size, expr_to_z offset with
       | Some s, Some o ->
         if Z.gt elm s then
-          let flow = raise_c_out_bound_alarm ~base ~offset ~size range man flow in
+          let flow = raise_c_out_bound_alarm base size offset typ range man flow flow in
           Cases.empty_singleton flow
         else
         if Z.leq Z.zero o &&
@@ -719,7 +704,7 @@ struct
           let c = mk_cell base o typ in
           Cases.singleton (Cell (c,mode)) flow
         else
-          let flow = raise_c_out_bound_alarm ~base ~offset ~size range man flow in
+          let flow = raise_c_out_bound_alarm base size offset typ range man flow flow in
           Cases.empty_singleton flow
 
       | _ ->
@@ -798,8 +783,8 @@ struct
                   Cases.join_list ~empty:(fun () -> Cases.empty_singleton flow) evals
 
             )
-          ~felse:(fun flow ->
-              let flow = raise_c_out_bound_alarm ~base ~offset ~size range man flow in
+          ~felse:(fun eflow ->
+              let flow = raise_c_out_bound_alarm base size offset typ range man flow eflow in
               Cases.empty_singleton flow
             )
           man flow
@@ -911,8 +896,13 @@ struct
 
 
   let forget_cell c range man flow =
+    let flow = map_env T_cur
+        (fun a ->
+           { a with cells = cell_set_remove c a.cells }
+        ) man flow
+    in
     let v = mk_cell_var c in
-    let stmt = mk_forget_var v range in
+    let stmt = mk_remove_var v range in
     man.post stmt ~zone:Z_c_scalar flow
 
 
@@ -981,61 +971,23 @@ struct
         pp_expr lval
 
 
-  (** 𝔼⟦ *(p + ∀i) ⟧ *)
-  let eval_deref_quantified p range man flow =
-    let typ = under_type p.etyp |> void_to_char in
-    eval_pointed_base_offset p range man flow >>$ fun pp flow ->
-
-    match pp with
-    | None ->
-      (* Valid pointer but unknown offset *)
-      Soundness.warn_at range "ignoring ⊤ pointer %a" pp_expr p;
-      Eval.singleton (mk_top typ range) flow
-
-    | Some (base,offset,mode) ->
-      eval_base_size base range man flow >>$ fun size flow ->
-      man.eval ~zone:(Z_c_scalar, Z_u_num) size flow >>$ fun size flow ->
-
-      let min, max = Common.Quantified_offset.bound offset in
-      man.eval ~zone:(Z_c, Z_u_num) min flow >>$ fun min flow ->
-      man.eval ~zone:(Z_c, Z_u_num) max flow >>$ fun max flow ->
-
-      let limit = sub size (mk_z (sizeof_type typ) range) range in
-
-      (* Safety condition: [min, max] ⊆ [0, size - |elm|] *)
-      assume (
-        mk_binop
-          (mk_in min (mk_zero range) limit range)
-          O_log_and
-          (mk_in max (mk_zero range) limit range)
-          range
-      )
-        ~fthen:(fun flow ->
-            Eval.singleton (mk_top typ range) flow
-          )
-        ~felse:(fun flow ->
-            raise_c_out_bound_quantified_alarm ~base ~min ~max ~size range man flow |>
-            Eval.empty_singleton
-          )
-        ~zone:Z_u_num man flow
-
-
-
   let eval zone exp man flow =
     match ekind exp with
+    | E_var ({ vkind = V_c_cell _},_) ->
+      Eval.singleton exp flow |>
+      OptionExt.return
+
     | E_var (v,_) when is_c_scalar_type v.vtyp ->
       eval_deref_scalar_pointer (mk_c_address_of exp exp.erange) exp.erange man flow |>
       OptionExt.return
 
-    | E_c_deref p when under_type p.etyp |> void_to_char |> is_c_scalar_type &&
-                       not (is_pointer_offset_forall_quantified p)
+    | E_c_deref p when under_type p.etyp |> void_to_char |> is_c_scalar_type
       ->
       eval_deref_scalar_pointer p exp.erange man flow |>
       OptionExt.return
 
 
-    | E_c_deref p when under_type p.etyp |> is_c_function_type &&
-                       not (is_pointer_offset_forall_quantified p)
+    | E_c_deref p when under_type p.etyp |> is_c_function_type
       ->
       eval_deref_function_pointer p exp.erange man flow |>
       OptionExt.return
@@ -1045,20 +997,11 @@ struct
       OptionExt.return
 
 
-    | E_c_deref p when is_pointer_offset_forall_quantified p ->
-      eval_deref_quantified p exp.erange man flow |>
-      OptionExt.return
-
-
     | E_stub_builtin_call((VALID_PTR | VALID_FLOAT) as f, e) ->
       man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow >>$? fun e flow ->
       Eval.singleton (mk_expr (E_stub_builtin_call(f, e)) ~etyp:exp.etyp exp.erange) flow |>
       OptionExt.return
 
-    | E_stub_quantified(EXISTS, v, _) ->
-      let e = mk_var v exp.erange in
-      man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow |>
-      OptionExt.return
 
     | _ -> None
 
@@ -1105,7 +1048,7 @@ struct
       Post.return flow
 
     | Cell ({ base },_) when is_base_readonly base ->
-      let flow = raise_c_read_only_modification_alarm base range man flow in
+      let flow = raise_c_modify_read_only_alarm p base man flow in
       Post.return flow
 
     | Cell (c,mode) ->
@@ -1197,17 +1140,8 @@ struct
 
   (** Compute the interval of an offset *)
   let offset_interval offset range man flow : Itv.t =
-    let interval e =
-      let evl = man.eval e ~zone:(Z_c, Z_u_num) flow in
-      Eval.apply (fun ee flow -> man.ask (Universal.Numeric.Common.mk_int_interval_query ee) flow) Itv.join Itv.meet Itv.bottom evl
-    in
-    if is_expr_forall_quantified offset then
-      let min, max = Common.Quantified_offset.bound offset in
-      let min_itv = interval min in
-      let max_itv = interval max in
-      Itv.join min_itv max_itv
-    else
-      interval offset
+    let evl = man.eval offset ~zone:(Z_c_scalar, Z_u_num) flow in
+    Eval.apply (fun ee flow -> man.ask (Universal.Numeric.Common.mk_int_interval_query ee) flow) Itv.join Itv.meet Itv.bottom evl
 
 
   (** Forget the value of an lval *)

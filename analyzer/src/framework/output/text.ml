@@ -28,6 +28,10 @@ open Location
 open Format
 
 
+(** Command-line option to enable display of alarms call stacks *)
+let opt_show_callstacks = ref false
+
+
 let print out fmt =
   let formatter =
     match out with
@@ -41,9 +45,85 @@ let print out fmt =
     ) fmt
 
 
-module AlarmBodySet = SetExt.Make(struct type t = alarm_body let compare = compare_alarm_body end)
+module AlarmMessageSet = SetExt.Make(struct type t = alarm_message let compare = compare_alarm_message end)
 module CallstackSet = SetExt.Make(struct type t = Callstack.cs let compare = Callstack.compare end)
 
+
+(** Highlight source code at a given location range *)
+let highlight_range fmt range =
+  if not @@ is_orig @@ untag_range range then ()
+  else
+    (* Print source code at location range *)
+    let start_pos = get_range_start range in
+    let end_pos = get_range_end range in
+    let file = get_pos_file start_pos in
+    assert (file = get_pos_file end_pos);
+
+    let is_bug_line i = i >= get_pos_line start_pos && i <= get_pos_line end_pos in
+
+    (* Read the file from disk *)
+    let f = open_in file in
+    let rec get_bug_lines i =
+      try
+        let l = input_line f in
+        if is_bug_line i then (i,l) :: get_bug_lines (i+1)
+        else get_bug_lines (i+1)
+      with End_of_file -> []
+    in
+
+    (* Highlight bug region in a line *)
+    let highlight_bug fmt (i,l) =
+      let safe_sub l s e =
+        try String.sub l s e
+        with Invalid_argument _ ->
+          let () = Debug.warn_at range "issue on sub %s %d %d" l s e in
+          String.sub l (min 0 s) (max 0 (min e ((String.length l) - s))) in
+      let n = String.length l in
+      (* prints from c1 to c2 included *)
+      let c1 = get_pos_column start_pos in
+      let c2 = get_pos_column end_pos in
+      let s1,s2,s3 =
+        if i = get_pos_line start_pos && i = get_pos_line end_pos then
+          safe_sub l 0 c1,
+          safe_sub l c1 (c2-c1),
+          safe_sub l c2 (n-c2)
+        else if i = get_pos_line start_pos && i = get_pos_line end_pos then
+          safe_sub l 0 c1,
+          safe_sub l c1 (n-c1),
+          ""
+        else if i = get_pos_line end_pos then
+          "",
+          safe_sub l 0 c2,
+          safe_sub l c2 (n-c2)
+        else
+          "",
+          l,
+          ""
+      in
+      fprintf fmt "%a: %s%a%s" (Debug.bold pp_print_int) i s1 (Debug.color_str "red") s2 s3
+    in
+
+    (* Underline bug region *)
+    let underline_bug fmt (i,l) =
+      let n = string_of_int i |> String.length in
+      let c1 = get_pos_column start_pos + n + 2 in
+      let c2 = get_pos_column end_pos + n + 2 in
+      let c3 = String.length l + n + 2 in
+      let s1 = String.make c1 ' ' in
+      let s2 = String.make (c2 - c1) '^' in
+      let s3 = String.make (c3 - c2) ' ' in
+      fprintf fmt "@,%s%a%s" s1 (Debug.color_str "red") s2 s3
+    in
+
+    (* Print the highlighted lines *)
+    let lines = get_bug_lines 1 in
+    close_in f;
+    pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,") highlight_bug fmt lines;
+
+    (* Underline bug if the number of lines is 1 *)
+    match lines with
+    | [bug] -> underline_bug fmt bug
+    | _ -> ()
 
 
 let report ?(flow=None) man alarms time files out =
@@ -72,104 +152,51 @@ let report ?(flow=None) man alarms time files out =
           let range_map = index_alarm_set_by_range ss in
           let sub_total = RangeMap.fold (fun range sss sub_total ->
 
-              (* Group similar bodies and callstacks *)
-              let bodies, callstacks = AlarmSet.fold (fun alarm (bodies,callstacks) ->
-                  AlarmBodySet.add (get_alarm_body alarm) bodies,
+              (* Group similar messages and callstacks *)
+              let messages, callstacks = AlarmSet.fold (fun alarm (messages,callstacks) ->
+                  AlarmMessageSet.add (get_alarm_message alarm) messages,
                   CallstackSet.add (get_alarm_callstack alarm) callstacks
-                ) sss (AlarmBodySet.empty, CallstackSet.empty)
+                ) sss (AlarmMessageSet.empty, CallstackSet.empty)
               in
 
               (* Print the alarm instance *)
-              print out "@.@[<v 2>%a: %a%a@,%a@,%a@]@.@."
-                pp_range range
-                pp_alarm_class cls
-                (fun fmt range ->
-                   if not @@ is_orig @@ untag_range range then ()
-                   else
-                   (* Print source code at location range *)
-                   let start_pos = get_range_start range in
-                   let end_pos = get_range_end range in
-                   let file = get_pos_file start_pos in
-                   assert (file = get_pos_file end_pos);
-
-                   let delta = 2 in
-                   let mem_line_delta i = i >= get_pos_line start_pos - delta && i <= get_pos_line end_pos + delta in
-                   let mem_line i = i >= get_pos_line start_pos && i <= get_pos_line end_pos in
-                   let after_line i = i > get_pos_line end_pos + delta in
-
-                   (* Read the file from disk *)
-                   let f = open_in file in
-                   let rec get_lines i =
-                     try
-                       let l = input_line f in
-                       if mem_line i then (i,true,highlight_bug i l) :: get_lines (i+1)
-                       else if mem_line_delta i then (i,false,l) :: get_lines (i+1)
-                       else if after_line i then []
-                       else get_lines (i+1)
-                     with End_of_file -> []
-
-                   (* Highlight bug region *)
-                   and highlight_bug i l =
-                     let safe_sub l s e =
-                       try String.sub l s e
-                       with Invalid_argument _ ->
-                         let () = Debug.warn_at range "issue on sub %s %d %d" l s e in
-                         String.sub l (min 0 s) (max 0 (min e ((String.length l) - s))) in
-                     let n = String.length l in
-                     (* prints from c1 to c2 included *)
-                     let c1 = get_pos_column start_pos in
-                     let c2 = get_pos_column end_pos in
-                     let s1,s2,s3 =
-                       if i = get_pos_line start_pos && i = get_pos_line end_pos then
-                         safe_sub l 0 c1,
-                         safe_sub l c1 (c2-c1),
-                         safe_sub l c2 (n-c2)
-                       else if i = get_pos_line start_pos && i = get_pos_line end_pos then
-                         safe_sub l 0 c1,
-                         safe_sub l c1 (n-c1),
-                         ""
-                       else if i = get_pos_line end_pos then
-                         "",
-                         safe_sub l 0 c2,
-                         safe_sub l c2 (n-c2)
-                       else
-                         "",
-                         l,
-                         ""
-                     in
-                     Format.asprintf "%s%a%s" s1 (Debug.color_str "red") s2 s3
-                   in
-
-                   (* Print the highlighted lines *)
-                   let lines = get_lines 1 in
-                   close_in f;
-                   fprintf fmt "@,@[<v>%a@]"
-                     (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-                        (fun fmt (i,is_bug_line,l) ->
-                           fprintf fmt "%a: %s"
-                             (Debug.color (if is_bug_line then "red" else "LightSlateBlue") pp_print_int) i
-                             l
-                        )
-                     ) lines
-                ) range
-                (fun fmt bodies ->
-                   (* Print the bodies *)
-                   fprintf fmt "@[<hov 8>Cause%a:@ %a@]" Debug.plurial_int (AlarmBodySet.cardinal bodies)
-                     (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-                        pp_alarm_body
-                     ) (AlarmBodySet.elements bodies)
-                ) bodies
+              let file_name = get_range_relative_file range in
+              let fun_name = match CallstackSet.elements callstacks with
+                | (c::_) :: _ -> c.call_fun_orig_name
+                | _ -> "<>"
+              in
+              print out "@.%a: In function '%a':@.@[<v 2>%a: %a@,@,%a@,%a%a@]@.@."
+                (Debug.bold pp_print_string) file_name
+                (Debug.bold pp_print_string) fun_name
+                (Debug.bold pp_relative_range) range
+                (Debug.color "magenta" pp_alarm_class) cls
+                highlight_range range
+                (pp_grouped_alarm_message cls) (AlarmMessageSet.elements messages)
                 (fun fmt callstacks ->
-                   (* Print the callstacks *)
-                   fprintf fmt "@[<v>Call trace%a:@,%a@]" Debug.plurial_int (CallstackSet.cardinal callstacks)
-                     (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,\t+@,")
-                        (fun fmt cs ->
-                           pp_print_list
-                             ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-                             (fun fmt c -> fprintf fmt "\tfrom %a: %s" pp_range c.Callstack.call_site c.Callstack.call_fun)
-                             fmt cs
-                        )
-                     ) (CallstackSet.elements callstacks);
+                   if not !opt_show_callstacks then ()
+                   else
+                     let pp_callstack i fmt cs =
+                       fprintf fmt "@[<v>Call stack%a:@,%a@]"
+                         (fun fmt -> function
+                            | None   -> ()
+                            | Some i -> fprintf fmt " %d" (i+1)
+                         ) i
+                         (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+                            (fun fmt c ->
+                               fprintf fmt "\tfrom %a: %s"
+                                 pp_relative_range c.Callstack.call_site
+                                 c.Callstack.call_fun_orig_name
+                            )
+                         ) cs
+                     in
+                     match CallstackSet.elements callstacks with
+                     | [] -> ()
+                     | [cs] -> pp_callstack None fmt cs
+                     | csl    ->
+                       let csl' = List.mapi (fun i cs -> (i,cs)) csl in
+                       pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+                         (fun fmt (i,cs) -> pp_callstack (Some i) fmt cs)
+                         fmt csl';
                 ) callstacks
               ;
               sub_total + 1
@@ -179,7 +206,7 @@ let report ?(flow=None) man alarms time files out =
         ) cls_map ([],0)
       in
       (* Print alarms summary *)
-      print out "@[<v 2>Summary of detected alarms:@,%a@,Total: %d@]@."
+      print out "@[<v 2>Summary of detected alarms:@,%a@,Total: %d@]@.@."
         (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
            (fun fmt (cls,nb) -> fprintf fmt "%a: %d" pp_alarm_class cls nb)
         ) sub_totals
@@ -189,7 +216,7 @@ let report ?(flow=None) man alarms time files out =
     match Soundness.get_warnings () with
     | [] -> ()
     | warnings ->
-      print out "%d warning%a detected:@,  @[<v>%a@]@." (List.length warnings) Debug.plurial_list warnings
+      print out "%d warning%a detected:@,  @[<v>%a@]@.@." (List.length warnings) Debug.plurial_list warnings
         (pp_print_list
            ~pp_sep:(fun fmt () -> fprintf fmt "@,")
            Core.Soundness.pp_warning

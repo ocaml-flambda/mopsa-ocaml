@@ -241,7 +241,7 @@ let rec repl_loop ctx man flow =
 
          | FunDecl ->
             let ctx, fdec = parse_fundec ctx str in
-            pf "function %s declared@." fdec.fun_name;
+            pf "function %s declared@." fdec.fun_orig_name;
             ctx, flow
 
     with
@@ -326,3 +326,12 @@ end
 
 let () =
   Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+
+
+
+(* Front-end registration *)
+let () =
+  register_frontend {
+    lang = "repl";
+    parse = parse_program;
+  }

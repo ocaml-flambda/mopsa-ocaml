@@ -24,6 +24,7 @@
 open Mopsa
 open Framework.Core.Sig.Stacked.Stateless
 open Universal.Ast
+open Stubs.Ast
 open Ast
 open Zone
 open Universal.Zone
@@ -58,12 +59,15 @@ struct
       provides = [Z_c_scalar, Z_u_num];
       uses = [
         Z_c_scalar, Z_u_num;
-        Z_c_scalar, Z_c_points_to
+        Z_c_scalar, Z_c_points_to;
+        Z_c, Z_u_num
       ];
     }
   }
 
-  let alarms = [A_c_integer_overflow_cls; A_c_divide_by_zero_cls; A_c_invalid_bit_shift_cls]
+  let alarms = [ A_c_integer_overflow;
+                 A_c_divide_by_zero;
+                 A_c_invalid_shift ]
 
   (** Command-line options *)
   (** ==================== *)
@@ -260,6 +264,10 @@ struct
     | _ -> false
 
 
+  let is_predicate_op = function
+    | O_float_class _ -> true
+    | _ -> false
+
   let rec to_compare_expr e =
     match ekind e with
     | E_binop(op, e1, e2) when is_comparison_op op ->
@@ -270,6 +278,9 @@ struct
 
     | E_unop(O_log_not, ee) ->
       { e with ekind = E_unop(O_log_not, to_compare_expr ee) }
+
+    | E_unop (op, _) when is_predicate_op op ->
+      e
 
     | _ ->
       mk_binop e O_ne (mk_zero e.erange) e.erange
@@ -324,16 +335,16 @@ struct
                               (e    |> etyp |> is_c_int_type &&
                                e'   |> etyp |> is_c_int_type)
       ->
-      let t = e.etyp in
+      let e0 = e in
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e flow ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e' flow >>$? fun e' flow ->
-      check_shift e' t range
+      check_shift e' e0.etyp range
         (fun tflow ->
            let exp' = mk_binop e op e' ~etyp:(to_num_type exp.etyp) range in
            Eval.singleton exp' tflow
         )
         (fun fflow ->
-           let flow' = raise_c_invalid_bit_shift_alarm e' t exp.erange man fflow in
+           let flow' = raise_c_invalid_shift_alarm e0 e' man flow fflow in
            Eval.empty_singleton flow'
         ) man flow |>
       OptionExt.return
@@ -346,7 +357,7 @@ struct
       check_overflow typ man range
         (fun e tflow -> Eval.singleton e tflow)
         (fun e fflow ->
-           let flow1 = raise_c_integer_overflow_alarm e typ exp.erange man fflow in
+           let flow1 = raise_c_integer_overflow_alarm e man flow fflow in
            Eval.singleton (mk_unop (O_wrap(rmin, rmax)) e ~etyp:(to_num_type typ) range) flow1
         ) e flow |>
       OptionExt.return
@@ -367,7 +378,7 @@ struct
            then
              Eval.singleton e' fflow
            else
-             let flow1 = raise_c_integer_overflow_alarm e typ exp.erange man fflow in
+             let flow1 = raise_c_integer_overflow_alarm e man flow fflow in
              Eval.singleton e' flow1
         ) e flow |>
       OptionExt.return
@@ -408,15 +419,12 @@ struct
       Eval.singleton exp' flow |>
       OptionExt.return
 
-    | E_c_cast(e, is_explicit_cast) when exp |> etyp |> is_c_int_type &&
-                                         e   |> etyp |> is_c_int_type
+    | E_c_cast(e, is_explicit_cast) when exp |> etyp |> is_c_int_type
       ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e' flow ->
       let t  = etyp exp in
       let t' = etyp e in
-      let r = rangeof t in
-      let r' = rangeof t' in
-      if range_leq r' r then
+      if is_c_int_type t' && range_leq (rangeof t') (rangeof t) then
         Eval.singleton e' flow |>
         OptionExt.return
       else
@@ -424,11 +432,16 @@ struct
         check_overflow t man range
           (fun e tflow -> Eval.singleton {e with etyp = to_num_type t} tflow)
           (fun e fflow ->
-             if is_explicit_cast && !opt_ignore_cast_alarm then
-               Eval.singleton (mk_unop (O_wrap(rmin, rmax)) e ~etyp:(to_num_type t) range) fflow
+             let wrap = mk_unop (O_wrap(rmin, rmax)) e ~etyp:(to_num_type t) range in
+             match ekind e with
+             | E_var _ | E_constant _ ->
+               Eval.singleton wrap fflow
+             | _ ->
+               if is_explicit_cast && !opt_ignore_cast_alarm then
+                 Eval.singleton wrap fflow
              else
-               let flow1 = raise_c_integer_overflow_alarm e' t exp.erange man fflow in
-               Eval.singleton (mk_unop (O_wrap(rmin, rmax)) e ~etyp:(to_num_type t) range) flow1
+               let flow1 = raise_c_cast_integer_overflow_alarm e' exp.etyp man flow fflow in
+               Eval.singleton wrap flow1
           ) e' flow |>
         OptionExt.return
 
@@ -478,8 +491,15 @@ struct
       Eval.singleton (mk_num_var_expr exp) flow |>
       OptionExt.return
 
-    | Stubs.Ast.E_stub_builtin_call(VALID_FLOAT, f) ->
-      panic_at exp.erange "valid_float not supported"
+    | Stubs.Ast.E_stub_builtin_call(VALID_FLOAT as f, e) ->
+      (*      panic_at exp.erange "valid_float not supported"*)
+      man.eval ~zone:(Z_c_scalar,Z_u_num) e flow >>$? fun e flow ->
+      Eval.singleton (mk_expr (E_stub_builtin_call(f, e)) ~etyp:exp.etyp exp.erange) flow |>
+      OptionExt.return
+
+    | Stubs.Ast.E_stub_quantified(_,v,S_interval _) ->
+      man.eval (mk_var v exp.erange) ~zone:(Z_c,Z_u_num) flow |>
+      OptionExt.return
 
     | _ ->
       None

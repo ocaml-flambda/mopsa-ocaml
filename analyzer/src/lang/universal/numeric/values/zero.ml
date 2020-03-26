@@ -146,6 +146,8 @@ struct
 
   let bwd_binop op a1 a2 r = default_bwd_binop op a1 a2 r
 
+  let predicate op x r = default_predicate op x r
+
   let compare op a1 a2 r =
     let op = if r then op else negate_comparison_op op in
     match op with

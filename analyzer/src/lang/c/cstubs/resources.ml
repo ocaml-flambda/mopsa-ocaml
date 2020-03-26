@@ -60,7 +60,7 @@ struct
     }
   }
 
-  let alarms = [Common.Alarms.A_c_double_free_cls]
+  let alarms = [Common.Alarms.A_c_double_free]
 
   (** Initialization of environments *)
   (** ============================== *)
@@ -88,14 +88,11 @@ struct
       in
 
       let stmt' = mk_free_addr addr range in
-      let flow' = man.exec stmt' flow' in
-
-      let stmt'' = mk_stub_free (mk_addr addr range) range in
-      man.exec stmt'' flow' |>
+      man.exec stmt' flow' |>
       Post.return
 
     | E_c_points_to (P_block ({ base_kind = Addr { addr_kind = A_stub_resource _ }; base_valid = false; base_invalidation_range = Some drange }, _, _)) ->
-      Common.Alarms.(raise_c_double_free_alarm p drange range (Sig.Stacked.Manager.of_domain_man man) flow) |>
+      raise_c_double_free_alarm p drange (Sig.Stacked.Manager.of_domain_man man) flow |>
       Post.return
 
     | E_c_points_to P_null ->
@@ -123,10 +120,6 @@ struct
 
   let exec zone stmt man flow  =
     match skind stmt with
-    | S_stub_free { ekind = E_addr (addr) } ->
-      Post.return flow |>
-      OptionExt.return
-
     | S_stub_free p ->
       exec_stub_free p stmt.srange man flow |>
       OptionExt.return

@@ -24,6 +24,7 @@
 open Ast
 open Ast.Stmt
 open Ast.Expr
+open Ast.Typ
 open Core
 open Lattice
 open Token
@@ -158,7 +159,7 @@ struct
 
   let print_prompt range () =
     printf "%a %a @?"
-      (Debug.color "lightblue" Location.pp_range) range
+      (Debug.color "blue" Location.pp_range) range
       (Debug.color "green" pp_print_string) ">>"
 
   let linedit_ctx = LineEdit.create_ctx ()
@@ -273,8 +274,9 @@ struct
         pp_zone zone
 
     | Eval(exp,zone,_) ->
-      fprintf fmt "@[<v 4>E[ %a@] ] in zone %a@."
+      fprintf fmt "@[<v 4>E[ %a@] : %a ] in zone %a@."
         pp_expr exp
+        pp_typ (etyp exp)
         pp_zone2 zone
 
 

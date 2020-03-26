@@ -78,7 +78,8 @@ struct
     }
   }
 
-  let alarms = [A_c_illegal_pointer_compare_cls; A_c_illegal_pointer_diff_cls]
+  let alarms = [ A_c_invalid_pointer_compare;
+                 A_c_invalid_pointer_sub ]
 
   (** {2 Lattice operators} *)
   (** ===================== *)
@@ -346,7 +347,7 @@ struct
         let flow = set_value_opt p1 v1 man flow |>
                    set_value_opt p2 v2 man
         in
-        let flow = raise_c_illegal_pointer_diff p q range man flow in
+        let flow = raise_c_invalid_pointer_sub p q range man flow in
         [Eval.empty_singleton flow]
     in
 
@@ -646,7 +647,7 @@ struct
       if PointerSet.is_bottom v1_invalid && PointerSet.is_bottom v2_invalid
       then []
       else
-        let flow = raise_c_illegal_pointer_compare p q range man flow in
+        let flow = raise_c_invalid_pointer_compare p q range man flow in
         [ Post.return flow ]
     in
 
@@ -675,7 +676,7 @@ struct
         let flow = set_value_opt p1 vv1 man flow |>
                    set_value_opt p2 vv2 man
         in
-        let flow = raise_c_illegal_pointer_compare p q range man flow in
+        let flow = raise_c_invalid_pointer_compare p q range man flow in
         [ Post.return flow ]
     in
     let bottom_case = Flow.set T_cur man.lattice.bottom man.lattice flow |>

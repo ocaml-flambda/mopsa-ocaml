@@ -49,7 +49,7 @@ let () =
 type token +=
   | T_return of range * bool
   (** [T_return(l, b)] represents flows reaching a return statement at
-      location [l]. The boolean is true iff there a return expression is present *)
+      location [l]. The boolean is true iff a return expression is present *)
 
 let () =
   register_token {
@@ -132,12 +132,12 @@ let check_recursion f range flow =
   let cs = Flow.get_callstack flow in
   if cs = [] then false
   else
-    List.exists (fun cs -> Callstack.compare_call cs {call_fun=f.fun_name; call_site=range} = 0) (List.tl cs)
+    List.exists (fun cs -> Callstack.compare_call cs {call_fun_orig_name=f.fun_orig_name; call_fun_uniq_name=f.fun_uniq_name; call_site=range} = 0) (List.tl cs)
 
 let check_nested_calls f range flow =
   let cs = Flow.get_callstack flow in
   if cs = [] then false
-  else List.exists (fun call -> call.call_fun = f) (List.tl cs)
+  else List.exists (fun call -> call.call_fun_uniq_name = f) (List.tl cs)
 
 
 
@@ -156,11 +156,11 @@ let init_fun_params f args range man flow =
   in
 
   (* Update call stack *)
-  let flow1 = Flow.push_callstack f.fun_name range flow0 in
+  let flow1 = Flow.push_callstack f.fun_orig_name ~uniq:f.fun_uniq_name range flow0 in
 
-  if check_nested_calls f.fun_name range flow1 then
+  if check_nested_calls f.fun_uniq_name range flow1 then
     begin
-      debug "nested calls detected on %s, performing parameters and locvar renaming" f.fun_name;
+      debug "nested calls detected on %s, performing parameters and locvar renaming" f.fun_orig_name;
       (* Add parameters and local variables to the environment *)
       let add_range = (fun p -> mk_attr_var p (Format.asprintf "%a" pp_range range) p.vtyp) in
 
@@ -205,6 +205,7 @@ let init_fun_params f args range man flow =
 
 (** Execute function body and save the return value *)
 let exec_fun_body f body ret range man flow =
+  (* Save the return variable in the context and backup the old one *)
   let oldreturn, flow1 =
     match ret with
     | None -> None, flow
@@ -215,21 +216,13 @@ let exec_fun_body f body ret range man flow =
   (* Execute the body of the function *)
   let flow2 = man.exec body flow1 in
 
-  let flow3 =
-    Flow.fold (fun acc tk env ->
-        match tk with
-        | T_return(_, false) ->
-          Flow.add T_cur env man.lattice acc
+  (* Copy the new context and alarms from flow2 to original flow flow1 *)
+  let flow3 = Flow.copy_ctx flow2 flow1 |> Flow.copy_alarms flow2 in
 
-        | T_return(_, true) ->
-          Flow.set T_cur env man.lattice acc |>
-          Flow.join man.lattice acc
+  (* Cut the T_cur flow *)
+  let flow3 = Flow.remove T_cur flow3 in
 
-        | _ -> Flow.add tk env man.lattice acc
-      )
-      (Flow.copy_ctx flow2 flow1 |> Flow.copy_alarms flow2 |> Flow.remove T_cur)
-      flow2 in
-
+  (* Restore return and callstack contexts *)
   let flow4 = match oldreturn with
     | None -> flow3
     | Some ret -> Flow.set_ctx
@@ -237,40 +230,73 @@ let exec_fun_body f body ret range man flow =
 
   (* Restore call stack *)
   let _, flow5 = Flow.pop_callstack flow4 in
-  flow5
+
+  (* Retrieve non-cur/return flows *)
+  let flow6 =
+    Flow.fold
+      (fun acc tk env ->
+         match tk with
+         | T_cur      -> acc
+         | T_return _ -> acc
+         | _          -> Flow.add tk env man.lattice acc
+      )
+      flow5 flow2
+  in
+  
+  (* Separate different return flows into separate post-states *)
+  let postl =
+    Flow.fold (fun acc tk env ->
+        match tk with
+        | T_cur | T_return _ ->
+          let flow = Flow.set T_cur env man.lattice flow6 in
+          Post.return flow :: acc
+
+        | _ -> acc
+      )
+      [] flow2
+  in
+
+  Post.join_list postl ~empty:(fun () -> Post.return flow6)
 
 
 (** Inline a function call *)
 let inline f params locals body ret range man flow =
-  let flow =
+  let post =
     match check_recursion f range flow with
     | true ->
       begin
         Soundness.warn_at range
-          "recursive call on function %s ignored" f.fun_name
+          "recursive call on function %s ignored" f.fun_orig_name
         ;
         match ret with
-        | None -> flow
+        | None -> Post.return flow
         | Some v ->
           if !opt_continue_on_recursive_call then
             man.exec (mk_add_var v range) flow |>
-            man.exec (mk_assign (mk_var v range) (mk_top v.vtyp range) range)
+            man.exec (mk_assign (mk_var v range) (mk_top v.vtyp range) range) |>
+            Post.return
           else
-            panic_at range "recursive call on function %s" f.fun_name
+            panic_at range "recursive call on function %s" f.fun_orig_name
       end
 
     | false ->
-      exec_fun_body f body ret range man flow |>
+      exec_fun_body f body ret range man flow >>$ fun () flow ->
       (* Remove local variables from the environment. Remove of parameters is
          postponed after finishing the statement, to keep relations between
          the passed arguments and the return value. *)
       man.exec (mk_block (List.map (fun v ->
           mk_remove_var v range
-        ) locals) range)
+        ) locals) range) flow |>
+      Post.return
   in
+  post >>$ fun () flow ->
   match ret with
   | None ->
-    Eval.singleton (mk_unit range) flow
+    Eval.singleton (mk_unit range) flow ~cleaners:(
+      List.map (fun v ->
+          mk_remove_var v range
+        ) params
+    )
 
   | Some v ->
     Eval.singleton (mk_var v range) flow ~cleaners:(

@@ -103,6 +103,8 @@ struct
   let bwd_unop _ _ _ _ _ = failwith "ni"
   let bwd_binop _ _ _ _ _  = failwith "ni"
 
+  let predicate man t op a r = default_predicate man t op a r
+
   let compare man t op a1 a2 r =
     lift_simplified_compare (fun op a1 a2 r ->
         match t with

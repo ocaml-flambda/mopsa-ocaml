@@ -35,14 +35,45 @@ open Universal.Ast
 open Ast
 open Common.Base
 
+
+
 module Strategy =
 struct
 
+  (** Command-line option to define custom packs *)
+  let opt_user_packs : (string option*string) list list ref = ref []
+
+  (** Parse a command-line pack definition using the syntax [f1.]<v1>,[f2.]<v2>,... *)
+  let parse_user_pack (s:string) : unit =
+    (* Split using delimiter ',' *)
+    let parts = Str.(split (regexp_string ",") s) in
+    (* Split each part using delimiter '.' *)
+    let parts = List.map (fun part ->
+        match Str.(split (regexp_string ".") part) with
+        | [v] -> (None,v)
+        | [f;v] -> (Some f,v)
+        | _ -> panic "incorrect argument for option -pack"
+      ) parts
+    in
+    if parts = [] then () else
+    opt_user_packs := parts :: !opt_user_packs
+    
+  let () = register_domain_option "c.memory.packing.static_scope" {
+      key      = "-c-pack";
+      category = "Numeric";
+      doc      = " create a pack of variables (syntax: [f1.]v1,[f2.]v2,...)";
+      spec     = ArgExt.String parse_user_pack;
+      default  = "";
+    }
+      
 
   (** Packing key *)
   type pack =
-    | Globals (** Pack of global variables *)
-    | Locals of string (** Pack of local variables of a function *)
+    | Globals             (** Pack of global variables *)
+    | Locals of string    (** Pack of local variables of a function *)
+    | User   of ( string option (** Function *) *
+                  string        (** Variable*)
+                ) list (** User defined custom packs *)
 
 
   (** Generate a unique ID for the strategy *)
@@ -57,63 +88,74 @@ struct
     match k1, k2 with
     | Globals, Globals -> 0
     | Locals f1, Locals f2 -> compare f1 f2
-    | Globals, Locals _ -> 1
-    | Locals _, Globals -> -1
+    | User vl1, User vl2 -> Compare.list (Compare.pair (Compare.option compare) compare) vl1 vl2
+    | _ -> compare k1 k2
+
+
+  let pp_user_pack_vars fmt vl =
+    Format.(pp_print_list
+              ~pp_sep:(fun fmt () -> pp_print_string fmt ", ")
+              (fun fmt -> function
+                 | (None,v)   -> pp_print_string fmt v
+                 | (Some f,v) -> fprintf fmt "%s.%s" f v
+              )
+           ) fmt vl
 
 
   (** Pretty printer of packing keys *)
   let print fmt = function
-    | Globals -> Format.pp_print_string fmt "[globals]"
+    | Globals  -> Format.pp_print_string fmt "[globals]"
     | Locals f -> Format.pp_print_string fmt f
+    | User vl  -> Format.fprintf fmt "(%a)" pp_user_pack_vars vl
 
 
   (** Initialization *)
   let init prog = ()
 
 
-  (** Packs of a base memory block *)
-  let rec packs_of_base ctx b =
-    if b.base_valid = false then []
-    else
+  (** Return the list of user-defined packs of a given base *)
+  let rec user_packs_of_base ctx b =
     match b.base_kind with
-    (* Special global variables for gettext functions *)
-    | Var { vkind = V_cvar {cvar_scope = Variable_global; cvar_orig_name} }
-    | Var { vkind = V_cvar {cvar_scope = Variable_file_static _; cvar_orig_name} } when cvar_orig_name = "_gettext_buf" ->
-      [Locals "gettext"; Locals "dcgettext"]
+    | Var {vkind = V_cvar {cvar_orig_name; cvar_scope}} ->
+      let packs = List.filter
+          (fun pack ->
+             List.exists (function
+                 | (None,v)   -> v = cvar_orig_name
+                 | (Some f,v) ->
+                   v = cvar_orig_name &&
+                   ( match cvar_scope with
+                     | Variable_local ff -> ff.c_func_org_name = f
+                     | _ -> false )
+               ) pack
+          ) !opt_user_packs
+      in
+      List.map (fun vl -> User vl) packs
 
-    (* Local temporary variables *)
+    | Var { vkind = Cstubs.Aux_vars.V_c_primed_base b } ->
+      user_packs_of_base ctx b
+ 
+    | _ -> []
+
+
+  (** Return the list of fixed packs (Global of Local) of a given base *)
+  let rec fixed_packs_of_base ctx b =
+    match b.base_kind with
+    (* Local temporary variables are not packed *)
     | Var { vkind = V_cvar {cvar_scope = Variable_local f; cvar_orig_name}; vtyp }
     | Var { vkind = V_cvar {cvar_scope = Variable_func_static f; cvar_orig_name}; vtyp }
       when cvar_orig_name = "__SAST_tmp" ->
       []
 
-    (* Local variables *)
+    (* Local scalar variables are packed in the function's pack *)
     | Var { vkind = V_cvar {cvar_scope = Variable_local f}; vtyp }
     | Var { vkind = V_cvar {cvar_scope = Variable_func_static f}; vtyp }
       ->
       [Locals f.c_func_unique_name]
 
-    (* argc parameter *)
-    | Var { vkind = V_cvar {cvar_scope = Variable_parameter f; cvar_orig_name} }
-      when f.c_func_org_name = "main" &&
-           cvar_orig_name = "argc"
+    (* Formal scalar parameters are part of the caller and the callee packs *)
+    | Var { vkind = V_cvar {cvar_scope = Variable_parameter f}; vtyp }
+      when is_c_scalar_type vtyp
       ->
-      [Locals "main"; Locals "getopt"; Locals "getopt_long"; Locals "getopt_long_only"]
-
-    (* argv and its auxiliary variables *)
-    | Addr { addr_kind = Stubs.Ast.A_stub_resource "argv" }
-    | Addr { addr_kind = Stubs.Ast.A_stub_resource "arg" } ->
-      [Locals "main"; Locals "getopt"; Locals "getopt_long"; Locals "getopt_long_only"]
-
-    (* optind variable *)
-    | Var { vkind = V_cvar {cvar_scope = Variable_global; cvar_orig_name} }
-      when cvar_orig_name = "optind"
-      ->
-      [Locals "main"; Locals "getopt"; Locals "getopt_long"; Locals "getopt_long_only"]
-
-
-    (* Formal parameters are part of the caller and the callee packs *)
-    | Var { vkind = V_cvar {cvar_scope = Variable_parameter f} } ->
       let cs = Context.ufind Callstack.ctx_key ctx in
       if Callstack.is_empty cs
       then [Locals f.c_func_unique_name]
@@ -123,7 +165,7 @@ struct
         then [Locals f.c_func_unique_name]
         else
           let caller, _ = Callstack.pop cs' in
-          [Locals f.c_func_unique_name; Locals caller.call_fun]
+          [Locals f.c_func_unique_name; Locals caller.call_fun_uniq_name]
 
     (* Return variables are also part of the caller and the callee packs *)
     | Var { vkind = Universal.Iterators.Interproc.Common.V_return call } ->
@@ -131,46 +173,49 @@ struct
       if Callstack.is_empty cs
       then []
       else
-          (* Note that the top of the callstack is not always the callee
-             function, because the return variable is used after the function
-             returns
-          *)
+        (* Note that the top of the callstack is not always the callee
+           function, because the return variable is used after the function
+           returns
+        *)
         let f1, cs' = Callstack.pop cs in
         let fname = match ekind call with
-          | E_call ({ekind = E_function (User_defined f)},_) -> f.fun_name
+          | E_call ({ekind = E_function (User_defined f)},_) -> f.fun_uniq_name
           | Stubs.Ast.E_stub_call(f,_) -> f.stub_func_name
           | _ -> assert false
         in
         if Callstack.is_empty cs'
-        then [Locals f1.call_fun]
-        else if f1.call_fun <> fname
-        then [Locals f1.call_fun]
+        then [Locals f1.call_fun_uniq_name]
+        else if f1.call_fun_uniq_name <> fname
+        then [Locals f1.call_fun_uniq_name]
         else
           let f2, _ = Callstack.pop cs' in
-          [Locals f1.call_fun; Locals f2.call_fun]
-
-    (* Temporary variables are considered as locals *)
-    | Var { vkind = V_tmp _ } ->
-      let cs = Context.ufind Callstack.ctx_key ctx in
-      if Callstack.is_empty cs
-      then []
-      else
-        let callee, _ = Callstack.pop cs in
-        [Locals callee.call_fun]
+          [Locals f1.call_fun_uniq_name; Locals f2.call_fun_uniq_name]
 
     (* Primed bases are in the same pack as the original ones *)
     | Var { vkind = Cstubs.Aux_vars.V_c_primed_base b } ->
-      packs_of_base ctx b
+      fixed_packs_of_base ctx b
 
-    | _ ->
-      []
+    | _ -> []
+
+
+
+  (** Packs of a base memory block *)
+  let rec packs_of_base ctx b =
+    (* Invalid bases are not packed *)
+    if b.base_valid = false then []
+    else
+      let user_packs = user_packs_of_base ctx b in
+      let fixed_packs = fixed_packs_of_base ctx b in
+      user_packs @ fixed_packs
+
 
 
   (** Packing function returning packs of a variable *)
   let rec packs_of_var ctx v =
     match v.vkind with
     | V_cvar _ -> packs_of_base ctx (mk_var_base v)
-    | Memory.Lowlevel.Cells.Domain.V_c_cell ({base = { base_kind = Var v; base_valid = true}} as c) when is_c_scalar_type v.vtyp -> packs_of_base ctx c.base
+    | Memory.Lowlevel.Cells.Domain.V_c_cell ({base = { base_kind = Var v; base_valid = true}} as c) ->
+      if not (is_c_scalar_type v.vtyp) then user_packs_of_base ctx c.base else packs_of_base ctx c.base
     | Memory.Lowlevel.String_length.Domain.V_c_string_length (base) -> packs_of_base ctx base
     | Memory.Lowlevel.Pointer_sentinel.Domain.V_c_sentinel (base) -> packs_of_base ctx base
     | Memory.Lowlevel.Pointer_sentinel.Domain.V_c_at_sentinel (base) -> packs_of_base ctx base

@@ -178,6 +178,21 @@ struct
       | _ -> a1,a2
     ) man t op a1 a2 r
 
+  let predicate man t op a r = lift_simplified_predicate (fun op a r ->
+        match t with
+        | T_float p ->
+          (match op with
+           | O_float_class c ->
+             let c = if r then c else inv_float_class c in
+             { I.itv  = if c.float_valid then a.I.itv  else BOT;
+               I.pinf = if c.float_inf   then a.I.pinf else false;
+               I.minf = if c.float_inf   then a.I.minf else false;
+               I.nan  = if c.float_nan   then a.I.nan  else false;
+             }
+           | _ -> a)
+        |_ -> a
+      ) man t op a r
+
   let compare man t op a1 a2 r = lift_simplified_compare (fun op a1 a2 r ->
       match t with
       | T_float p ->

@@ -170,6 +170,8 @@ struct
         bottom, bottom
     ) man
 
+  let predicate man t op a r = default_predicate man t op a r
+
   let compare man = lift_simplified_compare (fun op a1 a2 r ->
       try
         let a1, a2 = bot_to_exn a1, bot_to_exn a2 in

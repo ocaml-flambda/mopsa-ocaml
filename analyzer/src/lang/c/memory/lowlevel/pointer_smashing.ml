@@ -55,7 +55,6 @@ struct
     ieval = {
       provides = [Z_c_low_level, Z_c_scalar];
       uses = [
-        Z_c, Z_u_num;
         Z_c_low_level, Z_u_num;
         Z_c_scalar, Z_u_num;
         Z_c_low_level, Z_c_scalar;
