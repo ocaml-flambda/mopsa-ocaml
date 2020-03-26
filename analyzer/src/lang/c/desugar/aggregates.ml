@@ -305,17 +305,6 @@ struct
 
       (* Create a block of low-level assignments *)
       | _ ->
-        (* But before fill with 0 if the variable is partially initialized *)
-        begin
-          if fill = []
-          then Post.return flow
-          else
-            let i = mk_zero range in
-            let j = mk_z (sizeof_type v.vtyp |> Z.pred) range in
-            let p = mk_c_cast (mk_c_address_of (mk_var v range) range) (pointer_type s8) range in
-            memset p (mk_zero range) i j range man flow
-        end >>$ fun () flow ->
-        (* Do the assignments *)
         let stmt = mk_block (List.map (fun (e,o,t) ->
             (* *(( t* )( char* )(&v) + o)) = e; *)
             mk_assign (mk_c_deref (mk_c_cast

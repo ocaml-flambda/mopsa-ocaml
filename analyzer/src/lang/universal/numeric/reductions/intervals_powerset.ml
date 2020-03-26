@@ -19,46 +19,53 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Powerset lattice with finite cardinality elements or ⊺. *)
+(** Reduction operator for intervals and powersets. *)
 
-open Top
+open Mopsa
+open Core.Sig.Value.Reduction
 
-module type S =
-sig
-  type elt
-  module Set : SetExtSig.S with type elt = elt
-  type t = Set.t with_top
-  val bottom : t
-  val top : t
-  val is_top : t -> bool
-  val subset : t -> t -> bool
-  val equal : t -> t -> bool
-  val join : t -> t -> t
-  val meet : t -> t -> t
-  val union : t -> t -> t
-  val inter : t -> t -> t
-  val diff : t -> t -> t
-  val widen : 'a -> t -> t -> t
-  val print : Format.formatter -> t -> unit
-  val add : Set.elt -> t -> t
-  val fold : (elt -> 'a -> 'a) -> t -> 'a -> 'a
-  val remove : elt -> t -> t
-  val mem : elt -> t -> bool
-  val filter : (Set.elt -> bool) -> t -> t
-  val partition : (Set.elt -> bool) -> t -> t * t
-  val exists : (Set.elt -> bool) -> t -> bool
-  val for_all : (Set.elt -> bool) -> t -> bool
-  val cardinal : t -> int
-  val find : Set.elt -> t -> elt
-  val choose : t -> elt
-  val singleton : elt -> t
-  val of_list : elt list -> Set.t Top.with_top
-  val is_empty : t -> bool
-  val empty : t
-  val is_bottom : t -> bool
-  val is_singleton : t -> bool
-  val elements : t -> Set.elt list
-  val map : (elt -> elt) -> t -> t
-  val iter : (elt -> unit) -> t -> unit
-  val apply : (Set.t -> 'a) -> 'a -> t -> 'a
+
+
+module Reduction =
+struct
+
+  let name = "universal.numeric.reductions.intervals_powerset"
+  let debug fmt = Debug.debug ~channel:name fmt
+
+  module I = Values.Intervals.Integer.Value
+  module P = Values.Powerset.Value
+
+
+  (* Reduce an interval and a powerset *)
+  let meet_itv_pwr i p =
+    if I.is_bottom i || P.is_bottom p then
+      I.bottom, P.bottom
+    else
+      (* Reduce powersets with intervals if [i] is a singleton value *)
+      match I.bounds_opt i with
+      | Some a, Some b when Z.(a = b) ->
+        i, P.singleton a
+      | _ ->
+        (* Reduce intervals with powerset if the interval of [p] is more precise *)
+        match p with
+        | Top.TOP -> i,p
+        | Top.Nt set ->
+          let a = P.Set.min_elt set in
+          let b = P.Set.max_elt set in
+          let i' = I.meet i (I.of_z a b) in
+          i',p
+
+  (* Reduction operator *)
+  let reduce (man: 'a vrman) (v: 'a) : 'a =
+    let i = man.get I.id v
+    and p = man.get P.id v in
+
+    let i',p' = meet_itv_pwr i p in
+
+    man.set I.id i' v |>
+    man.set P.id p'
 end
+
+
+let () =
+  register_reduction (module Reduction)

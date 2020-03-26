@@ -137,6 +137,11 @@ struct
   let is_empty (abs:t) =
     top_dfl1 false Set.is_empty abs
 
+  let is_singleton a =
+    top_apply (fun s ->
+        Set.cardinal s = 1 (* FIXME: computing the cardinal for this check is inefficient *)
+      ) false a
+
   let empty = bottom
 
   let is_bottom = is_empty

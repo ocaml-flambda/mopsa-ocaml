@@ -19,46 +19,50 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Powerset lattice with finite cardinality elements or ⊺. *)
+(** Reduction rule between cells and string length domains *)
 
-open Top
+open Mopsa
+open Sig.Stacked.Reduction
+open Universal.Ast
+open Ast
+open Zone
 
-module type S =
-sig
-  type elt
-  module Set : SetExtSig.S with type elt = elt
-  type t = Set.t with_top
-  val bottom : t
-  val top : t
-  val is_top : t -> bool
-  val subset : t -> t -> bool
-  val equal : t -> t -> bool
-  val join : t -> t -> t
-  val meet : t -> t -> t
-  val union : t -> t -> t
-  val inter : t -> t -> t
-  val diff : t -> t -> t
-  val widen : 'a -> t -> t -> t
-  val print : Format.formatter -> t -> unit
-  val add : Set.elt -> t -> t
-  val fold : (elt -> 'a -> 'a) -> t -> 'a -> 'a
-  val remove : elt -> t -> t
-  val mem : elt -> t -> bool
-  val filter : (Set.elt -> bool) -> t -> t
-  val partition : (Set.elt -> bool) -> t -> t * t
-  val exists : (Set.elt -> bool) -> t -> bool
-  val for_all : (Set.elt -> bool) -> t -> bool
-  val cardinal : t -> int
-  val find : Set.elt -> t -> elt
-  val choose : t -> elt
-  val singleton : elt -> t
-  val of_list : elt list -> Set.t Top.with_top
-  val is_empty : t -> bool
-  val empty : t
-  val is_bottom : t -> bool
-  val is_singleton : t -> bool
-  val elements : t -> Set.elt list
-  val map : (elt -> elt) -> t -> t
-  val iter : (elt -> unit) -> t -> unit
-  val apply : (Set.t -> 'a) -> 'a -> t -> 'a
+module Reduction =
+struct
+
+  let name = "c.memory.lowlevel.reductions.cell_string_length"
+
+  let debug fmt = Debug.debug ~channel:name fmt
+
+  let cells = Cells.Domain.id
+  let strings = String_length.Domain.id
+
+
+  let reduce exp man evals flow =
+    let oe1 = man.get_eval cells evals in
+    let oe2 = man.get_eval strings evals in
+
+    (* Reduce only when both domains did an evaluation *)
+    OptionExt.apply2
+      (fun e1 e2 ->
+         match ekind e1, ekind e2 with
+          (* Constants from the string length domain should be precise *)
+          | _, E_constant (C_int _)
+          | _, E_constant (C_c_character _)
+          | _, E_constant (C_int_interval _) ->
+            (* Remove cell evaluation *)
+            let evals = man.del_eval cells evals in
+            Cases.singleton evals flow
+
+          (* Otherwise, keep cells *)
+          | _ ->
+            let evals = man.del_eval strings evals in
+            Cases.singleton evals flow
+      )
+      (Cases.singleton evals flow)
+      oe1 oe2
+
 end
+
+let () =
+  register_eval_reduction (module Reduction)

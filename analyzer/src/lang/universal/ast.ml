@@ -128,6 +128,12 @@ let () =
 (** {2 Universal operators} *)
 (*  *********************** *)
 
+type float_class =
+  { float_valid: bool; (* normal, denormal, +0 or -0 float *)
+    float_inf: bool;   (* +∞ or -∞ *)
+    float_nan: bool;   (* not-a-number *)
+  }
+
 type operator +=
   (* Unary operators *)
   | O_sqrt              (** Square root *)
@@ -149,6 +155,8 @@ type operator +=
   | O_bit_lshift (** << *)
   | O_concat     (** concatenation of arrays and strings *)
 
+  (* Float predicates *)
+  | O_float_class of float_class
 
 let () =
   register_operator {
@@ -179,6 +187,11 @@ let () =
         | O_bit_rshift -> pp_print_string fmt ">>"
         | O_bit_lshift -> pp_print_string fmt "<<"
         | O_cast(t1,t2)    -> fprintf fmt "cast[%a->%a]" pp_typ t1 pp_typ t2
+        | O_float_class c ->
+          Format.fprintf fmt "float_class[%s%s%s]"
+            (if c.float_valid then "valid," else "")
+            (if c.float_inf then "inf," else "")
+            (if c.float_nan then "nan," else "")
         | op           -> default fmt op
       );
   }
@@ -710,8 +723,10 @@ let mk_in ?(strict = false) ?(left_strict = false) ?(right_strict = false) ?(ety
 let mk_zero = mk_int 0
 let mk_one = mk_int 1
 
-let zero = mk_zero
-let one = mk_one
+let universal_constants_range = tag_range (mk_fresh_range ()) "universal-constants"
+
+let zero = mk_zero universal_constants_range
+let one = mk_one universal_constants_range
 
 let of_z = mk_z
 let of_int = mk_int
@@ -720,7 +735,46 @@ let add e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_plus e2 range ~etyp:typ
 let sub e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_minus e2 range ~etyp:typ
 let mul e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_mult e2 range ~etyp:typ
 let div e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_div e2 range ~etyp:typ
-let _mod e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_mod e2 range ~etyp:typ
+let _mod_ e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_mod e2 range ~etyp:typ
+
+let succ e range = add e one range
+let pred e range = sub e one range
+let mk_succ = succ
+let mk_pred = pred
+
+let eq e1 e2 ?(etyp=T_bool) range = mk_binop e1 O_eq e2 ~etyp range
+let ne e1 e2 ?(etyp=T_bool) range = mk_binop e1 O_ne e2 ~etyp range
+let lt e1 e2 ?(etyp=T_bool) range = mk_binop e1 O_lt e2 ~etyp range
+let le e1 e2 ?(etyp=T_bool) range = mk_binop e1 O_le e2 ~etyp range
+let gt e1 e2 ?(etyp=T_bool) range = mk_binop e1 O_gt e2 ~etyp range
+let ge e1 e2 ?(etyp=T_bool) range = mk_binop e1 O_ge e2 ~etyp range
+let mk_eq = eq
+let mk_ne = ne
+let mk_lt = lt
+let mk_le = le
+let mk_gt = gt
+let mk_ge = ge
+
+let log_or e1 e2 ?(etyp=T_bool) range = mk_binop e1 O_log_or e2 ~etyp range
+let log_and e1 e2 ?(etyp=T_bool) range = mk_binop e1 O_log_and e2 ~etyp range
+let mk_log_or = log_or
+let mk_log_and = log_and
+
+(* float classes *)
+
+let float_class ?(valid=false) ?(inf=false) ?(nan=false) () =
+  { float_valid = valid; float_inf=inf; float_nan=nan; }
+
+let inv_float_class c =
+  float_class ~valid:(not c.float_valid) ~inf:(not c.float_inf) ~nan:(not c.float_nan) ()
+
+let float_valid = float_class ~valid:true ()
+let float_inf   = float_class ~inf:true ()
+let float_nan   = float_class ~nan:true ()
+
+let mk_float_class (c:float_class) e range =
+  mk_unop (O_float_class c) e ~etyp:T_bool range
+
 
 let mk_unit range = mk_constant C_unit ~etyp:T_unit range
 

@@ -90,7 +90,6 @@ struct
       let stmt' = mk_free addr range in
       man.post stmt' ~zone:Z_u_heap flow
 
-  
     | E_c_points_to (P_block ({ base_kind = Addr { addr_kind = A_stub_resource _ }; base_valid = false; base_invalidation_range = Some drange }, _, _)) ->
       raise_c_double_free_alarm p drange (Sig.Stacked.Manager.of_domain_man man) flow |>
       Post.return
@@ -157,10 +156,6 @@ struct
 
   let exec zone stmt man flow  =
     match skind stmt with
-    | S_stub_free { ekind = E_addr (addr) } ->
-      Post.return flow |>
-      OptionExt.return
-
     | S_stub_free p ->
       exec_stub_free p stmt.srange man flow |>
       OptionExt.return

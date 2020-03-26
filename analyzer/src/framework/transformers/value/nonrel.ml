@@ -389,6 +389,18 @@ struct
       refine ctx ae2 v2 r2 @@ refine ctx ae1 v1 r1 a |>
       OptionExt.return
 
+    (* unary boolean predicate, handled by Value *)
+    | E_unop (op, e) ->
+      (* evaluate forward the expression *)
+      eval e a |> OptionExt.bind @@ fun (ae,v) ->
+
+      (* apply the predicate *)
+      let r = Value.predicate (man a) e.etyp op v r in
+
+      (* propagate backward on the argument *)
+      refine ctx ae v r a |>
+      OptionExt.return
+
     | _ -> assert false
 
 

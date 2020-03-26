@@ -46,31 +46,36 @@
                     "compose": [
                         "universal.heap.recency.callstack_range",
                         {
-                            "product": [
+                            "product":[
                                 "c.memory.lowlevel.cells",
-                                "c.memory.lowlevel.string_length"
+                                "c.memory.lowlevel.string_literal"
                             ],
-			    "reductions": [
-				"c.memory.lowlevel.reductions.cell_string_length"
-			    ]
-                        },
-                        {
-                            "seq": [
-			        "c.memory.scalars.pointer",
-			        "c.memory.scalars.machine_numbers"
+                            "reductions": [
+                                "c.memory.lowlevel.reductions.cell_string_literal"
                             ]
-                        }
+                        },
+			{
+                            "seq": [
+				"c.memory.scalars.pointer",
+				"c.memory.scalars.machine_numbers"
+                            ]
+			}
                     ]
-                },
+		},
 		"on": {
                     "nonrel": {
 			"union": [
 			    "universal.numeric.values.intervals.float",
-                            "universal.numeric.values.intervals.integer"
+                            {
+				"product": [
+                                    "universal.numeric.values.intervals.integer",
+			            "universal.numeric.values.zero"
+				]
+			    }
 			]
 		    }
-                }
-            }
+		}
+	    }
 	]
     }
 }

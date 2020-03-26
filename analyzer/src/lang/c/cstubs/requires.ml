@@ -54,7 +54,7 @@ struct
     };
 
     ieval = {
-      provides = [];
+      provides = [ ];
       uses     = [ Z_c, Z_c_points_to;
                    Z_c, Z_u_num;
                    Z_c_scalar,Z_u_num; ]
@@ -109,8 +109,8 @@ struct
         Common.Base.eval_base_size base range man' flow >>$ fun size flow ->
         man.eval ~zone:(Z_c_scalar,Z_u_num) size flow >>$ fun size flow ->
         let min, max = Common.Quantified_offset.bound offset in
-        man.eval ~zone:(Z_c, Z_u_num) min flow >>$ fun min flow ->
-        man.eval ~zone:(Z_c, Z_u_num) max flow >>$ fun max flow ->
+        man.eval ~zone:(Z_c_scalar, Z_u_num) min flow >>$ fun min flow ->
+        man.eval ~zone:(Z_c_scalar, Z_u_num) max flow >>$ fun max flow ->
         let elm = under_type ptr.etyp |> void_to_char |> (fun t -> mk_z (sizeof_type t) range) in
         let limit = sub size elm range in
         let cond = mk_binop
@@ -146,6 +146,19 @@ struct
     | _ -> assert false
 
   
+  let exec_stub_requires_float_class flt cls msg range man flow =
+    let man' = Sig.Stacked.Manager.of_domain_man man in
+    man.eval ~zone:(Z_c, Z_u_num) flt flow >>$ fun flt flow ->
+    let cond = mk_float_class cls flt range in
+    assume cond
+      ~fthen:(fun flow -> Post.return flow)
+      ~felse:(fun eflow ->
+          raise_c_invalid_float_class_alarm flt msg range man' flow eflow |>
+          Post.return
+        )
+      ~zone:Z_u_num man flow
+
+
   (** 𝕊⟦ requires cond; ⟧ *)
   let exec_stub_requires cond range man flow =
     assume cond
@@ -182,10 +195,19 @@ struct
       exec_stub_requires_valid_ptr ptr stmt.srange man flow |>
       OptionExt.return
 
+    | S_stub_requires { ekind = E_stub_builtin_call((VALID_FLOAT | FLOAT_INF | FLOAT_NAN) as op, flt) } ->
+      let cls, msg = match op with
+        | VALID_FLOAT -> float_valid, "valid"
+        | FLOAT_INF -> float_inf, "infinity"
+        | FLOAT_NAN -> float_nan, "NaN"
+        | _ -> assert false
+      in
+      exec_stub_requires_float_class flt cls msg stmt.srange man flow |>
+      OptionExt.return
+
     | S_stub_requires e ->
       exec_stub_requires e stmt.srange man flow |>
       OptionExt.return
-
 
     | _ -> None
 

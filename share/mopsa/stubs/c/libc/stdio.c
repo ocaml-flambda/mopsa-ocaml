@@ -483,18 +483,33 @@ int getchar_unlocked (void);
 int fgetc_unlocked (FILE *__stream);
 
 
+
+/*
+ Before glibc 2.28, putc is defined as a macro for _IO_putc
+*/
+#if __GLIBC_MINOR__ <= 28
+
+/*$
+ * requires: __fp in File;
+ * ensures: (return == (unsigned char) __c) or (return == EOF);
+ */
+int _IO_putc (int __c, _IO_FILE *__fp);
+
+#else
+
 /*$
  * requires: __stream in File;
  * ensures: (return == (unsigned char) __c) or (return == EOF);
  */
-int _IO_putc (int __c, FILE *__stream);
+int putc (int __c, FILE *__stream);
+
+#endif
 
 
 /*$
  * ensures: (return == (unsigned char) __c) or (return == EOF);
  */
 int putchar (int __c);
-
 
 
 /*$
@@ -505,15 +520,13 @@ int putchar (int __c);
 int fputc_unlocked (int __c, FILE *__stream);
 
 
-/*$
- * alias: _IO_putc;
- */
-int putc (int __c, FILE *__stream);
 
 /*$
- * alias: _IO_putc;
+ * requires: __stream in File;
+ * ensures: (return == (unsigned char) __c) or (return == EOF);
  */
 int putc_unlocked (int __c, FILE *__stream);
+
 
 /*$
  * // TODO: not thread-safe
@@ -536,9 +549,9 @@ int putw (int __w, FILE *__stream);
 
 /*$
  * requires: __stream in File;
- * requires: valid_ptr_range(__s, 0, __n);
- * assigns:  __s[0, __n];
- * ensures:  valid_primed_string(__s);
+ * requires: valid_ptr_range(__s, 0, __n - 1);
+ * assigns:  __s[0, __n - 1];
+ * ensures:  valid_primed_substring(__s, __n - 1);
  * ensures:  (return == __s) or (return == NULL);
  */
 char *fgets (char *__restrict __s, int __n, FILE *__restrict __stream);
@@ -553,9 +566,9 @@ char *gets (char *__s);
 /*$
  * // TODO: not thread-safe
  * requires: __stream in File;
- * requires: valid_ptr_range(__s, 0, __n);
- * assigns:  __s[0, __n];
- * ensures:  valid_primed_string(__s);
+ * requires: valid_ptr_range(__s, 0, __n - 1);
+ * assigns:  __s[0, __n - 1];
+ * ensures:  valid_primed_substring(__s, __n - 1);
  * ensures:  (return == __s) or (return == NULL);
  */
 char *fgets_unlocked (char *__restrict __s, int __n,
@@ -1027,13 +1040,6 @@ void funlockfile (FILE *__stream);
 /*  * ensures: return in [0, 255] or return == EOF; */
 /*  *\/ */
 /* int _IO_peekc_locked (_IO_FILE *__stream); */
-
-/* /\*$ */
-/*  * // TODO: internal glibc function, undocumented */
-/*  * requires: __stream in File; */
-/*  * ensures: (return == (unsigned char) __c) or (return == EOF); */
-/*  *\/ */
-/* int _IO_putc (int __c, _IO_FILE *__stream); */
 
 /* /\*$ */
 /*  * // TODO: internal glibc function, undocumented */

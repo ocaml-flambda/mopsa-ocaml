@@ -270,6 +270,17 @@ struct
         pp_operator op
         pp_typ t
 
+  let predicate man t op a r =
+    if is_v1_type t then
+      V1 (V1.predicate (v1_man man) t op a r)
+    else if is_v2_type t then
+      V2 (V2.predicate (v2_man man) t op a r)
+    else
+      Exceptions.panic "predicate called on unsupported operator %a of type %a"
+        ~loc:__LOC__
+        pp_operator op
+        pp_typ t
+
   let compare man t op a b r =
     match man.get a, man.get b with
     | V1 _, V2 _ | V2 _, V1 _ ->

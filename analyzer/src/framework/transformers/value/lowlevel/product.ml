@@ -296,6 +296,19 @@ struct
     vlist_man_apply_pair { f } Spec.pool man |>
     reduce_pair
 
+  let predicate man t op v r =
+    let f = fun (type a) (m:a vmodule) man ->
+      let module Value = (val m) in
+      if Value.mem_type t then
+        Value.predicate man t op v r
+      else
+        Exceptions.panic "predicate called on unsupported operator %a of type %a"
+          ~loc:__LOC__
+          pp_operator op
+          pp_typ t
+    in
+    vlist_man_apply { f } Spec.pool man |>
+    reduce
 
   let compare man t op v1 v2 r =
     let f = fun (type a) (m:a vmodule) man ->

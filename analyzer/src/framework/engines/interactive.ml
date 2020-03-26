@@ -24,6 +24,7 @@
 open Ast
 open Ast.Stmt
 open Ast.Expr
+open Ast.Typ
 open Core
 open Lattice
 open Token
@@ -274,8 +275,9 @@ struct
         pp_zone zone
 
     | Eval(exp,zone,_) ->
-      fprintf fmt "@[<v 4>E[ %a@] ] in zone %a@."
+      fprintf fmt "@[<v 4>E[ %a@] : %a ] in zone %a@."
         pp_expr exp
+        pp_typ (etyp exp)
         pp_zone2 zone
 
 

@@ -22,8 +22,9 @@
 (** Abstraction of C function calls *)
 
 open Mopsa
-open Framework.Core.Sig.Domain.Stateless
+open Framework.Core.Sig.Domain.Intermediate
 open Universal.Ast
+open Stubs.Ast
 open Ast
 open Zone
 open Common.Points_to
@@ -31,20 +32,28 @@ open Common.Scope_update
 open Common.Builtins
 open Universal.Iterators.Interproc.Common
 
+
 module Domain =
 struct
 
 
-  (** Domain identification *)
-  (** ===================== *)
+  (** {2 Abstract state} *)
+  (** ****************** *)
 
-  include GenStatelessDomainId(struct
+  (* The domain stores the set of addresses allocated by alloca *)
+  module AddrSet = Framework.Lattices.Powerset.Make(Addr)
+
+  include AddrSet
+
+
+  (** {2 Domain header} *)
+  (** ================= *)
+
+  include GenDomainId(struct
+      type nonrec t = t
       let name = "c.iterators.interproc"
     end)
 
-
-  (** Zoning definition *)
-  (** ================= *)
 
   let interface = {
     iexec = {
@@ -64,14 +73,26 @@ struct
 
   let alarms = []
 
-  (** Initialization of environments *)
-  (** ============================== *)
+  (** {2 Lattice operators} *)
+  (** ********************* *)
 
-  let init _ _ flow =  flow
+  let is_bottom _ = false
+
+  let print fmt (a:t) =
+    Format.fprintf fmt "alloca: %a@\n" AddrSet.print a
+
+  let merge pre (a1,log1) (a2,log2) =
+    join a1 a2
 
 
-  (** Computation of post-conditions *)
-  (** ============================== *)
+  (** {2 Initialization of environments} *)
+  (** ================================== *)
+
+  let init prog man flow = set_env T_cur empty man flow
+
+
+  (** {2 Computation of post-conditions} *)
+  (** ================================== *)
 
   let exec zone stmt man flow =
     match skind stmt with
@@ -100,8 +121,8 @@ struct
     | _ -> None
 
 
-  (** Evaluation of expressions *)
-  (** ========================= *)
+  (** {2 Evaluation of expressions} *)
+  (** ============================= *)
 
   (** Check if there is a recursive call to a function *)
   let is_recursive_call f flow =
@@ -110,59 +131,96 @@ struct
     List.exists (fun c -> c.call_fun_uniq_name = f.c_func_unique_name) cs
 
 
+  (** 𝔼⟦ alloca(size) ⟧ *)
+  let eval_alloca_call size range man flow =
+    (* allocate a resource *)
+    man.eval (mk_stub_alloc_resource "alloca" range) flow >>$ fun e flow ->
+    match ekind e with
+    | E_addr addr ->
+      (* add the resource to local state *)
+      let flow = map_env T_cur (add addr) man flow in
+      (* add the address to memory state *)
+      man.post (mk_add e range) flow >>$ fun () flow ->
+      (* set the size of the resource *)
+      let cond = mk_binop (mk_stub_builtin_call BYTES e ~etyp:ul range) O_eq size ~etyp:T_bool range in
+      man.post (mk_assume cond range) flow >>$ fun () flow ->
+      Eval.singleton e flow
+
+    | _ -> assert false
+
+
   (** Eval a function call *)
   let eval_call fundec args range man flow =
+    if fundec.c_func_org_name = "__builtin_alloca" then
+      match args with
+      | [size] -> eval_alloca_call size range man flow
+      | _ -> panic_at range "invalid call to alloca"
+    else
     if is_builtin_function fundec.c_func_org_name
     then
       let exp' = mk_expr (E_c_builtin_call(fundec.c_func_org_name, args)) ~etyp:fundec.c_func_return range in
       man.eval ~zone:(Zone.Z_c, Zone.Z_c_low_level) exp' flow
     else
-      match fundec with
-      | _ when is_recursive_call fundec flow ->
-        Soundness.warn_at range "ignoring recursive call of function %s in %a" fundec.c_func_org_name pp_range range;
-        if is_c_void_type fundec.c_func_return then
-          Eval.empty_singleton flow
-        else
-          Eval.singleton (mk_top fundec.c_func_return range) flow
+      (* save the alloca resources of the caller before resetting it *)
+      let caller_alloca_addrs = get_env T_cur man flow in
+      let flow = set_env T_cur empty man flow in
+      let ret =
+        match fundec with
+        | _ when is_recursive_call fundec flow ->
+          Soundness.warn_at range "ignoring recursive call of function %s in %a" fundec.c_func_org_name pp_range range;
+          if is_c_void_type fundec.c_func_return then
+            Eval.empty_singleton flow
+          else
+            Eval.singleton (mk_top fundec.c_func_return range) flow
 
-      | {c_func_body = Some body; c_func_stub = None; c_func_variadic = false} ->
-        let open Universal.Ast in
-        let ret_var = mktmp ~typ:fundec.c_func_return () in
-        let fundec' = {
-          fun_orig_name = fundec.c_func_org_name;
-          fun_uniq_name = fundec.c_func_unique_name;
-          fun_parameters = fundec.c_func_parameters;
-          fun_locvars = [];
-          (* FIXME: This is a temporary fix to avoid double removal of
-             local variables. The field fun_locvars is used by the
-             Universal iterator at the end of the call to clean the
-             environment. Since the environment is automatically
-             cleaned by the scope mechanism, local variables are
-             removed twice. *)
-          fun_body = {skind = S_c_goto_stab (body); srange = srange body};
-          fun_return_type = if is_c_void_type fundec.c_func_return then None else Some fundec.c_func_return;
-          fun_return_var = ret_var;
-          fun_range = fundec.c_func_range;
-        }
-        in
-        let exp' = mk_call fundec' args range in
-        (* Universal will evaluate the call into a temporary variable containing the returned value *)
-        man.eval ~zone:(Universal.Zone.Z_u, any_zone) exp' flow
+        | {c_func_body = Some body; c_func_stub = None; c_func_variadic = false} ->
+          let open Universal.Ast in
+          let ret_var = mktmp ~typ:fundec.c_func_return () in
+          let fundec' = {
+            fun_orig_name = fundec.c_func_org_name;
+            fun_uniq_name = fundec.c_func_unique_name;
+            fun_parameters = fundec.c_func_parameters;
+            fun_locvars = [];
+            (* FIXME: This is a temporary fix to avoid double removal of
+               local variables. The field fun_locvars is used by the
+               Universal iterator at the end of the call to clean the
+               environment. Since the environment is automatically
+               cleaned by the scope mechanism, local variables are
+               removed twice. *)
+            fun_body = {skind = S_c_goto_stab (body); srange = srange body};
+            fun_return_type = if is_c_void_type fundec.c_func_return then None else Some fundec.c_func_return;
+            fun_return_var = ret_var;
+            fun_range = fundec.c_func_range;
+          }
+          in
+          let exp' = mk_call fundec' args range in
+          (* Universal will evaluate the call into a temporary variable containing the returned value *)
+          man.eval ~zone:(Universal.Zone.Z_u, any_zone) exp' flow
 
-      | {c_func_variadic = true} ->
-        let exp' = mk_c_call fundec args range in
-        man.eval ~zone:(Zone.Z_c, Zone.Z_c_low_level) exp' flow
+        | {c_func_variadic = true} ->
+          let exp' = mk_c_call fundec args range in
+          man.eval ~zone:(Zone.Z_c, Zone.Z_c_low_level) exp' flow
 
-      | {c_func_stub = Some stub} ->
-        let exp' = Stubs.Ast.mk_stub_call stub args range in
-        man.eval ~zone:(Stubs.Zone.Z_stubs, any_zone) exp' flow
+        | {c_func_stub = Some stub} ->
+          let exp' = Stubs.Ast.mk_stub_call stub args range in
+          man.eval ~zone:(Stubs.Zone.Z_stubs, any_zone) exp' flow
 
-      | {c_func_body = None; c_func_org_name; c_func_return} ->
-        Soundness.warn_at range "ignoring side effects of calling undefined function %s" c_func_org_name;
-        if is_c_void_type c_func_return then
-          Eval.empty_singleton flow
-        else
-          Eval.singleton (mk_top c_func_return range) flow
+        | {c_func_body = None; c_func_org_name; c_func_return} ->
+          Soundness.warn_at range "ignoring side effects of calling undefined function %s" c_func_org_name;
+          if is_c_void_type c_func_return then
+            Eval.empty_singleton flow
+          else
+            Eval.singleton (mk_top c_func_return range) flow
+      in
+      (* free alloca addresses *)
+      ret >>$ fun e flow ->
+      let callee_alloca_addrs = get_env T_cur man flow in
+      let flow = set_env T_cur caller_alloca_addrs man flow in
+      AddrSet.fold
+        (fun addr acc -> Post.bind (man.post (mk_stub_free (mk_addr addr range) range)) acc)
+        callee_alloca_addrs (Post.return flow)
+      >>$ fun () flow ->
+      Eval.singleton e flow
 
 
   let eval zone exp man flow =
@@ -204,7 +262,9 @@ struct
 
   let ask query man flow = None
 
+  let refine _ _ _ = assert false
+
 end
 
 let () =
-  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Domain.Intermediate.register_domain (module Domain)
