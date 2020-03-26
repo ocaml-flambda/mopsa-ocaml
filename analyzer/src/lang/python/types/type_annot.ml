@@ -724,6 +724,7 @@ struct
 
   let exec zone stmt man flow =
     match skind stmt with
+    | S_fold ({ekind = E_addr a'}, [{ekind = E_py_annot {ekind = (E_addr a)}}])
     | S_rename ({ekind = E_py_annot {ekind = (E_addr a)}}, {ekind = E_addr a'}) ->
       let cur = get_env T_cur man flow in
       debug "rename %a %a, at %a@\ncur=%a" pp_addr a pp_addr a' pp_range stmt.srange TVMap.print cur;

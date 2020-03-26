@@ -452,6 +452,26 @@ struct
       man.exec ~zone:Zone.Z_py (mk_rename_var vva vva' range) flow
       |> Post.return |> OptionExt.return
 
+    | S_fold ({ekind = E_addr ({addr_kind = A_py_dict _} as a)}, addrs) ->
+       let kva, vva = var_of_addr a in
+       let kvas, vvas = List.split @@ List.map (fun ea' -> match ekind ea' with
+                                      | E_addr ({addr_kind = A_py_dict _} as a') -> var_of_addr a'
+                                      | _ -> assert false) addrs in
+       flow |>
+         man.exec ~zone:Zone.Z_py (mk_fold_var kva kvas range) |>
+         man.exec ~zone:Zone.Z_py (mk_fold_var vva vvas range) |>
+         Post.return |> OptionExt.return
+
+    | S_expand ({ekind = E_addr ({addr_kind = A_py_dict _} as a)}, addrs) ->
+       let kva, vva = var_of_addr a in
+       let kvas, vvas = List.split @@ List.map (fun ea' -> match ekind ea' with
+                                                           | E_addr ({addr_kind = A_py_dict _} as a') -> var_of_addr a'
+                                                           | _ -> assert false) addrs in
+       flow |>
+         man.exec ~zone:Zone.Z_py (mk_expand_var kva kvas range) |>
+         man.exec ~zone:Zone.Z_py (mk_expand_var vva vvas range) |>
+         Post.return |> OptionExt.return
+
     | S_remove {ekind = E_addr ({addr_kind = A_py_dict} as a)} ->
        let kva, vva = var_of_addr a in
        flow |>
@@ -467,6 +487,13 @@ struct
        let va = viewseq_of_addr a in
        let va' = viewseq_of_addr a' in
        man.exec ~zone:Zone.Z_py (mk_rename_var va va' range) flow |> Post.return |> OptionExt.return
+
+    | S_invalidate {ekind = E_addr ({addr_kind = A_py_dict _} as a)} ->
+       let kva, vva = var_of_addr a in
+       flow |>
+         man.exec ~zone:Zone.Z_py (mk_invalidate_var kva range) |>
+         man.exec ~zone:Zone.Z_py (mk_invalidate_var vva range) |>
+         Post.return |> OptionExt.return
 
     | _ -> None
 

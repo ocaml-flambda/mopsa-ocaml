@@ -344,6 +344,70 @@ struct
           | _ -> assert false (* shouldn't happen *) end
        end
 
+    | S_fold ({ekind = E_var (v, mode)}, vars) ->
+       let cur = get_env T_cur man flow in
+       let av = OptionExt.default ASet.empty (AMap.find_opt v cur) in
+       let new_av, ncur = List.fold_left (fun (av, ncur) ev' ->
+                              let v' = match ekind ev' with
+                                | E_var (v', _) -> v'
+                                | _ -> assert false in
+                              match AMap.find_opt v' cur with
+                              | None -> av, ncur
+                              | Some av' -> ASet.join av av', AMap.remove v' cur
+                            ) (av, cur) vars in
+       set_env T_cur (AMap.add v new_av ncur) man flow |>
+         Post.return |> OptionExt.return
+
+    | S_expand (({ekind = E_var (v, mode)}), vars) ->
+       let cur = get_env T_cur man flow in
+       begin match AMap.find_opt v cur with
+       | None -> flow
+       | Some addrs_v ->
+          let varset = VarSet.of_list (List.map (fun evars -> match ekind evars with
+                                                              | E_var (v, _) -> v
+                                                              | _ -> assert false) vars
+                         ) in
+          let ncur = AMap.mapi (fun var aset -> if VarSet.mem var varset then ASet.join aset addrs_v else aset) cur in
+          set_env T_cur ncur man flow
+       end
+       |> Post.return |> OptionExt.return
+
+    | S_expand (({ekind = E_addr a} as e1), addrs) ->
+       let cur = get_env T_cur man flow in
+       let addrs_aset = List.map (fun eaddr -> match ekind eaddr with
+                                               | E_addr addr -> PyAddr.Def addr
+                                               | _ -> assert false) addrs |> ASet.of_list in
+       let ncur = AMap.map
+                    (fun aset ->
+                      if ASet.mem (Def a) aset then
+                        ASet.join addrs_aset (ASet.remove (Def a) aset)
+                      else aset
+                    ) cur in
+       let flow = set_env T_cur ncur man flow in
+       let flow = Flow.fold (fun acc tk d ->
+              match tk with
+              | T_py_exception ({ekind = E_py_object (oa, oe)} as e, s, k) when compare_addr a oa = 0 ->
+                 List.fold_left (fun acc ea' ->
+                     match ekind ea' with
+                     | E_addr a' ->
+                        Flow.add (T_py_exception ({e with ekind = E_py_object (a', oe)}, s, k)) d man.lattice acc
+                     | _ -> assert false) acc addrs
+              | _ -> Flow.add tk d man.lattice acc) (Flow.bottom (Flow.get_ctx flow) (Flow.get_alarms flow)) flow in
+       begin match akind a with
+       | A_py_instance {addr_kind = A_py_class (C_annot _, _)} ->
+          let skind = S_expand ({e1 with ekind = E_py_annot e1}, addrs) in
+          man.exec ~zone:Zone.Z_py_obj stmt flow |>
+            man.exec ~zone:Zone.Z_py_obj {stmt with skind}
+       | A_py_instance _ ->
+          man.exec ~zone:Zone.Z_py_obj stmt flow
+       | ak when Objects.Data_container_utils.is_data_container ak ->
+          man.exec ~zone:Zone.Z_py_obj stmt flow
+       | _ -> flow
+       end
+       |> Post.return |> OptionExt.return
+
+
+    | S_fold (({ekind = E_addr a'} as e2), [{ekind = E_addr a} as e1])
     | S_rename (({ekind = E_addr a} as e1), ({ekind = E_addr a'} as e2)) ->
        let cur = get_env T_cur man flow in
        let rename addr = if PyAddr.compare addr (PyAddr.Def a) = 0 then PyAddr.Def a' else addr in
@@ -363,30 +427,18 @@ struct
          else
            flow in
        begin match akind a with
-       | A_py_instance {addr_kind = A_py_class (C_annot _, _)} ->
+      | A_py_instance {addr_kind = A_py_class (C_annot _, _)} ->
+         let skind = match skind stmt with
+           | S_fold _ -> S_fold ({e2 with ekind = E_py_annot e2}, [e1])
+           | S_rename _ -> S_rename ({e1 with ekind = E_py_annot e1}, e2)
+           | _ -> assert false in
           man.exec ~zone:Zone.Z_py_obj stmt flow |>
-            man.exec ~zone:Zone.Z_py_obj {stmt with skind = S_rename ({e1 with ekind = E_py_annot e1}, e2)}
-       | A_py_instance _ ->
-          man.exec ~zone:Zone.Z_py_obj stmt flow
-       | ak when Objects.Data_container_utils.is_data_container ak ->
-          man.exec ~zone:Zone.Z_py_obj stmt flow
-       | _ -> flow
-       end
-       |> Post.return |> OptionExt.return
-
-    | S_remove {ekind = E_addr {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin s, _)}}} when List.mem s ["int"; "float"; "bool"; "NoneType"; "NotImplementedType"; "str"] ->
-       flow |> Post.return |> OptionExt.return
-
-    | S_remove {ekind = E_addr a} ->
-       let cur = get_env T_cur man flow in
-       let ncur = AMap.map (ASet.remove (Def a)) cur in (* FIXME: if Aset = empty, remove it? *)
-       let flow = set_env T_cur ncur man flow in
-       begin match akind a with
-       | A_py_instance _ ->
-          man.exec ~zone:Zone.Z_py_obj stmt flow
-       | ak when Objects.Data_container_utils.is_data_container ak ->
-          man.exec ~zone:Zone.Z_py_obj stmt flow
-       | _ -> flow
+          man.exec ~zone:Zone.Z_py_obj {stmt with skind}
+      | A_py_instance _ ->
+         man.exec ~zone:Zone.Z_py_obj stmt flow
+      | ak when Objects.Data_container_utils.is_data_container ak ->
+         man.exec ~zone:Zone.Z_py_obj stmt flow
+      | _ -> flow
        end |> Post.return |> OptionExt.return
 
     | S_py_delete {ekind = E_var (v, _)} ->
@@ -396,6 +448,23 @@ struct
     | S_py_delete _ ->
        Soundness.warn_at range "%a not supported, ignored" pp_stmt stmt;
        flow |> Post.return |> OptionExt.return
+
+
+    | S_remove {ekind = E_addr {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin s, _)}}} when List.mem s ["int"; "float"; "bool"; "NoneType"; "NotImplementedType"; "str"] ->
+       flow |> Post.return |> OptionExt.return
+
+    | S_invalidate {ekind = E_addr a}
+    | S_remove {ekind = E_addr a} ->
+       let cur = get_env T_cur man flow in
+       let ncur = AMap.map (ASet.remove (Def a)) cur in
+       let flow = set_env T_cur ncur man flow in
+       begin match akind a with
+       | A_py_instance _ ->
+          man.exec ~zone:Zone.Z_py_obj stmt flow
+       | ak when Objects.Data_container_utils.is_data_container ak ->
+          man.exec ~zone:Zone.Z_py_obj stmt flow
+       | _ -> flow
+       end |> Post.return |> OptionExt.return
 
     | _ -> None
 

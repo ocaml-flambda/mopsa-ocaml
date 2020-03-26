@@ -90,6 +90,12 @@ sig
   val remove_inverse : value -> t -> t
   (** [remove_inverse v a] remove all bindings [(-,v)] in [a] *)
 
+  val filter : (key -> ValueSet.t with_top -> bool) -> t -> t
+  (** [filter f a] keeps all bindings [(k,vs)] in [a] such that [f k vs] is true *)
+
+  val filter_inverse : (value -> KeySet.t -> bool) -> t -> t
+  (** [filter_inverse f a] keeps all inverse bindings [(v,ks)] in [a] such that [f v ks] is true *)
+
   val set : key -> ValueSet.t with_top -> t -> t
   (** [set k vs a] adds the binding [(k,vs)] to [a]. Previous bindings are overwritten. *)
 

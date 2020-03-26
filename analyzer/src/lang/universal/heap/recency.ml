@@ -39,7 +39,6 @@ module Pool = Framework.Lattices.Powerset.Make(
 
 type _ query +=
   | Q_allocated_addresses : addr list query
-  | Q_select_allocated_addresses : (addr -> bool) -> addr list query
   | Q_alive_addresses : addr list query
   | Q_alive_addresses_aspset : Pool.t query
 
@@ -50,9 +49,6 @@ let () =
         fun next query a b ->
           match query with
           | Q_allocated_addresses -> a @ b
-          | Q_select_allocated_addresses _ ->
-            (* is that ok? *)
-             a @ b
           | Q_alive_addresses -> List.sort_uniq compare_addr (a @ b)
           | Q_alive_addresses_aspset -> Pool.join a b
           | _ -> next.join_query query a b
@@ -64,9 +60,6 @@ let () =
           match query with
           | Q_allocated_addresses ->
             assert false
-          | Q_select_allocated_addresses _ ->
-            (* is that ok? *)
-             assert false
           | Q_alive_addresses -> assert false
           | Q_alive_addresses_aspset -> Pool.meet a b
           | _ -> next.meet_query query a b
@@ -151,31 +144,6 @@ struct
 
   let widen man ctx (a,s) (a',s') =
     Pool.join a a', s, s', true
-    (* debug "widening@,a = %a@,a'= %a" Pool.print a Pool.print a';
-     * (\* Search for strong addresses that belong only to a' and make them weak *\)
-     * let aa = Pool.join a a' in
-     * let diff = Pool.diff a' a |>
-     *            Pool.filter (function ({ addr_mode } as addr) ->
-     *                addr_mode = STRONG &&
-     *                not (Pool.mem { addr with addr_mode = WEAK } aa)
-     *              )
-     * in
-     * let range = mk_fresh_range () in
-     * if Pool.is_empty diff
-     * then aa, s, s', true
-     * else
-     *   let aa, s' = Pool.fold (fun addr (acc,s') ->
-     *       debug "widening for address %a" pp_addr addr;
-     *       let addr' = { addr with addr_mode = WEAK } in
-     *       let acc = Pool.remove addr acc |>
-     *                 Pool.add addr'
-     *       in
-     *       let s' = man.sexec (mk_rename (mk_addr addr range) (mk_addr addr' range) range) ctx s' in
-     *       acc, s'
-     *     ) diff (aa, s')
-     *   in
-     *   debug "aa=%a@\n" Pool.print aa;
-     *   aa, s, s', true *)
 
   let merge pre (a,log) (a',log') =
     assert false
@@ -198,17 +166,34 @@ struct
   (** Post-conditions *)
   (** *************** *)
 
+  let is_recent addr = addr.addr_mode = STRONG
+
+  let is_old addr = addr.addr_mode = WEAK
+
   let exec zone stmt man flow =
     let range = srange stmt in
     match skind stmt with
-    (* 𝕊⟦ free(addr); ⟧ *)
-    | S_free_addr addr ->
-      let flow' =
-        if addr.addr_mode = WEAK then flow
-        else map_env T_cur (Pool.remove addr) man flow
-      in
-      let stmt' = mk_remove (mk_addr addr stmt.srange) stmt.srange in
-      man.exec stmt' flow' |>
+    (* 𝕊⟦ free(recent); ⟧ *)
+    | S_free addr when is_recent addr ->
+      let old = { addr with addr_mode = WEAK } in
+      let pool = get_env T_cur man flow in
+      (* Inform domains to remove addr *)
+      let flow' = man.exec (mk_remove_addr addr stmt.srange) flow in
+      if not (Pool.mem old pool) then
+        (* only recent is present : remove it from the pool and return *)
+        map_env T_cur (Pool.remove addr) man flow' |>
+        Post.return |>
+        OptionExt.return
+      else
+        (* old is present : expand it as the new recent *)
+        man.exec (mk_expand_addr old [addr] stmt.srange) flow' |>
+        Post.return |>
+        OptionExt.return
+
+    (* 𝕊⟦ free(old); ⟧ *)
+    | S_free addr when is_old addr ->
+      (* Inform domains to invalidate addr *)
+      man.exec (mk_invalidate_addr addr stmt.srange) flow |>
       Post.return |>
       OptionExt.return
 
@@ -221,7 +206,8 @@ struct
        let trange = tag_range range "agc" in
        let flow = set_env T_cur alive man flow in
        let flow = Pool.fold (fun addr flow ->
-                      man.exec (mk_remove (mk_addr addr trange) trange) flow) dead flow in
+                      (* FIXME: free of a strong address will re-create the strong address, I'm not really happy with that *)
+                      man.exec (mk_stmt (S_free addr) trange) flow) dead flow in
        let delta = Sys.time () -. startt in
        gc_time := !gc_time +. delta;
        incr gc_nb_collections;
@@ -243,27 +229,24 @@ struct
 
       let recent_addr = Policies.mk_addr addr_kind STRONG range (Flow.get_unit_ctx flow) in
 
-      (* Change the sub-domain *)
-      let flow' =
-        if not (Pool.mem recent_addr pool) then
-          (* let () = debug "first allocation@\n" in *)
-          (* First time we allocate at this site, so no change to the sub-domain. *)
-          flow
+      if not (Pool.mem recent_addr pool) then
+        (* first allocation at this site: just add the address to the pool and return it *)
+        map_env T_cur (Pool.add recent_addr) man flow |>
+        Eval.singleton (mk_addr recent_addr range) |>
+        OptionExt.return
+      else
+        let old_addr = Policies.mk_addr addr_kind WEAK range (Flow.get_unit_ctx flow) in
+        if not (Pool.mem old_addr pool) then
+          (* old address not present: rename the existing recent as old and return the new recent *)
+          map_env T_cur (Pool.add old_addr) man flow |>
+          man.exec (mk_rename_addr recent_addr old_addr range) |>
+          Eval.singleton (mk_addr recent_addr range) |>
+          OptionExt.return
         else
-          (* Otherwise, we make the previous recent address as an old one *)
-          let old_addr = Policies.mk_addr addr_kind WEAK range (Flow.get_unit_ctx flow) in
-          (* debug "rename %a to %a" pp_addr recent_addr pp_addr old_addr; *)
-          let nflow = map_env T_cur (Pool.add old_addr) man flow |>
-                        man.exec (mk_rename (mk_addr recent_addr range) (mk_addr old_addr range) range) in
-          if not (Pool.mem old_addr pool) then nflow
-          else
-            Flow.join man.lattice nflow (man.exec (mk_remove (mk_addr recent_addr range) range) flow)
-      in
-
-      (* Add the recent address *)
-      map_env T_cur (Pool.add recent_addr) man flow' |>
-      Eval.singleton (mk_addr recent_addr range) |>
-      OptionExt.return
+          (* old present : copy the content of the existing recent to old using `fold` statement *)
+          man.exec (mk_fold_addr old_addr [recent_addr] range) flow |>
+          Eval.singleton (mk_addr recent_addr range) |>
+          OptionExt.return
 
     | E_alloc_addr(addr_kind, WEAK) ->
       let pool = get_env T_cur man flow in
@@ -290,13 +273,6 @@ struct
     | Q_allocated_addresses ->
       let pool = get_env T_cur man flow in
       Some (Pool.elements pool)
-
-    | Q_select_allocated_addresses f ->
-      let pool = get_env T_cur man flow in
-      Some (
-        (* I guess a fold would be better than filter and elements *)
-        Pool.elements @@ Pool.filter f pool
-      )
 
     | _ -> None
 

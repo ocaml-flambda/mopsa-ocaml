@@ -512,16 +512,8 @@ struct
 
   (** Rename a base *)
   let exec_rename_base e e' range man flow =
-    let base = match ekind e with
-      | E_var (v,_) -> mk_var_base v
-      | E_addr a -> mk_addr_base a
-      | _ -> assert false
-    in
-    let base' = match ekind e' with
-      | E_var (v,_) -> mk_var_base v
-      | E_addr a -> mk_addr_base a
-      | _ -> assert false
-    in
+    let base = expr_to_base e in
+    let base' = expr_to_base e' in
     map_env T_cur (fun a ->
         match Map.find_inverse (PointerValue.Base base) a with
         | TOP -> a
@@ -529,12 +521,49 @@ struct
           Map.add_inverse (PointerValue.Base base') pset a |>
           Map.remove_inverse (PointerValue.Base base)
       ) man flow |>
-   Post.return
+    Post.return
 
 
+  (** Expand a base *)
+  let exec_expand_base e el range man flow =
+    let base = expr_to_base e in
+    let basel = List.map expr_to_base el in
+    map_env T_cur (fun a ->
+        match Map.find_inverse (PointerValue.Base base) a with
+        | TOP -> a
+        | Nt pset ->
+          List.fold_left (fun acc base' ->
+              Map.add_inverse (PointerValue.Base base') pset acc
+            ) a basel
+      ) man flow |>
+    Post.return
 
-  (** Remove a base *)
-  let exec_remove_base e range man flow =
+  (** Fold a set of bases *)
+  let exec_fold_bases e el range man flow =
+    let base = expr_to_base e in
+    let basel = List.map expr_to_base el in
+    map_env T_cur (fun a ->
+        try
+          (* get the set pointers pointing to bases in basel *)
+          let pset = List.fold_left (fun acc base' ->
+              match Map.find_inverse (PointerValue.Base base') a with
+              | TOP -> raise Top.Found_TOP
+              | Nt pset -> Map.KeySet.union pset acc
+            ) Map.KeySet.empty basel
+          in
+          (* Make pointers in pset point to base *)
+          let a' = Map.add_inverse (PointerValue.Base base) pset a in
+          (* Remove bases in basel *)
+          List.fold_left (fun acc base' ->
+              Map.remove_inverse (PointerValue.Base base') acc
+            ) a' basel
+        with Top.Found_TOP ->
+          a
+      ) man flow |>
+    Post.return
+
+  (** Invalidate a base *)
+  let exec_invalidate_base e range man flow =
     let valid_base, invalid_base = match ekind e with
       | E_var (v,_) -> mk_var_base v, mk_var_base v ~valid:false ~invalidation_range:(Some range)
       | E_addr a -> mk_addr_base a, mk_addr_base a ~valid:false ~invalidation_range:(Some range)
@@ -739,12 +768,20 @@ struct
       add_pointer_var p stmt.srange man flow |>
       OptionExt.return
 
-    | S_remove e when zone = Z_c_points_to ->
-      exec_remove_base e stmt.srange man flow |>
+    | S_invalidate e when zone = Z_c_points_to ->
+      exec_invalidate_base e stmt.srange man flow |>
       OptionExt.return
 
     | S_rename(e,e') when zone = Z_c_points_to ->
       exec_rename_base e e' stmt.srange man flow |>
+      OptionExt.return
+
+    | S_expand(e,el) when zone = Z_c_points_to ->
+      exec_expand_base e el stmt.srange man flow |>
+      OptionExt.return
+
+    | S_fold(e,el) when zone = Z_c_points_to ->
+      exec_fold_bases e el stmt.srange man flow |>
       OptionExt.return
 
     | S_remove { ekind = E_var (p, _) } when is_c_pointer_type p.vtyp ->

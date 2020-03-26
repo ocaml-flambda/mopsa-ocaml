@@ -47,7 +47,7 @@ struct
   let interface= {
     iexec = {
       provides = [Z_c];
-      uses = [Z_c_scalar; Z_c_low_level; Z_c_points_to]
+      uses = [Z_c; Z_c_scalar; Z_c_low_level; Z_u_heap]
     };
 
     ieval = {
@@ -79,17 +79,16 @@ struct
     match ekind pt with
     | E_c_points_to (P_block ({ base_kind = Addr ({ addr_kind = A_stub_resource _ } as addr); base_valid = true }, _, mode)) ->
       (* Remove the bytes attribute before removing the address *)
-      let flow' =
+      let flow =
         if addr.addr_mode = STRONG then
           let stmt' = mk_remove_var (mk_bytes_var addr) range in
           man.exec ~zone:Z_c_scalar stmt' flow
         else
           flow
       in
-
-      let stmt' = mk_free_addr addr range in
-      man.exec stmt' flow' |>
-      Post.return
+      (* Tell the heap abstraction to free the address *)
+      let stmt' = mk_free addr range in
+      man.post stmt' ~zone:Z_u_heap flow
 
     | E_c_points_to (P_block ({ base_kind = Addr { addr_kind = A_stub_resource _ }; base_valid = false; base_invalidation_range = Some drange }, _, _)) ->
       raise_c_double_free_alarm p drange (Sig.Stacked.Manager.of_domain_man man) flow |>
@@ -117,6 +116,43 @@ struct
     man.exec ~zone:Z_c_points_to stmt |>
     Post.return
 
+  let exec_stub_remove_resource addr stmt man flow =
+    let bytes = mk_bytes_var addr in
+    man.exec ~zone:Z_c_scalar (mk_remove_var bytes stmt.srange) flow |>
+    man.exec ~zone:Z_c_low_level stmt |>
+    man.exec ~zone:Z_c_points_to (mk_invalidate_addr addr stmt.srange) |>
+    Post.return
+
+  let exec_stub_expand_resource addr addrl stmt man flow =
+    let bytes = mk_bytes_var addr in
+    let bytesl = List.map mk_bytes_var addrl in
+    man.exec ~zone:Z_c_scalar (mk_expand_var bytes bytesl stmt.srange) flow |>
+    man.exec ~zone:Z_c_low_level stmt |>
+    man.exec ~zone:Z_c_points_to stmt |>
+    Post.return
+
+  let exec_stub_fold_resource addr addrl stmt man flow =
+    let bytes = mk_bytes_var addr in
+    let bytesl = List.map mk_bytes_var addrl in
+    man.exec ~zone:Z_c_scalar (mk_fold_var bytes bytesl stmt.srange) flow |>
+    man.exec ~zone:Z_c_low_level stmt |>
+    man.exec ~zone:Z_c_points_to stmt |>
+    Post.return
+
+  let is_resouce_addr addr =
+    match addr.addr_kind with
+    | A_stub_resource _ -> true
+    | _ -> false
+
+  let is_resource_addr_expr e =
+    match ekind e with
+    | E_addr a -> is_resouce_addr a
+    | _ -> false
+
+  let extract_resource_addr e =
+    match ekind e with
+    | E_addr ({ addr_kind = A_stub_resource _ } as a) -> a
+    | _ -> assert false
 
   let exec zone stmt man flow  =
     match skind stmt with
@@ -124,12 +160,24 @@ struct
       exec_stub_free p stmt.srange man flow |>
       OptionExt.return
 
-    | S_rename ({ ekind = E_addr ({ addr_kind = A_stub_resource _ } as addr1) },
-                { ekind = E_addr ({ addr_kind = A_stub_resource _ } as addr2) })
-      ->
-      exec_stub_rename_resource addr1 addr2 stmt man flow |>
+    | S_rename (e1, e2) when is_resource_addr_expr e1 &&
+                             is_resource_addr_expr e2 ->
+      exec_stub_rename_resource (extract_resource_addr e1) (extract_resource_addr e2) stmt man flow |>
       OptionExt.return
 
+    | S_remove (e) when is_resource_addr_expr e ->
+      exec_stub_remove_resource (extract_resource_addr e) stmt man flow |>
+      OptionExt.return
+
+    | S_expand (e,el) when is_resource_addr_expr e &&
+                           List.for_all is_resource_addr_expr el ->
+      exec_stub_expand_resource (extract_resource_addr e) (List.map extract_resource_addr el) stmt man flow |>
+      OptionExt.return
+
+    | S_fold (e,el) when is_resource_addr_expr e &&
+                         List.for_all is_resource_addr_expr el ->
+      exec_stub_fold_resource (extract_resource_addr e) (List.map extract_resource_addr el) stmt man flow |>
+      OptionExt.return
 
     | _ -> None
 

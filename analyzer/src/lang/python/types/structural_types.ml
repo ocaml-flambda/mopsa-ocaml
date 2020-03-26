@@ -122,9 +122,49 @@ struct
       Post.return flow |>
       OptionExt.return
 
+    | S_expand ({ekind = E_addr ({addr_kind = A_py_instance _} as a)}, addrs) ->
+       let cur = get_env T_cur man flow in
+       let attrs = find a cur in
+       let addrs = List.map (fun eaddr -> match ekind eaddr with
+                                          | E_addr a -> a
+                                          | _ -> assert false) addrs in
+       let addrs_attrs =
+         fun attr -> List.map (fun addr -> mk_addr_attr addr attr T_any) addrs in
+       let ncur = List.fold_left (fun cur a ->
+                      AMap.add a
+                        (AttrSet.join
+                           (OptionExt.default AttrSet.empty (AMap.find_opt a cur))
+                           attrs)
+                        cur) cur addrs in
+       let expand_stmts =
+         AttrSet.fold_u (fun attr stmts ->
+             mk_expand_var (mk_addr_attr a attr T_any) (addrs_attrs attr) range :: stmts
+           ) attrs [] in
+       set_env T_cur (remove a ncur) man flow |>
+         man.exec (mk_block expand_stmts range) |> Post.return |> OptionExt.return
+
+
+    | S_fold ({ekind = E_addr ({addr_kind = A_py_instance _} as a)}, addrs) ->
+       let cur = get_env T_cur man flow in
+       let old_a = OptionExt.default AttrSet.empty (find_opt a cur) in
+       (* let fold_vars = List.fold_left (fun stmts  (aun  mk_fold_var (mk_addr_attr a attr T_any) (List.map (fun a' -> mk_addr_attr a' attr T_any) addrs) range in *)
+       let newa, ncur, fold_stmts =
+         List.fold_left (fun (newa, ncur, stmts) a' ->
+             match ekind a' with
+             | E_addr a' ->
+                begin match find_opt a' ncur  with
+                 | None -> newa, remove a' cur, stmts
+                 | Some va' ->
+                    AttrSet.join newa va', remove a' cur,
+                    AttrSet.fold_u (fun attr stmts -> mk_fold_var (mk_addr_attr a attr T_any) [mk_addr_attr a' attr T_any] range :: stmts) va' stmts
+                end
+             | _ -> assert false
+           ) (old_a, cur, []) addrs in
+       set_env T_cur (add a newa ncur) man flow |>
+         man.exec (mk_block fold_stmts range) |> Post.return |> OptionExt.return
+
+
     | S_rename ({ekind = E_addr ({addr_kind = A_py_instance _ } as a)}, {ekind = E_addr a'}) ->
-      (* | S_rename ({ekind = E_addr ({addr_kind = A_py_var _ } as a)}, {ekind = E_addr a'}) -> *)
-      (* TODO: le faire autrepart (addr_env), /!\ zones *)
       let cur = get_env T_cur man flow in
       let old_a = find a cur in
       let to_rename_stmt = mk_block (AttrSet.fold_u (fun attr renames ->
@@ -159,6 +199,22 @@ struct
           let flow = set_env T_cur ncur man flow in
           man.exec to_remove_stmt flow |> Post.return |> OptionExt.return
        end
+
+    | S_invalidate {ekind = E_addr ({addr_kind = A_py_instance _} as a)}
+      | S_remove {ekind = E_addr ({addr_kind = A_py_instance _} as a)} ->
+       let mk_func = match skind stmt with
+         | S_invalidate _ -> mk_invalidate_var
+         | S_remove _ -> mk_remove_var
+         | _ -> assert false in
+       let cur = get_env T_cur man flow in
+       let old_a = find a cur in
+       let to_remove_stmt =
+         mk_block
+           (AttrSet.fold_u (fun attr removes ->
+                mk_func (mk_addr_attr a attr T_any) range :: removes) old_a []) range in
+       let ncur = remove a cur in
+       let flow = set_env T_cur ncur man flow in
+       man.exec to_remove_stmt flow |> Post.return |> OptionExt.return
 
     | S_add ({ekind = E_addr a}) ->
       debug "S_add";
