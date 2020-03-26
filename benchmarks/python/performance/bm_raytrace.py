@@ -440,6 +440,7 @@ def test_types():
 
 def test_values():
     bench_raytrace(10, DEFAULT_WIDTH, DEFAULT_HEIGHT, "FILENAME.ppm")
+    mopsa.ignore_exception(ZeroDivisionError)
     mopsa.ignore_exception(OverflowError)
     mopsa.ignore_exception(ValueError)
     mopsa.assert_safe()

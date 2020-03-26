@@ -176,4 +176,5 @@ def test_values():
     mopsa.ignore_exception(ValueError)
     mopsa.ignore_exception(KeyError)
     mopsa.ignore_exception(UnboundLocalError)
+    mopsa.ignore_exception(ZeroDivisionError)
     mopsa.assert_safe()

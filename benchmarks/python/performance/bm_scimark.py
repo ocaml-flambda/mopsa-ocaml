@@ -432,6 +432,7 @@ def test_values():
     bench_LU(10, 100)
     bench_FFT(10, 1024,50)
     import mopsa
+    mopsa.ignore_exception(ZeroDivisionError)
     mopsa.ignore_exception(IndexError)
     mopsa.ignore_exception(OverflowError)
     mopsa.assert_safe()

@@ -355,6 +355,7 @@ def test_values():
     mopsa.ignore_exception(ValueError)
     mopsa.ignore_exception(OverflowError)
     mopsa.ignore_exception(IndexError)
+    mopsa.ignore_exception(ZeroDivisionError)
     # mopsa.assert_exception_exists(TypeError) the typeerror is no longer raised due to a better precision
     # mopsa.ignore_exception(TypeError)
     mopsa.assert_safe()

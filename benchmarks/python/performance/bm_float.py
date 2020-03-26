@@ -70,6 +70,7 @@ def test_values():
     points = POINTS
     benchmark(points)
     mopsa.ignore_exception(OverflowError)
+    mopsa.ignore_exception(ZeroDivisionError)
     mopsa.assert_safe()
 
 
