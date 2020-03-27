@@ -19,8 +19,8 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(* A general smashing abstraction for Python lists, (hopefully)
-   irrelevant of the value/type domain *)
+(* A general smashing abstraction for Python lists, independent from
+   the value/type domain *)
 
 (* currently, lists are smashed into one variable abstracting all
    its elements. To avoid allocating a new variable each time
@@ -28,8 +28,6 @@
    been not other allocation at the same point. This is quite
    similar to the recency abstraction, and is probably not optimal
 *)
-
-(* TODO: add length for lists and position for iterator? *)
 
 open Mopsa
 open Sig.Domain.Stateless
@@ -1019,29 +1017,39 @@ struct
        let va' = itseq_of_addr a' in
        man.exec ~zone:Zone.Z_py (mk_rename_var va va' range) flow |> Post.return |> OptionExt.return
 
-    | S_invalidate {ekind = E_addr ({addr_kind = A_py_list _} as a)} ->
+    | S_invalidate {ekind = E_addr ({addr_kind = A_py_list} as a)} ->
        let va = var_of_addr a in
+       let la = length_var_of_addr a in
        flow |>
          man.exec ~zone:Zone.Z_py (mk_invalidate_var va range) |>
+         man.exec ~zone:Universal.Zone.Z_u_int (mk_invalidate_var la range) |>
          Post.return |> OptionExt.return
 
 
-    | S_fold ({ekind = E_addr ({addr_kind = A_py_list _} as a)}, addrs) ->
+    | S_fold ({ekind = E_addr ({addr_kind = A_py_list} as a)}, addrs) ->
        debug "list fold";
        let va = var_of_addr a in
-       let vas = List.map (fun ea' -> match ekind ea' with
-                                      | E_addr ({addr_kind = A_py_list _} as a') -> var_of_addr a'
+       let la = length_var_of_addr a in
+       let vas, las = List.split @@ List.map (fun ea' -> match ekind ea' with
+                                      | E_addr ({addr_kind = A_py_list} as a') -> var_of_addr a', length_var_of_addr a'
                                       | _ -> assert false) addrs in
-       man.exec ~zone:Zone.Z_py (mk_fold_var va vas range) flow |> Post.return |> OptionExt.return
+       flow |>
+         man.exec ~zone:Zone.Z_py (mk_fold_var va vas range) |>
+         man.exec ~zone:Universal.Zone.Z_u_int (mk_fold_var la las range) |>
+         Post.return |> OptionExt.return
 
-    | S_expand ({ekind = E_addr ({addr_kind = A_py_list _} as a)}, addrs) ->
-        let va = var_of_addr a in
-        let vas = List.map (fun ea' -> match ekind ea' with
-                                      | E_addr ({addr_kind = A_py_list _} as a') -> var_of_addr a'
+    | S_expand ({ekind = E_addr ({addr_kind = A_py_list} as a)}, addrs) ->
+       let va = var_of_addr a in
+       let la = length_var_of_addr a in
+       let vas, las = List.split @@ List.map (fun ea' -> match ekind ea' with
+                                      | E_addr ({addr_kind = A_py_list} as a') -> var_of_addr a', length_var_of_addr a'
                                       | _ -> assert false) addrs in
-        man.exec ~zone:Zone.Z_py (mk_expand_var va vas range) flow |> Post.return |> OptionExt.return
+       flow |>
+         man.exec ~zone:Zone.Z_py (mk_expand_var va vas range) |>
+         man.exec ~zone:Universal.Zone.Z_u_int (mk_expand_var la las range) |>
+         Post.return |> OptionExt.return
 
-    | S_rename ({ekind = E_addr ({addr_kind = A_py_list _} as a)}, {ekind = E_addr a'}) ->
+    | S_rename ({ekind = E_addr ({addr_kind = A_py_list} as a)}, {ekind = E_addr a'}) ->
       (* FIXME: I guess we could just do it for every data_container. Maybe add a data_container domain on top of them performing the renaming?*)
       (* working on lists entails smashed element variable being index by the address, meaning we need to rename them *)
       let va = var_of_addr a in

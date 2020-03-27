@@ -241,23 +241,23 @@ struct
          man.exec ~zone:Zone.Z_py (mk_remove_var va range) |>
          Post.return |> OptionExt.return
 
-    | S_invalidate {ekind = E_addr ({addr_kind = A_py_set _} as a)} ->
+    | S_invalidate {ekind = E_addr ({addr_kind = A_py_set} as a)} ->
        let va = var_of_addr a in
        flow |>
          man.exec ~zone:Zone.Z_py (mk_invalidate_var va range) |>
          Post.return |> OptionExt.return
 
-    | S_fold ({ekind = E_addr ({addr_kind = A_py_set _} as a)}, addrs) ->
+    | S_fold ({ekind = E_addr ({addr_kind = A_py_set} as a)}, addrs) ->
        let va = var_of_addr a in
        let vas = List.map (fun ea' -> match ekind ea' with
-                                      | E_addr ({addr_kind = A_py_set _} as a') -> var_of_addr a'
+                                      | E_addr ({addr_kind = A_py_set} as a') -> var_of_addr a'
                                       | _ -> assert false) addrs in
        man.exec ~zone:Zone.Z_py (mk_fold_var va vas range) flow |> Post.return |> OptionExt.return
 
-    | S_expand ({ekind = E_addr ({addr_kind = A_py_set _} as a)}, addrs) ->
+    | S_expand ({ekind = E_addr ({addr_kind = A_py_set} as a)}, addrs) ->
        let va = var_of_addr a in
        let vas = List.map (fun ea' -> match ekind ea' with
-                                      | E_addr ({addr_kind = A_py_set _} as a') -> var_of_addr a'
+                                      | E_addr ({addr_kind = A_py_set} as a') -> var_of_addr a'
                                       | _ -> assert false) addrs in
        man.exec ~zone:Zone.Z_py (mk_expand_var va vas range) flow |> Post.return |> OptionExt.return
 
