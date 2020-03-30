@@ -294,7 +294,7 @@ struct
 
 
     | S_invalidate ({ekind = E_var (v, _)} as var) ->
-       let flow = fold_intfloatstr man v flow (fun t -> mk_remove_var (* fixme: invalidate_var? *) (Utils.change_var_type t v) range) in
+       let flow = fold_intfloatstr man v flow (fun t -> mk_invalidate_var (Utils.change_var_type t v) range) in
        let cur = get_env T_cur man flow in
        let flow = set_env T_cur (AMap.remove v cur) man flow in
        begin match v.vkind with
@@ -314,7 +314,7 @@ struct
        let flow = set_env T_cur (AMap.remove v cur) man flow in
        begin match v.vkind with
        | V_uniq _ when not (Hashtbl.mem type_aliases v) ->
-          warn "remove var, assign to E_py_undefined?";
+          (* FIXME: "remove var, assign to E_py_undefined?"; *)
           (* if the variable maps to a list, we should remove the temporary variable associated, ONLY if it's not used by another list *)
           let flow = man.exec (mk_assign var (mk_expr (E_py_undefined true) range) range) flow in
           flow |> Post.return |> OptionExt.return

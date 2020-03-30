@@ -108,6 +108,7 @@ let generic_nonrel_merge ~top ~add ~remove ~find ~meet pre (a1, log1) (a2, log2)
       remove var1 acc |>
       add var2 v
 
+    | S_invalidate { ekind = E_var (var, _) }
     | S_remove { ekind = E_var (var, _) } ->
       remove var acc
 
@@ -415,6 +416,7 @@ struct
   let exec ctx stmt man (map:t) : t option =
     let range = srange stmt in
     match skind stmt with
+    | S_invalidate { ekind = E_var (v, _) }
     | S_remove { ekind = E_var (v, _) }  ->
       VarMap.remove v map |>
       OptionExt.return
