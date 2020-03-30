@@ -367,7 +367,7 @@ struct
           let addrs_v = AMap.find v ncur in
           let ncur = VarSet.fold (fun vvarset ncur -> AMap.add vvarset addrs_v ncur) varset ncur in
           let flow = set_env T_cur ncur man flow in
-          fold_intfloatstr man v flow (fun t -> mk_expand_var (Utils.change_var_type t v) (VarSet.elements varset) range)
+          fold_intfloatstr man v flow (fun t -> mk_expand_var (Utils.change_var_type t v) (List.map (fun v -> Utils.change_var_type t v) (VarSet.elements varset)) range)
        end
        |> Post.return |> OptionExt.return
 
