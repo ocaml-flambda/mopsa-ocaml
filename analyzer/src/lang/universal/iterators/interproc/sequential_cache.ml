@@ -126,7 +126,7 @@ struct
       let params, locals, body, in_flow_cur = init_fun_params func args range man in_flow_cur in
       begin match find_signature man func.fun_uniq_name in_flow_cur with
         | None ->
-          let ret = mk_range_attr_var range "ret_var" T_any in
+          let ret = mk_range_attr_var range (Format.asprintf "ret_var_%s" func.fun_uniq_name) T_any in
           inline func params locals body (Some ret) range man in_flow_cur |>
           bind_full (fun oeval_res out_flow log cleaners ->
               debug "in bind@\n";

@@ -281,33 +281,6 @@ struct
                                   | _ -> Exceptions.panic_at range "%a@\n" pp_expr e)
        |> OptionExt.return
 
-
-    (* i think this is dead code *)
-    (* | S_assign({ekind = E_py_attribute(lval, attr)}, rval) ->
-     *    (\* TODO: setattr *\)
-     *    bind_list [lval; rval] (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
-     *      bind_some (fun args flow ->
-     *          let elval, erval = match args with [e1;e2] -> e1, e2 | _ -> assert false in
-     *          man.exec ~zone:Zone.Z_py_obj (mk_assign (mk_py_attr elval attr range) erval range) flow |> Post.return
-     *        )
-     *    |> OptionExt.return *)
-
-
-    (* | S_invalidate ({ekind = E_var (v, _)} as var) ->
-     *    let flow = fold_intfloatstr man v flow (fun t -> mk_invalidate_var (Utils.change_var_type t v) range) in
-     *    let cur = get_env T_cur man flow in
-     *    let flow = set_env T_cur (AMap.remove v cur) man flow in
-     *    begin match v.vkind with
-     *    | V_uniq _ when not (Hashtbl.mem type_aliases v) ->
-     *       warn "invalidate var, assign to E_py_undefined?";
-     *       (\* if the variable maps to a list, we should remove the temporary variable associated, ONLY if it's not used by another list *\)
-     *       let flow = man.exec (mk_assign var (mk_expr (E_py_undefined true) range) range) flow in
-     *       flow |> Post.return |> OptionExt.return
-     *
-     *    | _ ->
-     *       flow |> Post.return |> OptionExt.return
-     *    end *)
-
     | S_remove ({ekind = E_var (v, _)} as var) ->
        let flow = fold_intfloatstr man v flow (fun t -> mk_remove_var (Utils.change_var_type t v) range) in
        let cur = get_env T_cur man flow in
@@ -363,18 +336,23 @@ struct
     | S_fold ({ekind = E_var (v, mode)}, vars) ->
        let cur = get_env T_cur man flow in
        let av = OptionExt.default ASet.empty (AMap.find_opt v cur) in
-       let new_av, ncur = List.fold_left (fun (av, ncur) ev' ->
+       let new_av, flow = List.fold_left (fun (av, flow) ev' ->
+                              let ncur = get_env T_cur man flow in
                               Debug.debug ~channel:"addrenv" "av = %a@.ncur = %a" ASet.print av AMap.print ncur;
                               let v' = match ekind ev' with
                                 | E_var (v', _) -> v'
                                 | _ -> assert false in
                               match AMap.find_opt v' cur with
-                              | None -> av, ncur
-                              | Some av' -> ASet.join av av', AMap.remove v' cur
-                            ) (av, cur) vars in
-       let ncur =
-         if ASet.is_empty new_av then ncur else AMap.add v new_av ncur in
-       set_env T_cur ncur man flow |> Post.return |> OptionExt.return
+                              | None -> av, flow
+                              | Some av' ->
+                                 ASet.join av av',
+                                 fold_intfloatstr man v' flow (fun t -> mk_fold_var (Utils.change_var_type t v) [(Utils.change_var_type t v')] range) |>
+                                 set_env T_cur (AMap.remove v' cur) man
+                            ) (av, flow) vars in
+       let flow =
+         if ASet.is_empty new_av then flow
+         else map_env T_cur (AMap.add v new_av) man flow in
+       flow |> Post.return |> OptionExt.return
 
     | S_expand (({ekind = E_var (v, mode)}), vars) ->
        let cur = get_env T_cur man flow in
@@ -388,7 +366,8 @@ struct
           let ncur = AMap.mapi (fun var aset -> if VarSet.mem var varset then ASet.join aset addrs_v else aset) cur in
           let addrs_v = AMap.find v ncur in
           let ncur = VarSet.fold (fun vvarset ncur -> AMap.add vvarset addrs_v ncur) varset ncur in
-          set_env T_cur ncur man flow
+          let flow = set_env T_cur ncur man flow in
+          fold_intfloatstr man v flow (fun t -> mk_expand_var (Utils.change_var_type t v) (VarSet.elements varset) range)
        end
        |> Post.return |> OptionExt.return
 
