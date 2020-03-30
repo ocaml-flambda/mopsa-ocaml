@@ -47,12 +47,14 @@ module Domain =
     let exec zone stmt man flow =
       match skind stmt with
       | S_remove { ekind = E_var _ }
+        | S_invalidate { ekind = E_var _ }
         | S_add { ekind = E_var _ }
         | S_project _
         | S_rename ({ ekind = E_var _ }, { ekind = E_var _ })
         | S_forget { ekind = E_var _ }
         | S_assign ({ ekind= E_var _ }, _)
         | S_expand ({ekind = E_var _ }, _)
+        | S_fold ({ekind = E_var _}, _)
         | S_assume _ ->
          Some (Post.return flow)
 

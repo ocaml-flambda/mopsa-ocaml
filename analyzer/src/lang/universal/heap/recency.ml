@@ -192,10 +192,11 @@ struct
 
     (* 𝕊⟦ free(old); ⟧ *)
     | S_free addr when is_old addr ->
-      (* Inform domains to invalidate addr *)
-      man.exec (mk_invalidate_addr addr stmt.srange) flow |>
-      Post.return |>
-      OptionExt.return
+       (* Inform domains to invalidate addr *)
+       map_env T_cur (Pool.remove addr) man flow |>
+         man.exec (mk_invalidate_addr addr stmt.srange)  |>
+         Post.return |>
+         OptionExt.return
 
     | S_perform_gc ->
        let startt = Sys.time () in
@@ -206,6 +207,7 @@ struct
        let trange = tag_range range "agc" in
        let flow = set_env T_cur alive man flow in
        let flow = Pool.fold (fun addr flow ->
+                      debug "free %a" pp_addr addr;
                       (* FIXME: free of a strong address will re-create the strong address, I'm not really happy with that *)
                       man.exec (mk_stmt (S_free addr) trange) flow) dead flow in
        let delta = Sys.time () -. startt in

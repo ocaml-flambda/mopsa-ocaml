@@ -117,6 +117,7 @@ struct
         let () = warn_at (srange stmt) "%a => addr %a not in cur.abs_heap, nothing done" pp_stmt stmt pp_addr a in
         Post.return flow |>
         OptionExt.return
+
     | S_assign ({ekind = E_addr _}, _) ->
       debug "nothing to do@\n";
       Post.return flow |>
@@ -130,17 +131,18 @@ struct
                                           | _ -> assert false) addrs in
        let addrs_attrs =
          fun attr -> List.map (fun addr -> mk_addr_attr addr attr T_any) addrs in
-       let ncur = List.fold_left (fun cur a ->
-                      AMap.add a
-                        (AttrSet.join
-                           (OptionExt.default AttrSet.empty (AMap.find_opt a cur))
-                           attrs)
+       let ncur = List.fold_left (fun cur addr ->
+                      AMap.add addr
+                        attrs
+                        (* (AttrSet.join
+                         *    (OptionExt.default AttrSet.empty (AMap.find_opt addr cur))
+                         *    attrs) *)
                         cur) cur addrs in
        let expand_stmts =
          AttrSet.fold_u (fun attr stmts ->
              mk_expand_var (mk_addr_attr a attr T_any) (addrs_attrs attr) range :: stmts
            ) attrs [] in
-       set_env T_cur (remove a ncur) man flow |>
+       set_env T_cur ncur man flow |>
          man.exec (mk_block expand_stmts range) |> Post.return |> OptionExt.return
 
 
@@ -186,20 +188,6 @@ struct
       Post.return |>
         OptionExt.return
 
-    | S_remove {ekind = E_addr ({addr_kind = A_py_instance _} as a)} ->
-       let cur = get_env T_cur man flow in
-       begin match find_opt a cur with
-       | None ->
-          warn "unable to perform %a in the structural types (guess is the instance addr wasn't added upon creation)" pp_stmt stmt;
-          flow |> Post.return |> OptionExt.return
-       | Some old_a ->
-          let to_remove_stmt = mk_block (AttrSet.fold_uo (fun attr removes ->
-                                             mk_remove_var (mk_addr_attr a attr T_any) range :: removes) old_a []) range in
-          let ncur = remove a cur in
-          let flow = set_env T_cur ncur man flow in
-          man.exec to_remove_stmt flow |> Post.return |> OptionExt.return
-       end
-
     | S_invalidate {ekind = E_addr ({addr_kind = A_py_instance _} as a)}
       | S_remove {ekind = E_addr ({addr_kind = A_py_instance _} as a)} ->
        let mk_func = match skind stmt with
@@ -207,14 +195,14 @@ struct
          | S_remove _ -> mk_remove_var
          | _ -> assert false in
        let cur = get_env T_cur man flow in
-       let old_a = find a cur in
+       let old_a = find_opt a cur |> OptionExt.default AttrSet.empty  in
        let to_remove_stmt =
          mk_block
            (AttrSet.fold_u (fun attr removes ->
                 mk_func (mk_addr_attr a attr T_any) range :: removes) old_a []) range in
        let ncur = remove a cur in
        let flow = set_env T_cur ncur man flow in
-       man.exec to_remove_stmt flow |> Post.return |> OptionExt.return
+       man.exec ~zone:Zone.Z_py to_remove_stmt flow |> Post.return |> OptionExt.return
 
     | S_add ({ekind = E_addr a}) ->
       debug "S_add";

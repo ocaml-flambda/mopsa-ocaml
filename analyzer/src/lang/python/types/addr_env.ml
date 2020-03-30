@@ -167,7 +167,6 @@ struct
     | None ->
        flow
     | Some aset ->
-       (* FIXME: if we explicitly define things below, we could use ASet.mem *)
        let check_baddr a = ASet.mem (Def (OptionExt.none_to_exn !a)) aset in
        let intb = check_baddr addr_integers || check_baddr addr_true || check_baddr addr_false || check_baddr addr_bool_top in
        let float = check_baddr addr_float in
@@ -283,16 +282,31 @@ struct
        |> OptionExt.return
 
 
+    (* i think this is dead code *)
+    (* | S_assign({ekind = E_py_attribute(lval, attr)}, rval) ->
+     *    (\* TODO: setattr *\)
+     *    bind_list [lval; rval] (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+     *      bind_some (fun args flow ->
+     *          let elval, erval = match args with [e1;e2] -> e1, e2 | _ -> assert false in
+     *          man.exec ~zone:Zone.Z_py_obj (mk_assign (mk_py_attr elval attr range) erval range) flow |> Post.return
+     *        )
+     *    |> OptionExt.return *)
 
-    | S_assign({ekind = E_py_attribute(lval, attr)}, rval) ->
-       (* TODO: setattr *)
-       bind_list [lval; rval] (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
-         bind_some (fun args flow ->
-             let elval, erval = match args with [e1;e2] -> e1, e2 | _ -> assert false in
-             man.exec ~zone:Zone.Z_py_obj (mk_assign (mk_py_attr elval attr range) erval range) flow |> Post.return
-           )
-       |> OptionExt.return
 
+    | S_invalidate ({ekind = E_var (v, _)} as var) ->
+       let flow = fold_intfloatstr man v flow (fun t -> mk_remove_var (* fixme: invalidate_var? *) (Utils.change_var_type t v) range) in
+       let cur = get_env T_cur man flow in
+       let flow = set_env T_cur (AMap.remove v cur) man flow in
+       begin match v.vkind with
+       | V_uniq _ when not (Hashtbl.mem type_aliases v) ->
+          warn "invalidate var, assign to E_py_undefined?";
+          (* if the variable maps to a list, we should remove the temporary variable associated, ONLY if it's not used by another list *)
+          let flow = man.exec (mk_assign var (mk_expr (E_py_undefined true) range) range) flow in
+          flow |> Post.return |> OptionExt.return
+
+       | _ ->
+          flow |> Post.return |> OptionExt.return
+       end
 
     | S_remove ({ekind = E_var (v, _)} as var) ->
        let flow = fold_intfloatstr man v flow (fun t -> mk_remove_var (Utils.change_var_type t v) range) in
@@ -300,6 +314,7 @@ struct
        let flow = set_env T_cur (AMap.remove v cur) man flow in
        begin match v.vkind with
        | V_uniq _ when not (Hashtbl.mem type_aliases v) ->
+          warn "remove var, assign to E_py_undefined?";
           (* if the variable maps to a list, we should remove the temporary variable associated, ONLY if it's not used by another list *)
           let flow = man.exec (mk_assign var (mk_expr (E_py_undefined true) range) range) flow in
           flow |> Post.return |> OptionExt.return
@@ -341,13 +356,15 @@ struct
           | V_addr_attr(a, _) when Objects.Data_container_utils.is_data_container a.addr_kind ->
              (* because the container abstraction may not bind v to anything if the container is empty *)
              flow |> Post.return |> OptionExt.return
-          | _ -> assert false (* shouldn't happen *) end
+          | _ -> assert false (* shouldn't happen *)
+          end
        end
 
     | S_fold ({ekind = E_var (v, mode)}, vars) ->
        let cur = get_env T_cur man flow in
        let av = OptionExt.default ASet.empty (AMap.find_opt v cur) in
        let new_av, ncur = List.fold_left (fun (av, ncur) ev' ->
+                              Debug.debug ~channel:"addrenv" "av = %a@.ncur = %a" ASet.print av AMap.print ncur;
                               let v' = match ekind ev' with
                                 | E_var (v', _) -> v'
                                 | _ -> assert false in
@@ -355,19 +372,22 @@ struct
                               | None -> av, ncur
                               | Some av' -> ASet.join av av', AMap.remove v' cur
                             ) (av, cur) vars in
-       set_env T_cur (AMap.add v new_av ncur) man flow |>
-         Post.return |> OptionExt.return
+       let ncur =
+         if ASet.is_empty new_av then ncur else AMap.add v new_av ncur in
+       set_env T_cur ncur man flow |> Post.return |> OptionExt.return
 
     | S_expand (({ekind = E_var (v, mode)}), vars) ->
        let cur = get_env T_cur man flow in
        begin match AMap.find_opt v cur with
-       | None -> flow
+       | None -> warn_at range "weird expand on %a" pp_var v; flow
        | Some addrs_v ->
           let varset = VarSet.of_list (List.map (fun evars -> match ekind evars with
                                                               | E_var (v, _) -> v
                                                               | _ -> assert false) vars
                          ) in
           let ncur = AMap.mapi (fun var aset -> if VarSet.mem var varset then ASet.join aset addrs_v else aset) cur in
+          let addrs_v = AMap.find v ncur in
+          let ncur = VarSet.fold (fun vvarset ncur -> AMap.add vvarset addrs_v ncur) varset ncur in
           set_env T_cur ncur man flow
        end
        |> Post.return |> OptionExt.return
@@ -380,7 +400,7 @@ struct
        let ncur = AMap.map
                     (fun aset ->
                       if ASet.mem (Def a) aset then
-                        ASet.join addrs_aset (ASet.remove (Def a) aset)
+                        ASet.join addrs_aset aset
                       else aset
                     ) cur in
        let flow = set_env T_cur ncur man flow in
@@ -390,7 +410,7 @@ struct
                  List.fold_left (fun acc ea' ->
                      match ekind ea' with
                      | E_addr a' ->
-                        Flow.add (T_py_exception ({e with ekind = E_py_object (a', oe)}, s, k)) d man.lattice acc
+                        Flow.add (T_py_exception ({e with ekind = E_py_object (a', oe)}, s, k)) d man.lattice (Flow.add tk d man.lattice acc)
                      | _ -> assert false) acc addrs
               | _ -> Flow.add tk d man.lattice acc) (Flow.bottom (Flow.get_ctx flow) (Flow.get_alarms flow)) flow in
        begin match akind a with

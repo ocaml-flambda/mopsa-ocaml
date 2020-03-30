@@ -1012,10 +1012,55 @@ struct
          )
        |> Post.return |> OptionExt.return
 
-    | S_rename ({ekind = E_addr ({addr_kind = A_py_iterator _} as a)}, {ekind = E_addr a'}) ->
+    | S_rename ({ekind = E_addr ({addr_kind = A_py_iterator (kind, _)} as a)}, {ekind = E_addr a'}) ->
        let va = itseq_of_addr a in
        let va' = itseq_of_addr a' in
-       man.exec ~zone:Zone.Z_py (mk_rename_var va va' range) flow |> Post.return |> OptionExt.return
+       flow |>
+         (
+           if kind = "list_iterator" || kind = "list_reverseiterator" then
+             man.exec ~zone:Universal.Zone.Z_u_int (mk_rename_var (itindex_var_of_addr a) (itindex_var_of_addr a') range)
+           else
+             fun x -> x
+         ) |>
+         man.exec ~zone:Zone.Z_py (mk_rename_var va va' range) |> Post.return |> OptionExt.return
+
+    | S_invalidate {ekind = E_addr ({addr_kind = A_py_iterator (kind, _)} as a)} ->
+       let va = itseq_of_addr a in
+       flow |>
+         man.exec ~zone:Zone.Z_py (mk_invalidate_var va range) |>
+         (
+           if kind = "list_iterator" || kind = "list_reverseiterator" then
+             man.exec ~zone:Universal.Zone.Z_u_int (mk_invalidate_var (itindex_var_of_addr a) range)
+           else
+             fun x -> x
+         ) |>
+         Post.return |> OptionExt.return
+
+    | S_expand ({ekind = E_addr ({addr_kind = A_py_iterator (kind, _)} as a)}, addrs)
+      | S_fold ({ekind = E_addr ({addr_kind = A_py_iterator (kind, _)} as a)}, addrs) ->
+       let mk_stmt = match skind stmt with
+         | S_expand _ -> mk_expand_var
+         | S_fold _  -> mk_fold_var
+         | _ -> assert false in
+       let va = itseq_of_addr a in
+       let vas = List.map (fun ea' ->
+                     match ekind ea' with
+                     | E_addr ({addr_kind = A_py_iterator (kind', _)} as a') when kind = kind' -> itseq_of_addr a'
+                     | _ -> assert false) addrs in
+       flow |>
+         man.exec ~zone:Zone.Z_py (mk_stmt va vas range) |>
+         ( if kind = "list_iterator" || kind = "list_reverseiterator" then
+             man.exec ~zone:Universal.Zone.Z_u_int
+               (mk_stmt (itindex_var_of_addr a)
+                  (List.map (fun ea' ->
+                     match ekind ea' with
+                     | E_addr ({addr_kind = A_py_iterator (kind', _)} as a') when kind = kind' -> itindex_var_of_addr a'
+                     | _ -> assert false) addrs)
+                  range)
+           else
+             fun x -> x ) |>
+         Post.return |>
+         OptionExt.return
 
     | S_invalidate {ekind = E_addr ({addr_kind = A_py_list} as a)} ->
        let va = var_of_addr a in
@@ -1026,27 +1071,21 @@ struct
          Post.return |> OptionExt.return
 
 
-    | S_fold ({ekind = E_addr ({addr_kind = A_py_list} as a)}, addrs) ->
-       debug "list fold";
+    | S_expand ({ekind = E_addr ({addr_kind = A_py_list} as a)}, addrs)
+      | S_fold ({ekind = E_addr ({addr_kind = A_py_list} as a)}, addrs) ->
+       Debug.debug ~channel:"addrenv" "fold py_list";
+       let mk_stmt = match skind stmt with
+         | S_expand _ -> mk_expand_var
+         | S_fold _ -> mk_fold_var
+         | _ -> assert false in
        let va = var_of_addr a in
        let la = length_var_of_addr a in
        let vas, las = List.split @@ List.map (fun ea' -> match ekind ea' with
                                       | E_addr ({addr_kind = A_py_list} as a') -> var_of_addr a', length_var_of_addr a'
                                       | _ -> assert false) addrs in
        flow |>
-         man.exec ~zone:Zone.Z_py (mk_fold_var va vas range) |>
-         man.exec ~zone:Universal.Zone.Z_u_int (mk_fold_var la las range) |>
-         Post.return |> OptionExt.return
-
-    | S_expand ({ekind = E_addr ({addr_kind = A_py_list} as a)}, addrs) ->
-       let va = var_of_addr a in
-       let la = length_var_of_addr a in
-       let vas, las = List.split @@ List.map (fun ea' -> match ekind ea' with
-                                      | E_addr ({addr_kind = A_py_list} as a') -> var_of_addr a', length_var_of_addr a'
-                                      | _ -> assert false) addrs in
-       flow |>
-         man.exec ~zone:Zone.Z_py (mk_expand_var va vas range) |>
-         man.exec ~zone:Universal.Zone.Z_u_int (mk_expand_var la las range) |>
+         man.exec ~zone:Zone.Z_py (mk_stmt va vas range) |>
+         man.exec ~zone:Universal.Zone.Z_u_int (mk_stmt la las range) |>
          Post.return |> OptionExt.return
 
     | S_rename ({ekind = E_addr ({addr_kind = A_py_list} as a)}, {ekind = E_addr a'}) ->
