@@ -1027,10 +1027,10 @@ struct
     | S_invalidate {ekind = E_addr ({addr_kind = A_py_iterator (kind, _)} as a)} ->
        let va = itseq_of_addr a in
        flow |>
-         man.exec ~zone:Zone.Z_py (mk_invalidate_var va range) |>
+         man.exec ~zone:Zone.Z_py (mk_remove_var va range) |>
          (
            if kind = "list_iterator" || kind = "list_reverseiterator" then
-             man.exec ~zone:Universal.Zone.Z_u_int (mk_invalidate_var (itindex_var_of_addr a) range)
+             man.exec ~zone:Universal.Zone.Z_u_int (mk_remove_var (itindex_var_of_addr a) range)
            else
              fun x -> x
          ) |>
@@ -1066,8 +1066,8 @@ struct
        let va = var_of_addr a in
        let la = length_var_of_addr a in
        flow |>
-         man.exec ~zone:Zone.Z_py (mk_invalidate_var va range) |>
-         man.exec ~zone:Universal.Zone.Z_u_int (mk_invalidate_var la range) |>
+         man.exec ~zone:Zone.Z_py (mk_remove_var va range) |>
+         man.exec ~zone:Universal.Zone.Z_u_int (mk_remove_var la range) |>
          Post.return |> OptionExt.return
 
 

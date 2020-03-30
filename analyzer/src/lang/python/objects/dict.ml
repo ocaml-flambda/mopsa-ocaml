@@ -491,8 +491,8 @@ struct
     | S_invalidate {ekind = E_addr ({addr_kind = A_py_dict} as a)} ->
        let kva, vva = var_of_addr a in
        flow |>
-         man.exec ~zone:Zone.Z_py (mk_invalidate_var kva range) |>
-         man.exec ~zone:Zone.Z_py (mk_invalidate_var vva range) |>
+         man.exec ~zone:Zone.Z_py (mk_remove_var kva range) |>
+         man.exec ~zone:Zone.Z_py (mk_remove_var vva range) |>
          Post.return |> OptionExt.return
 
     | _ -> None

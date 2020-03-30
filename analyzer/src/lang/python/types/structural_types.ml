@@ -190,16 +190,12 @@ struct
 
     | S_invalidate {ekind = E_addr ({addr_kind = A_py_instance _} as a)}
       | S_remove {ekind = E_addr ({addr_kind = A_py_instance _} as a)} ->
-       let mk_func = match skind stmt with
-         | S_invalidate _ -> mk_invalidate_var
-         | S_remove _ -> mk_remove_var
-         | _ -> assert false in
        let cur = get_env T_cur man flow in
        let old_a = find_opt a cur |> OptionExt.default AttrSet.empty  in
        let to_remove_stmt =
          mk_block
            (AttrSet.fold_u (fun attr removes ->
-                mk_func (mk_addr_attr a attr T_any) range :: removes) old_a []) range in
+                mk_remove_var (mk_addr_attr a attr T_any) range :: removes) old_a []) range in
        let ncur = remove a cur in
        let flow = set_env T_cur ncur man flow in
        man.exec ~zone:Zone.Z_py to_remove_stmt flow |> Post.return |> OptionExt.return
