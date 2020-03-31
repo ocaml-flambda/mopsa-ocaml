@@ -316,7 +316,7 @@ struct
               decr_iteration cond body man flow_init flow_lfp
             else flow_lfp in
           let flow_lfp = if !opt_loop_use_cache then
-                           let () = debug "storing fixpoint %a" (Flow.print man.lattice.print) flow_lfp in
+                           let () = Debug.debug ~channel:(name ^ ".cache") "storing fixpoint %a" (Flow.print man.lattice.print) flow_lfp in
                            store_fixpoint man flow_lfp (stmt.srange, Flow.get_callstack flow_lfp) else flow_lfp in
           flow_lfp in
 
