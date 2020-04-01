@@ -19,7 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Reduction rule between evaluations of cells and pointer smashing domains *)
+(** Reduction between cells and smashing domains *)
 
 open Mopsa
 open Sig.Stacked.Reduction
@@ -30,12 +30,12 @@ open Zone
 module Reduction =
 struct
 
-  let name = "c.memory.lowlevel.reductions.cell_pointer_smashing"
+  let name = "c.memory.lowlevel.reductions.cell_smashing"
 
   let debug fmt = Debug.debug ~channel:name fmt
 
   let cells = Cells.Domain.id
-  let smashing = Pointer_smashing.Domain.id
+  let smashing = Smashing.Domain.id
 
 
   let reduce exp man evals flow =

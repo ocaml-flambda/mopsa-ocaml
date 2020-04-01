@@ -270,6 +270,49 @@ let fold_some
       | Some rr -> f rr flow acc
     ) c init
 
+let for_all
+    (f:'r option -> 'a flow -> bool)
+    (c:('a,'r) cases)
+  : bool =
+  let flat_cases = Dnf.to_list c.cases_dnf |>
+                   List.flatten
+  in
+  List.for_all (fun case ->
+      let flow = Flow.create c.cases_ctx case.case_alarms case.case_flow in
+      f case.case_result flow
+    ) flat_cases
+
+let for_all_some
+    (f:'r -> 'a flow -> bool)
+    (c:('a,'r) cases)
+  : bool =
+  for_all (fun r flow ->
+      match r with
+      | None -> true
+      | Some rr -> f rr flow
+    ) c
+
+let exists
+    (f:'r option -> 'a flow -> bool)
+    (c:('a,'r) cases)
+  : bool =
+  let flat_cases = Dnf.to_list c.cases_dnf |>
+                   List.flatten
+  in
+  List.exists (fun case ->
+      let flow = Flow.create c.cases_ctx case.case_alarms case.case_flow in
+      f case.case_result flow
+    ) flat_cases
+
+let exists_some
+    (f:'r -> 'a flow -> bool)
+    (c:('a,'r) cases)
+  : bool =
+  exists (fun r flow ->
+      match r with
+      | None -> false
+      | Some rr -> f rr flow
+    ) c
 
 (****************************************************************************)
 (**                       {2 Lattice operators}                             *)

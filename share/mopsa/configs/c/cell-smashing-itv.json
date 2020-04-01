@@ -48,10 +48,10 @@
                         {
 			    "product": [
 				"c.memory.lowlevel.cells",
-				"c.memory.lowlevel.pointer_smashing"
+				"c.memory.lowlevel.smashing"
 			    ],
 			    "reductions": [
-				"c.memory.lowlevel.reductions.cell_pointer_smashing"
+				"c.memory.lowlevel.reductions.cell_smashing"
 			    ]
 			},
 			{
@@ -66,7 +66,15 @@
                     "nonrel": {
 			"union": [
 			    "universal.numeric.values.intervals.float",
-                            "universal.numeric.values.intervals.integer"
+                            {
+                                "product": [
+                                    "universal.numeric.values.intervals.integer",
+			            "universal.numeric.values.congruences"
+                                ],
+                                "reductions": [
+                                    "universal.numeric.reductions.intervals_congruences"
+                                ]
+                            }
 			]
 		    }
 		}
