@@ -225,19 +225,20 @@ struct
           Cases.singleton (None :: after, alarms) flow
 
         | Some r :: tl, Cons(hds,tls) ->
-          aux tls tl (tlman man) |>
+          let hdman = hdman man in
+          let tlman = tlman man in
+          aux tls tl tlman |>
           Cases.bind_full @@ fun after after_flow after_log after_cleaners ->
           let after,alarms = OptionExt.none_to_exn after in
           r |> Cases.bind_full @@ fun rr flow log cleaners ->
           let module S = (val hds) in
           if after |> List.exists (function Some _ -> true | None -> false) then
-            let hdman = hdman man in
-            let after_flow = Flow.set T_cur (
-                let cur = Flow.get T_cur man.lattice flow in
-                let after_cur = Flow.get T_cur man.lattice after_flow in
-                hdman.set (hdman.get cur) after_cur
-              ) man.lattice after_flow
-            in
+            let cur = Flow.get T_cur man.lattice flow in
+            let after_cur = Flow.get T_cur man.lattice after_flow in
+            let cur' = tlman.set (tlman.get after_cur) cur in
+            let after_cur' = hdman.set (hdman.get cur) after_cur in
+            let flow' = Flow.set T_cur cur' man.lattice flow in
+            let after_flow' = Flow.set T_cur after_cur' man.lattice after_flow in
             let common_alarms = List.filter (fun a -> List.mem a alarms) S.alarms in
             let merge_alarms a1 a2 =
               let a1', a1'' = AlarmSet.partition (fun a -> List.mem (get_alarm_class a) common_alarms) a1 in
@@ -246,7 +247,7 @@ struct
               AlarmSet.union a1'' |>
               AlarmSet.union a2''
             in
-            let flow = merge_flows ~merge_alarms man pre (flow,log) (after_flow,after_log) in
+            let flow = merge_flows ~merge_alarms man pre (flow',log) (after_flow',after_log) in
             let log = Log.concat log after_log in
             let cleaners = cleaners @ after_cleaners in
             Cases.return (Some (Some rr :: after, S.alarms @ alarms |> List.sort_uniq compare)) flow ~cleaners ~log
