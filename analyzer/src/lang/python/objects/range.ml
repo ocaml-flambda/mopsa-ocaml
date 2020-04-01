@@ -300,7 +300,13 @@ struct
              )
              ~zone:Zone.Z_py man flow
              ~fthen:(fun flow ->
-                 man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_binop start O_plus (mk_binop index O_mult step range) range) flow |> Eval.add_cleaners [mk_assign index (mk_binop index O_plus (mk_int 1 ~typ:T_int range) range) range]
+               man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_binop start O_plus (mk_binop index O_mult step range) range) flow |>
+                 (* add_cleaners is ugly, but a bind_some is incorrect
+                    (the return of eval will be something like <<int
+                    :: start + index * step>>. If we update index
+                    afterwards, it will change the value in the return
+                    above too... *)
+                 Eval.add_cleaners [mk_assign index (mk_binop index O_plus (mk_int 1 ~typ:T_int range) range) range]
                )
              ~felse:(fun flow ->
                    man.exec (Utils.mk_builtin_raise "StopIteration" range) flow

@@ -741,6 +741,21 @@ struct
       set_env T_cur ncur man flow
       |> Post.return |> OptionExt.return
 
+    | S_expand ({ekind = E_py_annot {ekind = E_addr a}}, addrs) ->
+       let cur = get_env T_cur man flow in
+       let cur = TVMap.fold (fun k v cur ->
+           match k with
+           | Class ({vkind = V_addr_attr (av, s)} as vk) when compare_addr av a = 0 ->
+              List.fold_left
+                (fun cur eaddr ->
+                  match ekind eaddr with
+                  | E_addr addr ->
+                     TVMap.add (Class {vk with vkind = V_addr_attr(addr, s)}) v cur
+                  | _ -> assert false
+                ) cur addrs
+           | _ -> cur ) cur cur in
+       set_env T_cur cur man flow |> Post.return |> OptionExt.return
+
     | _ -> None
 
   let ask _ _ _ = None
