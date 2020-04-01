@@ -42,7 +42,7 @@
  *   assumes: __len >= 1;
  *   requires: valid_ptr_range(__src, 0, (int)__len - 1);
  *   requires: valid_ptr_range(__dest, 0, (int)__len - 1);
- *   assigns: __dest[0, (int)__len - 1];
+ *   assigns: ((unsigned char*)__dest)[0, (int)__len - 1];
  *   ensures: forall int i in [0, (int)__len - 1]: (((unsigned char*)__dest)[i])' == ((unsigned char*)__src)[i];
  * }
  *
@@ -58,7 +58,7 @@ void *memcpy (void *__restrict __dest, const void *__restrict __src,
 /*$
  * requires: valid_ptr_range(__src, 0, (int)__len - 1);
  * requires: valid_ptr_range(__dest, 0, (int)__len - 1);
- * assigns: __dest[0, (int)__len - 1];
+ * assigns: ((unsigned char*)__dest)[0, (int)__len - 1];
  * ensures: forall int i in [0, (int)__len - 1]: (((unsigned char*)__dest)[i])' == ((unsigned char*)__src)[i];
  */
 void *memmove (void *__dest, const void *__src, size_t __len);
@@ -68,7 +68,7 @@ void *memmove (void *__dest, const void *__src, size_t __len);
  * requires: no_overlap(__src, __dest, __n);
  * requires: valid_ptr_range(__src, 0, __n - 1);
  * requires: valid_ptr_range(__dest, 0, __n - 1);
- * assigns: __dest[0, __n - 1];
+ * assigns: ((unsigned char*)__dest)[0, __n - 1];
  *
  * case "notfound" {
  *   assumes: forall int i in [0, __n - 1]: ((unsigned char*)__src)[i] != __c;
@@ -95,7 +95,7 @@ void *memccpy (void *__restrict __dest, const void *__restrict __src,
 
 /*$
  * requires: valid_ptr_range(__dest, 0, (int)__len - 1);
- * assigns: __dest[0, (int)__len - 1];
+ * assigns: ((unsigned char*)__dest)[0, (int)__len - 1];
  * ensures: forall int i in [0, (int)__len - 1]: (((unsigned char*)__dest)[i])' == __ch;
  * ensures: return == __dest;
  */
