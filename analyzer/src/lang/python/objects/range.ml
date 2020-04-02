@@ -337,13 +337,12 @@ struct
               body```
           as (if s > 0, otherwise you need to invert the sign in the comparison in the loop):
           ```python
-          target = start
-          while True:
-              body
-              if target + step < stop:
+          if start < stop:
+              target = start
+              while target < stop:
+                  body
                   target = target + step
-              else:
-                  break```
+              target = target - step```
            (It seems that in the case of the else statement, the usual desugar is sometimes better, so we keep it).
         *)
        let ra s = mk_py_attr rangeobj s (tag_range range "%s" s) in
@@ -358,15 +357,16 @@ struct
                let old_body = match skind body with
                  | S_block (stmts, _) -> stmts
                  | _ -> [body] in
-               let targetpstep = mk_binop target O_plus step range in
-               let incr_body =
-                 mk_if (mk_binop targetpstep comp_op stop range)
-                   (mk_assign target targetpstep range)
-                   (mk_stmt S_break range) range in
+               let targetostep o = mk_binop target o step range in
+               let incr_target = mk_assign target (targetostep O_plus) range in
+               let decr_target = mk_assign target (targetostep O_minus) range in
                let while_stmt =
-                 mk_while (mk_true range) (*(mk_binop target comp_op stop range)*)
-                   (mk_block (old_body @ [incr_body]) range) range in
-               mk_block (assign_target :: while_stmt :: []) range in
+                 mk_while (mk_binop target comp_op stop range)
+                   (mk_block (old_body @ [incr_target]) range) range in
+               mk_if (mk_binop start comp_op stop range)
+                 (mk_block (assign_target :: while_stmt :: decr_target :: []) range)
+                 (mk_nop range) range
+             in
              assume (mk_binop step O_gt (mk_zero range) range) man flow
                ~fthen:(fun flow -> man.exec (gen_stmt O_lt) flow |> Post.return)
                ~felse:(fun flow -> man.exec (gen_stmt O_gt) flow |> Post.return)
