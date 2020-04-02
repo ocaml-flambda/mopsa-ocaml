@@ -51,7 +51,7 @@ let () =
       );
     print = (fun default fmt a ->
         match a with
-        | A_py_uncaught_exception_msg (e, s) -> Format.fprintf fmt "Uncaught Python exception: %s" s
+        | A_py_uncaught_exception_msg (e, s) -> Format.fprintf fmt "Uncaught Python exception: %s@." s
         | _ -> default fmt a
       );
     }

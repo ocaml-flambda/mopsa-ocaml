@@ -242,7 +242,7 @@ let () =
       );
     print = (fun next fmt v ->
         match vkind v with
-        | V_uniq (orig,id) -> Format.fprintf fmt "%s:%d" orig id
+        | V_uniq (orig,id) -> Format.fprintf fmt "%s" orig
 
         | V_tmp _ | V_var_attr _ | V_range_attr _ -> Format.pp_print_string fmt v.vname
 
