@@ -32,7 +32,7 @@ open Common.Base
 open Common.Points_to
 open Common.Alarms
 open Format
-
+open Universal.Numeric.Common
 
 module Domain =
 struct
@@ -484,6 +484,35 @@ struct
     | _ -> Post.return flow
 
 
+  let assume_optim cond ~fthen ~felse ~zone man flow =
+    man.eval cond ~zone:(zone, Z_u_num) flow >>$ fun cond flow ->
+    let op,e1,e2 = match ekind cond with
+      | E_binop(op,e1,e2) -> op,e1,e2
+      | _ -> assert false
+    in
+    (* Get the intervals of e1 and e2 *)
+    let interval e : int_itv =
+      man.ask (mk_int_interval_query ~fast:true e) flow
+    in
+    let i1 = interval e1 in
+    let i2 = interval e2 in
+    let cmp = function
+      | O_eq -> Bot.bot_dfl2 false I.is_log_eq
+      | O_ne -> Bot.bot_dfl2 false I.is_log_neq
+      | O_lt -> Bot.bot_dfl2 false I.is_log_lt
+      | O_le -> Bot.bot_dfl2 false I.is_log_leq
+      | O_gt -> Bot.bot_dfl2 false I.is_log_gt
+      | O_ge -> Bot.bot_dfl2 false I.is_log_geq
+      | _    -> assert false
+    in
+    match cmp op i1 i2, cmp (negate_comparison_op op) i1 i2 with
+    | true, false -> fthen flow
+    | false, true -> felse flow
+    | _ -> assume cond ~fthen ~felse ~zone:Z_u_num man flow
+          
+    
+  
+
   (** {2 Execution of statements} *)
   (** *************************** *)
 
@@ -610,9 +639,9 @@ struct
           let min, max = Common.Quantified_offset.bound offset in
           let elm = mk_z (sizeof_type lval.etyp) range in
           eval_base_size base range man flow >>$ fun size flow ->
-          assume (eq min zero range)
+          assume_optim (eq min zero range)
             ~fthen:(fun flow ->
-                assume (eq max (sub size elm range) range)
+                assume_optim (eq max (sub size elm range) range)
                   ~fthen:(fun flow ->
                       (* Case #1: fully initialized
                             0            size - |elm|
@@ -658,9 +687,9 @@ struct
           let min, max = Common.Quantified_offset.bound offset in
           let elm = mk_z (sizeof_type lval.etyp) range in
           eval_base_size base range man flow >>$ fun size flow ->
-          assume (le min (add uninit elm range) range)
+          assume_optim (le min (add uninit elm range) range)
             ~fthen:(fun flow ->
-                assume (eq max (sub size elm range) range)
+                assume_optim (eq max (sub size elm range) range)
                   ~fthen:(fun flow ->
                       (* Case #1: fully initialized
                             0      uninit     size - |elm|
@@ -717,7 +746,7 @@ struct
           man.post (mk_add_var vsmash range) ~zone:Z_c_scalar flow >>$ fun () flow ->
           man.post (mk_assign strong_smash rval range) ~zone:Z_c_scalar flow >>$ fun () flow ->
           man.post (mk_add uninit range) ~zone:Z_c_scalar flow >>$ fun () flow ->
-          assume (eq offset zero range)
+          assume_optim (eq offset zero range)
             ~fthen:(fun flow ->
                 man.post (mk_assign uninit elm range) ~zone:Z_c_scalar flow
               )
@@ -742,9 +771,9 @@ struct
             man.post (mk_assign esmash rval range) ~zone:Z_c_scalar flow >>$ fun () flow ->
             let uninit = mk_uninit_expr base ~mode range in
             eval_base_size base range man flow >>$ fun size flow ->
-            assume (eq uninit offset range)
+            assume_optim (eq uninit offset range)
               ~fthen:(fun flow ->
-                  assume (eq offset (sub size elm range) range)
+                  assume_optim (eq offset (sub size elm range) range)
                     ~fthen:(fun flow ->
                         let init = Init.Full (STypeSet.singleton s.styp) in
                         let flow = set_env T_cur (State.add base init a) man flow in
@@ -833,7 +862,7 @@ struct
           Eval.singleton (mk_top (under_type p.etyp) range) flow
         else
           let uninit = mk_uninit_expr base ~mode range in
-          assume (ge offset uninit range)
+          assume_optim (ge offset uninit range)
             ~fthen:(fun flow ->
                 Eval.singleton (mk_top (under_type p.etyp) range) flow
               )
