@@ -195,6 +195,7 @@ struct
         print_usage ();
         read_command range ()
 
+
       | "" -> (
         match !last_command with
           | None ->  read_command range ()
