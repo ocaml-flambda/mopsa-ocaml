@@ -56,7 +56,7 @@ struct
             end)
 
   let interface = {
-    iexec = {provides = []; uses = []};
+    iexec = {provides = [Zone.Z_py]; uses = []};
     ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
   }
 
@@ -321,7 +321,67 @@ struct
 
     | _ -> None
 
-  let exec _ _ _ _ = None
+  let exec zone stmt man flow =
+    let range = srange stmt in
+    match skind stmt with
+    | S_py_for (target, ({ekind = E_py_object ({addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "range", _)}}, _)} as rangeobj), body, orelse) ->
+       (** if ranges are desugared in the generic way of
+          desugar/loops.ml, we lose precision in the non-relational
+          value analysis. We are unable to relate the target and start
+          + index * step (of the range_iterator object). At the end of
+          a loop like `for x in range(10)`, we thus have only 1 <= x
+          <= 9, but index = 10, which is disappointing. Instead, we
+          desugar the:
+          ```python
+          for target in range(start, stop, step):
+              body
+          else:
+              orelse```
+          as (if s > 0, otherwise you need to invert the sign in the comparison in the loop):
+          ```python
+          target = start
+          while True:
+              body
+              if target + step < stop:
+                  target = target + step
+              else:
+                  break
+          if *: # that's unprecise... (only if orelse is a nonempty statement)
+              orelse
+        *)
+       let ra s = mk_py_attr rangeobj s range in
+       bind_list [ra "start"; ra "stop"; ra "step"] (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+         bind_some (fun ranges flow ->
+             let start, stop, step = match ranges with
+               | [a;b;c] -> a, b, c
+               | _ -> assert false in
+
+             let gen_stmt comp_op =
+               let assign_target = mk_assign target start range in
+               let old_body = match skind body with
+                 | S_block (stmts, _) -> stmts
+                 | _ -> [body] in
+               let targetpstep = mk_binop target O_plus step range in
+               let incr_body =
+                 mk_if (mk_binop targetpstep comp_op stop range)
+                   (mk_assign target targetpstep range)
+                   (mk_stmt S_break range) range in
+               let while_stmt =
+                 mk_while (mk_true range)
+                   (mk_block (old_body @ [incr_body]) range) range in
+               mk_block (assign_target :: while_stmt :: match skind orelse with
+                                                        | S_block ([], _) -> []
+                                                        | _ ->
+                                                           warn_at range "else/for range statement unprecise";
+                                                           mk_if (mk_top T_bool range) orelse (mk_nop range) range :: []) range in
+             assume (mk_binop step O_gt (mk_zero range) range) man flow
+               ~fthen:(fun flow -> man.exec (gen_stmt O_lt) flow |> Post.return)
+               ~felse:(fun flow -> man.exec (gen_stmt O_gt) flow |> Post.return)
+           )
+       |> OptionExt.return
+
+       | _ -> None
+
   let ask _ _ _ = None
 
 end
