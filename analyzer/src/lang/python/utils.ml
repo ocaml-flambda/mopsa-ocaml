@@ -156,10 +156,12 @@ let new_wrapper man range flow newcls argcls ~fthennew =
 
 let bind_list_args ?(cleaners=true) man args flow range zone (f: var list -> 'b flow -> ('b, 'c) Cases.cases) =
   let cs = Flow.get_callstack flow in
-  let stmt, vars = List.fold_left (fun (stmts, vars) arg ->
-                       let tmp = mk_range_attr_var arg.erange (Format.asprintf "%xd(bla)" (Hashtbl.hash_param 30 100 cs)) T_any in
-                       (mk_assign (mk_var tmp arg.erange) arg arg.erange) :: stmts, tmp :: vars
-                     ) ([], []) (List.rev args) in
+  let module RangeSet = SetExt.Make(struct type t = range let compare = compare_range end) in
+  let stmt, vars, _ = List.fold_left (fun (stmts, vars, argranges) arg ->
+                          assert(not @@ RangeSet.mem arg.erange argranges);
+                          let tmp = mk_range_attr_var arg.erange (Format.asprintf "%xd(bla)" (Hashtbl.hash_param 30 100 cs)) T_any in
+                          (mk_assign (mk_var tmp arg.erange) arg arg.erange) :: stmts, tmp :: vars, RangeSet.add arg.erange argranges
+                        ) ([], [], RangeSet.empty) (List.rev args) in
   let stmt = Universal.Ast.mk_block stmt range in
   let cases = f vars (man.exec ~zone:zone stmt flow) in
   if cleaners then

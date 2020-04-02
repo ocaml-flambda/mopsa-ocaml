@@ -331,7 +331,7 @@ struct
           + index * step (of the range_iterator object). At the end of
           a loop like `for x in range(10)`, we thus have only 1 <= x
           <= 9, but index = 10, which is disappointing. Instead, we
-          desugar the:
+          try to desugar:
           ```python
           for target in range(start, stop, step):
               body```
@@ -344,9 +344,9 @@ struct
                   target = target + step
               else:
                   break```
-          It seems that in the case of the else statement, the usual desugar is sometimes better, so we keep it
+           (It seems that in the case of the else statement, the usual desugar is sometimes better, so we keep it).
         *)
-       let ra s = mk_py_attr rangeobj s range in
+       let ra s = mk_py_attr rangeobj s (tag_range range "%s" s) in
        Utils.bind_list_args man [ra "start"; ra "stop"; ra "step"] flow range Zone.Z_py
          (fun vars flow ->
              let start, stop, step = match List.map (fun x -> mk_var x range) vars with
@@ -364,7 +364,7 @@ struct
                    (mk_assign target targetpstep range)
                    (mk_stmt S_break range) range in
                let while_stmt =
-                 mk_while (mk_true range)
+                 mk_while (mk_true range) (*(mk_binop target comp_op stop range)*)
                    (mk_block (old_body @ [incr_body]) range) range in
                mk_block (assign_target :: while_stmt :: []) range in
              assume (mk_binop step O_gt (mk_zero range) range) man flow
