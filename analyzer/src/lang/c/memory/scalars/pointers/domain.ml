@@ -419,7 +419,7 @@ struct
   let assign p q mode range man flow =
     let o = mk_offset p mode range in
     match Static_points_to.eval q with
-    | AddrOf (b, offset, mode) ->
+    | AddrOf (b, offset, mode') ->
       let flow' = map_env T_cur (add p (PointerSet.base b) mode) man flow in
 
       man.eval offset ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) flow' >>$ fun offset flow' ->
