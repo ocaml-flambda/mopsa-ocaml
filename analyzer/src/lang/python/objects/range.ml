@@ -324,7 +324,7 @@ struct
   let exec zone stmt man flow =
     let range = srange stmt in
     match skind stmt with
-    | S_py_for (target, ({ekind = E_py_object ({addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "range", _)}}, _)} as rangeobj), body, orelse) ->
+    | S_py_for (target, ({ekind = E_py_object ({addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "range", _)}}, _)} as rangeobj), body, {skind = S_block ([], _)}) ->
        (** if ranges are desugared in the generic way of
           desugar/loops.ml, we lose precision in the non-relational
           value analysis. We are unable to relate the target and start
@@ -360,15 +360,13 @@ struct
                let targetostep o = mk_binop target o step range in
                let incr_target = mk_assign target (targetostep O_plus) range in
                let decr_target = mk_assign target (targetostep O_minus) range in
-               let new_else = match skind orelse with
-                 | S_block ([], _) -> orelse
-                 | S_block (t, _) -> mk_block (decr_target :: t) range
-                 | _ -> mk_block (decr_target :: orelse :: []) range in
+               (* let new_else = match skind orelse with
+                *   | S_block ([], _) -> orelse
+                *   | S_block (t, _) -> mk_block (decr_target :: t) range
+                *   | _ -> mk_block (decr_target :: orelse :: []) range in *)
                let while_stmt =
-                 mk_stmt (S_py_while
-                            (mk_binop target comp_op stop range,
-                             mk_block (old_body @ [incr_target]) range,
-                             new_else)) range in
+                 mk_while (mk_binop target comp_op stop range)
+                   (mk_block (old_body @ [incr_target]) range) range in
                mk_if (mk_binop start comp_op stop range)
                  (mk_block (assign_target :: while_stmt :: decr_target :: []) range)
                  (mk_nop range) range
