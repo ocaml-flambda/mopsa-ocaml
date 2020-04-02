@@ -324,7 +324,7 @@ struct
   let exec zone stmt man flow =
     let range = srange stmt in
     match skind stmt with
-    | S_py_for (target, ({ekind = E_py_object ({addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "range", _)}}, _)} as rangeobj), body, orelse) ->
+    | S_py_for (target, ({ekind = E_py_object ({addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "range", _)}}, _)} as rangeobj), body, {skind = S_block ([], _)}) ->
        (** if ranges are desugared in the generic way of
           desugar/loops.ml, we lose precision in the non-relational
           value analysis. We are unable to relate the target and start
@@ -334,9 +334,7 @@ struct
           desugar the:
           ```python
           for target in range(start, stop, step):
-              body
-          else:
-              orelse```
+              body```
           as (if s > 0, otherwise you need to invert the sign in the comparison in the loop):
           ```python
           target = start
@@ -345,9 +343,8 @@ struct
               if target + step < stop:
                   target = target + step
               else:
-                  break
-          if *: # that's unprecise... (only if orelse is a nonempty statement)
-              orelse
+                  break```
+          It seems that in the case of the else statement, the usual desugar is sometimes better, so we keep it
         *)
        let ra s = mk_py_attr rangeobj s range in
        Utils.bind_list_args man [ra "start"; ra "stop"; ra "step"] flow range Zone.Z_py
@@ -369,11 +366,7 @@ struct
                let while_stmt =
                  mk_while (mk_true range)
                    (mk_block (old_body @ [incr_body]) range) range in
-               mk_block (assign_target :: while_stmt :: match skind orelse with
-                                                        | S_block ([], _) -> []
-                                                        | _ ->
-                                                           warn_at range "else/for range statement unprecise";
-                                                           mk_if (mk_top T_bool range) orelse (mk_nop range) range :: []) range in
+               mk_block (assign_target :: while_stmt :: []) range in
              assume (mk_binop step O_gt (mk_zero range) range) man flow
                ~fthen:(fun flow -> man.exec (gen_stmt O_lt) flow |> Post.return)
                ~felse:(fun flow -> man.exec (gen_stmt O_gt) flow |> Post.return)
