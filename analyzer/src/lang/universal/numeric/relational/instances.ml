@@ -34,6 +34,12 @@ module Polyhedra = Domain.Make(struct
   let man = Polka.manager_alloc_loose ()
 end)
 
+module LinEqualities =
+  Domain.Make(struct
+      type t = Polka.equalities Polka.t
+      let name = "universal.numeric.relational"
+      let man = Polka.manager_alloc_equalities ()
+    end)
 
 let opt_numeric = ref "polyhedra"
 
@@ -43,7 +49,7 @@ let () =
     category = "Numeric";
     doc = " select the relational numeric domain.";
     spec = ArgExt.Symbol (
-        ["octagon"; "polyhedra"],
+        ["octagon"; "polyhedra"; "lineq"],
         (function
           | "octagon"   ->
             opt_numeric := "octagon";
@@ -52,6 +58,10 @@ let () =
           | "polyhedra" ->
             opt_numeric := "polyhedra";
             Framework.Core.Sig.Domain.Simplified.register_domain (module Polyhedra)
+
+          | "lineq" ->
+            opt_numeric := "lineq";
+            Framework.Core.Sig.Domain.Simplified.register_domain (module LinEqualities)
 
           | _ -> assert false
         )

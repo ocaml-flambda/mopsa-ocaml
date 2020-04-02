@@ -350,9 +350,9 @@ struct
               orelse
         *)
        let ra s = mk_py_attr rangeobj s range in
-       bind_list [ra "start"; ra "stop"; ra "step"] (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
-         bind_some (fun ranges flow ->
-             let start, stop, step = match ranges with
+       Utils.bind_list_args man [ra "start"; ra "stop"; ra "step"] flow range Zone.Z_py
+         (fun vars flow ->
+             let start, stop, step = match List.map (fun x -> mk_var x range) vars with
                | [a;b;c] -> a, b, c
                | _ -> assert false in
 
@@ -377,7 +377,7 @@ struct
              assume (mk_binop step O_gt (mk_zero range) range) man flow
                ~fthen:(fun flow -> man.exec (gen_stmt O_lt) flow |> Post.return)
                ~felse:(fun flow -> man.exec (gen_stmt O_gt) flow |> Post.return)
-           )
+         )
        |> OptionExt.return
 
        | _ -> None
