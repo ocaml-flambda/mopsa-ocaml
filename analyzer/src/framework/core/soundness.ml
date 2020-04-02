@@ -53,6 +53,7 @@ let get_warnings () = Warnings.elements !warnings
 
 let warn fmt =
   Format.kasprintf (fun msg ->
+      Exceptions.warn "%s" msg;
       let w = {
         warn_range = None;
         warn_message = msg;
@@ -63,6 +64,7 @@ let warn fmt =
 
 let warn_at range fmt =
   Format.kasprintf (fun msg ->
+      Exceptions.warn_at range "%s" msg;
       let w = {
         warn_range = Some range;
         warn_message = msg;
