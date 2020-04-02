@@ -268,34 +268,34 @@ struct
         | _ -> assert false
 
 
-  (** {2 Indeterminate value offsets} *)
-  (** ******************************* *)
+  (** {2 Offset of the first uninitialized byte} *)
+  (** ****************************************** *)
 
-  type var_kind += V_c_indeterminate_offset of base
+  type var_kind += V_c_uninit of base
 
   let () =
     register_var {
       print = (fun next fmt v ->
           match v.vkind with
-          | V_c_indeterminate_offset b -> fprintf fmt "indeterminate(%a)" pp_base b
+          | V_c_uninit b -> fprintf fmt "uninit(%a)" pp_base b
           | _ -> next fmt v
         );
 
       compare = (fun next v1 v2 ->
           match v1.vkind, v2.vkind with
-          | V_c_indeterminate_offset(b1), V_c_indeterminate_offset(b2) -> compare_base b1 b2
+          | V_c_uninit(b1), V_c_uninit(b2) -> compare_base b1 b2
           | _ -> next v1 v2
         );
     }
 
 
-  let mk_indeterminate_offset_var b : var =
-    let uname = asprintf "indeterminate(%s)" (base_uniq_name b) in
-    mkv uname (V_c_indeterminate_offset b) ul ~mode:(base_mode b)
+  let mk_uninit_var b : var =
+    let uname = asprintf "uninit(%s)" (base_uniq_name b) in
+    mkv uname (V_c_uninit b) ul ~mode:(base_mode b)
 
 
-  let mk_indeterminate_offset_expr b ?(mode=None) range =
-    mk_var (mk_indeterminate_offset_var b) ~mode range
+  let mk_uninit_expr b ?(mode=None) range =
+    mk_var (mk_uninit_var b) ~mode range
 
   
   (** {2 Unification} *)
@@ -365,6 +365,16 @@ struct
       let rec aux t =
         match remove_typedef_qual t with
         | T_c_array(tt,_) -> aux tt
+        | T_c_record{c_record_kind = C_struct; c_record_fields = fields} ->
+          let rec aux2 = function
+            | [] -> None
+            | [f] -> Some f.c_field_type
+            | f::tl ->
+              match aux2 tl with
+              | None -> None
+              | Some t -> if compare_typ t f.c_field_type = 0 then Some t else None
+          in
+          if aux2 fields = None then false else true
         | x -> is_c_scalar_type x
       in
       aux v.vtyp
@@ -396,23 +406,83 @@ struct
           Universal.Numeric.Common.C.included c c'
         )
 
-  let add_smash s range man flow =
-    man.post (mk_add_var (mk_smash_var s) range) ~zone:Z_c_scalar flow
+  let add_smash base styp range man flow =
+    man.post
+      (mk_add_var (mk_smash_var {base;styp}) range)
+      ~zone:Z_c_scalar flow
 
-  let remove_smash s range man flow =
-    man.post (mk_remove_var (mk_smash_var s) range) ~zone:Z_c_scalar flow
+  let remove_smash base styp range man flow =
+    man.post
+      (mk_remove_var (mk_smash_var {base;styp}) range)
+      ~zone:Z_c_scalar flow
 
-  let rename_smash s1 s2 range man flow =
-    man.post (mk_rename_var (mk_smash_var s1) (mk_smash_var s2) range) ~zone:Z_c_scalar flow
+  let rename_smash base1 base2 styp range man flow =
+    man.post
+      (mk_rename_var (mk_smash_var {base=base1;styp}) (mk_smash_var {base=base2;styp}) range)
+      ~zone:Z_c_scalar flow
 
-  let forget_smash s range man flow =
-    man.post (mk_forget_var (mk_smash_var s) range) ~zone:Z_c_scalar flow
+  let forget_smash base styp range man flow =
+    man.post
+      (mk_forget_var (mk_smash_var {base;styp}) range)
+      ~zone:Z_c_scalar flow
 
-  let expand_smash s sl range man flow =
-    man.post (mk_expand_var (mk_smash_var s) (List.map mk_smash_var sl) range) ~zone:Z_c_scalar flow
+  let expand_smash base basel styp range man flow =
+    man.post
+      (mk_expand_var (mk_smash_var {base;styp}) (List.map (fun b -> mk_smash_var {base=b;styp}) basel) range)
+      ~zone:Z_c_scalar flow
 
-  let fold_smash s sl range man flow =
-    man.post (mk_fold_var (mk_smash_var s) (List.map mk_smash_var sl) range) ~zone:Z_c_scalar flow
+  let fold_smash base basel styp range man flow =
+    man.post
+      (mk_fold_var (mk_smash_var {base;styp}) (List.map (fun b -> mk_smash_var {base=b;styp}) basel) range)
+      ~zone:Z_c_scalar flow
+
+  let add_uninit base range man flow =
+    man.post
+      (mk_add_var (mk_uninit_var base) range)
+      ~zone:Z_c_scalar flow
+
+  let remove_uninit base range man flow =
+    man.post
+      (mk_remove_var (mk_uninit_var base) range)
+      ~zone:Z_c_scalar flow
+
+  let rename_uninit base1 base2 range man flow =
+    man.post
+      (mk_rename_var (mk_uninit_var base1) (mk_uninit_var base2) range)
+      ~zone:Z_c_scalar flow
+
+  let forget_uninit base range man flow =
+    man.post
+      (mk_forget_var (mk_uninit_var base) range)
+      ~zone:Z_c_scalar flow
+
+  let expand_uninit base basel range man flow =
+    man.post
+      (mk_expand_var (mk_uninit_var base) (List.map mk_uninit_var basel) range)
+      ~zone:Z_c_scalar flow
+
+  let fold_uninit base basel range man flow =
+    man.post
+      (mk_fold_var (mk_uninit_var base) (List.map mk_uninit_var basel) range)
+      ~zone:Z_c_scalar flow
+
+  let fold_stypes (f:styp -> range -> _ man -> 'a flow -> 'a post) ts range man flow =
+    STypeSet.fold
+        (fun styp acc -> Post.bind (f styp range man) acc)
+        ts (Post.return flow)
+
+  let exec_smashes (f:styp -> range -> _ man -> 'a flow -> 'a post) base a range man flow =
+    match State.find base a with
+    | Init.Bot        -> Post.return flow
+    | Init.None       -> Post.return flow
+    | Init.Full ts
+    | Init.Partial ts -> fold_stypes f ts range man flow
+
+  let exec_uninit (f:range -> _ man -> 'a flow -> 'a post) base a range man flow =
+    match State.find base a with
+    | Init.Partial ts -> f range man flow
+    | _ -> Post.return flow
+
 
   (** {2 Execution of statements} *)
   (** *************************** *)
@@ -435,22 +505,14 @@ struct
   let exec_remove_base base range man flow =
     if not (is_interesting_base base) then
       Post.return flow
-    else
+    else      
       let a = get_env T_cur man flow in
-      let init = State.find base a in
+      (* Remove the base from the map *)
       let flow = set_env T_cur (State.remove base a) man flow in
-      let ss = smashes_of_base base a in
-      List.fold_left
-        (fun acc s ->
-           Post.bind (remove_smash s range man) acc
-        ) (Post.return flow) ss
-      >>$ fun () flow ->
-      match init with
-      | Init.Partial _ ->
-        let io = mk_indeterminate_offset_var base in
-        man.post (mk_remove_var io range) ~zone:Z_c_scalar flow
-      | _ ->
-        Post.return flow
+      (* Remove associated vars *)
+      exec_smashes (remove_smash base) base a range man flow >>$ fun () flow ->
+      exec_uninit
+        (remove_uninit base) base a range man flow
 
 
   (** 𝕊⟦ rename(base1,base2); *)
@@ -458,29 +520,14 @@ struct
     if not (is_interesting_base base1) then Post.return flow else
     if not (is_interesting_base base2) then exec_remove_base base1 range man flow
     else
+      (* Remove base2 before doing renaming *)
+      exec_remove_base base2 range man flow >>$ fun () flow ->
+      (* Rename the base in the map *)
       let a = get_env T_cur man flow in
-      let init = State.find base1 a in
       let flow = set_env T_cur (State.rename base1 base2 a) man flow in
-      let ss2 = smashes_of_base base2 a in
-      List.fold_left
-        (fun acc s2 ->
-           Post.bind (remove_smash s2 range man) acc
-        ) (Post.return flow) ss2
-      >>$ fun () flow ->
-      let ss1 = smashes_of_base base1 a in
-      List.fold_left
-        (fun acc s1 ->
-           let s2 = { s1 with base = base2 } in
-           Post.bind (rename_smash s1 s2 range man) acc
-        ) (Post.return flow) ss1
-      >>$ fun () flow ->
-      match init with
-      | Init.Partial _ ->
-        let io1 = mk_indeterminate_offset_var base1 in
-        let io2 = mk_indeterminate_offset_var base2 in
-        man.post (mk_rename_var io1 io2 range) ~zone:Z_c_scalar flow
-      | _ ->
-        Post.return flow
+      (* Rename associated vars *)
+      exec_smashes (rename_smash base1 base2) base1 a range man flow >>$ fun () flow ->
+      exec_uninit (rename_uninit base1 base2) base1 a range man flow
 
 
   (** 𝕊⟦ expand(base, bases); ⟧ *)
@@ -488,27 +535,16 @@ struct
     if not (is_interesting_base base) then
       Post.return flow
     else
+      (* Expand the base in the map *)
       let a = get_env T_cur man flow in
       let init = State.find base a in
-      let a = List.fold_left (fun acc b ->
+      let a' = List.fold_left (fun acc b ->
           State.add b init acc
         ) a bases in
-      let flow = set_env T_cur a man flow in
-      let ss = smashes_of_base base a in
-      List.fold_left
-        (fun acc s ->
-           let smash = mk_smash_var s in
-           let smashes = List.map (fun b -> mk_smash_var { s with base = b }) bases in
-           Post.bind (man.post (mk_expand_var smash smashes range) ~zone:Z_c_scalar) acc
-        ) (Post.return flow) ss
-      >>$ fun () flow ->
-      match init with
-      | Init.Partial _ ->
-        let io = mk_indeterminate_offset_var base in
-        let iol = List.map mk_indeterminate_offset_var bases in
-        man.post (mk_expand_var io iol range) ~zone:Z_c_scalar flow
-      | _ ->
-        Post.return flow
+      let flow = set_env T_cur a' man flow in
+      (* Expand associated variables *)
+      exec_smashes (expand_smash base bases) base a range man flow >>$ fun () flow ->
+      exec_uninit (expand_uninit base bases) base a range man flow
 
 
   (** 𝕊⟦ fold(base, bases); ⟧ *)
@@ -520,29 +556,18 @@ struct
       | [] -> Post.return flow
       | x::y::z -> panic_at range "smash: folding of multiple bases not supported"
       | [base'] ->
+        (* Fold the base in the map *)
         let a = get_env T_cur man flow in
         let init = State.find base a in
         let init' = State.find base' a in
         let init'' = if base_mode base = STRONG then init' else Init.join init init' in
-        let a = State.add base init'' a |>
-                State.remove base'
+        let a' = State.add base init'' a |>
+                 State.remove base'
         in
-        let flow = set_env T_cur a man flow in
-        match init' with
-        | Init.Bot -> Post.return flow
-        | Init.None -> Post.return flow
-        | Init.Full ts ->
-          STypeSet.fold
-            (fun styp acc -> Post.bind (fold_smash {base;styp} (List.map (fun base -> {base;styp}) bases) range man) acc)
-            ts (Post.return flow)
-        | Init.Partial ts ->
-          STypeSet.fold
-            (fun styp acc -> Post.bind (fold_smash {base;styp} (List.map (fun base -> {base;styp}) bases) range man) acc)
-            ts (Post.return flow)
-          >>$ fun () flow ->
-          man.post (mk_fold_var (mk_indeterminate_offset_var base) (List.map mk_indeterminate_offset_var bases) range) ~zone:Z_c_scalar flow
-      
-          
+        let flow = set_env T_cur a' man flow in
+        (* Fold associate variables *)
+        exec_smashes (fold_smash base bases) base a range man flow >>$ fun () flow ->
+        exec_uninit (fold_uninit base bases) base a range man flow
 
 
   (** 𝕊⟦ forget(lval) ⟧ *)
@@ -555,29 +580,33 @@ struct
       let init = State.find base a in
       let s = mk_smash base lval.etyp in
       let vsmash = mk_smash_var s in
-      let indeterminate_offset = mk_indeterminate_offset_expr base ~mode range in
+      let uninit = mk_uninit_expr base ~mode range in
 
       match init with
       | Init.Bot -> Post.return flow
 
       | Init.Full ts ->
-        STypeSet.fold
-          (fun styp acc -> Post.bind (remove_smash {base;styp} range man) acc)
-          (STypeSet.remove s.styp ts) (Post.return flow)
-        >>$ fun () flow ->
+        (* When base is fully initialized, we remove smashes other
+           than the one with the type of lval, which will be put to
+           top after *)
+        fold_stypes (remove_smash base) (STypeSet.remove s.styp ts) range man flow >>$ fun () flow ->
         if STypeSet.mem s.styp ts then
-          forget_smash s range man flow
+          man.post (mk_forget_var vsmash range) ~zone:Z_c_scalar flow
         else
           let flow = set_env T_cur (State.add base (Init.Full (STypeSet.singleton s.styp)) a) man flow in
-          add_smash s range man flow
+          man.post (mk_add_var vsmash range) ~zone:Z_c_scalar flow
 
       | Init.None ->
+        (* When base is not initialized at all, we switch its state to
+           partially initialized if the offset is not universally
+           quantified *)
         if not (is_aligned offset lval.etyp man flow) || not (is_expr_forall_quantified offset) then
           let flow = set_env T_cur (State.add base (Init.Partial (STypeSet.singleton s.styp)) a) man flow in
           man.post (mk_add_var vsmash range) ~zone:Z_c_scalar flow  >>$ fun () flow ->
-          man.post (mk_add indeterminate_offset range) ~zone:Z_c_scalar flow >>$ fun () flow ->
-          man.post (mk_assign indeterminate_offset zero range) ~zone:Z_c_scalar flow
+          man.post (mk_add uninit range) ~zone:Z_c_scalar flow >>$ fun () flow ->
+          man.post (mk_assign uninit zero range) ~zone:Z_c_scalar flow
         else
+          (* In the case of universally quantified offset, we check three cases: *)
           let min, max = Common.Quantified_offset.bound offset in
           let elm = mk_z (sizeof_type lval.etyp) range in
           eval_base_size base range man flow >>$ fun size flow ->
@@ -585,34 +614,43 @@ struct
             ~fthen:(fun flow ->
                 assume (eq max (sub size elm range) range)
                   ~fthen:(fun flow ->
+                      (* Case #1: fully initialized
+                            0            size - |elm|
+                            |----------------|------>
+                           min              max
+                      *)
                       let init' = Init.Full (STypeSet.singleton s.styp) in
                       set_env T_cur (State.add base init' a) man flow |>
                       man.post (mk_add_var vsmash range) ~zone:Z_c_scalar
                     )
                   ~felse:(fun flow ->
+                      (* Case #2: partially initialized until max + |elm|
+                            0            size - |elm|
+                            |---------x------|------>
+                           min       max
+                      *)
                       let flow = set_env T_cur (State.add base (Init.Partial (STypeSet.singleton s.styp)) a) man flow in
                       man.post (mk_add_var vsmash range) ~zone:Z_c_scalar flow  >>$ fun () flow ->
-                      man.post (mk_add indeterminate_offset range) ~zone:Z_c_scalar flow >>$ fun () flow ->
-                      man.post (mk_assign indeterminate_offset (add max elm range) range) ~zone:Z_c_scalar flow
+                      man.post (mk_add uninit range) ~zone:Z_c_scalar flow >>$ fun () flow ->
+                      man.post (mk_assign uninit (add max elm range) range) ~zone:Z_c_scalar flow
                     ) ~zone:Z_c_scalar man flow
               )
             ~felse:(fun flow ->
-                let flow = set_env T_cur (State.add base (Init.Partial (STypeSet.singleton s.styp)) a) man flow in
-                man.post (mk_add_var vsmash range) ~zone:Z_c_scalar flow  >>$ fun () flow ->
-                man.post (mk_add indeterminate_offset range) ~zone:Z_c_scalar flow >>$ fun () flow ->
-                man.post (mk_assign indeterminate_offset zero range) ~zone:Z_c_scalar flow
+                (* Case #3: nop
+                     0            size - |elm|
+                     |----x-----------|------>
+                         min
+                *)
+                Post.return flow
               ) ~zone:Z_c_scalar man flow
 
       | Init.Partial ts ->
-        STypeSet.fold
-          (fun styp acc -> Post.bind (remove_smash {base;styp} range man) acc)
-          (STypeSet.remove s.styp ts) (Post.return flow)
-        >>$ fun () flow ->
+        fold_stypes (remove_smash base) (STypeSet.remove s.styp ts) range man flow >>$ fun () flow ->
         begin if STypeSet.mem s.styp ts then
-            forget_smash s range man flow
+            man.post (mk_forget_var vsmash range) ~zone:Z_c_scalar flow
           else
-            let flow = set_env T_cur (State.add base (Init.Full (STypeSet.singleton s.styp)) a) man flow in
-            add_smash s range man flow
+            let flow = set_env T_cur (State.add base (Init.Partial (STypeSet.singleton s.styp)) a) man flow in
+            man.post (mk_add_var vsmash range) ~zone:Z_c_scalar flow
         end >>$ fun () flow ->
         if not (is_aligned offset lval.etyp man flow) || not (is_expr_forall_quantified offset) then
           Post.return flow
@@ -620,19 +658,34 @@ struct
           let min, max = Common.Quantified_offset.bound offset in
           let elm = mk_z (sizeof_type lval.etyp) range in
           eval_base_size base range man flow >>$ fun size flow ->
-          assume (le min (add indeterminate_offset elm range) range)
+          assume (le min (add uninit elm range) range)
             ~fthen:(fun flow ->
                 assume (eq max (sub size elm range) range)
                   ~fthen:(fun flow ->
+                      (* Case #1: fully initialized
+                            0      uninit     size - |elm|
+                            |---x----0----------|------>
+                               min             max
+                      *)
                       let init' = Init.Full (STypeSet.singleton s.styp) in
                       set_env T_cur (State.add base init' a) man flow |>
                       Post.return
                     )
                   ~felse:(fun flow ->
-                      man.post (mk_assign indeterminate_offset (add max elm range) range) ~zone:Z_c_scalar flow
+                      (* Case #2: partially initialized until max + |elm|
+                            0      uninit     size - |elm|
+                            |---x----0------x---|------>
+                               min         max
+                      *)
+                      man.post (mk_assign uninit (add max elm range) range) ~zone:Z_c_scalar flow
                     ) ~zone:Z_c_scalar man flow
               )
             ~felse:(fun flow ->
+                (* Case #3: nop
+                      0  uninit      size - |elm|
+                      |----0----x---------|------>
+                               min       
+                *)
                 Post.return flow
               )  ~zone:Z_c_scalar man flow
 
@@ -647,10 +700,7 @@ struct
     else
       let a = get_env T_cur man flow in
       if not (is_aligned offset (under_type p.etyp) man flow) then
-        let ss = smashes_of_base base a in
-        List.fold_left
-          (fun acc s -> Post.bind (remove_smash s range man) acc)
-          (Post.return flow) ss
+        exec_smashes (forget_smash base) base a range man flow
       else
         let s = mk_smash base (under_type p.etyp) in
         let vsmash = mk_smash_var s in
@@ -663,53 +713,47 @@ struct
           let init = Init.Partial (STypeSet.singleton s.styp) in
           let flow = set_env T_cur (State.add base init a) man flow in
           let strong_smash = mk_smash_expr s ~mode:(Some STRONG) range in
-          let indeterminate_offset = mk_indeterminate_offset_expr base ~mode range in
+          let uninit = mk_uninit_expr base ~mode range in
           man.post (mk_add_var vsmash range) ~zone:Z_c_scalar flow >>$ fun () flow ->
           man.post (mk_assign strong_smash rval range) ~zone:Z_c_scalar flow >>$ fun () flow ->
-          man.post (mk_add indeterminate_offset range) ~zone:Z_c_scalar flow >>$ fun () flow ->
+          man.post (mk_add uninit range) ~zone:Z_c_scalar flow >>$ fun () flow ->
           assume (eq offset zero range)
             ~fthen:(fun flow ->
-                man.post (mk_assign indeterminate_offset elm range) ~zone:Z_c_scalar flow
+                man.post (mk_assign uninit elm range) ~zone:Z_c_scalar flow
               )
             ~felse:(fun flow ->
-                man.post (mk_assign indeterminate_offset zero range) ~zone:Z_c_scalar flow
+                man.post (mk_assign uninit zero range) ~zone:Z_c_scalar flow
               ) ~zone:Z_c_scalar man flow
 
         | Init.Full ts ->
-          STypeSet.fold
-            (fun styp acc -> Post.bind (remove_smash {base;styp} range man) acc)
-            (STypeSet.remove s.styp ts) (Post.return flow)
-          >>$ fun () flow ->
+          fold_stypes (remove_smash base) (STypeSet.remove s.styp ts) range man flow >>$ fun () flow ->
           if not (STypeSet.mem s.styp ts) then
-            forget_smash s range man flow
+            man.post (mk_forget_var vsmash range) ~zone:Z_c_scalar flow
           else
             man.post (mk_assign esmash rval range) ~zone:Z_c_scalar flow
 
         | Init.Partial ts ->
-          STypeSet.fold
-            (fun styp acc -> Post.bind (remove_smash {base;styp} range man) acc)
-            (STypeSet.remove s.styp ts) (Post.return flow)
-          >>$ fun () flow ->
+          fold_stypes (remove_smash base) (STypeSet.remove s.styp ts) range man flow >>$ fun () flow ->
           if not (STypeSet.mem s.styp ts) then
             let init = Init.Partial (STypeSet.singleton s.styp) in
             let flow = set_env T_cur (State.add base init a) man flow in
-            add_smash s range man flow
+            man.post (mk_add_var vsmash range) ~zone:Z_c_scalar flow
           else
             man.post (mk_assign esmash rval range) ~zone:Z_c_scalar flow >>$ fun () flow ->
-            let indeterminate_offset = mk_indeterminate_offset_expr base ~mode range in
+            let uninit = mk_uninit_expr base ~mode range in
             eval_base_size base range man flow >>$ fun size flow ->
-            assume (eq indeterminate_offset offset range)
+            assume (eq uninit offset range)
               ~fthen:(fun flow ->
                   assume (eq offset (sub size elm range) range)
                     ~fthen:(fun flow ->
                         let init = Init.Full (STypeSet.singleton s.styp) in
                         let flow = set_env T_cur (State.add base init a) man flow in
-                        man.post (mk_remove indeterminate_offset range) ~zone:Z_c_scalar flow
+                        man.post (mk_remove uninit range) ~zone:Z_c_scalar flow
                       )
                     ~felse:(fun flow ->
                         let init = Init.Partial (STypeSet.singleton s.styp) in
                         let flow = set_env T_cur (State.add base init a) man flow in
-                        man.post (mk_assign indeterminate_offset (add indeterminate_offset elm range) range) ~zone:Z_c_scalar flow
+                        man.post (mk_assign uninit (add uninit elm range) range) ~zone:Z_c_scalar flow
                       ) ~zone:Z_c_scalar man flow
                 )
               ~felse:(fun flow ->
@@ -767,7 +811,7 @@ struct
   (** Abstract evaluation of a dereference *)
   let eval_deref p range man flow =
     eval_pointed_base_offset p range man flow >>$ fun (base,offset,mode) flow ->
-    if not (is_interesting_base base) || is_expr_forall_quantified offset || not (is_aligned offset (under_type p.etyp) man flow) then
+    if not (is_interesting_base base) || not (is_aligned offset (under_type p.etyp) man flow) then
       Eval.singleton (mk_top (under_type p.etyp) range) flow
     else
       let a = get_env T_cur man flow in
@@ -788,8 +832,8 @@ struct
         if not (STypeSet.mem s.styp ts) then
           Eval.singleton (mk_top (under_type p.etyp) range) flow
         else
-          let indeterminate_offset = mk_indeterminate_offset_expr base ~mode range in
-          assume (ge offset indeterminate_offset range)
+          let uninit = mk_uninit_expr base ~mode range in
+          assume (ge offset uninit range)
             ~fthen:(fun flow ->
                 Eval.singleton (mk_top (under_type p.etyp) range) flow
               )
