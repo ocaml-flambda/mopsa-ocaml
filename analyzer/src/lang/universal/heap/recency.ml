@@ -27,11 +27,20 @@ open Mopsa
 open Framework.Core.Sig.Stacked.Intermediate
 open Ast
 open Zone
-open Policies
+(* open Policies *)
 
+module Pool = Framework.Lattices.Powerset.Make(
+                  struct
+                    type t = addr
+                    let compare = compare_addr
+                    let print = pp_addr
+                  end
+                )
 
 type _ query +=
   | Q_allocated_addresses : addr list query
+  | Q_alive_addresses : addr list query
+  | Q_alive_addresses_aspset : Pool.t query
 
 let () =
   register_query {
@@ -40,6 +49,8 @@ let () =
         fun next query a b ->
           match query with
           | Q_allocated_addresses -> a @ b
+          | Q_alive_addresses -> List.sort_uniq compare_addr (a @ b)
+          | Q_alive_addresses_aspset -> Pool.join a b
           | _ -> next.join_query query a b
       in f
     );
@@ -47,35 +58,62 @@ let () =
       let f : type r. query_pool -> r query -> r -> r -> r =
         fun next query a b ->
           match query with
-          | Q_allocated_addresses -> assert false
+          | Q_allocated_addresses ->
+            assert false
+          | Q_alive_addresses -> assert false
+          | Q_alive_addresses_aspset -> Pool.meet a b
           | _ -> next.meet_query query a b
       in f
     );
   }
 
+let name = "universal.heap.recency"
 
+let opt_default_allocation_policy : string ref = ref "range_callstack"
+let () = Policies.register_option opt_default_allocation_policy name "-default-alloc-pol" "by default"
+           (fun _ ak -> (Policies.of_string !opt_default_allocation_policy) ak)
+
+let gc_time = ref 0.
+let gc_nb_collections = ref 0
+let gc_nb_addr_collected = ref 0
+let gc_max_heap_size = ref 0
 (** {2 Domain definition} *)
 (** ===================== *)
 
-module Domain(Policy: POLICY) =
+type stmt_kind +=
+   | S_perform_gc
+
+let () =
+  register_stmt_with_visitor {
+      compare = (fun next s1 s2 ->
+        match skind s1, skind s2 with
+        | _ -> next s1 s2);
+
+      print = (fun default fmt stmt ->
+        match skind stmt with
+        | S_perform_gc -> Format.fprintf fmt "Abstract GC call"
+        | _ -> default fmt stmt);
+
+      visit = (fun default stmt ->
+        match skind stmt with
+        | S_perform_gc -> leaf stmt
+        | _ -> default stmt);
+    }
+
+
+
+module Domain =
 struct
+
 
   (** Domain header *)
   (** ============= *)
-
-  module Pool = Framework.Lattices.Powerset.Make(
-    struct
-      type t = addr
-      let compare = compare_addr
-      let print = pp_addr
-    end
-    )
 
   type t = Pool.t
 
   include GenDomainId(struct
       type nonrec t = t
-      let name = "universal.heap.recency" ^ "." ^ Policy.name
+      let name = name
     end)
 
   let print fmt pool =
@@ -94,7 +132,9 @@ struct
   let is_bottom _ = false
 
   let subset man ctx (a,s) (a',s') =
-    Pool.subset a a', s, s'
+    let r1, r2, r3 = Pool.subset a a', s, s' in
+    if not r1 then Debug.debug ~channel:"explain" "%s not sub@.a' diff a = %a@a diff a' = %a@." name Pool.print (Pool.diff a' a) Pool.print (Pool.diff a a');
+    r1, r2, r3
 
   let join man ctx (a,s) (a',s') =
     Pool.join a a', s, s'
@@ -112,7 +152,7 @@ struct
   (** ================= *)
 
   let interface = {
-    iexec = {provides = [Z_u_heap]; uses = []};
+    iexec = {provides = [Z_u_heap]; uses = [Z_any]};
     ieval = {provides = [Z_u_heap, Z_any]; uses = []};
   }
 
@@ -120,8 +160,7 @@ struct
   (** Initialization *)
   (** ============== *)
 
-  let init prog man flow =
-    set_env T_cur Pool.empty man flow
+  let init prog man flow = set_env T_cur Pool.empty man flow
 
 
   (** Post-conditions *)
@@ -132,6 +171,7 @@ struct
   let is_old addr = addr.addr_mode = WEAK
 
   let exec zone stmt man flow =
+    let range = srange stmt in
     match skind stmt with
     (* 𝕊⟦ free(recent); ⟧ *)
     | S_free addr when is_recent addr ->
@@ -149,14 +189,33 @@ struct
         man.exec (mk_expand_addr old [addr] stmt.srange) flow' |>
         Post.return |>
         OptionExt.return
-      
+
     (* 𝕊⟦ free(old); ⟧ *)
     | S_free addr when is_old addr ->
-      (* Inform domains to invalidate addr *)
-      man.exec (mk_invalidate_addr addr stmt.srange) flow |>
-      Post.return |>
-      OptionExt.return
+       (* Inform domains to invalidate addr *)
+       map_env T_cur (Pool.remove addr) man flow |>
+         man.exec (mk_invalidate_addr addr stmt.srange)  |>
+         Post.return |>
+         OptionExt.return
 
+    | S_perform_gc ->
+       let startt = Sys.time () in
+       let all = get_env T_cur man flow in
+       let alive = man.ask Q_alive_addresses_aspset flow in
+       let dead = Pool.diff all alive in
+       debug "at %a, |dead| = %d@.dead = %a" pp_range range (Pool.cardinal dead) Pool.print dead;
+       let trange = tag_range range "agc" in
+       let flow = set_env T_cur alive man flow in
+       let flow = Pool.fold (fun addr flow ->
+                      debug "free %a" pp_addr addr;
+                      (* FIXME: free of a strong address will re-create the strong address, I'm not really happy with that *)
+                      man.exec (mk_stmt (S_free addr) trange) flow) dead flow in
+       let delta = Sys.time () -. startt in
+       gc_time := !gc_time +. delta;
+       incr gc_nb_collections;
+       gc_nb_addr_collected := !gc_nb_addr_collected + (Pool.cardinal dead);
+       gc_max_heap_size := max !gc_max_heap_size (Pool.cardinal all);
+       flow |> Post.return |> OptionExt.return
 
     | _ -> None
 
@@ -170,15 +229,15 @@ struct
     | E_alloc_addr(addr_kind, STRONG) ->
       let pool = get_env T_cur man flow in
 
-      let recent_addr = Policy.mk_addr addr_kind STRONG range flow in
-      
+      let recent_addr = Policies.mk_addr addr_kind STRONG range (Flow.get_unit_ctx flow) in
+
       if not (Pool.mem recent_addr pool) then
         (* first allocation at this site: just add the address to the pool and return it *)
         map_env T_cur (Pool.add recent_addr) man flow |>
         Eval.singleton (mk_addr recent_addr range) |>
         OptionExt.return
       else
-        let old_addr = Policy.mk_addr addr_kind WEAK range flow in
+        let old_addr = Policies.mk_addr addr_kind WEAK range (Flow.get_unit_ctx flow) in
         if not (Pool.mem old_addr pool) then
           (* old address not present: rename the existing recent as old and return the new recent *)
           map_env T_cur (Pool.add old_addr) man flow |>
@@ -193,7 +252,7 @@ struct
 
     | E_alloc_addr(addr_kind, WEAK) ->
       let pool = get_env T_cur man flow in
-      let weak_addr = Policy.mk_addr addr_kind WEAK range flow in
+      let weak_addr = Policies.mk_addr addr_kind WEAK range (Flow.get_unit_ctx flow) in
 
       let flow' =
         if Pool.mem weak_addr pool then
@@ -216,6 +275,7 @@ struct
     | Q_allocated_addresses ->
       let pool = get_env T_cur man flow in
       Some (Pool.elements pool)
+
     | _ -> None
 
   let refine channel man flow = Channel.return flow
@@ -223,13 +283,5 @@ struct
 end
 
 
-
-
-module Heap1 = Domain(StackRangePolicy)
-module Heap2 = Domain(StackPolicy)
-module Heap3 = Domain(AllPolicy)
-
 let () =
-  Framework.Core.Sig.Stacked.Intermediate.register_stack (module Heap1);
-  Framework.Core.Sig.Stacked.Intermediate.register_stack (module Heap2);
-  Framework.Core.Sig.Stacked.Intermediate.register_stack (module Heap3)
+  Framework.Core.Sig.Stacked.Intermediate.register_stack (module Domain)

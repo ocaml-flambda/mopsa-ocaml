@@ -78,7 +78,12 @@ let fun_to_binop = function
   | "__iand__" -> O_bit_and
   | "__ixor__" -> O_bit_xor
   | "__ior__" -> O_bit_or
-  | _ -> assert false
+  | s -> panic "Unknown operator %s" s
+
+let methfun_to_binop str =
+  let splitted = String.split_on_char '.' str in
+  let l = ListExt.nth splitted (ListExt.length splitted - 1) in
+  fun_to_binop l
 
 (** Magic function of a binary operator *)
 let binop_to_fun = function
@@ -200,6 +205,12 @@ let fun_to_unop = function
   | "__pos__" -> O_plus
   | "__invert__" -> O_bit_invert
   | _ -> assert false
+
+
+let methfun_to_unop str =
+  let splitted = String.split_on_char '.' str in
+  let l = ListExt.nth splitted (ListExt.length splitted - 1) in
+  fun_to_unop l
 
 
 (** Check that a magic function corresponds to a binary operator *)

@@ -190,8 +190,7 @@ struct
         pp_zone2 zone
         ~symbol:BEGIN
     ;
-    Stack.push (Sys.time ()) stack
-
+      Stack.push (Sys.time ()) stack
 
   let on_after_eval zone exp man evl =
     let time = get_timing () in

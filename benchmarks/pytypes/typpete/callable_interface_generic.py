@@ -1,7 +1,7 @@
 # type_params {'f': ['H']}
 import mopsa
 
-def test_main():
+def test_types():
     def f(x, y):
         return x(y)
 

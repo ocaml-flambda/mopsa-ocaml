@@ -1,6 +1,6 @@
 import mopsa
 
-def test_main():
+def test_types():
     a = float()
     b = float(1)
     c = float("123")

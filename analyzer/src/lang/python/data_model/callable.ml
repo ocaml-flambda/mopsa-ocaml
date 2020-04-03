@@ -61,8 +61,8 @@ module Domain =
                match ekind f with
                (* Calls on non-object variables and constants is not allowed *)
                | E_var _ | E_constant _ ->
-                 let () = Format.fprintf Format.str_formatter "object is not callable"  in
-                 let stmt = Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range in
+                 let msg = Format.asprintf "object is not callable" in
+                 let stmt = Utils.mk_builtin_raise_msg "TypeError" msg range in
                  let flow = man.exec stmt flow in
                  Eval.empty_singleton flow
 

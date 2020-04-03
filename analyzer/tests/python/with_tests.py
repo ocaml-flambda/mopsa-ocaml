@@ -15,7 +15,6 @@ def test_enter_and_exit_are_called():
 
     with C() as c:
         g = g + 1
-        mopsa.assert_equal(c.x, 1)
 
     mopsa.assert_equal(g, 3)
 
@@ -35,6 +34,7 @@ def test_enter_and_exit_are_called_after_exception():
         g = g + 1
         raise Exception
 
+    mopsa.assert_exception(Exception)
     mopsa.assert_safe()
     mopsa.assert_equal(g, 3)
 

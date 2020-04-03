@@ -28,6 +28,10 @@ open Addr
 open Universal.Ast
 
 
+
+
+
+
 module Domain =
 struct
 
@@ -55,30 +59,48 @@ struct
     | E_py_call({ekind = E_py_object (({addr_kind=A_py_class _}, _) as cls)} as ecls, args, kwargs) ->
       debug "class call  %a@\n@\n" pp_expr exp;
       (* Call __new__ *)
-      bind_list args (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
-      bind_some (fun eargs flow ->
-          let new_call = mk_py_kall (mk_py_object_attr cls "__new__" range) ((mk_py_object cls range) :: eargs) kwargs range in
+      let rec bind args vars flow f =
+        match args with
+        | [] ->
+           f (List.rev vars) flow
+        | hd :: tl ->
+           man.eval hd ~zone:(Zone.Z_py, Zone.Z_py_obj) flow |>
+             Eval.bind (fun ehd flow ->
+                 let cs = Flow.get_callstack flow in
+                 let tmp = mk_range_attr_var hd.erange (Format.asprintf "%a%xd" pp_expr ecls (Hashtbl.hash_param 30 100 cs)) T_any in
+                 bind tl (tmp::vars) (man.exec ~zone:Zone.Z_py (mk_assign (mk_var tmp hd.erange) ehd range) flow) f) in
+      bind args [] flow
+        (fun vars flow ->
+          let tmps = List.map (fun v ->
+                         match vkind v with
+                         | V_range_attr (r, _) -> mk_var v r
+                         | _ -> assert false) vars in
+          let new_call = mk_py_kall (mk_py_object_attr cls "__new__" range) ((mk_py_object cls range)
+                                                                             :: tmps) kwargs range in
           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) new_call flow |>
-          Eval.bind (fun inst flow ->
-              assume
-                (mk_py_isinstance inst ecls range)
-                ~fthen:(fun flow ->
+            Eval.add_cleaners (List.map (fun x -> match ekind x with
+                                                  | E_var (x, _) -> mk_remove_var x range
+                                                  | _ -> assert false) tmps) |>
+            Eval.bind (fun inst flow ->
+                assume
+                  (mk_py_isinstance inst ecls range)
+                  ~fthen:(fun flow ->
                     debug "init!@\n";
-                    man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_kall (mk_py_object_attr cls "__init__" range) (inst :: eargs) kwargs range) flow |>
-                    Eval.bind (fun r flow ->
-                        assume
-                          (mk_py_isinstance_builtin r "NoneType" range)
-                          ~fthen:(fun flow -> man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) inst flow)
-                          ~felse:(fun flow ->
-                              Format.fprintf Format.str_formatter "__init__() should return None, not %a" pp_expr r;
-                              let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow in
+                    man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_kall (mk_py_object_attr cls "__init__" range) (inst :: tmps) kwargs range) flow |>
+                      Eval.bind (fun r flow ->
+                          assume
+                            (mk_py_isinstance_builtin r "NoneType" range)
+                            ~fthen:(fun flow -> man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) inst flow)
+                            ~felse:(fun flow ->
+                              let msg = Format.asprintf "__init__() should return None, not %a" pp_expr r in
+                              let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow in
                               Eval.empty_singleton flow
                             )
-                          man flow
-                      ))
-                ~felse:(fun flow -> Eval.singleton inst flow)
-                man flow
-            )
+                            man flow
+                  ))
+                  ~felse:(fun flow -> Eval.singleton inst flow)
+                  man flow
+              )
         )
       |> OptionExt.return
 
@@ -111,7 +133,7 @@ struct
           else
             try
               debug "bases' = %a@\n" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_expr) (List.map (fun x -> mk_py_object x range) bases');
-              let mro = c3_lin ({addr_kind= (A_py_class (C_user cls, bases')); addr_group=G_all; addr_mode = STRONG}, None) in
+              let mro = c3_lin ({addr_kind= (A_py_class (C_user cls, bases')); addr_partitioning=G_all; addr_mode = STRONG}, None) in
               debug "MRO of %a: %a@\n" pp_var cls.py_cls_var
                 (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
                    (fun fmt x -> Format.fprintf fmt "%a" pp_expr (mk_py_object x (srange stmt))))

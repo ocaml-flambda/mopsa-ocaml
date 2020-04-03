@@ -1,7 +1,7 @@
 import mopsa
 
 
-def test_main():
+def test_types():
     class A:
         def f(self, x, y, z=1):
             return x + y - z

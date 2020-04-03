@@ -258,7 +258,12 @@ let () =
         | A_stub_resource res1, A_stub_resource res2 -> Stdlib.compare res1 res2
         | _ -> next ak1 ak2
       );
-  }
+    }
+
+let () = Universal.Heap.Policies.register_mk_addr (fun default ak ->
+             match ak with
+             | A_stub_resource _ -> Universal.Heap.Policies.mk_addr_stack_range ak
+             | _ -> default ak)
 
 
 (** {2 Utility functions} *)

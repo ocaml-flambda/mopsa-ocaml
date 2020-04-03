@@ -65,6 +65,8 @@ let opt_loop_unrolling : int ref = ref 1
 
 let opt_loop_use_cache : bool ref = ref true
 
+let opt_loop_decreasing_it : bool ref = ref false
+
 let () =
   register_domain_option name {
     key = "-widening-delay";
@@ -86,6 +88,13 @@ let () =
     doc = " do not use cache for loops";
     spec = ArgExt.Clear opt_loop_use_cache;
     default = "use cache";
+  };
+  register_domain_option name {
+    key = "-loop-decr-it";
+    category = "Loops";
+    doc = " enable decreasing iteration";
+    spec = ArgExt.Set opt_loop_decreasing_it;
+    default = "disabled";
   }
 
 
@@ -145,13 +154,9 @@ struct
     try
       let m = Context.find_poly LastFixpointCtx.key (Flow.get_ctx flow) in
       let mf = LoopHeadMap.filter (fun (cs, range) _ ->
-          Callstack.compare cs scs = 0 &&
-          let srange = untag_range srange and range = untag_range range in
-          match srange, range with
-          | R_orig (s1, e1), R_orig (s2, e2) ->
-            s1.pos_file = s2.pos_file && 0 <= s2.pos_line - s1.pos_line && s2.pos_line - s1.pos_line <= 1
-          | _ -> false
-        ) m in
+                   Callstack.compare cs scs = 0 &&
+                     compare_range srange range = 0
+                 ) m in
       Some (LoopHeadMap.choose mf |> snd |> Flow.join man.lattice flow)
 
     with Not_found ->
@@ -174,6 +179,7 @@ struct
       Flow.add T_continue (Flow.get T_continue man.lattice flow) man.lattice |>
       Flow.add T_break (Flow.get T_break man.lattice flow) man.lattice
     in
+    Debug.debug ~channel:(name ^ ".cache") "@(%a, %a): adding %a" pp_range range Callstack.pp_call_stack cs (Flow.print man.lattice.print) stripped_flow;
     let lfp_ctx = LoopHeadMap.add (cs, range) stripped_flow old_lfp_ctx in
     Flow.set_ctx (Context.add_poly LastFixpointCtx.key lfp_ctx (Flow.get_ctx flow)) flow
 
@@ -183,7 +189,7 @@ struct
     | None -> None
     | Some old_lfp ->
       let res = Flow.join man.lattice old_lfp flow in
-      debug "cache: %a join %a = %a@\n" (Flow.print man.lattice.print) old_lfp (Flow.print man.lattice.print) flow (Flow.print man.lattice.print) res;
+      Debug.debug ~channel:"universal.iterators.loops.cache" "cache: %a join %a = %a@\n" (Flow.print man.lattice.print) old_lfp (Flow.print man.lattice.print) flow (Flow.print man.lattice.print) res;
       Some res
     (* flow *)
 
@@ -262,6 +268,17 @@ struct
         let flag, flow1', flow2' = unroll (i - 1) cond body man (Flow.copy_ctx flow2 flow1) in
         flag, flow1', Flow.join man.lattice flow2 flow2'
 
+  let decr_iteration cond body man flow_init flow =
+    debug "starting decreasing iterations, flow = %a" (Flow.print man.lattice.print) flow;
+    let flow = Flow.remove T_continue flow |>
+    Flow.remove T_break |>
+    man.exec (mk_assume cond cond.erange) |>
+    man.exec body |>
+    merge_cur_and_continue man |>
+                 Flow.join man.lattice flow_init in
+    debug "after decreasing iteration, flow = %a" (Flow.print man.lattice.print) flow;
+    flow
+
 
   let rec exec zone stmt (man:('a,unit) man) flow =
     match skind stmt with
@@ -294,7 +311,13 @@ struct
           flow_init
         else
           let flow_lfp = lfp 0 !opt_loop_widening_delay cond body man flow_init flow_init in
-          let flow_lfp = if !opt_loop_use_cache then store_fixpoint man flow_lfp (stmt.srange, Flow.get_callstack flow_lfp) else flow_lfp in
+          let flow_lfp =
+            if !opt_loop_decreasing_it then
+              decr_iteration cond body man flow_init flow_lfp
+            else flow_lfp in
+          let flow_lfp = if !opt_loop_use_cache then
+                           let () = Debug.debug ~channel:(name ^ ".cache") "storing fixpoint %a" (Flow.print man.lattice.print) flow_lfp in
+                           store_fixpoint man flow_lfp (stmt.srange, Flow.get_callstack flow_lfp) else flow_lfp in
           flow_lfp in
 
       let res0 =

@@ -50,14 +50,15 @@ module Domain =
         | _ -> assert false in
       StringMap.add funname {in_args; out_type} db
 
-    let stub_base =
+  let extract_oobject e = match ekind e with
+    | E_py_object (_, Some a) -> a
+    | _ -> assert false
+
+  let stub_base =
       let str = "str" and int = "int" and bool = "bool" and bytes = "bytes" in
       StringMap.empty |>
       add_signature "str.__contains__" [str; str] bool |>
-      add_signature "str.__len__" [str] int |>
       add_signature "bytes.__len__" [bytes] int |>
-      add_signature "str.__mul__" [str; int] str |>
-      add_signature "str.__rmul__" [str; int] str |>
 
       add_signature "str.capitalize" [str] str |>
       add_signature "str.casefold" [str] str |>
@@ -99,7 +100,7 @@ module Domain =
       Utils.check_instances f man flow range exprs instances (fun _ flow -> man.eval (mk_py_top return range) flow)
 
     let interface = {
-      iexec = {provides = []; uses = []};
+      iexec = {provides = []; uses = [Zone.Z_py]};
       ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
     }
 
@@ -137,12 +138,9 @@ module Domain =
     let rec eval zs exp (man: ('a, unit) man) (flow:'a flow) =
       let range = erange exp in
       match ekind exp with
+      | E_constant (C_string _)
       | E_constant (C_top T_string) ->
-        allocate_builtin man range flow "str" (Some exp) |> OptionExt.return
-
-      | E_constant (C_string s) ->
-        allocate_builtin man range flow "str" (Some exp) |> OptionExt.return
-      (* we keep s in the expression of the returned object *)
+         Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_strings, Some {exp with etyp=T_string}) range) flow |> OptionExt.return
 
       | E_constant (C_top T_py_bytes)
       | E_py_bytes _ ->
@@ -199,15 +197,23 @@ module Domain =
                   assume
                     (mk_py_isinstance_builtin e2 "str" range)
                     ~fthen:(fun true_flow ->
-                        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_bool range) true_flow)
+                      (* FIXME: best way? *)
+                        assume
+                          (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) ~etyp:T_int range) man true_flow
+                          ~zone:Universal.Zone.Z_u_string
+                          ~fthen:(fun flow -> man.eval (mk_py_true range) flow)
+                          ~felse:(fun flow -> man.eval (mk_py_false range) flow)
+                        (* |> T_int.Domain.merge_tf_top man range *)
+                    (* man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_bool range) true_flow *)
+                    )
                     ~felse:(fun false_flow ->
                         let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
                         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) expr false_flow)
                     man true_flow
                 )
               ~felse:(fun false_flow ->
-                  Format.fprintf Format.str_formatter "descriptor '%s' requires a 'str' object but received '%a'" f pp_expr e1;
-                  let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) false_flow in
+                let msg = Format.asprintf "descriptor '%s' requires a 'str' object but received '%a'" f pp_expr e1 in
+                  let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow in
                   Eval.empty_singleton flow)
               man flow
           )
@@ -224,20 +230,45 @@ module Domain =
                   assume
                     (mk_py_isinstance_builtin e2 "str" range)
                     ~fthen:(fun true_flow ->
-                        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_string range) true_flow)
+                        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_string range) true_flow
+                        (* fixme: just to perform the addr alloc, clearly not the best *)
+                        |> Eval.bind (fun res flow ->
+                            match ekind res with
+                            | E_py_object (addr, _) ->
+                              Eval.singleton {res with ekind = E_py_object(addr,
+                                                                           Some (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) range ~etyp:T_string))} flow
+                            | _ -> assert false
+                          )
+                      )
                     ~felse:(fun false_flow ->
                         let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
                         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) expr false_flow)
                     man true_flow
                 )
               ~felse:(fun false_flow ->
-                  Format.fprintf Format.str_formatter "descriptor '%s' requires a 'str' object but received '%a'" f pp_expr e1;
-                  let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) false_flow in
+                let msg = Format.asprintf "descriptor '%s' requires a 'str' object but received '%a'" f pp_expr e1 in
+                let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow in
                   Eval.empty_singleton flow)
               man flow
           )
         |>  OptionExt.return
 
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__rmul__" as f, _))}, _)}, args, [])
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__mul__" as f, _))}, _)}, args, []) ->
+        Utils.check_instances f man flow range args ["str"; "int"]
+          (fun eargs flow ->
+             let e1, e2 = match eargs with [a; b] -> a, b | _ -> assert false in
+             man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_string range) flow
+             (* fixme: just to perform the addr alloc, clearly not the best *)
+             |> Eval.bind (fun res flow ->
+                 match ekind res with
+                 | E_py_object (addr, _) ->
+                   Eval.singleton {res with ekind = E_py_object(addr,
+                                                                Some (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) range ~etyp:T_string))} flow
+                 | _ -> assert false
+               )
+          )
+        |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__mod__" as f, _))}, _)}, args, []) ->
         Utils.check_instances ~arguments_after_check:1 f man flow range args ["str"]
@@ -280,14 +311,12 @@ module Domain =
           ["str"]
           (fun args flow ->
              let str = List.hd args in
-             let str_addr = match ekind str with
-               | E_py_object (a, _) -> a
-               | _ -> assert false in
-             let it_addr = mk_alloc_addr (Objects.Py_list.A_py_iterator ("str_iterator", [str_addr], None)) range in
+             let it_addr = mk_alloc_addr (Objects.Py_list.A_py_iterator ("str_iterator", None)) range in
              man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) it_addr flow |>
              Eval.bind (fun eit_addr flow ->
                  let it_addr = match ekind eit_addr with E_addr a -> a | _ -> assert false in
-                 Eval.singleton (mk_py_object (it_addr, None) range) flow
+                 man.exec ~zone:Zone.Z_py (mk_assign (mk_var (Objects.Py_list.Domain.itseq_of_addr it_addr) range) str range) flow |>
+                 Eval.singleton (mk_py_object (it_addr, None) range)
                )
           )
         |> OptionExt.return
@@ -306,7 +335,7 @@ module Domain =
 
       | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.encode", _))}, _)}) as caller, [arg], [])
       | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bytes.decode", _))}, _)}) as caller, [arg], []) ->
-        let encoding = mk_expr (E_constant (C_string "utf-8")) range in
+        let encoding = mk_string "utf-8" range in
         eval zs {exp with ekind = E_py_call(caller, [arg; encoding], [])} man flow
 
       | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.encode" as f, _))}, _)}), [arg; encoding], []) ->
@@ -314,13 +343,17 @@ module Domain =
         Utils.check_instances f man flow range [arg; encoding]
           ["str"; "str"]
           (fun eargs flow ->
-             let earg, eencoding = match eargs with [e1;e2] -> e1, e2 | _ -> assert false in
-             let msg = Format.fprintf Format.str_formatter "unknown encoding: %a" pp_expr eencoding; Format.flush_str_formatter () in
-             let lookuperr_f = man.exec (Utils.mk_builtin_raise_msg "LookupError" msg range) flow in
-             Eval.join_list
-               ~empty:(fun () -> assert false)
-               [ Eval.empty_singleton lookuperr_f;
-                 man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_constant (C_top T_py_bytes)) range) (Flow.copy_ctx lookuperr_f flow)]
+            let earg, eencoding = match eargs with [e1;e2] -> e1, e2 | _ -> assert false in
+            assume (mk_binop eencoding O_eq (mk_string "utf-8" range) range) man flow
+              ~zone:Zone.Z_py
+              ~fthen:(fun flow ->
+                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_constant (C_top T_py_bytes)) range) flow
+              )
+              ~felse:(fun flow ->
+                let msg = Format.asprintf "unknown encoding: %a" pp_expr eencoding in
+                man.exec (Utils.mk_builtin_raise_msg "LookupError" msg range) flow |>
+                Eval.empty_singleton
+              )
           )
         |> OptionExt.return
 
@@ -329,13 +362,15 @@ module Domain =
         Utils.check_instances f man flow range [arg; encoding]
           ["bytes"; "str"]
           (fun eargs flow ->
-             let earg, eencoding = match eargs with [e1;e2] -> e1, e2 | _ -> assert false in
-             let msg = Format.fprintf Format.str_formatter "unknown encoding: %a" pp_expr eencoding; Format.flush_str_formatter () in
-             let lookuperr_f = man.exec (Utils.mk_builtin_raise_msg "LookupError" msg range) flow in
-             Eval.join_list
-               ~empty:(fun () -> assert false)
-               [ Eval.empty_singleton lookuperr_f;
-                 man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_constant (C_top T_string)) range) (Flow.copy_ctx lookuperr_f flow)]
+            let earg, eencoding = match eargs with [e1;e2] -> e1, e2 | _ -> assert false in
+            assume (mk_binop eencoding O_eq (mk_string "utf-8" range) range) man flow
+              ~zone:Zone.Z_py
+              ~fthen:(fun flow ->
+                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_constant (C_top T_string)) range) flow)
+              ~felse:(fun flow ->
+                let msg = Format.asprintf "unknown encoding: %a" pp_expr eencoding in
+                man.exec (Utils.mk_builtin_raise_msg "LookupError" msg range) flow |>
+                  Eval.empty_singleton)
           )
         |> OptionExt.return
 
@@ -372,6 +407,14 @@ module Domain =
              Eval.join
                (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow)
                (man.exec (Utils.mk_builtin_raise_msg "ValueError" "substring not found" range) flow |> Eval.empty_singleton)
+          )
+        |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__len__" as f, _))}, _)}, args, []) ->
+        Utils.check_instances f man flow range args ["str"]
+          (fun eargs flow ->
+             man.eval ~zone:(Universal.Zone.Z_u, Universal.Zone.Z_u_string) (mk_expr (E_len (extract_oobject @@ List.hd eargs)) range) flow |>
+             Eval.bind (fun l flow -> man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) l flow)
           )
         |> OptionExt.return
 

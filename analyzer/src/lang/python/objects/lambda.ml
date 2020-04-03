@@ -48,7 +48,7 @@ module Domain =
       let range = erange exp in
       match ekind exp with
       | E_py_lambda l ->
-        let lname = Format.fprintf Format.str_formatter "λ%a" pp_range range; Format.flush_str_formatter () in
+        let lname = Format.asprintf "λ%a" pp_range range in
         let fun_addr = F_user
             { py_func_var = mk_range_attr_var range lname T_any;
               py_func_parameters = l.py_lambda_parameters;

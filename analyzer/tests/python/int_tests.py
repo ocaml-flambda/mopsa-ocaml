@@ -23,4 +23,4 @@ def test_bool_coercion():
 
 def test_in_condition():
     i = -10
-    mopsa.assert(i)
+    mopsa.massert(bool(i))

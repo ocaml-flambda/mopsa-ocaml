@@ -37,7 +37,7 @@ def f7(x):
     return f7(x - 1) + f7(x - 2)
 
 
-def test_main():
+def test_types():
     a = f1([1, 2, 3])
     b = f2(a[0])
     c = f3(b)

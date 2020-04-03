@@ -57,8 +57,7 @@ type stmt_kind +=
   (** Project the abstract environments on the given list of variables. *)
 
   | S_expand of expr * expr list
-  (** Expands the first dimension into the list of dimensions, the first
-      dimension is removed from the environment *)
+  (** Expands the first dimension into the list of dimensions *)
 
   | S_fold of expr * expr list
   (** Folds the the list of dimensions into the first one, the

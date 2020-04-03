@@ -1,6 +1,6 @@
 import mopsa
 
-def test_main():
+def test_types():
     T = 4
 
     for x in [1, 2, 3, 4, T + 1]:
@@ -20,6 +20,8 @@ def test_main():
                 y = y + b
                 cs = cs + F
 
+    mopsa.ignore_exception(ZeroDivisionError)
+    mopsa.ignore_exception(OverflowError)
     mopsa.ignore_exception(IndexError)
     mopsa.ignore_exception(UnboundLocalError)
     mopsa.assert_safe()

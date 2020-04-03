@@ -152,16 +152,16 @@ struct
                       | None ->
                         TVMap.add (Class tyvar) etypes cur
                       | Some set ->
-                        if ESet.subset set etypes then
-                          TVMap.add (Class tyvar) set cur
-                        else
-                          Exceptions.panic_at range "conflict for typevar %a, global set %a and class set %a differ" pp_var tyvar ESet.print set ESet.print etypes
+                         if ESet.subset set etypes then
+                           TVMap.add (Class tyvar) set cur
+                         else
+                           Exceptions.panic_at range "conflict for typevar %a, global set %a and class set %a differ" pp_var tyvar ESet.print set ESet.print etypes
                       end
                     | Some set ->
-                      if ESet.equal set etypes then
-                        cur
-                      else
-                        Exceptions.panic_at range "conflict for typevar %a, sets %a and %a differ" pp_var tyvar ESet.print set ESet.print etypes
+                       if ESet.subset set etypes then
+                         cur
+                       else
+                         Exceptions.panic_at range "conflict for typevar %a, sets %a and %a differ" pp_var tyvar ESet.print set ESet.print etypes
                   ) cur typevars in
                 let flow = set_env T_cur ncur man flow in
                 Eval.singleton eobj flow
@@ -307,8 +307,7 @@ struct
               | None -> assert false
             end
           in
-          let msg = Format.fprintf Format.str_formatter "%a(%a) does not match any signature provided in the stubs" pp_var pyannot.py_funca_var (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ") pp_expr) args;
-            Format.flush_str_formatter () in
+          let msg = Format.asprintf "%a(%a) does not match any signature provided in the stubs" pp_var pyannot.py_funca_var (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ") pp_expr) args in
           Eval.join_list ~empty:(
             fun () ->
               man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow |> Eval.empty_singleton)
@@ -350,15 +349,17 @@ struct
           let name = get_orig_vname v in
           begin match name with
             | "bool" ->
-              (fun s -> Eval.singleton (mk_py_object (s (), None) range) flow) Addr_env.addr_bool_top
+               Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_bool_top, None) range) flow
             | "int" ->
-              (fun s -> Eval.singleton (mk_py_object (s (), None) range) flow) Addr_env.addr_integers
+               Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_integers, None) range) flow
             | "float" ->
-              (fun s -> Eval.singleton (mk_py_object (s (), None) range) flow) Addr_env.addr_float
+               Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_float, None) range) flow
+            | "str" ->
+               Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_strings, None) range) flow
             | "NotImplementedType" ->
-              (fun s -> Eval.singleton (mk_py_object (s (), None) range) flow) Addr_env.addr_notimplemented
+               Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_notimplemented, None) range) flow
             | "NoneType" ->
-              (fun s -> Eval.singleton (mk_py_object (s (), None) range) flow) Addr_env.addr_none
+               Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_none, None) range) flow
             (* | "Any" ->
              *   warn_at range "any annot";
              *   (\* FIXME man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_any range) flow *\)
@@ -407,7 +408,7 @@ struct
             )
           |> OptionExt.return
 
-        | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)}, i) when get_orig_vname c.py_cls_a_var = "OptionExt.l" ->
+        | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)}, i) when get_orig_vname c.py_cls_a_var = "Optional" ->
           Eval.join_list
             ~empty:(fun () -> assert false)
             (List.map (fun e -> man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow)
@@ -432,7 +433,7 @@ struct
 
         | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)} as e, i) when
             (* issue: if object.__new__(e) renames addresses used in i, this is not caught... *)
-            List.for_all (fun n -> get_orig_vname c.py_cls_a_var <> n) ["List"; "Tuple"; "Dict"; "OptionExt.l"; "Union"; "Type"] ->
+            List.for_all (fun n -> get_orig_vname c.py_cls_a_var <> n) ["List"; "Tuple"; "Dict"; "Optional"; "Union"; "Type"] ->
           begin match c.py_cls_a_abases with
             | [] ->
               man.eval (mk_py_call (mk_py_object (find_builtin "object.__new__") range) [e] range) flow
@@ -582,7 +583,7 @@ struct
           end |> OptionExt.return
 
         | E_constant C_py_none ->
-          (fun s -> Eval.singleton (mk_py_object (s (), None) range) flow) Addr_env.addr_none |> OptionExt.return
+           Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_none, None) range) flow |> OptionExt.return
 
         | E_py_object ({addr_kind = A_py_class _}, _) ->
           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call e [] range) flow
@@ -664,7 +665,7 @@ struct
           |> OptionExt.return
           (* big disjunction on check_annot(e, t) for t in types *)
 
-        | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)}, i) when get_orig_vname c.py_cls_a_var = "OptionExt.l" ->
+        | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)}, i) when get_orig_vname c.py_cls_a_var = "Optional" ->
           let mk_cannot a = {exp with ekind = E_py_check_annot(e, a)} in
           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_binop (mk_cannot i) O_py_or (mk_cannot (mk_py_none range)) range) flow |> OptionExt.return
 
@@ -723,7 +724,7 @@ struct
 
   let exec zone stmt man flow =
     match skind stmt with
-    | S_fold ({ekind = E_addr a'}, [{ekind = E_py_annot {ekind = (E_addr a)}}])
+    | S_fold ({ekind = E_py_annot {ekind = E_addr a'}}, [{ekind = (E_addr a)}])
     | S_rename ({ekind = E_py_annot {ekind = (E_addr a)}}, {ekind = E_addr a'}) ->
       let cur = get_env T_cur man flow in
       debug "rename %a %a, at %a@\ncur=%a" pp_addr a pp_addr a' pp_range stmt.srange TVMap.print cur;
@@ -739,6 +740,21 @@ struct
       debug "ncur = %a" TVMap.print ncur;
       set_env T_cur ncur man flow
       |> Post.return |> OptionExt.return
+
+    | S_expand ({ekind = E_py_annot {ekind = E_addr a}}, addrs) ->
+       let cur = get_env T_cur man flow in
+       let cur = TVMap.fold (fun k v cur ->
+           match k with
+           | Class ({vkind = V_addr_attr (av, s)} as vk) when compare_addr av a = 0 ->
+              List.fold_left
+                (fun cur eaddr ->
+                  match ekind eaddr with
+                  | E_addr addr ->
+                     TVMap.add (Class {vk with vkind = V_addr_attr(addr, s)}) v cur
+                  | _ -> assert false
+                ) cur addrs
+           | _ -> cur ) cur cur in
+       set_env T_cur cur man flow |> Post.return |> OptionExt.return
 
     | _ -> None
 

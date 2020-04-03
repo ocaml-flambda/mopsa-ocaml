@@ -24,13 +24,12 @@
 # Python
 lang += python
 lang.python = ast addr zone utils visitor operators pp ast_compare hooks frontend   \
-              alarms libs desugar objects data_model values types  flows program
+              alarms libs desugar objects data_model types  flows program
 lang.python.libs = math py_mopsa py_std py_unittest py_typing
-lang.python.objects = lambda class range nones data_container_utils function  py_list tuple dict py_set py_object iterable
+lang.python.objects = lambda class nones data_container_utils function py_list range tuple dict py_set py_object iterable
 lang.python.data_model = callable arith_ops compare_ops aug_assign	\
                          attribute subscript
-lang.python.types = structural_types nominal_types addr_env polymorphism t_string t_int t_float t_complex type_annot
-lang.python.values = py_string
+lang.python.types = structural_types nominal_types addr_env polymorphism t_int t_float t_string  t_complex dummy_numeric type_annot
 
 
 

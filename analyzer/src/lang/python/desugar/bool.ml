@@ -89,6 +89,15 @@ module Domain =
                  man flow1)
          |> OptionExt.return
 
+      | E_binop(O_log_or, e1, e2) ->
+         assume e1 man flow
+           ~fthen:(fun true_flow ->
+             man.eval e1 true_flow)
+           ~felse:(fun false_flow ->
+             man.eval e2 false_flow)
+         |> OptionExt.return
+
+
       (* E⟦ e1 is not e2 ⟧ *)
       | E_binop(O_py_is_not, e1, e2) ->
          man.eval (mk_not (mk_binop e1 O_py_is e2 range) range) flow |> OptionExt.return
@@ -133,11 +142,10 @@ module Domain =
                                    panic_at range "evaluating 'in' operator using __getitem__ not supported"
                                  )
                                ~felse:(fun false_flow ->
-                                   Format.fprintf Format.str_formatter "argument of type '%a' is not iterable" pp_addr_kind (akind @@ fst @@ object_of_expr cls2);
-                                   let msg = Format.flush_str_formatter () in
-                                   let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow in
-                                   Eval.empty_singleton flow
-                                 )
+                                 let msg = Format.asprintf "argument of type '%a' is not iterable" pp_addr_kind (akind @@ fst @@ object_of_expr cls2) in
+                                 let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow in
+                                 Eval.empty_singleton flow
+                               )
                                man false_flow
                            )
                          man false_flow

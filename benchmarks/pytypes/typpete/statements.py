@@ -1,6 +1,6 @@
 import mopsa
 
-def test_main():
+def test_types():
     i = 0
     j = 0
     for x in [1, 2, 3]:

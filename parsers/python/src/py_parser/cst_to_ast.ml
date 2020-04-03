@@ -116,7 +116,7 @@ and translate_stmt (stmt: Cst.stmt) : Ast.stmt =
       }
 
     | Return value ->
-      S_return (translate_expr_option range value)
+      S_return (translate_expr_option (Location.tag_range range "return") value)
 
     | Assign (targets, value) ->
       if List.length targets = 1 then
@@ -303,7 +303,7 @@ and translate_expr (expr: Cst.expr) : Ast.expr =
         List.map translate_comprehension gens
       )
     | Yield eo ->
-      E_yield (translate_expr_option range eo)
+      E_yield (translate_expr_option (Location.tag_range range "yield") eo)
     | YieldFrom e ->
       E_yield_from (translate_expr e)
     | Compare (left, [op], [right]) ->
@@ -357,9 +357,9 @@ and translate_expr (expr: Cst.expr) : Ast.expr =
     | Subscript (v, Slice (a, b, s), _) ->
       E_slice_subscript (
         translate_expr v,
-        translate_expr_option range a,
-        translate_expr_option range b,
-        translate_expr_option range s
+        translate_expr_option (Location.tag_range range "start") a,
+        translate_expr_option (Location.tag_range range "stop") b,
+        translate_expr_option (Location.tag_range range "step") s
       )
     | Name (id, _) -> E_id (translate_var id)
     | Tuple (elts, _) -> E_tuple (List.map translate_expr elts)

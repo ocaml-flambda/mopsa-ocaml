@@ -1,6 +1,6 @@
 import mopsa
 
-def test_main():
+def test_types():
     n = int(input())
     w = int(input())
     arr = [int(x) for x in input().split(" ")]
@@ -27,6 +27,7 @@ def test_main():
             print(arr2[i])
     mopsa.ignore_exception(IndexError)
     mopsa.ignore_exception(UnboundLocalError)
+    mopsa.ignore_exception(ZeroDivisionError)
     mopsa.assert_safe()
     mopsa.massert(isinstance(arr, list))
     mopsa.massert(isinstance(arr[0], int))

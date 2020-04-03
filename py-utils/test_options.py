@@ -1,0 +1,151 @@
+#!/usr/bin/env python3
+import time
+import subprocess
+import collections
+import os
+import re
+
+file_dir = "../../pybenchs/"
+gctime_str = "Total gc time : "
+ocaml_gc_stats = "v=0x400"
+
+
+results = {}
+
+def run_mopsa(mopsa_name, mopsa_options, file_name, runs=1, cwd=None, file_dir=""):
+    rt = 0
+    for i in range(runs):
+        start = time.time()
+        proc = subprocess.Popen([mopsa_name, file_dir + file_name] + mopsa_options, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=dict(os.environ, OCAMLRUNPARAM=ocaml_gc_stats), cwd=cwd)
+        stdout, stderr = proc.communicate()
+        stop = time.time()
+        rt += stop - start
+    stdout = stdout.decode()
+    stderr = stderr.decode()
+    with open("logs/" + mopsa_name.replace("..", "_").replace("/", "_") + "_".join(mopsa_options) + "_" + file_name, 'w+') as f:
+        f.write("command: " + str([mopsa_name, file_dir + file_name] + mopsa_options))
+        f.write(stdout)
+    alarms = re.findall("Uncaught Python exception: ([a-zA-Z-_][a-zA-Z0-9_-]*)", stdout)
+    usedmem = int(int(stderr.split()[-3]) * 8 / 10**6) # this should be ocaml's top_heap_words, now in MB
+    return rt / runs, alarms, stdout, usedmem
+
+def f(percent=100, global_options=None):
+    if global_options is None:
+        global_options = []
+    options = { "GC": ["-gc", f"-gc-percent={percent}", "-hook gctest"] }
+    print(f"GC percent: {percent}, Global options: {global_options}")
+    base_config = { "Type Analysis": "../bin/mopsa-python-types",
+                "Value Analysis": "../bin/mopsa-python" }
+    files = ["bm_fannkuch.py", "bm_float.py", "bm_spectral_norm.py",
+             "bm_nbody.py", "bm_chaos.py", "bm_raytrace.py",
+             "bm_scimark.py", "bm_richards.py",
+             "bm_unpack_sequence.py", "bm_go.py", "bm_hexiom.py",
+             "bm_regex_v8.py" ]
+    fpp_files = ["processInput.py", "choose.py"]
+    s = "| Filename              "
+    for config_name, config_str in base_config.items():
+        for option_name, option_str in options.items():
+            name1 = f"{config_name}"
+            name2 = f"{name1} + {option_name}"
+            s = f"{s}| {name1:35} | {name2:43} | improvement (s, MB) "
+    print(s + "|")
+
+    s = "| Filename              "
+    for config_name, config_str in base_config.items():
+        for option_name, option_str in options.items():
+            name1 = f" time     |TyE|IE|KE|VE|OE|_e|  MEM  "
+            name2 = f"  time    |GC time|TyE|IE|KE|VE|OE|_e|  MEM  "
+            s = f"{s}|{name1}|{name2}|                     "
+    print(s + "|")
+
+    total_noopt = collections.defaultdict(int)
+    total_opt = collections.defaultdict(int)
+    for f in files:
+        print(f"| {f:21} ", end="", flush=True)
+        try:
+            for config_name, config_str in base_config.items():
+                for option_name, option_str in options.items():
+                    t_noopt, errs_noopt, _, usedmem_noopt = run_mopsa(config_str, global_options, f, file_dir=file_dir)
+                    t_opt, errs_opt, stdout, usedmem_opt = run_mopsa(config_str, global_options + option_str, f, file_dir=file_dir)
+                    errs_opt_ty = errs_opt.count("TypeError") + errs_opt.count("AttributeError")
+                    errs_opt_ie = errs_opt.count("IndexError")
+                    errs_opt_ke = errs_opt.count("KeyError")
+                    errs_opt_oe = errs_opt.count("OverflowError")
+                    errs_opt_ve = errs_opt.count("ValueError")
+                    errs_opt_val = len(errs_opt) - errs_opt_ty - errs_opt_ie - errs_opt_ke - errs_opt_oe - errs_opt_ve
+                    errs_noopt_ty = errs_noopt.count("TypeError") + errs_noopt.count("AttributeError")
+                    errs_noopt_ie = errs_noopt.count("IndexError")
+                    errs_noopt_ke = errs_noopt.count("KeyError")
+                    errs_noopt_oe = errs_noopt.count("OverflowError")
+                    errs_noopt_ve = errs_noopt.count("ValueError")
+                    errs_noopt_val = len(errs_noopt) - errs_noopt_ty - errs_noopt_ie - errs_noopt_ke - errs_noopt_oe - errs_noopt_ve
+                    warn = not (errs_noopt == errs_opt)
+                    gc_time = float(stdout[stdout.find(gctime_str)+len(gctime_str):].split()[0])
+
+                    total_noopt[config_name, option_name] += t_noopt
+                    total_opt[config_name, option_name] += t_opt
+                    results[f, config_name, option_name] = (t_opt, errs_opt, usedmem_opt)
+                    results[f, config_name] = (t_noopt, errs_noopt, usedmem_noopt)
+                    err = (100 * (t_noopt - t_opt) / t_noopt).__round__()
+                    mem = (100 * (usedmem_noopt - usedmem_opt) / usedmem_noopt).__round__()
+                    print(f"|{t_noopt:8.3f}s | {errs_noopt_ty:2}|{errs_noopt_ie:2}|{errs_noopt_ke:2}|{errs_noopt_oe:2}|{errs_noopt_ve:2}|{errs_noopt_val:2}|{usedmem_noopt:>4}MB |{t_opt:8.3f}s | {gc_time:5.3f}s| {errs_opt_ty:2}|{errs_opt_ie:2}|{errs_opt_ke:2}|{errs_opt_oe:2}|{errs_opt_ve:2}|{errs_opt_val:2}|{usedmem_opt:>4}MB |    {err:3}%    {mem:3}%     ", end="", flush=True)
+            print("|")
+        except KeyboardInterrupt:
+            print()
+            continue
+
+    cwd = os.getcwd()
+    fpp_dir = file_dir + "pathpicker/"
+    for f in fpp_files:
+        print(f"| {f:21} ", end="", flush=True)
+        try:
+            for config_name, config_str in base_config.items():
+                for option_name, option_str in options.items():
+                    t_noopt, errs_noopt, _, usedmem_noopt = run_mopsa(cwd + "/" + config_str, global_options, f, cwd=fpp_dir)
+                    t_opt, errs_opt, stdout, usedmem_opt = run_mopsa(cwd + "/" + config_str, global_options + option_str, f, cwd=fpp_dir)
+                    errs_opt_ty = errs_opt.count("TypeError") + errs_opt.count("AttributeError")
+                    errs_opt_ie = errs_opt.count("IndexError")
+                    errs_opt_ke = errs_opt.count("KeyError")
+                    errs_opt_oe = errs_opt.count("OverflowError")
+                    errs_opt_ve = errs_opt.count("ValueError")
+                    errs_opt_val = len(errs_opt) - errs_opt_ty - errs_opt_ie - errs_opt_ke - errs_opt_oe - errs_opt_ve
+                    errs_noopt_ty = errs_noopt.count("TypeError") + errs_noopt.count("AttributeError")
+                    errs_noopt_ie = errs_noopt.count("IndexError")
+                    errs_noopt_ke = errs_noopt.count("KeyError")
+                    errs_noopt_oe = errs_noopt.count("OverflowError")
+                    errs_noopt_ve = errs_noopt.count("ValueError")
+                    errs_noopt_val = len(errs_noopt) - errs_noopt_ty - errs_noopt_ie - errs_noopt_ke - errs_noopt_oe - errs_noopt_ve
+                    warn = not (errs_noopt == errs_opt)
+                    gc_time = float(stdout[stdout.find(gctime_str)+len(gctime_str):].split()[0])
+
+                    total_noopt[config_name, option_name] += t_noopt
+                    total_opt[config_name, option_name] += t_opt
+                    results[f, config_name, option_name] = (t_opt, errs_opt, usedmem_opt)
+                    results[f, config_name] = (t_noopt, errs_noopt, usedmem_noopt)
+                    err = (100 * (t_noopt - t_opt) / t_noopt).__round__()
+                    mem = (100 * (usedmem_noopt - usedmem_opt) / usedmem_noopt).__round__()
+                    print(f"|{t_noopt:8.3f}s | {errs_noopt_ty:2}|{errs_noopt_ie:2}|{errs_noopt_ke:2}|{errs_noopt_oe:2}|{errs_noopt_ve:2}|{errs_noopt_val:2}|{usedmem_noopt:>4}MB |{t_opt:8.3f}s | {gc_time:5.3f}s| {errs_opt_ty:2}|{errs_opt_ie:2}|{errs_opt_ke:2}|{errs_opt_oe:2}|{errs_opt_ve:2}|{errs_opt_val:2}|{usedmem_opt:>4}MB |    {err:3}%    {mem:3}%     ", end="", flush=True)
+            print("|")
+        except KeyboardInterrupt:
+            print()
+            continue
+        subprocess.Popen(["bash", "toggle_usage.sh"], cwd=fpp_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
+
+    with open(f"results_{percent}_{'_'.join(global_options)}", "w+") as f:
+        f.write(str(results))
+
+    total = "Total"
+    print(f"| {total:21} ", end="", flush=True)
+    for config_name, config_str in base_config.items():
+        for option_name, option_str in options.items():
+            err = (100 * (total_noopt[config_name, option_name] - total_opt[config_name, option_name]) / total_noopt[config_name, option_name]).__round__()
+            print(f"| {total_noopt[config_name, option_name]:34.3f}s | {total_opt[config_name, option_name]:42.3f}s | {err:18.2f}% ", end="", flush=True)
+    print("|\n")
+
+
+if __name__ == "__main__":
+    for x in reversed([1, 25, 50, 75, 100]):
+        f(x, ["-default-alloc-pol=all"])
+        f(x, ["-default-alloc-pol=range"])
+        f(x, ["-default-alloc-pol=callstack"])
+        f(x, ["-default-alloc-pol=range_callstack"])

@@ -98,10 +98,12 @@ module Domain =
                       srange
                     ;
                     (* Check the return value of the __exit__ method and re-raise the exception when it is false *)
-                    mk_if
-                      (mk_var tmpret srange)
-                      (mk_block [] srange)
-                      (mk_stmt (S_py_raise (Some (mk_var tmpexn erange))) srange)
+                      mk_stmt
+                        (S_py_if
+                           (mk_var tmpret srange,
+                            mk_block [] srange,
+                            mk_stmt (S_py_raise (Some (mk_var tmpexn erange))) srange)
+                        )
                       srange
                   ] srange
                 )

@@ -537,7 +537,7 @@ struct
             ) a basel
       ) man flow |>
     Post.return
-    
+
   (** Fold a set of bases *)
   let exec_fold_bases e el range man flow =
     let base = expr_to_base e in
@@ -561,7 +561,6 @@ struct
           a
       ) man flow |>
     Post.return
-
 
   (** Invalidate a base *)
   let exec_invalidate_base e range man flow =

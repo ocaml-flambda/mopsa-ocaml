@@ -3,7 +3,7 @@
 
 import mopsa
 
-def test_main():
+def test_types():
     class Concatenator:
         def __init__(self, a):
             self.a = a

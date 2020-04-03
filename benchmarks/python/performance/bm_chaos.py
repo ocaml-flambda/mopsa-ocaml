@@ -338,12 +338,24 @@ def main():#runner, args):
 
     # args = runner.parse_args()
     # main(runner, args)
-def test_main():
+def test_types():
     import mopsa
     main()
     mopsa.ignore_exception(ValueError)
     mopsa.ignore_exception(OverflowError)
     mopsa.ignore_exception(IndexError)
+    mopsa.ignore_exception(ZeroDivisionError)
+    # mopsa.assert_exception_exists(TypeError) the typeerror is no longer raised due to a better precision
+    # mopsa.ignore_exception(TypeError)
+    mopsa.assert_safe()
+
+def test_values():
+    import mopsa
+    main()
+    mopsa.ignore_exception(ValueError)
+    mopsa.ignore_exception(OverflowError)
+    mopsa.ignore_exception(IndexError)
+    mopsa.ignore_exception(ZeroDivisionError)
     # mopsa.assert_exception_exists(TypeError) the typeerror is no longer raised due to a better precision
     # mopsa.ignore_exception(TypeError)
     mopsa.assert_safe()

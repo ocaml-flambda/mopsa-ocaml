@@ -201,11 +201,6 @@ struct
 
   let debug fmt = Debug.debug ~channel:name fmt
 
-  let find v a =
-    try find v a
-    with Not_found -> Exceptions.warn "variable %a not found" pp_var v; raise Not_found
-
-
   let merge pre (a1, log1) (a2, log2) =
     debug "generic_nonrel_merge:@.pre = %a@.a1 = %a@.log1 = %a@.a2 = %a@.log2 = %a" VarMap.print pre VarMap.print a1 pp_block log1 VarMap.print a2 pp_block log2;
     generic_nonrel_merge ~top:Value.top ~add ~remove ~find ~meet pre (a1, log1) (a2, log2)
