@@ -104,7 +104,7 @@ let generic_nonrel_merge ~top ~add ~remove ~find ~meet pre (a1, log1) (a2, log2)
       add var top acc
 
     | S_rename ( {ekind = E_var (var1, _)}, {ekind = E_var (var2, _)} ) ->
-      let v = find var2 a (srange stmt) in
+      let v = find var2 a in
       remove var1 acc |>
       add var2 v
 
@@ -201,11 +201,6 @@ struct
 
   let debug fmt = Debug.debug ~channel:name fmt
 
-  let find v a r =
-    try find v a
-    with Not_found -> Exceptions.warn "nonrel: variable %a not found at range %a, domain:@.%a" pp_var v Location.pp_range r print a; raise Not_found
-
-
   let merge pre (a1, log1) (a2, log2) =
     debug "generic_nonrel_merge:@.pre = %a@.a1 = %a@.log1 = %a@.a2 = %a@.log2 = %a" VarMap.print pre VarMap.print a1 pp_block log1 VarMap.print a2 pp_block log2;
     generic_nonrel_merge ~top:Value.top ~add ~remove ~find ~meet pre (a1, log1) (a2, log2)
@@ -273,7 +268,7 @@ struct
   and eval (e:expr) (a:t) : (aexpr * Value.t) option =
     match ekind e with
     | E_var(var, mode) ->
-      let v = find var a e.erange in
+      let v = find var a in
       (A_var (var, mode, v), v) |>
       OptionExt.return
 
@@ -344,7 +339,6 @@ struct
      if r=false, keep the states that may falsify the expression
   *)
   let rec filter ctx (e:expr) (r:bool) (a:t) : t option =
-    let range = erange e in
     match ekind e with
 
     | E_unop (O_log_not, e) ->
@@ -369,7 +363,7 @@ struct
       OptionExt.return
 
     | E_var(var, mode) ->
-      let v = find var a range in
+      let v = find var a in
       let w = Value.filter (man a) v r in
       (if Value.is_bottom w then bottom else
        if var_mode var mode = STRONG then add ctx var w a
@@ -413,7 +407,6 @@ struct
   let zones = Value.zones
 
   let exec ctx stmt man (map:t) : t option =
-    let range = srange stmt in
     match skind stmt with
     | S_remove { ekind = E_var (v, _) }  ->
       VarMap.remove v map |>
@@ -439,7 +432,7 @@ struct
       OptionExt.return
 
     | S_rename ({ ekind = E_var (var1, _) }, { ekind = E_var (var2, _) }) ->
-      let v = find var1 map range in
+      let v = find var1 map in
       VarMap.remove var1 map |>
       VarMap.add var2 v |>
       OptionExt.return
@@ -465,7 +458,7 @@ struct
           | _ -> assert false
         ) vl
       in
-      let value = find v map range in
+      let value = find v map in
       List.fold_left (fun acc v' ->
           add ctx v' value acc
         ) map vl |>
@@ -478,7 +471,7 @@ struct
       let value,map' = List.fold_left
           (fun (accv,accm) -> function
              | { ekind = E_var (vv, _) } ->
-               let accv' = find vv map range |>
+               let accv' = find vv map |>
                            Value.join accv
                in
                let accm' = remove vv accm in
@@ -488,7 +481,7 @@ struct
       in
       let value' =
         if mem v map then
-          Value.join value (find v map range)
+          Value.join value (find v map)
         else
           value
       in

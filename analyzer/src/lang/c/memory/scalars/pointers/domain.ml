@@ -126,7 +126,7 @@ struct
     let a, block' = patch_block block' a' a in
 
     Framework.Transformers.Value.Nonrel.generic_nonrel_merge pre (a,block) (a',block')
-      ~top:Top.TOP ~add:Map.set ~find:(fun v t _ -> Map.find v t) ~remove:Map.remove ~meet:Map.meet
+      ~top:Top.TOP ~add:Map.set ~find:Map.find ~remove:Map.remove ~meet:Map.meet
 
 
   let add p v mode a =
