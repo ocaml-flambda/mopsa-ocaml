@@ -19,7 +19,34 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Abstraction of arrays by smashing. *)
+(** Abstraction of arrays by smashing.
+
+    This domain summarizes the values of arrays elements into a single
+    smash variable. Note that only initialized elements are smashed,
+    since uninitialized elements have an indeterminate value.margin
+
+    In order to determine whether the accessed element has been
+    initialized, the domain uses a numeric variable `uninit(base)` that
+    tracks the offset of the first unintilialized element of memory
+    block `base`.
+
+    For efficiency reason, some specific values of `uninit(base)` are
+    directly encoded in the abstract state. More particularly, we
+    associate to `base` three possible states:
+
+    - Init.None: the base has not been initialized yet, which
+    corresponds to `uninit(base) = 0`.
+
+    - Init.Full : the base has been fully initialize, which
+    corresponds to `uninit(base) = size(base)`
+
+    - Init.Partial : the base has been partially initialized. In this
+    case, we keep a value for `uninit(base)` in the numeric domain.
+
+    Limitations:
+    - We consider only (multi-)arrays of scalars.
+    - We support only sequential initialization starting from offset 0.
+*)
 
 open Mopsa
 open Core.Sig.Stacked.Intermediate
@@ -33,6 +60,7 @@ open Common.Points_to
 open Common.Alarms
 open Format
 open Universal.Numeric.Common
+
 
 module Domain =
 struct
@@ -139,13 +167,17 @@ struct
   module STypeSet = Framework.Lattices.Powerset.Make
       (struct type t = styp let compare = compare_styp let print = pp_styp end)
 
+  (** Initialization state *)
   module Init =
   struct
     type t =
-      | Bot
       | None
+      (* Not yet initialized *)
       | Partial of STypeSet.t
+      (* Partially initialized; we keep the types of the initialized elements. *)
       | Full    of STypeSet.t
+      (* Fully initialized *)
+      | Bot
 
     let bottom = Bot
 
@@ -209,6 +241,7 @@ struct
     let remove st = apply (STypeSet.remove st)
   end
 
+  (* The abstract state is a map from bases to initialization state *)
   module State = Framework.Lattices.Pointwise.Make(Base)(Init)
 
   type t = State.t
@@ -268,8 +301,8 @@ struct
         | _ -> assert false
 
 
-  (** {2 Offset of the first uninitialized byte} *)
-  (** ****************************************** *)
+  (** {2 Offset of the first uninitialized element} *)
+  (** ********************************************* *)
 
   type var_kind += V_c_uninit of base
 
@@ -362,13 +395,14 @@ struct
     match base with
     | { base_valid = false } -> false
     | { base_kind = Var v } when is_c_array_type v.vtyp ->
+      (* Keep arrays of scalars or records with fields having the same scalar type *)
       let rec aux t =
         match remove_typedef_qual t with
         | T_c_array(tt,_) -> aux tt
         | T_c_record{c_record_kind = C_struct; c_record_fields = fields} ->
           let rec aux2 = function
             | [] -> None
-            | [f] -> Some f.c_field_type
+            | [f] -> if is_c_scalar_type f.c_field_type then Some f.c_field_type else None
             | f::tl ->
               match aux2 tl with
               | None -> None
@@ -380,15 +414,6 @@ struct
       aux v.vtyp
     | { base_kind = Addr _ } -> true
     | _ -> false
-
-
-  let smashes_of_base base a =
-    match State.find base a with
-    | Bot | None -> []
-    | Full ts | Partial ts ->
-      STypeSet.fold
-        (fun styp acc -> { base; styp } :: acc)
-        ts []
 
 
   (** [is_aligned o n man flow] checks whether the value of an
@@ -406,6 +431,7 @@ struct
           Universal.Numeric.Common.C.included c c'
         )
 
+  (** Functions for managing smash variables *)
   let add_smash base styp range man flow =
     man.post
       (mk_add_var (mk_smash_var {base;styp}) range)
@@ -436,6 +462,7 @@ struct
       (mk_fold_var (mk_smash_var {base;styp}) (List.map (fun b -> mk_smash_var {base=b;styp}) basel) range)
       ~zone:Z_c_scalar flow
 
+  (** Functions for managing uninit variables *)
   let add_uninit base range man flow =
     man.post
       (mk_add_var (mk_uninit_var base) range)
@@ -466,11 +493,13 @@ struct
       (mk_fold_var (mk_uninit_var base) (List.map mk_uninit_var basel) range)
       ~zone:Z_c_scalar flow
 
+  (** Fold an exec transfer function over a set of stypes *)
   let fold_stypes (f:styp -> range -> _ man -> 'a flow -> 'a post) ts range man flow =
     STypeSet.fold
         (fun styp acc -> Post.bind (f styp range man) acc)
         ts (Post.return flow)
 
+  (** Fold an exec transfer function smashes of a base *)
   let exec_smashes (f:styp -> range -> _ man -> 'a flow -> 'a post) base a range man flow =
     match State.find base a with
     | Init.Bot        -> Post.return flow
@@ -478,12 +507,15 @@ struct
     | Init.Full ts
     | Init.Partial ts -> fold_stypes f ts range man flow
 
+  (** Execute a transfer when a uninit variable exists *)
   let exec_uninit (f:range -> _ man -> 'a flow -> 'a post) base a range man flow =
     match State.find base a with
     | Init.Partial ts -> f range man flow
     | _ -> Post.return flow
 
 
+  (** Optimized assume function that uses intervals to check a
+      condition or falls back to classic assume *)
   let assume_optim cond ~fthen ~felse ~zone man flow =
     man.eval cond ~zone:(zone, Z_u_num) flow >>$ fun cond flow ->
     let op,e1,e2 = match ekind cond with
@@ -635,7 +667,23 @@ struct
           man.post (mk_add uninit range) ~zone:Z_c_scalar flow >>$ fun () flow ->
           man.post (mk_assign uninit zero range) ~zone:Z_c_scalar flow
         else
-          (* In the case of universally quantified offset, we check three cases: *)
+          (* In the case of universally quantified offset, we check three cases: 
+
+             Case #1: fully initialized
+                0            size - |elm|
+                |----------------|------>
+               min              max
+
+            Case #2: partially initialized until max + |elm|
+                0            size - |elm|
+                |---------x------|------>
+               min       max
+
+             Case #3: nop
+                0            size - |elm|
+                |----x-----------|------>
+                    min
+          *)
           let min, max = Common.Quantified_offset.bound offset in
           let elm = mk_z (sizeof_type lval.etyp) range in
           eval_base_size base range man flow >>$ fun size flow ->
@@ -643,21 +691,13 @@ struct
             ~fthen:(fun flow ->
                 assume_optim (eq max (sub size elm range) range)
                   ~fthen:(fun flow ->
-                      (* Case #1: fully initialized
-                            0            size - |elm|
-                            |----------------|------>
-                           min              max
-                      *)
+                      (* Case #1 *)
                       let init' = Init.Full (STypeSet.singleton s.styp) in
                       set_env T_cur (State.add base init' a) man flow |>
                       man.post (mk_add_var vsmash range) ~zone:Z_c_scalar
                     )
                   ~felse:(fun flow ->
-                      (* Case #2: partially initialized until max + |elm|
-                            0            size - |elm|
-                            |---------x------|------>
-                           min       max
-                      *)
+                      (* Case #2 *)
                       let flow = set_env T_cur (State.add base (Init.Partial (STypeSet.singleton s.styp)) a) man flow in
                       man.post (mk_add_var vsmash range) ~zone:Z_c_scalar flow  >>$ fun () flow ->
                       man.post (mk_add uninit range) ~zone:Z_c_scalar flow >>$ fun () flow ->
@@ -665,11 +705,7 @@ struct
                     ) ~zone:Z_c_scalar man flow
               )
             ~felse:(fun flow ->
-                (* Case #3: nop
-                     0            size - |elm|
-                     |----x-----------|------>
-                         min
-                *)
+                (* Case #3 *)
                 Post.return flow
               ) ~zone:Z_c_scalar man flow
 
@@ -684,6 +720,23 @@ struct
         if not (is_aligned offset lval.etyp man flow) || not (is_expr_forall_quantified offset) then
           Post.return flow
         else
+          (* In case of partially intialized base, three cases are possible:
+
+             Case #1: fully initialized
+                0      uninit     size - |elm|
+                |---x----0----------|------>
+                   min             max
+
+             Case #2: partially initialized until max + |elm|
+                0      uninit     size - |elm|
+                |---x----0------x---|------>
+                   min         max
+
+             Case #3: nop
+                0  uninit      size - |elm|
+                |----0----x---------|------>
+                         min       
+          *)
           let min, max = Common.Quantified_offset.bound offset in
           let elm = mk_z (sizeof_type lval.etyp) range in
           eval_base_size base range man flow >>$ fun size flow ->
@@ -691,30 +744,18 @@ struct
             ~fthen:(fun flow ->
                 assume_optim (eq max (sub size elm range) range)
                   ~fthen:(fun flow ->
-                      (* Case #1: fully initialized
-                            0      uninit     size - |elm|
-                            |---x----0----------|------>
-                               min             max
-                      *)
+                      (* Case #1 *)
                       let init' = Init.Full (STypeSet.singleton s.styp) in
                       set_env T_cur (State.add base init' a) man flow |>
                       Post.return
                     )
                   ~felse:(fun flow ->
-                      (* Case #2: partially initialized until max + |elm|
-                            0      uninit     size - |elm|
-                            |---x----0------x---|------>
-                               min         max
-                      *)
+                      (* Case #2 *)
                       man.post (mk_assign uninit (add max elm range) range) ~zone:Z_c_scalar flow
                     ) ~zone:Z_c_scalar man flow
               )
             ~felse:(fun flow ->
-                (* Case #3: nop
-                      0  uninit      size - |elm|
-                      |----0----x---------|------>
-                               min       
-                *)
+                (* Case #3 *)
                 Post.return flow
               )  ~zone:Z_c_scalar man flow
 
@@ -728,6 +769,7 @@ struct
       Post.return flow
     else
       let a = get_env T_cur man flow in
+      (* Non-aligned offset destroys all existing smashes *)
       if not (is_aligned offset (under_type p.etyp) man flow) then
         exec_smashes (forget_smash base) base a range man flow
       else
@@ -739,53 +781,103 @@ struct
         | Init.Bot -> Post.return flow
 
         | Init.None ->
-          let init = Init.Partial (STypeSet.singleton s.styp) in
-          let flow = set_env T_cur (State.add base init a) man flow in
-          let strong_smash = mk_smash_expr s ~mode:(Some STRONG) range in
-          let uninit = mk_uninit_expr base ~mode range in
-          man.post (mk_add_var vsmash range) ~zone:Z_c_scalar flow >>$ fun () flow ->
-          man.post (mk_assign strong_smash rval range) ~zone:Z_c_scalar flow >>$ fun () flow ->
-          man.post (mk_add uninit range) ~zone:Z_c_scalar flow >>$ fun () flow ->
+          (* When the base has not been initialized yet, two cases are possible:
+
+             Case #1: assign first element
+                0           size - |elm|
+                |----------------|------>
+                offset
+
+             Case #2: nop
+                0           size - |elm|
+                |-----x-----------|------>
+                    offset
+          *)
           assume_optim (eq offset zero range)
             ~fthen:(fun flow ->
+                (* Case #1 *)
+                (* Since the previous state was Init.None, the smash
+                   variable is not the environment yet. So create it
+                   and assign rval to it. Since we are modifying the
+                   first element, we use a strong update. *)
+                let init = Init.Partial (STypeSet.singleton s.styp) in
+                let flow = set_env T_cur (State.add base init a) man flow in
+                let strong_smash = mk_smash_expr s ~mode:(Some STRONG) range in
+                let uninit = mk_uninit_expr base ~mode range in
+                man.post (mk_add_var vsmash range) ~zone:Z_c_scalar flow >>$ fun () flow ->
+                man.post (mk_assign strong_smash rval range) ~zone:Z_c_scalar flow >>$ fun () flow ->
+                man.post (mk_add uninit range) ~zone:Z_c_scalar flow >>$ fun () flow ->
                 man.post (mk_assign uninit elm range) ~zone:Z_c_scalar flow
               )
             ~felse:(fun flow ->
-                man.post (mk_assign uninit zero range) ~zone:Z_c_scalar flow
+                (* Case #2 *)
+                Post.return flow
               ) ~zone:Z_c_scalar man flow
 
         | Init.Full ts ->
+          (* Destroy existing incompatible smashes *)
           fold_stypes (remove_smash base) (STypeSet.remove s.styp ts) range man flow >>$ fun () flow ->
           if not (STypeSet.mem s.styp ts) then
-            man.post (mk_forget_var vsmash range) ~zone:Z_c_scalar flow
+            (* If this is the first time we access this type, we add
+               the corresponding smash *)
+            let init = Init.Full (STypeSet.singleton s.styp) in
+            let flow = map_env T_cur (State.add base init) man flow in
+            man.post (mk_add_var vsmash range) ~zone:Z_c_scalar flow
           else
+            (* If we have already a smash for this type, we update it
+               with a weak update *)
             man.post (mk_assign esmash rval range) ~zone:Z_c_scalar flow
 
         | Init.Partial ts ->
+          (* Destroy existing incompatible smashes *)
           fold_stypes (remove_smash base) (STypeSet.remove s.styp ts) range man flow >>$ fun () flow ->
           if not (STypeSet.mem s.styp ts) then
+            (* If this is the first time we access this type, we add
+               the corresponding smash *)
             let init = Init.Partial (STypeSet.singleton s.styp) in
             let flow = set_env T_cur (State.add base init a) man flow in
             man.post (mk_add_var vsmash range) ~zone:Z_c_scalar flow
           else
+            (* If we have already a smash for this type, we update it
+               with a weak update *)
             man.post (mk_assign esmash rval range) ~zone:Z_c_scalar flow >>$ fun () flow ->
+            (* To update where we are in the initialization, three cases are considered:
+
+             Case #1: fully initialized
+                0           uninit = size - |elm|
+                |------------------|------>
+                                offset
+
+             Case #2: advance initialization
+                0     uninit    size - |elm|
+                |--------x----------|------>
+                       offset
+
+             Case #3: nop
+                0  uninit      size - |elm|
+                |----x------x------|------>
+                          offset
+            *)
             let uninit = mk_uninit_expr base ~mode range in
             eval_base_size base range man flow >>$ fun size flow ->
             assume_optim (eq uninit offset range)
               ~fthen:(fun flow ->
                   assume_optim (eq offset (sub size elm range) range)
                     ~fthen:(fun flow ->
+                        (* Case #1 *)
                         let init = Init.Full (STypeSet.singleton s.styp) in
                         let flow = set_env T_cur (State.add base init a) man flow in
                         man.post (mk_remove uninit range) ~zone:Z_c_scalar flow
                       )
                     ~felse:(fun flow ->
+                        (* Case #2 *)
                         let init = Init.Partial (STypeSet.singleton s.styp) in
                         let flow = set_env T_cur (State.add base init a) man flow in
                         man.post (mk_assign uninit (add uninit elm range) range) ~zone:Z_c_scalar flow
                       ) ~zone:Z_c_scalar man flow
                 )
               ~felse:(fun flow ->
+                  (* Case #3 *)
                   let init = Init.Partial (STypeSet.singleton s.styp) in
                   let flow = set_env T_cur (State.add base init a) man flow in
                   Post.return flow
@@ -853,20 +945,38 @@ struct
 
       | Init.Full ts ->
         if not (STypeSet.mem s.styp ts) then
+          (* No smash exists for this type *)
           Eval.singleton (mk_top (under_type p.etyp) range) flow
         else
+          (* The base has been fully initialized and we have a smash
+             for this type, so rewrite the deref into the smash *)
           Eval.singleton esmash flow
 
       | Init.Partial ts ->
         if not (STypeSet.mem s.styp ts) then
+          (* No smash exists for this type *)
           Eval.singleton (mk_top (under_type p.etyp) range) flow
         else
+          (* When accessing a partially initialized base, two cases are possible 
+
+             Case #1: before the uninitialized part
+                0                uninit
+                |------x------------|------>
+                    offset
+
+             Case #2: after the uninitialized part
+                0     uninit    
+                |--------|----------x------>
+                                 offset
+          *)
           let uninit = mk_uninit_expr base ~mode range in
           assume_optim (ge offset uninit range)
             ~fthen:(fun flow ->
+                (* Case #2 *)
                 Eval.singleton (mk_top (under_type p.etyp) range) flow
               )
             ~felse:(fun flow ->
+                (* Case #1 *)
                 Eval.singleton esmash flow
               ) ~zone:Z_c_scalar man flow
 
