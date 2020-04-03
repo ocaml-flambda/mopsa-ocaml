@@ -23,7 +23,9 @@
     fork-join trajectory in the abstraction DAG.
 *)
 
+open Ast.Var
 open Ast.Stmt
+open Ast.Expr
 
 (** Logs *)
 type log =
@@ -115,3 +117,83 @@ let append_snd stmt log =
   | L_empty -> L_tuple (empty, append stmt empty)
   | L_singleton (block, inner) -> assert false
   | L_tuple (fst,snd) -> L_tuple (fst, append stmt snd)
+
+
+
+(** {2 Generic merge} *)
+(** ***************** *)
+
+(** Effect of a statement in terms of modified and removed variables *)
+type effect = {
+  modified: VarSet.t;
+  removed: VarSet.t;
+}
+
+(** Get the effect of a statement *)
+let get_stmt_effect stmt : effect =
+  match skind stmt with
+  | S_add { ekind = E_var (var, _) } ->
+    { modified = VarSet.singleton var;
+      removed = VarSet.empty }
+
+  | S_remove { ekind = E_var (var, _) } ->
+    { modified = VarSet.empty ;
+      removed = VarSet.singleton var; }
+
+  | S_assign ({ ekind = E_var (var, _) },_) ->
+    { modified = VarSet.singleton var;
+      removed = VarSet.empty }
+
+  | S_assume (e) ->
+    { modified = VarSet.of_list (Ast.Visitor.expr_vars e);
+      removed = VarSet.empty }
+
+  | S_rename ( {ekind = E_var (var1, _)}, {ekind = E_var (var2, _)} ) ->
+    { modified = VarSet.singleton var2;
+      removed = VarSet.singleton var1 }
+
+  | S_expand({ekind = E_var(var,_)}, vl) ->
+    { modified = VarSet.of_list (List.map (function {ekind = E_var(v,_)} -> v | _ -> assert false) vl);
+      removed = VarSet.empty }
+
+  | S_fold({ekind = E_var(var,_)}, vl) ->
+    { modified = VarSet.singleton var;
+      removed = VarSet.of_list (List.map (function {ekind = E_var(v,_)} -> v | _ -> assert false) vl) }
+
+  | S_forget { ekind = E_var (var, _) } ->
+    { modified = VarSet.singleton var;
+      removed = VarSet.empty }
+
+  | _ -> Exceptions.panic "get_stmt_effect: unsupported statement %a" pp_stmt stmt
+
+
+(** Get the effect of a log *)
+let get_log_effect (log:block) : effect =
+  List.fold_right
+    (fun stmt acc ->
+       let effect = get_stmt_effect stmt in
+       { modified = VarSet.union effect.modified (VarSet.diff acc.modified effect.removed);
+         removed  = VarSet.union effect.removed (VarSet.diff acc.removed effect.modified); }
+    ) log {modified = VarSet.empty; removed = VarSet.empty}
+
+
+(** Apply the effect of a log on an abstract element *)
+let apply_effect effect ~add ~remove ~find (other:'a) (this:'a) : 'a =
+  let a = VarSet.fold (fun v acc ->
+      add v (find v other) acc
+    ) effect.modified this
+  in
+  VarSet.fold (fun v acc ->
+      remove v acc
+    ) effect.removed a
+  
+
+(** Generic merge operator for non-relational domains *)
+let generic_domain_merge ~add ~find ~remove (a1, log1) (a2, log2) =
+  let e1 = get_log_effect log1 in
+  let a2' = apply_effect e1 a1 a2 ~add ~remove ~find in
+
+  let e2 = get_log_effect log2 in
+  let a1' = apply_effect e2 a2 a1 ~add ~remove ~find in
+
+  a1',a2'

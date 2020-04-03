@@ -22,6 +22,7 @@
 (** Journal logs *)
 
 open Ast.Stmt
+open Ast.Var
 
 type log
 
@@ -48,3 +49,5 @@ val append_fst : stmt -> log -> log
 val append_snd : stmt -> log -> log
 
 val print : Format.formatter -> log -> unit
+
+val generic_domain_merge : add:(var->'b->'a->'a) -> find:(var->'a->'b) -> remove:(var->'a->'a) -> ('a*block) -> ('a*block) -> 'a*'a

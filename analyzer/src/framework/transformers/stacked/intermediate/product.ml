@@ -165,44 +165,41 @@ struct
     let ctx = Context.get_most_recent (Flow.get_ctx flow1) (Flow.get_ctx flow2) |>
               Context.get_unit
     in
-    Flow.merge (fun tk oa1 oa2 ->
-        match tk, oa1, oa2 with
-        (* Logs concern only cur environments *)
-        | T_cur, Some a1, Some a2 ->
-          (* Merge the shared sub-tree *)
-          let p = Flow.get T_cur man.lattice pre |> man.get_sub in
-          let slog1 = man.get_sub_log log1 in
-          let slog2 = man.get_sub_log log2 in
+    Flow.map2zo
+      (fun _ a1 -> man.lattice.bottom)
+      (fun _ a2 -> man.lattice.bottom)
+      (fun tk a1 a2 ->
+         match tk with
+         (* Logs concern only cur environments *)
+         | T_cur ->
+           (* Merge the shared sub-tree *)
+           let p = Flow.get T_cur man.lattice pre |> man.get_sub in
+           let slog1 = man.get_sub_log log1 in
+           let slog2 = man.get_sub_log log2 in
 
-          let a1,a2 =
-            if Log.is_empty slog1 then
-              let merged = man.get_sub a2 in
-              let a1 = man.set_sub merged a1 in
-              a1,a2
-            else if Log.is_empty slog2 then
-              let merged = man.get_sub a1 in
-              let a2 = man.set_sub merged a2 in
-              a1,a2
-            else
-              let merged = man.merge_sub p
-                  (man.get_sub a1, slog1)
-                  (man.get_sub a2, slog2)
-              in
-              let a1 = man.set_sub merged a1 in
-              let a2 = man.set_sub merged a2 in
-              a1,a2
-          in
-          let a = man.lattice.meet ctx a1 a2 in
-          if man.lattice.is_bottom a then None else Some a
+           let a1,a2 =
+             if Log.is_empty slog1 then
+               let merged = man.get_sub a2 in
+               let a1 = man.set_sub merged a1 in
+               a1,a2
+             else if Log.is_empty slog2 then
+               let merged = man.get_sub a1 in
+               let a2 = man.set_sub merged a2 in
+               a1,a2
+             else
+               let merged = man.merge_sub p
+                   (man.get_sub a1, slog1)
+                   (man.get_sub a2, slog2)
+               in
+               let a1 = man.set_sub merged a1 in
+               let a2 = man.set_sub merged a2 in
+               a1,a2
+           in
+           man.lattice.meet ctx a1 a2
 
-        (* For the other tokens, compute the meet of the environments *)
-        | _ ->
-          OptionExt.absorb2 (fun a1 a2 ->
-              let a = man.lattice.meet ctx a1 a2 in
-              if man.lattice.is_bottom a then None else Some a
-            ) oa1 oa2
-      ) merge_alarms man.lattice flow1 flow2
-
+         (* For the other tokens, compute the meet of the environments *)
+         | _ -> man.lattice.meet ctx a1 a2
+      ) merge_alarms flow1 flow2
 
 
   (** Merge the conflicts between distinct domains in a pointwise result *)
@@ -267,7 +264,6 @@ struct
     Cases.map_fold_conjunctions (fun (flow1,log1) (flow2,log2) ->
         merge_flows ~merge_alarms:AlarmSet.inter man pre (flow1,log1) (flow2,log2)
       ) r
-
 
 
   (** {2 Reduction manager} *)

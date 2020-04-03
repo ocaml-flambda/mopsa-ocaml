@@ -202,6 +202,11 @@ struct
       )
       tmap1 tmap2
 
+  let map2zo f1 f2 f (tmap1: 'a t) (tmap2: 'a t) : 'a t =
+    top_lift2
+      (Map.map2zo f1 f2 f)
+      tmap1 tmap2
+
   let neutral2 (f: token -> 'a -> 'a -> 'a) (tmap1: 'a t) (tmap2: 'a t) : 'a t =
     top_lift2
       (Map.map2zo

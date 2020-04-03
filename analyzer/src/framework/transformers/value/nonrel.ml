@@ -90,41 +90,6 @@ let find_var_bounds_ctx_opt v uctx =
   with Not_found -> None
 
 
-
-(** {2 Generic non-relational merger} *)
-(** ********************************* *)
-
-(** Generic merge operation for non-relational domains *)
-let generic_nonrel_merge ~top ~add ~remove ~find ~meet pre (a1, log1) (a2, log2) =
-  let patch stmt a acc =
-    match skind stmt with
-    | S_forget { ekind = E_var (var, _) }
-    | S_add { ekind = E_var (var, _) }
-    | S_assign({ ekind = E_var (var, _)}, _) ->
-      add var top acc
-
-    | S_rename ( {ekind = E_var (var1, _)}, {ekind = E_var (var2, _)} ) ->
-      let v = find var2 a in
-      remove var1 acc |>
-      add var2 v
-
-    | S_remove { ekind = E_var (var, _) } ->
-      remove var acc
-
-    | S_expand({ekind = E_var(var,_)}, vl)
-    | S_fold({ekind = E_var(var,_)}, vl) ->
-      let vars = List.map (function { ekind = E_var(v,_) } -> v | _ -> assert false) vl in
-      List.fold_left (fun acc v -> add v top acc) acc vars
-
-    | S_assume e -> acc
-
-    | _ -> Exceptions.panic ~loc:__LOC__ "merge: unsupported statement %a" pp_stmt stmt
-  in
-  let a2' = List.fold_left (fun acc stmt -> patch stmt a1 acc) a2 (List.rev log1) in
-  let a1' = List.fold_left (fun acc stmt -> patch stmt a2 acc) a1 (List.rev log2) in
-  meet a1' a2'
-
-
 (** {2 Non-relational domain} *)
 (** ************************* *)
 
@@ -208,7 +173,15 @@ struct
 
   let merge pre (a1, log1) (a2, log2) =
     debug "generic_nonrel_merge:@.pre = %a@.a1 = %a@.log1 = %a@.a2 = %a@.log2 = %a" VarMap.print pre VarMap.print a1 pp_block log1 VarMap.print a2 pp_block log2;
-    generic_nonrel_merge ~top:Value.top ~add ~remove ~find ~meet pre (a1, log1) (a2, log2)
+    let a1', a2' = Log.generic_domain_merge ~add ~remove ~find (a1, log1) (a2, log2) in
+    try VarMap.map2zo
+      (fun _ v1 -> v1)
+      (fun _ v2 -> v2)
+      (fun _ v1 v2 ->
+         let v = Value.meet v1 v2 in
+         if Value.is_bottom v then raise Bot.Found_BOT else v
+      ) a1' a2'
+    with Bot.Found_BOT -> VarMap.bottom
 
 
   (* Constrain the value of a variable with its bounds *)

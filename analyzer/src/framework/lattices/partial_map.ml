@@ -276,4 +276,12 @@ struct
     | TOP -> raise Top.Found_TOP
     | Nbt m -> PMap.cardinal m
 
+  let map2zo f1 f2 f (a1:t) (a2:t) : t =
+    if a1 == a2 then a1
+    else match a1, a2 with
+      | BOT, x | x, BOT -> BOT
+      | TOP, x | x, TOP -> x
+      | Nbt m1, Nbt m2 -> Nbt (PMap.map2zo f1 f2 f m1 m2)
+
+
 end

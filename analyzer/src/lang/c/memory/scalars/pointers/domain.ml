@@ -125,8 +125,10 @@ struct
     let a', block = patch_block block a a' in
     let a, block' = patch_block block' a' a in
 
-    Framework.Transformers.Value.Nonrel.generic_nonrel_merge pre (a,block) (a',block')
-      ~top:Top.TOP ~add:Map.set ~find:Map.find ~remove:Map.remove ~meet:Map.meet
+    let a, a' = Log.generic_domain_merge (a,block) (a',block')
+        ~add:Map.set ~find:Map.find ~remove:Map.remove
+    in
+    Map.meet a a'
 
 
   let add p v mode a =
