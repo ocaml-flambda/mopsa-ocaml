@@ -133,7 +133,7 @@ struct
           else
             try
               debug "bases' = %a@\n" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_expr) (List.map (fun x -> mk_py_object x range) bases');
-              let mro = c3_lin ({addr_kind= (A_py_class (C_user cls, bases')); addr_group=G_all; addr_mode = STRONG}, None) in
+              let mro = c3_lin ({addr_kind= (A_py_class (C_user cls, bases')); addr_partitioning=G_all; addr_mode = STRONG}, None) in
               debug "MRO of %a: %a@\n" pp_var cls.py_cls_var
                 (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
                    (fun fmt x -> Format.fprintf fmt "%a" pp_expr (mk_py_object x (srange stmt))))

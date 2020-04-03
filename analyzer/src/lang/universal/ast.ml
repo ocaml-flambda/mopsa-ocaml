@@ -224,24 +224,24 @@ let register_addr_kind (info: addr_kind info) =
 
 
 (** Addresses are grouped by static criteria to make them finite *)
-type addr_group = ..
+type addr_partitioning = ..
 
-type addr_group +=
+type addr_partitioning +=
   | G_all (** Group all addresses into one *)
 
-let addr_group_compare_chain : (addr_group -> addr_group -> int) ref =
+let addr_partitioning_compare_chain : (addr_partitioning -> addr_partitioning -> int) ref =
   ref (fun a1 a2 -> compare a1 a2)
 
-let addr_group_pp_chain : (Format.formatter -> addr_group -> unit) ref =
+let addr_partitioning_pp_chain : (Format.formatter -> addr_partitioning -> unit) ref =
   ref (fun fmt g ->
       match g with
       | _ -> Format.pp_print_string fmt "*"
     )
 
-let pp_addr_group fmt ak =
-  !addr_group_pp_chain fmt ak
+let pp_addr_partitioning fmt ak =
+  !addr_partitioning_pp_chain fmt ak
 
-let pp_addr_group_hash fmt (g:addr_group) =
+let pp_addr_partitioning_hash fmt (g:addr_partitioning) =
   Format.fprintf fmt "%xd"
     (* Using Hashtbl.hash leads to collisions. Hashtbl.hash is
        equivalent to Hashtbl.hash_param 10 100. By increasing the
@@ -251,19 +251,19 @@ let pp_addr_group_hash fmt (g:addr_group) =
     (Hashtbl.hash_param 30 100 g)
 
 
-let compare_addr_group a1 a2 =
-  if a1 == a2 then 0 else !addr_group_compare_chain a1 a2
+let compare_addr_partitioning a1 a2 =
+  if a1 == a2 then 0 else !addr_partitioning_compare_chain a1 a2
 
-let register_addr_group (info: addr_group info) =
-  addr_group_compare_chain := info.compare !addr_group_compare_chain;
-  addr_group_pp_chain := info.print !addr_group_pp_chain;
+let register_addr_partitioning (info: addr_partitioning info) =
+  addr_partitioning_compare_chain := info.compare !addr_partitioning_compare_chain;
+  addr_partitioning_pp_chain := info.print !addr_partitioning_pp_chain;
   ()
 
 
 (** Heap addresses. *)
 type addr = {
   addr_kind : addr_kind;   (** Kind of the address. *)
-  addr_group : addr_group; (** Group of the address *)
+  addr_partitioning : addr_partitioning; (** Group of the address *)
   addr_mode : mode;        (** Assignment mode of address (string or weak) *)
 }
 
@@ -273,7 +273,7 @@ let akind addr = addr.addr_kind
 let pp_addr fmt a =
   fprintf fmt "@@%a:%a:%s"
     pp_addr_kind a.addr_kind
-    pp_addr_group a.addr_group
+    pp_addr_partitioning a.addr_partitioning
     (match a.addr_mode with WEAK -> "w" | STRONG -> "s")
 
 
@@ -281,7 +281,7 @@ let compare_addr a b =
   if a == b then 0
   else Compare.compose [
       (fun () -> compare_addr_kind a.addr_kind b.addr_kind);
-      (fun () -> compare_addr_group a.addr_group b.addr_group);
+      (fun () -> compare_addr_partitioning a.addr_partitioning b.addr_partitioning);
       (fun () -> compare_mode a.addr_mode b.addr_mode);
     ]
 

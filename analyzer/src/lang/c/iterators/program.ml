@@ -144,7 +144,7 @@ struct
     mk_addr
       {
         addr_kind = Stubs.Ast.A_stub_resource "argv";
-        addr_group = G_all;
+        addr_partitioning = G_all;
         addr_mode = STRONG;
       }
       ~etyp:(T_c_pointer (T_c_pointer s8))
@@ -156,7 +156,7 @@ struct
     mk_addr
       {
         addr_kind = Stubs.Ast.A_stub_resource "arg";
-        addr_group = G_all;
+        addr_partitioning = G_all;
         addr_mode = mode;
       }
       ~etyp:(T_c_pointer s8)
@@ -247,7 +247,7 @@ struct
        arguments. It should greater than 1 due to the presence of the
        program name. Also, it should not exceed INT_MAX - 1, because
        the argument argv[argc + 1] contains terminating NULL pointer
-       (i.e. to avoid integer overflow).  
+       (i.e. to avoid integer overflow).
     *)
 
     let argc = mk_var argc_var range in

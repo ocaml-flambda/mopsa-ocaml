@@ -148,8 +148,8 @@ struct
       bind_list [e1; e2] (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
       bind_some (fun el flow ->
           let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
-          let addr_group a = a.addr_group in
-          match addr_group @@ fst @@ object_of_expr e1, addr_group @@ fst @@ object_of_expr e2 with
+          let addr_partitioning a = a.addr_partitioning in
+          match addr_partitioning @@ fst @@ object_of_expr e1, addr_partitioning @@ fst @@ object_of_expr e2 with
           | Addr_env.G_py_bool (Some b1), Addr_env.G_py_bool (Some b2) ->
             man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_bool (b1 = b2) range) flow
           | _ ->

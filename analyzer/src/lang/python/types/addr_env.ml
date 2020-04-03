@@ -58,14 +58,14 @@ struct
 end
 
 
-type addr_group +=
+type addr_partitioning +=
   | G_py_bool of bool option
   | G_group of addr * addr
 
 
 
 let () =
-  register_addr_group {
+  register_addr_partitioning {
     print = (fun next fmt g ->
         match g with
         | G_py_bool (Some true) -> Format.fprintf fmt "true"
@@ -150,14 +150,14 @@ struct
     Format.fprintf fmt "addrs: @[%a@]@\n" AMap.print m
 
   let init prog man flow =
-    addr_none := Some {addr_group = G_all; addr_kind = A_py_instance (fst @@ find_builtin "NoneType"); addr_mode = STRONG};
-    addr_notimplemented := Some {addr_group = G_all; addr_kind = A_py_instance (fst @@ find_builtin "NotImplementedType"); addr_mode = STRONG};
-    addr_integers := Some {addr_group = G_all; addr_kind = A_py_instance (fst @@ find_builtin "int"); addr_mode = WEAK};
-    addr_float := Some {addr_group = G_all; addr_kind = A_py_instance (fst @@ find_builtin "float"); addr_mode = WEAK};
-    addr_strings := Some {addr_group = G_all; addr_kind = A_py_instance (fst @@ find_builtin "str"); addr_mode = WEAK};
-    addr_true := Some {addr_group = G_py_bool (Some true); addr_kind = A_py_instance (fst @@ find_builtin "bool"); addr_mode = STRONG};
-    addr_false := Some {addr_group = G_py_bool (Some false); addr_kind = A_py_instance (fst @@ find_builtin "bool"); addr_mode = STRONG};
-    addr_bool_top := Some {addr_group = G_py_bool None; addr_kind = A_py_instance (fst @@ find_builtin "bool"); addr_mode = WEAK};
+    addr_none := Some {addr_partitioning = G_all; addr_kind = A_py_instance (fst @@ find_builtin "NoneType"); addr_mode = STRONG};
+    addr_notimplemented := Some {addr_partitioning = G_all; addr_kind = A_py_instance (fst @@ find_builtin "NotImplementedType"); addr_mode = STRONG};
+    addr_integers := Some {addr_partitioning = G_all; addr_kind = A_py_instance (fst @@ find_builtin "int"); addr_mode = WEAK};
+    addr_float := Some {addr_partitioning = G_all; addr_kind = A_py_instance (fst @@ find_builtin "float"); addr_mode = WEAK};
+    addr_strings := Some {addr_partitioning = G_all; addr_kind = A_py_instance (fst @@ find_builtin "str"); addr_mode = WEAK};
+    addr_true := Some {addr_partitioning = G_py_bool (Some true); addr_kind = A_py_instance (fst @@ find_builtin "bool"); addr_mode = STRONG};
+    addr_false := Some {addr_partitioning = G_py_bool (Some false); addr_kind = A_py_instance (fst @@ find_builtin "bool"); addr_mode = STRONG};
+    addr_bool_top := Some {addr_partitioning = G_py_bool None; addr_kind = A_py_instance (fst @@ find_builtin "bool"); addr_mode = WEAK};
     set_env T_cur empty man flow
 
   let fold_intfloatstr man v flow fstmt =

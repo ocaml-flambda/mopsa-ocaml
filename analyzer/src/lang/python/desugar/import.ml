@@ -163,7 +163,7 @@ module Domain =
                   in
                   let addr = {
                     addr_kind = A_py_module (M_user(name, globals));
-                    addr_group = G_all;
+                    addr_partitioning = G_all;
                     addr_mode = STRONG;
                   }
                   in
@@ -221,7 +221,7 @@ module Domain =
           in
           let addr = {
             addr_kind = A_py_function kind;
-            addr_group = G_all;
+            addr_partitioning = G_all;
             addr_mode = STRONG;
           }
           in
@@ -239,7 +239,7 @@ module Domain =
       if name <> "stdlib" then
         let addr = {
           addr_kind = A_py_module(M_builtin name);
-          addr_group = G_all;
+          addr_partitioning = G_all;
           addr_mode = STRONG;
         }
         in
@@ -335,7 +335,7 @@ module Domain =
                             } in
                           let addr = {
                             addr_kind = A_py_class (C_annot newc, obases);
-                            addr_group = G_all;
+                            addr_partitioning = G_all;
                             addr_mode = STRONG;
                           } in
                           let mro = c3_lin (addr, None) in
@@ -374,7 +374,7 @@ module Domain =
                 } in
               let addr = {
                 addr_kind = A_py_function (F_annot newf);
-                addr_group = G_all;
+                addr_partitioning = G_all;
                 addr_mode = STRONG;
               } in
               let () =
@@ -408,7 +408,7 @@ module Domain =
       in
       let body, globals, flow = parse None stmts globals flow in
       let addr = { addr_kind = A_py_module(M_user (name, globals));
-                   addr_group = G_all;
+                   addr_partitioning = G_all;
                    addr_mode = STRONG; } in
       (addr, None), body, flow
 

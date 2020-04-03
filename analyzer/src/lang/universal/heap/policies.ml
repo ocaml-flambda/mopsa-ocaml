@@ -24,13 +24,13 @@
 open Mopsa
 open Ast
 
-type addr_group +=
+type addr_partitioning +=
    | G_range of range
    | G_stack_range of Callstack.cs * range
    | G_stack of Callstack.cs
 
 let () =
-  register_addr_group {
+  register_addr_partitioning {
       compare = (fun next g1 g2 ->
         match g1, g2 with
         | G_range r, G_range r' ->
@@ -46,8 +46,8 @@ let () =
       print = (fun next fmt g ->
         match g with
         | G_range r -> pp_range fmt r
-        | G_stack_range(cs, r) -> pp_addr_group_hash fmt g
-        | G_stack(cs) -> pp_addr_group_hash fmt g
+        | G_stack_range(cs, r) -> pp_addr_partitioning_hash fmt g
+        | G_stack(cs) -> pp_addr_partitioning_hash fmt g
         | _ -> next fmt g
       );
     }
@@ -55,22 +55,22 @@ let () =
 let mk_addr_range addr_kind addr_mode range uctx =
   { addr_kind;
     addr_mode;
-    addr_group = G_range range }
+    addr_partitioning = G_range range }
 
 let mk_addr_stack_range addr_kind addr_mode range uctx =
   let cs = Context.ufind Callstack.ctx_key uctx in
   { addr_kind;
     addr_mode;
-    addr_group = G_stack_range (cs, range) }
+    addr_partitioning = G_stack_range (cs, range) }
 
 let mk_addr_stack addr_kind addr_mode range uctx =
   let cs = Context.ufind Callstack.ctx_key uctx in
   { addr_kind;
     addr_mode;
-    addr_group = G_stack cs }
+    addr_partitioning = G_stack cs }
 
 let mk_addr_all addr_kind addr_mode range uctx  =
-  { addr_kind; addr_mode; addr_group = G_all }
+  { addr_kind; addr_mode; addr_partitioning = G_all }
 
 let mk_addr_chain : (addr_kind -> mode -> range -> Context.uctx -> addr) ref =
   ref (fun ak _ _ _ -> assert false)

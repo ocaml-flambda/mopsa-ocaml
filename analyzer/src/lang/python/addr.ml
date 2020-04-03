@@ -383,13 +383,13 @@ and search_c (l: py_object list list) : py_object option =
 let create_builtin_class kind name cls bases range =
   let mro = c3_lin ({
       addr_kind= (A_py_class (kind, bases));
-      addr_group = G_all;
+      addr_partitioning = G_all;
       addr_mode = STRONG
     }, None)
   in
   let addr = {
       addr_kind = A_py_class(kind, mro);
-      addr_group = G_all;
+      addr_partitioning = G_all;
       addr_mode = STRONG
     }
   in
