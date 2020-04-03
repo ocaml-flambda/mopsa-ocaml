@@ -145,7 +145,7 @@ let get_stmt_effect stmt : effect =
       removed = VarSet.empty }
 
   | S_assume (e) ->
-    { modified = VarSet.of_list (Ast.Visitor.expr_vars e);
+    { modified = VarSet.empty;
       removed = VarSet.empty }
 
   | S_rename ( {ekind = E_var (var1, _)}, {ekind = E_var (var2, _)} ) ->
