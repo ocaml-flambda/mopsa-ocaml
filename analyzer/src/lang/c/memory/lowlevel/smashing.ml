@@ -545,8 +545,8 @@ struct
     
   
 
-  (** {2 Execution of statements} *)
-  (** *************************** *)
+  (** {2 Environment transfer functions} *)
+  (** ********************************** *)
 
   (** 𝕊⟦ add(base); ⟧ *)
   let exec_add_base base range man flow =
@@ -760,6 +760,8 @@ struct
               )  ~zone:Z_c_scalar man flow
 
 
+  (** {2 Assignment transfer function} *)
+  (** ******************************** *)
 
   (** 𝕊⟦ *p = rval; ⟧ *)
   let exec_assign p rval range man flow =
@@ -884,9 +886,66 @@ struct
                 ) ~zone:Z_c_scalar man flow
 
 
+  (** {2 Quantified tests transfer functions} *)
+  (** *************************************** *)
+
+  (** 𝕊⟦ *(p + ∀i) ? e ⟧ *)
+  let exec_assume_quant op qe e range man flow =
+    man.eval e ~zone:(Z_c_low_level,Z_c_scalar) flow >>$ fun e flow ->
+    eval_pointed_base_offset (mk_c_address_of qe range) range man flow >>$ fun (base,offset,mode) flow ->
+    if not (is_interesting_base base) then
+      Post.return flow
+    else
+      let a = get_env T_cur man flow in
+      match State.find base a with
+      (* Do nothing if base is not fully initialized *)
+      | Init.Bot | Init.None | Init.Partial _ -> Post.return flow
+      | Init.Full ts ->
+        (* When base is fully initialized, check the valuation range of the quantified offset:
+
+           Case #1: predicate on the entire memory block
+              0            size - |elm|
+              |----------------|------>
+             min              max
+
+           Case #2: nop
+                0            size - |elm|
+                |--x-------x------|------>
+                  min     max
+        *)
+        let t = get_c_deref_type qe in
+        let s = mk_smash base t in
+        (* Add the smash if not existent *)
+        begin if not (STypeSet.mem s.styp ts) then
+            let init' = Init.Full (STypeSet.add s.styp ts) in
+            let flow = set_env T_cur (State.add base init' a) man flow in
+            add_smash base s.styp range man flow
+          else
+            Post.return flow
+        end
+        >>$ fun () flow ->
+        (* Check valuation range of the offset *)
+        let min, max = Common.Quantified_offset.bound offset in
+        let elm = mk_z (sizeof_type t) range in
+        eval_base_size base range man flow >>$ fun size flow ->
+        assume (log_and
+                  (eq min zero range)
+                  (eq max (sub size elm range) range)
+                  range)
+          ~fthen:(fun flow ->
+              (* Case #1 *)
+              let smash = mk_smash_expr s ~typ:(Some t) ~mode:(Some STRONG) range in
+              man.post (mk_assume (mk_binop smash op e ~etyp:T_bool range) range) ~zone:Z_c_scalar flow
+            )
+          ~felse:(fun flow ->
+              (* Case #2 *)
+              Post.return flow
+            ) ~zone:Z_c_scalar man flow
 
 
-  (** Transformers entry point *)
+  (** {2 Exec entry point} *)
+  (** ******************** *)
+
   let exec zone stmt man flow =
     match skind stmt with
     | S_c_declaration (v,init,scope) when is_interesting_base (mk_var_base v) ->
@@ -919,6 +978,13 @@ struct
 
     | S_assign({ ekind = E_c_deref p}, rval) when is_c_scalar_type (under_type p.etyp) ->
       exec_assign p rval stmt.srange man flow |>
+      OptionExt.return
+
+    | S_assume({ ekind = E_binop(op, e1, e2)}) when is_comparison_op op &&
+                                                    is_c_deref e1 &&
+                                                    is_lval_offset_forall_quantified e1 &&
+                                                    not (is_expr_forall_quantified e2) ->
+      exec_assume_quant op e1 e2 stmt.srange man flow |>
       OptionExt.return
 
 
