@@ -109,35 +109,40 @@ struct
   (** {2 Lattice operators} *)
   (** ********************* *)
 
-  let subset sman ctx (a1,s1) (a2,s2) =
-    let f = fun (type a) (m: a stack) acc (a1,s1) (a2,s2) ->
+  let subset (man:('a,t,'s) man) ctx (a1,s1) (a2,s2) =
+    let f = fun (type a) (m: a stack) man a1 a2 (b,s1,s2) ->
       let module S = (val m) in
-      let b, s1, s2 = S.subset sman ctx (a1,s1) (a2,s2) in
-      b && acc, s1, s2
+      let b', s1', s2' = S.subset man ctx (a1,s1) (a2,s2) in
+      b && b', s1', s2'
     in
-    fold_ext2 { f } Spec.pool true (a1,s1) (a2,s2)
+    man_fold2 { f } Spec.pool man a1 a2 (true,s1,s2)
 
-  let join sman ctx (a1,s1) (a2,s2) =
-    let f = fun (type a) (m: a stack) (a1,s1) (a2,s2) ->
+  let join man ctx (a1,s1) (a2,s2) =
+    let f = fun (type a) (m: a stack) man a1 a2 (s1,s2) ->
       let module S = (val m) in
-      S.join sman ctx (a1,s1) (a2,s2)
+      let a,s1,s2 = S.join man ctx (a1,s1) (a2,s2) in
+      a,(s1,s2)
     in
-    apply_ext2 { f } Spec.pool (a1,s1) (a2,s2)
+    let a,(s1,s2) = man_fold_apply2 { f } Spec.pool man a1 a2 (s1,s2) in
+    a,s1,s2
 
-  let meet sman ctx (a1,s1) (a2,s2) =
-    let f = fun (type a) (m: a stack) (a1,s1) (a2,s2) ->
+  let meet man ctx (a1,s1) (a2,s2) =
+    let f = fun (type a) (m: a stack) man a1 a2 (s1,s2) ->
       let module S = (val m) in
-      S.meet sman ctx (a1,s1) (a2,s2)
+      let a,s1,s2 = S.meet man ctx (a1,s1) (a2,s2) in
+      a,(s1,s2)
     in
-    apply_ext2 { f } Spec.pool (a1,s1) (a2,s2)
+    let a,(s1,s2) = man_fold_apply2 { f } Spec.pool man a1 a2 (s1,s2) in
+    a,s1,s2
 
-  let widen sman ctx (a1,s1) (a2,s2) =
-    let f = fun (type a) (m: a stack) (a1,s1) (a2,s2) stable ->
+  let widen man ctx (a1,s1) (a2,s2) =
+    let f = fun (type a) (m: a stack) man a1 a2 (s1,s2,stable) ->
       let module S = (val m) in
-      let a, s1, s2, stable' = S.widen sman ctx (a1,s1) (a2,s2) in
-      a, s1, s2, stable && stable'
+      let a, s1, s2, stable' = S.widen man ctx (a1,s1) (a2,s2) in
+      a, (s1, s2, stable && stable')
     in
-    fold_apply_ext2 { f } Spec.pool (a1,s1) (a2,s2) true
+    let a,(stable,s1,s2) = man_fold_apply2 { f } Spec.pool man a1 a2 (s1,s2,true) in
+    a,stable,s1,s2
 
   let merge pre (a1,log1) (a2,log2) =
     Exceptions.panic ~loc:__LOC__ "merge not implemented"

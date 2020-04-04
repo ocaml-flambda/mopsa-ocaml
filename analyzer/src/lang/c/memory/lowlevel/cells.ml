@@ -491,17 +491,17 @@ struct
 
       | [] ->
         match
+          compare_typ (cell_type c |> remove_typedef_qual) u8 = 0,
           cell_set_filter_overlapping_cell_range
             (fun c' ->
                let b = Z.sub c.offset c'.offset in
                Z.geq b Z.zero &&
                Z.lt b (sizeof_cell c') &&
-               is_int_cell c' &&
-               compare_typ (cell_type c) (T_c_integer(C_unsigned_char)) = 0
+               is_int_cell c'
             )
             c a.cells
         with
-        | c'::_ ->
+        | true, c'::_ ->
           let b = Z.sub c.offset c'.offset in
           let base = (Z.pow (Z.of_int 2) (8 * Z.to_int b))  in
           let v = mk_numeric_cell_var_expr c' range in
@@ -513,7 +513,7 @@ struct
             )
           )
 
-        | [] ->
+        | _ ->
           let exception NotPossible in
           try
             if is_int_cell c then
@@ -553,42 +553,55 @@ struct
               raise NotPossible
           with
           | NotPossible -> None
+    
 
 
-  (** Add a cell in the underlying domain using the simplified manager *)
-  let add_cell_simplified c a range man ctx s =
-    if cell_set_mem c a.cells ||
-       (* not (is_c_scalar_type c.typ) || *)
-       not (BaseSet.mem c.base a.bases)
-    then s
+  (** Add a cell and its constraints *)
+  let add_cell c range man flow =
+    let a = get_env T_cur man flow in
+    if cell_set_mem c a.cells
+    then Post.return flow
     else
+      let flow = set_env T_cur { a with cells = cell_set_add c a.cells } man flow in
       let v = mk_cell_var c in
-      let s' = man.sexec ~zone:Z_c_scalar (mk_add_var v range) ctx s in
-      if is_pointer_cell c
-      then s'
+      man.post ~zone:Z_c_scalar (mk_add_var v range) flow >>$ fun () flow ->
+      if is_pointer_cell c then
+        Post.return flow
       else
         match phi c a range with
         | Some e ->
           let stmt = mk_assume (mk_binop (mk_var v range) O_eq e ~etyp:u8 range) range in
-          man.sexec ~zone:Z_c_scalar stmt ctx s'
+          man.post ~zone:Z_c_scalar stmt flow
 
-        | None ->
-          s'
+        | None -> Post.return flow
+
+
+  (** Range used for tagging unification statements *)
+  let unify_range = tag_range (mk_fresh_range ()) "cell-unification"
+
+
+  (** Check if a cell is part of an optional base *)
+  let is_optional_cell c a =
+    not (BaseSet.mem c.base a.bases)
 
 
   (** [unify a a'] finds non-common cells in [a] and [a'] and adds them. *)
   let unify man ctx (a,s) (a',s') =
-    let range = mk_fresh_range () in
+    debug "unify %a and %a" print a print a';
     CellSet.fold2
       (fun _ m1 m2 acc ->
          OffCells.fold2
            (fun _ s1 s2 acc ->
               Cells.fold
-                (fun c s -> add_cell_simplified c a range man ctx s)
+                (fun c s ->
+                   if is_optional_cell c a then s
+                   else state_exec (add_cell c unify_range man) ctx man a s |> snd )
                 (Cells.diff s2 s1) (fst acc)
               ,
               Cells.fold
-                (fun c s -> add_cell_simplified c a range man ctx s)
+                (fun c s ->
+                   if is_optional_cell c a' then s
+                   else state_exec (add_cell c unify_range man) ctx man a' s |> snd )
                 (Cells.diff s1 s2) (snd acc)
 
            )
@@ -796,35 +809,6 @@ struct
     set_env T_cur aa man flow
 
 
-  (** Add a cell and its constraints *)
-  let add_cell c range man flow =
-    let flow = add_base c.base man flow in
-    let a = get_env T_cur man flow in
-
-    if cell_set_mem c a.cells (* || not (is_c_scalar_type c.typ) *)
-    then Post.return flow
-    else
-      let v = mk_cell_var c in
-      man.post ~zone:Z_c_scalar (mk_add_var v range) flow |>
-      Post.bind @@ fun flow ->
-
-      if is_pointer_cell c
-      then
-        set_env T_cur { a with cells = cell_set_add c a.cells } man flow |>
-        Post.return
-      else
-        begin
-          match phi c a range with
-          | Some e ->
-            let stmt = mk_assume (mk_binop (mk_var v range) O_eq e ~etyp:u8 range) range in
-            man.post ~zone:Z_c_scalar stmt flow
-
-          | None -> Post.return flow
-        end
-        |>
-        Post.bind @@ fun flow ->
-        set_env T_cur { a with cells = cell_set_add c a.cells } man flow |>
-        Post.return
 
   (* Remove a cell and its associated scalar variable *)
   let remove_cell c range man flow =
