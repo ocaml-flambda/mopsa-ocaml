@@ -1,6 +1,6 @@
 import mopsa
 
-def test_main():
+def test_types():
     a = 1
     b = [a, 2]
     c = {a: b[0]}
@@ -8,6 +8,7 @@ def test_main():
     d = (a, b, c)
     e = {a}
     f = (a & 2 * 3) - 33 / 2
+    mopsa.ignore_exception(OverflowError)
     g = b + [1]
     h = ~a
     i = a if a else h
@@ -19,6 +20,7 @@ def test_main():
     oo = o
     pp = p
 
+    mopsa.ignore_exception(ZeroDivisionError)
     mopsa.assert_safe()
     mopsa.massert(isinstance(a, int))
     mopsa.assert_list_of(b, int)

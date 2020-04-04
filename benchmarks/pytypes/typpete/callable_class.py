@@ -1,6 +1,6 @@
 import mopsa
 
-def test_main():
+def test_types():
     class A:
         def __init__(self):
             self.x = 1
@@ -12,6 +12,7 @@ def test_main():
     x = A()
     y = x([])
 
+    mopsa.ignore_exception(OverflowError)
     mopsa.assert_safe()
     mopsa.massert(isinstance(x, A))
     mopsa.massert(isinstance(y, list))

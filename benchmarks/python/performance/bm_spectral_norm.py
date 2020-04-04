@@ -27,10 +27,7 @@ def eval_times_u(func, u):
 
 
 def eval_AtA_times_u(u):
-    # currently unsupported due to recursive calls
-    #    return eval_times_u(part_At_times_u, eval_times_u(part_A_times_u, u))
-    a = eval_times_u(part_A_times_u, u)
-    return eval_times_u(part_At_times_u, a)
+    return eval_times_u(part_At_times_u, eval_times_u(part_A_times_u, u))
 
 def part_A_times_u(i_u):
     i, u = i_u
@@ -75,9 +72,18 @@ def bench_spectral_norm(loops):
     #     'MathWorld: "Hundred-Dollar, Hundred-Digit Challenge Problems", '
     #     'Challenge #3.')
     # runner.bench_time_func('spectral_norm', bench_spectral_norm)
-def test_main():
+def test_types():
     import mopsa
     bench_spectral_norm(50)
     mopsa.assert_exception_exists(UnboundLocalError)
     mopsa.ignore_exception(UnboundLocalError)
+    mopsa.ignore_exception(OverflowError)
+    mopsa.ignore_exception(ZeroDivisionError)
+    mopsa.assert_safe()
+
+
+def test_values():
+    import mopsa
+    bench_spectral_norm(50)
+    mopsa.ignore_exception(OverflowError)
     mopsa.assert_safe()

@@ -37,9 +37,11 @@ type var_kind = ..
 
 (** Access mode of a variable *)
 type mode =
-  | STRONG (** Strong variables represent a single concrete variable *)
   | WEAK   (** Weak variables represent multiple concrete variables *)
-
+  | STRONG (** Strong variables represent a single concrete variable *)
+(* /!\ declaration order is important: it allows strong objects to be
+   iterated on before weak objects, especially useful in the recency
+   with garbage collection *)
 
 (** Program variables *)
 type var = {
@@ -188,13 +190,7 @@ let mk_attr_var v attr typ =
 
 (** Create a program range attribute *)
 let mk_range_attr_var range attr typ =
-  let name =
-    let () = Format.fprintf Format.str_formatter "%a.%s"
-        Location.pp_range range
-        attr
-    in
-    Format.flush_str_formatter ()
-    in
+  let name = Format.asprintf "%a.%s" Location.pp_range range attr in
   mkv name (V_range_attr (range, attr)) typ
 
 

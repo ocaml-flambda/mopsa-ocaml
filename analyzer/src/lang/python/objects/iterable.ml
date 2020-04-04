@@ -53,8 +53,8 @@ struct
       bind_some
         (fun eargs flow ->
            if List.length eargs <> 2 then
-             let () = Format.fprintf Format.str_formatter "%s: too %s arguments: %d given, %d expected" f (if List.length eargs < 2 then "few" else "many") (List.length args) 2 in
-             man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |>
+             let msg = Format.asprintf "%s: too %s arguments: %d given, %d expected" f (if List.length eargs < 2 then "few" else "many") (List.length args) 2 in
+             man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow |>
              Eval.empty_singleton
            else
              let self, iterable = match eargs with a :: b :: [] -> a, b | _ -> assert false in
@@ -91,8 +91,8 @@ struct
                        )
                  )
                ~felse:(fun flow ->
-                   Format.fprintf Format.str_formatter "descriptor 'join' requires a 'str' object but received a '%a'" pp_expr self;
-                   man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow |>
+                 let msg = Format.asprintf "descriptor 'join' requires a 'str' object but received a '%a'" pp_expr self in
+                   man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow |>
                    Eval.empty_singleton
                  )
         )

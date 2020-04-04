@@ -7,7 +7,7 @@ both changes will be resolved after we have default args in stubs
 """
 import mopsa
 
-def test_main():
+def test_types():
     commands = {
         "i": "see inventory",
         "c": "see crafting options",

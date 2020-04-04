@@ -105,6 +105,12 @@ module Domain =
          Py_mopsa.check man (mk_binop arg1 O_eq arg2 range) range flow
          |> OptionExt.return
 
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertGreater", _))}, _)}, [test; arg1; arg2; _], [])
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertGreater", _))}, _)}, [test; arg1; arg2], []) ->
+         Py_mopsa.check man (mk_binop arg1 O_ge arg2 range) range flow
+         |> OptionExt.return
+
+
       (* FIXME: handle message *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertTrue", _))}, _)}, [test; cond;_], [])
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertTrue", _))}, _)}, [test; cond], []) ->
@@ -207,6 +213,10 @@ module Domain =
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, args, _)
            when is_builtin_class_function "unittest.TestCase" f ->
          panic "unittest.TestCase function %s not implemented (with |args| = %d)" f (List.length args)
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.skipUnless", _))}, _)}, [], _) ->
+         failwith "todo"
+
 
       | _ -> None
 

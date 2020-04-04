@@ -25,6 +25,9 @@ from typing import List, NoReturn, TextIO
 path: List[str]
 argv: List[str]
 version_info = (3, 7)
+
+maxsize = 9223372036854775807
+
 base_prefix: str
 
 def exit(arg: object = ...) -> NoReturn:
@@ -33,3 +36,21 @@ def exit(arg: object = ...) -> NoReturn:
 stdin: TextIO
 stdout: TextIO
 stderr: TextIO
+
+class int_info:
+    bits_per_digit = 30
+    sizeof_digit = 4
+
+
+class float_info:
+    epsilon = 2.220446049250313e-16
+    dig = 15
+    mant_dig = 53
+    max = 1.7976931348623157e+308
+    max_exp = 1024
+    max_10_exp = 308
+    min = 2.2250738585072014e-308
+    min_exp = -1021
+    min_10_exp = -307
+    radix = 2
+    rounds = 1

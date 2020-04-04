@@ -36,6 +36,7 @@ def combinations(l):
 
 PI = 3.14159265358979323
 SOLAR_MASS = 4 * PI * PI
+mopsa.ignore_exception(OverflowError)
 DAYS_PER_YEAR = 365.24
 
 BODIES = {
@@ -158,11 +159,22 @@ def bench_nbody(loops, reference, iterations):
     # args = runner.parse_args()
     # runner.bench_time_func('nbody', bench_nbody,
     #                        args.reference, args.iterations)
-def test_main():
+def test_types():
     res = bench_nbody(100, DEFAULT_REFERENCE, DEFAULT_ITERATIONS)
     mopsa.ignore_exception(ValueError)
     mopsa.ignore_exception(KeyError)
-    mopsa.assert_exception_exists(UnboundLocalError)
+    mopsa.ignore_exception(OverflowError)
+#    mopsa.assert_exception_exists(UnboundLocalError)
     mopsa.ignore_exception(UnboundLocalError)
+    mopsa.ignore_exception(ZeroDivisionError)
     mopsa.ignore_exception(IndexError)
+    mopsa.assert_safe()
+
+
+def test_values():
+    res = bench_nbody(100, DEFAULT_REFERENCE, DEFAULT_ITERATIONS)
+    mopsa.ignore_exception(ValueError)
+    mopsa.ignore_exception(KeyError)
+    mopsa.ignore_exception(UnboundLocalError)
+    mopsa.ignore_exception(ZeroDivisionError)
     mopsa.assert_safe()

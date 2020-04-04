@@ -32,6 +32,9 @@ class TestCase:
     @mopsa.builtin("unittest.TestCase.assertEqual")
     def assertEqual(self, x, y): pass
 
+    @mopsa.builtin("unittest.TestCase.assertGreater")
+    def assertGreater(self, x, y): pass
+
     @mopsa.builtin("unittest.TestCase.assertIs")
     def assertIs(self, x, y): pass
 
@@ -69,3 +72,6 @@ class ExceptionContext(object):
 
 @mopsa.builtin("unittest.main")
 def main(): pass
+
+@mopsa.builtin("unittest.skipUnless")
+def skipUnless(): pass

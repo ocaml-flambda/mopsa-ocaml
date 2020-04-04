@@ -57,21 +57,17 @@ module Domain =
               let if_stmt = List.fold_left (fun acc cond ->
                                 mk_stmt (Ast.S_py_if (cond, acc, empty_stmt)) range
                               ) (unfold_lc tl) i_conds in
-              mk_stmt (S_py_for(target, iter,
-                                if_stmt,
-                                empty_stmt)) range in
-         let clean_targets = List.fold_left
-             (fun acc (target, _, _) ->
+              let cleaners =
                 Visitor.fold_expr
                   (fun acc expr ->
-                     debug "expr = %a" pp_expr expr;
-                     match ekind expr with
-                     | E_var (v, _) -> Keep (mk_remove_var v range ::acc)
-                     | E_py_tuple t -> VisitParts acc
-                     | _ -> Exceptions.panic "Comprehension: target %a is not a variable...@\n" pp_expr target
-                  ) (fun acc stmt -> assert false) [] target
-             ) [] comprehensions in
-         let stmt = mk_block ((mk_assign acc_var base range) :: (unfold_lc comprehensions) :: clean_targets) range in
+                    debug "expr = %a" pp_expr expr;
+                    match ekind expr with
+                    | E_var (v, _) -> Keep (mk_remove_var v range ::acc)
+                    | E_py_tuple t -> VisitParts acc
+                    | _ -> Exceptions.panic "Comprehension: target %a is not a variable...@\n" pp_expr target
+                  ) (fun acc stmt -> assert false) [] target in
+              mk_block ((mk_stmt (S_py_for(target, iter, if_stmt, empty_stmt)) range)::cleaners) range in
+         let stmt = mk_block ((mk_assign acc_var base range) :: unfold_lc comprehensions :: []) range in
          stmt, tmp_acc
 
 

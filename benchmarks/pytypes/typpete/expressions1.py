@@ -1,12 +1,17 @@
 import mopsa
 
-def test_main():
+def test_types():
     a = 1 + 2 / 3
+    mopsa.ignore_exception(ZeroDivisionError)
+    mopsa.ignore_exception(OverflowError)
     a += 0
+    mopsa.ignore_exception(OverflowError)
     b = -a
+    mopsa.ignore_exception(OverflowError)
     c = [1.2, 2.0, b]
     d = [[1.1, 2.5], c]
     e = {(i, i * 2) for j in d for i in j}
+    mopsa.ignore_exception(OverflowError)
     f = 2 & 3
     mopsa.assert_safe()
     g = d[f]

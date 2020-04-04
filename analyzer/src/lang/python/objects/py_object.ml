@@ -128,8 +128,8 @@ struct
                       | None, Some meta_attribute ->
                         Eval.singleton meta_attribute flow
                       | None, None ->
-                        Format.fprintf Format.str_formatter "type object '%a' has no attribute '%s'" pp_expr ptype (match ekind attribute with | E_constant (C_string attr) -> attr | _ -> assert false);
-                        man.exec (Utils.mk_builtin_raise_msg "AttributeError" (Format.flush_str_formatter ()) range) flow |>
+                         let msg = Format.asprintf "type object '%a' has no attribute '%s'" pp_expr ptype (match ekind attribute with | E_constant (C_string attr) -> attr | _ -> assert false) in
+                        man.exec (Utils.mk_builtin_raise_msg "AttributeError" msg range) flow |>
                         Eval.empty_singleton
                     )
                   range mro_ptype flow
@@ -191,11 +191,10 @@ struct
 
                          get/set ~> https://docs.python.org/3/c-api/typeobj.html#cols
                       *)
-
                       (* hasattr is bad but needed for inheritance, to see *)
                       man flow
                       ~fthen:(fun flow ->
-                          assume (mk_binop (mk_py_hasattr (mk_py_type descr range) "__set__" range) O_py_or (mk_py_hasattr (mk_py_type descr range) "__del__" range) range) man flow
+                        assume (mk_binop (mk_py_hasattr (mk_py_type descr range) "__set__" range) O_py_or (mk_py_hasattr (mk_py_type descr range) "__del__" range) range) man flow
                             ~fthen:(man.eval (mk_py_call (mk_py_attr (mk_py_type descr range) "__get__" range) [descr; instance; class_of_exp] range))
                             ~felse:(tryinstance ~fother:(man.eval (mk_py_call (mk_py_attr (mk_py_type descr range) "__get__" range) [descr; instance; class_of_exp] range)))
                         )
@@ -204,12 +203,12 @@ struct
               )
             ~nothing_found:(tryinstance ~fother:(fun flow ->
                 debug "No attribute found for %a, attr = %a@\n" pp_expr instance pp_expr attribute;
-                Format.fprintf Format.str_formatter "'%a' object has no attribute '%s'" pp_expr instance
+                let msg = Format.asprintf "'%a' object has no attribute '%s'" pp_expr instance
                   (match ekind attribute with
                    | E_constant (C_string attr) -> attr
                    | E_py_object ({addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "str", _)}}, Some {ekind = E_constant (C_string attr)}) -> attr
-                   | _ -> assert false);
-                man.exec (Utils.mk_builtin_raise_msg "AttributeError" (Format.flush_str_formatter ()) range) flow |>
+                   | _ -> assert false) in
+                man.exec (Utils.mk_builtin_raise_msg "AttributeError" msg range) flow |>
                 Eval.empty_singleton)
               )
             range mro flow

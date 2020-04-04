@@ -67,9 +67,10 @@ module Domain =
           Post.return |>
           OptionExt.return
         with Module_not_found m ->
-          Format.fprintf Format.str_formatter "No module named '%s'" m;
           man.exec
-            (Utils.mk_builtin_raise_msg "ModuleNotFoundError" (Format.flush_str_formatter ()) range)
+            (Utils.mk_builtin_raise_msg "ModuleNotFoundError" (
+                 Format.asprintf "No module named '%s'" m
+               ) range)
             flow |> Post.return |> OptionExt.return
         end
 
@@ -162,7 +163,7 @@ module Domain =
                   in
                   let addr = {
                     addr_kind = A_py_module (M_user(name, globals));
-                    addr_group = G_all;
+                    addr_partitioning = G_all;
                     addr_mode = STRONG;
                   }
                   in
@@ -220,7 +221,7 @@ module Domain =
           in
           let addr = {
             addr_kind = A_py_function kind;
-            addr_group = G_all;
+            addr_partitioning = G_all;
             addr_mode = STRONG;
           }
           in
@@ -238,7 +239,7 @@ module Domain =
       if name <> "stdlib" then
         let addr = {
           addr_kind = A_py_module(M_builtin name);
-          addr_group = G_all;
+          addr_partitioning = G_all;
           addr_mode = STRONG;
         }
         in
@@ -334,7 +335,7 @@ module Domain =
                             } in
                           let addr = {
                             addr_kind = A_py_class (C_annot newc, obases);
-                            addr_group = G_all;
+                            addr_partitioning = G_all;
                             addr_mode = STRONG;
                           } in
                           let mro = c3_lin (addr, None) in
@@ -373,7 +374,7 @@ module Domain =
                 } in
               let addr = {
                 addr_kind = A_py_function (F_annot newf);
-                addr_group = G_all;
+                addr_partitioning = G_all;
                 addr_mode = STRONG;
               } in
               let () =
@@ -398,14 +399,16 @@ module Domain =
           {stmt with skind = S_block (newblock, [])}, newglobals, newflow
 
         | S_expression {ekind = (E_constant C_py_ellipsis)}
-        | S_expression {ekind = (E_constant (C_string _))} ->
+        | S_expression {ekind = (E_constant (C_string _))}
+        | Universal.Heap.Recency.S_perform_gc ->
           {stmt with skind = S_block ([], [])}, globals, flow
+
 
         | _ -> panic_at range "stmt %a not supported in stubs file %s" pp_stmt stmt name
       in
       let body, globals, flow = parse None stmts globals flow in
       let addr = { addr_kind = A_py_module(M_user (name, globals));
-                   addr_group = G_all;
+                   addr_partitioning = G_all;
                    addr_mode = STRONG; } in
       (addr, None), body, flow
 

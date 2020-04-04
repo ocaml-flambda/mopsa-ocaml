@@ -3,7 +3,7 @@
 import mopsa
 
 
-def test_main():
+def test_types():
     class Cell:
         def __init__(self, val):
             self.value = val

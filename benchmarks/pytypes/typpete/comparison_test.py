@@ -1,6 +1,6 @@
 import mopsa
 
-def test_main():
+def test_types():
     class A:
         def __init__(self, x):
             self.x = 1

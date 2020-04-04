@@ -39,9 +39,9 @@ def has_negative_cycle(source, adj_list):
     return found_cycle
 
 
-def test_main():
+def test_types():
     size = 5
-    adj_list = [[] * size]
+    adj_list = [[] for x in range(size)]
     adj_list[0].append(Edge(1, 23))
     adj_list[0].append(Edge(3, 7))
     adj_list[1].append(Edge(0, 85))
@@ -66,10 +66,3 @@ def test_main():
     mopsa.massert(isinstance(adj_list[0], list))
     mopsa.massert(isinstance(adj_list[0][0], Edge))
     mopsa.ignore_exception(IndexError)
-
-# INF := int
-# size := int
-# source := int
-# adj_list := List[List[Edge]]
-# bellman_ford := Callable[[int, List[List[Edge]]], List[int]]
-# has_negative_cycle := Callable[[int, List[List[Edge]]], bool]

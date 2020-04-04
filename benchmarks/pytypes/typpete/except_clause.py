@@ -1,6 +1,6 @@
 import mopsa
 
-def test_main():
+def test_types():
     class MyException(Exception):
         def __init__(self):
             self.val = 15

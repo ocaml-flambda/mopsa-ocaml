@@ -1,6 +1,6 @@
 import mopsa
 
-def test_main():
+def test_types():
     """Number of solutions of linear equality"""
 
 

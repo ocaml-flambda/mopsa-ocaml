@@ -28,49 +28,55 @@ open Addr
 open Universal.Ast
 open Data_container_utils
 
-type addr_kind +=
-  | A_py_staticmethod of Rangeset.t
-  | A_py_classmethod of Rangeset.t
+let name = "python.objects.function"
 
+type addr_kind +=
+  | A_py_staticmethod
+  | A_py_classmethod
+
+let () = register_addr_kind_nominal_type (fun default ak ->
+             match ak with
+             | A_py_staticmethod ->  "staticmethod"
+             | A_py_classmethod ->  "classmethod"
+             | _ -> default ak)
 
 let () =
-  register_join_akind (fun default ak1 ak2 ->
-      match ak1, ak2 with
-      | A_py_staticmethod r1, A_py_staticmethod r2 -> A_py_staticmethod (Rangeset.union r1 r2)
-      | A_py_classmethod r1, A_py_classmethod r2 -> A_py_classmethod (Rangeset.union r1 r2)
-      | _ -> default ak1 ak2);
   register_is_data_container (fun default ak -> match ak with
-      | A_py_classmethod _ -> false
-      | A_py_staticmethod _ -> false
+      | A_py_classmethod -> false
+      | A_py_staticmethod -> false
       | _ -> default ak)
 
 let () =
   Format.(register_addr_kind {
       print = (fun default fmt a ->
           match a with
-          | A_py_staticmethod r -> fprintf fmt "staticmethod[%a]" (fun fmt -> Rangeset.iter (fun ra -> pp_range fmt ra)) r
-          | A_py_classmethod r -> fprintf fmt "classmethod[%a]" (fun fmt -> Rangeset.iter (fun ra -> pp_range fmt ra)) r
+          | A_py_staticmethod -> fprintf fmt "staticmethod"
+          | A_py_classmethod -> fprintf fmt "classmethod"
           | _ -> default fmt a);
       compare = (fun default a1 a2 ->
           match a1, a2 with
-          | A_py_staticmethod v1, A_py_staticmethod v2 -> Rangeset.compare v1 v2
-          | A_py_classmethod v1, A_py_classmethod v2 -> Rangeset.compare v1 v2
           | _ -> default a1 a2);})
+
+let () = Universal.Heap.Policies.register_mk_addr (fun default ak ->
+             match ak with
+             | A_py_staticmethod | A_py_classmethod -> Universal.Heap.Policies.mk_addr_range ak
+             | _ -> default ak)
+
 
 module Domain =
   struct
 
     include GenStatelessDomainId(struct
-        let name = "python.objects.function"
+        let name = name
       end)
 
     let interface = {
-      iexec = {provides = [Zone.Z_py]; uses = []};
+      iexec = {provides = [Zone.Z_py]; uses = [Universal.Zone.Z_u_heap]};
       ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
     }
 
     let var_of_addr a = match akind a with
-      | A_py_staticmethod _ | A_py_classmethod _ -> mk_addr_attr a "__func__" T_any
+      | A_py_staticmethod | A_py_classmethod -> mk_addr_attr a "__func__" T_any
       | _ -> assert false
 
     let var_of_eobj e = match ekind e with
@@ -90,13 +96,19 @@ module Domain =
       let range = erange exp in
       match ekind exp with
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("method.__new__", _))}, _)}, [meth; func; inst], []) ->
-        (* FIXME: meth should be a subtype of method *)
-        eval_alloc man (A_py_method (object_of_expr func, inst, "method")) range flow |>
-        bind_some (fun addr flow ->
-            let obj = (addr, None) in
-            Eval.singleton (mk_py_object obj range) flow
-          )
-        |> OptionExt.return
+         (* FIXME: meth should be a subtype of method *)
+         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) func flow |>
+           Eval.bind (fun func flow ->
+               man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) inst flow |>
+                 Eval.bind (fun inst flow ->
+                     eval_alloc man (A_py_method (object_of_expr func, inst, "method")) range flow |>
+                       bind_some (fun addr flow ->
+                           let obj = (addr, None) in
+                           Eval.singleton (mk_py_object obj range) flow
+                         )
+                   )
+             )
+         |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("function.__get__", _))}, _)}, [descr; instance; typeofinst], []) ->
         assume (mk_py_isinstance_builtin instance "NoneType" range) man flow
@@ -143,8 +155,8 @@ module Domain =
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("classmethod.__new__" as s, _))}, _)}, [cls; func], [])
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("staticmethod.__new__" as s, _))}, _)}, [cls; func], []) ->
         let addr_func = mk_alloc_addr (match List.hd (String.split_on_char '.' s) with
-            | "staticmethod" -> A_py_staticmethod (Rangeset.singleton range)
-            | "classmethod" -> A_py_classmethod (Rangeset.singleton range)
+            | "staticmethod" -> A_py_staticmethod
+            | "classmethod" -> A_py_classmethod
             | _ -> assert false
           ) range in
         man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_func flow |>
@@ -245,9 +257,9 @@ module Domain =
           (
             debug "Too few arguments!@\n";
             let missing = List.length nondefault_args - List.length pyfundec.py_func_parameters in
-            Format.fprintf Format.str_formatter "%s() missing %d required positional argument%s" pyfundec.py_func_var.vname missing (if missing > 1 then "s" else "");
+            let msg = Format.asprintf "%s() missing %d required positional argument%s" pyfundec.py_func_var.vname missing (if missing > 1 then "s" else "") in
             let flow =
-              man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) exp.erange) flow
+              man.exec (Utils.mk_builtin_raise_msg "TypeError" msg exp.erange) flow
             in
             Eval.empty_singleton flow
           )
@@ -255,9 +267,9 @@ module Domain =
         if List.length args > (List.length pyfundec.py_func_parameters) then
           (
             debug "Too many arguments!@\n";
-            Format.fprintf Format.str_formatter "%s() takes %d positional arguments but %d were given" pyfundec.py_func_var.vname (List.length pyfundec.py_func_parameters) (List.length args);
+            let msg = Format.asprintf "%s() takes %d positional arguments but %d were given" pyfundec.py_func_var.vname (List.length pyfundec.py_func_parameters) (List.length args) in
             let flow =
-              man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) exp.erange) flow
+              man.exec (Utils.mk_builtin_raise_msg "TypeError" msg exp.erange) flow
             in
             Eval.empty_singleton flow
           )
@@ -305,9 +317,9 @@ module Domain =
             if List.length args <> (List.length pyfundec.py_func_parameters) then
               (
                 debug "The number of arguments is not good@\n";
-                Format.fprintf Format.str_formatter "%s() has too few arguments" pyfundec.py_func_var.vname;
+                let msg = Format.asprintf "%s() has too few arguments" pyfundec.py_func_var.vname in
                 let flow =
-                  man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) exp.erange) flow
+                  man.exec (Utils.mk_builtin_raise_msg "TypeError" msg exp.erange) flow
                 in
                 Eval.empty_singleton flow
               )
@@ -341,7 +353,15 @@ module Domain =
                 } in
 
                 man.eval (mk_call fundec args exp.erange) flow |>
-                Eval.bind (man.eval)
+                  Eval.bind (fun res flow ->
+                      (* les ajouter dans l'ast au frontend ? *)
+                      (* begin
+                       *   if !opt_gc_after_functioncall then
+                       *     man.exec ~zone:Universal.Zone.Z_u_heap (mk_stmt Universal.Heap.Recency.S_perform_gc range) flow
+                       *   else
+                       *     flow
+                       * end |> *)
+                        man.eval res flow)
               )
           )
       (* 𝔼⟦ f() | isinstance(f, method) ⟧ *)

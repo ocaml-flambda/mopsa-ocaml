@@ -1,6 +1,6 @@
 import mopsa
 
-def test_main():
+def test_types():
     T = 3
 
     for x in [1, 2, 3, T + 1]:

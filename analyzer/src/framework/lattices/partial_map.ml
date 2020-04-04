@@ -190,6 +190,14 @@ struct
     | TOP -> TOP
     | Nbt m -> Nbt (PMap.filter f m)
 
+  let partition (f : Key.t -> 'a -> bool) (a :t) : t * t=
+    match a with
+    | BOT -> BOT, BOT
+    | TOP -> TOP, TOP
+    | Nbt m ->
+       let a, b = PMap.partition f m in
+       Nbt a, Nbt b
+
   let iter (f:Key.t -> 'a -> unit) (a:t) : unit =
     match a with
     | BOT -> ()

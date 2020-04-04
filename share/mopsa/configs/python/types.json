@@ -49,7 +49,7 @@
             {
                 "apply": {
                     "compose": [
-                        "universal.heap.recency.all",
+                        "universal.heap.recency",
                         // {
                         //     "product": [
                         //         "python.types.addr_env",
@@ -71,7 +71,8 @@
                       "python.objects.dict",
                       "python.objects.set",
                       "python.objects.iterable",
-                      "python.values.string"
+                      "universal.strings.powerset",
+                      "python.types.dummy_numeric"
                   ]
                 }
             }

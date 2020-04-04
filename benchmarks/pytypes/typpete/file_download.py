@@ -42,7 +42,7 @@ class File:
 
 
 
-def test_main():
+def test_types():
     f1 = File("home/user", "http://www.download.com/", "file.py")
     ch1 = f1.download()
 

@@ -1,7 +1,7 @@
 import mopsa
 
 
-def test_main():
+def test_types():
     class Aexp:
         def eval(self, env):
             return 0

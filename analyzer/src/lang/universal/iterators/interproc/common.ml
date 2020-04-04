@@ -98,10 +98,7 @@ let () =
 
 (** Constructor of return variables *)
 let mk_return_var call =
-  let uniq_name =
-    let () = Format.fprintf Format.str_formatter "ret(%a)@@%a" pp_expr call pp_range call.erange in
-    Format.flush_str_formatter ()
-  in
+  let uniq_name = Format.asprintf "ret(%a)@@%a" pp_expr call pp_range call.erange in
   mkv uniq_name (V_return call) call.etyp
 
 
@@ -165,8 +162,7 @@ let init_fun_params f args range man flow =
     begin
       debug "nested calls detected on %s, performing parameters and locvar renaming" f.fun_orig_name;
       (* Add parameters and local variables to the environment *)
-      let add_range = (fun p -> mk_attr_var p (Format.fprintf Format.str_formatter "%a" pp_range range;
-                                               Format.flush_str_formatter ()) p.vtyp) in
+      let add_range = (fun p -> mk_attr_var p (Format.asprintf "%a" pp_range range) p.vtyp) in
 
       let function_vars = f.fun_parameters @ f.fun_locvars in
       let fun_parameters = List.map add_range f.fun_parameters in

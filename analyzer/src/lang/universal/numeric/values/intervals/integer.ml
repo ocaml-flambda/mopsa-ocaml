@@ -42,7 +42,7 @@ struct
       let display = "int-itv"
     end)
 
-  let zones = [Zone.Z_u_num]
+  let zones = [Zone.Z_u_num; Zone.Z_u_int]
 
   let mem_type = function T_int | T_bool -> true | _ -> false
 

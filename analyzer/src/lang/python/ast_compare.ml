@@ -109,8 +109,16 @@ let () =
       | E_py_bytes b1, E_py_bytes b2 ->
         Stdlib.compare b1 b2
 
-      | E_py_lambda _, E_py_lambda _
-      | E_py_multi_compare _, E_py_multi_compare _ -> Exceptions.panic "compare py"
+      | E_py_lambda _, E_py_lambda _ ->
+         Exceptions.panic "compare py lambdas"
+
+      | E_py_multi_compare (l1, op, l2), E_py_multi_compare (l1', op', l2') ->
+         Compare.compose
+           [
+             (fun () -> compare_expr l1 l1');
+             (fun () -> Compare.list compare_operator op op');
+             (fun () -> Compare.list compare_expr l2 l2');
+           ]
 
       | E_py_check_annot (e11, e12), E_py_check_annot (e21, e22) ->
         Compare.compose

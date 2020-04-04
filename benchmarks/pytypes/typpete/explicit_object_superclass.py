@@ -1,7 +1,7 @@
 import mopsa
 
 
-def test_main():
+def test_types():
     class A(object):
         def something(self):
             return 3

@@ -16,7 +16,7 @@ L = [
         (' 314', 314),
         ('314 ', 314),
         ('  \t\t  314  \t\t  ', 314),
-        #(repr(sys.maxsize), sys.maxsize), 
+        #(repr(sys.maxsize), sys.maxsize),
         ('  1x', ValueError),
         ('  1  ', 1),
         ('  1\02  ', ValueError),
@@ -212,7 +212,7 @@ class IntTestCases(unittest.TestCase):
         self.assertEqual(int('2br45qc', 35), 4294967297)
         self.assertEqual(int('1z141z5', 36), 4294967297)
 
-   
+
     @support.cpython_only
     def test_small_ints(self):
         # Bug #3236: Return small longs from PyLong_FromString
@@ -224,7 +224,7 @@ class IntTestCases(unittest.TestCase):
     def test_no_args(self):
         self.assertEqual(int(), 0)
 
-    
+
 
     def test_int_base_limits(self):
         """Testing the supported limits of the int() base parameter."""
@@ -267,7 +267,7 @@ class IntTestCases(unittest.TestCase):
         self.assertEqual(int('101', base=MyIndexable(10)), 101)
         self.assertEqual(int('101', base=MyIndexable(36)), 1 + 36**2)
 
-    
+
 
     def test_int_memoryview(self):
         self.assertEqual(int(memoryview(b'123')[1:3]), 23)
@@ -279,7 +279,7 @@ class IntTestCases(unittest.TestCase):
     def test_string_float(self):
         self.assertRaises(ValueError, int, '1.2')
 
-   
+
 
 if __name__ == "__main__":
     unittest.main()
