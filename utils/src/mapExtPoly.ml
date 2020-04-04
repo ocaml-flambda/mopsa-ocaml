@@ -32,6 +32,10 @@ type ('k,'a) t = {
   compare: 'k compare;
 }
 
+
+(** {2 Internal functions with compare parameter} *)
+(** ********************************************* *)
+
 let height_ = function
     Empty -> 0
   | Node(_,_,_,_,h) -> h
@@ -242,7 +246,6 @@ let rec for_all2zo_ compare f1 f2 f m1 m2 =
      (for_all2zo_ compare f1 f2 f r1 r2)
   )
 
-
 let rec map2zo_ compare f1 f2 f m1 m2 =
   if m1 == m2 then m1 else
     match m1 with
@@ -280,7 +283,6 @@ let rec merge_ compare f s1 s2 =
   | _ ->
     assert false
 
-
 let rec bindings_aux_ accu = function
     Empty -> accu
   | Node(l, v, d, r, _) -> bindings_aux_ ((v, d) :: bindings_aux_ accu r) l
@@ -291,7 +293,6 @@ let bindings_ s =
 let rec cardinal_ = function
     Empty -> 0
   | Node(l, _, _, r, _) -> cardinal_ l + 1 + cardinal_ r
-
 
 let rec fold2zo_ compare f1 f2 f m1 m2 acc =
   if m1 == m2 then acc else
@@ -306,9 +307,20 @@ let rec fold2zo_ compare f1 f2 f m1 m2 acc =
       in
       fold2zo_ compare f1 f2 f r1 r2 acc
 
+let rec fold2o_ compare f1 f2 f m1 m2 acc =
+  match m1 with
+  | Empty -> fold_ f2 m2 acc
+  | Node (l1,k,d1,r1,h1) ->
+    let l2, d2, r2 = cut_ compare k m2 in
+    let acc = fold2o_ compare f1 f2 f l1 l2 acc in
+    let acc = match d2 with
+      | None -> f1 k d1 acc | Some d2 -> f k d1 d2 acc
+    in
+    fold2o_ compare f1 f2 f r1 r2 acc
 
 
-
+(** {2 Exported functions} *)
+(** ********************** *)
 
 let singleton ~compare x d = { map = singleton_ x d; compare }
 
@@ -376,3 +388,6 @@ let cardinal s = cardinal_ s.map
 
 let fold2zo f1 f2 f m1 m2 acc =
   fold2zo_ m1.compare f1 f2 f m1.map m2.map acc
+
+let fold2o f1 f2 f m1 m2 acc =
+  fold2o_ m1.compare f1 f2 f m1.map m2.map acc

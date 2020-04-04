@@ -587,7 +587,6 @@ struct
 
   (** [unify a a'] finds non-common cells in [a] and [a'] and adds them. *)
   let unify man ctx (a,s) (a',s') =
-    debug "unify %a and %a" print a print a';
     CellSet.fold2
       (fun _ m1 m2 acc ->
          OffCells.fold2
