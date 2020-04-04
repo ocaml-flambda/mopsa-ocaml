@@ -177,24 +177,23 @@ struct
   module Init =
   struct
     type t =
-      | None
-      (* Not yet initialized *)
+      | Bot
+      | Top
       | Partial of STypeSet.t
       (* Partially initialized; we keep the types of the initialized elements. *)
       | Full    of STypeSet.t
       (* Fully initialized *)
-      | Bot
 
     let bottom = Bot
 
-    let top = Partial STypeSet.top
+    let top = Top
 
     let print fmt x =
       match x with
       | Bot        -> fprintf fmt "⊥"
-      | None       -> fprintf fmt "none"
       | Full ts    -> fprintf fmt "full(%a)" STypeSet.print ts
       | Partial ts -> fprintf fmt "partial(%a)" STypeSet.print ts
+      | Top        -> fprintf fmt "⊤"
 
     let is_bottom x = (x = Bot)
 
@@ -203,42 +202,36 @@ struct
       match x, y with
       | Bot, _ -> true
       | _, Bot -> false
-      | None, None -> true
-      | None, Full _ -> false
-      | None, Partial _ -> true
+      | _, Top -> true
+      | Top, _ -> false
       | Full ts1, Full ts2 -> STypeSet.subset ts1 ts2
-      | Full _, None -> false
-      | Full ts1, Partial ts2 -> STypeSet.subset ts1 ts2
       | Partial ts1, Partial ts2 -> STypeSet.subset ts1 ts2
-      | Partial _, _ -> false
+      | Partial _, Full _ -> false
+      | Full _, Partial _ -> false
 
     let join x y =
       if x == y then x else
       match x, y with
       | Bot, a | a, Bot -> a
-      | None, None -> None
-      | None, Full ts | Full ts, None -> Partial ts
-      | None, (Partial _ as a) | (Partial _ as a), None -> a
+      | Top, _ | _, Top -> Top
       | Full ts1, Full ts2 -> Full (STypeSet.join ts1 ts2)
-      | Full ts1, Partial ts2 | Partial ts1, Full ts2 -> Partial (STypeSet.join ts1 ts2)
       | Partial ts1, Partial ts2 -> Partial (STypeSet.join ts1 ts2)
+      | Full _, Partial _ | Partial _, Full _ -> Top
 
     let meet x y =
       if x == y then x else
       match x, y with
       | Bot, _ | _, Bot -> Bot
-      | None, None -> None
-      | None, Full _ | Full _, None -> Bot
-      | None, Partial _ | Partial _, None -> None
+      | Top, a | a, Top -> a
       | Full ts1, Full ts2 -> Full (STypeSet.meet ts1 ts2)
-      | Full ts1, Partial ts2 | Partial ts1, Full ts2 -> Full (STypeSet.meet ts1 ts2)
       | Partial ts1, Partial ts2 -> Partial (STypeSet.meet ts1 ts2)
+      | Full _, Partial _ | Partial _, Full _ -> Bot
 
     let widen ctx = join
 
     let apply f = function
       | Bot        -> Bot
-      | None       -> None
+      | Top        -> Top
       | Full ts    -> Full (f ts)
       | Partial ts -> Partial (f ts)
 
@@ -248,7 +241,7 @@ struct
   end
 
   (* The abstract state is a map from bases to initialization state *)
-  module State = Framework.Lattices.Pointwise.Make(Base)(Init)
+  module State = Framework.Lattices.Partial_map.Make(Base)(Init)
 
   type t = State.t
 
@@ -307,6 +300,37 @@ struct
         | _ -> assert false
 
 
+  (** Functions for managing smash variables *)
+  let add_smash base styp range man flow =
+    man.post
+      (mk_add_var (mk_smash_var {base;styp}) range)
+      ~zone:Z_c_scalar flow
+
+  let remove_smash base styp range man flow =
+    man.post
+      (mk_remove_var (mk_smash_var {base;styp}) range)
+      ~zone:Z_c_scalar flow
+
+  let rename_smash base1 base2 styp range man flow =
+    man.post
+      (mk_rename_var (mk_smash_var {base=base1;styp}) (mk_smash_var {base=base2;styp}) range)
+      ~zone:Z_c_scalar flow
+
+  let forget_smash base styp range man flow =
+    man.post
+      (mk_forget_var (mk_smash_var {base;styp}) range)
+      ~zone:Z_c_scalar flow
+
+  let expand_smash base basel styp range man flow =
+    man.post
+      (mk_expand_var (mk_smash_var {base;styp}) (List.map (fun b -> mk_smash_var {base=b;styp}) basel) range)
+      ~zone:Z_c_scalar flow
+
+  let fold_smash base basel styp range man flow =
+    man.post
+      (mk_fold_var (mk_smash_var {base;styp}) (List.map (fun b -> mk_smash_var {base=b;styp}) basel) range)
+      ~zone:Z_c_scalar flow
+
   (** {2 Offset of the first uninitialized element} *)
   (** ********************************************* *)
 
@@ -337,6 +361,38 @@ struct
     mk_var (mk_uninit_var b) ~mode range
 
 
+  (** Functions for managing uninit variables *)
+  let add_uninit base range man flow =
+    man.post
+      (mk_add_var (mk_uninit_var base) range)
+      ~zone:Z_c_scalar flow
+
+  let remove_uninit base range man flow =
+    man.post
+      (mk_remove_var (mk_uninit_var base) range)
+      ~zone:Z_c_scalar flow
+
+  let rename_uninit base1 base2 range man flow =
+    man.post
+      (mk_rename_var (mk_uninit_var base1) (mk_uninit_var base2) range)
+      ~zone:Z_c_scalar flow
+
+  let forget_uninit base range man flow =
+    man.post
+      (mk_forget_var (mk_uninit_var base) range)
+      ~zone:Z_c_scalar flow
+
+  let expand_uninit base basel range man flow =
+    man.post
+      (mk_expand_var (mk_uninit_var base) (List.map mk_uninit_var basel) range)
+      ~zone:Z_c_scalar flow
+
+  let fold_uninit base basel range man flow =
+    man.post
+      (mk_fold_var (mk_uninit_var base) (List.map mk_uninit_var basel) range)
+      ~zone:Z_c_scalar flow
+
+  
   (** {2 Unification} *)
   (** *************** *)
 
@@ -348,7 +404,7 @@ struct
     match init with
     (* Only fully initialized bases are supported for the moment *)
     | Init.Bot -> Post.return flow
-    | Init.None -> Post.return flow
+    | Init.Top -> Post.return flow
     | Init.Partial ts ->
       if STypeSet.mem s.styp ts then
         Post.return flow
@@ -429,8 +485,50 @@ struct
           assert false
 
 
+  (** Singleton unification range *)
+  let unify_range = tag_range (mk_fresh_range ()) "smashing-unification"
+
   let unify man ctx ((a,s):t*'s) ((a',s'):t*'s) : t * 's * t * 's =
-    (a,s,a',s')
+    State.fold2zo
+      (* No unification for bases present in one branch only *)
+      (fun b init acc -> acc)
+      (fun b' init' acc -> acc)
+      (* Perform unification for common bases *)
+      (fun base init init' (a,s,a',s') ->
+         let doit a init s other_init =
+           match init, other_init with
+           | Init.Bot, _ | _, Init.Bot -> a, s
+           | Init.Top, _ -> a, s
+
+           | Init.Partial _, Init.Partial _ -> a, s
+
+           | Init.Full ts1, Init.Full ts2 ->
+             STypeSet.fold
+               (fun styp (a,s) ->
+                  state_exec (phi {base; styp} unify_range man) ctx man a s
+               ) (STypeSet.diff ts2 ts1) (a,s)
+
+
+           | Init.Full ts, _ ->
+             STypeSet.fold
+               (fun st (a,s) -> state_exec (remove_smash base st unify_range man) ctx man a s)
+               ts (a,s)             
+
+           | Init.Partial ts, _ ->
+             let a,s =
+               STypeSet.fold
+                 (fun st (a,s) -> state_exec (remove_smash base st unify_range man) ctx man a s)
+                 ts (a,s)
+             in
+             state_exec (remove_uninit base unify_range man) ctx man a s
+
+         in
+         let a,s = doit a init s init' in
+         let a',s' = doit a' init' s' init in
+         (a,s,a',s')
+      )
+      a a' (a,s,a',s')
+
 
 
   (** {2 Lattice operators} *)
@@ -525,68 +623,6 @@ struct
           Universal.Numeric.Common.C.included c c'
         )
 
-  (** Functions for managing smash variables *)
-  let add_smash base styp range man flow =
-    man.post
-      (mk_add_var (mk_smash_var {base;styp}) range)
-      ~zone:Z_c_scalar flow
-
-  let remove_smash base styp range man flow =
-    man.post
-      (mk_remove_var (mk_smash_var {base;styp}) range)
-      ~zone:Z_c_scalar flow
-
-  let rename_smash base1 base2 styp range man flow =
-    man.post
-      (mk_rename_var (mk_smash_var {base=base1;styp}) (mk_smash_var {base=base2;styp}) range)
-      ~zone:Z_c_scalar flow
-
-  let forget_smash base styp range man flow =
-    man.post
-      (mk_forget_var (mk_smash_var {base;styp}) range)
-      ~zone:Z_c_scalar flow
-
-  let expand_smash base basel styp range man flow =
-    man.post
-      (mk_expand_var (mk_smash_var {base;styp}) (List.map (fun b -> mk_smash_var {base=b;styp}) basel) range)
-      ~zone:Z_c_scalar flow
-
-  let fold_smash base basel styp range man flow =
-    man.post
-      (mk_fold_var (mk_smash_var {base;styp}) (List.map (fun b -> mk_smash_var {base=b;styp}) basel) range)
-      ~zone:Z_c_scalar flow
-
-  (** Functions for managing uninit variables *)
-  let add_uninit base range man flow =
-    man.post
-      (mk_add_var (mk_uninit_var base) range)
-      ~zone:Z_c_scalar flow
-
-  let remove_uninit base range man flow =
-    man.post
-      (mk_remove_var (mk_uninit_var base) range)
-      ~zone:Z_c_scalar flow
-
-  let rename_uninit base1 base2 range man flow =
-    man.post
-      (mk_rename_var (mk_uninit_var base1) (mk_uninit_var base2) range)
-      ~zone:Z_c_scalar flow
-
-  let forget_uninit base range man flow =
-    man.post
-      (mk_forget_var (mk_uninit_var base) range)
-      ~zone:Z_c_scalar flow
-
-  let expand_uninit base basel range man flow =
-    man.post
-      (mk_expand_var (mk_uninit_var base) (List.map mk_uninit_var basel) range)
-      ~zone:Z_c_scalar flow
-
-  let fold_uninit base basel range man flow =
-    man.post
-      (mk_fold_var (mk_uninit_var base) (List.map mk_uninit_var basel) range)
-      ~zone:Z_c_scalar flow
-
   (** Fold an exec transfer function over a set of stypes *)
   let fold_stypes (f:styp -> range -> _ man -> 'a flow -> 'a post) ts range man flow =
     STypeSet.fold
@@ -595,14 +631,16 @@ struct
 
   (** Fold an exec transfer function smashes of a base *)
   let exec_smashes (f:styp -> range -> _ man -> 'a flow -> 'a post) base a range man flow =
+    if not (State.mem base a) then Post.return flow else
     match State.find base a with
-    | Init.Bot        -> Post.return flow
-    | Init.None       -> Post.return flow
-    | Init.Full ts
-    | Init.Partial ts -> fold_stypes f ts range man flow
+      | Init.Bot        -> Post.return flow
+      | Init.Top        -> Post.return flow
+      | Init.Full ts
+      | Init.Partial ts -> fold_stypes f ts range man flow
 
   (** Execute a transfer when a uninit variable exists *)
   let exec_uninit (f:range -> _ man -> 'a flow -> 'a post) base a range man flow =
+    if not (State.mem base a) then Post.return flow else
     match State.find base a with
     | Init.Partial ts -> f range man flow
     | _ -> Post.return flow
@@ -647,7 +685,7 @@ struct
     if not (is_interesting_base base) then
       Post.return flow
     else
-      map_env T_cur (State.add base Init.None) man flow |>
+      map_env T_cur (State.add base Init.Top) man flow |>
       Post.return
 
 
@@ -751,15 +789,10 @@ struct
           let flow = set_env T_cur (State.add base (Init.Full (STypeSet.singleton s.styp)) a) man flow in
           man.post (mk_add_var vsmash range) ~zone:Z_c_scalar flow
 
-      | Init.None ->
-        (* When base is not initialized at all, we switch its state to
-           partially initialized if the offset is not universally
-           quantified *)
+      | Init.Top ->
+        (* No initialization information available, so let's look at the offset *)
         if not (is_aligned offset lval.etyp man flow) || not (is_expr_forall_quantified offset) then
-          let flow = set_env T_cur (State.add base (Init.Partial (STypeSet.singleton s.styp)) a) man flow in
-          man.post (mk_add_var vsmash range) ~zone:Z_c_scalar flow  >>$ fun () flow ->
-          man.post (mk_add uninit range) ~zone:Z_c_scalar flow >>$ fun () flow ->
-          man.post (mk_assign uninit zero range) ~zone:Z_c_scalar flow
+          Post.return flow
         else
           (* In the case of universally quantified offset, we check three cases:
 
@@ -876,8 +909,8 @@ struct
         match State.find base a with
         | Init.Bot -> Post.return flow
 
-        | Init.None ->
-          (* When the base has not been initialized yet, two cases are possible:
+        | Init.Top ->
+          (* When we have no initialization information, we check two cases:
 
              Case #1: assign first element
                 0           size - |elm|
@@ -892,7 +925,7 @@ struct
           assume_optim (eq offset zero range)
             ~fthen:(fun flow ->
                 (* Case #1 *)
-                (* Since the previous state was Init.None, the smash
+                (* Since the previous state was Init.Top, the smash
                    variable is not the environment yet. So create it
                    and assign rval to it. Since we are modifying the
                    first element, we use a strong update. *)
@@ -994,7 +1027,7 @@ struct
       let a = get_env T_cur man flow in
       match State.find base a with
       (* Do nothing if base is not fully initialized *)
-      | Init.Bot | Init.None | Init.Partial _ -> Post.return flow
+      | Init.Bot | Init.Top | Init.Partial _ -> Post.return flow
       | Init.Full ts ->
         let s = mk_smash base t in
         phi s range man flow >>$ fun () flow ->
@@ -1149,10 +1182,8 @@ struct
       phi s range man flow >>$ fun () flow ->
       let esmash = mk_smash_expr s ~typ:(Some (under_type p.etyp)) ~mode range in
       match init with
-      | Init.Bot ->  Eval.singleton (mk_top (under_type p.etyp) range) flow
-
-      | Init.None -> Eval.singleton (mk_top (under_type p.etyp) range) flow
-
+      | Init.Bot     ->  Eval.singleton (mk_top (under_type p.etyp) range) flow
+      | Init.Top     -> Eval.singleton (mk_top (under_type p.etyp) range) flow
       | Init.Full ts -> Eval.singleton esmash flow
 
       | Init.Partial ts ->
