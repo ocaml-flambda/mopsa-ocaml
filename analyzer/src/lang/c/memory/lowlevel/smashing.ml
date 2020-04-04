@@ -44,8 +44,10 @@
     case, we keep a value for `uninit(base)` in the numeric domain.
 
     Limitations:
-    - We consider only (multi-)arrays of scalars.
-    - We support only sequential initialization starting from offset 0.
+    - Considers only (multi-)arrays of scalars.
+    - Supports only sequential initialization starting from offset 0.
+    - memcpy-like formulas limited to numeric arrays where the destination
+      is fully covered.
 *)
 
 open Mopsa
@@ -414,7 +416,6 @@ struct
       aux v.vtyp
     | { base_kind = Addr _ } -> true
     | _ -> false
-
 
   (** [is_aligned o n man flow] checks whether the value of an
       expression [o] is aligned w.r.t. type [t] *)
@@ -893,7 +894,8 @@ struct
   let exec_assume_quant op qe e range man flow =
     man.eval e ~zone:(Z_c_low_level,Z_c_scalar) flow >>$ fun e flow ->
     eval_pointed_base_offset (mk_c_address_of qe range) range man flow >>$ fun (base,offset,mode) flow ->
-    if not (is_interesting_base base) then
+    let t = get_c_deref_type qe in
+    if not (is_interesting_base base) || not (is_aligned offset t man flow) then
       Post.return flow
     else
       let a = get_env T_cur man flow in
@@ -909,21 +911,10 @@ struct
              min              max
 
            Case #2: nop
-                0            size - |elm|
-                |--x-------x------|------>
-                  min     max
+              0            size - |elm|
+              |--x-------x------|------>
+                min     max
         *)
-        let t = get_c_deref_type qe in
-        let s = mk_smash base t in
-        (* Add the smash if not existent *)
-        begin if not (STypeSet.mem s.styp ts) then
-            let init' = Init.Full (STypeSet.add s.styp ts) in
-            let flow = set_env T_cur (State.add base init' a) man flow in
-            add_smash base s.styp range man flow
-          else
-            Post.return flow
-        end
-        >>$ fun () flow ->
         (* Check valuation range of the offset *)
         let min, max = Common.Quantified_offset.bound offset in
         let elm = mk_z (sizeof_type t) range in
@@ -934,7 +925,19 @@ struct
                   range)
           ~fthen:(fun flow ->
               (* Case #1 *)
+              let s = mk_smash base t in
+              (* Add the smash if not existent *)
+              begin if not (STypeSet.mem s.styp ts) then
+                  let init' = Init.Full (STypeSet.add s.styp ts) in
+                  let flow = set_env T_cur (State.add base init' a) man flow in
+                  add_smash base s.styp range man flow
+                else
+                  Post.return flow
+              end
+              >>$ fun () flow ->
               let smash = mk_smash_expr s ~typ:(Some t) ~mode:(Some STRONG) range in
+              (* Add a cast if the type of the lvalue is different than the type of expression qe *)
+              let smash = if compare_typ t qe.etyp = 0 then smash else mk_c_cast smash qe.etyp range in
               man.post (mk_assume (mk_binop smash op e ~etyp:T_bool range) range) ~zone:Z_c_scalar flow
             )
           ~felse:(fun flow ->
@@ -943,6 +946,65 @@ struct
             ) ~zone:Z_c_scalar man flow
 
 
+  (** 𝕊⟦ *(p + ∀i) == *(q + ∀j) ⟧ *)
+  let exec_assume_quant2_num_eq qe1 qe2 range man flow =
+    eval_pointed_base_offset (mk_c_address_of qe1 range) range man flow >>$ fun (base1,offset1,mode1) flow ->
+    eval_pointed_base_offset (mk_c_address_of qe2 range) range man flow >>$ fun (base2,offset2,mode2) flow ->
+    let t1 = get_c_deref_type qe1 in
+    let t2 = get_c_deref_type qe2 in
+    if not (is_interesting_base base1) || not (is_interesting_base base2) ||
+       not (is_aligned offset1 t1 man flow) || not (is_aligned offset2 t2 man flow)
+    then
+      Post.return flow
+    else
+      let a = get_env T_cur man flow in
+      match State.find base1 a, State.find base2 a with
+      | Init.Full ts1, Init.Full ts2 ->
+        (* Add the smashes if not existent *)
+        let s1 = mk_smash base1 t1 in
+        let s2 = mk_smash base2 t2 in
+        begin if not (STypeSet.mem s1.styp ts1) then
+            let init' = Init.Full (STypeSet.add s1.styp ts1) in
+            let flow = set_env T_cur (State.add base1 init' a) man flow in
+            add_smash base1 s1.styp range man flow
+          else
+            Post.return flow
+        end
+        >>$ fun () flow ->
+        begin if not (STypeSet.mem s2.styp ts2) then
+            let init' = Init.Full (STypeSet.add s2.styp ts2) in
+            let flow = set_env T_cur (State.add base2 init' a) man flow in
+            add_smash base2 s2.styp range man flow
+          else
+            Post.return flow
+        end
+        >>$ fun () flow ->
+        (* Ensure that elements of a block that is entirely covered have values in the other block *)
+        let ensure_included base offset t qet s other_base other_offset other_t other_qet other_s range man flow =
+          let min, max = Common.Quantified_offset.bound offset in
+          let elm = mk_z (sizeof_type t) range in
+          eval_base_size base range man flow >>$ fun size flow ->
+          assume (log_and
+                    (eq min zero range)
+                    (eq max (sub size elm range) range)
+                    range)
+          ~fthen:(fun flow ->
+                let smash = mk_smash_expr s ~typ:(Some t) ~mode:(Some STRONG) range in
+                let smash = if compare_typ t qet = 0 then smash else mk_c_cast smash qet range in
+                let other_smash = mk_smash_expr other_s ~typ:(Some other_t) ~mode:(Some WEAK) range in
+                let other_smash = if compare_typ other_t other_qet = 0 then other_smash else mk_c_cast other_smash other_qet range in
+                man.post (mk_assume (eq smash other_smash range) range) ~zone:Z_c_scalar flow
+              )
+          ~felse:(fun flow ->
+              Post.return flow
+            ) ~zone:Z_c_scalar man flow
+        in
+        ensure_included base1 offset1 t1 qe1.etyp s1 base2 offset2 t2 qe2.etyp s2 range man flow >>$ fun () flow ->
+        ensure_included base2 offset2 t2 qe2.etyp s2 base1 offset1 t1 qe1.etyp s1 range man flow
+
+      | _ -> Post.return flow
+
+  
   (** {2 Exec entry point} *)
   (** ******************** *)
 
@@ -987,6 +1049,14 @@ struct
       exec_assume_quant op e1 e2 stmt.srange man flow |>
       OptionExt.return
 
+    | S_assume({ ekind = E_binop(O_eq, e1, e2)}) when is_c_deref e1 &&
+                                                      is_c_deref e2 &&
+                                                      is_lval_offset_forall_quantified e1 &&
+                                                      is_lval_offset_forall_quantified e2 &&
+                                                      is_c_int_type e1.etyp &&
+                                                      is_c_int_type e2.etyp ->
+      exec_assume_quant2_num_eq e1 e2 stmt.srange man flow |>
+      OptionExt.return
 
     | _ -> None
 
