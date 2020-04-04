@@ -157,7 +157,11 @@ struct
     | Int i   -> T_c_integer i
     | Float f -> T_c_float f
     | Ptr     -> T_c_pointer T_c_void
-  
+
+  let sizeof_styp st = sizeof_type (typ_of_styp st)
+
+  let rangeof_styp st = rangeof (typ_of_styp st)
+
   let mk_smash base typ =
     { base;
       styp = styp_of_typ typ; }
@@ -332,12 +336,101 @@ struct
   let mk_uninit_expr b ?(mode=None) range =
     mk_var (mk_uninit_var b) ~mode range
 
-  
+
   (** {2 Unification} *)
   (** *************** *)
 
+  (** [phi s r m f] synthesizes the value of smash [s] when existing
+      smashes in the same base exist *)
+  let phi (s:smash) range man flow =
+    let a = get_env T_cur man flow in
+    let init = State.find s.base a in
+    match init with
+    (* Only fully initialized bases are supported for the moment *)
+    | Init.Bot -> Post.return flow
+    | Init.None -> Post.return flow
+    | Init.Partial ts ->
+      if STypeSet.mem s.styp ts then
+        Post.return flow
+      else
+        let ts' = STypeSet.add s.styp ts in
+        let flow = set_env T_cur (State.add s.base (Init.Partial ts') a) man flow in
+        man.post (mk_add_var (mk_smash_var s) range) ~zone:Z_c_scalar flow
+
+    | Init.Full ts ->
+      if STypeSet.mem s.styp ts then
+        Post.return flow
+      else
+        let ts' = STypeSet.add s.styp ts in
+        let flow = set_env T_cur (State.add s.base (Init.Full ts') a) man flow in
+        man.post (mk_add_var (mk_smash_var s) range) ~zone:Z_c_scalar flow >>$ fun () flow ->
+        let esmash_strong = mk_smash_expr s ~mode:(Some STRONG) range in
+        match s.styp with
+        (* No synthesis for floats for the moment *)
+        | Float _ -> Post.return flow
+
+        (* Synthesis of numeric values *)
+        | Int int_type ->
+          (* Two cases are considered (inspired synthesis function of the Cells domain):
+
+             Case #1: ∃ s' : sizeof(s) = sizeof(s')
+                       ⇒ s = wrap(s', rangeof(s))
+
+             Case #2: ∃ s' : type(s') = unsigned char
+                        ⇒ s = wrap(s' * (256^sizeof(s) - 1) / 255, rangeof(s))
+
+             Case #3: typeof(s) = unsigned char
+                        ⇒   s = s' / 2^(8*0) mod 256
+                          ∨ s = s' / 2^(8*1) mod 256
+                          ∨ ...
+                          ∨ s = s' / 2^(8*(sizeof(s') - 1)) mod 256
+          *)
+          STypeSet.fold
+            (fun styp' acc ->
+               let s' = {base = s.base; styp = styp'} in
+               let esmash' = mk_smash_expr s' range in
+               match styp' with
+               (* Case #1 *)
+               | Int _ when Z.(sizeof_styp s.styp = sizeof_styp styp') ->
+                 let e = wrap_expr esmash' (rangeof_styp s.styp) range in
+                 let cond = eq esmash_strong e range in
+                 Post.bind (man.post (mk_assume cond range) ~zone:Z_c_scalar) acc
+
+               (* Case #2 *)
+               | Int C_unsigned_char ->
+                 let n = sizeof_styp s.styp |> Z.to_int in
+                 let m = Z.(((of_int 256 ** n) - one) / of_int 255) in
+                 let e = wrap_expr (mul esmash' (mk_z m range) range) (rangeof_styp s.styp) range in
+                 let cond = eq esmash_strong e range in
+                 Post.bind (man.post (mk_assume cond range) ~zone:Z_c_scalar) acc
+
+               (* Case #3 *)
+               | _ when int_type = C_unsigned_char ->
+                 acc >>$ fun () flow ->
+                 let n = sizeof_styp styp' |> Z.to_int in
+                 let rec aux i =
+                   if i = n then []
+                   else
+                     let e = _mod_ (div esmash' (mk_z Z.(of_int 2 ** Stdlib.(8 * i)) range) range) (mk_int 256 range) range in
+                     let cond = eq esmash_strong e range in
+                     man.post (mk_assume cond range) ~zone:Z_c_scalar flow :: aux (i+1)
+                 in
+                 aux 0 |>
+                 Post.join_list ~empty:(fun () -> Post.return flow)
+
+
+               | _ -> acc
+
+
+            ) ts (Post.return flow)
+
+        (* Synthesis of pointer values *)
+        | Ptr ->
+          assert false
+
+
   let unify man ctx ((a,s):t*'s) ((a',s'):t*'s) : t * 's * t * 's =
-    a, s, a', s'
+    (a,s,a',s')
 
 
   (** {2 Lattice operators} *)
@@ -542,9 +635,9 @@ struct
     | true, false -> fthen flow
     | false, true -> felse flow
     | _ -> assume cond ~fthen ~felse ~zone:Z_u_num man flow
-          
-    
-  
+
+
+
 
   (** {2 Environment transfer functions} *)
   (** ********************************** *)
@@ -567,7 +660,7 @@ struct
   let exec_remove_base base range man flow =
     if not (is_interesting_base base) then
       Post.return flow
-    else      
+    else
       let a = get_env T_cur man flow in
       (* Remove the base from the map *)
       let flow = set_env T_cur (State.remove base a) man flow in
@@ -668,7 +761,7 @@ struct
           man.post (mk_add uninit range) ~zone:Z_c_scalar flow >>$ fun () flow ->
           man.post (mk_assign uninit zero range) ~zone:Z_c_scalar flow
         else
-          (* In the case of universally quantified offset, we check three cases: 
+          (* In the case of universally quantified offset, we check three cases:
 
              Case #1: fully initialized
                 0            size - |elm|
@@ -736,7 +829,7 @@ struct
              Case #3: nop
                 0  uninit      size - |elm|
                 |----0----x---------|------>
-                         min       
+                         min
           *)
           let min, max = Common.Quantified_offset.bound offset in
           let elm = mk_z (sizeof_type lval.etyp) range in
@@ -846,19 +939,19 @@ struct
             man.post (mk_assign esmash rval range) ~zone:Z_c_scalar flow >>$ fun () flow ->
             (* To update where we are in the initialization, three cases are considered:
 
-             Case #1: fully initialized
-                0           uninit = size - |elm|
-                |------------------|------>
-                                offset
+               Case #1: fully initialized
+                  0           uninit = size - |elm|
+                  |------------------|------>
+                                  offset
 
-             Case #2: advance initialization
-                0     uninit    size - |elm|
-                |--------x----------|------>
-                       offset
+               Case #2: advance initialization
+                  0     uninit    size - |elm|
+                  |--------x----------|------>
+                         offset
 
-             Case #3: nop
-                0  uninit      size - |elm|
-                |----x------x------|------>
+               Case #3: nop
+                  0  uninit      size - |elm|
+                  |----x------x------|------>
                           offset
             *)
             let uninit = mk_uninit_expr base ~mode range in
@@ -903,6 +996,8 @@ struct
       (* Do nothing if base is not fully initialized *)
       | Init.Bot | Init.None | Init.Partial _ -> Post.return flow
       | Init.Full ts ->
+        let s = mk_smash base t in
+        phi s range man flow >>$ fun () flow ->
         (* When base is fully initialized, check the valuation range of the quantified offset:
 
            Case #1: predicate on the entire memory block
@@ -925,16 +1020,6 @@ struct
                   range)
           ~fthen:(fun flow ->
               (* Case #1 *)
-              let s = mk_smash base t in
-              (* Add the smash if not existent *)
-              begin if not (STypeSet.mem s.styp ts) then
-                  let init' = Init.Full (STypeSet.add s.styp ts) in
-                  let flow = set_env T_cur (State.add base init' a) man flow in
-                  add_smash base s.styp range man flow
-                else
-                  Post.return flow
-              end
-              >>$ fun () flow ->
               let smash = mk_smash_expr s ~typ:(Some t) ~mode:(Some STRONG) range in
               (* Add a cast if the type of the lvalue is different than the type of expression qe *)
               let smash = if compare_typ t qe.etyp = 0 then smash else mk_c_cast smash qe.etyp range in
@@ -963,22 +1048,8 @@ struct
         (* Add the smashes if not existent *)
         let s1 = mk_smash base1 t1 in
         let s2 = mk_smash base2 t2 in
-        begin if not (STypeSet.mem s1.styp ts1) then
-            let init' = Init.Full (STypeSet.add s1.styp ts1) in
-            let flow = set_env T_cur (State.add base1 init' a) man flow in
-            add_smash base1 s1.styp range man flow
-          else
-            Post.return flow
-        end
-        >>$ fun () flow ->
-        begin if not (STypeSet.mem s2.styp ts2) then
-            let init' = Init.Full (STypeSet.add s2.styp ts2) in
-            let flow = set_env T_cur (State.add base2 init' a) man flow in
-            add_smash base2 s2.styp range man flow
-          else
-            Post.return flow
-        end
-        >>$ fun () flow ->
+        phi s1 range man flow >>$ fun () flow ->
+        phi s2 range man flow >>$ fun () flow ->
         (* Ensure that elements of a block that is entirely covered have values in the other block *)
         let ensure_included base offset t qet s other_base other_offset other_t other_qet other_s range man flow =
           let min, max = Common.Quantified_offset.bound offset in
@@ -1004,7 +1075,7 @@ struct
 
       | _ -> Post.return flow
 
-  
+
   (** {2 Exec entry point} *)
   (** ******************** *)
 
@@ -1073,48 +1144,40 @@ struct
     else
       let a = get_env T_cur man flow in
       let s = mk_smash base (under_type p.etyp) in
-      let esmash = mk_smash_expr s ~typ:(Some  (under_type p.etyp)) ~mode range in
-      match State.find base a with
+      let init = State.find base a in
+      (* Synthesize the smash if it is new and there are some existing constraints *)
+      phi s range man flow >>$ fun () flow ->
+      let esmash = mk_smash_expr s ~typ:(Some (under_type p.etyp)) ~mode range in
+      match init with
       | Init.Bot ->  Eval.singleton (mk_top (under_type p.etyp) range) flow
 
       | Init.None -> Eval.singleton (mk_top (under_type p.etyp) range) flow
 
-      | Init.Full ts ->
-        if not (STypeSet.mem s.styp ts) then
-          (* No smash exists for this type *)
-          Eval.singleton (mk_top (under_type p.etyp) range) flow
-        else
-          (* The base has been fully initialized and we have a smash
-             for this type, so rewrite the deref into the smash *)
-          Eval.singleton esmash flow
+      | Init.Full ts -> Eval.singleton esmash flow
 
       | Init.Partial ts ->
-        if not (STypeSet.mem s.styp ts) then
-          (* No smash exists for this type *)
-          Eval.singleton (mk_top (under_type p.etyp) range) flow
-        else
-          (* When accessing a partially initialized base, two cases are possible 
+        (* When accessing a partially initialized base, two cases are possible
 
-             Case #1: before the uninitialized part
-                0                uninit
-                |------x------------|------>
-                    offset
+           Case #1: before the uninitialized part
+              0                uninit
+              |------x------------|------>
+                  offset
 
-             Case #2: after the uninitialized part
-                0     uninit    
-                |--------|----------x------>
+           Case #2: after the uninitialized part
+              0     uninit
+              |--------|----------x------>
                                  offset
-          *)
-          let uninit = mk_uninit_expr base ~mode range in
-          assume_optim (ge offset uninit range)
-            ~fthen:(fun flow ->
-                (* Case #2 *)
-                Eval.singleton (mk_top (under_type p.etyp) range) flow
-              )
-            ~felse:(fun flow ->
-                (* Case #1 *)
-                Eval.singleton esmash flow
-              ) ~zone:Z_c_scalar man flow
+        *)
+        let uninit = mk_uninit_expr base ~mode range in
+        assume_optim (ge offset uninit range)
+          ~fthen:(fun flow ->
+              (* Case #2 *)
+              Eval.singleton (mk_top (under_type p.etyp) range) flow
+            )
+          ~felse:(fun flow ->
+              (* Case #1 *)
+              Eval.singleton esmash flow
+            ) ~zone:Z_c_scalar man flow
 
 
 
