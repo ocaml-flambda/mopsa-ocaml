@@ -72,39 +72,57 @@ struct
   (** Command-line options *)
   (** ==================== *)
 
-  let opt_ignore_overflow = ref false
-
+  let opt_signed_arithmetic_overflow = ref true
   let () =
     register_domain_option name {
-      key = "-c-ignore-int-overflow";
+      key = "-c-detect-signed-arithmetic-overflow";
       category = "C";
-      doc = " do not raise integer overflow alarms";
-      spec = ArgExt.Set opt_ignore_overflow;
+      doc = " detect overflows in signed integer arithmetic";
+      spec = ArgExt.Bool (fun b -> opt_signed_arithmetic_overflow := b);
+      default = "true";
+    }
+
+  let opt_unsigned_arithmetic_overflow = ref false
+  let () =
+    register_domain_option name {
+      key = "-c-detect-unsigned-arithmetic-overflow";
+      category = "C";
+      doc = " detect overflows in unsigned integer arithmetic";
+      spec = ArgExt.Bool (fun b -> opt_unsigned_arithmetic_overflow := b);
       default = "false";
     }
 
-  let opt_ignore_explicit_cast_alarm = ref false
-
+  let opt_signed_implicit_cast_overflow = ref true
   let () =
     register_domain_option name {
-      key = "-c-ignore-int-explicit-cast-overflow";
+      key = "-c-detect-signed-implicit-cast-overflow";
       category = "C";
-      doc = " do not raise integer overflow alarms in explicit casts";
-      spec = ArgExt.Set opt_ignore_explicit_cast_alarm;
+      doc = " detect overflows in implicit casts to signed integer";
+      spec = ArgExt.Bool (fun b -> opt_signed_implicit_cast_overflow := b);
+      default = "true";
+    }
+
+  let opt_unsigned_implicit_cast_overflow = ref false
+  let () =
+    register_domain_option name {
+      key = "-c-detect-unsigned-implicit-cast-overflow";
+      category = "C";
+      doc = " detect overflows in implicit casts to unsigned integer";
+      spec = ArgExt.Bool (fun b -> opt_unsigned_implicit_cast_overflow := b);
       default = "false";
     }
 
 
-  let opt_detect_unsigned_wrap = ref false
-
+  let opt_explicit_cast_overflow = ref true
   let () =
     register_domain_option name {
-      key = "-c-detect-unsigned-int-wrap";
+      key = "-c-detect-explicit-cast-overflow";
       category = "C";
-      doc = " raise integer overflow alarms when an unsigned integer wraps around";
-      spec = ArgExt.Set opt_detect_unsigned_wrap;
-      default = "false";
+      doc = " detect overflows in explicit casts";
+      spec = ArgExt.Bool (fun b -> opt_explicit_cast_overflow := b);
+      default = "true";
     }
+
 
 
   (** Numeric variables *)
@@ -183,7 +201,6 @@ struct
     let typ = cexp.etyp in
     (* Function that performs the actual check *)
     let do_check raise_alarm =
-      let raise_alarm = raise_alarm && not !opt_ignore_overflow in
       let rmin, rmax = rangeof typ in
       let ritv = Itv.of_z rmin rmax in
       let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query nexp) flow in
@@ -200,20 +217,23 @@ struct
     match ekind cexp with
     (* Arithmetics on signed integers may overflow *)
     | E_binop _ | E_unop _ when is_c_signed_int_type typ ->
-      do_check true
+      do_check !opt_signed_arithmetic_overflow
 
-    (* Arithmetics on unsigned integers have a defined behavior, but
-       check overflow if flag `detect-unsigned-wrap` is set *)
+    (* Arithmetics on unsigned integers *)
     | E_binop _ | E_unop _ when not (is_c_signed_int_type typ) ->
-      do_check !opt_detect_unsigned_wrap
+      do_check !opt_unsigned_arithmetic_overflow
 
-    (* Implicit casts do not raise overflow alarms *)
-    | E_c_cast(_, false) ->
-      do_check true
+    (* Implicit casts to signed integers *)
+    | E_c_cast(_, false) when is_c_signed_int_type typ ->
+      do_check !opt_signed_implicit_cast_overflow
 
-    (* Explicit casts raise overflow alarms if the flag `-ignore-cast-overflow` is not set *)
+    (* Implicit casts to unsigned integers *)
+    | E_c_cast(_, false) when not (is_c_signed_int_type typ) ->
+      do_check !opt_unsigned_implicit_cast_overflow
+
+    (* Explicit casts *)
     | E_c_cast(_, true) ->
-      do_check (not !opt_ignore_explicit_cast_alarm)
+      do_check !opt_explicit_cast_overflow
 
     | _ -> panic_at range "check_overflow: unsupported expression %a" pp_expr cexp
 
@@ -233,8 +253,8 @@ struct
       ~zone:Z_u_num man flow
 
 
-  (** Check that bit-shifts are safe. Two conditions are verified: 
-      (i) the shift position is positive, and 
+  (** Check that bit-shifts are safe. Two conditions are verified:
+      (i) the shift position is positive, and
       (ii) this position does not exceed the size of the shifted value
   *)
   let check_shift exp e n range man flow =
