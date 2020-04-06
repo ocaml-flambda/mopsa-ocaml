@@ -75,9 +75,9 @@ struct
   let opt_signed_arithmetic_overflow = ref true
   let () =
     register_domain_option name {
-      key = "-c-detect-signed-arithmetic-overflow";
+      key = "-c-check-signed-arithmetic-overflow";
       category = "C";
-      doc = " detect overflows in signed integer arithmetic";
+      doc = " check overflows in signed integer arithmetic";
       spec = ArgExt.Bool (fun b -> opt_signed_arithmetic_overflow := b);
       default = "true";
     }
@@ -85,9 +85,9 @@ struct
   let opt_unsigned_arithmetic_overflow = ref false
   let () =
     register_domain_option name {
-      key = "-c-detect-unsigned-arithmetic-overflow";
+      key = "-c-check-unsigned-arithmetic-overflow";
       category = "C";
-      doc = " detect overflows in unsigned integer arithmetic";
+      doc = " check overflows in unsigned integer arithmetic";
       spec = ArgExt.Bool (fun b -> opt_unsigned_arithmetic_overflow := b);
       default = "false";
     }
@@ -95,32 +95,32 @@ struct
   let opt_signed_implicit_cast_overflow = ref true
   let () =
     register_domain_option name {
-      key = "-c-detect-signed-implicit-cast-overflow";
+      key = "-c-check-signed-implicit-cast-overflow";
       category = "C";
-      doc = " detect overflows in implicit casts to signed integer";
+      doc = " check overflows in implicit casts to signed integer";
       spec = ArgExt.Bool (fun b -> opt_signed_implicit_cast_overflow := b);
       default = "true";
     }
 
-  let opt_unsigned_implicit_cast_overflow = ref false
+  let opt_unsigned_implicit_cast_overflow = ref true
   let () =
     register_domain_option name {
-      key = "-c-detect-unsigned-implicit-cast-overflow";
+      key = "-c-check-unsigned-implicit-cast-overflow";
       category = "C";
-      doc = " detect overflows in implicit casts to unsigned integer";
+      doc = " check overflows in implicit casts to unsigned integer";
       spec = ArgExt.Bool (fun b -> opt_unsigned_implicit_cast_overflow := b);
-      default = "false";
+      default = "true";
     }
 
 
-  let opt_explicit_cast_overflow = ref true
+  let opt_explicit_cast_overflow = ref false
   let () =
     register_domain_option name {
-      key = "-c-detect-explicit-cast-overflow";
+      key = "-c-check-explicit-cast-overflow";
       category = "C";
-      doc = " detect overflows in explicit casts";
+      doc = " check overflows in explicit casts";
       spec = ArgExt.Bool (fun b -> opt_explicit_cast_overflow := b);
-      default = "true";
+      default = "false";
     }
 
 
