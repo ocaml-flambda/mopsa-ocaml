@@ -34,33 +34,47 @@ struct
 
   module I = Values.Intervals.Integer.Value
   module P = Values.Powerset.Value
+  module B = ItvUtils.IntItv.B
 
 
   (* Reduce an interval and a powerset *)
-  let meet_itv_pwr i p =
-    if I.is_bottom i || P.is_bottom p then
-      I.bottom, P.bottom
-    else
-      (* Reduce powersets with intervals if [i] is a singleton value *)
-      match I.bounds_opt i with
-      | Some a, Some b when Z.(a = b) ->
-        i, P.singleton a
-      | _ ->
-        (* Reduce intervals with powerset if the interval of [p] is more precise *)
-        match p with
-        | Top.TOP -> i,p
-        | Top.Nt set ->
-          let a = P.Set.min_elt set in
-          let b = P.Set.max_elt set in
-          let i' = I.meet i (I.of_z a b) in
-          i',p
 
-  (* Reduction operator *)
+  let of_interval (a:I.t) : P.t =
+    match a with
+    | BOT -> P.bottom
+    | Nb (B.Finite l, B.Finite h) -> P.of_bounds l h
+    | _ -> P.top
+
+  let to_interval (x:P.t) : I.t =
+    match x with
+    | TOP -> I.top
+    | Nt s ->
+      if P.Set.is_empty s then BOT
+      else Nb (B.Finite (P.Set.min_elt s), B.Finite (P.Set.max_elt s))
+
+  let reduce_pair (x:P.t) (i:I.t) : P.t * I.t =
+    if P.is_top x then of_interval i, i
+    else match i with
+      | BOT ->
+        P.bottom, BOT
+      | Nb (B.Finite l, B.Finite h) ->
+        let xx = P.Powerset.filter (fun a -> a >= l && a <= h) x in
+        xx, to_interval xx
+      | Nb (B.MINF, B.Finite h) ->
+        let xx = P.Powerset.filter (fun a -> a <= h) x in
+        xx, to_interval xx
+      | Nb (B.Finite l, B.PINF) ->
+        let xx = P.Powerset.filter (fun a -> a >= l) x in
+        xx, to_interval xx
+      | _ ->
+        x, to_interval x
+
+
   let reduce (man: 'a vrman) (v: 'a) : 'a =
     let i = man.get I.id v
     and p = man.get P.id v in
 
-    let i',p' = meet_itv_pwr i p in
+    let p',i' = reduce_pair p i in
 
     man.set I.id i' v |>
     man.set P.id p'
