@@ -355,18 +355,18 @@ let () =
   }
 
 
-let raise_c_integer_overflow_alarm exp man input_flow error_flow =
+let raise_c_integer_overflow_alarm cexp nexp man input_flow error_flow =
   let cs = Flow.get_callstack error_flow in
-  let exp' = get_orig_expr exp in
-  let itv = man.ask (mk_int_interval_query exp) input_flow in
-  let alarm = mk_alarm (A_c_integer_overflow_msg(exp',itv)) cs exp'.erange in
+  let cexp' = get_orig_expr cexp in
+  let itv = man.ask (mk_int_interval_query nexp) input_flow in
+  let alarm = mk_alarm (A_c_integer_overflow_msg(cexp',itv)) cs cexp'.erange in
   Flow.raise_alarm alarm ~bottom:false man.lattice error_flow
 
-let raise_c_cast_integer_overflow_alarm exp t man input_flow error_flow =
+let raise_c_cast_integer_overflow_alarm cexp nexp t man input_flow error_flow =
   let cs = Flow.get_callstack error_flow in
-  let exp' = get_orig_expr exp in
-  let itv = man.ask (mk_int_interval_query exp) input_flow in
-  let alarm = mk_alarm (A_c_cast_integer_overflow_msg(exp',itv,t)) cs exp'.erange in
+  let cexp' = get_orig_expr cexp in
+  let itv = man.ask (mk_int_interval_query nexp) input_flow in
+  let alarm = mk_alarm (A_c_cast_integer_overflow_msg(cexp',itv,t)) cs cexp'.erange in
   Flow.raise_alarm alarm ~bottom:false man.lattice error_flow
 
 
