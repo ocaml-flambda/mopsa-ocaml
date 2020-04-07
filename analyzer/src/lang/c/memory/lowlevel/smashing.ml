@@ -34,14 +34,15 @@
     directly encoded in the abstract state. More particularly, we
     associate to `base` three possible states:
 
-    - Init.None: the base has not been initialized yet, which
-    corresponds to `uninit(base) = 0`.
+    - Init.Partial : the base has been partially initialized. In this
+    case, we keep a value for `uninit(base)` in the numeric domain.
 
     - Init.Full : the base has been fully initialize, which
     corresponds to `uninit(base) = size(base)`
 
-    - Init.Partial : the base has been partially initialized. In this
-    case, we keep a value for `uninit(base)` in the numeric domain.
+    - Init.Top: no information available on the base, which
+    corresponds to `0 ≤ uninit(base) ≤ size(base)`.
+
 
     Limitations:
     - Considers only (multi-)arrays of scalars.
@@ -433,7 +434,7 @@ struct
                        ⇒ s = wrap(s', rangeof(s))
 
              Case #2: ∃ s' : type(s') = unsigned char
-                        ⇒ s = wrap(s' * (256^sizeof(s) - 1) / 255, rangeof(s))
+                        ⇒ s = wrap(Σ_{i = 0}^{size(s) - 1}{256^i * s'}, rangeof(s))
 
              Case #3: typeof(s) = unsigned char
                         ⇒   s = s' / 2^(8*0) mod 256
@@ -455,8 +456,12 @@ struct
                (* Case #2 *)
                | Int C_unsigned_char ->
                  let n = sizeof_styp s.styp |> Z.to_int in
-                 let m = Z.(((of_int 256 ** n) - one) / of_int 255) in
-                 let e = wrap_expr (mul esmash' (mk_z m range) range) (rangeof_styp s.styp) range in
+                 let rec sum i =
+                   if i = 0 then esmash' else
+                   let m = Z.(of_int 256 ** i) in
+                   add (sum (i-1)) (mul (mk_z m range) esmash' range) range
+                 in
+                 let e = wrap_expr (sum (n-1)) (rangeof_styp s.styp) range in
                  let cond = eq esmash_strong e range in
                  Post.bind (man.post (mk_assume cond range) ~zone:Z_c_scalar) acc
 
@@ -465,11 +470,10 @@ struct
                  acc >>$ fun () flow ->
                  let n = sizeof_styp styp' |> Z.to_int in
                  let rec aux i =
-                   if i = n then []
-                   else
-                     let e = _mod_ (div esmash' (mk_z Z.(of_int 2 ** Stdlib.(8 * i)) range) range) (mk_int 256 range) range in
-                     let cond = eq esmash_strong e range in
-                     man.post (mk_assume cond range) ~zone:Z_c_scalar flow :: aux (i+1)
+                   if i = n then [] else
+                   let e = _mod_ (div esmash' (mk_z Z.(of_int 2 ** Stdlib.(8 * i)) range) range) (mk_int 256 range) range in
+                   let cond = eq esmash_strong e range in
+                   man.post (mk_assume cond range) ~zone:Z_c_scalar flow :: aux (i+1)
                  in
                  aux 0 |>
                  Post.join_list ~empty:(fun () -> Post.return flow)
@@ -480,9 +484,9 @@ struct
 
             ) ts (Post.return flow)
 
-        (* Synthesis of pointer values *)
+        (* No synthesis for pointer values *)
         | Ptr ->
-          assert false
+          Post.return flow
 
 
   (** Singleton unification range *)
@@ -507,7 +511,6 @@ struct
                (fun styp (a,s) ->
                   state_exec (phi {base; styp} unify_range man) ctx man a s
                ) (STypeSet.diff ts2 ts1) (a,s)
-
 
            | Init.Full ts, _ ->
              STypeSet.fold
