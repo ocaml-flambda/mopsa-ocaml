@@ -355,7 +355,7 @@ struct
       check_overflow exp exp' range man flow |>
       OptionExt.return
 
-    (* 𝔼⟦ wrap(e,min,max) ⟧ *)
+    (* 𝔼⟦ ⋄ e ⟧, ⋄ ∈ {+, -} and type(t) = int *)
     | E_unop(O_wrap(min,max) as op, e) when exp |> etyp |> is_c_int_type ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e flow ->
       let exp' = { exp with
@@ -364,37 +364,29 @@ struct
       Eval.singleton exp' flow |>
       OptionExt.return
 
-    (* 𝔼⟦ ⋄ e ⟧, ⋄ ∈ {+, -} and type(t) = float *)
-    | E_unop(op, e) when is_c_float_op op &&
-                         exp |> etyp |> is_c_float_type
-      ->
-      man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e flow ->
-      let exp' = { exp with
-                   ekind = E_unop(op, e);
-                   etyp = to_num_type exp.etyp }
+    (* 𝔼⟦ ! e ⟧ *)
+    | E_unop(O_log_not, e) when exp |> etyp |> is_c_num_type ->
+      man.eval ~zone:(Z_c_scalar,Z_u_num) e flow >>$? fun e flow ->
+      let exp' =
+        if is_compare_expr e then
+          { exp with
+            ekind = E_unop(O_log_not, e);
+            etyp = T_bool }
+        else
+          mk_binop e O_eq (mk_zero exp.erange) exp.erange ~etyp:T_bool
       in
       Eval.singleton exp' flow |>
       OptionExt.return
 
-
-    (* 𝔼⟦ !e⟧ *)
-    | E_unop(O_log_not, e) when exp |> etyp |> is_c_num_type &&
-                                not (is_compare_expr e)
-      ->
-      man.eval ~zone:(Z_c_scalar,Z_u_num) e flow >>$? fun e flow ->
-      let exp' = mk_binop e O_eq (mk_zero exp.erange) exp.erange ~etyp:T_bool in
+    (* 𝔼⟦ ⋄ e ⟧ *)
+    | E_unop(op, e) when exp |> etyp |> is_c_num_type ->
+      man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e flow ->
+      let exp' = { exp with
+                   ekind = E_unop(op, e);
+                   etyp = to_num_type exp.etyp } in
       Eval.singleton exp' flow |>
       OptionExt.return
 
-    (* 𝔼⟦ ~e ⟧ *)
-    | E_unop(O_bit_invert, e) when exp |> etyp |> is_c_int_type
-      ->
-      man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e flow ->
-      let exp' = { exp with
-                   ekind = E_unop(O_bit_invert, e);
-                   etyp = to_num_type exp.etyp } in
-      check_overflow exp exp' range man flow |>
-      OptionExt.return
 
     (* 𝔼⟦ e ⋄ e' ⟧, ⋄ ∈ {/, %} and type(exp) = int *)
     | E_binop(op, e, e') when op |> is_c_div_op &&
@@ -414,7 +406,7 @@ struct
       check_shift exp e e' range man flow |>
       OptionExt.return
 
-    (* 𝔼⟦ e ⋄ e' ⟧, ⋄ ∈ {+, -, *} and exp(typ) = int *)
+    (* 𝔼⟦ e ⋄ e' ⟧, ⋄ ∈ {+, -, *} and type(exp) = int *)
     | E_binop(op, e, e') when is_c_overflow_op op &&
                               exp |> etyp |> is_c_int_type
       ->
@@ -427,10 +419,8 @@ struct
       check_overflow exp exp' range man flow |>
       OptionExt.return
 
-    (* 𝔼⟦ e ⋄ e' ⟧, ⋄ ∈ {+, -, *, /, %} and type(exp) = float *)
-    | E_binop(op, e, e') when op |> is_c_float_op &&
-                              exp |> etyp |> is_c_float_type
-      ->
+    (* 𝔼⟦ e ⋄ e' ⟧ *)
+    | E_binop(op, e, e') when exp |> etyp |> is_c_num_type ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e flow ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e' flow >>$? fun e' flow ->
       let exp' = { exp with
@@ -439,7 +429,6 @@ struct
       in
       Eval.singleton exp' flow |>
       OptionExt.return
-
 
     (* 𝔼⟦ (float)int ⟧ *)
     | E_c_cast(e, _) when exp |> etyp |> is_c_float_type &&
