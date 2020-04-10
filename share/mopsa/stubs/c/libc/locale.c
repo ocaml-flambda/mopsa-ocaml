@@ -95,24 +95,12 @@ struct lconv *localeconv (void);
 #endif
 
 
-/*$
- * warn: "unsupported stub";
- */
 locale_t newlocale (int __category_mask, const char *__locale, locale_t __base);
 
-/*$
- * warn: "unsupported stub";
- */
 locale_t duplocale (locale_t __dataset);
 
-/*$
- * warn: "unsupported stub";
- */
 void freelocale (locale_t __dataset);
 
-/*$
- * warn: "unsupported stub";
- */
 locale_t uselocale (locale_t __dataset);
 
 

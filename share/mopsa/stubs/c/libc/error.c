@@ -22,26 +22,42 @@
 /* Stubs for functions in error.h */
 
 #include <error.h>
+#include <stddef.h> // to get NULL
 
 /*$
- * ensures: 1 == 0;
+ * warn: "TODO: formats & error_print_progname in error_at_line";
+ * assigns: error_message_count;
+ *
+ * case "exit" {
+ *   assumes: __status != 0;
+ *   ensures: 1 == 0;
+ * }
+ *
+ * case "noexit" {
+ *   assumes: __status == 0;
+ * }
  */
 void error (int __status, int __errnum, const char *__format, ...);
 
 
 /*$
- * ensures: 1 == 0;
+ * warn: "TODO: formats & error_print_progname in error_at_line";
+ * assigns: error_message_count;
+ *
+ * case "exit" {
+ *   assumes: __status != 0;
+ *   ensures: 1 == 0;
+ * }
+ *
+ * case "noexit" {
+ *   assumes: __status == 0;
+ * }
  */
 void error_at_line (int __status, int __errnum, const char *__fname, unsigned int __lineno, const char *__format, ...);
 
 
-// TODO
-void (*error_print_progname) (void);
+void (*error_print_progname) (void) = NULL;
 
+unsigned int error_message_count = 0;
 
-// TODO
-unsigned int error_message_count;
-
-
-// TODO
-int error_one_per_line;
+int error_one_per_line = 0;

@@ -894,14 +894,6 @@ int __signbitf(float __value);
  */
 int __signbitl(long double __value);
 
-/*
-  not documented:
-  TODO: int __iseqsig(double __x, double __y);
-  TODO: int __issignaling(double __value);
-*/
-
-// TODO: not documented:__iseqsig, __issignaling
-
 /*$
  * requires: valid_float(__x) and valid_float(__y);
  * requires: __y != 0.;
@@ -974,19 +966,19 @@ long double copysignl(long double __x, long double __y);
 
 
 /*$
- * requires: exists int i in [0, size(__tagb) - 1]: __tagb[i] == 0;
+ * requires: valid_string(__tagb);
  * ensures: float_nan(return);
  */
 double nan(const char* __tagb);
 
 /*$
- * requires: exists int i in [0, size(__tagb) - 1]: __tagb[i] == 0;
+ * requires: valid_string(__tagb);
  * ensures: float_nan(return);
  */
 float nanf(const char* __tagb);
 
 /*$
- * requires: exists int i in [0, size(__tagb) - 1]: __tagb[i] == 0;
+ * requires: valid_string(__tagb);
  * ensures: float_nan(return);
  */
 long double nanl(const char* __tagb);
@@ -1727,11 +1719,6 @@ float scalbf(float __x, float __n);
 long double scalbl(long double __x, long double __n);
 
 
-/*
-  TODO: __builtin
-  
-*/
-
 /*$
  * ensures: float_inf(return) and return >= 0.;
  */
@@ -1753,6 +1740,7 @@ long double __builtin_huge_vall();
 float __builtin_inff();
 
 /*$
+ * requires: valid_string(__tagb);
  * ensures: float_nan(return);
  */
 float __builtin_nanf(const char* __tagb);

@@ -80,41 +80,41 @@ long long int atoll (const char *__nptr);
 #endif
 
 /*$
- * //NOTE: we are more strict than the spec by requiring that __nptr is 0-terminated
  * requires: valid_string(__nptr);
  *
  * case "with_endptr" {
  *   assumes: __endptr != NULL;
- *   assigns:  *__endptr;
- *   assigns:  _errno;
- *   ensures:  (*__endptr)' >= __nptr and (*__endptr)' < __nptr + size(__nptr);
+ *   requires: valid_ptr(__endptr);
+ *   local: size_t len = strlen(__nptr);
+ *   assigns: *__endptr;
+ *   assigns: _errno;
+ *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
- * case "without_endptr" {
+ *  case "without_endptr" {
  *   assumes: __endptr == NULL;
  *   assigns:  _errno;
- * }
+ *  }
  */
 double strtod (const char *__restrict __nptr,
                char **__restrict __endptr);
 
-
-
 /*$
- * //NOTE: we are more strict than the spec by requiring that __nptr is 0-terminated
  * requires: valid_string(__nptr);
  *
  * case "with_endptr" {
  *   assumes: __endptr != NULL;
- *   assigns:  *__endptr;
- *   assigns:  _errno;
- *   ensures:  (*__endptr)' >= __nptr and (*__endptr)' < __nptr + size(__nptr);
+ *   requires: valid_ptr(__endptr);
+ *   local: size_t len = strlen(__nptr);
+ *   assigns: *__endptr;
+ *   assigns: _errno;
+ *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
- * case "without_endptr" {
+ *  case "without_endptr" {
  *   assumes: __endptr == NULL;
  *   assigns:  _errno;
- * }
+ *  }
  */
 double strtod_l (const char *__restrict __nptr,
 		 char **__restrict __endptr, locale_t __loc);
@@ -123,39 +123,41 @@ double strtod_l (const char *__restrict __nptr,
 #ifdef	__USE_ISOC99
 
 /*$
- * //NOTE: we are more strict than the spec by requiring that __nptr is 0-terminated
  * requires: valid_string(__nptr);
  *
  * case "with_endptr" {
  *   assumes: __endptr != NULL;
- *   assigns:  *__endptr;
- *   assigns:  _errno;
- *   ensures:  (*__endptr)' >= __nptr and (*__endptr)' < __nptr + size(__nptr);
+ *   requires: valid_ptr(__endptr);
+ *   local: size_t len = strlen(__nptr);
+ *   assigns: *__endptr;
+ *   assigns: _errno;
+ *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
- * case "without_endptr" {
+ *  case "without_endptr" {
  *   assumes: __endptr == NULL;
  *   assigns:  _errno;
- * }
+ *  }
  */
 float strtof (const char *__restrict __nptr,
               char **__restrict __endptr);
 
 /*$
- * //NOTE: we are more strict than the spec by requiring that __nptr is 0-terminated
  * requires: valid_string(__nptr);
  *
  * case "with_endptr" {
  *   assumes: __endptr != NULL;
- *   assigns:  *__endptr;
- *   assigns:  _errno;
- *   ensures:  (*__endptr)' >= __nptr and (*__endptr)' < __nptr + size(__nptr);
+ *   requires: valid_ptr(__endptr);
+ *   local: size_t len = strlen(__nptr);
+ *   assigns: *__endptr;
+ *   assigns: _errno;
+ *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
- * case "without_endptr" {
+ *  case "without_endptr" {
  *   assumes: __endptr == NULL;
  *   assigns:  _errno;
- * }
+ *  }
  */
 long double strtold (const char *__restrict __nptr,
                      char **__restrict __endptr);
@@ -163,21 +165,22 @@ long double strtold (const char *__restrict __nptr,
 #endif
 
 /*$
- * //NOTE: we are more strict than the spec by requiring that __nptr is 0-terminated
  * requires: valid_string(__nptr);
- * requires: __base == 0 or __base in [2, 36];
+ * requires: __base == 0 or (__base >= 2 and __base <= 36);
  *
  * case "with_endptr" {
  *   assumes: __endptr != NULL;
- *   assigns:  *__endptr;
- *   assigns:  _errno;
- *   ensures:  (*__endptr)' >= __nptr and (*__endptr)' < __nptr + size(__nptr);
+ *   requires: valid_ptr(__endptr);
+ *   local: size_t len = strlen(__nptr);
+ *   assigns: *__endptr;
+ *   assigns: _errno;
+ *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
- * case "without_endptr" {
+ *  case "without_endptr" {
  *   assumes: __endptr == NULL;
  *   assigns:  _errno;
- * }
+ *  }
  */
 long int strtol (const char *__restrict __nptr,
                  char **__restrict __endptr, int __base);
@@ -189,64 +192,66 @@ long int __strtol_internal(const char *__restrict __nptr,
 
 
 /*$
- * //NOTE: we are more strict than the spec by requiring that __nptr is 0-terminated
  * requires: valid_string(__nptr);
- * requires: __base == 0 or __base in [2, 36];
+ * requires: __base == 0 or (__base >= 2 and __base <= 36);
  *
  * case "with_endptr" {
  *   assumes: __endptr != NULL;
- *   assigns:  *__endptr;
- *   assigns:  _errno;
- *   ensures:  (*__endptr)' >= __nptr and (*__endptr)' < __nptr + size(__nptr);
+ *   requires: valid_ptr(__endptr);
+ *   local: size_t len = strlen(__nptr);
+ *   assigns: *__endptr;
+ *   assigns: _errno;
+ *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
- * case "without_endptr" {
+ *  case "without_endptr" {
  *   assumes: __endptr == NULL;
  *   assigns:  _errno;
- * }
+ *  }
  */
 unsigned long int strtoul (const char *__restrict __nptr,
                            char **__restrict __endptr, int __base);
 
-
 #ifdef __USE_MISC
 
 /*$
- * //NOTE: we are more strict than the spec by requiring that __nptr is 0-terminated
  * requires: valid_string(__nptr);
- * requires: __base == 0 or __base in [2, 36];
+ * requires: __base == 0 or (__base >= 2 and __base <= 36);
  *
  * case "with_endptr" {
  *   assumes: __endptr != NULL;
- *   assigns:  *__endptr;
- *   assigns:  _errno;
- *   ensures:  (*__endptr)' >= __nptr and (*__endptr)' < __nptr + size(__nptr);
+ *   requires: valid_ptr(__endptr);
+ *   local: size_t len = strlen(__nptr);
+ *   assigns: *__endptr;
+ *   assigns: _errno;
+ *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
- * case "without_endptr" {
+ *  case "without_endptr" {
  *   assumes: __endptr == NULL;
  *   assigns:  _errno;
- * }
+ *  }
  */
 long long int strtoq (const char *__restrict __nptr,
                       char **__restrict __endptr, int __base);
 
 /*$
- * //NOTE: we are more strict than the spec by requiring that __nptr is 0-terminated
  * requires: valid_string(__nptr);
- * requires: __base == 0 or __base in [2, 36];
+ * requires: __base == 0 or (__base >= 2 and __base <= 36);
  *
  * case "with_endptr" {
  *   assumes: __endptr != NULL;
- *   assigns:  *__endptr;
- *   assigns:  _errno;
- *   ensures:  (*__endptr)' >= __nptr and (*__endptr)' < __nptr + size(__nptr);
+ *   requires: valid_ptr(__endptr);
+ *   local: size_t len = strlen(__nptr);
+ *   assigns: *__endptr;
+ *   assigns: _errno;
+ *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
- * case "without_endptr" {
+ *  case "without_endptr" {
  *   assumes: __endptr == NULL;
  *   assigns:  _errno;
- * }
+ *  }
  */
 unsigned long long int strtouq (const char *__restrict __nptr,
                                 char **__restrict __endptr, int __base);
@@ -256,41 +261,43 @@ unsigned long long int strtouq (const char *__restrict __nptr,
 #ifdef __USE_ISOC99
 
 /*$
- * //NOTE: we are more strict than the spec by requiring that __nptr is 0-terminated
  * requires: valid_string(__nptr);
- * requires: __base == 0 or __base in [2, 36];
+ * requires: __base == 0 or (__base >= 2 and __base <= 36);
  *
  * case "with_endptr" {
  *   assumes: __endptr != NULL;
- *   assigns:  *__endptr;
- *   assigns:  _errno;
- *   ensures:  (*__endptr)' >= __nptr and (*__endptr)' < __nptr + size(__nptr);
+ *   requires: valid_ptr(__endptr);
+ *   local: size_t len = strlen(__nptr);
+ *   assigns: *__endptr;
+ *   assigns: _errno;
+ *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
- * case "without_endptr" {
+ *  case "without_endptr" {
  *   assumes: __endptr == NULL;
  *   assigns:  _errno;
- * }
+ *  }
  */
 long long int strtoll (const char *__restrict __nptr,
                        char **__restrict __endptr, int __base);
 
 /*$
- * //NOTE: we are more strict than the spec by requiring that __nptr is 0-terminated
- * requires: exists int i in [0, size(__nptr) - 1]: __nptr[i] == 0;
- * requires: __base == 0 or __base in [2, 36];
+ * requires: valid_string(__nptr);
+ * requires: __base == 0 or (__base >= 2 and __base <= 36);
  *
  * case "with_endptr" {
  *   assumes: __endptr != NULL;
- *   assigns:  *__endptr;
- *   assigns:  _errno;
- *   ensures:  (*__endptr)' >= __nptr and (*__endptr)' < __nptr + size(__nptr);
+ *   requires: valid_ptr(__endptr);
+ *   local: size_t len = strlen(__nptr);
+ *   assigns: *__endptr;
+ *   assigns: _errno;
+ *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
- * case "without_endptr" {
+ *  case "without_endptr" {
  *   assumes: __endptr == NULL;
  *   assigns:  _errno;
- * }
+ *  }
  */
 unsigned long long int strtoull (const char *__restrict __nptr,
                                  char **__restrict __endptr, int __base);
@@ -316,7 +323,7 @@ static char _l64a_buf[7];
 char *l64a (long int __n);
 
 /*$
- * requires: size(__s) >= 6 or valid_substring(__s, 6);
+ * requires: valid_bytes(__s, 6) or valid_substring(__s, 6);
  */
 long int a64l (const char *__s);
 
@@ -340,7 +347,7 @@ static size_t _rand__statelen = sizeof(_rand__state);
 
 /*$
  * // TODO: return NULL when __statelen < 8?
- * requires: size(__statebuf) >= __statelen and __statelen >= 8;
+ * requires: valid_bytes(__statebuf, __statelen) and __statelen >= 8;
  * assigns:  _rand__statebuf;
  * assigns:  _rand__statelen;
  * assigns:  __statebuf[0, __statelen - 1];
@@ -350,7 +357,7 @@ static size_t _rand__statelen = sizeof(_rand__state);
 char *initstate (unsigned int __seed, char *__statebuf, size_t __statelen);
 
 /*$
- * requires: size(__statebuf) >= _rand__statelen;
+ * requires: valid_bytes(__statebuf, _rand__statelen);
  * assigns:  _rand__statebuf;
  * ensures:  _rand__statebuf' == __statebuf;
  * ensures:  return == _rand__statebuf;
@@ -380,7 +387,7 @@ int srandom_r (unsigned int __seed, struct random_data *__buf);
 
 /*$
  * requires: __statelen >= 8;
- * requires: size(__statebuf) >= __statelen;
+ * requires: valid_bytes(__statebuf, __statelen);
  * assigns:  *__statebuf[0, __statelen - 1];
  * assigns:  *__buf;
  * assigns:  _errno;
@@ -392,7 +399,7 @@ int initstate_r (unsigned int __seed, char *__restrict __statebuf,
                  struct random_data *__restrict __buf);
 
 /*$
- * requires: size(__statebuf) >= __buf->rand_deg;
+ * requires: valid_bytes(__statebuf, __buf->rand_deg);
  * assigns:  *__statebuf[0, __buf->rand_deg - 1];
  * assigns:  *__buf;
  * assigns:  _errno;
@@ -467,13 +474,13 @@ void srand48 (long int __seedval);
 static unsigned short int _seed48_buf[3];
 
 /*$
- * requires: size(&__seed16v[0]) >= 3;
+ * requires: valid_ptr_range(__seed16v, 0, 2);
  * ensures:  return == &_seed48_buf[0];
  */
 unsigned short int *seed48 (unsigned short int __seed16v[3]);
 
 /*$
- * requires: size(&__param[0]) >= 7;
+ * requires: valid_ptr_range(__param, 0, 6);
  */
 void lcong48 (unsigned short int __param[7]);
 
@@ -547,7 +554,7 @@ int jrand48_r (unsigned short int __xsubi[3],
 int srand48_r (long int __seedval, struct drand48_data *__buffer);
 
 /*$
- * requires: size(&__seed16v[0]) >= 3;
+ * requires: valid_ptr_range(__seed16v, 0, 2);
  * assigns:  *__buffer;
  * ensures:  return == 0;
  */
@@ -555,7 +562,7 @@ int seed48_r (unsigned short int __seed16v[3],
               struct drand48_data *__buffer);
 
 /*$
- * requires: size(&__param[0]) >= 7;
+ * requires: valid_ptr_range(__param, 0, 6);
  * assigns:  *__buffer;
  * ensures:  return == 0;
  */
@@ -750,18 +757,12 @@ void __builtin_abort (void);
 
 #if defined __USE_ISOC11 || defined __USE_ISOCXX11
 
-/*$
- * warn: "unsupported stub";
- */
 int at_quick_exit (void (*__func) (void)) ;
 
 #endif
 
 #ifdef	__USE_MISC
 
-/*$
- * warn: "unsupported stub";
- */
 int on_exit (void (*__func) (int __status, void *__arg), void *__arg);
 
 #endif
@@ -893,7 +894,7 @@ int clearenv (void);
  * // TODO: only the last 6 chars of __template are modified, not the whole block
  * warn: "dangerous function, do not use";
  * requires: valid_string(__template);
- * assigns:  __template[0, size(__template) - 1];
+ * assigns:  __template[0, size(__template) - offset(__template) - 1];
  * assigns:  _errno;
  * ensures:  return == __template;
  */
@@ -909,12 +910,12 @@ char *mktemp (char *__template);
  *
  * case "success" {
  *   local:   int fd = new FileDescriptor;
- *   assigns: __template[0, size(__template) - 1];
+ *   assigns: __template[0, size(__template) - offset(__template) - 1];
  *   ensures: return == fd;
  * }
  *
  * case "failure" {
- *   assigns: __template[0, size(__template) - 1];
+ *   assigns: __template[0, size(__template) - offset(__template) - 1];
  *   assigns: _errno;
  *   ensures: return == -1;
  * }
@@ -932,12 +933,12 @@ int mkstemp (char *__template);
  *
  * case "success" {
  *   local:   int fd = new FileDescriptor;
- *   assigns: __template[0, size(__template) - 1];
+ *   assigns: __template[0, size(__template) - offset(__template) - 1];
  *   ensures: return == fd;
  * }
  *
  * case "failure" {
- *   assigns: __template[0, size(__template) - 1];
+ *   assigns: __template[0, size(__template) - offset(__template) - 1];
  *   assigns: _errno;
  *   ensures: return == -1;
  * }
@@ -953,12 +954,12 @@ int mkstemps (char *__template, int __suffixlen);
  * requires: valid_string(__template);
  *
  * case "success" {
- *   assigns:  __template[0, size(__template) - 1];
+ *   assigns:  __template[0, size(__template) - offset(__template) - 1];
  *   ensures:  return == __template;
  * }
  *
  * case "failure" {
- *   assigns:  __template[0, size(__template) - 1];
+ *   assigns:  __template[0, size(__template) - offset(__template) - 1];
  *   assigns:  _errno;
  *   ensures:  return == NULL;
  * }
@@ -975,12 +976,12 @@ char *mkdtemp (char *__template);
  *
  * case "success" {
  *   local:   int fd = new FileDescriptor;
- *   assigns: __template[0, size(__template) - 1];
+ *   assigns: __template[0, size(__template) - offset(__template) - 1];
  *   ensures: return == fd;
  * }
  *
  * case "failure" {
- *   assigns: __template[0, size(__template) - 1];
+ *   assigns: __template[0, size(__template) - offset(__template) - 1];
  *   assigns: _errno;
  *   ensures: return == -1;
  * }
@@ -994,12 +995,12 @@ int mkostemp (char *__template, int __flags);
  *
  * case "success" {
  *   local:   int fd = new FileDescriptor;
- *   assigns: __template[0, size(__template) - 1];
+ *   assigns: __template[0, size(__template) - offset(__template) - 1];
  *   ensures: return == fd;
  * }
  *
  * case "failure" {
- *   assigns: __template[0, size(__template) - 1];
+ *   assigns: __template[0, size(__template) - offset(__template) - 1];
  *   assigns: _errno;
  *   ensures: return == -1;
  * }
@@ -1008,10 +1009,6 @@ int mkostemps (char *__template, int __suffixlen, int __flags);
 
 #endif
 
-/*$
- * requires: valid_string(__command);
- * warn: "unsupported stub";
- */
 int system (const char *__command);
 
 
@@ -1062,23 +1059,14 @@ char *realpath (const char *__restrict __name,
 
 #endif
 
-/*$
- * warn: "unsupported stub";
- */
 void *bsearch (const void *__key, const void *__base,
                size_t __nmemb, size_t __size, __compar_fn_t __compar);
 
-/*$
- * warn: "unsupported stub";
- */
 void qsort (void *__base, size_t __nmemb, size_t __size,
             __compar_fn_t __compar);
 
 #ifdef __USE_GNU
 
-/*$
- * warn: "unsupported stub";
- */
 void qsort_r (void *__base, size_t __nmemb, size_t __size,
               __compar_d_fn_t __compar, void *__arg);
 
@@ -1205,7 +1193,7 @@ int qfcvt_r (long double __value, int __ndigit,
 
 
 /*$
- * requires: __s != NULL implies size(__s) >= __n;
+ * requires: __s != NULL implies valid_bytes(__s, __n);
  *
  * case "shift" {
  *   assumes:  __s != NULL;
@@ -1219,7 +1207,7 @@ int qfcvt_r (long double __value, int __ndigit,
 int mblen (const char *__s, size_t __n);
 
 /*$
- * requires: __s != NULL implies size(__s) >= __n;
+ * requires: __s != NULL implies valid_bytes(__s, __n);
  *
  * case "shift" {
  *   assumes:  __s != NULL and __pwc == NULL;
@@ -1240,7 +1228,7 @@ int mbtowc (wchar_t *__restrict __pwc,
             const char *__restrict __s, size_t __n);
 
 /*$
- * requires: __s != NULL implies size(__s) >= MB_LEN_MAX;
+ * requires: __s != NULL implies valid_bytes(__s, MB_LEN_MAX);
  *
  * case "shift" {
  *   assumes: __s != NULL; 
@@ -1255,7 +1243,7 @@ int mbtowc (wchar_t *__restrict __pwc,
 int wctomb (char *__s, wchar_t __wchar);
 
 /*$
- * requires: __dst != NULL implies size(__dst) >= __len;
+ * requires: __dst != NULL implies valid_wchars(__dst, __len);
  * requires: valid_string(__src);
  *
  * case "copy" {
@@ -1266,15 +1254,13 @@ int wctomb (char *__s, wchar_t __wchar);
  * case "count" {
  *   assumes: __dst == NULL;
  * }
- *
- * // can return (size_t)-1, or a value less than __len
  */
-size_t mbstowcs (wchar_t *__restrict  __dst,
+size_t mbstowcs (wchar_t *__restrict __dst,
                  const char *__restrict __src, size_t __len);
 
 /*$
- * requires: __dst != NULL implies size(__dst) >= __len;
- * requires: valid_string(__src);
+ * requires: __dst != NULL implies valid_bytes(__dst, __len);
+ * requires: valid_wide_string(__src);
  *
  * case "copy" {
  *   assumes: __dst != NULL;
@@ -1284,8 +1270,6 @@ size_t mbstowcs (wchar_t *__restrict  __dst,
  * case "count" {
  *   assumes: __dst == NULL;
  * }
- *
- * // can return (size_t)-1, or a value less than __len
  */
 size_t wcstombs (char *__restrict __dst,
                  const wchar_t *__restrict __src, size_t __len);
@@ -1303,9 +1287,6 @@ int rpmatch (const char *__response);
 
 #if defined __USE_XOPEN_EXTENDED || defined __USE_XOPEN2K8
 
-/*$
- * warn: "unsupported stub";
- */
 int getsubopt (char **__restrict __optionp,
                char *const *__restrict __tokens,
                char **__restrict __valuep);
@@ -1316,7 +1297,7 @@ int getsubopt (char **__restrict __optionp,
 #ifdef __USE_XOPEN
 
 /*$
- * requires: size(__key) >= 64;
+ * requires: valid_bytes(__key, 64);
  */
 void setkey (const char *__key);
 
@@ -1376,7 +1357,7 @@ static char _ptsname_buf[1024]; // TODO: fix size
  * requires: __fd in FileDescriptor;
  *
  * case "success" {
- *   assigns: _ptsname_buf[0, size(_ptsname_buf) - 1];
+ *   assigns: _ptsname_buf[0, size(_ptsname_buf) - offset(_ptsname_buf) - 1];
  *   ensures: valid_primed_string(_ptsname_buf);
  *   ensures: return == (char*)_ptsname_buf;
  * }
@@ -1394,7 +1375,7 @@ char *ptsname (int __fd) ;
 
 /*$
  * requires: __fd in FileDescriptor;
- * requires: size(__buf) >= __buflen;
+ * requires: valid_bytes(__buf, __buflen);
  *
  * case "success" {
  *   assigns: __buf[0, __buflen - 1];
@@ -1427,7 +1408,7 @@ int getpt (void);
 #ifdef __USE_MISC
 
 /*$
- * requires: size(__loadavg) >= __nelem;
+ * requires: valid_ptr_range(__loadavg, 0, __nelem - 1);
  * assigns:  __loadavg[0, __nelem - 1];
  * ensures:  return in [-1, __nelem];
  */

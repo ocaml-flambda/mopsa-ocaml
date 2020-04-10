@@ -172,7 +172,7 @@ static char _tmpnam_buf[L_tmpnam];
 /*$
  * warn: "avoid using function tmpnam";
  *
- * requires: __s != NULL implies size(__s) >= L_tmpnam;
+ * requires: __s != NULL implies valid_bytes(__s, L_tmpnam);
  *
  * case "use_s" {
  *   assumes: __s != NULL;
@@ -198,7 +198,7 @@ char *tmpnam (char *__s);
 /*$
  * warn: "avoid using function tmpnam_r";
  *
- * requires: size(__s) >= L_tmpnam;
+ * requires: valid_bytes(__s, L_tmpnam);
  *
  * case "success" {
  *   assigns: __s[0, L_tmpnam - 1];
@@ -331,7 +331,7 @@ FILE *fdopen (int __fd, const char *__modes);
  * // TODO: if __s != NULL, the buffer pointed to by __s becomes volatile
  *
  * requires: valid_string(__modes);
- * requires: __s != NULL implies size(__s) >= __len;
+ * requires: __s != NULL implies valid_bytes(__s, __len);
  *
  * case "success" {
  *   local: FILE* r = _alloc_FILE();
@@ -365,7 +365,7 @@ FILE *open_memstream (char **__bufloc, size_t *__sizeloc);
  * // TODO: __buf becomes volatile
  *
  * requires: __stream in File;
- * requires: __buf != NULL implies size(__buf) >= BUFSIZ;
+ * requires: __buf != NULL implies valid_bytes(__buf, BUFSIZ);
  */
 void setbuf (FILE *__restrict __stream, char *__restrict __buf);
 
@@ -373,7 +373,7 @@ void setbuf (FILE *__restrict __stream, char *__restrict __buf);
  * // TODO: __buf becomes volatile
  *
  * requires: __stream in File;
- * requires: __buf != NULL implies size(__buf) >= __n;
+ * requires: __buf != NULL implies valid_bytes(__buf, __n);
  * requires: __modes in [0, 2];
  *
  * case "success" {
@@ -393,7 +393,7 @@ int setvbuf (FILE *__restrict __stream, char *__restrict __buf,
  * // TODO: __buf becomes volatile
  *
  * requires: __stream in File;
- * requires: __buf != NULL implies size(__buf) >= __size;
+ * requires: __buf != NULL implies valid_bytes(__buf, __size);
  */
 void setbuffer (FILE *__restrict __stream, char *__restrict __buf,
                 size_t __size);
@@ -549,7 +549,7 @@ int putw (int __w, FILE *__stream);
 
 /*$
  * requires: __stream in File;
- * requires: valid_ptr_range(__s, 0, __n - 1);
+ * requires: valid_bytes(__s, __n);
  * assigns:  __s[0, __n - 1];
  * ensures:  valid_primed_substring(__s, __n - 1);
  * ensures:  (return == __s) or (return == NULL);
@@ -566,7 +566,7 @@ char *gets (char *__s);
 /*$
  * // TODO: not thread-safe
  * requires: __stream in File;
- * requires: valid_ptr_range(__s, 0, __n - 1);
+ * requires: valid_bytes(__s, __n);
  * assigns:  __s[0, __n - 1];
  * ensures:  valid_primed_substring(__s, __n - 1);
  * ensures:  (return == __s) or (return == NULL);
@@ -577,7 +577,7 @@ char *fgets_unlocked (char *__restrict __s, int __n,
 
 /*$
  * requires: __stream in File;
- * requires: *__lineptr != NULL implies size(*__lineptr) >= *__n;
+ * requires: *__lineptr != NULL implies valid_bytes(*__lineptr, *__n);
  * 
  * case "realloc" {
  *   assumes:  *__lineptr != NULL;
@@ -586,7 +586,7 @@ char *fgets_unlocked (char *__restrict __s, int __n,
  *   assigns:  *__lineptr;
  *   assigns:  *__n;
  *   free:     *__lineptr;
- *   ensures:  size(r) == (*__n)';
+ *   ensures:  size(r) == offset(r) + (*__n)';
  *   ensures:  (*__lineptr)' == r;
  *   ensures:  return >= 0;
  * }
@@ -596,7 +596,7 @@ char *fgets_unlocked (char *__restrict __s, int __n,
  *   local:   char* r = new Memory;
  *   assigns: *__lineptr;
  *   assigns: *__n;
- *   ensures: size(r) == (*__n)';
+ *   ensures: size(r) == offset(r) + (*__n)';
  *   ensures: (*__lineptr)' == r;
  *   ensures: return >= 0;
  * }
@@ -656,8 +656,8 @@ int ungetc (int __c, FILE *__stream);
 
 /*$
  * requires: __stream in File;
- * requires: valid_ptr_range(__ptr, 0, __size * __n - 1);
- * assigns:  __ptr[0, __size * __n - 1];
+ * requires: valid_bytes(__ptr, __size * __n);
+ * assigns:  ((char*)__ptr)[0, __size * __n - 1];
  * ensures:  return in [0, __n];
  */
 size_t fread (void *__restrict __ptr, size_t __size,
@@ -665,7 +665,7 @@ size_t fread (void *__restrict __ptr, size_t __size,
 
 /*$
  * requires: __s in File;
- * requires: valid_ptr_range(__ptr, 0, __size * __n - 1);
+ * requires: valid_bytes(__ptr, __size * __n);
  * ensures:  return in [0, __n];
  */
 size_t fwrite (const void *__restrict __ptr, size_t __size,
@@ -693,8 +693,7 @@ int fputs_unlocked (const char *__restrict __s,
 /*$
  * // TODO: not thread-safe
  * requires: __stream in File;
- * requires: valid_ptr_range(__ptr, 0, __size * __n - 1);
- * assigns:  __ptr[0, __size * __n - 1];
+ * requires: valid_bytes(__ptr, __size * __n);
  * ensures:  return in [0, __n];
  */
 size_t fread_unlocked (void *__restrict __ptr, size_t __size,
@@ -703,8 +702,7 @@ size_t fread_unlocked (void *__restrict __ptr, size_t __size,
 /*$
  * // TODO: not thread-safe
  * requires: __stream in File;
- * requires: valid_ptr_range(__ptr, 0, __size * __n - 1);
- * requires: size(__ptr) >= __size * __n;
+ * requires: valid_bytes(__ptr, __size * __n);
  * ensures:  return in [0, __n];
  */
 size_t fwrite_unlocked (const void *__restrict __ptr, size_t __size,
@@ -791,7 +789,7 @@ int fgetpos (FILE *__restrict __stream, fpos_t *__restrict __pos);
 
 /*$
  * requires: __stream in File;
- * // TODO requires: size(__pos) >= sizeof_type(fpos_t);
+ * requires: valid_ptr(__pos);
  *
  * case "success" {
  *   ensures: return == 0;
@@ -888,7 +886,7 @@ int pclose (FILE *__stream);
 static char _ctermid_buf[L_ctermid];
 
 /*$
- * requires: __s != NULL implies size(__s) >= L_ctermid;
+ * requires: __s != NULL implies valid_bytes(__s, L_ctermid);
  *
  * case "buf" {
  *   assumes: __s != NULL;
@@ -914,7 +912,7 @@ char *ctermid (char *__s);
 static char _cuserid_buf[L_cuserid];
 
 /*$
- * requires: __s != NULL implies size(__s) >= L_cuserid;
+ * requires: __s != NULL implies valid_bytes(__s, L_cuserid);
  *
  * case "buf" {
  *   assumes: __s != NULL;
@@ -951,122 +949,3 @@ int ftrylockfile (FILE *__stream);
  * requires: __stream in File;
  */
 void funlockfile (FILE *__stream);
-
-
-
-// glibc internals
-
-
-/* /\*$ */
-/*  * // TODO: internal glibc function, undocumented */
-/*  * requires: __fd in File; */
-/*  *\/ */
-/* int __underflow (_IO_FILE *__fd); */
-
-/* /\*$ */
-/*  * // TODO: internal glibc function, undocumented */
-/*  * requires: __fd in File; */
-/*  *\/ */
-/* int __uflow (_IO_FILE *__fd); */
-
-/* /\*$ */
-/*  * // TODO: internal glibc function, undocumented */
-/*  * requires: __fd in File; */
-/*  *\/ */
-/* int __overflow (_IO_FILE *__fd, int arg1); */
-
-/* /\*$ */
-/*  * // TODO: internal glibc function, undocumented */
-/*  * requires: __fd in File; */
-/*  *\/ */
-/* __ssize_t _IO_padn (_IO_FILE *__fd, int, __ssize_t __len); */
-
-/* /\*$ */
-/*  * // TODO: internal glibc function, undocumented */
-/*  * requires: __fd in File; */
-/*  * requires: size(__ptr) >= __len; */
-/*  * assigns:  __ptr[0, __len - 1]; */
-/*  * ensures:  return <= __len; */
-/*  *\/ */
-/* size_t _IO_sgetn (_IO_FILE *__fd, void *__ptr, size_t __len); */
-
-/* /\*$ */
-/*  * // TODO: internal glibc function, undocumented */
-/*  * requires: __fd in File; */
-/*  *\/ */
-/* __off64_t _IO_seekoff (_IO_FILE *__fd, __off64_t __off, int arg1, int arg2); */
-
-/* /\*$ */
-/*  * // TODO: internal glibc function, undocumented */
-/*  * requires: __fd in File; */
-/*  *\/ */
-/* __off64_t _IO_seekpos (_IO_FILE *__fd, __off64_t __off, int arg1); */
-
-/* /\*$ */
-/*  * // TODO: internal glibc function, undocumented */
-/*  * requires: __fd in File; */
-/*  *\/ */
-/* void _IO_free_backup_area (_IO_FILE *__fd); */
-
-
-/* /\*$ */
-/*  * // TODO: internal glibc function, undocumented */
-/*  * requires: __s in File; */
-/*  * requires: exists int i in [0, size(__format) - 1]: __format[i] == 0; */
-/*  *\/ */
-/* int _IO_vfprintf (_IO_FILE *__restrict __s, const char *__restrict __format, */
-/*                   _IO_va_list __arg); */
-
-/* /\*$ */
-/*  * // TODO: internal glibc function, undocumented */
-/*  * requires: __s in File; */
-/*  * requires: exists int i in [0, size(__format) - 1]: __format[i] == 0; */
-/*  * assigns:  _errno; */
-/*  *\/ */
-/* int _IO_vfscanf (_IO_FILE *__restrict __s, const char *__restrict __format, */
-/*                  _IO_va_list __arg, int* arg); */
-
-
-/* /\*$ */
-/*  * // TODO: internal glibc function, undocumented */
-/*  * requires: __stream in File; */
-/*  * ensures: return in [0, 255] or return == EOF; */
-/*  *\/ */
-/* int _IO_getc (_IO_FILE *__stream); */
-
-/* /\*$ */
-/*  * // TODO: internal glibc function, undocumented */
-/*  * requires: __stream in File; */
-/*  * ensures: return in [0, 255] or return == EOF; */
-/*  *\/ */
-/* int _IO_peekc_locked (_IO_FILE *__stream); */
-
-/* /\*$ */
-/*  * // TODO: internal glibc function, undocumented */
-/*  * requires: __stream in File; */
-/*  *\/ */
-/* int _IO_feof (_IO_FILE *__stream); */
-
-/* /\*$ */
-/*  * // TODO: internal glibc function, undocumented */
-/*  * requires: __stream in File; */
-/*  *\/ */
-/* void _IO_flockfile (_IO_FILE *__stream); */
-
-/* /\*$ */
-/*  * // TODO: internal glibc function, undocumented */
-/*  * requires: __stream in File; */
-/*  *\/ */
-/* int _IO_ftrylockfile (_IO_FILE *__stream); */
-
-/* /\*$ */
-/*  * // TODO: internal glibc function, undocumented */
-/*  * requires: __stream in File; */
-/*  *\/ */
-/* void _IO_funlockfile (_IO_FILE *__stream); */
-
-/* /\*$ */
-/*  * // TODO: internal glibc function, undocumented */
-/*  * requires: __stream in File; */
-/*  *\/ */
-/* int _IO_ferror (_IO_FILE *__stream); */

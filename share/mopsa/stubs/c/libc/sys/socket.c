@@ -98,7 +98,7 @@ int accept (int __fd, struct sockaddr *__addr, socklen_t *__restrict __addr_len)
 
 /*$
  * requires: __fd in FileDescriptor;
- * requires: valid_ptr_range(__buf, 0, __n - 1);
+ * requires: valid_bytes(__buf, __n);
  *
  * case "safe" {
  *   assigns: ((char*)__buf)[0, __n - 1];

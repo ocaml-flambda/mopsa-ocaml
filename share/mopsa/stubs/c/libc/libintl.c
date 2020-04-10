@@ -104,9 +104,6 @@ char *textdomain (const char *__domainname);
  */
 char *bindtextdomain (const char *__domainname, const char *__dirname);
 
-/*$
- * warn: "unsupported stub";
- */
 char *bind_textdomain_codeset (const char *__domainname, const char *__codeset);
 
 #define GETTEXT_BUF_SIZE 100
@@ -153,26 +150,14 @@ char *dcgettext (const char *__domainname, const char *__msgid,
 		 int __category);
 #endif
 
-/*$
- * warn: "unsupported stub";
- */
 char *__dcgettext (const char *__domainname, const char *__msgid,
 		   int __category);
 
-/*$
- * warn: "unsupported stub";
- */
 char *ngettext (const char *__msgid1, const char *__msgid2,
 		unsigned long int __n);
 
-/*$
- * warn: "unsupported stub";
- */
 char *dngettext (const char *__domainname, const char *__msgid1,
 		 const char *__msgid2, unsigned long int __n);
 
-/*$
- * warn: "unsupported stub";
- */
 char *dcngettext (const char *__domainname, const char *__msgid1,
 		  const char *__msgid2, unsigned long int __n, int __category);

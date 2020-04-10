@@ -23,92 +23,35 @@
 
 #include <utmp.h>
 
-/*$
- * warn: "unsupported stub";
- */
 int login_tty (int __fd);
 
-
-/*$
- * warn: "unsupported stub";
- */
 void login (const struct utmp *__entry);
 
-
-/*$
- * warn: "unsupported stub";
- */
 int logout (const char *__ut_line);
 
-
-/*$
- * warn: "unsupported stub";
- */
 void logwtmp (const char *__ut_line, const char *__ut_name,
 		     const char *__ut_host);
 
-/*$
- * warn: "unsupported stub";
- */
-void updwtmp (const char *__wtmp_file, const struct utmp *__utmp)
-    ;
+void updwtmp (const char *__wtmp_file, const struct utmp *__utmp);
 
-
-/*$
- * warn: "unsupported stub";
- */
 int utmpname (const char *__file);
 
-
-/*$
- * warn: "unsupported stub";
- */
 struct utmp *getutent (void);
 
-
-/*$
- * warn: "unsupported stub";
- */
 void setutent (void);
 
-
-/*$
- * warn: "unsupported stub";
- */
 void endutent (void);
 
-
-/*$
- * warn: "unsupported stub";
- */
 struct utmp *getutid (const struct utmp *__id);
 
-
-/*$
- * warn: "unsupported stub";
- */
 struct utmp *getutline (const struct utmp *__line);
 
-
-/*$
- * warn: "unsupported stub";
- */
 struct utmp *pututline (const struct utmp *__utmp_ptr);
 
-
-/*$
- * warn: "unsupported stub";
- */
 int getutent_r (struct utmp *__buffer, struct utmp **__result);
 
-/*$
- * warn: "unsupported stub";
- */
 int getutid_r (const struct utmp *__id, struct utmp *__buffer,
 		      struct utmp **__result);
 
-/*$
- * warn: "unsupported stub";
- */
 int getutline_r (const struct utmp *__line,
 			struct utmp *__buffer, struct utmp **__result);

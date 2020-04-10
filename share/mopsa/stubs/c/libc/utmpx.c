@@ -23,56 +23,24 @@
 
 #include <utmpx.h>
 
-/*$
- * warn: "unsupported stub";
- */
 void setutxent (void);
 
-/*$
- * warn: "unsupported stub";
- */
 void endutxent (void);
 
-/*$
- * warn: "unsupported stub";
- */
 struct utmpx *getutxent (void);
 
-/*$
- * warn: "unsupported stub";
- */
 struct utmpx *getutxid (const struct utmpx *__id);
 
-/*$
- * warn: "unsupported stub";
- */
 struct utmpx *getutxline (const struct utmpx *__line);
 
-/*$
- * warn: "unsupported stub";
- */
 struct utmpx *pututxline (const struct utmpx *__utmpx);
 
-
-/*$
- * warn: "unsupported stub";
- */
 int utmpxname (const char *__file);
 
-/*$
- * warn: "unsupported stub";
- */
 void updwtmpx (const char *__wtmpx_file,
-		      const struct utmpx *__utmpx);
+               const struct utmpx *__utmpx);
 
-
-/*$
- * warn: "unsupported stub";
- */
 void getutmp (const struct utmpx *__utmpx,
 		     struct utmp *__utmp);
 
-/*$
- * warn: "unsupported stub";
- */
 void getutmpx (const struct utmp *__utmp, struct utmpx *__utmpx);
