@@ -55,12 +55,15 @@ struct
   let cardinal (ctx:t) : int =
     PredMap.cardinal ctx
 
-  let inline (pred:var) (params:expr with_range list) (ctx:t) range : formula with_range =
-    if not (PredMap.mem pred ctx) then
-      Exceptions.panic_at range "undeclared predicate %a" pp_var pred
+  let inline (predvar:var) (params:expr with_range list) (ctx:t) range : formula with_range =
+    if not (PredMap.mem predvar ctx) then
+      Exceptions.panic_at range "undeclared predicate %a" pp_var predvar
     else
       (* We need to find the predicate record containing the names of the arguments *)
-      let pred, body = PredMap.find pred ctx in
+      let pred, body = PredMap.find predvar ctx in
+
+      if List.length pred.predicate_args != List.length params then
+        Exceptions.panic_at range "invalid number of arguments for predicate %a: requires %i, given %i" pp_var predvar (List.length pred.predicate_args) (List.length params);
 
       (* Combine arguments and call parameters *)
       let args = List.map get_content params |>
