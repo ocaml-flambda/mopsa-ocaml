@@ -271,7 +271,7 @@ let rec promote_expression_type prj (e: Ast.expr with_range) =
               ) ->
     ee
 
-  | T_integer (Char SIGNED | SIGNED_CHAR | SIGNED_SHORT) ->
+  | T_integer (Char SIGNED | SIGNED_CHAR | SIGNED_SHORT) | T_bool ->
     let tt = (T_integer SIGNED_INT), snd t in
     { kind = E_cast(tt, false, e); typ = tt }
 
@@ -346,7 +346,7 @@ let binop_type prj t1 t2 =
   let open C_AST in
   let open C_utils in
   match fst (unroll_type t1), fst (unroll_type t2) with
-  | x1, x2 when compare x1 x2 = 0 -> t1
+  | x1, x2 when type_compatible prj.proj_target x1 x2 -> t1
 
   | T_float a, T_float b ->
      if rank_float a >= rank_float b then t1 else t2
@@ -377,10 +377,10 @@ let binop_type prj t1 t2 =
 
   | T_pointer (T_void,_), T_pointer _ -> t2
   | T_pointer _, T_pointer (T_void,_) -> t1
-  | T_pointer (p1,_), T_pointer (p2,_) when compare p1 p2 = 0 -> t1
+  | T_pointer (p1,_), T_pointer (p2,_) when type_equal prj.proj_target p1 p2 -> t1
 
-  | T_pointer p, T_array (e,_) when compare p e = 0 -> t1
-  | T_array (e,_), T_pointer p when compare p e = 0 -> t2
+  | T_pointer p, T_array (e,_) when type_qual_compatible prj.proj_target p e -> t1
+  | T_array (e,_), T_pointer p when type_qual_compatible prj.proj_target p e -> t2
 
   | _ -> Exceptions.panic "binop_type: unsupported case: %s and %s"
            (C_print.string_of_type_qual t1)
