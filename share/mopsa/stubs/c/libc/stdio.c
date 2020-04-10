@@ -694,6 +694,7 @@ int fputs_unlocked (const char *__restrict __s,
  * // TODO: not thread-safe
  * requires: __stream in File;
  * requires: valid_bytes(__ptr, __size * __n);
+ * assigns:  ((char*)__ptr)[0, __size * __n - 1];
  * ensures:  return in [0, __n];
  */
 size_t fread_unlocked (void *__restrict __ptr, size_t __size,
