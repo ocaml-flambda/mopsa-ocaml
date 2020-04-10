@@ -36,12 +36,6 @@
  */
 
 
-// Starting from glibc 2.28, _G_va_list is replaced by _gnuc_va_list
-#if __GLIBC_MINOR__ >= 28
-#define _G_va_list __gnuc_va_list
-#endif // __GLIBC_MINOR__ >= 28
-
-
 /*$
  * requires: valid_wide_string(__src);
  * local: size_t src_len = wcslen(__src);
@@ -537,13 +531,13 @@ int swprintf (wchar_t *__restrict __s, size_t __n, const wchar_t *__restrict __f
 
 int vfwprintf (FILE *__restrict __s,
                const wchar_t *__restrict __format,
-               _G_va_list __arg);
+               va_list __arg);
 
-int vwprintf (const wchar_t *__restrict __format, _G_va_list __arg);
+int vwprintf (const wchar_t *__restrict __format, va_list __arg);
 
 int vswprintf (wchar_t *__restrict __s, size_t __n,
                const wchar_t *__restrict __format,
-               _G_va_list __arg);
+               va_list __arg);
 
 int fwscanf (FILE *__restrict __stream, const wchar_t *__restrict __format, ...);
 
@@ -559,20 +553,20 @@ int swscanf (const wchar_t *__restrict __s, const wchar_t *__restrict __format, 
 
 int vfwscanf (FILE *__restrict __s,
               const wchar_t *__restrict __format,
-              _G_va_list __arg);
+              va_list __arg);
 
 int vwscanf (const wchar_t *__restrict __format,
-             _G_va_list __arg);
+             va_list __arg);
 
 int vswscanf (const wchar_t *__restrict __s,
               const wchar_t *__restrict __format,
-              _G_va_list __arg);
+              va_list __arg);
      
-int vfwscanf (FILE *__restrict __s, const wchar_t *__restrict __format, _G_va_list __arg);
+int vfwscanf (FILE *__restrict __s, const wchar_t *__restrict __format, va_list __arg);
 
-int vwscanf (const wchar_t *__restrict __format, _G_va_list __arg);
+int vwscanf (const wchar_t *__restrict __format, va_list __arg);
                                                          ;
-int vswscanf (const wchar_t *__restrict __s, const wchar_t *__restrict __format, _G_va_list __arg);
+int vswscanf (const wchar_t *__restrict __s, const wchar_t *__restrict __format, va_list __arg);
 
 wint_t fgetwc (FILE *__stream);
 wint_t getwc (FILE *__stream);

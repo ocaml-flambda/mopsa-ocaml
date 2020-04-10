@@ -404,18 +404,6 @@ void setbuffer (FILE *__restrict __stream, char *__restrict __buf,
 void setlinebuf (FILE *__stream);
 
 
-/*
-  Starting from glibc 2.28, _G_va_list is replaced by _gnuc_va_list
-*/
-#if __GLIBC_MINOR__ >= 28
-
-#define _G_va_list __gnuc_va_list
-
-#endif // __GLIBC_MINOR__ >= 28
-
-
-
-
 
 /*$
  * // TODO: check format, check variable arguments
@@ -425,7 +413,7 @@ void setlinebuf (FILE *__stream);
  * assigns:  _errno;
  */
 int vfscanf (FILE *__restrict __s, const char *__restrict __format,
-             _G_va_list __arg);
+             va_list __arg);
 
 /*$
  * // TODO: check format, check variable arguments
@@ -433,7 +421,7 @@ int vfscanf (FILE *__restrict __s, const char *__restrict __format,
  * requires: valid_string(__format);
  * assigns:  _errno;
  */
-int vscanf (const char *__restrict __format, _G_va_list __arg);
+int vscanf (const char *__restrict __format, va_list __arg);
 
 /*$
  * // TODO: check format, check variable arguments
@@ -443,7 +431,7 @@ int vscanf (const char *__restrict __format, _G_va_list __arg);
  * assigns:  _errno;
  */
 int vsscanf (const char *__restrict __s,
-             const char *__restrict __format, _G_va_list __arg);
+             const char *__restrict __format, va_list __arg);
 
 
 
