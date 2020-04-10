@@ -132,9 +132,7 @@ struct
           | O_minus  -> bot_to_exn (I.bwd_neg a r)
           | O_wrap(l,u) -> bot_to_exn (I.bwd_wrap a (l,u) r)
           | O_bit_invert -> bot_to_exn (I.bwd_bit_not a r)
-          | _ ->
-            warn "Intervals.Integer: no backward evaluation for operator %a" pp_operator op;
-            bot_to_exn (I.bwd_default_unary a r)
+          | _ -> bot_to_exn (I.bwd_default_unary a r)
         in
         Nb aa
       with Found_BOT ->
