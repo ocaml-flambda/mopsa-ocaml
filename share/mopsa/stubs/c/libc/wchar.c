@@ -23,6 +23,7 @@
   libc stub
   based on header from glibc-2.29-r7
 */
+#include <stdarg.h>
 #include <wchar.h>
 #include "mopsa_libc_utils.h"
 
