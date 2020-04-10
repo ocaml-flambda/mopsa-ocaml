@@ -296,6 +296,8 @@ and parse_file (cmd: string) ?nb (opts: string list) (file: string) enable_cache
 and parse_stubs ctx () =
   (** Add Mopsa stubs *)
   parse_file "clang" [] (Config.Paths.resolve_stub "c" "mopsa/mopsa.c") false false ctx;
+  (** Add compiler builtins *)
+  parse_file "clang" [] (Config.Paths.resolve_stub "c" "mopsa/compiler_builtins.c") false false ctx;
   if !opt_without_libc then ()
   else
     (** Add stubs of the included headers *)
