@@ -166,7 +166,7 @@ long double strtold (const char *__restrict __nptr,
 
 /*$
  * requires: valid_string(__nptr);
- * requires: __base == 0 or (__base >= 2 and __base <= 36);
+ * requires: __base == 0 or __base in [2, 36];
  *
  * case "with_endptr" {
  *   assumes: __endptr != NULL;
@@ -193,7 +193,7 @@ long int __strtol_internal(const char *__restrict __nptr,
 
 /*$
  * requires: valid_string(__nptr);
- * requires: __base == 0 or (__base >= 2 and __base <= 36);
+ * requires: __base == 0 or __base in [2, 36];
  *
  * case "with_endptr" {
  *   assumes: __endptr != NULL;
@@ -216,7 +216,7 @@ unsigned long int strtoul (const char *__restrict __nptr,
 
 /*$
  * requires: valid_string(__nptr);
- * requires: __base == 0 or (__base >= 2 and __base <= 36);
+ * requires: __base == 0 or __base in [2, 36];
  *
  * case "with_endptr" {
  *   assumes: __endptr != NULL;
@@ -237,7 +237,7 @@ long long int strtoq (const char *__restrict __nptr,
 
 /*$
  * requires: valid_string(__nptr);
- * requires: __base == 0 or (__base >= 2 and __base <= 36);
+ * requires: __base == 0 or __base in [2, 36];
  *
  * case "with_endptr" {
  *   assumes: __endptr != NULL;
@@ -262,7 +262,7 @@ unsigned long long int strtouq (const char *__restrict __nptr,
 
 /*$
  * requires: valid_string(__nptr);
- * requires: __base == 0 or (__base >= 2 and __base <= 36);
+ * requires: __base == 0 or __base in [2, 36];
  *
  * case "with_endptr" {
  *   assumes: __endptr != NULL;
@@ -283,7 +283,7 @@ long long int strtoll (const char *__restrict __nptr,
 
 /*$
  * requires: valid_string(__nptr);
- * requires: __base == 0 or (__base >= 2 and __base <= 36);
+ * requires: __base == 0 or __base in [2, 36];
  *
  * case "with_endptr" {
  *   assumes: __endptr != NULL;
@@ -451,7 +451,7 @@ long int lrand48 (void);
 
 /*$
  * assigns: __xsubi[0, 2];
- * ensures: return >= 0 and return <= 2147483647;
+ * ensures: return in [0, 2147483647];
  */
 long int nrand48 (unsigned short int __xsubi[3]);
 
@@ -597,7 +597,7 @@ void *malloc (size_t __size);
  * case "success" {
  *   local:   void* r = new Memory;
  *   ensures: size(r) == __nmemb * __size;
- *   ensures: forall int i in [0, __nmemb * __size - 1]: ((char*)r)[i] == 0;
+ *   ensures: forall int i in [0, (int)__nmemb * (int)__size - 1]: ((char*)r)[i] == 0;
  *   ensures: return == r;
  * }
  *
@@ -640,9 +640,9 @@ void *calloc (size_t __nmemb, size_t __size);
  *   local:    void* r = new Memory;
  *   ensures:  size(r) == __size;
  *   ensures:  size(__ptr) >= __size implies 
- *             forall int i in [0, __size - 1]: ((char*)r)[i] == ((char*)__ptr)[i];
+ *             forall int i in [0, (int)__size - 1]: ((char*)r)[i] == ((char*)__ptr)[i];
  *   ensures:  size(__ptr) <= __size implies 
- *             forall int i in [0, size(__ptr) - 1]: ((char*)r)[i] == ((char*)__ptr)[i];
+ *             forall int i in [0, (int)size(__ptr) - 1]: ((char*)r)[i] == ((char*)__ptr)[i];
  *   free:     __ptr;
  *   ensures:  return == r;
  * }
@@ -1248,7 +1248,7 @@ int wctomb (char *__s, wchar_t __wchar);
  *
  * case "copy" {
  *   assumes: __dst != NULL;
- *   assigns: __dst[0, __len - 1];
+ *   assigns: __dst[0, (int)__len - 1];
  * }
  *
  * case "count" {
@@ -1264,7 +1264,7 @@ size_t mbstowcs (wchar_t *__restrict __dst,
  *
  * case "copy" {
  *   assumes: __dst != NULL;
- *   assigns: __dst[0, __len - 1];
+ *   assigns: __dst[0, (int)__len - 1];
  * }
  *
  * case "count" {
@@ -1378,7 +1378,7 @@ char *ptsname (int __fd) ;
  * requires: valid_bytes(__buf, __buflen);
  *
  * case "success" {
- *   assigns: __buf[0, __buflen - 1];
+ *   assigns: __buf[0, (int)__buflen - 1];
  *   ensures: valid_primd_substring(__buf, __buflen);
  *   ensures: return == 0;
  * }

@@ -50,7 +50,7 @@ imaxdiv_t imaxdiv (intmax_t __numer, intmax_t __denom);
 
 /*$
  * requires: valid_string(__nptr);
- * requires: __base == 0 or (__base >= 2 and __base <= 36);
+ * requires: __base == 0 or __base in [2, 36];
  *
  * case "with_endptr" {
  *   assumes: __endptr != NULL;
@@ -71,7 +71,7 @@ intmax_t strtoimax (const char *__restrict __nptr,
 
 /*$
  * requires: valid_string(__nptr);
- * requires: __base == 0 or (__base >= 2 and __base <= 36);
+ * requires: __base == 0 or __base in [2, 36];
  *
  * case "with_endptr" {
  *   assumes: __endptr != NULL;
@@ -92,7 +92,7 @@ uintmax_t strtoumax (const char *__restrict __nptr,
 
 /*$
  * requires: valid_wide_string(__nptr);
- * requires: __base == 0 or (__base >= 2 and __base <= 36);
+ * requires: __base == 0 or __base in [2, 36];
  *
  * case "with_endptr" {
  *   assumes: __endptr != NULL;
@@ -113,7 +113,7 @@ intmax_t wcstoimax (const wchar_t *__restrict __nptr,
 
 /*$
  * requires: valid_wide_string(__nptr);
- * requires: __base == 0 or (__base >= 2 and __base <= 36);
+ * requires: __base == 0 or __base in [2, 36];
  *
  * case "with_endptr" {
  *   assumes: __endptr != NULL;

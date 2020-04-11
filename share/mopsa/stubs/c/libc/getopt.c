@@ -41,7 +41,7 @@ int optopt;
  * assigns: optopt;
  * assigns: optarg;
  * assigns: ___argv[0, ___argc - 1];
- * ensures: optind' >= 1 and optind' <= ___argc;
+ * ensures: optind' in [1, ___argc];
  * ensures: optarg' == NULL or (exists int i in [0, ___argc - 1]: optarg' == (___argv[i])');
  * ensures: forall int i in [0, ___argc - 1]: valid_primed_string(___argv[i]);
  */

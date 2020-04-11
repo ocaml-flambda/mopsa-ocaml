@@ -101,7 +101,7 @@ int accept (int __fd, struct sockaddr *__addr, socklen_t *__restrict __addr_len)
  * requires: valid_bytes(__buf, __n);
  *
  * case "safe" {
- *   assigns: ((char*)__buf)[0, __n - 1];
+ *   assigns: ((char*)__buf)[0, (int)__n - 1];
  *   ensures: return in [0, __n];
  * }
  *

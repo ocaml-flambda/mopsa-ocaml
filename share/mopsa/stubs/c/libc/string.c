@@ -71,14 +71,14 @@ void *memmove (void *__dest, const void *__src, size_t __len);
  * assigns: ((unsigned char*)__dest)[0, (int)__n - 1];
  *
  * case "notfound" {
- *   assumes: forall int i in [0, __n - 1]: ((unsigned char*)__src)[i] != __c;
- *   ensures: forall int i in [0, __n - 1]: (((unsigned char*)__dest)[i])' == ((unsigned char*)__src)[i];
+ *   assumes: forall int i in [0, (int)__n - 1]: ((unsigned char*)__src)[i] != __c;
+ *   ensures: forall int i in [0, (int)__n - 1]: (((unsigned char*)__dest)[i])' == ((unsigned char*)__src)[i];
  *   ensures: return == NULL;
  * }
  *
  * case "found" {
- *   assumes: exists int i in [0, __n - 1]: ((unsigned char*)__src)[i] == __c;
- *   ensures: exists int i in [0, __n - 1]: (
+ *   assumes: exists int i in [0, (int)__n - 1]: ((unsigned char*)__src)[i] == __c;
+ *   ensures: exists int i in [0, (int)__n - 1]: (
  *              (unsigned char*)__src[i] == __c and
  *              ((unsigned char*)__dest[i])' == __c and
  *              return == (unsigned char*)__src + i + 1 and
@@ -86,7 +86,7 @@ void *memmove (void *__dest, const void *__src, size_t __len);
  *                (unsigned char*)__src[j] != __c and
  *                ((unsigned char*)__dest[j])' == ((unsigned char*)__src)[j]
  *              ) and
- *              forall int j in [i, __n - 1]: (((unsigned char*)__dest)[j])' == ((unsigned char*)__dest)[j]
+ *              forall int j in [i, (int)__n - 1]: (((unsigned char*)__dest)[j])' == ((unsigned char*)__dest)[j]
  *            );
  * }
  */
@@ -240,9 +240,9 @@ char *strcpy (char *__restrict __dest, const char *__restrict __src);
  * local: size_t src_nlen = strnlen(__src, __len);
  * requires: no_overlap(__src, src_nlen, __dest, src_nlen);
  * requires: valid_bytes(__dest, __len);
- * assigns: __dest[0, __len - 1];
+ * assigns: __dest[0, (int)__len - 1];
  * ensures: forall int i in [0, (int)src_nlen - 1]: (__dest[i])' == __src[i];
- * ensures: forall int i in [src_nlen, __len - 1]: (__dest[i])' == 0;
+ * ensures: forall int i in [src_nlen, (int)__len - 1]: (__dest[i])' == 0;
  * ensures: return == __dest;
  */
 char *strncpy (char *__restrict __dest,
@@ -314,7 +314,7 @@ int strcoll (const char *__s1, const char *__s2);
  * requires: valid_string(__src);
  * requires: valid_bytes(__dest, __n);
  * requires: no_overlap(__src, __n, __dest, __n);
- * assigns: __dest[0, __n - 1];
+ * assigns: __dest[0, (int)__n - 1];
  * assigns: _errno;
  * ensures: return < __n implies (__dest[return])' == 0;
  */
@@ -338,7 +338,7 @@ int strcoll_l (const char *__s1, const char *__s2, __locale_t __l);
  * requires: valid_string(__src);
  * requires: valid_bytes(__dest, __n);
  * requires: no_overlap(__src, __n, __dest, __n);
- * assigns: __dest[0, __n - 1];
+ * assigns: __dest[0, (int)__n - 1];
  * assigns: _errno;
  * ensures: return < __n implies (__dest[return])' == 0;
  */
@@ -357,7 +357,7 @@ int strcoll_l (const char *__s1, const char *__s2, locale_t __l);
  * requires: valid_string(__src);
  * requires: valid_bytes(__dest, __n);
  * requires: no_overlap(__src, __n, __dest, __n);
- * assigns: __dest[0, __n - 1];
+ * assigns: __dest[0, (int)__n - 1];
  * assigns: _errno;
  * ensures: return < __n implies (__dest[return])' == 0;
  */
@@ -424,7 +424,7 @@ char *strndup (const char *__s, size_t __n);
  * local: size_t len = strlen(__s);
  *
  * case "found" {
- *   ensures:  exists int i in [0, len - 1]: (
+ *   ensures:  exists int i in [0, (int)len - 1]: (
  *             __s[i] == __c and
  *             (forall int j in [0, i - 1]: __s[j] != __c) and
  *             return == __s + i
@@ -432,7 +432,7 @@ char *strndup (const char *__s, size_t __n);
  * }
  *
  * case "notfound" {
- *   assumes: forall int i in [0, len - 1]: __s[i] != __c;
+ *   assumes: forall int i in [0, (int)len - 1]: __s[i] != __c;
  *   ensures: return == NULL;
  * }
  */
@@ -449,15 +449,15 @@ char *__builtin_strchr (const char *__s, int __c);
  * local: size_t len = strlen(__s);
  *
  * case "found" {
- *   ensures:  exists int i in [0, len - 1]: (
+ *   ensures:  exists int i in [0, (int)len - 1]: (
  *             __s[i] == __c and
- *             (forall int j in [i + 1, len - 1]: __s[j] != __c) and
+ *             (forall int j in [i + 1, (int)len - 1]: __s[j] != __c) and
  *             return == __s + i
  *          );
  * }
  *
  * case "notfound" {
- *   assumes: forall int i in [0, len - 1]: __s[i] != __c;
+ *   assumes: forall int i in [0, (int)len - 1]: __s[i] != __c;
  *   ensures: return == NULL;
  * }
  */
@@ -471,7 +471,7 @@ char *strrchr (const char *__s, int __c);
  * local: size_t len = strlen(__s);
  *
  * case "found" {
- *   ensures:  exists int i in [0, len - 1]: (
+ *   ensures:  exists int i in [0, (int)len - 1]: (
  *             __s[i] == __c and
  *             (forall int j in [0, i - 1]: __s[j] != __c) and
  *             return == __s + i
@@ -479,7 +479,7 @@ char *strrchr (const char *__s, int __c);
  * }
  *
  * case "notfound" {
- *   assumes: forall int i in [0, len - 1]: __s[i] != __c;
+ *   assumes: forall int i in [0, (int)len - 1]: __s[i] != __c;
  *   ensures: return == __s + len;
  * }
  */
@@ -491,7 +491,7 @@ char *strchrnul (const char *__s, int __c);
  * requires: valid_string(__s);
  * requires: valid_string(__reject);
  * local: size_t len = strlen(__s);
- * ensures: return >= 0 and return <= len;
+ * ensures: return in [0, len];
  */
 size_t strcspn (const char *__s, const char *__reject);
 
@@ -499,7 +499,7 @@ size_t strcspn (const char *__s, const char *__reject);
  * requires: valid_string(__s);
  * requires: valid_string(__accept);
  * local: size_t len = strlen(__s);
- * ensures: return >= 0 and return <= len;
+ * ensures: return in [0, len];
  */
 size_t strspn (const char *__s, const char *__accept);
 
@@ -507,7 +507,7 @@ size_t strspn (const char *__s, const char *__accept);
  * requires: valid_string(__s);
  * requires: valid_string(__accept);
  * local: size_t len = strlen(__s);
- * ensures: return == NULL or (exists int i in [0, len - 1]: return == __s + i);
+ * ensures: return == NULL or (exists int i in [0, (int)len - 1]: return == __s + i);
  */
 char *strpbrk (const char *__s, const char *__accept);
 
@@ -516,7 +516,7 @@ char *strpbrk (const char *__s, const char *__accept);
  * requires: valid_string(__needle);
  * local: size_t len1 = strlen(__haystack);
  * local: size_t len2 = strlen(__needle);
- * ensures: return == NULL or (exists int i in [0, len1 - len2]: return == __haystack + i);
+ * ensures: return == NULL or (exists int i in [0, (int)len1 - (int)len2]: return == __haystack + i);
  */
 char *strstr (const char *__haystack, const char *__needle);
 
@@ -531,18 +531,18 @@ static size_t _strtok_len = 0;
  *   assumes: __s != NULL;
  *   requires: valid_string(__s);
  *   local: size_t len = strlen(__s);
- *   assigns: __s[0, len - 1];
+ *   assigns: __s[0, (int)len - 1];
  *   assigns: _strtok_buf;
  *   assigns: _strtok_len;
- *   ensures: exists int i in [0, len - 1]: return == __s + i;
+ *   ensures: exists int i in [0, (int)len - 1]: return == __s + i;
  *   ensures: _strtok_buf' == __s;
  *   ensures: _strtok_len' == len;
  * }
  *
  * case "next" {
  *   assumes: __s == NULL;
- *   assigns: _strtok_buf[0, _strtok_len - 1];
- *   ensures: exists int i in [0, _strtok_len - 1]: return == _strtok_buf + i;
+ *   assigns: _strtok_buf[0, (int)_strtok_len - 1];
+ *   ensures: exists int i in [0, (int)_strtok_len - 1]: return == _strtok_buf + i;
  *  }
  *
  * case "last" {

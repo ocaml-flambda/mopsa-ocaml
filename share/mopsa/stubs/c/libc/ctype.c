@@ -65,190 +65,190 @@ const __int32_t **__ctype_toupper_loc (void);
 #ifdef __NO_CTYPE
 
 /*$
- * requires: __c == EOF or (__c >= 0 and __c <= 255);
+ * requires: __c == EOF or __c in [0,255];
  */
 int isalnum (int __c); 
 
 /*$
- * requires: __c == EOF or (__c >= 0 and __c <= 255);
+ * requires: __c == EOF or __c in [0,255];
  */
 int isalpha (int __c); 
 
 /*$
- * requires: __c == EOF or (__c >= 0 and __c <= 255);
+ * requires: __c == EOF or __c in [0,255];
  */
 int iscntrl (int __c); 
 
 /*$
- * requires: __c == EOF or (__c >= 0 and __c <= 255);
+ * requires: __c == EOF or __c in [0,255];
  */
 int isdigit (int __c); 
 
 /*$
- * requires: __c == EOF or (__c >= 0 and __c <= 255);
+ * requires: __c == EOF or __c in [0,255];
  */
 int islower (int __c); 
 
 /*$
- * requires: __c == EOF or (__c >= 0 and __c <= 255);
+ * requires: __c == EOF or __c in [0,255];
  */
 int isgraph (int __c); 
 
 /*$
- * requires: __c == EOF or (__c >= 0 and __c <= 255);
+ * requires: __c == EOF or __c in [0,255];
  */
 int isprint (int __c); 
 
 /*$
- * requires: __c == EOF or (__c >= 0 and __c <= 255);
+ * requires: __c == EOF or __c in [0,255];
  */
 int ispunct (int __c); 
 
 /*$
- * requires: __c == EOF or (__c >= 0 and __c <= 255);
+ * requires: __c == EOF or __c in [0,255];
  */
 int isspace (int __c); 
 
 /*$
- * requires: __c == EOF or (__c >= 0 and __c <= 255);
+ * requires: __c == EOF or __c in [0,255];
  */
 int isupper (int __c); 
 
 /*$
- * requires: __c == EOF or (__c >= 0 and __c <= 255);
+ * requires: __c == EOF or __c in [0,255];
  */
 int isxdigit (int __c); 
 
 #endif
 
 /*$
- * requires: __c == EOF or (__c >= 0 and __c <= 255);
- * ensures: return == EOF or (return >= 0 && return <= 255);
+ * requires: __c == EOF or __c in [0,255];
+ * ensures: return == EOF or return in [0, 255];
  */
 int tolower (int __c); 
 
 /*$
- * requires: __c == EOF or (__c >= 0 and __c <= 255);
- * ensures: return == EOF or (return >= 0 && return <= 255);
+ * requires: __c == EOF or __c in [0,255];
+ * ensures: return == EOF or return in [0,255];
  */
 int toupper (int __c); 
   
 #ifdef __NO_CTYPE
 
 /*$
- * requires: __c == EOF or (__c >= 0 and __c <= 255);
+ * requires: __c == EOF or __c in [0,255];
  */
 int isblank (int __c); 
 
 /*$
- * requires: __c == EOF or (__c >= 0 and __c <= 255);
+ * requires: __c == EOF or __c in [0,255];
  */
 int isascii (int __c); 
 
 /*$
- * ensures: return >= 0 and return <=127;
+ * ensures: return in [0, 127];
  */
 int toascii (int __c); 
 
 /*$
- * requires: __c == EOF or (__c >= 0 and __c <= 255);
- * ensures: return == EOF or (return >= 0 && return <= 255);
+ * requires: __c == EOF or __c in [0,255];
+ * ensures: return == EOF or return in [0,255];
  */
 int _toupper (int __c); 
 
 /*$
- * requires: __c == EOF or (__c >= 0 and __c <= 255);
- * ensures: return == EOF or (return >= 0 && return <= 255);
+ * requires: __c == EOF or __c in [0,255];
+ * ensures: return == EOF or return in [0,255];
  */
 int _tolower (int __c); 
 
 /*$
- * requires: __c == EOF or (__c >= 0 and __c <= 255);
+ * requires: __c == EOF or __c in [0,255];
  */
 int isalnum_l (int __c, locale_t __loc); 
 
 /*$
- * requires: __c == EOF or (__c >= 0 and __c <= 255);
+ * requires: __c == EOF or __c in [0,255];
  */
 int isalpha_l (int __c, locale_t __loc); 
 
 /*$
- * requires: __c == EOF or (__c >= 0 and __c <= 255);
+ * requires: __c == EOF or __c in [0,255];
  */
 int iscntrl_l (int __c, locale_t __loc); 
 
 /*$
- * requires: __c == EOF or (__c >= 0 and __c <= 255);
+ * requires: __c == EOF or __c in [0,255];
  */
 int isdigit_l (int __c, locale_t __loc); 
 
 /*$
- * requires: __c == EOF or (__c >= 0 and __c <= 255);
+ * requires: __c == EOF or __c in [0,255];
  */
 int islower_l (int __c, locale_t __loc); 
 
 /*$
- * requires: __c == EOF or (__c >= 0 and __c <= 255);
+ * requires: __c == EOF or __c in [0,255];
  */
 int isgraph_l (int __c, locale_t __loc); 
 
 /*$
- * requires: __c == EOF or (__c >= 0 and __c <= 255);
+ * requires: __c == EOF or __c in [0,255];
  */
 int isprint_l (int __c, locale_t __loc); 
 
 /*$
- * requires: __c == EOF or (__c >= 0 and __c <= 255);
+ * requires: __c == EOF or __c in [0,255];
  */
 int ispunct_l (int __c, locale_t __loc); 
 
 /*$
- * requires: __c == EOF or (__c >= 0 and __c <= 255);
+ * requires: __c == EOF or __c in [0,255];
  */
 int isspace_l (int __c, locale_t __loc); 
 
 /*$
- * requires: __c == EOF or (__c >= 0 and __c <= 255);
+ * requires: __c == EOF or __c in [0,255];
  */
 int isupper_l (int __c, locale_t __loc); 
 
 /*$
- * requires: __c == EOF or (__c >= 0 and __c <= 255);
+ * requires: __c == EOF or __c in [0,255];
  */
 int isxdigit_l (int __c, locale_t __loc); 
 
 /*$
- * requires: __c == EOF or (__c >= 0 and __c <= 255);
+ * requires: __c == EOF or __c in [0,255];
  */
 int isblank_l (int __c, locale_t __loc); 
 
 /*$
- * requires: __c == EOF or (__c >= 0 and __c <= 255);
- * ensures: return == EOF or (return >= 0 && return <= 255);
+ * requires: __c == EOF or __c in [0,255];
+ * ensures: return == EOF or return in [0,255];
  */
 int __tolower_l (int __c, locale_t __l); 
 
 #endif
 
 /*$
- * requires: __c == EOF or (__c >= 0 and __c <= 255);
- * ensures: return == EOF or (return >= 0 && return <= 255);
+ * requires: __c == EOF or __c in [0,255];
+ * ensures: return == EOF or return in [0,255];
  */
 int tolower_l (int __c, locale_t __l); 
 
 #ifdef __NO_CTYPE
 
 /*$
- * requires: __c == EOF or (__c >= 0 and __c <= 255);
- * ensures: return == EOF or (return >= 0 && return <= 255);
+ * requires: __c == EOF or __c in [0,255];
+ * ensures: return == EOF or return in [0,255];
  */
 int __toupper_l (int __c, locale_t __l); 
 
 #endif
 
 /*$
- * requires: __c == EOF or (__c >= 0 and __c <= 255);
- * ensures: return == EOF or (return >= 0 && return <= 255);
+ * requires: __c == EOF or __c in [0,255];
+ * ensures: return == EOF or return in [0,255];
  */
 int toupper_l (int __c, locale_t __l); 
 
