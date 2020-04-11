@@ -141,6 +141,14 @@ void _mopsa_memcpy(char *dst, char *src, unsigned int i, unsigned int j);
 
 
 /*$$
+ * predicate in_string(x,s):
+ *   exists int i in [0, bytes(s) - offset(s) - 1]:
+ *     x == s + i and
+ *     forall int j in [0, x - 1]: s[i] != 0
+ *  ;
+ */
+
+/*$$
  * predicate valid_wide_string(s):
  *   valid_ptr(s) and
  *   size(s) >= 1 and
@@ -154,6 +162,15 @@ void _mopsa_memcpy(char *dst, char *src, unsigned int i, unsigned int j);
  *   exists int _i in [0, ((bytes(s) - offset(s)) / sizeof_type(wchar_t)) - 1]: (s[_i])' == 0
  * ;
  */
+
+/*$$
+ * predicate in_wide_string(x,s):
+ *   exists int i in [0, ((bytes(s) - offset(s)) / sizeof_type(wchar_t)) - 1]:
+ *     x == s + i and
+ *     forall int j in [0, x - 1]: s[i] != 0
+ *  ;
+ */
+
 
 /*$$
  * predicate valid_bytes(s, n):
