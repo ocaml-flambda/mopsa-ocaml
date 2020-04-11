@@ -24,8 +24,14 @@
 #include <error.h>
 #include <stddef.h> // to get NULL
 
+
+/*
+  error and error_at_line are handled by builtins to check formats.
+  Then, they call the following functions to complete the stub.
+ */
+
 /*$
- * warn: "TODO: formats & error_print_progname in error_at_line";
+ * requires: error_print_progname != NULL implies valid_ptr(error_print_progname);
  * assigns: error_message_count;
  *
  * case "exit" {
@@ -37,11 +43,11 @@
  *   assumes: __status == 0;
  * }
  */
-void error (int __status, int __errnum, const char *__format, ...);
-
+void _mopsa_error(int __status);
 
 /*$
- * warn: "TODO: formats & error_print_progname in error_at_line";
+ * requires: error_print_progname != NULL implies valid_ptr(error_print_progname);
+ * requires: valid_string(__filename);
  * assigns: error_message_count;
  *
  * case "exit" {
@@ -53,8 +59,7 @@ void error (int __status, int __errnum, const char *__format, ...);
  *   assumes: __status == 0;
  * }
  */
-void error_at_line (int __status, int __errnum, const char *__fname, unsigned int __lineno, const char *__format, ...);
-
+void _mopsa_error_at_line(int __status, const char* __filename);
 
 void (*error_print_progname) (void) = NULL;
 

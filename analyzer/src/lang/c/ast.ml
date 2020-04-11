@@ -1158,3 +1158,17 @@ let memcpy (dst:expr) (src:expr) (i:expr) (j:expr) range man flow =
   let f = find_c_fundec_by_name "_mopsa_memcpy" flow in
   let stmt = mk_c_call_stmt f [dst; src; i; j] range in
   man.post stmt flow
+
+(** Exit if status is non-zero *)
+let error_error (p:expr) range man flow =
+  let open Sig.Domain.Manager in
+  let f = find_c_fundec_by_name "_mopsa_error" flow in
+  let stmt = mk_c_call_stmt f [p] range in
+  man.post stmt flow
+
+(** Exit if status is non-zero *)
+let error_error_at_line (p:expr) (n:expr) range man flow =
+  let open Sig.Domain.Manager in
+  let f = find_c_fundec_by_name "_mopsa_error_at_line" flow in
+  let stmt = mk_c_call_stmt f [p; n] range in
+  man.post stmt flow

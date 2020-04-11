@@ -85,7 +85,10 @@ let _ =
 
       "_mopsa_register_file_resource";
       "_mopsa_register_file_resource_at";
-      "_mopsa_find_file_resource"
+      "_mopsa_find_file_resource";
+
+      "error";
+      "error_at_line"
     ]
 
 let is_builtin_function = Hashtbl.mem builtin_functions

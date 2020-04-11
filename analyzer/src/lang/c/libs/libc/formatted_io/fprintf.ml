@@ -190,6 +190,20 @@ struct
       Eval.singleton (mk_top s32 exp.erange) flow |>
       OptionExt.return
 
+    (* 𝔼⟦ error(...) ⟧ *)
+    | E_c_builtin_call("error", status ::errnum :: format :: args) ->
+      check_args format args exp.erange man flow >>$? fun () flow ->
+      error_error status exp.erange man flow >>$? fun () flow ->
+      Eval.singleton (mk_top s32 exp.erange) flow |>
+      OptionExt.return
+
+    (* 𝔼⟦ error_at_line(...) ⟧ *)
+    | E_c_builtin_call("error_at_line", status :: errnum :: filename :: linenum :: format :: args) ->
+      check_args format args exp.erange man flow >>$? fun () flow ->
+      error_error_at_line status filename exp.erange man flow >>$? fun () flow ->
+      Eval.singleton (mk_top s32 exp.erange) flow |>
+      OptionExt.return
+
     | _ -> None
 
   let ask _ _ _  = None
