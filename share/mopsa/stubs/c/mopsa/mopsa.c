@@ -174,14 +174,12 @@ void _mopsa_memcpy(char *dst, char *src, unsigned int i, unsigned int j);
 
 /*$$
  * predicate valid_bytes(s, n):
- *   valid_ptr(s) and
- *   bytes(s) >= offset(s) + n
+ *   n > 0 implies (valid_ptr(s) and bytes(s) >= offset(s) + n)
  * ;
  */
 
 /*$$
  * predicate valid_wchars(s, n):
- *   valid_ptr(s) and
- *   bytes(s) >= offset(s) + n * sizeof_type(wchar_t)
+ *   n > 0 implies (valid_ptr(s) and bytes(s) >= offset(s) + n * sizeof_type(wchar_t))
  * ;
  */

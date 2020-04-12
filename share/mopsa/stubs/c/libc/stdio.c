@@ -262,8 +262,8 @@ int fflush (FILE *__stream);
 
 
 /*$
- * local:   int r = fflush(__stream);
- * ensures: return == r;
+ * // TODO: not thread-safe
+ * alias: fflush;
  */
 int fflush_unlocked (FILE *__stream);
 
@@ -442,6 +442,17 @@ int vsscanf (const char *__restrict __s,
 int fgetc (FILE *__stream);
 
 
+#ifndef getc
+
+/*$
+ * alias: fgetc;
+ */
+int getc (FILE *__stream);
+
+#endif
+
+
+
 /*$
  * ensures: return in [0, 127] or return == EOF;
  */
@@ -451,25 +462,29 @@ int getchar (void);
 
 /*$
  * // TODO: not thread-safe
- * requires: __stream in File;
- * ensures: return in [0, 127] or return == EOF;
+ * alias: fgetc;
  */
 int getc_unlocked (FILE *__stream);
 
 /*$
  * // TODO: not thread-safe
- * ensures: return in [0, 127] or return == EOF;
+ * alias: getchar;
  */
 int getchar_unlocked (void);
 
 
 /*$
  * // TODO: not thread-safe
- * requires: __stream in File;
- * ensures: return in [0, 127] or return == EOF;
+ * alias: fgetc;
  */
 int fgetc_unlocked (FILE *__stream);
 
+
+/*$
+ * requires: __stream in File;
+ * ensures: (return == (unsigned char) __c) or (return == EOF);
+ */
+int fputc (int __c, FILE *__stream);
 
 
 /*
@@ -478,16 +493,14 @@ int fgetc_unlocked (FILE *__stream);
 #if __GLIBC_MINOR__ <= 28
 
 /*$
- * requires: __fp in File;
- * ensures: (return == (unsigned char) __c) or (return == EOF);
+ * alias: fputc;
  */
 int _IO_putc (int __c, _IO_FILE *__fp);
 
 #else
 
 /*$
- * requires: __stream in File;
- * ensures: (return == (unsigned char) __c) or (return == EOF);
+ * alias: fputc;
  */
 int putc (int __c, FILE *__stream);
 
@@ -502,23 +515,22 @@ int putchar (int __c);
 
 /*$
  * // TODO: not thread-safe
- * requires: __stream in File;
- * ensures: (return == (unsigned char) __c) or (return == EOF);
+ * alias: fputc;
  */
 int fputc_unlocked (int __c, FILE *__stream);
 
 
 
 /*$
- * requires: __stream in File;
- * ensures: (return == (unsigned char) __c) or (return == EOF);
+ * // TODO: not thread-safe
+ * alias: fputc;
  */
 int putc_unlocked (int __c, FILE *__stream);
 
 
 /*$
  * // TODO: not thread-safe
- * ensures: (return == (unsigned char) __c) or (return == EOF);
+ * alias: putchar;
  */
 int putchar_unlocked (int __c);
 
@@ -537,27 +549,32 @@ int putw (int __w, FILE *__stream);
 
 /*$
  * requires: __stream in File;
- * requires: valid_bytes(__s, __n);
- * assigns:  __s[0, __n - 1];
- * ensures:  valid_primed_substring(__s, __n - 1);
+ * requires: __n >= 0;
  * ensures:  (return == __s) or (return == NULL);
+ *
+ * case "non-zero" {
+ *   assumes: __n > 0;
+ *   requires: valid_bytes(__s, __n);
+ *   assigns:  __s[0, __n - 1];
+ *   ensures:  valid_primed_substring(__s, __n );
+ * }
+ *
+ * case "nop" {
+ *   assumes: __n == 0;
+ * }
  */
 char *fgets (char *__restrict __s, int __n, FILE *__restrict __stream);
 
 /*$
  * warn: "gets: dangerous function, do not use";
+ * assigns: __s[0, bytes(__s) - offset(__s) - 1];
  * ensures: (return == __s) or (return == NULL);
  */
 char *gets (char *__s);
 
 
 /*$
- * // TODO: not thread-safe
- * requires: __stream in File;
- * requires: valid_bytes(__s, __n);
- * assigns:  __s[0, __n - 1];
- * ensures:  valid_primed_substring(__s, __n - 1);
- * ensures:  (return == __s) or (return == NULL);
+ * alias: fgets;
  */
 char *fgets_unlocked (char *__restrict __s, int __n,
                       FILE *__restrict __stream);
@@ -569,12 +586,13 @@ char *fgets_unlocked (char *__restrict __s, int __n,
  * 
  * case "realloc" {
  *   assumes:  *__lineptr != NULL;
- *   requires: *__lineptr in Memory;
  *   local:    char* r = new Memory;
  *   assigns:  *__lineptr;
  *   assigns:  *__n;
  *   free:     *__lineptr;
- *   ensures:  size(r) == offset(r) + (*__n)';
+ *   ensures:  size(r) > 0;
+ *   ensures:  size(r) == (*__n)';
+ *   ensures:  r[size(r) - 1] == 0;
  *   ensures:  (*__lineptr)' == r;
  *   ensures:  return >= 0;
  * }
@@ -584,7 +602,9 @@ char *fgets_unlocked (char *__restrict __s, int __n,
  *   local:   char* r = new Memory;
  *   assigns: *__lineptr;
  *   assigns: *__n;
- *   ensures: size(r) == offset(r) + (*__n)';
+ *   ensures: size(r) > 0;
+ *   ensures: size(r) == (*__n)';
+ *   ensures:  r[size(r) - 1] == 0;
  *   ensures: (*__lineptr)' == r;
  *   ensures: return >= 0;
  * }
@@ -652,27 +672,17 @@ size_t fread (void *__restrict __ptr, size_t __size,
               size_t __n, FILE *__restrict __stream);
 
 /*$
- * requires: __s in File;
+ * requires: __stream in File;
  * requires: valid_bytes(__ptr, __size * __n);
  * ensures:  return in [0, __n];
  */
 size_t fwrite (const void *__restrict __ptr, size_t __size,
-               size_t __n, FILE *__restrict __s);
+               size_t __n, FILE *__restrict __stream);
 
 
 /*$
  * // TODO: not thread-safe
- * requires: __stream in File;
- * requires: valid_string(__s);
- *
- * case "success" {
- *   ensures: return >= 0;
- * }
- *
- * case "failure" {
- *   assigns: _errno;
- *   ensures: return == EOF;
- * }
+ * alias: fputs;
  */
 int fputs_unlocked (const char *__restrict __s,
                     FILE *__restrict __stream);
@@ -680,19 +690,14 @@ int fputs_unlocked (const char *__restrict __s,
 
 /*$
  * // TODO: not thread-safe
- * requires: __stream in File;
- * requires: valid_bytes(__ptr, __size * __n);
- * assigns:  ((char*)__ptr)[0, (int)__size * (int)__n - 1];
- * ensures:  return in [0, __n];
+ * alias: fread;
  */
 size_t fread_unlocked (void *__restrict __ptr, size_t __size,
                        size_t __n, FILE *__restrict __stream);
 
 /*$
  * // TODO: not thread-safe
- * requires: __stream in File;
- * requires: valid_bytes(__ptr, __size * __n);
- * ensures:  return in [0, __n];
+ * alias: fwrite;
  */
 size_t fwrite_unlocked (const void *__restrict __ptr, size_t __size,
                         size_t __n, FILE *__restrict __stream);
@@ -810,19 +815,19 @@ int ferror (FILE *__stream);
 
 /*$
  * // TODO: not thread-safe
- * requires: __stream in File;
+ * alias: clearerr;
  */
 void clearerr_unlocked (FILE *__stream);
 
 /*$
  * // TODO: not thread-safe
- * requires: __stream in File;
+ * alias: feof;
  */
 int feof_unlocked (FILE *__stream);
 
 /*$
  * // TODO: not thread-safe
- * requires: __stream in File;
+ * alias: ferror;
  */
 int ferror_unlocked (FILE *__stream);
 
@@ -842,8 +847,7 @@ int fileno (FILE *__stream);
 
 /*$
  * // TODO: not thread-safe
- * requires: __stream in File;
- * ensures:  return == __stream->_fileno;
+ * alias: fileno;
  */
 int fileno_unlocked (FILE *__stream);
 

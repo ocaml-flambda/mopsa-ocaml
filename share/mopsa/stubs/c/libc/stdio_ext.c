@@ -26,39 +26,32 @@
 
 /*$
  * requires: __fp in File;
- * ensures:  return in [0, INT_MAX];
  */
 size_t __fbufsize (FILE *__fp);
 
 
 /*$
  * requires: __fp in File;
- * ensures:  return in [0, INT_MAX];
  */
 int __freading (FILE *__fp);
 
 /*$
  * requires: __fp in File;
- * ensures:  return in [0, INT_MAX];
  */
 int __fwriting (FILE *__fp);
 
-
 /*$
  * requires: __fp in File;
- * ensures:  return in [0, INT_MAX];
  */
 int __freadable (FILE *__fp);
 
 /*$
  * requires: __fp in File;
- * ensures:  return in [0, INT_MAX];
  */
 int __fwritable (FILE *__fp);
 
 /*$
  * requires: __fp in File;
- * ensures:  return in [0, INT_MAX];
  */
 int __flbf (FILE *__fp);
 
@@ -70,7 +63,6 @@ void __fpurge (FILE *__fp);
 
 /*$
  * requires: __fp in File;
- * ensures:  return in [0, INT_MAX];
  */
 size_t __fpending (FILE *__fp);
 
@@ -82,6 +74,9 @@ void _flushlbf (void);
 
 /*$
  * requires: __fp in File;
+ * requires: __type == FSETLOCKING_INTERNAL or
+ *           __type == FSETLOCKING_BYCALLER or
+ *           __type == FSETLOCKING_QUERY;
  * ensures:  return == FSETLOCKING_INTERNAL or
  *           return == FSETLOCKING_BYCALLER;
  */

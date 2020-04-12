@@ -1414,7 +1414,26 @@ int ilogbf(float __x);
  */
 int ilogbl(long double __x);
 
-// TODO: not documented: llogb
+
+/*$
+ * requires: valid_float(__x) and __x != 0;
+ * ensures:  return >= -1074 and return <= 1023;
+ */
+long int llogb(double __x);
+
+/*$
+ * requires: valid_float(__x) and __x != 0;
+ * ensures:  return >= -149 and return <= 127;
+ */
+long int llogbf(float __x);
+
+/*$
+ * // exponent range based on 128-bit IEEE quadruple precision
+ * requires: valid_float(__x) and __x != 0;
+ * ensures:  return >= -16493 and return <= 16383;
+ */
+long int llogbl(long double __x);
+
 
 /*$
  * requires: valid_float(__x);

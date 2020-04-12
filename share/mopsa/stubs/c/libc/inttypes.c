@@ -51,19 +51,18 @@ imaxdiv_t imaxdiv (intmax_t __numer, intmax_t __denom);
 /*$
  * requires: valid_string(__nptr);
  * requires: __base == 0 or __base in [2, 36];
+ * requires: __endptr != NULL implies valid_ptr(__endptr);
+ * assigns:  _errno;
  *
  * case "with_endptr" {
  *   assumes: __endptr != NULL;
- *   requires: valid_ptr(__endptr);
  *   local: size_t len = strlen(__nptr);
  *   assigns: *__endptr;
- *   assigns: _errno;
  *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
  *  case "without_endptr" {
  *   assumes: __endptr == NULL;
- *   assigns:  _errno;
  *  }
  */
 intmax_t strtoimax (const char *__restrict __nptr,
@@ -72,19 +71,18 @@ intmax_t strtoimax (const char *__restrict __nptr,
 /*$
  * requires: valid_string(__nptr);
  * requires: __base == 0 or __base in [2, 36];
+ * requires: __endptr != NULL implies valid_ptr(__endptr);
+ * assigns:  _errno;
  *
  * case "with_endptr" {
  *   assumes: __endptr != NULL;
- *   requires: valid_ptr(__endptr);
  *   local: size_t len = strlen(__nptr);
  *   assigns: *__endptr;
- *   assigns: _errno;
  *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
  *  case "without_endptr" {
  *   assumes: __endptr == NULL;
- *   assigns:  _errno;
  *  }
  */
 uintmax_t strtoumax (const char *__restrict __nptr,
@@ -93,19 +91,18 @@ uintmax_t strtoumax (const char *__restrict __nptr,
 /*$
  * requires: valid_wide_string(__nptr);
  * requires: __base == 0 or __base in [2, 36];
+ * requires: __endptr != NULL implies valid_ptr(__endptr);
+ * assigns:  _errno;
  *
  * case "with_endptr" {
  *   assumes: __endptr != NULL;
- *   requires: valid_ptr(__endptr);
  *   local: size_t len = wcslen(__nptr);
  *   assigns: *__endptr;
- *   assigns: _errno;
  *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
  *  case "without_endptr" {
  *   assumes: __endptr == NULL;
- *   assigns:  _errno;
  *  }
  */
 intmax_t wcstoimax (const wchar_t *__restrict __nptr,
@@ -114,19 +111,18 @@ intmax_t wcstoimax (const wchar_t *__restrict __nptr,
 /*$
  * requires: valid_wide_string(__nptr);
  * requires: __base == 0 or __base in [2, 36];
+ * requires: __endptr != NULL implies valid_ptr(__endptr);
+ * assigns:  _errno;
  *
  * case "with_endptr" {
  *   assumes: __endptr != NULL;
- *   requires: valid_ptr(__endptr);
  *   local: size_t len = wcslen(__nptr);
  *   assigns: *__endptr;
- *   assigns: _errno;
  *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
  *  case "without_endptr" {
  *   assumes: __endptr == NULL;
- *   assigns:  _errno;
  *  }
  */
 uintmax_t wcstoumax (const wchar_t *__restrict __nptr,

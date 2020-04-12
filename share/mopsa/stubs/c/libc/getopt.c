@@ -34,6 +34,7 @@ int optopt;
 
 
 /*$
+ * requires: ___argc > 0;
  * requires: optind > 0 and optind <= ___argc;
  * requires: valid_string(__shortopts);
  * requires: forall int i in [0, ___argc - 1]: valid_string(___argv[i]);
@@ -80,6 +81,7 @@ int _mopsa_len_option (const struct option* l);
 int _mopsa_pick(int i);
 
 /*$
+ * requires: ___argc > 0;
  * requires: optind > 0 and optind <= ___argc;
  * requires: valid_string(__shortopts);
  * requires: forall int i in [0, ___argc - 1]: valid_string(___argv[i]);

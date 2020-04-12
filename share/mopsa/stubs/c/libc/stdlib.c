@@ -49,22 +49,19 @@ size_t __ctype_get_mb_cur_max (void);
 
 /*$
  * //NOTE: we are more strict than the spec by requiring that __nptr is 0-terminated
- * //requires: valid_string(__nptr);
- *
+ * requires: valid_string(__nptr);
  */
 double atof (const char *__nptr);
 
 /*$
  * //NOTE: we are more strict than the spec by requiring that __nptr is 0-terminated
- * //requires: valid_string(__nptr);
- *
+ * requires: valid_string(__nptr);
  */
 int atoi (const char *__nptr);
 
 /*$
  * //NOTE: we are more strict than the spec by requiring that __nptr is 0-terminated
- * //requires: valid_string(__nptr);
- *
+ * requires: valid_string(__nptr);
  */
 long int atol (const char *__nptr);
 
@@ -72,8 +69,7 @@ long int atol (const char *__nptr);
 
 /*$
  * //NOTE: we are more strict than the spec by requiring that __nptr is 0-terminated
- * //requires: valid_string(__nptr);
- *
+ * requires: valid_string(__nptr);
  */
 long long int atoll (const char *__nptr);
 
@@ -81,40 +77,38 @@ long long int atoll (const char *__nptr);
 
 /*$
  * requires: valid_string(__nptr);
+ * requires: __endptr != NULL implies valid_ptr(__endptr);
+ * assigns: _errno;
  *
  * case "with_endptr" {
  *   assumes: __endptr != NULL;
- *   requires: valid_ptr(__endptr);
  *   local: size_t len = strlen(__nptr);
  *   assigns: *__endptr;
- *   assigns: _errno;
  *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
- *  case "without_endptr" {
+ * case "without_endptr" {
  *   assumes: __endptr == NULL;
- *   assigns:  _errno;
- *  }
+ * }
  */
 double strtod (const char *__restrict __nptr,
                char **__restrict __endptr);
 
 /*$
  * requires: valid_string(__nptr);
+ * requires: __endptr != NULL implies valid_ptr(__endptr);
+ * assigns: _errno;
  *
  * case "with_endptr" {
  *   assumes: __endptr != NULL;
- *   requires: valid_ptr(__endptr);
  *   local: size_t len = strlen(__nptr);
  *   assigns: *__endptr;
- *   assigns: _errno;
  *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
- *  case "without_endptr" {
+ * case "without_endptr" {
  *   assumes: __endptr == NULL;
- *   assigns:  _errno;
- *  }
+ * }
  */
 double strtod_l (const char *__restrict __nptr,
 		 char **__restrict __endptr, locale_t __loc);
@@ -124,40 +118,38 @@ double strtod_l (const char *__restrict __nptr,
 
 /*$
  * requires: valid_string(__nptr);
+ * requires: __endptr != NULL implies valid_ptr(__endptr);
+ * assigns: _errno;
  *
  * case "with_endptr" {
  *   assumes: __endptr != NULL;
- *   requires: valid_ptr(__endptr);
  *   local: size_t len = strlen(__nptr);
  *   assigns: *__endptr;
- *   assigns: _errno;
  *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
- *  case "without_endptr" {
+ * case "without_endptr" {
  *   assumes: __endptr == NULL;
- *   assigns:  _errno;
- *  }
+ * }
  */
 float strtof (const char *__restrict __nptr,
               char **__restrict __endptr);
 
 /*$
  * requires: valid_string(__nptr);
+ * requires: __endptr != NULL implies valid_ptr(__endptr);
+ * assigns: _errno;
  *
  * case "with_endptr" {
  *   assumes: __endptr != NULL;
- *   requires: valid_ptr(__endptr);
  *   local: size_t len = strlen(__nptr);
  *   assigns: *__endptr;
- *   assigns: _errno;
  *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
- *  case "without_endptr" {
+ * case "without_endptr" {
  *   assumes: __endptr == NULL;
- *   assigns:  _errno;
- *  }
+ * }
  */
 long double strtold (const char *__restrict __nptr,
                      char **__restrict __endptr);
@@ -167,47 +159,40 @@ long double strtold (const char *__restrict __nptr,
 /*$
  * requires: valid_string(__nptr);
  * requires: __base == 0 or __base in [2, 36];
+ * requires: __endptr != NULL implies valid_ptr(__endptr);
+ * assigns: _errno;
  *
  * case "with_endptr" {
  *   assumes: __endptr != NULL;
- *   requires: valid_ptr(__endptr);
  *   local: size_t len = strlen(__nptr);
  *   assigns: *__endptr;
- *   assigns: _errno;
  *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
- *  case "without_endptr" {
+ * case "without_endptr" {
  *   assumes: __endptr == NULL;
- *   assigns:  _errno;
- *  }
+ * }
  */
 long int strtol (const char *__restrict __nptr,
                  char **__restrict __endptr, int __base);
 
 
-long int __strtol_internal(const char *__restrict __nptr,
-			   char **__restrict __endptr,
-			   int __base, int __group);
-
-
 /*$
  * requires: valid_string(__nptr);
  * requires: __base == 0 or __base in [2, 36];
+ * requires: __endptr != NULL implies valid_ptr(__endptr);
+ * assigns: _errno;
  *
  * case "with_endptr" {
  *   assumes: __endptr != NULL;
- *   requires: valid_ptr(__endptr);
  *   local: size_t len = strlen(__nptr);
  *   assigns: *__endptr;
- *   assigns: _errno;
  *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
- *  case "without_endptr" {
+ * case "without_endptr" {
  *   assumes: __endptr == NULL;
- *   assigns:  _errno;
- *  }
+ * }
  */
 unsigned long int strtoul (const char *__restrict __nptr,
                            char **__restrict __endptr, int __base);
@@ -217,20 +202,19 @@ unsigned long int strtoul (const char *__restrict __nptr,
 /*$
  * requires: valid_string(__nptr);
  * requires: __base == 0 or __base in [2, 36];
+ * requires: __endptr != NULL implies valid_ptr(__endptr);
+ * assigns: _errno;
  *
  * case "with_endptr" {
  *   assumes: __endptr != NULL;
- *   requires: valid_ptr(__endptr);
  *   local: size_t len = strlen(__nptr);
  *   assigns: *__endptr;
- *   assigns: _errno;
  *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
- *  case "without_endptr" {
+ * case "without_endptr" {
  *   assumes: __endptr == NULL;
- *   assigns:  _errno;
- *  }
+ * }
  */
 long long int strtoq (const char *__restrict __nptr,
                       char **__restrict __endptr, int __base);
@@ -238,20 +222,19 @@ long long int strtoq (const char *__restrict __nptr,
 /*$
  * requires: valid_string(__nptr);
  * requires: __base == 0 or __base in [2, 36];
+ * requires: __endptr != NULL implies valid_ptr(__endptr);
+ * assigns: _errno;
  *
  * case "with_endptr" {
  *   assumes: __endptr != NULL;
- *   requires: valid_ptr(__endptr);
  *   local: size_t len = strlen(__nptr);
  *   assigns: *__endptr;
- *   assigns: _errno;
  *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
- *  case "without_endptr" {
+ * case "without_endptr" {
  *   assumes: __endptr == NULL;
- *   assigns:  _errno;
- *  }
+ * }
  */
 unsigned long long int strtouq (const char *__restrict __nptr,
                                 char **__restrict __endptr, int __base);
@@ -263,20 +246,19 @@ unsigned long long int strtouq (const char *__restrict __nptr,
 /*$
  * requires: valid_string(__nptr);
  * requires: __base == 0 or __base in [2, 36];
+ * requires: __endptr != NULL implies valid_ptr(__endptr);
+ * assigns: _errno;
  *
  * case "with_endptr" {
  *   assumes: __endptr != NULL;
- *   requires: valid_ptr(__endptr);
  *   local: size_t len = strlen(__nptr);
  *   assigns: *__endptr;
- *   assigns: _errno;
  *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
- *  case "without_endptr" {
+ * case "without_endptr" {
  *   assumes: __endptr == NULL;
- *   assigns:  _errno;
- *  }
+ * }
  */
 long long int strtoll (const char *__restrict __nptr,
                        char **__restrict __endptr, int __base);
@@ -284,20 +266,19 @@ long long int strtoll (const char *__restrict __nptr,
 /*$
  * requires: valid_string(__nptr);
  * requires: __base == 0 or __base in [2, 36];
+ * requires: __endptr != NULL implies valid_ptr(__endptr);
+ * assigns: _errno;
  *
  * case "with_endptr" {
  *   assumes: __endptr != NULL;
- *   requires: valid_ptr(__endptr);
  *   local: size_t len = strlen(__nptr);
  *   assigns: *__endptr;
- *   assigns: _errno;
  *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
- *  case "without_endptr" {
+ * case "without_endptr" {
  *   assumes: __endptr == NULL;
- *   assigns:  _errno;
- *  }
+ * }
  */
 unsigned long long int strtoull (const char *__restrict __nptr,
                                  char **__restrict __endptr, int __base);
@@ -314,11 +295,11 @@ unsigned long long int strtoull (const char *__restrict __nptr,
 static char _l64a_buf[7];
 
 /*$
- * // TODO: return one-use allocated string?
  * requires: __n >= 0;
- * assigns:  _l64a_buf[0, 6];
- * ensures:  return == _l64a_buf;
- * ensures:  valid_primed_string(_l64a_buf); 
+ * local:    char* r = new ReadOnlyMemory;
+ * ensures:  size(r) in [1,7];
+ * ensures:  return == r;
+ * ensures:  valid_string(return);
  */
 char *l64a (long int __n);
 
