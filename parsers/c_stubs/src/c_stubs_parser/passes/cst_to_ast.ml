@@ -499,9 +499,16 @@ let rec visit_expr e prj func =
 (** {2 Formulas} *)
 (** ************ *)
 
+let visit_interval i prj func =
+  { Ast.itv_lb = visit_expr i.itv_lb prj func;
+    itv_open_lb = i.itv_open_lb;
+    itv_ub = visit_expr i.itv_ub prj func;
+    itv_open_ub = i.itv_open_ub;}
+
+
 let visit_set s prj func =
   match s with
-  | S_interval(e1, e2) -> Ast.S_interval(visit_expr e1 prj func , visit_expr e2 prj func )
+  | S_interval(itv) -> Ast.S_interval(visit_interval itv prj func)
   | S_resource(r) -> Ast.S_resource(r)
 
 let rec visit_formula f prj func =
@@ -536,7 +543,7 @@ let visit_assigns a prj func =
   bind_range a @@ fun a ->
   Ast.{
     assign_target = visit_expr a.Cst.assign_target prj func;
-    assign_offset = (visit_list @@ visit_pair visit_expr visit_expr) a.Cst.assign_offset prj func;
+    assign_offset = (visit_list @@ visit_interval) a.Cst.assign_offset prj func;
   }
 
 let visit_ensures ens prj func =

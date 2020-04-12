@@ -94,7 +94,7 @@ and local_value =
 
 and assigns = {
   assign_target : expr;
-  assign_offset : (expr * expr) list;
+  assign_offset : interval list;
 }
 
 and free = expr
@@ -104,8 +104,10 @@ and warn = string
 and log_binop = C_stubs_parser.Ast.log_binop
 
 and set =
-  | S_interval of expr * expr
+  | S_interval of interval
   | S_resource of resource
+
+and interval = expr * expr
 
 and resource = C_stubs_parser.Ast.resource
 
@@ -415,6 +417,9 @@ and pp_set fmt =
   | S_interval(e1, e2) -> fprintf fmt "[%a .. %a]" pp_expr e1 pp_expr e2
   | S_resource(r) -> pp_resource fmt r
 
+and pp_interval fmt ((l,u):interval) =
+   fprintf fmt "[%a, %a]" pp_expr l pp_expr u
+
 and pp_resource = C_stubs_parser.Ast.pp_resource
 
 let pp_list pp sep fmt l =
@@ -443,11 +448,7 @@ let pp_requires fmt requires =
 let pp_assigns fmt assigns =
   fprintf fmt "assigns  : %a%a;"
     pp_expr assigns.content.assign_target
-    (pp_print_list ~pp_sep:(fun fmt () -> ())
-       (fun fmt (l, u) ->
-          fprintf fmt "[%a .. %a]" pp_expr l pp_expr u
-       )
-    ) assigns.content.assign_offset
+    (pp_print_list ~pp_sep:(fun fmt () -> ()) pp_interval) assigns.content.assign_offset
 
 let pp_assumes fmt (assumes:assumes with_range) =
   fprintf fmt "assumes  : %a;" pp_formula assumes.content

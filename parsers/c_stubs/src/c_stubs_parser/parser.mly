@@ -215,8 +215,7 @@ assigns:
 
 assigns_offset_list:
   | { [] }
-  | LBRACK with_range(expr) COMMA with_range(expr) RBRACK assigns_offset_list
-    { ($2, $4) :: $6 }
+  | interval assigns_offset_list { $1 :: $2 }
 
 (* Free section *)
 free:
@@ -338,8 +337,26 @@ c_typ:
   | BNOT  { BNOT }
 
 set:
-  | LBRACK with_range(expr) COMMA with_range(expr) RBRACK  { S_interval ($2, $4) }
-  | resource                                               { S_resource $1 }
+  | interval  { S_interval ($1) }
+  | resource  { S_resource $1 }
+
+interval:
+  | LBRACK with_range(expr) COMMA with_range(expr) RBRACK { { itv_lb=$2;
+							      itv_open_lb=false;
+							      itv_ub=$4;
+							      itv_open_ub=false; } }
+  | RBRACK with_range(expr) COMMA with_range(expr) RBRACK { { itv_lb=$2;
+							      itv_open_lb=true;
+							      itv_ub=$4;
+							      itv_open_ub=false; } }
+  | LBRACK with_range(expr) COMMA with_range(expr) LBRACK { { itv_lb=$2;
+							      itv_open_lb=false;
+							      itv_ub=$4;
+							      itv_open_ub=true; } }
+  | RBRACK with_range(expr) COMMA with_range(expr) LBRACK { { itv_lb=$2;
+							      itv_open_lb=true;
+							      itv_ub=$4;
+							      itv_open_ub=true; } }
 
 %inline log_binop:
   | AND     { AND }

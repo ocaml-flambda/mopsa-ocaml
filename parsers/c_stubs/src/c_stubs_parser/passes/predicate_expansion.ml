@@ -126,11 +126,15 @@ struct
 
       and visit_set s =
         match s with
-        | S_interval (e1, e2) -> S_interval (visit_expr e1, visit_expr e2)
+        | S_interval itv -> S_interval (visit_interval itv)
         | S_resource r -> S_resource r
 
-      in
+      and visit_interval i =
+        { i with
+          itv_lb = visit_expr i.itv_lb;
+          itv_ub = visit_expr i.itv_ub; }
 
+      in
       visit_formula (with_range body range)
 
 

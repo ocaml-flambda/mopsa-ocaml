@@ -71,7 +71,7 @@ and local_value =
 
 and assigns = {
   assign_target : expr with_range;
-  assign_offset : (expr with_range * expr with_range) list;
+  assign_offset : interval list;
 }
 
 and free = expr with_range
@@ -170,8 +170,15 @@ and unop =
   | BNOT    (* ~ *)
 
 and set =
-  | S_interval of expr with_range * expr with_range
+  | S_interval of interval
   | S_resource of resource
+
+and interval = {
+  itv_lb: expr with_range; (** lower bound *)
+  itv_open_lb: bool;       (** open lower bound *)
+  itv_ub: expr with_range; (** upper bound *)
+  itv_open_ub: bool;       (** open upper bound *)
+}
 
 and resource = string
 
@@ -382,9 +389,16 @@ and pp_log_binop fmt =
 
 and pp_set fmt =
   function
-  | S_interval(e1, e2) -> fprintf fmt "[%a .. %a]" pp_expr e1 pp_expr e2
+  | S_interval(itv) -> pp_interval fmt itv
   | S_resource(r) -> pp_resource fmt r
 
+and pp_interval fmt i =
+  fprintf fmt "%s%a, %a%s"
+    (if i.itv_open_lb then "]" else "[")
+    pp_expr i.itv_lb
+    pp_expr i.itv_ub
+    (if i.itv_open_ub then "[" else "]")
+   
 let pp_opt pp fmt o =
   match o with
   | None -> ()
@@ -415,11 +429,7 @@ let pp_requires fmt requires =
 let pp_assigns fmt assigns =
   fprintf fmt "assigns  : %a%a;"
     pp_expr assigns.content.assign_target
-    (pp_print_list ~pp_sep:(fun fmt () -> ())
-       (fun fmt (l, u) ->
-          fprintf fmt "[%a .. %a]" pp_expr l pp_expr u
-       )
-    ) assigns.content.assign_offset
+    (pp_print_list ~pp_sep:(fun fmt () -> ()) pp_interval) assigns.content.assign_offset
 
 let pp_assumes fmt (assumes:assumes with_range) =
   fprintf fmt "assumes  : @[%a@];" pp_formula assumes.content
