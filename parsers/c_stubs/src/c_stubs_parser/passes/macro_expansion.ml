@@ -216,7 +216,7 @@ let visit_leaf macros enums leaf =
   | S_assigns assigns   -> S_assigns (visit_assigns macros enums assigns)
   | S_ensures ensures   -> S_ensures (visit_ensures macros enums ensures)
   | S_free free         -> S_free (visit_free macros enums free)
-  | S_warn warn         -> S_warn warn
+  | S_message msg       -> leaf
 
 let visit_case macros enums case =
   bind_range case @@ fun case -> {

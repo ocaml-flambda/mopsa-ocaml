@@ -59,4 +59,41 @@ let () =
         | A_stub_invalid_requires_condition e -> Format.fprintf fmt "invalid requirement '%a'" (Debug.bold pp_expr) e
         | a -> next fmt a
       );
+  }
+
+
+
+
+
+type alarm_class   += A_stub_alarm
+type alarm_message += A_stub_alarm_body of string
+
+let raise_stub_alarm msg range man flow =
+  let cs = Flow.get_callstack flow in
+  let alarm = mk_alarm (A_stub_alarm_body msg) cs range in
+  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+
+
+let () =
+  register_alarm_class (fun default fmt -> function
+      | A_stub_alarm -> Format.fprintf fmt "Stub alarm"
+      | a -> default fmt a
+    )
+
+
+let () =
+  register_alarm_message {
+    classifier = (fun next -> function
+        | A_stub_alarm_body _ -> A_stub_alarm
+        | a -> next a
+      );
+    compare = (fun next a1 a2 ->
+        match a1, a2 with
+        | A_stub_alarm_body m1, A_stub_alarm_body m2 -> compare m1 m2
+        | _ -> next a1 a2
+      );
+      print = (fun next fmt -> function
+        | A_stub_alarm_body m -> Format.pp_print_string fmt m
+        | a -> next fmt a
+      );
   };

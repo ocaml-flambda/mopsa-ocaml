@@ -566,6 +566,11 @@ let visit_local loc prj func =
   in
   Ast.{ lvar; lval }
 
+let visit_message msg prj func =
+  bind_range msg @@ fun m ->
+  { Ast.message_kind = m.message_kind;
+    message_body = m.message_body; }
+
 let visit_leaf leaf prj func =
   match leaf with
   | Cst.S_local local ->
@@ -588,8 +593,8 @@ let visit_leaf leaf prj func =
   | S_free free ->
     S_free (visit_free free prj func), [], []
 
-  | S_warn warn ->
-    S_warn warn, [], []
+  | S_message msg ->
+    S_message (visit_message msg prj func), [], []
 
 let visit_case case prj func =
   let body, locals, assigns = visit_list_ext visit_leaf case.content.case_body prj func in

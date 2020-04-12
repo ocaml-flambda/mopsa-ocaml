@@ -65,7 +65,7 @@
 %token EOF
 
 (* Keywords *)
-%token REQUIRES LOCAL ASSIGNS CASE ASSUMES ENSURES PREDICATE WARN ALIAS
+%token REQUIRES LOCAL ASSIGNS CASE ASSUMES ENSURES PREDICATE WARN ALARM UNSOUND ALIAS
 %token TRUE FALSE
 %token FORALL EXISTS IN NEW
 %token FREE PRIMED RETURN SIZE BYTES SIZEOF_TYPE SIZEOF_EXPR OFFSET BASE VALID_PTR
@@ -155,7 +155,7 @@ leaf_section:
   | with_range(assigns)    { S_assigns $1 }
   | with_range(ensures)    { S_ensures $1 }
   | with_range(free)       { S_free $1 }
-  | with_range(warn)       { S_warn $1 }
+  | with_range(message)    { S_message $1 }
 
 
 (* Requirement section *)
@@ -231,9 +231,15 @@ assumes:
 ensures:
   | ENSURES COLON with_range(formula) SEMICOL { $3 }
 
-(* Warning section *)
-warn:
-  | WARN COLON STRING_CONST SEMICOL { $3 }
+(* Message sections *)
+message:
+  | message_kind COLON STRING_CONST SEMICOL { { message_kind = $1;
+						message_body = $3; } }
+
+message_kind:
+  | WARN    { WARN }
+  | UNSOUND { UNSOUND }
+  | ALARM   { ALARM }
 
 
 (* Logic formula *)
