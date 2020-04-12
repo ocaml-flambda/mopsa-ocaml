@@ -190,7 +190,7 @@ let visit_leaf sec ctx =
   | S_assigns assings   -> sec
   | S_ensures ensures   -> S_ensures (visit_ensures ensures ctx)
   | S_free free         -> sec
-  | S_warn warn         -> sec
+  | S_message msg       -> sec
 
 let visit_case case ctx =
   bind_range case @@ fun case -> {

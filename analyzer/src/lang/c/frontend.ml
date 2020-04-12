@@ -857,7 +857,7 @@ and from_stub_leaf ctx leaf =
   | S_assigns assigns   -> S_assigns (from_stub_assigns ctx assigns)
   | S_ensures ensures   -> S_ensures (from_stub_ensures ctx ensures)
   | S_free free         -> S_free (from_stub_free ctx free)
-  | S_warn warn         -> S_warn warn
+  | S_message msg       -> S_message (from_stub_message ctx msg)
 
 and from_stub_case ctx case =
   {
@@ -875,6 +875,16 @@ and from_stub_requires ctx req =
 and from_stub_free ctx free =
   bind_range free @@ fun free ->
   from_stub_expr ctx free
+
+and from_stub_message ctx msg =
+  bind_range msg @@ fun m ->
+  { message_kind = from_stub_message_kind m.message_kind;
+    message_body = m.message_body; }
+
+and from_stub_message_kind = function
+  | WARN    -> WARN
+  | ALARM   -> ALARM
+  | UNSOUND -> UNSOUND
 
 and from_stub_assigns ctx assign =
   bind_range assign @@ fun assign ->

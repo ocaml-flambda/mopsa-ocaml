@@ -252,8 +252,8 @@ let visit_leaf leaf scope =
     let free, scope = visit_free free scope in
     S_free free, scope
 
-  | S_warn warn ->
-    S_warn warn, scope
+  | S_message msg ->
+    S_message msg, scope
 
 let visit_case case scope =
   bind_pair_range case @@ fun case ->
