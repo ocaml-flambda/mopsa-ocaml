@@ -132,12 +132,19 @@ let rec visit_expr (e:expr with_range) scope =
     let e, scope = visit_expr e scope in
     E_sizeof_expr e, scope
 
+let visit_interval i scope =
+  let lb, scope = visit_expr i.itv_lb scope in
+  let ub, scope = visit_expr i.itv_ub scope in
+  let i = { i with
+            itv_lb = lb;
+            itv_ub = ub; } in
+  i, scope
+
 let visit_set (set:set) scope =
   match set with
-  | S_interval(e1, e2) ->
-    let e1, scope = visit_expr e1 scope in
-    let e2, scope = visit_expr e2 scope in
-    S_interval(e1, e2), scope
+  | S_interval itv ->
+    let itv, scope = visit_interval itv scope in
+    S_interval itv, scope
 
   | S_resource r -> S_resource r, scope
 
@@ -198,12 +205,7 @@ let visit_ensures ensures scope =
 let visit_assigns assigns scope =
   bind_pair_range assigns @@ fun assigns ->
   let assign_target, scope = visit_expr assigns.assign_target scope in
-  let assign_offset, scope = visit_list (fun (l, u) scope ->
-      let l, scope = visit_expr l scope in
-      let u, scope = visit_expr u scope in
-      (l, u), scope
-    ) assigns.assign_offset scope
-  in
+  let assign_offset, scope = visit_list visit_interval assigns.assign_offset scope in
   { assign_target; assign_offset }, scope
 
 let visit_free free scope =

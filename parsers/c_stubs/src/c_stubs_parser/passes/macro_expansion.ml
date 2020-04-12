@@ -134,13 +134,14 @@ and visit_type macros enums ((typ,qual):c_qual_typ) =
   | _ -> (typ,qual)
 
 
+let visit_interval macros enums i =
+  { i with
+    itv_lb = visit_expr macros enums i.itv_lb;
+    itv_ub = visit_expr macros enums i.itv_ub; }
+
 let visit_set macros enums set =
   match set with
-  | S_interval(e1, e2) ->
-    let e1 = visit_expr macros enums e1 in
-    let e2 = visit_expr macros enums e2 in
-    S_interval(e1, e2)
-
+  | S_interval itv -> S_interval(visit_interval macros enums itv)
   | S_resource r -> S_resource r
 
 
@@ -204,10 +205,7 @@ let visit_local macros enums local =
 let visit_assigns macros enums assigns =
   bind_range assigns @@ fun assigns -> {
     assign_target = visit_expr macros enums assigns.assign_target;
-    assign_offset = List.map (fun (a, b) ->
-        (visit_expr macros enums a),
-        (visit_expr macros enums b)
-      ) assigns.assign_offset;
+    assign_offset = List.map (visit_interval macros enums) assigns.assign_offset;
   }
 
 let visit_leaf macros enums leaf =

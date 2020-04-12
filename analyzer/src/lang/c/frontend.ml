@@ -880,9 +880,7 @@ and from_stub_assigns ctx assign =
   bind_range assign @@ fun assign ->
   {
     assign_target = from_stub_expr ctx assign.assign_target;
-    assign_offset = List.map (fun (a, b) ->
-        (from_stub_expr ctx a, from_stub_expr ctx b)
-      ) assign.assign_offset;
+    assign_offset = List.map (from_stub_interval ctx) assign.assign_offset;
   }
 
 and from_stub_local ctx loc =
@@ -924,8 +922,16 @@ and from_stub_formula ctx f =
 
 and from_stub_set ctx s =
   match s with
-  | S_interval(a, b) -> S_interval(from_stub_expr ctx a, from_stub_expr ctx b)
+  | S_interval i -> S_interval(from_stub_interval ctx i)
   | S_resource r -> S_resource r
+
+and from_stub_interval ctx i =
+  let lb = from_stub_expr ctx i.itv_lb in
+  let ub = from_stub_expr ctx i.itv_ub in
+  (* We can use operations on mathematical integers without worrying about overflows *)
+  let lb = if i.itv_open_lb then (add lb one ~typ:T_int lb.erange) else lb in
+  let ub = if i.itv_open_ub then (sub ub one ~typ:T_int ub.erange) else ub in
+  (lb,ub)
 
 and from_stub_expr ctx exp =
   let bind_range_expr (exp:C_stubs_parser.Ast.expr with_range) f =

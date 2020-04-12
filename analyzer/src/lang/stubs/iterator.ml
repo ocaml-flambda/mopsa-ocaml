@@ -321,11 +321,22 @@ struct
 
 
   let exec_assigns assigns man flow =
-    man.exec (mk_stub_assigns
-                assigns.content.assign_target
-                assigns.content.assign_offset
-                assigns.range
-             ) flow
+    let stmt = mk_stub_assigns assigns.content.assign_target assigns.content.assign_offset assigns.range in
+    match assigns.content.assign_offset with
+    | [] ->
+      man.exec stmt flow
+
+    | (l,u)::tl ->
+      (* Check that offsets intervals are not empty *)
+      let cond = List.fold_left
+          (fun acc (l,u) -> log_and acc (le l u assigns.range) assigns.range)
+          (le l u assigns.range) tl
+      in
+      assume_flow cond
+        ~fthen:(fun flow -> man.exec stmt flow)
+        ~felse:(fun flow -> flow)
+        man flow
+    
 
 
   (** Remove locals *)
