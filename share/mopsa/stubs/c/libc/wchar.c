@@ -26,6 +26,7 @@
 #include <stdarg.h>
 #include <wchar.h>
 #include <limits.h>
+#include <stdio.h> // for _alloc_FILE
 #include "mopsa_libc_utils.h"
 
 
