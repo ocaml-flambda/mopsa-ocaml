@@ -490,7 +490,7 @@ int fputc (int __c, FILE *__stream);
 /*$
  * alias: fputc;
  */
-int _IO_putc (int __c, _IO_FILE *__fp);
+int _IO_putc (int __c, _IO_FILE *__stream);
 
 #else
 
