@@ -31,7 +31,7 @@
  */
 
 /*$
- * requires: error_print_progname != NULL implies valid_ptr(error_print_progname);
+ * requires: error_print_progname == NULL or valid_ptr(error_print_progname);
  * assigns: error_message_count;
  *
  * case "exit" {
@@ -46,7 +46,7 @@
 void _mopsa_error(int __status);
 
 /*$
- * requires: error_print_progname != NULL implies valid_ptr(error_print_progname);
+ * requires: error_print_progname == NULL or valid_ptr(error_print_progname);
  * requires: valid_string(__filename);
  * assigns: error_message_count;
  *

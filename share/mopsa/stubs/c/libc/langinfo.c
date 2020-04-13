@@ -22,9 +22,7 @@
 #include <langinfo.h>
 
 /*$
- * local:   char *addr = new ReadOnlyString;
- * ensures: size(addr) in [1, INT_MAX];
- * ensures: valid_string(addr);
+ * local:   char *addr = _mopsa_new_readonly_string();
  * ensures: return == addr;
  */
 char *nl_langinfo (nl_item __item);
@@ -32,9 +30,7 @@ char *nl_langinfo (nl_item __item);
 /*$
  * // FIXME: nl_langinfo_l is undefined if __l is LC_GLOBAL_LOCALE or 
  * //        is not a valid locale object handle.
- * local:   char *addr = new ReadOnlyString;
- * ensures: size(addr) in [1, INT_MAX];
- * ensures: valid_string(addr);
+ * local:   char *addr = _mopsa_new_readonly_string();
  * ensures: return == addr;
  */
 char *nl_langinfo_l (nl_item __item, locale_t __l);

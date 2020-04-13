@@ -35,17 +35,17 @@ int optopt;
 
 /*$
  * requires: ___argc > 0;
- * requires: optind > 0 and optind <= ___argc;
+ * requires: optind >= 0 and optind <= ___argc;
  * requires: valid_string(__shortopts);
- * requires: forall int i in [0, ___argc - 1]: valid_string(___argv[i]);
+ * requires: forall int i in [0, ___argc[: valid_string(___argv[i]);
  * assigns: optind;
  * assigns: opterr;
  * assigns: optopt;
  * assigns: optarg;
- * assigns: ___argv[0, ___argc - 1];
- * ensures: optind' in [1, ___argc];
- * ensures: forall int i in [0, ___argc - 1]: exists int j in [0, ___argc - 1]: (___argv[i])' == ___argv[j];
- * ensures: optarg' == NULL or exists int i in [0, ___argc - 1]: in_string(optarg', ___argv[i]);
+ * assigns: ___argv[0, ___argc[;
+ * ensures: optind' in [0, ___argc];
+ * ensures: forall int i in [0, ___argc[: exists int j in [0, ___argc[: (___argv[i])' == ___argv[j];
+ * ensures: optarg' == NULL or exists int i in [0, ___argc[: in_string(optarg', ___argv[i]);
  * ensures: return in [-1, 255];
  */
 int getopt (int ___argc, char *const *___argv, const char *__shortopts);
@@ -55,48 +55,48 @@ int getopt (int ___argc, char *const *___argv, const char *__shortopts);
 /*$$
  * predicate valid_longopt(l):
  *   valid_ptr(l) and
- *   exists int i in [0, ((bytes(l) - offset(l)) / sizeof_type(struct option)) - 1]: (
+ *   exists int i in [0, ((bytes(l) - offset(l)) / sizeof_type(struct option))[: (
  *     l[i].name == NULL and
- *     forall int j in [0, i - 1]: (
+ *     forall int j in [0, i[: (
  *       valid_ptr(l[j].name) and
- *       (exists int k in [0, size(l[j].name) - offset(l[j].name) - 1]: l[j].name[k] == 0) and
- *       (l[j].flag != NULL implies valid_ptr(l[j].flag))
+ *       (exists int k in [0, (size(l[j].name) - offset(l[j].name))[: l[j].name[k] == 0) and
+ *       (l[j].flag == NULL or valid_ptr(l[j].flag))
  *     )
  *   );
  */
 
 /*$
  * ensures:
- *   exists int i in [0, ((bytes(l) - offset(l)) / sizeof_type(struct option)) - 1]: (
+ *   exists int i in [0, ((bytes(l) - offset(l)) / sizeof_type(struct option))[: (
  *     l[i].name == NULL and
  *     return == i and
- *     forall int j in [0, i - 1]: l[j].name != NULL
+ *     forall int j in [0, i[: l[j].name != NULL
  *   );
  */
-int _mopsa_len_option (const struct option* l);
+size_t _mopsa_len_option (const struct option* l);
 
 /*$
- * ensures: return in [0, i - 1];
+ * ensures: return in [0, i[;
  */
-int _mopsa_pick(int i);
+size_t _mopsa_pick(size_t i);
 
 /*$
  * requires: ___argc > 0;
- * requires: optind > 0 and optind <= ___argc;
+ * requires: optind >= 0 and optind <= ___argc;
  * requires: valid_string(__shortopts);
- * requires: forall int i in [0, ___argc - 1]: valid_string(___argv[i]);
+ * requires: forall int i in [0, ___argc[: valid_string(___argv[i]);
  * requires: valid_longopt(__longopts);
- * requires: __longind != NULL implies valid_ptr(__longind);
+ * requires: __longind == NULL or valid_ptr(__longind);
  * local: int len = _mopsa_len_option(__longopts);
  * local: int r = _mopsa_pick(len);
  * assigns: optind;
  * assigns: opterr;
  * assigns: optopt;
  * assigns: optarg;
- * assigns: ___argv[0, ___argc - 1];
- * ensures: optind' in [1, ___argc];
- * ensures: forall int i in [0, ___argc - 1]: exists int j in [0, ___argc - 1]: (___argv[i])' == ___argv[j];
- * ensures: optarg' == NULL or exists int i in [0, ___argc - 1]: in_string(optarg', ___argv[i]);
+ * assigns: ___argv[0, ___argc[;
+ * ensures: optind' in [0, ___argc];
+ * ensures: forall int i in [0, ___argc[: exists int j in [0, ___argc[: (___argv[i])' == ___argv[j];
+ * ensures: optarg' == NULL or exists int i in [0, ___argc[: in_string(optarg', ___argv[i]);
  *
  * case "opt-ind" {
  *   assumes: __longopts[r].flag != NULL;

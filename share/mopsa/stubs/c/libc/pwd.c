@@ -27,26 +27,16 @@
 
 /*$
  * local: struct passwd* r = new Pwd;
- * local: char* pw_name = new ReadOnlyString;
- * local: char* pw_passwd = new ReadOnlyString;
- * local: char* pw_gecos = new ReadOnlyString;
- * local: char* pw_dir = new ReadOnlyString;
- * local: char* pw_shell = new ReadOnlyString;
+ * local: char* pw_name = _mopsa_new_readonly_string();
+ * local: char* pw_passwd =  _mopsa_new_readonly_string();
+ * local: char* pw_gecos =  _mopsa_new_readonly_string();
+ * local: char* pw_dir = _mopsa_new_readonly_string();
+ * local: char* pw_shell =  _mopsa_new_readonly_string();
  * ensures: size(r) == sizeof_type(struct passwd);
- * ensures: size(pw_name) == INT_MAX;
- * ensures: valid_string(pw_name);
  * ensures: r->pw_name == pw_name;
- * ensures: size(pw_passwd) == INT_MAX;
- * ensures: valid_string(pw_passwd);
  * ensures: r->pw_passwd == pw_passwd;
- * ensures: size(pw_gecos) == INT_MAX;
- * ensures: valid_string(pw_gecos);
  * ensures: r->pw_gecos == pw_gecos;
- * ensures: size(pw_dir) == INT_MAX;
- * ensures: valid_string(pw_dir);
  * ensures: r->pw_dir == pw_dir;
- * ensures: size(pw_shell) == INT_MAX;
- * ensures: valid_string(pw_shell);
  * ensures: r->pw_shell == pw_shell;
  * ensures: return == r;
  */

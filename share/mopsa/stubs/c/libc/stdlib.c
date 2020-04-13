@@ -30,15 +30,6 @@
 #include "mopsa_libc_utils.h"
 
 
-/*$
- * local: char* r = new Memory;
- * ensures: return == r;
- * ensures: size(return) in [1, max];
- * ensures: return[size(return) - 1] == 0;
- */
-static char* _alloc_string(size_t max);
-
-
 /* Stubs */
 
 
@@ -76,8 +67,7 @@ long long int atoll (const char *__nptr);
 #endif
 
 /*$
- * requires: valid_string(__nptr);
- * requires: __endptr != NULL implies valid_ptr(__endptr);
+ * requires: __endptr == NULL or valid_ptr(__endptr);
  * assigns: _errno;
  *
  * case "with_endptr" {
@@ -89,14 +79,14 @@ long long int atoll (const char *__nptr);
  *
  * case "without_endptr" {
  *   assumes: __endptr == NULL;
+ *   requires: valid_string(__nptr);
  * }
  */
 double strtod (const char *__restrict __nptr,
                char **__restrict __endptr);
 
 /*$
- * requires: valid_string(__nptr);
- * requires: __endptr != NULL implies valid_ptr(__endptr);
+ * requires: __endptr == NULL or  valid_ptr(__endptr);
  * assigns: _errno;
  *
  * case "with_endptr" {
@@ -107,6 +97,7 @@ double strtod (const char *__restrict __nptr,
  * }
  *
  * case "without_endptr" {
+ *   requires: valid_string(__nptr);
  *   assumes: __endptr == NULL;
  * }
  */
@@ -118,7 +109,7 @@ double strtod_l (const char *__restrict __nptr,
 
 /*$
  * requires: valid_string(__nptr);
- * requires: __endptr != NULL implies valid_ptr(__endptr);
+ * requires: __endptr == NULL or valid_ptr(__endptr);
  * assigns: _errno;
  *
  * case "with_endptr" {
@@ -136,8 +127,7 @@ float strtof (const char *__restrict __nptr,
               char **__restrict __endptr);
 
 /*$
- * requires: valid_string(__nptr);
- * requires: __endptr != NULL implies valid_ptr(__endptr);
+ * requires: __endptr == NULL or valid_ptr(__endptr);
  * assigns: _errno;
  *
  * case "with_endptr" {
@@ -149,6 +139,7 @@ float strtof (const char *__restrict __nptr,
  *
  * case "without_endptr" {
  *   assumes: __endptr == NULL;
+ *   requires: valid_string(__nptr);
  * }
  */
 long double strtold (const char *__restrict __nptr,
@@ -157,9 +148,8 @@ long double strtold (const char *__restrict __nptr,
 #endif
 
 /*$
- * requires: valid_string(__nptr);
  * requires: __base == 0 or __base in [2, 36];
- * requires: __endptr != NULL implies valid_ptr(__endptr);
+ * requires: __endptr == NULL or valid_ptr(__endptr);
  * assigns: _errno;
  *
  * case "with_endptr" {
@@ -171,6 +161,7 @@ long double strtold (const char *__restrict __nptr,
  *
  * case "without_endptr" {
  *   assumes: __endptr == NULL;
+ *   requires: valid_string(__nptr);
  * }
  */
 long int strtol (const char *__restrict __nptr,
@@ -178,9 +169,8 @@ long int strtol (const char *__restrict __nptr,
 
 
 /*$
- * requires: valid_string(__nptr);
  * requires: __base == 0 or __base in [2, 36];
- * requires: __endptr != NULL implies valid_ptr(__endptr);
+ * requires: __endptr == NULL or valid_ptr(__endptr);
  * assigns: _errno;
  *
  * case "with_endptr" {
@@ -192,6 +182,7 @@ long int strtol (const char *__restrict __nptr,
  *
  * case "without_endptr" {
  *   assumes: __endptr == NULL;
+ *   requires: valid_string(__nptr);
  * }
  */
 unsigned long int strtoul (const char *__restrict __nptr,
@@ -200,9 +191,8 @@ unsigned long int strtoul (const char *__restrict __nptr,
 #ifdef __USE_MISC
 
 /*$
- * requires: valid_string(__nptr);
  * requires: __base == 0 or __base in [2, 36];
- * requires: __endptr != NULL implies valid_ptr(__endptr);
+ * requires: __endptr == NULL or valid_ptr(__endptr);
  * assigns: _errno;
  *
  * case "with_endptr" {
@@ -214,15 +204,15 @@ unsigned long int strtoul (const char *__restrict __nptr,
  *
  * case "without_endptr" {
  *   assumes: __endptr == NULL;
+ *   requires: valid_string(__nptr);
  * }
  */
 long long int strtoq (const char *__restrict __nptr,
                       char **__restrict __endptr, int __base);
 
 /*$
- * requires: valid_string(__nptr);
  * requires: __base == 0 or __base in [2, 36];
- * requires: __endptr != NULL implies valid_ptr(__endptr);
+ * requires: __endptr == NULL or valid_ptr(__endptr);
  * assigns: _errno;
  *
  * case "with_endptr" {
@@ -234,6 +224,7 @@ long long int strtoq (const char *__restrict __nptr,
  *
  * case "without_endptr" {
  *   assumes: __endptr == NULL;
+ *   requires: valid_string(__nptr);
  * }
  */
 unsigned long long int strtouq (const char *__restrict __nptr,
@@ -244,9 +235,8 @@ unsigned long long int strtouq (const char *__restrict __nptr,
 #ifdef __USE_ISOC99
 
 /*$
- * requires: valid_string(__nptr);
  * requires: __base == 0 or __base in [2, 36];
- * requires: __endptr != NULL implies valid_ptr(__endptr);
+ * requires: __endptr == NULL or valid_ptr(__endptr);
  * assigns: _errno;
  *
  * case "with_endptr" {
@@ -258,15 +248,15 @@ unsigned long long int strtouq (const char *__restrict __nptr,
  *
  * case "without_endptr" {
  *   assumes: __endptr == NULL;
+ *   requires: valid_string(__nptr);
  * }
  */
 long long int strtoll (const char *__restrict __nptr,
                        char **__restrict __endptr, int __base);
 
 /*$
- * requires: valid_string(__nptr);
  * requires: __base == 0 or __base in [2, 36];
- * requires: __endptr != NULL implies valid_ptr(__endptr);
+ * requires: __endptr == NULL or valid_ptr(__endptr);
  * assigns: _errno;
  *
  * case "with_endptr" {
@@ -278,6 +268,7 @@ long long int strtoll (const char *__restrict __nptr,
  *
  * case "without_endptr" {
  *   assumes: __endptr == NULL;
+ *   requires: valid_string(__nptr);
  * }
  */
 unsigned long long int strtoull (const char *__restrict __nptr,
@@ -296,10 +287,9 @@ static char _l64a_buf[7];
 
 /*$
  * requires: __n >= 0;
- * local:    char* r = new ReadOnlyMemory;
- * ensures:  size(r) in [1,7];
- * ensures:  return == r;
- * ensures:  valid_string(return);
+ * assigns: _l64a_buf[7];
+ * ensures: valid_primed_string(_l64a_buf);
+ * ensures:  return == _l64a_buf;
  */
 char *l64a (long int __n);
 
@@ -327,8 +317,8 @@ static char* _rand__statebuf = _rand__state;
 static size_t _rand__statelen = sizeof(_rand__state);
 
 /*$
- * // TODO: return NULL when __statelen < 8?
- * requires: valid_bytes(__statebuf, __statelen) and __statelen >= 8;
+ * requires: __statelen >= 8;
+ * requires: valid_bytes(__statebuf, __statelen);
  * assigns:  _rand__statebuf;
  * assigns:  _rand__statelen;
  * assigns:  __statebuf[0, __statelen - 1];
@@ -341,7 +331,15 @@ char *initstate (unsigned int __seed, char *__statebuf, size_t __statelen);
  * requires: valid_bytes(__statebuf, _rand__statelen);
  * assigns:  _rand__statebuf;
  * ensures:  _rand__statebuf' == __statebuf;
- * ensures:  return == _rand__statebuf;
+ *
+ * case "success" {
+ *   ensures:  return == _rand__statebuf;
+ * }
+ *
+ * case "failure" {
+ *   assigns: _errno;
+ *   ensures: return == NULL;
+ * }
  */
 char *setstate (char *__statebuf);
 
@@ -352,28 +350,49 @@ char *setstate (char *__statebuf);
 /*$
  * assigns: *__buf;
  * assigns: *__result;
- * assigns: _errno;
  * ensures: (*__result)' in [0, RAND_MAX]; 
- * ensures: return in [-1, 0];
+ *
+ * case "success" {
+ *   ensures: return == 0;
+ * }
+ *
+ * case "failure" {
+ *   ensures: return == -1;
+ *   assigns: _errno;
+ * }
  */
 int random_r (struct random_data *__restrict __buf,
               int32_t *__restrict __result);
 
 /*$
  * assigns: *__buf;
- * assigns: _errno;
- * ensures: return in [-1, 0];
+ *
+ * case "success" {
+ *   ensures: return == 0;
+ * }
+ *
+ * case "failure" {
+ *   ensures: return == -1;
+ *   assigns: _errno;
+ * }
  */
 int srandom_r (unsigned int __seed, struct random_data *__buf);
 
 /*$
  * requires: __statelen >= 8;
  * requires: valid_bytes(__statebuf, __statelen);
- * assigns:  *__statebuf[0, __statelen - 1];
+ * assigns:  *__statebuf[0, __statelen[;
  * assigns:  *__buf;
- * assigns:  _errno;
- * ensures:  return in [-1, 0];
  * ensures:  (__buf->rand_deg)' == __statelen; // keep length information around
+ *
+ * case "success" {
+ *   ensures: return == 0;
+ * }
+ *
+ * case "failure" {
+ *   ensures: return == -1;
+ *   assigns: _errno;
+ * }
  */
 int initstate_r (unsigned int __seed, char *__restrict __statebuf,
                  size_t __statelen,
@@ -381,11 +400,18 @@ int initstate_r (unsigned int __seed, char *__restrict __statebuf,
 
 /*$
  * requires: valid_bytes(__statebuf, __buf->rand_deg);
- * assigns:  *__statebuf[0, __buf->rand_deg - 1];
+ * assigns:  *__statebuf[0, __buf->rand_deg[;
  * assigns:  *__buf;
- * assigns:  _errno;
- * ensures:  return in [-1, 0];
  * ensures:  (__buf->rand_deg)' == __buf->rand_deg; // keep length information around
+ *
+ * case "success" {
+ *   ensures: return == 0;
+ * }
+ *
+ * case "failure" {
+ *   ensures: return == -1;
+ *   assigns: _errno;
+ * }
  */
 int setstate_r (char *__restrict __statebuf,
                 struct random_data *__restrict __buf);
@@ -456,6 +482,7 @@ static unsigned short int _seed48_buf[3];
 
 /*$
  * requires: valid_ptr_range(__seed16v, 0, 2);
+ * assigns:  _seed48_buf;
  * ensures:  return == &_seed48_buf[0];
  */
 unsigned short int *seed48 (unsigned short int __seed16v[3]);
@@ -578,7 +605,7 @@ void *malloc (size_t __size);
  * case "success" {
  *   local:   void* r = new Memory;
  *   ensures: size(r) == __nmemb * __size;
- *   ensures: forall int i in [0, (int)__nmemb * (int)__size - 1]: ((char*)r)[i] == 0;
+ *   ensures: forall int i in [0, (__nmemb * __size) [: ((unsigned char*)r)[i] == 0;
  *   ensures: return == r;
  * }
  *
@@ -621,9 +648,9 @@ void *calloc (size_t __nmemb, size_t __size);
  *   local:    void* r = new Memory;
  *   ensures:  size(r) == __size;
  *   ensures:  size(__ptr) >= __size implies 
- *             forall int i in [0, __size[: ((char*)r)[i] == ((char*)__ptr)[i];
+ *             forall int i in [0, __size[: ((unsigned char*)r)[i] == ((unsigned char*)__ptr)[i];
  *   ensures:  size(__ptr) <= __size implies 
- *             forall int i in [0, size(__ptr)[: ((char*)r)[i] == ((char*)__ptr)[i];
+ *             forall int i in [0, size(__ptr)[: ((unsigned char*)r)[i] == ((unsigned char*)__ptr)[i];
  *   free:     __ptr;
  *   ensures:  return == r;
  * }
@@ -793,9 +820,8 @@ char *getenv (const char *__name);
  * requires: valid_string(__name);
  *
  * case "success" {
- *   local:    char* r = new ReadOnlyMemory;
+ *   local:    char* r = _mopsa_new_readonly_string();
  *   ensures:  return == r;
- *   ensures:  valid_string(return);
  * }
  *
  * case "failure" {
@@ -871,12 +897,11 @@ int clearenv (void);
 #if defined __USE_MISC || (defined __USE_XOPEN_EXTENDED && !defined __USE_XOPEN2K8)
 
 /*$
- * // TODO: the last 6 chars of __template must be X
- * // TODO: only the last 6 chars of __template are modified, not the whole block
- * warn: "dangerous function, do not use";
- * requires: valid_string(__template);
- * assigns:  __template[0, size(__template) - offset(__template) - 1];
- * assigns:  _errno;
+ * local: size_t len = strlen(__template);
+ * requires: len >= 6;
+ * requires: forall int i in [0, 5]: __template[len - 6 + i] == 'X';
+ * assigns: __template[0, len[;
+ * assigns: _errno;
  * ensures:  return == __template;
  */
 char *mktemp (char *__template);
@@ -886,17 +911,17 @@ char *mktemp (char *__template);
 #if defined __USE_XOPEN_EXTENDED || defined __USE_XOPEN2K8
 
 /*$
- * // TODO: same issue as mktemp
- * requires: valid_string(__template);
+ * local: size_t len = strlen(__template);
+ * requires: len >= 6;
+ * requires: forall int i in [0, 5]: __template[len - 6 + i] == 'X';
+ * assigns: __template[0, len[;
  *
  * case "success" {
  *   local:   int fd = new FileDescriptor;
- *   assigns: __template[0, size(__template) - offset(__template) - 1];
  *   ensures: return == fd;
  * }
  *
  * case "failure" {
- *   assigns: __template[0, size(__template) - offset(__template) - 1];
  *   assigns: _errno;
  *   ensures: return == -1;
  * }
@@ -908,18 +933,18 @@ int mkstemp (char *__template);
 #ifdef __USE_MISC
 
 /*$
- * // TODO: same issue as mktemp
- * requires: valid_string(__template);
  * requires: __suffixlen >= 0;
+ * local: size_t len = strlen(__template);
+ * requires: len >= 6 + __suffixlen;
+ * requires: forall int i in [0, 5]: __template[len - 6 - __suffixlen + i] == 'X';
+ * assigns: __template[0, len[;
  *
  * case "success" {
  *   local:   int fd = new FileDescriptor;
- *   assigns: __template[0, size(__template) - offset(__template) - 1];
  *   ensures: return == fd;
  * }
  *
  * case "failure" {
- *   assigns: __template[0, size(__template) - offset(__template) - 1];
  *   assigns: _errno;
  *   ensures: return == -1;
  * }
@@ -931,19 +956,7 @@ int mkstemps (char *__template, int __suffixlen);
 #ifdef __USE_XOPEN2K8
   
 /*$
- * // TODO: same issue as mktemp
- * requires: valid_string(__template);
- *
- * case "success" {
- *   assigns:  __template[0, size(__template) - offset(__template) - 1];
- *   ensures:  return == __template;
- * }
- *
- * case "failure" {
- *   assigns:  __template[0, size(__template) - offset(__template) - 1];
- *   assigns:  _errno;
- *   ensures:  return == NULL;
- * }
+ * alias: mktemp;
  */
 char *mkdtemp (char *__template);
 
@@ -952,44 +965,22 @@ char *mkdtemp (char *__template);
 #ifdef __USE_GNU
 
 /*$
- * // TODO: same issue as mktemp
- * requires: valid_string(__template);
- *
- * case "success" {
- *   local:   int fd = new FileDescriptor;
- *   assigns: __template[0, size(__template) - offset(__template) - 1];
- *   ensures: return == fd;
- * }
- *
- * case "failure" {
- *   assigns: __template[0, size(__template) - offset(__template) - 1];
- *   assigns: _errno;
- *   ensures: return == -1;
- * }
+ * local: int r = mkstemp(__template);
+ * ensures: return == r;
  */
 int mkostemp (char *__template, int __flags);
 
 /*$
- * // TODO: same issue as mktemp
- * requires: valid_string(__template);
- * requires: __suffixlen >= 0;
- *
- * case "success" {
- *   local:   int fd = new FileDescriptor;
- *   assigns: __template[0, size(__template) - offset(__template) - 1];
- *   ensures: return == fd;
- * }
- *
- * case "failure" {
- *   assigns: __template[0, size(__template) - offset(__template) - 1];
- *   assigns: _errno;
- *   ensures: return == -1;
- * }
+ * local: int r = mkstemps(__template, __suffixlen);
+ * ensures: return == r;
  */
 int mkostemps (char *__template, int __suffixlen, int __flags);
 
 #endif
 
+/*$
+ * requires: __command == NULL or valid_string(__command);
+ */
 int system (const char *__command);
 
 
@@ -999,7 +990,7 @@ int system (const char *__command);
  * requires: valid_string(__name);
  *
  * case "success" {
- *   local:    char* r = _alloc_string(PATH_MAX);
+ *   local:    char* r = _mopsa_new_valid_string_max(PATH_MAX);
  *   ensures:  return == r;
  * }
  *
@@ -1016,16 +1007,17 @@ char *canonicalize_file_name (const char *__name);
 
 /*$
  * requires: valid_string(__name);
+ * requires: __resolved == NULL or valid_bytes(__resolved, PATH_MAX);
  *
  * case "alloc" {
  *   assumes:  __resolved == NULL;
- *   local:    char* r = _alloc_string(PATH_MAX);
+ *   local:    char* r = _mopsa_new_valid_string_max(PATH_MAX);
  *   ensures:  return == r;
  * }
  *
  * case "copy" {
  *   assumes:  __resolved != NULL;
- *   assigns:  __resolved[0, PATH_MAX - 1];
+ *   assigns:  __resolved[0, PATH_MAX[;
  *   ensures:  valid_primed_substring(__resolved, PATH_MAX);
  *   ensures:  return == __resolved;
  * }
@@ -1078,14 +1070,14 @@ long long int llabs (long long int __x);
 
 
 /*$
- * requires: __denom != 0;
+ * requires: __denom != 0 and __denom > INT_MIN;
  * ensures:  (return.quot == __numer / __denom) and 
  *           (return.rem == __numer % __denom);
  */
 div_t div (int __numer, int __denom);
 
 /*$
- * requires: __denom != 0;
+ * requires: __denom != 0 and __denom > LONG_MIN;
  * ensures:  (return.quot == __numer / __denom) and 
  *           (return.rem == __numer % __denom);
  */
@@ -1094,7 +1086,7 @@ ldiv_t ldiv (long int __numer, long int __denom);
 #ifdef __USE_ISOC99
 
 /*$
- * requires: __denom != 0;
+ * requires: __denom != 0 and __denom > LLONG_MIN;
  * ensures:  (return.quot == __numer / __denom) and 
  *           (return.rem == __numer % __denom);
  */
@@ -1102,22 +1094,36 @@ lldiv_t lldiv (long long int __numer, long long int __denom);
 
 #endif
 
+
 #if (defined __USE_XOPEN_EXTENDED && !defined __USE_XOPEN2K8) || defined __USE_MISC
 
+static char cvt_buf[1024];
+
 /*$
- * warn: "obsolete function, do not call";
+ * assigns: cvt_buf;
+ * assigns: *__decpt;
+ * assigns: *__sign;
+ * ensures: valid_primed_string(cvt_buf);
+ * ensures: return == cvt_buf;
  */
 char *ecvt (double __value, int __ndigit, int *__restrict __decpt,
             int *__restrict __sign);
 
 /*$
- * warn: "obsolete function, do not call";
+ * assigns: cvt_buf;
+ * assigns: *__decpt;
+ * assigns: *__sign;
+ * ensures: valid_primed_string(cvt_buf);
+ * ensures: return == cvt_buf;
  */
 char *fcvt (double __value, int __ndigit, int *__restrict __decpt,
             int *__restrict __sign);
 
 /*$
- * warn: "obsolete function, do not call";
+ * requires: valid_bytes(__buf, __ndigit);
+ * assigns: __buf[0, __ndigit[;
+ * ensures: valid_primed_string(__buf);
+ * ensures: return == __buf;
  */
 char *gcvt (double __value, int __ndigit, char *__buf);
 
@@ -1126,45 +1132,71 @@ char *gcvt (double __value, int __ndigit, char *__buf);
 #ifdef __USE_MISC
 
 /*$
- * warn: "obsolete function, do not call";
+ * assigns: cvt_buf;
+ * assigns: *__decpt;
+ * assigns: *__sign;
+ * ensures: valid_primed_string(cvt_buf);
+ * ensures: return == cvt_buf;
  */
 char *qecvt (long double __value, int __ndigit,
              int *__restrict __decpt, int *__restrict __sign);
 
 /*$
- * warn: "obsolete function, do not call";
+ * assigns: cvt_buf;
+ * assigns: *__decpt;
+ * assigns: *__sign;
+ * ensures: valid_primed_string(cvt_buf);
+ * ensures: return == cvt_buf;
  */
 char *qfcvt (long double __value, int __ndigit,
              int *__restrict __decpt, int *__restrict __sign);
 
 /*$
- * warn: "obsolete function, do not call";
+ * assigns: cvt_buf;
+ * ensures: valid_primed_string(cvt_buf);
+ * ensures: return == cvt_buf;
  */
 char *qgcvt (long double __value, int __ndigit, char *__buf);
 
 /*$
- * warn: "obsolete function, do not call";
+ * requires: valid_bytes(__buf, __len);
+ * assigns: *__decpt;
+ * assigns: *__sign;
+ * ensures: valid_primed_substring(cvt_buf, __len);
+ * ensures: return in [-1,0];
  */
 int ecvt_r (double __value, int __ndigit, int *__restrict __decpt,
             int *__restrict __sign, char *__restrict __buf,
             size_t __len);
 
 /*$
- * warn: "obsolete function, do not call";
+ * requires: valid_bytes(__buf, __len);
+ * assigns: *__decpt;
+ * assigns: *__sign;
+ * ensures: valid_primed_substring(cvt_buf, __len);
+ * ensures: return in [-1,0];
  */
 int fcvt_r (double __value, int __ndigit, int *__restrict __decpt,
             int *__restrict __sign, char *__restrict __buf,
             size_t __len);
 
 /*$
- * warn: "obsolete function, do not call";
+ * requires: valid_bytes(__buf, __len);
+ * assigns: *__decpt;
+ * assigns: *__sign;
+ * ensures: valid_primed_substring(cvt_buf, __len);
+ * ensures: return in [-1,0];
  */
 int qecvt_r (long double __value, int __ndigit,
              int *__restrict __decpt, int *__restrict __sign,
              char *__restrict __buf, size_t __len);
 
 /*$
- * warn: "obsolete function, do not call";
+ * requires: valid_bytes(__buf, __len);
+ * assigns: *__decpt;
+ * assigns: *__sign;
+ * ensures: valid_primed_substring(cvt_buf, __len);
+ * ensures: return in [-1,0];
  */
 int qfcvt_r (long double __value, int __ndigit,
              int *__restrict __decpt, int *__restrict __sign,
@@ -1174,7 +1206,7 @@ int qfcvt_r (long double __value, int __ndigit,
 
 
 /*$
- * requires: __s != NULL implies valid_bytes(__s, __n);
+ * requires: __s == NULL or valid_bytes(__s, __n);
  *
  * case "shift" {
  *   assumes:  __s != NULL;
@@ -1188,7 +1220,7 @@ int qfcvt_r (long double __value, int __ndigit,
 int mblen (const char *__s, size_t __n);
 
 /*$
- * requires: __s != NULL implies valid_bytes(__s, __n);
+ * requires: __s == NULL or valid_bytes(__s, __n);
  *
  * case "shift" {
  *   assumes:  __s != NULL and __pwc == NULL;
@@ -1209,13 +1241,13 @@ int mbtowc (wchar_t *__restrict __pwc,
             const char *__restrict __s, size_t __n);
 
 /*$
- * requires: __s != NULL implies valid_bytes(__s, MB_LEN_MAX);
+ * requires: __s == NULL or valid_bytes(__s, MB_LEN_MAX);
  *
  * case "shift" {
  *   assumes: __s != NULL; 
- *   assigns: __s[0, MB_LEN_MAX - 1];
+ *   assigns: __s[0, MB_LEN_MAX[;
  *   ensures: return in [-1, MB_LEN_MAX];
- * }
+ *  }
  *
  * case "reset" {
  *   assumes: __s == NULL;
@@ -1224,7 +1256,7 @@ int mbtowc (wchar_t *__restrict __pwc,
 int wctomb (char *__s, wchar_t __wchar);
 
 /*$
- * requires: __dst != NULL implies valid_wchars(__dst, __len);
+ * requires: __dst == NULL or valid_wchars(__dst, __len);
  * requires: valid_string(__src);
  *
  * case "copy" {
@@ -1240,7 +1272,7 @@ size_t mbstowcs (wchar_t *__restrict __dst,
                  const char *__restrict __src, size_t __len);
 
 /*$
- * requires: __dst != NULL implies valid_bytes(__dst, __len);
+ * requires: __dst == NULL or valid_bytes(__dst, __len);
  * requires: valid_wide_string(__src);
  *
  * case "copy" {
@@ -1338,7 +1370,7 @@ static char _ptsname_buf[1024]; // TODO: fix size
  * requires: __fd in FileDescriptor;
  *
  * case "success" {
- *   assigns: _ptsname_buf[0, size(_ptsname_buf) - offset(_ptsname_buf) - 1];
+ *   assigns: _ptsname_buf[0, (size(_ptsname_buf) - offset(_ptsname_buf))[;
  *   ensures: valid_primed_string(_ptsname_buf);
  *   ensures: return == (char*)_ptsname_buf;
  * }
@@ -1389,8 +1421,8 @@ int getpt (void);
 #ifdef __USE_MISC
 
 /*$
- * requires: valid_ptr_range(__loadavg, 0, __nelem - 1);
- * assigns:  __loadavg[0, __nelem - 1];
+ * requires: valid_bytes(__loadavg, __nelem * sizeof_type(double));
+ * assigns:  __loadavg[0, __nelem[;
  * ensures:  return in [-1, __nelem];
  */
 int getloadavg (double __loadavg[], int __nelem);

@@ -63,8 +63,6 @@ _FILE_ *_alloc_std_stream();
 
 
 
-
-
 /*$$$
  * assigns: stdin;
  * assigns: stdout;
@@ -76,9 +74,6 @@ _FILE_ *_alloc_std_stream();
  * ensures: stdout' == fstdout;
  * ensures: stderr' == fstderr;
  */
-
-
-
 
 
 
@@ -172,18 +167,18 @@ static char _tmpnam_buf[L_tmpnam];
 /*$
  * warn: "avoid using function tmpnam";
  *
- * requires: __s != NULL implies valid_bytes(__s, L_tmpnam);
+ * requires: __s == NULL or valid_bytes(__s, L_tmpnam);
  *
  * case "use_s" {
  *   assumes: __s != NULL;
- *   assigns: __s[0, L_tmpnam - 1];
+ *   assigns: __s[0, L_tmpnam[;
  *   ensures: valid_primed_substring(__s, L_tmpnam);
  *   ensures: return == __s;
  * }
  * 
  * case "use_static" {
  *   assumes: __s == NULL;
- *   assigns: _tmpnam_buf[0, size(_tmpnam_buf) - 1];
+ *   assigns: _tmpnam_buf[0, size(_tmpnam_buf)[;
  *   ensures: valid_primed_string(_tmpnam_buf);
  *   ensures: return == _tmpnam_buf;
  * }
@@ -201,7 +196,7 @@ char *tmpnam (char *__s);
  * requires: valid_bytes(__s, L_tmpnam);
  *
  * case "success" {
- *   assigns: __s[0, L_tmpnam - 1];
+ *   assigns: __s[0, L_tmpnam[;
  *   ensures: valid_primed_substring(__s, L_tmpnam);
  *   ensures: return == __s;
  * }
@@ -238,7 +233,7 @@ int fclose (FILE *__stream);
 
 
 /*$
- * requires: __stream != NULL implies __stream in File;
+ * requires: __stream == NULL or __stream in File;
  *
  * case "success" {
  *   assumes:  __stream != NULL;
@@ -331,7 +326,7 @@ FILE *fdopen (int __fd, const char *__modes);
  * // TODO: if __s != NULL, the buffer pointed to by __s becomes volatile
  *
  * requires: valid_string(__modes);
- * requires: __s != NULL implies valid_bytes(__s, __len);
+ * requires: __s == NULL or valid_bytes(__s, __len);
  *
  * case "success" {
  *   local: FILE* r = _alloc_FILE();
@@ -365,7 +360,7 @@ FILE *open_memstream (char **__bufloc, size_t *__sizeloc);
  * // TODO: __buf becomes volatile
  *
  * requires: __stream in File;
- * requires: __buf != NULL implies valid_bytes(__buf, BUFSIZ);
+ * requires: __buf == NULL or valid_bytes(__buf, BUFSIZ);
  */
 void setbuf (FILE *__restrict __stream, char *__restrict __buf);
 
@@ -373,7 +368,7 @@ void setbuf (FILE *__restrict __stream, char *__restrict __buf);
  * // TODO: __buf becomes volatile
  *
  * requires: __stream in File;
- * requires: __buf != NULL implies valid_bytes(__buf, __n);
+ * requires: __buf == NULL or valid_bytes(__buf, __n);
  * requires: __modes in [0, 2];
  *
  * case "success" {
@@ -393,7 +388,7 @@ int setvbuf (FILE *__restrict __stream, char *__restrict __buf,
  * // TODO: __buf becomes volatile
  *
  * requires: __stream in File;
- * requires: __buf != NULL implies valid_bytes(__buf, __size);
+ * requires: __buf == NULL or valid_bytes(__buf, __size);
  */
 void setbuffer (FILE *__restrict __stream, char *__restrict __buf,
                 size_t __size);
@@ -437,7 +432,7 @@ int vsscanf (const char *__restrict __s,
 
 /*$
  * requires: __stream in File;
- * ensures: return in [0, 127] or return == EOF;
+ * ensures: return in [0, 255] or return == EOF;
  */
 int fgetc (FILE *__stream);
 
@@ -454,7 +449,7 @@ int getc (FILE *__stream);
 
 
 /*$
- * ensures: return in [0, 127] or return == EOF;
+ * ensures: return in [0, 255] or return == EOF;
  */
 int getchar (void);
 
@@ -550,24 +545,16 @@ int putw (int __w, FILE *__stream);
 /*$
  * requires: __stream in File;
  * requires: __n >= 0;
+ * requires: valid_bytes(__s, __n);
+ * assigns:  __s[0, __n[;
+ * ensures:  valid_primed_substring(__s, __n);
  * ensures:  (return == __s) or (return == NULL);
- *
- * case "non-zero" {
- *   assumes: __n > 0;
- *   requires: valid_bytes(__s, __n);
- *   assigns:  __s[0, __n - 1];
- *   ensures:  valid_primed_substring(__s, __n );
- * }
- *
- * case "nop" {
- *   assumes: __n == 0;
- * }
  */
 char *fgets (char *__restrict __s, int __n, FILE *__restrict __stream);
 
 /*$
  * warn: "gets: dangerous function, do not use";
- * assigns: __s[0, bytes(__s) - offset(__s) - 1];
+ * assigns: __s[0, (bytes(__s) - offset(__s))[;
  * ensures: (return == __s) or (return == NULL);
  */
 char *gets (char *__s);
@@ -582,7 +569,7 @@ char *fgets_unlocked (char *__restrict __s, int __n,
 
 /*$
  * requires: __stream in File;
- * requires: *__lineptr != NULL implies valid_bytes(*__lineptr, *__n);
+ * requires: *__lineptr == NULL or valid_bytes(*__lineptr, *__n);
  * 
  * case "realloc" {
  *   assumes:  *__lineptr != NULL;
@@ -664,8 +651,8 @@ int ungetc (int __c, FILE *__stream);
 
 /*$
  * requires: __stream in File;
- * requires: valid_bytes(__ptr, __size * __n);
- * assigns:  ((char*)__ptr)[0, (int)__size * (int)__n - 1];
+ * requires: __size == 0 or __n == 0 or valid_bytes(__ptr, __size * __n);
+ * assigns:  ((char*)__ptr)[0, (__size * __n)[;
  * ensures:  return in [0, __n];
  */
 size_t fread (void *__restrict __ptr, size_t __size,
@@ -879,18 +866,18 @@ int pclose (FILE *__stream);
 static char _ctermid_buf[L_ctermid];
 
 /*$
- * requires: __s != NULL implies valid_bytes(__s, L_ctermid);
+ * requires: __s == NULL or valid_bytes(__s, L_ctermid);
  *
  * case "buf" {
  *   assumes: __s != NULL;
- *   assigns: __s[0, L_ctermid - 1];
+ *   assigns: __s[0, L_ctermid[;
  *   ensures: valid_primed_substring(__s, L_ctermid);
  *   ensures: return == __s;
  * }
  *
  * case "nobuf" {
  *   assumes: __s == NULL;
- *   assigns: _ctermid_buf[0, L_ctermid - 1];
+ *   assigns: _ctermid_buf[0, L_ctermid[;
  *   ensures: valid_primed_substring(_ctermid_buf, L_ctermid);
  *   ensures: return == &_ctermid_buf[0];
  * }
@@ -905,18 +892,18 @@ char *ctermid (char *__s);
 static char _cuserid_buf[L_cuserid];
 
 /*$
- * requires: __s != NULL implies valid_bytes(__s, L_cuserid);
+ * requires: __s == NULL or valid_bytes(__s, L_cuserid);
  *
  * case "buf" {
  *   assumes: __s != NULL;
- *   assigns: __s[0, L_cuserid - 1];
+ *   assigns: __s[0, L_cuserid[;
  *   ensures: valid_primed_substring(__s, L_cuserid);
  *   ensures: return == __s;
  * }
  *
  * case "nobuf" {
  *   assumes: __s == NULL;
- *   assigns: _cuserid_buf[0, L_cuserid - 1];
+ *   assigns: _cuserid_buf[0, L_cuserid[;
  *   ensures: valid_primed_substring(_cuserid_buf, L_cuserid);
  *   ensures: return == &_cuserid_buf[0];
  * }

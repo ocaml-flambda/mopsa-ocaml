@@ -20,6 +20,7 @@
 /****************************************************************************/
 
 
+#include <stddef.h>
 #include <limits.h>
 
 
@@ -27,7 +28,7 @@
  * predicate valid_string(s):
  *   valid_ptr(s) and
  *   size(s) >= 1 and
- *   exists int _i in [0, size(s) - offset(s) - 1]: s[_i] == 0
+ *   exists int _i in [0, (size(s) - offset(s)) [: s[_i] == 0
  * ;
  */
 
@@ -35,23 +36,23 @@
 /*$$
  * predicate valid_primed_string(s):
  *   valid_ptr(s) and
- *   exists int _i in [0, size(s) - offset(s) - 1]: (s[_i])' == 0
+ *   exists int _i in [0, (size(s) - offset(s)) [: (s[_i])' == 0
  * ;
  */
 
 
 /*$$
  * predicate valid_substring(s, n):
- *   valid_ptr(s) and
- *   exists int _i in [0, n - 1]: s[_i] == 0
+ *   (n > 0 implies valid_ptr(s)) and
+ *   exists int _i in [0, n[: s[_i] == 0
  * ;
  */
 
 
 /*$$
  * predicate valid_primed_substring(s, n):
- *   valid_ptr(s) and
- *   exists int _i in [0, n - 1]: (s[_i])' == 0
+ *   (n > 0 implies valid_ptr(s)) and
+ *   exists int _i in [0, n[: (s[_i])' == 0
  * ;
  */
 
@@ -67,7 +68,31 @@
  * ensures: valid_string(str);
  * ensures: return == str;
  */
-static char *_mopsa_new_valid_string();
+char *_mopsa_new_valid_string();
+
+/*$
+ * local:   char * str = new ReadOnlyMemory;
+ * ensures: size(str) == INT_MAX;
+ * ensures: valid_string(str);
+ * ensures: return == str;
+ */
+char *_mopsa_new_readonly_string();
+
+/*$
+ * local:   char * str = new Memory;
+ * ensures: size(str) == max;
+ * ensures: valid_string(str);
+ * ensures: return == str;
+ */
+char *_mopsa_new_valid_string_max(size_t max);
+
+/*$
+ * local:   char * str = new ReadOnlyMemory;
+ * ensures: size(str) == max;
+ * ensures: valid_string(str);
+ * ensures: return == str;
+ */
+char *_mopsa_new_readonly_string_max(size_t max);
 
 
 /*$
@@ -96,7 +121,7 @@ void _mopsa_memrand(char *s, unsigned int i, unsigned int j);
 
 /*$
  * requires: valid_ptr_range(s, 0, size(s) - offset(s) - 1);
- * assigns: s[0, size(s) - offset(s) - 1];
+ * assigns: s[0, (size(s) - offset(s)) [;
  * ensures: valid_primed_string(s);
  */
 void _mopsa_strrand(char *s);
@@ -105,7 +130,7 @@ void _mopsa_strrand(char *s);
  * case "non-empty" {
  *   assumes: n >= 1;
  *   requires: valid_ptr_range(s, 0, n - 1);
- *   assigns: s[0, n - 1];
+ *   assigns: s[0, n [;
  *   ensures: valid_primed_substring(s,n);
  * }
  *
@@ -142,9 +167,9 @@ void _mopsa_memcpy(char *dst, char *src, unsigned int i, unsigned int j);
 
 /*$$
  * predicate in_string(x,s):
- *   exists int i in [0, bytes(s) - offset(s) - 1]:
- *     x == s + i and
- *     forall int j in [0, x - 1]: s[i] != 0
+ *   exists int _i in [0, (bytes(s) - offset(s))[:
+ *     (x == s + _i and
+ *     forall int _j in [0, _i[: s[_j] != 0)
  *  ;
  */
 
@@ -152,22 +177,36 @@ void _mopsa_memcpy(char *dst, char *src, unsigned int i, unsigned int j);
  * predicate valid_wide_string(s):
  *   valid_ptr(s) and
  *   size(s) >= 1 and
- *   exists int _i in [0, ((bytes(s) - offset(s)) / sizeof_type(wchar_t)) - 1]: s[_i] == 0
+ *   exists int _i in [0, ((bytes(s) - offset(s)) / sizeof_type(wchar_t))[: s[_i] == 0
+ * ;
+ */
+
+/*$$
+ * predicate valid_wide_substring(s, n):
+ *   (n > 0 implies valid_ptr(s)) and
+ *   exists int _i in [0, n[: s[_i] == 0
  * ;
  */
 
 /*$$
  * predicate valid_primed_wide_string(s):
  *   valid_ptr(s) and
- *   exists int _i in [0, ((bytes(s) - offset(s)) / sizeof_type(wchar_t)) - 1]: (s[_i])' == 0
+ *   exists int _i in [0, ((bytes(s) - offset(s)) / sizeof_type(wchar_t))[: (s[_i])' == 0
+ * ;
+ */
+
+/*$$
+ * predicate valid_primed_wide_substring(s, n):
+ *   (n > 0 implies valid_ptr(s)) and
+ *   exists int _i in [0, n[: (s[_i])' == 0
  * ;
  */
 
 /*$$
  * predicate in_wide_string(x,s):
- *   exists int i in [0, ((bytes(s) - offset(s)) / sizeof_type(wchar_t)) - 1]:
- *     x == s + i and
- *     forall int j in [0, x - 1]: s[i] != 0
+ *   exists int _i in [0, ((bytes(s) - offset(s)) / sizeof_type(wchar_t))[:
+ *     (x == s + _i and
+ *     forall int _j in [0, _i[: s[_j] != 0)
  *  ;
  */
 
@@ -178,8 +217,21 @@ void _mopsa_memcpy(char *dst, char *src, unsigned int i, unsigned int j);
  * ;
  */
 
+
+/*$$
+ * predicate in_bytes(r, x, n):
+ *    exists int _i in [0, n]: r == x + _i
+ * ;
+ */
+
 /*$$
  * predicate valid_wchars(s, n):
  *   n > 0 implies (valid_ptr(s) and bytes(s) >= offset(s) + n * sizeof_type(wchar_t))
+ * ;
+ */
+
+/*$$
+ * predicate in_wchars(r, x, n):
+ *    exists int _i in [0, n]: r == x + _i
  * ;
  */

@@ -36,19 +36,15 @@ int *__errno_location (void);
 
 
 /*$$$
- * local: char* addr = new ReadOnlyString;
+ * local: char* addr = _mopsa_new_readonly_string();
  * assigns: program_invocation_name;
- * ensures: size(addr) == INT_MAX;
- * ensures: valid_string(addr);
  * ensures: program_invocation_name' == addr;
  */
 const char *program_invocation_name;
 
 /*$$$
- * local: char* addr = new ReadOnlyString;
+ * local: char* addr = _mopsa_new_readonly_string();
  * assigns: program_invocation_short_name;
- * ensures: size(addr) == INT_MAX;
- * ensures: valid_string(addr);
  * ensures: program_invocation_short_name' == addr;
  */
 const char *program_invocation_short_name;

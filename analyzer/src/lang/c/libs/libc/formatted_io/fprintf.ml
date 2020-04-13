@@ -191,7 +191,7 @@ struct
       OptionExt.return
 
     (* 𝔼⟦ error(...) ⟧ *)
-    | E_c_builtin_call("error", status ::errnum :: format :: args) ->
+    | E_c_builtin_call("error", status :: errnum :: format :: args) ->
       check_args format args exp.erange man flow >>$? fun () flow ->
       error_error status exp.erange man flow >>$? fun () flow ->
       Eval.singleton (mk_top s32 exp.erange) flow |>

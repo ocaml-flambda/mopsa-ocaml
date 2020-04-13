@@ -49,9 +49,8 @@ intmax_t imaxabs (intmax_t __n);
 imaxdiv_t imaxdiv (intmax_t __numer, intmax_t __denom);
 
 /*$
- * requires: valid_string(__nptr);
  * requires: __base == 0 or __base in [2, 36];
- * requires: __endptr != NULL implies valid_ptr(__endptr);
+ * requires: __endptr == NULL or valid_ptr(__endptr);
  * assigns:  _errno;
  *
  * case "with_endptr" {
@@ -63,15 +62,15 @@ imaxdiv_t imaxdiv (intmax_t __numer, intmax_t __denom);
  *
  *  case "without_endptr" {
  *   assumes: __endptr == NULL;
+ *   requires: valid_string(__nptr);
  *  }
  */
 intmax_t strtoimax (const char *__restrict __nptr,
                     char **__restrict __endptr, int __base);
 
 /*$
- * requires: valid_string(__nptr);
  * requires: __base == 0 or __base in [2, 36];
- * requires: __endptr != NULL implies valid_ptr(__endptr);
+ * requires: __endptr == NULL or valid_ptr(__endptr);
  * assigns:  _errno;
  *
  * case "with_endptr" {
@@ -83,15 +82,15 @@ intmax_t strtoimax (const char *__restrict __nptr,
  *
  *  case "without_endptr" {
  *   assumes: __endptr == NULL;
+ *   requires: valid_string(__nptr);
  *  }
  */
 uintmax_t strtoumax (const char *__restrict __nptr,
                      char ** __restrict __endptr, int __base);
 
 /*$
- * requires: valid_wide_string(__nptr);
  * requires: __base == 0 or __base in [2, 36];
- * requires: __endptr != NULL implies valid_ptr(__endptr);
+ * requires: __endptr == NULL or valid_ptr(__endptr);
  * assigns:  _errno;
  *
  * case "with_endptr" {
@@ -103,15 +102,15 @@ uintmax_t strtoumax (const char *__restrict __nptr,
  *
  *  case "without_endptr" {
  *   assumes: __endptr == NULL;
+ *   requires: valid_wide_string(__nptr);
  *  }
  */
 intmax_t wcstoimax (const wchar_t *__restrict __nptr,
                     wchar_t **__restrict __endptr, int __base);
 
 /*$
- * requires: valid_wide_string(__nptr);
  * requires: __base == 0 or __base in [2, 36];
- * requires: __endptr != NULL implies valid_ptr(__endptr);
+ * requires: __endptr == NULL or valid_ptr(__endptr);
  * assigns:  _errno;
  *
  * case "with_endptr" {
@@ -123,6 +122,7 @@ intmax_t wcstoimax (const wchar_t *__restrict __nptr,
  *
  *  case "without_endptr" {
  *   assumes: __endptr == NULL;
+ *   requires: valid_wide_string(__nptr);
  *  }
  */
 uintmax_t wcstoumax (const wchar_t *__restrict __nptr,

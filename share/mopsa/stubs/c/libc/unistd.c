@@ -297,7 +297,7 @@ int chdir (const char *__path);
 int fchdir (int __fd);
 
 /*$
- * requires: __buf != NULL implies valid_bytes(__buf, __size);
+ * requires: __buf == NULL or valid_bytes(__buf, __size);
  *
  * case "noalloc" {
  *   assumes: __buf != NULL;
@@ -313,10 +313,8 @@ int fchdir (int __fd);
  *
  * case "alloc" {
  *   assumes: __buf == NULL;
- *   local:   char* r = new Memory;
+ *   local:   char* r = _mopsa_new_valid_string_max(PATH_MAX);
  *   ensures: return == r;
- *   ensures: size(return) <= PATH_MAX;
- *   ensures: valid_string(return);
  * }
  *   
  *  case "failure" {
@@ -329,10 +327,8 @@ char *getcwd (char *__buf, size_t __size);
 
 /*$
  * case "success" {
- *   local:   char* r = new Memory;
+ *   local:   char* r = _mopsa_new_valid_string_max(PATH_MAX);
  *   ensures: return == r;
- *   ensures: size(return) <= PATH_MAX;
- *   ensures: valid_string(return);
  * }
  *   
  *  case "failure" {
@@ -617,7 +613,7 @@ long int sysconf (int __name);
 
 
 /*$
- * requires: __buf != NULL implies valid_bytes(__buf, __len);
+ * requires: __buf == NULL or valid_bytes(__buf, __len);
  *
  * case "copy" {
  *   assumes: __buf != NULL;
@@ -1584,9 +1580,7 @@ int fdatasync (int __fildes);
  * requires: valid_bytes(__salt, 2);
  * 
  * case "succes" {
- *   local: char* r = new ReadOnlyMemory;
- *   ensures: size(r) == size(__key) - offset(__key);
- *   ensures: valid_string(r);
+ *   local: char* r = _mopsa_new_readonly_string_max(size(__key) - offset(__key));
  *   ensures: return == r;
  * }
  *
