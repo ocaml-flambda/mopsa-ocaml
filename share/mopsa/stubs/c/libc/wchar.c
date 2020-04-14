@@ -405,14 +405,14 @@ wint_t btowc (int __c);
 int wctob (wint_t __c);
 
 /*$
- * requires: __ps == NULL or valid_ptr(__ps);
+ * requires: null_or_valid_ptr(__ps);
  */
 int mbsinit (const mbstate_t *__ps);
 
 /*$
- * requires: __s == NULL or valid_bytes(__s, __n);
- * requires: __s == NULL or __pwc == NULL or valid_ptr(__pwc);
- * requires: __p == NULL or valid_ptr(__p);
+ * requires: null_or_valid_bytes(__s, __n);
+ * requires: __s != NULL implies null_or_valid_ptr(__pwc);
+ * requires: null_or_valid_ptr(__p);
  * assigns: _errno;
  * ensures: return in [0, __n] or return == -1 or return == -2;
  *
@@ -461,8 +461,8 @@ size_t mbrtowc (wchar_t *__restrict __pwc,
                 mbstate_t *__restrict __p) ;
 
 /*$
- * requires: __s == NULL or valid_bytes(__s, MB_LEN_MAX);
- * requires: __ps == NULL or valid_ptr(__ps);
+ * requires: null_or_valid_bytes(__s, MB_LEN_MAX);
+ * requires: null_or_valid_ptr(__ps);
  * assigns: _errno;
  * ensures: return in [0, MB_LEN_MAX] or return == -1;
  *
@@ -495,7 +495,7 @@ size_t wcrtomb (char *__restrict __s, wchar_t __wc, mbstate_t *__restrict __ps);
 
 /*$
  * requires: valid_bytes(__s, __n);
- * requires: __ps == NULL or valid_ptr(__ps);
+ * requires: null_or_valid_ptr(__ps);
  * assigns: _errno;
  * ensures: return in [0, __n] or return == -1 or return == -2;
  *
@@ -517,8 +517,8 @@ size_t __mbrlen (const char *__restrict __s, size_t __n, mbstate_t *__restrict _
 
 
 /*$
- * requires: __dst == NULL or valid_wchars(__dst, __len);
- * requires: __ps == NULL or valid_ptr(__ps);
+ * requires: null_or_valid_wchars(__dst, __len);
+ * requires: null_or_valid_ptr(__ps);
  * local: size_t src_len = strlen(*__src);
  * assigns: _errno;
  * assigns: *__src;
@@ -554,8 +554,8 @@ size_t mbsrtowcs (wchar_t *__restrict __dst,
                   mbstate_t *__restrict __ps);
 
 /*$
- * requires: __dst == NULL or valid_bytes(__dst, __len);
- * requires: __ps == NULL or valid_ptr(__ps);
+ * requires: null_or_valid_bytes(__dst, __len);
+ * requires: null_or_valid_ptr(__ps);
  * local: size_t src_len = wcslen(*__src);
  * assigns: _errno;
  * assigns: *__src;
@@ -592,8 +592,8 @@ size_t wcsrtombs (char *__restrict __dst,
 
 /*$
  * requires: valid_bytes(*__src,__nmc) or valid_string(*__src);
- * requires: __dst == NULL or valid_wchars(__dst, __len);
- * requires: __ps == NULL or valid_ptr(__ps);
+ * requires: null_or_valid_wchars(__dst, __len);
+ * requires: null_or_valid_ptr(__ps);
  * local: size_t src_len = strnlen(*__src, __nmc);
  * assigns: _errno;
  * assigns: *__src;
@@ -630,8 +630,8 @@ size_t mbsnrtowcs (wchar_t *__restrict __dst,
 
 /*$
  * requires:  valid_wchars(*__src,__nwc) or valid_wide_string(*__src);
- * requires: __dst == NULL or valid_bytes(__dst, __len);
- * requires: __ps == NULL or valid_ptr(__ps);
+ * requires: null_or_valid_bytes(__dst, __len);
+ * requires: null_or_valid_ptr(__ps);
  * local: size_t src_len = wcsnlen(*__src, __nwc);
  * assigns: _errno;
  * assigns: *__src;
@@ -668,7 +668,7 @@ size_t wcsnrtombs (char *__restrict __dst,
                    mbstate_t *__restrict __ps);
 
 /*$
- * requires: __endptr == NULL or valid_ptr(__endptr);
+ * requires: null_or_valid_ptr(__endptr);
  * assigns: _errno;
  *
  * case "with_endptr" {
@@ -686,7 +686,7 @@ size_t wcsnrtombs (char *__restrict __dst,
 double wcstod (const wchar_t *__restrict __nptr, wchar_t **__restrict __endptr);
 
 /*$
- * requires: __endptr == NULL or valid_ptr(__endptr);
+ * requires: null_or_valid_ptr(__endptr);
  * assigns: _errno;
  *
  * case "with_endptr" {
@@ -704,7 +704,7 @@ double wcstod (const wchar_t *__restrict __nptr, wchar_t **__restrict __endptr);
 float wcstof (const wchar_t *__restrict __nptr, wchar_t **__restrict __endptr);
 
 /*$
- * requires: __endptr == NULL or valid_ptr(__endptr);
+ * requires: null_or_valid_ptr(__endptr);
  * assigns: _errno;
  *
  * case "with_endptr" {
@@ -723,7 +723,7 @@ float wcstof (const wchar_t *__restrict __nptr, wchar_t **__restrict __endptr);
 long double wcstold (const wchar_t *__restrict __nptr, wchar_t **__restrict __endptr);
 
 /*$
- * requires: __endptr == NULL or valid_ptr(__endptr);
+ * requires: null_or_valid_ptr(__endptr);
  * requires: __base == 0 or __base in [2, 36];
  * assigns: _errno;
  *
@@ -743,7 +743,7 @@ long double wcstold (const wchar_t *__restrict __nptr, wchar_t **__restrict __en
 long int wcstol (const wchar_t *__restrict __nptr, wchar_t **__restrict __endptr, int __base);
 
 /*$
- * requires: __endptr == NULL or valid_ptr(__endptr);
+ * requires: null_or_valid_ptr(__endptr);
  * requires: __base == 0 or __base in [2, 36];
  * assigns: _errno;
  *
@@ -764,7 +764,7 @@ unsigned long int wcstoul (const wchar_t *__restrict __nptr,
                            wchar_t **__restrict __endptr, int __base);
      
 /*$
- * requires: __endptr == NULL or valid_ptr(__endptr);
+ * requires: null_or_valid_ptr(__endptr);
  * requires: __base == 0 or __base in [2, 36];
  * assigns: _errno;
  *
@@ -785,7 +785,7 @@ long long int wcstoll (const wchar_t *__restrict __nptr,
                        wchar_t **__restrict __endptr, int __base);
 
 /*$
- * requires: __endptr == NULL or valid_ptr(__endptr);
+ * requires: null_or_valid_ptr(__endptr);
  * requires: __base == 0 or __base in [2, 36];
  * assigns: _errno;
  *

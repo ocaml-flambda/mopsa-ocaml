@@ -297,7 +297,7 @@ int chdir (const char *__path);
 int fchdir (int __fd);
 
 /*$
- * requires: __buf == NULL or valid_bytes(__buf, __size);
+ * requires: null_or_valid_bytes(__buf, __size);
  *
  * case "noalloc" {
  *   assumes: __buf != NULL;
@@ -613,7 +613,7 @@ long int sysconf (int __name);
 
 
 /*$
- * requires: __buf == NULL or valid_bytes(__buf, __len);
+ * requires: null_or_valid_bytes(__buf, __len);
  *
  * case "copy" {
  *   assumes: __buf != NULL;
@@ -1532,8 +1532,8 @@ int lockf (int __fd, int __cmd, __off_t __len);
 /*$
  * requires: __infd in FileDescriptor;
  * requires: __outfd in FileDescriptor;
- * requires: __pinoff == NULL or valid_ptr(__pinoff);
- * requires: __poutoff == NULL or valid_ptr(__poutoff);
+ * requires: null_or_valid_ptr(__pinoff);
+ * requires: null_or_valid_ptr(__poutoff);
  *
  * case "pinoff" {
  *   assumes: __pinoff != NULL;

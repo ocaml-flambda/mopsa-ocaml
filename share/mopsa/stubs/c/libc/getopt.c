@@ -45,7 +45,7 @@ int optopt;
  * assigns: ___argv[0, ___argc[;
  * ensures: optind' in [0, ___argc];
  * ensures: forall int i in [0, ___argc[: exists int j in [0, ___argc[: (___argv[i])' == ___argv[j];
- * ensures: optarg' == NULL or exists int i in [0, ___argc[: in_string(optarg', ___argv[i]);
+ * ensures: optarg' != NULL implies exists int i in [0, ___argc[: in_string(optarg', ___argv[i]);
  * ensures: return in [-1, 255];
  */
 int getopt (int ___argc, char *const *___argv, const char *__shortopts);
@@ -60,7 +60,7 @@ int getopt (int ___argc, char *const *___argv, const char *__shortopts);
  *     forall int j in [0, i[: (
  *       valid_ptr(l[j].name) and
  *       (exists int k in [0, (size(l[j].name) - offset(l[j].name))[: l[j].name[k] == 0) and
- *       (l[j].flag == NULL or valid_ptr(l[j].flag))
+ *       (l[j].flag != NULL implies valid_ptr(l[j].flag))
  *     )
  *   );
  */
@@ -86,7 +86,7 @@ size_t _mopsa_pick(size_t i);
  * requires: valid_string(__shortopts);
  * requires: forall int i in [0, ___argc[: valid_string(___argv[i]);
  * requires: valid_longopt(__longopts);
- * requires: __longind == NULL or valid_ptr(__longind);
+ * requires: null_or_valid_ptr(__longind);
  * local: int len = _mopsa_len_option(__longopts);
  * local: int r = _mopsa_pick(len);
  * assigns: optind;

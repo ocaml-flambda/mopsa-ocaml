@@ -67,7 +67,7 @@ long long int atoll (const char *__nptr);
 #endif
 
 /*$
- * requires: __endptr == NULL or valid_ptr(__endptr);
+ * requires: null_or_valid_ptr(__endptr);
  * assigns: _errno;
  *
  * case "with_endptr" {
@@ -86,7 +86,7 @@ double strtod (const char *__restrict __nptr,
                char **__restrict __endptr);
 
 /*$
- * requires: __endptr == NULL or  valid_ptr(__endptr);
+ * requires: null_or_valid_ptr(__endptr);
  * assigns: _errno;
  *
  * case "with_endptr" {
@@ -109,7 +109,7 @@ double strtod_l (const char *__restrict __nptr,
 
 /*$
  * requires: valid_string(__nptr);
- * requires: __endptr == NULL or valid_ptr(__endptr);
+ * requires: null_or_valid_ptr(__endptr);
  * assigns: _errno;
  *
  * case "with_endptr" {
@@ -127,7 +127,7 @@ float strtof (const char *__restrict __nptr,
               char **__restrict __endptr);
 
 /*$
- * requires: __endptr == NULL or valid_ptr(__endptr);
+ * requires: null_or_valid_ptr(__endptr);
  * assigns: _errno;
  *
  * case "with_endptr" {
@@ -149,7 +149,7 @@ long double strtold (const char *__restrict __nptr,
 
 /*$
  * requires: __base == 0 or __base in [2, 36];
- * requires: __endptr == NULL or valid_ptr(__endptr);
+ * requires: null_or_valid_ptr(__endptr);
  * assigns: _errno;
  *
  * case "with_endptr" {
@@ -170,7 +170,7 @@ long int strtol (const char *__restrict __nptr,
 
 /*$
  * requires: __base == 0 or __base in [2, 36];
- * requires: __endptr == NULL or valid_ptr(__endptr);
+ * requires: null_or_valid_ptr(__endptr);
  * assigns: _errno;
  *
  * case "with_endptr" {
@@ -192,7 +192,7 @@ unsigned long int strtoul (const char *__restrict __nptr,
 
 /*$
  * requires: __base == 0 or __base in [2, 36];
- * requires: __endptr == NULL or valid_ptr(__endptr);
+ * requires: null_or_valid_ptr(__endptr);
  * assigns: _errno;
  *
  * case "with_endptr" {
@@ -212,7 +212,7 @@ long long int strtoq (const char *__restrict __nptr,
 
 /*$
  * requires: __base == 0 or __base in [2, 36];
- * requires: __endptr == NULL or valid_ptr(__endptr);
+ * requires: null_or_valid_ptr(__endptr);
  * assigns: _errno;
  *
  * case "with_endptr" {
@@ -236,7 +236,7 @@ unsigned long long int strtouq (const char *__restrict __nptr,
 
 /*$
  * requires: __base == 0 or __base in [2, 36];
- * requires: __endptr == NULL or valid_ptr(__endptr);
+ * requires: null_or_valid_ptr(__endptr);
  * assigns: _errno;
  *
  * case "with_endptr" {
@@ -256,7 +256,7 @@ long long int strtoll (const char *__restrict __nptr,
 
 /*$
  * requires: __base == 0 or __base in [2, 36];
- * requires: __endptr == NULL or valid_ptr(__endptr);
+ * requires: null_or_valid_ptr(__endptr);
  * assigns: _errno;
  *
  * case "with_endptr" {
@@ -979,7 +979,7 @@ int mkostemps (char *__template, int __suffixlen, int __flags);
 #endif
 
 /*$
- * requires: __command == NULL or valid_string(__command);
+ * requires: null_or_valid_string(__command);
  */
 int system (const char *__command);
 
@@ -1007,7 +1007,7 @@ char *canonicalize_file_name (const char *__name);
 
 /*$
  * requires: valid_string(__name);
- * requires: __resolved == NULL or valid_bytes(__resolved, PATH_MAX);
+ * requires: null_or_valid_bytes(__resolved, PATH_MAX);
  *
  * case "alloc" {
  *   assumes:  __resolved == NULL;
@@ -1206,7 +1206,7 @@ int qfcvt_r (long double __value, int __ndigit,
 
 
 /*$
- * requires: __s == NULL or valid_bytes(__s, __n);
+ * requires: null_or_valid_bytes(__s, __n);
  *
  * case "shift" {
  *   assumes:  __s != NULL;
@@ -1220,7 +1220,7 @@ int qfcvt_r (long double __value, int __ndigit,
 int mblen (const char *__s, size_t __n);
 
 /*$
- * requires: __s == NULL or valid_bytes(__s, __n);
+ * requires: null_or_valid_bytes(__s, __n);
  *
  * case "shift" {
  *   assumes:  __s != NULL and __pwc == NULL;
@@ -1241,7 +1241,7 @@ int mbtowc (wchar_t *__restrict __pwc,
             const char *__restrict __s, size_t __n);
 
 /*$
- * requires: __s == NULL or valid_bytes(__s, MB_LEN_MAX);
+ * requires: null_or_valid_bytes(__s, MB_LEN_MAX);
  *
  * case "shift" {
  *   assumes: __s != NULL; 
@@ -1256,7 +1256,7 @@ int mbtowc (wchar_t *__restrict __pwc,
 int wctomb (char *__s, wchar_t __wchar);
 
 /*$
- * requires: __dst == NULL or valid_wchars(__dst, __len);
+ * requires: null_or_valid_wchars(__dst, __len);
  * requires: valid_string(__src);
  *
  * case "copy" {
@@ -1272,7 +1272,7 @@ size_t mbstowcs (wchar_t *__restrict __dst,
                  const char *__restrict __src, size_t __len);
 
 /*$
- * requires: __dst == NULL or valid_bytes(__dst, __len);
+ * requires: null_or_valid_bytes(__dst, __len);
  * requires: valid_wide_string(__src);
  *
  * case "copy" {

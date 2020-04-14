@@ -42,7 +42,7 @@ char * _local_buf;
 
 
 /*$
- * requires: __locale == NULL or valid_string(__locale);
+ * requires: null_or_valid_string(__locale);
  *
  * case "success" {
  *   local: char *addr = _mopsa_new_readonly_string_max(LOCAL_BUF_SIZE);

@@ -25,13 +25,24 @@
 
 
 /*$$
+ * predicate null_or_valid_ptr(s):
+ *   s != NULL implies valid_ptr(s);
+ */
+
+
+
+/*$$
+ * predicate null_or_valid_string(s):
+ *   s != NULL implies valid_string(s);
+ */
+
+/*$$
  * predicate valid_string(s):
  *   valid_ptr(s) and
  *   size(s) >= 1 and
  *   exists int _i in [0, (size(s) - offset(s)) [: s[_i] == 0
  * ;
  */
-
 
 /*$$
  * predicate valid_primed_string(s):
@@ -174,12 +185,18 @@ void _mopsa_memcpy(char *dst, char *src, unsigned int i, unsigned int j);
  */
 
 /*$$
+ * predicate null_or_valid_wide_string(s):
+ *   s != NULL implies valid_wide_string(s);
+ */
+
+/*$$
  * predicate valid_wide_string(s):
  *   valid_ptr(s) and
  *   size(s) >= 1 and
  *   exists int _i in [0, ((bytes(s) - offset(s)) / sizeof_type(wchar_t))[: s[_i] == 0
  * ;
  */
+
 
 /*$$
  * predicate valid_wide_substring(s, n):
@@ -217,6 +234,12 @@ void _mopsa_memcpy(char *dst, char *src, unsigned int i, unsigned int j);
  * ;
  */
 
+/*$$
+ * predicate null_or_valid_bytes(s, n):
+ *   n > 0 implies s != NULL implies (valid_ptr(s) and bytes(s) >= offset(s) + n)
+ * ;
+ */
+
 
 /*$$
  * predicate in_bytes(r, x, n):
@@ -227,6 +250,12 @@ void _mopsa_memcpy(char *dst, char *src, unsigned int i, unsigned int j);
 /*$$
  * predicate valid_wchars(s, n):
  *   n > 0 implies (valid_ptr(s) and bytes(s) >= offset(s) + n * sizeof_type(wchar_t))
+ * ;
+ */
+
+/*$$
+ * predicate null_or_valid_wchars(s, n):
+ *   n > 0 implies s != NULL implies (valid_ptr(s) and bytes(s) >= offset(s) + n * sizeof_type(wchar_t))
  * ;
  */
 

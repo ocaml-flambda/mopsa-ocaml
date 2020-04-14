@@ -598,7 +598,7 @@ char *strerror_l (int __errnum, locale_t __l);
 void explicit_bzero (void *__s, size_t __n);
 
 /*$
- * requires: __stringp == NULL or valid_ptr(__stringp);
+ * requires: null_or_valid_ptr(__stringp);
  *
  * case "nop" {
  *   assumes: __stringp == NULL;

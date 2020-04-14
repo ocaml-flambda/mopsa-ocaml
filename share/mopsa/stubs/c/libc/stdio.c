@@ -167,7 +167,7 @@ static char _tmpnam_buf[L_tmpnam];
 /*$
  * warn: "avoid using function tmpnam";
  *
- * requires: __s == NULL or valid_bytes(__s, L_tmpnam);
+ * requires: null_or_valid_bytes(__s, L_tmpnam);
  *
  * case "use_s" {
  *   assumes: __s != NULL;
@@ -233,7 +233,7 @@ int fclose (FILE *__stream);
 
 
 /*$
- * requires: __stream == NULL or __stream in File;
+ * requires: __stream != NULL implies __stream in File;
  *
  * case "success" {
  *   assumes:  __stream != NULL;
@@ -326,7 +326,7 @@ FILE *fdopen (int __fd, const char *__modes);
  * // TODO: if __s != NULL, the buffer pointed to by __s becomes volatile
  *
  * requires: valid_string(__modes);
- * requires: __s == NULL or valid_bytes(__s, __len);
+ * requires: null_or_valid_bytes(__s, __len);
  *
  * case "success" {
  *   local: FILE* r = _alloc_FILE();
@@ -360,7 +360,7 @@ FILE *open_memstream (char **__bufloc, size_t *__sizeloc);
  * // TODO: __buf becomes volatile
  *
  * requires: __stream in File;
- * requires: __buf == NULL or valid_bytes(__buf, BUFSIZ);
+ * requires: null_or_valid_bytes(__buf, BUFSIZ);
  */
 void setbuf (FILE *__restrict __stream, char *__restrict __buf);
 
@@ -368,7 +368,7 @@ void setbuf (FILE *__restrict __stream, char *__restrict __buf);
  * // TODO: __buf becomes volatile
  *
  * requires: __stream in File;
- * requires: __buf == NULL or valid_bytes(__buf, __n);
+ * requires: null_or_valid_bytes(__buf, __n);
  * requires: __modes in [0, 2];
  *
  * case "success" {
@@ -388,7 +388,7 @@ int setvbuf (FILE *__restrict __stream, char *__restrict __buf,
  * // TODO: __buf becomes volatile
  *
  * requires: __stream in File;
- * requires: __buf == NULL or valid_bytes(__buf, __size);
+ * requires: null_or_valid_bytes(__buf, __size);
  */
 void setbuffer (FILE *__restrict __stream, char *__restrict __buf,
                 size_t __size);
@@ -569,7 +569,7 @@ char *fgets_unlocked (char *__restrict __s, int __n,
 
 /*$
  * requires: __stream in File;
- * requires: *__lineptr == NULL or valid_bytes(*__lineptr, *__n);
+ * requires: null_or_valid_bytes(*__lineptr, *__n);
  * 
  * case "realloc" {
  *   assumes:  *__lineptr != NULL;
@@ -651,7 +651,7 @@ int ungetc (int __c, FILE *__stream);
 
 /*$
  * requires: __stream in File;
- * requires: __size == 0 or __n == 0 or valid_bytes(__ptr, __size * __n);
+ * requires: valid_bytes(__ptr, __size * __n);
  * assigns:  ((char*)__ptr)[0, (__size * __n)[;
  * ensures:  return in [0, __n];
  */
@@ -866,7 +866,7 @@ int pclose (FILE *__stream);
 static char _ctermid_buf[L_ctermid];
 
 /*$
- * requires: __s == NULL or valid_bytes(__s, L_ctermid);
+ * requires: null_or_valid_bytes(__s, L_ctermid);
  *
  * case "buf" {
  *   assumes: __s != NULL;
@@ -892,7 +892,7 @@ char *ctermid (char *__s);
 static char _cuserid_buf[L_cuserid];
 
 /*$
- * requires: __s == NULL or valid_bytes(__s, L_cuserid);
+ * requires: null_or_valid_bytes(__s, L_cuserid);
  *
  * case "buf" {
  *   assumes: __s != NULL;
