@@ -108,7 +108,7 @@ char *gettext (const char *__msgid) { return (char*)__msgid; }
  * requires: valid_string(__msgid);
  *
  * case "translation found" {
- *   assigns: _gettext_buf[0, GETTEXT_BUF_SIZE[;
+ *   assigns: _gettext_buf[0, GETTEXT_BUF_SIZE);
  *   ensures: valid_primed_string(_gettext_buf);
  *   ensures: return == _gettext_buf;
  * }
@@ -129,7 +129,7 @@ char *dcgettext (const char *__domainname, const char *__msgid,
  * requires: valid_string(__msgid);
  *
  * case "translation found" {
- *   assigns: _gettext_buf[0, GETTEXT_BUF_SIZE[;
+ *   assigns: _gettext_buf[0, GETTEXT_BUF_SIZE);
  *   ensures: valid_primed_string(_gettext_buf);
  *   ensures: return == _gettext_buf;
  * }

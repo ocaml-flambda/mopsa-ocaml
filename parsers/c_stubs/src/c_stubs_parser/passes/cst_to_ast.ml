@@ -99,11 +99,16 @@ let rec unroll_type t =
   | T_enum e -> T_integer e.enum_integer_type, snd t
   | _ -> t
 
+let visit_qual q =
+  C_AST.{
+    qual_is_const = q.c_qual_const
+  }
+
 let rec visit_qual_typ t prj func : C_AST.type_qual=
-  let (t0, is_const) = t in
+  let (t0, q) = t in
   let t0' = visit_typ t0 prj func in
-  let qual = C_AST.{ qual_is_const = is_const; } in
-  t0', qual
+  let q' = visit_qual q in
+  t0', q'
 
 and visit_typ t prj func =
   match t with

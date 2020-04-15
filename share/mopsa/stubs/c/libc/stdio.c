@@ -171,14 +171,14 @@ static char _tmpnam_buf[L_tmpnam];
  *
  * case "use_s" {
  *   assumes: __s != NULL;
- *   assigns: __s[0, L_tmpnam[;
+ *   assigns: __s[0, L_tmpnam);
  *   ensures: valid_primed_substring(__s, L_tmpnam);
  *   ensures: return == __s;
  * }
  * 
  * case "use_static" {
  *   assumes: __s == NULL;
- *   assigns: _tmpnam_buf[0, size(_tmpnam_buf)[;
+ *   assigns: _tmpnam_buf[0, size(_tmpnam_buf));
  *   ensures: valid_primed_string(_tmpnam_buf);
  *   ensures: return == _tmpnam_buf;
  * }
@@ -196,7 +196,7 @@ char *tmpnam (char *__s);
  * requires: valid_bytes(__s, L_tmpnam);
  *
  * case "success" {
- *   assigns: __s[0, L_tmpnam[;
+ *   assigns: __s[0, L_tmpnam);
  *   ensures: valid_primed_substring(__s, L_tmpnam);
  *   ensures: return == __s;
  * }
@@ -546,7 +546,7 @@ int putw (int __w, FILE *__stream);
  * requires: __stream in File;
  * requires: __n >= 0;
  * requires: valid_bytes(__s, __n);
- * assigns:  __s[0, __n[;
+ * assigns:  __s[0, __n);
  * ensures:  valid_primed_substring(__s, __n);
  * ensures:  (return == __s) or (return == NULL);
  */
@@ -554,7 +554,7 @@ char *fgets (char *__restrict __s, int __n, FILE *__restrict __stream);
 
 /*$
  * warn: "gets: dangerous function, do not use";
- * assigns: __s[0, (bytes(__s) - offset(__s))[;
+ * assigns: __s[0, (bytes(__s) - offset(__s)));
  * ensures: (return == __s) or (return == NULL);
  */
 char *gets (char *__s);
@@ -652,7 +652,7 @@ int ungetc (int __c, FILE *__stream);
 /*$
  * requires: __stream in File;
  * requires: valid_bytes(__ptr, __size * __n);
- * assigns:  ((char*)__ptr)[0, (__size * __n)[;
+ * assigns:  ((char*)__ptr)[0, (__size * __n));
  * ensures:  return in [0, __n];
  */
 size_t fread (void *__restrict __ptr, size_t __size,
@@ -870,14 +870,14 @@ static char _ctermid_buf[L_ctermid];
  *
  * case "buf" {
  *   assumes: __s != NULL;
- *   assigns: __s[0, L_ctermid[;
+ *   assigns: __s[0, L_ctermid);
  *   ensures: valid_primed_substring(__s, L_ctermid);
  *   ensures: return == __s;
  * }
  *
  * case "nobuf" {
  *   assumes: __s == NULL;
- *   assigns: _ctermid_buf[0, L_ctermid[;
+ *   assigns: _ctermid_buf[0, L_ctermid);
  *   ensures: valid_primed_substring(_ctermid_buf, L_ctermid);
  *   ensures: return == &_ctermid_buf[0];
  * }
@@ -896,14 +896,14 @@ static char _cuserid_buf[L_cuserid];
  *
  * case "buf" {
  *   assumes: __s != NULL;
- *   assigns: __s[0, L_cuserid[;
+ *   assigns: __s[0, L_cuserid);
  *   ensures: valid_primed_substring(__s, L_cuserid);
  *   ensures: return == __s;
  * }
  *
  * case "nobuf" {
  *   assumes: __s == NULL;
- *   assigns: _cuserid_buf[0, L_cuserid[;
+ *   assigns: _cuserid_buf[0, L_cuserid);
  *   ensures: valid_primed_substring(_cuserid_buf, L_cuserid);
  *   ensures: return == &_cuserid_buf[0];
  * }

@@ -214,7 +214,7 @@ and builtin =
 (*  ********* *)
 
 
-and c_qual_typ = c_typ * bool (** is const ? *)
+and c_qual_typ = c_typ * c_qual
 
 and c_typ =
   | T_void
@@ -234,6 +234,12 @@ and c_typ =
   | T_enum of var
   | T_unknown
 
+and c_qual = {
+  c_qual_const: bool;
+  c_qual_volatile: bool;
+  c_qual_restrict: bool;
+}
+
 and array_length =
   | A_no_length
   | A_constant_length of Z.t
@@ -251,7 +257,20 @@ let compare_var v1 v2 =
 
 let compare_resource (r1:resource) (r2:resource) = compare r1 r2
 
-let no_qual t = t, false
+let no_c_qual = { c_qual_const = false;
+                c_qual_volatile = false;
+                c_qual_restrict = false; }
+
+let const = { no_c_qual with c_qual_const = true; }
+let volatile = { no_c_qual with c_qual_volatile = true; }
+let restrict = { no_c_qual with c_qual_restrict = true; }
+
+let is_c_qual_non_empty q = q.c_qual_const || q.c_qual_restrict || q.c_qual_volatile
+
+let merge_c_qual q1 q2 =
+  { c_qual_const = q1.c_qual_const || q2.c_qual_const;
+    c_qual_volatile = q1.c_qual_volatile || q2.c_qual_volatile;
+    c_qual_restrict = q1.c_qual_restrict || q2.c_qual_restrict; }
 
 let is_alias (cst:stub) : bool =
   match cst.content with
@@ -345,8 +364,16 @@ and pp_binop fmt =
 
 and pp_c_qual_typ fmt =
   function
-  | (t, true) -> fprintf fmt "const %a" pp_c_typ t
-  | (t, false) -> pp_c_typ fmt t
+  | (t, qual) when is_c_qual_non_empty qual -> fprintf fmt "%a %a" pp_c_qual qual pp_c_typ t
+  | (t, qual) -> pp_c_typ fmt t
+
+and pp_c_qual fmt q =
+  let l =
+    (if q.c_qual_const then ["const"] else [])
+    @ (if q.c_qual_volatile then ["volatile"] else [])
+    @ (if q.c_qual_restrict then ["restrict"] else [])
+  in
+  Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt " ") Format.pp_print_string fmt l
 
 and pp_c_typ fmt =
   function
