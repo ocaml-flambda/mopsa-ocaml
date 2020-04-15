@@ -40,14 +40,14 @@
  * predicate valid_string(s):
  *   valid_ptr(s) and
  *   size(s) >= 1 and
- *   exists int _i in [0, (size(s) - offset(s)) [: s[_i] == 0
+ *   exists int _i in [0, (size(s) - offset(s)) ): s[_i] == 0
  * ;
  */
 
 /*$$
  * predicate valid_primed_string(s):
  *   valid_ptr(s) and
- *   exists int _i in [0, (size(s) - offset(s)) [: (s[_i])' == 0
+ *   exists int _i in [0, (size(s) - offset(s)) ): (s[_i])' == 0
  * ;
  */
 
@@ -55,7 +55,7 @@
 /*$$
  * predicate valid_substring(s, n):
  *   (n > 0 implies valid_ptr(s)) and
- *   exists int _i in [0, n[: s[_i] == 0
+ *   exists int _i in [0, n): s[_i] == 0
  * ;
  */
 
@@ -63,7 +63,7 @@
 /*$$
  * predicate valid_primed_substring(s, n):
  *   (n > 0 implies valid_ptr(s)) and
- *   exists int _i in [0, n[: (s[_i])' == 0
+ *   exists int _i in [0, n): (s[_i])' == 0
  * ;
  */
 
@@ -132,7 +132,7 @@ void _mopsa_memrand(char *s, unsigned int i, unsigned int j);
 
 /*$
  * requires: valid_ptr_range(s, 0, size(s) - offset(s) - 1);
- * assigns: s[0, (size(s) - offset(s)) [;
+ * assigns: s[0, (size(s) - offset(s)) );
  * ensures: valid_primed_string(s);
  */
 void _mopsa_strrand(char *s);
@@ -141,7 +141,7 @@ void _mopsa_strrand(char *s);
  * case "non-empty" {
  *   assumes: n >= 1;
  *   requires: valid_ptr_range(s, 0, n - 1);
- *   assigns: s[0, n [;
+ *   assigns: s[0, n);
  *   ensures: valid_primed_substring(s,n);
  * }
  *
@@ -178,9 +178,9 @@ void _mopsa_memcpy(char *dst, char *src, unsigned int i, unsigned int j);
 
 /*$$
  * predicate in_string(x,s):
- *   exists int _i in [0, (bytes(s) - offset(s))[:
+ *   exists int _i in [0, (bytes(s) - offset(s))):
  *     (x == s + _i and
- *     forall int _j in [0, _i[: s[_j] != 0)
+ *     forall int _j in [0, _i): s[_j] != 0)
  *  ;
  */
 
@@ -193,7 +193,7 @@ void _mopsa_memcpy(char *dst, char *src, unsigned int i, unsigned int j);
  * predicate valid_wide_string(s):
  *   valid_ptr(s) and
  *   size(s) >= 1 and
- *   exists int _i in [0, ((bytes(s) - offset(s)) / sizeof_type(wchar_t))[: s[_i] == 0
+ *   exists int _i in [0, ((bytes(s) - offset(s)) / sizeof_type(wchar_t))): s[_i] == 0
  * ;
  */
 
@@ -201,29 +201,29 @@ void _mopsa_memcpy(char *dst, char *src, unsigned int i, unsigned int j);
 /*$$
  * predicate valid_wide_substring(s, n):
  *   (n > 0 implies valid_ptr(s)) and
- *   exists int _i in [0, n[: s[_i] == 0
+ *   exists int _i in [0, n): s[_i] == 0
  * ;
  */
 
 /*$$
  * predicate valid_primed_wide_string(s):
  *   valid_ptr(s) and
- *   exists int _i in [0, ((bytes(s) - offset(s)) / sizeof_type(wchar_t))[: (s[_i])' == 0
+ *   exists int _i in [0, ((bytes(s) - offset(s)) / sizeof_type(wchar_t))): (s[_i])' == 0
  * ;
  */
 
 /*$$
  * predicate valid_primed_wide_substring(s, n):
  *   (n > 0 implies valid_ptr(s)) and
- *   exists int _i in [0, n[: (s[_i])' == 0
+ *   exists int _i in [0, n): (s[_i])' == 0
  * ;
  */
 
 /*$$
  * predicate in_wide_string(x,s):
- *   exists int _i in [0, ((bytes(s) - offset(s)) / sizeof_type(wchar_t))[:
+ *   exists int _i in [0, ((bytes(s) - offset(s)) / sizeof_type(wchar_t))):
  *     (x == s + _i and
- *     forall int _j in [0, _i[: s[_j] != 0)
+ *     forall int _j in [0, _i): s[_j] != 0)
  *  ;
  */
 

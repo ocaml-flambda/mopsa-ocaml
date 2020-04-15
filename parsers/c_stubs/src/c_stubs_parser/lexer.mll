@@ -71,6 +71,8 @@ let _ =
      "signed", SIGNED;
      "unsigned", UNSIGNED;
      "const", CONST;
+     "volatile", VOLATILE;
+     "restrict", RESTRICT;
      "struct", STRUCT;
      "union", UNION;
      "enum", ENUM;
@@ -92,6 +94,7 @@ let _ =
      "valid_float", VALID_FLOAT;
      "float_inf", FLOAT_INF;
      "float_nan", FLOAT_NAN;
+     "cast", CAST;
    ]
 
    let char_for_backslash = function

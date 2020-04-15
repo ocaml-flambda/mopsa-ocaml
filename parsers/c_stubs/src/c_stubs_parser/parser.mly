@@ -68,13 +68,13 @@
 %token REQUIRES LOCAL ASSIGNS CASE ASSUMES ENSURES PREDICATE WARN ALARM UNSOUND ALIAS
 %token TRUE FALSE
 %token FORALL EXISTS IN NEW
-%token FREE PRIMED RETURN SIZE BYTES SIZEOF_TYPE SIZEOF_EXPR OFFSET BASE VALID_PTR
+%token FREE PRIMED RETURN SIZE BYTES SIZEOF_TYPE SIZEOF_EXPR OFFSET BASE VALID_PTR CAST
 %token VALID_FLOAT FLOAT_INF FLOAT_NAN
 
 
 (* Types *)
 %token VOID CHAR INT LONG FLOAT DOUBLE SHORT
-%token SIGNED UNSIGNED CONST
+%token SIGNED UNSIGNED CONST VOLATILE RESTRICT
 %token STRUCT UNION ENUM
 
 (* Priorities of logical operators *)
@@ -84,32 +84,15 @@
 %nonassoc FORALL EXISTS
 %nonassoc NOT
 
-(* Priorities of C operators *)
-%left LOR
-%left LAND
-%left BOR
-%left BXOR
-%left BAND
-%left EQ NEQ
-%left LT GT LE GE
-%left RSHIFT LSHIFT
-
-%left PLUS MINUS
-%left STAR DIV MOD
-%nonassoc CAST
-%left LBRACK
-%nonassoc UNARY
-%left DOT ARROW COLON
-%right PRIME
 
 %start parse_stub
 %start parse_expr
 %start parse_type
 
+
 %type <Cst.stub option> parse_stub
 %type <Cst.expr> parse_expr
 %type <Cst.c_qual_typ> parse_type
-
 %%
 
 parse_stub:
@@ -120,7 +103,7 @@ parse_expr:
   | expr EOF { $1 }
 
 parse_type:
-  | c_qual_typ EOF { $1 }
+  | type_name EOF { $1 }
 
 (* Sections *)
 section_list:
@@ -165,7 +148,7 @@ requires:
 
 (* Local section *)
 local:
-  | LOCAL COLON c_qual_typ var ASSIGN local_value SEMICOL
+  | LOCAL COLON type_name var ASSIGN local_value SEMICOL
     {
       {
         lvar = $4;
@@ -205,7 +188,7 @@ alias:
 
 (* Assignment section *)
 assigns:
-  | ASSIGNS COLON with_range(expr) assigns_offset_list SEMICOL
+  | ASSIGNS COLON with_range(postfix_expr) assigns_offset_list SEMICOL
     {
       {
 	assign_target = $3;
@@ -213,8 +196,16 @@ assigns:
       }
     }
 
+  | ASSIGNS COLON with_range(expr) SEMICOL
+    {
+      {
+	assign_target = $3;
+	assign_offset = [];
+      }
+    }
+
 assigns_offset_list:
-  | { [] }
+  | interval                     { [$1] }
   | interval assigns_offset_list { $1 :: $2 }
 
 (* Free section *)
@@ -243,55 +234,100 @@ message_kind:
 
 
 (* Logic formula *)
-formula:
-  | RPAR formula RPAR                                 { $2 }
+primary_formula:
   | with_range(TRUE)                                  { F_bool true }
   | with_range(FALSE)                                 { F_bool false }
   | with_range(expr)                                  { F_expr $1 }
-  | with_range(formula) log_binop with_range(formula) { F_binop ($2, $1, $3) }
-  | NOT with_range(formula)                           { F_not $2 }
-  | FORALL c_qual_typ var IN set COLON with_range(formula) { F_forall ($3, $2, $5, $7) } %prec FORALL
-  | EXISTS c_qual_typ var IN set COLON with_range(formula) { F_exists ($3, $2, $5, $7) } %prec EXISTS
   | with_range(expr) IN set                           { F_in ($1, $3) }
-  | LPAR formula RPAR                                 { $2 }
   | var LPAR args RPAR                                { F_predicate ($1, $3) }
 
+composed_formula:
+  | with_range(formula) log_binop with_range(formula) { F_binop ($2, $1, $3) }
+  | NOT with_range(formula)                           { F_not $2 }
+  | FORALL type_name var IN set COLON with_range(formula) { F_forall ($3, $2, $5, $7) } %prec FORALL
+  | EXISTS type_name var IN set COLON with_range(formula) { F_exists ($3, $2, $5, $7) } %prec EXISTS
+
+formula:
+  | LPAR composed_formula RPAR { $2 }
+  | primary_formula            { $1 }
+  | composed_formula           { $1 }
+
+
 (* C expressions *)
+primary_expr:
+  | var                        { E_var $1 }
+  | const                      { $1 }
+  | RETURN                     { E_return }
+  | LPAR expr RPAR             { $2 }
+
+postfix_expr:
+  | primary_expr                                 { $1 }
+  | with_range(postfix_expr) LBRACK with_range(expr) RBRACK  { E_subscript ($1, $3) }
+  | with_range(postfix_expr) PRIME               { E_builtin_call (PRIMED, $1) } 
+  | builtin LPAR with_range(expr) RPAR           { E_builtin_call ($1, $3) }
+  | with_range(postfix_expr) DOT IDENT           { E_member ($1, $3) }
+  | with_range(postfix_expr) ARROW IDENT         { E_arrow ($1, $3) }
+
+unary_expr:
+  | postfix_expr { $1 }
+  | SIZEOF_TYPE LPAR with_range(type_name) RPAR { E_sizeof_type $3 }
+  | SIZEOF_EXPR LPAR with_range(unary_expr) RPAR { E_sizeof_expr $3 }
+  | unop with_range(cast_expr)                   { E_unop ($1, $2) }
+  | STAR with_range(cast_expr)                   { E_deref $2 }
+  | BAND with_range(cast_expr)                   { E_addr_of $2 }
+
+cast_expr:
+  | unary_expr                                               { $1 }
+  | LPAR type_name_except_typedef RPAR with_range(cast_expr) { E_cast ($2, $4) }
+  | CAST LPAR type_name COMMA with_range(cast_expr) RPAR     { E_cast ($3, $5) }
+
+multiplicative_expr:
+  | cast_expr { $1 }
+  | with_range(multiplicative_expr) multiplicative_binop with_range(cast_expr)  { E_binop ($2, $1, $3) }
+
+additive_expr:
+  | multiplicative_expr { $1 }
+  | with_range(additive_expr) additive_binop with_range(multiplicative_expr)    { E_binop ($2, $1, $3) }
+
+shift_expr:
+  | additive_expr { $1 }
+  | with_range(shift_expr) shift_binop with_range(additive_expr)                { E_binop ($2, $1, $3) }
+
+relational_expr:
+  | shift_expr { $1 }
+  | with_range(relational_expr) relational_binop with_range(shift_expr)         { E_binop ($2, $1, $3) }
+
+equality_expr:
+  | relational_expr { $1 }
+  | with_range(equality_expr) equality_binop with_range(relational_expr)        { E_binop ($2, $1, $3) }
+
+band_expr:
+  | equality_expr { $1 }
+  | with_range(band_expr) BAND with_range(equality_expr)   { E_binop (BAND, $1, $3) }
+
+bxor_expr:
+  | band_expr { $1 }
+  | with_range(bxor_expr) BXOR with_range(band_expr)       { E_binop (BXOR, $1, $3) }
+
+bor_expr:
+  | bxor_expr { $1 }
+  | with_range(bor_expr) BOR with_range(bxor_expr)         { E_binop (BOR, $1, $3) }
+
+land_expr:
+  | bor_expr { $1 }
+  | with_range(land_expr) LAND with_range(bor_expr)       { E_binop (LAND, $1, $3) }
+
+lor_expr:
+  | land_expr { $1 }
+  | with_range(lor_expr) LOR with_range(land_expr)        { E_binop (LOR, $1, $3) }
+
 expr:
-  | LPAR c_qual_typ RPAR with_range(expr)             { E_cast ($2, $4) } %prec CAST
-  | LPAR expr RPAR                                    { $2 } (* FIXME: conflict between `(id) e` and `(id + e) *)
-  | TOP LPAR c_qual_typ RPAR                          { E_top $3 }
-  | INT_CONST                                         { E_int (fst $1, snd $1) }
-  | STRING_CONST                                      { E_string $1}
-  | FLOAT_CONST                                       { E_float $1 }
-  | CHAR_CONST                                        { E_char $1 }
-  | INVALID                                           { E_invalid }
-  | var                                               { E_var $1 }
-  | unop with_range(expr)                             { E_unop ($1, $2) } %prec UNARY
-  | with_range(expr) binop with_range(expr)           { E_binop ($2, $1, $3) }
-  | BAND with_range(expr)                             { E_addr_of $2 } %prec UNARY
-  | STAR with_range(expr)                             { E_deref $2 } %prec UNARY
-  | with_range(expr) LBRACK with_range(expr) RBRACK   { E_subscript ($1, $3) }
-  | with_range(expr) DOT IDENT                        { E_member ($1, $3) }
-  | with_range(expr) ARROW IDENT                      { E_arrow ($1, $3) }
-  | RETURN                                            { E_return }
-  | SIZEOF_TYPE LPAR with_range(c_qual_typ) RPAR           { E_sizeof_type $3 }
-  | SIZEOF_EXPR LPAR with_range(expr) RPAR                 { E_sizeof_expr $3 }
-  | builtin LPAR with_range(expr) RPAR                { E_builtin_call ($1, $3) }
-  | with_range(expr) PRIME                            { E_builtin_call (PRIMED, $1) }
+  | lor_expr { $1 }
 
 
-(* C types *)
-c_qual_typ:
-  | c_qual_typ STAR        { (T_pointer $1, false) }
-  | c_qual_typ CONST STAR  { (T_pointer $1, true) }
-  | c_qual_typ_no_ptr      { $1 }
-
-c_qual_typ_no_ptr:
-  | CONST c_typ { ($2, true) }
-  | c_typ       { ($1, false) }
-
-c_typ:
+ 
+(* Types *)
+type_specifier_except_typedef:
   | VOID               { T_void }
   | CHAR               { T_char }
   | UNSIGNED CHAR      { T_unsigned_char }
@@ -314,30 +350,63 @@ c_typ:
   | STRUCT var         { T_struct($2) }
   | UNION var          { T_union($2) }
   | ENUM var           { T_enum($2) }
-  | var                { T_typedef($1) }
+
+type_specifier:
+  | type_specifier_except_typedef { $1 }
+  | var                           { T_typedef($1) }
+
+type_qualifier:
+  | CONST    { const }
+  | VOLATILE { volatile }
+  | RESTRICT { restrict }
+
+specifier_qualifier_list:
+  | type_specifier                          { $1, no_c_qual }
+  | type_qualifier specifier_qualifier_list { let t,q = $2 in t, merge_c_qual $1 q }
+
+type_qualifier_list:
+  |                                    { no_c_qual }
+  | type_qualifier_list type_qualifier { merge_c_qual $1 $2 }
+
+pointer:
+  | specifier_qualifier_list STAR type_qualifier_list { T_pointer $1, $3 }
+  | pointer STAR type_qualifier_list                  { T_pointer $1, $3 }
+
+type_name:
+  | pointer                  { $1 }
+  | specifier_qualifier_list { $1 }
+
+type_name_except_typedef:
+  | type_specifier_except_typedef           { $1, no_c_qual }
+  | type_name_except_typedef STAR { T_pointer $1, no_c_qual }
+
 
 (* Operators *)
-%inline binop:
+additive_binop:
   | PLUS   { ADD }
   | MINUS  { SUB }
+
+multiplicative_binop:
   | STAR   { MUL }
   | DIV    { DIV }
   | MOD    { MOD }
-  | LOR    { LOR }
-  | LAND   { LAND }
-  | BOR    { BOR }
-  | BXOR   { BXOR }
-  | BAND   { BAND }
+
+equality_binop:
   | EQ     { EQ }
   | NEQ    { NEQ }
+
+relational_binop:
   | LT     { LT }
   | GT     { GT }
   | LE     { LE }
   | GE     { GE }
+
+shift_binop:
   | RSHIFT { RSHIFT }
   | LSHIFT { LSHIFT }
 
-%inline unop:
+unop:
+  | PLUS  { PLUS }
   | MINUS { MINUS }
   | LNOT  { LNOT }
   | BNOT  { BNOT }
@@ -347,22 +416,29 @@ set:
   | resource  { S_resource $1 }
 
 interval:
-  | LBRACK with_range(expr) COMMA with_range(expr) RBRACK { { itv_lb=$2;
-							      itv_open_lb=false;
-							      itv_ub=$4;
-							      itv_open_ub=false; } }
-  | RBRACK with_range(expr) COMMA with_range(expr) RBRACK { { itv_lb=$2;
-							      itv_open_lb=true;
-							      itv_ub=$4;
-							      itv_open_ub=false; } }
-  | LBRACK with_range(expr) COMMA with_range(expr) LBRACK { { itv_lb=$2;
-							      itv_open_lb=false;
-							      itv_ub=$4;
-							      itv_open_ub=true; } }
-  | RBRACK with_range(expr) COMMA with_range(expr) LBRACK { { itv_lb=$2;
-							      itv_open_lb=true;
-							      itv_ub=$4;
-							      itv_open_ub=true; } }
+  | LBRACK with_range(expr) COMMA with_range(expr) RBRACK
+    { { itv_lb=$2;
+	itv_open_lb=false;
+	itv_ub=$4;
+	itv_open_ub=false; } }
+
+  | LPAR with_range(expr) COMMA with_range(expr) RBRACK
+    { { itv_lb=$2;
+  	itv_open_lb=true;
+  	itv_ub=$4;
+  	itv_open_ub=false; } }
+
+  | LBRACK with_range(expr) COMMA with_range(expr) RPAR
+    { { itv_lb=$2;
+  	itv_open_lb=false;
+  	itv_ub=$4;
+  	itv_open_ub=true; } }
+
+  | LPAR with_range(expr) COMMA with_range(expr) RPAR
+    { { itv_lb=$2;
+  	itv_open_lb=true;
+  	itv_ub=$4;
+  	itv_open_ub=true; } }
 
 %inline log_binop:
   | AND     { AND }
@@ -399,11 +475,20 @@ var:
 	{
 	  vname = $1;
 	  vuid = 0;
-	  vtyp = no_qual T_unknown;
+	  vtyp = T_unknown, no_c_qual;
 	  vlocal = false;
 	  vrange = from_lexing_range $startpos $endpos;
 	}
       }
+
+const:
+  | TOP LPAR type_name RPAR { E_top $3 }
+  | INT_CONST               { E_int (fst $1, snd $1) }
+  | STRING_CONST            { E_string $1}
+  | FLOAT_CONST             { E_float $1 }
+  | CHAR_CONST              { E_char $1 }
+  | INVALID                 { E_invalid }
+
 
 
 // adds range information to rule

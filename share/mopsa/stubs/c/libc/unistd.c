@@ -104,7 +104,7 @@ int close (int __fd);
  * requires: valid_bytes(__buf, __nbytes);
  *
  * case "success" {
- *   assigns: ((char*)__buf)[0, __nbytes[;
+ *   assigns: ((char*)__buf)[0, __nbytes);
  *   ensures: return in [0, __nbytes];
  * }
  *
@@ -301,7 +301,7 @@ int fchdir (int __fd);
  *
  * case "noalloc" {
  *   assumes: __buf != NULL;
- *   assigns: __buf[0, __size[;
+ *   assigns: __buf[0, __size);
  *   ensures: valid_primed_substring(__buf, __size);
  *   ensures: return == __buf;
  * }
@@ -746,7 +746,7 @@ __gid_t getegid (void);
  *
  * case "success" {
  *   assumes: __size > 0;
- *   assigns: __list[0, __size[;
+ *   assigns: __list[0, __size);
  *   ensures: return >= 0;
  * }
  *
@@ -964,7 +964,7 @@ char *ttyname (int __fd);
  * requires: valid_bytes(__buf, __buflen);
  *
  * case "success" {
- *   assigns: __buf[0, __buflen[;
+ *   assigns: __buf[0, __buflen);
  *   ensures: valid_primed_substring(__buf, __buflen);
  *   ensures: return == 0;
  * }
@@ -1052,7 +1052,7 @@ int symlink (const char *__from, const char *__to);
  * requires: valid_bytes(__buf, __len);
  *
  * case "success" {
- *   assigns: __buf[0, __len[;
+ *   assigns: __buf[0, __len);
  *   ensures: return in [0,__len];
  *   // no 0 added, but returns the position where to put the 0
  * }
@@ -1089,7 +1089,7 @@ int symlinkat (const char *__from, int __tofd,
  * requires: valid_bytes(__buf, __len);
  *
  * case "success" {
- *   assigns: __buf[0, __len[;
+ *   assigns: __buf[0, __len);
  *   ensures: return in [0, __len];
  *   // no 0 added, but returns the position where to put the 0
  * }
@@ -1191,7 +1191,7 @@ char *getlogin (void);
  * requires: valid_bytes(__buf, __buflen);
  *
  * case "success" {
- *   assigns: __buf[0, __buflen[;
+ *   assigns: __buf[0, __buflen);
  *   ensures: valid_primed_substring(__buf, __buflen);
  *   ensures: return == 0;
  * }
@@ -1224,7 +1224,7 @@ int setlogin (const char *__name);
  *
  * case "success" {
  *   // NOTE: 0 added only if the buffer is large enugh, which we cannot assume
- *   assigns: __buf[0, __buflen[;
+ *   assigns: __buf[0, __buflen);
  *   ensures: return == 0;
  * }
  *
@@ -1268,7 +1268,7 @@ int sethostid (long int __id);
  *
  * case "success" {
  *   // NOTE: 0 added only if the buffer is large enugh, which we cannot assume
- *   assigns: __buf[0, __buflen[;
+ *   assigns: __buf[0, __buflen);
  *   ensures: return == 0;
  * }
  *
@@ -1633,7 +1633,7 @@ void swab (const void *__restrict __from, void *__restrict __to,
  * requires: valid_bytes(__buffer, __length);
  *
  * case "success" {
- *   assigns: ((unsigned char*)__buffer)[0, __length[;
+ *   assigns: ((unsigned char*)__buffer)[0, __length);
  *   ensures: return == 0;
  * }
  *

@@ -381,7 +381,7 @@ int srandom_r (unsigned int __seed, struct random_data *__buf);
 /*$
  * requires: __statelen >= 8;
  * requires: valid_bytes(__statebuf, __statelen);
- * assigns:  *__statebuf[0, __statelen[;
+ * assigns:  __statebuf[0, __statelen);
  * assigns:  *__buf;
  * ensures:  (__buf->rand_deg)' == __statelen; // keep length information around
  *
@@ -400,7 +400,7 @@ int initstate_r (unsigned int __seed, char *__restrict __statebuf,
 
 /*$
  * requires: valid_bytes(__statebuf, __buf->rand_deg);
- * assigns:  *__statebuf[0, __buf->rand_deg[;
+ * assigns:  __statebuf[0, __buf->rand_deg);
  * assigns:  *__buf;
  * ensures:  (__buf->rand_deg)' == __buf->rand_deg; // keep length information around
  *
@@ -605,7 +605,7 @@ void *malloc (size_t __size);
  * case "success" {
  *   local:   void* r = new Memory;
  *   ensures: size(r) == __nmemb * __size;
- *   ensures: forall int i in [0, (__nmemb * __size) [: ((unsigned char*)r)[i] == 0;
+ *   ensures: forall int i in [0, (__nmemb * __size) ): ((unsigned char*)r)[i] == 0;
  *   ensures: return == r;
  * }
  *
@@ -648,9 +648,9 @@ void *calloc (size_t __nmemb, size_t __size);
  *   local:    void* r = new Memory;
  *   ensures:  size(r) == __size;
  *   ensures:  size(__ptr) >= __size implies 
- *             forall int i in [0, __size[: ((unsigned char*)r)[i] == ((unsigned char*)__ptr)[i];
+ *             forall int i in [0, __size): ((unsigned char*)r)[i] == ((unsigned char*)__ptr)[i];
  *   ensures:  size(__ptr) <= __size implies 
- *             forall int i in [0, size(__ptr)[: ((unsigned char*)r)[i] == ((unsigned char*)__ptr)[i];
+ *             forall int i in [0, size(__ptr)): ((unsigned char*)r)[i] == ((unsigned char*)__ptr)[i];
  *   free:     __ptr;
  *   ensures:  return == r;
  * }
@@ -900,7 +900,7 @@ int clearenv (void);
  * local: size_t len = strlen(__template);
  * requires: len >= 6;
  * requires: forall int i in [0, 5]: __template[len - 6 + i] == 'X';
- * assigns: __template[0, len[;
+ * assigns: __template[0, len);
  * assigns: _errno;
  * ensures:  return == __template;
  */
@@ -914,7 +914,7 @@ char *mktemp (char *__template);
  * local: size_t len = strlen(__template);
  * requires: len >= 6;
  * requires: forall int i in [0, 5]: __template[len - 6 + i] == 'X';
- * assigns: __template[0, len[;
+ * assigns: __template[0, len);
  *
  * case "success" {
  *   local:   int fd = new FileDescriptor;
@@ -937,7 +937,7 @@ int mkstemp (char *__template);
  * local: size_t len = strlen(__template);
  * requires: len >= 6 + __suffixlen;
  * requires: forall int i in [0, 5]: __template[len - 6 - __suffixlen + i] == 'X';
- * assigns: __template[0, len[;
+ * assigns: __template[0, len);
  *
  * case "success" {
  *   local:   int fd = new FileDescriptor;
@@ -1017,7 +1017,7 @@ char *canonicalize_file_name (const char *__name);
  *
  * case "copy" {
  *   assumes:  __resolved != NULL;
- *   assigns:  __resolved[0, PATH_MAX[;
+ *   assigns:  __resolved[0, PATH_MAX);
  *   ensures:  valid_primed_substring(__resolved, PATH_MAX);
  *   ensures:  return == __resolved;
  * }
@@ -1121,7 +1121,7 @@ char *fcvt (double __value, int __ndigit, int *__restrict __decpt,
 
 /*$
  * requires: valid_bytes(__buf, __ndigit);
- * assigns: __buf[0, __ndigit[;
+ * assigns: __buf[0, __ndigit);
  * ensures: valid_primed_string(__buf);
  * ensures: return == __buf;
  */
@@ -1245,7 +1245,7 @@ int mbtowc (wchar_t *__restrict __pwc,
  *
  * case "shift" {
  *   assumes: __s != NULL; 
- *   assigns: __s[0, MB_LEN_MAX[;
+ *   assigns: __s[0, MB_LEN_MAX);
  *   ensures: return in [-1, MB_LEN_MAX];
  *  }
  *
@@ -1261,7 +1261,7 @@ int wctomb (char *__s, wchar_t __wchar);
  *
  * case "copy" {
  *   assumes: __dst != NULL;
- *   assigns: __dst[0, __len[;
+ *   assigns: __dst[0, __len);
  * }
  *
  * case "count" {
@@ -1277,7 +1277,7 @@ size_t mbstowcs (wchar_t *__restrict __dst,
  *
  * case "copy" {
  *   assumes: __dst != NULL;
- *   assigns: __dst[0, __len[;
+ *   assigns: __dst[0, __len);
  * }
  *
  * case "count" {
@@ -1370,7 +1370,7 @@ static char _ptsname_buf[1024]; // TODO: fix size
  * requires: __fd in FileDescriptor;
  *
  * case "success" {
- *   assigns: _ptsname_buf[0, (size(_ptsname_buf) - offset(_ptsname_buf))[;
+ *   assigns: _ptsname_buf[0, (size(_ptsname_buf) - offset(_ptsname_buf)));
  *   ensures: valid_primed_string(_ptsname_buf);
  *   ensures: return == (char*)_ptsname_buf;
  * }
@@ -1391,7 +1391,7 @@ char *ptsname (int __fd) ;
  * requires: valid_bytes(__buf, __buflen);
  *
  * case "success" {
- *   assigns: __buf[0, __buflen[;
+ *   assigns: __buf[0, __buflen);
  *   ensures: valid_primd_substring(__buf, __buflen);
  *   ensures: return == 0;
  * }
@@ -1422,7 +1422,7 @@ int getpt (void);
 
 /*$
  * requires: valid_bytes(__loadavg, __nelem * sizeof_type(double));
- * assigns:  __loadavg[0, __nelem[;
+ * assigns:  __loadavg[0, __nelem);
  * ensures:  return in [-1, __nelem];
  */
 int getloadavg (double __loadavg[], int __nelem);
