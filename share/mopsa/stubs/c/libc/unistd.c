@@ -409,9 +409,9 @@ int dup3 (int __fd, int __fd2, int __flags);
 
 /*$
  * requires: valid_string(__path);
- * requires: forall int i in [0, (bytes(__argv) - offset(__argv)) / sizeof_type(char*) - 1]:
+ * requires: forall size_t i in [0, (bytes(__argv) - offset(__argv)) / sizeof_type(char*) - 1]:
  *             valid_string(__argv[i]);
- * requires: forall int i in [0, (bytes(__envp) - offset(__envp)) / sizeof_type(char*) - 1]:
+ * requires: forall size_t i in [0, (bytes(__envp) - offset(__envp)) / sizeof_type(char*) - 1]:
  *             valid_string(__envp[i]);
  *
  * case "success" {
@@ -430,9 +430,9 @@ int execve (const char *__path, char *const __argv[],
 /*$
  * local:    void* f = _mopsa_find_file_resource(__fd);
  * requires: f in FileRes;
- * requires: forall int i in [0, (bytes(__argv) - offset(__argv)) / sizeof_type(char*) - 1]:
+ * requires: forall size_t i in [0, (bytes(__argv) - offset(__argv)) / sizeof_type(char*) - 1]:
  *             valid_string(__argv[i]);
- * requires: forall int i in [0, (bytes(__envp) - offset(__envp)) / sizeof_type(char*) - 1]:
+ * requires: forall size_t i in [0, (bytes(__envp) - offset(__envp)) / sizeof_type(char*) - 1]:
  *             valid_string(__envp[i]);
  *
  * case "success" {
@@ -459,7 +459,7 @@ int fexecve (int __fd, char *const __argv[], char *const __envp[]);
  *
  * case "with-args" {
  *   assumes: __argv[1] != NULL;
- *   requires: forall int i in [1, (bytes(__argv) - offset(__argv)) / sizeof_type(char*) - 1]: valid_string(__argv[i]);
+ *   requires: forall size_t i in [1, (bytes(__argv) - offset(__argv)) / sizeof_type(char*) - 1]: valid_string(__argv[i]);
  * }
  *
  * case "success" {
@@ -519,7 +519,7 @@ int execl (const char *__path, const char *__arg, ...);
  *
  * case "with-args" {
  *   assumes: __argv[1] != NULL;
- *   requires: forall int i in [1, (bytes(__argv) - offset(__argv)) / sizeof_type(char*) - 1]: valid_string(__argv[i]);
+ *   requires: forall size_t i in [1, (bytes(__argv) - offset(__argv)) / sizeof_type(char*) - 1]: valid_string(__argv[i]);
  * }
  */
 int execvp (const char *__file, char *const __argv[]);
@@ -543,9 +543,9 @@ int execlp (const char *__file, const char *__arg, ...);
 
 /*$
  * requires: valid_string(__file);
- * requires: forall int i in [0, (bytes(__argv) - offset(__argv)) / sizeof_type(char*) - 1]:
+ * requires: forall size_t i in [0, (bytes(__argv) - offset(__argv)) / sizeof_type(char*) - 1]:
  *             valid_string(__argv[i]);
- * requires: forall int i in [0, (bytes(__envp) - offset(__envp)) / sizeof_type(char*) - 1]:
+ * requires: forall size_t i in [0, (bytes(__envp) - offset(__envp)) / sizeof_type(char*) - 1]:
  *           valid_string(__envp[i]);
  *
  * case "success" {
@@ -1605,15 +1605,15 @@ void encrypt (char *__glibc_block, int __edflag);
  *
  * case "odd" {
  *   assumes: __n >= 0 and __n & 1 == 0;
- *   assigns: ((unsigned char*)__to)[0, __n - 1];
- *   ensures: forall int i in [0, __n - 1]: ((unsigned char*)__from)[i] ==  (((unsigned char*)__to)[i ^ 1])';
+ *   assigns: ((unsigned char*)__to)[0, __n);
+ *   ensures: forall ssize_t i in [0, __n): ((unsigned char*)__from)[i] ==  (((unsigned char*)__to)[i ^ 1])';
  * }
  *
  * case "even" {
- *   assumes: __n >= 0 and __n & 1 == 1;
- *   assigns: ((unsigned char*)__to)[0, __n - 1];
+ *   assumes: __n >= 1 and __n & 1 == 1;
+ *   assigns: ((unsigned char*)__to)[0, __n - 1);
  *   // the last byte is unspecified
- *   ensures: forall int i in [0, __n - 2]: ((unsigned char*)__from)[i] ==  (((unsigned char*)__to)[i ^ 1])';
+ *   ensures: forall ssize_t i in [0, __n - 1): ((unsigned char*)__from)[i] ==  (((unsigned char*)__to)[i ^ 1])';
  * }
  *
  * case "negative" {

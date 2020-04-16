@@ -48,7 +48,7 @@ static wint_t _weof = WEOF;
  * requires: no_overlap_wide(__src, src_len + 1,__dest, src_len + 1);
  * requires: valid_wchars(__dest, src_len + 1);
  * assigns: __dest[0, src_len];
- * ensures: forall int i in [0, src_len]: (__dest[i])' == __src[i];
+ * ensures: forall size_t i in [0, src_len]: (__dest[i])' == __src[i];
  * ensures: return == __dest;
  */
 wchar_t *wcscpy (wchar_t *__restrict __dest, const wchar_t *__restrict __src);
@@ -59,8 +59,8 @@ wchar_t *wcscpy (wchar_t *__restrict __dest, const wchar_t *__restrict __src);
  * local: size_t src_nlen = wcsnlen(__src, __n);
  * requires: no_overlap_wide(__src, src_nlen, __dest, src_nlen);
  * assigns: __dest[0, __n);
- * ensures: forall int i in [0, src_nlen): (__dest[i])' == __src[i];
- * ensures: forall int i in [src_nlen, __n): (__dest[i])' == 0;
+ * ensures: forall size_t i in [0, src_nlen): (__dest[i])' == __src[i];
+ * ensures: forall size_t i in [src_nlen, __n): (__dest[i])' == 0;
  * ensures: return == __dest;
  */
 wchar_t *wcsncpy (wchar_t *__restrict __dest, const wchar_t *__restrict __src, size_t __n);
@@ -71,8 +71,8 @@ wchar_t *wcsncpy (wchar_t *__restrict __dest, const wchar_t *__restrict __src, s
  * requires: no_overlap_wide(__src, src_len + 1, __dest, dest_len + src_len + 1);
  * requires: valid_wchars(__dest, dest_len + src_len);
  * assigns: __dest[0, dest_len + src_len];
- * ensures: forall int i in [0, dest_len): (__dest[i])' == __dest[i];
- * ensures: forall int i in [0, src_len]: (__dest[dest_len + i])' == __src[i];
+ * ensures: forall size_t i in [0, dest_len): (__dest[i])' == __dest[i];
+ * ensures: forall size_t i in [0, src_len]: (__dest[dest_len + i])' == __src[i];
  * ensures: return == __dest;
  */
 wchar_t *wcscat (wchar_t *__restrict __dest, const wchar_t *__restrict __src);
@@ -83,8 +83,8 @@ wchar_t *wcscat (wchar_t *__restrict __dest, const wchar_t *__restrict __src);
  * requires: no_overlap_wide(__src, src_nlen + 1, __dest, dest_len + src_nlen + 1);
  * requires: valid_wchars(__dest, dest_len + src_nlen + 1);
  * assigns: __dest[0, dest_len + src_nlen];
- * ensures: forall int i in [0, dest_len): (__dest[i])' == __dest[i];
- * ensures: forall int i in [0, src_nlen): (__dest[dest_len + i])' == __src[i];
+ * ensures: forall size_t i in [0, dest_len): (__dest[i])' == __dest[i];
+ * ensures: forall size_t i in [0, src_nlen): (__dest[dest_len + i])' == __src[i];
  * ensures: (__dest[dest_len + src_nlen])' == 0;
  * ensures: return == __dest;
  */
@@ -170,7 +170,7 @@ size_t wcsxfrm_l (wchar_t *__s1, const wchar_t *__s2, size_t __n, locale_t __loc
  *   local: wchar_t* r = new Memory;
  *   ensures: return == r;
  *   ensures: size(return) == len + 1;
- *   ensures: forall int i in [0, len]: r[i] == __s[i];
+ *   ensures: forall size_t i in [0, len]: r[i] == __s[i];
  * }
  *
  * case "failure" {
@@ -184,15 +184,15 @@ wchar_t *wcsdup (const wchar_t *__s);
  * local: size_t len = wcslen(__wcs);
  *
  * case "found" {
- *   ensures:  exists int i in [0, len): ( 
+ *   ensures:  exists size_t i in [0, len): ( 
  *             __wcs[i] == __wc and 
- *             (forall int j in [0, i): __wcs[j] != __wc) and
+ *             (forall size_t j in [0, i): __wcs[j] != __wc) and
  *             return == __wcs + i 
  *          );
  * }
  *
  * case "notfound" {
- *   assumes: forall int i in [0, len): __wcs[i] != __wc;
+ *   assumes: forall size_t i in [0, len): __wcs[i] != __wc;
  *   ensures: return == NULL;
  * }
  */
@@ -202,15 +202,15 @@ wchar_t *wcschr (const wchar_t *__wcs, wchar_t __wc);
  * local: size_t len = wcslen(__wcs);
  *
  * case "found" {
- *   ensures:  exists int i in [0, len): ( 
+ *   ensures:  exists size_t i in [0, len): ( 
  *             __wcs[i] == __wc and 
- *             (forall int j in [i + 1, len): __wcs[j] != __wc) and
+ *             (forall size_t j in [i + 1, len): __wcs[j] != __wc) and
  *             return == __wcs + i 
  *          );
  * }
  *
  * case "notfound" {
- *   assumes: forall int i in [0, len): __wcs[i] != __wc;
+ *   assumes: forall size_t i in [0, len): __wcs[i] != __wc;
  *   ensures: return == NULL;
  * }
  */
@@ -222,15 +222,15 @@ wchar_t *wcsrchr (const wchar_t *__wcs, wchar_t __wc);
  * local: size_t len = wcslen(__wcs);
  *
  * case "found" {
- *   ensures:  exists int i in [0, len): ( 
+ *   ensures:  exists size_t i in [0, len): ( 
  *             __wcs[i] == __wc and 
- *             (forall int j in [0, i): __wcs[j] != __wc) and
+ *             (forall size_t j in [0, i): __wcs[j] != __wc) and
  *             return == __wcs + i 
  *          );
  * }
  *
  * case "notfound" {
- *   assumes: forall int i in [0, len): __wcs[i] != __wc;
+ *   assumes: forall size_t i in [0, len): __wcs[i] != __wc;
  *   ensures: return == __wcs + len;
  * }
  */
@@ -277,8 +277,8 @@ wchar_t *wcsstr (const wchar_t *__haystack, const wchar_t *__needle);
  *   local: size_t len = wcslen(__s);
  *   assigns: __s[0, len);
  *   assigns: *__ptr;
- *   ensures: exists int i in [0, len): return == __s + i;
- *   ensures: exists int i in [0, len): (*__ptr)' == __s + i;
+ *   ensures: exists size_t i in [0, len): return == __s + i;
+ *   ensures: exists size_t i in [0, len): (*__ptr)' == __s + i;
  * }
  *
  * case "next" {
@@ -287,8 +287,8 @@ wchar_t *wcsstr (const wchar_t *__haystack, const wchar_t *__needle);
  *   local: size_t len = wcslen(*__ptr);
  *   assigns: (*__ptr)[0, len);
  *   assigns: *__ptr;
- *   ensures: return == NULL or exists int i in [0, len]: return == (*__ptr) + i;
- *   ensures: (*__ptr)' == NULL or exists int i in [0, len]: (*__ptr)' == (*__ptr) + i;
+ *   ensures: return == NULL or exists size_t i in [0, len]: return == (*__ptr) + i;
+ *   ensures: (*__ptr)' == NULL or exists size_t i in [0, len]: (*__ptr)' == (*__ptr) + i;
  *  }
  *
  * case "end" {
@@ -303,9 +303,9 @@ wchar_t *wcstok (wchar_t *__restrict __s,
 
 /*$
  * requires: valid_wide_string(__s);
- * ensures:  exists int i in [0, ((bytes(__s) - offset(__s)) / sizeof_type(wchar_t))): ( 
+ * ensures:  exists size_t i in [0, ((bytes(__s) - offset(__s)) / sizeof_type(wchar_t))): ( 
  *             __s[i] == 0 and 
- *             (forall int j in [0, i): __s[j] != 0) and
+ *             (forall size_t j in [0, i): __s[j] != 0) and
  *             return == i 
  *          );
  */
@@ -321,7 +321,7 @@ size_t wcslen (const wchar_t *__s);
  * }
  *
  * case "string-bigger-than-maxlen" {
- *   assumes: forall int i in [0, __maxlen): __s[i] != 0;
+ *   assumes: forall size_t i in [0, __maxlen): __s[i] != 0;
  *   ensures: return == __maxlen;
  * }
  */
@@ -331,16 +331,16 @@ size_t wcsnlen (const wchar_t *__s, size_t __maxlen);
  * requires: valid_wchars(__s, __n);
  *
  * case "found" {
- *   assumes: exists int i in [0, __n): __s[i] == __c;
- *   ensures: exists int i in [0, __n): (
+ *   assumes: exists size_t i in [0, __n): __s[i] == __c;
+ *   ensures: exists size_t i in [0, __n): (
  *              __s[i] == __c and
- *              (forall int j in [0, i): __s[i] != __c) and
+ *              (forall size_t j in [0, i): __s[i] != __c) and
  *              return == __s + i
  *            );
  * }
  *
  * case "notfound" {
- *   assumes: forall int i in [0, __n): ((unsigned char*)__s)[i] != __c;
+ *   assumes: forall size_t i in [0, __n): ((unsigned char*)__s)[i] != __c;
  *   ensures: return == NULL;
  * }
  */
@@ -351,15 +351,15 @@ wchar_t *wmemchr (const wchar_t *__s, wchar_t __c, size_t __n);
  * requires: valid_wchars(__s2, __n);
  *
  * case "equal" {
- *   assumes: forall int i in [0, __n): __s1[i] == __s2[i];
+ *   assumes: forall size_t i in [0, __n): __s1[i] == __s2[i];
  *   ensures: return == 0;
  * }
  *
  * case "notequal" {
- *   assumes: exists int i in [0, __n): __s1[i] != __s2[i];
- *   ensures: exists int i in [0, __n): (
+ *   assumes: exists size_t i in [0, __n): __s1[i] != __s2[i];
+ *   ensures: exists size_t i in [0, __n): (
  *             __s1[i] != __s2[i] and
- *             (forall int j in [0, i): __s1[j] == __s2[j]) and
+ *             (forall size_t j in [0, i): __s1[j] == __s2[j]) and
  *             (__s1[i] > __s2[i] implies return > 0) and
  *             (__s1[i] < __s2[i] implies return < 0)
  *            );
@@ -372,7 +372,7 @@ int wmemcmp (const wchar_t *__s1, const wchar_t *__s2, size_t __n);
  * requires: valid_wchars(__s1, __n);
  * requires: valid_wchars(__s2, __n);
  * assigns: __s1[0, __n);
- * ensures: forall int i in [0, __n): (__s1[i])' == __s2[i];
+ * ensures: forall size_t i in [0, __n): (__s1[i])' == __s2[i];
  * ensures: return == __s1;
  */
 wchar_t *wmemcpy (wchar_t *__restrict __s1, const wchar_t *__restrict __s2, size_t __n);
@@ -381,7 +381,7 @@ wchar_t *wmemcpy (wchar_t *__restrict __s1, const wchar_t *__restrict __s2, size
  * requires: valid_wchars(__s1, __n);
  * requires: valid_wchars(__s2, __n);
  * assigns: __s1[0, __n);
- * ensures: forall int i in [0, __n): (__s1[i])' == __s2[i];
+ * ensures: forall size_t i in [0, __n): (__s1[i])' == __s2[i];
  * ensures: return == __s1;
  */
 wchar_t *wmemmove (wchar_t *__s1, const wchar_t *__s2, size_t __n);
@@ -389,7 +389,7 @@ wchar_t *wmemmove (wchar_t *__s1, const wchar_t *__s2, size_t __n);
 /*$
  * requires: valid_wchars(__s, __n);
  * assigns: __s[0, __n);
- * ensures: forall int i in [0, __n): (__s[i])' == __c;
+ * ensures: forall size_t i in [0, __n): (__s[i])' == __c;
  * ensures: return == __s;
  */
 wchar_t *wmemset (wchar_t *__s, wchar_t __c, size_t __n);
@@ -522,7 +522,7 @@ size_t __mbrlen (const char *__restrict __s, size_t __n, mbstate_t *__restrict _
  * local: size_t src_len = strlen(*__src);
  * assigns: _errno;
  * assigns: *__src;
- * ensures: (*__src)' == NULL or exists int i in [0, src_len]: (*__src)' == (*__src) + i;
+ * ensures: (*__src)' == NULL or exists size_t i in [0, src_len]: (*__src)' == (*__src) + i;
  * ensures: return in [0, __len] or return == -1;
  *
  * case "dst-ps" {
@@ -559,7 +559,7 @@ size_t mbsrtowcs (wchar_t *__restrict __dst,
  * local: size_t src_len = wcslen(*__src);
  * assigns: _errno;
  * assigns: *__src;
- * ensures: (*__src)' == NULL or exists int i in [0, src_len]: (*__src)' == (*__src) + i;
+ * ensures: (*__src)' == NULL or exists size_t i in [0, src_len]: (*__src)' == (*__src) + i;
  * ensures: return in [0, __len] or return == -1;
  *
  * case "dst-ps" {
@@ -597,7 +597,7 @@ size_t wcsrtombs (char *__restrict __dst,
  * local: size_t src_len = strnlen(*__src, __nmc);
  * assigns: _errno;
  * assigns: *__src;
- * ensures: (*__src)' == NULL or exists int i in [0, src_len]: (*__src)' == (*__src) + i;
+ * ensures: (*__src)' == NULL or exists size_t i in [0, src_len]: (*__src)' == (*__src) + i;
  * ensures: return in [0, __len] or return == -1;
  *
  * case "dst-ps" {
@@ -635,7 +635,7 @@ size_t mbsnrtowcs (wchar_t *__restrict __dst,
  * local: size_t src_len = wcsnlen(*__src, __nwc);
  * assigns: _errno;
  * assigns: *__src;
- * ensures: (*__src)' == NULL or exists int i in [0, src_len]: (*__src)' == (*__src) + i;
+ * ensures: (*__src)' == NULL or exists size_t i in [0, src_len]: (*__src)' == (*__src) + i;
  * ensures: return in [0, __len] or return == -1;
  *
  * case "dst-ps" {
@@ -675,7 +675,7 @@ size_t wcsnrtombs (char *__restrict __dst,
  *   assumes: __endptr != NULL;
  *   requires: valid_ptr(__endptr);
  *   local: size_t len = wcslen(__nptr);
- *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
+ *   ensures: exists size_t i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
  *  case "without_endptr" {
@@ -693,7 +693,7 @@ double wcstod (const wchar_t *__restrict __nptr, wchar_t **__restrict __endptr);
  *   assumes: __endptr != NULL;
  *   requires: valid_ptr(__endptr);
  *   local: size_t len = wcslen(__nptr);
- *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
+ *   ensures: exists size_t i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
  *  case "without_endptr" {
@@ -712,7 +712,7 @@ float wcstof (const wchar_t *__restrict __nptr, wchar_t **__restrict __endptr);
  *   requires: valid_ptr(__endptr);
  *   local: size_t len = wcslen(__nptr);
  *   assigns: *__endptr;
- *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
+ *   ensures: exists size_t i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
  *  case "without_endptr" {
@@ -732,7 +732,7 @@ long double wcstold (const wchar_t *__restrict __nptr, wchar_t **__restrict __en
  *   requires: valid_ptr(__endptr);
  *   local: size_t len = wcslen(__nptr);
  *   assigns: *__endptr;
- *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
+ *   ensures: exists size_t i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
  *  case "without_endptr" {
@@ -752,7 +752,7 @@ long int wcstol (const wchar_t *__restrict __nptr, wchar_t **__restrict __endptr
  *   requires: valid_ptr(__endptr);
  *   local: size_t len = wcslen(__nptr);
  *   assigns: *__endptr;
- *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
+ *   ensures: exists size_t i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
  *  case "without_endptr" {
@@ -773,7 +773,7 @@ unsigned long int wcstoul (const wchar_t *__restrict __nptr,
  *   requires: valid_ptr(__endptr);
  *   local: size_t len = wcslen(__nptr);
  *   assigns: *__endptr;
- *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
+ *   ensures: exists size_t i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
  *  case "without_endptr" {
@@ -794,7 +794,7 @@ long long int wcstoll (const wchar_t *__restrict __nptr,
  *   requires: valid_ptr(__endptr);
  *   local: size_t len = wcslen(__nptr);
  *   assigns: *__endptr;
- *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
+ *   ensures: exists size_t i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
  *  case "without_endptr" {
@@ -811,7 +811,7 @@ unsigned long long int wcstoull (const wchar_t *__restrict __nptr,
  * requires: no_overlap_wide(__src, src_len + 1, __dest, src_len + 1);
  * requires: valid_wchars(__dest, src_len + 1);
  * assigns: __dest[0, src_len];
- * ensures: forall int i in [0, src_len]: (__dest[i])' == __src[i];
+ * ensures: forall size_t i in [0, src_len]: (__dest[i])' == __src[i];
  * ensures: return == __dest + src_len;
  */
 wchar_t *wcpcpy (wchar_t *__restrict __dest, const wchar_t *__restrict __src);
@@ -822,8 +822,8 @@ wchar_t *wcpcpy (wchar_t *__restrict __dest, const wchar_t *__restrict __src);
  * local: size_t src_nlen = wcsnlen(__src, __n);
  * requires: no_overlap_wide(__src, src_nlen, __dest, src_nlen);
  * assigns: __dest[0, __n);
- * ensures: forall int i in [0, src_nlen): (__dest[i])' == __src[i];
- * ensures: forall int i in [src_nlen, __n): (__dest[i])' == 0;
+ * ensures: forall size_t i in [0, src_nlen): (__dest[i])' == __src[i];
+ * ensures: forall size_t i in [src_nlen, __n): (__dest[i])' == 0;
  * ensures: return == __dest + __n - 1;
  */
 wchar_t *wcpncpy (wchar_t *__restrict __dest, const wchar_t *__restrict __src, size_t __n);

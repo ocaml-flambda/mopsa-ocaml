@@ -55,11 +55,11 @@ int getopt (int ___argc, char *const *___argv, const char *__shortopts);
 /*$$
  * predicate valid_longopt(l):
  *   valid_ptr(l) and
- *   exists int i in [0, ((bytes(l) - offset(l)) / sizeof_type(struct option))): (
+ *   exists size_t i in [0, ((bytes(l) - offset(l)) / sizeof_type(struct option))): (
  *     l[i].name == NULL and
- *     forall int j in [0, i): (
+ *     forall size_t j in [0, i): (
  *       valid_ptr(l[j].name) and
- *       (exists int k in [0, (size(l[j].name) - offset(l[j].name))): l[j].name[k] == 0) and
+ *       (exists size_t k in [0, (size(l[j].name) - offset(l[j].name))): l[j].name[k] == 0) and
  *       (l[j].flag != NULL implies valid_ptr(l[j].flag))
  *     )
  *   );
@@ -67,10 +67,10 @@ int getopt (int ___argc, char *const *___argv, const char *__shortopts);
 
 /*$
  * ensures:
- *   exists int i in [0, ((bytes(l) - offset(l)) / sizeof_type(struct option))): (
+ *   exists size_t i in [0, ((bytes(l) - offset(l)) / sizeof_type(struct option))): (
  *     l[i].name == NULL and
  *     return == i and
- *     forall int j in [0, i): l[j].name != NULL
+ *     forall size_t j in [0, i): l[j].name != NULL
  *   );
  */
 size_t _mopsa_len_option (const struct option* l);
@@ -87,8 +87,8 @@ size_t _mopsa_pick(size_t i);
  * requires: forall int i in [0, ___argc): valid_string(___argv[i]);
  * requires: valid_longopt(__longopts);
  * requires: null_or_valid_ptr(__longind);
- * local: int len = _mopsa_len_option(__longopts);
- * local: int r = _mopsa_pick(len);
+ * local: size_t len = _mopsa_len_option(__longopts);
+ * local: size_t r = _mopsa_pick(len);
  * assigns: optind;
  * assigns: opterr;
  * assigns: optopt;

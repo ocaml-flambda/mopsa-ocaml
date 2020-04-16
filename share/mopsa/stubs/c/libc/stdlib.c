@@ -74,7 +74,7 @@ long long int atoll (const char *__nptr);
  *   assumes: __endptr != NULL;
  *   local: size_t len = strlen(__nptr);
  *   assigns: *__endptr;
- *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
+ *   ensures: exists size_t i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
  * case "without_endptr" {
@@ -93,7 +93,7 @@ double strtod (const char *__restrict __nptr,
  *   assumes: __endptr != NULL;
  *   local: size_t len = strlen(__nptr);
  *   assigns: *__endptr;
- *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
+ *   ensures: exists size_t i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
  * case "without_endptr" {
@@ -116,7 +116,7 @@ double strtod_l (const char *__restrict __nptr,
  *   assumes: __endptr != NULL;
  *   local: size_t len = strlen(__nptr);
  *   assigns: *__endptr;
- *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
+ *   ensures: exists size_t i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
  * case "without_endptr" {
@@ -134,7 +134,7 @@ float strtof (const char *__restrict __nptr,
  *   assumes: __endptr != NULL;
  *   local: size_t len = strlen(__nptr);
  *   assigns: *__endptr;
- *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
+ *   ensures: exists size_t i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
  * case "without_endptr" {
@@ -156,7 +156,7 @@ long double strtold (const char *__restrict __nptr,
  *   assumes: __endptr != NULL;
  *   local: size_t len = strlen(__nptr);
  *   assigns: *__endptr;
- *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
+ *   ensures: exists size_t i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
  * case "without_endptr" {
@@ -177,7 +177,7 @@ long int strtol (const char *__restrict __nptr,
  *   assumes: __endptr != NULL;
  *   local: size_t len = strlen(__nptr);
  *   assigns: *__endptr;
- *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
+ *   ensures: exists size_t i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
  * case "without_endptr" {
@@ -199,7 +199,7 @@ unsigned long int strtoul (const char *__restrict __nptr,
  *   assumes: __endptr != NULL;
  *   local: size_t len = strlen(__nptr);
  *   assigns: *__endptr;
- *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
+ *   ensures: exists size_t i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
  * case "without_endptr" {
@@ -219,7 +219,7 @@ long long int strtoq (const char *__restrict __nptr,
  *   assumes: __endptr != NULL;
  *   local: size_t len = strlen(__nptr);
  *   assigns: *__endptr;
- *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
+ *   ensures: exists size_t i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
  * case "without_endptr" {
@@ -243,7 +243,7 @@ unsigned long long int strtouq (const char *__restrict __nptr,
  *   assumes: __endptr != NULL;
  *   local: size_t len = strlen(__nptr);
  *   assigns: *__endptr;
- *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
+ *   ensures: exists size_t i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
  * case "without_endptr" {
@@ -263,7 +263,7 @@ long long int strtoll (const char *__restrict __nptr,
  *   assumes: __endptr != NULL;
  *   local: size_t len = strlen(__nptr);
  *   assigns: *__endptr;
- *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
+ *   ensures: exists size_t i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
  * case "without_endptr" {
@@ -605,7 +605,7 @@ void *malloc (size_t __size);
  * case "success" {
  *   local:   void* r = new Memory;
  *   ensures: size(r) == __nmemb * __size;
- *   ensures: forall int i in [0, (__nmemb * __size) ): ((unsigned char*)r)[i] == 0;
+ *   ensures: forall size_t i in [0, (__nmemb * __size) ): ((unsigned char*)r)[i] == 0;
  *   ensures: return == r;
  * }
  *
@@ -648,9 +648,9 @@ void *calloc (size_t __nmemb, size_t __size);
  *   local:    void* r = new Memory;
  *   ensures:  size(r) == __size;
  *   ensures:  size(__ptr) >= __size implies 
- *             forall int i in [0, __size): ((unsigned char*)r)[i] == ((unsigned char*)__ptr)[i];
+ *             forall size_t i in [0, __size): ((unsigned char*)r)[i] == ((unsigned char*)__ptr)[i];
  *   ensures:  size(__ptr) <= __size implies 
- *             forall int i in [0, size(__ptr)): ((unsigned char*)r)[i] == ((unsigned char*)__ptr)[i];
+ *             forall size_t i in [0, size(__ptr)): ((unsigned char*)r)[i] == ((unsigned char*)__ptr)[i];
  *   free:     __ptr;
  *   ensures:  return == r;
  * }

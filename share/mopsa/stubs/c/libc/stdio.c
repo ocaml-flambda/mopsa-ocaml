@@ -51,12 +51,12 @@ char _std_buffer[STD_BUFFER_SIZE];
  * local: _FILE_* file = new File;
  * ensures: bytes(file) == sizeof_type(_FILE_);
  * ensures: file->_fileno == fd;
- * ensures: exists int i in [0, STD_BUFFER_SIZE - 1]: file->_IO_read_ptr == &(_std_buffer[i]);
- * ensures: exists int i in [0, STD_BUFFER_SIZE - 1]: file->_IO_read_end == &(_std_buffer[i]);
- * ensures: exists int i in [0, STD_BUFFER_SIZE - 1]: file->_IO_read_base == &(_std_buffer[i]);
- * ensures: exists int i in [0, STD_BUFFER_SIZE - 1]: file->_IO_write_ptr == &(_std_buffer[i]);
- * ensures: exists int i in [0, STD_BUFFER_SIZE - 1]: file->_IO_write_end == &(_std_buffer[i]);
- * ensures: exists int i in [0, STD_BUFFER_SIZE - 1]: file->_IO_write_base == &(_std_buffer[i]);
+ * ensures: exists size_t i in [0, STD_BUFFER_SIZE - 1]: file->_IO_read_ptr == &(_std_buffer[i]);
+ * ensures: exists size_t i in [0, STD_BUFFER_SIZE - 1]: file->_IO_read_end == &(_std_buffer[i]);
+ * ensures: exists size_t i in [0, STD_BUFFER_SIZE - 1]: file->_IO_read_base == &(_std_buffer[i]);
+ * ensures: exists size_t i in [0, STD_BUFFER_SIZE - 1]: file->_IO_write_ptr == &(_std_buffer[i]);
+ * ensures: exists size_t i in [0, STD_BUFFER_SIZE - 1]: file->_IO_write_end == &(_std_buffer[i]);
+ * ensures: exists size_t i in [0, STD_BUFFER_SIZE - 1]: file->_IO_write_base == &(_std_buffer[i]);
  * ensures: return == file;
  */
 _FILE_ *_alloc_std_stream();

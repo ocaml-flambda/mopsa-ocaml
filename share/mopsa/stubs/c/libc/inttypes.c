@@ -57,7 +57,7 @@ imaxdiv_t imaxdiv (intmax_t __numer, intmax_t __denom);
  *   assumes: __endptr != NULL;
  *   local: size_t len = strlen(__nptr);
  *   assigns: *__endptr;
- *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
+ *   ensures: exists size_t i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
  *  case "without_endptr" {
@@ -77,7 +77,7 @@ intmax_t strtoimax (const char *__restrict __nptr,
  *   assumes: __endptr != NULL;
  *   local: size_t len = strlen(__nptr);
  *   assigns: *__endptr;
- *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
+ *   ensures: exists size_t i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
  *  case "without_endptr" {
@@ -97,7 +97,7 @@ uintmax_t strtoumax (const char *__restrict __nptr,
  *   assumes: __endptr != NULL;
  *   local: size_t len = wcslen(__nptr);
  *   assigns: *__endptr;
- *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
+ *   ensures: exists size_t i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
  *  case "without_endptr" {
@@ -117,7 +117,7 @@ intmax_t wcstoimax (const wchar_t *__restrict __nptr,
  *   assumes: __endptr != NULL;
  *   local: size_t len = wcslen(__nptr);
  *   assigns: *__endptr;
- *   ensures: exists int i in [0, len]: (*__endptr)' == __nptr + i;
+ *   ensures: exists size_t i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
  *  case "without_endptr" {

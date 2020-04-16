@@ -42,7 +42,7 @@ void bcopy (const void *__src, void *__dest, size_t __n);
 /*$
  * requires: valid_bytes(__s, __n);
  * assigns: ((unsigned char*)__s)[0, __n);
- * ensures: forall int i in [0, __n): (((unsigned char*)__s)[i])' == 0;
+ * ensures: forall size_t i in [0, __n): (((unsigned char*)__s)[i])' == 0;
  */
 void bzero (void *__s, size_t __n);
 

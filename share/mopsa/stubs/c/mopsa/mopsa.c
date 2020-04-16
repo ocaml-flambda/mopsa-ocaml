@@ -40,14 +40,14 @@
  * predicate valid_string(s):
  *   valid_ptr(s) and
  *   size(s) >= 1 and
- *   exists int _i in [0, (size(s) - offset(s)) ): s[_i] == 0
+ *   exists size_t _i in [0, (size(s) - offset(s)) ): s[_i] == 0
  * ;
  */
 
 /*$$
  * predicate valid_primed_string(s):
  *   valid_ptr(s) and
- *   exists int _i in [0, (size(s) - offset(s)) ): (s[_i])' == 0
+ *   exists size_t _i in [0, (size(s) - offset(s)) ): (s[_i])' == 0
  * ;
  */
 
@@ -55,7 +55,7 @@
 /*$$
  * predicate valid_substring(s, n):
  *   (n > 0 implies valid_ptr(s)) and
- *   exists int _i in [0, n): s[_i] == 0
+ *   exists size_t _i in [0, n): s[_i] == 0
  * ;
  */
 
@@ -63,14 +63,14 @@
 /*$$
  * predicate valid_primed_substring(s, n):
  *   (n > 0 implies valid_ptr(s)) and
- *   exists int _i in [0, n): (s[_i])' == 0
+ *   exists size_t _i in [0, n): (s[_i])' == 0
  * ;
  */
 
 
 /*$$
  * predicate valid_ptr_range(p, i, j):
- *   forall int k in [i, j]: valid_ptr(p+k);
+ *   forall size_t k in [i, j]: valid_ptr(p+k);
  */
 
 /*$
@@ -120,14 +120,14 @@ void _mopsa_assert_valid_string(char *s);
 /*$
  * requires: valid_substring(s,n);
  */
-void _mopsa_assert_valid_substring(char *s, unsigned int n);
+void _mopsa_assert_valid_substring(char *s, size_t n);
 
 
 /*$
  * requires: valid_ptr_range(s, i, j);
  * assigns: s[i, j];
  */
-void _mopsa_memrand(char *s, unsigned int i, unsigned int j);
+void _mopsa_memrand(char *s, size_t i, size_t j);
 
 
 /*$
@@ -149,7 +149,7 @@ void _mopsa_strrand(char *s);
  *   assumes: n == 0;
  * }
  */
-void _mopsa_strnrand(char *s, unsigned int n);
+void _mopsa_strnrand(char *s, size_t n);
 
 
 /*$
@@ -161,27 +161,27 @@ void _mopsa_assert_valid_stream(void* stream);
 /*$
  * requires: valid_ptr_range(s, i, j);
  * assigns: s[i, j];
- * ensures: forall unsigned int k in [i,j]: (s[k])' == c;
+ * ensures: forall size_t k in [i,j]: (s[k])' == c;
  */
-void _mopsa_memset(char *s, char c, unsigned int i, unsigned int j);
+void _mopsa_memset(char *s, char c, size_t i, size_t j);
 
 
 /*$
  * requires: valid_ptr_range(dst, i, j);
  * requires: valid_ptr_range(src, i, j);
  * assigns: dst[i, j];
- * ensures: forall unsigned int k in [i,j]: (dst[k])' == src[k];
+ * ensures: forall size_t k in [i,j]: (dst[k])' == src[k];
  */
-void _mopsa_memcpy(char *dst, char *src, unsigned int i, unsigned int j);
+void _mopsa_memcpy(char *dst, char *src, size_t i, size_t j);
 
 
 
 /*$$
  * predicate in_string(x,s):
- *   exists int _i in [0, (bytes(s) - offset(s))):
+ *   exists size_t _i in [0, (bytes(s) - offset(s))):
  *     (x == s + _i and
- *     forall int _j in [0, _i): s[_j] != 0)
- *  ;
+ *     forall size_t _j in [0, _i): s[_j] != 0)
+ * ;
  */
 
 /*$$
@@ -193,7 +193,7 @@ void _mopsa_memcpy(char *dst, char *src, unsigned int i, unsigned int j);
  * predicate valid_wide_string(s):
  *   valid_ptr(s) and
  *   size(s) >= 1 and
- *   exists int _i in [0, ((bytes(s) - offset(s)) / sizeof_type(wchar_t))): s[_i] == 0
+ *   exists size_t _i in [0, ((bytes(s) - offset(s)) / sizeof_type(wchar_t))): s[_i] == 0
  * ;
  */
 
@@ -201,30 +201,30 @@ void _mopsa_memcpy(char *dst, char *src, unsigned int i, unsigned int j);
 /*$$
  * predicate valid_wide_substring(s, n):
  *   (n > 0 implies valid_ptr(s)) and
- *   exists int _i in [0, n): s[_i] == 0
+ *   exists size_t _i in [0, n): s[_i] == 0
  * ;
  */
 
 /*$$
  * predicate valid_primed_wide_string(s):
  *   valid_ptr(s) and
- *   exists int _i in [0, ((bytes(s) - offset(s)) / sizeof_type(wchar_t))): (s[_i])' == 0
+ *   exists size_t _i in [0, ((bytes(s) - offset(s)) / sizeof_type(wchar_t))): (s[_i])' == 0
  * ;
  */
 
 /*$$
  * predicate valid_primed_wide_substring(s, n):
  *   (n > 0 implies valid_ptr(s)) and
- *   exists int _i in [0, n): (s[_i])' == 0
+ *   exists size_t _i in [0, n): (s[_i])' == 0
  * ;
  */
 
 /*$$
  * predicate in_wide_string(x,s):
- *   exists int _i in [0, ((bytes(s) - offset(s)) / sizeof_type(wchar_t))):
+ *   exists size_t _i in [0, ((bytes(s) - offset(s)) / sizeof_type(wchar_t))):
  *     (x == s + _i and
- *     forall int _j in [0, _i): s[_j] != 0)
- *  ;
+ *     forall size_t _j in [0, _i): s[_j] != 0)
+ * ;
  */
 
 
@@ -243,7 +243,7 @@ void _mopsa_memcpy(char *dst, char *src, unsigned int i, unsigned int j);
 
 /*$$
  * predicate in_bytes(r, x, n):
- *    exists int _i in [0, n]: r == x + _i
+ *    exists size_t _i in [0, n]: r == x + _i
  * ;
  */
 
@@ -261,6 +261,6 @@ void _mopsa_memcpy(char *dst, char *src, unsigned int i, unsigned int j);
 
 /*$$
  * predicate in_wchars(r, x, n):
- *    exists int _i in [0, n]: r == x + _i
+ *    exists size_t _i in [0, n]: r == x + _i
  * ;
  */
