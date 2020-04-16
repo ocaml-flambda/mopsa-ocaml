@@ -21,27 +21,26 @@
 
 (** Abstraction of arrays by smashing.
 
-    This domain summarizes the values of arrays elements into a single
-    smash variable. Note that only initialized elements are smashed,
-    since uninitialized elements have an indeterminate value.margin
+    This domain summarizes the initialized values of a base using single smash
+    variable `smash(base)`.
 
-    In order to determine whether the accessed element has been
-    initialized, the domain uses a numeric variable `uninit(base)` that
-    tracks the offset of the first unintilialized element of memory
-    block `base`.
+    In order to determine whether the accessed element has been initialized,
+    the domain uses a numeric variable `uninit(base)` that tracks the offset
+    of the first unintilialized element of memory block `base`.
 
-    For efficiency reason, some specific values of `uninit(base)` are
-    directly encoded in the abstract state. More particularly, we
-    associate to `base` three possible states:
+    The concretization of this domain is therefore:
+     
+       ∀ i ∈ [0, uninit(base) - 1]: base[i] ∈ γ(smash(base))
 
-    - Init.Partial : the base has been partially initialized. In this
-    case, we keep a value for `uninit(base)` in the numeric domain.
+    For efficiency reason, some specific values of `uninit(base)` are directly
+    encoded in the abstract state. More particularly, the domain uses two
+    shortcut states:
 
-    - Init.Full : the base has been fully initialize, which
-    corresponds to `uninit(base) = size(base)`
+    - Init.None : used to denote that the base has not been initialized yet.
+    This corresponds to `uninit(base) = 0`.
 
-    - Init.Top: no information available on the base, which
-    corresponds to `0 ≤ uninit(base) ≤ size(base)`.
+    - Init.Full : used to denote that the base has been fully initialized.
+    This corresponds to `uninit(base) = size(base)`.
 
 
     Limitations:
@@ -174,27 +173,33 @@ struct
   module STypeSet = Framework.Lattices.Powerset.Make
       (struct type t = styp let compare = compare_styp let print = pp_styp end)
 
-  (** Initialization state *)
+  (** Initialization state with shortcut states to avoid useless tests on `uninit` *)
   module Init =
   struct
     type t =
       | Bot
-      | Top
+      (* Empty state, useful only for the lattice signature *)
+
+      | None
+      (* Not yet initialized base *)
+
+      | Full of STypeSet.t
+      (* Fully initialized base with the types of initialized elements *)
+
       | Partial of STypeSet.t
-      (* Partially initialized; we keep the types of the initialized elements. *)
-      | Full    of STypeSet.t
-      (* Fully initialized *)
+      (* Partially initialized base. Note that [Full ts] and [None] are special case of [Partial ts] *)
+ 
 
     let bottom = Bot
 
-    let top = Top
+    let top = Partial STypeSet.top
 
     let print fmt x =
       match x with
       | Bot        -> fprintf fmt "⊥"
+      | None       -> fprintf fmt "none"
       | Full ts    -> fprintf fmt "full(%a)" STypeSet.print ts
       | Partial ts -> fprintf fmt "partial(%a)" STypeSet.print ts
-      | Top        -> fprintf fmt "⊤"
 
     let is_bottom x = (x = Bot)
 
@@ -203,36 +208,41 @@ struct
       match x, y with
       | Bot, _ -> true
       | _, Bot -> false
-      | _, Top -> true
-      | Top, _ -> false
       | Full ts1, Full ts2 -> STypeSet.subset ts1 ts2
+      | None, None -> true
       | Partial ts1, Partial ts2 -> STypeSet.subset ts1 ts2
-      | Partial _, Full _ -> false
-      | Full _, Partial _ -> false
+      | Full ts1, Partial ts2 -> STypeSet.subset ts1 ts2 (* since [Full ts] is a special case of [Partial ts] *)
+      | None, Partial _ -> true
+      | _ -> false
 
     let join x y =
       if x == y then x else
       match x, y with
       | Bot, a | a, Bot -> a
-      | Top, _ | _, Top -> Top
+      | None, None -> None
       | Full ts1, Full ts2 -> Full (STypeSet.join ts1 ts2)
       | Partial ts1, Partial ts2 -> Partial (STypeSet.join ts1 ts2)
-      | Full _, Partial _ | Partial _, Full _ -> Top
+      | Full ts1, Partial ts2 | Partial ts1, Full ts2 -> Partial (STypeSet.join ts1 ts2)
+      | None, Partial ts | Partial ts, None -> Partial ts
+      | None, Full ts | Full ts, None -> Partial ts
+           
 
     let meet x y =
       if x == y then x else
       match x, y with
-      | Bot, _ | _, Bot -> Bot
-      | Top, a | a, Top -> a
+      | Bot, a | a, Bot -> a
+      | None, None -> None
       | Full ts1, Full ts2 -> Full (STypeSet.meet ts1 ts2)
       | Partial ts1, Partial ts2 -> Partial (STypeSet.meet ts1 ts2)
-      | Full _, Partial _ | Partial _, Full _ -> Bot
+      | Full ts1, Partial ts2 | Partial ts1, Full ts2 -> Full (STypeSet.meet ts1 ts2)
+      | None, Partial _ | Partial _, None -> None
+      | None, Full ts | Full ts, None -> Bot
 
     let widen ctx = join
 
     let apply f = function
       | Bot        -> Bot
-      | Top        -> Top
+      | None       -> None
       | Full ts    -> Full (f ts)
       | Partial ts -> Partial (f ts)
 
@@ -368,6 +378,10 @@ struct
       (mk_add_var (mk_uninit_var base) range)
       ~zone:Z_c_scalar flow
 
+  let set_uninit_to_base_size base range man flow =
+    eval_base_size base range man flow >>$ fun size flow ->
+    man.post (mk_assign (mk_uninit_expr base range) size range) ~zone:Z_c_scalar flow
+
   let remove_uninit base range man flow =
     man.post
       (mk_remove_var (mk_uninit_var base) range)
@@ -405,7 +419,7 @@ struct
     match init with
     (* Only fully initialized bases are supported for the moment *)
     | Init.Bot -> Post.return flow
-    | Init.Top -> Post.return flow
+    | Init.None -> Post.return flow
     | Init.Partial ts ->
       if STypeSet.mem s.styp ts then
         Post.return flow
@@ -497,33 +511,49 @@ struct
       (* No unification for bases present in one branch only *)
       (fun b init acc -> acc)
       (fun b' init' acc -> acc)
-      (* Perform unification for common bases *)
       (fun base init init' (a,s,a',s') ->
          let doit a init s other_init =
            match init, other_init with
-           | Init.Bot, _ | _, Init.Bot -> a, s
-           | Init.Top, _ -> a, s
+           | Init.Bot, _ | _, Init.Bot -> a,s
 
-           | Init.Partial _, Init.Partial _ -> a, s
+           | Init.None, Init.None -> a,s
 
-           | Init.Full ts1, Init.Full ts2 ->
+           | Init.Partial _, Init.None -> a,s
+
+           (* The base becomes partially initialized from offset 0 *)
+           | Init.None, Init.Partial _
+           | Init.None, Init.Full _ ->
+             (* Add the uninit variable and initialize it to 0 *)
+             (* Note that there is no need to add a smashes in order
+                to keep the values of the other flow *)
+             let a,s = state_exec (add_uninit base unify_range man) ctx man a s in
+             state_exec (man.post (mk_assign (mk_uninit_expr base unify_range) zero unify_range) ~zone:Z_c_scalar) ctx man a s
+
+           (* The base becomes partially initialized from offset size(base) *)
+           | Init.Full _, Init.None ->
+             (* Add the uninit variable and initialize it to size *)
+             let a,s = state_exec (add_uninit base unify_range man) ctx man a s in
+             state_exec (set_uninit_to_base_size base unify_range man) ctx man a s
+
+           (* The base becomes partially initialized from offset size(base) with possible synthesis of missing smashes *)
+           | Init.Full ts1, Init.Partial ts2 ->
+             (* Add the uninit variable and initialize it to size(base) *)
+             let a,s = state_exec (add_uninit base unify_range man) ctx man a s in
+             let a,s = state_exec (set_uninit_to_base_size base unify_range man) ctx man a s in
+             (* Synthesize missing smashes *)
              STypeSet.fold
                (fun styp (a,s) ->
                   state_exec (phi {base; styp} unify_range man) ctx man a s
                ) (STypeSet.diff ts2 ts1) (a,s)
 
-           | Init.Full ts, _ ->
+           (* Initialization state will not change, but possible synthesis of missing smashes *)
+           | Init.Partial ts1, Init.Full ts2
+           | Init.Partial ts1, Init.Partial ts2
+           | Init.Full ts1, Init.Full ts2 ->
              STypeSet.fold
-               (fun st (a,s) -> state_exec (remove_smash base st unify_range man) ctx man a s)
-               ts (a,s)             
-
-           | Init.Partial ts, _ ->
-             let a,s =
-               STypeSet.fold
-                 (fun st (a,s) -> state_exec (remove_smash base st unify_range man) ctx man a s)
-                 ts (a,s)
-             in
-             state_exec (remove_uninit base unify_range man) ctx man a s
+               (fun styp (a,s) ->
+                  state_exec (phi {base; styp} unify_range man) ctx man a s
+               ) (STypeSet.diff ts2 ts1) (a,s)
 
          in
          let a,s = doit a init s init' in
@@ -636,10 +666,8 @@ struct
   let exec_smashes (f:styp -> range -> _ man -> 'a flow -> 'a post) base a range man flow =
     if not (State.mem base a) then Post.return flow else
     match State.find base a with
-      | Init.Bot        -> Post.return flow
-      | Init.Top        -> Post.return flow
-      | Init.Full ts
-      | Init.Partial ts -> fold_stypes f ts range man flow
+      | Init.Bot     | Init.None       -> Post.return flow
+      | Init.Full ts | Init.Partial ts -> fold_stypes f ts range man flow
 
   (** Execute a transfer when a uninit variable exists *)
   let exec_uninit (f:range -> _ man -> 'a flow -> 'a post) base a range man flow =
@@ -658,7 +686,7 @@ struct
     if not (is_interesting_base base) then
       Post.return flow
     else
-      map_env T_cur (State.add base Init.Top) man flow |>
+      map_env T_cur (State.add base Init.None) man flow |>
       Post.return
 
 
@@ -751,6 +779,54 @@ struct
       match init with
       | Init.Bot -> Post.return flow
 
+      | Init.None ->
+        if not (is_aligned offset lval.etyp man flow) || not (is_expr_forall_quantified offset) then
+          Post.return flow
+        else
+          (* In case of unintialized base, three cases are possible:
+
+             Case #1: fully initialized
+                0              size - |elm|
+                |-------------------|------>
+               min                 max
+
+             Case #2: partially initialized
+                0              size - |elm|
+                |-----------x-------|------>
+               min         max
+
+             Case #3: nop
+                0              size - |elm|
+                |---------x---------|------>
+                         min
+          *)
+          let min, max = Common.Quantified_offset.bound offset in
+          let elm = mk_z (sizeof_type lval.etyp) range in
+          eval_base_size base range man flow >>$ fun size flow ->
+          assume_num (eq min zero range)
+            ~fthen:(fun flow ->
+                man.post (mk_add_var vsmash range) ~zone:Z_c_scalar flow >>$ fun () flow ->
+                assume_num (eq max (sub size elm range) range)
+                  ~fthen:(fun flow ->
+                      (* Case #1 *)
+                      let init' = Init.Full (STypeSet.singleton s.styp) in
+                      set_env T_cur (State.add base init' a) man flow |>
+                      Post.return
+                    )
+                  ~felse:(fun flow ->
+                      (* Case #2 *)
+                      let init' = Init.Partial (STypeSet.singleton s.styp) in
+                      set_env T_cur (State.add base init' a) man flow |>
+                      man.post (mk_add uninit range) ~zone:Z_c_scalar >>$ fun () flow ->
+                      man.post (mk_assign uninit (add max elm range) range) ~zone:Z_c_scalar flow
+                    ) ~zone:Z_c_scalar man flow
+              )
+            ~felse:(fun flow ->
+                (* Case #3 *)
+                Post.return flow
+              )  ~zone:Z_c_scalar man flow
+        
+
       | Init.Full ts ->
         (* When base is fully initialized, we remove smashes other
            than the one with the type of lval, which will be put to
@@ -761,53 +837,6 @@ struct
         else
           let flow = set_env T_cur (State.add base (Init.Full (STypeSet.singleton s.styp)) a) man flow in
           man.post (mk_add_var vsmash range) ~zone:Z_c_scalar flow
-
-      | Init.Top ->
-        (* No initialization information available, so let's look at the offset *)
-        if not (is_aligned offset lval.etyp man flow) || not (is_expr_forall_quantified offset) then
-          Post.return flow
-        else
-          (* In the case of universally quantified offset, we check three cases:
-
-             Case #1: fully initialized
-                0            size - |elm|
-                |----------------|------>
-               min              max
-
-            Case #2: partially initialized until max + |elm|
-                0            size - |elm|
-                |---------x------|------>
-               min       max
-
-             Case #3: nop
-                0            size - |elm|
-                |----x-----------|------>
-                    min
-          *)
-          let min, max = Common.Quantified_offset.bound offset in
-          let elm = mk_z (sizeof_type lval.etyp) range in
-          eval_base_size base range man flow >>$ fun size flow ->
-          assume_num (eq min zero range)
-            ~fthen:(fun flow ->
-                assume_num (eq max (sub size elm range) range)
-                  ~fthen:(fun flow ->
-                      (* Case #1 *)
-                      let init' = Init.Full (STypeSet.singleton s.styp) in
-                      set_env T_cur (State.add base init' a) man flow |>
-                      man.post (mk_add_var vsmash range) ~zone:Z_c_scalar
-                    )
-                  ~felse:(fun flow ->
-                      (* Case #2 *)
-                      let flow = set_env T_cur (State.add base (Init.Partial (STypeSet.singleton s.styp)) a) man flow in
-                      man.post (mk_add_var vsmash range) ~zone:Z_c_scalar flow  >>$ fun () flow ->
-                      man.post (mk_add uninit range) ~zone:Z_c_scalar flow >>$ fun () flow ->
-                      man.post (mk_assign uninit (add max elm range) range) ~zone:Z_c_scalar flow
-                    ) ~zone:Z_c_scalar man flow
-              )
-            ~felse:(fun flow ->
-                (* Case #3 *)
-                Post.return flow
-              ) ~zone:Z_c_scalar man flow
 
       | Init.Partial ts ->
         fold_stypes (remove_smash base) (STypeSet.remove s.styp ts) range man flow >>$ fun () flow ->
@@ -882,39 +911,37 @@ struct
         match State.find base a with
         | Init.Bot -> Post.return flow
 
-        | Init.Top ->
-          (* When we have no initialization information, we check two cases:
+        | Init.None ->
+          man.post (mk_add_var vsmash range) ~zone:Z_c_scalar flow >>$ fun () flow ->
+          (* If this is the first time we initialize the base, we look at two cases:
 
-             Case #1: assign first element
-                0           size - |elm|
-                |----------------|------>
-                offset
+             Case #1: begin intialization
+                0             size - |elm|
+                |------------------|------>
+              offset
 
              Case #2: nop
-                0           size - |elm|
-                |-----x-----------|------>
-                    offset
+                0              size - |elm|
+                |--------x----------|------>
+                       offset
           *)
+          let uninit = mk_uninit_expr base ~mode range in
+          eval_base_size base range man flow >>$ fun size flow ->
           assume_num (eq offset zero range)
             ~fthen:(fun flow ->
                 (* Case #1 *)
-                (* Since the previous state was Init.Top, the smash
-                   variable is not the environment yet. So create it
-                   and assign rval to it. Since we are modifying the
-                   first element, we use a strong update. *)
                 let init = Init.Partial (STypeSet.singleton s.styp) in
                 let flow = set_env T_cur (State.add base init a) man flow in
-                let strong_smash = mk_smash_expr s ~mode:(Some STRONG) range in
-                let uninit = mk_uninit_expr base ~mode range in
                 man.post (mk_add_var vsmash range) ~zone:Z_c_scalar flow >>$ fun () flow ->
-                man.post (mk_assign strong_smash rval range) ~zone:Z_c_scalar flow >>$ fun () flow ->
                 man.post (mk_add uninit range) ~zone:Z_c_scalar flow >>$ fun () flow ->
+                man.post (mk_assign (strongify_var_expr esmash) rval range) ~zone:Z_c_scalar flow >>$ fun () flow ->
                 man.post (mk_assign uninit elm range) ~zone:Z_c_scalar flow
               )
             ~felse:(fun flow ->
                 (* Case #2 *)
                 Post.return flow
               ) ~zone:Z_c_scalar man flow
+
 
         | Init.Full ts ->
           (* Destroy existing incompatible smashes *)
@@ -1000,7 +1027,7 @@ struct
       let a = get_env T_cur man flow in
       match State.find base a with
       (* Do nothing if base is not fully initialized *)
-      | Init.Bot | Init.Top | Init.Partial _ -> Post.return flow
+      | Init.Bot | Init.None | Init.Partial _ -> Post.return flow
       | Init.Full ts ->
         let s = mk_smash base t in
         phi s range man flow >>$ fun () flow ->
@@ -1155,8 +1182,8 @@ struct
       phi s range man flow >>$ fun () flow ->
       let esmash = mk_smash_expr s ~typ:(Some (under_type p.etyp)) ~mode range in
       match init with
-      | Init.Bot     ->  Eval.singleton (mk_top (under_type p.etyp) range) flow
-      | Init.Top     -> Eval.singleton (mk_top (under_type p.etyp) range) flow
+      | Init.Bot | Init.None ->  Eval.singleton (mk_top (under_type p.etyp) range) flow
+
       | Init.Full ts -> Eval.singleton esmash flow
 
       | Init.Partial ts ->
