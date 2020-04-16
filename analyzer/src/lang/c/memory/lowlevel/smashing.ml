@@ -249,6 +249,23 @@ struct
     let add st = apply (STypeSet.add st)
 
     let remove st = apply (STypeSet.remove st)
+
+    let is_partial = function
+      | Partial _ -> true
+      | _         -> false
+
+    let is_full = function
+      | Full _ -> true
+      | _      -> false
+
+    let is_none = function
+      | None -> true
+      | _    -> false
+
+    let types = function
+      | Bot -> STypeSet.bottom
+      | None -> STypeSet.empty
+      | Full ts | Partial ts -> ts
   end
 
   (* The abstract state is a map from bases to initialization state *)
@@ -342,6 +359,7 @@ struct
       (mk_fold_var (mk_smash_var {base;styp}) (List.map (fun b -> mk_smash_var {base=b;styp}) basel) range)
       ~zone:Z_c_scalar flow
 
+
   (** {2 Offset of the first uninitialized element} *)
   (** ********************************************* *)
 
@@ -411,6 +429,89 @@ struct
   (** {2 Unification} *)
   (** *************** *)
 
+  
+  (** [is_aligned o n man flow] checks whether the value of an
+      expression [o] is aligned w.r.t. type [t] *)
+  let is_aligned e t ?(zone=Z_c_low_level) man flow =
+    let s = sizeof_type t in
+    if is_c_expr_equals_z e Z.zero then true else
+    if Z.(s = one) then true
+    else
+      man.eval e ~zone:(Zone.Z_c_low_level,Universal.Zone.Z_u_num) flow |>
+      Cases.for_all_some (fun ee flow ->
+          (* Compute the step-interval of ee *)
+          let _, c = man.ask (Universal.Numeric.Common.Q_int_congr_interval ee) flow in
+          let c' = (s,Z.zero) in
+          Universal.Numeric.Common.C.included c c'
+        )
+
+  (** Synthesis function of integer smashes *)
+  let phi_int s init range man flow =
+    (* Synthesis is not supported for partially initialized
+       bases where the uninit offset is not aligned w.r.t. to
+       the type of the smash *)
+    if Init.is_partial init
+    && not (is_aligned (mk_uninit_expr s.base range) (typ_of_styp s.styp) ~zone:Z_c_scalar man flow)
+    then
+      Post.return flow
+    else
+      (* Two cases are considered (inspired synthesis function of the Cells domain):
+
+         Case #1: ∃ s' : sizeof(s) = sizeof(s')
+               ⇒ s = wrap(s', rangeof(s))
+
+         Case #2: ∃ s' : type(s') = unsigned char
+                ⇒ s = wrap(Σ_{i = 0}^{size(s) - 1}{256^i * s'}, rangeof(s))
+
+         Case #3: typeof(s) = unsigned char
+                ⇒   s = s' / 2^(8*0) mod 256
+                  ∨ s = s' / 2^(8*1) mod 256
+                  ∨ ...
+                  ∨ s = s' / 2^(8*(sizeof(s') - 1)) mod 256
+      *)
+      let int_type = match s.styp with Int t -> t | _ -> assert false in
+      let esmash_strong = mk_smash_expr s ~mode:(Some STRONG) range in
+      STypeSet.fold
+        (fun styp' acc ->
+           let s' = {base = s.base; styp = styp'} in
+           let esmash' = mk_smash_expr s' range in
+           match styp' with
+           (* Case #1 *)
+           | Int _ when Z.(sizeof_styp s.styp = sizeof_styp styp') ->
+             let e = wrap_expr esmash' (rangeof_styp s.styp) range in
+             let cond = eq esmash_strong e range in
+             Post.bind (man.post (mk_assume cond range) ~zone:Z_c_scalar) acc
+
+           (* Case #2 *)
+           | Int C_unsigned_char ->
+             let n = sizeof_styp s.styp |> Z.to_int in
+             let rec sum i =
+               if i = 0 then esmash' else
+                 let m = Z.(of_int 256 ** i) in
+                 add (sum (i-1)) (mul (mk_z m range) esmash' range) range
+             in
+             let e = wrap_expr (sum (n-1)) (rangeof_styp s.styp) range in
+             let cond = eq esmash_strong e range in
+             Post.bind (man.post (mk_assume cond range) ~zone:Z_c_scalar) acc
+
+           (* Case #3 *)
+           | _ when int_type = C_unsigned_char ->
+             acc >>$ fun () flow ->
+             let n = sizeof_styp styp' |> Z.to_int in
+             let rec aux i =
+               if i = n then [] else
+                 let e = _mod_ (div esmash' (mk_z Z.(of_int 2 ** Stdlib.(8 * i)) range) range) (mk_int 256 range) range in
+                 let cond = eq esmash_strong e range in
+                 man.post (mk_assume cond range) ~zone:Z_c_scalar flow :: aux (i+1)
+             in
+             aux 0 |>
+             Post.join_list ~empty:(fun () -> Post.return flow)
+
+
+           | _ -> acc
+        ) (Init.types init) (Post.return flow)
+
+
   (** [phi s r m f] synthesizes the value of smash [s] when existing
       smashes in the same base exist *)
   let phi (s:smash) range man flow =
@@ -420,87 +521,26 @@ struct
     (* Only fully initialized bases are supported for the moment *)
     | Init.Bot -> Post.return flow
     | Init.None -> Post.return flow
-    | Init.Partial ts ->
-      if STypeSet.mem s.styp ts then
-        Post.return flow
-      else
-        let ts' = STypeSet.add s.styp ts in
-        let flow = set_env T_cur (State.add s.base (Init.Partial ts') a) man flow in
-        man.post (mk_add_var (mk_smash_var s) range) ~zone:Z_c_scalar flow
 
+    | Init.Partial ts
     | Init.Full ts ->
       if STypeSet.mem s.styp ts then
         Post.return flow
       else
-        let ts' = STypeSet.add s.styp ts in
-        let flow = set_env T_cur (State.add s.base (Init.Full ts') a) man flow in
+        let flow = set_env T_cur (State.add s.base (Init.add s.styp init) a) man flow in
         man.post (mk_add_var (mk_smash_var s) range) ~zone:Z_c_scalar flow >>$ fun () flow ->
-        let esmash_strong = mk_smash_expr s ~mode:(Some STRONG) range in
+        if STypeSet.is_empty ts then
+          Post.return flow
+        else
         match s.styp with
         (* No synthesis for floats for the moment *)
         | Float _ -> Post.return flow
 
-        (* Synthesis of numeric values *)
-        | Int int_type ->
-          (* Two cases are considered (inspired synthesis function of the Cells domain):
-
-             Case #1: ∃ s' : sizeof(s) = sizeof(s')
-                       ⇒ s = wrap(s', rangeof(s))
-
-             Case #2: ∃ s' : type(s') = unsigned char
-                        ⇒ s = wrap(Σ_{i = 0}^{size(s) - 1}{256^i * s'}, rangeof(s))
-
-             Case #3: typeof(s) = unsigned char
-                        ⇒   s = s' / 2^(8*0) mod 256
-                          ∨ s = s' / 2^(8*1) mod 256
-                          ∨ ...
-                          ∨ s = s' / 2^(8*(sizeof(s') - 1)) mod 256
-          *)
-          STypeSet.fold
-            (fun styp' acc ->
-               let s' = {base = s.base; styp = styp'} in
-               let esmash' = mk_smash_expr s' range in
-               match styp' with
-               (* Case #1 *)
-               | Int _ when Z.(sizeof_styp s.styp = sizeof_styp styp') ->
-                 let e = wrap_expr esmash' (rangeof_styp s.styp) range in
-                 let cond = eq esmash_strong e range in
-                 Post.bind (man.post (mk_assume cond range) ~zone:Z_c_scalar) acc
-
-               (* Case #2 *)
-               | Int C_unsigned_char ->
-                 let n = sizeof_styp s.styp |> Z.to_int in
-                 let rec sum i =
-                   if i = 0 then esmash' else
-                   let m = Z.(of_int 256 ** i) in
-                   add (sum (i-1)) (mul (mk_z m range) esmash' range) range
-                 in
-                 let e = wrap_expr (sum (n-1)) (rangeof_styp s.styp) range in
-                 let cond = eq esmash_strong e range in
-                 Post.bind (man.post (mk_assume cond range) ~zone:Z_c_scalar) acc
-
-               (* Case #3 *)
-               | _ when int_type = C_unsigned_char ->
-                 acc >>$ fun () flow ->
-                 let n = sizeof_styp styp' |> Z.to_int in
-                 let rec aux i =
-                   if i = n then [] else
-                   let e = _mod_ (div esmash' (mk_z Z.(of_int 2 ** Stdlib.(8 * i)) range) range) (mk_int 256 range) range in
-                   let cond = eq esmash_strong e range in
-                   man.post (mk_assume cond range) ~zone:Z_c_scalar flow :: aux (i+1)
-                 in
-                 aux 0 |>
-                 Post.join_list ~empty:(fun () -> Post.return flow)
-
-
-               | _ -> acc
-
-
-            ) ts (Post.return flow)
+        (* Synthesis of integer values *)
+        | Int int_type -> phi_int s init range man flow
 
         (* No synthesis for pointer values *)
-        | Ptr ->
-          Post.return flow
+        | Ptr -> Post.return flow
 
 
   (** Singleton unification range *)
@@ -641,20 +681,6 @@ struct
     | { base_kind = Addr _ } -> true
     | _ -> false
 
-  (** [is_aligned o n man flow] checks whether the value of an
-      expression [o] is aligned w.r.t. type [t] *)
-  let is_aligned e t man flow =
-    let s = sizeof_type t in
-    if is_c_expr_equals_z e Z.zero then true else
-    if Z.(s = one) then true
-    else
-      man.eval e ~zone:(Zone.Z_c_low_level,Universal.Zone.Z_u_num) flow |>
-      Cases.for_all_some (fun ee flow ->
-          (* Compute the step-interval of ee *)
-          let _, c = man.ask (Universal.Numeric.Common.Q_int_congr_interval ee) flow in
-          let c' = (s,Z.zero) in
-          Universal.Numeric.Common.C.included c c'
-        )
 
   (** Fold an exec transfer function over a set of stypes *)
   let fold_stypes (f:styp -> range -> _ man -> 'a flow -> 'a post) ts range man flow =
@@ -1026,12 +1052,44 @@ struct
     else
       let a = get_env T_cur man flow in
       match State.find base a with
-      (* Do nothing if base is not fully initialized *)
-      | Init.Bot | Init.None | Init.Partial _ -> Post.return flow
-      | Init.Full ts ->
+      | Init.Bot | Init.None -> Post.return flow
+
+      | Init.Partial ts ->
+        (* When base is partially initialized, check these cases:
+
+           Case #1: predicate on the entire initialized part
+              0           uninit - |elm|
+              |----------------|------>
+             min              max
+
+           Case #2: otherwise nop
+        *)
         let s = mk_smash base t in
         phi s range man flow >>$ fun () flow ->
-        (* When base is fully initialized, check the valuation range of the quantified offset:
+        (* Check valuation range of the offset *)
+        let min, max = Common.Quantified_offset.bound offset in
+        let elm = mk_z (sizeof_type t) range in
+        let uninit = mk_uninit_expr base ~mode range in
+        eval_base_size base range man flow >>$ fun size flow ->
+        assume (log_and
+                  (eq min zero range)
+                  (eq max (sub uninit elm range) range)
+                  range)
+          ~fthen:(fun flow ->
+              (* Case #1 *)
+              let smash = mk_smash_expr s ~typ:(Some t) ~mode:(Some STRONG) range in
+              (* Add a cast if the type of the lvalue is different than the type of expression qe *)
+              let smash = if compare_typ t qe.etyp = 0 then smash else mk_c_cast smash qe.etyp range in
+              man.post (mk_assume (mk_binop smash op e ~etyp:T_bool range) range) ~zone:Z_c_scalar flow
+            )
+          ~felse:(fun flow ->
+              (* Case #2 *)
+              Post.return flow
+            ) ~zone:Z_c_scalar man flow
+        
+
+      | Init.Full ts ->
+        (* When base is fully initialized, check these cases:
 
            Case #1: predicate on the entire memory block
               0            size - |elm|
@@ -1043,6 +1101,8 @@ struct
               |--x-------x------|------>
                 min     max
         *)
+        let s = mk_smash base t in
+        phi s range man flow >>$ fun () flow ->
         (* Check valuation range of the offset *)
         let min, max = Common.Quantified_offset.bound offset in
         let elm = mk_z (sizeof_type t) range in
