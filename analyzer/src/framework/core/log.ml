@@ -19,27 +19,8 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Logs are a journal of inner statements executed by the domains in
-    an abstraction DAG in order to compute a post-condition. They are
-    used to merge two post-conditions that diverged due to a fork-join
-    trajectory in the abstraction DAG.
-
-    Logs are presented as binary trees. This should work even when we
-    have an abstraction DAG (i.e. when there are shared domains) since:
-
-    A  x  B
-     \___/
-       |
-       C
-
-    is represented as:
-
-       o
-      / \
-     x   C
-    / \
-   A   B
-*)
+(** Logs for recording statements executed by the domains to compute
+    post-conditions *)
 
 open Ast.Var
 open Ast.Stmt
