@@ -144,9 +144,9 @@ struct
   include D
 
   let merge pre (post1, log1) (post2, log2) =
-    let block1 = Log.get_domain_block log1
-    and block2 = Log.get_domain_block log2 in
-    D.merge pre (post1, block1) (post2, block2)
+    let stmts1 = Log.get_log_stmts log1
+    and stmts2 = Log.get_log_stmts log2 in
+    D.merge pre (post1, stmts1) (post2, stmts2)
 
 
   let init prog man flow =
@@ -194,7 +194,7 @@ struct
         Post.return |>
         Cases.map_log (fun log ->
             man.set_log (
-              man.get_log log |> Log.append stmt
+              man.get_log log |> Log.add_stmt_to_log stmt
             ) log
           )
 

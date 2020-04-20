@@ -19,105 +19,153 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Journal logs used to merge two post-conditions that diverged due to a
-    fork-join trajectory in the abstraction DAG.
+(** Logs are a journal of inner statements executed by the domains in
+    an abstraction DAG in order to compute a post-condition. They are
+    used to merge two post-conditions that diverged due to a fork-join
+    trajectory in the abstraction DAG.
+
+    Logs are presented as binary trees. This should work even when we
+    have an abstraction DAG (i.e. when there are shared domains) since:
+
+    A  x  B
+     \___/
+       |
+       C
+
+    is represented as:
+
+       o
+      / \
+     x   C
+    / \
+   A   B
 *)
 
 open Ast.Var
 open Ast.Stmt
 open Ast.Expr
 
-(** Logs *)
+
 type log =
-  (** Empty log *)
-  | L_empty
+  | Empty
+  | Node of stmt list * log * log
 
-  (** Logs of a singleton domain *)
-  | L_singleton of block (** Block of statements received by the domain *) *
-                   log   (** Inner logs of the domain *)
+let pp_log_entries fmt = function
+  | [] -> ()
+  | [s] -> pp_stmt fmt s
+  | stmts -> Format.fprintf fmt "{@[<v2>%a@]}"
+               (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,") pp_stmt)
+               stmts
 
-  (** Logs of a compound domain *)
-  | L_tuple of log (** Logs of the first domain *) *
-               log (** Logs of the second domain *)
+let rec pp_log fmt = function
+  | Empty         -> ()
+  | Node(stmts,left,right) -> Format.fprintf fmt "(%a,%a,%a)" pp_log_entries stmts pp_log left pp_log right
 
-let rec print fmt = function
-  | L_empty -> ()
-  | L_singleton(block,L_empty) -> Format.fprintf fmt "@[<v 2>[@,%a@;<0 -2>]@]" pp_block block
-  | L_singleton(block,log) -> Format.fprintf fmt "@[<v 2>[@,%a@;<0 -2>]@] -> {@[<v 2>@,%a@;@]@;}" pp_block block print log
-  | L_tuple(fst,snd) -> Format.fprintf fmt "@[<v 2>(@,%a, %a@;<0 -2>)@]" print fst print snd
+let empty_log = Empty
 
-let print fmt log = Format.fprintf fmt "@[<v 0>%a@]" print log
+let rec is_empty_log log =
+  match log with
+  | Empty         -> true
+  | Node(stmts,left,right) -> stmts = [] && is_empty_log left && is_empty_log right
 
-(** Concatenate two logs *)
-let rec concat log1 log2 =
+let mk_log stmts left right =
+  Node (stmts,left,right)
+
+let get_log_stmts = function
+  | Empty           -> []
+  | Node(stmts,_,_) -> stmts
+
+let get_left_log = function
+  | Empty          -> Empty
+  | Node(_,left,_) -> left
+
+let get_right_log = function
+  | Empty           -> Empty
+  | Node(_,_,right) -> right
+
+let set_left_log left = function
+  | Empty               -> Node([], left, Empty)
+  | Node(stmts,_,right) -> Node(stmts,left,right)
+
+let set_right_log right = function
+  | Empty              -> Node([], Empty, right)
+  | Node(stmts,left,_) -> Node(stmts,left,right)
+
+let map_left_log f = function
+  | Empty                  -> Node([],f Empty,Empty)
+  | Node(stmts,left,right) -> Node(stmts,f left,right)
+
+let map_right_log f = function
+  | Empty                  -> Node([],Empty,f Empty)
+  | Node(stmts,left,right) -> Node(stmts,left,f right)
+
+let add_stmt_to_log stmt = function
+  | Empty                  -> Node([stmt],Empty,Empty)
+  | Node(stmts,left,right) -> Node(stmt::stmts,left,right)
+
+let rec merge_log f1 f2 f log1 log2 =
   match log1, log2 with
-  | L_empty, x | x, L_empty -> x
-  | L_singleton (b1, l1), L_singleton (b2, l2) -> L_singleton (concat_blocks b1 b2, concat l1 l2)
-  | L_tuple (fst1,snd1), L_tuple (fst2,snd2) -> L_tuple (concat fst1 fst2, concat snd1 snd2)
-  | _ -> assert false
+  | Empty, Empty -> Empty
+  | Empty, Node(stmts,left,right) -> Node (f1 stmts, left, right)
+  | Node(stmts,left,right), Empty -> Node (f2 stmts, left, right)
+  | Node(stmts1,left1,right1), Node(stmts2,left2,right2) -> Node (f stmts1 stmts2, merge_log f1 f2 f left1 left2, merge_log f1 f2 f right1 right2)
 
-(** Empty log *)
-let empty = L_empty
+let concat_log log1 log2 =
+  merge_log
+    (fun stmts1 -> stmts1)
+    (fun stmts2 -> stmts2)
+    (fun stmts1 stmts2 -> stmts1 @ stmts2)
+    log1 log2
 
-(** Test if a log is empty *)
-let rec is_empty log =
-  match log with
-  | L_empty -> true
-  | L_tuple(l1,l2) -> is_empty l1 && is_empty l2
-  | L_singleton([],ll) -> is_empty ll
-  | _ -> false
-
-let tuple (fst, snd) =
-  L_tuple (fst, snd)
-
-let first log =
-  match log with
-  | L_empty -> L_empty
-  | L_tuple(fst,_) -> fst
-  | _ -> assert false
-
-let second log =
-  match log with
-  | L_empty -> L_empty
-  | L_tuple(_,snd) -> snd
-  | _ -> assert false
+let meet_log log1 log2 =
+  (* When intersecting two post-states, logs are simply
+     concatenated. The reason is that intersections are used in
+     reduced products and the domains in the reduced product *must*
+     modify distinct dimensions in the shared underlying
+     domain. Therefore, statements are not in conflict and can be
+     executed in sequence *)
+  concat_log log1 log2
 
 
-(** Return the block of statement logged by a domain *)
-let get_domain_block log =
-  match log with
-  | L_empty -> []
-  | L_singleton(block, _) -> block
-  | _ -> assert false
+(* When joining two post-states, statements in logs can not be
+   concatenated because joins are performed within the same domain. We
+   need to introduce a new statement for expressing non-deterministic
+   executions *)
+type stmt_kind += S_ndet of stmt list * stmt list
 
-(** Return the inner logs of the domain *)
-let get_domain_inner_log log =
-  match log with
-  | L_empty -> L_empty
-  | L_singleton(_, l) -> l
-  | _ -> assert false
+let () = register_stmt {
+    print = (fun next fmt s ->
+        match skind s with
+        | S_ndet (s1,s2) ->
+          Format.fprintf fmt "%a ⁠‖ %a"
+            pp_log_entries s1
+            pp_log_entries s2
+        | _ -> next fmt s
+      );
+    compare = (fun next s s' ->
+        match skind s, skind s' with
+        | S_ndet(s1,s2), S_ndet(s1',s2') ->
+          Compare.pair (Compare.list compare_stmt) (Compare.list compare_stmt)
+            (s1,s2) (s1',s2')
+        | _ -> next s s'
+      );
+  }
 
-(** Append a statement to the logs of a domain *)
-let append stmt log =
-  match log with
-  | L_empty -> L_singleton ([stmt], L_empty)
-  | L_singleton (block, inner) -> L_singleton (stmt :: block, inner)
-  | L_tuple (fst,snd) -> log
+let mk_ndet stmts1 stmts2 range =
+  mk_stmt (S_ndet (stmts1,stmts2)) range
 
-(** Append a statement to the logs of the first domain in a tuple configuration *)
-let append_fst stmt log =
-  match log with
-  | L_empty -> L_tuple (append stmt empty, empty)
-  | L_singleton (block, inner) -> assert false
-  | L_tuple (fst,snd) -> L_tuple (append stmt fst, snd)
+let join_range = Location.(tag_range (mk_fresh_range ()) "log-join")
 
-(** Append a statement to the logs of the second domain in a tuple configuration *)
-let append_snd stmt log =
-  match log with
-  | L_empty -> L_tuple (empty, append stmt empty)
-  | L_singleton (block, inner) -> assert false
-  | L_tuple (fst,snd) -> L_tuple (fst, append stmt snd)
-
+let join_log log1 log2 =
+  merge_log
+    (fun stmts1 -> stmts1)
+    (fun stmts2 -> stmts2)
+    (fun stmts1 stmts2 ->
+       if stmts1 = [] || stmts2 = []
+       then stmts1 @ stmts2
+       else [mk_ndet stmts1 stmts2 join_range]
+    )
+    log1 log2
 
 
 (** {2 Generic merge} *)
@@ -130,7 +178,7 @@ type effect = {
 }
 
 (** Get the effect of a statement *)
-let get_stmt_effect stmt : effect =
+let rec get_stmt_effect stmt : effect =
   match skind stmt with
   | S_add { ekind = E_var (var, _) } ->
     { modified = VarSet.singleton var;
@@ -164,17 +212,23 @@ let get_stmt_effect stmt : effect =
     { modified = VarSet.singleton var;
       removed = VarSet.empty }
 
+  | S_ndet(e1,e2) ->
+    let effect1 = get_entries_effect e1
+    and effect2 = get_entries_effect e2 in
+    { modified = VarSet.union effect1.modified effect2.modified;
+      removed = VarSet.union (VarSet.diff effect1.removed effect2.modified) (VarSet.diff effect2.removed effect1.modified); }
+
   | _ -> Exceptions.panic "get_stmt_effect: unsupported statement %a" pp_stmt stmt
 
 
 (** Get the effect of a log *)
-let get_log_effect (log:block) : effect =
+and get_entries_effect (entries:stmt list) : effect =
   List.fold_right
     (fun stmt acc ->
-       let effect = get_stmt_effect stmt in
-       { modified = VarSet.union effect.modified (VarSet.diff acc.modified effect.removed);
-         removed  = VarSet.union effect.removed (VarSet.diff acc.removed effect.modified); }
-    ) log {modified = VarSet.empty; removed = VarSet.empty}
+      let effect = get_stmt_effect stmt in
+      { modified = VarSet.union effect.modified (VarSet.diff acc.modified effect.removed);
+        removed  = VarSet.union effect.removed (VarSet.diff acc.removed effect.modified); }
+    ) entries {modified = VarSet.empty; removed = VarSet.empty}
 
 
 (** Apply the effect of a log on an abstract element *)
@@ -190,10 +244,11 @@ let apply_effect effect ~add ~remove ~find (other:'a) (this:'a) : 'a =
 
 (** Generic merge operator for non-relational domains *)
 let generic_domain_merge ~add ~find ~remove (a1, log1) (a2, log2) =
-  let e1 = get_log_effect log1 in
+  Debug.debug ~channel:"framework.core.log" "generic merge:@,%a@,%a" pp_log_entries log1 pp_log_entries log2;
+  let e1 = get_entries_effect log1 in
   let a2' = apply_effect e1 a1 a2 ~add ~remove ~find in
 
-  let e2 = get_log_effect log2 in
+  let e2 = get_entries_effect log2 in
   let a1' = apply_effect e2 a2 a1 ~add ~remove ~find in
 
   a1',a2'

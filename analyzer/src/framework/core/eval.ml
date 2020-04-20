@@ -29,11 +29,12 @@ open Flow
 open Zone
 open Context
 open Cases
+open Log
 
 
 type 'a eval = ('a,expr) cases
 
-let return ?(cleaners=[]) ?(log=Log.empty) e flow : 'a eval = Cases.return e flow ~cleaners ~log
+let return ?(cleaners=[]) ?(log=empty_log) e flow : 'a eval = Cases.return e flow ~cleaners ~log
 
 let singleton ?(cleaners=[]) e flow : 'a eval = Cases.singleton e flow ~cleaners
 

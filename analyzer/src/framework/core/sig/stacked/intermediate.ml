@@ -344,7 +344,7 @@ struct
     OptionExt.lift @@ fun res ->
     Cases.map_log (fun log ->
         man.set_log (
-          man.get_log log |> Log.append stmt
+          man.get_log log |> Log.add_stmt_to_log stmt
         ) log
       ) res
 

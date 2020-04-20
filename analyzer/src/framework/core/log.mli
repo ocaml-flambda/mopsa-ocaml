@@ -19,35 +19,71 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Journal logs *)
+(** Logs are a journal of inner statements executed by the domains in
+    an abstraction DAG in order to compute a post-condition. They are
+    used to merge two post-conditions that diverged due to a fork-join
+    trajectory in the abstraction DAG.
+
+    Logs are presented as binary trees. This should work even when we
+    have an abstraction DAG (i.e. when there are shared domains) since:
+
+    A  x  B
+     \___/
+       |
+       C
+
+    is represented as:
+
+       o
+      / \
+     x   C
+    / \
+   A   B
+*)
+
 
 open Ast.Stmt
 open Ast.Var
+open Location
+
+
 
 type log
 
-val concat : log -> log -> log
+val pp_log : Format.formatter -> log -> unit
 
-val empty : log
+val empty_log : log
 
-val is_empty : log -> bool
+val is_empty_log : log -> bool
 
-val tuple : log * log -> log
+val mk_log : stmt list -> log -> log -> log
 
-val first : log -> log
+val get_left_log : log -> log
 
-val second : log -> log
+val get_right_log : log -> log
 
-val get_domain_block : log -> block
+val get_log_stmts : log -> stmt list
 
-val get_domain_inner_log : log -> log
+val set_left_log : log -> log -> log
 
-val append : stmt -> log -> log
+val set_right_log : log -> log -> log
 
-val append_fst : stmt -> log -> log
+val map_left_log : (log -> log) -> log -> log
 
-val append_snd : stmt -> log -> log
+val map_right_log : (log -> log) -> log -> log
 
-val print : Format.formatter -> log -> unit
+val add_stmt_to_log : stmt -> log -> log
+
+val merge_log : (stmt list -> stmt list) -> (stmt list -> stmt list) -> (stmt list -> stmt list -> stmt list) -> log -> log -> log
+
+val concat_log : log -> log -> log
+
+val meet_log : log -> log -> log
+
+val join_log : log -> log -> log
 
 val generic_domain_merge : add:(var->'b->'a->'a) -> find:(var->'a->'b) -> remove:(var->'a->'a) -> ('a*block) -> ('a*block) -> 'a*'a
+
+type stmt_kind += S_ndet of stmt list * stmt list
+
+val mk_ndet : stmt list -> stmt list -> range -> stmt

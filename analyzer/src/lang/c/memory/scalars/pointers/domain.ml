@@ -99,8 +99,8 @@ struct
     Map.join a a', s, s', true
 
   let merge pre (a,log) (a',log') =
-    let block = Log.get_domain_block log in
-    let block' = Log.get_domain_block log' in
+    let block = Log.get_log_stmts log in
+    let block' = Log.get_log_stmts log' in
 
     let patch_stmt stmt a acc =
       match skind stmt with

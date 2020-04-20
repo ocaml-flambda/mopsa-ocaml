@@ -226,7 +226,7 @@ let of_domain_man (man:('a,'t) Domain.Manager.man) : ('a,'t,unit) man =
     ask = man.ask;
     get_log = man.get_log;
     set_log = man.set_log;
-    get_sub_log = (fun _ -> Log.empty);
+    get_sub_log = (fun _ -> Log.empty_log);
     set_sub_log =  (fun _ l -> l);
     merge_sub = (fun _ _ _ -> ());
   }

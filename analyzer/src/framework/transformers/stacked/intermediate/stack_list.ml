@@ -132,16 +132,16 @@ let hdman man = {
   man with
   get = (fun a -> man.get a |> fst);
   set = (fun hd a -> man.set (hd, man.get a |> snd) a);
-  get_log = (fun log -> man.get_log log |> Log.first);
-  set_log = (fun l log -> man.set_log (Log.tuple (l, man.get_log log |> Log.second)) log);
+  get_log = (fun log -> man.get_log log |> Log.get_left_log);
+  set_log = (fun l log -> man.set_log (Log.mk_log [] l (man.get_log log |> Log.get_right_log)) log);
 }
 
 let tlman man = {
   man with
   get = (fun a -> man.get a |> snd);
   set = (fun tl a -> man.set (man.get a |> fst, tl) a);
-  get_log = (fun log -> man.get_log log |> Log.second);
-  set_log = (fun l log -> man.set_log (Log.tuple (man.get_log log |> Log.first, l)) log);
+  get_log = (fun log -> man.get_log log |> Log.get_right_log);
+  set_log = (fun l log -> man.set_log (Log.mk_log [] (man.get_log log |> Log.get_left_log) l) log);
 }
 
 

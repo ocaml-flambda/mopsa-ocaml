@@ -60,7 +60,7 @@ type ('a,'r) cases = {
 
 let mk_case
     ?(cleaners=[])
-    ?(log=Log.empty)
+    ?(log=empty_log)
     (result:'r option)
     (flow:'a flow)
   : ('a,'r) case =
@@ -75,7 +75,7 @@ let mk_case
 
 let return
     ?(cleaners=[])
-    ?(log=Log.empty)
+    ?(log=empty_log)
     (output:'r option)
     (flow:'a flow)
   : ('a,'r) cases
@@ -205,11 +205,10 @@ let map_log (f:log -> log) (r:('a,'r) cases) : ('a,'r) cases =
     )
 
 
-let concat_log (log:log) (r:('a,'r) cases) : ('a,'r) cases =
+let concat_cases_log (log:log) (r:('a,'r) cases) : ('a,'r) cases =
   r |> map_cases (fun case ->
-      {
-        case with case_log = Log.concat case.case_log log;
-      }
+      { case with
+        case_log = concat_log case.case_log log }
     )
 
 
@@ -229,7 +228,7 @@ let map_fold_conjunctions
           tl |> List.fold_left (fun (flow, log, cleaners) case ->
               let flow' = Flow.create ctx case.case_alarms case.case_flow in
               let flow = f (flow,log) (flow',case.case_log) in
-              flow, Log.concat log case.case_log, concat_blocks cleaners case.case_cleaners
+              flow, concat_log log case.case_log, concat_blocks cleaners case.case_cleaners
             ) (Flow.create ctx hd.case_alarms hd.case_flow, hd.case_log, hd.case_cleaners)
         in
         hd :: tl |> List.map (fun case -> {
@@ -401,7 +400,7 @@ let bind_opt
   r |> bind_full_opt (fun r flow log cleaners ->
       f r flow |>
       OptionExt.lift (add_cleaners cleaners) |>
-      OptionExt.lift (concat_log log)
+      OptionExt.lift (concat_cases_log log)
     )
 
 
@@ -490,7 +489,7 @@ let remove_duplicates compare lattice r =
                 case_flow = TokenMap.meet lattice (Context.get_unit ctx) case.case_flow case'.case_flow;
                 case_cleaners = case.case_cleaners @ case'.case_cleaners;
                 case_alarms = AlarmSet.inter case.case_alarms case'.case_alarms;
-                case_log = Log.concat case.case_log case'.case_log;
+                case_log = meet_log case.case_log case'.case_log;
               }
               in
               case'', tl''
@@ -508,7 +507,7 @@ let remove_duplicates compare lattice r =
           case_flow = TokenMap.join lattice (Context.get_unit ctx) case.case_flow case'.case_flow;
           case_cleaners = case.case_cleaners @ case'.case_cleaners;
           case_alarms = AlarmSet.union case.case_alarms case'.case_alarms;
-          case_log = Log.concat case.case_log case'.case_log;
+          case_log = join_log case.case_log case'.case_log;
         }
       )
   in
