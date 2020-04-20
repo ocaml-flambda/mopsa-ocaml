@@ -55,7 +55,7 @@ let panic ?btrace exn time files =
     | F_text -> Text.panic ?btrace exn files time !opt_file
     | F_json -> Json.panic ?btrace exn files time !opt_file
   in
-  if !opt_silent then 0 else 2
+  2
 
 let help (args:ArgExt.arg list) =
   match !opt_format with

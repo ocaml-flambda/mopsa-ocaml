@@ -72,9 +72,9 @@ void test_divide_by_range() {
 }
 
 int test_overflow() {
-  unsigned char c = 25;
-  unsigned char d = 6;
-  unsigned char e = 10 * c + d;
+  signed char c = 25;
+  signed char d = 6;
+  signed char e = 10 * c + d;
   _mopsa_assert_unsafe();
 }
 

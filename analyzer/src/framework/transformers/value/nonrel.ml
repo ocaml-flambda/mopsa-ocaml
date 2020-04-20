@@ -389,7 +389,7 @@ struct
       (* Check of the variable is already present *)
       if VarMap.mem v map
       then OptionExt.return map
-      else OptionExt.return @@ VarMap.add v Value.top map
+      else OptionExt.return @@ add ctx v Value.top map
 
 
     | S_project vars
@@ -406,8 +406,8 @@ struct
 
     | S_rename ({ ekind = E_var (var1, _) }, { ekind = E_var (var2, _) }) ->
       let v = find var1 map in
-      VarMap.remove var1 map |>
-      VarMap.add var2 v |>
+      remove var1 map |>
+      add ctx var2 v |>
       OptionExt.return
 
     | S_forget { ekind = E_var (var, _) } ->

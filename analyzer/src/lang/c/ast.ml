@@ -699,31 +699,7 @@ let int_rangeof t =
 
 (** [wrap_expr e (l,h)] expression needed to bring back [e] in range ([l],[h]) *)
 let wrap_expr (e: expr) ((l,h) : Z.t * Z.t) range : expr =
-    let open Universal.Ast in
-  add
-    (mk_z l range)
-    (_mod_
-       (sub
-          e
-          (mk_z l range)
-          range
-       )
-       (add
-          (sub
-             (mk_z h range)
-             (mk_z l range)
-             range
-          )
-          (mk_one range)
-          range
-       )
-       range
-    )
-    range
-
-(** [wrap v (l,h)] expression needed to bring back [v] in range ([l],[h]) *)
-let wrap (v : var) ((l,h) : Z.t * Z.t) range : expr =
-  wrap_expr (mk_var v (tag_range range "v")) (l,h) range
+  mk_unop (O_wrap(l,h)) e ~etyp:e.etyp range
 
 let is_c_char_type (t:typ) =
   match remove_typedef_qual t with
