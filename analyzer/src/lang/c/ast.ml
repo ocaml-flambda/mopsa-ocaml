@@ -864,7 +864,7 @@ let mk_c_character c range =
   mk_constant (C_c_character ((Z.of_int @@ int_of_char c), C_char_ascii)) range ~etyp:(T_c_integer(C_unsigned_char))
 
 (* extract a multi-byte integer of type t starting at offset off of s *)
-let mk_c_multibyte_integer (s:string) (off:int) t range =
+let extract_multibyte_integer (s:string) (off:int) t =
   let n = Z.to_int (sizeof_type t) in
   (* get bytes in right order according to endianess *)
   let rec doit acc i =
@@ -873,13 +873,13 @@ let mk_c_multibyte_integer (s:string) (off:int) t range =
       doit (Z.add (Z.mul (Z.of_int 256) acc) (Z.of_int (int_of_char s.[off']))) (i+1)
   in
   let v = doit Z.zero 0 in
-  let v' =
-    (* sign correction *)
-    if is_signed t && v >= Z.shift_left Z.one (n*8-1)
-    then Z.sub v (Z.shift_left Z.one (n*8))
-    else v
-  in
-  mk_z v' ~typ:t range
+  (* sign correction *)
+  if is_signed t && v >= Z.shift_left Z.one (n*8-1)
+  then Z.sub v (Z.shift_left Z.one (n*8))
+  else v
+
+let mk_c_multibyte_integer (s:string) (off:int) t range =
+  mk_z (extract_multibyte_integer s off t) ~typ:t range
 
 
 let mk_c_invalid_pointer range =
