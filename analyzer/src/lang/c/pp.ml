@@ -69,6 +69,12 @@ let rec pp_c_init fmt = function
                            (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_c_init) l
   | C_init_implicit t -> assert false
 
+let pp_character_kind fmt = function
+  | C_char_ascii -> ()
+  | C_char_wide -> pp_print_string fmt "L"
+  | C_char_utf8 -> pp_print_string fmt "u8"
+  | C_char_utf16 -> pp_print_string fmt "u"
+  | C_char_utf32 -> pp_print_string fmt "U"
 
 
 let () =
@@ -127,12 +133,8 @@ let () =
     );
   register_constant_pp (fun next fmt c ->
       match c with
-      | C_c_character(c, C_char_ascii) -> fprintf fmt "'\\x%s'" (Z.format "%X" c)
-      | C_c_character(c, C_char_wide) -> fprintf fmt "L'\\x%s'" (Z.format "%X" c)
-      | C_c_character(c, C_char_utf8) -> panic ~loc:__LOC__ "utf8 char not supported"
-      | C_c_character(c, C_char_utf16) -> panic ~loc:__LOC__ "utf16 char not supported"
-      | C_c_character(c, C_char_utf32) -> panic ~loc:__LOC__ "utf32 char not supported"
-      | C_c_string(s, _) -> fprintf fmt "\"%s\"" (String.escaped s)
+      | C_c_character(c, k) -> fprintf fmt "%a'\\x%s'" pp_character_kind k (Z.format "%X" c)
+      | C_c_string(s, k) -> fprintf fmt "%a\"%s\"" pp_character_kind k (String.escaped s)
       | C_c_invalid -> fprintf fmt "INVALID"
       | _ -> next fmt c
     );

@@ -626,6 +626,7 @@ let rec sizeof_type (t : typ) : Z.t =
 
   | t -> panic ~loc:__LOC__ "%a not a C type" pp_typ t
 
+
 let sizeof_expr (t:typ) range : expr =
   let rec doit t =
     match t with
@@ -813,7 +814,7 @@ let under_type (t: typ) : typ =
 
 let void_to_char t =
   match remove_typedef_qual t with
-  | T_c_void -> T_c_integer C_signed_char
+  | T_c_void -> T_c_integer C_unsigned_char
   | _ -> t
 
 let get_array_constant_length t =
@@ -861,6 +862,25 @@ let mk_c_subscript_access a i range =
 
 let mk_c_character c range =
   mk_constant (C_c_character ((Z.of_int @@ int_of_char c), C_char_ascii)) range ~etyp:(T_c_integer(C_unsigned_char))
+
+(* extract a multi-byte integer of type t starting at offset off of s *)
+let mk_c_multibyte_integer (s:string) (off:int) t range =
+  let n = Z.to_int (sizeof_type t) in
+  (* get bytes in right order according to endianess *)
+  let rec doit acc i =
+    if i >= n then acc else
+      let off' = if target_info.target_big_endian then off+i else off+n-i-1 in
+      doit (Z.add (Z.mul (Z.of_int 256) acc) (Z.of_int (int_of_char s.[off']))) (i+1)
+  in
+  let v = doit Z.zero 0 in
+  let v' =
+    (* sign correction *)
+    if is_signed t && v >= Z.shift_left Z.one (n*8-1)
+    then Z.sub v (Z.shift_left Z.one (n*8))
+    else v
+  in
+  mk_z v' ~typ:t range
+
 
 let mk_c_invalid_pointer range =
   mk_constant C_c_invalid ~etyp:(T_c_pointer T_c_void) range
@@ -1079,7 +1099,6 @@ let is_lval_offset_forall_quantified e =
   | E_c_deref(p) -> is_pointer_offset_forall_quantified p
   | E_c_array_subscript(_,o) -> is_expr_forall_quantified o
   | _ -> false
-
 
 (** Check if v is declared as a variable length array *)
 let is_c_variable_length_array_type t =

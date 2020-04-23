@@ -39,7 +39,7 @@
 
 
 open Mopsa
-open Core.Sig.Stacked.Stateless
+open Core.Sig.Stacked.Intermediate
 open Universal.Ast
 open Stubs.Ast
 open Ast
@@ -51,13 +51,24 @@ open Common.Alarms
 open Universal.Numeric.Common
 
 
+let elem_size = 1
+
+
 module Domain =
 struct
+
+  (** {2 State} *)
+  (** ********* *)
+
+
+  (*module M = Framework.Lattices.Pointwise.Make(Base)(String)*)
+
 
   (** {2 Domain header} *)
   (** ***************** *)
 
   include GenStatelessDomainId(struct
+      (*type t = M.t*)
       let name = "c.memory.lowlevel.string_length"
     end)
 
@@ -87,22 +98,22 @@ struct
 
   (** Registration of a new var kind for length variables *)
   type var_kind +=
-    | V_c_string_length of base
+    | V_c_string_length of base * int (* element size *)
 
   let () =
     register_var {
       print = (fun next fmt v ->
           match v.vkind with
-          | V_c_string_length (base) ->
-            Format.fprintf fmt "length(%a)" pp_base base
+          | V_c_string_length (base,elemsz) ->
+            Format.fprintf fmt "length(%a)*%i" pp_base base elemsz
 
           | _ -> next fmt v
         );
 
       compare = (fun next v1 v2 ->
           match v1.vkind, v2.vkind with
-          | V_c_string_length(b1), V_c_string_length(b2) ->
-            compare_base b1 b2
+          | V_c_string_length(b1,s1), V_c_string_length(b2,s2) ->
+            Compare.pair compare_base compare (b1,s1) (b2,s2)
 
           | _ -> next v1 v2
         );
@@ -111,15 +122,9 @@ struct
   (** Create a length variable. The returned variable is a
       mathematical integer, not a C variable.
   *)
-  let mk_length_var base ?(mode=None) range =
-    let name =
-      let () =
-        Format.fprintf Format.str_formatter "length(%s)"
-          (base_uniq_name base)
-      in
-      Format.flush_str_formatter ()
-    in
-    let v = mkv name (V_c_string_length (base)) T_int ~mode:(base_mode base) in
+  let mk_length_var base elemsz ?(mode=None) range =
+    let name = Format.asprintf "length(%s)" (base_uniq_name base) in
+    let v = mkv name (V_c_string_length (base,elemsz)) T_int ~mode:(base_mode base) in
     mk_var v ~mode range
 
 
@@ -158,9 +163,12 @@ struct
 
   
   (** Get the base and offset pointed by ptr. Since we do not track invalid
-     dereferences, we ignore invalid pointers.
+      dereferences, we ignore invalid pointers.
+      Offsets are counted in units of elem_size bytes (not plain bytes).
+      TODO: symbolic simplification
+      TODO: check alignment, for soundness !!!
   *)
-  let eval_pointed_base_offset ptr range man flow =
+  let eval_pointed_base_offset ptr elem_size range man flow =
     man.eval ptr ~zone:(Zone.Z_c_low_level, Z_c_points_to) flow >>$ fun pt flow ->
     match ekind pt with
     | E_c_points_to P_null
@@ -170,6 +178,7 @@ struct
       Cases.empty_singleton flow
 
     | E_c_points_to (P_block (base, offset, mode)) ->
+      let offset = if elem_size = 1 then offset else div offset (mk_int elem_size range) range in
       Cases.singleton (base, offset, mode) flow
 
     | _ -> assert false
@@ -177,11 +186,10 @@ struct
 
   let is_interesting_base base =
     match base with
-    (* Accept only arrays of chars *)
     | { base_kind = Var v; base_valid = true }
       when is_c_type v.vtyp &&
            is_c_array_type v.vtyp &&
-           under_array_type v.vtyp |> remove_typedef_qual |> sizeof_type |> Z.equal Z.one
+           under_array_type v.vtyp |> is_c_int_type
       ->
       true
 
@@ -217,12 +225,13 @@ struct
 
       | _ ->
         (* Add the length of the base to the numeric domain and
-           initialize it with the interval [0, size(@)]
+           initialize it with the interval [0, byte-size(@) / elem-size]
         *)
-        eval_base_size base range man flow >>$ fun size flow ->
-        man.eval ~zone:(Z_c_scalar, Z_u_num) size flow >>$ fun size flow ->
+        eval_base_size base range man flow >>$ fun bsize flow ->
+        man.eval ~zone:(Z_c_scalar, Z_u_num) bsize flow >>$ fun bsize flow ->
 
-        let length = mk_length_var base range in
+        let length = mk_length_var base elem_size range in
+        let size = div bsize (mk_int elem_size range) range in
 
         man.post ~zone:Z_u_num (mk_add length range) flow >>= fun _ flow ->
         man.post ~zone:Z_u_num (mk_assume (mk_in length (mk_zero range) size range) range) flow
@@ -236,7 +245,7 @@ struct
         Post.return flow
 
       | _ ->
-        let length = mk_length_var base range in
+        let length = mk_length_var base elem_size range in
         man.post ~zone:Z_u_num (mk_remove length range) flow
 
 
@@ -245,8 +254,8 @@ struct
     if not (is_interesting_base base1) then Post.return flow else
     if not (is_interesting_base base2) then exec_remove_base base1 range man flow
     else
-      let length1 = mk_length_var base1 range in
-      let length2 = mk_length_var base2 range in
+      let length1 = mk_length_var base1 elem_size range in
+      let length2 = mk_length_var base2 elem_size range in
       man.post ~zone:Z_u_num (mk_rename length1 length2 range) flow
 
 
@@ -255,8 +264,8 @@ struct
     if not (is_interesting_base base1) then Post.return flow else
     if List.exists (fun b -> not (is_interesting_base b)) bases then panic_at range "expand %a not supported" pp_base base1
     else
-      let length1 = mk_length_var base1 range in
-      let lengths = List.map (fun b -> mk_length_var b range) bases in
+      let length1 = mk_length_var base1 elem_size range in
+      let lengths = List.map (fun b -> mk_length_var b elem_size range) bases in
       man.post ~zone:Z_u_num (mk_expand length1 lengths range) flow
 
 
@@ -265,14 +274,14 @@ struct
     if not (is_interesting_base base1) then Post.return flow else
     if List.exists (fun b -> not (is_interesting_base b)) bases then panic_at range "fold %a not supported" pp_base base1
     else
-      let length1 = mk_length_var base1 range in
-      let lengths = List.map (fun b -> mk_length_var b range) bases in
+      let length1 = mk_length_var base1 elem_size range in
+      let lengths = List.map (fun b -> mk_length_var b elem_size range) bases in
       man.post ~zone:Z_u_num (mk_fold length1 lengths range) flow
 
 
   (** 𝕊⟦ forget(e); ⟧ *)
   let exec_forget e range man flow =
-    eval_pointed_base_offset (mk_c_address_of e range) range man flow >>$ fun (base,offse,mode) flow ->
+    eval_pointed_base_offset (mk_c_address_of e range) elem_size range man flow >>$ fun (base,offse,mode) flow ->
     if not (is_interesting_base base) then
       Post.return flow
     else
@@ -280,9 +289,10 @@ struct
       | String _ -> Post.return flow
       | _ ->
         (* FIXME: we can do better by checking if the offset affect the length of the string *)
-        let length = mk_length_var base range in
-        eval_base_size base range man flow >>$ fun size flow ->
-        man.eval ~zone:(Z_c_scalar, Z_u_num) size flow >>$ fun size flow ->
+        let length = mk_length_var base elem_size range in
+        eval_base_size base range man flow >>$ fun bsize flow ->
+        man.eval ~zone:(Z_c_scalar, Z_u_num) bsize flow >>$ fun bsize flow ->
+        let size = div bsize (mk_int elem_size range) range in
         man.post ~zone:Z_u_num (mk_forget length range) flow >>$ fun () flow ->
         man.post ~zone:Z_u_num (mk_assume (mk_in length (mk_zero range) size range) range) flow
 
@@ -298,22 +308,20 @@ struct
 
   (** 𝕊⟦ *p = rhs; ⟧ *)
   let exec_assign p rhs range man flow =
+    (*Format.printf "exec_assign:@.  p = %a # %a@.  rhs = %a # %a@." pp_expr p pp_typ p.etyp pp_expr rhs pp_typ rhs.etyp;*)
     man.eval ~zone:(Z_c_low_level,Z_u_num) rhs flow >>$ fun rhs flow ->
-    eval_pointed_base_offset p range man flow >>$ fun (base,offset,mode) flow ->
+    eval_pointed_base_offset p elem_size range man flow >>$ fun (base,offset,mode) flow ->
+    let typ = under_pointer_type p.etyp in
     if not (is_interesting_base base) then
       Post.return flow
     else
-      let length = mk_length_var base ~mode range in
+      let length = mk_length_var base elem_size ~mode range in
 
-      let typ = under_pointer_type p.etyp in
-
-      if not (is_c_char_type typ) then
-        (* FIXME: support of multi-byte assignments is too coarse for the moment *)
-        man.post ~zone:Z_u_num (mk_forget length range) flow
-      else
+      if is_c_int_type typ && sizeof_type typ = Z.of_int elem_size then
         man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow >>$ fun offset flow ->
-        eval_base_size base range man flow >>$ fun size flow ->
-        man.eval ~zone:(Z_c_scalar, Z_u_num) size flow >>$ fun size flow ->
+        eval_base_size base range man flow >>$ fun bsize flow ->
+        man.eval ~zone:(Z_c_scalar, Z_u_num) bsize flow >>$ fun bsize flow ->
+        let size = div bsize (mk_int elem_size range) range in
     
         (* Utility function to assign an interval to [length] *)
         let assign_length_interval l u flow =
@@ -359,8 +367,13 @@ struct
 
         ] ~zone:Z_u_num man flow
 
+      else
+        (* FIXME: support of multi-byte assignments is too coarse for the moment *)
+        man.post ~zone:Z_u_num (mk_forget length range) flow
+
 
   let exec_assume_string_literal_char_eq str offset mode n range man flow =
+    (*Format.printf "exec_assume_string_literal@.  str = \"%s\"@.  offset = %a # %a@.  n = %a@." str pp_expr offset pp_typ offset.etyp Z.pp_print n;*)
     let len = String.length str in
     (* When n = 0, require that offset = len(str) *)
     if Z.(n = zero) then
@@ -384,15 +397,20 @@ struct
 
   (** 𝕊⟦ *(p + i) == n ⟧ *)
   let exec_assume_eq lval n range man flow =
-    eval_pointed_base_offset (mk_c_address_of lval range) range man flow >>$ fun (base,offset,mode) flow ->
+     let etype = (remove_casts lval).etyp in
+     (*Format.printf "exec_assume_eq@.  lval = %a # %a # %a@.  n = %a # %a@." pp_expr lval pp_typ lval.etyp pp_typ etype pp_expr n pp_typ n.etyp;*)
+    eval_pointed_base_offset (mk_c_address_of lval range) elem_size range man flow >>$ fun (base,offset,mode) flow ->
     if not (is_interesting_base base) then
+      Post.return flow
+    else if sizeof_type etype <> Z.of_int elem_size then
       Post.return flow
     else
       match base.base_kind, c_expr_to_z n with
-      | String str, Some c -> exec_assume_string_literal_char_eq str offset mode c range man flow
-      | String _, None     -> Post.return flow
+      | String str, Some c when elem_size = 1 ->
+        exec_assume_string_literal_char_eq str offset mode c range man flow
+      | String _, _ -> Post.return flow
       | _ ->
-        let length = mk_length_var base ~mode range in
+        let length = mk_length_var base elem_size ~mode range in
         switch [
           (*         offset    length
              |---------x---------0----->
@@ -421,14 +439,16 @@ struct
   (* FIXME: this transfer function is sound only when the offset is an
      affine function with coefficient 1, i.e. of the form ∀i + a *)
   let exec_assume_quantified_eq base offset mode n range man flow =
+    (*Format.printf "exec_assume_quantified_eq:@.  base = %a@.  offset = %a # %a@.  n = %a # %a@." pp_base base pp_expr offset pp_typ offset.etyp pp_expr n pp_typ n.etyp;*)
     (** Get symbolic bounds of the offset *)
     let min, max = Common.Quantified_offset.bound offset in
     man.eval ~zone:(Z_c_scalar, Z_u_num) min flow >>$ fun min flow ->
     man.eval ~zone:(Z_c_scalar, Z_u_num) max flow >>$ fun max flow ->
 
-    let length = mk_length_var base ~mode range in
-    eval_base_size base range man flow >>$ fun size flow ->
-    man.eval ~zone:(Z_c_scalar, Z_u_num) size flow >>$ fun size flow ->
+    let length = mk_length_var base elem_size ~mode range in
+    eval_base_size base range man flow >>$ fun bsize flow ->
+    man.eval ~zone:(Z_c_scalar, Z_u_num) bsize flow >>$ fun bsize flow ->
+    let size = div bsize (mk_int elem_size range) range in
     (* Ensure that [min, max] ⊆ [0, size-1] *)
     man.post (mk_assume (ge min zero range) range) ~zone:Z_u_num flow >>$ fun () flow ->
     man.post (mk_assume (le max (pred size range) range) range) ~zone:Z_u_num flow >>$ fun () flow ->
@@ -473,6 +493,7 @@ struct
   (* FIXME: this transfer function is sound only when the offset is an
      affine function with coefficient 1, i.e. of the form ∀i + a *)
   let exec_assume_quantified_ne_zero base offset mode range man flow =
+    (*Format.printf "exec_assume_quantified_ne_zero@.  base = %a@.  offset = %a # %a@." pp_base base pp_expr offset pp_typ offset.etyp;*)
     (** Get symbolic bounds of the offset *)
     let min, max = Common.Quantified_offset.bound offset in
     man.eval ~zone:(Z_c_scalar, Z_u_num) min flow >>$ fun min flow ->
@@ -480,28 +501,33 @@ struct
 
     let length =
       match base.base_kind with
-      | String str -> mk_int (String.length str) range
-      | _ -> mk_length_var base ~mode range
+      | String str when elem_size = 1 -> Some (mk_int (String.length str) range)
+      | String _ -> None
+      | _ -> Some (mk_length_var base elem_size ~mode range)
     in
-    switch [
-      (*       min      max   length
-         |------|--------|------0------>
-      *)
-      [ le max (pred length range) range ],
-      (fun flow -> Post.return flow);
+    match length with
+    | None ->
+      Post.return flow
+    | Some length ->
+      switch [
+        (*       min      max   length
+           |------|--------|------0------>
+        *)
+        [ le max (pred length range) range ],
+        (fun flow -> Post.return flow);
 
-      (*       min  length     max
-         |------|------0--------|------>
-      *)
-      [ mk_in length min max range ],
-      (fun flow -> Cases.empty_singleton (Flow.bottom_from flow));
+        (*       min  length     max
+           |------|------0--------|------>
+        *)
+        [ mk_in length min max range ],
+        (fun flow -> Cases.empty_singleton (Flow.bottom_from flow));
 
-      (*       length   min    max
-         |------0--------|------|------>
-      *)
-      [ ge min (succ length range) range ],
-      (fun flow -> Post.return flow);
-    ] ~zone:Z_u_num man flow
+        (*       length   min    max
+           |------0--------|------|------>
+        *)
+        [ ge min (succ length range) range ],
+        (fun flow -> Post.return flow);
+      ] ~zone:Z_u_num man flow
 
 
 
@@ -509,8 +535,12 @@ struct
   (* FIXME: this transfer function is sound only when the offset is an
      affine function with coefficient 1, i.e. of the form ∀i + a *)
   let exec_assume_quantified op lval n range man flow =
-    eval_pointed_base_offset (mk_c_address_of lval range) range man flow >>$ fun (base,offset,mode) flow ->
+    let etype = (remove_casts lval).etyp in
+    (*Format.printf "exec_assume_quantified@.  lval = %a # %a # %a@.  n = %a # %a@." pp_expr lval pp_typ lval.etyp pp_typ etype pp_expr n pp_typ n.etyp;*)
+    eval_pointed_base_offset (mk_c_address_of lval range) elem_size range man flow >>$ fun (base,offset,mode) flow ->
     if not (is_interesting_base base) then
+      Post.return flow
+    else if sizeof_type etype <> Z.of_int elem_size then
       Post.return flow
     else
       match op with
@@ -532,14 +562,19 @@ struct
   (* FIXME: this transfer function is sound only when the offset is an
      affine function with coefficient 1, i.e. of the form ∀i + a *)
   let exec_assume_double_quantified_eq lval1 lval2 range man flow =
-    let evl1 = eval_pointed_base_offset (mk_c_address_of lval1 range) range man flow in
-    let evl2 = eval_pointed_base_offset (mk_c_address_of lval2 range) range man flow in
+    let etype1 = (remove_casts lval1).etyp and  etype2 = (remove_casts lval2).etyp in
+    (*Format.printf "exec_assume_double_quantified_eq:@.  lval1 = %a # %a # %a@.  lval2 = %a # %a # %a@." pp_expr lval1 pp_typ lval1.etyp pp_typ etype1 pp_expr lval2 pp_typ lval2.etyp pp_typ etype2;*)
+    let evl1 = eval_pointed_base_offset (mk_c_address_of lval1 range) elem_size range man flow in
+    let evl2 = eval_pointed_base_offset (mk_c_address_of lval2 range) elem_size range man flow in
 
     evl1 >>$ fun (base1,offset1,mode1) flow ->
     if not (is_interesting_base base1) then Post.return flow else
 
     evl2 >>$ fun (base2,offset2,mode2) flow ->
     if not (is_interesting_base base2) then Post.return flow else
+
+    if sizeof_type etype1 <> Z.of_int elem_size ||
+       sizeof_type etype2 <> Z.of_int elem_size then Post.return flow else
 
     (* Get symbolic bounds of quantified offsets *)
     let min1, max1 = Common.Quantified_offset.bound offset1 in
@@ -556,13 +591,15 @@ struct
     evl4 >>$ fun max2 flow ->
 
     let length1 = match base1.base_kind with
-      | String str -> mk_int (String.length str) range
-      | _ -> mk_length_var base1 ~mode:mode1 range
+      | String str when elem_size = 1 -> mk_int (String.length str) range
+      | _ -> mk_length_var base1 elem_size ~mode:mode1 range
     in
     let length2 = match base2.base_kind with
-      | String str -> mk_int (String.length str) range
-      | _ -> mk_length_var base2 ~mode:mode2 range
+      | String str when elem_size = 1 -> mk_int (String.length str) range
+      | _ -> mk_length_var base2 elem_size ~mode:mode2 range
     in
+    (*Format.printf "length1=%a@.length2=%a@." pp_expr length1 pp_expr length2;*)
+    (*Format.printf "%a" (Flow.print man.lattice.print) flow;*)
 
     let before1 = le max1 (pred length1 range) range in
     let before2 = le max2 (pred length2 range) range in
@@ -709,18 +746,18 @@ struct
 
 
   let eval_deref p range man flow =
-    eval_pointed_base_offset p range man flow >>$ fun (base,offset,mode) flow ->
+    eval_pointed_base_offset p elem_size range man flow >>$ fun (base,offset,mode) flow ->
     if not (is_interesting_base base) then
       Eval.singleton (mk_top (under_pointer_type p.etyp) range) flow
     else
       match base.base_kind with
-      | String str -> eval_string_literal_char str offset range man flow
+      | String str when elem_size = 1 -> eval_string_literal_char str offset range man flow
       | _ -> Eval.singleton (mk_top (under_pointer_type p.etyp) range) flow
 
 
   let eval zone exp man flow =
     match ekind exp with
-    | E_c_deref p when is_c_char_type exp.etyp ->
+    | E_c_deref p when is_c_int_type exp.etyp ->
       eval_deref p exp.erange man flow |>
       OptionExt.return
 

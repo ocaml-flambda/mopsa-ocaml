@@ -129,13 +129,6 @@ let expr_to_base e =
   | _ -> assert false
 
 
-let base_to_expr b range =
-  match b.base_kind with
-  | Var v    -> mk_var v range
-  | Addr a   -> mk_addr a range
-  | String s -> mk_c_string s range
-
-
 (** Evaluate the size of a base in bytes *)
 let eval_base_size base ?(via=Z_any) range (man:('a,'t,'s) Core.Sig.Stacked.Lowlevel.man) flow =
   match base.base_kind with
