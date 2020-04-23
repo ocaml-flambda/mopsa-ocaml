@@ -192,11 +192,11 @@ struct
           let slog2 = man.get_sub_log log2 in
 
           let a1,a2 =
-            if Log.is_empty slog1 then
+            if Log.is_empty_log slog1 then
               let merged = man.get_sub a2 in
               let a1 = man.set_sub merged a1 in
               a1,a2
-            else if Log.is_empty slog2 then
+            else if Log.is_empty_log slog2 then
               let merged = man.get_sub a1 in
               let a2 = man.set_sub merged a2 in
               a1,a2
@@ -264,7 +264,7 @@ struct
               AlarmSet.union a2''
             in
             let flow = merge_flows ~merge_alarms man pre (flow,log) (after_flow,after_log) in
-            let log = Log.concat log after_log in
+            let log = Log.meet_log log after_log in
             let cleaners = cleaners @ after_cleaners in
             Cases.return (Some (Some rr :: after, S.alarms @ alarms |> List.sort_uniq compare)) flow ~cleaners ~log
           else

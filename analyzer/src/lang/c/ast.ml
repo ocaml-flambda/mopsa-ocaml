@@ -1065,6 +1065,10 @@ let is_c_deref e =
   | E_c_deref _ -> true
   | _ -> false
 
+let get_c_deref_type e =
+  match remove_casts e |> ekind with
+  | E_c_deref p -> under_type p.etyp
+  | _ -> assert false
 
 let is_pointer_offset_forall_quantified p =
   let open Stubs.Ast in

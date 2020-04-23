@@ -20,68 +20,57 @@
 (****************************************************************************)
 
 
-(** Eval - abstract evaluations of expressions *)
+(** Lattice of pairs *)
 
-open Ast.Stmt
-open Ast.Expr
-open Token
-open Flow
-open Zone
-open Context
-open Cases
-open Log
+open Core.Lattice
 
 
-type 'a eval = ('a,expr) cases
+(** Signature of ordered types with printers *)
+module type ORDER =
+sig
+  type t
+  val compare: t -> t -> int
+  val print : Format.formatter -> t -> unit
+end
 
-let return ?(cleaners=[]) ?(log=empty_log) e flow : 'a eval = Cases.return e flow ~cleaners ~log
 
-let singleton ?(cleaners=[]) e flow : 'a eval = Cases.singleton e flow ~cleaners
+module Make(First:LATTICE)(Second:LATTICE) =
+struct
 
-let empty_singleton = empty_singleton
+  type t = First.t * Second.t
 
-let join (evl1:'a eval) (evl2:'a eval) : 'a eval =
-  Cases.join evl1 evl2
+  let bottom : t = First.bottom, Second.bottom
 
-let meet (evl1:'a eval) (evl2:'a eval) : 'a eval =
-  Cases.meet evl1 evl2
+  let top : t = First.top, Second.top
 
-let join_list ~(empty:unit -> 'a eval) (l:'a eval list) : 'a eval =
-  Cases.join_list ~empty l
+  let singleton (x:t) : t = x
 
-let meet_list ~(empty:unit -> 'a eval) (l:'a eval list) : 'a eval =
-  Cases.join_list ~empty l
+  let fst ((a,_):t) : First.t = a
 
-let print fmt (evl: 'a eval) : unit =
-  Cases.print_some (fun fmt e flow ->
-      pp_expr fmt e
-    ) fmt evl
+  let snd ((_,b):t) : Second.t = b
 
-let add_cleaners cleaners evl : 'a eval =
-  Cases.add_cleaners cleaners evl
+  let map_fst (f:(First.t -> First.t)) ((a,b):t) : t =
+    (f a, b)
 
-let get_ctx (evl:'a eval) : 'a ctx =
-  Cases.get_ctx evl
+  let map_snd (f:(Second.t -> Second.t)) ((a,b):t) : t =
+    (a, f b)
 
-let set_ctx (ctx:'a ctx) (evl:'a eval) : 'a eval =
-  Cases.set_ctx ctx evl
+  let is_bottom ((a,b):t) : bool =
+    First.is_bottom a || Second.is_bottom b
 
-let copy_ctx (src:'a eval) (dst:'a eval) : 'a eval =
-  Cases.copy_ctx src dst
+  let subset ((a1,b1):t) ((a2,b2):t) : bool =
+    First.subset a1 a2 && Second.subset b1 b2
 
-let bind = Cases.bind_some
+  let join ((a1,b1):t) ((a2,b2):t) : t =
+    (First.join a1 a2, Second.join b1 b2)
 
-let apply f join meet empty evl =
-  Cases.apply
-    (fun oe flow ->
-       match oe with
-       | Some e -> f e flow
-       | None -> empty
-    )
-    join meet evl
+  let meet ((a1,b1):t) ((a2,b2):t) : t =
+    (First.meet a1 a2, Second.meet b1 b2)
 
-let map = Cases.map
+  let widen ctx ((a1,b1):t) ((a2,b2):t) : t =
+    (First.widen ctx a1 a2, Second.widen ctx b1 b2)
 
-let remove_duplicates lattice evl = Cases.remove_duplicates compare_expr lattice evl
+  let print fmt ((a,b):t) : unit =
+    Format.fprintf fmt "(%a, %a)" First.print a Second.print b
 
-let cardinal = Cases.cardinal
+end

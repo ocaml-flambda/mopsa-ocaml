@@ -22,7 +22,9 @@
 (** Common constructs for numeric abstractions. *)
 
 open Mopsa
-
+open Ast
+open Zone
+open Framework.Core.Sig.Stacked.Manager
 module I = ItvUtils.IntItv
 module C = CongUtils.IntCong
 
@@ -165,3 +167,32 @@ let () =
       f
     );
   }
+
+
+(** {2 Fast assume on numeric conditions} *)
+(** ************************************* *)
+
+(** Get the intervals of a numeric expression *)
+let interval_of_num_expr e man flow : int_itv =
+  match expr_to_z e with
+  | Some n -> I.of_range_bot n n
+  | None -> man.ask (mk_int_interval_query ~fast:true e) flow
+
+(** Evaluate a numeric condition *)
+let eval_num_cond cond man flow : bool option =
+  match interval_of_num_expr cond man flow with
+  | Bot.Nb(I.B.Finite a, I.B.Finite b) when Z.equal a b -> Some Z.(equal a one)
+  | _ -> None
+  
+
+(** Optimized assume function that uses intervals to check a
+    condition or falls back to classic assume *)
+let assume_num cond ~fthen ~felse ?(zone=Z_u_num) man flow =
+  begin
+    if zone = Z_u_num then Eval.singleton cond flow
+    else man.eval cond ~zone:(zone,Z_u_num) flow
+  end >>$ fun cond flow ->
+  match eval_num_cond cond man flow with
+  | Some true  -> fthen flow
+  | Some false -> felse flow
+  | None       -> assume cond ~fthen ~felse ~zone:Z_u_num man flow

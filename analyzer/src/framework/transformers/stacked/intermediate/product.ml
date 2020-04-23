@@ -109,35 +109,40 @@ struct
   (** {2 Lattice operators} *)
   (** ********************* *)
 
-  let subset sman ctx (a1,s1) (a2,s2) =
-    let f = fun (type a) (m: a stack) acc (a1,s1) (a2,s2) ->
+  let subset (man:('a,t,'s) man) ctx (a1,s1) (a2,s2) =
+    let f = fun (type a) (m: a stack) man a1 a2 (b,s1,s2) ->
       let module S = (val m) in
-      let b, s1, s2 = S.subset sman ctx (a1,s1) (a2,s2) in
-      b && acc, s1, s2
+      let b', s1', s2' = S.subset man ctx (a1,s1) (a2,s2) in
+      b && b', s1', s2'
     in
-    fold_ext2 { f } Spec.pool true (a1,s1) (a2,s2)
+    man_fold2 { f } Spec.pool man a1 a2 (true,s1,s2)
 
-  let join sman ctx (a1,s1) (a2,s2) =
-    let f = fun (type a) (m: a stack) (a1,s1) (a2,s2) ->
+  let join man ctx (a1,s1) (a2,s2) =
+    let f = fun (type a) (m: a stack) man a1 a2 (s1,s2) ->
       let module S = (val m) in
-      S.join sman ctx (a1,s1) (a2,s2)
+      let a,s1,s2 = S.join man ctx (a1,s1) (a2,s2) in
+      a,(s1,s2)
     in
-    apply_ext2 { f } Spec.pool (a1,s1) (a2,s2)
+    let a,(s1,s2) = man_fold_apply2 { f } Spec.pool man a1 a2 (s1,s2) in
+    a,s1,s2
 
-  let meet sman ctx (a1,s1) (a2,s2) =
-    let f = fun (type a) (m: a stack) (a1,s1) (a2,s2) ->
+  let meet man ctx (a1,s1) (a2,s2) =
+    let f = fun (type a) (m: a stack) man a1 a2 (s1,s2) ->
       let module S = (val m) in
-      S.meet sman ctx (a1,s1) (a2,s2)
+      let a,s1,s2 = S.meet man ctx (a1,s1) (a2,s2) in
+      a,(s1,s2)
     in
-    apply_ext2 { f } Spec.pool (a1,s1) (a2,s2)
+    let a,(s1,s2) = man_fold_apply2 { f } Spec.pool man a1 a2 (s1,s2) in
+    a,s1,s2
 
-  let widen sman ctx (a1,s1) (a2,s2) =
-    let f = fun (type a) (m: a stack) (a1,s1) (a2,s2) stable ->
+  let widen man ctx (a1,s1) (a2,s2) =
+    let f = fun (type a) (m: a stack) man a1 a2 (s1,s2,stable) ->
       let module S = (val m) in
-      let a, s1, s2, stable' = S.widen sman ctx (a1,s1) (a2,s2) in
-      a, s1, s2, stable && stable'
+      let a, s1, s2, stable' = S.widen man ctx (a1,s1) (a2,s2) in
+      a, (s1, s2, stable && stable')
     in
-    fold_apply_ext2 { f } Spec.pool (a1,s1) (a2,s2) true
+    let a,(stable,s1,s2) = man_fold_apply2 { f } Spec.pool man a1 a2 (s1,s2,true) in
+    a,stable,s1,s2
 
   let merge pre (a1,log1) (a2,log2) =
     Exceptions.panic ~loc:__LOC__ "merge not implemented"
@@ -165,44 +170,41 @@ struct
     let ctx = Context.get_most_recent (Flow.get_ctx flow1) (Flow.get_ctx flow2) |>
               Context.get_unit
     in
-    Flow.merge (fun tk oa1 oa2 ->
-        match tk, oa1, oa2 with
-        (* Logs concern only cur environments *)
-        | T_cur, Some a1, Some a2 ->
-          (* Merge the shared sub-tree *)
-          let p = Flow.get T_cur man.lattice pre |> man.get_sub in
-          let slog1 = man.get_sub_log log1 in
-          let slog2 = man.get_sub_log log2 in
+    Flow.map2zo
+      (fun _ a1 -> man.lattice.bottom)
+      (fun _ a2 -> man.lattice.bottom)
+      (fun tk a1 a2 ->
+         match tk with
+         (* Logs concern only cur environments *)
+         | T_cur ->
+           (* Merge the shared sub-tree *)
+           let p = Flow.get T_cur man.lattice pre |> man.get_sub in
+           let slog1 = man.get_sub_log log1 in
+           let slog2 = man.get_sub_log log2 in
 
-          let a1,a2 =
-            if Log.is_empty slog1 then
-              let merged = man.get_sub a2 in
-              let a1 = man.set_sub merged a1 in
-              a1,a2
-            else if Log.is_empty slog2 then
-              let merged = man.get_sub a1 in
-              let a2 = man.set_sub merged a2 in
-              a1,a2
-            else
-              let merged = man.merge_sub p
-                  (man.get_sub a1, slog1)
-                  (man.get_sub a2, slog2)
-              in
-              let a1 = man.set_sub merged a1 in
-              let a2 = man.set_sub merged a2 in
-              a1,a2
-          in
-          let a = man.lattice.meet ctx a1 a2 in
-          if man.lattice.is_bottom a then None else Some a
+           let a1,a2 =
+             if Log.is_empty_log slog1 then
+               let merged = man.get_sub a2 in
+               let a1 = man.set_sub merged a1 in
+               a1,a2
+             else if Log.is_empty_log slog2 then
+               let merged = man.get_sub a1 in
+               let a2 = man.set_sub merged a2 in
+               a1,a2
+             else
+               let merged = man.merge_sub p
+                   (man.get_sub a1, slog1)
+                   (man.get_sub a2, slog2)
+               in
+               let a1 = man.set_sub merged a1 in
+               let a2 = man.set_sub merged a2 in
+               a1,a2
+           in
+           man.lattice.meet ctx a1 a2
 
-        (* For the other tokens, compute the meet of the environments *)
-        | _ ->
-          OptionExt.absorb2 (fun a1 a2 ->
-              let a = man.lattice.meet ctx a1 a2 in
-              if man.lattice.is_bottom a then None else Some a
-            ) oa1 oa2
-      ) merge_alarms man.lattice flow1 flow2
-
+         (* For the other tokens, compute the meet of the environments *)
+         | _ -> man.lattice.meet ctx a1 a2
+      ) merge_alarms flow1 flow2
 
 
   (** Merge the conflicts between distinct domains in a pointwise result *)
@@ -225,19 +227,20 @@ struct
           Cases.singleton (None :: after, alarms) flow
 
         | Some r :: tl, Cons(hds,tls) ->
-          aux tls tl (tlman man) |>
+          let hdman = hdman man in
+          let tlman = tlman man in
+          aux tls tl tlman |>
           Cases.bind_full @@ fun after after_flow after_log after_cleaners ->
           let after,alarms = OptionExt.none_to_exn after in
           r |> Cases.bind_full @@ fun rr flow log cleaners ->
           let module S = (val hds) in
           if after |> List.exists (function Some _ -> true | None -> false) then
-            let hdman = hdman man in
-            let after_flow = Flow.set T_cur (
-                let cur = Flow.get T_cur man.lattice flow in
-                let after_cur = Flow.get T_cur man.lattice after_flow in
-                hdman.set (hdman.get cur) after_cur
-              ) man.lattice after_flow
-            in
+            let cur = Flow.get T_cur man.lattice flow in
+            let after_cur = Flow.get T_cur man.lattice after_flow in
+            let cur' = tlman.set (tlman.get after_cur) cur in
+            let after_cur' = hdman.set (hdman.get cur) after_cur in
+            let flow' = Flow.set T_cur cur' man.lattice flow in
+            let after_flow' = Flow.set T_cur after_cur' man.lattice after_flow in
             let common_alarms = List.filter (fun a -> List.mem a alarms) S.alarms in
             let merge_alarms a1 a2 =
               let a1', a1'' = AlarmSet.partition (fun a -> List.mem (get_alarm_class a) common_alarms) a1 in
@@ -246,8 +249,8 @@ struct
               AlarmSet.union a1'' |>
               AlarmSet.union a2''
             in
-            let flow = merge_flows ~merge_alarms man pre (flow,log) (after_flow,after_log) in
-            let log = Log.concat log after_log in
+            let flow = merge_flows ~merge_alarms man pre (flow',log) (after_flow',after_log) in
+            let log = Log.meet_log log after_log in
             let cleaners = cleaners @ after_cleaners in
             Cases.return (Some (Some rr :: after, S.alarms @ alarms |> List.sort_uniq compare)) flow ~cleaners ~log
           else
@@ -266,7 +269,6 @@ struct
     Cases.map_fold_conjunctions (fun (flow1,log1) (flow2,log2) ->
         merge_flows ~merge_alarms:AlarmSet.inter man pre (flow1,log1) (flow2,log2)
       ) r
-
 
 
   (** {2 Reduction manager} *)

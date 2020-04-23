@@ -23,16 +23,17 @@
 # Framework packs
 framework = ast core lattices engines transformers output config runner
 framework.ast = program frontend typ operator constant var expr stmt visitor all
-framework.core = query context zone callstack alarm token log lattice        \
+framework.core = query context zone callstack alarm token log lattice       \
 		 soundness flow cases eval post id interface channel sig    \
                  hook cache abstraction all
 framework.core.sig = value domain stacked functor
 framework.core.sig.value = lowlevel simplified reduction
-framework.core.sig.domain = manager lowlevel intermediate simplified         \
+framework.core.sig.domain = manager lowlevel intermediate simplified        \
                             stateless reduction
 framework.core.sig.stacked = manager lowlevel intermediate stateless reduction
 framework.core.sig.functor = simplified
-framework.lattices = partial_map partial_inversible_map_sig partial_inversible_map powerset_sig powerset powersetwithunder pointwise
+framework.lattices = partial_map partial_inversible_map_sig partial_inversible_map \
+	             powerset_sig powerset powersetwithunder pointwise pair
 framework.engines = engine automatic interactive
 framework.transformers = value domain stacked
 framework.transformers.stacked.lowlevel = stack_list compose product sequence

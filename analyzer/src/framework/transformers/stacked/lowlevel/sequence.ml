@@ -75,9 +75,9 @@ struct
     man with
     get = (fun flow -> man.get flow |> fst);
     set = (fun a flow -> man.set (a, man.get flow |> snd) flow);
-    get_log = (fun glog -> man.get_log glog |> Log.first);
+    get_log = (fun glog -> man.get_log glog |> Log.get_left_log);
     set_log = (fun log glog -> man.set_log (
-        Log.tuple (log, man.get_log glog |> Log.second)
+        Log.mk_log [] log (man.get_log glog |> Log.get_right_log)
       ) glog);
   }
 
@@ -86,9 +86,9 @@ struct
     man with
     get = (fun flow -> man.get flow |> snd);
     set = (fun b flow -> man.set (man.get flow |> fst, b) flow);
-    get_log = (fun glog -> man.get_log glog |> Log.second);
+    get_log = (fun glog -> man.get_log glog |> Log.get_right_log);
     set_log = (fun log glog -> man.set_log (
-        Log.tuple (man.get_log glog |> Log.first, log)
+        Log.mk_log [] (man.get_log glog |> Log.get_left_log) log
       ) glog);
   }
 
@@ -118,8 +118,8 @@ struct
     (a1,a2), a, a', stable1 && stable2
 
   let merge (pre1,pre2) ((a1,a2), log) ((a1',a2'), log') =
-    S1.merge pre1 (a1, Log.first log) (a1', Log.first log'),
-    S2.merge pre2 (a2, Log.second log) (a2', Log.second log')
+    S1.merge pre1 (a1, Log.get_left_log log) (a1', Log.get_left_log log'),
+    S2.merge pre2 (a2, Log.get_right_log log) (a2', Log.get_right_log log')
 
 
 
