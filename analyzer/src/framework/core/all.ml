@@ -63,6 +63,7 @@ module Post = Post
 type 'a post = 'a Post.post
 
 module Log = Log
+include Log
 
 include Query
 

@@ -105,6 +105,13 @@ val fold : ('r option -> 'a flow -> 'b -> 'b) -> ('a,'r) cases -> 'b -> 'b
 
 val fold_some : ('r -> 'a flow -> 'b -> 'b) -> ('a,'r) cases -> 'b -> 'b
 
+val for_all : ('r option -> 'a flow -> bool) -> ('a,'r) cases -> bool
+
+val for_all_some : ('r -> 'a flow -> bool) -> ('a,'r) cases -> bool
+
+val exists : ('r option -> 'a flow -> bool) -> ('a,'r) cases -> bool
+
+val exists_some : ('r -> 'a flow -> bool) -> ('a,'r) cases -> bool
 
 val print :
   (Format.formatter -> 'r option -> 'a flow -> unit) ->

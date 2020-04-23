@@ -46,7 +46,10 @@ let bot_top_absorb2 (f:'a  -> 'b -> 'c with_bot_top) (a:'a with_bot_top) (b:'b w
   match a,b with TOP,_ | _,TOP -> TOP | BOT,_ | _,BOT -> BOT | Nbt x, Nbt y -> f x y
 
 let bot_top_neutral2 (f:'a -> 'a -> 'a) (a:'a with_bot_top) (b:'a with_bot_top) : 'a with_bot_top =
-  match a,b with TOP,_ -> b | _,TOP -> a | BOT,_ -> b | _,BOT -> a | Nbt x, Nbt y -> Nbt (f x y)
+  match a,b with TOP,_ -> TOP | _,TOP -> TOP | BOT,_ -> b | _,BOT -> a | Nbt x, Nbt y -> Nbt (f x y)
+
+let bot_top_neutral_bind2 (f:'a -> 'a -> 'a with_bot_top) (a:'a with_bot_top) (b:'a with_bot_top) : 'a with_bot_top =
+  match a,b with TOP,_ -> TOP | _,TOP -> TOP | BOT,_ -> b | _,BOT -> a | Nbt x, Nbt y -> f x y
 
 let bot_top_equal (f:'a->'b->bool) (a:'a with_bot_top) (b:'b with_bot_top) : bool =
   match a,b with BOT, BOT -> true | TOP, TOP -> true | Nbt x, Nbt y -> f x y | _ -> false

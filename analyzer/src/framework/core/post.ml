@@ -28,12 +28,14 @@ open Log
 open Context
 open Lattice
 open Cases
+open Log
+
 
 
 type 'a post = ('a, unit) cases
 
 
-let return ?(log=Log.empty) ?(cleaners=[]) flow : 'a post =
+let return ?(log=empty_log) ?(cleaners=[]) flow : 'a post =
   Cases.return (Some ()) ~log ~cleaners flow
 
 

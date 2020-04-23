@@ -183,6 +183,20 @@ let merge
     alarms = falarm flow1.alarms flow2.alarms;
   }
 
+let map2zo
+    (f1: token -> 'a -> 'a)
+    (f2: token -> 'a -> 'a)
+    (f: token -> 'a -> 'a -> 'a)
+    (falarm: AlarmSet.t -> AlarmSet.t -> AlarmSet.t)
+    (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
+  let ctx = Context.get_most_recent flow1.ctx flow2.ctx in
+  {
+    tmap = TokenMap.map2zo f1 f2 f flow1.tmap flow2.tmap;
+    ctx;
+    alarms = falarm flow1.alarms flow2.alarms;
+  }
+
+
 let get_ctx flow = flow.ctx
 
 let set_ctx ctx flow =

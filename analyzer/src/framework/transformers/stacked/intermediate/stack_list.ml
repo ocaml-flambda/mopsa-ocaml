@@ -58,23 +58,6 @@ let map f l =
   aux l
 
 
-type ('a,'b) map_combined = {
-  f: 't. 't stack -> 'a -> 'b;
-}
-
-
-let map_combined f l1 l2 =
-  let rec aux : type t. t stack_list -> 'a list -> 'b list =
-    fun l1 l2 ->
-      match l1, l2 with
-      | Nil, [] -> []
-      | Cons(hd1,tl1), hd2 :: tl2 ->
-        f.f hd1 hd2 :: aux tl1 tl2
-      | _ -> assert false
-  in
-  aux l1 l2
-
-
 type 'b fold = {
   f: 't. 't stack -> 'b -> 'b;
 }
@@ -90,78 +73,6 @@ let fold f l init =
         aux tl acc'
   in
   aux l init
-
-
-type ('a,'b) fold_combined = {
-  f: 't. 't stack -> 'a -> 'b -> 'b;
-}
-
-
-let fold_combined f l1 l2 init =
-  let rec aux : type t. t stack_list -> 'a list -> 'b -> 'b =
-    fun l1 l2 acc ->
-      match l1, l2 with
-      | Nil, [] -> acc
-      | Cons(hd1,tl1), hd2::tl2 ->
-        let acc' = f.f hd1 hd2 acc in
-        aux tl1 tl2 acc'
-      | _ -> assert false
-  in
-  aux l1 l2 init
-
-
-type ('a,'b) fold_ext2 = {
-  f: 't. 't stack -> 'a -> 't * 'b -> 't * 'b -> 'a * 'b * 'b;
-}
-
-
-let fold_ext2 f l init (a1,s1) (a2,s2) =
-  let rec aux : type t. t stack_list -> 'a -> t * 'b -> t * 'b -> 'a * 'b * 'b =
-    fun l acc (a1,s1) (a2,s2) ->
-      match l,a1,a2 with
-      | Nil,(),() -> acc,s1,s2
-      | Cons(hd,tl), (hda1,tla1), (hda2,tla2) ->
-        let acc,s1,s2 = f.f hd acc (hda1,s1) (hda2,s2) in
-        aux tl acc (tla1,s1) (tla2,s2)
-  in
-  aux l init (a1,s1) (a2,s2)
-
-
-type 'b apply_ext2 = {
-  f: 't. 't stack -> 't * 'b -> 't * 'b -> 't * 'b * 'b;
-}
-
-
-let apply_ext2 f l (a1,s1) (a2,s2) =
-  let rec aux : type t. t stack_list -> t * 'b -> t * 'b -> t * 'b * 'b =
-    fun l (a1,s1) (a2,s2) ->
-      match l,a1,a2 with
-      | Nil,(),() -> (),s1,s2
-      | Cons(hd,tl), (hda1,tla1), (hda2,tla2) ->
-        let hda,s1,s2 = f.f hd (hda1,s1) (hda2,s2) in
-        let tla,s1,s2 = aux tl (tla1,s1) (tla2,s2) in
-        (hda,tla), s1, s2
-  in
-  aux l (a1,s1) (a2,s2)
-
-
-
-type ('ext,'b) fold_apply_ext2 = {
-  f: 't. 't stack -> 't * 'b -> 't * 'b -> 'ext -> 't * 'b * 'b * 'ext;
-}
-
-
-let fold_apply_ext2 f l (a1,s1) (a2,s2) ext =
-  let rec aux : type t. t stack_list -> t * 'b -> t * 'b -> 'ext -> t * 'b * 'b * 'ext=
-    fun l (a1,s1) (a2,s2) ext ->
-      match l,a1,a2 with
-      | Nil,(),() -> (),s1,s2,ext
-      | Cons(hd,tl), (hda1,tla1), (hda2,tla2) ->
-        let hda,s1,s2,ext = f.f hd (hda1,s1) (hda2,s2) ext in
-        let tla,s1,s2,ext = aux tl (tla1,s1) (tla2,s2) ext in
-        (hda,tla), s1, s2,ext
-  in
-  aux l (a1,s1) (a2,s2) ext
 
 
 
@@ -221,16 +132,16 @@ let hdman man = {
   man with
   get = (fun a -> man.get a |> fst);
   set = (fun hd a -> man.set (hd, man.get a |> snd) a);
-  get_log = (fun log -> man.get_log log |> Log.first);
-  set_log = (fun l log -> man.set_log (Log.tuple (l, man.get_log log |> Log.second)) log);
+  get_log = (fun log -> man.get_log log |> Log.get_left_log);
+  set_log = (fun l log -> man.set_log (Log.mk_log [] l (man.get_log log |> Log.get_right_log)) log);
 }
 
 let tlman man = {
   man with
   get = (fun a -> man.get a |> snd);
   set = (fun tl a -> man.set (man.get a |> fst, tl) a);
-  get_log = (fun log -> man.get_log log |> Log.second);
-  set_log = (fun l log -> man.set_log (Log.tuple (man.get_log log |> Log.first, l)) log);
+  get_log = (fun log -> man.get_log log |> Log.get_right_log);
+  set_log = (fun l log -> man.set_log (Log.mk_log [] (man.get_log log |> Log.get_left_log) l) log);
 }
 
 
@@ -298,3 +209,40 @@ let man_fold_combined f l1 l2 man init =
       | _ -> assert false
   in
   aux l1 l2 man init
+
+
+type ('a,'b,'s) man_fold2 = {
+  f: 't. 't stack -> ('a,'t,'s) man -> 't -> 't -> 'b -> 'b;
+}
+
+
+let man_fold2 f l man a1 a2 init =
+  let rec aux : type t. t stack_list -> ('a,t,'s) man -> t -> t -> 'c -> 'c =
+    fun l man a1 a2 acc ->
+      match l, a1, a2 with
+      | Nil, (), () -> acc
+      | Cons(hd,tl), (hda1,tla1), (hda2,tla2) ->
+        let acc' = f.f hd (hdman man) hda1 hda2 acc in
+        aux tl (tlman man) tla1 tla2 acc'
+  in
+  aux l man a1 a2 init
+
+
+type ('a,'b,'s) man_fold_apply2 = {
+  f: 't. 't stack -> ('a,'t,'s) man -> 't -> 't -> 'b -> 't * 'b;
+}
+
+
+let man_fold_apply2 f l man a1 a2 init =
+  let rec aux : type t. t stack_list -> ('a,t,'s) man -> t -> t -> 'c -> t * 'c =
+    fun l man a1 a2 acc ->
+      match l, a1, a2 with
+      | Nil, (), () -> (), acc
+      | Cons(hd,tl), (hda1,tla1), (hda2,tla2) ->
+        let hda',acc' = f.f hd (hdman man) hda1 hda2 acc in
+        let tla',acc'' = aux tl (tlman man) tla1 tla2 acc' in
+        (hda',tla'),acc''
+  in
+  aux l man a1 a2 init
+
+

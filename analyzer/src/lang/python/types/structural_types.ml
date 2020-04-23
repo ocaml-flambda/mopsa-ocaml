@@ -87,9 +87,9 @@ struct
 
   let merge pre (a, log) (a', log') =
     if a == a' then a
-    else if Log.is_empty log' then a
-    else if Log.is_empty log then a'
-    else let () = debug "pre=%a@.a=%alog=%a@.a'=%alog'=%a@." print pre print a Log.print log print a' Log.print log' in assert false
+    else if Log.is_empty_log log' then a
+    else if Log.is_empty_log log then a'
+    else let () = debug "pre=%a@.a=%alog=%a@.a'=%alog'=%a@." print pre print a Log.pp_log log print a' Log.pp_log log' in assert false
 
 
   let init progr man flow =

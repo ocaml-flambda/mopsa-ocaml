@@ -172,33 +172,17 @@ struct
 
   let merge (pre,bnd) ((a1,bnd1),log1) ((a2,bnd2),log2) =
     let bnd = Binding.concat bnd1 bnd2 in
-    let patch stmt a acc =
-      match skind stmt with
-      | S_forget { ekind = E_var (var, _) }
-      | S_add { ekind = E_var (var, _) }
-      | S_remove { ekind = E_var (var, _) }
-      | S_assign({ ekind = E_var (var, _)}, _) ->
-        let acc', _ = forget_var var (acc,bnd) in
-        acc'
-      | S_rename ( {ekind = E_var (var1, _)}, {ekind = E_var (var2, _)} ) ->
-        let acc', _ = forget_var var1 (acc,bnd) |>
-                      forget_var var2
-        in
-        acc'
-
-      | S_expand({ekind = E_var(var,_)}, vl)
-      | S_fold({ekind = E_var(var,_)}, vl) ->
-        let vars = List.map (function { ekind = E_var(v,_) } -> v | _ -> assert false) vl in
-        let acc', _ = List.fold_left (fun acc v -> forget_var v acc) (acc,bnd) vars in
-        acc'
-
-      | S_assume _ ->
-        acc
-
-      | _ -> panic ~loc:__LOC__ "merge: unsupported statement %a" pp_stmt stmt
+    (* FIXME: the use here the generic merge provided by [Framework.Core.Log]
+       and we do not provide a [find] function. Instead, we forget all modified
+       and removed variables, which is sound, but inefficient. This should be
+       improved by return intervals in [find] and use them in [add]. *)
+    let a1',a2' =
+      Log.generic_domain_merge
+        ~add:(fun v () a -> forget_var v (a,bnd) |> fst)
+        ~find:(fun v a -> ())
+        ~remove:(fun v a -> forget_var v (a,bnd) |> fst)
+        (a1,log1) (a2,log2)
     in
-    let a1' = List.fold_left (fun acc stmt -> patch stmt a1 acc) a2 (List.rev log1) in
-    let a2' = List.fold_left (fun acc stmt -> patch stmt a2 acc) a1 (List.rev log2) in
     meet (a1',bnd) (a2',bnd)
 
 

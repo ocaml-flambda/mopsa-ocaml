@@ -59,11 +59,9 @@ type ('a, 't, 's) man = ('a,'t,'s) Lowlevel.man = {
   (* Lattice operators over global abstract elements ['a] *)
   lattice : 'a lattice;
 
-  (* Accessors to the domain's abstract element ['t] within ['a] *)
+  (* Accessors to the domain's abstract element ['t] and ['s] within ['a] *)
   get : 'a -> 't;
   set : 't -> 'a -> 'a;
-
-  (* Accessors to the sub-tree abstract element ['s] within ['a] *)
   get_sub : 'a -> 's;
   set_sub : 's -> 'a -> 'a;
 
@@ -83,15 +81,6 @@ type ('a, 't, 's) man = ('a,'t,'s) Lowlevel.man = {
 
   (** Sub-tree merger *)
   merge_sub : 's -> 's * log -> 's * log -> 's;
-}
-
-
-(** Simplified stack managers are provided to the lattice operators of stacked domains
-    to modify the state of the parameter abstraction during unification.
-*)
-type 's sman = {
-  sexec: ?zone:zone -> stmt -> uctx -> 's -> 's;
-  sask: 'r. 'r query -> 's -> 'r;
 }
 
 
@@ -137,23 +126,23 @@ sig
   (** {2 Lattice operators} *)
   (** ********************* *)
 
-  val subset: 's sman -> uctx -> t * 's -> t * 's -> bool * 's * 's
-  (** [subset (a1, s1) (a2, s2) sman] tests whether [a1] is related to
+  val subset: ('a,t,'s) man -> uctx -> t * 's -> t * 's -> bool * 's * 's
+  (** [subset (a1, s1) (a2, s2) man] tests whether [a1] is related to
       (or included in) [a2] and unifies the sub-tree elements [s1] and
       [s2]. *)
 
 
-  val join: 's sman -> uctx -> t * 's -> t * 's -> t * 's * 's
-  (** [join (a1, s1) (a2, s2) sman] computes an upper bound of [a1]
+  val join: ('a,t,'s) man -> uctx -> t * 's -> t * 's -> t * 's * 's
+  (** [join (a1, s1) (a2, s2) man] computes an upper bound of [a1]
       and [a2] and unifies the sub-tree elements [s1] and [s2]. *)
 
-  val meet: 's sman -> uctx -> t * 's -> t * 's -> t * 's * 's
-  (** [meet (a1, s1) (a2, s2) sman] computes a lower bound of [a1] and
+  val meet: ('a,t,'s) man -> uctx -> t * 's -> t * 's -> t * 's * 's
+  (** [meet (a1, s1) (a2, s2) man] computes a lower bound of [a1] and
       [a2] and unifies the sub-tree elements [s1] and [s2]. *)
 
   val widen:
-    's sman -> uctx -> t * 's -> t * 's -> t * 's * 's * bool
-  (** [widen ctx (a1, s1) (a2, s2) sman] computes an upper bound of
+    ('a,t,'s) man -> uctx -> t * 's -> t * 's -> t * 's * 's * bool
+  (** [widen ctx (a1, s1) (a2, s2) man] computes an upper bound of
       [a1] and [a2] that ensures stabilization of ascending chains and
       unifies the sub-tree elements [s1] and [s2]. *)
 
@@ -222,6 +211,37 @@ let exec_block_on_all_flows = Lowlevel.exec_block_on_all_flows
 
 let post_to_flow = Lowlevel.post_to_flow
 
+(** [state_exec f ctx man a s] executes transfer function [f] over a
+    flow containing domain's state [a] and its sub-tree state [s] *)
+let state_exec (f:'a flow -> 'a post) ctx (man:('a,'t,'s) man) (a:'t) (s:'s) : 't * 's =
+  (* Create a singleton flow with the given environment *)
+  let flow = Flow.singleton
+      (Context.empty |> Context.set_unit ctx)
+      T_cur
+      (man.set a man.lattice.top |> man.set_sub s)
+  in
+  (* Execute the statement *)
+  let flow' = f flow |> post_to_flow man in
+  (* Get the resulting environment *)
+  get_env T_cur man flow',
+  get_sub_env T_cur man flow'
+  
+
+(** [state_exec f ctx man s] executes transfer function [f] over a
+    flow containing a singleton sub-tree state [s] *)
+let sub_state_exec (f:'a flow -> 'a post) ctx (man:('a,'t,'s) man) (s:'s) : 's =
+  (* Create a singleton flow with the given environment *)
+  let flow = Flow.singleton
+      (Context.empty |> Context.set_unit ctx)
+      T_cur
+      (man.set_sub s man.lattice.top)
+  in
+  (* Execute the statement *)
+  let flow' = f flow |> post_to_flow man in
+  (* Get the resulting environment *)
+  get_sub_env T_cur man flow'
+
+
 (*==========================================================================*)
 (**                         {2 Low-level cast}                              *)
 (*==========================================================================*)
@@ -252,44 +272,12 @@ struct
   let print = S.print
 
 
-  (** {2 Stack manager} *)
-  (** ***************** *)
-
-  (** Create a simplified stack manager from a global manager *)
-  let simplified_man (man:('a,t,'s) man) : 's sman = {
-    sexec = (fun ?(zone=any_zone) stmt ctx s ->
-        (* Create a singleton flow with the given environment *)
-        let flow = Flow.singleton
-            (Context.empty |> Context.set_unit ctx)
-            T_cur
-            (man.set_sub s man.lattice.top)
-        in
-        (* Execute the statement *)
-        let flow' = man.exec ~zone stmt flow in
-        (* Get the resulting environment *)
-        get_sub_env T_cur man flow'
-      );
-
-    sask = (fun query s ->
-        (* Create a singleton flow with the given environment *)
-        let flow =
-          Flow.singleton
-            Context.empty
-            T_cur
-            (man.set_sub s man.lattice.top)
-        in
-        (* Ask the query *)
-        man.ask query flow
-      );
-  }
-
-
   (** {2 Lattice operators} *)
   (** ********************* *)
 
   let subset man ctx a a' =
     let b, s, s' = S.subset
-        (simplified_man man)
+        man
         ctx
         (man.get a, man.get_sub a)
         (man.get a', man.get_sub a')
@@ -298,7 +286,7 @@ struct
 
   let join man ctx a a' =
     let x, s, s' = S.join
-        (simplified_man man)
+        man
         ctx
         (man.get a, man.get_sub a)
         (man.get a', man.get_sub a')
@@ -307,7 +295,7 @@ struct
 
   let meet man ctx a a' =
     let x, s, s' = S.meet
-        (simplified_man man)
+        man
         ctx
         (man.get a, man.get_sub a)
         (man.get a', man.get_sub a')
@@ -316,7 +304,7 @@ struct
 
   let widen man ctx a a' =
     let x, s, s', stable = S.widen
-        (simplified_man man)
+        man
         ctx
         (man.get a, man.get_sub a)
         (man.get a', man.get_sub a')
@@ -356,7 +344,7 @@ struct
     OptionExt.lift @@ fun res ->
     Cases.map_log (fun log ->
         man.set_log (
-          man.get_log log |> Log.append stmt
+          man.get_log log |> Log.add_stmt_to_log stmt
         ) log
       ) res
 

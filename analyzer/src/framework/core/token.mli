@@ -97,6 +97,8 @@ sig
 
   val merge : (token -> 'a option -> 'a option -> 'a option) -> 'a lattice -> 'a t -> 'a t -> 'a t
 
+  val map2zo : (token -> 'a -> 'a) -> (token -> 'a -> 'a) -> (token -> 'a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
+
   val neutral2 : (token -> 'a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
 
   val absorb2 : (token -> 'a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t

@@ -67,10 +67,10 @@ struct
     man with
     get = (fun flow -> man.get flow |> fst);
     set = (fun a flow -> man.set (a, man.get flow |> snd) flow);
-    get_log = (fun glog -> man.get_log glog |> Log.first);
+    get_log = (fun glog -> man.get_log glog |> Log.get_left_log);
     set_log = (fun log glog ->
         man.set_log (
-          Log.tuple (log, man.get_log glog |> Log.second)
+          Log.mk_log [] log (man.get_log glog |> Log.get_right_log)
         ) glog
       );
   }
@@ -80,10 +80,10 @@ struct
     man with
     get = (fun flow -> man.get flow |> snd);
     set = (fun b flow -> man.set (man.get flow |> fst, b) flow);
-    get_log = (fun glog -> man.get_log glog |> Log.second);
+    get_log = (fun glog -> man.get_log glog |> Log.get_right_log);
     set_log = (fun log glog ->
         man.set_log (
-          Log.tuple (man.get_log glog |> Log.first, log)
+          Log.mk_log [] (man.get_log glog |> Log.get_left_log) log
         ) glog
       );
   }
@@ -102,29 +102,29 @@ struct
       S1.print a1
       S2.print a2
 
-  let subset sman ctx ((a1,a2),s) ((a1',a2'),s') =
-    let b1, s, s' = S1.subset sman ctx (a1,s) (a1',s') in
-    let b2, s, s' = S2.subset sman ctx (a2,s) (a2',s') in
+  let subset man ctx ((a1,a2),s) ((a1',a2'),s') =
+    let b1, s, s' = S1.subset (s1_man man) ctx (a1,s) (a1',s') in
+    let b2, s, s' = S2.subset (s2_man man) ctx (a2,s) (a2',s') in
     b1 && b2, s, s'
 
-  let join sman ctx ((a1,a2),s) ((a1',a2'),s') =
-    let a1, s, s' = S1.join sman ctx (a1,s) (a1',s') in
-    let a2, s, s' = S2.join sman ctx (a2,s) (a2',s') in
+  let join man ctx ((a1,a2),s) ((a1',a2'),s') =
+    let a1, s, s' = S1.join (s1_man man) ctx (a1,s) (a1',s') in
+    let a2, s, s' = S2.join (s2_man man) ctx (a2,s) (a2',s') in
     (a1,a2), s, s'
 
-  let meet sman ctx ((a1,a2),s) ((a1',a2'),s') =
-    let a1, s, s' = S1.meet sman ctx (a1,s) (a1',s') in
-    let a2, s, s' = S2.meet sman ctx (a2,s) (a2',s') in
+  let meet man ctx ((a1,a2),s) ((a1',a2'),s') =
+    let a1, s, s' = S1.meet (s1_man man) ctx (a1,s) (a1',s') in
+    let a2, s, s' = S2.meet (s2_man man) ctx (a2,s) (a2',s') in
     (a1,a2), s, s'
 
-  let widen ctx sman ((a1,a2),s) ((a1',a2'),s') =
-    let a1, s, s', stable1 = S1.widen ctx sman (a1,s) (a1',s') in
-    let a2, s, s', stable2 = S2.widen ctx sman (a2,s) (a2',s') in
+  let widen man ctx ((a1,a2),s) ((a1',a2'),s') =
+    let a1, s, s', stable1 = S1.widen (s1_man man) ctx (a1,s) (a1',s') in
+    let a2, s, s', stable2 = S2.widen (s2_man man) ctx (a2,s) (a2',s') in
     (a1,a2), s, s', stable1 && stable2
 
   let merge (pr1,pr2) ((a1,a2), log) ((a1',a2'), log') =
-    S1.merge pr1 (a1, Log.first log) (a1', Log.first log'),
-    S2.merge pr2 (a2, Log.second log) (a2', Log.second log')
+    S1.merge pr1 (a1, Log.get_left_log log) (a1', Log.get_left_log log'),
+    S2.merge pr2 (a2, Log.get_right_log log) (a2', Log.get_right_log log')
 
 
 

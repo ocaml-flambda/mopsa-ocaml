@@ -118,6 +118,11 @@ val merge :
   'a lattice ->
   'a flow -> 'a flow -> 'a flow
 
+val map2zo :
+  (token -> 'a -> 'a) -> (token -> 'a -> 'a) -> (token -> 'a -> 'a -> 'a) ->
+  (AlarmSet.t -> AlarmSet.t -> AlarmSet.t) ->
+  'a flow -> 'a flow -> 'a flow
+
 val get_ctx : 'a flow -> 'a ctx
 (** [get_all_ctx flow] retrieves the context pool from [flow] *)
 

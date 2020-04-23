@@ -99,8 +99,8 @@ struct
     Map.join a a', s, s', true
 
   let merge pre (a,log) (a',log') =
-    let block = Log.get_domain_block log in
-    let block' = Log.get_domain_block log' in
+    let block = Log.get_log_stmts log in
+    let block' = Log.get_log_stmts log' in
 
     let patch_stmt stmt a acc =
       match skind stmt with
@@ -125,8 +125,10 @@ struct
     let a', block = patch_block block a a' in
     let a, block' = patch_block block' a' a in
 
-    Framework.Transformers.Value.Nonrel.generic_nonrel_merge pre (a,block) (a',block')
-      ~top:Top.TOP ~add:Map.set ~find:Map.find ~remove:Map.remove ~meet:Map.meet
+    let a, a' = Log.generic_domain_merge (a,block) (a',block')
+        ~add:Map.set ~find:Map.find ~remove:Map.remove
+    in
+    Map.meet a a'
 
 
   let add p v mode a =
@@ -419,7 +421,7 @@ struct
   let assign p q mode range man flow =
     let o = mk_offset p mode range in
     match Static_points_to.eval q with
-    | AddrOf (b, offset, mode) ->
+    | AddrOf (b, offset, mode') ->
       let flow' = map_env T_cur (add p (PointerSet.base b) mode) man flow in
 
       man.eval offset ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) flow' >>$ fun offset flow' ->

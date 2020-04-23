@@ -75,10 +75,10 @@ struct
     man with
     get = (fun a -> man.get a |> snd);
     set = (fun a2 a -> man.set (man.get a |> fst, a2) a);
-    get_log = (fun log -> man.get_log log |> Log.second);
+    get_log = (fun log -> man.get_log log |> Log.get_right_log);
     set_log = (fun l log ->
         man.set_log (
-          Log.tuple (man.get_log log |> Log.first, l)
+          Log.mk_log [] (man.get_log log |> Log.get_left_log) l
         ) log
       );
   }
@@ -93,20 +93,20 @@ struct
       set = (fun a1 a -> man.set (a1, man.get a |> snd) a);
       get_sub = (fun a -> man2.get a, man.get_sub a);
       set_sub = (fun (a2,s) a -> man2.set a2 a |> man.set_sub s);
-      get_log = (fun log -> man.get_log log |> Log.first);
+      get_log = (fun log -> man.get_log log |> Log.get_left_log);
       set_log = (fun l log ->
           man.set_log (
-            Log.tuple (l, man.get_log log |> Log.second)
+            Log.mk_log [] l (man.get_log log |> Log.get_right_log)
           ) log
         );
-      get_sub_log = (fun log -> Log.tuple (man2.get_log log, man.get_sub_log log));
+      get_sub_log = (fun log -> Log.mk_log [] (man2.get_log log) (man.get_sub_log log));
       set_sub_log = (fun l log ->
-          man2.set_log (Log.first l) log |>
-          man.set_sub_log (Log.second l)
+          man2.set_log (Log.get_left_log l) log |>
+          man.set_sub_log (Log.get_right_log l)
         );
       merge_sub = (fun (pre1,pre2) ((a1,a2), log) ((a1',a2'), log') ->
-          S2.merge pre1 (a1, Log.first log) (a1', Log.first log'),
-          man.merge_sub pre2 (a2, Log.second log) (a2', Log.second log')
+          S2.merge pre1 (a1, Log.get_left_log log) (a1', Log.get_left_log log'),
+          man.merge_sub pre2 (a2, Log.get_right_log log) (a2', Log.get_right_log log')
         );
     }
 
@@ -135,8 +135,8 @@ struct
     (a1,a2), a, a', stable1 && stable2
 
   let merge (pre1,pre2) ((a1,a2), log) ((a1',a2'), log') =
-    S1.merge pre1 (a1, Log.first log) (a1', Log.first log'),
-    S2.merge pre2 (a2, Log.second log) (a2', Log.second log')
+    S1.merge pre1 (a1, Log.get_left_log log) (a1', Log.get_left_log log'),
+    S2.merge pre2 (a2, Log.get_right_log log) (a2', Log.get_right_log log')
 
 
 
