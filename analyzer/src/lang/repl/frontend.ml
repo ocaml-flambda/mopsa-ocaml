@@ -208,12 +208,7 @@ let rec repl_loop ctx man flow =
          ctx, flow
 
       | ("print" | "p")::vars ->
-         List.iter
-           (fun v ->
-             let var = parse_var ctx v in
-             pf "%a@." (man.ask Framework.Engines.Interactive.Q_print_var flow) var.vname
-           ) vars;
-         ctx, flow
+        Exceptions.panic "print not supported"
 
       | _ ->
          (* autodetect the command *)

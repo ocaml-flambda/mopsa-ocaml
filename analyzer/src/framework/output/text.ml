@@ -51,7 +51,7 @@ module CallstackSet = SetExt.Make(struct type t = Callstack.cs let compare = Cal
 
 (** Highlight source code at a given location range *)
 let highlight_range fmt range =
-  if not @@ is_orig @@ untag_range range then ()
+  if not @@ is_orig_range @@ untag_range range then ()
   else
     (* Print source code at location range *)
     let start_pos = get_range_start range in

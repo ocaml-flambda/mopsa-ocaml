@@ -267,11 +267,17 @@ struct
   let ask : type r. r query -> ('a, unit) man -> 'a flow -> r option =
     fun query man flow ->
     match query with
-    | Q_print_addr_related_info ({addr_kind = A_py_tuple _} as addr) ->
-      OptionExt.return @@
-      fun fmt ->
-      List.iter (fun var ->Format.fprintf fmt "%a"
-                    (man.ask Framework.Engines.Interactive.Q_print_var flow) var.vname) (var_of_addr addr)
+    | Universal.Ast.Q_debug_addr_value ({addr_kind = A_py_tuple _} as addr) ->
+       let open Framework.Engines.Interactive in
+       let vars_tuple = var_of_addr addr in
+       let contents = List.map (fun var ->
+                          match vkind var with
+                          | V_addr_attr (_, attr) -> (attr, man.ask (Q_debug_variable_value var) flow)
+                          | _ -> assert false) vars_tuple in
+       Some {var_value = None;
+             var_value_type = T_any;
+             var_sub_value = Some (Named_sub_value contents)}
+
     | _ -> None
 
 end

@@ -30,7 +30,8 @@ type call = {
   call_site: range;
 }
 
-type cs = call list
+type t = call list
+type cs = t
 
 let pp_call fmt c =
   Format.fprintf fmt "%s@%a"
@@ -95,3 +96,15 @@ let pop cs =
 let top (cs:cs) : call =
   try List.hd cs
   with Failure _ -> raise EmptyCallstack
+
+let is_after (cs:cs) (cs':cs) : bool =
+  let n = length cs in
+  let n' = length cs' in
+  if n <= n' then
+    false
+  else
+    let rec aux i x =
+      if i = n' then compare x cs' = 0
+      else aux (i-1) (List.tl x)
+    in
+    aux n cs

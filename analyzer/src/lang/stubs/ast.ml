@@ -641,17 +641,27 @@ let () =
 
     visit = (fun next s ->
         match skind s with
-        | S_stub_directive _ -> panic "visitor for S_stub_init not supported"
+        | S_stub_directive _ -> leaf s
 
         | S_stub_free e ->
           { exprs = [e]; stmts = [] },
           (function { exprs = [e] } -> { s with skind = S_stub_free e } | _ -> assert false)
 
-        | S_stub_assigns _ -> panic "visitor for S_stub_assigns not supported"
+        | S_stub_assigns a ->
+          let lbounds = List.map fst a.assign_offset in
+          let hbounds = List.map snd a.assign_offset in
+          { exprs = a.assign_target::lbounds@hbounds; stmts = [] },
+          (function
+            | { exprs = assign_target::bounds } ->
+              let lbounds,hbounds = ListExt.split bounds in
+              let assign_offset = List.combine lbounds hbounds in
+              { s with skind = S_stub_assigns {assign_target; assign_offset} }
+            | _ -> assert false)
 
-        | S_stub_prepare_all_assigns _ -> panic "visitor for S_stub_assigns not supported"
 
-        | S_stub_clean_all_assigns _ -> panic "visitor for S_stub_assigns not supported"
+        | S_stub_prepare_all_assigns _ -> leaf s
+
+        | S_stub_clean_all_assigns _ -> leaf s
 
         | S_stub_requires e ->
           { exprs = [e]; stmts = [] },

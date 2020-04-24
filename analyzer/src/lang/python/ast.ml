@@ -403,6 +403,25 @@ type prog_kind +=
       stmt (** body *)
 
 
+
+(** Flow-insensitive context to keep the analyzed C program *)
+let py_program_ctx =
+  let module K = Context.GenUnitKey(struct
+      type t = string * var list * stmt
+      let print fmt prog = Format.fprintf fmt "Python program"
+    end)
+  in
+  K.key
+
+(** Set the Python program in the flow *)
+let set_py_program prog flow =
+  Flow.set_ctx (Flow.get_ctx flow |> Context.add_unit py_program_ctx prog) flow
+
+(** Get the Python program from the flow *)
+let get_py_program flow =
+  Flow.get_ctx flow |> Context.find_unit py_program_ctx
+
+
 (*==========================================================================*)
                            (** {2 Utility functions} *)
 (*==========================================================================*)

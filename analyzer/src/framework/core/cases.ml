@@ -113,6 +113,11 @@ let copy_ctx src dst =
   set_ctx (get_ctx src) dst
 
 
+let get_callstack r =
+  get_ctx r |>
+  Context.find_unit Callstack.ctx_key
+
+
 let map_cases
     (f:('a,'r) case -> ('a,'s) case)
     (r:('a,'r) cases)

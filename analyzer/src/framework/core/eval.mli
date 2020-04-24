@@ -53,6 +53,8 @@ val get_ctx : 'a eval -> 'a ctx
 
 val set_ctx : 'a ctx -> 'a eval -> 'a eval
 
+val get_callstack : 'a eval -> Callstack.cs
+
 val copy_ctx : 'a eval -> 'a eval -> 'a eval
 
 val bind : (expr -> 'a flow -> ('a,'r) cases) -> 'a eval -> ('a,'r) cases

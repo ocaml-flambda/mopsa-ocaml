@@ -132,6 +132,7 @@ sig
   val cardinal : t -> int
   val bindings : t -> (k*AlarmSet.t) list
   val fold : (k -> AlarmSet.t -> 'a -> 'a) -> t -> 'a -> 'a
+  val iter : (k -> AlarmSet.t -> unit) -> t -> unit
 end
 
 module RangeMap : SETMAP with type k = Location.range

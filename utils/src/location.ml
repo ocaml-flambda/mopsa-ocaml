@@ -109,6 +109,7 @@ let rec map_tag f = function
 let get_range_start r =
   match untag_range r with
   | R_orig(pos, _) -> pos
+  | R_program[p] -> mk_pos p 0 0
   | _ -> failwith "get_range_start: invalid argument"
 
 let get_range_end r =
@@ -148,8 +149,12 @@ let get_range_column r =
   let pos = get_range_start r in
   pos.pos_column
 
-let is_orig = function
+let is_orig_range = function
   | R_orig _ -> true
+  | _ -> false
+
+let is_program_range = function
+  | R_program _ -> true
   | _ -> false
 
 let match_range_file file r =
@@ -198,6 +203,23 @@ let rec compare_range (r1: range) (r2: range) =
     | R_fresh(uid1), R_fresh(uid2) -> compare uid1 uid2
 
     | _ -> compare r1 r2
+
+
+let subset_range (r1:range) (r2:range) : bool =
+  if r1 == r2 then true
+  else match untag_range r1, untag_range r2 with
+    | R_program pl1, R_program pl2 -> Compare.list compare pl1 pl2 = 0
+    | R_fresh(uid1), R_fresh(uid2) -> uid1 = uid2
+    | R_orig (l1, l2), R_orig (l1', l2') ->
+      l1.pos_file = l1'.pos_file
+      && l2.pos_file = l2'.pos_file
+      && (l1.pos_line > l1'.pos_line
+          || (l1.pos_line = l1'.pos_line
+              && l1.pos_column >= l1'.pos_column))
+      && (l2.pos_line < l2'.pos_line
+          || (l2.pos_line = l2'.pos_line
+              && l2.pos_column <= l2'.pos_column))
+    | _ -> false
 
 
 (** {2 Range annotations} *)

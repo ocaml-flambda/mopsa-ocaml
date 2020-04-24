@@ -19,7 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Engine of an automatic analysis *)
+(** Engine for an automatic analysis without user interaction *)
 
 open Ast.Stmt
 open Ast.Expr
@@ -32,7 +32,7 @@ open Query
 open Abstraction
 open Engine
 
-(** Create an automatic analysis engine over an abstraction. *)
+
 module Make(Abstraction : ABSTRACTION) : ENGINE with type t = Abstraction.t =
 struct
 

@@ -29,6 +29,8 @@ open Stubs.Ast
 open Ast
 open Zone
 open Universal.Zone
+open Common.Points_to
+open Common.Base
 
 
 (** Iterator domain *)
@@ -87,7 +89,9 @@ struct
 
     ieval = {
       provides = [];
-      uses = [Z_c,Z_c_scalar]
+      uses = [Z_c,Z_c_scalar;
+              Z_c,Z_u_num;
+              Z_c,Z_c_points_to]
     }
   }
 
@@ -404,7 +408,173 @@ struct
   (** Handler of queries *)
   (** ================== *)
 
-  let ask query man flow = None
+  let ask : type r. r query -> _ man -> _ flow -> r option = fun query man flow ->
+    let open Framework.Engines.Interactive in
+    match query with
+    (* Get the list of variables in the current scope *)
+    | Q_debug_variables ->
+      let prog = get_c_program flow in
+      let cs = Flow.get_callstack flow in
+      (* Get global variables *)
+      let globals = List.map fst prog.c_globals in
+      (* Get local variables of all functions in the callstack *)
+      let locals = List.fold_left (fun acc call ->
+          let f = find_function call.Callstack.call_fun_orig_name prog.c_functions in
+          f.c_func_local_vars @ f.c_func_parameters @ acc
+        ) [] cs
+      in
+      Some (globals @ locals)
+      
+
+    (* Get the value of a variable *)
+    | Q_debug_variable_value var ->
+      let open Universal.Numeric.Common in
+      let range = mk_fresh_range () in
+
+      (* Get the direct value of an expression *)
+      let rec get_value e =
+        if is_c_int_type e.etyp then int_value e else
+        if is_c_float_type e.etyp then float_value e else
+        if is_c_array_type e.etyp then array_value e else
+        if is_c_record_type e.etyp then record_value e else
+        if is_c_pointer_type e.etyp then pointer_value e
+        else assert false
+
+      (* Get the direct value of an integer expression *)
+      and int_value ?(zone=Z_c) e =
+        let evl = man.eval e ~zone:(zone,Z_u_num) flow in
+        let itv = Cases.fold_some
+            (fun ee flow acc ->
+              let itv = man.ask (mk_int_interval_query ~fast:false ee) flow in
+              I.join_bot itv acc
+            ) evl Bot.BOT
+        in
+        match itv with
+        | Bot.BOT -> None
+        | Bot.Nb (I.B.Finite a, I.B.Finite b) when Z.equal a b -> Some (Z.to_string a)
+        | Bot.Nb i -> Some (I.to_string i)
+
+      (* Get the direct value of a float expression *)
+      and float_value e =
+        let evl = man.eval e ~zone:(Z_c,Z_u_num) flow in
+        let itv = Cases.fold_some
+            (fun ee flow acc ->
+               let itv = man.ask (mk_float_interval_query ee) flow in
+               ItvUtils.FloatItvNan.join itv acc
+            ) evl ItvUtils.FloatItvNan.bot
+        in
+        if ItvUtils.FloatItvNan.is_bot itv then None
+        else Some ItvUtils.FloatItvNan.(to_string dfl_fmt itv)
+
+      (* Arrays have no direct value *)
+      and array_value e = None
+
+      (* Records have no direct value *)
+      and record_value e = None
+
+      (* Get the direct value a pointer expression *)
+      and pointer_value e =
+        let evl = man.eval e ~zone:(Z_c,Z_c_points_to) flow in
+        let l = Cases.fold_some
+            (fun pt flow acc ->
+               match ekind pt with
+               | E_c_points_to P_null -> "NULL" :: acc
+               | E_c_points_to P_invalid -> "INVALID" :: acc
+               | E_c_points_to P_block (base,offset,_) ->
+                 begin match int_value ~zone:Z_c_scalar offset with
+                   | None -> acc
+                   | Some o ->
+                     let v = Format.asprintf "&%a + %s" pp_base base o in
+                     v :: acc
+                 end
+               | E_c_points_to P_fun f -> f.c_func_org_name :: acc
+               | E_c_points_to P_top -> "⊤" :: acc
+               | _ -> assert false
+            ) evl []
+        in
+        match l with
+        | [x] -> Some x
+        | []  -> None
+        | _   -> Some Format.(asprintf "{%a}"
+                                (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ")
+                                   pp_print_string
+                                ) l)
+
+      (* Get the sub-values of an expressions *)
+      and get_sub_value v e =
+        if is_c_int_type e.etyp then int_sub_value v e else
+        if is_c_float_type e.etyp then float_sub_value v e else
+        if is_c_array_type e.etyp then array_sub_value v e else
+        if is_c_record_type e.etyp then record_sub_value v e else
+        if is_c_pointer_type e.etyp then pointer_sub_value v e
+        else panic "get_sub_value: unsupported expression %a of type %a" pp_expr e pp_typ e.etyp
+
+      (* Integer expression have no sub-values *)
+      and int_sub_value v e = None
+
+      (* Float expression have no sub-values *)
+      and float_sub_value v e = None
+
+      (* Get the sub-values of an array *)
+      and array_sub_value v e =
+        match e.etyp |> remove_typedef_qual with
+        | T_c_array(t,C_array_length_cst n) ->
+          let rec aux i =
+            if Z.(i = n) then []
+            else
+              let vv = Format.asprintf "[%a]" Z.pp_print i in
+              get_var_value vv (mk_c_subscript_access e (mk_z i range) range) :: (aux Z.(succ i))
+          in
+          let l = aux Z.zero in
+          Some (Indexed_sub_value l)
+
+        | _ -> None
+
+      (* Get the sub-values of a record *)
+      and record_sub_value v e =
+        match e.etyp |> remove_typedef_qual with
+        | T_c_record r ->
+          let l = List.fold_right
+              (fun field acc ->
+                 (field.c_field_org_name, get_var_value field.c_field_org_name (mk_c_member_access e field range)) :: acc
+              ) r.c_record_fields []
+          in
+          Some (Named_sub_value l)
+
+        | _ -> None
+
+      (* Get the sub-values of a pointer *)
+      and pointer_sub_value v e =
+        let evl = man.eval e ~zone:(Z_c,Z_c_points_to) flow in
+        let l = Cases.fold_some
+            (fun pt flow acc ->
+               match ekind pt with
+               | E_c_points_to P_block (base,offset,_) ->
+                 let vv = "*" ^ v in
+                 begin match get_var_value vv (mk_c_deref e range) with
+                   | {var_value = None; var_sub_value = None} -> acc
+                   | x -> [Named_sub_value [vv,x]]
+                 end
+               | _ -> acc
+            ) evl []
+        in
+        match l with
+        | [] -> None
+        | [v] -> Some v
+        | _ -> assert false
+
+      (* Get the value of an expression *)
+      and get_var_value v e =
+        { var_value = get_value e;
+          var_value_type = e.etyp;
+          var_sub_value = get_sub_value v e; }
+      in
+
+      (* All together! *)
+      let vname = Format.asprintf "%a" pp_var var in
+      Some (get_var_value vname (mk_var var range))
+
+    | _ -> None
 
 end
 
