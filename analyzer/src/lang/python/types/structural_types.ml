@@ -462,23 +462,20 @@ struct
         let () = debug "answer to query is %s %s@\n" exc message in
         Some (exc, message)
 
-      | Q_print_addr_related_info addr ->
-        OptionExt.return @@
-        fun fmt ->
-        let cur = get_env T_cur man flow in
-        let addrs = AMap.filter (fun a _ -> compare_addr a addr = 0) cur in
-        if AMap.cardinal addrs <> 0 then
-             let () = Format.fprintf fmt "%a@\n" AMap.print addrs in
-             AMap.iter
-               (fun addr aset ->
-                  AttrSet.fold_uo (fun attr () ->
-                      Format.fprintf fmt "%a"
-                        (man.ask Framework.Engines.Interactive.Q_print_var flow) (mk_addr_attr addr attr T_any).vname
-                    ) aset ()
-               ) addrs
-
-
-
+      | Universal.Ast.Q_debug_addr_value addr when not @@ Objects.Data_container_utils.is_data_container addr.addr_kind ->
+         let open Framework.Engines.Interactive in
+         let cur = get_env T_cur man flow in
+         let attrset = AMap.find addr cur in
+         let attrs_descr = AttrSet.fold_o (fun attr acc ->
+                               let attr =
+                                   if not @@ AttrSet.mem_u attr attrset then
+                                     attr ^ " (optional)"
+                                   else attr in
+                                 let attr_var = mk_addr_attr addr attr T_any in
+                                 debug "asking for var %a" pp_var attr_var;
+                                 let value_attr = man.ask (Q_debug_variable_value attr_var) flow in
+                                 (attr, value_attr) :: acc) attrset [] in
+           Some {var_value = None; var_value_type = T_any; var_sub_value = Some (Named_sub_value attrs_descr)}
 
       | _ -> None
 

@@ -184,6 +184,7 @@ sig
   val cardinal : t -> int
   val bindings : t -> (k*AlarmSet.t) list
   val fold : (k -> AlarmSet.t -> 'a -> 'a) -> t -> 'a -> 'a
+  val iter : (k -> AlarmSet.t -> unit) -> t -> unit
 end
 
 module MakeSetMap(K:sig type t val compare : t -> t -> int val from_alarm : alarm -> t end) : SETMAP with type k = K.t =
@@ -215,6 +216,8 @@ struct
   let bindings = Map.bindings
 
   let fold = Map.fold
+
+  let iter = Map.iter
 
 end
 

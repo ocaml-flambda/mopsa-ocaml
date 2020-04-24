@@ -19,9 +19,10 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Engine of an interactive analysis *)
+(** Engine for interactive analysis sessions *)
 
 open Ast
+open Ast.Var
 open Ast.Stmt
 open Ast.Expr
 open Ast.Typ
@@ -36,233 +37,416 @@ open Zone
 open Abstraction
 open Engine
 open Format
-
-(** Query for printing variables *)
-type _ query += Q_print_var : (Format.formatter -> string -> unit) query
-
-let () =
-  register_query {
-    join = (
-      let doit : type r. query_pool -> r query -> r -> r -> r =
-        fun next query a b ->
-          match query with
-          | Q_print_var ->
-            fun fmt var ->
-              Format.fprintf fmt "%a@,%a" a var b var
-          | _ -> next.join_query query a b
-      in
-      doit
-    );
-
-    meet = (
-      let doit : type r. query_pool -> r query -> r -> r -> r =
-        fun next query a b ->
-          match query with
-          | Q_print_var ->
-            fun fmt var ->
-              Format.fprintf fmt "%a@,%a" a var b var
-          | _ -> next.meet_query query a b
-      in
-      doit
-    );
-  }
+open Location
 
 
+(** {2 Debug queries} *)
+(** ***************** *)
 
-(** Create an interactive analysis engine over an abstraction. *)
-module Make(Abstraction : ABSTRACTION) : ENGINE with type t = Abstraction.t =
+(* In order to retrieve structured information from the abstract environment,
+   each language should implement the queries [Q_debug_variables] and
+   [Q_debug_variable_value]:
+
+   - The query [Q_debug_variables] retrieves the variables accessible in
+   the current scope.
+
+   - The query [Q_debug_variable_value] retrieves the value of a given
+   variable as a [var_value] record, containing a textual representation of
+   the value, and a structural encoding of the eventual sub-values.
+*)
+
+(** Value of a variable *)
+type var_value = {
+  var_value: string option;            (** Direct value of the variable *)
+  var_value_type : typ;                (** Type of the value *)
+  var_sub_value: var_sub_value option; (** Sub-values of the variable *)
+}
+
+
+(** Sub-value of a variable *)
+and var_sub_value =
+  | Named_sub_value   of (string (** key *) * var_value (** value *)) list
+  (** Named sub-values are maps from field names to values *)
+
+  | Indexed_sub_value of var_value list
+  (** Indexed sub-values are arrays of values *)
+
+
+(** Query to retrieve the list of variables in the current scope *)
+type _ query += Q_debug_variables : var list query
+
+
+(** Query to retrieve the value of a given variable *)
+type _ query += Q_debug_variable_value : var -> var_value query
+
+
+(** Compare two var values *)
+let rec compare_var_value v1 v2 =
+  Compare.compose [
+    (fun () -> Compare.option compare v1.var_value v2.var_value);
+    (fun () -> Compare.option compare_var_sub_value v1.var_sub_value v2.var_sub_value);
+  ]
+
+
+(** Compare two var sub-values *)
+and compare_var_sub_value sv1 sv2 =
+  match sv1, sv2 with
+  | Named_sub_value m1, Named_sub_value m2 ->
+    Compare.list (fun x1 x2 -> Compare.pair compare compare_var_value x1 x2) m1 m2
+
+  | Indexed_sub_value l1, Indexed_sub_value l2 ->
+    Compare.list compare_var_value l1 l2
+
+  | _ -> compare sv1 sv2
+
+
+
+(** Print a key with its type *)
+let pp_key_with_type fmt (k,t) =
+  match t with
+  | T_any -> pp_print_string fmt k
+  | _      ->Format.fprintf fmt "%s : %a" k pp_typ t
+
+
+(** Print a variable with its type *)
+let pp_var_with_type fmt (v,t) =
+  match t with
+  | T_any -> pp_var fmt v
+  | _      ->Format.fprintf fmt "%a : %a" pp_var v pp_typ t
+
+
+(** Print the value of a variable *)
+let rec pp_var_value fmt v =
+  pp_print_option (Debug.color_str "blue") fmt v.var_value;
+  match v.var_sub_value with
+  | None -> ()
+  | Some sv -> fprintf fmt "@,@[<v2>  %a@]" pp_var_sub_value sv
+
+
+(** Print the values of sub-variables *)
+and pp_var_sub_value fmt = function
+  | Named_sub_value l ->
+    fprintf fmt "%a"
+      (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+         (fun fmt (k,v) -> fprintf fmt "%a = %a" pp_key_with_type (k,v.var_value_type) pp_var_value v)
+      ) l
+
+  | Indexed_sub_value l ->
+    (* Group consecutive elements with the same value *)
+    let rec group_by_value = function
+      | []        -> []
+      | (i,v)::tl ->
+        match group_by_value tl with
+        | [] -> [(i,i,v)]
+        | (a,b,w)::tl ->
+          if compare_var_value v w = 0
+          then (i,b,v)::tl
+          else (i,i,v)::(a,b,w)::tl
+    in
+    List.mapi (fun i v -> (i,v)) l |>
+    group_by_value |>
+    fprintf fmt "%a"
+      (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+         (fun fmt (i,j,v) ->
+            if i = j
+            then fprintf fmt "[%d] = %a" i pp_var_value v
+            else fprintf fmt "[%d-%d] = %a" i j pp_var_value v
+         )
+      )
+
+
+(** {2 Interactive engine} *)
+(** ********************** *)
+
+module Make(Abstraction : ABSTRACTION) =
 struct
 
   type t = Abstraction.t
 
-  (** Analysis breakpoint *)
-  type breakpoint = {
-    brk_file: string option;
-    brk_line: int;
-  }
-
-  (** Compare two breakpoints *)
-  let compare_breakpoint brk1 brk2 =
-    Compare.compose [
-      (fun () -> Compare.option compare brk1.brk_file brk2.brk_file);
-      (fun () -> compare brk1.brk_line brk2.brk_line);
-    ]
-
-  (** Set of active breakpoints *)
-  module BreakpointSet = Set.Make(struct type t = breakpoint let compare = compare_breakpoint end)
-  let breakpoints : BreakpointSet.t ref = ref BreakpointSet.empty
-
-  (** Parse a breakpoint string *)
-  let parse_breakpoint breakpoint =
-    if Str.string_match (Str.regexp "\\(.+\\):\\([0-9]+\\)$") breakpoint 0
-    then Some {
-      brk_file = Some (Str.matched_group 1 breakpoint);
-      brk_line = int_of_string (Str.matched_group 2 breakpoint);
-    }
-
-    else if Str.string_match (Str.regexp "\\([0-9]+\\)$") breakpoint 0
-    then Some {
-      brk_file = None;
-      brk_line = int_of_string (Str.matched_group 1 breakpoint);
-    }
-
-    else None
-
-  (** Check if a range matches a breakpoint *)
-  let match_breakpoint range breakpoint =
-    match breakpoint.brk_file with
-    | None -> Location.match_range_line breakpoint.brk_line range
-
-    | Some file -> Location.match_range_file file range &&
-                   Location.match_range_line breakpoint.brk_line range
-
-  (** Find the breakpoint covering location [range] *)
-  let find_breakpoint_at range =
-    BreakpointSet.filter (match_breakpoint range) !breakpoints |>
-    BreakpointSet.choose_opt
-
-  (* Debugging commands *)
-  type command =
-    | Run    (** Analyze and stop at next breakpoint *)
-    | Next   (** Analyze and stop at next program point in the same level *)
-    | Step   (** Step into current program point  *)
-    | Print  (** Print the current abstract state *)
-    | Env    (** Print the current  abstract environment associated to token T_cur *)
-    | Value of string (** Print the value of a variable *)
-    | Where  (** Show current program point *)
-    | Tokens  (** Show the flow tokens in the current abstract state *)
-    | Callstack (** Show current callstack *)
-    | LoadHook of string (** Activate a hook *)
-    | UnloadHook of string (** Deactivate a hook *)
-
-
-  (** Reference to the last received command *)
-  let last_command : command option ref = ref None
-
-  (** Print help message *)
-  let print_usage () =
-    printf "Available commands:@.";
-    printf "  b[reak] <loc>    add a breakpoint at location <loc>@.";
-    printf "  r[un]            analyze until next breakpoint@.";
-    printf "  n[ext]           analyze until next program point in the same level@.";
-    printf "  s[tep]           analyze until next program point in the level beneath@.";
-    printf "  p[rint]          print the abstract state@.";
-    printf "  e[nv]            print the current abstract environment@.";
-    (* printf "  e[nv] <var>      print the value of a variable in the current abstract environment@."; *)
-    printf "  t[okens]         print the flow tokens of the abstract state@.";
-    printf "  c[allstack]      print the current call stack@.";
-    printf "  w[here]          show current program point@.";
-    printf "  l[oad] <hook>    activate a hook@.";
-    printf "  u[nload] <hook>  deactivate a hook@.";
-    printf "  h[elp]           print this message@.";
-    ()
-
-  let print_prompt range () =
-    printf "%a %a @?"
-      (Debug.color "blue" Location.pp_range) range
-      (Debug.color "green" pp_print_string) ">>"
-
-  let linedit_ctx = LineEdit.create_ctx ()
-
-  (** Breakpoint flag *)
-  let break = ref true
-
-  (** Last breakpoint reached *)
-  let last_breakpoint = ref {
-      brk_file = None;
-      brk_line = -1;
-    }
+  let debug fmt = Debug.debug ~channel:"framework.engines.interactive" fmt
 
   (** Catch Ctrl+C interrupts as a Break exception*)
   let () = Sys.catch_break true
 
 
-  (** Read a debug command *)
-  let rec read_command range () =
-    print_prompt range ();
+  (** {2 Breakpoints} *)
+  (** *************** *)
+
+  (** Breakpoint *)
+  type breakpoint =
+    | B_function of string (** function *)
+    (** Break at the beginning of a function  *)
+
+    | B_line of string (** file *) * int (** line *)
+    (** Break at line *)
+
+
+  (** Compare two breakpoints *)
+  let compare_breakpoint b1 b2 : int =
+    match b1, b2 with
+    | B_function(f1), B_function(f2) ->
+      compare f1 f2
+
+    | B_line(file1,line1), B_line(file2,line2) ->
+      Compare.pair compare compare (file1,line1) (file2,line2)
+
+    | _ -> compare b1 b2
+
+
+  (** Print a breakpoint *)
+  let pp_breakpoint fmt = function
+    | B_function f -> Format.fprintf fmt "%s" f
+    | B_line(file,line) -> Format.fprintf fmt "%s:%d" file line
+
+
+  (** Set of breakpoints *)
+  module BreakpointSet = SetExt.Make(struct
+      type t = breakpoint let
+      compare = compare_breakpoint
+    end)
+
+
+  (** Print a set of breakpoints *)
+  let pp_breakpoint_set fmt bs =
+    Format.fprintf fmt "@[<v>%a@]"
+      (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,") pp_breakpoint)
+      (BreakpointSet.elements bs)
+
+
+  (** Test there is a breakpoint at a given program location *)
+  let is_range_breakpoint range breakpoints =
+    BreakpointSet.exists
+      (function B_line(file,line) -> match_range_file file range
+                                     && match_range_line line range
+              | B_function _ -> false
+      ) breakpoints
+
+
+  (** Test if there is a breakpoint at a given function *)
+  let is_function_breakpoint cs breakpoints =
+    not (Callstack.is_empty cs)
+    && ( let call = Callstack.top cs in
+         BreakpointSet.exists
+           (function
+             | B_function f -> f = call.Callstack.call_fun_orig_name
+             | B_line _ -> false
+           ) breakpoints )
+
+
+  (** Exception raised when parsing an invalid breakpoint string *)
+  exception Invalid_breakpoint_syntax
+
+
+  (** Parse a breakpoint string *)
+  let parse_breakpoint range (s:string) : breakpoint =
+    if Str.string_match (Str.regexp "\\(.+\\):\\([0-9]+\\)$") s 0
+    then
+      let file = Str.matched_group 1 s in
+      let line = int_of_string (Str.matched_group 2 s) in
+      B_line(file, line) else
+
+    if Str.string_match (Str.regexp "\\([0-9]+\\)$") s 0
+    then
+      let file = get_range_file range in
+      let line = int_of_string (Str.matched_group 1 s) in
+      B_line(file, line) else
+
+    if Str.string_match (Str.regexp "\\([^0-9].*\\)$") s 0
+    then
+      let func = Str.matched_group 1 s in
+      B_function(func)
+
+    else raise Invalid_breakpoint_syntax
+
+
+  (** {2 User commands} *)
+  (** ***************** *)
+
+  (** Commands *)
+  type command =
+    | Break of string
+    (** Add a breakpoint *)
+
+    | Continue
+    (** Stop at next breakpoint *)
+
+    | Next
+    (** Stop at next statement and skip function calls *)
+
+    | Step
+    (** Step into function calls  *)
+
+    | Finish
+    (** Finish current function *)
+
+    | NextI
+    (** Stop at next statement and skip nodes in the interpretation sub-tree *)
+
+    | StepI
+    (** Step into interpretation sub-tree  *)
+
+    | PrintVar of string
+    (** Print the value of a variable *)
+
+    | Print
+    (** Print the current abstract state *)
+
+    | Env
+    (** Print the current abstract environment, associated to token T_cur *)
+
+    | Where
+    (** Show current program point *)
+
+    | LoadHook of string
+    (** Activate a hook *)
+
+    | UnloadHook of string
+    (** Deactivate a hook *)
+
+    | Info of info_command
+    (** Print extra information *)
+
+    | Backtrace
+    (** Print the callstack *)
+
+
+  (** Information sub-commands *)
+  and info_command =
+    | Alarms
+    | Breakpoints
+    | Tokens
+    | Variables
+
+
+  (** Print a command *)
+  let pp_command fmt = function
+    | Break loc   -> Format.fprintf fmt "break %s" loc
+    | Continue    -> Format.pp_print_string fmt "continue"
+    | Next        -> Format.pp_print_string fmt "next"
+    | Finish      -> Format.pp_print_string fmt "finish"
+    | NextI       -> Format.pp_print_string fmt "nexti"
+    | Step        -> Format.pp_print_string fmt "step"
+    | StepI       -> Format.pp_print_string fmt "stepi"
+    | PrintVar v  -> Format.fprintf fmt "print %s" v
+    | Print       -> Format.pp_print_string fmt "print"
+    | Env         -> Format.pp_print_string fmt "env"
+    | Where       -> Format.pp_print_string fmt "where"
+    | LoadHook h  -> Format.fprintf fmt "hook %s" h
+    | UnloadHook h -> Format.fprintf fmt "unload %s" h
+    | Info Alarms -> Format.fprintf fmt "info alarms"
+    | Info Breakpoints -> Format.fprintf fmt "info breakpoints"
+    | Info Tokens -> Format.fprintf fmt "info tokens"
+    | Info Variables -> Format.fprintf fmt "info variables"
+    | Backtrace   -> Format.fprintf fmt "backtrace"
+
+
+  (** Print help message *)
+  let print_usage () =
+    printf "Available commands:@.";
+    printf "  b[reak] <[file:]line> add a breakpoint at a line@.";
+    printf "  b[reak] <function>    add a breakpoint at a function@.";
+    printf "  c[ontinue]            run until next breakpoint@.";
+    printf "  n[ext]                stop at next statement and skip function calls.@.";
+    printf "  n[ext]i               stop at next statement and skip nodes in the interpretation sub-tree@.";
+    printf "  s[tep]                step into function calls@.";
+    printf "  s[tep]i               step into interpretation sub-tree@.";
+    printf "  f[inish]              finish current function@.";
+    printf "  p[rint] <variable>    print the value of a variable@.";
+    printf "  p[rint]               print the abstract state@.";
+    printf "  e[nv]                 print the current abstract environment@.";
+    printf "  b[ack]t[race]         print the current call stack@.";
+    printf "  w[here]               show current program point@.";
+    printf "  h[oo] <hook>          activate a hook@.";
+    printf "  u[nload] <hook>       deactivate a hook@.";
+    printf "  i[info] a[larms]      print the list of alarms@.";
+    printf "  i[info] b[reakpoints] print the list of breakpoints@.";
+    printf "  i[info] t[okens]      print the list of flow tokens@.";
+    printf "  i[info] v[ariables]   print the list of variables@.";
+    printf "  help                  print this message@.";
+    ()
+
+
+  (** Print input prompt *)
+  let print_prompt () =
+    printf "%a %a @?"
+      (Debug.color_str "teal") "mopsa"
+      (Debug.color_str "green") ">>"
+
+
+  (** Context of LineEdit library *)
+  let linedit_ctx = LineEdit.create_ctx ()
+
+
+  (** The last entered command *)
+  let last_command = ref None
+
+
+  (** Read a command from user input *)
+  let rec read_command () =
+    print_prompt ();
     let l =  LineEdit.read_line linedit_ctx |> String.trim in
-    let c = match l with
-      | "run"       | "r"   -> Run
-      | "next"      | "n"   -> Next
-      | "step"      | "s"   -> Step
-      | "print"     | "p"   -> Print
-      | "env"       | "e"   -> Env
-      | "where"     | "w"   -> Where
-      | "tokens"    | "t"   -> Tokens
-      | "callstack" | "c"   -> Callstack
+    let parts = String.split_on_char ' ' l in
+    let c = match parts with
+      | ["continue" | "c"]   -> Continue
+      | ["next"     | "n"]   -> Next
+      | ["step"     | "s"]   -> Step
+      | ["finish"   | "f"]   -> Finish
+      | ["nexti"    |"ni"]   -> NextI
+      | ["stepi"    |"si"]   -> StepI
+      | ["print"    | "p"]   -> Print
+      | ["env"      | "e"]   -> Env
+      | ["where"    | "w"]   -> Where
+      | ["backtrace"|"bt"]   -> Backtrace
+      | ["break"    | "b"; loc] -> Break loc
+      | ["print"    | "p"; var] -> PrintVar var
 
-      | "help"  | "h"   ->
+      | ["help" | "h"]   ->
         print_usage ();
-        read_command range ()
+        read_command ()
 
 
-      | "" -> (
-        match !last_command with
-          | None ->  read_command range ()
-          | Some c -> c
-      )
+      | ["info" |"i"; "tokens"      | "t"] | ["it"] -> Info Tokens
+      | ["info" |"i"; "breakpoints" | "b"] | ["ib"] -> Info Breakpoints
+      | ["info" |"i"; "alarms"      | "a"] | ["ia"] -> Info Alarms
+      | ["info" |"i"; "variables" | "vars" | "var"  | "v"] | ["iv"] -> Info Variables
+
+      | [""] ->
+        ( match !last_command with
+          | None ->  read_command ()
+          | Some c -> c )
+
+      | ["hook"   | "h"; hook] -> LoadHook hook
+      | ["unload" | "u"; hook] -> UnloadHook hook
 
       | _ ->
-        if Str.string_match (Str.regexp "\\(b\\|break\\) \\(.*\\)") l 0
-        then (
-          let loc = Str.matched_group 2 l in
-          let () =
-            match parse_breakpoint loc with
-            | Some brk ->
-              breakpoints := BreakpointSet.add brk !breakpoints;
-              if compare_breakpoint brk !last_breakpoint = 0 then
-                last_breakpoint := {
-                  brk_file = None;
-                  brk_line = -1;
-                }
-              ;
-
-            | None ->
-              printf "Invalid breakpoint syntax@."
-          in
-          read_command range ()
-        )
-
-        (* else
-         * if Str.string_match (Str.regexp "\\(e\\|env\\) \\(.*\\\)") l 0
-         * then (
-         *   let var = Str.matched_group 2 l in
-         *   Value var
-         * ) *)
-
-        else
-        if Str.string_match (Str.regexp "\\(l\\|load\\) \\(.*\\)") l 0
-        then (
-          let hook = Str.matched_group 2 l in
-          LoadHook hook
-        )
-
-        else
-        if Str.string_match (Str.regexp "\\(u\\|unload\\) \\(.*\\)") l 0
-        then (
-          let hook = Str.matched_group 2 l in
-          UnloadHook hook
-        )
-
-        else (
-          printf "Unknown command %s@." l;
-          print_usage ();
-          read_command range ()
-        )
+        printf "Unknown command %s@." l;
+        print_usage ();
+        read_command ()
     in
     last_command := Some c;
     c
 
 
-  (** Interpreter actions *)
+  (** {2 Actions on the abstract domain} *)
+  (** ********************************** *)
+
+  (** Actions on abstract domain *)
   type _ action =
     | Exec : stmt * zone -> Abstraction.t flow action
     | Post : stmt * zone -> Abstraction.t post action
     | Eval : expr * (zone * zone) * zone -> Abstraction.t eval action
 
 
-  (** Print the current analysis action *)
-  let pp_action : type a. formatter -> a action * Abstraction.t flow -> unit = fun fmt (action, flow) ->
+  (** Get the program location related to an action *)
+  let action_range : type a. a action -> range = function
+    | Exec(stmt,_) -> stmt.srange
+    | Post(stmt,_) -> stmt.srange
+    | Eval(exp,_,_)  -> exp.erange
+
+
+  (** Print an action *)
+  let pp_action : type a. Abstraction.t flow -> formatter -> a action -> unit = fun flow fmt action ->
+    fprintf fmt "%a@." (Debug.color "orange" pp_range) (action_range action);
     match action with
     | Exec(stmt,zone) ->
       fprintf fmt "@[<v 4>S[ %a@] ] in zone %a@."
@@ -281,128 +465,368 @@ struct
         pp_zone2 zone
 
 
+  (** Check that an action is atomic *)
+  let is_atomic_action: type a. a action -> bool = fun action ->
+    match action with
+    | Exec(stmt,_) -> is_orig_range stmt.srange && Visitor.is_atomic_stmt stmt
+    | Post(stmt,_) -> is_orig_range stmt.srange && Visitor.is_atomic_stmt stmt
+    | Eval _       -> false
+
+
+
+  (** {2 Function state automaton} *)
+  (** **************************** *)
+
+  (* We use an automaton to track the current position within the
+     analyzed function *)
+
+  (** Function states *)
+  type fstate =
+    | FunStartNonAtomic
+    | FunStartAtomic
+    | NonAtomic
+    | Atomic
+    | InsideAtomic of int
+
+
+  (** Print a function state *)
+  let pp_fstate fmt = function
+    | FunStartNonAtomic -> Format.pp_print_string fmt "fun-start-non-atomic"
+    | FunStartAtomic    -> Format.pp_print_string fmt "fun-start-atomic"
+    | NonAtomic         -> Format.pp_print_string fmt "non-atomic"
+    | Atomic            -> Format.pp_print_string fmt "atomic"
+    | InsideAtomic d    -> Format.fprintf fmt "inside(%d)" d
+
+
+  (** Change the state of the automaton before executing an action *)
+  let next_fstate_on_pre_action action depth = function
+    | FunStartNonAtomic ->
+      if is_atomic_action action
+      then FunStartAtomic
+      else FunStartNonAtomic
+
+    | NonAtomic ->
+      if is_atomic_action action
+      then Atomic
+      else NonAtomic
+
+    | FunStartAtomic | Atomic -> InsideAtomic depth
+
+    | InsideAtomic _ as fs -> fs
+
+
+  (** Change the state of the automaton after executing an action *)
+  let next_fstate_on_post_action action depth = function
+    | FunStartNonAtomic    -> FunStartNonAtomic
+    | NonAtomic            -> NonAtomic
+    | FunStartAtomic       -> NonAtomic
+    | Atomic               -> NonAtomic
+    | InsideAtomic d as fs -> if d = depth then NonAtomic else fs
+
+
+  (** {2 Global state} *)
+  (** **************** *)
+
+  (** Structure of the global state *)
+  type state = {
+    mutable breakpoints: BreakpointSet.t;
+    (** Registered breakpoints *)
+
+    mutable depth: int;
+    (** Current depth of the interpretation tree *)
+
+    mutable command: command;
+    (** Last entered command *)
+
+    mutable command_depth: int;
+    (** Depth of the interpretation tree when the command was issued *)
+
+    mutable command_callstack : Callstack.cs;
+    (** Callstack when the command was issued *)
+
+    mutable fstack : fstate list;
+    (** Stack of function automata *)
+
+    mutable callstack : Callstack.cs;
+    (** Current call-stack *)
+  }
+
+
+  (** Global state *)
+  let state = {
+    breakpoints = BreakpointSet.empty;
+    command = StepI;
+    depth = 0;
+    command_depth = 0;
+    command_callstack = Callstack.empty;
+    fstack = [];
+    callstack = Callstack.empty;
+  }
+
+
+  (** Print the global state *)
+  let pp_state fmt () =
+    Format.fprintf fmt "@[<v>breakpoints: @[%a@]@,\
+                        depth: %d@,\
+                        command: @[%a@]@,\
+                        command_depth: %d@,\
+                        fstack: @[<v>%a@]@,\
+                        callstack: @[%a@]@,\
+                        command_callstack: @[%a@]@]"
+      pp_breakpoint_set state.breakpoints
+      state.depth
+      pp_command state.command
+      state.command_depth
+      (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,") pp_fstate) state.fstack
+      Callstack.print state.callstack
+      Callstack.print state.command_callstack
+
+
+  (** Detect if we are in a new call *)
+  let detect_call action prev cur =
+    Callstack.is_after cur prev
+
+
+  (** Detect if we returned from a call *)
+  let detect_return action prev cur =
+    Callstack.is_after prev cur
+
+
+  (** Change the state when an action is going to be executed *)
+  let on_pre_action action flow : unit =
+    let cs = Flow.get_callstack flow in
+    let prev_depth = state.depth in
+    let prev_cs = state.callstack in
+    state.depth <- state.depth + 1;
+    state.callstack <- cs;
+    if detect_call action prev_cs cs then
+      let fs0 = if is_atomic_action action then FunStartAtomic else FunStartNonAtomic in
+      let fs = next_fstate_on_pre_action action prev_depth fs0 in
+      state.fstack <- fs :: state.fstack
+    else
+    if detect_return action prev_cs cs then
+      let fs,tl =
+        match state.fstack with
+        | _::hd::tl -> hd,tl
+        | _         -> assert false
+      in
+      let fs' = next_fstate_on_pre_action action prev_depth fs in
+      state.fstack <- fs' :: tl
+    else
+      let fs,tl =
+        match state.fstack with
+        | hd::tl -> hd,tl
+        | []     -> NonAtomic,[]
+      in
+      let fs' = next_fstate_on_pre_action action prev_depth fs in
+      state.fstack <- fs' :: tl
+
+  (** Change the state when an action was executed *)
+  let on_post_action action : unit =
+    let fs,tl =
+      match state.fstack with
+      | hd::tl -> hd,tl
+      | _ -> assert false
+    in
+    let fs' = next_fstate_on_post_action action state.depth fs in
+    state.fstack <- fs' :: tl;
+    state.depth <- state.depth - 1
+
+
+  (** Check if we are at a breakpoint *)
+  let is_breakpoint action =
+    let fs = List.hd state.fstack in
+    ( (fs = Atomic || fs = FunStartAtomic)
+      && is_range_breakpoint (action_range action) state.breakpoints)
+    || ( fs = FunStartAtomic
+         && is_function_breakpoint state.callstack state.breakpoints )
+
+
+  (** Check if we are at an interaction point *)
+  let is_interaction_point action =
+    match state.command with
+    | StepI -> true
+
+    | NextI -> state.depth <= state.command_depth
+
+    | Step | Next | Continue | Finish when not (is_atomic_action action) -> false
+
+    | Step | Next | Continue | Finish when is_breakpoint action -> true
+
+    | Step ->
+      let fs = List.hd state.fstack in
+      fs = Atomic || fs = FunStartAtomic
+
+    | Next ->
+      let fs = List.hd state.fstack in
+      fs = Atomic
+      && not (Callstack.is_after state.callstack state.command_callstack)
+
+    | Continue -> false
+
+    | Finish ->
+      let fs = List.hd state.fstack in
+      fs = Atomic
+      && state.command_callstack <> []
+      && not (Callstack.is_after state.callstack (Callstack.pop state.command_callstack |> snd))
+
+    | _ -> false
+
+
+  (** {2 Interactive engine} *)
+  (** ********************** *)
+
   (** Apply an action on a flow and return its result *)
   let rec apply_action : type a. a action -> Abstraction.t flow -> a =
     fun action flow ->
-      match action with
-      | Exec(stmt, zone) -> Abstraction.exec ~zone stmt man flow
-      | Post(stmt, zone) -> Abstraction.post ~zone stmt man flow
-      | Eval(exp, zone, via) -> Abstraction.eval ~zone ~via exp man flow
+    match action with
+    | Exec(stmt, zone)     -> Abstraction.exec ~zone stmt man flow
+    | Post(stmt, zone)     -> Abstraction.post ~zone stmt man flow
+    | Eval(exp, zone, via) -> Abstraction.eval ~zone ~via exp man flow
 
 
-  (** Interact with the user input *)
-  and interact : type a. ?where:bool -> a action -> Location.range -> Abstraction.t flow -> a =
-    fun ?(where=true) action range flow ->
-      if not !break then (
-        (* Search for a breakpoint at current location *)
-        match find_breakpoint_at range with
-        | None ->
-          (* No breakpoint here *)
-          ()
+  (** Wait for user input and process it *)
+  and interact: type a. a action -> Abstraction.t flow -> a = fun action flow ->
+    let cmd = try read_command ()
+              with Exit -> exit 0
+    in
+    state.command <- cmd;
+    state.command_depth <- state.depth;
+    state.command_callstack <- (Flow.get_callstack flow);
+    let range = action_range action in
+    match cmd with
+    | Break loc ->
+      let () =
+        try
+          let b = parse_breakpoint range loc in
+          state.breakpoints <- BreakpointSet.add b state.breakpoints;
+        with
+        | Invalid_breakpoint_syntax ->
+          printf "Invalid breakpoint syntax@."
+      in
+      interact action flow
 
-        | Some brk ->
-          (* Check if brk is different than the current breakpoint *)
-          if compare_breakpoint brk !last_breakpoint <> 0 then (
-            break := true;
-            last_breakpoint := brk;
-          )
-      );
+    | Continue | Next | NextI | Step | StepI | Finish ->
+      apply_action action flow
 
-      try
+    | Backtrace ->
+      let cs = Flow.get_callstack flow in
+      printf "%a@." Callstack.print cs;
+      interact action flow
 
-        if not !break
-        then apply_action action flow
+    | Print ->
+      printf "%a@." (Flow.print man.lattice.print) flow;
+      interact action flow
 
+    | Env ->
+      let env = Flow.get T_cur man.lattice flow in
+      printf "%a@." man.lattice.print env;
+      interact action flow
+
+    | Where ->
+      pp_action flow std_formatter action;
+      interact action flow
+
+    | LoadHook hook ->
+      if not (Hook.mem_hook hook) then (
+        printf "Hook '%s' not found@." hook;
+        interact action flow
+      ) else (
+        Hook.activate_hook hook;
+        let ctx = Hook.init_hook hook (Flow.get_ctx flow) in
+        let flow = Flow.set_ctx ctx flow in
+        interact action flow
+      )
+
+    | UnloadHook hook ->
+      if not (Hook.mem_hook hook) then (
+        printf "Hook '%s' not found@." hook;
+        interact action flow
+      ) else (
+        Hook.deactivate_hook hook man flow;
+        interact action flow
+      )
+
+    | Info Tokens ->
+      let tokens = Flow.fold (fun acc tk _ -> tk::acc) [] flow in
+      printf "%a@." (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") pp_token) tokens;
+      interact action flow
+
+    | Info Alarms ->
+      let alarms = Flow.get_alarms flow in
+      begin
+        if Alarm.AlarmSet.is_empty alarms then
+          printf "No alarm@."
         else (
-          if where then pp_action std_formatter (action, flow);
-
-          let cmd =
-            try read_command range ()
-            with Exit -> exit 0
-          in
-
-          match cmd with
-          | Run ->
-            break := false;
-            apply_action action flow
-
-          | Step ->
-            break := true;
-            apply_action action flow
-
-          | Next ->
-            break := false;
-            let ret = apply_action action flow in
-            break := true;
-            ret
-
-          | Tokens ->
-            let tokens = Flow.fold (fun acc tk _ -> tk::acc) [] flow in
-            printf "%a@." (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") pp_token) tokens;
-            interact ~where:false action range flow
-
-          | Callstack ->
-            let cs = Flow.get_callstack flow in
-            printf "%a@." Callstack.print cs;
-            interact ~where:false action range flow
-
-
-          | Print ->
-            printf "%a@." (Flow.print man.lattice.print) flow;
-            interact ~where:false action range flow
-
-          | Env ->
-            let env = Flow.get T_cur man.lattice flow in
-            printf "%a@." man.lattice.print env;
-            interact ~where:false action range flow
-
-          | Value(var) ->
-            let old_break = !break in
-            break := false;
-            printf "%a@." (man.ask Q_print_var flow) var;
-            break := old_break;
-            interact ~where:false action range flow
-
-          | Where ->
-            pp_action std_formatter (action, flow);
-            interact ~where:false action range flow
-
-          | LoadHook hook ->
-            if not (Hook.mem_hook hook) then (
-              printf "Hook '%s' not found@." hook;
-              interact ~where:false action range flow
-            ) else (
-              Hook.activate_hook hook;
-              let ctx = Hook.init_hook hook (Flow.get_ctx flow) in
-              let flow = Flow.set_ctx ctx flow in
-              interact ~where:false action range flow
-            )
-
-          | UnloadHook hook ->
-            if not (Hook.mem_hook hook) then (
-              printf "Hook '%s' not found@." hook;
-            interact ~where:false action range flow
-            ) else (
-              Hook.deactivate_hook hook man flow;
-              interact ~where:false action range flow
+          let nb = Alarm.count_alarms alarms in
+          printf "%d alarm%a found:@." nb Debug.plurial_int nb;
+          Alarm.index_alarm_set_by_class alarms |>
+          Alarm.ClassMap.iter (fun cls ss ->
+              let range_map = Alarm.index_alarm_set_by_range ss in
+              let sub_total = Alarm.RangeMap.cardinal range_map in
+              printf "  %a: %d@." Alarm.pp_alarm_class cls sub_total
             )
         )
+      end;
+      interact action flow
 
-      with Sys.Break ->
-        break := true;
-        interact ~where:true action range flow
+    | Info Breakpoints ->
+      printf "%a@." pp_breakpoint_set state.breakpoints;
+      interact action flow
+
+    | Info Variables ->
+      let vars = man.ask Q_debug_variables flow in
+      printf "@[<v>%a@]@."
+        (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,")
+           (fun fmt v -> pp_var_with_type fmt (v,v.vtyp))
+        ) vars
+      ;
+      interact action flow
+
+    | PrintVar vname ->
+      let vars = man.ask Q_debug_variables flow in
+      begin try
+          let var = List.find
+              (fun var' ->
+                 let vname' = Format.asprintf "%a" pp_var var' in
+                 vname = vname'
+              ) vars
+          in
+          let value = man.ask (Q_debug_variable_value var) flow in
+          printf "%a = %a@." pp_var_with_type (var,value.var_value_type) pp_var_value value;
+          interact action flow
+        with Not_found ->
+          printf "Variable '%s' not found@." vname;
+          interact action flow
+      end
+
+
+  (** Interact with the user input or apply the action *)
+  and interact_or_apply_action : type a. a action -> Location.range -> Abstraction.t flow -> a =
+    fun action range flow ->
+    on_pre_action action flow;
+    let ret =
+      if is_interaction_point action then (
+        pp_action flow std_formatter action;
+        interact action flow
+      ) else
+        apply_action action flow
+    in
+    on_post_action action;
+    ret
+
 
   and init prog =
     Abstraction.init prog man
 
   and exec ?(zone=any_zone) stmt flow =
-    interact (Exec (stmt, zone)) stmt.srange flow
+    interact_or_apply_action (Exec (stmt, zone)) stmt.srange flow
 
   and post ?(zone=any_zone) stmt flow =
-    interact (Post (stmt,zone)) stmt.srange flow
+    interact_or_apply_action (Post (stmt,zone)) stmt.srange flow
 
   and eval ?(zone=(any_zone, any_zone)) ?(via=any_zone) exp flow =
-    interact (Eval (exp, zone, via)) exp.erange flow
+    interact_or_apply_action (Eval (exp, zone, via)) exp.erange flow
 
   and ask : type r. r query -> Abstraction.t flow -> r =
     fun query flow ->
@@ -431,5 +855,6 @@ struct
     eval = eval;
     ask = ask;
   }
+
 
 end

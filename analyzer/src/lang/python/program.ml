@@ -45,7 +45,10 @@ struct
 
   let alarms = []
 
-  let init _ _ flow = flow
+  let init prog man flow =
+    match prog.prog_kind with
+    | Py_program (name, globals, body) -> set_py_program (name, globals, body) flow
+    | _ -> flow
 
   let eval _ _ _ _ = None
 
@@ -173,8 +176,38 @@ struct
 
     | _ -> None
 
-  let ask _ _ _ = None
+  let find_function orig_name prog =
+    List.hd @@ Visitor.fold_stmt
+        (fun acc exp -> VisitParts acc)
+        (fun acc stmt ->
+           match skind stmt with
+           | S_py_function(fundec)
+             when get_orig_vname fundec.py_func_var = orig_name ->
+             Keep (fundec :: acc)
+           | _ -> VisitParts (acc)
+        ) [] prog
 
+  let ask : type r. r query -> _ man -> _ flow -> r option =
+    fun query man flow ->
+    let open Framework.Engines.Interactive in
+    match query with
+    | Q_debug_variables ->
+       let (_, globals, body) = get_py_program flow in
+       let cs = Flow.get_callstack flow in
+       let allvars =
+         List.fold_left (fun acc call ->
+             let fd = find_function call.Callstack.call_fun_orig_name body in
+             fd.py_func_parameters
+             @ fd.py_func_kwonly_args
+             @ (OptionExt.apply (fun x -> [x]) [] fd.py_func_kwarg)
+             @ fd.py_func_locals
+             @ [fd.py_func_ret_var]
+             @ acc
+
+           ) globals cs
+       in
+       Some allvars
+    | _ -> None
 end
 
 let () =

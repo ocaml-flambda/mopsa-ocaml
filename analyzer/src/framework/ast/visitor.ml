@@ -166,9 +166,23 @@ let is_leaf_expr e =
   let parts, _ = split_expr e in
   List.length parts.exprs = 0 && List.length parts.stmts = 0
 
-let is_leaf_stmt s =
-  let parts, _ = split_stmt s in
-  List.length parts.exprs = 0 && List.length parts.stmts = 0
+let rec is_stmt_free_expr e =
+  let parts, _ = split_expr e in
+  List.length parts.stmts = 0
+  && List.for_all is_stmt_free_expr parts.exprs
+
+let is_atomic_stmt s =
+  match skind s with
+  | S_program _ ->
+    (* FIXME: as defining visitor of the program is not always
+       possible, we need here to give a hard-coded answer *)
+    false
+
+  | _ ->
+    let parts, _ = split_stmt s in
+    List.length parts.stmts = 0
+    && List.for_all is_stmt_free_expr parts.exprs
+
 
 (*==========================================================================*)
 (**                            {2 Visitors}                                 *)

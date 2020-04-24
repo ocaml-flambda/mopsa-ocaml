@@ -66,6 +66,8 @@ let get_ctx (evl:'a eval) : 'a ctx =
 let set_ctx (ctx:'a ctx) (evl:'a eval) : 'a eval =
   Cases.set_ctx ctx evl
 
+let get_callstack = Cases.get_callstack
+
 let copy_ctx (src:'a eval) (dst:'a eval) : 'a eval =
   Cases.copy_ctx src dst
 

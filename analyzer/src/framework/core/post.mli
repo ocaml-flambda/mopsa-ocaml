@@ -46,4 +46,6 @@ val get_ctx : 'a post -> 'a ctx
 
 val set_ctx : 'a ctx -> 'a post -> 'a post
 
+val get_callstack : 'a post -> Callstack.cs
+
 val bind : ('a flow -> 'a post) -> 'a post -> 'a post

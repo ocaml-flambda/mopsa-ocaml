@@ -517,7 +517,22 @@ struct
 
     | _ -> None
 
-  let ask _ _ _ = None
+  let ask : type r. r query -> ('a, unit) man -> 'a flow -> r option =
+    fun query man flow ->
+    match query with
+    | Universal.Ast.Q_debug_addr_value ({addr_kind = A_py_dict} as addr) ->
+       let open Framework.Engines.Interactive in
+       let keys_dict = man.ask (Q_debug_variable_value (kvar_of_addr addr)) flow in
+       let values_dict = man.ask (Q_debug_variable_value (vvar_of_addr addr)) flow in
+       Some {var_value = None;
+             var_value_type = T_any;
+             var_sub_value = Some (Named_sub_value
+                                     (("keys", keys_dict)::
+                                        ("values", values_dict)::[]))
+         }
+
+    | _ -> None
+
 end
 
 let () =
