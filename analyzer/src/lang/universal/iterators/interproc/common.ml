@@ -47,24 +47,19 @@ let () =
 (** ===================== *)
 
 type token +=
-  | T_return of range * bool
-  (** [T_return(l, b)] represents flows reaching a return statement at
-      location [l]. The boolean is true iff a return expression is present *)
+  | T_return of range
+  (** [T_return(l)] represents flows reaching a return statement at
+      location [l] *)
 
 let () =
   register_token {
     compare = (fun next tk1 tk2 ->
         match tk1, tk2 with
-        | T_return(r1, b1), T_return(r2, b2) ->
-          (* we may return different things at one same location (for example due to disjunctions *)
-          Compare.compose
-            [ (fun () -> compare_range r1 r2);
-              (fun () -> Stdlib.compare b1 b2);
-            ]
+        | T_return(r1), T_return(r2) -> compare_range r1 r2
         | _ -> next tk1 tk2
       );
     print = (fun next fmt -> function
-        | T_return(r, b) -> Format.fprintf fmt "return[r = %a, b = %b@" pp_range r b
+        | T_return(r) -> Format.fprintf fmt "return[%a]@" pp_range r
         | tk -> next fmt tk
       );
   }
@@ -128,14 +123,12 @@ let get_last_call_site flow =
 
 
 (** Check that no recursion is happening *)
-let check_recursion f range flow =
-  let cs = Flow.get_callstack flow in
+let check_recursion f range cs =
   if cs = [] then false
   else
     List.exists (fun cs -> Callstack.compare_call cs {call_fun_orig_name=f.fun_orig_name; call_fun_uniq_name=f.fun_uniq_name; call_site=range} = 0) (List.tl cs)
 
-let check_nested_calls f range flow =
-  let cs = Flow.get_callstack flow in
+let check_nested_calls f cs =
   if cs = [] then false
   else List.exists (fun call -> call.call_fun_uniq_name = f) (List.tl cs)
 
@@ -148,17 +141,20 @@ let check_nested_calls f range flow =
 (** Initialize function parameters *)
 let init_fun_params f args range man flow =
   (* Clear all return flows *)
-  let flow0 = Flow.filter (fun tk env ->
+  let flow = Flow.filter (fun tk env ->
       match tk with
       | T_return _ -> false
       | _ -> true
     ) flow
   in
 
-  (* Update call stack *)
-  let flow1 = Flow.push_callstack f.fun_orig_name ~uniq:f.fun_uniq_name range flow0 in
+  (* Update the call stack *)
+  let flow = Flow.push_callstack f.fun_orig_name ~uniq:f.fun_uniq_name range flow in
 
-  if check_nested_calls f.fun_uniq_name range flow1 then
+  if f.fun_parameters = [] then
+    [], f.fun_locvars, f.fun_body, flow
+  else
+  if check_nested_calls f.fun_uniq_name (Flow.get_callstack flow) then
     begin
       debug "nested calls detected on %s, performing parameters and locvar renaming" f.fun_orig_name;
       (* Add parameters and local variables to the environment *)
@@ -176,30 +172,38 @@ let init_fun_params f args range man flow =
       debug "moved body from:%a@\nto %a@\n" pp_stmt f.fun_body pp_stmt new_body;
 
       (* Assign arguments to parameters *)
+      (* FIXME: the sub-expressions of arg have a range in the caller
+         body. Since we have updated the callstack, we should be now
+         in the callee body. We need a way to rewrite the ranges in
+         arg! *)
       let parameters_assign = List.rev @@ List.fold_left (fun acc (param, arg) ->
-          mk_assign (mk_var param range) arg range ::
-          mk_add_var param range :: acc
+          mk_assign (mk_var param f.fun_range) arg f.fun_range :: 
+          mk_add_var param f.fun_range :: acc
         ) [] (List.combine fun_parameters args) in
 
-      let init_block = mk_block parameters_assign range in
+      let init_block = mk_block parameters_assign f.fun_range in
 
 
       (* Execute body *)
-      fun_parameters, fun_locvars, new_body, man.exec init_block flow1
+      fun_parameters, fun_locvars, new_body, man.exec init_block flow
 
     end
   else
     begin
       (* Assign arguments to parameters *)
+      (* FIXME: the sub-expressions of arg have a range in the caller
+         body. Since we have updated the callstack, we should be now
+         in the callee body. We need a way to rewrite the ranges in
+         arg! *)
       let parameters_assign = List.rev @@ List.fold_left (fun acc (param, arg) ->
-          mk_assign (mk_var param range) arg range ::
-          mk_add_var param range :: acc
+          mk_assign (mk_var param f.fun_range) arg f.fun_range ::
+          mk_add_var param f.fun_range :: acc
         ) [] (List.combine f.fun_parameters args) in
 
-      let init_block = mk_block parameters_assign range in
+      let init_block = mk_block parameters_assign f.fun_range in
 
       (* Execute body *)
-      f.fun_parameters, f.fun_locvars, f.fun_body, man.exec init_block flow1
+      f.fun_parameters, f.fun_locvars, f.fun_body, man.exec init_block flow
     end
 
 
@@ -212,6 +216,7 @@ let exec_fun_body f body ret range man flow =
     | Some ret ->
       (try Some (Context.find_unit return_key (Flow.get_ctx flow)) with Not_found -> None),
       Flow.set_ctx (Context.add_unit return_key ret (Flow.get_ctx flow)) flow in
+
 
   (* Execute the body of the function *)
   let flow2 = man.exec body flow1 in
@@ -229,7 +234,7 @@ let exec_fun_body f body ret range man flow =
                     (Context.add_unit return_key ret (Flow.get_ctx flow3)) flow3 in
 
   (* Restore call stack *)
-  let _, flow5 = Flow.pop_callstack flow4 in
+  let _,flow5 = Flow.pop_callstack flow4 in
 
   (* Retrieve non-cur/return flows *)
   let flow6 =
@@ -262,7 +267,7 @@ let exec_fun_body f body ret range man flow =
 (** Inline a function call *)
 let inline f params locals body ret range man flow =
   let post =
-    match check_recursion f range flow with
+    match check_recursion f range (Flow.get_callstack flow) with
     | true ->
       begin
         Soundness.warn_at range

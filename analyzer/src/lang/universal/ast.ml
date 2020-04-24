@@ -285,6 +285,39 @@ let compare_addr a b =
       (fun () -> compare_mode a.addr_mode b.addr_mode);
     ]
 
+type _ query += Q_debug_addr_value : addr -> Framework.Engines.Interactive.var_value query
+
+let () =
+  register_query {
+      join = (let doit : type r. query_pool -> r query -> r -> r -> r =
+          fun next query a b ->
+          match query with
+          | Q_debug_addr_value addr ->
+             let open Framework.Engines.Interactive in
+             assert (a.var_value = None && b.var_value = None);
+             let var_sub_value = begin match a.var_sub_value, b.var_sub_value with
+                                 | None, Some sb -> Some sb
+                                 | Some sa, None -> Some sa
+                                 | Some Indexed_sub_value la, Some Indexed_sub_value lb -> Some (Indexed_sub_value (la @ lb))
+                                 | Some Named_sub_value ma, Some Named_sub_value mb -> Some (Named_sub_value (ma @ mb))
+                                 | _, _ -> assert false
+                                 end in
+             {var_value=None; var_value_type = T_any; var_sub_value}
+
+          | _ -> next.meet_query query a b
+        in doit
+      );
+      meet = (
+        let doit : type r. query_pool -> r query -> r -> r -> r =
+          fun next query a b ->
+          match query with
+          | Q_debug_addr_value addr -> assert false
+          | _ -> next.meet_query query a b
+               in doit
+      );
+    }
+
+
 (** Address variables *)
 type var_kind +=
   | V_addr_attr of addr * string

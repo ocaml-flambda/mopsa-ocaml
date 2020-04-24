@@ -484,33 +484,6 @@ let () = Universal.Heap.Policies.register_mk_addr
                               | A_py_class _ | A_py_module _ | A_py_function _ -> Universal.Heap.Policies.mk_addr_all ak
                               | _ -> default ak)
 
-type _ query += Q_print_addr_related_info : addr -> ((Format.formatter -> unit) query)
-
-let () =
-  register_query {
-    join = (
-      let doit : type r. query_pool -> r query -> r -> r -> r =
-        fun next query a b ->
-          match query with
-          | Q_print_addr_related_info addr ->
-            fun fmt -> a fmt; b fmt
-          | _ -> next.join_query query a b
-      in
-      doit
-    );
-
-    meet = (
-      let doit : type r. query_pool -> r query -> r -> r -> r =
-        fun next query a b ->
-          match query with
-          | Q_print_addr_related_info addr ->
-            fun fmt -> a fmt; b fmt
-          | _ -> next.meet_query query a b
-      in
-      doit
-    );
-  }
-
 let nominal_type_of_addr_kind : (addr_kind -> string) ref = ref (fun ak -> panic "unknown nominal type for addr_kind %a" pp_addr_kind ak)
 
 let structural_type_of_addr_kind : (addr_kind -> string -> bool) ref = ref (fun ak s -> panic "unknown structural type for addr_kind %a" pp_addr_kind ak)

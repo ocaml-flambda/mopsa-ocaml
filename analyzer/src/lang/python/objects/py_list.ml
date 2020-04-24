@@ -670,9 +670,9 @@ struct
         )
       |> OptionExt.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list_reverseiterator.__next__" as s, _))}, _)}, [iterator], [])
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list_reverseiterator.__next__", _))}, _)}, [iterator], [])
       (* FIXME: list_reverseiterator + values *)
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list_iterator.__next__" as s, _))}, _)}, [iterator], []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list_iterator.__next__", _))}, _)}, [iterator], []) ->
       (* todo: checks ? *)
       (* let it_name = String.sub s 0 (String.index s '.') in *)
       man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) iterator flow |>
@@ -1126,15 +1126,24 @@ struct
 
     | _ -> None
 
+
   let ask : type r. r query -> ('a, unit) man -> 'a flow -> r option =
     fun query man flow ->
     match query with
-    | Q_print_addr_related_info ({addr_kind = A_py_list} as addr) ->
-      OptionExt.return @@
-      fun fmt ->
-      Format.fprintf fmt "%a, length: %a"
-        (man.ask Framework.Engines.Interactive.Q_print_var flow) (var_of_addr addr).vname
-        (man.ask Framework.Engines.Interactive.Q_print_var flow) (length_var_of_addr addr).vname
+    | Universal.Ast.Q_debug_addr_value ({addr_kind = A_py_list} as addr) ->
+       let open Framework.Engines.Interactive in
+       let content_list = man.ask (Q_debug_variable_value (var_of_addr addr)) flow in
+       let length_list =
+         let itv = man.ask (Universal.Numeric.Common.Q_int_interval (mk_var (length_var_of_addr addr) (Location.mk_fresh_range ()))) flow in
+         {var_value = Some (Format.asprintf "%a" Universal.Numeric.Common.pp_int_interval itv);
+          var_value_type = T_int;
+          var_sub_value = None} in
+       Some {var_value = None;
+             var_value_type = T_any;
+             var_sub_value = Some (Named_sub_value
+                                     (("list contents", content_list)::
+                                     ("list length", length_list)::[]))
+         }
 
     | _ -> None
 

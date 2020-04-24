@@ -275,7 +275,7 @@ let rec add_stmt (c:ctx) (pre:node) (post:node) (s:stmt) : unit =
     let med = add_node c loc in
     (* from cur to return flow *)
     add_edge
-      c (srange s) [T_cur,pre] [T_return (srange s,true),med]
+      c (srange s) [T_cur,pre] [T_return (srange s),med]
       (adds @ assigns @ [addret; assign_stmt; return_stmt]);
     (* from intermediate to exit node *)
     add_edge c (srange s) [T_cur,med] [T_cur,c.ctx_return] (remret::rems)

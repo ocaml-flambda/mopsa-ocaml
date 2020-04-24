@@ -34,10 +34,7 @@ let colors = [
   ("magenta", 5);
   ("fushia", 13);
   ("orange", 0xd0);
-  ("Teal", 6);
-  ("LightSlateBlue", 105);
-  ("DarkOliveGreen3", 113);
-  ("IndianRed", 167);
+  ("teal", 6);
 ]
 
 let add_channel ch =

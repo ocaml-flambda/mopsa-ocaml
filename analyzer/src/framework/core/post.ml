@@ -74,4 +74,7 @@ let set_ctx (ctx:'a ctx) (p:'a post) : 'a post =
   Cases.set_ctx ctx p
 
 
+let get_callstack = Cases.get_callstack
+
+
 let bind f post = Cases.bind (fun _ flow -> f flow) post

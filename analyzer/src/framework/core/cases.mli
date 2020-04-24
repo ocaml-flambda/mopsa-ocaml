@@ -66,6 +66,10 @@ val set_ctx : 'a ctx -> ('a,'r) cases -> ('a,'r) cases
 (** [set_ctx ctx c] changes the context of cases [c] to [ctx]. *)
 
 
+val get_callstack: ('a,'r) cases -> Callstack.cs
+(** [get_callstack c] returns the callstack of cases [c]. *)
+
+
 val copy_ctx : ('a,'r) cases -> ('a,'s) cases -> ('a,'s) cases
 (** [copy_ctx c1 c2] changes the context of cases [c2] to the context of [c1]. *)
 

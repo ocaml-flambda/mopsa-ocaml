@@ -26,6 +26,7 @@ open Framework.Core.Sig.Domain.Intermediate
 open Universal.Ast
 open Stubs.Ast
 open Ast
+open Universal.Zone
 open Zone
 open Common.Points_to
 open Common.Scope_update
@@ -58,14 +59,14 @@ struct
   let interface = {
     iexec = {
       provides = [Z_c];
-      uses = []
+      uses = [Z_u]
     };
 
     ieval = {
       provides = [Z_c, Z_c_low_level];
       uses = [
         Z_c, Z_c_points_to;
-        Universal.Zone.Z_u, any_zone;
+        Z_u, any_zone;
         Stubs.Zone.Z_stubs, Z_any
       ]
     }
@@ -96,27 +97,19 @@ struct
 
   let exec zone stmt man flow =
     match skind stmt with
-    | S_c_return (Some e,upd) ->
-      let ret = Context.find_unit return_key (Flow.get_ctx flow) in
-      let rrange = get_last_call_site flow in
-      let flow =
-        man.exec (mk_add_var ret rrange) flow |>
-        man.exec (mk_assign (mk_var ret rrange) e rrange) |>
-        update_scope upd rrange man
-      in
+    | S_c_return (r,upd) ->
+      (* Let first Universal manage the return flow *)
+      man.post (mk_stmt (S_return r) stmt.srange) ~zone:Z_u flow >>$? fun () flow ->
+      (* Now clean the post-state using scope updater *)
+      (* To do that, first move the return environment to cur *)
+      let flow = Flow.copy (T_return stmt.srange) T_cur man.lattice flow flow in
+      (* Now clean cur *)
+      let flow = update_scope upd stmt.srange man flow in
+      (* Finally, move cur to return flow *)
       let cur = Flow.get T_cur man.lattice flow in
-      Flow.add (T_return (stmt.srange, true)) cur man.lattice flow |>
+      Flow.set (T_return (stmt.srange)) cur man.lattice flow |>
       Flow.remove T_cur |>
       Post.return |> OptionExt.return
-
-    | S_c_return (None,upd) ->
-      let rrange = get_last_call_site flow in
-      let flow = update_scope upd rrange man flow in
-      let cur = Flow.get T_cur man.lattice flow in
-      Flow.add (T_return (stmt.srange, false)) cur man.lattice flow |>
-      Flow.remove T_cur |>
-      Post.return |> OptionExt.return
-
 
     | _ -> None
 
@@ -159,7 +152,7 @@ struct
     if is_builtin_function fundec.c_func_org_name
     then
       let exp' = mk_expr (E_c_builtin_call(fundec.c_func_org_name, args)) ~etyp:fundec.c_func_return range in
-      man.eval ~zone:(Zone.Z_c, Zone.Z_c_low_level) exp' flow
+      man.eval ~zone:(Z_c, Z_c_low_level) exp' flow
     else
       (* save the alloca resources of the caller before resetting it *)
       let caller_alloca_addrs = get_env T_cur man flow in
@@ -195,11 +188,11 @@ struct
           in
           let exp' = mk_call fundec' args range in
           (* Universal will evaluate the call into a temporary variable containing the returned value *)
-          man.eval ~zone:(Universal.Zone.Z_u, any_zone) exp' flow
+          man.eval ~zone:(Z_u, any_zone) exp' flow
 
         | {c_func_variadic = true} ->
           let exp' = mk_c_call fundec args range in
-          man.eval ~zone:(Zone.Z_c, Zone.Z_c_low_level) exp' flow
+          man.eval ~zone:(Z_c, Z_c_low_level) exp' flow
 
         | {c_func_stub = Some stub} ->
           let exp' = Stubs.Ast.mk_stub_call stub args range in
@@ -233,7 +226,7 @@ struct
       OptionExt.return
 
     | E_call(f, args) ->
-      man.eval ~zone:(Zone.Z_c, Z_c_points_to) f flow >>$? fun ff flow ->
+      man.eval ~zone:(Z_c, Z_c_points_to) f flow >>$? fun ff flow ->
 
       begin match ekind ff with
         | E_c_points_to (P_fun f) ->
