@@ -114,9 +114,9 @@ let rec eval_opt exp : static_points_to option =
   | E_c_function f ->
     Fun f |> OptionExt.return
 
-  | E_constant (C_c_string (s, _)) ->
-    (*Format.printf "XXX %a \"%s\" %i@." pp_typ (etyp exp) s (String.length s);*)
-    AddrOf(mk_string_base s, mk_zero exp.erange, None) |> OptionExt.return
+  | E_constant (C_c_string (s, k)) ->
+    let str = mk_string_base ~kind:k ~typ:(under_type (etyp exp)) s in
+    AddrOf(str, mk_zero exp.erange, None) |> OptionExt.return
 
   | E_var (a, mode) when is_c_array_type a.vtyp ->
     AddrOf(mk_var_base a, mk_zero exp.erange, mode) |> OptionExt.return

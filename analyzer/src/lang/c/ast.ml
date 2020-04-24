@@ -902,8 +902,8 @@ let array_type typ size = T_c_array(typ,C_array_length_cst size)
 
 let type_of_string s = T_c_array(s8, C_array_length_cst (Z.of_int (1 + String.length s)))
 
-let mk_c_string s range =
-  mk_constant (C_c_string (s, C_char_ascii)) range ~etyp:(type_of_string s)
+let mk_c_string ?(kind=C_char_ascii) s range =
+  mk_constant (C_c_string (s, kind)) range ~etyp:(type_of_string s)
 
 let mk_c_fun_typ f =
   let ftype = {

@@ -31,7 +31,7 @@ open Zone
 type base_kind =
   | Var    of var    (** Stack variable *)
   | Addr   of addr   (** Heap address *)
-  | String of string (** String literal *)
+  | String of string * c_character_kind * typ (** String literal, with character kind and type of character *)
 
 (** Bases *)
 type base = {
@@ -44,7 +44,7 @@ type base = {
 let pp_base_kind fmt = function
   | Var v -> pp_var fmt v
   | Addr (a) -> pp_addr fmt a
-  | String s -> Format.fprintf fmt "\"%s\"" (String.escaped s)
+  | String (s,k,_) -> Format.fprintf fmt "%a\"%s\"" Pp.pp_character_kind k (String.escaped s)
 
 let pp_base fmt b =
   Format.fprintf fmt "%s%a"
@@ -54,7 +54,8 @@ let pp_base fmt b =
 let compare_base_kind b b' = match b, b' with
   | Var v, Var v' -> compare_var v v'
   | Addr a, Addr a' -> compare_addr a a'
-  | String s, String s' -> compare s s'
+  | String (s,k,t), String (s',k',t') ->
+    Compare.triple compare compare compare_typ (s,k,t) (s',k',t')
   | _ -> compare b b'
 
 let compare_base b b' =
@@ -77,8 +78,8 @@ let mk_var_base ?(valid=true) ?(invalidation_range=None) v =
 let mk_addr_base ?(valid=true) ?(invalidation_range=None) a =
   mk_base (Addr a) ~valid ~invalidation_range
 
-let mk_string_base s =
-  mk_base (String s) ~valid:true ~invalidation_range:None
+let mk_string_base ?(kind=C_char_ascii) ?(typ=(T_c_integer C_unsigned_char)) s =
+  mk_base (String (s,kind,typ)) ~valid:true ~invalidation_range:None
 
 let base_kind_uniq_name b =
   match b with
@@ -86,7 +87,7 @@ let base_kind_uniq_name b =
   | Addr a ->
     let () = pp_addr Format.str_formatter a in
     Format.flush_str_formatter ()
-  | String s -> s
+  | String (s,_,_) -> s
 
 
 let base_uniq_name b =
@@ -97,7 +98,7 @@ let base_uniq_name b =
 let base_size b =
   match b.base_kind with
   | Var v -> sizeof_type v.vtyp
-  | String s -> Z.of_int @@ String.length s
+  | String (s,_,_) -> Z.of_int @@ String.length s
   | Addr a -> panic ~loc:__LOC__ "base_size: addresses not supported"
 
 let base_mode b =
@@ -142,8 +143,10 @@ let eval_base_size base ?(via=Z_any) range (man:('a,'t,'s) Core.Sig.Stacked.Lowl
   | Var var ->
     Eval.singleton (mk_z (sizeof_type var.vtyp) range ~typ:ul) flow
 
-  | String str ->
-    Eval.singleton (mk_int (String.length str + 1) range ~typ:ul) flow
+  | String (str,_,t) ->
+    (* length of the terminal 0 character *)
+    let char_len = Z.to_int (sizeof_type t) in
+    Eval.singleton (mk_int (String.length str + char_len) range ~typ:ul) flow
 
   | Addr addr ->
     let bytes_expr = mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, mk_addr addr range)) range ~etyp:ul in

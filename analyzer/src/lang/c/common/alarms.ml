@@ -65,8 +65,10 @@ let pp_base_verbose fmt base =
   match base.base_kind with
   | Var v    -> fprintf fmt "variable '%a'" (Debug.bold pp_var) v
   | Addr a   -> fprintf fmt "dynamically allocated block"
-  | String s when String.length s > 20 -> fprintf fmt "string \"%s...\"" (String.escaped (String.sub s 0 20))
-  | String s -> fprintf fmt "string \"%s\"" (String.escaped s)
+  | String (s,k,_) when String.length s > 20 ->
+    fprintf fmt "string %a\"%s...\"" Pp.pp_character_kind k  (String.escaped (String.sub s 0 20))
+  | String (s,k,_) ->
+    fprintf fmt "string %a\"%s\"" Pp.pp_character_kind k (String.escaped s)
 
 
 (** {2 NULL pointer dereference} *)
@@ -216,13 +218,6 @@ let raise_c_out_addr_bound_alarm addr size offset typ range man input_flow error
   let offset_itv = man.ask (mk_int_interval_query offset) input_flow in
   let size_itv = man.ask (mk_int_interval_query size) input_flow in
   let alarm = mk_alarm (A_c_out_of_bound_msg(mk_addr_base addr, size_itv, offset_itv, typ)) cs range in
-  Flow.raise_alarm alarm ~bottom:true man.lattice error_flow
-
-let raise_c_out_string_bound_alarm str ?(typ=s8) offset range man input_flow error_flow =
-  let cs = Flow.get_callstack error_flow in
-  let offset_itv = man.ask (mk_int_interval_query offset) input_flow in
-  let size_itv = String.length str |> I.cst_int in
-  let alarm = mk_alarm (A_c_out_of_bound_msg(mk_string_base str,Bot.Nb size_itv, offset_itv, typ)) cs range in
   Flow.raise_alarm alarm ~bottom:true man.lattice error_flow
 
 let raise_c_out_bound_alarm base size offset typ range man input_flow error_flow =

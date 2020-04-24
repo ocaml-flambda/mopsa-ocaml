@@ -51,16 +51,16 @@ let eval_format_string format range man flow =
     raise_c_use_after_free_alarm format r man' flow |>
     Cases.empty_singleton
 
-  | E_c_points_to (P_block ({ base_kind = String fmt }, offset, _)) when is_c_expr_equals_z offset Z.zero ->
-    Cases.singleton fmt flow
-
-  | E_c_points_to (P_block ({ base_kind = String fmt }, offset, _)) ->
-    assume (mk_binop offset O_eq (mk_zero (erange offset)) (erange offset))
-      ~fthen:(fun flow -> Cases.singleton fmt flow)
-      ~felse:(fun flow ->
-          Soundness.warn_at range "unsupported format string: non-constant";
-          Cases.empty_singleton flow)
-      ~zone:Z_c_scalar man flow
+  | E_c_points_to (P_block ({ base_kind = String (fmt,_,t) }, offset, _)) when sizeof_type t = Z.one  ->
+    if is_c_expr_equals_z offset Z.zero then
+      Cases.singleton fmt flow
+    else
+      assume (mk_binop offset O_eq (mk_zero (erange offset)) (erange offset))
+        ~fthen:(fun flow -> Cases.singleton fmt flow)
+        ~felse:(fun flow ->
+            Soundness.warn_at range "unsupported format string: non-constant";
+            Cases.empty_singleton flow)
+        ~zone:Z_c_scalar man flow
 
   | _ ->
     Soundness.warn_at range "unsupported format string: non-constant";

@@ -23,6 +23,9 @@ open Mopsa
 open Universal.Ast
 open Stubs.Ast
 open Ast
+open Core.Sig.Stacked.Intermediate
+open Top
+
 
 
 (** Compute symbolic boundaries of a quantified offset. *)
@@ -67,70 +70,102 @@ let rec bound offset : expr * expr =
     { offset with ekind = E_c_cast (l, xplct)},
     { offset with ekind = E_c_cast (u, xplct)}
 
-  | E_binop (O_div, e, ({ ekind = E_constant (C_int c) })) ->
-    bound_div e c
-
   | _ -> panic_at offset.erange
            "can not compute symbolic bounds of non-linear expression %a"
            pp_expr offset
 
 
-and bound_div offset den =
-  let range = erange offset in
-  match ekind offset with
-  | E_constant _ ->
-    div offset (mk_z den range) range,
-    div offset (mk_z den range) range
 
-  | E_var (v, _) ->
-    div offset (mk_z den range) range,
-    div offset (mk_z den range) range
+(** [is_aligned o n man flow] checks whether the value of an
+      expression [o] is aligned w.r.t. size sz *)
+let is_aligned e sz man flow =
+  (sz = Z.one) || (is_c_expr_equals_z e Z.zero) ||
+  (man.eval e ~zone:(Zone.Z_c_low_level,Universal.Zone.Z_u_num) flow |>
+   Cases.for_all_some (fun ee flow ->
+       let open Universal.Numeric.Common in
+       let i , c = man.ask (Q_int_congr_interval ee) flow in
+       match i with
+       | Bot.Nb(I.B.Finite a, I.B.Finite b) when  a = b && Z.rem a sz = Z.zero -> true
+       | _ -> Universal.Numeric.Common.C.included c (sz,Z.zero)
+     )
+  )
 
-  | E_stub_quantified(FORALL, _, S_interval(l, u)) ->
-    div l (mk_z den range) range,
-    div u (mk_z den range) range
 
-  | E_unop (O_minus, e) ->
-    let l, u = bound_div e den in
-    { offset with ekind = E_unop (O_minus, u)},
-    { offset with ekind = E_unop (O_minus, l)}
+(** Compute symbolic boundaries of offset / den *)
+let bound_div (offset:expr) (den:Z.t) man flow : (expr * expr) with_top =
+  let rec doit offset den  =
+    let range = erange offset in
+    match ekind offset with
+    | E_constant (C_int c) when Z.rem c den = Z.zero ->
+      let r =
+        if den = Z.one then offset
+        else if c = Z.zero then offset
+        else div offset (mk_z den range) range in
+      r, r
 
-  | E_binop (O_plus, e1, e2) ->
-    let l1, u1 = bound_div e1 den in
-    let l2, u2 = bound_div e2 den in
-    { offset with ekind = E_binop (O_plus, l1, l2)},
-    { offset with ekind = E_binop (O_plus, u1, u2)}
+    | E_var (v, _) ->
+      if not (is_aligned offset den man flow) then raise Found_TOP;
+      let r = if den = Z.one then offset else div offset (mk_z den range) range in
+      r, r
 
-  | E_binop (O_minus, e1, e2) ->
-    let l1, u1 = bound_div e1 den in
-    let l2, u2 = bound_div e2 den in
-    { offset with ekind = E_binop (O_minus, l1, u2)},
-    { offset with ekind = E_binop (O_minus, u1, l2)}
+    | E_stub_quantified(FORALL, _, S_interval(l, u)) when den = Z.one -> l, u
 
-  | E_binop (O_mult, e, ({ ekind = E_constant (C_int c) } as const))
-  | E_binop (O_mult, ({ ekind = E_constant (C_int c) } as const), e)
-    when Z.rem c den = Z.zero ->
-    let c = Z.div c den in
-    let l, u = bound e in
-    if Z.geq c Z.zero then
-      { offset with ekind = E_binop (O_mult, l, { const with ekind = E_constant (C_int c) })},
-      { offset with ekind = E_binop (O_mult, u, { const with ekind = E_constant (C_int c) })}
-    else
-      { offset with ekind = E_binop (O_mult, u, { const with ekind = E_constant (C_int c) })},
-      { offset with ekind = E_binop (O_mult, l, { const with ekind = E_constant (C_int c) })}
+    | E_unop (O_minus, e) ->
+      let l, u = doit e den in
+      { offset with ekind = E_unop (O_minus, u)},
+      { offset with ekind = E_unop (O_minus, l)}
 
-  | E_c_cast(e, xplct) ->
-    let l, u = bound_div e den in
-    { offset with ekind = E_c_cast (l, xplct)},
-    { offset with ekind = E_c_cast (u, xplct)}
+    | E_binop (O_plus, e1, e2) ->
+      let l1, u1 = doit e1 den in
+      let l2, u2 = doit e2 den in
+      { offset with ekind = E_binop (O_plus, l1, l2)},
+      { offset with ekind = E_binop (O_plus, u1, u2)}
 
-  | _ -> panic_at offset.erange
-      "can not compute symbolic bounds of non-linear expression %a"
-      pp_expr offset
+    | E_binop (O_minus, e1, e2) ->
+      let l1, u1 = doit e1 den in
+      let l2, u2 = doit e2 den in
+      { offset with ekind = E_binop (O_minus, l1, u2)},
+      { offset with ekind = E_binop (O_minus, u1, l2)}
+
+    | E_binop (O_mult, e1, e2) ->
+      let e1, c, e2 = match e1, e2 with
+        | { ekind = E_constant (C_int c) }, _ -> e1, c, e2
+        | _, { ekind = E_constant (C_int c) } -> e2, c, e1
+        | _ -> raise Found_TOP
+      in
+      let gcd = Z.gcd c den in
+      let c, den = Z.div c gcd, Z.div den gcd in
+      let l, u = doit e2 den in
+      if c = Z.one then l, u
+      else if c >= Z.zero then
+        { offset with ekind = E_binop (O_mult, l, { e1 with ekind = E_constant (C_int c) })},
+        { offset with ekind = E_binop (O_mult, u, { e1 with ekind = E_constant (C_int c) })}
+      else
+        { offset with ekind = E_binop (O_mult, u, { e1 with ekind = E_constant (C_int c) })},
+        { offset with ekind = E_binop (O_mult, l, { e1 with ekind = E_constant (C_int c) })}
+
+    | E_binop (O_div, e, ({ ekind = E_constant (C_int c) })) ->
+      doit e (Z.mul den c)
+
+    | E_c_cast(e, xplct) ->
+      let l, u = doit e den in
+      { offset with ekind = E_c_cast (l, xplct)},
+      { offset with ekind = E_c_cast (u, xplct)}
+
+    | _ ->
+      (*
+      panic_at offset.erange
+        "can not compute symbolic bounds of non-linear expression %a / %a"
+        pp_expr offset Z.pp_print den
+      *)
+      raise Found_TOP
+  in
+  retop (doit offset) den
 
 (*
-let bound o =
-  let r = bound o in
-  Format.printf "bound %a -> [%a, %a]@." pp_expr o pp_expr (fst r) pp_expr (snd r);
-  r
+let bound_div offset den man flow =
+  Format.printf "bound_div %a / %a@." pp_expr offset Z.pp_print den;
+  let l,u = bound_div offset den man flow in
+  Format.printf "  [%a,@.   %a]@." pp_expr l pp_expr u;
+  l, u
 *)

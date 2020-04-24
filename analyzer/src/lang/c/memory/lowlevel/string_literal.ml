@@ -85,19 +85,27 @@ struct
       end
     | _ -> false
 
+  let is_int_deref lval =
+    match remove_casts lval |> ekind with
+    | E_c_deref p -> is_c_int_type (under_type p.etyp)
+    | _ -> false
+
 
   (** {2 Abstract transformers} *)
   (** ************************* *)
 
 
   (** Cases of the abstract transformer for tests *(str + ∀i) != 0 *)
-  let assume_quantified_non_zero_cases str offset range man flow =
+  let assume_quantified_non_zero_cases str t boffset range man flow =
     (** Get symbolic bounds of the offset *)
-    let min, max = Common.Quantified_offset.bound offset in
+    let char_size = sizeof_type t in
+    match Common.Quantified_offset.bound_div boffset char_size man flow with
+    | Top.TOP -> Post.return flow
+    | Top.Nt (min,max) ->
     man.eval ~zone:(Z_c_scalar, Z_u_num) min flow >>$ fun min flow ->
     man.eval ~zone:(Z_c_scalar, Z_u_num) max flow >>$ fun max flow ->
 
-    let length = mk_z (Z.of_int @@ String.length str) range in
+    let length = mk_z (Z.(div (of_int @@ String.length str) (sizeof_type t))) range in
 
     let mk_bottom flow = Flow.set T_cur man.lattice.bottom man.lattice flow in
 
@@ -153,13 +161,16 @@ struct
 
 
   (** Cases of the abstract transformer for tests *(str + ∀i) == 0 *)
-  let assume_quantified_zero_cases str offset range man flow =
+  let assume_quantified_zero_cases str t boffset range man flow =
     (** Get symbolic bounds of the offset *)
-    let min, max = Common.Quantified_offset.bound offset in
+    let char_size = sizeof_type t in
+    match Common.Quantified_offset.bound_div boffset char_size man flow with
+    | Top.TOP -> Post.return flow
+    | Top.Nt (min,max) ->
     man.eval ~zone:(Z_c_scalar, Z_u_num) min flow >>$ fun min flow ->
     man.eval ~zone:(Z_c_scalar, Z_u_num) max flow >>$ fun max flow ->
 
-    let length = mk_z (Z.of_int @@ String.length str) range in
+    let length = mk_z (Z.(div (of_int @@ String.length str) (sizeof_type t))) range in
     let mk_bottom flow = Flow.bottom_from flow in
 
     (* Safety condition: [min, max] ⊆ [0, length] *)
@@ -219,54 +230,52 @@ struct
       in
       doit lval
     in
-    if Z.(sizeof_type (under_type p.etyp) != one) then
-      Cases.empty_singleton flow
-    else
-      man.eval p ~zone:(Z_c_low_level, Z_c_points_to) flow >>$ fun pt flow ->
-      match ekind pt with
-      | E_c_points_to (P_block ({ base_kind = String str }, offset, mode)) ->
-        Cases.singleton (str,offset) flow
+    man.eval p ~zone:(Z_c_low_level, Z_c_points_to) flow >>$ fun pt flow ->
+    match ekind pt with
+    | E_c_points_to (P_block ({ base_kind = String (str,_,t) }, boffset, mode)) when sizeof_type t = sizeof_type (under_type p.etyp) ->
+      Cases.singleton (str,t,boffset) flow
 
-      | _ ->
-        Cases.empty_singleton flow
+    | _ ->
+      Cases.empty_singleton flow
 
   (** Abstract transformer for tests *(str + ∀offset) op 0 *)
-  let assume_quantified_op_zero op str offset range man flow =
+  let assume_quantified_op_zero op str t boffset range man flow =
     if op = O_ne
-    then assume_quantified_non_zero_cases str offset range man flow
+    then assume_quantified_non_zero_cases str t boffset range man flow
 
     else if op = O_eq
-    then assume_quantified_zero_cases str offset range man flow
+    then assume_quantified_zero_cases str t boffset range man flow
 
     else Post.return flow
 
   (** Abstract transformer for tests *(lval + ∀offset) op 0 *)
   let assume_quantified_zero op lval range man flow =
-    extract_string_base lval range man flow >>$ fun (str,offset) flow ->
-    assume_quantified_op_zero op str offset range man flow
+    extract_string_base lval range man flow >>$ fun (str,t,boffset) flow ->
+    assume_quantified_op_zero op str t boffset range man flow
 
 
   (** Abstract transformer for tests *(lval + ∀offset) op n *)
   let assume_quantified op lval n range man flow =
-    extract_string_base lval range man flow >>$ fun (str,offset) flow ->
-    match c_expr_to_z offset with
+    extract_string_base lval range man flow >>$ fun (str,t,boffset) flow ->
+    match c_expr_to_z boffset with
     | Some n when Z.(n != zero) -> Post.return flow
-    | Some n -> assume_quantified_op_zero op str offset range man flow
+    | Some n -> assume_quantified_op_zero op str t boffset range man flow
     | None ->
       assume (mk_binop n O_eq (mk_zero range) range)
-        ~fthen:(fun flow -> assume_quantified_op_zero op str offset range man flow)
+        ~fthen:(fun flow -> assume_quantified_op_zero op str t boffset range man flow)
         ~felse:(fun flow -> Post.return flow)
         ~zone:Z_c_low_level man flow
 
 
   (** Abstract transformer for tests *(p + i) == n *)
   let assume_eq_const (lval:expr) (n:Z.t) range man flow =
-    extract_string_base lval range man flow >>$ fun (str,offset) flow ->
-    let len = String.length str in
+    extract_string_base lval range man flow >>$ fun (str,t,boffset) flow ->
+    let char_size = Z.to_int (sizeof_type t) in
+    let blen = String.length str in
     (* When n = 0, require that offset = len(str) *)
     if Z.(n = zero) then
-      man.post (mk_assume (mk_binop offset O_eq (mk_int len range) range) range) ~zone:Z_c_scalar flow
-    else
+      man.post (mk_assume (mk_binop boffset O_eq (mk_int blen range) range) range) ~zone:Z_c_scalar flow
+    else if char_size = 1 then
       (* Search for the first and last positions of `n` in `str` *)
       let c = Z.to_int n |> Char.chr in
       if not (String.contains str c) then
@@ -279,7 +288,9 @@ struct
           else mk_int_interval l u range
         in
         (* Require that offset is equal to pos *)
-        man.post (mk_assume (mk_binop offset O_eq pos range) range) ~zone:Z_c_scalar flow
+        man.post (mk_assume (mk_binop boffset O_eq pos range) range) ~zone:Z_c_scalar flow
+    else
+      man.post (mk_assume (mk_binop boffset O_le (mk_int (blen-char_size) range) range) range) ~zone:Z_c_scalar flow
 
 
   (** Transformers entry point *)
@@ -288,7 +299,7 @@ struct
     (* 𝕊⟦ *(p + ∀i) == 0 ⟧ *)
     | S_assume({ ekind = E_binop(O_eq, lval, n)})
     | S_assume({ ekind = E_unop(O_log_not, { ekind = E_binop(O_ne, lval, n)} )})
-      when is_char_deref lval &&
+      when is_int_deref lval &&
            is_lval_offset_forall_quantified lval &&
            not (is_expr_forall_quantified n)
       ->
@@ -297,7 +308,7 @@ struct
 
     (* 𝕊⟦ !*(p + ∀i) ⟧ *)
     | S_assume({ ekind = E_unop(O_log_not,lval)})
-      when is_char_deref lval &&
+      when is_int_deref lval &&
            is_lval_offset_forall_quantified lval
       ->
       assume_quantified_zero O_eq lval stmt.srange man flow |>
@@ -306,7 +317,7 @@ struct
     (* 𝕊⟦ *(p + ∀i) != 0 ⟧ *)
     | S_assume({ ekind = E_binop(O_ne, lval, n)})
     | S_assume({ ekind = E_unop(O_log_not, { ekind = E_binop(O_eq, lval, n)} )})
-      when is_char_deref lval &&
+      when is_int_deref lval &&
            is_lval_offset_forall_quantified lval &&
            not (is_expr_forall_quantified n)
       ->
@@ -315,7 +326,7 @@ struct
 
     (* 𝕊⟦ *(p + ∀i) ⟧ *)
     | S_assume(lval)
-      when is_char_deref lval &&
+      when is_int_deref lval &&
            is_lval_offset_forall_quantified lval
       ->
       assume_quantified_zero O_ne lval stmt.srange man flow |>
@@ -324,7 +335,7 @@ struct
     (* 𝕊⟦ *(p + i) == n ⟧ *)
     | S_assume({ ekind = E_binop(O_eq, lval, n)})
     | S_assume({ ekind = E_unop(O_log_not, { ekind = E_binop(O_ne, lval, n)} )})
-      when is_char_deref lval &&
+      when is_int_deref lval &&
            not (is_expr_forall_quantified lval) &&
            not (is_expr_forall_quantified n) &&
            is_c_constant n
@@ -342,8 +353,14 @@ struct
   let eval_deref p range man flow =
     man.eval p ~zone:(Z_c_low_level, Z_c_points_to) flow >>$ fun pt flow ->
     match ekind pt with
-    | E_c_points_to (P_block ({ base_kind = String str }, offset, mode)) ->
-      let length = Z.of_int (String.length str) in
+    | E_c_points_to (P_block ({ base_kind = String (str,_,t) }, boffset, mode))
+        when sizeof_type t = sizeof_type (under_type p.etyp) ->
+      let char_size = sizeof_type t in
+      let offset =
+        if char_size = Z.one then boffset
+        else div boffset (mk_z char_size range) range
+      in
+      let length = Z.(div (of_int (String.length str)) char_size) in
       man.eval offset ~zone:(Z_c_scalar,Z_u_num) flow >>$ fun offset flow ->
       switch [
         [mk_binop offset O_eq (mk_z length range) range],
@@ -361,12 +378,11 @@ struct
                (* Get the interval of possible chars *)
                let indexes = I.to_list itv' in
                let char_at i =
-                 let chr = str.[Z.to_int i] |> Char.code |> Z.of_int in
-                 I.cst chr
+                 I.cst (extract_multibyte_integer str (Z.to_int (Z.mul char_size i)) t)
                in
-               let chars = List.fold_left (fun acc i ->
-                   char_at i :: acc
-                 ) [char_at (List.hd indexes)] (List.tl indexes)
+               let chars =
+                 List.fold_left (fun acc i -> char_at i :: acc)
+                   [char_at (List.hd indexes)] (List.tl indexes)
                in
                let l,u =
                  match I.join_list chars |> Bot.bot_to_exn with
@@ -386,7 +402,7 @@ struct
 
   let eval zone exp man flow =
     match ekind exp with
-    | E_c_deref(p) when is_char_deref exp &&
+    | E_c_deref(p) when is_int_deref exp &&
                         not (is_pointer_offset_forall_quantified p)
       ->
       eval_deref p exp.erange man flow |>
