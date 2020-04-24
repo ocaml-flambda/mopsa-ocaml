@@ -71,7 +71,8 @@ int getopt (int ___argc, char *const *___argv, const char *__shortopts);
  *     l[i].name == NULL and
  *     return == i and
  *     forall size_t j in [0, i): l[j].name != NULL
- *   );
+ *   )
+ * ;
  */
 size_t _mopsa_len_option (const struct option* l);
 
@@ -93,9 +94,9 @@ size_t _mopsa_pick(size_t i);
  * assigns: opterr;
  * assigns: optopt;
  * assigns: optarg;
- * assigns: ___argv[0, ___argc);
+ * //assigns: ___argv[0, ___argc);
  * ensures: optind' in [0, ___argc];
- * ensures: forall int i in [0, ___argc): exists int j in [0, ___argc): (___argv[i])' == ___argv[j];
+ * //ensures: forall int i in [0, ___argc): exists int j in [0, ___argc): (___argv[i])' == ___argv[j];
  * ensures: optarg' == NULL or exists int i in [0, ___argc): in_string(optarg', ___argv[i]);
  *
  * case "opt-ind" {
