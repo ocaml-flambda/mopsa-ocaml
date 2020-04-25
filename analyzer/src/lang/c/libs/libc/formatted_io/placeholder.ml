@@ -29,6 +29,7 @@ type placeholder_type =
   | Float of c_float_type
   | Pointer
   | String
+  | WideString
 
 (** Placeholder for output streams, e.g. printf *)
 type output_placeholder = {

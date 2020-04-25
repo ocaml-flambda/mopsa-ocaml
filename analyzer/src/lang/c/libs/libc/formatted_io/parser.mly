@@ -56,7 +56,7 @@
 %token <int> NUM
 %token STAR DOT
 %token H HH L LL CAP_L
-%token D I U F G E A P S X O C
+%token D I U F G E A P S WS X O C
 %token EOF
 
 %start parse_output_format
@@ -126,6 +126,7 @@ output_typ:
 
   (* String and pointers *)
   | S                      { String }
+  | WS                     { WideString }
   | P                      { Pointer }
 
 

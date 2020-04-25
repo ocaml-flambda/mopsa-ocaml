@@ -27,6 +27,7 @@
 #include <wchar.h>
 #include <limits.h>
 #include <stdio.h> // for _alloc_FILE
+#include <string.h>
 #include "mopsa_libc_utils.h"
 
 
@@ -848,23 +849,17 @@ FILE *open_wmemstream (wchar_t **__bufloc, size_t *__sizeloc);
  */
 int fwide (FILE *__fp, int __mode);
 
+/* built-in */
 int fwprintf (FILE *__restrict __stream, const wchar_t *__restrict __format, ...);
 
+/* built-in */
 int wprintf (const wchar_t *__restrict __format, ...);
 
+/* built-in */
 int swprintf (wchar_t *__restrict __s, size_t __n, const wchar_t *__restrict __format, ...);
 
-int vfwprintf (FILE *__restrict __s,
-               const wchar_t *__restrict __format,
-               va_list __arg);
 
-int vwprintf (const wchar_t *__restrict __format, va_list __arg);
 
-int vswprintf (wchar_t *__restrict __s, size_t __n,
-               const wchar_t *__restrict __format,
-               va_list __arg);
-
-int fwscanf (FILE *__restrict __stream, const wchar_t *__restrict __format, ...);
 
 int wscanf (const wchar_t *__restrict __format, ...);
 

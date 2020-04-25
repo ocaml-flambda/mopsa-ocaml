@@ -1128,6 +1128,12 @@ let assert_valid_string (p:expr) range man flow =
   let stmt = mk_c_call_stmt f [p] range in
   man.post stmt flow
 
+(** Check if a pointer points to a nul-terminated wide char array *)
+let assert_valid_wide_string (p:expr) range man flow =
+  let open Sig.Domain.Manager in
+  let f = find_c_fundec_by_name "_mopsa_assert_valid_wide_string" flow in
+  let stmt = mk_c_call_stmt f [p] range in
+  man.post stmt flow
 
 (** Check if a pointer points to a valid stream *)
 let assert_valid_stream (p:expr) range man flow =
@@ -1163,6 +1169,14 @@ let strrand (p:expr) range man flow =
 let strnrand (p:expr) (n:expr) range man flow =
   let open Sig.Domain.Manager in
   let f = find_c_fundec_by_name "_mopsa_strnrand" flow in
+  let stmt = mk_c_call_stmt f [p; n] range in
+  man.post stmt flow
+
+
+(** Randomize a wide substring *)
+let wcsnrand (p:expr) (n:expr) range man flow =
+  let open Sig.Domain.Manager in
+  let f = find_c_fundec_by_name "_mopsa_wcsnrand" flow in
   let stmt = mk_c_call_stmt f [p; n] range in
   man.post stmt flow
 

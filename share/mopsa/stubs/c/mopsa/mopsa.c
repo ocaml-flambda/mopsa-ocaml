@@ -197,6 +197,10 @@ void _mopsa_memcpy(char *dst, char *src, size_t i, size_t j);
  * ;
  */
 
+/*$
+ * requires: valid_wide_string(s);
+ */
+void _mopsa_assert_valid_wide_string(wchar_t *s);
 
 /*$$
  * predicate valid_wide_substring(s, n):
@@ -218,6 +222,7 @@ void _mopsa_memcpy(char *dst, char *src, size_t i, size_t j);
  *   exists size_t _i in [0, n): (s[_i])' == 0
  * ;
  */
+
 
 /*$$
  * predicate in_wide_string(x,s):
@@ -264,3 +269,18 @@ void _mopsa_memcpy(char *dst, char *src, size_t i, size_t j);
  *    exists size_t _i in [0, n]: r == x + _i
  * ;
  */
+
+
+/*$
+ * case "non-empty" {
+ *   assumes: n >= 1;
+ *   requires: valid_wchars(s, n);
+ *   assigns: s[0, n);
+ *   ensures: valid_primed_wide_substring(s,n);
+ * }
+ *
+ * case "empty" {
+ *   assumes: n == 0;
+ * }
+ */
+void _mopsa_wcsnrand(wchar_t *s, size_t n);

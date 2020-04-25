@@ -30,6 +30,14 @@
   Then, they call the following functions to complete the stub.
  */
 
+/* built-in */
+void error (int __status, int __errnum, const char *__format, ...);
+
+/* built-in */
+void error_at_line (int __status, int __errnum, const char *__fname,
+                    unsigned int __lineno, const char *__format, ...);
+
+
 /*$
  * requires: null_or_valid_ptr(error_print_progname);
  * assigns: error_message_count;

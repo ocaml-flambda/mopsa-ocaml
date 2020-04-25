@@ -47,6 +47,10 @@ let _ =
       "scanf";
       "sscanf";
 
+      "fwprintf";
+      "wprintf";
+      "swprintf";
+
       "_mopsa_rand_s8";
       "_mopsa_rand_u8";
       "_mopsa_rand_s16";

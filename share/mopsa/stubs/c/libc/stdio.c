@@ -25,6 +25,7 @@
 */
 #include <stdarg.h>
 #include <stdio.h>
+#include <wchar.h>
 #include "mopsa_libc_utils.h"
 
 
@@ -399,35 +400,31 @@ void setbuffer (FILE *__restrict __stream, char *__restrict __buf,
 void setlinebuf (FILE *__stream);
 
 
+/* built-in */
+int fprintf (FILE *__restrict __stream,
+             const char *__restrict __format, ...);
 
-/*$
- * // TODO: check format, check variable arguments
- *
- * requires: __s in File;
- * requires: valid_string(__format);
- * assigns:  _errno;
- */
-int vfscanf (FILE *__restrict __s, const char *__restrict __format,
-             va_list __arg);
+/* built-in */
+int printf (const char *__restrict __format, ...);
 
-/*$
- * // TODO: check format, check variable arguments
- *
- * requires: valid_string(__format);
- * assigns:  _errno;
- */
-int vscanf (const char *__restrict __format, va_list __arg);
+/* built-in */
+extern int sprintf (char *__restrict __s,
+                    const char *__restrict __format, ...);
 
-/*$
- * // TODO: check format, check variable arguments
- *
- * requires: valid_string(__s);
- * requires: valid_string(__format);
- * assigns:  _errno;
- */
-int vsscanf (const char *__restrict __s,
-             const char *__restrict __format, va_list __arg);
+/* built-in */
+int snprintf (char *__restrict __s, size_t __maxlen,
+              const char *__restrict __format, ...);
 
+/* built-in */
+int fscanf (FILE *__restrict __stream,
+            const char *__restrict __format, ...);
+
+/* built-in */
+int scanf (const char *__restrict __format, ...);
+
+/* built-in */
+int sscanf (const char *__restrict __s,
+            const char *__restrict __format, ...) ;
 
 
 /*$
@@ -929,3 +926,24 @@ int ftrylockfile (FILE *__stream);
  * requires: __stream in File;
  */
 void funlockfile (FILE *__stream);
+
+
+
+/*$
+ * // MS-specific, not in libc, but used in Juliet
+ *
+ * requires: valid_wide_string(__filename);
+ * requires: valid_wide_string(__modes);
+ *
+ * case "success" {
+ *   local:   FILE* r = _alloc_FILE();
+ *   ensures: return == r;
+ * }
+ *
+ * case "failure" {
+ *   assigns: _errno;
+ *   ensures: return == NULL;
+ * }
+ */
+FILE *_wfopen (const wchar_t *__restrict __filename,
+               const wchar_t *__restrict __modes);
