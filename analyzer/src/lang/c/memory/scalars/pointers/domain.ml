@@ -736,6 +736,28 @@ struct
       Post.return flow
 
 
+  (** Fold pointers ql in p *)
+  let fold_pointer_var p ql range man flow =
+    let a = get_env T_cur man flow in
+    (* Collect the pointer values of ql before removing them *)
+    let value,a' = List.fold_left (fun (accv,acca) q ->
+        let accv' = Map.find q a |> PointerSet.join accv in
+        let acca' = Map.remove q acca in
+        accv',acca'
+      ) (PointerSet.bottom,a) ql
+    in
+    let value' = if Map.mem p a then PointerSet.join value (Map.find p a) else value in
+    let flow = set_env T_cur (Map.set p value' a') man flow in
+    (* Fold the offset if present *)
+    if PointerSet.is_valid value' then
+      let o = mk_offset p None range in
+      let ol = List.map (fun q -> mk_offset q None range) ql in
+      let stmt = mk_fold o ol range in
+      man.post stmt ~zone:Z_u_num flow
+    else
+      Post.return flow
+
+
   (** Forget the value of pointer p *)
   let forget_pointer_var p range man flow =
     (* Forget the bases *)
@@ -804,6 +826,14 @@ struct
       ->
       let ql = List.map (function { ekind = E_var(q, _) } -> q | _ -> assert false) ql in
       expand_pointer_var p ql stmt.srange man flow |>
+      OptionExt.return
+
+     | S_fold({ekind = E_var(p,_)}, ql)
+      when is_c_pointer_type p.vtyp &&
+           List.for_all (function { ekind = E_var(q,_) } -> is_c_pointer_type q.vtyp | _ -> false) ql
+      ->
+      let ql = List.map (function { ekind = E_var(q, _) } -> q | _ -> assert false) ql in
+      fold_pointer_var p ql stmt.srange man flow |>
       OptionExt.return
 
     | S_forget({ekind = E_var(p,_)}) when is_c_pointer_type p.vtyp ->
