@@ -287,22 +287,46 @@ struct
 
   (** 𝕊⟦ expand(base,bases); ⟧ *)
   let exec_expand_base base1 bases range man flow =
-    if not (is_interesting_base base1) then Post.return flow else
-    if List.exists (fun b -> not (is_interesting_base b)) bases then panic_at range "expand %a not supported" pp_base base1
+    if not (is_interesting_base base1) then
+      List.fold_left
+        (fun acc b -> Post.bind (exec_add_base b range man) acc)
+        (Post.return flow) bases
     else
       let length1 = mk_length_var base1 elem_size range in
-      let lengths = List.map (fun b -> mk_length_var b elem_size range) bases in
-      man.post ~zone:Z_u_num (mk_expand length1 lengths range) flow
+      let lengths = List.fold_left
+          (fun acc b ->
+             if is_interesting_base b then
+               mk_length_var b elem_size range :: acc
+             else
+               acc
+          ) [] bases in
+      if lengths = [] then
+        Post.return flow
+      else
+        man.post ~zone:Z_u_num (mk_expand length1 lengths range) flow
 
 
   (** Fold the length variable of a base *)
-  let exec_fold_bases base1 bases range man flow =
-    if not (is_interesting_base base1) then Post.return flow else
-    if List.exists (fun b -> not (is_interesting_base b)) bases then panic_at range "fold %a not supported" pp_base base1
+  let exec_fold_bases base bases range man flow =
+    if not (is_interesting_base base) then
+      Post.return flow
     else
-      let length1 = mk_length_var base1 elem_size range in
-      let lengths = List.map (fun b -> mk_length_var b elem_size range) bases in
-      man.post ~zone:Z_u_num (mk_fold length1 lengths range) flow
+      let length = mk_length_var base elem_size range in
+      let lengths = List.fold_left
+          (fun acc b ->
+             if is_interesting_base b then
+               mk_length_var b elem_size range :: acc
+             else
+               acc
+          ) [] bases in
+      if lengths = [] then
+         eval_base_size base range man flow >>$ fun bsize flow ->
+         man.eval ~zone:(Z_c_scalar, Z_u_num) bsize flow >>$ fun bsize flow ->
+         let size = elem_of_offset bsize elem_size range in
+         man.post ~zone:Z_u_num (mk_forget length range) flow >>$ fun () flow ->
+         man.post ~zone:Z_u_num (mk_assume (mk_in length (mk_zero range) size range) range) flow
+      else
+        man.post ~zone:Z_u_num (mk_fold length lengths range) flow
 
 
   (** 𝕊⟦ forget(e); ⟧ *)
@@ -314,7 +338,7 @@ struct
       match base.base_kind with
       | String _ -> Post.return flow
       | _ ->
-        (* FIXME: we can do better by checking if the offset affect the length of the string *)
+        (* FIXME: we can do better by checking if the offset affects the length of the string *)
         let length = mk_length_var base elem_size range in
         eval_base_size base range man flow >>$ fun bsize flow ->
         man.eval ~zone:(Z_c_scalar, Z_u_num) bsize flow >>$ fun bsize flow ->
