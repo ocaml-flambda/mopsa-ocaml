@@ -657,9 +657,13 @@ struct
 
 
   (** Predicate defining interesting bases to smash *)
-  let is_interesting_base base =
+  let rec is_interesting_base base =
     match base with
     | { base_valid = false } -> false
+
+    | { base_kind = Var {vkind = Cstubs.Aux_vars.V_c_primed_base base}; base_valid = true } ->
+       is_interesting_base base
+
     | { base_kind = Var v } when is_c_array_type v.vtyp ->
       (* Keep arrays of scalars or records with fields having the same scalar type *)
       let rec aux t =
@@ -678,7 +682,9 @@ struct
         | x -> is_c_scalar_type x
       in
       aux v.vtyp
+
     | { base_kind = Addr _ } -> true
+
     | _ -> false
 
 

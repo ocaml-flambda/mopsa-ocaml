@@ -203,8 +203,11 @@ struct
     if elem_size = 1 then boffset
     else div boffset (mk_int elem_size range) range
 
-  let is_interesting_base base =
+  let rec is_interesting_base base =
     match base with
+    | { base_kind = Var {vkind = Cstubs.Aux_vars.V_c_primed_base base}; base_valid = true } ->
+      is_interesting_base base
+
     | { base_kind = Var v; base_valid = true } ->
       !opt_track_length &&
       is_c_type v.vtyp &&
