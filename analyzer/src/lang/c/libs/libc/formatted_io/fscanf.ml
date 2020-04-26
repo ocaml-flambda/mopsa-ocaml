@@ -121,6 +121,9 @@ struct
       in
       memrand arg (mk_zero range) w range man flow
 
+    | WideString ->
+      assert false
+
 
   (** Assign arbitrary values to arguments *)
   let assign_args format args range man flow =

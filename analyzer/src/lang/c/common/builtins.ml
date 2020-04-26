@@ -47,6 +47,10 @@ let _ =
       "scanf";
       "sscanf";
 
+      "fwprintf";
+      "wprintf";
+      "swprintf";
+
       "_mopsa_rand_s8";
       "_mopsa_rand_u8";
       "_mopsa_rand_s16";
@@ -85,7 +89,10 @@ let _ =
 
       "_mopsa_register_file_resource";
       "_mopsa_register_file_resource_at";
-      "_mopsa_find_file_resource"
+      "_mopsa_find_file_resource";
+
+      "error";
+      "error_at_line"
     ]
 
 let is_builtin_function = Hashtbl.mem builtin_functions

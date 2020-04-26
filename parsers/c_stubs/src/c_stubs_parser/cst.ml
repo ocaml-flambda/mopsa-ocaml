@@ -41,7 +41,7 @@ and leaf =
   | S_assigns   of assigns with_range
   | S_ensures   of ensures with_range
   | S_free      of free with_range
-  | S_warn      of warn with_range
+  | S_message   of message with_range
 
 and case = {
   case_label     : string;
@@ -71,7 +71,7 @@ and local_value =
 
 and assigns = {
   assign_target : expr with_range;
-  assign_offset : (expr with_range * expr with_range) list;
+  assign_offset : interval list;
 }
 
 and free = expr with_range
@@ -82,7 +82,15 @@ and predicate = {
   predicate_body : formula with_range;
 }
 
-and warn = string
+and message = {
+  message_kind: message_kind;
+  message_body: string;
+}
+
+and message_kind =
+  | WARN
+  | UNSOUND
+  | ALARM
 
 (** {2 Formulas} *)
 (** ************ *)
@@ -170,8 +178,15 @@ and unop =
   | BNOT    (* ~ *)
 
 and set =
-  | S_interval of expr with_range * expr with_range
+  | S_interval of interval
   | S_resource of resource
+
+and interval = {
+  itv_lb: expr with_range; (** lower bound *)
+  itv_open_lb: bool;       (** open lower bound *)
+  itv_ub: expr with_range; (** upper bound *)
+  itv_open_ub: bool;       (** open upper bound *)
+}
 
 and resource = string
 
@@ -199,7 +214,7 @@ and builtin =
 (*  ********* *)
 
 
-and c_qual_typ = c_typ * bool (** is const ? *)
+and c_qual_typ = c_typ * c_qual
 
 and c_typ =
   | T_void
@@ -219,6 +234,12 @@ and c_typ =
   | T_enum of var
   | T_unknown
 
+and c_qual = {
+  c_qual_const: bool;
+  c_qual_volatile: bool;
+  c_qual_restrict: bool;
+}
+
 and array_length =
   | A_no_length
   | A_constant_length of Z.t
@@ -236,7 +257,20 @@ let compare_var v1 v2 =
 
 let compare_resource (r1:resource) (r2:resource) = compare r1 r2
 
-let no_qual t = t, false
+let no_c_qual = { c_qual_const = false;
+                c_qual_volatile = false;
+                c_qual_restrict = false; }
+
+let const = { no_c_qual with c_qual_const = true; }
+let volatile = { no_c_qual with c_qual_volatile = true; }
+let restrict = { no_c_qual with c_qual_restrict = true; }
+
+let is_c_qual_non_empty q = q.c_qual_const || q.c_qual_restrict || q.c_qual_volatile
+
+let merge_c_qual q1 q2 =
+  { c_qual_const = q1.c_qual_const || q2.c_qual_const;
+    c_qual_volatile = q1.c_qual_volatile || q2.c_qual_volatile;
+    c_qual_restrict = q1.c_qual_restrict || q2.c_qual_restrict; }
 
 let is_alias (cst:stub) : bool =
   match cst.content with
@@ -330,8 +364,16 @@ and pp_binop fmt =
 
 and pp_c_qual_typ fmt =
   function
-  | (t, true) -> fprintf fmt "const %a" pp_c_typ t
-  | (t, false) -> pp_c_typ fmt t
+  | (t, qual) when is_c_qual_non_empty qual -> fprintf fmt "%a %a" pp_c_qual qual pp_c_typ t
+  | (t, qual) -> pp_c_typ fmt t
+
+and pp_c_qual fmt q =
+  let l =
+    (if q.c_qual_const then ["const"] else [])
+    @ (if q.c_qual_volatile then ["volatile"] else [])
+    @ (if q.c_qual_restrict then ["restrict"] else [])
+  in
+  Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt " ") Format.pp_print_string fmt l
 
 and pp_c_typ fmt =
   function
@@ -382,9 +424,16 @@ and pp_log_binop fmt =
 
 and pp_set fmt =
   function
-  | S_interval(e1, e2) -> fprintf fmt "[%a .. %a]" pp_expr e1 pp_expr e2
+  | S_interval(itv) -> pp_interval fmt itv
   | S_resource(r) -> pp_resource fmt r
 
+and pp_interval fmt i =
+  fprintf fmt "%s%a, %a%s"
+    (if i.itv_open_lb then "]" else "[")
+    pp_expr i.itv_lb
+    pp_expr i.itv_ub
+    (if i.itv_open_ub then "[" else "]")
+   
 let pp_opt pp fmt o =
   match o with
   | None -> ()
@@ -415,11 +464,7 @@ let pp_requires fmt requires =
 let pp_assigns fmt assigns =
   fprintf fmt "assigns  : %a%a;"
     pp_expr assigns.content.assign_target
-    (pp_print_list ~pp_sep:(fun fmt () -> ())
-       (fun fmt (l, u) ->
-          fprintf fmt "[%a .. %a]" pp_expr l pp_expr u
-       )
-    ) assigns.content.assign_offset
+    (pp_print_list ~pp_sep:(fun fmt () -> ()) pp_interval) assigns.content.assign_offset
 
 let pp_assumes fmt (assumes:assumes with_range) =
   fprintf fmt "assumes  : @[%a@];" pp_formula assumes.content
@@ -430,8 +475,11 @@ let pp_ensures fmt ensures =
 let pp_free fmt free =
   fprintf fmt "free : %a;" pp_expr free.content
 
-let pp_warn fmt warn =
-  fprintf fmt "warn: \"%s\";" warn.content
+let pp_message fmt msg =
+  match msg.content.message_kind with
+  | WARN    -> fprintf fmt "warn: \"%s\";" msg.content.message_body
+  | ALARM   -> fprintf fmt "alarm: \"%s\";" msg.content.message_body
+  | UNSOUND -> fprintf fmt "unsound: \"%s\";" msg.content.message_body
 
 let pp_leaf fmt sec =
   match sec with
@@ -441,7 +489,7 @@ let pp_leaf fmt sec =
   | S_assigns assigns -> pp_assigns fmt assigns
   | S_ensures ensures -> pp_ensures fmt ensures
   | S_free free -> pp_free fmt free
-  | S_warn warn  -> pp_warn fmt warn
+  | S_message msg  -> pp_message fmt msg
 
 let pp_case fmt case =
   fprintf fmt "case \"%s\":@\n  @[<v 2>%a@]"

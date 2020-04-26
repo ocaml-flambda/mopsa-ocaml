@@ -55,12 +55,15 @@ struct
   let cardinal (ctx:t) : int =
     PredMap.cardinal ctx
 
-  let inline (pred:var) (params:expr with_range list) (ctx:t) range : formula with_range =
-    if not (PredMap.mem pred ctx) then
-      Exceptions.panic_at range "undeclared predicate %a" pp_var pred
+  let inline (predvar:var) (params:expr with_range list) (ctx:t) range : formula with_range =
+    if not (PredMap.mem predvar ctx) then
+      Exceptions.panic_at range "undeclared predicate %a" pp_var predvar
     else
       (* We need to find the predicate record containing the names of the arguments *)
-      let pred, body = PredMap.find pred ctx in
+      let pred, body = PredMap.find predvar ctx in
+
+      if List.length pred.predicate_args != List.length params then
+        Exceptions.panic_at range "invalid number of arguments for predicate %a: requires %i, given %i" pp_var predvar (List.length pred.predicate_args) (List.length params);
 
       (* Combine arguments and call parameters *)
       let args = List.map get_content params |>
@@ -123,11 +126,15 @@ struct
 
       and visit_set s =
         match s with
-        | S_interval (e1, e2) -> S_interval (visit_expr e1, visit_expr e2)
+        | S_interval itv -> S_interval (visit_interval itv)
         | S_resource r -> S_resource r
 
-      in
+      and visit_interval i =
+        { i with
+          itv_lb = visit_expr i.itv_lb;
+          itv_ub = visit_expr i.itv_ub; }
 
+      in
       visit_formula (with_range body range)
 
 
@@ -183,7 +190,7 @@ let visit_leaf sec ctx =
   | S_assigns assings   -> sec
   | S_ensures ensures   -> S_ensures (visit_ensures ensures ctx)
   | S_free free         -> sec
-  | S_warn warn         -> sec
+  | S_message msg       -> sec
 
 let visit_case case ctx =
   bind_range case @@ fun case -> {

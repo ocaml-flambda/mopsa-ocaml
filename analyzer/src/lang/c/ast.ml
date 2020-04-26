@@ -626,6 +626,7 @@ let rec sizeof_type (t : typ) : Z.t =
 
   | t -> panic ~loc:__LOC__ "%a not a C type" pp_typ t
 
+
 let sizeof_expr (t:typ) range : expr =
   let rec doit t =
     match t with
@@ -813,7 +814,7 @@ let under_type (t: typ) : typ =
 
 let void_to_char t =
   match remove_typedef_qual t with
-  | T_c_void -> T_c_integer C_signed_char
+  | T_c_void -> T_c_integer C_unsigned_char
   | _ -> t
 
 let get_array_constant_length t =
@@ -862,6 +863,25 @@ let mk_c_subscript_access a i range =
 let mk_c_character c range =
   mk_constant (C_c_character ((Z.of_int @@ int_of_char c), C_char_ascii)) range ~etyp:(T_c_integer(C_unsigned_char))
 
+(* extract a multi-byte integer of type t starting at offset off of s *)
+let extract_multibyte_integer (s:string) (off:int) t =
+  let n = Z.to_int (sizeof_type t) in
+  (* get bytes in right order according to endianess *)
+  let rec doit acc i =
+    if i >= n then acc else
+      let off' = if target_info.target_big_endian then off+i else off+n-i-1 in
+      doit (Z.add (Z.mul (Z.of_int 256) acc) (Z.of_int (int_of_char s.[off']))) (i+1)
+  in
+  let v = doit Z.zero 0 in
+  (* sign correction *)
+  if is_signed t && v >= Z.shift_left Z.one (n*8-1)
+  then Z.sub v (Z.shift_left Z.one (n*8))
+  else v
+
+let mk_c_multibyte_integer (s:string) (off:int) t range =
+  mk_z (extract_multibyte_integer s off t) ~typ:t range
+
+
 let mk_c_invalid_pointer range =
   mk_constant C_c_invalid ~etyp:(T_c_pointer T_c_void) range
 
@@ -882,8 +902,8 @@ let array_type typ size = T_c_array(typ,C_array_length_cst size)
 
 let type_of_string s = T_c_array(s8, C_array_length_cst (Z.of_int (1 + String.length s)))
 
-let mk_c_string s range =
-  mk_constant (C_c_string (s, C_char_ascii)) range ~etyp:(type_of_string s)
+let mk_c_string ?(kind=C_char_ascii) s range =
+  mk_constant (C_c_string (s, kind)) range ~etyp:(type_of_string s)
 
 let mk_c_fun_typ f =
   let ftype = {
@@ -1084,7 +1104,6 @@ let is_lval_offset_forall_quantified e =
   | E_c_array_subscript(_,o) -> is_expr_forall_quantified o
   | _ -> false
 
-
 (** Check if v is declared as a variable length array *)
 let is_c_variable_length_array_type t =
   match remove_typedef_qual t with
@@ -1109,6 +1128,12 @@ let assert_valid_string (p:expr) range man flow =
   let stmt = mk_c_call_stmt f [p] range in
   man.post stmt flow
 
+(** Check if a pointer points to a nul-terminated wide char array *)
+let assert_valid_wide_string (p:expr) range man flow =
+  let open Sig.Domain.Manager in
+  let f = find_c_fundec_by_name "_mopsa_assert_valid_wide_string" flow in
+  let stmt = mk_c_call_stmt f [p] range in
+  man.post stmt flow
 
 (** Check if a pointer points to a valid stream *)
 let assert_valid_stream (p:expr) range man flow =
@@ -1148,6 +1173,14 @@ let strnrand (p:expr) (n:expr) range man flow =
   man.post stmt flow
 
 
+(** Randomize a wide substring *)
+let wcsnrand (p:expr) (n:expr) range man flow =
+  let open Sig.Domain.Manager in
+  let f = find_c_fundec_by_name "_mopsa_wcsnrand" flow in
+  let stmt = mk_c_call_stmt f [p; n] range in
+  man.post stmt flow
+
+
 (** Set elements of an array with the same value [c] *)
 let memset (p:expr) (c:expr) (i:expr) (j:expr) range man flow =
   let open Sig.Domain.Manager in
@@ -1161,4 +1194,18 @@ let memcpy (dst:expr) (src:expr) (i:expr) (j:expr) range man flow =
   let open Sig.Domain.Manager in
   let f = find_c_fundec_by_name "_mopsa_memcpy" flow in
   let stmt = mk_c_call_stmt f [dst; src; i; j] range in
+  man.post stmt flow
+
+(** Exit if status is non-zero *)
+let error_error (p:expr) range man flow =
+  let open Sig.Domain.Manager in
+  let f = find_c_fundec_by_name "_mopsa_error" flow in
+  let stmt = mk_c_call_stmt f [p] range in
+  man.post stmt flow
+
+(** Exit if status is non-zero *)
+let error_error_at_line (p:expr) (n:expr) range man flow =
+  let open Sig.Domain.Manager in
+  let f = find_c_fundec_by_name "_mopsa_error_at_line" flow in
+  let stmt = mk_c_call_stmt f [p; n] range in
   man.post stmt flow

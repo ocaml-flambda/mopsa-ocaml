@@ -63,7 +63,7 @@ and leaf =
   | S_assigns   of assigns with_range
   | S_ensures   of ensures with_range
   | S_free      of free with_range
-  | S_warn      of warn with_range
+  | S_message   of message with_range
 
 and case = {
   case_label     : string;
@@ -94,18 +94,28 @@ and local_value =
 
 and assigns = {
   assign_target : expr;
-  assign_offset : (expr * expr) list;
+  assign_offset : interval list;
 }
 
 and free = expr
 
-and warn = string
+and message = {
+  message_kind: message_kind;
+  message_body: string;
+}
+
+and message_kind =
+  | WARN
+  | ALARM
+  | UNSOUND
 
 and log_binop = C_stubs_parser.Ast.log_binop
 
 and set =
-  | S_interval of expr * expr
+  | S_interval of interval
   | S_resource of resource
+
+and interval = expr * expr
 
 and resource = C_stubs_parser.Ast.resource
 
@@ -415,6 +425,9 @@ and pp_set fmt =
   | S_interval(e1, e2) -> fprintf fmt "[%a .. %a]" pp_expr e1 pp_expr e2
   | S_resource(r) -> pp_resource fmt r
 
+and pp_interval fmt ((l,u):interval) =
+   fprintf fmt "[%a, %a]" pp_expr l pp_expr u
+
 and pp_resource = C_stubs_parser.Ast.pp_resource
 
 let pp_list pp sep fmt l =
@@ -443,11 +456,7 @@ let pp_requires fmt requires =
 let pp_assigns fmt assigns =
   fprintf fmt "assigns  : %a%a;"
     pp_expr assigns.content.assign_target
-    (pp_print_list ~pp_sep:(fun fmt () -> ())
-       (fun fmt (l, u) ->
-          fprintf fmt "[%a .. %a]" pp_expr l pp_expr u
-       )
-    ) assigns.content.assign_offset
+    (pp_print_list ~pp_sep:(fun fmt () -> ()) pp_interval) assigns.content.assign_offset
 
 let pp_assumes fmt (assumes:assumes with_range) =
   fprintf fmt "assumes  : %a;" pp_formula assumes.content
@@ -458,8 +467,11 @@ let pp_ensures fmt ensures =
 let pp_free fmt free =
   fprintf fmt "free : %a;" pp_expr free.content
 
-let pp_warn fmt warn =
-  fprintf fmt "warn: \"%s\";" warn.content
+let pp_message fmt msg =
+  match msg.content.message_kind with
+  | WARN    -> fprintf fmt "warn: \"%s\";" msg.content.message_body
+  | ALARM   -> fprintf fmt "alarm: \"%s\";" msg.content.message_body
+  | UNSOUND -> fprintf fmt "unsound: \"%s\";" msg.content.message_body
 
 let pp_leaf_section fmt sec =
   match sec with
@@ -469,7 +481,7 @@ let pp_leaf_section fmt sec =
   | S_assigns assigns -> pp_assigns fmt assigns
   | S_ensures ensures -> pp_ensures fmt ensures
   | S_free free -> pp_free fmt free
-  | S_warn warn -> pp_warn fmt warn
+  | S_message msg -> pp_message fmt msg
 
 let pp_leaf_sections fmt secs =
   fprintf fmt "@[<v>";

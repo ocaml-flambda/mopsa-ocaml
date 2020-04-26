@@ -19,20 +19,90 @@
 /*                                                                          */
 /****************************************************************************/
 
+#include <stddef.h>
 #include <sys/types.h>
 #include <pwd.h>
+#include "mopsa_libc_utils.h"
 
-struct passwd _passwd_buf[1];
 
-/*$$$
- * assigns: _passwd_buf[0,0];
- * local: char *name = _mopsa_new_valid_string();
- * ensures: (_passwd_buf->pw_name)' == name;
+/*$
+ * local: struct passwd* r = new Pwd;
+ * local: char* pw_name = _mopsa_new_readonly_string();
+ * local: char* pw_passwd =  _mopsa_new_readonly_string();
+ * local: char* pw_gecos =  _mopsa_new_readonly_string();
+ * local: char* pw_dir = _mopsa_new_readonly_string();
+ * local: char* pw_shell =  _mopsa_new_readonly_string();
+ * ensures: size(r) == sizeof_type(struct passwd);
+ * ensures: r->pw_name == pw_name;
+ * ensures: r->pw_passwd == pw_passwd;
+ * ensures: r->pw_gecos == pw_gecos;
+ * ensures: r->pw_dir == pw_dir;
+ * ensures: r->pw_shell == pw_shell;
+ * ensures: return == r;
  */
+struct passwd* _mopsa_alloc_pw();
+
+/*$
+ */
+void setpwent (void);
+
+/*$
+ */
+void endpwent (void);
+
 
 /*$
  * case "success" {
- *   ensures: return == _passwd_buf;
+ *   local: struct passwd* r = _mopsa_alloc_pw();
+ *   ensures: return == r;
+ * }
+ *
+ * case "failure" {
+ *   assigns: _errno;
+ *   ensures: return == NULL;
+ * }
+ */
+struct passwd *getpwent (void);
+
+/*$
+ * requires: __stream in File;
+ *
+ * case "success" {
+ *   local: struct passwd* r = _mopsa_alloc_pw();
+ *   ensures: return == r;
+ * }
+ *
+ * case "failure" {
+ *   assigns: _errno;
+ *   ensures: return == NULL;
+ * }
+ */
+struct passwd *fgetpwent (FILE *__stream);
+
+/*$
+ * requires: __f in File;
+ * requires: valid_ptr(__p);
+ * requires: valid_string(__p->pw_name);
+ * requires: valid_string(__p->pw_passwd);
+ * requires: valid_string(__p->pw_gecos);
+ * requires: valid_string(__p->pw_dir);
+ * requires: valid_string(__p->pw_shell);
+ *
+ * case "success" {
+ *   ensures: return == 0;
+ * }
+ *
+ * case "failure" {
+ *   assigns: _errno;
+ *   ensures: return == -1;
+ * }
+ */
+int putpwent (const struct passwd *__restrict __p, FILE *__restrict __f);
+
+/*$
+ * case "success" {
+ *   local: struct passwd* r = _mopsa_alloc_pw();
+ *   ensures: return == r;
  * }
  *
  * case "failure" {
@@ -41,3 +111,18 @@ struct passwd _passwd_buf[1];
  * }
  */
 struct passwd *getpwuid (__uid_t __uid);
+
+/*$
+ * requires: valid_string(__name);
+ *
+ * case "success" {
+ *   local: struct passwd* r = _mopsa_alloc_pw();
+ *   ensures: return == r;
+ * }
+ *
+ * case "failure" {
+ *   assigns: _errno;
+ *   ensures: return == NULL;
+ * }
+ */
+struct passwd *getpwnam (const char *__name);

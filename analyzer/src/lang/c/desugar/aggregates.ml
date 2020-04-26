@@ -178,7 +178,7 @@ struct
       in
       aux 0
 
-    | Some (Ast.C_init_expr {ekind = E_constant(C_c_string (s, _))}) ->
+    | Some (Ast.C_init_expr {ekind = E_constant(C_c_string (s, C_char_ascii)); etyp = t}) ->
       let rec aux i =
         let o = Z.add offset (Z.mul (Z.of_int i) (sizeof_type under_typ)) in
         if Z.equal (Z.of_int i) n
@@ -189,6 +189,26 @@ struct
 
         else if i = String.length s
         then (mk_c_character (char_of_int 0) range, o, under_typ) >>| aux (i + 1)
+
+        else [],[(None,Z.sub n (Z.of_int i), o, s8)]
+      in
+      aux 0
+
+    (* wide strings *)
+    | Some (Ast.C_init_expr {ekind = E_constant(C_c_string (s, _)); etyp = t}) ->
+      let char_size = sizeof_type under_typ in
+      let nchar_size = Z.to_int char_size in
+      let len = String.length s / nchar_size in
+      let rec aux i =
+        let o = Z.add offset (Z.mul (Z.of_int i) char_size) in
+        if Z.equal (Z.of_int i) n
+        then [],[]
+
+        else if i < len
+        then (mk_c_multibyte_integer s (i * nchar_size) under_typ range, o, under_typ) >>| aux (i + 1)
+
+        else if i = len
+        then (mk_zero ~typ:under_typ range, o, under_typ) >>| aux (i + 1)
 
         else [],[(None,Z.sub n (Z.of_int i), o, s8)]
       in

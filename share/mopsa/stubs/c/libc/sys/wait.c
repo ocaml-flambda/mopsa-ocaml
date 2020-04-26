@@ -32,7 +32,7 @@
  * assigns: *__stat_loc;
  *
  * ensures: return >= -1;
- * ensures: (__stat_loc != NULL) implies ((*__stat_loc)' in [0,255]); // FIXME: is this sound?
+ * ensures: (__stat_loc != NULL) implies (*__stat_loc)' in [0,255]; // FIXME: is this sound?
  *
  * ensures: 
  *   (__usage != NULL) implies (

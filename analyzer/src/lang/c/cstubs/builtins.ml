@@ -156,8 +156,8 @@ struct
         | E_c_points_to (P_block ({ base_kind = Var v; base_valid = true; },_,mode)) ->
           Eval.singleton (mk_c_cast (mk_c_address_of (mk_var v ~mode exp.erange) exp.erange) (T_c_pointer T_c_void) exp.erange) flow
 
-        | E_c_points_to (P_block ({ base_kind = String str },_,_)) ->
-          Eval.singleton (mk_c_string str exp.erange) flow
+        | E_c_points_to (P_block ({ base_kind = String (str,k,_) },_,_)) ->
+          Eval.singleton (mk_c_string ~kind:k str exp.erange) flow
 
         | E_c_points_to (P_block ({ base_kind = Addr addr; base_valid = true; },_,_)) ->
           Eval.singleton (mk_c_cast (mk_addr addr exp.erange) (T_c_pointer T_c_void) exp.erange) flow

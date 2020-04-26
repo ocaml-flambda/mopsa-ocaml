@@ -649,10 +649,10 @@ struct
     | Top
 
 
-  let is_interesting_base = function
+  let rec is_interesting_base = function
+    | { base_valid = true; base_kind = Var {vkind = Cstubs.Aux_vars.V_c_primed_base base}; } -> is_interesting_base base
     | { base_valid = true; base_kind = Var _ }  -> true
     | { base_valid = true; base_kind = Addr _ } -> true
-
     | _ -> false
 
 

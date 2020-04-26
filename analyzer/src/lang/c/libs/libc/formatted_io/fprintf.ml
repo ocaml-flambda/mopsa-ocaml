@@ -126,10 +126,19 @@ struct
       in
       assert_valid_string arg range man flow
 
+    | WideString ->
+      let flow =
+        if not (is_c_pointer_type arg.etyp) then
+          raise_c_invalid_format_arg_type_alarm arg (T_c_pointer s8) (Sig.Stacked.Manager.of_domain_man man) flow
+        else
+          flow
+      in
+      assert_valid_wide_string arg range man flow
+
 
   (** Check that arguments correspond to the format *)
-  let check_args format args range man flow =
-    parse_output_format format range man flow >>$ fun placeholders flow ->
+  let check_args ?wide format args range man flow =
+    parse_output_format ?wide format range man flow >>$ fun placeholders flow ->
     let nb_required = List.length placeholders in
     let nb_given = List.length args in
     if nb_required > nb_given then
@@ -187,6 +196,40 @@ struct
     | E_c_builtin_call("snprintf", dst :: n :: format :: args) ->
       check_args format args exp.erange man flow >>$? fun () flow ->
       strnrand dst n exp.erange man flow >>$? fun () flow ->
+      Eval.singleton (mk_top s32 exp.erange) flow |>
+      OptionExt.return
+
+    (* 𝔼⟦ error(...) ⟧ *)
+    | E_c_builtin_call("error", status :: errnum :: format :: args) ->
+      check_args format args exp.erange man flow >>$? fun () flow ->
+      error_error status exp.erange man flow >>$? fun () flow ->
+      Eval.singleton (mk_top s32 exp.erange) flow |>
+      OptionExt.return
+
+    (* 𝔼⟦ error_at_line(...) ⟧ *)
+    | E_c_builtin_call("error_at_line", status :: errnum :: filename :: linenum :: format :: args) ->
+      check_args format args exp.erange man flow >>$? fun () flow ->
+      error_error_at_line status filename exp.erange man flow >>$? fun () flow ->
+      Eval.singleton (mk_top s32 exp.erange) flow |>
+      OptionExt.return
+
+    (* 𝔼⟦ wprintf(...) ⟧ *)
+    | E_c_builtin_call("wprintf", format :: args) ->
+      check_args ~wide:true format args exp.erange man flow >>$? fun () flow ->
+      Eval.singleton (mk_top s32 exp.erange) flow |>
+      OptionExt.return
+
+    (* 𝔼⟦ fwprintf(...) ⟧ *)
+    | E_c_builtin_call("fwprintf", stream :: format :: args) ->
+      assert_valid_stream stream exp.erange man flow >>$? fun () flow ->
+      check_args ~wide:true format args exp.erange man flow >>$? fun () flow ->
+      Eval.singleton (mk_top s32 exp.erange) flow |>
+      OptionExt.return
+
+    (* 𝔼⟦ swprintf(...) ⟧ *)
+    | E_c_builtin_call("swprintf", dst :: n :: format :: args) ->
+      check_args ~wide:true format args exp.erange man flow >>$? fun () flow ->
+      wcsnrand dst n exp.erange man flow >>$? fun () flow ->
       Eval.singleton (mk_top s32 exp.erange) flow |>
       OptionExt.return
 

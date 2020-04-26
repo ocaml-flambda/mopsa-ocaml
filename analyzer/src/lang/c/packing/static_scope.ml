@@ -216,7 +216,7 @@ struct
     | V_cvar _ -> packs_of_base ctx (mk_var_base v)
     | Memory.Lowlevel.Cells.Domain.V_c_cell ({base = { base_kind = Var v; base_valid = true}} as c) ->
       if not (is_c_scalar_type v.vtyp) then user_packs_of_base ctx c.base else packs_of_base ctx c.base
-    | Memory.Lowlevel.String_length.Domain.V_c_string_length (base) -> packs_of_base ctx base
+    | Memory.Lowlevel.String_length.Domain.V_c_string_length (base,_) -> packs_of_base ctx base
     | Memory.Lowlevel.Pointer_sentinel.Domain.V_c_sentinel (base) -> packs_of_base ctx base
     | Memory.Lowlevel.Pointer_sentinel.Domain.V_c_at_sentinel (base) -> packs_of_base ctx base
     | Memory.Lowlevel.Pointer_sentinel.Domain.V_c_before_sentinel (base) -> packs_of_base ctx base

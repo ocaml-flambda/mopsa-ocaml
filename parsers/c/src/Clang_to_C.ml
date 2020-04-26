@@ -147,6 +147,15 @@ let empty_block = {
     blk_local_vars = [];
   }
 
+
+let has_stub_comment l =
+  List.exists
+    (fun c ->
+       let s = c.C.com_text in
+       String.length s >= 3 && s.[2] = '$'
+    ) l
+
+
 let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: string list) (coms:comment list) (macros:C.macro list) =
 
   
@@ -686,13 +695,15 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
        with Invalid_argument msg ->
          warning range "multiple declaration of a function have incompatible return type" msg
       );
-      if f.C.function_body <> None then (
+
+      (* favor argument names from functions with a body, a
+         non-empty argument list, or from stubs
+      *)
+      if f.C.function_body <> None ||
+         (func.func_parameters = [||] &&  params <> [||]) ||
+         has_stub_comment f.C.function_com then (
         func.func_parameters <- params;
         func.func_variadic <- f.C.function_is_variadic
-      )
-      else if func.func_body = None && params <> [||] then (
-        func.func_parameters <- params;
-        func.func_variadic <- f.C.function_is_variadic        
       );
       
       func.func_com <- comment_unify func.func_com f.C.function_com;

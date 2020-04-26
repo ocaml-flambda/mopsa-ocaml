@@ -29,7 +29,6 @@
 
 /*$
  * requires: __fd in FileDescriptor;
- * // TODO: check __cmd & handle variable arguments
  */
 int fcntl (int __fd, int __cmd, ...);
 
@@ -49,18 +48,14 @@ int fcntl (int __fd, int __cmd, ...);
  */
 int open (const char *__file, int __oflag, ...);
 
-
-
-int creat (const char *__file, mode_t __mode) {
-  return open(__file, O_CREAT|O_WRONLY|O_TRUNC, __mode);
-}
-
-
 /*$
+ * requires: valid_string(__file);
  * requires: __fd in FileDescriptor;
  *
  * case "success" {
- *   ensures: return == 0;
+ *   local:   void* f = new FileRes;
+ *   local:   int fd = _mopsa_register_file_resource(f);
+ *   ensures: return == fd;
  * }
  *
  * case "failure" {
@@ -68,4 +63,30 @@ int creat (const char *__file, mode_t __mode) {
  *   ensures: return == -1;
  * }
  */
-int lockf (int __fd, int __cmd, off_t __len);
+int openat (int __fd, const char *__file, int __oflag, ...);
+
+/*$
+ * requires: valid_string(__file);
+ *
+ * case "success" {
+ *   local:   void* f = new FileRes;
+ *   local:   int fd = _mopsa_register_file_resource(f);
+ *   ensures: return == fd;
+ * }
+ *
+ * case "failure" {
+ *   assigns: _errno;
+ *   ensures: return == -1;
+ * }
+ */
+int creat (const char *__file, mode_t __mode);
+
+/*$
+ * requires: __fd in FileDescriptor;
+ */
+int posix_fadvise (int __fd, off_t __offset, off_t __len, int __advise);
+
+/*$
+ * requires: __fd in FileDescriptor;
+ */
+int posix_fallocate (int __fd, off_t __offset, off_t __len);

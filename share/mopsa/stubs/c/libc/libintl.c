@@ -43,10 +43,8 @@ char *_domain_name_buf = NULL;
  *   assumes: _domain_name_buf == NULL;
  *   requires: valid_string(__domainname);
  *   assigns: _domain_name_buf;
- *   local: char *addr = new ReadOnlyString;
- *   ensures: size(addr) == DOMAIN_NAME_BUF_SIZE;
+ *   local: char *addr = _mopsa_new_readonly_string_max(DOMAIN_NAME_BUF_SIZE);
  *   ensures: _domain_name_buf' == addr;
- *   ensures: valid_string(addr);
  *   ensures: return == addr;
  * }
  *
@@ -55,10 +53,8 @@ char *_domain_name_buf = NULL;
  *   assumes: _domain_name_buf != NULL;
  *   requires: valid_string(__domainname);
  *   assigns: _domain_name_buf;
- *   local: char *addr = new ReadOnlyString;
- *   ensures: size(addr) == DOMAIN_NAME_BUF_SIZE;
+ *   local: char *addr = _mopsa_new_readonly_string_max(DOMAIN_NAME_BUF_SIZE);
  *   ensures: _domain_name_buf' == addr;
- *   ensures: valid_string(addr);
  *   ensures: return == addr;
  *   free: _domain_name_buf;
  * }
@@ -78,10 +74,8 @@ char *textdomain (const char *__domainname);
  *   assumes: __dirname != NULL;
  *   assumes: _domain_name_buf == NULL;
  *   assigns: _domain_name_buf;
- *   local: char *addr = new ReadOnlyString;
- *   ensures: size(addr) == DOMAIN_NAME_BUF_SIZE;
+ *   local: char *addr = _mopsa_new_readonly_string_max(DOMAIN_NAME_BUF_SIZE);
  *   ensures: _domain_name_buf' == addr;
- *   ensures: valid_string(addr);
  *   ensures: return == addr;
  * }
  *
@@ -89,10 +83,8 @@ char *textdomain (const char *__domainname);
  *   assumes: __dirname != NULL;
  *   assumes: _domain_name_buf != NULL;
  *   assigns: _domain_name_buf;
- *   local: char *addr = new ReadOnlyString;
- *   ensures: size(addr) == DOMAIN_NAME_BUF_SIZE;
+ *   local: char *addr = _mopsa_new_readonly_string_max(DOMAIN_NAME_BUF_SIZE);
  *   ensures: _domain_name_buf' == addr;
- *   ensures: valid_string(addr);
  *   ensures: return == addr;
  *   free: _domain_name_buf;
  * }
@@ -104,9 +96,6 @@ char *textdomain (const char *__domainname);
  */
 char *bindtextdomain (const char *__domainname, const char *__dirname);
 
-/*$
- * warn: "unsupported stub";
- */
 char *bind_textdomain_codeset (const char *__domainname, const char *__codeset);
 
 #define GETTEXT_BUF_SIZE 100
@@ -119,7 +108,7 @@ char *gettext (const char *__msgid) { return (char*)__msgid; }
  * requires: valid_string(__msgid);
  *
  * case "translation found" {
- *   assigns: _gettext_buf[0, GETTEXT_BUF_SIZE - 1];
+ *   assigns: _gettext_buf[0, GETTEXT_BUF_SIZE);
  *   ensures: valid_primed_string(_gettext_buf);
  *   ensures: return == _gettext_buf;
  * }
@@ -140,7 +129,7 @@ char *dcgettext (const char *__domainname, const char *__msgid,
  * requires: valid_string(__msgid);
  *
  * case "translation found" {
- *   assigns: _gettext_buf[0, GETTEXT_BUF_SIZE - 1];
+ *   assigns: _gettext_buf[0, GETTEXT_BUF_SIZE);
  *   ensures: valid_primed_string(_gettext_buf);
  *   ensures: return == _gettext_buf;
  * }
@@ -153,26 +142,14 @@ char *dcgettext (const char *__domainname, const char *__msgid,
 		 int __category);
 #endif
 
-/*$
- * warn: "unsupported stub";
- */
 char *__dcgettext (const char *__domainname, const char *__msgid,
 		   int __category);
 
-/*$
- * warn: "unsupported stub";
- */
 char *ngettext (const char *__msgid1, const char *__msgid2,
 		unsigned long int __n);
 
-/*$
- * warn: "unsupported stub";
- */
 char *dngettext (const char *__domainname, const char *__msgid1,
 		 const char *__msgid2, unsigned long int __n);
 
-/*$
- * warn: "unsupported stub";
- */
 char *dcngettext (const char *__domainname, const char *__msgid1,
 		  const char *__msgid2, unsigned long int __n, int __category);

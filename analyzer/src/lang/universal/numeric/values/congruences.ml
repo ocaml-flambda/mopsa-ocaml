@@ -102,7 +102,6 @@ struct
     try
       let a, r = bot_to_exn abs, bot_to_exn rabs in
       let aa = match op with
-        | O_log_not -> assert false
         | O_minus  -> bot_to_exn (C.bwd_neg a r)
         | _ -> a
       in

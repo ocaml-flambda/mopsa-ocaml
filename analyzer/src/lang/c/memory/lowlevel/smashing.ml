@@ -657,9 +657,13 @@ struct
 
 
   (** Predicate defining interesting bases to smash *)
-  let is_interesting_base base =
+  let rec is_interesting_base base =
     match base with
     | { base_valid = false } -> false
+
+    | { base_kind = Var {vkind = Cstubs.Aux_vars.V_c_primed_base base}; base_valid = true } ->
+       is_interesting_base base
+
     | { base_kind = Var v } when is_c_array_type v.vtyp ->
       (* Keep arrays of scalars or records with fields having the same scalar type *)
       let rec aux t =
@@ -678,7 +682,9 @@ struct
         | x -> is_c_scalar_type x
       in
       aux v.vtyp
+
     | { base_kind = Addr _ } -> true
+
     | _ -> false
 
 
@@ -769,23 +775,31 @@ struct
 
   (** 𝕊⟦ fold(base, bases); ⟧ *)
   let exec_fold_bases base bases range man flow =
-    if not (is_interesting_base base) then Post.return flow else
-    if List.exists (fun b -> not (is_interesting_base b)) bases then panic_at range "fold %a not supported" pp_base base
+    if not (is_interesting_base base) then
+      Post.return flow
     else
       match bases with
       | [] -> Post.return flow
+
       | x::y::z -> panic_at range "smash: folding of multiple bases not supported"
+
+      | [base'] when not (is_interesting_base base') ->
+        let a = get_env T_cur man flow in
+        let flow = set_env T_cur (State.add base Init.None a) man flow in
+        exec_smashes (remove_smash base) base a range man flow >>$ fun () flow ->
+        exec_uninit (remove_uninit base) base a range man flow
+
       | [base'] ->
         (* Fold the base in the map *)
         let a = get_env T_cur man flow in
-        let init = State.find base a in
+        let init = State.find base a in 
         let init' = State.find base' a in
         let init'' = if base_mode base = STRONG then init' else Init.join init init' in
         let a' = State.add base init'' a |>
                  State.remove base'
         in
         let flow = set_env T_cur a' man flow in
-        (* Fold associate variables *)
+        (* Fold associated variables *)
         exec_smashes (fold_smash base bases) base a range man flow >>$ fun () flow ->
         exec_uninit (fold_uninit base bases) base a range man flow
 

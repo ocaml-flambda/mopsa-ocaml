@@ -53,7 +53,7 @@ and leaf =
   | S_assigns   of assigns with_range
   | S_ensures   of ensures with_range
   | S_free      of free with_range
-  | S_warn      of warn with_range
+  | S_message   of message with_range
 
 and case = {
   case_label     : string;
@@ -83,12 +83,20 @@ and local_value =
 
 and assigns = {
   assign_target : expr with_range;
-  assign_offset : (expr with_range * expr with_range) list;
+  assign_offset : interval list;
 }
 
 and free = expr with_range
 
-and warn = string
+and message = {
+  message_kind: message_kind;
+  message_body: string;
+}
+
+and message_kind = Cst.message_kind =
+  | WARN
+  | UNSOUND
+  | ALARM
 
 (** {2 Expressions} *)
 (** *=*=*=*=*=*=*=* *)
@@ -130,8 +138,15 @@ and binop = Cst.binop
 and unop = Cst.unop
 
 and set =
-  | S_interval of expr with_range * expr with_range
+  | S_interval of interval
   | S_resource of resource
+
+and interval ={
+  itv_lb: expr with_range; (** lower bound *)
+  itv_open_lb: bool;       (** open lower bound *)
+  itv_ub: expr with_range; (** upper bound *)
+  itv_open_ub: bool;       (** open upper bound *)
+}
 
 and resource = Cst.resource
 
@@ -222,8 +237,16 @@ and pp_log_binop = Cst.pp_log_binop
 
 and pp_set fmt =
   function
-  | S_interval(e1, e2) -> fprintf fmt "[%a .. %a]" pp_expr e1 pp_expr e2
+  | S_interval itv -> pp_interval fmt itv
   | S_resource(r) -> pp_resource fmt r
+
+and pp_interval fmt i =
+  fprintf fmt "%s%a, %a%s"
+    (if i.itv_open_lb then "]" else "[")
+    pp_expr i.itv_lb
+    pp_expr i.itv_ub
+    (if i.itv_open_ub then "[" else "]")
+   
 
 let pp_list pp sep fmt l =
   pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt sep) pp fmt l
@@ -251,11 +274,7 @@ let pp_requires fmt requires =
 let pp_assigns fmt assigns =
   fprintf fmt "assigns  : %a%a;"
     pp_expr assigns.content.assign_target
-    (pp_print_list ~pp_sep:(fun fmt () -> ())
-       (fun fmt (l, u) ->
-          fprintf fmt "[%a .. %a]" pp_expr l pp_expr u
-       )
-    ) assigns.content.assign_offset
+    (pp_print_list ~pp_sep:(fun fmt () -> ()) pp_interval) assigns.content.assign_offset
 
 let pp_assumes fmt (assumes:assumes with_range) =
   fprintf fmt "assumes  : @[%a@];" pp_formula assumes.content
@@ -266,8 +285,11 @@ let pp_ensures fmt ensures =
 let pp_free fmt free =
   fprintf fmt "free : %a;" pp_expr free.content
 
-let pp_warn fmt warn =
-  fprintf fmt "warn: \"%s\";" warn.content
+let pp_message fmt msg =
+  match msg.content.message_kind with
+  | WARN    -> fprintf fmt "warn: \"%s\";" msg.content.message_body
+  | ALARM   -> fprintf fmt "alarm: \"%s\";" msg.content.message_body
+  | UNSOUND -> fprintf fmt "unsound: \"%s\";" msg.content.message_body
 
 let pp_leaf_section fmt sec =
   match sec with
@@ -277,7 +299,7 @@ let pp_leaf_section fmt sec =
   | S_assigns assigns -> pp_assigns fmt assigns
   | S_ensures ensures -> pp_ensures fmt ensures
   | S_free free -> pp_free fmt free
-  | S_warn warn  -> pp_warn fmt warn
+  | S_message msg  -> pp_message fmt msg
 
 let pp_leaf_sections fmt secs =
   pp_print_list

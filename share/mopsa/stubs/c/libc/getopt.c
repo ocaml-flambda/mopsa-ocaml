@@ -25,133 +25,109 @@
  */
 
 #include <getopt.h>
+#include <stddef.h> // to get NULL
 
 char *optarg;
 int optind = 1;
 int opterr;
 int optopt;
 
+
 /*$
- * requires: optind > 0;
+ * requires: ___argc > 0;
+ * requires: optind >= 0 and optind <= ___argc;
  * requires: valid_string(__shortopts);
- *
- * case "no-arg" {
- *   assumes: optind >= ___argc;
- *   ensures: return == -1;
- * }
- *
- * case "null-arg" {
- *   assumes: optind <= ___argc - 1;
- *   assumes: ___argv[optind] == NULL;
- *   ensures: return == -1;
- * }
- *
- * case "non-dash-char" {
- *   assumes: optind <= ___argc - 1;
- *   assumes: ___argv[optind] != NULL and ___argv[optind][0] != '-';
- *   ensures: return == -1;
- * }
- *
- * case "parse" {
- *   assumes: optind <= ___argc - 1;
- *   assumes: ___argv[optind] != NULL and ___argv[optind][0] == '-';
- *   requires: valid_string(___argv[optind]);
- *   requires: (optind <= ___argc - 2) implies valid_string(___argv[optind + 1]);
- *
- *   assigns: optind;
- *   assigns: opterr;
- *   assigns: optopt;
- *   assigns: optarg;
- *   // TODO assigns: ___argv[*][*];
- *
- *   ensures: return in [-1, 255];
- *   ensures: optind' in [optind, ___argc];
- *   ensures: optarg' == NULL or ((optind <= ___argc - 2) and (optarg' == ___argv[optind + 1]));
- * }
+ * requires: forall int i in [0, ___argc): valid_string(___argv[i]);
+ * assigns: optind;
+ * assigns: opterr;
+ * assigns: optopt;
+ * assigns: optarg;
+ * assigns: ___argv[0, ___argc);
+ * ensures: optind' in [0, ___argc];
+ * ensures: forall int i in [0, ___argc): exists int j in [0, ___argc): (___argv[i])' == ___argv[j];
+ * ensures: optarg' != NULL implies exists int i in [0, ___argc): in_string(optarg', ___argv[i]);
+ * ensures: return in [-1, 255];
  */
 int getopt (int ___argc, char *const *___argv, const char *__shortopts);
 
 
 
+/*$$
+ * predicate valid_longopt(l):
+ *   valid_ptr(l) and
+ *   exists size_t i in [0, ((bytes(l) - offset(l)) / sizeof_type(struct option))): (
+ *     l[i].name == NULL and
+ *     forall size_t j in [0, i): (
+ *       valid_ptr(l[j].name) and
+ *       (exists size_t k in [0, (size(l[j].name) - offset(l[j].name))): l[j].name[k] == 0) and
+ *       (l[j].flag != NULL implies valid_ptr(l[j].flag))
+ *     )
+ *   );
+ */
+
 /*$
- * requires: optind > 0;
+ * ensures:
+ *   exists size_t i in [0, ((bytes(l) - offset(l)) / sizeof_type(struct option))): (
+ *     l[i].name == NULL and
+ *     return == i and
+ *     forall size_t j in [0, i): l[j].name != NULL
+ *   )
+ * ;
+ */
+size_t _mopsa_len_option (const struct option* l);
+
+/*$
+ * ensures: return in [0, i);
+ */
+size_t _mopsa_pick(size_t i);
+
+/*$
+ * requires: ___argc > 0;
+ * requires: optind >= 0 and optind <= ___argc;
  * requires: valid_string(__shortopts);
+ * requires: forall int i in [0, ___argc): valid_string(___argv[i]);
+ * requires: valid_longopt(__longopts);
+ * requires: null_or_valid_ptr(__longind);
+ * local: size_t len = _mopsa_len_option(__longopts);
+ * local: size_t r = _mopsa_pick(len);
+ * assigns: optind;
+ * assigns: opterr;
+ * assigns: optopt;
+ * assigns: optarg;
+ * //assigns: ___argv[0, ___argc);
+ * ensures: optind' in [0, ___argc];
+ * //ensures: forall int i in [0, ___argc): exists int j in [0, ___argc): (___argv[i])' == ___argv[j];
+ * ensures: optarg' == NULL or exists int i in [0, ___argc): in_string(optarg', ___argv[i]);
  *
- * case "no-arg" {
- *   assumes: optind >= ___argc;
- *   ensures: return == -1;
+ * case "opt-ind" {
+ *   assumes: __longopts[r].flag != NULL;
+ *   assumes: __longind != NULL;
+ *   assigns: __longopts[r].flag;
+ *   assigns: *__longind;
  * }
  *
- * case "null-arg" {
- *   assumes: optind <= ___argc - 1;
- *   assumes: ___argv[optind] == NULL;
- *   ensures: return == -1;
+ * case "opt" {
+ *   assumes: __longopts[r].flag != NULL;
+ *   assumes: __longind == NULL;
+ *   assigns: __longopts[r].flag;
  * }
  *
- * case "non-dash-char" {
- *   assumes: optind <= ___argc - 1;
- *   assumes: ___argv[optind] != NULL and ___argv[optind][0] != '-';
- *   ensures: return == -1;
+ * case "ind" {
+ *   assumes: __longopts[r].flag == NULL;
+ *   assumes: __longind != NULL;
+ *   assigns: *__longind;
  * }
  *
- * case "parse" {
- *   assumes: optind <= ___argc - 1;
- *   assumes: ___argv[optind] != NULL and ___argv[optind][0] == '-';
- *   requires: valid_string(___argv[optind]);
- *   requires: (optind <= ___argc - 2) implies valid_string(___argv[optind + 1]);
- *
- *   assigns: optind;
- *   assigns: opterr;
- *   assigns: optopt;
- *   assigns: optarg;
- *   // TODO assigns: ___argv[*][*];
- *
- *   ensures: return in [-1, 255];
- *   ensures: optind' in [optind, ___argc];
- *   ensures: optarg' == NULL or ((optind <= ___argc - 2) and (optarg' == ___argv[optind + 1]));
+ * case "none" {
+ *   assumes: __longopts[r].flag == NULL;
+ *   assumes: __longind == NULL;
  * }
  */
 int getopt_long (int ___argc, char *const *___argv, const char *__shortopts,
                  const struct option *__longopts, int *__longind);
 
-
 /*$
- * requires: optind > 0;
- * requires: valid_string(__shortopts);
- *
- * case "no-arg" {
- *   assumes: optind >= ___argc;
- *   ensures: return == -1;
- * }
- *
- * case "null-arg" {
- *   assumes: optind <= ___argc - 1;
- *   assumes: ___argv[optind] == NULL;
- *   ensures: return == -1;
- * }
- *
- * case "non-dash-char" {
- *   assumes: optind <= ___argc - 1;
- *   assumes: ___argv[optind] != NULL and ___argv[optind][0] != '-';
- *   ensures: return == -1;
- * }
- *
- * case "parse" {
- *   assumes: optind <= ___argc - 1;
- *   assumes: ___argv[optind] != NULL and ___argv[optind][0] == '-';
- *   requires: valid_string(___argv[optind]);
- *   requires: (optind <= ___argc - 2) implies valid_string(___argv[optind + 1]);
- *
- *   assigns: optind;
- *   assigns: opterr;
- *   assigns: optopt;
- *   assigns: optarg;
- *   // TODO assigns: ___argv[*][*];
- *
- *   ensures: return in [-1, 255];
- *   ensures: optind' in [optind, ___argc];
- *   ensures: optarg' == NULL or ((optind <= ___argc - 2) and (optarg' == ___argv[optind + 1]));
- * }
+ * alias: getopt_long;
  */
 int getopt_long_only (int ___argc, char *const *___argv, const char *__shortopts,
                       const struct option *__longopts, int *__longind);

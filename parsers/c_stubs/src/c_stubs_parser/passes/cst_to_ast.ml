@@ -99,11 +99,16 @@ let rec unroll_type t =
   | T_enum e -> T_integer e.enum_integer_type, snd t
   | _ -> t
 
+let visit_qual q =
+  C_AST.{
+    qual_is_const = q.c_qual_const
+  }
+
 let rec visit_qual_typ t prj func : C_AST.type_qual=
-  let (t0, is_const) = t in
+  let (t0, q) = t in
   let t0' = visit_typ t0 prj func in
-  let qual = C_AST.{ qual_is_const = is_const; } in
-  t0', qual
+  let q' = visit_qual q in
+  t0', q'
 
 and visit_typ t prj func =
   match t with
@@ -271,7 +276,7 @@ let rec promote_expression_type prj (e: Ast.expr with_range) =
               ) ->
     ee
 
-  | T_integer (Char SIGNED | SIGNED_CHAR | SIGNED_SHORT) ->
+  | T_integer (Char SIGNED | SIGNED_CHAR | SIGNED_SHORT) | T_bool ->
     let tt = (T_integer SIGNED_INT), snd t in
     { kind = E_cast(tt, false, e); typ = tt }
 
@@ -346,7 +351,7 @@ let binop_type prj t1 t2 =
   let open C_AST in
   let open C_utils in
   match fst (unroll_type t1), fst (unroll_type t2) with
-  | x1, x2 when compare x1 x2 = 0 -> t1
+  | x1, x2 when type_compatible prj.proj_target x1 x2 -> t1
 
   | T_float a, T_float b ->
      if rank_float a >= rank_float b then t1 else t2
@@ -377,10 +382,10 @@ let binop_type prj t1 t2 =
 
   | T_pointer (T_void,_), T_pointer _ -> t2
   | T_pointer _, T_pointer (T_void,_) -> t1
-  | T_pointer (p1,_), T_pointer (p2,_) when compare p1 p2 = 0 -> t1
+  | T_pointer (p1,_), T_pointer (p2,_) when type_equal prj.proj_target p1 p2 -> t1
 
-  | T_pointer p, T_array (e,_) when compare p e = 0 -> t1
-  | T_array (e,_), T_pointer p when compare p e = 0 -> t2
+  | T_pointer p, T_array (e,_) when type_qual_compatible prj.proj_target p e -> t1
+  | T_array (e,_), T_pointer p when type_qual_compatible prj.proj_target p e -> t2
 
   | _ -> Exceptions.panic "binop_type: unsupported case: %s and %s"
            (C_print.string_of_type_qual t1)
@@ -499,9 +504,16 @@ let rec visit_expr e prj func =
 (** {2 Formulas} *)
 (** ************ *)
 
+let visit_interval i prj func =
+  { Ast.itv_lb = visit_expr i.itv_lb prj func;
+    itv_open_lb = i.itv_open_lb;
+    itv_ub = visit_expr i.itv_ub prj func;
+    itv_open_ub = i.itv_open_ub;}
+
+
 let visit_set s prj func =
   match s with
-  | S_interval(e1, e2) -> Ast.S_interval(visit_expr e1 prj func , visit_expr e2 prj func )
+  | S_interval(itv) -> Ast.S_interval(visit_interval itv prj func)
   | S_resource(r) -> Ast.S_resource(r)
 
 let rec visit_formula f prj func =
@@ -536,7 +548,7 @@ let visit_assigns a prj func =
   bind_range a @@ fun a ->
   Ast.{
     assign_target = visit_expr a.Cst.assign_target prj func;
-    assign_offset = (visit_list @@ visit_pair visit_expr visit_expr) a.Cst.assign_offset prj func;
+    assign_offset = (visit_list @@ visit_interval) a.Cst.assign_offset prj func;
   }
 
 let visit_ensures ens prj func =
@@ -558,6 +570,11 @@ let visit_local loc prj func =
       Ast.L_call (f, visit_list visit_expr args prj func)
   in
   Ast.{ lvar; lval }
+
+let visit_message msg prj func =
+  bind_range msg @@ fun m ->
+  { Ast.message_kind = m.message_kind;
+    message_body = m.message_body; }
 
 let visit_leaf leaf prj func =
   match leaf with
@@ -581,8 +598,8 @@ let visit_leaf leaf prj func =
   | S_free free ->
     S_free (visit_free free prj func), [], []
 
-  | S_warn warn ->
-    S_warn warn, [], []
+  | S_message msg ->
+    S_message (visit_message msg prj func), [], []
 
 let visit_case case prj func =
   let body, locals, assigns = visit_list_ext visit_leaf case.content.case_body prj func in

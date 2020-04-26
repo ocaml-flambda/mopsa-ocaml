@@ -24,130 +24,109 @@
   based on header from glibc-2.27-r6
 */
 #include <inttypes.h>
-#include <stdint.h>
+#include <stdint.h> // for intmax_t & co.
+#include <wchar.h>  // for wchar_t
+#include <string.h> // for strlen
 #include "mopsa_libc_utils.h"
 
 
 // FIXME: INTMAX_MIN can not be used in stubs since it is defined with the
-//        macro __INT64_C that has a paremeter, which is not supported
+//        macro __INT64_C that has a parameter, which is not supported
 static const intmax_t _INTMAX_MIN = INTMAX_MIN;
 
 /*$
- * // requires: __n > _INTMAX_MIN;
+ * requires: __n > _INTMAX_MIN;
  * ensures:  (__n >= 0 implies return == __n) and
- *           (__n < 0 implies return == __n);
+ *           (__n < 0 implies return == - __n);
  */
 intmax_t imaxabs (intmax_t __n);
 
 /*$
- * requires: __denom != 0;
+ * requires: __denom != 0 and __denom > _INTMAX_MIN;
  * ensures:  (return.quot == __numer / __denom) and 
  *           (return.rem == __numer % __denom);
  */
 imaxdiv_t imaxdiv (intmax_t __numer, intmax_t __denom);
 
 /*$
- * //NOTE: we are more strict than the spec by requiring that __nptr is 0-terminated
- * requires: exists int i in [0, size(__nptr) - 1]: __nptr[i] == 0;
- * requires: __base == 0 or (__base >= 2 and __base <= 36);
+ * requires: __base == 0 or __base in [2, 36];
+ * requires: null_or_valid_ptr(__endptr);
+ * assigns:  _errno;
  *
  * case "with_endptr" {
  *   assumes: __endptr != NULL;
- *   assigns:  *__endptr;
- *   assigns:  _errno;
- *   ensures:  *__endptr >= __nptr and *__endptr < __nptr + size(__nptr);
+ *   local: size_t len = strlen(__nptr);
+ *   assigns: *__endptr;
+ *   ensures: exists size_t i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
- * case "without_endptr" {
+ *  case "without_endptr" {
  *   assumes: __endptr == NULL;
- *   assigns:  _errno;
- * }
+ *   requires: valid_string(__nptr);
+ *  }
  */
 intmax_t strtoimax (const char *__restrict __nptr,
                     char **__restrict __endptr, int __base);
 
 /*$
- * //NOTE: we are more strict than the spec by requiring that __nptr is 0-terminated
- * requires: exists int i in [0, size(__nptr) - 1]: __nptr[i] == 0;
- * requires: __base == 0 or (__base >= 2 and __base <= 36);
+ * requires: __base == 0 or __base in [2, 36];
+ * requires: null_or_valid_ptr(__endptr);
+ * assigns:  _errno;
  *
  * case "with_endptr" {
  *   assumes: __endptr != NULL;
- *   assigns:  *__endptr;
- *   assigns:  _errno;
- *   ensures:  *__endptr >= __nptr and *__endptr < __nptr + size(__nptr);
+ *   local: size_t len = strlen(__nptr);
+ *   assigns: *__endptr;
+ *   ensures: exists size_t i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
- * case "without_endptr" {
+ *  case "without_endptr" {
  *   assumes: __endptr == NULL;
- *   assigns:  _errno;
- * }
+ *   requires: valid_string(__nptr);
+ *  }
  */
 uintmax_t strtoumax (const char *__restrict __nptr,
                      char ** __restrict __endptr, int __base);
 
 /*$
- * //NOTE: we are more strict than the spec by requiring that __nptr is 0-terminated
- * requires: exists int i in [0, size(__nptr) - 1]: __nptr[i] == 0;
- * requires: __base == 0 or (__base >= 2 and __base <= 36);
- *
- * case "with_endptr" {
- *   assumes: __endptr != NULL;
- *   assigns:  *__endptr;
- *   assigns:  _errno;
- *   ensures:  *__endptr >= __nptr and *__endptr < __nptr + size(__nptr);
- * }
- *
- * case "without_endptr" {
- *   assumes: __endptr == NULL;
- *   assigns:  _errno;
- * }
- */
-intmax_t wcstoimax (const __gwchar_t *__restrict __nptr,
-                    __gwchar_t **__restrict __endptr, int __base);
-
-/*$
- * //NOTE: we are more strict than the spec by requiring that __nptr is 0-terminated
- * requires: exists int i in [0, size(__nptr) - 1]: __nptr[i] == 0;
- * requires: __base == 0 or (__base >= 2 and __base <= 36);
- *
- * case "with_endptr" {
- *   assumes: __endptr != NULL;
- *   assigns:  *__endptr;
- *   assigns:  _errno;
- *   ensures:  *__endptr >= __nptr and *__endptr < __nptr + size(__nptr);
- * }
- *
- * case "without_endptr" {
- *   assumes: __endptr == NULL;
- *   assigns:  _errno;
- * }
- */
-uintmax_t wcstoumax (const __gwchar_t *__restrict __nptr,
-                     __gwchar_t ** __restrict __endptr, int __base);
-
-
-/*$
- * //NOTE: we are more strict than the spec by requiring that __nptr is 0-terminated
- * requires: __group == 0;
- * requires: valid_string(__nptr);
  * requires: __base == 0 or __base in [2, 36];
+ * requires: null_or_valid_ptr(__endptr);
+ * assigns:  _errno;
  *
  * case "with_endptr" {
  *   assumes: __endptr != NULL;
- *   assigns:  *__endptr;
- *   assigns:  _errno;
- *   ensures:  (*__endptr)' >= __nptr and (*__endptr)' < __nptr + size(__nptr);
+ *   local: size_t len = wcslen(__nptr);
+ *   assigns: *__endptr;
+ *   ensures: exists size_t i in [0, len]: (*__endptr)' == __nptr + i;
  * }
  *
- * case "without_endptr" {
+ *  case "without_endptr" {
  *   assumes: __endptr == NULL;
- *   assigns:  _errno;
- * }
+ *   requires: valid_wide_string(__nptr);
+ *  }
  */
-long int __strtol_internal(const char *__restrict __nptr,
-			   char **__restrict __endptr,
-			   int __base, int __group);
+intmax_t wcstoimax (const wchar_t *__restrict __nptr,
+                    wchar_t **__restrict __endptr, int __base);
+
+/*$
+ * requires: __base == 0 or __base in [2, 36];
+ * requires: null_or_valid_ptr(__endptr);
+ * assigns:  _errno;
+ *
+ * case "with_endptr" {
+ *   assumes: __endptr != NULL;
+ *   local: size_t len = wcslen(__nptr);
+ *   assigns: *__endptr;
+ *   ensures: exists size_t i in [0, len]: (*__endptr)' == __nptr + i;
+ * }
+ *
+ *  case "without_endptr" {
+ *   assumes: __endptr == NULL;
+ *   requires: valid_wide_string(__nptr);
+ *  }
+ */
+uintmax_t wcstoumax (const wchar_t *__restrict __nptr,
+                     wchar_t ** __restrict __endptr, int __base);
 
 
 /*

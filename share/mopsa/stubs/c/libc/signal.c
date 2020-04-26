@@ -23,9 +23,6 @@
 
 #include <signal.h>
 
-/*$
- * warn: "unsupported stub";
- */
 int kill (__pid_t __pid, int __sig);
 
 
@@ -41,7 +38,4 @@ int kill (__pid_t __pid, int __sig);
 int sigismember (const sigset_t *__set, int __signo);
 
 
-/*$
- * 
- */
 __sighandler_t signal (int __sig, __sighandler_t __handler);

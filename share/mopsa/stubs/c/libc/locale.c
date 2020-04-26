@@ -35,22 +35,18 @@ char * _local_buf;
 
 /*$$$
  * assigns: _local_buf;
- * local: char* addr = new ReadOnlyString;
- * ensures: size(addr) == LOCAL_BUF_SIZE;
- * // TODO ensures: valid_string(addr);
+ * local: char *addr = _mopsa_new_readonly_string_max(LOCAL_BUF_SIZE);
  * ensures: _local_buf' == addr;
  */
 
 
 
 /*$
- * requires: __locale != NULL implies valid_string(__locale);
+ * requires: null_or_valid_string(__locale);
  *
  * case "success" {
- *   local:   char* addr = new ReadOnlyString;
+ *   local: char *addr = _mopsa_new_readonly_string_max(LOCAL_BUF_SIZE);
  *   assigns: _local_buf;
- *   ensures: size(addr) == LOCAL_BUF_SIZE;
- *   ensures: valid_string(addr);
  *   ensures: _local_buf' == addr;
  *   ensures: return == addr;
  *   free:    _local_buf;
@@ -95,24 +91,12 @@ struct lconv *localeconv (void);
 #endif
 
 
-/*$
- * warn: "unsupported stub";
- */
 locale_t newlocale (int __category_mask, const char *__locale, locale_t __base);
 
-/*$
- * warn: "unsupported stub";
- */
 locale_t duplocale (locale_t __dataset);
 
-/*$
- * warn: "unsupported stub";
- */
 void freelocale (locale_t __dataset);
 
-/*$
- * warn: "unsupported stub";
- */
 locale_t uselocale (locale_t __dataset);
 
 

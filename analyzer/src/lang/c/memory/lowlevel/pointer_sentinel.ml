@@ -209,8 +209,10 @@ struct
   (** Predicate defining interesting bases for which the domain will
       track the sentinel position.
   *)
-  let is_interesting_base base =
+  let rec is_interesting_base base =
     match base with
+    | { base_kind = Var {vkind = Cstubs.Aux_vars.V_c_primed_base base}; base_valid = true } -> is_interesting_base base
+
     | { base_kind = Var v; base_valid = true } when is_c_type v.vtyp && is_c_array_type v.vtyp ->
       (* Accept only arrays with pointers or records of pointers *)
       let rec aux t =

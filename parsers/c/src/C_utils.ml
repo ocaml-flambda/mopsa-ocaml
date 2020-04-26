@@ -208,6 +208,12 @@ let intmax_type target  = target_int target.C.target_intmax_type
 let ptrdiff_type target  = target_int target.C.target_ptrdiff_type
 let intptr_type target  = target_int target.C.target_intptr_type
 let int64_type target  = target_int target.C.target_int64_type
+let wchar_type target = target_int target.C.target_wchar_type
+let wint_type target = target_int target.C.target_wint_type
+let char16_type target = target_int target.C.target_char16_type
+let char32_type target = target_int target.C.target_char32_type
+let sigatomic_type target = target_int target.C.target_sigatomic_type
+let processid_type target = target_int target.C.target_processid_type
 (** Base integer type of a derived integer type. *)
 
 

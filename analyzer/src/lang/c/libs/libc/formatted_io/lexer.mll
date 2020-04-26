@@ -39,6 +39,7 @@ rule read =
   | "a" | "A"   { if !format then (format := false; A) else read lexbuf }
   | "p"         { if !format then (format := false; P) else read lexbuf }
   | "s"		{ if !format then (format := false; S) else read lexbuf }
+  | "ls"	{ if !format then (format := false; WS) else read lexbuf }
   | "x" | "X"	{ if !format then (format := false; X) else read lexbuf }
   | "o"	  	{ if !format then (format := false; O) else read lexbuf }
   | "c" 	{ if !format then (format := false; C) else read lexbuf }

@@ -101,10 +101,10 @@ int close (int __fd);
 /*$
  * local:    void* f = _mopsa_find_file_resource(__fd);
  * requires: f in FileRes;
- * requires: valid_ptr_range(__buf, 0, __nbytes - 1);
+ * requires: valid_bytes(__buf, __nbytes);
  *
  * case "success" {
- *   assigns: __buf[0, __nbytes - 1];
+ *   assigns: ((char*)__buf)[0, __nbytes);
  *   ensures: return in [0, __nbytes];
  * }
  *
@@ -118,7 +118,7 @@ ssize_t read (int __fd, void *__buf, size_t __nbytes);
 /*$
  * local:    void* f = _mopsa_find_file_resource(__fd);
  * requires: f in FileRes;
- * requires: valid_ptr_range(__buf, 0, __n - 1);
+ * requires: valid_bytes(__buf, __n);
  *
  * case "success" {
  *   ensures: return in [0, __n];
@@ -173,9 +173,6 @@ int pipe (int __pipedes[2]);
 int pipe2 (int __pipedes[2], int __flags);
 
 
-/*$
- * warn: "unsupported stub";
- */
 unsigned int alarm (unsigned int __seconds);
 
 /*$
@@ -184,10 +181,6 @@ unsigned int alarm (unsigned int __seconds);
 unsigned int sleep (unsigned int __seconds);
 
 
-/*$
- * warn: "unsupported stub";
- * assigns: _errno;
- */
 __useconds_t ualarm (__useconds_t __value, __useconds_t __interval);
 
 /*$
@@ -304,11 +297,11 @@ int chdir (const char *__path);
 int fchdir (int __fd);
 
 /*$
- * requires: __buf != NULL implies size(__buf) >= __size;
+ * requires: null_or_valid_bytes(__buf, __size);
  *
  * case "noalloc" {
  *   assumes: __buf != NULL;
- *   assigns: __buf[0, __size - 1];
+ *   assigns: __buf[0, __size);
  *   ensures: valid_primed_substring(__buf, __size);
  *   ensures: return == __buf;
  * }
@@ -320,10 +313,8 @@ int fchdir (int __fd);
  *
  * case "alloc" {
  *   assumes: __buf == NULL;
- *   local:   char* r = new Memory;
+ *   local:   char* r = _mopsa_new_valid_string_max(PATH_MAX);
  *   ensures: return == r;
- *   ensures: size(return) <= PATH_MAX;
- *   ensures: valid_string(return);
  * }
  *   
  *  case "failure" {
@@ -336,10 +327,8 @@ char *getcwd (char *__buf, size_t __size);
 
 /*$
  * case "success" {
- *   local:   char* r = new Memory;
+ *   local:   char* r = _mopsa_new_valid_string_max(PATH_MAX);
  *   ensures: return == r;
- *   ensures: size(return) <= PATH_MAX;
- *   ensures: valid_string(return);
  * }
  *   
  *  case "failure" {
@@ -351,7 +340,7 @@ char *get_current_dir_name (void);
 
 
 /*$
- * requires: size(__buf) >= PATH_MAX;
+ * requires: valid_bytes(__buf, PATH_MAX);
  *
  * case "success" {
  *   assigns: __buf[0, PATH_MAX - 1];
@@ -420,9 +409,9 @@ int dup3 (int __fd, int __fd2, int __flags);
 
 /*$
  * requires: valid_string(__path);
- * requires: forall int i in [0, size(__argv) - 1]:
+ * requires: forall size_t i in [0, (bytes(__argv) - offset(__argv)) / sizeof_type(char*) - 1]:
  *             valid_string(__argv[i]);
- * requires: forall int i in [0, size(__envp) - 1]:
+ * requires: forall size_t i in [0, (bytes(__envp) - offset(__envp)) / sizeof_type(char*) - 1]:
  *             valid_string(__envp[i]);
  *
  * case "success" {
@@ -441,9 +430,9 @@ int execve (const char *__path, char *const __argv[],
 /*$
  * local:    void* f = _mopsa_find_file_resource(__fd);
  * requires: f in FileRes;
- * requires: forall int i in [0, size(__argv) - 1]:
+ * requires: forall size_t i in [0, (bytes(__argv) - offset(__argv)) / sizeof_type(char*) - 1]:
  *             valid_string(__argv[i]);
- * requires: forall int i in [0, size(__envp) - 1]:
+ * requires: forall size_t i in [0, (bytes(__envp) - offset(__envp)) / sizeof_type(char*) - 1]:
  *             valid_string(__envp[i]);
  *
  * case "success" {
@@ -470,7 +459,7 @@ int fexecve (int __fd, char *const __argv[], char *const __envp[]);
  *
  * case "with-args" {
  *   assumes: __argv[1] != NULL;
- *   requires: forall int i in [1, size(__argv) - 1]: valid_string(__argv[i]);
+ *   requires: forall size_t i in [1, (bytes(__argv) - offset(__argv)) / sizeof_type(char*) - 1]: valid_string(__argv[i]);
  * }
  *
  * case "success" {
@@ -530,7 +519,7 @@ int execl (const char *__path, const char *__arg, ...);
  *
  * case "with-args" {
  *   assumes: __argv[1] != NULL;
- *   requires: forall int i in [1, size(__argv) - 1]: valid_string(__argv[i]);
+ *   requires: forall size_t i in [1, (bytes(__argv) - offset(__argv)) / sizeof_type(char*) - 1]: valid_string(__argv[i]);
  * }
  */
 int execvp (const char *__file, char *const __argv[]);
@@ -554,9 +543,9 @@ int execlp (const char *__file, const char *__arg, ...);
 
 /*$
  * requires: valid_string(__file);
- * requires: forall int i in [0, size(__argv) - 1]:
+ * requires: forall size_t i in [0, (bytes(__argv) - offset(__argv)) / sizeof_type(char*) - 1]:
  *             valid_string(__argv[i]);
- * requires: forall int i in [0, size(__envp) - 1]:
+ * requires: forall size_t i in [0, (bytes(__envp) - offset(__envp)) / sizeof_type(char*) - 1]:
  *           valid_string(__envp[i]);
  *
  * case "success" {
@@ -624,11 +613,11 @@ long int sysconf (int __name);
 
 
 /*$
- * requires: __buf != NULL implies size(__buf) >= __len;
+ * requires: null_or_valid_bytes(__buf, __len);
  *
  * case "copy" {
  *   assumes: __buf != NULL;
- *   assigns: __buf[0, size(__buf) - 1];
+ *   assigns: __buf[0, size(__buf) - offset(__buf) - 1];
  *   ensures: valid_primed_string(__buf);
  *   ensures: return >= 1; // TODO: upper bound on return
  * }
@@ -757,7 +746,7 @@ __gid_t getegid (void);
  *
  * case "success" {
  *   assumes: __size > 0;
- *   assigns: __list[0, __size - 1];
+ *   assigns: __list[0, __size);
  *   ensures: return >= 0;
  * }
  *
@@ -949,18 +938,6 @@ int setresgid (__gid_t __rgid, __gid_t __egid, __gid_t __sgid);
 __pid_t fork (void);
 
 
-/*$
- * warn: "unsupported stub";
- *
- * case "success" {
- *   ensures: return >= 0;
- * }
- *
- * case "failure" {
- *   assigns: _errno;
- *   ensures: return == -1;
- * }
- */
 __pid_t vfork (void);
 
 
@@ -984,10 +961,10 @@ char *ttyname (int __fd);
 
 /*$
  * requires: __fd in FileDescriptor;
- * requires: size(__buf) >= __buflen;
+ * requires: valid_bytes(__buf, __buflen);
  *
  * case "success" {
- *   assigns: __buf[0, __buflen - 1];
+ *   assigns: __buf[0, __buflen);
  *   ensures: valid_primed_substring(__buf, __buflen);
  *   ensures: return == 0;
  * }
@@ -1072,10 +1049,10 @@ int symlink (const char *__from, const char *__to);
 
 /*$
  * requires: valid_string(__path);
- * requires: size(__buf) >= __len;
+ * requires: valid_bytes(__buf, __len);
  *
  * case "success" {
- *   assigns: __buf[0, __len - 1];
+ *   assigns: __buf[0, __len);
  *   ensures: return in [0,__len];
  *   // no 0 added, but returns the position where to put the 0
  * }
@@ -1109,10 +1086,10 @@ int symlinkat (const char *__from, int __tofd,
 /*$
  * requires: __fd in FileDescriptor;
  * requires: valid_string(__path);
- * requires: size(__buf) >= __len;
+ * requires: valid_bytes(__buf, __len);
  *
  * case "success" {
- *   assigns: __buf[0, __len - 1];
+ *   assigns: __buf[0, __len);
  *   ensures: return in [0, __len];
  *   // no 0 added, but returns the position where to put the 0
  * }
@@ -1211,10 +1188,10 @@ char *getlogin (void);
 
 
 /*$
- * requires: size(__buf) >= __buflen;
+ * requires: valid_bytes(__buf, __buflen);
  *
  * case "success" {
- *   assigns: __buf[0, __buflen - 1];
+ *   assigns: __buf[0, __buflen);
  *   ensures: valid_primed_substring(__buf, __buflen);
  *   ensures: return == 0;
  * }
@@ -1243,11 +1220,11 @@ int setlogin (const char *__name);
 
 
 /*$
- * requires: size(__buf) >= __buflen;
+ * requires: valid_bytes(__buf, __buflen);
  *
  * case "success" {
  *   // NOTE: 0 added only if the buffer is large enugh, which we cannot assume
- *   assigns: __buf[0, __buflen - 1];
+ *   assigns: __buf[0, __buflen);
  *   ensures: return == 0;
  * }
  *
@@ -1260,7 +1237,7 @@ int gethostbuf (char *__buf, size_t __buflen);
 
 
 /*$
- * requires: size(__name) >= __len;
+ * requires: valid_bytes(__name, __len);
  * // NOTE: no terminal 0 required
  *
  * case "success" {
@@ -1287,11 +1264,11 @@ int sethostname (const char *__name, size_t __len);
 int sethostid (long int __id);
 
 /*$
- * requires: size(__buf) >= __buflen;
+ * requires: valid_bytes(__buf, __buflen);
  *
  * case "success" {
  *   // NOTE: 0 added only if the buffer is large enugh, which we cannot assume
- *   assigns: __buf[0, __buflen - 1];
+ *   assigns: __buf[0, __buflen);
  *   ensures: return == 0;
  * }
  *
@@ -1303,7 +1280,7 @@ int sethostid (long int __id);
 int getdomainname (char *__buf, size_t __buflen);
 
 /*$
- * requires: size(__name) >= __len;
+ * requires: valid_bytes(__name, __len);
  * // NOTE: no terminal 0 required
  *
  * case "success" {
@@ -1529,30 +1506,10 @@ int truncate (const char *__file, __off_t __length);
 int ftruncate (int __fd, __off_t __length);
 
 
-/*$
- * warn: "unsupported stub; use malloc";
- *
- * case "success" {
- *   ensures: return == 0;
- * }
- *
- * case "failure" {
- *   assigns: _errno;
- *   ensures: return == -1;
- * }
- */
 int brk (void *__addr);
 
-/*$
- * warn: "unsupported stub; use malloc";
- */
 void *sbrk (intptr_t __delta);
 
-
-/*$
- * warn: "unsupported stub";
- * assigns: _errno;
- */
 long int syscall (long int __sysno, ...);
 
 
@@ -1575,8 +1532,8 @@ int lockf (int __fd, int __cmd, __off_t __len);
 /*$
  * requires: __infd in FileDescriptor;
  * requires: __outfd in FileDescriptor;
- * requires: __pinoff != NULL or size(__pinoff) >= sizeof_type(__off64_t);
- * requires: __poutoff != NULL or size(__poutoff) >= sizeof_type(__off64_t);
+ * requires: null_or_valid_ptr(__pinoff);
+ * requires: null_or_valid_ptr(__poutoff);
  *
  * case "pinoff" {
  *   assumes: __pinoff != NULL;
@@ -1620,12 +1577,10 @@ int fdatasync (int __fildes);
  * // TODO: allocation policy is not documented, assuming dynamic allocation
  *
  * requires: valid_string(__key);
- * requires: size(__salt) >= 2;
+ * requires: valid_bytes(__salt, 2);
  * 
  * case "succes" {
- *   local: char* r = new ReadOnlyMemory;
- *   ensures: size(r) == size(__key);
- *   ensures: valid_string(r);
+ *   local: char* r = _mopsa_new_readonly_string_max(size(__key) - offset(__key));
  *   ensures: return == r;
  * }
  *
@@ -1638,27 +1593,27 @@ char *crypt (const char *__key, const char *__salt);
 
 /*$
  * requires: __edflag in [0, 1];
- * requires: size(__glibc_block) >= 8; // en/decode 64-bit messages
- * assigns: __glibc_block[0, 7];
+ * requires: valid_bytes(__glibc_block, 8); // en/decode 64-bit messages
+ * assigns: ((unsigned char*)__glibc_block)[0, 7];
  * assigns: _errno;
  */
 void encrypt (char *__glibc_block, int __edflag);
 
 /*$
- * requires: size(__from) >= __n;
- * requires: size(__to) >= __n;
+ * requires: valid_bytes(__from, __n);
+ * requires: valid_bytes(__to, __n);
  *
  * case "odd" {
  *   assumes: __n >= 0 and __n & 1 == 0;
- *   assigns: __to[0, __n - 1];
- *   ensures: forall int i in [0, __n - 1]: ((char*)__from)[i] ==  (((char*)__to)[i ^ 1])';
+ *   assigns: ((unsigned char*)__to)[0, __n);
+ *   ensures: forall ssize_t i in [0, __n): ((unsigned char*)__from)[i] ==  (((unsigned char*)__to)[i ^ 1])';
  * }
  *
  * case "even" {
- *   assumes: __n >= 0 and __n & 1 == 1;
- *   assigns: __to[0, __n - 1];
+ *   assumes: __n >= 1 and __n & 1 == 1;
+ *   assigns: ((unsigned char*)__to)[0, __n - 1);
  *   // the last byte is unspecified
- *   ensures: forall int i in [0, __n - 2]:  ((char*)__from)[i] ==  (((char*)__to)[i ^ 1])';
+ *   ensures: forall ssize_t i in [0, __n - 1): ((unsigned char*)__from)[i] ==  (((unsigned char*)__to)[i ^ 1])';
  * }
  *
  * case "negative" {
@@ -1675,10 +1630,10 @@ void swab (const void *__restrict __from, void *__restrict __to,
 
 /*$
  * requires: __length <= 256;
- * requires: size(__buffer) >= __length;
+ * requires: valid_bytes(__buffer, __length);
  *
  * case "success" {
- *   assigns: __buffer[0, __length - 1];
+ *   assigns: ((unsigned char*)__buffer)[0, __length);
  *   ensures: return == 0;
  * }
  *

@@ -321,11 +321,22 @@ struct
 
 
   let exec_assigns assigns man flow =
-    man.exec (mk_stub_assigns
-                assigns.content.assign_target
-                assigns.content.assign_offset
-                assigns.range
-             ) flow
+    let stmt = mk_stub_assigns assigns.content.assign_target assigns.content.assign_offset assigns.range in
+    match assigns.content.assign_offset with
+    | [] ->
+      man.exec stmt flow
+
+    | (l,u)::tl ->
+      (* Check that offsets intervals are not empty *)
+      let cond = List.fold_left
+          (fun acc (l,u) -> log_and acc (le l u assigns.range) assigns.range)
+          (le l u assigns.range) tl
+      in
+      assume_flow cond
+        ~fthen:(fun flow -> man.exec stmt flow)
+        ~felse:(fun flow -> flow)
+        man flow
+    
 
 
   (** Remove locals *)
@@ -344,6 +355,23 @@ struct
     man.exec stmt flow
 
 
+  let exec_message msg man flow =
+    if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
+    then flow
+    else match msg.content.message_kind with
+      | WARN ->
+        Exceptions.warn_at msg.range "%s" msg.content.message_body;
+        flow
+
+      | UNSOUND ->
+        Soundness.warn_at msg.range "%s" msg.content.message_body;
+        flow
+
+      | ALARM ->
+        raise_stub_alarm msg.content.message_body msg.range (Sig.Stacked.Manager.of_domain_man man) flow
+
+
+
   (** Execute a leaf section *)
   let exec_leaf leaf return man flow =
     match leaf with
@@ -353,11 +381,7 @@ struct
     | S_assigns assigns -> exec_assigns assigns man flow
     | S_ensures ensures -> exec_ensures ensures return man flow
     | S_free free -> exec_free free man flow
-    | S_warn warn ->
-      if not (Flow.get T_cur man.lattice flow |> man.lattice.is_bottom)
-      then Exceptions.warn_at warn.range "%s" warn.content;
-      flow
-
+    | S_message msg -> exec_message msg man flow
 
   (** Execute the body of a case section *)
   let exec_case case return man flow =
