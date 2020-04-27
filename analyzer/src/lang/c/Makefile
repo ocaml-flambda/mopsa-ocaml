@@ -39,7 +39,7 @@ lang.c.cstubs = aux_vars resources assigns requires builtins
 lang.c.libs = libc libmopsa compiler_builtins
 lang.c.libs.libc.formatted_io = placeholder parser lexer format_string fscanf fprintf
 lang.c.libs.libc.file_descriptor = slot table domain
-lang.c.hooks = disj
+lang.c.hooks = disj analysis_bugs
 lang.c.packing = static_scope reductions
 
 

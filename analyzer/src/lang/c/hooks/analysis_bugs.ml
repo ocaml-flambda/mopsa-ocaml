@@ -19,12 +19,12 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Hook to track some bug patterns in the analyzer
+(** Hook to track some bug patterns in C analysis
 
-    The hook captures assignments and function calls. It checks that
-    if such statement is reachable its post-state should not be empty.
-    Otherwise, this seems to be a soundness bug in some transfer
-    function.
+    The hook captures assignments and calls to stubbed functions. It
+    checks that if such statement is reachable its post-state should
+    not be empty. Otherwise, this seems to be a soundness bug in some
+    transfer function.
 *)
 
 open Location
@@ -32,6 +32,8 @@ open Mopsa
 open Framework.Core.Sig.Domain.Manager
 open Format
 open Ast
+open Stubs.Zone
+open Stubs.Ast
 open Zone
 
 
@@ -41,63 +43,51 @@ struct
   (** {2 Hook header} *)
   (** *************** *)
 
-  let name = "analyzer-bugs"
-  let exec_zones = [Z_any]
-  let eval_zones = [Z_any,Z_any]
+  let name = "c-analysis-bugs"
+  let exec_zones = [Z_c]
+  let eval_zones = [Z_stubs,Z_any]
 
 
-  (** {2 Hook state} *)
-  (** ************** *)
+  (** {2 Analyzer bugs} *)
+  (** ***************** *)
 
-  (** Set of ranges where bugs were detected *)
-  module RangeSet = SetExt.Make
+  type bug = {
+    bug_range : range;
+    bug_callstack : Callstack.cs;
+  }
+
+
+  let compare_bug b1 b2 =
+    Compare.pair compare_range Callstack.compare
+      (b1.bug_range,b1.bug_callstack)
+      (b2.bug_range,b2.bug_callstack)
+
+
+  module BugSet = SetExt.Make
       (struct
-        type t = range
-        let compare = compare_range
+        type t = bug
+        let compare = compare_bug
       end)
 
-  (** State of the hook keeping the set of detected bug locations. We
-      also need the set of encountered call sites in order to detected
-      call expression in [on_after_eval] *)
-  type state = {
-    mutable bugs : RangeSet.t;
-    mutable call_sites : RangeSet.t;
-  }
 
-  let state = {
-    bugs = RangeSet.empty;
-    call_sites = RangeSet.empty;
-  }
+  let bugs = ref BugSet.empty
 
 
   (** Add range to the set of bug locations *)
-  let add_bug range =
-    state.bugs <- RangeSet.add (untag_range range) state.bugs
-
-
-  (** Update the set of call sites *)
-  let update_call_sites cs =
-    if Callstack.is_empty cs then
-      ()
-    else
-      let call = Callstack.top cs in
-      state.call_sites <- RangeSet.add (untag_range call.call_site) state.call_sites
-
-
-  (** Check if a range corresponds to a call site *)
-  let is_call_site range =
-    RangeSet.mem (untag_range range) state.call_sites
+  let add_bug range cs =
+    bugs := BugSet.add {bug_range = range; bug_callstack = cs} !bugs
 
 
   (** Remove redundant bug locations *)
   let remove_redundant_bugs () =
-    state.bugs <- RangeSet.filter
-        (fun range ->
-           RangeSet.for_all
-             (fun range' -> range == range'
-                            || not (subset_range range' range)
-             ) state.bugs
-        ) state.bugs
+    bugs := BugSet.filter
+        (fun b ->
+           BugSet.for_all
+             (fun b' -> b.bug_range == b'.bug_range
+                          || (not (subset_range b'.bug_range b.bug_range)
+                              &&  not (Callstack.is_after b'.bug_callstack b.bug_callstack))
+             ) !bugs
+        ) !bugs
 
 
   (** {2 Initialization} *)
@@ -121,9 +111,7 @@ struct
   (** {2 Events handlers} *)
   (** ******************* *)
 
-  let on_before_exec zone stmt man flow =
-    update_call_sites (Flow.get_callstack flow);
-    ()
+  let on_before_exec zone stmt man flow = ()
 
   let on_after_exec zone stmt man flow post =
     match skind stmt with
@@ -131,7 +119,7 @@ struct
       when not (is_cur_bottom_in_flow man flow)
         && is_cur_bottom_in_cases man post
       ->
-      add_bug stmt.srange
+      add_bug stmt.srange (Flow.get_callstack flow)
 
     | _ -> ()
 
@@ -139,25 +127,38 @@ struct
   let on_before_eval zone exp man flow = ()
 
   let on_after_eval zone exp man flow evl =
-    if is_call_site exp.erange
-    && not (is_cur_bottom_in_flow man flow)
-    && is_cur_bottom_in_cases man evl then
-      add_bug exp.erange
-    else
-      ()
+    match ekind exp with
+    | E_stub_call (f,_)
+      when not (is_cur_bottom_in_flow man flow)
+        && is_cur_bottom_in_cases man evl
+      ->
+      add_bug exp.erange (Flow.get_callstack flow)
+
+    | _ -> ()
+    
 
   let on_finish man flow =
-    if RangeSet.is_empty state.bugs then
+    if BugSet.is_empty !bugs then
       printf "No potential analyzer bug detected@."
     else
       let () = remove_redundant_bugs () in
-      let nb = RangeSet.cardinal state.bugs in
+      let nb = BugSet.cardinal !bugs in
       printf "%d potential analyzer bug%a found:@.  @[<v>%a@]@."
         nb
         Debug.plurial_int nb
         (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-           (fun fmt range -> fprintf fmt "%a %a" (Debug.color_str "orange") "⚠" pp_range range)
-        ) (RangeSet.elements state.bugs)
+           (fun fmt bug -> fprintf fmt "%a %a@,  Trace:@,%a"
+               (Debug.color_str "orange") "⚠"
+               pp_relative_range bug.bug_range
+               (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+                  (fun fmt c ->
+                     fprintf fmt "\tfrom %a: %s"
+                       pp_relative_range c.Callstack.call_site
+                       c.Callstack.call_fun_orig_name
+                  )
+               ) bug.bug_callstack
+           )
+        ) (BugSet.elements !bugs)
 
 end
 
