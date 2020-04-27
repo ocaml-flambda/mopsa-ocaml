@@ -171,7 +171,7 @@ struct
     | None -> panic "entry function %s is not defined" f.c_func_org_name
     | Some stmt ->
       let f' = { f with c_func_parameters = [] } in
-      let stmt = mk_c_call_stmt f' [] f.c_func_name_range in
+      let stmt = mk_c_call_stmt f' [] f.c_func_range in
       man.post stmt flow
 
 
