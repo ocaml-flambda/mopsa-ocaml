@@ -224,7 +224,7 @@ struct
     in
     try
       let post = Cache.exec fexec zone stmt man flow in
-      let ctx = Hook.on_after_exec zone stmt man post in
+      let ctx = Hook.on_after_exec zone stmt man flow post in
       Post.set_ctx ctx post
     with Exceptions.Panic(msg, line) ->
       Printexc.raise_with_backtrace
@@ -345,7 +345,7 @@ struct
                   pp_zone2 zone
 
     in
-    let ctx = Hook.on_after_eval zone exp man ret in
+    let ctx = Hook.on_after_eval zone exp man flow ret in
     Eval.set_ctx ctx ret
 
 

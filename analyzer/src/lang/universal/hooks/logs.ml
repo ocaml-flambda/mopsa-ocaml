@@ -160,7 +160,7 @@ struct
     Stack.push (Sys.time ()) stack
 
 
-  let on_after_exec zone stmt man post =
+  let on_after_exec zone stmt man flow post =
     let time = get_timing () in
     if Options.short then
       indent "%a done in zone %a [%.4fs]"
@@ -192,7 +192,7 @@ struct
     ;
       Stack.push (Sys.time ()) stack
 
-  let on_after_eval zone exp man evl =
+  let on_after_eval zone exp man flow evl =
     let time = get_timing () in
     if Options.short then
       indent "%a = %a done in zone %a [%.4fs]"

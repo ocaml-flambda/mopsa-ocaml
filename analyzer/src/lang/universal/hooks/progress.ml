@@ -172,7 +172,7 @@ struct
     before_stmt stmt.srange
 
 
-  let on_after_exec zone stmt man post =
+  let on_after_exec zone stmt man flow post =
     after_stmt stmt.srange
 
 
@@ -182,7 +182,7 @@ struct
     | _ -> ()
 
 
-  let on_after_eval zone exp man evl =
+  let on_after_eval zone exp man flow evl =
     match ekind exp with
     | E_call ({ ekind = E_function (User_defined f) }, args) -> after_call ()
     | _ -> ()

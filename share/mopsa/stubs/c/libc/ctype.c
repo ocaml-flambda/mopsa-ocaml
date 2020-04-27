@@ -29,19 +29,19 @@
 
 
 /*$$$
- * assigns: _ctype_b_buf;
+ * assigns: _ctype_b_buf[0,383];
  */
 static unsigned short int  _ctype_b_buf[384]; // 256+128 locations
 static unsigned short int* _ctype_b_pbuf = &(_ctype_b_buf[128]);
 
 /*$$$
- * assigns: _ctype_tolower_buf;
+ * assigns: _ctype_tolower_buf[0,383];
  */
 static __int32_t  _ctype_tolower_buf[384];
 static __int32_t* _ctype_tolower_pbuf = &(_ctype_tolower_buf[128]);
 
 /*$$$
- * assigns: _ctype_toupper_buf;
+ * assigns: _ctype_toupper_buf[0,383];
  */
 static __int32_t  _ctype_toupper_buf[384];
 static __int32_t* _ctype_toupper_pbuf = &(_ctype_toupper_buf[128]);

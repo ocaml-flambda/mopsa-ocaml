@@ -43,9 +43,9 @@ sig
   val eval_zones: (zone * zone) list
   val init : 'a ctx -> 'a ctx
   val on_before_exec : zone -> stmt -> ('a,'a) man -> 'a flow -> 'a ctx
-  val on_after_exec : zone -> stmt -> ('a,'a) man -> 'a post -> 'a ctx
+  val on_after_exec : zone -> stmt -> ('a,'a) man -> 'a flow -> 'a post -> 'a ctx
   val on_before_eval : zone*zone -> expr -> ('a,'a) man -> 'a flow -> 'a ctx
-  val on_after_eval : zone*zone -> expr -> ('a,'a) man -> 'a eval -> 'a ctx
+  val on_after_eval : zone*zone -> expr -> ('a,'a) man -> 'a flow -> 'a eval -> 'a ctx
   val on_finish : ('a,'a) man -> 'a flow -> unit
 end
 
@@ -57,9 +57,9 @@ sig
   val eval_zones: (zone * zone) list
   val init : 'a ctx -> unit
   val on_before_exec : zone -> stmt -> ('a,'a) man  -> 'a flow -> unit
-  val on_after_exec : zone -> stmt -> ('a,'a) man -> 'a post -> unit
+  val on_after_exec : zone -> stmt -> ('a,'a) man -> 'a flow -> 'a post -> unit
   val on_before_eval : (zone * zone) -> expr -> ('a,'a) man -> 'a flow -> unit
-  val on_after_eval : (zone * zone) -> expr -> ('a,'a) man -> 'a eval -> unit
+  val on_after_eval : (zone * zone) -> expr -> ('a,'a) man -> 'a flow -> 'a eval -> unit
   val on_finish : ('a,'a) man -> 'a flow -> unit
 end
 
@@ -77,16 +77,16 @@ struct
     Hook.on_before_exec zone stmt man flow;
     Flow.get_ctx flow
 
-  let on_after_exec zone stmt man post =
-    Hook.on_after_exec zone stmt man post;
+  let on_after_exec zone stmt man flow post =
+    Hook.on_after_exec zone stmt man flow post;
     Post.get_ctx post
 
   let on_before_eval zone stmt man flow =
     Hook.on_before_eval zone stmt man flow;
     Flow.get_ctx flow
 
-  let on_after_eval zone stmt man eval =
-    Hook.on_after_eval zone stmt man eval;
+  let on_after_eval zone stmt man flow eval =
+    Hook.on_after_eval zone stmt man flow eval;
     Eval.get_ctx eval
 
   let on_finish = Hook.on_finish
@@ -232,12 +232,12 @@ let on_before_exec zone stmt man flow =
 
 
 (** Fire [on_after_exec] event *)
-let on_after_exec zone stmt man post =
+let on_after_exec zone stmt man flow post =
   let hooks = find_exec_hooks zone cache in
   HookSet.fold (fun hook ctx ->
       let post = Post.set_ctx ctx post in
       let module H = (val hook : HOOK) in
-      H.on_after_exec zone stmt man post
+      H.on_after_exec zone stmt man flow post
     ) hooks (Post.get_ctx post)
 
 
@@ -253,12 +253,12 @@ let on_before_eval zone exp man flow =
 
 
 (** Fire [on_after_eval] event *)
-let on_after_eval zone exp man eval =
+let on_after_eval zone exp man flow eval =
   let hooks = find_eval_hooks zone cache in
   HookSet.fold (fun hook ctx ->
       let eval = Eval.set_ctx ctx eval in
       let module H = (val hook : HOOK) in
-      H.on_after_eval zone exp man eval
+      H.on_after_eval zone exp man flow eval
     ) hooks (Eval.get_ctx eval)
 
 

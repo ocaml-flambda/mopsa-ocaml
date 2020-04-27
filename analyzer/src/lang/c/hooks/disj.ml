@@ -52,9 +52,9 @@ struct
 
   let max_nb = ref 1
 
-  let on_after_exec zone stmt man flow =
-    let nb = Cases.cardinal flow in
-    let nb2 = Cases.fold_some (fun _ f i -> Flow.fold (fun i _ _ -> i + 1) i f) flow 0 in
+  let on_after_exec zone stmt man flow post =
+    let nb = Cases.cardinal post in
+    let nb2 = Cases.fold_some (fun _ f i -> Flow.fold (fun i _ _ -> i + 1) i f) post 0 in
     if nb2 >= !threshold then (      
       max_nb := max !max_nb nb2;
       Format.printf "exec: %i / %i (max=%i): %a %a@." nb nb2 !max_nb pp_range (srange stmt) pp_stmt stmt
@@ -66,7 +66,7 @@ struct
 
   let max_nb = ref 1
   
-  let on_after_eval zone exp man eval =
+  let on_after_eval zone exp man flow eval =
     let nb = Cases.cardinal eval in
     if nb >= !threshold then (      
       max_nb := max !max_nb nb;
