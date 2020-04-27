@@ -57,12 +57,14 @@ struct
   }
 
 
+  (** Compare two bugs *)
   let compare_bug b1 b2 =
     Compare.pair compare_range Callstack.compare
       (b1.bug_range,b1.bug_callstack)
       (b2.bug_range,b2.bug_callstack)
 
 
+  (** Set of bugs *)
   module BugSet = SetExt.Make
       (struct
         type t = bug
@@ -71,6 +73,16 @@ struct
 
 
   let bugs = ref BugSet.empty
+
+  (** Whitelist of stub functions that do not return *)
+  let whitelist = [ "exit";
+                    "quick_exit";
+                    "abort";
+                    "__builtin_abort";
+                    "__builtin_unreachable";
+                    "__assert_fail";
+                    "__assert_perror_fail";
+                    "__assert" ]
 
 
   (** Add range to the set of bug locations *)
@@ -129,7 +141,8 @@ struct
   let on_after_eval zone exp man flow evl =
     match ekind exp with
     | E_stub_call (f,_)
-      when not (is_cur_bottom_in_flow man flow)
+      when not (List.mem f.stub_func_name whitelist)
+        && not (is_cur_bottom_in_flow man flow)
         && is_cur_bottom_in_cases man evl
       ->
       add_bug exp.erange (Flow.get_callstack flow)
