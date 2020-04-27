@@ -77,7 +77,15 @@ int getopt (int ___argc, char *const *___argv, const char *__shortopts);
 size_t _mopsa_len_option (const struct option* l);
 
 /*$
- * ensures: return in [0, i);
+ * case "null" {
+ *   assumes: i == 0;
+ *   ensures: return == 0;
+ * }
+ *
+ * case "nonnull" {
+ *   assumes: i > 0;
+ *   ensures: return in [0, i);
+ * }
  */
 size_t _mopsa_pick(size_t i);
 
@@ -100,6 +108,7 @@ size_t _mopsa_pick(size_t i);
  * ensures: optarg' == NULL or exists int i in [0, ___argc): in_string(optarg', ___argv[i]);
  *
  * case "opt-ind" {
+ *   assumes: len > 0;
  *   assumes: __longopts[r].flag != NULL;
  *   assumes: __longind != NULL;
  *   assigns: __longopts[r].flag;
@@ -107,20 +116,27 @@ size_t _mopsa_pick(size_t i);
  * }
  *
  * case "opt" {
+ *   assumes: len > 0;
  *   assumes: __longopts[r].flag != NULL;
  *   assumes: __longind == NULL;
  *   assigns: __longopts[r].flag;
  * }
  *
  * case "ind" {
+ *   assumes: len > 0;
  *   assumes: __longopts[r].flag == NULL;
  *   assumes: __longind != NULL;
  *   assigns: *__longind;
  * }
  *
  * case "none" {
+ *   assumes: len > 0;
  *   assumes: __longopts[r].flag == NULL;
  *   assumes: __longind == NULL;
+ * }
+ *
+ * case "empty" {
+ *   assumes: len == 0;
  * }
  */
 int getopt_long (int ___argc, char *const *___argv, const char *__shortopts,
