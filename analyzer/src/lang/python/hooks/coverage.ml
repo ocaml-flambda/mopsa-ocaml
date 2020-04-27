@@ -115,7 +115,7 @@ struct
           let () = entry.always_bottom_stmts <- StmtSet.remove stmt entry.always_bottom_stmts in
           entry.reachable_stmts <- StmtSet.add stmt entry.reachable_stmts
 
-  let on_after_exec zone stmt man post = ()
+  let on_after_exec zone stmt man flow post = ()
 
   let on_before_eval zone exp man flow =
     let range = erange exp in
@@ -131,7 +131,7 @@ struct
       let () = entry.always_bottom_exprs <- ExprSet.remove exp entry.always_bottom_exprs in
       entry.reachable_exprs <- ExprSet.add exp entry.reachable_exprs
 
-  let on_after_eval zone exp man evl =
+  let on_after_eval zone exp man flow evl =
     match ekind exp with
     (* to highlight the def bla(params): if bla is ever called *)
     | E_py_call ({ekind = E_py_object ({addr_kind = Addr.A_py_function (F_user f)}, _)} as caller, _, _) ->

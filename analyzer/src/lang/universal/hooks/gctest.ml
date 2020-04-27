@@ -43,9 +43,9 @@ struct
 
 
   let on_before_exec zone stmt man flow = ()
-  let on_after_exec zone stmt man post = ()
+  let on_after_exec zone stmt man flow post = ()
   let on_before_eval zone exp man flow = ()
-  let on_after_eval zone exp man evl = ()
+  let on_after_eval zone exp man flow evl = ()
 
   let on_finish man flow =
     let alladdr = man.ask Heap.Recency.Q_allocated_addresses flow in
