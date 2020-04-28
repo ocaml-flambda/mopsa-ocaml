@@ -614,13 +614,16 @@ struct
   let is_bottom _ = false
 
   let subset man ctx (a,s) (a',s') =
+    let a, s, a', s' = unify man ctx (a,s) (a',s') in
     true, s, s'
 
   let join man ctx (a,s) (a',s') =
     let a, s, a', s' = unify man ctx (a,s) (a',s') in
     State.join a a', s, s'
 
-  let meet = join
+  let meet man ctx (a,s) (a',s') =
+    let a, s, a', s' = unify man ctx (a,s) (a',s') in
+    State.join a a', s, s'
 
   let widen man ctx (a,s) (a',s') =
     let (a, s, s') = join man ctx (a,s) (a',s') in
@@ -872,14 +875,15 @@ struct
            than the one with the type of lval, which will be put to
            top after *)
         fold_stypes (remove_smash base) (STypeSet.remove s.styp ts) range man flow >>$ fun () flow ->
+        let flow = set_env T_cur (State.add base (Init.Full (STypeSet.singleton s.styp)) a) man flow in
         if STypeSet.mem s.styp ts then
           man.post (mk_forget_var vsmash range) ~zone:Z_c_scalar flow
         else
-          let flow = set_env T_cur (State.add base (Init.Full (STypeSet.singleton s.styp)) a) man flow in
           man.post (mk_add_var vsmash range) ~zone:Z_c_scalar flow
 
       | Init.Partial ts ->
         fold_stypes (remove_smash base) (STypeSet.remove s.styp ts) range man flow >>$ fun () flow ->
+        let flow = set_env T_cur (State.add base (Init.Partial (STypeSet.singleton s.styp)) a) man flow in
         begin if STypeSet.mem s.styp ts then
             man.post (mk_forget_var vsmash range) ~zone:Z_c_scalar flow
           else
@@ -986,11 +990,10 @@ struct
         | Init.Full ts ->
           (* Destroy existing incompatible smashes *)
           fold_stypes (remove_smash base) (STypeSet.remove s.styp ts) range man flow >>$ fun () flow ->
+          let flow = set_env T_cur (State.add base (Init.Full (STypeSet.singleton s.styp)) a) man flow in
           if not (STypeSet.mem s.styp ts) then
             (* If this is the first time we access this type, we add
                the corresponding smash *)
-            let init = Init.Full (STypeSet.singleton s.styp) in
-            let flow = map_env T_cur (State.add base init) man flow in
             man.post (mk_add_var vsmash range) ~zone:Z_c_scalar flow
           else
             (* If we have already a smash for this type, we update it
@@ -1000,11 +1003,10 @@ struct
         | Init.Partial ts ->
           (* Destroy existing incompatible smashes *)
           fold_stypes (remove_smash base) (STypeSet.remove s.styp ts) range man flow >>$ fun () flow ->
+          let flow = set_env T_cur (State.add base (Init.Partial (STypeSet.singleton s.styp)) a) man flow in
           if not (STypeSet.mem s.styp ts) then
             (* If this is the first time we access this type, we add
                the corresponding smash *)
-            let init = Init.Partial (STypeSet.singleton s.styp) in
-            let flow = set_env T_cur (State.add base init a) man flow in
             man.post (mk_add_var vsmash range) ~zone:Z_c_scalar flow
           else
             (* If we have already a smash for this type, we update it
