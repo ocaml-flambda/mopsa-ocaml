@@ -482,7 +482,7 @@ int fputc (int __c, FILE *__stream);
 /*
  Before glibc 2.28, putc is defined as a macro for _IO_putc
 */
-#if __GLIBC_MINOR__ <= 28
+#if __GLIBC_MINOR__ <= 27
 
 /*$
  * alias: fputc;
