@@ -272,6 +272,15 @@ let post_to_flow = Lowlevel.post_to_flow
 module AutoLogger(D:DOMAIN) : DOMAIN with type t = D.t =
 struct
   include D
+
+  let merge pre (a1,log1) (a2,log2) =
+    if a1 == a2 then a1 else
+    if Log.is_empty_log log1 then a2 else
+    if Log.is_empty_log log2 then a1 else
+    if (Log.compare_log log1 log2 = 0) then a1
+    else D.merge pre (a1,log1) (a2,log2)
+
+
   let exec zone stmt man flow =
     D.exec zone stmt man flow |>
     OptionExt.lift @@ fun res ->

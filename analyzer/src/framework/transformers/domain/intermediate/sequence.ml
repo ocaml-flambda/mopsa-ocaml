@@ -68,8 +68,8 @@ struct
   (** Global manager of [D1] *)
   let d1_man (man:('a, t) man) : ('a, D1.t) man = {
     man with
-    get = (fun flow -> man.get flow |> fst);
-    set = (fun a flow -> man.set (a, man.get flow |> snd) flow);
+    get = Sig.Domain.Manager.get_pair_fst man;
+    set = Sig.Domain.Manager.set_pair_fst man;
     get_log = (fun glog -> man.get_log glog |> Log.get_left_log);
     set_log = (fun log glog -> man.set_log (
         Log.mk_log [] log (man.get_log glog |> Log.get_right_log)
@@ -79,8 +79,8 @@ struct
   (** Global manager of [D] *)
   let d2_man (man:('a, t) man) : ('a, D2.t) man = {
     man with
-    get = (fun flow -> man.get flow |> snd);
-    set = (fun b flow -> man.set (man.get flow |> fst, b) flow);
+    get = Sig.Domain.Manager.get_pair_snd man;
+    set = Sig.Domain.Manager.set_pair_snd man;
     get_log = (fun glog -> man.get_log glog |> Log.get_right_log);
     set_log = (fun log glog -> man.set_log (
         Log.mk_log [] (man.get_log glog |> Log.get_left_log) log
@@ -106,11 +106,13 @@ struct
     D1.subset a1 a1' &&
     D2.subset a2 a2'
 
-  let join (a1,a2) (a1',a2') =
+  let join ((a1,a2) as x) (a1',a2') =
+    if a1 == a1' && a2 == a2' then x else
     D1.join a1 a1',
     D2.join a2 a2'
 
-  let meet (a1,a2) (a1',a2') =
+  let meet ((a1,a2) as x) (a1',a2') =
+    if a1 == a1' && a2 == a2' then x else
     D1.meet a1 a1',
     D2.meet a2 a2'
 

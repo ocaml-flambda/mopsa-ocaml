@@ -192,3 +192,9 @@ let post_to_flow man post =
     (Flow.join man.lattice)
     (Flow.join man.lattice)
     post
+
+let get_pair_fst man = (fun a -> man.get a |> fst)
+let set_pair_fst man = (fun a1 a -> let old = man.get a in if a1 == fst old then a else man.set (a1, snd old) a)
+
+let get_pair_snd man = (fun a -> man.get a |> snd)
+let set_pair_snd man = (fun a2 a -> let old = man.get a in if a2 == snd old then a else man.set (fst old, a2) a);

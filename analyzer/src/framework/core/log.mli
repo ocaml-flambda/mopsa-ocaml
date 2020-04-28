@@ -57,6 +57,9 @@ type log
 val pp_log : Format.formatter -> log -> unit
 (** Print a log *)
 
+val compare_log : log -> log -> int
+(** Compare two logs *)
+
 val empty_log : log
 (** Empty log *)
 

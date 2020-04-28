@@ -52,9 +52,11 @@ struct
     top_equal Set.equal abs1 abs2
 
   let join (abs1:t) (abs2:t) : t =
+    if abs1 == abs2 then abs1 else
     top_lift2 Set.union abs1 abs2
 
   let meet (abs1:t) (abs2:t) : t =
+    if abs1 == abs2 then abs1 else
     top_neutral2 Set.inter abs1 abs2
 
   let union = join

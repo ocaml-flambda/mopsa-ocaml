@@ -74,13 +74,6 @@ type ('a, 't, 's) man = ('a,'t,'s) Lowlevel.man = {
   (** Accessors to the domain's merge logs *)
   get_log : log -> log;
   set_log : log -> log -> log;
-
-  (** Accessors to the sub-tree merge logs *)
-  get_sub_log : log -> log;
-  set_sub_log : log -> log -> log;
-
-  (** Sub-tree merger *)
-  merge_sub : 's -> 's * log -> 's * log -> 's;
 }
 
 
@@ -338,7 +331,16 @@ end
 (** Auto-logger lifter used when registering a domain *)
 module AutoLogger(S:STACK) : STACK with type t = S.t =
 struct
+
   include S
+
+  let merge pre (a1,log1) (a2,log2) =
+    if a1 == a2 then a1 else
+    if Log.is_empty_log log1 then a2 else
+    if Log.is_empty_log log2 then a1 else
+    if (Log.compare_log log1 log2 = 0) then a1
+    else S.merge pre (a1,log1) (a2,log2)
+
   let exec zone stmt man flow =
     S.exec zone stmt man flow |>
     OptionExt.lift @@ fun res ->

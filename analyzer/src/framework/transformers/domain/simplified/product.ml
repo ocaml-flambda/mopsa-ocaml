@@ -362,6 +362,7 @@ struct
     forall2 { f } Spec.pool a1 a2
 
   let join a1 a2 =
+    if a1 == a2 then a1 else
     let f = fun (type a) (m: a dmodule) aa1 aa2 ->
       let module Domain = (val m) in
       Domain.join aa1 aa2
@@ -369,6 +370,7 @@ struct
     apply2 { f } Spec.pool a1 a2
 
   let meet a1 a2 =
+    if a1 == a2 then a1 else
     let f = fun (type a) (m: a dmodule) aa1 aa2 ->
       let module Domain = (val m) in
       Domain.meet aa1 aa2

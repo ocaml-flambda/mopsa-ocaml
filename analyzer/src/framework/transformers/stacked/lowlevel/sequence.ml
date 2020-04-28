@@ -73,8 +73,8 @@ struct
   (** Global manager of [S1] *)
   let s1_man (man:('a, t, 's) man) : ('a, S1.t, 's) man = {
     man with
-    get = (fun flow -> man.get flow |> fst);
-    set = (fun a flow -> man.set (a, man.get flow |> snd) flow);
+    get = Sig.Stacked.Manager.get_pair_fst man;
+    set = Sig.Stacked.Manager.set_pair_fst man;
     get_log = (fun glog -> man.get_log glog |> Log.get_left_log);
     set_log = (fun log glog -> man.set_log (
         Log.mk_log [] log (man.get_log glog |> Log.get_right_log)
@@ -84,8 +84,8 @@ struct
   (** Global manager of [D] *)
   let s2_man (man:('a, t, 's) man) : ('a, S2.t, 's) man = {
     man with
-    get = (fun flow -> man.get flow |> snd);
-    set = (fun b flow -> man.set (man.get flow |> fst, b) flow);
+    get = Sig.Stacked.Manager.get_pair_snd man;
+    set = Sig.Stacked.Manager.set_pair_snd man;
     get_log = (fun glog -> man.get_log glog |> Log.get_right_log);
     set_log = (fun log glog -> man.set_log (
         Log.mk_log [] (man.get_log glog |> Log.get_left_log) log

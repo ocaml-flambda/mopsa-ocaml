@@ -65,13 +65,6 @@ type ('a, 't, 's) man = {
   (** Accessors to the domain's merge logs *)
   get_log : log -> log;
   set_log : log -> log -> log;
-
-  (** Accessors to the sub-tree merge logs *)
-  get_sub_log : log -> log;
-  set_sub_log : log -> log -> log;
-
-  (** Sub-tree merger *)
-  merge_sub : 's -> 's * log -> 's * log -> 's;
 }
 
 
@@ -226,7 +219,10 @@ let of_domain_man (man:('a,'t) Domain.Manager.man) : ('a,'t,unit) man =
     ask = man.ask;
     get_log = man.get_log;
     set_log = man.set_log;
-    get_sub_log = (fun _ -> Log.empty_log);
-    set_sub_log =  (fun _ l -> l);
-    merge_sub = (fun _ _ _ -> ());
   }
+
+let get_pair_fst man = (fun a -> man.get a |> fst)
+let set_pair_fst man = (fun a1 a -> let old = man.get a in if a1 == fst old then a else man.set (a1, snd old) a)
+
+let get_pair_snd man = (fun a -> man.get a |> snd)
+let set_pair_snd man = (fun a2 a -> let old = man.get a in if a2 == snd old then a else man.set (fst old, a2) a);

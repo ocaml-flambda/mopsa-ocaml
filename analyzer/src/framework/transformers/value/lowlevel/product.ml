@@ -141,6 +141,7 @@ struct
     vlist_exists { f } Spec.pool v
 
   let subset v v' =
+    if v == v' then true else
     let f = fun (type a) (m:a vmodule) (v:a) (v':a) ->
       let module Value = (val m) in
       Value.subset v v'
@@ -148,6 +149,7 @@ struct
     vlist_all2 { f } Spec.pool v v'
 
   let join v v' =
+    if v == v' then v else
     let f = fun (type a) (m:a vmodule) (v:a) (v':a) ->
       let module Value = (val m) in
       Value.join v v'
@@ -155,12 +157,14 @@ struct
     vlist_apply2 { f } Spec.pool v v'
 
   let meet v v' =
+    if v == v' then v else
     vlist_apply2 { f = (fun (type a) (m:a vmodule) (v:a) (v':a) ->
         let module Value = (val m) in
         Value.meet v v'
       )} Spec.pool v v'
 
   let widen ctx v v' =
+    if v == v' then v else
     let f = fun (type a) (m:a vmodule) (v:a) (v':a) ->
       let module Value = (val m) in
       Value.widen ctx v v'

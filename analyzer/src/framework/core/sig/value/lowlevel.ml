@@ -421,14 +421,14 @@ let vlist_all2 f l v1 v2 =
 let hdman man = {
   man with
   get = (fun v -> man.get v |> fst);
-  set = (fun hdv v -> man.set (hdv, man.get v |> snd) v);
+  set = (fun hdv v -> let old = man.get v in if hdv == fst old then v else man.set (hdv, snd old) v);
 }
 
 (** Create a value manager for the tail of the list *)
 let tlman man = {
   man with
   get = (fun v -> man.get v |> snd);
-  set = (fun tlv v -> man.set (man.get v |> fst, tlv) v);
+  set = (fun tlv v -> let old = man.get v in if tlv == snd old then v else man.set (fst old, tlv) v);
 }
 
 

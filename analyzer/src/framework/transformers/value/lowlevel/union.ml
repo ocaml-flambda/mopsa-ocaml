@@ -138,6 +138,7 @@ struct
     | V2 v2 -> V2.is_bottom v2
 
   let subset a b =
+    if a == b then true else
     match a,b with
     | V1 x, V1 y -> V1.subset x y
     | V2 x, V2 y -> V2.subset x y
@@ -145,6 +146,7 @@ struct
     | _ -> false
 
   let join a b =
+    if a == b then a else
     match a,b with
     | V1 x, V1 y -> V1 (V1.join x y)
     | V2 x, V2 y -> V2 (V2.join x y)
@@ -152,6 +154,7 @@ struct
     | _ -> TOP
 
   let meet a b =
+    if a == b then a else
     match a,b with
     | V1 x, V1 y -> V1 (V1.meet x y)
     | V2 x, V2 y -> V2 (V2.meet x y)
@@ -160,6 +163,7 @@ struct
     | _ -> TOP
 
   let widen ctx a b =
+    if a == b then a else
     match a,b with
     | V1 x, V1 y -> V1 (V1.widen ctx x y)
     | V2 x, V2 y -> V2 (V2.widen ctx x y)

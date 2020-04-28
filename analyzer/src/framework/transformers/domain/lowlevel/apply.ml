@@ -79,8 +79,8 @@ struct
   (** Global manager of [D] *)
   let d_man (man:('a, t) Domain.man) : ('a, D.t) Domain.man = {
     man with
-    get = (fun flow -> man.get flow |> snd);
-    set = (fun b flow -> man.set (man.get flow |> fst, b) flow);
+    get = Sig.Domain.Manager.get_pair_snd man;
+    set = Sig.Domain.Manager.set_pair_snd man;
     get_log = (fun glog -> man.get_log glog |> Log.get_right_log);
     set_log = (fun log glog -> man.set_log (
         Log.mk_log [] (man.get_log glog |> Log.get_left_log) log
@@ -97,8 +97,8 @@ struct
       eval = man.eval;
       ask = man.ask;
 
-      get = (fun a -> man.get a |> fst);
-      set = (fun a1 a -> man.set (a1, man.get a |> snd) a);
+      get = Sig.Domain.Manager.get_pair_fst man;
+      set = Sig.Domain.Manager.set_pair_fst man;
       get_sub = dman.get;
       set_sub = dman.set;
       get_log = (fun log -> man.get_log log |> Log.get_left_log);
@@ -107,10 +107,7 @@ struct
             Log.mk_log [] l (man.get_log log |> Log.get_right_log)
           ) log
         );
-      get_sub_log = dman.get_log;
-      set_sub_log = dman.set_log;
-      merge_sub = D.merge;
-  }
+ }
 
   (**************************************************************************)
   (**                      {2 Lattice operators}                            *)
