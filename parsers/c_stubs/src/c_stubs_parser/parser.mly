@@ -78,7 +78,7 @@
 %token STRUCT UNION ENUM
 
 (* Priorities of logical operators *)
-%left IMPLIES
+%right IMPLIES
 %left OR
 %left AND
 %nonassoc FORALL EXISTS
