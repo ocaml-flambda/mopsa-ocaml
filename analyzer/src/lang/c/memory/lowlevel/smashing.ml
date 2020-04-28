@@ -437,7 +437,7 @@ struct
     if is_c_expr_equals_z e Z.zero then true else
     if Z.(s = one) then true
     else
-      man.eval e ~zone:(Zone.Z_c_low_level,Universal.Zone.Z_u_num) flow |>
+      man.eval e ~zone:(zone,Universal.Zone.Z_u_num) flow |>
       Cases.for_all_some (fun ee flow ->
           (* Compute the step-interval of ee *)
           let _, c = man.ask (Universal.Numeric.Common.Q_int_congr_interval ee) flow in
