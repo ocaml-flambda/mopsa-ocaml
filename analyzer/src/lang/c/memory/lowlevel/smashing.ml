@@ -495,7 +495,7 @@ struct
              Post.bind (man.post (mk_assume cond range) ~zone:Z_c_scalar) acc
 
            (* Case #3 *)
-           | _ when int_type = C_unsigned_char ->
+           | Int _ when int_type = C_unsigned_char ->
              acc >>$ fun () flow ->
              let n = sizeof_styp styp' |> Z.to_int in
              let rec aux i =
