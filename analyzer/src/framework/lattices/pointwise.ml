@@ -75,6 +75,7 @@ struct
     a = TOP
   
   let subset (a:t) (b:t) : bool =
+    if a == b then true else
     top_included
       (M.for_all2zo
          (fun _ _ -> false)
@@ -83,6 +84,7 @@ struct
       a b
 
   let join (a:t) (b:t) : t =
+    if a == b then a else
     top_lift2
       (M.map2zo
          (fun _ x -> x)
@@ -92,6 +94,7 @@ struct
       a b
   
   let widen ctx (a:t) (b:t) : t =
+    if a == b then a else
     top_lift2
       (M.map2zo
          (fun _ x -> x)
@@ -101,6 +104,7 @@ struct
       a b
 
   let meet (a:t) (b:t) : t =
+    if a == b then a else
     top_neutral2
       (M.map2zo
          (fun _ x -> x)

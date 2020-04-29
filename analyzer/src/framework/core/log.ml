@@ -42,6 +42,18 @@ let rec pp_log fmt = function
   | Empty         -> ()
   | Node(stmts,left,right) -> Format.fprintf fmt "(%a,%a,%a)" pp_log_entries stmts pp_log left pp_log right
 
+let rec compare_log l1 l2 =
+  if l1 == l2 then 0 else
+  match l1,l2 with
+    | Empty,Empty -> 0
+    | Node(s1,left1,right1),Node(s2,left2,right2) ->
+      Compare.compose [
+        (fun () -> Compare.list compare_stmt s1 s2);
+        (fun () -> compare_log left1 left2);
+        (fun () -> compare_log right1 right2)
+      ]
+    | _ -> compare l1 l2
+
 let empty_log = Empty
 
 let rec is_empty_log log =

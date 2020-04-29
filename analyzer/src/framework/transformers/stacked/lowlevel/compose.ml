@@ -73,8 +73,8 @@ struct
   (** Global manager of [D] *)
   let s2_man (man:('a, t, 's) man) : ('a, S2.t, 's) man = {
     man with
-    get = (fun a -> man.get a |> snd);
-    set = (fun a2 a -> man.set (man.get a |> fst, a2) a);
+    get = Sig.Stacked.Manager.get_pair_snd man;
+    set = Sig.Stacked.Manager.set_pair_snd man;
     get_log = (fun log -> man.get_log log |> Log.get_right_log);
     set_log = (fun l log ->
         man.set_log (
@@ -89,8 +89,8 @@ struct
     {
       man with
       exec = man2.exec;
-      get = (fun a -> man.get a |> fst);
-      set = (fun a1 a -> man.set (a1, man.get a |> snd) a);
+      get = Sig.Stacked.Manager.get_pair_fst man;
+      set = Sig.Stacked.Manager.set_pair_fst man;
       get_sub = (fun a -> man2.get a, man.get_sub a);
       set_sub = (fun (a2,s) a -> man2.set a2 a |> man.set_sub s);
       get_log = (fun log -> man.get_log log |> Log.get_left_log);
@@ -99,16 +99,7 @@ struct
             Log.mk_log [] l (man.get_log log |> Log.get_right_log)
           ) log
         );
-      get_sub_log = (fun log -> Log.mk_log [] (man2.get_log log) (man.get_sub_log log));
-      set_sub_log = (fun l log ->
-          man2.set_log (Log.get_left_log l) log |>
-          man.set_sub_log (Log.get_right_log l)
-        );
-      merge_sub = (fun (pre1,pre2) ((a1,a2), log) ((a1',a2'), log') ->
-          S2.merge pre1 (a1, Log.get_left_log log) (a1', Log.get_left_log log'),
-          man.merge_sub pre2 (a2, Log.get_right_log log) (a2', Log.get_right_log log')
-        );
-    }
+  }
 
   (**************************************************************************)
   (**                      {2 Lattice operators}                            *)

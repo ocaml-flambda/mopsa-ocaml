@@ -203,6 +203,11 @@ struct
     if elem_size = 1 then boffset
     else div boffset (mk_int elem_size range) range
 
+
+  let is_interesting_resource = function
+    | "Memory" | "alloca" | "ReadOnlyMemory" | "String" | "ReadOnlyString" | "arg" -> true
+    | _ -> false
+
   let rec is_interesting_base base =
     match base with
     | { base_kind = Var {vkind = Cstubs.Aux_vars.V_c_primed_base base}; base_valid = true } ->
@@ -216,9 +221,10 @@ struct
 
     | { base_kind = String _ } -> true
 
-    | { base_kind = Addr { addr_kind = A_stub_resource _ }; base_valid = true }
+    | { base_kind = Addr { addr_kind = A_stub_resource res }; base_valid = true }
       ->
-      !opt_track_length
+      !opt_track_length &&
+      is_interesting_resource res
 
     | _ -> false
 

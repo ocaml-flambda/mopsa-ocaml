@@ -49,11 +49,13 @@ struct
 
   let snd ((_,b):t) : Second.t = b
 
-  let map_fst (f:(First.t -> First.t)) ((a,b):t) : t =
-    (f a, b)
+  let map_fst (f:(First.t -> First.t)) ((a,b) as x:t) : t =
+    let a' = f a in
+    if a' == a then x else (a',b)
 
-  let map_snd (f:(Second.t -> Second.t)) ((a,b):t) : t =
-    (a, f b)
+  let map_snd (f:(Second.t -> Second.t)) ((a,b) as x:t) : t =
+    let b' = f b in
+    if b == b' then x else (a,b')
 
   let is_bottom ((a,b):t) : bool =
     First.is_bottom a || Second.is_bottom b
@@ -61,13 +63,16 @@ struct
   let subset ((a1,b1):t) ((a2,b2):t) : bool =
     First.subset a1 a2 && Second.subset b1 b2
 
-  let join ((a1,b1):t) ((a2,b2):t) : t =
+  let join ((a1,b1) as x:t) ((a2,b2):t) : t =
+    if a1 == a2 && b1 == b2 then x else
     (First.join a1 a2, Second.join b1 b2)
 
-  let meet ((a1,b1):t) ((a2,b2):t) : t =
+  let meet ((a1,b1) as x:t) ((a2,b2):t) : t =
+    if a1 == a2 && b1 == b2 then x else
     (First.meet a1 a2, Second.meet b1 b2)
 
-  let widen ctx ((a1,b1):t) ((a2,b2):t) : t =
+  let widen ctx ((a1,b1) as x:t) ((a2,b2):t) : t =
+    if a1 == a2 && b1 == b2 then x else
     (First.widen ctx a1 a2, Second.widen ctx b1 b2)
 
   let print fmt ((a,b):t) : unit =

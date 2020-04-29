@@ -52,16 +52,16 @@ type (_,'x) pair_stack_list =
 
 let hdman man = {
   man with
-  get = (fun a -> man.get a |> fst);
-  set = (fun hd a -> man.set (hd, man.get a |> snd) a);
+  get = Sig.Stacked.Manager.get_pair_fst man;
+  set = Sig.Stacked.Manager.set_pair_fst man;
   get_log = (fun log -> man.get_log log |> Log.get_left_log);
   set_log = (fun l log -> man.set_log (Log.mk_log [] l (man.get_log log |> Log.get_right_log)) log);
 }
 
 let tlman man = {
   man with
-  get = (fun a -> man.get a |> snd);
-  set = (fun tl a -> man.set (man.get a |> fst, tl) a);
+  get = Sig.Stacked.Manager.get_pair_snd man;
+  set = Sig.Stacked.Manager.set_pair_snd man;
   get_log = (fun log -> man.get_log log |> Log.get_right_log);
   set_log = (fun l log -> man.set_log (Log.mk_log [] (man.get_log log |> Log.get_left_log) l) log);
 }
@@ -202,6 +202,35 @@ let map_fold_man {f} l man a init =
         (hda',tla'), acc
   in
   aux l man a init
+
+
+type 'a map_fold2 = { f: 't. 't stack -> 't -> 't -> 'a -> 't * 'a }
+let map_fold2 {f} l a1 a2 init =
+  let rec aux : type t. t stack_list -> t -> t -> 'a -> t * 'a =
+    fun l a1 a2 acc ->
+      match l, a1, a2 with
+      | Nil, (), () -> (), acc
+      | Cons(hd,tl), (hda1,tla1), (hda2,tla2) ->
+        let hda',acc = f hd hda1 hda2 acc in
+        let tla', acc = aux tl tla1 tla2 acc in
+        (hda',tla'), acc
+  in
+  aux l a1 a2 init
+
+
+
+type 'a map_fold3 = { f: 't. 't stack -> 't -> 't -> 't -> 'a -> 't * 'a }
+let map_fold3 {f} l a1 a2 a3 init =
+  let rec aux : type t. t stack_list -> t -> t -> t -> 'a -> t * 'a =
+    fun l a1 a2 a3 acc ->
+      match l, a1, a2, a3 with
+      | Nil, (), (), () -> (), acc
+      | Cons(hd,tl), (hda1,tla1), (hda2,tla2), (hda3,tla3)->
+        let hda',acc = f hd hda1 hda2 hda3 acc in
+        let tla', acc = aux tl tla1 tla2 tla3 acc in
+        (hda',tla'), acc
+  in
+  aux l a1 a2 a3 init
 
 
 

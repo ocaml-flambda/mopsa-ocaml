@@ -118,6 +118,7 @@ struct
     man_fold2 { f } Spec.pool man a1 a2 (true,s1,s2)
 
   let join man ctx (a1,s1) (a2,s2) =
+    if a1 == a2 then a1,s1,s2 else
     let f = fun (type a) (m: a stack) man a1 a2 (s1,s2) ->
       let module S = (val m) in
       let a,s1,s2 = S.join man ctx (a1,s1) (a2,s2) in
@@ -127,6 +128,7 @@ struct
     a,s1,s2
 
   let meet man ctx (a1,s1) (a2,s2) =
+    if a1 == a2 then a1,s1,s2 else
     let f = fun (type a) (m: a stack) man a1 a2 (s1,s2) ->
       let module S = (val m) in
       let a,s1,s2 = S.meet man ctx (a1,s1) (a2,s2) in
@@ -145,7 +147,19 @@ struct
     a,stable,s1,s2
 
   let merge pre (a1,log1) (a2,log2) =
-    Exceptions.panic ~loc:__LOC__ "merge not implemented"
+    if a1 == a2 then a1 else
+    if Log.is_empty_log log1 then a2 else
+    if Log.is_empty_log log2 then a1 else
+    if (Log.compare_log log1 log2 = 0) then a1
+    else
+      let f = fun (type a) (m:a stack) p a1 a2 (log1,log2)->
+        let module S = (val m) in
+        let l1 = Log.get_left_log log1 in
+        let l2 = Log.get_left_log log2 in
+        S.merge p (a1,l1) (a2,l2), (Log.get_right_log log1, Log.get_right_log log2)
+      in
+      let a, _ = fold_apply3 { f } Spec.pool pre a1 a2 (log1,log2) in
+      a
 
 
 
@@ -170,41 +184,26 @@ struct
     let ctx = Context.get_most_recent (Flow.get_ctx flow1) (Flow.get_ctx flow2) |>
               Context.get_unit
     in
-    Flow.map2zo
+    let t = Timing.start () in
+    let r = Flow.map2zo
       (fun _ a1 -> man.lattice.bottom)
       (fun _ a2 -> man.lattice.bottom)
       (fun tk a1 a2 ->
          match tk with
          (* Logs concern only cur environments *)
          | T_cur ->
-           (* Merge the shared sub-tree *)
-           let p = Flow.get T_cur man.lattice pre |> man.get_sub in
-           let slog1 = man.get_sub_log log1 in
-           let slog2 = man.get_sub_log log2 in
-
-           let a1,a2 =
-             if Log.is_empty_log slog1 then
-               let merged = man.get_sub a2 in
-               let a1 = man.set_sub merged a1 in
-               a1,a2
-             else if Log.is_empty_log slog2 then
-               let merged = man.get_sub a1 in
-               let a2 = man.set_sub merged a2 in
-               a1,a2
-             else
-               let merged = man.merge_sub p
-                   (man.get_sub a1, slog1)
-                   (man.get_sub a2, slog2)
-               in
-               let a1 = man.set_sub merged a1 in
-               let a2 = man.set_sub merged a2 in
-               a1,a2
-           in
-           man.lattice.meet ctx a1 a2
+           (* Merge the cur environments *)
+           let t = Timing.start () in
+           let p = Flow.get T_cur man.lattice pre in
+           let r = man.lattice.merge p (a1,log1) (a2,log2) in
+           debug "merge cur: %.6f" (Timing.stop t);
+           r
 
          (* For the other tokens, compute the meet of the environments *)
          | _ -> man.lattice.meet ctx a1 a2
-      ) merge_alarms flow1 flow2
+      ) merge_alarms flow1 flow2 in
+    debug "merge_flows: %.6f" (Timing.stop t);
+    r
 
 
   (** Merge the conflicts between distinct domains in a pointwise result *)
@@ -362,9 +361,13 @@ struct
         None :: acc, ctx
       else
         let flow' = Flow.set_ctx ctx flow in
-        match S.exec zone stmt man flow' with
+        let t = Timing.start () in
+        let post = S.exec zone stmt man flow' in
+        let t = Timing.stop t in
+        match post with
         | None -> None :: acc, ctx
         | Some post ->
+          debug "%s exec done in %.6f" S.name t;
           let ctx' = Post.get_ctx post in
           Some post :: acc, ctx'
     in
@@ -389,11 +392,22 @@ struct
   let exec zone =
     let coverage = get_exec_coverage zone in
     (fun stmt man flow ->
-       exec_pointwise zone coverage stmt man flow |>
-       OptionExt.lift @@ fun pointwise ->
-       merge_inter_conflicts man flow pointwise |>
-       simplify_pointwise_post |>
-       merge_intra_conflicts man flow
+       let t0 = Timing.start () in
+       let t = Timing.start () in
+       let r = exec_pointwise zone coverage stmt man flow in
+       debug "pointwise: %.6f" (Timing.stop t);
+       r |> OptionExt.lift @@ fun pointwise ->
+       let t = Timing.start () in
+       let r = merge_inter_conflicts man flow pointwise in
+       debug "merge_inter: %.6f" (Timing.stop t);
+       let t = Timing.start () in
+       let r = simplify_pointwise_post r in
+       debug "simplify: %.6f" (Timing.stop t);
+       let t = Timing.start () in
+       let r = merge_intra_conflicts man flow r in
+       debug "merge_intra: %.6f" (Timing.stop t);
+       debug "exec: %.6f" (Timing.stop t0);
+       r
     )
 
 

@@ -130,16 +130,16 @@ let exists f l a =
 
 let hdman man = {
   man with
-  get = (fun a -> man.get a |> fst);
-  set = (fun hd a -> man.set (hd, man.get a |> snd) a);
+  get = Sig.Stacked.Manager.get_pair_fst man;
+  set = Sig.Stacked.Manager.set_pair_fst man;
   get_log = (fun log -> man.get_log log |> Log.get_left_log);
   set_log = (fun l log -> man.set_log (Log.mk_log [] l (man.get_log log |> Log.get_right_log)) log);
 }
 
 let tlman man = {
   man with
-  get = (fun a -> man.get a |> snd);
-  set = (fun tl a -> man.set (man.get a |> fst, tl) a);
+  get = Sig.Stacked.Manager.get_pair_snd man;
+  set = Sig.Stacked.Manager.set_pair_snd man;
   get_log = (fun log -> man.get_log log |> Log.get_right_log);
   set_log = (fun l log -> man.set_log (Log.mk_log [] (man.get_log log |> Log.get_left_log) l) log);
 }
@@ -245,4 +245,42 @@ let man_fold_apply2 f l man a1 a2 init =
   in
   aux l man a1 a2 init
 
+
+
+
+type ('a,'s) man_apply3 = {
+  f: 't. 't stack -> ('a,'t,'s) man -> 't -> 't -> 't -> 't;
+}
+
+
+let man_apply3 f l man a1 a2 a3 =
+  let rec aux : type t. t stack_list -> ('a,t,'s) man -> t -> t -> t -> t =
+    fun l man a1 a2 a3 ->
+      match l, a1, a2, a3 with
+      | Nil, (), (), () -> ()
+      | Cons(hd,tl), (hda1,tla1), (hda2,tla2), (hda3,tla3) ->
+        let hda' = f.f hd (hdman man) hda1 hda2 hda3 in
+        let tla' = aux tl (tlman man) tla1 tla2 tla3 in
+        (hda',tla')
+  in
+  aux l man a1 a2 a3
+
+
+
+type ('a,'b) fold_apply3 = {
+  f: 't. 't stack -> 't -> 't -> 't -> 'b -> 't * 'b;
+}
+
+
+let fold_apply3 f l a1 a2 a3 init =
+  let rec aux : type t. t stack_list -> t -> t -> t -> 'c -> t * 'c =
+    fun l a1 a2 a3 acc ->
+      match l, a1, a2, a3 with
+      | Nil, (), (), () -> (), acc
+      | Cons(hd,tl), (hda1,tla1), (hda2,tla2), (hda3,tla3) ->
+        let hda',acc' = f.f hd hda1 hda2 hda3 acc in
+        let tla',acc'' = aux tl tla1 tla2 tla3 acc' in
+        (hda',tla'),acc''
+  in
+  aux l a1 a2 a3 init
 
