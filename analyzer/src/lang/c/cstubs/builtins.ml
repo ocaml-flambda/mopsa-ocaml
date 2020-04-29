@@ -107,11 +107,10 @@ struct
         | E_c_points_to (P_block (base,_,mode)) ->
           eval_base_bytes base mode exp.erange man flow
 
-        | E_c_points_to P_top ->
-          Soundness.warn_at exp.erange "ignoring size computation of ⊤ pointer";
+        | E_c_points_to _ ->
           Eval.singleton (mk_top ul exp.erange) flow
 
-        | _ -> panic_at exp.erange "bytes(%a | %a %a) not supported" pp_expr e pp_expr e pp_expr pt
+        | _ -> assert false
       )
 
     | E_stub_builtin_call(SIZE, e) ->
@@ -132,18 +131,10 @@ struct
           then Eval.singleton bytes flow
           else Eval.singleton (mk_binop bytes O_div (mk_z elm exp.erange) ~etyp:bytes.etyp exp.erange) flow
 
-        | E_c_points_to P_top ->
-          Soundness.warn_at exp.erange "ignoring size computation of ⊤ pointer";
-          let _,max = rangeof ul in
-          Eval.singleton (mk_z_interval Z.one max exp.erange) flow
-
-        | E_c_points_to P_null
-        | E_c_points_to P_invalid ->
-          Soundness.warn_at exp.erange "size(%a) where %a %a not supported" pp_expr e pp_expr e pp_expr pt;
+        | E_c_points_to _ ->
           Eval.singleton (mk_top ul exp.erange) flow
 
-
-        | _ -> panic_at exp.erange "size(%a | %a %a) not supported" pp_expr e pp_expr e pp_expr pt
+        | _ -> assert false
       )
 
 
@@ -163,7 +154,6 @@ struct
           Eval.singleton (mk_c_cast (mk_addr addr exp.erange) (T_c_pointer T_c_void) exp.erange) flow
 
         | E_c_points_to P_top ->
-          Soundness.warn_at exp.erange "ignoring base computation of ⊤ pointer";
           Eval.singleton (mk_top (T_c_pointer T_c_void) exp.erange) flow
 
         | E_c_points_to P_null ->
@@ -197,8 +187,9 @@ struct
 
         | E_c_points_to(P_top) -> Eval.singleton (mk_top T_bool range) flow
 
-        | _ -> panic_at range "is_valid(%a | %a %a) not supported"
-             pp_expr p pp_expr p pp_expr pt
+        | _ ->
+          panic_at range "is_valid(%a | %a %a) not supported"
+            pp_expr p pp_expr p pp_expr pt
       )
 
 
