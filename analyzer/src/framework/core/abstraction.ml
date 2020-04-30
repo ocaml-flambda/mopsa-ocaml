@@ -40,6 +40,7 @@ open Query
 open Log
 open Cases
 open Interface
+open Callstack
 
 
 type ('a, 't) man = ('a, 't) Sig.Domain.Lowlevel.man = {
@@ -178,7 +179,7 @@ struct
   let init prog man : Domain.t flow =
     (* Initialize the context with an empty callstack *)
     let ctx = Context.empty |>
-              Context.add_unit Callstack.ctx_key Callstack.empty
+              Context.add_unit Context.callstack_ctx_key empty_callstack
     in
 
     (* Initialize hooks *)

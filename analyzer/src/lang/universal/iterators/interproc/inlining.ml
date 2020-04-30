@@ -56,7 +56,7 @@ struct
   let init prog man (flow: 'a flow) =
     Flow.set_ctx (
       Flow.get_ctx flow |>
-      Context.add_unit Callstack.ctx_key Callstack.empty
+      Context.add_unit Context.callstack_ctx_key empty_callstack
     ) flow
 
   (** Computation of post-conditions *)

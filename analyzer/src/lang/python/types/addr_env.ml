@@ -517,13 +517,13 @@ struct
               (Eval.singleton (mk_py_object (find_builtin @@ get_orig_vname v) range) flow :: acc, annots)
 
             | Undef_global ->
-              debug "Incoming NameError, on var %a, range %a, cs = %a @\n" pp_var v pp_range range Callstack.print (Flow.get_callstack flow);
+              debug "Incoming NameError, on var %a, range %a, cs = %a @\n" pp_var v pp_range range pp_callstack (Flow.get_callstack flow);
               let msg = Format.asprintf "name '%a' is not defined" pp_var v in
               let flow = man.exec (Utils.mk_builtin_raise_msg "NameError" msg range) flow in
               (Eval.empty_singleton flow :: acc, Flow.get_ctx flow)
 
             | Undef_local ->
-              debug "Incoming UnboundLocalError, on var %a, range %a, cs = %a @\ncur = %a@\n" pp_var v pp_range range Callstack.print (Flow.get_callstack flow) man.lattice.print (Flow.get T_cur man.lattice flow);
+              debug "Incoming UnboundLocalError, on var %a, range %a, cs = %a @\ncur = %a@\n" pp_var v pp_range range pp_callstack (Flow.get_callstack flow) man.lattice.print (Flow.get T_cur man.lattice flow);
               let msg = Format.asprintf "local variable '%a' referenced before assignment" pp_var v in
               let flow = man.exec (Utils.mk_builtin_raise_msg "UnboundLocalError" msg range) flow in
               (Eval.empty_singleton flow :: acc, Flow.get_ctx flow)

@@ -21,6 +21,7 @@
 
 (** Flow-insensitive context *)
 
+open Callstack
 
 (****************************************************************************)
 (**                          {2 Unit contexts}                              *)
@@ -108,3 +109,9 @@ val init_poly : 'a pctx -> 'a ctx -> 'a ctx
 val print : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a ctx -> unit
 
 val get_most_recent : 'a ctx -> 'a ctx -> 'a ctx
+
+
+(** {2 Callstack context} *)
+(** ********************* *)
+
+val callstack_ctx_key : callstack ukey

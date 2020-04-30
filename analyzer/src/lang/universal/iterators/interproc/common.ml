@@ -25,7 +25,7 @@
 open Mopsa
 open Framework.Core.Sig.Domain.Stateless
 open Ast
-open Callstack
+
 
 let name = "universal.iterators.interproc.common"
 let debug fmt = Debug.debug ~channel:name fmt
@@ -115,8 +115,8 @@ let return_key =
 
 let get_last_call_site flow =
   let cs = Flow.get_callstack flow in
-  let hd, _ = Callstack.pop cs in
-  hd.call_site
+  let hd, _ = pop_callstack cs in
+  hd.call_range
 
 (** {2 Recursion checks} *)
 (** ==================== *)
@@ -126,7 +126,7 @@ let get_last_call_site flow =
 let check_recursion f range cs =
   if cs = [] then false
   else
-    List.exists (fun cs -> Callstack.compare_call cs {call_fun_orig_name=f.fun_orig_name; call_fun_uniq_name=f.fun_uniq_name; call_site=range} = 0) (List.tl cs)
+    List.exists (fun cs -> compare_callsite cs {call_fun_orig_name=f.fun_orig_name; call_fun_uniq_name=f.fun_uniq_name; call_range=range} = 0) (List.tl cs)
 
 let check_nested_calls f cs =
   if cs = [] then false

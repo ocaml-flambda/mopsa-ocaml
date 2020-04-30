@@ -99,7 +99,7 @@ type alarm
 
 
 (** Create an alarm instance *)
-val mk_alarm : alarm_message -> Callstack.cs -> Location.range -> alarm
+val mk_alarm : alarm_message -> Callstack.callstack -> Location.range -> alarm
 
 (** Get the class of an alarm *)
 val get_alarm_class : alarm -> alarm_class
@@ -111,7 +111,7 @@ val get_alarm_message : alarm -> alarm_message
 val get_alarm_range : alarm -> Location.range
 
 (** Get the callstack of an alarm *)
-val get_alarm_callstack : alarm -> Callstack.cs
+val get_alarm_callstack : alarm -> Callstack.callstack
 
 (** Compare two alarms *)
 val compare_alarm : alarm -> alarm -> int

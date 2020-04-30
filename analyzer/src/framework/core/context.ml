@@ -348,3 +348,20 @@ let get_most_recent ctx1 ctx2 =
   if ctx1.ctx_timestamp < ctx2.ctx_timestamp
   then ctx2
   else ctx1
+
+
+
+(** {2 Callstack context} *)
+(** ********************* *)
+
+let callstack_ctx_key =
+  let open Callstack in
+  let module K = GenUnitKey(
+    struct
+      type t = callstack
+      let print fmt cs =
+        Format.fprintf fmt "Callstack:@,%a" pp_callstack cs
+    end
+    )
+  in
+  K.key

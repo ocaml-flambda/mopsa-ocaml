@@ -28,6 +28,8 @@ open Ast.Expr
 open Context
 open Cases
 open Log
+open Callstack
+
 
 type 'a eval = ('a, expr) cases
 
@@ -53,7 +55,7 @@ val get_ctx : 'a eval -> 'a ctx
 
 val set_ctx : 'a ctx -> 'a eval -> 'a eval
 
-val get_callstack : 'a eval -> Callstack.cs
+val get_callstack : 'a eval -> callstack
 
 val copy_ctx : 'a eval -> 'a eval -> 'a eval
 

@@ -19,92 +19,81 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Call stacks are represented as sequences of call sites
-   (ranges). They are saved as annotations in flows. *)
+(** Callstack - representation of the call stack of a program execution *)
 
 open Location
 
-type call = {
+type callsite = {
   call_fun_orig_name:  string;
   call_fun_uniq_name:  string;
-  call_site: range;
+  call_range: range;
 }
 
-type t = call list
-type cs = t
-
-let pp_call fmt c =
-  Format.fprintf fmt "%s@%a"
+let pp_callsite fmt c =
+  Format.fprintf fmt "%a: %s"
+    pp_range c.call_range
     c.call_fun_orig_name
-    pp_range c.call_site
 
-let pp_call_stack fmt (cs:cs) =
-  Format.pp_print_list
-    ~pp_sep:(fun fmt () -> Format.pp_print_string fmt " → ")
-    pp_call
-    fmt cs
-
-let print fmt (cs:cs) =
-  Format.pp_print_list
-    ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
-    pp_call
-    fmt cs
-
-let compare_call c c' =
+let compare_callsite c c' =
   if c == c' then 0
   else Compare.compose [
     (fun () -> compare c.call_fun_uniq_name c'.call_fun_uniq_name);
-    (fun () -> compare_range c.call_site c'.call_site);
+    (fun () -> compare_range c.call_range c'.call_range);
   ]
 
-let compare cs cs' =
-  Compare.list compare_call cs cs'
+type callstack = callsite list
 
-let empty : cs = []
+let pp_callstack fmt (cs:callstack) =
+  Format.fprintf fmt "@[<v>%a@]"
+    (Format.pp_print_list
+       ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,")
+       (fun fmt c ->
+          Format.fprintf fmt "\tfrom %a" pp_callsite c
+       )
+    ) cs
 
-let is_empty (cs:cs) =
-  match cs with
+let pp_callstack_short fmt cs =
+  Format.pp_print_list
+    ~pp_sep:(fun fmt () -> Format.fprintf fmt " → ")
+    (fun fmt c -> Format.fprintf fmt "%s@%a" c.call_fun_orig_name pp_relative_range c.call_range)
+    fmt cs
+
+let compare_callstack cs cs' =
+  Compare.list compare_callsite cs cs'
+
+let empty_callstack : callstack = []
+
+let is_empty_callstack = function
   | [] -> true
   | _ -> false
 
-let length (cs:cs) : int = List.length cs
-
-let ctx_key =
-  let module K = Context.GenUnitKey(
-    struct
-      type t = cs
-      let print fmt cs =
-        Format.fprintf fmt "Callstack: %a" print cs
-    end
-    )
-  in
-  K.key
+let callstack_length (cs:callstack) : int = List.length cs
 
 
-let push orig ?(uniq=orig) range cs =
+let push_callstack orig ?(uniq=orig) range cs =
   { call_fun_orig_name = orig;
     call_fun_uniq_name = uniq;
-    call_site = range } :: cs
+    call_range = range } :: cs
 
-exception EmptyCallstack
+exception Empty_callstack
 
-let pop cs =
+let pop_callstack cs =
   match cs with
-  | [] -> raise EmptyCallstack
+  | [] -> raise Empty_callstack
   | _ -> List.hd cs, List.tl cs
 
-let top (cs:cs) : call =
+let callstack_top (cs:callstack) : callsite =
   try List.hd cs
-  with Failure _ -> raise EmptyCallstack
+  with Failure _ -> raise Empty_callstack
 
-let is_after (cs:cs) (cs':cs) : bool =
-  let n = length cs in
-  let n' = length cs' in
+let callstack_begins_with (cs:callstack) (cs':callstack) : bool =
+  let n = callstack_length cs in
+  let n' = callstack_length cs' in
   if n <= n' then
     false
   else
     let rec aux i x =
-      if i = n' then compare x cs' = 0
+      if i = n' then compare_callstack x cs' = 0
       else aux (i-1) (List.tl x)
     in
     aux n cs

@@ -25,6 +25,7 @@ open Yojson.Basic
 open ArgExt
 open Core.Alarm
 open Core.Soundness
+open Callstack
 
 
 let print out json =
@@ -53,10 +54,10 @@ let render_range range =
     "end", render_pos (Location.get_range_end range)
   ]
 
-let render_call (c:Core.Callstack.call)  =
+let render_call (c:callsite)  =
   `Assoc [
     "function", `String c.call_fun_orig_name;
-    "range", render_range c.call_site;
+    "range", render_range c.call_range;
   ]
 
 let render_callstack cs  =

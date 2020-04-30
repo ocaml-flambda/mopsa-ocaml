@@ -61,7 +61,7 @@ let () =
 (** Flow token for exceptions *)
 type py_exc_kind =
   | Py_exc_unprecise
-  | Py_exc_with_callstack of range * Callstack.cs
+  | Py_exc_with_callstack of range * callstack
 
 type token +=
   | T_py_exception of expr * string * py_exc_kind
@@ -74,7 +74,7 @@ let mk_py_exception obj name ~cs range =
 
 let pp_py_exc_kind fmt = function
   | Py_exc_unprecise -> ()
-  | Py_exc_with_callstack (range,cs) -> Format.fprintf fmt "%a@,%a" pp_range range Callstack.print cs
+  | Py_exc_with_callstack (range,cs) -> Format.fprintf fmt "%a@,%a" pp_range range pp_callstack_short cs
 
 let () =
   register_token {
@@ -89,7 +89,7 @@ let () =
                | Py_exc_with_callstack (r1, cs1), Py_exc_with_callstack (r2, cs2) ->
                  Compare.compose [
                    (fun () -> compare_range r1 r2);
-                   (fun () -> Callstack.compare cs1 cs2);
+                   (fun () -> compare_callstack cs1 cs2);
                  ]
                | _ -> compare k1 k2
             );

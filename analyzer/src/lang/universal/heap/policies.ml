@@ -26,8 +26,8 @@ open Ast
 
 type addr_partitioning +=
    | G_range of range
-   | G_stack_range of Callstack.cs * range
-   | G_stack of Callstack.cs
+   | G_stack_range of callstack * range
+   | G_stack of callstack
 
 let () =
   register_addr_partitioning {
@@ -37,10 +37,10 @@ let () =
            compare_range r r'
         | G_stack_range (cs, r), G_stack_range (cs', r') ->
            Compare.compose
-             [ (fun () -> Callstack.compare cs cs');
+             [ (fun () -> compare_callstack cs cs');
                (fun () -> compare_range r r'); ]
         | G_stack(cs), G_stack(cs') ->
-           Callstack.compare cs cs'
+           compare_callstack cs cs'
         | _ -> next g1 g2
       );
       print = (fun next fmt g ->
@@ -58,13 +58,13 @@ let mk_addr_range addr_kind addr_mode range uctx =
     addr_partitioning = G_range range }
 
 let mk_addr_stack_range addr_kind addr_mode range uctx =
-  let cs = Context.ufind Callstack.ctx_key uctx in
+  let cs = Context.ufind Context.callstack_ctx_key uctx in
   { addr_kind;
     addr_mode;
     addr_partitioning = G_stack_range (cs, range) }
 
 let mk_addr_stack addr_kind addr_mode range uctx =
-  let cs = Context.ufind Callstack.ctx_key uctx in
+  let cs = Context.ufind Context.callstack_ctx_key uctx in
   { addr_kind;
     addr_mode;
     addr_partitioning = G_stack cs }

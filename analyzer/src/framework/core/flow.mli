@@ -156,13 +156,13 @@ val copy_alarms : 'a flow -> 'a flow -> 'a flow
 
 val create : 'a ctx -> AlarmSet.t -> 'a TokenMap.t -> 'a flow
 
-val get_callstack : 'a flow -> cs
+val get_callstack : 'a flow -> callstack
 
-val set_callstack : cs -> 'a flow -> 'a flow
+val set_callstack : callstack -> 'a flow -> 'a flow
 
 val push_callstack : string -> ?uniq:string -> Location.range -> 'a flow -> 'a flow
 
-val pop_callstack : 'a flow -> Callstack.call * 'a flow
+val pop_callstack : 'a flow -> callsite * 'a flow
 
 val bottom_from : 'a flow -> 'a flow
 (** Empty set of flows *)
