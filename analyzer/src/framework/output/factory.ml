@@ -50,10 +50,10 @@ let report man flow time files =
     | F_json -> Json.report man alarms time files !opt_file in
   return_v
 
-let panic ?btrace exn time files =
+let panic ~btrace exn time files =
   let () = match !opt_format with
-    | F_text -> Text.panic ?btrace exn files time !opt_file
-    | F_json -> Json.panic ?btrace exn files time !opt_file
+    | F_text -> Text.panic ~btrace exn files time !opt_file
+    | F_json -> Json.panic ~btrace exn files time !opt_file
   in
   2
 

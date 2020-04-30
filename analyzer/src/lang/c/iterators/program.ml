@@ -142,9 +142,18 @@ struct
       ) functions
 
 
+  let exec_entry_body f man flow =
+    match f.c_func_body with
+    | None -> panic "entry function %s is not defined" f.c_func_org_name
+    | Some stmt ->
+      let f' = { f with c_func_parameters = [] } in
+      let stmt = mk_c_call_stmt f' [] f.c_func_range in
+      man.post stmt flow
 
+
+  
   (** Create the address of the array pointed by argv *)
-  let mk_c_argv range =
+  let mk_argv range =
     mk_addr
       {
         addr_kind = Stubs.Ast.A_stub_resource "argv";
@@ -155,8 +164,8 @@ struct
       range
 
 
-  (** Create the address of an argument string *)
-  let mk_c_arg ~mode range =
+  (** Create a smash address for all arguments *)
+  let mk_arg_smash ~mode range =
     mk_addr
       {
         addr_kind = Stubs.Ast.A_stub_resource "arg";
@@ -166,13 +175,41 @@ struct
       ~etyp:(T_c_pointer s8)
       range
 
-  let exec_entry_body f man flow =
-    match f.c_func_body with
-    | None -> panic "entry function %s is not defined" f.c_func_org_name
-    | Some stmt ->
-      let f' = { f with c_func_parameters = [] } in
-      let stmt = mk_c_call_stmt f' [] f.c_func_range in
-      man.post stmt flow
+  (** Allocate the argv array *)
+  let alloc_argv range man flow =
+    let arange = tag_range range "argv" in
+    man.eval (mk_alloc_addr (Stubs.Ast.A_stub_resource "argv") arange) flow >>$ fun addr flow ->
+    man.eval ~zone:(Z_c,Z_c_scalar) (mk_stub_builtin_call BYTES addr ~etyp:ul range) flow >>$ fun bytes flow ->
+    man.exec ~zone:Z_c_scalar (mk_add bytes range) flow |>
+    Eval.singleton { addr with etyp = T_c_pointer (T_c_pointer s8) }
+
+
+  (** Allocate an address for a concrete argument *)
+  let alloc_concrete_arg i range man flow =
+    let irange = tag_range range "argv[%d]" i in
+    man.eval (mk_alloc_addr (Stubs.Ast.A_stub_resource "arg") irange) flow >>$ fun addr flow ->
+    man.eval ~zone:(Z_c,Z_c_scalar) (mk_stub_builtin_call BYTES addr ~etyp:ul range) flow >>$ fun bytes flow ->
+    man.exec ~zone:Z_c_scalar (mk_add bytes range) flow |>
+    Eval.singleton { addr with etyp =  T_c_pointer s8 }
+
+
+  (** Set the minimal size of the argument block *)
+  let set_arg_min_size arg min range man flow =
+    let max = snd (rangeof ul) in
+    man.exec (mk_assume (mk_in (mk_stub_builtin_call BYTES arg ~etyp:ul range) min (mk_z max range ) range) range) flow |>
+    Post.return
+
+
+  (** Initialize an argument with a concrete string *)
+  let init_concrete_arg arg str range man flow =
+    let n = String.length str in
+    let rec aux i flow =
+      let argi = mk_c_subscript_access arg (mk_int i range) range in
+      if i = n then man.exec (mk_assign argi zero range) flow
+      else man.exec (mk_assign argi (mk_c_character (String.get str i) range) range) flow |>
+           aux (i + 1)
+    in
+    aux 0 flow
 
 
   (** Initialize argc and argv with concrete values and execute the body of main *)
@@ -184,43 +221,38 @@ struct
     let argc = mk_int (nargs + 1) range in
 
     (* Create the memory block pointed by argv. *)
-    let argv = mk_c_argv range in
+    alloc_argv range man flow >>$ fun argv flow ->
+    let flow = man.exec (mk_add argv range) flow in
 
-    (* Initialize its size to |args| + 2 *)
-    man.eval ~zone:(Z_c,Z_c_scalar) (mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, argv)) range ~etyp:ul) flow >>$ fun bytes flow ->
-    let flow = man.exec ~zone:Z_c_scalar (mk_add bytes range) flow |>
-               man.exec ~zone:Z_c_scalar (mk_assign bytes (mk_z
-                                                             (Z.mul
-                                                                (sizeof_type (T_c_pointer s8))
-                                                                (Z.of_int (nargs + 2))
-                                                             ) range
-                                                          ) range) |>
-               man.exec (mk_add argv range)
-    in
-
+    (* Initialize its size to (|args| + 2)*sizeof(ptr) *)
+    man.eval ~zone:(Z_c,Z_c_scalar) (mk_stub_builtin_call BYTES argv ~etyp:ul range) flow >>$ fun bytes flow ->
+    let size = Z.mul (sizeof_type (T_c_pointer s8)) (Z.of_int (nargs + 2)) in 
+    let flow = man.exec ~zone:Z_c_scalar (mk_assign bytes (mk_z size range) range) flow in
 
     (* Initialize argv[0] with the name of the program *)
-    let flow = man.exec
-        (mk_assign
-           (mk_c_subscript_access argv (mk_zero range) range)
-           (mk_c_string "a.out" range)
-           range
-        )
-        flow
-    in
+    alloc_concrete_arg 0 range man flow >>$ fun arg flow ->
+    let program_name = "a.out" in
+    set_arg_min_size arg (mk_int (String.length program_name + 1) range) range man flow >>$ fun () flow ->
+    let flow = man.exec (mk_add arg range) flow in
+    let flow = init_concrete_arg arg program_name range man flow in
+    let argv0 = mk_c_subscript_access argv (mk_zero range) range in
+    let flow = man.exec (mk_assign argv0 arg range) flow in
 
     (* Initialize argv[i | 1 <= i < argc] with command-line arguments *)
     let rec iter i flow =
       if i >= nargs + 1
-      then flow
+      then Post.return flow
       else
-        let range = tag_range range "argv[%d]" i in
+        let str = List.nth args (i-1) in
+        alloc_concrete_arg i range man flow >>$ fun arg flow ->
+        set_arg_min_size arg (mk_int (String.length str + 1) range) range man flow >>$ fun () flow ->
+        let flow = man.exec (mk_add arg range) flow in
+        let flow = init_concrete_arg arg str range man flow in
         let argvi = mk_c_subscript_access argv (mk_int i range) range in
-        let arg = mk_c_string (List.nth args (i-1)) range in
         let flow = man.exec (mk_assign argvi arg range) flow in
         iter (i + 1) flow
     in
-    let flow = iter 1 flow in
+    iter 1 flow >>$ fun () flow ->
 
     (* Put NULL in argv[argc + 1] *)
     let last = mk_c_subscript_access argv argc range in
@@ -261,7 +293,8 @@ struct
 
 
     (* Create the memory block pointed by argv. *)
-    let argv = mk_c_argv range in
+    alloc_argv range man flow >>$ fun argv flow ->
+    let argv = mk_argv range in
     let argvv = mk_var argv_var range in
     let flow = man.exec (mk_add argvv range) flow |>
                man.exec (mk_assign argvv argv range)
@@ -270,17 +303,16 @@ struct
     (* Initialize its size to argc + 1 *)
     man.eval ~zone:(Z_c,Z_c_scalar) (mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, argv)) range ~etyp:ul) flow >>$ fun bytes flow ->
     man.eval ~zone:(Z_c,Z_c_scalar) argc flow >>$ fun scalar_argc flow ->
-    let flow = man.exec ~zone:Z_c_scalar (mk_add bytes range) flow |>
-               man.exec ~zone:Z_c_scalar (mk_assign bytes (mul
+    let flow = man.exec ~zone:Z_c_scalar (mk_assign bytes (mul
                                                              (mk_z (sizeof_type (T_c_pointer s8)) range)
                                                              (add scalar_argc (mk_one range) range)
                                                              range
-                                                          ) range) |>
+                                                          ) range) flow |>
                man.exec (mk_add argv range)
     in
 
     (* Create a symbolic argument *)
-    let arg = mk_c_arg ~mode:STRONG range in
+    let arg = mk_arg_smash ~mode:STRONG range in
 
     (* Initialize the size of the argument *)
     man.eval ~zone:(Z_c,Z_c_scalar) (mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, arg)) range ~etyp:ul) flow >>$ fun bytes flow ->
@@ -296,7 +328,7 @@ struct
     let flow = man.exec (mk_assign some_arg_cell (mk_zero range) range) flow in
 
     (* Make the address weak *)
-    let arg_weak = mk_c_arg ~mode:WEAK range in
+    let arg_weak = mk_arg_smash ~mode:WEAK range in
     let flow = man.exec (mk_rename arg arg_weak range) flow in
 
     (* Put the symbolic argument in argv[0 : argc-1] *)

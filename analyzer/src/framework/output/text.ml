@@ -220,7 +220,7 @@ let report ?(flow=None) man alarms time files out =
   print out "Time: %.3fs@." time;
   ()
 
-let panic ?btrace exn files time out =
+let panic ~btrace exn files time out =
   print out "%a@." (Debug.color_str "red") "Analysis aborted";
   let () =
     match exn with
@@ -230,8 +230,8 @@ let panic ?btrace exn files time out =
     | Exceptions.PanicAtLocation (range, msg, "") -> print out "panic in %a: %s@." Location.pp_range range msg
     | Exceptions.PanicAtLocation (range, msg, loc) -> print out "%a: panic raised in %s: %s@." Location.pp_range range loc msg
 
-    | Exceptions.PanicAtFrame (range, cs, msg, "") -> print out "panic in %a: %s@,Trace:@,%a@." Location.pp_range range msg pp_callstack cs
-    | Exceptions.PanicAtFrame (range, cs, msg, loc) -> print out "%a: panic raised in %s: %s@,Trace:@,%a@." Location.pp_range range loc msg pp_callstack cs
+    | Exceptions.PanicAtFrame (range, cs, msg, "") -> print out "panic in %a: %s@\nTrace:@\n%a@." Location.pp_range range msg pp_callstack cs
+    | Exceptions.PanicAtFrame (range, cs, msg, loc) -> print out "%a: panic raised in %s: %s@\nTrace:@\n%a@." Location.pp_range range loc msg pp_callstack cs
 
     | Exceptions.SyntaxError (range, msg) -> print out "%a: syntax error: %s@." Location.pp_range range msg
     | Exceptions.UnnamedSyntaxError range -> print out "%a: syntax error@." Location.pp_range range
@@ -251,9 +251,8 @@ let panic ?btrace exn files time out =
     | _ -> print out "Uncaught exception: %s@." (Printexc.to_string exn)
   in
   let () =
-    match btrace with
-    | Some x when String.length x > 0 -> print out "Backtrace:@\n%s" x
-    | _ -> ()
+    if btrace = "" then ()
+    else print out "Backtrace:@\n%s" btrace
   in
   ()
 

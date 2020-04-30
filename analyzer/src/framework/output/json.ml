@@ -118,7 +118,7 @@ let report ?(flow=None) man alarms time files out : unit =
   print out json
 
 
-let panic ?(btrace="<none>") exn files time out =
+let panic ~btrace exn files time out =
   let open Exceptions in
   let error,range,cs =
     match exn with
