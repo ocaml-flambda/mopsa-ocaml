@@ -227,10 +227,19 @@ struct
       let post = Cache.exec fexec zone stmt man flow in
       let ctx = Hook.on_after_exec zone stmt man flow post in
       Post.set_ctx ctx post
-    with Exceptions.Panic(msg, line) ->
-      Printexc.raise_with_backtrace
-        (Exceptions.PanicAt(stmt.srange, msg, line))
-        (Printexc.get_raw_backtrace())
+    with
+    | Exceptions.Panic(msg, line) ->
+      raise (Exceptions.PanicAtFrame(stmt.srange, (Flow.get_callstack flow),msg, line))
+
+    | Exceptions.PanicAtLocation(range, msg, line) ->
+      raise (Exceptions.PanicAtFrame(range, (Flow.get_callstack flow),msg, line))
+
+    | Exceptions.PanicAtFrame _ as e -> raise e
+
+    | Sys.Break -> raise Sys.Break
+
+    | e ->
+      raise (Exceptions.PanicAtFrame(stmt.srange, (Flow.get_callstack flow), Printexc.to_string e, ""))
 
 
   let exec ?(zone = any_zone) (stmt: stmt) man (flow: Domain.t flow) : Domain.t flow =
@@ -382,21 +391,16 @@ struct
 
     | other_action ->
       match
-        (try Cache.eval (fun e man flow ->
-             match feval e man flow with
-             | None -> None
-             | Some evl ->
-               let evl' = Eval.remove_duplicates man.lattice evl in
-               (* Update the eprev field in returned expressions to indicate the
+        Cache.eval (fun e man flow ->
+            match feval e man flow with
+            | None -> None
+            | Some evl ->
+              let evl' = Eval.remove_duplicates man.lattice evl in
+              (* Update the eprev field in returned expressions to indicate the
                   previous form of the result *)
-               let evl'' = Eval.map (fun ee -> { ee with eprev = Some e }) evl' in
-               Some evl''
-           ) (z1, z2) exp man flow
-         with Exceptions.Panic(msg, line) ->
-           Printexc.raise_with_backtrace
-             (Exceptions.PanicAt(exp.erange, msg, line))
-             (Printexc.get_raw_backtrace())
-        )
+              let evl'' = Eval.map (fun ee -> { ee with eprev = Some e }) evl' in
+              Some evl''
+          ) (z1, z2) exp man flow
       with
       | Some evl -> Some evl
       | None ->

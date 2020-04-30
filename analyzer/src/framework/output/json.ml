@@ -33,7 +33,7 @@ let print out json =
     match out with
     | None -> stdout
     | Some file ->
-       open_out_gen [Open_append; Open_wronly; Open_creat] 0o644 file
+       open_out_gen [Open_creat; Open_wronly; Open_creat] 0o644 file
   in
   Yojson.Basic.pretty_to_channel channel json
 
@@ -120,23 +120,30 @@ let report ?(flow=None) man alarms time files out : unit =
 
 let panic ?(btrace="<none>") exn files time out =
   let open Exceptions in
-  let error =
+  let error,range,cs =
     match exn with
-    | Panic (msg, loc) -> msg
-    | PanicAt (range, msg, loc) -> msg
-    | SyntaxError(range, msg) -> msg
-    | SyntaxErrorList l -> String.concat ", " (List.map snd l)
-    |  _ -> Printexc.to_string exn
+    | Panic (msg, loc) -> msg, None, None
+    | PanicAtLocation (range, msg, loc) -> msg,Some range,None
+    | PanicAtFrame (range, cs, msg, loc) -> msg,Some range,Some cs
+    | SyntaxError(range, msg) -> msg,Some range,None
+    | SyntaxErrorList l -> String.concat ", " (List.map snd l),None,None
+    |  _ -> Printexc.to_string exn,None,None
   in
-  let json  = `Assoc [
-      "success", `Bool false;
+  let assoc =
+    [ "success", `Bool false;
       "time", `Float time;
       "files", `List (List.map (fun f -> `String f) files);
       "exception", `String error;
-      "backtrace", `String btrace;
-    ]
+      "backtrace", `String btrace; ]
+    @ (match range with
+        | None -> []
+        | Some r -> [ "range", render_range r ] )
+    @ (match cs with
+        | None -> []
+        | Some c -> [ "callstack", render_callstack c ] )
   in
-  print out json
+  print out (`Assoc assoc)
+
 
 let help (args:arg list) out =
   let json  = `List (

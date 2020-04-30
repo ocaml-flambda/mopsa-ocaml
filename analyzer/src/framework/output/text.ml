@@ -177,7 +177,7 @@ let report ?(flow=None) man alarms time files out =
                    if not !opt_show_callstacks then ()
                    else
                      let pp_numbered_callstack i fmt cs =
-                       fprintf fmt "@[<v>Call stack%a:@,%a@]"
+                       fprintf fmt "@,@[<v>Call stack%a:@,%a@]"
                          (fun fmt -> function
                             | None   -> ()
                             | Some i -> fprintf fmt " %d" (i+1)
@@ -227,8 +227,11 @@ let panic ?btrace exn files time out =
     | Exceptions.Panic (msg, "") -> print out "panic: %s@." msg
     | Exceptions.Panic (msg, loc) -> print out "panic raised in %s: %s@." loc msg
 
-    | Exceptions.PanicAt (range, msg, "") -> print out "panic in %a: %s@." Location.pp_range range msg
-    | Exceptions.PanicAt (range, msg, loc) -> print out "%a: panic raised in %s: %s@." Location.pp_range range loc msg
+    | Exceptions.PanicAtLocation (range, msg, "") -> print out "panic in %a: %s@." Location.pp_range range msg
+    | Exceptions.PanicAtLocation (range, msg, loc) -> print out "%a: panic raised in %s: %s@." Location.pp_range range loc msg
+
+    | Exceptions.PanicAtFrame (range, cs, msg, "") -> print out "panic in %a: %s@,Trace:@,%a@." Location.pp_range range msg pp_callstack cs
+    | Exceptions.PanicAtFrame (range, cs, msg, loc) -> print out "%a: panic raised in %s: %s@,Trace:@,%a@." Location.pp_range range loc msg pp_callstack cs
 
     | Exceptions.SyntaxError (range, msg) -> print out "%a: syntax error: %s@." Location.pp_range range msg
     | Exceptions.UnnamedSyntaxError range -> print out "%a: syntax error@." Location.pp_range range
