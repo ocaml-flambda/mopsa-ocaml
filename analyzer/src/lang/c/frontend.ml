@@ -257,25 +257,21 @@ and parse_db (dbfile: string) ctx : unit =
   let srcs = get_executable_sources db exec in
   let nb = List.length srcs in
   input_files := [];
+  let cwd = Sys.getcwd() in
   ListExt.par_iteri
     !nb_clang_threads
     (fun i src ->
        match src.source_kind with
        | SOURCE_C | SOURCE_CXX ->
          let cmd = if src.source_kind = SOURCE_C then "clang" else "clang++" in
-         let cwd = Sys.getcwd() in
+         (* parse file in the original compilation directory *)
          Sys.chdir src.source_cwd;
-         (try
-             (* parse file in the original compilation directory *)
-             parse_file cmd ~nb:(i,nb) src.source_opts src.source_path !opt_enable_cache (src.source_kind=SOURCE_CXX) ctx;
-            Sys.chdir cwd;
-          with x ->
-            (* make sure we get back to cwd in all cases *)
-            Sys.chdir cwd;
-            raise x
-         )
+         parse_file cmd ~nb:(i,nb) src.source_opts src.source_path !opt_enable_cache (src.source_kind=SOURCE_CXX) ctx;
+
        | _ -> if !opt_warn_all then warn "ignoring file %s" src.source_path
-    ) srcs
+    ) srcs;
+  (* make sure we get back to cwd in all cases *)
+  Sys.chdir cwd
 
 and parse_file (cmd: string) ?nb (opts: string list) (file: string) enable_cache ignore ctx =
   if not (Sys.file_exists file) then panic "file %s not found" file;
