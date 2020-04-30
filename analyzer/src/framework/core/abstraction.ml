@@ -21,7 +21,7 @@
 
 (** An abstraction is the encapsulation of the top-level abstract domain used
     by the analyzer.
-
+ 
     There are two main differences with domains. First, transfer functions are
     indexed by zones to enable a faster access. Second, transfer functions are 
     not partial functions and return always a result.
@@ -229,17 +229,21 @@ struct
       Post.set_ctx ctx post
     with
     | Exceptions.Panic(msg, line) ->
-      raise (Exceptions.PanicAtFrame(stmt.srange, (Flow.get_callstack flow),msg, line))
+      Printexc.raise_with_backtrace
+        (Exceptions.PanicAtFrame(stmt.srange, (Flow.get_callstack flow),msg, line))
+        (Printexc.get_raw_backtrace())
 
     | Exceptions.PanicAtLocation(range, msg, line) ->
-      raise (Exceptions.PanicAtFrame(range, (Flow.get_callstack flow),msg, line))
-
-    | Exceptions.PanicAtFrame _ as e -> raise e
+      Printexc.raise_with_backtrace
+        (Exceptions.PanicAtFrame(range, (Flow.get_callstack flow),msg, line))
+        (Printexc.get_raw_backtrace())
 
     | Sys.Break -> raise Sys.Break
 
-    | e ->
-      raise (Exceptions.PanicAtFrame(stmt.srange, (Flow.get_callstack flow), Printexc.to_string e, ""))
+    | e when (match e with Exceptions.PanicAtFrame _ -> false | _ -> true) ->
+      Printexc.raise_with_backtrace
+        (Exceptions.PanicAtFrame(stmt.srange, (Flow.get_callstack flow), Printexc.to_string e, ""))
+        (Printexc.get_raw_backtrace())
 
 
   let exec ?(zone = any_zone) (stmt: stmt) man (flow: Domain.t flow) : Domain.t flow =
