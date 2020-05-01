@@ -269,7 +269,7 @@ struct
                        ekind = E_binop(op,e,n);
                        etyp  = to_num_type t; }
           in
-          Eval.singleton exp' tflow
+          check_overflow exp exp' range man flow
         )
       ~felse:(fun fflow ->
           let flow' = raise_c_invalid_shift_alarm exp n man flow fflow in
