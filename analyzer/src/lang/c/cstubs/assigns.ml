@@ -84,7 +84,7 @@ struct
         let pp = man.eval ptr ~zone:(Z_c,Z_c_points_to) flow in
         Cases.fold_some (fun p flow acc ->
             match ekind p with
-            | E_c_points_to(P_block ({ base_valid = true } as base, _, _)) ->
+            | E_c_points_to(P_block ({ base_valid = true; base_kind = Var _ | Addr _ } as base, _, _)) ->
               BaseSet.add base acc
             | _ -> acc
           ) pp acc
