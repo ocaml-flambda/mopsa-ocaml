@@ -368,6 +368,9 @@ struct
     if not (is_interesting_base base) then
       Post.return flow
     else
+    match base.base_kind with
+    | String _ -> Post.return flow
+    | Var _ | Addr _ ->
       let char_size = sizeof_type (under_pointer_type p.etyp) in
       let length = mk_length_var base elem_size ~mode range in
       let offset = elem_of_offset boffset elem_size range in
