@@ -577,6 +577,7 @@ struct
 
       (* Get the sub-values of a pointer *)
       and pointer_sub_value v e =
+        if is_c_pointer_type e.etyp && is_c_void_type (under_pointer_type e.etyp) then None else
         let evl = man.eval e ~zone:(Z_c,Z_c_points_to) flow in
         let l = Cases.fold_some
             (fun pt flow acc ->
