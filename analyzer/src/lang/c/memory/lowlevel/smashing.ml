@@ -803,8 +803,8 @@ struct
         in
         let flow = set_env T_cur a' man flow in
         (* Fold associated variables *)
-        exec_smashes (fold_smash base bases) base a range man flow >>$ fun () flow ->
-        exec_uninit (fold_uninit base bases) base a range man flow
+        exec_smashes (fold_smash base [base']) base' a range man flow >>$ fun () flow ->
+        exec_uninit (fold_uninit base [base']) base' a range man flow
 
 
   (** 𝕊⟦ forget(lval) ⟧ *)
