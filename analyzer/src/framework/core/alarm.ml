@@ -23,6 +23,7 @@
     by abstract domains during the analysis. *)
 
 open Location
+open Callstack
 
 
 
@@ -108,7 +109,7 @@ let register_alarm_message (info:alarm_message_info) =
 type alarm = {
   alarm_message : alarm_message;
   alarm_range : range;
-  alarm_callstack : Callstack.cs;
+  alarm_callstack : callstack;
 }
 
 
@@ -133,7 +134,7 @@ let compare_alarm a1 a2 =
   else Compare.compose [
       (fun () -> compare_alarm_message a1.alarm_message a2.alarm_message);
       (fun () -> compare_range a1.alarm_range a2.alarm_range);
-      (fun () -> Callstack.compare a1.alarm_callstack a2.alarm_callstack);
+      (fun () -> compare_callstack a1.alarm_callstack a2.alarm_callstack);
     ]
 
 let compare_alarm_by_class a1 a2 =
@@ -141,7 +142,7 @@ let compare_alarm_by_class a1 a2 =
   else Compare.compose [
       (fun () -> compare (get_alarm_class a1) (get_alarm_class a2));
       (fun () -> compare_range a1.alarm_range a2.alarm_range);
-      (fun () -> Callstack.compare a1.alarm_callstack a2.alarm_callstack);
+      (fun () -> compare_callstack a1.alarm_callstack a2.alarm_callstack);
     ]
 
 

@@ -35,6 +35,8 @@ module Visitor = Framework.Ast.Visitor
 
 include Location
 
+include Callstack
+
 include Framework.Config.Options
 
 include Exceptions

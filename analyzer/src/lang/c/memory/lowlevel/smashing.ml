@@ -495,7 +495,7 @@ struct
              Post.bind (man.post (mk_assume cond range) ~zone:Z_c_scalar) acc
 
            (* Case #3 *)
-           | _ when int_type = C_unsigned_char ->
+           | Int _ when int_type = C_unsigned_char ->
              acc >>$ fun () flow ->
              let n = sizeof_styp styp' |> Z.to_int in
              let rec aux i =
@@ -803,8 +803,8 @@ struct
         in
         let flow = set_env T_cur a' man flow in
         (* Fold associated variables *)
-        exec_smashes (fold_smash base bases) base a range man flow >>$ fun () flow ->
-        exec_uninit (fold_uninit base bases) base a range man flow
+        exec_smashes (fold_smash base [base']) base' a range man flow >>$ fun () flow ->
+        exec_uninit (fold_uninit base [base']) base' a range man flow
 
 
   (** 𝕊⟦ forget(lval) ⟧ *)

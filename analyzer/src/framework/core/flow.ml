@@ -25,6 +25,7 @@ open Lattice
 open Context
 open Token
 open Alarm
+open Callstack
 
 
 (****************************************************************************)
@@ -242,24 +243,24 @@ let create ctx alarms tmap = {
 
 let get_callstack flow =
   get_ctx flow |>
-  Context.find_unit Callstack.ctx_key
+  Context.find_unit Context.callstack_ctx_key
 
 
 let set_callstack cs flow =
   set_ctx (
     get_ctx flow |>
-    Context.add_unit Callstack.ctx_key cs
+    Context.add_unit Context.callstack_ctx_key cs
   ) flow
 
 let push_callstack fname ?(uniq=fname) range flow =
   set_callstack (
     get_callstack flow |>
-    Callstack.push fname ~uniq range
+    push_callstack fname ~uniq range
   ) flow
 
 let pop_callstack flow =
   let hd, cs = get_callstack flow |>
-               Callstack.pop
+               pop_callstack
   in
   hd, set_callstack cs flow
 

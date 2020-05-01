@@ -83,6 +83,9 @@ let rec eval_opt exp : static_points_to option =
   | E_addr (addr) ->
     AddrOf(mk_addr_base addr, mk_zero exp.erange, None) |> OptionExt.return
 
+  | x when is_c_int_type exp.etyp ->
+    Top |> OptionExt.return
+
   | E_c_deref { ekind = E_c_address_of e } ->
     eval_opt e
 
@@ -108,7 +111,7 @@ let rec eval_opt exp : static_points_to option =
         None
     end
 
-  | E_c_cast (e, _) ->
+  | E_c_cast (e, _) when is_c_pointer_type exp.etyp ->
     eval_opt e
 
   | E_c_function f ->
@@ -124,7 +127,8 @@ let rec eval_opt exp : static_points_to option =
   | E_c_deref a when is_c_array_type (under_type a.etyp) ->
     eval_opt a
 
-  | E_binop(O_plus | O_minus as op, e1, e2) ->
+  | E_binop(O_plus | O_minus as op, e1, e2) when is_c_pointer_type e1.etyp
+                                              || is_c_pointer_type e2.etyp->
     let p, i =
       if is_c_pointer_type e1.etyp || is_c_array_type e1.etyp
       then e1, e2
@@ -136,9 +140,6 @@ let rec eval_opt exp : static_points_to option =
 
   | E_var (v, mode) when is_c_pointer_type v.vtyp ->
     Eval (v, mode, mk_zero exp.erange) |> OptionExt.return
-
-  | x when is_c_int_type exp.etyp ->
-    Invalid |> OptionExt.return
 
   | _ ->
     warn_at exp.erange "evaluation of pointer expression %a not supported" pp_expr exp;

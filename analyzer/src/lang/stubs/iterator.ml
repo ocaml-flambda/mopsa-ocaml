@@ -271,15 +271,6 @@ struct
     (* Evaluation the allocation request *)
     post_to_flow man (
       man.eval (mk_stub_alloc_resource res range) flow >>$ fun addr flow ->
-
-      (* Add the address dimension before doing the assignment *)
-      (
-        match ekind addr with
-        | E_addr _ -> man.post (mk_add addr range) flow
-        | _ -> Post.return flow
-      )
-      >>$ fun _ flow ->
-
       (* Assign the address to the variable *)
       man.post (mk_assign (mk_var v range) addr range) flow
     )

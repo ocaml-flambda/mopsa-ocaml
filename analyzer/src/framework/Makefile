@@ -23,9 +23,8 @@
 # Framework packs
 framework = ast core lattices engines transformers output config runner
 framework.ast = program frontend typ operator constant var expr stmt visitor all
-framework.core = query context zone callstack alarm token log lattice       \
-		 soundness flow cases eval post id interface channel sig    \
-                 hook cache abstraction all
+framework.core = query context zone alarm token log lattice soundness flow \
+		 cases eval post id interface channel sig hook cache abstraction all
 framework.core.sig = value domain stacked functor
 framework.core.sig.value = lowlevel simplified reduction
 framework.core.sig.domain = manager lowlevel intermediate simplified        \

@@ -45,7 +45,8 @@ let pp_at range fmt =
 
 
 exception Panic of string (** message *) * string (** OCaml line of code *)
-exception PanicAt of Location.range * string (** message *) * string (** OCaml line of code *)
+exception PanicAtLocation of Location.range * string (** message *) * string (** OCaml line of code *)
+exception PanicAtFrame of Location.range * Callstack.callstack * string (** message *) * string (** OCaml line of code *)
 
 (** Raise a panic exception using a formatted string *)
 let panic ?(loc="") fmt =
@@ -55,7 +56,12 @@ let panic ?(loc="") fmt =
 
 let panic_at ?(loc="") range fmt =
   Format.kasprintf (fun str ->
-      raise (PanicAt (range, str, loc))
+      raise (PanicAtLocation (range, str, loc))
+    ) fmt
+
+let panic_at_frame ?(loc="") range cs fmt =
+  Format.kasprintf (fun str ->
+      raise (PanicAtFrame (range, cs, str, loc))
     ) fmt
 
 

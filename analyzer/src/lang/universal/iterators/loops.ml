@@ -128,13 +128,13 @@ struct
   (** Fixpoints are attached to the callstack and the location of the loop head *)
   module LoopHeadMap = MapExt.Make(
     struct
-      type t = (Callstack.cs * range)
+      type t = (callstack * range)
       let compare (cs1, r1) (cs2, r2) =
         Compare.compose
           [(fun () -> compare_range r1 r2);
-           (fun () -> Callstack.compare cs1 cs2);
+           (fun () -> compare_callstack cs1 cs2);
           ]
-      let print fmt (cs, r) = Format.fprintf fmt "[%a, %a]" pp_range r Callstack.pp_call_stack cs end)
+      let print fmt (cs, r) = Format.fprintf fmt "[%a, %a]" pp_range r pp_callstack cs end)
 
   (** Cache of the last fixpoints at loop heads *)
   module LastFixpointCtx = Context.GenPolyKey(
@@ -143,7 +143,7 @@ struct
         let print (l: Format.formatter -> 'a -> unit) fmt ctx = Format.fprintf fmt "Lfp cache context: %a"
             (LoopHeadMap.fprint
                MapExt.printer_default
-               (fun fmt (cs, r) -> Callstack.print fmt cs; pp_range fmt r)
+               (fun fmt (cs, r) -> pp_callstack fmt cs; pp_range fmt r)
                (fun fmt flow -> TokenMap.print l fmt (Flow.get_token_map flow))) ctx
       end
     )
@@ -154,7 +154,7 @@ struct
     try
       let m = Context.find_poly LastFixpointCtx.key (Flow.get_ctx flow) in
       let mf = LoopHeadMap.filter (fun (cs, range) _ ->
-                   Callstack.compare cs scs = 0 &&
+                   compare_callstack cs scs = 0 &&
                      compare_range srange range = 0
                  ) m in
       Some (LoopHeadMap.choose mf |> snd |> Flow.join man.lattice flow)
@@ -179,7 +179,7 @@ struct
       Flow.add T_continue (Flow.get T_continue man.lattice flow) man.lattice |>
       Flow.add T_break (Flow.get T_break man.lattice flow) man.lattice
     in
-    Debug.debug ~channel:(name ^ ".cache") "@(%a, %a): adding %a" pp_range range Callstack.pp_call_stack cs (Flow.print man.lattice.print) stripped_flow;
+    Debug.debug ~channel:(name ^ ".cache") "@(%a, %a): adding %a" pp_range range pp_callstack cs (Flow.print man.lattice.print) stripped_flow;
     let lfp_ctx = LoopHeadMap.add (cs, range) stripped_flow old_lfp_ctx in
     Flow.set_ctx (Context.add_poly LastFixpointCtx.key lfp_ctx (Flow.get_ctx flow)) flow
 

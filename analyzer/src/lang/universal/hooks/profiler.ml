@@ -90,7 +90,7 @@ struct
   (** *********************** *)
 
   (** Update the state when a call is detected *)
-  let call_detected (call:Callstack.call) =
+  let call_detected (call:callsite) =
     (* First, stop the timer of previous call, save it in the queue
        and create a new timing record *)
     let t = Sys.time () in
@@ -112,14 +112,14 @@ struct
 
 
   (** Observe the call stack and update the timing records *)
-  let observe_callstack (cs:Callstack.cs) range =
-    let depth = Callstack.length cs in
+  let observe_callstack (cs:callstack) range =
+    let depth = callstack_length cs in
     (* Decrease by 1 the current depth to take into account the first
        hidden %program call, added by init but not present in the call
        stack *)
     let cur_depth = List.length !cur.callstack - 1 in 
     if depth = cur_depth then () else
-    if depth = cur_depth + 1 then call_detected (Callstack.top cs) else
+    if depth = cur_depth + 1 then call_detected (callstack_top cs) else
     if depth = cur_depth - 1 then return_detected ()
     else panic_at range "unsupported call stack configuration: current = %d, previous = %d" cur_depth depth
 
@@ -212,7 +212,7 @@ struct
   let on_before_eval zone exp man flow = ()
     
   let on_after_eval zone exp man flow eval =
-    observe_callstack (Eval.get_ctx eval |> Context.find_unit Callstack.ctx_key) exp.erange
+    observe_callstack (Eval.get_ctx eval |> Context.find_unit Context.callstack_ctx_key) exp.erange
 
   let on_finish man flow =
     let t = Sys.time () in

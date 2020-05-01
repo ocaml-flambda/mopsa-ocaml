@@ -156,39 +156,39 @@ struct
     | Var { vkind = V_cvar {cvar_scope = Variable_parameter f}; vtyp }
       when is_c_scalar_type vtyp
       ->
-      let cs = Context.ufind Callstack.ctx_key ctx in
-      if Callstack.is_empty cs
+      let cs = Context.ufind Context.callstack_ctx_key ctx in
+      if is_empty_callstack cs
       then [Locals f.c_func_unique_name]
       else
-        let _, cs' = Callstack.pop cs in
-        if Callstack.is_empty cs'
+        let _, cs' = pop_callstack cs in
+        if is_empty_callstack cs'
         then [Locals f.c_func_unique_name]
         else
-          let caller, _ = Callstack.pop cs' in
+          let caller, _ = pop_callstack cs' in
           [Locals f.c_func_unique_name; Locals caller.call_fun_uniq_name]
 
     (* Return variables are also part of the caller and the callee packs *)
     | Var { vkind = Universal.Iterators.Interproc.Common.V_return call } ->
-      let cs = Context.ufind Callstack.ctx_key ctx in
-      if Callstack.is_empty cs
+      let cs = Context.ufind Context.callstack_ctx_key ctx in
+      if is_empty_callstack cs
       then []
       else
         (* Note that the top of the callstack is not always the callee
            function, because the return variable is used after the function
            returns
         *)
-        let f1, cs' = Callstack.pop cs in
+        let f1, cs' = pop_callstack cs in
         let fname = match ekind call with
           | E_call ({ekind = E_function (User_defined f)},_) -> f.fun_uniq_name
           | Stubs.Ast.E_stub_call(f,_) -> f.stub_func_name
           | _ -> assert false
         in
-        if Callstack.is_empty cs'
+        if is_empty_callstack cs'
         then [Locals f1.call_fun_uniq_name]
         else if f1.call_fun_uniq_name <> fname
         then [Locals f1.call_fun_uniq_name]
         else
-          let f2, _ = Callstack.pop cs' in
+          let f2, _ = pop_callstack cs' in
           [Locals f1.call_fun_uniq_name; Locals f2.call_fun_uniq_name]
 
     (* Primed bases are in the same pack as the original ones *)

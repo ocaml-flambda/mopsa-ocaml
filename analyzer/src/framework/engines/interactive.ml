@@ -38,6 +38,7 @@ open Abstraction
 open Engine
 open Format
 open Location
+open Callstack
 
 
 (** {2 Debug queries} *)
@@ -224,11 +225,11 @@ struct
 
   (** Test if there is a breakpoint at a given function *)
   let is_function_breakpoint cs breakpoints =
-    not (Callstack.is_empty cs)
-    && ( let call = Callstack.top cs in
+    not (is_empty_callstack cs)
+    && ( let call = callstack_top cs in
          BreakpointSet.exists
            (function
-             | B_function f -> f = call.Callstack.call_fun_orig_name
+             | B_function f -> f = call.call_fun_orig_name
              | B_line _ -> false
            ) breakpoints )
 
@@ -541,13 +542,13 @@ struct
     mutable command_depth: int;
     (** Depth of the interpretation tree when the command was issued *)
 
-    mutable command_callstack : Callstack.cs;
+    mutable command_callstack : callstack;
     (** Callstack when the command was issued *)
 
     mutable fstack : fstate list;
     (** Stack of function automata *)
 
-    mutable callstack : Callstack.cs;
+    mutable callstack : callstack;
     (** Current call-stack *)
   }
 
@@ -558,9 +559,9 @@ struct
     command = StepI;
     depth = 0;
     command_depth = 0;
-    command_callstack = Callstack.empty;
+    command_callstack = empty_callstack;
     fstack = [];
-    callstack = Callstack.empty;
+    callstack = empty_callstack;
   }
 
 
@@ -578,18 +579,18 @@ struct
       pp_command state.command
       state.command_depth
       (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,") pp_fstate) state.fstack
-      Callstack.print state.callstack
-      Callstack.print state.command_callstack
+      pp_callstack state.callstack
+      pp_callstack state.command_callstack
 
 
   (** Detect if we are in a new call *)
   let detect_call action prev cur =
-    Callstack.is_after cur prev
+    callstack_begins_with cur prev
 
 
   (** Detect if we returned from a call *)
   let detect_return action prev cur =
-    Callstack.is_after prev cur
+    callstack_begins_with prev cur
 
 
   (** Change the state when an action is going to be executed *)
@@ -660,7 +661,7 @@ struct
     | Next ->
       let fs = List.hd state.fstack in
       fs = Atomic
-      && not (Callstack.is_after state.callstack state.command_callstack)
+      && not (callstack_begins_with state.callstack state.command_callstack)
 
     | Continue -> false
 
@@ -668,7 +669,7 @@ struct
       let fs = List.hd state.fstack in
       fs = Atomic
       && state.command_callstack <> []
-      && not (Callstack.is_after state.callstack (Callstack.pop state.command_callstack |> snd))
+      && not (callstack_begins_with state.callstack (pop_callstack state.command_callstack |> snd))
 
     | _ -> false
 
@@ -711,7 +712,7 @@ struct
 
     | Backtrace ->
       let cs = Flow.get_callstack flow in
-      printf "%a@." Callstack.print cs;
+      printf "%a@." pp_callstack cs;
       interact action flow
 
     | Print ->

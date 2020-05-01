@@ -33,7 +33,7 @@ open Ast.All
 open Flow
 open Log
 open Context
-
+open Callstack
 
 
 
@@ -66,7 +66,7 @@ val set_ctx : 'a ctx -> ('a,'r) cases -> ('a,'r) cases
 (** [set_ctx ctx c] changes the context of cases [c] to [ctx]. *)
 
 
-val get_callstack: ('a,'r) cases -> Callstack.cs
+val get_callstack: ('a,'r) cases -> callstack
 (** [get_callstack c] returns the callstack of cases [c]. *)
 
 

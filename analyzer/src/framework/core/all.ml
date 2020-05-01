@@ -21,8 +21,6 @@
 
 include Alarm
 
-module Callstack = Callstack
-
 module Context = Context
 
 module Cases = Cases

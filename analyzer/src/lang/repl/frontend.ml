@@ -243,7 +243,11 @@ let rec repl_loop ctx man flow =
     | Panic (msg,txt) ->
        pf "%sPanic: %s: %s%s@." col_error msg txt col_reset;
        ctx, flow
-    | PanicAt (r,msg,txt) ->
+    | PanicAtLocation (r,msg,txt) ->
+       pf "%sPanic: %s at %a: %s%s@." col_error msg (pp_range) r txt col_reset;
+       print_highlight str r;
+       ctx, flow
+    | PanicAtFrame (r,cs,msg,txt) ->
        pf "%sPanic: %s at %a: %s%s@." col_error msg (pp_range) r txt col_reset;
        print_highlight str r;
        ctx, flow

@@ -135,7 +135,7 @@ struct
           let alarm =
             match k with
             | Alarms.Py_exc_unprecise ->
-              mk_alarm a Callstack.empty (unprecise_exception_range prog_range)
+              mk_alarm a empty_callstack (unprecise_exception_range prog_range)
 
             | Alarms.Py_exc_with_callstack (range,cs) ->
               mk_alarm a cs range

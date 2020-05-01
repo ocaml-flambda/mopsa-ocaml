@@ -21,7 +21,7 @@
 
 (** An abstraction is the encapsulation of the top-level abstract domain used
     by the analyzer.
-
+ 
     There are two main differences with domains. First, transfer functions are
     indexed by zones to enable a faster access. Second, transfer functions are 
     not partial functions and return always a result.
@@ -40,6 +40,7 @@ open Query
 open Log
 open Cases
 open Interface
+open Callstack
 
 
 type ('a, 't) man = ('a, 't) Sig.Domain.Lowlevel.man = {
@@ -178,7 +179,7 @@ struct
   let init prog man : Domain.t flow =
     (* Initialize the context with an empty callstack *)
     let ctx = Context.empty |>
-              Context.add_unit Callstack.ctx_key Callstack.empty
+              Context.add_unit Context.callstack_ctx_key empty_callstack
     in
 
     (* Initialize hooks *)
@@ -226,9 +227,22 @@ struct
       let post = Cache.exec fexec zone stmt man flow in
       let ctx = Hook.on_after_exec zone stmt man flow post in
       Post.set_ctx ctx post
-    with Exceptions.Panic(msg, line) ->
+    with
+    | Exceptions.Panic(msg, line) ->
       Printexc.raise_with_backtrace
-        (Exceptions.PanicAt(stmt.srange, msg, line))
+        (Exceptions.PanicAtFrame(stmt.srange, (Flow.get_callstack flow),msg, line))
+        (Printexc.get_raw_backtrace())
+
+    | Exceptions.PanicAtLocation(range, msg, line) ->
+      Printexc.raise_with_backtrace
+        (Exceptions.PanicAtFrame(range, (Flow.get_callstack flow),msg, line))
+        (Printexc.get_raw_backtrace())
+
+    | Sys.Break -> raise Sys.Break
+
+    | e when (match e with Exceptions.PanicAtFrame _ -> false | _ -> true) ->
+      Printexc.raise_with_backtrace
+        (Exceptions.PanicAtFrame(stmt.srange, (Flow.get_callstack flow), Printexc.to_string e, ""))
         (Printexc.get_raw_backtrace())
 
 
@@ -381,21 +395,16 @@ struct
 
     | other_action ->
       match
-        (try Cache.eval (fun e man flow ->
-             match feval e man flow with
-             | None -> None
-             | Some evl ->
-               let evl' = Eval.remove_duplicates man.lattice evl in
-               (* Update the eprev field in returned expressions to indicate the
+        Cache.eval (fun e man flow ->
+            match feval e man flow with
+            | None -> None
+            | Some evl ->
+              let evl' = Eval.remove_duplicates man.lattice evl in
+              (* Update the eprev field in returned expressions to indicate the
                   previous form of the result *)
-               let evl'' = Eval.map (fun ee -> { ee with eprev = Some e }) evl' in
-               Some evl''
-           ) (z1, z2) exp man flow
-         with Exceptions.Panic(msg, line) ->
-           Printexc.raise_with_backtrace
-             (Exceptions.PanicAt(exp.erange, msg, line))
-             (Printexc.get_raw_backtrace())
-        )
+              let evl'' = Eval.map (fun ee -> { ee with eprev = Some e }) evl' in
+              Some evl''
+          ) (z1, z2) exp man flow
       with
       | Some evl -> Some evl
       | None ->

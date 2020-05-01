@@ -26,6 +26,7 @@ open Core.All
 open Sig.Domain.Lowlevel
 open Location
 open Format
+open Callstack
 
 
 (** Command-line option to enable display of alarms call stacks *)
@@ -46,7 +47,7 @@ let print out fmt =
 
 
 module AlarmMessageSet = SetExt.Make(struct type t = alarm_message let compare = compare_alarm_message end)
-module CallstackSet = SetExt.Make(struct type t = Callstack.cs let compare = Callstack.compare end)
+module CallstackSet = SetExt.Make(struct type t = callstack let compare = compare_callstack end)
 
 
 (** Highlight source code at a given location range *)
@@ -175,27 +176,21 @@ let report ?(flow=None) man alarms time files out =
                 (fun fmt callstacks ->
                    if not !opt_show_callstacks then ()
                    else
-                     let pp_callstack i fmt cs =
-                       fprintf fmt "@[<v>Call stack%a:@,%a@]"
+                     let pp_numbered_callstack i fmt cs =
+                       fprintf fmt "@,@[<v>Call stack%a:@,%a@]"
                          (fun fmt -> function
                             | None   -> ()
                             | Some i -> fprintf fmt " %d" (i+1)
                          ) i
-                         (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-                            (fun fmt c ->
-                               fprintf fmt "\tfrom %a: %s"
-                                 pp_relative_range c.Callstack.call_site
-                                 c.Callstack.call_fun_orig_name
-                            )
-                         ) cs
+                         pp_callstack cs
                      in
                      match CallstackSet.elements callstacks with
                      | [] -> ()
-                     | [cs] -> pp_callstack None fmt cs
+                     | [cs] -> pp_numbered_callstack None fmt cs
                      | csl    ->
                        let csl' = List.mapi (fun i cs -> (i,cs)) csl in
                        pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-                         (fun fmt (i,cs) -> pp_callstack (Some i) fmt cs)
+                         (fun fmt (i,cs) -> pp_numbered_callstack (Some i) fmt cs)
                          fmt csl';
                 ) callstacks
               ;
@@ -225,15 +220,18 @@ let report ?(flow=None) man alarms time files out =
   print out "Time: %.3fs@." time;
   ()
 
-let panic ?btrace exn files time out =
+let panic ~btrace exn files time out =
   print out "%a@." (Debug.color_str "red") "Analysis aborted";
   let () =
     match exn with
     | Exceptions.Panic (msg, "") -> print out "panic: %s@." msg
     | Exceptions.Panic (msg, loc) -> print out "panic raised in %s: %s@." loc msg
 
-    | Exceptions.PanicAt (range, msg, "") -> print out "panic in %a: %s@." Location.pp_range range msg
-    | Exceptions.PanicAt (range, msg, loc) -> print out "%a: panic raised in %s: %s@." Location.pp_range range loc msg
+    | Exceptions.PanicAtLocation (range, msg, "") -> print out "panic in %a: %s@." Location.pp_range range msg
+    | Exceptions.PanicAtLocation (range, msg, loc) -> print out "%a: panic raised in %s: %s@." Location.pp_range range loc msg
+
+    | Exceptions.PanicAtFrame (range, cs, msg, "") -> print out "panic in %a: %s@\nTrace:@\n%a@." Location.pp_range range msg pp_callstack cs
+    | Exceptions.PanicAtFrame (range, cs, msg, loc) -> print out "%a: panic raised in %s: %s@\nTrace:@\n%a@." Location.pp_range range loc msg pp_callstack cs
 
     | Exceptions.SyntaxError (range, msg) -> print out "%a: syntax error: %s@." Location.pp_range range msg
     | Exceptions.UnnamedSyntaxError range -> print out "%a: syntax error@." Location.pp_range range
@@ -253,9 +251,8 @@ let panic ?btrace exn files time out =
     | _ -> print out "Uncaught exception: %s@." (Printexc.to_string exn)
   in
   let () =
-    match btrace with
-    | Some x when String.length x > 0 -> print out "Backtrace:@\n%s" x
-    | _ -> ()
+    if btrace = "" then ()
+    else print out "Backtrace:@\n%s" btrace
   in
   ()
 

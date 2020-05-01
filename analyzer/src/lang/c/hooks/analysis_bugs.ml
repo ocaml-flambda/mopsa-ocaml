@@ -53,13 +53,13 @@ struct
 
   type bug = {
     bug_range : range;
-    bug_callstack : Callstack.cs;
+    bug_callstack : callstack;
   }
 
 
   (** Compare two bugs *)
   let compare_bug b1 b2 =
-    Compare.pair compare_range Callstack.compare
+    Compare.pair compare_range compare_callstack
       (b1.bug_range,b1.bug_callstack)
       (b2.bug_range,b2.bug_callstack)
 
@@ -97,7 +97,7 @@ struct
            BugSet.for_all
              (fun b' -> b.bug_range == b'.bug_range
                           || (not (subset_range b'.bug_range b.bug_range)
-                              &&  not (Callstack.is_after b'.bug_callstack b.bug_callstack))
+                              &&  not (callstack_begins_with b'.bug_callstack b.bug_callstack))
              ) !bugs
         ) !bugs
 
@@ -163,13 +163,7 @@ struct
            (fun fmt bug -> fprintf fmt "%a %a@,  Trace:@,%a"
                (Debug.color_str "orange") "⚠"
                pp_relative_range bug.bug_range
-               (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-                  (fun fmt c ->
-                     fprintf fmt "\tfrom %a: %s"
-                       pp_relative_range c.Callstack.call_site
-                       c.Callstack.call_fun_orig_name
-                  )
-               ) bug.bug_callstack
+               pp_callstack bug.bug_callstack
            )
         ) (BugSet.elements !bugs)
 

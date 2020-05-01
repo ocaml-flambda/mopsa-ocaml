@@ -31,7 +31,6 @@ open Context
 open Alarm
 
 
-
 (****************************************************************************)
 (**                           {2 Definition}                                *)
 (****************************************************************************)
@@ -115,7 +114,7 @@ let copy_ctx src dst =
 
 let get_callstack r =
   get_ctx r |>
-  Context.find_unit Callstack.ctx_key
+  Context.find_unit Context.callstack_ctx_key
 
 
 let map_cases
