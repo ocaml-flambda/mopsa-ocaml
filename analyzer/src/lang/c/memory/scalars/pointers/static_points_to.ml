@@ -108,7 +108,7 @@ let rec eval_opt exp : static_points_to option =
         None
     end
 
-  | E_c_cast (e, _) ->
+  | E_c_cast (e, _) when is_c_pointer_type exp.etyp ->
     eval_opt e
 
   | E_c_function f ->
@@ -138,7 +138,7 @@ let rec eval_opt exp : static_points_to option =
     Eval (v, mode, mk_zero exp.erange) |> OptionExt.return
 
   | x when is_c_int_type exp.etyp ->
-    Invalid |> OptionExt.return
+    Top |> OptionExt.return
 
   | _ ->
     warn_at exp.erange "evaluation of pointer expression %a not supported" pp_expr exp;
