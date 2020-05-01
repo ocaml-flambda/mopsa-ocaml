@@ -195,8 +195,10 @@ struct
     | E_addr addr ->
       (* Add bytes attribute *)
       let bytes = mk_bytes_var addr in
-      let flow' = man.exec ~zone:Z_c_scalar (mk_add_var bytes exp.erange) flow in
-      Eval.singleton exp flow'
+      man.post ~zone:Z_c_scalar (mk_add_var bytes exp.erange) flow >>$ fun () flow ->
+      (* Add the address dimension to memory abstraction *)
+      man.post (mk_add exp range) flow >>$ fun () flow ->
+      Eval.singleton exp flow
 
     | _ -> assert false
 
