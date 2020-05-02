@@ -100,11 +100,11 @@ let () =
       );
   }
 
-let raise_c_null_deref_alarm pointer man flow =
+let raise_c_null_deref_alarm ?(bottom=true) pointer man flow =
   let cs = Flow.get_callstack flow in
   let pointer' = get_orig_expr pointer in
   let alarm = mk_alarm (A_c_null_deref_msg(pointer')) cs pointer.erange in
-  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+  Flow.raise_alarm alarm ~bottom man.lattice flow
 
 
 (** {2 Invalid pointer dereference} *)
@@ -136,11 +136,11 @@ let () =
       );
   }
 
-let raise_c_invalid_deref_alarm pointer man flow =
+let raise_c_invalid_deref_alarm ?(bottom=true) pointer man flow =
   let cs = Flow.get_callstack flow in
   let pointer' = get_orig_expr pointer in
   let alarm = mk_alarm (A_c_invalid_deref_msg(pointer')) cs pointer.erange in
-  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+  Flow.raise_alarm alarm ~bottom man.lattice flow
 
 
 
@@ -152,6 +152,7 @@ type alarm_message += A_c_out_of_bound_msg of base (** accessed base *) *
                                               int_itv (** base size *) *
                                               int_itv (** offset *) *
                                               typ (** accessed type *)
+type alarm_message += A_c_out_of_bound_wo_info_msg of expr (** pointer *)
 
 let () =
   register_alarm_class (fun next fmt -> function
@@ -163,6 +164,7 @@ let () =
   register_grouped_alarm_message {
     classifier = (fun next -> function
         | A_c_out_of_bound_msg _ -> A_c_out_of_bound
+        | A_c_out_of_bound_wo_info_msg _ -> A_c_out_of_bound
         | a -> next a
       );
     compare = (fun next a1 a2 ->
@@ -173,6 +175,9 @@ let () =
               (fun () -> compare_int_interval s1 s2);
               (fun () -> compare_int_interval o1 o2);
               (fun () -> compare_typ t1 t2); ]
+
+        | A_c_out_of_bound_wo_info_msg(p1), A_c_out_of_bound_wo_info_msg(p2) ->
+          compare_expr p1 p2
 
         | _ -> next a1 a2
       );
@@ -187,6 +192,7 @@ let () =
                    let o = I.join_bot oldo o in
                    let e = I.join_bot olde (Bot.Nb (I.cst (sizeof_type (void_to_char t)))) in
                    BaseMap.add b (s,o,e) acc
+                 | A_c_out_of_bound_wo_info_msg _ -> acc
                  | _ -> assert false
               ) BaseMap.empty messages
           in
@@ -206,37 +212,43 @@ let () =
       );
   }
 
-let raise_c_out_var_bound_alarm var offset typ range man input_flow error_flow =
+
+let raise_c_out_var_bound_alarm ?(bottom=true) var offset typ range man input_flow error_flow =
   let cs = Flow.get_callstack error_flow in
   let offset_itv = man.ask (mk_int_interval_query offset) input_flow in
   let size_itv = sizeof_type var.vtyp |> I.cst in
   let alarm = mk_alarm (A_c_out_of_bound_msg(mk_var_base var,Bot.Nb size_itv, offset_itv, typ)) cs range in
-  Flow.raise_alarm alarm ~bottom:true man.lattice error_flow
+  Flow.raise_alarm alarm ~bottom man.lattice error_flow
 
-let raise_c_out_addr_bound_alarm addr size offset typ range man input_flow error_flow =
+let raise_c_out_addr_bound_alarm ?(bottom=true) addr size offset typ range man input_flow error_flow =
   let cs = Flow.get_callstack error_flow in
   let offset_itv = man.ask (mk_int_interval_query offset) input_flow in
   let size_itv = man.ask (mk_int_interval_query size) input_flow in
   let alarm = mk_alarm (A_c_out_of_bound_msg(mk_addr_base addr, size_itv, offset_itv, typ)) cs range in
-  Flow.raise_alarm alarm ~bottom:true man.lattice error_flow
+  Flow.raise_alarm alarm ~bottom man.lattice error_flow
 
-let raise_c_out_bound_alarm base size offset typ range man input_flow error_flow =
+let raise_c_out_bound_alarm ?(bottom=true) base size offset typ range man input_flow error_flow =
   let cs = Flow.get_callstack error_flow in
   let offset_itv = man.ask (mk_int_interval_query offset) input_flow in
   let size_itv = man.ask (mk_int_interval_query size) input_flow in
   let alarm = mk_alarm (A_c_out_of_bound_msg(base, size_itv, offset_itv, typ)) cs range in
-  Flow.raise_alarm alarm ~bottom:true man.lattice error_flow
+  Flow.raise_alarm alarm ~bottom man.lattice error_flow
 
 
-let raise_c_quantified_out_bound_alarm base size min max typ range man input_flow error_flow =
+let raise_c_quantified_out_bound_alarm ?(bottom=true) base size min max typ range man input_flow error_flow =
   let cs = Flow.get_callstack error_flow in
   let min_itv = man.ask (mk_int_interval_query min) input_flow in
   let max_itv = man.ask (mk_int_interval_query max) input_flow in
   let offset_itv = I.join_bot min_itv max_itv in
   let size_itv = man.ask (mk_int_interval_query size) input_flow in
   let alarm = mk_alarm (A_c_out_of_bound_msg(base,size_itv, offset_itv, typ)) cs range in
-  Flow.raise_alarm alarm ~bottom:true man.lattice error_flow
+  Flow.raise_alarm alarm ~bottom man.lattice error_flow
 
+let raise_c_out_bound_wo_info_alarm ?(bottom=true) ptr man flow =
+  let cs = Flow.get_callstack flow in
+  let ptr' = get_orig_expr ptr in
+  let alarm = mk_alarm (A_c_out_of_bound_wo_info_msg ptr') cs ptr.erange in
+  Flow.raise_alarm alarm ~bottom man.lattice flow
 
 
 (** {2 Division by zero} *)
@@ -269,11 +281,11 @@ let () =
   }
 
 
-let raise_c_divide_by_zero_alarm denominator range man flow =
+let raise_c_divide_by_zero_alarm ?(bottom=true) denominator range man flow =
   let cs = Flow.get_callstack flow in
   let denominator' = get_orig_expr denominator in
   let alarm = mk_alarm (A_c_divide_by_zero_msg(denominator')) cs range in
-  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+  Flow.raise_alarm alarm ~bottom man.lattice flow
 
 
 (** {2 Integer overflow} *)
@@ -350,19 +362,19 @@ let () =
   }
 
 
-let raise_c_integer_overflow_alarm cexp nexp man input_flow error_flow =
+let raise_c_integer_overflow_alarm ?(bottom=false) cexp nexp man input_flow error_flow =
   let cs = Flow.get_callstack error_flow in
   let cexp' = get_orig_expr cexp in
   let itv = man.ask (mk_int_interval_query nexp) input_flow in
   let alarm = mk_alarm (A_c_integer_overflow_msg(cexp',itv)) cs cexp'.erange in
-  Flow.raise_alarm alarm ~bottom:false man.lattice error_flow
+  Flow.raise_alarm alarm ~bottom man.lattice error_flow
 
-let raise_c_cast_integer_overflow_alarm cexp nexp t man input_flow error_flow =
+let raise_c_cast_integer_overflow_alarm ?(bottom=false) cexp nexp t man input_flow error_flow =
   let cs = Flow.get_callstack error_flow in
   let cexp' = get_orig_expr cexp in
   let itv = man.ask (mk_int_interval_query nexp) input_flow in
   let alarm = mk_alarm (A_c_cast_integer_overflow_msg(cexp',itv,t)) cs cexp'.erange in
-  Flow.raise_alarm alarm ~bottom:false man.lattice error_flow
+  Flow.raise_alarm alarm ~bottom man.lattice error_flow
 
 
 (** {2 Invalid shift} *)
@@ -420,12 +432,12 @@ let () =
 
 
 
-let raise_c_invalid_shift_alarm e shift man input_flow error_flow =
+let raise_c_invalid_shift_alarm ?(bottom=true) e shift man input_flow error_flow =
   let cs = Flow.get_callstack error_flow in
   let shift' = get_orig_expr shift in
   let shift_itv = man.ask (mk_int_interval_query shift) input_flow in
   let alarm = mk_alarm (A_c_invalid_shift_msg(e,shift',shift_itv)) cs shift.erange in
-  Flow.raise_alarm alarm ~bottom:true man.lattice error_flow
+  Flow.raise_alarm alarm ~bottom man.lattice error_flow
 
 
 
@@ -465,12 +477,12 @@ let () =
   }
 
 
-let raise_c_invalid_pointer_compare p1 p2 range man flow =
+let raise_c_invalid_pointer_compare ?(bottom=true) p1 p2 range man flow =
   let cs = Flow.get_callstack flow in
   let p1' = get_orig_expr p1 in
   let p2' = get_orig_expr p2 in
   let alarm = mk_alarm (A_c_invalid_pointer_compare_msg(p1',p2')) cs range in
-  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+  Flow.raise_alarm alarm ~bottom man.lattice flow
 
 
 
@@ -511,12 +523,12 @@ let () =
   }
 
 
-let raise_c_invalid_pointer_sub p1 p2 range man flow =
+let raise_c_invalid_pointer_sub ?(bottom=true) p1 p2 range man flow =
   let cs = Flow.get_callstack flow in
   let p1' = get_orig_expr p1 in
   let p2' = get_orig_expr p2 in
   let alarm = mk_alarm (A_c_invalid_pointer_sub_msg(p1',p2')) cs range in
-  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+  Flow.raise_alarm alarm ~bottom man.lattice flow
 
 
 
@@ -527,6 +539,7 @@ type alarm_class   += A_c_dangling_pointer_deref
 type alarm_message += A_c_dangling_pointer_deref_msg of expr (** pointer *) *
                                                         var (** pointed variable *) *
                                                         range (** return location *)
+type alarm_message += A_c_dangling_pointer_deref_wo_info_msg of expr
 
 let () =
   register_alarm_class (fun next fmt -> function
@@ -538,12 +551,15 @@ let () =
   register_alarm_message {
     classifier = (fun next -> function
         | A_c_dangling_pointer_deref_msg _ -> A_c_dangling_pointer_deref
+        | A_c_dangling_pointer_deref_wo_info_msg _ -> A_c_dangling_pointer_deref
         | a -> next a
       );
     compare = (fun next a1 a2 ->
         match a1, a2 with
         | A_c_dangling_pointer_deref_msg(p1,v1,r1), A_c_dangling_pointer_deref_msg(p2,v2,r2) ->
           Compare.triple compare_expr compare_var compare_range (p1,v1,r1) (p2,v2,r2)
+        | A_c_dangling_pointer_deref_wo_info_msg(p1), A_c_dangling_pointer_deref_wo_info_msg(p2) ->
+          compare_expr p1 p2
         | _ -> next a1 a2
       );
     print = (fun next fmt -> function
@@ -564,16 +580,26 @@ let () =
                 pp_range r
           end
 
+        | A_c_dangling_pointer_deref_wo_info_msg(p) -> ()
+
         | m -> next fmt m
       );
   }
 
 
-let raise_c_dangling_deref_alarm ptr var ret_range man flow =
+let raise_c_dangling_deref_alarm ?(bottom=true) ptr var ret_range man flow =
   let cs = Flow.get_callstack flow in
   let ptr' = get_orig_expr ptr in
   let alarm = mk_alarm (A_c_dangling_pointer_deref_msg(ptr',var,ret_range)) cs ptr.erange in
-  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+  Flow.raise_alarm alarm ~bottom man.lattice flow
+
+
+let raise_c_dangling_deref_wo_info_alarm ?(bottom=true) ptr man flow =
+  let cs = Flow.get_callstack flow in
+  let ptr' = get_orig_expr ptr in
+  let alarm = mk_alarm (A_c_dangling_pointer_deref_wo_info_msg ptr') cs ptr.erange in
+  Flow.raise_alarm alarm ~bottom man.lattice flow
+
 
 
 (** {2 Use after free} *)
@@ -582,6 +608,7 @@ let raise_c_dangling_deref_alarm ptr var ret_range man flow =
 type alarm_class   += A_c_use_after_free
 type alarm_message += A_c_use_after_free_msg of expr (** pointer *) *
                                                 range (** deallocation site *)
+type alarm_message += A_c_use_after_free_wo_info_msg of expr (** pointer *)
 
 let () =
   register_alarm_class (fun next fmt -> function
@@ -593,29 +620,39 @@ let () =
   register_alarm_message {
     classifier = (fun next -> function
         | A_c_use_after_free_msg _ -> A_c_use_after_free
+        | A_c_use_after_free_wo_info_msg _ -> A_c_use_after_free
         | a -> next a
       );
     compare = (fun next a1 a2 ->
         match a1, a2 with
         | A_c_use_after_free_msg(p1,r1), A_c_use_after_free_msg(p2,r2) ->
           Compare.pair compare_expr compare_range (p1,r1) (p2,r2)
+        | A_c_use_after_free_wo_info_msg(p1), A_c_use_after_free_wo_info_msg(p2) ->
+          compare_expr p1 p2
         | _ -> next a1 a2
       );
     print = (fun next fmt -> function
         | A_c_use_after_free_msg(p,r) ->
           fprintf fmt "'%a' points to memory deallocated at %a" (Debug.bold pp_expr) p pp_range r
 
+        | A_c_use_after_free_wo_info_msg p -> ()
+
         | m -> next fmt m
       );
   }
 
 
-let raise_c_use_after_free_alarm pointer dealloc_range man flow =
+let raise_c_use_after_free_alarm ?(bottom=true) pointer dealloc_range man flow =
   let cs = Flow.get_callstack flow in
   let pointer' = get_orig_expr pointer in
   let alarm = mk_alarm (A_c_use_after_free_msg(pointer',dealloc_range)) cs pointer'.erange in
-  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+  Flow.raise_alarm alarm ~bottom man.lattice flow
 
+let raise_c_use_after_free_wo_info_alarm ?(bottom=true) pointer man flow =
+  let cs = Flow.get_callstack flow in
+  let pointer' = get_orig_expr pointer in
+  let alarm = mk_alarm (A_c_use_after_free_wo_info_msg(pointer')) cs pointer'.erange in
+  Flow.raise_alarm alarm ~bottom man.lattice flow
 
 
 (** {2 Double free} *)
@@ -654,11 +691,11 @@ let () =
   }
 
 
-let raise_c_double_free_alarm pointer dealloc_range man flow =
+let raise_c_double_free_alarm ?(bottom=true) pointer dealloc_range man flow =
   let cs = Flow.get_callstack flow in
   let pointer' = get_orig_expr pointer in
   let alarm = mk_alarm (A_c_double_free_msg(pointer',dealloc_range)) cs pointer'.erange in
-  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+  Flow.raise_alarm alarm ~bottom man.lattice flow
 
 
 (** {2 Insufficient variadic arguments} *)
@@ -713,12 +750,12 @@ let () =
   }
 
 
-let raise_c_insufficient_variadic_args va_list counter args range man input_flow error_flow =
+let raise_c_insufficient_variadic_args ?(bottom=true) va_list counter args range man input_flow error_flow =
   let cs = Flow.get_callstack error_flow in
   let nargs = List.length args in
   let counter_itv = man.ask (mk_int_interval_query counter) input_flow in
   let alarm = mk_alarm (A_c_insufficient_variadic_args_msg(va_list,counter_itv,nargs)) cs range in
-  Flow.raise_alarm alarm ~bottom:true man.lattice error_flow
+  Flow.raise_alarm alarm ~bottom man.lattice error_flow
 
 
 
@@ -756,10 +793,10 @@ let () =
   }
 
 
-let raise_c_insufficient_format_args_alarm required given range man flow =
+let raise_c_insufficient_format_args_alarm ?(bottom=true) required given range man flow =
   let cs = Flow.get_callstack flow in
   let alarm = mk_alarm (A_c_insufficient_format_args_msg(required,given)) cs range in
-  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+  Flow.raise_alarm alarm ~bottom man.lattice flow
 
 
 
@@ -798,10 +835,10 @@ let () =
   }
 
 
-let raise_c_invalid_format_arg_type_alarm arg typ man flow =
+let raise_c_invalid_format_arg_type_alarm ?(bottom=false) arg typ man flow =
   let cs = Flow.get_callstack flow in
   let alarm = mk_alarm (A_c_invalid_format_arg_type_msg(get_orig_expr arg, typ)) cs arg.erange in
-  Flow.raise_alarm alarm ~bottom:false man.lattice flow
+  Flow.raise_alarm alarm ~bottom man.lattice flow
 
 
 
@@ -840,10 +877,10 @@ let () =
   }
 
 
-let raise_c_modify_read_only_alarm ptr base man flow =
+let raise_c_modify_read_only_alarm ?(bottom=true) ptr base man flow =
   let cs = Flow.get_callstack flow in
   let alarm = mk_alarm (A_c_modify_read_only_msg(get_orig_expr ptr, base)) cs ptr.erange in
-  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+  Flow.raise_alarm alarm ~bottom man.lattice flow
 
 
 
@@ -881,8 +918,8 @@ let () =
       );
   }
 
-let raise_c_invalid_float_class_alarm float msg range man input_flow error_flow =
+let raise_c_invalid_float_class_alarm ?(bottom=true) float msg range man input_flow error_flow =
   let cs = Flow.get_callstack error_flow in
   let float_itv = man.ask (mk_float_interval_query float) input_flow in
   let alarm = mk_alarm (A_c_invalid_float_class_msg (float_itv,msg)) cs range in
-  Flow.raise_alarm alarm ~bottom:true man.lattice error_flow
+  Flow.raise_alarm alarm ~bottom man.lattice error_flow

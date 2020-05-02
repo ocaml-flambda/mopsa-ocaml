@@ -176,7 +176,7 @@ struct
       exec_assign_base base offset mode target.etyp assigned_indices range man flow
 
     | E_c_points_to P_top ->
-      Soundness.warn_at range "ignoring ⊤ pointer %a" pp_expr (get_orig_expr ptr);
+      Soundness.warn_at range "ignoring assigns on ⊤ pointer %a" pp_expr (get_orig_expr ptr);
       Cases.empty_singleton flow
 
     | _ -> assert false
@@ -264,7 +264,7 @@ struct
       eval_primed_base base offset mode e.etyp range man flow
 
     | E_c_points_to P_top ->
-      Soundness.warn_at range "ignoring ⊤ pointer %a" pp_expr (get_orig_expr ptr);
+      Soundness.warn_at range "ignoring prime of ⊤ pointer %a" pp_expr (get_orig_expr ptr);
       Cases.empty_singleton flow
 
     | _ -> assert false
