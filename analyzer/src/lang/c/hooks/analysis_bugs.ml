@@ -76,6 +76,7 @@ struct
 
   (** Whitelist of stub functions that do not return *)
   let whitelist = [ "exit";
+                    "_exit";
                     "quick_exit";
                     "abort";
                     "__builtin_abort";

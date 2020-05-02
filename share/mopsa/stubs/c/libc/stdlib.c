@@ -763,11 +763,71 @@ void abort (void);
 void __builtin_abort (void);
 
 
-#if defined __USE_ISOC11 || defined __USE_ISOCXX11
+#define _ATEXIT_MAX 32
 
+void (*_exit_fun_buf[_ATEXIT_MAX])(void);
+unsigned int _next_exit_fun_slot = 0;
+
+
+/*$
+ * case "success" {
+ *   assumes: _next_exit_fun_slot <= _ATEXIT_MAX;
+ *   assigns: _next_exit_fun_slot;
+ *   assigns: _exit_fun_buf[_next_exit_fun_slot];
+ *   ensures: (_exit_fun_buf[_next_exit_fun_slot])' == __func;
+ *   ensures: _next_exit_fun_slot' == _next_exit_fun_slot + 1;
+ *   ensures: return == 1;
+ * }
+ *
+ * case "failure" {
+ *   assumes: _next_exit_fun_slot > _ATEXIT_MAX;
+ *   ensures: return == 0;
+ * }
+ */
+int atexit (void (*__func) (void));
+
+// stub built in mopsa
+void exit (int __status);
+
+/*$
+ * ensures: 1 == 0;
+ */
+void _Exit (int __status);
+
+/*$
+ * ensures: 1 == 0;
+ */
+void _exit (int __status);
+
+
+
+
+//#if defined __USE_ISOC11 || defined __USE_ISOCXX11
+
+void (*_quick_exit_fun_buf[_ATEXIT_MAX])(void);
+unsigned int _next_quick_exit_fun_slot = 0;
+
+/*$
+ * case "success" {
+ *   assumes: _next_quick_exit_fun_slot <= _ATEXIT_MAX;
+ *   assigns: _next_quick_exit_fun_slot;
+ *   assigns: _quick_exit_fun_buf[_next_quick_exit_fun_slot];
+ *   ensures: (_quick_exit_fun_buf[_next_quick_exit_fun_slot])' == __func;
+ *   ensures: _next_quick_exit_fun_slot' == _next_quick_exit_fun_slot + 1;
+ *   ensures: return == 1;
+ * }
+ *
+ * case "failure" {
+ *   assumes: _next_quick_exit_fun_slot > _ATEXIT_MAX;
+ *   ensures: return == 0;
+ * }
+ */
 int at_quick_exit (void (*__func) (void)) ;
 
-#endif
+// stub built in mopsa
+void quick_exit (int __status);
+
+//#endif
 
 #ifdef	__USE_MISC
 
@@ -775,28 +835,6 @@ int on_exit (void (*__func) (int __status, void *__arg), void *__arg);
 
 #endif
 
-/*$
- * ensures: 1 == 0;
- */
-void exit (int __status);
-
-#if defined __USE_ISOC11 || defined __USE_ISOCXX11
-
-/*$
- * ensures: 1 == 0;
- */
-void quick_exit (int __status);
-
-#endif
-
-#ifdef __USE_ISOC99
-
-/*$
- * ensures: 1 == 0;
- */
-void _Exit (int __status);
-
-#endif
 
 /*$
  * requires: valid_string(__name);
