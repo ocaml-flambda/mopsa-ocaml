@@ -31,6 +31,7 @@ open Zone
 open Universal.Zone
 open Common.Points_to
 open Common.Base
+open Universal.Numeric.Common
 
 
 (** Iterator domain *)
@@ -88,7 +89,7 @@ struct
     };
 
     ieval = {
-      provides = [];
+      provides = [Z_c,Z_c_low_level];
       uses = [Z_c,Z_c_scalar;
               Z_c,Z_u_num;
               Z_c,Z_c_points_to]
@@ -96,6 +97,7 @@ struct
   }
 
   let alarms = []
+
 
   (** Initialization of environments *)
   (** ============================== *)
@@ -140,6 +142,85 @@ struct
     List.find (function
           {c_func_org_name} -> c_func_org_name = f
       ) functions
+
+  (** Find a global variable by name *)
+  let find_variable v vars =
+    List.find (fun (vv,_) ->
+        match vv.vkind with
+        | V_cvar {cvar_orig_name} -> cvar_orig_name = v
+        | _ -> false
+      ) vars
+    |> fst
+    
+
+  (** Execute exit functions using a loop *)
+  let exec_exit_functions_with_loop a b buf range man flow =
+    let rec aux i flow =
+      if i < Z.zero then
+        (* We have reached the end of the array *)
+        Post.return flow
+      else
+        (* Resolve the pointed function *)
+        let fp = mk_c_subscript_access buf (mk_z i range) range in
+        man.eval fp ~zone:(Z_c,Z_c_points_to) flow >>$ fun p flow ->
+        let input = flow in
+        match ekind p with
+        | E_c_points_to (P_fun f) ->
+          (* Execute the function *)
+          let stmt = mk_c_call_stmt f [] range in
+          man.post stmt flow >>$ fun () flow' ->
+          (* Function to return the correct flow depending on the
+             position in the array. If index [i] is above [a], this
+             means that function [f] hasn't been registered in some
+             traces, so we put the input flow also *)
+          let fix_flow f = if Z.(i < a) then f else Flow.join man.lattice input f in
+          (* If the output is empty, this was due to calls to _exit or due to alarms. So we stop the loop *)
+          if man.lattice.is_bottom (Flow.get T_cur man.lattice flow') then
+            Post.return (fix_flow flow')
+          else
+            aux (Z.pred i) flow' >>$ fun () flow'' ->
+            Post.return (fix_flow flow'')
+
+        | E_c_points_to P_top ->
+          Soundness.warn "ignoring side-effects of ⊤ exit functions";
+          Post.return flow
+
+        | _ -> assert false
+    in
+    aux (Z.pred b) flow >>$ fun () flow ->
+    Post.return (Flow.remove T_cur flow)
+
+
+
+  (** Execute functions registered with atexit *)
+  let exec_exit_functions name range man flow =
+    let prog = get_c_program flow in
+    try
+      let nb = mk_var (find_variable ("_next_"^name^"_fun_slot") prog.c_globals) range in
+      let buf = mk_var (find_variable ("_"^name^"_fun_buf") prog.c_globals) range in
+      let nb_itv =
+        let evl = man.eval nb ~zone:(Z_c,Z_u_num) flow in
+        Cases.fold_some
+          (fun nb flow acc ->
+             man.ask (mk_int_interval_query nb) flow |>
+             I.join_bot acc
+          ) evl Bot.BOT
+      in
+      match nb_itv with
+      | Bot.BOT ->
+        Post.return flow
+
+      | Bot.Nb itv when I.is_bounded itv ->
+        let a,b = match itv with I.B.Finite a, I.B.Finite b -> (a,b) | _ -> assert false in
+        exec_exit_functions_with_loop a b buf range man flow
+
+      | _ ->
+        Soundness.warn "ignoring side-effects of unbounded number of exit functions";
+        Post.return (Flow.remove T_cur flow)
+
+    (* Variables _next_exit_fun_slot and _exit_fun_buf not found,
+       probably because <stdlib.h> not included. In this case, do nothing *)
+    with Not_found -> Post.return flow
 
 
   let exec_entry_body f man flow =
@@ -360,7 +441,8 @@ struct
       | true, None       -> call_main_with_symbolic_args main functions man flow
       | true, Some args  -> panic "-c-symbolic-main-args used with concrete arguments"
     else
-      exec_entry_body main man flow
+      exec_entry_body main man flow >>$ fun () flow ->
+      exec_exit_functions "exit" main.c_func_name_range man flow
 
 
   let exec zone stmt man flow =
@@ -434,7 +516,21 @@ struct
   (** Evaluation of expressions *)
   (** ========================= *)
 
-  let eval zone exp man flow = None
+  let eval_exit name code range man flow =
+    man.eval code ~zone:(Z_c,Z_u_num) flow >>$ fun _ flow ->
+    exec_exit_functions name range man flow >>$ fun () flow ->
+    Eval.singleton (mk_unit range) flow
+
+  let eval zone exp man flow =
+    match ekind exp with
+    | E_c_builtin_call("exit", [code]) ->
+      eval_exit "exit" code exp.erange man flow |>
+      OptionExt.return
+    | E_c_builtin_call("quick_exit", [code]) ->
+      eval_exit "quick_exit" code exp.erange man flow |>
+      OptionExt.return
+
+    | _ -> None
 
 
   (** Handler of queries *)
