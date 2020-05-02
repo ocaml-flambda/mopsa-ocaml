@@ -29,11 +29,11 @@ open Sig.Stacked.Manager
 type alarm_class   += A_stub_invalid_requires
 type alarm_message += A_stub_invalid_requires_condition of expr
 
-let raise_stub_invalid_requires cond range man flow =
+let raise_stub_invalid_requires ?(bottom=true) cond range man flow =
   let cs = Flow.get_callstack flow in
   let cond' = get_orig_expr cond in
   let alarm = mk_alarm (A_stub_invalid_requires_condition cond') cs range in
-  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+  Flow.raise_alarm alarm ~bottom man.lattice flow
 
 
 let () =
@@ -68,10 +68,10 @@ let () =
 type alarm_class   += A_stub_alarm
 type alarm_message += A_stub_alarm_body of string
 
-let raise_stub_alarm msg range man flow =
+let raise_stub_alarm ?(bottom=true) msg range man flow =
   let cs = Flow.get_callstack flow in
   let alarm = mk_alarm (A_stub_alarm_body msg) cs range in
-  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+  Flow.raise_alarm alarm ~bottom man.lattice flow
 
 
 let () =
