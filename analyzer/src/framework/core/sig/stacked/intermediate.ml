@@ -200,8 +200,6 @@ let switch = Lowlevel.switch
 
 let exec_stmt_on_all_flows = Lowlevel.exec_stmt_on_all_flows
 
-let exec_block_on_all_flows = Lowlevel.exec_block_on_all_flows
-
 let post_to_flow = Lowlevel.post_to_flow
 
 (** [state_exec f ctx man a s] executes transfer function [f] over a

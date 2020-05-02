@@ -180,15 +180,18 @@ let exec_stmt_on_all_flows stmt man flow =
     ) flow flow
 
 
-let exec_block_on_all_flows block man flow =
+let apply_cleaners block man flow =
+  let exec =
+    if !Cases.opt_clean_cur_only then man.exec ~zone:Z_any else (fun stmt flow -> exec_stmt_on_all_flows stmt man flow)
+  in
   List.fold_left (fun flow stmt ->
-      exec_stmt_on_all_flows stmt man flow
+      exec stmt flow
     ) flow block
 
 
 let post_to_flow man post =
   Cases.apply_full
-    (fun _ flow _ cleaners -> exec_block_on_all_flows cleaners man flow )
+    (fun _ flow _ cleaners -> apply_cleaners cleaners man flow )
     (Flow.join man.lattice)
     (Flow.join man.lattice)
     post
