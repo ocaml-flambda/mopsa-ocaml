@@ -764,6 +764,7 @@ let raise_c_insufficient_variadic_args ?(bottom=true) va_list counter args range
 
 type alarm_class   += A_c_insufficient_format_args
 type alarm_message += A_c_insufficient_format_args_msg of int (** number of required arguments *) * int (** number of given arguments *)
+type alarm_message += A_c_insufficient_format_args_wo_info_msg
 
 let () =
   register_alarm_class (fun next fmt -> function
@@ -774,13 +775,15 @@ let () =
 let () =
   register_alarm_message {
     classifier = (fun next -> function
-        | A_c_insufficient_format_args_msg _ -> A_c_insufficient_format_args
+        | A_c_insufficient_format_args_msg _       -> A_c_insufficient_format_args
+        | A_c_insufficient_format_args_wo_info_msg -> A_c_insufficient_format_args
         | a -> next a
       );
     compare = (fun next a1 a2 ->
         match a1, a2 with
         | A_c_insufficient_format_args_msg(r1,g1), A_c_insufficient_format_args_msg(r2,g2) ->
           Compare.pair compare compare (r1,g1) (r2,g2)
+        | A_c_insufficient_format_args_wo_info_msg, A_c_insufficient_format_args_wo_info_msg -> 0
         | _ -> next a1 a2
       );
     print = (fun next fmt -> function
@@ -788,6 +791,7 @@ let () =
           fprintf fmt "%d argument%a given while %d argument%a required"
             given Debug.plurial_int given
             required Debug.plurial_int required
+        | A_c_insufficient_format_args_wo_info_msg -> ()
         | m -> next fmt m
       );
   }
@@ -798,6 +802,10 @@ let raise_c_insufficient_format_args_alarm ?(bottom=true) required given range m
   let alarm = mk_alarm (A_c_insufficient_format_args_msg(required,given)) cs range in
   Flow.raise_alarm alarm ~bottom man.lattice flow
 
+let raise_c_insufficient_format_args_wo_info_alarm ?(bottom=true) range man flow =
+  let cs = Flow.get_callstack flow in
+  let alarm = mk_alarm A_c_insufficient_format_args_wo_info_msg cs range in
+  Flow.raise_alarm alarm ~bottom man.lattice flow
 
 
 (** {2 Invalid type of format argument} *)
@@ -805,6 +813,7 @@ let raise_c_insufficient_format_args_alarm ?(bottom=true) required given range m
 
 type alarm_class   += A_c_invalid_format_arg_type
 type alarm_message += A_c_invalid_format_arg_type_msg of expr (** argument *) * typ (** expected type *)
+type alarm_message += A_c_invalid_format_arg_type_wo_info_msg
 
 let () =
   register_alarm_class (fun next fmt -> function
@@ -815,13 +824,15 @@ let () =
 let () =
   register_alarm_message {
     classifier = (fun next -> function
-        | A_c_invalid_format_arg_type_msg _ -> A_c_invalid_format_arg_type
+        | A_c_invalid_format_arg_type_msg _       -> A_c_invalid_format_arg_type
+        | A_c_invalid_format_arg_type_wo_info_msg -> A_c_invalid_format_arg_type
         | a -> next a
       );
     compare = (fun next a1 a2 ->
         match a1, a2 with
         | A_c_invalid_format_arg_type_msg(e1,t1), A_c_invalid_format_arg_type_msg(e2,t2) ->
           Compare.pair compare_expr compare_typ (e1,t1) (e2,t2)
+        | A_c_invalid_format_arg_type_wo_info_msg, A_c_invalid_format_arg_type_wo_info_msg -> 0
         | _ -> next a1 a2
       );
     print = (fun next fmt -> function
@@ -830,6 +841,7 @@ let () =
             (Debug.bold pp_typ) t
             (Debug.bold pp_expr) e
             (Debug.bold pp_typ) e.etyp
+        | A_c_invalid_format_arg_type_wo_info_msg -> ()
         | m -> next fmt m
       );
   }
@@ -840,7 +852,10 @@ let raise_c_invalid_format_arg_type_alarm ?(bottom=false) arg typ man flow =
   let alarm = mk_alarm (A_c_invalid_format_arg_type_msg(get_orig_expr arg, typ)) cs arg.erange in
   Flow.raise_alarm alarm ~bottom man.lattice flow
 
-
+let raise_c_invalid_format_arg_type_wo_info_alarm ?(bottom=false) range man flow =
+  let cs = Flow.get_callstack flow in
+  let alarm = mk_alarm A_c_invalid_format_arg_type_wo_info_msg cs range in
+  Flow.raise_alarm alarm ~bottom man.lattice flow
 
 (** {2 Modification of read-only memory} *)
 (** ************************************** *)

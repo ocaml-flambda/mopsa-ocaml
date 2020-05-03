@@ -139,28 +139,36 @@ struct
   (** Check that arguments correspond to the format *)
   let check_args ?wide format args range man flow =
     parse_output_format ?wide format range man flow >>$ fun placeholders flow ->
-    let nb_required = List.length placeholders in
-    let nb_given = List.length args in
-    if nb_required > nb_given then
+    match placeholders with
+    | None ->
       let man' = Sig.Stacked.Manager.of_domain_man man in
-      raise_c_insufficient_format_args_alarm nb_required nb_given range man' flow |>
+      raise_c_invalid_format_arg_type_wo_info_alarm ~bottom:false range man' flow |>
+      raise_c_insufficient_format_args_wo_info_alarm ~bottom:false range man' |>
       Post.return
-    else
-      let rec iter placeholders args flow =
-        match placeholders, args with
-        | [], [] -> Post.return flow
 
-        | ph :: tlp, arg :: tla ->
-          check_arg arg ph range man flow >>$ fun () flow ->
-          iter tlp tla flow
+    | Some placeholders ->
+      let nb_required = List.length placeholders in
+      let nb_given = List.length args in
+      if nb_required > nb_given then
+        let man' = Sig.Stacked.Manager.of_domain_man man in
+        raise_c_insufficient_format_args_alarm nb_required nb_given range man' flow |>
+        Post.return
+      else
+        let rec iter placeholders args flow =
+          match placeholders, args with
+          | [], [] -> Post.return flow
 
-        | [], arg :: tla ->
-          man.eval ~zone:(Z_c,Z_c_scalar) arg flow >>$ fun _ flow ->
-          iter [] tla flow
+          | ph :: tlp, arg :: tla ->
+            check_arg arg ph range man flow >>$ fun () flow ->
+            iter tlp tla flow
 
-        | _ -> assert false
-      in
-      iter placeholders args flow
+          | [], arg :: tla ->
+            man.eval ~zone:(Z_c,Z_c_scalar) arg flow >>$ fun _ flow ->
+            iter [] tla flow
+
+          | _ -> assert false
+        in
+        iter placeholders args flow
 
 
 

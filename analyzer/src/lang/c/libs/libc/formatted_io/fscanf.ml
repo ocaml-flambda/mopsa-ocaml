@@ -128,21 +128,27 @@ struct
   (** Assign arbitrary values to arguments *)
   let assign_args format args range man flow =
     parse_input_format format range man flow >>$ fun placeholders flow ->
-    let nb_required = List.length placeholders in
-    let nb_given = List.length args in
-    if nb_required > nb_given then
-      let man' = Sig.Stacked.Manager.of_domain_man man in
-      raise_c_insufficient_format_args_alarm nb_required nb_given range man' flow |>
-      Post.return
-    else
-      let rec iter placeholders args flow =
-        match placeholders, args with
-        | ph :: tlp, arg :: tla ->
-          assign_arg arg ph range man flow >>$ fun () flow ->
-          iter tlp tla flow
-        | _ -> Post.return flow
-      in
-      iter placeholders args flow
+    match placeholders with
+    | None ->
+      Soundness.warn_at range "unsupported fscanf format string";
+      Post.return flow
+
+    | Some placeholders ->
+      let nb_required = List.length placeholders in
+      let nb_given = List.length args in
+      if nb_required > nb_given then
+        let man' = Sig.Stacked.Manager.of_domain_man man in
+        raise_c_insufficient_format_args_alarm nb_required nb_given range man' flow |>
+        Post.return
+      else
+        let rec iter placeholders args flow =
+          match placeholders, args with
+          | ph :: tlp, arg :: tla ->
+            assign_arg arg ph range man flow >>$ fun () flow ->
+            iter tlp tla flow
+          | _ -> Post.return flow
+        in
+        iter placeholders args flow
 
 
 
