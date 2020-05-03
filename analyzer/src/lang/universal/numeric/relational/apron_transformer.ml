@@ -198,10 +198,14 @@ struct
 
   let rec exp_to_apron exp (abs,bnd) l =
     match ekind exp with
+    | E_constant C_top T_bool ->
+      Apron.Texpr1.Cst (Apron.Coeff.Interval (Apron.Interval.of_int 0 1)),
+      abs, bnd, l
+
     | E_constant C_top t ->
       Apron.Texpr1.Cst (Apron.Coeff.Interval Apron.Interval.top),
       abs, bnd, l
-
+  
     | E_constant(C_int_interval (a,b)) ->
       Apron.Texpr1.Cst(
         Apron.Coeff.i_of_scalar
@@ -215,6 +219,14 @@ struct
           (Apron.Scalar.of_float a)
           (Apron.Scalar.of_float b)
       ), abs, bnd, l
+
+    | E_constant(C_bool true) ->
+      Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_int 1)),
+      abs, bnd, l
+
+    | E_constant(C_bool false) ->
+      Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_int 0)),
+      abs, bnd, l
 
     | E_constant(C_int n) ->
       Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_mpq @@ Mpq.of_string @@ Z.to_string n)),

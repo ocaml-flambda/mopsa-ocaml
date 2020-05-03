@@ -64,6 +64,15 @@ struct
   let print fmt (a:t) = I.fprint_bot fmt a
 
   let constant t = function
+    | C_bool true ->
+      Nb (I.cst_int 1)
+
+    | C_bool false ->
+      Nb (I.cst_int 0)
+
+    | C_top T_bool ->
+      Nb (I.of_int 0 1)
+
     | C_int i ->
        Nb (I.of_z i i)
 
