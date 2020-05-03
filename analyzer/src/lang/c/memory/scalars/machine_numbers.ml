@@ -306,7 +306,7 @@ struct
       e
 
     | _ ->
-      mk_binop e O_ne (mk_zero e.erange) e.erange
+      mk_binop e O_ne (mk_zero ~typ:e.etyp e.erange) e.erange
 
 
   (** Transfer functions *)
@@ -373,7 +373,7 @@ struct
             ekind = E_unop(O_log_not, e);
             etyp = T_bool }
         else
-          mk_binop e O_eq (mk_zero exp.erange) exp.erange ~etyp:T_bool
+          mk_binop e O_eq (mk_zero ~typ:e.etyp exp.erange) exp.erange ~etyp:T_bool
       in
       Eval.singleton exp' flow |>
       OptionExt.return
