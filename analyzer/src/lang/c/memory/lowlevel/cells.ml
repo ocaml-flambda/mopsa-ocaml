@@ -399,7 +399,6 @@ struct
 
   (** Maximal number of expanded cells when dereferencing a pointer *)
   let opt_deref_expand = ref 1
-
   let () =
     register_domain_option name {
       key = "-cell-deref-expand";
@@ -407,6 +406,17 @@ struct
       doc = " maximal number of expanded cells when dereferencing a pointer";
       spec = ArgExt.Set_int opt_deref_expand;
       default = "1";
+    }
+
+  (** Flag to activate the on-demand smashing *)
+  let opt_smash = ref false
+  let () =
+    register_domain_option name {
+      key = "-cell-smash";
+      category = "C";
+      doc = " activate the on-demand smashing when the expansion threshold is reached";
+      spec = ArgExt.Set opt_smash;
+      default = "";
     }
 
 
@@ -724,11 +734,10 @@ struct
   (** Summarize a set of cells into a single smashed cell *)
   let smash_region base lo hi step t range man flow =
     let top = Eval.singleton (mk_top (void_to_char t) range) flow in
-    if not (is_interesting_base base) then
-      top
-    else
-      (* For performance reasons, we smash only pointer cells *)
-    if not (is_c_pointer_type t) then
+    if not !opt_smash
+    || not (is_interesting_base base)
+    || not (is_c_pointer_type t) (* For performance reasons, we smash only pointer cells *)
+    then
       top
     else
       (* In order to smash a region in something useful, we ensure
