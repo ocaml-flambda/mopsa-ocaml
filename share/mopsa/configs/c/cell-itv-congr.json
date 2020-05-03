@@ -45,16 +45,8 @@
                 "apply": {
                     "compose": [
                         "universal.heap.recency",
+			"c.memory.lowlevel.cells",
 			{
-			    "product": [
-				"c.memory.lowlevel.string_literals",
-				"c.memory.lowlevel.cells"
-			    ],
-			    "reductions": [
-				"c.memory.lowlevel.reductions.cell_string_literals"
-			    ]
-			},
-                        {
                             "seq": [
 			        "c.memory.scalars.pointer",
 			        "c.memory.scalars.machine_numbers"
