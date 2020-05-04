@@ -744,11 +744,15 @@ struct
          that all covered cells do exist *)
       let a = get_env T_cur man flow in
       let cells = cell_set_filter_range
-          (fun c -> c.typ = Pointer)
+          (fun c ->
+             (* Get only pointer cells that are correctly aligned with the step *)
+             c.typ = Pointer
+             && Z.(rem (c.offset - lo) step = zero)
+          )
           base lo hi a.cells in
       (* Coverage test: |cells| = ((hi - lo) / step) + 1 *)
       let nb_cells = List.length cells in
-      if nb_cells = 0 || Z.(of_int nb_cells <> (div (hi - lo) step) + one) then
+      if nb_cells = 0 || Z.(of_int nb_cells < (div (hi - lo) step) + one) then
         top
       else
         (* Create a temporary smash and populate it with the values of cells *)
