@@ -545,11 +545,11 @@ struct
       let cs = Flow.get_callstack flow in
       (* Get global variables *)
       let globals = List.map fst prog.c_globals in
-      (* Get local variables of all functions in the callstack *)
-      let locals = List.fold_left (fun acc call ->
+      (* Get local variables of all functions in the callstack, following the same order *)
+      let locals = List.fold_right (fun call acc ->
           let f = find_function call.Callstack.call_fun_orig_name prog.c_functions in
           f.c_func_local_vars @ f.c_func_parameters @ acc
-        ) [] cs
+        ) cs []
       in
       Some (globals @ locals)
       
