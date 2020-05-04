@@ -23,6 +23,7 @@
   libc stub
   based on header from glibc-2.27-r6
 */
+
 #include <errno.h>
 #include <limits.h>
 #include "mopsa_libc_utils.h"

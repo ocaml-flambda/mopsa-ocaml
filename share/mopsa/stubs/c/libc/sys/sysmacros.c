@@ -19,65 +19,25 @@
 /*                                                                          */
 /****************************************************************************/
 
-/* Stubs for the extension of stdio as found in Sun's Solaris OS */
+/*
+  libc stub
+  based on header from glibc-2.27-r6
+*/
 
-#include <stdio_ext.h>
-#include <limits.h>
-
-/*$
- * requires: alive_resource(__fp, File);
- */
-size_t __fbufsize (FILE *__fp);
-
+#include <sys/sysmacros.h>
 
 /*$
- * requires: alive_resource(__fp, File);
+ * // empty
  */
-int __freading (FILE *__fp);
+unsigned int gnu_dev_major (__dev_t __dev);
 
 /*$
- * requires: alive_resource(__fp, File);
+ * // empty
  */
-int __fwriting (FILE *__fp);
+unsigned int gnu_dev_minor (__dev_t __dev);
 
 /*$
- * requires: alive_resource(__fp, File);
+ * // empty
  */
-int __freadable (FILE *__fp);
+__dev_t gnu_dev_makedev (unsigned int __major, unsigned int __minor);
 
-/*$
- * requires: alive_resource(__fp, File);
- */
-int __fwritable (FILE *__fp);
-
-/*$
- * requires: alive_resource(__fp, File);
- */
-int __flbf (FILE *__fp);
-
-
-/*$
- * requires: alive_resource(__fp, File);
- */
-void __fpurge (FILE *__fp);
-
-/*$
- * requires: alive_resource(__fp, File);
- */
-size_t __fpending (FILE *__fp);
-
-/*$
- * // emtpy stub
- */
-void _flushlbf (void);
-
-
-/*$
- * requires: alive_resource(__fp, File);
- * requires: __type == FSETLOCKING_INTERNAL or
- *           __type == FSETLOCKING_BYCALLER or
- *           __type == FSETLOCKING_QUERY;
- * ensures:  return == FSETLOCKING_INTERNAL or
- *           return == FSETLOCKING_BYCALLER;
- */
-int __fsetlocking (FILE *__fp, int __type);

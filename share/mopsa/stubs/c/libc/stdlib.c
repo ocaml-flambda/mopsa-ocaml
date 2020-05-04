@@ -23,6 +23,7 @@
   libc stub
   based on header from glibc-2.27-r6
 */
+
 #include <stdlib.h>
 #include <limits.h>
 #include <inttypes.h>
@@ -56,7 +57,7 @@ int atoi (const char *__nptr);
  */
 long int atol (const char *__nptr);
 
-#ifdef __USE_ISOC99
+//#ifdef __USE_ISOC99
 
 /*$
  * //NOTE: we are more strict than the spec by requiring that __nptr is 0-terminated
@@ -64,7 +65,7 @@ long int atol (const char *__nptr);
  */
 long long int atoll (const char *__nptr);
 
-#endif
+//#endif
 
 /*$
  * requires: null_or_valid_ptr(__endptr);
@@ -105,7 +106,7 @@ double strtod_l (const char *__restrict __nptr,
 		 char **__restrict __endptr, locale_t __loc);
 
 
-#ifdef	__USE_ISOC99
+//#ifdef	__USE_ISOC99
 
 /*$
  * requires: valid_string(__nptr);
@@ -145,7 +146,7 @@ float strtof (const char *__restrict __nptr,
 long double strtold (const char *__restrict __nptr,
                      char **__restrict __endptr);
 
-#endif
+//#endif
 
 /*$
  * requires: __base == 0 or __base in [2, 36];
@@ -188,51 +189,23 @@ long int strtol (const char *__restrict __nptr,
 unsigned long int strtoul (const char *__restrict __nptr,
                            char **__restrict __endptr, int __base);
 
-#ifdef __USE_MISC
+//#ifdef __USE_MISC
 
 /*$
- * requires: __base == 0 or __base in [2, 36];
- * requires: null_or_valid_ptr(__endptr);
- * assigns: _errno;
- *
- * case "with_endptr" {
- *   assumes: __endptr != NULL;
- *   local: size_t len = strlen(__nptr);
- *   assigns: *__endptr;
- *   ensures: exists size_t i in [0, len]: (*__endptr)' == __nptr + i;
- * }
- *
- * case "without_endptr" {
- *   assumes: __endptr == NULL;
- *   requires: valid_string(__nptr);
- * }
+ * alias: strtoll;
  */
 long long int strtoq (const char *__restrict __nptr,
                       char **__restrict __endptr, int __base);
 
 /*$
- * requires: __base == 0 or __base in [2, 36];
- * requires: null_or_valid_ptr(__endptr);
- * assigns: _errno;
- *
- * case "with_endptr" {
- *   assumes: __endptr != NULL;
- *   local: size_t len = strlen(__nptr);
- *   assigns: *__endptr;
- *   ensures: exists size_t i in [0, len]: (*__endptr)' == __nptr + i;
- * }
- *
- * case "without_endptr" {
- *   assumes: __endptr == NULL;
- *   requires: valid_string(__nptr);
- * }
+ * alias: strtoull;
  */
 unsigned long long int strtouq (const char *__restrict __nptr,
                                 char **__restrict __endptr, int __base);
 
-#endif
+//#endif
 
-#ifdef __USE_ISOC99
+//#ifdef __USE_ISOC99
 
 /*$
  * requires: __base == 0 or __base in [2, 36];
@@ -274,14 +247,65 @@ long long int strtoll (const char *__restrict __nptr,
 unsigned long long int strtoull (const char *__restrict __nptr,
                                  char **__restrict __endptr, int __base);
 
-#endif
+//#endif
 
+
+//#ifdef __USE_GNU
+
+/*$
+ * local: long int r = strtol(__nptr,__endptr,__base);
+ */
+long int strtol_l (const char *__restrict __nptr,
+                   char **__restrict __endptr, int __base,
+                   locale_t __loc);
+
+/*$
+ * local: unsigned long int r = strtoul(__nptr,__endptr,__base);
+ */
+unsigned long int strtoul_l (const char *__restrict __nptr,
+                             char **__restrict __endptr,
+                             int __base, locale_t __loc);
+
+/*$
+ * local: long long int r = strtoll(__nptr,__endptr,__base);
+ */
+long long int strtoll_l (const char *__restrict __nptr,
+                         char **__restrict __endptr, int __base,
+                         locale_t __loc);
+
+/*$
+ * local: unsigned long long int r = strtoull(__nptr,__endptr,__base);
+ */
+unsigned long long int strtoull_l (const char *__restrict __nptr,
+                                   char **__restrict __endptr,
+                                   int __base, locale_t __loc);
+
+/*$
+ * local: double r = strtod(__nptr,__endptr);
+ */
+double strtod_l (const char *__restrict __nptr,
+                 char **__restrict __endptr, locale_t __loc);
+
+/*$
+ * local: float r = strtof(__nptr,__endptr);
+ */
+float strtof_l (const char *__restrict __nptr,
+                char **__restrict __endptr, locale_t __loc);
+
+/*$
+ * local: long double r = strtold(__nptr,__endptr);
+ */
+long double strtold_l (const char *__restrict __nptr,
+                       char **__restrict __endptr,
+                       locale_t __loc);
+
+//#endif
 
 
 // omitted: __USE_GNU functions
 
 
-#if defined __USE_MISC || defined __USE_XOPEN_EXTENDED
+//#if defined __USE_MISC || defined __USE_XOPEN_EXTENDED
 
 static char _l64a_buf[7];
 
@@ -298,9 +322,9 @@ char *l64a (long int __n);
  */
 long int a64l (const char *__s);
 
-#endif
+//#endif
 
-#if defined __USE_MISC || defined __USE_XOPEN_EXTENDED
+//#if defined __USE_MISC || defined __USE_XOPEN_EXTENDED
 
 /*$
  * ensures: return in [0, RAND_MAX];
@@ -343,9 +367,9 @@ char *initstate (unsigned int __seed, char *__statebuf, size_t __statelen);
  */
 char *setstate (char *__statebuf);
 
-#endif
+//#endif
 
-#ifdef __USE_MISC
+//#ifdef __USE_MISC
 
 /*$
  * assigns: *__buf;
@@ -416,7 +440,7 @@ int initstate_r (unsigned int __seed, char *__restrict __statebuf,
 int setstate_r (char *__restrict __statebuf,
                 struct random_data *__restrict __buf);
 
-#endif
+//#endif
 
 /*$
  * ensures: return in [0, RAND_MAX];
@@ -428,7 +452,7 @@ int rand (void);
  */
 void srand (unsigned int __seed);
 
-#ifdef __USE_POSIX199506
+//#ifdef __USE_POSIX199506
 
 /*$
  * assigns: *__seed;
@@ -436,9 +460,9 @@ void srand (unsigned int __seed);
  */
 int rand_r (unsigned int *__seed);
 
-#endif
+//#endif
 
-#if defined __USE_MISC || defined __USE_XOPEN
+//#if defined __USE_MISC || defined __USE_XOPEN
 
 /*$
  * ensures: valid_float(return) and return in [0., 1.];
@@ -492,9 +516,9 @@ unsigned short int *seed48 (unsigned short int __seed16v[3]);
  */
 void lcong48 (unsigned short int __param[7]);
 
-#endif
+//#endif
 
-# ifdef __USE_MISC
+//#ifdef __USE_MISC
 
 /*$
  * assigns: *__result;
@@ -577,7 +601,7 @@ int seed48_r (unsigned short int __seed16v[3],
 int lcong48_r (unsigned short int __param[7],
                struct drand48_data *__buffer);
 
-#endif
+//#endif
 
 
 /*$
@@ -678,7 +702,7 @@ void *realloc (void *__ptr, size_t __size);
  */
 void free (void *__ptr);
 
-#if (defined __USE_XOPEN_EXTENDED && !defined __USE_XOPEN2K) || defined __USE_MISC
+//#if (defined __USE_XOPEN_EXTENDED && !defined __USE_XOPEN2K) || defined __USE_MISC
 
 /*$
  * case "success" {
@@ -694,9 +718,9 @@ void free (void *__ptr);
  */
 void *valloc (size_t __size);
 
-#endif
+//#endif
 
-#ifdef __USE_XOPEN2K
+//#ifdef __USE_XOPEN2K
 
 static const size_t _sizeof_ptr = sizeof(void*);
 
@@ -725,9 +749,9 @@ static const size_t _sizeof_ptr = sizeof(void*);
  */
 int posix_memalign (void **__memptr, size_t __alignment, size_t __size);
 
-#endif
+//#endif
 
-#ifdef __USE_ISOC11
+//#ifdef __USE_ISOC11
 
 /*$
  * requires: __alignment & (__alignment - 1) == 0; // __alignment is a power of 2
@@ -750,15 +774,17 @@ int posix_memalign (void **__memptr, size_t __alignment, size_t __size);
  */
 void *aligned_alloc (size_t __alignment, size_t __size);
 
-#endif
+//#endif
 
 /*$
- * requires: 1 == 0;
+ * alarm: "abort called";
+ * ensures: 1 == 0;
  */
 void abort (void);
 
 /*$
- * requires: 1 == 0;
+ * alarm: "__builtin_abort called";
+ * ensures: 1 == 0;
  */
 void __builtin_abort (void);
 
@@ -767,7 +793,6 @@ void __builtin_abort (void);
 
 void (*_exit_fun_buf[_ATEXIT_MAX])(void);
 unsigned int _next_exit_fun_slot = 0;
-
 
 /*$
  * case "success" {
@@ -798,9 +823,6 @@ void _Exit (int __status);
  * ensures: 1 == 0;
  */
 void _exit (int __status);
-
-
-
 
 //#if defined __USE_ISOC11 || defined __USE_ISOCXX11
 
@@ -852,7 +874,7 @@ int on_exit (void (*__func) (int __status, void *__arg), void *__arg);
  */
 char *getenv (const char *__name);
 
-#ifdef __USE_GNU
+//#ifdef __USE_GNU
 
 /*$
  * requires: valid_string(__name);
@@ -868,9 +890,9 @@ char *getenv (const char *__name);
  */
 char *secure_getenv (const char *__name);
 
-#endif
+//#endif
 
-#if defined __USE_MISC || defined __USE_XOPEN
+//#if defined __USE_MISC || defined __USE_XOPEN
 
 /*$
  * //TODO: the function takes ownership of the string
@@ -888,9 +910,9 @@ char *secure_getenv (const char *__name);
  */
 int putenv (char *__string);
 
-#endif
+//#endif
 
-#ifdef __USE_XOPEN2K
+//#ifdef __USE_XOPEN2K
 
 /*$
  * requires: valid_string(__name);
@@ -921,18 +943,18 @@ int setenv (const char *__name, const char *__value, int __replace);
  */
 int unsetenv (const char *__name);
 
-#endif
+//#endif
 
-#ifdef	__USE_MISC
+//#ifdef __USE_MISC
 
 /*$
  * // empty contract
  */
 int clearenv (void);
 
-#endif
+//#endif
 
-#if defined __USE_MISC || (defined __USE_XOPEN_EXTENDED && !defined __USE_XOPEN2K8)
+//#if defined __USE_MISC || (defined __USE_XOPEN_EXTENDED && !defined __USE_XOPEN2K8)
 
 /*$
  * local: size_t len = strlen(__template);
@@ -944,9 +966,9 @@ int clearenv (void);
  */
 char *mktemp (char *__template);
 
-#endif
+//#endif
 
-#if defined __USE_XOPEN_EXTENDED || defined __USE_XOPEN2K8
+//#if defined __USE_XOPEN_EXTENDED || defined __USE_XOPEN2K8
 
 /*$
  * local: size_t len = strlen(__template);
@@ -955,7 +977,8 @@ char *mktemp (char *__template);
  * assigns: __template[0, len);
  *
  * case "success" {
- *   local:   int fd = new FileDescriptor;
+ *   local:   void* f = new FileRes;
+ *   local:   int fd = _mopsa_register_file_resource(f);
  *   ensures: return == fd;
  * }
  *
@@ -966,9 +989,9 @@ char *mktemp (char *__template);
  */
 int mkstemp (char *__template);
 
-#endif
+//#endif
 
-#ifdef __USE_MISC
+//#ifdef __USE_MISC
 
 /*$
  * requires: __suffixlen >= 0;
@@ -978,7 +1001,8 @@ int mkstemp (char *__template);
  * assigns: __template[0, len);
  *
  * case "success" {
- *   local:   int fd = new FileDescriptor;
+ *   local:   void* f = new FileRes;
+ *   local:   int fd = _mopsa_register_file_resource(f);
  *   ensures: return == fd;
  * }
  *
@@ -989,18 +1013,18 @@ int mkstemp (char *__template);
  */
 int mkstemps (char *__template, int __suffixlen);
 
-#endif
+//#endif
   
-#ifdef __USE_XOPEN2K8
+//#ifdef __USE_XOPEN2K8
   
 /*$
  * alias: mktemp;
  */
 char *mkdtemp (char *__template);
 
-#endif
+//#endif
 
-#ifdef __USE_GNU
+//#ifdef __USE_GNU
 
 /*$
  * local: int r = mkstemp(__template);
@@ -1014,7 +1038,7 @@ int mkostemp (char *__template, int __flags);
  */
 int mkostemps (char *__template, int __suffixlen, int __flags);
 
-#endif
+//#endif
 
 /*$
  * requires: null_or_valid_string(__command);
@@ -1022,7 +1046,7 @@ int mkostemps (char *__template, int __suffixlen, int __flags);
 int system (const char *__command);
 
 
-#ifdef	__USE_GNU
+//#ifdef __USE_GNU
 
 /*$
  * requires: valid_string(__name);
@@ -1039,9 +1063,9 @@ int system (const char *__command);
  */
 char *canonicalize_file_name (const char *__name);
 
-#endif
+//#endif
 
-#if defined __USE_MISC || defined __USE_XOPEN_EXTENDED
+//#if defined __USE_MISC || defined __USE_XOPEN_EXTENDED
 
 /*$
  * requires: valid_string(__name);
@@ -1068,16 +1092,31 @@ char *canonicalize_file_name (const char *__name);
 char *realpath (const char *__restrict __name,
                 char *__restrict __resolved);
 
-#endif
+//#endif
 
+/*$
+ * requires: valid_bytes(__base, __nmemb * __size);
+ * requires: valid_bytes(__key, __size);
+ * ensures: return == NULL or
+ *          exists size_t i in [0,__nmemb): return == ((unsigned char*)__base) + i * __size;
+ * unsound: "bsearch does not call the comparison function";
+ */
 void *bsearch (const void *__key, const void *__base,
                size_t __nmemb, size_t __size, __compar_fn_t __compar);
 
+/*$
+ * requires: valid_bytes(__base, __nmemb * __size);
+ * unsound: "qsort stub does not update the array argument and does not call the comparison function";
+ */
 void qsort (void *__base, size_t __nmemb, size_t __size,
             __compar_fn_t __compar);
 
 #ifdef __USE_GNU
 
+/*$
+ * requires: valid_bytes(__base, __nmemb * __size);
+ * unsound: "qsort_r stub does not update the array argument and does not call the comparison function";
+ */
 void qsort_r (void *__base, size_t __nmemb, size_t __size,
               __compar_d_fn_t __compar, void *__arg);
 
@@ -1121,7 +1160,7 @@ div_t div (int __numer, int __denom);
  */
 ldiv_t ldiv (long int __numer, long int __denom);
 
-#ifdef __USE_ISOC99
+//#ifdef __USE_ISOC99
 
 /*$
  * requires: __denom != 0 and __denom > LLONG_MIN;
@@ -1130,10 +1169,10 @@ ldiv_t ldiv (long int __numer, long int __denom);
  */
 lldiv_t lldiv (long long int __numer, long long int __denom);
 
-#endif
+//#endif
 
 
-#if (defined __USE_XOPEN_EXTENDED && !defined __USE_XOPEN2K8) || defined __USE_MISC
+//#if (defined __USE_XOPEN_EXTENDED && !defined __USE_XOPEN2K8) || defined __USE_MISC
 
 static char cvt_buf[1024];
 
@@ -1165,9 +1204,9 @@ char *fcvt (double __value, int __ndigit, int *__restrict __decpt,
  */
 char *gcvt (double __value, int __ndigit, char *__buf);
 
-#endif
+//#endif
 
-#ifdef __USE_MISC
+//#ifdef __USE_MISC
 
 /*$
  * assigns: cvt_buf;
@@ -1240,7 +1279,7 @@ int qfcvt_r (long double __value, int __ndigit,
              int *__restrict __decpt, int *__restrict __sign,
              char *__restrict __buf, size_t __len);
 
-#endif
+//#endif
 
 
 /*$
@@ -1325,7 +1364,7 @@ size_t mbstowcs (wchar_t *__restrict __dst,
 size_t wcstombs (char *__restrict __dst,
                  const wchar_t *__restrict __src, size_t __len);
 
-#ifdef __USE_MISC
+//#ifdef __USE_MISC
 
 /*$
  * requires: valid_string(__response);
@@ -1333,33 +1372,34 @@ size_t wcstombs (char *__restrict __dst,
  */
 int rpmatch (const char *__response);
 
-#endif
+//#endif
 
 
-#if defined __USE_XOPEN_EXTENDED || defined __USE_XOPEN2K8
+//#if defined __USE_XOPEN_EXTENDED || defined __USE_XOPEN2K8
 
 int getsubopt (char **__restrict __optionp,
                char *const *__restrict __tokens,
                char **__restrict __valuep);
 
-#endif
+//#endif
 
 
-#ifdef __USE_XOPEN
+//#ifdef __USE_XOPEN
 
 /*$
  * requires: valid_bytes(__key, 64);
  */
 void setkey (const char *__key);
 
-#endif
+//#endif
 
 
-#ifdef __USE_XOPEN2KXSI
+//#ifdef __USE_XOPEN2KXSI
 
 /*$
  * case "success" {
- *   local:   in fd = new FileDescriptor;
+ *   local:   void* f = new FileRes;
+ *   local:   int fd = _mopsa_register_file_resource(f);
  *   ensures: return == fd;
  * }
  *
@@ -1370,12 +1410,13 @@ void setkey (const char *__key);
  */
 int posix_openpt (int __oflag);
 
-#endif
+//#endif
 
-#ifdef __USE_XOPEN_EXTENDED
+//#ifdef __USE_XOPEN_EXTENDED
 
 /*$
- * requires: __fd in FileDescriptor;
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: alive_resource(f, FileRes);
  *
  * case "success" {
  *   ensures: return == 0;
@@ -1389,7 +1430,8 @@ int posix_openpt (int __oflag);
 int grantpt (int __fd);
 
 /*$
- * requires: __fd in FileDescriptor;
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: alive_resource(f, FileRes);
  *
  * case "success" {
  *   ensures: return == 0;
@@ -1405,7 +1447,8 @@ int unlockpt (int __fd);
 static char _ptsname_buf[1024]; // TODO: fix size
 
 /*$
- * requires: __fd in FileDescriptor;
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: alive_resource(f, FileRes);
  *
  * case "success" {
  *   assigns: _ptsname_buf[0, (size(_ptsname_buf) - offset(_ptsname_buf)));
@@ -1420,17 +1463,18 @@ static char _ptsname_buf[1024]; // TODO: fix size
  */
 char *ptsname (int __fd) ;
 
-#endif
+//#endif
 
-#ifdef __USE_GNU
+//#ifdef __USE_GNU
 
 /*$
- * requires: __fd in FileDescriptor;
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: alive_resource(f, FileRes);
  * requires: valid_bytes(__buf, __buflen);
  *
  * case "success" {
  *   assigns: __buf[0, __buflen);
- *   ensures: valid_primd_substring(__buf, __buflen);
+ *   ensures: valid_primed_substring(__buf, __buflen);
  *   ensures: return == 0;
  * }
  *
@@ -1443,7 +1487,8 @@ int ptsname_r (int __fd, char *__buf, size_t __buflen);
 
 /*$
  * case "success" {
- *   local:   int fd = new FileDescriptor;
+ *   local:   void* f = new FileRes;
+ *   local:   int fd = _mopsa_register_file_resource(f);
  *   ensures: return == fd;
  * }
  *
@@ -1454,9 +1499,9 @@ int ptsname_r (int __fd, char *__buf, size_t __buflen);
  */
 int getpt (void);
 
-#endif
+//#endif
 
-#ifdef __USE_MISC
+//#ifdef __USE_MISC
 
 /*$
  * requires: valid_bytes(__loadavg, __nelem * sizeof_type(double));
@@ -1465,4 +1510,4 @@ int getpt (void);
  */
 int getloadavg (double __loadavg[], int __nelem);
 
-#endif
+//#endif

@@ -732,7 +732,7 @@ struct
       OptionExt.return
 
     | S_assign({ ekind = E_c_deref p}, rval)
-      when under_type p.etyp |> void_to_char |> is_c_int_type
+      when !opt_track_length && under_type p.etyp |> void_to_char |> is_c_int_type
       ->
       exec_assign p rval stmt.srange man flow |>
       OptionExt.return

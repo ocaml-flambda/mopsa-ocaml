@@ -94,7 +94,7 @@ size_t _mopsa_pick(size_t i);
  * requires: optind >= 0 and optind <= ___argc;
  * requires: valid_string(__shortopts);
  * requires: forall int i in [0, ___argc): valid_string(___argv[i]);
- * requires: valid_longopt(__longopts);
+ * //requires: valid_longopt(__longopts);
  * requires: null_or_valid_ptr(__longind);
  * local: size_t len = _mopsa_len_option(__longopts);
  * local: size_t r = _mopsa_pick(len);
@@ -102,16 +102,16 @@ size_t _mopsa_pick(size_t i);
  * assigns: opterr;
  * assigns: optopt;
  * assigns: optarg;
- * //assigns: ___argv[0, ___argc);
+ * assigns: ___argv[0, ___argc);
  * ensures: optind' in [0, ___argc];
- * //ensures: forall int i in [0, ___argc): exists int j in [0, ___argc): (___argv[i])' == ___argv[j];
+ * ensures: forall int i in [0, ___argc): exists int j in [0, ___argc): (___argv[i])' == ___argv[j];
  * ensures: optarg' == NULL or exists int i in [0, ___argc): in_string(optarg', ___argv[i]);
  *
  * case "opt-ind" {
  *   assumes: len > 0;
  *   assumes: __longopts[r].flag != NULL;
  *   assumes: __longind != NULL;
- *   assigns: __longopts[r].flag;
+ *   assigns: *__longopts[r].flag;
  *   assigns: *__longind;
  * }
  *
@@ -119,7 +119,7 @@ size_t _mopsa_pick(size_t i);
  *   assumes: len > 0;
  *   assumes: __longopts[r].flag != NULL;
  *   assumes: __longind == NULL;
- *   assigns: __longopts[r].flag;
+ *   assigns: *__longopts[r].flag;
  * }
  *
  * case "ind" {

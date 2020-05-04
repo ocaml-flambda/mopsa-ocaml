@@ -188,7 +188,7 @@ and interval = {
   itv_open_ub: bool;       (** open upper bound *)
 }
 
-and resource = string
+and resource = var
 
 and var = {
   vname  : string;     (** variable name *)
@@ -208,6 +208,7 @@ and builtin =
   | VALID_FLOAT
   | FLOAT_INF
   | FLOAT_NAN
+  | ALIVE
 
 
 (** {2 Types} *)
@@ -284,7 +285,7 @@ open Format
 
 let pp_var fmt v = pp_print_string fmt v.vname
 
-let pp_resource fmt resource = pp_print_string fmt resource
+let pp_resource fmt resource = pp_var fmt resource
 
 let pp_builtin fmt f =
   match f with
@@ -297,6 +298,7 @@ let pp_builtin fmt f =
   | VALID_FLOAT -> pp_print_string fmt "valid_float"
   | FLOAT_INF   -> pp_print_string fmt "float_inf"
   | FLOAT_NAN   -> pp_print_string fmt "float_nan"
+  | ALIVE       -> pp_print_string fmt "alive"
 
 let pp_list pp sep fmt l =
   pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt sep) pp fmt l

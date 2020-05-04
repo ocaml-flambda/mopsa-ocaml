@@ -31,6 +31,7 @@
  * requires: valid_string(__assertion);
  * requires: valid_string(__file);
  * requires: valid_string(__function);
+ * warn: "__assert_fail called";
  * ensures : 1 == 0;
  */
 void __assert_fail (const char *__assertion, const char *__file,
@@ -39,6 +40,7 @@ void __assert_fail (const char *__assertion, const char *__file,
 /*$
  * requires: valid_string(__file);
  * requires: valid_string(__function);
+ * warn: "__assert_perror_fail called";
  * ensures: 1 == 0;
  */
 void __assert_perror_fail (int __errnum, const char *__file,
@@ -47,6 +49,7 @@ void __assert_perror_fail (int __errnum, const char *__file,
 /*$
  * requires: valid_string(__assertion);
  * requires: valid_string(__file);
+ * warn: "__assert called";
  * ensures: 1 == 0;
  */
 void __assert (const char *__assertion, const char *__file, int __line);

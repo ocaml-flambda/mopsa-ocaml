@@ -23,6 +23,7 @@
   libc stub
   based on header from glibc-2.27-r6
 */
+
 #include <string.h>
 #include "mopsa_libc_utils.h"
 
@@ -45,6 +46,13 @@
  */
 void *memcpy (void *__restrict __dest, const void *__restrict __src,
               size_t __len);
+
+
+/*$
+ * alias: memcpy;
+ */
+void *__builtin_memcpy (void *__restrict __dest, const void *__restrict __src,
+                        size_t __len);
 
 /*$
  * requires: valid_bytes(__src, __len);
@@ -402,7 +410,7 @@ char *__builtin_strchr (const char *__s, int __c);
 char *strrchr (const char *__s, int __c);
 
 
-#ifdef __USE_GNU
+//#ifdef __USE_GNU
 
 /*$
  * local: size_t len = strlen(__s);
@@ -422,7 +430,7 @@ char *strrchr (const char *__s, int __c);
  */
 char *strchrnul (const char *__s, int __c);
 
-#endif
+//#endif
 
 /*$
  * requires: valid_string(__reject);
@@ -496,7 +504,7 @@ char *__strtok_r (char *__restrict __s,
                   const char *__restrict __delim,
                   char **__restrict __save_ptr);
 
-#ifdef __USE_POSIX
+//#ifdef __USE_POSIX
 
 /*$
  * alias: __strtok_r;
@@ -504,9 +512,9 @@ char *__strtok_r (char *__restrict __s,
 char *strtok_r (char *__restrict __s, const char *__restrict __delim,
                 char **__restrict __save_ptr);
 
-#endif
+//#endif
 
-#ifdef __USE_GNU
+//#ifdef __USE_GNU
 
 /*$
  * local: size_t len1 = strlen(__haystack);
@@ -516,9 +524,9 @@ char *strtok_r (char *__restrict __s, const char *__restrict __delim,
  */
 char *strcasestr (const char *__haystack, const char *__needle);
 
-#endif
+//#endif
 
-#ifdef __USE_GNU
+//#ifdef __USE_GNU
 
 /*$
  * requires: valid_bytes(__haystack, __haystacklen);
@@ -537,7 +545,7 @@ void *memmem (const void *__haystack, size_t __haystacklen,
 void *mempcpy (void *__restrict __dest,
                const void *__restrict __src, size_t __n);
 
-#endif
+//#endif
 
 /*$
  * local: char* s = _mopsa_new_readonly_string();
@@ -577,7 +585,7 @@ char *strerror_r (int __errnum, char *__buf, size_t __buflen);
 
 #endif
 
-#ifdef __USE_XOPEN2K8
+//#ifdef __USE_XOPEN2K8
 
 /*$
  * local: char* s = _mopsa_new_readonly_string();
@@ -586,9 +594,9 @@ char *strerror_r (int __errnum, char *__buf, size_t __buflen);
  */
 char *strerror_l (int __errnum, locale_t __l);
 
-#endif
+//#endif
 
-#ifdef __USE_MISC
+//#ifdef __USE_MISC
 
 /*$
  * requires: valid_bytes(__s, __n);
@@ -617,9 +625,9 @@ void explicit_bzero (void *__s, size_t __n);
 char *strsep (char **__restrict __stringp,
               const char *__restrict __delim);
 
-#endif
+//#endif
 
-#ifdef	__USE_XOPEN2K8
+//#ifdef __USE_XOPEN2K8
 
 /*$
  * case "success" {
@@ -655,9 +663,9 @@ char *stpcpy (char *__restrict __dest, const char *__restrict __src);
 char *stpncpy (char *__restrict __dest,
                const char *__restrict __src, size_t __n);
 
-#endif
+//#endif
 
-#ifdef __USE_GNU
+//#ifdef __USE_GNU
 
 /*$
  * requires: valid_string(__s1);
@@ -679,4 +687,4 @@ char *strfry (char *__string);
  */
 void *memfrob (void *__s, size_t __n);
 
-#endif
+//#endif

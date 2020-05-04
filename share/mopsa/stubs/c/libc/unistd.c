@@ -23,9 +23,12 @@
   libc stub
   based on header from glibc-2.27-r6
 */
+
 #include <unistd.h>
 #include <limits.h>
 #include "mopsa_libc_utils.h"
+#include <fcntl.h> // for AT_FDCWD
+
 
 /*$
  * requires: valid_string(__name);
@@ -58,17 +61,25 @@ int eaccess (const char *__name, int __type);
 
 
 /*$
+ * requires: valid_string(__file);
  * local:    void* f = _mopsa_find_file_resource(__fd);
- * requires: f in FileRes;
- * local: int r = access(__file, __type);
- * ensures: return == r;
+ * requires: __fd == AT_FDCWD or alive_resource(f, FileRes);
+ *
+ * case "success" {
+ *   ensures: return == 0;
+ * }
+ *
+ * case "failure" {
+ *   assigns: _errno;
+ *   ensures: return == -1;
+ * }
  */
 int faccessat (int __fd, const char *__file, int __type, int __flag);
 
 
 /*$
  * local:    void* f = _mopsa_find_file_resource(__fd);
- * requires: f in FileRes;
+ * requires: alive_resource(f, FileRes);
  * requires: __whence in [0, __whence];
  *
  * case "success" {
@@ -84,11 +95,11 @@ __off_t lseek (int __fd, __off_t __offset, int __whence);
 
 /*$
  * local:    void* f = _mopsa_find_file_resource(__fd);
- * requires: f in FileRes;
+ * requires: alive_resource(f, FileRes);
  *
  * case "success" {
- *   ensures: return == 0;
  *   free:    f;
+ *   ensures: return == 0;
  * }
  *
  * case "failure" {
@@ -100,7 +111,7 @@ int close (int __fd);
 
 /*$
  * local:    void* f = _mopsa_find_file_resource(__fd);
- * requires: f in FileRes;
+ * requires: alive_resource(f, FileRes);
  * requires: valid_bytes(__buf, __nbytes);
  *
  * case "success" {
@@ -117,7 +128,7 @@ ssize_t read (int __fd, void *__buf, size_t __nbytes);
 
 /*$
  * local:    void* f = _mopsa_find_file_resource(__fd);
- * requires: f in FileRes;
+ * requires: alive_resource(f, FileRes);
  * requires: valid_bytes(__buf, __n);
  *
  * case "success" {
@@ -172,15 +183,19 @@ int pipe (int __pipedes[2]);
  */
 int pipe2 (int __pipedes[2], int __flags);
 
-
-unsigned int alarm (unsigned int __seconds);
-
 /*$
  * // empty contract
  */
+unsigned int alarm (unsigned int __seconds);
+
+/*$
+ * ensures: return in [0,__seconds];
+ */
 unsigned int sleep (unsigned int __seconds);
 
-
+/*$
+ * assigns: _errno;
+ */
 __useconds_t ualarm (__useconds_t __value, __useconds_t __interval);
 
 /*$
@@ -222,7 +237,7 @@ int chown (const char *__file, __uid_t __owner, __gid_t __group);
 
 /*$
  * local:    void* f = _mopsa_find_file_resource(__fd);
- * requires: f in FileRes;
+ * requires: alive_resource(f, FileRes);
  * requires: __owner >= 0;
  * requires: __group >= 0;
  *
@@ -247,11 +262,11 @@ int lchown (const char *__file, __uid_t __owner, __gid_t __group);
 
 
 /*$
- * local:    void* f = _mopsa_find_file_resource(__fd);
- * requires: f in FileRes;
  * requires: valid_string(__file);
  * requires: __owner >= 0;
  * requires: __group >= 0;
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: __fd == AT_FDCWD or alive_resource(f, FileRes);
  *
  * case "success" {
  *   ensures: return == 0;
@@ -283,7 +298,7 @@ int chdir (const char *__path);
 
 /*$
  * local:    void* f = _mopsa_find_file_resource(__fd);
- * requires: f in FileRes;
+ * requires: alive_resource(f, FileRes);
  *
  * case "success" {
  *   ensures: return == 0;
@@ -358,7 +373,7 @@ char *getwd (char *__buf);
 
 /*$
  * local:    void* f = _mopsa_find_file_resource(__fd);
- * requires: f in FileRes;
+ * requires: alive_resource(f, FileRes);
  *
  * case "success" {
  *   local:   void *f2 = new FileRes;
@@ -376,7 +391,7 @@ int dup (int __fd);
 /*$
  * local:    void* f = _mopsa_find_file_resource(__fd);
  * local:    void* f2 = _mopsa_find_file_resource(__fd2);
- * requires: f in FileRes;
+ * requires: alive_resource(f, FileRes);
  *
  * case "newfd" {
  *   assumes: not f2 in FileRes;
@@ -386,7 +401,7 @@ int dup (int __fd);
  * }
  *
  * case "reopen" {
- *   assumes: f2 in FileDescriptor;
+ *   assumes: f2 in FileRes;
  *   ensures: return == __fd2;
  * }
  *
@@ -415,7 +430,7 @@ int dup3 (int __fd, int __fd2, int __flags);
  *             valid_string(__envp[i]);
  *
  * case "success" {
- *   ensures: 0 == 1; // TODO: does not terminate
+ *   ensures: 1 == 0; // TODO: does not terminate
  * }
  *
  * case "failure" {
@@ -429,14 +444,14 @@ int execve (const char *__path, char *const __argv[],
 
 /*$
  * local:    void* f = _mopsa_find_file_resource(__fd);
- * requires: f in FileRes;
+ * requires: alive_resource(f, FileRes);
  * requires: forall size_t i in [0, (bytes(__argv) - offset(__argv)) / sizeof_type(char*) - 1]:
  *             valid_string(__argv[i]);
  * requires: forall size_t i in [0, (bytes(__envp) - offset(__envp)) / sizeof_type(char*) - 1]:
  *             valid_string(__envp[i]);
  *
  * case "success" {
- *   ensures: 0 == 1; // TODO: does not terminate
+ *   ensures: 1 == 0; // TODO: does not terminate
  * }
  *
  * case "failure" {
@@ -463,7 +478,7 @@ int fexecve (int __fd, char *const __argv[], char *const __envp[]);
  * }
  *
  * case "success" {
- *   ensures: 0 == 1; // TODO: does not terminate
+ *   ensures: 1 == 0; // TODO: does not terminate
  * }
  *
  * case "failure" {
@@ -479,7 +494,7 @@ int execv (const char *__path, char *const __argv[]);
  * requires: valid_string(__arg);
  *
  * case "success" {
- *   ensures: 0 == 1; // TODO: does not terminate
+ *   ensures: 1 == 0; // TODO: does not terminate
  * }
  *
  * case "failure" {
@@ -495,7 +510,7 @@ int execle (const char *__path, const char *__arg, ...);
  * requires: valid_string(__arg);
  *
  * case "success" {
- *   ensures: 0 == 1; // TODO: does not terminate
+ *   ensures: 1 == 0; // TODO: does not terminate
  * }
  *
  * case "failure" {
@@ -530,7 +545,7 @@ int execvp (const char *__file, char *const __argv[]);
  * requires: valid_string(__arg);
  *
  * case "success" {
- *   ensures: 0 == 1; // TODO: does not terminate
+ *   ensures: 1 == 0; // TODO: does not terminate
  * }
  *
  * case "failure" {
@@ -549,7 +564,7 @@ int execlp (const char *__file, const char *__arg, ...);
  *           valid_string(__envp[i]);
  *
  * case "success" {
- *   ensures: 0 == 1; // does not terminate
+ *   ensures: 1 == 0; // does not terminate
  * }
  *
  * case "failure" {
@@ -573,7 +588,7 @@ int nice (int __inc);
 
 
 /*$
- * ensures: 0 == 1; // does not terminate
+ * ensures: 1 == 0; // does not terminate
  */
 void _exit (int __status);
 
@@ -590,7 +605,8 @@ void _exit (int __status);
 long int pathconf (const char *__path, int __name);
 
 /*$
- * requires: __fd in FileDescriptor;
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: alive_resource(f, FileRes);
  *
  * case "success" { }
  *
@@ -938,13 +954,17 @@ int setresgid (__gid_t __rgid, __gid_t __egid, __gid_t __sgid);
 __pid_t fork (void);
 
 
+/*$
+ * alias: fork;
+ */
 __pid_t vfork (void);
 
 
 static char _ttyname_buf[PATH_MAX];
 
 /*$
- * requires: __fd in FileDescriptor;
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: alive_resource(f, FileRes);
  *
  * case "success" {
  *   assigns: _ttyname_buf[0, PATH_MAX - 1];
@@ -960,7 +980,8 @@ static char _ttyname_buf[PATH_MAX];
 char *ttyname (int __fd);
 
 /*$
- * requires: __fd in FileDescriptor;
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: alive_resource(f, FileRes);
  * requires: valid_bytes(__buf, __buflen);
  *
  * case "success" {
@@ -977,7 +998,8 @@ char *ttyname (int __fd);
 int ttyname_r (int __fd, char *__buf, size_t __buflen);
 
 /*$
- * requires: __fd in FileDescriptor;
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: alive_resource(f, FileRes);
  *
  * case "success" {
  *   ensures: return == 1;
@@ -1016,8 +1038,10 @@ int link (const char *__from, const char *__to);
 /*$
  * requires: valid_string(__from);
  * requires: valid_string(__to);
- * requires: __fromfd in FileDescriptor;
- * requires: __tofd in FileDescriptor;
+ * local:    void* f1 = _mopsa_find_file_resource(__fromfd);
+ * local:    void* f2 = _mopsa_find_file_resource(__tofd);
+ * requires: __fromfd == AT_FDCWD or alive_resource(f1, FileRes);
+ * requires: __tofd == AT_FDCWD or alive_resource(f2, FileRes);
  *
  * case "success" {
  *   ensures: return == 0;
@@ -1069,7 +1093,8 @@ ssize_t readlink (const char *__restrict __path,
 /*$
  * requires: valid_string(__from);
  * requires: valid_string(__to);
- * requires: __tofd in FileDescriptor;
+ * local:    void* f = _mopsa_find_file_resource(__tofd);
+ * requires: __tofd == AT_FDCWD or alive_resource(f, FileRes);
  *
  * case "success" {
  *   ensures: return == 0;
@@ -1084,9 +1109,10 @@ int symlinkat (const char *__from, int __tofd,
                const char *__to);
 
 /*$
- * requires: __fd in FileDescriptor;
  * requires: valid_string(__path);
  * requires: valid_bytes(__buf, __len);
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: __fd == AT_FDCWD or alive_resource(f, FileRes);
  *
  * case "success" {
  *   assigns: __buf[0, __len);
@@ -1119,8 +1145,9 @@ int unlink (const char *__name);
 
 
 /*$
- * requires: __fd in FileDescriptor;
  * requires: valid_string(__name);
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: __fd == AT_FDCWD or alive_resource(f, FileRes);
  *
  * case "success" {
  *   ensures: return == 0;
@@ -1149,7 +1176,8 @@ int unlinkat (int __fd, const char *__name, int __flag);
 int rmdir (const char *__path);
 
 /*$
- * requires: __fd in FileDescriptor;
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: alive_resource(f, FileRes);
  *
  * case "success" {
  *   ensures: return >= 0;
@@ -1163,7 +1191,8 @@ int rmdir (const char *__path);
 __pid_t tcgetpgrp(int __fd);
 
 /*$
- * requires: __fd in FileDescriptor;
+  * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: alive_resource(f, FileRes);
  * requires: __pgrp_id >= 0;
  *
  * case "success" {
@@ -1220,11 +1249,11 @@ int setlogin (const char *__name);
 
 
 /*$
- * requires: valid_bytes(__buf, __buflen);
+ * requires: valid_bytes(__name, __len);
  *
  * case "success" {
- *   // NOTE: 0 added only if the buffer is large enugh, which we cannot assume
- *   assigns: __buf[0, __buflen);
+ *   // NOTE: 0 added only if the buffer is large enough, which we cannot assume
+ *   assigns: __name[0, __len);
  *   ensures: return == 0;
  * }
  *
@@ -1233,7 +1262,7 @@ int setlogin (const char *__name);
  *   ensures: return == -1;
  * }
  */
-int gethostbuf (char *__buf, size_t __buflen);
+int gethostname (char *__name, size_t __len);
 
 
 /*$
@@ -1423,7 +1452,8 @@ char *getpass (const char *__prompt);
 
 
 /*$
- * requires: __fd in FileDescriptor;
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: alive_resource(f, FileRes);
  *
  * case "success" {
  *   ensures: return == 0;
@@ -1438,7 +1468,8 @@ int fsync (int __fd);
 
 
 /*$
- * requires: __fd in FileDescriptor;
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: alive_resource(f, FileRes);
  *
  * case "success" {
  *   ensures: return == 0;
@@ -1464,13 +1495,13 @@ void sync (void);
 
 
 /*$
- * //warn: "not portable; use sysconf(SC_PAGESIZE) instead";
+ * warn: "not portable; use sysconf(SC_PAGESIZE) instead";
  * ensures: return >= 1;
  */
 int getpagesize (void);
 
 /*$
- * //warn: "not portable; use sysconf(SC_OPEN_MAX) instead";
+ * warn: "not portable; use sysconf(SC_OPEN_MAX) instead";
  * ensures: return >= 1;
  */
 int getdtablesize (void);
@@ -1492,7 +1523,8 @@ int truncate (const char *__file, __off_t __length);
 
 
 /*$
- * requires: __fd in FileDescriptor;
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: alive_resource(f, FileRes);
  *
  * case "success" {
  *   ensures: return == 0;
@@ -1506,15 +1538,28 @@ int truncate (const char *__file, __off_t __length);
 int ftruncate (int __fd, __off_t __length);
 
 
+/*$
+ * unsound: "the effect of brk is ignored";
+ * assigns: _errno;
+ */
 int brk (void *__addr);
 
+/*$
+ * unsound: "the effect of sbrk is ignored";
+ * assigns: _errno;
+ */
 void *sbrk (intptr_t __delta);
 
+/*$
+ * unsound: "the effect of syscall is ignored";
+ * assigns: _errno;
+ */
 long int syscall (long int __sysno, ...);
 
 
 /*$
- * requires: __fd in FileDescriptor;
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: alive_resource(f, FileRes);
  * requires: __cmd in [0, 3];
  *
  * case "success" {
@@ -1530,8 +1575,10 @@ int lockf (int __fd, int __cmd, __off_t __len);
 
 
 /*$
- * requires: __infd in FileDescriptor;
- * requires: __outfd in FileDescriptor;
+ * local:    void* f1 = _mopsa_find_file_resource(__infd);
+ * requires: alive_resource(f1, FileRes);
+ * local:    void* f2 = _mopsa_find_file_resource(__outfd);
+ * requires: alive_resource(f2, FileRes);
  * requires: null_or_valid_ptr(__pinoff);
  * requires: null_or_valid_ptr(__poutoff);
  *
@@ -1559,7 +1606,8 @@ ssize_t copy_file_range (int __infd, __off64_t *__pinoff,
 			 size_t __length, unsigned int __flags);
 
 /*$
- * requires: __fildes in FileDescriptor;
+ * local:    void* f = _mopsa_find_file_resource(__fildes);
+ * requires: alive_resource(f, FileRes);
  *
  * case "success" {
  *   ensures: return == 0;

@@ -183,6 +183,13 @@ struct
       Eval.singleton (mk_top s32 exp.erange) flow |>
       OptionExt.return
 
+    (* 𝔼⟦ dprintf(...) ⟧ *)
+    | E_c_builtin_call("dprintf", file:: format :: args) ->
+      assert_valid_file_descriptor file exp.erange man flow >>$? fun () flow ->
+      check_args format args exp.erange man flow >>$? fun () flow ->
+      Eval.singleton (mk_top s32 exp.erange) flow |>
+      OptionExt.return
+
     (* 𝔼⟦ sprintf(...) ⟧ *)
     | E_c_builtin_call("sprintf", dst :: format :: args)
     | E_c_builtin_call("__sprintf_chk", dst :: _ :: _ :: format :: args)
@@ -197,6 +204,12 @@ struct
       check_args format args exp.erange man flow >>$? fun () flow ->
       strnrand dst n exp.erange man flow >>$? fun () flow ->
       Eval.singleton (mk_top s32 exp.erange) flow |>
+      OptionExt.return
+
+    (* 𝔼⟦ asprintf(...) ⟧ *)
+    | E_c_builtin_call("asprintf", dst :: format :: args) ->
+      check_args format args exp.erange man flow >>$? fun () flow ->
+      asprintf_stub dst exp.erange man flow |>
       OptionExt.return
 
     (* 𝔼⟦ error(...) ⟧ *)

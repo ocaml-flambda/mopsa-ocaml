@@ -19,65 +19,61 @@
 /*                                                                          */
 /****************************************************************************/
 
-/* Stubs for the extension of stdio as found in Sun's Solaris OS */
+/*
+  libc stub
+  based on header from glibc-2.29-r7
+*/
 
-#include <stdio_ext.h>
-#include <limits.h>
-
-/*$
- * requires: alive_resource(__fp, File);
- */
-size_t __fbufsize (FILE *__fp);
-
+#include <sys/inotify.h>
+#include "../mopsa_libc_utils.h"
 
 /*$
- * requires: alive_resource(__fp, File);
+ * case "success" {
+ *   local:   void* f = new FileRes;
+ *   local:   int fd = _mopsa_register_file_resource(f);
+ *   ensures: return == fd;
+ * }
+ *
+ * case "failure" {
+ *   assigns: _errno;
+ *   ensures: return == -1;
+ * }
  */
-int __freading (FILE *__fp);
+int inotify_init (void);
 
 /*$
- * requires: alive_resource(__fp, File);
+ * local: int r = inotify_init();
+ * ensures: return == r;
  */
-int __fwriting (FILE *__fp);
+int inotify_init1 (int __flags);
 
 /*$
- * requires: alive_resource(__fp, File);
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: alive_resource(f, FileRes);
+ * requires: valid_string(__name);
+ *
+ * case "success" {
+ *   ensures: return >= 0;
+ * }
+ *
+ * case "failure" {
+ *   assigns: _errno;
+ *   ensures: return == -1;
+ * }
  */
-int __freadable (FILE *__fp);
+int inotify_add_watch (int __fd, const char *__name, uint32_t __mask);
 
 /*$
- * requires: alive_resource(__fp, File);
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: alive_resource(f, FileRes);
+ *
+ * case "success" {
+ *   ensures: return == 0;
+ * }
+ *
+ * case "failure" {
+ *   assigns: _errno;
+ *   ensures: return == -1;
+ * }
  */
-int __fwritable (FILE *__fp);
-
-/*$
- * requires: alive_resource(__fp, File);
- */
-int __flbf (FILE *__fp);
-
-
-/*$
- * requires: alive_resource(__fp, File);
- */
-void __fpurge (FILE *__fp);
-
-/*$
- * requires: alive_resource(__fp, File);
- */
-size_t __fpending (FILE *__fp);
-
-/*$
- * // emtpy stub
- */
-void _flushlbf (void);
-
-
-/*$
- * requires: alive_resource(__fp, File);
- * requires: __type == FSETLOCKING_INTERNAL or
- *           __type == FSETLOCKING_BYCALLER or
- *           __type == FSETLOCKING_QUERY;
- * ensures:  return == FSETLOCKING_INTERNAL or
- *           return == FSETLOCKING_BYCALLER;
- */
-int __fsetlocking (FILE *__fp, int __type);
+int inotify_rm_watch (int __fd, int __wd);

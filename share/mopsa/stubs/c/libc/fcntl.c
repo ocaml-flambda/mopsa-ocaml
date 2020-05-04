@@ -23,12 +23,14 @@
   libc stub
   based on header from glibc-2.27-r6
 */
+
 #include <fcntl.h>
 #include "mopsa_libc_utils.h"
 
 
 /*$
- * requires: __fd in FileDescriptor;
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: alive_resource(f, FileRes);
  */
 int fcntl (int __fd, int __cmd, ...);
 
@@ -50,12 +52,13 @@ int open (const char *__file, int __oflag, ...);
 
 /*$
  * requires: valid_string(__file);
- * requires: __fd in FileDescriptor;
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: __fd == AT_FDCWD or alive_resource(f, FileRes);
  *
  * case "success" {
- *   local:   void* f = new FileRes;
- *   local:   int fd = _mopsa_register_file_resource(f);
- *   ensures: return == fd;
+ *   local:   void* f2 = new FileRes;
+ *   local:   int fd2 = _mopsa_register_file_resource(f2);
+ *   ensures: return == fd2;
  * }
  *
  * case "failure" {
@@ -82,11 +85,13 @@ int openat (int __fd, const char *__file, int __oflag, ...);
 int creat (const char *__file, mode_t __mode);
 
 /*$
- * requires: __fd in FileDescriptor;
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: alive_resource(f, FileRes);
  */
 int posix_fadvise (int __fd, off_t __offset, off_t __len, int __advise);
 
 /*$
- * requires: __fd in FileDescriptor;
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: alive_resource(f, FileRes);
  */
 int posix_fallocate (int __fd, off_t __offset, off_t __len);

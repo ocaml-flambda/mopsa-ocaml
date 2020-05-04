@@ -76,3 +76,8 @@ let list_alarms (alarms:alarm_class list) =
   match !opt_format with
   | F_text -> Text.list_alarms alarms !opt_file
   | F_json -> Json.list_alarms alarms !opt_file
+
+let list_hooks (hooks:string list) =
+  match !opt_format with
+  | F_text -> Text.list_hooks hooks !opt_file
+  | F_json -> Json.list_hooks hooks !opt_file

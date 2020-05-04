@@ -39,10 +39,12 @@ let _ =
       "__printf_chk";
       "fprintf";
       "__fprintf_chk";
+      "dprintf";
       "sprintf";
       "__sprintf_chk";
       "__builtin___sprintf_chk";
       "snprintf";
+      "asprintf";
       "fscanf";
       "scanf";
       "sscanf";

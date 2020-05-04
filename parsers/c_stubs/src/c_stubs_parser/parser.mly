@@ -69,7 +69,7 @@
 %token TRUE FALSE
 %token FORALL EXISTS IN NEW
 %token FREE PRIMED RETURN SIZE BYTES SIZEOF_TYPE SIZEOF_EXPR OFFSET BASE VALID_PTR CAST
-%token VALID_FLOAT FLOAT_INF FLOAT_NAN
+%token VALID_FLOAT FLOAT_INF FLOAT_NAN ALIVE
 
 
 (* Types *)
@@ -333,17 +333,28 @@ type_specifier_except_typedef:
   | UNSIGNED CHAR      { T_unsigned_char }
   | SIGNED CHAR        { T_signed_char }
   | SHORT              { T_signed_short }
+  | SHORT INT          { T_signed_short }
   | UNSIGNED SHORT     { T_unsigned_short }
+  | UNSIGNED SHORT INT { T_unsigned_short }
   | SIGNED SHORT       { T_signed_short }
+  | SIGNED SHORT INT   { T_signed_short }
   | INT                { T_signed_int }
+  | UNSIGNED           { T_unsigned_int }
   | UNSIGNED INT       { T_unsigned_int }
+  | SIGNED             { T_signed_int }
   | SIGNED INT         { T_signed_int }
   | LONG               { T_signed_long }
+  | LONG INT           { T_signed_long }
   | UNSIGNED LONG      { T_unsigned_long }
+  | UNSIGNED LONG INT  { T_unsigned_long }
   | SIGNED LONG        { T_signed_long }
+  | SIGNED LONG INT    { T_signed_long }
   | LONG LONG          { T_signed_long_long }
+  | LONG LONG INT      { T_signed_long_long }
   | SIGNED LONG LONG   { T_signed_long_long }
+  | SIGNED LONG LONG INT  { T_signed_long_long }
   | UNSIGNED LONG LONG { T_unsigned_long_long }
+  | UNSIGNED LONG LONG INT { T_unsigned_long_long }
   | FLOAT              { T_float }
   | DOUBLE             { T_double }
   | LONG DOUBLE        { T_long_double }
@@ -446,15 +457,16 @@ interval:
   | IMPLIES { IMPLIES }
 
 %inline builtin:
-  | SIZE   { SIZE }
-  | BYTES  { BYTES }
-  | OFFSET { OFFSET }
-  | BASE   { BASE }
-  | PRIMED { PRIMED }
-  | VALID_PTR { VALID_PTR }
+  | SIZE        { SIZE }
+  | BYTES       { BYTES }
+  | OFFSET      { OFFSET }
+  | BASE        { BASE }
+  | PRIMED      { PRIMED }
+  | VALID_PTR   { VALID_PTR }
   | VALID_FLOAT { VALID_FLOAT }
   | FLOAT_INF   { FLOAT_INF }
   | FLOAT_NAN   { FLOAT_NAN }
+  | ALIVE       { ALIVE }
 
 args:
   |                             { [] }
@@ -468,7 +480,7 @@ var_list:
 
 
 resource:
-  | IDENT { $1 }
+  | var { $1 }
 
 var:
   | IDENT {
