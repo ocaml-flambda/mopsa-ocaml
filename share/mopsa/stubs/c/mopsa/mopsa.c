@@ -54,16 +54,20 @@
 
 /*$$
  * predicate valid_substring(s, n):
- *   (n > 0 implies valid_ptr(s)) and
- *   exists size_t _i in [0, n): s[_i] == 0
+ *   n > 0 implies (
+ *     valid_ptr(s) and
+ *     exists size_t _i in [0, n): s[_i] == 0
+ *   )
  * ;
  */
 
 
 /*$$
  * predicate valid_primed_substring(s, n):
- *   (n > 0 implies valid_ptr(s)) and
- *   exists size_t _i in [0, n): (s[_i])' == 0
+ *   n > 0 implies (
+ *      valid_ptr(s) and
+ *      exists size_t _i in [0, n): (s[_i])' == 0
+ *   )
  * ;
  */
 
