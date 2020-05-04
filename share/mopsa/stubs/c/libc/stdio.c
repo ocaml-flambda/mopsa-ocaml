@@ -23,9 +23,11 @@
   libc stub
   based on header from glibc-2.27-r6
 */
+
 #include <stdarg.h>
 #include <stdio.h>
 #include <wchar.h>
+#include <fcntl.h> // for AT_FDCWD
 #include "mopsa_libc_utils.h"
 
 
@@ -136,8 +138,10 @@ int rename (const char *__old, const char *__new);
 /*$
  * requires: valid_string(__old);
  * requires: valid_string(__new);
- * requires: __oldfd in FileDescriptor;
- * requires: __newfd in FileDescriptor;
+ * local:    void* f1 = _mopsa_find_file_resource(__oldfd);
+ * local:    void* f2 = _mopsa_find_file_resource(__newfd);
+ * requires: __oldfd == AT_FDCWD or alive_resource(f1, FileRes);
+ * requires: __newfd == AT_FDCWD or alive_resource(f2, FileRes);
  *
  * case "success" {
  *   ensures: return == 0;
@@ -149,6 +153,13 @@ int rename (const char *__old, const char *__new);
  * }
  */
 int renameat (int __oldfd, const char *__old, int __newfd, const char *__new);
+
+/*$
+ * local: int r = renameat(__oldfd, __old, __newfd, __new);
+ * ensures: return == r;
+ */
+extern int renameat2 (int __oldfd, const char *__old, int __newfd,
+		      const char *__new, unsigned int __flags);
 
 /*$
  * case "success" {
@@ -258,12 +269,14 @@ int fflush (FILE *__stream);
 
 
 /*$
- * // TODO: not thread-safe
  * alias: fflush;
  */
 int fflush_unlocked (FILE *__stream);
 
-// TODO: not implemented fcloseall
+/*$
+ * unsound: "fcloseall effect ignored";
+ */
+int fcloseall(void);
 
 /*$
  * requires: valid_string(__filename);
@@ -285,7 +298,7 @@ FILE *fopen (const char *__restrict __filename,
 /*$
  * requires: valid_string(__filename);
  * requires: valid_string(__modes);
- * requires: __stream in File;
+ * requires: alive_resource(__stream, File);
  *
  * case "success" {
  *   ensures: return == __stream;
@@ -303,7 +316,8 @@ FILE *freopen (const char *__restrict __filename,
 
 /*$
  * requires: valid_string(__modes);
- * requires: __fd in FileDescriptor;
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: alive_resource(f, FileRes);
  *
  * case "success" {
  *   local:   FILE* f = _alloc_FILE_at(__fd);
@@ -360,7 +374,7 @@ FILE *open_memstream (char **__bufloc, size_t *__sizeloc);
 /*$
  * // TODO: __buf becomes volatile
  *
- * requires: __stream in File;
+ * requires: alive_resource(__stream, File);
  * requires: null_or_valid_bytes(__buf, BUFSIZ);
  */
 void setbuf (FILE *__restrict __stream, char *__restrict __buf);
@@ -368,7 +382,7 @@ void setbuf (FILE *__restrict __stream, char *__restrict __buf);
 /*$
  * // TODO: __buf becomes volatile
  *
- * requires: __stream in File;
+ * requires: alive_resource(__stream, File);
  * requires: null_or_valid_bytes(__buf, __n);
  * requires: __modes in [0, 2];
  *
@@ -388,14 +402,14 @@ int setvbuf (FILE *__restrict __stream, char *__restrict __buf,
 /*$
  * // TODO: __buf becomes volatile
  *
- * requires: __stream in File;
+ * requires: alive_resource(__stream, File);
  * requires: null_or_valid_bytes(__buf, __size);
  */
 void setbuffer (FILE *__restrict __stream, char *__restrict __buf,
                 size_t __size);
 
 /*$
- * requires: __stream in File;
+ * requires: alive_resource(__stream, File);
  */
 void setlinebuf (FILE *__stream);
 
@@ -403,6 +417,9 @@ void setlinebuf (FILE *__stream);
 /* built-in */
 int fprintf (FILE *__restrict __stream,
              const char *__restrict __format, ...);
+
+/* built-in */
+int dprintf (int __fd, const char *__restrict __format, ...);
 
 /* built-in */
 int printf (const char *__restrict __format, ...);
@@ -414,6 +431,28 @@ extern int sprintf (char *__restrict __s,
 /* built-in */
 int snprintf (char *__restrict __s, size_t __maxlen,
               const char *__restrict __format, ...);
+
+/* built-in */
+int asprintf (char **__restrict __ptr,
+              const char *__restrict __fmt, ...);
+
+/*$
+ * // called at the end of asprintf's stub, after checking the format
+ *
+ * case "success" {
+ *   local: char* r = _mopsa_new_valid_string();
+ *   local: size_t l = strlen(r);
+ *   assigns: *strp;
+ *   ensures: (*strp)' == r;
+ *   ensures: return >= 0 and return == l;
+ * }
+ *
+ * case "failure" {
+ *   ensures: return == -1;
+ *  }
+ */
+int _mopsa_asprintf(char** strp);
+
 
 /* built-in */
 int fscanf (FILE *__restrict __stream,
@@ -428,7 +467,7 @@ int sscanf (const char *__restrict __s,
 
 
 /*$
- * requires: __stream in File;
+ * requires: alive_resource(__stream, File);
  * ensures: return in [0, 255] or return == EOF;
  */
 int fgetc (FILE *__stream);
@@ -453,27 +492,24 @@ int getchar (void);
 
 
 /*$
- * // TODO: not thread-safe
  * alias: fgetc;
  */
 int getc_unlocked (FILE *__stream);
 
 /*$
- * // TODO: not thread-safe
  * alias: getchar;
  */
 int getchar_unlocked (void);
 
 
 /*$
- * // TODO: not thread-safe
  * alias: fgetc;
  */
 int fgetc_unlocked (FILE *__stream);
 
 
 /*$
- * requires: __stream in File;
+ * requires: alive_resource(__stream, File);
  * ensures: (return == (unsigned char) __c) or (return == EOF);
  */
 int fputc (int __c, FILE *__stream);
@@ -504,43 +540,36 @@ int putc (int __c, FILE *__stream);
  */
 int putchar (int __c);
 
-
 /*$
- * // TODO: not thread-safe
  * alias: fputc;
  */
 int fputc_unlocked (int __c, FILE *__stream);
 
-
-
 /*$
- * // TODO: not thread-safe
  * alias: fputc;
  */
 int putc_unlocked (int __c, FILE *__stream);
 
-
 /*$
- * // TODO: not thread-safe
  * alias: putchar;
  */
 int putchar_unlocked (int __c);
 
 
 /*$
- * requires: __stream in File;
+ * requires: alive_resource(__stream, File);
  */
 int getw (FILE *__stream);
 
 /*$
- * requires: __stream in File;
+ * requires: alive_resource(__stream, File);
  * ensures:  (return == 0) or (return == EOF);
  */
 int putw (int __w, FILE *__stream);
 
 
 /*$
- * requires: __stream in File;
+ * requires: alive_resource(__stream, File);
  * requires: __n >= 0;
  * requires: valid_bytes(__s, __n);
  * assigns:  __s[0, __n);
@@ -565,7 +594,7 @@ char *fgets_unlocked (char *__restrict __s, int __n,
 
 
 /*$
- * requires: __stream in File;
+ * requires: alive_resource(__stream, File);
  * requires: null_or_valid_bytes(*__lineptr, *__n);
  * 
  * case "realloc" {
@@ -612,7 +641,7 @@ ssize_t getline (char **__restrict __lineptr,
 
 
 /*$
- * requires: __stream in File;
+ * requires: alive_resource(__stream, File);
  * requires: valid_string(__s);
  *
  * case "success" {
@@ -641,13 +670,13 @@ int fputs (const char *__restrict __s, FILE *__restrict __stream);
 int puts (const char *__s);
 
 /*$
- * requires: __stream in File;
+ * requires: alive_resource(__stream, File);
  * ensures: (return == (unsigned char) __c) or (return == EOF);
  */
 int ungetc (int __c, FILE *__stream);
 
 /*$
- * requires: __stream in File;
+ * requires: alive_resource(__stream, File);
  * requires: valid_bytes(__ptr, __size * __n);
  * assigns:  ((char*)__ptr)[0, (__size * __n));
  * ensures:  return in [0, __n];
@@ -656,7 +685,7 @@ size_t fread (void *__restrict __ptr, size_t __size,
               size_t __n, FILE *__restrict __stream);
 
 /*$
- * requires: __stream in File;
+ * requires: alive_resource(__stream, File);
  * requires: valid_bytes(__ptr, __size * __n);
  * ensures:  return in [0, __n];
  */
@@ -665,29 +694,25 @@ size_t fwrite (const void *__restrict __ptr, size_t __size,
 
 
 /*$
- * // TODO: not thread-safe
  * alias: fputs;
  */
 int fputs_unlocked (const char *__restrict __s,
                     FILE *__restrict __stream);
 
-
 /*$
- * // TODO: not thread-safe
  * alias: fread;
  */
 size_t fread_unlocked (void *__restrict __ptr, size_t __size,
                        size_t __n, FILE *__restrict __stream);
 
 /*$
- * // TODO: not thread-safe
  * alias: fwrite;
  */
 size_t fwrite_unlocked (const void *__restrict __ptr, size_t __size,
                         size_t __n, FILE *__restrict __stream);
 
 /*$
- * requires: __stream in File;
+ * requires: alive_resource(__stream, File);
  * requires: __whence in [0, 2];
  *
  * case "success" {
@@ -702,7 +727,7 @@ size_t fwrite_unlocked (const void *__restrict __ptr, size_t __size,
 int fseek (FILE *__stream, long int __off, int __whence);
 
 /*$
- * requires: __stream in File;
+ * requires: alive_resource(__stream, File);
  *
  * case "success" {
  *   ensures: return >= 0;
@@ -716,12 +741,12 @@ int fseek (FILE *__stream, long int __off, int __whence);
 long int ftell (FILE *__stream);
 
 /*$
- * requires: __stream in File;
+ * requires: alive_resource(__stream, File);
  */
 void rewind (FILE *__stream);
 
 /*$
- * requires: __stream in File;
+ * requires: alive_resource(__stream, File);
  * requires: __whence in [0, 2];
  *
  * case "success" {
@@ -736,7 +761,7 @@ void rewind (FILE *__stream);
 int fseeko (FILE *__stream, __off_t __off, int __whence);
 
 /*$
- * requires: __stream in File;
+ * requires: alive_resource(__stream, File);
  *
  * case "success" {
  *   ensures: return >= 0;
@@ -751,7 +776,7 @@ __off_t ftello (FILE *__stream);
 
 
 /*$
- * requires: __stream in File;
+ * requires: alive_resource(__stream, File);
  *
  * case "success" {
  *   assigns: *__pos;
@@ -766,7 +791,7 @@ __off_t ftello (FILE *__stream);
 int fgetpos (FILE *__restrict __stream, fpos_t *__restrict __pos);
 
 /*$
- * requires: __stream in File;
+ * requires: alive_resource(__stream, File);
  * requires: valid_ptr(__pos);
  *
  * case "success" {
@@ -781,36 +806,33 @@ int fgetpos (FILE *__restrict __stream, fpos_t *__restrict __pos);
 int fsetpos (FILE *__stream, const fpos_t *__pos);
 
 /*$
- * requires: __stream in File;
+ * requires: alive_resource(__stream, File);
  */
 void clearerr (FILE *__stream);
 
 /*$
- * requires: __stream in File;
+ * requires: alive_resource(__stream, File);
  */
 int feof (FILE *__stream);
 
 
 /*$
- * requires: __stream in File;
+ * requires: alive_resource(__stream, File);
  */
 int ferror (FILE *__stream);
 
 
 /*$
- * // TODO: not thread-safe
  * alias: clearerr;
  */
 void clearerr_unlocked (FILE *__stream);
 
 /*$
- * // TODO: not thread-safe
  * alias: feof;
  */
 int feof_unlocked (FILE *__stream);
 
 /*$
- * // TODO: not thread-safe
  * alias: ferror;
  */
 int ferror_unlocked (FILE *__stream);
@@ -823,14 +845,13 @@ void perror (const char *__s);
 
 
 /*$
- * requires: __stream in File;
+ * requires: alive_resource(__stream, File);
  * ensures:  return == __stream->_fileno;
  */
 int fileno (FILE *__stream);
 
 
 /*$
- * // TODO: not thread-safe
  * alias: fileno;
  */
 int fileno_unlocked (FILE *__stream);
@@ -881,7 +902,7 @@ static char _ctermid_buf[L_ctermid];
  */
 char *ctermid (char *__s);
 
-//L_cuserid is not always defined
+// L_cuserid is not always defined
 #ifndef L_cuserid
 #define L_cuserid 10
 #endif
@@ -912,18 +933,18 @@ char *cuserid (char *__s);
 
 
 /*$
- * requires: __stream in File;
+ * requires: alive_resource(__stream, File);
  */
 void flockfile (FILE *__stream);
 
 
 /*$
- * requires: __stream in File;
+ * requires: alive_resource(__stream, File);
  */
 int ftrylockfile (FILE *__stream);
 
 /*$
- * requires: __stream in File;
+ * requires: alive_resource(__stream, File);
  */
 void funlockfile (FILE *__stream);
 
@@ -947,3 +968,90 @@ void funlockfile (FILE *__stream);
  */
 FILE *_wfopen (const wchar_t *__restrict __filename,
                const wchar_t *__restrict __modes);
+
+
+/// TODO: format checking not supported due to va_arg
+
+/*$
+ * requires: alive_resource(__s, File);
+ * requires: valid_string(__format);
+ * unsound: "vfprintf format is not checked";
+ */
+int vfprintf (FILE *__restrict __s, const char *__restrict __format,
+              __gnuc_va_list __arg);
+
+/*$
+ * requires: valid_string(__format);
+ * unsound: "vprintf format is not checked";
+ */
+int vprintf (const char *__restrict __format, __gnuc_va_list __arg);
+
+/*$
+ * requires: valid_ptr(__s);
+ * requires: valid_string(__format);
+ * warn: "vsprintf is not safe to use";
+ * unsound: "vsprintf format is not checked";
+ */
+int vsprintf (char *__restrict __s, const char *__restrict __format,
+              __gnuc_va_list __arg);
+
+/*$
+ * requires: valid_bytes(__s, __maxlen);
+ * requires: valid_string(__format);
+ * assigns: __s[0,__maxlen);
+ * ensures: valid_primed_substring(__s, __maxlen);
+ * unsound: "vsnprintf format is not checked";
+ */
+int vsnprintf (char *__restrict __s, size_t __maxlen,
+               const char *__restrict __format, __gnuc_va_list __arg);
+
+/*$
+ * requires: valid_ptr(__ptr);
+ * requires: valid_string(__f);
+ * unsound: "vasprintf format is not checked";
+ *
+ * case "success" {
+ *   local: char* r = _mopsa_new_valid_string();
+ *   local: size_t l = strlen(r);
+ *   assigns: *__ptr;
+ *   ensures: (*__ptr)' == r;
+ *   ensures: return >= 0 and return == l;
+ * }
+ *
+ * case "failure" {
+ *   ensures: return == -1;
+ *  }
+ */
+int vasprintf (char **__restrict __ptr, const char *__restrict __f,
+               __gnuc_va_list __arg);
+
+/*$
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: alive_resource(f, FileRes);
+ * requires: valid_string(__fmt);
+ * unsound: "vdprintf format is not checked";
+ */
+int vdprintf (int __fd, const char *__restrict __fmt,
+              __gnuc_va_list __arg);
+
+/*$
+ * requires: alive_resource(__s, File);
+ * requires: valid_string(__format);
+ * unsound: "vfscanf format and arguments not handled";
+ */
+int vfscanf (FILE *__restrict __s, const char *__restrict __format,
+             __gnuc_va_list __arg);
+
+/*$
+ * requires: valid_string(__format);
+ * unsound: "vscanf format and arguments not handled";
+ */
+int vscanf (const char *__restrict __format, __gnuc_va_list __arg);
+
+/*$
+ * requires: valid_string(__s);
+ * requires: valid_string(__format);
+ * unsound: "vsscanf format and arguments not handled";
+ */
+int vsscanf (const char *__restrict __s,
+             const char *__restrict __format, __gnuc_va_list __arg);

@@ -24,10 +24,10 @@
   based on header from glibc-2.27-r6
 */
 #include <inttypes.h>
+#include "mopsa_libc_utils.h"
 #include <stdint.h> // for intmax_t & co.
 #include <wchar.h>  // for wchar_t
 #include <string.h> // for strlen
-#include "mopsa_libc_utils.h"
 
 
 // FIXME: INTMAX_MIN can not be used in stubs since it is defined with the

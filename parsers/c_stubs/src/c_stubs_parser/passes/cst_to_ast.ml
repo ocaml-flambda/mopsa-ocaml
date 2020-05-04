@@ -171,11 +171,11 @@ let is_array_typ t =
   | C_AST.T_array _ -> true
   | _ -> false
 
-let pointed_type t =
+let pointed_type range t =
   match fst (unroll_type t) with
   | C_AST.T_pointer t' -> t'
   | C_AST.T_array(t', _) -> t'
-  | _ -> Exceptions.panic "pointed_type(cst_to_ast.ml): unsupported type %s" (C_print.string_of_type_qual t)
+  | _ -> Exceptions.panic_at range "pointed_type(cst_to_ast.ml): unsupported type %s" (C_print.string_of_type_qual t)
 
 let is_record_typ t =
   match fst (unroll_type t) with
@@ -197,12 +197,13 @@ let builtin_type f arg =
   | PRIMED -> arg.content.Ast.typ
   | VALID_PTR | VALID_FLOAT | FLOAT_INF | FLOAT_NAN -> bool_type
   | BYTES    -> unsigned_long_type
+  | ALIVE    -> bool_type
 
 
 (** {2 Records} *)
 (** *********** *)
 
-let rec find_field t f =
+let rec find_field range t f =
   match fst (unroll_type t) with
   | C_AST.T_record r ->
     let rec aux = function
@@ -214,7 +215,7 @@ let rec find_field t f =
       (* case of anonymous records *)
       | field::tl when field.field_org_name = "" && is_record_typ field.field_type ->
         begin
-          try find_field field.field_type f
+          try find_field range field.field_type f
           with Not_found -> aux tl
         end
 
@@ -222,8 +223,13 @@ let rec find_field t f =
     in
     aux (Array.to_list r.C_AST.record_fields)
 
-  | _ -> Exceptions.panic "field_type(cst_to_ast.ml): unsupported type %s"
+  | _ -> Exceptions.panic_at range "field_type(cst_to_ast.ml): unsupported type %s"
            (C_print.string_of_type_qual t)
+
+let find_field_check t f range =
+  try find_field range t f
+  with Not_found ->
+    Exceptions.panic_at range "type %s has no field named %s" (C_print.string_of_type_qual t) f
 
 
 (** {2 Expressions} *)
@@ -296,7 +302,7 @@ let rec promote_expression_type prj (e: Ast.expr with_range) =
 
   | T_array _ -> ee
 
-  | _ -> Exceptions.panic "promote_expression_type: unsupported type %s"
+  | _ -> Exceptions.panic_at e.range "promote_expression_type: unsupported type %s"
            (C_print.string_of_type_qual t)
 
 let convert_expression_type (e:Ast.expr with_range) t =
@@ -347,7 +353,7 @@ let rank_float =
   | DOUBLE -> 1
   | LONG_DOUBLE -> 2
   
-let binop_type prj t1 t2 =
+let binop_type range prj t1 t2 =
   let open C_AST in
   let open C_utils in
   match fst (unroll_type t1), fst (unroll_type t2) with
@@ -387,7 +393,7 @@ let binop_type prj t1 t2 =
   | T_pointer p, T_array (e,_) when type_qual_compatible prj.proj_target p e -> t1
   | T_array (e,_), T_pointer p when type_qual_compatible prj.proj_target p e -> t2
 
-  | _ -> Exceptions.panic "binop_type: unsupported case: %s and %s"
+  | _ -> Exceptions.panic_at range "binop_type: unsupported case: %s and %s"
            (C_print.string_of_type_qual t1)
            (C_print.string_of_type_qual t2)
 
@@ -414,7 +420,7 @@ let rec visit_expr e prj func =
 
     | E_char(c) -> Ast.E_char(c), char_type
 
-    | E_invalid -> Ast.E_invalid, pointed_type void_type
+    | E_invalid -> Ast.E_invalid, pointed_type e.range void_type
 
     | E_var(v) ->
       let v = visit_var v e.range prj func in
@@ -438,7 +444,7 @@ let rec visit_expr e prj func =
       let e1 = promote_expression_type prj e1 in
       let e2 = promote_expression_type prj e2 in
 
-      let t = binop_type prj e1.content.typ e2.content.typ in
+      let t = binop_type e.range prj e1.content.typ e2.content.typ in
 
       let e1 = convert_expression_type e1 t in
       let e2 = convert_expression_type e2 t in
@@ -459,7 +465,7 @@ let rec visit_expr e prj func =
 
     | E_deref(e')         ->
       let e' = visit_expr e' prj func in
-      Ast.E_deref e', pointed_type e'.content.typ
+      Ast.E_deref e', pointed_type e.range e'.content.typ
 
     | E_cast(t, e') ->
       let t = visit_qual_typ t prj func in
@@ -467,16 +473,16 @@ let rec visit_expr e prj func =
 
     | E_subscript(a, i)   ->
       let a  = visit_expr a prj func in
-      Ast.E_subscript(a, visit_expr i prj func ), subscript_type a.content.typ
+      Ast.E_subscript(a, visit_expr i prj func ), subscript_type e.range a.content.typ
 
     | E_member(s, f)      ->
       let s = visit_expr s prj func in
-      let field = find_field s.content.typ f in
+      let field = find_field_check s.content.typ f e.range in
       Ast.E_member(s, field.field_index, f), field.field_type
 
     | E_arrow(p, f) ->
       let p = visit_expr p prj func in
-      let field = find_field (pointed_type p.content.typ) f in
+      let field = find_field_check (pointed_type e.range p.content.typ) f e.range in
       Ast.E_arrow(p, field.field_index, f), field.field_type
 
     | E_sizeof_expr(e) ->
@@ -514,7 +520,7 @@ let visit_interval i prj func =
 let visit_set s prj func =
   match s with
   | S_interval(itv) -> Ast.S_interval(visit_interval itv prj func)
-  | S_resource(r) -> Ast.S_resource(r)
+  | S_resource(r) -> Ast.S_resource(r.vname)
 
 let rec visit_formula f prj func =
   bind_range f @@ fun ff ->
@@ -564,7 +570,7 @@ let visit_local loc prj func =
   let lvar = visit_var l.lvar loc.range prj func in
   let lval =
     match l.lval with
-    | L_new r -> Ast.L_new r
+    | L_new r -> Ast.L_new r.vname
     | L_call (f, args) ->
       let f = find_function f prj in
       Ast.L_call (f, visit_list visit_expr args prj func)

@@ -19,190 +19,184 @@
 /*                                                                          */
 /****************************************************************************/
 
-#include <termios.h>
+/*
+  libc stub
+  based on header from glibc-2.29-r7
+*/
+
+#include <sched.h>
 #include "mopsa_libc_utils.h"
 
-/* Stubs for functions provided by termios.h */
-
 /*$
- * requires: valid_ptr(__termios_p);
- * ensures: return == __termios_p->c_ospeed;
- */
-speed_t cfgetospeed (const struct termios *__termios_p);
-
-/*$
- * requires: valid_ptr(__termios_p);
- * ensures: return == __termios_p->c_ispeed;
- */
-speed_t cfgetispeed (const struct termios *__termios_p);
-
-/*$
- * requires: valid_ptr(__termios_p);
- * assigns: __termios_p->c_ospeed;
+ * requires: valid_ptr(__param);
  *
  * case "success" {
  *   ensures: return == 0;
  * }
  *
- * case "error" {
+ * case "failure" {
  *   assigns: _errno;
  *   ensures: return == -1;
- * }  
+ * }
  */
-int cfsetospeed (struct termios *__termios_p, speed_t __speed);
+int sched_setparam (__pid_t __pid, const struct sched_param *__param);
 
 /*$
- * requires: valid_ptr(__termios_p);
- * assigns: __termios_p->c_ispeed;
+ * requires: valid_ptr(__param);
+ * assigns: *__param;
  *
  * case "success" {
  *   ensures: return == 0;
  * }
  *
- * case "error" {
+ * case "failure" {
  *   assigns: _errno;
  *   ensures: return == -1;
- * }  
+ * }
  */
-int cfsetispeed (struct termios *__termios_p, speed_t __speed);
-
-//#ifdef __USE_MISC
+int sched_getparam (__pid_t __pid, struct sched_param *__param);
 
 /*$
- * requires: valid_ptr(__termios_p);
- * assigns: __termios_p->c_ispeed;
- * assigns: __termios_p->c_ospeed;
+ * requires: valid_ptr(__param);
  *
  * case "success" {
  *   ensures: return == 0;
  * }
  *
- * case "error" {
+ * case "failure" {
  *   assigns: _errno;
  *   ensures: return == -1;
- * }  
+ * }
  */
-int cfsetspeed (struct termios *__termios_p, speed_t __speed);
-
-//#endif
+int sched_setscheduler (__pid_t __pid, int __policy,
+                        const struct sched_param *__param);
 
 /*$
- * local:    void* f = _mopsa_find_file_resource(__fd);
- * requires: alive_resource(f, FileRes);
- * assigns: __termios_p;
+ * case "success" {
+ *   ensures: return == 0;
+ * }
+ *
+ * case "failure" {
+ *   assigns: _errno;
+ *   ensures: return == -1;
+ * }
+ */
+int sched_getscheduler (__pid_t __pid);
+
+/*$
+ * case "success" {
+ *   ensures: return == 0;
+ * }
+ *
+ * case "failure" {
+ *   assigns: _errno;
+ *   ensures: return == -1;
+ * }
+ */
+int sched_yield (void);
+
+/*$
+ * case "success" {
+ *   ensures: return == 0;
+ * }
+ *
+ * case "failure" {
+ *   assigns: _errno;
+ *   ensures: return == -1;
+ * }
+ */
+int sched_get_priority_max (int __algorithm);
+
+/*$
+ * case "success" {
+ *   ensures: return == 0;
+ * }
+ *
+ * case "failure" {
+ *   assigns: _errno;
+ *   ensures: return == -1;
+ * }
+ */
+int sched_get_priority_min (int __algorithm);
+
+/*$
+ * requires: valid_ptr(__t);
+ * assigns: *__t;
  *
  * case "success" {
  *   ensures: return == 0;
  * }
  *
- * case "error" {
+ * case "failure" {
  *   assigns: _errno;
  *   ensures: return == -1;
- * }  
+ * }
  */
-int tcgetattr (int __fd, struct termios *__termios_p);
+int sched_rr_get_interval (__pid_t __pid, struct timespec *__t);
 
 /*$
- * local:    void* f = _mopsa_find_file_resource(__fd);
- * requires: alive_resource(f, FileRes);
- * requires: valid_ptr(__termios_p);
+ * requires: valid_bytes(__cpuset, __cpusetsize);
  *
  * case "success" {
  *   ensures: return == 0;
  * }
  *
- * case "error" {
+ * case "failure" {
  *   assigns: _errno;
  *   ensures: return == -1;
- * }  
+ * }
  */
-int tcsetattr (int __fd, int __optional_actions,
-               const struct termios *__termios_p);
-
-//#ifdef __USE_MISC
+int sched_setaffinity (__pid_t __pid, size_t __cpusetsize,
+                       const cpu_set_t *__cpuset);
 
 /*$
- * assigns: __termios_p;
- */
-void cfmakeraw (struct termios *__termios_p);
-
-//#endif
-
-/*$
- * local:    void* f = _mopsa_find_file_resource(__fd);
- * requires: alive_resource(f, FileRes);
+ * requires: valid_bytes(__cpuset, __cpusetsize);
+ * assigns: ((unsigned char*)__cpuset)[0, __cpusetsize);
  *
  * case "success" {
  *   ensures: return == 0;
  * }
  *
- * case "error" {
+ * case "failure" {
  *   assigns: _errno;
  *   ensures: return == -1;
- * }  
+ * }
  */
-int tcsendbreak (int __fd, int __duration);
+int sched_getaffinity (__pid_t __pid, size_t __cpusetsize,
+                       cpu_set_t *__cpuset);
+
+
+// from cpu-set.h
+
+static size_t _mopsa_cpu_alloc_size(size_t __setsize) {
+  return __CPU_ALLOC_SIZE(__setsize);
+}
 
 /*$
- * local:    void* f = _mopsa_find_file_resource(__fd);
- * requires: alive_resource(f, FileRes);
+ * local: size_t sz = _mopsa_cpu_alloc_size(__setsize);
+ * requires: valid_bytes(__setp, sz);
  *
  * case "success" {
  *   ensures: return == 0;
  * }
  *
- * case "error" {
+ * case "failure" {
  *   assigns: _errno;
  *   ensures: return == -1;
- * }  
+ * }
  */
-int tcdrain (int __fd);
+int __sched_cpucount (size_t __setsize, const cpu_set_t *__setp);
 
 /*$
- * local:    void* f = _mopsa_find_file_resource(__fd);
- * requires: alive_resource(f, FileRes);
- *
- * case "success" {
- *   ensures: return == 0;
- * }
- *
- * case "error" {
- *   assigns: _errno;
- *   ensures: return == -1;
- * }  
+ * local: size_t sz = _mopsa_cpu_alloc_size(__count);
+ * local: cpu_set_t* r = new Memory;
+ * ensures: size(r) == sz;
+ * ensures: return == NULL or return == r;
  */
-int tcflush (int __fd, int __queue_selector);
+cpu_set_t *__sched_cpualloc (size_t __count);
 
 /*$
- * local:    void* f = _mopsa_find_file_resource(__fd);
- * requires: alive_resource(f, FileRes);
- *
- * case "success" {
- *   ensures: return == 0;
- * }
- *
- * case "error" {
- *   assigns: _errno;
- *   ensures: return == -1;
- * }  
+ * requires: __set in Memory;
+ * free: __set;
  */
-int tcflow (int __fd, int __action);
-
-//#if defined __USE_XOPEN_EXTENDED || defined __USE_XOPEN2K8
-
-/*$
- * local:    void* f = _mopsa_find_file_resource(__fd);
- * requires: alive_resource(f, FileRes);
- *
- * case "success" {
- *   ensures: return >= 0;
- * }
- *
- * case "error" {
- *   assigns: _errno;
- *   ensures: return == -1;
- * }  
- */
-__pid_t tcgetsid (int __fd);
-
-//#endif
+void __sched_cpufree (cpu_set_t *__set);

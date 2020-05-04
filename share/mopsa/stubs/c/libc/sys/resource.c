@@ -19,16 +19,64 @@
 /*                                                                          */
 /****************************************************************************/
 
+/*
+  libc stub
+  based on header from glibc-2.27-r6
+*/
+
 #include <sys/resource.h>
+#include "../mopsa_libc_utils.h"
 
 /*$
+ * requires: valid_ptr(__rlimits);
+ * assigns: *__rlimits;
+ *
  * case "success" {
+ *   ensures: return == 0;
  * }
  *
  * case "failure" {
  *   assigns: _errno;
  *   ensures: return == -1;
  * }
+ */
+int getrlimit (__rlimit_resource_t __resource,
+               struct rlimit *__rlimits);
+
+/*$
+ * requires: valid_ptr(__rlimits);
+ *
+ * case "success" {
+ *   ensures: return == 0;
+ * }
+ *
+ * case "failure" {
+ *   assigns: _errno;
+ *   ensures: return == -1;
+ * }
+ */
+int setrlimit (__rlimit_resource_t __resource,
+               const struct rlimit *__rlimits);
+
+/*$
+ * requires: valid_ptr(__usage);
+ * assigns: *__usage;
+ *
+ * case "success" {
+ *   ensures: return == 0;
+ * }
+ *
+ * case "failure" {
+ *   assigns: _errno;
+ *   ensures: return == -1;
+ * }
+ * // TODO fill __usage with actual values
+ */
+int getrusage (__rusage_who_t __who, struct rusage *__usage);
+
+
+/*$
+ * assigns: _errno;
  */
 int getpriority (__priority_which_t __which, id_t __who);
 

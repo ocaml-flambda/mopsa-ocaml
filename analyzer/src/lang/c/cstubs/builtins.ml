@@ -215,6 +215,26 @@ struct
         Eval.singleton (mk_float_class cls flt exp.erange) flow
       )
 
+    | E_stub_builtin_call(ALIVE, p) ->
+      Some (
+        man.eval ~zone:(Z_c_low_level,Z_c_points_to) p flow >>$ fun pt flow ->
+        let range = exp.erange in
+        match ekind pt with
+        | E_c_points_to (P_block ({ base_valid }, _, _)) ->
+          if base_valid then
+            Eval.singleton (mk_one range) flow
+          else
+            Eval.singleton (mk_zero range) flow
+
+        | E_c_points_to(P_null | P_invalid | P_fun _) -> Eval.singleton (mk_zero range) flow
+
+        | E_c_points_to(P_top) -> Eval.singleton (mk_top T_bool range) flow
+
+        | _ -> panic_at range "alive(%a | %a %a) not supported"
+                 pp_expr p pp_expr p pp_expr pt
+      )
+
+
     | _ -> None
 
   let ask _ _ _ = None

@@ -21,8 +21,8 @@
 
 /* Stubs for <sys/socket.h> */
 
-#include <errno.h>
 #include <sys/socket.h>
+#include "../mopsa_libc_utils.h"
 
 
 /*$
@@ -42,7 +42,8 @@ int socket (int __domain, int __type, int __protocol);
 
 
 /*$
- * requires: __fd in FileDescriptor;
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: alive_resource(f, FileRes);
  *
  * case "safe" {
  *   ensures: return == 0;
@@ -57,7 +58,8 @@ int connect (int __fd, const struct sockaddr * __addr, socklen_t __len);
 
 
 /*$
- * requires: __fd in FileDescriptor;
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: alive_resource(f, FileRes);
  *
  * case "safe" {
  *   ensures: return == 0;
@@ -72,7 +74,8 @@ int bind (int __fd, const struct sockaddr *__addr, socklen_t __len);
 
 
 /*$
- * requires: __fd in FileDescriptor;
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: alive_resource(f, FileRes);
  * assigns: _errno;
  * ensures: return in [-1, 0];
  */
@@ -80,7 +83,8 @@ int listen (int __fd, int __n);
 
 
 /*$
- * requires: __fd in FileDescriptor;
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: alive_resource(f, FileRes);
  *
  * case "valid-addr" {
  *   local:   void *f = new FileRes;
@@ -97,7 +101,8 @@ int accept (int __fd, struct sockaddr *__addr, socklen_t *__restrict __addr_len)
 
 
 /*$
- * requires: __fd in FileDescriptor;
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: alive_resource(f, FileRes);
  * requires: valid_bytes(__buf, __n);
  *
  * case "safe" {

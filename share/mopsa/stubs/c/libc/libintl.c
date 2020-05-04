@@ -26,6 +26,7 @@
 
 #include <libintl.h>
 #include <stddef.h>
+#include "mopsa_libc_utils.h"
 
 /* If true, gettext returns its argument string unchanged.
    This makes it possible to check printf formats that use gettext.
@@ -33,76 +34,43 @@
 #define IDENTITY_GETTEXT 1
 
 
-#define DOMAIN_NAME_BUF_SIZE 100
-
-char *_domain_name_buf = NULL;
-
 /*$
- * case "with domain name AND first call" {
- *   assumes: __domainname != NULL;
- *   assumes: _domain_name_buf == NULL;
- *   requires: valid_string(__domainname);
- *   assigns: _domain_name_buf;
- *   local: char *addr = _mopsa_new_readonly_string_max(DOMAIN_NAME_BUF_SIZE);
- *   ensures: _domain_name_buf' == addr;
- *   ensures: return == addr;
- * }
- *
- * case "with domain name AND later calls" {
- *   assumes: __domainname != NULL;
- *   assumes: _domain_name_buf != NULL;
- *   requires: valid_string(__domainname);
- *   assigns: _domain_name_buf;
- *   local: char *addr = _mopsa_new_readonly_string_max(DOMAIN_NAME_BUF_SIZE);
- *   ensures: _domain_name_buf' == addr;
- *   ensures: return == addr;
- *   free: _domain_name_buf;
- * }
- *
- * case "without domain name" {
- *   assumes: __domainname == NULL;
- *   ensures: return == _domain_name_buf;
- * }
+ * requires: null_or_valid_string(__domainname);
+ * local: char* r = _mopsa_new_readonly_string();
+ * assigns: _errno;
+ * ensures: return == NULL or return == r;
  */
 char *textdomain (const char *__domainname);
 
-
 /*$
  * requires: valid_string(__domainname);
- *
- * case "with directory name AND first call" {
- *   assumes: __dirname != NULL;
- *   assumes: _domain_name_buf == NULL;
- *   assigns: _domain_name_buf;
- *   local: char *addr = _mopsa_new_readonly_string_max(DOMAIN_NAME_BUF_SIZE);
- *   ensures: _domain_name_buf' == addr;
- *   ensures: return == addr;
- * }
- *
- * case "with directory name AND later calls" {
- *   assumes: __dirname != NULL;
- *   assumes: _domain_name_buf != NULL;
- *   assigns: _domain_name_buf;
- *   local: char *addr = _mopsa_new_readonly_string_max(DOMAIN_NAME_BUF_SIZE);
- *   ensures: _domain_name_buf' == addr;
- *   ensures: return == addr;
- *   free: _domain_name_buf;
- * }
- *
- * case "without directory name" {
- *   assumes: __dirname == NULL;
- *   ensures: return == _domain_name_buf;
- * }
+ * requires: null_or_valid_string(__dirname);
+ * local: char* r = _mopsa_new_readonly_string();
+ * assigns: _errno;
+ * ensures: return == NULL or return == r;
  */
 char *bindtextdomain (const char *__domainname, const char *__dirname);
 
+/*$
+ * requires: valid_string(__domainname);
+ * requires: null_or_valid_string(__codeset);
+ * local: char* r = _mopsa_new_readonly_string();
+ * assigns: _errno;
+ * ensures: return == NULL or return == r;
+ */
 char *bind_textdomain_codeset (const char *__domainname, const char *__codeset);
 
+
+
 #define GETTEXT_BUF_SIZE 100
-char _gettext_buf[GETTEXT_BUF_SIZE];
+static char _gettext_buf[GETTEXT_BUF_SIZE];
 
 #if IDENTITY_GETTEXT
-char *gettext (const char *__msgid) { return (char*)__msgid; }
+/*$
+ * requires: valid_string(__msgid);
+ * ensures: return == __msgid;
+ */
+char *gettext (const char *__msgid);
 #else
 /*$
  * requires: valid_string(__msgid);
@@ -120,36 +88,42 @@ char *gettext (const char *__msgid) { return (char*)__msgid; }
 char *gettext (const char *__msgid);
 #endif
 
-#if IDENTITY_GETTEXT
-char *dcgettext (const char *__domainname, const char *__msgid,
-		 int __category)
-{ return (char*)__msgid; }
-#else
+
 /*$
- * requires: valid_string(__msgid);
- *
- * case "translation found" {
- *   assigns: _gettext_buf[0, GETTEXT_BUF_SIZE);
- *   ensures: valid_primed_string(_gettext_buf);
- *   ensures: return == _gettext_buf;
- * }
- *
- * case "translation not found" {
- *   ensures: return == _gettext_buf;
- * }
+ * requires: valid_string(__domainname);
+ * local: char* r = gettext(__msgid);
+ * ensures: return == r;
+ */
+char *dgettext (const char *__domainname, const char *__msgid);
+
+/*$
+ * requires: valid_string(__domainname);
+ * local: char* r = gettext(__msgid);
+ * ensures: return == r;
  */
 char *dcgettext (const char *__domainname, const char *__msgid,
 		 int __category);
-#endif
 
-char *__dcgettext (const char *__domainname, const char *__msgid,
-		   int __category);
-
+/*$
+ * local: char* r1 = gettext(__msgid1);
+ * local: char* r2 = gettext(__msgid2);
+ * ensures: return == r1 or return == r2;
+ */
 char *ngettext (const char *__msgid1, const char *__msgid2,
 		unsigned long int __n);
 
+/*$
+ * requires: valid_string(__domainname);
+ * local: char* r = ngettext(__msgid1, __msgid2);
+ * ensures: return == r;
+ */
 char *dngettext (const char *__domainname, const char *__msgid1,
 		 const char *__msgid2, unsigned long int __n);
 
+/*$
+ * requires: valid_string(__domainname);
+ * local: char* r = ngettext(__msgid1, __msgid2);
+ * ensures: return == r;
+ */
 char *dcngettext (const char *__domainname, const char *__msgid1,
 		  const char *__msgid2, unsigned long int __n, int __category);

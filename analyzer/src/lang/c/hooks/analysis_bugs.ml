@@ -78,12 +78,18 @@ struct
   let whitelist = [ "exit";
                     "_exit";
                     "quick_exit";
+                    "_Exit";
                     "abort";
+                    "_exit";
                     "__builtin_abort";
                     "__builtin_unreachable";
                     "__assert_fail";
                     "__assert_perror_fail";
-                    "__assert" ]
+                    "__assert";
+                    "_mopsa_error";
+                    "_mopsa_error_at_line";
+                    "sigreturn";
+                  ]
 
 
   (** Add range to the set of bug locations *)

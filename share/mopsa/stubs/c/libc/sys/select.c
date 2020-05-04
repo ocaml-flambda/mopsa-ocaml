@@ -24,83 +24,56 @@
   based on header from glibc-2.29-r7
 */
 
-#include <utmpx.h>
-#include "mopsa_libc_utils.h"
+#include <sys/select.h>
+#include "../mopsa_libc_utils.h"
 
 /*$
+ * requires: __nfds >= 1;
+ * requires: null_or_valid_ptr(__readfds);
+ * requires: null_or_valid_ptr(__writefds);
+ * requires: null_or_valid_ptr(__exceptfds);
+ * requires: null_or_valid_ptr(__timeout);
  * assigns: _errno;
- */
-void setutxent (void);
-
-/*$
- * assigns: _errno;
- */
-void endutxent (void);
-
-static struct utmpx _mopsa_utmpx_buf;
-
-/*$
- * assigns: _mopsa_utmpx_buf;
- * assigns: _errno;
- * ensures: return == NULL or return == &_mopsa_utmpx_buf;
- */
-struct utmpx *getutxent (void);
-
-/*$
- * requires: valid_ptr(__id);
- * assigns: _mopsa_utmpx_buf;
- * assigns: _errno;
- * ensures: return == NULL or return == &_mopsa_utmpx_buf;
- */
-struct utmpx *getutxid (const struct utmpx *__id);
-
-/*$
- * requires: valid_ptr(__line);
- * assigns: _mopsa_utmpx_buf;
- * assigns: _errno;
- * ensures: return == NULL or return == &_mopsa_utmpx_buf;
- */
-struct utmpx *getutxline (const struct utmpx *__line);
-
-/*$
- * requires: valid_ptr(__utmpx);
- * assigns: _mopsa_utmpx_buf;
- * assigns: _errno;
- * ensures: return == NULL or return == &_mopsa_utmpx_buf;
- */
-struct utmpx *pututxline (const struct utmpx *__utmpx);
-
-/*$
- * requires: valid_string(__file);
+ * ensures: return >= -1 and return <- __nfds;
+ * unsound: "select does not check that file-descriptors are valid";
  *
- * case "success" {
- *   ensures: return == 0;
+ * case "read" {
+ *   assumes: __readfds != NULL;
+ *   assigns: *__readfds;
  * }
  *
- * case "failure" {
- *   assigns: _errno;
- *   ensures: return == -1;
+ * case "write" {
+ *   assumes: __writefds != NULL;
+ *   assigns: *__writefds;
+ * }
+ *
+ * case "except" {
+ *   assumes: __exceptfds != NULL;
+ *   assigns: *__exceptfds;
+ * }
+ *
+ * case "timeout" {
+ *   assumes: __timeout != NULL;
+ *   assigns: *__timeout;
+ *   ensures: (__timeout->tv_sec)' >= 0 and  (__timeout->tv_sec)' <= __timeout->tv_sec;
+ *   ensures: (__timeout->tv_usec)' >= 0 and  (__timeout->tv_usec)' < 10000000;
+ * }
+ *
+ * case "NULL" {
  * }
  */
-int utmpxname (const char *__file);
+int select (int __nfds, fd_set *__restrict __readfds,
+            fd_set *__restrict __writefds,
+            fd_set *__restrict __exceptfds,
+            struct timeval *__restrict __timeout);
 
 /*$
- * requires: valid_string(__wtmpx_file);
- * requires: valid_ptr(__utmpx);
+ * requires: null_or_valid_ptr(__timeout);
+ * requires: null_or_valid_ptr(__sigmask);
+ * local: int r = select(__nfds,__readfds,__writefds,__exceptfds,NULL);
  */
-void updwtmpx (const char *__wtmpx_file,
-               const struct utmpx *__utmpx);
-
-/*$
- * requires: valid_ptr(__utmpx);
- * requires: valid_ptr(__utmp);
- * assigns: *__utmp;
- */
-void getutmp (const struct utmpx *__utmpx, struct utmp *__utmp);
-
-/*$
- * requires: valid_ptr(__utmpx);
- * requires: valid_ptr(__utmp);
- * assigns: *__utmpx;
- */
-void getutmpx (const struct utmp *__utmp, struct utmpx *__utmpx);
+int pselect (int __nfds, fd_set *__restrict __readfds,
+             fd_set *__restrict __writefds,
+             fd_set *__restrict __exceptfds,
+             const struct timespec *__restrict __timeout,
+             const __sigset_t *__restrict __sigmask);

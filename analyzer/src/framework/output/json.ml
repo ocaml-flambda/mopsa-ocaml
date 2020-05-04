@@ -189,6 +189,14 @@ let list_alarms alarms out =
   in
   print out json
 
+let list_hooks hooks out =
+  let json = `List (
+      hooks |>
+      List.map (fun d -> `String d)
+    )
+  in
+  print out json
+
 let print range printer flow out =
   printer Format.str_formatter flow;
   let str = Format.flush_str_formatter () in

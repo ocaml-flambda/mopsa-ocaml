@@ -19,65 +19,15 @@
 /*                                                                          */
 /****************************************************************************/
 
-/* Stubs for the extension of stdio as found in Sun's Solaris OS */
+/*
+  libc stub
+  based on header from glibc-2.29-r7
+*/
 
-#include <stdio_ext.h>
-#include <limits.h>
-
-/*$
- * requires: alive_resource(__fp, File);
- */
-size_t __fbufsize (FILE *__fp);
-
+#include <fnmatch.h>
 
 /*$
- * requires: alive_resource(__fp, File);
+ * requires: valid_string(__pattern);
+ * requires: valid_string(__name);
  */
-int __freading (FILE *__fp);
-
-/*$
- * requires: alive_resource(__fp, File);
- */
-int __fwriting (FILE *__fp);
-
-/*$
- * requires: alive_resource(__fp, File);
- */
-int __freadable (FILE *__fp);
-
-/*$
- * requires: alive_resource(__fp, File);
- */
-int __fwritable (FILE *__fp);
-
-/*$
- * requires: alive_resource(__fp, File);
- */
-int __flbf (FILE *__fp);
-
-
-/*$
- * requires: alive_resource(__fp, File);
- */
-void __fpurge (FILE *__fp);
-
-/*$
- * requires: alive_resource(__fp, File);
- */
-size_t __fpending (FILE *__fp);
-
-/*$
- * // emtpy stub
- */
-void _flushlbf (void);
-
-
-/*$
- * requires: alive_resource(__fp, File);
- * requires: __type == FSETLOCKING_INTERNAL or
- *           __type == FSETLOCKING_BYCALLER or
- *           __type == FSETLOCKING_QUERY;
- * ensures:  return == FSETLOCKING_INTERNAL or
- *           return == FSETLOCKING_BYCALLER;
- */
-int __fsetlocking (FILE *__fp, int __type);
+int fnmatch (const char *__pattern, const char *__name, int __flags);

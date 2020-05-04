@@ -217,7 +217,7 @@ wchar_t *wcschr (const wchar_t *__wcs, wchar_t __wc);
  */
 wchar_t *wcsrchr (const wchar_t *__wcs, wchar_t __wc);
 
-#ifdef __USE_GNU
+//#ifdef __USE_GNU
 
 /*$
  * local: size_t len = wcslen(__wcs);
@@ -237,7 +237,7 @@ wchar_t *wcsrchr (const wchar_t *__wcs, wchar_t __wc);
  */
 wchar_t *wcschrnul (const wchar_t *__wcs, wchar_t __wc);
 
-#endif
+//#endif
 
 /*$
  * requires: valid_wide_string(__reject);
@@ -311,6 +311,11 @@ wchar_t *wcstok (wchar_t *__restrict __s,
  *          );
  */
 size_t wcslen (const wchar_t *__s);
+
+/*$
+ * alias: wcsstr;
+ */
+wchar_t *wcswcs (const wchar_t *__haystack, const wchar_t *__needle);
 
 /*$
  * requires: valid_wchars(__s, __maxlen) or valid_wide_string(__s);
@@ -669,6 +674,12 @@ size_t wcsnrtombs (char *__restrict __dst,
                    mbstate_t *__restrict __ps);
 
 /*$
+ * ensures: return >= -1;
+ */
+int wcwidth (wchar_t __c);
+
+
+/*$
  * requires: null_or_valid_ptr(__endptr);
  * assigns: _errno;
  *
@@ -685,6 +696,12 @@ size_t wcsnrtombs (char *__restrict __dst,
  *  }
  */
 double wcstod (const wchar_t *__restrict __nptr, wchar_t **__restrict __endptr);
+
+/*$
+ * requires: valid_wide_substring(__s, __n) or valid_wchars(__s, __n);
+ * ensures: return >= -1;
+ */
+int wcswidth (const wchar_t *__s, size_t __n);
 
 /*$
  * requires: null_or_valid_ptr(__endptr);
@@ -808,6 +825,73 @@ unsigned long long int wcstoull (const wchar_t *__restrict __nptr,
                                  int __base);
 
 /*$
+ * alias: wcstoll;
+ */
+long long int wcstoq (const wchar_t *__restrict __nptr,
+                      wchar_t **__restrict __endptr, int __base);
+
+/*$
+ * alias: wcstoull;
+ */
+unsigned long long int wcstouq (const wchar_t *__restrict __nptr,
+                                wchar_t **__restrict __endptr,
+                                int __base);
+
+/*$
+ * local: long r = wcstol(__nptr, __endptr, __base, __loc);
+ * ensures: return == r;
+ */
+long int wcstol_l (const wchar_t *__restrict __nptr,
+                   wchar_t **__restrict __endptr, int __base,
+                   locale_t __loc);
+
+/*$
+ * local: unsigned long int r = wcstoul(__nptr, __endptr, __base, __loc);
+ * ensures: return == r;
+ */
+unsigned long int wcstoul_l (const wchar_t *__restrict __nptr,
+                             wchar_t **__restrict __endptr,
+                             int __base, locale_t __loc);
+
+/*$
+ * local: long long int r = wcstoll(__nptr, __endptr, __base, __loc);
+ * ensures: return == r;
+ */
+long long int wcstoll_l (const wchar_t *__restrict __nptr,
+                         wchar_t **__restrict __endptr,
+                         int __base, locale_t __loc);
+
+/*$
+ * local: unsigned long long int r = wcstoull(__nptr, __endptr, __base, __loc);
+ * ensures: return == r;
+ */
+unsigned long long int wcstoull_l (const wchar_t *__restrict __nptr,
+                                   wchar_t **__restrict __endptr,
+                                   int __base, locale_t __loc);
+
+/*$
+ * local: double r = wcstod(__nptr, __endptr, __loc);
+ * ensures: return == r;
+ */
+double wcstod_l (const wchar_t *__restrict __nptr,
+                 wchar_t **__restrict __endptr, locale_t __loc);
+
+/*$
+ * local: float r = wcstof(__nptr, __endptr, __loc);
+ * ensures: return == r;
+ */
+float wcstof_l (const wchar_t *__restrict __nptr,
+                wchar_t **__restrict __endptr, locale_t __loc);
+
+/*$
+ * local: long double r = wcstold(__nptr, __endptr, __loc);
+ * ensures: return == r;
+ */
+long double wcstold_l (const wchar_t *__restrict __nptr,
+                       wchar_t **__restrict __endptr,
+                       locale_t __loc);
+
+/*$
  * local: size_t src_len = wcslen(__src);
  * requires: no_overlap_wide(__src, src_len + 1, __dest, src_len + 1);
  * requires: valid_wchars(__dest, src_len + 1);
@@ -845,7 +929,7 @@ wchar_t *wcpncpy (wchar_t *__restrict __dest, const wchar_t *__restrict __src, s
 FILE *open_wmemstream (wchar_t **__bufloc, size_t *__sizeloc);
 
 /*$
- * requires: __fp in File;
+ * requires: alive_resource(__fp, File);
  */
 int fwide (FILE *__fp, int __mode);
 
@@ -858,38 +942,8 @@ int wprintf (const wchar_t *__restrict __format, ...);
 /* built-in */
 int swprintf (wchar_t *__restrict __s, size_t __n, const wchar_t *__restrict __format, ...);
 
-
-
-
-int wscanf (const wchar_t *__restrict __format, ...);
-
-int swscanf (const wchar_t *__restrict __s, const wchar_t *__restrict __format, ...);
-
-int fwscanf (FILE *__restrict __stream, const wchar_t *__restrict __format, ...);
-
-int wscanf (const wchar_t *__restrict __format, ...);
-                                                         ;
-int swscanf (const wchar_t *__restrict __s, const wchar_t *__restrict __format, ...);
-
-int vfwscanf (FILE *__restrict __s,
-              const wchar_t *__restrict __format,
-              va_list __arg);
-
-int vwscanf (const wchar_t *__restrict __format,
-             va_list __arg);
-
-int vswscanf (const wchar_t *__restrict __s,
-              const wchar_t *__restrict __format,
-              va_list __arg);
-     
-int vfwscanf (FILE *__restrict __s, const wchar_t *__restrict __format, va_list __arg);
-
-int vwscanf (const wchar_t *__restrict __format, va_list __arg);
-                                                         ;
-int vswscanf (const wchar_t *__restrict __s, const wchar_t *__restrict __format, va_list __arg);
-
 /*$
- * requires: __stream in File;
+ * requires: alive_resource(__stream, File);
  * assigns: _errno;
  */
 wint_t fgetwc (FILE *__stream);
@@ -906,7 +960,7 @@ wint_t getwchar (void);
 
 
 /*$
- * requires: __stream in File;
+ * requires: alive_resource(__stream, File);
  * assigns: _errno;
  * ensures: (return == __wc) or (return == _weof);
  */
@@ -924,7 +978,7 @@ wint_t putwc (wchar_t __wc, FILE *__stream);
 wint_t putwchar (wchar_t __wc);
 
 /*$
- * requires: __stream in File;
+ * requires: alive_resource(__stream, File);
  * requires: __n >= 0;
  * requires: valid_wchars(__ws, __n);
  * assigns:  __ws[0, __n);
@@ -936,19 +990,140 @@ wchar_t *fgetws (wchar_t *__restrict __ws, int __n, FILE *__restrict __stream);
 
 /*$
  * requires: valid_wide_string(__ws);
- * requires: __stream in File;
+ * requires: alive_resource(__stream, File);
  * assigns: _errno;
  * ensures: return >= -1;
  */
 int fputws (const wchar_t *__restrict __ws, FILE *__restrict __stream);
 
 /*$
- * requires: __stream in File;
+ * requires: alive_resource(__stream, File);
  * assigns: _errno;
  * ensures: (return == __wc) or (return == _weof);
  */
 wint_t ungetwc (wint_t __wc, FILE *__stream);
 
+/*$
+ * alias: getwc;
+ */
+wint_t getwc_unlocked (__FILE *__stream);
+
+/*$
+ * alias: getwchar;
+ */
+wint_t getwchar_unlocked (void);
+
+/*$
+ * alias: fgetwc;
+ */
+wint_t fgetwc_unlocked (__FILE *__stream);
+
+/*$
+ * alias: fputwc;
+ */
+wint_t fputwc_unlocked (wchar_t __wc, __FILE *__stream);
+
+/*$
+ * alias: putwc;
+ */
+wint_t putwc_unlocked (wchar_t __wc, __FILE *__stream);
+
+/*$
+ * alias: putwchar;
+ */
+wint_t putwchar_unlocked (wchar_t __wc);
+
+/*$
+ * alias: fgetws;
+ */
+wchar_t *fgetws_unlocked (wchar_t *__restrict __ws, int __n,
+                          __FILE *__restrict __stream);
+
+/*$
+ * alias: fputws;
+ */
+int fputws_unlocked (const wchar_t *__restrict __ws,
+                     __FILE *__restrict __stream);
+
+/*$
+ * requires: valid_wchars(__s, __maxsize);
+ * requires: valid_wide_string(__format);
+ * requires: valid_ptr(__tp);
+ *
+ * case "success" {
+ *   assigns: __s[0,__maxsize);
+ *   ensures: valid_primed_wide_substring(__s, __maxsize);
+ *   ensures: return >= 0 and return < __maxsize;
+ * }
+ *
+ * case "failure" {
+ *   ensures: return == 0;
+ * }
+ */
 size_t wcsftime (wchar_t *__restrict __s, size_t __maxsize,
                  const wchar_t *__restrict __format,
                  const struct tm *__restrict __tp);
+
+/*$
+ * local: size_t r = wcsftime(__s, __maxsize, __format, __tp);
+ * ensures: return == r;
+ */
+size_t wcsftime_l (wchar_t *__restrict __s, size_t __maxsize,
+                   const wchar_t *__restrict __format,
+                   const struct tm *__restrict __tp,
+                   locale_t __loc);
+
+
+/// TODO: format checking not supported due to va_arg
+
+/*$
+ * requires: alive_resource(__s, File);
+ * requires: valid_wide_string(__format);
+ * unsound: "vfwprintf format is not checked";
+ */
+int vfwprintf (__FILE *__restrict __s,
+               const wchar_t *__restrict __format,
+               __gnuc_va_list __arg);
+
+/*$
+ * requires: valid_wide_string(__format);
+ * unsound: "vwprintf format is not checked";
+ */
+int vwprintf (const wchar_t *__restrict __format,
+              __gnuc_va_list __arg);
+
+/*$
+ * requires: valid_wchars(__s, __n);
+ * requires: valid_wide_string(__format);
+ * assigns: __s[0,__n);
+ * ensures: valid_primed_wide_substring(__s, __n);
+ * unsound: "vswprintf format is not checked";
+ */
+int vswprintf (wchar_t *__restrict __s, size_t __n,
+               const wchar_t *__restrict __format,
+               __gnuc_va_list __arg);
+
+/*$
+ * requires: alive_resource(__s, File);
+ * requires: valid_wide_string(__format);
+ * unsound: "vfwscanf format and arguments not handled";
+ */
+int vfwscanf (__FILE *__restrict __s,
+              const wchar_t *__restrict __format,
+              __gnuc_va_list __arg);
+
+/*$
+ * requires: valid_wide_string(__format);
+ * unsound: "vwscanf format and arguments not handled";
+ */
+int vwscanf (const wchar_t *__restrict __format,
+             __gnuc_va_list __arg);
+
+/*$
+ * requires: valid_wide_string(__s);
+ * requires: valid_wide_string(__format);
+ * unsound: "vswscanf format and arguments not handled";
+ */
+int vswscanf (const wchar_t *__restrict __s,
+              const wchar_t *__restrict __format,
+              __gnuc_va_list __arg);

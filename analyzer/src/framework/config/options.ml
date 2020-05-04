@@ -231,6 +231,25 @@ let () =
     default = "";
   }
 
+(** List of hooks *)
+let () =
+  register_builtin_option {
+    key = "-hooks";
+    category = "Help";
+    doc = " list the available hooks";
+    spec = ArgExt.Unit_delayed (fun () ->
+        let d =
+          List.map
+            (fun (h:(module Core.Hook.HOOK)) ->
+               let module H = (val h) in
+               H.name
+            ) (Core.Hook.list_hooks ())
+        in
+        Output.Factory.list_hooks d
+      );
+    default = "";
+  }
+
 (** Output format *)
 let () =
   register_builtin_option {

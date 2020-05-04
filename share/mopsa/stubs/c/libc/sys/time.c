@@ -19,24 +19,198 @@
 /*                                                                          */
 /****************************************************************************/
 
+/*
+  libc stub
+  based on header from glibc-2.29-r7
+*/
+
 #include <sys/time.h>
+#include "../mopsa_libc_utils.h"
+#include <fcntl.h> // for AT_FDCWD
 
-long int _last_time;
-
-/*$$$
- * assigns: _last_time;
- * ensures: _last_time' in [0, 2000000000]; // we are somewhere between 1970 and 2030
+/*$$
+ * predicate valid_primed_tv(tv):
+ *   (tv.tv_sec)' in [0, 2000000000] and // we are somewhere between 1970 and 2030
+ *   (tv.tv_usec)' in [0, 1000000];
  */
+
 
 /*$
- * requires: __tz == NULL;
- * requires: valid_ptr(__tv);
- * assigns: _last_time;
- * assigns: __tv->tv_sec;
- * assigns: __tv->tv_usec;
- * ensures: _last_time' in [_last_time + 1, 2000000000];
- * ensures: (__tv->tv_sec)' == _last_time';
- * ensures: (__tv->tv_usec)' in [0, 1000000];
- * ensures: return == 0;
+ * requires: __tv != NULL implies valid_ptr(__tv);
+ * requires: __tz != NULL implies valid_ptr(__tz);
+ *
+ * case "tv-tz" {
+ *   assumes: valid_ptr(__tv);
+ *   assumes: valid_ptr(__tz);
+ *   assigns: *__tv;
+ *   assigns: *__tz;
+ *   ensures: valid_primed_tv(*__tv);
+ *   ensures: return == 0;
+ * }
+ *
+ * case "tv" {
+ *   assumes: valid_ptr(__tv);
+ *   assumes: __tz == NULL;
+ *   assigns: *__tv;
+ *   ensures: valid_primed_tv(*__tv);
+ *   ensures: return == 0;
+ * }
+ *
+ * case "tz" {
+ *   assumes: __tv == NULL;
+ *   assumes: valid_ptr(__tz);
+ *   assigns: *__tz;
+ *   ensures: return == 0;
+ * }
+ *
+ * case "failure" {
+ *   assigns: _errno;
+ *   ensures: return == -1;
+ * }
  */
 int gettimeofday (struct timeval *__restrict __tv, __timezone_ptr_t __tz);
+
+/*$
+ * requires: __tv != NULL implies valid_ptr(__tv);
+ * requires: __tz != NULL implies valid_ptr(__tz);
+ *
+ * case "success" {
+ *   ensures: return == 0;
+ * }
+ *
+ * case "failure" {
+ *   assigns: _errno;
+ *   ensures: return == -1;
+ * }
+ */
+int settimeofday (const struct timeval *__tv,
+                  const struct timezone *__tz);
+
+/*$
+ * requires: valid_ptr(__delta);
+ * requires: __olddelta != NULL implies valid_ptr(__olddelta);
+ * 
+ * case "olddelta" {
+ *   assumes: __olddelta != NULL;
+ *   assigns: *__olddelta;
+ *   ensures: valid_primed_tv(*__olddelta);
+ *   ensures: return == 0;
+ * }
+ *
+ * case "null" {
+ *   assumes: __olddelta == NULL;
+ *   ensures: return == 0;
+ * }
+ *
+ * case "failure" {
+ *   assigns: _errno;
+ *   ensures: return == -1;
+ * }
+ */
+int adjtime (const struct timeval *__delta,
+             struct timeval *__olddelta);
+
+/*$
+ * requires: valid_ptr(__value);
+ *
+ * case "success" {
+ *   assigns: *__value;
+ *   ensures: valid_primed_tv(__value->it_interval);
+ *   ensures: valid_primed_tv(__value->it_value);
+ *   ensures: return == 0;
+ * }
+ *
+ * case "failure" {
+ *   assigns: _errno;
+ *   ensures: return == -1;
+ * }
+ */
+int getitimer (__itimer_which_t __which,
+               struct itimerval *__value);
+
+/*$
+ * requires: valid_ptr(__new);
+ * requires: __old != NULL implies valid_ptr(__old);
+ *
+ * case "old" {
+ *   assumes: __old != NULL;
+ *   assigns: *__old;
+ *   ensures: valid_primed_tv(__old->it_interval);
+ *   ensures: valid_primed_tv(__old->it_value);
+ *   ensures: return == 0;
+ * }
+ *
+ * case "noold" {
+ *   assumes: __old == NULL;
+ *   ensures: return == 0;
+ * }
+ *
+ * case "failure" {
+ *   assigns: _errno;
+ *   ensures: return == -1;
+ * }
+ */
+int setitimer (__itimer_which_t __which,
+               const struct itimerval *__restrict __new,
+               struct itimerval *__restrict __old);
+
+/*$
+ * requires: valid_string(__file);
+ * requires: __tvp != NULL implies valid_ptr_range(__tvp, 0, 1);
+ *
+ * case "success" {
+ *   ensures: return == 0;
+ * }
+ *
+ * case "failure" {
+ *   assigns: _errno;
+ *   ensures: return == -1;
+ * }
+ */
+int utimes (const char *__file, const struct timeval __tvp[2]);
+
+/*$
+ * alias: utimes;
+ */
+int lutimes (const char *__file, const struct timeval __tvp[2]);
+
+/*$
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: alive_resource(f, FileRes);
+ * requires: __tvp != NULL implies valid_ptr_range(__tvp, 0, 1);
+ *
+ * case "success" {
+ *   ensures: return == 0;
+ * }
+ *
+ * case "failure" {
+ *   assigns: _errno;
+ *   ensures: return == -1;
+ * }
+ */
+int futimes (int __fd, const struct timeval __tvp[2]);
+
+/*$
+ * requires: valid_string(__file);
+ * requires: __tvp != NULL implies valid_ptr_range(__tvp, 0, 1);
+ * local:    void* f = _mopsa_find_file_resource(__fd);
+ * requires: __fd == AT_FDCWD or f in FileRes;
+ *
+ * case "AT_FDCWD" {
+ *   assumes: __fd == AT_FDCWD;
+ *   ensures: return == 0;
+ * }
+ *
+ * case "no-AT_FDCWD" {
+ *   assumes: f in FileRes;
+ *   requires: alive_resource(f, FileRes);
+ *   ensures: return == 0;
+ * }
+ *
+ * case "failure" {
+ *   assigns: _errno;
+ *   ensures: return == -1;
+ * }
+ */
+int futimesat (int __fd, const char *__file,
+               const struct timeval __tvp[2]);

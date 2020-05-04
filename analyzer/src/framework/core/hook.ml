@@ -123,6 +123,9 @@ let mem_hook name : bool =
 let find_hook (name:string) : (module HOOK) =
   Hashtbl.find hooks name
 
+let list_hooks () : (module HOOK) list =
+  Hashtbl.fold (fun _ h l -> h::l) hooks []
+
 (** Set of hooks *)
 module HookSet = SetExt.Make
     (struct

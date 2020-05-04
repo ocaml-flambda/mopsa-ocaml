@@ -44,6 +44,7 @@ void error_at_line (int __status, int __errnum, const char *__fname,
  *
  * case "exit" {
  *   assumes: __status != 0;
+ *   warn: "error called";
  *   ensures: 1 == 0;
  * }
  *
@@ -60,6 +61,7 @@ void _mopsa_error(int __status);
  *
  * case "exit" {
  *   assumes: __status != 0;
+ *   warn: "error_at_line called";
  *   ensures: 1 == 0;
  * }
  *

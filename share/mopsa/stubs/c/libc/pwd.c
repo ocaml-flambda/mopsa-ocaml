@@ -65,7 +65,7 @@ void endpwent (void);
 struct passwd *getpwent (void);
 
 /*$
- * requires: __stream in File;
+ * requires: alive_resource(__stream, File);
  *
  * case "success" {
  *   local: struct passwd* r = _mopsa_alloc_pw();
@@ -80,7 +80,7 @@ struct passwd *getpwent (void);
 struct passwd *fgetpwent (FILE *__stream);
 
 /*$
- * requires: __f in File;
+ * requires: alive_resource(__f, File);
  * requires: valid_ptr(__p);
  * requires: valid_string(__p->pw_name);
  * requires: valid_string(__p->pw_passwd);

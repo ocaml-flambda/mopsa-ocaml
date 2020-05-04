@@ -19,65 +19,47 @@
 /*                                                                          */
 /****************************************************************************/
 
-/* Stubs for the extension of stdio as found in Sun's Solaris OS */
+/*
+  libc stub
+  based on header from glibc-2.27-r6
+*/
 
-#include <stdio_ext.h>
-#include <limits.h>
+#include <sys/sysinfo.h>
+#include "../mopsa_libc_utils.h"
 
-/*$
- * requires: alive_resource(__fp, File);
- */
-size_t __fbufsize (FILE *__fp);
-
-
-/*$
- * requires: alive_resource(__fp, File);
- */
-int __freading (FILE *__fp);
+// TODO: fill-in __info and return reasonable values
 
 /*$
- * requires: alive_resource(__fp, File);
+ * requires: valid_ptr(__info);
+ * assigns: *__info;
+ *
+ * case "success" {
+ *   ensures: return == 0;
+ * }
+ *
+ * case "failure" {
+ *   assigns: _errno;
+ *   ensures: return == -1;
+ * }
  */
-int __fwriting (FILE *__fp);
+int sysinfo (struct sysinfo *__info);
 
 /*$
- * requires: alive_resource(__fp, File);
+ * ensures: return >= 0;
  */
-int __freadable (FILE *__fp);
+int get_nprocs_conf (void);
 
 /*$
- * requires: alive_resource(__fp, File);
+ * ensures: return >= 0;
  */
-int __fwritable (FILE *__fp);
+int get_nprocs (void);
 
 /*$
- * requires: alive_resource(__fp, File);
+ * ensures: return >= 0;
  */
-int __flbf (FILE *__fp);
-
+long int get_phys_pages (void);
 
 /*$
- * requires: alive_resource(__fp, File);
+ * ensures: return >= 0;
  */
-void __fpurge (FILE *__fp);
-
-/*$
- * requires: alive_resource(__fp, File);
- */
-size_t __fpending (FILE *__fp);
-
-/*$
- * // emtpy stub
- */
-void _flushlbf (void);
-
-
-/*$
- * requires: alive_resource(__fp, File);
- * requires: __type == FSETLOCKING_INTERNAL or
- *           __type == FSETLOCKING_BYCALLER or
- *           __type == FSETLOCKING_QUERY;
- * ensures:  return == FSETLOCKING_INTERNAL or
- *           return == FSETLOCKING_BYCALLER;
- */
-int __fsetlocking (FILE *__fp, int __type);
+long int get_avphys_pages (void);

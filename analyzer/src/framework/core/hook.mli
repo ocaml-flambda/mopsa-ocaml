@@ -115,6 +115,9 @@ val find_hook : string -> (module HOOK)
 val mem_hook : string -> bool
 (** Check whether a hook exits *)
 
+val list_hooks : unit -> (module HOOK) list
+(** List all existing hooks *)
+
 val deactivate_hook : string -> ('a,'a) man -> 'a flow -> unit
 (** Deactivate an active hook *)
 

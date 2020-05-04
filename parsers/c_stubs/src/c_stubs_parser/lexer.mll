@@ -95,6 +95,7 @@ let _ =
      "float_inf", FLOAT_INF;
      "float_nan", FLOAT_NAN;
      "cast", CAST;
+     "alive", ALIVE;
    ]
 
    let char_for_backslash = function

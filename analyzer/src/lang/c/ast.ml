@@ -1142,6 +1142,13 @@ let assert_valid_stream (p:expr) range man flow =
   let stmt = mk_c_call_stmt f [p] range in
   man.post stmt flow
 
+(** Check if a pointer points to a valid file descriptor *)
+let assert_valid_file_descriptor (p:expr) range man flow =
+  let open Sig.Domain.Manager in
+  let f = find_c_fundec_by_name "_mopsa_assert_valid_file_descriptor" flow in
+  let stmt = mk_c_call_stmt f [p] range in
+  man.post stmt flow
+
 
 (** Check if a pointer is valid *)
 let assert_valid_ptr (p:expr) range man flow =
@@ -1209,3 +1216,9 @@ let error_error_at_line (p:expr) (n:expr) range man flow =
   let f = find_c_fundec_by_name "_mopsa_error_at_line" flow in
   let stmt = mk_c_call_stmt f [p; n] range in
   man.post stmt flow
+
+let asprintf_stub (dst:expr) range man flow =
+  let open Sig.Domain.Manager in
+  let f = find_c_fundec_by_name "_mopsa_asprintf" flow in
+  let exp = mk_c_call f [dst] range in
+  man.eval exp flow

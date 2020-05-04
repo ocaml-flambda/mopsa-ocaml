@@ -975,6 +975,7 @@ and from_stub_builtin f =
   | FLOAT_INF -> FLOAT_INF
   | FLOAT_NAN -> FLOAT_NAN
   | BYTES -> BYTES
+  | ALIVE -> ALIVE
 
 and from_stub_log_binop = function
   | AND -> AND
