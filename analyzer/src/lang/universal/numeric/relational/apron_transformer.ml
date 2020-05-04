@@ -273,15 +273,7 @@ struct
       Apron.Texpr1.Unop(Apron.Texpr1.Sqrt, e', typ', !opt_float_rounding), abs, bnd, l
 
     | E_unop(O_wrap(g, d), e) ->
-      let r = erange e in
-      mk_binop ~etyp:T_int
-        (mk_z g r) O_plus (mk_binop ~etyp:T_int
-                             (mk_binop e O_minus (mk_z g r) r ~etyp:T_int)
-                             O_mod
-                             (mk_z (Z.(d-g+one)) r)
-                             r
-                          ) r
-      |> fun x -> exp_to_apron x (abs,bnd) l
+      exp_to_apron (mk_z_interval g d e.erange) (abs,bnd) l
 
     | _ ->
       Exceptions.warn "exp_to_apron: failed to transform %a of type %a" pp_expr exp pp_typ (etyp exp);
