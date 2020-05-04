@@ -305,6 +305,10 @@ let list_alarms alarms out =
   print out "Alarm classes:@.";
   List.iter (fun a -> print out "  %a@." Core.Alarm.pp_alarm_class a) alarms
 
+let list_hooks hooks out =
+  print out "Hooks:@.";
+  List.iter (fun h -> print out "  %s@." h) hooks
+
 let print range printer flow out =
   if Debug.can_print "print" then
     print out "%a@\n  @[%a@]@."

@@ -19,36 +19,115 @@
 /*                                                                          */
 /****************************************************************************/
 
-#include <sys/wait.h>
+#include <sys/types.h>
 #include <sys/time.h>
 #include <sys/resource.h>
-
-// FIXME: wait3 before glibc 2.24 is not yet supported due to the union-type parameter of __stat_loc
-#if __GLIBC_MINOR__ >= 24
+#include <sys/wait.h>
+#include "../mopsa_libc_utils.h"
 
 /*$
- * assigns: _errno;
- * assigns: *__usage;
- * assigns: *__stat_loc;
+ * requires: __stat_loc != NULL implies valid_ptr(__stat_loc);
  *
- * ensures: return >= -1;
- * ensures: (__stat_loc != NULL) implies (*__stat_loc)' in [0,255]; // FIXME: is this sound?
+ * case "stat_loc" {
+ *   assumes: __stat_loc != NULL;
+ *   assigns: *__stat_loc;
+ *   ensures: return >= 0;
+ * }
  *
- * ensures: 
- *   (__usage != NULL) implies (
- *         (__usage->ru_utime.tv_sec)'  in [0, 2000000000] // 30 years :)
- *     and (__usage->ru_utime.tv_usec)' in [0, 1000000]
- *     and (__usage->ru_stime.tv_sec)'  in [0, 2000000000]
- *     and (__usage->ru_stime.tv_usec)' in [0, 1000000]
- *     and (__usage->ru_maxrss)' >= 0
- *     and (__usage->ru_minflt)' >= 0
- *     and (__usage->ru_majflt)' >= 0
- *     and (__usage->ru_inblock)' >= 0
- *     and (__usage->ru_oublock)' >= 0
- *     and (__usage->ru_nvcsw)' >= 0
- *     and (__usage->ru_nivcsw)' >= 0
- *   );
+ * case "no-stat_loc" {
+ *   assumes: __stat_loc == NULL;
+ *   ensures: return >= 0;
+ * }
+ *
+ * case "failure" {
+ *   assigns: _errno;
+ *   ensures: return == -1;
+ * }
  */
-pid_t wait3 (int *__stat_loc, int __options, struct rusage * __usage);
+__pid_t wait (int *__stat_loc);
 
-#endif // __GLIBC_MINOR__ >= 24
+/*$
+ * local: __pid_t r = wait(__stat_loc);
+ * ensures: return == r;
+ */
+__pid_t waitpid (__pid_t __pid, int *__stat_loc, int __options);
+
+/*$
+ * requires: valid_ptr(__infop);
+ * assigns: *__infop;
+ *
+ * case "success" {
+ *   ensures: return == 0;
+ * }
+ *
+ * case "failure" {
+ *   assigns: _errno;
+ *   ensures: return == -1;
+ * }
+ */
+int waitid (idtype_t __idtype, __id_t __id, siginfo_t *__infop,
+            int __options);
+
+/*$$
+ * predicate valid_primed_rusage(r):
+ *         (r->ru_utime.tv_sec)'  in [0, 2000000000] // 30 years :)
+ *     and (r->ru_utime.tv_usec)' in [0, 1000000]
+ *     and (r->ru_stime.tv_sec)'  in [0, 2000000000]
+ *     and (r->ru_stime.tv_usec)' in [0, 1000000]
+ *     and (r->ru_maxrss)' >= 0
+ *     and (r->ru_minflt)' >= 0
+ *     and (r->ru_majflt)' >= 0
+ *     and (r->ru_inblock)' >= 0
+ *     and (r->ru_oublock)' >= 0
+ *     and (r->ru_nvcsw)' >= 0
+ *     and (r->ru_nivcsw)' >= 0;
+ */
+
+/*$
+ * requires: __stat_loc != NULL implies valid_ptr(__stat_loc);
+ * requires: __usage != NULL implies valid_ptr(__usage);
+ *
+ * case "usage-stat_loc" {
+ *   assumes: __usage != NULL;
+ *   assumes: __stat_loc != NULL;
+ *   assigns: *__usage;
+ *   assigns: *__stat_loc;
+ *   ensures: valid_primed_rusage(__usage);
+ *   ensures: return >= 0;
+ * }
+ *
+ * case "usage" {
+ *   assumes: __usage != NULL;
+ *   assumes: __stat_loc == NULL;
+ *   assigns: *__usage;
+ *   ensures: valid_primed_rusage(__usage);
+ *   ensures: return >= 0;
+ * }
+ *
+ * case "stat_loc" {
+ *   assumes: __usage == NULL;
+ *   assumes: __stat_loc != NULL;
+ *   assigns: *__stat_loc;
+ *   ensures: return >= 0;
+ * }
+ *
+ * case "none" {
+ *   assumes: __usage == NULL;
+ *   assumes: __stat_loc == NULL;
+ *   ensures: return >= 0;
+ * }
+ *
+ * case "failure" {
+ *   assigns: _errno;
+ *   ensures: return == -1;
+ * }
+ */
+__pid_t wait3 (int *__stat_loc, int __options,
+               struct rusage * __usage);
+
+/*$
+ * local: __pid_t r = wait3(__stat_loc, __options, __usage);
+ * ensures: return == r;
+ */
+__pid_t wait4 (__pid_t __pid, int *__stat_loc, int __options,
+               struct rusage *__usage);

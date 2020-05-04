@@ -26,6 +26,7 @@
 
 #include <locale.h>
 #include <limits.h>
+#include "mopsa_libc_utils.h"
 
 
 #define LOCAL_BUF_SIZE 100
@@ -81,24 +82,53 @@ struct lconv * _lconv_buf = NULL;
  */
 struct lconv *localeconv (void);
 
+static locale_t  _mopsa_last_locale;
 
-#ifdef	__USE_XOPEN2K8
+/*$$$
+ * local: locale_t r = new Locale;
+ * assigns: _mopsa_last_locale;
+ * ensures: _mopsa_last_locale' == r;
+ */
 
-
-// type __locale_t has been renamed local_t starting from glibv 2.26
-#ifndef local_t
-#define local_t __local_t
-#endif
-
-
+/*$
+ * requires: valid_string(__locale);
+ * requires: __base == 0 or alive_resource(__base, Locale);
+ * local: locale_t r = new Locale;
+ * assigns: _errno;
+ * ensures: return == r;
+ *
+ * case "free" {
+ *   assumes: alive_resource(__base, Locale);
+ *   free: __base;
+ * }
+ *
+ * case "nofree" {
+ *   assumes: __base == 0;
+ * }
+ */
 locale_t newlocale (int __category_mask, const char *__locale, locale_t __base);
 
+/*$
+ * requires: alive_resource(__dataset, Locale);
+ * local: locale_t r = new Locale;
+ * assigns: _errno;
+ * ensures: return == r or return == 0;
+ * // TODO: LC_GLOBAL_LOCALE
+ */
 locale_t duplocale (locale_t __dataset);
 
+/*$
+ * requires: __dataset in Locale;
+ * free: __dataset;
+ */
 void freelocale (locale_t __dataset);
 
+/*$
+ * requires: alive_resource(__dataset, Locale) or __dataset == 0;
+ * assigns: _mopsa_last_locale;
+ * ensures: _mopsa_last_locale' == __dataset;
+ * ensures: return == _mopsa_last_locale;
+ * // TODO: LC_GLOBAL_LOCALE
+ */
 locale_t uselocale (locale_t __dataset);
 
-
-
-#endif

@@ -148,7 +148,7 @@ and interval ={
   itv_open_ub: bool;       (** open upper bound *)
 }
 
-and resource = Cst.resource
+and resource = string
 
 and var = C_AST.variable
 
@@ -178,7 +178,7 @@ let compare_var v1 v2 =
     (fun () -> compare v1.C_AST.var_uid v2.C_AST.var_uid);
   ]
 
-let compare_resource r1 r2 = Cst.compare_resource r1 r2
+let compare_resource r1 r2 = compare r1 r2
 
 (** {2 Pretty printers} *)
 (** ******************* *)
@@ -187,7 +187,7 @@ open Format
 
 let pp_var fmt v = pp_print_string fmt v.C_AST.var_org_name
 
-let pp_resource = Cst.pp_resource
+let pp_resource = pp_print_string
 
 let pp_builtin = Cst.pp_builtin
 

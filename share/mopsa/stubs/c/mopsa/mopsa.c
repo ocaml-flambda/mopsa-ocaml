@@ -73,6 +73,12 @@
  *   forall size_t k in [i, j]: valid_ptr(p+k);
  */
 
+
+/*$$
+ * predicate alive_resource(p, r):
+ *   p in r and alive(p);
+ */
+
 /*$
  * local:   char * str = new Memory;
  * ensures: size(str) == INT_MAX;
@@ -80,6 +86,21 @@
  * ensures: return == str;
  */
 char *_mopsa_new_valid_string();
+
+/*$
+ * local:  char ** ar = new Memory;
+ * local:  char* s1 = _mopsa_new_valid_string();
+ * local:  char* s2 = _mopsa_new_valid_string();
+ * local:  char* s3 = _mopsa_new_valid_string();
+ * ensures: size(ar) == sizeof_type(char*) * 4;
+ * ensures: ar[0] == s1;
+ * ensures: ar[1] == s2;
+ * ensures: ar[2] == s3;
+ * ensures: ar[3] == NULL;
+ * ensures: return == ar;
+ * unsound: "stubs only create string arrays of 3 strings";
+ */
+char **_mopsa_new_valid_string_array();
 
 /*$
  * local:   char * str = new ReadOnlyMemory;
@@ -153,10 +174,17 @@ void _mopsa_strnrand(char *s, size_t n);
 
 
 /*$
- * requires: stream in File;
+ * requires: alive_resource(stream, File);
  */
 void _mopsa_assert_valid_stream(void* stream);
 
+extern void *_mopsa_find_file_resource(int fd);
+
+/*$
+ * local:    void* f = _mopsa_find_file_resource(fd);
+ * requires: alive_resource(f, FileRes);
+ */
+void _mopsa_assert_valid_file_descriptor(int fd);
 
 /*$
  * requires: valid_ptr_range(s, i, j);

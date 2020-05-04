@@ -127,12 +127,19 @@ struct
       and visit_set s =
         match s with
         | S_interval itv -> S_interval (visit_interval itv)
-        | S_resource r -> S_resource r
+        | S_resource r -> S_resource (visit_resource r)
 
       and visit_interval i =
         { i with
           itv_lb = visit_expr i.itv_lb;
           itv_ub = visit_expr i.itv_ub; }
+
+      and visit_resource r =
+        match find_arg_expr r with
+        | None -> r
+        | Some (E_var rr) -> rr
+        | Some x -> Exceptions.panic "resource %a can't be expanded" pp_resource r
+
 
       in
       visit_formula (with_range body range)

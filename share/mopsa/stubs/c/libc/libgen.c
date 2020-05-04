@@ -19,65 +19,36 @@
 /*                                                                          */
 /****************************************************************************/
 
-/* Stubs for the extension of stdio as found in Sun's Solaris OS */
+/*
+  libc stub
+  based on header from glibc-2.29-r7
+*/
 
-#include <stdio_ext.h>
-#include <limits.h>
+#include <libgen.h>
+#include <string.h> // for strlen
+#include <limits.h> // for PATH_MAX
+#include "mopsa_libc_utils.h"
 
-/*$
- * requires: alive_resource(__fp, File);
- */
-size_t __fbufsize (FILE *__fp);
-
-
-/*$
- * requires: alive_resource(__fp, File);
- */
-int __freading (FILE *__fp);
+static char _mopsa_dir_buf[PATH_MAX];
 
 /*$
- * requires: alive_resource(__fp, File);
+ * requires: valid_string(__path);
+ * assigns: _mopsa_dir_buf;
+ * local: size_t len = strlen(__path);
+ * assigns: __path[0,len);
+ * ensures: valid_primed_substring(_mopsa_dir_buf, PATH_MAX);
+ * ensures: valid_primed_substring(__path, len);
+ * ensures: return == _mopsa_dir_buf;
  */
-int __fwriting (FILE *__fp);
+char *dirname (char *__path);
 
 /*$
- * requires: alive_resource(__fp, File);
+ * requires: valid_string(__filename);
+ * assigns: _mopsa_dir_buf;
+ * local: size_t len = strlen(__filename);
+ * assigns: __filename[0,len);
+ * ensures: valid_primed_substring(_mopsa_dir_buf, PATH_MAX);
+ * ensures: valid_primed_substring(__filename, len);
+ * ensures: return == _mopsa_dir_buf;
  */
-int __freadable (FILE *__fp);
-
-/*$
- * requires: alive_resource(__fp, File);
- */
-int __fwritable (FILE *__fp);
-
-/*$
- * requires: alive_resource(__fp, File);
- */
-int __flbf (FILE *__fp);
-
-
-/*$
- * requires: alive_resource(__fp, File);
- */
-void __fpurge (FILE *__fp);
-
-/*$
- * requires: alive_resource(__fp, File);
- */
-size_t __fpending (FILE *__fp);
-
-/*$
- * // emtpy stub
- */
-void _flushlbf (void);
-
-
-/*$
- * requires: alive_resource(__fp, File);
- * requires: __type == FSETLOCKING_INTERNAL or
- *           __type == FSETLOCKING_BYCALLER or
- *           __type == FSETLOCKING_QUERY;
- * ensures:  return == FSETLOCKING_INTERNAL or
- *           return == FSETLOCKING_BYCALLER;
- */
-int __fsetlocking (FILE *__fp, int __type);
+char *basename (char *__filename);
