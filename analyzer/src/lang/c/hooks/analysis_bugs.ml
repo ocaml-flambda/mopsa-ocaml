@@ -52,16 +52,44 @@ struct
   (** ***************** *)
 
   type bug = {
+    bug_kind : bug_kind;
     bug_range : range;
     bug_callstack : callstack;
   }
 
+  and bug_kind =
+    | Assign of stmt
+    | Call   of string
+
+
+  (** Compare two bug kinds *)
+  let compare_bug_kind bk1 bk2 =
+    match bk1, bk2 with
+    | Assign s1, Assign s2 -> compare_stmt s1 s2
+    | Call f1, Call f2 -> compare f1 f2
+    | _ -> compare bk1 bk2
+
 
   (** Compare two bugs *)
   let compare_bug b1 b2 =
-    Compare.pair compare_range compare_callstack
-      (b1.bug_range,b1.bug_callstack)
-      (b2.bug_range,b2.bug_callstack)
+    Compare.triple compare_range compare_callstack compare_bug_kind
+      (b1.bug_range,b1.bug_callstack,b1.bug_kind)
+      (b2.bug_range,b2.bug_callstack,b2.bug_kind)
+
+
+  (** Print bug kinds *)
+  let pp_bug_kind fmt = function
+    | Assign stmt -> pp_stmt fmt stmt
+    | Call f -> pp_print_string fmt f
+
+
+  (** Print a bug *)
+  let pp_bug fmt bug =
+    fprintf fmt "%a %a: %a@,  Trace:@,%a"
+      (Debug.color_str "orange") "⚠"
+      pp_relative_range bug.bug_range
+      pp_bug_kind bug.bug_kind
+      pp_callstack bug.bug_callstack
 
 
   (** Set of bugs *)
@@ -92,9 +120,16 @@ struct
                   ]
 
 
-  (** Add range to the set of bug locations *)
-  let add_bug range cs =
-    bugs := BugSet.add {bug_range = range; bug_callstack = cs} !bugs
+  (** Add a bug at an assignment *)
+  let add_assign_bug stmt range cs =
+    warn_at range "potential bug detected in %a" pp_stmt stmt;
+    bugs := BugSet.add {bug_range = range; bug_kind = Assign stmt; bug_callstack = cs} !bugs
+
+
+  (** Add a bug at a function call *)
+  let add_call_bug f range cs =
+    if not (List.mem f whitelist) then warn_at range "potential bug detected in %s" f;
+    bugs := BugSet.add {bug_range = range; bug_kind = Call f; bug_callstack = cs} !bugs
 
 
   (** Remove redundant bug locations *)
@@ -103,9 +138,19 @@ struct
         (fun b ->
            BugSet.for_all
              (fun b' -> b.bug_range == b'.bug_range
-                          || (not (subset_range b'.bug_range b.bug_range)
-                              &&  not (callstack_begins_with b'.bug_callstack b.bug_callstack))
+                        || (not (subset_range b'.bug_range b.bug_range)
+                            &&  not (callstack_begins_with b'.bug_callstack b.bug_callstack))
              ) !bugs
+        ) !bugs
+
+
+  (** Remove calls to whitelist functions *)
+  let remove_whitelist_bugs () =
+    bugs := BugSet.filter
+        (fun b ->
+           match b.bug_kind with
+           | Call f when List.mem f whitelist -> false
+           | _ -> true
         ) !bugs
 
 
@@ -138,7 +183,7 @@ struct
       when not (is_cur_bottom_in_flow man flow)
         && is_cur_bottom_in_cases man post
       ->
-      add_bug stmt.srange (Flow.get_callstack flow)
+      add_assign_bug stmt stmt.srange (Flow.get_callstack flow)
 
     | _ -> ()
 
@@ -148,11 +193,16 @@ struct
   let on_after_eval zone exp man flow evl =
     match ekind exp with
     | E_stub_call (f,_)
-      when not (List.mem f.stub_func_name whitelist)
-        && not (is_cur_bottom_in_flow man flow)
+      when not (is_cur_bottom_in_flow man flow)
         && is_cur_bottom_in_cases man evl
       ->
-      add_bug exp.erange (Flow.get_callstack flow)
+      add_call_bug f.stub_func_name exp.erange (Flow.get_callstack flow)
+
+    | E_c_builtin_call (f,_)
+      when not (is_cur_bottom_in_flow man flow)
+        && is_cur_bottom_in_cases man evl
+      ->
+      add_call_bug f exp.erange (Flow.get_callstack flow)
 
     | _ -> ()
     
@@ -162,17 +212,12 @@ struct
       printf "No potential analyzer bug detected@."
     else
       let () = remove_redundant_bugs () in
+      let () = remove_whitelist_bugs () in
       let nb = BugSet.cardinal !bugs in
-      printf "%d potential analyzer bug%a found:@.  @[<v>%a@]@."
+      printf "%d potential analyzer bug%a detected:@.  @[<v>%a@]@."
         nb
         Debug.plurial_int nb
-        (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-           (fun fmt bug -> fprintf fmt "%a %a@,  Trace:@,%a"
-               (Debug.color_str "orange") "⚠"
-               pp_relative_range bug.bug_range
-               pp_callstack bug.bug_callstack
-           )
-        ) (BugSet.elements !bugs)
+        (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,") pp_bug) (BugSet.elements !bugs)
 
 end
 
