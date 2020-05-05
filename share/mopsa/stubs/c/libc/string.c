@@ -347,10 +347,9 @@ char *__strdup (const char *__s);
 
 
 /*$
- * requires: valid_substring(__s, __n);
+ * local: size_t len = strnlen(__s, __n);
  *
  * case "success" {
- *   local: size_t len = strnlen(__s, __n);
  *   local: char* r = new Memory;
  *   ensures: size(r) == len + 1;
  *   ensures: forall size_t i in [0, len): r[i] == __s[i];

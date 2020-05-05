@@ -41,7 +41,6 @@ open Callstack
 type ('a,'r) cases
 
 
-
 (****************************************************************************)
 (**                      {2 Utility functions}                              *)
 (****************************************************************************)
@@ -72,6 +71,10 @@ val get_callstack: ('a,'r) cases -> callstack
 
 val copy_ctx : ('a,'r) cases -> ('a,'s) cases -> ('a,'s) cases
 (** [copy_ctx c1 c2] changes the context of cases [c2] to the context of [c1]. *)
+
+
+val opt_clean_cur_only : bool ref
+(** Option to apply cleaners on T_cur only *)
 
 
 val add_cleaners : block -> ('a,'r) cases -> ('a,'r) cases

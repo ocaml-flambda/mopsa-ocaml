@@ -51,8 +51,6 @@ type ('a,'r) cases = {
 }
 
 
-
-
 (****************************************************************************)
 (**                      {2 Utility functions}                              *)
 (****************************************************************************)
@@ -99,6 +97,8 @@ let singleton
 let empty_singleton (flow:'a flow) : ('a,'r) cases =
   return None flow
 
+
+let opt_clean_cur_only = ref false
 
 
 let get_ctx r = r.cases_ctx

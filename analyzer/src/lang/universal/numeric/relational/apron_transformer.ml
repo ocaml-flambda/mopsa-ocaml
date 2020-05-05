@@ -198,10 +198,14 @@ struct
 
   let rec exp_to_apron exp (abs,bnd) l =
     match ekind exp with
+    | E_constant C_top T_bool ->
+      Apron.Texpr1.Cst (Apron.Coeff.Interval (Apron.Interval.of_int 0 1)),
+      abs, bnd, l
+
     | E_constant C_top t ->
       Apron.Texpr1.Cst (Apron.Coeff.Interval Apron.Interval.top),
       abs, bnd, l
-
+  
     | E_constant(C_int_interval (a,b)) ->
       Apron.Texpr1.Cst(
         Apron.Coeff.i_of_scalar
@@ -215,6 +219,14 @@ struct
           (Apron.Scalar.of_float a)
           (Apron.Scalar.of_float b)
       ), abs, bnd, l
+
+    | E_constant(C_bool true) ->
+      Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_int 1)),
+      abs, bnd, l
+
+    | E_constant(C_bool false) ->
+      Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_int 0)),
+      abs, bnd, l
 
     | E_constant(C_int n) ->
       Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_mpq @@ Mpq.of_string @@ Z.to_string n)),
@@ -261,15 +273,7 @@ struct
       Apron.Texpr1.Unop(Apron.Texpr1.Sqrt, e', typ', !opt_float_rounding), abs, bnd, l
 
     | E_unop(O_wrap(g, d), e) ->
-      let r = erange e in
-      mk_binop ~etyp:T_int
-        (mk_z g r) O_plus (mk_binop ~etyp:T_int
-                             (mk_binop e O_minus (mk_z g r) r ~etyp:T_int)
-                             O_mod
-                             (mk_z (Z.(d-g+one)) r)
-                             r
-                          ) r
-      |> fun x -> exp_to_apron x (abs,bnd) l
+      exp_to_apron (mk_z_interval g d e.erange) (abs,bnd) l
 
     | _ ->
       Exceptions.warn "exp_to_apron: failed to transform %a of type %a" pp_expr exp pp_typ (etyp exp);

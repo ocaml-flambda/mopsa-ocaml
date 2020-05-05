@@ -310,6 +310,9 @@ struct
     | Backtrace
     (** Print the callstack *)
 
+    | Debug of string
+    (** Set debug channels *)
+
 
   (** Information sub-commands *)
   and info_command =
@@ -339,6 +342,7 @@ struct
     | Info Tokens -> Format.fprintf fmt "info tokens"
     | Info Variables -> Format.fprintf fmt "info variables"
     | Backtrace   -> Format.fprintf fmt "backtrace"
+    | Debug ch    -> Format.fprintf fmt "debug %s" ch
 
 
   (** Print help message *)
@@ -359,6 +363,7 @@ struct
     printf "  w[here]               show current program point@.";
     printf "  h[oo] <hook>          activate a hook@.";
     printf "  u[nload] <hook>       deactivate a hook@.";
+    printf "  d[ebug] <channels>    set debug channels@.";
     printf "  i[info] a[larms]      print the list of alarms@.";
     printf "  i[info] b[reakpoints] print the list of breakpoints@.";
     printf "  i[info] t[okens]      print the list of flow tokens@.";
@@ -419,6 +424,8 @@ struct
       | ["hook"   | "h"; hook] -> LoadHook hook
       | ["unload" | "u"; hook] -> UnloadHook hook
 
+      | ["debug"  | "d"; channel] -> Debug channel
+
       | _ ->
         printf "Unknown command %s@." l;
         print_usage ();
@@ -447,7 +454,7 @@ struct
 
   (** Print an action *)
   let pp_action : type a. Abstraction.t flow -> formatter -> a action -> unit = fun flow fmt action ->
-    fprintf fmt "%a@." (Debug.color "orange" pp_range) (action_range action);
+    fprintf fmt "%a@." (Debug.color "fushia" pp_range) (action_range action);
     match action with
     | Exec(stmt,zone) ->
       fprintf fmt "@[<v 4>S[ %a@] ] in zone %a@."
@@ -800,6 +807,10 @@ struct
           printf "Variable '%s' not found@." vname;
           interact action flow
       end
+
+    | Debug channel ->
+      Debug.set_channels channel;
+      interact action flow
 
 
   (** Interact with the user input or apply the action *)

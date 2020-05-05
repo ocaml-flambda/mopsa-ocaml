@@ -310,6 +310,16 @@ let () =
     default = "false";
   }
 
+(** Apply cleaners on T_cur only *)
+let () =
+  register_builtin_option {
+    key = "-clean-cur-only";
+    category = "Configuration";
+    doc = " flag to apply cleaners on the current environment only";
+    spec = ArgExt.Set Core.Cases.opt_clean_cur_only;
+    default = "";
+  }
+
 (** Help message *)
 let help () =
   let options =

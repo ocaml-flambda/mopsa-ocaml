@@ -46,7 +46,7 @@
                     "compose": [
                         "universal.heap.recency",
 			"c.memory.lowlevel.cells",
-			{
+                        {
                             "seq": [
 			        "c.memory.scalars.pointer",
 			        "c.memory.scalars.machine_numbers"
@@ -55,22 +55,33 @@
                     ]
                 },
 		"on": {
-                    "nonrel": {
-			"union": [
-			    "universal.numeric.values.intervals.float",
-                            {
-                                "product": [
-                                    "universal.numeric.values.intervals.integer",
-			            "universal.numeric.values.congruences"
-                                ],
-                                "reductions": [
-                                    "universal.numeric.reductions.intervals_congruences"
-                                ]
-                            }
-			]
-		    }
+                    "product": [
+                        {
+                            "nonrel": {
+			        "union": [
+			            "universal.numeric.values.intervals.float",
+                                    {
+					"product": [
+					    "universal.numeric.values.intervals.integer",
+					    "universal.numeric.values.congruences"
+					],
+					"reductions": [
+					    "universal.numeric.reductions.intervals_congruences"
+					]
+				    }
+			        ]
+		            }
+                        },
+			{
+                            "apply":"c.memory.packing.static_scope",
+                            "on": "universal.numeric.relational"
+                        }
+                    ],
+                    "reductions": [
+                        "c.memory.packing.reductions.intervals_static_scope"
+                    ]
                 }
-	    }
+            }
 	]
     }
 }

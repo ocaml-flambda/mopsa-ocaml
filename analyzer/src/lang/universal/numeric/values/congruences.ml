@@ -65,6 +65,10 @@ struct
   let print fmt (a:t) = C.fprint_bot fmt a
 
   let constant t = function
+    | C_bool true -> Nb (C.cst_int 1)
+
+    | C_bool false -> Nb (C.cst_int 0)
+
     | C_int i -> Nb (C.cst i)
 
     | C_int_interval (i1,i2) -> Nb (C.of_range i1 i2)

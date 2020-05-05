@@ -177,6 +177,4 @@ let switch = Intermediate.switch
 
 let exec_stmt_on_all_flows = Intermediate.exec_stmt_on_all_flows
 
-let exec_block_on_all_flows = Intermediate.exec_block_on_all_flows
-
 let post_to_flow = Intermediate.post_to_flow

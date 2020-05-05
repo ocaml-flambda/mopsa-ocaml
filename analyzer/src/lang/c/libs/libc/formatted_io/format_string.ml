@@ -71,24 +71,20 @@ let eval_format_string wide format range man flow =
 
   | E_c_points_to (P_block ({ base_kind = String (fmt,C_char_ascii,_) }, offset, _)) when not wide ->
     if is_c_expr_equals_z offset Z.zero then
-      Cases.singleton fmt flow
+      Cases.singleton (Some fmt) flow
     else
       assume (mk_binop offset O_eq (mk_zero (erange offset)) (erange offset))
-        ~fthen:(fun flow -> Cases.singleton fmt flow)
-        ~felse:(fun flow ->
-            Soundness.warn_at range "unsupported format string: non-constant";
-            Cases.empty_singleton flow)
+        ~fthen:(fun flow -> Cases.singleton (Some fmt) flow)
+        ~felse:(fun flow -> Cases.singleton None flow)
         ~zone:Z_c_scalar man flow
 
   | E_c_points_to (P_block ({ base_kind = String (fmt,C_char_wide,t) }, offset, _)) when wide ->
     if is_c_expr_equals_z offset Z.zero then
-      Cases.singleton (format_of_wide_format fmt t) flow
+      Cases.singleton (Some (format_of_wide_format fmt t)) flow
     else
       assume (mk_binop offset O_eq (mk_zero (erange offset)) (erange offset))
-        ~fthen:(fun flow -> Cases.singleton fmt flow)
-        ~felse:(fun flow ->
-            Soundness.warn_at range "unsupported format string: non-constant";
-            Cases.empty_singleton flow)
+        ~fthen:(fun flow -> Cases.singleton (Some fmt) flow)
+        ~felse:(fun flow -> Cases.singleton None flow)
         ~zone:Z_c_scalar man flow
 
   | E_c_points_to (P_block ({ base_kind = String (fmt,C_char_ascii,_) }, offset, _)) when wide ->
@@ -99,23 +95,29 @@ let eval_format_string wide format range man flow =
     Soundness.warn_at range "unsupported format string: non-wide string expected";
     Cases.empty_singleton flow
 
+  | E_c_points_to (P_block _) ->
+    Cases.singleton None flow
+
   | _ ->
-    Soundness.warn_at range "unsupported format string: non-constant";
+    Soundness.warn_at range "unsupported format string";
     Cases.empty_singleton flow
 
 
 (** Parse a format according to parser *)
 let parse_format wide parser (format:expr) range man flow =
   eval_format_string wide format range man flow >>$ fun fmt flow ->
-  let lex = Lexing.from_string fmt in
-  try
-    let placeholders = parser Lexer.read lex in
-    Cases.singleton placeholders flow
-  with _ ->
-    (* lexer / parser error *)
-    Soundness.warn_at range "unsupported format string: char %i of \"%s\""
-      lex.lex_start_p.pos_cnum fmt;
-    Cases.empty_singleton flow
+  match fmt with
+  | None -> Cases.singleton None flow
+  | Some fmt ->
+    let lex = Lexing.from_string fmt in
+    try
+      let placeholders = parser Lexer.read lex in
+      Cases.singleton (Some placeholders) flow
+    with _ ->
+      (* lexer / parser error *)
+      ( warn_at range "unsupported format string: char %i of \"%s\""
+          lex.lex_start_p.pos_cnum fmt;
+        Cases.singleton None flow )
 
 (** Parse an output format *)
 let parse_output_format ?(wide=false) (format:expr) range man flow =

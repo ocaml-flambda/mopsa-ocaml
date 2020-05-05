@@ -100,7 +100,9 @@ struct
       Cases.empty_singleton
 
     | E_c_points_to P_top ->
-      Soundness.warn_at range "ignoring requirement check due to ⊤ pointer %a" pp_expr ptr;
+      let cond = mk_stub_builtin_call VALID_PTR ptr ~etyp:u8 range in
+      let man' = Sig.Stacked.Manager.of_domain_man man in
+      let flow = Stubs.Alarms.raise_stub_invalid_requires ~bottom:false cond range man' flow in
       Post.return flow
 
     | E_c_points_to (P_block (base, offset, _)) ->

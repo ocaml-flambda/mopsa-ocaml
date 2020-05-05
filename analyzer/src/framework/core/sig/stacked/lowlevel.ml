@@ -189,8 +189,6 @@ let switch = Manager.switch
 
 let exec_stmt_on_all_flows = Manager.exec_stmt_on_all_flows
 
-let exec_block_on_all_flows = Manager.exec_block_on_all_flows
-
 let post_to_flow = Manager.post_to_flow
 
 (*==========================================================================*)

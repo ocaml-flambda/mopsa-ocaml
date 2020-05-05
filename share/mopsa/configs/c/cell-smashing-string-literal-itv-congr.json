@@ -45,15 +45,25 @@
                 "apply": {
                     "compose": [
                         "universal.heap.recency",
-			"c.memory.lowlevel.cells",
+                        {
+                            "product":[
+                                "c.memory.lowlevel.cells",
+				"c.memory.lowlevel.smashing",
+                                "c.memory.lowlevel.string_literal"
+                            ],
+                            "reductions": [
+				"c.memory.lowlevel.reductions.cell_smashing",
+                                "c.memory.lowlevel.reductions.cell_string_literal"
+                            ]
+                        },
 			{
                             "seq": [
-			        "c.memory.scalars.pointer",
-			        "c.memory.scalars.machine_numbers"
+				"c.memory.scalars.pointer",
+				"c.memory.scalars.machine_numbers"
                             ]
-                        }
+			}
                     ]
-                },
+		},
 		"on": {
                     "nonrel": {
 			"union": [
@@ -69,7 +79,7 @@
                             }
 			]
 		    }
-                }
+		}
 	    }
 	]
     }

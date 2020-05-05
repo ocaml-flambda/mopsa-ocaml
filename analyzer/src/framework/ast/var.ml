@@ -123,10 +123,10 @@ let vcounter = ref 0
 (** Create a fresh variable. Function [f] is given a fresh and unique
     identifier. It should return a unique name and a variable kind
 *)
-let mkfresh (f:int -> string * var_kind) typ () =
+let mkfresh (f:int -> string * var_kind) typ ?(mode=STRONG) () =
   incr vcounter;
   let name, kind = f !vcounter in
-  mkv name kind typ
+  mkv name kind ~mode typ
 
 
 (** Temporary fixes for frontends *)
@@ -161,37 +161,37 @@ type var_kind +=
 
 
 (** Create a fresh temporary variable *)
-let mk_uniq_var orig uid typ =
+let mk_uniq_var orig uid ?(mode=STRONG) typ =
   let name = orig ^ ":" ^ (string_of_int uid) in
-  mkv name (V_uniq (orig, uid)) typ
+  mkv name (V_uniq (orig, uid)) ~mode typ
 
 
 (** Create a fresh variable with a unique ID *)
-let mk_fresh_uniq_var orig typ () =
+let mk_fresh_uniq_var orig ?(mode=STRONG) typ () =
   mkfresh (fun uid ->
       let name = orig ^ ":" ^ (string_of_int uid) in
       name, (V_uniq (orig, uid))
-    ) typ ()
+    ) typ ~mode ()
 
 
 (** Create a fresh temporary variable *)
-let mktmp ?(typ=T_any) () =
+let mktmp ?(typ=T_any) ?(mode=STRONG) () =
   mkfresh (fun uid ->
       let name = "$tmp" ^ (string_of_int uid) in
       name, V_tmp uid
-    ) typ ()
+    ) typ ~mode ()
 
 
 (** Create a variable attribute *)
-let mk_attr_var v attr typ =
+let mk_attr_var v attr ?(mode=STRONG) typ =
   let name = v.vname ^ "." ^ attr in
-  mkv name (V_var_attr (v, attr)) typ
+  mkv name (V_var_attr (v, attr)) ~mode typ
 
 
 (** Create a program range attribute *)
-let mk_range_attr_var range attr typ =
+let mk_range_attr_var range attr ?(mode=STRONG) typ =
   let name = Format.asprintf "%a.%s" Location.pp_range range attr in
-  mkv name (V_range_attr (range, attr)) typ
+  mkv name (V_range_attr (range, attr)) ~mode typ
 
 
 (** Return the original name of variables with UIDs *)

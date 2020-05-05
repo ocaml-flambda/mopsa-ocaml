@@ -399,7 +399,6 @@ struct
 
   (** Maximal number of expanded cells when dereferencing a pointer *)
   let opt_deref_expand = ref 1
-
   let () =
     register_domain_option name {
       key = "-cell-deref-expand";
@@ -409,63 +408,16 @@ struct
       default = "1";
     }
 
-
-
-  (** {2 Utility functions for cells} *)
-  (** =============================== *)
-(*
-  (** [find_cell_opt f a] finds the cell in [a.cells] verifying
-      predicate [f]. None is returned if such cells is not found. *)
-  let find_cell_opt (f:cell->bool) (a:t) =
-    CellSet.apply (fun r ->
-        let exception Found of cell in
-        try
-          let () = CellSet.Set.iter (fun c ->
-              if f c then raise (Found(c))
-            ) r in
-          None
-        with
-        | Found (c) -> Some (c)
-      )
-      None a.cells
-
-  (** [find_cells f a] returns the list of cells in [a.cells] verifying
-      predicate [f]. *)
-  let find_cells f (a:t) =
-    CellSet.apply (fun r ->
-        CellSet.Set.filter f r |>
-        CellSet.Set.elements
-      )
-      []
-      a.cells
-
-  (** Return the list of cells in [a.cells] - other than [c] - that
-      overlap with [c]. *)
-  let get_cell_overlappings c (a:t) =
-    let check_overlap c1 c2 =
-      let (a1,b1) = (c1.offset, Z.add c1.offset (sizeof_cell c1)) in
-      let (a2,b2) = (c2.offset, Z.add c2.offset (sizeof_cell c2)) in
-      Z.lt (Z.max a1 a2) (Z.min b1 b2)
-    in
-    find_cells (fun c' ->
-        compare_cell c c' <> 0 &&
-        compare_base (c.base) (c'.base) = 0 &&
-        (
-          check_overlap c c'
-        )
-      ) a
-
-  (** Return the list of cells in [a.cells] in [base] that overlap in
-      offset interval [itv]. *)
-  let get_region_overlappings base itv (a:t) =
-    find_cells (fun c ->
-        compare_base (c.base) base = 0 &&
-        (
-          let itv' = Itv.of_z c.offset (Z.add c.offset (Z.pred (sizeof_cell c))) in
-          not (Itv.meet itv itv' |> Itv.is_bottom)
-        )
-      ) a
-*)
+  (** Flag to activate the on-demand smashing *)
+  let opt_smash = ref false
+  let () =
+    register_domain_option name {
+      key = "-cell-smash";
+      category = "C";
+      doc = " activate the on-demand smashing when the expansion threshold is reached";
+      spec = ArgExt.Set opt_smash;
+      default = "";
+    }
 
 
   (** {2 Unification of cells} *)
@@ -645,7 +597,7 @@ struct
   (** Possible results of a cell expansion *)
   type expansion =
     | Cell of cell * mode option
-    | Region of base * Itv.t
+    | Region of base * Z.t (** offset lower bound *) * Z.t (** offset higher bound *) * Z.t (** offset step *)
     | Top
 
 
@@ -658,7 +610,6 @@ struct
 
   let eval_pointed_base_offset ptr range man flow =
     man.eval ptr ~zone:(Zone.Z_c_low_level, Z_c_points_to) flow >>$ fun pt flow ->
-
     match ekind pt with
     | E_c_points_to P_null ->
       raise_c_null_deref_alarm ptr man flow |>
@@ -690,7 +641,6 @@ struct
     eval_pointed_base_offset p range man flow >>$ fun pp flow ->
     match pp with
     | None ->
-      Soundness.warn_at range "ignoring ⊤ pointer %a" pp_expr p;
       Cases.singleton Top flow
 
     | Some (base,offset,mode) ->
@@ -711,71 +661,67 @@ struct
       in
       assume_num ~zone:Z_u_num cond
         ~fthen:(fun flow ->
-            (* Expand only interesting bases *)
-            if not @@ is_interesting_base base
-            then Cases.singleton Top flow
-            else
-              (* Compute the interval and create a finite number of cells *)
-              let itv, (stride,_) = man.ask (Universal.Numeric.Common.Q_int_congr_interval offset) flow in
-              let step = if Z.equal stride Z.zero then Z.one else stride in
+            (* Compute the interval and create a finite number of cells *)
+            let itv, (stride,_) = man.ask (Universal.Numeric.Common.Q_int_congr_interval offset) flow in
+            let step = if Z.equal stride Z.zero then Z.one else stride in
 
-              let l, u = Itv.bounds_opt itv in
+            let l, u = Itv.bounds_opt itv in
 
-              let l =
-                match l with
-                | None -> Z.zero
-                | Some l -> Z.max l Z.zero
-              in
+            let l =
+              match l with
+              | None -> Z.zero
+              | Some l -> Z.max l Z.zero
+            in
 
-              let u =
-                match u, expr_to_z size with
-                | None, Some size -> Z.sub size elm
-                | Some u, Some size -> Z.min u (Z.sub size elm)
-                | Some u, None -> u
-                | None, None ->
-                  (* No bound found for the offset and the size is not constant, so
-                     get an upper bound of the size.
+            let u =
+              match u, expr_to_z size with
+              | None, Some size -> Z.sub size elm
+              | Some u, Some size -> Z.min u (Z.sub size elm)
+              | Some u, None -> u
+              | None, None ->
+                (* No bound found for the offset and the size is not constant, so
+                   get an upper bound of the size.
+                *)
+                let size_itv = man.ask (Universal.Numeric.Common.mk_int_interval_query size) flow in
+                let ll, uu = Itv.bounds_opt size_itv in
+                match uu with
+                | Some size -> Z.sub size elm
+                | None ->
+                  (* We are in trouble: the size is not bounded!
+                     So we assume that it does not exceed the range of unsigned long, usually used for size_t
                   *)
-                  let size_itv = man.ask (Universal.Numeric.Common.mk_int_interval_query size) flow in
-                  let ll, uu = Itv.bounds_opt size_itv in
-                  match uu with
-                  | Some size -> Z.sub size elm
-                  | None ->
-                    (* We are in trouble: the size is not bounded!
-                       So we assume that it does not exceed the range of unsigned long, usually used for size_t
-                    *)
-                    let _, uuu = rangeof ul in
-                    Soundness.warn_at range
-                      "size of %a is unbounded and is assumed to %a"
-                      pp_base base
-                      Z.pp_print uuu
-                    ;
-                    Z.sub uuu elm
-              in
+                  let _, uuu = rangeof ul in
+                  Soundness.warn_at range
+                    "size of %a is unbounded and is assumed to %a"
+                    pp_base base
+                    Z.pp_print uuu
+                  ;
+                  Z.sub uuu elm
+            in
 
-              let nb = Z.div (Z.sub u l) step in
-              if nb > Z.of_int !opt_deref_expand then
-                (* too many cases -> top *)
-                let region = Region (base, Itv.of_z l u) in
-                let flow = man.exec ~zone:Z_u_num (mk_assume (mk_binop offset O_ge (mk_z l range) range) range) flow in
-                if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
-                then Cases.empty_singleton flow
-                else Cases.singleton region flow
-              else
-                (* few cases -> iterate fully over [l, u] *)
-                let rec aux o =
-                  if Z.gt o u
-                  then []
+            let nb = Z.div (Z.sub u l) step in
+            if nb > Z.of_int !opt_deref_expand || not (is_interesting_base base) then
+              (* too many cases -> top *)
+              let region = Region (base, l, u ,step) in
+              let flow = man.exec ~zone:Z_u_num (mk_assume (mk_binop offset O_ge (mk_z l range) range) range) flow in
+              if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
+              then Cases.empty_singleton flow
+              else Cases.singleton region flow
+            else
+              (* few cases -> iterate fully over [l, u] *)
+              let rec aux o =
+                if Z.gt o u
+                then []
+                else
+                  let flow = man.exec ~zone:Z_u_num (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow in
+                  if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
+                  then aux (Z.add o step)
                   else
-                    let flow = man.exec ~zone:Z_u_num (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow in
-                    if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
-                    then aux (Z.add o step)
-                    else
-                      let c = mk_cell base o typ in
-                      Cases.singleton (Cell (c,mode)) flow :: aux (Z.add o step)
-                in
-                let evals = aux l in
-                Cases.join_list ~empty:(fun () -> Cases.empty_singleton flow) evals
+                    let c = mk_cell base o typ in
+                    Cases.singleton (Cell (c,mode)) flow :: aux (Z.add o step)
+              in
+              let evals = aux l in
+              Cases.join_list ~empty:(fun () -> Cases.empty_singleton flow) evals
 
           )
         ~felse:(fun eflow ->
@@ -783,6 +729,46 @@ struct
             Cases.empty_singleton flow
           )
         man flow
+
+
+  (** Summarize a set of cells into a single smashed cell *)
+  let smash_region base lo hi step t range man flow =
+    let top = Eval.singleton (mk_top (void_to_char t) range) flow in
+    if not !opt_smash
+    || not (is_interesting_base base)
+    || not (is_c_pointer_type t) (* For performance reasons, we smash only pointer cells *)
+    then
+      top
+    else
+      (* In order to smash a region in something useful, we ensure
+         that all covered cells do exist *)
+      let a = get_env T_cur man flow in
+      let cells = cell_set_filter_range
+          (fun c ->
+             (* Get only pointer cells that are correctly aligned with the step *)
+             c.typ = Pointer
+             && Z.(rem (c.offset - lo) step = zero)
+          )
+          base lo hi a.cells in
+      (* Coverage test: |cells| = ((hi - lo) / step) + 1 *)
+      let nb_cells = List.length cells in
+      if nb_cells = 0 || Z.(of_int nb_cells < (div (hi - lo) step) + one) then
+        top
+      else
+        (* Create a temporary smash and populate it with the values of cells *)
+        let smash = mk_range_attr_var range "smash" ~mode:WEAK t in
+        let weak_smash = mk_var smash range in
+        let strong_smash = mk_var smash ~mode:(Some STRONG) range in
+        man.post (mk_add_var smash range) ~zone:Z_c_scalar flow >>$ fun () flow ->
+        let ecells = List.map (fun c -> mk_pointer_cell_var_expr c t range) cells in
+        let hd = List.hd ecells in
+        let tl = List.tl ecells in
+        man.post (mk_assign strong_smash hd range) ~zone:Z_c_scalar flow >>$ fun () flow ->
+        List.fold_left
+          (fun acc c -> Post.bind (man.post (mk_assign weak_smash c range) ~zone:Z_c_scalar) acc)
+          (Post.return flow) tl
+        >>$ fun () flow ->
+        Eval.singleton weak_smash ~cleaners:[mk_remove_var smash range] flow
 
 
   let add_base b man flow =
@@ -813,9 +799,9 @@ struct
 
 
   (** Remove cells overlapping with cell [c] *)
-  let remove_region_overlappings base itv range man flow =
+  let remove_region_overlappings base lo hi step range man flow =
     let a = get_env T_cur man flow in
-    let overlappings = cell_set_find_overlapping_itv base itv a.cells in
+    let overlappings = cell_set_filter_overlapping_range (fun _ -> true) base lo hi a.cells in
     List.fold_left (fun acc c' ->
         Post.bind (remove_cell c' range man) acc
       ) (Post.return flow) overlappings
@@ -845,8 +831,11 @@ struct
     remove_cell_overlappings c range man flow
 
 
-  let assign_region base itv range man flow =
-    remove_region_overlappings base itv range man flow
+  let assign_region base lo hi step range man flow =
+    if not (is_interesting_base base) then
+      Post.return flow
+    else
+      remove_region_overlappings base lo hi step range man flow
 
 
   let expand_cell c cl range man flow =
@@ -896,14 +885,20 @@ struct
   (** 𝔼⟦ *p ⟧ where p is a pointer to a scalar *)
   let eval_deref_scalar_pointer p range man flow =
     (* Expand *p into cells *)
-    expand p range man flow >>$ fun expansion flow ->
     let t = under_type p.etyp in
+    expand p range man flow >>$ fun expansion flow ->
     match expansion with
     | Top ->
+      warn_at range "dereferencing ⊤ pointer %a" pp_expr p;
+      let flow = raise_c_null_deref_alarm ~bottom:false p man flow |>
+                 raise_c_invalid_deref_alarm ~bottom:false p man |>
+                 raise_c_use_after_free_wo_info_alarm ~bottom:false p man |>
+                 raise_c_dangling_deref_wo_info_alarm ~bottom:false p man |>
+                 raise_c_out_bound_wo_info_alarm ~bottom:false p man in
       Eval.singleton (mk_top (void_to_char t) range) flow
 
-    | Region _ ->
-      Eval.singleton (mk_top (void_to_char t) range) flow
+    | Region (base,lo,hi,step) ->
+      smash_region base lo hi step t range man flow
 
     | Cell (c,mode) ->
       add_cell c range man flow >>= fun _ flow ->
@@ -1030,13 +1025,13 @@ struct
       man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow >>$ fun e flow ->
       assign_cell c e mode range man flow
 
-    | Region (base,itv) when is_c_num_type e.etyp ->
+    | Region (base,lo,hi,step) when is_c_num_type e.etyp ->
       man.eval ~zone:(Z_c_low_level,Z_u_num) e flow >>$ fun e flow ->
-      assign_region base itv range man flow
+      assign_region base lo hi step range man flow
 
-    | Region (base,itv)  ->
+    | Region (base,lo,hi,step)  ->
       man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow >>$ fun e flow ->
-      assign_region base itv range man flow
+      assign_region base lo hi step range man flow
 
 
   (** 𝕊⟦ ?e ⟧ *)

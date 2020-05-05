@@ -90,6 +90,10 @@ struct
     | NON_ZERO -> Format.fprintf fmt "≠ 0"
 
   let constant = function
+    | C_bool true -> NON_ZERO
+
+    | C_bool false -> ZERO
+
     | C_int i when Z.equal i Z.zero -> ZERO
 
     | C_int i -> NON_ZERO
