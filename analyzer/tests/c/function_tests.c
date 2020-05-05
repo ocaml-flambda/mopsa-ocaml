@@ -90,3 +90,21 @@ void test_procedure() {
   proc(10);
   _mopsa_assert(proc_g == 10);
 }
+
+
+
+/* Test of nested calls */
+/* ******************** */
+
+int max(int x, int y) {
+  int res;
+  if (x > y)
+    res = x;
+  else
+    res = y;
+  return res;
+}
+
+void test_nested_call() {
+  _mopsa_assert(max(1, max(2, 3)) == 3);
+}

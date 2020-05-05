@@ -158,15 +158,19 @@ struct
       let caller_alloca_addrs = get_env T_cur man flow in
       let flow = set_env T_cur empty man flow in
       let ret =
-        match fundec with
-        | _ when is_recursive_call fundec flow ->
+        (* Evaluate arguments *)
+        bind_list args (man.eval ~zone:(Z_c,Z_c_low_level)) flow >>$ fun args flow ->
+        (* We don't support recursive functions yet! *)
+        if is_recursive_call fundec flow then (
           Soundness.warn_at range "ignoring recursive call of function %s in %a" fundec.c_func_org_name pp_range range;
           if is_c_void_type fundec.c_func_return then
             Eval.empty_singleton flow
           else
             Eval.singleton (mk_top fundec.c_func_return range) flow
-
-        | {c_func_body = Some body; c_func_stub = None; c_func_variadic = false} ->
+        )
+        else
+         match fundec with
+         | {c_func_body = Some body; c_func_stub = None; c_func_variadic = false} ->
           let open Universal.Ast in
           let ret_var = mktmp ~typ:fundec.c_func_return () in
           let fundec' = {
