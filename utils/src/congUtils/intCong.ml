@@ -551,7 +551,7 @@ let meet_inter ((a,b):t) ((l,h):I.t) : (t * I.t) with_bot =
     | _ -> l
   (* greatest element in aℤ+b smaller or equal to h *)
   and h' = match h with
-    | B.Finite f -> B.Finite (Z.sub f (rem_zero (Z.sub b f) a))
+    | B.Finite f -> B.Finite (Z.sub f (rem_zero (Z.sub f b) a))
     | _ -> h
   in
   match l',h' with
