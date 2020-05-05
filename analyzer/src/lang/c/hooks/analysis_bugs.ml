@@ -208,16 +208,16 @@ struct
     
 
   let on_finish man flow =
+    let () = remove_redundant_bugs () in
+    let () = remove_whitelist_bugs () in
     if BugSet.is_empty !bugs then
       printf "No potential analyzer bug detected@."
     else
-      let () = remove_redundant_bugs () in
-      let () = remove_whitelist_bugs () in
-      let nb = BugSet.cardinal !bugs in
+     let nb = BugSet.cardinal !bugs in
       printf "%d potential analyzer bug%a detected:@.  @[<v>%a@]@."
         nb
         Debug.plurial_int nb
-        (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,") pp_bug) (BugSet.elements !bugs)
+        (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,@,") pp_bug) (BugSet.elements !bugs)
 
 end
 
