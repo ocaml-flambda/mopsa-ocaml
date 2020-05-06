@@ -164,11 +164,11 @@ let split_stmt (stmt : stmt) : stmt structure = !stmt_visit_chain stmt
 
 let is_leaf_expr e =
   let parts, _ = split_expr e in
-  List.length parts.exprs = 0 && List.length parts.stmts = 0
+  parts.exprs = [] && parts.stmts = []
 
 let rec is_stmt_free_expr e =
   let parts, _ = split_expr e in
-  List.length parts.stmts = 0
+  parts.stmts = []
   && List.for_all is_stmt_free_expr parts.exprs
 
 let is_atomic_stmt s =
@@ -180,7 +180,7 @@ let is_atomic_stmt s =
 
   | _ ->
     let parts, _ = split_stmt s in
-    List.length parts.stmts = 0
+    parts.stmts = []
     && List.for_all is_stmt_free_expr parts.exprs
 
 

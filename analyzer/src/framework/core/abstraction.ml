@@ -182,15 +182,17 @@ struct
               Context.add_unit Context.callstack_ctx_key empty_callstack
     in
 
-    (* Initialize hooks *)
-    let () = Hook.init Domain.interface in
-    let ctx = Hook.init_active_hooks ctx in
-
     (* The initial flow is a singleton ⊤ environment *)
     let flow0 = Flow.singleton ctx T_cur man.lattice.top in
 
     (* Initialize domains *)
-    Domain.init prog man flow0
+    let res = Domain.init prog man flow0 in
+
+    (* Initialize hooks *)
+    let () = Hook.init Domain.interface in
+    let ctx = Hook.init_active_hooks (Flow.get_ctx res) in
+
+    Flow.set_ctx ctx res
 
 
   (** {2 Statement execution} *)

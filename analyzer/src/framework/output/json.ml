@@ -63,20 +63,30 @@ let render_call (c:callsite)  =
 let render_callstack cs  =
   `List (List.map render_call cs)
 
+let aggregate_alarms alarms =
+  (* Iterate first on the alarm classes *)
+  let cls_map = index_alarm_set_by_class alarms in
+  ClassMap.fold
+    (fun cls alarms acc ->
+       (* Then iterate on the location ranges within each class *)
+       let range_map = index_alarm_set_by_range alarms in
+       RangeMap.fold
+         (fun range alarms acc ->
+            let csl = AlarmSet.elements alarms |>
+                      List.map get_alarm_callstack in
+            (cls,range,csl) :: acc
+         ) range_map acc
+    ) cls_map []
+
 let render_alarm_class alarm =
-  let title =
-    let () = pp_alarm_class Format.str_formatter alarm in
-    Format.flush_str_formatter ()
-  in
+  let title = Format.asprintf "%a" pp_alarm_class alarm in
   `String title
 
-let render_alarm alarm  =
-  let range = Core.Alarm.get_alarm_range alarm in
-  let cs = Core.Alarm.get_alarm_callstack alarm in
+let render_alarm (cls,range,csl) =
   `Assoc [
-    "title", render_alarm_class (Core.Alarm.get_alarm_class alarm);
+    "title", render_alarm_class cls;
     "range", render_range range;
-    "callstack", render_callstack cs;
+    "callstacks", `List (List.map render_callstack csl);
   ]
 
 let render_warning w  =
@@ -111,7 +121,7 @@ let report ?(flow=None) man alarms time files out : unit =
       "success", `Bool true;
       "time", `Float time;
       "files", `List (List.map (fun f -> `String f) files);
-      "alarms", `List (AlarmSet.elements alarms |> List.map render_alarm);
+      "alarms", `List (aggregate_alarms alarms |> List.map render_alarm);
       "warnings", `List (List.map render_warning (get_warnings ()));
     ]
   in
