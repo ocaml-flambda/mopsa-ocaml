@@ -211,10 +211,10 @@ struct
     let () = remove_redundant_bugs () in
     let () = remove_whitelist_bugs () in
     if BugSet.is_empty !bugs then
-      printf "No potential analyzer bug detected@."
+      printf "No potential analyzer bug detected@\n@."
     else
      let nb = BugSet.cardinal !bugs in
-      printf "%d potential analyzer bug%a detected:@.  @[<v>%a@]@."
+      printf "%d potential analyzer bug%a detected:@.  @[<v>%a@]@\n@."
         nb
         Debug.plurial_int nb
         (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,@,") pp_bug) (BugSet.elements !bugs)

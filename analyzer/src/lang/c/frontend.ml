@@ -481,10 +481,18 @@ and from_stmt ctx ((skind, range): C_AST.statement) : stmt =
   {skind; srange}
 
 and from_block ctx range (block: C_AST.block) : stmt =
+  let block_range =
+    match block.blk_stmts with
+    | [] -> set_range_start range (get_range_end range)
+    | l ->
+      let _,first = ListExt.hd l in
+      let _,last = ListExt.last l in
+      mk_orig_range (get_range_start (from_range first)) (get_range_end (from_range last))
+  in
   mk_block
     (List.map (from_stmt ctx) block.blk_stmts)
     ~vars:(List.map (from_var ctx) block.blk_local_vars)
-    range
+    block_range
 
 and from_block_option ctx (range: Location.range) (block: C_AST.block option) : stmt =
   match block with
