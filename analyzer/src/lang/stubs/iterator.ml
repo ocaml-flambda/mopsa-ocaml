@@ -247,10 +247,10 @@ struct
       eval_quantified_formula cond_to_stmt EXISTS v s ff range man flow
 
     | F_in (e, S_interval (l, u)) ->
-      man.exec (cond_to_stmt (mk_in e l u f.range) f.range) flow
+      man.exec (cond_to_stmt (mk_in e l u f.range) range) flow
 
     | F_in (e, S_resource res ) ->
-      man.exec (cond_to_stmt (mk_stub_resource_mem e res f.range) f.range) flow
+      man.exec (cond_to_stmt (mk_stub_resource_mem e res f.range) range) flow
 
 
   (** Evaluate a quantified formula and its eventual negation *)
