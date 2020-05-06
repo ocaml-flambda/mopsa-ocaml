@@ -26,13 +26,26 @@ open Ast
 open Sig.Stacked.Manager
 
 
+(** Get the callstack of the function that called the stub. Used to attach
+    alarms at proper locations outside the body of the stub. *)
+let patch_callstack cs range =
+  let rec aux = function
+    | [] -> []
+    | hd::tl as x ->
+      if compare_range hd.call_range range = 0
+      then aux tl
+      else x
+  in
+  aux cs
+
+
 type alarm_class   += A_stub_invalid_requires
 type alarm_message += A_stub_invalid_requires_condition of expr
 
 let raise_stub_invalid_requires ?(bottom=true) cond range man flow =
   let cs = Flow.get_callstack flow in
   let cond' = get_orig_expr cond in
-  let alarm = mk_alarm (A_stub_invalid_requires_condition cond') cs range in
+  let alarm = mk_alarm (A_stub_invalid_requires_condition cond') (patch_callstack cs range) range in
   Flow.raise_alarm alarm ~bottom man.lattice flow
 
 
@@ -56,7 +69,7 @@ let () =
         | _ -> next a1 a2
       );
       print = (fun next fmt -> function
-        | A_stub_invalid_requires_condition e -> Format.fprintf fmt "invalid requirement '%a'" (Debug.bold pp_expr) e
+        | A_stub_invalid_requires_condition e -> Format.fprintf fmt "invalid requirement '%a'" (Debug.bold pp_stub_quantified_expr) e
         | a -> next fmt a
       );
   }
@@ -70,7 +83,7 @@ type alarm_message += A_stub_alarm_body of string
 
 let raise_stub_alarm ?(bottom=true) msg range man flow =
   let cs = Flow.get_callstack flow in
-  let alarm = mk_alarm (A_stub_alarm_body msg) cs range in
+  let alarm = mk_alarm (A_stub_alarm_body msg) (patch_callstack cs range) range in
   Flow.raise_alarm alarm ~bottom man.lattice flow
 
 

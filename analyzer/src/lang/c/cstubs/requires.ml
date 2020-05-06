@@ -84,19 +84,19 @@ struct
     man.eval ptr ~zone:(Z_c, Z_c_points_to) flow >>$ fun pt flow ->
     match ekind pt with
     | E_c_points_to P_null ->
-      raise_c_null_deref_alarm ptr man' flow |>
+      raise_c_null_deref_alarm ptr ~range man' flow |>
       Cases.empty_singleton
 
     | E_c_points_to P_invalid ->
-      raise_c_invalid_deref_alarm ptr man' flow |>
+      raise_c_invalid_deref_alarm ptr ~range man' flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
-      raise_c_use_after_free_alarm ptr r  man' flow |>
+      raise_c_use_after_free_alarm ptr r ~range man' flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
-      raise_c_dangling_deref_alarm ptr v r man' flow |>
+      raise_c_dangling_deref_alarm ptr v r ~range man' flow |>
       Cases.empty_singleton
 
     | E_c_points_to P_top ->
