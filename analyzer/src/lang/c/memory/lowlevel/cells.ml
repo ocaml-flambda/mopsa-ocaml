@@ -890,11 +890,11 @@ struct
     match expansion with
     | Top ->
       warn_at range "dereferencing ⊤ pointer %a" pp_expr p;
-      let flow = raise_c_null_deref_alarm ~bottom:false p man flow |>
-                 raise_c_invalid_deref_alarm ~bottom:false p man |>
-                 raise_c_use_after_free_wo_info_alarm ~bottom:false p man |>
-                 raise_c_dangling_deref_wo_info_alarm ~bottom:false p man |>
-                 raise_c_out_bound_wo_info_alarm ~bottom:false p man in
+      let flow = raise_c_null_deref_wo_info_alarm ~bottom:false range man flow |>
+                 raise_c_invalid_deref_wo_info_alarm ~bottom:false range man |>
+                 raise_c_use_after_free_wo_info_alarm ~bottom:false range man |>
+                 raise_c_dangling_deref_wo_info_alarm ~bottom:false range man |>
+                 raise_c_out_bound_wo_info_alarm ~bottom:false range man in
       Eval.singleton (mk_top (void_to_char t) range) flow
 
     | Region (base,lo,hi,step) ->

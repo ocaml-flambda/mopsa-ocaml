@@ -156,42 +156,43 @@ struct
   let rec eval_formula
       (cond_to_stmt: expr -> range -> stmt)
       (f: formula with_range)
+      range
       (man:('a, unit) man)
       (flow:'a flow)
     : 'a flow =
     debug "@[<hov>eval formula@ %a@]" pp_formula f;
     match f.content with
     | F_expr e ->
-      man.exec (cond_to_stmt e f.range) flow
+      man.exec (cond_to_stmt e range) flow
 
     | F_binop (AND, f1, f2) ->
-      eval_formula cond_to_stmt f1 man flow |>
-      eval_formula cond_to_stmt f2 man
+      eval_formula cond_to_stmt f1 range man flow |>
+      eval_formula cond_to_stmt f2 range man
 
     | F_binop (OR, f1, f2) ->
-      let f1 = eval_formula cond_to_stmt f1 man flow in
-      let f2 = eval_formula cond_to_stmt f2 man flow in
+      let f1 = eval_formula cond_to_stmt f1 range man flow in
+      let f2 = eval_formula cond_to_stmt f2 range man flow in
       let alarms = join_alarms f1 f2 flow in
       Flow.join man.lattice f1 f2 |>
       Flow.set_alarms alarms
 
 
     | F_binop (IMPLIES, f1, f2) ->
-      let nf1 = eval_formula mk_assume (negate_formula f1) man flow in
-      let f2 = eval_formula mk_assume f1 man flow |>
-               eval_formula cond_to_stmt f2 man
+      let nf1 = eval_formula mk_assume (negate_formula f1) range man flow in
+      let f2 = eval_formula mk_assume f1 range man flow |>
+               eval_formula cond_to_stmt f2 range man
       in
       Flow.join man.lattice nf1 f2
 
     | F_not ff ->
       let ff' = negate_formula ff in
-      eval_formula cond_to_stmt ff' man flow
+      eval_formula cond_to_stmt ff' range man flow
 
     | F_forall (v, s, ff) ->
-      eval_quantified_formula cond_to_stmt FORALL v s ff f.range man flow
+      eval_quantified_formula cond_to_stmt FORALL v s ff range man flow
 
     | F_exists (v, s, ff) ->
-      eval_quantified_formula cond_to_stmt EXISTS v s ff f.range man flow
+      eval_quantified_formula cond_to_stmt EXISTS v s ff range man flow
 
     | F_in (e, S_interval (l, u)) ->
       man.exec (cond_to_stmt (mk_in e l u f.range) f.range) flow
@@ -229,7 +230,7 @@ struct
               f
           in
           (* Evaluate [f'] *)
-          let flow = eval_formula cond_to_stmt f' man flow in
+          let flow = eval_formula cond_to_stmt f' range man flow in
           (* Remove [v] from the environment *)
           man.exec (mk_remove_var v range) flow
         )
@@ -257,13 +258,13 @@ struct
 
 
   (** Evaluate the formula of the `assumes` section *)
-  let exec_assumes assumes man flow =
-    eval_formula mk_assume assumes.content man flow
+  let exec_assumes assumes range man flow =
+    eval_formula mk_assume assumes.content range man flow
 
 
   (** Evaluate the formula of the `requires` section *)
-  let exec_requires req man flow =
-    eval_formula mk_stub_requires req.content man flow
+  let exec_requires req range man flow =
+    eval_formula mk_stub_requires req.content range man flow
 
 
   (** Execute an allocation of a new resource *)
@@ -287,13 +288,13 @@ struct
 
 
   (** Execute the `local` section *)
-  let exec_local l man flow =
+  let exec_local l range man flow =
     match l.content.lval with
-    | L_new  res -> exec_local_new l.content.lvar res l.range man flow
-    | L_call (f, args) -> exec_local_call l.content.lvar f args l.range man flow
+    | L_new  res -> exec_local_new l.content.lvar res range man flow
+    | L_call (f, args) -> exec_local_call l.content.lvar f args range man flow
 
 
-  let exec_ensures e return man flow =
+  let exec_ensures e return range man flow =
     (* Replace E_stub_return expression with the fresh return variable *)
     let f =
       match return with
@@ -308,11 +309,11 @@ struct
           e.content
     in
     (* Evaluate ensure body and return flows that verify it *)
-    eval_formula mk_assume f man flow
+    eval_formula mk_assume f range man flow
 
 
-  let exec_assigns assigns man flow =
-    let stmt = mk_stub_assigns assigns.content.assign_target assigns.content.assign_offset assigns.range in
+  let exec_assigns assigns range man flow =
+    let stmt = mk_stub_assigns assigns.content.assign_target assigns.content.assign_offset range in
     match assigns.content.assign_offset with
     | [] ->
       man.exec stmt flow
@@ -340,44 +341,44 @@ struct
     man.exec (mk_block block range) flow
 
 
-  let exec_free free man flow =
+  let exec_free free range man flow =
     let e = free.content in
-    let stmt = mk_stub_free e free.range in
+    let stmt = mk_stub_free e range in
     man.exec stmt flow
 
 
-  let exec_message msg man flow =
+  let exec_message msg range man flow =
     if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
     then flow
     else match msg.content.message_kind with
       | WARN ->
-        Exceptions.warn_at msg.range "%s" msg.content.message_body;
+        Exceptions.warn_at range "%s" msg.content.message_body;
         flow
 
       | UNSOUND ->
-        Soundness.warn_at msg.range "%s" msg.content.message_body;
+        Soundness.warn_at range "%s" msg.content.message_body;
         flow
 
       | ALARM ->
-        raise_stub_alarm msg.content.message_body msg.range (Sig.Stacked.Manager.of_domain_man man) flow
+        raise_stub_alarm msg.content.message_body range (Sig.Stacked.Manager.of_domain_man man) flow
 
 
 
   (** Execute a leaf section *)
-  let exec_leaf leaf return man flow =
+  let exec_leaf leaf return range man flow =
     match leaf with
-    | S_local local -> exec_local local man flow
-    | S_assumes assumes -> exec_assumes assumes man flow
-    | S_requires requires -> exec_requires requires man flow
-    | S_assigns assigns -> exec_assigns assigns man flow
-    | S_ensures ensures -> exec_ensures ensures return man flow
-    | S_free free -> exec_free free man flow
-    | S_message msg -> exec_message msg man flow
+    | S_local local -> exec_local local range man flow
+    | S_assumes assumes -> exec_assumes assumes range man flow
+    | S_requires requires -> exec_requires requires range man flow
+    | S_assigns assigns -> exec_assigns assigns range man flow
+    | S_ensures ensures -> exec_ensures ensures return range man flow
+    | S_free free -> exec_free free range man flow
+    | S_message msg -> exec_message msg range man flow
 
   (** Execute the body of a case section *)
-  let exec_case case return man flow =
+  let exec_case case return range man flow =
     List.fold_left (fun acc leaf ->
-        exec_leaf leaf return man acc
+        exec_leaf leaf return range man acc
       ) flow case.case_body |>
 
     (* Clean case post state *)
@@ -385,11 +386,11 @@ struct
 
 
   (** Execute the body of a stub *)
-  let exec_body ?(stub=None) body return man flow =
+  let exec_body ?(stub=None) body return range man flow =
     (* Execute leaf sections *)
     let flow = List.fold_left (fun flow section ->
         match section with
-        | S_leaf leaf -> exec_leaf leaf return man flow
+        | S_leaf leaf -> exec_leaf leaf return range man flow
         | _ -> flow
       ) flow body
     in
@@ -399,7 +400,7 @@ struct
         match section with
         | S_case case when not (is_case_ignored stub case) ->
           let flow = Flow.set_ctx ctx flow in
-          let flow' = exec_case case return man flow in
+          let flow' = exec_case case return range man flow in
           flow':: acc, Flow.get_ctx flow'
         | _ -> acc, ctx
       ) ([], Flow.get_ctx flow) body
@@ -425,6 +426,84 @@ struct
     then flow
     else man.exec (mk_stub_clean_all_assigns assigns range) flow
 
+  (** The following patch_params_* functions are used to patch the body of a stub by
+      adding call arguments to the evaluation history of formal
+      parameters *)
+  let patch_params_history_visitor bindings exp =
+    match ekind exp with
+    | E_var(v,_) ->
+      begin
+        match List.find_opt
+                (fun (p,a) -> compare_var p v = 0) bindings with
+        | None -> Visitor.Keep exp
+        | Some (p,a) -> Keep { exp with eprev = Some a }
+      end
+    | _ -> VisitParts exp
+
+  let patch_params_history_in_expr bindings exp =
+    Visitor.map_expr
+      (patch_params_history_visitor bindings)
+      (fun s -> VisitParts s)
+      exp
+
+  let patch_params_history_in_local_value bindings = function
+    | L_new _ as x -> x
+    | L_call(f,cargs) -> L_call (patch_params_history_in_expr bindings f,
+                                 List.map (patch_params_history_in_expr bindings) cargs)
+
+  let patch_params_history_in_local bindings local =
+    bind_range local @@ fun l ->
+    { l with
+      lval = patch_params_history_in_local_value bindings l.lval }
+
+  let patch_params_history_in_formula bindings f =
+    visit_expr_in_formula (patch_params_history_visitor bindings) f
+
+  let patch_params_history_in_assumes bindings assumes =
+    bind_range assumes @@ (patch_params_history_in_formula bindings)
+
+  let patch_params_history_in_requires bindings requires =
+    bind_range requires @@ (patch_params_history_in_formula bindings)
+
+  let patch_params_history_in_ensures bindings ensures =
+    bind_range ensures @@ (patch_params_history_in_formula bindings)
+
+  let patch_params_history_in_interval bindings (lo,hi) =
+    ( patch_params_history_in_expr bindings lo,
+      patch_params_history_in_expr bindings hi )
+
+  let patch_params_history_in_assigns bindings assigns =
+    bind_range assigns @@ fun a ->
+    { assign_target = patch_params_history_in_expr bindings a.assign_target;
+      assign_offset = List.map (patch_params_history_in_interval bindings) a.assign_offset; }
+
+  let patch_params_history_in_free bindings free =
+    bind_range free @@ (patch_params_history_in_expr bindings)
+
+  let patch_params_history_in_leaf bindings = function
+    | S_local local -> S_local (patch_params_history_in_local bindings local)
+    | S_assumes assumes -> S_assumes (patch_params_history_in_assumes bindings assumes)
+    | S_requires requires -> S_requires (patch_params_history_in_requires bindings requires)
+    | S_assigns assigns -> S_assigns (patch_params_history_in_assigns bindings assigns)
+    | S_ensures ensures -> S_ensures (patch_params_history_in_ensures bindings ensures)
+    | S_free free -> S_free (patch_params_history_in_free bindings free)
+    | S_message _ as x -> x
+
+  let patch_params_history_in_case bindings case =
+    { case with
+      case_body = List.map (patch_params_history_in_leaf bindings) case.case_body;
+      case_locals = List.map (patch_params_history_in_local bindings) case.case_locals;
+      case_assigns = List.map (patch_params_history_in_assigns bindings) case.case_assigns; }
+
+  let patch_params_history_in_section bindings = function
+    | S_case case -> S_case (patch_params_history_in_case bindings case)
+    | S_leaf leaf -> S_leaf (patch_params_history_in_leaf bindings leaf)
+
+  let patch_params_history_in_stub bindings (stub:stub_func) : stub_func =
+    { stub with
+      stub_func_body = List.map (patch_params_history_in_section bindings) stub.stub_func_body;
+      stub_func_locals = List.map (patch_params_history_in_local bindings) stub.stub_func_locals;
+      stub_func_assigns = List.map (patch_params_history_in_assigns bindings) stub.stub_func_assigns; }
 
   (** Entry point of expression evaluations *)
   let eval zone exp man flow =
@@ -438,6 +517,14 @@ struct
       (* Update the callstack *)
       let cs = Flow.get_callstack flow in
       let flow = Flow.push_callstack stub.stub_func_name exp.erange flow in
+
+      (* In order to get better alarm messages, we replace parameters
+         with the corresponding argument. This is done by putting the
+         argument in the evaluation history of the parameter. Function
+         `get_orig_expr` can be used in order to recover the original
+         form. *)
+      let bindings = List.combine stub.stub_func_params args in
+      let stub = patch_params_history_in_stub bindings stub in
 
       (* Initialize parameters *)
       let flow = init_params args stub.stub_func_params exp.erange man flow in
@@ -456,7 +543,7 @@ struct
       in
 
       (* Evaluate the body of the stb *)
-      let flow = exec_body ~stub:(Some stub) stub.stub_func_body return man flow in
+      let flow = exec_body ~stub:(Some stub) stub.stub_func_body return exp.erange man flow in
 
       (* Clean locals *)
       let flow = clean_post stub.stub_func_locals stub.stub_func_range man flow in
@@ -492,7 +579,7 @@ struct
       let flow = prepare_all_assigns stub.stub_directive_assigns stub.stub_directive_range man flow in
 
       (* Evaluate the body of the stub *)
-      let flow = exec_body stub.stub_directive_body None man flow in
+      let flow = exec_body stub.stub_directive_body None stmt.srange man flow in
 
       (* Clean locals *)
       let flow = clean_post stub.stub_directive_locals stub.stub_directive_range man flow in

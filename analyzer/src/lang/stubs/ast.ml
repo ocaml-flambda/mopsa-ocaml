@@ -411,6 +411,10 @@ let pp_builtin = C_stubs_parser.Ast.pp_builtin
 
 let pp_log_binop = C_stubs_parser.Ast.pp_log_binop
 
+let pp_quantifier fmt = function
+  | FORALL -> pp_print_string fmt "∀"
+  | EXISTS -> pp_print_string fmt "∃"
+
 let rec pp_formula fmt f =
   match f.content with
   | F_expr e -> pp_expr fmt e
@@ -514,6 +518,40 @@ let pp_sections fmt secs =
 let pp_stub_func fmt stub = pp_sections fmt stub.stub_func_body
 
 let pp_stub_directive fmt stub = pp_sections fmt stub.stub_directive_body
+
+let pp_stub_quantified_expr fmt exp =
+  (* Get quantified variables *)
+  let rec visitor acc e =
+    match ekind e with
+    | E_stub_quantified(q,v,s) ->
+      let acc,s = match s with
+        | S_resource _ -> acc,s
+        | S_interval (lo,hi) ->
+          let acc,lo = visit_expr acc lo in
+          let acc,hi = visit_expr acc hi in
+          acc,S_interval(lo,hi)
+      in
+      Visitor.Keep ((q,v,s)::acc, { e with ekind = E_var(v,None) })
+    | _ -> VisitParts (acc,e)
+
+  and visit_expr acc e =
+    Visitor.fold_map_expr
+      visitor (fun acc s -> VisitParts(acc,s))
+      acc e
+  in
+  (* Print the expression as quantified formula *)
+  let qvl, exp' = visit_expr [] exp in
+  match qvl with
+  | [] -> pp_expr fmt exp
+  | _ ->
+    Format.fprintf fmt "%a: %a"
+      (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
+         (fun fmt (q,v,s) ->
+            Format.fprintf fmt "%a %a ∈ %a" pp_quantifier q pp_var v pp_set s
+         )
+      ) qvl
+      pp_expr exp'
+                
 
 
 (** {2 Registration of expressions} *)

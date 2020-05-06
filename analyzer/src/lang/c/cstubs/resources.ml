@@ -91,7 +91,7 @@ struct
       man.post stmt' ~zone:Z_u_heap flow
 
     | E_c_points_to (P_block ({ base_kind = Addr { addr_kind = A_stub_resource _ }; base_valid = false; base_invalidation_range = Some drange }, _, _)) ->
-      raise_c_double_free_alarm p drange (Sig.Stacked.Manager.of_domain_man man) flow |>
+      raise_c_double_free_alarm p drange (Sig.Stacked.Manager.of_domain_man man) ~range flow |>
       Post.return
 
     | E_c_points_to P_null ->
