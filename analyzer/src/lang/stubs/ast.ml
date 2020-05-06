@@ -547,6 +547,8 @@ let pp_stub_quantified_expr fmt exp =
   match qvl with
   | [] -> pp_expr fmt exp
   | _ ->
+    (* Remove duplicates *)
+    let qvl = List.sort_uniq (fun (_,v1,_)  (_,v2,_) -> compare_var v1 v2) qvl in
     Format.fprintf fmt "%a: %a"
       (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
          (fun fmt (q,v,s) ->
