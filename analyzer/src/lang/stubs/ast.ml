@@ -109,7 +109,10 @@ and message_kind =
   | ALARM
   | UNSOUND
 
-and log_binop = C_stubs_parser.Ast.log_binop
+and log_binop = C_stubs_parser.Cst.log_binop =
+  | AND
+  | OR
+  | IMPLIES
 
 and set =
   | S_interval of interval

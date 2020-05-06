@@ -39,7 +39,6 @@
 /*$$
  * predicate valid_string(s):
  *   valid_ptr(s) and
- *   size(s) >= 1 and
  *   exists size_t _i in [0, (size(s) - offset(s)) ): s[_i] == 0
  * ;
  */
