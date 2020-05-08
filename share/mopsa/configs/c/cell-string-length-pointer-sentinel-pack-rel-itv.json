@@ -52,6 +52,7 @@
                                 "c.memory.lowlevel.pointer_sentinel"
                             ],
                             "reductions": [
+                                "c.memory.lowlevel.reductions.cell_string_length",
                                 "c.memory.lowlevel.reductions.cell_pointer_sentinel"
                             ]
                         },
