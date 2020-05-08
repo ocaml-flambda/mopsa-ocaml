@@ -58,14 +58,14 @@ struct
   }
 
   and bug_kind =
-    | Assign of stmt
-    | Call   of string
+    | Exec of stmt
+    | Call of string
 
 
   (** Compare two bug kinds *)
   let compare_bug_kind bk1 bk2 =
     match bk1, bk2 with
-    | Assign s1, Assign s2 -> compare_stmt s1 s2
+    | Exec s1, Exec s2 -> compare_stmt s1 s2
     | Call f1, Call f2 -> compare f1 f2
     | _ -> compare bk1 bk2
 
@@ -79,7 +79,7 @@ struct
 
   (** Print bug kinds *)
   let pp_bug_kind fmt = function
-    | Assign stmt -> pp_stmt fmt stmt
+    | Exec stmt -> pp_stmt fmt stmt
     | Call f -> pp_print_string fmt f
 
 
@@ -120,10 +120,10 @@ struct
                   ]
 
 
-  (** Add a bug at an assignment *)
-  let add_assign_bug stmt range cs =
+  (** Add a bug at a statement *)
+  let add_exec_bug stmt range cs =
     warn_at range "potential bug detected in %a" pp_stmt stmt;
-    bugs := BugSet.add {bug_range = range; bug_kind = Assign stmt; bug_callstack = cs} !bugs
+    bugs := BugSet.add {bug_range = range; bug_kind = Exec stmt; bug_callstack = cs} !bugs
 
 
   (** Add a bug at a function call *)
@@ -180,10 +180,11 @@ struct
   let on_after_exec zone stmt man flow post =
     match skind stmt with
     | S_assign _
+    | S_stub_directive _
       when not (is_cur_bottom_in_flow man flow)
         && is_cur_bottom_in_cases man post
       ->
-      add_assign_bug stmt stmt.srange (Flow.get_callstack flow)
+      add_exec_bug stmt stmt.srange (Flow.get_callstack flow)
 
     | _ -> ()
 
