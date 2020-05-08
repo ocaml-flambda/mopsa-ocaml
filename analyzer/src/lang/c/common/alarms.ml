@@ -607,7 +607,7 @@ let () =
 let raise_c_dangling_deref_alarm ?(bottom=true) ptr var ret_range ?(range=ptr.erange) man flow =
   let cs = Flow.get_callstack flow in
   let ptr' = get_orig_expr ptr in
-  let alarm = mk_alarm (A_c_dangling_pointer_deref_msg(ptr',var,ret_range)) cs range in
+  let alarm = mk_alarm (A_c_dangling_pointer_deref_msg(ptr',var,untag_range ret_range)) cs range in
   Flow.raise_alarm alarm ~bottom man.lattice flow
 
 
@@ -660,7 +660,7 @@ let () =
 let raise_c_use_after_free_alarm ?(bottom=true) pointer dealloc_range ?(range=pointer.erange) man flow =
   let cs = Flow.get_callstack flow in
   let pointer' = get_orig_expr pointer in
-  let alarm = mk_alarm (A_c_use_after_free_msg(pointer',dealloc_range)) cs range in
+  let alarm = mk_alarm (A_c_use_after_free_msg(pointer',untag_range dealloc_range)) cs range in
   Flow.raise_alarm alarm ~bottom man.lattice flow
 
 let raise_c_use_after_free_wo_info_alarm ?(bottom=true) range man flow =
@@ -708,7 +708,7 @@ let () =
 let raise_c_double_free_alarm ?(bottom=true) pointer dealloc_range ?(range=pointer.erange) man flow =
   let cs = Flow.get_callstack flow in
   let pointer' = get_orig_expr pointer in
-  let alarm = mk_alarm (A_c_double_free_msg(pointer',dealloc_range)) cs range in
+  let alarm = mk_alarm (A_c_double_free_msg(pointer',untag_range dealloc_range)) cs range in
   Flow.raise_alarm alarm ~bottom man.lattice flow
 
 
