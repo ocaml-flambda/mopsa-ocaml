@@ -160,7 +160,7 @@ struct
 
   let init prog = top
 
-  let forget_var v (a,bnd) =
+  let remove_var v (a,bnd) =
     let env = Apron.Abstract1.env a in
     let vars, bnd =
       List.filter (fun v -> is_env_var v a) [v] |>
@@ -170,20 +170,25 @@ struct
     (Apron.Abstract1.change_environment ApronManager.man a env true, bnd)
 
 
+  let forget_var v (a,bnd) =
+    let v,bnd = Binding.var_to_apron bnd v in
+    Apron.Abstract1.forget_array ApronManager.man a [|v|] false, bnd
+
+
   let merge (pre,bnd) ((a1,bnd1),log1) ((a2,bnd2),log2) =
     let bnd = Binding.concat bnd1 bnd2 in
     (* FIXME: the use here the generic merge provided by [Framework.Core.Log]
        and we do not provide a [find] function. Instead, we forget all modified
        and removed variables, which is sound, but inefficient. This should be
        improved by return intervals in [find] and use them in [add]. *)
-    let a1',a2' =
+    let x1,x2 =
       Log.generic_domain_merge
-        ~add:(fun v () a -> forget_var v (a,bnd) |> fst)
-        ~find:(fun v a -> ())
-        ~remove:(fun v a -> forget_var v (a,bnd) |> fst)
-        (a1,log1) (a2,log2)
+        ~add:(fun v () x -> add_missing_vars x [v] |> forget_var v)
+        ~find:(fun v x -> ())
+        ~remove:(fun v x -> remove_var v x)
+        ((a1,bnd),log1) ((a2,bnd),log2)
     in
-    meet (a1',bnd) (a2',bnd)
+    meet x1 x2
 
 
   let rec exec ctx stmt man (a,bnd) =
@@ -192,7 +197,10 @@ struct
       add_missing_vars (a,bnd) [var] |>
       OptionExt.return
 
-    | S_remove { ekind = E_var (var, _) }
+    | S_remove { ekind = E_var (var, _) } ->
+      remove_var var (a,bnd) |>
+      OptionExt.return
+
     | S_forget { ekind = E_var (var, _) } ->
       forget_var var (a,bnd) |>
       OptionExt.return
@@ -200,7 +208,7 @@ struct
 
     | S_rename ({ ekind = E_var (var1, _) }, { ekind = E_var (var2, _) }) ->
       let a, bnd = add_missing_vars (a,bnd) [var1] in
-      let a, bnd = forget_var var2 (a,bnd) in
+      let a, bnd = remove_var var2 (a,bnd) in
       let v1, bnd = Binding.var_to_apron bnd var1 in
       let v2, bnd = Binding.var_to_apron bnd var2 in
       (Apron.Abstract1.rename_array ApronManager.man a [| v1  |] [| v2 |], bnd) |>
