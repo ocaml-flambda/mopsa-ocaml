@@ -89,32 +89,32 @@ struct
 
   (** Registration of a new var kinds for auxiliary variables *)
   type var_kind +=
-    | V_c_sentinel        of base
+    | V_c_sentinel_pos    of base
     | V_c_before_sentinel of base
-    | V_c_at_sentinel     of base
+    | V_c_sentinel        of base
 
 
   let () =
     register_var {
       print = (fun next fmt v ->
           match v.vkind with
-          | V_c_sentinel (base) ->
-            Format.fprintf fmt "sentinel(%a)" pp_base base
+          | V_c_sentinel_pos (base) ->
+            Format.fprintf fmt "sentinel-pos(%a)" pp_base base
 
           | V_c_before_sentinel (base) ->
             Format.fprintf fmt "before-sentinel(%a)" pp_base base
 
-          | V_c_at_sentinel (base) ->
-            Format.fprintf fmt "at-sentinel(%a)" pp_base base
+          | V_c_sentinel (base) ->
+            Format.fprintf fmt "sentinel(%a)" pp_base base
 
           | _ -> next fmt v
         );
 
       compare = (fun next v1 v2 ->
           match v1.vkind, v2.vkind with
-          | V_c_sentinel(b1), V_c_sentinel(b2)
+          | V_c_sentinel_pos(b1), V_c_sentinel_pos(b2)
           | V_c_before_sentinel(b1), V_c_before_sentinel(b2)
-          | V_c_at_sentinel(b1), V_c_at_sentinel(b2) ->
+          | V_c_sentinel(b1), V_c_sentinel(b2) ->
             compare_base b1 b2
 
           | _ -> next v1 v2
@@ -130,50 +130,50 @@ struct
   let ptr_size = sizeof_type void_ptr
 
 
-  (** Create the auxiliary sentinel(base) variable representing the
-      position of the first NULL/INVALID pointer in the base.
-
-      Note that the returned variable has a mathematical integer type,
-      not a C int type.
-  *)
-  let mk_sentinel_var base ?(mode=None) range : expr =
-    let name = "sentinel(" ^ (base_uniq_name base) ^ ")" in
-    let v = mkv name (V_c_sentinel (base)) T_int ~mode:(base_mode base) in
-    mk_var v ~mode range
+  (** Create the auxiliary variable sentinel(base) *)
+  let mk_sentinel_pos_var base : var =
+    let name = "sentinel-pos(" ^ (base_uniq_name base) ^ ")" in
+    mkv name (V_c_sentinel_pos (base)) T_int ~mode:(base_mode base)
 
 
-  (** Create the auxiliary before-sentinel(base) variable representing
-      valid pointers before sentinel(base).
-  *)
-  let mk_before_var base ?(mode=None) range : expr =
+  let mk_sentinel_pos_var_expr base ?(mode=None) range : expr =
+    mk_var (mk_sentinel_pos_var base) ~mode range
+
+
+  (** Create the auxiliary variable before-sentinel(base) *)
+  let mk_before_var base : var =
     let name = "before-sentinel(" ^ (base_uniq_name base) ^ ")" in
-    let v = mkv name (V_c_before_sentinel (base)) (T_c_pointer T_c_void) ~mode:WEAK in
-    mk_var v ~mode range
+    mkv name (V_c_before_sentinel (base)) (T_c_pointer T_c_void) ~mode:WEAK
 
 
-  (** Create the auxiliary at-sentinel(base) variable representing the
-     pointer at the sentinel.
-  *)
-  let mk_at_var base ?(mode=None) range : expr =
-    let name = "at-sentinel(" ^ (base_uniq_name base) ^ ")" in
-    let v = mkv name (V_c_at_sentinel (base)) (T_c_pointer T_c_void) ~mode:(base_mode base) in
-    mk_var v ~mode range
+  let mk_before_var_expr base ?(mode=None) range : expr =
+    mk_var (mk_before_var base) ~mode range
+
+
+  (** Create the auxiliary variable at-sentinel(base) *)
+  let mk_sentinel_var base : var =
+    let name = "sentinel(" ^ (base_uniq_name base) ^ ")" in
+    mkv name (V_c_sentinel (base)) (T_c_pointer T_c_void) ~mode:(base_mode base)
+
+
+  let mk_sentinel_var_expr base ?(mode=None) range : expr =
+    mk_var (mk_sentinel_var base) ~mode range
 
 
 
   (* Execute [exists] when the set of pointers before the sentinel is non-empty, [empty] otherwise *)
-  let before_cases ~exists ~empty sentinel range man flow =
+  let before_cases ~exists ~empty sentinel_pos range man flow =
     assume ~zone:Z_u_num
-      (mk_binop sentinel O_eq (mk_zero range) range)
+      (mk_binop sentinel_pos O_eq (mk_zero range) range)
       ~fthen:empty
       ~felse:exists
       man flow
 
 
   (* Execute [exists] when the sentinel cell exits, [empty] otherwise. *)
-  let at_cases ~exists ~empty sentinel size range man flow =
+  let sentinel_cases ~exists ~empty sentinel_pos size range man flow =
     assume ~zone:Z_u_num
-      (mk_binop sentinel O_eq size range)
+      (mk_binop sentinel_pos O_eq size range)
       ~fthen:empty
       ~felse:exists
       man flow
@@ -258,12 +258,12 @@ struct
     if not (is_interesting_base base) then
       Post.return flow
     else
-      let sentinel = mk_sentinel_var base range in
-      let at = mk_at_var base range in
+      let sentinel_pos = mk_sentinel_pos_var base in
+      let sentinel = mk_sentinel_var base in
       (* Put the sentinel at postion 0 with value ⊤ *)
-      man.post ~zone:Z_u_num (mk_add sentinel range) flow >>$ fun _ flow ->
-      man.post ~zone:Z_u_num (mk_assign sentinel (mk_zero range) range) flow >>$ fun _ flow ->
-      man.post ~zone:Z_c_scalar (mk_add at range) flow
+      man.post ~zone:Z_u_num (mk_add_var sentinel_pos range) flow >>$ fun _ flow ->
+      man.post ~zone:Z_u_num (mk_assign (mk_var sentinel_pos range) (mk_zero range) range) flow >>$ fun _ flow ->
+      man.post ~zone:Z_c_scalar (mk_add_var sentinel range) flow
 
 
   (** Remove the auxiliary variables of a base *)
@@ -271,12 +271,12 @@ struct
     if not (is_interesting_base base) then
       Post.return flow
     else
-      let sentinel = mk_sentinel_var base range in
-      let at = mk_at_var base range in
-      let before = mk_before_var base range in
-      man.post ~zone:Z_u_num (mk_remove sentinel range) flow >>$ fun _ flow ->
-      man.post ~zone:Z_c_scalar (mk_remove at range) flow >>$ fun _ flow ->
-      man.post ~zone:Z_c_scalar (mk_remove before range) flow
+      let sentinel_pos = mk_sentinel_pos_var base in
+      let sentinel = mk_sentinel_var base in
+      let before = mk_before_var base in
+      man.post ~zone:Z_u_num (mk_remove_var sentinel_pos range) flow >>$ fun _ flow ->
+      man.post ~zone:Z_c_scalar (mk_remove_var sentinel range) flow >>$ fun _ flow ->
+      man.post ~zone:Z_c_scalar (mk_remove_var before range) flow
 
 
   (** Rename the auxiliary variables associated to a base *)
@@ -284,23 +284,23 @@ struct
     if not (is_interesting_base base1) then Post.return flow else
     if not (is_interesting_base base2) then remove_base base1 range man flow
     else
-      let sentinel1 = mk_sentinel_var base1 range in
-      let sentinel2 = mk_sentinel_var base2 range in
-      man.post ~zone:Z_u_num (mk_rename sentinel1 sentinel2 range) flow >>$ fun _ flow ->
+      let sentinel_pos1 = mk_sentinel_pos_var base1 in
+      let sentinel_pos2 = mk_sentinel_pos_var base2 in
+      man.post ~zone:Z_u_num (mk_rename_var sentinel_pos1 sentinel_pos2 range) flow >>$ fun _ flow ->
 
-      before_cases sentinel2 range man flow
+      before_cases (mk_var sentinel_pos2 range) range man flow
         ~exists:(fun flow ->
-            let before1 = mk_before_var base1 range in
-            let before2 = mk_before_var base2 range in
-            man.post ~zone:Z_c_scalar (mk_rename before1 before2 range) flow
+            let before1 = mk_before_var base1 in
+            let before2 = mk_before_var base2 in
+            man.post ~zone:Z_c_scalar (mk_rename_var before1 before2 range) flow
           )
         ~empty:(fun flow -> Post.return flow)
       >>$ fun _ flow ->
 
       (* FIXME: check if at-sentinel exists *)
-      let at1 = mk_at_var base1 range in
-      let at2 = mk_at_var base2 range in
-      man.post ~zone:Z_c_scalar (mk_rename at1 at2 range) flow
+      let sentinel1 = mk_sentinel_var base1 in
+      let sentinel2 = mk_sentinel_var base2 in
+      man.post ~zone:Z_c_scalar (mk_rename_var sentinel1 sentinel2 range) flow
 
 
   (** Expand the auxiliary variables of a base *)
@@ -308,24 +308,23 @@ struct
     if not (is_interesting_base base1) then Post.return flow else
     if List.exists (fun b -> not (is_interesting_base b)) bases then panic_at range "expand %a not supported" pp_base base1
     else
-      let mk_aux_list f = List.map (fun b -> f b range) bases in
-      let sentinel1 = mk_sentinel_var base1 range in
-      let sentinel2 = mk_aux_list (mk_sentinel_var ~mode:None) in
-      man.post ~zone:Z_u_num (mk_expand sentinel1 sentinel2 range) flow >>$ fun _ flow ->
+      let sentinel_pos1 = mk_sentinel_pos_var base1 in
+      let sentinel_pos2 = List.map mk_sentinel_pos_var bases in
+      man.post ~zone:Z_u_num (mk_expand_var sentinel_pos1 sentinel_pos2 range) flow >>$ fun _ flow ->
 
-      before_cases sentinel1 range man flow
+      before_cases (mk_var sentinel_pos1 range) range man flow
         ~exists:(fun flow ->
-            let before1 = mk_before_var base1 range in
-            let before2 = mk_aux_list (mk_before_var ~mode:None) in
-            man.post ~zone:Z_c_scalar (mk_expand before1 before2 range) flow
+            let before1 = mk_before_var base1 in
+            let before2 = List.map mk_before_var bases in
+            man.post ~zone:Z_c_scalar (mk_expand_var before1 before2 range) flow
           )
         ~empty:(fun flow -> Post.return flow)
       >>$ fun _ flow ->
 
-      (* FIXME: check if at-sentinel exists *)
-      let at1 = mk_at_var base1 range in
-      let at2 = mk_aux_list (mk_at_var ~mode:None) in
-      man.post ~zone:Z_c_scalar (mk_expand at1 at2 range) flow
+      (* FIXME: check if sentinel exists *)
+      let sentinel1 = mk_sentinel_var base1 in
+      let sentinel2 = List.map mk_sentinel_var bases in
+      man.post ~zone:Z_c_scalar (mk_expand_var sentinel1 sentinel2 range) flow
 
 
   (** Fold the auxiliary variables of a set of bases *)
@@ -333,24 +332,23 @@ struct
     if not (is_interesting_base base1) then Post.return flow else
     if List.exists (fun b -> not (is_interesting_base b)) bases then panic_at range "fold %a not supported" pp_base base1
     else
-      let mk_aux_list f = List.map (fun b -> f b range) bases in
-      let sentinel1 = mk_sentinel_var base1 range in
-      let sentinel2 = mk_aux_list (mk_sentinel_var ~mode:None) in
-      man.post ~zone:Z_u_num (mk_fold sentinel1 sentinel2 range) flow >>$ fun _ flow ->
+      let sentinel_pos1 = mk_sentinel_pos_var base1 in
+      let sentinel_pos2 = List.map mk_sentinel_pos_var bases in
+      man.post ~zone:Z_u_num (mk_fold_var sentinel_pos1 sentinel_pos2 range) flow >>$ fun _ flow ->
 
-      before_cases sentinel1 range man flow
+      before_cases (mk_var sentinel_pos1 range) range man flow
         ~exists:(fun flow ->
-            let before1 = mk_before_var base1 range in
-            let before2 = mk_aux_list (mk_before_var ~mode:None) in
-            man.post ~zone:Z_c_scalar (mk_fold before1 before2 range) flow
+            let before1 = mk_before_var base1 in
+            let before2 = List.map mk_before_var bases in
+            man.post ~zone:Z_c_scalar (mk_fold_var before1 before2 range) flow
           )
         ~empty:(fun flow -> Post.return flow)
       >>$ fun _ flow ->
 
-      (* FIXME: check if at-sentinel exists *)
-      let at1 = mk_at_var base1 range in
-      let at2 = mk_aux_list (mk_at_var ~mode:None) in
-      man.post ~zone:Z_c_scalar (mk_fold at1 at2 range) flow
+      (* FIXME: check if sentinel exists *)
+      let sentinel1 = mk_sentinel_var base1 in
+      let sentinel2 = List.map mk_sentinel_var bases in
+      man.post ~zone:Z_c_scalar (mk_fold_var sentinel1 sentinel2 range) flow
 
   
   (** Forget the value of auxiliary variables of a base *)
@@ -364,10 +362,10 @@ struct
     man.eval ptr ~zone:(Z_c_low_level,Z_c_points_to) flow >>$ fun p flow ->
     match ekind p with
     | E_c_points_to(P_block(base,offset,mode)) when is_interesting_base base ->
-      let sentinel = mk_sentinel_var base range in
-      let at = mk_at_var base range in
-      man.post ~zone:Z_u_num (mk_assign sentinel (mk_zero range) range) flow >>$ fun _ flow ->
-      man.post ~zone:Z_c_scalar (mk_forget at range) flow
+      let sentinel_pos = mk_sentinel_pos_var_expr base ~mode range in
+      let sentinel = mk_sentinel_var_expr base ~mode range in
+      man.post ~zone:Z_u_num (mk_assign sentinel_pos (mk_zero range) range) flow >>$ fun _ flow ->
+      man.post ~zone:Z_c_scalar (mk_forget sentinel range) flow
 
 
     | _ -> Post.return flow
@@ -398,9 +396,9 @@ struct
           then Post.return flow
 
           else
-            let sentinel = mk_sentinel_var base ~mode range in
-            let at = mk_at_var base ~mode range in
-            let before = mk_before_var base ~mode range in
+            let sentinel_pos = mk_sentinel_pos_var_expr base ~mode range in
+            let sentinel = mk_sentinel_var_expr base ~mode range in
+            let before = mk_before_var_expr base ~mode range in
             let ptr = mk_z ptr_size range in
 
             switch ~zone:Z_u_num [
@@ -408,11 +406,11 @@ struct
                                                      offset
                  -----|------------------#-------------?------|--->
                       0               sentinel              size
-                 offset condition: offset >= sentinel + |ptr|
+                 offset condition: offset >= sentinel_pos + |ptr|
                  transformation: nop;
               *)
               [
-                mk_binop offset O_ge (add sentinel ptr range) range;
+                mk_binop offset O_ge (add sentinel_pos ptr range) range;
               ],
               (fun flow -> Post.return flow);
 
@@ -421,10 +419,10 @@ struct
                                offset
                  -----|-----------?------------#-------------|--->
                  0                         sentinel        size
-                 offset condition: offset ∈ [0, sentinel - |ptr|]
+                 offset condition: offset ∈ [0, sentinel_pos - |ptr|]
               *)
               [
-                mk_binop offset O_le (sub sentinel ptr range) range;
+                mk_binop offset O_le (sub sentinel_pos ptr range) range;
               ],
               (fun flow ->
                  (* Test if the rval is a sentinel *)
@@ -436,20 +434,20 @@ struct
                            0                      sentinel       size
                       rval condition: rval == SENTINEL
                       transformation: if offset = 0 then remove before;
-                                      if sentinel = size then add at;
-                                      at = rval;
-                                      sentinel = offset;
+                                      if sentinel_pos = size then add sentinel;
+                                      sentinel = rval;
+                                      sentinel_pos = offset;
                    *)
                    before_cases offset range man flow
                      ~exists:(fun flow -> Post.return flow)
                      ~empty:(fun flow -> man.post ~zone:Z_c_scalar (mk_remove before range) flow)
                    >>$ fun _ flow ->
-                   at_cases sentinel size range man flow
+                   sentinel_cases sentinel_pos size range man flow
                      ~exists:(fun flow -> Post.return flow)
-                     ~empty:(fun flow -> man.post ~zone:Z_c_scalar (mk_add at range) flow)
+                     ~empty:(fun flow -> man.post ~zone:Z_c_scalar (mk_add sentinel range) flow)
                    >>$ fun _ flow ->
-                   man.post ~zone:Z_u_num (mk_assign sentinel offset range) flow >>$ fun _ flow ->
-                   man.post ~zone:Z_c_scalar (mk_assign at rval range) flow
+                   man.post ~zone:Z_u_num (mk_assign sentinel_pos offset range) flow >>$ fun _ flow ->
+                   man.post ~zone:Z_c_scalar (mk_assign sentinel rval range) flow
                  else
                    (* Case 2.2: set non-sentinel before
                                     offset
@@ -465,10 +463,10 @@ struct
                                              offset
                  -----|------------------------?#-------------|--->
                       0                      sentinel        size
-                 offset condition: offset = sentinel
+                 offset condition: offset = sentinel_pos
               *)
               [
-                mk_binop offset O_eq sentinel range;
+                mk_binop offset O_eq sentinel_pos range;
               ],
               (fun flow ->
                  (* Test if the rval is a sentinel *)
@@ -478,27 +476,27 @@ struct
                                                   offset
                       -----|-------------------------#-------------|--->
                            0                      sentinel        size
-                      offset condition: at = rval
+                      offset condition: sentinel = rval
                    *)
-                   man.post ~zone:Z_c_scalar (mk_assign at rval range) flow
+                   man.post ~zone:Z_c_scalar (mk_assign sentinel rval range) flow
                  else
                    (* Case 2.2: set non-sentinel at sentinel
                                                   offset
                       -----|------------------------@-------------|--->
                            0                      sentinel       size
                       rval condition: rval != SENTINEL
-                      transformation: if sentinel = 0 then before = rval else weak(before) = rval;
-                                      sentinel = sentinel + |ptr|;
-                                      if sentinel = size then remove at else at = ⊤;
+                      transformation: if sentinel_pos = 0 then before = rval else weak(before) = rval;
+                                      sentinel_pos = sentinel_pos + |ptr|;
+                                      if sentinel_pos = size then remove sentinel else sentinel = ⊤;
                    *)
-                   before_cases sentinel range man flow
+                   before_cases sentinel_pos range man flow
                      ~exists:(fun flow -> man.post ~zone:Z_c_scalar (mk_assign (weaken_var_expr before) rval range) flow)
-                     ~empty:(fun flow -> man.post ~zone:Z_c_scalar (mk_assign before rval range) flow)
+                     ~empty:(fun flow -> man.post ~zone:Z_c_scalar (mk_assign (strongify_var_expr before) rval range) flow)
                    >>$ fun _ flow ->
-                   man.post ~zone:Z_u_num (mk_assign sentinel (add sentinel ptr range) range) flow >>$ fun _ flow ->
-                   at_cases sentinel size range man flow
-                     ~exists:(fun flow -> man.post ~zone:Z_c_scalar (mk_assign at (mk_top void_ptr range) range) flow)
-                     ~empty:(fun flow -> man.post ~zone:Z_c_scalar (mk_remove at range) flow)
+                   man.post ~zone:Z_u_num (mk_assign sentinel_pos (add sentinel_pos ptr range) range) flow >>$ fun _ flow ->
+                   sentinel_cases sentinel_pos size range man flow
+                     ~exists:(fun flow -> man.post ~zone:Z_c_scalar (mk_assign sentinel (mk_top void_ptr range) range) flow)
+                     ~empty:(fun flow -> man.post ~zone:Z_c_scalar (mk_remove sentinel range) flow)
               );
 
 
@@ -530,9 +528,9 @@ struct
     man.eval ~zone:(Z_c_scalar, Z_u_num) min flow >>$ fun min flow ->
     man.eval ~zone:(Z_c_scalar, Z_u_num) max flow >>$ fun max flow ->
 
-    let sentinel = mk_sentinel_var base ~mode range in
-    let at = mk_at_var base ~mode range in
-    let before = mk_before_var base ~mode range in
+    let sentinel_pos = mk_sentinel_pos_var_expr base ~mode range in
+    let sentinel = mk_sentinel_var_expr base ~mode range in
+    let before = mk_before_var_expr base ~mode range in
     let ptr = mk_z ptr_size range in
 
     debug "min = %a, max = %a" pp_expr min pp_expr max;
@@ -554,7 +552,7 @@ struct
           if ok then
             switch [
               [
-                mk_binop (add sentinel ptr range) O_le min range
+                mk_binop (add sentinel_pos ptr range) O_le min range
               ],
               (fun flow ->
                  debug "case 1";
@@ -562,15 +560,15 @@ struct
               );
 
               [
-                mk_binop min O_eq sentinel range
+                mk_binop min O_eq sentinel_pos range
               ],
               (fun flow ->
                  debug "case 2";
-                 man.post ~zone:Z_c_scalar (mk_assume (mk_binop at O_eq q range) range) flow
+                 man.post ~zone:Z_c_scalar (mk_assume (mk_binop sentinel O_eq q range) range) flow
               );
 
               [
-                mk_binop min O_le (sub sentinel ptr range) range
+                mk_binop min O_le (sub sentinel_pos ptr range) range
               ],
               (fun flow ->
                  debug "case 3";
@@ -583,7 +581,7 @@ struct
           else
             switch [
               [
-                mk_binop (add sentinel ptr range) O_le min range
+                mk_binop (add sentinel_pos ptr range) O_le min range
               ],
               (fun flow ->
                  debug "case 4";
@@ -591,18 +589,18 @@ struct
               );
 
               [
-                mk_binop min O_eq sentinel range
+                mk_binop min O_eq sentinel_pos range
               ],
               (fun flow ->
                  debug "case 5";
-                 man.post ~zone:Z_u_num (mk_assign sentinel (add max ptr range) range) flow >>$ fun _ flow ->
+                 man.post ~zone:Z_u_num (mk_assign sentinel_pos (add max ptr range) range) flow >>$ fun _ flow ->
                  before_cases min range man flow
                    ~exists:(fun flow -> man.post ~zone:Z_c_scalar (mk_assign (weaken_var_expr before) q range) flow)
-                   ~empty:(fun flow -> man.post ~zone:Z_c_scalar (mk_assign before q range) flow)
+                   ~empty:(fun flow -> man.post ~zone:Z_c_scalar (mk_assign (strongify_var_expr before) q range) flow)
               );
 
               [
-                mk_binop max O_le (sub sentinel ptr range) range
+                mk_binop max O_le (sub sentinel_pos ptr range) range
               ],
               (fun flow ->
                  debug "case 6";
@@ -620,21 +618,10 @@ struct
       ~zone:Z_u_num man flow
 
 
-
-
   (** Entry point of the transfer function of quantified tests 𝕊⟦ *(p + ∀i) op q ⟧ *)
   let assume_quantified op p q range man flow =
-    let pp =
-      let rec doit e =
-        match ekind e with
-        | E_c_deref pp -> pp
-        | E_c_cast(ee, _) -> doit ee
-        | _ -> panic_at range "assume_quantified_zero: invalid argument %a" pp_expr p;
-      in
-      doit p
-    in
-
-    eval_pointed_base_offset pp range man flow >>$ fun (base,offset,mode) flow ->
+    eval_pointed_base_offset (mk_c_address_of p range) range man flow >>$ fun (base,offset,mode) flow ->
+    man.eval q ~zone:(Z_c_low_level,Z_c_scalar) flow >>$ fun q flow ->
     if is_interesting_base base then
       assume_quantified_cases op base offset mode q range man flow
     else
@@ -719,42 +706,42 @@ struct
           then Eval.singleton (mk_top typ range) flow
 
           else
-            let sentinel = mk_sentinel_var base ~mode range in
-            let before = mk_before_var base ~mode range in
-            let at = mk_at_var base ~mode range in
+            let sentinel_pos = mk_sentinel_pos_var_expr base ~mode range in
+            let before = mk_before_var_expr base ~mode range in
+            let sentinel = mk_sentinel_var_expr base ~mode range in
             let ptr = mk_z ptr_size range in
             let top = mk_top void_ptr range in
 
 
             switch ~zone:Z_c_scalar [
               (* Case 1: before sentinel
-                 Offset condition: offset <= sentinel - |ptr|
+                 Offset condition: offset <= sentinel_pos - |ptr|
                  Transformation: weak(before)
               *)
               [
-                mk_binop offset O_le (sub sentinel ptr range) range;
+                mk_binop offset O_le (sub sentinel_pos ptr range) range;
               ],
               (fun flow ->
                  Eval.singleton (weaken_var_expr before) flow
               );
 
               (* Case 2: at sentinel
-                 Offset condition: offset == sentinel
-                 Transformation: at
+                 Offset condition: offset == sentinel_pos
+                 Transformation: sentinel
               *)
               [
-                mk_binop offset O_eq sentinel range;
+                mk_binop offset O_eq sentinel_pos range;
               ],
               (fun flow ->
-                 Eval.singleton at flow
+                 Eval.singleton sentinel flow
               );
 
               (* Case 2: after sentinel
-                 Offset condition: offset >= sentinel + |ptr|
-                 Transformation: at
+                 Offset condition: offset >= sentinel_pos + |ptr|
+                 Transformation: sentinel
               *)
               [
-                mk_binop offset O_ge (add sentinel ptr range) range;
+                mk_binop offset O_ge (add sentinel_pos ptr range) range;
               ],
               (fun flow ->
                  Eval.singleton top flow
@@ -793,28 +780,28 @@ struct
           range
       )
       ~fthen:(fun flow ->
-          let sentinel = mk_sentinel_var base ~mode range in
-          let before = mk_before_var base ~mode range in
+          let sentinel_pos = mk_sentinel_pos_var_expr base ~mode range in
+          let before = mk_before_var_expr base ~mode range in
           let top = mk_top void_ptr range in
 
           switch ~zone:Z_c_scalar [
               (* Case 1: before sentinel
-                 Offset condition: max <= sentinel - |ptr|
+                 Offset condition: max <= sentinel_pos - |ptr|
                  Transformation: weak(before)
               *)
               [
-                mk_binop max O_le (sub sentinel ptr range) range;
+                mk_binop max O_le (sub sentinel_pos ptr range) range;
               ],
               (fun flow ->
                  Eval.singleton (weaken_var_expr before) flow
               );
 
               (* Case 2: after sentinel
-                 Offset condition: max >= sentinel
+                 Offset condition: max >= sentinel_pos
                  Transformation: ⊤
               *)
               [
-                mk_binop max O_ge sentinel range;
+                mk_binop max O_ge sentinel_pos range;
               ],
               (fun flow ->
                  Eval.singleton top flow

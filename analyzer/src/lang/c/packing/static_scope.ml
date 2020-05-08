@@ -218,7 +218,7 @@ struct
       if not (is_c_scalar_type v.vtyp) then user_packs_of_base ctx c.base else packs_of_base ctx c.base
     | Memory.Lowlevel.String_length.Domain.V_c_string_length (base,_) -> packs_of_base ctx base
     | Memory.Lowlevel.Pointer_sentinel.Domain.V_c_sentinel (base) -> packs_of_base ctx base
-    | Memory.Lowlevel.Pointer_sentinel.Domain.V_c_at_sentinel (base) -> packs_of_base ctx base
+    | Memory.Lowlevel.Pointer_sentinel.Domain.V_c_sentinel_pos (base) -> packs_of_base ctx base
     | Memory.Lowlevel.Pointer_sentinel.Domain.V_c_before_sentinel (base) -> packs_of_base ctx base
     | Memory.Lowlevel.Smashing.Domain.V_c_uninit (base) -> packs_of_base ctx base
     | Memory.Scalars.Pointers.Domain.Domain.V_c_ptr_offset vv -> packs_of_var ctx vv
