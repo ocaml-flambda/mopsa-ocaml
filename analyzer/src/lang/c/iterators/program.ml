@@ -132,7 +132,7 @@ struct
   let exec_stub_directives directives range man flow =
     directives |>
     List.fold_left (fun flow directive ->
-        let stmt = mk_stub_directive directive range in
+        let stmt = mk_stub_directive directive directive.stub_directive_range in
         man.exec stmt flow
       ) flow
 
