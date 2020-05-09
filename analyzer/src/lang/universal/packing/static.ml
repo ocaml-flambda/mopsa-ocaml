@@ -252,12 +252,29 @@ struct
            if List.exists (fun p -> Strategy.compare p pack = 0) packs then
              Visitor.Keep ee
            else
-             let itv = man.ask (Numeric.Common.mk_int_interval_query ee) in
-             if Numeric.Values.Intervals.Integer.Value.is_bounded itv then
-               let l,u = Numeric.Values.Intervals.Integer.Value.bounds itv in
-               Visitor.Keep (mk_z_interval l u ee.erange)
-             else
-               Visitor.Keep (mk_top ee.etyp ee.erange)
+             begin match ee.etyp with
+               | T_int | T_bool ->
+                 let itv = man.ask (Numeric.Common.mk_int_interval_query ee) in
+                 if Numeric.Values.Intervals.Integer.Value.is_bounded itv then
+                   let l,u = Numeric.Values.Intervals.Integer.Value.bounds itv in
+                   Visitor.Keep (mk_z_interval l u ee.erange)
+                 else
+                   Visitor.Keep (mk_top ee.etyp ee.erange)
+
+               | T_float prec ->
+                 let itv = man.ask (Numeric.Common.mk_float_interval_query ee) in
+                 if ItvUtils.FloatItvNan.is_finite itv then
+                   match itv.itv with
+                   | Bot.Nb f ->
+                     Visitor.Keep (mk_float_interval ~prec f.lo f.up ee.erange)
+                   | _ ->
+                     Visitor.Keep (mk_top ee.etyp ee.erange)
+                 else
+                   Visitor.Keep (mk_top ee.etyp ee.erange)
+
+               | _ ->
+                 Visitor.Keep (mk_top ee.etyp ee.erange)
+             end
          | _ ->
            Visitor.VisitParts ee
       )
