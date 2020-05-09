@@ -321,26 +321,21 @@ struct
 
   (** Execute an allocation of a new resource *)
   let exec_local_new v res alloc_range call_range man flow : 'a flow =
-    (* Tag the call range with the allocation range, so we can
-       distinguish between different allocations within the same call,
-       while we still display the call range to the user *)
-    let range = mk_range_tagged_range alloc_range call_range in
     (* Evaluation the allocation request *)
     post_to_flow man (
-      man.eval (mk_stub_alloc_resource res range) flow >>$ fun addr flow ->
+      man.eval (mk_stub_alloc_resource res alloc_range) flow >>$ fun addr flow ->
       (* Assign the address to the variable *)
-      man.post (mk_assign (mk_var v call_range) addr range) flow
+      man.post (mk_assign (mk_var v call_range) addr alloc_range) flow
     )
 
 
   (** Execute a function call *)
   (* FIXME: check the purity of f *)
   let exec_local_call v f args local_range call_range man flow =
-    let range = mk_range_tagged_range local_range call_range in
     man.exec (mk_assign
-                (mk_var v range)
-                (mk_expr (E_call(f, args)) ~etyp:v.vtyp range)
-                range
+                (mk_var v local_range)
+                (mk_expr (E_call(f, args)) ~etyp:v.vtyp local_range)
+                local_range
              ) flow
 
 
