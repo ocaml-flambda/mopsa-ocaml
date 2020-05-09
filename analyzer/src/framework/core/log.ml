@@ -237,11 +237,11 @@ let apply_effect effect ~add ~remove ~find (other:'a) (this:'a) : 'a =
 
 (** Generic merge operator for non-relational domains *)
 let generic_domain_merge ~add ~find ~remove (a1, log1) (a2, log2) =
-  Debug.debug ~channel:"framework.core.log" "generic merge:@,%a@,%a" pp_log_entries log1 pp_log_entries log2;
+  if log1 = [] then a2,a2 else
+  if log2 = [] then a1,a1 else
+  let () = Debug.debug ~channel:"framework.core.log" "generic merge:@,%a@,%a" pp_log_entries log1 pp_log_entries log2 in
   let e1 = get_entries_effect log1 in
   let a2' = apply_effect e1 a1 a2 ~add ~remove ~find in
-
   let e2 = get_entries_effect log2 in
   let a1' = apply_effect e2 a2 a1 ~add ~remove ~find in
-
   a1',a2'

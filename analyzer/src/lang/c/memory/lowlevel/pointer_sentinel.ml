@@ -213,17 +213,17 @@ struct
     match base with
     | { base_kind = Var {vkind = Cstubs.Aux_vars.V_c_primed_base base}; base_valid = true } -> is_interesting_base base
 
-    | { base_kind = Var v; base_valid = true } when is_c_type v.vtyp && is_c_array_type v.vtyp ->
-      (* Accept only arrays with pointers or records of pointers *)
-      let rec aux t =
-        match remove_typedef_qual t with
-        | T_c_pointer _ -> true
-        | T_c_array(tt,_) -> aux tt
-        | T_c_record { c_record_fields } ->
-          List.for_all (fun field -> aux field.c_field_type) c_record_fields
-        | _ -> false
-      in
-      aux v.vtyp
+    (* | { base_kind = Var v; base_valid = true } when is_c_type v.vtyp && is_c_array_type v.vtyp ->
+     *   (\* Accept only arrays with pointers or records of pointers *\)
+     *   let rec aux t =
+     *     match remove_typedef_qual t with
+     *     | T_c_pointer _ -> true
+     *     | T_c_array(tt,_) -> aux tt
+     *     | T_c_record { c_record_fields } ->
+     *       List.for_all (fun field -> aux field.c_field_type) c_record_fields
+     *     | _ -> false
+     *   in
+     *   aux v.vtyp *)
 
     | { base_kind = Addr { addr_kind = A_stub_resource "argv" }; base_valid = true } -> true
 
@@ -286,69 +286,91 @@ struct
     else
       let sentinel_pos1 = mk_sentinel_pos_var base1 in
       let sentinel_pos2 = mk_sentinel_pos_var base2 in
-      man.post ~zone:Z_u_num (mk_rename_var sentinel_pos1 sentinel_pos2 range) flow >>$ fun _ flow ->
-
-      before_cases (mk_var sentinel_pos2 range) range man flow
-        ~exists:(fun flow ->
-            let before1 = mk_before_var base1 in
-            let before2 = mk_before_var base2 in
-            man.post ~zone:Z_c_scalar (mk_rename_var before1 before2 range) flow
-          )
-        ~empty:(fun flow -> Post.return flow)
-      >>$ fun _ flow ->
-
-      (* FIXME: check if at-sentinel exists *)
+      let before1 = mk_before_var base1 in
+      let before2 = mk_before_var base2 in
       let sentinel1 = mk_sentinel_var base1 in
       let sentinel2 = mk_sentinel_var base2 in
-      man.post ~zone:Z_c_scalar (mk_rename_var sentinel1 sentinel2 range) flow
+
+      man.post ~zone:Z_u_num (mk_rename_var sentinel_pos1 sentinel_pos2 range) flow >>$ fun () flow ->
+      before_cases (mk_var sentinel_pos2 range) range man flow
+        ~exists:(fun flow ->
+            man.post ~zone:Z_c_scalar (mk_rename_var before1 before2 range) flow
+          )
+        ~empty:(fun flow ->
+            man.post ~zone:Z_c_scalar (mk_remove_var before1 range) flow
+          )
+      >>$ fun _ flow ->
+      (* FIXME: check if at-sentinel exists *)
+       man.post ~zone:Z_c_scalar (mk_rename_var sentinel1 sentinel2 range) flow
 
 
   (** Expand the auxiliary variables of a base *)
   let expand_base base1 bases range man flow =
-    if not (is_interesting_base base1) then Post.return flow else
-    if List.exists (fun b -> not (is_interesting_base b)) bases then panic_at range "expand %a not supported" pp_base base1
+    if not (is_interesting_base base1) then
+      List.fold_left
+        (fun acc b -> Post.bind (add_base b range man) acc)
+        (Post.return flow) bases
     else
       let sentinel_pos1 = mk_sentinel_pos_var base1 in
-      let sentinel_pos2 = List.map mk_sentinel_pos_var bases in
-      man.post ~zone:Z_u_num (mk_expand_var sentinel_pos1 sentinel_pos2 range) flow >>$ fun _ flow ->
-
-      before_cases (mk_var sentinel_pos1 range) range man flow
-        ~exists:(fun flow ->
-            let before1 = mk_before_var base1 in
-            let before2 = List.map mk_before_var bases in
-            man.post ~zone:Z_c_scalar (mk_expand_var before1 before2 range) flow
-          )
-        ~empty:(fun flow -> Post.return flow)
-      >>$ fun _ flow ->
-
-      (* FIXME: check if sentinel exists *)
+      let before1 = mk_before_var base1 in
       let sentinel1 = mk_sentinel_var base1 in
-      let sentinel2 = List.map mk_sentinel_var bases in
-      man.post ~zone:Z_c_scalar (mk_expand_var sentinel1 sentinel2 range) flow
+      let sentinel_pos2,before2,sentinel2 = List.fold_left
+          (fun (acc1,acc2,acc3) b ->
+             if is_interesting_base b then
+               let sentinel_pos2 = mk_sentinel_pos_var b in
+               let before2 = mk_before_var b in
+               let sentinel2 = mk_sentinel_var b in
+               (sentinel_pos2::acc1),
+               (before2::acc2),
+               (sentinel2::acc3)
+             else
+               (acc1,acc2,acc3)
+          ) ([],[],[]) bases in
+      if sentinel_pos2 = [] then
+        Post.return flow
+      else
+        man.post ~zone:Z_u_num (mk_expand_var sentinel_pos1 sentinel_pos2 range) flow >>$ fun _ flow ->
+        before_cases (mk_var sentinel_pos1 range) range man flow
+          ~exists:(fun flow ->
+              man.post ~zone:Z_c_scalar (mk_expand_var before1 before2 range) flow
+            )
+          ~empty:(fun flow -> Post.return flow)
+        >>$ fun _ flow ->
+        (* FIXME: check if sentinel exists *)
+        man.post ~zone:Z_c_scalar (mk_expand_var sentinel1 sentinel2 range) flow
 
 
   (** Fold the auxiliary variables of a set of bases *)
   let fold_bases base1 bases range man flow =
-    if not (is_interesting_base base1) then Post.return flow else
-    if List.exists (fun b -> not (is_interesting_base b)) bases then panic_at range "fold %a not supported" pp_base base1
+    if not (is_interesting_base base1) then Post.return flow
     else
       let sentinel_pos1 = mk_sentinel_pos_var base1 in
-      let sentinel_pos2 = List.map mk_sentinel_pos_var bases in
-      man.post ~zone:Z_u_num (mk_fold_var sentinel_pos1 sentinel_pos2 range) flow >>$ fun _ flow ->
-
-      before_cases (mk_var sentinel_pos1 range) range man flow
-        ~exists:(fun flow ->
-            let before1 = mk_before_var base1 in
-            let before2 = List.map mk_before_var bases in
-            man.post ~zone:Z_c_scalar (mk_fold_var before1 before2 range) flow
-          )
-        ~empty:(fun flow -> Post.return flow)
-      >>$ fun _ flow ->
-
-      (* FIXME: check if sentinel exists *)
+      let before1 = mk_before_var base1 in
       let sentinel1 = mk_sentinel_var base1 in
-      let sentinel2 = List.map mk_sentinel_var bases in
-      man.post ~zone:Z_c_scalar (mk_fold_var sentinel1 sentinel2 range) flow
+      let sentinel_pos2,before2,sentinel2 = List.fold_left
+          (fun (acc1,acc2,acc3) b ->
+             if is_interesting_base b then
+               let sentinel_pos2 = mk_sentinel_pos_var b in
+               let before2 = mk_before_var b in
+               let sentinel2 = mk_sentinel_var b in
+               (sentinel_pos2::acc1),
+               (before2::acc2),
+               (sentinel2::acc3)
+             else
+               (acc1,acc2,acc3)
+          ) ([],[],[]) bases in
+      if sentinel_pos2 = [] then
+        assert false
+      else
+        man.post ~zone:Z_u_num (mk_fold_var sentinel_pos1 sentinel_pos2 range) flow >>$ fun _ flow ->
+        before_cases (mk_var sentinel_pos1 range) range man flow
+          ~exists:(fun flow ->
+              man.post ~zone:Z_c_scalar (mk_fold_var before1 before2 range) flow
+            )
+          ~empty:(fun flow -> Post.return flow)
+        >>$ fun _ flow ->
+        (* FIXME: check if sentinel exists *)
+        man.post ~zone:Z_c_scalar (mk_fold_var sentinel1 sentinel2 range) flow
 
   
   (** Forget the value of auxiliary variables of a base *)
