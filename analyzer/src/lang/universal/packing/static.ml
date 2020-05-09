@@ -309,6 +309,7 @@ struct
   let exec_expand_fold_var ctx stmt man a =
     let v,vl = match skind stmt with
       | S_expand ({ ekind = E_var (v,_) }, el) -> v, List.map (function { ekind = E_var(v,_) } -> v | _ -> assert false) el
+      | S_fold ({ ekind = E_var (v,_) }, el) -> v, List.map (function { ekind = E_var(v,_) } -> v | _ -> assert false) el
       | _ -> assert false
     in
     let packs = packs_of_var ctx v in
