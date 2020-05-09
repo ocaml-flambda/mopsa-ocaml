@@ -40,19 +40,69 @@ open Common.Base
 module Strategy =
 struct
 
-  (** Command-line option to define custom packs *)
-  let opt_user_packs : (string option*string) list list ref = ref []
+  (** {2 User-defined packs} *)
+  (** ********************** *)
 
-  (** Parse a command-line pack definition using the syntax [f1.]<v1>,[f2.]<v2>,... *)
+  type user_pack = user_pack_elm list
+
+  and user_pack_elm =
+    | Var of string
+    | Function of string
+    | FunctionVar of string * string
+    | Resource of string
+
+  let pp_user_pack_elm fmt = function
+    | Var v -> Format.pp_print_string fmt v
+    | Function f -> Format.fprintf fmt "$%s" f
+    | FunctionVar (f,v) -> Format.fprintf fmt "$%s.%s" f v
+    | Resource r -> Format.fprintf fmt "@@%s" r
+
+  let pp_user_pack fmt pack =
+    Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ",") pp_user_pack_elm fmt pack
+
+  let compare_user_pack_elem e1 e2 =
+    match e1,e2 with
+    | Var v1, Var v2 -> compare v1 v2
+    | Function f1,Function f2 -> compare f1 f2
+    | FunctionVar (f1,v1), FunctionVar (f2,v2) -> Compare.pair compare compare (f1,v1) (f2,v2)
+    | Resource r1, Resource r2 -> compare r1 r2
+    | _ -> compare e1 e2
+
+  let compare_user_pack p1 p2 =
+    Compare.list compare_user_pack_elem p1 p2
+
+  (** Command-line option to define custom packs *)
+  let opt_user_packs : user_pack list ref = ref []
+
+  (** Parse a command-line pack definition as a list with elements of the form:
+      - var
+      - %function
+      - %function.var
+      - @resource 
+  *)
   let parse_user_pack (s:string) : unit =
+    (* Utility function to parse an identifier *)
+    let ensure_is_id s =
+      if Str.string_match (Str.regexp "^[A-Za-z].*$") s 0 then
+        s
+      else
+        panic "incorrect argument '%s' for option -c-pack" s
+    in
     (* Split using delimiter ',' *)
     let parts = Str.(split (regexp_string ",") s) in
-    (* Split each part using delimiter '.' *)
+    (* Look at first character *)
     let parts = List.map (fun part ->
-        match Str.(split (regexp_string ".") part) with
-        | [v] -> (None,v)
-        | [f;v] -> (Some f,v)
-        | _ -> panic "incorrect argument for option -pack"
+        let n = String.length part in
+        if n = 0 then panic "empty argument for option -c-pack";
+        match part.[0] with
+        | '@' -> Resource (String.sub part 1 (n-1) |> ensure_is_id)
+        | '%' ->
+          begin match Str.(split (regexp_string ",") (String.sub part 1 (n-1))) with
+            | [f] -> Function (ensure_is_id f)
+            | [f;v] -> FunctionVar (ensure_is_id f, ensure_is_id v)
+            | _ -> panic "incorrect argument '%s' for option -c-pack" part
+          end 
+        | _ -> Var (ensure_is_id part)
       ) parts
     in
     if parts = [] then () else
@@ -61,19 +111,20 @@ struct
   let () = register_domain_option "c.memory.packing.static_scope" {
       key      = "-c-pack";
       category = "Numeric";
-      doc      = " create a pack of variables (syntax: [f1.]v1,[f2.]v2,...)";
+      doc      = " create a pack of variables (syntax: var,%function,%function.var,@resource)";
       spec     = ArgExt.String parse_user_pack;
       default  = "";
     }
-      
+
+
+  (** {2 Packs} *)
+  (** ********* *)
 
   (** Packing key *)
   type pack =
     | Globals             (** Pack of global variables *)
     | Locals of string    (** Pack of local variables of a function *)
-    | User   of ( string option (** Function *) *
-                  string        (** Variable*)
-                ) list (** User defined custom packs *)
+    | User   of user_pack (** User-defined packs *)
 
 
   (** Generate a unique ID for the strategy *)
@@ -88,25 +139,15 @@ struct
     match k1, k2 with
     | Globals, Globals -> 0
     | Locals f1, Locals f2 -> compare f1 f2
-    | User vl1, User vl2 -> Compare.list (Compare.pair (Compare.option compare) compare) vl1 vl2
+    | User u1, User u2 -> compare_user_pack u1 u2
     | _ -> compare k1 k2
-
-
-  let pp_user_pack_vars fmt vl =
-    Format.(pp_print_list
-              ~pp_sep:(fun fmt () -> pp_print_string fmt ", ")
-              (fun fmt -> function
-                 | (None,v)   -> pp_print_string fmt v
-                 | (Some f,v) -> fprintf fmt "%s.%s" f v
-              )
-           ) fmt vl
 
 
   (** Pretty printer of packing keys *)
   let print fmt = function
     | Globals  -> Format.pp_print_string fmt "[globals]"
     | Locals f -> Format.pp_print_string fmt f
-    | User vl  -> Format.fprintf fmt "(%a)" pp_user_pack_vars vl
+    | User u  -> Format.fprintf fmt "(%a)" pp_user_pack u
 
 
   (** Initialization *)
@@ -120,16 +161,34 @@ struct
       let packs = List.filter
           (fun pack ->
              List.exists (function
-                 | (None,v)   -> v = cvar_orig_name
-                 | (Some f,v) ->
+                 | Var v   -> v = cvar_orig_name
+                 | FunctionVar(f,v) ->
                    v = cvar_orig_name &&
                    ( match cvar_scope with
                      | Variable_local ff -> ff.c_func_org_name = f
+                     | Variable_parameter ff -> ff.c_func_org_name = f
                      | _ -> false )
+                 | Function f ->
+                   ( match cvar_scope with
+                     | Variable_local ff -> ff.c_func_org_name = f
+                     | Variable_parameter ff -> ff.c_func_org_name = f
+                     | _ -> false )
+                 | Resource _ -> false
                ) pack
           ) !opt_user_packs
       in
-      List.map (fun vl -> User vl) packs
+      List.map (fun u -> User u) packs
+
+    | Addr { addr_kind = Stubs.Ast.A_stub_resource r } ->
+      let packs = List.filter
+          (fun pack ->
+             List.exists (function
+                 | Resource rr -> r = rr
+                 | _ -> false
+               ) pack
+          ) !opt_user_packs
+      in
+      List.map (fun u -> User u) packs
 
     | Var { vkind = Cstubs.Aux_vars.V_c_primed_base b } ->
       user_packs_of_base ctx b

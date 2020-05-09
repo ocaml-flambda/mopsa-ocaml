@@ -286,7 +286,7 @@ let pp_relative_position fmt pos =
   Format.fprintf fmt "%s:%d:%d" (relative_path pos.pos_file) pos.pos_line pos.pos_column
 
 let rec pp_range fmt range =
-  match untag_range range with
+  match range with
   | R_program pl ->
     Format.fprintf fmt "{%a}"
       (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") Format.pp_print_string) pl
@@ -316,7 +316,10 @@ let rec pp_range fmt range =
 
   | R_fresh uid -> Format.fprintf fmt "<%d>" uid
 
-  | R_tagged _ -> assert false
+  | R_tagged (String_tag t, r) -> Format.fprintf fmt "%a::%s" pp_range r t
+
+  | R_tagged (Range_tag rr, r) -> Format.fprintf fmt "%a:$%a" pp_range r pp_range rr
+
 
 let rec pp_relative_range fmt range =
   match untag_range range with
@@ -350,39 +353,3 @@ let rec pp_relative_range fmt range =
   | R_fresh uid -> Format.fprintf fmt "<%d>" uid
 
   | R_tagged _ -> assert false
-
-
-let rec pp_range_details fmt range =
-   match untag_range range with
-  | R_program pl ->
-    Format.fprintf fmt "{%a}"
-      (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") Format.pp_print_string) pl
-
-  | R_orig (pos1, pos2) when pos1.pos_file == pos2.pos_file
-                          && pos1.pos_line == pos2.pos_line
-                          && pos1.pos_column == pos2.pos_column ->
-    pp_position fmt pos1
-
-  | R_orig (pos1, pos2) when pos1.pos_file == pos2.pos_file
-                          && pos1.pos_line == pos2.pos_line ->
-    Format.fprintf fmt "%s:%d.%d-%d"
-      pos1.pos_file
-      pos1.pos_line
-      pos1.pos_column pos2.pos_column
-
-  | R_orig (pos1, pos2) when pos1.pos_file == pos2.pos_file ->
-    Format.fprintf fmt "%s:%d.%d-%d.%d"
-      pos1.pos_file
-      pos1.pos_line pos1.pos_column
-      pos2.pos_line pos2.pos_column
-
-  | R_orig (pos1, pos2) ->
-    Format.fprintf fmt "%a-%a"
-      pp_position pos1
-      pp_position pos2
-
-  | R_fresh uid -> Format.fprintf fmt "<%d>" uid
-
-  | R_tagged (String_tag t, r) -> Format.fprintf fmt "%a::%s" pp_range r t
-
-  | R_tagged (Range_tag rr, r) -> Format.fprintf fmt "%a:$%a" pp_range r pp_range rr
