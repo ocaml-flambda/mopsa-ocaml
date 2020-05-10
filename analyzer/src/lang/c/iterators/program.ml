@@ -132,7 +132,7 @@ struct
   let exec_stub_directives directives range man flow =
     directives |>
     List.fold_left (fun flow directive ->
-        let stmt = mk_stub_directive directive range in
+        let stmt = mk_stub_directive directive directive.stub_directive_range in
         man.exec stmt flow
       ) flow
 
@@ -353,6 +353,10 @@ struct
 
   (** Initialize argc and argv with symbolic arguments *)
   let call_main_with_symbolic_args main functions man flow =
+    (* FIXME: functions call_main_* main generate false alarms. Since
+       we are sure they are safe, we can remove these alarms *)
+    let alarms = Flow.get_alarms flow in
+
     let range = main.c_func_name_range in
 
     let argc_var, argv_var = match main.c_func_parameters with
@@ -428,6 +432,9 @@ struct
     (* Put the terminating NULL pointer in argv[argc] *)
     let last = mk_c_subscript_access argv argc range in
     let flow = man.exec (mk_assign last (mk_c_null range) range) flow in
+
+    (* Put the initial alarm set *)
+    let flow = Flow.set_alarms alarms flow in
 
     exec_entry_body main man flow
 

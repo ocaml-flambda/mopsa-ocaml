@@ -186,7 +186,7 @@ struct
               let start = get_range_start r in
               let stop = get_range_end r in
               (match r with
-               | R_tagged (s, _) ->
+               | R_tagged (String_tag s, _) ->
                  String.sub s 0 8 = "implicit"
               | _ -> true ) &&
               get_pos_line start <= lineno && lineno <= get_pos_line stop

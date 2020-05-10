@@ -320,30 +320,30 @@ struct
 
 
   (** Execute an allocation of a new resource *)
-  let exec_local_new v res range man flow : 'a flow =
+  let exec_local_new v res alloc_range call_range man flow : 'a flow =
     (* Evaluation the allocation request *)
     post_to_flow man (
-      man.eval (mk_stub_alloc_resource res range) flow >>$ fun addr flow ->
+      man.eval (mk_stub_alloc_resource res alloc_range) flow >>$ fun addr flow ->
       (* Assign the address to the variable *)
-      man.post (mk_assign (mk_var v range) addr range) flow
+      man.post (mk_assign (mk_var v call_range) addr alloc_range) flow
     )
 
 
   (** Execute a function call *)
   (* FIXME: check the purity of f *)
-  let exec_local_call v f args range man flow =
+  let exec_local_call v f args local_range call_range man flow =
     man.exec (mk_assign
-                (mk_var v range)
-                (mk_expr (E_call(f, args)) ~etyp:v.vtyp range)
-                range
+                (mk_var v local_range)
+                (mk_expr (E_call(f, args)) ~etyp:v.vtyp local_range)
+                local_range
              ) flow
 
 
   (** Execute the `local` section *)
   let exec_local l range man flow =
     match l.content.lval with
-    | L_new  res -> exec_local_new l.content.lvar res range man flow
-    | L_call (f, args) -> exec_local_call l.content.lvar f args range man flow
+    | L_new  res -> exec_local_new l.content.lvar res l.range range man flow
+    | L_call (f, args) -> exec_local_call l.content.lvar f args l.range range man flow
 
 
   let exec_ensures e return range man flow =

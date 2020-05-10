@@ -819,15 +819,17 @@ struct
 
 
   let assign_cell c e mode range man flow =
-    let flow = map_env T_cur (fun a ->
-        { a with cells = cell_set_add c a.cells }
-      ) man flow
-    in
-
+    let a = get_env T_cur man flow in
+    let a' = { a with cells = cell_set_add c a.cells } in
+    let flow = set_env T_cur a' man flow in
     let v = mk_cell_var c in
     let vv = mk_var v ~mode range in
-    let stmt = mk_assign vv e range in
-    man.post ~zone:Z_c_scalar stmt flow >>= fun _ flow ->
+    begin if cell_set_mem c a.cells then
+        Post.return flow
+      else
+        man.post (mk_add_var v range) ~zone:Z_c_scalar flow
+    end >>$ fun () flow ->
+    man.post (mk_assign vv e range) ~zone:Z_c_scalar flow >>$ fun () flow ->
     remove_cell_overlappings c range man flow
 
 
@@ -901,7 +903,7 @@ struct
       smash_region base lo hi step t range man flow
 
     | Cell (c,mode) ->
-      add_cell c range man flow >>= fun _ flow ->
+      add_cell c range man flow >>$ fun () flow ->
       let v =
         if is_pointer_cell c then
           mk_pointer_cell_var_expr c ~mode t range

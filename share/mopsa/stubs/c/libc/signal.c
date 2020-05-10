@@ -368,11 +368,11 @@ const char *const _sys_siglist[_NSIG];
 const char *const sys_siglist[_NSIG];
 
 /*$$$
- * assigns: _sys_siglist;
- * assigns: sys_siglist;
+ * assigns: _sys_siglist[0,_NSIG);
+ * assigns: sys_siglist[0,_NSIG);
  * local: char* s = _mopsa_new_readonly_string();
- * ensures: forall int i in [0,64): (_sys_siglist[i])' == s;
- * ensures: forall int i in [0,64): (sys_siglist[i])' == s;
+ * ensures: forall int i in [0,_NSIG): (_sys_siglist[i])' == s;
+ * ensures: forall int i in [0,_NSIG): (sys_siglist[i])' == s;
  * // TODO: allocate different strings for each array element
  */
 

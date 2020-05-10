@@ -64,10 +64,6 @@ let relative_path file =
 (** ========== *)
 
 
-type range_tag = string
-(** Range tags can be used to annotate AST nodes added by the abstract
-   domains that are not textually present in the source files. *)
-
 (** Location range of AST nodes. *)
 type range =
   | R_program of string list (** list of source files *)
@@ -79,13 +75,33 @@ type range =
   | R_fresh of int (** non-original fresh range with unique id *)
   (** Fresh ranges with unique identifiers *)
 
-  | R_tagged of string * range
-  (** Tagged range with a string annotation *)
+  | R_tagged of range_tag * range
+  (** Tagged range with an annotation *)
+
+
+(** Range tags can be used to annotate AST nodes added by the abstract
+   domains that are not textually present in the source files. *)
+and range_tag =
+  | String_tag of string
+  | Range_tag  of range
+
+
+
+let mk_tagged_range tag range = R_tagged(tag,range)
+
+let mk_string_tag fmt =
+  Format.kasprintf (fun tag ->
+      String_tag tag
+    ) fmt
+
+let mk_range_tag range = Range_tag range
+
+let mk_range_tagged_range rtag range = R_tagged (mk_range_tag rtag, range)
 
 (** Tag a range with a (formatted) annotation. *)
 let tag_range range fmt =
   Format.kasprintf (fun tag ->
-      R_tagged (tag, range)
+      R_tagged (String_tag tag, range)
     ) fmt
 
 let mk_orig_range pos1 pos2 = R_orig (pos1, pos2)
@@ -197,12 +213,18 @@ let rec compare_range (r1: range) (r2: range) =
     | R_tagged(t1, r1), R_tagged(t2, r2) ->
       Compare.compose [
         (fun () -> compare_range r1 r2);
-        (fun () -> compare t1 t2)
+        (fun () -> compare_range_tag t1 t2)
       ]
 
     | R_fresh(uid1), R_fresh(uid2) -> compare uid1 uid2
 
     | _ -> compare r1 r2
+
+and compare_range_tag tag1 tag2 =
+  match tag1, tag2 with
+  | String_tag s1, String_tag s2 -> compare s1 s2
+  | Range_tag r1, Range_tag r2 -> compare_range r1 r2
+  | _ -> compare tag1 tag2
 
 
 let subset_range (r1:range) (r2:range) : bool =
@@ -294,11 +316,13 @@ let rec pp_range fmt range =
 
   | R_fresh uid -> Format.fprintf fmt "<%d>" uid
 
-  | R_tagged (t, r) -> Format.fprintf fmt "%a::%s" pp_range r t
+  | R_tagged (String_tag t, r) -> Format.fprintf fmt "%a::%s" pp_range r t
+
+  | R_tagged (Range_tag rr, r) -> Format.fprintf fmt "%a:$%a" pp_range r pp_range rr
 
 
 let rec pp_relative_range fmt range =
-  match range with
+  match untag_range range with
   | R_program pl ->
     Format.fprintf fmt "{%a}"
       (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") Format.pp_print_string) pl
@@ -328,4 +352,4 @@ let rec pp_relative_range fmt range =
 
   | R_fresh uid -> Format.fprintf fmt "<%d>" uid
 
-  | R_tagged (t, r) -> Format.fprintf fmt "%a::%s" pp_relative_range r t
+  | R_tagged _ -> assert false

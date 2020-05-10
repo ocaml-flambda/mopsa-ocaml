@@ -108,9 +108,6 @@ struct
         let v = Map.find var a in
         Some (Map.set var v acc)
 
-      | S_rename ( {ekind = E_addr addr1}, {ekind = E_addr addr2} ) ->
-        Some acc
-
       | _ -> None
     in
 
@@ -125,10 +122,10 @@ struct
     let a', block = patch_block block a a' in
     let a, block' = patch_block block' a' a in
 
-    let a, a' = Log.generic_domain_merge (a,block) (a',block')
+    let aa, aa' = Log.generic_domain_merge (a,List.rev block) (a',List.rev block')
         ~add:Map.set ~find:Map.find ~remove:Map.remove
     in
-    Map.meet a a'
+    Map.meet aa aa'
 
 
   let add p v mode a =

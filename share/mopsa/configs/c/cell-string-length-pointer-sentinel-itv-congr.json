@@ -46,31 +46,41 @@
                     "compose": [
                         "universal.heap.recency",
                         {
-                            "product":[
+                            "product": [
                                 "c.memory.lowlevel.cells",
-                                "c.memory.lowlevel.string_literal"
+                                "c.memory.lowlevel.string_length",
+                                "c.memory.lowlevel.pointer_sentinel"
                             ],
-                            "reductions": [
-                                "c.memory.lowlevel.reductions.cell_string_literal"
-                            ]
+			    "reductions": [
+				"c.memory.lowlevel.reductions.cell_string_length",
+				"c.memory.lowlevel.reductions.cell_pointer_sentinel"
+			    ]
                         },
-			{
+                        {
                             "seq": [
-				"c.memory.scalars.pointer",
-				"c.memory.scalars.machine_numbers"
+			        "c.memory.scalars.pointer",
+			        "c.memory.scalars.machine_numbers"
                             ]
-			}
+                        }
                     ]
-		},
+                },
 		"on": {
                     "nonrel": {
 			"union": [
 			    "universal.numeric.values.intervals.float",
-                            "universal.numeric.values.intervals.integer"
+                            {
+                                "product": [
+                                    "universal.numeric.values.intervals.integer",
+			            "universal.numeric.values.congruences"
+                                ],
+                                "reductions": [
+                                    "universal.numeric.reductions.intervals_congruences"
+                                ]
+                            }
 			]
 		    }
-		}
-	    }
+                }
+            }
 	]
     }
 }

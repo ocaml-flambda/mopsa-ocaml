@@ -252,12 +252,29 @@ struct
            if List.exists (fun p -> Strategy.compare p pack = 0) packs then
              Visitor.Keep ee
            else
-             let itv = man.ask (Numeric.Common.mk_int_interval_query ee) in
-             if Numeric.Values.Intervals.Integer.Value.is_bounded itv then
-               let l,u = Numeric.Values.Intervals.Integer.Value.bounds itv in
-               Visitor.Keep (mk_z_interval l u ee.erange)
-             else
-               Visitor.Keep (mk_top ee.etyp ee.erange)
+             begin match ee.etyp with
+               | T_int | T_bool ->
+                 let itv = man.ask (Numeric.Common.mk_int_interval_query ee) in
+                 if Numeric.Values.Intervals.Integer.Value.is_bounded itv then
+                   let l,u = Numeric.Values.Intervals.Integer.Value.bounds itv in
+                   Visitor.Keep (mk_z_interval l u ee.erange)
+                 else
+                   Visitor.Keep (mk_top ee.etyp ee.erange)
+
+               | T_float prec ->
+                 let itv = man.ask (Numeric.Common.mk_float_interval_query ee) in
+                 if ItvUtils.FloatItvNan.is_finite itv then
+                   match itv.itv with
+                   | Bot.Nb f ->
+                     Visitor.Keep (mk_float_interval ~prec f.lo f.up ee.erange)
+                   | _ ->
+                     Visitor.Keep (mk_top ee.etyp ee.erange)
+                 else
+                   Visitor.Keep (mk_top ee.etyp ee.erange)
+
+               | _ ->
+                 Visitor.Keep (mk_top ee.etyp ee.erange)
+             end
          | _ ->
            Visitor.VisitParts ee
       )
@@ -305,6 +322,36 @@ struct
       ) a packs
 
 
+  (** 𝕊⟦ expand/fold (v,vl) ⟧ *)
+  let exec_expand_fold_var ctx stmt man a =
+    let v,vl = match skind stmt with
+      | S_expand ({ ekind = E_var (v,_) }, el) -> v, List.map (function { ekind = E_var(v,_) } -> v | _ -> assert false) el
+      | S_fold ({ ekind = E_var (v,_) }, el) -> v, List.map (function { ekind = E_var(v,_) } -> v | _ -> assert false) el
+      | _ -> assert false
+    in
+    let packs = packs_of_var ctx v in
+    let () = Cache.add cache v packs in
+    List.fold_left (fun acc pack ->
+        let aa = try Map.find pack acc with Not_found -> Domain.top in
+        let aa' = Domain.exec ctx stmt man aa |> OptionExt.none_to_exn in
+        Map.add pack aa' acc
+      ) a packs
+
+
+  (** 𝕊⟦ rename (v1,v2) ⟧ *)
+  let exec_rename_var ctx stmt man a =
+    let v1,v2 = match skind stmt with
+      | S_rename ({ ekind = E_var (v1,_) }, { ekind = E_var (v2,_) }) -> v1,v2
+      | _ -> assert false
+    in
+    let packs = packs_of_var ctx v1 in
+    let () = Cache.add cache v1 packs in
+    List.fold_left (fun acc pack ->
+        let aa = try Map.find pack acc with Not_found -> Domain.top in
+        let aa' = Domain.exec ctx stmt man aa |> OptionExt.none_to_exn in
+        Map.add pack aa' acc
+      ) a packs
+
 
   (* 𝕊⟦  ⟧ *)
   let exec ctx stmt man a =
@@ -315,6 +362,15 @@ struct
 
     | S_assign ({ekind = E_var _}, _) ->
       exec_assign_var ctx stmt man a |>
+      OptionExt.return
+
+    | S_expand( {ekind = E_var _}, _)
+    | S_fold( {ekind = E_var _}, _) ->
+      exec_expand_fold_var ctx stmt man a |>
+      OptionExt.return
+
+    | S_rename( {ekind = E_var _}, {ekind = E_var _}) ->
+      exec_rename_var ctx stmt man a |>
       OptionExt.return
 
     | _ ->
@@ -329,12 +385,13 @@ struct
       in
       try
         if not has_vars then
-          let a' = Map.map (fun aa ->
-              Domain.exec ctx stmt man aa |>
-              OptionExt.none_to_exn
-            ) a
-          in
-          Some a'
+          (* let a' = Map.map (fun aa ->
+           *     Domain.exec ctx stmt man aa |>
+           *     OptionExt.none_to_exn
+           *   ) a
+           * in
+           * Some a' *)
+          None
         else
           (* Statement contains variables, so see which packs are concerned *)
           let packs = packs_of_stmt ctx stmt in

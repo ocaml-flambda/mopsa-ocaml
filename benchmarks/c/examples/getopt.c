@@ -11,6 +11,7 @@ static struct option const longopts[] =
 {
   {"version", no_argument, NULL, 'v'},
   {"help", no_argument, NULL, 'h'},
+  {NULL, 0, NULL, 0}
 };
 
 
@@ -34,7 +35,6 @@ main (int argc, char **argv)
 {
   int optc;
   bool ok = false;
-
 
   while ((optc = getopt_long (argc, argv, "vh", longopts, NULL))
          != -1)
