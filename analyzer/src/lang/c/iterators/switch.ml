@@ -122,7 +122,7 @@ struct
       | [] -> flow
       | (e',r) :: tl ->
         (* Filter the environments *)
-        let cond = mk_binop e O_eq e' ~etyp:u8 range in
+        let cond = mk_binop e O_eq e' ~etyp:u8 e.erange in
         assume_flow cond ~zone:Z_c
           ~fthen:(fun flow ->
               (* Case reachable, so save cur in the flow of the case before removing cur *)
