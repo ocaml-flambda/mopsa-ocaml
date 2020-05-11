@@ -200,7 +200,8 @@ and var = {
 
 and builtin =
   | PRIMED
-  | SIZE
+  | LENGTH
+  | INDEX
   | BYTES
   | OFFSET
   | BASE
@@ -290,8 +291,9 @@ let pp_resource fmt resource = pp_var fmt resource
 let pp_builtin fmt f =
   match f with
   | BYTES   -> pp_print_string fmt "bytes"
-  | SIZE   -> pp_print_string fmt "size"
+  | LENGTH   -> pp_print_string fmt "length"
   | OFFSET -> pp_print_string fmt "offset"
+  | INDEX -> pp_print_string fmt "index"
   | BASE   -> pp_print_string fmt "base"
   | PRIMED -> pp_print_string fmt "primed"
   | VALID_PTR -> pp_print_string fmt "valid_ptr"

@@ -90,6 +90,16 @@ struct
       eval_base_size base range (Sig.Stacked.Manager.of_domain_man man) flow
 
 
+  let byte_to_element t bytes range =
+    let elm =
+      match remove_typedef_qual t with
+      | T_c_void -> Z.one
+      | tt -> sizeof_type tt in
+    if Z.equal elm Z.one
+    then bytes
+    else mk_binop bytes O_div (mk_z elm range) ~etyp:bytes.etyp range
+
+
   let eval zone exp man flow =
     match ekind exp with
 
@@ -113,23 +123,15 @@ struct
         | _ -> assert false
       )
 
-    | E_stub_builtin_call(SIZE, e) ->
+    | E_stub_builtin_call(LENGTH, e) ->
       Some (
         man.eval ~zone:(Z_c_low_level,Z_c_points_to) e flow |>
         Eval.bind @@ fun pt flow ->
 
-        let elm =
-          match under_type e.etyp |> remove_typedef_qual with
-          | T_c_void -> Z.one
-          | t -> sizeof_type t
-        in
-
         match ekind pt with
         | E_c_points_to (P_block (base,_,mode)) ->
           eval_base_bytes base mode exp.erange man flow >>$ fun bytes flow ->
-          if Z.equal elm Z.one
-          then Eval.singleton bytes flow
-          else Eval.singleton (mk_binop bytes O_div (mk_z elm exp.erange) ~etyp:bytes.etyp exp.erange) flow
+          Eval.singleton (byte_to_element (under_type e.etyp) bytes exp.erange) flow
 
         | E_c_points_to _ ->
           Eval.singleton (mk_top ul exp.erange) flow
@@ -202,6 +204,14 @@ struct
         | _ -> Eval.singleton (mk_top ul exp.erange) flow
       )
 
+    | E_stub_builtin_call(INDEX, e) ->
+      Some (
+        man.eval ~zone:(Z_c_low_level,Z_c_points_to) e flow |>
+        Eval.bind @@ fun pt flow ->
+        match ekind pt with
+        | E_c_points_to(P_block(_,o,_)) -> Eval.singleton (byte_to_element (under_type e.etyp) o exp.erange) flow
+        | _ -> Eval.singleton (mk_top ul exp.erange) flow
+      )
 
     | E_stub_builtin_call((VALID_FLOAT | FLOAT_INF | FLOAT_NAN) as op, flt) ->
       let cls = match op with
