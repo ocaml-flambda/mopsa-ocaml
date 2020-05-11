@@ -35,14 +35,14 @@ int optopt;
 
 /*$
  * requires: ___argc > 0;
- * requires: optind >= 0 and optind <= ___argc;
+ * requires: optind >= 1 and optind <= ___argc;
  * requires: valid_string(__shortopts);
  * requires: forall int i in [0, ___argc): valid_string(___argv[i]);
  * assigns: optind;
  * assigns: opterr;
  * assigns: optopt;
  * assigns: optarg;
- * ensures: optind' in [0, ___argc];
+ * ensures: optind' in [1, ___argc];
  * ensures: optarg' != NULL implies exists int i in [0, ___argc): in_string(optarg', ___argv[i]);
  * ensures: return in [-1, 255];
  * case "modify-argv" {
@@ -93,7 +93,7 @@ size_t _mopsa_pick(size_t i);
 
 /*$
  * requires: ___argc > 0;
- * requires: optind >= 0 and optind <= ___argc;
+ * requires: optind >= 1 and optind <= ___argc;
  * requires: valid_string(__shortopts);
  * requires: forall int i in [0, ___argc): valid_string(___argv[i]);
  * //requires: valid_longopt(__longopts);
@@ -104,7 +104,7 @@ size_t _mopsa_pick(size_t i);
  * assigns: opterr;
  * assigns: optopt;
  * assigns: optarg;
- * ensures: optind' in [0, ___argc];
+ * ensures: optind' in [1, ___argc];
  * ensures: optarg' == NULL or exists int i in [0, ___argc): in_string(optarg', ___argv[i]);
  *
  * case "opt-ind" {
