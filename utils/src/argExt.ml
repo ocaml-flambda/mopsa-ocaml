@@ -41,6 +41,7 @@ type spec =
   | String of (string -> unit)
   | Set_string of string ref
 
+  | String_list of (string list -> unit)
   | Set_string_list of string list ref
 
   | Symbol of string list * (string -> unit)
@@ -169,6 +170,11 @@ let parse (args:arg list) (handler:string -> unit) (rest:string list -> unit) (m
            | Set_string f ->
               let v, tl = get_arg () in
               f := v;
+              eat tl
+
+           | String_list f ->
+              let v, tl = get_arg_list () in
+              f v;
               eat tl
 
            | Set_string_list f ->

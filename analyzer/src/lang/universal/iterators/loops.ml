@@ -54,14 +54,68 @@ let () =
 
 
 (*==========================================================================*)
+(**                        {2 Unrolling strategy}                           *)
+(*==========================================================================*)
+
+type unrolling = {
+  mutable unroll_global_nb : int option (* unrolling numbers *);
+  mutable unroll_locals : local_unrolling list;
+}
+
+and local_unrolling = {
+  unroll_local_file : string option;
+  unroll_local_line : int;
+  unroll_local_nb : int option;
+}
+
+let opt_unrolling = {
+  unroll_global_nb = Some 1;
+  unroll_locals = [];
+}
+  
+
+(** Parse local unrolling specification string *)
+let parse_unroll_local (spec:string) : local_unrolling =
+  if not Str.(string_match (regexp "^\\(\\([a-zA-Z][^:]*\\):\\)?\\([0-9]+\\):\\([0-9]+\\)$") spec 0) then
+    panic "incorrect argument '%s' for option -loop-unrolling-at" spec
+  ;
+  let file = try Some (Str.matched_group 2 spec) with Not_found -> None in
+  let line = Str.matched_group 3 spec |> int_of_string in
+  let nb = Some (Str.matched_group 4 spec |> int_of_string) in
+  { unroll_local_file = file;
+    unroll_local_line = line;
+    unroll_local_nb = nb; }
+
+(** Parse local full unrolling specification string *)
+let parse_full_unroll_local (spec:string) : local_unrolling =
+  if not Str.(string_match (regexp "^\\(\\([a-zA-Z][^:]*\\):\\)?\\([0-9]+\\)$") spec 0) then
+    panic "incorrect argument '%s' for option -loop-full-unrolling-at" spec
+  ;
+  let file = try Some (Str.matched_group 2 spec) with Not_found -> None in
+  let line = Str.matched_group 3 spec |> int_of_string in
+  { unroll_local_file = file;
+    unroll_local_line = line;
+    unroll_local_nb = None; }
+
+(** Get the unrolling limit for a given loop location *)
+let get_range_unrolling range : int option =
+  let range = untag_range range in
+  let is_matching u =
+    match_range_line u.unroll_local_line range
+    && match u.unroll_local_file with
+    | None -> true
+    | Some file -> match_range_file file range in
+  match List.find_opt is_matching opt_unrolling.unroll_locals with
+  | Some u -> u.unroll_local_nb
+  | None -> opt_unrolling.unroll_global_nb
+
+
+(*==========================================================================*)
 (**                       {2 Command line options}                          *)
 (*==========================================================================*)
 
 let opt_loop_widening_delay : int ref = ref 0
 (** Number of iterations before applying a widening. *)
-
-let opt_loop_unrolling : int ref = ref 1
-(** Number of unrolling iterations before joining the environments. *)
 
 let opt_loop_use_cache : bool ref = ref true
 
@@ -79,8 +133,29 @@ let () =
     key = "-loop-unrolling";
     category = "Loops";
     doc = " number of unrolling iterations before joining the environments";
-    spec = ArgExt.Set_int opt_loop_unrolling;
+    spec = ArgExt.Int (fun n -> opt_unrolling.unroll_global_nb <- Some n);
     default = "1";
+  };
+  register_domain_option name {
+    key = "-loop-unrolling-at";
+    category = "Loops";
+    doc = " number of unrolling iterations at specific program location (syntax: [file.]line:unrolling)";
+    spec = ArgExt.String_list (fun specs -> opt_unrolling.unroll_locals <- List.map parse_unroll_local specs);
+    default = "";
+  };
+  register_domain_option name {
+    key = "-loop-full-unrolling";
+    category = "Loops";
+    doc = " unroll loops without applying widening";
+    spec = ArgExt.Bool (fun b -> opt_unrolling.unroll_global_nb <- (if b then None else opt_unrolling.unroll_global_nb)); 
+    default = "false";
+  };
+  register_domain_option name {
+    key = "-loop-full-unrolling-at";
+    category = "Loops";
+    doc = " fully unroll loop at specific program location (syntax: [file.]line)";
+    spec = ArgExt.String_list (fun specs -> opt_unrolling.unroll_locals <- List.map parse_full_unroll_local specs);
+    default = "";
   };
   register_domain_option name {
     key = "-loop-no-cache";
@@ -249,8 +324,11 @@ struct
 
 
   let rec unroll i cond body man flow =
-    debug "unrolling iteration %d in %a" i pp_range (srange body);
-    if i = 0 then (false, flow, Flow.bottom (Flow.get_ctx flow) (Flow.get_alarms flow))
+    debug "unrolling iteration %a in %a"
+      (OptionExt.print ~none:"" ~some:"" Format.pp_print_int) i
+      pp_range (srange body);
+    if i = Some 0 then
+      (false, flow, Flow.bottom (Flow.get_ctx flow) (Flow.get_alarms flow))
     else
       let flow1 =
         man.exec {skind = S_assume cond; srange = cond.erange} flow |>
@@ -265,7 +343,7 @@ struct
         let () = debug "stabilisation reached in unrolling!" in
         true, flow1, flow2
       else
-        let flag, flow1', flow2' = unroll (i - 1) cond body man (Flow.copy_ctx flow2 flow1) in
+        let flag, flow1', flow2' = unroll (OptionExt.lift (fun ii -> (ii - 1)) i) cond body man (Flow.copy_ctx flow2 flow1) in
         flag, flow1', Flow.join man.lattice flow2 flow2'
 
   let decr_iteration cond body man flow_init flow =
@@ -295,9 +373,9 @@ struct
         if !opt_loop_use_cache then
           match join_w_old_lfp man flow0 (stmt.srange, Flow.get_callstack flow0) with
           | Some flow0 -> false, flow0, Flow.bottom (Flow.get_ctx flow0) (Flow.get_alarms flow0)
-          | None -> unroll !opt_loop_unrolling cond body man flow0
+          | None -> unroll (get_range_unrolling stmt.srange) cond body man flow0
         else
-          unroll !opt_loop_unrolling cond body man flow0 in
+          unroll (get_range_unrolling stmt.srange) cond body man flow0 in
 
       debug "post unroll %a (is_fp=%b):@\n flow_init = @[%a@]@\n flow_out = @[%a@]"
         pp_range stmt.srange
