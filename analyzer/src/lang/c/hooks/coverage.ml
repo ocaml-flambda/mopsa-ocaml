@@ -89,9 +89,18 @@ struct
              | S_c_for(_, Some cond, _, _)
              | S_c_switch(cond,_) ->
                VisitParts (RangeSet.add cond.erange acc)
+
+             | S_assign _
+             | S_expression _
+             | S_c_break _
+             | S_c_continue _
+             | S_c_declaration _
+             | S_c_return _
+             | S_c_goto _ ->
+               Keep (RangeSet.add s.srange acc)
+
              | _ ->
-               if Visitor.is_atomic_stmt s then Keep (RangeSet.add s.srange acc)
-               else VisitParts acc
+               VisitParts acc
           ) RangeSet.empty body
       in
       Some { fundec = f; total; reachable = RangeSet.empty }
@@ -210,7 +219,6 @@ struct
 
   let on_before_exec zone stmt man flow =
     let cs = Flow.get_callstack flow in
-    if not (Visitor.is_atomic_stmt stmt) then () else
     if is_empty_callstack cs then () else
     if man.lattice.is_bottom (Flow.get T_cur man.lattice flow) then ()
     else update_cov cs stmt.srange
