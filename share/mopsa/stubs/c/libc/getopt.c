@@ -35,7 +35,7 @@ int optopt;
 
 /*$
  * requires: ___argc > 0;
- * requires: optind >= 1 and optind <= ___argc;
+ * requires: optind >= 0 and optind <= ___argc;
  * requires: valid_string(__shortopts);
  * requires: forall int i in [0, ___argc): valid_string(___argv[i]);
  * assigns: optind;
@@ -93,7 +93,7 @@ size_t _mopsa_pick(size_t i);
 
 /*$
  * requires: ___argc > 0;
- * requires: optind >= 1 and optind <= ___argc;
+ * requires: optind >= 0 and optind <= ___argc;
  * requires: valid_string(__shortopts);
  * requires: forall int i in [0, ___argc): valid_string(___argv[i]);
  * //requires: valid_longopt(__longopts);
