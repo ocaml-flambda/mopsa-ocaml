@@ -252,7 +252,8 @@ struct
       let e1', abs, bnd, l = exp_to_apron e1 (abs,bnd) l in
       let e2', abs, bnd, l = exp_to_apron e2 (abs,bnd) l in
       let typ' = typ_to_apron exp.etyp in
-      Apron.Texpr1.Binop(binop', e1', e2', typ', !opt_float_rounding), abs, bnd, l
+      let round = if typ' = Apron.Texpr1.Int then Apron.Texpr1.Zero else !opt_float_rounding in
+      Apron.Texpr1.Binop(binop', e1', e2', typ', round), abs, bnd, l
 
     | E_unop (O_plus, e) ->
       exp_to_apron e (abs,bnd) l
@@ -260,12 +261,14 @@ struct
     | E_unop(O_cast(t1, t2), e) ->
       let e', abs, bnd, l = exp_to_apron e (abs,bnd) l in
       let typ' = typ_to_apron t2 in
-      Apron.Texpr1.Unop(Apron.Texpr1.Cast, e', typ', !opt_float_rounding), abs, bnd, l
+      let round = if typ' = Apron.Texpr1.Int then Apron.Texpr1.Zero else !opt_float_rounding in
+      Apron.Texpr1.Unop(Apron.Texpr1.Cast, e', typ', round), abs, bnd, l
 
     | E_unop(O_minus, e) ->
       let e', abs, bnd, l = exp_to_apron e (abs,bnd) l in
       let typ' = typ_to_apron e.etyp in
-      Apron.Texpr1.Unop(Apron.Texpr1.Neg, e', typ', !opt_float_rounding), abs, bnd, l
+      let round = if typ' = Apron.Texpr1.Int then Apron.Texpr1.Zero else !opt_float_rounding in
+      Apron.Texpr1.Unop(Apron.Texpr1.Neg, e', typ', round), abs, bnd, l
 
     | E_unop(O_sqrt, e) ->
       let e', abs, bnd, l = exp_to_apron e (abs,bnd) l in
