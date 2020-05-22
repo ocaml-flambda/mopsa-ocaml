@@ -80,8 +80,10 @@ let _ =
 
      (* Built-ins *)
      "primed", PRIMED;  
-     "size",   SIZE;
-     "bytes",  BYTES;
+     "size",   LENGTH;
+     "length",   LENGTH;
+     "bytes",  BYTES; (* bytes should be renamed as size *)
+     "index", INDEX;
      "sizeof_type",   SIZEOF_TYPE;
      "sizeof_expr",   SIZEOF_EXPR;
      "offset", OFFSET;

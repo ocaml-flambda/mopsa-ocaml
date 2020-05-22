@@ -66,15 +66,23 @@ struct
 
 
   (** Symbolic main arguments. *)
-  let opt_symbolic_args = ref false
+  let opt_symbolic_args = ref None
+
+  let parse_symbolic_args_spec spec : Z.t * Z.t option =
+    if not Str.(string_match (regexp "\\([0-9]+\\)\\(:\\([0-9]+\\)\\)?") spec 0) then
+      panic "incorrect argument '%s' for option -c-symbolic-args" spec
+    ;
+    let lo = Str.matched_group 1 spec |> Z.of_string in
+    let hi = try Some (Str.matched_group 3 spec |> Z.of_string) with Not_found -> None in
+    lo,hi
 
   let () =
     register_domain_option name {
       key = "-c-symbolic-args";
       category = "C";
-      doc = " call main with symbolic argc and argv";
-      spec = ArgExt.Set opt_symbolic_args;
-      default = "false";
+      doc = " set the number of symbolic arguments given to main (syntax: min[:max])";
+      spec = ArgExt.String (fun s -> opt_symbolic_args := Some (parse_symbolic_args_spec s));
+      default = "";
     }
 
 
@@ -352,7 +360,7 @@ struct
 
 
   (** Initialize argc and argv with symbolic arguments *)
-  let call_main_with_symbolic_args main functions man flow =
+  let call_main_with_symbolic_args main lo hi functions man flow =
     (* FIXME: functions call_main_* main generate false alarms. Since
        we are sure they are safe, we can remove these alarms *)
     let alarms = Flow.get_alarms flow in
@@ -372,9 +380,17 @@ struct
     *)
 
     let argc = mk_var argc_var range in
-    let flow = man.exec (mk_add argc range) flow |>
-               man.exec (mk_assign argc (mk_z_interval Z.one (rangeof s32 |> snd |> Z.pred) range) range)
-    in
+    let flow = man.exec (mk_add argc range) flow in
+    let lo' = Z.succ lo in
+    let hi' =
+      match hi with
+      | None -> lo'
+      | Some hi -> Z.succ hi in
+    let int_max = rangeof s32 |> snd in
+    if Z.(lo' > hi') || Z.(hi' > int_max - one) then
+      panic "incorrect argc value [%a,%a]" Z.pp_print lo' Z.pp_print hi'
+    ;
+    let flow = man.exec (mk_assign argc (mk_z_interval lo' hi' range) range) flow in
 
 
     (* Create the memory block pointed by argv. *)
@@ -443,10 +459,10 @@ struct
   let call_main main args functions man flow =
     if List.length main.c_func_parameters = 2 then
       match !opt_symbolic_args, args with
-      | false, None      -> call_main_with_concrete_args main [] man flow
-      | false, Some args -> call_main_with_concrete_args main args man flow
-      | true, None       -> call_main_with_symbolic_args main functions man flow
-      | true, Some args  -> panic "-c-symbolic-main-args used with concrete arguments"
+      | None, None      -> call_main_with_concrete_args main [] man flow
+      | None, Some args -> call_main_with_concrete_args main args man flow
+      | Some(lo,hi), None       -> call_main_with_symbolic_args main lo hi functions man flow
+      | Some(lo,hi), Some args  -> panic "-c-symbolic-main-args used with concrete arguments"
     else
       exec_entry_body main man flow >>$ fun () flow ->
       exec_exit_functions "exit" main.c_func_name_range man flow

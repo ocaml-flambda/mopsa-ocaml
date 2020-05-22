@@ -191,12 +191,13 @@ let attribute_type obj f =
 
 let builtin_type f arg =
   match f with
-  | SIZE   -> unsigned_long_type
+  | LENGTH   -> unsigned_long_type
+  | BYTES    -> unsigned_long_type
   | OFFSET -> int_type
+  | INDEX -> int_type
   | BASE   -> pointer_type C_AST.(T_void, no_qual)
   | PRIMED -> arg.content.Ast.typ
   | VALID_PTR | VALID_FLOAT | FLOAT_INF | FLOAT_NAN -> bool_type
-  | BYTES    -> unsigned_long_type
   | ALIVE    -> bool_type
 
 

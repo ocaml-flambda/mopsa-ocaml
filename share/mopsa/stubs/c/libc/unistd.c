@@ -424,9 +424,9 @@ int dup3 (int __fd, int __fd2, int __flags);
 
 /*$
  * requires: valid_string(__path);
- * requires: forall size_t i in [0, (bytes(__argv) - offset(__argv)) / sizeof_type(char*) - 1]:
+ * requires: forall size_t i in [0, size(__argv) - index(__argv)):
  *             valid_string(__argv[i]);
- * requires: forall size_t i in [0, (bytes(__envp) - offset(__envp)) / sizeof_type(char*) - 1]:
+ * requires: forall size_t i in [0, size(__envp) - index(__envp)):
  *             valid_string(__envp[i]);
  *
  * case "success" {
@@ -445,9 +445,9 @@ int execve (const char *__path, char *const __argv[],
 /*$
  * local:    void* f = _mopsa_find_file_resource(__fd);
  * requires: alive_resource(f, FileRes);
- * requires: forall size_t i in [0, (bytes(__argv) - offset(__argv)) / sizeof_type(char*) - 1]:
+ * requires: forall size_t i in [0, size(__argv) - index(__argv)):
  *             valid_string(__argv[i]);
- * requires: forall size_t i in [0, (bytes(__envp) - offset(__envp)) / sizeof_type(char*) - 1]:
+ * requires: forall size_t i in [0, size(__envp) - index(__envp)):
  *             valid_string(__envp[i]);
  *
  * case "success" {
@@ -474,7 +474,7 @@ int fexecve (int __fd, char *const __argv[], char *const __envp[]);
  *
  * case "with-args" {
  *   assumes: __argv[1] != NULL;
- *   requires: forall size_t i in [1, (bytes(__argv) - offset(__argv)) / sizeof_type(char*) - 1]: valid_string(__argv[i]);
+ *   requires: forall size_t i in [1, size(__argv) - index(__argv)): valid_string(__argv[i]);
  * }
  *
  * case "success" {
@@ -523,19 +523,12 @@ int execl (const char *__path, const char *__arg, ...);
 /*$
  * requires: valid_string(__file);
  * requires: valid_ptr(__argv);
- * requires: valid_ptr(__argv + 1);
- * requires: valid_string(__argv[0]);
  *
  * assigns: _errno;
- *
- * case "no-args" {
- *   assumes: __argv[1] == NULL;
- * }
- *
- * case "with-args" {
- *   assumes: __argv[1] != NULL;
- *   requires: forall size_t i in [1, (bytes(__argv) - offset(__argv)) / sizeof_type(char*) - 1]: valid_string(__argv[i]);
- * }
+ * requires: exists size_t i in [0, size(__argv) - index(__argv)): (
+ *    __argv[i] == NULL
+ *    and forall size_t j in [0, i): valid_string(__argv[j])
+ * );
  */
 int execvp (const char *__file, char *const __argv[]);
 
@@ -558,9 +551,9 @@ int execlp (const char *__file, const char *__arg, ...);
 
 /*$
  * requires: valid_string(__file);
- * requires: forall size_t i in [0, (bytes(__argv) - offset(__argv)) / sizeof_type(char*) - 1]:
+ * requires: forall size_t i in [0, size(__argv) - index(__argv)):
  *             valid_string(__argv[i]);
- * requires: forall size_t i in [0, (bytes(__envp) - offset(__envp)) / sizeof_type(char*) - 1]:
+ * requires: forall size_t i in [0, size(__envp) - index(__envp)):
  *           valid_string(__envp[i]);
  *
  * case "success" {

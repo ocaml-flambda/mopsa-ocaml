@@ -173,6 +173,7 @@ let help (args:arg list) out =
               | ArgExt.Unit_delayed _ -> "unit"
               | ArgExt.String _ -> "string"
               | ArgExt.Set_string _ -> "string"
+              | ArgExt.String_list _ -> "string list"
               | ArgExt.Set_string_list _ -> "string list"
               | ArgExt.Int _ -> "int"
               | ArgExt.Set_int _ -> "int"
