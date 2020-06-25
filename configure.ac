@@ -154,6 +154,8 @@ if test "x$LLVMCONFIG" != "x"; then
     AC_SUBST([LLVMCONFIG])
   else
     AC_CHECK_TOOL(CLANG,clang$LLVMCONFIG_EXTRA)
+    LLVM_MAJOR_VERSION=`$LLVMCONFIG --version | cut -f 1 -d .`
+    AC_SUBST([LLVM_MAJOR_VERSION])
   fi
 
 fi

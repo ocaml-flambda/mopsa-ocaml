@@ -51,6 +51,10 @@
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/FrontendAction.h"
 
+#if CLANG_VERSION_MAJOR >= 10
+#include "clang/Basic/Builtins.h"
+#endif
+
 /* OCaml includes */
 #include <caml/mlvalues.h>
 #include <caml/memory.h>
@@ -652,7 +656,19 @@ CAMLprim value MLCommentTranslator::TranslateRawCommentOpt(const RawComment *x) 
 CAMLprim value MLCommentTranslator::getRawCommentList(ASTContext& Context) {
   CAMLparam0();
   CAMLlocal1(ret);
+#if CLANG_VERSION_MAJOR < 10
   GENERATE_LIST(ret, Context.getRawCommentList().getComments(), TranslateRawComment(child));
+#else
+  std::vector<RawComment*> c;
+  FileID id = Context.getSourceManager().getMainFileID();
+  auto coms = Context.getRawCommentList().getCommentsInFile(id);
+  if (coms != nullptr) {
+    for (auto cc : *coms) {
+      c.push_back(cc.second);
+    }
+  }
+  GENERATE_LIST(ret, c, TranslateRawComment(child));
+#endif  
   CAMLreturn(ret);
 }
 
@@ -1025,7 +1041,11 @@ CAMLprim value MLTreeBuilderVisitor::TranslateDecl(const Decl *node) {
           Store_field(ret, 0, TranslateNamedDecl(x));
           Store_field(ret, 1, TranslateTemplateParameterList(x->getTemplateParameters()));
           Store_field_option(ret, 2, x->getTemplatedDecl(), TranslateDecl(x->getTemplatedDecl()));
+#if CLANG_VERSION_MAJOR < 10
           Store_field_option(ret, 3, x->getRequiresClause(), TranslateExpr(x->getRequiresClause()));
+#else
+          Store_field(ret, 3, Val_false);
+#endif
           int r = 0;
           switch (x->getBuiltinTemplateKind()) {
             GENERATE_CASE(r, BTK__make_integer_seq);
@@ -1050,7 +1070,11 @@ CAMLprim value MLTreeBuilderVisitor::TranslateDecl(const Decl *node) {
           Store_field(ret, 0, TranslateNamedDecl(x));
           Store_field(ret, 1, TranslateTemplateParameterList(x->getTemplateParameters()));
           Store_field(ret, 2, TranslateTypedefNameDecl(x->getTemplatedDecl()));
+#if CLANG_VERSION_MAJOR < 10
           Store_field_option(ret, 3, x->getRequiresClause(), TranslateExpr(x->getRequiresClause()));
+#else
+          Store_field(ret, 3, Val_false);
+#endif
         });
 
       GENERATE_NODE(VarTemplateDecl, ret, node, 1, {
@@ -1195,7 +1219,11 @@ CAMLprim value MLTreeBuilderVisitor::TranslateTemplateTemplateParmDecl(const Tem
       Store_field(ret, 0, TranslateNamedDecl(x));
       Store_field(ret, 1, TranslateTemplateParameterList(x->getTemplateParameters()));
       Store_field_option(ret, 2, x->getTemplatedDecl(), TranslateDecl(x->getTemplatedDecl()));
+#if CLANG_VERSION_MAJOR < 10
       Store_field_option(ret, 3, x->getRequiresClause(), TranslateExpr(x->getRequiresClause()));
+#else
+          Store_field(ret, 3, Val_false);
+#endif
       Store_field(ret, 4, Val_bool(x->isParameterPack()));
       Store_field(ret, 5, Val_bool(x->isPackExpansion()));
       if (x->isExpandedParameterPack()) {
@@ -1328,7 +1356,11 @@ CAMLprim value MLTreeBuilderVisitor::TranslateClassTemplateDecl(const ClassTempl
       Store_field(ret, 0, TranslateNamedDecl(x));
       Store_field(ret, 1, TranslateTemplateParameterList(x->getTemplateParameters()));
       Store_field(ret, 2, TranslateRecordDecl(x->getTemplatedDecl()));
+#if CLANG_VERSION_MAJOR < 10
       Store_field_option(ret, 3, x->getRequiresClause(), TranslateExpr(x->getRequiresClause()));
+#else
+          Store_field(ret, 3, Val_false);
+#endif
       Store_field(ret, 4, Val_unit); //Store_field_list(ret, 4, x->specializations(), TranslateRecordDecl(child));
       Store_field(ret, 5, TranslateQualType((const_cast<ClassTemplateDecl*>(x))->getInjectedClassNameSpecialization()));
     });
@@ -1347,7 +1379,11 @@ CAMLprim value MLTreeBuilderVisitor::TranslateFunctionTemplateDecl(const Functio
       Store_field(ret, 0, TranslateNamedDecl(x));
       Store_field(ret, 1, TranslateTemplateParameterList(x->getTemplateParameters()));
       Store_field(ret, 2, TranslateFunctionDecl(x->getTemplatedDecl()));
+#if CLANG_VERSION_MAJOR < 10
       Store_field_option(ret, 3, x->getRequiresClause(), TranslateExpr(x->getRequiresClause()));
+#else
+          Store_field(ret, 3, Val_false);
+#endif
       Store_field(ret, 4, Val_unit); //Store_field_list(ret, 4, x->specializations(), TranslateFunctionDecl(child));
     });
 
@@ -1365,7 +1401,11 @@ CAMLprim value MLTreeBuilderVisitor::TranslateVarTemplateDecl(const VarTemplateD
       Store_field(ret, 0, TranslateNamedDecl(x));
       Store_field(ret, 1, TranslateTemplateParameterList(x->getTemplateParameters()));
       Store_field(ret, 2, TranslateVarDecl(x->getTemplatedDecl()));
+#if CLANG_VERSION_MAJOR < 10
       Store_field_option(ret, 3, x->getRequiresClause(), TranslateExpr(x->getRequiresClause()));
+#else
+          Store_field(ret, 3, Val_false);
+#endif
       Store_field(ret, 4, Val_unit); //Store_field_list(ret, 4, x->specializations(), TranslateVarDecl(child));
     });
 
@@ -2617,7 +2657,11 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
         });
 
       GENERATE_NODE_INDIRECT(MaterializeTemporaryExpr, ret, node, 4, {
+#if CLANG_VERSION_MAJOR < 10
           Store_field(ret, 0, TranslateExpr(x->GetTemporaryExpr()));
+#else
+          Store_field(ret, 0, TranslateExpr(x->getSubExpr()));
+#endif
           Store_field(ret, 1, TranslateStorageDuration(x->getStorageDuration()));
           Store_field_option(ret, 2, x->getExtendingDecl(), TranslateDecl(x->getExtendingDecl()));
           Store_field(ret, 3, Val_bool(x->isBoundToLvalueReference()));
@@ -4714,7 +4758,13 @@ CAML_EXPORT value mlclang_parse(value command, value target, value name, value a
   // source file
   ci.createFileManager();
   ci.createSourceManager(ci.getFileManager());
+#if CLANG_VERSION_MAJOR < 10
   const FileEntry *pFile = ci.getFileManager().getFile(String_val(name));
+#else
+  auto x = ci.getFileManager().getFile(String_val(name));
+  if (!x) caml_failwith("mlClangAST: cannot get FileEntry");
+  const FileEntry *pFile = x.get();
+#endif
   if (!pFile) caml_failwith("mlClangAST: cannot get FileEntry");
   SourceManager& src = ci.getSourceManager();
   src.setMainFileID(src.createFileID(pFile,SourceLocation(),SrcMgr::C_User));
@@ -4742,7 +4792,11 @@ CAML_EXPORT value mlclang_parse(value command, value target, value name, value a
   ci.getDiagnostics().setClient(diag);
 
   // parsing
+#if CLANG_VERSION_MAJOR < 10
   ci.setASTConsumer(llvm::make_unique<MLTreeBuilderConsumer>(loc, &tmp, src, com));
+#else
+  ci.setASTConsumer(std::make_unique<MLTreeBuilderConsumer>(loc, &tmp, src, com));
+#endif
   ci.createASTContext();
   ci.getDiagnosticClient().BeginSourceFile(ci.getLangOpts(), &pp);
   ASTContext& Context = ci.getASTContext();
