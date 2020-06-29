@@ -24,7 +24,7 @@
 *)
 
 open Mopsa
-open Core.Sig.Domain.Reduction
+open Framework.Sig.Reduction.Simplified
 
 
 module Reduction =
@@ -37,8 +37,7 @@ struct
   module R = Relational.Domain
 
   (** Get a list of variables related numerically to [v] *)
-  let get_related_vars v man a =
-    man.ask (R.Q_related_vars v) a
+  let get_related_vars v man = man.ask (R.Q_related_vars v)
 
 
   (** Get the list of modified variables *)
@@ -58,7 +57,7 @@ struct
 
 
   (** Reduction operator *)
-  let reduce ctx stmt (man: 'a man) (pre:'a) (post:'a) : 'a =
+  let reduce stmt (man: 'a simplified_reduction_man) ctx (pre:'a) (post:'a) : 'a =
     (* Get the modified variables *)
     let vars = get_modified_vars stmt man pre in
 
@@ -81,4 +80,4 @@ end
 
 
 let () =
-  register_reduction (module Reduction)
+  register_simplified_reduction (module Reduction)

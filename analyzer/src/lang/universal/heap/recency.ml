@@ -24,18 +24,17 @@
 
 
 open Mopsa
-open Framework.Core.Sig.Stacked.Intermediate
+open Framework.Sig.Abstraction.Domain
 open Ast
 open Zone
 (* open Policies *)
 
-module Pool = Framework.Lattices.Powerset.Make(
-                  struct
-                    type t = addr
-                    let compare = compare_addr
-                    let print = pp_addr
-                  end
-                )
+module Pool = Framework.Lattices.Powerset.Make
+    (struct
+      type t = addr
+      let compare = compare_addr
+      let print = pp_addr
+    end)
 
 type _ query +=
   | Q_allocated_addresses : addr list query
@@ -131,19 +130,13 @@ struct
 
   let is_bottom _ = false
 
-  let subset man ctx (a,s) (a',s') =
-    let r1, r2, r3 = Pool.subset a a', s, s' in
-    if not r1 then Debug.debug ~channel:"explain" "%s not sub@.a' diff a = %a@a diff a' = %a@." name Pool.print (Pool.diff a' a) Pool.print (Pool.diff a a');
-    r1, r2, r3
+  let subset = Pool.subset
 
-  let join man ctx (a,s) (a',s') =
-    Pool.join a a', s, s'
+  let join = Pool.join
 
-  let meet man ctx (a,s) (a',s') =
-    Pool.meet a a', s, s'
+  let meet = Pool.meet
 
-  let widen man ctx (a,s) (a',s') =
-    Pool.join a a', s, s', true
+  let widen ctx = Pool.join
 
   let merge pre (a,log) (a',log') =
     assert false
@@ -278,10 +271,8 @@ struct
 
     | _ -> None
 
-  let refine channel man flow = Channel.return flow
-
 end
 
 
 let () =
-  Framework.Core.Sig.Stacked.Intermediate.register_stack (module Domain)
+  register_standard_domain (module Domain)

@@ -22,7 +22,7 @@
 (** Handling of class definition and instantiation. *)
 
 open Mopsa
-open Framework.Core.Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Ast
 open Addr
 open Universal.Ast
@@ -106,7 +106,7 @@ struct
 
     | _ -> None
 
-  let rec exec zone stmt (man:('a, unit) man) (flow:'a flow) : 'a post option =
+  let rec exec zone stmt (man:('a, unit, 's) man) (flow:'a flow) : 'a post option =
     let range = srange stmt in
     match skind stmt with
     (* 𝕊⟦ class cls: body ⟧ *)
@@ -164,4 +164,4 @@ struct
 end
 
 let () =
-  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+  register_stateless_domain (module Domain)

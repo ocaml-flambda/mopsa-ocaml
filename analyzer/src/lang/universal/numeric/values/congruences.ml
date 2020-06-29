@@ -22,7 +22,7 @@
 (** Congruence abstraction of integer values. *)
 
 open Mopsa
-open Core.Sig.Value.Lowlevel
+open Framework.Sig.Abstraction.Value
 open Ast
 open Bot
 
@@ -45,8 +45,6 @@ struct
 
   let zones = [Zone.Z_u_num]
 
-  let mem_type = function T_int | T_bool -> true | _ -> false
-
   let bottom = BOT
 
   let top = Nb (C.minf_inf)
@@ -60,30 +58,46 @@ struct
 
   let meet (a1:t) (a2:t) : t = C.meet_bot a1 a2
 
-  let widen ctx (a1:t) (a2:t) : t = join a1 a2
+  let widen (a1:t) (a2:t) : t = join a1 a2
 
   let print fmt (a:t) = C.fprint_bot fmt a
 
-  let constant t = function
-    | C_bool true -> Nb (C.cst_int 1)
+  let constant t c =
+    match t with
+    | T_int | T_bool ->
+      let v = match c with
+        | C_bool true -> Nb (C.cst_int 1)
+        | C_bool false -> Nb (C.cst_int 0)
+        | C_int i -> Nb (C.cst i)
+        | C_int_interval (i1,i2) -> Nb (C.of_range i1 i2)
+        | _ -> top
+      in
+      Some v
+    | _ -> None
 
-    | C_bool false -> Nb (C.cst_int 0)
+  let cast man t e =
+    match t, e.etyp with
+    | (T_int | T_bool), T_float _ ->
+      let float_itv = man.ask (Common.Q_float_interval e) in
+      let itv = ItvUtils.FloatItvNan.to_int_itv float_itv in
+      begin match itv with
+        | BOT -> Some bottom
+        | Nb(a,b) -> Some (C.of_bound_bot a b)
+      end
 
-    | C_int i -> Nb (C.cst i)
+    | (T_int | T_bool), _ -> Some top
 
-    | C_int_interval (i1,i2) -> Nb (C.of_range i1 i2)
+    | _ -> None
 
-    | _ -> top
-
-  let unop man = lift_simplified_unop (fun op a ->
+  let unop op t a =
     match op with
     | O_log_not -> bot_lift1 C.log_not a
     | O_minus  -> bot_lift1 C.neg a
     | O_plus  -> a
     | _ -> top
-    ) man
 
-  let binop man = lift_simplified_binop (fun op a1 a2 ->
+
+  let binop op t a1 a2 =
     match op with
     | O_plus   -> bot_lift2 C.add a1 a2
     | O_minus  -> bot_lift2 C.sub a1 a2
@@ -95,16 +109,15 @@ struct
     | O_bit_rshift -> bot_absorb2 C.shift_right a1 a2
     | O_bit_lshift -> bot_absorb2 C.shift_left a1 a2
     | _     -> top
-    ) man
 
-  let filter man = lift_simplified_filter (fun a b ->
+  let filter b t a =
     if b then bot_absorb1 C.meet_nonzero a
     else bot_absorb1 C.meet_zero a
-    ) man
 
-  let bwd_unop man = lift_simplified_bwd_unop (fun op abs rabs ->
+
+  let bwd_unop op t a r =
     try
-      let a, r = bot_to_exn abs, bot_to_exn rabs in
+      let a, r = bot_to_exn a, bot_to_exn r in
       let aa = match op with
         | O_minus  -> bot_to_exn (C.bwd_neg a r)
         | _ -> a
@@ -112,9 +125,8 @@ struct
       Nb aa
     with Found_BOT ->
       bottom
-    ) man
 
-  let bwd_binop man = lift_simplified_bwd_binop (fun op a1 a2 r ->
+  let bwd_binop op t a1 a2 r =
     try
       let a1, a2, r = bot_to_exn a1, bot_to_exn a2, bot_to_exn r in
       let aa1, aa2 =
@@ -131,14 +143,15 @@ struct
       Nb aa1, Nb aa2
     with Found_BOT ->
       bottom, bottom
-    ) man
 
-  let predicate man typ op x r = default_predicate man typ op x r
+  let bwd_cast = default_bwd_cast
 
-  let compare man = lift_simplified_compare (fun op a1 a2 r ->
+  let predicate = default_predicate
+
+  let compare op b t a1 a2 =
     try
       let a1, a2 = bot_to_exn a1, bot_to_exn a2 in
-      let op = if r then op else negate_comparison_op op in
+      let op = if b then op else negate_comparison_op op in
       let aa1, aa2 =
         match op with
         | O_eq -> bot_to_exn (C.filter_eq a1 a2)
@@ -152,24 +165,22 @@ struct
       Nb aa1, Nb aa2
     with Found_BOT ->
       bottom, bottom
-    ) man
 
 
-  let ask : type r. ('a,t) man -> ('a,r) vquery -> r option =
-    fun man query ->
-      match query with
-      | NormalQuery(Common.Q_int_congr_interval e) ->
-        let c = man.eval e |> man.get in
-        let ret =
-          match c with
-          | BOT -> Intervals.Integer.Value.bottom, C.minf_inf
-          | Nb cc -> Intervals.Integer.Value.top, cc
-        in
-        OptionExt.return ret
+  let ask : type r. t value_man -> r query -> r option = fun man query ->
+    match query with
+    | Common.Q_int_congr_interval e ->
+      let c = man.eval e in
+      let ret =
+        match c with
+        | BOT -> Intervals.Integer.Value.bottom, C.minf_inf
+        | Nb cc -> Intervals.Integer.Value.top, cc
+      in
+      OptionExt.return ret
 
-      | _ -> None
+    | _ -> None
 
 end
 
 let () =
-  register_value (module Value)
+  register_value_abstraction (module Value)

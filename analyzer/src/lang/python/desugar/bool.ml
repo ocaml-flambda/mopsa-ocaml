@@ -22,7 +22,7 @@
 (** Handling of and/or operators. *)
 
 open Mopsa
-open Framework.Core.Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Ast
 open Addr
 open Universal.Ast
@@ -45,7 +45,7 @@ module Domain =
 
     let init _ _ flow = flow
 
-    let eval zs exp (man:('a, unit) man) (flow:'a flow) =
+    let eval zs exp (man:('a, unit, 's) man) (flow:'a flow) =
       let range = erange exp in
       match ekind exp with
       | E_unop(O_py_not, e) ->
@@ -192,5 +192,4 @@ module Domain =
 
   end
 
-let () =
-  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+let () = register_stateless_domain (module Domain)

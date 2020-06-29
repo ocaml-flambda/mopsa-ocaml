@@ -184,11 +184,9 @@ void *memrchr (const void *__s, int __c, size_t __n);
 
 /*$
  * requires: valid_string(__s);
- * ensures:  exists size_t i in [0, (size(__s) - offset(__s))): ( 
- *             __s[i] == 0 and 
- *             (forall size_t j in [0, i): __s[j] != 0) and
- *             return == i 
- *          );
+ * ensures:  return in [0, size(__s) - offset(__s));
+ * ensures:  __s[return] == 0;
+ * ensures:  forall size_t j in [0, return): __s[j] != 0;
  */
 size_t strlen (const char *__s);
 
@@ -350,6 +348,9 @@ char *__strdup (const char *__s);
  * local: size_t len = strnlen(__s, __n);
  *
  * case "success" {
+ *   requires: len < cast(size_t, -1); // FIXME: SIZE_MAX is defined in <limits.h> as (size_t)-1,
+ *                                     // however the stubs parser can't yet parse casts to typedefs
+ *                                     // due to conflict with parenthezied variables
  *   local: char* r = new Memory;
  *   ensures: size(r) == len + 1;
  *   ensures: forall size_t i in [0, len): r[i] == __s[i];

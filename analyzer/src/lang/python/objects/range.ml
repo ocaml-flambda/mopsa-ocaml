@@ -23,7 +23,7 @@
 (* FIXME: range(1, 10, -1) ; range(10, 1, 1) ; range(1, 3, 0) *)
 
 open Mopsa
-open Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Ast
 open Addr
 open Universal.Ast
@@ -184,12 +184,12 @@ struct
 
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range.__new__", _))}, _)} as call, cls :: [up], []) ->
-      let args' = (mk_constant T_int (C_int (Z.of_int 0)) range)::up::(mk_constant T_int (C_int (Z.of_int 1)) range)::[] in
+      let args' = (mk_constant ~etyp:T_int (C_int (Z.of_int 0)) range)::up::(mk_constant ~etyp:T_int (C_int (Z.of_int 1)) range)::[] in
       man.eval {exp with ekind = E_py_call(call, cls :: args', [])} flow
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range.__new__", _))}, _)} as call, cls :: [down; up], []) ->
-      let args' = down::up::(mk_constant T_int (C_int (Z.of_int 1)) range)::[] in
+      let args' = down::up::(mk_constant ~etyp:T_int (C_int (Z.of_int 1)) range)::[] in
       man.eval {exp with ekind = E_py_call(call, cls :: args', [])} flow
       |> OptionExt.return
 
@@ -384,4 +384,4 @@ struct
 end
 
 let () =
-  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+  register_stateless_domain (module Domain)

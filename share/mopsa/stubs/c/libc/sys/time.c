@@ -28,6 +28,13 @@
 #include "../mopsa_libc_utils.h"
 #include <fcntl.h> // for AT_FDCWD
 
+/*
+  Starting from glibc 2.31, __timezone_ptr_t is replaced by void*
+*/
+#if __GLIBC_MINOR__ >= 31
+#define __timezone_ptr_t void*
+#endif
+
 /*$$
  * predicate valid_primed_tv(tv):
  *   (tv.tv_sec)' in [0, 2000000000] and // we are somewhere between 1970 and 2030

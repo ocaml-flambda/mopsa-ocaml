@@ -24,7 +24,7 @@
 (* Originally written by Abdelraouf Ouadjaout (see commit #9619db0103d72f03eb12bb1c39d34881889ec216)) *)
 
 open Mopsa
-open Framework.Core.Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Addr
 open Ast
 open Universal.Ast
@@ -57,7 +57,7 @@ module Domain =
             | _ -> tests) [] stmts
       | _ -> assert false
 
-    let eval zones exp (man:('a, unit) man) (flow:'a flow) =
+    let eval zones exp (man:('a, unit, 's) man) (flow:'a flow) =
       let range = exp.erange in
       match ekind exp with
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.main", _))}, _)}, [], []) ->
@@ -225,4 +225,4 @@ module Domain =
 
   end
 
-let () = Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+let () = register_stateless_domain (module Domain)

@@ -22,7 +22,7 @@
 (** Finite powerset of integer constants *)
 
 open Mopsa
-open Core.Sig.Value.Simplified
+open Framework.Sig.Abstraction.Value
 open Ast
 open Zone
 open Top
@@ -59,9 +59,6 @@ struct
 
 
   let zones = [Z_u_num]
-
-  let mem_type = function T_int | T_bool -> true | _ -> false
-
 
 
   (** {2 Options} *)
@@ -124,15 +121,27 @@ struct
   (** ********************* *)
 
 
-  let constant = function
-    | C_bool true -> singleton Z.one |> bound
-    | C_bool false -> singleton Z.zero |> bound
-    | C_top T_bool -> of_bounds Z.zero Z.one |> bound
-    | C_int n -> singleton n |> bound
-    | C_int_interval (i1,i2) -> of_bounds i1 i2
-    | _ -> TOP
+  let constant t c =
+    match t with
+    | T_int | T_bool ->
+      let v = match c with
+        | C_bool true -> singleton Z.one |> bound
+        | C_bool false -> singleton Z.zero |> bound
+        | C_top T_bool -> of_bounds Z.zero Z.one |> bound
+        | C_int n -> singleton n |> bound
+        | C_int_interval (i1,i2) -> of_bounds i1 i2
+        | _ -> TOP
+      in
+      Some v
+    | _ -> None
 
-  let unop op a =
+  let cast man t e =
+    match t with
+    | T_int | T_bool -> Some top
+    | _              -> None
+
+
+  let unop op t a =
     match op with
     | O_plus       -> a
     | O_minus      -> map Z.neg a
@@ -153,7 +162,7 @@ struct
         ) a1 empty
       |> bound
       
-  let binop op a1 a2 =
+  let binop op t a1 a2 =
     if is_bottom a1 || is_bottom a2 then bottom else
     if is_top a1 || is_top a2 then top else
       let with_int f a b = f a (Z.to_int b) in
@@ -192,7 +201,7 @@ struct
       with Z.Overflow -> TOP
 
 
-  let widen ctx (a1:t) (a2:t) : t =
+  let widen (a1:t) (a2:t) : t =
     (*if subset a2 a1 then a1 else TOP*)
     join a1 a2
 
@@ -202,18 +211,18 @@ struct
   (** ********************** *)
 
 
-  let filter a b =
+  let filter b t a =
     if b then remove Z.zero a
     else meet a (singleton Z.zero)
 
-  let bwd_unop op abs rabs =
+  let bwd_unop op t a r =
     match op with
-    | O_plus       -> meet abs rabs
-    | O_minus      -> meet abs (map Z.neg rabs)
-    | O_bit_invert -> meet abs (map Z.lognot rabs)
-    | _ -> default_bwd_unop op abs rabs
+    | O_plus       -> meet a r
+    | O_minus      -> meet a (map Z.neg r)
+    | O_bit_invert -> meet a (map Z.lognot r)
+    | _ -> default_bwd_unop op t a r
 
-  let bwd_binop op a1 a2 r =
+  let bwd_binop op t a1 a2 r =
     let b1, b2 =  match op with
       | O_plus  -> meet a1 (map2 Z.sub r a2), meet a2 (map2 Z.sub r a1)
       | O_minus -> meet a1 (map2 Z.add a2 r), meet a2 (map2 Z.sub a1 r)
@@ -222,13 +231,14 @@ struct
         else meet a1 (map2 Z.div r a2), meet a2 (map2 Z.div r a1)
       | _ ->
         (* TODO: support precisely other operators *)
-        default_bwd_binop op a1 a2 r
+        default_bwd_binop op t a1 a2 r
     in
     if is_empty b1 || is_empty b2 then bottom, bottom
     else b1,b2
 
+  let bwd_cast = default_bwd_cast
 
-  let predicate op x r = default_predicate op x r
+  let predicate = default_predicate
 
 
 
@@ -244,8 +254,8 @@ struct
       let m = minmax b2 in
       Powerset.filter (fun n -> cmp n m) a1
 
-  let compare op a1 a2 r =
-    let op = if r then op else negate_comparison_op op in
+  let compare op b t a1 a2 =
+    let op = if b then op else negate_comparison_op op in
     let b1,b2 =
       match op with
       | O_eq -> let a = meet a1 a2 in a,a
@@ -261,13 +271,15 @@ struct
         filt a1 Z.lt Set.max_elt a2, filt a2 Z.gt Set.min_elt a1
       | O_gt ->
         filt a1 Z.gt Set.min_elt a2, filt a2 Z.lt Set.max_elt a1
-      | _ -> default_compare op a1 a2 r
+      | _ -> default_compare op b t a1 a2
     in
     if is_empty b1 || is_empty b2 then bottom, bottom
     else b1,b2
 
 
+  let ask man q = None
+
 end
 
 let () =
-  register_value (module Value)
+  register_value_abstraction (module Value)

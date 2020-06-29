@@ -19,7 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 open Mopsa
-open Sig.Domain.Intermediate
+open Sig.Abstraction.Stateless
 open Ast
 open Addr
 open Universal.Ast
@@ -171,8 +171,7 @@ struct
 
   let exec _ _ _ _ = None
   let ask _ _ _ = None
-  let refine c m f = Channel.return f
 
 end
 
-let () = Framework.Core.Sig.Domain.Stateless.register_domain (module Domain);
+let () = register_stateless_domain (module Domain);

@@ -45,37 +45,18 @@
             "python.types.t_int",
             "python.types.t_float",
             "python.types.t_complex",
-
-            {
-                "apply": {
-                    "compose": [
-                        "universal.heap.recency",
-                        // {
-                        //     "product": [
-                        //         "python.types.addr_env",
-                        //         "python.types.polymorphism"
-                        //     ],
-                        //     "reductions": ["python.types.reductions.polymorphism"]
-                        // }
-                        "python.types.addr_env"
-                    ]
-                },
-                "on":
-                { "seq":
-                  [
-                      "python.types.nominal_types",
-                      "python.types.structural_types",
-                      "python.types.type_annot",
-                      "python.objects.list",
-                      "python.objects.tuple",
-                      "python.objects.dict",
-                      "python.objects.set",
-                      "python.objects.iterable",
-                      "universal.strings.powerset",
-                      "python.types.dummy_numeric"
-                  ]
-                }
-            }
+            "universal.heap.recency",
+            "python.types.addr_env",
+            "python.types.nominal_types",
+            "python.types.structural_types",
+            "python.types.type_annot",
+            "python.objects.list",
+            "python.objects.tuple",
+            "python.objects.dict",
+            "python.objects.set",
+            "python.objects.iterable",
+            "universal.strings.powerset",
+            "python.types.dummy_numeric"
         ]
     }
 }

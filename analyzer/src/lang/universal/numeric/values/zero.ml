@@ -22,7 +22,7 @@
 (** Abstraction of zero and non-zero integer values. *)
 
 open Mopsa
-open Core.Sig.Value.Simplified
+open Framework.Sig.Abstraction.Value
 open Ast
 
 
@@ -44,8 +44,6 @@ struct
     )
 
   let zones = [Zone.Z_u_num]
-
-  let mem_type = function T_int | T_bool -> true | _ -> false
 
   let bottom = BOT
 
@@ -80,7 +78,7 @@ struct
     | NON_ZERO, NON_ZERO -> NON_ZERO
     | ZERO, NON_ZERO | NON_ZERO, ZERO -> BOT
 
-  let widen ctx (a1:t) (a2:t) : t = join a1 a2
+  let widen (a1:t) (a2:t) : t = join a1 a2
 
   let print fmt (a:t) =
     match a with
@@ -89,26 +87,39 @@ struct
     | ZERO -> Format.fprintf fmt "0"
     | NON_ZERO -> Format.fprintf fmt "≠ 0"
 
-  let constant = function
-    | C_bool true -> NON_ZERO
+  let constant t c =
+    match t with
+    | T_int | T_bool ->
+      let v = match c with
+        | C_bool true -> NON_ZERO
 
-    | C_bool false -> ZERO
+        | C_bool false -> ZERO
 
-    | C_int i when Z.equal i Z.zero -> ZERO
+        | C_int i when Z.equal i Z.zero -> ZERO
 
-    | C_int i -> NON_ZERO
+        | C_int i -> NON_ZERO
 
-    | C_int_interval (i1,i2) when Z.equal i1 Z.zero &&
-                                  Z.equal i2 Z.zero ->
-      ZERO
+        | C_int_interval (i1,i2) when Z.equal i1 Z.zero &&
+                                      Z.equal i2 Z.zero ->
+          ZERO
 
-    | C_int_interval (i1,i2) when Z.gt i1 Z.zero ||
-                                  Z.lt i2 Z.zero ->
-      NON_ZERO
+        | C_int_interval (i1,i2) when Z.gt i1 Z.zero ||
+                                      Z.lt i2 Z.zero ->
+          NON_ZERO
 
-    | _ -> TOP
+        | _ -> TOP
+      in
+      Some v
 
-  let unop op a =
+    | _ -> None
+
+  let cast man t e =
+    match t with
+    | T_int | T_bool -> Some top
+    | _              -> None
+      
+
+  let unop op t a =
     match op with
     | O_log_not -> begin match a with
         | TOP -> TOP
@@ -120,7 +131,7 @@ struct
     | O_plus  -> a
     | _ -> top
 
-  let binop op a1 a2 =
+  let binop op t a1 a2 =
     match op with
     | O_plus | O_minus ->
       begin match a1, a2 with
@@ -139,21 +150,23 @@ struct
       end
     | _     -> top
 
-  let filter a b =
+  let filter b t a =
     match a with
     | TOP -> TOP
     | BOT -> BOT
     | ZERO -> if b then BOT else a
     | NON_ZERO -> if b then a else BOT
 
-  let bwd_unop op abs rabs = default_bwd_unop op abs rabs
+  let bwd_unop = default_bwd_unop
 
-  let bwd_binop op a1 a2 r = default_bwd_binop op a1 a2 r
+  let bwd_binop = default_bwd_binop
 
-  let predicate op x r = default_predicate op x r
+  let bwd_cast = default_bwd_cast
 
-  let compare op a1 a2 r =
-    let op = if r then op else negate_comparison_op op in
+  let predicate = default_predicate
+
+  let compare op b t a1 a2 =
+    let op = if b then op else negate_comparison_op op in
     match op with
     | O_eq ->
       let a = meet a1 a2 in
@@ -168,10 +181,11 @@ struct
         | _ -> a1, a2
       end
 
-    | _ -> default_compare op a1 a2 r
+    | _ -> default_compare op b t a1 a2
 
+  let ask man q = None
 
 end
 
 let () =
-  register_value (module Value)
+  register_value_abstraction (module Value)

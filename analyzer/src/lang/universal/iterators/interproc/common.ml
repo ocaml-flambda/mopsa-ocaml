@@ -23,7 +23,7 @@
 
 
 open Mopsa
-open Framework.Core.Sig.Domain.Stateless
+open Framework.Sig.Abstraction.Stateless
 open Ast
 
 

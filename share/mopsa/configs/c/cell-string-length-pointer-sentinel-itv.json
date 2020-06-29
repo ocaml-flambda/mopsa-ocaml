@@ -41,38 +41,36 @@
 
             // Memory model
             "c.desugar.aggregates",
+            "universal.heap.recency",
 	    {
-                "apply": {
-                    "compose": [
-                        "universal.heap.recency",
-                        {
-                            "product": [
-                                "c.memory.lowlevel.cells",
-                                "c.memory.lowlevel.string_length",
-                                "c.memory.lowlevel.pointer_sentinel"
-                            ],
-                            "reductions": [
-				"c.memory.lowlevel.reductions.cell_string_length",
-                                "c.memory.lowlevel.reductions.cell_pointer_sentinel"
-                            ]
-                        },
-                        {
-                            "seq": [
-			        "c.memory.scalars.pointer",
-			        "c.memory.scalars.machine_numbers"
-                            ]
-                        }
-                    ]
-                },
-		"on": {
-                    "nonrel": {
-			"union": [
-			    "universal.numeric.values.intervals.float",
-                            "universal.numeric.values.intervals.integer"
-			]
-		    }
-                }
-            }
+                "compose": [
+                    {
+                        "product": [
+                            "c.memory.lowlevel.cells",
+                            "c.memory.lowlevel.string_length",
+                            "c.memory.lowlevel.pointer_sentinel"
+                        ],
+                        "reductions": [
+			    "c.memory.lowlevel.reductions.cell_string_length",
+                            "c.memory.lowlevel.reductions.cell_pointer_sentinel"
+                        ]
+                    },
+                    {
+                        "seq": [
+			    "c.memory.scalars.pointer",
+			    "c.memory.scalars.machine_numbers"
+                        ]
+                    },
+		    {
+			"nonrel": {
+			    "union": [
+				"universal.numeric.values.intervals.float",
+				"universal.numeric.values.intervals.integer"
+			    ]
+			}
+                    }
+		]
+	    }
 	]
     }
 }

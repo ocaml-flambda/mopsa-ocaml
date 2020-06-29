@@ -764,7 +764,7 @@ module Double = struct
 
                                
   let bwd_to_z (lo:Z.t) (up:Z.t) (r:t) : t_with_bot =
-    meet r (mk (FF.of_z_down lo) (FF.of_z_up up))
+    bwd_round_int_zero r (mk (FF.of_z_down lo) (FF.of_z_up up))
   (** Backward conversion to int. *)
     
                                
@@ -1080,7 +1080,7 @@ module Single = struct
 
                                
   let bwd_to_z (lo:Z.t) (up:Z.t) (r:t) : t_with_bot =
-    meet r (mk (FF.of_z_down lo) (FF.of_z_up up))
+    bwd_round_int_zero (mk (FF.of_z_down lo) (FF.of_z_up up)) r
   (** Backward conversion to int. *)
     
 

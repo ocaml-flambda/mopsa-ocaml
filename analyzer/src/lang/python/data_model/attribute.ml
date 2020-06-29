@@ -22,7 +22,7 @@
 (** Data model for attribute access. *)
 
 open Mopsa
-open Framework.Core.Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Ast
 open Addr
 open Universal.Ast
@@ -89,7 +89,7 @@ module Domain =
       (* Other attributes *)
       | E_py_attribute (e, attr) ->
          debug "%a@\n" pp_expr expr;
-         let c_attr = mk_constant T_string (C_string attr) range in
+         let c_attr = mk_constant ~etyp:T_string (C_string attr) range in
          man.eval e ~zone:(Zone.Z_py, Zone.Z_py_obj) flow |>
          Eval.bind (fun exp flow ->
              match ekind exp with
@@ -235,7 +235,7 @@ module Domain =
       let range = stmt.srange in
       match skind stmt with
       | S_assign({ekind = E_py_attribute(lval, attr)}, rval) ->
-        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_attr (mk_py_type lval range) "__setattr__" range) [lval; mk_constant T_any (C_string attr) range; rval] range) flow
+        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_attr (mk_py_type lval range) "__setattr__" range) [lval; mk_constant ~etyp:T_any (C_string attr) range; rval] range) flow
         |> Eval.bind (fun e flow -> Post.return flow)
         |> OptionExt.return
 
@@ -245,4 +245,4 @@ module Domain =
   end
 
 
-let () = Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+let () = register_stateless_domain (module Domain)

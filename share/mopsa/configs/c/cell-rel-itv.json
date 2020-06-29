@@ -41,35 +41,33 @@
 
             // Memory model
             "c.desugar.aggregates",
+            "universal.heap.recency",
 	    {
-                "apply": {
-                    "compose": [
-                        "universal.heap.recency",
-			"c.memory.lowlevel.cells",
-                        {
-                            "seq": [
-			        "c.memory.scalars.pointer",
-			        "c.memory.scalars.machine_numbers"
-                            ]
-                        }
-                    ]
-                },
-		"on": {
-                    "product": [
-                        {
-                            "nonrel": {
-			        "union": [
-			            "universal.numeric.values.intervals.float",
-                                    "universal.numeric.values.intervals.integer"
-			        ]
-		            }
-                        },
-                        "universal.numeric.relational"
-                    ],
-                    "reductions": [
-                        "universal.numeric.reductions.intervals_rel"
-                    ]
-                }
+                "compose": [
+		    "c.memory.lowlevel.cells",
+                    {
+                        "seq": [
+			    "c.memory.scalars.pointer",
+			    "c.memory.scalars.machine_numbers"
+                        ]
+                    },
+		    {
+			"product": [
+                            {
+				"nonrel": {
+			            "union": [
+					"universal.numeric.values.intervals.float",
+					"universal.numeric.values.intervals.integer"
+			            ]
+				}
+                            },
+                            "universal.numeric.relational"
+			],
+			"reductions": [
+                            "universal.numeric.reductions.intervals_rel"
+			]
+                    }
+		]
             }
 	]
     }

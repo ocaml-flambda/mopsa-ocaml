@@ -22,7 +22,7 @@
 (** Domain for supporting variable-length arrays *)
 
 open Mopsa
-open Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Universal.Ast
 open Universal.Zone
 open Stubs.Ast
@@ -186,4 +186,4 @@ struct
 end
 
 let () =
-  Sig.Domain.Stateless.register_domain (module Domain)
+  register_stateless_domain (module Domain)

@@ -19,14 +19,12 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Extensible type of types *)
+(** Types *)
 
 
 type typ = ..
 
-(** Basic types *)
-type typ +=
-  | T_any (** Generic unknown type. *)
+type typ += T_any (** Generic unknown type. *)
 
 let typ_compare_chain = TypeExt.mk_compare_chain (fun t1 t2 ->
     match t1, t2 with

@@ -39,7 +39,7 @@
 
 
 open Mopsa
-open Core.Sig.Stacked.Intermediate
+open Sig.Abstraction.Stateless
 open Universal.Ast
 open Stubs.Ast
 open Ast
@@ -60,7 +60,6 @@ struct
   (** ***************** *)
 
   include GenStatelessDomainId(struct
-      (*type t = M.t*)
       let name = "c.memory.lowlevel.string_length"
     end)
 
@@ -851,4 +850,4 @@ struct
 end
 
 let () =
-  Core.Sig.Stacked.Stateless.register_stack (module Domain)
+  register_stateless_domain (module Domain)

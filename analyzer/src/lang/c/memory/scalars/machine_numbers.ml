@@ -22,7 +22,7 @@
 (** Machine representation of C integers and floats *)
 
 open Mopsa
-open Framework.Core.Sig.Stacked.Stateless
+open Sig.Abstraction.Stateless
 open Universal.Ast
 open Stubs.Ast
 open Ast
@@ -436,7 +436,7 @@ struct
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e flow ->
       let exp' =
         mk_unop
-          (O_cast (to_num_type e.etyp, to_num_type exp.etyp))
+          O_cast
           e ~etyp:(to_num_type exp.etyp) exp.erange
       in
       Eval.singleton exp' flow |>
@@ -448,7 +448,7 @@ struct
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e flow ->
       let exp' =
         mk_unop
-          (O_cast (to_num_type e.etyp, to_num_type exp.etyp))
+          O_cast
           e ~etyp:(to_num_type exp.etyp) exp.erange
       in
       Eval.singleton exp' flow |>
@@ -507,7 +507,7 @@ struct
     if is_c_int_type t then
       let l,u = rangeof t in
       let vv = match ekind vv with E_var (vv, _) -> vv | _ -> assert false in
-      Framework.Transformers.Value.Nonrel.add_var_bounds_flow vv (C_int_interval (l,u)) flow
+      Framework.Combiners.Value.Nonrel.add_var_bounds_flow vv (C_int_interval (l,u)) flow
     else
       flow
 
@@ -592,7 +592,7 @@ struct
       Post.bind (fun flow ->
           if is_c_int_type v.etyp then
             let vv = match ekind vv with E_var (vv,_) -> vv | _ -> assert false in
-            Framework.Transformers.Value.Nonrel.remove_var_bounds_flow vv flow |>
+            Framework.Combiners.Value.Nonrel.remove_var_bounds_flow vv flow |>
             Post.return
           else
             Post.return flow
@@ -645,4 +645,4 @@ struct
 end
 
 let () =
-  Framework.Core.Sig.Stacked.Stateless.register_stack (module Domain)
+  register_stateless_domain (module Domain)

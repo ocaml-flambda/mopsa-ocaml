@@ -23,7 +23,6 @@
 (** Entry point for parsing format strings *)
 
 open Mopsa
-open Framework.Core.Sig.Domain.Manager
 open Universal.Ast
 open Ast
 open Placeholder
@@ -47,7 +46,7 @@ let format_of_wide_format str t =
       if c >= Z.zero && c <= Z.of_int 255 then Z.to_int c
       else 32 (* default to space *)
     in
-    r.[i] <- Char.chr c;
+    Bytes.set r i (Char.chr c);
   done;
   Bytes.to_string r
 
@@ -55,18 +54,17 @@ let format_of_wide_format str t =
 (** Evaluate an expression of format string into a string *)
 let eval_format_string wide format range man flow =
   man.eval ~zone:(Z_c,Z_c_points_to) format flow >>$ fun pt flow ->
-  let man' = Core.Sig.Stacked.Manager.of_domain_man man in
   match ekind pt with
   | E_c_points_to P_null ->
-    raise_c_null_deref_alarm format man' flow |>
+    raise_c_null_deref_alarm format man flow |>
     Cases.empty_singleton
 
   | E_c_points_to P_invalid ->
-    raise_c_invalid_deref_alarm format man' flow |>
+    raise_c_invalid_deref_alarm format man flow |>
     Cases.empty_singleton
 
   | E_c_points_to (P_block ({ base_kind = Addr addr; base_valid = false; base_invalidation_range = Some r}, _, _)) ->
-    raise_c_use_after_free_alarm format r man' flow |>
+    raise_c_use_after_free_alarm format r man flow |>
     Cases.empty_singleton
 
   | E_c_points_to (P_block ({ base_kind = String (fmt,C_char_ascii,_) }, offset, _)) when not wide ->

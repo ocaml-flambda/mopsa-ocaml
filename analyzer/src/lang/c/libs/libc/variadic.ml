@@ -24,7 +24,7 @@
 
 
 open Mopsa
-open Framework.Core.Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Universal.Ast
 open Ast
 open Zone
@@ -205,7 +205,7 @@ struct
           )
         ~felse:(fun eflow ->
             man.eval offset ~zone:(Z_c_scalar,Universal.Zone.Z_u_num) flow >>$ fun offset flow ->
-            raise_c_out_var_bound_alarm ap offset (under_type ap.vtyp) range (Core.Sig.Stacked.Manager.of_domain_man man) flow eflow |>
+            raise_c_out_var_bound_alarm ap offset (under_type ap.vtyp) range man flow eflow |>
             Cases.empty_singleton
           )
         ~zone:Z_c
@@ -268,7 +268,7 @@ struct
         )
       ~felse:(fun eflow ->
           (* Raise an alarm since no next argument can be fetched by va_arg *)
-          let flow' = raise_c_insufficient_variadic_args ap valc unnamed range (Sig.Stacked.Manager.of_domain_man man) flow eflow in
+          let flow' = raise_c_insufficient_variadic_args ap valc unnamed range man flow eflow in
           Eval.empty_singleton flow'
         )
       ~zone:Universal.Zone.Z_u_num
@@ -324,4 +324,4 @@ struct
 end
 
 let () =
-  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+  register_stateless_domain (module Domain)

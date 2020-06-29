@@ -22,7 +22,7 @@
 (** Desugaring loops into a usual case *)
 
 open Mopsa
-open Framework.Core.Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Addr
 open Universal.Ast
 open Ast
@@ -146,4 +146,4 @@ module Domain =
   end
 
 let () =
-  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+  register_stateless_domain (module Domain)

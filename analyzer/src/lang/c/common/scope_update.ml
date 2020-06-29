@@ -23,7 +23,6 @@
 (** Utility functions for updating the scope due to jump statements *)
 
 open Mopsa
-open Sig.Domain.Manager
 open Universal.Ast
 open Ast
 

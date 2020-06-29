@@ -45,10 +45,6 @@ struct
 
   let singleton (x:t) : t = x
 
-  let fst ((a,_):t) : First.t = a
-
-  let snd ((_,b):t) : Second.t = b
-
   let map_fst (f:(First.t -> First.t)) ((a,b) as x:t) : t =
     let a' = f a in
     if a' == a then x else (a',b)
@@ -63,17 +59,30 @@ struct
   let subset ((a1,b1):t) ((a2,b2):t) : bool =
     First.subset a1 a2 && Second.subset b1 b2
 
-  let join ((a1,b1) as x:t) ((a2,b2):t) : t =
-    if a1 == a2 && b1 == b2 then x else
-    (First.join a1 a2, Second.join b1 b2)
+  let apply f1 f2 ((v1,v2) as v) =
+    let r1 = f1 v1 in
+    let r2 = f2 v2 in
+    if r1 == v1 && r2 == v2 then v
+    else (r1,r2)
 
-  let meet ((a1,b1) as x:t) ((a2,b2):t) : t =
-    if a1 == a2 && b1 == b2 then x else
-    (First.meet a1 a2, Second.meet b1 b2)
+  let apply2 f1 f2 ((v1,v2) as v) ((w1,w2) as w) =
+    let r1 = f1 v1 w1 in
+    let r2 = f2 v2 w2 in
+    if r1 == v1 && r2 == v2 then v else
+    if r1 == w1 && r2 == w2 then w
+    else (r1,r2)
 
-  let widen ctx ((a1,b1) as x:t) ((a2,b2):t) : t =
-    if a1 == a2 && b1 == b2 then x else
-    (First.widen ctx a1 a2, Second.widen ctx b1 b2)
+  let join ((v1,v2) as v:t) ((w1,w2) as w:t) : t =
+    if v1 == w1 && v2 == w2 then v else
+    apply2 First.join Second.join v w
+
+  let meet ((v1,v2) as v:t) ((w1,w2) as w:t) : t =
+    if v1 == w1 && v2 == w2 then v else
+    apply2 First.meet Second.meet v w
+
+  let widen ((v1,v2) as v:t) ((w1,w2) as w:t) : t =
+    if v1 == w1 && v2 == w2 then v else
+    apply2 First.widen Second.widen v w
 
   let print fmt ((a,b):t) : unit =
     Format.fprintf fmt "(%a, %a)" First.print a Second.print b

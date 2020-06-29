@@ -43,7 +43,7 @@ struct
 
   let top : t = TOP
 
-  let is_top (abs: t) = top_dfl1 true (fun x -> false) abs
+  let is_top (abs: t) = abs = TOP
 
   let subset (abs1:t) (abs2:t) : bool =
     top_included Set.subset abs1 abs2
@@ -68,7 +68,7 @@ struct
     then bottom
     else top_lift2 Set.diff abs1 abs2
 
-  let widen ctx (abs1:t) (abs2:t) : t =
+  let widen (abs1:t) (abs2:t) : t =
     top_absorb2
       (fun s1 s2 ->
          if Set.subset s2 s1 then

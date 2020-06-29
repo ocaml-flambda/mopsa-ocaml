@@ -22,7 +22,6 @@
 /* Stubs for the extension of stdio as found in Sun's Solaris OS */
 
 #include <stdio_ext.h>
-#include <limits.h>
 
 /*$
  * requires: alive_resource(__fp, File);

@@ -22,7 +22,7 @@
 (** Python standard library. *)
 
 open Mopsa
-open Framework.Core.Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Addr
 open Ast
 open Universal.Ast
@@ -176,7 +176,7 @@ struct
         tyerror flow |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("sum", _))}, _)} as call, [els], [])  ->
-      let args' = els :: (mk_constant T_int (C_int (Z.of_int 0)) range) :: [] in
+      let args' = els :: (mk_constant ~etyp:T_int (C_int (Z.of_int 0)) range) :: [] in
       man.eval {exp with ekind = E_py_call(call, args', [])} flow |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("sum", _))}, _)}, [ els; start ], [])  ->
@@ -185,7 +185,7 @@ struct
       let counter_var = mk_var counter range in
       let target = mk_range_attr_var range "target" T_any in
       let target_var = mk_var target range in
-      let assign = mk_assign counter_var (mk_constant T_int (C_int (Z.of_int 0)) range) range in
+      let assign = mk_assign counter_var (mk_constant ~etyp:T_int (C_int (Z.of_int 0)) range) range in
       let pass = mk_block [] range in
       let for_loop = mk_stmt (S_py_for (target_var, els,
                                         mk_assign counter_var (mk_binop counter_var O_plus target_var range) range,
@@ -412,4 +412,4 @@ struct
 
 end
 
-let () = Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+let () = register_stateless_domain (module Domain)

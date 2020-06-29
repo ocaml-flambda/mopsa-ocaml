@@ -22,7 +22,7 @@
 (** An environment is a total map from variables to addresses. *)
 
 open Mopsa
-open Sig.Stacked.Intermediate
+open Sig.Abstraction.Domain
 open Ast
 open Addr
 open Universal.Ast
@@ -109,7 +109,7 @@ struct
         | PyAddr.Def _ -> false
         | _ -> true
 
-      let widen ctx a b = join a b
+      let widen = join
         (* Top.top_absorb2 (fun a b ->
          *     if Set.cardinal b - Set.cardinal a = 1
          *     && Set.exists undef b && Set.exists undef a then
@@ -128,14 +128,14 @@ struct
       let name = "python.types.addr_env"
     end)
 
-  let subset _ _ (l1, r1) (l2, r2)  = AMap.subset l1 l2, r1, r2
+  let subset = AMap.subset
     (* let r1, r2, r3 = AMap.subset l1 l2, r1, r2 in
      * if not r1 then Debug.debug ~channel:"explain" "%s not sub@." name;
      * r1, r2, r3 *)
 
-  let join _ _ (l1, r1) (l2, r2) = AMap.join l1 l2, r1, r2
-  let meet _ _ (l1, r1) (l2, r2) = AMap.meet l1 l2, r1, r2
-  let widen _ uctx (l1, r1) (l2, r2) = AMap.widen uctx l1 l2, r1, r2, true
+  let join = AMap.join
+  let meet = AMap.meet
+  let widen uctx = AMap.widen
 
   let interface = {
     iexec = { provides = [Zone.Z_py]; uses = [Zone.Z_py; Zone.Z_py_obj; Universal.Zone.Z_u_int; Universal.Zone.Z_u_float; Universal.Zone.Z_u_string]; };
@@ -704,9 +704,7 @@ struct
 
       | _ -> None
 
-  let refine channel man flow = Channel.return flow
-
 end
 
 let () =
-  Framework.Core.Sig.Stacked.Intermediate.register_stack (module Domain);
+  register_standard_domain (module Domain);

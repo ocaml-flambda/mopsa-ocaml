@@ -25,11 +25,6 @@ open Expr
 open Var
 open Stmt
 
-(*==========================================================================*)
-(**                          {2 Structure}                                  *)
-(*==========================================================================*)
-
-
 (** Parts are the direct sub-elements of an AST node *)
 type parts = {
   exprs : expr list; (** child expressions *)
@@ -50,7 +45,7 @@ let leaf (x: 'a) : 'a structure =
 
 
 (** Information record of an AST construct with visitors *)
-type 'a vinfo = {
+type 'a visit_info = {
   compare : 'a TypeExt.compare;
   print   : 'a TypeExt.print;
   visit : ('a -> 'a structure) -> 'a -> 'a structure;
@@ -71,9 +66,9 @@ let expr_visit_chain = ref (fun exp ->
       Exceptions.panic "expr visitor: unknown expression %a" pp_expr exp
   )
 
-let register_expr_with_visitor (info: expr vinfo) : unit =
-  TypeExt.register_compare info.compare expr_compare_chain;
-  TypeExt.register_print info.print expr_pp_chain;
+let register_expr_with_visitor (info: expr visit_info) : unit =
+  register_expr_compare info.compare;
+  register_expr_pp info.print;
   expr_visit_chain := info.visit !expr_visit_chain;
   ()
 
@@ -148,9 +143,9 @@ let stmt_visit_chain : (stmt -> stmt structure) ref =
       | _ -> Exceptions.panic "stmt_visit_chain: unknown statement"
     )
 
-let register_stmt_with_visitor (info: stmt vinfo) : unit =
-  TypeExt.register_compare info.compare stmt_compare_chain;
-  TypeExt.register_print info.print stmt_pp_chain;
+let register_stmt_with_visitor (info: stmt visit_info) : unit =
+  register_stmt_compare info.compare;
+  register_stmt_pp info.print;
   stmt_visit_chain := info.visit !stmt_visit_chain;
   ()
 
@@ -158,16 +153,16 @@ let register_stmt_visitor v : unit =
   stmt_visit_chain := v !stmt_visit_chain;
   ()
 
-let split_expr (expr : expr) : expr structure = !expr_visit_chain expr
+let structure_of_expr (expr : expr) : expr structure = !expr_visit_chain expr
 
-let split_stmt (stmt : stmt) : stmt structure = !stmt_visit_chain stmt
+let structure_of_stmt (stmt : stmt) : stmt structure = !stmt_visit_chain stmt
 
 let is_leaf_expr e =
-  let parts, _ = split_expr e in
+  let parts, _ = structure_of_expr e in
   parts.exprs = [] && parts.stmts = []
 
 let rec is_stmt_free_expr e =
-  let parts, _ = split_expr e in
+  let parts, _ = structure_of_expr e in
   parts.stmts = []
   && List.for_all is_stmt_free_expr parts.exprs
 
@@ -179,7 +174,7 @@ let is_atomic_stmt s =
     false
 
   | _ ->
-    let parts, _ = split_stmt s in
+    let parts, _ = structure_of_stmt s in
     parts.stmts = []
     && List.for_all is_stmt_free_expr parts.exprs
 
@@ -190,7 +185,7 @@ let is_atomic_stmt s =
 
 
 (** Visitor actions *)
-type 'a action =
+type 'a visit_action =
   | Keep of 'a       (** Keep the result *)
   | VisitParts of 'a (** Continue visiting the parts of the result *)
   | Visit of 'a      (** Iterate the visitor on the result *)
@@ -212,69 +207,69 @@ let fold_map_list (f : 'a -> 'b -> ('a * 'b)) (x0 : 'a) (l : 'b list)
     the builder of [fe e].
 *)
 let rec map_expr
-    (fe: expr -> expr action)
-    (fs: stmt -> stmt action)
+    (fe: expr -> expr visit_action)
+    (fs: stmt -> stmt visit_action)
     (e: expr) : expr =
   match fe e with
   | Keep e' -> e'
   | Visit e' -> map_expr fe fs e'
   | VisitParts e' ->
-    let parts, builder = split_expr e' in
+    let parts, builder = structure_of_expr e' in
     let exprs' = List.map (map_expr fe fs) parts.exprs
     and stmts' = List.map (map_stmt fe fs) parts.stmts in
     builder {exprs = exprs'; stmts = stmts'}
 
 (** [map_stmt fe fs s] same as [map_expr] but on statements. *)
 and map_stmt
-    (fe: expr -> expr action)
-    (fs: stmt -> stmt action) s : stmt =
+    (fe: expr -> expr visit_action)
+    (fs: stmt -> stmt visit_action) s : stmt =
   match fs s with
   | Keep s' -> s'
   | Visit s' -> map_stmt fe fs s'
   | VisitParts s' ->
-    let parts, builder = split_stmt s' in
+    let parts, builder = structure_of_stmt s' in
     let exprs' = List.map (map_expr fe fs) parts.exprs
     and stmts' = List.map (map_stmt fe fs) parts.stmts in
     builder {exprs = exprs'; stmts = stmts'}
 
 (** Folding function for expressions  *)
 let rec fold_expr
-    (fe: 'a -> expr -> 'a action)
-    (fs: 'a -> stmt -> 'a action) x0 e =
+    (fe: 'a -> expr -> 'a visit_action)
+    (fs: 'a -> stmt -> 'a visit_action) x0 e =
   match fe x0 e with
   | Keep x1 -> x1
   | Visit x1 -> fold_expr fe fs x1 e
   | VisitParts x1 ->
-    let parts, _ = split_expr e in
+    let parts, _ = structure_of_expr e in
     let x2 = List.fold_left (fold_expr fe fs) x1 parts.exprs in
     List.fold_left (fold_stmt fe fs) x2 parts.stmts
 
 
 (** Folding function for statements *)
 and fold_stmt
-    (fe: 'a -> expr -> 'a action)
-    (fs: 'a -> stmt -> 'a action) x0 s =
+    (fe: 'a -> expr -> 'a visit_action)
+    (fs: 'a -> stmt -> 'a visit_action) x0 s =
   match fs x0 s with
   | Keep x1 -> x1
   | Visit x1 -> fold_stmt fe fs x1 s
   | VisitParts x1 ->
-    let parts, _ = split_stmt s in
+    let parts, _ = structure_of_stmt s in
     let x2 = List.fold_left (fold_expr fe fs) x1 parts.exprs in
     List.fold_left (fold_stmt fe fs) x2 parts.stmts
 
 
 let fold_sub_expr
-    (fe: 'a -> expr -> 'a action)
-    (fs: 'a -> stmt -> 'a action) x0 e =
-  let parts, _ = split_expr e in
+    (fe: 'a -> expr -> 'a visit_action)
+    (fs: 'a -> stmt -> 'a visit_action) x0 e =
+  let parts, _ = structure_of_expr e in
   let x2 = List.fold_left (fold_expr fe fs) x0 parts.exprs in
   List.fold_left (fold_stmt fe fs) x2 parts.stmts
 
 
 (** Combination of map and fold for expressions *)
 let rec fold_map_expr
-    (fme  : 'a -> expr -> ('a * expr) action)
-    (fms  : 'a -> stmt -> ('a * stmt) action)
+    (fme  : 'a -> expr -> ('a * expr) visit_action)
+    (fms  : 'a -> stmt -> ('a * stmt) visit_action)
     (x0   : 'a)
     (expr : expr)
   :
@@ -284,7 +279,7 @@ let rec fold_map_expr
   | Keep (x1, expr') -> x1, expr'
   | Visit (x1, expr') -> fold_map_expr fme fms x1 expr'
   | VisitParts (x1, expr') ->
-    let parts, builder = split_expr expr' in
+    let parts, builder = structure_of_expr expr' in
     let x2, exprs =
       fold_map_list (fun x0 (z : expr) ->
           fold_map_expr fme fms x0 z
@@ -299,8 +294,8 @@ let rec fold_map_expr
 
 (** Combination of map and fold for statements *)
 and fold_map_stmt
-    (fme  : 'a -> expr -> ('a * expr) action)
-    (fms  : 'a -> stmt -> ('a * stmt) action)
+    (fme  : 'a -> expr -> ('a * expr) visit_action)
+    (fms  : 'a -> stmt -> ('a * stmt) visit_action)
     (x0   : 'a)
     (stmt : stmt)
   :
@@ -310,7 +305,7 @@ and fold_map_stmt
     | Keep (x1, stmt') -> x1, stmt'
     | Visit (x1, stmt') -> fold_map_stmt fme fms x1 stmt'
     | VisitParts (x1, stmt') ->
-      let parts, builder = split_stmt stmt' in
+      let parts, builder = structure_of_stmt stmt' in
       let x2, exprs =
         fold_map_list (fun x0 z ->
             fold_map_expr fme fms x0 z

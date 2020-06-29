@@ -1,4 +1,4 @@
-(****************************************************************************)
+ (****************************************************************************)
 (*                                                                          *)
 (* This file is part of MOPSA, a Modular Open Platform for Static Analysis. *)
 (*                                                                          *)
@@ -30,38 +30,23 @@ open Constant
 open Var
 open Format
 
-(** Kinds of expressions are defined by domains *)
 type expr_kind = ..
 
-
-(** An expression is identified by a kind, a type and a location *)
 type expr = {
-  ekind: expr_kind; (** kind of the expression *)
-  etyp: typ; (** type of the expression *)
-  erange: Location.range; (** range of the expression *)
-  eprev: expr option; (** previous form of the expression *)
+  ekind: expr_kind;
+  etyp: typ;
+  erange: Location.range;
+  eprev: expr option;
 }
 
-
-
-(** Some basic expressions *)
 type expr_kind +=
   | E_var of var * mode option
-  (** variables *)
-
   | E_constant of constant
-  (** constants *)
-
   | E_unop of operator * expr
-  (** unary operator expressions *)
-
   | E_binop of operator * expr * expr
-  (** binary operator expressions *)
 
 let ekind (e: expr) = e.ekind
-
 let etyp (e: expr) = e.etyp
-
 let erange (e: expr) = e.erange
 
 let expr_compare_chain = TypeExt.mk_compare_chain (fun e1 e2 ->
@@ -76,7 +61,6 @@ let expr_compare_chain = TypeExt.mk_compare_chain (fun e1 e2 ->
       | _ -> Stdlib.compare (ekind e1) (ekind e2)
   )
 
-
 let expr_pp_chain = TypeExt.mk_print_chain (fun fmt expr ->
     match ekind expr with
     | E_constant c -> pp_constant fmt c
@@ -86,21 +70,15 @@ let expr_pp_chain = TypeExt.mk_print_chain (fun fmt expr ->
     | _ -> failwith "Pp: Unknown expression"
   )
 
-let register_expr info =
-  TypeExt.register info expr_compare_chain expr_pp_chain
+let register_expr info = TypeExt.register info expr_compare_chain expr_pp_chain
 
 let register_expr_compare cmp = TypeExt.register_compare cmp expr_compare_chain
 
 let register_expr_pp pp = TypeExt.register_print pp expr_pp_chain
 
-let compare_expr e1 e2 =
-  TypeExt.compare expr_compare_chain e1 e2
+let compare_expr e1 e2 = TypeExt.compare expr_compare_chain e1 e2
 
-let pp_expr fmt e =
-  TypeExt.print expr_pp_chain fmt e
-
-let pp_expr_with_range fmt e =
-  Format.fprintf fmt "%a@%a" (TypeExt.print expr_pp_chain) e pp_range e.erange
+let pp_expr fmt e = TypeExt.print expr_pp_chain fmt e
 
 let () =
   register_expr {
@@ -124,6 +102,7 @@ let () =
 
     print = (fun next fmt e ->
         match ekind e with
+        | E_unop(O_cast, ee) -> fprintf fmt "cast(%a, %a)" pp_typ e.etyp pp_expr ee
         | E_unop(op, e) -> fprintf fmt "%a(%a)" pp_operator op pp_expr e
         | E_binop(op, e1, e2) -> fprintf fmt "(%a %a %a)" pp_expr e1 pp_operator op pp_expr e2
         | _ -> next fmt e
@@ -131,9 +110,7 @@ let () =
   }
 
 
-(*==========================================================================*)
-(**                {2 Utility functions for expressions}                    *)
-(*==========================================================================*)
+(** Utility functions *)
 
 let mk_expr
     ?(etyp = T_any)
@@ -145,12 +122,6 @@ let mk_expr
 
 let mk_var v ?(mode = None) erange =
   mk_expr ~etyp:v.vtyp (E_var(v, mode)) erange
-
-let var_mode (v:var) (omode: mode option) : mode =
-  match omode with
-  | None   -> v.vmode
-  | Some m -> m
-
 
 let weaken_var_expr v =
   match ekind v with
@@ -167,15 +138,18 @@ let strongify_var_expr v =
   | _ -> assert false
 
 
-let mk_binop left op right ?(etyp = T_any) erange =
+let var_mode (v:var) (omode: mode option) : mode =
+  match omode with
+  | None   -> v.vmode
+  | Some m -> m
+
+let mk_binop ?(etyp = T_any) left op right erange =
   mk_expr (E_binop (op, left, right)) ~etyp erange
 
-let mk_unop op operand ?(etyp = T_any) erange =
+let mk_unop ?(etyp = T_any) op operand erange =
   mk_expr (E_unop (op, operand)) ~etyp erange
 
-let mk_constant ~etyp c = mk_expr ~etyp (E_constant c)
-
-let mk_top typ range = mk_constant (C_top typ) ~etyp:typ range
+let mk_constant ?(etyp=T_any) c = mk_expr ~etyp (E_constant c)
 
 let mk_not e range = mk_unop O_log_not e ~etyp:e.etyp range
 

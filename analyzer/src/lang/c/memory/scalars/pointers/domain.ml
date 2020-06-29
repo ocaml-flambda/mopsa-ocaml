@@ -22,7 +22,7 @@
 (** Non-relational abstraction of C pointers *)
 
 open Mopsa
-open Framework.Core.Sig.Stacked.Intermediate
+open Sig.Abstraction.Domain
 open Universal.Ast
 open Ast
 open Zone
@@ -84,19 +84,15 @@ struct
   (** {2 Lattice operators} *)
   (** ===================== *)
 
-  let is_bottom a = Map.is_bottom a
+  let is_bottom = Map.is_bottom
 
-  let subset man ctx (a,s) (a',s') =
-    Map.subset a a', s, s'
+  let subset = Map.subset
 
-  let join man ctx (a,s) (a',s') =
-    Map.join a a', s, s'
+  let join = Map.join
 
-  let meet man ctx (a,s) (a',s') =
-    Map.meet a a', s, s'
+  let meet = Map.meet
 
-  let widen man ctx (a,s) (a',s') =
-    Map.join a a', s, s', true
+  let widen ctx = Map.join
 
   let merge pre (a,log) (a',log') =
     let block = Log.get_log_stmts log in
@@ -953,9 +949,7 @@ struct
 
   let ask _ _ _ = None
 
-  let refine channel man flow = Channel.return flow
-
 end
 
 let () =
-  Framework.Core.Sig.Stacked.Intermediate.register_stack (module Domain)
+  register_standard_domain (module Domain)

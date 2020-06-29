@@ -23,7 +23,7 @@
    irrelevant of the value/type domain *)
 
 open Mopsa
-open Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Ast
 open Addr
 open Universal.Ast
@@ -271,7 +271,7 @@ struct
 
     | _ -> None
 
-  let ask : type r. r query -> ('a, unit) man -> 'a flow -> r option =
+  let ask : type r. r query -> ('a, unit, 's) man -> 'a flow -> r option =
     fun query man flow ->
     match query with
     | Universal.Ast.Q_debug_addr_value ({addr_kind = A_py_set} as addr) ->
@@ -287,4 +287,4 @@ struct
 end
 
 let () =
-  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+  register_stateless_domain (module Domain)

@@ -29,47 +29,50 @@ open Flow
 open Eval
 open Zone
 open Query
-open Abstraction
+open Toplevel
+open Manager
 open Engine
 
 
-module Make(Abstraction : ABSTRACTION) : ENGINE with type t = Abstraction.t =
+module Make(Toplevel : TOPLEVEL) : ENGINE with type t = Toplevel.t =
 struct
 
-  type t = Abstraction.t
+  type t = Toplevel.t
 
   let rec init prog =
-    Abstraction.init prog man
+    Toplevel.init prog man
 
   and exec ?(zone=any_zone) stmt flow =
-    Abstraction.exec ~zone stmt man flow
+    Toplevel.exec ~zone stmt man flow
 
   and post ?(zone=any_zone) stmt flow =
-    Abstraction.post ~zone stmt man flow
+    Toplevel.post ~zone stmt man flow
 
   and eval ?(zone=any_zone,any_zone) ?(via=any_zone) exp flow =
-    Abstraction.eval ~zone ~via exp man flow
+    Toplevel.eval ~zone ~via exp man flow
 
-  and ask : type r. r query -> Abstraction.t flow -> r =
+  and ask : type r. r query -> Toplevel.t flow -> r =
     fun query flow ->
-      Abstraction.ask query man flow
+      Toplevel.ask query man flow
 
-  and lattice : Abstraction.t lattice = {
-    bottom = Abstraction.bottom;
-    top = Abstraction.top;
-    is_bottom = Abstraction.is_bottom;
-    subset = (fun ctx a a' -> Abstraction.subset man ctx a a');
-    join = (fun ctx a a' -> Abstraction.join man ctx a a');
-    meet = (fun ctx a a' -> Abstraction.meet man ctx a a');
-    widen = (fun ctx a a' -> Abstraction.widen man ctx a a');
-    merge = Abstraction.merge;
-    print = Abstraction.print;
+  and lattice : Toplevel.t lattice = {
+    bottom = Toplevel.bottom;
+    top = Toplevel.top;
+    is_bottom = Toplevel.is_bottom;
+    subset = (fun ctx a a' -> Toplevel.subset man ctx a a');
+    join = (fun ctx a a' -> Toplevel.join man ctx a a');
+    meet = (fun ctx a a' -> Toplevel.meet man ctx a a');
+    widen = (fun ctx a a' -> Toplevel.widen man ctx a a');
+    merge = Toplevel.merge;
+    print = Toplevel.print;
   }
 
-  and man : (Abstraction.t, Abstraction.t) man = {
+  and man : (Toplevel.t, Toplevel.t, unit) man = {
     lattice;
-    get = (fun flow -> flow);
-    set = (fun flow _ -> flow);
+    get = (fun a -> a);
+    set = (fun a _ -> a);
+    get_sub = (fun _ -> ());
+    set_sub = (fun () a -> a);
     get_log = (fun log -> log);
     set_log = (fun log _ -> log);
     exec = exec;

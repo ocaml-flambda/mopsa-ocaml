@@ -50,7 +50,7 @@ let join_list ~(empty:unit -> 'a eval) (l:'a eval list) : 'a eval =
   Cases.join_list ~empty l
 
 let meet_list ~(empty:unit -> 'a eval) (l:'a eval list) : 'a eval =
-  Cases.join_list ~empty l
+  Cases.meet_list ~empty l
 
 let print fmt (evl: 'a eval) : unit =
   Cases.print_some (fun fmt e flow ->

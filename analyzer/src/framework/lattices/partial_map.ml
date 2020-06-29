@@ -98,7 +98,7 @@ struct
       )
   (** Join two sets of partial maps. *)
 
-  let widen ctx (a1:t) (a2:t) : t =
+  let widen (a1:t) (a2:t) : t =
     if a1 == a2 then a1 else
     match a1, a2 with
     | BOT, x | x, BOT -> x
@@ -108,7 +108,7 @@ struct
         PMap.map2zo
           (fun _ v1 -> v1)
           (fun _ v2 -> v2)
-          (fun _ v1 v2 -> Value.widen ctx v1 v2)
+          (fun _ v1 v2 -> Value.widen v1 v2)
           m1 m2
       )
   (** Widening (naive). *)
@@ -293,8 +293,8 @@ struct
   let map2zo f1 f2 f (a1:t) (a2:t) : t =
     if a1 == a2 then a1
     else match a1, a2 with
-      | BOT, x | x, BOT -> BOT
-      | TOP, x | x, TOP -> x
+      | BOT, x | x, BOT -> x
+      | TOP, x | x, TOP -> TOP
       | Nbt m1, Nbt m2 -> Nbt (PMap.map2zo f1 f2 f m1 m2)
 
 

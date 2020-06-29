@@ -36,7 +36,7 @@
 
 
 open Mopsa
-open Core.Sig.Stacked.Intermediate
+open Sig.Abstraction.Stacked
 open Universal.Ast
 open Stubs.Ast
 open Ast
@@ -540,9 +540,9 @@ struct
 
   (** [unify a a'] finds non-common cells in [a] and [a'] and adds them. *)
   let unify man ctx (a,s) (a',s') =
-    CellSet.fold2
+    CellSet.fold2z
       (fun _ m1 m2 acc ->
-         OffCells.fold2
+         OffCells.fold2z
            (fun _ s1 s2 acc ->
               Cells.fold
                 (fun c s ->
@@ -1246,11 +1246,7 @@ struct
 
   let ask query man flow = None
 
-
-  let refine channel man flow =
-    assert false
-
 end
 
 let () =
-  Core.Sig.Stacked.Intermediate.register_stack (module Domain)
+  register_stacked_domain (module Domain)

@@ -22,7 +22,7 @@
 (** Reduction operator for intervals and congruences. *)
 
 open Mopsa
-open Core.Sig.Value.Reduction
+open Framework.Sig.Reduction.Value
 
 
 
@@ -58,7 +58,7 @@ struct
         (c', i')
 
   (* Reduction operator *)
-  let reduce (man: 'a vrman) (v: 'a) : 'a =
+  let reduce (man: 'a value_reduction_man) (v: 'a) : 'a =
     let c = man.get C.id v
     and i = man.get I.id v in
 
@@ -70,4 +70,4 @@ end
 
 
 let () =
-  register_reduction (module Reduction)
+  register_value_reduction (module Reduction)

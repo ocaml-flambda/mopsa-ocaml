@@ -41,48 +41,46 @@
 
             // Memory model
             "c.desugar.aggregates",
+            "universal.heap.recency",
 	    {
-                "apply": {
-                    "compose": [
-                        "universal.heap.recency",
-                        {
-                            "product": [
-                                "c.memory.lowlevel.cells",
-                                "c.memory.lowlevel.string_length",
-                                "c.memory.lowlevel.pointer_sentinel"
-                            ],
-                            "reductions": [
-                                "c.memory.lowlevel.reductions.cell_string_length",
-                                "c.memory.lowlevel.reductions.cell_pointer_sentinel"
-                            ]
-                        },
-                        {
-                            "seq": [
-			        "c.memory.scalars.pointer",
-			        "c.memory.scalars.machine_numbers"
-                            ]
-                        }
-                    ]
-                },
-		"on": {
-                    "product": [
-                        {
-                            "nonrel": {
-			        "union": [
-			            "universal.numeric.values.intervals.float",
-                                    "universal.numeric.values.intervals.integer"
-			        ]
-		            }
-                        },
-			{
-                            "apply":"c.memory.packing.static_scope",
-                            "on": "universal.numeric.relational"
-                        }
-		    ],
-                    "reductions": [
-                        "c.memory.packing.reductions.intervals_static_scope"
-                    ]
-                }
+                "compose": [
+                    {
+                        "product": [
+                            "c.memory.lowlevel.cells",
+                            "c.memory.lowlevel.string_length",
+                            "c.memory.lowlevel.pointer_sentinel"
+                        ],
+                        "reductions": [
+                            "c.memory.lowlevel.reductions.cell_string_length",
+                            "c.memory.lowlevel.reductions.cell_pointer_sentinel"
+                        ]
+                    },
+                    {
+                        "seq": [
+			    "c.memory.scalars.pointer",
+			    "c.memory.scalars.machine_numbers"
+                        ]
+                    },
+		    {
+			"product": [
+                            {
+				"nonrel": {
+			            "union": [
+					"universal.numeric.values.intervals.float",
+					"universal.numeric.values.intervals.integer"
+			            ]
+				}
+                            },
+			    {
+				"apply":"c.memory.packing.static_scope",
+				"on": "universal.numeric.relational"
+                            }
+			],
+			"reductions": [
+                            "c.memory.packing.reductions.intervals_static_scope"
+			]
+                    }
+		]
             }
 	]
     }

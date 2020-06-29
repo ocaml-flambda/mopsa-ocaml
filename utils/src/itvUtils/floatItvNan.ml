@@ -891,7 +891,7 @@ let bwd_to_int_itv (a:t) ((lo,up):II.t) : t =
   in
   let itv =
     bot_absorb1
-      (fun i -> FI.of_float_bot (max l i.FI.lo) (min u i.FI.up)) a.itv
+      (fun i -> FI.bwd_round_int `DOUBLE `ZERO i (FI.mk l u)) a.itv
   in
   { itv;
     nan = a.nan;

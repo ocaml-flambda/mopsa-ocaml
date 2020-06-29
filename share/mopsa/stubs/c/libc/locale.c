@@ -25,7 +25,6 @@
 */
 
 #include <locale.h>
-#include <limits.h>
 #include "mopsa_libc_utils.h"
 
 

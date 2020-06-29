@@ -22,7 +22,7 @@
 (** Reduction rule between evaluations of cells and pointer sentinel domains *)
 
 open Mopsa
-open Sig.Stacked.Reduction
+open Sig.Reduction.Eval
 open Universal.Ast
 open Ast
 open Zone
@@ -38,9 +38,9 @@ struct
   let sentinel = Pointer_sentinel.Domain.id
 
 
-  let reduce exp man evals flow =
-    let oe1 = man.get_eval cells evals in
-    let oe2 = man.get_eval sentinel evals in
+  let reduce exp man rman flow evals =
+    let oe1 = rman.get_eval cells evals in
+    let oe2 = rman.get_eval sentinel evals in
 
     (* Reduce only when both domains did an evaluation *)
     OptionExt.apply2
@@ -49,7 +49,7 @@ struct
          | _, E_constant (C_top _)
          | E_constant (C_int _), _
          | E_constant (C_c_character _), _ ->
-           let evals = man.del_eval sentinel evals in
+           let evals = rman.del_eval sentinel evals in
            Cases.singleton evals flow
 
          (* If the cell domain returned a cell variable, refine it if possible *)
@@ -60,18 +60,18 @@ struct
 
            if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
            then
-             let evals = man.del_eval cells evals |>
-                         man.del_eval sentinel
+             let evals = rman.del_eval cells evals |>
+                         rman.del_eval sentinel
              in
              Cases.singleton evals flow
            else
-             let evals = man.del_eval sentinel evals in
+             let evals = rman.del_eval sentinel evals in
              Cases.singleton evals flow
 
 
          (* Otherwise, keep the sentinel evaluation *)
          | _, _ ->
-           let evals = man.del_eval cells evals in
+           let evals = rman.del_eval cells evals in
            Cases.singleton evals flow
       )
       (Cases.singleton evals flow)

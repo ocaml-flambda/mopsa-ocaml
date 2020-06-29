@@ -23,7 +23,6 @@
 
 open Mopsa
 open Ast
-open Sig.Stacked.Manager
 
 
 (** Get the callstack of the function that called the stub. Used to attach

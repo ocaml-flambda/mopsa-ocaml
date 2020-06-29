@@ -34,7 +34,8 @@ open Eval
 open Post
 open Query
 open Zone
-open Abstraction
+open Toplevel
+open Manager
 open Engine
 open Format
 open Location
@@ -159,10 +160,10 @@ and pp_var_sub_value fmt = function
 (** {2 Interactive engine} *)
 (** ********************** *)
 
-module Make(Abstraction : ABSTRACTION) =
+module Make(Toplevel : TOPLEVEL) =
 struct
 
-  type t = Abstraction.t
+  type t = Toplevel.t
 
   let debug fmt = Debug.debug ~channel:"framework.engines.interactive" fmt
 
@@ -440,9 +441,9 @@ struct
 
   (** Actions on abstract domain *)
   type _ action =
-    | Exec : stmt * zone -> Abstraction.t flow action
-    | Post : stmt * zone -> Abstraction.t post action
-    | Eval : expr * (zone * zone) * zone -> Abstraction.t eval action
+    | Exec : stmt * zone -> Toplevel.t flow action
+    | Post : stmt * zone -> Toplevel.t post action
+    | Eval : expr * (zone * zone) * zone -> Toplevel.t eval action
 
 
   (** Get the program location related to an action *)
@@ -453,7 +454,7 @@ struct
 
 
   (** Print an action *)
-  let pp_action : type a. Abstraction.t flow -> formatter -> a action -> unit = fun flow fmt action ->
+  let pp_action : type a. Toplevel.t flow -> formatter -> a action -> unit = fun flow fmt action ->
     fprintf fmt "%a@." (Debug.color "fushia" pp_range) (action_range action);
     match action with
     | Exec(stmt,zone) ->
@@ -685,16 +686,16 @@ struct
   (** ********************** *)
 
   (** Apply an action on a flow and return its result *)
-  let rec apply_action : type a. a action -> Abstraction.t flow -> a =
+  let rec apply_action : type a. a action -> Toplevel.t flow -> a =
     fun action flow ->
     match action with
-    | Exec(stmt, zone)     -> Abstraction.exec ~zone stmt man flow
-    | Post(stmt, zone)     -> Abstraction.post ~zone stmt man flow
-    | Eval(exp, zone, via) -> Abstraction.eval ~zone ~via exp man flow
+    | Exec(stmt, zone)     -> Toplevel.exec ~zone stmt man flow
+    | Post(stmt, zone)     -> Toplevel.post ~zone stmt man flow
+    | Eval(exp, zone, via) -> Toplevel.eval ~zone ~via exp man flow
 
 
   (** Wait for user input and process it *)
-  and interact: type a. a action -> Abstraction.t flow -> a = fun action flow ->
+  and interact: type a. a action -> Toplevel.t flow -> a = fun action flow ->
     let cmd = try read_command ()
               with Exit -> exit 0
     in
@@ -814,7 +815,7 @@ struct
 
 
   (** Interact with the user input or apply the action *)
-  and interact_or_apply_action : type a. a action -> Location.range -> Abstraction.t flow -> a =
+  and interact_or_apply_action : type a. a action -> Location.range -> Toplevel.t flow -> a =
     fun action range flow ->
     on_pre_action action flow;
     let ret =
@@ -829,7 +830,7 @@ struct
 
 
   and init prog =
-    Abstraction.init prog man
+    Toplevel.init prog man
 
   and exec ?(zone=any_zone) stmt flow =
     interact_or_apply_action (Exec (stmt, zone)) stmt.srange flow
@@ -840,26 +841,28 @@ struct
   and eval ?(zone=(any_zone, any_zone)) ?(via=any_zone) exp flow =
     interact_or_apply_action (Eval (exp, zone, via)) exp.erange flow
 
-  and ask : type r. r query -> Abstraction.t flow -> r =
+  and ask : type r. r query -> Toplevel.t flow -> r =
     fun query flow ->
-      Abstraction.ask query man flow
+      Toplevel.ask query man flow
 
-  and lattice : Abstraction.t lattice = {
-    bottom = Abstraction.bottom;
-    top = Abstraction.top;
-    is_bottom = Abstraction.is_bottom;
-    subset = (fun a a' -> Abstraction.subset man a a');
-    join = (fun a a' -> Abstraction.join man a a');
-    meet = (fun a a' -> Abstraction.meet man a a');
-    widen = (fun ctx a a' -> Abstraction.widen man ctx a a');
-    merge = Abstraction.merge;
-    print = Abstraction.print;
+  and lattice : Toplevel.t lattice = {
+    bottom = Toplevel.bottom;
+    top = Toplevel.top;
+    is_bottom = Toplevel.is_bottom;
+    subset = (fun a a' -> Toplevel.subset man a a');
+    join = (fun a a' -> Toplevel.join man a a');
+    meet = (fun a a' -> Toplevel.meet man a a');
+    widen = (fun ctx a a' -> Toplevel.widen man ctx a a');
+    merge = Toplevel.merge;
+    print = Toplevel.print;
   }
 
-  and man : (Abstraction.t, Abstraction.t) man = {
+  and man : (Toplevel.t, Toplevel.t, unit) man = {
     lattice;
-    get = (fun flow -> flow);
-    set = (fun flow _ -> flow);
+    get = (fun a -> a);
+    set = (fun a _ -> a);
+    get_sub = (fun _ -> ());
+    set_sub = (fun () a -> a);
     get_log = (fun log -> log);
     set_log = (fun log _ -> log);
     exec = exec;

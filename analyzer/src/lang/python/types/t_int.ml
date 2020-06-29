@@ -20,7 +20,7 @@
 (****************************************************************************)
 
 open Mopsa
-open Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Ast
 open MapExt
 open Addr
@@ -73,7 +73,7 @@ struct
    *   else c *)
 
 
-  let eval zs exp (man: ('a, unit) Framework.Core.Sig.Domain.Stateless.man) (flow: 'a flow) =
+  let eval zs exp (man: ('a, unit, 's) man) (flow: 'a flow) =
     let range = erange exp in
     match ekind exp with
     | E_constant (C_top T_bool) ->
@@ -290,7 +290,7 @@ struct
                range)
             man flow
           ~fthen:(fun flow ->
-            man.eval ~zone:(Universal.Zone.Z_u, Universal.Zone.Z_u_float) (mk_unop (O_cast (T_int, T_float F_DOUBLE)) ~etyp:(T_float F_DOUBLE) (Utils.extract_oobject @@ List.hd e) range) flow |>
+            man.eval ~zone:(Universal.Zone.Z_u, Universal.Zone.Z_u_float) (mk_unop O_cast  ~etyp:(T_float F_DOUBLE) (Utils.extract_oobject @@ List.hd e) range) flow |>
               Eval.bind (fun e flow -> Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_float, Some e) range) flow))
           ~felse:(fun flow ->
             man.exec (Utils.mk_builtin_raise_msg "OverflowError" "int too large to convert to float" range) flow |> Eval.empty_singleton)
@@ -301,4 +301,4 @@ struct
   let ask _ _ _ = None
 end
 
-let () = Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+let () = register_stateless_domain (module Domain)

@@ -22,7 +22,7 @@
 (** Reduction rule between cells and string length domains *)
 
 open Mopsa
-open Sig.Stacked.Reduction
+open Sig.Reduction.Eval
 open Universal.Ast
 open Ast
 open Zone
@@ -38,9 +38,9 @@ struct
   let strings = String_length.Domain.id
 
 
-  let reduce exp man evals flow =
-    let oe1 = man.get_eval cells evals in
-    let oe2 = man.get_eval strings evals in
+  let reduce exp man rman flow evals =
+    let oe1 = rman.get_eval cells evals in
+    let oe2 = rman.get_eval strings evals in
 
     (* Reduce only when both domains did an evaluation *)
     OptionExt.apply2
@@ -51,12 +51,12 @@ struct
           | _, E_constant (C_c_character _)
           | _, E_constant (C_int_interval _) ->
             (* Remove cell evaluation *)
-            let evals = man.del_eval cells evals in
+            let evals = rman.del_eval cells evals in
             Cases.singleton evals flow
 
           (* Otherwise, keep cells *)
           | _ ->
-            let evals = man.del_eval strings evals in
+            let evals = rman.del_eval strings evals in
             Cases.singleton evals flow
       )
       (Cases.singleton evals flow)

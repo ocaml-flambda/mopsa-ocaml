@@ -70,7 +70,7 @@ let extract_calls_expr (e:expr) : (var * range) list * stmt list * expr =
    *)
   let rec doit (tmps,assigns) e =
     (* recursive call on argument expressions *)
-    let p, c = Visitor.split_expr e in
+    let p, c = Visitor.structure_of_expr e in
     let (tmps,assigns), el = doit_list (tmps,assigns) [] p.exprs in
     (* recombine sub-expressions into expression *)
     let e = c { p with exprs = el } in
@@ -104,7 +104,7 @@ let extract_calls_expr (e:expr) : (var * range) list * stmt list * expr =
    Does not change the sub-statements of the statement.
  *)
 let extract_calls_stmt (s:stmt) : (var * range) list * stmt list * stmt =
-  let p, c = Visitor.split_stmt s in
+  let p, c = Visitor.structure_of_stmt s in
   let rec extract tmps assigns exprs = function
     | [] -> tmps, assigns, List.rev exprs
     | e::ee ->

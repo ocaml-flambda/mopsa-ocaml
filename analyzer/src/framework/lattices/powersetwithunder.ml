@@ -90,8 +90,8 @@ struct
 
   let inter = meet
 
-  let widen ctx (su1: t) (su2: t) : t =
-    bot_neutral2 (fun (l1, u1) (l2, u2) -> Set.inter l1 l2, USet.widen ctx u1 u2) su1 su2
+  let widen (su1: t) (su2: t) : t =
+    bot_neutral2 (fun (l1, u1) (l2, u2) -> Set.inter l1 l2, USet.widen u1 u2) su1 su2
 
   let fold_u (f : Elt.t -> 'a -> 'a) (s : t) (init : 'a) : 'a =
     bot_to_exn s |> (fun (_, u) -> USet.fold f u init)

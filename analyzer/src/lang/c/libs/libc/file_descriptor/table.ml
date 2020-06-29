@@ -70,8 +70,8 @@ let meet a1 a2 = {
   support = AddrSet.union a1.support a2.support;
 }
 
-let widen ctx a1 a2 = {
-  map = AddrItvMap.widen ctx a1.map a2.map;
+let widen a1 a2 = {
+  map = AddrItvMap.widen a1.map a2.map;
   support = AddrSet.inter a1.support a2.support;
 }
 

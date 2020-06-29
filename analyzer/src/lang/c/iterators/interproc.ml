@@ -22,7 +22,7 @@
 (** Abstraction of C function calls *)
 
 open Mopsa
-open Framework.Core.Sig.Domain.Intermediate
+open Sig.Abstraction.Domain
 open Universal.Ast
 open Stubs.Ast
 open Ast
@@ -81,6 +81,8 @@ struct
 
   let print fmt (a:t) =
     Format.fprintf fmt "alloca: %a@\n" AddrSet.print a
+
+  let widen ctx = join
 
   let merge pre (a1,log1) (a2,log2) =
     join a1 a2
@@ -259,9 +261,7 @@ struct
 
   let ask query man flow = None
 
-  let refine _ _ _ = assert false
-
 end
 
 let () =
-  Framework.Core.Sig.Domain.Intermediate.register_domain (module Domain)
+  register_standard_domain (module Domain)

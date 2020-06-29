@@ -53,15 +53,15 @@ let () =
         (function
           | "octagon"   ->
             opt_numeric := "octagon";
-            Framework.Core.Sig.Domain.Simplified.register_domain (module Octagon)
+            Framework.Sig.Abstraction.Simplified.register_simplified_domain (module Octagon)
 
           | "polyhedra" ->
             opt_numeric := "polyhedra";
-            Framework.Core.Sig.Domain.Simplified.register_domain (module Polyhedra)
+            Framework.Sig.Abstraction.Simplified.register_simplified_domain (module Polyhedra)
 
           | "lineq" ->
             opt_numeric := "lineq";
-            Framework.Core.Sig.Domain.Simplified.register_domain (module LinEqualities)
+            Framework.Sig.Abstraction.Simplified.register_simplified_domain (module LinEqualities)
 
           | _ -> assert false
         )
@@ -70,4 +70,4 @@ let () =
   }
 
 let () =
-  Framework.Core.Sig.Domain.Simplified.register_domain (module Polyhedra)
+  Framework.Sig.Abstraction.Simplified.register_simplified_domain (module Polyhedra)

@@ -28,7 +28,8 @@ open Core
 open Flow
 open Eval
 open Zone
-open Abstraction
+open Toplevel
+open Manager
 
 module type ENGINE =
 sig
@@ -43,6 +44,6 @@ sig
 
   val ask : 'r Query.query -> t flow -> 'r
 
-  val man : (t, t) man
+  val man : (t, t, unit) man
 
 end

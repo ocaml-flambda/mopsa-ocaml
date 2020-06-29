@@ -22,7 +22,7 @@
 (** Abstraction of exceptions flows. *)
 
 open Mopsa
-open Framework.Core.Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Ast
 open Addr
 open Universal.Ast
@@ -64,7 +64,7 @@ module Domain =
     let init _ _ flow = flow
     let eval _ _ _ _ = None
 
-    let rec exec (zone:zone) (stmt:stmt) (man:('a, unit) man) (flow:'a flow) : 'a post option =
+    let rec exec (zone:zone) (stmt:stmt) (man:('a, unit, 's) man) (flow:'a flow) : 'a post option =
       let range = srange stmt in
       match skind stmt with
       | S_py_try(body, excepts, orelse, finally) ->
@@ -185,7 +185,7 @@ module Domain =
       | _ -> None
 
 
-    and exec_except (man:('a, unit) man) excpt range (flow:'a flow) : 'a flow =
+    and exec_except (man:('a, unit, 's) man) excpt range (flow:'a flow) : 'a flow =
       debug "exec except on@ @[%a@]" (Flow.print man.lattice.print) flow;
       let flow0 = Flow.set T_cur man.lattice.bottom man.lattice flow in
       debug "flow_cur %a@\n" (Flow.print man.lattice.print) flow;
@@ -314,4 +314,4 @@ module Domain =
     let ask _ _ _ = None
   end
 
-let () = Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+let () = register_stateless_domain (module Domain)

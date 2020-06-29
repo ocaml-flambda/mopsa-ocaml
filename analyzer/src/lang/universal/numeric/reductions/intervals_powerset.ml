@@ -22,7 +22,7 @@
 (** Reduction operator for intervals and powersets. *)
 
 open Mopsa
-open Core.Sig.Value.Reduction
+open Framework.Sig.Reduction.Value
 
 
 
@@ -70,7 +70,7 @@ struct
         x, to_interval x
 
 
-  let reduce (man: 'a vrman) (v: 'a) : 'a =
+  let reduce (man: 'a value_reduction_man) (v: 'a) : 'a =
     let i = man.get I.id v
     and p = man.get P.id v in
 
@@ -82,4 +82,4 @@ end
 
 
 let () =
-  register_reduction (module Reduction)
+  register_value_reduction (module Reduction)

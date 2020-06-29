@@ -22,7 +22,7 @@
 (** Inter-procedural iterator by inlining.  *)
 
 open Mopsa
-open Framework.Core.Sig.Domain.Stateless
+open Framework.Sig.Abstraction.Stateless
 open Ast
 open Zone
 open Common
@@ -112,4 +112,4 @@ end
 
 
 let () =
-  register_domain (module Domain)
+  register_stateless_domain (module Domain)

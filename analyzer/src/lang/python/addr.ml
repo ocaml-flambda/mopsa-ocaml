@@ -61,7 +61,6 @@ type addr_kind +=
 (** Allocate an object on the heap and return its address as an evaluation *)
 let eval_alloc ?(mode=STRONG) man kind range flow =
   let exp = mk_alloc_addr ~mode:mode kind range in
-  let open Sig.Domain.Manager in
   man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) exp flow |>
   Eval.bind (fun exp flow ->
       match ekind exp with

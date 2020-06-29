@@ -20,7 +20,7 @@
 (****************************************************************************)
 
 open Mopsa
-open Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Ast
 open MapExt
 open Addr
@@ -135,7 +135,7 @@ module Domain =
 
 
 
-    let rec eval zs exp (man: ('a, unit) man) (flow:'a flow) =
+    let rec eval zs exp (man: ('a, unit, 's) man) (flow:'a flow) =
       let range = erange exp in
       match ekind exp with
       | E_constant (C_string _)
@@ -424,4 +424,4 @@ module Domain =
     let ask _ _ _ = None
   end
 
-let () = Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+let () =  register_stateless_domain (module Domain)

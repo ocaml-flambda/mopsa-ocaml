@@ -22,7 +22,7 @@
 (** Evaluation of fprintf-derived functions *)
 
 open Mopsa
-open Framework.Core.Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Universal.Ast
 open Ast
 open Universal.Zone
@@ -88,7 +88,7 @@ struct
       let typ = T_c_integer t in
       let flow =
         if not (is_c_int_type arg.etyp) then
-          raise_c_invalid_format_arg_type_alarm arg typ (Sig.Stacked.Manager.of_domain_man man) flow
+          raise_c_invalid_format_arg_type_alarm arg typ man flow
         else
           flow
       in
@@ -100,7 +100,7 @@ struct
       let typ = T_c_float t in
       let flow =
         if not (is_c_float_type arg.etyp) then
-          raise_c_invalid_format_arg_type_alarm arg typ (Sig.Stacked.Manager.of_domain_man man) flow
+          raise_c_invalid_format_arg_type_alarm arg typ man flow
         else
           flow
       in
@@ -111,7 +111,7 @@ struct
     | Pointer ->
       let flow =
         if not (is_c_pointer_type arg.etyp) then
-          raise_c_invalid_format_arg_type_alarm arg (T_c_pointer void) (Sig.Stacked.Manager.of_domain_man man) flow
+          raise_c_invalid_format_arg_type_alarm arg (T_c_pointer void) man flow
         else
           flow
       in
@@ -120,7 +120,7 @@ struct
     | String ->
       let flow =
         if not (is_c_pointer_type arg.etyp) then
-          raise_c_invalid_format_arg_type_alarm arg (T_c_pointer s8) (Sig.Stacked.Manager.of_domain_man man) flow
+          raise_c_invalid_format_arg_type_alarm arg (T_c_pointer s8) man flow
         else
           flow
       in
@@ -129,7 +129,7 @@ struct
     | WideString ->
       let flow =
         if not (is_c_pointer_type arg.etyp) then
-          raise_c_invalid_format_arg_type_alarm arg (T_c_pointer s8) (Sig.Stacked.Manager.of_domain_man man) flow
+          raise_c_invalid_format_arg_type_alarm arg (T_c_pointer s8) man flow
         else
           flow
       in
@@ -141,17 +141,15 @@ struct
     parse_output_format ?wide format range man flow >>$ fun placeholders flow ->
     match placeholders with
     | None ->
-      let man' = Sig.Stacked.Manager.of_domain_man man in
-      raise_c_invalid_format_arg_type_wo_info_alarm ~bottom:false range man' flow |>
-      raise_c_insufficient_format_args_wo_info_alarm ~bottom:false range man' |>
+      raise_c_invalid_format_arg_type_wo_info_alarm ~bottom:false range man flow |>
+      raise_c_insufficient_format_args_wo_info_alarm ~bottom:false range man |>
       Post.return
 
     | Some placeholders ->
       let nb_required = List.length placeholders in
       let nb_given = List.length args in
       if nb_required > nb_given then
-        let man' = Sig.Stacked.Manager.of_domain_man man in
-        raise_c_insufficient_format_args_alarm nb_required nb_given range man' flow |>
+        raise_c_insufficient_format_args_alarm nb_required nb_given range man flow |>
         Post.return
       else
         let rec iter placeholders args flow =
@@ -261,4 +259,4 @@ struct
 end
 
 let () =
-  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+  register_stateless_domain (module Domain)

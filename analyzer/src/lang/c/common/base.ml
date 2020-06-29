@@ -131,7 +131,7 @@ let expr_to_base e =
 
 
 (** Evaluate the size of a base in bytes *)
-let eval_base_size base ?(via=Z_any) range (man:('a,'t,'s) Core.Sig.Stacked.Lowlevel.man) flow =
+let eval_base_size base ?(via=Z_any) range (man:('a,'t,'s) man) flow =
   match base.base_kind with
   | Var var
     when is_c_variable_length_array_type var.vtyp ||

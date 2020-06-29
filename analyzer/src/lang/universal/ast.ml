@@ -83,6 +83,7 @@ let () =
 (*  *********************** *)
 
 type constant +=
+  | C_top of typ
   | C_unit
   | C_bool of bool
   | C_int of Z.t (** Integer numbers, with arbitrary precision. *)
@@ -96,6 +97,7 @@ let () =
   register_constant {
     compare = (fun next c1 c2 ->
         match c1, c2 with
+        | C_top t1, C_top t2 -> compare_typ t1 t2
         | C_int z1, C_int z2 -> Z.compare z1 z2
         | C_float f1, C_float f2 -> Stdlib.compare f1 f2
         | C_string s1, C_string s2 -> Stdlib.compare s1 s2
@@ -113,6 +115,8 @@ let () =
       );
 
     print = (fun default fmt -> function
+        | C_top T_any -> Format.fprintf fmt "⊤"
+        | C_top t -> Format.fprintf fmt "⊤:%a" pp_typ t
         | C_unit -> fprintf fmt "()"
         | C_bool(b) -> fprintf fmt "%a" Format.pp_print_bool b
         | C_string(s) -> fprintf fmt "\"%s\"" s
@@ -139,7 +143,6 @@ type operator +=
   | O_sqrt              (** Square root *)
   | O_bit_invert        (** bitwise ~ *)
   | O_wrap of Z.t * Z.t (** wrap *)
-  | O_cast of typ * typ (** Cast *)
 
   (* Binary operators *)
   | O_plus       (** + *)
@@ -186,7 +189,6 @@ let () =
         | O_bit_xor    -> pp_print_string fmt "^"
         | O_bit_rshift -> pp_print_string fmt ">>"
         | O_bit_lshift -> pp_print_string fmt "<<"
-        | O_cast(t1,t2)    -> fprintf fmt "cast[%a->%a]" pp_typ t1 pp_typ t2
         | O_float_class c ->
           Format.fprintf fmt "float_class[%s%s%s]"
             (if c.float_valid then "valid," else "")
@@ -696,6 +698,7 @@ let rec is_universal_type t =
 
   | _ -> false
 
+let mk_top typ range = mk_constant (C_top typ) ~etyp:typ range
 
 let mk_int i ?(typ=T_int) erange =
   mk_constant ~etyp:typ (C_int (Z.of_int i)) erange

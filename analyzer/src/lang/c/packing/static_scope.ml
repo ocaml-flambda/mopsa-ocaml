@@ -29,7 +29,6 @@
 *)
 
 open Mopsa
-open Sig.Domain.Simplified
 open Universal.Packing.Static
 open Universal.Ast
 open Ast
@@ -128,7 +127,7 @@ struct
 
 
   (** Generate a unique ID for the strategy *)
-  include GenId(struct
+  include GenDomainId(struct
       type t = pack
       let name = "c.memory.packing.static_scope"
     end)

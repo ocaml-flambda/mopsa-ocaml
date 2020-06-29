@@ -39,6 +39,8 @@ type operator +=
   | O_log_or     (** || *)
   | O_log_and    (** && *)
 
+  | O_cast       (** cast operator *)
+
 
 let operator_compare_chain = TypeExt.mk_compare_chain (fun o1 o2 ->
     compare o1 o2
@@ -55,6 +57,7 @@ let operator_pp_chain = TypeExt.mk_print_chain (fun fmt op ->
     | O_log_or -> pp_print_string fmt "or"
     | O_log_and -> pp_print_string fmt "and"
     | O_log_not -> pp_print_string fmt "not"
+    | O_cast -> pp_print_string fmt "cast"
     | _ -> Exceptions.panic "operator_pp_chain: unknown operator"
   )
 
@@ -86,12 +89,3 @@ let negate_comparison_op = function
   | O_gt -> O_le
   | O_ge -> O_lt
   | op -> Exceptions.panic "don't know how to negate operator %a" pp_operator op
-
-let flip_comparison_op = function
-  | O_eq -> O_eq
-  | O_ne -> O_ne
-  | O_lt -> O_gt
-  | O_le -> O_ge
-  | O_gt -> O_lt
-  | O_ge -> O_le
-  | op -> Exceptions.panic "don't know how to flip operator %a" pp_operator op

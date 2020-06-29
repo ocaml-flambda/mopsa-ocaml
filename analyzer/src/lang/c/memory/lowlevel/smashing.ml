@@ -51,7 +51,7 @@
 *)
 
 open Mopsa
-open Core.Sig.Stacked.Intermediate
+open Sig.Abstraction.Stacked
 open Universal.Ast
 open Stubs.Ast
 open Ast
@@ -238,7 +238,7 @@ struct
       | None, Partial _ | Partial _, None -> None
       | None, Full ts | Full ts, None -> Bot
 
-    let widen ctx = join
+    let widen = join
 
     let apply f = function
       | Bot        -> Bot
@@ -1304,9 +1304,8 @@ struct
 
   let ask query man flow = None
 
-  let refine _ _ _ = assert false
 
 end
 
 let () =
-  Core.Sig.Stacked.Intermediate.register_stack (module Domain)
+  register_stacked_domain (module Domain)

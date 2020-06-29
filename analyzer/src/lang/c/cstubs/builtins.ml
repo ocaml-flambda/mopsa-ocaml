@@ -22,7 +22,7 @@
 (** Evaluation of stub builtins: bytes, size, base, offset and valid_ptr *)
 
 open Mopsa
-open Framework.Core.Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Universal.Ast
 open Stubs.Ast
 open Common.Points_to
@@ -87,7 +87,7 @@ struct
       Eval.singleton (mk_bytes addr mode range) flow
 
     | _ ->
-      eval_base_size base range (Sig.Stacked.Manager.of_domain_man man) flow
+      eval_base_size base range man flow
 
 
   let byte_to_element t bytes range =
@@ -252,4 +252,4 @@ struct
 end
 
 let () =
-  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+  register_stateless_domain (module Domain)
