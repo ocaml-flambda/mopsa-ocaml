@@ -23,7 +23,6 @@
 
 open Mopsa
 open Format
-open Framework.Core.Sig.Stacked.Manager
 open Universal.Numeric.Common
 open Universal.Ast
 open Base

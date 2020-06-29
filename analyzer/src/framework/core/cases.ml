@@ -166,7 +166,7 @@ let map_opt (f:'r -> 's option option) (r:('a,'r) cases) : ('a,'s) cases =
 
 
 let add_cleaners_case cleaners c =
-  { c with case_cleaners = concat_blocks c.case_cleaners cleaners }
+  { c with case_cleaners = c.case_cleaners @ cleaners }
 
 
 let add_cleaners cleaners r =
@@ -232,7 +232,7 @@ let map_fold_conjunctions
           tl |> List.fold_left (fun (flow, log, cleaners) case ->
               let flow' = Flow.create ctx case.case_alarms case.case_flow in
               let flow = f (flow,log) (flow',case.case_log) in
-              flow, concat_log log case.case_log, concat_blocks cleaners case.case_cleaners
+              flow, concat_log log case.case_log, cleaners @ case.case_cleaners
             ) (Flow.create ctx hd.case_alarms hd.case_flow, hd.case_log, hd.case_cleaners)
         in
         hd :: tl |> List.map (fun case -> {

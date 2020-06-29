@@ -61,8 +61,8 @@ sig
   val meet: t -> t -> t
   (** [meet a1 a2] computes a lower bound of [a1] and [a2]. *)
 
-  val widen: uctx -> t -> t -> t
-  (** [widen ctx a1 a2] computes an upper bound of [a1] and [a2] that
+  val widen: t -> t -> t
+  (** [widen a1 a2] computes an upper bound of [a1] and [a2] that
       ensures stabilization of ascending chains. *)
 
 
@@ -74,7 +74,9 @@ sig
 
 end
 
-(** Signature of lattice records *)
+
+
+(** Lattice operators *)
 type 'a lattice = {
   bottom:    'a;
   top:       'a;

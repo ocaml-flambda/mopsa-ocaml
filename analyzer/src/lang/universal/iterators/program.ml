@@ -22,7 +22,7 @@
 (** Main handler of Universal programs. *)
 
 open Mopsa
-open Framework.Core.Sig.Domain.Stateless
+open Framework.Sig.Abstraction.Stateless
 open Ast
 open Zone
 
@@ -93,4 +93,4 @@ struct
 end
 
 let () =
-  register_domain (module Domain)
+  register_stateless_domain (module Domain)

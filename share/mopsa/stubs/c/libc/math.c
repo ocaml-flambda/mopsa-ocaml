@@ -24,7 +24,7 @@
   based on header from glibc-2.27-r6
 */
 #include <math.h>
-#include <limits.h>
+#include <stdint.h>
 #include "mopsa_libc_utils.h"
 
 

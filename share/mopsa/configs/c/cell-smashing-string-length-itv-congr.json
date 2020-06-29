@@ -41,45 +41,43 @@
 
             // Memory model
             "c.desugar.aggregates",
+            "universal.heap.recency",
 	    {
-                "apply": {
-                    "compose": [
-                        "universal.heap.recency",
-                        {
-                            "product": [
-                                "c.memory.lowlevel.cells",
-				"c.memory.lowlevel.smashing",
-                                "c.memory.lowlevel.string_length"
-                            ],
-			    "reductions": [
-				"c.memory.lowlevel.reductions.cell_smashing",
-				"c.memory.lowlevel.reductions.cell_string_length"
-			    ]
-                        },
-                        {
-                            "seq": [
-			        "c.memory.scalars.pointer",
-			        "c.memory.scalars.machine_numbers"
-                            ]
-                        }
-                    ]
-                },
-		"on": {
-                    "nonrel": {
-			"union": [
-			    "universal.numeric.values.intervals.float",
-                            {
-                                "product": [
-                                    "universal.numeric.values.intervals.integer",
-			            "universal.numeric.values.congruences"
-                                ],
-                                "reductions": [
-                                    "universal.numeric.reductions.intervals_congruences"
-                                ]
-                            }
+                "compose": [
+                    {
+                        "product": [
+                            "c.memory.lowlevel.cells",
+			    "c.memory.lowlevel.smashing",
+                            "c.memory.lowlevel.string_length"
+                        ],
+			"reductions": [
+			    "c.memory.lowlevel.reductions.cell_smashing",
+			    "c.memory.lowlevel.reductions.cell_string_length"
 			]
-		    }
-                }
+                    },
+                    {
+                        "seq": [
+			    "c.memory.scalars.pointer",
+			    "c.memory.scalars.machine_numbers"
+                        ]
+                    },
+		    {
+			"nonrel": {
+			    "union": [
+				"universal.numeric.values.intervals.float",
+				{
+                                    "product": [
+					"universal.numeric.values.intervals.integer",
+					"universal.numeric.values.congruences"
+                                    ],
+                                    "reductions": [
+					"universal.numeric.reductions.intervals_congruences"
+                                    ]
+				}
+			    ]
+			}
+                    }
+		]
             }
 	]
     }

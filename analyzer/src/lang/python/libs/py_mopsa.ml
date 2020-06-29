@@ -22,7 +22,7 @@
 (** MOPSA Python library. *)
 
 open Mopsa
-open Framework.Core.Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Addr
 open Ast
 open Universal.Ast
@@ -345,4 +345,4 @@ let builtin_type_name default fundec =
 
 
 let () =
-  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+  register_stateless_domain (module Domain)

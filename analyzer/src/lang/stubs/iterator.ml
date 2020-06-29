@@ -22,7 +22,7 @@
 (** Inter-procedural iterator of stubs by inlining. *)
 
 open Mopsa
-open Framework.Core.Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Universal.Ast
 open Ast
 open Zone
@@ -207,7 +207,7 @@ struct
       (cond_to_stmt: expr -> range -> stmt)
       (f: formula with_range)
       range
-      (man:('a, unit) man)
+      (man:('a, unit, 's) man)
       (flow:'a flow)
     : 'a flow =
     debug "@[<hov>eval formula@ %a@]" pp_formula f;
@@ -412,7 +412,7 @@ struct
         flow
 
       | ALARM ->
-        raise_stub_alarm msg.content.message_body range (Sig.Stacked.Manager.of_domain_man man) flow
+        raise_stub_alarm msg.content.message_body range man flow
 
 
 
@@ -653,4 +653,4 @@ struct
 end
 
 let () =
-  register_domain (module Domain)
+  register_stateless_domain (module Domain)

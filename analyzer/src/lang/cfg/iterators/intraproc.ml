@@ -22,7 +22,7 @@
 (** General intraprocedural iterator on Control Flow Graphs. *)
 
 open Mopsa
-open Framework.Core.Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Universal.Ast
 open Universal.Zone
 open Ast
@@ -319,4 +319,4 @@ end
 
 
 let () =
-  register_domain (module Domain)
+  register_stateless_domain (module Domain)

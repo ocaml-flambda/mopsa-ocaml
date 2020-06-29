@@ -28,3 +28,10 @@ include Var
 include Expr
 include Stmt
 include Visitor
+
+module Var =
+struct
+  type t = var
+  let compare = compare_var
+  let print = pp_var
+end

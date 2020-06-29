@@ -24,7 +24,7 @@
 open Mopsa
 open Ast
 open Zone
-open Framework.Core.Sig.Stacked.Manager
+
 module I = ItvUtils.IntItv
 module C = CongUtils.IntCong
 
@@ -167,6 +167,23 @@ let () =
       f
     );
   }
+
+
+
+let prec : Ast.float_prec -> ItvUtils.FloatItvNan.prec = function
+    | F_SINGLE -> `SINGLE
+    | F_DOUBLE -> `DOUBLE
+    | F_LONG_DOUBLE -> `LONG_DOUBLE
+    | F_REAL -> `REAL
+
+let round () : ItvUtils.FloatItvNan.round =
+  match !Rounding.opt_float_rounding with
+  | Apron.Texpr1.Near -> `NEAR
+  | Apron.Texpr1.Zero -> `ZERO
+  | Apron.Texpr1.Up -> `UP
+  | Apron.Texpr1.Down -> `DOWN
+  | Apron.Texpr1.Rnd -> `ANY
+
 
 
 (** {2 Fast assume on numeric conditions} *)

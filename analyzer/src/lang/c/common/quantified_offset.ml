@@ -23,7 +23,6 @@ open Mopsa
 open Universal.Ast
 open Stubs.Ast
 open Ast
-open Core.Sig.Stacked.Intermediate
 open Top
 
 

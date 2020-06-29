@@ -22,6 +22,8 @@
 include Alarm
 
 module Context = Context
+type uctx = Context.uctx
+type 'a ctx = 'a Context.ctx
 
 module Cases = Cases
 
@@ -39,17 +41,14 @@ let (>>=) = Cases.(>>=)
 let bind_opt = Cases.bind_opt
 let (>>=?) = Cases.(>>=?)
 
-
 let bind_some = Cases.bind_some
 let (>>$) = Cases.(>>$)
-
 
 let bind_some_opt = Cases.bind_some_opt
 let (>>$?) = Cases.(>>$?)
 
 let bind_list = Cases.bind_list
 let bind_list_opt = Cases.bind_list_opt
-
 
 module Eval = Eval
 type 'a eval = 'a Eval.eval
@@ -76,9 +75,7 @@ include Id
 include Interface
 module Interface = Interface
 
-module Sig = Sig
-
-module Channel = Channel
+include Manager
 
 module Soundness = Soundness
 

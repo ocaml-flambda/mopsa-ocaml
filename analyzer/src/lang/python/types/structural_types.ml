@@ -21,7 +21,7 @@
 
 (* TODO: move S_assume and eval of not into t_bool domain? *)
 open Mopsa
-open Sig.Domain.Intermediate
+open Sig.Abstraction.Domain
 open Ast
 open Addr
 open Data_model.Attribute
@@ -84,6 +84,8 @@ struct
   let print fmt d =
     Format.fprintf fmt "attributes: @[%a@]@\n"
       AMap.print d
+
+  let widen ctx = widen
 
   let merge pre (a, log) (a', log') =
     if a == a' then a
@@ -422,7 +424,7 @@ struct
       None
 
 
-  let ask : type r. r query -> ('a, t) man -> 'a flow -> r option =
+  let ask : type r. r query -> ('a, t, 's) man -> 'a flow -> r option =
     fun query man flow ->
       match query with
       | Q_exn_string_query t ->
@@ -436,8 +438,8 @@ struct
             | A_py_class (c, b) ->
               begin match c with
                 | C_builtin name | C_unsupported name -> name
-                | C_user c -> get_orig_vname ~warn:false c.py_cls_var
-                | C_annot c -> get_orig_vname ~warn:false c.py_cls_a_var
+                | C_user c -> get_orig_vname c.py_cls_var
+                | C_annot c -> get_orig_vname c.py_cls_a_var
               end
             | _ -> assert false
           in
@@ -479,9 +481,6 @@ struct
 
       | _ -> None
 
-
-  let refine channel man flow = Channel.return flow
-
 end
 
-let () = Framework.Core.Sig.Domain.Intermediate.register_domain (module Domain)
+let () = register_standard_domain (module Domain)

@@ -41,7 +41,7 @@
 
 
 open Mopsa
-open Core.Sig.Stacked.Stateless
+open Sig.Abstraction.Stateless
 open Universal.Ast
 open Stubs.Ast
 open Ast
@@ -882,4 +882,4 @@ struct
 end
 
 let () =
-  Core.Sig.Stacked.Stateless.register_stack (module Domain)
+  register_stateless_domain (module Domain)

@@ -24,8 +24,8 @@
 *)
 
 open Mopsa
-open Core.Sig.Domain.Reduction
-open Core.Sig.Domain.Simplified
+open Sig.Reduction.Simplified
+open Sig.Abstraction.Simplified
 open Universal.Packing.Static
 open Bot_top
 
@@ -46,7 +46,7 @@ struct
   *)
   module type REL =
   sig
-    include DOMAIN
+    include SIMPLIFIED
     val related_vars : var -> t -> var list
     val bound_var : var -> t -> I.t
     val vars : t -> var list
@@ -60,11 +60,11 @@ struct
   let get_pack_map man a : pack_map =
     match !Universal.Numeric.Relational.Instances.opt_numeric with
     | "octagon" ->
-      let aa = man.get (D_static_packing (S.id,O.id)) a in
+      let aa = man.get_env (D_static_packing (S.id,O.id)) a in
       PM (aa, (module O))
 
     | "polyhedra" ->
-      let aa = man.get (D_static_packing (S.id,P.id)) a in
+      let aa = man.get_env (D_static_packing (S.id,P.id)) a in
       PM (aa, (module P))
 
     | _ -> assert false
@@ -72,7 +72,7 @@ struct
 
 
   (** Get the interval of a variable in all packs *)
-  let get_var_interval_in_packs var ctx man post =
+  let get_var_interval_in_packs var man ctx post =
     (* Get the packing map and the underlying rel domain *)
     let PM (a, domain) = get_pack_map man post in
     let module Domain = (val domain) in
@@ -93,11 +93,11 @@ struct
 
 
   (** Refine the interval of a variable in the box domain *)
-  let refine_var_interval var ctx man a =
+  let refine_var_interval var man ctx a =
     (* Get the interval of the variable in the box domain *)
     let itv = man.get_value I.id var a in
     (** Get the interval of the variable in all packs *)
-    let itv' = get_var_interval_in_packs var ctx man a in
+    let itv' = get_var_interval_in_packs var man ctx a in
     if I.subset itv itv' then a
     else
       let itv'' = I.meet itv itv' in
@@ -111,7 +111,7 @@ struct
 
 
   (** Reduction after a test *)
-  let reduce_assume cond ctx man pre post =
+  let reduce_assume cond man ctx pre post =
     let PM (a, domain) = get_pack_map man post in
     let module Domain = (val domain) in
     match a with
@@ -131,7 +131,7 @@ struct
                 let vars' = VarSet.diff vars past in
                 (* Refine the interval of these variables *)
                 let acc' = VarSet.fold (fun var' acc ->
-                    refine_var_interval var' ctx man acc
+                    refine_var_interval var' man ctx acc
                   ) vars' acc
                 in
                 acc', VarSet.union vars' past
@@ -143,13 +143,13 @@ struct
 
 
   (** Reduction operator *)
-  let reduce ctx stmt man (pre:'a) (post:'a) : 'a =
+  let reduce stmt man ctx (pre:'a) (post:'a) : 'a =
     match skind stmt with
     | S_assign ({ ekind = E_var (v,_) },_) ->
-      refine_var_interval v ctx man post
+      refine_var_interval v man ctx post
 
     | S_assume cond ->
-      reduce_assume cond ctx man pre post
+      reduce_assume cond man ctx pre post
 
     | _ ->
       post
@@ -158,4 +158,4 @@ end
 
 
 let () =
-  register_reduction (module Reduction)
+  register_simplified_reduction (module Reduction)

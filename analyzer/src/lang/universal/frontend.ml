@@ -90,7 +90,7 @@ let to_typ (t:typ) (e:expr) : expr =
   else
     match orgt, t with
     | (T_int | T_float _), (T_int | T_float _) ->
-       mk_unop (O_cast (orgt,t)) e ~etyp:t range
+       mk_unop O_cast e ~etyp:t range
     | _ ->
       Exceptions.panic "cannot convert expression %a of type %a to type %a" pp_expr e pp_typ orgt pp_typ t
 
@@ -129,7 +129,7 @@ let from_unop (t: typ) (b: U.unary_op) : operator =
   | T_int, AST_NOT           -> O_log_not
   | T_float f, AST_UNARY_PLUS  -> O_plus
   | T_float f, AST_UNARY_MINUS -> O_minus
-  | T_float f, AST_ROUND -> O_cast (T_float f, T_int)
+  | T_float f, AST_ROUND -> O_cast
   | _ -> Exceptions.panic "operator %a cannot be used with type %a" U_ast_printer.print_unary_op b pp_typ t
 
 let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: fun_context option): expr =

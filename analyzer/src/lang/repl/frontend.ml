@@ -25,7 +25,7 @@
 *)
 
 open Mopsa
-open Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Lexing
 open Universal.Ast
 open Universal.Frontend
@@ -324,7 +324,7 @@ module Domain = struct
 end
 
 let () =
-  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+  register_stateless_domain (module Domain)
 
 
 

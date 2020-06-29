@@ -19,22 +19,17 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Frontends - translation of input source codes into Mopsa programs *)
+(** Frontends *)
 
 open Program
 
 type frontend = {
   lang: string;
-  (** Target language of the frontend *)
-
   parse: string list -> program;
-  (** Parse a list of input source files into a Mopsa program *)
 }
 
 let frontends : frontend list ref = ref []
 
-let register_frontend (f:frontend) : unit =
-  frontends := f :: !frontends
+let register_frontend (f:frontend) = frontends := f :: !frontends
 
-let find_language_frontend (l:string) : frontend =
-  List.find (function { lang } -> lang = l) !frontends
+let find_language_frontend l = List.find (function { lang } -> lang = l) !frontends

@@ -23,7 +23,6 @@
 
 open ArgExt
 open Core.All
-open Sig.Domain.Lowlevel
 open Location
 open Format
 open Callstack

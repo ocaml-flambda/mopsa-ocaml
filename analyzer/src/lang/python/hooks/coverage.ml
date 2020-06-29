@@ -26,7 +26,6 @@ open Mopsa
 open Format
 open Ast
 open Zone
-open Sig.Domain.Manager
 
 
 module Hook =
@@ -71,7 +70,7 @@ struct
            | S_py_function _
            | S_py_class _ -> VisitParts (acce, accs)
            | _ ->
-           let parts, _ = split_stmt s in
+           let parts, _ = structure_of_stmt s in
            let exprs = ExprSet.of_list parts.exprs in
            if List.length parts.stmts > 0 then
              VisitParts (ExprSet.union exprs acce, accs)

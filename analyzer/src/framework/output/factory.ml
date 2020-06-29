@@ -21,8 +21,8 @@
 
 (** Render the output of an analysis depending on the selected engine. *)
 
-open Core.Sig.Domain.Lowlevel
-open Core.Alarm
+open Core.All
+
 
 type format =
   | F_text (* Textual output *)

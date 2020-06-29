@@ -22,6 +22,7 @@
 (* Warning: this is a work in progress *)
 
 open Mopsa
+open Sig.Abstraction.Domain
 open Ast
 open Addr
 open Universal.Ast
@@ -93,8 +94,8 @@ struct
   let bottom = Partitions.bottom
   let top = Partitions.top
 
-  let join _ _ (l1, r1) (l2, r2) = Partitions.join l1 l2, r1, r2
-  let meet _ _ (l1, r1) (l2, r2) = Partitions.meet l1 l2, r1, r2
+  let join = Partitions.join
+  let meet = Partitions.meet
   let widen = Partitions.widen
   let subset = Partitions.subset
   let print fmt a = Format.fprintf fmt "partitions: %a@." Partitions.print a
@@ -112,10 +113,8 @@ struct
   let alarms = []
 
   let merge _ _ _ = assert false
-  let refine _ _ _ = assert false
 
-  let init prog man flow =
-    Sig.Stacked.Intermediate.set_env T_cur (Partitions.empty) man flow
+  let init prog man flow = set_env T_cur (Partitions.empty) man flow
 
   let rec exec zone stmt man flow =
     match skind stmt with
@@ -130,7 +129,7 @@ struct
 end
 
 
-let () = Framework.Core.Sig.Stacked.Intermediate.register_stack (module Poly);
+let () = register_standard_domain (module Poly);
 
 
 module Reduction =
@@ -175,7 +174,7 @@ struct
         ) addrs poly
 
 
-  let reduce (stmt:stmt) (man:('a, 's) Sig.Stacked.Reduction.rman) flow_pre flow_post =
+  let reduce (stmt:stmt) man (rman:('a, 's) Sig.Reduction.Exec.exec_reduction_man) flow_pre flow_post =
     assert false
     (* let man_addrs = man.get_man addrenv in
      * let man_poly = man.get_man polymorphism in
@@ -193,4 +192,4 @@ struct
 
 end
 
-let () = Sig.Stacked.Reduction.register_exec_reduction (module Reduction)
+let () = Sig.Reduction.Exec.register_exec_reduction (module Reduction)

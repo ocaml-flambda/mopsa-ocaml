@@ -22,7 +22,7 @@
 (** An environment is a total map from variables to addresses. *)
 
 open Mopsa
-open Sig.Domain.Intermediate
+open Sig.Abstraction.Stateless
 open Ast
 open Addr
 open Universal.Ast
@@ -283,8 +283,7 @@ struct
 
   let ask _ _ _ = None
 
-  let refine channel man flow = Channel.return flow
 end
 
 
-let () = Framework.Core.Sig.Domain.Stateless.register_domain (module Domain);
+let () = register_stateless_domain (module Domain);

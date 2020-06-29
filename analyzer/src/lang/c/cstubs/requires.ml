@@ -23,7 +23,7 @@
 
 
 open Mopsa
-open Framework.Core.Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Universal.Ast
 open Stubs.Ast
 open Common.Points_to
@@ -80,35 +80,33 @@ struct
   (** ============================== *)
 
   let exec_stub_requires_valid_ptr ptr range man flow =
-    let man' = Sig.Stacked.Manager.of_domain_man man in
     man.eval ptr ~zone:(Z_c, Z_c_points_to) flow >>$ fun pt flow ->
     match ekind pt with
     | E_c_points_to P_null ->
-      raise_c_null_deref_alarm ptr ~range man' flow |>
+      raise_c_null_deref_alarm ptr ~range man flow |>
       Cases.empty_singleton
 
     | E_c_points_to P_invalid ->
-      raise_c_invalid_deref_alarm ptr ~range man' flow |>
+      raise_c_invalid_deref_alarm ptr ~range man flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
-      raise_c_use_after_free_alarm ptr r ~range man' flow |>
+      raise_c_use_after_free_alarm ptr r ~range man flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
-      raise_c_dangling_deref_alarm ptr v r ~range man' flow |>
+      raise_c_dangling_deref_alarm ptr v r ~range man flow |>
       Cases.empty_singleton
 
     | E_c_points_to P_top ->
       let cond = mk_stub_builtin_call VALID_PTR ptr ~etyp:u8 range in
-      let man' = Sig.Stacked.Manager.of_domain_man man in
-      let flow = Stubs.Alarms.raise_stub_invalid_requires ~bottom:false cond range man' flow in
+      let flow = Stubs.Alarms.raise_stub_invalid_requires ~bottom:false cond range man flow in
       Post.return flow
 
     | E_c_points_to (P_block (base, offset, _)) ->
       if is_expr_forall_quantified offset
       then
-        Common.Base.eval_base_size base range man' flow >>$ fun size flow ->
+        Common.Base.eval_base_size base range man flow >>$ fun size flow ->
         man.eval ~zone:(Z_c_scalar,Z_u_num) size flow >>$ fun size flow ->
         let min, max = Common.Quantified_offset.bound offset in
         man.eval ~zone:(Z_c_scalar, Z_u_num) min flow >>$ fun min flow ->
@@ -124,14 +122,14 @@ struct
         assume cond
           ~fthen:(fun flow -> Post.return flow)
           ~felse:(fun eflow ->
-              raise_c_quantified_out_bound_alarm base size min max (under_type ptr.etyp) range man' flow eflow |>
+              raise_c_quantified_out_bound_alarm base size min max (under_type ptr.etyp) range man flow eflow |>
               Post.return
             )
           ~zone:Z_u_num man flow
 
       (* Valid base + non-quantified offset *)
       else
-        Common.Base.eval_base_size base range man' flow >>$ fun size flow ->
+        Common.Base.eval_base_size base range man flow >>$ fun size flow ->
         man.eval ~zone:(Z_c_scalar,Z_u_num) size flow >>$ fun size flow ->
         man.eval ~zone:(Z_c_scalar,Z_u_num) offset flow >>$ fun offset flow ->
         let elm = under_type ptr.etyp |> void_to_char |> (fun t -> mk_z (sizeof_type t) range) in
@@ -140,7 +138,7 @@ struct
         assume cond
           ~fthen:(fun flow -> Post.return flow)
           ~felse:(fun eflow ->
-              raise_c_out_bound_alarm base size offset (under_type ptr.etyp) range man' flow eflow |>
+              raise_c_out_bound_alarm base size offset (under_type ptr.etyp) range man flow eflow |>
               Post.return
             )
           ~zone:Z_u_num man flow
@@ -149,13 +147,12 @@ struct
 
   
   let exec_stub_requires_float_class flt cls msg range man flow =
-    let man' = Sig.Stacked.Manager.of_domain_man man in
     man.eval ~zone:(Z_c, Z_u_num) flt flow >>$ fun flt flow ->
     let cond = mk_float_class cls flt range in
     assume cond
       ~fthen:(fun flow -> Post.return flow)
       ~felse:(fun eflow ->
-          raise_c_invalid_float_class_alarm flt msg range man' flow eflow |>
+          raise_c_invalid_float_class_alarm flt msg range man flow eflow |>
           Post.return
         )
       ~zone:Z_u_num man flow
@@ -168,7 +165,7 @@ struct
           Post.return flow
         )
       ~felse:(fun flow ->
-          Stubs.Alarms.raise_stub_invalid_requires cond range (Sig.Stacked.Manager.of_domain_man man) flow |>
+          Stubs.Alarms.raise_stub_invalid_requires cond range man flow |>
           Post.return
         )
       ~negate:(fun e range ->
@@ -226,4 +223,4 @@ struct
 end
 
 let () =
-  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+  register_stateless_domain (module Domain)

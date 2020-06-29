@@ -93,13 +93,13 @@ struct
       )
       a b
   
-  let widen ctx (a:t) (b:t) : t =
+  let widen (a:t) (b:t) : t =
     if a == b then a else
     top_lift2
       (M.map2zo
          (fun _ x -> x)
          (fun _ x -> x)
-         (fun _ x y -> Value.widen ctx x y)
+         (fun _ x y -> Value.widen x y)
       )
       a b
 

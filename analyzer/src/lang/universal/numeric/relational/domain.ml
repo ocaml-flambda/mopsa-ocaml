@@ -22,6 +22,7 @@
 (** Relational numeric abstract domain, based on APRON. *)
 
 open Mopsa
+open Framework.Sig.Abstraction.Simplified
 open Rounding
 open Ast
 open Apron_manager
@@ -191,7 +192,7 @@ struct
     meet x1 x2
 
 
-  let rec exec ctx stmt man (a,bnd) =
+  let rec exec stmt man ctx (a,bnd) =
     match skind stmt with
     | S_add { ekind = E_var (var, _) } ->
       add_missing_vars (a,bnd) [var] |>
@@ -245,12 +246,12 @@ struct
           in
           Some (a', bnd)
         with UnsupportedExpression ->
-          exec ctx (mk_remove_var var stmt.srange) man (a,bnd)
+          exec (mk_remove_var var stmt.srange) man ctx (a,bnd)
       end
 
     | S_assign({ ekind = E_var (var, mode) } as lval, e) when var_mode var mode = WEAK ->
       let lval' = { lval with ekind = E_var(var, Some STRONG) } in
-      exec ctx {stmt with skind = S_assign(lval', e)} man (a,bnd) |>
+      exec {stmt with skind = S_assign(lval', e)} man ctx (a,bnd) |>
       OptionExt.lift @@ fun (a',bnd') ->
       join (a,bnd) (a', bnd')
 
@@ -364,8 +365,8 @@ struct
         Values.Intervals.Integer.Value.top
 
 
-  let ask : type r. r query -> t -> r option =
-    fun query (abs,bnd) ->
+  let ask : type r. r query -> t simplified_man -> t -> r option =
+    fun query man (abs,bnd) ->
       match query with
       | Common.Q_int_interval e ->
         eval_interval e (abs,bnd) |>
@@ -385,7 +386,5 @@ struct
 
 
       | _ -> None
-
-  let refine channel a = Channel.return a
 
 end

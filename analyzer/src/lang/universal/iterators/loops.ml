@@ -23,7 +23,7 @@
 
 
 open Mopsa
-open Framework.Core.Sig.Domain.Stateless
+open Framework.Sig.Abstraction.Stateless
 open Ast
 open Zone
 
@@ -358,7 +358,7 @@ struct
     flow
 
 
-  let rec exec zone stmt (man:('a,unit) man) flow =
+  let rec exec zone stmt (man:('a,unit,'s) man) flow =
     match skind stmt with
     | S_while(cond, body) ->
       incr nestedness;
@@ -441,4 +441,4 @@ end
 
 
 let () =
-  register_domain (module Domain)
+  register_stateless_domain (module Domain)

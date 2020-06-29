@@ -20,7 +20,7 @@
 (****************************************************************************)
 
 open Mopsa
-open Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Ast
 open MapExt
 open Addr
@@ -227,4 +227,4 @@ module Domain =
     let ask _ _ _ = None
   end
 
-let () = Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+let () = register_stateless_domain (module Domain)

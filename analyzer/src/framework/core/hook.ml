@@ -33,7 +33,7 @@ open Post
 open Eval
 open Zone
 open Interface
-open Sig.Domain.Manager
+open Manager
 
 
 module type HOOK =
@@ -42,11 +42,11 @@ sig
   val exec_zones : zone list
   val eval_zones: (zone * zone) list
   val init : 'a ctx -> 'a ctx
-  val on_before_exec : zone -> stmt -> ('a,'a) man -> 'a flow -> 'a ctx
-  val on_after_exec : zone -> stmt -> ('a,'a) man -> 'a flow -> 'a post -> 'a ctx
-  val on_before_eval : zone*zone -> expr -> ('a,'a) man -> 'a flow -> 'a ctx
-  val on_after_eval : zone*zone -> expr -> ('a,'a) man -> 'a flow -> 'a eval -> 'a ctx
-  val on_finish : ('a,'a) man -> 'a flow -> unit
+  val on_before_exec : zone -> stmt -> ('a,'a,unit) man -> 'a flow -> 'a ctx
+  val on_after_exec : zone -> stmt -> ('a,'a,unit) man -> 'a flow -> 'a post -> 'a ctx
+  val on_before_eval : zone*zone -> expr -> ('a,'a,unit) man -> 'a flow -> 'a ctx
+  val on_after_eval : zone*zone -> expr -> ('a,'a,unit) man -> 'a flow -> 'a eval -> 'a ctx
+  val on_finish : ('a,'a,unit) man -> 'a flow -> unit
 end
 
 
@@ -56,11 +56,11 @@ sig
   val exec_zones : zone list
   val eval_zones: (zone * zone) list
   val init : 'a ctx -> unit
-  val on_before_exec : zone -> stmt -> ('a,'a) man  -> 'a flow -> unit
-  val on_after_exec : zone -> stmt -> ('a,'a) man -> 'a flow -> 'a post -> unit
-  val on_before_eval : (zone * zone) -> expr -> ('a,'a) man -> 'a flow -> unit
-  val on_after_eval : (zone * zone) -> expr -> ('a,'a) man -> 'a flow -> 'a eval -> unit
-  val on_finish : ('a,'a) man -> 'a flow -> unit
+  val on_before_exec : zone -> stmt -> ('a,'a,unit) man  -> 'a flow -> unit
+  val on_after_exec : zone -> stmt -> ('a,'a,unit) man -> 'a flow -> 'a post -> unit
+  val on_before_eval : (zone * zone) -> expr -> ('a,'a,unit) man -> 'a flow -> unit
+  val on_after_eval : (zone * zone) -> expr -> ('a,'a,unit) man -> 'a flow -> 'a eval -> unit
+  val on_finish : ('a,'a,unit) man -> 'a flow -> unit
 end
 
 module MakeStatefulHook(Hook:STATELESS_HOOK) : HOOK =

@@ -22,7 +22,7 @@
 (** Common transfer functions for handling C stubs *)
 
 open Mopsa
-open Framework.Core.Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Universal.Ast
 open Stubs.Ast
 open Common.Points_to
@@ -91,7 +91,7 @@ struct
       man.post stmt' ~zone:Z_u_heap flow
 
     | E_c_points_to (P_block ({ base_kind = Addr { addr_kind = A_stub_resource _ }; base_valid = false; base_invalidation_range = Some drange }, _, _)) ->
-      raise_c_double_free_alarm p drange (Sig.Stacked.Manager.of_domain_man man) ~range flow |>
+      raise_c_double_free_alarm p drange man ~range flow |>
       Post.return
 
     | E_c_points_to P_null ->
@@ -237,4 +237,4 @@ struct
 end
 
 let () =
-  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+  register_stateless_domain (module Domain)

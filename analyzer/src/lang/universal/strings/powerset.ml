@@ -24,7 +24,8 @@
 open Mopsa
 open Ast
 open Bot
-open Core.Sig.Value.Lowlevel
+open Sig.Abstraction.Value
+open Sig.Abstraction.Domain
 
 
 module StringPower = Framework.Lattices.Powerset.Make
@@ -69,73 +70,76 @@ struct
 
   let zones = [Zone.Z_u_string]
 
-  let mem_type = function
-    | T_string -> true
-    | _ -> false
+  let is_string_type = function T_string -> true | _ -> false
 
-  let constant t = function
-    | C_string s ->
-      singleton s
+  let constant t c =
+    if is_string_type t then
+      match c with
+      | C_string s -> Some (singleton s)
+      | _          -> Some top
+    else
+      None
 
-    | _ -> top
+  let cast man t e =
+    if is_string_type t then Some top else None
 
-  let unop man t op v =
-      match op with
-      | _ -> assert false
+  let unop op t v =
+    match op with
+    | _ -> assert false
 
-  let binop man = lift_simplified_binop (fun op a1 a2 ->
-      match op with
-      | O_plus ->
-        begin match a1, a2 with
-          | Top.TOP, _ | _, Top.TOP -> Top.TOP
-          | _ ->
-            fold (fun s1 acc ->
-                fold (fun s2 acc ->
-                    add (s1^s2) acc
-                  ) a2 acc) a1 empty
-        end
-      | O_mult -> assert false
-      | _  -> failwith "todo") man
+  let binop op t a1 a2 =
+    match op with
+    | O_plus ->
+      begin match a1, a2 with
+        | Top.TOP, _ | _, Top.TOP -> Top.TOP
+        | _ ->
+          fold (fun s1 acc ->
+              fold (fun s2 acc ->
+                  add (s1^s2) acc
+                ) a2 acc) a1 empty
+      end
+    | O_mult -> assert false
+    | _  -> failwith "todo"
 
-  let filter man a b =
+  let filter b t a =
       failwith "todo"
 
-  let bwd_unop _ _ _ _ _ = failwith "ni"
-  let bwd_binop _ _ _ _ _  = failwith "ni"
+  let bwd_unop _ _ _ _ = failwith "ni"
+  let bwd_binop _ _ _ _  = failwith "ni"
 
-  let predicate man t op a r = default_predicate man t op a r
+  let bwd_cast = default_bwd_cast
 
-  let compare man t op a1 a2 r =
-    lift_simplified_compare (fun op a1 a2 r ->
-        match t with
-        | T_string ->
-           if is_top a1 || is_top a2 then a1, a2 else
+  let predicate = default_predicate
+
+  let compare op b t a1 a2 =
+    match t with
+    | T_string ->
+      if is_top a1 || is_top a2 then a1, a2 else
            (*
              { v1 \in a1 | \exists v2 \in a2, v1 op v2 == r },
              { v2 \in a2 | \exists v1 \in a1, v1 op v2 == r }
             *)
-           let filter left right =
-             StringPower.fold (fun ell acc ->
-                 if StringPower.exists (fun elr ->
-                        begin match op with
-                        | O_eq -> ell =  elr
-                        | O_ne -> ell <> elr
-                        | O_lt -> ell <  elr
-                        | O_le -> ell <= elr
-                        | O_gt -> ell >  elr
-                        | O_ge -> ell >= elr
-                        | _ -> assert false
-                        end = r)
-                      right then StringPower.add ell acc
-                     else acc
-               ) left StringPower.empty in
-           filter a1 a2, filter a2 a1
-        | _ -> a1, a2
-      ) man t op a1 a2 r
+        let filter left right =
+          StringPower.fold (fun ell acc ->
+              if StringPower.exists (fun elr ->
+                  begin match op with
+                    | O_eq -> ell =  elr
+                    | O_ne -> ell <> elr
+                    | O_lt -> ell <  elr
+                    | O_le -> ell <= elr
+                    | O_gt -> ell >  elr
+                    | O_ge -> ell >= elr
+                    | _ -> assert false
+                  end = b)
+                  right then StringPower.add ell acc
+              else acc
+            ) left StringPower.empty in
+        filter a1 a2, filter a2 a1
+    | _ -> a1, a2
 
   (** {2 Query handlers} *)
 
-  let ask : type r. ('a,t) man -> ('a,r) vquery -> r option =
+  let ask : type r. t value_man -> r query -> r option =
     fun man q ->
     match q with
     (* TODO: query de values.py_string *)
@@ -146,8 +150,8 @@ end
 module Domain =
 struct
 
-  module Nonrel = Framework.Transformers.Value.Nonrel.Make(Value)
-  module Lifted = Core.Sig.Domain.Simplified.MakeIntermediate(Nonrel)
+  module Nonrel = Framework.Combiners.Value.Nonrel.Make(Value)
+  module Lifted = Sig.Abstraction.Simplified.MakeDomain(Nonrel)
   include Lifted
 
   let interface = {
@@ -158,7 +162,7 @@ struct
   let debug fmt = Debug.debug ~channel:name fmt
 
 
-  let exec zone stmt (man: ('a, t) Core.Sig.Domain.Intermediate.man) (flow: 'a flow) : 'a post option =
+  let exec zone stmt (man: ('a, t, 's) man) (flow: 'a flow) : 'a post option =
     match skind stmt with
     | S_assign (x, e) ->
       debug "ok";
@@ -179,13 +183,13 @@ struct
       if nb mod 2 = 0 then a^a
       else a^a^s
 
-  let eval zones expr (man: ('a, t) Core.Sig.Domain.Intermediate.man) flow =
+  let eval zones expr (man: ('a, t, 's) man) flow =
     let range = erange expr in
     match ekind expr with
     | E_binop (O_mult, e1, e2) when etyp e1 = T_string && etyp e2 = T_int->
       man.eval ~zone:(Zone.Z_u, Zone.Z_u_string) e1 flow |>
       Eval.bind (fun e1 flow ->
-          let cur = Core.Sig.Domain.Intermediate.get_env T_cur man flow in
+          let cur = get_env T_cur man flow in
           let strings_e1 = Nonrel.eval e1 cur |> OptionExt.none_to_exn |> snd in
           let itv_e2 = man.ask (Numeric.Common.Q_int_interval e2) flow in
           (* FIXME: arbitrary constants... *)
@@ -209,7 +213,7 @@ struct
     | E_len e when etyp e = T_string ->
       man.eval ~zone:(Zone.Z_u, Zone.Z_u_string) e flow |>
       Eval.bind (fun e flow ->
-          let cur = Core.Sig.Domain.Intermediate.get_env T_cur man flow in
+          let cur = get_env T_cur man flow in
           let strings_e = Nonrel.eval e cur |> OptionExt.none_to_exn |> snd in
           Eval.join_list ~empty:(fun () -> failwith "todo")
             (if Value.is_top strings_e then
@@ -221,14 +225,14 @@ struct
     | _ -> None
 
 
-  let ask : type r. r query -> ('a, t) Core.Sig.Domain.Intermediate.man -> 'a flow -> r option =
+  let ask : type r. r query -> ('a, t, 's) man -> 'a flow -> r option =
     fun query man flow ->
     match query with
     | Q_strings_powerset e ->
       man.eval ~zone:(Zone.Z_u, Zone.Z_u_string) e flow |>
       Cases.apply
         (fun oe flow ->
-           let cur = Core.Sig.Domain.Intermediate.get_env T_cur man flow in
+           let cur = get_env T_cur man flow in
            Nonrel.eval (OptionExt.none_to_exn oe) cur |> OptionExt.lift snd
 
         ) (OptionExt.lift2 StringPower.join) (OptionExt.lift2 StringPower.meet)
@@ -238,4 +242,4 @@ struct
 end
 
 let () =
-  Core.Sig.Domain.Intermediate.register_domain (module Domain)
+  register_standard_domain (module Domain)

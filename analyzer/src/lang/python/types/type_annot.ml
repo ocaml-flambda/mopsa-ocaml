@@ -22,7 +22,7 @@
 (** Definition of python functions annotations as well as polymorphism *)
 
 open Mopsa
-open Sig.Domain.Intermediate
+open Sig.Abstraction.Domain
 open Ast
 open Addr
 open Universal.Ast
@@ -49,6 +49,8 @@ struct
   module TVMap = Framework.Lattices.Partial_map.Make(Keys)(ESet)
 
   include TVMap
+
+  let widen ctx = widen
 
   let print fmt m =
     Format.fprintf fmt "TypeVar annotations: @[%a@]@\n" TVMap.print m
@@ -759,7 +761,7 @@ struct
     | _ -> None
 
   let ask _ _ _ = None
-  let refine channel man flow = Channel.return flow
+
   let merge pre (a, log) (a', log') =
     if a == a' then a
     else if Log.is_empty_log log' then a
@@ -768,4 +770,4 @@ struct
 end
 
 let () =
-  Framework.Core.Sig.Domain.Intermediate.register_domain (module Domain)
+  register_standard_domain (module Domain)

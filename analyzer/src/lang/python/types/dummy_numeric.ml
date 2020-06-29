@@ -20,7 +20,7 @@
 (****************************************************************************)
 
 open Mopsa
-open Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Ast
 open MapExt
 open Addr
@@ -62,7 +62,7 @@ module Domain =
 
     let eval _ _ _ _ = None
 
-    let ask : type r. r query -> ('a, unit) Core.Sig.Domain.Stateless.man -> 'a flow -> r option =
+    let ask : type r. r query -> ('a, unit, 's) man -> 'a flow -> r option =
       fun query man flow ->
       match query with
       | Universal.Numeric.Common.Q_int_interval e ->
@@ -74,4 +74,4 @@ module Domain =
 
   end
 
-let () = Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+let () = register_stateless_domain (module Domain)

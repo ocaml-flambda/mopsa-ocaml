@@ -30,7 +30,7 @@
 *)
 
 open Mopsa
-open Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Ast
 open Addr
 open Universal.Ast
@@ -880,14 +880,14 @@ struct
     (* the last case of str.split uses this list abstraction so every case is here... *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.split", _))}, _)} as call, [str], []) ->
       (* rewrite into str.split(str, " ", -1) *)
-      let args' = (mk_constant T_string (C_string " ") range) :: (mk_constant T_int (C_int (Z.of_int 1)) range) :: [] in
+      let args' = (mk_constant ~etyp:T_string (C_string " ") range) :: (mk_constant ~etyp:T_int (C_int (Z.of_int 1)) range) :: [] in
       man.eval {exp with ekind = E_py_call(call, str :: args', [])} flow
       |> OptionExt.return
 
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.split", _))}, _)} as call , [str; split], []) ->
       (* rewrite into str.split(str, split, -1) *)
-      let args' = (mk_constant T_int (C_int (Z.of_int 1)) range) :: [] in
+      let args' = (mk_constant ~etyp:T_int (C_int (Z.of_int 1)) range) :: [] in
       man.eval {exp with ekind = E_py_call(call, str :: split :: args', [])} flow
       |> OptionExt.return
 
@@ -903,13 +903,13 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bytes.split", _))}, _)} as call, [str], []) ->
       (* rewrite into str.split(str, " ", -1) *)
-      let args' = (mk_py_top T_py_bytes range) :: (mk_constant T_int (C_int (Z.of_int 1)) range) :: [] in
+      let args' = (mk_py_top T_py_bytes range) :: (mk_constant ~etyp:T_int (C_int (Z.of_int 1)) range) :: [] in
       man.eval {exp with ekind = E_py_call(call, str :: args', [])} flow
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bytes.split", _))}, _)} as call , [str; split], []) ->
       (* rewrite into str.split(str, split, -1) *)
-      let args' = (mk_constant T_int (C_int (Z.of_int 1)) range) :: [] in
+      let args' = (mk_constant ~etyp:T_int (C_int (Z.of_int 1)) range) :: [] in
       man.eval {exp with ekind = E_py_call(call, str :: split :: args', [])} flow
       |> OptionExt.return
 
@@ -1127,7 +1127,7 @@ struct
     | _ -> None
 
 
-  let ask : type r. r query -> ('a, unit) man -> 'a flow -> r option =
+  let ask : type r. r query -> ('a, unit, 's) man -> 'a flow -> r option =
     fun query man flow ->
     match query with
     | Universal.Ast.Q_debug_addr_value ({addr_kind = A_py_list} as addr) ->
@@ -1150,4 +1150,4 @@ struct
 end
 
 let () =
-  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+  register_stateless_domain (module Domain)

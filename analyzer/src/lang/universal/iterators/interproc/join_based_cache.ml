@@ -23,7 +23,7 @@
    results for each flow *)
 
 open Mopsa
-open Sig.Domain.Stateless
+open Framework.Sig.Abstraction.Stateless
 open Ast
 open Zone
 open Callstack
@@ -154,4 +154,4 @@ struct
 end
 
 
-let () = Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+let () = register_stateless_domain (module Domain)

@@ -72,21 +72,22 @@ let parse_program lang files =
 let analyze_files (files:string list) (args:string list option) : int =
   let t = Timing.start () in
   try
-    let lang, domain = Config.Parser.parse !Config.Parser.opt_config in
+    let abstraction = Config.Abstraction.Parser.(parse !opt_config) in
+    let domain = Config.Abstraction.Builder.make abstraction in
 
-    let prog = parse_program lang files in
+    let prog = parse_program abstraction.language files in
 
     (* Top layer analyzer *)
     let module Domain = (val domain) in
-    let module Abstraction = Abstraction.Make(Domain) in
+    let module Toplevel = Toplevel.Make(Domain) in
     let module Engine =
       (val
         if !opt_interactive
         then
-          let module E = Engines.Interactive.Make(Abstraction) in
+          let module E = Engines.Interactive.Make(Toplevel) in
           (module E)
         else
-          let module E = Engines.Automatic.Make(Abstraction) in
+          let module E = Engines.Automatic.Make(Toplevel) in
           (module E)
         : Engines.Engine.ENGINE with type t = Domain.t
       )

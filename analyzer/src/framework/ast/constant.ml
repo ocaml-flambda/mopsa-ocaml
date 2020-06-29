@@ -19,14 +19,13 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Extensible type of constants *)
+(** Constants *)
 
 open Typ
 
 type constant = ..
 
-type constant +=
-  | C_top of typ (** top value of a specific type *)
+type constant += C_top of typ
 
 let constant_compare_chain = TypeExt.mk_compare_chain (fun c1 c2 ->
     match c1, c2 with
@@ -47,7 +46,6 @@ let register_constant (info: constant TypeExt.info) : unit =
 let register_constant_compare cmp = TypeExt.register_compare cmp constant_compare_chain
 
 let register_constant_pp pp = TypeExt.register_print pp constant_pp_chain
-
 
 let compare_constant o1 o2 = TypeExt.compare constant_compare_chain o1 o2
 

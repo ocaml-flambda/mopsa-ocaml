@@ -19,8 +19,6 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Extensible type of programs *)
-
 type prog_kind = ..
 
 type program = {
@@ -36,8 +34,7 @@ let program_compare_chain = TypeExt.mk_compare_chain (fun p1 p2 ->
     compare p1 p2
   )
 
-let register_program (info:program TypeExt.info) =
-  TypeExt.register info program_compare_chain program_pp_chain
+let register_program (info:program TypeExt.info) = TypeExt.register info program_compare_chain program_pp_chain
 
 let register_program_compare cmp = TypeExt.register_compare cmp program_compare_chain
 

@@ -28,46 +28,25 @@ open Format
 
 type stmt_kind = ..
 
-(** Basic statements *)
+
 type stmt_kind +=
   | S_program of program * string list option
-  (** Program to be analyzed *)
-
   | S_assign of expr (** lhs *) * expr (** rhs *)
-  (** Assignments *)
-
   | S_assume of expr (** condition *)
-
   | S_add of expr
-  (** Add a dimension to the abstract environments. *)
-
   | S_remove of expr
-  (** Remove a dimension and invalidate all references to it. *)
-
   | S_invalidate of expr
-  (** Invalidate all references to a dimension without removing its content *)
-
   | S_rename of expr (** old *) * expr (** new *)
-  (** Rename the first dimension into the second one *)
-
   | S_forget of expr
-  (** Forget a dimension from the abstract environments. *)
-
   | S_project of expr list
-  (** Project the abstract environments on the given list of variables. *)
-
   | S_expand of expr * expr list
-  (** Expands the first dimension into the list of dimensions *)
-
   | S_fold of expr * expr list
-  (** Folds the the list of dimensions into the first one, the
-      list of dimensions is then removed from the environment *)
-
+ 
 type stmt = {
-  skind : stmt_kind; (** Kind of the statement. *)
-  srange : Location.range; (** Location range of the statement. *)
+  skind : stmt_kind;
+  srange : Location.range;
 }
-(** Statements with their kind and range. *)
+
 
 type block = stmt list
 
@@ -173,11 +152,6 @@ let register_stmt_compare cmp = TypeExt.register_compare cmp stmt_compare_chain
 
 let register_stmt_pp pp = TypeExt.register_print pp stmt_pp_chain
 
-
-(*==========================================================================*)
-(**                 {2 Utility functions for statements}                    *)
-(*==========================================================================*)
-
 let mk_stmt skind srange = {skind; srange}
 
 let mk_rename v v' =
@@ -236,11 +210,6 @@ let mk_fold_var v vl range =
     (mk_var v range)
     (List.map (fun v' -> mk_var v' range) vl)
     range
-
-let concat_blocks b1 b2 =
-  List.fold_left (fun acc c ->
-      if List.memq c acc then acc else c :: acc
-    ) b2 b1
 
 module StmtSet = SetExt.Make(struct
     type t = stmt

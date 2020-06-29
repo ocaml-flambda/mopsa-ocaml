@@ -24,7 +24,7 @@
 
 
 open Mopsa
-open Framework.Core.Sig.Value.Simplified
+open Sig.Abstraction.Value
 open Universal.Ast
 open Ast
 open Zone

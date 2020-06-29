@@ -22,7 +22,7 @@
 (** Desugar constant expressions. *)
 
 open Mopsa
-open Framework.Core.Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Universal.Ast
 open Ast
 open Zone
@@ -71,7 +71,6 @@ struct
     match c_expr_to_z exp with
     | None   -> None
     | Some z ->
-      debug "%a simplified into %a" pp_expr exp Z.pp_print z;
       Eval.singleton (mk_z z ~typ:exp.etyp exp.erange) flow |>
       OptionExt.return
 
@@ -84,4 +83,4 @@ struct
 end
 
 let () =
-  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+  register_stateless_domain (module Domain)

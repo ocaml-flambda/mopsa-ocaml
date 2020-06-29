@@ -25,7 +25,6 @@
 */
 
 #include <errno.h>
-#include <limits.h>
 #include "mopsa_libc_utils.h"
 
 int _errno;

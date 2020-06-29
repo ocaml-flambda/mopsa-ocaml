@@ -43,18 +43,6 @@ val equal_id : 'a id -> 'b id -> ('a,'b) eq option
 (** Equality witness of identifiers *)
 
 
-(** Generator of a new identifier *)
-module GenId(
-    Spec: sig
-      type t
-      val name : string
-    end
-  ) :
-sig
-  val id : Spec.t id
-  val name : string
-  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
-end
 
 
 (** Generator of a new domain identifier *)

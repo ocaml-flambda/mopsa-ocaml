@@ -63,7 +63,7 @@
 
 
 open Mopsa
-open Framework.Core.Sig.Domain.Intermediate
+open Sig.Abstraction.Domain
 open Universal.Ast
 open Stubs.Ast
 open Ast
@@ -124,7 +124,7 @@ struct
 
   let widen ctx a1 a2 = {
     first = List.map2 Slot.join a1.first a2.first;
-    others = Table.widen ctx a1.others a2.others;
+    others = Table.widen a1.others a2.others;
   }
 
   let merge pre (post,log) (post',log') =
@@ -481,9 +481,8 @@ struct
 
   let ask _ _ _ = None
 
-  let refine channel man flow = Channel.return flow
 
 end
 
 let () =
-  Framework.Core.Sig.Domain.Intermediate.register_domain (module Domain)
+  register_standard_domain (module Domain)

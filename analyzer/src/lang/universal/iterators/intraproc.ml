@@ -22,7 +22,7 @@
 (** Intra-procedural iterator for blocks, assignments and tests *)
 
 open Mopsa
-open Sig.Domain.Stateless
+open Framework.Sig.Abstraction.Stateless
 open Ast
 
 
@@ -88,4 +88,4 @@ struct
 end
 
 let () =
-  register_domain (module Domain)
+  register_stateless_domain (module Domain)

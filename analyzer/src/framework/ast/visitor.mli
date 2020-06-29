@@ -19,7 +19,35 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Generic visitors for statements and expressions. *)
+(** Visitors for statements and expressions
+
+    This module provides generic [map], [fold] and [fold_map] functions for
+    statements/expressions that visits their structure. To support newly added
+    statements and expressions, visitors need to be registered with functions
+    [register_stmt_visitor] and [register_expr_visitor].
+
+    A visitor of a statement/expression encodes its structure, composed of
+    two parts: 
+    - The first part is the direct sub-node of the statement/expression, 
+    e.g. [x] and [e] for the statement [S_assign(x,e)]. 
+    - The second part is a builder function that reconstructs the statement
+    given its sub-nodes.
+    
+    Here is an example of registering the visitor of the assignment statement
+    {[
+      let () =
+        register_stmt_visitor
+          (fun next s ->
+             match skind s with
+             | S_assign(x,e) ->
+               (* Sub-nodes *)
+               { exprs = [x;e]; stmts = [] },
+               (* Builder *)
+               (function | {exprs = [x';e']} -> {s with skind = S_assign(x',e')}
+                         | _ -> assert false)
+             | _ -> next s)
+    ]}
+*)
 
 open Expr
 open Var
@@ -27,100 +55,140 @@ open Stmt
 
 
 type parts = {
-  exprs : expr list; (** child expressions *)
-  stmts : stmt list; (** child statements *)
+  exprs : expr list; (** sub-expressions *)
+  stmts : stmt list; (** sub-statements *)
 }
+(** Parts of a statement/expression *)
 
 
-type 'a structure = parts * (parts -> 'a)
+type 'a structure = parts         (** sub-nodes *) *
+                    (parts -> 'a) (** builder function *)
+(** Structure of a statement/expression with its parts and builder function *)
+
+val structure_of_expr : expr -> expr structure
+(** Get the structure of an expression *)
+
+val structure_of_stmt : stmt -> stmt structure
+(** Get the structure of a statement *)
 
 val leaf : 'a -> 'a structure
+(** Visitor for leaf statements/expressions that have no sub-elements *)
 
 
-type 'a vinfo = {
+(****************************************************************************)
+(**                            {1 Registration}                             *)
+(****************************************************************************)
+
+
+type 'a visit_info = {
   compare : 'a TypeExt.compare;
+  (** Comparison function for ['a] *)
+
   print   : 'a TypeExt.print;
+  (** Pretty-printer for ['a'] *)
+
   visit : ('a -> 'a structure) -> 'a -> 'a structure;
+  (** Visitor for ['a] *)
 }
+(** Registration descriptor for visitors *)
 
-val register_expr_with_visitor : expr vinfo -> unit
+val register_expr_with_visitor : expr visit_info -> unit
+(** Register an expression with its visitor *)
 
-val register_expr_visitor : ((expr -> expr structure) -> expr -> expr structure) -> unit
+val register_expr_visitor :
+  ((expr -> expr structure) -> expr -> expr structure) -> unit
+(** Register a visitor of an expression *)
 
-val register_stmt_with_visitor : stmt vinfo -> unit
+val register_stmt_with_visitor : stmt visit_info -> unit
+(** Register a statement with its visitor *)
 
-val register_stmt_visitor : ((stmt -> stmt structure) -> stmt -> stmt structure) -> unit
+val register_stmt_visitor :
+  ((stmt -> stmt structure) -> stmt -> stmt structure) -> unit
+(** Register a visitor of a statement *)
 
-val split_expr : expr -> expr structure
 
-val split_stmt : stmt -> stmt structure
+(****************************************************************************)
+(**                         {1 Visiting iterators}                          *)
+(****************************************************************************)
 
-val is_leaf_expr : expr -> bool
 
-val is_stmt_free_expr : expr -> bool
-
-val is_atomic_stmt : stmt -> bool
-
-(** Kinds of returned actions by a visitor *)
-type 'a action =
-  | Keep of 'a       (** Keep the result *)
-  | VisitParts of 'a (** Continue visiting the parts of the result *)
-  | Visit of 'a      (** Iterate the visitor on the result *)
+(** Actions of a visiting iterator *)
+type 'a visit_action =
+  | Keep of 'a       (** Keep the given result *)
+  | VisitParts of 'a (** Continue visiting the parts of the given result *)
+  | Visit of 'a      (** Iterate the visitor on the given result *)
 
 
 val map_expr :
-    (expr -> expr action) ->
-    (stmt -> stmt action) ->
+    (expr -> expr visit_action) ->
+    (stmt -> stmt visit_action) ->
     expr -> expr
-(** [map_expr fe fs e] transforms the expression [e] into a new one,
-    by splitting [fe e] into its sub-parts, applying [map_expr fe fs] and
-    [map_stmt fe fs] on them, and finally gathering the results with
-    the builder of [fe e].
+(** [map_expr fe fs e] transforms the expression [e] into a new one by applying
+    visitor action [fe] and [fs] on its sub-expression and sub-statements
+    respectively
 *)
 
 
 val map_stmt :
-  (expr -> expr action) ->
-  (stmt -> stmt action) ->
+  (expr -> expr visit_action) ->
+  (stmt -> stmt visit_action) ->
   stmt -> stmt
-(** [map_stmt fe fs s] same as [map_expr] but on statements. *)
+(** Similar to [map_expr] but on statements *)
 
 val fold_expr :
-  ('a -> expr -> 'a action) ->
-  ('a -> stmt -> 'a action) ->
+  ('a -> expr -> 'a visit_action) ->
+  ('a -> stmt -> 'a visit_action) ->
   'a -> expr -> 'a
-(** Folding function for expressions  *)
-
-
-val fold_sub_expr :
-  ('a -> expr -> 'a action) ->
-  ('a -> stmt -> 'a action) ->
-  'a -> expr -> 'a
+(** [fold_expr fe fs e] folds the accumulated result of visitors [fe] and
+    [fs] on the structure of expression [e]  *)
 
 
 val fold_stmt :
-  ('a -> expr -> 'a action) ->
-  ('a -> stmt -> 'a action) ->
+  ('a -> expr -> 'a visit_action) ->
+  ('a -> stmt -> 'a visit_action) ->
   'a -> stmt -> 'a
-(** Folding function for statements *)
+(** Similar to [fold_expr] but on statements *)
 
 val fold_map_expr :
-  ('a -> expr -> ('a * expr) action) ->
-  ('a -> stmt -> ('a * stmt) action) ->
+  ('a -> expr -> ('a * expr) visit_action) ->
+  ('a -> stmt -> ('a * stmt) visit_action) ->
   'a -> expr -> 'a * expr
 (** Combination of map and fold for expressions *)
 
 val fold_map_stmt :
-  ('a -> expr -> ('a * expr) action) ->
-  ('a -> stmt -> ('a * stmt) action) ->
+  ('a -> expr -> ('a * expr) visit_action) ->
+  ('a -> stmt -> ('a * stmt) visit_action) ->
   'a -> stmt -> ('a * stmt)
 (** Combination of map and fold for statements *)
 
+
+(****************************************************************************)
+(**                         {1 Utility functions}                           *)
+(****************************************************************************)
+
+val is_leaf_expr : expr -> bool
+(** Test whether an expression is a leaf expression *)
+
+val is_stmt_free_expr : expr -> bool
+(** Test whether an expression has no sub-statement *)
+
+val is_atomic_stmt : stmt -> bool
+(** Test whether a statement has no sub-statement *)
+
 val expr_vars : expr -> var list
-(** Extract variables from an expression *)
+(** Get all variables present in an expression *)
 
 val stmt_vars : stmt -> var list
-(** Extract variables from a statement *)
+(** Get all variables present in a statement *)
 
 val get_orig_expr : expr -> expr
-(** Get the original version of an evaluated expression *)
+(** Get the original version along the transformation lineage of an expression *)
+
+(****************************************************************************)
+(**                            {1 Deprecated}                               *)
+(****************************************************************************)
+
+val fold_sub_expr :
+  ('a -> expr -> 'a visit_action) ->
+  ('a -> stmt -> 'a visit_action) ->
+  'a -> expr -> 'a

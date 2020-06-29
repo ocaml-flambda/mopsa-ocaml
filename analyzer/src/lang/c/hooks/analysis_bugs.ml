@@ -29,7 +29,6 @@
 
 open Location
 open Mopsa
-open Framework.Core.Sig.Domain.Manager
 open Format
 open Ast
 open Stubs.Zone

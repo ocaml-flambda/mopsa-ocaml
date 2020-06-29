@@ -23,7 +23,7 @@
 
 
 open Mopsa
-open Framework.Core.Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Universal.Ast
 open Stubs.Ast
 open Common.Points_to
@@ -150,26 +150,25 @@ struct
       | _ -> target
     in
     man.eval ptr ~zone:(Z_c,Z_c_points_to) flow >>$ fun p flow ->
-    let man' = Core.Sig.Stacked.Manager.of_domain_man man in
     match ekind p with
     | E_c_points_to P_null ->
-      raise_c_null_deref_alarm ptr man' flow |>
+      raise_c_null_deref_alarm ptr man flow |>
       Cases.empty_singleton
 
     | E_c_points_to P_invalid ->
-      raise_c_invalid_deref_alarm ptr man' flow |>
+      raise_c_invalid_deref_alarm ptr man flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
-      raise_c_use_after_free_alarm ptr r man' flow |>
+      raise_c_use_after_free_alarm ptr r man flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
-      raise_c_dangling_deref_alarm ptr v r man' flow |>
+      raise_c_dangling_deref_alarm ptr v r man flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block (base, offset, _)) when is_base_readonly base ->
-      raise_c_modify_read_only_alarm ptr base man' flow |>
+      raise_c_modify_read_only_alarm ptr base man flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block (base, offset, mode))  ->
@@ -238,26 +237,25 @@ struct
   let eval_stub_primed e range man flow =
     let ptr = mk_c_address_of e range in
     man.eval ptr ~zone:(Z_c,Z_c_points_to) flow >>$ fun p flow ->
-    let man' = Core.Sig.Stacked.Manager.of_domain_man man in
     match ekind p with
     | E_c_points_to P_null ->
-      raise_c_null_deref_alarm ptr man' flow |>
+      raise_c_null_deref_alarm ptr man flow |>
       Cases.empty_singleton
 
     | E_c_points_to P_invalid ->
-      raise_c_invalid_deref_alarm ptr man' flow |>
+      raise_c_invalid_deref_alarm ptr man flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
-      raise_c_use_after_free_alarm ptr r man' flow |>
+      raise_c_use_after_free_alarm ptr r man flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
-      raise_c_dangling_deref_alarm ptr v r man' flow |>
+      raise_c_dangling_deref_alarm ptr v r man flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block (base, offset, _)) when is_base_readonly base ->
-      raise_c_modify_read_only_alarm ptr base man' flow |>
+      raise_c_modify_read_only_alarm ptr base man flow |>
       Cases.empty_singleton
 
     | E_c_points_to (P_block (base, offset, mode))  ->
@@ -277,7 +275,7 @@ struct
       OptionExt.return
 
     | E_stub_builtin_call(BYTES, { ekind = E_var({ vkind = V_c_primed_base base },_) }) ->
-      eval_base_size base exp.erange (Sig.Stacked.Manager.of_domain_man man) flow |>
+      eval_base_size base exp.erange man flow |>
       OptionExt.return
 
 
@@ -285,9 +283,7 @@ struct
 
   let ask _ _ _ = None
 
-  let refine _ _ _ = assert false
-
 end
 
 let () =
-  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+  register_stateless_domain (module Domain)

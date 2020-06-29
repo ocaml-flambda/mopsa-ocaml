@@ -41,43 +41,41 @@
 
             // Memory model
             "c.desugar.aggregates",
+            "universal.heap.recency",
 	    {
-                "apply": {
-                    "compose": [
-                        "universal.heap.recency",
-                        {
-                            "product": [
-                                "c.memory.lowlevel.cells",
-                                "c.memory.lowlevel.string_length"
-                            ],
-			    "reductions": [
-				"c.memory.lowlevel.reductions.cell_string_length"
-			    ]
-                        },
-                        {
-                            "seq": [
-			        "c.memory.scalars.pointer",
-			        "c.memory.scalars.machine_numbers"
-                            ]
-                        }
-                    ]
-                },
-		"on": {
-                    "product": [
-                        {
-                            "nonrel": {
-			        "union": [
-			            "universal.numeric.values.intervals.float",
-                                    "universal.numeric.values.intervals.integer"
-			        ]
-		            }
-                        },
-                        "universal.numeric.relational"
-                    ],
-                    "reductions": [
-                        "universal.numeric.reductions.intervals_rel"
-                    ]
-                }
+                "compose": [
+                    {
+                        "product": [
+                            "c.memory.lowlevel.cells",
+                            "c.memory.lowlevel.string_length"
+                        ],
+			"reductions": [
+			    "c.memory.lowlevel.reductions.cell_string_length"
+			]
+                    },
+                    {
+                        "seq": [
+			    "c.memory.scalars.pointer",
+			    "c.memory.scalars.machine_numbers"
+                        ]
+                    },
+		    {
+			"product": [
+                            {
+				"nonrel": {
+			            "union": [
+					"universal.numeric.values.intervals.float",
+					"universal.numeric.values.intervals.integer"
+			            ]
+				}
+                            },
+                            "universal.numeric.relational"
+			],
+			"reductions": [
+                            "universal.numeric.reductions.intervals_rel"
+			]
+                    }
+		]
             }
 	]
     }

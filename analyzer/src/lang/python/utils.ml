@@ -20,7 +20,6 @@
 (****************************************************************************)
 
 open Mopsa
-open Framework.Core.Sig.Domain.Lowlevel
 open Ast
 
 let debug fmt = Debug.debug ~channel:"python.utils" fmt
@@ -42,7 +41,7 @@ let mk_builtin_raise_args exn args range =
 
 let mk_builtin_raise_msg exn msg range =
   let open Universal.Ast in
-  mk_builtin_raise_args exn [mk_constant T_string (C_string msg) range] range
+  mk_builtin_raise_args exn [mk_constant ~etyp:T_string (C_string msg) range] range
 
 let mk_builtin_call f params range =
   mk_py_call (mk_py_object (Addr.find_builtin f) range) params range

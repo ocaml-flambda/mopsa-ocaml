@@ -22,7 +22,7 @@
 (** Reduction between cells and smashing domains *)
 
 open Mopsa
-open Sig.Stacked.Reduction
+open Sig.Reduction.Eval
 open Universal.Ast
 open Ast
 open Zone
@@ -38,20 +38,20 @@ struct
   let smashing = Smashing.Domain.id
 
 
-  let reduce exp man evals flow =
-    let oe1 = man.get_eval cells evals in
-    let oe2 = man.get_eval smashing evals in
+  let reduce exp man rman flow evals =
+    let oe1 = rman.get_eval cells evals in
+    let oe2 = rman.get_eval smashing evals in
 
     (* Reduce only when both domains did an evaluation *)
     OptionExt.apply2
       (fun e1 e2 ->
          match ekind e1, ekind e2 with
          | _, E_constant (C_top _) ->
-           let evals = man.del_eval smashing evals in
+           let evals = rman.del_eval smashing evals in
            Cases.singleton evals flow
 
          | E_constant (C_top _),_ ->
-           let evals = man.del_eval cells evals in
+           let evals = rman.del_eval cells evals in
            Cases.singleton evals flow
 
          (* If both domains returned variables, refine the results *)
@@ -62,18 +62,18 @@ struct
 
            if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
            then
-             let evals = man.del_eval cells evals |>
-                         man.del_eval smashing
+             let evals = rman.del_eval cells evals |>
+                         rman.del_eval smashing
              in
              Cases.singleton evals flow
            else
-             let evals = man.del_eval smashing evals in
+             let evals = rman.del_eval smashing evals in
              Cases.singleton evals flow
 
 
          (* Otherwise, keep the cell evaluation *)
          | _, _ ->
-           let evals = man.del_eval smashing evals in
+           let evals = rman.del_eval smashing evals in
            Cases.singleton evals flow
       )
       (Cases.singleton evals flow)
