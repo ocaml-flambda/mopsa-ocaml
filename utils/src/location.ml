@@ -321,7 +321,7 @@ let rec pp_range fmt range =
   | R_tagged (Range_tag rr, r) -> Format.fprintf fmt "%a:$%a" pp_range r pp_range rr
 
 
-let rec pp_relative_range fmt range =
+let pp_relative_range fmt range =
   match untag_range range with
   | R_program pl ->
     Format.fprintf fmt "{%a}"

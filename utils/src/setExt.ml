@@ -270,38 +270,6 @@ module Make(Ord: OrderedType) =
         Empty -> e
       | Node{l; v; r} -> cons_enum l (More(v, r, e))
 
-    let rec compare_aux e1 e2 =
-        match (e1, e2) with
-        (End, End) -> 0
-      | (End, _)  -> -1
-      | (_, End) -> 1
-      | (More(v1, r1, e1), More(v2, r2, e2)) ->
-          let c = Ord.compare v1 v2 in
-          if c <> 0
-          then c
-          else compare_aux (cons_enum r1 e1) (cons_enum r2 e2)
-
-    let compare s1 s2 =
-      compare_aux (cons_enum s1 End) (cons_enum s2 End)
-
-    let equal s1 s2 =
-      compare s1 s2 = 0
-
-    let rec subset s1 s2 =
-      match (s1, s2) with
-        Empty, _ ->
-          true
-      | _, Empty ->
-          false
-      | Node {l=l1; v=v1; r=r1}, (Node {l=l2; v=v2; r=r2} as t2) ->
-          let c = Ord.compare v1 v2 in
-          if c = 0 then
-            subset l1 l2 && subset r1 r2
-          else if c < 0 then
-            subset (Node {l=l1; v=v1; r=Empty; h=0}) l2 && subset r1 t2
-          else
-            subset (Node {l=Empty; v=v1; r=r1; h=0}) r2 && subset l1 t2
-
     let rec iter f = function
         Empty -> ()
       | Node{l; v; r} -> iter f l; f v; iter f r
@@ -702,7 +670,7 @@ module Make(Ord: OrderedType) =
     let to_string printer key l =
       let b = Buffer.create 10 in
       print_gen (fun () s -> Buffer.add_string b s) printer
-                (fun () k -> key k) () l;
+                (fun () k ->  Buffer.add_string b (key k)) () l;
       Buffer.contents b
                       
 

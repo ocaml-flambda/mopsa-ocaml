@@ -731,8 +731,10 @@ module Make(Ord: OrderedType) =
 
     let to_string printer key elem l =
       let b = Buffer.create 10 in
-      print_gen (fun () s -> Buffer.add_string b s) printer
-                (fun () k -> key k) (fun () e ->  elem e) () l;
+      print_gen
+        (fun () s -> Buffer.add_string b s) printer
+        (fun () k -> Buffer.add_string b (key k))
+        (fun () e -> Buffer.add_string b (elem e)) () l;
       Buffer.contents b
 
 

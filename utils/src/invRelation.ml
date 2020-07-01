@@ -471,8 +471,8 @@ module Make(Dom: OrderedType)(CoDom: OrderedType) = struct
   let to_string printer dom codom l =
     let b = Buffer.create 10 in
     print_gen (fun () s -> Buffer.add_string b s) printer
-              (fun () k -> dom k)
-              (fun () k -> codom k)
+              (fun () k -> Buffer.add_string b (dom k))
+              (fun () k -> Buffer.add_string b (codom k))
               () l;
     Buffer.contents b
     

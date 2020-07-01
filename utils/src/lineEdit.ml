@@ -321,7 +321,7 @@ module UBuf = struct
   (** Byte index of the nb-th utf-8 char. *)  
   let index_of_uchar (b:t) (nb:int) : int =
     let idx = ref 0 in
-    for i = 0 to nb-1 do
+    for _ = 0 to nb-1 do
       if !idx >= b.len then invalid_arg "index_of_uchar";
       idx := !idx + sizeof_uchar (Bytes.get b.buf !idx)
     done;

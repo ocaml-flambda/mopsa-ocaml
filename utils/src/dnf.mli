@@ -26,7 +26,10 @@ type 'a t
 
 val singleton : 'a -> 'a t
 
+val mk_true : 'a t
 
+val mk_false : 'a t
+  
 val mk_and : 'a t -> 'a t -> 'a t
   
 
