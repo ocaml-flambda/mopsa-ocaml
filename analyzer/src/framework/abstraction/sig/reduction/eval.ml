@@ -19,75 +19,49 @@
 (*                                                                          *)
 (****************************************************************************)
 
+(** Reduction rules for abstract evaluations *)
 
-(** Generators of identifiers for domains and values *)
-
-open Eq
-
-
-type _ id = ..
-(** Identifiers *)
+open Ast.All
+open Core.All
 
 
-type witness = {
-  eq :  'a 'b. 'a id -> 'b id -> ('a,'b) eq option;
+
+
+(** Product evaluations *)
+type prod_eval = (expr*semantic) option option list
+
+
+(** Manager used by reduction rules *)
+type 'a eval_reduction_man = {
+  get_man : 't. 't id -> ('a, 't) man;
+  get_eval : 't. 't id -> prod_eval -> (expr * semantic) option;
+  del_eval : 't. 't id -> prod_eval -> prod_eval;
 }
 
-type witness_chain = {
-  eq :  'a 'b. witness -> 'a id -> 'b id -> ('a,'b) eq option;
-}
-(** Equality witness of an identifier *)
 
 
-val register_id : witness_chain -> unit
-(** Register a new descriptor *)
-
-
-val equal_id : 'a id -> 'b id -> ('a,'b) eq option
-(** Equality witness of identifiers *)
-
-
-
-
-(** Generator of a new domain identifier *)
-module GenDomainId(
-    Spec: sig
-      type t
-      val name : string
-    end
-  ) :
+(** Signature of a reduction rule for evaluations *)
+module type EVAL_REDUCTION =
 sig
-  val id : Spec.t id
-  val name : string
-  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
+  val name   : string
+  val reduce : expr -> ('a,'b) man -> 'a eval_reduction_man -> 'a flow -> prod_eval -> ('a, prod_eval) cases
 end
 
 
-(** Generator of a new identifier for stateless domains *)
-module GenStatelessDomainId(
-    Spec: sig
-      val name : string
-    end
-  ) :
-sig
-  val id : unit id
-  val name : string
-  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
-end
+(** {2 Registration} *)
+(** **************** *)
+
+(** Registered eval reductions *)
+let eval_reductions : (module EVAL_REDUCTION) list ref = ref []
 
 
+(** Register a new eval reduction *)
+let register_eval_reduction rule =
+  eval_reductions := rule :: !eval_reductions
 
-(** Generator of a new value identifier *)
-module GenValueId(
-    Spec:sig
-      type t
-      val name : string
-      val display : string
-    end
-  ) :
-sig
-  val id : Spec.t id
-  val name : string
-  val display : string
-  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
-end
+(** Find an eval reduction by its name *)
+let find_eval_reduction name =
+  List.find (fun v ->
+      let module V = (val v : EVAL_REDUCTION) in
+      compare V.name name = 0
+    ) !eval_reductions

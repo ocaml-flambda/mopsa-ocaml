@@ -26,17 +26,17 @@ open Ast.Stmt
 open Ast.Expr
 open Token
 open Flow
-open Zone
 open Context
 open Cases
 open Log
+open Semantic
 
 
-type 'a eval = ('a,expr) cases
+type 'a eval = ('a, expr*semantic) cases
 
 let return ?(cleaners=[]) ?(log=empty_log) e flow : 'a eval = Cases.return e flow ~cleaners ~log
 
-let singleton ?(cleaners=[]) e flow : 'a eval = Cases.singleton e flow ~cleaners
+let singleton ?(cleaners=[]) e ~semantic flow : 'a eval = Cases.singleton (e,semantic) flow ~cleaners
 
 let empty_singleton = empty_singleton
 
@@ -53,8 +53,8 @@ let meet_list ~(empty:unit -> 'a eval) (l:'a eval list) : 'a eval =
   Cases.meet_list ~empty l
 
 let print fmt (evl: 'a eval) : unit =
-  Cases.print_some (fun fmt e flow ->
-      pp_expr fmt e
+  Cases.print_some (fun fmt (e,sem) flow ->
+      Format.fprintf fmt "%a {%a}" pp_expr e pp_semantic sem
     ) fmt evl
 
 let add_cleaners cleaners evl : 'a eval =
@@ -84,6 +84,6 @@ let apply f join meet empty evl =
 
 let map = Cases.map
 
-let remove_duplicates lattice evl = Cases.remove_duplicates compare_expr lattice evl
+let remove_duplicates lattice evl = Cases.remove_duplicates (Compare.pair compare_expr compare_semantic) lattice evl
 
 let cardinal = Cases.cardinal

@@ -19,75 +19,40 @@
 (*                                                                          *)
 (****************************************************************************)
 
+(** Reduction rules for abstract evaluations *)
 
-(** Generators of identifiers for domains and values *)
-
-open Eq
-
-
-type _ id = ..
-(** Identifiers *)
+open Ast.All
+open Core.All
 
 
-type witness = {
-  eq :  'a 'b. 'a id -> 'b id -> ('a,'b) eq option;
+
+(** Manager used by reduction rules *)
+type 'a exec_reduction_man = {
+  get_man : 't. 't id -> ('a, 't) man;
 }
 
-type witness_chain = {
-  eq :  'a 'b. witness -> 'a id -> 'b id -> ('a,'b) eq option;
-}
-(** Equality witness of an identifier *)
 
-
-val register_id : witness_chain -> unit
-(** Register a new descriptor *)
-
-
-val equal_id : 'a id -> 'b id -> ('a,'b) eq option
-(** Equality witness of identifiers *)
-
-
-
-
-(** Generator of a new domain identifier *)
-module GenDomainId(
-    Spec: sig
-      type t
-      val name : string
-    end
-  ) :
+(** Signature of a reduction rule for post-conditions *)
+module type EXEC_REDUCTION =
 sig
-  val id : Spec.t id
-  val name : string
-  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
+  val name   : string
+  val reduce : stmt -> ('a,'b) man -> 'a exec_reduction_man -> 'a flow -> 'a flow  -> 'a post
 end
 
 
-(** Generator of a new identifier for stateless domains *)
-module GenStatelessDomainId(
-    Spec: sig
-      val name : string
-    end
-  ) :
-sig
-  val id : unit id
-  val name : string
-  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
-end
+(** {2 Registration} *)
+(** **************** *)
 
+(** Registered exec reductions *)
+let exec_reductions : (module EXEC_REDUCTION) list ref = ref []
 
+(** Register a new exec reduction *)
+let register_exec_reduction rule =
+  exec_reductions := rule :: !exec_reductions
 
-(** Generator of a new value identifier *)
-module GenValueId(
-    Spec:sig
-      type t
-      val name : string
-      val display : string
-    end
-  ) :
-sig
-  val id : Spec.t id
-  val name : string
-  val display : string
-  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
-end
+(** Find an exec reduction by its name *)
+let find_exec_reduction name =
+  List.find (fun v ->
+      let module V = (val v : EXEC_REDUCTION) in
+      compare V.name name = 0
+    ) !exec_reductions

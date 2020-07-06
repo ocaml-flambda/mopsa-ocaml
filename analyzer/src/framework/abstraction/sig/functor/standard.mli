@@ -20,74 +20,36 @@
 (****************************************************************************)
 
 
-(** Generators of identifiers for domains and values *)
+(** Signature of functors of standard domains *)
 
-open Eq
+open Domain.Standard
 
+(*==========================================================================*)
+(**                           {1 Signature}                                 *)
+(*==========================================================================*)
 
-type _ id = ..
-(** Identifiers *)
-
-
-type witness = {
-  eq :  'a 'b. 'a id -> 'b id -> ('a,'b) eq option;
-}
-
-type witness_chain = {
-  eq :  'a 'b. witness -> 'a id -> 'b id -> ('a,'b) eq option;
-}
-(** Equality witness of an identifier *)
-
-
-val register_id : witness_chain -> unit
-(** Register a new descriptor *)
-
-
-val equal_id : 'a id -> 'b id -> ('a,'b) eq option
-(** Equality witness of identifiers *)
-
-
-
-
-(** Generator of a new domain identifier *)
-module GenDomainId(
-    Spec: sig
-      type t
-      val name : string
-    end
-  ) :
+module type DOMAIN_FUNCTOR =
 sig
-  val id : Spec.t id
   val name : string
-  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
-end
-
-
-(** Generator of a new identifier for stateless domains *)
-module GenStatelessDomainId(
-    Spec: sig
-      val name : string
-    end
-  ) :
-sig
-  val id : unit id
-  val name : string
-  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
+  module Functor : functor(D:DOMAIN) -> DOMAIN
 end
 
 
 
-(** Generator of a new value identifier *)
-module GenValueId(
-    Spec:sig
-      type t
-      val name : string
-      val display : string
-    end
-  ) :
-sig
-  val id : Spec.t id
-  val name : string
-  val display : string
-  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
-end
+(*==========================================================================*)
+(**                          {1 Registration}                               *)
+(*==========================================================================*)
+
+val register_domain_functor : (module DOMAIN_FUNCTOR) -> unit
+(** Register a new functor of standard domains *)
+
+
+val find_domain_functor : string -> (module DOMAIN_FUNCTOR)
+(** Find a domain functor by its name. Raise [Not_found] if no functor is found *)
+
+val mem_domain_functor : string -> bool
+(** [mem_domain_functor name] checks whether a domain functor with name
+    [name] is registered *)
+ 
+val domain_functor_names : unit -> string list
+(** Return the names of registered domain functor *) 

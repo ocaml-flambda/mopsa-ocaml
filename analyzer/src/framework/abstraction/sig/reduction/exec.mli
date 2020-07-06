@@ -19,75 +19,45 @@
 (*                                                                          *)
 (****************************************************************************)
 
+(** Signature of reduction rules for product post-states *)
 
-(** Generators of identifiers for domains and values *)
-
-open Eq
-
-
-type _ id = ..
-(** Identifiers *)
+open Ast.All
+open Core.All
 
 
-type witness = {
-  eq :  'a 'b. 'a id -> 'b id -> ('a,'b) eq option;
+(*==========================================================================*)
+(**                       {1 Reduction manager}                             *)
+(*==========================================================================*)
+
+(** Manager used by reduction rules *)
+type 'a exec_reduction_man = {
+  get_man : 't. 't id -> ('a, 't) man; (** Get the manger of a domain *)
 }
 
-type witness_chain = {
-  eq :  'a 'b. witness -> 'a id -> 'b id -> ('a,'b) eq option;
-}
-(** Equality witness of an identifier *)
 
+(*==========================================================================*)
+(**                             {1 Signature}                               *)
+(*==========================================================================*)
 
-val register_id : witness_chain -> unit
-(** Register a new descriptor *)
-
-
-val equal_id : 'a id -> 'b id -> ('a,'b) eq option
-(** Equality witness of identifiers *)
-
-
-
-
-(** Generator of a new domain identifier *)
-module GenDomainId(
-    Spec: sig
-      type t
-      val name : string
-    end
-  ) :
+module type EXEC_REDUCTION =
 sig
-  val id : Spec.t id
-  val name : string
-  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
-end
+  val name   : string
+  (** Name of the reduction rule *)
 
-
-(** Generator of a new identifier for stateless domains *)
-module GenStatelessDomainId(
-    Spec: sig
-      val name : string
-    end
-  ) :
-sig
-  val id : unit id
-  val name : string
-  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
+  val reduce : stmt -> ('a,'b) man -> 'a exec_reduction_man ->
+    'a flow -> 'a flow  -> 'a post
+  (** [reduce s man erman input output] reduces post-state [output] that
+      resulted from executing statement [s] on pre-state [input] *)
 end
 
 
 
-(** Generator of a new value identifier *)
-module GenValueId(
-    Spec:sig
-      type t
-      val name : string
-      val display : string
-    end
-  ) :
-sig
-  val id : Spec.t id
-  val name : string
-  val display : string
-  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
-end
+(*==========================================================================*)
+(**                          {1 Registration}                               *)
+(*==========================================================================*)
+
+(** Register a new exec reduction *)
+val register_exec_reduction : (module EXEC_REDUCTION) -> unit
+
+(** Find an exec reduction by its name *)
+val find_exec_reduction : string -> (module EXEC_REDUCTION)

@@ -19,75 +19,34 @@
 (*                                                                          *)
 (****************************************************************************)
 
+(** Semantic dependencies *)
 
-(** Generators of identifiers for domains and values *)
+type semantic =
+  | Any
+  | One of { name : string;
+             domain: string; }
 
-open Eq
+let any_semantic = Any
 
+let name_of_semantic = function
+  | Any   -> Exceptions.panic "name_of_semantic called on any_semantic"
+  | One s -> s.name
 
-type _ id = ..
-(** Identifiers *)
+let domain_of_semantic = function
+  | Any   -> Exceptions.panic "domain_of_semantic called on any_semantic"
+  | One s ->  s.domain
 
+let compare_semantic s1 s2 =
+  match s1, s2 with
+  | Any, Any -> 0
+  | One ss1, One ss2 ->
+    Compare.pair String.compare String.compare
+      (ss1.name,ss1.domain)
+      (ss2.name,ss2.domain)
+  | _ -> compare s1 s2
 
-type witness = {
-  eq :  'a 'b. 'a id -> 'b id -> ('a,'b) eq option;
-}
+let pp_semantic fmt = function
+  | Any   -> Format.pp_print_string fmt "*"
+  | One s -> Format.fprintf fmt "%s#%s" s.domain s.name
 
-type witness_chain = {
-  eq :  'a 'b. witness -> 'a id -> 'b id -> ('a,'b) eq option;
-}
-(** Equality witness of an identifier *)
-
-
-val register_id : witness_chain -> unit
-(** Register a new descriptor *)
-
-
-val equal_id : 'a id -> 'b id -> ('a,'b) eq option
-(** Equality witness of identifiers *)
-
-
-
-
-(** Generator of a new domain identifier *)
-module GenDomainId(
-    Spec: sig
-      type t
-      val name : string
-    end
-  ) :
-sig
-  val id : Spec.t id
-  val name : string
-  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
-end
-
-
-(** Generator of a new identifier for stateless domains *)
-module GenStatelessDomainId(
-    Spec: sig
-      val name : string
-    end
-  ) :
-sig
-  val id : unit id
-  val name : string
-  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
-end
-
-
-
-(** Generator of a new value identifier *)
-module GenValueId(
-    Spec:sig
-      type t
-      val name : string
-      val display : string
-    end
-  ) :
-sig
-  val id : Spec.t id
-  val name : string
-  val display : string
-  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
-end
+let mk_semantic ~name ~domain = One { domain; name }

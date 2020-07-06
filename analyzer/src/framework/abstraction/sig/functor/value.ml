@@ -19,75 +19,46 @@
 (*                                                                          *)
 (****************************************************************************)
 
+(** Simplified interface of functor domains. *)
 
-(** Generators of identifiers for domains and values *)
-
-open Eq
-
-
-type _ id = ..
-(** Identifiers *)
+open Ast.All
+open Core.All
+open Domain.Value
 
 
-type witness = {
-  eq :  'a 'b. 'a id -> 'b id -> ('a,'b) eq option;
-}
-
-type witness_chain = {
-  eq :  'a 'b. witness -> 'a id -> 'b id -> ('a,'b) eq option;
-}
-(** Equality witness of an identifier *)
-
-
-val register_id : witness_chain -> unit
-(** Register a new descriptor *)
-
-
-val equal_id : 'a id -> 'b id -> ('a,'b) eq option
-(** Equality witness of identifiers *)
-
-
-
-
-(** Generator of a new domain identifier *)
-module GenDomainId(
-    Spec: sig
-      type t
-      val name : string
-    end
-  ) :
+module type VALUE_FUNCTOR =
 sig
-  val id : Spec.t id
   val name : string
-  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
-end
-
-
-(** Generator of a new identifier for stateless domains *)
-module GenStatelessDomainId(
-    Spec: sig
-      val name : string
-    end
-  ) :
-sig
-  val id : unit id
-  val name : string
-  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
+  module Functor : functor(D:VALUE) -> VALUE
 end
 
 
 
-(** Generator of a new value identifier *)
-module GenValueId(
-    Spec:sig
-      type t
-      val name : string
-      val display : string
-    end
-  ) :
-sig
-  val id : Spec.t id
-  val name : string
-  val display : string
-  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
-end
+
+(*==========================================================================*)
+(**                          {2 Registration}                               *)
+(*==========================================================================*)
+
+
+let functors : (module VALUE_FUNCTOR) list ref = ref []
+
+let register_value_functor f =
+  functors := f :: !functors
+
+let find_value_functor name =
+  List.find (fun dom ->
+      let module D = (val dom : VALUE_FUNCTOR) in
+      compare D.name name = 0
+    ) !functors
+
+let mem_value_functor name =
+  List.exists (fun dom ->
+      let module D = (val dom : VALUE_FUNCTOR) in
+      compare D.name name = 0
+    ) !functors
+
+let value_functor_names () =
+  List.map (fun dom ->
+      let module D = (val dom : VALUE_FUNCTOR) in
+      D.name
+    ) !functors

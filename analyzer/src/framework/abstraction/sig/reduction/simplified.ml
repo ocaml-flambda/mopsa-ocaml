@@ -19,75 +19,44 @@
 (*                                                                          *)
 (****************************************************************************)
 
+(** Reduction rules for abstract evaluations *)
 
-(** Generators of identifiers for domains and values *)
+open Ast.All
+open Core.All
 
-open Eq
-
-
-type _ id = ..
-(** Identifiers *)
-
-
-type witness = {
-  eq :  'a 'b. 'a id -> 'b id -> ('a,'b) eq option;
+(** Manager used by simplified reduction rules *)
+type 'a simplified_reduction_man = {
+  get_env : 't. 't id -> 'a -> 't;
+  set_env : 't. 't id -> 't -> 'a -> 'a;
+  get_value : 't. 't id -> var -> 'a -> 't;
+  set_value : 't. 't id -> var -> 't -> 'a -> 'a;
+  ask : 'r. 'r query -> uctx -> 'a -> 'r;
 }
 
-type witness_chain = {
-  eq :  'a 'b. witness -> 'a id -> 'b id -> ('a,'b) eq option;
-}
-(** Equality witness of an identifier *)
 
 
-val register_id : witness_chain -> unit
-(** Register a new descriptor *)
-
-
-val equal_id : 'a id -> 'b id -> ('a,'b) eq option
-(** Equality witness of identifiers *)
-
-
-
-
-(** Generator of a new domain identifier *)
-module GenDomainId(
-    Spec: sig
-      type t
-      val name : string
-    end
-  ) :
+(** Signature of simplified reduction rules *)
+module type SIMPLIFIED_REDUCTION =
 sig
-  val id : Spec.t id
-  val name : string
-  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
+  val name   : string
+  val reduce : stmt -> 'a simplified_reduction_man -> uctx -> 'a -> 'a -> 'a
 end
 
 
-(** Generator of a new identifier for stateless domains *)
-module GenStatelessDomainId(
-    Spec: sig
-      val name : string
-    end
-  ) :
-sig
-  val id : unit id
-  val name : string
-  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
-end
+(** {2 Registration} *)
+(** **************** *)
+
+(** Registered simplified reductions *)
+let simplified_reductions : (module SIMPLIFIED_REDUCTION) list ref = ref []
 
 
+(** Register a new simplified reduction *)
+let register_simplified_reduction rule =
+  simplified_reductions := rule :: !simplified_reductions
 
-(** Generator of a new value identifier *)
-module GenValueId(
-    Spec:sig
-      type t
-      val name : string
-      val display : string
-    end
-  ) :
-sig
-  val id : Spec.t id
-  val name : string
-  val display : string
-  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
-end
+(** Find an simplified reduction by its name *)
+let find_simplified_reduction name =
+  List.find (fun v ->
+      let module V = (val v : SIMPLIFIED_REDUCTION) in
+      compare V.name name = 0
+    ) !simplified_reductions

@@ -19,75 +19,57 @@
 (*                                                                          *)
 (****************************************************************************)
 
+(** Common definitions for value combiners *)
 
-(** Generators of identifiers for domains and values *)
+open Ast.All
+open Core.Id
+open Sig.Domain.Value
 
-open Eq
+type _ id += V_empty : unit id
+type _ id += V_pair  : 'a id * 'b id -> ('a*'b) id
 
+let () = register_id {
+    eq = (
+      let f : type a b. witness -> a id -> b id -> (a,b) Eq.eq option = fun next id1 id2 ->
+        match id1, id2 with
+        | V_empty, V_empty -> Some Eq
+        | V_pair(x1,y1), V_pair(x2,y2) ->
+          begin match equal_id x1 x2 with
+            | None -> None
+            | Some Eq ->
+              match equal_id y1 y2 with
+              | None -> None
+              | Some Eq -> Some Eq
+          end
+        | _ -> next.eq id1 id2
+      in
+      f
+    );
+  }
 
-type _ id = ..
-(** Identifiers *)
-
-
-type witness = {
-  eq :  'a 'b. 'a id -> 'b id -> ('a,'b) eq option;
-}
-
-type witness_chain = {
-  eq :  'a 'b. witness -> 'a id -> 'b id -> ('a,'b) eq option;
-}
-(** Equality witness of an identifier *)
-
-
-val register_id : witness_chain -> unit
-(** Register a new descriptor *)
-
-
-val equal_id : 'a id -> 'b id -> ('a,'b) eq option
-(** Equality witness of identifiers *)
-
-
-
-
-(** Generator of a new domain identifier *)
-module GenDomainId(
-    Spec: sig
-      type t
-      val name : string
-    end
-  ) :
-sig
-  val id : Spec.t id
-  val name : string
-  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
-end
-
-
-(** Generator of a new identifier for stateless domains *)
-module GenStatelessDomainId(
-    Spec: sig
-      val name : string
-    end
-  ) :
-sig
-  val id : unit id
-  val name : string
-  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
-end
-
-
-
-(** Generator of a new value identifier *)
-module GenValueId(
-    Spec:sig
-      type t
-      val name : string
-      val display : string
-    end
-  ) :
-sig
-  val id : Spec.t id
-  val name : string
-  val display : string
-  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
+module EmptyValue : VALUE =
+struct
+  type t = unit
+  let id = V_empty
+  let name = ""
+  let display = ""
+  let bottom = ()
+  let top = ()
+  let print fmt () = ()
+  let is_bottom () = false
+  let subset () () = true
+  let join () () = ()
+  let meet () () = ()
+  let widen () () = ()
+  let constant t c = None
+  let cast man t e = None
+  let unop op t () = ()
+  let binop op t () () = ()
+  let filter b t () = ()
+  let bwd_unop op t () () = ()
+  let bwd_binop op t () () () = ((),())
+  let bwd_cast man t e () = ()
+  let predicate op b t () = ()
+  let compare op b t () () = ((),())
+  let ask man q = None
 end

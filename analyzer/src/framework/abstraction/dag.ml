@@ -19,75 +19,13 @@
 (*                                                                          *)
 (****************************************************************************)
 
+(** Abstraction DAG *)
 
-(** Generators of identifiers for domains and values *)
+open Core.Semantic
 
-open Eq
-
-
-type _ id = ..
-(** Identifiers *)
-
-
-type witness = {
-  eq :  'a 'b. 'a id -> 'b id -> ('a,'b) eq option;
-}
-
-type witness_chain = {
-  eq :  'a 'b. witness -> 'a id -> 'b id -> ('a,'b) eq option;
-}
-(** Equality witness of an identifier *)
+type dag =
+  | Dag_empty
+  | Dag_node of string * semantic list
+  | Dag_fork_join of dag list * dag
 
 
-val register_id : witness_chain -> unit
-(** Register a new descriptor *)
-
-
-val equal_id : 'a id -> 'b id -> ('a,'b) eq option
-(** Equality witness of identifiers *)
-
-
-
-
-(** Generator of a new domain identifier *)
-module GenDomainId(
-    Spec: sig
-      type t
-      val name : string
-    end
-  ) :
-sig
-  val id : Spec.t id
-  val name : string
-  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
-end
-
-
-(** Generator of a new identifier for stateless domains *)
-module GenStatelessDomainId(
-    Spec: sig
-      val name : string
-    end
-  ) :
-sig
-  val id : unit id
-  val name : string
-  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
-end
-
-
-
-(** Generator of a new value identifier *)
-module GenValueId(
-    Spec:sig
-      type t
-      val name : string
-      val display : string
-    end
-  ) :
-sig
-  val id : Spec.t id
-  val name : string
-  val display : string
-  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
-end

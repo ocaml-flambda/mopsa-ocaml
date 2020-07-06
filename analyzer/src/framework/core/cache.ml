@@ -27,7 +27,7 @@ open Post
 open Manager
 open Ast.Expr
 open Ast.Stmt
-open Zone
+open Semantic
 
 let debug fmt = Debug.debug ~channel:"framework.core.cache" fmt
 
@@ -101,9 +101,9 @@ struct
 
   module ExecCache = Queue(
     struct
-      type t = zone * stmt * Domain.t Token.TokenMap.t * Alarm.AlarmSet.t
-      let equal (zone1,stmt1,tmap1,alarms1) (zone2,stmt2,tmap2,alarms2) =
-        compare_zone zone1 zone2 = 0 &&
+      type t = semantic * stmt * Domain.t Token.TokenMap.t * Alarm.AlarmSet.t
+      let equal (semantic1,stmt1,tmap1,alarms1) (semantic2,stmt2,tmap2,alarms2) =
+        compare_semantic semantic1 semantic2 = 0 &&
         stmt1 == stmt2 &&
         tmap1 == tmap2 &&
         alarms1 == alarms2
@@ -112,7 +112,7 @@ struct
 
   let exec_cache : Domain.t post ExecCache.t = ExecCache.create !opt_cache
 
-  let exec f zone stmt man flow =
+  let exec f semantic stmt man flow =
     let ff () =
       match f stmt man flow with
       | None ->
@@ -120,9 +120,9 @@ struct
         then Post.return flow
         else
           Exceptions.panic_at stmt.srange
-            "unable to analyze statement %a in zone %a"
+            "unable to analyze statement %a in semantic %a"
             pp_stmt stmt
-            pp_zone zone
+            pp_semantic semantic
 
       | Some post -> post
     in
@@ -132,13 +132,13 @@ struct
     else try
         let tmap = Flow.get_token_map flow in
         let alarms = Flow.get_alarms flow in
-        let post = ExecCache.find (zone,stmt,tmap,alarms) exec_cache in
+        let post = ExecCache.find (semantic,stmt,tmap,alarms) exec_cache in
         Post.set_ctx (
           Context.get_most_recent (Post.get_ctx post) (Flow.get_ctx flow)
         ) post
       with Not_found ->
         let post = ff () in
-        ExecCache.add (zone, stmt, Flow.get_token_map flow, Flow.get_alarms flow) post exec_cache;
+        ExecCache.add (semantic, stmt, Flow.get_token_map flow, Flow.get_alarms flow) post exec_cache;
         post
 
 
@@ -147,9 +147,9 @@ struct
 
   module EvalCache = Queue(
     struct
-      type t = (zone * zone) * expr * Domain.t Token.TokenMap.t * Alarm.AlarmSet.t
-      let equal (zone1,exp1,tmap1,alarms1) (zone2,exp2,tmap2,alarms2) =
-        compare_zone2 zone1 zone2 = 0 &&
+      type t = semantic * expr * Domain.t Token.TokenMap.t * Alarm.AlarmSet.t
+      let equal (semantic1,exp1,tmap1,alarms1) (semantic2,exp2,tmap2,alarms2) =
+        compare_semantic semantic1 semantic2 = 0 &&
         exp1 == exp2 &&
         tmap1 == tmap2 &&
         alarms1 == alarms2
@@ -158,20 +158,20 @@ struct
 
   let eval_cache : Domain.t eval option EvalCache.t = EvalCache.create !opt_cache
 
-  let eval f zone exp man flow =
+  let eval f semantic exp man flow =
     if !opt_cache = 0
     then f exp man flow
     else try
         let tmap = Flow.get_token_map flow in
         let alarms = Flow.get_alarms flow in
-        let evls = EvalCache.find (zone,exp,tmap,alarms) eval_cache in
+        let evls = EvalCache.find (semantic,exp,tmap,alarms) eval_cache in
         OptionExt.lift (fun evl ->
             let ctx = Context.get_most_recent (Eval.get_ctx evl) (Flow.get_ctx flow) in
             Eval.set_ctx ctx evl
           ) evls
       with Not_found ->
         let evals = f exp man flow in
-        EvalCache.add (zone, exp, Flow.get_token_map flow, Flow.get_alarms flow) evals eval_cache;
+        EvalCache.add (semantic, exp, Flow.get_token_map flow, Flow.get_alarms flow) evals eval_cache;
         evals
 
 end

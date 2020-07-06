@@ -29,13 +29,14 @@ open Context
 open Cases
 open Log
 open Callstack
+open Semantic
 
 
-type 'a eval = ('a, expr) cases
+type 'a eval = ('a, expr * semantic) cases
 
-val return : ?cleaners:block -> ?log:log -> expr option -> 'a flow -> 'a eval
+val return : ?cleaners:block -> ?log:log -> (expr * semantic) option -> 'a flow -> 'a eval
 
-val singleton : ?cleaners:block -> expr -> 'a flow -> 'a eval
+val singleton : ?cleaners:block -> expr -> semantic:semantic-> 'a flow -> 'a eval
 
 val empty_singleton : 'a flow -> 'a eval
 
@@ -59,11 +60,11 @@ val get_callstack : 'a eval -> callstack
 
 val copy_ctx : 'a eval -> 'a eval -> 'a eval
 
-val bind : (expr -> 'a flow -> ('a,'r) cases) -> 'a eval -> ('a,'r) cases
+val bind : (expr * semantic -> 'a flow -> ('a,'r) cases) -> 'a eval -> ('a,'r) cases
 
-val apply : (expr -> 'a flow -> 'b) -> ('b -> 'b -> 'b) -> ('b -> 'b -> 'b) -> 'b -> 'a eval -> 'b
+val apply : (expr * semantic -> 'a flow -> 'b) -> ('b -> 'b -> 'b) -> ('b -> 'b -> 'b) -> 'b -> 'a eval -> 'b
 
-val map : (expr -> expr) -> 'a eval -> 'a eval
+val map : (expr * semantic -> expr * semantic) -> 'a eval -> 'a eval
 
 val remove_duplicates : 'a lattice -> 'a eval -> 'a eval
 

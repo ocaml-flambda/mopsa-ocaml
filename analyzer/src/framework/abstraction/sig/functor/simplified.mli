@@ -20,74 +20,36 @@
 (****************************************************************************)
 
 
-(** Generators of identifiers for domains and values *)
+(** Signature of functors of simplified domains *)
 
-open Eq
+open Domain.Simplified
 
+(*==========================================================================*)
+(**                           {1 Signature}                                 *)
+(*==========================================================================*)
 
-type _ id = ..
-(** Identifiers *)
-
-
-type witness = {
-  eq :  'a 'b. 'a id -> 'b id -> ('a,'b) eq option;
-}
-
-type witness_chain = {
-  eq :  'a 'b. witness -> 'a id -> 'b id -> ('a,'b) eq option;
-}
-(** Equality witness of an identifier *)
-
-
-val register_id : witness_chain -> unit
-(** Register a new descriptor *)
-
-
-val equal_id : 'a id -> 'b id -> ('a,'b) eq option
-(** Equality witness of identifiers *)
-
-
-
-
-(** Generator of a new domain identifier *)
-module GenDomainId(
-    Spec: sig
-      type t
-      val name : string
-    end
-  ) :
+module type SIMPLIFIED_FUNCTOR =
 sig
-  val id : Spec.t id
   val name : string
-  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
-end
-
-
-(** Generator of a new identifier for stateless domains *)
-module GenStatelessDomainId(
-    Spec: sig
-      val name : string
-    end
-  ) :
-sig
-  val id : unit id
-  val name : string
-  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
+  module Functor : functor(D:SIMPLIFIED) -> SIMPLIFIED
 end
 
 
 
-(** Generator of a new value identifier *)
-module GenValueId(
-    Spec:sig
-      type t
-      val name : string
-      val display : string
-    end
-  ) :
-sig
-  val id : Spec.t id
-  val name : string
-  val display : string
-  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
-end
+(*==========================================================================*)
+(**                          {1 Registration}                               *)
+(*==========================================================================*)
+
+val register_simplified_functor : (module SIMPLIFIED_FUNCTOR) -> unit
+(** Register a new functor of simplified domains *)
+
+
+val find_simplified_functor : string -> (module SIMPLIFIED_FUNCTOR)
+(** Find a simplified functor by its name. Raise [Not_found] if no functor is found *)
+
+val mem_simplified_functor : string -> bool
+(** [mem_simplified_functor name] checks whether a simplified functor with name
+    [name] is registered *)
+ 
+val simplified_functor_names : unit -> string list
+(** Return the names of registered simplified functor *) 

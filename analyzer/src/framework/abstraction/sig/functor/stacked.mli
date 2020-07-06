@@ -20,74 +20,36 @@
 (****************************************************************************)
 
 
-(** Generators of identifiers for domains and values *)
+(** Signature of functors of stacked domains *)
 
-open Eq
+open Domain.Stacked
 
+(*==========================================================================*)
+(**                           {1 Signature}                                 *)
+(*==========================================================================*)
 
-type _ id = ..
-(** Identifiers *)
-
-
-type witness = {
-  eq :  'a 'b. 'a id -> 'b id -> ('a,'b) eq option;
-}
-
-type witness_chain = {
-  eq :  'a 'b. witness -> 'a id -> 'b id -> ('a,'b) eq option;
-}
-(** Equality witness of an identifier *)
-
-
-val register_id : witness_chain -> unit
-(** Register a new descriptor *)
-
-
-val equal_id : 'a id -> 'b id -> ('a,'b) eq option
-(** Equality witness of identifiers *)
-
-
-
-
-(** Generator of a new domain identifier *)
-module GenDomainId(
-    Spec: sig
-      type t
-      val name : string
-    end
-  ) :
+module type STACKED_FUNCTOR =
 sig
-  val id : Spec.t id
   val name : string
-  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
-end
-
-
-(** Generator of a new identifier for stateless domains *)
-module GenStatelessDomainId(
-    Spec: sig
-      val name : string
-    end
-  ) :
-sig
-  val id : unit id
-  val name : string
-  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
+  module Functor : functor(D:STACKED)-> STACKED
 end
 
 
 
-(** Generator of a new value identifier *)
-module GenValueId(
-    Spec:sig
-      type t
-      val name : string
-      val display : string
-    end
-  ) :
-sig
-  val id : Spec.t id
-  val name : string
-  val display : string
-  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
-end
+(*==========================================================================*)
+(**                          {1 Registration}                               *)
+(*==========================================================================*)
+
+val register_stacked_functor : (module STACKED_FUNCTOR) -> unit
+(** Register a new functor of stacked domains *)
+
+
+val find_stacked_functor : string -> (module STACKED_FUNCTOR)
+(** Find a stacked functor by its name. Raise [Not_found] if no functor is found *)
+
+val mem_stacked_functor : string -> bool
+(** [mem_stacked_functor name] checks whether a stacked functor with name
+    [name] is registered *)
+ 
+val stacked_functor_names : unit -> string list
+(** Return the names of registered stacked functor *) 

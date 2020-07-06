@@ -19,75 +19,44 @@
 (*                                                                          *)
 (****************************************************************************)
 
+(** Simplified interface of functor domains. *)
 
-(** Generators of identifiers for domains and values *)
+open Ast.All
+open Domain.Simplified
 
-open Eq
-
-
-type _ id = ..
-(** Identifiers *)
-
-
-type witness = {
-  eq :  'a 'b. 'a id -> 'b id -> ('a,'b) eq option;
-}
-
-type witness_chain = {
-  eq :  'a 'b. witness -> 'a id -> 'b id -> ('a,'b) eq option;
-}
-(** Equality witness of an identifier *)
-
-
-val register_id : witness_chain -> unit
-(** Register a new descriptor *)
-
-
-val equal_id : 'a id -> 'b id -> ('a,'b) eq option
-(** Equality witness of identifiers *)
-
-
-
-
-(** Generator of a new domain identifier *)
-module GenDomainId(
-    Spec: sig
-      type t
-      val name : string
-    end
-  ) :
+module type SIMPLIFIED_FUNCTOR =
 sig
-  val id : Spec.t id
   val name : string
-  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
-end
-
-
-(** Generator of a new identifier for stateless domains *)
-module GenStatelessDomainId(
-    Spec: sig
-      val name : string
-    end
-  ) :
-sig
-  val id : unit id
-  val name : string
-  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
+  module Functor : functor(D:SIMPLIFIED) -> SIMPLIFIED
 end
 
 
 
-(** Generator of a new value identifier *)
-module GenValueId(
-    Spec:sig
-      type t
-      val name : string
-      val display : string
-    end
-  ) :
-sig
-  val id : Spec.t id
-  val name : string
-  val display : string
-  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
-end
+
+(*==========================================================================*)
+(**                          {2 Registration}                               *)
+(*==========================================================================*)
+
+
+let functors : (module SIMPLIFIED_FUNCTOR) list ref = ref []
+
+let register_simplified_functor f =
+  functors := f :: !functors
+
+let find_simplified_functor name =
+  List.find (fun dom ->
+      let module D = (val dom : SIMPLIFIED_FUNCTOR) in
+      compare D.name name = 0
+    ) !functors
+
+let mem_simplified_functor name =
+  List.exists (fun dom ->
+      let module D = (val dom : SIMPLIFIED_FUNCTOR) in
+      compare D.name name = 0
+    ) !functors
+
+let simplified_functor_names () =
+  List.map (fun dom ->
+      let module D = (val dom : SIMPLIFIED_FUNCTOR) in
+      D.name
+    ) !functors

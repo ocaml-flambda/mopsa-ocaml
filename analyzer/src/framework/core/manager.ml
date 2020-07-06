@@ -27,22 +27,22 @@ open Ast.All
 open Lattice
 open Token
 open Flow
-open Zone
 open Eval
 open Post
 open Log
 open Context
 open Cases
-
+open Semantic
 
 
 (*==========================================================================*)
 (**                             {2 Managers}                                *)
 (*==========================================================================*)
 
+type 'a geval = ('a, expr) cases
 
 (** Managers provide access to full analyzer *)
-type ('a, 't, 's) man = {
+type ('a, 't) man = {
   (* Lattice operators over global abstract elements ['a] *)
   lattice : 'a lattice;
 
@@ -50,19 +50,23 @@ type ('a, 't, 's) man = {
   get : 'a -> 't;
   set : 't -> 'a -> 'a;
 
-  (* Accessors the sub-domain's abstract element ['s] within ['a] *)
-  get_sub : 'a -> 's;
-  set_sub : 's -> 'a -> 'a;
-
   (* Analyzer transfer functions *)
-  exec : ?zone:zone -> stmt -> 'a flow -> 'a flow;
-  post : ?zone:zone -> stmt -> 'a flow -> 'a post;
-  eval : ?zone:(zone * zone) -> ?via:zone -> expr -> 'a flow -> 'a eval;
+  exec : stmt -> ?semantic:semantic -> 'a flow -> 'a flow;
+  post : stmt -> ?semantic:semantic -> 'a flow -> 'a post;
+  eval : expr -> ?semantic:semantic -> 'a flow -> 'a geval;
   ask : 'r. 'r Query.query -> 'a flow -> 'r;
 
   (* Accessors to the domain's merge logs *)
   get_log : log -> log;
   set_log : log -> log -> log;
+}
+
+
+(** Managers provide access to the sub-tree of stacked domain *)
+type ('a, 's) stack_man = {
+  (* Accessors the sub-domain's abstract element ['s] within ['a] *)
+  get_sub : 'a -> 's;
+  set_sub : 's -> 'a -> 'a;
 }
 
 
@@ -72,25 +76,25 @@ type ('a, 't, 's) man = {
 (**                        {2 Utility functions}                            *)
 (*==========================================================================*)
 
-let set_env (tk:token) (env:'t) (man:('a,'t,'s) man) (flow:'a flow) : 'a flow =
+let set_env (tk:token) (env:'t) (man:('a,'t) man) (flow:'a flow) : 'a flow =
   Flow.set tk (man.set env (Flow.get tk man.lattice flow)) man.lattice flow
 
-let get_env (tk:token) (man:('a,'t,'s) man) (flow:'a flow) : 't =
+let get_env (tk:token) (man:('a,'t) man) (flow:'a flow) : 't =
   man.get (Flow.get tk man.lattice flow)
 
-let map_env (tk:token) (f:'t -> 't) (man:('a,'t,'s) man) (flow:'a flow) : 'a flow =
+let map_env (tk:token) (f:'t -> 't) (man:('a,'t) man) (flow:'a flow) : 'a flow =
   set_env tk (f (get_env tk man flow)) man flow
 
 
 let assume
-    cond ?(zone=any_zone)
+    cond ?(semantic=any_semantic)
     ~fthen ~felse
     ?(negate=mk_not)
     man flow
   =
-  let then_post = man.post ~zone (mk_assume cond cond.erange) flow in
+  let then_post = man.post ~semantic (mk_assume cond cond.erange) flow in
   let flow = Flow.set_ctx (Post.get_ctx then_post) flow in
-  let else_post = man.post ~zone (mk_assume (negate cond cond.erange) cond.erange) flow in
+  let else_post = man.post ~semantic (mk_assume (negate cond cond.erange) cond.erange) flow in
 
   let then_res = then_post >>$? fun () then_flow ->
     if man.lattice.is_bottom (Flow.get T_cur man.lattice then_flow)
@@ -112,14 +116,14 @@ let assume
 
 
 let assume_flow
-    ?(zone=any_zone) cond
+    ?(semantic=any_semantic) cond
     ~fthen ~felse
     ?(negate=mk_not)
     man flow
   =
-  let then_flow = man.exec ~zone (mk_assume cond cond.erange) flow in
+  let then_flow = man.exec ~semantic (mk_assume cond cond.erange) flow in
   let flow = Flow.set_ctx (Flow.get_ctx then_flow) flow in
-  let else_flow = man.exec ~zone (mk_assume (negate cond cond.erange) cond.erange) flow in
+  let else_flow = man.exec ~semantic (mk_assume (negate cond cond.erange) cond.erange) flow in
 
   match man.lattice.is_bottom (Flow.get T_cur man.lattice then_flow),
         man.lattice.is_bottom (Flow.get T_cur man.lattice else_flow)
@@ -136,7 +140,7 @@ let assume_flow
 
 let switch
     (cases : (expr list * ('a Flow.flow -> ('a,'r) cases)) list)
-    ?(zone = any_zone)
+    ?(semantic = any_semantic)
     man flow
   : ('a,'r) cases
   =
@@ -145,7 +149,7 @@ let switch
     | [] -> f acc
     | x :: tl ->
       let s = mk_assume x x.erange in
-      man.post ~zone s acc >>$ fun _ acc' ->
+      man.post ~semantic s acc >>$ fun _ acc' ->
       if Flow.get T_cur man.lattice acc' |> man.lattice.is_bottom then
         Cases.empty_singleton acc'
       else
@@ -182,7 +186,7 @@ let exec_stmt_on_all_flows stmt man flow =
 
 let apply_cleaners block man flow =
   let exec =
-    if !Cases.opt_clean_cur_only then man.exec ~zone:Z_any else (fun stmt flow -> exec_stmt_on_all_flows stmt man flow)
+    if !Cases.opt_clean_cur_only then man.exec ~semantic:any_semantic else (fun stmt flow -> exec_stmt_on_all_flows stmt man flow)
   in
   List.fold_left (fun flow stmt ->
       exec stmt flow
@@ -204,7 +208,7 @@ let get_pair_snd man = (fun a -> man.get a |> snd)
 let set_pair_snd man = (fun a2 a -> let old = man.get a in if a2 == snd old then a else man.set (fst old, a2) a)
 
 
-let env_exec (f:'a flow -> 'a post) ctx (man:('a,'t,'s) man) (a:'a) : 'a =
+let env_exec (f:'a flow -> 'a post) ctx (man:('a,'t) man) (a:'a) : 'a =
   (* Create a singleton flow with the given environment *)
   let flow = Flow.singleton Context.(set_unit ctx empty) T_cur a in
   (* Execute the statement *)
@@ -212,11 +216,6 @@ let env_exec (f:'a flow -> 'a post) ctx (man:('a,'t,'s) man) (a:'a) : 'a =
   Flow.get T_cur man.lattice flow'
 
 
-let state_exec (f:'a flow -> 'a post) ctx (man:('a,'t,'s) man) (a:'t) (s:'s) : 't * 's =
-  let aa = env_exec f ctx man (man.lattice.top |> man.set a |> man.set_sub s) in
-  man.get aa, man.get_sub aa
-  
-
-let sub_state_exec (f:'a flow -> 'a post) ctx (man:('a,'t,'s) man) (s:'s) : 's =
-  env_exec f ctx man (man.lattice.top |> man.set_sub s) |>
-  man.get_sub
+let sub_env_exec (f:'a flow -> 'a post) ctx (man:('a,'t) man) (sman:('a,'s) stack_man) (a:'t) (s:'s) : 't * 's =
+  let aa = env_exec f ctx man (man.lattice.top |> man.set a |> sman.set_sub s) in
+  man.get aa, sman.get_sub aa

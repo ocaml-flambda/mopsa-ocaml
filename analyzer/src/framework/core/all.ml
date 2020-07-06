@@ -66,14 +66,11 @@ include Query
 
 include Token
 
-include Zone
+include Semantic
 
 include Lattice
 
 include Id
-
-include Interface
-module Interface = Interface
 
 include Manager
 

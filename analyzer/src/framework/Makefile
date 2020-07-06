@@ -21,25 +21,26 @@
 
 
 # Framework packs
-framework = ast core lattices sig combiners toplevel engines output config runner
+framework = ast core lattices abstraction engines output config runner
 framework.ast = program frontend typ operator constant var expr stmt visitor all
-framework.core = query context zone alarm token log lattice soundness flow \
-		 cases eval post id interface manager hook cache all
+framework.core = query context semantic alarm token log lattice soundness flow \
+		 cases eval post id manager hook cache all
 framework.lattices = partial_map partial_inversible_map_sig \
 		     partial_inversible_map powerset_sig powerset \
 		     powersetwithunder pointwise pair
-framework.sig = abstraction functor reduction
-framework.sig.abstraction = stacked domain simplified stateless value
-framework.sig.functor = stacked domain simplified value
-framework.sig.reduction = eval exec simplified value
-framework.combiners = value domain
-framework.combiners.value = common union product nonrel
-framework.combiners.domain = sequence compose product simplified_product \
-                             stateless_sequence
+framework.abstraction = sig tree combiners dag json toplevel
+framework.abstraction.sig = domain functor reduction
+framework.abstraction.sig.domain = stacked standard simplified stateless value
+framework.abstraction.sig.functor = stacked standard simplified value
+framework.abstraction.sig.reduction = eval exec simplified value
+framework.abstraction.combiners = value domain
+framework.abstraction.combiners.value = common union product nonrel
+framework.abstraction.combiners.domain = sequence compose product \
+					 simplified_product stateless_sequence
+framework.abstraction.json = syntax visitor parser builder
 framework.engines = engine automatic interactive
 framework.output = text json factory
-framework.config = paths abstraction options
-framework.config.abstraction = syntax visitor parser builder
+framework.config = paths options
 
 
 
