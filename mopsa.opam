@@ -31,7 +31,7 @@ depends: [
   "yojson"
   "zarith"
 ]
-available: [ arch = "x86_64" & os = "linux" ]
+available: [ os = "linux" ]
 synopsis: "MOPSA: a Modular and Open Platform for Static Analysis using abstract interpretation"
 description: """
 MOPSA is a generic framework for building sound static analyzers based on the theory of abstract interpretation. It features a modular architecture for supporting different kinds of languages, iterators, and abstract domains.
