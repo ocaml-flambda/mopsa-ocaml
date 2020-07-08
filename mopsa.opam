@@ -1,5 +1,12 @@
 opam-version: "2.0"
 name: "mopsa"
+synopsis: "MOPSA: A Modular and Open Platform for Static Analysis using Abstract Interpretation"
+description: """
+MOPSA is a generic framework for building sound static analyzers based on Abstract Interpretation. It features a modular architecture to support different kinds of languages, iterators, and abstract domains.
+For the moment, MOPSA can analyze programs written in a subset of C and Python.
+It reports run-time errors on C programs and uncaught exceptions on Python programs.
+"""
+version: "0.9"
 maintainer: "Antoine Miné <antoine.mine@lip6.fr>"
 authors: [
   "Matthieu Journault"
@@ -7,33 +14,31 @@ authors: [
   "Raphaël Monat"
   "Abdelraouf Ouadjaout"
 ]
-homepage: [
-  "https://gitlab.com/mopsa/mopsa"
-  "http://mopsa.lip6.fr/"
-]
-bug-reports: "https://gitlab.com/mopsa/mopsa/issues"
+homepage: "http://mopsa.lip6.fr/"
+license: "GNU Lesser General Public License version 3"
 dev-repo: "git+https://gitlab.com/mopsa/mopsa.git"
-license: "LGPL"
+doc: "https://mopsa.lip6.fr/mopsa/doc/"
+bug-reports: "https://gitlab.com/mopsa/mopsa/issues"
 build: [
+  ["autoconf"] {pinned}
   ["./configure" "--prefix=%{prefix}%"]
-  [make]
+  [make "-j%{jobs}%"]
 ]
 install: [
   [make "install"]
 ]
+run-test: [
+  [make "tests"]
+]
 depends: [
-  "apron"
-  "menhir"
-  "mlgmpidl"
+  "conf-autoconf" { build }
   "ocaml" {>= "4.08.0"}
   "ocamlfind"
+  "apron"
   "conf-libclang"
+  "menhir"
+  "mlgmpidl"
   "yojson"
   "zarith"
 ]
 available: [ os = "linux" ]
-synopsis: "MOPSA: a Modular and Open Platform for Static Analysis using abstract interpretation"
-description: """
-MOPSA is a generic framework for building sound static analyzers based on the theory of abstract interpretation. It features a modular architecture for supporting different kinds of languages, iterators, and abstract domains.
-For the moment, MOPSA can analyze programs written in a subset of C and Python.
-"""
