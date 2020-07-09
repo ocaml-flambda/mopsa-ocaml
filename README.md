@@ -38,8 +38,8 @@ Tested on Ubuntu 16.04:
 ```shell
 sudo apt install build-essential m4 opam clang-5.0 llvm-5.0-dev libclang-5.0-dev libgmp-dev libmpfr-dev zlib1g-dev
 opam init
-opam switch 4.07.0
-eval `opam config env`
+opam switch 4.08.0
+eval $(opam config env)
 opam install apron zarith menhir yojson
 ./configure
 make
@@ -53,7 +53,7 @@ Tested on Fedora 27:
 ```shell
 sudo dnf install git m4 redhat-rpm-config patch opam clang-devel-5.0.? llvm-devel-5.0.? gmp-devel mpfr-devel zlib-devel make which
 opam init
-opam switch 4.07.0
+opam switch 4.08.0
 eval $(opam config env)
 opam install apron zarith menhir yojson
 ./configure
