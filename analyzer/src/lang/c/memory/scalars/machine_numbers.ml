@@ -549,8 +549,8 @@ struct
       declare_var v init scope stmt.srange man flow |>
       OptionExt.return
 
-    | S_assign(lval, rval) when etyp lval |> is_c_num_type &&
-                                is_compare_expr rval ->
+    | S_assign({ekind = E_var _} as lval, rval) when etyp lval |> is_c_num_type &&
+                                             is_compare_expr rval ->
       man.eval lval flow >>$? fun lval flow ->
       let range = stmt.srange in
       assume rval
@@ -563,19 +563,19 @@ struct
         man flow |>
       OptionExt.return
 
-    | S_assign(lval, rval) when etyp lval |> is_c_num_type ->
+    | S_assign({ekind = E_var _} as lval, rval) when etyp lval |> is_c_num_type ->
       man.eval lval flow >>$? fun lval' flow ->
       man.eval rval flow >>$? fun rval' flow ->
       man.post ~semantic:numeric (mk_assign lval' rval' stmt.srange) flow |>
       OptionExt.return
 
-    | S_add v when is_c_num_type v.etyp ->
+    | S_add ({ekind = E_var _} as v) when is_c_num_type v.etyp ->
       let vv = mk_num_var_expr v in
       add_var_bounds vv v.etyp flow |>
       man.post ~semantic:numeric (mk_add vv stmt.srange) |>
       OptionExt.return
 
-    | S_remove v when is_c_num_type v.etyp ->
+    | S_remove ({ekind = E_var _} as v) when is_c_num_type v.etyp ->
       let vv = mk_num_var_expr v in
       man.post ~semantic:numeric (mk_remove vv stmt.srange) flow |>
       Post.bind (fun flow ->
@@ -588,8 +588,9 @@ struct
         ) |>
       OptionExt.return
 
-    | S_rename(v1, v2) when is_c_num_type v1.etyp &&
-                            is_c_num_type v2.etyp
+    | S_rename(({ekind = E_var _} as v1), ({ekind = E_var _} as v2))
+      when is_c_num_type v1.etyp &&
+           is_c_num_type v2.etyp
       ->
       let vv1 = mk_num_var_expr v1 in
       let vv2 = mk_num_var_expr v2 in
@@ -602,23 +603,25 @@ struct
       man.post ~semantic:numeric (mk_assume (to_compare_expr e') stmt.srange) flow |>
       OptionExt.return
 
-    | S_expand(e,el) when is_c_num_type e.etyp &&
-                          List.for_all (fun ee -> is_c_num_type ee.etyp) el
+    | S_expand(({ekind = E_var _} as e),el)
+      when is_c_num_type e.etyp &&
+           List.for_all (fun ee -> is_c_num_type ee.etyp) el
       ->
       man.eval e flow >>$? fun e' flow ->
       bind_list el (fun e flow -> man.eval e flow) flow >>$? fun el' flow ->
       man.post (mk_expand e' el' stmt.srange) ~semantic:numeric flow |>
       OptionExt.return
 
-    | S_fold(e,el) when is_c_num_type e.etyp &&
-                          List.for_all (fun ee -> is_c_num_type ee.etyp) el
+    | S_fold(({ekind = E_var _} as e),el)
+      when is_c_num_type e.etyp &&
+           List.for_all (fun ee -> is_c_num_type ee.etyp) el
       ->
       man.eval e flow >>$? fun e' flow ->
       bind_list el (fun e flow -> man.eval e flow) flow >>$? fun el' flow ->
       man.post (mk_fold e' el' stmt.srange) ~semantic:numeric flow |>
       OptionExt.return
 
-    | S_forget v when is_c_num_type v.etyp ->
+    | S_forget ({ekind = E_var _} as v) when is_c_num_type v.etyp ->
       let vv = mk_num_var_expr v in
       man.post (mk_forget vv stmt.srange) ~semantic:numeric flow |>
       OptionExt.return

@@ -1139,7 +1139,8 @@ struct
       exec_declare v scope stmt.srange man flow |>
       OptionExt.return
 
-    | S_assign(x, e) when is_c_scalar_type x.etyp ->
+    | S_assign({ekind = E_var _} as x, e)
+    | S_assign({ekind = E_c_deref _} as x, e) when is_c_scalar_type x.etyp ->
       exec_assign x e stmt.srange man flow |>
       OptionExt.return
 

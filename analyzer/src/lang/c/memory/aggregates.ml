@@ -90,6 +90,24 @@ struct
       )
       range
 
+  (** 𝔼⟦ p->f ⟧ -> *(( typeof(p->f)* )(( char* )p + alignof(p->f))) *)
+  let mk_lowlevel_arrow_access p i t range =
+    let st = under_type p.etyp in
+    let align = mk_int (align_byte st i) range in
+    mk_c_deref
+      (mk_c_cast
+         (mk_binop
+            (mk_c_cast p (pointer_type s8) range)
+            O_plus
+            align
+            range
+         )
+         (pointer_type t)
+         range
+      )
+      range
+
+
 
 
   (** {2 Abstract transformers} *)
@@ -389,6 +407,15 @@ struct
     let stmt = mk_assign lval e range in
     man.post stmt flow
 
+  let assign_member a i f t e r range man flow =
+    let lval = mk_lowlevel_member_access a i r in
+    let stmt = mk_assign lval e range in
+    man.post stmt flow
+
+  let assign_arrow a i f t e r range man flow =
+    let lval = mk_lowlevel_arrow_access a i t r in
+    let stmt = mk_assign lval e range in
+    man.post stmt flow
 
   let exec stmt man flow =
     match skind stmt with
@@ -406,6 +433,16 @@ struct
       assign_array a i t e range stmt.srange man flow |>
       OptionExt.return
 
+    | S_assign({ekind = E_c_member_access(a,i,f); etyp = t; erange = range}, e)
+    | S_expression { ekind = E_c_assign ({ekind = E_c_member_access(a,i,f); etyp = t; erange = range}, e) } ->
+      assign_member a i f t e range stmt.srange man flow |>
+      OptionExt.return
+
+    | S_assign({ekind = E_c_arrow_access(a,i,f); etyp = t; erange = range}, e)
+    | S_expression { ekind = E_c_assign ({ekind = E_c_arrow_access(a,i,f); etyp = t; erange = range}, e) } ->
+      assign_arrow a i f t e range stmt.srange man flow |>
+      OptionExt.return
+
     | _ -> None
 
 
@@ -418,26 +455,10 @@ struct
   let member_access s i f range = mk_lowlevel_member_access s i range
 
   (** 𝔼⟦ p->f ⟧ -> *(( typeof(p->f)* )(( char* )p + alignof(p->f))) *)
-  let arrow_access p i f t range =
-    let st = under_type p.etyp in
-    let align = mk_int (align_byte st i) range in
-    mk_c_deref
-      (mk_c_cast
-         (mk_binop
-            (mk_c_cast p (pointer_type s8) range)
-            O_plus
-            align
-            range
-         )
-         (pointer_type t)
-         range
-      )
-      range
-
+  let arrow_access p i f t range = mk_lowlevel_arrow_access p i t range
   
   (** 𝔼⟦ &(a[i]) ⟧ = a + i *)
   let address_of_array_subscript a i t range = mk_binop a O_plus i ~etyp:t range
-
 
   (** 𝔼⟦ &(p->f) ⟧ = ( typeof(p->f)* )(( char* )p + alignof(p->f)) *)
   let address_of_arrow_access p i f t range =
