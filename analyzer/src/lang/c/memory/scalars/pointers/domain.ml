@@ -766,22 +766,6 @@ struct
       add_pointer_var p stmt.srange man flow |>
       OptionExt.return
 
-    (* | S_invalidate e when zone = Z_c_points_to ->
-     *   exec_invalidate_base e stmt.srange man flow |>
-     *   OptionExt.return
-     * 
-     * | S_rename(e,e') when zone = Z_c_points_to ->
-     *   exec_rename_base e e' stmt.srange man flow |>
-     *   OptionExt.return
-     * 
-     * | S_expand(e,el) when zone = Z_c_points_to ->
-     *   exec_expand_base e el stmt.srange man flow |>
-     *   OptionExt.return
-     * 
-     * | S_fold(e,el) when zone = Z_c_points_to ->
-     *   exec_fold_bases e el stmt.srange man flow |>
-     *   OptionExt.return *)
-
     | S_remove { ekind = E_var (p, _) } when is_c_pointer_type p.vtyp ->
       remove_pointer_var p stmt.srange man flow |>
       OptionExt.return
@@ -814,6 +798,21 @@ struct
       forget_pointer_var p stmt.srange man flow |>
       OptionExt.return
 
+    | S_invalidate e when is_c_type e.etyp  ->
+      exec_invalidate_base e stmt.srange man flow |>
+      OptionExt.return
+
+    | S_rename(e,e') when Blocks.is_c_block_type e.etyp ->
+      exec_rename_base e e' stmt.srange man flow |>
+      OptionExt.return
+
+    | S_expand(e,el) when Blocks.is_c_block_type e.etyp ->
+      exec_expand_base e el stmt.srange man flow |>
+      OptionExt.return
+
+    | S_fold(e,el) when Blocks.is_c_block_type e.etyp ->
+      exec_fold_bases e el stmt.srange man flow |>
+      OptionExt.return
 
     (* S⟦ ?(p == q) ⟧ *)
     | S_assume({ ekind = E_binop(O_eq, p, q) })

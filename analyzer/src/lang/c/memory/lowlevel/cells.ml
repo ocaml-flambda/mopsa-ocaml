@@ -1145,36 +1145,34 @@ struct
       OptionExt.return
 
 
-    | S_add e when is_base_expr e ->
+    | S_add e when is_base_expr e && is_c_type e.etyp ->
       exec_add (expr_to_base e) stmt.srange man flow |>
       OptionExt.return
 
 
-    | S_remove e when is_base_expr e ->
+    | S_remove e when is_base_expr e && is_c_type e.etyp ->
       exec_remove (expr_to_base e) stmt.srange man flow |>
       OptionExt.return
 
 
-    | S_rename(e1,e2) when is_base_expr e1 && is_base_expr e2 ->
+    | S_rename(e1,e2) when is_base_expr e1 && is_base_expr e2 && is_c_type e1.etyp && is_c_type e2.etyp ->
       exec_rename (expr_to_base e1) (expr_to_base e2) stmt.srange man flow |>
       OptionExt.return
 
     | S_expand(e,el) when is_base_expr e &&
+                          is_c_type e.etyp &&
                           List.for_all is_base_expr el ->
       exec_expand (expr_to_base e) (List.map expr_to_base el) stmt.srange man flow |>
       OptionExt.return
 
     | S_fold(e,el) when is_base_expr e &&
+                        is_c_type e.etyp &&
                         List.for_all is_base_expr el ->
       exec_fold (expr_to_base e) (List.map expr_to_base el) stmt.srange man flow |>
       OptionExt.return
 
-    | S_forget(e) ->
+    | S_forget(e) when is_c_type e.etyp ->
       exec_forget e stmt.srange man flow |>
-      OptionExt.return
-
-    | S_stub_assigns _ ->
-      Post.return flow |>
       OptionExt.return
 
 
