@@ -39,12 +39,10 @@
 
 
 open Mopsa
-open Sig.Abstraction.Stateless
+open Sig.Domain.Stateless
 open Universal.Ast
 open Stubs.Ast
 open Ast
-open Universal.Zone
-open Zone
 open Common.Base
 open Common.Points_to
 open Common.Alarms
@@ -63,24 +61,11 @@ struct
       let name = "c.memory.lowlevel.string_length"
     end)
 
-  let interface = {
-    iexec = {
-      provides = [Z_c_low_level];
-      uses = [
-        Z_u_num;
-        Z_c_scalar
-      ];
-    };
-    ieval = {
-      provides = [Z_c_low_level, Z_c_scalar];
-      uses = [
-        Z_c_low_level, Z_u_num;
-        Z_c_scalar, Z_u_num;
-        Z_c_low_level, Z_c_scalar;
-        Z_c_low_level, Z_c_points_to;
-      ];
-    }
-  }
+  let scalar = mk_semantic "C/Scalar" ~domain:name
+  let numeric = mk_semantic "U/Numeric" ~domain:name
+
+  let dependencies = [ scalar;
+                       numeric ]
 
   let alarms = []
 
@@ -184,15 +169,15 @@ struct
       Offsets are still counted in bytes (not elem_size).
   *)
   let eval_pointed_base_offset ptr range man flow =
-    man.eval ptr ~zone:(Zone.Z_c_low_level, Z_c_points_to) flow >>$ fun pt flow ->
-    match ekind pt with
-    | E_c_points_to P_null
-    | E_c_points_to P_invalid
-    | E_c_points_to (P_block ({ base_valid = false }, _, _))
-    | E_c_points_to P_top ->
+    resolve_pointer ptr man flow >>$ fun pt flow ->
+    match pt with
+    | P_null
+    | P_invalid
+    | P_block ({ base_valid = false }, _, _)
+    | P_top ->
       Cases.empty_singleton flow
 
-    | E_c_points_to (P_block (base, offset, mode)) ->
+    | P_block (base, offset, mode) ->
       Cases.singleton (base, offset, mode) flow
 
     | _ -> assert false
@@ -259,13 +244,13 @@ struct
            initialize it with the interval [0, byte-size(@) / elem-size]
         *)
         eval_base_size base range man flow >>$ fun bsize flow ->
-        man.eval ~zone:(Z_c_scalar, Z_u_num) bsize flow >>$ fun bsize flow ->
+        man.eval bsize flow >>$ fun bsize flow ->
 
         let length = mk_length_var base elem_size range in
         let size = elem_of_offset bsize elem_size range in
 
-        man.post ~zone:Z_u_num (mk_add length range) flow >>= fun _ flow ->
-        man.post ~zone:Z_u_num (mk_assume (mk_in length (mk_zero range) size range) range) flow
+        man.post ~semantic:numeric (mk_add length range) flow >>= fun _ flow ->
+        man.post ~semantic:numeric (mk_assume (mk_in length (mk_zero range) size range) range) flow
 
 
   (** 𝕊⟦ remove(base); ⟧ *)
@@ -277,7 +262,7 @@ struct
 
       | _ ->
         let length = mk_length_var base elem_size range in
-        man.post ~zone:Z_u_num (mk_remove length range) flow
+        man.post ~semantic:numeric (mk_remove length range) flow
 
 
   (** 𝕊⟦ rename(base1,base2); ⟧ *)
@@ -287,7 +272,7 @@ struct
     else
       let length1 = mk_length_var base1 elem_size range in
       let length2 = mk_length_var base2 elem_size range in
-      man.post ~zone:Z_u_num (mk_rename length1 length2 range) flow
+      man.post ~semantic:numeric (mk_rename length1 length2 range) flow
 
 
   (** 𝕊⟦ expand(base,bases); ⟧ *)
@@ -308,7 +293,7 @@ struct
       if lengths = [] then
         Post.return flow
       else
-        man.post ~zone:Z_u_num (mk_expand length1 lengths range) flow
+        man.post ~semantic:numeric (mk_expand length1 lengths range) flow
 
 
   (** Fold the length variable of a base *)
@@ -326,12 +311,12 @@ struct
           ) [] bases in
       if lengths = [] then
          eval_base_size base range man flow >>$ fun bsize flow ->
-         man.eval ~zone:(Z_c_scalar, Z_u_num) bsize flow >>$ fun bsize flow ->
+         man.eval bsize flow >>$ fun bsize flow ->
          let size = elem_of_offset bsize elem_size range in
-         man.post ~zone:Z_u_num (mk_forget length range) flow >>$ fun () flow ->
-         man.post ~zone:Z_u_num (mk_assume (mk_in length (mk_zero range) size range) range) flow
+         man.post ~semantic:numeric (mk_forget length range) flow >>$ fun () flow ->
+         man.post ~semantic:numeric (mk_assume (mk_in length (mk_zero range) size range) range) flow
       else
-        man.post ~zone:Z_u_num (mk_fold length lengths range) flow
+        man.post ~semantic:numeric (mk_fold length lengths range) flow
 
 
   (** 𝕊⟦ forget(e); ⟧ *)
@@ -346,10 +331,10 @@ struct
         (* FIXME: we can do better by checking if the offset affects the length of the string *)
         let length = mk_length_var base elem_size range in
         eval_base_size base range man flow >>$ fun bsize flow ->
-        man.eval ~zone:(Z_c_scalar, Z_u_num) bsize flow >>$ fun bsize flow ->
+        man.eval bsize flow >>$ fun bsize flow ->
         let size = elem_of_offset bsize elem_size range in
-        man.post ~zone:Z_u_num (mk_forget length range) flow >>$ fun () flow ->
-        man.post ~zone:Z_u_num (mk_assume (mk_in length (mk_zero range) size range) range) flow
+        man.post ~semantic:numeric (mk_forget length range) flow >>$ fun () flow ->
+        man.post ~semantic:numeric (mk_assume (mk_in length (mk_zero range) size range) range) flow
 
 
   (** 𝕊⟦ type v; ⟧ *)
@@ -362,7 +347,7 @@ struct
 
   (** 𝕊⟦ *p = rhs; ⟧ *)
   let exec_assign p rhs range man flow =
-    man.eval ~zone:(Z_c_low_level,Z_u_num) rhs flow >>$ fun rhs flow ->
+    man.eval rhs flow >>$ fun rhs flow ->
     eval_pointed_base_offset p range man flow >>$ fun (base,boffset,mode) flow ->
     if not (is_interesting_base base) then
       Post.return flow
@@ -376,16 +361,16 @@ struct
       if char_size = Z.of_int elem_size &&
          Common.Quantified_offset.is_aligned boffset char_size man flow
       then
-        man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow >>$ fun offset flow ->
+        man.eval offset flow >>$ fun offset flow ->
         eval_base_size base range man flow >>$ fun bsize flow ->
-        man.eval ~zone:(Z_c_scalar, Z_u_num) bsize flow >>$ fun bsize flow ->
+        man.eval bsize flow >>$ fun bsize flow ->
         let size = elem_of_offset bsize elem_size range in
 
         (* Utility function to assign an interval to [length] *)
         let assign_length_interval l u flow =
-          man.post ~zone:Z_u_num (mk_forget length range) flow |>
+          man.post ~semantic:numeric (mk_forget length range) flow |>
           Post.bind (
-            man.post ~zone:Z_u_num (mk_assume ((mk_in length l u range)) range)
+            man.post ~semantic:numeric (mk_assume ((mk_in length l u range)) range)
           )
         in
         switch [
@@ -395,7 +380,7 @@ struct
           (* Transformation: length := offset; *)
           [ mk_in offset zero length range;
             mk_eq rhs zero range ],
-          (fun flow -> man.post ~zone:Z_u_num (mk_assign length offset range) flow)
+          (fun flow -> man.post ~semantic:numeric (mk_assign length offset range) flow)
           ;
 
           (* setnon0 case *)
@@ -423,10 +408,10 @@ struct
           [ mk_ge offset (succ length range) range ],
           (fun flow -> Post.return flow)
 
-        ] ~zone:Z_u_num man flow
+        ] ~semantic:numeric man flow
 
       else
-        man.post ~zone:Z_u_num (mk_forget length range) flow
+        man.post ~semantic:numeric (mk_forget length range) flow
 
 
   let exec_assume_string_literal_char_eq str t boffset mode n range man flow =
@@ -434,7 +419,7 @@ struct
     let blen = String.length str in
     (* When n = 0, require that byte-offset = byte-length(str) *)
     if Z.(n = zero) then
-      man.post (mk_assume (mk_binop boffset O_eq (mk_int blen range) range) range) ~zone:Z_c_scalar flow
+      man.post (mk_assume (mk_binop boffset O_eq (mk_int blen range) range) range) flow
     else if char_size = 1 then
       (* Search for the first and last positions of `n` in `str` *)
       let c = Z.to_int n |> Char.chr in
@@ -448,10 +433,10 @@ struct
           else mk_int_interval l u range
         in
         (* Require that offset is equal to pos *)
-        man.post (mk_assume (mk_binop boffset O_eq pos range) range) ~zone:Z_c_scalar flow
+        man.post (mk_assume (mk_binop boffset O_eq pos range) range) flow
     else
       (* for wide characters, we only know that offset < len(str) *)
-      man.post (mk_assume (mk_binop boffset O_le (mk_int (blen-char_size) range) range) range) ~zone:Z_c_scalar flow
+      man.post (mk_assume (mk_binop boffset O_le (mk_int (blen-char_size) range) range) range) flow
 
   
 
@@ -477,20 +462,20 @@ struct
              |---------x---------0----->
           *)
           [ le offset (pred length range) range ],
-          (fun flow -> man.post (mk_assume (ne n zero range) range) ~zone:Z_c_low_level flow);
+          (fun flow -> man.post (mk_assume (ne n zero range) range) flow);
 
           (*          offset/length
              |--------------0----------->
           *)
           [ eq offset length range],
-          (fun flow -> man.post (mk_assume (eq n zero range) range) ~zone:Z_c_low_level flow);
+          (fun flow -> man.post (mk_assume (eq n zero range) range) flow);
 
           (*          length   offset
              |----------0--------x----->
           *)
           [ ge offset (succ length range) range ],
           (fun flow -> Post.return flow);
-        ] ~zone:Z_c_scalar man flow
+        ] man flow
       |_ ->
         Post.return flow
 
@@ -506,16 +491,16 @@ struct
     match Common.Quantified_offset.bound_div boffset char_size man flow with
     | Top.TOP -> Post.return flow
     | Top.Nt (min,max) ->
-    man.eval ~zone:(Z_c_scalar, Z_u_num) min flow >>$ fun min flow ->
-    man.eval ~zone:(Z_c_scalar, Z_u_num) max flow >>$ fun max flow ->
+    man.eval min flow >>$ fun min flow ->
+    man.eval max flow >>$ fun max flow ->
 
     let length = mk_length_var base elem_size ~mode range in
     eval_base_size base range man flow >>$ fun bsize flow ->
-    man.eval ~zone:(Z_c_scalar, Z_u_num) bsize flow >>$ fun bsize flow ->
+    man.eval bsize flow >>$ fun bsize flow ->
     let size = elem_of_offset bsize elem_size range in
     (* Ensure that [min, max] ⊆ [0, size-1] *)
-    man.post (mk_assume (ge min zero range) range) ~zone:Z_u_num flow >>$ fun () flow ->
-    man.post (mk_assume (le max (pred size range) range) range) ~zone:Z_u_num flow >>$ fun () flow ->
+    man.post (mk_assume (ge min zero range) range) ~semantic:numeric flow >>$ fun () flow ->
+    man.post (mk_assume (le max (pred size range) range) range) ~semantic:numeric flow >>$ fun () flow ->
     switch [
       (*          length    min     max
          |-----------0-------|nnnnnnnn|------>
@@ -535,7 +520,7 @@ struct
            assume (eq n zero range)
              ~fthen:(fun flow -> Post.return flow)
              ~felse:(fun flow -> Cases.empty_singleton (Flow.bottom_from flow))
-             ~zone:Z_c_low_level man flow
+             man flow
       );
 
       (*         min    length    max
@@ -549,8 +534,8 @@ struct
          |----|nnnnnnnnn|-------0------>
       *)
       [ le max (pred length range) range ],
-      (fun flow -> man.post (mk_assume (ne n zero range) range) ~zone:Z_c_low_level flow);
-    ] ~zone:Z_u_num man flow
+      (fun flow -> man.post (mk_assume (ne n zero range) range) flow);
+    ] ~semantic:numeric man flow
 
 
   (** 𝕊⟦ *(p + ∀i) != 0 ⟧ *)
@@ -562,8 +547,8 @@ struct
     match Common.Quantified_offset.bound_div boffset char_size man flow with
     | Top.TOP -> Post.return flow
     | Top.Nt (min,max) ->
-    man.eval ~zone:(Z_c_scalar, Z_u_num) min flow >>$ fun min flow ->
-    man.eval ~zone:(Z_c_scalar, Z_u_num) max flow >>$ fun max flow ->
+    man.eval min flow >>$ fun min flow ->
+    man.eval max flow >>$ fun max flow ->
 
     let length =
       match base.base_kind with
@@ -597,7 +582,7 @@ struct
         *)
         [ ge min (succ length range) range ],
         (fun flow -> Post.return flow);
-      ] ~zone:Z_u_num man flow
+      ] ~semantic:numeric man flow
 
 
 
@@ -621,7 +606,7 @@ struct
            assume (eq n zero range)
              ~fthen:(fun flow -> exec_assume_quantified_ne_zero base boffset ctype mode range man flow)
              ~felse:(fun flow -> Post.return flow)
-             ~zone:Z_c_low_level man flow
+             man flow
         end
       | _ -> Post.return flow
 
@@ -651,10 +636,10 @@ struct
     with
     | Top.TOP,_ | _, Top.TOP -> Post.return flow
     | Top.Nt (min1,max1), Top.Nt (min2,max2) ->
-    let evl1 = man.eval ~zone:(Z_c_scalar, Z_u_num) min1 flow in
-    let evl2 = man.eval ~zone:(Z_c_scalar, Z_u_num) max1 flow in
-    let evl3 = man.eval ~zone:(Z_c_scalar, Z_u_num) min2 flow in
-    let evl4 = man.eval ~zone:(Z_c_scalar, Z_u_num) max2 flow in
+    let evl1 = man.eval min1 flow in
+    let evl2 = man.eval max1 flow in
+    let evl3 = man.eval min2 flow in
+    let evl4 = man.eval max2 flow in
     
     evl1 >>$ fun min1 flow ->
     evl2 >>$ fun max1 flow ->
@@ -694,12 +679,12 @@ struct
         (fun flow -> Cases.empty_singleton (Flow.bottom_from flow));
 
         [ log_and cover1 cover2 range ],
-        (fun flow -> man.post (mk_assume (eq (sub length1 min1 range) (sub length2 min2 range) range) range) ~zone:Z_u_num flow);
-      ] ~zone:Z_u_num man flow
+        (fun flow -> man.post (mk_assume (eq (sub length1 min1 range) (sub length2 min2 range) range) range) ~semantic:numeric flow);
+      ] ~semantic:numeric man flow
 
 
   (** Transformers entry point *)
-  let exec zone stmt man flow =
+  let exec stmt man flow =
     match skind stmt with
 
     | S_c_declaration (v,init,scope) when not (is_c_scalar_type v.vtyp) ->
@@ -780,7 +765,7 @@ struct
     let char_size = sizeof_type t in
     let length = Z.(div (of_int (String.length str)) char_size) in
     let offset = elem_of_offset boffset (Z.to_int char_size) range in
-    man.eval offset ~zone:(Z_c_scalar,Z_u_num) flow >>$ fun offset flow ->
+    man.eval offset flow >>$ fun offset flow ->
     if Common.Quantified_offset.is_aligned boffset char_size man flow then
       switch [
         [ eq offset (mk_z length range) range],
@@ -814,7 +799,7 @@ struct
                else Eval.singleton (mk_z_interval l u range) flow
            end
         )
-      ] ~zone:Z_u_num man flow
+      ] ~semantic:numeric man flow
     else
       Eval.singleton (mk_top t range) flow
 
@@ -832,10 +817,11 @@ struct
         Eval.singleton (mk_top ctype range) flow
 
 
-  let eval zone exp man flow =
+  let eval exp man flow =
     match ekind exp with
     | E_c_deref p when is_c_int_type exp.etyp ->
       eval_deref p exp.erange man flow |>
+      Rewrite.forward_eval ~semantic:scalar |>
       OptionExt.return
 
     | _ -> None

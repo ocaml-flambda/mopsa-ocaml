@@ -19,13 +19,12 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Desugar constant expressions. *)
+(** Desugar conditional expressions. *)
 
 open Mopsa
-open Sig.Abstraction.Stateless
+open Sig.Domain.Stateless
 open Universal.Ast
 open Ast
-open Zone
 
 
 (** {2 Domain definition} *)
@@ -38,19 +37,13 @@ struct
   (** ===================== *)
 
   include GenStatelessDomainId(struct
-      let name = "c.desugar.constants"
+      let name = "c.iterators.intraproc"
     end)
 
-
-  (** Zoning definition *)
-  (** ================= *)
-
-  let interface = {
-    iexec = {provides = []; uses = []};
-    ieval = {provides = [Z_c, Z_c_low_level]; uses = []};
-  }
+  let dependencies = []
 
   let alarms = []
+
 
   (** Initialization *)
   (** ============== *)
@@ -61,18 +54,79 @@ struct
   (** Post-condition computation *)
   (** ========================== *)
 
-  let exec zone stmt man flow = None
+  let exec stmt man flow = None
 
 
   (** Evaluation of expressions *)
   (** ========================= *)
 
-  let eval zone exp man flow  =
-    match c_expr_to_z exp with
-    | None   -> None
-    | Some z ->
-      Eval.singleton (mk_z z ~typ:exp.etyp exp.erange) flow |>
+  let eval exp man flow  =
+    match ekind exp with
+    | E_c_conditional(cond, e1, e2) ->
+      assume cond
+        ~fthen:(fun flow ->
+            man.eval e1 flow |>
+            Rewrite.return_eval
+          )
+        ~felse:(fun flow ->
+            man.eval e2 flow |>
+            Rewrite.return_eval
+          )
+        man flow |>
       OptionExt.return
+
+    | E_binop(O_c_and, e1, e2) ->
+      assume e1
+        ~fthen:(fun flow ->
+            man.eval e2 flow |>
+            Rewrite.return_eval
+          )
+        ~felse:(fun flow ->
+            Rewrite.return_singleton (Universal.Ast.mk_zero exp.erange) flow
+          )
+        man flow |>
+      OptionExt.return
+
+    | E_binop(O_c_or, e1, e2) ->
+      assume e1
+        ~fthen:(fun flow ->
+            Rewrite.return_singleton (Universal.Ast.mk_one exp.erange) flow
+          )
+        ~felse:(fun flow ->
+            man.eval e2 flow |>
+            Rewrite.return_eval
+          )
+        man flow |>
+      OptionExt.return
+
+    | E_c_assign(lval, rval) ->
+      man.eval rval flow >>$? fun rval flow ->
+      man.post (mk_assign lval rval exp.erange) flow >>$? fun () flow ->
+      Rewrite.return_singleton rval flow |>
+      OptionExt.return
+
+    | E_c_statement {skind = S_block (l,local_vars)} ->
+      begin
+        match List.rev l with
+        | {skind = S_expression e}::q ->
+          let q' = List.rev q in
+          let stmt' = mk_block q' (erange exp) in
+          man.post stmt' flow >>$? fun () flow ->
+          man.eval e flow |>
+          Rewrite.return_eval |>
+          Cases.add_cleaners (List.map (fun v -> mk_remove_var v exp.erange) local_vars) |>
+          OptionExt.return
+
+        | _ -> panic "E_c_statement %a not supported" pp_expr exp
+      end
+
+    | E_c_statement {skind = S_expression e} ->
+      man.eval e flow |>
+      Rewrite.return_eval |>
+      OptionExt.return
+
+
+    | _ -> None
 
 
   (** Query handler *)
@@ -82,5 +136,4 @@ struct
 
 end
 
-let () =
-  register_stateless_domain (module Domain)
+let () = register_stateless_domain (module Domain)

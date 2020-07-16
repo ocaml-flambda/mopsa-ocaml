@@ -25,11 +25,10 @@
 *)
 
 open Mopsa
-open Sig.Abstraction.Stateless
+open Framework.Abstraction.Sig.Domain.Stateless
 open Lexing
 open Universal.Ast
 open Universal.Frontend
-open Universal.Zone
 open Debug
 
 
@@ -301,23 +300,20 @@ module Domain = struct
     end)
 
 
-  let interface = {
-    iexec = {provides = [Z_u]; uses = []};
-    ieval = {provides = []; uses = []};
-  }
+  let dependencies = []
 
   let alarms = []
 
   let init prog man flow = flow
 
-  let exec zone stmt man flow =
+  let exec stmt man flow =
     match skind stmt with
     | S_program ({ prog_kind = P_REPL }, _) ->
        Some (Post.return (enter_repl man flow))
 
     | _ -> None
 
-  let eval zone exp man flow = None
+  let eval exp man flow = None
 
   let ask query man flow = None
 

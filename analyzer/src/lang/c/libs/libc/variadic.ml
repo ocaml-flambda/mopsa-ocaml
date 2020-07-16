@@ -24,10 +24,9 @@
 
 
 open Mopsa
-open Sig.Abstraction.Stateless
+open Sig.Domain.Stateless
 open Universal.Ast
 open Ast
-open Zone
 module Itv = Universal.Numeric.Values.Intervals.Integer.Value
 open Common.Alarms
 open Common.Base
@@ -45,27 +44,12 @@ struct
       let name = "c.libs.variadic"
     end)
 
+  let numeric = mk_semantic "U/Numeric" ~domain:name
 
-  (** Zoning definition *)
-  (** ================= *)
+  let dependencies = [ numeric ]
 
-  let interface = {
-    iexec = {
-      provides = [];
-      uses = [Z_c_low_level; Universal.Zone.Z_u_num]
-    };
-    ieval = {
-      provides = [
-        Z_c, Z_c_low_level
-      ];
-      uses = [
-        Z_c, Common.Points_to.Z_c_points_to;
-        Z_c_scalar, Universal.Zone.Z_u_num
-      ]
-    }
-  }
-
-  let alarms = [A_c_out_of_bound; A_c_insufficient_variadic_args]
+  let alarms = [ A_c_out_of_bound;
+                 A_c_insufficient_variadic_args ]
 
   (** Flow-insensitive annotations *)
   (** ============================ *)
@@ -124,7 +108,7 @@ struct
 
   let init _ _ flow =  flow
 
-  let exec zone stmt man flow = None
+  let exec stmt man flow = None
 
 
 
@@ -164,11 +148,11 @@ struct
     man.eval (mk_c_call fundec' named range) flow >>= fun ret flow ->
     let flow =
       List.fold_left (fun flow unnamed ->
-          man.exec ~zone:Z_c_low_level (mk_remove_var unnamed range) flow
+          man.exec (mk_remove_var unnamed range) flow
         ) flow vars |>
       pop_unnamed_args
     in
-    Eval.return ret flow
+    Cases.return ret flow
 
 
   (* Create a counter variable for a va_list *)
@@ -179,17 +163,16 @@ struct
 
   (* Initialize a counter *)
   let init_valc_var valc range man flow =
-    man.exec (mk_add valc range) ~zone:Universal.Zone.Z_u_num flow |>
-    man.exec (mk_assign valc (mk_zero range) range) ~zone:Universal.Zone.Z_u_num
+    man.exec (mk_add valc range) ~semantic:numeric flow |>
+    man.exec (mk_assign valc (mk_zero range) range) ~semantic:numeric
 
 
   (* Resolve a pointer to a va_list *)
   let resolve_va_list ap range man flow =
     let open Common.Points_to in
-    man.eval ap ~zone:(Z_c, Z_c_points_to) flow >>$ fun pt flow ->
-
-    match ekind pt with
-    | E_c_points_to (P_block ({ base_kind = Var ap; base_valid = true }, offset, mode)) ->
+    resolve_pointer ap man flow >>$ fun pt flow ->
+    match pt with
+    | P_block ({ base_kind = Var ap; base_valid = true }, offset, mode) ->
       let base_size = sizeof_type ap.vtyp in
       let elem_size = sizeof_type (under_type ap.vtyp) in
 
@@ -199,19 +182,18 @@ struct
 
       (* In this case, only offset 0 is OK *)
       assume
-        (mk_binop offset O_eq (mk_zero range) ~etyp:u8 range)
+        (mk_binop offset O_eq (mk_zero range) range)
         ~fthen:(fun flow ->
             Cases.singleton ap flow
           )
         ~felse:(fun eflow ->
-            man.eval offset ~zone:(Z_c_scalar,Universal.Zone.Z_u_num) flow >>$ fun offset flow ->
             raise_c_out_var_bound_alarm ap offset (under_type ap.vtyp) range man flow eflow |>
             Cases.empty_singleton
           )
-        ~zone:Z_c
+        ~semantic:numeric
         man flow
 
-    | _ -> panic_at range "resolve_va_list: pointed object %a not supported" pp_expr pt
+    | _ -> panic_at range "resolve_va_list: pointed object %a not supported" pp_points_to pt
 
 
   (** Evaluate calls to va_start *)
@@ -230,7 +212,7 @@ struct
     let valc = mk_valc_var ap range in
     let flow = init_valc_var valc range man flow in
 
-    Eval.empty_singleton flow
+    Eval.singleton (mk_unit range) flow
 
 
   (** Evaluate calls to va_arg *)
@@ -257,10 +239,10 @@ struct
               (* Increment the counter *)
               let flow = man.exec
                   (mk_assign valc (mk_z (Z.succ n) range) range)
-                  ~zone:Universal.Zone.Z_u_num
+                  ~semantic:numeric
                   flow
               in
-              Eval.singleton (mk_var arg range) flow
+              man.eval (mk_var arg range) flow
             ) itv
           in
 
@@ -271,7 +253,7 @@ struct
           let flow' = raise_c_insufficient_variadic_args ap valc unnamed range man flow eflow in
           Eval.empty_singleton flow'
         )
-      ~zone:Universal.Zone.Z_u_num
+      ~semantic:numeric
       man flow
 
 
@@ -282,35 +264,39 @@ struct
     let valc = mk_valc_var ap range in
 
     (* Remove the counter *)
-    let flow' = man.exec (mk_remove valc range) ~zone:Universal.Zone.Z_u_num flow in
-    Eval.empty_singleton flow'
+    let flow' = man.exec (mk_remove valc range) ~semantic:numeric flow in
+    Eval.singleton (mk_unit range) flow'
 
 
 
   (** {2 Evaluation entry point} *)
   (** ========================== *)
 
-  let eval zone exp man flow =
+  let eval exp man flow =
     match ekind exp with
 
     (* 𝔼⟦ variadic f(...) ⟧ *)
     | E_call ({ ekind = E_c_function ({c_func_variadic = true} as fundec)}, args) ->
       call_variadic_function fundec args exp.erange man flow |>
+      Rewrite.return_eval |>
       OptionExt.return
 
     (* 𝔼⟦ va_start(ap, param) ⟧ *)
     | E_c_builtin_call("__builtin_va_start", [ap; { ekind = E_var (param, _) }]) ->
       va_start ap param exp.erange man flow |>
+      Rewrite.return_eval |>
       OptionExt.return
 
     (* 𝔼⟦ va_arg(ap) ⟧ *)
     | E_c_var_args(ap) ->
       va_arg ap exp.etyp exp.erange man flow |>
+      Rewrite.return_eval |>
       OptionExt.return
 
     (* 𝔼⟦ va_end(ap) ⟧ *)
     | E_c_builtin_call("__builtin_va_end", [ap]) ->
       va_end ap exp.erange man flow |>
+      Rewrite.return_eval |>
       OptionExt.return
 
     (* 𝔼⟦ va_copy(src, dst) ⟧ *)

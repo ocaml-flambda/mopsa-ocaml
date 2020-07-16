@@ -36,12 +36,10 @@
 
 
 open Mopsa
-open Sig.Abstraction.Stacked
+open Sig.Domain.Stacked
 open Universal.Ast
 open Stubs.Ast
 open Ast
-open Universal.Zone
-open Zone
 open Common.Base
 open Common.Points_to
 open Common.Alarms
@@ -367,26 +365,9 @@ struct
     end)
 
 
-  (** Zone interface *)
-  let interface = {
-    iexec = {
-      provides = [Z_c_low_level];
-      uses = [
-        Z_c;
-        Z_c_scalar
-      ];
-    };
-
-    ieval = {
-      provides = [Z_c_low_level, Z_c_scalar];
-      uses = [
-        (Z_c_low_level, Z_c_scalar);
-        (Z_c_scalar, Z_u_num);
-        (Z_c_low_level, Z_u_num);
-        (Z_c_low_level, Z_c_points_to);
-      ];
-    }
-  }
+  (** Semantic dependencies *)
+  let scalar = mk_semantic "C/Scalar" ~domain:name
+  let dependencies = [ scalar ]
 
   let alarms = [ A_c_out_of_bound;
                  A_c_null_deref;
@@ -517,14 +498,14 @@ struct
     else
       let flow = set_env T_cur { a with cells = cell_set_add c a.cells } man flow in
       let v = mk_cell_var c in
-      man.post ~zone:Z_c_scalar (mk_add_var v range) flow >>$ fun () flow ->
+      man.post ~semantic:scalar (mk_add_var v range) flow >>$ fun () flow ->
       if is_pointer_cell c then
         Post.return flow
       else
         match phi c a range with
         | Some e ->
           let stmt = mk_assume (mk_binop (mk_var v range) O_eq e ~etyp:u8 range) range in
-          man.post ~zone:Z_c_scalar stmt flow
+          man.post ~semantic:scalar stmt flow
 
         | None -> Post.return flow
 
@@ -539,7 +520,7 @@ struct
 
 
   (** [unify a a'] finds non-common cells in [a] and [a'] and adds them. *)
-  let unify man ctx (a,s) (a',s') =
+  let unify man sman ctx (a,s) (a',s') =
     CellSet.fold2z
       (fun _ m1 m2 acc ->
          OffCells.fold2z
@@ -547,13 +528,13 @@ struct
               Cells.fold
                 (fun c s ->
                    if is_optional_cell c a then s
-                   else state_exec (add_cell c unify_range man) ctx man a s |> snd )
+                   else sub_env_exec (add_cell c unify_range man) ctx man sman a s |> snd )
                 (Cells.diff s2 s1) (fst acc)
               ,
               Cells.fold
                 (fun c s ->
                    if is_optional_cell c a' then s
-                   else state_exec (add_cell c unify_range man) ctx man a' s |> snd )
+                   else sub_env_exec (add_cell c unify_range man) ctx man sman a' s |> snd )
                 (Cells.diff s1 s2) (snd acc)
 
            )
@@ -567,12 +548,12 @@ struct
 
   let is_bottom _ = false
 
-  let subset man ctx (a,s) (a',s') =
-    let s, s' = unify man ctx (a, s) (a', s') in
+  let subset man sman ctx (a,s) (a',s') =
+    let s, s' = unify man sman ctx (a, s) (a', s') in
     (true, s, s')
 
-  let join man ctx (a,s) (a',s') =
-    let s, s' = unify man ctx (a,s) (a',s') in
+  let join man sman ctx (a,s) (a',s') =
+    let s, s' = unify man sman ctx (a,s) (a',s') in
     let a = {
       cells = CellSet.join a.cells a'.cells;
       bases = BaseSet.join a.bases a'.bases;
@@ -580,11 +561,10 @@ struct
     in
     (a, s, s')
 
-  let meet man ctx (a,s) (a',s') =
-    join man ctx (a,s) (a',s')
+  let meet = join
 
-  let widen man ctx (a,s) (a',s') =
-    let (a, s, s') = join man ctx (a,s) (a',s') in
+  let widen man sman ctx (a,s) (a',s') =
+    let (a, s, s') = join man sman ctx (a,s) (a',s') in
     (a, s, s', true)
 
   let merge pre (a,log) (a',log') =
@@ -609,32 +589,32 @@ struct
 
 
   let eval_pointed_base_offset ptr range man flow =
-    man.eval ptr ~zone:(Zone.Z_c_low_level, Z_c_points_to) flow >>$ fun pt flow ->
-    match ekind pt with
-    | E_c_points_to P_null ->
+    resolve_pointer ptr man flow >>$ fun pt flow ->
+    match pt with
+    | P_null ->
       raise_c_null_deref_alarm ptr man flow |>
       Cases.empty_singleton
 
-    | E_c_points_to P_invalid ->
+    | P_invalid ->
       raise_c_invalid_deref_alarm ptr man flow |>
       Cases.empty_singleton
 
-    | E_c_points_to (P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
+    | P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset, _) ->
       raise_c_use_after_free_alarm ptr r man flow |>
       Cases.empty_singleton
 
-    | E_c_points_to (P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
+    | P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset, _) ->
       raise_c_dangling_deref_alarm ptr v r man flow |>
       Cases.empty_singleton
 
-    | E_c_points_to (P_block (base, offset, mode)) ->
+    | P_block (base, offset, mode) ->
       Cases.singleton (Some (base, offset, mode)) flow
 
-    | E_c_points_to P_top ->
+    | P_top ->
       Cases.singleton None flow
 
-    | _ -> assert false
-
+    | P_fun _ ->
+      assert false
 
   (** Expand a pointer dereference into a cell. *)
   let expand p range man flow : ('a, expansion) cases =
@@ -651,15 +631,15 @@ struct
       eval_base_size base range man flow >>$ fun size flow ->
 
       (* Convert the size and the offset to numeric *)
-      man.eval ~zone:(Z_c_scalar,Z_u_num) size flow >>$ fun size flow ->
-      man.eval ~zone:(Z_c_scalar,Z_u_num) offset flow >>$ fun offset flow ->
+      man.eval size flow >>$ fun size flow ->
+      man.eval offset flow >>$ fun offset flow ->
 
       (* Check the bounds: offset ∈ [0, size - |typ|] *)
       let cond = mk_in offset (mk_zero range)
           (sub size (mk_z elm range) range ~typ:T_int)
           range
       in
-      assume_num ~zone:Z_u_num cond
+      assume_num cond
         ~fthen:(fun flow ->
             (* Compute the interval and create a finite number of cells *)
             let itv, (stride,_) = man.ask (Universal.Numeric.Common.Q_int_congr_interval offset) flow in
@@ -703,7 +683,7 @@ struct
             if nb > Z.of_int !opt_deref_expand || not (is_interesting_base base) then
               (* too many cases -> top *)
               let region = Region (base, l, u ,step) in
-              let flow = man.exec ~zone:Z_u_num (mk_assume (mk_binop offset O_ge (mk_z l range) range) range) flow in
+              let flow = man.exec (mk_assume (mk_binop offset O_ge (mk_z l range) range) range) flow in
               if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
               then Cases.empty_singleton flow
               else Cases.singleton region flow
@@ -713,7 +693,7 @@ struct
                 if Z.gt o u
                 then []
                 else
-                  let flow = man.exec ~zone:Z_u_num (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow in
+                  let flow = man.exec (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow in
                   if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
                   then aux (Z.add o step)
                   else
@@ -759,13 +739,13 @@ struct
         let smash = mk_range_attr_var range "smash" ~mode:WEAK t in
         let weak_smash = mk_var smash range in
         let strong_smash = mk_var smash ~mode:(Some STRONG) range in
-        man.post (mk_add_var smash range) ~zone:Z_c_scalar flow >>$ fun () flow ->
+        man.post (mk_add_var smash range) ~semantic:scalar flow >>$ fun () flow ->
         let ecells = List.map (fun c -> mk_pointer_cell_var_expr c t range) cells in
         let hd = List.hd ecells in
         let tl = List.tl ecells in
-        man.post (mk_assign strong_smash hd range) ~zone:Z_c_scalar flow >>$ fun () flow ->
+        man.post (mk_assign strong_smash hd range) ~semantic:scalar flow >>$ fun () flow ->
         List.fold_left
-          (fun acc c -> Post.bind (man.post (mk_assign weak_smash c range) ~zone:Z_c_scalar) acc)
+          (fun acc c -> Post.bind (man.post (mk_assign weak_smash c range) ~semantic:scalar) acc)
           (Post.return flow) tl
         >>$ fun () flow ->
         Eval.singleton weak_smash ~cleaners:[mk_remove_var smash range] flow
@@ -786,7 +766,7 @@ struct
     in
     let v = mk_cell_var c in
     let stmt = mk_remove_var v range in
-    man.post ~zone:Z_c_scalar stmt flow
+    man.post ~semantic:scalar stmt flow
 
 
   (** Remove cells overlapping with cell [c] *)
@@ -815,7 +795,7 @@ struct
                          cell_set_add c2 }
       ) man flow in
     let stmt = mk_rename_var v1 v2 range in
-    man.post ~zone:Z_c_scalar stmt flow
+    man.post ~semantic:scalar stmt flow
 
 
   let assign_cell c e mode range man flow =
@@ -827,9 +807,9 @@ struct
     begin if cell_set_mem c a.cells then
         Post.return flow
       else
-        man.post (mk_add_var v range) ~zone:Z_c_scalar flow
+        man.post (mk_add_var v range) ~semantic:scalar flow
     end >>$ fun () flow ->
-    man.post (mk_assign vv e range) ~zone:Z_c_scalar flow >>$ fun () flow ->
+    man.post (mk_assign vv e range) ~semantic:scalar flow >>$ fun () flow ->
     remove_cell_overlappings c range man flow
 
 
@@ -849,7 +829,7 @@ struct
     let v = mk_cell_var c in
     let vl = List.map mk_cell_var cl in
     let stmt = mk_expand_var v vl range in
-    man.post stmt ~zone:Z_c_scalar flow
+    man.post stmt ~semantic:scalar flow
 
   let fold_cells c cl range man flow =
     let flow = map_env T_cur (fun a ->
@@ -859,7 +839,7 @@ struct
     let v = mk_cell_var c in
     let vl = List.map mk_cell_var cl in
     let stmt = mk_fold_var v vl range in
-    man.post stmt ~zone:Z_c_scalar flow
+    man.post stmt ~semantic:scalar flow
 
   let forget_cell c range man flow =
     let flow = map_env T_cur
@@ -869,7 +849,7 @@ struct
     in
     let v = mk_cell_var c in
     let stmt = mk_remove_var v range in
-    man.post stmt ~zone:Z_c_scalar flow
+    man.post stmt ~semantic:scalar flow
 
 
   (** {2 Initial state} *)
@@ -915,17 +895,15 @@ struct
 
   (* 𝔼⟦ *p ⟧ where p is a pointer to a function *)
   let eval_deref_function_pointer p range man flow =
-    man.eval ~zone:(Z_c_low_level,Z_c_points_to) p flow |>
-    Eval.bind @@ fun pt flow ->
-
-    match ekind pt with
-    | E_c_points_to (P_fun f) ->
+    resolve_pointer p man flow >>$ fun pt flow ->
+    match pt with
+    | P_fun f ->
       Eval.singleton (mk_expr (E_c_function f) ~etyp:(under_type p.etyp) range) flow
 
     | _ -> panic_at range
              "deref_function_pointer: pointer %a points to a non-function object %a"
              pp_expr p
-             pp_expr pt
+             pp_points_to pt
 
 
   (** 𝔼⟦ &lval ⟧ *)
@@ -935,7 +913,7 @@ struct
       Eval.singleton (mk_c_address_of lval range) flow
 
     | E_c_deref p ->
-      man.eval ~zone:(Z_c_low_level,Z_c_scalar) p flow
+      man.eval p flow
 
     | _ ->
       panic_at range ~loc:__LOC__
@@ -943,35 +921,33 @@ struct
         pp_expr lval
 
 
-  let eval zone exp man flow =
+  let eval exp man flow =
     match ekind exp with
     | E_var ({ vkind = V_c_cell _},_) ->
-      Eval.singleton exp flow |>
+      Rewrite.forward_singleton exp ~semantic:scalar flow |>
       OptionExt.return
 
     | E_var (v,_) when is_c_scalar_type v.vtyp ->
       eval_deref_scalar_pointer (mk_c_address_of exp exp.erange) exp.erange man flow |>
+      Rewrite.forward_eval ~semantic:scalar |>
       OptionExt.return
 
     | E_c_deref p when under_type p.etyp |> void_to_char |> is_c_scalar_type
       ->
       eval_deref_scalar_pointer p exp.erange man flow |>
+      Rewrite.forward_eval ~semantic:scalar |>
       OptionExt.return
 
 
     | E_c_deref p when under_type p.etyp |> is_c_function_type
       ->
       eval_deref_function_pointer p exp.erange man flow |>
+      Rewrite.forward_eval ~semantic:scalar |>
       OptionExt.return
 
     | E_c_address_of lval ->
       eval_address_of lval exp.erange man flow |>
-      OptionExt.return
-
-
-    | E_stub_builtin_call((VALID_PTR | VALID_FLOAT) as f, e) ->
-      man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow >>$? fun e flow ->
-      Eval.singleton (mk_expr (E_stub_builtin_call(f, e)) ~etyp:exp.etyp exp.erange) flow |>
+      Rewrite.forward_eval ~semantic:scalar |>
       OptionExt.return
 
 
@@ -997,7 +973,7 @@ struct
       map_env T_cur (fun a ->
         { a with cells = cell_set_add c a.cells }
       ) man flow |>
-      man.post ~zone:Z_c_scalar (mk_c_declaration vv None scope range)
+      man.post ~semantic:scalar (mk_c_declaration vv None scope range)
     else
       Post.return flow
 
@@ -1024,23 +1000,16 @@ struct
       Post.return flow
 
     | Cell (c,mode) ->
-      man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow >>$ fun e flow ->
+      man.eval e flow >>$ fun e flow ->
       assign_cell c e mode range man flow
 
     | Region (base,lo,hi,step) when is_c_num_type e.etyp ->
-      man.eval ~zone:(Z_c_low_level,Z_u_num) e flow >>$ fun e flow ->
+      man.eval e flow >>$ fun e flow ->
       assign_region base lo hi step range man flow
 
     | Region (base,lo,hi,step)  ->
-      man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow >>$ fun e flow ->
+      man.eval e flow >>$ fun e flow ->
       assign_region base lo hi step range man flow
-
-
-  (** 𝕊⟦ ?e ⟧ *)
-  let exec_assume e range man flow =
-    man.eval ~zone:(Z_c_low_level,Z_c_scalar) e flow >>$ fun e flow ->
-    let stmt = mk_assume e range in
-    man.post ~zone:Z_c_scalar stmt flow
 
 
   let exec_add b range man flow =
@@ -1161,8 +1130,8 @@ struct
 
   (** Compute the interval of an offset *)
   let offset_interval offset range man flow : Itv.t =
-    let evl = man.eval offset ~zone:(Z_c_scalar, Z_u_num) flow in
-    Eval.apply (fun ee flow -> man.ask (Universal.Numeric.Common.mk_int_interval_query ee) flow) Itv.join Itv.meet Itv.bottom evl
+    let evl = man.eval offset flow in
+    Cases.apply_some (fun ee flow -> man.ask (Universal.Numeric.Common.mk_int_interval_query ee) flow) Itv.join Itv.meet Itv.bottom evl
 
 
   (** Forget the value of an lval *)
@@ -1173,9 +1142,9 @@ struct
       | E_c_deref(p) -> p
       | _ -> assert false
     in
-    man.eval ptr ~zone:(Z_c_low_level,Z_c_points_to) flow >>$ fun p flow ->
-    match ekind p with
-    | E_c_points_to(P_block(base,offset,mode)) ->
+    resolve_pointer ptr man flow >>$ fun p flow ->
+    match p with
+    | P_block(base,offset,mode) ->
       (* Compute the interval of the offset *)
       let itv = offset_interval offset range man flow in
       (* Add the size of the pointed cells *)
@@ -1189,7 +1158,7 @@ struct
     | _ -> Post.return flow
 
 
-  let exec zone stmt man flow =
+  let exec stmt man flow =
     match skind stmt with
     | S_c_declaration (v,init,scope) ->
       exec_declare v scope stmt.srange man flow |>
@@ -1197,11 +1166,6 @@ struct
 
     | S_assign(x, e) when is_c_scalar_type x.etyp ->
       exec_assign x e stmt.srange man flow |>
-      OptionExt.return
-
-
-    | S_assume(e) ->
-      exec_assume e stmt.srange man flow |>
       OptionExt.return
 
 

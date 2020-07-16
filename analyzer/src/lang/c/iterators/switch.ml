@@ -22,10 +22,9 @@
 (** Control flow abstraction for switch statements. *)
 
 open Mopsa
-open Sig.Abstraction.Stateless
+open Sig.Domain.Stateless
 open Universal.Iterators.Loops
 open Ast
-open Zone
 
 
 module Domain =
@@ -39,12 +38,7 @@ struct
       let name = "c.iterators.switch"
     end)
 
-
-
-  let interface = {
-    iexec = {provides = [Z_c]; uses = []};
-    ieval = {provides = []; uses = []};
-  }
+  let dependencies = []
 
 
   let alarms = []
@@ -123,7 +117,7 @@ struct
       | (e',r) :: tl ->
         (* Filter the environments *)
         let cond = mk_binop e O_eq e' ~etyp:u8 e.erange in
-        assume_flow cond ~zone:Z_c
+        assume_flow cond
           ~fthen:(fun flow ->
               (* Case reachable, so save cur in the flow of the case before removing cur *)
               let cur = Flow.get T_cur man.lattice flow in
@@ -184,7 +178,7 @@ struct
     Post.return flow
 
 
-  let exec zone stmt man flow =
+  let exec stmt man flow =
     match skind stmt with
     | S_c_switch(e, body) ->
       exec_switch e body stmt.srange man flow |>
@@ -203,7 +197,7 @@ struct
   (** Evaluation of expressions *)
   (** ========================= *)
 
-  let eval zone exp man flow = None
+  let eval exp man flow = None
 
   (** Answer to queries *)
   (** ================= *)

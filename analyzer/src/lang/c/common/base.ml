@@ -24,7 +24,6 @@
 open Mopsa
 open Universal.Ast
 open Ast
-open Zone
 
 
 (** Kinds of bases *)
@@ -131,26 +130,26 @@ let expr_to_base e =
 
 
 (** Evaluate the size of a base in bytes *)
-let eval_base_size base ?(via=Z_any) range (man:('a,'t,'s) man) flow =
+let eval_base_size base range (man:('a,'t) man) flow =
   match base.base_kind with
   | Var var
     when is_c_variable_length_array_type var.vtyp ||
          is_c_no_length_array_type var.vtyp
     ->
     let bytes_expr = mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, mk_var var range)) range ~etyp:ul in
-    man.eval ~zone:(Z_c_low_level, Z_c_scalar) ~via bytes_expr flow
+    man.eval bytes_expr flow
 
   | Var var ->
-    Eval.singleton (mk_z (sizeof_type var.vtyp) range ~typ:ul) flow
+    Cases.singleton (mk_z (sizeof_type var.vtyp) range) flow
 
   | String (str,_,t) ->
     (* length of the terminal 0 character *)
     let char_len = Z.to_int (sizeof_type t) in
-    Eval.singleton (mk_int (String.length str + char_len) range ~typ:ul) flow
+    Cases.singleton (mk_int (String.length str + char_len) range) flow
 
   | Addr addr ->
     let bytes_expr = mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, mk_addr addr range)) range ~etyp:ul in
-    man.eval ~zone:(Z_c_low_level, Z_c_scalar) ~via bytes_expr flow
+    man.eval bytes_expr flow
 
 
 module Base =

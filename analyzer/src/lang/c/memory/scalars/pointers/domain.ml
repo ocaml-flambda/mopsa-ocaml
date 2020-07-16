@@ -22,11 +22,9 @@
 (** Non-relational abstraction of C pointers *)
 
 open Mopsa
-open Sig.Abstraction.Domain
+open Sig.Domain.Standard
 open Universal.Ast
 open Ast
-open Zone
-open Universal.Zone
 open Common.Points_to
 open Common.Base
 open Common.Alarms
@@ -60,23 +58,8 @@ struct
   let print fmt a =
     Format.fprintf fmt "pointers: %a@\n" Map.print a
 
-  let interface = {
-    iexec = {
-      provides = [Z_c_scalar; Z_c_points_to];
-      uses = [Z_c_scalar; Universal.Zone.Z_u_num];
-    };
-
-
-    ieval = {
-      provides = [
-        Z_c_scalar, Z_c_points_to;
-        Z_c_scalar, Universal.Zone.Z_u_num
-      ];
-      uses = [
-        Z_c_scalar, Universal.Zone.Z_u_num
-      ]
-    }
-  }
+  let numeric = mk_semantic "U/Numeric" ~domain:name
+  let dependencies = [ numeric ]
 
   let alarms = [ A_c_invalid_pointer_compare;
                  A_c_invalid_pointer_sub ]
@@ -247,7 +230,7 @@ struct
     | None -> Post.return flow
     | Some (p,mode) ->
       if PointerSet.is_valid v && not (PointerSet.is_valid v')
-      then man.post ~zone:Z_u_num (mk_remove (mk_offset p mode range) range) flow
+      then man.post ~semantic:numeric (mk_remove (mk_offset p mode range) range) flow
       else Post.return flow
 
 
@@ -258,11 +241,12 @@ struct
 
   (** Evaluation a pointer expression into a points-to expression *)
   let eval_points_to exp man flow =
+    man.eval exp flow >>$? fun exp flow ->
     Static_points_to.eval_opt exp |> OptionExt.lift @@ fun ptr ->
 
     match ptr with
     | AddrOf (base, offset, mode) ->
-      Eval.singleton (mk_c_points_to_bloc base offset mode exp.erange) flow
+      Cases.singleton (mk_c_points_to_bloc base offset mode) flow
 
     | Eval (p, mode, offset) ->
       let offset' = mk_binop (mk_offset p mode exp.erange) O_plus offset ~etyp:T_int exp.erange in
@@ -270,22 +254,23 @@ struct
       let values = Map.find p a in
       let evals = PointerSet.fold_points_to (fun v pt acc ->
           let flow = set_env T_cur (Map.set p v a) man flow in
-          Eval.singleton (mk_c_points_to pt exp.erange) flow :: acc
+          Cases.singleton pt flow :: acc
         ) values offset' []
       in
-      Eval.join_list evals ~empty:(fun () -> Eval.empty_singleton flow)
+      Cases.join_list evals ~empty:(fun () -> Cases.empty_singleton flow)
 
     | Fun f ->
-      Eval.singleton (mk_c_points_to_fun f exp.erange) flow
+      Cases.singleton (mk_c_points_to_fun f) flow
 
     | Null ->
-      Eval.singleton (mk_c_points_to_null exp.erange) flow
+      Cases.singleton mk_c_points_to_null flow
 
     | Invalid ->
-      Eval.singleton (mk_c_points_to_invalid exp.erange) flow
+      Cases.singleton mk_c_points_to_invalid flow
 
     | Top ->
-      Eval.singleton (mk_c_points_to_top exp.erange) flow
+      Cases.singleton mk_c_points_to_top flow
+
 
   (** 𝔼⟦ p - q ⟧ *)
   let eval_diff p q range man flow =
@@ -328,8 +313,8 @@ struct
           else Some (div e (mk_z elem_size range) range)
         in
         match ee with
-        | None -> [man.eval ~zone:(Z_c_scalar, Z_u_num) (mk_top T_int range) flow] (* FIXME: why not return 0? *)
-        | Some e -> [man.eval ~zone:(Z_c_scalar, Z_u_num) e flow]
+        | None -> [man.eval (mk_top T_int range) flow] (* FIXME: why not return 0? *)
+        | Some e -> [man.eval e flow]
     in
 
     (* Case 2: different base => undefined behavior *)
@@ -351,8 +336,8 @@ struct
 
 
 
-  (** Evaluation of a pointer comparison into a numeric expression *)
-  let eval_compare exp man flow =
+  (** Entry point of abstraction evaluations *)
+  let eval exp man flow =
     match ekind exp with
     (* 𝔼⟦ (t)p - (t)q | t is a numeric type ⟧ *)
     | E_binop(O_minus, { ekind = E_c_cast(p, _); etyp = t1 }, { ekind = E_c_cast(q, _); etyp = t2 })
@@ -370,7 +355,8 @@ struct
         | T_c_void -> diff
         | tt -> mul (mk_z (sizeof_type tt) ~typ:t1 exp.erange) diff ~typ:t1 exp.erange
       in
-      man.eval ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) exp' flow |>
+      man.eval exp' flow |>
+      Rewrite.forward_eval ~semantic:numeric |>
       OptionExt.return
 
     (* 𝔼⟦ p1 - p2 ⟧ *)
@@ -379,25 +365,18 @@ struct
            is_c_pointer_type p2.etyp
       ->
       eval_diff p1 p2 exp.erange man flow |>
+      Rewrite.forward_eval ~semantic:numeric |>
       OptionExt.return
 
     | _ when is_c_pointer_type exp.etyp ->
       assume (mk_binop exp O_eq (mk_c_null exp.erange) exp.erange)
         ~fthen:(fun flow -> Eval.singleton (mk_zero exp.erange) flow)
         ~felse:(fun flow -> Eval.singleton (mk_one exp.erange) flow)
-        ~zone:Z_c_scalar man flow|>
+        man flow|>
+      Rewrite.forward_eval ~semantic:numeric |>
       OptionExt.return
 
     | _ -> None
-
-
-  (** Entry point of abstraction evaluations *)
-  let eval zone exp man flow =
-    match zone with
-    | Z_c_scalar, Z_c_points_to -> eval_points_to exp man flow
-    | Z_c_scalar, Universal.Zone.Z_u_num -> eval_compare exp man flow
-    | _ -> None
-
 
 
   (** {2 Computation of post-conditions} *)
@@ -405,7 +384,7 @@ struct
 
   let remove_offset o mode range man flow =
     if mode = STRONG then
-      man.post ~zone:(Universal.Zone.Z_u_num) (mk_remove o range) flow
+      man.post ~semantic:numeric (mk_remove o range) flow
     else
       Post.return flow
 
@@ -417,8 +396,8 @@ struct
     | AddrOf (b, offset, mode') ->
       let flow' = map_env T_cur (add p (PointerSet.base b) mode) man flow in
 
-      man.eval offset ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) flow' >>$ fun offset flow' ->
-      man.post ~zone:(Universal.Zone.Z_u_num) (mk_assign o offset range) flow'
+      man.eval offset flow' >>$ fun offset flow' ->
+      man.post ~semantic:numeric (mk_assign o offset range) flow'
 
     | Eval (q, mode', offset) ->
       let flow' = map_env T_cur (fun a ->
@@ -432,8 +411,8 @@ struct
         let qo = mk_offset q mode' range in
         let offset' = mk_binop qo O_plus offset ~etyp:T_int range in
 
-        man.eval offset' ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) flow' >>$ fun offset' flow ->
-        man.post ~zone:(Universal.Zone.Z_u_num) (mk_assign o offset' range) flow'
+        man.eval offset' flow' >>$ fun offset' flow ->
+        man.post ~semantic:numeric (mk_assign o offset' range) flow'
       else
         remove_offset o (var_mode p mode) range man flow'
 
@@ -451,7 +430,7 @@ struct
 
     | Top ->
       map_env T_cur (add p PointerSet.top mode) man flow |>
-      man.post ~zone:(Universal.Zone.Z_u_num) (mk_assign o (mk_top T_int range) range)
+      man.post ~semantic:numeric (mk_assign o (mk_top T_int range) range)
 
 
 
@@ -481,14 +460,14 @@ struct
   let add_pointer_var p range man flow =
     let o = mk_offset p None range in
     map_env T_cur (Map.set p PointerSet.top) man flow |>
-    man.post ~zone:(Universal.Zone.Z_u_num) (mk_add o range)
+    man.post ~semantic:numeric (mk_add o range)
 
 
   (** Remove a pointer variable from the support of the non-rel map *)
   let remove_pointer_var p range man flow =
     let flow = map_env T_cur (Map.remove p) man flow in
     let o = mk_offset p None range in
-    man.post ~zone:(Universal.Zone.Z_u_num) (mk_remove o range) flow
+    man.post ~semantic:numeric (mk_remove o range) flow
 
 
   (** Rename a pointer variable *)
@@ -500,7 +479,7 @@ struct
     if PointerSet.is_valid a1 then
       let o1 = mk_offset p1 None range in
       let o2 = mk_offset p2 None range in
-      man.post ~zone:(Universal.Zone.Z_u_num) (mk_rename o1 o2 range) flow'
+      man.post ~semantic:numeric (mk_rename o1 o2 range) flow'
     else
       Post.return flow'
 
@@ -601,8 +580,8 @@ struct
       match mk_offset_constraint_opt O_eq p1 v1 o1 p2 v2 o2 range with
       | None -> Post.return flow
       | Some cond ->
-        man.eval ~zone:(Z_c_scalar,Z_u_num) cond flow >>$ fun cond flow ->
-        man.post ~zone:Z_u_num (mk_assume cond range) flow
+        man.eval cond flow >>$ fun cond flow ->
+        man.post ~semantic:numeric (mk_assume cond range) flow
 
 
 
@@ -631,8 +610,8 @@ struct
         in
         let cond = mk_binop o1 O_ne o2 ~etyp:T_int range in
         [
-          man.eval ~zone:(Z_c_scalar,Z_u_num) cond flow >>$ fun cond flow ->
-          man.post ~zone:Z_u_num (mk_assume cond range) flow
+          man.eval cond flow >>$ fun cond flow ->
+          man.post ~semantic:numeric (mk_assume cond range) flow
         ]
     in
 
@@ -685,8 +664,8 @@ struct
           match mk_offset_constraint_opt op p1 v1 o1 p2 v2 o2 range with
           | None -> Post.return flow
           | Some cond ->
-            man.eval ~zone:(Z_c_scalar,Z_u_num) cond flow >>$ fun cond flow ->
-            man.post ~zone:Z_u_num (mk_assume cond range) flow
+            man.eval cond flow >>$ fun cond flow ->
+            man.post ~semantic:numeric (mk_assume cond range) flow
         ]
     in
 
@@ -724,7 +703,7 @@ struct
       let o = mk_offset p None range in
       let ol = List.map (fun q -> mk_offset q None range) ql in
       let stmt = mk_expand o ol range in
-      man.post stmt ~zone:Z_u_num flow
+      man.post stmt ~semantic:numeric flow
     else
       Post.return flow
 
@@ -746,7 +725,7 @@ struct
       let o = mk_offset p None range in
       let ol = List.map (fun q -> mk_offset q None range) ql in
       let stmt = mk_fold o ol range in
-      man.post stmt ~zone:Z_u_num flow
+      man.post stmt ~semantic:numeric flow
     else
       Post.return flow
 
@@ -765,13 +744,13 @@ struct
       else
         mk_add o range
     in
-    man.post stmt ~zone:Z_u_num flow
+    man.post stmt ~semantic:numeric flow
 
 
 
 
   (** Entry point of abstract transformers *)
-  let exec zone stmt man flow =
+  let exec stmt man flow =
     match skind stmt with
     | S_c_declaration(p,init,scope) when is_c_pointer_type p.vtyp ->
       declare_pointer_var p init scope stmt.srange man flow |>
@@ -785,21 +764,21 @@ struct
       add_pointer_var p stmt.srange man flow |>
       OptionExt.return
 
-    | S_invalidate e when zone = Z_c_points_to ->
-      exec_invalidate_base e stmt.srange man flow |>
-      OptionExt.return
-
-    | S_rename(e,e') when zone = Z_c_points_to ->
-      exec_rename_base e e' stmt.srange man flow |>
-      OptionExt.return
-
-    | S_expand(e,el) when zone = Z_c_points_to ->
-      exec_expand_base e el stmt.srange man flow |>
-      OptionExt.return
-
-    | S_fold(e,el) when zone = Z_c_points_to ->
-      exec_fold_bases e el stmt.srange man flow |>
-      OptionExt.return
+    (* | S_invalidate e when zone = Z_c_points_to ->
+     *   exec_invalidate_base e stmt.srange man flow |>
+     *   OptionExt.return
+     * 
+     * | S_rename(e,e') when zone = Z_c_points_to ->
+     *   exec_rename_base e e' stmt.srange man flow |>
+     *   OptionExt.return
+     * 
+     * | S_expand(e,el) when zone = Z_c_points_to ->
+     *   exec_expand_base e el stmt.srange man flow |>
+     *   OptionExt.return
+     * 
+     * | S_fold(e,el) when zone = Z_c_points_to ->
+     *   exec_fold_bases e el stmt.srange man flow |>
+     *   OptionExt.return *)
 
     | S_remove { ekind = E_var (p, _) } when is_c_pointer_type p.vtyp ->
       remove_pointer_var p stmt.srange man flow |>
@@ -928,14 +907,14 @@ struct
     (* S⟦ (t)p ⟧ *)
     | S_assume ({ ekind = E_c_cast(p, _) })
       when is_c_pointer_type p.etyp ->
-      man.post ~zone (mk_assume p stmt.srange) flow |>
+      man.post (mk_assume p stmt.srange) flow |>
       OptionExt.return
 
 
     (* S⟦ !(t)p ⟧ *)
     | S_assume ({ ekind = E_unop (O_log_not, ({ ekind = E_c_cast(p, _) })) })
       when is_c_pointer_type p.etyp ->
-      man.post ~zone (mk_assume (mk_not p stmt.srange) stmt.srange) flow |>
+      man.post (mk_assume (mk_not p stmt.srange) stmt.srange) flow |>
       OptionExt.return
 
 
@@ -947,7 +926,10 @@ struct
   (** {2 Handler of queries} *)
   (** ====================== *)
 
-  let ask _ _ _ = None
+  let ask : type a r. (a,r) query -> (a,t) man -> a flow -> r option = fun query man flow ->
+    match query with
+    | Q_c_points_to e -> eval_points_to e man flow
+    | _ -> None
 
 end
 

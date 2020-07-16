@@ -22,10 +22,9 @@
 (** Interpreter of for and do-while loops. *)
 
 open Mopsa
-open Sig.Abstraction.Stateless
+open Sig.Domain.Stateless
 open Universal.Ast
 open Ast
-open Zone
 open Common.Scope_update
 
 
@@ -42,13 +41,7 @@ struct
       let name = "c.iterators.loops"
     end)
 
-  (** Zoning definition *)
-  (** ================= *)
-
-  let interface = {
-    iexec = {provides = [Z_c]; uses = []};
-    ieval = {provides = []; uses = []};
-  }
+  let dependencies = []
 
   let alarms = []
 
@@ -58,7 +51,7 @@ struct
   let init _ _ flow = flow
 
 
-  let exec zone stmt man flow =
+  let exec stmt man flow =
     match skind stmt with
     | S_c_for(init, cond, incr, body) ->
       let range = stmt.srange in
@@ -106,7 +99,7 @@ struct
 
     | _ -> None
 
-  let eval _ _ _ _  = None
+  let eval _ _ _  = None
 
   let ask _ _ _  = None
 

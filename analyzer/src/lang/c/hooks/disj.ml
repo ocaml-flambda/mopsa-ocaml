@@ -24,7 +24,7 @@
 open Mopsa
 open Hook
 open Ast
-open Zone
+
 
 let threshold = ref 8
 
@@ -36,9 +36,6 @@ struct
   (** *************** *)
 
   let name = "c.hooks.disj"
-
-  let exec_zones = [Z_any]
-  let eval_zones = [Z_any,Z_any]
 
   let init ctx = ()
 

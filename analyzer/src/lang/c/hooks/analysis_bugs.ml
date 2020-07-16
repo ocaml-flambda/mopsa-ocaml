@@ -31,9 +31,7 @@ open Location
 open Mopsa
 open Format
 open Ast
-open Stubs.Zone
 open Stubs.Ast
-open Zone
 
 
 module Hook =
@@ -43,8 +41,6 @@ struct
   (** *************** *)
 
   let name = "c-analysis-bugs"
-  let exec_zones = [Z_c]
-  let eval_zones = [Z_stubs,Z_any]
 
 
   (** {2 Analyzer bugs} *)

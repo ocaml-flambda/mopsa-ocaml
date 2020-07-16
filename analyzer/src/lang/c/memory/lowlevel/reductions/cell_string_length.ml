@@ -25,7 +25,6 @@ open Mopsa
 open Sig.Reduction.Eval
 open Universal.Ast
 open Ast
-open Zone
 
 module Reduction =
 struct
@@ -44,7 +43,9 @@ struct
 
     (* Reduce only when both domains did an evaluation *)
     OptionExt.apply2
-      (fun e1 e2 ->
+      (fun erw1 erw2 ->
+         let e1 = Rewrite.get_expr erw1 in
+         let e2 = Rewrite.get_expr erw2 in
          match ekind e1, ekind e2 with
           (* Constants from the string length domain should be precise *)
           | _, E_constant (C_int _)

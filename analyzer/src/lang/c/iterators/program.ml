@@ -23,12 +23,10 @@
 
 
 open Mopsa
-open Sig.Abstraction.Stateless
+open Sig.Domain.Stateless
 open Universal.Ast
 open Stubs.Ast
 open Ast
-open Zone
-open Universal.Zone
 open Common.Points_to
 open Common.Base
 open Universal.Numeric.Common
@@ -86,23 +84,7 @@ struct
     }
 
 
-
-  (** Zoning definition *)
-  (** ================= *)
-
-  let interface = {
-    iexec = {
-      provides= [Z_c];
-      uses = [Z_c;Z_c_scalar]
-    };
-
-    ieval = {
-      provides = [Z_c,Z_c_low_level];
-      uses = [Z_c,Z_c_scalar;
-              Z_c,Z_u_num;
-              Z_c,Z_c_points_to]
-    }
-  }
+  let dependencies = []
 
   let alarms = []
 
@@ -170,10 +152,10 @@ struct
       else
         (* Resolve the pointed function *)
         let fp = mk_c_subscript_access buf (mk_z i range) range in
-        man.eval fp ~zone:(Z_c,Z_c_points_to) flow >>$ fun p flow ->
+        resolve_pointer fp man flow >>$ fun p flow ->
         let input = flow in
-        match ekind p with
-        | E_c_points_to (P_fun f) ->
+        match p with
+        | P_fun f ->
           (* Execute the function *)
           let stmt = mk_c_call_stmt f [] range in
           man.post stmt flow >>$ fun () flow' ->
@@ -189,7 +171,7 @@ struct
             aux (Z.pred i) flow' >>$ fun () flow'' ->
             Post.return (fix_flow flow'')
 
-        | E_c_points_to P_top ->
+        | P_top ->
           Soundness.warn "ignoring side-effects of ⊤ exit functions";
           Post.return flow
 
@@ -207,7 +189,7 @@ struct
       let nb = mk_var (find_variable ("_next_"^name^"_fun_slot") prog.c_globals) range in
       let buf = mk_var (find_variable ("_"^name^"_fun_buf") prog.c_globals) range in
       let nb_itv =
-        let evl = man.eval nb ~zone:(Z_c,Z_u_num) flow in
+        let evl = man.eval nb flow in
         Cases.fold_some
           (fun nb flow acc ->
              man.ask (mk_int_interval_query nb) flow |>
@@ -268,8 +250,8 @@ struct
   let alloc_argv range man flow =
     let arange = tag_range range "argv" in
     man.eval (mk_alloc_addr (Stubs.Ast.A_stub_resource "argv") arange) flow >>$ fun addr flow ->
-    man.eval ~zone:(Z_c,Z_c_scalar) (mk_stub_builtin_call BYTES addr ~etyp:ul range) flow >>$ fun bytes flow ->
-    man.exec ~zone:Z_c_scalar (mk_add bytes range) flow |>
+    man.eval (mk_stub_builtin_call BYTES addr ~etyp:ul range) flow >>$ fun bytes flow ->
+    man.exec (mk_add bytes range) flow |>
     Eval.singleton { addr with etyp = T_c_pointer (T_c_pointer s8) }
 
 
@@ -277,8 +259,8 @@ struct
   let alloc_concrete_arg i range man flow =
     let irange = tag_range range "argv[%d]" i in
     man.eval (mk_alloc_addr (Stubs.Ast.A_stub_resource "arg") irange) flow >>$ fun addr flow ->
-    man.eval ~zone:(Z_c,Z_c_scalar) (mk_stub_builtin_call BYTES addr ~etyp:ul range) flow >>$ fun bytes flow ->
-    man.exec ~zone:Z_c_scalar (mk_add bytes range) flow |>
+    man.eval (mk_stub_builtin_call BYTES addr ~etyp:ul range) flow >>$ fun bytes flow ->
+    man.exec (mk_add bytes range) flow |>
     Eval.singleton { addr with etyp =  T_c_pointer s8 }
 
 
@@ -314,9 +296,9 @@ struct
     let flow = man.exec (mk_add argv range) flow in
 
     (* Initialize its size to (|args| + 2)*sizeof(ptr) *)
-    man.eval ~zone:(Z_c,Z_c_scalar) (mk_stub_builtin_call BYTES argv ~etyp:ul range) flow >>$ fun bytes flow ->
+    man.eval (mk_stub_builtin_call BYTES argv ~etyp:ul range) flow >>$ fun bytes flow ->
     let size = Z.mul (sizeof_type (T_c_pointer s8)) (Z.of_int (nargs + 2)) in 
-    let flow = man.exec ~zone:Z_c_scalar (mk_assign bytes (mk_z size range) range) flow in
+    let flow = man.exec (mk_assign bytes (mk_z size range) range) flow in
 
     (* Initialize argv[0] with the name of the program *)
     alloc_concrete_arg 0 range man flow >>$ fun arg flow ->
@@ -402,13 +384,13 @@ struct
     in
 
     (* Initialize its size to argc + 1 *)
-    man.eval ~zone:(Z_c,Z_c_scalar) (mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, argv)) range ~etyp:ul) flow >>$ fun bytes flow ->
-    man.eval ~zone:(Z_c,Z_c_scalar) argc flow >>$ fun scalar_argc flow ->
-    let flow = man.exec ~zone:Z_c_scalar (mk_assign bytes (mul
-                                                             (mk_z (sizeof_type (T_c_pointer s8)) range)
-                                                             (add scalar_argc (mk_one range) range)
-                                                             range
-                                                          ) range) flow |>
+    man.eval (mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, argv)) range ~etyp:ul) flow >>$ fun bytes flow ->
+    man.eval argc flow >>$ fun scalar_argc flow ->
+    let flow = man.exec (mk_assign bytes (mul
+                                            (mk_z (sizeof_type (T_c_pointer s8)) range)
+                                            (add scalar_argc (mk_one range) range)
+                                            range
+                                         ) range) flow |>
                man.exec (mk_add argv range)
     in
 
@@ -416,9 +398,9 @@ struct
     let arg = mk_arg_smash ~mode:STRONG range in
 
     (* Initialize the size of the argument *)
-    man.eval ~zone:(Z_c,Z_c_scalar) (mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, arg)) range ~etyp:ul) flow >>$ fun bytes flow ->
-    let flow = man.exec ~zone:Z_c_scalar (mk_add bytes range) flow |>
-               man.exec ~zone:Z_c_scalar (mk_assign bytes (mk_z (rangeof s32 |> snd) range) range) |>
+    man.eval (mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, arg)) range ~etyp:ul) flow >>$ fun bytes flow ->
+    let flow = man.exec (mk_add bytes range) flow |>
+               man.exec (mk_assign bytes (mk_z (rangeof s32 |> snd) range) range) |>
                man.exec (mk_add arg range)
     in
 
@@ -468,7 +450,7 @@ struct
       exec_exit_functions "exit" main.c_func_name_range man flow
 
 
-  let exec zone stmt man flow =
+  let exec stmt man flow =
     match skind stmt with
     | S_program ({ prog_kind = C_program {c_globals; c_functions; c_stub_directives} }, args)
       when not !Universal.Iterators.Unittest.unittest_flag ->
@@ -540,17 +522,19 @@ struct
   (** ========================= *)
 
   let eval_exit name code range man flow =
-    man.eval code ~zone:(Z_c,Z_u_num) flow >>$ fun _ flow ->
+    man.eval code flow >>$ fun _ flow ->
     exec_exit_functions name range man flow >>$ fun () flow ->
     Eval.singleton (mk_unit range) flow
 
-  let eval zone exp man flow =
+  let eval exp man flow =
     match ekind exp with
     | E_c_builtin_call("exit", [code]) ->
       eval_exit "exit" code exp.erange man flow |>
+      Rewrite.return_eval |>
       OptionExt.return
     | E_c_builtin_call("quick_exit", [code]) ->
       eval_exit "quick_exit" code exp.erange man flow |>
+      Rewrite.return_eval |>
       OptionExt.return
 
     | _ -> None
@@ -559,7 +543,7 @@ struct
   (** Handler of queries *)
   (** ================== *)
 
-  let ask : type r. r query -> _ man -> _ flow -> r option = fun query man flow ->
+  let ask : type r. ('a,r) query -> _ man -> _ flow -> r option = fun query man flow ->
     let open Framework.Engines.Interactive in
     match query with
     (* Get the list of variables in the current scope *)
@@ -592,8 +576,8 @@ struct
         else assert false
 
       (* Get the direct value of an integer expression *)
-      and int_value ?(zone=Z_c) e =
-        let evl = man.eval e ~zone:(zone,Z_u_num) flow in
+      and int_value e =
+        let evl = man.eval e flow in
         let itv = Cases.fold_some
             (fun ee flow acc ->
               let itv = man.ask (mk_int_interval_query ~fast:false ee) flow in
@@ -607,7 +591,7 @@ struct
 
       (* Get the direct value of a float expression *)
       and float_value e =
-        let evl = man.eval e ~zone:(Z_c,Z_u_num) flow in
+        let evl = man.eval e flow in
         let itv = Cases.fold_some
             (fun ee flow acc ->
                let itv = man.ask (mk_float_interval_query ee) flow in
@@ -625,22 +609,21 @@ struct
 
       (* Get the direct value a pointer expression *)
       and pointer_value e =
-        let evl = man.eval e ~zone:(Z_c,Z_c_points_to) flow in
+        let evl = resolve_pointer e man flow in
         let l = Cases.fold_some
             (fun pt flow acc ->
-               match ekind pt with
-               | E_c_points_to P_null -> "NULL" :: acc
-               | E_c_points_to P_invalid -> "INVALID" :: acc
-               | E_c_points_to P_block (base,offset,_) ->
-                 begin match int_value ~zone:Z_c_scalar offset with
+               match pt with
+               | P_null -> "NULL" :: acc
+               | P_invalid -> "INVALID" :: acc
+               | P_block (base,offset,_) ->
+                 begin match int_value offset with
                    | None -> acc
                    | Some o ->
                      let v = Format.asprintf "&%a + %s" pp_base base o in
                      v :: acc
                  end
-               | E_c_points_to P_fun f -> f.c_func_org_name :: acc
-               | E_c_points_to P_top -> "⊤" :: acc
-               | _ -> assert false
+               | P_fun f -> f.c_func_org_name :: acc
+               | P_top -> "⊤" :: acc
             ) evl []
         in
         match l with
@@ -697,11 +680,11 @@ struct
       (* Get the sub-values of a pointer *)
       and pointer_sub_value v e =
         if is_c_pointer_type e.etyp && is_c_void_type (under_pointer_type e.etyp) then None else
-        let evl = man.eval e ~zone:(Z_c,Z_c_points_to) flow in
+        let evl = resolve_pointer e man flow in
         let l = Cases.fold_some
             (fun pt flow acc ->
-               match ekind pt with
-               | E_c_points_to P_block (base,offset,_) ->
+               match pt with
+               | P_block (base,offset,_) ->
                  let vv = "*" ^ v in
                  begin match get_var_value vv (mk_c_deref e range) with
                    | {var_value = None; var_sub_value = None} -> acc

@@ -25,10 +25,8 @@ open Location
 open Mopsa
 open Format
 open Ast
-open Stubs.Zone
 open Stubs.Ast
 open Universal.Ast
-open Zone
 
 
 module Hook =
@@ -38,8 +36,6 @@ struct
   (** *************** *)
 
   let name = "c.coverage"
-  let exec_zones = [Z_c]
-  let eval_zones = []
 
 
   (** {2 Command-line options} *)

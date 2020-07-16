@@ -22,11 +22,9 @@
 (** Evaluation of fprintf-derived functions *)
 
 open Mopsa
-open Sig.Abstraction.Stateless
+open Sig.Domain.Stateless
 open Universal.Ast
 open Ast
-open Universal.Zone
-open Zone
 open Common.Points_to
 open Common.Base
 open Common.Alarms
@@ -44,25 +42,7 @@ struct
       let name = "c.libs.clib.formatted_io.fprint"
     end)
 
-
-  (** Zoning definition *)
-  (** ================= *)
-
-  let interface = {
-    iexec = {
-      provides = [];
-      uses = []
-    };
-    ieval = {
-      provides = [
-        Z_c, Z_c_low_level
-      ];
-      uses = [
-        Z_c,Z_c_points_to;
-        Z_c,Z_u_num
-      ]
-    }
-  }
+  let dependencies = []
 
   let alarms = [
     A_c_insufficient_format_args;
@@ -79,7 +59,7 @@ struct
   let init prog man flow =  flow
 
 
-  let exec zone stmt man flow = None
+  let exec stmt man flow = None
 
   (** Check the correct type of an argument *)
   let check_arg arg placeholder range man flow =
@@ -93,7 +73,7 @@ struct
           flow
       in
       let exp = mk_c_cast arg typ arg.erange in
-      man.eval ~zone:(Z_c,Z_u_num) exp flow >>$ fun _ flow ->
+      man.eval exp flow >>$ fun _ flow ->
       Post.return flow
 
     | Float t ->
@@ -105,7 +85,7 @@ struct
           flow
       in
       let exp = mk_c_cast arg typ arg.erange in
-      man.eval ~zone:(Z_c,Z_u_num) exp flow >>$ fun _ flow ->
+      man.eval exp flow >>$ fun _ flow ->
       Post.return flow
 
     | Pointer ->
@@ -161,7 +141,7 @@ struct
             iter tlp tla flow
 
           | [], arg :: tla ->
-            man.eval ~zone:(Z_c,Z_c_scalar) arg flow >>$ fun _ flow ->
+            man.eval arg flow >>$ fun _ flow ->
             iter [] tla flow
 
           | _ -> assert false
@@ -171,14 +151,15 @@ struct
 
 
   (** Evaluation entry point *)
-  let eval zone exp man flow =
+  let eval exp man flow =
     match ekind exp with
 
     (* 𝔼⟦ printf(...) ⟧ *)
     | E_c_builtin_call("printf", format :: args)
     | E_c_builtin_call("__printf_chk", _ :: format :: args) ->
       check_args format args exp.erange man flow >>$? fun () flow ->
-      Eval.singleton (mk_top s32 exp.erange) flow |>
+      man.eval (mk_top s32 exp.erange) flow |>
+      Rewrite.return_eval |>
       OptionExt.return
 
     (* 𝔼⟦ fprintf(...) ⟧ *)
@@ -186,14 +167,16 @@ struct
     | E_c_builtin_call("__fprintf_chk", stream :: _ :: format :: args) ->
       assert_valid_stream stream exp.erange man flow >>$? fun () flow ->
       check_args format args exp.erange man flow >>$? fun () flow ->
-      Eval.singleton (mk_top s32 exp.erange) flow |>
+      man.eval (mk_top s32 exp.erange) flow |>
+      Rewrite.return_eval |>
       OptionExt.return
 
     (* 𝔼⟦ dprintf(...) ⟧ *)
     | E_c_builtin_call("dprintf", file:: format :: args) ->
       assert_valid_file_descriptor file exp.erange man flow >>$? fun () flow ->
       check_args format args exp.erange man flow >>$? fun () flow ->
-      Eval.singleton (mk_top s32 exp.erange) flow |>
+      man.eval (mk_top s32 exp.erange) flow |>
+      Rewrite.return_eval |>
       OptionExt.return
 
     (* 𝔼⟦ sprintf(...) ⟧ *)
@@ -202,54 +185,62 @@ struct
     | E_c_builtin_call("__builtin___sprintf_chk", dst :: _ :: _ :: format :: args) ->
       check_args format args exp.erange man flow >>$? fun () flow ->
       memrand dst (mk_zero ~typ:ul exp.erange) (mk_top ul exp.erange) exp.erange man flow >>$? fun () flow ->
-      Eval.singleton (mk_top s32 exp.erange) flow |>
+      man.eval (mk_top s32 exp.erange) flow |>
+      Rewrite.return_eval |>
       OptionExt.return
 
     (* 𝔼⟦ snprintf(...) ⟧ *)
     | E_c_builtin_call("snprintf", dst :: n :: format :: args) ->
       check_args format args exp.erange man flow >>$? fun () flow ->
       strnrand dst n exp.erange man flow >>$? fun () flow ->
-      Eval.singleton (mk_top s32 exp.erange) flow |>
+      man.eval (mk_top s32 exp.erange) flow |>
+      Rewrite.return_eval |>
       OptionExt.return
 
     (* 𝔼⟦ asprintf(...) ⟧ *)
     | E_c_builtin_call("asprintf", dst :: format :: args) ->
       check_args format args exp.erange man flow >>$? fun () flow ->
       asprintf_stub dst exp.erange man flow |>
+      Rewrite.return_eval |>
       OptionExt.return
 
     (* 𝔼⟦ error(...) ⟧ *)
     | E_c_builtin_call("error", status :: errnum :: format :: args) ->
       check_args format args exp.erange man flow >>$? fun () flow ->
       error_error status exp.erange man flow >>$? fun () flow ->
-      Eval.singleton (mk_top s32 exp.erange) flow |>
+      man.eval (mk_top s32 exp.erange) flow |>
+      Rewrite.return_eval |>
       OptionExt.return
 
     (* 𝔼⟦ error_at_line(...) ⟧ *)
     | E_c_builtin_call("error_at_line", status :: errnum :: filename :: linenum :: format :: args) ->
       check_args format args exp.erange man flow >>$? fun () flow ->
       error_error_at_line status filename exp.erange man flow >>$? fun () flow ->
-      Eval.singleton (mk_top s32 exp.erange) flow |>
+      man.eval (mk_top s32 exp.erange) flow |>
+      Rewrite.return_eval |>
       OptionExt.return
 
     (* 𝔼⟦ wprintf(...) ⟧ *)
     | E_c_builtin_call("wprintf", format :: args) ->
       check_args ~wide:true format args exp.erange man flow >>$? fun () flow ->
-      Eval.singleton (mk_top s32 exp.erange) flow |>
+      man.eval (mk_top s32 exp.erange) flow |>
+      Rewrite.return_eval |>
       OptionExt.return
 
     (* 𝔼⟦ fwprintf(...) ⟧ *)
     | E_c_builtin_call("fwprintf", stream :: format :: args) ->
       assert_valid_stream stream exp.erange man flow >>$? fun () flow ->
       check_args ~wide:true format args exp.erange man flow >>$? fun () flow ->
-      Eval.singleton (mk_top s32 exp.erange) flow |>
+      man.eval (mk_top s32 exp.erange) flow |>
+      Rewrite.return_eval |>
       OptionExt.return
 
     (* 𝔼⟦ swprintf(...) ⟧ *)
     | E_c_builtin_call("swprintf", dst :: n :: format :: args) ->
       check_args ~wide:true format args exp.erange man flow >>$? fun () flow ->
       wcsnrand dst n exp.erange man flow >>$? fun () flow ->
-      Eval.singleton (mk_top s32 exp.erange) flow |>
+      man.eval (mk_top s32 exp.erange) flow |>
+      Rewrite.return_eval |>
       OptionExt.return
 
     | _ -> None

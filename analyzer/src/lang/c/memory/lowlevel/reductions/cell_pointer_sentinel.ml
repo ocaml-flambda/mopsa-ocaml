@@ -25,7 +25,7 @@ open Mopsa
 open Sig.Reduction.Eval
 open Universal.Ast
 open Ast
-open Zone
+
 
 module Reduction =
 struct
@@ -44,7 +44,9 @@ struct
 
     (* Reduce only when both domains did an evaluation *)
     OptionExt.apply2
-      (fun e1 e2 ->
+      (fun erw1 erw2 ->
+         let e1 = Rewrite.get_expr erw1 in
+         let e2 = Rewrite.get_expr erw2 in
          match ekind e1, ekind e2 with
          | _, E_constant (C_top _)
          | E_constant (C_int _), _
@@ -56,7 +58,7 @@ struct
          | E_var _, _
          | E_c_cast ({ ekind = E_var _ },_), _ ->
            let cond = mk_binop e1 O_eq e2 exp.erange in
-           man.post ~zone:Z_c_scalar (mk_assume cond exp.erange) flow >>= fun _ flow ->
+           man.post (mk_assume cond exp.erange) flow >>= fun _ flow ->
 
            if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
            then

@@ -22,7 +22,7 @@
 (** Control flow abstraction for Goto statements. *)
 
 open Mopsa
-open Sig.Abstraction.Stateless
+open Sig.Domain.Stateless
 open Ast
 open Common.Scope_update
 
@@ -66,13 +66,7 @@ struct
       let name = "c.iterators.goto"
     end)
 
-  (** Zoning definition *)
-  (** ================= *)
-
-  let interface = {
-    iexec = {provides = [Zone.Z_c]; uses = []};
-    ieval = {provides = []; uses = []};
-  }
+  let dependencies = []
 
   let alarms = []
 
@@ -81,7 +75,7 @@ struct
 
   let init _ _ flow =  flow
 
-  let exec zone stmt man flow =
+  let exec stmt man flow =
     match skind stmt with
     | S_c_goto (s,upd) ->
       (* Save TCur env in T_goto s token, then set T_cur to bottom. *)
@@ -144,7 +138,7 @@ struct
 
     | _ -> None
 
-  let eval zone man exp flow = None
+  let eval man exp flow = None
 
   let ask _ _ _  = None
 

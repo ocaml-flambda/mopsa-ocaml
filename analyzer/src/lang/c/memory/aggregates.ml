@@ -28,11 +28,9 @@
 *)
 
 open Mopsa
-open Sig.Abstraction.Stateless
+open Sig.Domain.Stateless
 open Universal.Ast
 open Ast
-open Zone
-open Universal.Zone
 open Stubs.Ast
 open Common.Base
 open Common.Points_to
@@ -45,28 +43,10 @@ struct
   (** ================ *)
 
   include GenStatelessDomainId(struct
-      let name = "c.desugar.aggregates"
+      let name = "c.memory.aggregates"
     end)
 
-  let interface = {
-    iexec = {
-      provides = [Z_c];
-      uses = [
-        Z_c_low_level;
-        Z_c;
-        Z_c_points_to
-      ]
-    };
-
-    ieval = {
-      provides = [Z_c, Z_c_low_level];
-      uses = [
-        Z_c, Z_c_low_level;
-        Z_c, Z_c_scalar;
-        Z_c, Z_u_num
-      ]
-    };
-  }
+  let dependencies = []
 
   let alarms = []
 
@@ -296,8 +276,7 @@ struct
 
   (** 𝕊⟦ type v = init; ⟧ *)
   let declare v init scope range man flow =
-    (* Forward the declaration to low-level domains but translate initializations into assignments *)
-    man.post ~zone:(Z_c_low_level) (mk_c_declaration v None scope range) flow >>$ fun () flow ->
+    man.post (mk_add_var v range) flow >>$ fun () flow ->
     let initl,fill = flatten_init init Z.zero v.vtyp range in
 
     (* Scalar variables can be handed directly by the underlying low-level domain *)
@@ -339,16 +318,6 @@ struct
           ) initl) range
         in
         man.post stmt flow
-
-
-
-  (** 𝕊⟦ lval = e; ⟧ when lval is scalar *)
-  let assign_scalar lval e range man flow =
-    man.eval ~zone:(Z_c,Z_c_low_level) lval flow >>$ fun lval flow ->
-    man.eval ~zone:(Z_c,Z_c_low_level) e flow >>$ fun e flow ->
-
-    let stmt = mk_assign lval e range in
-    man.post ~zone:Z_c_low_level stmt flow
 
 
   (** 𝕊⟦ lval = rval; ⟧ when lval is a record *)
@@ -400,7 +369,7 @@ struct
                 let lval'' = mk_c_subscript_access lval' (mk_z i range) range in
                 let rval'' = mk_c_subscript_access rval' (mk_z i range) range in
                 let stmt = mk_assign lval'' rval'' range in
-                Post.bind (man.post ~zone:Z_c stmt) acc |>
+                (acc >>$ fun () flow -> man.post stmt flow) |>
                 aux (Z.succ i)
             in
             aux Z.zero acc
@@ -411,88 +380,14 @@ struct
 
           | _ ->
             let stmt = mk_assign lval' rval' range in
-            Post.bind (man.post ~zone:Z_c stmt) acc
+            acc >>$ fun () flow -> man.post stmt flow
         ) (Post.return flow)
 
 
-  (** 𝕊⟦ ?e ⟧ *)
-  let assume e range man flow =
-    man.eval ~zone:(Z_c,Z_c_low_level) e flow >>$ fun e flow ->
-    let stmt = mk_assume e range in
-    man.post ~zone:Z_c_low_level stmt flow
-
-
-  (** 𝕊⟦ add base ⟧ *)
-  let add base range man flow =
-    man.eval ~zone:(Z_c,Z_c_low_level) base flow >>$ fun base flow ->
-    let stmt = mk_add base range in
-    man.post ~zone:Z_c_low_level stmt flow
-
-
-  (** 𝕊⟦ destroy base ⟧ *)
-  let invalidate base range man flow =
-    man.eval ~zone:(Z_c,Z_c_low_level) base flow >>$ fun base flow ->
-    let stmt = mk_invalidate base range in
-    man.post ~zone:Z_c_points_to stmt flow
-
-
-  (** 𝕊⟦ remove base ⟧ *)
-  let remove base range man flow =
-    man.eval ~zone:(Z_c,Z_c_low_level) base flow >>$ fun base flow ->
-    (* Remove contents *)
-    let stmt = mk_remove base range in
-    man.post ~zone:Z_c_low_level stmt flow >>$ fun () flow ->
-    (* Invalidate the address *)
-    let stmt = mk_invalidate base range in
-    man.post ~zone:Z_c_points_to stmt flow
-
-
-  (** 𝕊⟦ rename (e,e') ⟧ *)
-  let rename e e' range man flow =
-    man.eval ~zone:(Z_c,Z_c_low_level) e flow >>$ fun e flow ->
-    man.eval ~zone:(Z_c,Z_c_low_level) e' flow >>$ fun e' flow ->
-    (* Rename contents dimensions *)
-    let stmt = mk_rename e e' range in
-    man.post ~zone:Z_c_low_level stmt flow >>$ fun () flow -> 
-    (* Rename the address *)
-    man.post ~zone:Z_c_points_to stmt flow
-
-
-  let forget e range man flow =
-    man.eval ~zone:(Z_c,Z_c_low_level) e flow >>$ fun e flow ->
-    let stmt = mk_forget e range in
-    man.post ~zone:Z_c_low_level stmt flow
-
-
-  let expand e el range man flow =
-    man.eval ~zone:(Z_c,Z_c_low_level) e flow >>$ fun e flow ->
-    bind_list el (man.eval ~zone:(Z_c,Z_c_low_level)) flow >>$ fun el flow ->
-    let stmt = mk_expand e el range in
-    (* Expand contents *)
-    man.post ~zone:Z_c_low_level stmt flow >>$ fun () flow ->
-    (* Expand addresses *)
-    man.post ~zone:Z_c_points_to stmt flow
-
-
-  let fold e el range man flow =
-    man.eval ~zone:(Z_c,Z_c_low_level) e flow >>$ fun e flow ->
-    bind_list el (man.eval ~zone:(Z_c,Z_c_low_level)) flow >>$ fun el flow ->
-    let stmt = mk_fold e el range in
-    (* Fold contents *)
-    man.post ~zone:Z_c_low_level stmt flow >>$ fun () flow ->
-    (* Fold addresses *)
-    man.post ~zone:Z_c_points_to stmt flow
-
-
-  let exec zone stmt man flow =
+  let exec stmt man flow =
     match skind stmt with
     | S_c_declaration(v, init, scope) ->
       declare v init scope stmt.srange man flow |>
-      OptionExt.return
-
-    | S_assign(lval, e)
-    | S_expression { ekind = E_c_assign (lval, e) } when is_c_scalar_type lval.etyp ->
-      assign_scalar lval e stmt.srange man flow |>
       OptionExt.return
 
     | S_assign(lval, e)
@@ -500,199 +395,83 @@ struct
       assign_record lval e stmt.srange man flow |>
       OptionExt.return
 
-    | S_assume(e) ->
-      assume e stmt.srange man flow |>
-      OptionExt.return
-
-    | S_add e ->
-      add e stmt.srange man flow |>
-      OptionExt.return
-
-    | S_remove e ->
-      remove e stmt.srange man flow |>
-      OptionExt.return
-
-    | S_invalidate e ->
-      invalidate e stmt.srange man flow |>
-      OptionExt.return
-
-    | S_rename(e,e') ->
-      rename e e' stmt.srange man flow |>
-      OptionExt.return
-
-    | S_forget(e) ->
-      forget e stmt.srange man flow |>
-      OptionExt.return
-
-    | S_expand(e,el) ->
-      expand e el stmt.srange man flow |>
-      OptionExt.return
-
-    | S_fold(e,el) ->
-      fold e el stmt.srange man flow |>
-      OptionExt.return
-
-    | S_expression e when is_c_num_type e.etyp ->
-      Some (
-        man.eval ~zone:(Z_c,Z_u_num) e flow >>$ fun e flow ->
-        Post.return flow
-      )
-
-    | S_expression e when is_c_scalar_type e.etyp ->
-      Some (
-        man.eval ~zone:(Z_c,Z_c_scalar) e flow >>$ fun e flow ->
-        Post.return flow
-      )
-
-    | S_expression e when is_c_type e.etyp ->
-      Some (
-        man.eval ~zone:(Z_c,Z_c_low_level) e flow >>$ fun e flow ->
-        Post.return flow
-      )
-
-    | S_stub_requires e ->
-      Some (
-        man.eval ~zone:(Z_c,Z_c_low_level) e flow >>$ fun e flow ->
-        man.post ~zone:Z_c_low_level (mk_stub_requires e stmt.srange) flow
-      )
-
-
     | _ -> None
 
 
   (** {2 Abstract evaluations} *)
   (** ======================== *)
 
-  let array_subscript a i exp range man flow =
-    man.eval ~zone:(Z_c, Z_c_low_level) a flow |>
-    Eval.bind @@ fun a flow ->
-    man.eval ~zone:(Z_c, Z_c_low_level) i flow |> Eval.bind @@ fun i flow ->
-    let exp' = mk_lowlevel_subscript_access a i exp.etyp range in
-    Eval.singleton exp' flow
+  let array_subscript a i t range = mk_lowlevel_subscript_access a i t range
 
   (** 𝔼⟦ s.f ⟧ -> *(( typeof(s.f)* )(( char* )(&s) + alignof(s.f))) *)
-  let member_access s i f exp range man flow =
-    man.eval ~zone:(Z_c, Z_c_low_level) s flow |>
-    Eval.bind @@ fun s flow ->
-    let exp' = mk_lowlevel_member_access s i range in
-    Eval.singleton exp' flow
-
+  let member_access s i f range = mk_lowlevel_member_access s i range
 
   (** 𝔼⟦ p->f ⟧ -> *(( typeof(p->f)* )(( char* )p + alignof(p->f))) *)
-  let arrow_access p i f exp range man flow =
-    man.eval ~zone:(Z_c, Z_c_low_level) p flow |>
-    Eval.bind @@ fun p flow ->
-
+  let arrow_access p i f t range =
     let st = under_type p.etyp in
-    let t = etyp exp in
     let align = mk_int (align_byte st i) range in
+    mk_c_deref
+      (mk_c_cast
+         (mk_binop
+            (mk_c_cast p (pointer_type s8) range)
+            O_plus
+            align
+            range
+         )
+         (pointer_type t)
+         range
+      )
+      range
 
-    let exp' =
-      mk_c_deref
-        (mk_c_cast
-           (mk_binop
-              (mk_c_cast p (pointer_type s8) range)
-              O_plus
-              align
-              range
-           )
-           (pointer_type t)
-           range
-        )
-        range
-    in
-    Eval.singleton exp' flow
-
-
-  (** 𝔼⟦ &( *p ) ⟧ = p *)
-  let address_of_deref p range man flow =
-      man.eval ~zone:(Z_c, Z_c_low_level) p flow
   
-
   (** 𝔼⟦ &(a[i]) ⟧ = a + i *)
-  let address_of_array_subscript a i exp range man flow =
-      man.eval ~zone:(Z_c, Z_c_low_level) a flow |>
-      Eval.bind @@ fun a flow ->
-
-      man.eval ~zone:(Z_c, Z_c_low_level) i flow |>
-      Eval.bind @@ fun i flow ->
-
-      let exp' = { exp with ekind = E_binop(O_plus, a, i) } in
-      Eval.singleton exp' flow
+  let address_of_array_subscript a i t range = mk_binop a O_plus i ~etyp:t range
 
 
   (** 𝔼⟦ &(p->f) ⟧ = ( typeof(p->f)* )(( char* )p + alignof(p->f)) *)
-  let address_of_arrow_access p i f exp range man flow =
-    man.eval ~zone:(Z_c, Z_c_low_level) p flow |>
-    Eval.bind @@ fun p flow ->
-
+  let address_of_arrow_access p i f t range =
     let st = under_type p.etyp in
-    let t = etyp exp in
     let align = mk_int (align_byte st i) range in
+    mk_c_cast
+      (mk_binop
+         (mk_c_cast p (pointer_type s8) range)
+         O_plus
+         align
+         range
+      )
+      (pointer_type t)
+      range
 
-    let exp' =
-      mk_c_cast
-        (mk_binop
-           (mk_c_cast p (pointer_type s8) range)
-           O_plus
-           align
-           range
-        )
-        (pointer_type t)
-        range
-    in
-    Eval.singleton exp' flow
-
-
-  let eval zone exp man flow =
+  let eval exp man flow =
     match ekind exp with
     | E_c_array_subscript(a, i) ->
-      array_subscript a i exp exp.erange man flow |>
+      man.eval (array_subscript a i exp.etyp exp.erange) flow |>
+      Rewrite.return_eval |>
       OptionExt.return
 
     | E_c_member_access (s, i, f) ->
-      member_access s i f exp exp.erange man flow |>
+      man.eval (member_access s i f exp.erange) flow |>
+      Rewrite.return_eval |>
       OptionExt.return
 
     | E_c_arrow_access(p, i, f) ->
-      arrow_access p i f exp exp.erange man flow |>
+      man.eval (arrow_access p i f exp.etyp exp.erange) flow |>
+      Rewrite.return_eval |>
       OptionExt.return
 
     | E_c_address_of { ekind = E_c_deref p } ->
-      address_of_deref p exp.erange man flow |>
+      man.eval p flow |>
+      Rewrite.return_eval |>
       OptionExt.return
 
     | E_c_address_of { ekind = E_c_array_subscript(a,i) } ->
-      address_of_array_subscript a i exp exp.erange man flow |>
+      man.eval (address_of_array_subscript a i exp.etyp exp.erange) flow |>
+      Rewrite.return_eval |>
       OptionExt.return
 
     | E_c_address_of { ekind = E_c_arrow_access(p, i, f) } ->
-      address_of_arrow_access p i f exp exp.erange man flow |>
-      OptionExt.return
-
-    | E_c_assign(lval, rval) ->
-      man.eval rval ~zone:(Z_c, Z_c_low_level) flow >>$? fun rval flow ->
-      man.eval lval ~zone:(Z_c, Z_c_low_level) flow >>$? fun lval flow ->
-      let flow = man.exec ~zone:Z_c_low_level (mk_assign lval rval exp.erange) flow in
-      Eval.singleton rval flow |>
-      OptionExt.return
-
-    | E_c_statement {skind = S_block (l,local_vars)} ->
-      begin
-        match List.rev l with
-        | {skind = S_expression e}::q ->
-          let q' = List.rev q in
-          let stmt' = mk_block q' (erange exp) in
-          let flow' = man.exec stmt' flow in
-          man.eval ~zone:(Z_c, Z_c_low_level) e flow' |>
-          Eval.add_cleaners (List.map (fun v -> mk_remove_var v exp.erange) local_vars) |>
-          OptionExt.return
-
-        | _ -> panic "E_c_statement %a not supported" pp_expr exp
-      end
-
-    | E_c_statement {skind = S_expression e} ->
-      man.eval ~zone:(Z_c, Z_c_low_level) e flow |>
+      man.eval (address_of_arrow_access p i f exp.etyp exp.erange) flow |>
+      Rewrite.return_eval |>
       OptionExt.return
 
     | _ -> None

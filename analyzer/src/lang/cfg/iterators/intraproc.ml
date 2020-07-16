@@ -22,9 +22,8 @@
 (** General intraprocedural iterator on Control Flow Graphs. *)
 
 open Mopsa
-open Sig.Abstraction.Stateless
+open Framework.Abstraction.Sig.Domain.Stateless
 open Universal.Ast
-open Universal.Zone
 open Ast
 
 
@@ -63,10 +62,7 @@ struct
     end)
 
 
-  let interface = {
-    iexec = { provides = [Z_u]; uses = [] };
-    ieval = { provides = []; uses = [] };
-  }
+  let dependencies = []
 
   let alarms = []
 
@@ -295,7 +291,7 @@ struct
     Flow.join man.lattice tflow fflow
 
     
-  let exec zone stmt man flow =
+  let exec stmt man flow =
     match skind stmt with
 
     | S_cfg cfg ->
@@ -311,7 +307,7 @@ struct
        (* S_expression, S_block and S_print are handled by universal's intraproc *)
        None
    
-  let eval zone exp man flow = None
+  let eval exp man flow = None
 
   let ask query man flow = None
 

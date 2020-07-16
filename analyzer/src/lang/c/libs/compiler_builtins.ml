@@ -24,10 +24,9 @@
 
 
 open Mopsa
-open Sig.Abstraction.Stateless
+open Sig.Domain.Stateless
 open Universal.Ast
 open Ast
-open Zone
 
 
 module Domain =
@@ -41,19 +40,8 @@ struct
       let name = "c.libs.compiler"
     end)
 
-  (** Zoning definition *)
-  (** ================= *)
 
-  let interface = {
-    iexec = {
-      provides = [];
-      uses = []
-    };
-    ieval = {
-      provides = [Z_c, Z_c_low_level];
-      uses = [Z_c, Z_c_low_level]
-    }
-  }
+  let dependencies = []
 
   let alarms = []
   
@@ -62,13 +50,13 @@ struct
 
   let init _ _ flow =  flow
 
-  let exec zone stmt man flow = None
+  let exec stmt man flow = None
 
 
   (** {2 Evaluation entry point} *)
   (** ========================== *)
 
-  let eval zone exp man flow =
+  let eval exp man flow =
     match ekind exp with
 
     (* 𝔼⟦ __builtin_constant_p(e) ⟧ *)
@@ -78,14 +66,15 @@ struct
          to be constant at compile time *)
       let ret =
         match remove_casts e |> ekind with
-        | E_constant _ -> mk_one ~typ:s32 exp.erange
-        | _ -> mk_z_interval Z.zero Z.one ~typ:s32 exp.erange
+        | E_constant _ -> mk_one exp.erange
+        | _ -> mk_z_interval Z.zero Z.one exp.erange
       in
-      Eval.singleton ret flow |>
+      Rewrite.return_singleton ret flow |>
       OptionExt.return
 
     | E_c_builtin_call("__builtin_expect", [e;v]) ->
-      man.eval e ~zone:(Z_c,Z_c_low_level) flow |>
+      man.eval e flow |>
+      Rewrite.return_eval |>
       OptionExt.return
 
 

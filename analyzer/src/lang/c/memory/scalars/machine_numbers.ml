@@ -22,12 +22,10 @@
 (** Machine representation of C integers and floats *)
 
 open Mopsa
-open Sig.Abstraction.Stateless
+open Sig.Domain.Stateless
 open Universal.Ast
 open Stubs.Ast
 open Ast
-open Zone
-open Universal.Zone
 open Common.Alarms
 open Common.Points_to
 module Itv = Universal.Numeric.Values.Intervals.Integer.Value
@@ -44,26 +42,8 @@ struct
       let name = "c.memory.scalars.machine_numbers"
     end)
 
-  (** Zoning definition *)
-  (** ================= *)
-
-  let interface = {
-    iexec = {
-      provides = [Z_c_scalar];
-      uses = [
-        Z_c_scalar;
-        Z_u_num
-      ];
-    };
-    ieval = {
-      provides = [Z_c_scalar, Z_u_num];
-      uses = [
-        Z_c_scalar, Z_u_num;
-        Z_c_scalar, Z_c_points_to;
-        Z_c, Z_u_num
-      ];
-    }
-  }
+  let numeric = mk_semantic "U/Numeric" ~domain:name
+  let dependencies = [ numeric ]
 
   let alarms = [ A_c_integer_overflow;
                  A_c_divide_by_zero;
@@ -250,7 +230,7 @@ struct
           let flow = raise_c_divide_by_zero_alarm denominator range man fflow in
           Eval.empty_singleton flow
         )
-      ~zone:Z_u_num man flow
+      ~semantic:numeric man flow
 
 
   (** Check that bit-shifts are safe. Two conditions are verified:
@@ -275,7 +255,7 @@ struct
           let flow' = raise_c_invalid_shift_alarm exp n man flow fflow in
           Eval.empty_singleton flow'
         )
-      ~zone:Z_u_num man flow
+      ~semantic:numeric man flow
 
 
   let rec is_compare_expr e =
@@ -313,60 +293,61 @@ struct
   (** ================== *)
 
 
-  let eval zone exp man flow =
+  let eval exp man flow =
     let range = erange exp in
     match ekind exp with
     (* 𝔼⟦ n ⟧ *)
     | E_constant(C_int _ | C_int_interval _ | C_float _ | C_float_interval _) ->
-      Eval.singleton {exp with etyp = to_num_type exp.etyp} flow
+      Rewrite.return_singleton {exp with etyp = to_num_type exp.etyp} flow
       |> OptionExt.return
 
     (* 𝔼⟦ 'c' ⟧ *)
     | E_constant(C_c_character (c, _)) ->
-      Eval.singleton {exp with ekind = E_constant (C_int c); etyp = to_num_type exp.etyp} flow
+      Rewrite.return_singleton {exp with ekind = E_constant (C_int c); etyp = to_num_type exp.etyp} flow
       |> OptionExt.return
 
     (* 𝔼⟦ ⊤int ⟧ *)
     | E_constant(C_top t) when is_c_int_type t ->
       let l, u = rangeof t in
       let exp' = mk_z_interval l u ~typ:(to_num_type t) exp.erange in
-      Eval.singleton exp' flow |>
+      Rewrite.return_singleton exp' flow |>
       OptionExt.return
 
     (* 𝔼⟦ ⊤float ⟧ *)
     | E_constant(C_top t) when is_c_float_type t ->
       let exp' = mk_top (to_num_type t) exp.erange in
-      Eval.singleton exp' flow |>
+      Rewrite.return_singleton exp' flow |>
       OptionExt.return
 
     (* 𝔼⟦ var ⟧ *)
     | E_var (v,_) when is_c_num_type v.vtyp ->
-      Eval.singleton (mk_num_var_expr exp) flow |>
+      Rewrite.return_singleton (mk_num_var_expr exp) flow |>
       OptionExt.return
 
     (* 𝔼⟦ ⋄ e ⟧, ⋄ ∈ {+, -} and type(t) = int *)
     | E_unop(op, e) when is_c_overflow_op op &&
                          exp |> etyp |> is_c_int_type
       ->
-      man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e flow ->
+      man.eval e flow >>$? fun e flow ->
       let exp' = { exp with
                    ekind = E_unop(op, e);
                    etyp = to_num_type exp.etyp } in
       check_overflow exp exp' range man flow |>
+      Rewrite.return_eval |>
       OptionExt.return
 
     (* 𝔼⟦ ⋄ e ⟧, ⋄ ∈ {+, -} and type(t) = int *)
     | E_unop(O_wrap(min,max) as op, e) when exp |> etyp |> is_c_int_type ->
-      man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e flow ->
+      man.eval e flow >>$? fun e flow ->
       let exp' = { exp with
                    ekind = E_unop(op, e);
                    etyp = to_num_type exp.etyp } in
-      Eval.singleton exp' flow |>
+      Rewrite.return_singleton exp' flow |>
       OptionExt.return
 
     (* 𝔼⟦ ! e ⟧ *)
     | E_unop(O_log_not, e) when exp |> etyp |> is_c_num_type ->
-      man.eval ~zone:(Z_c_scalar,Z_u_num) e flow >>$? fun e flow ->
+      man.eval e flow >>$? fun e flow ->
       let exp' =
         if is_compare_expr e then
           { exp with
@@ -375,16 +356,16 @@ struct
         else
           mk_binop e O_eq (mk_zero ~typ:e.etyp exp.erange) exp.erange ~etyp:T_bool
       in
-      Eval.singleton exp' flow |>
+      Rewrite.return_singleton exp' flow |>
       OptionExt.return
 
     (* 𝔼⟦ ⋄ e ⟧ *)
     | E_unop(op, e) when exp |> etyp |> is_c_num_type ->
-      man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e flow ->
+      man.eval e flow >>$? fun e flow ->
       let exp' = { exp with
                    ekind = E_unop(op, e);
                    etyp = to_num_type exp.etyp } in
-      Eval.singleton exp' flow |>
+      Rewrite.return_singleton exp' flow |>
       OptionExt.return
 
 
@@ -392,111 +373,118 @@ struct
     | E_binop(op, e, e') when op |> is_c_div_op &&
                               exp |> etyp |> is_c_int_type
       ->
-      man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e flow ->
-      man.eval ~zone:(Z_c_scalar, Z_u_num) e' flow >>$? fun e' flow ->
+      man.eval e flow >>$? fun e flow ->
+      man.eval e' flow >>$? fun e' flow ->
       check_division op e e' range man flow |>
+      Rewrite.return_eval |>
       OptionExt.return
 
     (* 𝔼⟦ e ⋄ e' ⟧, ⋄ ∈ {>>, <<} *)
     | E_binop(op, e, e') when op |> is_c_shift_op &&
                               exp |> etyp |> is_c_int_type
       ->
-      man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e flow ->
-      man.eval ~zone:(Z_c_scalar, Z_u_num) e' flow >>$? fun e' flow ->
+      man.eval e flow >>$? fun e flow ->
+      man.eval e' flow >>$? fun e' flow ->
       check_shift exp e e' range man flow |>
+      Rewrite.return_eval |>
       OptionExt.return
 
     (* 𝔼⟦ e ⋄ e' ⟧, ⋄ ∈ {+, -, *} and type(exp) = int *)
     | E_binop(op, e, e') when is_c_overflow_op op &&
                               exp |> etyp |> is_c_int_type
       ->
-      man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e flow ->
-      man.eval ~zone:(Z_c_scalar, Z_u_num) e' flow >>$? fun e' flow ->
+      man.eval e flow >>$? fun e flow ->
+      man.eval e' flow >>$? fun e' flow ->
       let exp' = { exp with
                    ekind = E_binop(op, e, e');
                    etyp = to_num_type exp.etyp }
       in
       check_overflow exp exp' range man flow |>
+      Rewrite.return_eval |>
       OptionExt.return
 
     (* 𝔼⟦ e ⋄ e' ⟧ *)
     | E_binop(op, e, e') when exp |> etyp |> is_c_num_type ->
-      man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e flow ->
-      man.eval ~zone:(Z_c_scalar, Z_u_num) e' flow >>$? fun e' flow ->
+      man.eval e flow >>$? fun e flow ->
+      man.eval e' flow >>$? fun e' flow ->
       let exp' = { exp with
                    ekind = E_binop(op, e, e');
                    etyp = to_num_type exp.etyp }
       in
-      Eval.singleton exp' flow |>
+      Rewrite.return_singleton exp' flow |>
       OptionExt.return
 
     (* 𝔼⟦ (float)int ⟧ *)
     | E_c_cast(e, _) when exp |> etyp |> is_c_float_type &&
                           e   |> etyp |> is_c_int_type ->
-      man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e flow ->
+      man.eval e flow >>$? fun e flow ->
       let exp' =
         mk_unop
           O_cast
           e ~etyp:(to_num_type exp.etyp) exp.erange
       in
-      Eval.singleton exp' flow |>
+      Rewrite.return_singleton exp' flow |>
       OptionExt.return
 
     (* 𝔼⟦ (int)float ⟧ *)
     | E_c_cast(e, _) when exp |> etyp |> is_c_int_type &&
                           e   |> etyp |> is_c_float_type ->
-      man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e flow ->
+      man.eval e flow >>$? fun e flow ->
       let exp' =
         mk_unop
           O_cast
           e ~etyp:(to_num_type exp.etyp) exp.erange
       in
-      Eval.singleton exp' flow |>
+      Rewrite.return_singleton exp' flow |>
       OptionExt.return
 
     (* 𝔼⟦ (int)ptr ⟧ *)
     | E_c_cast(p, _) when exp |> etyp |> is_c_int_type &&
                           p   |> etyp |> is_c_pointer_type ->
-      man.eval ~zone:(Z_c_scalar, Z_c_points_to) p flow >>$? fun pt flow ->
+      resolve_pointer p man flow >>$? fun pt flow ->
       let exp' =
-        match ekind pt with
-        | E_c_points_to P_null -> mk_zero exp.erange
+        match pt with
+        | P_null -> mk_zero exp.erange
         | _ ->
           let l,u = rangeof exp.etyp in
           mk_z_interval l u exp.erange
       in
-      Eval.singleton exp' flow |>
+      Rewrite.return_singleton exp' flow |>
       OptionExt.return
 
     (* 𝔼⟦ (int)int ⟧ *)
     | E_c_cast(e, _) when exp |> etyp |> is_c_int_type &&
                           e   |> etyp |> is_c_int_type
       ->
-      man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e' flow ->
+      man.eval e flow >>$? fun e' flow ->
       check_overflow exp e' range man flow |>
+      Rewrite.return_eval |>
       OptionExt.return
 
     (* 𝔼⟦ (int)num ⟧ *)
     | E_c_cast(e, _) when exp |> etyp |> is_c_int_type &&
                           is_numeric_type e.etyp ->
-      man.eval ~zone:(Z_c_scalar, Z_u_num) e flow |>
+      man.eval e flow |>
+      Rewrite.return_eval |>
       OptionExt.return
 
     (* 𝔼⟦ (float)float ⟧ *)
     | E_c_cast(e, _) when exp |> etyp |> is_c_float_type &&
                           e   |> etyp |> is_c_float_type ->
-      man.eval ~zone:(Z_c_scalar, Z_u_num) e flow |>
+      man.eval e flow |>
+      Rewrite.return_eval |>
       OptionExt.return
 
     (* 𝔼⟦ valid_float(e) ⟧ *)
     | Stubs.Ast.E_stub_builtin_call(VALID_FLOAT as f, e) ->
-      man.eval ~zone:(Z_c_scalar,Z_u_num) e flow >>$? fun e flow ->
-      Eval.singleton (mk_expr (E_stub_builtin_call(f, e)) ~etyp:exp.etyp exp.erange) flow |>
+      man.eval e flow >>$? fun e flow ->
+      Rewrite.return_singleton (mk_expr (E_stub_builtin_call(f, e)) ~etyp:exp.etyp exp.erange) flow |>
       OptionExt.return
 
     (* 𝔼⟦ ∃v ⟧ *)
     | Stubs.Ast.E_stub_quantified(_,v,S_interval _) ->
-      man.eval (mk_var v exp.erange) ~zone:(Z_c,Z_u_num) flow |>
+      man.eval (mk_var v exp.erange) flow |>
+      Rewrite.return_eval |>
       OptionExt.return
 
     | _ ->
@@ -507,7 +495,7 @@ struct
     if is_c_int_type t then
       let l,u = rangeof t in
       let vv = match ekind vv with E_var (vv, _) -> vv | _ -> assert false in
-      Framework.Combiners.Value.Nonrel.add_var_bounds_flow vv (C_int_interval (l,u)) flow
+      Framework.Abstraction.Combiners.Value.Nonrel.add_var_bounds_flow vv (C_int_interval (l,u)) flow
     else
       flow
 
@@ -535,9 +523,9 @@ struct
 
       | _, Some (C_init_expr e) ->
         if not (is_compare_expr e) then
-          man.eval ~zone:(Z_c_scalar,Z_u_num) e flow
+          man.eval e flow
         else
-          assume e ~zone:Z_c_scalar
+          assume e
             ~fthen:(fun flow ->
                 Eval.singleton (mk_one range) flow
               )
@@ -550,12 +538,12 @@ struct
     in
 
     init' >>$ fun init' flow ->
-    man.post ~zone:Z_u_num (mk_add vv range) flow >>= fun _ flow ->
+    man.post ~semantic:numeric (mk_add vv range) flow >>= fun _ flow ->
     add_var_bounds vv v.vtyp flow |>
-    man.post ~zone:Z_u_num (mk_assign vv init' range)
+    man.post ~semantic:numeric (mk_assign vv init' range)
 
 
-  let exec zone stmt man flow =
+  let exec stmt man flow =
     match skind stmt with
     | S_c_declaration (v,init,scope) when is_c_num_type v.vtyp ->
       declare_var v init scope stmt.srange man flow |>
@@ -564,35 +552,35 @@ struct
     | S_assign(lval, rval) when etyp lval |> is_c_num_type &&
                                 is_compare_expr rval ->
       let range = stmt.srange in
-      assume rval ~zone:Z_c_scalar
+      assume rval
         ~fthen:(fun flow ->
-            man.post ~zone:Z_c_scalar (mk_assign lval (mk_one ~typ:rval.etyp range) range) flow
+            man.post (mk_assign lval (mk_one ~typ:rval.etyp range) range) flow
           )
         ~felse:(fun flow ->
-            man.post ~zone:Z_c_scalar (mk_assign lval (mk_zero ~typ:rval.etyp range) range) flow
+            man.post (mk_assign lval (mk_zero ~typ:rval.etyp range) range) flow
           )
         man flow |>
       OptionExt.return
 
     | S_assign(lval, rval) when etyp lval |> is_c_num_type ->
-      man.eval ~zone:(Z_c_scalar, Z_u_num) lval flow >>$? fun lval' flow ->
-      man.eval ~zone:(Z_c_scalar, Z_u_num) rval flow >>$? fun rval' flow ->
-      man.post ~zone:Z_u_num (mk_assign lval' rval' stmt.srange) flow |>
+      man.eval lval flow >>$? fun lval' flow ->
+      man.eval rval flow >>$? fun rval' flow ->
+      man.post ~semantic:numeric (mk_assign lval' rval' stmt.srange) flow |>
       OptionExt.return
 
     | S_add v when is_c_num_type v.etyp ->
       let vv = mk_num_var_expr v in
       add_var_bounds vv v.etyp flow |>
-      man.post ~zone:Z_u_num (mk_add vv stmt.srange) |>
+      man.post ~semantic:numeric (mk_add vv stmt.srange) |>
       OptionExt.return
 
     | S_remove v when is_c_num_type v.etyp ->
       let vv = mk_num_var_expr v in
-      man.post ~zone:Z_u_num (mk_remove vv stmt.srange) flow |>
+      man.post ~semantic:numeric (mk_remove vv stmt.srange) flow |>
       Post.bind (fun flow ->
           if is_c_int_type v.etyp then
             let vv = match ekind vv with E_var (vv,_) -> vv | _ -> assert false in
-            Framework.Combiners.Value.Nonrel.remove_var_bounds_flow vv flow |>
+            Framework.Abstraction.Combiners.Value.Nonrel.remove_var_bounds_flow vv flow |>
             Post.return
           else
             Post.return flow
@@ -604,34 +592,34 @@ struct
       ->
       let vv1 = mk_num_var_expr v1 in
       let vv2 = mk_num_var_expr v2 in
-      man.post ~zone:Z_u_num (mk_rename vv1 vv2 stmt.srange) flow |>
+      man.post ~semantic:numeric (mk_rename vv1 vv2 stmt.srange) flow |>
       OptionExt.return
 
 
     | S_assume(e) when is_c_num_type e.etyp || is_numeric_type e.etyp || e.etyp = T_any ->
-      man.eval ~zone:(Z_c_scalar, Z_u_num) e flow >>$? fun e' flow ->
-      man.post ~zone:Z_u_num (mk_assume (to_compare_expr e') stmt.srange) flow |>
+      man.eval e flow >>$? fun e' flow ->
+      man.post ~semantic:numeric (mk_assume (to_compare_expr e') stmt.srange) flow |>
       OptionExt.return
 
     | S_expand(e,el) when is_c_num_type e.etyp &&
                           List.for_all (fun ee -> is_c_num_type ee.etyp) el
       ->
-      man.eval e ~zone:(Z_c_scalar,Z_u_num) flow >>$? fun e' flow ->
-      bind_list el (man.eval ~zone:(Z_c_scalar,Z_u_num)) flow >>$? fun el' flow ->
-      man.post (mk_expand e' el' stmt.srange) ~zone:Z_u_num flow |>
+      man.eval e flow >>$? fun e' flow ->
+      bind_list el (fun e flow -> man.eval e flow) flow >>$? fun el' flow ->
+      man.post (mk_expand e' el' stmt.srange) ~semantic:numeric flow |>
       OptionExt.return
 
     | S_fold(e,el) when is_c_num_type e.etyp &&
                           List.for_all (fun ee -> is_c_num_type ee.etyp) el
       ->
-      man.eval e ~zone:(Z_c_scalar,Z_u_num) flow >>$? fun e' flow ->
-      bind_list el (man.eval ~zone:(Z_c_scalar,Z_u_num)) flow >>$? fun el' flow ->
-      man.post (mk_fold e' el' stmt.srange) ~zone:Z_u_num flow |>
+      man.eval e flow >>$? fun e' flow ->
+      bind_list el (fun e flow -> man.eval e flow) flow >>$? fun el' flow ->
+      man.post (mk_fold e' el' stmt.srange) ~semantic:numeric flow |>
       OptionExt.return
 
     | S_forget v when is_c_num_type v.etyp ->
       let vv = mk_num_var_expr v in
-      man.post (mk_forget vv stmt.srange) ~zone:Z_u_num flow |>
+      man.post (mk_forget vv stmt.srange) ~semantic:numeric flow |>
       OptionExt.return
 
     | _ -> None

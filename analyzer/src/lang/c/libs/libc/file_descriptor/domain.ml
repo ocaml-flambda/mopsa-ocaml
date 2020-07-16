@@ -63,12 +63,10 @@
 
 
 open Mopsa
-open Sig.Abstraction.Domain
+open Sig.Domain.Standard
 open Universal.Ast
 open Stubs.Ast
 open Ast
-open Universal.Zone
-open Zone
 open Common.Points_to
 open Common.Base
 module Itv = Universal.Numeric.Values.Intervals.Integer.Value
@@ -154,25 +152,9 @@ struct
       let name = "c.libs.clib.file_descriptor"
     end)
 
+  let numeric = mk_semantic "U/Numeric" ~domain:name
 
-  (** Zoning definition *)
-  (** ================= *)
-
-  let interface = {
-    iexec = {
-      provides = [Z_c];
-      uses = []
-    };
-
-    ieval = {
-      provides = [Z_c, Z_c_low_level; Z_c_low_level, Z_c_scalar];
-      uses = [
-        Z_c, Z_c_points_to;
-        Z_c, Universal.Zone.Z_u_num;
-        Universal.Zone.Z_u_heap, Z_any
-      ]
-    }
-  }
+  let dependencies = [ numeric ]
 
   let alarms = []
 
@@ -284,7 +266,7 @@ struct
                    }
                  ) man flow
                in
-               Eval.singleton (mk_zero ~typ:s8 range) flow
+               Eval.singleton (mk_zero range) flow
             )
           )
           (let rec aux k = if k = window then [] else k :: aux (k + 1) in aux 0)
@@ -297,11 +279,11 @@ struct
                  { a with others = Table.insert_at addr itv a.others }
                ) man flow
              in
-             Eval.singleton (mk_zero ~typ:s8 range) flow
+             Eval.singleton (mk_zero range) flow
           )
         ]
       )
-      ~zone:Z_u_num
+      ~semantic:numeric
       man flow
 
 
@@ -318,7 +300,7 @@ struct
         let addrs = Slot.get hd in
         if addrs = [] then find_addr_first (j + 1) tl flow
         else
-          assume (mk_binop i O_eq (mk_int j range) range) ~zone:Universal.Zone.Z_u_num
+          assume (mk_binop i O_eq (mk_int j range) range) ~semantic:numeric
             ~fthen:(fun flow ->
                 List.map (fun addr -> Eval.singleton (mk_addr addr range) flow) addrs |>
                 Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow)
@@ -411,7 +393,7 @@ struct
   (** Computation of post-conditions *)
   (** ============================== *)
 
-  let exec zone stmt man flow  =
+  let exec stmt man flow  =
     match skind stmt with
     | S_remove({ekind = E_addr ({ addr_kind = A_stub_resource "FileRes"} as addr)}) ->
       remove addr man flow |>
@@ -424,55 +406,58 @@ struct
   (** Evaluation of expressions *)
   (** ========================= *)
 
-  let eval zone exp man flow =
+  let eval exp man flow =
     match ekind exp with
     (* 𝔼⟦ _mopsa_register_file_resource(f) ⟧ *)
     | E_c_builtin_call("_mopsa_register_file_resource", [f]) ->
       begin
-        man.eval ~zone:(Z_c,Z_c_points_to) f flow >>$ fun p flow ->
-        match ekind p with
-        | E_c_points_to (P_block ({ base_kind = Addr addr; base_valid = true; },_,_)) ->
+        resolve_pointer f man flow >>$ fun p flow ->
+        match p with
+        | P_block ({ base_kind = Addr addr; base_valid = true; },_,_) ->
           insert_addr addr exp.erange man flow
 
         | _ ->
-          Eval.singleton (mk_int (-1) ~typ:s8 exp.erange) flow
+          Eval.singleton (mk_int (-1) exp.erange) flow
       end
+      |> Rewrite.return_eval
       |> OptionExt.return
 
 
     (* 𝔼⟦ _mopsa_register_file_resource_at(f) ⟧ *)
     | E_c_builtin_call("_mopsa_register_file_resource_at", [f; fd]) ->
       begin
-        man.eval ~zone:(Z_c,Z_c_points_to) f flow >>$ fun p flow ->
-        man.eval ~zone:(Z_c,Z_u_num) fd flow >>$ fun fd flow ->
-        match ekind p with
-        | E_c_points_to (P_block({ base_kind = Addr addr; base_valid = true; },_,_)) ->
+        resolve_pointer f man flow >>$ fun p flow ->
+        man.eval fd flow >>$ fun fd flow ->
+        match p with
+        | P_block({ base_kind = Addr addr; base_valid = true; },_,_) ->
           insert_addr_at addr fd exp.erange man flow
 
         | _ ->
-          Eval.singleton (mk_int (-1) ~typ:s8 exp.erange) flow
+          Eval.singleton (mk_int (-1) exp.erange) flow
       end
+      |> Rewrite.return_eval
       |> OptionExt.return
 
 
     (* 𝔼⟦ _mopsa_find_file_resource(fd) ⟧ *)
     | E_c_builtin_call("_mopsa_find_file_resource", [fd]) ->
-      man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) fd flow >>$? fun fd flow ->
-      find_addr fd exp.erange man flow |>
-      OptionExt.return
+      man.eval fd flow >>$? fun fd flow ->
+      find_addr fd exp.erange man flow
+      |> Rewrite.return_eval
+      |> OptionExt.return
 
 
     (* 𝔼⟦ n in FileDescriptor ⟧ *)
     | E_stub_resource_mem(n, "FileDescriptor") ->
-      man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) n flow >>$? fun n flow ->
+      man.eval n flow >>$? fun n flow ->
       find_addr n exp.erange man flow >>$? fun addr flow ->
       let exp' =
         match ekind addr with
-        | E_addr _ -> mk_one ~typ:u8 exp.erange
-        | _ -> mk_zero ~typ:u8 exp.erange
+        | E_addr _ -> mk_one exp.erange
+        | _        -> mk_zero exp.erange
       in
 
-      Eval.singleton exp' flow |>
+      Rewrite.return_singleton exp' flow |>
       OptionExt.return
 
 
