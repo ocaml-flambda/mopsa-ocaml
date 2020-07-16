@@ -551,13 +551,14 @@ struct
 
     | S_assign(lval, rval) when etyp lval |> is_c_num_type &&
                                 is_compare_expr rval ->
+      man.eval lval flow >>$? fun lval flow ->
       let range = stmt.srange in
       assume rval
         ~fthen:(fun flow ->
-            man.post (mk_assign lval (mk_one ~typ:rval.etyp range) range) flow
+            man.post ~semantic:numeric (mk_assign lval (mk_one range) range) flow
           )
         ~felse:(fun flow ->
-            man.post (mk_assign lval (mk_zero ~typ:rval.etyp range) range) flow
+            man.post ~semantic:numeric (mk_assign lval (mk_zero range) range) flow
           )
         man flow |>
       OptionExt.return
