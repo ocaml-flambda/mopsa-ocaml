@@ -384,6 +384,12 @@ struct
         ) (Post.return flow)
 
 
+  let assign_array a i t e r range man flow =
+    let lval = mk_lowlevel_subscript_access a i t r in
+    let stmt = mk_assign lval e range in
+    man.post stmt flow
+
+
   let exec stmt man flow =
     match skind stmt with
     | S_c_declaration(v, init, scope) ->
@@ -393,6 +399,11 @@ struct
     | S_assign(lval, e)
     | S_expression { ekind = E_c_assign (lval, e) } when is_c_record_type lval.etyp ->
       assign_record lval e stmt.srange man flow |>
+      OptionExt.return
+
+    | S_assign({ekind = E_c_array_subscript(a,i); etyp = t; erange = range}, e)
+    | S_expression { ekind = E_c_assign ({ekind = E_c_array_subscript(a,i); etyp = t; erange = range}, e) } ->
+      assign_array a i t e range stmt.srange man flow |>
       OptionExt.return
 
     | _ -> None
