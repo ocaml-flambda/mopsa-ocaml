@@ -719,7 +719,7 @@ let () =
           fprintf fmt "@[<v 2>/*$$$@,%a@]*/"
             pp_sections stub.stub_directive_body
 
-        | S_stub_free e -> fprintf fmt "free(%a);" pp_expr e
+        | S_stub_free e -> fprintf fmt "stub-free(%a);" pp_expr e
 
         | S_stub_assigns assigns ->
           fprintf fmt "assigns  : %a%a;"

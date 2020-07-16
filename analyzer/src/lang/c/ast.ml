@@ -841,6 +841,7 @@ let is_c_type = function
   | T_c_record  _
   | T_c_enum _
   | T_c_qualified _ -> true
+  | T_addr -> true (* XXX is it safe to consider heap addresses as C objects? *)
   | _ -> false
 
 let is_c_function_parameter v =
