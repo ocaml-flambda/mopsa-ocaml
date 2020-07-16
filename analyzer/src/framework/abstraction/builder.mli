@@ -19,37 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
+open Json.Syntax
+open Sig.Combiner.Stacked
 
-(** Signature of functors of stacked domains *)
-
-open Domain.Stacked
-
-(*==========================================================================*)
-(**                           {1 Signature}                                 *)
-(*==========================================================================*)
-
-module type STACKED_FUNCTOR =
-sig
-  val name : string
-  module Functor : functor(D:STACKED)-> STACKED
-end
-
-
-
-(*==========================================================================*)
-(**                          {1 Registration}                               *)
-(*==========================================================================*)
-
-val register_stacked_functor : (module STACKED_FUNCTOR) -> unit
-(** Register a new functor of stacked domains *)
-
-
-val find_stacked_functor : string -> (module STACKED_FUNCTOR)
-(** Find a stacked functor by its name. Raise [Not_found] if no functor is found *)
-
-val mem_stacked_functor : string -> bool
-(** [mem_stacked_functor name] checks whether a stacked functor with name
-    [name] is registered *)
- 
-val stacked_functor_names : unit -> string list
-(** Return the names of registered stacked functor *) 
+val from_json : domain -> (module STACKED_COMBINER)

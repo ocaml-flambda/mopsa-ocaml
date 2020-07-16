@@ -20,36 +20,37 @@
 (****************************************************************************)
 
 
-(** Signature of functors of value domains *)
+(** Semantic routes *)
 
-open Domain.Value
+open Semantic
 
-(*==========================================================================*)
-(**                           {1 Signature}                                 *)
-(*==========================================================================*)
+module Map =
+  MapExt.Make
+    (struct
+      type t = semantic
+      let compare = compare_semantic
+    end)
 
-module type VALUE_FUNCTOR =
-sig
-  val name : string
-  module Functor : functor(D:VALUE) -> VALUE
-end
+type domain = string
 
+type wirings = domain list Map.t
 
+let empty_wirings = Map.empty
 
-(*==========================================================================*)
-(**                          {1 Registration}                               *)
-(*==========================================================================*)
+let find_wirings semantic map = Map.find semantic map
 
-val register_value_functor : (module VALUE_FUNCTOR) -> unit
-(** Register a new functor of value domains *)
+let add_wiring semantic domain map =
+  let old = try Map.find semantic map with Not_found -> [] in
+  Map.add semantic (domain :: old) map
 
+let add_wirings semantic domains map =
+  let old = try Map.find semantic map with Not_found -> [] in
+  Map.add semantic (domains @ old) map
 
-val find_value_functor : string -> (module VALUE_FUNCTOR)
-(** Find a value functor by its name. Raise [Not_found] if no functor is found *)
+let join_wirings m1 m2 =
+  Map.map2zo
+    (fun sem1 domains1 -> domains1)
+    (fun sem2 domains2 -> domains2)
+    (fun sem domains1 domains2 -> domains1 @ domains2)
+    m1 m2
 
-val mem_value_functor : string -> bool
-(** [mem_value_functor name] checks whether a value functor with name
-    [name] is registered *)
- 
-val value_functor_names : unit -> string list
-(** Return the names of registered value functor *) 

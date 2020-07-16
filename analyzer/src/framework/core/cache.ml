@@ -22,7 +22,7 @@
 (** Cache of post-conditions and evaluations *)
 
 open Flow
-open Eval
+open Rewrite
 open Post
 open Manager
 open Ast.Expr
@@ -110,34 +110,23 @@ struct
     end
     )
 
-  let exec_cache : Domain.t post ExecCache.t = ExecCache.create !opt_cache
+  let exec_cache : Domain.t post option ExecCache.t = ExecCache.create !opt_cache
 
   let exec f semantic stmt man flow =
-    let ff () =
-      match f stmt man flow with
-      | None ->
-        if Flow.is_bottom man.lattice flow
-        then Post.return flow
-        else
-          Exceptions.panic_at stmt.srange
-            "unable to analyze statement %a in semantic %a"
-            pp_stmt stmt
-            pp_semantic semantic
-
-      | Some post -> post
-    in
     if !opt_cache = 0
-    then ff ()
+    then f stmt man flow
 
     else try
         let tmap = Flow.get_token_map flow in
         let alarms = Flow.get_alarms flow in
-        let post = ExecCache.find (semantic,stmt,tmap,alarms) exec_cache in
-        Post.set_ctx (
-          Context.get_most_recent (Post.get_ctx post) (Flow.get_ctx flow)
-        ) post
+        let opost = ExecCache.find (semantic,stmt,tmap,alarms) exec_cache in
+        OptionExt.lift (fun post ->
+            Cases.set_ctx (
+              Context.get_most_recent (Cases.get_ctx post) (Flow.get_ctx flow)
+            ) post
+          ) opost
       with Not_found ->
-        let post = ff () in
+        let post = f stmt man flow in
         ExecCache.add (semantic, stmt, Flow.get_token_map flow, Flow.get_alarms flow) post exec_cache;
         post
 
@@ -156,7 +145,7 @@ struct
     end
     )
 
-  let eval_cache : Domain.t eval option EvalCache.t = EvalCache.create !opt_cache
+  let eval_cache : Domain.t rewrite option EvalCache.t = EvalCache.create !opt_cache
 
   let eval f semantic exp man flow =
     if !opt_cache = 0
@@ -166,8 +155,8 @@ struct
         let alarms = Flow.get_alarms flow in
         let evls = EvalCache.find (semantic,exp,tmap,alarms) eval_cache in
         OptionExt.lift (fun evl ->
-            let ctx = Context.get_most_recent (Eval.get_ctx evl) (Flow.get_ctx flow) in
-            Eval.set_ctx ctx evl
+            let ctx = Context.get_most_recent (Cases.get_ctx evl) (Flow.get_ctx flow) in
+            Cases.set_ctx ctx evl
           ) evls
       with Not_found ->
         let evals = f exp man flow in

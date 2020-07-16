@@ -23,21 +23,29 @@
 # Framework packs
 framework = ast core lattices abstraction engines output config runner
 framework.ast = program frontend typ operator constant var expr stmt visitor all
-framework.core = query context semantic alarm token log lattice soundness flow \
-		 cases eval post id manager hook cache all
+framework.core = query context semantic wiring alarm token log lattice soundness \
+		 flow cases eval rewrite post id manager hook cache all
 framework.lattices = partial_map partial_inversible_map_sig \
 		     partial_inversible_map powerset_sig powerset \
 		     powersetwithunder pointwise pair
-framework.abstraction = sig tree combiners dag json toplevel
-framework.abstraction.sig = domain functor reduction
-framework.abstraction.sig.domain = stacked standard simplified stateless value
-framework.abstraction.sig.functor = stacked standard simplified value
+framework.abstraction = sig json combiners builder toplevel
+framework.abstraction.sig = domain combiner reduction
+framework.abstraction.sig.domain = stacked stacked_functor \
+				   standard standard_functor \
+				   simplified simplified_functor \
+				   stateless \
+				   value value_functor
+framework.abstraction.sig.combiner = stacked stacked_functor \
+				     standard standard_functor \
+				     simplified simplified_functor \
+				     stateless
 framework.abstraction.sig.reduction = eval exec simplified value
-framework.abstraction.combiners = value domain
-framework.abstraction.combiners.value = common union product nonrel
-framework.abstraction.combiners.domain = sequence compose product \
-					 simplified_product stateless_sequence
-framework.abstraction.json = syntax visitor parser builder
+framework.abstraction.combiners = common value domain
+framework.abstraction.combiners.value = union product nonrel
+framework.abstraction.combiners.domain = optimized sequence compose product
+framework.abstraction.combiners.domain.optimized = simplified_product \
+						   stateless_sequence
+framework.abstraction.json = syntax visitor parser
 framework.engines = engine automatic interactive
 framework.output = text json factory
 framework.config = paths options

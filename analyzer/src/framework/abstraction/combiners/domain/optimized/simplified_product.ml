@@ -23,15 +23,17 @@
 
 open Ast.All
 open Core.All
+open Common
 open Sig.Reduction.Simplified
-open Tree
+open Sig.Combiner.Simplified
 
 
-module EmptyDomain : SIMPLIFIED =
+
+module EmptyDomain : SIMPLIFIED_COMBINER =
 struct
   type t = unit
-  let id = I_empty
-  let leaves = []
+  let id = C_empty
+  let nodes = []
   let name = ""
   let bottom = ()
   let top = ()
@@ -47,16 +49,16 @@ struct
   let ask targets q man ctx () = None
 end
 
-module MakeDomainPair(T1:SIMPLIFIED)(T2:SIMPLIFIED) : SIMPLIFIED with type t = T1.t * T2.t =
+module MakeDomainPair(T1:SIMPLIFIED_COMBINER)(T2:SIMPLIFIED_COMBINER) : SIMPLIFIED_COMBINER with type t = T1.t * T2.t =
 struct
 
   type t = T1.t * T2.t
   
-  let id = I_binary(Product,T1.id,T2.id)
+  let id = C_pair(Product,T1.id,T2.id)
 
   let name = T1.name ^ " ∧ " ^ T2.name
 
-  let leaves = T1.leaves @ T2.leaves
+  let nodes = T1.nodes @ T2.nodes
 
   let bottom : t = T1.bottom, T2.bottom
 
@@ -101,15 +103,15 @@ struct
 
   let print fmt (a1,a2) =
     match T2.id with
-    | I_empty -> T1.print fmt a1
+    | C_empty -> T1.print fmt a1
     | _ ->  Format.fprintf fmt "%a@\n%a" T1.print a1 T2.print a2
   
-  let hdman (man:t Sig.Domain.Simplified.simplified_man) : (T1.t Sig.Domain.Simplified.simplified_man) = {
+  let hdman (man:('a,t) Sig.Domain.Simplified.simplified_man) : (('a,T1.t) Sig.Domain.Simplified.simplified_man) = {
     man with
     exec = (fun stmt -> man.exec stmt |> fst);
   }
 
-  let tlman (man:t Sig.Domain.Simplified.simplified_man) : (T2.t Sig.Domain.Simplified.simplified_man) = {
+  let tlman (man:('a,t) Sig.Domain.Simplified.simplified_man) : (('a,T2.t) Sig.Domain.Simplified.simplified_man) = {
     man with
     exec = (fun stmt -> man.exec stmt |> snd);
   }
@@ -124,8 +126,8 @@ struct
       | None, Some r2    -> if a2 == r2 then Some a else Some (a1,r2)
       | Some r1, Some r2 -> if r1 == a1 && r2 == a2 then Some a else Some (r1,r2)
     in
-    match sat_targets ~targets ~leaves:T1.leaves,
-          sat_targets ~targets ~leaves:T1.leaves
+    match sat_targets ~targets ~nodes:T1.nodes,
+          sat_targets ~targets ~nodes:T1.nodes
     with
     | false, false -> raise Not_found
     | true, false ->
@@ -144,8 +146,8 @@ struct
     
     
   let ask targets =
-    match sat_targets ~targets ~leaves:T1.leaves,
-          sat_targets ~targets ~leaves:T1.leaves
+    match sat_targets ~targets ~nodes:T1.nodes,
+          sat_targets ~targets ~nodes:T1.nodes
     with
     | false, false -> raise Not_found
     | true, false ->
@@ -159,25 +161,26 @@ struct
       let f2 = T2.ask targets in
       (fun q man ctx (a1,a2) ->
          OptionExt.neutral2
-           (meet_query q)
+           (meet_query q
+              ~meet:(fun _ _ -> Exceptions.panic "abstract queries called from simplified domains"))
            (f1 q (hdman man) ctx a1)
            (f2 q (tlman man) ctx a2))    
 
 end
 
 
-module Make(D:SIMPLIFIED)(R:sig val rules : (module SIMPLIFIED_REDUCTION) list end) : SIMPLIFIED with type t = D.t =
+module Make(D:SIMPLIFIED_COMBINER)(R:sig val rules : (module SIMPLIFIED_REDUCTION) list end) : SIMPLIFIED_COMBINER with type t = D.t =
 struct
 
   include D
 
-  let reduction_man man : D.t simplified_reduction_man = {
+  let reduction_man man : ('a,D.t) simplified_reduction_man = {
     (* Get the abstract element of a domain *)
     get_env = (fun (type a) (idx:a id) (a:t) ->
         let rec aux : type b. b id -> b -> a = fun idy aa ->
           match idy, aa with
-          | I_empty, () -> raise Not_found
-          | I_binary(_,hd,tl), (ahd,atl) ->
+          | C_empty, () -> raise Not_found
+          | C_pair(_,hd,tl), (ahd,atl) ->
             begin match equal_id hd idx with
               | Some Eq -> ahd
               | None -> aux tl atl
@@ -195,8 +198,8 @@ struct
         let rec aux : type b. b id -> b -> b =
           fun idy aa ->
             match idy, aa with
-            | I_empty, () -> raise Not_found
-            | I_binary(_,hd,tl), (ahd,atl) ->
+            | C_empty, () -> raise Not_found
+            | C_pair(_,hd,tl), (ahd,atl) ->
               begin match equal_id hd idx with
                 | Some Eq -> x,atl
                 | None    -> ahd, aux tl atl
@@ -214,7 +217,6 @@ struct
         let open Value.Nonrel in
         let open Bot_top in
         let open Lattices.Partial_map in
-        let open Value.Common in
         let rec aux : type a. a id -> a -> v =
           fun idy aa ->
             match idy, aa with
@@ -245,7 +247,7 @@ struct
               in
               iter V.id v
 
-            | I_binary(_,hd,tl), (ahd,atl) ->
+            | C_pair(_,hd,tl), (ahd,atl) ->
               begin
                 try aux hd ahd
                 with Not_found -> aux tl atl
@@ -260,7 +262,6 @@ struct
         let open Value.Nonrel in
         let open Bot_top in
         let open Lattices.Partial_map in
-        let open Value.Common in
         let rec aux : type a. a id -> a -> a =
           fun idy aa ->
             match idy, aa with
@@ -296,7 +297,7 @@ struct
                 | Nbt map -> Nbt (PMap.add var update map)
               end
 
-            | I_binary(_,hd,tl), (ahd,atl) ->
+            | C_pair(_,hd,tl), (ahd,atl) ->
               begin
                 try aux hd ahd, atl
                 with Not_found -> ahd, aux tl atl
@@ -327,10 +328,10 @@ struct
 end
 
 
-let make (domains:(module SIMPLIFIED) list) ~(rules:(module SIMPLIFIED_REDUCTION) list) : (module SIMPLIFIED) =
+let make (domains:(module SIMPLIFIED_COMBINER) list) ~(rules:(module SIMPLIFIED_REDUCTION) list) : (module SIMPLIFIED_COMBINER) =
   let rec aux = function
     | [] -> assert false
     | [d] -> d
-    | hd::tl -> (module MakeDomainPair(val hd:SIMPLIFIED)(val (aux tl):SIMPLIFIED) : SIMPLIFIED)
+    | hd::tl -> (module MakeDomainPair(val hd:SIMPLIFIED_COMBINER)(val (aux tl):SIMPLIFIED_COMBINER) : SIMPLIFIED_COMBINER)
   in
-  (module Make(val (aux domains):SIMPLIFIED)(struct let rules = rules end))
+  (module Make(val (aux domains):SIMPLIFIED_COMBINER)(struct let rules = rules end))

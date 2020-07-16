@@ -54,7 +54,7 @@
 type semantic
 (** semantic dependency *)
 
-val mk_semantic: name:string -> domain:string -> semantic
+val mk_semantic: string -> domain:string -> semantic
 (** Create a semantic from a name and a domain *)
 
 val any_semantic : semantic

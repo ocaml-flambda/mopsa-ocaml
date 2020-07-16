@@ -45,9 +45,9 @@ open Core.All
 (** Simplified managers provide access to the pre-state and can be used to
     perform queries or execute statements. 
 *)
-type 'a simplified_man = {
-  exec : stmt -> 'a;          (** execute a statement on the pre-state *)
-  ask  : 'r. 'r query -> 'r;  (** ask a query on the pre-state *)
+type ('a,'t) simplified_man = {
+  exec : stmt -> 't;          (** execute a statement on the pre-state *)
+  ask  : 'r. ('a,'r) query -> 'r;  (** ask a query on the pre-state *)
 }
 
 
@@ -124,10 +124,10 @@ sig
   val init : program -> t
   (** Initial abstract element *)
 
-  val exec : stmt -> t simplified_man -> uctx -> t -> t option
+  val exec : stmt -> ('a,t) simplified_man -> uctx -> t -> t option
   (** Computation of post-conditions *)
 
-  val ask : 'r query -> t simplified_man -> uctx -> t -> 'r option
+  val ask : ('a,'r) query -> ('a,t) simplified_man -> uctx -> t -> 'r option
   (** Handler of queries *)
 
 

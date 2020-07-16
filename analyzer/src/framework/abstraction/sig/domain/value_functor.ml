@@ -19,15 +19,46 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Reduced product of (leaf) domains with n-ary simplified reduction rules *)
+(** Simplified interface of functor domains. *)
 
 open Ast.All
 open Core.All
-open Tree
-open Sig.Reduction.Simplified
+open Value
+
+
+module type VALUE_FUNCTOR =
+sig
+  val name : string
+  module Functor : functor(D:VALUE) -> VALUE
+end
 
 
 
-val make : (module SIMPLIFIED) list ->
-           rules:(module SIMPLIFIED_REDUCTION) list ->
-           (module SIMPLIFIED)
+
+(*==========================================================================*)
+(**                          {2 Registration}                               *)
+(*==========================================================================*)
+
+
+let functors : (module VALUE_FUNCTOR) list ref = ref []
+
+let register_value_functor f =
+  functors := f :: !functors
+
+let find_value_functor name =
+  List.find (fun dom ->
+      let module D = (val dom : VALUE_FUNCTOR) in
+      compare D.name name = 0
+    ) !functors
+
+let mem_value_functor name =
+  List.exists (fun dom ->
+      let module D = (val dom : VALUE_FUNCTOR) in
+      compare D.name name = 0
+    ) !functors
+
+let value_functor_names () =
+  List.map (fun dom ->
+      let module D = (val dom : VALUE_FUNCTOR) in
+      D.name
+    ) !functors

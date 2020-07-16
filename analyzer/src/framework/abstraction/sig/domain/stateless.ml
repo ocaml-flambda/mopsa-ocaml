@@ -54,10 +54,10 @@ sig
   val exec : stmt -> ('a, unit) man -> 'a flow -> 'a post option
   (** Computation of post-conditions *)
 
-  val eval : expr -> ('a, unit) man -> 'a flow -> 'a eval option
+  val eval : expr -> ('a, unit) man -> 'a flow -> 'a rewrite option
   (** Evaluation of expressions *)
 
-  val ask  : 'r query -> ('a, unit) man -> 'a flow -> 'r option
+  val ask  : ('a,'r) query -> ('a, unit) man -> 'a flow -> 'r option
   (** Handler of queries *)
 
 end

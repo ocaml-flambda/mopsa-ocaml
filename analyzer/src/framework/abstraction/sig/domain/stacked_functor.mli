@@ -19,46 +19,39 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Simplified interface of functor domains. *)
 
-open Ast.All
-open Core.All
-open Domain.Value
+(** Signature of functors of stacked domains *)
 
+open Stacked
+open Core.Semantic
 
-module type VALUE_FUNCTOR =
+(*==========================================================================*)
+(**                           {1 Signature}                                 *)
+(*==========================================================================*)
+
+module type STACKED_FUNCTOR =
 sig
   val name : string
-  module Functor : functor(D:VALUE) -> VALUE
+  val dependencies : semantic list
+  module Functor : functor(D:STACKED)-> STACKED
 end
 
 
 
-
 (*==========================================================================*)
-(**                          {2 Registration}                               *)
+(**                          {1 Registration}                               *)
 (*==========================================================================*)
 
+val register_stacked_functor : (module STACKED_FUNCTOR) -> unit
+(** Register a new functor of stacked domains *)
 
-let functors : (module VALUE_FUNCTOR) list ref = ref []
 
-let register_value_functor f =
-  functors := f :: !functors
+val find_stacked_functor : string -> (module STACKED_FUNCTOR)
+(** Find a stacked functor by its name. Raise [Not_found] if no functor is found *)
 
-let find_value_functor name =
-  List.find (fun dom ->
-      let module D = (val dom : VALUE_FUNCTOR) in
-      compare D.name name = 0
-    ) !functors
-
-let mem_value_functor name =
-  List.exists (fun dom ->
-      let module D = (val dom : VALUE_FUNCTOR) in
-      compare D.name name = 0
-    ) !functors
-
-let value_functor_names () =
-  List.map (fun dom ->
-      let module D = (val dom : VALUE_FUNCTOR) in
-      D.name
-    ) !functors
+val mem_stacked_functor : string -> bool
+(** [mem_stacked_functor name] checks whether a stacked functor with name
+    [name] is registered *)
+ 
+val stacked_functor_names : unit -> string list
+(** Return the names of registered stacked functor *) 

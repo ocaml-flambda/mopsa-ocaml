@@ -183,6 +183,13 @@ let apply_full f join meet r =
 let apply f join meet r =
   apply_full (fun out flow _ _ -> f out flow) join meet r
 
+let apply_some f join meet bot r =
+  apply (fun out flow ->
+      match out with
+      | None -> bot
+      | Some o -> f o flow)
+    join meet r
+
 
 let print pp fmt r =
   Dnf.print (fun fmt case ->

@@ -27,8 +27,8 @@ open Ast.Stmt
 open Core
 open Flow
 open Eval
-open Zone
-open Toplevel
+open Abstraction.Toplevel
+open Semantic
 open Manager
 
 module type ENGINE =
@@ -38,12 +38,12 @@ sig
 
   val init : program -> t flow
 
-  val exec : ?zone:zone -> stmt -> t flow -> t flow
+  val exec : stmt -> ?semantic:semantic -> t flow -> t flow
 
-  val eval : ?zone:(zone * zone) -> ?via:zone -> expr -> t flow -> t eval
+  val eval : expr -> ?semantic:semantic -> t flow -> t eval
 
-  val ask : 'r Query.query -> t flow -> 'r
+  val ask : (t,'r) Query.query -> t flow -> 'r
 
-  val man : (t, t, unit) man
+  val man : (t, t) man
 
 end

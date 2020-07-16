@@ -33,8 +33,8 @@ open Flow
 open Eval
 open Post
 open Query
-open Zone
-open Toplevel
+open Semantic
+open Abstraction.Toplevel
 open Manager
 open Engine
 open Format
@@ -75,11 +75,11 @@ and var_sub_value =
 
 
 (** Query to retrieve the list of variables in the current scope *)
-type _ query += Q_debug_variables : var list query
+type ('a,_) query += Q_debug_variables : ('a,var list) query
 
 
 (** Query to retrieve the value of a given variable *)
-type _ query += Q_debug_variable_value : var -> var_value query
+type ('a,_) query += Q_debug_variable_value : var -> ('a,var_value) query
 
 
 (** Compare two var values *)
@@ -441,37 +441,37 @@ struct
 
   (** Actions on abstract domain *)
   type _ action =
-    | Exec : stmt * zone -> Toplevel.t flow action
-    | Post : stmt * zone -> Toplevel.t post action
-    | Eval : expr * (zone * zone) * zone -> Toplevel.t eval action
+    | Exec : stmt * semantic -> Toplevel.t flow action
+    | Post : stmt * semantic -> Toplevel.t post action
+    | Eval : expr * semantic -> Toplevel.t eval action
 
 
   (** Get the program location related to an action *)
   let action_range : type a. a action -> range = function
     | Exec(stmt,_) -> stmt.srange
     | Post(stmt,_) -> stmt.srange
-    | Eval(exp,_,_)  -> exp.erange
+    | Eval(exp,_)  -> exp.erange
 
 
   (** Print an action *)
   let pp_action : type a. Toplevel.t flow -> formatter -> a action -> unit = fun flow fmt action ->
     fprintf fmt "%a@." (Debug.color "fushia" pp_range) (action_range action);
     match action with
-    | Exec(stmt,zone) ->
-      fprintf fmt "@[<v 4>S[ %a@] ] in zone %a@."
+    | Exec(stmt,semantic) ->
+      fprintf fmt "@[<v 4>S[ %a@] ] in semantic %a@."
         pp_stmt stmt
-        pp_zone zone
+        pp_semantic semantic
 
-    | Post(stmt,zone) ->
-      fprintf fmt "@[<v 4>P[ %a@] ] in zone %a@."
+    | Post(stmt,semantic) ->
+      fprintf fmt "@[<v 4>P[ %a@] ] in semantic %a@."
         pp_stmt stmt
-        pp_zone zone
+        pp_semantic semantic
 
-    | Eval(exp,zone,_) ->
-      fprintf fmt "@[<v 4>E[ %a@] : %a ] in zone %a@."
+    | Eval(exp,semantic) ->
+      fprintf fmt "@[<v 4>E[ %a@] : %a ] in semantic %a@."
         pp_expr exp
         pp_typ (etyp exp)
-        pp_zone2 zone
+        pp_semantic semantic
 
 
   (** Check that an action is atomic *)
@@ -689,9 +689,9 @@ struct
   let rec apply_action : type a. a action -> Toplevel.t flow -> a =
     fun action flow ->
     match action with
-    | Exec(stmt, zone)     -> Toplevel.exec ~zone stmt man flow
-    | Post(stmt, zone)     -> Toplevel.post ~zone stmt man flow
-    | Eval(exp, zone, via) -> Toplevel.eval ~zone ~via exp man flow
+    | Exec(stmt, semantic) -> Toplevel.exec ~semantic stmt man flow
+    | Post(stmt, semantic) -> Toplevel.post ~semantic stmt man flow
+    | Eval(exp, semantic)  -> Toplevel.eval ~semantic exp man flow
 
 
   (** Wait for user input and process it *)
@@ -832,16 +832,16 @@ struct
   and init prog =
     Toplevel.init prog man
 
-  and exec ?(zone=any_zone) stmt flow =
-    interact_or_apply_action (Exec (stmt, zone)) stmt.srange flow
+  and exec stmt ?(semantic=any_semantic) flow =
+    interact_or_apply_action (Exec (stmt, semantic)) stmt.srange flow
 
-  and post ?(zone=any_zone) stmt flow =
-    interact_or_apply_action (Post (stmt,zone)) stmt.srange flow
+  and post stmt ?(semantic=any_semantic) flow =
+    interact_or_apply_action (Post (stmt,semantic)) stmt.srange flow
 
-  and eval ?(zone=(any_zone, any_zone)) ?(via=any_zone) exp flow =
-    interact_or_apply_action (Eval (exp, zone, via)) exp.erange flow
+  and eval exp ?(semantic=any_semantic) flow =
+    interact_or_apply_action (Eval (exp, semantic)) exp.erange flow
 
-  and ask : type r. r query -> Toplevel.t flow -> r =
+  and ask : type r. (Toplevel.t,r) query -> Toplevel.t flow -> r =
     fun query flow ->
       Toplevel.ask query man flow
 
@@ -857,12 +857,10 @@ struct
     print = Toplevel.print;
   }
 
-  and man : (Toplevel.t, Toplevel.t, unit) man = {
+  and man : (Toplevel.t, Toplevel.t) man = {
     lattice;
     get = (fun a -> a);
     set = (fun a _ -> a);
-    get_sub = (fun _ -> ());
-    set_sub = (fun () a -> a);
     get_log = (fun log -> log);
     set_log = (fun log _ -> log);
     exec = exec;

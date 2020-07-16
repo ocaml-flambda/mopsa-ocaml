@@ -19,9 +19,11 @@
 (*                                                                          *)
 (****************************************************************************)
 
-open Syntax
-open Tree
-open Dag
+open Json.Syntax
+open Sig.Combiner.Stacked
+open Sig.Combiner.Standard
+open Sig.Combiner.Stateless
+open Sig.Combiner.Simplified
 open Sig.Domain.Value
 
 
@@ -42,9 +44,9 @@ let rec make_value (value:value) : (module VALUE) =
 (** {2 Simplified domains} *)
 (** ********************** *)
 
-let make_nonrel_domain (value:value) : (module SIMPLIFIED) =
+let make_nonrel_domain (value:value) : (module SIMPLIFIED_COMBINER) =
   let module V = (val (make_value value)) in
-  (module FromSimplified(Combiners.Value.Nonrel.Make(V) : Sig.Domain.Simplified.SIMPLIFIED))
+  (module SimplifiedToCombiner(Combiners.Value.Nonrel.Make(V)))
 
 let rec is_simplified_domain = function
   | D_simplified _               -> true
@@ -53,16 +55,21 @@ let rec is_simplified_domain = function
   | D_functor(F_simplified _, d) -> is_simplified_domain d
   |  _                           -> false
 
-let rec make_simplified_domain (domain:domain) : (module SIMPLIFIED) =
+let rec make_simplified_domain (domain:domain) : (module SIMPLIFIED_COMBINER) =
   match domain with
-  | D_simplified d                -> (module FromSimplified(val d))
+  | D_simplified d                -> (module SimplifiedToCombiner(val d))
   | D_nonrel value                -> make_nonrel_domain value
   | D_product(domains,reductions) -> make_simplified_product domains reductions
-  | D_functor(F_simplified f, d) -> (module SimplifiedFunctor(val f)(val make_simplified_domain d : SIMPLIFIED))
+  | D_functor(F_simplified f, d) ->
+    let module F = (val f) in
+    (module SimplifiedToCombiner
+         (F.Functor
+            (CombinerToSimplified
+               (val make_simplified_domain d : SIMPLIFIED_COMBINER))))
   | _ -> Exceptions.panic "Invalid configuration of simplified domain: %a" pp_domain domain
 
-and make_simplified_product (domains:domain list) (reductions:domain_reduction list) : (module SIMPLIFIED) =
-  Combiners.Domain.Simplified_product.make
+and make_simplified_product (domains:domain list) (reductions:domain_reduction list) : (module SIMPLIFIED_COMBINER) =
+  Combiners.Domain.Optimized.Simplified_product.make
     (List.map make_simplified_domain domains)
     (List.fold_left
        (fun acc -> function DR_simplified r -> r :: acc | _ -> acc)
@@ -78,10 +85,10 @@ let rec is_stateless_domain = function
   | D_sequence (dl) -> List.for_all is_simplified_domain dl
   |  _              -> false
 
-let rec make_stateless_domain (domain:domain) : (module STATELESS) =
+let rec make_stateless_domain (domain:domain) : (module STATELESS_COMBINER) =
   match domain with
-  | D_stateless d -> (module FromStateless(val d))
-  | D_sequence dl -> Combiners.Domain.Stateless_sequence.make (List.map make_stateless_domain dl)
+  | D_stateless d -> (module StatelessToCombiner(val d))
+  | D_sequence dl -> Combiners.Domain.Optimized.Stateless_sequence.make (List.map make_stateless_domain dl)
   | _ -> Exceptions.panic "Invalid configuration of stateless domain: %a" pp_domain domain
 
 
@@ -93,15 +100,20 @@ let is_standard_domain = function
   | D_functor(F_domain _, _) -> true
   | _ -> false
 
-let rec make_standard_domain (domain:domain) : (module DOMAIN) =
+let rec make_standard_domain (domain:domain) : (module DOMAIN_COMBINER) =
   if is_simplified_domain domain then
     (module SimplifiedToStandard(val (make_simplified_domain domain))) else
   if is_stateless_domain domain then
     (module StatelessToDomain(val (make_stateless_domain domain)))
   else
     match domain with
-    | D_domain d -> (module FromDomain(val d))
-    | D_functor(F_domain f, d) -> (module StandardFunctor(val f)(val make_standard_domain d : DOMAIN))
+    | D_domain d -> (module DomainToCombiner(val d))
+    | D_functor(F_domain f, d) ->
+      let module F = (val f) in
+      (module DomainToCombiner
+           (F.Functor
+              (CombinerToDomain
+                 (val make_standard_domain d : DOMAIN_COMBINER))))
     | _ -> Exceptions.panic "Invalid configuration of standard domain: %a" pp_domain domain
 
 
@@ -109,7 +121,7 @@ let rec make_standard_domain (domain:domain) : (module DOMAIN) =
 (** {2 Stacked domains} *)
 (** ******************** *)
 
-let rec prepare_stacked_sequence (domains:domain list) : (module STACKED) list =
+let rec prepare_stacked_sequence (domains:domain list) : (module STACKED_COMBINER) list =
   match domains with
   | [] -> []
   | D_stateless _ :: _ ->
@@ -125,19 +137,37 @@ let rec prepare_stacked_sequence (domains:domain list) : (module STACKED) list =
     (module StandardToStacked(StatelessToDomain(val hd))) :: prepare_stacked_sequence l2
   | hd::tl -> make_stacked_domain hd :: prepare_stacked_sequence tl
 
-and make_stacked_domain (domain:domain) : (module STACKED) =
+and make_stacked_domain (domain:domain) : (module STACKED_COMBINER) =
   match domain with
-  | D_stacked d     -> (module FromStacked(val d))
-  | D_domain d      -> (module StandardToStacked(FromDomain(val d)))
-  | D_simplified d  -> (module StandardToStacked(SimplifiedToStandard(FromSimplified(val d))))
-  | D_stateless d   -> (module StandardToStacked(StatelessToDomain(FromStateless(val d))))
+  | D_stacked d     -> (module StackedToCombiner(val d))
+  | D_domain d      -> (module StandardToStacked(DomainToCombiner(val d)))
+  | D_simplified d  -> (module StandardToStacked(SimplifiedToStandard(SimplifiedToCombiner(val d))))
+  | D_stateless d   -> (module StandardToStacked(StatelessToDomain(StatelessToCombiner(val d))))
   | D_nonrel(value) -> (module StandardToStacked(SimplifiedToStandard(val (make_nonrel_domain value))))
 
-  | D_functor(F_stacked f,d) -> (module StackedFunctor(val f)(val (make_stacked_domain d)))
+  | D_functor(F_stacked f,d) ->
+    let module F = (val f) in
+    (module StackedToCombiner
+         (F.Functor
+            (CombinerToStacked
+               (val make_stacked_domain d : STACKED_COMBINER))))
 
-  | D_functor(F_domain f,d) -> (module StandardToStacked(StandardFunctor(val f)(val (make_standard_domain d))))
+  | D_functor(F_domain f,d) ->
+    let module F = (val f) in
+    (module StandardToStacked
+         (DomainToCombiner
+            (F.Functor
+               (CombinerToDomain
+                  (val make_standard_domain d : DOMAIN_COMBINER)))))
 
-  | D_functor(F_simplified f,d) -> (module StandardToStacked(SimplifiedToStandard(SimplifiedFunctor(val f)(val (make_simplified_domain d)))))
+  | D_functor(F_simplified f,d) ->
+    let module F = (val f) in
+    (module StandardToStacked
+         (SimplifiedToStandard
+           (SimplifiedToCombiner
+              (F.Functor
+                 (CombinerToSimplified
+                    (val make_simplified_domain d : SIMPLIFIED_COMBINER))))))
 
   | D_compose domains  -> Combiners.Domain.Compose.make (List.map make_stacked_domain domains)
   | D_sequence domains -> Combiners.Domain.Sequence.make (prepare_stacked_sequence domains)
@@ -157,24 +187,5 @@ and make_stacked_domain (domain:domain) : (module STACKED) =
            [] reductions)
 
 
-let make_tree (abstraction:abstraction) : (module STACKED) =
-  make_stacked_domain abstraction.domain
-
-
-let make_dag (abstraction:abstraction) : dag =
-  let rec aux domain =
-    match domain with
-    | D_stacked d     -> let module D = (val d) in Dag_node (D.name, D.dependencies)
-    | D_domain d      -> let module D = (val d) in Dag_node (D.name, D.dependencies)
-    | D_simplified d  -> let module D = (val d) in Dag_node (D.name, [])
-    | D_stateless d   -> let module D = (val d) in Dag_node (D.name, D.dependencies)
-    | D_nonrel(value) -> Dag_node ("framework.abstraction.combiners.value.nonrel", [])
-    | D_functor(F_stacked f,d) -> let module F = (val f) in Dag_node(F.name, F.dependencies)
-    | D_functor(F_domain f,d) -> let module F = (val f) in Dag_node(F.name, F.dependencies)
-    | D_functor(F_simplified f,d) -> let module F = (val f) in Dag_node(F.name, [])
-    | D_compose [d]  -> aux d
-    | D_compose [] -> Dag_empty
-    | D_compose domains ->
-      
-    | D_sequence domains -> Combiners.Domain.Sequence.make (prepare_stacked_sequence domains)
-    | D_product(domains,reductions) ->
+let from_json (domain:domain) : (module STACKED_COMBINER) =
+  make_stacked_domain domain

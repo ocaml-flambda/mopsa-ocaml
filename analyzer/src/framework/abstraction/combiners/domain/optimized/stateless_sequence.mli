@@ -19,37 +19,12 @@
 (*                                                                          *)
 (****************************************************************************)
 
+(** Sequence of stateless domains *)
 
-(** Signature of functors of standard domains *)
+open Ast.All
+open Core.All
+open Sig.Combiner.Stateless
 
-open Domain.Standard
+module Make(R1:STATELESS_COMBINER)(R2:STATELESS_COMBINER) : STATELESS_COMBINER
 
-(*==========================================================================*)
-(**                           {1 Signature}                                 *)
-(*==========================================================================*)
-
-module type DOMAIN_FUNCTOR =
-sig
-  val name : string
-  module Functor : functor(D:DOMAIN) -> DOMAIN
-end
-
-
-
-(*==========================================================================*)
-(**                          {1 Registration}                               *)
-(*==========================================================================*)
-
-val register_domain_functor : (module DOMAIN_FUNCTOR) -> unit
-(** Register a new functor of standard domains *)
-
-
-val find_domain_functor : string -> (module DOMAIN_FUNCTOR)
-(** Find a domain functor by its name. Raise [Not_found] if no functor is found *)
-
-val mem_domain_functor : string -> bool
-(** [mem_domain_functor name] checks whether a domain functor with name
-    [name] is registered *)
- 
-val domain_functor_names : unit -> string list
-(** Return the names of registered domain functor *) 
+val make : (module STATELESS_COMBINER) list -> (module STATELESS_COMBINER)

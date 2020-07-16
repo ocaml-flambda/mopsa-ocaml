@@ -19,67 +19,47 @@
 (*                                                                          *)
 (****************************************************************************)
 
+(** Eval - abstract evaluations of expressions *)
 
-(** Stacked signature of functor domains *)
+open Lattice
+open Flow
+open Ast.Stmt
+open Ast.Expr
+open Cases
+open Semantic
 
-open Ast.All
-open Core.All
-open Domain.Stacked
+type expr_rewrite =
+  | Return  of expr
+  | Forward of expr * semantic
 
-module type STACKED_FUNCTOR =
-sig
-  val name : string
-  val dependencies : semantic list
-  module Functor : functor(D:STACKED) -> STACKED
-end
+type 'a rewrite = ('a,expr_rewrite) cases
 
+val compare_expr_rewrite : expr_rewrite -> expr_rewrite -> int
 
+val pp_expr_rewrite : Format.formatter -> expr_rewrite -> unit
 
+val get_expr : expr_rewrite -> expr
 
-(*==========================================================================*)
-(**                          {2 Registration}                               *)
-(*==========================================================================*)
+val get_semantic_opt : expr_rewrite -> semantic option
 
-(** Module to automatically log statements of a functor *)
-module AutoLogger(F:STACKED_FUNCTOR) : STACKED_FUNCTOR =
-struct
-  include F
-  module Functor(D:STACKED) =
-  struct
-    include D
-    let exec stmt man flow =
-      D.exec stmt man flow |>
-      OptionExt.lift @@ fun res ->
-      Cases.map_log (fun log ->
-          man.set_log (
-            man.get_log log |> Log.add_stmt_to_log stmt
-          ) log
-        ) res
-  end
-end
+val singleton : ?cleaners:stmt list -> expr_rewrite -> 'a flow -> 'a rewrite
 
+val return_singleton : ?cleaners:block -> expr -> 'a flow -> 'a rewrite
 
-let functors : (module STACKED_FUNCTOR) list ref = ref []
+val forward_singleton : ?cleaners:block -> expr -> semantic:semantic-> 'a flow -> 'a rewrite
 
-let register_stacked_functor f =
-  let module F = (val f : STACKED_FUNCTOR) in
-  let module FF = AutoLogger(F) in
-  functors := (module FF) :: !functors
+val empty_singleton : 'a flow -> 'a rewrite
 
-let find_stacked_functor name =
-  List.find (fun dom ->
-      let module D = (val dom : STACKED_FUNCTOR) in
-      compare D.name name = 0
-    ) !functors
+val return_eval : 'a Eval.eval -> 'a rewrite
 
-let mem_stacked_functor name =
-  List.exists (fun dom ->
-      let module D = (val dom : STACKED_FUNCTOR) in
-      compare D.name name = 0
-    ) !functors
+val forward_eval : 'a Eval.eval -> semantic:semantic -> 'a rewrite
 
-let stacked_functor_names () =
-  List.map (fun dom ->
-      let module D = (val dom : STACKED_FUNCTOR) in
-      D.name
-    ) !functors
+val join_list : empty:(unit -> 'a rewrite) -> 'a rewrite list -> 'a rewrite
+
+val meet : 'a rewrite -> 'a rewrite -> 'a rewrite
+
+val meet_list : empty:(unit -> 'a rewrite) -> 'a rewrite list -> 'a rewrite
+
+val print : Format.formatter -> 'a rewrite -> unit
+
+val remove_duplicates : 'a lattice -> 'a rewrite -> 'a rewrite

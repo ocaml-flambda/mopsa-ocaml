@@ -19,13 +19,37 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Abstraction DAG *)
 
-open Core.Semantic
+(** Signature of functors of value domains *)
 
-type dag =
-  | Dag_empty
-  | Dag_node of string * semantic list
-  | Dag_fork_join of dag list * dag
+open Value
+
+(*==========================================================================*)
+(**                           {1 Signature}                                 *)
+(*==========================================================================*)
+
+module type VALUE_FUNCTOR =
+sig
+  val name : string
+  module Functor : functor(D:VALUE) -> VALUE
+end
 
 
+
+(*==========================================================================*)
+(**                          {1 Registration}                               *)
+(*==========================================================================*)
+
+val register_value_functor : (module VALUE_FUNCTOR) -> unit
+(** Register a new functor of value domains *)
+
+
+val find_value_functor : string -> (module VALUE_FUNCTOR)
+(** Find a value functor by its name. Raise [Not_found] if no functor is found *)
+
+val mem_value_functor : string -> bool
+(** [mem_value_functor name] checks whether a value functor with name
+    [name] is registered *)
+ 
+val value_functor_names : unit -> string list
+(** Return the names of registered value functor *) 

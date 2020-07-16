@@ -72,7 +72,7 @@ struct
 
   let on_after_exec semantic stmt man flow post =
     Hook.on_after_exec semantic stmt man flow post;
-    Post.get_ctx post
+    Cases.get_ctx post
 
   let on_before_eval semantic stmt man flow =
     Hook.on_before_eval semantic stmt man flow;
@@ -80,7 +80,7 @@ struct
 
   let on_after_eval semantic stmt man flow eval =
     Hook.on_after_eval semantic stmt man flow eval;
-    Eval.get_ctx eval
+    Cases.get_ctx eval
 
   let on_finish = Hook.on_finish
 
@@ -174,10 +174,10 @@ let on_before_exec semantic stmt man flow =
 (** Fire [on_after_exec] event *)
 let on_after_exec semantic stmt man flow post =
   Hashtbl.fold (fun name hook ctx ->
-      let post = Post.set_ctx ctx post in
+      let post = Cases.set_ctx ctx post in
       let module H = (val hook : HOOK) in
       H.on_after_exec semantic stmt man flow post
-    ) active_hooks (Post.get_ctx post)
+    ) active_hooks (Cases.get_ctx post)
 
 
 (** Fire [on_before_eval] event *)
@@ -192,10 +192,10 @@ let on_before_eval semantic exp man flow =
 (** Fire [on_after_eval] event *)
 let on_after_eval semantic exp man flow eval =
   Hashtbl.fold (fun name hook ctx ->
-      let eval = Eval.set_ctx ctx eval in
+      let eval = Cases.set_ctx ctx eval in
       let module H = (val hook : HOOK) in
       H.on_after_eval semantic exp man flow eval
-    ) active_hooks (Eval.get_ctx eval)
+    ) active_hooks (Cases.get_ctx eval)
 
 
 let on_finish man flow =

@@ -58,12 +58,12 @@ struct
   (** {2 Value managers} *)
   (** ****************** *)
 
-  let v1_man (man:t value_man) : V1.t value_man = {
+  let v1_man (man:('a,t) value_man) : ('a,V1.t) value_man = {
     man with
     eval = (fun e -> man.eval e |> fst);
   }
 
-  let v2_man (man:t value_man) : V2.t value_man = {
+  let v2_man (man:('a,t) value_man) : ('a,V2.t) value_man = {
     man with
     eval = (fun e -> man.eval e |> snd);
   }
@@ -136,9 +136,11 @@ struct
   (** ***************** *)
 
   let ask man q =
-    let r1 = V1.ask (v1_man man) q in
-    let r2 = V2.ask (v2_man man) q in
-    OptionExt.neutral2 (join_query q) r1 r2
+    OptionExt.neutral2
+      (join_query q
+         ~join:(fun _ _ -> Exceptions.panic "abstract queries called from value abstraction"))
+      (V1.ask (v1_man man) q)
+      (V2.ask (v2_man man) q)
 
 
 

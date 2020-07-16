@@ -25,47 +25,23 @@ open Lattice
 open Flow
 open Ast.Stmt
 open Ast.Expr
-open Context
 open Cases
-open Log
-open Callstack
 open Semantic
 
+type 'a eval = ('a,expr) cases
 
-type 'a eval = ('a, expr * semantic) cases
-
-val return : ?cleaners:block -> ?log:log -> (expr * semantic) option -> 'a flow -> 'a eval
-
-val singleton : ?cleaners:block -> expr -> semantic:semantic-> 'a flow -> 'a eval
+val singleton : ?cleaners:stmt list -> expr -> 'a flow -> 'a eval
 
 val empty_singleton : 'a flow -> 'a eval
 
-val join : 'a eval  -> 'a eval  -> 'a eval
-
-val meet : 'a eval  -> 'a eval  -> 'a eval
+val join : 'a eval -> 'a eval -> 'a eval
 
 val join_list : empty:(unit -> 'a eval) -> 'a eval list -> 'a eval
 
+val meet : 'a eval -> 'a eval -> 'a eval
+
 val meet_list : empty:(unit -> 'a eval) -> 'a eval list -> 'a eval
-
-val print: Format.formatter -> 'a eval -> unit
-
-val add_cleaners : stmt list -> 'a eval  -> 'a eval
-
-val get_ctx : 'a eval -> 'a ctx
-
-val set_ctx : 'a ctx -> 'a eval -> 'a eval
-
-val get_callstack : 'a eval -> callstack
-
-val copy_ctx : 'a eval -> 'a eval -> 'a eval
-
-val bind : (expr * semantic -> 'a flow -> ('a,'r) cases) -> 'a eval -> ('a,'r) cases
-
-val apply : (expr * semantic -> 'a flow -> 'b) -> ('b -> 'b -> 'b) -> ('b -> 'b -> 'b) -> 'b -> 'a eval -> 'b
-
-val map : (expr * semantic -> expr * semantic) -> 'a eval -> 'a eval
+    
+val print : Format.formatter -> 'a eval -> unit
 
 val remove_duplicates : 'a lattice -> 'a eval -> 'a eval
-
-val cardinal : 'a eval -> int

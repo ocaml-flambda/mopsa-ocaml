@@ -26,14 +26,16 @@ open Ast.All
 open Core.All
 open Sig.Reduction.Exec
 open Sig.Reduction.Eval
-open Tree
+open Sig.Combiner.Stacked
+open Common
+
 
 module type POOL =
 sig
-  include STACKED
+  include STACKED_COMBINER
   val alarms : alarm_class list list
-  val exec : string list -> stmt -> ('a,t) man -> 'a flow -> 'a post option list * 'a ctx
-  val eval : string list -> expr -> ('a,t) man -> 'a flow -> 'a eval option list * 'a ctx
+  val exec : domain list -> stmt -> ('a,t) man -> 'a flow -> 'a post option list * 'a ctx
+  val eval : string list -> expr -> ('a,t) man -> 'a flow -> 'a rewrite option list * 'a ctx
 end
 
 
@@ -41,10 +43,12 @@ end
 module EmptyPool : POOL =
 struct
   type t = unit
-  let id = I_empty
+  let id = C_empty
   let name = "()"
-  let leaves = []
+  let nodes = []
+  let roots = []
   let dependencies = []
+  let wirings = empty_wirings
   let alarms = [[]]
   let bottom = ()
   let top = ()
@@ -62,19 +66,21 @@ struct
 end
 
 
-module MakePairPool(S:STACKED)(P:POOL) : POOL with type t = S.t * P.t =
+module MakePairPool(S:STACKED_COMBINER)(P:POOL) : POOL with type t = S.t * P.t =
 struct
   type t = S.t * P.t
-  let id = I_binary(Product,S.id,P.id)
-  let leaves = S.leaves @ P.leaves
+  let id = C_pair(Product,S.id,P.id)
+  let nodes = S.nodes @ P.nodes
   let dependencies = S.dependencies @ P.dependencies
+  let roots = S.roots @ P.roots
+  let wirings = join_wirings S.wirings P.wirings
   let alarms = S.alarms :: P.alarms
   let name = S.name ^ " ∧ " ^ P.name
 
   let print fmt (s,p) =
     match P.id with
-    | I_empty  -> Format.fprintf fmt "%a" S.print s
-    | I_binary _ -> Format.fprintf fmt "%a@\n%a" S.print s P.print p
+    | C_empty  -> Format.fprintf fmt "%a" S.print s
+    | C_pair _ -> Format.fprintf fmt "%a@\n%a" S.print s P.print p
     | _ -> assert false
 
   let bottom = S.bottom, P.bottom
@@ -112,7 +118,7 @@ struct
 
   let exec targets =
     let f2 = P.exec targets in
-    if not (sat_targets ~targets ~leaves:S.leaves) then
+    if not (sat_targets ~targets ~nodes:S.nodes) then
       (fun stmt man flow ->
          let l,ctx = f2 stmt (snd_pair_man man) flow in
          None :: l, ctx
@@ -121,7 +127,7 @@ struct
       let f1 = S.exec targets in
       (fun stmt man flow ->
          let post = f1 stmt (fst_pair_man man) flow in
-         let ctx = OptionExt.apply Post.get_ctx (Flow.get_ctx flow) post in
+         let ctx = OptionExt.apply Cases.get_ctx (Flow.get_ctx flow) post in
          let flow = Flow.set_ctx ctx flow in
          let l,ctx = f2 stmt (snd_pair_man man) flow in
          post :: l, ctx
@@ -129,7 +135,7 @@ struct
 
   let eval targets =
     let f2 = P.eval targets in
-    if not (sat_targets ~targets ~leaves:S.leaves) then
+    if not (sat_targets ~targets ~nodes:S.nodes) then
       (fun exp man flow ->
          let l,ctx = f2 exp (snd_pair_man man) flow in
          None :: l, ctx
@@ -138,7 +144,7 @@ struct
       let f1 = S.eval targets in
       (fun exp man flow ->
          let eval = f1 exp (fst_pair_man man) flow in
-         let ctx = OptionExt.apply Eval.get_ctx (Flow.get_ctx flow) eval in
+         let ctx = OptionExt.apply Cases.get_ctx (Flow.get_ctx flow) eval in
          let flow = Flow.set_ctx ctx flow in
          let l,ctx = f2 exp (snd_pair_man man) flow in
          eval :: l, ctx
@@ -146,7 +152,7 @@ struct
 
   let ask targets =
     let f2 = P.ask targets in
-    if not (sat_targets ~targets ~leaves:S.leaves) then
+    if not (sat_targets ~targets ~nodes:S.nodes) then
       (fun query man flow ->
          f2 query (snd_pair_man man) flow
       )
@@ -154,7 +160,7 @@ struct
       let f1 = S.ask targets in
       (fun query man flow ->
          OptionExt.neutral2
-           (meet_query query)
+           (meet_query query ~meet:(fun a b -> man.lattice.meet (Flow.get_unit_ctx flow) a b))
            (f1 query (fst_pair_man man) flow)
            (f2 query (snd_pair_man man) flow))
 end
@@ -165,7 +171,7 @@ module Make(Pool:POOL)
     (Rules:sig
        val erules: (module EVAL_REDUCTION) list
        val srules: (module EXEC_REDUCTION) list
-     end) : STACKED with type t = Pool.t =
+     end) : STACKED_COMBINER with type t = Pool.t =
 struct
 
   include Pool
@@ -202,18 +208,18 @@ struct
     let rec aux : type t. t id -> ('a,t) man -> ('a,'r) cases option list -> alarm_class list list -> ('a,'r option option list) cases =
       fun id man pointwise alarms ->
         match pointwise, id, alarms with
-        | [None], I_binary(_, s, _), _ ->
+        | [None], C_pair(_, s, _), _ ->
           Cases.singleton [None] pre
 
-        | [Some r], I_binary(_, s, _), _ ->
+        | [Some r], C_pair(_, s, _), _ ->
           r >>= fun rr flow ->
           Cases.singleton [Some rr] flow
 
-        | None :: tl, I_binary(_,s,pid), _::tlalarms ->
+        | None :: tl, C_pair(_,s,pid), _::tlalarms ->
           aux pid (snd_pair_man man) tl tlalarms >>$ fun after flow ->
           Cases.singleton (None :: after) flow
 
-        | Some r :: tl, I_binary(_,s,pid), hdalarms::tlalarms ->
+        | Some r :: tl, C_pair(_,s,pid), hdalarms::tlalarms ->
           aux pid (snd_pair_man man) tl tlalarms |>
           Cases.bind_full @@ fun after after_flow after_log after_cleaners ->
           r |> Cases.bind_full @@ fun rr flow log cleaners ->
@@ -284,7 +290,7 @@ struct
     let rman = exec_reduction_man man in
     List.fold_left (fun pointwise rule ->
         let module R = (val rule : EXEC_REDUCTION) in
-        Post.bind (R.reduce stmt man rman pre) post
+        post >>$ fun () -> R.reduce stmt man rman pre 
       ) post Rules.srules
 
 
@@ -303,7 +309,7 @@ struct
 
 
   (** Compute pointwise evaluations over the pool of domains *)
-  let eval_pointwise targets exp man flow : 'a eval option list option =
+  let eval_pointwise targets exp man flow : 'a rewrite option list option =
     let pointwise, ctx = Pool.eval targets exp man flow in
     if List.exists (function Some _ -> true | None -> false) pointwise
     then Some pointwise
@@ -313,11 +319,11 @@ struct
   (** Manager used by reductions *)
   let eval_reduction_man (man:('a, t) man) : 'a eval_reduction_man = {
     get_eval = (
-      let f : type t. t id -> prod_eval -> (expr*semantic) option = fun id evals ->
-        let rec aux : type t tt. t id -> tt id -> prod_eval -> (expr*semantic) option = fun target tree el ->
+      let f : type t. t id -> prod_eval -> expr_rewrite option = fun id evals ->
+        let rec aux : type t tt. t id -> tt id -> prod_eval -> expr_rewrite option = fun target tree el ->
           match tree, el with
-          | I_empty, [] -> None
-          | I_binary(_,left,right), (hde::tle) ->
+          | C_empty, [] -> None
+          | C_pair(_,left,right), (hde::tle) ->
             if mem_domain ~target ~tree:left then
               match hde with None -> None | Some x -> x
             else
@@ -333,8 +339,8 @@ struct
       let f : type t. t id -> prod_eval -> prod_eval = fun id evals ->
         let rec aux : type t tt. t id -> tt id -> prod_eval -> prod_eval = fun target tree el ->
           match tree, el with
-          | I_empty, [] -> raise Not_found
-          | I_binary(_,left,right), (hde::tle) ->
+          | C_empty, [] -> raise Not_found
+          | C_pair(_,left,right), (hde::tle) ->
             if mem_domain ~target ~tree:left then None :: tle else hde :: aux target right tle
           | _ -> assert false
           in
@@ -348,7 +354,7 @@ struct
 
   
   (** Apply reduction rules on a pointwise evaluation *)
-  let reduce_pointwise_eval exp man (pointwise:('a,(expr*semantic) option option list) cases) : 'a eval =
+  let reduce_pointwise_eval exp man (pointwise:('a, expr_rewrite option option list) cases) : 'a rewrite =
     let rman = eval_reduction_man man in
     (* Let reduction rules roll out imprecise evaluations from [pointwise] *)
     let pointwise = List.fold_left (fun pointwise rule ->
@@ -366,7 +372,7 @@ struct
         with Not_found -> None
       )
     in
-    Eval.remove_duplicates man.lattice evl
+    Rewrite.remove_duplicates man.lattice evl
 
 
 
@@ -394,7 +400,7 @@ end
 
 
 
-let rec make_pool : (module STACKED) list -> (module POOL) = function
+let rec make_pool : (module STACKED_COMBINER) list -> (module POOL) = function
   | [] -> (module EmptyPool)
   | hd :: tl ->
     let module S = (val hd) in
@@ -403,10 +409,10 @@ let rec make_pool : (module STACKED) list -> (module POOL) = function
     
 
 let make
-    (domains: (module STACKED) list)
+    (domains: (module STACKED_COMBINER) list)
     ~(eval_rules: (module EVAL_REDUCTION) list)
     ~(exec_rules: (module EXEC_REDUCTION) list)
-  : (module STACKED) =
+  : (module STACKED_COMBINER) =
   let p = make_pool domains in
   (module Make(val p)
        (struct

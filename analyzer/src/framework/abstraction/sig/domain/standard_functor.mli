@@ -20,12 +20,14 @@
 (****************************************************************************)
 
 
-(** Standard signature of functor domains *)
+(** Signature of functors of standard domains *)
 
-open Ast.All
-open Core.All
-open Domain.Standard
+open Standard
+open Core.Semantic
 
+(*==========================================================================*)
+(**                           {1 Signature}                                 *)
+(*==========================================================================*)
 
 module type DOMAIN_FUNCTOR =
 sig
@@ -36,51 +38,20 @@ end
 
 
 
-
 (*==========================================================================*)
-(**                          {2 Registration}                               *)
+(**                          {1 Registration}                               *)
 (*==========================================================================*)
 
-(** Module to automatically log statements of a functor *)
-module AutoLogger(F:DOMAIN_FUNCTOR) : DOMAIN_FUNCTOR =
-struct
-  include F
-  module Functor(D:DOMAIN) =
-  struct
-    include D
-    let exec stmt man flow =
-      D.exec stmt man flow |>
-      OptionExt.lift @@ fun res ->
-      Cases.map_log (fun log ->
-          man.set_log (
-            man.get_log log |> Log.add_stmt_to_log stmt
-          ) log
-        ) res
-  end
-end
+val register_domain_functor : (module DOMAIN_FUNCTOR) -> unit
+(** Register a new functor of standard domains *)
 
 
-let functors : (module DOMAIN_FUNCTOR) list ref = ref []
+val find_domain_functor : string -> (module DOMAIN_FUNCTOR)
+(** Find a domain functor by its name. Raise [Not_found] if no functor is found *)
 
-let register_domain_functor f =
-  let module F = (val f : DOMAIN_FUNCTOR) in
-  let module FF = AutoLogger(F) in
-  functors := (module FF) :: !functors
-
-let find_domain_functor name =
-  List.find (fun dom ->
-      let module D = (val dom : DOMAIN_FUNCTOR) in
-      compare D.name name = 0
-    ) !functors
-
-let mem_domain_functor name =
-  List.exists (fun dom ->
-      let module D = (val dom : DOMAIN_FUNCTOR) in
-      compare D.name name = 0
-    ) !functors
-
-let domain_functor_names () =
-  List.map (fun dom ->
-      let module D = (val dom : DOMAIN_FUNCTOR) in
-      D.name
-    ) !functors
+val mem_domain_functor : string -> bool
+(** [mem_domain_functor name] checks whether a domain functor with name
+    [name] is registered *)
+ 
+val domain_functor_names : unit -> string list
+(** Return the names of registered domain functor *) 

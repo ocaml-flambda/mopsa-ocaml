@@ -29,9 +29,9 @@ open Core.All
 (**                          {2 Value manager}                              *)
 (*==========================================================================*)
 
-type 'a value_man = {
-  eval : expr -> 'a; 
-  ask  : 'r. 'r query -> 'r;
+type ('a,'t) value_man = {
+  eval : expr -> 't; 
+  ask  : 'r. ('a,'r) query -> 'r;
 }
 
 (*==========================================================================*)
@@ -94,7 +94,7 @@ sig
   val constant : typ -> constant -> t option
   (** Forward evaluation of constants *)
 
-  val cast : t value_man -> typ -> expr -> t option
+  val cast : ('a,t) value_man -> typ -> expr -> t option
   (** Cast an expression into a value *)
 
   val unop : operator -> typ -> t -> t
@@ -127,7 +127,7 @@ sig
       applying the operation op, the result is in r
   *)
 
-  val bwd_cast : t value_man -> typ -> expr -> t -> t
+  val bwd_cast : ('a,t) value_man -> typ -> expr -> t -> t
   (** Backward evaluation of casts.
       [bwd_cast man t e x] returns x':
        - x' abstracts the set of v in x such cast(t,v) is in the evaluation 𝔼[cast(t,e)]
@@ -154,7 +154,7 @@ sig
   (** {2 Query handler } *)
   (** ****************** *)
 
-  val ask : t value_man -> 'r query -> 'r option
+  val ask : ('a,t) value_man -> ('a,'r) query -> 'r option
   (** Query handler *)
 
 end

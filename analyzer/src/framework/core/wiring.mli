@@ -20,6 +20,20 @@
 (****************************************************************************)
 
 
-val make_tree : Syntax.abstraction -> (module Tree.STACKED)
+(** Semantic routes *)
 
-val make_dag : Syntax.abstraction -> Dag.dag
+open Semantic
+
+type wirings
+
+type domain = string
+
+val empty_wirings : wirings
+
+val find_wirings : semantic -> wirings -> domain list
+
+val add_wiring : semantic -> domain -> wirings -> wirings
+
+val add_wirings : semantic -> domain list -> wirings -> wirings
+
+val join_wirings : wirings -> wirings -> wirings

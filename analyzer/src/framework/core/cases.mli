@@ -103,6 +103,11 @@ val apply : ('r option -> 'a flow -> 'b) -> ('b -> 'b -> 'b) -> ('b -> 'b -> 'b)
     [join] and [meet].
 *)
 
+val apply_some : ('r -> 'a flow -> 'b) -> ('b -> 'b -> 'b) -> ('b -> 'b -> 'b) -> 'b -> ('a,'r) cases -> 'b
+(** [apply_some f join meet bottom c] collapses cases [c] to a single value by
+    applying [f] on non-empty each case [ci] in [c] and merging outputs using
+    [join] and [meet].
+*)
 
 val apply_full : ('r option -> 'a flow -> log -> block -> 'b) -> ('b -> 'b -> 'b) -> ('b -> 'b -> 'b) -> ('a,'r) cases -> 'b
 (** Similar to [apply] but passes to [f] also logs and cleaners *)

@@ -22,9 +22,10 @@
 (** Composition combiner to stack a domain over another one *)
 
 
-open Tree
+open Sig.Combiner.Stacked
 
 
-module Make(T1:STACKED)(T2:STACKED) : STACKED with type t = T1.t * T2.t
+module Make(C1:STACKED_COMBINER)(C2:STACKED_COMBINER) : STACKED_COMBINER
+  with type t = C1.t * C2.t
 
-val make : (module STACKED) list -> (module STACKED)
+val make : (module STACKED_COMBINER) list -> (module STACKED_COMBINER)

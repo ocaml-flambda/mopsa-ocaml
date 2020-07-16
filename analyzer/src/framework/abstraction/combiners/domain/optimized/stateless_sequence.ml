@@ -23,24 +23,30 @@
 
 open Ast.All
 open Core.All
-open Tree
+open Sig.Combiner.Stateless
+open Common
 
-module Make(T1:STATELESS)(T2:STATELESS) : STATELESS =
+
+module Make(C1:STATELESS_COMBINER)(C2:STATELESS_COMBINER) : STATELESS_COMBINER =
 struct
 
   (**************************************************************************)
   (**                         {2 Domain header}                             *)
   (**************************************************************************)
 
-  let id = I_empty
+  let id = C_empty
 
-  let name = T1.name ^ " ; " ^ T2.name
+  let name = C1.name ^ " ; " ^ C2.name
 
-  let dependencies = T1.dependencies @ T2.dependencies
+  let dependencies = C1.dependencies @ C2.dependencies
 
-  let leaves = T1.leaves @ T2.leaves
+  let nodes = C1.nodes @ C2.nodes
 
-  let alarms = T1.alarms @ T2.alarms |> List.sort_uniq compare
+  let roots = C1.roots @ C2.roots
+
+  let wirings = join_wirings C1.wirings C2.wirings
+
+  let alarms = C1.alarms @ C2.alarms |> List.sort_uniq compare
 
   (**************************************************************************)
   (**                      {2 Transfer functions}                           *)
@@ -48,13 +54,13 @@ struct
 
   (** Initialization procedure *)
   let init prog man flow =
-    T1.init prog man flow |>
-    T2.init prog man
+    C1.init prog man flow |>
+    C2.init prog man
 
   (** Execution of statements *)
-  let exec targets =
-    match sat_targets ~targets ~leaves:T1.leaves,
-          sat_targets ~targets ~leaves:T2.leaves
+  let exec domains =
+    match sat_targets ~targets:domains ~nodes:C1.nodes,
+          sat_targets ~targets:domains ~nodes:C2.nodes
     with
     | false, false ->
       (* Both domains do not provide an [exec] for such zone *)
@@ -62,16 +68,16 @@ struct
 
     | true, false ->
       (* Only [D1] provides an [exec] for such zone *)
-      T1.exec targets
+      C1.exec domains
 
     | false, true ->
       (* Only [D2] provides an [exec] for such zone *)
-      T2.exec targets
+      C2.exec domains
 
     | true, true ->
       (* Both [D1] and [D2] provide an [exec] for such zone *)
-      let f1 = T1.exec targets in
-      let f2 = T2.exec targets in
+      let f1 = C1.exec domains in
+      let f2 = C2.exec domains in
       (fun stmt man flow ->
          match f1 stmt man flow with
          | Some post -> Some post
@@ -81,9 +87,9 @@ struct
 
 
   (** Evaluation of expressions *)
-  let eval targets =
-    match sat_targets ~targets ~leaves:T1.leaves,
-          sat_targets ~targets ~leaves:T2.leaves
+  let eval domains =
+    match sat_targets ~targets:domains ~nodes:C1.nodes,
+          sat_targets ~targets:domains ~nodes:C2.nodes
     with
     | false, false ->
       (* Both domains do not provide an [eval] for such zone *)
@@ -91,16 +97,16 @@ struct
 
     | true, false ->
       (* Only [D1] provides an [eval] for such zone *)
-      T1.eval targets
+      C1.eval domains
 
     | false, true ->
       (* Only [D2] provides an [eval] for such zone *)
-      T2.eval targets
+      C2.eval domains
 
     | true, true ->
       (* Both [D1] and [D2] provide an [eval] for such zone *)
-      let f1 = T1.eval targets in
-      let f2 = T2.eval targets in
+      let f1 = C1.eval domains in
+      let f2 = C2.eval domains in
       (fun exp man flow ->
          match f1 exp man flow with
          | Some evl -> Some evl
@@ -110,9 +116,9 @@ struct
 
 
   (** Query handler *)
-  let ask targets =
-match sat_targets ~targets ~leaves:T1.leaves,
-          sat_targets ~targets ~leaves:T2.leaves
+  let ask domains =
+match sat_targets ~targets:domains ~nodes:C1.nodes,
+      sat_targets ~targets:domains ~nodes:C2.nodes
     with
     | false, false ->
       (* Both domains do not provide an [eval] for such zone *)
@@ -120,29 +126,32 @@ match sat_targets ~targets ~leaves:T1.leaves,
 
     | true, false ->
       (* Only [D1] provides an [eval] for such zone *)
-      T1.ask targets
+      C1.ask domains
 
     | false, true ->
       (* Only [D2] provides an [eval] for such zone *)
-      T2.ask targets
+      C2.ask domains
 
     | true, true ->
       (* Both [D1] and [D2] provide an [eval] for such zone *)
-      let f1 = T1.ask targets in
-      let f2 = T2.ask targets in
+      let f1 = C1.ask domains in
+      let f2 = C2.ask domains in
       (fun q man flow ->
-         OptionExt.neutral2 (join_query q) (f1 q man flow) (f2 q man flow)
+         OptionExt.neutral2
+           (join_query q ~join:(fun a b -> man.lattice.join (Flow.get_unit_ctx flow) a b))
+           (f1 q man flow)
+           (f2 q man flow)
       )
 
 end
 
 
 
-let rec make (domains:(module STATELESS) list) : (module STATELESS) =
+let rec make (domains:(module STATELESS_COMBINER) list) : (module STATELESS_COMBINER) =
   match domains with
   | [] -> assert false
   | [d] -> d
   | l ->
     let a,b = ListExt.split l in
     let aa, bb = make a, make b in
-    (module Make(val aa : STATELESS)(val bb : STATELESS))
+    (module Make(val aa : STATELESS_COMBINER)(val bb : STATELESS_COMBINER))

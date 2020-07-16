@@ -97,10 +97,10 @@ sig
   val exec : stmt -> ('a,t) man -> 'a flow -> 'a post option
   (** Post-state of statements *)
 
-  val eval : expr -> ('a,t) man -> 'a flow -> 'a eval option
+  val eval : expr -> ('a,t) man -> 'a flow -> 'a rewrite option
   (** Evaluation of expressions *)
 
-  val ask  : 'r query -> ('a,t) man -> 'a flow -> 'r option
+  val ask  : ('a,'r) query -> ('a,t) man -> 'a flow -> 'r option
   (** Handler of queries *)
 
 end

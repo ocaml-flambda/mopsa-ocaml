@@ -19,17 +19,67 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Simplified interface of functor domains. *)
+(** Extended domains signatures used by combiners *)
 
 open Ast.All
-open Domain.Simplified
+open Core.All
+open Domain.Stateless
 
-module type SIMPLIFIED_FUNCTOR =
+
+module type STATELESS_COMBINER =
 sig
-  val name : string
-  module Functor : functor(D:SIMPLIFIED) -> SIMPLIFIED
+  include STATELESS
+  val roots : domain list
+  val nodes : domain list
+  val wirings : wirings
+  val exec : domain list -> stmt -> ('a,unit) man -> 'a flow -> 'a post option
+  val eval : domain list -> expr -> ('a,unit) man -> 'a flow -> 'a rewrite option
+  val ask  : domain list -> ('a,'r) query -> ('a,unit) man -> 'a flow -> 'r option
 end
 
+
+
+module StatelessToCombiner(D:STATELESS) : STATELESS_COMBINER =
+struct
+  include D
+  let roots = [D.name]
+  let nodes = roots
+  let wirings = empty_wirings
+  let exec targets = D.exec
+  let eval targets = D.eval
+  let ask targets  = D.ask
+end
+
+module CombinerToStateless(T:STATELESS_COMBINER) : STATELESS =
+struct
+  include T
+  let exec stmt man flow = T.exec [] stmt man flow
+  let eval exp man flow  = T.eval [] exp man flow
+  let ask query man flow = T.ask [] query man flow
+end
+
+
+
+
+
+module StatelessToDomain(S:STATELESS_COMBINER) : Standard.DOMAIN_COMBINER with type t = unit =
+struct
+
+  include S
+
+  type t = unit
+  let bottom = ()
+  let top = ()
+  let is_bottom () = false
+  let merge _ _ _ = ()
+  let print _ _ = ()
+
+  let subset () () = true
+  let join () () = ()
+  let meet () () = ()
+  let widen _ () () = ()
+
+end
 
 
 
@@ -38,25 +88,25 @@ end
 (*==========================================================================*)
 
 
-let functors : (module SIMPLIFIED_FUNCTOR) list ref = ref []
+let combiners : (module STATELESS_COMBINER) list ref = ref []
 
-let register_simplified_functor f =
-  functors := f :: !functors
+let register_stateless_combiner dom =
+  combiners := dom :: !combiners
 
-let find_simplified_functor name =
+let find_stateless_combiner name =
   List.find (fun dom ->
-      let module D = (val dom : SIMPLIFIED_FUNCTOR) in
-      compare D.name name = 0
-    ) !functors
+      let module S = (val dom : STATELESS_COMBINER) in
+      compare S.name name = 0
+    ) !combiners
 
-let mem_simplified_functor name =
+let mem_stateless_combiner name =
   List.exists (fun dom ->
-      let module D = (val dom : SIMPLIFIED_FUNCTOR) in
-      compare D.name name = 0
-    ) !functors
+      let module S = (val dom : STATELESS_COMBINER) in
+      compare S.name name = 0
+    ) !combiners
 
-let simplified_functor_names () =
+let stateless_combiner_names () =
   List.map (fun dom ->
-      let module D = (val dom : SIMPLIFIED_FUNCTOR) in
-      D.name
-    ) !functors
+      let module S = (val dom : STATELESS_COMBINER) in
+      S.name
+    ) !combiners

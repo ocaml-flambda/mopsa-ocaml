@@ -19,15 +19,37 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Reduced product with n-ary reduction rules *)
+
+(** Signature of functors of simplified domains *)
+
+open Simplified
+
+(*==========================================================================*)
+(**                           {1 Signature}                                 *)
+(*==========================================================================*)
+
+module type SIMPLIFIED_FUNCTOR =
+sig
+  val name : string
+  module Functor : functor(D:SIMPLIFIED) -> SIMPLIFIED
+end
 
 
-open Sig.Combiner.Stacked
-open Sig.Reduction.Exec
-open Sig.Reduction.Eval
 
-val make :
-  (module STACKED_COMBINER) list ->
-  eval_rules:(module EVAL_REDUCTION) list ->
-  exec_rules:(module EXEC_REDUCTION) list ->
-  (module STACKED_COMBINER)
+(*==========================================================================*)
+(**                          {1 Registration}                               *)
+(*==========================================================================*)
+
+val register_simplified_functor : (module SIMPLIFIED_FUNCTOR) -> unit
+(** Register a new functor of simplified domains *)
+
+
+val find_simplified_functor : string -> (module SIMPLIFIED_FUNCTOR)
+(** Find a simplified functor by its name. Raise [Not_found] if no functor is found *)
+
+val mem_simplified_functor : string -> bool
+(** [mem_simplified_functor name] checks whether a simplified functor with name
+    [name] is registered *)
+ 
+val simplified_functor_names : unit -> string list
+(** Return the names of registered simplified functor *) 

@@ -222,7 +222,7 @@ struct
 
 
   (** Value manager *)
-  let rec value_man (ev:(expr*aexpr*Value.t) option) (map:t) : Value.t value_man = {
+  let rec value_man (ev:(expr*aexpr*Value.t) option) (map:t) : ('a,Value.t) value_man = {
     eval = (fun e ->
         (* check if expression e has been evaluated by searching withing the annotated value-expression ev *)
         match ev with

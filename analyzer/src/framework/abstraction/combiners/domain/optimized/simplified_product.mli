@@ -19,57 +19,14 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Common definitions for value combiners *)
+(** Reduced product of (leaf) domains with n-ary simplified reduction rules *)
 
 open Ast.All
-open Core.Id
-open Sig.Domain.Value
+open Core.All
+open Sig.Combiner.Simplified
+open Sig.Reduction.Simplified
 
-type _ id += V_empty : unit id
-type _ id += V_pair  : 'a id * 'b id -> ('a*'b) id
 
-let () = register_id {
-    eq = (
-      let f : type a b. witness -> a id -> b id -> (a,b) Eq.eq option = fun next id1 id2 ->
-        match id1, id2 with
-        | V_empty, V_empty -> Some Eq
-        | V_pair(x1,y1), V_pair(x2,y2) ->
-          begin match equal_id x1 x2 with
-            | None -> None
-            | Some Eq ->
-              match equal_id y1 y2 with
-              | None -> None
-              | Some Eq -> Some Eq
-          end
-        | _ -> next.eq id1 id2
-      in
-      f
-    );
-  }
-
-module EmptyValue : VALUE =
-struct
-  type t = unit
-  let id = V_empty
-  let name = ""
-  let display = ""
-  let bottom = ()
-  let top = ()
-  let print fmt () = ()
-  let is_bottom () = false
-  let subset () () = true
-  let join () () = ()
-  let meet () () = ()
-  let widen () () = ()
-  let constant t c = None
-  let cast man t e = None
-  let unop op t () = ()
-  let binop op t () () = ()
-  let filter b t () = ()
-  let bwd_unop op t () () = ()
-  let bwd_binop op t () () () = ((),())
-  let bwd_cast man t e () = ()
-  let predicate op b t () = ()
-  let compare op b t () () = ((),())
-  let ask man q = None
-end
+val make : (module SIMPLIFIED_COMBINER) list ->
+           rules:(module SIMPLIFIED_REDUCTION) list ->
+           (module SIMPLIFIED_COMBINER)

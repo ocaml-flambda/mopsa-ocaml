@@ -49,12 +49,12 @@ struct
     | _ ->  Format.fprintf fmt "%a ∧ %a" V1.print v1 V2.print v2
 
   
-  let hdman (man:t value_man) : (V1.t value_man) = {
+  let hdman (man:('a,t) value_man) : (('a,V1.t) value_man) = {
     man with
     eval = (fun exp -> man.eval exp |> fst);
   }
 
-  let tlman (man:t value_man) : (V2.t value_man) = {
+  let tlman (man:('a,t) value_man) : (('a,V2.t) value_man) = {
     man with
     eval = (fun exp -> man.eval exp |> snd);
   }
@@ -96,7 +96,9 @@ struct
     ((x1,x2),(y1,y2))
 
   let ask man q =
-    OptionExt.neutral2 (meet_query q)
+    OptionExt.neutral2
+      (meet_query q
+         ~meet:(fun _ _ -> Exceptions.panic "abstract queries called from value abstraction"))
       (V1.ask (hdman man) q)
       (V2.ask (tlman man) q)
     

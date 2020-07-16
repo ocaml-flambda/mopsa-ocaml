@@ -19,12 +19,67 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Sequence of stateless domains *)
+
+(** Stacked signature of functor domains *)
 
 open Ast.All
 open Core.All
-open Tree
+open Stacked
 
-module Make(T1:STATELESS)(T2:STATELESS) : STATELESS
+module type STACKED_FUNCTOR =
+sig
+  val name : string
+  val dependencies : semantic list
+  module Functor : functor(D:STACKED) -> STACKED
+end
 
-val make : (module STATELESS) list -> (module STATELESS)
+
+
+
+(*==========================================================================*)
+(**                          {2 Registration}                               *)
+(*==========================================================================*)
+
+(** Module to automatically log statements of a functor *)
+module AutoLogger(F:STACKED_FUNCTOR) : STACKED_FUNCTOR =
+struct
+  include F
+  module Functor(D:STACKED) =
+  struct
+    include D
+    let exec stmt man flow =
+      D.exec stmt man flow |>
+      OptionExt.lift @@ fun res ->
+      Cases.map_log (fun log ->
+          man.set_log (
+            man.get_log log |> Log.add_stmt_to_log stmt
+          ) log
+        ) res
+  end
+end
+
+
+let functors : (module STACKED_FUNCTOR) list ref = ref []
+
+let register_stacked_functor f =
+  let module F = (val f : STACKED_FUNCTOR) in
+  let module FF = AutoLogger(F) in
+  functors := (module FF) :: !functors
+
+let find_stacked_functor name =
+  List.find (fun dom ->
+      let module D = (val dom : STACKED_FUNCTOR) in
+      compare D.name name = 0
+    ) !functors
+
+let mem_stacked_functor name =
+  List.exists (fun dom ->
+      let module D = (val dom : STACKED_FUNCTOR) in
+      compare D.name name = 0
+    ) !functors
+
+let stacked_functor_names () =
+  List.map (fun dom ->
+      let module D = (val dom : STACKED_FUNCTOR) in
+      D.name
+    ) !functors

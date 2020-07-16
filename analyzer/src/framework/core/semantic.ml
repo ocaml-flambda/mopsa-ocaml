@@ -49,4 +49,4 @@ let pp_semantic fmt = function
   | Any   -> Format.pp_print_string fmt "*"
   | One s -> Format.fprintf fmt "%s#%s" s.domain s.name
 
-let mk_semantic ~name ~domain = One { domain; name }
+let mk_semantic name ~domain = One { domain; name }

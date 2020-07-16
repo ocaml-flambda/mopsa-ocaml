@@ -49,7 +49,7 @@ open Core.All
 
 (** Product evaluations. [None] means that the domain didn't return any 
     evaluation and [Some None] represents the case of an empty evaluation. *)
-type prod_eval = (expr*semantic) option option list
+type prod_eval = expr_rewrite option option list
 
 
 (** Manager used by reduction rules *)
@@ -57,7 +57,7 @@ type 'a eval_reduction_man = {
   get_man  : 't. 't id -> ('a, 't) man;
   (** Get the manger of a domain *)
 
-  get_eval : 't. 't id -> prod_eval -> (expr * semantic) option;
+  get_eval : 't. 't id -> prod_eval -> expr_rewrite option;
   (** Get the evaluation of a domain within a product evaluation *)
 
   del_eval : 't. 't id -> prod_eval -> prod_eval;

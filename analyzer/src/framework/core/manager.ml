@@ -39,7 +39,6 @@ open Semantic
 (**                             {2 Managers}                                *)
 (*==========================================================================*)
 
-type 'a geval = ('a, expr) cases
 
 (** Managers provide access to full analyzer *)
 type ('a, 't) man = {
@@ -53,8 +52,8 @@ type ('a, 't) man = {
   (* Analyzer transfer functions *)
   exec : stmt -> ?semantic:semantic -> 'a flow -> 'a flow;
   post : stmt -> ?semantic:semantic -> 'a flow -> 'a post;
-  eval : expr -> ?semantic:semantic -> 'a flow -> 'a geval;
-  ask : 'r. 'r Query.query -> 'a flow -> 'r;
+  eval : expr -> ?semantic:semantic -> 'a flow -> 'a eval;
+  ask : 'r. ('a,'r) Query.query -> 'a flow -> 'r;
 
   (* Accessors to the domain's merge logs *)
   get_log : log -> log;
@@ -93,7 +92,7 @@ let assume
     man flow
   =
   let then_post = man.post ~semantic (mk_assume cond cond.erange) flow in
-  let flow = Flow.set_ctx (Post.get_ctx then_post) flow in
+  let flow = Flow.set_ctx (Cases.get_ctx then_post) flow in
   let else_post = man.post ~semantic (mk_assume (negate cond cond.erange) cond.erange) flow in
 
   let then_res = then_post >>$? fun () then_flow ->

@@ -22,15 +22,14 @@
 (** Syntax tree of configuration files *)
 
 open Sig.Domain.Stacked
+open Sig.Domain.Stacked_functor
 open Sig.Domain.Standard
+open Sig.Domain.Standard_functor
 open Sig.Domain.Simplified
+open Sig.Domain.Simplified_functor
 open Sig.Domain.Stateless
 open Sig.Domain.Value
-
-open Sig.Functor.Stacked
-open Sig.Functor.Standard
-open Sig.Functor.Simplified
-open Sig.Functor.Value
+open Sig.Domain.Value_functor
 
 open Sig.Reduction.Exec
 open Sig.Reduction.Eval
@@ -38,6 +37,7 @@ open Sig.Reduction.Value
 open Sig.Reduction.Simplified
 
 open Format
+
 
 type abstraction = {
   domain: domain;

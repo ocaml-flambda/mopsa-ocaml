@@ -37,9 +37,9 @@ open Core.All
 (** Simplified domains are given a simplified manager providing access to
     queries on the pre-condition only 
 *)
-type 'a simplified_man = {
-  exec : stmt -> 'a;
-  ask  : 'r. 'r query -> 'r;
+type ('a,'t) simplified_man = {
+  exec : stmt -> 't;
+  ask  : 'r. ('a,'r) query -> 'r;
 }
 
 
@@ -113,10 +113,10 @@ sig
   val init : program -> t
   (** Initial abstract element *)
 
-  val exec : stmt -> t simplified_man -> uctx -> t -> t option
+  val exec : stmt -> ('a,t) simplified_man -> uctx -> t -> t option
   (** Computation of post-conditions *)
 
-  val ask : 'r query -> t simplified_man -> uctx -> t -> 'r option
+  val ask : ('a,'r) query -> ('a,t) simplified_man -> uctx -> t -> 'r option
   (** Handler of queries *)
 
 

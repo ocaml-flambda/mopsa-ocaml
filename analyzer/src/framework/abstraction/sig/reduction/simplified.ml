@@ -25,12 +25,12 @@ open Ast.All
 open Core.All
 
 (** Manager used by simplified reduction rules *)
-type 'a simplified_reduction_man = {
-  get_env : 't. 't id -> 'a -> 't;
-  set_env : 't. 't id -> 't -> 'a -> 'a;
-  get_value : 't. 't id -> var -> 'a -> 't;
-  set_value : 't. 't id -> var -> 't -> 'a -> 'a;
-  ask : 'r. 'r query -> uctx -> 'a -> 'r;
+type ('a,'b) simplified_reduction_man = {
+  get_env : 't. 't id -> 'b -> 't;
+  set_env : 't. 't id -> 't -> 'b -> 'b;
+  get_value : 't. 't id -> var -> 'b -> 't;
+  set_value : 't. 't id -> var -> 't -> 'b -> 'b;
+  ask : 'r. ('a,'r) query -> uctx -> 'b -> 'r;
 }
 
 
@@ -39,7 +39,7 @@ type 'a simplified_reduction_man = {
 module type SIMPLIFIED_REDUCTION =
 sig
   val name   : string
-  val reduce : stmt -> 'a simplified_reduction_man -> uctx -> 'a -> 'a -> 'a
+  val reduce : stmt -> ('a,'b) simplified_reduction_man -> uctx -> 'b -> 'b -> 'b
 end
 
 

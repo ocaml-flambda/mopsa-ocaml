@@ -20,36 +20,67 @@
 (****************************************************************************)
 
 
-(** Signature of functors of simplified domains *)
+(** Standard signature of functor domains *)
 
-open Domain.Simplified
+open Ast.All
+open Core.All
+open Standard
 
-(*==========================================================================*)
-(**                           {1 Signature}                                 *)
-(*==========================================================================*)
 
-module type SIMPLIFIED_FUNCTOR =
+module type DOMAIN_FUNCTOR =
 sig
   val name : string
-  module Functor : functor(D:SIMPLIFIED) -> SIMPLIFIED
+  val dependencies : semantic list
+  module Functor : functor(D:DOMAIN) -> DOMAIN
 end
 
 
 
+
 (*==========================================================================*)
-(**                          {1 Registration}                               *)
+(**                          {2 Registration}                               *)
 (*==========================================================================*)
 
-val register_simplified_functor : (module SIMPLIFIED_FUNCTOR) -> unit
-(** Register a new functor of simplified domains *)
+(** Module to automatically log statements of a functor *)
+module AutoLogger(F:DOMAIN_FUNCTOR) : DOMAIN_FUNCTOR =
+struct
+  include F
+  module Functor(D:DOMAIN) =
+  struct
+    include D
+    let exec stmt man flow =
+      D.exec stmt man flow |>
+      OptionExt.lift @@ fun res ->
+      Cases.map_log (fun log ->
+          man.set_log (
+            man.get_log log |> Log.add_stmt_to_log stmt
+          ) log
+        ) res
+  end
+end
 
 
-val find_simplified_functor : string -> (module SIMPLIFIED_FUNCTOR)
-(** Find a simplified functor by its name. Raise [Not_found] if no functor is found *)
+let functors : (module DOMAIN_FUNCTOR) list ref = ref []
 
-val mem_simplified_functor : string -> bool
-(** [mem_simplified_functor name] checks whether a simplified functor with name
-    [name] is registered *)
- 
-val simplified_functor_names : unit -> string list
-(** Return the names of registered simplified functor *) 
+let register_domain_functor f =
+  let module F = (val f : DOMAIN_FUNCTOR) in
+  let module FF = AutoLogger(F) in
+  functors := (module FF) :: !functors
+
+let find_domain_functor name =
+  List.find (fun dom ->
+      let module D = (val dom : DOMAIN_FUNCTOR) in
+      compare D.name name = 0
+    ) !functors
+
+let mem_domain_functor name =
+  List.exists (fun dom ->
+      let module D = (val dom : DOMAIN_FUNCTOR) in
+      compare D.name name = 0
+    ) !functors
+
+let domain_functor_names () =
+  List.map (fun dom ->
+      let module D = (val dom : DOMAIN_FUNCTOR) in
+      D.name
+    ) !functors
