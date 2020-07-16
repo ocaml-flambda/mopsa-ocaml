@@ -906,21 +906,6 @@ struct
              pp_points_to pt
 
 
-  (** 𝔼⟦ &lval ⟧ *)
-  let eval_address_of lval range man flow =
-    match ekind @@ remove_casts lval with
-    | E_var _ ->
-      Eval.singleton (mk_c_address_of lval range) flow
-
-    | E_c_deref p ->
-      man.eval p flow
-
-    | _ ->
-      panic_at range ~loc:__LOC__
-        "evaluation of &%a not supported"
-        pp_expr lval
-
-
   let eval exp man flow =
     match ekind exp with
     | E_var ({ vkind = V_c_cell _},_) ->
@@ -942,11 +927,6 @@ struct
     | E_c_deref p when under_type p.etyp |> is_c_function_type
       ->
       eval_deref_function_pointer p exp.erange man flow |>
-      Rewrite.forward_eval ~semantic:scalar |>
-      OptionExt.return
-
-    | E_c_address_of lval ->
-      eval_address_of lval exp.erange man flow |>
       Rewrite.forward_eval ~semantic:scalar |>
       OptionExt.return
 
@@ -1000,15 +980,10 @@ struct
       Post.return flow
 
     | Cell (c,mode) ->
-      man.eval e flow >>$ fun e flow ->
       assign_cell c e mode range man flow
 
-    | Region (base,lo,hi,step) when is_c_num_type e.etyp ->
-      man.eval e flow >>$ fun e flow ->
-      assign_region base lo hi step range man flow
-
-    | Region (base,lo,hi,step)  ->
-      man.eval e flow >>$ fun e flow ->
+    | Region (base,lo,hi,step) ->
+      man.eval e flow >>$ fun _ flow ->
       assign_region base lo hi step range man flow
 
 

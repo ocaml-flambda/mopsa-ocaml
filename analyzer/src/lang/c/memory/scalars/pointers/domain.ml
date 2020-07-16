@@ -368,13 +368,14 @@ struct
       Rewrite.forward_eval ~semantic:numeric |>
       OptionExt.return
 
-    | _ when is_c_pointer_type exp.etyp ->
-      assume (mk_binop exp O_eq (mk_c_null exp.erange) exp.erange)
-        ~fthen:(fun flow -> Eval.singleton (mk_zero exp.erange) flow)
-        ~felse:(fun flow -> Eval.singleton (mk_one exp.erange) flow)
-        man flow|>
-      Rewrite.forward_eval ~semantic:numeric |>
-      OptionExt.return
+    | E_c_address_of lval ->
+      begin match ekind @@ remove_casts lval with
+        | E_var _ ->
+          Rewrite.return_singleton exp flow |>
+          OptionExt.return
+
+        | _ -> None
+      end
 
     | _ -> None
 
