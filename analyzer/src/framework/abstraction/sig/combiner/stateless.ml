@@ -29,7 +29,6 @@ open Domain.Stateless
 module type STATELESS_COMBINER =
 sig
   include STATELESS
-  val roots : domain list
   val nodes : domain list
   val wirings : wirings
   val exec : domain list -> stmt -> ('a,unit) man -> 'a flow -> 'a post option
@@ -42,8 +41,7 @@ end
 module StatelessToCombiner(D:STATELESS) : STATELESS_COMBINER =
 struct
   include D
-  let roots = [D.name]
-  let nodes = roots
+  let nodes = [D.name]
   let wirings = empty_wirings
   let exec targets = D.exec
   let eval targets = D.eval

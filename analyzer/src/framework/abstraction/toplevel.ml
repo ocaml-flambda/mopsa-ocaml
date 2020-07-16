@@ -84,13 +84,15 @@ end
 (*==========================================================================*)
 
 
-let debug fmt = Debug.debug ~channel:"framework.core.abstraction" fmt
+let debug fmt = Debug.debug ~channel:"framework.abstraction.toplevel" fmt
 
 
 (** Encapsulate a domain into a top-level abstraction *)
 module Make(Domain:STACKED_COMBINER) : TOPLEVEL with type t = Domain.t
 =
 struct
+
+  let () = debug "wiring table:@,%a" pp_wirinings Domain.wirings
 
   (** {2 Abstraction header} *)
   (** ********************** *)
@@ -179,7 +181,10 @@ struct
     Domain.dependencies |>
     List.fold_left (fun map semantic ->
         if SemanticMap.mem semantic map then map else
-        try SemanticMap.add semantic (Domain.exec (find_wirings semantic Domain.wirings)) map
+        try
+          let domains = find_wirings semantic Domain.wirings in
+          debug "exec for %a found" pp_semantic semantic;
+          SemanticMap.add semantic (Domain.exec domains) map
         with Not_found -> Exceptions.panic "exec for %a not found" pp_semantic semantic
       ) map
 
@@ -192,19 +197,21 @@ struct
       with Not_found -> Exceptions.panic_at stmt.srange "exec for %a not found" pp_semantic semantic
     in
     try
-      match Cache.exec fexec semantic stmt man flow with
-      | None ->
-        if Flow.is_bottom man.lattice flow
-        then Post.return flow
-        else
-          Exceptions.panic_at stmt.srange
-            "unable to analyze statement %a in semantic %a"
-            pp_stmt stmt
-            pp_semantic semantic
-
-      | Some post ->
-        let ctx = Hook.on_after_exec semantic stmt man flow post in
-        Cases.set_ctx ctx post
+      let post =
+        match Cache.exec fexec semantic stmt man flow with
+        | None ->
+          if Flow.is_bottom man.lattice flow
+          then Post.return flow
+          else
+            Exceptions.panic_at stmt.srange
+              "unable to analyze statement %a in semantic %a"
+              pp_stmt stmt
+              pp_semantic semantic
+              
+        | Some post -> post
+      in
+      let ctx = Hook.on_after_exec semantic stmt man flow post in
+      Cases.set_ctx ctx post
     with
     | Exceptions.Panic(msg, line) ->
       Printexc.raise_with_backtrace

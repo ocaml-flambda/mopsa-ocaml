@@ -70,7 +70,7 @@ struct
 
   let dependencies = [] (* Leaf domains have no dependency *)
 
-  let roots = nodes
+  let unresolved_dependencies = []
 
   let wirings = empty_wirings
 

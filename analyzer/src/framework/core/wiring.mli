@@ -37,3 +37,5 @@ val add_wiring : semantic -> domain -> wirings -> wirings
 val add_wirings : semantic -> domain list -> wirings -> wirings
 
 val join_wirings : wirings -> wirings -> wirings
+
+val pp_wirinings : Format.formatter -> wirings -> unit

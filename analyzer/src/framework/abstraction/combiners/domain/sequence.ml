@@ -47,11 +47,13 @@ struct
 
   let nodes = C1.nodes @ C2.nodes
 
-  let roots = C2.roots @ C2.roots
-
   let dependencies = C1.dependencies @ C2.dependencies
 
-  let wirings = join_wirings C1.wirings C2.wirings
+  let wirings =
+    List.fold_left
+      (fun acc sem1 -> add_wirings sem1 C2.nodes acc)
+      (join_wirings C1.wirings C2.wirings)
+      C1.dependencies
 
   let alarms = C1.alarms @ C2.alarms |> List.sort_uniq compare
 

@@ -46,13 +46,11 @@ struct
 
   let nodes = C1.nodes @ C2.nodes
 
-  let roots = C1.roots
-
-  let dependencies = C2.dependencies
+  let dependencies = C1.dependencies @ C2.dependencies
 
   let wirings =
     List.fold_left
-      (fun acc sem1 -> add_wirings sem1 C2.roots acc)
+      (fun acc sem1 -> add_wirings sem1 C2.nodes acc)
       (join_wirings C1.wirings C2.wirings)
       C1.dependencies
 

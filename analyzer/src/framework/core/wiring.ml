@@ -54,3 +54,14 @@ let join_wirings m1 m2 =
     (fun sem domains1 domains2 -> domains1 @ domains2)
     m1 m2
 
+let pp_wirinings fmt m =
+  Format.(fprintf fmt "@[<v>%a@]"
+            (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+               (fun fmt (semantic,domains) ->
+                  fprintf fmt "%a -> {%a}"
+                    pp_semantic semantic
+                    (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_print_string) domains
+               )
+            ) (Map.bindings m)
+         )
+                       

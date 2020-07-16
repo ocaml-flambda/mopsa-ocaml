@@ -28,7 +28,6 @@ open Domain.Stacked
 module type STACKED_COMBINER =
 sig
   include Domain.Stacked.STACKED
-  val roots : domain list
   val nodes : domain list
   val wirings : wirings
   val exec : domain list -> stmt -> ('a,t) man -> 'a flow -> 'a post option
@@ -40,8 +39,7 @@ end
 module StackedToCombiner(D:STACKED) : STACKED_COMBINER with type t = D.t =
 struct
   include D
-  let roots = [D.name]
-  let nodes = roots
+  let nodes = [D.name]
   let wirings = empty_wirings
   let exec targets = D.exec
   let eval targets = D.eval

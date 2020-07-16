@@ -46,8 +46,8 @@ struct
   let id = C_empty
   let name = "()"
   let nodes = []
-  let roots = []
   let dependencies = []
+  let unresolved_dependencies = []
   let wirings = empty_wirings
   let alarms = [[]]
   let bottom = ()
@@ -72,7 +72,6 @@ struct
   let id = C_pair(Product,S.id,P.id)
   let nodes = S.nodes @ P.nodes
   let dependencies = S.dependencies @ P.dependencies
-  let roots = S.roots @ P.roots
   let wirings = join_wirings S.wirings P.wirings
   let alarms = S.alarms :: P.alarms
   let name = S.name ^ " ∧ " ^ P.name
