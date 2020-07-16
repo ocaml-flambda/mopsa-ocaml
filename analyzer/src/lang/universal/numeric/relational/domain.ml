@@ -22,7 +22,7 @@
 (** Relational numeric abstract domain, based on APRON. *)
 
 open Mopsa
-open Framework.Sig.Abstraction.Simplified
+open Framework.Abstraction.Sig.Domain.Simplified
 open Rounding
 open Ast
 open Apron_manager
@@ -32,30 +32,30 @@ open Apron_transformer
 
 (** Query to retrieve relational variables *)
 
-type _ query +=
-    | Q_related_vars : var -> var list query
-    | Q_constant_vars : var list query
+type ('a,_) query +=
+    | Q_related_vars : var -> ('a,var list) query
+    | Q_constant_vars : ('a,var list) query
 
 
 let () =
   register_query {
     join = (
-      let f : type r. query_pool -> r query -> r -> r -> r =
-        fun next query a b ->
+      let f : type a r. query_operator -> (a,r) query -> (a->a->a) -> r -> r -> r =
+        fun next query join a b ->
           match query with
           | Q_related_vars _ -> a @ b
           | Q_constant_vars -> a @ b
-          | _ -> next.join_query query a b
+          | _ -> next.apply query join a b
         in
         f
       );
       meet = (
-        let f : type r. query_pool -> r query -> r -> r -> r =
-          fun next query a b ->
+        let f : type a r. query_operator -> (a,r) query -> (a->a->a) -> r -> r -> r =
+          fun next query meet a b ->
             match query with
             | Q_related_vars _ -> a @ b
             | Q_constant_vars -> a @ b
-            | _ -> next.meet_query query a b
+            | _ -> next.apply query meet a b
         in
         f
       );
@@ -156,8 +156,6 @@ struct
 
   (** {2 Transfer functions} *)
   (** ********************** *)
-
-  let zones = [Zone.Z_u_num; Zone.Z_u_int; Zone.Z_u_float]
 
   let init prog = top
 
@@ -365,8 +363,8 @@ struct
         Values.Intervals.Integer.Value.top
 
 
-  let ask : type r. r query -> t simplified_man -> t -> r option =
-    fun query man (abs,bnd) ->
+  let ask : type r. ('a,r) query -> ('a,t) simplified_man -> uctx -> t -> r option =
+    fun query man ctx (abs,bnd) ->
       match query with
       | Common.Q_int_interval e ->
         eval_interval e (abs,bnd) |>

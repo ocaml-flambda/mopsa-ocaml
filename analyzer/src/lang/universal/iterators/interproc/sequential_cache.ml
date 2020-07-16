@@ -23,9 +23,8 @@
    results for each flow *)
 
 open Mopsa
-open Framework.Sig.Abstraction.Stateless
+open Framework.Abstraction.Sig.Domain.Stateless
 open Ast
-open Zone
 open Callstack
 open Context
 open Common
@@ -51,11 +50,7 @@ struct
       let name = name
     end)
 
-  (** Zoning definition *)
-  let interface = {
-    iexec = { provides = [Z_u]; uses = [] };
-    ieval = { provides = [Z_u, Z_any]; uses = [Z_u, Z_any] };
-  }
+  let dependencies = []
 
   let alarms = []
 
@@ -112,13 +107,13 @@ struct
     let flow_other = Flow.remove T_cur flow in
     flow_cur, flow_other
 
-  let eval zs exp man flow =
+  let eval exp man flow =
     let range = erange exp in
     match ekind exp with
     | E_call({ekind = E_function (User_defined func)}, args) ->
 
       if man.lattice.is_bottom (Flow.get T_cur man.lattice flow)
-      then Eval.empty_singleton flow |> OptionExt.return
+      then Cases.empty_singleton flow |> OptionExt.return
       else
 
       let in_flow = flow in
@@ -136,7 +131,7 @@ struct
                 let out_flow_cur, out_flow_other = split_cur_from_others man out_flow in
                 (* let out_flow_cur = exec_block_on_all_flows cleaners man out_flow_cur in *)
                 let out_flow = Flow.join man.lattice out_flow_cur out_flow_other in
-                let flow = store_signature func.fun_uniq_name in_flow_cur oeval_res out_flow cleaners in
+                let flow = store_signature func.fun_uniq_name in_flow_cur None out_flow cleaners in
                 Cases.return oeval_res (Flow.join man.lattice in_flow_other flow) ~log ~cleaners:cleaners
 
               | Some eval_res ->
@@ -154,14 +149,15 @@ struct
                       (* let out_flow_cur = exec_block_on_all_flows cleaners man out_flow_cur in *)
                       let out_flow = Flow.join man.lattice out_flow_cur out_flow_other in
                       let flow = store_signature func.fun_uniq_name in_flow_cur (Some eval_res) out_flow cleaners in
-                      Cases.return (Some eval_res) (Flow.join man.lattice in_flow_other flow) ~log ~cleaners:cleaners
+                      Cases.return (Some (eval_res,sem)) (Flow.join man.lattice in_flow_other flow) ~log ~cleaners:cleaners
                   )
             )
 
         | Some (_, oout_expr, out_flow, cleaners) ->
           Debug.debug ~channel:"profiling" "reusing %s at range %a" func.fun_orig_name pp_range func.fun_range;
           debug "reusing something in function %s@\nchanging in_flow=%a@\ninto out_flow=%a@\n" func.fun_orig_name (Flow.print man.lattice.print) in_flow (Flow.print man.lattice.print) out_flow;
-          Cases.return oout_expr (Flow.join man.lattice in_flow_other out_flow) ~cleaners:cleaners
+          let oout_expr_sem = OptionExt.lift (fun e -> (e,any_semantic)) oout_expr in
+          Cases.return oout_expr_sem (Flow.join man.lattice in_flow_other out_flow) ~cleaners:cleaners
       end
       |> OptionExt.return
 
@@ -170,7 +166,7 @@ struct
 
     | _ -> None
 
-  let exec _ _ _ _ = None
+  let exec _ _ _ = None
   let ask _ _ _ = None
 
 end

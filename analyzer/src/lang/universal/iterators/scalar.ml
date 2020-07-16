@@ -22,9 +22,8 @@
 (** Desugar non-scalar expressions in assignments and tests *)
 
 open Mopsa
-open Framework.Sig.Abstraction.Stateless
+open Framework.Abstraction.Sig.Domain.Stateless
 open Ast
-open Zone
 
 module Domain =
 struct
@@ -33,35 +32,33 @@ struct
       let name = "universal.iterators.scalar"
     end)
 
-  let interface = {
-    iexec = { provides = [Z_u]; uses = [Z_u_num] };
-    ieval = { provides = []; uses = [Z_u,Z_u_num] };
-  }
+  let numeric = mk_semantic "numeric" ~domain:name
+  
+  let dependencies = [numeric]
 
   let alarms = []
 
   let init prog man flow = flow
 
-  let desugar e man flow =
-    man.eval e ~zone:(Z_u, Z_u_num) flow
+  let desugar e man flow = man.eval e flow
 
-  let exec zone stmt man flow =
+  let exec stmt man flow =
     match skind stmt with
     | S_assign(x, e) when is_numeric_type e.etyp ->
       desugar x man flow >>$? fun x flow ->
       desugar e man flow >>$? fun e flow ->
-      man.post ~zone:Z_u_num (mk_assign x e stmt.srange) flow |>
+      man.post ~semantic:numeric (mk_assign x e stmt.srange) flow |>
       OptionExt.return
 
     | S_assume e when is_numeric_type e.etyp ->
       desugar e man flow >>$? fun e flow ->
-      man.post ~zone:Z_u_num (mk_assume e stmt.srange) flow |>
+      man.post ~semantic:numeric (mk_assume e stmt.srange) flow |>
       OptionExt.return
 
 
     | _ -> None
 
-  let eval zone exp man flow = None
+  let eval exp man flow = None
 
   let ask query man flow = None
 

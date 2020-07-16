@@ -22,9 +22,8 @@
 (** Inter-procedural iterator by inlining.  *)
 
 open Mopsa
-open Framework.Sig.Abstraction.Stateless
+open Framework.Abstraction.Sig.Domain.Stateless
 open Ast
-open Zone
 open Common
 
 
@@ -42,11 +41,7 @@ struct
     end)
 
 
-  (** Zoning definition *)
-  let interface = {
-    iexec = { provides = [Z_u]; uses = [] };
-    ieval = { provides = [Z_u, Z_any]; uses = [] };
-  }
+  let dependencies = []
 
   let alarms = []
 
@@ -62,7 +57,7 @@ struct
   (** Computation of post-conditions *)
   (** ============================== *)
 
-  let exec zone stmt man flow =
+  let exec stmt man flow =
     let range = stmt.srange in
     match skind stmt with
     | S_return (Some e) ->
@@ -87,13 +82,13 @@ struct
 
   (** Evaluation of expressions *)
   (** ========================= *)
-  let eval zone exp man flow =
+  let eval exp man flow =
     let range = erange exp in
     match ekind exp with
     | E_call({ekind = E_function (User_defined f)}, args) ->
 
       if man.lattice.is_bottom (Flow.get T_cur man.lattice flow)
-      then Eval.empty_singleton flow |> OptionExt.return
+      then Cases.empty_singleton flow |> OptionExt.return
       else
 
       let params, locals, body, flow = init_fun_params f args range man flow in

@@ -22,9 +22,8 @@
 (** Unit tests iterator. *)
 
 open Mopsa
-open Framework.Sig.Abstraction.Stateless
+open Framework.Abstraction.Sig.Domain.Stateless
 open Ast
-open Zone
 
 
 let name = "universal.iterators.unittest"
@@ -138,13 +137,7 @@ struct
   let summary fmt = Debug.debug ~channel:"unittest" fmt
 
 
-  (* Zoning interface *)
-  (* ================ *)
-
-  let interface = {
-    iexec = {provides = [Z_u]; uses = []};
-    ieval = {provides = []; uses = []};
-  }
+  let dependencies = []
 
   let alarms = []
 
@@ -175,7 +168,7 @@ struct
       (Flow.bottom ctx alarms)
       tests
 
-  let rec exec zone stmt man flow  =
+  let rec exec stmt man flow  =
     match skind stmt with
     | S_unit_tests(tests) ->
       debug "Starting tests";
@@ -208,7 +201,7 @@ struct
     | _ -> None
 
 
-  let eval zone exp man flow = None
+  let eval exp man flow = None
 
   let ask query man flow = None
 

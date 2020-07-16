@@ -24,7 +24,6 @@
 open Mopsa
 open Hook
 open Ast
-open Zone
 
 
 module Hook =
@@ -34,9 +33,6 @@ struct
   (** *************** *)
 
   let name = "profiler"
-
-  let exec_zones = [Z_any]
-  let eval_zones = [Z_any, Z_any]
 
   let debug fmt = Debug.debug ~channel:"profiler" fmt
 
@@ -204,15 +200,15 @@ struct
     cur := timing
 
 
-  let on_before_exec zone stmt man flow =
+  let on_before_exec semantic stmt man flow =
     observe_callstack (Flow.get_callstack flow) stmt.srange
 
-  let on_after_exec zone stmt man flow post = ()
+  let on_after_exec semantic stmt man flow post = ()
     
-  let on_before_eval zone exp man flow = ()
+  let on_before_eval semantic exp man flow = ()
     
-  let on_after_eval zone exp man flow eval =
-    observe_callstack (Eval.get_ctx eval |> Context.find_unit Context.callstack_ctx_key) exp.erange
+  let on_after_eval semantic exp man flow eval =
+    observe_callstack (Cases.get_ctx eval |> Context.find_unit Context.callstack_ctx_key) exp.erange
 
   let on_finish man flow =
     let t = Sys.time () in

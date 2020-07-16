@@ -24,9 +24,9 @@
 
 
 open Mopsa
-open Framework.Sig.Abstraction.Domain
+open Framework.Abstraction.Sig.Domain.Standard
 open Ast
-open Zone
+
 (* open Policies *)
 
 module Pool = Framework.Lattices.Powerset.Make
@@ -36,32 +36,32 @@ module Pool = Framework.Lattices.Powerset.Make
       let print = pp_addr
     end)
 
-type _ query +=
-  | Q_allocated_addresses : addr list query
-  | Q_alive_addresses : addr list query
-  | Q_alive_addresses_aspset : Pool.t query
+type ('a,_) query +=
+  | Q_allocated_addresses : ('a,addr list) query
+  | Q_alive_addresses : ('a,addr list) query
+  | Q_alive_addresses_aspset : ('a,Pool.t) query
 
 let () =
   register_query {
     join = (
-      let f : type r. query_pool -> r query -> r -> r -> r =
-        fun next query a b ->
+      let f : type a r. query_operator -> (a,r) query -> (a->a->a) -> r -> r -> r =
+        fun next query join a b ->
           match query with
           | Q_allocated_addresses -> a @ b
           | Q_alive_addresses -> List.sort_uniq compare_addr (a @ b)
           | Q_alive_addresses_aspset -> Pool.join a b
-          | _ -> next.join_query query a b
+          | _ -> next.apply query join a b
       in f
     );
     meet = (
-      let f : type r. query_pool -> r query -> r -> r -> r =
-        fun next query a b ->
+      let f : type a r. query_operator -> (a,r) query -> (a->a->a) -> r -> r -> r =
+        fun next query meet a b ->
           match query with
           | Q_allocated_addresses ->
             assert false
           | Q_alive_addresses -> assert false
           | Q_alive_addresses_aspset -> Pool.meet a b
-          | _ -> next.meet_query query a b
+          | _ -> next.apply query meet a b
       in f
     );
   }
@@ -125,6 +125,8 @@ struct
 
   let alarms = []
 
+  let dependencies = []
+
   (** Lattice operators *)
   (** ================= *)
 
@@ -141,14 +143,6 @@ struct
   let merge pre (a,log) (a',log') =
     assert false
 
-  (** Zoning definition *)
-  (** ================= *)
-
-  let interface = {
-    iexec = {provides = [Z_u_heap]; uses = [Z_any]};
-    ieval = {provides = [Z_u_heap, Z_any]; uses = []};
-  }
-
 
   (** Initialization *)
   (** ============== *)
@@ -163,7 +157,7 @@ struct
 
   let is_old addr = addr.addr_mode = WEAK
 
-  let exec zone stmt man flow =
+  let exec stmt man flow =
     let range = srange stmt in
     match skind stmt with
     (* 𝕊⟦ free(recent); ⟧ *)
@@ -216,7 +210,7 @@ struct
   (** Evaluations *)
   (** *********** *)
 
-  let eval zone expr man flow =
+  let eval expr man flow =
     let range = erange expr in
     match ekind expr with
     | E_alloc_addr(addr_kind, STRONG) ->
@@ -227,7 +221,7 @@ struct
       if not (Pool.mem recent_addr pool) then
         (* first allocation at this site: just add the address to the pool and return it *)
         map_env T_cur (Pool.add recent_addr) man flow |>
-        Eval.singleton (mk_addr recent_addr range) |>
+        Rewrite.return_singleton (mk_addr recent_addr range) |>
         OptionExt.return
       else
         let old_addr = Policies.mk_addr addr_kind WEAK range (Flow.get_unit_ctx flow) in
@@ -235,12 +229,12 @@ struct
           (* old address not present: rename the existing recent as old and return the new recent *)
           map_env T_cur (Pool.add old_addr) man flow |>
           man.exec (mk_rename_addr recent_addr old_addr range) |>
-          Eval.singleton (mk_addr recent_addr range) |>
+          Rewrite.return_singleton (mk_addr recent_addr range) |>
           OptionExt.return
         else
           (* old present : copy the content of the existing recent to old using `fold` statement *)
           man.exec (mk_fold_addr old_addr [recent_addr] range) flow |>
-          Eval.singleton (mk_addr recent_addr range) |>
+          Rewrite.return_singleton (mk_addr recent_addr range) |>
           OptionExt.return
 
     | E_alloc_addr(addr_kind, WEAK) ->
@@ -253,7 +247,7 @@ struct
         else
           map_env T_cur (Pool.add weak_addr) man flow
       in
-      Eval.singleton (mk_addr weak_addr range) flow' |>
+      Rewrite.return_singleton (mk_addr weak_addr range) flow' |>
       OptionExt.return
 
 
@@ -262,7 +256,7 @@ struct
   (** Queries *)
   (** ******* *)
 
-  let ask : type r. r query -> ('a, t, 's) man -> 'a flow -> r option =
+  let ask : type r. ('a,r) query -> ('a, t) man -> 'a flow -> r option =
     fun query man flow ->
     match query with
     | Q_allocated_addresses ->

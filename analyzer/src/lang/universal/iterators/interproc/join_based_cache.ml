@@ -23,9 +23,8 @@
    results for each flow *)
 
 open Mopsa
-open Framework.Sig.Abstraction.Stateless
+open Framework.Abstraction.Sig.Domain.Stateless
 open Ast
-open Zone
 open Callstack
 open Context
 open Common
@@ -40,11 +39,7 @@ struct
       let name = name
     end)
 
-  (** Zoning definition *)
-  let interface = {
-    iexec = { provides = [Z_u]; uses = [] };
-    ieval = { provides = [Z_u, Z_any]; uses = [Z_u, Z_any] };
-  }
+  let dependencies = []
 
   let alarms = []
 
@@ -89,7 +84,7 @@ struct
   let init prog flow =
     Flow.map_ctx (Context.init_poly Fctx.init)
 
-  let eval zs exp man flow =
+  let eval exp man flow =
     let range = erange exp in
     match ekind exp with
     | E_call({ekind = E_function (User_defined func)} as f, args) ->
@@ -134,7 +129,7 @@ struct
             Eval.empty_singleton flow
 
           | Some v ->
-            Eval.singleton (mk_var v range) flow ~cleaners:(
+            Eval.singleton (mk_var v range) ~semantic:any_semantic flow ~cleaners:(
               mk_remove_var v range ::
               List.map (fun v ->
                   mk_remove_var v range
@@ -148,7 +143,7 @@ struct
 
     | _ -> None
 
-  let exec _ _ _ _ = None
+  let exec _ _ _ = None
   let ask _ _ _ = None
 
 end

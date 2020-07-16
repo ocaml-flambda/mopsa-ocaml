@@ -22,7 +22,7 @@
 (** Intra-procedural iterator for blocks, assignments and tests *)
 
 open Mopsa
-open Framework.Sig.Abstraction.Stateless
+open Framework.Abstraction.Sig.Domain.Stateless
 open Ast
 
 
@@ -35,16 +35,13 @@ struct
     end
     )
 
-  let interface = {
-    iexec = { provides = [Z_any]; uses = [] };
-    ieval = { provides = []; uses = [] };
-  }
+  let dependencies = []
 
   let alarms = []
 
   let init prog man flow = flow
 
-  let exec zone stmt man flow =
+  let exec stmt man flow =
     match skind stmt with
     | S_expression(e) when is_universal_type e.etyp || e.etyp = T_any ->
       Some (
@@ -53,13 +50,13 @@ struct
       )
 
     | S_assume { ekind = E_unop (O_log_not, { ekind = E_unop (O_log_not, e) }) } ->
-      man.post ~zone (mk_assume e stmt.srange) flow |>
+      man.post (mk_assume e stmt.srange) flow |>
       OptionExt.return
 
     | S_block(block,local_vars) ->
       Some (
-        let flow = List.fold_left (fun acc stmt -> man.exec ~zone stmt acc) flow block in
-        let flow = List.fold_left (fun acc var -> man.exec ~zone (mk_remove_var var stmt.srange) acc) flow local_vars in
+        let flow = List.fold_left (fun acc stmt -> man.exec stmt acc) flow block in
+        let flow = List.fold_left (fun acc var -> man.exec (mk_remove_var var stmt.srange) acc) flow local_vars in
         Post.return flow
       )
 
@@ -81,7 +78,7 @@ struct
 
     | _ -> None
 
-  let eval zone exp man flow = None
+  let eval exp man flow = None
 
   let ask query man flow = None
 

@@ -22,9 +22,8 @@
 (** Main handler of Universal programs. *)
 
 open Mopsa
-open Framework.Sig.Abstraction.Stateless
+open Framework.Abstraction.Sig.Domain.Stateless
 open Ast
-open Zone
 
 module Domain =
 struct
@@ -33,17 +32,14 @@ struct
       let name = "universal.iterators.program"
     end)
 
-  let interface = {
-    iexec = { provides = [Z_u]; uses = [] };
-    ieval = { provides = []; uses = [] };
-  }
+  let dependencies = []
 
   let alarms = []
 
   let init prog man flow = flow
 
 
-  let eval zone exp man flow = None
+  let eval exp man flow = None
 
 
   let ask query man flow = None
@@ -73,7 +69,7 @@ struct
     
   
 
-  let exec zone stmt man flow =
+  let exec stmt man flow =
     match skind stmt with
     | S_program ({ prog_kind = P_universal{universal_main} }, _)
       when not !Unittest.unittest_flag ->

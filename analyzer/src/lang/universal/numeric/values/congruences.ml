@@ -22,7 +22,7 @@
 (** Congruence abstraction of integer values. *)
 
 open Mopsa
-open Framework.Sig.Abstraction.Value
+open Framework.Abstraction.Sig.Domain.Value
 open Ast
 open Bot
 
@@ -42,8 +42,6 @@ struct
         let display = "congruences"
     end
     )
-
-  let zones = [Zone.Z_u_num]
 
   let bottom = BOT
 
@@ -167,7 +165,7 @@ struct
       bottom, bottom
 
 
-  let ask : type r. t value_man -> r query -> r option = fun man query ->
+  let ask : type r. ('a,t) value_man -> ('a,r) query -> r option = fun man query ->
     match query with
     | Common.Q_int_congr_interval e ->
       let c = man.eval e in

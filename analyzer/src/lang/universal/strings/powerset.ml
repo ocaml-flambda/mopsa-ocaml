@@ -24,8 +24,8 @@
 open Mopsa
 open Ast
 open Bot
-open Sig.Abstraction.Value
-open Sig.Abstraction.Domain
+open Framework.Abstraction.Sig.Domain.Value
+open Framework.Abstraction.Sig.Domain.Simplified
 
 
 module StringPower = Framework.Lattices.Powerset.Make
@@ -68,7 +68,6 @@ struct
       let display = "strings"
             end)
 
-  let zones = [Zone.Z_u_string]
 
   let is_string_type = function T_string -> true | _ -> false
 
@@ -150,7 +149,7 @@ end
 module Domain =
 struct
 
-  module Nonrel = Framework.Combiners.Value.Nonrel.Make(Value)
+  module Nonrel = Framework.Abstraction.Combiners.Value.Nonrel.Make(Value)
   module Lifted = Sig.Abstraction.Simplified.MakeDomain(Nonrel)
   include Lifted
 

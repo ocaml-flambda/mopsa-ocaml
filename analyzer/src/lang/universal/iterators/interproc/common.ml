@@ -23,7 +23,6 @@
 
 
 open Mopsa
-open Framework.Sig.Abstraction.Stateless
 open Ast
 
 
@@ -261,7 +260,7 @@ let exec_fun_body f body ret range man flow =
       [] flow2
   in
 
-  Post.join_list postl ~empty:(fun () -> Post.return flow6)
+  Cases.join_list postl ~empty:(fun () -> Post.return flow6)
 
 
 (** Inline a function call *)
@@ -297,16 +296,18 @@ let inline f params locals body ret range man flow =
   post >>$ fun () flow ->
   match ret with
   | None ->
-    Eval.singleton (mk_unit range) flow ~cleaners:(
+    Rewrite.return_singleton (mk_unit range) flow ~cleaners:(
       List.map (fun v ->
           mk_remove_var v range
         ) params
     )
 
   | Some v ->
-    Eval.singleton (mk_var v range) flow ~cleaners:(
+    man.eval (mk_var v range) flow
+    |> Cases.add_cleaners (
       mk_remove_var v range ::
       List.map (fun v ->
           mk_remove_var v range
         ) params
     )
+    |> Rewrite.return_eval

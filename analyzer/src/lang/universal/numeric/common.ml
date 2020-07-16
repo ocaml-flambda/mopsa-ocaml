@@ -23,7 +23,6 @@
 
 open Mopsa
 open Ast
-open Zone
 
 module I = ItvUtils.IntItv
 module C = CongUtils.IntCong
@@ -35,10 +34,10 @@ module C = CongUtils.IntCong
 (** Integer intervals *)
 type int_itv = I.t_with_bot
 
-type _ query +=
-  | Q_int_interval : expr -> int_itv query (** Query to evaluate the integer interval of an expression *)
-  | Q_fast_int_interval : expr -> int_itv query (** Query handled by non-relational domains only *)
-  | VQ_to_int_interval : int_itv query (** Value query to cast an abstract value to integers *)
+type ('a,_) query +=
+  | Q_int_interval : expr -> ('a,int_itv) query (** Query to evaluate the integer interval of an expression *)
+  | Q_fast_int_interval : expr -> ('a,int_itv) query (** Query handled by non-relational domains only *)
+  | VQ_to_int_interval : ('a,int_itv) query (** Value query to cast an abstract value to integers *)
 
 let mk_int_interval_query ?(fast=true) e =
   if fast then Q_fast_int_interval e else Q_int_interval e
@@ -50,24 +49,24 @@ let compare_int_interval itv1 itv2 = I.compare_bot itv1 itv2
 let () =
   register_query {
     join = (
-      let f : type r. query_pool -> r query -> r -> r -> r =
-        fun next query a b ->
+      let f : type a r. query_operator -> (a,r) query -> (a->a->a) -> r -> r -> r =
+        fun next query join a b ->
           match query with
           | Q_int_interval _ -> I.join_bot a b
           | Q_fast_int_interval _ -> I.join_bot a b
           | VQ_to_int_interval -> I.join_bot a b
-          | _ -> next.join_query query a b
+          | _ -> next.apply query join a b
       in
       f
     );
     meet = (
-      let f : type r. query_pool -> r query -> r -> r -> r =
-        fun next query a b ->
+      let f : type a r. query_operator -> (a,r) query -> (a->a->a) -> r -> r -> r =
+        fun next query meet a b ->
           match query with
           | Q_int_interval e -> I.meet_bot a b
           | Q_fast_int_interval e -> I.meet_bot a b
           | VQ_to_int_interval -> I.meet_bot a b
-          | _ -> next.meet_query query a b
+          | _ -> next.apply query meet a b
       in
       f
     );
@@ -83,29 +82,27 @@ type int_congr_itv = int_itv * C.t
 
 
 (** Query to evaluate the integer interval of an expression *)
-type _ query += Q_int_congr_interval : expr -> int_congr_itv query
+type ('a,_) query += Q_int_congr_interval : expr -> ('a,int_congr_itv) query
 
 
 let () =
   register_query {
     join = (
-      let f : type r. query_pool -> r query -> r -> r -> r =
-        fun next query a b ->
+      let f : type a r. query_operator -> (a,r) query -> (a->a->a) -> r -> r -> r =
+        fun next query join a b ->
           match query with
-
           | Q_int_congr_interval e ->
             let (i1,c1), (i2,c2) = a, b in
             (I.join_bot i1 i2, C.join c1 c2)
 
-          | _ -> next.join_query query a b
+          | _ -> next.apply query join a b
       in
       f
     );
     meet = (
-      let f : type r. query_pool -> r query -> r -> r -> r =
-        fun next query a b ->
+      let f : type a r. query_operator -> (a,r) query -> (a->a->a) -> r -> r -> r =
+        fun next query meet a b ->
           match query with
-
           | Q_int_congr_interval e ->
             let (i1,c1), (i2,c2) = a, b in
             let i = I.meet_bot i1 i2 in
@@ -115,7 +112,7 @@ let () =
               (Bot.BOT, C.minf_inf)
               (fun (c,i) -> (Bot.Nb i, c))
 
-          | _ -> next.meet_query query a b
+          | _ -> next.apply query meet a b
       in
       f
     );
@@ -133,9 +130,9 @@ module F = ItvUtils.FloatItvNan
 (** Float intervals *)
 type float_itv = F.t
 
-type _ query +=
-  | Q_float_interval : expr -> float_itv query (** Query to evaluate the float interval of an expression, with infinities and NaN *)
-  | VQ_to_float_interval : float_itv query (** Value query to cast an abstract value to a float interval *)
+type ('a,_) query +=
+  | Q_float_interval : expr -> ('a,float_itv) query (** Query to evaluate the float interval of an expression, with infinities and NaN *)
+  | VQ_to_float_interval : ('a,float_itv) query (** Value query to cast an abstract value to a float interval *)
 
 let mk_float_interval_query e =
   Q_float_interval e
@@ -147,22 +144,22 @@ let compare_float_interval itv1 itv2 = F.compare itv1 itv2
 let () =
   register_query {
     join = (
-      let f : type r. query_pool -> r query -> r -> r -> r =
-        fun next query a b ->
+      let f : type a r. query_operator -> (a,r) query -> (a->a->a) -> r -> r -> r =
+        fun next query join a b ->
           match query with
           | Q_float_interval _ -> F.join a b
           | VQ_to_float_interval -> F.join a b
-          | _ -> next.join_query query a b
+          | _ -> next.apply query join a b
       in
       f
     );
     meet = (
-      let f : type r. query_pool -> r query -> r -> r -> r =
-        fun next query a b ->
+      let f : type a r. query_operator -> (a,r) query -> (a->a->a) -> r -> r -> r =
+        fun next query meet a b ->
           match query with
           | Q_float_interval e -> F.meet a b
           | VQ_to_float_interval -> F.meet a b
-          | _ -> next.meet_query query a b
+          | _ -> next.apply query meet a b
       in
       f
     );
@@ -204,12 +201,9 @@ let eval_num_cond cond man flow : bool option =
 
 (** Optimized assume function that uses intervals to check a
     condition or falls back to classic assume *)
-let assume_num cond ~fthen ~felse ?(zone=Z_u_num) man flow =
-  begin
-    if zone = Z_u_num then Eval.singleton cond flow
-    else man.eval cond ~zone:(zone,Z_u_num) flow
-  end >>$ fun cond flow ->
+let assume_num cond ~fthen ~felse ?(semantic=any_semantic) man flow =
+  man.eval cond flow >>$ fun cond flow ->
   match eval_num_cond cond man flow with
   | Some true  -> fthen flow
   | Some false -> felse flow
-  | None       -> assume cond ~fthen ~felse ~zone:Z_u_num man flow
+  | None       -> assume cond ~fthen ~felse man ~semantic flow

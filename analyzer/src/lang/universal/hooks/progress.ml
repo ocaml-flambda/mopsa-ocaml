@@ -25,7 +25,6 @@ open Location
 open Mopsa
 open Format
 open Ast
-open Zone
 
 
 module Hook =
@@ -35,8 +34,7 @@ struct
   (** *************** *)
 
   let name = "progress"
-  let exec_zones = [Z_any]
-  let eval_zones = [Z_u,Z_any]
+
 
 
   (** {2 Entries of the progress table} *)
@@ -168,21 +166,21 @@ struct
   (** {2 Events handlers} *)
   (** ******************* *)
 
-  let on_before_exec zone stmt man flow =
+  let on_before_exec semantic stmt man flow =
     before_stmt stmt.srange
 
 
-  let on_after_exec zone stmt man flow post =
+  let on_after_exec semantic stmt man flow post =
     after_stmt stmt.srange
 
 
-  let on_before_eval zone exp man flow =
+  let on_before_eval semantic exp man flow =
     match ekind exp with
     | E_call ({ ekind = E_function (User_defined f) }, args) -> before_call f
     | _ -> ()
 
 
-  let on_after_eval zone exp man flow evl =
+  let on_after_eval semantic exp man flow evl =
     match ekind exp with
     | E_call ({ ekind = E_function (User_defined f) }, args) -> after_call ()
     | _ -> ()

@@ -41,9 +41,6 @@ struct
 
   let name = Options.name
 
-  let exec_zones = [Z_any]
-  let eval_zones = [Z_any,Z_any]
-
 
   (** {2 Initialization} *)
   (** ****************** *)
@@ -142,68 +139,68 @@ struct
   (** {2 Events handlers} *)
   (** ******************* *)
 
-  let on_before_exec zone stmt man flow =
+  let on_before_exec sem stmt man flow =
     reach stmt.srange;
     if Options.short then
-      indent "%a in zone %a"
+      indent "%a in semantic %a"
         pp_S stmt
-        pp_zone zone
+        pp_semantic sem
         ~symbol:BEGIN
     else
-      indent "%a @,in %a @,and zone %a"
+      indent "%a @,in %a @,and semantic %a"
         pp_S stmt
         (Flow.print man.lattice.print) flow
-        pp_zone zone
+        pp_semantic sem
         ~symbol:BEGIN
     ;
     Stack.push (Sys.time ()) stack
 
 
-  let on_after_exec zone stmt man flow post =
+  let on_after_exec semantic stmt man flow post =
     let time = get_timing () in
     if Options.short then
-      indent "%a done in zone %a [%.4fs]"
+      indent "%a done in semantic %a [%.4fs]"
         pp_S stmt
-        pp_zone zone
+        pp_semantic semantic
         time
         ~symbol:END
     else
-      indent "%a done in zone %a [%.4fs]@ -->  %a"
+      indent "%a done in semantic %a [%.4fs]@ -->  %a"
         pp_S stmt
-        pp_zone zone
+        pp_semantic semantic
         time
         (Post.print man.lattice.print) post
         ~symbol:END
 
 
-  let on_before_eval zone exp man flow =
+  let on_before_eval semantic exp man flow =
     if Options.short then
-      indent "%a in zone %a"
+      indent "%a in semantic %a"
         pp_E exp
-        pp_zone2 zone
+        pp_semantic semantic
         ~symbol:BEGIN
     else
-      indent "%a @,in %a @,and zone %a"
+      indent "%a @,in %a @,and semantic %a"
         pp_E exp
         (Flow.print man.lattice.print) flow
-        pp_zone2 zone
+        pp_semantic semantic
         ~symbol:BEGIN
     ;
       Stack.push (Sys.time ()) stack
 
-  let on_after_eval zone exp man flow evl =
+  let on_after_eval semantic exp man flow evl =
     let time = get_timing () in
     if Options.short then
-      indent "%a = %a done in zone %a [%.4fs]"
+      indent "%a = %a done in semantic %a [%.4fs]"
         pp_E exp
         Eval.print evl
-        pp_zone2 zone
+        pp_semantic semantic
         time
         ~symbol:END
     else
-      indent "%a done in zone %a [%.4fs]@ -->  %a"
+      indent "%a done in semantic %a [%.4fs]@ -->  %a"
         pp_E exp
-        pp_zone2 zone
+        pp_semantic semantic
         time
         Eval.print evl
         ~symbol:END

@@ -287,12 +287,12 @@ let compare_addr a b =
       (fun () -> compare_mode a.addr_mode b.addr_mode);
     ]
 
-type _ query += Q_debug_addr_value : addr -> Framework.Engines.Interactive.var_value query
+type ('a,_) query += Q_debug_addr_value : addr -> ('a,Framework.Engines.Interactive.var_value) query
 
 let () =
   register_query {
-      join = (let doit : type r. query_pool -> r query -> r -> r -> r =
-          fun next query a b ->
+      join = (let doit : type a r. query_operator -> (a,r) query -> (a->a->a) -> r -> r -> r =
+          fun next query join a b ->
           match query with
           | Q_debug_addr_value addr ->
              let open Framework.Engines.Interactive in
@@ -306,17 +306,10 @@ let () =
                                  end in
              {var_value=None; var_value_type = T_any; var_sub_value}
 
-          | _ -> next.meet_query query a b
+          | _ -> next.apply query join a b
         in doit
       );
-      meet = (
-        let doit : type r. query_pool -> r query -> r -> r -> r =
-          fun next query a b ->
-          match query with
-          | Q_debug_addr_value addr -> assert false
-          | _ -> next.meet_query query a b
-               in doit
-      );
+      meet = (fun next q meet a b -> next.apply q meet a b);
     }
 
 

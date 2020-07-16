@@ -23,9 +23,8 @@
 
 
 open Mopsa
-open Framework.Sig.Abstraction.Stateless
+open Framework.Abstraction.Sig.Domain.Stateless
 open Ast
-open Zone
 
 let name = "universal.iterators.loops"
 
@@ -189,11 +188,7 @@ struct
       let name = name
     end)
 
-
-  let interface = {
-    iexec = { provides = [Z_u]; uses = [] };
-    ieval = { provides = []; uses = [] };
-  }
+  let dependencies = []
 
   let alarms = []
 
@@ -358,7 +353,7 @@ struct
     flow
 
 
-  let rec exec zone stmt (man:('a,unit,'s) man) flow =
+  let rec exec stmt man flow =
     match skind stmt with
     | S_while(cond, body) ->
       incr nestedness;
@@ -429,7 +424,7 @@ struct
 
     | _ -> None
 
-  let eval _ _ _ _ = None
+  let eval _ _ _ = None
 
   let ask _ _ _ = None
 

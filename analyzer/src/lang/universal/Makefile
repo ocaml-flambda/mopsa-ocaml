@@ -23,9 +23,10 @@
 
 # Universal
 lang += universal
-lang.universal = ast frontend zone iterators heap numeric strings packing hooks
+#lang.universal = ast frontend iterators heap numeric strings packing hooks
+lang.universal = ast frontend iterators heap numeric packing hooks
 lang.universal.iterators = unittest program intraproc scalar interproc loops
-lang.universal.iterators.interproc = common inlining sequential_cache join_based_cache
+lang.universal.iterators.interproc = common inlining #sequential_cache join_based_cache
 lang.universal.heap = policies recency
 lang.universal.numeric = rounding common values relational reductions
 lang.universal.numeric.values = intervals congruences zero powerset

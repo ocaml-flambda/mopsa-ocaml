@@ -22,9 +22,8 @@
 (** Finite powerset of integer constants *)
 
 open Mopsa
-open Framework.Sig.Abstraction.Value
+open Framework.Abstraction.Sig.Domain.Value
 open Ast
-open Zone
 open Top
 
 
@@ -52,13 +51,6 @@ struct
     end
     )
 
-
-
-  (** {2 Zones & co.} *)
-  (** *************** *)
-
-
-  let zones = [Z_u_num]
 
 
   (** {2 Options} *)
