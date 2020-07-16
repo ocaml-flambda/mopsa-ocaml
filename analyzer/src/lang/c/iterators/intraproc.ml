@@ -54,7 +54,19 @@ struct
   (** Post-condition computation *)
   (** ========================== *)
 
-  let exec stmt man flow = None
+  let exec stmt man flow =
+    match skind stmt with
+    | S_expression { ekind = E_c_assign(x,e); erange } ->
+      man.post (mk_assign x e erange) flow |>
+      OptionExt.return
+
+    | S_expression(e) when is_c_type e.etyp ->
+      Some (
+        man.eval e flow >>$ fun e flow ->
+        Post.return flow
+      )
+
+    | _ -> None
 
 
   (** Evaluation of expressions *)
