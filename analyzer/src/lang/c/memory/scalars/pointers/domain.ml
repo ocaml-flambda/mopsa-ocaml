@@ -392,6 +392,7 @@ struct
 
   (** Assignment abstract transformer *)
   let assign p q mode range man flow =
+    man.eval q flow >>$ fun q flow ->
     let o = mk_offset p mode range in
     match Static_points_to.eval q with
     | AddrOf (b, offset, mode') ->

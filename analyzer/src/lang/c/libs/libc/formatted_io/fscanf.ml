@@ -142,24 +142,21 @@ struct
     (* 𝔼⟦ scanf ⟧ *)
     | E_c_builtin_call("scanf", format :: args) ->
       assign_args format args exp.erange man flow >>$? fun () flow ->
-      man.eval (mk_top s32 exp.erange) flow |>
-      Rewrite.return_eval |>
+      Rewrite.reval_singleton (mk_top s32 exp.erange) flow |>
       OptionExt.return
 
     (* 𝔼⟦ fscanf ⟧ *)
     | E_c_builtin_call("fscanf", stream :: format :: args) ->
       assert_valid_stream stream exp.erange man flow >>$? fun () flow ->
       assign_args format args exp.erange man flow >>$? fun () flow ->
-      man.eval (mk_top s32 exp.erange) flow |>
-      Rewrite.return_eval |>
+      Rewrite.reval_singleton (mk_top s32 exp.erange) flow |>
       OptionExt.return
 
       (* 𝔼⟦ sscanf ⟧ *)
     | E_c_builtin_call("sscanf", src :: format :: args) ->
       assign_args format args exp.erange man flow >>$? fun () flow ->
       assert_valid_string src exp.erange man flow >>$? fun () flow ->
-      man.eval (mk_top s32 exp.erange) flow |>
-      Rewrite.return_eval |>
+      Rewrite.reval_singleton (mk_top s32 exp.erange) flow |>
       OptionExt.return
 
 

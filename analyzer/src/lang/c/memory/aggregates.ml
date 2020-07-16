@@ -477,33 +477,27 @@ struct
   let eval exp man flow =
     match ekind exp with
     | E_c_array_subscript(a, i) ->
-      man.eval (array_subscript a i exp.etyp exp.erange) flow |>
-      Rewrite.return_eval |>
+      Rewrite.reval_singleton (array_subscript a i exp.etyp exp.erange) flow |>
       OptionExt.return
 
     | E_c_member_access (s, i, f) ->
-      man.eval (member_access s i f exp.erange) flow |>
-      Rewrite.return_eval |>
+      Rewrite.reval_singleton (member_access s i f exp.erange) flow |>
       OptionExt.return
 
     | E_c_arrow_access(p, i, f) ->
-      man.eval (arrow_access p i f exp.etyp exp.erange) flow |>
-      Rewrite.return_eval |>
+      Rewrite.reval_singleton (arrow_access p i f exp.etyp exp.erange) flow |>
       OptionExt.return
 
     | E_c_address_of { ekind = E_c_deref p } ->
-      man.eval p flow |>
-      Rewrite.return_eval |>
+      Rewrite.reval_singleton p flow |>
       OptionExt.return
 
     | E_c_address_of { ekind = E_c_array_subscript(a,i) } ->
-      man.eval (address_of_array_subscript a i exp.etyp exp.erange) flow |>
-      Rewrite.return_eval |>
+      Rewrite.reval_singleton (address_of_array_subscript a i exp.etyp exp.erange) flow |>
       OptionExt.return
 
     | E_c_address_of { ekind = E_c_arrow_access(p, i, f) } ->
-      man.eval (address_of_arrow_access p i f exp.etyp exp.erange) flow |>
-      Rewrite.return_eval |>
+      Rewrite.reval_singleton (address_of_arrow_access p i f exp.etyp exp.erange) flow |>
       OptionExt.return
 
     | _ -> None

@@ -61,9 +61,13 @@ let return_singleton ?(cleaners=[]) exp flow = Cases.singleton (Return exp) flow
 
 let forward_singleton ?(cleaners=[]) exp ~semantic flow = Cases.singleton (Forward (exp,semantic)) flow ~cleaners
 
+let reval_singleton = forward_singleton ~semantic:any_semantic
+
 let return_eval evl = Cases.map (fun e -> Return e) evl
 
 let forward_eval evl ~semantic = Cases.map (fun e -> Forward (e,semantic)) evl
+
+let reval_eval = forward_eval ~semantic:any_semantic
 
 let print fmt (evl: 'a rewrite) : unit =
   Cases.print_some (fun fmt de flow -> pp_expr_rewrite fmt de) fmt evl

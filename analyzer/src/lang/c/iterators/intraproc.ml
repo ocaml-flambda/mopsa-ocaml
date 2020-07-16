@@ -77,12 +77,10 @@ struct
     | E_c_conditional(cond, e1, e2) ->
       assume cond
         ~fthen:(fun flow ->
-            man.eval e1 flow |>
-            Rewrite.return_eval
+            Rewrite.reval_singleton e1 flow
           )
         ~felse:(fun flow ->
-            man.eval e2 flow |>
-            Rewrite.return_eval
+            Rewrite.reval_singleton e2 flow
           )
         man flow |>
       OptionExt.return
@@ -90,8 +88,7 @@ struct
     | E_binop(O_c_and, e1, e2) ->
       assume e1
         ~fthen:(fun flow ->
-            man.eval e2 flow |>
-            Rewrite.return_eval
+            Rewrite.reval_singleton e2 flow
           )
         ~felse:(fun flow ->
             Rewrite.return_singleton (Universal.Ast.mk_zero exp.erange) flow
@@ -105,8 +102,7 @@ struct
             Rewrite.return_singleton (Universal.Ast.mk_one exp.erange) flow
           )
         ~felse:(fun flow ->
-            man.eval e2 flow |>
-            Rewrite.return_eval
+            Rewrite.reval_singleton e2 flow
           )
         man flow |>
       OptionExt.return
@@ -124,8 +120,7 @@ struct
           let q' = List.rev q in
           let stmt' = mk_block q' (erange exp) in
           man.post stmt' flow >>$? fun () flow ->
-          man.eval e flow |>
-          Rewrite.return_eval |>
+          Rewrite.reval_singleton e flow |>
           Cases.add_cleaners (List.map (fun v -> mk_remove_var v exp.erange) local_vars) |>
           OptionExt.return
 
@@ -133,8 +128,7 @@ struct
       end
 
     | E_c_statement {skind = S_expression e} ->
-      man.eval e flow |>
-      Rewrite.return_eval |>
+      Rewrite.reval_singleton e flow |>
       OptionExt.return
 
 

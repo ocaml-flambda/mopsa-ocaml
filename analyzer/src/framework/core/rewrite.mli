@@ -42,13 +42,15 @@ val get_expr : expr_rewrite -> expr
 
 val get_semantic_opt : expr_rewrite -> semantic option
 
-val singleton : ?cleaners:stmt list -> expr_rewrite -> 'a flow -> 'a rewrite
+val reval_singleton : ?cleaners:stmt list -> expr -> 'a flow -> 'a rewrite
 
 val return_singleton : ?cleaners:block -> expr -> 'a flow -> 'a rewrite
 
 val forward_singleton : ?cleaners:block -> expr -> semantic:semantic-> 'a flow -> 'a rewrite
 
 val empty_singleton : 'a flow -> 'a rewrite
+
+val reval_eval : 'a Eval.eval -> 'a rewrite
 
 val return_eval : 'a Eval.eval -> 'a rewrite
 

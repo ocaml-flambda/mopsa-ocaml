@@ -464,8 +464,7 @@ struct
     (* 𝔼⟦ (int)num ⟧ *)
     | E_c_cast(e, _) when exp |> etyp |> is_c_int_type &&
                           is_numeric_type e.etyp ->
-      man.eval e flow |>
-      Rewrite.return_eval |>
+      Rewrite.reval_singleton e flow |>
       OptionExt.return
 
     (* 𝔼⟦ (float)float ⟧ *)
@@ -483,8 +482,7 @@ struct
 
     (* 𝔼⟦ ∃v ⟧ *)
     | Stubs.Ast.E_stub_quantified(_,v,S_interval _) ->
-      man.eval (mk_var v exp.erange) flow |>
-      Rewrite.return_eval |>
+      Rewrite.reval_singleton (mk_var v exp.erange) flow |>
       OptionExt.return
 
     | _ ->
@@ -624,6 +622,11 @@ struct
     | S_forget ({ekind = E_var _} as v) when is_c_num_type v.etyp ->
       let vv = mk_num_var_expr v in
       man.post (mk_forget vv stmt.srange) ~semantic:numeric flow |>
+      OptionExt.return
+
+    | S_assume(e) when is_c_num_type e.etyp || is_numeric_type e.etyp ->
+      man.eval e flow >>$? fun e' flow ->
+      man.post ~semantic:numeric (mk_assume (to_compare_expr e') stmt.srange) flow |>
       OptionExt.return
 
     | _ -> None

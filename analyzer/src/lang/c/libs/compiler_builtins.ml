@@ -73,8 +73,7 @@ struct
       OptionExt.return
 
     | E_c_builtin_call("__builtin_expect", [e;v]) ->
-      man.eval e flow |>
-      Rewrite.return_eval |>
+      Rewrite.reval_singleton e flow |>
       OptionExt.return
 
 
