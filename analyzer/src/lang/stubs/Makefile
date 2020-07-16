@@ -22,4 +22,4 @@
 
 # Stubs
 lang += stubs
-lang.stubs = ast zone alarms iterator
+lang.stubs = ast alarms iterator

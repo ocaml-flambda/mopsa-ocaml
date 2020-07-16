@@ -22,10 +22,9 @@
 (** Inter-procedural iterator of stubs by inlining. *)
 
 open Mopsa
-open Sig.Abstraction.Stateless
+open Framework.Abstraction.Sig.Domain.Stateless
 open Universal.Ast
 open Ast
-open Zone
 open Alarms
 
 
@@ -37,13 +36,7 @@ struct
       let name = "stubs.iterator"
     end)
 
-  (** Zoning definition *)
-  (** ================= *)
-
-  let interface = {
-    iexec = {provides = [Z_stubs]; uses = []};
-    ieval = {provides = [Z_stubs, Z_any]; uses = []};
-  }
+  let dependencies = []
 
   let alarms = []
 
@@ -207,7 +200,7 @@ struct
       (cond_to_stmt: expr -> range -> stmt)
       (f: formula with_range)
       range
-      (man:('a, unit, 's) man)
+      (man:('a, unit) man)
       (flow:'a flow)
     : 'a flow =
     debug "@[<hov>eval formula@ %a@]" pp_formula f;
@@ -558,7 +551,7 @@ struct
       stub_func_assigns = List.map (patch_params_history_in_assigns bindings) stub.stub_func_assigns; }
 
   (** Entry point of expression evaluations *)
-  let eval zone exp man flow =
+  let eval exp man flow =
     match ekind exp with
     | E_stub_call (stub, args) ->
       debug "call to stub %s:@\n @[%a@]"
@@ -610,11 +603,11 @@ struct
 
       begin match return with
         | None ->
-          Eval.singleton (mk_unit exp.erange) flow ~cleaners |>
+          Rewrite.return_singleton (mk_unit exp.erange) flow ~cleaners |>
           OptionExt.return
 
         | Some v ->
-          Eval.singleton (mk_var v exp.erange) flow ~cleaners:(mk_remove_var v exp.erange :: cleaners) |>
+          Rewrite.return_singleton (mk_var v exp.erange) flow ~cleaners:(mk_remove_var v exp.erange :: cleaners) |>
           OptionExt.return
       end
 
@@ -624,7 +617,7 @@ struct
   (** Computation of post-conditions *)
   (** ============================== *)
 
-  let exec zone stmt man flow =
+  let exec stmt man flow =
     match skind stmt with
     | S_stub_directive (stub) ->
       (* Prepare assignments *)
