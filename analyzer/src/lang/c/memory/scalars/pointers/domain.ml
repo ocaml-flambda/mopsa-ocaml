@@ -374,6 +374,10 @@ struct
           Rewrite.return_singleton exp flow |>
           OptionExt.return
 
+        | E_c_deref p ->
+          Rewrite.reval_singleton p flow |>
+          OptionExt.return
+
         | _ -> None
       end
 
@@ -754,49 +758,55 @@ struct
   (** Entry point of abstract transformers *)
   let exec stmt man flow =
     match skind stmt with
-    | S_c_declaration(p,init,scope) when is_c_pointer_type p.vtyp ->
+    | S_c_declaration(p,init,scope)
+      when is_c_pointer_type p.vtyp ->
       declare_pointer_var p init scope stmt.srange man flow |>
       OptionExt.return
 
-    | S_assign({ekind = E_var(p, mode)}, q) when is_c_pointer_type p.vtyp ->
+    | S_assign({ekind = E_var(p, mode)}, q)
+      when is_c_pointer_type p.vtyp ->
       assign p q mode stmt.srange man flow |>
       OptionExt.return
 
-    | S_add { ekind = E_var (p, _) } when is_c_pointer_type p.vtyp ->
+    | S_add { ekind = E_var (p, _) }
+      when is_c_pointer_type p.vtyp ->
       add_pointer_var p stmt.srange man flow |>
       OptionExt.return
 
-    | S_remove { ekind = E_var (p, _) } when is_c_pointer_type p.vtyp ->
-      remove_pointer_var p stmt.srange man flow |>
+    | S_remove ({ ekind = E_var (v,_) } as p)
+      when is_c_pointer_type p.etyp ->
+      remove_pointer_var v stmt.srange man flow |>
       OptionExt.return
 
 
-    | S_rename({ekind = E_var (p1, _)}, {ekind = E_var (p2, _)})
-      when is_c_pointer_type p1.vtyp &&
-           is_c_pointer_type p2.vtyp
+    | S_rename(({ekind = E_var (v1, _)} as p1),
+               ({ekind = E_var (v2, _)} as p2))
+      when is_c_pointer_type p1.etyp &&
+           is_c_pointer_type p2.etyp
       ->
-      rename_pointer_var p1 p2 stmt.srange man flow |>
+      rename_pointer_var v1 v2 stmt.srange man flow |>
       OptionExt.return
 
-    | S_expand({ekind = E_var(p,_)}, ql)
-      when is_c_pointer_type p.vtyp &&
+    | S_expand({ekind = E_var (v,_)} as p, ql)
+      when is_c_pointer_type p.etyp &&
+           List.for_all (function { ekind = E_var _ } as q -> is_c_pointer_type q.etyp | _ -> false) ql
+      ->
+      let vl = List.map (function { ekind = E_var(q, _) } -> q | _ -> assert false) ql in
+      expand_pointer_var v vl stmt.srange man flow |>
+      OptionExt.return
+
+     | S_fold({ekind = E_var(v,_)} as p, ql)
+      when is_c_pointer_type p.etyp &&
            List.for_all (function { ekind = E_var(q,_) } -> is_c_pointer_type q.vtyp | _ -> false) ql
       ->
-      let ql = List.map (function { ekind = E_var(q, _) } -> q | _ -> assert false) ql in
-      expand_pointer_var p ql stmt.srange man flow |>
+      let vl = List.map (function { ekind = E_var(q, _) } -> q | _ -> assert false) ql in
+      fold_pointer_var v vl stmt.srange man flow |>
       OptionExt.return
 
-     | S_fold({ekind = E_var(p,_)}, ql)
-      when is_c_pointer_type p.vtyp &&
-           List.for_all (function { ekind = E_var(q,_) } -> is_c_pointer_type q.vtyp | _ -> false) ql
-      ->
-      let ql = List.map (function { ekind = E_var(q, _) } -> q | _ -> assert false) ql in
-      fold_pointer_var p ql stmt.srange man flow |>
-      OptionExt.return
-
-    | S_forget({ekind = E_var(p,_)}) when is_c_pointer_type p.vtyp ->
-      forget_pointer_var p stmt.srange man flow |>
-      OptionExt.return
+     | S_forget({ekind = E_var(v,_)} as p)
+       when is_c_pointer_type p.etyp ->
+       forget_pointer_var v stmt.srange man flow |>
+       OptionExt.return
 
     | S_invalidate e when is_c_type e.etyp  ->
       exec_invalidate_base e stmt.srange man flow |>

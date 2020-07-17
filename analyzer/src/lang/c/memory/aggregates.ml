@@ -488,18 +488,6 @@ struct
       Rewrite.reval_singleton (arrow_access p i f exp.etyp exp.erange) flow |>
       OptionExt.return
 
-    | E_c_address_of { ekind = E_c_deref p } ->
-      Rewrite.reval_singleton p flow |>
-      OptionExt.return
-
-    | E_c_address_of { ekind = E_c_array_subscript(a,i) } ->
-      Rewrite.reval_singleton (address_of_array_subscript a i exp.etyp exp.erange) flow |>
-      OptionExt.return
-
-    | E_c_address_of { ekind = E_c_arrow_access(p, i, f) } ->
-      Rewrite.reval_singleton (address_of_arrow_access p i f exp.etyp exp.erange) flow |>
-      OptionExt.return
-
     | _ -> None
 
   let ask _ _ _  = None
