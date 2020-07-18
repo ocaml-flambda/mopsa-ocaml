@@ -133,37 +133,6 @@ struct
   (** {2 Utility functions} *)
   (** ********************* *)
 
-  (** [is_assume_operands lval n] checks that [lval] and [n] are the
-      operands of an assume statement [*(p + i) ? n] *)
-  let is_assume_operands lval n =
-     is_c_int_type lval.etyp &&
-     is_c_deref lval &&
-     not (OptionExt.apply is_c_deref false n) &&
-     not (is_expr_forall_quantified lval) &&
-     not (OptionExt.apply is_expr_forall_quantified false n)
-
-
-  (** [is_quantified_assume_operands lval n] checks that [lval] and [n]
-      are the operands of a quantified assume statement [*(p + ∀i) ? n] *)
-  let is_quantified_assume_operands lval n =
-     is_c_int_type lval.etyp &&
-     is_c_deref lval &&
-     not (is_c_deref n) &&
-     is_lval_offset_forall_quantified lval &&
-     not (is_expr_forall_quantified n)
-
-
-  (** [is_double_quantified_assume_operands lval1 lval2] checks that [lval1] and [lval2]
-      are the operands of a double quantified assume statement [*(p + ∀i) ? *(q + ∀j)] *)
-  let is_double_quantified_assume_operands lval1 lval2 =
-     is_c_int_type lval1.etyp &&
-     is_c_int_type lval2.etyp &&
-     is_c_deref lval1 &&
-     is_c_deref lval2 &&
-     is_lval_offset_forall_quantified lval1 &&
-     is_lval_offset_forall_quantified lval2
-
-
   (** Get the base and offset pointed by ptr. Since we do not track invalid
       dereferences, we ignore invalid pointers.
       Offsets are still counted in bytes (not elem_size).
@@ -481,14 +450,15 @@ struct
 
 
 
-  (** 𝕊⟦ *(p + ∀i) == n ⟧ *)
+  (** 𝕊⟦ ∀i ∈ [a,b] : *(p + i) == n ⟧ *)
   (* FIXME: this transfer function is sound only when the offset is an
      affine function with coefficient 1, i.e. of the form ∀i + a *)
-  let exec_assume_quantified_eq base boffset ctype mode n range man flow =
+  let exec_assume_quantified_eq i a b base boffset ctype mode n range man flow =
     let char_size = sizeof_type ctype in
     if char_size <> Z.of_int elem_size then Post.return flow else
     (** Get symbolic bounds of the offset *)
-    match Common.Quantified_offset.bound_div boffset char_size man flow with
+    let quants = [(FORALL,i,S_interval(a,b))] in  
+    match Common.Quantified_offset.bound_div boffset char_size quants man flow with
     | Top.TOP -> Post.return flow
     | Top.Nt (min,max) ->
     man.eval min flow >>$ fun min flow ->
@@ -538,13 +508,14 @@ struct
     ] ~semantic:numeric man flow
 
 
-  (** 𝕊⟦ *(p + ∀i) != 0 ⟧ *)
+  (** 𝕊⟦ ∀i ∈ [a,b] : *(p + ∀i) != 0 ⟧ *)
   (* FIXME: this transfer function is sound only when the offset is an
      affine function with coefficient 1, i.e. of the form ∀i + a *)
-  let exec_assume_quantified_ne_zero base boffset ctype mode range man flow =
+  let exec_assume_quantified_ne_zero i a b base boffset ctype mode range man flow =
     (** Get symbolic bounds of the offset *)
     let char_size = sizeof_type ctype in
-    match Common.Quantified_offset.bound_div boffset char_size man flow with
+    let quants = [(FORALL,i,S_interval(a,b))] in  
+    match Common.Quantified_offset.bound_div boffset char_size quants man flow with
     | Top.TOP -> Post.return flow
     | Top.Nt (min,max) ->
     man.eval min flow >>$ fun min flow ->
@@ -586,35 +557,35 @@ struct
 
 
 
-  (** 𝕊⟦ *(p + ∀i) ? n ⟧ *)
+  (** 𝕊⟦ ∀i ∈ [a,b] : *(p + i) ? n ⟧ *)
   (* FIXME: this transfer function is sound only when the offset is an
      affine function with coefficient 1, i.e. of the form ∀i + a *)
-  let exec_assume_quantified op lval n range man flow =
+  let exec_assume_quantified i a b op lval n range man flow =
     let ctype = (remove_casts lval).etyp in
     eval_pointed_base_offset (mk_c_address_of lval range) range man flow >>$ fun (base,boffset,mode) flow ->
     if not (is_interesting_base base) then
       Post.return flow
     else
       match op with
-      | O_eq -> exec_assume_quantified_eq base boffset ctype mode n range man flow
+      | O_eq -> exec_assume_quantified_eq i a b base boffset ctype mode n range man flow
       | O_ne ->
         begin match c_expr_to_z n with
          | Some n when Z.(n = zero) ->
-            exec_assume_quantified_ne_zero base boffset ctype mode range man flow
+            exec_assume_quantified_ne_zero i a b base boffset ctype mode range man flow
          | Some n -> Post.return flow
          | None ->
            assume (eq n zero range)
-             ~fthen:(fun flow -> exec_assume_quantified_ne_zero base boffset ctype mode range man flow)
+             ~fthen:(fun flow -> exec_assume_quantified_ne_zero i a b base boffset ctype mode range man flow)
              ~felse:(fun flow -> Post.return flow)
              man flow
         end
       | _ -> Post.return flow
 
 
-  (** 𝕊⟦ *(p + ∀i) == *(q + ∀j) ⟧ *)
+  (** 𝕊⟦ ∀i ∈ [a,b] :*(p + i) == *(q + i) ⟧ *)
   (* FIXME: this transfer function is sound only when the offset is an
      affine function with coefficient 1, i.e. of the form ∀i + a *)
-  let exec_assume_double_quantified_eq lval1 lval2 range man flow =
+  let exec_assume_double_quantified_eq i a b lval1 lval2 range man flow =
     let ctype1 = (remove_casts lval1).etyp
     and ctype2 = (remove_casts lval2).etyp in
     let evl1 = eval_pointed_base_offset (mk_c_address_of lval1 range) range man flow in
@@ -630,9 +601,10 @@ struct
        sizeof_type ctype1 <> Z.of_int elem_size then Post.return flow else
 
     (* Get symbolic bounds of quantified offsets *)
+    let quants = [(FORALL,i,S_interval(a,b))] in  
     match
-      Common.Quantified_offset.bound_div boffset1 (Z.of_int elem_size) man flow,
-      Common.Quantified_offset.bound_div boffset2 (Z.of_int elem_size) man flow
+      Common.Quantified_offset.bound_div boffset1 (Z.of_int elem_size) quants man flow,
+      Common.Quantified_offset.bound_div boffset2 (Z.of_int elem_size) quants man flow
     with
     | Top.TOP,_ | _, Top.TOP -> Post.return flow
     | Top.Nt (min1,max1), Top.Nt (min2,max2) ->
@@ -724,33 +696,54 @@ struct
     (* 𝕊⟦ *(p + i) == n ⟧ *)
     | S_assume({ ekind = E_binop(O_eq, lval, n)})
     | S_assume({ ekind = E_unop(O_log_not, { ekind = E_binop(O_ne, lval, n)} )})
-      when is_assume_operands lval (Some n)
+      when is_c_int_type lval.etyp &&
+           is_c_deref lval &&
+           is_c_int_type n.etyp &&
+           not (is_c_deref n)
       ->
       exec_assume_eq lval n stmt.srange man flow |>
       OptionExt.return
 
-    (* 𝕊⟦ *(p + ∀i) == n ⟧ *)
-    | S_assume({ ekind = E_binop(O_eq, lval, n)})
-    | S_assume({ ekind = E_unop(O_log_not, { ekind = E_binop(O_ne, lval, n)} )})
-      when is_quantified_assume_operands lval n
+    (* 𝕊⟦ ∀i ∈ [a,b] : *(p + i) == n ⟧ *)
+    | S_assume({ ekind = E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_binop(O_eq, lval, n) }) })
+    | S_assume({ ekind = E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_unop(O_log_not, { ekind = E_binop(O_ne, lval, n)}) }) })
+      when is_c_int_type lval.etyp &&
+           is_c_deref lval &&
+           is_c_int_type n.etyp &&
+           not (is_c_deref n) &&
+           is_c_int_type i.vtyp &&
+           is_var_in_expr i lval &&
+           not (is_var_in_expr i n)
       ->
-      exec_assume_quantified O_eq lval n stmt.srange man flow |>
+      exec_assume_quantified i a b O_eq lval n stmt.srange man flow |>
       OptionExt.return
 
-    (* 𝕊⟦ *(p + ∀i) != n ⟧ *)
-    | S_assume({ ekind = E_binop(O_ne, lval, n)})
-    | S_assume({ ekind = E_unop(O_log_not, { ekind = E_binop(O_eq, lval, n)} )})
-      when is_quantified_assume_operands lval n
+    (* 𝕊⟦ ∀i ∈ [a,b] : *(p + i) != n ⟧ *)
+    | S_assume({ ekind = E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_binop(O_ne, lval, n)}) })
+    | S_assume({ ekind = E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_unop(O_log_not, { ekind = E_binop(O_eq, lval, n)} )}) })
+      when is_c_int_type lval.etyp &&
+           is_c_deref lval &&
+           is_c_int_type n.etyp &&
+           not (is_c_deref n) &&
+           is_c_int_type i.vtyp &&
+           is_var_in_expr i lval &&
+           not (is_var_in_expr i n)
       ->
-      exec_assume_quantified O_ne lval n stmt.srange man flow |>
+      exec_assume_quantified i a b O_ne lval n stmt.srange man flow |>
       OptionExt.return
 
-    (* 𝕊⟦ *(p + ∀i) == *(q + ∀j) ⟧ *)
-    | S_assume({ ekind = E_binop(O_eq, lval1, lval2)})
-    | S_assume({ ekind = E_unop(O_log_not, { ekind = E_binop(O_ne, lval1, lval2)} )})
-      when is_double_quantified_assume_operands lval1 lval2
+    (* 𝕊⟦ ∀i ∈ [a,b]: *(p + i) == *(q + i) ⟧ *)
+    | S_assume({ ekind = E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_binop(O_eq, lval1, lval2)}) })
+    | S_assume({ ekind = E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_unop(O_log_not, { ekind = E_binop(O_ne, lval1, lval2)} )}) })
+      when is_c_int_type lval1.etyp &&
+           is_c_deref lval1 &&
+           is_c_int_type lval2.etyp &&
+           is_c_deref lval2 &&
+           is_c_int_type i.vtyp &&
+           is_var_in_expr i lval1 &&
+           is_var_in_expr i lval2
       ->
-      exec_assume_double_quantified_eq lval1 lval2 stmt.srange man flow |>
+      exec_assume_double_quantified_eq i a b lval1 lval2 stmt.srange man flow |>
       OptionExt.return
 
     | _ -> None

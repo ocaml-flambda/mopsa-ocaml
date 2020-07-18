@@ -1091,20 +1091,6 @@ let get_c_deref_type e =
   | E_c_deref p -> under_type p.etyp
   | _ -> assert false
 
-let is_pointer_offset_forall_quantified p =
-  let open Stubs.Ast in
-  match remove_casts p |> ekind with
-  | E_binop(_,e1,e2) when is_c_pointer_type e1.etyp -> is_expr_forall_quantified e2
-  | E_binop(_,e1,e2) when is_c_pointer_type e2.etyp -> is_expr_forall_quantified e1
-  | _ -> false
-
-let is_lval_offset_forall_quantified e =
-  let open Stubs.Ast in
-  match remove_casts e |> ekind with
-  | E_c_deref(p) -> is_pointer_offset_forall_quantified p
-  | E_c_array_subscript(_,o) -> is_expr_forall_quantified o
-  | _ -> false
-
 (** Check if v is declared as a variable length array *)
 let is_c_variable_length_array_type t =
   match remove_typedef_qual t with

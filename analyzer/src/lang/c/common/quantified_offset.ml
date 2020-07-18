@@ -26,37 +26,38 @@ open Ast
 open Top
 
 
-
 (** Compute symbolic boundaries of a quantified offset. *)
 (* FIXME: works only for linear expressions *)
-let rec bound offset : expr * expr =
-  match ekind offset with
+let rec bound offset quants : expr * expr =
+  match ekind @@ get_orig_expr offset with
   | E_constant _ -> offset, offset
 
-  | E_var (v, _) -> offset, offset
+  | E_var (v, _) when is_forall_quantified_var v quants ->
+    find_quantified_var_interval v quants
 
-  | E_stub_quantified(FORALL, _, S_interval(l, u)) -> l, u
+  | E_var _ ->
+    offset, offset
 
   | E_unop (O_minus, e) ->
-    let l, u = bound e in
+    let l, u = bound e quants in
     { offset with ekind = E_unop (O_minus, u)},
     { offset with ekind = E_unop (O_minus, l)}
 
   | E_binop (O_plus, e1, e2) ->
-    let l1, u1 = bound e1 in
-    let l2, u2 = bound e2 in
+    let l1, u1 = bound e1 quants in
+    let l2, u2 = bound e2 quants in
     { offset with ekind = E_binop (O_plus, l1, l2)},
     { offset with ekind = E_binop (O_plus, u1, u2)}
 
   | E_binop (O_minus, e1, e2) ->
-    let l1, u1 = bound e1 in
-    let l2, u2 = bound e2 in
+    let l1, u1 = bound e1 quants in
+    let l2, u2 = bound e2 quants in
     { offset with ekind = E_binop (O_minus, l1, u2)},
     { offset with ekind = E_binop (O_minus, u1, l2)}
 
   | E_binop (O_mult, e, ({ ekind = E_constant (C_int c) } as const))
   | E_binop (O_mult, ({ ekind = E_constant (C_int c) } as const), e) ->
-    let l, u = bound e in
+    let l, u = bound e quants in
     if Z.geq c Z.zero then
       { offset with ekind = E_binop (O_mult, l, { const with ekind = E_constant (C_int c) })},
       { offset with ekind = E_binop (O_mult, u, { const with ekind = E_constant (C_int c) })}
@@ -65,7 +66,7 @@ let rec bound offset : expr * expr =
       { offset with ekind = E_binop (O_mult, l, { const with ekind = E_constant (C_int c) })}
 
   | E_c_cast(e, xplct) ->
-    let l, u = bound e in
+    let l, u = bound e quants in
     { offset with ekind = E_c_cast (l, xplct)},
     { offset with ekind = E_c_cast (u, xplct)}
 
@@ -91,10 +92,10 @@ let is_aligned e sz man flow =
 
 
 (** Compute symbolic boundaries of offset / den *)
-let bound_div (offset:expr) (den:Z.t) man flow : (expr * expr) with_top =
+let bound_div (offset:expr) (den:Z.t) quants man flow : (expr * expr) with_top =
   let rec doit offset den  =
     let range = erange offset in
-    match ekind offset with
+    match ekind @@ get_orig_expr offset with
     | E_constant (C_int c) when Z.rem c den = Z.zero ->
       let r =
         if den = Z.one then offset
@@ -102,12 +103,16 @@ let bound_div (offset:expr) (den:Z.t) man flow : (expr * expr) with_top =
         else div offset (mk_z den range) range in
       r, r
 
-    | E_var (v, _) ->
+    | E_var (v, _) when is_forall_quantified_var v quants ->
+      if den = Z.one then
+        find_quantified_var_interval v quants
+      else
+        raise Found_TOP
+
+    | E_var (v,_) ->
       if not (is_aligned offset den man flow) then raise Found_TOP;
       let r = if den = Z.one then offset else div offset (mk_z den range) range in
       r, r
-
-    | E_stub_quantified(FORALL, _, S_interval(l, u)) when den = Z.one -> l, u
 
     | E_unop (O_minus, e) ->
       let l, u = doit e den in

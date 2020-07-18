@@ -196,6 +196,7 @@ type quant =
   | FORALL
   | EXISTS
 
+
 type expr_kind +=
   | E_stub_call of stub_func (** called stub *) * expr list (** arguments *)
   (** Call to a stubbed function *)
@@ -205,9 +206,6 @@ type expr_kind +=
 
   | E_stub_builtin_call of builtin * expr
   (** Call to a built-in function *)
-
-  | E_stub_quantified of quant * var * set (** quantified variable over a set of values *)
-  (** Quantified variable *)
 
   | E_stub_attribute of expr * string
   (** Access to an attribute of a resource *)
@@ -221,6 +219,9 @@ type expr_kind +=
   | E_stub_primed of expr
   (** Primed expressions denoting values in the post-state *)
 
+  | E_stub_quantified_formula of (quant * var * set) list (** Prefix containing the list of quantified variables *) *
+                                 expr (** Quantifier-free formula *)
+  (** Quantified formula in prenex normal form *)
 
 
 (** {2 Statements} *)
@@ -292,36 +293,11 @@ let mk_stub_call stub args range =
 let mk_stub_builtin_call builtin arg ~etyp range =
   mk_expr (E_stub_builtin_call (builtin,arg)) ~etyp range
 
-let mk_stub_quantified quant v s range =
-  mk_expr (E_stub_quantified(quant, v, s)) range ~etyp:v.vtyp
-
 let mk_stub_resource_mem e res range =
   mk_expr (E_stub_resource_mem (e, res)) ~etyp:T_bool range
 
 let mk_stub_primed e range =
   mk_expr (E_stub_primed e) ~etyp:e.etyp range
-
-
-(** Check whether an expression is quantified? *)
-let is_expr_quantified quant e =
-  Visitor.fold_expr
-    (fun acc e ->
-       match ekind e with
-       | E_stub_quantified (q,_,_) -> Keep (q = quant)
-       | _ -> VisitParts acc
-    )
-    (fun acc s -> VisitParts acc)
-    false
-    e
-
-
-(** Check whether an expression is universally quantified? *)
-let is_expr_forall_quantified e =
-  is_expr_quantified FORALL e
-
-(** Check whether an expression is existentially quantified? *)
-let is_expr_exists_quantified e =
-  is_expr_quantified EXISTS e
 
 let mk_stub_directive stub range =
   mk_stmt (S_stub_directive stub) range
@@ -341,6 +317,9 @@ let mk_stub_clean_all_assigns assigns range =
 let mk_stub_requires cond range =
   mk_stmt (S_stub_requires cond) range
 
+let mk_stub_quantified_formula ?(etyp=T_bool) quants cond range =
+  mk_expr (E_stub_quantified_formula (quants, cond)) ~etyp range
+
 let is_stub_primed e =
   fold_expr
     (fun acc ee ->
@@ -350,6 +329,42 @@ let is_stub_primed e =
     )
     (fun acc stmt -> VisitParts acc)
     false e
+
+
+let find_var_quantifier v quants =
+  let rec iter = function
+    | [] -> raise Not_found
+    | (q,vv,s)::tl -> if compare_var v vv = 0 then (q,s) else iter tl
+  in
+  iter quants
+
+let find_var_quantifier_opt v quants =
+  try Some (find_var_quantifier v quants)
+  with Not_found -> None
+
+let is_quantified_var v quants =
+  match find_var_quantifier_opt v quants with
+  | None -> false
+  | Some _ -> true
+
+let is_forall_quantified_var v quants =
+  match find_var_quantifier_opt v quants with
+  | None -> false
+  | Some (q,_) -> q = FORALL
+
+let is_exists_quantified_var v quants =
+  match find_var_quantifier_opt v quants with
+  | None -> false
+  | Some (q,_) -> q = EXISTS
+
+let find_quantified_var_interval v quants =
+  match find_var_quantifier v quants with
+  | (_,S_interval(lo,hi)) -> (lo,hi)
+  | _ -> raise Not_found
+
+let find_quantified_var_interval_opt v quants =
+  try Some (find_quantified_var_interval v quants)
+  with Not_found -> None
 
 (** Visit expressions present in a formula *)
 let rec visit_expr_in_formula visitor f =
@@ -378,33 +393,6 @@ let negate_log_binop : log_binop -> log_binop = function
   | AND -> OR
   | OR -> AND
   | IMPLIES -> assert false
-
-
-let flip_quantified_var v s f =
-  visit_expr_in_formula
-    (fun e ->
-       match ekind e with
-       | E_stub_quantified(FORALL, vv, s) when compare_var v vv = 0 ->
-         VisitParts { e with ekind = E_stub_quantified(EXISTS, v, s) }
-
-       | E_stub_quantified(EXISTS, vv, s) when compare_var v vv = 0 ->
-         VisitParts { e with ekind = E_stub_quantified(FORALL, v, s) }
-
-       | _ -> VisitParts e
-    ) f
-
-let flip_quantified_vars s f =
-  visit_expr_in_formula
-    (fun e ->
-       match ekind e with
-       | E_stub_quantified(FORALL, v, s) ->
-         VisitParts { e with ekind = E_stub_quantified(EXISTS, v, s) }
-
-       | E_stub_quantified(EXISTS, v, s) ->
-         VisitParts { e with ekind = E_stub_quantified(FORALL, v, s) }
-
-       | _ -> VisitParts e
-    ) f
 
 
 (** {2 Pretty printers} *)
@@ -522,42 +510,6 @@ let pp_stub_func fmt stub = pp_sections fmt stub.stub_func_body
 
 let pp_stub_directive fmt stub = pp_sections fmt stub.stub_directive_body
 
-let pp_stub_quantified_expr fmt exp =
-  (* Get quantified variables *)
-  let rec visitor acc e =
-    match ekind e with
-    | E_stub_quantified(q,v,s) ->
-      let acc,s = match s with
-        | S_resource _ -> acc,s
-        | S_interval (lo,hi) ->
-          let acc,lo = visit_expr acc lo in
-          let acc,hi = visit_expr acc hi in
-          acc,S_interval(lo,hi)
-      in
-      Visitor.Keep ((q,v,s)::acc, { e with ekind = E_var(v,None) })
-    | _ -> VisitParts (acc,e)
-
-  and visit_expr acc e =
-    Visitor.fold_map_expr
-      visitor (fun acc s -> VisitParts(acc,s))
-      acc e
-  in
-  (* Print the expression as quantified formula *)
-  let qvl, exp' = visit_expr [] exp in
-  match qvl with
-  | [] -> pp_expr fmt exp
-  | _ ->
-    (* Remove duplicates *)
-    let qvl = List.sort_uniq (fun (_,v1,_)  (_,v2,_) -> compare_var v1 v2) qvl in
-    Format.fprintf fmt "%a: %a"
-      (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
-         (fun fmt (q,v,s) ->
-            Format.fprintf fmt "%a %a ∈ %a" pp_quantifier q pp_var v pp_set s
-         )
-      ) qvl
-      pp_expr exp'
-                
-
 
 (** {2 Registration of expressions} *)
 (*  =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= *)
@@ -578,12 +530,6 @@ let () =
             (fun () -> compare_expr arg1 arg2)
           ]
 
-        | E_stub_quantified(q1, v1, set1), E_stub_quantified(q2, v2, set2) ->
-          Compare.compose [
-            (fun () -> compare q1 q2);
-            (fun () -> compare_var v1 v2);
-            (fun () -> compare_set set1 set2);
-          ]
 
         | E_stub_attribute(o1, f1), E_stub_attribute(o2, f2) ->
           Compare.compose [
@@ -603,6 +549,12 @@ let () =
         | E_stub_primed(e1), E_stub_primed(e2) ->
           compare_expr e1 e2
 
+        | E_stub_quantified_formula(quants1,cond1), E_stub_quantified_formula(quants2,cond2) ->
+          Compare.pair
+            (Compare.list (Compare.triple compare compare_var compare_set))
+            compare_expr
+            (quants1,cond1) (quants2,cond2)
+
         | _ -> next e1 e2
       );
 
@@ -619,11 +571,6 @@ let () =
           { exprs = [arg]; stmts = [] },
           (function {exprs = [arg]} -> {e with ekind = E_stub_builtin_call(f, arg)} | _ -> assert false)
 
-        | E_stub_quantified(_,_,S_resource _) -> leaf e
-        | E_stub_quantified(q,v,S_interval(a,b)) ->
-          { exprs = [a;b]; stmts = [] },
-          (function { exprs = [a;b] } -> { e with ekind = E_stub_quantified(q, v, S_interval(a,b)) } | _ -> assert false)
-
         | E_stub_attribute(o, f) ->
           { exprs = [o]; stmts = [] },
           (function { exprs = [o] } -> { e with ekind = E_stub_attribute(o, f) } | _ -> assert false)
@@ -638,6 +585,26 @@ let () =
           { exprs = [ee]; stmts = [] },
           (function { exprs = [ee] } -> { e with ekind = E_stub_primed(ee) } | _ -> assert false)
 
+        | E_stub_quantified_formula(quants,cond) ->
+          let rec decompose_quants quants =
+            match quants with
+            | [] -> []
+            | (_,_,S_interval(hi,lo))::tl -> hi::lo::decompose_quants tl
+            | (_,_,S_resource _)::tl -> decompose_quants tl
+          in
+          let rec recompose_quants quants bounds =
+            match quants, bounds with
+            | [], [] -> []
+            | (q,v,S_interval _)::tl1, lo::hi::tl2 -> (q,v,S_interval(lo,hi))::recompose_quants tl1 tl2
+            | (q,v,S_resource r)::tl1, l2 -> (q,v,S_resource r)::recompose_quants tl1 l2
+            | _ -> assert false
+          in
+          { exprs = decompose_quants quants @ [cond]; stmts = [] },
+          (function { exprs } ->
+             let rexprs = List.rev exprs in
+             let cond = List.hd rexprs and quants = recompose_quants quants (List.rev @@ List.tl rexprs) in
+             { e with ekind = E_stub_quantified_formula(quants,cond) })
+
         | _ -> next e
       );
 
@@ -646,12 +613,16 @@ let () =
         | E_stub_call (s, args) -> fprintf fmt "stub %s(%a)" s.stub_func_name (pp_list pp_expr ", ") args
         | E_stub_return -> pp_print_string fmt "return"
         | E_stub_builtin_call(f, arg) -> fprintf fmt "%a(%a)" pp_builtin f pp_expr arg
-        | E_stub_quantified(FORALL, v, _) -> fprintf fmt "∀%a" pp_var v
-        | E_stub_quantified(EXISTS, v, _) -> fprintf fmt "∃%a" pp_var v
         | E_stub_attribute(o, f) -> fprintf fmt "%a:%s" pp_expr o f
         | E_stub_alloc r -> fprintf fmt "alloc res(%s)" r
         | E_stub_resource_mem(x, res) -> fprintf fmt "%a ∈ %a" pp_expr x pp_resource res
         | E_stub_primed(ee) -> fprintf fmt "%a'" pp_expr ee
+        | E_stub_quantified_formula(quants,cond) ->
+          fprintf fmt "%a : %a"
+            (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ")
+               (fun fmt (q,v,s) -> fprintf fmt "%a%a ∈ %a" pp_quantifier q pp_var v pp_set s)
+            ) quants
+            pp_expr cond
         | _ -> next fmt e
       );
   }

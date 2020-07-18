@@ -117,7 +117,7 @@ struct
       (* Convert the assigned indices to temporary quantified variables *)
       let quant_indices_with_tmps = List.map (fun (a,b) ->
           let tmp = mktmp ~typ:s32 () in
-          mk_stub_quantified FORALL tmp (S_interval(a,b)) range, tmp, a, b
+          (FORALL, tmp, S_interval(a,b)), tmp, a, b
         ) assigned_indices
       in
 
@@ -125,18 +125,19 @@ struct
       let primed_target = mk_primed_address base offset (under_type typ) range in
 
       (* Create the assigned lval *)
-      let adds, assumes, lval, cleaners = List.fold_left (fun (adds,assumes,acc,cleaners) (i,tmp,a,b) ->
+      let adds, assumes, quants, lval, cleaners = List.fold_left (fun (adds,assumes,quants,acc,cleaners) (q,tmp,a,b) ->
           mk_add_var tmp range :: adds,
           mk_assume (mk_in (mk_var tmp range) a b range) range :: assumes,
-          mk_c_subscript_access acc i range,
+          q::quants,
+          mk_c_subscript_access acc (mk_var tmp range) range,
           mk_remove_var tmp range :: cleaners
-        ) ([],[],primed_target,[]) quant_indices_with_tmps
+        ) ([],[],[],primed_target,[]) quant_indices_with_tmps
       in
 
       (* Execute `forget lval` *)
       man.post (mk_block adds range) flow >>$ fun () flow ->
       man.post (mk_block assumes range) flow >>$ fun () flow ->
-      man.post (mk_forget lval range) flow >>$ fun () flow ->
+      man.post (mk_forget (mk_stub_quantified_formula quants lval ~etyp:typ range) range) flow >>$ fun () flow ->
       man.post (mk_block cleaners range) flow
 
 

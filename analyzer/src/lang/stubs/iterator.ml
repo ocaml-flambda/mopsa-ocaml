@@ -98,16 +98,14 @@ struct
       with_range (F_exists (
           var,
           set,
-          flip_quantified_var var set ff |>
-          negate_formula
+          negate_formula ff
         )) f.range
 
     | F_exists (var, set, ff) ->
       with_range (F_forall (
           var,
           set,
-          flip_quantified_var var set ff |>
-          negate_formula
+          negate_formula ff
         )) f.range
 
     | F_in (e, S_interval(l,u)) ->
@@ -180,21 +178,95 @@ struct
       assert false
 
 
-    (*   AlarmSet.fold2_diff
-     * match AlarmSet.subset (Flow.get_alarms f1) (Flow.get_alarms flow),
-     *       AlarmSet.subset (Flow.get_alarms f2) (Flow.get_alarms flow)
-     * with
-     * | false,true
-     * | true,false ->
-     *   (\* Only one evaluation detected alarms, so ignore them *\)
-     *   Flow.get_alarms flow
-     *
-     * | true, true
-     * | false, false ->
-     *   (\* Both evaluations behave similarly, so keep them *\)
-     *   AlarmSet.union (Flow.get_alarms f1) (Flow.get_alarms f2) *)
+  (** Translate a formula into prenex normal form *)
+  let rec to_prenex_formula f man flow =
+    match f.content with
+    | F_expr cond ->
+      Cases.singleton ([], cond) flow
+
+    | F_binop (AND, f1, f2) ->
+      to_prenex_formula f1 man flow >>$ fun (quants1, cond1) flow ->
+      to_prenex_formula f2 man flow >>$ fun (quants2, cond2) flow ->
+      Cases.singleton (quants1@quants2, mk_log_and cond1 cond2 f.range) flow
+
+    | F_binop (OR, f1, f2) ->
+      to_prenex_formula f1 man flow >>$ fun (quants1, cond1) flow ->
+      to_prenex_formula f2 man flow >>$ fun (quants2, cond2) flow ->
+      Cases.singleton (quants1@quants2, mk_log_or cond1 cond2 f.range) flow
+
+    | F_binop (IMPLIES, f1, f2) ->
+      to_prenex_formula (negate_formula f1) man flow >>$ fun (quants1, cond1) flow ->
+      to_prenex_formula f2 man flow >>$ fun (quants2, cond2) flow ->
+      Cases.singleton (quants1@quants2, mk_log_or cond1 cond2 f.range) flow
+
+    | F_not ff ->
+      to_prenex_formula (negate_formula ff) man flow
+
+    | F_in (e, S_interval (l, u)) ->
+      Cases.singleton ([], mk_in e l u f.range) flow
+
+    | F_in (e, S_resource res ) ->
+      Cases.singleton ([], mk_stub_resource_mem e res f.range) flow
+
+    | F_forall(v,(S_resource _ as s),ff) ->
+      to_prenex_formula ff man flow >>$ fun (quants,cond) flow -> 
+      Cases.singleton ((FORALL,v,s)::quants, cond) flow
+
+    | F_forall(v,(S_interval (lo,hi) as s),ff) ->
+      assume
+        (mk_le lo hi f.range)
+        ~fthen:(fun flow ->
+            man.exec (mk_add_var v f.range) flow |>
+            man.exec (mk_assume (mk_in (mk_var v f.range) lo hi f.range) f.range) |>
+            to_prenex_formula ff man >>$ fun (quants,cond) flow -> 
+            Cases.singleton ((FORALL,v,s)::quants, cond) flow
+          )
+        ~felse:(fun flow ->
+            Cases.singleton ([],mk_true f.range) flow
+          )
+        man flow
+
+    | F_exists(v,(S_resource _ as s),ff) ->
+      to_prenex_formula ff man flow >>$ fun (quants,cond) flow -> 
+      Cases.singleton ((EXISTS,v,s)::quants, cond) flow
+
+    | F_exists(v,(S_interval (lo,hi) as s),ff) ->
+      assume
+        (mk_le lo hi f.range)
+        ~fthen:(fun flow ->
+            man.exec (mk_add_var v f.range) flow |>
+            man.exec (mk_assume (mk_in (mk_var v f.range) lo hi f.range) f.range) |>
+            to_prenex_formula ff man >>$ fun (quants,cond) flow -> 
+            Cases.singleton ((EXISTS,v,s)::quants, cond) flow
+          )
+        ~felse:(fun flow ->
+            Cases.singleton ([],mk_false f.range) flow
+          )
+        man flow
+
+  (** Evaluate a quantified formula *)
+  let eval_prenex_formula cond_to_stmt quants cond range man flow : 'a flow =
+    let cond' =
+      match quants with
+      | [] -> cond
+      | _ -> mk_stub_quantified_formula quants cond range
+    in
+    let flow = man.exec (cond_to_stmt cond' range) flow in
+    List.fold_left
+      (fun acc (_,v,s) ->
+         match s with
+         | S_interval _ -> man.exec (mk_remove_var v range) acc
+         | S_resource _ -> acc) 
+      flow quants
 
 
+  let eval_quantified_formula cond_to_stmt f man flow =
+    to_prenex_formula f man flow |>
+    Cases.apply_some
+      (fun (quants,cond) flow -> eval_prenex_formula cond_to_stmt quants cond f.range man flow)
+      (Flow.join man.lattice)
+      (Flow.meet man.lattice)
+      (Flow.bottom_from flow)
 
   let rec eval_formula
       (cond_to_stmt: expr -> range -> stmt)
@@ -221,7 +293,6 @@ struct
       Flow.join man.lattice flow1 flow2 |>
       Flow.set_alarms alarms
 
-
     | F_binop (IMPLIES, f1, f2) ->
       let nf1 = eval_formula mk_assume (negate_formula f1) range man flow in
       let f2 = eval_formula mk_assume f1 range man flow |>
@@ -233,11 +304,9 @@ struct
       let ff' = negate_formula ff in
       eval_formula cond_to_stmt ff' range man flow
 
-    | F_forall (v, s, ff) ->
-      eval_quantified_formula cond_to_stmt FORALL v s ff range man flow
-
-    | F_exists (v, s, ff) ->
-      eval_quantified_formula cond_to_stmt EXISTS v s ff range man flow
+    | F_forall _
+    | F_exists _ ->
+      eval_quantified_formula cond_to_stmt f man flow
 
     | F_in (e, S_interval (l, u)) ->
       man.exec (cond_to_stmt (mk_in e l u f.range) range) flow
@@ -246,44 +315,6 @@ struct
       man.exec (cond_to_stmt (mk_stub_resource_mem e res f.range) range) flow
 
 
-  (** Evaluate a quantified formula and its eventual negation *)
-  and eval_quantified_formula cond_to_stmt q v s f range man flow : 'a flow =
-    (* Check that the set [s] is not empty *)
-    let cond =
-      match s with
-      | S_resource _ -> mk_true range
-      | S_interval(a,b) -> mk_binop a O_le b range
-    in
-    assume_flow cond
-      ~fthen:(fun flow ->
-          (* Add [v] to the environment *)
-          let flow = man.exec (mk_add_var v range) flow in
-          (* Ensure that [v] is in the set [s] *)
-          let flow = match s with
-            | S_resource _ -> flow
-            | S_interval(a,b) -> man.exec (mk_assume (mk_in (mk_var v range) a b range) range) flow
-          in
-          (* Replace [v] in [f] with quantified variables *)
-          let f' = visit_expr_in_formula
-              (fun e ->
-                 match ekind e with
-                 | E_var (vv, _) when compare_var v vv = 0 ->
-                   Keep (mk_stub_quantified q v s range)
-
-                 | _ -> VisitParts e
-              )
-              f
-          in
-          (* Evaluate [f'] *)
-          let flow = eval_formula cond_to_stmt f' range man flow in
-          (* Remove [v] from the environment *)
-          man.exec (mk_remove_var v range) flow
-        )
-      ~felse:(fun flow ->
-          match q with
-          | FORALL -> man.exec (cond_to_stmt (mk_true range) range) flow
-          | EXISTS -> man.exec (cond_to_stmt (mk_false range) range) flow
-        ) man flow
 
 
 

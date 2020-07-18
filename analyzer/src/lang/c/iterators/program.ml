@@ -422,8 +422,9 @@ struct
     let flow = man.exec (mk_add ii range) flow |>
                man.exec (mk_assign ii (mk_c_builtin_call "_mopsa_range_s32" [l;u] s32 range) range)
     in
-    let every_argv_cell = mk_c_subscript_access argv (mk_stub_quantified FORALL i (S_interval(l,u)) range) range in
-    let flow = man.exec (mk_assume (mk_binop every_argv_cell O_eq arg_weak ~etyp:u8 range) range) flow |>
+    let flow = man.exec (mk_assume (mk_stub_quantified_formula
+                                      [FORALL,i,S_interval(l,u)]
+                                      (mk_binop (mk_c_subscript_access argv (mk_var i range) range) O_eq arg_weak ~etyp:u8 range) range) range) flow |>
                man.exec (mk_remove ii range)
     in
 

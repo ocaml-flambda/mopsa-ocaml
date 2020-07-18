@@ -358,3 +358,24 @@ let rec get_orig_expr e =
       (fun ee -> VisitParts (iter ee))
       (fun s -> VisitParts s)
       e
+
+let is_var_in_expr v e =
+  fold_expr
+    (fun acc ee ->
+       match ekind ee with
+       | E_var (vv,_) when compare_var v vv = 0 -> Keep true
+       | _ -> VisitParts acc
+    )
+    (fun acc s -> VisitParts acc)
+    false e
+
+
+let is_var_in_stmt v s =
+  fold_stmt
+    (fun acc ee ->
+       match ekind ee with
+       | E_var (vv,_) when compare_var v vv = 0 -> Keep true
+       | _ -> VisitParts acc
+    )
+    (fun acc s -> VisitParts acc)
+    false s

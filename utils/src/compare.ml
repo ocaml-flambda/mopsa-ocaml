@@ -71,6 +71,24 @@ let triple p q r =
       else
         x
 
+let quadruple p q r s =
+  fun (a,b,c,d) (e,f,g,h) ->
+    if a == e && b == f && c == g && d == h then 0
+    else
+      let x = p a e in
+      if x = 0 then
+        let y = q b f in
+        if y = 0 then
+          let z = r c g in
+          if z = 0 then
+            s d h
+          else
+            z
+        else
+          y
+      else
+        x
+
 (** [option p] lifts [p: 'a -> 'a -> int] to ['a option -> 'a option -> int] *)
 let option p q r =
   if q == r then 0

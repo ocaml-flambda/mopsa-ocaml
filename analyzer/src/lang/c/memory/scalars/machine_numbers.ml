@@ -480,11 +480,6 @@ struct
       Rewrite.return_singleton (mk_expr (E_stub_builtin_call(f, e)) ~etyp:exp.etyp exp.erange) flow |>
       OptionExt.return
 
-    (* 𝔼⟦ ∃v ⟧ *)
-    | Stubs.Ast.E_stub_quantified(_,v,S_interval _) ->
-      Rewrite.reval_singleton (mk_var v exp.erange) flow |>
-      OptionExt.return
-
     | _ ->
       None
 

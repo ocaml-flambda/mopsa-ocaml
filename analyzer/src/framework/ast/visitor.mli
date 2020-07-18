@@ -184,6 +184,12 @@ val stmt_vars : stmt -> var list
 val get_orig_expr : expr -> expr
 (** Get the original version along the transformation lineage of an expression *)
 
+val is_var_in_expr : var -> expr -> bool
+(** Check whether a variable appears in an expression *)
+
+val is_var_in_stmt : var -> stmt -> bool
+(** Check whether a variable appears in a statement *)
+
 (****************************************************************************)
 (**                            {1 Deprecated}                               *)
 (****************************************************************************)

@@ -800,13 +800,50 @@ struct
       let init = State.find base a in
       let s = mk_smash base lval.etyp in
       let vsmash = mk_smash_var s in
+
+      match init with
+      | Init.Bot -> Post.return flow
+
+      | Init.None -> Post.return flow
+        
+      | Init.Full ts ->
+        (* When base is fully initialized, we remove smashes other
+           than the one with the type of lval, which will be put to
+           top after *)
+        fold_stypes (remove_smash base) (STypeSet.remove s.styp ts) range man flow >>$ fun () flow ->
+        let flow = set_env T_cur (State.add base (Init.Full (STypeSet.singleton s.styp)) a) man flow in
+        if STypeSet.mem s.styp ts then
+          man.post (mk_forget_var vsmash range) ~semantic:scalar flow
+        else
+          man.post (mk_add_var vsmash range) ~semantic:scalar flow
+
+      | Init.Partial ts ->
+        fold_stypes (remove_smash base) (STypeSet.remove s.styp ts) range man flow >>$ fun () flow ->
+        let flow = set_env T_cur (State.add base (Init.Partial (STypeSet.singleton s.styp)) a) man flow in
+        if STypeSet.mem s.styp ts then
+          man.post (mk_forget_var vsmash range) ~semantic:scalar flow
+        else
+          let flow = set_env T_cur (State.add base (Init.Partial (STypeSet.singleton s.styp)) a) man flow in
+          man.post (mk_add_var vsmash range) ~semantic:scalar flow
+
+
+  (** 𝕊⟦ ∀i ∈ [lo,hi]: forget( *(p + i) ) ⟧ *)
+  let exec_forget_quant i lo hi lval range man flow =
+    eval_pointed_base_offset (mk_c_address_of lval range) range man flow >>$ fun (base,offset,mode) flow ->
+    if not (is_interesting_base base) then
+      Post.return flow
+    else
+      let a = get_env T_cur man flow in
+      let init = State.find base a in
+      let s = mk_smash base lval.etyp in
+      let vsmash = mk_smash_var s in
       let uninit = mk_uninit_expr base ~mode range in
 
       match init with
       | Init.Bot -> Post.return flow
 
       | Init.None ->
-        if not (is_aligned offset lval.etyp man flow) || not (is_expr_forall_quantified offset) then
+        if not (is_aligned offset lval.etyp man flow) then
           Post.return flow
         else
           (* In case of unintialized base, three cases are possible:
@@ -826,7 +863,7 @@ struct
                 |---------x---------|------>
                          min
           *)
-          let min, max = Common.Quantified_offset.bound offset in
+          let min, max = Common.Quantified_offset.bound offset [FORALL,i,S_interval(lo,hi)] in
           let elm = mk_z (sizeof_type lval.etyp) range in
           eval_base_size base range man flow >>$ fun size flow ->
           assume_num (eq min zero range)
@@ -873,7 +910,7 @@ struct
             let flow = set_env T_cur (State.add base (Init.Partial (STypeSet.singleton s.styp)) a) man flow in
             man.post (mk_add_var vsmash range) ~semantic:scalar flow
         end >>$ fun () flow ->
-        if not (is_aligned offset lval.etyp man flow) || not (is_expr_forall_quantified offset) then
+        if not (is_aligned offset lval.etyp man flow) then
           Post.return flow
         else
           (* In case of partially intialized base, three cases are possible:
@@ -893,7 +930,7 @@ struct
                 |----0----x---------|------>
                          min
           *)
-          let min, max = Common.Quantified_offset.bound offset in
+          let min, max = Common.Quantified_offset.bound offset [FORALL,i,S_interval(lo,hi)] in
           let elm = mk_z (sizeof_type lval.etyp) range in
           eval_base_size base range man flow >>$ fun size flow ->
           assume_num (le min (add uninit elm range) range)
@@ -914,6 +951,7 @@ struct
                 (* Case #3 *)
                 Post.return flow
               )  ~semantic:scalar man flow
+
 
 
   (** {2 Assignment transfer function} *)
@@ -1041,8 +1079,8 @@ struct
   (** {2 Quantified tests transfer functions} *)
   (** *************************************** *)
 
-  (** 𝕊⟦ *(p + ∀i) ? e ⟧ *)
-  let exec_assume_quant op qe e range man flow =
+  (** 𝕊⟦ ∀i ∈ [lo,hi] : *(p + i) ? e ⟧ *)
+  let exec_assume_quant i lo hi op qe e range man flow =
     man.eval e flow >>$ fun e flow ->
     eval_pointed_base_offset (mk_c_address_of qe range) range man flow >>$ fun (base,offset,mode) flow ->
     let t = get_c_deref_type qe in
@@ -1066,7 +1104,7 @@ struct
         let s = mk_smash base t in
         phi s range man flow >>$ fun () flow ->
         (* Check valuation range of the offset *)
-        let min, max = Common.Quantified_offset.bound offset in
+        let min, max = Common.Quantified_offset.bound offset [FORALL,i,S_interval(lo,hi)] in
         let elm = mk_z (sizeof_type t) range in
         let uninit = mk_uninit_expr base ~mode range in
         eval_base_size base range man flow >>$ fun size flow ->
@@ -1103,7 +1141,7 @@ struct
         let s = mk_smash base t in
         phi s range man flow >>$ fun () flow ->
         (* Check valuation range of the offset *)
-        let min, max = Common.Quantified_offset.bound offset in
+        let min, max = Common.Quantified_offset.bound offset [FORALL,i,S_interval(lo,hi)] in
         let elm = mk_z (sizeof_type t) range in
         eval_base_size base range man flow >>$ fun size flow ->
         assume (log_and
@@ -1123,8 +1161,8 @@ struct
             ) ~semantic:scalar man flow
 
 
-  (** 𝕊⟦ *(p + ∀i) == *(q + ∀j) ⟧ *)
-  let exec_assume_quant2_num_eq qe1 qe2 range man flow =
+  (** 𝕊⟦ ∀i ∈ [lo,hi] : *(p + i) == *(q + i) ⟧ *)
+  let exec_assume_quant2_num_eq i lo hi qe1 qe2 range man flow =
     eval_pointed_base_offset (mk_c_address_of qe1 range) range man flow >>$ fun (base1,offset1,mode1) flow ->
     eval_pointed_base_offset (mk_c_address_of qe2 range) range man flow >>$ fun (base2,offset2,mode2) flow ->
     let t1 = get_c_deref_type qe1 in
@@ -1144,7 +1182,7 @@ struct
         phi s2 range man flow >>$ fun () flow ->
         (* Ensure that elements of a block that is entirely covered have values in the other block *)
         let ensure_included base offset t qet s other_base other_offset other_t other_qet other_s range man flow =
-          let min, max = Common.Quantified_offset.bound offset in
+          let min, max = Common.Quantified_offset.bound offset [FORALL,i,S_interval(lo,hi)] in
           let elm = mk_z (sizeof_type t) range in
           eval_base_size base range man flow >>$ fun size flow ->
           assume (log_and
@@ -1193,8 +1231,14 @@ struct
       exec_fold_bases (expr_to_base e) (List.map expr_to_base el) stmt.srange man flow |>
       OptionExt.return
 
-    | S_forget(e) ->
+    | S_forget(e) when is_c_deref e ->
       exec_forget e stmt.srange man flow |>
+      OptionExt.return
+
+    | S_forget({ ekind = E_stub_quantified_formula([FORALL,i,S_interval(a,b)], e) })
+      when is_c_deref e &&
+           is_var_in_expr i e ->
+      exec_forget_quant i a b e stmt.srange man flow |>
       OptionExt.return
 
     | S_remove(e) when is_base_expr e ->
@@ -1205,20 +1249,24 @@ struct
       exec_assign p rval stmt.srange man flow |>
       OptionExt.return
 
-    | S_assume({ ekind = E_binop(op, e1, e2)}) when is_comparison_op op &&
-                                                    is_c_deref e1 &&
-                                                    is_lval_offset_forall_quantified e1 &&
-                                                    not (is_expr_forall_quantified e2) ->
-      exec_assume_quant op e1 e2 stmt.srange man flow |>
+    | S_assume({ ekind = E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_binop(op, e1, e2)}) })
+      when is_comparison_op op &&
+           is_c_deref e1 &&
+           is_c_int_type i.vtyp &&
+           is_var_in_expr i e1 &&
+           not (is_var_in_expr i e2) ->
+      exec_assume_quant i a b op e1 e2 stmt.srange man flow |>
       OptionExt.return
 
-    | S_assume({ ekind = E_binop(O_eq, e1, e2)}) when is_c_deref e1 &&
-                                                      is_c_deref e2 &&
-                                                      is_lval_offset_forall_quantified e1 &&
-                                                      is_lval_offset_forall_quantified e2 &&
-                                                      is_c_int_type e1.etyp &&
-                                                      is_c_int_type e2.etyp ->
-      exec_assume_quant2_num_eq e1 e2 stmt.srange man flow |>
+    | S_assume({ ekind = E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_binop(O_eq, e1, e2)}) })
+      when is_c_deref e1 &&
+           is_c_deref e2 &&
+           is_c_int_type e1.etyp &&
+           is_c_int_type e2.etyp &&
+           is_c_int_type i.vtyp &&
+           is_var_in_expr i e1 &&
+           is_var_in_expr i e2 ->
+      exec_assume_quant2_num_eq i a b e1 e2 stmt.srange man flow |>
       OptionExt.return
 
     | _ -> None
