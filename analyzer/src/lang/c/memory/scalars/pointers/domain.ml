@@ -243,7 +243,6 @@ struct
   let eval_points_to exp man flow =
     man.eval exp flow >>$? fun exp flow ->
     Static_points_to.eval_opt exp |> OptionExt.lift @@ fun ptr ->
-
     match ptr with
     | AddrOf (base, offset, mode) ->
       Cases.singleton (mk_c_points_to_bloc base offset mode) flow
@@ -567,6 +566,8 @@ struct
 
   (** Filter equal pointers *)
   let assume_eq p q range man flow =
+    man.eval p flow >>$ fun p flow ->
+    man.eval q flow >>$ fun q flow ->
     let v1, o1, p1 = Static_points_to.eval p |>
                      eval_static_points_to man flow
     in
@@ -593,6 +594,8 @@ struct
 
   (** Filter non-equal pointers *)
   let assume_ne p q range man flow =
+    man.eval p flow >>$ fun p flow ->
+    man.eval q flow >>$ fun q flow ->
     let v1, o1, p1 = Static_points_to.eval p |>
                      eval_static_points_to man flow
     in
@@ -642,6 +645,8 @@ struct
 
   (** Filter ordered pointers *)
   let assume_order op p q range man flow =
+    man.eval p flow >>$ fun p flow ->
+    man.eval q flow >>$ fun q flow ->
     let v1, o1, p1 = Static_points_to.eval p |>
                      eval_static_points_to man flow
     in
