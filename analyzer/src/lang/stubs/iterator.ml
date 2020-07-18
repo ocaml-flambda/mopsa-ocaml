@@ -638,7 +638,7 @@ struct
           OptionExt.return
 
         | Some v ->
-          Rewrite.return_singleton (mk_var v exp.erange) flow ~cleaners:(mk_remove_var v exp.erange :: cleaners) |>
+          Rewrite.reval_singleton (mk_var v exp.erange) flow ~cleaners:(mk_remove_var v exp.erange :: cleaners) |>
           OptionExt.return
       end
 

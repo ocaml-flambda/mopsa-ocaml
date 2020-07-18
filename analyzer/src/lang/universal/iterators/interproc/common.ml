@@ -303,11 +303,10 @@ let inline f params locals body ret range man flow =
     )
 
   | Some v ->
-    man.eval (mk_var v range) flow
+    Rewrite.reval_singleton (mk_var v range) flow
     |> Cases.add_cleaners (
       mk_remove_var v range ::
       List.map (fun v ->
           mk_remove_var v range
         ) params
     )
-    |> Rewrite.return_eval

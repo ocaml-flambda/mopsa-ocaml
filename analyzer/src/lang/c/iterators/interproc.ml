@@ -193,7 +193,7 @@ struct
           if is_c_void_type c_func_return then
             Eval.empty_singleton flow
           else
-            Eval.singleton (mk_top c_func_return range) flow
+            man.eval (mk_top c_func_return range) flow
       in
       (* free alloca addresses *)
       ret >>$ fun e flow ->
