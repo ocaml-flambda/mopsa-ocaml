@@ -63,49 +63,30 @@ struct
   let mk_lowlevel_subscript_access a i t range =
     mk_c_deref (mk_binop a O_plus i ~etyp:(pointer_type t) range) range
 
-
-  (** s.f -> *(( typeof(s.f)* )(( char* )(&s) + alignof(s.f))) *)
-  let mk_lowlevel_member_access s i range =
-    let ss = mk_c_address_of s range in
-
-    let st = etyp s in
-    let field =
-      match remove_typedef_qual st with
-      | T_c_record r -> List.nth r.c_record_fields i
-      | _ -> panic "member access on type %a" pp_typ st;
-    in
-    let t = field.c_field_type in
+  (** 𝔼⟦ &(p->f) ⟧ -> ( typeof(p->f)* )(( char* )p + alignof(p->f)) *)
+  let mk_lowlevel_field_address p i t range =
+    let st = under_type p.etyp in
     let align = mk_int (align_byte st i) range in
-
-    mk_c_deref
-      (mk_c_cast
-         (mk_binop
-            (mk_c_cast ss (pointer_type s8) range)
-            O_plus
-            align
-            range
-         )
-         (pointer_type t)
+    mk_c_cast
+      (mk_binop
+         (mk_c_cast p (pointer_type s8) range)
+         O_plus
+         align
          range
       )
+      (pointer_type t)
       range
+
+
+
+  (** s.f -> *(( typeof(s.f)* )(( char* )(&s) + alignof(s.f))) *)
+  let mk_lowlevel_member_access s i t range =
+    let ss = mk_c_address_of s range in
+    mk_c_deref (mk_lowlevel_field_address ss i t range) range
 
   (** 𝔼⟦ p->f ⟧ -> *(( typeof(p->f)* )(( char* )p + alignof(p->f))) *)
   let mk_lowlevel_arrow_access p i t range =
-    let st = under_type p.etyp in
-    let align = mk_int (align_byte st i) range in
-    mk_c_deref
-      (mk_c_cast
-         (mk_binop
-            (mk_c_cast p (pointer_type s8) range)
-            O_plus
-            align
-            range
-         )
-         (pointer_type t)
-         range
-      )
-      range
+    mk_c_deref (mk_lowlevel_field_address p i t range) range
 
 
 
@@ -281,7 +262,7 @@ struct
         | [] -> [],[]
         | field :: tl ->
           let o = Z.add offset (Z.of_int field.c_field_offset) in
-          let init = Some (C_init_expr (mk_lowlevel_member_access e field.c_field_index range)) in
+          let init = Some (C_init_expr (mk_lowlevel_member_access e field.c_field_index field.c_field_type range)) in
           flatten_init init o field.c_field_type range >>+ aux tl
       in
       aux fields'
@@ -408,7 +389,7 @@ struct
     man.post stmt flow
 
   let assign_member a i f t e r range man flow =
-    let lval = mk_lowlevel_member_access a i r in
+    let lval = mk_lowlevel_member_access a i t r in
     let stmt = mk_assign lval e range in
     man.post stmt flow
 
@@ -481,11 +462,23 @@ struct
       OptionExt.return
 
     | E_c_member_access (s, i, f) ->
-      Rewrite.reval_singleton (member_access s i f exp.erange) flow |>
+      Rewrite.reval_singleton (member_access s i f exp.etyp exp.erange) flow |>
       OptionExt.return
 
     | E_c_arrow_access(p, i, f) ->
       Rewrite.reval_singleton (arrow_access p i f exp.etyp exp.erange) flow |>
+      OptionExt.return
+
+    | E_c_address_of({ekind = E_c_array_subscript(a,i)}) ->
+      Rewrite.reval_singleton (add a i ~typ:a.etyp exp.erange) flow |>
+      OptionExt.return
+
+    | E_c_address_of({ekind = E_c_member_access(s,i,f)} as e) ->
+      Rewrite.reval_singleton (mk_lowlevel_field_address (mk_c_address_of s exp.erange) i e.etyp exp.erange) flow |>
+      OptionExt.return
+
+    | E_c_address_of({ekind = E_c_arrow_access(p,i,f)} as e) ->
+      Rewrite.reval_singleton (mk_lowlevel_field_address p i e.etyp exp.erange) flow |>
       OptionExt.return
 
     | _ -> None
