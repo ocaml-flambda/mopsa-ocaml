@@ -137,7 +137,7 @@ struct
       (* Execute `forget lval` *)
       man.post (mk_block adds range) flow >>$ fun () flow ->
       man.post (mk_block assumes range) flow >>$ fun () flow ->
-      man.post (mk_forget (mk_stub_quantified_formula quants lval ~etyp:typ range) range) flow >>$ fun () flow ->
+      man.post (mk_forget (mk_stub_quantified_formula quants lval range) range) flow >>$ fun () flow ->
       man.post (mk_block cleaners range) flow
 
 

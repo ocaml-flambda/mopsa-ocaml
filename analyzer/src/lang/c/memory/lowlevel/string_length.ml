@@ -306,6 +306,23 @@ struct
         man.post ~semantic:numeric (mk_assume (mk_in length (mk_zero range) size range) range) flow
 
 
+  let exec_forget_quant quants e range man flow =
+    eval_pointed_base_offset (mk_c_address_of e range) range man flow >>$ fun (base,boffset,mode) flow ->
+    if not (is_interesting_base base) then
+      Post.return flow
+    else
+      match base.base_kind with
+      | String _ -> Post.return flow
+      | _ ->
+        (* FIXME: we can do better by checking if the offset affects the length of the string *)
+        let length = mk_length_var base elem_size range in
+        eval_base_size base range man flow >>$ fun bsize flow ->
+        man.eval bsize flow >>$ fun bsize flow ->
+        let size = elem_of_offset bsize elem_size range in
+        man.post ~semantic:numeric (mk_forget length range) flow >>$ fun () flow ->
+        man.post ~semantic:numeric (mk_assume (mk_in length (mk_zero range) size range) range) flow
+
+
   (** 𝕊⟦ type v; ⟧ *)
   let exec_declare_variable v scope range man flow =
     let base = mk_var_base v in
@@ -679,8 +696,12 @@ struct
       exec_fold_bases (expr_to_base e) (List.map expr_to_base el) stmt.srange man flow |>
       OptionExt.return
 
-    | S_forget(e) ->
+    | S_forget(e) when is_c_scalar_type e.etyp ->
       exec_forget e stmt.srange man flow |>
+      OptionExt.return
+
+    | S_forget({ ekind = E_stub_quantified_formula(quants, e)}) when is_c_scalar_type e.etyp ->
+      exec_forget_quant quants e stmt.srange man flow |>
       OptionExt.return
 
     | S_remove(e) when is_base_expr e ->

@@ -958,25 +958,20 @@ struct
       Post.return flow
 
 
-  (** 𝕊⟦ x = e; ⟧ *)
-  let exec_assign x e range man flow =
-    let p = match ekind x with
-      | E_var _     -> mk_c_address_of x range
-      | E_c_deref p -> p
-      | _           -> assert false
-    in
-    (* Expand *p into cells *)
-    expand p range man flow >>$ fun expansion flow ->
+  (** 𝕊⟦ lval = e; ⟧ *)
+  let exec_assign lval e range man flow =
+    let ptr = mk_c_address_of lval range in
+    expand ptr range man flow >>$ fun expansion flow ->
     match expansion with
     | Top ->
-      Soundness.warn_at range "ignoring assignment to ⊤ pointer *%a = %a;"
-        pp_expr p
+      Soundness.warn_at range "ignoring assignment to ⊤ pointer %a = %a;"
+        pp_expr lval
         pp_expr e
       ;
       Post.return flow
 
     | Cell ({ base },_) when is_base_readonly base ->
-      let flow = raise_c_modify_read_only_alarm p base man flow in
+      let flow = raise_c_modify_read_only_alarm ptr base man flow in
       Post.return flow
 
     | Cell (c,mode) ->
@@ -1112,11 +1107,26 @@ struct
   (** Forget the value of an lval *)
   let exec_forget lval range man flow =
     (* Get the pointed base *)
-    let ptr = match ekind lval with
-      | E_var _   -> mk_c_address_of lval range
-      | E_c_deref(p) -> p
-      | _ -> assert false
-    in
+    let ptr = mk_c_address_of lval range in
+    resolve_pointer ptr man flow >>$ fun p flow ->
+    match p with
+    | P_block(base,offset,mode) ->
+      (* Compute the interval of the offset *)
+      let itv = offset_interval offset range man flow in
+      (* Add the size of the pointed cells *)
+      let size = sizeof_type (under_type ptr.etyp |> void_to_char) in
+      let itv = Bot.bot_lift2 ItvUtils.IntItv.add itv (Itv.of_z Z.zero (Z.pred size)) in
+      (* Forget all affected cells *)
+      let a = get_env T_cur man flow in
+      let cells = cell_set_find_overlapping_itv base itv a.cells in
+      List.fold_left (fun acc c -> Post.bind (forget_cell c range man) acc) (Post.return flow) cells
+
+    | _ -> Post.return flow
+
+
+  let exec_forget_quant quants lval range man flow =
+    (* Get the pointed base *)
+    let ptr = mk_c_address_of lval range in
     resolve_pointer ptr man flow >>$ fun p flow ->
     match p with
     | P_block(base,offset,mode) ->
@@ -1175,6 +1185,9 @@ struct
       exec_forget e stmt.srange man flow |>
       OptionExt.return
 
+    | S_forget({ ekind = E_stub_quantified_formula(quants, e)}) when is_c_type e.etyp ->
+      exec_forget_quant quants e stmt.srange man flow |>
+      OptionExt.return
 
     | _ -> None
 

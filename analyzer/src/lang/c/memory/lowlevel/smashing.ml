@@ -828,7 +828,7 @@ struct
 
 
   (** 𝕊⟦ ∀i ∈ [lo,hi]: forget( *(p + i) ) ⟧ *)
-  let exec_forget_quant i lo hi lval range man flow =
+  let exec_forget_quant quants lval range man flow =
     eval_pointed_base_offset (mk_c_address_of lval range) range man flow >>$ fun (base,offset,mode) flow ->
     if not (is_interesting_base base) then
       Post.return flow
@@ -863,7 +863,7 @@ struct
                 |---------x---------|------>
                          min
           *)
-          let min, max = Common.Quantified_offset.bound offset [FORALL,i,S_interval(lo,hi)] in
+          let min, max = Common.Quantified_offset.bound offset quants in
           let elm = mk_z (sizeof_type lval.etyp) range in
           eval_base_size base range man flow >>$ fun size flow ->
           assume_num (eq min zero range)
@@ -930,7 +930,7 @@ struct
                 |----0----x---------|------>
                          min
           *)
-          let min, max = Common.Quantified_offset.bound offset [FORALL,i,S_interval(lo,hi)] in
+          let min, max = Common.Quantified_offset.bound offset quants in
           let elm = mk_z (sizeof_type lval.etyp) range in
           eval_base_size base range man flow >>$ fun size flow ->
           assume_num (le min (add uninit elm range) range)
@@ -1235,10 +1235,9 @@ struct
       exec_forget e stmt.srange man flow |>
       OptionExt.return
 
-    | S_forget({ ekind = E_stub_quantified_formula([FORALL,i,S_interval(a,b)], e) })
-      when is_c_deref e &&
-           is_var_in_expr i e ->
-      exec_forget_quant i a b e stmt.srange man flow |>
+    | S_forget({ ekind = E_stub_quantified_formula(quants, e) })
+      when is_c_deref e ->
+      exec_forget_quant quants e stmt.srange man flow |>
       OptionExt.return
 
     | S_remove(e) when is_base_expr e ->

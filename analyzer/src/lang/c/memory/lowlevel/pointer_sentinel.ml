@@ -370,7 +370,7 @@ struct
     | _ -> Post.return flow
 
 
-  let forget_quant i lo hi e range man flow =
+  let forget_quant quants e range man flow =
     let ptr = mk_c_address_of e range in
     resolve_pointer ptr man flow >>$ fun p flow ->
     match p with
@@ -666,8 +666,8 @@ struct
       forget e stmt.srange man flow |>
       OptionExt.return
 
-    | S_forget({ ekind = E_stub_quantified_formula([FORALL,i,S_interval(a,b)], e) }) when is_c_deref e ->
-      forget_quant i a b e stmt.srange man flow |>
+    | S_forget({ ekind = E_stub_quantified_formula(quants, e) }) when is_c_deref e ->
+      forget_quant quants e stmt.srange man flow |>
       OptionExt.return
 
     | S_remove(e) when is_base_expr e ->
