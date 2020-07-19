@@ -820,15 +820,15 @@ struct
       OptionExt.return
 
     | S_rename(e,e') when is_c_block_object_type e.etyp ->
-      exec_rename_base e e' stmt.srange man flow |>
+      exec_rename_base (of_c_block_object e) (of_c_block_object e') stmt.srange man flow |>
       OptionExt.return
 
     | S_expand(e,el) when is_c_block_object_type  e.etyp ->
-      exec_expand_base e el stmt.srange man flow |>
+      exec_expand_base (of_c_block_object e) (List.map of_c_block_object el) stmt.srange man flow |>
       OptionExt.return
 
     | S_fold(e,el) when is_c_block_object_type e.etyp ->
-      exec_fold_bases e el stmt.srange man flow |>
+      exec_fold_bases (of_c_block_object e) (List.map of_c_block_object el) stmt.srange man flow |>
       OptionExt.return
 
     (* S⟦ ?(p == q) ⟧ *)

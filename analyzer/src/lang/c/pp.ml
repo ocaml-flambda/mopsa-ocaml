@@ -164,6 +164,7 @@ let () =
       | E_c_cast(e, false) -> pp_expr fmt e
       | E_c_statement s -> fprintf fmt "@[<v 4>{@,%a@]@,}" pp_stmt s
       | E_c_var_args e -> fprintf fmt "__builtin_va_arg(%a)" pp_expr e
+      | E_c_block_object e -> fprintf fmt "block_object(%a)" pp_expr e
       | E_c_predefined _ -> assert false
       | E_c_atomic _ -> assert false
       | _ -> default fmt expr

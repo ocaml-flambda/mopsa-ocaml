@@ -158,11 +158,7 @@ type typ +=
   (** Qualified type. *)
 
   | T_c_block_object of typ
-  (** Type to designate a block as an object. Useful to distinguish
-      between operations on the content of block and the block itself.
-      For, expanding the contents of a block will duplicate every cell
-      in the block, while expanding the block object will update the
-      pointers that point to the block.  *)  
+  (** Type of block objects.  *)  
 
 
 (** {2 Function descriptor} *)
@@ -335,6 +331,12 @@ type expr_kind +=
 
   | E_c_atomic of int (** operation *) * expr * expr
 
+  | E_c_block_object of expr
+  (** Block objects are useful to distinguish between operations on
+      the block itself and its content.  For, expanding the contents of
+      a block will duplicate every cell in the block, while expanding
+      the block object will update the pointers that point to the
+      block.  *)  
 
 
 
@@ -909,11 +911,12 @@ let type_of_string s = T_c_array(s8, C_array_length_cst (Z.of_int (1 + String.le
 
 let is_c_block_object_type = function T_c_block_object _ -> true | _ -> false
 
-let to_c_block_object e = { e with etyp = T_c_block_object e.etyp }
+let to_c_block_object e = mk_expr (E_c_block_object e) e.erange ~etyp:(T_c_block_object e.etyp)
 
 let of_c_block_object e =
-  let t = match e.etyp with T_c_block_object t -> t | _ -> assert false in
-  { e with etyp = t }
+  match ekind e with
+  | E_c_block_object ee -> ee
+  | _ -> assert false
 
 
 let mk_c_string ?(kind=C_char_ascii) s range =
@@ -1008,6 +1011,98 @@ let () =
       | T_c_block_object tt1, T_c_block_object tt2 -> compare_typ tt1 tt2
       | _ -> next t1 t2
     )
+
+let () =
+  register_expr_compare
+    (fun next e1 e2 ->
+       match ekind e1, ekind e2 with
+       | E_c_conditional(cond1,then1,else1), E_c_conditional(cond2,then2,else2) ->
+         Compare.triple compare_expr compare_expr compare_expr
+           (cond1,then1,else1)
+           (cond2,then2,else2)
+
+       | E_c_array_subscript(a1,i1), E_c_array_subscript(a2,i2) ->
+         Compare.pair compare_expr compare_expr
+           (a1,i1)
+           (a2,i2)
+
+       | E_c_member_access(s1,i1,f1), E_c_member_access(s2,i2,f2) ->
+         Compare.triple compare_expr compare compare
+           (s1,i1,f1)
+           (s2,i2,f2)
+
+       | E_c_function(f1), E_c_function(f2) ->
+         compare f1.c_func_unique_name f2.c_func_unique_name
+
+       | E_c_builtin_function(f1), E_c_builtin_function(f2) ->
+         compare f1 f2
+
+       | E_c_builtin_call(f1,args1), E_c_builtin_call(f2,args2) ->
+         Compare.pair compare (Compare.list compare_expr)
+           (f1,args1)
+           (f2,args2)
+
+       | E_c_arrow_access(p1,i1,f1), E_c_arrow_access(p2,i2,f2) ->
+         Compare.triple compare_expr compare compare
+           (p1,i1,f1)
+           (p2,i2,f2)
+
+       | E_c_assign(x1,e1), E_c_assign(x2,e2) ->
+         Compare.pair compare_expr compare_expr
+           (x1,e1)
+           (x2,e2)
+
+       | E_c_compound_assign(lval1,t1,op1,rval1,tt1), E_c_compound_assign(lval2,t2,op2,rval2,tt2) ->
+         Compare.compose [
+           (fun () -> compare_expr lval1 lval2);
+           (fun () -> compare_typ t1 t2);
+           (fun () -> compare_operator op1 op2);
+           (fun () -> compare_expr rval1 rval2);
+           (fun () -> compare_typ tt1 tt2);
+         ]
+
+       | E_c_comma(e1,ee1), E_c_comma(e2,ee2) ->
+         Compare.pair compare_expr compare_expr
+           (e1,ee1)
+           (e2,ee2)
+
+       | E_c_increment(dir1,loc1,e1), E_c_increment(dir2,loc2,e2) ->
+         Compare.triple compare compare compare_expr
+           (dir1,loc1,e1)
+           (dir2,loc2,e2)
+
+       | E_c_address_of(e1), E_c_address_of(e2) ->
+         compare_expr e1 e2
+
+       | E_c_deref(e1), E_c_deref(e2) ->
+         compare_expr e1 e2
+
+       | E_c_cast(e1,b1), E_c_cast(e2,b2) ->
+         Compare.pair compare_expr compare
+           (e1,b1)
+           (e2,b2)
+
+       | E_c_statement(s1), E_c_statement(s2) ->
+         compare_stmt s1 s2
+
+       | E_c_predefined(s1), E_c_predefined(s2) ->
+         compare s1 s2
+
+       | E_c_var_args(e1), E_c_var_args(e2) ->
+         compare_expr e1 e2
+
+       | E_c_atomic(op1,e1,ee1), E_c_atomic(op2,e2,ee2) ->
+         Compare.triple compare compare_expr compare_expr
+           (op1,e1,ee1)
+           (op2,e2,ee2)
+
+       | E_c_block_object(e1), E_c_block_object(e2) ->
+         compare_expr e1 e2
+
+       | _ -> next e1 e2
+    )
+
+
 
 let range_cond e_mint rmin rmax range =
   let condle = mk_binop e_mint O_le (mk_z rmax range) ~etyp:T_bool range in
