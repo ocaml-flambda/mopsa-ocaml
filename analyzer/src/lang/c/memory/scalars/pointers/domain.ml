@@ -273,6 +273,8 @@ struct
 
   (** 𝔼⟦ p - q ⟧ *)
   let eval_diff p q range man flow =
+    man.eval p flow >>$ fun p flow ->
+    man.eval q flow >>$ fun q flow ->
     (* p1 and p2 should point to the same type *)
     let elem_size_p = under_type p.etyp |> void_to_char |> sizeof_type in
     let elem_size_q = under_type q.etyp |> void_to_char |> sizeof_type in
