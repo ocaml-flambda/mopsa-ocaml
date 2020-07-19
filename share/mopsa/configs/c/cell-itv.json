@@ -17,7 +17,7 @@
             "c.iterators.intraproc",
 
             // Stubs
-	    "stubs.iterator",
+	    "stubs.iterators.body",
 
 	    // Libraries
             "c.libs.compiler",
@@ -28,13 +28,12 @@
             "c.libs.variadic",
 
 	    // C stubs
+	    "c.cstubs.assigns",
 	    "c.cstubs.builtins",
 	    "c.cstubs.requires",
 	    "c.cstubs.resources",
 
             // Memory model
-	    "c.memory.blocks",
-	    "c.cstubs.assigns",
 	    "c.memory.variable_length_array",
             "c.memory.aggregates",
             "universal.heap.recency",
@@ -56,7 +55,10 @@
 			}
 		    }
 		]
-	    }
+	    },
+
+	    // Fallbacks
+	    "stubs.iterators.fallback"
 	]
     }
 }
