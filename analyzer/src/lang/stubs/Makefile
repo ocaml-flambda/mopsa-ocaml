@@ -22,4 +22,5 @@
 
 # Stubs
 lang += stubs
-lang.stubs = ast alarms iterator
+lang.stubs = ast alarms iterators
+lang.stubs.iterator = body fallback
