@@ -129,6 +129,7 @@ let () =
 
       | T_c_bitfield(t, size) -> assert false
       | T_c_builtin_fn -> fprintf fmt "builtin_fn"
+      | T_c_block_object tt -> Format.fprintf fmt "block-object(%a)" pp_typ tt
       | _ -> default fmt typ
     );
   register_constant_pp (fun next fmt c ->

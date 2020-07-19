@@ -144,19 +144,6 @@ struct
         ) man flow
 
 
-  (** 𝕊⟦ requires cond; ⟧ *)
-  let exec_stub_requires cond range man flow =
-    assume cond
-      ~fthen:(fun flow ->
-          Post.return flow
-        )
-      ~felse:(fun flow ->
-          Stubs.Alarms.raise_stub_invalid_requires cond range man flow |>
-          Post.return
-        )
-      man flow
-
-
   let exec stmt man flow  =
     match skind stmt with
     | S_stub_requires { ekind = E_stub_builtin_call(VALID_PTR, ptr) } ->
@@ -175,10 +162,6 @@ struct
         | _ -> assert false
       in
       exec_stub_requires_float_class flt cls msg stmt.srange man flow |>
-      OptionExt.return
-
-    | S_stub_requires e ->
-      exec_stub_requires e stmt.srange man flow |>
       OptionExt.return
 
     | _ -> None

@@ -74,6 +74,9 @@ let rec eval_opt exp : static_points_to option =
   | E_constant(C_int n) when Z.equal n Z.zero ->
     Null |> OptionExt.return
 
+  | E_constant(C_int n) ->
+    Top |> OptionExt.return
+
   | E_constant(C_c_invalid) ->
     Invalid |> OptionExt.return
 

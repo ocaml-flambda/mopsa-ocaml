@@ -27,7 +27,7 @@ lang.c = ast pp visitor frontend common libs iterators cstubs memory hooks \
          packing
 lang.c.common = builtins base alarms points_to quantified_offset scope_update
 lang.c.iterators = program switch loops goto interproc intraproc
-lang.c.memory = blocks aggregates variable_length_array lowlevel scalars
+lang.c.memory = aggregates variable_length_array lowlevel scalars
 lang.c.memory.lowlevel = cells string_length smashing pointer_sentinel reductions
 lang.c.memory.lowlevel.reductions = cell_string_length cell_pointer_sentinel \
 				    cell_smashing

@@ -130,14 +130,14 @@ let expr_to_base e =
 
 
 (** Evaluate the size of a base in bytes *)
-let eval_base_size base range (man:('a,'t) man) flow =
+let eval_base_size ?(semantic=any_semantic) base range (man:('a,'t) man) flow =
   match base.base_kind with
   | Var var
     when is_c_variable_length_array_type var.vtyp ||
          is_c_no_length_array_type var.vtyp
     ->
     let bytes_expr = mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, mk_var var range)) range ~etyp:ul in
-    man.eval bytes_expr flow
+    man.eval ~semantic bytes_expr flow
 
   | Var var ->
     Cases.singleton (mk_z (sizeof_type var.vtyp) range) flow
@@ -149,7 +149,7 @@ let eval_base_size base range (man:('a,'t) man) flow =
 
   | Addr addr ->
     let bytes_expr = mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, mk_addr addr range)) range ~etyp:ul in
-    man.eval bytes_expr flow
+    man.eval ~semantic bytes_expr flow
 
 
 module Base =

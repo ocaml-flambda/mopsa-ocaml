@@ -27,6 +27,7 @@ open Universal.Ast
 open Ast
 
 
+
 (** {2 Domain definition} *)
 (** ===================== *)
 
@@ -40,7 +41,11 @@ struct
       let name = "c.iterators.intraproc"
     end)
 
-  let dependencies = []
+  let memory = mk_semantic "memory" ~domain:name
+
+  let pointers = mk_semantic "pointer" ~domain:name
+
+  let dependencies = [ memory; pointers ]
 
   let alarms = []
 
@@ -54,17 +59,61 @@ struct
   (** Post-condition computation *)
   (** ========================== *)
 
+  let exec_add b range man flow =
+    man.post ~semantic:memory (mk_add b range) flow
+
+  let exec_remove b range man flow =
+    man.post ~semantic:memory (mk_remove b range) flow >>$ fun () flow ->
+    man.post ~semantic:pointers (mk_invalidate b range) flow
+
+  let exec_rename b1 b2 range man flow =
+    man.post ~semantic:memory (mk_rename b1 b2 range) flow >>$ fun () flow ->
+    let bb1 = to_c_block_object b1 in
+    let bb2 = to_c_block_object b2 in
+    man.post ~semantic:pointers (mk_rename bb1 bb2 range) flow
+
+  let exec_forget b range man flow =
+    man.post ~semantic:memory (mk_forget b range) flow
+
+  let exec_expand b bl range man flow =
+    man.post ~semantic:memory (mk_expand b bl range) flow >>$ fun () flow ->
+    let bb = to_c_block_object b in
+    let bbl = List.map to_c_block_object bl in
+    man.post ~semantic:pointers (mk_expand bb bbl range) flow
+
+
+  let exec_fold b bl range man flow =
+    man.post ~semantic:memory (mk_fold b bl range) flow >>$ fun () flow ->
+    let bb = to_c_block_object b in
+    let bbl = List.map to_c_block_object bl in
+    man.post ~semantic:pointers (mk_fold bb bbl range) flow
+
+  
   let exec stmt man flow =
     match skind stmt with
-    | S_expression { ekind = E_c_assign(x,e); erange } ->
-      man.post (mk_assign x e erange) flow |>
+    | S_add b when is_c_type b.etyp ->
+      exec_add b stmt.srange man flow |>
       OptionExt.return
 
-    | S_expression(e) when is_c_type e.etyp ->
-      Some (
-        man.eval e flow >>$ fun e flow ->
-        Post.return flow
-      )
+    | S_remove b when is_c_type b.etyp ->
+      exec_remove b stmt.srange man flow |>
+      OptionExt.return
+
+    | S_rename(b1,b2) when is_c_type b1.etyp && is_c_type b2.etyp ->
+      exec_rename b1 b2 stmt.srange man flow |>
+      OptionExt.return
+
+    | S_forget b when is_c_type b.etyp ->
+      exec_forget b stmt.srange man flow |>
+      OptionExt.return
+
+    | S_expand(b,bl) when is_c_type b.etyp && List.for_all (fun b -> is_c_type b.etyp) bl  ->
+      exec_expand b bl stmt.srange man flow |>
+      OptionExt.return
+
+    | S_fold(b,bl) when is_c_type b.etyp && List.for_all (fun b -> is_c_type b.etyp) bl  ->
+      exec_fold b bl stmt.srange man flow |>
+      OptionExt.return
 
     | _ -> None
 

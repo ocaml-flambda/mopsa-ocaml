@@ -395,7 +395,7 @@ struct
       refine ctx e ae v r a |>
       OptionExt.return
 
-    | _ -> assert false
+    | _ -> None
 
 
   (** {2 Transfer functions} *)

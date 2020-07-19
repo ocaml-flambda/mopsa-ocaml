@@ -35,7 +35,9 @@ struct
     end
     )
 
-  let dependencies = []
+  let below = mk_semantic "below" ~domain:name
+
+  let dependencies = [ below ]
 
   let alarms = []
 
@@ -43,14 +45,23 @@ struct
 
   let exec stmt man flow =
     match skind stmt with
-    | S_expression(e) when is_universal_type e.etyp || e.etyp = T_any ->
-      Some (
-        man.eval e flow >>$ fun e flow ->
-        Post.return flow
-      )
+    | S_expression e ->
+      man.eval e flow >>$? fun e flow ->
+      Post.return flow |>
+      OptionExt.return
+
+    | S_assign(lval, rval) ->
+      man.eval rval flow >>$? fun rval flow ->
+      man.post ~semantic:below (mk_assign lval rval stmt.srange) flow |>
+      OptionExt.return
 
     | S_assume { ekind = E_unop (O_log_not, { ekind = E_unop (O_log_not, e) }) } ->
       man.post (mk_assume e stmt.srange) flow |>
+      OptionExt.return
+
+    | S_assume(e) ->
+      man.eval e flow >>$? fun e flow ->
+      man.post ~semantic:below (mk_assume e stmt.srange) flow |>
       OptionExt.return
 
     | S_block(block,local_vars) ->

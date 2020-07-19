@@ -42,7 +42,9 @@ struct
       let name = "c.cstubs.builtins"
     end)
 
-  let dependencies = []
+  let below = mk_semantic "below" ~domain:name
+
+  let dependencies = [ below ]
 
   let alarms = []
 
@@ -74,7 +76,7 @@ struct
       Eval.singleton (mk_bytes addr mode range) flow
 
     | _ ->
-      eval_base_size base range man flow
+      eval_base_size ~semantic:below base range man flow
 
 
   let byte_to_element t bytes range =

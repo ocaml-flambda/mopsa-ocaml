@@ -258,20 +258,22 @@ struct
       ~semantic:numeric man flow
 
 
-  let rec is_compare_expr e =
-    match ekind e with
-    | E_binop(op, e1, e2) when is_comparison_op op -> true
-    | E_binop(op, e1, e2) when is_logic_op op -> true
-    | E_unop(O_log_not, ee) -> is_compare_expr ee
-    | E_c_cast(ee,_) -> is_compare_expr ee
-    | _ -> false
-
-
   let is_predicate_op = function
     | O_float_class _ -> true
     | _ -> false
 
+  let rec is_cond_expr e =
+    match ekind @@ remove_casts e with
+    | E_binop(op,_,_) when is_comparison_op op -> true
+    | E_binop(op,_,_) when is_logic_op op -> true
+    | E_unop(O_log_not, _) -> true
+    | E_unop(op,_) when is_predicate_op op -> true
+    | _ -> false
+
+
+
   let rec to_compare_expr e =
+    if e.etyp = T_bool then e else
     match ekind e with
     | E_binop(op, e1, e2) when is_comparison_op op ->
       e
@@ -297,7 +299,7 @@ struct
     let range = erange exp in
     match ekind exp with
     (* 𝔼⟦ n ⟧ *)
-    | E_constant(C_int _ | C_int_interval _ | C_float _ | C_float_interval _) ->
+    | E_constant(C_int _ | C_int_interval _ | C_float _ | C_float_interval _) when is_c_num_type exp.etyp ->
       Rewrite.return_singleton {exp with etyp = to_num_type exp.etyp} flow
       |> OptionExt.return
 
@@ -349,7 +351,7 @@ struct
     | E_unop(O_log_not, e) when exp |> etyp |> is_c_num_type ->
       man.eval e flow >>$? fun e flow ->
       let exp' =
-        if is_compare_expr e then
+        if is_cond_expr e then
           { exp with
             ekind = E_unop(O_log_not, e);
             etyp = T_bool }
@@ -515,7 +517,7 @@ struct
           Eval.singleton (mk_top (to_num_type v.vtyp) range) flow
 
       | _, Some (C_init_expr e) ->
-        if not (is_compare_expr e) then
+        if not (is_cond_expr e) then
           man.eval e flow
         else
           assume e
@@ -543,7 +545,7 @@ struct
       OptionExt.return
 
     | S_assign({ekind = E_var _} as lval, rval) when etyp lval |> is_c_num_type &&
-                                             is_compare_expr rval ->
+                                                     is_cond_expr rval ->
       man.eval lval flow >>$? fun lval flow ->
       let range = stmt.srange in
       assume rval
@@ -590,12 +592,6 @@ struct
       man.post ~semantic:numeric (mk_rename vv1 vv2 stmt.srange) flow |>
       OptionExt.return
 
-
-    | S_assume(e) when is_c_num_type e.etyp || is_numeric_type e.etyp || e.etyp = T_any ->
-      man.eval e flow >>$? fun e' flow ->
-      man.post ~semantic:numeric (mk_assume (to_compare_expr e') stmt.srange) flow |>
-      OptionExt.return
-
     | S_expand(({ekind = E_var _} as e),el)
       when is_c_num_type e.etyp &&
            List.for_all (fun ee -> is_c_num_type ee.etyp) el
@@ -617,11 +613,6 @@ struct
     | S_forget ({ekind = E_var _} as v) when is_c_num_type v.etyp ->
       let vv = mk_num_var_expr v in
       man.post (mk_forget vv stmt.srange) ~semantic:numeric flow |>
-      OptionExt.return
-
-    | S_assume(e) when is_c_num_type e.etyp || is_numeric_type e.etyp ->
-      man.eval e flow >>$? fun e' flow ->
-      man.post ~semantic:numeric (mk_assume (to_compare_expr e') stmt.srange) flow |>
       OptionExt.return
 
     | _ -> None

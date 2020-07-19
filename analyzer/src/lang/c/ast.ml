@@ -157,6 +157,13 @@ type typ +=
   | T_c_qualified of c_qual * typ
   (** Qualified type. *)
 
+  | T_c_block_object of typ
+  (** Type to designate a block as an object. Useful to distinguish
+      between operations on the content of block and the block itself.
+      For, expanding the contents of a block will duplicate every cell
+      in the block, while expanding the block object will update the
+      pointers that point to the block.  *)  
+
 
 (** {2 Function descriptor} *)
 (** *********************** *)
@@ -341,9 +348,6 @@ type c_scope_update = {
   c_scope_var_removed: var list;
 }
 (** Scope update information for jump statements *)
-
-
-
 
 
 (*==========================================================================*)
@@ -903,6 +907,15 @@ let array_type typ size = T_c_array(typ,C_array_length_cst size)
 
 let type_of_string s = T_c_array(s8, C_array_length_cst (Z.of_int (1 + String.length s)))
 
+let is_c_block_object_type = function T_c_block_object _ -> true | _ -> false
+
+let to_c_block_object e = { e with etyp = T_c_block_object e.etyp }
+
+let of_c_block_object e =
+  let t = match e.etyp with T_c_block_object t -> t | _ -> assert false in
+  { e with etyp = t }
+
+
 let mk_c_string ?(kind=C_char_ascii) s range =
   mk_constant (C_c_string (s, kind)) range ~etyp:(type_of_string s)
 
@@ -992,6 +1005,7 @@ let () =
           (fun () -> compare q1.c_qual_is_restrict q2.c_qual_is_restrict);
           (fun () -> compare_typ t1 t2)
         ]
+      | T_c_block_object tt1, T_c_block_object tt2 -> compare_typ tt1 tt2
       | _ -> next t1 t2
     )
 

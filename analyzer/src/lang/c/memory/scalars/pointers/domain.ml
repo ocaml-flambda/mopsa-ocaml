@@ -817,15 +817,15 @@ struct
       exec_invalidate_base e stmt.srange man flow |>
       OptionExt.return
 
-    | S_rename(e,e') when Blocks.is_c_block_type e.etyp ->
+    | S_rename(e,e') when is_c_block_object_type e.etyp ->
       exec_rename_base e e' stmt.srange man flow |>
       OptionExt.return
 
-    | S_expand(e,el) when Blocks.is_c_block_type e.etyp ->
+    | S_expand(e,el) when is_c_block_object_type  e.etyp ->
       exec_expand_base e el stmt.srange man flow |>
       OptionExt.return
 
-    | S_fold(e,el) when Blocks.is_c_block_type e.etyp ->
+    | S_fold(e,el) when is_c_block_object_type e.etyp ->
       exec_fold_bases e el stmt.srange man flow |>
       OptionExt.return
 
@@ -926,14 +926,11 @@ struct
       man.post (mk_assume p stmt.srange) flow |>
       OptionExt.return
 
-
     (* S⟦ !(t)p ⟧ *)
     | S_assume ({ ekind = E_unop (O_log_not, ({ ekind = E_c_cast(p, _) })) })
       when is_c_pointer_type p.etyp ->
       man.post (mk_assume (mk_not p stmt.srange) stmt.srange) flow |>
       OptionExt.return
-
-
 
     | _ -> None
 
