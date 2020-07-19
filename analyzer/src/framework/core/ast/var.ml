@@ -23,7 +23,7 @@
 
 
 open Typ
-
+open Semantic
 
 
 type var_kind = ..
@@ -38,6 +38,7 @@ type var = {
   vkind : var_kind;
   vtyp  : typ;
   vmode : mode;
+  vsemantic : semantic;
 }
 
 
@@ -46,9 +47,10 @@ let vname v = v.vname
 let vkind v = v.vkind
 let vtyp  v = v.vtyp
 let vmode v = v.vmode
+let vsemantic v = v.vsemantic
 
-let mkv name kind ?(mode=STRONG) typ =
-  {vname = name; vkind = kind; vtyp = typ; vmode = mode }
+let mkv name kind ?(mode=STRONG) ?(semantic=any_semantic) typ =
+  {vname = name; vkind = kind; vtyp = typ; vmode = mode; vsemantic = semantic }
 
 
 (** Internal pretty printer chain over variable kinds *)
@@ -76,6 +78,7 @@ let compare_var v1 v2 =
       (fun () -> Stdlib.compare v1.vname v2.vname);
       (fun () -> compare_typ v1.vtyp v2.vtyp);
       (fun () -> compare_mode v1.vmode v2.vmode);
+      (fun () -> compare_semantic v1.vsemantic v2.vsemantic);
     ]
 
 let register_var_compare f = TypeExt.register_compare f var_compare_chain

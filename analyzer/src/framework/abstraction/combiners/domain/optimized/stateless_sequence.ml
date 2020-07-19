@@ -21,7 +21,6 @@
 
 (** Sequence of stateless domains *)
 
-open Ast.All
 open Core.All
 open Sig.Combiner.Stateless
 open Common

@@ -21,16 +21,8 @@
 
 (** Engine for an automatic analysis without user interaction *)
 
-open Ast.Stmt
-open Ast.Expr
-open Core
-open Lattice
-open Flow
-open Eval
-open Semantic
-open Query
+open Core.All
 open Abstraction.Toplevel
-open Manager
 open Engine
 
 

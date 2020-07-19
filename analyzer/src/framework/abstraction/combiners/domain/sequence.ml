@@ -22,7 +22,6 @@
 
 (** Sequence combiner to build Cartesian products of domains *)
 
-open Ast.All
 open Core.All
 open Sig.Combiner.Stacked
 open Common

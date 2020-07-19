@@ -39,7 +39,6 @@
     the other ones in the abstract state (such as equality with [e']). 
  *)
 
-open Ast.All
 open Core.All
 
 

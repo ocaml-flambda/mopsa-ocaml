@@ -21,15 +21,8 @@
 
 (** Signature of an analysis engine *)
 
-open Ast.Program
-open Ast.Expr
-open Ast.Stmt
-open Core
-open Flow
-open Eval
+open Core.All
 open Abstraction.Toplevel
-open Semantic
-open Manager
 
 module type ENGINE =
 sig
@@ -42,7 +35,7 @@ sig
 
   val eval : expr -> ?semantic:semantic -> t flow -> t eval
 
-  val ask : (t,'r) Query.query -> t flow -> 'r
+  val ask : (t,'r) query -> t flow -> 'r
 
   val man : (t, t) man
 

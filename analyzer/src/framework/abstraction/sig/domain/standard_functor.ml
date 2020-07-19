@@ -22,7 +22,6 @@
 
 (** Standard signature of functor domains *)
 
-open Ast.All
 open Core.All
 open Standard
 

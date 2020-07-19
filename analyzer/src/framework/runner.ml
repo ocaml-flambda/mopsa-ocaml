@@ -21,8 +21,7 @@
 
 (** Runner - main entry point of the analysis *)
 
-open Ast.All
-open Core
+open Core.All
 open Config.Options
 
 (** {2 Command-line options} *)

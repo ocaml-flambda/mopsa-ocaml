@@ -21,7 +21,6 @@
 
 (** Extended domains signatures used by combiners *)
 
-open Ast.All
 open Core.All
 
 

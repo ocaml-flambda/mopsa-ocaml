@@ -25,7 +25,6 @@
     This can be useful for implementing iterators for example.
 *)
 
-open Ast.All
 open Core.All
 
 

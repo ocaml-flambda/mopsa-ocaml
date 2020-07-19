@@ -50,7 +50,15 @@ open Universal.Numeric.Common
 module Domain =
 struct
 
+  let name = "c.memory.lowlevel.cells"
 
+  (** {2 Semantic dependencies} *)
+  (** ************************* *)
+
+  let scalar = mk_semantic "C/Scalar" ~domain:name
+  let dependencies = [ scalar ]
+
+  
   (** {2 Memory cells} *)
   (** **************** *)
 
@@ -202,7 +210,7 @@ struct
   (** Create a variable from a cell *)
   let mk_cell_var c : var =
     let name = mk_cell_uniq_name c in
-    mkv name (V_c_cell c) (cell_type c) ~mode:(base_mode c.base)
+    mkv name (V_c_cell c) (cell_type c) ~mode:(base_mode c.base) ~semantic:scalar
 
 
   (** Create a variable from a numeric cell *)
@@ -361,13 +369,9 @@ struct
   (** Domain identifier *)
   include GenDomainId(struct
       type nonrec t = t
-      let name = "c.memory.lowlevel.cells"
+      let name = name
     end)
 
-
-  (** Semantic dependencies *)
-  let scalar = mk_semantic "C/Scalar" ~domain:name
-  let dependencies = [ scalar ]
 
   let alarms = [ A_c_out_of_bound;
                  A_c_null_deref;
@@ -505,7 +509,7 @@ struct
         match phi c a range with
         | Some e ->
           let stmt = mk_assume (mk_binop (mk_var v range) O_eq e ~etyp:u8 range) range in
-          man.post ~semantic:scalar stmt flow
+          man.post stmt flow
 
         | None -> Post.return flow
 

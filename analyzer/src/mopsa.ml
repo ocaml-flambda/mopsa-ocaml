@@ -21,8 +21,6 @@
 
 (** Essential modules. *)
 
-include Framework.Ast.All
-
 include Framework.Core.All
 
 module Core = Framework.Core
@@ -33,7 +31,7 @@ module Config = Framework.Config
 
 module Paths = Framework.Config.Paths
 
-module Visitor = Framework.Ast.Visitor
+module Visitor = Framework.Core.Ast.Visitor
 
 include Location
 

@@ -22,7 +22,6 @@
 (** Composition combiner to stack a domain over another one *)
 
 
-open Ast.All
 open Core.All
 open Sig.Combiner.Stacked
 open Common

@@ -21,7 +21,6 @@
 
 (** Union of two value abstractions *)
 
-open Ast.All
 open Core.All
 open Sig.Domain.Value
 open Common

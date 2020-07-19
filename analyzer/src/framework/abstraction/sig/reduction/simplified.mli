@@ -29,7 +29,6 @@
     access to the non-relational abstraction (if any).
  *)
 
-open Ast.All
 open Core.All
 
 

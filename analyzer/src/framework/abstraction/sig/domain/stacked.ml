@@ -22,7 +22,6 @@
 (** Signature of stacked domains *)
 
 
-open Ast.All
 open Core.All
 
 

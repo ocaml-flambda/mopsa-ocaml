@@ -21,7 +21,6 @@
 
 (** Signature of stacked combiner domains *)
 
-open Ast.All
 open Core.All
 open Domain.Stacked
 

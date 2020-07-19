@@ -59,6 +59,7 @@
     performed to preserve the value of unmodified concrete dimensions.
 *)
 
+open Semantic
 
 (****************************************************************************)
 (**                            {1 Access modes}                             *)
@@ -90,10 +91,11 @@ val compare_mode : mode -> mode -> int
 (****************************************************************************)
 
 type var = {
-  vname : string;     (** unique name of the variable*)
-  vkind : var_kind;   (** kind the variable *)
-  vtyp  : Typ.typ;    (** type of the variable *)
-  vmode : mode;       (** access mode of the variable *)
+  vname     : string;     (** unique name of the variable*)
+  vkind     : var_kind;   (** kind the variable *)
+  vtyp      : Typ.typ;    (** type of the variable *)
+  vmode     : mode;       (** access mode of the variable *)
+  vsemantic : semantic;
 }
 (** Variables *)
 
@@ -103,9 +105,10 @@ val vname : var -> string
 val vkind : var -> var_kind
 val vtyp  : var -> Typ.typ
 val vmode : var -> mode
+val vsemantic : var -> semantic
 
 
-val mkv : string -> var_kind -> ?mode:mode -> Typ.typ -> var
+val mkv : string -> var_kind -> ?mode:mode -> ?semantic:semantic -> Typ.typ -> var
 (** Create a variable with a unique name, a kind, a type and an access mode 
     (STRONG if not given) *)
 

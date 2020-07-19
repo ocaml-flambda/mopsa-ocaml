@@ -21,7 +21,6 @@
 
 (** Reduced product of value abstractions with n-ary reduction rules *)
 
-open Ast.All
 open Core.All
 open Sig.Domain.Value
 open Sig.Reduction.Value

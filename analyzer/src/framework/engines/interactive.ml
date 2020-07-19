@@ -21,22 +21,8 @@
 
 (** Engine for interactive analysis sessions *)
 
-open Ast
-open Ast.Var
-open Ast.Stmt
-open Ast.Expr
-open Ast.Typ
-open Core
-open Lattice
-open Token
-open Flow
-open Eval
-open Post
-open Query
-open Semantic
+open Core.All
 open Abstraction.Toplevel
-open Manager
-open Engine
 open Format
 open Location
 open Callstack
@@ -477,8 +463,8 @@ struct
   (** Check that an action is atomic *)
   let is_atomic_action: type a. a action -> bool = fun action ->
     match action with
-    | Exec(stmt,_) -> is_orig_range stmt.srange && Visitor.is_atomic_stmt stmt
-    | Post(stmt,_) -> is_orig_range stmt.srange && Visitor.is_atomic_stmt stmt
+    | Exec(stmt,_) -> is_orig_range stmt.srange && is_atomic_stmt stmt
+    | Post(stmt,_) -> is_orig_range stmt.srange && is_atomic_stmt stmt
     | Eval _       -> false
 
 

@@ -27,7 +27,6 @@
 *)
 
 open Core.All
-open Ast.All
 open Sig.Combiner.Stacked
 
 
@@ -207,7 +206,7 @@ struct
               "unable to analyze statement %a in semantic %a"
               pp_stmt stmt
               pp_semantic semantic
-              
+
         | Some post -> post
       in
       let ctx = Hook.on_after_exec semantic stmt man flow post in
@@ -253,46 +252,52 @@ struct
       ) map
 
   (** Evaluation of expressions. *)
-  let rec eval ?(semantic=any_semantic) exp man flow =
+  let eval ?(semantic=any_semantic) exp man flow =
     let ctx = Hook.on_before_eval semantic exp man flow in
     let flow = Flow.set_ctx ctx flow in
 
-    (* Iterate evaluation until stabilization, i.e. no answer from domains *)
-    let rec iter semantic e f =
-      let feval =
-        try SemanticMap.find semantic eval_map
-        with Not_found -> Exceptions.panic_at exp.erange "eval for %a not found" pp_semantic semantic
-    in
-    match Cache.eval feval semantic e man f with
-    | None ->
-      (* No answer, so try to visit sub-expressions *)
-      let open Ast.Visitor in
-      let parts, builder = structure_of_expr e in
-      begin match parts with
-        | {exprs; stmts = []} ->
-          Cases.bind_list exprs (iter semantic) f >>$ fun exprs' f' ->
-          let e' = builder {exprs = exprs'; stmts = []} in
-          Cases.singleton e' f'
-
-        (* XXX sub-statements are not handled for the moment *)
-        | _ -> Cases.singleton e f
-      end
-
-    | Some evl ->
-      (* Iterate evaluation again *)
-      evl >>$ fun erw f' ->
-      match erw with
-      | Return e'       -> Cases.singleton e' f'
-      | Forward (e',s') -> iter s' e' f'
+    let semantic =
+      if compare_semantic semantic any_semantic = 0 then
+        match ekind exp with
+        | E_var (v,_) -> v.vsemantic
+        | _ -> semantic
+      else
+        semantic
     in
 
-    (* Same as [iter] but updates the expression transformation lineage *)
-    let iter_and_update_lineage semantic e f =
-      iter semantic e f >>$ fun e' f' ->
-      if e == e' then Cases.singleton e' f' else Cases.singleton { e' with eprev = Some e } f'
+    let feval =
+      try SemanticMap.find semantic eval_map
+      with Not_found -> Exceptions.panic_at exp.erange "eval for %a not found" pp_semantic semantic
+    in
+    let evl =
+      match Cache.eval feval semantic exp man flow with
+      | None ->
+        (* No answer, so try to visit sub-expressions *)
+        let parts, builder = structure_of_expr exp in
+        begin match parts with
+          | {exprs; stmts = []} ->
+            Cases.bind_list exprs (fun e flow -> man.eval ~semantic e flow) flow >>$ fun exprs' f' ->
+            let e' = builder {exprs = exprs'; stmts = []} in
+            Cases.singleton e' f'
+
+          (* XXX sub-statements are not handled for the moment *)
+          | _ -> Cases.singleton exp flow
+        end
+
+      | Some evl ->
+        (* Iterate evaluation again *)
+        evl >>$ fun erw f' ->
+        match erw with
+        | Return e'       -> Cases.singleton e' f'
+        | Forward (e',s') -> man.eval ~semantic:s' e' f'
     in
 
-    let ret = iter_and_update_lineage semantic exp flow in
+    (* Updates the expression transformation lineage *)
+    let ret =
+      evl >>$ fun exp' flow' ->
+      if exp == exp' then Cases.singleton exp' flow' else Cases.singleton { exp' with eprev = Some exp } flow'
+    in
+
     let ctx = Hook.on_after_eval semantic exp man flow ret in
     Cases.set_ctx ctx ret
 

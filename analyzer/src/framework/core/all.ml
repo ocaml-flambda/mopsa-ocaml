@@ -19,7 +19,25 @@
 (*                                                                          *)
 (****************************************************************************)
 
+include Ast.Constant
+include Ast.Expr
+include Ast.Stmt
+include Ast.Typ
+include Ast.Program
+include Ast.Frontend
+include Ast.Operator
+include Ast.Var
+include Ast.Visitor
+
+module Var =
+struct
+  type t = var
+  let compare = compare_var
+  let print = pp_var
+end
+
 include Alarm
+module Alarm = Alarm
 
 module Context = Context
 type uctx = Context.uctx

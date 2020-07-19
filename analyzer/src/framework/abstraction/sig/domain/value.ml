@@ -21,7 +21,6 @@
 
 (** Signature of a value abstraction. *)
 
-open Ast.All
 open Core.All
 
 

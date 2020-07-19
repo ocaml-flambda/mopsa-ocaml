@@ -23,7 +23,6 @@
     Only transfer functions need to be defined.
 *)
 
-open Ast.All
 open Core.All
 
 

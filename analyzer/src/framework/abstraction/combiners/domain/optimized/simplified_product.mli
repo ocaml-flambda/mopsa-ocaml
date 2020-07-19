@@ -21,7 +21,6 @@
 
 (** Reduced product of (leaf) domains with n-ary simplified reduction rules *)
 
-open Ast.All
 open Core.All
 open Sig.Combiner.Simplified
 open Sig.Reduction.Simplified

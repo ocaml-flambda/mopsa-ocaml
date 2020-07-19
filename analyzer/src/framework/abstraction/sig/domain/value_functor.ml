@@ -21,7 +21,6 @@
 
 (** Simplified interface of functor domains. *)
 
-open Ast.All
 open Core.All
 open Value
 

@@ -21,7 +21,6 @@
 
 (** Reduction rules for abstract evaluations *)
 
-open Ast.All
 open Core.All
 
 

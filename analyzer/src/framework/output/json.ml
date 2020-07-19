@@ -23,10 +23,10 @@
 
 open Yojson.Basic
 open ArgExt
-open Core.Alarm
-open Core.Soundness
+open Core.All
+open Soundness
 open Callstack
-
+open Location
 
 let print out json =
   let channel =
@@ -104,7 +104,7 @@ let render_warning w  =
     
 
 let render_var var  =
-  `String var.Ast.Var.vname
+  `String var.vname
 
 let render_value value  =
   `String value

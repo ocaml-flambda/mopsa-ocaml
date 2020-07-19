@@ -22,7 +22,6 @@
 
 (** Stacked signature of functor domains *)
 
-open Ast.All
 open Core.All
 open Stacked
 

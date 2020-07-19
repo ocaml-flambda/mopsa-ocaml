@@ -22,7 +22,6 @@
 (** Reduced product with n-ary reduction rules *)
 
 
-open Ast.All
 open Core.All
 open Sig.Reduction.Exec
 open Sig.Reduction.Eval

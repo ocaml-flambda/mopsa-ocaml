@@ -32,7 +32,6 @@
     provided that can be used to perform queries on the pre-state.
 *)
 
-open Ast.All
 open Core.All
 
 

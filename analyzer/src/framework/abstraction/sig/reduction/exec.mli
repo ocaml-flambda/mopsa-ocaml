@@ -21,7 +21,6 @@
 
 (** Signature of reduction rules for product post-states *)
 
-open Ast.All
 open Core.All
 
 

@@ -23,7 +23,6 @@
     abstract domain of partial environments from variables to values.
 *)
 
-open Ast.All
 open Core.All
 open Sig.Domain.Value
 

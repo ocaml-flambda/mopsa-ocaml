@@ -23,7 +23,8 @@
 (** Manager - access to the top-level lattice and transfer functions *)
 
 
-open Ast.All
+open Ast.Stmt
+open Ast.Expr
 open Lattice
 open Token
 open Flow
@@ -42,20 +43,20 @@ open Semantic
 
 (** Managers provide access to full analyzer *)
 type ('a, 't) man = {
-  (* Lattice operators over global abstract elements ['a] *)
+  (* Lattice operators of the toplevel abstract element ['a] *)
   lattice : 'a lattice;
 
   (* Accessors to the domain's abstract element ['t] within ['a] *)
   get : 'a -> 't;
   set : 't -> 'a -> 'a;
 
-  (* Analyzer transfer functions *)
+  (* Toplevel transfer functions *)
   exec : stmt -> ?semantic:semantic -> 'a flow -> 'a flow;
   post : stmt -> ?semantic:semantic -> 'a flow -> 'a post;
   eval : expr -> ?semantic:semantic -> 'a flow -> 'a eval;
   ask : 'r. ('a,'r) Query.query -> 'a flow -> 'r;
 
-  (* Accessors to the domain's merge logs *)
+  (* Accessors to the domain's logs *)
   get_log : log -> log;
   set_log : log -> log -> log;
 }
@@ -67,8 +68,6 @@ type ('a, 's) stack_man = {
   get_sub : 'a -> 's;
   set_sub : 's -> 'a -> 'a;
 }
-
-
 
 
 (*==========================================================================*)
@@ -184,8 +183,11 @@ let exec_stmt_on_all_flows stmt man flow =
 
 
 let apply_cleaners block man flow =
-  let exec =
-    if !Cases.opt_clean_cur_only then man.exec ~semantic:any_semantic else (fun stmt flow -> exec_stmt_on_all_flows stmt man flow)
+  let exec stmt flow =
+    if !Cases.opt_clean_cur_only then
+      man.exec ~semantic:any_semantic stmt flow
+    else
+      exec_stmt_on_all_flows stmt man flow
   in
   List.fold_left (fun flow stmt ->
       exec stmt flow
