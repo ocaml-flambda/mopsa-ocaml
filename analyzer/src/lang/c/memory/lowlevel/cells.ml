@@ -990,7 +990,8 @@ struct
     match b with
     | { base_kind = Var v; base_valid = true; } when is_c_scalar_type v.vtyp ->
       let c = mk_cell b Z.zero v.vtyp in
-      add_cell c range man flow
+      add_base b man flow |>
+      add_cell c range man
 
     | _ ->
       add_base b man flow |>
