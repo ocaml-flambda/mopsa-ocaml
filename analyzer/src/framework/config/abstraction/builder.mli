@@ -19,39 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
+open Syntax
+open Sig.Combiner.Stacked
 
-(** Signature of functors of standard domains *)
-
-open Standard
-open Core.Semantic
-
-(*==========================================================================*)
-(**                           {1 Signature}                                 *)
-(*==========================================================================*)
-
-module type DOMAIN_FUNCTOR =
-sig
-  val name : string
-  val dependencies : semantic list
-  module Functor : functor(D:DOMAIN) -> DOMAIN
-end
-
-
-
-(*==========================================================================*)
-(**                          {1 Registration}                               *)
-(*==========================================================================*)
-
-val register_domain_functor : (module DOMAIN_FUNCTOR) -> unit
-(** Register a new functor of standard domains *)
-
-
-val find_domain_functor : string -> (module DOMAIN_FUNCTOR)
-(** Find a domain functor by its name. Raise [Not_found] if no functor is found *)
-
-val mem_domain_functor : string -> bool
-(** [mem_domain_functor name] checks whether a domain functor with name
-    [name] is registered *)
- 
-val domain_functor_names : unit -> string list
-(** Return the names of registered domain functor *) 
+val from_json : domain -> (module STACKED_COMBINER)

@@ -22,7 +22,7 @@
 (** Finite powerset of integer constants *)
 
 open Mopsa
-open Framework.Abstraction.Sig.Domain.Value
+open Sig.Abstraction.Value
 open Ast
 open Top
 

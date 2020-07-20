@@ -24,7 +24,7 @@
 *)
 
 open Core.All
-open Sig.Domain.Value
+open Sig.Abstraction.Value
 
 
 (** {2 Identifier for the non-relation domain} *)

@@ -23,7 +23,7 @@
 
 
 open Mopsa
-open Framework.Abstraction.Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Ast
 
 let name = "universal.iterators.loops"

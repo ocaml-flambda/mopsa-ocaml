@@ -20,7 +20,7 @@
 (****************************************************************************)
 
 open Mopsa
-open Framework.Abstraction.Sig.Domain.Simplified
+open Sig.Abstraction.Simplified
 
 module Octagon = Domain.Make(struct
   type t = Oct.t

@@ -71,15 +71,15 @@ let parse_program lang files =
 let analyze_files (files:string list) (args:string list option) : int =
   let t = Timing.start () in
   try
-    let config = Config.Paths.resolve_config_file !Abstraction.Json.Parser.opt_config in
-    let abstraction = Abstraction.Json.Parser.parse config in
-    let domain = Abstraction.Builder.from_json abstraction.domain in
+    let config = Config.Paths.resolve_config_file !Config.Abstraction.Parser.opt_config in
+    let abstraction = Config.Abstraction.Parser.parse config in
+    let domain = Config.Abstraction.Builder.from_json abstraction.domain in
 
     let prog = parse_program abstraction.language files in
 
     (* Top layer analyzer *)
     let module Domain = (val domain) in
-    let module Toplevel = Abstraction.Toplevel.Make(Domain) in
+    let module Toplevel = Toplevel.Make(Domain) in
     let module Engine =
       (val
         if !opt_interactive

@@ -22,7 +22,7 @@
 (** Congruence abstraction of integer values. *)
 
 open Mopsa
-open Framework.Abstraction.Sig.Domain.Value
+open Sig.Abstraction.Value
 open Ast
 open Bot
 

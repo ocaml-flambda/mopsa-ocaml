@@ -22,7 +22,7 @@
 (** Domain for supporting variable-length arrays *)
 
 open Mopsa
-open Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Universal.Ast
 open Stubs.Ast
 open Ast

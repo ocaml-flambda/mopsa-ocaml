@@ -55,10 +55,10 @@ type semantic
 (** semantic dependency *)
 
 val mk_semantic: string -> domain:string -> semantic
-(** Create a semantic from a name and a domain *)
+(** Create a semantic dependency of a domain from its name *)
 
 val any_semantic : semantic
-(** Wildcard dependency *)
+(** Wildcard semantic *)
 
 val domain_of_semantic : semantic -> string
 (** Get the domain of a semantic dependency *)

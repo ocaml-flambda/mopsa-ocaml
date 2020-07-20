@@ -24,7 +24,7 @@
 
 
 open Mopsa
-open Framework.Abstraction.Sig.Domain.Standard
+open Sig.Abstraction.Domain
 open Ast
 
 (* open Policies *)

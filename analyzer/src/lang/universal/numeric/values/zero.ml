@@ -22,7 +22,7 @@
 (** Abstraction of zero and non-zero integer values. *)
 
 open Mopsa
-open Framework.Abstraction.Sig.Domain.Value
+open Sig.Abstraction.Value
 open Ast
 
 

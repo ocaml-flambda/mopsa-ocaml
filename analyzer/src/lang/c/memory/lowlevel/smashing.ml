@@ -51,7 +51,7 @@
 *)
 
 open Mopsa
-open Sig.Domain.Stacked
+open Sig.Abstraction.Stacked
 open Universal.Ast
 open Stubs.Ast
 open Ast

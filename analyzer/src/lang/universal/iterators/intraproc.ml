@@ -22,7 +22,7 @@
 (** Intra-procedural iterator for blocks, assignments and tests *)
 
 open Mopsa
-open Framework.Abstraction.Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Ast
 
 

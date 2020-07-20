@@ -95,7 +95,7 @@ type var = {
   vkind     : var_kind;   (** kind the variable *)
   vtyp      : Typ.typ;    (** type of the variable *)
   vmode     : mode;       (** access mode of the variable *)
-  vsemantic : semantic;
+  vsemantic : semantic;   (** semantic of the variable *)
 }
 (** Variables *)
 

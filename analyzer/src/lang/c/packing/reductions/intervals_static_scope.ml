@@ -25,7 +25,7 @@
 
 open Mopsa
 open Sig.Reduction.Simplified
-open Sig.Domain.Simplified
+open Sig.Abstraction.Simplified
 open Universal.Packing.Static
 open Bot_top
 

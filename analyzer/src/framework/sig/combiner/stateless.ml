@@ -19,23 +19,25 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Signature of stacked combiner domains *)
+(** Extended domains signatures used by combiners *)
 
 open Core.All
-open Domain.Stacked
+open Abstraction.Stateless
 
-module type STACKED_COMBINER =
+
+module type STATELESS_COMBINER =
 sig
-  include Domain.Stacked.STACKED
+  include STATELESS
   val nodes : domain list
   val wirings : wirings
-  val exec : domain list -> stmt -> ('a,t) man -> 'a flow -> 'a post option
-  val eval : domain list -> expr -> ('a,t) man -> 'a flow -> 'a rewrite option
-  val ask  : domain list -> ('a,'r) query -> ('a,t) man -> 'a flow -> 'r option
+  val exec : domain list -> stmt -> ('a,unit) man -> 'a flow -> 'a post option
+  val eval : domain list -> expr -> ('a,unit) man -> 'a flow -> 'a rewrite option
+  val ask  : domain list -> ('a,'r) query -> ('a,unit) man -> 'a flow -> 'r option
 end
 
 
-module StackedToCombiner(D:STACKED) : STACKED_COMBINER with type t = D.t =
+
+module StatelessToCombiner(D:STATELESS) : STATELESS_COMBINER =
 struct
   include D
   let nodes = [D.name]
@@ -45,7 +47,7 @@ struct
   let ask targets  = D.ask
 end
 
-module CombinerToStacked(T:STACKED_COMBINER) : STACKED with type t = T.t =
+module CombinerToStateless(T:STATELESS_COMBINER) : STATELESS =
 struct
   include T
   let exec stmt man flow = T.exec [] stmt man flow
@@ -54,51 +56,54 @@ struct
 end
 
 
-module AutoLogger(T:STACKED_COMBINER) : STACKED_COMBINER with type t = T.t =
+
+
+
+module StatelessToDomain(S:STATELESS_COMBINER) : Domain.DOMAIN_COMBINER with type t = unit =
 struct
-  include T
-  let merge pre (a1,log1) (a2,log2) =
-    if a1 == a2 then a1 else
-    if Log.is_empty_log log1 then a2 else
-    if Log.is_empty_log log2 then a1 else
-    if (Log.compare_log log1 log2 = 0) then a1
-    else T.merge pre (a1,log1) (a2,log2)
 
+  include S
 
-  let exec domains =
-    let f = T.exec domains in
-    (fun stmt man flow ->
-       f stmt man flow |>
-       OptionExt.lift @@ fun res ->
-       Cases.map_log (fun log ->
-           man.set_log (
-             man.get_log log |> Log.add_stmt_to_log stmt
-           ) log
-         ) res
-    )
+  type t = unit
+  let bottom = ()
+  let top = ()
+  let is_bottom () = false
+  let merge _ _ _ = ()
+  let print _ _ = ()
+
+  let subset () () = true
+  let join () () = ()
+  let meet () () = ()
+  let widen _ () () = ()
+
 end
 
 
-let domains : (module STACKED_COMBINER) list ref = ref []
 
-let register_stacked_combiner dom =
-  let module D = (val dom : STACKED_COMBINER) in
-  domains := (module AutoLogger(D)) :: !domains
+(*==========================================================================*)
+(**                          {2 Registration}                               *)
+(*==========================================================================*)
 
-let find_stacked_combiner name =
+
+let combiners : (module STATELESS_COMBINER) list ref = ref []
+
+let register_stateless_combiner dom =
+  combiners := dom :: !combiners
+
+let find_stateless_combiner name =
   List.find (fun dom ->
-      let module D = (val dom : STACKED_COMBINER) in
-      compare D.name name = 0
-    ) !domains
+      let module S = (val dom : STATELESS_COMBINER) in
+      compare S.name name = 0
+    ) !combiners
 
-let mem_stacked_combiner name =
+let mem_stateless_combiner name =
   List.exists (fun dom ->
-      let module D = (val dom : STACKED_COMBINER) in
-      compare D.name name = 0
-    ) !domains
+      let module S = (val dom : STATELESS_COMBINER) in
+      compare S.name name = 0
+    ) !combiners
 
-let stacked_combiner_names () =
+let stateless_combiner_names () =
   List.map (fun dom ->
-      let module D = (val dom : STACKED_COMBINER) in
-      D.name
-    ) !domains
+      let module S = (val dom : STATELESS_COMBINER) in
+      S.name
+    ) !combiners

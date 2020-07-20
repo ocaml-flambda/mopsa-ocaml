@@ -22,7 +22,7 @@
 (** Desugar non-scalar expressions in assignments and tests *)
 
 open Mopsa
-open Framework.Abstraction.Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Ast
 
 module Domain =

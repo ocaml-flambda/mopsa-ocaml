@@ -25,7 +25,7 @@ include Framework.Core.All
 
 module Core = Framework.Core
 
-module Sig = Framework.Abstraction.Sig
+module Sig = Framework.Sig
 
 module Config = Framework.Config
 

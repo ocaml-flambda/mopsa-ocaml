@@ -22,7 +22,7 @@
 (** Union of two value abstractions *)
 
 open Core.All
-open Sig.Domain.Value
+open Sig.Abstraction.Value
 open Common
 
 

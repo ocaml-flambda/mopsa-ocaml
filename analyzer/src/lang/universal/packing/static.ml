@@ -33,8 +33,8 @@
 *)
 
 open Mopsa
-open Framework.Abstraction.Sig.Domain.Simplified_functor
-open Framework.Abstraction.Sig.Domain.Simplified
+open Sig.Abstraction.Simplified_functor
+open Sig.Abstraction.Simplified
 open Ast
 open Format
 open Context

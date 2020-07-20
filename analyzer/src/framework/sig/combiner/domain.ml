@@ -22,12 +22,12 @@
 (** Extended domains signatures used by combiners *)
 
 open Core.All
-open Domain.Standard
+open Abstraction.Domain
 
 
 module type DOMAIN_COMBINER =
 sig
-  include Domain.Standard.DOMAIN
+  include DOMAIN
   val nodes : domain list
   val wirings : wirings
   val exec : domain list -> stmt -> ('a,t) man -> 'a flow -> 'a post option

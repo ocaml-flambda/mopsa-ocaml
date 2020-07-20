@@ -22,7 +22,7 @@
 (** Control flow abstraction for switch statements. *)
 
 open Mopsa
-open Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Universal.Iterators.Loops
 open Ast
 

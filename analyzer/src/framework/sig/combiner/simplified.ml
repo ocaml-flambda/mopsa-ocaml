@@ -22,7 +22,7 @@
 (** Extended domains signatures used by combiners *)
 
 open Core.All
-open Domain.Simplified
+open Abstraction.Simplified
 
 module type SIMPLIFIED_COMBINER =
 sig
@@ -51,7 +51,7 @@ end
 
 
 
-module SimplifiedToStandard(D: SIMPLIFIED_COMBINER) : Standard.DOMAIN_COMBINER with type t = D.t =
+module SimplifiedToStandard(D: SIMPLIFIED_COMBINER) : Domain.DOMAIN_COMBINER with type t = D.t =
 struct
 
   include D

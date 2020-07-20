@@ -22,7 +22,7 @@
 (** Main handler of Universal programs. *)
 
 open Mopsa
-open Framework.Abstraction.Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Ast
 
 module Domain =

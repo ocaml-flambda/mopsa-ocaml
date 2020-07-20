@@ -24,7 +24,7 @@
 *)
 
 open Mopsa
-open Framework.Abstraction.Sig.Reduction.Simplified
+open Sig.Reduction.Simplified
 
 
 module Reduction =

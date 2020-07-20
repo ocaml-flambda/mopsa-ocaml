@@ -20,22 +20,31 @@
 (****************************************************************************)
 
 
-(** Semantic routes *)
+(** Wiring - Links between a semantic dependency and its providers *)
 
 open Semantic
 
 type wirings
+(** Wirings table providing the domains that implement a given semantic
+    dependency *) 
 
 type domain = string
+(** Domains are designated by their names *)
 
 val empty_wirings : wirings
+(** Empty wirings table *)
 
 val find_wirings : semantic -> wirings -> domain list
+(** Find providers of a given semantic dependency *)
 
 val add_wiring : semantic -> domain -> wirings -> wirings
+(** Add a wiring linking a semantic and its provider *)
 
 val add_wirings : semantic -> domain list -> wirings -> wirings
+(** Add a set of wirings linking a semantic and its providers *)
 
 val join_wirings : wirings -> wirings -> wirings
+(** Join two wirings table *)
 
 val pp_wirinings : Format.formatter -> wirings -> unit
+(** Print a wiring table *)

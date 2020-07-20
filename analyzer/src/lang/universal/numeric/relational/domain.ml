@@ -22,7 +22,7 @@
 (** Relational numeric abstract domain, based on APRON. *)
 
 open Mopsa
-open Framework.Abstraction.Sig.Domain.Simplified
+open Sig.Abstraction.Simplified
 open Rounding
 open Ast
 open Apron_manager

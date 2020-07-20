@@ -22,7 +22,7 @@
 (** Reduced product of value abstractions with n-ary reduction rules *)
 
 open Core.All
-open Sig.Domain.Value
+open Sig.Abstraction.Value
 open Sig.Reduction.Value
 open Common
 

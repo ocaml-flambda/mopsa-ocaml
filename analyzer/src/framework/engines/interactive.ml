@@ -22,7 +22,7 @@
 (** Engine for interactive analysis sessions *)
 
 open Core.All
-open Abstraction.Toplevel
+open Toplevel
 open Format
 open Location
 open Callstack

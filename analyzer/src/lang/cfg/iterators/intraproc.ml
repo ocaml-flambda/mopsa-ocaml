@@ -22,7 +22,7 @@
 (** General intraprocedural iterator on Control Flow Graphs. *)
 
 open Mopsa
-open Framework.Abstraction.Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Universal.Ast
 open Ast
 

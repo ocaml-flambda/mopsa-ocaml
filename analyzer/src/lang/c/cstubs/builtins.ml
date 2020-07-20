@@ -22,7 +22,7 @@
 (** Evaluation of stub builtins: bytes, size, base, offset and valid_ptr *)
 
 open Mopsa
-open Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Universal.Ast
 open Stubs.Ast
 open Common.Points_to

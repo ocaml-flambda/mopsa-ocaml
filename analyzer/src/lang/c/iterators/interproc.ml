@@ -22,7 +22,7 @@
 (** Abstraction of C function calls *)
 
 open Mopsa
-open Sig.Domain.Standard
+open Sig.Abstraction.Domain
 open Universal.Ast
 open Stubs.Ast
 open Ast

@@ -22,7 +22,7 @@
 (** Signature of an analysis engine *)
 
 open Core.All
-open Abstraction.Toplevel
+open Toplevel
 
 module type ENGINE =
 sig

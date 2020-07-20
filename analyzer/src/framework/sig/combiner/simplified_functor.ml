@@ -19,7 +19,44 @@
 (*                                                                          *)
 (****************************************************************************)
 
-open Json.Syntax
-open Sig.Combiner.Stacked
+(** Simplified interface of functor domains. *)
 
-val from_json : domain -> (module STACKED_COMBINER)
+open Core.All
+open Abstraction.Simplified
+
+module type SIMPLIFIED_FUNCTOR =
+sig
+  val name : string
+  module Functor : functor(D:SIMPLIFIED) -> SIMPLIFIED
+end
+
+
+
+
+(*==========================================================================*)
+(**                          {2 Registration}                               *)
+(*==========================================================================*)
+
+
+let functors : (module SIMPLIFIED_FUNCTOR) list ref = ref []
+
+let register_simplified_functor f =
+  functors := f :: !functors
+
+let find_simplified_functor name =
+  List.find (fun dom ->
+      let module D = (val dom : SIMPLIFIED_FUNCTOR) in
+      compare D.name name = 0
+    ) !functors
+
+let mem_simplified_functor name =
+  List.exists (fun dom ->
+      let module D = (val dom : SIMPLIFIED_FUNCTOR) in
+      compare D.name name = 0
+    ) !functors
+
+let simplified_functor_names () =
+  List.map (fun dom ->
+      let module D = (val dom : SIMPLIFIED_FUNCTOR) in
+      D.name
+    ) !functors

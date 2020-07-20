@@ -24,7 +24,7 @@
 
 
 open Mopsa
-open Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Universal.Ast
 open Ast
 

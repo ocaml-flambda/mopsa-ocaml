@@ -19,12 +19,12 @@
 (*                                                                          *)
 (****************************************************************************)
 
-open Json.Syntax
+open Syntax
 open Sig.Combiner.Stacked
-open Sig.Combiner.Standard
+open Sig.Combiner.Domain
 open Sig.Combiner.Stateless
 open Sig.Combiner.Simplified
-open Sig.Domain.Value
+open Sig.Abstraction.Value
 
 
 (** {2 Values} *)

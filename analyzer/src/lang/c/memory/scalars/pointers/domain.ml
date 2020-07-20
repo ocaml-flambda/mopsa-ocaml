@@ -22,7 +22,7 @@
 (** Non-relational abstraction of C pointers *)
 
 open Mopsa
-open Sig.Domain.Standard
+open Sig.Abstraction.Domain
 open Universal.Ast
 open Ast
 open Common.Points_to

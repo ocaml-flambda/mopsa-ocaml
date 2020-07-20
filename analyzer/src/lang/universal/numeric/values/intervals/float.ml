@@ -22,7 +22,7 @@
 (** Interval abstraction of float values. *)
 
 open Mopsa
-open Framework.Abstraction.Sig.Domain.Value
+open Sig.Abstraction.Value
 open Rounding
 open Ast
 open Bot

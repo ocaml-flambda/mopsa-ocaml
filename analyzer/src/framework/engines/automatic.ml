@@ -22,7 +22,7 @@
 (** Engine for an automatic analysis without user interaction *)
 
 open Core.All
-open Abstraction.Toplevel
+open Toplevel
 open Engine
 
 

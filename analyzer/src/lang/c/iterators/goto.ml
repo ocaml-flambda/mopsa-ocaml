@@ -22,7 +22,7 @@
 (** Control flow abstraction for Goto statements. *)
 
 open Mopsa
-open Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Ast
 open Common.Scope_update
 

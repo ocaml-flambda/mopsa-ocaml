@@ -19,7 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Eval - abstract evaluations of expressions *)
+(** Rewrite - expression transformations returned by domains evaluations *)
 
 open Lattice
 open Flow
@@ -28,40 +28,67 @@ open Ast.Expr
 open Cases
 open Semantic
 
-type expr_rewrite =
-  | Return  of expr
-  | Forward of expr * semantic
+(****************************************************************************)
+(**                     {1 Transformed expressions}                         *)
+(****************************************************************************)
 
-type 'a rewrite = ('a,expr_rewrite) cases
+(** Transformed expressions *)
+type expr_rewrite =
+  | Return  of expr (** Final transformation *)
+  | Forward of expr * semantic (** Dependent transformation in a given semantic *)
 
 val compare_expr_rewrite : expr_rewrite -> expr_rewrite -> int
+(** Compare two transformed expressions *)
 
 val pp_expr_rewrite : Format.formatter -> expr_rewrite -> unit
-
+  
 val get_expr : expr_rewrite -> expr
 
 val get_semantic_opt : expr_rewrite -> semantic option
 
+
+(****************************************************************************)
+(**                  {1 Disjunctive Expression rewrite}                     *)
+(****************************************************************************)
+
+type 'a rewrite = ('a,expr_rewrite) cases
+(** Disjunctive expression rewrite *)
+
 val reval_singleton : ?cleaners:stmt list -> expr -> 'a flow -> 'a rewrite
+(** Re-evaluate a singleton expression *)
 
 val return_singleton : ?cleaners:block -> expr -> 'a flow -> 'a rewrite
+(** Return an expression as a final transformation *)
 
 val forward_singleton : ?cleaners:block -> expr -> semantic:semantic-> 'a flow -> 'a rewrite
+(** Forward a transformation to domains implementing a given semantic *)
 
 val empty_singleton : 'a flow -> 'a rewrite
+(** Transformation to an empty expression *)
 
 val reval_eval : 'a Eval.eval -> 'a rewrite
+(** Re-evaluate all cases in an evaluation *)
 
 val return_eval : 'a Eval.eval -> 'a rewrite
+(** Return all cases in an evaluation as a final transformation *)
 
 val forward_eval : 'a Eval.eval -> semantic:semantic -> 'a rewrite
+(** Forward all cases in an evaluation to domains implementing a given semantic *)
+
+val join : 'a rewrite -> 'a rewrite -> 'a rewrite
+(** Join two rewrites *)
 
 val join_list : empty:(unit -> 'a rewrite) -> 'a rewrite list -> 'a rewrite
+(** Join a list of rewrites *)
 
 val meet : 'a rewrite -> 'a rewrite -> 'a rewrite
+(** Intersect two rewrites *)
 
 val meet_list : empty:(unit -> 'a rewrite) -> 'a rewrite list -> 'a rewrite
+(** Intersect a list of rewrites *)
 
 val print : Format.formatter -> 'a rewrite -> unit
+(** Print a rewrite *)
 
 val remove_duplicates : 'a lattice -> 'a rewrite -> 'a rewrite
+(** Remove duplicate cases in a rewrite *)

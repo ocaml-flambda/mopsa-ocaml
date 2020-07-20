@@ -256,6 +256,8 @@ struct
     let ctx = Hook.on_before_eval semantic exp man flow in
     let flow = Flow.set_ctx ctx flow in
 
+    (* Get the actual semantic of the expression in case of a
+       variable, since variable can have an intrinsic semantic *)
     let semantic =
       if compare_semantic semantic any_semantic = 0 then
         match ekind exp with
@@ -270,13 +272,24 @@ struct
       with Not_found -> Exceptions.panic_at exp.erange "eval for %a not found" pp_semantic semantic
     in
     let evl =
+      (* Ask domains to perform the evaluation *) 
       match Cache.eval feval semantic exp man flow with
+      | Some evl ->
+        (* Check if the domain asks to forward the evaluation to some semantics *)
+        evl >>$ fun erw f' ->
+        begin match erw with
+          | Return e'       -> Cases.singleton e' f'
+          | Forward (e',s') -> man.eval ~semantic:s' e' f'
+        end
+
       | None ->
         (* No answer, so try to visit sub-expressions *)
         let parts, builder = structure_of_expr exp in
         begin match parts with
           | {exprs; stmts = []} ->
+            (* Iterate on sub-expressions *)
             Cases.bind_list exprs (fun e flow -> man.eval ~semantic e flow) flow >>$ fun exprs' f' ->
+            (* Rebuild the expression from its evaluated parts *)
             let e' = builder {exprs = exprs'; stmts = []} in
             Cases.singleton e' f'
 
@@ -284,12 +297,6 @@ struct
           | _ -> Cases.singleton exp flow
         end
 
-      | Some evl ->
-        (* Iterate evaluation again *)
-        evl >>$ fun erw f' ->
-        match erw with
-        | Return e'       -> Cases.singleton e' f'
-        | Forward (e',s') -> man.eval ~semantic:s' e' f'
     in
 
     (* Updates the expression transformation lineage *)

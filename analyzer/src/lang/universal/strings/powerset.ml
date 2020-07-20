@@ -24,8 +24,8 @@
 open Mopsa
 open Ast
 open Bot
-open Framework.Abstraction.Sig.Domain.Value
-open Framework.Abstraction.Sig.Domain.Simplified
+open Sig.Abstraction.Value
+open Sig.Abstraction.Simplified
 
 
 module StringPower = Framework.Lattices.Powerset.Make

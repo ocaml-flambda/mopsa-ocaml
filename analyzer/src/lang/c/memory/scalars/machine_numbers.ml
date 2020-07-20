@@ -22,7 +22,7 @@
 (** Machine representation of C integers and floats *)
 
 open Mopsa
-open Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Universal.Ast
 open Stubs.Ast
 open Ast
@@ -490,7 +490,7 @@ struct
     if is_c_int_type t then
       let l,u = rangeof t in
       let vv = match ekind vv with E_var (vv, _) -> vv | _ -> assert false in
-      Framework.Abstraction.Combiners.Value.Nonrel.add_var_bounds_flow vv (C_int_interval (l,u)) flow
+      Framework.Combiners.Value.Nonrel.add_var_bounds_flow vv (C_int_interval (l,u)) flow
     else
       flow
 
@@ -576,7 +576,7 @@ struct
       Post.bind (fun flow ->
           if is_c_int_type v.etyp then
             let vv = match ekind vv with E_var (vv,_) -> vv | _ -> assert false in
-            Framework.Abstraction.Combiners.Value.Nonrel.remove_var_bounds_flow vv flow |>
+            Framework.Combiners.Value.Nonrel.remove_var_bounds_flow vv flow |>
             Post.return
           else
             Post.return flow

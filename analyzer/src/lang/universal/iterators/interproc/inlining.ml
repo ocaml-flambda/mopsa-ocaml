@@ -22,7 +22,7 @@
 (** Inter-procedural iterator by inlining.  *)
 
 open Mopsa
-open Framework.Abstraction.Sig.Domain.Stateless
+open Sig.Abstraction.Stateless
 open Ast
 open Common
 

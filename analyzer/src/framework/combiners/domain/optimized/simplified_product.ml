@@ -105,12 +105,12 @@ struct
     | C_empty -> T1.print fmt a1
     | _ ->  Format.fprintf fmt "%a@\n%a" T1.print a1 T2.print a2
   
-  let hdman (man:('a,t) Sig.Domain.Simplified.simplified_man) : (('a,T1.t) Sig.Domain.Simplified.simplified_man) = {
+  let hdman (man:('a,t) Sig.Abstraction.Simplified.simplified_man) : (('a,T1.t) Sig.Abstraction.Simplified.simplified_man) = {
     man with
     exec = (fun stmt -> man.exec stmt |> fst);
   }
 
-  let tlman (man:('a,t) Sig.Domain.Simplified.simplified_man) : (('a,T2.t) Sig.Domain.Simplified.simplified_man) = {
+  let tlman (man:('a,t) Sig.Abstraction.Simplified.simplified_man) : (('a,T2.t) Sig.Abstraction.Simplified.simplified_man) = {
     man with
     exec = (fun stmt -> man.exec stmt |> snd);
   }

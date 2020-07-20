@@ -19,67 +19,67 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Reduction operator for intervals and powersets. *)
 
-open Mopsa
-open Sig.Reduction.Value
+(** Standard signature of functor domains *)
 
-
-
-module Reduction =
-struct
-
-  let name = "universal.numeric.reductions.intervals_powerset"
-  let debug fmt = Debug.debug ~channel:name fmt
-
-  module I = Values.Intervals.Integer.Value
-  module P = Values.Powerset.Value
-  module B = ItvUtils.IntItv.B
+open Core.All
+open Domain
 
 
-  (* Reduce an interval and a powerset *)
-
-  let of_interval (a:I.t) : P.t =
-    match a with
-    | BOT -> P.bottom
-    | Nb (B.Finite l, B.Finite h) -> P.of_bounds l h
-    | _ -> P.top
-
-  let to_interval (x:P.t) : I.t =
-    match x with
-    | TOP -> I.top
-    | Nt s ->
-      if P.Set.is_empty s then BOT
-      else Nb (B.Finite (P.Set.min_elt s), B.Finite (P.Set.max_elt s))
-
-  let reduce_pair (x:P.t) (i:I.t) : P.t * I.t =
-    if P.is_top x then of_interval i, i
-    else match i with
-      | BOT ->
-        P.bottom, BOT
-      | Nb (B.Finite l, B.Finite h) ->
-        let xx = P.Powerset.filter (fun a -> a >= l && a <= h) x in
-        xx, to_interval xx
-      | Nb (B.MINF, B.Finite h) ->
-        let xx = P.Powerset.filter (fun a -> a <= h) x in
-        xx, to_interval xx
-      | Nb (B.Finite l, B.PINF) ->
-        let xx = P.Powerset.filter (fun a -> a >= l) x in
-        xx, to_interval xx
-      | _ ->
-        x, to_interval x
-
-
-  let reduce (man: 'a value_reduction_man) (v: 'a) : 'a =
-    let i = man.get I.id v
-    and p = man.get P.id v in
-
-    let p',i' = reduce_pair p i in
-
-    man.set I.id i' v |>
-    man.set P.id p'
+module type DOMAIN_FUNCTOR =
+sig
+  val name : string
+  val dependencies : semantic list
+  module Functor : functor(D:DOMAIN) -> DOMAIN
 end
 
 
-let () =
-  register_value_reduction (module Reduction)
+
+
+(*==========================================================================*)
+(**                          {2 Registration}                               *)
+(*==========================================================================*)
+
+(** Module to automatically log statements of a functor *)
+module AutoLogger(F:DOMAIN_FUNCTOR) : DOMAIN_FUNCTOR =
+struct
+  include F
+  module Functor(D:DOMAIN) =
+  struct
+    include D
+    let exec stmt man flow =
+      D.exec stmt man flow |>
+      OptionExt.lift @@ fun res ->
+      Cases.map_log (fun log ->
+          man.set_log (
+            man.get_log log |> Log.add_stmt_to_log stmt
+          ) log
+        ) res
+  end
+end
+
+
+let functors : (module DOMAIN_FUNCTOR) list ref = ref []
+
+let register_domain_functor f =
+  let module F = (val f : DOMAIN_FUNCTOR) in
+  let module FF = AutoLogger(F) in
+  functors := (module FF) :: !functors
+
+let find_domain_functor name =
+  List.find (fun dom ->
+      let module D = (val dom : DOMAIN_FUNCTOR) in
+      compare D.name name = 0
+    ) !functors
+
+let mem_domain_functor name =
+  List.exists (fun dom ->
+      let module D = (val dom : DOMAIN_FUNCTOR) in
+      compare D.name name = 0
+    ) !functors
+
+let domain_functor_names () =
+  List.map (fun dom ->
+      let module D = (val dom : DOMAIN_FUNCTOR) in
+      D.name
+    ) !functors

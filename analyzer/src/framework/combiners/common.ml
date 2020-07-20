@@ -128,7 +128,7 @@ let rec mem_domain : type b c. target:b id -> tree:c id -> bool = fun ~target ~t
 
 
 
-module EmptyValue : Sig.Domain.Value.VALUE =
+module EmptyValue : Sig.Abstraction.Value.VALUE =
 struct
   type t = unit
   let id = V_empty

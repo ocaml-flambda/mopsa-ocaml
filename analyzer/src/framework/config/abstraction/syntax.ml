@@ -21,15 +21,15 @@
 
 (** Syntax tree of configuration files *)
 
-open Sig.Domain.Stacked
-open Sig.Domain.Stacked_functor
-open Sig.Domain.Standard
-open Sig.Domain.Standard_functor
-open Sig.Domain.Simplified
-open Sig.Domain.Simplified_functor
-open Sig.Domain.Stateless
-open Sig.Domain.Value
-open Sig.Domain.Value_functor
+open Sig.Abstraction.Stacked
+open Sig.Abstraction.Stacked_functor
+open Sig.Abstraction.Domain
+open Sig.Abstraction.Functor
+open Sig.Abstraction.Simplified
+open Sig.Abstraction.Simplified_functor
+open Sig.Abstraction.Stateless
+open Sig.Abstraction.Value
+open Sig.Abstraction.Value_functor
 
 open Sig.Reduction.Exec
 open Sig.Reduction.Eval
