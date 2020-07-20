@@ -36,7 +36,6 @@ struct
   let alarms = []
 
   let init prog man flow = flow
-  let eval exp man flow = None
   let ask query man flow = None
 
 
@@ -91,6 +90,21 @@ struct
       OptionExt.return
 
     | _ -> None
+
+  let eval exp man flow =
+    match ekind exp with
+    (* XXX We need to freeze evaluation of quantified formula so that
+       it can be processed by domains as-is. This is due to the fact
+       the generic iterator of S_assume firsts evaluates its operand
+       expression before giving the statement to the underlying
+       domains, that generally do a pattern matching based on the
+       *original* AST, not the evaluated one *)
+    | E_stub_quantified_formula _ ->
+      Rewrite.return_singleton exp flow |>
+      OptionExt.return
+
+    | _ -> None
+
 end
 
 let () =
