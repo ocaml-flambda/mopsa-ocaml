@@ -366,6 +366,15 @@ let find_quantified_var_interval_opt v quants =
   try Some (find_quantified_var_interval v quants)
   with Not_found -> None
 
+let negate_stub_quantified_formula quants cond range =
+  let quants' = List.map (fun (q,v,s) ->
+      let q' = if q = FORALL then EXISTS else FORALL in
+      (q',v,s)
+    ) quants
+  in
+  let conds' = mk_not cond cond.erange in
+  mk_stub_quantified_formula quants' conds' range
+
 (** Visit expressions present in a formula *)
 let rec visit_expr_in_formula visitor f =
   bind_range f @@ fun f ->

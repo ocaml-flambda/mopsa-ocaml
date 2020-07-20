@@ -87,12 +87,12 @@ let map_env (tk:token) (f:'t -> 't) (man:('a,'t) man) (flow:'a flow) : 'a flow =
 let assume
     cond ?(semantic=any_semantic)
     ~fthen ~felse
-    ?(negate=mk_not)
+    ?(negate=mk_not cond cond.erange)
     man flow
   =
   let then_post = man.post ~semantic (mk_assume cond cond.erange) flow in
   let flow = Flow.set_ctx (Cases.get_ctx then_post) flow in
-  let else_post = man.post ~semantic (mk_assume (negate cond cond.erange) cond.erange) flow in
+  let else_post = man.post ~semantic (mk_assume negate negate.erange) flow in
 
   let then_res = then_post >>$? fun () then_flow ->
     if man.lattice.is_bottom (Flow.get T_cur man.lattice then_flow)

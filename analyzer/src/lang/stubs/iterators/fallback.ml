@@ -39,9 +39,10 @@ struct
   let eval exp man flow = None
   let ask query man flow = None
 
-  let exec_quantifers cond_to_stmt quants cond range man flow =
+
+  let exec_assume_quants quants cond range man flow =
     let rec iter = function
-      | [] -> cond_to_stmt cond range
+      | [] -> mk_assume cond range
       | (EXISTS,_,_)::tl -> iter tl
       | (FORALL,i,S_interval(a,b))::tl ->
         let ii = mk_var i range in
@@ -55,12 +56,19 @@ struct
     let stmt = iter quants in
     man.post stmt flow
 
+  let exec_requires_quants quants cond range man flow =
+    assume (mk_stub_quantified_formula quants cond range)
+      ~fthen:(fun flow -> Post.return flow)
+      ~felse:(fun flow ->
+          raise_stub_invalid_requires cond range man flow |>
+          Post.return
+        )
+      ~negate:(negate_stub_quantified_formula quants cond range)
+      man flow
 
   let exec_requires cond range man flow =
     assume cond
-      ~fthen:(fun flow ->
-          Post.return flow
-        )
+      ~fthen:(fun flow -> Post.return flow)
       ~felse:(fun flow ->
           raise_stub_invalid_requires cond range man flow |>
           Post.return
@@ -71,11 +79,11 @@ struct
   let exec stmt man flow =
     match skind stmt with
     | S_assume({ekind = E_stub_quantified_formula(quants,cond)}) ->
-      exec_quantifers mk_assume quants cond stmt.srange man flow |>
+      exec_assume_quants quants cond stmt.srange man flow |>
       OptionExt.return
 
     | S_stub_requires({ekind = E_stub_quantified_formula(quants,cond)}) ->
-      exec_quantifers mk_stub_requires quants cond stmt.srange man flow |>
+      exec_requires_quants quants cond stmt.srange man flow |>
       OptionExt.return
 
     | S_stub_requires(cond) ->
