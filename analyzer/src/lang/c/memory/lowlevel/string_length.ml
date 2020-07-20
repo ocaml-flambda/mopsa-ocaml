@@ -126,7 +126,7 @@ struct
   *)
   let mk_length_var base elemsz ?(mode=None) range =
     let name = Format.asprintf "length(%s)" (base_uniq_name base) in
-    let v = mkv name (V_c_string_length (base,elemsz)) T_int ~mode:(base_mode base) in
+    let v = mkv name (V_c_string_length (base,elemsz)) T_int ~mode:(base_mode base) ~semantic:numeric in
     mk_var v ~mode range
 
 
@@ -219,7 +219,7 @@ struct
         let size = elem_of_offset bsize elem_size range in
 
         man.post ~semantic:numeric (mk_add length range) flow >>= fun _ flow ->
-        man.post ~semantic:numeric (mk_assume (mk_in length (mk_zero range) size range) range) flow
+        man.post (mk_assume (mk_in length (mk_zero range) size range) range) flow
 
 
   (** 𝕊⟦ remove(base); ⟧ *)
@@ -283,7 +283,7 @@ struct
          man.eval bsize flow >>$ fun bsize flow ->
          let size = elem_of_offset bsize elem_size range in
          man.post ~semantic:numeric (mk_forget length range) flow >>$ fun () flow ->
-         man.post ~semantic:numeric (mk_assume (mk_in length (mk_zero range) size range) range) flow
+         man.post (mk_assume (mk_in length (mk_zero range) size range) range) flow
       else
         man.post ~semantic:numeric (mk_fold length lengths range) flow
 
@@ -303,7 +303,7 @@ struct
         man.eval bsize flow >>$ fun bsize flow ->
         let size = elem_of_offset bsize elem_size range in
         man.post ~semantic:numeric (mk_forget length range) flow >>$ fun () flow ->
-        man.post ~semantic:numeric (mk_assume (mk_in length (mk_zero range) size range) range) flow
+        man.post (mk_assume (mk_in length (mk_zero range) size range) range) flow
 
 
   let exec_forget_quant quants e range man flow =
@@ -320,7 +320,7 @@ struct
         man.eval bsize flow >>$ fun bsize flow ->
         let size = elem_of_offset bsize elem_size range in
         man.post ~semantic:numeric (mk_forget length range) flow >>$ fun () flow ->
-        man.post ~semantic:numeric (mk_assume (mk_in length (mk_zero range) size range) range) flow
+        man.post (mk_assume (mk_in length (mk_zero range) size range) range) flow
 
 
   (** 𝕊⟦ type v; ⟧ *)
@@ -356,7 +356,7 @@ struct
         let assign_length_interval l u flow =
           man.post ~semantic:numeric (mk_forget length range) flow |>
           Post.bind (
-            man.post ~semantic:numeric (mk_assume ((mk_in length l u range)) range)
+            man.post (mk_assume ((mk_in length l u range)) range)
           )
         in
         switch [
@@ -394,7 +394,7 @@ struct
           [ mk_ge offset (succ length range) range ],
           (fun flow -> Post.return flow)
 
-        ] ~semantic:numeric man flow
+        ] man flow
 
       else
         man.post ~semantic:numeric (mk_forget length range) flow
@@ -522,7 +522,7 @@ struct
       *)
       [ le max (pred length range) range ],
       (fun flow -> man.post (mk_assume (ne n zero range) range) flow);
-    ] ~semantic:numeric man flow
+    ] man flow
 
 
   (** 𝕊⟦ ∀i ∈ [a,b] : *(p + ∀i) != 0 ⟧ *)
@@ -570,7 +570,7 @@ struct
         *)
         [ ge min (succ length range) range ],
         (fun flow -> Post.return flow);
-      ] ~semantic:numeric man flow
+      ] man flow
 
 
 
@@ -669,7 +669,7 @@ struct
 
         [ log_and cover1 cover2 range ],
         (fun flow -> man.post (mk_assume (eq (sub length1 min1 range) (sub length2 min2 range) range) range) ~semantic:numeric flow);
-      ] ~semantic:numeric man flow
+      ] man flow
 
 
   (** Transformers entry point *)
@@ -680,19 +680,19 @@ struct
       exec_declare_variable v scope stmt.srange man flow |>
       OptionExt.return
 
-    | S_add e when is_base_expr e ->
+    | S_add e when is_base_expr e && is_c_int_type e.etyp ->
       exec_add_base (expr_to_base e) stmt.srange man flow |>
       OptionExt.return
 
-    | S_rename (e1,e2) when is_base_expr e1 && is_base_expr e2 ->
+    | S_rename (e1,e2) when is_base_expr e1 && is_base_expr e2 && is_c_int_type e1.etyp ->
       exec_rename_base (expr_to_base e1) (expr_to_base e2) stmt.srange man flow |>
       OptionExt.return
 
-    | S_expand(e,el) when is_base_expr e && List.for_all is_base_expr el ->
+    | S_expand(e,el) when is_base_expr e && List.for_all is_base_expr el && is_c_int_type e.etyp ->
       exec_expand_base (expr_to_base e) (List.map expr_to_base el) stmt.srange man flow |>
       OptionExt.return
 
-    | S_fold(e,el) when is_base_expr e && List.for_all is_base_expr el ->
+    | S_fold(e,el) when is_base_expr e && List.for_all is_base_expr el && is_c_int_type e.etyp ->
       exec_fold_bases (expr_to_base e) (List.map expr_to_base el) stmt.srange man flow |>
       OptionExt.return
 
@@ -704,7 +704,7 @@ struct
       exec_forget_quant quants e stmt.srange man flow |>
       OptionExt.return
 
-    | S_remove(e) when is_base_expr e ->
+    | S_remove(e) when is_base_expr e && is_c_int_type e.etyp ->
       exec_remove_base (expr_to_base e) stmt.srange man flow |>
       OptionExt.return
 
@@ -813,7 +813,7 @@ struct
                else Eval.singleton (mk_z_interval l u range) flow
            end
         )
-      ] ~semantic:numeric man flow
+      ] man flow
     else
       Eval.singleton (mk_top t range) flow
 
