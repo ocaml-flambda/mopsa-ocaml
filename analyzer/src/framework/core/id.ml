@@ -58,16 +58,20 @@ let pool =
 
 
 let register_id (w:witness_chain) =
-  pool.others <- { eq = (fun (type a) (type b) (id1:a id) (id2:b id) -> w.eq pool.others id1 id2) }
+  let old = pool.others in
+  pool.others <- { eq = (fun (type a) (type b) (id1:a id) (id2:b id) -> w.eq old id1 id2) }
 
 let register_stateful_id (w:witness_chain) =
-  pool.stateful <- { eq = (fun (type a) (type b) (id1:a id) (id2:b id) -> w.eq pool.stateful id1 id2) }
+  let old = pool.stateful in
+  pool.stateful <- { eq = (fun (type a) (type b) (id1:a id) (id2:b id) -> w.eq old id1 id2) }
 
 let register_stateless_id (w:witness_chain) =
-  pool.stateless <- { eq = (fun (type a) (type b) (id1:a id) (id2:b id) -> w.eq pool.stateless id1 id2) }
+  let old = pool.stateless in
+  pool.stateless <- { eq = (fun (type a) (type b) (id1:a id) (id2:b id) -> w.eq old id1 id2) }
 
 let register_value_id (w:witness_chain) =
-  pool.value <- { eq = (fun (type a) (type b) (id1:a id) (id2:b id) -> w.eq pool.value id1 id2) }
+  let old = pool.value in
+  pool.value <- { eq = (fun (type a) (type b) (id1:a id) (id2:b id) -> w.eq old id1 id2) }
 
 
 (** Equality witness of domain identifiers *)
