@@ -680,19 +680,19 @@ struct
       exec_declare_variable v scope stmt.srange man flow |>
       OptionExt.return
 
-    | S_add e when is_base_expr e && is_c_int_type e.etyp ->
+    | S_add e when is_base_expr e && is_c_type e.etyp && not (is_c_scalar_type e.etyp) ->
       exec_add_base (expr_to_base e) stmt.srange man flow |>
       OptionExt.return
 
-    | S_rename (e1,e2) when is_base_expr e1 && is_base_expr e2 && is_c_int_type e1.etyp ->
+    | S_rename (e1,e2) when is_base_expr e1 && is_base_expr e2 && is_c_type e1.etyp && not (is_c_scalar_type e1.etyp) ->
       exec_rename_base (expr_to_base e1) (expr_to_base e2) stmt.srange man flow |>
       OptionExt.return
 
-    | S_expand(e,el) when is_base_expr e && List.for_all is_base_expr el && is_c_int_type e.etyp ->
+    | S_expand(e,el) when is_base_expr e && List.for_all is_base_expr el && is_c_type e.etyp && not (is_c_scalar_type e.etyp) ->
       exec_expand_base (expr_to_base e) (List.map expr_to_base el) stmt.srange man flow |>
       OptionExt.return
 
-    | S_fold(e,el) when is_base_expr e && List.for_all is_base_expr el && is_c_int_type e.etyp ->
+    | S_fold(e,el) when is_base_expr e && List.for_all is_base_expr el && is_c_type e.etyp && not (is_c_scalar_type e.etyp) ->
       exec_fold_bases (expr_to_base e) (List.map expr_to_base el) stmt.srange man flow |>
       OptionExt.return
 
@@ -704,7 +704,7 @@ struct
       exec_forget_quant quants e stmt.srange man flow |>
       OptionExt.return
 
-    | S_remove(e) when is_base_expr e && is_c_int_type e.etyp ->
+    | S_remove(e) when is_base_expr e && is_c_type e.etyp && not (is_c_scalar_type e.etyp) ->
       exec_remove_base (expr_to_base e) stmt.srange man flow |>
       OptionExt.return
 
