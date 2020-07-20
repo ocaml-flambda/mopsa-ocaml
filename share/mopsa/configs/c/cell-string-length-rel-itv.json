@@ -8,22 +8,16 @@
             "universal.iterators.interproc.inlining",
             "universal.iterators.unittest",
 
-
 	    // C iterators
             "c.iterators.program",
             "c.iterators.interproc",
             "c.iterators.goto",
             "c.iterators.switch",
             "c.iterators.loops",
+            "c.iterators.intraproc",
 
             // Stubs
-	    "stubs.iterator",
-
-            // C desugar
-            "c.desugar.constants",
-            "c.desugar.conditions",
-
-            "c.memory.variable_length_array",
+	    "stubs.iterators.body",
 
 	    // Libraries
             "c.libs.compiler",
@@ -40,7 +34,8 @@
 	    "c.cstubs.resources",
 
             // Memory model
-            "c.desugar.aggregates",
+	    "c.memory.variable_length_array",
+            "c.memory.aggregates",
             "universal.heap.recency",
 	    {
                 "compose": [
@@ -76,7 +71,10 @@
 			]
                     }
 		]
-            }
+            },
+
+	    // Fallbacks
+	    "stubs.iterators.fallback"
 	]
     }
 }
