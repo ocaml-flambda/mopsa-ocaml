@@ -43,6 +43,20 @@ module Domain =
 
     let init _ _ flow = flow
 
+    let search_mro man range flow attr c mro =
+      let rec search mro =
+        match mro with
+        | [] ->
+           let msg = Format.asprintf "'%s' object has no attribute '%s'" c attr in
+           man.exec (Utils.mk_builtin_raise_msg "AttributeError" msg range) flow |>
+             Eval.empty_singleton
+        | cls::tl ->
+           if is_builtin_attribute cls attr then
+             Eval.singleton (mk_py_object (find_builtin_attribute cls attr) range) flow
+           else
+             search tl in
+      search mro
+
     let eval zs expr man flow =
       let range = erange expr in
       match ekind expr with
@@ -57,20 +71,9 @@ module Domain =
         | E_py_attribute(obj, ("__subclass__" as attr)) ->
          panic_at range "Access to special attribute %s not supported" attr
 
-      (* TODO: wtf factor search_mro *)
-      (* Attributes of builtins classes are static, so we can be much more efficient *)
+      (* Attributes of builtin classes are static, so we can be more efficient *)
       | E_py_attribute ({ekind = E_py_object ({addr_kind = A_py_class (C_builtin c, mro)}, _)}, attr) ->
-        let rec search_mro mro = match mro with
-          | [] ->
-             let msg = Format.asprintf "'%s' object has no attribute '%s'" c attr in
-            man.exec (Utils.mk_builtin_raise_msg "AttributeError" msg range) flow |>
-            Eval.empty_singleton
-          | cls::tl ->
-            if is_builtin_attribute cls attr then
-              Eval.singleton (mk_py_object (find_builtin_attribute cls attr) range) flow
-            else
-              search_mro tl in
-        search_mro mro |> OptionExt.return
+        search_mro man range flow attr c mro |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("getattr", _))}, _)}, e::attr::[], [])  ->
         man.eval attr flow |>
@@ -94,17 +97,8 @@ module Domain =
          Eval.bind (fun exp flow ->
              match ekind exp with
              | E_py_object ({addr_kind = A_py_class (C_builtin c, mro)}, _) ->
-               let rec search_mro mro = match mro with
-                 | [] ->
-                    let msg = Format.asprintf "'%s' object has no attribute '%s'" c attr in
-                   man.exec (Utils.mk_builtin_raise_msg "AttributeError" msg range) flow |>
-                   Eval.empty_singleton
-                 | cls::tl ->
-                   if is_builtin_attribute cls attr then
-                     Eval.singleton (mk_py_object (find_builtin_attribute cls attr) range) flow
-                   else
-                     search_mro tl in
-               search_mro mro
+                search_mro man range flow attr c mro
+
              | _ ->
                debug "other: %a@\n" pp_expr exp;
                (* In a bottom environment, the only thing that we can
@@ -139,7 +133,6 @@ module Domain =
                              let exp, c_attr = match ee with [e1;e2] -> e1, e2 | _ -> assert false in
                              assume (mk_py_hasattr exp "__getattr__" range) man flow
                                ~fthen:(fun flow ->
-                                   (* FIXME(?): we split the flow to remove the exn tokens. If some appear afterwards (hopefully it's only AttributeErrors), we remove them and put it back to cur *)
                                    let flow_exn_before, flow = Flow.partition (fun tk _ -> match tk with
                                        | Alarms.T_py_exception _ -> true
                                        | _ -> false) flow in
@@ -148,7 +141,9 @@ module Domain =
                                        Some
                                          (match oattr with
                                           | None ->
-                                            (* exn, let's call getattr, and change exn flow into cur *)
+                                             (* exn, let's call
+                                                getattr, and change
+                                                exn flow into cur *)
                                             let flow = Flow.fold (fun acc tk env ->
                                                 match tk with
                                                 | Alarms.T_py_exception _ ->

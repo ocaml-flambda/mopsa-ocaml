@@ -77,7 +77,6 @@ let eval_alloc ?(mode=STRONG) man kind range flow =
 let classes = Hashtbl.create 100
 let functions = Hashtbl.create 100
 let modules = Hashtbl.create 10
-(* let all () = !classes @ !functions @ !modules *)
 let type_aliases = Hashtbl.create 100
 let typed_functions = Hashtbl.create 100 (* and typed classes *)
 
@@ -116,7 +115,6 @@ let oobject_name obj =
   | A_py_class(C_user c, _) -> some @@ get_orig_vname c.py_cls_var
   | A_py_class(C_annot c, _) -> some @@ get_orig_vname c.py_cls_a_var
   | _ -> None
-
 
 let object_name obj =
   match oobject_name obj with
@@ -248,16 +246,6 @@ let is_builtin_class_function cls f =
 (**                      {2 Utility functions}                              *)
 (*==========================================================================*)
 
-
-(** Address of the type class of an object *)
-let class_of_object (obj: py_object) : py_object =
-  match kind_of_object obj with
-  | A_py_class _ -> find_builtin "type"
-  | A_py_function _ -> find_builtin "function"
-  (* | A_py_method _ -> find_builtin "method" *)
-  | A_py_module _ -> find_builtin "module"
-  | _ -> assert false
-
 let mro (obj: py_object) : py_object list =
   match kind_of_object obj with
   | A_py_class (c, b) -> b
@@ -298,8 +286,6 @@ let mk_py_isinstance_builtin e builtin range =
 let mk_py_type e range =
   let obj = find_builtin "type" in
   mk_py_call (mk_py_object obj range) [e] range
-
-
 
 exception C3_lin_failure
 

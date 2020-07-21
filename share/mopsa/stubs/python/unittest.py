@@ -21,7 +21,7 @@
 
 import mopsa
 
-@mopsa.builtin("unittest.TestCase")
+# TestCase is NOT a mopsa.builtin, since assertRaises is defined here
 class TestCase:
     @mopsa.builtin("unittest.TestCase.assertTrue")
     def assertTrue(self, cond): pass
@@ -53,13 +53,13 @@ class TestCase:
     @mopsa.builtin("unittest.TestCase.assertNotIsInstance")
     def assertNotIsInstance(self, x, y): pass
 
-    @mopsa.builtin("unittest.TestCase.assertRaises")
-    def assertRaises(self, exn, f, args): pass
+    def assertRaises(self, exn):
+        return ExceptionContext(exn)
 
     @mopsa.builtin("unittest.TestCase.fail")
     def fail(self, msg): pass
 
-@mopsa.builtin("unittest.ExceptionContext")
+#  ExceptionContext is NOT a mopsa.builtin, since __init__ and __enter__ are defined here
 class ExceptionContext(object):
     def __init__(self, exn):
         self.expected = exn

@@ -21,6 +21,7 @@ def test_types():
     mopsa.ignore_exception(IndexError)
     o = f[k]
     mopsa.ignore_exception(IndexError)
+    mopsa.ignore_exception(OverflowError)
     mopsa.assert_safe()
     mopsa.massert(isinstance(a, int))
     mopsa.massert(isinstance(b, str))

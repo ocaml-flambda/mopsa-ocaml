@@ -63,7 +63,7 @@ build_job:
   script:
     - eval `opam config env`
     - echo $PY_FILE
-    - $MOPSA_PYTYP -gc benchmarks/pytypes/typpete/$PY_FILE
+    - $MOPSA_PYTYP -gc benchmarks/python/typpete/$PY_FILE
 
 test-c 1/25:
   variables:

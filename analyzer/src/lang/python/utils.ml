@@ -55,7 +55,6 @@ let mk_object_hasattr obj attr range =
 let mk_addr_hasattr obj attr range =
   mk_hasattr (Universal.Ast.mk_addr obj range) attr range
 
-
 let mk_try_stopiteration body except range =
   mk_try
     body

@@ -3,5 +3,4 @@ def f(x):
   i = x
   return i
 i = 1
-j = i + f(1) + f(2) + i
-
+j = i + f(3) + i

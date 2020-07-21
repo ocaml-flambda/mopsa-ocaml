@@ -21,7 +21,7 @@
 
 (** Unittest library. *)
 
-(* Originally written by Abdelraouf Ouadjaout (see commit #9619db0103d72f03eb12bb1c39d34881889ec216)) *)
+(* Originally written by Abdelraouf Ouadjaout *)
 
 open Mopsa
 open Sig.Abstraction.Stateless
@@ -63,9 +63,10 @@ module Domain =
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.main", _))}, _)}, [], []) ->
        debug "Search for all classes that inherit from TestCase";
        let test_cases = man.ask Universal.Heap.Recency.Q_allocated_addresses flow |>
-                        List.filter (fun addr ->
+                          List.filter (fun addr ->
                             match addr.addr_kind with
-                            | A_py_class(cls, _ :: ({addr_kind = A_py_class (C_builtin "unittest.TestCase", _)}, _) :: _) -> true
+                            | A_py_class(cls, _ :: ({addr_kind = A_py_class (C_user u, _)}, _) :: _) ->
+                               get_orig_vname u.py_cls_var = "TestCase"
                             | _ -> false
                           ) |>
                         List.map (fun addr ->
@@ -95,7 +96,7 @@ module Domain =
            debug "stmts for %s =@[@\n%a@]" cls_decl.py_cls_var.vname pp_stmt stmt;
            (cls_decl.py_cls_var.vname ^ "'s tests", stmt) :: other_tests
          ) [] test_cases in
-
+       debug "|tests| = %d" (List.length tests);
        man.exec (mk_stmt (Universal.Ast.S_unit_tests tests) range) flow |>
        man.eval (mk_py_none range)
        |> OptionExt.return
@@ -175,40 +176,39 @@ module Domain =
        *    Eval.singleton (mk_py_none range) flow
        *    |> OptionExt.return *)
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertRaises", _))}, _)}, [test; exn], []) ->
-         (* Instantiate ExceptionContext with the given exception exn *)
-         let exp' = Utils.mk_builtin_call "unittest.ExceptionContext" [exn] range in
-         man.eval exp' flow |> OptionExt.return
+      (* | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertRaises", _))}, _)}, [test; exn], []) ->
+       *    (\* Instantiate ExceptionContext with the given exception exn *\)
+       *    let exp' = mk_call "unittest.ExceptionContext" [exn] range in
+       *    man.eval exp' flow |> OptionExt.return *)
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertRaises", _))}, _)}, _, _) ->
-         Py_mopsa.check man (mk_py_top T_bool range) range flow
-         |> OptionExt.return
-
-
-      (* | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "unittest.ExceptionContext.__exit__")}, _)},[self; typ; exn; trace], []) ->
-       *    assume
-       *      (mk_binop exn O_eq (mk_py_none range) range)
-       *      ~fthen:(fun true_flow ->
-       *        (\* No exception raised => assertion failed *\)
-       *        let flow = man.exec (mk_assert_unreachable range) true_flow in
-       *        Eval.empty_singleton flow
-       *      )
-       *      ~felse:(fun false_flow ->
-       *        (\* Check that the caught exception is an instance of the expected exception *\)
-       *        assume
-       *          (Utils.mk_builtin_call "isinstance" [exn; (mk_py_attr self "expected" range)] range)
-       *          ~fthen:(fun true_flow ->
-       *            let flow = man.exec (mk_assert_reachable range) true_flow in
-       *            Eval.singleton (mk_py_true range) flow
-       *          )
-       *          ~felse:(fun false_flow ->
-       *            let flow = man.exec (mk_assert_unreachable range) false_flow in
-       *            Eval.empty_singleton flow
-       *          )
-       *          man false_flow
-       *      )
-       *      man flow
+      (* | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertRaises", _))}, _)}, _, _) ->
+       *    Py_mopsa.check man (mk_py_top T_bool range) range flow
        *    |> OptionExt.return *)
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.ExceptionContext.__exit__", _))}, _)},[self; typ; exn; trace], []) ->
+         assume
+           (mk_binop exn O_eq (mk_py_none range) range)
+           ~fthen:(fun true_flow ->
+             debug "Assertion failed!";
+             (* No exception raised => assertion failed *)
+             Py_mopsa.check man (mk_py_false range) range flow
+           )
+           ~felse:(fun false_flow ->
+             (* Check that the caught exception is an instance of the expected exception *)
+             assume
+               (Utils.mk_builtin_call "isinstance" [exn; (mk_py_attr self "expected" range)] range)
+               ~fthen:(fun true_flow ->
+                 debug "Good exception!";
+                 man.eval (mk_py_true range) flow
+               )
+               ~felse:(fun false_flow ->
+                 debug "Bad exception!";
+                 Py_mopsa.check man (mk_py_false range) range flow
+               )
+               man false_flow
+           )
+           man flow
+         |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, args, _)
            when is_builtin_class_function "unittest.TestCase" f ->

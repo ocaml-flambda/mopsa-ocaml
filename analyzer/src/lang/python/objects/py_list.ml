@@ -26,7 +26,7 @@
    its elements. To avoid allocating a new variable each time
    (especially during loops), we allocate them only if there has
    been not other allocation at the same point. This is quite
-   similar to the recency abstraction, and is probably not optimal
+   similar to the recency abstraction.
 *)
 
 open Mopsa
@@ -165,10 +165,8 @@ struct
         Eval.bind (fun eaddr_list flow ->
             let addr_list = addr_of_expr eaddr_list in
             let els_var = var_of_addr addr_list in
-            (* let flow = man.exec (mk_add_var els_var range) flow in *)
             let flow = List.fold_left (fun acc el ->
                            let stmt = mk_assign (mk_var els_var range) el range in
-                           (* debug "fold_left %a@\n" pp_stmt stmt; *)
                            man.exec ~zone:Zone.Z_py stmt acc) flow ls in
             man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (mk_var (length_var_of_addr addr_list) range) (mk_int (List.length ls) ~typ:T_int range) range) flow |>
               Eval.singleton (mk_py_object (addr_list, None) range)
@@ -446,7 +444,6 @@ struct
         ["list"]
         (fun args flow ->
            let list, element = match args with | [l; e] -> l, e | _ -> assert false in
-           (* debug "list: %a@\nelement = %a@\nflow = %a@\n" pp_expr list pp_expr element (Flow.print man.lattice.print) flow; *)
            let var_els = var_of_eobj list in
            let len_els = length_var_of_eobj list in
            flow |>
@@ -496,7 +493,7 @@ struct
              ~felse:(fun flow ->
                  assume (mk_py_isinstance_builtin other "range" range) man flow
                    ~fthen:(fun flow ->
-                       (* FIXME: length precision *)
+                     (* FIXME: length precision *)
                      (* TODO: more precision on top (for range) *)
                      let ra a = mk_py_attr other a range in
                      let flow =
@@ -671,10 +668,9 @@ struct
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list_reverseiterator.__next__", _))}, _)}, [iterator], [])
-      (* FIXME: list_reverseiterator + values *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list_iterator.__next__", _))}, _)}, [iterator], []) ->
+       (* it_pos in reverse iterator + value analysis? *)
       (* todo: checks ? *)
-      (* let it_name = String.sub s 0 (String.index s '.') in *)
       man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) iterator flow |>
         Eval.bind (fun iterator flow ->
             man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var (itseq_of_eobj iterator) range) flow |>
@@ -688,7 +684,6 @@ struct
                   assume (mk_binop (mk_var it_pos range) O_lt (mk_var len_els range) ~etyp:T_int range)
                     ~zone:Universal.Zone.Z_u_int man flow
                     ~fthen:(fun flow ->
-                      debug "comp: fthen!";
                       let els = man.eval (mk_var var_els range) flow in
                       OptionExt.none_to_exn @@ bind_opt (fun oels flow ->
                                                    Some begin match oels with
@@ -706,7 +701,6 @@ struct
                                                  ) els
                     )
                     ~felse:(fun flow ->
-                      debug "comp: felse!";
                       man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton
                     )
                 )
