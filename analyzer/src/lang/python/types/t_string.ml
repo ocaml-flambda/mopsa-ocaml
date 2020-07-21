@@ -25,7 +25,6 @@ open Ast
 open MapExt
 open Addr
 open Universal.Ast
-(* au moins gérer les strings *)
 
 module Domain =
   struct

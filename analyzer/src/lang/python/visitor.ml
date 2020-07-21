@@ -343,24 +343,11 @@ let () =
           | {exprs = [test']; stmts = [sthen'; selse']} -> {stmt with skind = S_py_if(test', sthen', selse')}
           | _ -> assert false)
 
-      (* | S_py_for(({ekind = E_py_tuple inner | E_py_list inner} as target), iter, body, orelse) ->
-       *   {exprs = iter::inner; stmts = [body; orelse];},
-       *   (function
-       *     | {exprs = iter::inner; stmts = [body; orelse];} -> {stmt with skind = S_py_for({target with ekind =
-       *                                                                                                    match ekind target with
-       *                                                                                                    | E_py_tuple _ -> E_py_tuple inner
-       *                                                                                                    | E_py_list _ -> E_py_list inner
-       *                                                                                                    | _ -> assert false
-       *                                                                                     }, iter, body, orelse)}
-       *     | _ -> assert false) *)
-
-
       | S_py_for(target, iter, body, orelse) ->
         {exprs = iter::target::[]; stmts = [body; orelse]},
         (function
           | {exprs = iter::target::[]; stmts = [body; orelse]} -> {stmt with skind = S_py_for(target, iter, body, orelse)}
           | _ -> assert false)
-
 
       | S_py_multi_assign(targets, e) ->
         {exprs = [e]; stmts = []},
@@ -401,8 +388,6 @@ let () =
           | _ -> assert false
         )
 
-
-
       | S_py_with(ctx, None, body) ->
         {exprs = [ctx]; stmts = [body];},
         (function
@@ -416,7 +401,6 @@ let () =
           | {exprs = [ctx]; stmts = [body]} -> {stmt with skind = S_py_with(ctx, Some target, body)}
           | _ -> assert false
         )
-
 
       | _ -> default stmt
     );

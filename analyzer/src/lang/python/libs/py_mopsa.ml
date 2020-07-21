@@ -31,7 +31,7 @@ open Alarms
 
 let check man cond range flow =
   let flow = man.exec (mk_assert cond range) flow in
-  Eval.singleton (mk_py_none range) flow
+  man.eval (mk_py_none range) flow
 
 
 (*==========================================================================*)
@@ -106,7 +106,6 @@ module Domain =
                            man.exec (mk_assume (mk_py_in (mk_var tmp range) l u range) range)
               in
               man.eval (mk_var tmp range) flow |> Eval.add_cleaners [mk_remove_var tmp range]
-              (* Eval.singleton (mk_var tmp range) ~cleaners:[mk_remove_var tmp range] flow *)
          end
          |> OptionExt.return
 

@@ -49,13 +49,7 @@ module Domain =
       | S_assign({ekind = E_py_tuple(el)}, exp)
       | S_assign({ekind = E_py_list(el)}, exp) ->
         debug "iterable assign@\n";
-         (* man.eval (Utils.mk_builtin_call "iter" [exp] range) flow |>
-          *   Post.bind man
-          *     (fun iter flow -> *)
-               assign_iter man el exp range flow
-             (*   |> Post.of_flow
-              * ) *)
-         (* |> OptionExt.xt.return *)
+        assign_iter man el exp range flow
 
       | _ -> None
 

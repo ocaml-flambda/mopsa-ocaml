@@ -1,5 +1,5 @@
 class C:
-  a = "test" 
+  a = "test"
 
 x1 = 1
 x2 = C()
@@ -13,4 +13,3 @@ if x2:
   res2 = 1
 else:
   res2 = 2
-  

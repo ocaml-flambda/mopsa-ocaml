@@ -49,7 +49,7 @@ module Domain = struct
     let range = erange exp in
     match ekind exp with
     | E_binop(op, e1, e2) when is_comp_op op ->
-      (* Cpython: object.c, function do_richcompare *)
+      (* CPython: object.c, function do_richcompare *)
       let is_notimplemented x =
         let not_implemented_type = mk_py_object (find_builtin "NotImplementedType") range in
         mk_py_isinstance x not_implemented_type range in

@@ -88,8 +88,6 @@ module Domain =
            Utils.bind_list_args man [Utils.mk_builtin_call "iter" [iterable] iterable.erange] flow range Zone.Z_py
              (fun vars flow ->
                let tmp = mk_var (List.hd vars) range in
-               (* man.eval (Utils.mk_builtin_call "iter" [iterable] range) flow |>
-                * bind_some (fun tmp flow -> *)
                let l_else =
                  match skind orelse with
                  | S_block ([],_) -> [mk_stmt S_break range]

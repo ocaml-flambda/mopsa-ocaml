@@ -19,7 +19,8 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Definition of python functions annotations as well as polymorphism *)
+(** Definition of python function annotations as well as polymorphism *)
+(** This module is still experimental *)
 
 open Mopsa
 open Sig.Abstraction.Domain
@@ -171,25 +172,6 @@ struct
           | _ -> assert false
         )
       |> OptionExt.return
-      (* bind_list args (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
-       * bind_some (fun args flow ->
-       *     match args with
-       *     | [] ->
-       *       debug "Error during creation of a new instance@\n";
-       *       man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton
-       *     | cls :: tl ->
-       *       let c = fst @@ object_of_expr cls in
-       *       man.eval  ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr (A_py_instance c) range) flow |>
-       *       Eval.bind (fun eaddr flow ->
-       *           let addr = match ekind eaddr with
-       *             | E_addr a -> a
-       *             | _ -> assert false in
-       *           man.exec ~zone:Zone.Z_py_obj (mk_add eaddr range) flow |>
-       *           Eval.singleton (mk_py_object (addr, None) range)
-       *         )
-       *   )
-       * |> OptionExt.return *)
-
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function(F_annot pyannot)}, _)}, args, kwargs) ->
       let exception Invalid_sig in
@@ -231,7 +213,6 @@ struct
             debug "[%a] apply_sig %a" pp_var pyannot.py_funca_var pp_py_func_sig signature;
             let cur = get_env T_cur man flow in
             let new_typevars = collect_typevars (if is_method then Some (List.hd args) else None) signature in
-            (* il faut enelver des trucs là, je veux pas enlever les variables de classe *)
             debug "new_typevars: %a" TVMap.print new_typevars;
             debug "cur: %a" TVMap.print cur;
             debug "kwargs: %a" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") (fun fmt (argn, argv) -> Format.fprintf fmt "(%a, %a)" (OptionExt.print Format.pp_print_string) argn pp_expr argv)) kwargs;
@@ -246,8 +227,6 @@ struct
             let in_types, in_args =
               (* remove types having a default parameter and no argument *)
               (* FIXME: kwargs actually depend on the chosen py_func_sig...  *)
-              (* we need to add kwargs to args smartly here *)
-              (* failwith "otodkwargs"; *)
               let rec filter names types defaults args (acctypes, accargs) =
                 debug "calling filter names=%a; types=_; defaults=%a; args=%a"
                   (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_var) names
@@ -259,7 +238,7 @@ struct
                       | None -> false
                       | Some v -> v = get_orig_vname nhd) kwargs with
                   | None ->
-                    if dhd && List.length args = 0 (* List.length names > List.length args *) then
+                    if dhd && List.length args = 0 then
                       (* if the argument is optional and not replaced in the kwargs *)
                       (* the default argument has its default value, we don't check anything *)
                       filter ntl (List.tl types) dtl args (acctypes, accargs)
@@ -277,10 +256,6 @@ struct
                 | _ ->
                   debug "%d %d %d; raising Invalid_sig" (List.length names) (List.length defaults) (List.length args);
                   raise Invalid_sig
-                  (* ;
-                   * panic_at range "filter names=%a defaults=%a args=%a" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_var) names
-                   *        (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") Format.pp_print_bool) defaults
-                   *        (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_expr) args *)
               in
               filter signature.py_funcs_parameters signature.py_funcs_types_in signature.py_funcs_defaults args ([], [])
             in
@@ -465,12 +440,9 @@ struct
                   let substi =
                     Visitor.map_expr
                       (fun expr -> match ekind expr with
-                         (* il faudrait gérer les tuples comme avant donc c'est pas un fold_left qu'on veut sur les listes et probablement pas un Visitor.map_expr. *)
-                         (* si c'est un tuple le visiteur devrait trouver chacun des éléments. Maintenant c'est Mapping[Mapping[str, int], int], comment on fait ? KT: Mapping[str, int], VT: int *)
                          | E_py_call (
                              {ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)},
                              {ekind = E_constant (C_string s)}::_, []) ->
-                           (* FIXME: égalité entre s et tname à gérer mieux que ça ? *)
                            Keep (try ESet.choose @@ (TVMap.find (Global s) (get_env T_cur man flow)) with Not_found -> expr)
                          | E_py_call (
                              {ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)},
@@ -481,7 +453,6 @@ struct
                                | None ->
                                  debug "vname = %a@\n" pp_var vname;
                                  match vkind vname with
-                                 (* to re-try on re.finditer *)
                                  (* FIXME: ugly fix to handle:             (* issue: if object.__new__(e) renames addresses used in i, this is not caught... *) *)
                                  | V_addr_attr ({addr_kind = A_py_instance {addr_kind = A_py_class (C_annot c', _)}} as addr, attr) when compare_var c.py_cls_a_var c'.py_cls_a_var = 0 ->
                                    OptionExt.default (ESet.singleton expr) (TVMap.find_opt (Class (mk_addr_attr {addr with addr_mode = WEAK} attr T_any)) (get_env T_cur man flow))
@@ -512,7 +483,6 @@ struct
                                             st)
                                          (get_env T_cur man flow)) man flow) flow tnames types in
                   debug "after %a, cur = %a" pp_expr exp TVMap.print (get_env T_cur man flow);
-                  (* man.exec (mk_stmt (S_py_annot (mk_var (mk_addr_attr addr tname T_any) range, mk_expr (E_py_annot i) range)) range) flow |> *)
                   Eval.singleton eobj flow
                 )
           end
@@ -579,9 +549,6 @@ struct
                     let flow = set_env T_cur (TVMap.add (Class v) (ESet.singleton t) cur) man flow in
                     man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) {exp with ekind = E_py_annot t} flow)
                  (ESet.elements tycur))
-            (* assert (ESet.cardinal tycur = 1);
-             * let ty = ESet.choose tycur in
-             * man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) {exp with ekind = E_py_annot ty} flow *)
           end |> OptionExt.return
 
         | E_constant C_py_none ->

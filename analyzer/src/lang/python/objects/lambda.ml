@@ -19,7 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Definition of python functions and evaluation of their calls. *)
+(** Inlining of anonymous functions defined through lambda *)
 
 open Mopsa
 open Sig.Abstraction.Stateless

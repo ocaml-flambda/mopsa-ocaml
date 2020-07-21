@@ -19,8 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(* A general expansion-based abstraction for Python tuples, (hopefully)
-   irrelevant of the value/type domain *)
+(** A general expansion-based abstraction for Python tuples *)
 
 open Mopsa
 open Sig.Abstraction.Stateless
@@ -149,7 +148,6 @@ struct
                | E_constant (C_int z) -> Z.to_int z
                | _ -> raise Nonconstantinteger in
              if 0 <= pos && pos < List.length tuple_vars then
-               let () = debug "ok@\n" in
                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var ~mode:(Some STRONG) (List.nth tuple_vars pos) range) flow
              else
                man.exec ~zone:Zone.Z_py (Utils.mk_builtin_raise_msg "IndexError" "tuple index out of range" range) flow |>
@@ -192,7 +190,6 @@ struct
                 let vars_els = var_of_eobj tuple_eobj in
                 match tuple_pos with
                 | Some d when d < List.length vars_els ->
-                   let () = debug "exec incoming@\n" in
                    let flow = man.exec ~zone:Zone.Z_py
                                 (mk_rename (mk_addr tuple_it_addr range)
                                    (mk_addr {tuple_it_addr with addr_kind = Py_list.A_py_iterator ("tuple_iterator", Some (d+1))} range) range) flow in
@@ -204,7 +201,6 @@ struct
       |> OptionExt.return
 
     | E_py_annot {ekind = E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)}, i) } when get_orig_vname c.py_cls_a_var = "Tuple" ->
-      debug "TUPLE";
       let i = match ekind i with
         | E_py_tuple i -> i
         | _ -> assert false in
@@ -217,7 +213,6 @@ struct
               man.exec ~zone:Zone.Z_py
                 (mk_stmt (S_py_annot (mk_var ~mode:(Some STRONG) vari range, mk_expr (E_py_annot eli) range)) range) flow
             ) flow els_var i in
-          debug "TUPLE, flow = %a@\n" (Flow.print man.lattice.print) flow;
           Eval.singleton (mk_py_object (addr_tuple, None) range) flow
         )
       |> OptionExt.return

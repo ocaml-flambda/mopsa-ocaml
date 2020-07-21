@@ -62,31 +62,31 @@ module Domain =
          Eval.singleton (mk_py_false range) flow |> OptionExt.return
 
       | E_binop(O_py_and, e1, e2) ->
-        man.eval (Utils.mk_builtin_call "bool" [e1] range) flow |>
-        Eval.bind (fun be1 flow1 ->
-            assume be1 man
-              ~fthen:(fun true_flow -> man.eval e2 true_flow)
-              ~felse:(fun false_flow -> man.eval e1 false_flow)
-              flow1
-          )
-        |> OptionExt.return
-
-      (* | E_binop(O_py_or, {ekind = E_constant (C_bool true)}, e2) ->
-       *    Eval.singleton (mk_py_true range) flow |> OptionExt.return
-       *
-       * | E_binop(O_py_or, {ekind = E_constant (C_bool false)}, e2) ->
-       *    man.eval e2 flow |> OptionExt.return *)
+         man.eval e1 flow |>
+         Eval.bind (fun ee1 flow ->
+           man.eval (Utils.mk_builtin_call "bool" [ee1] range) flow |>
+           Eval.bind (fun be1 flow1 ->
+             assume be1 man
+               ~fthen:(fun true_flow -> man.eval e2 true_flow)
+               ~felse:(fun false_flow -> Eval.singleton ee1 false_flow)
+               flow1
+             )
+           )
+         |> OptionExt.return
 
       (* E⟦ e1 or e2 ⟧ *)
       | E_binop(O_py_or, e1, e2) ->
-         man.eval (Utils.mk_builtin_call "bool" [e1] range) flow |>
+         man.eval e1 flow |>
+         Eval.bind (fun ee1 flow ->
+           man.eval (Utils.mk_builtin_call "bool" [ee1] range) flow |>
            Eval.bind (fun be1 flow1 ->
-               assume be1
-                 ~fthen:(fun true_flow ->
-                     man.eval e1 true_flow)
-                 ~felse:(fun false_flow ->
-                     man.eval e2 false_flow)
-                 man flow1)
+             assume be1
+               ~fthen:(fun true_flow ->
+                 Eval.singleton ee1 true_flow)
+               ~felse:(fun false_flow ->
+                 man.eval e2 false_flow)
+               man flow1)
+           )
          |> OptionExt.return
 
       | E_binop(O_log_or, e1, e2) ->

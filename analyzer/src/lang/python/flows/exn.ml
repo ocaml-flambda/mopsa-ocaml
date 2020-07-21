@@ -134,8 +134,6 @@ module Domain =
              match exp with
              | None -> Cases.return None flow ~log ~cleaners
              | Some exp ->
-             (* match ekind exp with
-              * | E_py_object obj -> *)
              assume
                (mk_py_isinstance_builtin exp "BaseException" range)
                man
@@ -150,7 +148,8 @@ module Domain =
                      if List.exists (fun x ->
                          Stdlib.compare x exc_str = 0) !opt_unprecise_exn then
                        let exp = Utils.strip_object exp in
-                       mk_py_unprecise_exception exp exc_str (* we don't keep the message for unprecise exns *)
+                       (* messages are removed for unprecise exns *)
+                       mk_py_unprecise_exception exp exc_str
                      else
                        let cs = Flow.get_callstack true_flow in
                        mk_py_exception exp
@@ -219,8 +218,6 @@ module Domain =
                       match ekind e with
                       | E_py_object obj ->
                         assume
-                          (* if issubclass obj (find_builtin "BaseException") then *)
-                          (* issubclass cls1 cls2 <-> ???*)
                           (mk_py_call (mk_py_object (find_builtin "issubclass") range) [e; mk_py_object (find_builtin "BaseException") range] range)
                           man flow
                           ~fthen:(fun true_flow ->
@@ -232,13 +229,11 @@ module Domain =
                                     | None -> Post.return true_flow
                                     | Some v -> man.exec (mk_assign (mk_var v range) exn range) true_flow |> Post.return)
                                 ~felse:(fun false_flow ->
-                                    (*if not (isinstance exn obj) then*)
                                     Flow.set T_cur man.lattice.bottom man.lattice false_flow |> Post.return
                                   )
                                 true_flow
                             )
                           ~felse:(fun false_flow ->
-                              (* else *)
                               man.exec (Utils.mk_builtin_raise_msg "TypeError" "catching classes that do not inherit from BaseException is not allowed" range) flow |> Post.return)
                       | _ -> assert false
                     )
@@ -257,7 +252,6 @@ module Domain =
         | None -> mk_block [] (tag_range range "clean_except_var")
         | Some v -> mk_remove_var v (tag_range range "clean_except_var") in
       debug "except flow1 =@ @[%a@]" (Flow.print man.lattice.print) flow1;
-      (* Execute exception handler *)
       man.exec excpt.py_excpt_body flow1
       |> man.exec clean_except_var
 
@@ -285,8 +279,6 @@ module Domain =
                       assume
                         (mk_py_call (mk_py_object (find_builtin "issubclass") range) [e; mk_py_object (find_builtin "BaseException") range] range)
                         man
-                        (* if issubclass obj (find_builtin "BaseException") && not (isinstance exn obj) then
-                         *   man.flow.add (TExn exn) env flow *)
                         ~fthen:(fun true_flow ->
                             assume
                               (mk_py_isinstance exn e range)
