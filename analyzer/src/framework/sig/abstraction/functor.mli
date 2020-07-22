@@ -23,7 +23,6 @@
 (** Signature of functors of standard domains *)
 
 open Domain
-open Core.Semantic
 
 (*==========================================================================*)
 (**                           {1 Signature}                                 *)
@@ -32,7 +31,6 @@ open Core.Semantic
 module type DOMAIN_FUNCTOR =
 sig
   val name : string
-  val dependencies : semantic list
   module Functor : functor(D:DOMAIN) -> DOMAIN
 end
 

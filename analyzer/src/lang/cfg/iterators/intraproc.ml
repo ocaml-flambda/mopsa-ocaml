@@ -61,9 +61,6 @@ struct
       let name = name
     end)
 
-
-  let dependencies = []
-
   let alarms = []
 
   let init prog man flow = flow

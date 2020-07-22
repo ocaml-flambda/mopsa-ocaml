@@ -40,9 +40,6 @@ sig
   val name : string
   (** Name of the domain *)
 
-  val dependencies : semantic list
-  (** Semantic dependencies of the domain *)
-
   val alarms : alarm_class list
   (** List of alarms detected by the domain *)
 
@@ -98,7 +95,7 @@ sig
   val exec : stmt -> ('a, t) man -> 'a flow -> 'a post option
   (** Post-state of statements *)
 
-  val eval : expr -> ('a, t) man -> 'a flow -> 'a rewrite option
+  val eval : expr -> ('a, t) man -> 'a flow -> 'a eval option
   (** Evaluation of expressions *)
 
   val ask  : ('a,'r) query -> ('a, t) man -> 'a flow -> 'r option
@@ -112,8 +109,8 @@ end
 (*==========================================================================*)
 
 
-(** Auto-logger lifter used when registering a domain *)
-module AutoLogger(D:DOMAIN) : DOMAIN with type t = D.t =
+(** Instrument transfer functions with some useful pre/post processing *)
+module Instrument(D:DOMAIN) : DOMAIN with type t = D.t =
 struct
   include D
 
@@ -124,8 +121,12 @@ struct
     if (Log.compare_log log1 log2 = 0) then a1
     else D.merge pre (a1,log1) (a2,log2)
 
-
+  let init prog man flow =
+    let man = resolve_below_alias D.name man in
+    D.init prog man flow
+  
   let exec stmt man flow =
+    let man = resolve_below_alias D.name man in 
     D.exec stmt man flow |>
     OptionExt.lift @@ fun res ->
     Cases.map_log (fun log ->
@@ -133,13 +134,22 @@ struct
           man.get_log log |> Log.add_stmt_to_log stmt
         ) log
       ) res
+
+  let eval exp man flow =
+    let man = resolve_below_alias D.name man in
+    D.eval exp man flow
+
+  let ask query man flow =
+    let man = resolve_below_alias D.name man in
+    D.ask query man flow
+  
 end
 
 let domains : (module DOMAIN) list ref = ref []
 
 let register_standard_domain dom =
   let module D = (val dom : DOMAIN) in
-  domains := (module AutoLogger(D)) :: !domains
+  domains := (module Instrument(D)) :: !domains
 
 
 let find_standard_domain name =

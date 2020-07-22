@@ -125,8 +125,6 @@ struct
 
   let alarms = []
 
-  let dependencies = []
-
   (** Lattice operators *)
   (** ================= *)
 
@@ -221,7 +219,7 @@ struct
       if not (Pool.mem recent_addr pool) then
         (* first allocation at this site: just add the address to the pool and return it *)
         map_env T_cur (Pool.add recent_addr) man flow |>
-        Rewrite.return_singleton (mk_addr recent_addr range) |>
+        Eval.singleton (mk_addr recent_addr range) |>
         OptionExt.return
       else
         let old_addr = Policies.mk_addr addr_kind WEAK range (Flow.get_unit_ctx flow) in
@@ -229,12 +227,12 @@ struct
           (* old address not present: rename the existing recent as old and return the new recent *)
           map_env T_cur (Pool.add old_addr) man flow |>
           man.exec (mk_rename_addr recent_addr old_addr range) |>
-          Rewrite.return_singleton (mk_addr recent_addr range) |>
+          Eval.singleton (mk_addr recent_addr range) |>
           OptionExt.return
         else
           (* old present : copy the content of the existing recent to old using `fold` statement *)
           man.exec (mk_fold_addr old_addr [recent_addr] range) flow |>
-          Rewrite.return_singleton (mk_addr recent_addr range) |>
+          Eval.singleton (mk_addr recent_addr range) |>
           OptionExt.return
 
     | E_alloc_addr(addr_kind, WEAK) ->
@@ -247,7 +245,7 @@ struct
         else
           map_env T_cur (Pool.add weak_addr) man flow
       in
-      Rewrite.return_singleton (mk_addr weak_addr range) flow' |>
+      Eval.singleton (mk_addr weak_addr range) flow' |>
       OptionExt.return
 
 

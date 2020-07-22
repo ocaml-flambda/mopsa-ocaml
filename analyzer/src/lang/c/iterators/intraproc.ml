@@ -41,11 +41,7 @@ struct
       let name = "c.iterators.intraproc"
     end)
 
-  let memory = mk_semantic "memory" ~domain:name
-
-  let pointers = mk_semantic "pointer" ~domain:name
-
-  let dependencies = [ memory; pointers ]
+  let dependencies = []
 
   let alarms = []
 
@@ -60,33 +56,33 @@ struct
   (** ========================== *)
 
   let exec_add b range man flow =
-    man.post ~semantic:memory (mk_add b range) flow
+    man.post ~route:Below (mk_add b range) flow
 
   let exec_remove b range man flow =
-    man.post ~semantic:memory (mk_remove b range) flow >>$ fun () flow ->
-    man.post ~semantic:pointers (mk_invalidate b range) flow
+    man.post ~route:Below (mk_remove b range) flow >>$ fun () flow ->
+    man.post ~route:Below (mk_invalidate b range) flow
 
   let exec_rename b1 b2 range man flow =
-    man.post ~semantic:memory (mk_rename b1 b2 range) flow >>$ fun () flow ->
+    man.post ~route:Below (mk_rename b1 b2 range) flow >>$ fun () flow ->
     let bb1 = to_c_block_object b1 in
     let bb2 = to_c_block_object b2 in
-    man.post ~semantic:pointers (mk_rename bb1 bb2 range) flow
+    man.post ~route:Below (mk_rename bb1 bb2 range) flow
 
   let exec_forget b range man flow =
-    man.post ~semantic:memory (mk_forget b range) flow
+    man.post ~route:Below (mk_forget b range) flow
 
   let exec_expand b bl range man flow =
-    man.post ~semantic:memory (mk_expand b bl range) flow >>$ fun () flow ->
+    man.post ~route:Below (mk_expand b bl range) flow >>$ fun () flow ->
     let bb = to_c_block_object b in
     let bbl = List.map to_c_block_object bl in
-    man.post ~semantic:pointers (mk_expand bb bbl range) flow
+    man.post ~route:Below (mk_expand bb bbl range) flow
 
 
   let exec_fold b bl range man flow =
-    man.post ~semantic:memory (mk_fold b bl range) flow >>$ fun () flow ->
+    man.post ~route:Below (mk_fold b bl range) flow >>$ fun () flow ->
     let bb = to_c_block_object b in
     let bbl = List.map to_c_block_object bl in
-    man.post ~semantic:pointers (mk_fold bb bbl range) flow
+    man.post ~route:Below (mk_fold bb bbl range) flow
 
   
   let exec stmt man flow =
@@ -126,10 +122,10 @@ struct
     | E_c_conditional(cond, e1, e2) ->
       assume cond
         ~fthen:(fun flow ->
-            Rewrite.reval_singleton e1 flow
+            Eval.singleton e1 flow
           )
         ~felse:(fun flow ->
-            Rewrite.reval_singleton e2 flow
+            Eval.singleton e2 flow
           )
         man flow |>
       OptionExt.return
@@ -137,10 +133,10 @@ struct
     | E_binop(O_c_and, e1, e2) ->
       assume e1
         ~fthen:(fun flow ->
-            Rewrite.reval_singleton e2 flow
+            Eval.singleton e2 flow
           )
         ~felse:(fun flow ->
-            Rewrite.return_singleton (Universal.Ast.mk_zero exp.erange) flow
+            Eval.singleton (Universal.Ast.mk_zero exp.erange) flow
           )
         man flow |>
       OptionExt.return
@@ -148,10 +144,10 @@ struct
     | E_binop(O_c_or, e1, e2) ->
       assume e1
         ~fthen:(fun flow ->
-            Rewrite.return_singleton (Universal.Ast.mk_one exp.erange) flow
+            Eval.singleton (Universal.Ast.mk_one exp.erange) flow
           )
         ~felse:(fun flow ->
-            Rewrite.reval_singleton e2 flow
+            Eval.singleton e2 flow
           )
         man flow |>
       OptionExt.return
@@ -159,7 +155,7 @@ struct
     | E_c_assign(lval, rval) ->
       man.eval rval flow >>$? fun rval flow ->
       man.post (mk_assign lval rval exp.erange) flow >>$? fun () flow ->
-      Rewrite.return_singleton rval flow |>
+      Eval.singleton rval flow |>
       OptionExt.return
 
     | E_c_statement {skind = S_block (l,local_vars)} ->
@@ -169,7 +165,7 @@ struct
           let q' = List.rev q in
           let stmt' = mk_block q' (erange exp) in
           man.post stmt' flow >>$? fun () flow ->
-          Rewrite.reval_singleton e flow |>
+          Eval.singleton e flow |>
           Cases.add_cleaners (List.map (fun v -> mk_remove_var v exp.erange) local_vars) |>
           OptionExt.return
 
@@ -177,7 +173,7 @@ struct
       end
 
     | E_c_statement {skind = S_expression e} ->
-      Rewrite.reval_singleton e flow |>
+      Eval.singleton e flow |>
       OptionExt.return
 
 

@@ -427,9 +427,9 @@ struct
 
   (** Actions on abstract domain *)
   type _ action =
-    | Exec : stmt * semantic -> Toplevel.t flow action
-    | Post : stmt * semantic -> Toplevel.t post action
-    | Eval : expr * semantic -> Toplevel.t eval action
+    | Exec : stmt * route -> Toplevel.t flow action
+    | Post : stmt * route -> Toplevel.t post action
+    | Eval : expr * route -> Toplevel.t eval action
 
 
   (** Get the program location related to an action *)
@@ -443,21 +443,21 @@ struct
   let pp_action : type a. Toplevel.t flow -> formatter -> a action -> unit = fun flow fmt action ->
     fprintf fmt "%a@." (Debug.color "fushia" pp_range) (action_range action);
     match action with
-    | Exec(stmt,semantic) ->
-      fprintf fmt "@[<v 4>S[ %a@] ] in semantic %a@."
+    | Exec(stmt,route) ->
+      fprintf fmt "@[<v 4>S[ %a@] ] in %a@."
         pp_stmt stmt
-        pp_semantic semantic
+        pp_route route
 
-    | Post(stmt,semantic) ->
-      fprintf fmt "@[<v 4>P[ %a@] ] in semantic %a@."
+    | Post(stmt,route) ->
+      fprintf fmt "@[<v 4>P[ %a@] ] in %a@."
         pp_stmt stmt
-        pp_semantic semantic
+        pp_route route
 
-    | Eval(exp,semantic) ->
-      fprintf fmt "@[<v 4>E[ %a@] : %a ] in semantic %a@."
+    | Eval(exp,route) ->
+      fprintf fmt "@[<v 4>E[ %a@] : %a ] in %a@."
         pp_expr exp
         pp_typ (etyp exp)
-        pp_semantic semantic
+        pp_route route
 
 
   (** Check that an action is atomic *)
@@ -675,9 +675,9 @@ struct
   let rec apply_action : type a. a action -> Toplevel.t flow -> a =
     fun action flow ->
     match action with
-    | Exec(stmt, semantic) -> Toplevel.exec ~semantic stmt man flow
-    | Post(stmt, semantic) -> Toplevel.post ~semantic stmt man flow
-    | Eval(exp, semantic)  -> Toplevel.eval ~semantic exp man flow
+    | Exec(stmt, route) -> Toplevel.exec ~route stmt man flow
+    | Post(stmt, route) -> Toplevel.post ~route stmt man flow
+    | Eval(exp, route)  -> Toplevel.eval ~route exp man flow
 
 
   (** Wait for user input and process it *)
@@ -818,17 +818,17 @@ struct
   and init prog =
     Toplevel.init prog man
 
-  and exec stmt ?(semantic=any_semantic) flow =
-    interact_or_apply_action (Exec (stmt, semantic)) stmt.srange flow
+  and exec ?(route=toplevel) stmt flow =
+    interact_or_apply_action (Exec (stmt, route)) stmt.srange flow
 
-  and post stmt ?(semantic=any_semantic) flow =
-    interact_or_apply_action (Post (stmt,semantic)) stmt.srange flow
+  and post ?(route=toplevel)stmt flow =
+    interact_or_apply_action (Post (stmt, route)) stmt.srange flow
 
-  and eval exp ?(semantic=any_semantic) flow =
-    interact_or_apply_action (Eval (exp, semantic)) exp.erange flow
+  and eval ?(route=toplevel)exp flow =
+    interact_or_apply_action (Eval (exp, route)) exp.erange flow
 
-  and ask : type r. (Toplevel.t,r) query -> Toplevel.t flow -> r =
-    fun query flow ->
+  and ask : type r. ?route:route -> (Toplevel.t,r) query -> Toplevel.t flow -> r =
+    fun ?(route=toplevel)query flow ->
       Toplevel.ask query man flow
 
   and lattice : Toplevel.t lattice = {

@@ -19,50 +19,48 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Desugar non-scalar expressions in assignments and tests *)
 
-open Mopsa
-open Sig.Abstraction.Stateless
-open Ast
+(** Routes to select sub-trees of the abstraction when interpreting commands *)
 
-module Domain =
-struct
+open Semantic
 
-  include GenStatelessDomainId(struct
-      let name = "universal.iterators.scalar"
-    end)
+type domain = string
 
-  let numeric = mk_semantic "numeric" ~domain:name
-  
-  let dependencies = [numeric]
+(** Routes *)
+type route =
+  | Below                (** Sub-tree below the currently active domain *)
+  | BelowOf of domain    (** Sub-tree below a given domain *)
+  | Semantic of semantic (** Sub-tree identified by a semantic *)
 
-  let alarms = []
+val compare_route : route -> route -> int
+(** Compare two routes *)
 
-  let init prog man flow = flow
+val pp_route : Format.formatter -> route -> unit
+(** Print a route *)
 
-  let desugar e man flow = man.eval e flow
+val toplevel : route
+(** Toplevel tree *)
 
-  let exec stmt man flow =
-    match skind stmt with
-    | S_assign(x, e) when is_numeric_type e.etyp ->
-      desugar x man flow >>$? fun x flow ->
-      desugar e man flow >>$? fun e flow ->
-      man.post ~semantic:numeric (mk_assign x e stmt.srange) flow |>
-      OptionExt.return
+type routing_table
+(** Routing table providing the domains that are part of a route *) 
 
-    | S_assume e when is_numeric_type e.etyp ->
-      desugar e man flow >>$? fun e flow ->
-      man.post ~semantic:numeric (mk_assume e stmt.srange) flow |>
-      OptionExt.return
+val empty_routing_table : routing_table
+(** Empty routing table *)
 
+val resolve_route : route -> routing_table -> domain list
+(** Resolve a route into domains *)
 
-    | _ -> None
+val add_route : route -> domain -> routing_table -> routing_table
+(** Add a route between a route and a domain *)
 
-  let eval exp man flow = None
+val add_routes : route -> domain list -> routing_table -> routing_table
+(** Add a set of routing_table linking a route and a set of domains *)
 
-  let ask query man flow = None
+val get_routes : routing_table -> route list
+(** Get all routing_table in a routing table *)
 
-end
+val join_routing_table : routing_table -> routing_table -> routing_table
+(** Join two routing_table table *)
 
-let () =
-  register_stateless_domain (module Domain)
+val pp_routing_table : Format.formatter -> routing_table -> unit
+(** Print a routing table *)

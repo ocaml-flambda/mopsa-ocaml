@@ -152,9 +152,7 @@ struct
       let name = "c.libs.clib.file_descriptor"
     end)
 
-  let numeric = mk_semantic "U/Numeric" ~domain:name
-
-  let dependencies = [ numeric ]
+  let numeric = Semantic "U/Numeric"
 
   let alarms = []
 
@@ -283,7 +281,7 @@ struct
           )
         ]
       )
-      ~semantic:numeric
+      ~route:numeric
       man flow
 
 
@@ -300,7 +298,7 @@ struct
         let addrs = Slot.get hd in
         if addrs = [] then find_addr_first (j + 1) tl flow
         else
-          assume (mk_binop i O_eq (mk_int j range) range) ~semantic:numeric
+          assume (mk_binop i O_eq (mk_int j range) range) ~route:numeric
             ~fthen:(fun flow ->
                 List.map (fun addr -> Eval.singleton (mk_addr addr range) flow) addrs |>
                 Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow)
@@ -419,7 +417,6 @@ struct
         | _ ->
           Eval.singleton (mk_int (-1) exp.erange) flow
       end
-      |> Rewrite.return_eval
       |> OptionExt.return
 
 
@@ -435,7 +432,6 @@ struct
         | _ ->
           Eval.singleton (mk_int (-1) exp.erange) flow
       end
-      |> Rewrite.return_eval
       |> OptionExt.return
 
 
@@ -443,7 +439,6 @@ struct
     | E_c_builtin_call("_mopsa_find_file_resource", [fd]) ->
       man.eval fd flow >>$? fun fd flow ->
       find_addr fd exp.erange man flow
-      |> Rewrite.return_eval
       |> OptionExt.return
 
 
@@ -457,7 +452,7 @@ struct
         | _        -> mk_zero exp.erange
       in
 
-      Rewrite.return_singleton exp' flow |>
+      Eval.singleton exp' flow |>
       OptionExt.return
 
 

@@ -67,13 +67,13 @@ sig
 
   val init : program -> (t, t) man -> t flow
 
-  val exec : ?semantic:semantic -> stmt -> (t, t) man -> t flow -> t flow
+  val exec : ?route:route -> stmt -> (t, t) man -> t flow -> t flow
 
-  val post : ?semantic:semantic -> stmt -> (t, t) man -> t flow -> t post
+  val post : ?route:route -> stmt -> (t, t) man -> t flow -> t post
 
-  val eval : ?semantic:semantic -> expr -> (t, t) man -> t flow -> t eval
+  val eval : ?route:route -> expr -> (t, t) man -> t flow -> t eval
 
-  val ask  : ?semantic:semantic -> (t,'r) query -> (t, t) man -> t flow -> 'r
+  val ask  : ?route:route -> (t,'r) query -> (t, t) man -> t flow -> 'r
 
 end
 
@@ -91,7 +91,7 @@ module Make(Domain:STACKED_COMBINER) : TOPLEVEL with type t = Domain.t
 =
 struct
 
-  let () = debug "wiring table:@,%a" pp_wirinings Domain.wirings
+  let () = debug "routing table:@,%a" pp_routing_table Domain.routing_table
 
   (** {2 Abstraction header} *)
   (** ********************** *)
@@ -133,17 +133,17 @@ struct
   let merge = Domain.merge
 
 
-  (** {2 Caches and semantic maps} *)
+  (** {2 Caches and route maps} *)
   (** **************************** *)
 
   (* Cache of previous evaluations and post-conditions *)
   module Cache = Core.Cache.Make(struct type t = Domain.t end)
 
 
-  (** Map giving transfer functions of each semantic *)
-  module SemanticMap = MapExt.Make(struct
-      type t = semantic
-      let compare = compare_semantic
+  (** Map giving transfer functions of each route *)
+  module RouteMap = MapExt.Make(struct
+      type t = route
+      let compare = compare_route
     end)
 
 
@@ -173,43 +173,42 @@ struct
   (** *********************** *)
 
   (** Build the map of exec functions *)
-  let exec_map : (stmt -> (t,t) man -> t flow -> t post option) SemanticMap.t =
-    (* Add the initial implicit binding for any_semantic *)
-    let map = SemanticMap.singleton any_semantic (Domain.exec []) in
-    (* Iterate over the semantic dependencies *)
-    Domain.dependencies |>
-    List.fold_left (fun map semantic ->
-        if SemanticMap.mem semantic map then map else
-        try
-          let domains = find_wirings semantic Domain.wirings in
-          debug "exec for %a found" pp_semantic semantic;
-          SemanticMap.add semantic (Domain.exec domains) map
-        with Not_found -> Exceptions.panic "exec for %a not found" pp_semantic semantic
+  let exec_map : (stmt -> (t,t) man -> t flow -> t post option) RouteMap.t =
+    (* Add the initial implicit binding for toplevel route *)
+    let map = RouteMap.singleton toplevel (Domain.exec Domain.domains) in
+    (* Iterate over all routes *)
+    get_routes Domain.routing_table |>
+    List.fold_left (fun map route ->
+        if RouteMap.mem route map then
+          map
+        else
+          let domains = resolve_route route Domain.routing_table in
+          RouteMap.add route (Domain.exec domains) map
       ) map
 
-  let post ?(semantic = any_semantic) (stmt: stmt) man (flow: Domain.t flow) : Domain.t post =
-    let ctx = Hook.on_before_exec semantic stmt man flow in
+  let post ?(route = toplevel) (stmt: stmt) man (flow: Domain.t flow) : Domain.t post =
+    let ctx = Hook.on_before_exec route stmt man flow in
     let flow = Flow.set_ctx ctx flow in
 
     let fexec =
-      try SemanticMap.find semantic exec_map
-      with Not_found -> Exceptions.panic_at stmt.srange "exec for %a not found" pp_semantic semantic
+      try RouteMap.find route exec_map
+      with Not_found -> Exceptions.panic_at stmt.srange "exec for %a not found" pp_route route
     in
     try
       let post =
-        match Cache.exec fexec semantic stmt man flow with
+        match Cache.exec fexec route stmt man flow with
         | None ->
           if Flow.is_bottom man.lattice flow
           then Post.return flow
           else
             Exceptions.panic_at stmt.srange
-              "unable to analyze statement %a in semantic %a"
+              "unable to analyze statement %a in %a"
               pp_stmt stmt
-              pp_semantic semantic
+              pp_route route
 
         | Some post -> post
       in
-      let ctx = Hook.on_after_exec semantic stmt man flow post in
+      let ctx = Hook.on_after_exec route stmt man flow post in
       Cases.set_ctx ctx post
     with
     | Exceptions.Panic(msg, line) ->
@@ -230,8 +229,8 @@ struct
         (Printexc.get_raw_backtrace())
 
 
-  let exec ?(semantic = any_semantic) (stmt: stmt) man (flow: Domain.t flow) : Domain.t flow =
-    let post = post ~semantic stmt man flow in
+  let exec ?(route = toplevel) (stmt: stmt) man (flow: Domain.t flow) : Domain.t flow =
+    let post = post ~route stmt man flow in
     post_to_flow man post
 
 
@@ -239,56 +238,63 @@ struct
   (** ***************************** *)
 
   (** Build the map of [eval] functions *)
-  let eval_map : (expr -> (t,t) man -> t flow -> t rewrite option) SemanticMap.t =
-    (* Add the implicit eval for any_semantic *)
-    let map = SemanticMap.singleton any_semantic (Domain.eval []) in
+  let eval_map : (expr -> (t,t) man -> t flow -> t eval option) RouteMap.t =
+    (* Add the implicit eval for toplevel *)
+    let map = RouteMap.singleton toplevel (Domain.eval Domain.domains) in
 
-    (* Iterate over the semantic dependencies *)
-    Domain.dependencies |>
-    List.fold_left (fun map semantic ->
-        if SemanticMap.mem semantic map then map else
-          try SemanticMap.add semantic (Domain.eval (find_wirings semantic Domain.wirings)) map
-          with Not_found -> Exceptions.panic "eval for %a not found" pp_semantic semantic
+    (* Iterate over all routes *)
+    get_routes Domain.routing_table |>
+    List.fold_left (fun map route ->
+        if RouteMap.mem route map then
+          map
+        else
+          let domains = resolve_route route Domain.routing_table in
+          RouteMap.add route (Domain.eval domains) map
       ) map
 
   (** Evaluation of expressions. *)
-  let eval ?(semantic=any_semantic) exp man flow =
-    let ctx = Hook.on_before_eval semantic exp man flow in
+  let eval ?(route=toplevel) exp man flow =
+    let ctx = Hook.on_before_eval route exp man flow in
     let flow = Flow.set_ctx ctx flow in
 
-    (* Get the actual semantic of the expression in case of a
+
+    (* Get the actual route of the expression in case of a
        variable, since variable can have an intrinsic semantic *)
-    let semantic =
-      if compare_semantic semantic any_semantic = 0 then
-        match ekind exp with
-        | E_var (v,_) -> v.vsemantic
-        | _ -> semantic
+    let refine_route_with_var_semantic route e =
+      if compare_route route toplevel = 0 then
+        match ekind e with
+        | E_var (v,_) -> Semantic v.vsemantic
+        | _ -> route
       else
-        semantic
+        route
     in
 
+    let route = refine_route_with_var_semantic route exp in
+
     let feval =
-      try SemanticMap.find semantic eval_map
-      with Not_found -> Exceptions.panic_at exp.erange "eval for %a not found" pp_semantic semantic
+      try RouteMap.find route eval_map
+      with Not_found -> Exceptions.panic_at exp.erange "eval for %a not found" pp_route route
     in
     let evl =
       (* Ask domains to perform the evaluation *) 
-      match Cache.eval feval semantic exp man flow with
+      match Cache.eval feval route exp man flow with
       | Some evl ->
-        (* Check if the domain asks to forward the evaluation to some semantics *)
-        evl >>$ fun erw f' ->
-        begin match erw with
-          | Return e'       -> Cases.singleton e' f'
-          | Forward (e',s') -> man.eval ~semantic:s' e' f'
-        end
+        (* Check if we reached the end of the evaluation if we get an
+           expression equal to the input expression *)
+        evl >>$ fun exp' flow' ->
+        if exp == exp' then
+          Cases.singleton exp' flow'
+        else
+          (* Otherwise iterate again evaluation route the result *)
+          man.eval exp' ~route:(refine_route_with_var_semantic toplevel exp')flow'
 
       | None ->
         (* No answer, so try to visit sub-expressions *)
         let parts, builder = structure_of_expr exp in
         begin match parts with
           | {exprs; stmts = []} ->
-            (* Iterate on sub-expressions *)
-            Cases.bind_list exprs (fun e flow -> man.eval ~semantic e flow) flow >>$ fun exprs' f' ->
+            (* Iterate over sub-expressions *)
+            Cases.bind_list exprs (fun e flow -> man.eval ~route e flow) flow >>$ fun exprs' f' ->
             (* Rebuild the expression from its evaluated parts *)
             let e' = builder {exprs = exprs'; stmts = []} in
             Cases.singleton e' f'
@@ -305,7 +311,7 @@ struct
       if exp == exp' then Cases.singleton exp' flow' else Cases.singleton { exp' with eprev = Some exp } flow'
     in
 
-    let ctx = Hook.on_after_eval semantic exp man flow ret in
+    let ctx = Hook.on_after_eval route exp man flow ret in
     Cases.set_ctx ctx ret
 
 
@@ -315,26 +321,27 @@ struct
   type ask = { doit : 'r. (t,'r) query -> (t,t) man -> t flow -> 'r option }
   
   (** Map binding semantics to the associated [ask] function *)
-  let ask_map : ask SemanticMap.t =
-    (* Add the implicit eval for any_semantic *)
-    let map = SemanticMap.singleton any_semantic { doit = (fun q man flow -> Domain.ask [] q man flow) } in
+  let ask_map : ask RouteMap.t =
+    (* Add the implicit ask for toplevel *)
+    let map = RouteMap.singleton toplevel { doit = (fun q man flow -> Domain.ask Domain.domains q man flow) } in
 
-    (* Iterate over the semantic dependencies *)
-    Domain.dependencies |>
-    List.fold_left (fun map semantic ->
-        if SemanticMap.mem semantic map then map else
-        try SemanticMap.add semantic { doit = (fun q man flow -> Domain.ask (find_wirings semantic Domain.wirings) q man flow) } map
-        with Not_found -> Exceptions.panic "ask for %a not found" pp_semantic semantic
+    (* Iterate over all routes *)
+    get_routes Domain.routing_table |>
+    List.fold_left (fun map route ->
+        if RouteMap.mem route map then
+          map
+        else
+          let domains = resolve_route route Domain.routing_table in
+          RouteMap.add route { doit = (fun q man flow -> Domain.ask domains q man flow) } map
       ) map
 
   
-  let ask : type r. ?semantic:semantic -> (t,r) query -> (t,t) man -> t flow -> r =
-    fun ?(semantic=any_semantic) query man flow ->
-    let f = SemanticMap.find semantic ask_map in
+  let ask : type r. ?route:route -> (t,r) query -> (t,t) man -> t flow -> r =
+    fun ?(route=toplevel) query man flow ->
+    let f = RouteMap.find route ask_map in
     match f.doit query man flow with
     | None -> raise Not_found
     | Some r -> r
-
 
 
 end

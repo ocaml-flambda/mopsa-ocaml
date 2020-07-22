@@ -32,7 +32,6 @@ module Domain =
 struct
 
   include GenStatelessDomainId(struct let name = "stubs.iterators.fallback" end)
-  let dependencies = []
   let alarms = []
 
   let init prog man flow = flow
@@ -100,7 +99,7 @@ struct
        domains, that generally do a pattern matching based on the
        *original* AST, not the evaluated one *)
     | E_stub_quantified_formula _ ->
-      Rewrite.return_singleton exp flow |>
+      Eval.singleton exp flow |>
       OptionExt.return
 
     | _ -> None

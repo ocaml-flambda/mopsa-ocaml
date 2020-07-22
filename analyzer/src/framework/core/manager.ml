@@ -33,8 +33,8 @@ open Post
 open Log
 open Context
 open Cases
-open Semantic
-
+open Route
+open Query
 
 (*==========================================================================*)
 (**                             {2 Managers}                                *)
@@ -51,10 +51,10 @@ type ('a, 't) man = {
   set : 't -> 'a -> 'a;
 
   (* Toplevel transfer functions *)
-  exec : stmt -> ?semantic:semantic -> 'a flow -> 'a flow;
-  post : stmt -> ?semantic:semantic -> 'a flow -> 'a post;
-  eval : expr -> ?semantic:semantic -> 'a flow -> 'a eval;
-  ask : 'r. ('a,'r) Query.query -> 'a flow -> 'r;
+  exec : ?route:route -> stmt -> 'a flow -> 'a flow;
+  post : ?route:route -> stmt -> 'a flow -> 'a post;
+  eval : ?route:route -> expr -> 'a flow -> 'a eval;
+  ask : 'r. ?route:route -> ('a,'r) query -> 'a flow -> 'r;
 
   (* Accessors to the domain's logs *)
   get_log : log -> log;
@@ -85,14 +85,14 @@ let map_env (tk:token) (f:'t -> 't) (man:('a,'t) man) (flow:'a flow) : 'a flow =
 
 
 let assume
-    cond ?(semantic=any_semantic)
+    cond ?(route=toplevel)
     ~fthen ~felse
     ?(negate=mk_not cond cond.erange)
     man flow
   =
-  let then_post = man.post ~semantic (mk_assume cond cond.erange) flow in
+  let then_post = man.post ~route (mk_assume cond cond.erange) flow in
   let flow = Flow.set_ctx (Cases.get_ctx then_post) flow in
-  let else_post = man.post ~semantic (mk_assume negate negate.erange) flow in
+  let else_post = man.post ~route (mk_assume negate negate.erange) flow in
 
   let then_res = then_post >>$? fun () then_flow ->
     if man.lattice.is_bottom (Flow.get T_cur man.lattice then_flow)
@@ -114,14 +114,14 @@ let assume
 
 
 let assume_flow
-    ?(semantic=any_semantic) cond
+    ?(route=toplevel) cond
     ~fthen ~felse
-    ?(negate=mk_not)
+    ?(negate=mk_not cond cond.erange)
     man flow
   =
-  let then_flow = man.exec ~semantic (mk_assume cond cond.erange) flow in
+  let then_flow = man.exec ~route (mk_assume cond cond.erange) flow in
   let flow = Flow.set_ctx (Flow.get_ctx then_flow) flow in
-  let else_flow = man.exec ~semantic (mk_assume (negate cond cond.erange) cond.erange) flow in
+  let else_flow = man.exec ~route (mk_assume negate cond.erange) flow in
 
   match man.lattice.is_bottom (Flow.get T_cur man.lattice then_flow),
         man.lattice.is_bottom (Flow.get T_cur man.lattice else_flow)
@@ -138,7 +138,7 @@ let assume_flow
 
 let switch
     (cases : (expr list * ('a Flow.flow -> ('a,'r) cases)) list)
-    ?(semantic = any_semantic)
+    ?(route = toplevel)
     man flow
   : ('a,'r) cases
   =
@@ -147,7 +147,7 @@ let switch
     | [] -> f acc
     | x :: tl ->
       let s = mk_assume x x.erange in
-      man.post ~semantic s acc >>$ fun _ acc' ->
+      man.post ~route s acc >>$ fun _ acc' ->
       if Flow.get T_cur man.lattice acc' |> man.lattice.is_bottom then
         Cases.empty_singleton acc'
       else
@@ -185,7 +185,7 @@ let exec_stmt_on_all_flows stmt man flow =
 let apply_cleaners block man flow =
   let exec stmt flow =
     if !Cases.opt_clean_cur_only then
-      man.exec ~semantic:any_semantic stmt flow
+      man.exec stmt flow
     else
       exec_stmt_on_all_flows stmt man flow
   in
@@ -220,3 +220,30 @@ let env_exec (f:'a flow -> 'a post) ctx (man:('a,'t) man) (a:'a) : 'a =
 let sub_env_exec (f:'a flow -> 'a post) ctx (man:('a,'t) man) (sman:('a,'s) stack_man) (a:'t) (s:'s) : 't * 's =
   let aa = env_exec f ctx man (man.lattice.top |> man.set a |> sman.set_sub s) in
   man.get aa, sman.get_sub aa
+
+
+(** Resolve route [Below] to [BelowOf domain]. This is necessary
+    because the toplevel domain resolve absolute routes only. *)
+let resolve_below_alias domain man =
+  { man with
+    exec = (fun ?(route=toplevel) stmt flow ->
+        match route with
+        | Below -> man.exec ~route:(BelowOf domain) stmt flow
+        | _ -> man.exec ~route stmt flow
+      );
+    post = (fun ?(route=toplevel) stmt flow ->
+        match route with
+        | Below -> man.post ~route:(BelowOf domain) stmt flow
+        | _ -> man.post ~route stmt flow
+      );
+    eval = (fun ?(route=toplevel) exp flow ->
+        match route with
+        | Below -> man.eval ~route:(BelowOf domain) exp flow
+        | _ -> man.eval ~route exp flow
+      );
+    ask = (fun ?(route=toplevel) query flow ->
+        match route with
+        | Below -> man.ask ~route:(BelowOf domain) query flow
+        | _ -> man.ask ~route query flow
+      );
+  }

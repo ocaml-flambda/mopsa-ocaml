@@ -44,15 +44,13 @@ struct
 
   let name = C1.name ^ " ; " ^ C2.name
 
-  let nodes = C1.nodes @ C2.nodes
+  let domains = C1.domains @ C2.domains
 
-  let dependencies = C1.dependencies @ C2.dependencies
-
-  let wirings =
+  let routing_table =
     List.fold_left
-      (fun acc sem1 -> add_wirings sem1 C2.nodes acc)
-      (join_wirings C1.wirings C2.wirings)
-      C1.dependencies
+      (fun acc d1 -> add_routes (BelowOf d1) C2.domains acc)
+      (join_routing_table C1.routing_table C2.routing_table)
+      C1.domains
 
   let alarms = C1.alarms @ C2.alarms |> List.sort_uniq compare
 
@@ -111,8 +109,8 @@ struct
 
   (** Execution of statements *)
   let exec targets =
-    match sat_targets ~targets ~nodes:C1.nodes,
-          sat_targets ~targets ~nodes:C2.nodes
+    match sat_targets ~targets ~domains:C1.domains,
+          sat_targets ~targets ~domains:C2.domains
     with
     | false, false ->
       (* Both domains do not provide an [exec] for such targets *)
@@ -145,8 +143,8 @@ struct
 
   (** Evaluation of expressions *)
   let eval targets =
-    match sat_targets ~targets ~nodes:C1.nodes,
-          sat_targets ~targets ~nodes:C2.nodes
+    match sat_targets ~targets ~domains:C1.domains,
+          sat_targets ~targets ~domains:C2.domains
     with
     | false, false ->
       (* Both domains do not provide an [eval] for such targets *)
@@ -176,8 +174,8 @@ struct
 
   (** Query handler *)
   let ask targets =
-    match sat_targets ~targets ~nodes:C1.nodes,
-          sat_targets ~targets ~nodes:C2.nodes
+    match sat_targets ~targets ~domains:C1.domains,
+          sat_targets ~targets ~domains:C2.domains
     with
     | false, false -> raise Not_found
 

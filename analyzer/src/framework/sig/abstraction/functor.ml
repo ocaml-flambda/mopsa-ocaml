@@ -29,7 +29,6 @@ open Domain
 module type DOMAIN_FUNCTOR =
 sig
   val name : string
-  val dependencies : semantic list
   module Functor : functor(D:DOMAIN) -> DOMAIN
 end
 
@@ -40,14 +39,23 @@ end
 (**                          {2 Registration}                               *)
 (*==========================================================================*)
 
-(** Module to automatically log statements of a functor *)
-module AutoLogger(F:DOMAIN_FUNCTOR) : DOMAIN_FUNCTOR =
+(** Instrument transfer functions with some useful pre/post processing *)
+module Instrument(F:DOMAIN_FUNCTOR) : DOMAIN_FUNCTOR =
 struct
+
   include F
+
   module Functor(D:DOMAIN) =
   struct
+
     include D
+
+    let init prog man flow =
+      let man = resolve_below_alias D.name man in
+      D.init prog man flow
+
     let exec stmt man flow =
+      let man = resolve_below_alias D.name man in 
       D.exec stmt man flow |>
       OptionExt.lift @@ fun res ->
       Cases.map_log (fun log ->
@@ -55,6 +63,15 @@ struct
             man.get_log log |> Log.add_stmt_to_log stmt
           ) log
         ) res
+
+  let eval exp man flow =
+    let man = resolve_below_alias D.name man in
+    D.eval exp man flow
+
+  let ask query man flow =
+    let man = resolve_below_alias D.name man in
+    D.ask query man flow
+  
   end
 end
 
@@ -63,7 +80,7 @@ let functors : (module DOMAIN_FUNCTOR) list ref = ref []
 
 let register_domain_functor f =
   let module F = (val f : DOMAIN_FUNCTOR) in
-  let module FF = AutoLogger(F) in
+  let module FF = Instrument(F) in
   functors := (module FF) :: !functors
 
 let find_domain_functor name =

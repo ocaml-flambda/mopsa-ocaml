@@ -53,8 +53,6 @@ struct
       let name = "c.iterators.interproc"
     end)
 
-  let dependencies = []
-
   let alarms = []
 
 
@@ -145,7 +143,7 @@ struct
       let flow = set_env T_cur empty man flow in
       let ret =
         (* Evaluate arguments *)
-        bind_list args (man.eval ~semantic:any_semantic) flow >>$ fun args flow ->
+        bind_list args man.eval flow >>$ fun args flow ->
         (* We don't support recursive functions yet! *)
         if is_recursive_call fundec flow then (
           Soundness.warn_at range "ignoring recursive call of function %s in %a" fundec.c_func_org_name pp_range range;
@@ -213,7 +211,6 @@ struct
 
     | E_call({ ekind = E_c_function f}, args) ->
       eval_call f args exp.erange man flow |>
-      Rewrite.return_eval |>
       OptionExt.return
 
     | E_call(f, args) ->
@@ -222,7 +219,6 @@ struct
       begin match ff with
         | P_fun f ->
           eval_call f args exp.erange man flow |>
-          Rewrite.return_eval |>
           OptionExt.return
 
         | _ ->
@@ -231,11 +227,10 @@ struct
             pp_expr f
           ;
           if is_c_void_type exp.etyp then
-            Rewrite.empty_singleton flow |>
+            Eval.singleton (mk_unit exp.erange) flow |>
             OptionExt.return
           else
             man.eval (mk_top exp.etyp exp.erange) flow |>
-            Rewrite.return_eval |>
             OptionExt.return
       end
 

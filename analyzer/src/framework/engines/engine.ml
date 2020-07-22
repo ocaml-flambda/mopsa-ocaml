@@ -31,11 +31,11 @@ sig
 
   val init : program -> t flow
 
-  val exec : stmt -> ?semantic:semantic -> t flow -> t flow
+  val exec : ?route:route -> stmt -> t flow -> t flow
 
-  val eval : expr -> ?semantic:semantic -> t flow -> t eval
+  val eval : ?route:route -> expr -> t flow -> t eval
 
-  val ask : (t,'r) query -> t flow -> 'r
+  val ask : ?route:route -> (t,'r) query -> t flow -> 'r
 
   val man : (t, t) man
 

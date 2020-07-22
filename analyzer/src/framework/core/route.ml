@@ -19,47 +19,66 @@
 (*                                                                          *)
 (****************************************************************************)
 
-
-(** Semantic routes *)
-
 open Semantic
+
+type domain = string
+
+type route =
+  | Below
+  | BelowOf of domain
+  | Semantic of semantic
+
+let compare_route r1 r2 =
+  match r1, r2 with
+  | Below, Below -> 0
+  | BelowOf dom1, BelowOf dom2 -> String.compare dom1 dom2
+  | Semantic sem1, Semantic sem2 -> String.compare sem1 sem2
+  | _ -> compare r1 r2
+
+let pp_route fmt = function
+  | Below        -> Format.fprintf fmt "below"
+  | BelowOf dom  -> Format.fprintf fmt "below(%s)" dom
+  | Semantic sem -> pp_semantic fmt sem
+
+
+let toplevel = Semantic toplevel_semantic
 
 module Map =
   MapExt.Make
     (struct
-      type t = semantic
-      let compare = compare_semantic
+      type t = route
+      let compare = compare_route
     end)
 
-type domain = string
+type routing_table = domain list Map.t
 
-type wirings = domain list Map.t
+let empty_routing_table = Map.empty
 
-let empty_wirings = Map.empty
+let resolve_route route map = Map.find route map
 
-let find_wirings semantic map = Map.find semantic map
+let add_route selector domain map =
+  let old = try Map.find selector map with Not_found -> [] in
+  Map.add selector (domain :: old) map
 
-let add_wiring semantic domain map =
-  let old = try Map.find semantic map with Not_found -> [] in
-  Map.add semantic (domain :: old) map
+let add_routes selector domains map =
+  let old = try Map.find selector map with Not_found -> [] in
+  Map.add selector (domains @ old) map
 
-let add_wirings semantic domains map =
-  let old = try Map.find semantic map with Not_found -> [] in
-  Map.add semantic (domains @ old) map
+let get_routes map = Map.bindings map |> List.map fst
 
-let join_wirings m1 m2 =
+let join_routing_table m1 m2 =
   Map.map2zo
     (fun sem1 domains1 -> domains1)
     (fun sem2 domains2 -> domains2)
     (fun sem domains1 domains2 -> domains1 @ domains2)
     m1 m2
 
-let pp_wirinings fmt m =
+let pp_routing_table fmt m =
   Format.(fprintf fmt "@[<v>%a@]"
             (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-               (fun fmt (semantic,domains) ->
+               (fun fmt (route,domains) ->
                   fprintf fmt "%a -> {%a}"
-                    pp_semantic semantic
+                    pp_route route
                     (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_print_string) domains
                )
             ) (Map.bindings m)

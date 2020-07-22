@@ -49,7 +49,7 @@ let vtyp  v = v.vtyp
 let vmode v = v.vmode
 let vsemantic v = v.vsemantic
 
-let mkv name kind ?(mode=STRONG) ?(semantic=any_semantic) typ =
+let mkv name kind ?(mode=STRONG) ?(semantic=toplevel_semantic) typ =
   {vname = name; vkind = kind; vtyp = typ; vmode = mode; vsemantic = semantic }
 
 

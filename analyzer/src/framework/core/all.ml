@@ -71,10 +71,6 @@ let bind_list_opt = Cases.bind_list_opt
 module Eval = Eval
 type 'a eval = 'a Eval.eval
 
-module Rewrite = Rewrite
-type expr_rewrite = Rewrite.expr_rewrite
-type 'a rewrite = 'a Rewrite.rewrite
-
 module Flow = Flow
 type 'a flow = 'a Flow.flow
 
@@ -90,13 +86,13 @@ include Token
 
 include Semantic
 
+include Route
+
 include Lattice
 
 include Id
 
 include Manager
-
-include Wiring
 
 module Soundness = Soundness
 

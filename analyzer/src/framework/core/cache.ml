@@ -22,12 +22,12 @@
 (** Cache of post-conditions and evaluations *)
 
 open Flow
-open Rewrite
+open Eval
 open Post
 open Manager
 open Ast.Expr
 open Ast.Stmt
-open Semantic
+open Route
 
 let debug fmt = Debug.debug ~channel:"framework.core.cache" fmt
 
@@ -101,9 +101,9 @@ struct
 
   module ExecCache = Queue(
     struct
-      type t = semantic * stmt * Domain.t Token.TokenMap.t * Alarm.AlarmSet.t
-      let equal (semantic1,stmt1,tmap1,alarms1) (semantic2,stmt2,tmap2,alarms2) =
-        compare_semantic semantic1 semantic2 = 0 &&
+      type t = route * stmt * Domain.t Token.TokenMap.t * Alarm.AlarmSet.t
+      let equal (route1,stmt1,tmap1,alarms1) (route2,stmt2,tmap2,alarms2) =
+        compare_route route1 route2 = 0 &&
         stmt1 == stmt2 &&
         tmap1 == tmap2 &&
         alarms1 == alarms2
@@ -136,31 +136,31 @@ struct
 
   module EvalCache = Queue(
     struct
-      type t = semantic * expr * Domain.t Token.TokenMap.t * Alarm.AlarmSet.t
-      let equal (semantic1,exp1,tmap1,alarms1) (semantic2,exp2,tmap2,alarms2) =
-        compare_semantic semantic1 semantic2 = 0 &&
+      type t = route * expr * Domain.t Token.TokenMap.t * Alarm.AlarmSet.t
+      let equal (route1,exp1,tmap1,alarms1) (route2,exp2,tmap2,alarms2) =
+        compare_route route1 route2 = 0 &&
         exp1 == exp2 &&
         tmap1 == tmap2 &&
         alarms1 == alarms2
     end
     )
 
-  let eval_cache : Domain.t rewrite option EvalCache.t = EvalCache.create !opt_cache
+  let eval_cache : Domain.t eval option EvalCache.t = EvalCache.create !opt_cache
 
-  let eval f semantic exp man flow =
+  let eval f route exp man flow =
     if !opt_cache = 0
     then f exp man flow
     else try
         let tmap = Flow.get_token_map flow in
         let alarms = Flow.get_alarms flow in
-        let evls = EvalCache.find (semantic,exp,tmap,alarms) eval_cache in
+        let evls = EvalCache.find (route,exp,tmap,alarms) eval_cache in
         OptionExt.lift (fun evl ->
             let ctx = Context.get_most_recent (Cases.get_ctx evl) (Flow.get_ctx flow) in
             Cases.set_ctx ctx evl
           ) evls
       with Not_found ->
         let evals = f exp man flow in
-        EvalCache.add (semantic, exp, Flow.get_token_map flow, Flow.get_alarms flow) evals eval_cache;
+        EvalCache.add (route, exp, Flow.get_token_map flow, Flow.get_alarms flow) evals eval_cache;
         evals
 
 end

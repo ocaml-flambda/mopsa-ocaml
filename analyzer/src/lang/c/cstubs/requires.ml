@@ -44,8 +44,6 @@ struct
       let name = "c.cstubs.requires"
     end)
 
-  let dependencies = []
-
   let alarms = [ A_c_out_of_bound;
                  A_c_null_deref;
                  A_c_use_after_free;

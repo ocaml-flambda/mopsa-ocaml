@@ -84,8 +84,6 @@ struct
     }
 
 
-  let dependencies = []
-
   let alarms = []
 
 
@@ -531,11 +529,9 @@ struct
     match ekind exp with
     | E_c_builtin_call("exit", [code]) ->
       eval_exit "exit" code exp.erange man flow |>
-      Rewrite.return_eval |>
       OptionExt.return
     | E_c_builtin_call("quick_exit", [code]) ->
       eval_exit "quick_exit" code exp.erange man flow |>
-      Rewrite.return_eval |>
       OptionExt.return
 
     | _ -> None

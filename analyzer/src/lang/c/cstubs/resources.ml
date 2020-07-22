@@ -42,10 +42,7 @@ struct
       let name = "c.cstubs.resources"
     end)
 
-  let below = mk_semantic "below" ~domain:name
-  let scalar = mk_semantic "scalar" ~domain:name
-
-  let dependencies= [ below; scalar ]
+  let dependencies= []
 
   let alarms = [Common.Alarms.A_c_double_free]
 
@@ -87,28 +84,28 @@ struct
   let exec_stub_rename_resource addr1 addr2 stmt man flow =
     let bytes1 = mk_bytes_var addr1 in
     let bytes2 = mk_bytes_var addr2 in
-    man.exec ~semantic:scalar (mk_rename_var bytes1 bytes2 stmt.srange) flow |>
-    man.exec ~semantic:below stmt |>
+    man.exec (mk_rename_var bytes1 bytes2 stmt.srange) flow |>
+    man.exec ~route:Below stmt |>
     Post.return
 
   let exec_stub_remove_resource addr stmt man flow =
     let bytes = mk_bytes_var addr in
-    man.exec ~semantic:scalar (mk_remove_var bytes stmt.srange) flow |>
-    man.exec ~semantic:below stmt |>
+    man.exec (mk_remove_var bytes stmt.srange) flow |>
+    man.exec ~route:Below stmt |>
     Post.return
 
   let exec_stub_expand_resource addr addrl stmt man flow =
     let bytes = mk_bytes_var addr in
     let bytesl = List.map mk_bytes_var addrl in
-    man.exec ~semantic:scalar (mk_expand_var bytes bytesl stmt.srange) flow |>
-    man.exec ~semantic:below stmt |>
+    man.exec (mk_expand_var bytes bytesl stmt.srange) flow |>
+    man.exec ~route:Below stmt |>
     Post.return
 
   let exec_stub_fold_resource addr addrl stmt man flow =
     let bytes = mk_bytes_var addr in
     let bytesl = List.map mk_bytes_var addrl in
-    man.exec ~semantic:scalar (mk_fold_var bytes bytesl stmt.srange) flow |>
-    man.exec ~semantic:below stmt |>
+    man.exec (mk_fold_var bytes bytesl stmt.srange) flow |>
+    man.exec ~route:Below stmt |>
     Post.return
 
   let is_resouce_addr addr =
@@ -196,12 +193,10 @@ struct
     match ekind exp with
     | E_stub_alloc res ->
       eval_stub_alloc res exp.erange man flow |>
-      Rewrite.return_eval |>
       OptionExt.return
 
     | E_stub_resource_mem(p, res) ->
       eval_stub_resource_mem p res exp.erange man flow |>
-      Rewrite.return_eval |>
       OptionExt.return
 
     | _ -> None

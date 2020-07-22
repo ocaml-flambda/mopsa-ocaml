@@ -56,19 +56,32 @@ let debug fmt = Debug.debug ~channel:"framework.config.abstraction.parser" fmt
 
 let rec parse_domain json : domain =
   json |> visit {
-    leaf = (fun name ->
-        try D_stacked(find_stacked_domain name)     with Not_found ->
-        try D_domain(find_standard_domain name)     with Not_found ->
-        try D_stateless(find_stateless_domain name) with Not_found ->
-        try D_simplified(find_simplified_domain name)
-        with Not_found -> Exceptions.panic "Domain '%s' not found" name
+    leaf = (fun semantic name ->
+        let d =
+          try D_stacked(find_stacked_domain name)     with Not_found ->
+          try D_domain(find_standard_domain name)     with Not_found ->
+          try D_stateless(find_stateless_domain name) with Not_found ->
+          try D_simplified(find_simplified_domain name)
+          with Not_found -> Exceptions.panic "Domain '%s' not found" name
+        in
+        mk_domain d ~semantic
       );
-    sequence = (fun jsons -> D_sequence (List.map parse_domain jsons));
-    compose = (fun jsons -> D_compose (List.map parse_domain jsons));
-    product = (fun jsons reductions -> D_product (List.map parse_domain jsons, List.map parse_domain_reduction reductions));
-    nonrel = (fun json -> D_nonrel(parse_value json));
-    apply = (fun funct arg -> D_functor(parse_domain_functor funct, parse_domain arg));
-    union = (fun json -> assert false);
+    sequence = (fun semantic jsons ->
+        mk_domain (D_sequence (List.map parse_domain jsons)) ~semantic
+      );
+    compose = (fun semantic jsons ->
+        mk_domain (D_compose (List.map parse_domain jsons)) ~semantic
+      );
+    product = (fun semantic jsons reductions ->
+        mk_domain (D_product (List.map parse_domain jsons, List.map parse_domain_reduction reductions)) ~semantic
+      );
+    nonrel = (fun semantic json ->
+        mk_domain (D_nonrel(parse_value json)) ~semantic
+      );
+    apply = (fun semantic funct arg ->
+        mk_domain (D_functor(parse_domain_functor funct, parse_domain arg)) ~semantic
+      );
+    union = (fun semantic json -> assert false);
   }
 
 and parse_domain_reduction (name:string) : domain_reduction =
@@ -85,14 +98,14 @@ and parse_domain_functor name : domain_functor =
 
 and parse_value json : value =
   json |> visit {
-    leaf = (fun name -> try V_value (find_value_abstraction name) with Not_found -> Exceptions.panic "Value '%s' not found" name);
-    union = (fun jsons -> V_union (List.map parse_value jsons));
-    product = (fun jsons reductions -> V_product (List.map parse_value jsons, List.map parse_value_reduction reductions));
-    apply = (fun funct arg -> V_functor(parse_value_functor funct, parse_value arg));
+    leaf = (fun _ name -> try V_value (find_value_abstraction name) with Not_found -> Exceptions.panic "Value '%s' not found" name);
+    union = (fun _ jsons -> V_union (List.map parse_value jsons));
+    product = (fun _ jsons reductions -> V_product (List.map parse_value jsons, List.map parse_value_reduction reductions));
+    apply = (fun _ funct arg -> V_functor(parse_value_functor funct, parse_value arg));
 
-    sequence = (fun jsons -> assert false);
-    compose = (fun jsons -> assert false);
-    nonrel = (fun json -> assert false);
+    sequence = (fun _ jsons -> assert false);
+    compose = (fun _ jsons -> assert false);
+    nonrel = (fun _ json -> assert false);
   }
 
 and parse_value_reduction (name:string) : value_reduction =
@@ -150,13 +163,13 @@ let domains file : string list =
     let json = Yojson.Basic.from_file file in
     let domain = json |> member "domain" in
     let rec name_visitor = Visitor.{
-        leaf = (fun name -> [name]);
-        sequence = (fun l -> List.map get_names l |> List.flatten);
-        nonrel = (fun v -> get_names v);
-        apply = (fun f d -> f :: get_names d);
-        compose = (fun l -> List.map get_names l |> List.flatten);
-        product = (fun l r -> List.map get_names l |> List.flatten);
-        union = (fun l -> List.map get_names l |> List.flatten);
+        leaf = (fun _ name -> [name]);
+        sequence = (fun _ l -> List.map get_names l |> List.flatten);
+        nonrel = (fun _ v -> get_names v);
+        apply = (fun _ f d -> f :: get_names d);
+        compose = (fun _ l -> List.map get_names l |> List.flatten);
+        product = (fun _ l r -> List.map get_names l |> List.flatten);
+        union = (fun _ l -> List.map get_names l |> List.flatten);
     }
     and get_names json = Visitor.visit name_visitor json in
     get_names domain

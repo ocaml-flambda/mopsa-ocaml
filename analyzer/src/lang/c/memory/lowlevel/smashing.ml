@@ -70,9 +70,7 @@ struct
 
   let name = "c.memory.lowlevel.smashing"
 
-  let scalar = mk_semantic "C/Scalar" ~domain:name
-
-  let dependencies = [ scalar ]
+  let scalar = Semantic "C/Scalar"
 
   let alarms = []
 
@@ -293,7 +291,7 @@ struct
         (base_uniq_name s.base)
         pp_styp s.styp
     in
-    mkv uname (V_c_smash (s)) (typ_of_styp s.styp) ~mode:WEAK
+    mkv uname (V_c_smash (s)) (typ_of_styp s.styp) ~mode:WEAK ~semantic:"C/Scalar"
 
 
   let mk_smash_expr s ?(typ=None) ?(mode=None) range =
@@ -315,32 +313,32 @@ struct
   let add_smash base styp range man flow =
     man.post
       (mk_add_var (mk_smash_var {base;styp}) range)
-      ~semantic:scalar flow
+      ~route:scalar flow
 
   let remove_smash base styp range man flow =
     man.post
       (mk_remove_var (mk_smash_var {base;styp}) range)
-      ~semantic:scalar flow
+      ~route:scalar flow
 
   let rename_smash base1 base2 styp range man flow =
     man.post
       (mk_rename_var (mk_smash_var {base=base1;styp}) (mk_smash_var {base=base2;styp}) range)
-      ~semantic:scalar flow
+      ~route:scalar flow
 
   let forget_smash base styp range man flow =
     man.post
       (mk_forget_var (mk_smash_var {base;styp}) range)
-      ~semantic:scalar flow
+      ~route:scalar flow
 
   let expand_smash base basel styp range man flow =
     man.post
       (mk_expand_var (mk_smash_var {base;styp}) (List.map (fun b -> mk_smash_var {base=b;styp}) basel) range)
-      ~semantic:scalar flow
+      ~route:scalar flow
 
   let fold_smash base basel styp range man flow =
     man.post
       (mk_fold_var (mk_smash_var {base;styp}) (List.map (fun b -> mk_smash_var {base=b;styp}) basel) range)
-      ~semantic:scalar flow
+      ~route:scalar flow
 
 
   (** {2 Offset of the first uninitialized element} *)
@@ -377,36 +375,36 @@ struct
   let add_uninit base range man flow =
     man.post
       (mk_add_var (mk_uninit_var base) range)
-      ~semantic:scalar flow
+      ~route:scalar flow
 
   let set_uninit_to_base_size base range man flow =
     eval_base_size base range man flow >>$ fun size flow ->
-    man.post (mk_assign (mk_uninit_expr base range) size range) ~semantic:scalar flow
+    man.post (mk_assign (mk_uninit_expr base range) size range) ~route:scalar flow
 
   let remove_uninit base range man flow =
     man.post
       (mk_remove_var (mk_uninit_var base) range)
-      ~semantic:scalar flow
+      ~route:scalar flow
 
   let rename_uninit base1 base2 range man flow =
     man.post
       (mk_rename_var (mk_uninit_var base1) (mk_uninit_var base2) range)
-      ~semantic:scalar flow
+      ~route:scalar flow
 
   let forget_uninit base range man flow =
     man.post
       (mk_forget_var (mk_uninit_var base) range)
-      ~semantic:scalar flow
+      ~route:scalar flow
 
   let expand_uninit base basel range man flow =
     man.post
       (mk_expand_var (mk_uninit_var base) (List.map mk_uninit_var basel) range)
-      ~semantic:scalar flow
+      ~route:scalar flow
 
   let fold_uninit base basel range man flow =
     man.post
       (mk_fold_var (mk_uninit_var base) (List.map mk_uninit_var basel) range)
-      ~semantic:scalar flow
+      ~route:scalar flow
 
   
   (** {2 Unification} *)
@@ -415,12 +413,12 @@ struct
   
   (** [is_aligned o n man flow] checks whether the value of an
       expression [o] is aligned w.r.t. type [t] *)
-  let is_aligned ?(semantic=any_semantic) e t man flow =
+  let is_aligned ?(route=toplevel) e t man flow =
     let s = sizeof_type t in
     if is_c_expr_equals_z e Z.zero then true else
     if Z.(s = one) then true
     else
-      man.eval ~semantic e flow |>
+      man.eval ~route e flow |>
       Cases.for_all_some (fun ee flow ->
           (* Compute the step-interval of ee *)
           let _, c = man.ask (Universal.Numeric.Common.Q_int_congr_interval ee) flow in
@@ -434,7 +432,7 @@ struct
        bases where the uninit offset is not aligned w.r.t. to
        the type of the smash *)
     if Init.is_partial init
-    && not (is_aligned (mk_uninit_expr s.base range) (typ_of_styp s.styp) ~semantic:scalar man flow)
+    && not (is_aligned (mk_uninit_expr s.base range) (typ_of_styp s.styp) ~route:scalar man flow)
     then
       Post.return flow
     else
@@ -463,7 +461,7 @@ struct
            | Int _ when Z.(sizeof_styp s.styp = sizeof_styp styp') ->
              let e = wrap_expr esmash' (rangeof_styp s.styp) range in
              let cond = eq esmash_strong e range in
-             Post.bind (man.post (mk_assume cond range) ~semantic:scalar) acc
+             Post.bind (man.post (mk_assume cond range) ~route:scalar) acc
 
            (* Case #2 *)
            | Int C_unsigned_char ->
@@ -475,7 +473,7 @@ struct
              in
              let e = wrap_expr (sum (n-1)) (rangeof_styp s.styp) range in
              let cond = eq esmash_strong e range in
-             Post.bind (man.post (mk_assume cond range) ~semantic:scalar) acc
+             Post.bind (man.post (mk_assume cond range) ~route:scalar) acc
 
            (* Case #3 *)
            | Int _ when int_type = C_unsigned_char ->
@@ -485,7 +483,7 @@ struct
                if i = n then [] else
                  let e = _mod_ (div esmash' (mk_z Z.(of_int 2 ** Stdlib.(8 * i)) range) range) (mk_int 256 range) range in
                  let cond = eq esmash_strong e range in
-                 man.post (mk_assume cond range) ~semantic:scalar flow :: aux (i+1)
+                 man.post (mk_assume cond range) ~route:scalar flow :: aux (i+1)
              in
              aux 0 |>
              Post.join_list ~empty:(fun () -> Post.return flow)
@@ -511,7 +509,7 @@ struct
         Post.return flow
       else
         let flow = set_env T_cur (State.add s.base (Init.add s.styp init) a) man flow in
-        man.post (mk_add_var (mk_smash_var s) range) ~semantic:scalar flow >>$ fun () flow ->
+        man.post (mk_add_var (mk_smash_var s) range) ~route:scalar flow >>$ fun () flow ->
         if STypeSet.is_empty ts then
           Post.return flow
         else
@@ -550,7 +548,7 @@ struct
              (* Note that there is no need to add a smashes in order
                 to keep the values of the other flow *)
              let a,s = sub_env_exec (add_uninit base unify_range man) ctx man sman a s in
-             sub_env_exec (man.post (mk_assign (mk_uninit_expr base unify_range) zero unify_range) ~semantic:scalar) ctx man sman a s
+             sub_env_exec (man.post (mk_assign (mk_uninit_expr base unify_range) zero unify_range) ~route:scalar) ctx man sman a s
 
            (* The base becomes partially initialized from offset size(base) *)
            | Init.Full _, Init.None ->
@@ -813,18 +811,18 @@ struct
         fold_stypes (remove_smash base) (STypeSet.remove s.styp ts) range man flow >>$ fun () flow ->
         let flow = set_env T_cur (State.add base (Init.Full (STypeSet.singleton s.styp)) a) man flow in
         if STypeSet.mem s.styp ts then
-          man.post (mk_forget_var vsmash range) ~semantic:scalar flow
+          man.post (mk_forget_var vsmash range) ~route:scalar flow
         else
-          man.post (mk_add_var vsmash range) ~semantic:scalar flow
+          man.post (mk_add_var vsmash range) ~route:scalar flow
 
       | Init.Partial ts ->
         fold_stypes (remove_smash base) (STypeSet.remove s.styp ts) range man flow >>$ fun () flow ->
         let flow = set_env T_cur (State.add base (Init.Partial (STypeSet.singleton s.styp)) a) man flow in
         if STypeSet.mem s.styp ts then
-          man.post (mk_forget_var vsmash range) ~semantic:scalar flow
+          man.post (mk_forget_var vsmash range) ~route:scalar flow
         else
           let flow = set_env T_cur (State.add base (Init.Partial (STypeSet.singleton s.styp)) a) man flow in
-          man.post (mk_add_var vsmash range) ~semantic:scalar flow
+          man.post (mk_add_var vsmash range) ~route:scalar flow
 
 
   (** 𝕊⟦ ∀i ∈ [lo,hi]: forget( *(p + i) ) ⟧ *)
@@ -868,7 +866,7 @@ struct
           eval_base_size base range man flow >>$ fun size flow ->
           assume_num (eq min zero range)
             ~fthen:(fun flow ->
-                man.post (mk_add_var vsmash range) ~semantic:scalar flow >>$ fun () flow ->
+                man.post (mk_add_var vsmash range) ~route:scalar flow >>$ fun () flow ->
                 assume_num (eq max (sub size elm range) range)
                   ~fthen:(fun flow ->
                       (* Case #1 *)
@@ -880,14 +878,14 @@ struct
                       (* Case #2 *)
                       let init' = Init.Partial (STypeSet.singleton s.styp) in
                       set_env T_cur (State.add base init' a) man flow |>
-                      man.post (mk_add uninit range) ~semantic:scalar >>$ fun () flow ->
-                      man.post (mk_assign uninit (add max elm range) range) ~semantic:scalar flow
-                    ) ~semantic:scalar man flow
+                      man.post (mk_add uninit range) ~route:scalar >>$ fun () flow ->
+                      man.post (mk_assign uninit (add max elm range) range) ~route:scalar flow
+                    ) ~route:scalar man flow
               )
             ~felse:(fun flow ->
                 (* Case #3 *)
                 Post.return flow
-              )  ~semantic:scalar man flow
+              )  ~route:scalar man flow
         
 
       | Init.Full ts ->
@@ -897,18 +895,18 @@ struct
         fold_stypes (remove_smash base) (STypeSet.remove s.styp ts) range man flow >>$ fun () flow ->
         let flow = set_env T_cur (State.add base (Init.Full (STypeSet.singleton s.styp)) a) man flow in
         if STypeSet.mem s.styp ts then
-          man.post (mk_forget_var vsmash range) ~semantic:scalar flow
+          man.post (mk_forget_var vsmash range) ~route:scalar flow
         else
-          man.post (mk_add_var vsmash range) ~semantic:scalar flow
+          man.post (mk_add_var vsmash range) ~route:scalar flow
 
       | Init.Partial ts ->
         fold_stypes (remove_smash base) (STypeSet.remove s.styp ts) range man flow >>$ fun () flow ->
         let flow = set_env T_cur (State.add base (Init.Partial (STypeSet.singleton s.styp)) a) man flow in
         begin if STypeSet.mem s.styp ts then
-            man.post (mk_forget_var vsmash range) ~semantic:scalar flow
+            man.post (mk_forget_var vsmash range) ~route:scalar flow
           else
             let flow = set_env T_cur (State.add base (Init.Partial (STypeSet.singleton s.styp)) a) man flow in
-            man.post (mk_add_var vsmash range) ~semantic:scalar flow
+            man.post (mk_add_var vsmash range) ~route:scalar flow
         end >>$ fun () flow ->
         if not (is_aligned offset lval.etyp man flow) then
           Post.return flow
@@ -944,13 +942,13 @@ struct
                     )
                   ~felse:(fun flow ->
                       (* Case #2 *)
-                      man.post (mk_assign uninit (add max elm range) range) ~semantic:scalar flow
-                    ) ~semantic:scalar man flow
+                      man.post (mk_assign uninit (add max elm range) range) ~route:scalar flow
+                    ) ~route:scalar man flow
               )
             ~felse:(fun flow ->
                 (* Case #3 *)
                 Post.return flow
-              )  ~semantic:scalar man flow
+              )  ~route:scalar man flow
 
 
 
@@ -977,7 +975,7 @@ struct
         | Init.Bot -> Post.return flow
 
         | Init.None ->
-          man.post (mk_add_var vsmash range) ~semantic:scalar flow >>$ fun () flow ->
+          man.post (mk_add_var vsmash range) ~route:scalar flow >>$ fun () flow ->
           (* If this is the first time we initialize the base, we look at two cases:
 
              Case #1: begin intialization
@@ -997,15 +995,15 @@ struct
                 (* Case #1 *)
                 let init = Init.Partial (STypeSet.singleton s.styp) in
                 let flow = set_env T_cur (State.add base init a) man flow in
-                man.post (mk_add_var vsmash range) ~semantic:scalar flow >>$ fun () flow ->
-                man.post (mk_add uninit range) ~semantic:scalar flow >>$ fun () flow ->
-                man.post (mk_assign (strongify_var_expr esmash) rval range) ~semantic:scalar flow >>$ fun () flow ->
-                man.post (mk_assign uninit elm range) ~semantic:scalar flow
+                man.post (mk_add_var vsmash range) ~route:scalar flow >>$ fun () flow ->
+                man.post (mk_add uninit range) ~route:scalar flow >>$ fun () flow ->
+                man.post (mk_assign (strongify_var_expr esmash) rval range) ~route:scalar flow >>$ fun () flow ->
+                man.post (mk_assign uninit elm range) ~route:scalar flow
               )
             ~felse:(fun flow ->
                 (* Case #2 *)
                 Post.return flow
-              ) ~semantic:scalar man flow
+              ) ~route:scalar man flow
 
 
         | Init.Full ts ->
@@ -1015,11 +1013,11 @@ struct
           if not (STypeSet.mem s.styp ts) then
             (* If this is the first time we access this type, we add
                the corresponding smash *)
-            man.post (mk_add_var vsmash range) ~semantic:scalar flow
+            man.post (mk_add_var vsmash range) ~route:scalar flow
           else
             (* If we have already a smash for this type, we update it
                with a weak update *)
-            man.post (mk_assign esmash rval range) ~semantic:scalar flow
+            man.post (mk_assign esmash rval range) ~route:scalar flow
 
         | Init.Partial ts ->
           (* Destroy existing incompatible smashes *)
@@ -1028,11 +1026,11 @@ struct
           if not (STypeSet.mem s.styp ts) then
             (* If this is the first time we access this type, we add
                the corresponding smash *)
-            man.post (mk_add_var vsmash range) ~semantic:scalar flow
+            man.post (mk_add_var vsmash range) ~route:scalar flow
           else
             (* If we have already a smash for this type, we update it
                with a weak update *)
-            man.post (mk_assign esmash rval range) ~semantic:scalar flow >>$ fun () flow ->
+            man.post (mk_assign esmash rval range) ~route:scalar flow >>$ fun () flow ->
             (* To update where we are in the initialization, three cases are considered:
 
                Case #1: fully initialized
@@ -1059,21 +1057,21 @@ struct
                         (* Case #1 *)
                         let init = Init.Full (STypeSet.singleton s.styp) in
                         let flow = set_env T_cur (State.add base init a) man flow in
-                        man.post (mk_remove uninit range) ~semantic:scalar flow
+                        man.post (mk_remove uninit range) ~route:scalar flow
                       )
                     ~felse:(fun flow ->
                         (* Case #2 *)
                         let init = Init.Partial (STypeSet.singleton s.styp) in
                         let flow = set_env T_cur (State.add base init a) man flow in
-                        man.post (mk_assign uninit (add uninit elm range) range) ~semantic:scalar flow
-                      ) ~semantic:scalar man flow
+                        man.post (mk_assign uninit (add uninit elm range) range) ~route:scalar flow
+                      ) ~route:scalar man flow
                 )
               ~felse:(fun flow ->
                   (* Case #3 *)
                   let init = Init.Partial (STypeSet.singleton s.styp) in
                   let flow = set_env T_cur (State.add base init a) man flow in
                   Post.return flow
-                ) ~semantic:scalar man flow
+                ) ~route:scalar man flow
 
 
   (** {2 Quantified tests transfer functions} *)
@@ -1117,12 +1115,12 @@ struct
               let smash = mk_smash_expr s ~typ:(Some t) ~mode:(Some STRONG) range in
               (* Add a cast if the type of the lvalue is different than the type of expression qe *)
               let smash = if compare_typ t qe.etyp = 0 then smash else mk_c_cast smash qe.etyp range in
-              man.post (mk_assume (mk_binop smash op e ~etyp:T_bool range) range) ~semantic:scalar flow
+              man.post (mk_assume (mk_binop smash op e ~etyp:T_bool range) range) ~route:scalar flow
             )
           ~felse:(fun flow ->
               (* Case #2 *)
               Post.return flow
-            ) ~semantic:scalar man flow
+            ) ~route:scalar man flow
         
 
       | Init.Full ts ->
@@ -1153,12 +1151,12 @@ struct
               let smash = mk_smash_expr s ~typ:(Some t) ~mode:(Some STRONG) range in
               (* Add a cast if the type of the lvalue is different than the type of expression qe *)
               let smash = if compare_typ t qe.etyp = 0 then smash else mk_c_cast smash qe.etyp range in
-              man.post (mk_assume (mk_binop smash op e ~etyp:T_bool range) range) ~semantic:scalar flow
+              man.post (mk_assume (mk_binop smash op e ~etyp:T_bool range) range) ~route:scalar flow
             )
           ~felse:(fun flow ->
               (* Case #2 *)
               Post.return flow
-            ) ~semantic:scalar man flow
+            ) ~route:scalar man flow
 
 
   (** 𝕊⟦ ∀i ∈ [lo,hi] : *(p + i) == *(q + i) ⟧ *)
@@ -1194,11 +1192,11 @@ struct
                 let smash = if compare_typ t qet = 0 then smash else mk_c_cast smash qet range in
                 let other_smash = mk_smash_expr other_s ~typ:(Some other_t) ~mode:(Some WEAK) range in
                 let other_smash = if compare_typ other_t other_qet = 0 then other_smash else mk_c_cast other_smash other_qet range in
-                man.post (mk_assume (eq smash other_smash range) range) ~semantic:scalar flow
+                man.post (mk_assume (eq smash other_smash range) range) ~route:scalar flow
               )
           ~felse:(fun flow ->
               Post.return flow
-            ) ~semantic:scalar man flow
+            ) ~route:scalar man flow
         in
         ensure_included base1 offset1 t1 qe1.etyp s1 base2 offset2 t2 qe2.etyp s2 range man flow >>$ fun () flow ->
         ensure_included base2 offset2 t2 qe2.etyp s2 base1 offset1 t1 qe1.etyp s1 range man flow
@@ -1314,7 +1312,7 @@ struct
           ~felse:(fun flow ->
               (* Case #1 *)
               Eval.singleton esmash flow
-            ) ~semantic:scalar man flow
+            ) ~route:scalar man flow
 
 
 
@@ -1323,7 +1321,6 @@ struct
     match ekind exp with
     | E_c_deref p when is_c_scalar_type exp.etyp ->
       eval_deref p exp.erange man flow |>
-      Rewrite.forward_eval ~semantic:scalar |>
       OptionExt.return
 
 

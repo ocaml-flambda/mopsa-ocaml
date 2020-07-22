@@ -8,7 +8,6 @@
 	    "universal.iterators.intraproc",
             "universal.iterators.interproc.inlining",
             "universal.iterators.unittest",
-            "universal.iterators.scalar",
 
 	    // Numeric abstraction
             {

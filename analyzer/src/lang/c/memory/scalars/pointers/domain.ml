@@ -58,8 +58,7 @@ struct
   let print fmt a =
     Format.fprintf fmt "pointers: %a@\n" Map.print a
 
-  let numeric = mk_semantic "U/Numeric" ~domain:name
-  let dependencies = [ numeric ]
+  let numeric = Semantic "U/Numeric"
 
   let alarms = [ A_c_invalid_pointer_compare;
                  A_c_invalid_pointer_sub ]
@@ -158,7 +157,7 @@ struct
       let () = Format.fprintf Format.str_formatter "offset(%s)" p.vname in
       Format.flush_str_formatter ()
     in
-    mkv name (V_c_ptr_offset p) T_int ~mode:p.vmode
+    mkv name (V_c_ptr_offset p) T_int ~mode:p.vmode ~semantic:"U/Numeric"
 
 
   (** Create the offset expression of a pointer *)
@@ -230,7 +229,7 @@ struct
     | None -> Post.return flow
     | Some (p,mode) ->
       if PointerSet.is_valid v && not (PointerSet.is_valid v')
-      then man.post ~semantic:numeric (mk_remove (mk_offset p mode range) range) flow
+      then man.post ~route:numeric (mk_remove (mk_offset p mode range) range) flow
       else Post.return flow
 
 
@@ -357,7 +356,6 @@ struct
         | tt -> mul (mk_z (sizeof_type tt) ~typ:t1 exp.erange) diff ~typ:t1 exp.erange
       in
       man.eval exp' flow |>
-      Rewrite.forward_eval ~semantic:numeric |>
       OptionExt.return
 
     (* 𝔼⟦ p1 - p2 ⟧ *)
@@ -366,17 +364,16 @@ struct
            is_c_pointer_type p2.etyp
       ->
       eval_diff p1 p2 exp.erange man flow |>
-      Rewrite.forward_eval ~semantic:numeric |>
       OptionExt.return
 
     | E_c_address_of lval ->
       begin match ekind @@ remove_casts lval with
         | E_var _ ->
-          Rewrite.return_singleton exp flow |>
+          Eval.singleton exp flow |>
           OptionExt.return
 
         | E_c_deref p ->
-          Rewrite.reval_singleton p flow |>
+          Eval.singleton p flow |>
           OptionExt.return
 
         | _ -> None
@@ -390,7 +387,7 @@ struct
 
   let remove_offset o mode range man flow =
     if mode = STRONG then
-      man.post ~semantic:numeric (mk_remove o range) flow
+      man.post ~route:numeric (mk_remove o range) flow
     else
       Post.return flow
 
@@ -404,7 +401,7 @@ struct
       let flow' = map_env T_cur (add p (PointerSet.base b) mode) man flow in
 
       man.eval offset flow' >>$ fun offset flow' ->
-      man.post ~semantic:numeric (mk_assign o offset range) flow'
+      man.post ~route:numeric (mk_assign o offset range) flow'
 
     | Eval (q, mode', offset) ->
       let flow' = map_env T_cur (fun a ->
@@ -419,7 +416,7 @@ struct
         let offset' = mk_binop qo O_plus offset ~etyp:T_int range in
 
         man.eval offset' flow' >>$ fun offset' flow ->
-        man.post ~semantic:numeric (mk_assign o offset' range) flow'
+        man.post ~route:numeric (mk_assign o offset' range) flow'
       else
         remove_offset o (var_mode p mode) range man flow'
 
@@ -437,7 +434,7 @@ struct
 
     | Top ->
       map_env T_cur (add p PointerSet.top mode) man flow |>
-      man.post ~semantic:numeric (mk_assign o (mk_top T_int range) range)
+      man.post ~route:numeric (mk_assign o (mk_top T_int range) range)
 
 
 
@@ -467,14 +464,14 @@ struct
   let add_pointer_var p range man flow =
     let o = mk_offset p None range in
     map_env T_cur (Map.set p PointerSet.top) man flow |>
-    man.post ~semantic:numeric (mk_add o range)
+    man.post ~route:numeric (mk_add o range)
 
 
   (** Remove a pointer variable from the support of the non-rel map *)
   let remove_pointer_var p range man flow =
     let flow = map_env T_cur (Map.remove p) man flow in
     let o = mk_offset p None range in
-    man.post ~semantic:numeric (mk_remove o range) flow
+    man.post ~route:numeric (mk_remove o range) flow
 
 
   (** Rename a pointer variable *)
@@ -486,7 +483,7 @@ struct
     if PointerSet.is_valid a1 then
       let o1 = mk_offset p1 None range in
       let o2 = mk_offset p2 None range in
-      man.post ~semantic:numeric (mk_rename o1 o2 range) flow'
+      man.post ~route:numeric (mk_rename o1 o2 range) flow'
     else
       Post.return flow'
 
@@ -590,7 +587,7 @@ struct
       | None -> Post.return flow
       | Some cond ->
         man.eval cond flow >>$ fun cond flow ->
-        man.post ~semantic:numeric (mk_assume cond range) flow
+        man.post ~route:numeric (mk_assume cond range) flow
 
 
 
@@ -622,7 +619,7 @@ struct
         let cond = mk_binop o1 O_ne o2 ~etyp:T_int range in
         [
           man.eval cond flow >>$ fun cond flow ->
-          man.post ~semantic:numeric (mk_assume cond range) flow
+          man.post ~route:numeric (mk_assume cond range) flow
         ]
     in
 
@@ -678,7 +675,7 @@ struct
           | None -> Post.return flow
           | Some cond ->
             man.eval cond flow >>$ fun cond flow ->
-            man.post ~semantic:numeric (mk_assume cond range) flow
+            man.post ~route:numeric (mk_assume cond range) flow
         ]
     in
 
@@ -716,7 +713,7 @@ struct
       let o = mk_offset p None range in
       let ol = List.map (fun q -> mk_offset q None range) ql in
       let stmt = mk_expand o ol range in
-      man.post stmt ~semantic:numeric flow
+      man.post stmt ~route:numeric flow
     else
       Post.return flow
 
@@ -738,7 +735,7 @@ struct
       let o = mk_offset p None range in
       let ol = List.map (fun q -> mk_offset q None range) ql in
       let stmt = mk_fold o ol range in
-      man.post stmt ~semantic:numeric flow
+      man.post stmt ~route:numeric flow
     else
       Post.return flow
 
@@ -757,7 +754,7 @@ struct
       else
         mk_add o range
     in
-    man.post stmt ~semantic:numeric flow
+    man.post stmt ~route:numeric flow
 
 
 

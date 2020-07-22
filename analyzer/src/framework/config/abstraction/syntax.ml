@@ -44,7 +44,12 @@ type abstraction = {
   language : string;
 }
 
-and domain =
+and domain = {
+  domain_kind : domain_kind;
+  domain_semantic : string option;
+}
+
+and domain_kind =
   | D_stacked    of (module STACKED)
   | D_domain     of (module DOMAIN)
   | D_simplified of (module SIMPLIFIED)
@@ -75,7 +80,7 @@ and domain_reduction =
 
 and value_reduction = (module VALUE_REDUCTION)
 
-
+let mk_domain ?(semantic=None) kind = { domain_kind = kind; domain_semantic = semantic } 
 
 let pp_value_reduction fmt (r:value_reduction) =
   let module R = (val r) in
@@ -141,7 +146,12 @@ let pp_domain_functor fmt = function
 
 
 
-let rec pp_domain fmt = function
+let rec pp_domain fmt d =
+  match d.domain_semantic with
+  | None -> pp_domain_kind fmt d.domain_kind
+  | Some semantic -> fprintf fmt "[%s] %a" semantic pp_domain_kind d.domain_kind
+
+and pp_domain_kind fmt = function
   | D_stacked d ->
     let module D = (val d) in
     pp_print_string fmt D.name

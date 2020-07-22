@@ -36,8 +36,6 @@ struct
       let name = "stubs.iterators.body"
     end)
 
-  let dependencies = []
-
   let alarms = []
 
 
@@ -630,11 +628,11 @@ struct
 
       begin match return with
         | None ->
-          Rewrite.return_singleton (mk_unit exp.erange) flow ~cleaners |>
+          Eval.singleton (mk_unit exp.erange) flow ~cleaners |>
           OptionExt.return
 
         | Some v ->
-          Rewrite.reval_singleton (mk_var v exp.erange) flow ~cleaners:(mk_remove_var v exp.erange :: cleaners) |>
+          Eval.singleton (mk_var v exp.erange) flow ~cleaners:(mk_remove_var v exp.erange :: cleaners) |>
           OptionExt.return
       end
 

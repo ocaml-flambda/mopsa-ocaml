@@ -44,9 +44,7 @@ struct
       let name = "c.libs.variadic"
     end)
 
-  let numeric = mk_semantic "U/Numeric" ~domain:name
-
-  let dependencies = [ numeric ]
+  let numeric = Semantic "U/Numeric"
 
   let alarms = [ A_c_out_of_bound;
                  A_c_insufficient_variadic_args ]
@@ -163,8 +161,8 @@ struct
 
   (* Initialize a counter *)
   let init_valc_var valc range man flow =
-    man.exec (mk_add valc range) ~semantic:numeric flow |>
-    man.exec (mk_assign valc (mk_zero range) range) ~semantic:numeric
+    man.exec (mk_add valc range) ~route:numeric flow |>
+    man.exec (mk_assign valc (mk_zero range) range) ~route:numeric
 
 
   (* Resolve a pointer to a va_list *)
@@ -190,7 +188,7 @@ struct
             raise_c_out_var_bound_alarm ap offset (under_type ap.vtyp) range man flow eflow |>
             Cases.empty_singleton
           )
-        ~semantic:numeric
+        ~route:numeric
         man flow
 
     | _ -> panic_at range "resolve_va_list: pointed object %a not supported" pp_points_to pt
@@ -239,7 +237,7 @@ struct
               (* Increment the counter *)
               let flow = man.exec
                   (mk_assign valc (mk_z (Z.succ n) range) range)
-                  ~semantic:numeric
+                  ~route:numeric
                   flow
               in
               man.eval (mk_var arg range) flow
@@ -253,7 +251,7 @@ struct
           let flow' = raise_c_insufficient_variadic_args ap valc unnamed range man flow eflow in
           Eval.empty_singleton flow'
         )
-      ~semantic:numeric
+      ~route:numeric
       man flow
 
 
@@ -264,7 +262,7 @@ struct
     let valc = mk_valc_var ap range in
 
     (* Remove the counter *)
-    let flow' = man.exec (mk_remove valc range) ~semantic:numeric flow in
+    let flow' = man.exec (mk_remove valc range) ~route:numeric flow in
     Eval.singleton (mk_unit range) flow'
 
 
@@ -278,25 +276,21 @@ struct
     (* 𝔼⟦ variadic f(...) ⟧ *)
     | E_call ({ ekind = E_c_function ({c_func_variadic = true} as fundec)}, args) ->
       call_variadic_function fundec args exp.erange man flow |>
-      Rewrite.return_eval |>
       OptionExt.return
 
     (* 𝔼⟦ va_start(ap, param) ⟧ *)
     | E_c_builtin_call("__builtin_va_start", [ap; { ekind = E_var (param, _) }]) ->
       va_start ap param exp.erange man flow |>
-      Rewrite.return_eval |>
       OptionExt.return
 
     (* 𝔼⟦ va_arg(ap) ⟧ *)
     | E_c_var_args(ap) ->
       va_arg ap exp.etyp exp.erange man flow |>
-      Rewrite.return_eval |>
       OptionExt.return
 
     (* 𝔼⟦ va_end(ap) ⟧ *)
     | E_c_builtin_call("__builtin_va_end", [ap]) ->
       va_end ap exp.erange man flow |>
-      Rewrite.return_eval |>
       OptionExt.return
 
     (* 𝔼⟦ va_copy(src, dst) ⟧ *)

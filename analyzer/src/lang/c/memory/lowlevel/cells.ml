@@ -52,12 +52,6 @@ struct
 
   let name = "c.memory.lowlevel.cells"
 
-  (** {2 Semantic dependencies} *)
-  (** ************************* *)
-
-  let scalar = mk_semantic "C/Scalar" ~domain:name
-  let dependencies = [ scalar ]
-
   
   (** {2 Memory cells} *)
   (** **************** *)
@@ -210,7 +204,7 @@ struct
   (** Create a variable from a cell *)
   let mk_cell_var c : var =
     let name = mk_cell_uniq_name c in
-    mkv name (V_c_cell c) (cell_type c) ~mode:(base_mode c.base) ~semantic:scalar
+    mkv name (V_c_cell c) (cell_type c) ~mode:(base_mode c.base) ~semantic:"C/Scalar"
 
 
   (** Create a variable from a numeric cell *)
@@ -372,6 +366,7 @@ struct
       let name = name
     end)
 
+  let scalar = Semantic "C/Scalar"
 
   let alarms = [ A_c_out_of_bound;
                  A_c_null_deref;
@@ -502,7 +497,7 @@ struct
     else
       let flow = set_env T_cur { a with cells = cell_set_add c a.cells } man flow in
       let v = mk_cell_var c in
-      man.post ~semantic:scalar (mk_add_var v range) flow >>$ fun () flow ->
+      man.post ~route:scalar (mk_add_var v range) flow >>$ fun () flow ->
       if is_pointer_cell c then
         Post.return flow
       else
@@ -743,13 +738,13 @@ struct
         let smash = mk_range_attr_var range "smash" ~mode:WEAK t in
         let weak_smash = mk_var smash range in
         let strong_smash = mk_var smash ~mode:(Some STRONG) range in
-        man.post (mk_add_var smash range) ~semantic:scalar flow >>$ fun () flow ->
+        man.post (mk_add_var smash range) ~route:scalar flow >>$ fun () flow ->
         let ecells = List.map (fun c -> mk_pointer_cell_var_expr c t range) cells in
         let hd = List.hd ecells in
         let tl = List.tl ecells in
-        man.post (mk_assign strong_smash hd range) ~semantic:scalar flow >>$ fun () flow ->
+        man.post (mk_assign strong_smash hd range) ~route:scalar flow >>$ fun () flow ->
         List.fold_left
-          (fun acc c -> Post.bind (man.post (mk_assign weak_smash c range) ~semantic:scalar) acc)
+          (fun acc c -> Post.bind (man.post (mk_assign weak_smash c range) ~route:scalar) acc)
           (Post.return flow) tl
         >>$ fun () flow ->
         Eval.singleton weak_smash ~cleaners:[mk_remove_var smash range] flow
@@ -770,7 +765,7 @@ struct
     in
     let v = mk_cell_var c in
     let stmt = mk_remove_var v range in
-    man.post ~semantic:scalar stmt flow
+    man.post ~route:scalar stmt flow
 
 
   (** Remove cells overlapping with cell [c] *)
@@ -799,7 +794,7 @@ struct
                          cell_set_add c2 }
       ) man flow in
     let stmt = mk_rename_var v1 v2 range in
-    man.post ~semantic:scalar stmt flow
+    man.post ~route:scalar stmt flow
 
 
   let assign_cell c e mode range man flow =
@@ -811,9 +806,9 @@ struct
     begin if cell_set_mem c a.cells then
         Post.return flow
       else
-        man.post (mk_add_var v range) ~semantic:scalar flow
+        man.post (mk_add_var v range) ~route:scalar flow
     end >>$ fun () flow ->
-    man.post (mk_assign vv e range) ~semantic:scalar flow >>$ fun () flow ->
+    man.post (mk_assign vv e range) ~route:scalar flow >>$ fun () flow ->
     remove_cell_overlappings c range man flow
 
 
@@ -833,7 +828,7 @@ struct
     let v = mk_cell_var c in
     let vl = List.map mk_cell_var cl in
     let stmt = mk_expand_var v vl range in
-    man.post stmt ~semantic:scalar flow
+    man.post stmt ~route:scalar flow
 
   let fold_cells c cl range man flow =
     let flow = map_env T_cur (fun a ->
@@ -843,7 +838,7 @@ struct
     let v = mk_cell_var c in
     let vl = List.map mk_cell_var cl in
     let stmt = mk_fold_var v vl range in
-    man.post stmt ~semantic:scalar flow
+    man.post stmt ~route:scalar flow
 
   let forget_cell c range man flow =
     let flow = map_env T_cur
@@ -853,7 +848,7 @@ struct
     in
     let v = mk_cell_var c in
     let stmt = mk_remove_var v range in
-    man.post stmt ~semantic:scalar flow
+    man.post stmt ~route:scalar flow
 
 
   (** {2 Initial state} *)
@@ -912,26 +907,21 @@ struct
 
   let eval exp man flow =
     match ekind exp with
-    | E_var ({ vkind = V_c_cell _},_) ->
-      Rewrite.forward_singleton exp ~semantic:scalar flow |>
-      OptionExt.return
+    | E_var ({ vkind = V_c_cell _},_) -> None
 
     | E_var (v,_) when is_c_scalar_type v.vtyp ->
       eval_deref_scalar_pointer (mk_c_address_of exp exp.erange) exp.erange man flow |>
-      Rewrite.forward_eval ~semantic:scalar |>
       OptionExt.return
 
     | E_c_deref p when under_type p.etyp |> void_to_char |> is_c_scalar_type
       ->
       eval_deref_scalar_pointer p exp.erange man flow |>
-      Rewrite.forward_eval ~semantic:scalar |>
       OptionExt.return
 
 
     | E_c_deref p when under_type p.etyp |> is_c_function_type
       ->
       eval_deref_function_pointer p exp.erange man flow |>
-      Rewrite.forward_eval ~semantic:scalar |>
       OptionExt.return
 
 
@@ -957,7 +947,7 @@ struct
       map_env T_cur (fun a ->
         { a with cells = cell_set_add c a.cells }
       ) man flow |>
-      man.post ~semantic:scalar (mk_c_declaration vv None scope range)
+      man.post ~route:scalar (mk_c_declaration vv None scope range)
     else
       Post.return flow
 

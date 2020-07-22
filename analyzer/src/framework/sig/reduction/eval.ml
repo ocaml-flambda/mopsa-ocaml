@@ -27,13 +27,13 @@ open Core.All
 
 
 (** Product evaluations *)
-type prod_eval = expr_rewrite option option list
+type prod_eval = expr option option list
 
 
 (** Manager used by reduction rules *)
 type 'a eval_reduction_man = {
   get_man : 't. 't id -> ('a, 't) man;
-  get_eval : 't. 't id -> prod_eval -> expr_rewrite option;
+  get_eval : 't. 't id -> prod_eval -> expr option;
   del_eval : 't. 't id -> prod_eval -> prod_eval;
 }
 

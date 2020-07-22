@@ -19,34 +19,13 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Semantic dependencies *)
+(** Semantics *)
 
-type semantic =
-  | Any
-  | One of { name : string;
-             domain: string; }
 
-let any_semantic = Any
+type semantic = string
 
-let name_of_semantic = function
-  | Any   -> Exceptions.panic "name_of_semantic called on any_semantic"
-  | One s -> s.name
+let compare_semantic = String.compare
 
-let domain_of_semantic = function
-  | Any   -> Exceptions.panic "domain_of_semantic called on any_semantic"
-  | One s ->  s.domain
+let pp_semantic = Format.pp_print_string
 
-let compare_semantic s1 s2 =
-  match s1, s2 with
-  | Any, Any -> 0
-  | One ss1, One ss2 ->
-    Compare.pair String.compare String.compare
-      (ss1.name,ss1.domain)
-      (ss2.name,ss2.domain)
-  | _ -> compare s1 s2
-
-let pp_semantic fmt = function
-  | Any   -> Format.pp_print_string fmt "*"
-  | One s -> Format.fprintf fmt "%s#%s" s.domain s.name
-
-let mk_semantic name ~domain = One { domain; name }
+let toplevel_semantic = "*"

@@ -31,7 +31,7 @@ open Flow
 open Context
 open Post
 open Eval
-open Semantic
+open Route
 open Manager
 
 
@@ -45,16 +45,16 @@ sig
   val init : 'a ctx -> 'a ctx
   (** Initialization of the hook *)
 
-  val on_before_exec : semantic -> stmt -> ('a,'a) man  -> 'a flow -> 'a ctx
+  val on_before_exec : route -> stmt -> ('a,'a) man  -> 'a flow -> 'a ctx
   (** Event fired before an exec is performed *)
 
-  val on_after_exec : semantic -> stmt -> ('a,'a) man -> 'a flow -> 'a post -> 'a ctx
+  val on_after_exec : route -> stmt -> ('a,'a) man -> 'a flow -> 'a post -> 'a ctx
   (** Event fired after an exec is performed *)
 
-  val on_before_eval : semantic -> expr -> ('a,'a) man -> 'a flow -> 'a ctx
+  val on_before_eval : route -> expr -> ('a,'a) man -> 'a flow -> 'a ctx
   (** Event fired before an eval is performed *)
 
-  val on_after_eval : semantic -> expr -> ('a,'a) man -> 'a flow -> 'a eval -> 'a ctx
+  val on_after_eval : route -> expr -> ('a,'a) man -> 'a flow -> 'a eval -> 'a ctx
   (** Event fired after an eval is performed *)
 
   val on_finish : ('a,'a) man -> 'a flow -> unit
@@ -70,16 +70,16 @@ sig
   val init : 'a ctx -> unit
   (** Initialization of the hook *)
 
-  val on_before_exec : semantic -> stmt -> ('a,'a) man  -> 'a flow -> unit
+  val on_before_exec : route -> stmt -> ('a,'a) man  -> 'a flow -> unit
   (** Event fired before an exec is performed *)
 
-  val on_after_exec : semantic -> stmt -> ('a,'a) man -> 'a flow -> 'a post -> unit
+  val on_after_exec : route -> stmt -> ('a,'a) man -> 'a flow -> 'a post -> unit
   (** Event fired after an exec is performed *)
 
-  val on_before_eval : semantic -> expr -> ('a,'a) man -> 'a flow -> unit
+  val on_before_eval : route -> expr -> ('a,'a) man -> 'a flow -> unit
   (** Event fired before an eval is performed *)
 
-  val on_after_eval : semantic -> expr -> ('a,'a) man -> 'a flow -> 'a eval -> unit
+  val on_after_eval : route -> expr -> ('a,'a) man -> 'a flow -> 'a eval -> unit
   (** Event fired after an eval is performed *)
 
   val on_finish : ('a,'a) man -> 'a flow -> unit
@@ -117,16 +117,16 @@ val init_hook : string -> 'a ctx -> 'a ctx
 val init_active_hooks : 'a ctx -> 'a ctx
 (** Initialize all active hooks *)
 
-val on_before_exec : semantic -> stmt -> ('a,'a) man -> 'a flow -> 'a ctx
+val on_before_exec : route -> stmt -> ('a,'a) man -> 'a flow -> 'a ctx
 (** Call [on_before_exec] on all active hooks *)
 
-val on_after_exec : semantic -> stmt -> ('a,'a) man -> 'a flow -> 'a post -> 'a ctx
+val on_after_exec : route -> stmt -> ('a,'a) man -> 'a flow -> 'a post -> 'a ctx
 (** Call [on_after_exec] on all active hooks *)
 
-val on_before_eval : semantic -> expr -> ('a,'a) man -> 'a flow -> 'a ctx
+val on_before_eval : route -> expr -> ('a,'a) man -> 'a flow -> 'a ctx
 (** Call [on_before_eval] on all active hooks *)
 
-val on_after_eval : semantic -> expr -> ('a,'a) man -> 'a flow -> 'a eval -> 'a ctx
+val on_after_eval : route -> expr -> ('a,'a) man -> 'a flow -> 'a eval -> 'a ctx
 (** Call [on_after_eval] on all active hooks *)
 
 val on_finish : ('a,'a) man -> 'a flow -> unit

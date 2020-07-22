@@ -41,8 +41,6 @@ struct
       let name = "c.iterators.loops"
     end)
 
-  let dependencies = []
-
   let alarms = []
 
   (** Initialization *)

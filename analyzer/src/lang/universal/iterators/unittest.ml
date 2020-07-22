@@ -137,8 +137,6 @@ struct
   let summary fmt = Debug.debug ~channel:"unittest" fmt
 
 
-  let dependencies = []
-
   let alarms = []
 
   (* Initialization *)

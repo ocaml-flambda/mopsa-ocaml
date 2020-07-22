@@ -27,10 +27,10 @@ open Abstraction.Stacked
 module type STACKED_COMBINER =
 sig
   include STACKED
-  val nodes : domain list
-  val wirings : wirings
+  val domains : domain list
+  val routing_table : routing_table
   val exec : domain list -> stmt -> ('a,t) man -> 'a flow -> 'a post option
-  val eval : domain list -> expr -> ('a,t) man -> 'a flow -> 'a rewrite option
+  val eval : domain list -> expr -> ('a,t) man -> 'a flow -> 'a eval option
   val ask  : domain list -> ('a,'r) query -> ('a,t) man -> 'a flow -> 'r option
 end
 
@@ -38,8 +38,8 @@ end
 module StackedToCombiner(D:STACKED) : STACKED_COMBINER with type t = D.t =
 struct
   include D
-  let nodes = [D.name]
-  let wirings = empty_wirings
+  let domains = [D.name]
+  let routing_table = empty_routing_table
   let exec targets = D.exec
   let eval targets = D.eval
   let ask targets  = D.ask

@@ -77,8 +77,8 @@ let () = register_id {
   }
 
 
-let sat_targets ~targets ~nodes =
-  targets = [] || List.exists (fun t -> List.mem t nodes) targets
+let sat_targets ~targets ~domains =
+  targets = [] || List.exists (fun t -> List.mem t domains) targets
 
 
 (** Manager of the left argument in a compose topology *)

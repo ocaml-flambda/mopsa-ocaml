@@ -37,10 +37,6 @@ struct
   include GenStatelessDomainId
       (struct let name = "c.memory.variable_length_array" end)
 
-  let lowlevel = mk_semantic "C/Lowlevel" ~domain:name
-
-  let dependencies = [ lowlevel ]
-
   let alarms = []
 
 
@@ -123,11 +119,11 @@ struct
   (** 𝕊⟦ remove arr; ⟧ *)
   let exec_remove arr range man flow =
     (* Remove the base arr from the underlying memory abstraction *)
-    man.post ~semantic:lowlevel (mk_remove_var arr range) flow >>$ fun () flow ->
+    man.post ~route:Below (mk_remove_var arr range) flow >>$ fun () flow ->
 
     (* Remove the length variable from the environment *)
     let len = mk_variable_length_var arr in
-    man.post ~semantic:lowlevel (mk_remove_var len range) flow
+    man.post ~route:Below (mk_remove_var len range) flow
 
 
   let exec stmt man flow =
@@ -156,7 +152,6 @@ struct
     match ekind exp with
     | E_stub_builtin_call(BYTES, { ekind = E_var(v,_) }) when is_c_variable_length_array_type v.vtyp ->
       eval_bytes v exp.erange man flow |>
-      Rewrite.forward_eval ~semantic:lowlevel |>
       OptionExt.return
 
     | _ -> None

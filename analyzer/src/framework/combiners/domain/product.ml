@@ -34,7 +34,7 @@ sig
   include STACKED_COMBINER
   val alarms : alarm_class list list
   val exec : domain list -> stmt -> ('a,t) man -> 'a flow -> 'a post option list * 'a ctx
-  val eval : string list -> expr -> ('a,t) man -> 'a flow -> 'a rewrite option list * 'a ctx
+  val eval : string list -> expr -> ('a,t) man -> 'a flow -> 'a eval option list * 'a ctx
 end
 
 
@@ -44,10 +44,8 @@ struct
   type t = unit
   let id = C_empty
   let name = "()"
-  let nodes = []
-  let dependencies = []
-  let unresolved_dependencies = []
-  let wirings = empty_wirings
+  let domains = []
+  let routing_table = empty_routing_table
   let alarms = [[]]
   let bottom = ()
   let top = ()
@@ -69,9 +67,8 @@ module MakePairPool(S:STACKED_COMBINER)(P:POOL) : POOL with type t = S.t * P.t =
 struct
   type t = S.t * P.t
   let id = C_pair(Product,S.id,P.id)
-  let nodes = S.nodes @ P.nodes
-  let dependencies = S.dependencies @ P.dependencies
-  let wirings = join_wirings S.wirings P.wirings
+  let domains = S.domains @ P.domains
+  let routing_table = join_routing_table S.routing_table P.routing_table
   let alarms = S.alarms :: P.alarms
   let name = S.name ^ " ∧ " ^ P.name
 
@@ -116,7 +113,7 @@ struct
 
   let exec targets =
     let f2 = P.exec targets in
-    if not (sat_targets ~targets ~nodes:S.nodes) then
+    if not (sat_targets ~targets ~domains:S.domains) then
       (fun stmt man flow ->
          let l,ctx = f2 stmt (snd_pair_man man) flow in
          None :: l, ctx
@@ -133,7 +130,7 @@ struct
 
   let eval targets =
     let f2 = P.eval targets in
-    if not (sat_targets ~targets ~nodes:S.nodes) then
+    if not (sat_targets ~targets ~domains:S.domains) then
       (fun exp man flow ->
          let l,ctx = f2 exp (snd_pair_man man) flow in
          None :: l, ctx
@@ -150,7 +147,7 @@ struct
 
   let ask targets =
     let f2 = P.ask targets in
-    if not (sat_targets ~targets ~nodes:S.nodes) then
+    if not (sat_targets ~targets ~domains:S.domains) then
       (fun query man flow ->
          f2 query (snd_pair_man man) flow
       )
@@ -307,7 +304,7 @@ struct
 
 
   (** Compute pointwise evaluations over the pool of domains *)
-  let eval_pointwise targets exp man flow : 'a rewrite option list option =
+  let eval_pointwise targets exp man flow : 'a eval option list option =
     let pointwise, ctx = Pool.eval targets exp man flow in
     if List.exists (function Some _ -> true | None -> false) pointwise
     then Some pointwise
@@ -317,8 +314,8 @@ struct
   (** Manager used by reductions *)
   let eval_reduction_man (man:('a, t) man) : 'a eval_reduction_man = {
     get_eval = (
-      let f : type t. t id -> prod_eval -> expr_rewrite option = fun id evals ->
-        let rec aux : type t tt. t id -> tt id -> prod_eval -> expr_rewrite option = fun target tree el ->
+      let f : type t. t id -> prod_eval -> expr option = fun id evals ->
+        let rec aux : type t tt. t id -> tt id -> prod_eval -> expr option = fun target tree el ->
           match tree, el with
           | C_empty, [] -> None
           | C_pair(_,left,right), (hde::tle) ->
@@ -352,7 +349,7 @@ struct
 
   
   (** Apply reduction rules on a pointwise evaluation *)
-  let reduce_pointwise_eval exp man (pointwise:('a, expr_rewrite option option list) cases) : 'a rewrite =
+  let reduce_pointwise_eval exp man (pointwise:('a, expr option option list) cases) : 'a eval =
     let rman = eval_reduction_man man in
     (* Let reduction rules roll out imprecise evaluations from [pointwise] *)
     let pointwise = List.fold_left (fun pointwise rule ->
@@ -370,7 +367,7 @@ struct
         with Not_found -> None
       )
     in
-    Rewrite.remove_duplicates man.lattice evl
+    Eval.remove_duplicates man.lattice evl
 
 
 

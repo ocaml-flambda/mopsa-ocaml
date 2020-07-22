@@ -61,11 +61,7 @@ struct
       let name = "c.memory.lowlevel.string_length"
     end)
 
-  let scalar = mk_semantic "C/Scalar" ~domain:name
-  let numeric = mk_semantic "U/Numeric" ~domain:name
-
-  let dependencies = [ scalar;
-                       numeric ]
+  let numeric = Semantic "U/Numeric"
 
   let alarms = []
 
@@ -126,7 +122,7 @@ struct
   *)
   let mk_length_var base elemsz ?(mode=None) range =
     let name = Format.asprintf "length(%s)" (base_uniq_name base) in
-    let v = mkv name (V_c_string_length (base,elemsz)) T_int ~mode:(base_mode base) ~semantic:numeric in
+    let v = mkv name (V_c_string_length (base,elemsz)) T_int ~mode:(base_mode base) ~semantic:"U/Numeric" in
     mk_var v ~mode range
 
 
@@ -218,7 +214,7 @@ struct
         let length = mk_length_var base elem_size range in
         let size = elem_of_offset bsize elem_size range in
 
-        man.post ~semantic:numeric (mk_add length range) flow >>= fun _ flow ->
+        man.post ~route:numeric (mk_add length range) flow >>= fun _ flow ->
         man.post (mk_assume (mk_in length (mk_zero range) size range) range) flow
 
 
@@ -231,7 +227,7 @@ struct
 
       | _ ->
         let length = mk_length_var base elem_size range in
-        man.post ~semantic:numeric (mk_remove length range) flow
+        man.post ~route:numeric (mk_remove length range) flow
 
 
   (** 𝕊⟦ rename(base1,base2); ⟧ *)
@@ -241,7 +237,7 @@ struct
     else
       let length1 = mk_length_var base1 elem_size range in
       let length2 = mk_length_var base2 elem_size range in
-      man.post ~semantic:numeric (mk_rename length1 length2 range) flow
+      man.post ~route:numeric (mk_rename length1 length2 range) flow
 
 
   (** 𝕊⟦ expand(base,bases); ⟧ *)
@@ -262,7 +258,7 @@ struct
       if lengths = [] then
         Post.return flow
       else
-        man.post ~semantic:numeric (mk_expand length1 lengths range) flow
+        man.post ~route:numeric (mk_expand length1 lengths range) flow
 
 
   (** Fold the length variable of a base *)
@@ -282,10 +278,10 @@ struct
          eval_base_size base range man flow >>$ fun bsize flow ->
          man.eval bsize flow >>$ fun bsize flow ->
          let size = elem_of_offset bsize elem_size range in
-         man.post ~semantic:numeric (mk_forget length range) flow >>$ fun () flow ->
+         man.post ~route:numeric (mk_forget length range) flow >>$ fun () flow ->
          man.post (mk_assume (mk_in length (mk_zero range) size range) range) flow
       else
-        man.post ~semantic:numeric (mk_fold length lengths range) flow
+        man.post ~route:numeric (mk_fold length lengths range) flow
 
 
   (** 𝕊⟦ forget(e); ⟧ *)
@@ -302,7 +298,7 @@ struct
         eval_base_size base range man flow >>$ fun bsize flow ->
         man.eval bsize flow >>$ fun bsize flow ->
         let size = elem_of_offset bsize elem_size range in
-        man.post ~semantic:numeric (mk_forget length range) flow >>$ fun () flow ->
+        man.post ~route:numeric (mk_forget length range) flow >>$ fun () flow ->
         man.post (mk_assume (mk_in length (mk_zero range) size range) range) flow
 
 
@@ -319,7 +315,7 @@ struct
         eval_base_size base range man flow >>$ fun bsize flow ->
         man.eval bsize flow >>$ fun bsize flow ->
         let size = elem_of_offset bsize elem_size range in
-        man.post ~semantic:numeric (mk_forget length range) flow >>$ fun () flow ->
+        man.post ~route:numeric (mk_forget length range) flow >>$ fun () flow ->
         man.post (mk_assume (mk_in length (mk_zero range) size range) range) flow
 
 
@@ -354,7 +350,7 @@ struct
 
         (* Utility function to assign an interval to [length] *)
         let assign_length_interval l u flow =
-          man.post ~semantic:numeric (mk_forget length range) flow |>
+          man.post ~route:numeric (mk_forget length range) flow |>
           Post.bind (
             man.post (mk_assume ((mk_in length l u range)) range)
           )
@@ -366,7 +362,7 @@ struct
           (* Transformation: length := offset; *)
           [ mk_in offset zero length range;
             mk_eq rhs zero range ],
-          (fun flow -> man.post ~semantic:numeric (mk_assign length offset range) flow)
+          (fun flow -> man.post ~route:numeric (mk_assign length offset range) flow)
           ;
 
           (* setnon0 case *)
@@ -397,7 +393,7 @@ struct
         ] man flow
 
       else
-        man.post ~semantic:numeric (mk_forget length range) flow
+        man.post ~route:numeric (mk_forget length range) flow
 
 
   let exec_assume_string_literal_char_eq str t boffset mode n range man flow =
@@ -486,8 +482,8 @@ struct
     man.eval bsize flow >>$ fun bsize flow ->
     let size = elem_of_offset bsize elem_size range in
     (* Ensure that [min, max] ⊆ [0, size-1] *)
-    man.post (mk_assume (ge min zero range) range) ~semantic:numeric flow >>$ fun () flow ->
-    man.post (mk_assume (le max (pred size range) range) range) ~semantic:numeric flow >>$ fun () flow ->
+    man.post (mk_assume (ge min zero range) range) ~route:numeric flow >>$ fun () flow ->
+    man.post (mk_assume (le max (pred size range) range) range) ~route:numeric flow >>$ fun () flow ->
     switch [
       (*          length    min     max
          |-----------0-------|nnnnnnnn|------>
@@ -668,7 +664,7 @@ struct
         (fun flow -> Cases.empty_singleton (Flow.bottom_from flow));
 
         [ log_and cover1 cover2 range ],
-        (fun flow -> man.post (mk_assume (eq (sub length1 min1 range) (sub length2 min2 range) range) range) ~semantic:numeric flow);
+        (fun flow -> man.post (mk_assume (eq (sub length1 min1 range) (sub length2 min2 range) range) range) ~route:numeric flow);
       ] man flow
 
 
@@ -835,7 +831,6 @@ struct
     match ekind exp with
     | E_c_deref p when is_c_int_type exp.etyp ->
       eval_deref p exp.erange man flow |>
-      Rewrite.forward_eval ~semantic:scalar |>
       OptionExt.return
 
     | _ -> None

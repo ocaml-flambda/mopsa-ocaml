@@ -32,7 +32,8 @@ module EmptyDomain : SIMPLIFIED_COMBINER =
 struct
   type t = unit
   let id = C_empty
-  let nodes = []
+  let domains = []
+  let routing_table = empty_routing_table
   let name = ""
   let bottom = ()
   let top = ()
@@ -57,7 +58,9 @@ struct
 
   let name = T1.name ^ " ∧ " ^ T2.name
 
-  let nodes = T1.nodes @ T2.nodes
+  let domains = T1.domains @ T2.domains
+
+  let routing_table = join_routing_table T1.routing_table T2.routing_table
 
   let bottom : t = T1.bottom, T2.bottom
 
@@ -125,8 +128,8 @@ struct
       | None, Some r2    -> if a2 == r2 then Some a else Some (a1,r2)
       | Some r1, Some r2 -> if r1 == a1 && r2 == a2 then Some a else Some (r1,r2)
     in
-    match sat_targets ~targets ~nodes:T1.nodes,
-          sat_targets ~targets ~nodes:T1.nodes
+    match sat_targets ~targets ~domains:T1.domains,
+          sat_targets ~targets ~domains:T1.domains
     with
     | false, false -> raise Not_found
     | true, false ->
@@ -145,8 +148,8 @@ struct
     
     
   let ask targets =
-    match sat_targets ~targets ~nodes:T1.nodes,
-          sat_targets ~targets ~nodes:T1.nodes
+    match sat_targets ~targets ~domains:T1.domains,
+          sat_targets ~targets ~domains:T1.domains
     with
     | false, false -> raise Not_found
     | true, false ->

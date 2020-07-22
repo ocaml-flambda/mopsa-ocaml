@@ -42,8 +42,7 @@ struct
       let name = "c.memory.scalars.machine_numbers"
     end)
 
-  let numeric = mk_semantic "U/Numeric" ~domain:name
-  let dependencies = [ numeric ]
+  let numeric = Semantic "U/Numeric"
 
   let alarms = [ A_c_integer_overflow;
                  A_c_divide_by_zero;
@@ -230,7 +229,7 @@ struct
           let flow = raise_c_divide_by_zero_alarm denominator range man fflow in
           Eval.empty_singleton flow
         )
-      ~semantic:numeric man flow
+      ~route:numeric man flow
 
 
   (** Check that bit-shifts are safe. Two conditions are verified:
@@ -255,7 +254,7 @@ struct
           let flow' = raise_c_invalid_shift_alarm exp n man flow fflow in
           Eval.empty_singleton flow'
         )
-      ~semantic:numeric man flow
+      ~route:numeric man flow
 
 
   let is_predicate_op = function
@@ -300,30 +299,30 @@ struct
     match ekind exp with
     (* 𝔼⟦ n ⟧ *)
     | E_constant(C_int _ | C_int_interval _ | C_float _ | C_float_interval _) when is_c_num_type exp.etyp ->
-      Rewrite.return_singleton {exp with etyp = to_num_type exp.etyp} flow
+      Eval.singleton {exp with etyp = to_num_type exp.etyp} flow
       |> OptionExt.return
 
     (* 𝔼⟦ 'c' ⟧ *)
     | E_constant(C_c_character (c, _)) ->
-      Rewrite.return_singleton {exp with ekind = E_constant (C_int c); etyp = to_num_type exp.etyp} flow
+      Eval.singleton {exp with ekind = E_constant (C_int c); etyp = to_num_type exp.etyp} flow
       |> OptionExt.return
 
     (* 𝔼⟦ ⊤int ⟧ *)
     | E_constant(C_top t) when is_c_int_type t ->
       let l, u = rangeof t in
       let exp' = mk_z_interval l u ~typ:(to_num_type t) exp.erange in
-      Rewrite.return_singleton exp' flow |>
+      Eval.singleton exp' flow |>
       OptionExt.return
 
     (* 𝔼⟦ ⊤float ⟧ *)
     | E_constant(C_top t) when is_c_float_type t ->
       let exp' = mk_top (to_num_type t) exp.erange in
-      Rewrite.return_singleton exp' flow |>
+      Eval.singleton exp' flow |>
       OptionExt.return
 
     (* 𝔼⟦ var ⟧ *)
     | E_var (v,_) when is_c_num_type v.vtyp ->
-      Rewrite.return_singleton (mk_num_var_expr exp) flow |>
+      Eval.singleton (mk_num_var_expr exp) flow |>
       OptionExt.return
 
     (* 𝔼⟦ ⋄ e ⟧, ⋄ ∈ {+, -} and type(t) = int *)
@@ -335,7 +334,6 @@ struct
                    ekind = E_unop(op, e);
                    etyp = to_num_type exp.etyp } in
       check_overflow exp exp' range man flow |>
-      Rewrite.return_eval |>
       OptionExt.return
 
     (* 𝔼⟦ ⋄ e ⟧, ⋄ ∈ {+, -} and type(t) = int *)
@@ -344,7 +342,7 @@ struct
       let exp' = { exp with
                    ekind = E_unop(op, e);
                    etyp = to_num_type exp.etyp } in
-      Rewrite.return_singleton exp' flow |>
+      Eval.singleton exp' flow |>
       OptionExt.return
 
     (* 𝔼⟦ ! e ⟧ *)
@@ -358,7 +356,7 @@ struct
         else
           mk_binop e O_eq (mk_zero ~typ:e.etyp exp.erange) exp.erange ~etyp:T_bool
       in
-      Rewrite.return_singleton exp' flow |>
+      Eval.singleton exp' flow |>
       OptionExt.return
 
     (* 𝔼⟦ ⋄ e ⟧ *)
@@ -367,7 +365,7 @@ struct
       let exp' = { exp with
                    ekind = E_unop(op, e);
                    etyp = to_num_type exp.etyp } in
-      Rewrite.return_singleton exp' flow |>
+      Eval.singleton exp' flow |>
       OptionExt.return
 
 
@@ -378,7 +376,6 @@ struct
       man.eval e flow >>$? fun e flow ->
       man.eval e' flow >>$? fun e' flow ->
       check_division op e e' range man flow |>
-      Rewrite.return_eval |>
       OptionExt.return
 
     (* 𝔼⟦ e ⋄ e' ⟧, ⋄ ∈ {>>, <<} *)
@@ -388,7 +385,6 @@ struct
       man.eval e flow >>$? fun e flow ->
       man.eval e' flow >>$? fun e' flow ->
       check_shift exp e e' range man flow |>
-      Rewrite.return_eval |>
       OptionExt.return
 
     (* 𝔼⟦ e ⋄ e' ⟧, ⋄ ∈ {+, -, *} and type(exp) = int *)
@@ -402,7 +398,6 @@ struct
                    etyp = to_num_type exp.etyp }
       in
       check_overflow exp exp' range man flow |>
-      Rewrite.return_eval |>
       OptionExt.return
 
     (* 𝔼⟦ e ⋄ e' ⟧ *)
@@ -413,7 +408,7 @@ struct
                    ekind = E_binop(op, e, e');
                    etyp = to_num_type exp.etyp }
       in
-      Rewrite.return_singleton exp' flow |>
+      Eval.singleton exp' flow |>
       OptionExt.return
 
     (* 𝔼⟦ (float)int ⟧ *)
@@ -425,7 +420,7 @@ struct
           O_cast
           e ~etyp:(to_num_type exp.etyp) exp.erange
       in
-      Rewrite.return_singleton exp' flow |>
+      Eval.singleton exp' flow |>
       OptionExt.return
 
     (* 𝔼⟦ (int)float ⟧ *)
@@ -437,7 +432,7 @@ struct
           O_cast
           e ~etyp:(to_num_type exp.etyp) exp.erange
       in
-      Rewrite.return_singleton exp' flow |>
+      Eval.singleton exp' flow |>
       OptionExt.return
 
     (* 𝔼⟦ (int)ptr ⟧ *)
@@ -451,7 +446,7 @@ struct
           let l,u = rangeof exp.etyp in
           mk_z_interval l u exp.erange
       in
-      Rewrite.return_singleton exp' flow |>
+      Eval.singleton exp' flow |>
       OptionExt.return
 
     (* 𝔼⟦ (int)int ⟧ *)
@@ -460,26 +455,24 @@ struct
       ->
       man.eval e flow >>$? fun e' flow ->
       check_overflow exp e' range man flow |>
-      Rewrite.return_eval |>
       OptionExt.return
 
     (* 𝔼⟦ (int)num ⟧ *)
     | E_c_cast(e, _) when exp |> etyp |> is_c_int_type &&
                           is_numeric_type e.etyp ->
-      Rewrite.reval_singleton e flow |>
+      Eval.singleton e flow |>
       OptionExt.return
 
     (* 𝔼⟦ (float)float ⟧ *)
     | E_c_cast(e, _) when exp |> etyp |> is_c_float_type &&
                           e   |> etyp |> is_c_float_type ->
       man.eval e flow |>
-      Rewrite.return_eval |>
       OptionExt.return
 
     (* 𝔼⟦ valid_float(e) ⟧ *)
     | Stubs.Ast.E_stub_builtin_call(VALID_FLOAT as f, e) ->
       man.eval e flow >>$? fun e flow ->
-      Rewrite.return_singleton (mk_expr (E_stub_builtin_call(f, e)) ~etyp:exp.etyp exp.erange) flow |>
+      Eval.singleton (mk_expr (E_stub_builtin_call(f, e)) ~etyp:exp.etyp exp.erange) flow |>
       OptionExt.return
 
     | _ ->
@@ -533,9 +526,9 @@ struct
     in
 
     init' >>$ fun init' flow ->
-    man.post ~semantic:numeric (mk_add vv range) flow >>= fun _ flow ->
+    man.post ~route:numeric (mk_add vv range) flow >>= fun _ flow ->
     add_var_bounds vv v.vtyp flow |>
-    man.post ~semantic:numeric (mk_assign vv init' range)
+    man.post ~route:numeric (mk_assign vv init' range)
 
 
   let exec stmt man flow =
@@ -550,10 +543,10 @@ struct
       let range = stmt.srange in
       assume rval
         ~fthen:(fun flow ->
-            man.post ~semantic:numeric (mk_assign lval (mk_one range) range) flow
+            man.post ~route:numeric (mk_assign lval (mk_one range) range) flow
           )
         ~felse:(fun flow ->
-            man.post ~semantic:numeric (mk_assign lval (mk_zero range) range) flow
+            man.post ~route:numeric (mk_assign lval (mk_zero range) range) flow
           )
         man flow |>
       OptionExt.return
@@ -561,18 +554,18 @@ struct
     | S_assign({ekind = E_var _} as lval, rval) when etyp lval |> is_c_num_type ->
       man.eval lval flow >>$? fun lval' flow ->
       man.eval rval flow >>$? fun rval' flow ->
-      man.post ~semantic:numeric (mk_assign lval' rval' stmt.srange) flow |>
+      man.post ~route:numeric (mk_assign lval' rval' stmt.srange) flow |>
       OptionExt.return
 
     | S_add ({ekind = E_var _} as v) when is_c_num_type v.etyp ->
       let vv = mk_num_var_expr v in
       add_var_bounds vv v.etyp flow |>
-      man.post ~semantic:numeric (mk_add vv stmt.srange) |>
+      man.post ~route:numeric (mk_add vv stmt.srange) |>
       OptionExt.return
 
     | S_remove ({ekind = E_var _} as v) when is_c_num_type v.etyp ->
       let vv = mk_num_var_expr v in
-      man.post ~semantic:numeric (mk_remove vv stmt.srange) flow |>
+      man.post ~route:numeric (mk_remove vv stmt.srange) flow |>
       Post.bind (fun flow ->
           if is_c_int_type v.etyp then
             let vv = match ekind vv with E_var (vv,_) -> vv | _ -> assert false in
@@ -589,7 +582,7 @@ struct
       ->
       let vv1 = mk_num_var_expr v1 in
       let vv2 = mk_num_var_expr v2 in
-      man.post ~semantic:numeric (mk_rename vv1 vv2 stmt.srange) flow |>
+      man.post ~route:numeric (mk_rename vv1 vv2 stmt.srange) flow |>
       OptionExt.return
 
     | S_expand(({ekind = E_var _} as e),el)
@@ -598,7 +591,7 @@ struct
       ->
       man.eval e flow >>$? fun e' flow ->
       bind_list el (fun e flow -> man.eval e flow) flow >>$? fun el' flow ->
-      man.post (mk_expand e' el' stmt.srange) ~semantic:numeric flow |>
+      man.post (mk_expand e' el' stmt.srange) ~route:numeric flow |>
       OptionExt.return
 
     | S_fold(({ekind = E_var _} as e),el)
@@ -607,12 +600,12 @@ struct
       ->
       man.eval e flow >>$? fun e' flow ->
       bind_list el (fun e flow -> man.eval e flow) flow >>$? fun el' flow ->
-      man.post (mk_fold e' el' stmt.srange) ~semantic:numeric flow |>
+      man.post (mk_fold e' el' stmt.srange) ~route:numeric flow |>
       OptionExt.return
 
     | S_forget ({ekind = E_var _} as v) when is_c_num_type v.etyp ->
       let vv = mk_num_var_expr v in
-      man.post (mk_forget vv stmt.srange) ~semantic:numeric flow |>
+      man.post (mk_forget vv stmt.srange) ~route:numeric flow |>
       OptionExt.return
 
     | _ -> None

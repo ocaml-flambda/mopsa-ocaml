@@ -42,10 +42,6 @@ struct
       let name = "c.cstubs.builtins"
     end)
 
-  let below = mk_semantic "below" ~domain:name
-
-  let dependencies = [ below ]
-
   let alarms = []
 
 
@@ -76,7 +72,7 @@ struct
       Eval.singleton (mk_bytes addr mode range) flow
 
     | _ ->
-      eval_base_size ~semantic:below base range man flow
+      eval_base_size ~route:Below base range man flow
 
 
   let byte_to_element t bytes range =
@@ -93,7 +89,7 @@ struct
     match ekind exp with
 
     | E_stub_builtin_call(BYTES, { ekind = E_addr addr }) ->
-      Rewrite.reval_singleton (mk_var (mk_bytes_var addr) exp.erange) flow |>
+      Eval.singleton (mk_var (mk_bytes_var addr) exp.erange) flow |>
       OptionExt.return
 
 
@@ -102,11 +98,10 @@ struct
         resolve_pointer e man flow >>$ fun pt flow ->
         match pt with
         | P_block (base,_,mode) ->
-          eval_base_bytes base mode exp.erange man flow |>
-          Rewrite.reval_eval
+          eval_base_bytes base mode exp.erange man flow
 
         | _ ->
-          Rewrite.reval_singleton (mk_top ul exp.erange) flow
+          Eval.singleton (mk_top ul exp.erange) flow
       )
 
     | E_stub_builtin_call(LENGTH, e) ->
@@ -115,10 +110,10 @@ struct
         match pt with
         | P_block (base,_,mode) ->
           eval_base_bytes base mode exp.erange man flow >>$ fun bytes flow ->
-          Rewrite.reval_singleton (byte_to_element (under_type e.etyp) bytes exp.erange) flow
+          Eval.singleton (byte_to_element (under_type e.etyp) bytes exp.erange) flow
 
         | _ ->
-          Rewrite.reval_singleton (mk_top ul exp.erange) flow
+          Eval.singleton (mk_top ul exp.erange) flow
       )
 
     | E_stub_builtin_call(BASE, e) ->
@@ -126,25 +121,25 @@ struct
         resolve_pointer e man flow >>$ fun pt flow ->
         match pt with
         | P_block ({ base_kind = Var v; base_valid = true; },_,mode) ->
-          Rewrite.reval_singleton (mk_c_cast (mk_c_address_of (mk_var v ~mode exp.erange) exp.erange) (T_c_pointer T_c_void) exp.erange) flow
+          Eval.singleton (mk_c_cast (mk_c_address_of (mk_var v ~mode exp.erange) exp.erange) (T_c_pointer T_c_void) exp.erange) flow
 
         | P_block ({ base_kind = String (str,k,_) },_,_) ->
-          Rewrite.reval_singleton (mk_c_string ~kind:k str exp.erange) flow
+          Eval.singleton (mk_c_string ~kind:k str exp.erange) flow
 
         | P_block ({ base_kind = Addr addr; base_valid = true; },_,_) ->
-          Rewrite.reval_singleton (mk_c_cast (mk_addr addr exp.erange) (T_c_pointer T_c_void) exp.erange) flow
+          Eval.singleton (mk_c_cast (mk_addr addr exp.erange) (T_c_pointer T_c_void) exp.erange) flow
 
         | P_top ->
-          Rewrite.reval_singleton (mk_top (T_c_pointer T_c_void) exp.erange) flow
+          Eval.singleton (mk_top (T_c_pointer T_c_void) exp.erange) flow
 
         | P_null ->
-          Rewrite.reval_singleton (mk_c_null exp.erange) flow
+          Eval.singleton (mk_c_null exp.erange) flow
 
         | P_invalid ->
-          Rewrite.reval_singleton (mk_c_invalid_pointer exp.erange) flow
+          Eval.singleton (mk_c_invalid_pointer exp.erange) flow
 
         | P_block ({ base_valid = false; },_,_) ->
-          Rewrite.reval_singleton (mk_c_invalid_pointer exp.erange) flow
+          Eval.singleton (mk_c_invalid_pointer exp.erange) flow
 
         | _ -> panic_at exp.erange "base(%a) where %a %a not supported" pp_expr e pp_expr e pp_points_to pt
       )
@@ -160,13 +155,13 @@ struct
           let elm = under_type p.etyp |> void_to_char |> (fun t -> mk_z (sizeof_type t) range) in
           (* Check validity of the offset *)
           let cond = mk_in o (mk_zero range) (sub size elm range) range in
-          Rewrite.reval_singleton cond flow
+          Eval.singleton cond flow
 
-        | P_fun _ -> Rewrite.reval_singleton (mk_one range) flow
+        | P_fun _ -> Eval.singleton (mk_one range) flow
 
-        | P_null | P_invalid -> Rewrite.reval_singleton (mk_zero range) flow
+        | P_null | P_invalid -> Eval.singleton (mk_zero range) flow
 
-        | P_top -> Rewrite.reval_singleton (mk_top T_bool range) flow
+        | P_top -> Eval.singleton (mk_top T_bool range) flow
       )
 
 
@@ -174,16 +169,16 @@ struct
       Some (
         resolve_pointer e man flow >>$ fun pt flow ->
         match pt with
-        | P_block(_,o,_) -> Rewrite.reval_singleton o flow
-        | _ -> Rewrite.reval_singleton (mk_top ul exp.erange) flow
+        | P_block(_,o,_) -> Eval.singleton o flow
+        | _ -> Eval.singleton (mk_top ul exp.erange) flow
       )
 
     | E_stub_builtin_call(INDEX, e) ->
       Some (
         resolve_pointer e man flow >>$ fun pt flow ->
         match pt with
-        | P_block(_,o,_) -> Rewrite.reval_singleton (byte_to_element (under_type e.etyp) o exp.erange) flow
-        | _ -> Rewrite.reval_singleton (mk_top ul exp.erange) flow
+        | P_block(_,o,_) -> Eval.singleton (byte_to_element (under_type e.etyp) o exp.erange) flow
+        | _ -> Eval.singleton (mk_top ul exp.erange) flow
       )
 
     | E_stub_builtin_call((VALID_FLOAT | FLOAT_INF | FLOAT_NAN) as op, flt) ->
@@ -195,7 +190,7 @@ struct
       in
       Some (
         man.eval flt flow >>$ fun flt flow ->
-        Rewrite.reval_singleton (mk_float_class cls flt exp.erange) flow
+        Eval.singleton (mk_float_class cls flt exp.erange) flow
       )
 
     | E_stub_builtin_call(ALIVE, p) ->
@@ -205,13 +200,13 @@ struct
         match pt with
         | P_block ({ base_valid }, _, _) ->
           if base_valid then
-            Rewrite.reval_singleton (mk_one range) flow
+            Eval.singleton (mk_one range) flow
           else
-            Rewrite.reval_singleton (mk_zero range) flow
+            Eval.singleton (mk_zero range) flow
 
-        | P_null | P_invalid | P_fun _ -> Rewrite.reval_singleton (mk_zero range) flow
+        | P_null | P_invalid | P_fun _ -> Eval.singleton (mk_zero range) flow
 
-        | P_top -> Rewrite.reval_singleton (mk_top T_bool range) flow
+        | P_top -> Eval.singleton (mk_top T_bool range) flow
 
       )
 

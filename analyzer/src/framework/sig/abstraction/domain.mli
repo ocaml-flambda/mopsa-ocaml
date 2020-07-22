@@ -51,9 +51,6 @@ sig
   val name : string
   (** Name of the domain *)
 
-  val dependencies : semantic list
-  (** Semantic dependencies of the domain *)
-
   val alarms : alarm_class list
   (** List of alarms detected by the domain *)
 
@@ -109,7 +106,7 @@ sig
   val exec : stmt -> ('a, t) man -> 'a flow -> 'a post option
   (** Post-state of statements *)
 
-  val eval : expr -> ('a, t) man -> 'a flow -> 'a rewrite option
+  val eval : expr -> ('a, t) man -> 'a flow -> 'a eval option
   (** Evaluation of expressions *)
 
   val ask  : ('a,'r) query -> ('a, t) man -> 'a flow -> 'r option

@@ -40,9 +40,6 @@ struct
       let name = "c.libs.compiler"
     end)
 
-
-  let dependencies = []
-
   let alarms = []
   
   (** {2 Transfer functions} *)
@@ -69,11 +66,11 @@ struct
         | E_constant _ -> mk_one exp.erange
         | _ -> mk_z_interval Z.zero Z.one exp.erange
       in
-      Rewrite.return_singleton ret flow |>
+      Eval.singleton ret flow |>
       OptionExt.return
 
     | E_c_builtin_call("__builtin_expect", [e;v]) ->
-      Rewrite.reval_singleton e flow |>
+      Eval.singleton e flow |>
       OptionExt.return
 
 

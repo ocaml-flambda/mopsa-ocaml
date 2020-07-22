@@ -35,10 +35,6 @@ struct
     end
     )
 
-  let below = mk_semantic "below" ~domain:name
-
-  let dependencies = [ below ]
-
   let alarms = []
 
   let init prog man flow = flow
@@ -52,7 +48,7 @@ struct
 
     | S_assign(lval, rval) ->
       man.eval rval flow >>$? fun rval flow ->
-      man.post ~semantic:below (mk_assign lval rval stmt.srange) flow |>
+      man.post ~route:Below (mk_assign lval rval stmt.srange) flow |>
       OptionExt.return
 
     | S_assume { ekind = E_unop (O_log_not, { ekind = E_unop (O_log_not, e) }) } ->
@@ -61,7 +57,7 @@ struct
 
     | S_assume(e) ->
       man.eval e flow >>$? fun e flow ->
-      man.post ~semantic:below (mk_assume e stmt.srange) flow |>
+      man.post ~route:Below (mk_assume e stmt.srange) flow |>
       OptionExt.return
 
     | S_block(block,local_vars) ->

@@ -201,9 +201,9 @@ let eval_num_cond cond man flow : bool option =
 
 (** Optimized assume function that uses intervals to check a
     condition or falls back to classic assume *)
-let assume_num cond ~fthen ~felse ?(semantic=any_semantic) man flow =
+let assume_num cond ~fthen ~felse ?(route=toplevel) man flow =
   man.eval cond flow >>$ fun cond flow ->
   match eval_num_cond cond man flow with
   | Some true  -> fthen flow
   | Some false -> felse flow
-  | None       -> assume cond ~fthen ~felse man ~semantic flow
+  | None       -> assume cond ~fthen ~felse man ~route flow

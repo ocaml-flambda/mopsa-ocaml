@@ -188,8 +188,6 @@ struct
       let name = name
     end)
 
-  let dependencies = []
-
   let alarms = []
 
   (** {3 Cache of last fixpoint} *)

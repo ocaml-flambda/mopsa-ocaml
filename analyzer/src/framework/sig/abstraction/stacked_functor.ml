@@ -28,7 +28,6 @@ open Stacked
 module type STACKED_FUNCTOR =
 sig
   val name : string
-  val dependencies : semantic list
   module Functor : functor(D:STACKED) -> STACKED
 end
 
@@ -39,14 +38,35 @@ end
 (**                          {2 Registration}                               *)
 (*==========================================================================*)
 
-(** Module to automatically log statements of a functor *)
-module AutoLogger(F:STACKED_FUNCTOR) : STACKED_FUNCTOR =
+(** Instrument transfer functions with some useful pre/post processing *)
+module Instrument(F:STACKED_FUNCTOR) : STACKED_FUNCTOR =
 struct
+
   include F
+
   module Functor(D:STACKED) =
   struct
+
     include D
+
+    let subset man sman x y =
+      let man = resolve_below_alias D.name man in
+      D.subset man sman x y    
+
+    let join man sman x y =
+      let man = resolve_below_alias D.name man in
+      D.join man sman x y    
+
+    let meet man sman x y =
+      let man = resolve_below_alias D.name man in
+      D.meet man sman x y    
+
+    let widen man sman x y =
+      let man = resolve_below_alias D.name man in
+      D.widen man sman x y    
+
     let exec stmt man flow =
+      let man = resolve_below_alias D.name man in 
       D.exec stmt man flow |>
       OptionExt.lift @@ fun res ->
       Cases.map_log (fun log ->
@@ -54,6 +74,15 @@ struct
             man.get_log log |> Log.add_stmt_to_log stmt
           ) log
         ) res
+
+  let eval exp man flow =
+    let man = resolve_below_alias D.name man in
+    D.eval exp man flow
+
+  let ask query man flow =
+    let man = resolve_below_alias D.name man in
+    D.ask query man flow
+
   end
 end
 
@@ -62,7 +91,7 @@ let functors : (module STACKED_FUNCTOR) list ref = ref []
 
 let register_stacked_functor f =
   let module F = (val f : STACKED_FUNCTOR) in
-  let module FF = AutoLogger(F) in
+  let module FF = Instrument(F) in
   functors := (module FF) :: !functors
 
 let find_stacked_functor name =

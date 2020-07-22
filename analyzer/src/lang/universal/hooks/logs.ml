@@ -139,68 +139,68 @@ struct
   (** {2 Events handlers} *)
   (** ******************* *)
 
-  let on_before_exec sem stmt man flow =
+  let on_before_exec route stmt man flow =
     reach stmt.srange;
     if Options.short then
       indent "%a in semantic %a"
         pp_S stmt
-        pp_semantic sem
+        pp_route route
         ~symbol:BEGIN
     else
       indent "%a @,in %a @,and semantic %a"
         pp_S stmt
         (Flow.print man.lattice.print) flow
-        pp_semantic sem
+        pp_route route
         ~symbol:BEGIN
     ;
     Stack.push (Sys.time ()) stack
 
 
-  let on_after_exec semantic stmt man flow post =
+  let on_after_exec route stmt man flow post =
     let time = get_timing () in
     if Options.short then
       indent "%a done in semantic %a [%.4fs]"
         pp_S stmt
-        pp_semantic semantic
+        pp_route route
         time
         ~symbol:END
     else
       indent "%a done in semantic %a [%.4fs]@ -->  %a"
         pp_S stmt
-        pp_semantic semantic
+        pp_route route
         time
         (Post.print man.lattice.print) post
         ~symbol:END
 
 
-  let on_before_eval semantic exp man flow =
+  let on_before_eval route exp man flow =
     if Options.short then
       indent "%a in semantic %a"
         pp_E exp
-        pp_semantic semantic
+        pp_route route
         ~symbol:BEGIN
     else
       indent "%a @,in %a @,and semantic %a"
         pp_E exp
         (Flow.print man.lattice.print) flow
-        pp_semantic semantic
+        pp_route route
         ~symbol:BEGIN
     ;
       Stack.push (Sys.time ()) stack
 
-  let on_after_eval semantic exp man flow evl =
+  let on_after_eval route exp man flow evl =
     let time = get_timing () in
     if Options.short then
       indent "%a = %a done in semantic %a [%.4fs]"
         pp_E exp
         Eval.print evl
-        pp_semantic semantic
+        pp_route route
         time
         ~symbol:END
     else
       indent "%a done in semantic %a [%.4fs]@ -->  %a"
         pp_E exp
-        pp_semantic semantic
+        pp_route route
         time
         Eval.print evl
         ~symbol:END

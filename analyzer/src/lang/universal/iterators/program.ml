@@ -32,18 +32,14 @@ struct
       let name = "universal.iterators.program"
     end)
 
-  let dependencies = []
 
   let alarms = []
 
   let init prog man flow = flow
 
-
   let eval exp man flow = None
 
-
   let ask query man flow = None
-
 
   (** Execute tests in a unit test program *)
   let exec_tests main fundecs range man flow =

@@ -41,8 +41,6 @@ struct
     end)
 
 
-  let dependencies = []
-
   let alarms = []
 
   (** Initialization *)

@@ -34,18 +34,18 @@ struct
   let rec init prog =
     Toplevel.init prog man
 
-  and exec stmt ?(semantic=any_semantic) flow =
-    Toplevel.exec ~semantic stmt man flow
+  and exec ?(route=toplevel) stmt flow =
+    Toplevel.exec ~route stmt man flow
 
-  and post stmt ?(semantic=any_semantic) flow =
-    Toplevel.post ~semantic stmt man flow
+  and post ?(route=toplevel)stmt flow =
+    Toplevel.post ~route stmt man flow
 
-  and eval exp  ?(semantic=any_semantic) flow =
-    Toplevel.eval ~semantic exp man flow
+  and eval ?(route=toplevel) exp flow =
+    Toplevel.eval ~route exp man flow
 
-  and ask : type r. (Toplevel.t,r) query -> Toplevel.t flow -> r =
-    fun query flow ->
-      Toplevel.ask query man flow
+  and ask : type r. ?route:route -> (Toplevel.t,r) query -> Toplevel.t flow -> r =
+    fun ?(route=toplevel) query flow ->
+      Toplevel.ask ~route query man flow
 
   and lattice : Toplevel.t lattice = {
     bottom = Toplevel.bottom;

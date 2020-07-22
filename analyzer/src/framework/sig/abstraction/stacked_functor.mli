@@ -32,7 +32,6 @@ open Core.Semantic
 module type STACKED_FUNCTOR =
 sig
   val name : string
-  val dependencies : semantic list
   module Functor : functor(D:STACKED)-> STACKED
 end
 

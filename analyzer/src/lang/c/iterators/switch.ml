@@ -38,8 +38,6 @@ struct
       let name = "c.iterators.switch"
     end)
 
-  let dependencies = []
-
 
   let alarms = []
 

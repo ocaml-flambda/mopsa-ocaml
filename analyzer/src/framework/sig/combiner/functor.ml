@@ -29,7 +29,6 @@ open Abstraction.Domain
 module type DOMAIN_FUNCTOR =
 sig
   val name : string
-  val dependencies : semantic list
   module Functor : functor(D:DOMAIN) -> DOMAIN
 end
 

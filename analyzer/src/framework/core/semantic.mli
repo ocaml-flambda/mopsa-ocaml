@@ -19,55 +19,12 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Semantic dependencies
+(** Semantics are named sub-trees of the abstraction *)
 
-    Domains do not have explicit dependencies on particular abstractions.
-    Instead, domains can depend on an external concrete semantics implemented
-    by some abstraction determined at runtime.
-
-    For example, consider the following case:
-
-                                     |
-                                     v
-                                  +------+
-                                  |  D1  |
-                                  +------+
-                                   |    |
-        semantic dependency #1 +---+    +---+ semantic dependency #2
-                               |            |
-                               v            v
-                            +------+     +------+
-                            |  D2  |     |  D3  |
-                            +------+     +------+
-
-    -  Domain D1 receives commands (execute a statement, evaluate an expression)
-    expressed in its concrete semantics,
-
-    -  For modularity reasons, D1 maintains part of its abstraction locally
-    and expresses other parts as a function of two other abstractions.
-
-    - D1 communicate with its dependencies through commands expressed in their
-    concrete semantics, and does not rely on internal states of D2 and D3.
-*)
-
-
-type semantic
-(** semantic dependency *)
-
-val mk_semantic: string -> domain:string -> semantic
-(** Create a semantic dependency of a domain from its name *)
-
-val any_semantic : semantic
-(** Wildcard semantic *)
-
-val domain_of_semantic : semantic -> string
-(** Get the domain of a semantic dependency *)
-
-val name_of_semantic : semantic -> string
-(** Get the name of a semantic dependency *)
+type semantic = string
 
 val compare_semantic : semantic -> semantic -> int
-(** Compare two semantic dependencies *)
 
 val pp_semantic : Format.formatter -> semantic -> unit
-(** Print a semantic dependency *)
+
+val toplevel_semantic : semantic

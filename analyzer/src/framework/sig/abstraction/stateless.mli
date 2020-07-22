@@ -45,9 +45,6 @@ sig
   val id : unit id
   (** Identifier of the domain *)
 
-  val dependencies : semantic list
-  (** Semantic dependencies of the domain *)
-
   val alarms : alarm_class list
   (** List of alarms detected by the domain *)
 
@@ -60,7 +57,7 @@ sig
   val exec : stmt -> ('a, unit) man -> 'a flow -> 'a post option
   (** Computation of post-conditions *)
 
-  val eval : expr -> ('a, unit) man -> 'a flow -> 'a rewrite option
+  val eval : expr -> ('a, unit) man -> 'a flow -> 'a eval option
   (** Evaluation of expressions *)
 
   val ask  : ('a,'r) query -> ('a, unit) man -> 'a flow -> 'r option

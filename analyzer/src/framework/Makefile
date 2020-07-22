@@ -22,8 +22,8 @@
 
 # Framework packs
 framework = core lattices sig combiners toplevel engines output config runner
-framework.core = semantic ast query context wiring alarm token log lattice soundness \
-		 flow cases eval rewrite post id manager hook cache all
+framework.core = semantic route ast query context alarm token log lattice \
+	 	 soundness flow cases eval post id manager hook cache all
 framework.core.ast = program frontend typ operator constant var expr stmt visitor
 framework.lattices = partial_map partial_inversible_map_sig \
 		     partial_inversible_map powerset_sig powerset \

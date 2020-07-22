@@ -27,7 +27,8 @@ open Abstraction.Simplified
 module type SIMPLIFIED_COMBINER =
 sig
   include SIMPLIFIED
-  val nodes : domain list
+  val domains : domain list
+  val routing_table : routing_table
   val exec : domain list -> stmt -> ('a,t) simplified_man -> uctx -> t -> t option
   val ask  : domain list -> ('a,'r) query -> ('a,t) simplified_man -> uctx -> t -> 'r option
 end
@@ -37,7 +38,8 @@ end
 module SimplifiedToCombiner(D:SIMPLIFIED) : SIMPLIFIED_COMBINER with type t = D.t =
 struct
   include D
-  let nodes = [D.name]
+  let domains = [D.name]
+  let routing_table = empty_routing_table
   let exec domains = D.exec
   let ask domains  = D.ask
 end
@@ -66,12 +68,7 @@ struct
     let a' = D.init prog in
     set_env T_cur a' man flow
 
-
-  let dependencies = [] (* Leaf domains have no dependency *)
-
-  let unresolved_dependencies = []
-
-  let wirings = empty_wirings
+  let routing_table = empty_routing_table
 
   let alarms = []
 

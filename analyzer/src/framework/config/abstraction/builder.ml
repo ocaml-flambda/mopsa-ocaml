@@ -19,6 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
+open Core.Route
 open Syntax
 open Sig.Combiner.Stacked
 open Sig.Combiner.Domain
@@ -48,15 +49,23 @@ let make_nonrel_domain (value:value) : (module SIMPLIFIED_COMBINER) =
   let module V = (val (make_value value)) in
   (module SimplifiedToCombiner(Combiners.Value.Nonrel.Make(V)))
 
-let rec is_simplified_domain = function
+let rec is_simplified_domain d =
+  match d.domain_kind with
   | D_simplified _               -> true
   | D_nonrel _                   -> true
   | D_product (dl,_)             -> List.for_all is_simplified_domain dl
   | D_functor(F_simplified _, d) -> is_simplified_domain d
   |  _                           -> false
 
-let rec make_simplified_domain (domain:domain) : (module SIMPLIFIED_COMBINER) =
-  match domain with
+let rec make_simplified_product (domains:domain list) (reductions:domain_reduction list) : (module SIMPLIFIED_COMBINER) =
+  Combiners.Domain.Optimized.Simplified_product.make
+    (List.map make_simplified_domain domains)
+    (List.fold_left
+       (fun acc -> function DR_simplified r -> r :: acc | _ -> acc)
+       [] reductions)
+
+and make_simplified_domain_without_semantic (domain:domain) : (module SIMPLIFIED_COMBINER) =
+  match domain.domain_kind with
   | D_simplified d                -> (module SimplifiedToCombiner(val d))
   | D_nonrel value                -> make_nonrel_domain value
   | D_product(domains,reductions) -> make_simplified_product domains reductions
@@ -68,34 +77,56 @@ let rec make_simplified_domain (domain:domain) : (module SIMPLIFIED_COMBINER) =
                (val make_simplified_domain d : SIMPLIFIED_COMBINER))))
   | _ -> Exceptions.panic "Invalid configuration of simplified domain: %a" pp_domain domain
 
-and make_simplified_product (domains:domain list) (reductions:domain_reduction list) : (module SIMPLIFIED_COMBINER) =
-  Combiners.Domain.Optimized.Simplified_product.make
-    (List.map make_simplified_domain domains)
-    (List.fold_left
-       (fun acc -> function DR_simplified r -> r :: acc | _ -> acc)
-       [] reductions)
+and make_simplified_domain (domain:domain) : (module SIMPLIFIED_COMBINER) =
+  match domain.domain_semantic with
+  | None -> make_simplified_domain_without_semantic domain
+  | Some semantic ->
+    let module D = (val (make_simplified_domain_without_semantic domain)) in
+    (module
+      (struct
+        include D
+        let routing_table = add_routes (Semantic semantic) D.domains D.routing_table
+      end)
+      : SIMPLIFIED_COMBINER
+    )
 
 
 (** {2 Stateless domains} *)
 (** ********************** *)
 
 
-let rec is_stateless_domain = function
+let rec is_stateless_domain d =
+  match d.domain_kind with
   | D_stateless _   -> true
   | D_sequence (dl) -> List.for_all is_simplified_domain dl
   |  _              -> false
 
-let rec make_stateless_domain (domain:domain) : (module STATELESS_COMBINER) =
-  match domain with
+let rec make_stateless_domain_without_semantic (domain:domain) : (module STATELESS_COMBINER) =
+  match domain.domain_kind with
   | D_stateless d -> (module StatelessToCombiner(val d))
   | D_sequence dl -> Combiners.Domain.Optimized.Stateless_sequence.make (List.map make_stateless_domain dl)
   | _ -> Exceptions.panic "Invalid configuration of stateless domain: %a" pp_domain domain
+
+and make_stateless_domain (domain:domain) : (module STATELESS_COMBINER) =
+  match domain.domain_semantic with
+  | None -> make_stateless_domain_without_semantic domain
+  | Some semantic ->
+    let module D = (val (make_stateless_domain_without_semantic domain)) in
+    (module
+      (struct
+        include D
+        let routing_table = add_routes (Semantic semantic) D.domains D.routing_table
+      end)
+      : STATELESS_COMBINER
+    )
+
 
 
 (** {2 Standard domains} *)
 (** ******************** *)
 
-let is_standard_domain = function
+let is_standard_domain d =
+  match d.domain_kind with
   | D_domain _ -> true
   | D_functor(F_domain _, _) -> true
   | _ -> false
@@ -106,7 +137,7 @@ let rec make_standard_domain (domain:domain) : (module DOMAIN_COMBINER) =
   if is_stateless_domain domain then
     (module StatelessToDomain(val (make_stateless_domain domain)))
   else
-    match domain with
+    match domain.domain_kind with
     | D_domain d -> (module DomainToCombiner(val d))
     | D_functor(F_domain f, d) ->
       let module F = (val f) in
@@ -124,21 +155,21 @@ let rec make_standard_domain (domain:domain) : (module DOMAIN_COMBINER) =
 let rec prepare_stacked_sequence (domains:domain list) : (module STACKED_COMBINER) list =
   match domains with
   | [] -> []
-  | D_stateless _ :: _ ->
+  | { domain_kind = D_stateless _ } :: _ ->
     let rec extract_stateless_prefix = function
       | [] -> [], []
-      | D_stateless _ as hd :: tl ->
+      | { domain_kind = D_stateless _ } as hd :: tl ->
         let a,b = extract_stateless_prefix tl in
         hd::a,b
       | l -> [],l
     in
     let l1,l2 = extract_stateless_prefix domains in
-    let hd = make_stateless_domain (D_sequence l1) in
+    let hd = make_stateless_domain (mk_domain (D_sequence l1)) in
     (module StandardToStacked(StatelessToDomain(val hd))) :: prepare_stacked_sequence l2
   | hd::tl -> make_stacked_domain hd :: prepare_stacked_sequence tl
 
-and make_stacked_domain (domain:domain) : (module STACKED_COMBINER) =
-  match domain with
+and make_stacked_domain_without_semantic (domain:domain) : (module STACKED_COMBINER) =
+  match domain.domain_kind with
   | D_stacked d     -> (module StackedToCombiner(val d))
   | D_domain d      -> (module StandardToStacked(DomainToCombiner(val d)))
   | D_simplified d  -> (module StandardToStacked(SimplifiedToStandard(SimplifiedToCombiner(val d))))
@@ -164,10 +195,10 @@ and make_stacked_domain (domain:domain) : (module STACKED_COMBINER) =
     let module F = (val f) in
     (module StandardToStacked
          (SimplifiedToStandard
-           (SimplifiedToCombiner
-              (F.Functor
-                 (CombinerToSimplified
-                    (val make_simplified_domain d : SIMPLIFIED_COMBINER))))))
+            (SimplifiedToCombiner
+               (F.Functor
+                  (CombinerToSimplified
+                     (val make_simplified_domain d : SIMPLIFIED_COMBINER))))))
 
   | D_compose domains  -> Combiners.Domain.Compose.make (List.map make_stacked_domain domains)
   | D_sequence domains -> Combiners.Domain.Sequence.make (prepare_stacked_sequence domains)
@@ -186,6 +217,18 @@ and make_stacked_domain (domain:domain) : (module STACKED_COMBINER) =
            (fun acc -> function DR_exec r -> r :: acc | _ -> acc)
            [] reductions)
 
+and make_stacked_domain (domain:domain) : (module STACKED_COMBINER) =
+  match domain.domain_semantic with
+  | None -> make_stacked_domain_without_semantic domain
+  | Some semantic ->
+    let module D = (val (make_stacked_domain_without_semantic domain)) in
+    (module
+      (struct
+        include D
+        let routing_table = add_routes (Semantic semantic) D.domains D.routing_table
+      end)
+      : STACKED_COMBINER
+    )
 
 let from_json (domain:domain) : (module STACKED_COMBINER) =
   make_stacked_domain domain
