@@ -47,8 +47,13 @@ struct
          match ekind e1, ekind e2 with
           (* Constants from the string length domain should be precise *)
           | _, E_constant (C_int _)
-          | _, E_constant (C_c_character _)
-          | _, E_constant (C_int_interval _) ->
+          | _, E_constant (C_c_character _) ->
+            (* Remove cell evaluation *)
+            let evals = rman.del_eval cells evals in
+            Cases.singleton evals flow
+
+          (* When both return an interval, we prefer the result of the string domain as it may represent characters of a literal string *)
+          | E_constant (C_int_interval _), E_constant (C_int_interval _) ->
             (* Remove cell evaluation *)
             let evals = rman.del_eval cells evals in
             Cases.singleton evals flow

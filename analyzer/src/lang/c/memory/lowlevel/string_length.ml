@@ -521,7 +521,7 @@ struct
     ] man flow
 
 
-  (** 𝕊⟦ ∀i ∈ [a,b] : *(p + ∀i) != 0 ⟧ *)
+  (** 𝕊⟦ ∀i ∈ [a,b] : *(p + i) != 0 ⟧ *)
   (* FIXME: this transfer function is sound only when the offset is an
      affine function with coefficient 1, i.e. of the form ∀i + a *)
   let exec_assume_quantified_ne_zero i a b base boffset ctype mode range man flow =
@@ -725,42 +725,35 @@ struct
     | S_assume({ ekind = E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_binop(O_eq, lval, n) }) })
     | S_assume({ ekind = E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_unop(O_log_not, { ekind = E_binop(O_ne, lval, n)}) }) })
       when is_c_int_type lval.etyp &&
-           is_c_deref lval &&
-           is_c_int_type n.etyp &&
-           not (is_c_deref n) &&
-           is_c_int_type i.vtyp &&
+           is_c_lval (remove_casts lval) &&
            is_var_in_expr i lval &&
            not (is_var_in_expr i n)
       ->
-      exec_assume_quantified i a b O_eq lval n stmt.srange man flow |>
+      exec_assume_quantified i a b O_eq (remove_casts lval) n stmt.srange man flow |>
       OptionExt.return
 
     (* 𝕊⟦ ∀i ∈ [a,b] : *(p + i) != n ⟧ *)
     | S_assume({ ekind = E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_binop(O_ne, lval, n)}) })
     | S_assume({ ekind = E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_unop(O_log_not, { ekind = E_binop(O_eq, lval, n)} )}) })
       when is_c_int_type lval.etyp &&
-           is_c_deref lval &&
-           is_c_int_type n.etyp &&
-           not (is_c_deref n) &&
-           is_c_int_type i.vtyp &&
+           is_c_lval (remove_casts lval) &&
            is_var_in_expr i lval &&
            not (is_var_in_expr i n)
       ->
-      exec_assume_quantified i a b O_ne lval n stmt.srange man flow |>
+      exec_assume_quantified i a b O_ne (remove_casts lval) n stmt.srange man flow |>
       OptionExt.return
 
     (* 𝕊⟦ ∀i ∈ [a,b]: *(p + i) == *(q + i) ⟧ *)
     | S_assume({ ekind = E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_binop(O_eq, lval1, lval2)}) })
     | S_assume({ ekind = E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_unop(O_log_not, { ekind = E_binop(O_ne, lval1, lval2)} )}) })
       when is_c_int_type lval1.etyp &&
-           is_c_deref lval1 &&
+           is_c_lval (remove_casts lval1) &&
            is_c_int_type lval2.etyp &&
-           is_c_deref lval2 &&
-           is_c_int_type i.vtyp &&
+           is_c_lval (remove_casts lval2) &&
            is_var_in_expr i lval1 &&
            is_var_in_expr i lval2
       ->
-      exec_assume_double_quantified_eq i a b lval1 lval2 stmt.srange man flow |>
+      exec_assume_double_quantified_eq i a b (remove_casts lval1) (remove_casts lval2) stmt.srange man flow |>
       OptionExt.return
 
     | _ -> None

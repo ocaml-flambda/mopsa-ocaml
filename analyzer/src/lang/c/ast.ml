@@ -1189,6 +1189,10 @@ let is_c_constant e =
   | None -> false
   | Some _ -> true
 
+let is_c_lval e =
+  match ekind e with
+  | E_var _ | E_c_deref _ | E_c_array_subscript _ | E_c_member_access _ | E_c_arrow_access _ -> true
+  | _ -> false
 
 let is_c_deref e =
   match remove_casts e |> ekind with
