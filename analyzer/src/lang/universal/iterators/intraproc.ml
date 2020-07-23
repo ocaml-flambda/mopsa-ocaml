@@ -66,14 +66,6 @@ struct
       man.post (mk_assume e stmt.srange) flow |>
       OptionExt.return
 
-    | S_assume { ekind = E_unop (O_log_not, { ekind = E_binop (O_log_and, e1, e2) }) } ->
-      man.post (mk_assume (mk_log_or e1 e2 stmt.srange) stmt.srange) flow |>
-      OptionExt.return
-
-    | S_assume { ekind = E_unop (O_log_not, { ekind = E_binop (O_log_or, e1, e2) }) } ->
-      man.post (mk_assume (mk_log_and e1 e2 stmt.srange) stmt.srange) flow |>
-      OptionExt.return
-
     | S_assume { ekind = E_constant (C_bool true) } ->
       Post.return flow |>
       OptionExt.return
