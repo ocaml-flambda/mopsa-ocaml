@@ -175,7 +175,7 @@ struct
   (** Build the map of exec functions *)
   let exec_map : (stmt -> (t,t) man -> t flow -> t post option) RouteMap.t =
     (* Add the initial implicit binding for toplevel route *)
-    let map = RouteMap.singleton toplevel (Domain.exec Domain.domains) in
+    let map = RouteMap.singleton toplevel (Domain.exec []) in
     (* Iterate over all routes *)
     get_routes Domain.routing_table |>
     List.fold_left (fun map route ->
@@ -240,7 +240,7 @@ struct
   (** Build the map of [eval] functions *)
   let eval_map : (expr -> (t,t) man -> t flow -> t eval option) RouteMap.t =
     (* Add the implicit eval for toplevel *)
-    let map = RouteMap.singleton toplevel (Domain.eval Domain.domains) in
+    let map = RouteMap.singleton toplevel (Domain.eval []) in
 
     (* Iterate over all routes *)
     get_routes Domain.routing_table |>

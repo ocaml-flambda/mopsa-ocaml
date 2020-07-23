@@ -257,22 +257,20 @@ struct
       ~route:numeric man flow
 
 
+  let rec is_compare_expr e =
+    match ekind e with
+    | E_binop(op, e1, e2) when is_comparison_op op -> true
+    | E_binop(op, e1, e2) when is_logic_op op -> true
+    | E_unop(O_log_not, ee) -> is_compare_expr ee
+    | E_c_cast(ee,_) -> is_compare_expr ee
+    | _ -> false
+
+
   let is_predicate_op = function
     | O_float_class _ -> true
     | _ -> false
 
-  let rec is_cond_expr e =
-    match ekind @@ remove_casts e with
-    | E_binop(op,_,_) when is_comparison_op op -> true
-    | E_binop(op,_,_) when is_logic_op op -> true
-    | E_unop(O_log_not, _) -> true
-    | E_unop(op,_) when is_predicate_op op -> true
-    | _ -> false
-
-
-
   let rec to_compare_expr e =
-    if e.etyp = T_bool then e else
     match ekind e with
     | E_binop(op, e1, e2) when is_comparison_op op ->
       e
@@ -349,7 +347,7 @@ struct
     | E_unop(O_log_not, e) when exp |> etyp |> is_c_num_type ->
       man.eval e flow >>$? fun e flow ->
       let exp' =
-        if is_cond_expr e then
+        if is_compare_expr e then
           { exp with
             ekind = E_unop(O_log_not, e);
             etyp = T_bool }
@@ -510,7 +508,7 @@ struct
           Eval.singleton (mk_top (to_num_type v.vtyp) range) flow
 
       | _, Some (C_init_expr e) ->
-        if not (is_cond_expr e) then
+        if not (is_compare_expr e) then
           man.eval e flow
         else
           assume e
@@ -538,7 +536,7 @@ struct
       OptionExt.return
 
     | S_assign({ekind = E_var _} as lval, rval) when etyp lval |> is_c_num_type &&
-                                                     is_cond_expr rval ->
+                                                     is_compare_expr rval ->
       man.eval lval flow >>$? fun lval flow ->
       let range = stmt.srange in
       assume rval
@@ -555,6 +553,10 @@ struct
       man.eval lval flow >>$? fun lval' flow ->
       man.eval rval flow >>$? fun rval' flow ->
       man.post ~route:numeric (mk_assign lval' rval' stmt.srange) flow |>
+      OptionExt.return
+
+    | S_assume(e) when is_c_num_type e.etyp && not (is_compare_expr e) ->
+      man.post ~route:numeric (mk_assume (to_compare_expr e) stmt.srange) flow |>
       OptionExt.return
 
     | S_add ({ekind = E_var _} as v) when is_c_num_type v.etyp ->
