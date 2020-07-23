@@ -263,6 +263,7 @@ struct
     | E_binop(op, e1, e2) when is_logic_op op -> true
     | E_unop(O_log_not, ee) -> is_compare_expr ee
     | E_c_cast(ee,_) -> is_compare_expr ee
+    | E_stub_quantified_formula _ -> true
     | _ -> false
 
 
@@ -555,7 +556,7 @@ struct
       man.post ~route:numeric (mk_assign lval' rval' stmt.srange) flow |>
       OptionExt.return
 
-    | S_assume(e) when is_c_num_type e.etyp && not (is_compare_expr e) ->
+    | S_assume(e) when (is_c_num_type e.etyp || is_numeric_type e.etyp) && not (is_compare_expr e) ->
       man.post ~route:numeric (mk_assume (to_compare_expr e) stmt.srange) flow |>
       OptionExt.return
 
