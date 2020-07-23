@@ -310,28 +310,12 @@ struct
   (** {2 Handler of queries} *)
   (** ********************** *)
 
-  type ask = { doit : 'r. (t,'r) query -> (t,t) man -> t flow -> 'r option }
-  
-  (** Map binding semantics to the associated [ask] function *)
-  let ask_map : ask RouteMap.t =
-    (* Add the implicit ask for toplevel *)
-    let map = RouteMap.singleton toplevel { doit = (fun q man flow -> Domain.ask Domain.domains q man flow) } in
 
-    (* Iterate over all routes *)
-    get_routes Domain.routing_table |>
-    List.fold_left (fun map route ->
-        if RouteMap.mem route map then
-          map
-        else
-          let domains = resolve_route route Domain.routing_table in
-          RouteMap.add route { doit = (fun q man flow -> Domain.ask domains q man flow) } map
-      ) map
-
-  
   let ask : type r. ?route:route -> (t,r) query -> (t,t) man -> t flow -> r =
     fun ?(route=toplevel) query man flow ->
-    let f = RouteMap.find route ask_map in
-    match f.doit query man flow with
+    (* FIXME: the map of transfer functions indexed by routes is not constructed offline, due to the GADT query *)
+    let domains = if compare_route route toplevel = 0 then [] else resolve_route route Domain.routing_table in
+    match Domain.ask domains query man flow with
     | None -> raise Not_found
     | Some r -> r
 

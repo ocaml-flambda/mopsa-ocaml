@@ -116,8 +116,8 @@ struct
 
   (** Query handler *)
   let ask domains =
-match sat_targets ~targets:domains ~domains:C1.domains,
-      sat_targets ~targets:domains ~domains:C2.domains
+    match sat_targets ~targets:domains ~domains:C1.domains,
+          sat_targets ~targets:domains ~domains:C2.domains
     with
     | false, false ->
       (* Both domains do not provide an [eval] for such zone *)

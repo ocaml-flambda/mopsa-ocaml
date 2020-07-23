@@ -266,8 +266,8 @@ struct
 
 
   (* Apply [exec] transfer function pointwise over all domains *)
-  let exec_pointwise targets stmt man flow : 'a post option list option =
-    let posts, ctx = Pool.exec targets stmt man flow in
+  let exec_pointwise f stmt man flow : 'a post option list option =
+    let posts, ctx = f stmt man flow in
     if List.exists (function Some _ -> true | None -> false) posts
     then Some posts
     else None
@@ -290,13 +290,15 @@ struct
 
 
   (** Entry point of abstract transformers *)
-  let exec targets stmt man flow =
-    exec_pointwise targets stmt man flow |>
-    OptionExt.lift @@ fun pointwise ->
-    merge_inter_conflicts man flow pointwise |>
-    simplify_pointwise_post |>
-    merge_intra_conflicts man flow |>
-    reduce_post stmt man flow
+  let exec targets =
+    let f = Pool.exec targets in
+    (fun stmt man flow ->
+       exec_pointwise f stmt man flow |>
+       OptionExt.lift @@ fun pointwise ->
+       merge_inter_conflicts man flow pointwise |>
+       simplify_pointwise_post |>
+       merge_intra_conflicts man flow |>
+       reduce_post stmt man flow)
 
 
   (** {2 Abstract evaluations} *)
@@ -304,8 +306,8 @@ struct
 
 
   (** Compute pointwise evaluations over the pool of domains *)
-  let eval_pointwise targets exp man flow : 'a eval option list option =
-    let pointwise, ctx = Pool.eval targets exp man flow in
+  let eval_pointwise f exp man flow : 'a eval option list option =
+    let pointwise, ctx = f exp man flow in
     if List.exists (function Some _ -> true | None -> false) pointwise
     then Some pointwise
     else None
@@ -372,12 +374,14 @@ struct
 
 
   (** Entry point of abstract evaluations *)
-  let eval targets exp man flow =
-    eval_pointwise targets exp man flow |>
-    OptionExt.lift @@ fun pointwise ->
-    merge_inter_conflicts man flow pointwise |>
-    reduce_pointwise_eval exp man |>
-    merge_intra_conflicts man flow
+  let eval targets =
+    let f = Pool.eval targets in
+    (fun exp man flow ->
+       eval_pointwise f exp man flow |>
+       OptionExt.lift @@ fun pointwise ->
+       merge_inter_conflicts man flow pointwise |>
+       reduce_pointwise_eval exp man |>
+       merge_intra_conflicts man flow)
 
 
 
