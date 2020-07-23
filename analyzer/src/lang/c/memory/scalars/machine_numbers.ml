@@ -258,12 +258,12 @@ struct
 
 
   let rec is_compare_expr e =
+    e.etyp = T_bool ||
     match ekind e with
     | E_binop(op, e1, e2) when is_comparison_op op -> true
     | E_binop(op, e1, e2) when is_logic_op op -> true
     | E_unop(O_log_not, ee) -> is_compare_expr ee
     | E_c_cast(ee,_) -> is_compare_expr ee
-    | E_stub_quantified_formula _ -> true
     | _ -> false
 
 
