@@ -876,10 +876,11 @@ struct
                  raise_c_use_after_free_wo_info_alarm ~bottom:false range man |>
                  raise_c_dangling_deref_wo_info_alarm ~bottom:false range man |>
                  raise_c_out_bound_wo_info_alarm ~bottom:false range man in
-      Eval.singleton (mk_top (void_to_char t) range) flow
+      man.eval (mk_top (void_to_char t) range) flow
 
     | Region (base,lo,hi,step) ->
-      smash_region base lo hi step t range man flow
+      smash_region base lo hi step t range man flow >>$ fun ret flow ->
+      man.eval ret flow ~route:scalar
 
     | Cell (c,mode) ->
       add_cell c range man flow >>$ fun () flow ->
@@ -889,7 +890,7 @@ struct
         else
           mk_numeric_cell_var_expr c ~mode range
       in
-      Eval.singleton v flow
+      man.eval v flow ~route:scalar
 
 
   (* 𝔼⟦ *p ⟧ where p is a pointer to a function *)

@@ -156,7 +156,7 @@ struct
     | E_c_builtin_call("printf", format :: args)
     | E_c_builtin_call("__printf_chk", _ :: format :: args) ->
       check_args format args exp.erange man flow >>$? fun () flow ->
-      Eval.singleton (mk_top s32 exp.erange) flow |>
+      man.eval (mk_top s32 exp.erange) flow |>
       OptionExt.return
 
     (* 𝔼⟦ fprintf(...) ⟧ *)
@@ -164,14 +164,14 @@ struct
     | E_c_builtin_call("__fprintf_chk", stream :: _ :: format :: args) ->
       assert_valid_stream stream exp.erange man flow >>$? fun () flow ->
       check_args format args exp.erange man flow >>$? fun () flow ->
-      Eval.singleton (mk_top s32 exp.erange) flow |>
+      man.eval (mk_top s32 exp.erange) flow |>
       OptionExt.return
 
     (* 𝔼⟦ dprintf(...) ⟧ *)
     | E_c_builtin_call("dprintf", file:: format :: args) ->
       assert_valid_file_descriptor file exp.erange man flow >>$? fun () flow ->
       check_args format args exp.erange man flow >>$? fun () flow ->
-      Eval.singleton (mk_top s32 exp.erange) flow |>
+      man.eval (mk_top s32 exp.erange) flow |>
       OptionExt.return
 
     (* 𝔼⟦ sprintf(...) ⟧ *)
@@ -180,14 +180,14 @@ struct
     | E_c_builtin_call("__builtin___sprintf_chk", dst :: _ :: _ :: format :: args) ->
       check_args format args exp.erange man flow >>$? fun () flow ->
       memrand dst (mk_zero ~typ:ul exp.erange) (mk_top ul exp.erange) exp.erange man flow >>$? fun () flow ->
-      Eval.singleton (mk_top s32 exp.erange) flow |>
+      man.eval (mk_top s32 exp.erange) flow |>
       OptionExt.return
 
     (* 𝔼⟦ snprintf(...) ⟧ *)
     | E_c_builtin_call("snprintf", dst :: n :: format :: args) ->
       check_args format args exp.erange man flow >>$? fun () flow ->
       strnrand dst n exp.erange man flow >>$? fun () flow ->
-      Eval.singleton (mk_top s32 exp.erange) flow |>
+      man.eval (mk_top s32 exp.erange) flow |>
       OptionExt.return
 
     (* 𝔼⟦ asprintf(...) ⟧ *)
@@ -200,20 +200,20 @@ struct
     | E_c_builtin_call("error", status :: errnum :: format :: args) ->
       check_args format args exp.erange man flow >>$? fun () flow ->
       error_error status exp.erange man flow >>$? fun () flow ->
-      Eval.singleton (mk_top s32 exp.erange) flow |>
+      man.eval (mk_top s32 exp.erange) flow |>
       OptionExt.return
 
     (* 𝔼⟦ error_at_line(...) ⟧ *)
     | E_c_builtin_call("error_at_line", status :: errnum :: filename :: linenum :: format :: args) ->
       check_args format args exp.erange man flow >>$? fun () flow ->
       error_error_at_line status filename exp.erange man flow >>$? fun () flow ->
-      Eval.singleton (mk_top s32 exp.erange) flow |>
+      man.eval (mk_top s32 exp.erange) flow |>
       OptionExt.return
 
     (* 𝔼⟦ wprintf(...) ⟧ *)
     | E_c_builtin_call("wprintf", format :: args) ->
       check_args ~wide:true format args exp.erange man flow >>$? fun () flow ->
-      Eval.singleton (mk_top s32 exp.erange) flow |>
+      man.eval (mk_top s32 exp.erange) flow |>
       OptionExt.return
 
     (* 𝔼⟦ fwprintf(...) ⟧ *)
@@ -227,7 +227,7 @@ struct
     | E_c_builtin_call("swprintf", dst :: n :: format :: args) ->
       check_args ~wide:true format args exp.erange man flow >>$? fun () flow ->
       wcsnrand dst n exp.erange man flow >>$? fun () flow ->
-      Eval.singleton (mk_top s32 exp.erange) flow |>
+      man.eval (mk_top s32 exp.erange) flow |>
       OptionExt.return
 
     | _ -> None

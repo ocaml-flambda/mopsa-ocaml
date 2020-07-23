@@ -732,7 +732,7 @@ struct
                 mk_binop offset O_le (sub sentinel_pos ptr range) range;
               ],
               (fun flow ->
-                 Eval.singleton (weaken_var_expr before) flow
+                 man.eval (weaken_var_expr before) ~route:scalar flow
               );
 
               (* Case 2: at sentinel
@@ -743,7 +743,7 @@ struct
                 mk_binop offset O_eq sentinel_pos range;
               ],
               (fun flow ->
-                 Eval.singleton sentinel flow
+                 man.eval sentinel ~route:scalar flow
               );
 
               (* Case 2: after sentinel

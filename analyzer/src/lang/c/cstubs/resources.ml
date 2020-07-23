@@ -159,15 +159,15 @@ struct
   (* Allocate in the heap *)
   let eval_stub_alloc res range man flow =
     let alloc = mk_alloc_addr (A_stub_resource res) range in
-    man.eval alloc flow >>$ fun exp flow ->
-    match ekind exp with
+    man.eval alloc flow >>$ fun eaddr flow ->
+    match ekind eaddr with
     | E_addr addr ->
       (* Add bytes attribute *)
       let bytes = mk_bytes_var addr in
-      man.post (mk_add_var bytes exp.erange) flow >>$ fun () flow ->
+      man.post (mk_add_var bytes eaddr.erange) flow >>$ fun () flow ->
       (* Add the address dimension to memory abstraction *)
-      man.post (mk_add exp range) flow >>$ fun () flow ->
-      Eval.singleton exp flow
+      man.post (mk_add eaddr range) flow >>$ fun () flow ->
+      Eval.singleton eaddr flow
 
     | _ -> assert false
 

@@ -228,7 +228,7 @@ struct
 
   let eval_primed_base base offset mode typ range man flow =
     let p = mk_primed_address base offset typ range in
-    Eval.singleton (mk_c_deref p range) flow
+    man.eval (mk_c_deref p range) flow
 
 
   let eval_stub_primed e range man flow =

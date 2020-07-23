@@ -122,10 +122,10 @@ struct
     | E_c_conditional(cond, e1, e2) ->
       assume cond
         ~fthen:(fun flow ->
-            Eval.singleton e1 flow
+            man.eval e1 flow
           )
         ~felse:(fun flow ->
-            Eval.singleton e2 flow
+            man.eval e2 flow
           )
         man flow |>
       OptionExt.return
@@ -133,10 +133,10 @@ struct
     | E_binop(O_c_and, e1, e2) ->
       assume e1
         ~fthen:(fun flow ->
-            Eval.singleton e2 flow
+            man.eval e2 flow
           )
         ~felse:(fun flow ->
-            Eval.singleton (Universal.Ast.mk_zero exp.erange) flow
+            Eval.singleton (mk_zero exp.erange) flow
           )
         man flow |>
       OptionExt.return
@@ -144,10 +144,10 @@ struct
     | E_binop(O_c_or, e1, e2) ->
       assume e1
         ~fthen:(fun flow ->
-            Eval.singleton (Universal.Ast.mk_one exp.erange) flow
+            Eval.singleton (mk_one exp.erange) flow
           )
         ~felse:(fun flow ->
-            Eval.singleton e2 flow
+            man.eval e2 flow
           )
         man flow |>
       OptionExt.return
@@ -165,7 +165,7 @@ struct
           let q' = List.rev q in
           let stmt' = mk_block q' (erange exp) in
           man.post stmt' flow >>$? fun () flow ->
-          Eval.singleton e flow |>
+          man.eval e flow |>
           Cases.add_cleaners (List.map (fun v -> mk_remove_var v exp.erange) local_vars) |>
           OptionExt.return
 
@@ -173,7 +173,7 @@ struct
       end
 
     | E_c_statement {skind = S_expression e} ->
-      Eval.singleton e flow |>
+      man.eval e flow |>
       OptionExt.return
 
 

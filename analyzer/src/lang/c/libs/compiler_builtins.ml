@@ -70,7 +70,7 @@ struct
       OptionExt.return
 
     | E_c_builtin_call("__builtin_expect", [e;v]) ->
-      Eval.singleton e flow |>
+      man.eval e flow |>
       OptionExt.return
 
 

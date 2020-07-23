@@ -278,15 +278,7 @@ struct
     let evl =
       (* Ask domains to perform the evaluation *) 
       match Cache.eval feval route exp man flow with
-      | Some evl ->
-        (* Check if we reached the end of the evaluation if we get an
-           expression equal to the input expression *)
-        evl >>$ fun exp' flow' ->
-        if exp == exp' then
-          Cases.singleton exp' flow'
-        else
-          (* Otherwise iterate again evaluation route the result *)
-          man.eval exp' ~route:(refine_route_with_var_semantic toplevel exp')flow'
+      | Some evl -> evl
 
       | None ->
         (* No answer, so try to visit sub-expressions *)

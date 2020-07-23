@@ -150,7 +150,7 @@ struct
           if is_c_void_type fundec.c_func_return then
             Eval.empty_singleton flow
           else
-            Eval.singleton (mk_top fundec.c_func_return range) flow
+            man.eval (mk_top fundec.c_func_return range) flow
         )
         else
          match fundec with
@@ -175,7 +175,6 @@ struct
           }
           in
           let exp' = mk_call fundec' args range in
-          (* Universal will evaluate the call into a temporary variable containing the returned value *)
           man.eval exp' flow
 
         | {c_func_variadic = true} ->

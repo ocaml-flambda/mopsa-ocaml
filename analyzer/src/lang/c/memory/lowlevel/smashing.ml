@@ -1277,7 +1277,7 @@ struct
   let eval_deref p range man flow =
     eval_pointed_base_offset p range man flow >>$ fun (base,offset,mode) flow ->
     if not (is_interesting_base base) || not (is_aligned offset (under_type p.etyp) man flow) then
-      Eval.singleton (mk_top (under_type p.etyp) range) flow
+      man.eval (mk_top (under_type p.etyp) range) ~route:scalar flow
     else
       let a = get_env T_cur man flow in
       let s = mk_smash base (under_type p.etyp) in
@@ -1286,9 +1286,9 @@ struct
       phi s range man flow >>$ fun () flow ->
       let esmash = mk_smash_expr s ~typ:(Some (under_type p.etyp)) ~mode range in
       match init with
-      | Init.Bot | Init.None ->  Eval.singleton (mk_top (under_type p.etyp) range) flow
+      | Init.Bot | Init.None ->  man.eval (mk_top (under_type p.etyp) range) ~route:scalar flow
 
-      | Init.Full ts -> Eval.singleton esmash flow
+      | Init.Full ts -> man.eval esmash ~route:scalar flow
 
       | Init.Partial ts ->
         (* When accessing a partially initialized base, two cases are possible
@@ -1307,11 +1307,11 @@ struct
         assume_num (ge offset uninit range)
           ~fthen:(fun flow ->
               (* Case #2 *)
-              Eval.singleton (mk_top (under_type p.etyp) range) flow
+              man.eval (mk_top (under_type p.etyp) range) ~route:scalar flow
             )
           ~felse:(fun flow ->
               (* Case #1 *)
-              Eval.singleton esmash flow
+              man.eval esmash ~route:scalar flow
             ) ~route:scalar man flow
 
 

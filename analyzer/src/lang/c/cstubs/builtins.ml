@@ -69,7 +69,7 @@ struct
     let open Common.Base in
     match base.base_kind with
     | Addr addr ->
-      Eval.singleton (mk_bytes addr mode range) flow
+      man.eval (mk_bytes addr mode range) flow
 
     | _ ->
       eval_base_size ~route:Below base range man flow
@@ -89,7 +89,7 @@ struct
     match ekind exp with
 
     | E_stub_builtin_call(BYTES, { ekind = E_addr addr }) ->
-      Eval.singleton (mk_var (mk_bytes_var addr) exp.erange) flow |>
+      man.eval (mk_var (mk_bytes_var addr) exp.erange) flow |>
       OptionExt.return
 
 
@@ -101,7 +101,7 @@ struct
           eval_base_bytes base mode exp.erange man flow
 
         | _ ->
-          Eval.singleton (mk_top ul exp.erange) flow
+          man.eval (mk_top ul exp.erange) flow
       )
 
     | E_stub_builtin_call(LENGTH, e) ->
@@ -113,7 +113,7 @@ struct
           Eval.singleton (byte_to_element (under_type e.etyp) bytes exp.erange) flow
 
         | _ ->
-          Eval.singleton (mk_top ul exp.erange) flow
+          man.eval (mk_top ul exp.erange) flow
       )
 
     | E_stub_builtin_call(BASE, e) ->
@@ -151,7 +151,6 @@ struct
         match pt with
         | P_block(b, o, m) ->
           eval_base_bytes b m range man flow >>$ fun size flow ->
-          man.eval size flow >>$ fun size flow ->
           let elm = under_type p.etyp |> void_to_char |> (fun t -> mk_z (sizeof_type t) range) in
           (* Check validity of the offset *)
           let cond = mk_in o (mk_zero range) (sub size elm range) range in
@@ -170,7 +169,7 @@ struct
         resolve_pointer e man flow >>$ fun pt flow ->
         match pt with
         | P_block(_,o,_) -> Eval.singleton o flow
-        | _ -> Eval.singleton (mk_top ul exp.erange) flow
+        | _ -> man.eval (mk_top ul exp.erange) flow
       )
 
     | E_stub_builtin_call(INDEX, e) ->
@@ -178,7 +177,7 @@ struct
         resolve_pointer e man flow >>$ fun pt flow ->
         match pt with
         | P_block(_,o,_) -> Eval.singleton (byte_to_element (under_type e.etyp) o exp.erange) flow
-        | _ -> Eval.singleton (mk_top ul exp.erange) flow
+        | _ -> man.eval (mk_top ul exp.erange) flow
       )
 
     | E_stub_builtin_call((VALID_FLOAT | FLOAT_INF | FLOAT_NAN) as op, flt) ->

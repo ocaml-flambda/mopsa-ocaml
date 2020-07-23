@@ -632,7 +632,8 @@ struct
           OptionExt.return
 
         | Some v ->
-          Eval.singleton (mk_var v exp.erange) flow ~cleaners:(mk_remove_var v exp.erange :: cleaners) |>
+          man.eval (mk_var v exp.erange) flow |>
+          Cases.add_cleaners (mk_remove_var v exp.erange :: cleaners) |>
           OptionExt.return
       end
 

@@ -373,7 +373,7 @@ struct
           OptionExt.return
 
         | E_c_deref p ->
-          Eval.singleton p flow |>
+          man.eval p flow |>
           OptionExt.return
 
         | _ -> None

@@ -37,6 +37,8 @@ struct
   include GenStatelessDomainId
       (struct let name = "c.memory.variable_length_array" end)
 
+  let scalar = Semantic "C/Scalar"
+
   let alarms = []
 
 
@@ -79,7 +81,7 @@ struct
       let () = pp_variable_length Format.str_formatter arr in
       Format.flush_str_formatter ()
     in
-    mkv name (V_c_variable_length arr) ul
+    mkv name (V_c_variable_length arr) ul ~semantic:"C/Scalar"
 
 
 
@@ -102,7 +104,7 @@ struct
 
     (* Add the length variable to the environment *)
     let len = mk_variable_length_var arr in
-    man.post (mk_add_var len range) flow >>$ fun () flow ->
+    man.post (mk_add_var len range) ~route:scalar flow >>$ fun () flow ->
 
     (* Initialize it with the length expression *)
     man.eval (get_array_length_expr arr) flow >>$ fun e flow ->
@@ -110,7 +112,7 @@ struct
         (under_array_type arr.vtyp |> void_to_char |> sizeof_type |> (fun z -> mk_z z range))
         range
     in
-    man.post (mk_assign (mk_var len range) ee range) flow >>$ fun () flow ->
+    man.post (mk_assign (mk_var len range) ee range) ~route:scalar flow >>$ fun () flow ->
 
     (* Add arr as a base in the underlying memory abstraction *)
     man.post (mk_add_var arr range) flow
@@ -123,7 +125,7 @@ struct
 
     (* Remove the length variable from the environment *)
     let len = mk_variable_length_var arr in
-    man.post ~route:Below (mk_remove_var len range) flow
+    man.post ~route:scalar (mk_remove_var len range) flow
 
 
   let exec stmt man flow =
@@ -145,7 +147,7 @@ struct
   (** 𝔼⟦ bytes(arr) ⟧ *)
   let eval_bytes arr range man flow =
     let len = mk_variable_length_var arr in
-    Eval.singleton (mk_var len range) flow
+    man.eval (mk_var len range) flow
 
 
   let eval exp man flow =

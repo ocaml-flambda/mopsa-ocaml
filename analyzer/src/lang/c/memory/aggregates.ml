@@ -458,27 +458,27 @@ struct
   let eval exp man flow =
     match ekind exp with
     | E_c_array_subscript(a, i) ->
-      Eval.singleton (array_subscript a i exp.etyp exp.erange) flow |>
+      man.eval (array_subscript a i exp.etyp exp.erange) flow |>
       OptionExt.return
 
     | E_c_member_access (s, i, f) ->
-      Eval.singleton (member_access s i f exp.etyp exp.erange) flow |>
+      man.eval (member_access s i f exp.etyp exp.erange) flow |>
       OptionExt.return
 
     | E_c_arrow_access(p, i, f) ->
-      Eval.singleton (arrow_access p i f exp.etyp exp.erange) flow |>
+      man.eval (arrow_access p i f exp.etyp exp.erange) flow |>
       OptionExt.return
 
     | E_c_address_of({ekind = E_c_array_subscript(a,i)}) ->
-      Eval.singleton (add a i ~typ:a.etyp exp.erange) flow |>
+      man.eval (add a i ~typ:a.etyp exp.erange) flow |>
       OptionExt.return
 
     | E_c_address_of({ekind = E_c_member_access(s,i,f)} as e) ->
-      Eval.singleton (mk_lowlevel_field_address (mk_c_address_of s exp.erange) i e.etyp exp.erange) flow |>
+      man.eval (mk_lowlevel_field_address (mk_c_address_of s exp.erange) i e.etyp exp.erange) flow |>
       OptionExt.return
 
     | E_c_address_of({ekind = E_c_arrow_access(p,i,f)} as e) ->
-      Eval.singleton (mk_lowlevel_field_address p i e.etyp exp.erange) flow |>
+      man.eval (mk_lowlevel_field_address p i e.etyp exp.erange) flow |>
       OptionExt.return
 
     | _ -> None

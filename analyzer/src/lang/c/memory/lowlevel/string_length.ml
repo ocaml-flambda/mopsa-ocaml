@@ -811,20 +811,20 @@ struct
         )
       ] man flow
     else
-      Eval.singleton (mk_top t range) flow
+      man.eval (mk_top t range) flow
 
 
   let eval_deref p range man flow =
     let ctype = under_pointer_type p.etyp in
     eval_pointed_base_offset p range man flow >>$ fun (base,offset,mode) flow ->
     if not (is_interesting_base base) then
-      Eval.singleton (mk_top ctype range) flow
+      man.eval (mk_top ctype range) flow
     else
       match base.base_kind with
       | String (str,_,t) when equal_int_types t ctype ->
         eval_string_literal_char str t offset range man flow
       | _ ->
-        Eval.singleton (mk_top ctype range) flow
+        man.eval (mk_top ctype range) flow
 
 
   let eval exp man flow =
