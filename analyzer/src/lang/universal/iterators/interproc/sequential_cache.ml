@@ -149,15 +149,14 @@ struct
                       (* let out_flow_cur = exec_block_on_all_flows cleaners man out_flow_cur in *)
                       let out_flow = Flow.join man.lattice out_flow_cur out_flow_other in
                       let flow = store_signature func.fun_uniq_name in_flow_cur (Some eval_res) out_flow cleaners in
-                      Cases.return (Some (eval_res,sem)) (Flow.join man.lattice in_flow_other flow) ~log ~cleaners:cleaners
+                      Cases.return (Some eval_res) (Flow.join man.lattice in_flow_other flow) ~log ~cleaners:cleaners
                   )
             )
 
         | Some (_, oout_expr, out_flow, cleaners) ->
           Debug.debug ~channel:"profiling" "reusing %s at range %a" func.fun_orig_name pp_range func.fun_range;
           debug "reusing something in function %s@\nchanging in_flow=%a@\ninto out_flow=%a@\n" func.fun_orig_name (Flow.print man.lattice.print) in_flow (Flow.print man.lattice.print) out_flow;
-          let oout_expr_sem = OptionExt.lift (fun e -> (e,any_semantic)) oout_expr in
-          Cases.return oout_expr_sem (Flow.join man.lattice in_flow_other out_flow) ~cleaners:cleaners
+          Cases.return oout_expr (Flow.join man.lattice in_flow_other out_flow) ~cleaners:cleaners
       end
       |> OptionExt.return
 
