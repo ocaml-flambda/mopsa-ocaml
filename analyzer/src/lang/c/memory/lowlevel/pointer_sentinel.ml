@@ -516,9 +516,9 @@ struct
         ) man flow
 
 
-  (** Assignment abstract transformer for 𝕊⟦ *p = rval; ⟧ *)
-  let assign_deref p rval range man flow =
-    eval_pointed_base_offset p range man flow >>$ fun (base,offset,mode) flow ->
+  (** Assignment abstract transformer *)
+  let assign lval rval range man flow =
+    eval_pointed_base_offset (mk_c_address_of lval range) range man flow >>$ fun (base,offset,mode) flow ->
     man.eval ~route:scalar offset flow >>$ fun offset flow ->
     man.eval rval flow >>$ fun rval flow ->
     assign_cases base offset mode rval range man flow
@@ -670,8 +670,8 @@ struct
       remove_base (expr_to_base e) stmt.srange man flow |>
       OptionExt.return
 
-    | S_assign({ ekind = E_c_deref p} as lval, rval) when is_c_pointer_type lval.etyp ->
-      assign_deref p rval stmt.srange man flow |>
+    | S_assign(lval, rval) when is_c_pointer_type lval.etyp ->
+      assign lval rval stmt.srange man flow |>
       OptionExt.return
 
     (* 𝕊⟦ ∀i ∈ [a,b] : *(p + i) == q ⟧ *)

@@ -409,21 +409,6 @@ struct
       assign_record lval e stmt.srange man flow |>
       OptionExt.return
 
-    | S_assign({ekind = E_c_array_subscript(a,i); etyp = t; erange = range}, e)
-    | S_expression { ekind = E_c_assign ({ekind = E_c_array_subscript(a,i); etyp = t; erange = range}, e) } ->
-      assign_array a i t e range stmt.srange man flow |>
-      OptionExt.return
-
-    | S_assign({ekind = E_c_member_access(a,i,f); etyp = t; erange = range}, e)
-    | S_expression { ekind = E_c_assign ({ekind = E_c_member_access(a,i,f); etyp = t; erange = range}, e) } ->
-      assign_member a i f t e range stmt.srange man flow |>
-      OptionExt.return
-
-    | S_assign({ekind = E_c_arrow_access(a,i,f); etyp = t; erange = range}, e)
-    | S_expression { ekind = E_c_assign ({ekind = E_c_arrow_access(a,i,f); etyp = t; erange = range}, e) } ->
-      assign_arrow a i f t e range stmt.srange man flow |>
-      OptionExt.return
-
     | _ -> None
 
 

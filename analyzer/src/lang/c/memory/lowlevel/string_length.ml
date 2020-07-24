@@ -327,17 +327,17 @@ struct
     else exec_add_base base range man flow
 
 
-  (** 𝕊⟦ *p = rhs; ⟧ *)
-  let exec_assign p rhs range man flow =
+  (** 𝕊⟦ lval = rhs; ⟧ *)
+  let exec_assign lval rhs range man flow =
     man.eval rhs flow >>$ fun rhs flow ->
-    eval_pointed_base_offset p range man flow >>$ fun (base,boffset,mode) flow ->
+    eval_pointed_base_offset (mk_c_address_of lval range) range man flow >>$ fun (base,boffset,mode) flow ->
     if not (is_interesting_base base) then
       Post.return flow
     else
     match base.base_kind with
     | String _ -> Post.return flow
     | Var _ | Addr _ ->
-      let char_size = sizeof_type (under_pointer_type p.etyp) in
+      let char_size = sizeof_type lval.etyp in
       let length = mk_length_var base elem_size ~mode range in
       let offset = elem_of_offset boffset elem_size range in
       if char_size = Z.of_int elem_size &&
@@ -704,10 +704,10 @@ struct
       exec_remove_base (expr_to_base e) stmt.srange man flow |>
       OptionExt.return
 
-    | S_assign({ ekind = E_c_deref p}, rval)
-      when !opt_track_length && under_type p.etyp |> void_to_char |> is_c_int_type
+    | S_assign(lval, rval)
+      when !opt_track_length && lval.etyp |> void_to_char |> is_c_int_type
       ->
-      exec_assign p rval stmt.srange man flow |>
+      exec_assign lval rval stmt.srange man flow |>
       OptionExt.return
 
     (* 𝕊⟦ *(p + i) == n ⟧ *)

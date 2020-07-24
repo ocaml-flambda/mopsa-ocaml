@@ -955,22 +955,22 @@ struct
   (** {2 Assignment transfer function} *)
   (** ******************************** *)
 
-  (** 𝕊⟦ *p = rval; ⟧ *)
-  let exec_assign p rval range man flow =
+  (** 𝕊⟦ lval = rval; ⟧ *)
+  let exec_assign lval rval range man flow =
     man.eval rval flow >>$ fun rval flow ->
-    eval_pointed_base_offset p range man flow >>$ fun (base,offset,mode) flow ->
+    eval_pointed_base_offset (mk_c_address_of lval range) range man flow >>$ fun (base,offset,mode) flow ->
     if not (is_interesting_base base) then
       Post.return flow
     else
       let a = get_env T_cur man flow in
       (* Non-aligned offset destroys all existing smashes *)
-      if not (is_aligned offset (under_type p.etyp) man flow) then
+      if not (is_aligned offset lval.etyp man flow) then
         exec_smashes (forget_smash base) base a range man flow
       else
-        let s = mk_smash base (under_type p.etyp) in
+        let s = mk_smash base lval.etyp in
         let vsmash = mk_smash_var s in
         let esmash = mk_smash_expr s ~mode range in
-        let elm = mk_z (sizeof_type (under_type p.etyp)) range in
+        let elm = mk_z (sizeof_type lval.etyp) range in
         match State.find base a with
         | Init.Bot -> Post.return flow
 
@@ -1242,8 +1242,8 @@ struct
       exec_remove_base (expr_to_base e) stmt.srange man flow |>
       OptionExt.return
 
-    | S_assign({ ekind = E_c_deref p}, rval) when is_c_scalar_type (under_type p.etyp) ->
-      exec_assign p rval stmt.srange man flow |>
+    | S_assign(lval, rval) when is_c_scalar_type lval.etyp ->
+      exec_assign lval rval stmt.srange man flow |>
       OptionExt.return
 
     | S_assume({ ekind = E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_binop(op, e1, e2)}) })
