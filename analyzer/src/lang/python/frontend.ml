@@ -53,11 +53,11 @@ let rec parse_program (files: string list) : program =
   match files with
   | [filename] ->
     debug "parsing %s" filename;
-    let ast, counter = Py_parser.Main.parse_file ~counter:(Framework.Ast.Var.get_vcounter_val ()) filename in
+    let ast, counter = Py_parser.Main.parse_file ~counter:(Core.Ast.Var.get_vcounter_val ()) filename in
     let body = from_stmt ast.prog_body in
     Hooks.Coverage.Hook.add_file filename body;
     let globals = List.map from_var ast.prog_globals in
-    Framework.Ast.Var.start_vcounter_at counter;
+    Core.Ast.Var.start_vcounter_at counter;
     {
       prog_kind = Ast.Py_program (filename, globals, body);
       prog_range = mk_program_range [filename];
@@ -69,6 +69,11 @@ let rec parse_program (files: string list) : program =
 
 (** Create a Universal.var variable from Py_parser.Ast.var *)
 and from_var (v:Py_parser.Ast.var) =
+  let open Core.Ast in
+  (* let () = if Hashtbl.mem tmp v.uid && Hashtbl.find tmp v.uid <> v.name then
+   *     Exceptions.panic "%d is already %s, conflict with current %s@\n" v.uid (Hashtbl.find tmp v.uid) v.name
+   *   else
+   *     Hashtbl.add tmp v.uid v.name in *)
   mk_uniq_var v.name v.uid T_any
 
 (** Translation of a Python statement *)

@@ -35,12 +35,6 @@ struct
 
   let alarms = []
 
-
-  let interface = {
-    iexec = {provides = []; uses = [Universal.Zone.Z_u_int]};
-    ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj; Universal.Zone.Z_u, Universal.Zone.Z_u_int; Universal.Zone.Z_u, Universal.Zone.Z_u_float]}
-  }
-
   let init _ _ flow = flow
 
   let is_arith_unop_fun = function
@@ -50,7 +44,7 @@ struct
     | _ -> false
 
 
-  let eval zs exp (man: ('a, unit, 's) man) (flow: 'a flow) =
+  let eval exp man flow =
     let range = erange exp in
     match ekind exp with
     | E_constant (C_top T_bool) ->
@@ -73,8 +67,8 @@ struct
          considered true unless its class defines either a __bool__()
          method that returns False or a __l en__() method that returns
          zero, when called with the object.  *)
-      man.eval arg flow |>
-      Eval.bind (fun earg flow ->
+      man.eval arg flow >>$
+ (fun earg flow ->
           assume (mk_py_isinstance_builtin earg "bool" range)
             ~fthen:(Eval.singleton earg)
             ~felse:(fun flow ->
@@ -103,19 +97,19 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("NoneType.__bool__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args ["NoneType"] (fun eargs flow ->
-          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_false range) flow
+          man.eval ~route:(Semantic "Python") (mk_py_false range) flow
         )
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("int.__new__", _))}, _)}, [cls], []) ->
       Utils.new_wrapper man range flow "int" cls
-        ~fthennew:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range))
+        ~fthennew:(man.eval ~route:(Semantic "Python") (mk_py_top T_int range))
 
     | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("int.__new__", _))}, _)} as f), [cls; arg], []) ->
       Utils.new_wrapper man range flow "int" cls
         ~fthennew:(fun flow ->
-          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) arg flow |>
-            Eval.bind (fun el flow ->
+          man.eval ~route:(Semantic "Python") arg flow >>$
+ (fun el flow ->
                 assume
                   (mk_py_isinstance_builtin el "int" range) man flow
                   ~fthen:(fun flow -> Eval.singleton el flow)
@@ -126,25 +120,25 @@ struct
                         man.eval (mk_py_call (mk_py_object (find_builtin "float.__int__") range) [el] range) flow
                       )
                       ~felse:(fun flow ->
-                        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) {exp with ekind = E_py_call(f, [cls; arg; mk_int 10 range], [])} flow)
+                        man.eval ~route:(Semantic "Python") {exp with ekind = E_py_call(f, [cls; arg; mk_int 10 range], [])} flow)
                   )
               )
         )
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("int.__new__", _))}, _)}, [cls; str; base], []) ->
       Utils.new_wrapper man range flow "int" cls
-        ~fthennew:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range))
+        ~fthennew:(man.eval ~route:(Semantic "Python") (mk_py_top T_int range))
 
     (* 𝔼⟦ int.__op__(e1, e2) | op ∈ {==, !=, <, ...} ⟧ *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f,  _))}, _)}, [e1; e2], [])
       when is_compare_op_fun "int" f ->
-      bind_list [e1; e2] (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+      bind_list [e1; e2] (man.eval ~route:(Semantic "Python")) flow |>
       bind_some (fun el flow ->
           let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
           let addr_partitioning a = a.addr_partitioning in
           match addr_partitioning @@ fst @@ object_of_expr e1, addr_partitioning @@ fst @@ object_of_expr e2 with
           | Addr_env.G_py_bool (Some b1), Addr_env.G_py_bool (Some b2) ->
-            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_bool (b1 = b2) range) flow
+            man.eval ~route:(Semantic "Python") (mk_py_bool (b1 = b2) range) flow
           | _ ->
             assume
               (mk_py_isinstance_builtin e1 "int" range)
@@ -154,13 +148,13 @@ struct
                     ~fthen:(fun true_flow ->
                       assume
                           (mk_binop (Utils.extract_oobject e1) (Operators.methfun_to_binop f) (Utils.extract_oobject e2) ~etyp:T_int range) man true_flow
-                          ~zone:Universal.Zone.Z_u_int
+                          ~route:(Semantic "U/Int")
                           ~fthen:(fun flow -> man.eval (mk_py_true range) flow)
                           ~felse:(fun flow -> man.eval (mk_py_false range) flow)
                       )
                     ~felse:(fun false_flow ->
                         let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
-                        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) expr false_flow)
+                        man.eval ~route:(Semantic "Python") expr false_flow)
                     man true_flow
                 )
               ~felse:(fun false_flow ->
@@ -173,7 +167,7 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, [e1; e2], [])
       when is_arith_binop_fun "int" f ->
-      bind_list [e1; e2] (man.eval~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+      bind_list [e1; e2] (man.eval~route:(Semantic "Python")) flow |>
       bind_some (fun el flow ->
           let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
           assume
@@ -219,7 +213,7 @@ struct
                   )
                   ~felse:(fun false_flow ->
                       let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
-                      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) expr false_flow)
+                      man.eval ~route:(Semantic "Python") expr false_flow)
                   man true_flow
               )
             ~felse:(fun false_flow ->
@@ -232,15 +226,15 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, [e], [])
       when is_arith_unop_fun f ->
-      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
-      Eval.bind (fun el flow ->
+      man.eval ~route:(Semantic "Python") e flow >>$
+ (fun el flow ->
           assume
             (mk_py_isinstance_builtin e "int" range)
             ~fthen:(fun true_flow ->
                 Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_integers, Some (mk_unop (Operators.methfun_to_unop f) (Utils.extract_oobject el) range ~etyp:T_int)) range) true_flow)
             ~felse:(fun false_flow ->
                 let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
-                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) expr false_flow)
+                man.eval ~route:(Semantic "Python") expr false_flow)
             man flow
         )
       |> OptionExt.return
@@ -251,7 +245,7 @@ struct
         (fun e flow ->
            assume
              (mk_binop (Utils.extract_oobject @@ List.hd e) O_eq (mk_int 0 ~typ:T_int range) ~etyp:T_int range) man flow
-             ~zone:Universal.Zone.Z_u_int
+             ~route:(Semantic "U/Int")
              ~fthen:(fun flow -> man.eval (mk_py_false range) flow)
              ~felse:(fun flow -> man.eval (mk_py_true range) flow)
         )
@@ -270,7 +264,7 @@ struct
         ["int"]
         (fun e flow ->
           let max_intfloat = mk_constant (C_int (Z.of_string "179769313486231580793728971405303415079934132710037826936173778980444968292764750946649017977587207096330286416692887910946555547851940402630657488671505820681908902000708383676273854845817711531764475730270069855571366959622842914819860834936475292719074168444365510704342711559699508093042880177904174497791")) ~etyp:T_int range in
-          assume ~zone:Universal.Zone.Z_u_int
+          assume ~route:(Semantic "U/Int")
             (mk_binop
                (mk_binop (mk_unop O_minus max_intfloat ~etyp:T_int range) O_le  (Utils.extract_oobject @@ List.hd e) range)
                O_log_and
@@ -278,14 +272,14 @@ struct
                range)
             man flow
           ~fthen:(fun flow ->
-            man.eval ~zone:(Universal.Zone.Z_u, Universal.Zone.Z_u_float) (mk_unop O_cast  ~etyp:(T_float F_DOUBLE) (Utils.extract_oobject @@ List.hd e) range) flow |>
-              Eval.bind (fun e flow -> Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_float, Some e) range) flow))
+            man.eval ~route:(Semantic "U/Float") (mk_unop O_cast  ~etyp:(T_float F_DOUBLE) (Utils.extract_oobject @@ List.hd e) range) flow >>$
+ (fun e flow -> Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_float, Some e) range) flow))
           ~felse:(fun flow ->
             man.exec (Utils.mk_builtin_raise_msg "OverflowError" "int too large to convert to float" range) flow |> Eval.empty_singleton)
         ) |> OptionExt.return
     | _ -> None
 
-  let exec _ _ _ _ = None
+  let exec _ _ _ = None
   let ask _ _ _ = None
 end
 

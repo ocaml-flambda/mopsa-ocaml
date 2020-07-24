@@ -139,8 +139,8 @@ let strip_object (e:expr) =
   {e with ekind}
 
 let new_wrapper man range flow newcls argcls ~fthennew =
-  man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) argcls flow |>
-  Eval.bind (fun ecls flow ->
+  man.eval argcls flow >>$
+    (fun ecls flow ->
       assume
         (Addr.mk_py_issubclass_builtin_r argcls newcls range)
         man flow
@@ -152,7 +152,7 @@ let new_wrapper man range flow newcls argcls ~fthennew =
     )
   |> OptionExt.return
 
-let bind_list_args ?(cleaners=true) man args flow range zone (f: var list -> 'b flow -> ('b, 'c) Cases.cases) =
+let bind_list_args ?(cleaners=true) man args flow range (f: var list -> 'b flow -> ('b, 'c) Cases.cases) =
   let cs = Flow.get_callstack flow in
   let module RangeSet = SetExt.Make(struct type t = range let compare = compare_range end) in
   let stmt, vars, _ = List.fold_left (fun (stmts, vars, argranges) arg ->
@@ -161,7 +161,7 @@ let bind_list_args ?(cleaners=true) man args flow range zone (f: var list -> 'b 
                           (mk_assign (mk_var tmp arg.erange) arg arg.erange) :: stmts, tmp :: vars, RangeSet.add arg.erange argranges
                         ) ([], [], RangeSet.empty) (List.rev args) in
   let stmt = Universal.Ast.mk_block stmt range in
-  let cases = f vars (man.exec ~zone:zone stmt flow) in
+  let cases = f vars (man.exec stmt flow) in
   if cleaners then
     Cases.add_cleaners (List.map (fun x -> mk_remove_var x range) vars) cases
   else cases

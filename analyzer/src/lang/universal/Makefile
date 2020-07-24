@@ -23,7 +23,7 @@
 
 # Universal
 lang += universal
-lang.universal = ast frontend iterators heap numeric packing hooks #strings
+lang.universal = ast frontend iterators heap numeric packing hooks strings
 lang.universal.iterators = unittest program intraproc interproc loops
 lang.universal.iterators.interproc = common inlining #sequential_cache join_based_cache
 lang.universal.heap = policies recency

@@ -128,11 +128,6 @@ struct
   let meet = AMap.meet
   let widen uctx = AMap.widen
 
-  let interface = {
-    iexec = { provides = [Zone.Z_py]; uses = [Zone.Z_py; Zone.Z_py_obj; Universal.Zone.Z_u_int; Universal.Zone.Z_u_float; Universal.Zone.Z_u_string]; };
-    ieval = { provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]; }
-  }
-
   let alarms = []
 
   let merge _ _ _ = assert false
@@ -162,12 +157,12 @@ struct
        let intb = check_baddr addr_integers || check_baddr addr_true || check_baddr addr_false || check_baddr addr_bool_top in
        let float = check_baddr addr_float in
        let str = check_baddr addr_strings in
-       let flow = if str then man.exec ~zone:Universal.Zone.Z_u_string (fstmt T_string) flow  else flow in
-       let flow = if intb then man.exec ~zone:Universal.Zone.Z_u_int (fstmt T_int) flow else flow in
-       let flow = if float then man.exec ~zone:Universal.Zone.Z_u_float (fstmt (T_float F_DOUBLE)) flow else flow in
+       let flow = if str then man.exec ~route:(Semantic "U/String") (fstmt T_string) flow  else flow in
+       let flow = if intb then man.exec ~route:(Semantic "U/Int") (fstmt T_int) flow else flow in
+       let flow = if float then man.exec ~route:(Semantic "U/Float") (fstmt (T_float F_DOUBLE)) flow else flow in
        flow
 
-  let rec exec zone stmt man flow =
+  let rec exec stmt man flow =
     debug "exec %a@\n" pp_stmt stmt;
     let range = srange stmt in
     match skind stmt with
@@ -193,12 +188,12 @@ struct
                          let cstmt = fun t -> {stmt with skind = S_assign(Utils.change_evar_type t vl, Utils.change_evar_type t wl)} in
                          match pyaddr with
                          | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "str", _)}} ->
-                            man.exec ~zone:Universal.Zone.Z_u_string (cstmt T_string) flow
+                            man.exec ~route:(Semantic "U/String") (cstmt T_string) flow
                          | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)}}
                            | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}} ->
-                            man.exec ~zone:Universal.Zone.Z_u_int (cstmt T_int) flow
+                            man.exec ~route:(Semantic "U/Int") (cstmt T_int) flow
                          | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "float", _)}}  ->
-                            man.exec ~zone:Universal.Zone.Z_u_float (cstmt (T_float F_DOUBLE)) flow
+                            man.exec ~route:(Semantic "U/Float") (cstmt (T_float F_DOUBLE)) flow
                          | _ -> flow
                        ) aset flow in
           if mem v cur then
@@ -209,7 +204,7 @@ struct
 
     (* S⟦ v = e ⟧ *)
     | S_assign(({ekind = E_var (v, mode)} as evar), e) ->
-       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
+       man.eval ~route:(Semantic "Python") e flow |>
          bind_some
            (fun e flow ->
              match ekind e with
@@ -227,12 +222,12 @@ struct
                 debug "calling values for %a" pp_addr addr;
                 begin match akind addr with
                 | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} ->
-                   man.exec ~zone:Universal.Zone.Z_u_string (mk_assign (Utils.change_evar_type T_string evar) expr range) flow
+                   man.exec ~route:(Semantic "U/String") (mk_assign (Utils.change_evar_type T_string evar) expr range) flow
                 | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}
                   | A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)} ->
-                   man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (Utils.change_evar_type T_int evar) expr range) flow
+                   man.exec ~route:(Semantic "U/Int") (mk_assign (Utils.change_evar_type T_int evar) expr range) flow
                 | A_py_instance {addr_kind = A_py_class (C_builtin "float", _)} ->
-                   man.exec ~zone:Universal.Zone.Z_u_float (mk_assign (Utils.change_evar_type (T_float F_DOUBLE) evar) expr range) flow
+                   man.exec ~route:(Semantic "U/Float") (mk_assign (Utils.change_evar_type (T_float F_DOUBLE) evar) expr range) flow
                 | _ ->
                    flow
                 end |>
@@ -253,17 +248,17 @@ struct
        (* need to make e E_py_annot here or on the frontend *)
        (* then handle E_py_annot in typing, to perform an allocation? *)
        (* what about non builtins? *)
-       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
+       man.eval ~route:(Semantic "Python") e flow |>
          bind_some (fun e flow -> match ekind e with
                                   | E_py_object (addr, _) ->
                                      begin match akind addr with
                                      | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} ->
-                                        man.exec ~zone:Universal.Zone.Z_u_string (mk_assign (Utils.change_evar_type T_string evar) (mk_py_top T_string range) range) flow
+                                        man.exec ~route:(Semantic "U/String") (mk_assign (Utils.change_evar_type T_string evar) (mk_py_top T_string range) range) flow
                                      | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}
                                        | A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)} ->
-                                        man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (Utils.change_evar_type T_int evar) (mk_py_top T_int range) range) flow
+                                        man.exec ~route:(Semantic "U/Int") (mk_assign (Utils.change_evar_type T_int evar) (mk_py_top T_int range) range) flow
                                      | A_py_instance {addr_kind = A_py_class (C_builtin "float", _)} ->
-                                        man.exec ~zone:Universal.Zone.Z_u_float (mk_assign (Utils.change_evar_type (T_float F_DOUBLE) evar) (mk_py_top (T_float F_DOUBLE) range) range) flow
+                                        man.exec ~route:(Semantic "U/Float") (mk_assign (Utils.change_evar_type (T_float F_DOUBLE) evar) (mk_py_top (T_float F_DOUBLE) range) range) flow
                                      | _ ->
                                         flow
                                      end |>
@@ -288,7 +283,7 @@ struct
        end
 
     | S_assume e ->
-       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
+       man.eval ~route:(Semantic "Python") e flow |>
          bind_some (fun expr flow ->
              match ekind expr with
              | E_constant (C_top T_bool)
@@ -386,12 +381,12 @@ struct
        begin match akind a with
        | A_py_instance {addr_kind = A_py_class (C_annot _, _)} ->
           let skind = S_expand ({e1 with ekind = E_py_annot e1}, addrs) in
-          man.exec ~zone:Zone.Z_py_obj stmt flow |>
-            man.exec ~zone:Zone.Z_py_obj {stmt with skind}
+          man.exec ~route:(Semantic "Python") stmt flow |>
+            man.exec ~route:(Semantic "Python") {stmt with skind}
        | A_py_instance _ ->
-          man.exec ~zone:Zone.Z_py_obj stmt flow
+          man.exec ~route:(Semantic "Python") stmt flow
        | ak when Objects.Data_container_utils.is_data_container ak ->
-          man.exec ~zone:Zone.Z_py_obj stmt flow
+          man.exec ~route:(Semantic "Python") stmt flow
        | _ -> flow
        end
        |> Post.return |> OptionExt.return
@@ -422,8 +417,8 @@ struct
            | S_fold _ -> S_fold ({e2 with ekind = E_py_annot e2}, [e1])
            | S_rename _ -> S_rename ({e1 with ekind = E_py_annot e1}, e2)
            | _ -> assert false in
-          man.exec ~zone:Zone.Z_py_obj stmt flow |>
-          man.exec ~zone:Zone.Z_py_obj {stmt with skind}
+          man.exec ~route:(Semantic "Python") stmt flow |>
+          man.exec ~route:(Semantic "Python") {stmt with skind}
       | A_py_instance _ ->
          (* FIXME: PERF: in function.ml, store inst -> method binding and use it here? / ask function.ml to perform the stmt? *)
          let aaddr = man.ask Universal.Heap.Recency.Q_allocated_addresses flow in
@@ -436,17 +431,17 @@ struct
                                            | S_rename _ -> S_rename ({e1 with ekind = E_addr addr}, {e2 with ekind = E_addr addr'})
                                            | _ -> assert false
                            in
-                           man.exec ~zone:Zone.Z_py {stmt with skind} flow
+                           man.exec ~route:(Semantic "Python") {stmt with skind} flow
                         | _ -> flow) flow aaddr in
-         man.exec ~zone:Zone.Z_py_obj stmt flow
+         man.exec ~route:(Semantic "Python") stmt flow
       | ak when Objects.Data_container_utils.is_data_container ak ->
-         man.exec ~zone:Zone.Z_py_obj stmt flow
+         man.exec ~route:(Semantic "Python") stmt flow
       | _ -> flow
        end |> Post.return |> OptionExt.return
 
     | S_py_delete {ekind = E_var (v, _)} ->
        Soundness.warn_at range "%a not properly supported" pp_stmt stmt;
-       man.exec ~zone:Zone.Z_py (mk_remove_var v range) flow |> Post.return |> OptionExt.return
+       man.exec ~route:(Semantic "Python") (mk_remove_var v range) flow |> Post.return |> OptionExt.return
 
     | S_py_delete _ ->
        Soundness.warn_at range "%a not supported, ignored" pp_stmt stmt;
@@ -463,9 +458,9 @@ struct
        let flow = set_env T_cur ncur man flow in
        begin match akind a with
        | A_py_instance _ ->
-          man.exec ~zone:Zone.Z_py_obj stmt flow
+          man.exec ~route:(Semantic "Python") stmt flow
        | ak when Objects.Data_container_utils.is_data_container ak ->
-          man.exec ~zone:Zone.Z_py_obj stmt flow
+          man.exec ~route:(Semantic "Python") stmt flow
        | _ -> flow
        end |> Post.return |> OptionExt.return
 
@@ -494,16 +489,16 @@ struct
     (* allocate addr, and map this addr to inst bltin *)
     let range = tag_range range "alloc_%s" bltin in
     let cls = fst @@ find_builtin bltin in
-    man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr ~mode:mode (A_py_instance cls) range) flow |>
-    Eval.bind (fun eaddr flow ->
+    man.eval ~route:(Semantic "U/Heap") (mk_alloc_addr ~mode:mode (A_py_instance cls) range) flow >>$
+ (fun eaddr flow ->
         let addr = match ekind eaddr with
           | E_addr a -> a
           | _ -> assert false in
-        man.exec ~zone:Zone.Z_py_obj (mk_add eaddr range) flow |>
+        man.exec ~route:(Semantic "Python") (mk_add eaddr range) flow |>
         Eval.singleton (mk_py_object (addr, oe) range)
       )
 
-  let eval zs exp man flow =
+  let eval exp man flow =
     let range = erange exp in
     match ekind exp with
     | E_var (v, mode) ->
@@ -540,7 +535,7 @@ struct
                     debug "removing other numerical vars";
                     let f = begin match akind addr' with
                       | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} ->
-                        man.exec ~zone:Universal.Zone.Z_u_string (mk_remove_var (Utils.change_var_type T_string v) range) flow
+                        man.exec ~route:(Semantic "U/String") (mk_remove_var (Utils.change_var_type T_string v) range) flow
                       | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}
                       | A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)} ->
                          begin match akind addr with
@@ -548,10 +543,10 @@ struct
                            | A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)} ->
                             flow
                          | _ ->
-                            man.exec ~zone:Universal.Zone.Z_u_int (mk_remove_var (Utils.change_var_type T_int v) range) flow
+                            man.exec ~route:(Semantic "U/Int") (mk_remove_var (Utils.change_var_type T_int v) range) flow
                          end
                       | A_py_instance {addr_kind = A_py_class (C_builtin "float", _)} ->
-                        man.exec ~zone:Universal.Zone.Z_u_float (mk_remove_var (Utils.change_var_type (T_float F_DOUBLE) v) range) flow
+                        man.exec ~route:(Semantic "U/String") (mk_remove_var (Utils.change_var_type (T_float F_DOUBLE) v) range) flow
                       | _ ->
                         flow
                     end in
@@ -568,11 +563,11 @@ struct
                   Utils.change_evar_type T_string exp
                 | _ -> exp in
               let res = man.eval (mk_py_object (addr, Some exp) range) flow in
-              let annots = Eval.get_ctx res in
+              let annots = Cases.get_ctx res in
               res :: acc, annots
 
           ) aset ([], Flow.get_ctx flow) in
-        let evals = List.map (Eval.set_ctx annot) evals in
+        let evals = List.map (Cases.set_ctx annot) evals in
         evals |> Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow)
         |> OptionExt.return
       else if is_builtin_var v then
@@ -599,8 +594,8 @@ struct
 
     | E_unop(O_log_not, e') ->
       (* bool is called in desugar/bool *)
-      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e' flow |>
-      Eval.bind
+      man.eval ~route:(Semantic "Python") e' flow >>$
+
         (fun ee' flow ->
            match ekind ee' with
            (* FIXME: weird cases *)
@@ -611,9 +606,9 @@ struct
            | E_constant (C_bool false) ->
              Eval.singleton (mk_py_true range) flow
            | E_py_object (a, _) when compare_addr a (OptionExt.none_to_exn !addr_true) = 0 ->
-             man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_false range) flow
+             man.eval ~route:(Semantic "Python") (mk_py_false range) flow
            | E_py_object (a, _) when compare_addr a (OptionExt.none_to_exn !addr_false) = 0 ->
-             man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_true range) flow
+             man.eval ~route:(Semantic "Python") (mk_py_true range) flow
            | E_py_object (a, _) when compare_addr a (OptionExt.none_to_exn !addr_bool_top) = 0 ->
              Eval.singleton ee' flow
            | _ ->
@@ -622,7 +617,7 @@ struct
       |> OptionExt.return
 
     | E_binop(O_py_is, e1, e2) ->
-      bind_list [e1;e2] (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+      bind_list [e1;e2] (man.eval ~route:(Semantic "Python")) flow |>
       bind_some (fun evals flow ->
           let e1, e2 = match evals with [e1;e2] -> e1, e2 | _ -> assert false in
           begin match ekind e1, ekind e2 with
@@ -640,7 +635,7 @@ struct
 
     | _ -> None
 
-  let ask : type r. r query -> ('a, t, 's) man -> 'a flow -> r option =
+  let ask : type r. ('a, r) query -> ('a, t) man -> 'a flow -> r option =
     fun query man flow ->
       match query with
       | Universal.Heap.Recency.Q_alive_addresses ->

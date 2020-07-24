@@ -38,11 +38,6 @@ module Domain =
         let name = "python.desugar.comprehensions"
       end)
 
-    let interface = {
-      iexec = {provides = []; uses = [Zone.Z_py]};
-      ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
-    }
-
     let alarms = []
 
     let unfold_comprehension expr comprehensions base append range =
@@ -72,7 +67,7 @@ module Domain =
 
 
     let init _ _ flow = flow
-    let eval zs exp man flow =
+    let eval exp man flow =
       let range = erange exp in
       match ekind exp with
       | E_py_list_comprehension (expr, comprehensions) ->
@@ -83,7 +78,7 @@ module Domain =
          debug "Rewriting %a into %a@\n" pp_expr exp pp_stmt stmt;
          man.exec stmt flow |>
            man.eval acc_var |>
-           Eval.add_cleaners [mk_remove_var tmp_acc range] |>
+           Cases.add_cleaners [mk_remove_var tmp_acc range] |>
            OptionExt.return
 
       | E_py_set_comprehension (expr, comprehensions) ->
@@ -95,7 +90,7 @@ module Domain =
          debug "Rewriting %a into %a@\n" pp_expr exp pp_stmt stmt;
          man.exec stmt flow |>
            man.eval acc_var |>
-           Eval.add_cleaners [mk_remove_var tmp_acc range] |>
+           Cases.add_cleaners [mk_remove_var tmp_acc range] |>
            OptionExt.return
 
       | E_py_dict_comprehension (key, value, comprehensions) ->
@@ -107,7 +102,7 @@ module Domain =
          debug "Rewriting %a into %a@\n" pp_expr exp pp_stmt stmt;
          man.exec stmt flow |>
            man.eval acc_var |>
-           Eval.add_cleaners [mk_remove_var tmp_acc range] |>
+           Cases.add_cleaners [mk_remove_var tmp_acc range] |>
            OptionExt.return
 
       | E_py_generator_comprehension (expr, comprehensions) ->
@@ -115,7 +110,7 @@ module Domain =
 
       | _ -> None
 
-    let exec _ _ _ _ = None
+    let exec _ _ _ = None
 
     let ask _ _ _ = None
 

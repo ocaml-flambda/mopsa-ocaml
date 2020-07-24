@@ -34,18 +34,13 @@ module Domain =
         let name = "python.desugar.loops"
       end)
 
-    let interface = {
-      iexec = {provides = [Zone.Z_py]; uses = []};
-      ieval = {provides = []; uses = []}
-    }
-
     let alarms = []
 
     let init _ _ flow = flow
-    let eval _ _ _ _ = None
+    let eval _ _ _ = None
 
 
-    let exec zone stmt man flow =
+    let exec stmt man flow =
       let range = srange stmt in
       match skind stmt with
       | S_py_while (test, body, {skind = S_block ([], _)}) ->
@@ -85,7 +80,7 @@ module Domain =
          (* same for next *)
          let start = Timing.start () in
          let res =
-           Utils.bind_list_args man [Utils.mk_builtin_call "iter" [iterable] iterable.erange] flow range Zone.Z_py
+           Utils.bind_list_args man [Utils.mk_builtin_call "iter" [iterable] iterable.erange] flow range
              (fun vars flow ->
                let tmp = mk_var (List.hd vars) range in
                let l_else =

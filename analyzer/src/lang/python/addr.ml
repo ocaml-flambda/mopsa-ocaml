@@ -61,12 +61,11 @@ type addr_kind +=
 (** Allocate an object on the heap and return its address as an evaluation *)
 let eval_alloc ?(mode=STRONG) man kind range flow =
   let exp = mk_alloc_addr ~mode:mode kind range in
-  man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) exp flow |>
-  Eval.bind (fun exp flow ->
-      match ekind exp with
-      | E_addr (addr) -> Cases.singleton addr flow
-      | _ -> panic "eval_alloc: allocation returned a non-address express %a" pp_expr exp
-    )
+  man.eval exp flow >>$
+    fun exp flow ->
+    match ekind exp with
+    | E_addr (addr) -> Cases.singleton addr flow
+    | _ -> panic "eval_alloc: allocation returned a non-address express %a" pp_expr exp
 
 (*==========================================================================*)
 (**                           {2 Built-ins}                                 *)

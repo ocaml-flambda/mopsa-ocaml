@@ -35,16 +35,11 @@ module Domain =
         let name = "python.objects.lambda"
       end)
 
-    let interface = {
-      iexec = {provides = [Zone.Z_py]; uses = []};
-      ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
-    }
-
     let alarms = []
 
     let init _ _ flow = flow
 
-    let eval zs exp man flow =
+    let eval exp man flow =
       let range = erange exp in
       match ekind exp with
       | E_py_lambda l ->
@@ -75,7 +70,7 @@ module Domain =
 
       | _ -> None
 
-    let exec zone stmt man flow = None
+    let exec stmt man flow = None
 
     let ask _ _ _ = None
 

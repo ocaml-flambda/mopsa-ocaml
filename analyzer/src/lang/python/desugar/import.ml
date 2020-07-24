@@ -37,16 +37,11 @@ module Domain =
 
     let imported_modules = Hashtbl.create 100
 
-    let interface = {
-      iexec = {provides = [Zone.Z_py]; uses = []};
-      ieval = {provides = []; uses = []}
-    }
-
     exception Module_not_found of string
 
     let alarms = []
 
-    let rec exec zone stmt man flow =
+    let rec exec stmt man flow =
       let range = srange stmt in
       match skind stmt with
       | S_py_import(modul, _, _) when String.contains modul '.'->
@@ -308,7 +303,7 @@ module Domain =
                   | _ -> (expr::b, ab)
                 ) ([], []) c.py_cls_bases in
               let bases, abases = List.rev bases, List.rev abases in
-              let r = bind_list bases (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+              let r = bind_list bases (man.eval ~route:(Semantic "Python")) flow |>
                       bind_some (fun ebases flow ->
                           (* FIXME: won't work with Generic[T] I guess *)
                           let obases = match ebases with
@@ -412,7 +407,7 @@ module Domain =
       import_builtin_module None "stdlib";
       flow
 
-    let eval _ _ _ _ = None
+    let eval _ _ _ = None
     let ask _ _ _ = None
   end
 

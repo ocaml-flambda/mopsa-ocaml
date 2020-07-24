@@ -34,33 +34,28 @@ struct
       let name = "python.data_model.subscript"
     end)
 
-  let interface = {
-    iexec = {provides = [Zone.Z_py]; uses = []};
-    ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses= [Zone.Z_py, Zone.Z_py_obj]}
-  }
-
   let alarms = []
 
   let init _ _ flow = flow
 
 
-  let eval zs exp man flow =
+  let eval exp man flow =
     let range = exp.erange in
     match ekind exp with
     | E_py_index_subscript(obj, index) ->
-      bind_list [obj; index] (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+      bind_list [obj; index] (man.eval ~route:(Semantic "Python")) flow |>
       bind_some (fun el flow ->
           let eobj, eindex = match el with [obj; index] -> obj, index | _ -> assert false in
 
-          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type eobj range) flow |>
-          Eval.bind (fun cls flow ->
+          man.eval ~route:(Semantic "Python") (mk_py_type eobj range) flow >>$
+ (fun cls flow ->
               assume
                 (Utils.mk_hasattr cls "__getitem__" range)
                 man flow
                 ~fthen:(fun true_flow ->
                     (* we need to keep the unevaluated index here for the type analysis *)
                     let exp' = mk_py_call (mk_py_attr cls "__getitem__" range) [eobj; index] range in
-                    man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) exp' true_flow
+                    man.eval ~route:(Semantic "Python") exp' true_flow
                   )
                 ~felse:(fun false_flow ->
                   let msg = Format.asprintf "'%a' object is not subscriptable" pp_addr_kind (akind @@ fst @@ object_of_expr cls) in
@@ -72,19 +67,19 @@ struct
       |> OptionExt.return
 
     | E_py_slice_subscript(obj, start, stop, step) ->
-      bind_list [obj; start; stop; step] (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+      bind_list [obj; start; stop; step] (man.eval ~route:(Semantic "Python")) flow |>
       bind_some (fun el flow ->
           let eobj, start, stop, step = match el with [obj; start; stop; step] -> obj, start, stop, step | _ -> assert false in
-          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type eobj range) flow |>
-          Eval.bind (fun cls flow ->
+          man.eval ~route:(Semantic "Python") (mk_py_type eobj range) flow >>$
+ (fun cls flow ->
               assume
                 (Utils.mk_hasattr cls "__getitem__" range)
                 man flow
                 ~fthen:(fun true_flow ->
-                    man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (Utils.mk_builtin_call "slice" [start; stop; step] range) true_flow |>
-                    Eval.bind (fun slice flow ->
+                    man.eval ~route:(Semantic "Python") (Utils.mk_builtin_call "slice" [start; stop; step] range) true_flow >>$
+ (fun slice flow ->
                         let exp' = mk_py_call (mk_py_attr cls "__getitem__" range) [eobj; slice] range in
-                        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) exp' flow
+                        man.eval ~route:(Semantic "Python") exp' flow
                       )
                   )
                 ~felse:(fun false_flow ->
@@ -99,15 +94,15 @@ struct
     | _ -> None
 
 
-  let exec zone stmt man flow =
+  let exec stmt man flow =
     let range = stmt.srange in
     match skind stmt with
     | S_assign({ekind = E_py_index_subscript(obj, index)}, exp) ->
-      bind_list [exp; obj; index] (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+      bind_list [exp; obj; index] (man.eval ~route:(Semantic "Python")) flow |>
       bind_some
         (fun el flow ->
            let exp, eobj, eindex = match el with [exp; obj; index] -> exp, obj, index | _ -> assert false in
-           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type eobj range) flow |>
+           man.eval ~route:(Semantic "Python") (mk_py_type eobj range) flow |>
            bind_some (fun cls flow ->
                assume
                  (Utils.mk_hasattr cls "__setitem__" range)
@@ -126,16 +121,16 @@ struct
       |> OptionExt.return
 
     | S_assign({ekind = E_py_slice_subscript (obj, start, stop, step)}, exp) ->
-      bind_list [exp; obj; start; stop; step] (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+      bind_list [exp; obj; start; stop; step] (man.eval  ~route:(Semantic "Python")) flow |>
       bind_some (fun el flow ->
           let exp, eobj, start, stop, step = match el with [exp; obj; start; stop; step] -> exp, obj, start, stop, step | _ -> assert false in
-          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type eobj range) flow |>
+          man.eval ~route:(Semantic "Python") (mk_py_type eobj range) flow |>
           bind_some (fun cls flow ->
               assume
                 (Utils.mk_hasattr cls "__setitem__" range)
                 man flow
                 ~fthen:(fun true_flow ->
-                    man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (Utils.mk_builtin_call "slice" [start; stop; step] range) true_flow |>
+                    man.eval ~route:(Semantic "Python") (Utils.mk_builtin_call "slice" [start; stop; step] range) true_flow |>
                     bind_some (fun slice flow ->
                         let exp' = mk_py_call (mk_py_attr cls "__setitem__" range) [eobj; slice; exp] range in
                         man.exec {stmt with skind = S_expression(exp')} flow |> Post.return

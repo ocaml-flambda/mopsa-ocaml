@@ -33,16 +33,11 @@ module Domain =
         let name = "python.desugar.if"
       end)
 
-    let interface = {
-      iexec = {provides = [Zone.Z_py]; uses = [Zone.Z_py]};
-      ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
-    }
-
     let alarms = []
 
     let init _ _ flow = flow
 
-    let eval zs exp man flow =
+    let eval exp man flow =
       let range = erange exp in
       match ekind exp with
       | E_py_if(test, body, orelse) ->
@@ -57,19 +52,19 @@ module Domain =
          in
          let exp' = {exp with ekind = E_var (tmp, None)} in
          man.eval exp' flow |>
-           Eval.add_cleaners [mk_remove_var tmp (tag_range range "cleaner")] |>
+           Cases.add_cleaners [mk_remove_var tmp (tag_range range "cleaner")] |>
            OptionExt.return
 
       | _ -> None
 
 
-    let exec zone stmt man flow =
+    let exec stmt man flow =
       let range = srange stmt in
       match skind stmt with
       | S_py_if (test, sthen, selse) ->
-        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (Utils.mk_builtin_call "bool" [test] range) flow |>
+        man.eval ~route:(Semantic "Python") (Utils.mk_builtin_call "bool" [test] range) flow |>
         bind_some (fun exp flow ->
-            man.exec ~zone:Zone.Z_py (mk_if exp sthen selse range) flow |> Post.return
+            man.exec (mk_if exp sthen selse range) flow |> Post.return
           )
         |> OptionExt.return
 

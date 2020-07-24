@@ -34,17 +34,12 @@ module Domain =
         let name = "python.desugar.with"
       end)
 
-    let interface = {
-      iexec = {provides = [Zone.Z_py]; uses = [Zone.Z_py]};
-      ieval = {provides = []; uses = [Zone.Z_py, Zone.Z_py_obj]}
-    }
-
     let alarms = []
 
     let init _ _ flow = flow
-    let eval _ _ _ _ = None
+    let eval _ _ _ = None
 
-    let exec zone stmt man flow =
+    let exec stmt man flow =
       match skind stmt with
       | S_py_with(context, target, body) ->
          let srange = stmt.srange in

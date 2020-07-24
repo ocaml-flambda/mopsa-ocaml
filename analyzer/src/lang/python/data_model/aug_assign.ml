@@ -35,28 +35,23 @@ module Domain = struct
       let name = "python.data_model.aug_assign"
     end)
 
-  let interface = {
-    iexec = {provides = [Zone.Z_py]; uses = []};
-    ieval = {provides = []; uses = []}
-  }
-
   let alarms = []
 
   let init _ _ flow = flow
-  let eval _ _ _ _ = None
+  let eval _ _ _ = None
 
 
-  let exec zs stmt man flow =
+  let exec stmt man flow =
     let range = srange stmt in
     match skind stmt with
     | S_py_aug_assign(x, op, e) ->
        let x0 = x in
-       bind_list [e; x] (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+       bind_list [e; x] (man.eval  ~route:(Semantic "Python")) flow |>
        bind_some (fun el flow ->
              let e, x = match el with [e; x] -> e, x | _ -> assert false in
 
              let op_fun = Operators.binop_to_incr_fun op in
-             man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)  (mk_py_type x range) flow |>
+             man.eval  ~route:(Semantic "Python")  (mk_py_type x range) flow |>
              bind_some (fun cls flow ->
                    let cls = object_of_expr cls in
                    assume

@@ -33,16 +33,11 @@ module Domain =
         let name = "python.types.t_complex"
       end)
 
-    let interface = {
-      iexec = {provides = []; uses = []};
-      ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
-    }
-
     let alarms = []
 
     let init _ _ flow = flow
 
-    let eval zs exp man flow =
+    let eval exp man flow =
       let range = erange exp in
       match ekind exp with
       | E_constant (C_top T_py_complex) ->
@@ -50,7 +45,7 @@ module Domain =
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("complex.__new__", _))}, _)}, [cls], []) ->
         Utils.new_wrapper man range flow "complex" cls
-          ~fthennew:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_py_complex range))
+          ~fthennew:(man.eval ~route:(Semantic "Python") (mk_py_top T_py_complex range))
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("complex.__new__" as f, _))}, _)}, [cls; arg], []) ->
         Utils.check_instances_disj f man flow range [arg] [["float"; "int"; "str"]] (fun _ -> man.eval (mk_py_top T_py_complex range))
@@ -65,7 +60,7 @@ module Domain =
 
       | _ -> None
 
-    let exec _ _ _ _ = None
+    let exec _ _ _ = None
     let ask _ _ _ = None
   end
 

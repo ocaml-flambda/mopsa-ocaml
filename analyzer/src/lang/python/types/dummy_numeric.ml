@@ -37,15 +37,9 @@ module Domain =
 
     let alarms = []
 
-
-    let interface = {
-        iexec = {provides = [Universal.Zone.Z_u_float; Universal.Zone.Z_u_int]; uses = []};
-        ieval = {provides = []; uses = []}
-      }
-
     let init _ _ flow = flow
 
-    let exec zone stmt man flow =
+    let exec stmt man flow =
       match skind stmt with
       | S_remove { ekind = E_var _ }
         | S_invalidate { ekind = E_var _ }
@@ -61,9 +55,9 @@ module Domain =
 
       | _ -> None
 
-    let eval _ _ _ _ = None
+    let eval _ _ _ = None
 
-    let ask : type r. r query -> ('a, unit, 's) man -> 'a flow -> r option =
+    let ask : type r. ('a, r) query -> ('a, unit) man -> 'a flow -> r option =
       fun query man flow ->
       match query with
       | Universal.Numeric.Common.Q_int_interval e ->

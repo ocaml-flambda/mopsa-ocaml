@@ -34,11 +34,6 @@ module Domain =
         let name = "python.data_model.attribute"
       end)
 
-    let interface = {
-      iexec = {provides = [Zone.Z_py]; uses = []} (* TODO: add attribute assignment *);
-      ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
-    }
-
     let alarms = []
 
     let init _ _ flow = flow
@@ -57,7 +52,7 @@ module Domain =
              search tl in
       search mro
 
-    let eval zs expr man flow =
+    let eval expr man flow =
       let range = erange expr in
       match ekind expr with
       (* Special attributes *)
@@ -76,8 +71,8 @@ module Domain =
         search_mro man range flow attr c mro |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("getattr", _))}, _)}, e::attr::[], [])  ->
-        man.eval attr flow |>
-        Eval.bind (fun eattr flow ->
+        man.eval attr flow >>$
+ (fun eattr flow ->
             match ekind eattr with
             | E_py_object (_, Some {ekind = E_constant (C_string attr)}) ->
               man.eval (mk_py_attr e attr range) flow
@@ -93,8 +88,8 @@ module Domain =
       | E_py_attribute (e, attr) ->
          debug "%a@\n" pp_expr expr;
          let c_attr = mk_constant ~etyp:T_string (C_string attr) range in
-         man.eval e ~zone:(Zone.Z_py, Zone.Z_py_obj) flow |>
-         Eval.bind (fun exp flow ->
+         man.eval e ~route:(Semantic "Python") flow >>$
+ (fun exp flow ->
              match ekind exp with
              | E_py_object ({addr_kind = A_py_class (C_builtin c, mro)}, _) ->
                 search_mro man range flow attr c mro
@@ -114,8 +109,8 @@ module Domain =
                  else
                    Eval.empty_singleton flow
                else
-                 man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type exp range) flow |>
-                 Eval.bind (fun class_of_exp flow ->
+                 man.eval ~route:(Semantic "Python") (mk_py_type exp range) flow >>$
+ (fun class_of_exp flow ->
                      let mro = mro (object_of_expr class_of_exp) in
                      debug "mro of %a: %a" pp_expr class_of_exp (Format.pp_print_list (fun fmt (a, _) -> pp_addr fmt a)) mro;
                      let rec search_mro flow mro = match mro with
@@ -126,8 +121,8 @@ module Domain =
                            ~fthen:(fun flow -> man.eval (mk_expr (E_py_ll_getattr (mk_py_object cls range, mk_string "__getattribute__" range)) range) flow)
                            ~felse:(fun flow -> search_mro flow tl)
                            man flow in
-                     search_mro flow mro |>
-                     Eval.bind (fun getattribute flow ->
+                     search_mro flow mro >>$
+ (fun getattribute flow ->
                          bind_list [exp; c_attr] man.eval flow |>
                          bind_some (fun ee flow ->
                              let exp, c_attr = match ee with [e1;e2] -> e1, e2 | _ -> assert false in
@@ -151,7 +146,7 @@ module Domain =
                                                   Flow.add T_cur env man.lattice acc
                                                 | _ -> Flow.add tk env man.lattice acc) (Flow.bottom_from flow) flow in
                                             let flow = Flow.join man.lattice flow_exn_before flow in
-                                            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_attr class_of_exp "__getattr__" range) [exp; c_attr] range) flow
+                                            man.eval ~route:(Semantic "Python") (mk_py_call (mk_py_attr class_of_exp "__getattr__" range) [exp; c_attr] range) flow
                                           | Some attr -> Eval.singleton attr (Flow.join man.lattice flow_exn_before flow)
                                          )
                                      )
@@ -167,8 +162,8 @@ module Domain =
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("hasattr", _))}, _)}, [obj; attr], []) ->
-         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) obj flow |>
-           Eval.bind (fun eobj flow ->
+         man.eval ~route:(Semantic "Python") obj flow >>$
+ (fun eobj flow ->
              match ekind eobj with
              | E_py_object ({addr_kind = A_py_class (C_builtin c, mro)}, _) ->
                let attr = match ekind attr with
@@ -204,8 +199,8 @@ module Domain =
                        let mro = mro (object_of_expr eobj) in
                        search_mro flow mro)
                      ~felse:(fun flow ->
-                       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type eobj range) flow |>
-                         Eval.bind (fun class_of_exp flow ->
+                       man.eval ~route:(Semantic "Python") (mk_py_type eobj range) flow >>$
+ (fun class_of_exp flow ->
                              let mro = mro (object_of_expr class_of_exp) in
                              search_mro flow mro)
                      )
@@ -216,22 +211,23 @@ module Domain =
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("setattr", _))}, _)}, [lval; attr; rval], []) ->
-        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_attr lval "__setattr__" range) [attr; rval] range) flow
+        man.eval ~route:(Semantic "Python") (mk_py_call (mk_py_attr lval "__setattr__" range) [attr; rval] range) flow
         |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("delattr", _))}, _)}, [lval; attr], []) ->
-        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_attr lval "__delattr__" range) [attr] range) flow
+        man.eval ~route:(Semantic "Python") (mk_py_call (mk_py_attr lval "__delattr__" range) [attr] range) flow
         |> OptionExt.return
 
 
       | _ -> None
 
-    let exec zone stmt man flow =
+    let exec stmt man flow =
       let range = stmt.srange in
       match skind stmt with
       | S_assign({ekind = E_py_attribute(lval, attr)}, rval) ->
-        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_attr (mk_py_type lval range) "__setattr__" range) [lval; mk_constant ~etyp:T_any (C_string attr) range; rval] range) flow
-        |> Eval.bind (fun e flow -> Post.return flow)
+        man.eval ~route:(Semantic "Python") (mk_py_call (mk_py_attr (mk_py_type lval range) "__setattr__" range) [lval; mk_constant ~etyp:T_any (C_string attr) range; rval] range) flow
+        >>$
+ (fun e flow -> Post.return flow)
         |> OptionExt.return
 
       | _ -> None

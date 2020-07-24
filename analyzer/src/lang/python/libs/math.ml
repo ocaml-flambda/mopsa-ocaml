@@ -37,11 +37,6 @@ module Domain =
         let name = "python.libs.math"
       end)
 
-    let interface = {
-      iexec = { provides = []; uses = [] };
-      ieval = { provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [] }
-    }
-
     let alarms = []
 
     type stub_signature = {in_args: string list;
@@ -93,9 +88,9 @@ module Domain =
     let init prog man flow =
       flow
 
-    let exec _ _ _ _ = None
+    let exec _ _ _ = None
 
-    let eval zones exp man flow =
+    let eval exp man flow =
       let range = erange exp in
       match ekind exp with
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f,_))}, _)}, args, []) when StringMap.mem f stub_base ->

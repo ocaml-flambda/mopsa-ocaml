@@ -98,11 +98,6 @@ struct
       let name = name
     end)
 
-  let interface = {
-    iexec = {provides = [Zone.Z_py_obj]; uses = [Zone.Z_py_obj; Universal.Zone.Z_u_heap; Universal.Zone.Z_u_int; Zone.Z_py]};
-    ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj; Universal.Zone.Z_u_heap, Z_any]}
-  }
-
   let alarms = []
 
   let init (prog:program) man flow = flow
@@ -154,34 +149,34 @@ struct
     | E_addr a -> a
     | _ -> Exceptions.panic "%a@\n" pp_expr exp
 
-  let rec eval zones exp man flow =
+  let rec eval exp man flow =
     let range = erange exp in
     match ekind exp with
     | E_py_list ls ->
       debug "Skipping list.__new__, list.__init__ for now@\n";
 
       let addr_list = mk_alloc_addr A_py_list range in
-      man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_list flow |>
-        Eval.bind (fun eaddr_list flow ->
+      man.eval ~route:(Semantic "U/Heap") addr_list flow >>$
+        (fun eaddr_list flow ->
             let addr_list = addr_of_expr eaddr_list in
             let els_var = var_of_addr addr_list in
             let flow = List.fold_left (fun acc el ->
                            let stmt = mk_assign (mk_var els_var range) el range in
-                           man.exec ~zone:Zone.Z_py stmt acc) flow ls in
-            man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (mk_var (length_var_of_addr addr_list) range) (mk_int (List.length ls) ~typ:T_int range) range) flow |>
+                           man.exec ~route:(Semantic "Python") stmt acc) flow ls in
+            man.exec ~route:(Semantic "U/Int") (mk_assign (mk_var (length_var_of_addr addr_list) range) (mk_int (List.length ls) ~typ:T_int range) range) flow |>
               Eval.singleton (mk_py_object (addr_list, None) range)
           )
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.__getitem__", _))}, _)}, args, []) ->
-       Utils.bind_list_args man args flow range Zone.Z_py (fun args flow ->
+       Utils.bind_list_args man args flow range (fun args flow ->
            let eargs = List.map (fun x -> mk_var x range) args in
            let list, index = match eargs with [l; i] -> l, i | _ -> assert false in
            assume (mk_py_isinstance_builtin list "list" range) man flow
              ~fthen:(fun flow ->
                assume (mk_py_isinstance_builtin index "int" range) man flow
                  ~fthen:(fun flow ->
-                   Cases.bind_list eargs (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+                   Cases.bind_list eargs (man.eval ~route:(Semantic "Python")) flow |>
                      Cases.bind_some (fun eargs flow ->
                          let list, index = match eargs with [l; i] -> l, i | _ -> assert false in
                          let var_els = var_of_eobj list in
@@ -193,8 +188,8 @@ struct
                               (mk_binop (mk_unop O_minus (mk_var length_list range) ~etyp:T_int range) O_le (Utils.extract_oobject index)  range)
                               range
                            )
-                           ~zone:Universal.Zone.Z_u_int man flow
-                           ~fthen:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var var_els range))
+                           ~route:(Semantic "U/Int") man flow
+                           ~fthen:(man.eval ~route:(Semantic "Python") (mk_var var_els range))
                            ~felse:(fun flow ->
                              man.exec (Utils.mk_builtin_raise "IndexError" range) flow |>
                                Eval.empty_singleton
@@ -206,17 +201,17 @@ struct
                      ~fthen:(fun flow ->
                        debug "slice!";
                        let addr_list = mk_alloc_addr A_py_list range in
-                       man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_list flow |>
-                         Eval.bind (fun eaddr_list flow ->
+                       man.eval ~route:(Semantic "U/Heap") addr_list flow >>$
+                         (fun eaddr_list flow ->
                              let addr_list = addr_of_expr eaddr_list in
                              let slicedlist_var = var_of_addr addr_list in
-                             man.eval list ~zone:(Zone.Z_py, Zone.Z_py_obj) flow |>
-                               Eval.bind (fun list flow ->
-                                   man.eval (mk_py_call (mk_py_attr index "indices" range) [mk_py_call (mk_py_attr list "__len__" range) [] range] range) ~zone:(Zone.Z_py, Zone.Z_py_obj) flow |>
-                                     Eval.bind (fun tuple_indices flow ->
+                             man.eval list ~route:(Semantic "Python") flow >>$
+                               (fun list flow ->
+                                   man.eval (mk_py_call (mk_py_attr index "indices" range) [mk_py_call (mk_py_attr list "__len__" range) [] range] range) ~route:(Semantic "Python") flow >>$
+                                     (fun tuple_indices flow ->
                                          let get_nth n =
                                            mk_py_call (mk_py_attr tuple_indices "__getitem__" range) [mk_int n range] range in
-                                          Cases.bind_list [get_nth 0; get_nth 1; get_nth 2] (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+                                          Cases.bind_list [get_nth 0; get_nth 1; get_nth 2] (man.eval ~route:(Semantic "Python")) flow |>
                                            Cases.bind_some (fun sss flow ->
                                                  let start, stop, step = match List.map Utils.extract_oobject sss with
                                                    | [a;b;c] -> a, b, c
@@ -224,14 +219,14 @@ struct
                                                  let var_els = var_of_eobj list in
                                                  let new_length = mk_var (length_var_of_addr addr_list) range in
                                                  flow |>
-                                                   man.exec ~zone:Zone.Z_py (mk_assign (mk_var slicedlist_var range) (mk_var var_els range) range) |>
+                                                   man.exec ~route:(Semantic "Python") (mk_assign (mk_var slicedlist_var range) (mk_var var_els range) range) |>
                                                    switch
                                                      [
                                                        [
                                                          mk_binop ~etyp:T_int step O_lt (mk_zero ~typ:T_int range) range;
                                                          mk_binop ~etyp:T_int stop O_lt start range
                                                        ],
-                                                       (fun flow -> Post.return @@ man.exec ~zone:Universal.Zone.Z_u_int
+                                                       (fun flow -> Post.return @@ man.exec ~route:(Semantic "U/Int")
                                                           (mk_assign new_length (mk_binop ~etyp:T_int
                                                                                    (
                                                                                      mk_binop ~etyp:T_int
@@ -253,7 +248,7 @@ struct
                                                          mk_not (mk_binop ~etyp:T_int step O_lt (mk_zero ~typ:T_int range) range) range;
                                                          mk_binop ~etyp:T_int start O_lt stop range
                                                        ],
-                                                       (fun flow -> Post.return @@ man.exec ~zone:Universal.Zone.Z_u_int
+                                                       (fun flow -> Post.return @@ man.exec ~route:(Semantic "U/Int")
                                                           (mk_assign new_length (mk_binop ~etyp:T_int
                                                                                    (
                                                                                      mk_binop ~etyp:T_int
@@ -282,11 +277,11 @@ struct
                                                           (mk_binop (mk_not (mk_binop ~etyp:T_int step O_lt (mk_zero ~typ:T_int range) range) range) O_log_and (mk_not (mk_binop ~etyp:T_int start O_lt stop range) range) range)
                                                           range
                                                        ],
-                                                       (fun flow -> Post.return @@ man.exec ~zone:Universal.Zone.Z_u_int
+                                                       (fun flow -> Post.return @@ man.exec ~route:(Semantic "U/Int")
                                                            (mk_assign new_length (mk_zero ~typ:T_int range) range) flow
                                                        )
                                                      ]
-                                                     ~zone:Universal.Zone.Z_u_int man
+                                                     ~route:(Semantic "U/Int") man
                                                      >>$ fun () flow ->
                                                    Eval.singleton (mk_py_object (addr_list, None) range) flow
                                              )
@@ -295,8 +290,8 @@ struct
                            )
                      )
                      ~felse:(fun flow ->
-                       man.eval index ~zone:(Zone.Z_py, Zone.Z_py_obj) flow |>
-                         Eval.bind (fun index flow ->
+                       man.eval index ~route:(Semantic "Python") flow >>$
+                         (fun index flow ->
                              let msg = Format.asprintf "list indices must be integers or slices, not %a" pp_addr_kind (akind @@ fst @@ object_of_expr index) in
                              man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow |>
                                Eval.empty_singleton
@@ -313,7 +308,7 @@ struct
        |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.__add__" as f, _))}, _)}, args, []) ->
-       Utils.bind_list_args man args flow range Zone.Z_py (fun vargs flow ->
+       Utils.bind_list_args man args flow range (fun vargs flow ->
            let evargs = List.map (fun x -> mk_var x range) vargs in
            Utils.check_instances f man flow range evargs
              ["list"; "list"]
@@ -321,12 +316,12 @@ struct
                (* First, allocate new addr for the list, and new addr for the list elements *)
                (* Then assign the el addr to both addresses above *)
                let addr_list = mk_alloc_addr A_py_list range in
-               man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_list flow |>
-                 Eval.bind (fun list_addr flow ->
+               man.eval ~route:(Semantic "U/Heap") addr_list flow >>$
+                 (fun list_addr flow ->
                      let alist_addr = addr_of_expr list_addr in
                      let els_res_var = var_of_addr alist_addr in
                      let els_res_length = length_var_of_addr alist_addr in
-                     Cases.bind_list evargs (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+                     Cases.bind_list evargs (man.eval ~route:(Semantic "Python")) flow |>
                        Cases.bind_some (fun exprs flow ->
                            let listl, listr = match exprs with [l; r] -> l, r | _ -> assert false in
                            let elsl_var = var_of_eobj listl in
@@ -335,10 +330,10 @@ struct
                            let elsr_length = length_var_of_eobj listr in
 
                            let flow = List.fold_left (fun acc el ->
-                                          man.exec ~zone:Zone.Z_py (mk_assign (mk_var els_res_var range) el range) acc)
+                                          man.exec ~route:(Semantic "Python") (mk_assign (mk_var els_res_var range) el range) acc)
                                         flow [mk_var elsl_var range;
                                               mk_var elsr_var range] in
-                           man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (mk_var els_res_length range)
+                           man.exec ~route:(Semantic "U/Int") (mk_assign (mk_var els_res_length range)
                                                                     (mk_binop (mk_var elsl_length range) O_plus (mk_var elsr_length range) ~etyp:T_int range) range) flow |>
                              Eval.singleton (mk_py_object (alist_addr, None) range)
                          )
@@ -349,9 +344,9 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.__iadd__", _))}, _)}, args, []) ->
       (* let's rewrite list.__iadd__(s, t) into list.extend(s, t) && return s *)
-      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object (find_builtin "list.extend") range) args range) flow
-      |> Eval.bind (fun nonety flow ->
-          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (List.hd args) flow
+      man.eval ~route:(Semantic "Python") (mk_py_call (mk_py_object (find_builtin "list.extend") range) args range) flow
+      >>$ (fun nonety flow ->
+          man.eval ~route:(Semantic "Python") (List.hd args) flow
         )
       |> OptionExt.return
 
@@ -371,9 +366,9 @@ struct
                       (mk_binop (mk_unop O_minus (mk_var length_els range) ~etyp:T_int range) O_le (Utils.extract_oobject index) range)
                       range
                    )
-                   ~zone:Universal.Zone.Z_u_int man flow
+                   ~route:(Semantic "U/Int") man flow
                    ~fthen:(fun flow ->
-                       man.exec ~zone:Zone.Z_py (mk_assign (mk_var var_els range) value range) flow |> man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range)
+                       man.exec ~route:(Semantic "Python") (mk_assign (mk_var var_els range) value range) flow |> man.eval ~route:(Semantic "Python") (mk_py_none range)
                      )
                    ~felse:(fun flow ->
                        man.exec (Utils.mk_builtin_raise_msg "IndexError" "list assignment index out of range" range) flow |>
@@ -409,25 +404,25 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.__mul__" as f, _))}, _)}, args, [])
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.__rmul__" as f, _))}, _)}, args, []) ->
-       Utils.bind_list_args man args flow range Zone.Z_py (fun vargs flow ->
+       Utils.bind_list_args man args flow range (fun vargs flow ->
            let evargs = List.map (fun x -> mk_var x range) vargs in
            Utils.check_instances f man flow range evargs ["list"; "int"]
              (fun _ flow ->
                let addr_list = mk_alloc_addr A_py_list range in
                (* WOOPS: this alloc may trigger an address renaming invalidating els_list and len_list *)
-               man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_list flow |>
-                 Eval.bind (fun eaddr_list flow ->
+               man.eval ~route:(Semantic "U/Heap") addr_list flow >>$
+                 (fun eaddr_list flow ->
                      let addr_list = addr_of_expr eaddr_list in
                      let els_var = var_of_addr addr_list in
                      let els_len = length_var_of_addr addr_list in
-                     Cases.bind_list evargs (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+                     Cases.bind_list evargs (man.eval ~route:(Semantic "Python")) flow |>
                        Cases.bind_some (fun exprs flow ->
                            let list, int = match exprs with [l; r] -> l, r | _ -> assert false in
                            let els_list = var_of_eobj list in
                            let len_list = length_var_of_eobj list in
 
-                           let flow = man.exec ~zone:Zone.Z_py (mk_assign (mk_var els_var range) (mk_var els_list range) range) flow in
-                           man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (mk_var els_len range)
+                           let flow = man.exec ~route:(Semantic "Python") (mk_assign (mk_var els_var range) (mk_var els_list range) range) flow in
+                           man.exec ~route:(Semantic "U/Int") (mk_assign (mk_var els_len range)
                                                                     (mk_binop (mk_var len_list range) O_mult (Utils.extract_oobject int) ~etyp:T_int range) range) flow |>
                              Eval.singleton (mk_py_object (addr_list, None) range)
                          )
@@ -447,8 +442,8 @@ struct
            let var_els = var_of_eobj list in
            let len_els = length_var_of_eobj list in
            flow |>
-           man.exec ~zone:Zone.Z_py (mk_assign (mk_var var_els range) element range) |>
-           man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (mk_var len_els range)
+           man.exec ~route:(Semantic "Python") (mk_assign (mk_var var_els range) element range) |>
+           man.exec ~route:(Semantic "U/Int") (mk_assign (mk_var len_els range)
                                        (mk_binop (mk_var len_els range) O_plus (mk_int 1 range) ~etyp:T_int range) range) |>
            man.eval (mk_py_none range))
       |> OptionExt.return
@@ -461,8 +456,8 @@ struct
            let var_els = var_of_eobj list in
            let len_els = length_var_of_eobj list in
            flow |>
-           man.exec ~zone:Zone.Z_py (mk_assign (mk_var var_els range) element range)  |>
-           man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (mk_var len_els range)
+           man.exec ~route:(Semantic "Python") (mk_assign (mk_var var_els range) element range)  |>
+           man.exec ~route:(Semantic "U/Int") (mk_assign (mk_var len_els range)
                                        (mk_binop (mk_var len_els range) O_plus (mk_int 1 range) ~etyp:T_int range) range) |>
            man.eval (mk_py_none range))
       |> OptionExt.return
@@ -485,8 +480,8 @@ struct
                  let var_sndels = var_of_eobj other in
                  let len_sndels = length_var_of_eobj other in
                  flow |>
-                 man.exec ~zone:Zone.Z_py (mk_assign (mk_var var_els range) (mk_var var_sndels range) range) |>
-                 man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (mk_var len_els range)
+                 man.exec ~route:(Semantic "Python") (mk_assign (mk_var var_els range) (mk_var var_sndels range) range) |>
+                 man.exec ~route:(Semantic "U/Int") (mk_assign (mk_var len_els range)
                              (mk_binop (mk_var len_els range) O_plus (mk_var len_sndels range) ~etyp:T_int range) range) |>
                  man.eval (mk_py_none range)
                )
@@ -498,29 +493,29 @@ struct
                      let ra a = mk_py_attr other a range in
                      let flow =
                        flow |>
-                         man.exec ~zone:Zone.Z_py (mk_assign (mk_var var_els range) (mk_py_top T_int range) range)  |>
-                         man.exec ~zone:Zone.Z_py (mk_assume (mk_binop
+                         man.exec ~route:(Semantic "Python") (mk_assign (mk_var var_els range) (mk_py_top T_int range) range)  |>
+                         man.exec ~route:(Semantic "Python") (mk_assume (mk_binop
                                                 (mk_binop (ra "start") O_le (mk_var var_els range) range)
                                                 O_py_and
                                                 (mk_binop (mk_var var_els range) O_lt (ra "stop") range) range) range) in
-                     man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)
-                       (mk_py_call (mk_py_object (find_builtin_function "len") range) [other] range) flow |>
-                       Eval.bind (fun len flow ->
-                           man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (mk_var len_els range) (Utils.extract_oobject len) range) flow |>
-                             man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range)
+                     man.eval ~route:(Semantic "Python")
+                       (mk_py_call (mk_py_object (find_builtin_function "len") range) [other] range) flow >>$
+                       (fun len flow ->
+                           man.exec ~route:(Semantic "U/Int") (mk_assign (mk_var len_els range) (Utils.extract_oobject len) range) flow |>
+                             man.eval ~route:(Semantic "Python") (mk_py_none range)
                          )
                      )
                    (* TODO: if object has iter field call it and then call next *)
                    ~felse:(fun flow ->
                        assume (mk_py_isinstance_builtin other "list_reverseiterator" range) man flow
                          ~fthen:(fun flow ->
-                           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var (itseq_of_eobj other) range) flow |>
-                             Eval.bind (fun list_eobj flow ->
+                           man.eval ~route:(Semantic "Python") (mk_var (itseq_of_eobj other) range) flow >>$
+                             (fun list_eobj flow ->
                                  let var_sndels = var_of_eobj list_eobj in
                                  let len_sndels = length_var_of_eobj list_eobj in
                                  flow |>
-                                   man.exec ~zone:Zone.Z_py (mk_assign (mk_var var_els range) (mk_var var_sndels range) range) |>
-                                   man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (mk_var len_els range)
+                                   man.exec ~route:(Semantic "Python") (mk_assign (mk_var var_els range) (mk_var var_sndels range) range) |>
+                                   man.exec ~route:(Semantic "U/Int") (mk_assign (mk_var len_els range)
                                                                             (mk_binop (mk_var len_els range) O_plus (mk_var len_sndels range) ~etyp:T_int range) range) |>
                                    man.eval (mk_py_none range)
                                )
@@ -528,10 +523,10 @@ struct
                          ~felse:(fun flow ->
                              assume (mk_py_isinstance_builtin other "zip" range) man flow
                                ~fthen:(fun flow ->
-                                 man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var (itseq_of_eobj other) range) flow |>
-                                   Eval.bind (fun l1_eobj flow ->
-                                       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var (itseq2_of_eobj other) range) flow |>
-                                         Eval.bind (fun l2_eobj flow ->
+                                 man.eval ~route:(Semantic "Python") (mk_var (itseq_of_eobj other) range) flow >>$
+ (fun l1_eobj flow ->
+                                       man.eval ~route:(Semantic "Python") (mk_var (itseq2_of_eobj other) range) flow >>$
+ (fun l2_eobj flow ->
                                              let var_l1 = var_of_eobj l1_eobj in
                                              let len_l1 = length_var_of_eobj l1_eobj in
                                              let var_l2 = var_of_eobj l2_eobj in
@@ -568,8 +563,8 @@ struct
            let var_els = var_of_eobj list in
            let len_els = length_var_of_eobj list in
            flow |>
-           man.exec ~zone:Zone.Z_py (mk_remove_var var_els range) |>
-           man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (mk_var len_els range) (mk_int 0 range) range) |>
+           man.exec ~route:(Semantic "Python") (mk_remove_var var_els range) |>
+           man.exec ~route:(Semantic "U/Int") (mk_assign (mk_var len_els range) (mk_int 0 range) range) |>
            man.eval (mk_py_none range)
         )
       |> OptionExt.return
@@ -605,16 +600,16 @@ struct
                 (mk_binop (mk_unop O_minus (mk_var len_els range) ~etyp:T_int range) O_le (Utils.extract_oobject popindex)  range)
                 range
              )
-             ~zone:Universal.Zone.Z_u_int man flow
+             ~route:(Semantic "U/Int") man flow
              ~fthen:(fun flow ->
                  flow |>
-                 man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (mk_var len_els range)
+                 man.exec ~route:(Semantic "U/Int") (mk_assign (mk_var len_els range)
                                              (mk_binop (mk_var len_els range) O_minus (mk_int 1 range) ~etyp:T_int range) range) |>
                  man.eval (mk_var var_els range)
                )
              ~felse:(fun flow ->
                assume (mk_binop (mk_var len_els range) O_eq (mk_int 0 range) range)
-                 ~zone:Universal.Zone.Z_u_int
+                 ~route:(Semantic "U/Int")
                    man flow
                    ~fthen:(fun flow ->
                        man.exec (Utils.mk_builtin_raise_msg "IndexError" "pop from empty list" range) flow |> Eval.empty_singleton)
@@ -656,12 +651,12 @@ struct
         (fun args flow ->
            let list = match args with | [l] -> l | _ -> assert false in
            let a = mk_alloc_addr (A_py_iterator ("list_iterator", None)) range in
-           man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) a flow |>
-             Eval.bind (fun eaddr_it flow ->
+           man.eval ~route:(Semantic "U/Heap") a flow >>$
+ (fun eaddr_it flow ->
                  let addr_it = match ekind eaddr_it with | E_addr a -> a | _ -> assert false in
                  flow |>
-                   man.exec ~zone:Zone.Z_py (mk_assign (mk_var (itseq_of_addr addr_it) range) list range) |>
-                 man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (mk_var (itindex_var_of_addr addr_it) range) (mk_int 0 range) range)  |>
+                   man.exec ~route:(Semantic "Python") (mk_assign (mk_var (itseq_of_addr addr_it) range) list range) |>
+                 man.exec ~route:(Semantic "U/Int") (mk_assign (mk_var (itindex_var_of_addr addr_it) range) (mk_int 0 range) range)  |>
                    Eval.singleton (mk_py_object (addr_it, None) range)
              )
         )
@@ -671,10 +666,10 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list_iterator.__next__", _))}, _)}, [iterator], []) ->
        (* it_pos in reverse iterator + value analysis? *)
       (* todo: checks ? *)
-      man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) iterator flow |>
-        Eval.bind (fun iterator flow ->
-            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var (itseq_of_eobj iterator) range) flow |>
-              Eval.bind (fun list_eobj flow ->
+      man.eval  ~route:(Semantic "Python") iterator flow >>$
+ (fun iterator flow ->
+            man.eval ~route:(Semantic "Python") (mk_var (itseq_of_eobj iterator) range) flow >>$
+ (fun list_eobj flow ->
                   let list_addr = match ekind list_eobj with
                     | E_py_object (a, _) -> a
                     | _ -> assert false in
@@ -682,7 +677,7 @@ struct
                   let len_els = length_var_of_addr list_addr in
                   let it_pos = itindex_var_of_eobj iterator in
                   assume (mk_binop (mk_var it_pos range) O_lt (mk_var len_els range) ~etyp:T_int range)
-                    ~zone:Universal.Zone.Z_u_int man flow
+                    ~route:(Semantic "U/Int") man flow
                     ~fthen:(fun flow ->
                       let els = man.eval (mk_var var_els range) flow in
                       OptionExt.none_to_exn @@ bind_opt (fun oels flow ->
@@ -693,7 +688,7 @@ struct
                                                         man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton
 
                                                      | Some e ->
-                                                        man.exec ~zone:Universal.Zone.Z_u_int
+                                                        man.exec ~route:(Semantic "U/Int")
                                                           (mk_assign (mk_var it_pos range)
                                                              (mk_binop (mk_var it_pos range) O_plus (mk_int 1 range) ~etyp:T_int range) range) flow |>
                                                           Eval.singleton e
@@ -710,7 +705,7 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list_reverseiterator.__iter__", _))}, _)}, [iterator], [])
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list_iterator.__iter__", _))}, _)}, [iterator], []) ->
       (* todo: checks ? *)
-      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) iterator flow |> OptionExt.return
+      man.eval ~route:(Semantic "Python") iterator flow |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.__reversed__" as f, _))}, _)}, args, []) ->
        (* FIXME: values *)
@@ -719,13 +714,13 @@ struct
         (fun args flow ->
            let list = match args with | [l] -> l | _ -> assert false in
            let a = mk_alloc_addr (A_py_iterator ("list_reverseiterator", None)) range in
-           man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) a flow |>
-           Eval.bind (fun eaddr_it flow ->
+           man.eval ~route:(Semantic "U/Heap") a flow >>$
+ (fun eaddr_it flow ->
                (* FIXME list_reverseiterator index *)
                let addr_it = match ekind eaddr_it with | E_addr a -> a | _ -> assert false in
                flow |>
-                 man.exec ~zone:Zone.Z_py (mk_assign (mk_var (itseq_of_addr addr_it) range) list range) |>
-               man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (mk_var (itindex_var_of_addr addr_it) range) (mk_int 0 range) range) |>
+                 man.exec ~route:(Semantic "Python") (mk_assign (mk_var (itseq_of_addr addr_it) range) list range) |>
+               man.exec ~route:(Semantic "U/Int") (mk_assign (mk_var (itindex_var_of_addr addr_it) range) (mk_int 0 range) range) |>
                Eval.singleton (mk_py_object (addr_it, None) range)
              )
         )
@@ -736,8 +731,8 @@ struct
       Utils.check_instances f man flow range args
         ["list"]
         (fun args flow ->
-          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow |>
-            Eval.bind (fun eint flow ->
+          man.eval ~route:(Semantic "Python") (mk_py_top T_int range) flow >>$
+ (fun eint flow ->
                 match ekind eint with
                 | E_py_object (addr, _) ->
                    Eval.singleton {eint with ekind = E_py_object (addr, Some {(mk_var (length_var_of_eobj @@ List.hd args) range) with etyp=T_int})} flow
@@ -752,9 +747,9 @@ struct
           assume
             (mk_binop (mk_var (var_of_eobj list) range) O_eq el range)
             man flow
-            ~zone:Zone.Z_py
-            ~fthen:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_true range))
-            ~felse:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_false range))
+            ~route:(Semantic "Python")
+            ~fthen:(man.eval ~route:(Semantic "Python") (mk_py_true range))
+            ~felse:(man.eval ~route:(Semantic "Python") (mk_py_false range))
         )
       |> OptionExt.return
 
@@ -794,10 +789,10 @@ struct
         (fun args flow ->
            let list = match args with | [_; l] -> l | _ -> assert false in
            let a = mk_alloc_addr (A_py_iterator ("enumerate", None)) range in
-           man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) a flow |>
-           Eval.bind (fun eaddr_it flow ->
+           man.eval ~route:(Semantic "U/Heap") a flow >>$
+ (fun eaddr_it flow ->
                let addr_it = match ekind eaddr_it with | E_addr a -> a | _ -> assert false in
-               man.exec ~zone:Zone.Z_py (mk_assign (mk_var (itseq_of_addr addr_it) range) list range) flow |>
+               man.exec ~route:(Semantic "Python") (mk_assign (mk_var (itseq_of_addr addr_it) range) list range) flow |>
                Eval.singleton (mk_py_object (addr_it, None) range)
              )
         )
@@ -812,16 +807,16 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("enumerate.__next__", _))}, _)}, [iterator], []) ->
        (* FIXME: new py_iterator + values *)
-      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) iterator flow |>
-        Eval.bind (fun iterator flow ->
-            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var (itseq_of_eobj iterator) range) flow |>
-              Eval.bind (fun list_eobj flow ->
+      man.eval ~route:(Semantic "Python") iterator flow >>$
+ (fun iterator flow ->
+            man.eval ~route:(Semantic "Python") (mk_var (itseq_of_eobj iterator) range) flow >>$
+ (fun list_eobj flow ->
                   let var_els = var_of_eobj list_eobj in
                   let els = man.eval (mk_expr (E_py_tuple [mk_top T_int range;
                                                            mk_var var_els range]) range) flow in
-                  let flow = Flow.set_ctx (Eval.get_ctx els) flow in
+                  let flow = Flow.set_ctx (Cases.get_ctx els) flow in
                   let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
-                  Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Eval.copy_ctx stopiteration els::stopiteration::[])
+                  Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Cases.copy_ctx stopiteration els::stopiteration::[])
                 )
           )
       |> OptionExt.return
@@ -833,14 +828,14 @@ struct
         (fun args flow ->
            let list1, list2 = match args with | [_; l1; l2] -> l1, l2 | _ -> assert false in
            let a = mk_alloc_addr (A_py_iterator ("zip", None)) range in
-           man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) a flow |>
-           Eval.bind (fun eaddr_it flow ->
+           man.eval ~route:(Semantic "U/Heap") a flow >>$
+ (fun eaddr_it flow ->
                let addr_it = match ekind eaddr_it with
                  | E_addr a -> a
                  | _ -> assert false in
                flow |>
-                 man.exec ~zone:Zone.Z_py (mk_assign (mk_var (itseq_of_addr  addr_it) range) list1 range) |>
-                 man.exec ~zone:Zone.Z_py (mk_assign (mk_var (itseq2_of_addr addr_it) range) list2 range) |>
+                 man.exec ~route:(Semantic "Python") (mk_assign (mk_var (itseq_of_addr  addr_it) range) list1 range) |>
+                 man.exec ~route:(Semantic "Python") (mk_assign (mk_var (itseq2_of_addr addr_it) range) list2 range) |>
                Eval.singleton (mk_py_object (addr_it, None) range)
              )
         )
@@ -854,19 +849,19 @@ struct
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("zip.__next__", _))}, _)}, [iterator], []) ->
-      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) iterator flow |>
-        Eval.bind (fun iterator flow ->
+      man.eval ~route:(Semantic "Python") iterator flow >>$
+ (fun iterator flow ->
             Cases.bind_list (List.map (fun x -> mk_var x range) [itseq_of_eobj iterator; itseq2_of_eobj iterator])
-              (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+              (man.eval ~route:(Semantic "Python")) flow |>
               Cases.bind_some (fun its flow ->
                   let list1_eobj, list2_eobj = match its with [a; b] -> a, b | _ -> assert false in
                   let var_els1 = var_of_eobj list1_eobj in
                   let var_els2 = var_of_eobj list2_eobj in
                   let els = man.eval (mk_expr (E_py_tuple [mk_var var_els1 range;
                                                            mk_var var_els2 range]) range) flow in
-                  let flow = Flow.set_ctx (Eval.get_ctx els) flow in
+                  let flow = Flow.set_ctx (Cases.get_ctx els) flow in
                   let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
-                  Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Eval.copy_ctx stopiteration els::stopiteration::[])
+                  Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Cases.copy_ctx stopiteration els::stopiteration::[])
                 )
           )
       |> OptionExt.return
@@ -948,15 +943,15 @@ struct
 
     | E_py_annot {ekind = E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)}, i) } when get_orig_vname c.py_cls_a_var = "List" ->
       let addr_list = mk_alloc_addr A_py_list range in
-      man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_list flow |>
-      Eval.bind (fun eaddr_list flow ->
+      man.eval ~route:(Semantic "U/Heap") addr_list flow >>$
+ (fun eaddr_list flow ->
           let addr_list = addr_of_expr eaddr_list in
           let els_var = var_of_addr addr_list in
           let len_var = length_var_of_addr addr_list in
           let stmt = mk_stmt (S_py_annot (mk_var els_var range, mk_expr (E_py_annot i) range)) range in
           flow |>
-            man.exec ~zone:Zone.Z_py stmt |>
-            man.exec ~zone:Universal.Zone.Z_u_int (mk_assign (mk_var len_var range) (mk_py_top T_int range) range) |>
+            man.exec ~route:(Semantic "Python") stmt |>
+            man.exec ~route:(Semantic "U/Int") (mk_assign (mk_var len_var range) (mk_py_top T_int range) range) |>
             Eval.singleton (mk_py_object (addr_list, None) range)
         )
       |> OptionExt.return
@@ -965,7 +960,7 @@ struct
       debug "s_py_check_annot list";
       assume (mk_py_isinstance_builtin tocheck "list" range) man flow
         ~fthen:(fun flow ->
-            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) tocheck flow |>
+            man.eval ~route:(Semantic "Python") tocheck flow |>
             bind_some (fun iterator flow ->
                 let list_addr = match ekind iterator with
                   | E_py_object ({addr_kind = A_py_list} as a, _) -> a
@@ -975,7 +970,7 @@ struct
               )
           )
         ~felse:(fun flow ->
-            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_false range) flow
+            man.eval ~route:(Semantic "Python") (mk_py_false range) flow
           )
       |> OptionExt.return
 
@@ -983,24 +978,24 @@ struct
 
 
 
-  let exec zone stmt man flow =
+  let exec stmt man flow =
     let range = srange stmt in
     match skind stmt with
     | S_remove {ekind = E_addr ({addr_kind = A_py_list} as a)} ->
        let va = var_of_addr a in
        let la = length_var_of_addr a in
        flow |>
-         man.exec ~zone:Zone.Z_py (mk_remove_var va range) |>
-         man.exec ~zone:Universal.Zone.Z_u_int (mk_remove_var la range) |>
+         man.exec ~route:(Semantic "Python") (mk_remove_var va range) |>
+         man.exec ~route:(Semantic "U/Int") (mk_remove_var la range) |>
          Post.return |> OptionExt.return
 
     | S_remove {ekind = E_addr ({addr_kind = A_py_iterator (kind, _)} as a)} ->
        let va = itseq_of_addr a in
-       let flow = man.exec ~zone:Zone.Z_py (mk_remove_var va range) flow in
+       let flow = man.exec ~route:(Semantic "Python") (mk_remove_var va range) flow in
        flow |>
          (
            if kind = "list_iterator" || kind = "list_reverseiterator" then
-             man.exec ~zone:Universal.Zone.Z_u_int (mk_remove_var (itindex_var_of_addr a) range)
+             man.exec ~route:(Semantic "U/Int") (mk_remove_var (itindex_var_of_addr a) range)
            else
              fun x -> x
          )
@@ -1012,19 +1007,19 @@ struct
        flow |>
          (
            if kind = "list_iterator" || kind = "list_reverseiterator" then
-             man.exec ~zone:Universal.Zone.Z_u_int (mk_rename_var (itindex_var_of_addr a) (itindex_var_of_addr a') range)
+             man.exec ~route:(Semantic "U/Int") (mk_rename_var (itindex_var_of_addr a) (itindex_var_of_addr a') range)
            else
              fun x -> x
          ) |>
-         man.exec ~zone:Zone.Z_py (mk_rename_var va va' range) |> Post.return |> OptionExt.return
+         man.exec ~route:(Semantic "Python") (mk_rename_var va va' range) |> Post.return |> OptionExt.return
 
     | S_invalidate {ekind = E_addr ({addr_kind = A_py_iterator (kind, _)} as a)} ->
        let va = itseq_of_addr a in
        flow |>
-         man.exec ~zone:Zone.Z_py (mk_remove_var va range) |>
+         man.exec ~route:(Semantic "Python") (mk_remove_var va range) |>
          (
            if kind = "list_iterator" || kind = "list_reverseiterator" then
-             man.exec ~zone:Universal.Zone.Z_u_int (mk_remove_var (itindex_var_of_addr a) range)
+             man.exec ~route:(Semantic "U/Int") (mk_remove_var (itindex_var_of_addr a) range)
            else
              fun x -> x
          ) |>
@@ -1042,9 +1037,9 @@ struct
                      | E_addr ({addr_kind = A_py_iterator (kind', _)} as a') when kind = kind' -> itseq_of_addr a'
                      | _ -> assert false) addrs in
        flow |>
-         man.exec ~zone:Zone.Z_py (mk_stmt va vas range) |>
+         man.exec ~route:(Semantic "Python") (mk_stmt va vas range) |>
          ( if kind = "list_iterator" || kind = "list_reverseiterator" then
-             man.exec ~zone:Universal.Zone.Z_u_int
+             man.exec ~route:(Semantic "U/Int")
                (mk_stmt (itindex_var_of_addr a)
                   (List.map (fun ea' ->
                      match ekind ea' with
@@ -1060,8 +1055,8 @@ struct
        let va = var_of_addr a in
        let la = length_var_of_addr a in
        flow |>
-         man.exec ~zone:Zone.Z_py (mk_remove_var va range) |>
-         man.exec ~zone:Universal.Zone.Z_u_int (mk_remove_var la range) |>
+         man.exec ~route:(Semantic "Python") (mk_remove_var va range) |>
+         man.exec ~route:(Semantic "U/Int") (mk_remove_var la range) |>
          Post.return |> OptionExt.return
 
 
@@ -1078,8 +1073,8 @@ struct
                                       | E_addr ({addr_kind = A_py_list} as a') -> var_of_addr a', length_var_of_addr a'
                                       | _ -> assert false) addrs in
        flow |>
-         man.exec ~zone:Zone.Z_py (mk_stmt va vas range) |>
-         man.exec ~zone:Universal.Zone.Z_u_int (mk_stmt la las range) |>
+         man.exec ~route:(Semantic "Python") (mk_stmt va vas range) |>
+         man.exec ~route:(Semantic "U/Int") (mk_stmt la las range) |>
          Post.return |> OptionExt.return
 
     | S_rename ({ekind = E_addr ({addr_kind = A_py_list} as a)}, {ekind = E_addr a'}) ->
@@ -1091,8 +1086,8 @@ struct
       let la' = length_var_of_addr a' in
       debug "renaming %a into %a@\n" pp_var va pp_var va';
       let flow = flow |>
-      man.exec ~zone:Zone.Z_py (mk_rename_var va va' range) |>
-      man.exec ~zone:Universal.Zone.Z_u_int (mk_rename_var la la' range) in
+      man.exec ~route:(Semantic "Python") (mk_rename_var va va' range) |>
+      man.exec ~route:(Semantic "U/Int") (mk_rename_var la la' range) in
       flow |> Post.return |> OptionExt.return
       (* FIXME: now we need to do the same for iterators based on this address, but it's complicated *)
       (* let to_rename =
@@ -1121,7 +1116,7 @@ struct
     | _ -> None
 
 
-  let ask : type r. r query -> ('a, unit, 's) man -> 'a flow -> r option =
+  let ask : type r. ('a, r) query -> ('a, unit) man -> 'a flow -> r option =
     fun query man flow ->
     match query with
     | Universal.Ast.Q_debug_addr_value ({addr_kind = A_py_list} as addr) ->

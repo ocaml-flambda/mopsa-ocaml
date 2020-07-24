@@ -35,11 +35,6 @@ struct
       let name = "python.libs.stdlib"
     end)
 
-  let interface = {
-    iexec = { provides = []; uses = [Zone.Z_py] };
-    ieval = { provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj] }
-  }
-
   let alarms = []
 
   type stub_signature = {in_args: string list;
@@ -69,26 +64,26 @@ struct
 
   let init _ _ flow = flow
 
-  let exec _ _ _ _ = None
+  let exec _ _ _ = None
 
-  let eval zones exp man flow =
+  let eval exp man flow =
     let range = exp.erange in
     match ekind exp with
     (* Calls to iter built-in function *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("iter", _))}, _)},
                 [obj], []) ->
       (* Check that the class of obj has an attribute __iter__ *)
-      man.eval obj flow |>
-      Eval.bind (fun eobj flow ->
-          man.eval (mk_py_type eobj range) flow |>
-          Eval.bind (fun cls' flow ->
+      man.eval obj flow >>$
+        (fun eobj flow ->
+          man.eval (mk_py_type eobj range) flow >>$
+            (fun cls' flow ->
               let cls = object_of_expr cls' in
               assume
                 (Utils.mk_object_hasattr cls "__iter__" range)
                 ~fthen:(fun true_flow ->
                     (* Call iter and check that it returns an object with an attribute __next__ *)
-                    man.eval (mk_py_call (mk_py_object_attr cls "__iter__" range) [eobj] range) true_flow |>
-                    Eval.bind (fun iter flow ->
+                    man.eval (mk_py_call (mk_py_object_attr cls "__iter__" range) [eobj] range) true_flow >>$
+                    (fun iter flow ->
                         assume
                           (Utils.mk_hasattr iter "__next__" range)
                           ~fthen:(fun true_flow -> Eval.singleton iter true_flow)
@@ -112,17 +107,17 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("len", _))}, _)},
                 [obj], [])  ->
       (* Check that the class of obj has an attribute __len__ *)
-      man.eval obj flow |>
-      Eval.bind (fun eobj flow ->
-          man.eval (mk_py_type eobj range) flow |>
-          Eval.bind (fun cls flow ->
+      man.eval obj flow >>$
+        (fun eobj flow ->
+          man.eval (mk_py_type eobj range) flow >>$
+            (fun cls flow ->
               let cls = object_of_expr cls in
               assume
                 (Utils.mk_object_hasattr cls "__len__" range)
                 ~fthen:(fun true_flow ->
                     (* Call __len__ and check that it returns an integer *)
-                    man.eval (mk_py_call (mk_py_object_attr cls "__len__" range) [eobj] range) true_flow |>
-                    Eval.bind (fun len flow ->
+                    man.eval (mk_py_call (mk_py_object_attr cls "__len__" range) [eobj] range) true_flow >>$
+                    (fun len flow ->
                         assume
                           (mk_py_isinstance_builtin len "int" range)
                           ~fthen:(fun true_flow ->
@@ -147,10 +142,10 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("next", _))}, _)},
                 [obj], [])  ->
       (* Check that the class of obj has an attribute __next__ *)
-      man.eval obj flow |>
-      Eval.bind (fun eobj flow ->
-          man.eval (mk_py_type eobj range) flow |>
-          Eval.bind (fun cls flow ->
+      man.eval obj flow >>$
+        (fun eobj flow ->
+          man.eval (mk_py_type eobj range) flow >>$
+          (fun cls flow ->
               let cls = object_of_expr cls in
               assume
                 (Utils.mk_object_hasattr cls "__next__" range)
@@ -171,7 +166,7 @@ struct
          let msg = Format.asprintf "input expected at most 1 arguments, got %d" (List.length args) in
          man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow |> Eval.empty_singleton in
        if List.length args <= 1 then
-        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_string range) flow |> OptionExt.return
+        man.eval ~route:(Semantic "Python") (mk_py_top T_string range) flow |> OptionExt.return
       else
         tyerror flow |> OptionExt.return
 
@@ -194,13 +189,13 @@ struct
       debug "Rewriting %a into %a@\n" pp_expr exp pp_stmt stmt;
       man.exec stmt flow |>
       man.eval counter_var |>
-      Eval.add_cleaners [mk_remove_var counter range; mk_remove_var target range] |>
+      Cases.add_cleaners [mk_remove_var counter range; mk_remove_var target range] |>
       OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (s, _))}, _)}, [e1; e2], []) when s = "max" || s = "min" ->
       (* desugaring max(e1, e2) into e1 if e1 > e2 else e2 *)
       let comp_op = if s = "max" then O_gt else O_lt in
-      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr
+      man.eval ~route:(Semantic "Python") (mk_expr
                                                    (E_py_if
                                                       (mk_binop e1 comp_op e2 range,
                                                        e1,
@@ -242,7 +237,7 @@ struct
       debug "Rewriting %a into %a@\n" pp_expr exp pp_stmt stmt;
       man.exec stmt flow |>
       man.eval maxi_var |>
-      Eval.add_cleaners cleaners |>
+      Cases.add_cleaners cleaners |>
       OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("max", _))}, _)}, [e1; e2], []) ->
@@ -256,7 +251,7 @@ struct
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("print", _))}, _)}, objs, [])  ->
-      bind_list objs (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+      bind_list objs (man.eval ~route:(Semantic "Python")) flow |>
       bind_some (fun eobj flow -> man.eval (mk_py_none range) flow)
       |> OptionExt.return
 
@@ -273,14 +268,14 @@ struct
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("repr", _))}, _)}, [v], [])  ->
-      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type v range) flow |>
-      Eval.bind (fun etype flow ->
+      man.eval ~route:(Semantic "Python") (mk_py_type v range) flow >>$
+      (fun etype flow ->
           assume
             (mk_py_hasattr etype "__repr__" range)
             man flow
             ~fthen:(fun flow ->
-                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_attr etype "__repr__" range) [] range) flow |>
-                Eval.bind (fun repro flow ->
+                man.eval ~route:(Semantic "Python") (mk_py_call (mk_py_attr etype "__repr__" range) [] range) flow >>$
+                  (fun repro flow ->
                     assume (mk_py_isinstance_builtin repro "str" range) man flow
                       ~fthen:(Eval.singleton repro)
                       ~felse:(fun flow ->  man.exec (Utils.mk_builtin_raise_msg "TypeError" "__repr__ returned non-string" range) flow |> Eval.empty_singleton)
@@ -288,7 +283,7 @@ struct
               )
             ~felse:(
               (* there is a default implementation saying "<%s object at %p>" % (name(type(v)), v as addr I guess *)
-              man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_string range)
+              man.eval ~route:(Semantic "Python") (mk_py_top T_string range)
             )
         )
       |> OptionExt.return
@@ -304,16 +299,16 @@ struct
       (* todo: call list on obj first *)
       let seq = mk_range_attr_var range "sorted" T_any in
       let flow = man.exec (mk_assign (mk_var seq range) obj range) flow in
-      man.eval (Utils.mk_builtin_call "list.sort" [mk_var seq range] range) flow |>
-      Eval.bind (fun _ flow ->
+      man.eval (Utils.mk_builtin_call "list.sort" [mk_var seq range] range) flow >>$
+        (fun _ flow ->
           man.eval (mk_var seq range) flow |>
-          Eval.add_cleaners [mk_remove_var seq range]
+          Cases.add_cleaners [mk_remove_var seq range]
         )
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_class (C_builtin "reversed", _)}, _)}, args, [])  ->
       (* FIXME: reversed_new_impl *)
-      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_attr (List.hd args) "__reversed__" range) [] range) flow
+      man.eval ~route:(Semantic "Python") (mk_py_call (mk_py_attr (List.hd args) "__reversed__" range) [] range) flow
       (* man.eval (Utils.mk_builtin_call "list.__reversed__" args range) flow *)
       |> OptionExt.return
 
@@ -327,7 +322,7 @@ struct
                            (mk_py_attr exc "args" range)
                            (mk_expr (E_py_tuple (List.tl args)) range) range) flow
            in
-           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range) flow
+           man.eval ~route:(Semantic "Python") (mk_py_none range) flow
         )
       |> OptionExt.return
 

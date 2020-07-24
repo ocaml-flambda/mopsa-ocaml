@@ -55,29 +55,24 @@ struct
               let name = name
             end)
 
-  let interface = {
-    iexec = {provides = [Zone.Z_py]; uses = []};
-    ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
-  }
-
   let init _ _ flow = flow
 
   let allocate_builtin ?(mode=STRONG) man range flow bltin oe =
     (* allocate addr, and map this addr to inst bltin *)
     let range = tag_range range "alloc_%s" bltin in
     let cls = fst @@ find_builtin bltin in
-    man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr ~mode:mode (A_py_instance cls) range) flow |>
-    Eval.bind (fun eaddr flow ->
+    man.eval ~route:(Semantic "U/Heap") (mk_alloc_addr ~mode:mode (A_py_instance cls) range) flow >>$
+      (fun eaddr flow ->
         let addr = match ekind eaddr with
           | E_addr a -> a
           | _ -> assert false in
-        man.exec ~zone:Zone.Z_py_obj (mk_add eaddr range) flow |>
+        man.exec ~route:(Semantic "Python") (mk_add eaddr range) flow |>
         Eval.singleton (mk_py_object (addr, oe) range)
       )
 
   let alarms = []
 
-  let rec eval zs exp man flow =
+  let rec eval exp man flow =
     let range = exp.erange in
     match ekind exp with
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("slice.__new__" as f, _))}, _)}, cls :: args, []) ->
@@ -88,16 +83,16 @@ struct
               [intornone; intornone; intornone]
               (fun _ flow ->
                 let start, stop, step = match args with a::b::c::[] -> a,b,c | _ -> assert false in
-                man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr ~mode:STRONG (A_py_instance (fst @@ find_builtin "slice")) (tag_range range "alloc_slice")) flow |>
-                Eval.bind (fun eaddr flow ->
+                man.eval ~route:(Semantic "U/Heap") (mk_alloc_addr ~mode:STRONG (A_py_instance (fst @@ find_builtin "slice")) (tag_range range "alloc_slice")) flow >>$
+                  (fun eaddr flow ->
                     let addr = match ekind eaddr with
                       | E_addr a -> a
                       | _ -> assert false in
                     let obj = mk_py_object (addr, None) range in
-                    man.exec ~zone:Zone.Z_py_obj (mk_add eaddr range) flow |>
-                    man.exec ~zone:Zone.Z_py (mk_assign (mk_py_attr obj "start" range) start range) |>
-                    man.exec ~zone:Zone.Z_py (mk_assign (mk_py_attr obj "stop" range) stop range) |>
-                    man.exec ~zone:Zone.Z_py (mk_assign (mk_py_attr obj "step" range) step range) |>
+                    man.exec ~route:(Semantic "Python") (mk_add eaddr range) flow |>
+                    man.exec ~route:(Semantic "Python") (mk_assign (mk_py_attr obj "start" range) start range) |>
+                    man.exec ~route:(Semantic "Python") (mk_assign (mk_py_attr obj "stop" range) stop range) |>
+                    man.exec ~route:(Semantic "Python") (mk_assign (mk_py_attr obj "step" range) step range) |>
                     Eval.singleton obj
                   )
               )
@@ -170,11 +165,11 @@ struct
           let adjust__start = adjust_st (mk_var _start range) in
           let adjust__stop = adjust_st (mk_var _stop range) in
 
-          man.exec ~zone:Zone.Z_py (mk_block [unpack__step; unpack__start; unpack__stop; adjust__start; adjust__stop] range) flow |>
-            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_tuple [mk_var _start range;
+          man.exec ~route:(Semantic "Python") (mk_block [unpack__step; unpack__start; unpack__stop; adjust__start; adjust__stop] range) flow |>
+            man.eval ~route:(Semantic "Python") (mk_expr (E_py_tuple [mk_var _start range;
                                                                             mk_var _stop range;
                                                                             mk_var _step range]) range) |>
-            Eval.add_cleaners [mk_remove_var _step range;
+            Cases.add_cleaners [mk_remove_var _step range;
                                mk_remove_var _start range;
                                mk_remove_var _stop range]
 
@@ -201,16 +196,16 @@ struct
               (fun args flow ->
                  let start, stop, step = match args with a::b::c::[] -> a, b, c | _ -> assert false in
                  let alloc_range = tag_range range "alloc_%s" "range" in
-                 man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr ~mode:STRONG (A_py_instance (fst @@ find_builtin "range")) alloc_range) flow |>
-                 Eval.bind (fun eaddr flow ->
+                 man.eval ~route:(Semantic "U/Heap") (mk_alloc_addr ~mode:STRONG (A_py_instance (fst @@ find_builtin "range")) alloc_range) flow >>$
+ (fun eaddr flow ->
                      let addr = match ekind eaddr with
                        | E_addr a -> a
                        | _ -> assert false in
                      let obj = mk_py_object (addr, None) range in
-                     man.exec ~zone:Zone.Z_py_obj (mk_add eaddr range) flow |>
-                     man.exec ~zone:Zone.Z_py (mk_assign (mk_py_attr obj "start" range) start range) |>
-                     man.exec ~zone:Zone.Z_py (mk_assign (mk_py_attr obj "stop" range) stop range) |>
-                     man.exec ~zone:Zone.Z_py (mk_assign (mk_py_attr obj "step" range) step range) |>
+                     man.exec ~route:(Semantic "Python")  (mk_add eaddr range) flow |>
+                     man.exec ~route:(Semantic "Python") (mk_assign (mk_py_attr obj "start" range) start range) |>
+                     man.exec ~route:(Semantic "Python") (mk_assign (mk_py_attr obj "stop" range) stop range) |>
+                     man.exec ~route:(Semantic "Python") (mk_assign (mk_py_attr obj "step" range) step range) |>
                      Eval.singleton obj
                    )
               )
@@ -221,10 +216,10 @@ struct
       Exceptions.panic "todo: %a@\n" pp_expr exp
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range.__len__", _))}, _)}, [arg], []) ->
-      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) arg flow |>
-      Eval.bind (fun arg flow ->
+      man.eval ~route:(Semantic "Python") arg flow >>$
+ (fun arg flow ->
           let ra s = mk_py_attr arg s range in
-          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)
+          man.eval ~route:(Semantic "Python")
             (mk_binop
                (mk_binop
                   (ra "stop")
@@ -242,19 +237,19 @@ struct
         (fun r flow ->
            let range_obj = List.hd r in
            let alloc_range = tag_range range "alloc_%s" "range" in
-           man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr ~mode:STRONG (A_py_instance (fst @@ find_builtin "range_iterator")) alloc_range) flow |>
-           Eval.bind (fun eaddr flow ->
+           man.eval ~route:(Semantic "U/Heap") (mk_alloc_addr ~mode:STRONG (A_py_instance (fst @@ find_builtin "range_iterator")) alloc_range) flow >>$
+ (fun eaddr flow ->
                let addr = match ekind eaddr with
                  | E_addr a -> a
                  | _ -> assert false in
                let obj = mk_py_object (addr, None) range in
                (* FIXME: replace stop by length which should be computed, see rangeobject.c:197 *)
                flow |>
-               man.exec ~zone:Zone.Z_py_obj (mk_add eaddr range) |>
-               man.exec ~zone:Zone.Z_py (mk_assign (mk_py_attr obj "start" range) (mk_py_attr range_obj "start" range) range) |>
-               man.exec ~zone:Zone.Z_py (mk_assign (mk_py_attr obj "stop" range) (mk_py_attr range_obj "stop" range) range) |>
-               man.exec ~zone:Zone.Z_py (mk_assign (mk_py_attr obj "step" range) (mk_py_attr range_obj "step" range) range) |>
-               man.exec ~zone:Zone.Z_py (mk_assign (mk_py_attr obj "index" range) (mk_int 0 ~typ:T_int range) range) |>
+               man.exec ~route:(Semantic "Python")  (mk_add eaddr range) |>
+               man.exec ~route:(Semantic "Python") (mk_assign (mk_py_attr obj "start" range) (mk_py_attr range_obj "start" range) range) |>
+               man.exec ~route:(Semantic "Python") (mk_assign (mk_py_attr obj "stop" range) (mk_py_attr range_obj "stop" range) range) |>
+               man.exec ~route:(Semantic "Python") (mk_assign (mk_py_attr obj "step" range) (mk_py_attr range_obj "step" range) range) |>
+               man.exec ~route:(Semantic "Python") (mk_assign (mk_py_attr obj "index" range) (mk_int 0 ~typ:T_int range) range) |>
                (* FIXME: rangeobject:874: no stop but a len field. These are CPython fields and not attributes too *)
                Eval.singleton obj)
         )
@@ -269,7 +264,7 @@ struct
           let start = mk_py_attr r "start" range in
           let step = mk_py_attr r "step" range in
           let len = mk_py_call (mk_py_object (find_builtin_function "range.__len__") range) [r] range in
-          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)
+          man.eval ~route:(Semantic "Python")
             (mk_py_call (mk_py_object (find_builtin_function "range.__iter__") range)
                [mk_py_call (mk_py_object (find_builtin "range") range)
                   [ mk_binop (mk_binop start O_minus step range) O_plus (mk_binop len O_mult step range) range;
@@ -298,15 +293,15 @@ struct
                stop
                range
              )
-             ~zone:Zone.Z_py man flow
+             ~route:(Semantic "Python") man flow
              ~fthen:(fun flow ->
-               man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_binop start O_plus (mk_binop index O_mult step range) range) flow |>
+               man.eval ~route:(Semantic "Python") (mk_binop start O_plus (mk_binop index O_mult step range) range) flow |>
                  (* add_cleaners is ugly, but a bind_some is incorrect
                     (the return of eval will be something like <<int
                     :: start + index * step>>. If we update index
                     afterwards, it will change the value in the return
                     above too... *)
-                 Eval.add_cleaners [mk_assign index (mk_binop index O_plus (mk_int 1 ~typ:T_int range) range) range]
+                 Cases.add_cleaners [mk_assign index (mk_binop index O_plus (mk_int 1 ~typ:T_int range) range) range]
                )
              ~felse:(fun flow ->
                    man.exec (Utils.mk_builtin_raise "StopIteration" range) flow
@@ -321,7 +316,7 @@ struct
 
     | _ -> None
 
-  let exec zone stmt man flow =
+  let exec stmt man flow =
     let range = srange stmt in
     match skind stmt with
     | S_py_for (target, ({ekind = E_py_object ({addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "range", _)}}, _)} as rangeobj), body, {skind = S_block ([], _)}) ->
@@ -346,7 +341,7 @@ struct
            (It seems that in the case of the else statement, the usual desugar is sometimes better, so we keep it).
         *)
        let ra s = mk_py_attr rangeobj s (tag_range range "%s" s) in
-       Utils.bind_list_args man [ra "start"; ra "stop"; ra "step"] flow range Zone.Z_py
+       Utils.bind_list_args man [ra "start"; ra "stop"; ra "step"] flow range
          (fun vars flow ->
              let start, stop, step = match List.map (fun x -> mk_var x range) vars with
                | [a;b;c] -> a, b, c

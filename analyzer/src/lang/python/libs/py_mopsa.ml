@@ -46,21 +46,16 @@ module Domain =
         let name = "python.libs.mopsa"
       end)
 
-    let interface = {
-      iexec = {provides = []; uses = [Zone.Z_py]};
-      ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
-    }
-
     let alarms = []
 
     (*==========================================================================*)
     (**                       {2 Transfer functions }                           *)
     (*==========================================================================*)
-    let exec _ _ _ _ = None
+    let exec _ _ _ = None
 
     let init prog man flow = flow
 
-    let eval zs exp man flow =
+    let eval exp man flow =
       let range = erange exp in
       match ekind exp with
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.random_bool", _))}, _)}, [], []) ->
@@ -88,7 +83,7 @@ module Domain =
                            man.exec (mk_assume (mk_py_in (mk_var tmp range) l u range) range)
               in
               man.eval (mk_var tmp range) flow |>
-              Eval.add_cleaners [mk_remove_var tmp range] |>
+              Cases.add_cleaners [mk_remove_var tmp range] |>
               OptionExt.return
 
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.random_float", _))}, _)}, [l; u], []) ->
@@ -105,7 +100,7 @@ module Domain =
               let flow = man.exec (mk_assign (mk_var tmp range) (mk_top (T_float F_DOUBLE) range) range) flow |>
                            man.exec (mk_assume (mk_py_in (mk_var tmp range) l u range) range)
               in
-              man.eval (mk_var tmp range) flow |> Eval.add_cleaners [mk_remove_var tmp range]
+              man.eval (mk_var tmp range) flow |> Cases.add_cleaners [mk_remove_var tmp range]
          end
          |> OptionExt.return
 

@@ -29,21 +29,22 @@ open MapExt
 open SetExt
 open Universal.Ast
 
-type _ query += Q_exn_string_query : expr -> (string * string) query
+type ('a, _) query += Q_exn_string_query : expr -> ('a, string * string) query
 
 let () = register_query {
-    join = (let f : type r. query_pool -> r query -> r -> r -> r =
-              fun next query a b ->
+    join = (let f : type a r. query_operator -> (a, r) query -> (a->a->a) -> r -> r -> r =
+              fun next query join a b ->
                 match query with
                 | Q_exn_string_query _ -> (fst a ^ fst b, snd a ^ snd b)
-                | _ -> next.join_query query a b in
+                | _ -> next.apply query join a b in
             f
            );
-    meet = (let f : type r. query_pool -> r query -> r -> r -> r =
-              fun next query a b ->
+    meet = (let f : type a r. query_operator -> (a, r) query -> (a->a->a) -> r -> r -> r =
+              fun next query meet a b ->
                 match query with
                 | Q_exn_string_query _ -> assert false
-                | _ -> next.meet_query query a b in f)
+                | _ -> next.apply query meet a b in
+            f)
   }
 
 
@@ -74,11 +75,6 @@ struct
 
   let debug fmt = Debug.debug ~channel:name fmt
 
-  let interface = {
-    iexec = {provides = [Zone.Z_py_obj]; uses = []};
-    ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj; Universal.Zone.Z_u_heap, Z_any; Universal.Zone.Z_u, Z_any]}
-  }
-
   let alarms = []
 
   let print fmt d =
@@ -97,7 +93,7 @@ struct
   let init progr man flow =
     set_env T_cur empty man flow
 
-  let exec zone stmt man flow =
+  let exec stmt man flow =
     let range = stmt.srange in
     match skind stmt with
     | S_assign ({ekind = E_addr ({addr_mode} as la)}, {ekind = E_py_object (a, _)}) ->
@@ -195,7 +191,7 @@ struct
                 mk_remove_var (mk_addr_attr a attr T_any) range :: removes) old_a []) range in
        let ncur = remove a cur in
        let flow = set_env T_cur ncur man flow in
-       man.exec ~zone:Zone.Z_py to_remove_stmt flow |> Post.return |> OptionExt.return
+       man.exec ~route:(Semantic "Python") to_remove_stmt flow |> Post.return |> OptionExt.return
 
     | S_add ({ekind = E_addr a}) ->
       debug "S_add";
@@ -208,7 +204,7 @@ struct
 
     | _ -> None
 
-  let eval zs exp man flow =
+  let eval exp man flow =
     let range = erange exp in
     match ekind exp with
     | E_py_ll_hasattr({ekind = E_py_object (addr, objexpr)} as e, attr) ->
@@ -218,66 +214,66 @@ struct
         | _ -> assert false in
       begin match akind addr with
         | A_py_module (M_user(name, globals)) ->
-          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_bool (List.exists (fun v -> get_orig_vname v = attr) globals) range) flow
+          man.eval ~route:(Semantic "Python") (mk_py_bool (List.exists (fun v -> get_orig_vname v = attr) globals) range) flow
         | A_py_class (C_builtin _, _)
         | A_py_function (F_builtin _)
         | A_py_module _ ->
-          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_bool (is_builtin_attribute (object_of_expr e) attr) range) flow
+          man.eval ~route:(Semantic "Python") (mk_py_bool (is_builtin_attribute (object_of_expr e) attr) range) flow
 
         | A_py_class (C_annot c, _) ->
-          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_bool (
+          man.eval ~route:(Semantic "Python") (mk_py_bool (
               List.exists (fun v -> get_orig_vname v = attr) c.py_cls_a_static_attributes
               || is_builtin_attribute (object_of_expr e) attr
                                        ) range) flow
 
         | A_py_function f ->
-          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_false range) flow
+          man.eval ~route:(Semantic "Python") (mk_py_false range) flow
 
         | A_py_class (C_user c, b) ->
           if (List.exists (fun v -> get_orig_vname v = attr) c.py_cls_static_attributes) then
-            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_true range) flow
+            man.eval ~route:(Semantic "Python") (mk_py_true range) flow
           else
             let cur = get_env T_cur man flow in
             let oaset = AMap.find_opt addr cur in
             begin match oaset with
-              | None -> man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_false range) flow
+              | None -> man.eval ~route:(Semantic "Python") (mk_py_false range) flow
               | Some aset ->
                 if AttrSet.mem_u attr aset then
-                  man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_true range) flow
+                  man.eval ~route:(Semantic "Python") (mk_py_true range) flow
                 else if AttrSet.mem_o attr aset then
                   let cur_t = AMap.add addr (AttrSet.add_u attr aset) cur in
                   let cur_f = AMap.add addr (AttrSet.remove attr aset) cur in
                   let flow_t = set_env T_cur cur_t man flow in
                   let flow_f = set_env T_cur cur_f man flow in
                   Eval.join
-                    (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_true range) flow_t)
-                    (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_false range) flow_f)
+                    (man.eval ~route:(Semantic "Python") (mk_py_true range) flow_t)
+                    (man.eval ~route:(Semantic "Python") (mk_py_false range) flow_f)
                 else
-                  man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_false range) flow
+                  man.eval ~route:(Semantic "Python") (mk_py_false range) flow
             end
 
         | A_py_instance _ ->
           let cur = get_env T_cur man flow in
           let oaset = AMap.find_opt addr cur in
           begin match oaset with
-            | None -> man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_false range) flow
+            | None -> man.eval ~route:(Semantic "Python") (mk_py_false range) flow
             | Some aset ->
               if AttrSet.mem_u attr aset then
-                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_true range) flow
+                man.eval ~route:(Semantic "Python") (mk_py_true range) flow
               else if AttrSet.mem_o attr aset then
                 let cur_t = AMap.add addr (AttrSet.add_u attr aset) cur in
                 let cur_f = AMap.add addr (AttrSet.remove attr aset) cur in
                 let flow_t = set_env T_cur cur_t man flow in
                 let flow_f = set_env T_cur cur_f man flow in
                 Eval.join
-                  (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_true range) flow_t)
-                  (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_false range) flow_f)
+                  (man.eval ~route:(Semantic "Python") (mk_py_true range) flow_t)
+                  (man.eval ~route:(Semantic "Python") (mk_py_false range) flow_f)
               else
-                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_false range) flow
+                man.eval ~route:(Semantic "Python") (mk_py_false range) flow
           end
 
         | ak ->
-           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_bool (addr_kind_find_structural_type ak attr) range) flow
+           man.eval ~route:(Semantic "Python") (mk_py_bool (addr_kind_find_structural_type ak attr) range) flow
 
       end
       |> OptionExt.return
@@ -301,7 +297,7 @@ struct
            *   failwith "~ok" *)
           else
             let () = debug "else for var %a" pp_var v in
-            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var v range) flow
+            man.eval ~route:(Semantic "Python") (mk_var v range) flow
 
         | A_py_class (C_builtin c, b) ->
           Eval.singleton (mk_py_object (find_builtin_attribute (object_of_expr e) attr) range) flow
@@ -330,28 +326,28 @@ struct
               | None ->
                  let () = debug "body = %a" pp_stmt c.py_cls_a_body in
                  OptionExt.none_to_exn @@ find_annot c.py_cls_a_body in
-          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) obj  flow
+          man.eval ~route:(Semantic "Python") obj  flow
 
 
         | A_py_class (C_user c, b) ->
           let f = List.find_opt (fun x -> get_orig_vname x = attr) c.py_cls_static_attributes in
           begin match f with
             | Some f ->
-              man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var f range) flow
+              man.eval ~route:(Semantic "Python") (mk_var f range) flow
             | None ->
               let attr_var = mk_addr_attr addr attr T_any in
-              man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var attr_var range) flow
+              man.eval ~route:(Semantic "Python") (mk_var attr_var range) flow
           end
 
         | A_py_instance _ ->
           (* there should be a positive hasattr before, so we just evaluate the addr_attr var *)
           let attr_var = mk_addr_attr addr attr T_any in
-          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var attr_var range) flow
+          man.eval ~route:(Semantic "Python") (mk_var attr_var range) flow
 
         | ak when addr_kind_find_structural_type ak attr ->
           (* there should be a positive hasattr before, so we just evaluate the addr_attr var *)
           let attr_var = mk_addr_attr addr attr T_any in
-          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var attr_var range) flow
+          man.eval ~route:(Semantic "Python") (mk_var attr_var range) flow
 
         | _ -> Exceptions.panic_at range "ll_getattr: todo %a, attr=%s in@\n%a" pp_addr addr attr (Flow.print man.lattice.print) flow
       end
@@ -367,7 +363,7 @@ struct
          let var = List.find (fun v -> get_orig_vname v = attr) c.py_cls_static_attributes in
          let () = debug "using c.py_cls_static_attributes with var = %a" pp_var var in
          man.exec (mk_assign (mk_var var range) rval range) flow
-         |> man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range)
+         |> man.eval ~route:(Semantic "Python") (mk_py_none range)
          |> OptionExt.return
       | E_py_object ({addr_kind = A_py_class (_)}, _ ), E_py_object (arval, _) ->
          Exceptions.panic_at range "Attr assignment on non user-defined classes not supported yet.@\n"
@@ -385,8 +381,8 @@ struct
          let flow = set_env T_cur cur man flow in
          (* now we create an attribute var *)
          let attr_var = mk_addr_attr alval attr T_any in
-         man.exec ~zone:Zone.Z_py (mk_assign (mk_var attr_var range) rval range) flow
-         |> man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range)
+         man.exec ~route:(Semantic "Python") (mk_assign (mk_var attr_var range) rval range) flow
+         |> man.eval ~route:(Semantic "Python") (mk_py_none range)
          |> OptionExt.return
 
         | _ -> assert false
@@ -407,19 +403,19 @@ struct
             if AttrSet.mem_u attr old_attrset then
               set_env T_cur (AMap.add alval (AttrSet.remove attr old_attrset) cur) man flow
             else flow in
-          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range) flow |>
+          man.eval ~route:(Semantic "Python") (mk_py_none range) flow |>
           OptionExt.return
       end
 
     | E_py_ll_setattr(e, attr, o) ->
-      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
-      Eval.bind (fun e flow -> man.eval {exp with ekind = E_py_ll_setattr(e, attr, o)} flow) |> OptionExt.return
+      man.eval ~route:(Semantic "Python") e flow >>$
+ (fun e flow -> man.eval {exp with ekind = E_py_ll_setattr(e, attr, o)} flow) |> OptionExt.return
 
     | _ ->
       None
 
 
-  let ask : type r. r query -> ('a, t, 's) man -> 'a flow -> r option =
+  let ask : type r. ('a, r) query -> ('a, t) man -> 'a flow -> r option =
     fun query man flow ->
       match query with
       | Q_exn_string_query t ->
@@ -440,12 +436,12 @@ struct
           in
           let message =
             if AttrSet.mem_o "args" (match AMap.find_opt iaddr cur with None -> AttrSet.empty | Some x -> x) then
-              man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var (mk_addr_attr iaddr "args" T_any) range) flow |>
+              man.eval ~route:(Semantic "Python") (mk_var (mk_addr_attr iaddr "args" T_any) range) flow |>
               (* FIXME *)
               Eval.apply (fun etuple flow ->
                   let var = List.hd @@ Objects.Tuple.Domain.var_of_eobj etuple in
                   (* FIXME *)
-                  let pset = man.ask (Universal.Strings.Powerset.Q_strings_powerset (mk_var (Utils.change_var_type T_string var) range)) flow in
+                   let pset = man.ask (Universal.Strings.Powerset.Q_strings_powerset (mk_var (Utils.change_var_type T_string var) range)) flow in
                   if Universal.Strings.Powerset.Value.is_top pset then "T"
                   else Universal.Strings.Powerset.StringPower.choose pset
                 )

@@ -70,11 +70,6 @@ module Domain =
         let name = name
       end)
 
-    let interface = {
-      iexec = {provides = [Zone.Z_py]; uses = [Universal.Zone.Z_u_heap]};
-      ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
-    }
-
     let var_of_addr a = match akind a with
       | A_py_staticmethod | A_py_classmethod -> mk_addr_attr a "__func__" T_any
       | _ -> assert false
@@ -92,15 +87,15 @@ module Domain =
 
     let init _ _ flow = flow
 
-    let eval zs exp man flow =
+    let eval exp man flow =
       let range = erange exp in
       match ekind exp with
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("method.__new__", _))}, _)}, [meth; func; inst], []) ->
          (* FIXME: meth should be a subtype of method *)
-         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) func flow |>
-           Eval.bind (fun func flow ->
-               man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) inst flow |>
-                 Eval.bind (fun inst flow ->
+         man.eval ~route:(Semantic "Python") func flow >>$
+           (fun func flow ->
+               man.eval ~route:(Semantic "Python") inst flow >>$
+                 (fun inst flow ->
                      eval_alloc man (A_py_method (object_of_expr func, inst, "method")) range flow |>
                        bind_some (fun addr flow ->
                            let obj = (addr, None) in
@@ -112,9 +107,9 @@ module Domain =
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("function.__get__", _))}, _)}, [descr; instance; typeofinst], []) ->
         assume (mk_py_isinstance_builtin instance "NoneType" range) man flow
-          ~fthen:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) descr)
+          ~fthen:(man.eval ~route:(Semantic "Python") descr)
           ~felse:(
-            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object (find_builtin "method") range) [descr; instance] range)
+            man.eval ~route:(Semantic "Python") (mk_py_call (mk_py_object (find_builtin "method") range) [descr; instance] range)
             )
         |> OptionExt.return
 
@@ -130,7 +125,7 @@ module Domain =
                       let obj = (addr, None) in
                       Eval.singleton (mk_py_object obj range) flow)
                 )
-                ~felse:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) descr)
+                ~felse:(man.eval ~route:(Semantic "Python") descr)
             )
           ~felse:(fun flow ->
               eval_alloc man (A_py_method (object_of_expr descr, instance, "method-wrapper")) range flow |>
@@ -143,7 +138,7 @@ module Domain =
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("method_descriptor.__get__", _))}, _)}, [descr; instance; typeofinst], []) ->
         assume (mk_py_isinstance_builtin instance "NoneType" range) man flow
-          ~fthen:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) descr)
+          ~fthen:(man.eval ~route:(Semantic "Python") descr)
           ~felse:(fun flow ->
               eval_alloc man (A_py_method (object_of_expr descr, instance, "builtin_function_or_method")) range flow |>
               bind_some (fun addr flow ->
@@ -159,8 +154,8 @@ module Domain =
             | "classmethod" -> A_py_classmethod
             | _ -> assert false
           ) range in
-        man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_func flow |>
-        Eval.bind (fun eaddr_list flow ->
+        man.eval ~route:(Semantic "U/Heap") addr_func flow >>$
+          (fun eaddr_list flow ->
             let addr_func = addr_of_expr eaddr_list in
             let func_var = var_of_addr addr_func in
             man.exec (mk_assign (mk_var func_var range) func range) flow |>
@@ -171,55 +166,55 @@ module Domain =
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("classmethod.__init__", _))}, _)}, [self; func], [])
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("staticmethod.__init__", _))}, _)}, [self; func], []) ->
-        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range) flow |>
+        man.eval ~route:(Semantic "Python") (mk_py_none range) flow |>
         OptionExt.return
 
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("classmethod.__get__", _))}, _)}, [self; inst; typ], []) ->
-        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) self flow |>
-        Eval.bind (fun self flow ->
+        man.eval ~route:(Semantic "Python") self flow >>$
+          (fun self flow ->
             let var_func = var_of_eobj self in
             assume (mk_py_isinstance_builtin inst "NoneType" range) man flow
               ~fthen:(fun flow ->
                   assume (mk_py_isinstance inst typ range) man flow
                     ~fthen:(
-                      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object (find_builtin "method") range) [mk_var var_func range ; mk_py_type inst range] range)
+                      man.eval ~route:(Semantic "Python") (mk_py_call (mk_py_object (find_builtin "method") range) [mk_var var_func range ; mk_py_type inst range] range)
                     )
                     ~felse:(
-                      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object (find_builtin "method") range) [mk_var var_func range ; typ] range)
+                      man.eval ~route:(Semantic "Python") (mk_py_call (mk_py_object (find_builtin "method") range) [mk_var var_func range ; typ] range)
                     )
                 )
               ~felse:(
-                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object (find_builtin "method") range) [mk_var var_func range ;  mk_py_type inst range] range)
+                man.eval ~route:(Semantic "Python") (mk_py_call (mk_py_object (find_builtin "method") range) [mk_var var_func range ;  mk_py_type inst range] range)
               )
           )
         |>  OptionExt.return
 
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("staticmethod.__get__", _))}, _)}, [self; _; _], []) ->
-        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) self flow |>
-        Eval.bind (fun self flow ->
+        man.eval ~route:(Semantic "Python") self flow >>$
+          (fun self flow ->
             let var_func = var_of_eobj self in
-            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var var_func range) flow
+            man.eval ~route:(Semantic "Python") (mk_var var_func range) flow
           )
         |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("property.__get__", _))}, _)}, [self; instance; _], []) ->
-        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_attr self "fget" range) [instance] range) flow |> OptionExt.return
+        man.eval ~route:(Semantic "Python") (mk_py_call (mk_py_attr self "fget" range) [instance] range) flow |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("property.__init__", _))}, _)} as called, [self; getter], []) ->
-        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) {exp with ekind = E_py_call(called, [self; getter; mk_py_none range; mk_py_none range; mk_py_none range], [])} flow |> OptionExt.return
+        man.eval ~route:(Semantic "Python") {exp with ekind = E_py_call(called, [self; getter; mk_py_none range; mk_py_none range; mk_py_none range], [])} flow |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("property.__init__", _))}, _)} as called, [self; getter; setter], []) ->
-        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) {exp with ekind = E_py_call(called, [self; getter; setter; mk_py_none range; mk_py_none range], [])} flow |> OptionExt.return
+        man.eval ~route:(Semantic "Python") {exp with ekind = E_py_call(called, [self; getter; setter; mk_py_none range; mk_py_none range], [])} flow |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("property.__init__", _))}, _)} as called, [self; getter; setter; deleter], []) ->
-        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) {exp with ekind = E_py_call(called, [self; getter; setter; deleter; mk_py_none range], [])} flow |> OptionExt.return
+        man.eval ~route:(Semantic "Python") {exp with ekind = E_py_call(called, [self; getter; setter; deleter; mk_py_none range], [])} flow |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("property.__init__", _))}, _)}, [self; getter; setter; deleter; doc], []) ->
         let assignments = [("fget", getter); ("fset", setter); ("fdel", deleter); ("__doc__", doc)] in
         man.exec (mk_block (List.map (fun (field, arg) -> mk_assign (mk_py_attr self field range) arg range)  assignments) range) flow |>
-        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range) |>
+        man.eval ~route:(Semantic "Python") (mk_py_none range) |>
         OptionExt.return
 
 
@@ -342,14 +337,14 @@ module Domain =
                   fun_range = pyfundec.py_func_range;
                 } in
 
-                man.eval (mk_call fundec args exp.erange) flow |>
-                  Eval.bind (fun res flow -> man.eval res flow)
+                man.eval (mk_call fundec args exp.erange) flow >>$
+                  (fun res flow -> man.eval res flow)
               )
           )
       (* 𝔼⟦ f() | isinstance(f, method) ⟧ *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_method(f, e, t)}, _)}, args, kwargs) ->
         let exp' = mk_py_kall (mk_py_object f range) (e :: args) kwargs range in
-        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) exp' flow |> OptionExt.return
+        man.eval ~route:(Semantic "Python") exp' flow |> OptionExt.return
 
 
       | _ -> None
@@ -362,7 +357,7 @@ module Domain =
           | _ -> true
         ) fundec.py_func_decors
 
-    let exec zone stmt man flow =
+    let exec stmt man flow =
       let range = srange stmt in
       match skind stmt with
       (* 𝕊⟦ def f(arg1, ...): body ⟧ *)

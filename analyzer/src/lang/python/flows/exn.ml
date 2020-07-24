@@ -52,19 +52,12 @@ module Domain =
         default = "";
       }
 
-
-
-    let interface = {
-      iexec = {provides = [Zone.Z_py]; uses = [Zone.Z_py]};
-      ieval = {provides = []; uses = [Zone.Z_py, Zone.Z_py_obj]}
-    }
-
     let alarms = []
 
     let init _ _ flow = flow
-    let eval _ _ _ _ = None
+    let eval _ _ _ = None
 
-    let rec exec (zone:zone) (stmt:stmt) (man:('a, unit, 's) man) (flow:'a flow) : 'a post option =
+    let rec exec stmt man flow =
       let range = srange stmt in
       match skind stmt with
       | S_py_try(body, excepts, orelse, finally) ->
@@ -129,7 +122,7 @@ module Domain =
 
       | S_py_raise(Some exp) ->
         debug "Raising %a@\n" pp_expr exp;
-        (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) exp flow |>
+        (man.eval ~route:(Semantic "Python") exp flow |>
          bind_full (fun exp flow log cleaners ->
              match exp with
              | None -> Cases.return None flow ~log ~cleaners
@@ -184,7 +177,7 @@ module Domain =
       | _ -> None
 
 
-    and exec_except (man:('a, unit, 's) man) excpt range (flow:'a flow) : 'a flow =
+    and exec_except man excpt range flow =
       debug "exec except on@ @[%a@]" (Flow.print man.lattice.print) flow;
       let flow0 = Flow.set T_cur man.lattice.bottom man.lattice flow in
       debug "flow_cur %a@\n" (Flow.print man.lattice.print) flow;
@@ -213,7 +206,7 @@ module Domain =
                 debug "T_cur now matches tk %a@\n" pp_token tk;
                 let flow = Flow.set T_cur env man.lattice flow0 in
                 let flow' =
-                  man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
+                  man.eval ~route:(Semantic "Python") e flow |>
                   bind_some (fun e flow ->
                       match ekind e with
                       | E_py_object obj ->
@@ -272,7 +265,7 @@ module Domain =
               (* Evaluate e in env to check if it corresponds to exn *)
               let flow = Flow.set T_cur env man.lattice flow0 in
               let flow' =
-                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
+                man.eval ~route:(Semantic "Python") e flow |>
                 bind_some (fun e flow ->
                     match ekind e with
                     | E_py_object obj ->

@@ -38,11 +38,6 @@ struct
       let name = "python.program"
     end)
 
-  let interface = {
-    iexec = {provides = [Zone.Z_py]; uses = []};
-    ieval = {provides = []; uses = []}
-  }
-
   let alarms = []
 
   let init prog man flow =
@@ -50,7 +45,7 @@ struct
     | Py_program (name, globals, body) -> set_py_program (name, globals, body) flow
     | _ -> flow
 
-  let eval _ _ _ _ = None
+  let eval _ _ _ = None
 
   let init_globals man globals range flow =
     (* Initialize global variables with C_py_undefined constant *)
@@ -142,7 +137,7 @@ struct
       ) flow flow
 
 
-  let exec zone stmt man flow  =
+  let exec stmt man flow  =
     match skind stmt with
     | S_program ({ prog_kind = Py_program(_, globals, body); prog_range }, _)
       when !Universal.Iterators.Unittest.unittest_flag ->
@@ -182,7 +177,7 @@ struct
            | _ -> VisitParts (acc)
         ) [] prog
 
-  let ask : type r. r query -> _ man -> _ flow -> r option =
+  let ask : type r. ('a, r) query -> _ man -> _ flow -> r option =
     fun query man flow ->
     let open Framework.Engines.Interactive in
     match query with

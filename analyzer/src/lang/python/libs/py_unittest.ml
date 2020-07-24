@@ -36,16 +36,11 @@ module Domain =
         let name = "python.libs.unittest"
       end)
 
-    let interface = {
-      iexec = { provides = []; uses = [Zone.Z_py] };
-      ieval = { provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
-    }
-
     let alarms = []
 
     let init _ _ flow = flow
 
-    let exec _ _ _ _ = None
+    let exec _ _ _ = None
 
     let test_functions_from_cls (cls: Ast.py_clsdec) : Ast.py_fundec list =
       match skind cls.py_cls_body with
@@ -57,7 +52,7 @@ module Domain =
             | _ -> tests) [] stmts
       | _ -> assert false
 
-    let eval zones exp (man:('a, unit, 's) man) (flow:'a flow) =
+    let eval exp man flow =
       let range = exp.erange in
       match ekind exp with
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.main", _))}, _)}, [], []) ->

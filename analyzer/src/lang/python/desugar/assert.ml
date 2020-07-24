@@ -25,7 +25,6 @@ open Mopsa
 open Sig.Abstraction.Stateless
 open Universal.Ast
 open Ast
-open Zone
 
 module Domain =
   struct
@@ -34,16 +33,11 @@ module Domain =
         let name = "python.desugar.assert"
       end)
 
-    let interface = {
-      iexec = {provides = [Zone.Z_py]; uses = [Zone.Z_py]};
-      ieval = {provides = []; uses = []}
-    }
-
     let alarms = []
 
     let init _ _ flow = flow
 
-    let exec zone stmt man flow =
+    let exec stmt man flow =
       let range = srange stmt in
       match skind stmt with
       (* S⟦ assert(e, msg) ⟧ *)
@@ -58,7 +52,7 @@ module Domain =
 
       | _ -> None
 
-    let eval _ _ _ _ = None
+    let eval _ _ _ = None
 
 
     let ask _ _ _ = None

@@ -35,17 +35,12 @@ struct
       let name = "python.objects.iterable"
     end)
 
-  let interface = {
-    iexec = {provides = []; uses = []};
-    ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
-  }
-
   let alarms = []
 
   let init (prog:program) man flow =
     flow
 
-  let rec eval zones exp man flow =
+  let eval exp man flow =
     let range = erange exp in
     match ekind exp with
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.join" as f, _))}, _)}, args, []) ->
@@ -101,7 +96,7 @@ struct
     | _ -> None
 
 
-  let exec zone stmt man flow = None
+  let exec stmt man flow = None
 
   let ask _ _ _ = None
 end
