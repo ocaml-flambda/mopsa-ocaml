@@ -710,51 +710,58 @@ struct
       exec_assign lval rval stmt.srange man flow |>
       OptionExt.return
 
-    (* 𝕊⟦ *(p + i) == n ⟧ *)
-    | S_assume({ ekind = E_binop(O_eq, lval, n)})
-    | S_assume({ ekind = E_unop(O_log_not, { ekind = E_binop(O_ne, lval, n)} )})
-      when is_c_int_type lval.etyp &&
-           is_c_deref lval &&
-           is_c_int_type n.etyp &&
-           not (is_c_deref n)
-      ->
-      exec_assume_eq lval n stmt.srange man flow |>
-      OptionExt.return
+    | S_assume(e) ->
+      let e' = get_orig_expr e in
+      debug "e = %a, e' = %a" pp_expr e pp_expr e';
+      begin match ekind e' with
+        (* 𝕊⟦ *(p + i) == n ⟧ *)
+        | E_binop(O_eq, lval, n)
+        | E_unop(O_log_not, { ekind = E_binop(O_ne, lval, n)})
+          when is_c_int_type lval.etyp &&
+               is_c_lval (remove_casts lval) &&
+               is_c_int_type n.etyp &&
+               not (is_c_deref n)
+          ->
+          exec_assume_eq (remove_casts lval) n stmt.srange man flow |>
+          OptionExt.return
 
-    (* 𝕊⟦ ∀i ∈ [a,b] : *(p + i) == n ⟧ *)
-    | S_assume({ ekind = E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_binop(O_eq, lval, n) }) })
-    | S_assume({ ekind = E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_unop(O_log_not, { ekind = E_binop(O_ne, lval, n)}) }) })
-      when is_c_int_type lval.etyp &&
-           is_c_lval (remove_casts lval) &&
-           is_var_in_expr i lval &&
-           not (is_var_in_expr i n)
-      ->
-      exec_assume_quantified i a b O_eq (remove_casts lval) n stmt.srange man flow |>
-      OptionExt.return
+        (* 𝕊⟦ ∀i ∈ [a,b] : *(p + i) == n ⟧ *)
+        | E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_binop(O_eq, lval, n) })
+        | E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_unop(O_log_not, { ekind = E_binop(O_ne, lval, n)}) })
+          when is_c_int_type lval.etyp &&
+               is_c_lval (remove_casts lval) &&
+               is_var_in_expr i lval &&
+               not (is_var_in_expr i n)
+          ->
+          exec_assume_quantified i a b O_eq (remove_casts lval) n stmt.srange man flow |>
+          OptionExt.return
 
-    (* 𝕊⟦ ∀i ∈ [a,b] : *(p + i) != n ⟧ *)
-    | S_assume({ ekind = E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_binop(O_ne, lval, n)}) })
-    | S_assume({ ekind = E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_unop(O_log_not, { ekind = E_binop(O_eq, lval, n)} )}) })
-      when is_c_int_type lval.etyp &&
-           is_c_lval (remove_casts lval) &&
-           is_var_in_expr i lval &&
-           not (is_var_in_expr i n)
-      ->
-      exec_assume_quantified i a b O_ne (remove_casts lval) n stmt.srange man flow |>
-      OptionExt.return
+        (* 𝕊⟦ ∀i ∈ [a,b] : *(p + i) != n ⟧ *)
+        | E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_binop(O_ne, lval, n)})
+        | E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_unop(O_log_not, { ekind = E_binop(O_eq, lval, n)} )})
+          when is_c_int_type lval.etyp &&
+               is_c_lval (remove_casts lval) &&
+               is_var_in_expr i lval &&
+               not (is_var_in_expr i n)
+          ->
+          exec_assume_quantified i a b O_ne (remove_casts lval) n stmt.srange man flow |>
+          OptionExt.return
 
-    (* 𝕊⟦ ∀i ∈ [a,b]: *(p + i) == *(q + i) ⟧ *)
-    | S_assume({ ekind = E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_binop(O_eq, lval1, lval2)}) })
-    | S_assume({ ekind = E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_unop(O_log_not, { ekind = E_binop(O_ne, lval1, lval2)} )}) })
-      when is_c_int_type lval1.etyp &&
-           is_c_lval (remove_casts lval1) &&
-           is_c_int_type lval2.etyp &&
-           is_c_lval (remove_casts lval2) &&
-           is_var_in_expr i lval1 &&
-           is_var_in_expr i lval2
-      ->
-      exec_assume_double_quantified_eq i a b (remove_casts lval1) (remove_casts lval2) stmt.srange man flow |>
-      OptionExt.return
+        (* 𝕊⟦ ∀i ∈ [a,b]: *(p + i) == *(q + i) ⟧ *)
+        | E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_binop(O_eq, lval1, lval2)})
+        | E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_unop(O_log_not, { ekind = E_binop(O_ne, lval1, lval2)} )})
+          when is_c_int_type lval1.etyp &&
+               is_c_lval (remove_casts lval1) &&
+               is_c_int_type lval2.etyp &&
+               is_c_lval (remove_casts lval2) &&
+               is_var_in_expr i lval1 &&
+               is_var_in_expr i lval2
+          ->
+          exec_assume_double_quantified_eq i a b (remove_casts lval1) (remove_casts lval2) stmt.srange man flow |>
+          OptionExt.return
+
+        | _ -> None
+      end
 
     | _ -> None
 
