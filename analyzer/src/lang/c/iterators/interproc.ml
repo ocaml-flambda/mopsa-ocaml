@@ -175,11 +175,11 @@ struct
           }
           in
           let exp' = mk_call fundec' args range in
-          man.eval exp' flow
+          man.eval exp' flow ~route:Below
 
         | {c_func_variadic = true} ->
           let exp' = mk_c_call fundec args range in
-          man.eval exp' flow
+          man.eval exp' flow ~route:Below
 
         | {c_func_stub = Some stub} ->
           let exp' = Stubs.Ast.mk_stub_call stub args range in
