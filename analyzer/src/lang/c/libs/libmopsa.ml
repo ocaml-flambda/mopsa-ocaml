@@ -308,6 +308,21 @@ struct
       Eval.singleton (mk_int 0 exp.erange) flow |>
       OptionExt.return
 
+    | E_c_builtin_call("_mopsa_assert_unreachable", []) ->
+      let b = man.lattice.is_bottom (Flow.get T_cur man.lattice flow) in
+      let cond = mk_bool b exp.erange in
+      let stmt = mk_assert cond exp.erange in
+      let flow = man.exec stmt flow in
+      Eval.singleton (mk_int 0 exp.erange) flow |>
+      OptionExt.return
+
+    | E_c_builtin_call("_mopsa_assert_reachable", []) ->
+      let b = not (man.lattice.is_bottom (Flow.get T_cur man.lattice flow)) in
+      let cond = mk_bool b exp.erange in
+      let stmt = mk_assert cond exp.erange in
+      let flow = man.exec stmt flow in
+      Eval.singleton (mk_int 0 exp.erange) flow |>
+      OptionExt.return
 
     | _ -> None
 

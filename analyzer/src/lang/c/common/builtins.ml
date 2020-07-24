@@ -88,6 +88,8 @@ let _ =
       "_mopsa_assert";
       "_mopsa_assert_safe";
       "_mopsa_assert_unsafe";
+      "_mopsa_assert_unreachable";
+      "_mopsa_assert_reachable";
 
       "_mopsa_register_file_resource";
       "_mopsa_register_file_resource_at";

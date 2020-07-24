@@ -81,6 +81,7 @@ extern void _mopsa_assume(int cond);
 extern void _mopsa_assert(int cond);
 extern void _mopsa_assert_exists(int cond);
 extern void _mopsa_assert_unreachable();
+extern void _mopsa_assert_reachable();
 extern void _mopsa_assert_safe();
 extern void _mopsa_assert_unsafe();
 

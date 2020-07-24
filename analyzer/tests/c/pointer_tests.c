@@ -329,3 +329,12 @@ void test_deref_dangling_pointer_in_struct() {
   int x = *(s.p);
   _mopsa_assert_unsafe();
 }
+
+void test_pointer_as_condition() {
+  char *p = "test";
+  if (p) {
+    _mopsa_assert_reachable();
+  } else {
+    _mopsa_assert_unreachable();
+  }
+}
