@@ -171,15 +171,6 @@ module Domain =
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("classmethod.__init__", _))}, _)}, [self; func], [])
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("staticmethod.__init__", _))}, _)}, [self; func], []) ->
-        (* begin match ekind func with
-         *   | E_py_object ({addr_kind = A_py_function f} as faddr, _) ->
-         *     man.exec (mk_assign (mk_var (mk_addr_attr faddr "__func__" T_any) range) func range) flow |>
-         *     (\* man.exec (mk_assign (mk_py_attr self "__func__" range) func range) flow |> *\)
-         *     man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range) |>
-         *     OptionExt.return
-         *   | _ -> assert false
-         * end *)
-        (* man.exec (mk_assign (mk_py_attr self "__func__" range) func range) flow |> *)
         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range) flow |>
         OptionExt.return
 
@@ -340,7 +331,6 @@ module Domain =
                       flow
                 in
 
-                (* let ret_var = mkfresh_ranged (tag_range range "ret_var") () in *)
                 let fundec = {
                   fun_orig_name = pyfundec.py_func_var.vname;
                   fun_uniq_name = pyfundec.py_func_var.vname;
@@ -353,15 +343,7 @@ module Domain =
                 } in
 
                 man.eval (mk_call fundec args exp.erange) flow |>
-                  Eval.bind (fun res flow ->
-                      (* les ajouter dans l'ast au frontend ? *)
-                      (* begin
-                       *   if !opt_gc_after_functioncall then
-                       *     man.exec ~zone:Universal.Zone.Z_u_heap (mk_stmt Universal.Heap.Recency.S_perform_gc range) flow
-                       *   else
-                       *     flow
-                       * end |> *)
-                        man.eval res flow)
+                  Eval.bind (fun res flow -> man.eval res flow)
               )
           )
       (* 𝔼⟦ f() | isinstance(f, method) ⟧ *)
@@ -385,16 +367,16 @@ module Domain =
       match skind stmt with
       (* 𝕊⟦ def f(arg1, ...): body ⟧ *)
       | S_py_function(func) ->
-         debug "creating function object";
          (* Allocate an object for the function and assign it to the variable
          representing the name of the function *)
          let kind =
-           if Libs.Py_mopsa.is_unsupported_fundec func then F_unsupported (get_orig_vname func.py_func_var) else
-             if Libs.Py_mopsa.is_builtin_fundec func then
-               let name = Libs.Py_mopsa.builtin_fundec_name func in
-               F_builtin (name, Libs.Py_mopsa.builtin_type_name "function" func)
-             else F_user func
+           if Libs.Py_mopsa.is_unsupported_fundec func then F_unsupported (get_orig_vname func.py_func_var)
+           else if Libs.Py_mopsa.is_builtin_fundec func then
+             let name = Libs.Py_mopsa.builtin_fundec_name func in
+             F_builtin (name, Libs.Py_mopsa.builtin_type_name "function" func)
+           else F_user func
          in
+         debug "creating function object %a" pp_addr_kind (A_py_function kind);
          eval_alloc man (A_py_function kind) stmt.srange flow |>
          bind_some (fun addr flow ->
              let obj = (addr, None) in

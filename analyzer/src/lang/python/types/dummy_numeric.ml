@@ -26,6 +26,8 @@ open MapExt
 open Addr
 open Universal.Ast
 
+(** A dummy numerical domain for the type-only analysis. *)
+
 module Domain =
   struct
 
@@ -39,7 +41,6 @@ module Domain =
     let interface = {
         iexec = {provides = [Universal.Zone.Z_u_float; Universal.Zone.Z_u_int]; uses = []};
         ieval = {provides = []; uses = []}
-                  (* Universal.Zone.Z_u, Universal.Zone.Z_u_float; Universal.Zone.Z_u, Universal.Zone.Z_u_int]; uses = []} *)
       }
 
     let init _ _ flow = flow

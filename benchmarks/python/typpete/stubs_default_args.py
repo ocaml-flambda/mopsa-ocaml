@@ -15,6 +15,7 @@ def test_types():
     x = input()
     y = input("what's your name?")
 
+    mopsa.ignore_exception(OverflowError)
     mopsa.assert_safe()
     mopsa.massert(isinstance(a, float))
     mopsa.massert(isinstance(b, float))

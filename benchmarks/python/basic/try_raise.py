@@ -4,4 +4,3 @@ try:
   raise TypeError
 except TypeError:
   res = 2
-

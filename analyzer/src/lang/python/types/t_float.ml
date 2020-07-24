@@ -25,7 +25,6 @@ open Ast
 open MapExt
 open Addr
 open Universal.Ast
-(* gérer les appels sur float + constantes *)
 
 module Domain =
   struct
@@ -65,6 +64,7 @@ module Domain =
           ~fthennew:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top (T_float F_DOUBLE) range))
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("float.__new__", _))}, _)}, [cls; arg], []) ->
+         debug "exp = %a" pp_expr exp;
         Utils.new_wrapper man range flow "float" cls
           ~fthennew:(fun flow ->
               man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) arg flow |>
@@ -72,12 +72,13 @@ module Domain =
                   assume
                     (mk_py_isinstance_builtin el "float" range)
                     ~fthen:(fun flow ->
-                        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top (T_float F_DOUBLE) range) flow)
+                      Eval.singleton el flow)
                     ~felse:(fun flow ->
                         assume
                           (mk_py_isinstance_builtin el "int" range)
                           ~fthen:(fun flow ->
-                              man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top (T_float F_DOUBLE) range) flow)
+                            man.eval (mk_py_call (mk_py_object (find_builtin "int.__float__") range) [el] range) flow
+                          )
                           ~felse:(fun flow ->
                               assume
                                 (mk_py_isinstance_builtin el "str" range)
@@ -111,7 +112,6 @@ module Domain =
                           ~zone:Universal.Zone.Z_u_float
                           ~fthen:(fun flow -> man.eval (mk_py_true range) flow)
                           ~felse:(fun flow -> man.eval (mk_py_false range) flow)
-                        (* |> T_int.Domain.merge_tf_top man range *)
                       )
                     ~felse:(fun flow ->
                         assume (mk_py_isinstance_builtin e2 "int" range) man flow
@@ -123,7 +123,6 @@ module Domain =
                                     ~zone:Universal.Zone.Z_u_float
                                     ~fthen:(fun flow -> man.eval (mk_py_true range) flow)
                                     ~felse:(fun flow -> man.eval (mk_py_false range) flow)
-                                  (* |> T_int.Domain.merge_tf_top man range *)
                                 )
                             )
                           ~felse:(fun flow ->
@@ -216,10 +215,16 @@ module Domain =
                ~zone:Universal.Zone.Z_u_float
                ~fthen:(fun flow -> man.eval (mk_py_false range) flow)
                ~felse:(fun flow -> man.eval (mk_py_true range) flow)
-             (* |> T_int.Domain.merge_tf_top man range *)
           )
         |> OptionExt.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("float.__int__" as f, _))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args
+        ["float"]
+        (fun e flow ->
+            man.eval ~zone:(Universal.Zone.Z_u, Universal.Zone.Z_u_int) (mk_unop O_cast  ~etyp:T_int (Utils.extract_oobject @@ List.hd e) range) flow |>
+              Eval.bind (fun e flow -> Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_integers, Some e) range) flow)
+        ) |> OptionExt.return
 
       | _ -> None
 

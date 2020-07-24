@@ -512,11 +512,5 @@ let object_of_expr e =
   | E_py_object o -> o
   | _ -> assert false
 
-let addr_of_object (obj:py_object) : Universal.Ast.addr =
-  fst obj
-
-let value_of_object (obj:py_object) : expr option =
-  snd obj
-
 let mk_py_none range =
   mk_constant ~etyp:T_py_none C_py_none range

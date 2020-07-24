@@ -110,7 +110,7 @@ struct
                           assume (mk_py_hasattr (mk_py_type attribute range) "__get__" range)
                             man flow
                             ~fthen:(fun flow ->
-                                (* FIXME: a NULL argument has been replaced with a None during evaluation *)
+                              (* FIXME: a NULL argument has been replaced with a None during evaluation *)
                               man.eval
                                 (mk_py_call
                                    (mk_py_attr (mk_py_type attribute range) "__get__" range)

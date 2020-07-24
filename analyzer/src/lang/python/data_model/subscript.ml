@@ -113,7 +113,7 @@ struct
                  (Utils.mk_hasattr cls "__setitem__" range)
                  man flow
                  ~fthen:(fun true_flow ->
-                     (* we need to keep the unevaluated index here for the type analysis *)
+                   (* we need to keep the unevaluated index here to improve the precision *)
                      let exp' = mk_py_call (mk_py_attr cls "__setitem__" range) [obj; index; exp] range in
                      man.exec {stmt with skind = S_expression(exp')} true_flow |> Post.return
                    )

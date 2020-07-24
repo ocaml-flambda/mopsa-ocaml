@@ -79,7 +79,6 @@ module Domain =
         debug "importing %s from module %s" name modul;
         let obj, flow, ispyi = import_module man modul range flow in
         debug "import ok, adding a few eq";
-        (* FIXME: terrible disjunction *)
         if ispyi then
           match kind_of_object obj with
           | A_py_module (M_user (_, globals)) ->
@@ -189,9 +188,7 @@ module Domain =
         match (Frontend.parse_program [path]).prog_kind with
         | Ast.Py_program (_, _, b) -> b
         | _ -> assert false in
-      (* FIXME: pour les fonctions récursives, ça marche ça ? *)
-      (* pour les variables globales : collecter les variables globales, puis faire des man.exec dessus ? *)
-      (* et pour les modules normaux, il y a aussi un pb sur les noms de variables, non ? *)
+      (* FIXME: does this work for recursive functions? *)
       let rec parse base stmt =
         match skind stmt with
         | S_py_class(cls) ->
@@ -258,13 +255,11 @@ module Domain =
         let range = srange stmt in
         match skind stmt with
         | S_assign ({ekind = E_var (v, _)}, e) ->
-          (* let v = set_orig_vname (mk_dot_name (Some name) (get_orig_vname v)) v in *)
           debug "%s: adding alias %a[%s] = %a" base pp_var v v.vname pp_expr e;
           let ee = Visitor.map_expr (fun exp -> match ekind exp with
               | E_var (v, m) -> begin try Keep (Hashtbl.find type_aliases v) with Not_found -> Keep exp end
               | _ -> VisitParts exp) (fun s -> VisitParts s) e in
           add_type_alias v ee;
-          (* add to map *)
           {stmt with skind = S_block ([], [])},
           List.filter (fun var -> compare_var var v <> 0) globals,
           flow
@@ -300,8 +295,8 @@ module Domain =
               | _ -> VisitParts e) (fun s -> VisitParts s) stmt
           in
           let is_typingoverload_fundec = function
-            | {py_func_decors = [{ekind = E_py_attribute({ekind = E_var( {vkind = V_uniq ("typing",_)}, _)}, "overload")}]} -> true
             (* FIXME *)
+            | {py_func_decors = [{ekind = E_py_attribute({ekind = E_var( {vkind = V_uniq ("typing",_)}, _)}, "overload")}]} -> true
             | {py_func_decors = [{ekind = E_var( {vkind = V_uniq ("overload",_)}, _)}]} -> true
             | _ -> false in
           begin match skind stmt with
@@ -415,7 +410,6 @@ module Domain =
     let init prog man flow =
       import_builtin_module (Some "mopsa") "mopsa";
       import_builtin_module None "stdlib";
-      (* import_builtin_module (Some "math") "math"; *)
       flow
 
     let eval _ _ _ _ = None

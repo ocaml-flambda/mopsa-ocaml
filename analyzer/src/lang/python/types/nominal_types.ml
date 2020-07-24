@@ -157,9 +157,6 @@ struct
              | C_builtin n when n = n_ak -> man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_true range) flow
              | _ ->
                 man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_issubclass_builtin_l n_ak eattr range) flow
-                  (* ~zone:Zone.Z_py
-                   * ~fthen:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_true range))
-                   * ~felse:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_false range)) *)
              end
 
           | _ -> assert false

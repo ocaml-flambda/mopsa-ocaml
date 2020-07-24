@@ -19,8 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(* A general smashing abstraction for Python dicts, (hopefully)
-   irrelevant of the value/type domain *)
+(** A general smashing abstraction for Python dicts *)
 
 open Mopsa
 open Sig.Abstraction.Stateless

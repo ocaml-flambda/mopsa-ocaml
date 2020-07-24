@@ -111,7 +111,7 @@ struct
           (* assumes that _PySlice_GetLongIndices and PySlice_Unpack+PySlice_AdjustIndices carry the same meaning in sliceobject.c *)
           let py_ssize_t_max (*FIXME. should be sys.maxsize *) = mk_z (Z.of_string "9223372036854775807") ?typ:(Some T_int) range in
           let py_ssize_t_min = mk_binop (mk_unop O_minus py_ssize_t_max range) O_minus (mk_int 1 ?typ:(Some T_int) range) range in
-          (* fixme: potentiel overflow over int start/stop/step (in new or here?) *)
+          (* fixme: potential overflow over int start/stop/step (in new or here?) *)
           let _step = mk_range_attr_var range "step" T_any in
           let _start = mk_range_attr_var range "start" T_any in
           let _stop = mk_range_attr_var range "stop" T_any in

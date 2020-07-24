@@ -25,7 +25,6 @@ open Ast
 open MapExt
 open Addr
 open Universal.Ast
-(* gérer les appels sur int + constantes *)
 
 module Domain =
 struct
@@ -49,28 +48,6 @@ struct
     | "int.__neg__"
     | "int.__invert__" -> true
     | _ -> false
-
-  (* FIXME: I'd like to merge only if true/false have different flows *)
-  (* let merge_tf_top man range c =
-   *   if Cases.cardinal c = 2 then
-   *     let () = debug "2 cases, we're good!" in
-   *     let t, f, oflow = Cases.fold (fun oe flow (ftrue, ffalse, oflow) ->
-   *                           if oflow <> None && not (Flow.subset man.lattice flow (OptionExt.none_to_exn oflow)) then
-   *                             (ftrue, ffalse, oflow)
-   *                           else
-   *                             match oe with
-   *                             | Some e when compare_expr e (mk_py_object (Addr_env.addr_true (), Some (mk_int 1 ~typ:T_int e.erange)) e.erange) = 0 ->
-   *                                (true, ffalse, OptionExt.apply (fun flow' -> Some (Flow.join man.lattice flow flow')) (Some flow) oflow)
-   *                             | Some e when compare_expr e (mk_py_object (Addr_env.addr_false (), Some (mk_int 0 ~typ:T_int e.erange)) e.erange) = 0 ->
-   *                                (ftrue, true, OptionExt.apply (fun flow' -> Some (Flow.join man.lattice flow flow')) (Some flow) oflow)
-   *                             | _ -> (ftrue, ffalse, oflow)
-   *                         ) c (false, false, None) in
-   *     let () = debug "t = %b, f = %b" t f in
-   *     if t && f then
-   *       man.eval (mk_py_top T_bool range) (OptionExt.none_to_exn oflow)
-   *     else
-   *       c
-   *   else c *)
 
 
   let eval zs exp (man: ('a, unit, 's) man) (flow: 'a flow) =
@@ -136,7 +113,23 @@ struct
 
     | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("int.__new__", _))}, _)} as f), [cls; arg], []) ->
       Utils.new_wrapper man range flow "int" cls
-        ~fthennew:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) {exp with ekind = E_py_call(f, [cls; arg; mk_int 10 range], [])})
+        ~fthennew:(fun flow ->
+          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) arg flow |>
+            Eval.bind (fun el flow ->
+                assume
+                  (mk_py_isinstance_builtin el "int" range) man flow
+                  ~fthen:(fun flow -> Eval.singleton el flow)
+                  ~felse:(fun flow ->
+                    assume
+                      (mk_py_isinstance_builtin el "float" range) man flow
+                      ~fthen:(fun flow ->
+                        man.eval (mk_py_call (mk_py_object (find_builtin "float.__int__") range) [el] range) flow
+                      )
+                      ~felse:(fun flow ->
+                        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) {exp with ekind = E_py_call(f, [cls; arg; mk_int 10 range], [])} flow)
+                  )
+              )
+        )
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("int.__new__", _))}, _)}, [cls; str; base], []) ->
       Utils.new_wrapper man range flow "int" cls
@@ -159,14 +152,11 @@ struct
                   assume
                     (mk_py_isinstance_builtin e2 "int" range)
                     ~fthen:(fun true_flow ->
-                        (* FIXME: best way? *)
                       assume
                           (mk_binop (Utils.extract_oobject e1) (Operators.methfun_to_binop f) (Utils.extract_oobject e2) ~etyp:T_int range) man true_flow
                           ~zone:Universal.Zone.Z_u_int
                           ~fthen:(fun flow -> man.eval (mk_py_true range) flow)
                           ~felse:(fun flow -> man.eval (mk_py_false range) flow)
-                      (* |> merge_tf_top man range *)
-                          (* man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_bool range) true_flow *)
                       )
                     ~felse:(fun false_flow ->
                         let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
@@ -259,13 +249,11 @@ struct
       Utils.check_instances f man flow range args
         ["int"]
         (fun e flow ->
-           (* FIXME: best way? *)
            assume
              (mk_binop (Utils.extract_oobject @@ List.hd e) O_eq (mk_int 0 ~typ:T_int range) ~etyp:T_int range) man flow
              ~zone:Universal.Zone.Z_u_int
              ~fthen:(fun flow -> man.eval (mk_py_false range) flow)
              ~felse:(fun flow -> man.eval (mk_py_true range) flow)
-           (* |> merge_tf_top man range *)
         )
       |> OptionExt.return
 

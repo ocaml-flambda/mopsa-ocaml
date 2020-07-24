@@ -19,7 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(* TODO: move S_assume and eval of not into t_bool domain? *)
+
 open Mopsa
 open Sig.Abstraction.Domain
 open Ast
@@ -101,7 +101,6 @@ struct
     let range = stmt.srange in
     match skind stmt with
     | S_assign ({ekind = E_addr ({addr_mode} as la)}, {ekind = E_py_object (a, _)}) ->
-      (* si l'adresse est weak et pas dans le store, faire un assign strong *)
       let cur = get_env T_cur man flow in
       if mem a cur then
         let tys = find a cur in
@@ -136,9 +135,6 @@ struct
        let ncur = List.fold_left (fun cur addr ->
                       AMap.add addr
                         attrs
-                        (* (AttrSet.join
-                         *    (OptionExt.default AttrSet.empty (AMap.find_opt addr cur))
-                         *    attrs) *)
                         cur) cur addrs in
        let expand_stmts =
          AttrSet.fold_u (fun attr stmts ->
@@ -151,7 +147,6 @@ struct
     | S_fold ({ekind = E_addr ({addr_kind = A_py_instance _} as a)}, addrs) ->
        let cur = get_env T_cur man flow in
        let old_a = OptionExt.default AttrSet.empty (find_opt a cur) in
-       (* let fold_vars = List.fold_left (fun stmts  (aun  mk_fold_var (mk_addr_attr a attr T_any) (List.map (fun a' -> mk_addr_attr a' attr T_any) addrs) range in *)
        let newa, ncur, fold_stmts =
          List.fold_left (fun (newa, ncur, stmts) a' ->
              match ekind a' with

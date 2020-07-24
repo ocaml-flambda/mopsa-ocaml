@@ -41,11 +41,10 @@ let () =
   register_domain_option "python.frontend" {
       key = "-gc-percent";
       category = "Python";
-      doc = " percent of abstract garbage collection calls (default: " ^ string_of_int !opt_gc_percent_calls ^ ")";
+      doc = Format.asprintf " percent of abstract garbage collection calls (default: %d)" !opt_gc_percent_calls;
       spec = ArgExt.Set_int opt_gc_percent_calls;
       default = "";
     }
-
 
 let debug fmt = Debug.debug ~channel:"python.frontend" fmt
 
@@ -68,26 +67,9 @@ let rec parse_program (files: string list) : program =
 
   | _ -> panic "analysis of multiple files not supported"
 
-(* and parse_file (filename: string) =
- *   let ast, counter = Py_parser.Main.parse_file ~counter:(Framework.Ast.Var.get_vcounter_val ()) filename in
- *   Framework.Ast.Var.start_vcounter_at counter;
- *   from_stmt ast.prog_body *)
-
 (** Create a Universal.var variable from Py_parser.Ast.var *)
 and from_var (v:Py_parser.Ast.var) =
-  let open Framework.Ast in
-  (* let () = if Hashtbl.mem tmp v.uid && Hashtbl.find tmp v.uid <> v.name then
-   *     Exceptions.panic "%d is already %s, conflict with current %s@\n" v.uid (Hashtbl.find tmp v.uid) v.name
-   *   else
-   *     Hashtbl.add tmp v.uid v.name in *)
   mk_uniq_var v.name v.uid T_any
-
-(** Translate a Python program into a stmt *)
-(* and from_program filename (p: Py_parser.Ast.program) : prog_kind =
- *   let body = from_stmt p.prog_body in
- *   let globals = List.map from_var p.prog_globals in
- *   Ast.Py_program (filename, globals, body) *)
-
 
 (** Translation of a Python statement *)
 and from_stmt (stmt: Py_parser.Ast.stmt) : stmt =

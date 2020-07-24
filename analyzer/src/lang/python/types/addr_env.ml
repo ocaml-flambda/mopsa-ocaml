@@ -30,7 +30,7 @@ open Data_model.Attribute
 open Alarms
 
 
-(*FIXME: can iterators over addresses be renamed? *)
+(* FIXME: can iterators over addresses be renamed? *)
 
 
 (*==========================================================================*)
@@ -110,12 +110,6 @@ struct
         | _ -> true
 
       let widen = join
-        (* Top.top_absorb2 (fun a b ->
-         *     if Set.cardinal b - Set.cardinal a = 1
-         *     && Set.exists undef b && Set.exists undef a then
-         *       Top.Nt (Set.union a b)
-         *     else
-         *       PS.widen annot at bt) at bt *)
     end)
 
   module AMap = Framework.Lattices.Partial_map.Make
@@ -129,9 +123,6 @@ struct
     end)
 
   let subset = AMap.subset
-    (* let r1, r2, r3 = AMap.subset l1 l2, r1, r2 in
-     * if not r1 then Debug.debug ~channel:"explain" "%s not sub@." name;
-     * r1, r2, r3 *)
 
   let join = AMap.join
   let meet = AMap.meet
@@ -196,7 +187,7 @@ struct
        begin match AMap.find_opt w cur with
        | None -> flow |> Post.return |> OptionExt.return
        | Some aset ->
-          (* FIXME FIXME FIXME FIXME: what happens if multiple float/... instances? *)
+          (* FIXME: what happens if they are multiple float/... instances? *)
           let flow = ASet.fold
                        (fun pyaddr flow ->
                          let cstmt = fun t -> {stmt with skind = S_assign(Utils.change_evar_type t vl, Utils.change_evar_type t wl)} in
@@ -434,6 +425,19 @@ struct
           man.exec ~zone:Zone.Z_py_obj stmt flow |>
           man.exec ~zone:Zone.Z_py_obj {stmt with skind}
       | A_py_instance _ ->
+         (* FIXME: PERF: in function.ml, store inst -> method binding and use it here? / ask function.ml to perform the stmt? *)
+         let aaddr = man.ask Universal.Heap.Recency.Q_allocated_addresses flow in
+         let flow = List.fold_left (fun flow addr ->
+                        match akind addr with
+                        | A_py_method(func, ({ekind = E_py_object(ainst, oe)} as inst), mclass) when compare_addr a ainst = 0 ->
+                           let addr' = {addr with addr_kind = A_py_method(func, {inst with ekind = E_py_object(a', oe)}, mclass)} in
+                           let skind = match skind stmt with
+                                           | S_fold _ -> S_fold ({e2 with ekind = E_addr addr'}, [{e1 with ekind = E_addr addr}])
+                                           | S_rename _ -> S_rename ({e1 with ekind = E_addr addr}, {e2 with ekind = E_addr addr'})
+                                           | _ -> assert false
+                           in
+                           man.exec ~zone:Zone.Z_py {stmt with skind} flow
+                        | _ -> flow) flow aaddr in
          man.exec ~zone:Zone.Z_py_obj stmt flow
       | ak when Objects.Data_container_utils.is_data_container ak ->
          man.exec ~zone:Zone.Z_py_obj stmt flow
@@ -572,8 +576,6 @@ struct
         evals |> Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow)
         |> OptionExt.return
       else if is_builtin_var v then
-        (* let () = debug "bla %s %s %d" v.org_vname v.uniq_vname v.vuid in *)
-        (* man.eval (mk_py_object (find_builtin v.org_vname) range) flow |> OptionExt.return *)
         let () = debug "is it a builtin?" in
         let obj = find_builtin @@ get_orig_vname v in
         Eval.singleton (mk_py_object obj range) flow |> OptionExt.return
@@ -581,10 +583,6 @@ struct
         let () = debug "cur to bottom, empty singleton" in
         Eval.empty_singleton flow |> OptionExt.return
       else
-        (* let () = warn_at range "NameError on %a that shouldn't happen. Todo: use partial envs and add_var %a" pp_var v (Flow.print man.lattice.print) flow in
-         * let () = Format.fprintf Format.str_formatter "name '%s' is not defined" (get_orig_vname v) in
-         * man.exec (Utils.mk_builtin_raise_msg "NameError" (Format.flush_str_formatter ()) range) flow |> *)
-        (* panic_at range "%a not a builtin, cur = %a" pp_var v print cur *)
         let () = debug "not a builtin..." in
         Eval.empty_singleton flow |>
         OptionExt.return
@@ -593,7 +591,6 @@ struct
     | E_py_object ({addr_kind = A_py_instance _}, _) ->
       Eval.singleton exp flow |> OptionExt.return
 
-    (* FIXME: clean *)
     | E_constant C_py_none ->
       Eval.singleton (mk_py_object (OptionExt.none_to_exn !addr_none, None) range) flow |> OptionExt.return
 
@@ -602,7 +599,7 @@ struct
 
     | E_unop(O_log_not, e') ->
       (* bool is called in desugar/bool *)
-      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e' (*(Utils.mk_builtin_call "bool" [e'] range)*) flow |>
+      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e' flow |>
       Eval.bind
         (fun ee' flow ->
            match ekind ee' with

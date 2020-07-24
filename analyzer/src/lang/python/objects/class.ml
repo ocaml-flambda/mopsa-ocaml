@@ -58,7 +58,8 @@ struct
 
     | E_py_call({ekind = E_py_object (({addr_kind=A_py_class _}, _) as cls)} as ecls, args, kwargs) ->
       debug "class call  %a@\n@\n" pp_expr exp;
-      (* Call __new__ *)
+      (* FIXME: this is actually type.__call__(cls) *)
+      (* Call __new__ and __init__ *)
       let rec bind args vars flow f =
         match args with
         | [] ->
