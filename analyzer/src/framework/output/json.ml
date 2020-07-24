@@ -28,6 +28,10 @@ open Soundness
 open Callstack
 open Location
 
+module AlarmMessageSet = SetExt.Make(struct type t = alarm_message let compare = compare_alarm_message end)
+module CallstackSet = SetExt.Make(struct type t = callstack let compare = compare_callstack end)
+
+
 let print out json =
   let channel =
     match out with
@@ -63,31 +67,38 @@ let render_call (c:callsite)  =
 let render_callstack cs  =
   `List (List.map render_call cs)
 
-let aggregate_alarms alarms =
-  (* Iterate first on the alarm classes *)
-  let cls_map = index_alarm_set_by_class alarms in
-  ClassMap.fold
-    (fun cls alarms acc ->
-       (* Then iterate on the location ranges within each class *)
-       let range_map = index_alarm_set_by_range alarms in
-       RangeMap.fold
-         (fun range alarms acc ->
-            let csl = AlarmSet.elements alarms |>
-                      List.map get_alarm_callstack in
-            (cls,range,csl) :: acc
-         ) range_map acc
-    ) cls_map []
-
 let render_alarm_class alarm =
   let title = Format.asprintf "%a" pp_alarm_class alarm in
   `String title
 
-let render_alarm (cls,range,csl) =
+let render_alarm_messages cls messages =
+  let msgs = Format.asprintf "%a" (pp_grouped_alarm_message cls) (AlarmMessageSet.elements messages) in
+  `String msgs
+
+let render_alarm cls messages range callstacks =
   `Assoc [
-    "title", render_alarm_class cls;
-    "range", render_range range;
-    "callstacks", `List (List.map render_callstack csl);
-  ]
+      "title", render_alarm_class cls;
+      "messages", render_alarm_messages cls messages;
+      "range", render_range range;
+      "callstacks", `List (List.map render_callstack callstacks);
+    ]
+
+let render_alarms alarms =
+  let cls_map = index_alarm_set_by_class alarms in
+  ClassMap.fold (fun cls ss alarms ->
+    (* Then iterate on the location ranges within each class *)
+    let range_map = index_alarm_set_by_range ss in
+    RangeMap.fold (fun range sss alarms ->
+
+    (* Group similar messages and callstacks *)
+    let messages, callstacks = AlarmSet.fold (fun alarm (messages,callstacks) ->
+      AlarmMessageSet.add (get_alarm_message alarm) messages,
+      CallstackSet.add (get_alarm_callstack alarm) callstacks
+                                 ) sss (AlarmMessageSet.empty, CallstackSet.empty)
+    in
+    (render_alarm cls messages range (CallstackSet.elements callstacks)) :: alarms
+                       ) range_map alarms
+    ) cls_map []
 
 let render_warning w  =
   match w.warn_range with
@@ -101,7 +112,7 @@ let render_warning w  =
       "message", `String w.warn_message;
       "range", render_range r;
     ]
-    
+
 
 let render_var var  =
   `String var.vname
@@ -121,7 +132,7 @@ let report ?(flow=None) man alarms time files out : unit =
       "success", `Bool true;
       "time", `Float time;
       "files", `List (List.map (fun f -> `String f) files);
-      "alarms", `List (aggregate_alarms alarms |> List.map render_alarm);
+      "alarms", `List (render_alarms alarms);
       "warnings", `List (List.map render_warning (get_warnings ()));
     ]
   in

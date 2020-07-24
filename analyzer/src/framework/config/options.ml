@@ -268,7 +268,9 @@ let () =
         (fun s ->
            match s with
            | "text" -> Output.Factory.(opt_format := F_text)
-           | "json" -> Output.Factory.(opt_format := F_json)
+           | "json" ->
+              Output.Factory.(opt_format := F_json);
+              Debug.print_color := false
            | _ -> assert false
         )
       );
