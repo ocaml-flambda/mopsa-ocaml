@@ -33,6 +33,7 @@ struct
   type t = unit
   let id = C_empty
   let domains = []
+  let semantics = []
   let routing_table = empty_routing_table
   let name = ""
   let bottom = ()
@@ -59,6 +60,8 @@ struct
   let name = T1.name ^ " ∧ " ^ T2.name
 
   let domains = T1.domains @ T2.domains
+
+  let semantics = T1.semantics @ T2.semantics
 
   let routing_table = join_routing_table T1.routing_table T2.routing_table
 

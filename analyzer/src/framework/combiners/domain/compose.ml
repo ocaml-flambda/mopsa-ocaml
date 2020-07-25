@@ -45,11 +45,20 @@ struct
 
   let domains = C1.domains @ C2.domains
 
+  let semantics = C1.semantics @ C2.semantics
+
   let routing_table =
-    List.fold_left
-      (fun acc d1 -> add_routes (BelowOf d1) C2.domains acc)
-      (join_routing_table C1.routing_table C2.routing_table)
-      C1.domains
+    let t1 = List.fold_left
+        (fun acc d1 -> add_routes (BelowOf d1) C2.domains acc)
+        (join_routing_table C1.routing_table C2.routing_table)
+        C1.domains
+    in
+    let t2 = List.fold_left
+        (fun acc s1 -> add_routes (Semantic s1) C2.domains acc)
+        t1
+        C1.semantics
+    in
+    t2
 
   let alarms = C1.alarms @ C2.alarms |> List.sort_uniq compare
 

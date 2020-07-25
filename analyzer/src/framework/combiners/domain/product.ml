@@ -45,6 +45,7 @@ struct
   let id = C_empty
   let name = "()"
   let domains = []
+  let semantics = []
   let routing_table = empty_routing_table
   let alarms = [[]]
   let bottom = ()
@@ -68,6 +69,7 @@ struct
   type t = S.t * P.t
   let id = C_pair(Product,S.id,P.id)
   let domains = S.domains @ P.domains
+  let semantics = S.semantics @ P.semantics
   let routing_table = join_routing_table S.routing_table P.routing_table
   let alarms = S.alarms :: P.alarms
   let name = S.name ^ " ∧ " ^ P.name

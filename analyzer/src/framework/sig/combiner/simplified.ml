@@ -28,6 +28,7 @@ module type SIMPLIFIED_COMBINER =
 sig
   include SIMPLIFIED
   val domains : domain list
+  val semantics : semantic list
   val routing_table : routing_table
   val exec : domain list -> stmt -> ('a,t) simplified_man -> uctx -> t -> t option
   val ask  : domain list -> ('a,'r) query -> ('a,t) simplified_man -> uctx -> t -> 'r option
@@ -39,6 +40,7 @@ module SimplifiedToCombiner(D:SIMPLIFIED) : SIMPLIFIED_COMBINER with type t = D.
 struct
   include D
   let domains = [D.name]
+  let semantics = []
   let routing_table = empty_routing_table
   let exec domains = D.exec
   let ask domains  = D.ask
