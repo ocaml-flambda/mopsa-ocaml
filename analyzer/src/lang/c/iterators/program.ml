@@ -219,47 +219,19 @@ struct
       let stmt = mk_c_call_stmt f' [] f.c_func_range in
       man.post stmt flow
 
-
   
-  (** Create the address of the array pointed by argv *)
-  let mk_argv range =
-    mk_addr
-      {
-        addr_kind = Stubs.Ast.A_stub_resource "argv";
-        addr_partitioning = G_all;
-        addr_mode = STRONG;
-      }
-      ~etyp:(T_c_pointer (T_c_pointer s8))
-      range
-
-
-  (** Create a smash address for all arguments *)
-  let mk_arg_smash ~mode range =
-    mk_addr
-      {
-        addr_kind = Stubs.Ast.A_stub_resource "arg";
-        addr_partitioning = G_all;
-        addr_mode = mode;
-      }
-      ~etyp:(T_c_pointer s8)
-      range
-
   (** Allocate the argv array *)
   let alloc_argv range man flow =
     let arange = tag_range range "argv" in
-    man.eval (mk_alloc_addr (Stubs.Ast.A_stub_resource "argv") arange) flow >>$ fun addr flow ->
-    man.eval (mk_stub_builtin_call BYTES addr ~etyp:ul range) flow >>$ fun bytes flow ->
-    man.exec (mk_add bytes range) flow |>
-    Eval.singleton { addr with etyp = T_c_pointer (T_c_pointer s8) }
+    man.eval (mk_stub_alloc_resource "argv" arange) flow >>$ fun addr flow ->
+    Eval.singleton { addr with etyp = T_c_pointer (T_c_pointer s8) } flow
 
 
   (** Allocate an address for a concrete argument *)
   let alloc_concrete_arg i range man flow =
     let irange = tag_range range "argv[%d]" i in
-    man.eval (mk_alloc_addr (Stubs.Ast.A_stub_resource "arg") irange) flow >>$ fun addr flow ->
-    man.eval (mk_stub_builtin_call BYTES addr ~etyp:ul range) flow >>$ fun bytes flow ->
-    man.exec (mk_add bytes range) flow |>
-    Eval.singleton { addr with etyp =  T_c_pointer s8 }
+    man.eval (mk_stub_alloc_resource "arg" irange) flow >>$ fun addr flow ->
+    Eval.singleton { addr with etyp =  T_c_pointer s8 } flow
 
 
   (** Set the minimal size of the argument block *)
@@ -267,6 +239,12 @@ struct
     let max = snd (rangeof ul) in
     man.exec (mk_assume (mk_in (mk_stub_builtin_call BYTES arg ~etyp:ul range) min (mk_z max range ) range) range) flow |>
     Post.return
+
+  (** Allocate an address for a symbolic argument *)
+  let alloc_symbolic_arg range man flow =
+    let arange = tag_range range "arg" in
+    man.eval (mk_stub_alloc_resource "arg" arange) flow >>$ fun addr flow ->
+    Eval.singleton { addr with etyp =  T_c_pointer s8 } flow
 
 
   (** Initialize an argument with a concrete string *)
@@ -375,7 +353,6 @@ struct
 
     (* Create the memory block pointed by argv. *)
     alloc_argv range man flow >>$ fun argv flow ->
-    let argv = mk_argv range in
     let argvv = mk_var argv_var range in
     let flow = man.exec (mk_add argvv range) flow |>
                man.exec (mk_assign argvv argv range)
@@ -393,14 +370,11 @@ struct
     in
 
     (* Create a symbolic argument *)
-    let arg = mk_arg_smash ~mode:STRONG range in
+    alloc_symbolic_arg range man flow >>$ fun arg flow ->
 
     (* Initialize the size of the argument *)
     man.eval (mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, arg)) range ~etyp:ul) flow >>$ fun bytes flow ->
-    let flow = man.exec (mk_add bytes range) flow |>
-               man.exec (mk_assign bytes (mk_z (rangeof s32 |> snd) range) range) |>
-               man.exec (mk_add arg range)
-    in
+    let flow = man.exec (mk_assign bytes (mk_z (rangeof s32 |> snd) range) range) flow in
 
     (* Ensure that the argument is a valid string with at least one character *)
     let first_arg_cell = mk_c_subscript_access arg (mk_zero range) range in
@@ -409,7 +383,7 @@ struct
     let flow = man.exec (mk_assign some_arg_cell (mk_zero range) range) flow in
 
     (* Make the address weak *)
-    let arg_weak = mk_arg_smash ~mode:WEAK range in
+    let arg_weak = weaken_addr_expr arg in
     let flow = man.exec (mk_rename arg arg_weak range) flow in
 
     (* Put the symbolic argument in argv[0 : argc-1] *)
