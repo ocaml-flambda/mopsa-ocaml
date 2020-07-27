@@ -243,8 +243,8 @@ struct
                    remove_tmp l
           in
           Some (a', bnd)
-        with UnsupportedExpression ->
-          exec (mk_remove_var var stmt.srange) man ctx (a,bnd)
+        with UnsupportedOperator -> exec (mk_remove_var var stmt.srange) man ctx (a,bnd)
+           | UnsupportedExpression -> None
       end
 
     | S_assign({ ekind = E_var (var, mode) } as lval, e) when var_mode var mode = WEAK ->
@@ -328,7 +328,8 @@ struct
                    remove_tmp l
           in
           Some (a', bnd)
-        with UnsupportedExpression -> OptionExt.return (a,bnd)
+        with UnsupportedOperator -> Some (a,bnd)
+           | UnsupportedExpression -> None
       end
 
     | _ -> None
@@ -350,7 +351,7 @@ struct
 
   let eval_interval e (abs,bnd) =
     match ekind e with
-    | E_var (v,_) -> bound_var v (abs,bnd)
+    | E_var (v,_) -> Some (bound_var v (abs,bnd))
     | _ ->
       try
         let abs, bnd = add_missing_vars (abs,bnd) (Visitor.expr_vars e) in
@@ -358,21 +359,20 @@ struct
         let env = Apron.Abstract1.env abs in
         let e = Apron.Texpr1.of_expr env e in
         Apron.Abstract1.bound_texpr ApronManager.man abs e |>
-        Values.Intervals.Integer.Value.of_apron
-      with UnsupportedExpression ->
-        Values.Intervals.Integer.Value.top
+        Values.Intervals.Integer.Value.of_apron |>
+        OptionExt.return
+      with UnsupportedOperator -> Some (Values.Intervals.Integer.Value.top)
+         | UnsupportedExpression -> None
 
 
   let ask : type r. ('a,r) query -> ('a,t) simplified_man -> uctx -> t -> r option =
     fun query man ctx (abs,bnd) ->
       match query with
       | Common.Q_int_interval e ->
-        eval_interval e (abs,bnd) |>
-        OptionExt.return
+        eval_interval e (abs,bnd)
 
       | Common.Q_int_congr_interval e ->
-        (eval_interval e (abs,bnd), Common.C.minf_inf) |>
-        OptionExt.return
+        eval_interval e (abs,bnd) |> OptionExt.lift (fun itv -> itv,Common.C.minf_inf)
 
       | Q_related_vars v ->
         related_vars v (abs,bnd) |>
