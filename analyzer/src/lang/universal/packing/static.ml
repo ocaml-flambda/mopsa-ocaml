@@ -326,13 +326,16 @@ struct
         | _ -> assert false
       in
       let packs = packs_of_var ctx v in
-      List.fold_left (fun acc pack ->
-          let aa = try Map.find pack acc with Not_found -> Domain.top in
-          let e' = resolve_expr_missing_vars pack man ctx e in
-          let stmt' = { stmt with skind = S_assign (lval, e') } in
-          let aa' = Domain.exec stmt' (pack_man pack man) ctx aa |> OptionExt.none_to_exn in
-          Map.add pack aa' acc
-        ) a packs
+      try
+        List.fold_left (fun acc pack ->
+            let aa = try Map.find pack acc with Not_found -> Domain.top in
+            let e' = resolve_expr_missing_vars pack man ctx e in
+            let stmt' = { stmt with skind = S_assign (lval, e') } in
+            let aa' = Domain.exec stmt' (pack_man pack man) ctx aa |> OptionExt.none_to_exn in
+            Map.add pack aa' acc
+          ) a packs
+        |> OptionExt.return
+      with OptionExt.Found_None -> None
 
 
     (** 𝕊⟦ expand/fold (v,vl) ⟧ *)
@@ -374,8 +377,7 @@ struct
         OptionExt.return
 
       | S_assign ({ekind = E_var _}, _) ->
-        exec_assign_var stmt man ctx a |>
-        OptionExt.return
+        exec_assign_var stmt man ctx a
 
       | S_expand( {ekind = E_var _}, _)
       | S_fold( {ekind = E_var _}, _) ->
