@@ -894,17 +894,17 @@ struct
       OptionExt.return
 
     (* S⟦ ?p ⟧ *)
-    | S_assume ({ ekind = E_var _ } as exp)
-    | S_assume ({ ekind = E_c_cast({ ekind = E_var _ },_) } as exp)
-      when is_c_pointer_type exp.etyp ->
-      assume_ne exp (mk_zero stmt.srange ~typ:(T_c_pointer T_c_void)) stmt.srange man flow |>
+    | S_assume (lval)
+      when is_c_pointer_type lval.etyp &&
+           is_c_lval (remove_casts lval) ->
+      assume_ne lval (mk_zero stmt.srange ~typ:(T_c_pointer T_c_void)) stmt.srange man flow |>
       OptionExt.return
 
     (* S⟦ ?!p ⟧ *)
-    | S_assume ({ ekind = E_unop (O_log_not, ({ekind = E_var _} as exp)) })
-    | S_assume ({ ekind = E_unop (O_log_not, ({ ekind = E_c_cast({ ekind = E_var _ },_) } as exp)) })
-      when is_c_pointer_type exp.etyp ->
-      assume_eq exp (mk_zero stmt.srange ~typ:(T_c_pointer T_c_void)) stmt.srange man flow |>
+    | S_assume ({ ekind = E_unop (O_log_not, lval) })
+      when is_c_pointer_type lval.etyp &&
+           is_c_lval (remove_casts lval) ->
+      assume_eq lval (mk_zero stmt.srange ~typ:(T_c_pointer T_c_void)) stmt.srange man flow |>
       OptionExt.return
 
 

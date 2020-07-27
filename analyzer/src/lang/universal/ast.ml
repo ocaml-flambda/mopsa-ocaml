@@ -816,6 +816,18 @@ let mk_addr addr ?(etyp=T_addr) range = mk_expr ~etyp (E_addr addr) range
 let mk_alloc_addr ?(mode=STRONG) addr_kind range =
   mk_expr (E_alloc_addr (addr_kind, mode)) ~etyp:T_addr range
 
+let weaken_addr_expr e =
+  match ekind e with
+  | E_addr {addr_mode = WEAK} -> e
+  | E_addr addr -> {e with ekind = E_addr {addr with addr_mode = WEAK}}
+  | _ -> assert false
+
+let strongigy_addr_expr e =
+  match ekind e with
+  | E_addr {addr_mode = STRONG} -> e
+  | E_addr addr -> {e with ekind = E_addr {addr with addr_mode = STRONG}}
+  | _ -> assert false
+
 let is_int_type = function
   | T_int | T_bool -> true
   | _ -> false
