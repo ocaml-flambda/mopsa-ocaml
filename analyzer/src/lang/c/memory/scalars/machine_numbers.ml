@@ -264,6 +264,9 @@ struct
     | E_binop(op, e1, e2) when is_logic_op op -> true
     | E_unop(O_log_not, ee) -> is_compare_expr ee
     | E_c_cast(ee,_) -> is_compare_expr ee
+    | E_stub_builtin_call(VALID_PTR, _) -> true
+    | E_stub_builtin_call(VALID_FLOAT, _) -> true
+    | E_stub_builtin_call(ALIVE, _) -> true
     | _ -> false
 
 

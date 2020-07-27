@@ -1189,9 +1189,10 @@ let is_c_constant e =
   | None -> false
   | Some _ -> true
 
-let is_c_lval e =
+let rec is_c_lval e =
   match ekind e with
   | E_var _ | E_c_deref _ | E_c_array_subscript _ | E_c_member_access _ | E_c_arrow_access _ -> true
+  | Stubs.Ast.E_stub_primed ee -> is_c_lval ee
   | _ -> false
 
 let is_c_deref e =

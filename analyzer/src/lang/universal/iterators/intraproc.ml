@@ -46,11 +46,6 @@ struct
       Post.return flow |>
       OptionExt.return
 
-    | S_assign(lval, rval) ->
-      man.eval rval flow >>$? fun rval flow ->
-      man.post ~route:Below (mk_assign lval rval stmt.srange) flow |>
-      OptionExt.return
-
     | S_assume { ekind = E_binop (O_log_and, e1, e2) } ->
       man.post (mk_assume e1 stmt.srange) flow >>$? fun () flow ->
       man.post (mk_assume e2 stmt.srange) flow |>
@@ -72,11 +67,6 @@ struct
 
     | S_assume { ekind = E_unop (O_log_not, { ekind = E_binop (O_log_or, e1, e2) }); erange } ->
       man.post (mk_assume (mk_log_and (mk_not e1 e1.erange) (mk_not e2 e2.erange) erange) stmt.srange) flow |>
-      OptionExt.return
-
-    | S_assume(e) ->
-      man.eval e flow >>$? fun e flow ->
-      man.post ~route:Below (mk_assume e stmt.srange) flow |>
       OptionExt.return
 
     | S_block(block,local_vars) ->
