@@ -265,10 +265,33 @@ struct
     | _ -> assert false
 
 
+  let eval_stub_primed_address e range man flow =
+    let ptr = mk_c_address_of e range in
+    resolve_pointer ptr man flow >>$ fun p flow ->
+    match p with
+    | P_null ->
+      Eval.singleton (mk_c_null range) flow
+
+    | P_invalid ->
+      Eval.singleton (mk_c_invalid_pointer range) flow
+
+    | P_block (base, offset, mode) ->
+      man.eval (mk_primed_address base offset e.etyp range) flow
+
+    | P_top ->
+      Eval.singleton (mk_top (T_c_pointer e.etyp) range) flow
+
+    | _ -> assert false
+
+
   let eval exp man flow =
     match ekind exp with
     | E_stub_primed e ->
       eval_stub_primed e exp.erange man flow |>
+      OptionExt.return
+
+    | E_c_address_of {ekind = E_stub_primed e} ->
+      eval_stub_primed_address e exp.erange man flow |>
       OptionExt.return
 
     | E_stub_builtin_call(BYTES, { ekind = E_var({ vkind = V_c_primed_base base },_) }) ->
