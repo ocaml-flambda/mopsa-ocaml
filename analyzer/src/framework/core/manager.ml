@@ -87,12 +87,12 @@ let map_env (tk:token) (f:'t -> 't) (man:('a,'t) man) (flow:'a flow) : 'a flow =
 let assume
     cond ?(route=toplevel)
     ~fthen ~felse
-    ?(negate=mk_not cond cond.erange)
     man flow
   =
+  man.eval cond flow ~route >>$ fun cond flow ->
   let then_post = man.post ~route (mk_assume cond cond.erange) flow in
   let flow = Flow.set_ctx (Cases.get_ctx then_post) flow in
-  let else_post = man.post ~route (mk_assume negate negate.erange) flow in
+  let else_post = man.post ~route (mk_assume (mk_not cond cond.erange) cond.erange) flow in
 
   let then_res = then_post >>$? fun () then_flow ->
     if man.lattice.is_bottom (Flow.get T_cur man.lattice then_flow)
@@ -146,6 +146,7 @@ let switch
     match cond with
     | [] -> f acc
     | x :: tl ->
+      man.eval ~route x flow >>$ fun x flow ->
       let s = mk_assume x x.erange in
       man.post ~route s acc >>$ fun _ acc' ->
       if Flow.get T_cur man.lattice acc' |> man.lattice.is_bottom then

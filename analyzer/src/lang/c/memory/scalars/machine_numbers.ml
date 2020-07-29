@@ -257,41 +257,6 @@ struct
       ~route:numeric man flow
 
 
-  let rec is_compare_expr e =
-    e.etyp = T_bool ||
-    match ekind e with
-    | E_binop(op, e1, e2) when is_comparison_op op -> true
-    | E_binop(op, e1, e2) when is_logic_op op -> true
-    | E_unop(O_log_not, ee) -> is_compare_expr ee
-    | E_c_cast(ee,_) -> is_compare_expr ee
-    | E_stub_builtin_call(VALID_PTR, _) -> true
-    | E_stub_builtin_call(VALID_FLOAT, _) -> true
-    | E_stub_builtin_call(ALIVE, _) -> true
-    | _ -> false
-
-
-  let is_predicate_op = function
-    | O_float_class _ -> true
-    | _ -> false
-
-  let rec to_compare_expr e =
-    match ekind e with
-    | E_binop(op, e1, e2) when is_comparison_op op ->
-      e
-
-    | E_binop(op, e1, e2) when is_logic_op op ->
-      { e with ekind = E_binop(op, to_compare_expr e1, to_compare_expr e2) }
-
-    | E_unop(O_log_not, ee) ->
-      { e with ekind = E_unop(O_log_not, to_compare_expr ee) }
-
-    | E_unop (op, _) when is_predicate_op op ->
-      e
-
-    | _ ->
-      mk_binop e O_ne (mk_zero ~typ:e.etyp e.erange) e.erange
-
-
   (** Transfer functions *)
   (** ================== *)
 
@@ -347,19 +312,6 @@ struct
       Eval.singleton exp' flow |>
       OptionExt.return
 
-    (* 𝔼⟦ ! e ⟧ *)
-    | E_unop(O_log_not, e) when exp |> etyp |> is_c_num_type ->
-      man.eval e flow >>$? fun e flow ->
-      let exp' =
-        if is_compare_expr e then
-          { exp with
-            ekind = E_unop(O_log_not, e);
-            etyp = T_bool }
-        else
-          mk_binop e O_eq (mk_zero ~typ:e.etyp exp.erange) exp.erange ~etyp:T_bool
-      in
-      Eval.singleton exp' flow |>
-      OptionExt.return
 
     (* 𝔼⟦ ⋄ e ⟧ *)
     | E_unop(op, e) when exp |> etyp |> is_c_num_type ->
@@ -512,17 +464,7 @@ struct
           Eval.singleton (mk_top (to_num_type v.vtyp) range) flow
 
       | _, Some (C_init_expr e) ->
-        if not (is_compare_expr e) then
-          man.eval e flow
-        else
-          assume e
-            ~fthen:(fun flow ->
-                Eval.singleton (mk_one range) flow
-              )
-            ~felse:(fun flow ->
-                Eval.singleton (mk_zero range) flow
-              )
-            man flow
+        man.eval e flow
 
       | _ -> assert false
     in
@@ -539,28 +481,10 @@ struct
       declare_var v init scope stmt.srange man flow |>
       OptionExt.return
 
-    | S_assign({ekind = E_var _} as lval, rval) when etyp lval |> is_c_num_type &&
-                                                     is_compare_expr rval ->
-      man.eval lval flow >>$? fun lval flow ->
-      let range = stmt.srange in
-      assume rval
-        ~fthen:(fun flow ->
-            man.post ~route:numeric (mk_assign lval (mk_one range) range) flow
-          )
-        ~felse:(fun flow ->
-            man.post ~route:numeric (mk_assign lval (mk_zero range) range) flow
-          )
-        man flow |>
-      OptionExt.return
-
     | S_assign({ekind = E_var _} as lval, rval) when etyp lval |> is_c_num_type ->
       man.eval lval flow >>$? fun lval' flow ->
       man.eval rval flow >>$? fun rval' flow ->
       man.post ~route:numeric (mk_assign lval' rval' stmt.srange) flow |>
-      OptionExt.return
-
-    | S_assume(e) when (is_c_num_type e.etyp || is_numeric_type e.etyp) && not (is_compare_expr e) ->
-      man.post ~route:numeric (mk_assume (to_compare_expr e) stmt.srange) flow |>
       OptionExt.return
 
     | S_add ({ekind = E_var _} as v) when is_c_num_type v.etyp ->

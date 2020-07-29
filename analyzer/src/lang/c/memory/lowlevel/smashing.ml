@@ -1074,136 +1074,6 @@ struct
                 ) ~route:scalar man flow
 
 
-  (** {2 Quantified tests transfer functions} *)
-  (** *************************************** *)
-
-  (** 𝕊⟦ ∀i ∈ [lo,hi] : *(p + i) ? e ⟧ *)
-  let exec_assume_quant i lo hi op qe e range man flow =
-    man.eval e flow >>$ fun e flow ->
-    eval_pointed_base_offset (mk_c_address_of qe range) range man flow >>$ fun (base,offset,mode) flow ->
-    let t = get_c_deref_type qe in
-    if not (is_interesting_base base) || not (is_aligned offset t man flow) then
-      Post.return flow
-    else
-      let a = get_env T_cur man flow in
-      match State.find base a with
-      | Init.Bot | Init.None -> Post.return flow
-
-      | Init.Partial ts ->
-        (* When base is partially initialized, check these cases:
-
-           Case #1: predicate on the entire initialized part
-              0           uninit - |elm|
-              |----------------|------>
-             min              max
-
-           Case #2: otherwise nop
-        *)
-        let s = mk_smash base t in
-        phi s range man flow >>$ fun () flow ->
-        (* Check valuation range of the offset *)
-        let min, max = Common.Quantified_offset.bound offset [FORALL,i,S_interval(lo,hi)] in
-        let elm = mk_z (sizeof_type t) range in
-        let uninit = mk_uninit_expr base ~mode range in
-        eval_base_size base range man flow >>$ fun size flow ->
-        assume (log_and
-                  (eq min zero range)
-                  (eq max (sub uninit elm range) range)
-                  range)
-          ~fthen:(fun flow ->
-              (* Case #1 *)
-              let smash = mk_smash_expr s ~typ:(Some t) ~mode:(Some STRONG) range in
-              (* Add a cast if the type of the lvalue is different than the type of expression qe *)
-              let smash = if compare_typ t qe.etyp = 0 then smash else mk_c_cast smash qe.etyp range in
-              man.post (mk_assume (mk_binop smash op e ~etyp:T_bool range) range) ~route:scalar flow
-            )
-          ~felse:(fun flow ->
-              (* Case #2 *)
-              Post.return flow
-            ) ~route:scalar man flow
-        
-
-      | Init.Full ts ->
-        (* When base is fully initialized, check these cases:
-
-           Case #1: predicate on the entire memory block
-              0            size - |elm|
-              |----------------|------>
-             min              max
-
-           Case #2: nop
-              0            size - |elm|
-              |--x-------x------|------>
-                min     max
-        *)
-        let s = mk_smash base t in
-        phi s range man flow >>$ fun () flow ->
-        (* Check valuation range of the offset *)
-        let min, max = Common.Quantified_offset.bound offset [FORALL,i,S_interval(lo,hi)] in
-        let elm = mk_z (sizeof_type t) range in
-        eval_base_size base range man flow >>$ fun size flow ->
-        assume (log_and
-                  (eq min zero range)
-                  (eq max (sub size elm range) range)
-                  range)
-          ~fthen:(fun flow ->
-              (* Case #1 *)
-              let smash = mk_smash_expr s ~typ:(Some t) ~mode:(Some STRONG) range in
-              (* Add a cast if the type of the lvalue is different than the type of expression qe *)
-              let smash = if compare_typ t qe.etyp = 0 then smash else mk_c_cast smash qe.etyp range in
-              man.post (mk_assume (mk_binop smash op e ~etyp:T_bool range) range) ~route:scalar flow
-            )
-          ~felse:(fun flow ->
-              (* Case #2 *)
-              Post.return flow
-            ) ~route:scalar man flow
-
-
-  (** 𝕊⟦ ∀i ∈ [lo,hi] : *(p + i) == *(q + i) ⟧ *)
-  let exec_assume_quant2_num_eq i lo hi qe1 qe2 range man flow =
-    eval_pointed_base_offset (mk_c_address_of qe1 range) range man flow >>$ fun (base1,offset1,mode1) flow ->
-    eval_pointed_base_offset (mk_c_address_of qe2 range) range man flow >>$ fun (base2,offset2,mode2) flow ->
-    let t1 = get_c_deref_type qe1 in
-    let t2 = get_c_deref_type qe2 in
-    if not (is_interesting_base base1) || not (is_interesting_base base2) ||
-       not (is_aligned offset1 t1 man flow) || not (is_aligned offset2 t2 man flow)
-    then
-      Post.return flow
-    else
-      let a = get_env T_cur man flow in
-      match State.find base1 a, State.find base2 a with
-      | Init.Full ts1, Init.Full ts2 ->
-        (* Add the smashes if not existent *)
-        let s1 = mk_smash base1 t1 in
-        let s2 = mk_smash base2 t2 in
-        phi s1 range man flow >>$ fun () flow ->
-        phi s2 range man flow >>$ fun () flow ->
-        (* Ensure that elements of a block that is entirely covered have values in the other block *)
-        let ensure_included base offset t qet s other_base other_offset other_t other_qet other_s range man flow =
-          let min, max = Common.Quantified_offset.bound offset [FORALL,i,S_interval(lo,hi)] in
-          let elm = mk_z (sizeof_type t) range in
-          eval_base_size base range man flow >>$ fun size flow ->
-          assume (log_and
-                    (eq min zero range)
-                    (eq max (sub size elm range) range)
-                    range)
-          ~fthen:(fun flow ->
-                let smash = mk_smash_expr s ~typ:(Some t) ~mode:(Some STRONG) range in
-                let smash = if compare_typ t qet = 0 then smash else mk_c_cast smash qet range in
-                let other_smash = mk_smash_expr other_s ~typ:(Some other_t) ~mode:(Some WEAK) range in
-                let other_smash = if compare_typ other_t other_qet = 0 then other_smash else mk_c_cast other_smash other_qet range in
-                man.post (mk_assume (eq smash other_smash range) range) ~route:scalar flow
-              )
-          ~felse:(fun flow ->
-              Post.return flow
-            ) ~route:scalar man flow
-        in
-        ensure_included base1 offset1 t1 qe1.etyp s1 base2 offset2 t2 qe2.etyp s2 range man flow >>$ fun () flow ->
-        ensure_included base2 offset2 t2 qe2.etyp s2 base1 offset1 t1 qe1.etyp s1 range man flow
-
-      | _ -> Post.return flow
-
-
   (** {2 Exec entry point} *)
   (** ******************** *)
 
@@ -1244,26 +1114,6 @@ struct
 
     | S_assign(lval, rval) when is_c_scalar_type lval.etyp ->
       exec_assign lval rval stmt.srange man flow |>
-      OptionExt.return
-
-    | S_assume({ ekind = E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_binop(op, e1, e2)}) })
-      when is_comparison_op op &&
-           is_c_deref e1 &&
-           is_c_int_type i.vtyp &&
-           is_var_in_expr i e1 &&
-           not (is_var_in_expr i e2) ->
-      exec_assume_quant i a b op e1 e2 stmt.srange man flow |>
-      OptionExt.return
-
-    | S_assume({ ekind = E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_binop(O_eq, e1, e2)}) })
-      when is_c_deref e1 &&
-           is_c_deref e2 &&
-           is_c_int_type e1.etyp &&
-           is_c_int_type e2.etyp &&
-           is_c_int_type i.vtyp &&
-           is_var_in_expr i e1 &&
-           is_var_in_expr i e2 ->
-      exec_assume_quant2_num_eq i a b e1 e2 stmt.srange man flow |>
       OptionExt.return
 
     | _ -> None
@@ -1315,6 +1165,151 @@ struct
             ) ~route:scalar man flow
 
 
+  (** {2 Quantified tests transfer functions} *)
+  (** *************************************** *)
+
+  (** 𝕊⟦ ∀i ∈ [lo,hi] : *(p + i) ? e ⟧ *)
+  let assume_forall_compare i lo hi op base offset mode t e range man flow =
+    let a = get_env T_cur man flow in
+    match State.find base a with
+    | Init.Bot | Init.None -> Post.return flow
+
+    | Init.Partial ts ->
+      (* When base is partially initialized, check these cases:
+
+         Case #1: predicate on the entire initialized part
+            0           uninit - |elm|
+            |----------------|------>
+           min              max
+
+         Case #2: otherwise nop
+      *)
+      let s = mk_smash base t in
+      phi s range man flow >>$ fun () flow ->
+      (* Check valuation range of the offset *)
+      let min, max = Common.Quantified_offset.bound offset [FORALL,i,S_interval(lo,hi)] in
+      let elm = mk_z (sizeof_type t) range in
+      let uninit = mk_uninit_expr base ~mode range in
+      eval_base_size base range man flow >>$ fun size flow ->
+      assume (log_and
+                (eq min zero range)
+                (eq max (sub uninit elm range) range)
+                range)
+        ~fthen:(fun flow ->
+            (* Case #1 *)
+            let smash = mk_smash_expr s ~typ:(Some t) ~mode:(Some STRONG) range in
+            (* Add a cast if the type of the lvalue is different than the type of expression e *)
+            let smash = if compare_typ t e.etyp = 0 then smash else mk_c_cast smash e.etyp range in
+            man.post (mk_assume (mk_binop smash op e ~etyp:T_bool range) range) ~route:scalar flow
+          )
+        ~felse:(fun flow ->
+            (* Case #2 *)
+            Post.return flow
+          ) ~route:scalar man flow
+
+
+    | Init.Full ts ->
+      (* When base is fully initialized, check these cases:
+
+         Case #1: predicate on the entire memory block
+            0            size - |elm|
+            |----------------|------>
+           min              max
+
+         Case #2: nop
+            0            size - |elm|
+            |--x-------x------|------>
+              min     max
+      *)
+      let s = mk_smash base t in
+      phi s range man flow >>$ fun () flow ->
+      (* Check valuation range of the offset *)
+      let min, max = Common.Quantified_offset.bound offset [FORALL,i,S_interval(lo,hi)] in
+      let elm = mk_z (sizeof_type t) range in
+      eval_base_size base range man flow >>$ fun size flow ->
+      assume (log_and
+                (eq min zero range)
+                (eq max (sub size elm range) range)
+                range)
+        ~fthen:(fun flow ->
+            (* Case #1 *)
+            let smash = mk_smash_expr s ~typ:(Some t) ~mode:(Some STRONG) range in
+            (* Add a cast if the type of the lvalue is different than the type of expression e *)
+            let smash = if compare_typ t e.etyp = 0 then smash else mk_c_cast smash e.etyp range in
+            man.post (mk_assume (mk_binop smash op e ~etyp:T_bool range) range) ~route:scalar flow
+          )
+        ~felse:(fun flow ->
+            (* Case #2 *)
+            Post.return flow
+          ) ~route:scalar man flow
+
+
+  (** 𝕊⟦ ∀i ∈ [lo,hi] : *(p + i) == *(q + i) ⟧ *)
+  let assume_forall_eq2 i lo hi base1 offset1 mode1 t1 et1 base2 offset2 mode2 t2 et2 range man flow =
+    let a = get_env T_cur man flow in
+    match State.find base1 a, State.find base2 a with
+    | Init.Full ts1, Init.Full ts2 ->
+      (* Add the smashes if not existent *)
+      let s1 = mk_smash base1 t1 in
+      let s2 = mk_smash base2 t2 in
+      phi s1 range man flow >>$ fun () flow ->
+      phi s2 range man flow >>$ fun () flow ->
+      (* Ensure that elements of a block that is entirely covered have values in the other block *)
+      let ensure_included base offset t qet s other_base other_offset other_t other_qet other_s range man flow =
+        let min, max = Common.Quantified_offset.bound offset [FORALL,i,S_interval(lo,hi)] in
+        let elm = mk_z (sizeof_type t) range in
+        eval_base_size base range man flow >>$ fun size flow ->
+        assume (log_and
+                  (eq min zero range)
+                  (eq max (sub size elm range) range)
+                  range)
+          ~fthen:(fun flow ->
+              let smash = mk_smash_expr s ~typ:(Some t) ~mode:(Some STRONG) range in
+              let smash = if compare_typ t qet = 0 then smash else mk_c_cast smash qet range in
+              let other_smash = mk_smash_expr other_s ~typ:(Some other_t) ~mode:(Some WEAK) range in
+              let other_smash = if compare_typ other_t other_qet = 0 then other_smash else mk_c_cast other_smash other_qet range in
+              man.post (mk_assume (eq smash other_smash range) range) ~route:scalar flow
+            )
+          ~felse:(fun flow ->
+              Post.return flow
+            ) ~route:scalar man flow
+      in
+      ensure_included base1 offset1 t1 et1 s1 base2 offset2 t2 et2 s2 range man flow >>$ fun () flow ->
+      ensure_included base2 offset2 t2 et2 s2 base1 offset1 t1 et1 s1 range man flow
+
+    | _ -> Post.return flow
+
+  let assume_exists_compare i lo hi op base offset mode t e range man flow =
+    Post.return flow
+
+  let assume_exists_ne2 i lo hi base1 offset1 mode1 t1 et1 base2 offset2 mode2 t2 et2 range man flow =
+    Post.return flow
+
+  let eval_forall_compare i lo hi op lval e range man flow =
+    man.eval e flow >>$ fun e flow ->
+    eval_pointed_base_offset (mk_c_address_of lval range) range man flow >>$ fun (base,offset,mode) flow ->
+    let t = get_c_deref_type lval in
+    if not (is_interesting_base base) || not (is_aligned offset t man flow) then
+      Eval.singleton (mk_top T_bool range) flow
+    else
+      Eval.join
+        (assume_forall_compare i lo hi op base offset mode lval.etyp e range man flow >>$ fun () flow -> Eval.singleton (mk_true range) flow)
+        (assume_exists_compare i lo hi op base offset mode lval.etyp e range man flow >>$ fun () flow -> Eval.singleton (mk_false range) flow)
+
+
+  let eval_forall_eq2 i lo hi lval1 lval2 range man flow =
+    eval_pointed_base_offset (mk_c_address_of lval1 range) range man flow >>$ fun (base1,offset1,mode1) flow ->
+    eval_pointed_base_offset (mk_c_address_of lval2 range) range man flow >>$ fun (base2,offset2,mode2) flow ->
+    let t1 = get_c_deref_type lval1 in
+    let t2 = get_c_deref_type lval2 in
+    if not (is_interesting_base base1) || not (is_interesting_base base2) ||
+       not (is_aligned offset1 t1 man flow) || not (is_aligned offset2 t2 man flow)
+    then
+      Eval.singleton (mk_top T_bool range) flow
+    else
+      Eval.join
+        (assume_forall_eq2 i lo hi base1 offset1 mode1 t1 lval1.etyp base2 offset2 mode2 t2 lval1.etyp range man flow  >>$ fun () flow -> Eval.singleton (mk_true range) flow)
+        (assume_exists_ne2 i lo hi base1 offset1 mode1 t1 lval1.etyp base2 offset2 mode2 t2 lval1.etyp range man flow >>$ fun () flow -> Eval.singleton (mk_false range) flow)
 
   (** Evaluations entry point *)
   let eval exp man flow =
@@ -1322,6 +1317,28 @@ struct
     | E_c_deref p when is_c_scalar_type exp.etyp ->
       eval_deref p exp.erange man flow |>
       OptionExt.return
+
+  
+    | E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_binop(op, e1, e2)})
+      when is_comparison_op op &&
+           is_c_deref e1 &&
+           is_c_int_type i.vtyp &&
+           is_var_in_expr i e1 &&
+           not (is_var_in_expr i e2) ->
+      eval_forall_compare i a b op e1 e2 exp.erange man flow |>
+      OptionExt.return
+
+    |  E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_binop(O_eq, e1, e2)})
+      when is_c_deref e1 &&
+           is_c_deref e2 &&
+           is_c_int_type e1.etyp &&
+           is_c_int_type e2.etyp &&
+           is_c_int_type i.vtyp &&
+           is_var_in_expr i e1 &&
+           is_var_in_expr i e2 ->
+      eval_forall_eq2 i a b e1 e2 exp.erange man flow |>
+      OptionExt.return
+
 
 
     | _ -> None

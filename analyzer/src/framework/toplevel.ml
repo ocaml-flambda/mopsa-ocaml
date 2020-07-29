@@ -286,7 +286,7 @@ struct
         begin match parts with
           | {exprs; stmts = []} ->
             (* Iterate over sub-expressions *)
-            Cases.bind_list exprs (fun e flow -> man.eval ~route e flow) flow >>$ fun exprs' f' ->
+            Cases.bind_list exprs (fun e flow -> man.eval e flow) flow >>$ fun exprs' f' ->
             (* Rebuild the expression from its evaluated parts *)
             let e' = builder {exprs = exprs'; stmts = []} in
             Cases.singleton e' f'

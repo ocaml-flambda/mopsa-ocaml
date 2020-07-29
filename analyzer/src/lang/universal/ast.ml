@@ -844,6 +844,9 @@ let is_math_type = function
   | T_int | T_float _ | T_bool -> true
   | _ -> false
 
+let is_predicate_op = function
+  | O_float_class _ -> true
+  | _ -> false
 
 let mk_assert e range =
   mk_stmt (S_assert e) range
@@ -894,7 +897,16 @@ let mk_fold_addr a al range =
 
 let rec expr_to_z (e: expr) : Z.t option =
   match ekind e with
+  | E_constant (C_bool true) -> Some Z.one
+  | E_constant (C_bool false) -> Some Z.zero
   | E_constant (C_int n) -> Some n
+  | E_unop(O_log_not, ee) ->
+    begin
+      match expr_to_z ee with
+      | None -> None
+      | Some n ->
+        if Z.(n = zero) then Some Z.one else Some Z.zero
+    end
   | E_unop (O_minus, e') ->
     begin
       match expr_to_z e' with

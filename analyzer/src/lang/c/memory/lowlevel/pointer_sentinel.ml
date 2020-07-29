@@ -524,8 +524,133 @@ struct
     assign_cases base offset mode rval range man flow
 
 
+
+  (** Transformers entry point *)
+  let exec stmt man flow =
+    match skind stmt with
+    | S_c_declaration (v,None,scope) when is_interesting_base (mk_var_base v) ->
+      declare_variable v scope stmt.srange man flow |>
+      OptionExt.return
+
+    | S_add (e) when is_base_expr e->
+      add_base (expr_to_base e) stmt.srange man flow |>
+      OptionExt.return
+
+    | S_rename (e1,e2) when is_base_expr e1 && is_base_expr e2 ->
+      rename_base (expr_to_base e1) (expr_to_base e2) stmt.srange man flow |>
+      OptionExt.return
+
+    | S_expand(e,el) when is_base_expr e && List.for_all is_base_expr el ->
+      expand_base (expr_to_base e) (List.map expr_to_base el) stmt.srange man flow |>
+      OptionExt.return
+
+    | S_fold(e,el) when is_base_expr e && List.for_all is_base_expr el ->
+      fold_bases (expr_to_base e) (List.map expr_to_base el) stmt.srange man flow |>
+      OptionExt.return
+
+    | S_forget(e) when is_c_deref e  ->
+      forget e stmt.srange man flow |>
+      OptionExt.return
+
+    | S_forget({ ekind = E_stub_quantified_formula(quants, e) }) when is_c_deref e ->
+      forget_quant quants e stmt.srange man flow |>
+      OptionExt.return
+
+    | S_remove(e) when is_base_expr e ->
+      remove_base (expr_to_base e) stmt.srange man flow |>
+      OptionExt.return
+
+    | S_assign(lval, rval) when is_c_pointer_type lval.etyp ->
+      assign lval rval stmt.srange man flow |>
+      OptionExt.return
+
+
+    | _ -> None
+
+
+  (** {2 Abstract evaluations} *)
+  (** ************************ *)
+
+  (** Cases of the abstraction evaluations *)
+  let eval_deref_cases base offset mode typ range man flow =
+    eval_base_size base range man flow >>$ fun size flow ->
+    man.eval ~route:scalar size flow  >>$ fun size flow ->
+
+    (* Safety condition: offset ∈ [0, size - pointer_size] *)
+    assume ~route:numeric
+      (mk_in offset (mk_zero range) (sub size (mk_z ptr_size range) range) range)
+      ~fthen:(fun flow ->
+          if not (is_interesting_base base)
+          then Eval.singleton (mk_top typ range) flow
+
+          else
+            let sentinel_pos = mk_sentinel_pos_var_expr base ~mode range in
+            let before = mk_before_var_expr base ~mode range in
+            let sentinel = mk_sentinel_var_expr base ~mode range in
+            let ptr = mk_z ptr_size range in
+            let top = mk_top void_ptr range in
+
+
+            switch ~route:scalar [
+              (* Case 1: before sentinel
+                 Offset condition: offset <= sentinel_pos - |ptr|
+                 Transformation: weak(before)
+              *)
+              [
+                mk_binop offset O_le (sub sentinel_pos ptr range) range;
+              ],
+              (fun flow ->
+                 man.eval (weaken_var_expr before) ~route:scalar flow
+              );
+
+              (* Case 2: at sentinel
+                 Offset condition: offset == sentinel_pos
+                 Transformation: sentinel
+              *)
+              [
+                mk_binop offset O_eq sentinel_pos range;
+              ],
+              (fun flow ->
+                 man.eval sentinel ~route:scalar flow
+              );
+
+              (* Case 2: after sentinel
+                 Offset condition: offset >= sentinel_pos + |ptr|
+                 Transformation: sentinel
+              *)
+              [
+                mk_binop offset O_ge (add sentinel_pos ptr range) range;
+              ],
+              (fun flow ->
+                 Eval.singleton top flow
+              );
+
+            ] man flow
+
+        )
+      ~felse:(fun flow ->
+          (* Unsafe case *)
+          Flow.set_bottom T_cur flow |>
+          Eval.empty_singleton
+        ) man flow
+
+
+
+  (** Abstract evaluation of a dereference *)
+  let eval_deref exp range man flow =
+    let p = match ekind exp with E_c_deref p -> p | _ -> assert false in
+    eval_pointed_base_offset p range man flow >>$ fun (base,offset,mode) flow ->
+    if is_interesting_base base
+    then
+      man.eval ~route:scalar offset flow >>$ fun offset flow ->
+      eval_deref_cases base offset mode (under_type p.etyp) range man flow
+    else
+      Eval.singleton (mk_top (under_type p.etyp |> void_to_char) range) flow
+
+
+
   (** Cases of the transfer function of quantified tests 𝕊⟦ ∀i ∈ [lo,hi]: *(base + i) op q ⟧ *)
-  let assume_quantified_cases i lo hi op base offset mode q range man flow =
+  let assume_forall_eq i lo hi base offset mode q range man flow =
     (** Get symbolic bounds of the offset *)
     let min, max = Common.Quantified_offset.bound offset [FORALL,i,S_interval(lo,hi)] in
 
@@ -623,163 +748,38 @@ struct
         )
       ~route:numeric man flow
 
+  let assume_exists_ne i lo hi base offset mode q range man flow =
+    Post.return flow
 
-  (** Entry point of the transfer function of quantified tests 𝕊⟦ ∀i ∈ [lo,hi]: *(p + ∀i) op q ⟧ *)
-  let assume_quantified i lo hi op p q range man flow =
+  let assume_exists_eq i lo hi base offset mode q range man flow =
+    Post.return flow
+
+  let assume_forall_ne i lo hi base offset mode q range man flow =
+    Post.return flow
+
+
+  let eval_forall_eq i lo hi p q range man flow =
     eval_pointed_base_offset (mk_c_address_of p range) range man flow >>$ fun (base,offset,mode) flow ->
     man.eval q flow >>$ fun q flow ->
-    if is_interesting_base base then
-      assume_quantified_cases i lo hi op base offset mode q range man flow
+    if not (is_interesting_base base) then
+      Eval.singleton (mk_top T_bool range) flow
     else
-      Post.return flow
+      Eval.join
+        (assume_forall_eq i lo hi base offset mode q range man flow >>$ fun () flow -> Eval.singleton (mk_true range) flow)
+        (assume_exists_ne i lo hi base offset mode q range man flow >>$ fun () flow -> Eval.singleton (mk_false range) flow)
 
-
-
-  (** Transformers entry point *)
-  let exec stmt man flow =
-    match skind stmt with
-    | S_c_declaration (v,None,scope) when is_interesting_base (mk_var_base v) ->
-      declare_variable v scope stmt.srange man flow |>
-      OptionExt.return
-
-    | S_add (e) when is_base_expr e->
-      add_base (expr_to_base e) stmt.srange man flow |>
-      OptionExt.return
-
-    | S_rename (e1,e2) when is_base_expr e1 && is_base_expr e2 ->
-      rename_base (expr_to_base e1) (expr_to_base e2) stmt.srange man flow |>
-      OptionExt.return
-
-    | S_expand(e,el) when is_base_expr e && List.for_all is_base_expr el ->
-      expand_base (expr_to_base e) (List.map expr_to_base el) stmt.srange man flow |>
-      OptionExt.return
-
-    | S_fold(e,el) when is_base_expr e && List.for_all is_base_expr el ->
-      fold_bases (expr_to_base e) (List.map expr_to_base el) stmt.srange man flow |>
-      OptionExt.return
-
-    | S_forget(e) when is_c_deref e  ->
-      forget e stmt.srange man flow |>
-      OptionExt.return
-
-    | S_forget({ ekind = E_stub_quantified_formula(quants, e) }) when is_c_deref e ->
-      forget_quant quants e stmt.srange man flow |>
-      OptionExt.return
-
-    | S_remove(e) when is_base_expr e ->
-      remove_base (expr_to_base e) stmt.srange man flow |>
-      OptionExt.return
-
-    | S_assign(lval, rval) when is_c_pointer_type lval.etyp ->
-      assign lval rval stmt.srange man flow |>
-      OptionExt.return
-
-    (* 𝕊⟦ ∀i ∈ [a,b] : *(p + i) == q ⟧ *)
-    | S_assume({ ekind = E_stub_quantified_formula([FORALL,i,S_interval(a,b)], {ekind = E_binop(O_eq, lval, q)}) })
-    | S_assume({ ekind = E_stub_quantified_formula([FORALL,i,S_interval(a,b)], {ekind = E_unop(O_log_not, {ekind = E_binop(O_ne, lval, q)})}) })
-      when is_c_pointer_type lval.etyp &&
-           is_var_in_expr i lval &&
-           not (is_var_in_expr i q) &&
-           is_c_deref lval
-      ->
-      assume_quantified i a b O_eq lval q stmt.srange man flow |>
-      OptionExt.return
-
-    (* 𝕊⟦ ∀i ∈ [a,b] : *(p + i) != q ⟧ *)
-    | S_assume({ ekind = E_stub_quantified_formula([FORALL,i,S_interval(a,b)], {ekind = E_binop(O_ne, lval, q)}) })
-    | S_assume({ ekind = E_stub_quantified_formula([FORALL,i,S_interval(a,b)], {ekind = E_unop(O_log_not, {ekind = E_binop(O_eq, lval, q)})}) })
-      when is_c_pointer_type lval.etyp &&
-           is_var_in_expr i lval &&
-           not (is_var_in_expr i q) &&
-           is_c_deref lval
-      ->
-      assume_quantified i a b O_ne lval q stmt.srange man flow |>
-      OptionExt.return
-
-
-    | _ -> None
-
-
-  (** {2 Abstract evaluations} *)
-  (** ************************ *)
-
-  (** Cases of the abstraction evaluations *)
-  let eval_deref_cases base offset mode typ range man flow =
-    eval_base_size base range man flow >>$ fun size flow ->
-    man.eval ~route:scalar size flow  >>$ fun size flow ->
-
-    (* Safety condition: offset ∈ [0, size - pointer_size] *)
-    assume ~route:numeric
-      (mk_in offset (mk_zero range) (sub size (mk_z ptr_size range) range) range)
-      ~fthen:(fun flow ->
-          if not (is_interesting_base base)
-          then Eval.singleton (mk_top typ range) flow
-
-          else
-            let sentinel_pos = mk_sentinel_pos_var_expr base ~mode range in
-            let before = mk_before_var_expr base ~mode range in
-            let sentinel = mk_sentinel_var_expr base ~mode range in
-            let ptr = mk_z ptr_size range in
-            let top = mk_top void_ptr range in
-
-
-            switch ~route:scalar [
-              (* Case 1: before sentinel
-                 Offset condition: offset <= sentinel_pos - |ptr|
-                 Transformation: weak(before)
-              *)
-              [
-                mk_binop offset O_le (sub sentinel_pos ptr range) range;
-              ],
-              (fun flow ->
-                 man.eval (weaken_var_expr before) ~route:scalar flow
-              );
-
-              (* Case 2: at sentinel
-                 Offset condition: offset == sentinel_pos
-                 Transformation: sentinel
-              *)
-              [
-                mk_binop offset O_eq sentinel_pos range;
-              ],
-              (fun flow ->
-                 man.eval sentinel ~route:scalar flow
-              );
-
-              (* Case 2: after sentinel
-                 Offset condition: offset >= sentinel_pos + |ptr|
-                 Transformation: sentinel
-              *)
-              [
-                mk_binop offset O_ge (add sentinel_pos ptr range) range;
-              ],
-              (fun flow ->
-                 Eval.singleton top flow
-              );
-
-            ] man flow
-
-        )
-      ~felse:(fun flow ->
-          (* Unsafe case *)
-          Flow.set_bottom T_cur flow |>
-          Eval.empty_singleton
-        ) man flow
-
-
-
-  (** Abstract evaluation of a dereference *)
-  let eval_deref exp range man flow =
-    let p = match ekind exp with E_c_deref p -> p | _ -> assert false in
-    eval_pointed_base_offset p range man flow >>$ fun (base,offset,mode) flow ->
-    if is_interesting_base base
-    then
-      man.eval ~route:scalar offset flow >>$ fun offset flow ->
-      eval_deref_cases base offset mode (under_type p.etyp) range man flow
+  let eval_forall_ne i lo hi p q range man flow =
+    eval_pointed_base_offset (mk_c_address_of p range) range man flow >>$ fun (base,offset,mode) flow ->
+    man.eval q flow >>$ fun q flow ->
+    if not (is_interesting_base base) then
+      Eval.singleton (mk_top T_bool range) flow
     else
-      Eval.singleton (mk_top (under_type p.etyp |> void_to_char) range) flow
+      Eval.join
+        (assume_forall_ne i lo hi base offset mode q range man flow >>$ fun () flow -> Eval.singleton (mk_true range) flow)
+        (assume_exists_eq i lo hi base offset mode q range man flow >>$ fun () flow -> Eval.singleton (mk_false range) flow)
 
 
+  
 
   (** Evaluations entry point *)
   let eval exp man flow =
@@ -790,6 +790,29 @@ struct
       ->
       eval_deref exp exp.erange man flow |>
       OptionExt.return
+
+    (* 𝕊⟦ ∀i ∈ [a,b] : *(p + i) == q ⟧ *)
+    | E_stub_quantified_formula([FORALL,i,S_interval(a,b)], {ekind = E_binop(O_eq, lval, q)})
+    | E_stub_quantified_formula([FORALL,i,S_interval(a,b)], {ekind = E_unop(O_log_not, {ekind = E_binop(O_ne, lval, q)})})
+      when is_c_pointer_type lval.etyp &&
+           is_var_in_expr i lval &&
+           not (is_var_in_expr i q) &&
+           is_c_deref lval
+      ->
+      eval_forall_eq i a b lval q exp.erange man flow |>
+      OptionExt.return
+
+    (* 𝕊⟦ ∀i ∈ [a,b] : *(p + i) != q ⟧ *)
+    | E_stub_quantified_formula([FORALL,i,S_interval(a,b)], {ekind = E_binop(O_ne, lval, q)})
+    | E_stub_quantified_formula([FORALL,i,S_interval(a,b)], {ekind = E_unop(O_log_not, {ekind = E_binop(O_eq, lval, q)})})
+      when is_c_pointer_type lval.etyp &&
+           is_var_in_expr i lval &&
+           not (is_var_in_expr i q) &&
+           is_c_deref lval
+      ->
+      eval_forall_ne i a b lval q exp.erange man flow |>
+      OptionExt.return
+
 
     | _ -> None
 

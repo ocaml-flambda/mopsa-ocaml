@@ -155,7 +155,7 @@ struct
             man.eval e2 flow
           )
         ~felse:(fun flow ->
-            Eval.singleton (mk_zero exp.erange) flow
+            Eval.singleton (mk_false exp.erange) flow
           )
         man flow |>
       OptionExt.return
@@ -163,7 +163,7 @@ struct
     | E_binop(O_c_or, e1, e2) ->
       assume e1
         ~fthen:(fun flow ->
-            Eval.singleton (mk_one exp.erange) flow
+            Eval.singleton (mk_true exp.erange) flow
           )
         ~felse:(fun flow ->
             man.eval e2 flow

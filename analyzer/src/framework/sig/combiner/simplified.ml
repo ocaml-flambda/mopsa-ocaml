@@ -84,37 +84,21 @@ struct
   let exec domains =
     let f = D.exec domains in
     (fun stmt man flow ->
-       let exception NotSupported in
-       try
-         begin match skind stmt with
-           | S_assign(x,e) ->
-             man.eval e flow >>$ fun e' flow ->
-             Cases.singleton (mk_assign x e' stmt.srange) flow
-           | S_assume(e) ->
-             man.eval e flow >>$ fun e' flow ->
-             Cases.singleton (mk_assume e' stmt.srange) flow
-           | _ ->
-             Cases.singleton stmt flow
-         end >>$? fun stmt flow ->
-         let a = get_env T_cur man flow in
-         if D.is_bottom a
-         then
-           Post.return flow |>
-           OptionExt.return
-         else
-           begin match f stmt (simplified_man man flow) (Flow.get_unit_ctx flow) a with
-             | None -> raise NotSupported
-             | Some a' ->
-               set_env T_cur a' man flow |>
-               Post.return |>
-               Cases.map_log (fun log ->
-                   man.set_log (
-                     man.get_log log |> Log.add_stmt_to_log stmt
-                   ) log
-                 ) |>
-               OptionExt.return
-           end
-       with NotSupported -> None
+       let a = get_env T_cur man flow in
+       if D.is_bottom a
+       then
+         Post.return flow |>
+         OptionExt.return
+       else
+         f stmt (simplified_man man flow) (Flow.get_unit_ctx flow) a |>
+         OptionExt.lift @@ fun a' ->
+         set_env T_cur a' man flow |>
+         Post.return |>
+         Cases.map_log (fun log ->
+             man.set_log (
+               man.get_log log |> Log.add_stmt_to_log stmt
+             ) log
+           )
     )
 
   let eval domains exp man flow = None

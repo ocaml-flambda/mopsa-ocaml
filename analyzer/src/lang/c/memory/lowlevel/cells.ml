@@ -1149,12 +1149,6 @@ struct
       exec_assign x e stmt.srange man flow |>
       OptionExt.return
 
-    | S_assume(e) ->
-      if get_orig_expr e |> etyp |> is_c_scalar_type then
-        man.post stmt ~route:scalar flow |>
-        OptionExt.return
-      else
-        None
 
     | S_add e when is_base_expr e && is_c_type e.etyp ->
       exec_add (expr_to_base e) stmt.srange man flow |>
