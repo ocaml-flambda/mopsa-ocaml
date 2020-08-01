@@ -33,18 +33,20 @@ module type POOL =
 sig
   include STACKED_COMBINER
   val alarms : alarm_class list list
+  val members : domain list list
   val exec : domain list -> stmt -> ('a,t) man -> 'a flow -> 'a post option list * 'a ctx
   val eval : string list -> expr -> ('a,t) man -> 'a flow -> 'a eval option list * 'a ctx
 end
 
 
-    
+
 module EmptyPool : POOL =
 struct
   type t = unit
   let id = C_empty
   let name = "()"
   let domains = []
+  let members = []
   let semantics = []
   let routing_table = empty_routing_table
   let alarms = [[]]
@@ -69,6 +71,7 @@ struct
   type t = S.t * P.t
   let id = C_pair(Product,S.id,P.id)
   let domains = S.domains @ P.domains
+  let members = S.domains :: P.members
   let semantics = S.semantics @ P.semantics
   let routing_table = join_routing_table S.routing_table P.routing_table
   let alarms = S.alarms :: P.alarms
@@ -161,7 +164,7 @@ struct
            (f1 query (fst_pair_man man) flow)
            (f2 query (snd_pair_man man) flow))
 end
-      
+
 
 (** Product functor *)
 module Make(Pool:POOL)
@@ -287,7 +290,7 @@ struct
     let rman = exec_reduction_man man in
     List.fold_left (fun pointwise rule ->
         let module R = (val rule : EXEC_REDUCTION) in
-        post >>$ fun () -> R.reduce stmt man rman pre 
+        post >>$ fun () -> R.reduce stmt man rman pre
       ) post Rules.srules
 
 
@@ -351,7 +354,7 @@ struct
     get_man = (fun id -> find_domain_man id Pool.id man);
   }
 
-  
+
   (** Apply reduction rules on a pointwise evaluation *)
   let reduce_pointwise_eval exp man (pointwise:('a, expr option option list) cases) : 'a eval =
     let rman = eval_reduction_man man in
@@ -374,6 +377,24 @@ struct
     Eval.remove_duplicates man.lattice evl
 
 
+  (* The successor domain is the domain below the reduced
+     product. Since all member domains in the reduced product are at the
+     same level, we can pick any one of them *)
+  let successor =
+    (* XXX Make sure to take a member that is a user domain, not a composed domain,
+       because `BelowOf` routes are defined for user domains only *)
+    let member = List.find (function [domain] -> true | _ -> false) Pool.members |>
+                 List.hd in
+    BelowOf member
+
+  (** Replace missing evaluations with the evaluation of the successor domain *)
+  let add_missing_pointwise_eval exp pointwise man flow =
+    (* Call the successor domain only when there are missing evaluations *)
+    if List.for_all (function Some _ -> true | None -> false) pointwise then
+      pointwise
+    else
+      let evl = man.eval ~route:successor exp flow in
+      List.map (function None -> Some evl | Some evl as x -> x) pointwise
 
   (** Entry point of abstract evaluations *)
   let eval targets =
@@ -381,7 +402,8 @@ struct
     (fun exp man flow ->
        eval_pointwise f exp man flow |>
        OptionExt.lift @@ fun pointwise ->
-       merge_inter_conflicts man flow pointwise |>
+       add_missing_pointwise_eval exp pointwise man flow |>
+       merge_inter_conflicts man flow |>
        reduce_pointwise_eval exp man |>
        merge_intra_conflicts man flow)
 
@@ -407,7 +429,7 @@ let rec make_pool : (module STACKED_COMBINER) list -> (module POOL) = function
     let module S = (val hd) in
     let p = make_pool tl in
     (module MakePairPool(S)(val p))
-    
+
 
 let make
     (domains: (module STACKED_COMBINER) list)
