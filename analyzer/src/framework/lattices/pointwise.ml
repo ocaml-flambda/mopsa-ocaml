@@ -296,11 +296,20 @@ struct
     top_apply2
       acc acc
       (fun m1 m2 ->
-         M.fold2zo
-           (fun k v1 acc -> f k v1 Value.bottom acc)
-           (fun k v2 acc -> f k Value.bottom v2 acc)
+         M.fold2z
            f
            m1 m2 acc
+      )
+      m1 m2
+
+  let fold2zo
+      (f1:Key.t -> Value.t -> 'a -> 'a)
+      (f2:Key.t -> Value.t -> 'a -> 'a)
+      (f:Key.t -> Value.t -> Value.t -> 'a -> 'a) (m1:t) (m2:t) (acc:'a) : 'a =
+    top_apply2
+      acc acc
+      (fun m1 m2 ->
+         M.fold2zo f1 f2 f m1 m2 acc
       )
       m1 m2
 

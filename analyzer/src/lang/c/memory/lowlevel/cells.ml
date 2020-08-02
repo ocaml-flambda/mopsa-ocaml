@@ -513,27 +513,36 @@ struct
   let unify_range = tag_range (mk_fresh_range ()) "cell-unification"
 
 
-  (** Check if a cell is part of an optional base *)
-  let is_optional_cell c a =
-    not (BaseSet.mem c.base a.bases)
-
-
   (** [unify a a'] finds non-common cells in [a] and [a'] and adds them. *)
   let unify man sman ctx (a,s) (a',s') =
-    CellSet.fold2z
-      (fun _ m1 m2 acc ->
-         OffCells.fold2z
+    CellSet.fold2zo
+      (fun b m1 acc -> acc)
+      (fun b m2 acc -> acc)
+      (fun b m1 m2 acc ->
+         OffCells.fold2zo
+           (fun _ s1 (acc1,acc2) ->
+              acc1,
+              Cells.fold
+                (fun c s ->
+                   sub_env_exec (add_cell c unify_range man) ctx man sman a' s |> snd )
+                s1 acc2
+           )
+           (fun _ s2 (acc1,acc2) ->
+             Cells.fold
+               (fun c s ->
+                  sub_env_exec (add_cell c unify_range man) ctx man sman a s |> snd )
+               s2 acc1,
+             acc2
+           )
            (fun _ s1 s2 acc ->
               Cells.fold
                 (fun c s ->
-                   if is_optional_cell c a then s
-                   else sub_env_exec (add_cell c unify_range man) ctx man sman a s |> snd )
+                   sub_env_exec (add_cell c unify_range man) ctx man sman a s |> snd )
                 (Cells.diff s2 s1) (fst acc)
               ,
               Cells.fold
                 (fun c s ->
-                   if is_optional_cell c a' then s
-                   else sub_env_exec (add_cell c unify_range man) ctx man sman a' s |> snd )
+                   sub_env_exec (add_cell c unify_range man) ctx man sman a' s |> snd )
                 (Cells.diff s1 s2) (snd acc)
 
            )
@@ -1034,7 +1043,8 @@ struct
   let exec_expand b bl range man flow =
     let a = get_env T_cur man flow in
     (* Add the list of bases bl to abstract state a *)
-    let a = { a with bases = BaseSet.union a.bases (BaseSet.of_list bl) } in
+    let aa = { a with bases = BaseSet.union a.bases (BaseSet.of_list bl) } in
+    let flow = set_env T_cur aa man flow in
     (* Get the cells of base b *)
     let cells = cell_set_find_base b a.cells in
     (* Expand each cell *)
