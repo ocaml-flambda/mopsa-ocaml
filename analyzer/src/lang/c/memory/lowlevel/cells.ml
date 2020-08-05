@@ -919,18 +919,6 @@ struct
     in
     man.eval v flow ~route:scalar
   
-  (* 𝔼⟦ *p ⟧ where p is a pointer to a function *)
-  let eval_deref_function_pointer p range man flow =
-    resolve_pointer p man flow >>$ fun pt flow ->
-    match pt with
-    | P_fun f ->
-      Eval.singleton (mk_expr (E_c_function f) ~etyp:(under_type p.etyp) range) flow
-
-    | _ -> panic_at range
-             "deref_function_pointer: pointer %a points to a non-function object %a"
-             pp_expr p
-             pp_points_to pt
-
 
   let eval exp man flow =
     match ekind exp with
@@ -944,13 +932,6 @@ struct
       ->
       eval_deref_scalar_pointer p exp.erange man flow |>
       OptionExt.return
-
-
-    | E_c_deref p when under_type p.etyp |> is_c_function_type
-      ->
-      eval_deref_function_pointer p exp.erange man flow |>
-      OptionExt.return
-
 
     | _ -> None
 
