@@ -188,13 +188,13 @@ let switch
     match cond with
     | [] -> f acc
     | x :: tl ->
-      man.eval ~route x flow >>$ fun x flow ->
+      man.eval ~route x acc >>$ fun x acc' ->
       let s = mk_assume x x.erange in
-      man.exec ~route s acc >>% fun acc' ->
-      if Flow.get T_cur man.lattice acc' |> man.lattice.is_bottom then
-        Cases.empty_singleton acc'
+      man.exec ~route s acc' >>% fun acc'' ->
+      if Flow.get T_cur man.lattice acc'' |> man.lattice.is_bottom then
+        Cases.empty_singleton acc''
       else
-        one tl acc' f
+        one tl acc'' f
   in
   let rec aux cases =
     match cases with
