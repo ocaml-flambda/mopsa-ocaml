@@ -894,39 +894,128 @@ let mk_expand_addr a al range =
 let mk_fold_addr a al range =
   mk_fold (mk_addr a range) (List.map (fun aa -> mk_addr aa range) al) range
 
-
-let rec expr_to_z (e: expr) : Z.t option =
+let rec expr_to_const e : constant option =
+  Debug.debug ~channel:"hoo" "expr_to_const: %a" pp_expr e;
+  if not (is_numeric_type e.etyp) then None else 
   match ekind e with
-  | E_constant (C_bool true) -> Some Z.one
-  | E_constant (C_bool false) -> Some Z.zero
-  | E_constant (C_int n) -> Some n
+  | E_constant c -> Some c
+
   | E_unop(O_log_not, ee) ->
     begin
-      match expr_to_z ee with
+      match expr_to_const ee with
       | None -> None
-      | Some n ->
-        if Z.(n = zero) then Some Z.one else Some Z.zero
+      | Some (C_bool b) ->
+        Some (C_bool (not b))
+      | Some (C_top T_bool) as x -> x
+      | _ -> None
     end
+
   | E_unop (O_minus, e') ->
     begin
-      match expr_to_z e' with
+      match expr_to_const e' with
       | None -> None
-      | Some n -> Some (Z.neg n)
+      | Some (C_int n) -> Some (C_int (Z.neg n))
+      | Some (C_top T_int) as x -> x
+      | _ -> None
     end
-  | E_binop(op, e1, e2) ->
+
+  | E_binop(op, e1, e2) when is_comparison_op op ->
     begin
-      match expr_to_z e1, expr_to_z e2 with
-      | Some n1, Some n2 ->
+      match op, expr_to_const e1, expr_to_const e2 with
+      | O_eq, Some (C_int n1), Some (C_int n2) ->
+        Some (C_bool Z.(n1 = n2))
+
+      | O_eq, Some (C_int n), Some (C_int_interval (a,b))
+      | O_eq, Some (C_int_interval (a,b)), Some (C_int n) ->
+        Debug.debug ~channel:"hoo" "aa";
+        let c = if Z.(a <= n && n <= b) then C_top T_bool else C_bool false in
+        Some c
+
+      | O_ne, Some (C_int n1), Some (C_int n2) ->
+        Some (C_bool Z.(n1 <> n2))
+
+      | O_ne, Some (C_int n), Some (C_int_interval (a,b))
+      | O_ne, Some (C_int_interval (a,b)), Some (C_int n) ->
+        let c = if Z.(a <= n && n <= b) then C_top T_bool else C_bool true in
+        Some c
+
+      | O_le, Some (C_int n1), Some (C_int n2)
+      | O_ge, Some (C_int n2), Some (C_int n1)  ->
+        Some (C_bool Z.(n1 <= n2))
+
+      | O_le, Some (C_int n), Some (C_int_interval (a,b))
+      | O_ge, Some (C_int_interval (a,b)), Some (C_int n) ->
+        let c = if Z.(n <= a) then C_bool true else if Z.(n > b) then C_bool false else C_top T_bool in
+        Some c
+
+      | O_le, Some (C_int_interval (a,b)), Some (C_int n)
+      | O_ge, Some (C_int n), Some (C_int_interval (a,b)) ->
+        let c = if Z.(b <= n) then C_bool true else if Z.(a > n) then C_bool false else C_top T_bool in
+        Some c
+
+      | O_lt, Some (C_int n1), Some (C_int n2)
+      | O_gt, Some (C_int n2), Some (C_int n1)  ->
+        Some (C_bool Z.(n1 < n2))
+
+      | O_lt, Some (C_int n), Some (C_int_interval (a,b))
+      | O_gt, Some (C_int_interval (a,b)), Some (C_int n) ->
+        let c = if Z.(n < a) then C_bool true else if Z.(n >= b) then C_bool false else C_top T_bool in
+        Some c
+
+      | O_lt, Some (C_int_interval (a,b)), Some (C_int n)
+      | O_gt, Some (C_int n), Some (C_int_interval (a,b)) ->
+        let c = if Z.(b < n) then C_bool true else if Z.(a >= n) then C_bool false else C_top T_bool in
+        Some c
+
+      | _ -> None
+    end
+
+  | E_binop(O_log_and, e1, e2) ->
+    begin
+      match expr_to_const e1, expr_to_const e2 with
+      | Some (C_bool b1), Some (C_bool b2) ->
+        Some (C_bool (b1 && b2))
+
+      | Some (C_top T_bool), x
+      | x, Some (C_top T_bool) ->
+        x
+
+      | _ -> None
+    end
+
+  | E_binop(O_log_or, e1, e2) ->
+    begin
+      match expr_to_const e1, expr_to_const e2 with
+      | Some (C_bool b1), Some (C_bool b2) ->
+        Some (C_bool (b1 || b2))
+
+      | Some (C_top T_bool), x
+      | x, Some (C_top T_bool) ->
+        Some (C_top T_bool)
+
+      | _ -> None
+    end
+
+  | E_binop(O_plus | O_minus | O_mult | O_div as op, e1, e2) ->
+    begin
+      match expr_to_const e1, expr_to_const e2 with
+      | Some (C_int n1), Some (C_int n2) ->
         begin
           match op with
-          | O_plus -> Some (Z.add n1 n2)
-          | O_minus -> Some (Z.sub n1 n2)
-          | O_mult -> Some (Z.mul n1 n2)
-          | O_div -> if Z.equal n2 Z.zero then None else Some (Z.div n1 n2)
+          | O_plus -> Some (C_int (Z.add n1 n2))
+          | O_minus -> Some (C_int (Z.sub n1 n2))
+          | O_mult -> Some (C_int (Z.mul n1 n2))
+          | O_div -> if Z.equal n2 Z.zero then None else Some (C_int (Z.div n1 n2))
           | _ -> None
         end
       | _ -> None
     end
+
+  | _ -> None
+
+let expr_to_z (e:expr) : Z.t option =
+  match expr_to_const e with
+  | Some (C_int n) -> Some n
   | _ -> None
 
 module Addr =

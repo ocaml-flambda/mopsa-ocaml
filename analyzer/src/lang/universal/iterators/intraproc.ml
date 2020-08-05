@@ -61,7 +61,12 @@ struct
     | _ -> ne e zero e.erange
 
   let eval_bool_expr e ~ftrue ~ffalse ~fboth range man flow =
-    match ekind e with
+    let ee =
+      match expr_to_const e with
+      | Some c -> { e with ekind = E_constant c }
+      | None -> e
+    in
+    match ekind ee with
     | E_constant (C_bool true) -> ftrue flow
     | E_constant (C_bool false) -> ffalse flow
     | E_constant (C_top T_bool) -> fboth flow

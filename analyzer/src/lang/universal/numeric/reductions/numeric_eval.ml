@@ -32,29 +32,46 @@ struct
   let name = "universal.numeric.reductions.numeric_eval"
 
   let reduce exp man rman pre results flow =
-    if List.exists (fun e -> is_numeric_type e.etyp) results then None
+    if not @@ List.exists (fun e -> is_numeric_type e.etyp) results then None
     else
-      let () = Debug.debug ~channel:name "reduce(%a): %a" pp_expr exp Format.(pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt " ∧ ") pp_expr) results in
-    match results with
+    (* Simplify some boolean expressions *)
+    let results' =
+      results |> List.map (fun e ->
+          match expr_to_const e with
+          | Some c -> { e with ekind = E_constant c }
+          | None -> e
+        )
+    in
+    match results' with
       | [] -> Some (Eval.empty_singleton flow)
       | [e] -> Some (Eval.singleton e flow)
       | hd::tl ->
         (* Iterate over the list of result expressions and accumulate the most precise one *)
         let rec iter acc flow = function
           | [] -> Eval.singleton acc flow
-          | hd::tl ->
+          | hd::tl ->       
             match ekind acc, ekind hd with
+            (* Top rules *)
             | _, E_constant (C_top _) ->
               iter acc flow tl
 
             | E_constant (C_top _), _ ->
               iter hd flow tl
 
+            (* Boolean expressions *)
+            | E_constant (C_bool true), E_constant (C_bool false)
+            | E_constant (C_bool false), E_constant (C_bool true) ->
+              Eval.empty_singleton (Flow.bottom_from flow)
+
+            | E_constant (C_bool _), _ ->
+              iter hd flow tl
+
+            | _, E_constant (C_bool _) ->
+              iter acc flow tl
+
+            (* Integer expressions *)
             | E_constant (C_int a), E_constant (C_int b) ->
               if Z.(a = b) then iter acc flow tl else Eval.empty_singleton (Flow.bottom_from flow)
-
-            | E_constant (C_bool a), E_constant (C_bool b) ->
-              if a = b then iter acc flow tl else Eval.empty_singleton (Flow.bottom_from flow)
 
             | E_constant (C_int_interval(a,b)), E_constant(C_int c) ->
               if Z.(a <= c && c <= b) then iter hd flow tl else Eval.empty_singleton (Flow.bottom_from flow)
@@ -62,13 +79,9 @@ struct
             | E_constant(C_int c), E_constant (C_int_interval(a,b)) ->
               if Z.(a <= c && c <= b) then iter acc flow tl else Eval.empty_singleton (Flow.bottom_from flow)
 
-            | E_constant (C_int_interval(a,b)), E_constant(C_bool c) ->
-              let d = if c then Z.one else Z.zero in
-              if Z.(a <= d && d <= b) then iter hd flow tl else Eval.empty_singleton (Flow.bottom_from flow)
-
-            | E_constant(C_bool c), E_constant (C_int_interval(a,b)) ->
-              let d = if c then Z.one else Z.zero in
-              if Z.(a <= d && d <= b) then iter acc flow tl else Eval.empty_singleton (Flow.bottom_from flow)
+            | E_constant(C_int_interval (a,b)), E_constant (C_int_interval(c,d)) ->
+              let lo = Z.max a c and hi = Z.min b d in
+              if Z.(lo <= hi) then iter (mk_z_interval lo hi exp.erange) flow tl else Eval.empty_singleton (Flow.bottom_from flow)
 
             | E_var (v1,mode1), E_var (v2,mode2) ->
               (* Ensure that both variables are equal *)
