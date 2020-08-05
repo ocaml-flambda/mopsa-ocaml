@@ -97,6 +97,9 @@ val map_log : (log -> log) -> ('a,'r) cases -> ('a,'r) cases
 (** [map_log f c] applies function [f] to logs in [c]. *)
 
 
+val set_log : log -> ('a,'r) cases -> ('a,'r) cases
+(** Set the logs of cases *)
+
 val apply : ('r option -> 'a flow -> 'b) -> ('b -> 'b -> 'b) -> ('b -> 'b -> 'b) -> ('a,'r) cases -> 'b
 (** [apply f join meet c] collapses cases [c] to a single value by
     applying [f] on each case [ci] in [c] and merging outputs using
@@ -277,8 +280,11 @@ val bind_list :
 (** Bind a list of results with a transfer function *)
 
 
-val remove_duplicates : ('r -> 'r -> int) -> 'a Lattice.lattice -> ('a,'r) cases -> ('a,'r) cases
+val remove_duplicates : ('r option -> 'r option  -> int) -> 'a Lattice.lattice -> ('a,'r) cases -> ('a,'r) cases
 (** Remove duplicate results *)
+
+val remove_duplicates_some : ('r -> 'r  -> int) -> 'a Lattice.lattice -> ('a,'r) cases -> ('a,'r) cases
+(** Remove non-empty duplicate results *)
 
 
 val cardinal : ('a,'r) cases -> int

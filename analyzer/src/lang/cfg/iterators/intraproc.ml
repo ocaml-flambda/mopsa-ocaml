@@ -118,8 +118,7 @@ struct
           flow src
       in
       (* apply edge transfer function *)
-      let flow = man.exec stmt flow
-      in
+      man.exec stmt flow >>% fun flow ->
       (* dispatch flow values into nodes *)
       let flow =
         List.fold_left
@@ -137,7 +136,7 @@ struct
           (fun flow (port,_) -> Flow.remove port flow)
           flow (src@dst)
       in
-      flow
+      Post.return flow
     in
     
     (* recompute the node value and call apply_edge for all edges out 
@@ -148,8 +147,8 @@ struct
       let flow = update_node weak flow node in
       (* reompute all edges from this node *)
       List.fold_left
-        (fun flow (_,e) -> apply_edge e flow)
-        flow (CFG.node_out node)
+        (fun post (_,e) -> post >>% apply_edge e)
+        (Post.return flow) (CFG.node_out node)
     in
 
     (* get the widening node id for a component *)
@@ -167,7 +166,7 @@ struct
             (Graph.pp_nested_list_list pp_node_as_id) lst
             pp_node_id wid count man.lattice.print old;
       (* analyze the component *)
-      let flow = analyze_component true lst flow in
+      analyze_component true lst flow >>% fun flow ->
       let v = Flow.get (T_cfg_node wid) man.lattice flow in
       (* check stability *)
       if man.lattice.subset (Flow.get_unit_ctx flow) v old
@@ -195,24 +194,24 @@ struct
           (Graph.pp_nested_list_list pp_node_as_id) lst
           pp_node_id wid man.lattice.print
           (Flow.get (T_cfg_node wid) man.lattice flow);
-        flow
+        Post.return flow
       )
       else (
         (* iter *)
         debug "decreasing iteration at head %a, count=%i" pp_node_id wid count;
-        let flow = analyze_component false lst flow in
-        refine_component (count+1) lst flow
+        analyze_component false lst flow >>%
+        refine_component (count+1) lst
       )
 
                       
     (* analyze a list of components *)
-    and analyze_component weak lst flow =
+    and analyze_component weak lst flow : 'a post =
       match lst with
       | (GraphSig.Simple node)::rest ->
-        flow |> propagate_node weak node |> analyze_component false rest
+        flow |> propagate_node weak node >>% analyze_component false rest
       | (GraphSig.Composed l)::rest ->
-        flow |> fix_component 0 l |> analyze_component false rest
-      | [] -> flow
+        flow |> fix_component 0 l >>% analyze_component false rest
+      | [] -> Post.return flow
     in
     
     (* shift the current flow into the entry *)
@@ -270,32 +269,34 @@ struct
     (* all together now *)
     let flow = flow_in flow in
     debug "CFG iteration started:@\nabs = @[%a@]" (Flow.print man.lattice.print) flow;
-    let flow = analyze_component false cfg.cfg_order flow in
+    analyze_component false cfg.cfg_order flow >>% fun flow ->
     debug "CFG iteration finished:@\nabs = @[%a@]" (Flow.print man.lattice.print) flow;
     let flow = flow |> flow_out |> cleanup in
     debug "returned flow:@\nabs = @[%a@]" (Flow.print man.lattice.print) flow;
-    flow
+    Post.return flow
 
 
   (* atomic test function *)
   let test_iterator man cond flow =
     let range = erange cond in
     debug "CFG test [%a] at %a" pp_expr cond pp_range range;
-    let tflow = man.exec (mk_assume cond range) flow
-    and fflow = man.exec (mk_assume (mk_not cond range) range) flow in
+    man.eval cond flow >>$ fun cond flow ->
+    man.exec (mk_assume cond range) flow >>% fun tflow -> 
+    man.exec (mk_assume (mk_not cond range) range) flow >>% fun fflow -> 
     let tflow = Flow.set T_true  (Flow.get T_cur man.lattice tflow) man.lattice tflow
     and fflow = Flow.set T_false (Flow.get T_cur man.lattice fflow) man.lattice fflow in
-    Flow.join man.lattice tflow fflow
+    Flow.join man.lattice tflow fflow |>
+    Post.return
 
     
   let exec stmt man flow =
     match skind stmt with
 
     | S_cfg cfg ->
-       Some (Post.return (cfg_iterator cfg man flow))
+       Some (cfg_iterator cfg man flow)
 
     | S_test expr ->
-       Some (Post.return (test_iterator man expr flow))
+       Some (test_iterator man expr flow)
 
     | S_skip ->
        Some (Post.return flow)

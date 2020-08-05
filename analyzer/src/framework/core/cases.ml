@@ -215,6 +215,11 @@ let map_log (f:log -> log) (r:('a,'r) cases) : ('a,'r) cases =
       }
     )
 
+let set_log log (r:('a,'r) cases) : ('a,'r) cases =
+  r |> map_cases (fun case ->
+      { case with
+        case_log = log }
+    )
 
 let concat_cases_log (log:log) (r:('a,'r) cases) : ('a,'r) cases =
   r |> map_cases (fun case ->
@@ -481,7 +486,7 @@ let bind_list l f flow =
 
 let remove_duplicates compare lattice r =
   let ctx = r.cases_ctx in
-  let compare_case case case' = OptionExt.compare compare case.case_result case'.case_result in
+  let compare_case case case' = compare case.case_result case'.case_result in
   let rec simplify_conj conj =
     match conj with
     | [] -> conj
@@ -542,6 +547,9 @@ let remove_duplicates compare lattice r =
       conj' :: simplify_disj tl'
   in
   { r with cases_dnf = Dnf.from_list (simplify_disj (Dnf.to_list r.cases_dnf)) }
+
+let remove_duplicates_some compare lattice r =
+  remove_duplicates (OptionExt.compare compare) lattice r
 
 
 let cardinal r = Dnf.cardinal r.cases_dnf

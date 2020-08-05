@@ -214,8 +214,8 @@ struct
         let length = mk_length_var base elem_size range in
         let size = elem_of_offset bsize elem_size range in
 
-        man.post ~route:numeric (mk_add length range) flow >>= fun _ flow ->
-        man.post (mk_assume (mk_in length (mk_zero range) size range) range) flow
+        man.exec ~route:numeric (mk_add length range) flow >>% fun flow ->
+        man.exec (mk_assume (mk_in length (mk_zero range) size range) range) flow
 
 
   (** 𝕊⟦ remove(base); ⟧ *)
@@ -227,7 +227,7 @@ struct
 
       | _ ->
         let length = mk_length_var base elem_size range in
-        man.post ~route:numeric (mk_remove length range) flow
+        man.exec ~route:numeric (mk_remove length range) flow
 
 
   (** 𝕊⟦ rename(base1,base2); ⟧ *)
@@ -237,7 +237,7 @@ struct
     else
       let length1 = mk_length_var base1 elem_size range in
       let length2 = mk_length_var base2 elem_size range in
-      man.post ~route:numeric (mk_rename length1 length2 range) flow
+      man.exec ~route:numeric (mk_rename length1 length2 range) flow
 
 
   (** 𝕊⟦ expand(base,bases); ⟧ *)
@@ -258,7 +258,7 @@ struct
       if lengths = [] then
         Post.return flow
       else
-        man.post ~route:numeric (mk_expand length1 lengths range) flow
+        man.exec ~route:numeric (mk_expand length1 lengths range) flow
 
 
   (** Fold the length variable of a base *)
@@ -278,10 +278,10 @@ struct
          eval_base_size base range man flow >>$ fun bsize flow ->
          man.eval bsize flow >>$ fun bsize flow ->
          let size = elem_of_offset bsize elem_size range in
-         man.post ~route:numeric (mk_forget length range) flow >>$ fun () flow ->
-         man.post (mk_assume (mk_in length (mk_zero range) size range) range) flow
+         man.exec ~route:numeric (mk_forget length range) flow >>% fun flow ->
+         man.exec (mk_assume (mk_in length (mk_zero range) size range) range) flow
       else
-        man.post ~route:numeric (mk_fold length lengths range) flow
+        man.exec ~route:numeric (mk_fold length lengths range) flow
 
 
   (** 𝕊⟦ forget(e); ⟧ *)
@@ -298,8 +298,8 @@ struct
         eval_base_size base range man flow >>$ fun bsize flow ->
         man.eval bsize flow >>$ fun bsize flow ->
         let size = elem_of_offset bsize elem_size range in
-        man.post ~route:numeric (mk_forget length range) flow >>$ fun () flow ->
-        man.post (mk_assume (mk_in length (mk_zero range) size range) range) flow
+        man.exec ~route:numeric (mk_forget length range) flow >>% fun flow ->
+        man.exec (mk_assume (mk_in length (mk_zero range) size range) range) flow
 
 
   let exec_forget_quant quants e range man flow =
@@ -315,8 +315,8 @@ struct
         eval_base_size base range man flow >>$ fun bsize flow ->
         man.eval bsize flow >>$ fun bsize flow ->
         let size = elem_of_offset bsize elem_size range in
-        man.post ~route:numeric (mk_forget length range) flow >>$ fun () flow ->
-        man.post (mk_assume (mk_in length (mk_zero range) size range) range) flow
+        man.exec ~route:numeric (mk_forget length range) flow >>% fun flow ->
+        man.exec (mk_assume (mk_in length (mk_zero range) size range) range) flow
 
 
   (** 𝕊⟦ type v; ⟧ *)
@@ -350,9 +350,9 @@ struct
 
         (* Utility function to assign an interval to [length] *)
         let assign_length_interval l u flow =
-          man.post ~route:numeric (mk_forget length range) flow |>
+          man.exec ~route:numeric (mk_forget length range) flow |>
           Post.bind (
-            man.post (mk_assume ((mk_in length l u range)) range)
+            man.exec (mk_assume ((mk_in length l u range)) range)
           )
         in
         switch [
@@ -362,7 +362,7 @@ struct
           (* Transformation: length := offset; *)
           [ mk_in offset zero length range;
             mk_eq rhs zero range ],
-          (fun flow -> man.post ~route:numeric (mk_assign length offset range) flow)
+          (fun flow -> man.exec ~route:numeric (mk_assign length offset range) flow)
           ;
 
           (* setnon0 case *)
@@ -393,7 +393,7 @@ struct
         ] man flow
 
       else
-        man.post ~route:numeric (mk_forget length range) flow
+        man.exec ~route:numeric (mk_forget length range) flow
 
 
   (** Transformers entry point *)
@@ -508,7 +508,7 @@ struct
     let blen = String.length str in
     (* When n = 0, require that byte-offset = byte-length(str) *)
     if Z.(n = zero) then
-      man.post (mk_assume (mk_binop boffset O_eq (mk_int blen range) range) range) flow
+      man.exec (mk_assume (mk_binop boffset O_eq (mk_int blen range) range) range) flow
     else if char_size = 1 then
       (* Search for the first and last positions of `n` in `str` *)
       let c = Z.to_int n |> Char.chr in
@@ -522,10 +522,10 @@ struct
           else mk_int_interval l u range
         in
         (* Require that offset is equal to pos *)
-        man.post (mk_assume (mk_binop boffset O_eq pos range) range) flow
+        man.exec (mk_assume (mk_binop boffset O_eq pos range) range) flow
     else
       (* for wide characters, we only know that offset < len(str) *)
-      man.post (mk_assume (mk_binop boffset O_le (mk_int (blen-char_size) range) range) range) flow
+      man.exec (mk_assume (mk_binop boffset O_le (mk_int (blen-char_size) range) range) range) flow
 
   
   let assume_ne base boffset mode etype n range man flow =
@@ -549,13 +549,13 @@ struct
                    |---------x---------0----->
         *)
         [ le offset (pred length range) range ],
-        (fun flow -> man.post (mk_assume (ne n zero range) range) flow);
+        (fun flow -> man.exec (mk_assume (ne n zero range) range) flow);
 
         (*          offset/length
                     |--------------0----------->
         *)
         [ eq offset length range],
-        (fun flow -> man.post (mk_assume (eq n zero range) range) flow);
+        (fun flow -> man.exec (mk_assume (eq n zero range) range) flow);
 
         (*          length   offset
                     |----------0--------x----->
@@ -588,8 +588,8 @@ struct
     man.eval bsize flow >>$ fun bsize flow ->
     let size = elem_of_offset bsize elem_size range in
     (* Ensure that [min, max] ⊆ [0, size-1] *)
-    man.post (mk_assume (ge min zero range) range) ~route:numeric flow >>$ fun () flow ->
-    man.post (mk_assume (le max (pred size range) range) range) ~route:numeric flow >>$ fun () flow ->
+    man.exec (mk_assume (ge min zero range) range) ~route:numeric flow >>% fun flow ->
+    man.exec (mk_assume (le max (pred size range) range) range) ~route:numeric flow >>% fun flow ->
     switch [
       (*          length    min     max
          |-----------0-------|nnnnnnnn|------>
@@ -623,7 +623,7 @@ struct
          |----|nnnnnnnnn|-------0------>
       *)
       [ le max (pred length range) range ],
-      (fun flow -> man.post (mk_assume (ne n zero range) range) flow);
+      (fun flow -> man.exec (mk_assume (ne n zero range) range) flow);
     ] man flow
 
 
@@ -748,7 +748,7 @@ struct
             (fun flow -> Cases.empty_singleton (Flow.bottom_from flow));
 
             [ log_and cover1 cover2 range ],
-            (fun flow -> man.post (mk_assume (eq (sub length1 min1 range) (sub length2 min2 range) range) range) ~route:numeric flow);
+            (fun flow -> man.exec (mk_assume (eq (sub length1 min1 range) (sub length2 min2 range) range) range) ~route:numeric flow);
           ] man flow
 
   let assume_exists_ne2 i a b base1 boffset1 mode1 ctype1 base2 boffset2 mode2 ctype2 range man flow =
@@ -765,8 +765,8 @@ struct
    *     Eval.singleton (mk_top T_bool range) flow
    *   else
    *     Eval.join
-   *       (assume_eq base offset mode lval.etyp n range man flow >>$ fun () flow -> Eval.singleton (mk_true range) flow)
-   *       (assume_ne base offset mode lval.etyp n range man flow >>$ fun () flow -> Eval.singleton (mk_false range) flow) *)
+   *       (assume_eq base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_true range) flow)
+   *       (assume_ne base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_false range) flow) *)
         
 
   (** 𝔼⟦ ∃i ∈ [a,b]: *(p + i) == n ⟧ *)
@@ -777,8 +777,8 @@ struct
       Eval.singleton (mk_top T_bool range) flow
     else
       Eval.join
-        (assume_exists_eq i a b base offset mode lval.etyp n range man flow >>$ fun () flow -> Eval.singleton (mk_true range) flow)
-        (assume_forall_ne i a b base offset mode lval.etyp n range man flow >>$ fun () flow -> Eval.singleton (mk_false range) flow)
+        (assume_exists_eq i a b base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_true range) flow)
+        (assume_forall_ne i a b base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_false range) flow)
     
   (** 𝔼⟦ ∀i ∈ [a,b] : *(p + i) == n ⟧ *)
   let eval_forall_eq i a b lval n range man flow =
@@ -788,8 +788,8 @@ struct
       Eval.singleton (mk_top T_bool range) flow
     else
       Eval.join
-        (assume_forall_eq i a b base offset mode lval.etyp n range man flow >>$ fun () flow -> Eval.singleton (mk_true range) flow)
-        (assume_exists_ne i a b base offset mode lval.etyp n range man flow >>$ fun () flow -> Eval.singleton (mk_false range) flow)
+        (assume_forall_eq i a b base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_true range) flow)
+        (assume_exists_ne i a b base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_false range) flow)
 
   (** 𝔼⟦ ∀i ∈ [a,b] : *(p + i) != n ⟧ *)
   let eval_forall_ne i a b lval n range man flow =
@@ -799,8 +799,8 @@ struct
       Eval.singleton (mk_top T_bool range) flow
     else
       Eval.join
-        (assume_forall_ne i a b base offset mode lval.etyp n range man flow >>$ fun () flow -> Eval.singleton (mk_true range) flow)
-        (assume_exists_eq i a b base offset mode lval.etyp n range man flow >>$ fun () flow -> Eval.singleton (mk_false range) flow)
+        (assume_forall_ne i a b base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_true range) flow)
+        (assume_exists_eq i a b base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_false range) flow)
 
 
   (** 𝔼⟦ ∀i ∈ [a,b] : *(p + i) == *(q + i) ⟧ *)
@@ -819,8 +819,8 @@ struct
       if not (is_interesting_base base2) then Eval.singleton (mk_top T_bool range) flow
       else
         Eval.join
-        (assume_forall_eq2 i a b base1 offset1 mode1 ctype1 base2 offset2 mode2 ctype2 range man flow >>$ fun () flow -> Eval.singleton (mk_true range) flow)
-        (assume_exists_ne2 i a b base1 offset1 mode1 ctype1 base2 offset2 mode2 ctype2 range man flow >>$ fun () flow -> Eval.singleton (mk_false range) flow)
+        (assume_forall_eq2 i a b base1 offset1 mode1 ctype1 base2 offset2 mode2 ctype2 range man flow >>% fun flow -> Eval.singleton (mk_true range) flow)
+        (assume_exists_ne2 i a b base1 offset1 mode1 ctype1 base2 offset2 mode2 ctype2 range man flow >>% fun flow -> Eval.singleton (mk_false range) flow)
 
 
   let eval exp man flow =

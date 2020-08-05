@@ -109,12 +109,12 @@ struct
   let eval_range typ l u range man flow =
     let tmp = mktmp ~typ () in
     let v = mk_var tmp range in
-    let flow = man.exec (mk_block [
+    man.exec (mk_block [
         mk_add_var tmp range;
         mk_assume (mk_in v l u range) range
       ] range) flow
-    in
-    man.eval v flow |>
+    >>%
+    man.eval v |>
     Cases.add_cleaners [mk_remove_var tmp range]
 
 
@@ -270,20 +270,20 @@ struct
 
     | E_c_builtin_call("_mopsa_assume", [cond]) ->
       let stmt = mk_assume cond exp.erange in
-      let flow = man.exec stmt flow in
+      man.exec stmt flow >>%? fun flow ->
       Eval.singleton (mk_int 0 exp.erange) flow |>
       OptionExt.return
 
 
     | E_c_builtin_call("_mopsa_assert", [cond]) ->
       let stmt = mk_assert cond exp.erange in
-      let flow = man.exec stmt flow in
+      man.exec stmt flow >>%? fun flow ->
       Eval.singleton (mk_int 0 exp.erange) flow |>
       OptionExt.return
 
     | E_c_builtin_call("_mopsa_assert_exists", [cond]) ->
       let stmt = mk_satisfy cond exp.erange in
-      let flow = man.exec stmt flow in
+      man.exec stmt flow >>%? fun flow ->
       Eval.singleton (mk_int 0 exp.erange) flow |>
       OptionExt.return
 
@@ -312,7 +312,7 @@ struct
       let b = man.lattice.is_bottom (Flow.get T_cur man.lattice flow) in
       let cond = mk_bool b exp.erange in
       let stmt = mk_assert cond exp.erange in
-      let flow = man.exec stmt flow in
+      man.exec stmt flow >>%? fun flow ->
       Eval.singleton (mk_int 0 exp.erange) flow |>
       OptionExt.return
 
@@ -320,7 +320,7 @@ struct
       let b = not (man.lattice.is_bottom (Flow.get T_cur man.lattice flow)) in
       let cond = mk_bool b exp.erange in
       let stmt = mk_assert cond exp.erange in
-      let flow = man.exec stmt flow in
+      man.exec stmt flow >>%? fun flow ->
       Eval.singleton (mk_int 0 exp.erange) flow |>
       OptionExt.return
 

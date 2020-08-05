@@ -163,7 +163,7 @@ struct
       let old = { addr with addr_mode = WEAK } in
       let pool = get_env T_cur man flow in
       (* Inform domains to remove addr *)
-      let flow' = man.exec (mk_remove_addr addr stmt.srange) flow in
+      man.exec (mk_remove_addr addr stmt.srange) flow >>%? fun flow' -> 
       if not (Pool.mem old pool) then
         (* only recent is present : remove it from the pool and return *)
         map_env T_cur (Pool.remove addr) man flow' |>
@@ -172,16 +172,14 @@ struct
       else
         (* old is present : expand it as the new recent *)
         man.exec (mk_expand_addr old [addr] stmt.srange) flow' |>
-        Post.return |>
         OptionExt.return
 
     (* 𝕊⟦ free(old); ⟧ *)
     | S_free addr when is_old addr ->
        (* Inform domains to invalidate addr *)
        map_env T_cur (Pool.remove addr) man flow |>
-         man.exec (mk_invalidate_addr addr stmt.srange)  |>
-         Post.return |>
-         OptionExt.return
+       man.exec (mk_invalidate_addr addr stmt.srange)  |>
+       OptionExt.return
 
     | S_perform_gc ->
        let startt = Sys.time () in
@@ -191,16 +189,16 @@ struct
        debug "at %a, |dead| = %d@.dead = %a" pp_range range (Pool.cardinal dead) Pool.print dead;
        let trange = tag_range range "agc" in
        let flow = set_env T_cur alive man flow in
-       let flow = Pool.fold (fun addr flow ->
+       let post = Pool.fold (fun addr acc ->
                       debug "free %a" pp_addr addr;
                       (* FIXME: free of a strong address will re-create the strong address, I'm not really happy with that *)
-                      man.exec (mk_stmt (S_free addr) trange) flow) dead flow in
+                      acc >>% man.exec (mk_stmt (S_free addr) trange)) dead (Post.return flow) in
        let delta = Sys.time () -. startt in
        gc_time := !gc_time +. delta;
        incr gc_nb_collections;
        gc_nb_addr_collected := !gc_nb_addr_collected + (Pool.cardinal dead);
        gc_max_heap_size := max !gc_max_heap_size (Pool.cardinal all);
-       flow |> Post.return |> OptionExt.return
+       post |> OptionExt.return
 
     | _ -> None
 
@@ -226,13 +224,13 @@ struct
         if not (Pool.mem old_addr pool) then
           (* old address not present: rename the existing recent as old and return the new recent *)
           map_env T_cur (Pool.add old_addr) man flow |>
-          man.exec (mk_rename_addr recent_addr old_addr range) |>
-          Eval.singleton (mk_addr recent_addr range) |>
+          man.exec (mk_rename_addr recent_addr old_addr range) >>%? fun flow ->
+          Eval.singleton (mk_addr recent_addr range) flow |>
           OptionExt.return
         else
           (* old present : copy the content of the existing recent to old using `fold` statement *)
-          man.exec (mk_fold_addr old_addr [recent_addr] range) flow |>
-          Eval.singleton (mk_addr recent_addr range) |>
+          man.exec (mk_fold_addr old_addr [recent_addr] range) flow >>%? fun flow ->
+          Eval.singleton (mk_addr recent_addr range) flow |>
           OptionExt.return
 
     | E_alloc_addr(addr_kind, WEAK) ->

@@ -97,6 +97,7 @@ let add_stmt_to_log stmt = function
   | Node(stmts,left,right) -> Node(stmt::stmts,left,right)
 
 let rec merge_log f1 f2 f log1 log2 =
+  if log1 == log2 then log1 else
   match log1, log2 with
   | Empty, Empty -> Empty
   | Empty, Node(stmts,left,right) -> Node (f1 stmts, left, right)

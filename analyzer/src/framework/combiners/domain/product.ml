@@ -290,7 +290,7 @@ struct
     let rman = exec_reduction_man man in
     List.fold_left (fun pointwise rule ->
         let module R = (val rule : EXEC_REDUCTION) in
-        post >>$ fun () -> R.reduce stmt man rman pre
+        post >>% R.reduce stmt man rman pre
       ) post Rules.srules
 
 
@@ -394,7 +394,11 @@ struct
       pointwise
     else
       let evl = man.eval ~route:successor exp flow in
-      List.map (function None -> Some evl | Some evl as x -> x) pointwise
+      (* Check if the successor domain performed an evaluation *)
+      if Cases.for_all_some (fun ee flow -> compare_expr ee exp = 0) evl then
+        pointwise
+      else
+        List.map (function None -> Some evl | Some evl as x -> x) pointwise
 
   (** Entry point of abstract evaluations *)
   let eval targets =

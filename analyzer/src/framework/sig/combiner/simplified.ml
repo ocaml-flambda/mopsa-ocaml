@@ -76,6 +76,7 @@ struct
 
   let simplified_man man flow = {
     exec = (fun stmt -> man.Core.Manager.exec stmt flow |>
+                        post_to_flow man |>
                         get_env T_cur man
            );
     ask = (fun query -> man.Core.Manager.ask query flow);

@@ -67,9 +67,7 @@ sig
 
   val init : program -> (t, t) man -> t flow
 
-  val exec : ?route:route -> stmt -> (t, t) man -> t flow -> t flow
-
-  val post : ?route:route -> stmt -> (t, t) man -> t flow -> t post
+  val exec : ?route:route -> stmt -> (t, t) man -> t flow -> t post
 
   val eval : ?route:route -> expr -> (t, t) man -> t flow -> t eval
 
@@ -186,7 +184,7 @@ struct
           RouteMap.add route (Domain.exec domains) map
       ) map
 
-  let post ?(route = toplevel) (stmt: stmt) man (flow: Domain.t flow) : Domain.t post =
+  let exec ?(route = toplevel) (stmt: stmt) man (flow: Domain.t flow) : Domain.t post =
     let ctx = Hook.on_before_exec route stmt man flow in
     let flow = Flow.set_ctx ctx flow in
 
@@ -208,8 +206,15 @@ struct
 
         | Some post -> post
       in
-      let ctx = Hook.on_after_exec route stmt man flow post in
-      Cases.set_ctx ctx post
+      let clean_post =
+        post |> Cases.bind_full
+          (fun ret flow log cleaners ->
+             apply_cleaners cleaners man flow |>
+             Cases.set_log log
+          )
+      in
+      let ctx = Hook.on_after_exec route stmt man flow clean_post in
+      Cases.set_ctx ctx clean_post
     with
     | Exceptions.Panic(msg, line) ->
       Printexc.raise_with_backtrace
@@ -228,10 +233,6 @@ struct
         (Exceptions.PanicAtFrame(stmt.srange, (Flow.get_callstack flow), Printexc.to_string e, ""))
         (Printexc.get_raw_backtrace())
 
-
-  let exec ?(route = toplevel) (stmt: stmt) man (flow: Domain.t flow) : Domain.t flow =
-    let post = post ~route stmt man flow in
-    post_to_flow man post
 
 
   (** {2 Evaluation of expressions} *)

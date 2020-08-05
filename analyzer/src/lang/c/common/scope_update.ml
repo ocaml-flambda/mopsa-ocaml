@@ -29,10 +29,10 @@ open Ast
 
 (* Update the scope by removing/adding variables as indicated by [upd] *)
 let update_scope upd range man flow =
-  let flow = List.fold_left (fun flow v ->
-      man.exec (mk_remove_var v range) flow
-    ) flow upd.c_scope_var_removed
+  let post = List.fold_left (fun acc v ->
+      acc >>% man.exec (mk_remove_var v range)
+    ) (Post.return flow) upd.c_scope_var_removed
   in
   List.fold_left (fun acc v ->
-      man.exec (mk_c_declaration v None (var_scope v) range) acc
-    ) flow upd.c_scope_var_added
+      acc >>% man.exec (mk_c_declaration v None (var_scope v) range)
+    ) post upd.c_scope_var_added

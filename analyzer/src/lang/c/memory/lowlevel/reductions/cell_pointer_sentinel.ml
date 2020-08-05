@@ -56,7 +56,7 @@ struct
          | E_var _, _
          | E_c_cast ({ ekind = E_var _ },_), _ ->
            let cond = mk_binop e1 O_eq e2 exp.erange in
-           man.post (mk_assume cond exp.erange) flow >>= fun _ flow ->
+           man.exec (mk_assume cond exp.erange) flow >>% fun flow ->
 
            if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
            then

@@ -1226,84 +1226,84 @@ let find_c_fundec_by_name name flow =
 let assert_valid_string (p:expr) range man flow =
   let f = find_c_fundec_by_name "_mopsa_assert_valid_string" flow in
   let stmt = mk_c_call_stmt f [p] range in
-  man.post stmt flow
+  man.exec stmt flow
 
 (** Check if a pointer points to a nul-terminated wide char array *)
 let assert_valid_wide_string (p:expr) range man flow =
   let f = find_c_fundec_by_name "_mopsa_assert_valid_wide_string" flow in
   let stmt = mk_c_call_stmt f [p] range in
-  man.post stmt flow
+  man.exec stmt flow
 
 (** Check if a pointer points to a valid stream *)
 let assert_valid_stream (p:expr) range man flow =
   let f = find_c_fundec_by_name "_mopsa_assert_valid_stream" flow in
   let stmt = mk_c_call_stmt f [p] range in
-  man.post stmt flow
+  man.exec stmt flow
 
 (** Check if a pointer points to a valid file descriptor *)
 let assert_valid_file_descriptor (p:expr) range man flow =
   let f = find_c_fundec_by_name "_mopsa_assert_valid_file_descriptor" flow in
   let stmt = mk_c_call_stmt f [p] range in
-  man.post stmt flow
+  man.exec stmt flow
 
 
 (** Check if a pointer is valid *)
 let assert_valid_ptr (p:expr) range man flow =
   let f = find_c_fundec_by_name "_mopsa_assert_valid_ptr" flow in
   let stmt = mk_c_call_stmt f [p] range in
-  man.post stmt flow
+  man.exec stmt flow
 
 
 (** Randomize an entire array *)
 let memrand (p:expr) (i:expr) (j:expr) range man flow =
   let f = find_c_fundec_by_name "_mopsa_memrand" flow in
   let stmt = mk_c_call_stmt f [p; i; j] range in
-  man.post stmt flow
+  man.exec stmt flow
 
 (** Randomize a string *)
 let strrand (p:expr) range man flow =
   let f = find_c_fundec_by_name "_mopsa_strrand" flow in
   let stmt = mk_c_call_stmt f [p] range in
-  man.post stmt flow
+  man.exec stmt flow
 
 (** Randomize a substring *)
 let strnrand (p:expr) (n:expr) range man flow =
   let f = find_c_fundec_by_name "_mopsa_strnrand" flow in
   let stmt = mk_c_call_stmt f [p; n] range in
-  man.post stmt flow
+  man.exec stmt flow
 
 
 (** Randomize a wide substring *)
 let wcsnrand (p:expr) (n:expr) range man flow =
   let f = find_c_fundec_by_name "_mopsa_wcsnrand" flow in
   let stmt = mk_c_call_stmt f [p; n] range in
-  man.post stmt flow
+  man.exec stmt flow
 
 
 (** Set elements of an array with the same value [c] *)
 let memset (p:expr) (c:expr) (i:expr) (j:expr) range man flow =
   let f = find_c_fundec_by_name "_mopsa_memset" flow in
   let stmt = mk_c_call_stmt f [p; c; i; j] range in
-  man.post stmt flow
+  man.exec stmt flow
 
 
 (** Copy elements of an array *)
 let memcpy (dst:expr) (src:expr) (i:expr) (j:expr) range man flow =
   let f = find_c_fundec_by_name "_mopsa_memcpy" flow in
   let stmt = mk_c_call_stmt f [dst; src; i; j] range in
-  man.post stmt flow
+  man.exec stmt flow
 
 (** Exit if status is non-zero *)
 let error_error (p:expr) range man flow =
   let f = find_c_fundec_by_name "_mopsa_error" flow in
   let stmt = mk_c_call_stmt f [p] range in
-  man.post stmt flow
+  man.exec stmt flow
 
 (** Exit if status is non-zero *)
 let error_error_at_line (p:expr) (n:expr) range man flow =
   let f = find_c_fundec_by_name "_mopsa_error_at_line" flow in
   let stmt = mk_c_call_stmt f [p; n] range in
-  man.post stmt flow
+  man.exec stmt flow
 
 let asprintf_stub (dst:expr) range man flow =
   let f = find_c_fundec_by_name "_mopsa_asprintf" flow in

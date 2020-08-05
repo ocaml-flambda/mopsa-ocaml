@@ -77,7 +77,7 @@ struct
     match skind stmt with
     | S_c_goto (s,upd) ->
       (* Save TCur env in T_goto s token, then set T_cur to bottom. *)
-      let flow = update_scope upd stmt.srange man flow in
+      update_scope upd stmt.srange man flow >>%? fun flow ->
       let cur = Flow.get T_cur man.lattice flow in
       let flow0 = Flow.add (T_goto s) cur man.lattice flow |>
                   Flow.remove T_cur
@@ -119,12 +119,12 @@ struct
       in
       let rec stabilization f i wid_limit =
         let f = Flow.set_alarms init_alarms f in
-        let f' = man.exec stmt' f in
+        man.exec stmt' f >>% fun f' ->
         match next (Flow.copy_ctx f' f) f' i wid_limit with
-        | None -> f'
+        | None -> Post.return f'
         | Some f'' -> stabilization f'' (i+1) wid_limit
       in
-      let flow1 = stabilization nogotos 0 3 in
+      stabilization nogotos 0 3 >>%? fun flow1 ->
       let flow1_minus_gotos = Flow.filter (fun k v ->
           match k with
           | T_goto s -> false | _ -> true

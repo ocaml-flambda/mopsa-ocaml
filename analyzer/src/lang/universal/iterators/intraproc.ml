@@ -79,7 +79,7 @@ struct
 
     | S_assign(x,e) ->
       man.eval e flow >>$? fun e flow ->
-      man.post (mk_assign x e stmt.srange) flow ~route:Below |>
+      man.exec (mk_assign x e stmt.srange) flow ~route:Below |>
       OptionExt.return
 
     | S_assume{ekind = E_constant (C_bool true)}
@@ -102,22 +102,22 @@ struct
 
     | S_block(block,local_vars) ->
       Some (
-        let flow = List.fold_left (fun acc stmt -> man.exec stmt acc) flow block in
-        let flow = List.fold_left (fun acc var -> man.exec (mk_remove_var var stmt.srange) acc) flow local_vars in
-        Post.return flow
+        let post = List.fold_left (fun acc stmt -> acc >>% man.exec stmt) (Post.return flow) block in
+        let post = List.fold_left (fun acc var -> acc >>% man.exec (mk_remove_var var stmt.srange)) post local_vars in
+        post
       )
 
     | S_if(cond, s1, s2) ->
       man.eval cond flow >>$? fun cond flow ->
-      let then_flow = man.exec (mk_assume cond cond.erange) flow |>
+      let then_post = man.exec (mk_assume cond cond.erange) flow >>%
                       man.exec s1
       in
-      let else_flow = Flow.copy_ctx then_flow flow |>
-                      man.exec (mk_assume (mk_not cond cond.erange) cond.erange) |>
+      let then_ctx = Cases.get_ctx then_post in
+      let else_post = Flow.set_ctx then_ctx flow |>
+                      man.exec (mk_assume (mk_not cond cond.erange) cond.erange) >>%
                       man.exec s2
       in
-      Flow.join man.lattice then_flow else_flow |>
-      Post.return |>
+      Post.join then_post else_post |>
       OptionExt.return
 
     | S_print ->

@@ -151,7 +151,7 @@ let init_fun_params f args range man flow =
   let flow = Flow.push_callstack f.fun_orig_name ~uniq:f.fun_uniq_name range flow in
 
   if f.fun_parameters = [] then
-    [], f.fun_locvars, f.fun_body, flow
+    [], f.fun_locvars, f.fun_body, Post.return flow
   else
   if check_nested_calls f.fun_uniq_name (Flow.get_callstack flow) then
     begin
@@ -218,7 +218,7 @@ let exec_fun_body f body ret range man flow =
 
 
   (* Execute the body of the function *)
-  let flow2 = man.exec body flow1 in
+  man.exec body flow1 >>% fun flow2 -> 
 
   (* Copy the new context and alarms from flow2 to original flow flow1 *)
   let flow3 = Flow.copy_ctx flow2 flow1 |> Flow.copy_alarms flow2 in
@@ -276,24 +276,22 @@ let inline f params locals body ret range man flow =
         | None -> Post.return flow
         | Some v ->
           if !opt_continue_on_recursive_call then
-            man.exec (mk_add_var v range) flow |>
-            man.exec (mk_assign (mk_var v range) (mk_top v.vtyp range) range) |>
-            Post.return
+            man.exec (mk_add_var v range) flow >>%
+            man.exec (mk_assign (mk_var v range) (mk_top v.vtyp range) range)
           else
             panic_at range "recursive call on function %s" f.fun_orig_name
       end
 
     | false ->
-      exec_fun_body f body ret range man flow >>$ fun () flow ->
+      exec_fun_body f body ret range man flow >>%
       (* Remove local variables from the environment. Remove of parameters is
          postponed after finishing the statement, to keep relations between
          the passed arguments and the return value. *)
       man.exec (mk_block (List.map (fun v ->
           mk_remove_var v range
-        ) locals) range) flow |>
-      Post.return
+        ) locals) range)
   in
-  post >>$ fun () flow ->
+  post >>% fun flow ->
   match ret with
   | None ->
     Eval.singleton (mk_unit range) flow ~cleaners:(

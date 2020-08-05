@@ -470,9 +470,9 @@ struct
     in
 
     init' >>$ fun init' flow ->
-    man.post ~route:numeric (mk_add vv range) flow >>= fun _ flow ->
+    man.exec ~route:numeric (mk_add vv range) flow >>% fun flow ->
     add_var_bounds vv v.vtyp flow |>
-    man.post ~route:numeric (mk_assign vv init' range)
+    man.exec ~route:numeric (mk_assign vv init' range)
 
 
   let exec stmt man flow =
@@ -484,18 +484,18 @@ struct
     | S_assign({ekind = E_var _} as lval, rval) when etyp lval |> is_c_num_type ->
       man.eval lval flow >>$? fun lval' flow ->
       man.eval rval flow >>$? fun rval' flow ->
-      man.post ~route:numeric (mk_assign lval' rval' stmt.srange) flow |>
+      man.exec ~route:numeric (mk_assign lval' rval' stmt.srange) flow |>
       OptionExt.return
 
     | S_add ({ekind = E_var _} as v) when is_c_num_type v.etyp ->
       let vv = mk_num_var_expr v in
       add_var_bounds vv v.etyp flow |>
-      man.post ~route:numeric (mk_add vv stmt.srange) |>
+      man.exec ~route:numeric (mk_add vv stmt.srange) |>
       OptionExt.return
 
     | S_remove ({ekind = E_var _} as v) when is_c_num_type v.etyp ->
       let vv = mk_num_var_expr v in
-      man.post ~route:numeric (mk_remove vv stmt.srange) flow |>
+      man.exec ~route:numeric (mk_remove vv stmt.srange) flow |>
       Post.bind (fun flow ->
           if is_c_int_type v.etyp then
             let vv = match ekind vv with E_var (vv,_) -> vv | _ -> assert false in
@@ -512,7 +512,7 @@ struct
       ->
       let vv1 = mk_num_var_expr v1 in
       let vv2 = mk_num_var_expr v2 in
-      man.post ~route:numeric (mk_rename vv1 vv2 stmt.srange) flow |>
+      man.exec ~route:numeric (mk_rename vv1 vv2 stmt.srange) flow |>
       OptionExt.return
 
     | S_expand(({ekind = E_var _} as e),el)
@@ -521,7 +521,7 @@ struct
       ->
       man.eval e flow >>$? fun e' flow ->
       bind_list el (fun e flow -> man.eval e flow) flow >>$? fun el' flow ->
-      man.post (mk_expand e' el' stmt.srange) ~route:numeric flow |>
+      man.exec (mk_expand e' el' stmt.srange) ~route:numeric flow |>
       OptionExt.return
 
     | S_fold(({ekind = E_var _} as e),el)
@@ -530,12 +530,12 @@ struct
       ->
       man.eval e flow >>$? fun e' flow ->
       bind_list el (fun e flow -> man.eval e flow) flow >>$? fun el' flow ->
-      man.post (mk_fold e' el' stmt.srange) ~route:numeric flow |>
+      man.exec (mk_fold e' el' stmt.srange) ~route:numeric flow |>
       OptionExt.return
 
     | S_forget ({ekind = E_var _} as v) when is_c_num_type v.etyp ->
       let vv = mk_num_var_expr v in
-      man.post (mk_forget vv stmt.srange) ~route:numeric flow |>
+      man.exec (mk_forget vv stmt.srange) ~route:numeric flow |>
       OptionExt.return
 
     | _ -> None

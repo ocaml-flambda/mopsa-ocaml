@@ -45,4 +45,8 @@ let print pp fmt post =
       Flow.print pp fmt flow
     ) fmt post
 
-let bind f post = post >>$ fun () flow -> f flow
+let bind f post = post >>= fun _ flow -> f flow
+
+let (>>%) post f = bind f post
+
+let (>>%?) post f = post >>=? fun _ flow -> f flow

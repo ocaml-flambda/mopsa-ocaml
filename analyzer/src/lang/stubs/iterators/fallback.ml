@@ -52,12 +52,12 @@ struct
       | (_,_,S_resource _)::tl -> assert false
     in
     let stmt = iter quants in
-    man.post stmt flow
+    man.exec stmt flow
 
   let eval_quantified_formula quants cond range man flow =
-    let etrue = exec_assume_quants quants cond range man flow >>$ fun () flow -> Eval.singleton (mk_true range) flow in
+    let etrue = exec_assume_quants quants cond range man flow >>% fun flow -> Eval.singleton (mk_true range) flow in
     let nquants,ncond = negate_stub_quantified_formula quants cond in
-    let efalse = exec_assume_quants nquants ncond range man flow >>$ fun () flow -> Eval.singleton (mk_false range) flow  in
+    let efalse = exec_assume_quants nquants ncond range man flow >>% fun flow -> Eval.singleton (mk_false range) flow  in
     Eval.join etrue efalse
 
   let exec_requires cond range man flow =

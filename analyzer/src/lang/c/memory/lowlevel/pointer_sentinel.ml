@@ -240,9 +240,9 @@ struct
       let sentinel_pos = mk_sentinel_pos_var base in
       let sentinel = mk_sentinel_var base in
       (* Put the sentinel at postion 0 with value ⊤ *)
-      man.post ~route:numeric (mk_add_var sentinel_pos range) flow >>$ fun _ flow ->
-      man.post ~route:numeric (mk_assign (mk_var sentinel_pos range) (mk_zero range) range) flow >>$ fun _ flow ->
-      man.post ~route:scalar (mk_add_var sentinel range) flow
+      man.exec ~route:numeric (mk_add_var sentinel_pos range) flow >>% fun flow ->
+      man.exec ~route:numeric (mk_assign (mk_var sentinel_pos range) (mk_zero range) range) flow >>% fun flow ->
+      man.exec ~route:scalar (mk_add_var sentinel range) flow
 
 
   (** Remove the auxiliary variables of a base *)
@@ -253,9 +253,9 @@ struct
       let sentinel_pos = mk_sentinel_pos_var base in
       let sentinel = mk_sentinel_var base in
       let before = mk_before_var base in
-      man.post ~route:numeric (mk_remove_var sentinel_pos range) flow >>$ fun _ flow ->
-      man.post ~route:scalar (mk_remove_var sentinel range) flow >>$ fun _ flow ->
-      man.post ~route:scalar (mk_remove_var before range) flow
+      man.exec ~route:numeric (mk_remove_var sentinel_pos range) flow >>% fun flow ->
+      man.exec ~route:scalar (mk_remove_var sentinel range) flow >>% fun flow ->
+      man.exec ~route:scalar (mk_remove_var before range) flow
 
 
   (** Rename the auxiliary variables associated to a base *)
@@ -270,17 +270,17 @@ struct
       let sentinel1 = mk_sentinel_var base1 in
       let sentinel2 = mk_sentinel_var base2 in
 
-      man.post ~route:numeric (mk_rename_var sentinel_pos1 sentinel_pos2 range) flow >>$ fun () flow ->
+      man.exec ~route:numeric (mk_rename_var sentinel_pos1 sentinel_pos2 range) flow >>% fun flow ->
       before_cases (mk_var sentinel_pos2 range) range man flow
         ~exists:(fun flow ->
-            man.post ~route:scalar (mk_rename_var before1 before2 range) flow
+            man.exec ~route:scalar (mk_rename_var before1 before2 range) flow
           )
         ~empty:(fun flow ->
-            man.post ~route:scalar (mk_remove_var before1 range) flow
+            man.exec ~route:scalar (mk_remove_var before1 range) flow
           )
-      >>$ fun _ flow ->
+      >>% fun flow ->
       (* FIXME: check if at-sentinel exists *)
-       man.post ~route:scalar (mk_rename_var sentinel1 sentinel2 range) flow
+      man.exec ~route:scalar (mk_rename_var sentinel1 sentinel2 range) flow
 
 
   (** Expand the auxiliary variables of a base *)
@@ -308,15 +308,15 @@ struct
       if sentinel_pos2 = [] then
         Post.return flow
       else
-        man.post ~route:numeric (mk_expand_var sentinel_pos1 sentinel_pos2 range) flow >>$ fun _ flow ->
+        man.exec ~route:numeric (mk_expand_var sentinel_pos1 sentinel_pos2 range) flow >>% fun flow ->
         before_cases (mk_var sentinel_pos1 range) range man flow
           ~exists:(fun flow ->
-              man.post ~route:scalar (mk_expand_var before1 before2 range) flow
+              man.exec ~route:scalar (mk_expand_var before1 before2 range) flow
             )
           ~empty:(fun flow -> Post.return flow)
         >>$ fun _ flow ->
         (* FIXME: check if sentinel exists *)
-        man.post ~route:scalar (mk_expand_var sentinel1 sentinel2 range) flow
+        man.exec ~route:scalar (mk_expand_var sentinel1 sentinel2 range) flow
 
 
   (** Fold the auxiliary variables of a set of bases *)
@@ -341,15 +341,15 @@ struct
       if sentinel_pos2 = [] then
         assert false
       else
-        man.post ~route:numeric (mk_fold_var sentinel_pos1 sentinel_pos2 range) flow >>$ fun _ flow ->
+        man.exec ~route:numeric (mk_fold_var sentinel_pos1 sentinel_pos2 range) flow >>% fun flow ->
         before_cases (mk_var sentinel_pos1 range) range man flow
           ~exists:(fun flow ->
-              man.post ~route:scalar (mk_fold_var before1 before2 range) flow
+              man.exec ~route:scalar (mk_fold_var before1 before2 range) flow
             )
           ~empty:(fun flow -> Post.return flow)
-        >>$ fun _ flow ->
+        >>% fun flow ->
         (* FIXME: check if sentinel exists *)
-        man.post ~route:scalar (mk_fold_var sentinel1 sentinel2 range) flow
+        man.exec ~route:scalar (mk_fold_var sentinel1 sentinel2 range) flow
 
   
   (** Forget the value of auxiliary variables of a base *)
@@ -360,8 +360,8 @@ struct
     | P_block(base,offset,mode) when is_interesting_base base ->
       let sentinel_pos = mk_sentinel_pos_var_expr base ~mode range in
       let sentinel = mk_sentinel_var_expr base ~mode range in
-      man.post ~route:numeric (mk_assign sentinel_pos (mk_zero range) range) flow >>$ fun _ flow ->
-      man.post ~route:scalar (mk_forget sentinel range) flow
+      man.exec ~route:numeric (mk_assign sentinel_pos (mk_zero range) range) flow >>% fun flow ->
+      man.exec ~route:scalar (mk_forget sentinel range) flow
 
     | _ -> Post.return flow
 
@@ -373,8 +373,8 @@ struct
     | P_block(base,offset,mode) when is_interesting_base base ->
       let sentinel_pos = mk_sentinel_pos_var_expr base ~mode range in
       let sentinel = mk_sentinel_var_expr base ~mode range in
-      man.post ~route:numeric (mk_assign sentinel_pos (mk_zero range) range) flow >>$ fun _ flow ->
-      man.post ~route:scalar (mk_forget sentinel range) flow
+      man.exec ~route:numeric (mk_assign sentinel_pos (mk_zero range) range) flow >>% fun flow ->
+      man.exec ~route:scalar (mk_forget sentinel range) flow
 
     | _ -> Post.return flow
 
@@ -446,14 +446,14 @@ struct
                    *)
                    before_cases offset range man flow
                      ~exists:(fun flow -> Post.return flow)
-                     ~empty:(fun flow -> man.post ~route:scalar (mk_remove before range) flow)
-                   >>$ fun _ flow ->
+                     ~empty:(fun flow -> man.exec ~route:scalar (mk_remove before range) flow)
+                   >>% fun flow ->
                    sentinel_cases sentinel_pos size range man flow
                      ~exists:(fun flow -> Post.return flow)
-                     ~empty:(fun flow -> man.post ~route:scalar (mk_add sentinel range) flow)
-                   >>$ fun _ flow ->
-                   man.post ~route:numeric (mk_assign sentinel_pos offset range) flow >>$ fun _ flow ->
-                   man.post ~route:scalar (mk_assign sentinel rval range) flow
+                     ~empty:(fun flow -> man.exec ~route:scalar (mk_add sentinel range) flow)
+                   >>% fun flow ->
+                   man.exec ~route:numeric (mk_assign sentinel_pos offset range) flow >>% fun flow ->
+                   man.exec ~route:scalar (mk_assign sentinel rval range) flow
                  else
                    (* Case 2.2: set non-sentinel before
                                     offset
@@ -462,7 +462,7 @@ struct
                       rval condition: rval != SENTINEL
                       transformation: weak(before) = rval;
                    *)
-                   man.post ~route:scalar (mk_assign (weaken_var_expr before) rval range) flow
+                   man.exec ~route:scalar (mk_assign (weaken_var_expr before) rval range) flow
               );
 
               (* Case 3: set at sentinel
@@ -484,7 +484,7 @@ struct
                            0                      sentinel        size
                       offset condition: sentinel = rval
                    *)
-                   man.post ~route:scalar (mk_assign sentinel rval range) flow
+                   man.exec ~route:scalar (mk_assign sentinel rval range) flow
                  else
                    (* Case 2.2: set non-sentinel at sentinel
                                                   offset
@@ -496,13 +496,13 @@ struct
                                       if sentinel_pos = size then remove sentinel else sentinel = ⊤;
                    *)
                    before_cases sentinel_pos range man flow
-                     ~exists:(fun flow -> man.post ~route:scalar (mk_assign (weaken_var_expr before) rval range) flow)
-                     ~empty:(fun flow -> man.post ~route:scalar (mk_assign (strongify_var_expr before) rval range) flow)
-                   >>$ fun _ flow ->
-                   man.post ~route:numeric (mk_assign sentinel_pos (add sentinel_pos ptr range) range) flow >>$ fun _ flow ->
+                     ~exists:(fun flow -> man.exec ~route:scalar (mk_assign (weaken_var_expr before) rval range) flow)
+                     ~empty:(fun flow -> man.exec ~route:scalar (mk_assign (strongify_var_expr before) rval range) flow)
+                   >>% fun flow ->
+                   man.exec ~route:numeric (mk_assign sentinel_pos (add sentinel_pos ptr range) range) flow >>% fun flow ->
                    sentinel_cases sentinel_pos size range man flow
-                     ~exists:(fun flow -> man.post ~route:scalar (mk_assign sentinel (mk_top void_ptr range) range) flow)
-                     ~empty:(fun flow -> man.post ~route:scalar (mk_remove sentinel range) flow)
+                     ~exists:(fun flow -> man.exec ~route:scalar (mk_assign sentinel (mk_top void_ptr range) range) flow)
+                     ~empty:(fun flow -> man.exec ~route:scalar (mk_remove sentinel range) flow)
               );
 
 
@@ -664,9 +664,6 @@ struct
     let before = mk_before_var_expr base ~mode range in
     let ptr = mk_z ptr_size range in
 
-    debug "min = %a, max = %a" pp_expr min pp_expr max;
-    debug "cur = %a" man.lattice.print (Flow.get T_cur man.lattice flow);
-
     (* Safety condition: [min, max] ⊆ [0, size - ptr [ *)
     assume
       (
@@ -686,7 +683,6 @@ struct
                 mk_binop (add sentinel_pos ptr range) O_le min range
               ],
               (fun flow ->
-                 debug "case 1";
                  Post.return flow
               );
 
@@ -694,15 +690,13 @@ struct
                 mk_binop min O_eq sentinel_pos range
               ],
               (fun flow ->
-                 debug "case 2";
-                 man.post ~route:scalar (mk_assume (mk_binop sentinel O_eq q range) range) flow
+                 man.exec ~route:scalar (mk_assume (mk_binop sentinel O_eq q range) range) flow
               );
 
               [
                 mk_binop min O_le (sub sentinel_pos ptr range) range
               ],
               (fun flow ->
-                 debug "case 3";
                  Flow.set T_cur man.lattice.bottom man.lattice flow |>
                  Post.return
               )
@@ -715,7 +709,6 @@ struct
                 mk_binop (add sentinel_pos ptr range) O_le min range
               ],
               (fun flow ->
-                 debug "case 4";
                  Post.return flow
               );
 
@@ -723,18 +716,16 @@ struct
                 mk_binop min O_eq sentinel_pos range
               ],
               (fun flow ->
-                 debug "case 5";
-                 man.post ~route:numeric (mk_assign sentinel_pos (add max ptr range) range) flow >>$ fun _ flow ->
+                 man.exec ~route:numeric (mk_assign sentinel_pos (add max ptr range) range) flow >>% fun flow ->
                  before_cases min range man flow
-                   ~exists:(fun flow -> man.post ~route:scalar (mk_assign (weaken_var_expr before) q range) flow)
-                   ~empty:(fun flow -> man.post ~route:scalar (mk_assign (strongify_var_expr before) q range) flow)
+                   ~exists:(fun flow -> man.exec ~route:scalar (mk_assign (weaken_var_expr before) q range) flow)
+                   ~empty:(fun flow -> man.exec ~route:scalar (mk_assign (strongify_var_expr before) q range) flow)
               );
 
               [
                 mk_binop max O_le (sub sentinel_pos ptr range) range
               ],
               (fun flow ->
-                 debug "case 6";
                  Post.return flow
               )
 
@@ -765,8 +756,8 @@ struct
       Eval.singleton (mk_top T_bool range) flow
     else
       Eval.join
-        (assume_forall_eq i lo hi base offset mode q range man flow >>$ fun () flow -> Eval.singleton (mk_true range) flow)
-        (assume_exists_ne i lo hi base offset mode q range man flow >>$ fun () flow -> Eval.singleton (mk_false range) flow)
+        (assume_forall_eq i lo hi base offset mode q range man flow >>% fun flow -> Eval.singleton (mk_true range) flow)
+        (assume_exists_ne i lo hi base offset mode q range man flow >>% fun flow -> Eval.singleton (mk_false range) flow)
 
   let eval_forall_ne i lo hi p q range man flow =
     eval_pointed_base_offset (mk_c_address_of p range) range man flow >>$ fun (base,offset,mode) flow ->
@@ -775,8 +766,8 @@ struct
       Eval.singleton (mk_top T_bool range) flow
     else
       Eval.join
-        (assume_forall_ne i lo hi base offset mode q range man flow >>$ fun () flow -> Eval.singleton (mk_true range) flow)
-        (assume_exists_eq i lo hi base offset mode q range man flow >>$ fun () flow -> Eval.singleton (mk_false range) flow)
+        (assume_forall_ne i lo hi base offset mode q range man flow >>% fun flow -> Eval.singleton (mk_true range) flow)
+        (assume_exists_eq i lo hi base offset mode q range man flow >>% fun flow -> Eval.singleton (mk_false range) flow)
 
 
   

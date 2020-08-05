@@ -216,14 +216,14 @@ let rec repl_loop ctx man flow =
          | Stmt ->
             let stmt = parse_stmt ctx str in
             pf "%s@[<v 4>X♯ ≜ 𝕊⟦%a@]⟧ =@]%s@." col_out pp_stmt stmt col_reset;
-            let flow = man.exec stmt flow in
+            let flow = man.exec stmt flow |> post_to_flow man in
             pf "%s@[<v 4>%a@]%s@." col_out (Flow.print man.lattice.print) flow col_reset;
             ctx, flow
 
          | VarDecl ->
             let ctx, stmts, vars = parse_vardec ctx str in
             let flow =
-              List.fold_left (fun flow stmt -> man.exec stmt flow) flow stmts
+              List.fold_left (fun flow stmt -> man.exec stmt flow |> post_to_flow man) flow stmts
             in
             List.iter (
                 fun v ->

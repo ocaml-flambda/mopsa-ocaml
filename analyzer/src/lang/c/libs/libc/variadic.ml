@@ -129,28 +129,29 @@ struct
     in
 
     (* Assign each unnamed argument to a temporary variable *)
-    let vars, flow =
+    let vars, post =
       unnamed |>
-      List.fold_left (fun (vars, flow) unnamed ->
+      List.fold_left (fun (vars, acc) unnamed ->
           let tmp = mktmp ~typ:unnamed.etyp () in
-          let flow' = man.exec (mk_assign (mk_var tmp range) unnamed range) flow in
-          tmp :: vars, flow'
-        ) ([], flow)
+          let acc' = acc >>% man.exec (mk_assign (mk_var tmp range) unnamed range) in
+          tmp :: vars, acc'
+        ) ([], Post.return flow)
     in
 
     (* Put vars in the annotation *)
+    post >>% fun flow ->
     let flow = push_unnamed_args (last, List.rev vars) flow in
 
     (* Call the function with only named arguments *)
     let fundec' = {fundec with c_func_variadic = false} in
     man.eval (mk_c_call fundec' named range) flow >>= fun ret flow ->
-    let flow =
-      List.fold_left (fun flow unnamed ->
-          man.exec (mk_remove_var unnamed range) flow
-        ) flow vars |>
-      pop_unnamed_args
-    in
-    Cases.return ret flow
+    begin
+      List.fold_left (fun acc unnamed ->
+          acc >>% man.exec (mk_remove_var unnamed range)
+        ) (Post.return flow) vars
+    end >>% fun flow ->
+    pop_unnamed_args flow |>
+    Cases.return ret
 
 
   (* Create a counter variable for a va_list *)
@@ -161,7 +162,7 @@ struct
 
   (* Initialize a counter *)
   let init_valc_var valc range man flow =
-    man.exec (mk_add valc range) ~route:numeric flow |>
+    man.exec (mk_add valc range) ~route:numeric flow >>%
     man.exec (mk_assign valc (mk_zero range) range) ~route:numeric
 
 
@@ -208,9 +209,8 @@ struct
 
     (* Initialize the counter *)
     let valc = mk_valc_var ap range in
-    let flow = init_valc_var valc range man flow in
-
-    Eval.singleton (mk_unit range) flow
+    init_valc_var valc range man flow >>%
+    Eval.singleton (mk_unit range)
 
 
   (** Evaluate calls to va_arg *)
@@ -235,12 +235,12 @@ struct
           let evl = Itv.map (fun n ->
               let arg = List.nth unnamed (Z.to_int n) in
               (* Increment the counter *)
-              let flow = man.exec
-                  (mk_assign valc (mk_z (Z.succ n) range) range)
-                  ~route:numeric
-                  flow
-              in
-              man.eval (mk_var arg range) flow
+              man.exec
+                (mk_assign valc (mk_z (Z.succ n) range) range)
+                ~route:numeric
+                flow
+              >>%
+              man.eval (mk_var arg range)
             ) itv
           in
 
@@ -262,8 +262,8 @@ struct
     let valc = mk_valc_var ap range in
 
     (* Remove the counter *)
-    let flow' = man.exec (mk_remove valc range) ~route:numeric flow in
-    Eval.singleton (mk_unit range) flow'
+    man.exec (mk_remove valc range) ~route:numeric flow >>%
+    Eval.singleton (mk_unit range)
 
 
 

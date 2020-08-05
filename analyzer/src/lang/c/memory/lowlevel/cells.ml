@@ -504,14 +504,14 @@ struct
     else
       let flow = set_env T_cur { a with cells = cell_set_add c a.cells } man flow in
       let v = mk_cell_var c in
-      man.post ~route:scalar (mk_add_var v range) flow >>$ fun () flow ->
+      man.exec ~route:scalar (mk_add_var v range) flow >>% fun flow ->
       if is_pointer_cell c then
         Post.return flow
       else
         match phi c a range with
         | Some e ->
           let stmt = mk_assume (mk_binop (mk_var v range) O_eq e ~etyp:u8 range) range in
-          man.post stmt flow
+          man.exec stmt flow
 
         | None -> Post.return flow
 
@@ -698,7 +698,7 @@ struct
             if nb > Z.of_int !opt_deref_expand || not (is_interesting_base base) then
               (* too many cases -> top *)
               let region = Region (base, l, u ,step) in
-              let flow = man.exec (mk_assume (mk_binop offset O_ge (mk_z l range) range) range) flow in
+              man.exec (mk_assume (mk_binop offset O_ge (mk_z l range) range) range) flow >>% fun flow ->
               if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
               then Cases.empty_singleton flow
               else Cases.singleton region flow
@@ -708,7 +708,7 @@ struct
                 if Z.gt o u
                 then []
                 else
-                  let flow = man.exec (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow in
+                  let flow = man.exec (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow |> post_to_flow man in
                   if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
                   then aux (Z.add o step)
                   else
@@ -754,15 +754,15 @@ struct
         let smash = mk_range_attr_var range "smash" ~mode:WEAK t in
         let weak_smash = mk_var smash range in
         let strong_smash = mk_var smash ~mode:(Some STRONG) range in
-        man.post (mk_add_var smash range) ~route:scalar flow >>$ fun () flow ->
+        man.exec (mk_add_var smash range) ~route:scalar flow >>% fun flow ->
         let ecells = List.map (fun c -> mk_pointer_cell_var_expr c t range) cells in
         let hd = List.hd ecells in
         let tl = List.tl ecells in
-        man.post (mk_assign strong_smash hd range) ~route:scalar flow >>$ fun () flow ->
+        man.exec (mk_assign strong_smash hd range) ~route:scalar flow >>% fun flow ->
         List.fold_left
-          (fun acc c -> Post.bind (man.post (mk_assign weak_smash c range) ~route:scalar) acc)
+          (fun acc c -> Post.bind (man.exec (mk_assign weak_smash c range) ~route:scalar) acc)
           (Post.return flow) tl
-        >>$ fun () flow ->
+        >>% fun flow ->
         Eval.singleton weak_smash ~cleaners:[mk_remove_var smash range] flow
 
 
@@ -781,7 +781,7 @@ struct
     in
     let v = mk_cell_var c in
     let stmt = mk_remove_var v range in
-    man.post ~route:scalar stmt flow
+    man.exec ~route:scalar stmt flow
 
 
   (** Remove cells overlapping with cell [c] *)
@@ -810,7 +810,7 @@ struct
                          cell_set_add c2 }
       ) man flow in
     let stmt = mk_rename_var v1 v2 range in
-    man.post ~route:scalar stmt flow
+    man.exec ~route:scalar stmt flow
 
 
   let assign_cell c e mode range man flow =
@@ -822,9 +822,9 @@ struct
     begin if cell_set_mem c a.cells then
         Post.return flow
       else
-        man.post (mk_add_var v range) ~route:scalar flow
-    end >>$ fun () flow ->
-    man.post (mk_assign vv e range) ~route:scalar flow >>$ fun () flow ->
+        man.exec (mk_add_var v range) ~route:scalar flow
+    end >>% fun flow ->
+    man.exec (mk_assign vv e range) ~route:scalar flow >>% fun flow ->
     remove_cell_overlappings c range man flow
 
 
@@ -844,7 +844,7 @@ struct
     let v = mk_cell_var c in
     let vl = List.map mk_cell_var cl in
     let stmt = mk_expand_var v vl range in
-    man.post stmt ~route:scalar flow
+    man.exec stmt ~route:scalar flow
 
   let fold_cells c cl range man flow =
     let flow = map_env T_cur (fun a ->
@@ -854,7 +854,7 @@ struct
     let v = mk_cell_var c in
     let vl = List.map mk_cell_var cl in
     let stmt = mk_fold_var v vl range in
-    man.post stmt ~route:scalar flow
+    man.exec stmt ~route:scalar flow
 
   let forget_cell c range man flow =
     let flow = map_env T_cur
@@ -864,7 +864,7 @@ struct
     in
     let v = mk_cell_var c in
     let stmt = mk_remove_var v range in
-    man.post stmt ~route:scalar flow
+    man.exec stmt ~route:scalar flow
 
 
   (** {2 Initial state} *)
@@ -899,7 +899,7 @@ struct
       man.eval ret flow ~route:scalar
 
     | Cell (c,mode) ->
-      add_cell c range man flow >>$ fun () flow ->
+      add_cell c range man flow >>% fun flow ->
       let v =
         if is_pointer_cell c then
           mk_pointer_cell_var_expr c ~mode t range
@@ -974,7 +974,7 @@ struct
       map_env T_cur (fun a ->
         { a with cells = cell_set_add c a.cells }
       ) man flow |>
-      man.post ~route:scalar (mk_c_declaration vv None scope range)
+      man.exec ~route:scalar (mk_c_declaration vv None scope range)
     else
       Post.return flow
 
@@ -1111,7 +1111,7 @@ struct
          let cl = List.map (fun bb -> { c with base = bb }) bl in
          Post.bind (fold_cells c cl range man) acc
       ) common (Post.return flow)
-    >>$ fun () flow ->
+    >>% fun flow ->
 
     (* Remove bases bl *)
     List.fold_left

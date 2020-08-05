@@ -89,7 +89,7 @@ struct
        Consequently, this domain should be placed *after* the toplevel C
        abstraction (i.e. c.memory.blocks) in the configuration file.
     *)
-    man.post (mk_expand (mk_base_expr base range) [primed] range) ~route:lowlevel flow
+    man.exec (mk_expand (mk_base_expr base range) [primed] range) ~route:lowlevel flow
 
 
   (** Prepare primed copies of assigned bases *)
@@ -108,7 +108,7 @@ struct
       (* Prime the target *)
       let primed_target = mk_primed_address base offset typ range in
       let lval = mk_c_deref primed_target range in
-      man.post (mk_forget lval range) flow
+      man.exec (mk_forget lval range) flow
 
     | _ ->
 
@@ -133,10 +133,10 @@ struct
       in
 
       (* Execute `forget lval` *)
-      man.post (mk_block adds range) flow >>$ fun () flow ->
-      man.post (mk_block assumes range) flow >>$ fun () flow ->
-      man.post (mk_forget (mk_stub_quantified_formula quants lval range) range) flow >>$ fun () flow ->
-      man.post (mk_block cleaners range) flow
+      man.exec (mk_block adds range) flow >>%
+      man.exec (mk_block assumes range) >>%
+      man.exec (mk_forget (mk_stub_quantified_formula quants lval range) range) >>%
+      man.exec (mk_block cleaners range)
 
 
 
@@ -184,13 +184,13 @@ struct
     let unprimed = mk_base_expr base range in
     let primed = mk_primed_base_expr base range in
     let stmt = mk_rename primed unprimed range in
-    let post1 = man.post stmt ~route:Below flow in
+    let post1 = man.exec stmt ~route:Below flow in
     (* If this is a weak base, we need to restore the old values. *)
     (* To do that, we remove the primed base from the flow and we join with post1 *)
     if base_mode base = STRONG then
       post1
     else
-      let post2 = man.post (mk_remove primed range) ~route:lowlevel flow in
+      let post2 = man.exec (mk_remove primed range) ~route:lowlevel flow in
       Post.join post1 post2
 
 

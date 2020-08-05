@@ -147,7 +147,7 @@ struct
     in
 
     (* Execute the body of the switch statement *)
-    let flow = man.exec body flow in
+    man.exec body flow >>% fun flow ->
 
     (* Merge cur, break and no_default environments *)
     let flow = Flow.add T_cur no_default man.lattice flow |>
@@ -165,10 +165,9 @@ struct
   let exec_case_or_default upd range man flow =
     (* Get the case environments and update their scope *)
     let env = Flow.get (T_c_switch_case range) man.lattice flow in
-    let env' = Flow.singleton (Flow.get_ctx flow) T_cur env |>
-               Common.Scope_update.update_scope upd range man |>
-               Flow.get T_cur man.lattice
-    in
+    Flow.singleton (Flow.get_ctx flow) T_cur env |>
+    Common.Scope_update.update_scope upd range man >>% fun f ->
+    let env' = Flow.get T_cur man.lattice f in
     (* Merge them with cur *)
     let flow = Flow.add T_cur env' man.lattice flow |>
                Flow.remove (T_c_switch_case range)
