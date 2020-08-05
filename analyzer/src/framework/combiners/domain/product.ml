@@ -288,10 +288,16 @@ struct
   (** Apply reduction rules on a post-conditions *)
   let reduce_post stmt man pre post =
     let rman = exec_reduction_man man in
-    List.fold_left (fun pointwise rule ->
+    post >>% fun flow ->
+    let rec iter = function
+      | [] -> Post.return flow
+      | rule::tl ->
         let module R = (val rule : EXEC_REDUCTION) in
-        post >>% R.reduce stmt man rman pre
-      ) post Rules.srules
+        match R.reduce stmt man rman pre flow with
+        | None -> iter tl
+        | Some post -> post
+    in
+    iter Rules.srules
 
 
   (** Entry point of abstract transformers *)
@@ -320,61 +326,35 @@ struct
 
   (** Manager used by reductions *)
   let eval_reduction_man (man:('a, t) man) : 'a eval_reduction_man = {
-    get_eval = (
-      let f : type t. t id -> prod_eval -> expr option = fun id evals ->
-        let rec aux : type t tt. t id -> tt id -> prod_eval -> expr option = fun target tree el ->
-          match tree, el with
-          | C_empty, [] -> None
-          | C_pair(_,left,right), (hde::tle) ->
-            if mem_domain ~target ~tree:left then
-              match hde with None -> None | Some x -> x
-            else
-              aux target right tle
-          | _ -> assert false
-        in
-        aux id Pool.id evals
-      in
-      f
-    );
-
-    del_eval = (
-      let f : type t. t id -> prod_eval -> prod_eval = fun id evals ->
-        let rec aux : type t tt. t id -> tt id -> prod_eval -> prod_eval = fun target tree el ->
-          match tree, el with
-          | C_empty, [] -> raise Not_found
-          | C_pair(_,left,right), (hde::tle) ->
-            if mem_domain ~target ~tree:left then None :: tle else hde :: aux target right tle
-          | _ -> assert false
-          in
-          aux id Pool.id evals
-      in
-      f
-    );
-
     get_man = (fun id -> find_domain_man id Pool.id man);
   }
 
 
   (** Apply reduction rules on a pointwise evaluation *)
-  let reduce_pointwise_eval exp man (pointwise:('a, expr option option list) cases) : 'a eval =
-    let rman = eval_reduction_man man in
-    (* Let reduction rules roll out imprecise evaluations from [pointwise] *)
-    let pointwise = List.fold_left (fun pointwise rule ->
-        let module R = (val rule : EVAL_REDUCTION) in
-        pointwise |> Cases.bind_some @@ fun el flow ->
-        R.reduce exp man rman flow el
-      ) pointwise Rules.erules
+  let reduce_pointwise_eval exp man input (pointwise:('a, expr option option list) cases) : 'a eval =
+    pointwise >>$ fun el flow ->
+    (* Keep only cases with non-empty results *)
+    let el' = List.filter (function Some (Some _) -> true | _ -> false) el |>
+              List.map (function Some (Some e) -> e | _ -> assert false) |>
+              List.sort_uniq compare_expr
     in
-    (* For performance reasons, we keep only one evaluation in each conjunction.
-       THE CHOICE IS ARBITRARY: keep the first non-None result using the
-       order of domains in the configuration file.
-    *)
-    let evl = pointwise |> Cases.map_opt (fun el ->
-        try List.find (function Some _ -> true | None -> false) el
-        with Not_found -> None
-      )
-    in
-    Eval.remove_duplicates man.lattice evl
+    if el' = [] then Eval.empty_singleton flow
+    else
+      let rman = eval_reduction_man man in
+      let rec iter = function
+        | [] ->
+          (* For performance reasons, we keep only one evaluation in each conjunction.
+             THE CHOICE IS ARBITRARY: keep the first non-None result
+          *)
+          Eval.singleton (List.hd el') flow
+
+        | rule::tl ->
+          let module R = (val rule : EVAL_REDUCTION) in
+          match R.reduce exp man rman input el' flow with
+          | None -> iter tl
+          | Some evl -> evl
+      in
+      iter Rules.erules
 
 
   (* The successor domain is the domain below the reduced
@@ -408,7 +388,8 @@ struct
        OptionExt.lift @@ fun pointwise ->
        add_missing_pointwise_eval exp pointwise man flow |>
        merge_inter_conflicts man flow |>
-       reduce_pointwise_eval exp man |>
+       reduce_pointwise_eval exp man flow |>
+       Eval.remove_duplicates man.lattice |>
        merge_intra_conflicts man flow)
 
 

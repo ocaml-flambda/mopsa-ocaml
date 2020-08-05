@@ -33,7 +33,7 @@ lang.universal.numeric.values.intervals = integer float
 lang.universal.numeric.packing = strategy functor
 lang.universal.numeric.relational = apron_manager binding apron_transformer \
                                     domain instances
-lang.universal.numeric.reductions = intervals_congruences intervals_rel intervals_powerset
+lang.universal.numeric.reductions = intervals_congruences intervals_rel intervals_powerset numeric_eval
 lang.universal.packing = static
 lang.universal.partitioning = merge_after_stmt 
 lang.universal.hooks = logs progress profiler gctest
