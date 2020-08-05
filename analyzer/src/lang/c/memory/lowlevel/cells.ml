@@ -208,7 +208,7 @@ struct
     | Var v when is_c_scalar_type v.vtyp &&
                  Z.(c.offset = zero) &&
                  (c.typ = Pointer || compare_typ v.vtyp (cell_type c) = 0)
-      -> { v with vsemantic = "C/Scalar" }
+      -> v
     | _ ->
       let name = mk_cell_uniq_name c in
       mkv name (V_c_cell c) (cell_type c) ~mode:(base_mode c.base) ~semantic:"C/Scalar"
