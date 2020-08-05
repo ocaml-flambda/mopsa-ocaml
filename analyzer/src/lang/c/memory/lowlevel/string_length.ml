@@ -331,7 +331,7 @@ struct
   let exec_assign lval rhs range man flow =
     man.eval rhs flow >>$ fun rhs flow ->
     eval_pointed_base_offset (mk_c_address_of lval range) range man flow >>$ fun (base,boffset,mode) flow ->
-    if not (is_interesting_base base) then
+    if not (is_interesting_base base) || not (is_c_int_type lval.etyp) then
       Post.return flow
     else
     match base.base_kind with
@@ -433,7 +433,7 @@ struct
       OptionExt.return
 
     | S_assign(lval, rval)
-      when !opt_track_length && lval.etyp |> void_to_char |> is_c_int_type
+      when !opt_track_length && lval.etyp |> is_c_scalar_type
       ->
       exec_assign lval rval stmt.srange man flow |>
       OptionExt.return
@@ -492,7 +492,7 @@ struct
   let eval_deref p range man flow =
     let ctype = under_pointer_type p.etyp in
     eval_pointed_base_offset p range man flow >>$ fun (base,offset,mode) flow ->
-    if not (is_interesting_base base) then
+    if not (is_interesting_base base) || not (is_c_int_type ctype) then
       man.eval (mk_top ctype range) flow
     else
       match base.base_kind with
@@ -757,16 +757,16 @@ struct
 
 
 
-  (* (\** 𝔼⟦ *(p + i) == n ⟧ *\)
-   * let eval_eq lval n range man flow =
-   *   eval_pointed_base_offset (mk_c_address_of lval range) range man flow >>$ fun (base,offset,mode) flow ->
-   *   man.eval n flow >>$ fun n flow ->
-   *   if not (is_interesting_base base) then
-   *     Eval.singleton (mk_top T_bool range) flow
-   *   else
-   *     Eval.join
-   *       (assume_eq base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_true range) flow)
-   *       (assume_ne base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_false range) flow) *)
+  (** 𝔼⟦ *(p + i) == n ⟧ *)
+  let eval_eq lval n range man flow =
+    eval_pointed_base_offset (mk_c_address_of lval range) range man flow >>$ fun (base,offset,mode) flow ->
+    man.eval n flow >>$ fun n flow ->
+    if not (is_interesting_base base) then
+      Eval.singleton (mk_top T_bool range) flow
+    else
+      Eval.join
+        (assume_eq base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_true range) flow)
+        (assume_ne base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_false range) flow)
         
 
   (** 𝔼⟦ ∃i ∈ [a,b]: *(p + i) == n ⟧ *)
@@ -826,19 +826,19 @@ struct
   let eval exp man flow =
     match ekind exp with
     (* 𝔼⟦ *p ⟧ *)
-    | E_c_deref p when is_c_int_type exp.etyp ->
+    | E_c_deref p when under_type p.etyp |> void_to_char |> is_c_scalar_type ->
       eval_deref p exp.erange man flow |>
       OptionExt.return
 
-    (* (\* 𝔼⟦ *(p + i) == n ⟧ *\)
-     * | E_binop(O_eq, lval, n)
-     * | E_unop(O_log_not, { ekind = E_binop(O_ne, lval, n)})
-     *   when is_c_int_type lval.etyp &&
-     *        is_c_lval (remove_casts lval) &&
-     *        is_c_int_type n.etyp
-     *   ->
-     *   eval_eq (remove_casts lval) n exp.erange man flow |>
-     *   OptionExt.return *)
+    (* 𝔼⟦ *(p + i) == n ⟧ *)
+    | E_binop(O_eq, lval, n)
+    | E_unop(O_log_not, { ekind = E_binop(O_ne, lval, n)})
+      when is_c_int_type lval.etyp &&
+           is_c_lval (remove_casts lval) &&
+           is_c_int_type n.etyp
+      ->
+      eval_eq (remove_casts lval) n exp.erange man flow |>
+      OptionExt.return
 
     (* 𝔼⟦ ∃i ∈ [a,b]: *(p + i) == n ⟧ *)
     | E_stub_quantified_formula([EXISTS,i,S_interval(a,b)], { ekind = E_binop(O_eq, lval, n) })
