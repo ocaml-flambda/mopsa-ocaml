@@ -203,8 +203,15 @@ struct
 
   (** Create a variable from a cell *)
   let mk_cell_var c : var =
-    let name = mk_cell_uniq_name c in
-    mkv name (V_c_cell c) (cell_type c) ~mode:(base_mode c.base) ~semantic:"C/Scalar"
+    match c.base.base_kind with
+    (* Don't create new variables for cells representing scalar variables *)
+    | Var v when is_c_scalar_type v.vtyp &&
+                 Z.(c.offset = zero) &&
+                 (c.typ = Pointer || compare_typ v.vtyp (cell_type c) = 0)
+      -> { v with vsemantic = "C/Scalar" }
+    | _ ->
+      let name = mk_cell_uniq_name c in
+      mkv name (V_c_cell c) (cell_type c) ~mode:(base_mode c.base) ~semantic:"C/Scalar"
 
 
   (** Create a variable from a numeric cell *)
@@ -218,7 +225,7 @@ struct
   let mk_pointer_cell_var_expr c ?(mode=None) typ range : expr =
     assert(is_pointer_cell c);
     let v = mk_cell_var c in
-    if is_c_void_type (under_type typ)
+    if compare_typ (remove_typedef_qual v.vtyp) (remove_typedef_qual typ) = 0
     then mk_var v ~mode range
     else mk_c_cast (mk_var v ~mode range) typ range
 
@@ -901,7 +908,17 @@ struct
       in
       man.eval v flow ~route:scalar
 
-
+  let eval_scalar_var v mode range man flow =
+    let c = mk_cell (mk_var_base v) Z.zero v.vtyp in
+    add_cell c range man flow >>% fun flow ->
+    let v =
+      if is_pointer_cell c then
+        mk_pointer_cell_var_expr c ~mode v.vtyp range
+      else
+        mk_numeric_cell_var_expr c ~mode range
+    in
+    man.eval v flow ~route:scalar
+  
   (* 𝔼⟦ *p ⟧ where p is a pointer to a function *)
   let eval_deref_function_pointer p range man flow =
     resolve_pointer p man flow >>$ fun pt flow ->
@@ -919,8 +936,8 @@ struct
     match ekind exp with
     | E_var ({ vkind = V_c_cell _},_) -> None
 
-    | E_var (v,_) when is_c_scalar_type v.vtyp ->
-      eval_deref_scalar_pointer (mk_c_address_of exp exp.erange) exp.erange man flow |>
+    | E_var (v,mode) when is_c_scalar_type v.vtyp ->
+      eval_scalar_var v mode exp.erange man flow |>
       OptionExt.return
 
     | E_c_deref p when under_type p.etyp |> void_to_char |> is_c_scalar_type
