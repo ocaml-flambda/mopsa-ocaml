@@ -2,7 +2,10 @@
     "language": "c",
     "domain": {
 	"seq": [
-	    // C iterators
+            // Partitioning
+            "universal.partitioning.merge_after_stmt",
+
+            // C iterators
             "c.iterators.program",
             "c.iterators.interproc",
             "c.iterators.goto",
