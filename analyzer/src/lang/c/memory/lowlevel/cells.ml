@@ -207,7 +207,7 @@ struct
     (* Don't create new variables for cells representing scalar variables *)
     | Var v when is_c_scalar_type v.vtyp &&
                  Z.(c.offset = zero) &&
-                 (c.typ = Pointer || compare_typ v.vtyp (cell_type c) = 0)
+                 (c.typ = Pointer || compare_typ (remove_typedef_qual v.vtyp) (cell_type c) = 0)
       -> v
     | _ ->
       let name = mk_cell_uniq_name c in
