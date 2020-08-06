@@ -366,11 +366,7 @@ struct
       pointwise
     else
       let evl = man.eval ~route:successor exp flow in
-      (* Check if the successor domain performed an evaluation *)
-      if Cases.for_all_some (fun ee flow -> compare_expr ee exp = 0) evl then
-        pointwise
-      else
-        List.map (function None -> Some evl | Some evl as x -> x) pointwise
+      List.map (function None -> Some evl | x -> x) pointwise
 
   (** Entry point of abstract evaluations *)
   let eval targets =
