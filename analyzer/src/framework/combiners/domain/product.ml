@@ -232,15 +232,7 @@ struct
                 fst_pair_man.set (fst_pair_man.get cur) after_cur
               ) man.lattice after_flow
             in
-            let common_alarms = List.filter (fun a -> List.mem a hdalarms) (List.flatten tlalarms) in
-            let merge_alarms a1 a2 =
-              let a1', a1'' = AlarmSet.partition (fun a -> List.mem (get_alarm_class a) common_alarms) a1 in
-              let a2', a2'' = AlarmSet.partition (fun a -> List.mem (get_alarm_class a) common_alarms) a2 in
-              AlarmSet.inter a1' a2' |>
-              AlarmSet.union a1'' |>
-              AlarmSet.union a2''
-            in
-            let flow = merge_flows ~merge_alarms man pre (flow,log) (after_flow,after_log) in
+            let flow = merge_flows ~merge_alarms:AlarmSet.union man pre (flow,log) (after_flow,after_log) in
             let log = Log.meet_log log after_log in
             let cleaners = cleaners @ after_cleaners in
             Cases.return (Some (Some rr :: after)) flow ~cleaners ~log
