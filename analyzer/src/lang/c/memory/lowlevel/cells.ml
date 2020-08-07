@@ -1006,6 +1006,13 @@ struct
     List.fold_left (fun acc c ->
         Post.bind (remove_cell c range man) acc
       ) (Post.return flow) cells
+    >>% fun flow ->
+    match b with
+    | { base_kind = Var v; base_valid = true; } when is_c_scalar_type v.vtyp ->
+      man.exec ~route:scalar (mk_remove_var v range) flow
+
+    | _ ->
+      Post.return flow
 
 
   (** Rename bases and their cells *)

@@ -287,7 +287,7 @@ struct
   (** 𝕊⟦ forget(e); ⟧ *)
   let exec_forget e range man flow =
     eval_pointed_base_offset (mk_c_address_of e range) range man flow >>$ fun (base,boffset,mode) flow ->
-    if not (is_interesting_base base) then
+    if not (is_interesting_base base) || not (is_c_int_type e.etyp) then
       Post.return flow
     else
       match base.base_kind with
@@ -304,7 +304,7 @@ struct
 
   let exec_forget_quant quants e range man flow =
     eval_pointed_base_offset (mk_c_address_of e range) range man flow >>$ fun (base,boffset,mode) flow ->
-    if not (is_interesting_base base) then
+    if not (is_interesting_base base) || not (is_c_int_type e.etyp) then
       Post.return flow
     else
       match base.base_kind with
@@ -399,7 +399,6 @@ struct
   (** Transformers entry point *)
   let exec stmt man flow =
     match skind stmt with
-
     | S_c_declaration (v,init,scope) when not (is_c_scalar_type v.vtyp) ->
       exec_declare_variable v scope stmt.srange man flow |>
       OptionExt.return
@@ -420,11 +419,11 @@ struct
       exec_fold_bases (expr_to_base e) (List.map expr_to_base el) stmt.srange man flow |>
       OptionExt.return
 
-    | S_forget(e) when is_c_scalar_type e.etyp ->
+    | S_forget(e) when is_c_type e.etyp ->
       exec_forget e stmt.srange man flow |>
       OptionExt.return
 
-    | S_forget({ ekind = E_stub_quantified_formula(quants, e)}) when is_c_scalar_type e.etyp ->
+    | S_forget({ ekind = E_stub_quantified_formula(quants, e)}) when is_c_type e.etyp ->
       exec_forget_quant quants e stmt.srange man flow |>
       OptionExt.return
 
