@@ -37,11 +37,22 @@ struct
   let init prog man flow = flow
   let ask query man flow = None
 
+  let opt_stub_use_forall_loop_eval = ref false
+  (** Use fallback evaluation of ∀ formulas with loops *)
+
+  let () = register_builtin_option {
+      key      = "-stub-use-forall-loop-evaluation";
+      doc      = " use the fallback evaluation of universally quantified formulas with loops";
+      category = "Stubs";
+      spec     = ArgExt.Set opt_stub_use_forall_loop_eval;
+      default  = "";
+    }
 
   let exec_assume_quants quants cond range man flow =
     let rec iter = function
       | [] -> mk_assume cond range
       | (EXISTS,_,_)::tl -> iter tl
+      | (FORALL,_,_)::tl when not !opt_stub_use_forall_loop_eval -> iter tl
       | (FORALL,i,S_interval(a,b))::tl ->
         let ii = mk_var i range in
         mk_block [ mk_assign ii a range;
