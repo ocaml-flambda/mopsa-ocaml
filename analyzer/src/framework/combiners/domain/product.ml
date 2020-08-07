@@ -34,8 +34,8 @@ sig
   include STACKED_COMBINER
   val alarms : alarm_class list list
   val members : domain list list
-  val exec : domain list -> stmt -> ('a,t) man -> 'a flow -> 'a post option list * 'a ctx
-  val eval : string list -> expr -> ('a,t) man -> 'a flow -> 'a eval option list * 'a ctx
+  val exec : domain list -> stmt -> ('a,t) man -> 'a flow -> 'a post option list
+  val eval : string list -> expr -> ('a,t) man -> 'a flow -> 'a eval option list
 end
 
 
@@ -60,8 +60,8 @@ struct
   let widen _ _ _ ((),s) ((),s') = (),s,s',true
   let merge _ _ _ = ()
   let init _ _ flow = flow
-  let exec _ _ _ flow = [], Flow.get_ctx flow
-  let eval _ _ _ flow = [], Flow.get_ctx flow
+  let exec _ _ _ flow = []
+  let eval _ _ _ flow = []
   let ask _ _ _ _ = None
 end
 
@@ -120,8 +120,7 @@ struct
     let f2 = P.exec targets in
     if not (sat_targets ~targets ~domains:S.domains) then
       (fun stmt man flow ->
-         let l,ctx = f2 stmt (snd_pair_man man) flow in
-         None :: l, ctx
+         None :: f2 stmt (snd_pair_man man) flow
       )
     else
       let f1 = S.exec targets in
@@ -129,16 +128,14 @@ struct
          let post = f1 stmt (fst_pair_man man) flow in
          let ctx = OptionExt.apply Cases.get_ctx (Flow.get_ctx flow) post in
          let flow = Flow.set_ctx ctx flow in
-         let l,ctx = f2 stmt (snd_pair_man man) flow in
-         post :: l, ctx
+         post :: f2 stmt (snd_pair_man man) flow
       )
 
   let eval targets =
     let f2 = P.eval targets in
     if not (sat_targets ~targets ~domains:S.domains) then
       (fun exp man flow ->
-         let l,ctx = f2 exp (snd_pair_man man) flow in
-         None :: l, ctx
+         None :: f2 exp (snd_pair_man man) flow
       )
     else
       let f1 = S.eval targets in
@@ -146,8 +143,7 @@ struct
          let eval = f1 exp (fst_pair_man man) flow in
          let ctx = OptionExt.apply Cases.get_ctx (Flow.get_ctx flow) eval in
          let flow = Flow.set_ctx ctx flow in
-         let l,ctx = f2 exp (snd_pair_man man) flow in
-         eval :: l, ctx
+         eval :: f2 exp (snd_pair_man man) flow
       )
 
   let ask targets =
@@ -256,18 +252,62 @@ struct
   (** {2 Abstract transformer} *)
   (** ************************ *)
 
+  (** The successor domain is the domain below the reduced
+     product. Since all member domains in the reduced product are at the
+     same level, we can pick any one of them *)
+  let successor =
+    (* XXX This is a hack to be sure to take a member that is a user
+       domain, not a composed domain, because `BelowOf` routes are
+       defined for user domains only *)
+    let member = List.find (function [domain] -> true | _ -> false) Pool.members |>
+                 List.hd in
+    BelowOf member
+
+
+  (** Get the context of a pointwise result *)
+  let rec get_pointwise_ctx ~default pointwise =
+    match pointwise with
+    | []               -> default
+    | None::tl         -> get_pointwise_ctx ~default tl
+    | Some cases :: tl -> Context.get_most_recent
+                            (Cases.get_ctx cases)
+                            (get_pointwise_ctx ~default tl)
+
+  (** Set the context of a pointwise result *)
+  let rec set_pointwise_ctx ctx pointwise =
+    match pointwise with
+    | []               -> []
+    | None :: tl       -> None :: set_pointwise_ctx ctx tl
+    | Some cases :: tl -> Some (Cases.set_ctx ctx cases) :: set_pointwise_ctx ctx tl
+
+
+  (** Apply [f] transfer function pointwise over all domains *)
+  let apply_pointwise f arg man flow =
+    let pointwise = f arg man flow in
+    if List.exists (function Some _ -> true | None -> false) pointwise
+    then
+      let ctx = get_pointwise_ctx pointwise ~default:(Flow.get_ctx flow) in
+      Some (set_pointwise_ctx ctx pointwise)
+    else None
+
+
+  (** Replace missing pointwise results by calling the successor domain *)
+  let add_missing_pointwise_results fsuccessor arg pointwise flow =
+    (* Call the successor domain only when there are missing results *)
+    if List.for_all (function Some _ -> true | None -> false) pointwise then
+      pointwise
+    else
+      let flow = Flow.set_ctx (get_pointwise_ctx pointwise ~default:(Flow.get_ctx flow)) flow in
+      let res = fsuccessor arg flow in
+      List.map (function None -> Some res | x -> x) pointwise |>
+      set_pointwise_ctx (Cases.get_ctx res)
+
+
+
   (** Manager used by reductions *)
   let exec_reduction_man (man:('a, t) man) : 'a exec_reduction_man = {
     get_man = (fun id -> find_domain_man id Pool.id man);
   }
-
-
-  (* Apply [exec] transfer function pointwise over all domains *)
-  let exec_pointwise f stmt man flow : 'a post option list option =
-    let posts, ctx = f stmt man flow in
-    if List.exists (function Some _ -> true | None -> false) posts
-    then Some posts
-    else None
 
 
   (** Simplify a pointwise post-state by changing lists of unit into unit *)
@@ -296,9 +336,10 @@ struct
   let exec targets =
     let f = Pool.exec targets in
     (fun stmt man flow ->
-       exec_pointwise f stmt man flow |>
+       apply_pointwise f stmt man flow |>
        OptionExt.lift @@ fun pointwise ->
-       merge_inter_conflicts man flow pointwise |>
+       add_missing_pointwise_results (man.exec ~route:successor) stmt pointwise flow |>
+       merge_inter_conflicts man flow |>
        simplify_pointwise_post |>
        merge_intra_conflicts man flow |>
        reduce_post stmt man flow)
@@ -306,14 +347,6 @@ struct
 
   (** {2 Abstract evaluations} *)
   (** ************************ *)
-
-
-  (** Compute pointwise evaluations over the pool of domains *)
-  let eval_pointwise f exp man flow : 'a eval option list option =
-    let pointwise, ctx = f exp man flow in
-    if List.exists (function Some _ -> true | None -> false) pointwise
-    then Some pointwise
-    else None
 
 
   (** Manager used by reductions *)
@@ -349,38 +382,17 @@ struct
       iter Rules.erules
 
 
-  (* The successor domain is the domain below the reduced
-     product. Since all member domains in the reduced product are at the
-     same level, we can pick any one of them *)
-  let successor =
-    (* XXX Make sure to take a member that is a user domain, not a composed domain,
-       because `BelowOf` routes are defined for user domains only *)
-    let member = List.find (function [domain] -> true | _ -> false) Pool.members |>
-                 List.hd in
-    BelowOf member
-
-  (** Replace missing evaluations with the evaluation of the successor domain *)
-  let add_missing_pointwise_eval exp pointwise man flow =
-    (* Call the successor domain only when there are missing evaluations *)
-    if List.for_all (function Some _ -> true | None -> false) pointwise then
-      pointwise
-    else
-      let evl = man.eval ~route:successor exp flow in
-      List.map (function None -> Some evl | x -> x) pointwise
-
   (** Entry point of abstract evaluations *)
   let eval targets =
     let f = Pool.eval targets in
     (fun exp man flow ->
-       eval_pointwise f exp man flow |>
+       apply_pointwise f exp man flow |>
        OptionExt.lift @@ fun pointwise ->
-       add_missing_pointwise_eval exp pointwise man flow |>
+       add_missing_pointwise_results (man.eval ~route:successor) exp pointwise flow |>
        merge_inter_conflicts man flow |>
        reduce_pointwise_eval exp man flow |>
        Eval.remove_duplicates man.lattice |>
        merge_intra_conflicts man flow)
-
-
 
 end
 
