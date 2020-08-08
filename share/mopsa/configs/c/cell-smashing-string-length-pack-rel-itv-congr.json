@@ -50,8 +50,8 @@
                             "c.memory.lowlevel.string_length"
                         ],
 			"reductions": [
-			    "c.memory.lowlevel.reductions.cell_smashing",
-			    "c.memory.lowlevel.reductions.cell_string_length"
+			    "universal.numeric.reductions.numeric_eval",
+			    "c.memory.reductions.pointer_eval"
 			]
                     },
                     {
