@@ -857,13 +857,8 @@ struct
     man.exec stmt ~route:scalar flow
 
   let forget_cell c range man flow =
-    let flow = map_env T_cur
-        (fun a ->
-           { a with cells = cell_set_remove c a.cells }
-        ) man flow
-    in
     let v = mk_cell_var c in
-    let stmt = mk_remove_var v range in
+    let stmt = mk_forget_var v range in
     man.exec stmt ~route:scalar flow
 
 
@@ -1121,7 +1116,7 @@ struct
     let ptr = mk_c_address_of lval range in
     resolve_pointer ptr man flow >>$ fun p flow ->
     match p with
-    | P_block(base,offset,mode) ->
+    | P_block(base,offset,mode) when is_interesting_base base ->
       (* Compute the interval of the offset *)
       let itv = offset_interval offset range man flow in
       (* Add the size of the pointed cells *)
@@ -1140,7 +1135,7 @@ struct
     let ptr = mk_c_address_of lval range in
     resolve_pointer ptr man flow >>$ fun p flow ->
     match p with
-    | P_block(base,offset,mode) ->
+    | P_block(base,offset,mode) when is_interesting_base base ->
       (* Compute the interval of the offset *)
       let itv = offset_interval offset range man flow in
       (* Add the size of the pointed cells *)

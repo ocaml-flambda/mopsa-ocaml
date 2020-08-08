@@ -750,7 +750,7 @@ struct
     let o = mk_offset p None range in
     let stmt =
       if PointerSet.is_valid (Map.find p a) then
-        mk_forget o range
+        mk_assign o (mk_top T_int range) range
       else
         mk_add o range
     in

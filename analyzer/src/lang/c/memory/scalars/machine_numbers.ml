@@ -535,7 +535,8 @@ struct
 
     | S_forget ({ekind = E_var _} as v) when is_c_num_type v.etyp ->
       let vv = mk_num_var_expr v in
-      man.exec (mk_forget vv stmt.srange) ~route:numeric flow |>
+      let lo,hi = rangeof v.etyp in
+      man.exec (mk_assign vv (mk_z_interval lo hi stmt.srange) stmt.srange) ~route:numeric flow |>
       OptionExt.return
 
     | _ -> None
