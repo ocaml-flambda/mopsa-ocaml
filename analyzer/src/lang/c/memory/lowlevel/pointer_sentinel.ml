@@ -357,7 +357,7 @@ struct
     let ptr = mk_c_address_of e range in
     resolve_pointer ptr man flow >>$ fun p flow ->
     match p with
-    | P_block(base,offset,mode) when is_interesting_base base ->
+    | P_block(base,offset,mode) when is_interesting_base base && is_c_pointer_type e.etyp ->
       let sentinel_pos = mk_sentinel_pos_var_expr base ~mode range in
       let sentinel = mk_sentinel_var_expr base ~mode range in
       man.exec ~route:numeric (mk_assign sentinel_pos (mk_zero range) range) flow >>% fun flow ->
@@ -370,7 +370,7 @@ struct
     let ptr = mk_c_address_of e range in
     resolve_pointer ptr man flow >>$ fun p flow ->
     match p with
-    | P_block(base,offset,mode) when is_interesting_base base ->
+    | P_block(base,offset,mode) when is_interesting_base base && is_c_pointer_type e.etyp ->
       let sentinel_pos = mk_sentinel_pos_var_expr base ~mode range in
       let sentinel = mk_sentinel_var_expr base ~mode range in
       man.exec ~route:numeric (mk_assign sentinel_pos (mk_zero range) range) flow >>% fun flow ->
@@ -382,7 +382,7 @@ struct
   (** Declaration of a C variable *)
   let declare_variable v scope range man flow =
     let base = mk_var_base v in
-    if not (is_interesting_base base)
+    if not (is_interesting_base base) || not (is_c_pointer_type v.vtyp)
     then Post.return flow
     else add_base base range man flow
 
@@ -519,48 +519,51 @@ struct
   (** Assignment abstract transformer *)
   let assign lval rval range man flow =
     eval_pointed_base_offset (mk_c_address_of lval range) range man flow >>$ fun (base,offset,mode) flow ->
-    man.eval ~route:scalar offset flow >>$ fun offset flow ->
-    man.eval rval flow >>$ fun rval flow ->
-    assign_cases base offset mode rval range man flow
+    if not (is_interesting_base base) || not (is_c_pointer_type lval.etyp) then
+      Post.return flow
+    else
+      man.eval ~route:scalar offset flow >>$ fun offset flow ->
+      man.eval rval flow >>$ fun rval flow ->
+      assign_cases base offset mode rval range man flow
 
 
 
   (** Transformers entry point *)
   let exec stmt man flow =
     match skind stmt with
-    | S_c_declaration (v,None,scope) when is_interesting_base (mk_var_base v) ->
+    | S_c_declaration (v,None,scope) when not (is_c_scalar_type v.vtyp) ->
       declare_variable v scope stmt.srange man flow |>
       OptionExt.return
 
-    | S_add (e) when is_base_expr e->
+    | S_add (e) when is_base_expr e && is_c_type e.etyp && not (is_var_base_expr e && is_c_scalar_type e.etyp) ->
       add_base (expr_to_base e) stmt.srange man flow |>
       OptionExt.return
 
-    | S_rename (e1,e2) when is_base_expr e1 && is_base_expr e2 ->
+    | S_rename (e1,e2) when is_base_expr e1 && is_base_expr e2 && is_c_type e1.etyp && not (is_var_base_expr e1 && is_c_scalar_type e1.etyp) ->
       rename_base (expr_to_base e1) (expr_to_base e2) stmt.srange man flow |>
       OptionExt.return
 
-    | S_expand(e,el) when is_base_expr e && List.for_all is_base_expr el ->
+    | S_expand(e,el) when is_base_expr e && List.for_all is_base_expr el && is_c_type e.etyp && not (is_var_base_expr e && is_c_scalar_type e.etyp) ->
       expand_base (expr_to_base e) (List.map expr_to_base el) stmt.srange man flow |>
       OptionExt.return
 
-    | S_fold(e,el) when is_base_expr e && List.for_all is_base_expr el ->
+    | S_fold(e,el) when is_base_expr e && List.for_all is_base_expr el && is_c_type e.etyp && not (is_var_base_expr e && is_c_scalar_type e.etyp)->
       fold_bases (expr_to_base e) (List.map expr_to_base el) stmt.srange man flow |>
       OptionExt.return
 
-    | S_forget(e) when is_c_deref e  ->
+    | S_forget(e) when is_c_type e.etyp  ->
       forget e stmt.srange man flow |>
       OptionExt.return
 
-    | S_forget({ ekind = E_stub_quantified_formula(quants, e) }) when is_c_deref e ->
+    | S_forget({ ekind = E_stub_quantified_formula(quants, e) }) when is_c_type e.etyp ->
       forget_quant quants e stmt.srange man flow |>
       OptionExt.return
 
-    | S_remove(e) when is_base_expr e ->
+    | S_remove(e) when is_base_expr e && is_c_type e.etyp && not (is_c_scalar_type e.etyp) ->
       remove_base (expr_to_base e) stmt.srange man flow |>
       OptionExt.return
 
-    | S_assign(lval, rval) when is_c_pointer_type lval.etyp ->
+    | S_assign(lval, rval) when is_c_scalar_type lval.etyp ->
       assign lval rval stmt.srange man flow |>
       OptionExt.return
 
@@ -637,15 +640,15 @@ struct
 
 
   (** Abstract evaluation of a dereference *)
-  let eval_deref exp range man flow =
-    let p = match ekind exp with E_c_deref p -> p | _ -> assert false in
+  let eval_deref p range man flow =
+    let ctype = under_pointer_type p.etyp in
     eval_pointed_base_offset p range man flow >>$ fun (base,offset,mode) flow ->
-    if is_interesting_base base
+    if is_interesting_base base && is_c_pointer_type ctype
     then
       man.eval ~route:scalar offset flow >>$ fun offset flow ->
-      eval_deref_cases base offset mode (under_type p.etyp) range man flow
+      eval_deref_cases base offset mode ctype range man flow
     else
-      Eval.singleton (mk_top (under_type p.etyp |> void_to_char) range) flow
+      Eval.singleton (mk_top ctype range) flow
 
 
 
@@ -776,10 +779,9 @@ struct
   let eval exp man flow =
     match ekind exp with
     | E_c_deref p
-      when is_c_pointer_type exp.etyp &&
-           under_type p.etyp |> void_to_char |> is_c_scalar_type
+      when under_type p.etyp |> void_to_char |> is_c_scalar_type
       ->
-      eval_deref exp exp.erange man flow |>
+      eval_deref p exp.erange man flow |>
       OptionExt.return
 
     (* 𝕊⟦ ∀i ∈ [a,b] : *(p + i) == q ⟧ *)
