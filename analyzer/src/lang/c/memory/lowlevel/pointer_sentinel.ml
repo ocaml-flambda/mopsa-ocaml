@@ -790,7 +790,7 @@ struct
       when is_c_pointer_type lval.etyp &&
            is_var_in_expr i lval &&
            not (is_var_in_expr i q) &&
-           is_c_deref lval
+           is_c_lval lval
       ->
       eval_forall_eq i a b lval q exp.erange man flow |>
       OptionExt.return
@@ -801,7 +801,7 @@ struct
       when is_c_pointer_type lval.etyp &&
            is_var_in_expr i lval &&
            not (is_var_in_expr i q) &&
-           is_c_deref lval
+           is_c_lval lval
       ->
       eval_forall_ne i a b lval q exp.erange man flow |>
       OptionExt.return
