@@ -358,6 +358,10 @@ struct
   (** Apply reduction rules on a pointwise evaluation *)
   let reduce_pointwise_eval exp man input (pointwise:('a, expr option option list) cases) : 'a eval =
     pointwise >>$ fun el flow ->
+    (* An empty result in [el] makes the whole result empty *)
+    if List.exists (function Some None -> true | _ -> false) el then
+      Eval.empty_singleton flow
+    else
     (* Keep only cases with non-empty results *)
     let el' = List.filter (function Some (Some _) -> true | _ -> false) el |>
               List.map (function Some (Some e) -> e | _ -> assert false) |>
