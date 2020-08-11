@@ -751,7 +751,7 @@ struct
         top
       else
         (* Create a temporary smash and populate it with the values of cells *)
-        let smash = mk_range_attr_var range "smash" ~mode:WEAK t in
+        let smash = mk_range_attr_var range "smash" ~mode:WEAK ~semantic:"C/Scalar" t in
         let weak_smash = mk_var smash range in
         let strong_smash = mk_var smash ~mode:(Some STRONG) range in
         man.exec (mk_add_var smash range) ~route:scalar flow >>% fun flow ->

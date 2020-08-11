@@ -163,11 +163,11 @@ val mk_fresh_uniq_var : string -> ?mode:mode -> Typ.typ -> unit -> var
 val mktmp : ?typ:Typ.typ -> ?mode:mode -> unit -> var
 (** Create a fresh temporary variable *)
 
-val mk_attr_var : var -> string -> ?mode:mode -> Typ.typ -> var
+val mk_attr_var : var -> string -> ?mode:mode -> ?semantic:semantic -> Typ.typ -> var
 (** [mk_attr_var v a t] creates a variable representing an attribute [a] of
     another variable [v] *)
 
-val mk_range_attr_var : Location.range -> string -> ?mode:mode -> Typ.typ -> var
+val mk_range_attr_var : Location.range -> string -> ?mode:mode -> ?semantic:semantic -> Typ.typ -> var
 (** [mk_range_attr_var r a t] creates a variable representing an attribute [a]
     of a program location [r] *)
 
