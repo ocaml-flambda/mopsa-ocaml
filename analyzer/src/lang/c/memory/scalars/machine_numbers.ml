@@ -515,22 +515,22 @@ struct
       man.exec ~route:numeric (mk_rename vv1 vv2 stmt.srange) flow |>
       OptionExt.return
 
-    | S_expand(({ekind = E_var _} as e),el)
+    | S_expand({ekind = E_var _} as e, el)
       when is_c_num_type e.etyp &&
            List.for_all (fun ee -> is_c_num_type ee.etyp) el
       ->
-      man.eval e flow >>$? fun e' flow ->
-      bind_list el (fun e flow -> man.eval e flow) flow >>$? fun el' flow ->
-      man.exec (mk_expand e' el' stmt.srange) ~route:numeric flow |>
+      let v = mk_num_var_expr e in
+      let vl = List.map mk_num_var_expr el in
+      man.exec (mk_expand v vl stmt.srange) ~route:numeric flow |>
       OptionExt.return
 
     | S_fold(({ekind = E_var _} as e),el)
       when is_c_num_type e.etyp &&
            List.for_all (fun ee -> is_c_num_type ee.etyp) el
       ->
-      man.eval e flow >>$? fun e' flow ->
-      bind_list el (fun e flow -> man.eval e flow) flow >>$? fun el' flow ->
-      man.exec (mk_fold e' el' stmt.srange) ~route:numeric flow |>
+      let v = mk_num_var_expr e in
+      let vl = List.map mk_num_var_expr el in
+      man.exec (mk_fold v vl stmt.srange) ~route:numeric flow |>
       OptionExt.return
 
     | S_forget ({ekind = E_var _} as v) when is_c_num_type v.etyp ->
