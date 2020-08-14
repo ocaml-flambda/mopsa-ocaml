@@ -266,7 +266,7 @@ struct
       (fun (quants,cond) flow -> eval_prenex_formula cond_to_stmt quants cond f.range man flow)
       (Flow.join man.lattice)
       (Flow.meet man.lattice)
-      (Flow.bottom_from flow)
+      (Flow.remove T_cur flow)
 
   let rec eval_formula
       (cond_to_stmt: expr -> range -> stmt)

@@ -512,7 +512,7 @@ struct
       (* Search for the first and last positions of `n` in `str` *)
       let c = Z.to_int n |> Char.chr in
       if not (String.contains str c) then
-        Post.return (Flow.bottom_from flow)
+        Post.return (Flow.remove T_cur flow)
       else
         let l = String.index str c in
         let u = String.rindex str c in
@@ -603,11 +603,11 @@ struct
       (fun flow ->
          match c_expr_to_z n with
          | Some n when Z.(n = zero) -> Post.return flow
-         | Some n -> Cases.empty_singleton (Flow.bottom_from flow)
+         | Some n -> Cases.empty_singleton (Flow.remove T_cur flow)
          | None ->
            assume (eq n zero range)
              ~fthen:(fun flow -> Post.return flow)
-             ~felse:(fun flow -> Cases.empty_singleton (Flow.bottom_from flow))
+             ~felse:(fun flow -> Cases.empty_singleton (Flow.remove T_cur flow))
              man flow
       );
 
@@ -616,7 +616,7 @@ struct
       *)
       [ le min (pred length range) range;
         le length max range ],
-      (fun flow -> Cases.empty_singleton (Flow.bottom_from flow));
+      (fun flow -> Cases.empty_singleton (Flow.remove T_cur flow));
 
       (*     min       max    length   
          |----|nnnnnnnnn|-------0------>
@@ -664,7 +664,7 @@ struct
            |------|------0--------|------>
         *)
         [ mk_in length min max range ],
-        (fun flow -> Cases.empty_singleton (Flow.bottom_from flow));
+        (fun flow -> Cases.empty_singleton (Flow.remove T_cur flow));
 
         (*       length   min    max
            |------0--------|------|------>
@@ -741,10 +741,10 @@ struct
             (fun flow -> Post.return flow);
 
             [ log_and before1 cover2 range ],
-            (fun flow -> Cases.empty_singleton (Flow.bottom_from flow));
+            (fun flow -> Cases.empty_singleton (Flow.remove T_cur flow));
 
             [ log_and cover1 before2 range ],
-            (fun flow -> Cases.empty_singleton (Flow.bottom_from flow));
+            (fun flow -> Cases.empty_singleton (Flow.remove T_cur flow));
 
             [ log_and cover1 cover2 range ],
             (fun flow -> man.exec (mk_assume (eq (sub length1 min1 range) (sub length2 min2 range) range) range) ~route:numeric flow);

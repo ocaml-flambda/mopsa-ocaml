@@ -94,14 +94,14 @@ struct
 
     | S_assume{ekind = E_constant (C_bool false)}
     | S_assume{ekind = E_unop(O_log_not, {ekind = E_constant (C_bool true)})} ->
-      Post.return (Flow.bottom_from flow) |>
+      Post.return (Flow.remove T_cur flow) |>
       OptionExt.return
 
     | S_assume e ->
       man.eval e flow >>$? fun e flow ->
       eval_bool_expr e stmt.srange man flow
         ~ftrue:(fun flow -> Post.return flow)
-        ~ffalse:(fun flow -> Post.return (Flow.bottom_from flow))
+        ~ffalse:(fun flow -> Post.return (Flow.remove T_cur flow))
         ~fboth:(fun flow -> Post.return flow) |>
       OptionExt.return
 
