@@ -103,6 +103,8 @@ val rename : token -> token -> 'a lattice -> 'a flow -> 'a flow
 val remove : token -> 'a flow -> 'a flow
 (** [remove tk flow] removes token [tk] from the map of [flow] *)
 
+val mem: token -> 'a flow -> bool
+
 val filter : (token -> 'a -> bool) -> 'a flow -> 'a flow
 (** [filter f flow] keeps in [flow] all tokens [tk] verifying [f tk = true] *)
 

@@ -159,6 +159,8 @@ let rename (tki: token) (tko: token) (lattice: 'a lattice) (flow: 'a flow) : 'a 
   remove tki flow |>
   add tko ai lattice
 
+let mem (tk:token) (flow:'a flow) = TokenMap.mem tk flow.tmap
+
 let filter (f: token -> 'a -> bool) (flow: 'a flow) : 'a flow =
   { flow with tmap = TokenMap.filter f flow.tmap }
 
