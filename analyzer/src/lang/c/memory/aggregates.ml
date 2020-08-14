@@ -240,28 +240,7 @@ struct
       aux l fields
 
     | Some (C_init_expr e) when is_c_record_type e.etyp ->
-      (* Remove unnecessary casts in e *)
-      let e =
-        let rec aux ee =
-          match ekind ee with
-          | E_c_cast (eee, false) -> eee
-          | _ -> ee
-        in
-        aux e
-      in
-
-      let fields' = match remove_typedef_qual typ with
-        | T_c_record{c_record_fields} -> c_record_fields
-        | _ -> assert false
-      in
-      let rec aux = function
-        | [] -> [],[]
-        | field :: tl ->
-          let o = Z.add offset (Z.of_int field.c_field_offset) in
-          let init = Some (C_init_expr (mk_lowlevel_member_access e field.c_field_index field.c_field_type range)) in
-          flatten_init init o field.c_field_type range >>+ aux tl
-      in
-      aux fields'
+      [(e,offset,typ)],[]
 
 
     | _ -> panic_at ~loc:__LOC__ range "initialization %a is not supported"
