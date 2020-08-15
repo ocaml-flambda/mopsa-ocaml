@@ -26,6 +26,7 @@
 
 #include <libintl.h>
 #include <stddef.h>
+#include <errno.h>
 #include "mopsa_libc_utils.h"
 
 /* If true, gettext returns its argument string unchanged.

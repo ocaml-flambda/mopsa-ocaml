@@ -22,6 +22,7 @@
 #include <stddef.h>
 #include <sys/types.h>
 #include <pwd.h>
+#include <errno.h>
 #include "mopsa_libc_utils.h"
 
 

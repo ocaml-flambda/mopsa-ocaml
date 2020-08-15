@@ -28,6 +28,8 @@
 #include <stdint.h> // for intmax_t & co.
 #include <wchar.h>  // for wchar_t
 #include <string.h> // for strlen
+#include <errno.h>  // for _errno
+
 
 
 // FIXME: INTMAX_MIN can not be used in stubs since it is defined with the

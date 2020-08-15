@@ -20,6 +20,7 @@
 /****************************************************************************/
 
 #include <termios.h>
+#include <errno.h>
 #include "mopsa_libc_utils.h"
 
 /* Stubs for functions provided by termios.h */
