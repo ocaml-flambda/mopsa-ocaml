@@ -177,12 +177,14 @@ struct
     match pt with
     | P_null
     | P_invalid
-    | P_block ({ base_valid = false }, _, _)
-    | P_top ->
+    | P_block ({ base_valid = false }, _, _) ->
       Cases.empty_singleton flow
 
     | P_block (base, offset, mode) ->
-      Cases.singleton (base, offset, mode) flow
+      Cases.singleton (Some (base, offset, mode)) flow
+
+    | P_top ->
+      Cases.singleton None flow
 
     | P_fun _ -> assert false
 
@@ -518,13 +520,16 @@ struct
 
   (** Assignment abstract transformer *)
   let assign lval rval range man flow =
-    eval_pointed_base_offset (mk_c_address_of lval range) range man flow >>$ fun (base,offset,mode) flow ->
-    if not (is_interesting_base base) || not (is_c_pointer_type lval.etyp) then
-      Post.return flow
-    else
-      man.eval ~route:scalar offset flow >>$ fun offset flow ->
-      man.eval rval flow >>$ fun rval flow ->
-      assign_cases base offset mode rval range man flow
+    eval_pointed_base_offset (mk_c_address_of lval range) range man flow >>$ fun bo flow ->
+    match bo with
+    | None -> Post.return flow
+    | Some (base,offset,mode) ->
+      if not (is_interesting_base base) || not (is_c_pointer_type lval.etyp) then
+        Post.return flow
+      else
+        man.eval ~route:scalar offset flow >>$ fun offset flow ->
+        man.eval rval flow >>$ fun rval flow ->
+        assign_cases base offset mode rval range man flow
 
 
 
@@ -642,13 +647,16 @@ struct
   (** Abstract evaluation of a dereference *)
   let eval_deref p range man flow =
     let ctype = under_pointer_type p.etyp in
-    eval_pointed_base_offset p range man flow >>$ fun (base,offset,mode) flow ->
-    if is_interesting_base base && is_c_pointer_type ctype
-    then
-      man.eval ~route:scalar offset flow >>$ fun offset flow ->
-      eval_deref_cases base offset mode ctype range man flow
-    else
-      Eval.singleton (mk_top ctype range) flow
+    eval_pointed_base_offset p range man flow >>$ fun  bo flow ->
+    match bo with
+    | None -> Eval.singleton (mk_top ctype range) flow
+    | Some (base,offset,mode) ->
+      if is_interesting_base base && is_c_pointer_type ctype
+      then
+        man.eval ~route:scalar offset flow >>$ fun offset flow ->
+        eval_deref_cases base offset mode ctype range man flow
+      else
+        Eval.singleton (mk_top ctype range) flow
 
 
 
@@ -753,27 +761,31 @@ struct
 
 
   let eval_forall_eq i lo hi p q range man flow =
-    eval_pointed_base_offset (mk_c_address_of p range) range man flow >>$ fun (base,offset,mode) flow ->
+    eval_pointed_base_offset (mk_c_address_of p range) range man flow >>$ fun bo flow ->
     man.eval q flow >>$ fun q flow ->
-    if not (is_interesting_base base) then
-      Eval.singleton (mk_top T_bool range) flow
-    else
-      Eval.join
-        (assume_forall_eq i lo hi base offset mode q range man flow >>% fun flow -> Eval.singleton (mk_true range) flow)
-        (assume_exists_ne i lo hi base offset mode q range man flow >>% fun flow -> Eval.singleton (mk_false range) flow)
+    match bo with
+    | None -> Eval.singleton (mk_top T_bool range) flow
+    | Some (base,offset,mode) ->
+      if not (is_interesting_base base) then
+        Eval.singleton (mk_top T_bool range) flow
+      else
+        Eval.join
+          (assume_forall_eq i lo hi base offset mode q range man flow >>% fun flow -> Eval.singleton (mk_true range) flow)
+          (assume_exists_ne i lo hi base offset mode q range man flow >>% fun flow -> Eval.singleton (mk_false range) flow)
 
   let eval_forall_ne i lo hi p q range man flow =
-    eval_pointed_base_offset (mk_c_address_of p range) range man flow >>$ fun (base,offset,mode) flow ->
+    eval_pointed_base_offset (mk_c_address_of p range) range man flow >>$ fun  bo flow ->
     man.eval q flow >>$ fun q flow ->
-    if not (is_interesting_base base) then
-      Eval.singleton (mk_top T_bool range) flow
-    else
-      Eval.join
-        (assume_forall_ne i lo hi base offset mode q range man flow >>% fun flow -> Eval.singleton (mk_true range) flow)
-        (assume_exists_eq i lo hi base offset mode q range man flow >>% fun flow -> Eval.singleton (mk_false range) flow)
+    match bo with
+    | None -> Eval.singleton (mk_top T_bool range) flow
+    | Some (base,offset,mode) ->
+      if not (is_interesting_base base) then
+        Eval.singleton (mk_top T_bool range) flow
+      else
+        Eval.join
+          (assume_forall_ne i lo hi base offset mode q range man flow >>% fun flow -> Eval.singleton (mk_true range) flow)
+          (assume_exists_eq i lo hi base offset mode q range man flow >>% fun flow -> Eval.singleton (mk_false range) flow)
 
-
-  
 
   (** Evaluations entry point *)
   let eval exp man flow =

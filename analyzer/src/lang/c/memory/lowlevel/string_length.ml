@@ -138,12 +138,14 @@ struct
     match pt with
     | P_null
     | P_invalid
-    | P_block ({ base_valid = false }, _, _)
-    | P_top ->
+    | P_block ({ base_valid = false }, _, _) ->
       Cases.empty_singleton flow
 
     | P_block (base, offset, mode) ->
-      Cases.singleton (base, offset, mode) flow
+      Cases.singleton (Some (base, offset, mode)) flow
+
+    | P_top ->
+      Cases.singleton None flow
 
     | _ -> assert false
 
@@ -286,24 +288,30 @@ struct
 
   (** 𝕊⟦ forget(e); ⟧ *)
   let exec_forget e range man flow =
-    eval_pointed_base_offset (mk_c_address_of e range) range man flow >>$ fun (base,boffset,mode) flow ->
-    if not (is_interesting_base base) || not (is_c_int_type e.etyp) then
-      Post.return flow
-    else
-      match base.base_kind with
-      | String _ -> Post.return flow
-      | _ ->
-        (* FIXME: we can do better by checking if the offset affects the length of the string *)
-        let length = mk_length_var base elem_size range in
-        eval_base_size base range man flow >>$ fun bsize flow ->
-        man.eval bsize flow >>$ fun bsize flow ->
-        let size = elem_of_offset bsize elem_size range in
-        man.exec ~route:numeric (mk_forget length range) flow >>% fun flow ->
-        man.exec (mk_assume (mk_in length (mk_zero range) size range) range) flow
+    eval_pointed_base_offset (mk_c_address_of e range) range man flow >>$ fun bo flow ->
+    match bo with
+    | None -> Post.return flow
+    | Some (base,boffset,mode) ->
+      if not (is_interesting_base base) || not (is_c_int_type e.etyp) then
+        Post.return flow
+      else
+        match base.base_kind with
+        | String _ -> Post.return flow
+        | _ ->
+          (* FIXME: we can do better by checking if the offset affects the length of the string *)
+          let length = mk_length_var base elem_size range in
+          eval_base_size base range man flow >>$ fun bsize flow ->
+          man.eval bsize flow >>$ fun bsize flow ->
+          let size = elem_of_offset bsize elem_size range in
+          man.exec ~route:numeric (mk_forget length range) flow >>% fun flow ->
+          man.exec (mk_assume (mk_in length (mk_zero range) size range) range) flow
 
 
   let exec_forget_quant quants e range man flow =
-    eval_pointed_base_offset (mk_c_address_of e range) range man flow >>$ fun (base,boffset,mode) flow ->
+    eval_pointed_base_offset (mk_c_address_of e range) range man flow >>$ fun bo flow ->
+    match bo with
+    | None -> Post.return flow
+    | Some (base,boffset,mode) ->
     if not (is_interesting_base base) || not (is_c_int_type e.etyp) then
       Post.return flow
     else
@@ -330,70 +338,73 @@ struct
   (** 𝕊⟦ lval = rhs; ⟧ *)
   let exec_assign lval rhs range man flow =
     man.eval rhs flow >>$ fun rhs flow ->
-    eval_pointed_base_offset (mk_c_address_of lval range) range man flow >>$ fun (base,boffset,mode) flow ->
-    if not (is_interesting_base base) || not (is_c_int_type lval.etyp) then
-      Post.return flow
-    else
-    match base.base_kind with
-    | String _ -> Post.return flow
-    | Var _ | Addr _ ->
-      let char_size = sizeof_type lval.etyp in
-      let length = mk_length_var base elem_size ~mode range in
-      let offset = elem_of_offset boffset elem_size range in
-      if char_size = Z.of_int elem_size &&
-         Common.Quantified_offset.is_aligned boffset char_size man flow
-      then
-        man.eval offset flow >>$ fun offset flow ->
-        eval_base_size base range man flow >>$ fun bsize flow ->
-        man.eval bsize flow >>$ fun bsize flow ->
-        let size = elem_of_offset bsize elem_size range in
-
-        (* Utility function to assign an interval to [length] *)
-        let assign_length_interval l u flow =
-          man.exec ~route:numeric (mk_forget length range) flow |>
-          Post.bind (
-            man.exec (mk_assume ((mk_in length l u range)) range)
-          )
-        in
-        switch [
-          (* set0 case *)
-          (* Offset condition: offset ∈ [0, length] *)
-          (* RHS condition: rhs = 0 *)
-          (* Transformation: length := offset; *)
-          [ mk_in offset zero length range;
-            mk_eq rhs zero range ],
-          (fun flow -> man.exec ~route:numeric (mk_assign length offset range) flow)
-          ;
-
-          (* setnon0 case *)
-          (* Offset condition: offset = length *)
-          (* RHS condition: rhs ≠ 0 *)
-          (* Transformation: length := [offset + 1, size]; *)
-          [ mk_eq offset length range;
-            mk_ne rhs zero range ],
-          (fun flow -> assign_length_interval (add offset one range) size flow)
-          ;
-
-          (* First unchanged case *)
-          (* Offset condition: offset ∈ [0, length - 1] *)
-          (* RHS condition: rhs ≠ 0 *)
-          (* Transformation: nop; *)
-          [ mk_in offset zero (pred length range) range;
-            mk_ne rhs zero range ],
-          (fun flow -> Post.return flow)
-          ;
-
-          (* Second unchanged case *)
-          (* Offset condition: offset >= length + 1 *)
-          (* RHS condition: ⊤ *)
-          (* Transformation: nop; *)
-          [ mk_ge offset (succ length range) range ],
-          (fun flow -> Post.return flow)
-
-        ] man flow
-
+    eval_pointed_base_offset (mk_c_address_of lval range) range man flow >>$ fun bo flow ->
+    match bo with
+    | None -> Post.return flow
+    | Some (base,boffset,mode) ->
+      if not (is_interesting_base base) || not (is_c_int_type lval.etyp) then
+        Post.return flow
       else
-        man.exec ~route:numeric (mk_forget length range) flow
+      match base.base_kind with
+      | String _ -> Post.return flow
+      | Var _ | Addr _ ->
+        let char_size = sizeof_type lval.etyp in
+        let length = mk_length_var base elem_size ~mode range in
+        let offset = elem_of_offset boffset elem_size range in
+        if char_size = Z.of_int elem_size &&
+           Common.Quantified_offset.is_aligned boffset char_size man flow
+        then
+          man.eval offset flow >>$ fun offset flow ->
+          eval_base_size base range man flow >>$ fun bsize flow ->
+          man.eval bsize flow >>$ fun bsize flow ->
+          let size = elem_of_offset bsize elem_size range in
+
+          (* Utility function to assign an interval to [length] *)
+          let assign_length_interval l u flow =
+            man.exec ~route:numeric (mk_forget length range) flow |>
+            Post.bind (
+              man.exec (mk_assume ((mk_in length l u range)) range)
+            )
+          in
+          switch [
+            (* set0 case *)
+            (* Offset condition: offset ∈ [0, length] *)
+            (* RHS condition: rhs = 0 *)
+            (* Transformation: length := offset; *)
+            [ mk_in offset zero length range;
+              mk_eq rhs zero range ],
+            (fun flow -> man.exec ~route:numeric (mk_assign length offset range) flow)
+            ;
+
+            (* setnon0 case *)
+            (* Offset condition: offset = length *)
+            (* RHS condition: rhs ≠ 0 *)
+            (* Transformation: length := [offset + 1, size]; *)
+            [ mk_eq offset length range;
+              mk_ne rhs zero range ],
+            (fun flow -> assign_length_interval (add offset one range) size flow)
+            ;
+
+            (* First unchanged case *)
+            (* Offset condition: offset ∈ [0, length - 1] *)
+            (* RHS condition: rhs ≠ 0 *)
+            (* Transformation: nop; *)
+            [ mk_in offset zero (pred length range) range;
+              mk_ne rhs zero range ],
+            (fun flow -> Post.return flow)
+            ;
+
+            (* Second unchanged case *)
+            (* Offset condition: offset >= length + 1 *)
+            (* RHS condition: ⊤ *)
+            (* Transformation: nop; *)
+            [ mk_ge offset (succ length range) range ],
+            (fun flow -> Post.return flow)
+
+          ] man flow
+
+        else
+          man.exec ~route:numeric (mk_forget length range) flow
 
 
   (** Transformers entry point *)
@@ -490,15 +501,18 @@ struct
 
   let eval_deref p range man flow =
     let ctype = under_pointer_type p.etyp in
-    eval_pointed_base_offset p range man flow >>$ fun (base,offset,mode) flow ->
-    if not (is_interesting_base base) || not (is_c_int_type ctype) then
-      man.eval (mk_top ctype range) flow
-    else
-      match base.base_kind with
-      | String (str,_,t) when equal_int_types t ctype ->
-        eval_string_literal_char str t offset range man flow
-      | _ ->
+    eval_pointed_base_offset p range man flow >>$ fun bo flow ->
+    match bo with
+    | None -> man.eval (mk_top ctype range) flow
+    | Some (base,offset,mode) ->
+      if not (is_interesting_base base) || not (is_c_int_type ctype) then
         man.eval (mk_top ctype range) flow
+      else
+        match base.base_kind with
+        | String (str,_,t) when equal_int_types t ctype ->
+          eval_string_literal_char str t offset range man flow
+        | _ ->
+          man.eval (mk_top ctype range) flow
 
 
 
@@ -758,68 +772,84 @@ struct
 
   (** 𝔼⟦ *(p + i) == n ⟧ *)
   let eval_eq lval n range man flow =
-    eval_pointed_base_offset (mk_c_address_of lval range) range man flow >>$ fun (base,offset,mode) flow ->
+    eval_pointed_base_offset (mk_c_address_of lval range) range man flow >>$ fun bo flow ->
     man.eval n flow >>$ fun n flow ->
-    if not (is_interesting_base base) then
-      Eval.singleton (mk_top T_bool range) flow
-    else
-      Eval.join
-        (assume_eq base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_true range) flow)
-        (assume_ne base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_false range) flow)
-        
+    match bo with
+    | None -> Eval.singleton (mk_top T_bool range) flow
+    | Some (base,offset,mode) ->
+      if not (is_interesting_base base) then
+        Eval.singleton (mk_top T_bool range) flow
+      else
+        Eval.join
+          (assume_eq base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_true range) flow)
+          (assume_ne base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_false range) flow)
+
 
   (** 𝔼⟦ ∃i ∈ [a,b]: *(p + i) == n ⟧ *)
   let eval_exists_eq i a b lval n range man flow =
-    eval_pointed_base_offset (mk_c_address_of lval range) range man flow >>$ fun (base,offset,mode) flow ->
+    eval_pointed_base_offset (mk_c_address_of lval range) range man flow >>$ fun bo flow ->
     man.eval n flow >>$ fun n flow ->
-    if not (is_interesting_base base) then
-      Eval.singleton (mk_top T_bool range) flow
-    else
-      Eval.join
-        (assume_exists_eq i a b base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_true range) flow)
-        (assume_forall_ne i a b base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_false range) flow)
-    
+    match bo with
+    | None -> Eval.singleton (mk_top T_bool range) flow
+    | Some (base,offset,mode) ->
+      if not (is_interesting_base base) then
+        Eval.singleton (mk_top T_bool range) flow
+      else
+        Eval.join
+          (assume_exists_eq i a b base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_true range) flow)
+          (assume_forall_ne i a b base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_false range) flow)
+
   (** 𝔼⟦ ∀i ∈ [a,b] : *(p + i) == n ⟧ *)
   let eval_forall_eq i a b lval n range man flow =
-    eval_pointed_base_offset (mk_c_address_of lval range) range man flow >>$ fun (base,offset,mode) flow ->
+    eval_pointed_base_offset (mk_c_address_of lval range) range man flow >>$ fun  bo flow ->
     man.eval n flow >>$ fun n flow ->
-    if not (is_interesting_base base) then
-      Eval.singleton (mk_top T_bool range) flow
-    else
-      Eval.join
-        (assume_forall_eq i a b base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_true range) flow)
-        (assume_exists_ne i a b base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_false range) flow)
+    match bo with
+    | None -> Eval.singleton (mk_top T_bool range) flow
+    | Some (base,offset,mode) ->
+      if not (is_interesting_base base) then
+        Eval.singleton (mk_top T_bool range) flow
+      else
+        Eval.join
+          (assume_forall_eq i a b base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_true range) flow)
+          (assume_exists_ne i a b base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_false range) flow)
 
   (** 𝔼⟦ ∀i ∈ [a,b] : *(p + i) != n ⟧ *)
   let eval_forall_ne i a b lval n range man flow =
-    eval_pointed_base_offset (mk_c_address_of lval range) range man flow >>$ fun (base,offset,mode) flow ->
+    eval_pointed_base_offset (mk_c_address_of lval range) range man flow >>$ fun  bo flow ->
     man.eval n flow >>$ fun n flow ->
-    if not (is_interesting_base base) then
-      Eval.singleton (mk_top T_bool range) flow
-    else
-      Eval.join
-        (assume_forall_ne i a b base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_true range) flow)
-        (assume_exists_eq i a b base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_false range) flow)
+    match bo with
+    | None -> Eval.singleton (mk_top T_bool range) flow
+    | Some (base,offset,mode) ->
+      if not (is_interesting_base base) then
+        Eval.singleton (mk_top T_bool range) flow
+      else
+        Eval.join
+          (assume_forall_ne i a b base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_true range) flow)
+          (assume_exists_eq i a b base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_false range) flow)
 
 
   (** 𝔼⟦ ∀i ∈ [a,b] : *(p + i) == *(q + i) ⟧ *)
   let eval_forall_eq2 i a b lval1 lval2 range man flow =
-    eval_pointed_base_offset (mk_c_address_of lval1 range) range man flow >>$ fun (base1,offset1,mode1) flow ->
-    eval_pointed_base_offset (mk_c_address_of lval2 range) range man flow >>$ fun (base2,offset2,mode2) flow ->
     let ctype1 = (remove_casts lval1).etyp
     and ctype2 = (remove_casts lval2).etyp in
     let evl1 = eval_pointed_base_offset (mk_c_address_of lval1 range) range man flow in
     let evl2 = eval_pointed_base_offset (mk_c_address_of lval2 range) range man flow in
 
-    evl1 >>$ fun (base1,boffset1,mode1) flow ->
-    if not (is_interesting_base base1) then Eval.singleton (mk_top T_bool range) flow
-    else
-      evl2 >>$ fun (base2,boffset2,mode2) flow ->
-      if not (is_interesting_base base2) then Eval.singleton (mk_top T_bool range) flow
+    evl1 >>$ fun bo1 flow ->
+    match bo1 with
+    | None -> Eval.singleton (mk_top T_bool range) flow
+    | Some (base1,offset1,mode1) ->
+      if not (is_interesting_base base1) then Eval.singleton (mk_top T_bool range) flow
       else
-        Eval.join
-        (assume_forall_eq2 i a b base1 offset1 mode1 ctype1 base2 offset2 mode2 ctype2 range man flow >>% fun flow -> Eval.singleton (mk_true range) flow)
-        (assume_exists_ne2 i a b base1 offset1 mode1 ctype1 base2 offset2 mode2 ctype2 range man flow >>% fun flow -> Eval.singleton (mk_false range) flow)
+        evl2 >>$ fun bo2 flow ->
+        match bo2 with
+        | None -> Eval.singleton (mk_top T_bool range) flow
+        | Some (base2,offset2,mode2) ->
+          if not (is_interesting_base base2) then Eval.singleton (mk_top T_bool range) flow
+          else
+            Eval.join
+              (assume_forall_eq2 i a b base1 offset1 mode1 ctype1 base2 offset2 mode2 ctype2 range man flow >>% fun flow -> Eval.singleton (mk_true range) flow)
+              (assume_exists_ne2 i a b base1 offset1 mode1 ctype1 base2 offset2 mode2 ctype2 range man flow >>% fun flow -> Eval.singleton (mk_false range) flow)
 
 
   let eval exp man flow =
