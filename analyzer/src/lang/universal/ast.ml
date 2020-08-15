@@ -250,7 +250,7 @@ let pp_addr_partitioning_hash fmt (g:addr_partitioning) =
        number of meaningful nodes to encounter, collisions are less
        likely to happen.
     *)
-    (Hashtbl.hash_param 30 100 g)
+    (Hashtbl.hash_param 50 150 g)
 
 
 let compare_addr_partitioning a1 a2 =
