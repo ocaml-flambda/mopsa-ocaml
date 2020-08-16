@@ -80,3 +80,23 @@ void test_duff_device() {
   }
   _mopsa_assert(from == 10);
 }
+
+
+#define DIGIT				   \
+   case '0': case '1': case '2': case '3': \
+   case '4': case '5': case '6': case '7': \
+   case '8': case '9'
+
+int test_cases_with_macro() {
+  char c = _mopsa_range_char('4','7');
+  int x;
+  switch (c) {
+  DIGIT:
+    x = 1;
+    break;
+  default:
+    x = 2;
+    break;
+  }
+  _mopsa_assert(x == 1);
+}
