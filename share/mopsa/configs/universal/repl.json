@@ -1,7 +1,7 @@
 {
     "language": "repl",
     "domain": {
-	"seq": [
+	"switch": [
 	    // Iterators
 	    "universal.repl",
 	    "universal.iterators.intraproc",

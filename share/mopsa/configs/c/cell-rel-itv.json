@@ -1,7 +1,7 @@
 {
     "language": "c",
     "domain": {
-	"seq": [
+	"switch": [
 	    // Partitioning
 	    "universal.partitioning.merge_after_stmt",
 
@@ -48,7 +48,7 @@
 		    },
                     {
 			"semantic": "C/Scalar",
-                        "seq": [
+                        "switch": [
 			    "c.memory.scalars.pointer",
 			    "c.memory.scalars.machine_numbers"
                         ]

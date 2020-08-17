@@ -66,8 +66,8 @@ let rec parse_domain json : domain =
         in
         mk_domain d ~semantic
       );
-    sequence = (fun semantic jsons ->
-        mk_domain (D_sequence (List.map parse_domain jsons)) ~semantic
+    switch = (fun semantic jsons ->
+        mk_domain (D_switch (List.map parse_domain jsons)) ~semantic
       );
     compose = (fun semantic jsons ->
         mk_domain (D_compose (List.map parse_domain jsons)) ~semantic
@@ -103,7 +103,7 @@ and parse_value json : value =
     product = (fun _ jsons reductions -> V_product (List.map parse_value jsons, List.map parse_value_reduction reductions));
     apply = (fun _ funct arg -> V_functor(parse_value_functor funct, parse_value arg));
 
-    sequence = (fun _ jsons -> assert false);
+    switch = (fun _ jsons -> assert false);
     compose = (fun _ jsons -> assert false);
     nonrel = (fun _ json -> assert false);
   }
@@ -164,7 +164,7 @@ let domains file : string list =
     let domain = json |> member "domain" in
     let rec name_visitor = Visitor.{
         leaf = (fun _ name -> [name]);
-        sequence = (fun _ l -> List.map get_names l |> List.flatten);
+        switch = (fun _ l -> List.map get_names l |> List.flatten);
         nonrel = (fun _ v -> get_names v);
         apply = (fun _ f d -> f :: get_names d);
         compose = (fun _ l -> List.map get_names l |> List.flatten);

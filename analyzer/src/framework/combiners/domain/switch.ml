@@ -20,7 +20,7 @@
 (****************************************************************************)
 
 
-(** Sequence combiner to build Cartesian products of domains *)
+(** Switch combiner *)
 
 open Core.All
 open Sig.Combiner.Stacked
@@ -28,9 +28,9 @@ open Common
 
 
 module Make
-    (C1:STACKED_COMBINER)
-    (C2:STACKED_COMBINER)
-  : STACKED_COMBINER with type t = C1.t * C2.t
+    (D1:STACKED_COMBINER)
+    (D2:STACKED_COMBINER)
+  : STACKED_COMBINER with type t = D1.t * D2.t
 =
 struct
 
@@ -38,44 +38,44 @@ struct
   (**                         {2 Domain header}                             *)
   (**************************************************************************)
 
-  type t = C1.t * C2.t
+  type t = D1.t * D2.t
 
-  let id = C_pair(Sequence,C1.id,C2.id)
+  let id = C_pair(Sequence,D1.id,D2.id)
 
-  let name = C1.name ^ " ; " ^ C2.name
+  let name = D1.name ^ " ; " ^ D2.name
 
-  let domains = C1.domains @ C2.domains
+  let domains = D1.domains @ D2.domains
 
-  let semantics = C1.semantics @ C2.semantics
+  let semantics = D1.semantics @ D2.semantics
 
   let routing_table =
     let t1 = List.fold_left
-        (fun acc d1 -> add_routes (BelowOf d1) C2.domains acc)
-        (join_routing_table C1.routing_table C2.routing_table)
-        C1.domains
+        (fun acc d1 -> add_routes (BelowOf d1) D2.domains acc)
+        (join_routing_table D1.routing_table D2.routing_table)
+        D1.domains
     in
     let t2 = List.fold_left
-        (fun acc s1 -> add_routes (Semantic s1) C2.domains acc)
+        (fun acc s1 -> add_routes (Semantic s1) D2.domains acc)
         t1
-        C1.semantics
+        D1.semantics
     in
     t2
 
 
-  let alarms = C1.alarms @ C2.alarms |> List.sort_uniq compare
+  let alarms = D1.alarms @ D2.alarms |> List.sort_uniq compare
 
-  let bottom = C1.bottom, C2.bottom
+  let bottom = D1.bottom, D2.bottom
 
-  let top = C1.top, C2.top
+  let top = D1.top, D2.top
 
   let is_bottom (a1,a2) =
-    C1.is_bottom a1 ||
-    C2.is_bottom a2
+    D1.is_bottom a1 ||
+    D2.is_bottom a2
 
   let print fmt (a1,a2) =
     Format.fprintf fmt "%a%a"
-      C1.print a1
-      C2.print a2
+      D1.print a1
+      D2.print a2
 
 
   (**************************************************************************)
@@ -83,28 +83,28 @@ struct
   (**************************************************************************)
 
   let subset man sman ctx ((a1,a2),s) ((a1',a2'),s') =
-    let b1, s, s' = C1.subset (fst_pair_man man) sman ctx (a1,s) (a1',s') in
-    let b2, s, s' = C2.subset (snd_pair_man man) sman ctx (a2,s) (a2',s') in
+    let b1, s, s' = D1.subset (fst_pair_man man) sman ctx (a1,s) (a1',s') in
+    let b2, s, s' = D2.subset (snd_pair_man man) sman ctx (a2,s) (a2',s') in
     b1 && b2, s, s'
 
   let join man sman ctx ((a1,a2),s) ((a1',a2'),s') =
-    let aa1, s, s' = C1.join (fst_pair_man man) sman ctx (a1,s) (a1',s') in
-    let aa2, s, s' = C2.join (snd_pair_man man) sman ctx (a2,s) (a2',s') in
+    let aa1, s, s' = D1.join (fst_pair_man man) sman ctx (a1,s) (a1',s') in
+    let aa2, s, s' = D2.join (snd_pair_man man) sman ctx (a2,s) (a2',s') in
     (aa1,aa2), s, s'
 
   let meet man sman ctx ((a1,a2),s) ((a1',a2'),s') =
-    let aa1, s, s' = C1.meet (fst_pair_man man) sman  ctx (a1,s) (a1',s') in
-    let aa2, s, s' = C2.meet (snd_pair_man man) sman ctx (a2,s) (a2',s') in
+    let aa1, s, s' = D1.meet (fst_pair_man man) sman  ctx (a1,s) (a1',s') in
+    let aa2, s, s' = D2.meet (snd_pair_man man) sman ctx (a2,s) (a2',s') in
     (aa1,aa2), s, s'
 
   let widen man sman ctx ((a1,a2),s) ((a1',a2'),s') =
-    let aa1, s, s', stable1 = C1.widen (fst_pair_man man) sman ctx (a1,s) (a1',s') in
-    let aa2, s, s', stable2 = C2.widen (snd_pair_man man) sman ctx (a2,s) (a2',s') in
+    let aa1, s, s', stable1 = D1.widen (fst_pair_man man) sman ctx (a1,s) (a1',s') in
+    let aa2, s, s', stable2 = D2.widen (snd_pair_man man) sman ctx (a2,s) (a2',s') in
     (aa1,aa2), s, s', stable1 && stable2
 
   let merge (pre1,pre2) ((a1,a2), log) ((a1',a2'), log') =
-    C1.merge pre1 (a1, Log.get_left_log log) (a1', Log.get_left_log log'),
-    C2.merge pre2 (a2, Log.get_right_log log) (a2', Log.get_right_log log')
+    D1.merge pre1 (a1, Log.get_left_log log) (a1', Log.get_left_log log'),
+    D2.merge pre2 (a2, Log.get_right_log log) (a2', Log.get_right_log log')
 
 
 
@@ -114,34 +114,34 @@ struct
 
   (** Initialization procedure *)
   let init prog man flow =
-    C1.init prog (fst_pair_man man) flow |>
-    C2.init prog (snd_pair_man man)
+    D1.init prog (fst_pair_man man) flow |>
+    D2.init prog (snd_pair_man man)
 
   (** Execution of statements *)
   let exec targets =
-    match sat_targets ~targets ~domains:C1.domains,
-          sat_targets ~targets ~domains:C2.domains
+    match sat_targets ~targets ~domains:D1.domains,
+          sat_targets ~targets ~domains:D2.domains
     with
     | false, false ->
       (* Both domains do not provide an [exec] for such targets *)
       raise Not_found
 
     | true, false ->
-      (* Only [S1] provides an [exec] for such targets *)
-      let f = C1.exec targets in
+      (* Only [D1] provides an [exec] for such targets *)
+      let f = D1.exec targets in
       (fun stmt man flow ->
          f stmt (fst_pair_man man) flow)
 
     | false, true ->
-      (* Only [S2] provides an [exec] for such targets *)
-      let f = C2.exec targets in
+      (* Only [D2] provides an [exec] for such targets *)
+      let f = D2.exec targets in
       (fun stmt man flow ->
          f stmt (snd_pair_man man) flow)
 
     | true, true ->
-      (* Both [S1] and [S2] provide an [exec] for such targets *)
-      let f1 = C1.exec targets in
-      let f2 = C2.exec targets in
+      (* Both [D1] and [D2] provide an [exec] for such targets *)
+      let f1 = D1.exec targets in
+      let f2 = D2.exec targets in
       (fun stmt man flow ->
          match f1 stmt (fst_pair_man man) flow with
          | Some post ->
@@ -153,29 +153,29 @@ struct
 
   (** Evaluation of expressions *)
   let eval targets =
-    match sat_targets ~targets ~domains:C1.domains,
-          sat_targets ~targets ~domains:C2.domains
+    match sat_targets ~targets ~domains:D1.domains,
+          sat_targets ~targets ~domains:D2.domains
     with
     | false, false ->
       (* Both domains do not provide an [eval] for such targets *)
       raise Not_found
 
     | true, false ->
-      (* Only [S1] provides an [eval] for such targets *)
-      let f = C1.eval targets in
+      (* Only [D1] provides an [eval] for such targets *)
+      let f = D1.eval targets in
       (fun exp man flow ->
          f exp (fst_pair_man man) flow)
 
     | false, true ->
-      (* Only [S2] provides an [eval] for such targets *)
-      let f = C2.eval targets in
+      (* Only [D2] provides an [eval] for such targets *)
+      let f = D2.eval targets in
       (fun exp man flow ->
          f exp (snd_pair_man man) flow)
 
     | true, true ->
-      (* Both [S1] and [S2] provide an [eval] for such targets *)
-      let f1 = C1.eval targets in
-      let f2 = C2.eval targets in
+      (* Both [D1] and [D2] provide an [eval] for such targets *)
+      let f1 = D1.eval targets in
+      let f2 = D2.eval targets in
       (fun exp man flow ->
          match f1 exp (fst_pair_man man) flow with
          | Some evl -> Some evl
@@ -184,24 +184,24 @@ struct
 
   (** Query handler *)
   let ask targets =
-    match sat_targets ~targets ~domains:C1.domains,
-          sat_targets ~targets ~domains:C2.domains
+    match sat_targets ~targets ~domains:D1.domains,
+          sat_targets ~targets ~domains:D2.domains
     with
     | false, false -> raise Not_found
 
     | true, false ->
-      let f = C1.ask targets in
+      let f = D1.ask targets in
       (fun q man flow ->
          f q (fst_pair_man man) flow)
 
     | false, true ->
-      let f = C2.ask targets in
+      let f = D2.ask targets in
       (fun q man flow ->
          f q (snd_pair_man man) flow)
 
     | true, true ->
-      let f1 = C1.ask targets in
-      let f2 = C2.ask targets in
+      let f1 = D1.ask targets in
+      let f2 = D2.ask targets in
       (fun q man flow ->
          OptionExt.neutral2
            (join_query q ~join:(fun a b -> man.lattice.join (Flow.get_unit_ctx flow) a b))

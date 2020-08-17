@@ -19,7 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Reduced product with n-ary reduction rules *)
+(** Reduced product combiner with n-ary reduction rules *)
 
 
 open Core.All
@@ -29,6 +29,7 @@ open Sig.Combiner.Stacked
 open Common
 
 
+(** Signature of a pool of domains with pointwise transfer functions *)
 module type POOL =
 sig
   include STACKED_COMBINER
@@ -40,6 +41,7 @@ end
 
 
 
+(** Empty pool *)
 module EmptyPool : POOL =
 struct
   type t = unit
@@ -66,6 +68,7 @@ struct
 end
 
 
+(** Add a domain to a pool *)
 module MakePairPool(S:STACKED_COMBINER)(P:POOL) : POOL with type t = S.t * P.t =
 struct
   type t = S.t * P.t
@@ -162,8 +165,9 @@ struct
 end
 
 
-(** Product functor *)
-module Make(Pool:POOL)
+(** Create a reduced product over a pool and a list of reduction rules *)
+module Make
+    (Pool:POOL)
     (Rules:sig
        val erules: (module EVAL_REDUCTION) list
        val srules: (module EXEC_REDUCTION) list
@@ -199,28 +203,46 @@ struct
 
 
 
-  (** Merge the conflicts between distinct domains in a pointwise result *)
+  (** Merge the conflicts between distinct domains.
+      These conflicts arise from two situations:
+
+      1. When a domain changes its local state, this change is not present in
+      the post-state of the other domains. In this case, we need to put the new
+      local state of every domain in all other post-states.
+
+      2. When two domains change (independently) the state of a shared sub-abstraction.
+      In this case, we use logs to merge the two diverging states.
+  *)
   let merge_inter_conflicts man pre (pointwise:('a,'r) cases option list) : ('a,'r option option list) cases =
     let rec aux : type t. t id -> ('a,t) man -> ('a,'r) cases option list -> alarm_class list list -> ('a,'r option option list) cases =
       fun id man pointwise alarms ->
         match pointwise, id, alarms with
+        (* Last domain returned no answer *)
         | [None], C_pair(_, s, _), _ ->
           Cases.singleton [None] pre
 
+        (* Last domain returned an answer *)
         | [Some r], C_pair(_, s, _), _ ->
           r >>= fun rr flow ->
           Cases.singleton [Some rr] flow
 
+        (* One domain returned no answer *)
         | None :: tl, C_pair(_,s,pid), _::tlalarms ->
           aux pid (snd_pair_man man) tl tlalarms >>$ fun after flow ->
           Cases.singleton (None :: after) flow
 
+        (* One domain returned an answer.
+           Here we need to merge this answer with the answers of the next domains *)
         | Some r :: tl, C_pair(_,s,pid), hdalarms::tlalarms ->
+          (* Compute the answer of the next domains *)
           aux pid (snd_pair_man man) tl tlalarms |>
           Cases.bind_full @@ fun after after_flow after_log after_cleaners ->
           r |> Cases.bind_full @@ fun rr flow log cleaners ->
           let after = after |> OptionExt.none_to_exn in
+          (* Merge only when the next domains provided some answers *)
           if after |> List.exists (function Some _ -> true | None -> false) then
+            (* Resolve the first conflict situation:
+               put the post-state of the current domain in the answer of the next domains *)
             let fst_pair_man = fst_pair_man man in
             let after_flow = Flow.set T_cur (
                 let cur = Flow.get T_cur man.lattice flow in
@@ -228,11 +250,14 @@ struct
                 fst_pair_man.set (fst_pair_man.get cur) after_cur
               ) man.lattice after_flow
             in
+            (* Resolve the second conflict situation:
+               merge the post-states of any shared sub-abstraction *)
             let flow = merge_flows ~merge_alarms:AlarmSet.union man pre (flow,log) (after_flow,after_log) in
             let log = Log.meet_log log after_log in
             let cleaners = cleaners @ after_cleaners in
             Cases.return (Some (Some rr :: after)) flow ~cleaners ~log
           else
+            (* Next domains returned no answer, so no merging *)
             Cases.return (Some (Some rr :: after)) flow ~cleaners ~log
 
 
@@ -242,19 +267,24 @@ struct
 
 
 
-  (** Merge the conflicts emerging from the same domain *)
+  (** Merge the conflicts emerging from the same domain.
+      This kind of conflicts arises when a same domain produces a conjunction of
+      post-states.  Since these conjunctions are from the same domain, there is
+      no need to merge its local state; we just merge any shared sub-abstraction.
+  *)
   let merge_intra_conflicts man pre (r:('a,'r) cases) : ('a,'r) cases =
     Cases.map_fold_conjunctions (fun (flow1,log1) (flow2,log2) ->
         merge_flows ~merge_alarms:AlarmSet.inter man pre (flow1,log1) (flow2,log2)
       ) r
 
 
-  (** {2 Abstract transformer} *)
-  (** ************************ *)
+
+  (** {2 Generic pointwise processing of transfer functions *)
+  (** ***************************************************** *)
 
   (** The successor domain is the domain below the reduced
-     product. Since all member domains in the reduced product are at the
-     same level, we can pick any one of them *)
+       product. Since all member domains in the reduced product are at the
+       same level, we can pick any one of them *)
   let successor =
     (* XXX This is a hack to be sure to take a member that is a user
        domain, not a composed domain, because `BelowOf` routes are
@@ -281,7 +311,7 @@ struct
     | Some cases :: tl -> Some (Cases.set_ctx ctx cases) :: set_pointwise_ctx ctx tl
 
 
-  (** Apply [f] transfer function pointwise over all domains *)
+  (** Apply transfer function [f] pointwise over all domains *)
   let apply_pointwise f arg man flow =
     let pointwise = f arg man flow in
     if List.exists (function Some _ -> true | None -> false) pointwise
@@ -304,6 +334,9 @@ struct
 
 
 
+  (** {2 Abstract transformer} *)
+  (** ************************ *)
+
   (** Manager used by reductions *)
   let exec_reduction_man (man:('a, t) man) : 'a exec_reduction_man = {
     get_man = (fun id -> find_domain_man id Pool.id man);
@@ -321,6 +354,7 @@ struct
   let reduce_post stmt man pre post =
     let rman = exec_reduction_man man in
     post >>% fun flow ->
+    (* Iterate over rules *)
     let rec iter = function
       | [] -> Post.return flow
       | rule::tl ->
@@ -348,7 +382,6 @@ struct
   (** {2 Abstract evaluations} *)
   (** ************************ *)
 
-
   (** Manager used by reductions *)
   let eval_reduction_man (man:('a, t) man) : 'a eval_reduction_man = {
     get_man = (fun id -> find_domain_man id Pool.id man);
@@ -358,11 +391,11 @@ struct
   (** Apply reduction rules on a pointwise evaluation *)
   let reduce_pointwise_eval exp man input (pointwise:('a, expr option option list) cases) : 'a eval =
     pointwise >>$ fun el flow ->
-    (* An empty result in [el] makes the whole result empty *)
+    (* An empty result in a conjunction [el] makes the whole result empty *)
     if List.exists (function Some None -> true | _ -> false) el then
       Eval.empty_singleton flow
     else
-    (* Keep only cases with non-empty results *)
+    (* Otherwise, keep only cases with non-empty results and remove duplicates *)
     let el' = List.filter (function Some (Some _) -> true | _ -> false) el |>
               List.map (function Some (Some e) -> e | _ -> assert false) |>
               List.sort_uniq compare_expr
@@ -372,8 +405,9 @@ struct
       let rman = eval_reduction_man man in
       let rec iter = function
         | [] ->
-          (* For performance reasons, we keep only one evaluation in each conjunction.
-             THE CHOICE IS ARBITRARY: keep the first non-None result
+          (* XXX For performance reasons, we keep only one evaluation in
+             each conjunction.
+             THE CHOICE IS ARBITRARY!
           *)
           Eval.singleton (List.hd el') flow
 
@@ -399,16 +433,6 @@ struct
        merge_intra_conflicts man flow)
 
 end
-
-
-
-(****************************************************************************)
-(**                      {2 Functional factory}                             *)
-(****************************************************************************)
-
-(** The following functions are useful to create a reduced product
-    from a list of first-class modules
-*)
 
 
 

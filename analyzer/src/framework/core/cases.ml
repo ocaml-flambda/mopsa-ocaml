@@ -20,7 +20,7 @@
 (****************************************************************************)
 
 
-(** Cases Encoding of results returned by transfer functions. *)
+(** Cases - Encoding of results returned by transfer functions. *)
 
 
 open Ast.Stmt

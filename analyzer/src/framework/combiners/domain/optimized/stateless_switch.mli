@@ -19,14 +19,13 @@
 (*                                                                          *)
 (****************************************************************************)
 
+(** Switch of stateless domains *)
 
-(** Sequence combiner to build Cartesian products of domains *)
+open Core.All
+open Sig.Combiner.Stateless
 
-open Sig.Combiner.Stacked
+(** Combine two stateless domains *)
+module Make(D1:STATELESS_COMBINER)(D2:STATELESS_COMBINER) : STATELESS_COMBINER
 
-
-module Make (C1:STACKED_COMBINER)(C2:STACKED_COMBINER) : STACKED_COMBINER
-  with type t = C1.t * C2.t
-
-
-val make : (module STACKED_COMBINER) list -> (module STACKED_COMBINER)
+(** Combine a list of stateless domains *)
+val make : (module STATELESS_COMBINER) list -> (module STATELESS_COMBINER)

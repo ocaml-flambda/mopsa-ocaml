@@ -19,13 +19,15 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Reduced product of (leaf) domains with n-ary simplified reduction rules *)
+(** Reduced product of simplified (leaf) domains *)
 
 open Core.All
 open Sig.Combiner.Simplified
 open Sig.Reduction.Simplified
 
 
+(** Create a reduced product of a list of simplified domains and a list of
+    reduction rules *)
 val make : (module SIMPLIFIED_COMBINER) list ->
            rules:(module SIMPLIFIED_REDUCTION) list ->
            (module SIMPLIFIED_COMBINER)
