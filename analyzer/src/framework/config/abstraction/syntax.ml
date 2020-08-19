@@ -56,7 +56,7 @@ and domain_kind =
   | D_stateless  of (module STATELESS)
   | D_functor    of domain_functor * domain
   | D_nonrel     of value
-  | D_sequence   of domain list
+  | D_switch   of domain list
   | D_compose    of domain list
   | D_product    of domain list * domain_reduction list
 
@@ -174,7 +174,7 @@ and pp_domain_kind fmt = function
   | D_nonrel v ->
     fprintf fmt "nonrel(%a)" pp_value v
 
-  | D_sequence dl ->
+  | D_switch dl ->
     fprintf fmt "(%a)"
       (pp_print_list
          ~pp_sep:(fun fmt () -> pp_print_string fmt " ; ")

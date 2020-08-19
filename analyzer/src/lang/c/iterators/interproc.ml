@@ -83,12 +83,12 @@ struct
     match skind stmt with
     | S_c_return (r,upd) ->
       (* Let first Universal manage the return flow *)
-      man.post (mk_stmt (S_return r) stmt.srange) flow >>$? fun () flow ->
+      man.exec (mk_stmt (S_return r) stmt.srange) flow >>%? fun flow ->
       (* Now clean the post-state using scope updater *)
       (* To do that, first move the return environment to cur *)
       let flow = Flow.copy (T_return stmt.srange) T_cur man.lattice flow flow in
       (* Now clean cur *)
-      let flow = update_scope upd stmt.srange man flow in
+      update_scope upd stmt.srange man flow >>%? fun flow ->
       (* Finally, move cur to return flow *)
       let cur = Flow.get T_cur man.lattice flow in
       Flow.set (T_return (stmt.srange)) cur man.lattice flow |>
@@ -117,10 +117,10 @@ struct
       (* add the resource to local state *)
       let flow = map_env T_cur (add addr) man flow in
       (* add the address to memory state *)
-      man.post (mk_add e range) flow >>$ fun () flow ->
+      man.exec (mk_add e range) flow >>% fun flow ->
       (* set the size of the resource *)
       let cond = mk_binop (mk_stub_builtin_call BYTES e ~etyp:ul range) O_eq size ~etyp:T_bool range in
-      man.post (mk_assume cond range) flow >>$ fun () flow ->
+      man.exec (mk_assume cond range) flow >>% fun flow ->
       Eval.singleton e flow
 
     | _ -> assert false
@@ -175,11 +175,11 @@ struct
           }
           in
           let exp' = mk_call fundec' args range in
-          man.eval exp' flow
+          man.eval exp' flow ~route:Below
 
         | {c_func_variadic = true} ->
           let exp' = mk_c_call fundec args range in
-          man.eval exp' flow
+          man.eval exp' flow ~route:Below
 
         | {c_func_stub = Some stub} ->
           let exp' = Stubs.Ast.mk_stub_call stub args range in
@@ -197,11 +197,22 @@ struct
       let callee_alloca_addrs = get_env T_cur man flow in
       let flow = set_env T_cur caller_alloca_addrs man flow in
       AddrSet.fold
-        (fun addr acc -> acc >>$ fun () flow -> man.post (mk_stub_free (mk_addr addr range) range) flow)
+        (fun addr acc -> acc >>% man.exec (mk_stub_free (mk_addr addr range) range))
         callee_alloca_addrs (Post.return flow)
-      >>$ fun () flow ->
+      >>% fun flow ->
       Eval.singleton e flow
 
+  (* 𝔼⟦ *p ⟧ where p is a pointer to a function *)
+  let eval_deref_function_pointer p range man flow =
+    resolve_pointer p man flow >>$ fun pt flow ->
+    match pt with
+    | P_fun f ->
+      Eval.singleton (mk_expr (E_c_function f) ~etyp:(under_type p.etyp) range) flow
+
+    | _ -> panic_at range
+             "deref_function_pointer: pointer %a points to a non-function object %a"
+             pp_expr p
+             pp_points_to pt
 
   let eval exp man flow =
     match ekind exp with
@@ -232,6 +243,11 @@ struct
             man.eval (mk_top exp.etyp exp.erange) flow |>
             OptionExt.return
       end
+
+    | E_c_deref p when under_type p.etyp |> is_c_function_type
+      ->
+      eval_deref_function_pointer p exp.erange man flow |>
+      OptionExt.return
 
     | _ -> None
 

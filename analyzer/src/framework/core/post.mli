@@ -45,4 +45,8 @@ val return : ?log:log -> ?cleaners:block -> 'a flow -> 'a post
 
 val print : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a post -> unit
 
-val bind : ('a flow -> 'a post) -> 'a post -> 'a post
+val bind : ('a flow -> ('a,'r) cases) -> 'a post -> ('a,'r) cases
+
+val (>>%) : 'a post -> ('a flow -> ('a,'r) cases) -> ('a,'r) cases 
+
+val (>>%?) : 'a post -> ('a flow -> ('a,'r) cases option) -> ('a,'r) cases option 

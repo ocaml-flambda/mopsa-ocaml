@@ -25,6 +25,7 @@
 */
 
 #include <utmpx.h>
+#include <errno.h>
 #include "mopsa_libc_utils.h"
 
 /*$

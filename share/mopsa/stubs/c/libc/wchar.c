@@ -28,6 +28,7 @@
 #include <limits.h>
 #include <stdio.h> // for _alloc_FILE
 #include <string.h>
+#include <errno.h>
 #include "mopsa_libc_utils.h"
 
 

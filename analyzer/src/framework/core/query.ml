@@ -49,5 +49,7 @@ type query_info = {
 }
 
 let register_query info =
-  join_chain := { apply = (fun q join a b -> info.join !join_chain q join a b) };
-  meet_chain := { apply = (fun q meet a b -> info.meet !meet_chain q meet a b) }
+  let old_join = !join_chain in
+  let old_meet = !meet_chain in
+  join_chain := { apply = (fun q join a b -> info.join old_join q join a b) };
+  meet_chain := { apply = (fun q meet a b -> info.meet old_meet q meet a b) }

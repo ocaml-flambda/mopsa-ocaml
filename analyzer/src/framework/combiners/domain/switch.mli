@@ -20,13 +20,20 @@
 (****************************************************************************)
 
 
-(** Sequence combiner to build Cartesian products of domains *)
+(** Switch combiner
+
+    A switch combination 𝒟₁;𝒟₂ creates a cartesian product in which 𝒟₁ is
+    given higher priority than 𝒟₂. Transfer functions of 𝒟₁ are called first,
+    and if no answer is returned 𝒟₂ is called. 
+ *)
 
 open Sig.Combiner.Stacked
 
 
-module Make (C1:STACKED_COMBINER)(C2:STACKED_COMBINER) : STACKED_COMBINER
-  with type t = C1.t * C2.t
+(** Create a switch of two domains *)
+module Make (D1:STACKED_COMBINER)(D2:STACKED_COMBINER) : STACKED_COMBINER
+  with type t = D1.t * D2.t
 
 
+(** Create a switch of a list of domains *)
 val make : (module STACKED_COMBINER) list -> (module STACKED_COMBINER)

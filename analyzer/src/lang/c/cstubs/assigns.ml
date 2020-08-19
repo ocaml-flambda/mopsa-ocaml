@@ -89,7 +89,7 @@ struct
        Consequently, this domain should be placed *after* the toplevel C
        abstraction (i.e. c.memory.blocks) in the configuration file.
     *)
-    man.post (mk_expand (mk_base_expr base range) [primed] range) ~route:lowlevel flow
+    man.exec (mk_expand (mk_base_expr base range) [primed] range) ~route:lowlevel flow
 
 
   (** Prepare primed copies of assigned bases *)
@@ -108,7 +108,7 @@ struct
       (* Prime the target *)
       let primed_target = mk_primed_address base offset typ range in
       let lval = mk_c_deref primed_target range in
-      man.post (mk_forget lval range) flow
+      man.exec (mk_forget lval range) flow
 
     | _ ->
 
@@ -133,10 +133,10 @@ struct
       in
 
       (* Execute `forget lval` *)
-      man.post (mk_block adds range) flow >>$ fun () flow ->
-      man.post (mk_block assumes range) flow >>$ fun () flow ->
-      man.post (mk_forget (mk_stub_quantified_formula quants lval range) range) flow >>$ fun () flow ->
-      man.post (mk_block cleaners range) flow
+      man.exec (mk_block adds range) flow >>%
+      man.exec (mk_block assumes range) >>%
+      man.exec (mk_forget (mk_stub_quantified_formula quants lval range) range) >>%
+      man.exec (mk_block cleaners range)
 
 
 
@@ -184,13 +184,13 @@ struct
     let unprimed = mk_base_expr base range in
     let primed = mk_primed_base_expr base range in
     let stmt = mk_rename primed unprimed range in
-    let post1 = man.post stmt ~route:Below flow in
+    let post1 = man.exec stmt ~route:Below flow in
     (* If this is a weak base, we need to restore the old values. *)
     (* To do that, we remove the primed base from the flow and we join with post1 *)
     if base_mode base = STRONG then
       post1
     else
-      let post2 = man.post (mk_remove primed range) ~route:lowlevel flow in
+      let post2 = man.exec (mk_remove primed range) ~route:lowlevel flow in
       Post.join post1 post2
 
 
@@ -265,10 +265,33 @@ struct
     | _ -> assert false
 
 
+  let eval_stub_primed_address e range man flow =
+    let ptr = mk_c_address_of e range in
+    resolve_pointer ptr man flow >>$ fun p flow ->
+    match p with
+    | P_null ->
+      Eval.singleton (mk_c_null range) flow
+
+    | P_invalid ->
+      Eval.singleton (mk_c_invalid_pointer range) flow
+
+    | P_block (base, offset, mode) ->
+      man.eval (mk_primed_address base offset e.etyp range) flow
+
+    | P_top ->
+      Eval.singleton (mk_top (T_c_pointer e.etyp) range) flow
+
+    | _ -> assert false
+
+
   let eval exp man flow =
     match ekind exp with
     | E_stub_primed e ->
       eval_stub_primed e exp.erange man flow |>
+      OptionExt.return
+
+    | E_c_address_of {ekind = E_stub_primed e} ->
+      eval_stub_primed_address e exp.erange man flow |>
       OptionExt.return
 
     | E_stub_builtin_call(BYTES, { ekind = E_var({ vkind = V_c_primed_base base },_) }) ->

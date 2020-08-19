@@ -27,6 +27,8 @@
 #include <sys/stat.h>
 #include "../mopsa_libc_utils.h"
 #include <fcntl.h> // for AT_FDCWD
+#include <errno.h>
+
 
 /*$
  * requires: valid_string(__file);

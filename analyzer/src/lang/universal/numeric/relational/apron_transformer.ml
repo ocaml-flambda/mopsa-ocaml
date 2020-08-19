@@ -158,7 +158,8 @@ struct
 
 
 
-  exception UnsupportedExpression
+  exception UnsupportedExpression (* Raised when an expression is not part of the concrete semantics *)
+  exception UnsupportedOperator   (* Raised when an operator is not implemented in Apron *)
 
   let binop_to_apron = function
     | O_plus  -> Apron.Texpr1.Add
@@ -166,7 +167,7 @@ struct
     | O_mult  -> Apron.Texpr1.Mul
     | O_div   -> Apron.Texpr1.Div
     | O_mod   -> Apron.Texpr1.Mod
-    | _ -> raise UnsupportedExpression
+    | _ -> raise UnsupportedOperator
 
   let typ_to_apron = function
     | T_bool -> Apron.Texpr1.Int

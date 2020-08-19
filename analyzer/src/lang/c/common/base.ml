@@ -113,6 +113,16 @@ let is_base_readonly b =
   | _ -> false
 
 
+let is_var_base_expr e =
+  match ekind e with
+  | E_var(v,_)                -> is_c_type v.vtyp
+  | _ -> false
+
+let is_addr_base_expr e =
+  match ekind e with
+  | E_addr _                  -> true
+  | _ -> false
+
 let is_base_expr e =
   match ekind e with
   | E_var(v,_)                -> is_c_type v.vtyp

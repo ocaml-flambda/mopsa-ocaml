@@ -140,7 +140,7 @@ struct
       | _ -> panic ~loc:__LOC__ "non integer type %a" pp_typ t
 
   let mk_num_var v =
-    mkv v.vname (V_c_num v) (to_num_type v.vtyp) ~mode:v.vmode
+    mkv v.vname (V_c_num v) (to_num_type v.vtyp) ~mode:v.vmode ~semantic:"U/Numeric"
 
   let mk_num_var_expr e =
     match ekind e with
@@ -257,38 +257,6 @@ struct
       ~route:numeric man flow
 
 
-  let rec is_compare_expr e =
-    e.etyp = T_bool ||
-    match ekind e with
-    | E_binop(op, e1, e2) when is_comparison_op op -> true
-    | E_binop(op, e1, e2) when is_logic_op op -> true
-    | E_unop(O_log_not, ee) -> is_compare_expr ee
-    | E_c_cast(ee,_) -> is_compare_expr ee
-    | _ -> false
-
-
-  let is_predicate_op = function
-    | O_float_class _ -> true
-    | _ -> false
-
-  let rec to_compare_expr e =
-    match ekind e with
-    | E_binop(op, e1, e2) when is_comparison_op op ->
-      e
-
-    | E_binop(op, e1, e2) when is_logic_op op ->
-      { e with ekind = E_binop(op, to_compare_expr e1, to_compare_expr e2) }
-
-    | E_unop(O_log_not, ee) ->
-      { e with ekind = E_unop(O_log_not, to_compare_expr ee) }
-
-    | E_unop (op, _) when is_predicate_op op ->
-      e
-
-    | _ ->
-      mk_binop e O_ne (mk_zero ~typ:e.etyp e.erange) e.erange
-
-
   (** Transfer functions *)
   (** ================== *)
 
@@ -344,19 +312,6 @@ struct
       Eval.singleton exp' flow |>
       OptionExt.return
 
-    (* 𝔼⟦ ! e ⟧ *)
-    | E_unop(O_log_not, e) when exp |> etyp |> is_c_num_type ->
-      man.eval e flow >>$? fun e flow ->
-      let exp' =
-        if is_compare_expr e then
-          { exp with
-            ekind = E_unop(O_log_not, e);
-            etyp = T_bool }
-        else
-          mk_binop e O_eq (mk_zero ~typ:e.etyp exp.erange) exp.erange ~etyp:T_bool
-      in
-      Eval.singleton exp' flow |>
-      OptionExt.return
 
     (* 𝔼⟦ ⋄ e ⟧ *)
     | E_unop(op, e) when exp |> etyp |> is_c_num_type ->
@@ -509,25 +464,15 @@ struct
           Eval.singleton (mk_top (to_num_type v.vtyp) range) flow
 
       | _, Some (C_init_expr e) ->
-        if not (is_compare_expr e) then
-          man.eval e flow
-        else
-          assume e
-            ~fthen:(fun flow ->
-                Eval.singleton (mk_one range) flow
-              )
-            ~felse:(fun flow ->
-                Eval.singleton (mk_zero range) flow
-              )
-            man flow
+        man.eval e flow
 
       | _ -> assert false
     in
 
     init' >>$ fun init' flow ->
-    man.post ~route:numeric (mk_add vv range) flow >>= fun _ flow ->
+    man.exec ~route:numeric (mk_add vv range) flow >>% fun flow ->
     add_var_bounds vv v.vtyp flow |>
-    man.post ~route:numeric (mk_assign vv init' range)
+    man.exec ~route:numeric (mk_assign vv init' range)
 
 
   let exec stmt man flow =
@@ -536,39 +481,21 @@ struct
       declare_var v init scope stmt.srange man flow |>
       OptionExt.return
 
-    | S_assign({ekind = E_var _} as lval, rval) when etyp lval |> is_c_num_type &&
-                                                     is_compare_expr rval ->
-      man.eval lval flow >>$? fun lval flow ->
-      let range = stmt.srange in
-      assume rval
-        ~fthen:(fun flow ->
-            man.post ~route:numeric (mk_assign lval (mk_one range) range) flow
-          )
-        ~felse:(fun flow ->
-            man.post ~route:numeric (mk_assign lval (mk_zero range) range) flow
-          )
-        man flow |>
-      OptionExt.return
-
     | S_assign({ekind = E_var _} as lval, rval) when etyp lval |> is_c_num_type ->
       man.eval lval flow >>$? fun lval' flow ->
       man.eval rval flow >>$? fun rval' flow ->
-      man.post ~route:numeric (mk_assign lval' rval' stmt.srange) flow |>
-      OptionExt.return
-
-    | S_assume(e) when (is_c_num_type e.etyp || is_numeric_type e.etyp) && not (is_compare_expr e) ->
-      man.post ~route:numeric (mk_assume (to_compare_expr e) stmt.srange) flow |>
+      man.exec ~route:numeric (mk_assign lval' rval' stmt.srange) flow |>
       OptionExt.return
 
     | S_add ({ekind = E_var _} as v) when is_c_num_type v.etyp ->
       let vv = mk_num_var_expr v in
       add_var_bounds vv v.etyp flow |>
-      man.post ~route:numeric (mk_add vv stmt.srange) |>
+      man.exec ~route:numeric (mk_add vv stmt.srange) |>
       OptionExt.return
 
     | S_remove ({ekind = E_var _} as v) when is_c_num_type v.etyp ->
       let vv = mk_num_var_expr v in
-      man.post ~route:numeric (mk_remove vv stmt.srange) flow |>
+      man.exec ~route:numeric (mk_remove vv stmt.srange) flow |>
       Post.bind (fun flow ->
           if is_c_int_type v.etyp then
             let vv = match ekind vv with E_var (vv,_) -> vv | _ -> assert false in
@@ -585,30 +512,31 @@ struct
       ->
       let vv1 = mk_num_var_expr v1 in
       let vv2 = mk_num_var_expr v2 in
-      man.post ~route:numeric (mk_rename vv1 vv2 stmt.srange) flow |>
+      man.exec ~route:numeric (mk_rename vv1 vv2 stmt.srange) flow |>
       OptionExt.return
 
-    | S_expand(({ekind = E_var _} as e),el)
+    | S_expand({ekind = E_var _} as e, el)
       when is_c_num_type e.etyp &&
            List.for_all (fun ee -> is_c_num_type ee.etyp) el
       ->
-      man.eval e flow >>$? fun e' flow ->
-      bind_list el (fun e flow -> man.eval e flow) flow >>$? fun el' flow ->
-      man.post (mk_expand e' el' stmt.srange) ~route:numeric flow |>
+      let v = mk_num_var_expr e in
+      let vl = List.map mk_num_var_expr el in
+      man.exec (mk_expand v vl stmt.srange) ~route:numeric flow |>
       OptionExt.return
 
     | S_fold(({ekind = E_var _} as e),el)
       when is_c_num_type e.etyp &&
            List.for_all (fun ee -> is_c_num_type ee.etyp) el
       ->
-      man.eval e flow >>$? fun e' flow ->
-      bind_list el (fun e flow -> man.eval e flow) flow >>$? fun el' flow ->
-      man.post (mk_fold e' el' stmt.srange) ~route:numeric flow |>
+      let v = mk_num_var_expr e in
+      let vl = List.map mk_num_var_expr el in
+      man.exec (mk_fold v vl stmt.srange) ~route:numeric flow |>
       OptionExt.return
 
     | S_forget ({ekind = E_var _} as v) when is_c_num_type v.etyp ->
       let vv = mk_num_var_expr v in
-      man.post (mk_forget vv stmt.srange) ~route:numeric flow |>
+      let lo,hi = rangeof v.etyp in
+      man.exec (mk_assign vv (mk_z_interval lo hi stmt.srange) stmt.srange) ~route:numeric flow |>
       OptionExt.return
 
     | _ -> None

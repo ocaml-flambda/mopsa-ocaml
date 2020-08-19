@@ -104,7 +104,7 @@ struct
 
     (* Add the length variable to the environment *)
     let len = mk_variable_length_var arr in
-    man.post (mk_add_var len range) ~route:scalar flow >>$ fun () flow ->
+    man.exec (mk_add_var len range) ~route:scalar flow >>% fun flow ->
 
     (* Initialize it with the length expression *)
     man.eval (get_array_length_expr arr) flow >>$ fun e flow ->
@@ -112,20 +112,20 @@ struct
         (under_array_type arr.vtyp |> void_to_char |> sizeof_type |> (fun z -> mk_z z range))
         range
     in
-    man.post (mk_assign (mk_var len range) ee range) ~route:scalar flow >>$ fun () flow ->
+    man.exec (mk_assign (mk_var len range) ee range) ~route:scalar flow >>% fun flow ->
 
     (* Add arr as a base in the underlying memory abstraction *)
-    man.post (mk_add_var arr range) flow
+    man.exec (mk_add_var arr range) flow
 
 
   (** 𝕊⟦ remove arr; ⟧ *)
   let exec_remove arr range man flow =
     (* Remove the base arr from the underlying memory abstraction *)
-    man.post ~route:Below (mk_remove_var arr range) flow >>$ fun () flow ->
+    man.exec ~route:Below (mk_remove_var arr range) flow >>% fun flow ->
 
     (* Remove the length variable from the environment *)
     let len = mk_variable_length_var arr in
-    man.post ~route:scalar (mk_remove_var len range) flow
+    man.exec ~route:scalar (mk_remove_var len range) flow
 
 
   let exec stmt man flow =

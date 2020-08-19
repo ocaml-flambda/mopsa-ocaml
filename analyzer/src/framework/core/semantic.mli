@@ -19,7 +19,11 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Semantics are named sub-trees of the abstraction *)
+(** Semantics
+
+    Semantics are named sub-trees of the abstraction. They can be used to
+    route commands (exec/eval) to specific parts of the abstraction. 
+*)
 
 type semantic = string
 

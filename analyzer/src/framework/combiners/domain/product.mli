@@ -19,13 +19,14 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Reduced product with n-ary reduction rules *)
+(** Reduced product combiner with n-ary reduction rules *)
 
 
 open Sig.Combiner.Stacked
 open Sig.Reduction.Exec
 open Sig.Reduction.Eval
 
+(** Create a reduced product over a list of domains and a list of reduction rules *)
 val make :
   (module STACKED_COMBINER) list ->
   eval_rules:(module EVAL_REDUCTION) list ->

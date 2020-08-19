@@ -56,33 +56,33 @@ struct
   (** ========================== *)
 
   let exec_add b range man flow =
-    man.post ~route:Below (mk_add b range) flow
+    man.exec ~route:Below (mk_add b range) flow
 
   let exec_remove b range man flow =
-    man.post ~route:Below (mk_remove b range) flow >>$ fun () flow ->
-    man.post ~route:Below (mk_invalidate b range) flow
+    man.exec ~route:Below (mk_remove b range) flow >>%
+    man.exec ~route:Below (mk_invalidate b range)
 
   let exec_rename b1 b2 range man flow =
-    man.post ~route:Below (mk_rename b1 b2 range) flow >>$ fun () flow ->
+    man.exec ~route:Below (mk_rename b1 b2 range) flow >>% fun flow ->
     let bb1 = to_c_block_object b1 in
     let bb2 = to_c_block_object b2 in
-    man.post ~route:Below (mk_rename bb1 bb2 range) flow
+    man.exec ~route:Below (mk_rename bb1 bb2 range) flow
 
   let exec_forget b range man flow =
-    man.post ~route:Below (mk_forget b range) flow
+    man.exec ~route:Below (mk_forget b range) flow
 
   let exec_expand b bl range man flow =
-    man.post ~route:Below (mk_expand b bl range) flow >>$ fun () flow ->
+    man.exec ~route:Below (mk_expand b bl range) flow >>% fun flow ->
     let bb = to_c_block_object b in
     let bbl = List.map to_c_block_object bl in
-    man.post ~route:Below (mk_expand bb bbl range) flow
+    man.exec ~route:Below (mk_expand bb bbl range) flow
 
 
   let exec_fold b bl range man flow =
-    man.post ~route:Below (mk_fold b bl range) flow >>$ fun () flow ->
+    man.exec ~route:Below (mk_fold b bl range) flow >>% fun flow ->
     let bb = to_c_block_object b in
     let bbl = List.map to_c_block_object bl in
-    man.post ~route:Below (mk_fold bb bbl range) flow
+    man.exec ~route:Below (mk_fold bb bbl range) flow
 
   
   let exec stmt man flow =
@@ -111,6 +111,25 @@ struct
       exec_fold b bl stmt.srange man flow |>
       OptionExt.return
 
+    | S_assume { ekind = E_binop (O_c_and, e1, e2) } ->
+      man.exec (mk_assume e1 stmt.srange) flow >>%? fun flow ->
+      man.exec (mk_assume e2 stmt.srange) flow |>
+      OptionExt.return
+
+    | S_assume { ekind = E_binop (O_c_or, e1, e2) } ->
+      let post1 = man.exec (mk_assume e1 stmt.srange) flow in
+      let post2 = man.exec (mk_assume e2 stmt.srange) flow in
+      Post.join post1 post2 |>
+      OptionExt.return
+
+    | S_assume { ekind = E_unop (O_log_not, { ekind = E_binop (O_c_and, e1, e2); etyp }); erange } ->
+      man.exec (mk_assume (mk_binop (mk_not e1 e1.erange) O_c_or (mk_not e2 e2.erange) ~etyp erange) stmt.srange) flow |>
+      OptionExt.return
+
+    | S_assume { ekind = E_unop (O_log_not, { ekind = E_binop (O_c_or, e1, e2); etyp }); erange } ->
+      man.exec (mk_assume (mk_binop (mk_not e1 e1.erange) O_c_and (mk_not e2 e2.erange) ~etyp erange) stmt.srange) flow |>
+      OptionExt.return
+
     | _ -> None
 
 
@@ -136,7 +155,7 @@ struct
             man.eval e2 flow
           )
         ~felse:(fun flow ->
-            Eval.singleton (mk_zero exp.erange) flow
+            Eval.singleton (mk_false exp.erange) flow
           )
         man flow |>
       OptionExt.return
@@ -144,7 +163,7 @@ struct
     | E_binop(O_c_or, e1, e2) ->
       assume e1
         ~fthen:(fun flow ->
-            Eval.singleton (mk_one exp.erange) flow
+            Eval.singleton (mk_true exp.erange) flow
           )
         ~felse:(fun flow ->
             man.eval e2 flow
@@ -154,7 +173,7 @@ struct
 
     | E_c_assign(lval, rval) ->
       man.eval rval flow >>$? fun rval flow ->
-      man.post (mk_assign lval rval exp.erange) flow >>$? fun () flow ->
+      man.exec (mk_assign lval rval exp.erange) flow >>%? fun flow ->
       Eval.singleton rval flow |>
       OptionExt.return
 
@@ -164,7 +183,7 @@ struct
         | {skind = S_expression e}::q ->
           let q' = List.rev q in
           let stmt' = mk_block q' (erange exp) in
-          man.post stmt' flow >>$? fun () flow ->
+          man.exec stmt' flow >>%? fun flow ->
           man.eval e flow |>
           Cases.add_cleaners (List.map (fun v -> mk_remove_var v exp.erange) local_vars) |>
           OptionExt.return

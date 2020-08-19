@@ -61,7 +61,7 @@ struct
     | P_block ({ base_kind = Addr ({ addr_kind = A_stub_resource _ } as addr); base_valid = true }, _, mode) ->
       (* Tell the heap abstraction to free the address *)
       let stmt' = mk_free addr range in
-      man.post stmt' flow
+      man.exec stmt' flow
 
     | P_block ({ base_kind = Addr { addr_kind = A_stub_resource _ }; base_valid = false; base_invalidation_range = Some drange }, _, _) ->
       raise_c_double_free_alarm p drange man ~range flow |>
@@ -84,29 +84,25 @@ struct
   let exec_stub_rename_resource addr1 addr2 stmt man flow =
     let bytes1 = mk_bytes_var addr1 in
     let bytes2 = mk_bytes_var addr2 in
-    man.exec (mk_rename_var bytes1 bytes2 stmt.srange) flow |>
-    man.exec ~route:Below stmt |>
-    Post.return
+    man.exec (mk_rename_var bytes1 bytes2 stmt.srange) flow >>%
+    man.exec ~route:Below stmt
 
   let exec_stub_remove_resource addr stmt man flow =
     let bytes = mk_bytes_var addr in
-    man.exec (mk_remove_var bytes stmt.srange) flow |>
-    man.exec ~route:Below stmt |>
-    Post.return
+    man.exec (mk_remove_var bytes stmt.srange) flow >>%
+    man.exec ~route:Below stmt
 
   let exec_stub_expand_resource addr addrl stmt man flow =
     let bytes = mk_bytes_var addr in
     let bytesl = List.map mk_bytes_var addrl in
-    man.exec (mk_expand_var bytes bytesl stmt.srange) flow |>
-    man.exec ~route:Below stmt |>
-    Post.return
+    man.exec (mk_expand_var bytes bytesl stmt.srange) flow >>%
+    man.exec ~route:Below stmt
 
   let exec_stub_fold_resource addr addrl stmt man flow =
     let bytes = mk_bytes_var addr in
     let bytesl = List.map mk_bytes_var addrl in
-    man.exec (mk_fold_var bytes bytesl stmt.srange) flow |>
-    man.exec ~route:Below stmt |>
-    Post.return
+    man.exec (mk_fold_var bytes bytesl stmt.srange) flow>>%
+    man.exec ~route:Below stmt
 
   let is_resouce_addr addr =
     match addr.addr_kind with
@@ -164,10 +160,10 @@ struct
     | E_addr addr ->
       (* Add bytes attribute *)
       let bytes = mk_bytes_var addr in
-      man.post (mk_add_var bytes eaddr.erange) flow >>$ fun () flow ->
+      man.exec (mk_add_var bytes eaddr.erange) flow >>%
       (* Add the address dimension to memory abstraction *)
-      man.post (mk_add eaddr range) flow >>$ fun () flow ->
-      Eval.singleton eaddr flow
+      man.exec (mk_add eaddr range) >>%
+      Eval.singleton eaddr
 
     | _ -> assert false
 

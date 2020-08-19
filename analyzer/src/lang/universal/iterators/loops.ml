@@ -277,11 +277,11 @@ struct
 
   let rec lfp count delay cond body man flow_init flow =
     debug "lfp called, range = %a, count = %d" (* @\n flow = %a@\n*) pp_range body.srange count (* (Flow.print man.lattice) flow *);
-    let flow' = Flow.remove T_continue flow |>
-                Flow.remove T_break |>
-                man.exec (mk_assume cond cond.erange) |>
-                man.exec body |>
-                merge_cur_and_continue man |>
+    Flow.remove T_continue flow |>
+    Flow.remove T_break |>
+    man.exec (mk_assume cond cond.erange) >>%
+    man.exec body >>% fun f ->
+    let flow' = merge_cur_and_continue man f |>
                 Flow.join man.lattice flow_init
     in
     let cur = Flow.get T_cur man.lattice flow in
@@ -291,16 +291,17 @@ struct
     if is_sub then
       (* Add a decreasing iteration if new alarms are reported *)
       if AlarmSet.subset (Flow.get_alarms flow') (Flow.get_alarms flow_init) then
-        flow'
+        Post.return flow'
       else
         let () = debug "decreasing iteration" in
         Flow.remove T_continue flow' |>
         Flow.remove T_break |>
         Flow.remove_alarms |>
-        man.exec (mk_assume cond cond.erange) |>
-        man.exec body |>
-        merge_cur_and_continue man |>
-        Flow.join man.lattice flow_init
+        man.exec (mk_assume cond cond.erange) >>%
+        man.exec body >>% fun f ->
+        merge_cur_and_continue man f |>
+        Flow.join man.lattice flow_init |>
+        Post.return
     else if delay = 0 then
       let wcur = man.lattice.widen (Flow.get_unit_ctx flow') cur cur' in
       let wflow = Flow.set T_cur wcur man.lattice flow' in
@@ -321,34 +322,38 @@ struct
       (OptionExt.print ~none:"" ~some:"" Format.pp_print_int) i
       pp_range (srange body);
     if i = Some 0 then
-      (false, flow, Flow.bottom (Flow.get_ctx flow) (Flow.get_alarms flow))
+      Cases.singleton (false, Flow.bottom (Flow.get_ctx flow) (Flow.get_alarms flow)) flow
     else
-      let flow1 =
-        man.exec {skind = S_assume cond; srange = cond.erange} flow |>
-        man.exec body |>
-        merge_cur_and_continue man
+      let post1 =
+        man.exec {skind = S_assume cond; srange = cond.erange} flow >>%
+        man.exec body >>% fun f ->
+        merge_cur_and_continue man f |>
+        Post.return
       in
 
-      let flow2 =
-        man.exec (mk_assume (mk_not cond cond.erange) cond.erange) (Flow.copy_ctx flow1 flow)
+      let post2 =
+        man.exec (mk_assume (mk_not cond cond.erange) cond.erange) (Flow.set_ctx (Cases.get_ctx post1) flow)
       in
+
+      post1 >>% fun flow1 ->
+      post2 >>% fun flow2 ->
       if Flow.subset man.lattice flow1 flow then
         let () = debug "stabilisation reached in unrolling!" in
-        true, flow1, flow2
+        Cases.singleton (true, flow2) flow1
       else
-        let flag, flow1', flow2' = unroll (OptionExt.lift (fun ii -> (ii - 1)) i) cond body man (Flow.copy_ctx flow2 flow1) in
-        flag, flow1', Flow.join man.lattice flow2 flow2'
+        unroll (OptionExt.lift (fun ii -> (ii - 1)) i) cond body man (Flow.copy_ctx flow2 flow1) >>$ fun (flag, flow2') flow1' -> 
+        Cases.singleton (flag, Flow.join man.lattice flow2 flow2') flow1'
 
   let decr_iteration cond body man flow_init flow =
     debug "starting decreasing iterations, flow = %a" (Flow.print man.lattice.print) flow;
-    let flow = Flow.remove T_continue flow |>
+    Flow.remove T_continue flow |>
     Flow.remove T_break |>
-    man.exec (mk_assume cond cond.erange) |>
-    man.exec body |>
-    merge_cur_and_continue man |>
-                 Flow.join man.lattice flow_init in
+    man.exec (mk_assume cond cond.erange) >>%
+    man.exec body >>% fun flow ->
+    let flow = merge_cur_and_continue man flow |>
+               Flow.join man.lattice flow_init in
     debug "after decreasing iteration, flow = %a" (Flow.print man.lattice.print) flow;
-    flow
+    Post.return flow
 
 
   let rec exec stmt man flow =
@@ -362,13 +367,13 @@ struct
                   Flow.remove T_break
       in
 
-      let is_fp, flow_init, flow_out =
-        if !opt_loop_use_cache then
+      begin if !opt_loop_use_cache then
           match join_w_old_lfp man flow0 (stmt.srange, Flow.get_callstack flow0) with
-          | Some flow0 -> false, flow0, Flow.bottom (Flow.get_ctx flow0) (Flow.get_alarms flow0)
+          | Some flow0 -> Cases.singleton (false, Flow.bottom (Flow.get_ctx flow0) (Flow.get_alarms flow0)) flow0
           | None -> unroll (get_range_unrolling stmt.srange) cond body man flow0
         else
-          unroll (get_range_unrolling stmt.srange) cond body man flow0 in
+          unroll (get_range_unrolling stmt.srange) cond body man flow0
+      end >>$? fun (is_fp, flow_out) flow_init ->
 
       debug "post unroll %a (is_fp=%b):@\n flow_init = @[%a@]@\n flow_out = @[%a@]"
         pp_range stmt.srange
@@ -377,24 +382,23 @@ struct
         (Flow.print man.lattice.print) flow_out
       ;
 
-      let flow_lfp =
+      begin
         if is_fp then
-          flow_init
+          Post.return flow_init
         else
-          let flow_lfp = lfp 0 !opt_loop_widening_delay cond body man flow_init flow_init in
-          let flow_lfp =
+          lfp 0 !opt_loop_widening_delay cond body man flow_init flow_init >>% fun flow_lfp -> 
+          begin
             if !opt_loop_decreasing_it then
               decr_iteration cond body man flow_init flow_lfp
-            else flow_lfp in
+            else Post.return flow_lfp
+          end >>% fun flow_lfp ->
           let flow_lfp = if !opt_loop_use_cache then
                            let () = Debug.debug ~channel:(name ^ ".cache") "storing fixpoint %a" (Flow.print man.lattice.print) flow_lfp in
                            store_fixpoint man flow_lfp (stmt.srange, Flow.get_callstack flow_lfp) else flow_lfp in
-          flow_lfp in
-
-      let res0 =
-        man.exec (mk_assume (mk_not cond cond.erange) cond.erange) flow_lfp |>
-        Flow.join man.lattice flow_out
-      in
+          Post.return flow_lfp
+      end >>%? fun flow_lfp ->
+      man.exec (mk_assume (mk_not cond cond.erange) cond.erange) flow_lfp >>%? fun f ->
+      let res0 = Flow.join man.lattice flow_out f in
 
       debug "while post abs %a:" (* @\nres0 = @[%a@] *) pp_range stmt.srange (* (Flow.print man.lattice) res0 *);
 

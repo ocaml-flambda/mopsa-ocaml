@@ -19,54 +19,13 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Reduction rule between cells and string length domains *)
+(** Switch of stateless domains *)
 
-open Mopsa
-open Sig.Reduction.Eval
-open Universal.Ast
-open Ast
+open Core.All
+open Sig.Combiner.Stateless
 
-module Reduction =
-struct
+(** Combine two stateless domains *)
+module Make(D1:STATELESS_COMBINER)(D2:STATELESS_COMBINER) : STATELESS_COMBINER
 
-  let name = "c.memory.lowlevel.reductions.cell_string_length"
-
-  let debug fmt = Debug.debug ~channel:name fmt
-
-  let cells = Cells.Domain.id
-  let strings = String_length.Domain.id
-
-
-  let reduce exp man rman flow evals =
-    let oe1 = rman.get_eval cells evals in
-    let oe2 = rman.get_eval strings evals in
-
-    (* Reduce only when both domains did an evaluation *)
-    OptionExt.apply2
-      (fun e1 e2 ->
-         match ekind e1, ekind e2 with
-          (* Constants from the string length domain should be precise *)
-          | _, E_constant (C_int _)
-          | _, E_constant (C_c_character _) ->
-            (* Remove cell evaluation *)
-            let evals = rman.del_eval cells evals in
-            Cases.singleton evals flow
-
-          (* When both return an interval, we prefer the result of the string domain as it may represent characters of a literal string *)
-          | E_constant (C_int_interval _), E_constant (C_int_interval _) ->
-            (* Remove cell evaluation *)
-            let evals = rman.del_eval cells evals in
-            Cases.singleton evals flow
-
-          (* Otherwise, keep cells *)
-          | _ ->
-            let evals = rman.del_eval strings evals in
-            Cases.singleton evals flow
-      )
-      (Cases.singleton evals flow)
-      oe1 oe2
-
-end
-
-let () =
-  register_eval_reduction (module Reduction)
+(** Combine a list of stateless domains *)
+val make : (module STATELESS_COMBINER) list -> (module STATELESS_COMBINER)

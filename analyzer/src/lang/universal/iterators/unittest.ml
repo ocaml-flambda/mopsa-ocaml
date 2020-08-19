@@ -160,7 +160,7 @@ struct
         (* Fold the context *)
         let flow = Flow.copy_ctx acc flow in
         (* Call the function *)
-        let flow1 = man.exec test flow in
+        let flow1 = man.exec test flow |> post_to_flow man in
         Flow.join man.lattice acc flow1
       )
       (Flow.bottom ctx alarms)
@@ -175,18 +175,18 @@ struct
       OptionExt.return
 
     | S_assert(cond) ->
-      assume_flow
+      assume
         cond
-        ~fthen:(fun safe_flow -> safe_flow)
+        ~fthen:(fun safe_flow -> Post.return safe_flow)
         ~felse:(fun fail_flow ->
-            raise_assert_fail cond man fail_flow
+            raise_assert_fail cond man fail_flow |>
+            Post.return
           )
         man flow
-      |> Post.return
       |> OptionExt.return
 
     | S_satisfy(cond) ->
-      let flow' = man.exec (mk_assume cond stmt.srange) flow in
+      man.exec (mk_assume cond stmt.srange) flow >>%? fun flow' -> 
       if not @@ man.lattice.is_bottom @@ Flow.get T_cur man.lattice flow' then
         Post.return flow |>
         OptionExt.return

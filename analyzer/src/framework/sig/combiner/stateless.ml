@@ -29,6 +29,7 @@ module type STATELESS_COMBINER =
 sig
   include STATELESS
   val domains : domain list
+  val semantics : semantic list
   val routing_table : routing_table
   val exec : domain list -> stmt -> ('a,unit) man -> 'a flow -> 'a post option
   val eval : domain list -> expr -> ('a,unit) man -> 'a flow -> 'a eval option
@@ -41,6 +42,7 @@ module StatelessToCombiner(D:STATELESS) : STATELESS_COMBINER =
 struct
   include D
   let domains = [D.name]
+  let semantics = []
   let routing_table = empty_routing_table
   let exec targets = D.exec
   let eval targets = D.eval

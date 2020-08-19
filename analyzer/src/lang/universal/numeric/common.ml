@@ -37,7 +37,6 @@ type int_itv = I.t_with_bot
 type ('a,_) query +=
   | Q_int_interval : expr -> ('a,int_itv) query (** Query to evaluate the integer interval of an expression *)
   | Q_fast_int_interval : expr -> ('a,int_itv) query (** Query handled by non-relational domains only *)
-  | VQ_to_int_interval : ('a,int_itv) query (** Value query to cast an abstract value to integers *)
 
 let mk_int_interval_query ?(fast=true) e =
   if fast then Q_fast_int_interval e else Q_int_interval e
@@ -54,7 +53,6 @@ let () =
           match query with
           | Q_int_interval _ -> I.join_bot a b
           | Q_fast_int_interval _ -> I.join_bot a b
-          | VQ_to_int_interval -> I.join_bot a b
           | _ -> next.apply query join a b
       in
       f
@@ -65,7 +63,6 @@ let () =
           match query with
           | Q_int_interval e -> I.meet_bot a b
           | Q_fast_int_interval e -> I.meet_bot a b
-          | VQ_to_int_interval -> I.meet_bot a b
           | _ -> next.apply query meet a b
       in
       f

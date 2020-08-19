@@ -212,15 +212,19 @@ struct
   (** {2 Events handlers} *)
   (** ******************* *)
 
-  let on_before_exec zone stmt man flow =
+  let process_range range man flow =
     let cs = Flow.get_callstack flow in
     if is_empty_callstack cs then () else
     if man.lattice.is_bottom (Flow.get T_cur man.lattice flow) then ()
-    else update_cov cs stmt.srange
+    else update_cov cs range
+
+  let on_before_exec zone stmt man flow =
+    process_range stmt.srange man flow
 
   let on_after_exec zone stmt man flow post = ()
 
-  let on_before_eval zone exp man flow = ()
+  let on_before_eval zone exp man flow =
+    process_range exp.erange man flow
 
   let on_after_eval zone exp man flow evl = ()
 

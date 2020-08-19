@@ -1,7 +1,7 @@
 {
     "language": "universal",
     "domain": {
-	"seq": [
+	"switch": [
 	    // Iterators
 	    "universal.iterators.program",
 	    "universal.iterators.intraproc",

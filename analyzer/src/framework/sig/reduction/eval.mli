@@ -42,42 +42,23 @@
 open Core.All
 
 
-(*==========================================================================*)
-(**                       {1 Reduction manager}                             *)
-(*==========================================================================*)
-
-(** Product evaluations. [None] means that the domain didn't return any 
-    evaluation and [Some None] represents the case of an empty evaluation. *)
-type prod_eval = expr option option list
-
 
 (** Manager used by reduction rules *)
 type 'a eval_reduction_man = {
-  get_man  : 't. 't id -> ('a, 't) man;
-  (** Get the manger of a domain *)
-
-  get_eval : 't. 't id -> prod_eval -> expr option;
-  (** Get the evaluation of a domain within a product evaluation *)
-
-  del_eval : 't. 't id -> prod_eval -> prod_eval;
-  (** Remove the evaluation of a domain from a product evaluation *)
+  get_man : 't. 't id -> ('a, 't) man; (** Get the manger of a domain *)
 }
 
 
-
-(*==========================================================================*)
-(**                             {1 Signature}                               *)
-(*==========================================================================*)
-
+(** Signature of an evaluation reduction rule *)
 module type EVAL_REDUCTION =
 sig
   val name   : string
   (** Name of the reduction rule *)
 
-  val reduce : expr -> ('a,'b) man -> 'a eval_reduction_man ->
-    'a flow -> prod_eval -> ('a, prod_eval) cases
-  (** [reduce e man erman f peval] reduces a product evaluation [peval]
-      resulting from evaluating expression [e] in input flow [f] *)
+  val reduce :
+    expr -> ('a,'b) man -> 'a eval_reduction_man ->
+    'a flow -> expr list -> 'a flow -> 'a eval option
+  (** [reduce e man input_flow results output_flow] reduces a product evaluation *)
 end
 
 

@@ -427,15 +427,13 @@ struct
 
   (** Actions on abstract domain *)
   type _ action =
-    | Exec : stmt * route -> Toplevel.t flow action
-    | Post : stmt * route -> Toplevel.t post action
+    | Exec : stmt * route -> Toplevel.t post action
     | Eval : expr * route -> Toplevel.t eval action
 
 
   (** Get the program location related to an action *)
   let action_range : type a. a action -> range = function
     | Exec(stmt,_) -> stmt.srange
-    | Post(stmt,_) -> stmt.srange
     | Eval(exp,_)  -> exp.erange
 
 
@@ -445,11 +443,6 @@ struct
     match action with
     | Exec(stmt,route) ->
       fprintf fmt "@[<v 4>S[ %a@] ] in %a@."
-        pp_stmt stmt
-        pp_route route
-
-    | Post(stmt,route) ->
-      fprintf fmt "@[<v 4>P[ %a@] ] in %a@."
         pp_stmt stmt
         pp_route route
 
@@ -464,7 +457,6 @@ struct
   let is_atomic_action: type a. a action -> bool = fun action ->
     match action with
     | Exec(stmt,_) -> is_orig_range stmt.srange && is_atomic_stmt stmt
-    | Post(stmt,_) -> is_orig_range stmt.srange && is_atomic_stmt stmt
     | Eval _       -> false
 
 
@@ -676,7 +668,6 @@ struct
     fun action flow ->
     match action with
     | Exec(stmt, route) -> Toplevel.exec ~route stmt man flow
-    | Post(stmt, route) -> Toplevel.post ~route stmt man flow
     | Eval(exp, route)  -> Toplevel.eval ~route exp man flow
 
 
@@ -821,9 +812,6 @@ struct
   and exec ?(route=toplevel) stmt flow =
     interact_or_apply_action (Exec (stmt, route)) stmt.srange flow
 
-  and post ?(route=toplevel)stmt flow =
-    interact_or_apply_action (Post (stmt, route)) stmt.srange flow
-
   and eval ?(route=toplevel)exp flow =
     interact_or_apply_action (Eval (exp, route)) exp.erange flow
 
@@ -850,7 +838,6 @@ struct
     get_log = (fun log -> log);
     set_log = (fun log _ -> log);
     exec = exec;
-    post = post;
     eval = eval;
     ask = ask;
   }

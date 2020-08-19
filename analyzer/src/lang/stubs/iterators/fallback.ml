@@ -37,11 +37,22 @@ struct
   let init prog man flow = flow
   let ask query man flow = None
 
+  let opt_stub_use_forall_loop_eval = ref false
+  (** Use fallback evaluation of ∀ formulas with loops *)
+
+  let () = register_builtin_option {
+      key      = "-stub-use-forall-loop-evaluation";
+      doc      = " use the fallback evaluation of universally quantified formulas with loops";
+      category = "Stubs";
+      spec     = ArgExt.Set opt_stub_use_forall_loop_eval;
+      default  = "";
+    }
 
   let exec_assume_quants quants cond range man flow =
     let rec iter = function
       | [] -> mk_assume cond range
       | (EXISTS,_,_)::tl -> iter tl
+      | (FORALL,_,_)::tl when not !opt_stub_use_forall_loop_eval -> iter tl
       | (FORALL,i,S_interval(a,b))::tl ->
         let ii = mk_var i range in
         mk_block [ mk_assign ii a range;
@@ -52,17 +63,13 @@ struct
       | (_,_,S_resource _)::tl -> assert false
     in
     let stmt = iter quants in
-    man.post stmt flow
+    man.exec stmt flow
 
-  let exec_requires_quants quants cond range man flow =
-    assume (mk_stub_quantified_formula quants cond range)
-      ~fthen:(fun flow -> Post.return flow)
-      ~felse:(fun flow ->
-          raise_stub_invalid_requires cond range man flow |>
-          Post.return
-        )
-      ~negate:(negate_stub_quantified_formula quants cond range)
-      man flow
+  let eval_quantified_formula quants cond range man flow =
+    let etrue = exec_assume_quants quants cond range man flow >>% fun flow -> Eval.singleton (mk_true range) flow in
+    let nquants,ncond = negate_stub_quantified_formula quants cond in
+    let efalse = exec_assume_quants nquants ncond range man flow >>% fun flow -> Eval.singleton (mk_false range) flow  in
+    Eval.join etrue efalse
 
   let exec_requires cond range man flow =
     assume cond
@@ -76,14 +83,6 @@ struct
 
   let exec stmt man flow =
     match skind stmt with
-    | S_assume({ekind = E_stub_quantified_formula(quants,cond)}) ->
-      exec_assume_quants quants cond stmt.srange man flow |>
-      OptionExt.return
-
-    | S_stub_requires({ekind = E_stub_quantified_formula(quants,cond)}) ->
-      exec_requires_quants quants cond stmt.srange man flow |>
-      OptionExt.return
-
     | S_stub_requires(cond) ->
       exec_requires cond stmt.srange man flow |>
       OptionExt.return
@@ -92,14 +91,8 @@ struct
 
   let eval exp man flow =
     match ekind exp with
-    (* XXX We need to freeze evaluation of quantified formula so that
-       it can be processed by domains as-is. This is due to the fact
-       the generic iterator of S_assume firsts evaluates its operand
-       expression before giving the statement to the underlying
-       domains, that generally do a pattern matching based on the
-       *original* AST, not the evaluated one *)
-    | E_stub_quantified_formula _ ->
-      Eval.singleton exp flow |>
+    | E_stub_quantified_formula (quants,cond) ->
+      eval_quantified_formula quants cond exp.erange man flow |>
       OptionExt.return
 
     | _ -> None

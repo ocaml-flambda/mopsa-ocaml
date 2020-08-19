@@ -31,7 +31,7 @@ sig
 
   val init : program -> t flow
 
-  val exec : ?route:route -> stmt -> t flow -> t flow
+  val exec : ?route:route -> stmt -> t flow -> t post
 
   val eval : ?route:route -> expr -> t flow -> t eval
 

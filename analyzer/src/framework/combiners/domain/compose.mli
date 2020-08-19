@@ -19,13 +19,19 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Composition combiner to stack a domain over another one *)
+(** Composition combiner
+
+    The composition of domains 𝒟₁∘𝒟₂ is similar to function composition as it
+    produces a stack λ𝒟.𝒟₁(𝒟₂(𝒟)) 
+ *)
 
 
 open Sig.Combiner.Stacked
 
 
-module Make(C1:STACKED_COMBINER)(C2:STACKED_COMBINER) : STACKED_COMBINER
-  with type t = C1.t * C2.t
+(** Compose two domains *)
+module Make(D1:STACKED_COMBINER)(D2:STACKED_COMBINER) : STACKED_COMBINER
+  with type t = D1.t * D2.t
 
+(** Compose a list of domains *)
 val make : (module STACKED_COMBINER) list -> (module STACKED_COMBINER)

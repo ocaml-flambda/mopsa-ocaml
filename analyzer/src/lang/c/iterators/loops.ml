@@ -68,7 +68,7 @@ struct
           ] range
         )
       in
-      man.exec stmt flow |> Post.return |> OptionExt.return
+      man.exec stmt flow |> OptionExt.return
 
     | S_c_do_while(body, cond) ->
       let range = stmt.srange in
@@ -79,20 +79,18 @@ struct
           ] range
         )
       in
-      man.exec stmt flow |> Post.return |> OptionExt.return
+      man.exec stmt flow |> OptionExt.return
 
     | S_c_break upd ->
-      let flow' = update_scope upd stmt.srange man flow in
+      update_scope upd stmt.srange man flow >>%? fun flow' ->
       let stmt' = { stmt with skind = S_break } in
       man.exec stmt' flow' |>
-      Post.return |>
       OptionExt.return
 
     | S_c_continue upd ->
-      let flow' = update_scope upd stmt.srange man flow in
+      update_scope upd stmt.srange man flow >>%? fun flow' ->
       let stmt' = { stmt with skind = S_continue } in
       man.exec stmt' flow' |>
-      Post.return |>
       OptionExt.return
 
     | _ -> None

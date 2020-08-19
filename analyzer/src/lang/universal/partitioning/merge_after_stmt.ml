@@ -19,11 +19,42 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Sequence of stateless domains *)
+(** Collapse all partitions after the execution of each statement *)
 
-open Core.All
-open Sig.Combiner.Stateless
+open Mopsa
+open Sig.Abstraction.Stateless
+open Ast
 
-module Make(R1:STATELESS_COMBINER)(R2:STATELESS_COMBINER) : STATELESS_COMBINER
 
-val make : (module STATELESS_COMBINER) list -> (module STATELESS_COMBINER)
+module Domain =
+struct
+
+  include GenStatelessDomainId(
+    struct
+      let name = "universal.partitioning.merge_after_stmt"
+    end
+    )
+
+  let alarms = []
+
+  let init prog man flow = flow
+    
+  let eval exp man flow = None
+
+  let ask query man flow = None
+
+  let exec stmt man flow =
+    let post = man.exec stmt flow ~route:(BelowOf name) in
+    let post' =
+      (* Collapse all partitions *)
+      Cases.remove_duplicates (fun _ _ -> 0) man.lattice post >>% fun flow ->
+      (* Since partitions can be tagged with [Some ()] or [None], we
+         add this bind to ensure that final result is [Some ()] *)
+      Post.return flow
+    in
+    OptionExt.return post'
+
+end
+
+let () =
+  register_stateless_domain (module Domain)

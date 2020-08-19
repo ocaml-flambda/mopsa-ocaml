@@ -104,7 +104,6 @@ struct
   (** The following functions flatten the initialization expression
       into a list of scalar initializations *)
   let rec flatten_init init offset typ range =
-    debug "flatten_init: %a (%a)" (OptionExt.print Pp.pp_c_init) init pp_typ typ;
     if is_c_scalar_type typ then flatten_scalar_init init offset typ range else
     if is_c_array_type typ  then flatten_array_init init offset typ range else
     if is_c_record_type typ then flatten_record_init init offset typ range
@@ -113,14 +112,12 @@ struct
         (OptionExt.print Pp.pp_c_init) init pp_typ typ
 
   and flatten_scalar_init init offset typ range =
-    debug "flatten_scalar_init at %a" Z.pp_print offset;
     match init with
     | None                 -> [],[(None,Z.one, offset, typ)]
     | Some (C_init_expr e) -> [(e,offset, typ)],[]
     | Some init -> panic_at range "unsupported scalar initializer %a for type %a" Pp.pp_c_init init pp_typ typ;
 
   and flatten_array_init init offset typ range =
-    debug "flatten_array_init at %a" Z.pp_print offset;
     let n = get_array_constant_length typ in
     let under_typ = under_array_type typ in
     match init with
@@ -210,7 +207,6 @@ struct
 
 
   and flatten_record_init init offset typ range =
-    debug "flatten_record_init at %a" Z.pp_print offset;
     let fields =
       match remove_typedef_qual typ with
       | T_c_record{c_record_fields} -> c_record_fields
@@ -244,28 +240,7 @@ struct
       aux l fields
 
     | Some (C_init_expr e) when is_c_record_type e.etyp ->
-      (* Remove unnecessary casts in e *)
-      let e =
-        let rec aux ee =
-          match ekind ee with
-          | E_c_cast (eee, false) -> eee
-          | _ -> ee
-        in
-        aux e
-      in
-
-      let fields' = match remove_typedef_qual typ with
-        | T_c_record{c_record_fields} -> c_record_fields
-        | _ -> assert false
-      in
-      let rec aux = function
-        | [] -> [],[]
-        | field :: tl ->
-          let o = Z.add offset (Z.of_int field.c_field_offset) in
-          let init = Some (C_init_expr (mk_lowlevel_member_access e field.c_field_index field.c_field_type range)) in
-          flatten_init init o field.c_field_type range >>+ aux tl
-      in
-      aux fields'
+      [(e,offset,typ)],[]
 
 
     | _ -> panic_at ~loc:__LOC__ range "initialization %a is not supported"
@@ -275,7 +250,7 @@ struct
 
   (** 𝕊⟦ type v = init; ⟧ *)
   let declare v init scope range man flow =
-    man.post (mk_add_var v range) flow >>$ fun () flow ->
+    man.exec (mk_add_var v range) flow >>% fun flow ->
     let initl,fill = flatten_init init Z.zero v.vtyp range in
 
     (* Scalar variables can be handed directly by the underlying low-level domain *)
@@ -283,11 +258,11 @@ struct
       match initl with
       | [e,o,t] ->
         let stmt = mk_assign (mk_var v range) e range in
-        man.post stmt flow
+        man.exec stmt flow
 
       | [] when is_c_global_scope scope ->
         let stmt = mk_assign (mk_var v range) (mk_zero range) range in
-        man.post stmt flow
+        man.exec stmt flow
 
       | _ ->
         Post.return flow
@@ -316,7 +291,7 @@ struct
                                   ) range) e range
           ) initl) range
         in
-        man.post stmt flow
+        man.exec stmt flow
 
 
   (** 𝕊⟦ lval = rval; ⟧ when lval is a record *)
@@ -368,7 +343,7 @@ struct
                 let lval'' = mk_c_subscript_access lval' (mk_z i range) range in
                 let rval'' = mk_c_subscript_access rval' (mk_z i range) range in
                 let stmt = mk_assign lval'' rval'' range in
-                (acc >>$ fun () flow -> man.post stmt flow) |>
+                acc >>% man.exec stmt |>
                 aux (Z.succ i)
             in
             aux Z.zero acc
@@ -379,24 +354,24 @@ struct
 
           | _ ->
             let stmt = mk_assign lval' rval' range in
-            acc >>$ fun () flow -> man.post stmt flow
+            acc >>% man.exec stmt
         ) (Post.return flow)
 
 
   let assign_array a i t e r range man flow =
     let lval = mk_lowlevel_subscript_access a i t r in
     let stmt = mk_assign lval e range in
-    man.post stmt flow
+    man.exec stmt flow
 
   let assign_member a i f t e r range man flow =
     let lval = mk_lowlevel_member_access a i t r in
     let stmt = mk_assign lval e range in
-    man.post stmt flow
+    man.exec stmt flow
 
   let assign_arrow a i f t e r range man flow =
     let lval = mk_lowlevel_arrow_access a i t r in
     let stmt = mk_assign lval e range in
-    man.post stmt flow
+    man.exec stmt flow
 
   let exec stmt man flow =
     match skind stmt with
@@ -407,21 +382,6 @@ struct
     | S_assign(lval, e)
     | S_expression { ekind = E_c_assign (lval, e) } when is_c_record_type lval.etyp ->
       assign_record lval e stmt.srange man flow |>
-      OptionExt.return
-
-    | S_assign({ekind = E_c_array_subscript(a,i); etyp = t; erange = range}, e)
-    | S_expression { ekind = E_c_assign ({ekind = E_c_array_subscript(a,i); etyp = t; erange = range}, e) } ->
-      assign_array a i t e range stmt.srange man flow |>
-      OptionExt.return
-
-    | S_assign({ekind = E_c_member_access(a,i,f); etyp = t; erange = range}, e)
-    | S_expression { ekind = E_c_assign ({ekind = E_c_member_access(a,i,f); etyp = t; erange = range}, e) } ->
-      assign_member a i f t e range stmt.srange man flow |>
-      OptionExt.return
-
-    | S_assign({ekind = E_c_arrow_access(a,i,f); etyp = t; erange = range}, e)
-    | S_expression { ekind = E_c_assign ({ekind = E_c_arrow_access(a,i,f); etyp = t; erange = range}, e) } ->
-      assign_arrow a i f t e range stmt.srange man flow |>
       OptionExt.return
 
     | _ -> None

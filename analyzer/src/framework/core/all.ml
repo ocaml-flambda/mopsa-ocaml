@@ -77,6 +77,9 @@ type 'a flow = 'a Flow.flow
 module Post = Post
 type 'a post = 'a Post.post
 
+let (>>%) = Post.(>>%)
+let (>>%?) = Post.(>>%?)
+
 module Log = Log
 include Log
 

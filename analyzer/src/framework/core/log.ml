@@ -97,6 +97,7 @@ let add_stmt_to_log stmt = function
   | Node(stmts,left,right) -> Node(stmt::stmts,left,right)
 
 let rec merge_log f1 f2 f log1 log2 =
+  if log1 == log2 then log1 else
   match log1, log2 with
   | Empty, Empty -> Empty
   | Empty, Node(stmts,left,right) -> Node (f1 stmts, left, right)
@@ -237,9 +238,21 @@ let apply_effect effect ~add ~remove ~find (other:'a) (this:'a) : 'a =
 
 (** Generic merge operator for non-relational domains *)
 let generic_domain_merge ~add ~find ~remove (a1, log1) (a2, log2) =
+  (* Clean logs by removing successive duplicates *)
+  let rec clean = function
+    | [] -> []
+    | hd::tl ->
+      let tl' = doit hd tl in
+      hd::clean tl'
+  and doit stmt = function
+    | [] -> []
+    | (hd::tl) as l -> if compare_stmt stmt hd = 0 then doit stmt tl else l
+  in
+  let log1 = clean log1 and log2 = clean log2 in
+  let () = Debug.debug ~channel:"framework.core.log" "generic merge:@\nlog1 = @[%a@]@\nlog2 = @[%a@]" pp_log_entries log1 pp_log_entries log2 in
   if log1 = [] then a2,a2 else
   if log2 = [] then a1,a1 else
-  let () = Debug.debug ~channel:"framework.core.log" "generic merge:@,%a@,%a" pp_log_entries log1 pp_log_entries log2 in
+  if Compare.list compare_stmt log1 log2 = 0 then a1,a2 else
   let e1 = get_entries_effect log1 in
   let a2' = apply_effect e1 a1 a2 ~add ~remove ~find in
   let e2 = get_entries_effect log2 in

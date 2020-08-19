@@ -21,6 +21,8 @@
 
 (** Inter-procedural iterator of stubs by inlining. *)
 
+(** FIXME: remove calls to post_to_flow to preserve logs *)
+
 open Mopsa
 open Sig.Abstraction.Stateless
 open Universal.Ast
@@ -214,8 +216,8 @@ struct
       assume
         (mk_le lo hi f.range)
         ~fthen:(fun flow ->
-            man.exec (mk_add_var v f.range) flow |>
-            man.exec (mk_assume (mk_in (mk_var v f.range) lo hi f.range) f.range) |>
+            man.exec (mk_add_var v f.range) flow >>%
+            man.exec (mk_assume (mk_in (mk_var v f.range) lo hi f.range) f.range) >>%
             to_prenex_formula ff man >>$ fun (quants,cond) flow -> 
             Cases.singleton ((FORALL,v,s)::quants, cond) flow
           )
@@ -232,8 +234,8 @@ struct
       assume
         (mk_le lo hi f.range)
         ~fthen:(fun flow ->
-            man.exec (mk_add_var v f.range) flow |>
-            man.exec (mk_assume (mk_in (mk_var v f.range) lo hi f.range) f.range) |>
+            man.exec (mk_add_var v f.range) flow >>%
+            man.exec (mk_assume (mk_in (mk_var v f.range) lo hi f.range) f.range) >>%
             to_prenex_formula ff man >>$ fun (quants,cond) flow -> 
             Cases.singleton ((EXISTS,v,s)::quants, cond) flow
           )
@@ -249,11 +251,11 @@ struct
       | [] -> cond
       | _ -> mk_stub_quantified_formula quants cond range
     in
-    let flow = man.exec (cond_to_stmt cond' range) flow in
+    let flow = man.exec (cond_to_stmt cond' range) flow |> post_to_flow man in
     List.fold_left
       (fun acc (_,v,s) ->
          match s with
-         | S_interval _ -> man.exec (mk_remove_var v range) acc
+         | S_interval _ -> man.exec (mk_remove_var v range) acc |> post_to_flow man
          | S_resource _ -> acc) 
       flow quants
 
@@ -264,7 +266,7 @@ struct
       (fun (quants,cond) flow -> eval_prenex_formula cond_to_stmt quants cond f.range man flow)
       (Flow.join man.lattice)
       (Flow.meet man.lattice)
-      (Flow.bottom_from flow)
+      (Flow.remove T_cur flow)
 
   let rec eval_formula
       (cond_to_stmt: expr -> range -> stmt)
@@ -276,7 +278,7 @@ struct
     debug "@[<hov>eval formula@ %a@]" pp_formula f;
     match f.content with
     | F_expr e ->
-      man.exec (cond_to_stmt e range) flow
+      man.exec (cond_to_stmt e range) flow |> post_to_flow man 
 
     | F_binop (AND, f1, f2) ->
       let flow1 = eval_formula cond_to_stmt f1 range man flow in
@@ -307,23 +309,23 @@ struct
       eval_quantified_formula cond_to_stmt f man flow
 
     | F_in (e, S_interval (l, u)) ->
-      man.exec (cond_to_stmt (mk_in e l u f.range) range) flow
+      man.exec (cond_to_stmt (mk_in e l u f.range) range) flow |> post_to_flow man 
 
     | F_in (e, S_resource res ) ->
-      man.exec (cond_to_stmt (mk_stub_resource_mem e res f.range) range) flow
+      man.exec (cond_to_stmt (mk_stub_resource_mem e res f.range) range) flow |> post_to_flow man 
 
 
   (** Initialize the parameters of the stubbed function *)
   let init_params args params range man flow =
     List.combine args params |>
     List.fold_left (fun flow (arg, param) ->
-        man.exec (mk_assign (mk_var param range) arg range) flow
+        man.exec (mk_assign (mk_var param range) arg range) flow |> post_to_flow man 
       ) flow
 
   (** Remove parameters from the returned flow *)
   let remove_params params range man flow =
     params |> List.fold_left (fun flow param ->
-        man.exec (mk_remove_var param range) flow
+        man.exec (mk_remove_var param range) flow |> post_to_flow man 
       ) flow
 
 
@@ -343,7 +345,7 @@ struct
     post_to_flow man (
       man.eval (mk_stub_alloc_resource res alloc_range) flow >>$ fun addr flow ->
       (* Assign the address to the variable *)
-      man.post (mk_assign (mk_var v call_range) addr alloc_range) flow
+      man.exec (mk_assign (mk_var v call_range) addr alloc_range) flow
     )
 
 
@@ -355,6 +357,7 @@ struct
                 (mk_expr (E_call(f, args)) ~etyp:v.vtyp local_range)
                 local_range
              ) flow
+    |> post_to_flow man 
 
 
   (** Execute the `local` section *)
@@ -386,7 +389,7 @@ struct
     let stmt = mk_stub_assigns assigns.content.assign_target assigns.content.assign_offset range in
     match assigns.content.assign_offset with
     | [] ->
-      man.exec stmt flow
+      man.exec stmt flow |> post_to_flow man
 
     | (l,u)::tl ->
       (* Check that offsets intervals are not empty *)
@@ -395,7 +398,7 @@ struct
           (le l u assigns.range) tl
       in
       assume_flow cond
-        ~fthen:(fun flow -> man.exec stmt flow)
+        ~fthen:(fun flow -> man.exec stmt flow |> post_to_flow man)
         ~felse:(fun flow -> flow)
         man flow
 
@@ -408,13 +411,13 @@ struct
           mk_remove_var l.content.lvar range :: block
         ) [] locals
     in
-    man.exec (mk_block block range) flow
+    man.exec (mk_block block range) flow |> post_to_flow man 
 
 
   let exec_free free range man flow =
     let e = free.content in
     let stmt = mk_stub_free e range in
-    man.exec stmt flow
+    man.exec stmt flow |> post_to_flow man 
 
 
   let exec_message msg range man flow =
@@ -488,13 +491,13 @@ struct
     (* Check if there are assigned variables *)
     if assigns = []
     then flow
-    else man.exec (mk_stub_prepare_all_assigns assigns range) flow
+    else man.exec (mk_stub_prepare_all_assigns assigns range) flow |> post_to_flow man
 
   let clean_all_assigns assigns range man flow =
     (* Check if there are assigned variables *)
     if assigns = []
     then flow
-    else man.exec (mk_stub_clean_all_assigns assigns range) flow
+    else man.exec (mk_stub_clean_all_assigns assigns range) flow |> post_to_flow man
 
   (** The following patch_params_* functions are used to patch the body of a stub by
       adding call arguments to the evaluation history of formal
@@ -608,7 +611,7 @@ struct
         | None -> None, flow
         | Some t ->
           let return = Universal.Iterators.Interproc.Common.mk_return_var exp in
-          let flow = man.exec (mk_add_var return exp.erange) flow in
+          let flow = man.exec (mk_add_var return exp.erange) flow |> post_to_flow man in
           Some return, flow
       in
 

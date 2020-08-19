@@ -19,16 +19,18 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Extended domains signatures used by combiners *)
+(** Common utility definitions used by combiners *)
 
 open Core.All
 
 
+(** Kinds of domain combiners *)
 type combiner =
   | Sequence
   | Compose
   | Product
 
+(** GADT identifiers used by domain combiners *)
 type _ id +=
   | C_empty : unit id
   | C_pair : combiner * 'a id * 'b id -> ('a*'b) id
@@ -54,6 +56,7 @@ let () = register_id {
     );
   }
 
+(** GADT identifiers used by value combiners *)
 type _ id += V_empty : unit id
 type _ id += V_pair  : 'a id * 'b id -> ('a*'b) id
 
@@ -77,11 +80,12 @@ let () = register_id {
   }
 
 
+(** [sat_targets ~domains ~targets] checks whether a combiner containing [domains] satisifies some route [targets] *)
 let sat_targets ~targets ~domains =
   targets = [] || List.exists (fun t -> List.mem t domains) targets
 
 
-(** Manager of the left argument in a compose topology *)
+(** Manager of the left argument in a pair of domains *)
 let fst_pair_man (man:('a, 'b * 'c) man) : ('a, 'b) man = {
   man with
   get = get_pair_fst man;
@@ -92,7 +96,7 @@ let fst_pair_man (man:('a, 'b * 'c) man) : ('a, 'b) man = {
     ) glog);
 }
 
-(** Manager of the right argument in a compose topology *)
+(** Manager of the right argument in a pair of domains *)
 let snd_pair_man (man:('a, 'b * 'c) man) : ('a, 'c) man = {
   man with
   get = get_pair_snd man;
@@ -104,6 +108,7 @@ let snd_pair_man (man:('a, 'b * 'c) man) : ('a, 'c) man = {
 }
 
 
+(** Find the manager of a domain given the manager of a combiner containing it *)
 let rec find_domain_man : type b c. target:b id -> tree:c id -> ('a,c) man -> ('a,b) man = fun ~target ~tree man ->
   match tree with
   | C_empty -> raise Not_found
@@ -117,6 +122,7 @@ let rec find_domain_man : type b c. target:b id -> tree:c id -> ('a,c) man -> ('
     | Some Eq -> man
     | None -> raise Not_found
 
+(** Check whether a domain is part of a combiner tree *)
 let rec mem_domain : type b c. target:b id -> tree:c id -> bool = fun ~target ~tree ->
   match tree with
   | C_empty -> false
@@ -128,6 +134,7 @@ let rec mem_domain : type b c. target:b id -> tree:c id -> bool = fun ~target ~t
 
 
 
+(** Empty (unit) value abstraction *)
 module EmptyValue : Sig.Abstraction.Value.VALUE =
 struct
   type t = unit

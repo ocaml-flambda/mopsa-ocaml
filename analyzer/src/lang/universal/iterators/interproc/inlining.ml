@@ -60,9 +60,8 @@ struct
     match skind stmt with
     | S_return (Some e) ->
       let ret = Context.find_unit return_key (Flow.get_ctx flow) in
-      let flow =
-        man.exec (mk_add_var ret range) flow |>
-        man.exec (mk_assign (mk_var ret range) e range) in
+      man.exec (mk_add_var ret range) flow >>%? fun flow ->
+      man.exec (mk_assign (mk_var ret range) e range) flow >>%? fun flow ->
       let cur = Flow.get T_cur man.lattice flow in
       Flow.add (T_return (range)) cur man.lattice flow |>
       Flow.remove T_cur |>
@@ -89,13 +88,12 @@ struct
       then Cases.empty_singleton flow |> OptionExt.return
       else
 
-      let params, locals, body, flow = init_fun_params f args range man flow in
+      let params, locals, body, post = init_fun_params f args range man flow in
       let ret = match f.fun_return_type with
         | None -> None
         | Some _ -> Some (mk_return_var exp)
       in
-      inline f params locals body ret range man flow
-      |> OptionExt.return
+      Some (post >>% inline f params locals body ret range man)
 
     | _ -> None
 

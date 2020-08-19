@@ -51,8 +51,7 @@ type ('a, 't) man = {
   set : 't -> 'a -> 'a;
 
   (* Toplevel transfer functions *)
-  exec : ?route:route -> stmt -> 'a flow -> 'a flow;
-  post : ?route:route -> stmt -> 'a flow -> 'a post;
+  exec : ?route:route -> stmt -> 'a flow -> 'a post;
   eval : ?route:route -> expr -> 'a flow -> 'a eval;
   ask : 'r. ?route:route -> ('a,'r) query -> 'a flow -> 'r;
 
@@ -84,24 +83,67 @@ let map_env (tk:token) (f:'t -> 't) (man:('a,'t) man) (flow:'a flow) : 'a flow =
   set_env tk (f (get_env tk man flow)) man flow
 
 
+let rec exec_stmt_on_all_flows stmt man flow =
+  man.exec stmt flow >>% fun flow ->
+  Flow.fold (fun acc tk env ->
+      (* Put env in T_cur token of flow and remove others *)
+      let annot = Flow.get_ctx flow in
+      let flow' = Flow.singleton annot T_cur env in
+
+      (* Execute the cleaner *)
+      let flow'' = man.exec stmt flow' |> post_to_flow man in
+
+      (* Restore T_cur in tk *)
+      Flow.copy T_cur tk man.lattice flow'' flow |>
+      Flow.copy_ctx flow''
+    ) flow flow |>
+  Post.return
+
+
+and apply_cleaners block man flow =
+  let exec stmt flow =
+    if !Cases.opt_clean_cur_only then
+      man.exec stmt flow
+    else
+      exec_stmt_on_all_flows stmt man flow
+  in
+  List.fold_left (fun acc stmt ->
+      acc >>% exec stmt
+    ) (Post.return flow) block
+
+and post_to_flow man post =
+  let to_flow f post =
+    Cases.apply_full f
+      (Flow.join man.lattice)
+      (Flow.meet man.lattice)
+      post
+  in
+  to_flow
+    (fun _ flow _ cleaners ->
+       apply_cleaners cleaners man flow |>
+       to_flow
+         (fun _ flow _ _ -> flow)
+    )
+    post
+
 let assume
     cond ?(route=toplevel)
     ~fthen ~felse
-    ?(negate=mk_not cond cond.erange)
     man flow
   =
-  let then_post = man.post ~route (mk_assume cond cond.erange) flow in
+  man.eval cond flow ~route >>$ fun cond flow ->
+  let then_post = man.exec ~route (mk_assume cond cond.erange) flow in
   let flow = Flow.set_ctx (Cases.get_ctx then_post) flow in
-  let else_post = man.post ~route (mk_assume negate negate.erange) flow in
+  let else_post = man.exec ~route (mk_assume (mk_not cond cond.erange) cond.erange) flow in
 
-  let then_res = then_post >>$? fun () then_flow ->
+  let then_res = then_post >>%? fun then_flow ->
     if man.lattice.is_bottom (Flow.get T_cur man.lattice then_flow)
        && Alarm.AlarmSet.subset (Flow.get_alarms then_flow) (Flow.get_alarms flow)
     then None
     else Some (fthen then_flow)
   in
 
-  let else_res = else_post >>$? fun () else_flow ->
+  let else_res = else_post >>%? fun else_flow ->
     if man.lattice.is_bottom (Flow.get T_cur man.lattice else_flow)
        && Alarm.AlarmSet.subset (Flow.get_alarms else_flow) (Flow.get_alarms flow)
     then None
@@ -119,9 +161,9 @@ let assume_flow
     ?(negate=mk_not cond cond.erange)
     man flow
   =
-  let then_flow = man.exec ~route (mk_assume cond cond.erange) flow in
+  let then_flow = man.exec ~route (mk_assume cond cond.erange) flow |> post_to_flow man in
   let flow = Flow.set_ctx (Flow.get_ctx then_flow) flow in
-  let else_flow = man.exec ~route (mk_assume negate cond.erange) flow in
+  let else_flow = man.exec ~route (mk_assume negate cond.erange) flow |> post_to_flow man in
 
   match man.lattice.is_bottom (Flow.get T_cur man.lattice then_flow),
         man.lattice.is_bottom (Flow.get T_cur man.lattice else_flow)
@@ -146,12 +188,13 @@ let switch
     match cond with
     | [] -> f acc
     | x :: tl ->
+      man.eval ~route x acc >>$ fun x acc' ->
       let s = mk_assume x x.erange in
-      man.post ~route s acc >>$ fun _ acc' ->
-      if Flow.get T_cur man.lattice acc' |> man.lattice.is_bottom then
-        Cases.empty_singleton acc'
+      man.exec ~route s acc' >>% fun acc'' ->
+      if Flow.get T_cur man.lattice acc'' |> man.lattice.is_bottom then
+        Cases.empty_singleton acc''
       else
-        one tl acc' f
+        one tl acc'' f
   in
   let rec aux cases =
     match cases with
@@ -165,42 +208,6 @@ let switch
       Cases.join r rr
   in
   aux cases
-
-
-let exec_stmt_on_all_flows stmt man flow =
-  Flow.fold (fun flow tk env ->
-      (* Put env in T_cur token of flow and remove others *)
-      let annot = Flow.get_ctx flow in
-      let flow' = Flow.singleton annot T_cur env in
-
-      (* Execute the cleaner *)
-      let flow'' = man.exec stmt flow' in
-
-      (* Restore T_cur in tk *)
-      Flow.copy T_cur tk man.lattice flow'' flow |>
-      Flow.copy_ctx flow''
-    ) flow flow
-
-
-let apply_cleaners block man flow =
-  let exec stmt flow =
-    if !Cases.opt_clean_cur_only then
-      man.exec stmt flow
-    else
-      exec_stmt_on_all_flows stmt man flow
-  in
-  List.fold_left (fun flow stmt ->
-      exec stmt flow
-    ) flow block
-
-
-let post_to_flow man post =
-  Cases.apply_full
-    (fun _ flow _ cleaners -> apply_cleaners cleaners man flow )
-    (Flow.join man.lattice)
-    (Flow.meet man.lattice)
-    post
-
 
 let get_pair_fst man = (fun a -> man.get a |> fst)
 let set_pair_fst man = (fun a1 a -> let old = man.get a in if a1 == fst old then a else man.set (a1, snd old) a)
@@ -230,11 +237,6 @@ let resolve_below_alias domain man =
         match route with
         | Below -> man.exec ~route:(BelowOf domain) stmt flow
         | _ -> man.exec ~route stmt flow
-      );
-    post = (fun ?(route=toplevel) stmt flow ->
-        match route with
-        | Below -> man.post ~route:(BelowOf domain) stmt flow
-        | _ -> man.post ~route stmt flow
       );
     eval = (fun ?(route=toplevel) exp flow ->
         match route with

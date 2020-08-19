@@ -34,11 +34,8 @@ struct
   let rec init prog =
     Toplevel.init prog man
 
-  and exec ?(route=toplevel) stmt flow =
+  and exec ?(route=toplevel)stmt flow =
     Toplevel.exec ~route stmt man flow
-
-  and post ?(route=toplevel)stmt flow =
-    Toplevel.post ~route stmt man flow
 
   and eval ?(route=toplevel) exp flow =
     Toplevel.eval ~route exp man flow
@@ -66,7 +63,6 @@ struct
     get_log = (fun log -> log);
     set_log = (fun log _ -> log);
     exec = exec;
-    post = post;
     eval = eval;
     ask = ask;
   }

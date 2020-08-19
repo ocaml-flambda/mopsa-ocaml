@@ -28,7 +28,7 @@ open Yojson.Basic.Util
 
 type 'a visitor = {
   leaf : string option -> string -> 'a;
-  sequence : string option -> Yojson.Basic.t list -> 'a;
+  switch : string option -> Yojson.Basic.t list -> 'a;
   compose : string option -> Yojson.Basic.t list -> 'a;
   union : string option -> Yojson.Basic.t list -> 'a;
   apply : string option -> string -> Yojson.Basic.t -> 'a;

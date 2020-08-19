@@ -19,7 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Reduced product of (leaf) domains with n-ary simplified reduction rules *)
+(** Reduced product of simplified (leaf) domains *)
 
 open Core.All
 open Common
@@ -28,49 +28,32 @@ open Sig.Combiner.Simplified
 
 
 
-module EmptyDomain : SIMPLIFIED_COMBINER =
-struct
-  type t = unit
-  let id = C_empty
-  let domains = []
-  let routing_table = empty_routing_table
-  let name = ""
-  let bottom = ()
-  let top = ()
-  let print fmt () = ()
-  let is_bottom () = false
-  let subset () () = true
-  let join () () = ()
-  let meet () () = ()
-  let widen ctx () () = ()
-  let merge () _ _ = ()
-  let init p = ()
-  let exec targets stmt man ctx () = None
-  let ask targets q man ctx () = None
-end
-
-module MakeDomainPair(T1:SIMPLIFIED_COMBINER)(T2:SIMPLIFIED_COMBINER) : SIMPLIFIED_COMBINER with type t = T1.t * T2.t =
+(** Create a product of two domains *)
+module MakeDomainPair(D1:SIMPLIFIED_COMBINER)(D2:SIMPLIFIED_COMBINER)
+  : SIMPLIFIED_COMBINER with type t = D1.t * D2.t =
 struct
 
-  type t = T1.t * T2.t
+  type t = D1.t * D2.t
   
-  let id = C_pair(Product,T1.id,T2.id)
+  let id = C_pair(Product,D1.id,D2.id)
 
-  let name = T1.name ^ " ∧ " ^ T2.name
+  let name = D1.name ^ " ∧ " ^ D2.name
 
-  let domains = T1.domains @ T2.domains
+  let domains = D1.domains @ D2.domains
 
-  let routing_table = join_routing_table T1.routing_table T2.routing_table
+  let semantics = D1.semantics @ D2.semantics
 
-  let bottom : t = T1.bottom, T2.bottom
+  let routing_table = join_routing_table D1.routing_table D2.routing_table
 
-  let top : t = T1.top, T2.top
+  let bottom : t = D1.bottom, D2.bottom
+
+  let top : t = D1.top, D2.top
 
   let is_bottom ((a,b):t) : bool =
-    T1.is_bottom a || T2.is_bottom b
+    D1.is_bottom a || D2.is_bottom b
 
   let subset ((a1,b1):t) ((a2,b2):t) : bool =
-    T1.subset a1 a2 && T2.subset b1 b2
+    D1.subset a1 a2 && D2.subset b1 b2
 
   let apply f1 f2 ((v1,v2) as v) =
     let r1 = f1 v1 in
@@ -87,38 +70,38 @@ struct
 
   let join ((v1,v2) as v:t) ((w1,w2) as w:t) : t =
     if v1 == w1 && v2 == w2 then v else
-    apply2 T1.join T2.join v w
+    apply2 D1.join D2.join v w
 
   let meet ((v1,v2) as v:t) ((w1,w2) as w:t) : t =
     if v1 == w1 && v2 == w2 then v else
-    apply2 T1.meet T2.meet v w
+    apply2 D1.meet D2.meet v w
 
   let widen ctx ((v1,v2) as v:t) ((w1,w2) as w:t) : t =
     if v1 == w1 && v2 == w2 then v else
-    apply2 (T1.widen ctx) (T2.widen ctx) v w
+    apply2 (D1.widen ctx) (D2.widen ctx) v w
 
   let merge (p1,p2) (a1,log1) (a2,log2) =
     apply2
-      (fun v1 w1 -> T1.merge p1 (v1,log1) (w1,log2))
-      (fun v2 w2 -> T2.merge p2 (v2,log1) (w2,log2))
+      (fun v1 w1 -> D1.merge p1 (v1,log1) (w1,log2))
+      (fun v2 w2 -> D2.merge p2 (v2,log1) (w2,log2))
       a1 a2
 
   let print fmt (a1,a2) =
-    match T2.id with
-    | C_empty -> T1.print fmt a1
-    | _ ->  Format.fprintf fmt "%a@\n%a" T1.print a1 T2.print a2
+    match D2.id with
+    | C_empty -> D1.print fmt a1
+    | _ ->  Format.fprintf fmt "%a@\n%a" D1.print a1 D2.print a2
   
-  let hdman (man:('a,t) Sig.Abstraction.Simplified.simplified_man) : (('a,T1.t) Sig.Abstraction.Simplified.simplified_man) = {
+  let hdman (man:('a,t) Sig.Abstraction.Simplified.simplified_man) : (('a,D1.t) Sig.Abstraction.Simplified.simplified_man) = {
     man with
     exec = (fun stmt -> man.exec stmt |> fst);
   }
 
-  let tlman (man:('a,t) Sig.Abstraction.Simplified.simplified_man) : (('a,T2.t) Sig.Abstraction.Simplified.simplified_man) = {
+  let tlman (man:('a,t) Sig.Abstraction.Simplified.simplified_man) : (('a,D2.t) Sig.Abstraction.Simplified.simplified_man) = {
     man with
     exec = (fun stmt -> man.exec stmt |> snd);
   }
 
-  let init prog = T1.init prog, T2.init prog
+  let init prog = D1.init prog, D2.init prog
 
   let exec targets =
     let recompose_pair ((a1,a2) as a) r1 r2 =
@@ -128,19 +111,19 @@ struct
       | None, Some r2    -> if a2 == r2 then Some a else Some (a1,r2)
       | Some r1, Some r2 -> if r1 == a1 && r2 == a2 then Some a else Some (r1,r2)
     in
-    match sat_targets ~targets ~domains:T1.domains,
-          sat_targets ~targets ~domains:T1.domains
+    match sat_targets ~targets ~domains:D1.domains,
+          sat_targets ~targets ~domains:D1.domains
     with
     | false, false -> raise Not_found
     | true, false ->
-      let f1 = T1.exec targets in
+      let f1 = D1.exec targets in
       (fun stmt man ctx ((a1,a2) as a) -> recompose_pair a (f1 stmt (hdman man) ctx a1) None)
     | false, true ->
-      let f2 = T2.exec targets in
+      let f2 = D2.exec targets in
       (fun stmt man ctx ((a1,a2) as a) -> recompose_pair a None (f2 stmt (tlman man) ctx a2))
     | true, true ->
-      let f1 = T1.exec targets in
-      let f2 = T2.exec targets in
+      let f1 = D1.exec targets in
+      let f2 = D2.exec targets in
       (fun stmt man ctx ((a1,a2) as a) ->
          recompose_pair a
            (f1 stmt (hdman man) ctx a1)
@@ -148,19 +131,19 @@ struct
     
     
   let ask targets =
-    match sat_targets ~targets ~domains:T1.domains,
-          sat_targets ~targets ~domains:T1.domains
+    match sat_targets ~targets ~domains:D1.domains,
+          sat_targets ~targets ~domains:D1.domains
     with
     | false, false -> raise Not_found
     | true, false ->
-      let f1 = T1.ask targets in
+      let f1 = D1.ask targets in
       (fun q man ctx (a1,_) -> f1 q (hdman man) ctx a1)
     | false, true ->
-      let f2 = T2.ask targets in
+      let f2 = D2.ask targets in
       (fun q man ctx (_,a2) -> f2 q (tlman man) ctx a2)
     | true, true ->
-      let f1 = T1.ask targets in
-      let f2 = T2.ask targets in
+      let f1 = D1.ask targets in
+      let f2 = D2.ask targets in
       (fun q man ctx (a1,a2) ->
          OptionExt.neutral2
            (meet_query q
@@ -171,7 +154,12 @@ struct
 end
 
 
-module Make(D:SIMPLIFIED_COMBINER)(R:sig val rules : (module SIMPLIFIED_REDUCTION) list end) : SIMPLIFIED_COMBINER with type t = D.t =
+(** Create a reduced product from a domain representing a product of
+    domains and a list of reduction rules *)
+module Make
+    (D:SIMPLIFIED_COMBINER)
+    (R:sig val rules : (module SIMPLIFIED_REDUCTION) list end)
+  : SIMPLIFIED_COMBINER with type t = D.t =
 struct
 
   include D

@@ -203,8 +203,15 @@ struct
 
   (** Create a variable from a cell *)
   let mk_cell_var c : var =
-    let name = mk_cell_uniq_name c in
-    mkv name (V_c_cell c) (cell_type c) ~mode:(base_mode c.base) ~semantic:"C/Scalar"
+    match c.base.base_kind with
+    (* Don't create new variables for cells representing scalar variables *)
+    | Var v when is_c_scalar_type v.vtyp &&
+                 Z.(c.offset = zero) &&
+                 (c.typ = Pointer || compare_typ (remove_typedef_qual v.vtyp) (cell_type c) = 0)
+      -> v
+    | _ ->
+      let name = mk_cell_uniq_name c in
+      mkv name (V_c_cell c) (cell_type c) ~mode:(base_mode c.base) ~semantic:"C/Scalar"
 
 
   (** Create a variable from a numeric cell *)
@@ -218,7 +225,7 @@ struct
   let mk_pointer_cell_var_expr c ?(mode=None) typ range : expr =
     assert(is_pointer_cell c);
     let v = mk_cell_var c in
-    if is_c_void_type (under_type typ)
+    if compare_typ (remove_typedef_qual v.vtyp) (remove_typedef_qual typ) = 0
     then mk_var v ~mode range
     else mk_c_cast (mk_var v ~mode range) typ range
 
@@ -497,14 +504,14 @@ struct
     else
       let flow = set_env T_cur { a with cells = cell_set_add c a.cells } man flow in
       let v = mk_cell_var c in
-      man.post ~route:scalar (mk_add_var v range) flow >>$ fun () flow ->
+      man.exec ~route:scalar (mk_add_var v range) flow >>% fun flow ->
       if is_pointer_cell c then
         Post.return flow
       else
         match phi c a range with
         | Some e ->
           let stmt = mk_assume (mk_binop (mk_var v range) O_eq e ~etyp:u8 range) range in
-          man.post stmt flow
+          man.exec stmt flow
 
         | None -> Post.return flow
 
@@ -512,30 +519,39 @@ struct
   (** Range used for tagging unification statements *)
   let unify_range = tag_range (mk_fresh_range ()) "cell-unification"
 
-
-  (** Check if a cell is part of an optional base *)
-  let is_optional_cell c a =
-    not (BaseSet.mem c.base a.bases)
-
+  let is_optional_base b a = not (BaseSet.mem b a.bases)
 
   (** [unify a a'] finds non-common cells in [a] and [a'] and adds them. *)
   let unify man sman ctx (a,s) (a',s') =
-    CellSet.fold2z
-      (fun _ m1 m2 acc ->
-         OffCells.fold2z
-           (fun _ s1 s2 acc ->
-              Cells.fold
-                (fun c s ->
-                   if is_optional_cell c a then s
-                   else sub_env_exec (add_cell c unify_range man) ctx man sman a s |> snd )
-                (Cells.diff s2 s1) (fst acc)
-              ,
-              Cells.fold
-                (fun c s ->
-                   if is_optional_cell c a' then s
-                   else sub_env_exec (add_cell c unify_range man) ctx man sman a' s |> snd )
-                (Cells.diff s1 s2) (snd acc)
-
+    let doit ss aa acc =
+      Cells.fold
+        (fun c acc ->
+           sub_env_exec (add_cell c unify_range man) ctx man sman aa acc |> snd )
+        ss acc
+    in
+    CellSet.fold2zo
+      (fun b m1 (acc1,acc2) ->
+         if is_optional_base b a' then
+           (acc1,acc2)
+         else
+           acc1, OffCells.fold (fun _ s1 acc2 -> doit s1 a' acc2) m1 acc2
+      )
+      (fun b m2 (acc1,acc2) ->
+         if is_optional_base b a then
+           (acc1,acc2) else
+           OffCells.fold (fun _ s2 acc1 -> doit s2 a acc1) m2 acc1, acc2
+      )
+      (fun b m1 m2 acc ->
+         OffCells.fold2zo
+           (fun _ s1 (acc1,acc2) ->
+              acc1, doit s1 a' acc2
+           )
+           (fun _ s2 (acc1,acc2) ->
+              doit s2 a acc1, acc2
+           )
+           (fun _ s1 s2 (acc1,acc2) ->
+              doit (Cells.diff s2 s1) a acc1,
+              doit (Cells.diff s1 s2) a' acc2
            )
            m1 m2 acc
       )
@@ -682,7 +698,7 @@ struct
             if nb > Z.of_int !opt_deref_expand || not (is_interesting_base base) then
               (* too many cases -> top *)
               let region = Region (base, l, u ,step) in
-              let flow = man.exec (mk_assume (mk_binop offset O_ge (mk_z l range) range) range) flow in
+              man.exec (mk_assume (mk_binop offset O_ge (mk_z l range) range) range) flow >>% fun flow ->
               if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
               then Cases.empty_singleton flow
               else Cases.singleton region flow
@@ -692,7 +708,7 @@ struct
                 if Z.gt o u
                 then []
                 else
-                  let flow = man.exec (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow in
+                  let flow = man.exec (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow |> post_to_flow man in
                   if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
                   then aux (Z.add o step)
                   else
@@ -735,18 +751,18 @@ struct
         top
       else
         (* Create a temporary smash and populate it with the values of cells *)
-        let smash = mk_range_attr_var range "smash" ~mode:WEAK t in
+        let smash = mk_range_attr_var range "smash" ~mode:WEAK ~semantic:"C/Scalar" t in
         let weak_smash = mk_var smash range in
         let strong_smash = mk_var smash ~mode:(Some STRONG) range in
-        man.post (mk_add_var smash range) ~route:scalar flow >>$ fun () flow ->
+        man.exec (mk_add_var smash range) ~route:scalar flow >>% fun flow ->
         let ecells = List.map (fun c -> mk_pointer_cell_var_expr c t range) cells in
         let hd = List.hd ecells in
         let tl = List.tl ecells in
-        man.post (mk_assign strong_smash hd range) ~route:scalar flow >>$ fun () flow ->
+        man.exec (mk_assign strong_smash hd range) ~route:scalar flow >>% fun flow ->
         List.fold_left
-          (fun acc c -> Post.bind (man.post (mk_assign weak_smash c range) ~route:scalar) acc)
+          (fun acc c -> Post.bind (man.exec (mk_assign weak_smash c range) ~route:scalar) acc)
           (Post.return flow) tl
-        >>$ fun () flow ->
+        >>% fun flow ->
         Eval.singleton weak_smash ~cleaners:[mk_remove_var smash range] flow
 
 
@@ -765,7 +781,7 @@ struct
     in
     let v = mk_cell_var c in
     let stmt = mk_remove_var v range in
-    man.post ~route:scalar stmt flow
+    man.exec ~route:scalar stmt flow
 
 
   (** Remove cells overlapping with cell [c] *)
@@ -794,7 +810,7 @@ struct
                          cell_set_add c2 }
       ) man flow in
     let stmt = mk_rename_var v1 v2 range in
-    man.post ~route:scalar stmt flow
+    man.exec ~route:scalar stmt flow
 
 
   let assign_cell c e mode range man flow =
@@ -806,9 +822,9 @@ struct
     begin if cell_set_mem c a.cells then
         Post.return flow
       else
-        man.post (mk_add_var v range) ~route:scalar flow
-    end >>$ fun () flow ->
-    man.post (mk_assign vv e range) ~route:scalar flow >>$ fun () flow ->
+        man.exec (mk_add_var v range) ~route:scalar flow
+    end >>% fun flow ->
+    man.exec (mk_assign vv e range) ~route:scalar flow >>% fun flow ->
     remove_cell_overlappings c range man flow
 
 
@@ -828,7 +844,7 @@ struct
     let v = mk_cell_var c in
     let vl = List.map mk_cell_var cl in
     let stmt = mk_expand_var v vl range in
-    man.post stmt ~route:scalar flow
+    man.exec stmt ~route:scalar flow
 
   let fold_cells c cl range man flow =
     let flow = map_env T_cur (fun a ->
@@ -838,17 +854,12 @@ struct
     let v = mk_cell_var c in
     let vl = List.map mk_cell_var cl in
     let stmt = mk_fold_var v vl range in
-    man.post stmt ~route:scalar flow
+    man.exec stmt ~route:scalar flow
 
   let forget_cell c range man flow =
-    let flow = map_env T_cur
-        (fun a ->
-           { a with cells = cell_set_remove c a.cells }
-        ) man flow
-    in
     let v = mk_cell_var c in
-    let stmt = mk_remove_var v range in
-    man.post stmt ~route:scalar flow
+    let stmt = mk_forget_var v range in
+    man.exec stmt ~route:scalar flow
 
 
   (** {2 Initial state} *)
@@ -883,7 +894,7 @@ struct
       man.eval ret flow ~route:scalar
 
     | Cell (c,mode) ->
-      add_cell c range man flow >>$ fun () flow ->
+      add_cell c range man flow >>% fun flow ->
       let v =
         if is_pointer_cell c then
           mk_pointer_cell_var_expr c ~mode t range
@@ -892,39 +903,30 @@ struct
       in
       man.eval v flow ~route:scalar
 
-
-  (* 𝔼⟦ *p ⟧ where p is a pointer to a function *)
-  let eval_deref_function_pointer p range man flow =
-    resolve_pointer p man flow >>$ fun pt flow ->
-    match pt with
-    | P_fun f ->
-      Eval.singleton (mk_expr (E_c_function f) ~etyp:(under_type p.etyp) range) flow
-
-    | _ -> panic_at range
-             "deref_function_pointer: pointer %a points to a non-function object %a"
-             pp_expr p
-             pp_points_to pt
-
+  let eval_scalar_var v mode range man flow =
+    let c = mk_cell (mk_var_base v) Z.zero v.vtyp in
+    add_cell c range man flow >>% fun flow ->
+    let v =
+      if is_pointer_cell c then
+        mk_pointer_cell_var_expr c ~mode v.vtyp range
+      else
+        mk_numeric_cell_var_expr c ~mode range
+    in
+    man.eval v flow ~route:scalar
+  
 
   let eval exp man flow =
     match ekind exp with
     | E_var ({ vkind = V_c_cell _},_) -> None
 
-    | E_var (v,_) when is_c_scalar_type v.vtyp ->
-      eval_deref_scalar_pointer (mk_c_address_of exp exp.erange) exp.erange man flow |>
+    | E_var (v,mode) when is_c_scalar_type v.vtyp ->
+      eval_scalar_var v mode exp.erange man flow |>
       OptionExt.return
 
     | E_c_deref p when under_type p.etyp |> void_to_char |> is_c_scalar_type
       ->
       eval_deref_scalar_pointer p exp.erange man flow |>
       OptionExt.return
-
-
-    | E_c_deref p when under_type p.etyp |> is_c_function_type
-      ->
-      eval_deref_function_pointer p exp.erange man flow |>
-      OptionExt.return
-
 
     | _ -> None
 
@@ -948,7 +950,7 @@ struct
       map_env T_cur (fun a ->
         { a with cells = cell_set_add c a.cells }
       ) man flow |>
-      man.post ~route:scalar (mk_c_declaration vv None scope range)
+      man.exec ~route:scalar (mk_c_declaration vv None scope range)
     else
       Post.return flow
 
@@ -977,6 +979,7 @@ struct
       assign_region base lo hi step range man flow
 
 
+
   let exec_add b range man flow =
     match b with
     | { base_kind = Var v; base_valid = true; } when is_c_scalar_type v.vtyp ->
@@ -990,7 +993,6 @@ struct
 
 
 
-
   (* 𝕊⟦ remove v ⟧ *)
   let exec_remove b range man flow =
     let a = get_env T_cur man flow in
@@ -999,6 +1001,13 @@ struct
     List.fold_left (fun acc c ->
         Post.bind (remove_cell c range man) acc
       ) (Post.return flow) cells
+    >>% fun flow ->
+    match b with
+    | { base_kind = Var v; base_valid = true; } when is_c_scalar_type v.vtyp ->
+      man.exec ~route:scalar (mk_remove_var v range) flow
+
+    | _ ->
+      Post.return flow
 
 
   (** Rename bases and their cells *)
@@ -1034,7 +1043,8 @@ struct
   let exec_expand b bl range man flow =
     let a = get_env T_cur man flow in
     (* Add the list of bases bl to abstract state a *)
-    let a = { a with bases = BaseSet.union a.bases (BaseSet.of_list bl) } in
+    let aa = { a with bases = BaseSet.union a.bases (BaseSet.of_list bl) } in
+    let flow = set_env T_cur aa man flow in
     (* Get the cells of base b *)
     let cells = cell_set_find_base b a.cells in
     (* Expand each cell *)
@@ -1084,7 +1094,7 @@ struct
          let cl = List.map (fun bb -> { c with base = bb }) bl in
          Post.bind (fold_cells c cl range man) acc
       ) common (Post.return flow)
-    >>$ fun () flow ->
+    >>% fun flow ->
 
     (* Remove bases bl *)
     List.fold_left
@@ -1106,7 +1116,7 @@ struct
     let ptr = mk_c_address_of lval range in
     resolve_pointer ptr man flow >>$ fun p flow ->
     match p with
-    | P_block(base,offset,mode) ->
+    | P_block(base,offset,mode) when is_interesting_base base ->
       (* Compute the interval of the offset *)
       let itv = offset_interval offset range man flow in
       (* Add the size of the pointed cells *)
@@ -1125,7 +1135,7 @@ struct
     let ptr = mk_c_address_of lval range in
     resolve_pointer ptr man flow >>$ fun p flow ->
     match p with
-    | P_block(base,offset,mode) ->
+    | P_block(base,offset,mode) when is_interesting_base base ->
       (* Compute the interval of the offset *)
       let itv = offset_interval offset range man flow in
       (* Add the size of the pointed cells *)
@@ -1145,8 +1155,7 @@ struct
       exec_declare v scope stmt.srange man flow |>
       OptionExt.return
 
-    | S_assign({ekind = E_var _} as x, e)
-    | S_assign({ekind = E_c_deref _} as x, e) when is_c_scalar_type x.etyp ->
+    | S_assign(x, e) when is_c_scalar_type x.etyp ->
       exec_assign x e stmt.srange man flow |>
       OptionExt.return
 

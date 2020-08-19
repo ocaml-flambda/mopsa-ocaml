@@ -1,12 +1,9 @@
 {
     "language": "c",
     "domain": {
-	"seq": [
-            // Universal iterators
-            "universal.iterators.intraproc",
-            "universal.iterators.loops",
-            "universal.iterators.interproc.inlining",
-            "universal.iterators.unittest",
+	"switch": [
+	    // Partitioning
+	    "universal.partitioning.merge_after_stmt",
 
 	    // C iterators
             "c.iterators.program",
@@ -15,6 +12,12 @@
             "c.iterators.switch",
             "c.iterators.loops",
             "c.iterators.intraproc",
+
+            // Universal iterators
+            "universal.iterators.intraproc",
+            "universal.iterators.loops",
+            "universal.iterators.interproc.inlining",
+            "universal.iterators.unittest",
 
             // Stubs
 	    "stubs.iterators.body",
@@ -40,23 +43,26 @@
 	    {
                 "compose": [
                     {
+			"semantic": "C/Lowlevel",
                         "product": [
                             "c.memory.lowlevel.cells",
                             "c.memory.lowlevel.string_length",
                             "c.memory.lowlevel.pointer_sentinel"
                         ],
                         "reductions": [
-			    "c.memory.lowlevel.reductions.cell_string_length",
-                            "c.memory.lowlevel.reductions.cell_pointer_sentinel"
+			    "universal.numeric.reductions.numeric_eval",
+			    "c.memory.reductions.pointer_eval"
                         ]
                     },
                     {
-                        "seq": [
+			"semantic": "C/Scalar",
+                        "switch": [
 			    "c.memory.scalars.pointer",
 			    "c.memory.scalars.machine_numbers"
                         ]
                     },
 		    {
+			"semantic": "U/Numeric",
 			"nonrel": {
 			    "union": [
 				"universal.numeric.values.intervals.float",

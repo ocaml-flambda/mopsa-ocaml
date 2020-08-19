@@ -23,7 +23,7 @@
 
 # Universal
 lang += universal
-lang.universal = ast frontend iterators heap numeric packing hooks strings
+lang.universal = ast frontend iterators heap numeric packing partitioning hooks strings
 lang.universal.iterators = unittest program intraproc interproc loops
 lang.universal.iterators.interproc = common inlining sequential_cache # join_based_cache
 lang.universal.heap = policies recency
@@ -33,8 +33,9 @@ lang.universal.numeric.values.intervals = integer float
 lang.universal.numeric.packing = strategy functor
 lang.universal.numeric.relational = apron_manager binding apron_transformer \
                                     domain instances
-lang.universal.numeric.reductions = intervals_congruences intervals_rel intervals_powerset
+lang.universal.numeric.reductions = intervals_congruences intervals_rel intervals_powerset numeric_eval
 lang.universal.packing = static
+lang.universal.partitioning = merge_after_stmt
 lang.universal.hooks = logs progress profiler gctest
 
 

@@ -211,7 +211,7 @@ let () =
     category = "Help";
     doc = " list available domains; if a configuration is specified, only used domains are listed";
     spec = ArgExt.Unit_delayed (fun () ->
-        let domains = Abstraction.Parser.(domains !opt_config) in
+        let domains = Abstraction.Parser.(domains @@ Paths.resolve_config_file !opt_config) in
         Output.Factory.list_domains domains
       );
     default = "";
@@ -224,7 +224,7 @@ let () =
     category = "Help";
     doc = " list the alarms captured by the selected configuration";
     spec = ArgExt.Unit_delayed (fun () ->
-        let abstraction = Abstraction.Parser.(parse !opt_config) in
+        let abstraction = Abstraction.Parser.(parse @@ Paths.resolve_config_file !opt_config) in
         let domain = Abstraction.Builder.from_json abstraction.domain in
         let module Domain = (val domain) in
         Output.Factory.list_alarms Domain.alarms
@@ -327,8 +327,9 @@ let help () =
     if !Abstraction.Parser.opt_config = "" then !options
     else
       (* Get the language and domains of selected configuration *)
-      let lang = Abstraction.Parser.(language !opt_config) in
-      let domains = Abstraction.Parser.(domains !opt_config) in
+      let config = Paths.resolve_config_file !Abstraction.Parser.opt_config in
+      let lang = Abstraction.Parser.(language config) in
+      let domains = Abstraction.Parser.(domains config) in
 
       (* Get the options *)
       (get_builtin_options ())    @

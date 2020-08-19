@@ -19,7 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Reduced product with n-ary reduction rules *)
+(** Reduced product combiner with n-ary reduction rules *)
 
 
 open Core.All
@@ -29,22 +29,27 @@ open Sig.Combiner.Stacked
 open Common
 
 
+(** Signature of a pool of domains with pointwise transfer functions *)
 module type POOL =
 sig
   include STACKED_COMBINER
   val alarms : alarm_class list list
-  val exec : domain list -> stmt -> ('a,t) man -> 'a flow -> 'a post option list * 'a ctx
-  val eval : string list -> expr -> ('a,t) man -> 'a flow -> 'a eval option list * 'a ctx
+  val members : domain list list
+  val exec : domain list -> stmt -> ('a,t) man -> 'a flow -> 'a post option list
+  val eval : string list -> expr -> ('a,t) man -> 'a flow -> 'a eval option list
 end
 
 
-    
+
+(** Empty pool *)
 module EmptyPool : POOL =
 struct
   type t = unit
   let id = C_empty
   let name = "()"
   let domains = []
+  let members = []
+  let semantics = []
   let routing_table = empty_routing_table
   let alarms = [[]]
   let bottom = ()
@@ -57,17 +62,20 @@ struct
   let widen _ _ _ ((),s) ((),s') = (),s,s',true
   let merge _ _ _ = ()
   let init _ _ flow = flow
-  let exec _ _ _ flow = [], Flow.get_ctx flow
-  let eval _ _ _ flow = [], Flow.get_ctx flow
+  let exec _ _ _ flow = []
+  let eval _ _ _ flow = []
   let ask _ _ _ _ = None
 end
 
 
+(** Add a domain to a pool *)
 module MakePairPool(S:STACKED_COMBINER)(P:POOL) : POOL with type t = S.t * P.t =
 struct
   type t = S.t * P.t
   let id = C_pair(Product,S.id,P.id)
   let domains = S.domains @ P.domains
+  let members = S.domains :: P.members
+  let semantics = S.semantics @ P.semantics
   let routing_table = join_routing_table S.routing_table P.routing_table
   let alarms = S.alarms :: P.alarms
   let name = S.name ^ " ∧ " ^ P.name
@@ -115,8 +123,7 @@ struct
     let f2 = P.exec targets in
     if not (sat_targets ~targets ~domains:S.domains) then
       (fun stmt man flow ->
-         let l,ctx = f2 stmt (snd_pair_man man) flow in
-         None :: l, ctx
+         None :: f2 stmt (snd_pair_man man) flow
       )
     else
       let f1 = S.exec targets in
@@ -124,16 +131,14 @@ struct
          let post = f1 stmt (fst_pair_man man) flow in
          let ctx = OptionExt.apply Cases.get_ctx (Flow.get_ctx flow) post in
          let flow = Flow.set_ctx ctx flow in
-         let l,ctx = f2 stmt (snd_pair_man man) flow in
-         post :: l, ctx
+         post :: f2 stmt (snd_pair_man man) flow
       )
 
   let eval targets =
     let f2 = P.eval targets in
     if not (sat_targets ~targets ~domains:S.domains) then
       (fun exp man flow ->
-         let l,ctx = f2 exp (snd_pair_man man) flow in
-         None :: l, ctx
+         None :: f2 exp (snd_pair_man man) flow
       )
     else
       let f1 = S.eval targets in
@@ -141,8 +146,7 @@ struct
          let eval = f1 exp (fst_pair_man man) flow in
          let ctx = OptionExt.apply Cases.get_ctx (Flow.get_ctx flow) eval in
          let flow = Flow.set_ctx ctx flow in
-         let l,ctx = f2 exp (snd_pair_man man) flow in
-         eval :: l, ctx
+         eval :: f2 exp (snd_pair_man man) flow
       )
 
   let ask targets =
@@ -159,10 +163,11 @@ struct
            (f1 query (fst_pair_man man) flow)
            (f2 query (snd_pair_man man) flow))
 end
-      
 
-(** Product functor *)
-module Make(Pool:POOL)
+
+(** Create a reduced product over a pool and a list of reduction rules *)
+module Make
+    (Pool:POOL)
     (Rules:sig
        val erules: (module EVAL_REDUCTION) list
        val srules: (module EXEC_REDUCTION) list
@@ -198,28 +203,46 @@ struct
 
 
 
-  (** Merge the conflicts between distinct domains in a pointwise result *)
+  (** Merge the conflicts between distinct domains.
+      These conflicts arise from two situations:
+
+      1. When a domain changes its local state, this change is not present in
+      the post-state of the other domains. In this case, we need to put the new
+      local state of every domain in all other post-states.
+
+      2. When two domains change (independently) the state of a shared sub-abstraction.
+      In this case, we use logs to merge the two diverging states.
+  *)
   let merge_inter_conflicts man pre (pointwise:('a,'r) cases option list) : ('a,'r option option list) cases =
     let rec aux : type t. t id -> ('a,t) man -> ('a,'r) cases option list -> alarm_class list list -> ('a,'r option option list) cases =
       fun id man pointwise alarms ->
         match pointwise, id, alarms with
+        (* Last domain returned no answer *)
         | [None], C_pair(_, s, _), _ ->
           Cases.singleton [None] pre
 
+        (* Last domain returned an answer *)
         | [Some r], C_pair(_, s, _), _ ->
           r >>= fun rr flow ->
           Cases.singleton [Some rr] flow
 
+        (* One domain returned no answer *)
         | None :: tl, C_pair(_,s,pid), _::tlalarms ->
           aux pid (snd_pair_man man) tl tlalarms >>$ fun after flow ->
           Cases.singleton (None :: after) flow
 
+        (* One domain returned an answer.
+           Here we need to merge this answer with the answers of the next domains *)
         | Some r :: tl, C_pair(_,s,pid), hdalarms::tlalarms ->
+          (* Compute the answer of the next domains *)
           aux pid (snd_pair_man man) tl tlalarms |>
           Cases.bind_full @@ fun after after_flow after_log after_cleaners ->
           r |> Cases.bind_full @@ fun rr flow log cleaners ->
           let after = after |> OptionExt.none_to_exn in
+          (* Merge only when the next domains provided some answers *)
           if after |> List.exists (function Some _ -> true | None -> false) then
+            (* Resolve the first conflict situation:
+               put the post-state of the current domain in the answer of the next domains *)
             let fst_pair_man = fst_pair_man man in
             let after_flow = Flow.set T_cur (
                 let cur = Flow.get T_cur man.lattice flow in
@@ -227,19 +250,14 @@ struct
                 fst_pair_man.set (fst_pair_man.get cur) after_cur
               ) man.lattice after_flow
             in
-            let common_alarms = List.filter (fun a -> List.mem a hdalarms) (List.flatten tlalarms) in
-            let merge_alarms a1 a2 =
-              let a1', a1'' = AlarmSet.partition (fun a -> List.mem (get_alarm_class a) common_alarms) a1 in
-              let a2', a2'' = AlarmSet.partition (fun a -> List.mem (get_alarm_class a) common_alarms) a2 in
-              AlarmSet.inter a1' a2' |>
-              AlarmSet.union a1'' |>
-              AlarmSet.union a2''
-            in
-            let flow = merge_flows ~merge_alarms man pre (flow,log) (after_flow,after_log) in
+            (* Resolve the second conflict situation:
+               merge the post-states of any shared sub-abstraction *)
+            let flow = merge_flows ~merge_alarms:AlarmSet.union man pre (flow,log) (after_flow,after_log) in
             let log = Log.meet_log log after_log in
             let cleaners = cleaners @ after_cleaners in
             Cases.return (Some (Some rr :: after)) flow ~cleaners ~log
           else
+            (* Next domains returned no answer, so no merging *)
             Cases.return (Some (Some rr :: after)) flow ~cleaners ~log
 
 
@@ -249,11 +267,71 @@ struct
 
 
 
-  (** Merge the conflicts emerging from the same domain *)
+  (** Merge the conflicts emerging from the same domain.
+      This kind of conflicts arises when a same domain produces a conjunction of
+      post-states.  Since these conjunctions are from the same domain, there is
+      no need to merge its local state; we just merge any shared sub-abstraction.
+  *)
   let merge_intra_conflicts man pre (r:('a,'r) cases) : ('a,'r) cases =
     Cases.map_fold_conjunctions (fun (flow1,log1) (flow2,log2) ->
         merge_flows ~merge_alarms:AlarmSet.inter man pre (flow1,log1) (flow2,log2)
       ) r
+
+
+
+  (** {2 Generic pointwise processing of transfer functions *)
+  (** ***************************************************** *)
+
+  (** The successor domain is the domain below the reduced
+       product. Since all member domains in the reduced product are at the
+       same level, we can pick any one of them *)
+  let successor =
+    (* XXX This is a hack to be sure to take a member that is a user
+       domain, not a composed domain, because `BelowOf` routes are
+       defined for user domains only *)
+    let member = List.find (function [domain] -> true | _ -> false) Pool.members |>
+                 List.hd in
+    BelowOf member
+
+
+  (** Get the context of a pointwise result *)
+  let rec get_pointwise_ctx ~default pointwise =
+    match pointwise with
+    | []               -> default
+    | None::tl         -> get_pointwise_ctx ~default tl
+    | Some cases :: tl -> Context.get_most_recent
+                            (Cases.get_ctx cases)
+                            (get_pointwise_ctx ~default tl)
+
+  (** Set the context of a pointwise result *)
+  let rec set_pointwise_ctx ctx pointwise =
+    match pointwise with
+    | []               -> []
+    | None :: tl       -> None :: set_pointwise_ctx ctx tl
+    | Some cases :: tl -> Some (Cases.set_ctx ctx cases) :: set_pointwise_ctx ctx tl
+
+
+  (** Apply transfer function [f] pointwise over all domains *)
+  let apply_pointwise f arg man flow =
+    let pointwise = f arg man flow in
+    if List.exists (function Some _ -> true | None -> false) pointwise
+    then
+      let ctx = get_pointwise_ctx pointwise ~default:(Flow.get_ctx flow) in
+      Some (set_pointwise_ctx ctx pointwise)
+    else None
+
+
+  (** Replace missing pointwise results by calling the successor domain *)
+  let add_missing_pointwise_results fsuccessor arg pointwise flow =
+    (* Call the successor domain only when there are missing results *)
+    if List.for_all (function Some _ -> true | None -> false) pointwise then
+      pointwise
+    else
+      let flow = Flow.set_ctx (get_pointwise_ctx pointwise ~default:(Flow.get_ctx flow)) flow in
+      let res = fsuccessor arg flow in
+      List.map (function None -> Some res | x -> x) pointwise |>
+      set_pointwise_ctx (Cases.get_ctx res)
+
 
 
   (** {2 Abstract transformer} *)
@@ -263,14 +341,6 @@ struct
   let exec_reduction_man (man:('a, t) man) : 'a exec_reduction_man = {
     get_man = (fun id -> find_domain_man id Pool.id man);
   }
-
-
-  (* Apply [exec] transfer function pointwise over all domains *)
-  let exec_pointwise f stmt man flow : 'a post option list option =
-    let posts, ctx = f stmt man flow in
-    if List.exists (function Some _ -> true | None -> false) posts
-    then Some posts
-    else None
 
 
   (** Simplify a pointwise post-state by changing lists of unit into unit *)
@@ -283,19 +353,27 @@ struct
   (** Apply reduction rules on a post-conditions *)
   let reduce_post stmt man pre post =
     let rman = exec_reduction_man man in
-    List.fold_left (fun pointwise rule ->
+    post >>% fun flow ->
+    (* Iterate over rules *)
+    let rec iter = function
+      | [] -> Post.return flow
+      | rule::tl ->
         let module R = (val rule : EXEC_REDUCTION) in
-        post >>$ fun () -> R.reduce stmt man rman pre 
-      ) post Rules.srules
+        match R.reduce stmt man rman pre flow with
+        | None -> iter tl
+        | Some post -> post
+    in
+    iter Rules.srules
 
 
   (** Entry point of abstract transformers *)
   let exec targets =
     let f = Pool.exec targets in
     (fun stmt man flow ->
-       exec_pointwise f stmt man flow |>
+       apply_pointwise f stmt man flow |>
        OptionExt.lift @@ fun pointwise ->
-       merge_inter_conflicts man flow pointwise |>
+       add_missing_pointwise_results (man.exec ~route:successor) stmt pointwise flow |>
+       merge_inter_conflicts man flow |>
        simplify_pointwise_post |>
        merge_intra_conflicts man flow |>
        reduce_post stmt man flow)
@@ -304,98 +382,57 @@ struct
   (** {2 Abstract evaluations} *)
   (** ************************ *)
 
-
-  (** Compute pointwise evaluations over the pool of domains *)
-  let eval_pointwise f exp man flow : 'a eval option list option =
-    let pointwise, ctx = f exp man flow in
-    if List.exists (function Some _ -> true | None -> false) pointwise
-    then Some pointwise
-    else None
-
-
   (** Manager used by reductions *)
   let eval_reduction_man (man:('a, t) man) : 'a eval_reduction_man = {
-    get_eval = (
-      let f : type t. t id -> prod_eval -> expr option = fun id evals ->
-        let rec aux : type t tt. t id -> tt id -> prod_eval -> expr option = fun target tree el ->
-          match tree, el with
-          | C_empty, [] -> None
-          | C_pair(_,left,right), (hde::tle) ->
-            if mem_domain ~target ~tree:left then
-              match hde with None -> None | Some x -> x
-            else
-              aux target right tle
-          | _ -> assert false
-        in
-        aux id Pool.id evals
-      in
-      f
-    );
-
-    del_eval = (
-      let f : type t. t id -> prod_eval -> prod_eval = fun id evals ->
-        let rec aux : type t tt. t id -> tt id -> prod_eval -> prod_eval = fun target tree el ->
-          match tree, el with
-          | C_empty, [] -> raise Not_found
-          | C_pair(_,left,right), (hde::tle) ->
-            if mem_domain ~target ~tree:left then None :: tle else hde :: aux target right tle
-          | _ -> assert false
-          in
-          aux id Pool.id evals
-      in
-      f
-    );
-
     get_man = (fun id -> find_domain_man id Pool.id man);
   }
 
-  
-  (** Apply reduction rules on a pointwise evaluation *)
-  let reduce_pointwise_eval exp man (pointwise:('a, expr option option list) cases) : 'a eval =
-    let rman = eval_reduction_man man in
-    (* Let reduction rules roll out imprecise evaluations from [pointwise] *)
-    let pointwise = List.fold_left (fun pointwise rule ->
-        let module R = (val rule : EVAL_REDUCTION) in
-        pointwise |> Cases.bind_some @@ fun el flow ->
-        R.reduce exp man rman flow el
-      ) pointwise Rules.erules
-    in
-    (* For performance reasons, we keep only one evaluation in each conjunction.
-       THE CHOICE IS ARBITRARY: keep the first non-None result using the
-       order of domains in the configuration file.
-    *)
-    let evl = pointwise |> Cases.map_opt (fun el ->
-        try List.find (function Some _ -> true | None -> false) el
-        with Not_found -> None
-      )
-    in
-    Eval.remove_duplicates man.lattice evl
 
+  (** Apply reduction rules on a pointwise evaluation *)
+  let reduce_pointwise_eval exp man input (pointwise:('a, expr option option list) cases) : 'a eval =
+    pointwise >>$ fun el flow ->
+    (* An empty result in a conjunction [el] makes the whole result empty *)
+    if List.exists (function Some None -> true | _ -> false) el then
+      Eval.empty_singleton flow
+    else
+    (* Otherwise, keep only cases with non-empty results and remove duplicates *)
+    let el' = List.filter (function Some (Some _) -> true | _ -> false) el |>
+              List.map (function Some (Some e) -> e | _ -> assert false) |>
+              List.sort_uniq compare_expr
+    in
+    if el' = [] then Eval.empty_singleton flow
+    else
+      let rman = eval_reduction_man man in
+      let rec iter = function
+        | [] ->
+          (* XXX For performance reasons, we keep only one evaluation in
+             each conjunction.
+             THE CHOICE IS ARBITRARY!
+          *)
+          Eval.singleton (List.hd el') flow
+
+        | rule::tl ->
+          let module R = (val rule : EVAL_REDUCTION) in
+          match R.reduce exp man rman input el' flow with
+          | None -> iter tl
+          | Some evl -> evl
+      in
+      iter Rules.erules
 
 
   (** Entry point of abstract evaluations *)
   let eval targets =
     let f = Pool.eval targets in
     (fun exp man flow ->
-       eval_pointwise f exp man flow |>
+       apply_pointwise f exp man flow |>
        OptionExt.lift @@ fun pointwise ->
-       merge_inter_conflicts man flow pointwise |>
-       reduce_pointwise_eval exp man |>
+       add_missing_pointwise_results (man.eval ~route:successor) exp pointwise flow |>
+       merge_inter_conflicts man flow |>
+       reduce_pointwise_eval exp man flow |>
+       Eval.remove_duplicates man.lattice |>
        merge_intra_conflicts man flow)
 
-
-
 end
-
-
-
-(****************************************************************************)
-(**                      {2 Functional factory}                             *)
-(****************************************************************************)
-
-(** The following functions are useful to create a reduced product
-    from a list of first-class modules
-*)
 
 
 
@@ -405,7 +442,7 @@ let rec make_pool : (module STACKED_COMBINER) list -> (module POOL) = function
     let module S = (val hd) in
     let p = make_pool tl in
     (module MakePairPool(S)(val p))
-    
+
 
 let make
     (domains: (module STACKED_COMBINER) list)

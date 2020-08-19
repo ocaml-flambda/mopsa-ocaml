@@ -129,7 +129,7 @@ struct
     fprintf fmt "@[<v 3>S [| %a@] |]" pp_stmt stmt
 
   let pp_E fmt exp =
-    fprintf fmt "@[<v 3>E [| %a@] |]" pp_expr exp
+    fprintf fmt "@[<v 3>E [| %a : %a@] |]" pp_expr exp pp_typ exp.etyp
 
   let get_timing () =
     try Sys.time () -. Stack.pop stack
@@ -190,10 +190,16 @@ struct
 
   let on_after_eval route exp man flow evl =
     let time = get_timing () in
+    let pp_evl_with_type fmt evl =
+      Cases.print_some (
+        fun fmt e flow ->
+          Format.fprintf fmt "%a : %a" pp_expr e pp_typ e.etyp
+      ) fmt evl
+    in
     if Options.short then
       indent "%a = %a done in semantic %a [%.4fs]"
         pp_E exp
-        Eval.print evl
+        pp_evl_with_type evl
         pp_route route
         time
         ~symbol:END
@@ -202,7 +208,7 @@ struct
         pp_E exp
         pp_route route
         time
-        Eval.print evl
+        pp_evl_with_type evl
         ~symbol:END
 
   let on_finish man flow =

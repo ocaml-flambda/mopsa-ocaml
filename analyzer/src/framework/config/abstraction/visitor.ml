@@ -28,7 +28,7 @@ open Yojson.Basic.Util
 
 type 'a visitor = {
   leaf : string option -> string -> 'a;
-  sequence : string option -> Yojson.Basic.t list -> 'a;
+  switch : string option -> Yojson.Basic.t list -> 'a;
   compose : string option -> Yojson.Basic.t list -> 'a;
   union : string option -> Yojson.Basic.t list -> 'a;
   apply : string option -> string -> Yojson.Basic.t -> 'a;
@@ -46,11 +46,11 @@ let visit_domain visitor obj =
 
 let visit_seq visitor obj =
   let l = List.assoc "seq" obj |> to_list in
-  visitor.sequence (get_semantic obj) l
+  visitor.switch (get_semantic obj) l
 
-let visit_sequence visitor obj =
-  let l = List.assoc "sequence" obj |> to_list in
-  visitor.sequence (get_semantic obj) l
+let visit_switch visitor obj =
+  let l = List.assoc "switch" obj |> to_list in
+  visitor.switch (get_semantic obj) l
 
 let visit_compose visitor obj =
   let l = List.assoc "compose" obj |> to_list in
@@ -78,8 +78,7 @@ let rec visit visitor json =
   match json with
   | `String s -> visit_leaf visitor s
   | `Assoc obj when List.mem_assoc "domain" obj -> visit_domain visitor obj
-  | `Assoc obj when List.mem_assoc "seq" obj -> visit_seq visitor obj
-  | `Assoc obj when List.mem_assoc "sequence" obj -> visit_sequence visitor obj
+  | `Assoc obj when List.mem_assoc "switch" obj -> visit_switch visitor obj
   | `Assoc obj when List.mem_assoc "compose" obj -> visit_compose visitor obj
   | `Assoc obj when List.mem_assoc "apply" obj -> visit_apply visitor obj
   | `Assoc obj when List.mem_assoc "nonrel" obj -> visit_nonrel visitor obj
