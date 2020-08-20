@@ -86,16 +86,21 @@ let map_env (tk:token) (f:'t -> 't) (man:('a,'t) man) (flow:'a flow) : 'a flow =
 let rec exec_stmt_on_all_flows stmt man flow =
   man.exec stmt flow >>% fun flow ->
   Flow.fold (fun acc tk env ->
-      (* Put env in T_cur token of flow and remove others *)
-      let annot = Flow.get_ctx flow in
-      let flow' = Flow.singleton annot T_cur env in
+      match tk with
+      (* Skip T_cur since the statement was executed at the beginning
+         of the function *)
+      | T_cur -> acc
+      | _ ->
+        (* Put env in T_cur token of flow and remove others *)
+        let annot = Flow.get_ctx flow in
+        let flow' = Flow.singleton annot T_cur env in
 
-      (* Execute the cleaner *)
-      let flow'' = man.exec stmt flow' |> post_to_flow man in
+        (* Execute the cleaner *)
+        let flow'' = man.exec stmt flow' |> post_to_flow man in
 
-      (* Restore T_cur in tk *)
-      Flow.copy T_cur tk man.lattice flow'' flow |>
-      Flow.copy_ctx flow''
+        (* Restore T_cur in tk *)
+        Flow.copy T_cur tk man.lattice flow'' flow |>
+        Flow.copy_ctx flow''
     ) flow flow |>
   Post.return
 
