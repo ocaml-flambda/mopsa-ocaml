@@ -148,7 +148,7 @@ struct
                     ~fthen:(fun true_flow ->
                       assume
                           (mk_binop (Utils.extract_oobject e1) (Operators.methfun_to_binop f) (Utils.extract_oobject e2) ~etyp:T_int range) man true_flow
-                          ~route:(Semantic "U/Int")
+                          ~route:(Semantic "U/Numeric")
                           ~fthen:(fun flow -> man.eval (mk_py_true range) flow)
                           ~felse:(fun flow -> man.eval (mk_py_false range) flow)
                       )
@@ -245,7 +245,7 @@ struct
         (fun e flow ->
            assume
              (mk_binop (Utils.extract_oobject @@ List.hd e) O_eq (mk_int 0 ~typ:T_int range) ~etyp:T_int range) man flow
-             ~route:(Semantic "U/Int")
+             ~route:(Semantic "U/Numeric")
              ~fthen:(fun flow -> man.eval (mk_py_false range) flow)
              ~felse:(fun flow -> man.eval (mk_py_true range) flow)
         )
@@ -264,7 +264,7 @@ struct
         ["int"]
         (fun e flow ->
           let max_intfloat = mk_constant (C_int (Z.of_string "179769313486231580793728971405303415079934132710037826936173778980444968292764750946649017977587207096330286416692887910946555547851940402630657488671505820681908902000708383676273854845817711531764475730270069855571366959622842914819860834936475292719074168444365510704342711559699508093042880177904174497791")) ~etyp:T_int range in
-          assume ~route:(Semantic "U/Int")
+          assume ~route:(Semantic "U/Numeric")
             (mk_binop
                (mk_binop (mk_unop O_minus max_intfloat ~etyp:T_int range) O_le  (Utils.extract_oobject @@ List.hd e) range)
                O_log_and
@@ -272,7 +272,7 @@ struct
                range)
             man flow
           ~fthen:(fun flow ->
-            man.eval ~route:(Semantic "U/Float") (mk_unop O_cast  ~etyp:(T_float F_DOUBLE) (Utils.extract_oobject @@ List.hd e) range) flow >>$
+            man.eval ~route:(Semantic "U/Numeric") (mk_unop O_cast  ~etyp:(T_float F_DOUBLE) (Utils.extract_oobject @@ List.hd e) range) flow >>$
  (fun e flow -> Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_float, Some e) range) flow))
           ~felse:(fun flow ->
             man.exec (Utils.mk_builtin_raise_msg "OverflowError" "int too large to convert to float" range) flow >>% Eval.empty_singleton)

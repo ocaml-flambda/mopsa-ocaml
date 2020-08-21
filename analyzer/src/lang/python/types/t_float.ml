@@ -104,7 +104,7 @@ module Domain =
                     ~fthen:(fun flow ->
                         assume
                           (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) ~etyp:(T_float F_DOUBLE) range) man flow
-                          ~route:(Semantic "U/Float")
+                          ~route:(Semantic "U/Numeric")
                           ~fthen:(fun flow -> man.eval (mk_py_true range) flow)
                           ~felse:(fun flow -> man.eval (mk_py_false range) flow)
                       )
@@ -115,7 +115,7 @@ module Domain =
  (fun e2 flow ->
                                   assume
                                     (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) ~etyp:(T_float F_DOUBLE) range) man flow
-                                    ~route:(Semantic "U/Float")
+                                    ~route:(Semantic "U/Numeric")
                                     ~fthen:(fun flow -> man.eval (mk_py_true range) flow)
                                     ~felse:(fun flow -> man.eval (mk_py_false range) flow)
                                 )
@@ -207,7 +207,7 @@ module Domain =
              assume
                (mk_binop (extract_oobject @@ List.hd e) O_eq (mk_float 0. range) ~etyp:(T_float F_DOUBLE) range)
                man flow
-               ~route:(Semantic "U/Float")
+               ~route:(Semantic "U/Numeric")
                ~fthen:(fun flow -> man.eval (mk_py_false range) flow)
                ~felse:(fun flow -> man.eval (mk_py_true range) flow)
           )
@@ -217,7 +217,7 @@ module Domain =
       Utils.check_instances f man flow range args
         ["float"]
         (fun e flow ->
-            man.eval ~route:(Semantic "U/Int") (mk_unop O_cast  ~etyp:T_int (Utils.extract_oobject @@ List.hd e) range) flow >>$
+            man.eval ~route:(Semantic "U/Numeric") (mk_unop O_cast  ~etyp:T_int (Utils.extract_oobject @@ List.hd e) range) flow >>$
  (fun e flow -> Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_integers, Some e) range) flow)
         ) |> OptionExt.return
 

@@ -64,7 +64,7 @@ struct
 
   include GenValueId(struct
       type nonrec t = t
-      let name = "universal.strings.powerset"
+      let name = "universal.strings.powerset_value"
       let display = "strings"
             end)
 
@@ -162,7 +162,7 @@ struct
 
   include Framework.Core.Id.GenDomainId(struct
               type nonrec t = t
-              let name = "univeral.strings.powerset"
+              let name = "universal.strings.powerset"
             end)
 
   let merge _ _ _ = assert false
@@ -242,8 +242,8 @@ struct
           let strings_e = Nonrel.eval e cur |> OptionExt.none_to_exn |> snd in
           Eval.join_list ~empty:(fun () -> failwith "todo")
             (if Value.is_top strings_e then
-               man.eval ~route:(Semantic "U/Int") (mk_top T_int range) flow :: []
-             else Value.fold (fun s acc -> (man.eval ~route:(Semantic "U/Int") (mk_int (String.length s) range) flow) :: acc) strings_e [])
+               man.eval ~route:(Semantic "U/Numeric") (mk_top T_int range) flow :: []
+             else Value.fold (fun s acc -> (man.eval ~route:(Semantic "U/Numeric") (mk_int (String.length s) range) flow) :: acc) strings_e [])
         )
       |> OptionExt.return
 

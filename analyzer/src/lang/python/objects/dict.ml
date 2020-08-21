@@ -126,7 +126,7 @@ struct
       debug "Skipping dict.__new__, dict.__init__ for now@\n";
 
       let addr_dict = mk_alloc_addr A_py_dict range in
-      man.eval ~route:(Semantic "U/Heap") addr_dict flow >>$
+      man.eval   addr_dict flow >>$
  (fun eaddr_dict flow ->
           let addr_dict = addr_of_expr eaddr_dict in
           let els_keys, els_vals = var_of_addr addr_dict in
@@ -248,7 +248,7 @@ struct
         (fun args flow ->
            let dict = List.hd args in
            let a = mk_alloc_addr (Py_list.A_py_iterator ("dict_keyiterator", None)) range in
-           man.eval ~route:(Semantic "U/Heap") a flow >>$
+           man.eval   a flow >>$
  (fun addr_it flow ->
                  let addr_it = match ekind addr_it with E_addr a -> a | _ -> assert false in
                  man.exec ~route:(Semantic "Python") (mk_assign (mk_var (Py_list.Domain.itseq_of_addr addr_it) range) dict range) flow >>%
@@ -285,7 +285,7 @@ struct
         (fun args flow ->
            let dict = List.hd args in
            let a = mk_alloc_addr (A_py_dict_view viewname) range in
-           man.eval ~route:(Semantic "U/Heap") a flow >>$
+           man.eval   a flow >>$
  (fun addr_it flow ->
                let addr_it = match ekind addr_it with E_addr a -> a | _ -> assert false in
                man.exec ~route:(Semantic "Python") (mk_assign (mk_var (viewseq_of_addr addr_it) range) dict range) flow >>%
@@ -307,7 +307,7 @@ struct
           man.eval ~route:(Semantic "Python") (mk_var (viewseq_of_addr @@ addr_of_eobj @@ List.hd args) range) flow >>$
  (fun dict_eobj flow ->
                 let a = mk_alloc_addr (Py_list.A_py_iterator (itname, None)) range in
-                man.eval ~route:(Semantic "U/Heap") a flow >>$
+                man.eval   a flow >>$
  (fun addr_it flow ->
                       let addr_it = match ekind addr_it with E_addr a -> a | _ -> assert false in
                       man.exec ~route:(Semantic "Python") (mk_assign (mk_var (Py_list.Domain.itseq_of_addr addr_it) range) dict_eobj range) flow >>%
@@ -415,7 +415,7 @@ struct
       let ty_key, ty_value = match ekind i with
         | E_py_tuple (a::b::[]) -> a, b
         | _ -> assert false in
-      man.eval ~route:(Semantic "U/Heap") addr_dict flow >>$
+      man.eval   addr_dict flow >>$
  (fun eaddr_dict flow ->
           let addr_dict = addr_of_expr eaddr_dict in
           let keys_var, values_var = var_of_addr addr_dict in

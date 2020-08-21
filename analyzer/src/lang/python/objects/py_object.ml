@@ -76,7 +76,7 @@ struct
             man.exec (Utils.mk_builtin_raise "TypeError" range) flow >>% Eval.empty_singleton
           | cls :: tl ->
             let c = fst @@ object_of_expr cls in
-            man.eval  ~route:(Semantic "U/Heap") (mk_alloc_addr (A_py_instance c) range) flow >>$
+            man.eval    (mk_alloc_addr (A_py_instance c) range) flow >>$
  (fun eaddr flow ->
                 let addr = match ekind eaddr with
                   | E_addr a -> a

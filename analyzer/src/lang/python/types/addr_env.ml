@@ -158,8 +158,8 @@ struct
        let float = check_baddr addr_float in
        let str = check_baddr addr_strings in
        (if str then man.exec ~route:(Semantic "U/String") (fstmt T_string) flow  else Post.return flow) >>% fun flow ->
-       (if intb then man.exec ~route:(Semantic "U/Int") (fstmt T_int) flow else Post.return flow) >>% fun flow ->
-       (if float then man.exec ~route:(Semantic "U/Float") (fstmt (T_float F_DOUBLE)) flow else Post.return flow)
+       (if intb then man.exec ~route:(Semantic "U/Numeric") (fstmt T_int) flow else Post.return flow) >>% fun flow ->
+       (if float then man.exec ~route:(Semantic "U/Numeric") (fstmt (T_float F_DOUBLE)) flow else Post.return flow)
 
 
   let rec exec stmt man flow =
@@ -191,9 +191,9 @@ struct
                             flow >>% man.exec ~route:(Semantic "U/String") (cstmt T_string)
                          | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)}}
                            | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}} ->
-                            flow >>% man.exec ~route:(Semantic "U/Int") (cstmt T_int)
+                            flow >>% man.exec ~route:(Semantic "U/Numeric") (cstmt T_int)
                          | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "float", _)}}  ->
-                            flow >>% man.exec ~route:(Semantic "U/Float") (cstmt (T_float F_DOUBLE))
+                            flow >>% man.exec ~route:(Semantic "U/Numeric") (cstmt (T_float F_DOUBLE))
                          | _ -> flow
                        ) aset (Post.return flow) in
           flow >>% fun flow ->
@@ -230,9 +230,9 @@ struct
                    man.exec ~route:(Semantic "U/String") (mk_assign (Utils.change_evar_type T_string evar) expr range) flow
                 | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}
                   | A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)} ->
-                   man.exec ~route:(Semantic "U/Int") (mk_assign (Utils.change_evar_type T_int evar) expr range) flow
+                   man.exec ~route:(Semantic "U/Numeric") (mk_assign (Utils.change_evar_type T_int evar) expr range) flow
                 | A_py_instance {addr_kind = A_py_class (C_builtin "float", _)} ->
-                   man.exec ~route:(Semantic "U/Float") (mk_assign (Utils.change_evar_type (T_float F_DOUBLE) evar) expr range) flow
+                   man.exec ~route:(Semantic "U/Numeric") (mk_assign (Utils.change_evar_type (T_float F_DOUBLE) evar) expr range) flow
                 | _ ->
                    Post.return flow
                 end
@@ -260,9 +260,9 @@ struct
                                         man.exec ~route:(Semantic "U/String") (mk_assign (Utils.change_evar_type T_string evar) (mk_py_top T_string range) range) flow
                                      | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}
                                        | A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)} ->
-                                        man.exec ~route:(Semantic "U/Int") (mk_assign (Utils.change_evar_type T_int evar) (mk_py_top T_int range) range) flow
+                                        man.exec ~route:(Semantic "U/Numeric") (mk_assign (Utils.change_evar_type T_int evar) (mk_py_top T_int range) range) flow
                                      | A_py_instance {addr_kind = A_py_class (C_builtin "float", _)} ->
-                                        man.exec ~route:(Semantic "U/Float") (mk_assign (Utils.change_evar_type (T_float F_DOUBLE) evar) (mk_py_top (T_float F_DOUBLE) range) range) flow
+                                        man.exec ~route:(Semantic "U/Numeric") (mk_assign (Utils.change_evar_type (T_float F_DOUBLE) evar) (mk_py_top (T_float F_DOUBLE) range) range) flow
                                      | _ ->
                                         Post.return flow
                                      end >>% fun flow ->
@@ -498,7 +498,7 @@ struct
     (* allocate addr, and map this addr to inst bltin *)
     let range = tag_range range "alloc_%s" bltin in
     let cls = fst @@ find_builtin bltin in
-    man.eval ~route:(Semantic "U/Heap") (mk_alloc_addr ~mode:mode (A_py_instance cls) range) flow >>$
+    man.eval   (mk_alloc_addr ~mode:mode (A_py_instance cls) range) flow >>$
  (fun eaddr flow ->
         let addr = match ekind eaddr with
           | E_addr a -> a
@@ -552,7 +552,7 @@ struct
                            | A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)} ->
                             Post.return flow
                          | _ ->
-                            man.exec ~route:(Semantic "U/Int") (mk_remove_var (Utils.change_var_type T_int v) range) flow
+                            man.exec ~route:(Semantic "U/Numeric") (mk_remove_var (Utils.change_var_type T_int v) range) flow
                          end
                       | A_py_instance {addr_kind = A_py_class (C_builtin "float", _)} ->
                         man.exec ~route:(Semantic "U/String") (mk_remove_var (Utils.change_var_type (T_float F_DOUBLE) v) range) flow

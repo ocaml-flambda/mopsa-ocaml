@@ -101,7 +101,7 @@ struct
     match ekind exp with
     | E_py_tuple els ->
       let addr_tuple = mk_alloc_addr (A_py_tuple (List.length els)) range in
-      man.eval ~route:(Semantic "U/Heap") addr_tuple flow >>$
+      man.eval   addr_tuple flow >>$
  (fun eaddr_tuple flow ->
           let addr_tuple = addr_of_expr eaddr_tuple in
           let els_vars = var_of_addr addr_tuple in
@@ -161,7 +161,7 @@ struct
         (fun args flow ->
            let tuple = List.hd args in
            let addr_iterator = mk_alloc_addr (Py_list.A_py_iterator ("tuple_iterator", Some 0)) range in
-           man.eval ~route:(Semantic "U/Heap") addr_iterator flow >>$
+           man.eval   addr_iterator flow >>$
  (fun addr_it flow ->
                let addr_it = match ekind addr_it with
                  | E_addr a -> a
@@ -200,7 +200,7 @@ struct
         | E_py_tuple i -> i
         | _ -> assert false in
       let addr_tuple = mk_alloc_addr (A_py_tuple (List.length i)) range in
-      man.eval ~route:(Semantic "U/Heap") addr_tuple flow >>$
+      man.eval   addr_tuple flow >>$
  (fun eaddr_tuple flow ->
           let addr_tuple = addr_of_expr eaddr_tuple in
           let els_var = var_of_addr addr_tuple in

@@ -117,7 +117,7 @@ module Domain =
       (* allocate addr, and map this addr to inst bltin *)
       let range = tag_range range "alloc_%s" bltin in
       let cls = fst @@ find_builtin bltin in
-      man.eval ~route:(Semantic "U/Heap") (mk_alloc_addr ~mode:mode (A_py_instance cls) range) flow >>$
+      man.eval   (mk_alloc_addr ~mode:mode (A_py_instance cls) range) flow >>$
         (fun eaddr flow ->
           let addr = match ekind eaddr with
             | E_addr a -> a
@@ -308,7 +308,7 @@ module Domain =
           (fun args flow ->
              let str = List.hd args in
              let it_addr = mk_alloc_addr (Objects.Py_list.A_py_iterator ("str_iterator", None)) range in
-             man.eval ~route:(Semantic "U/Heap") it_addr flow >>$
+             man.eval   it_addr flow >>$
  (fun eit_addr flow ->
                  let it_addr = match ekind eit_addr with E_addr a -> a | _ -> assert false in
                  man.exec ~route:(Semantic "Python") (mk_assign (mk_var (Objects.Py_list.Domain.itseq_of_addr it_addr) range) str range) flow >>%

@@ -98,7 +98,7 @@ struct
       debug "Skipping set.__new__, set.__init__ for now@\n";
 
       let addr_set = mk_alloc_addr A_py_set range in
-      man.eval ~route:(Semantic "U/Heap") addr_set flow >>$
+      man.eval   addr_set flow >>$
  (fun eaddr_set flow ->
           let addr_set = addr_of_expr eaddr_set in
           let els_var = var_of_addr addr_set in
@@ -158,7 +158,7 @@ struct
         (fun args flow ->
            let set = match args with | [l] -> l | _ -> assert false in
            let a = mk_alloc_addr (Py_list.A_py_iterator ("set_iterator", None)) range in
-           man.eval ~route:(Semantic "U/Heap") a flow >>$
+           man.eval   a flow >>$
  (fun eaddr_it flow ->
                let addr_it = match ekind eaddr_it with | E_addr a -> a | _ -> assert false in
                man.exec ~route:(Semantic "Python") (mk_assign (mk_var (Py_list.Domain.itseq_of_addr addr_it) range) set range) flow >>%

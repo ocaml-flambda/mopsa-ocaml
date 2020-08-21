@@ -154,7 +154,7 @@ module Domain =
             | "classmethod" -> A_py_classmethod
             | _ -> assert false
           ) range in
-        man.eval ~route:(Semantic "U/Heap") addr_func flow >>$
+        man.eval   addr_func flow >>$
           (fun eaddr_list flow ->
             let addr_func = addr_of_expr eaddr_list in
             let func_var = var_of_addr addr_func in

@@ -61,7 +61,7 @@ struct
     (* allocate addr, and map this addr to inst bltin *)
     let range = tag_range range "alloc_%s" bltin in
     let cls = fst @@ find_builtin bltin in
-    man.eval ~route:(Semantic "U/Heap") (mk_alloc_addr ~mode:mode (A_py_instance cls) range) flow >>$
+    man.eval   (mk_alloc_addr ~mode:mode (A_py_instance cls) range) flow >>$
       (fun eaddr flow ->
         let addr = match ekind eaddr with
           | E_addr a -> a
@@ -83,7 +83,7 @@ struct
               [intornone; intornone; intornone]
               (fun _ flow ->
                 let start, stop, step = match args with a::b::c::[] -> a,b,c | _ -> assert false in
-                man.eval ~route:(Semantic "U/Heap") (mk_alloc_addr ~mode:STRONG (A_py_instance (fst @@ find_builtin "slice")) (tag_range range "alloc_slice")) flow >>$
+                man.eval   (mk_alloc_addr ~mode:STRONG (A_py_instance (fst @@ find_builtin "slice")) (tag_range range "alloc_slice")) flow >>$
                   (fun eaddr flow ->
                     let addr = match ekind eaddr with
                       | E_addr a -> a
@@ -196,7 +196,7 @@ struct
               (fun args flow ->
                  let start, stop, step = match args with a::b::c::[] -> a, b, c | _ -> assert false in
                  let alloc_range = tag_range range "alloc_%s" "range" in
-                 man.eval ~route:(Semantic "U/Heap") (mk_alloc_addr ~mode:STRONG (A_py_instance (fst @@ find_builtin "range")) alloc_range) flow >>$
+                 man.eval   (mk_alloc_addr ~mode:STRONG (A_py_instance (fst @@ find_builtin "range")) alloc_range) flow >>$
  (fun eaddr flow ->
                      let addr = match ekind eaddr with
                        | E_addr a -> a
@@ -237,7 +237,7 @@ struct
         (fun r flow ->
            let range_obj = List.hd r in
            let alloc_range = tag_range range "alloc_%s" "range" in
-           man.eval ~route:(Semantic "U/Heap") (mk_alloc_addr ~mode:STRONG (A_py_instance (fst @@ find_builtin "range_iterator")) alloc_range) flow >>$
+           man.eval   (mk_alloc_addr ~mode:STRONG (A_py_instance (fst @@ find_builtin "range_iterator")) alloc_range) flow >>$
  (fun eaddr flow ->
                let addr = match ekind eaddr with
                  | E_addr a -> a
