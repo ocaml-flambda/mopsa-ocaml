@@ -365,6 +365,15 @@ struct
       Eval.singleton exp' flow |>
       OptionExt.return
 
+
+    | E_c_cast(e,_) when is_c_bool_type exp.etyp ->
+      assume e man flow
+        ~fthen:(Eval.singleton (mk_true exp.erange))
+        ~felse:(Eval.singleton (mk_false exp.erange))
+      |>
+      OptionExt.return
+
+
     (* 𝔼⟦ (float)int ⟧ *)
     | E_c_cast(e, _) when exp |> etyp |> is_c_float_type &&
                           e   |> etyp |> is_c_int_type ->
