@@ -61,7 +61,7 @@ struct
     | E_binop(op,e1,e2) when is_logic_op op -> mk_binop (to_bool_expr e1) op (to_bool_expr e2) e.erange ~etyp:T_bool
     | _ -> ne e zero e.erange
 
-  let eval_bool_expr e ~ftrue ~ffalse ~fboth range man flow =
+  let rec eval_bool_expr e ~ftrue ~ffalse ~fboth range man flow =
     let ee =
       match expr_to_const e with
       | Some c -> { e with ekind = E_constant c }
@@ -71,6 +71,7 @@ struct
     | E_constant (C_bool true) -> ftrue flow
     | E_constant (C_bool false) -> ffalse flow
     | E_constant (C_top T_bool) -> fboth flow
+    | E_unop(O_log_not,ee) -> eval_bool_expr ee ~ftrue:ffalse ~ffalse:ftrue ~fboth range man flow
     | _ ->
       assume (to_bool_expr ee) man flow ~route:Below
         ~fthen:ftrue
@@ -96,14 +97,6 @@ struct
     | S_assume{ekind = E_constant (C_bool false)}
     | S_assume{ekind = E_unop(O_log_not, {ekind = E_constant (C_bool true)})} ->
       Post.return (Flow.remove T_cur flow) |>
-      OptionExt.return
-
-    | S_assume {ekind = E_unop(O_log_not, e)} ->
-      man.eval e flow >>$? fun e flow ->
-      eval_bool_expr e stmt.srange man flow
-        ~ftrue:(fun flow -> Post.return (Flow.remove T_cur flow))
-        ~ffalse:(fun flow -> Post.return flow)
-        ~fboth:(fun flow -> Post.return flow) |>
       OptionExt.return
 
     | S_assume e ->
