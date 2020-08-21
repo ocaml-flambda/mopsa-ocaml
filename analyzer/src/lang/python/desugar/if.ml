@@ -51,9 +51,10 @@ module Domain =
                       ) flow
          in
          let exp' = {exp with ekind = E_var (tmp, None)} in
-         man.eval exp' flow |>
-           Cases.add_cleaners [mk_remove_var tmp (tag_range range "cleaner")] |>
-           OptionExt.return
+         flow >>%
+         man.eval exp' |>
+         Cases.add_cleaners [mk_remove_var tmp (tag_range range "cleaner")] |>
+         OptionExt.return
 
       | _ -> None
 
@@ -64,7 +65,7 @@ module Domain =
       | S_py_if (test, sthen, selse) ->
         man.eval ~route:(Semantic "Python") (Utils.mk_builtin_call "bool" [test] range) flow |>
         bind_some (fun exp flow ->
-            man.exec (mk_if exp sthen selse range) flow |> Post.return
+            man.exec (mk_if exp sthen selse range) flow >>% Post.return
           )
         |> OptionExt.return
 

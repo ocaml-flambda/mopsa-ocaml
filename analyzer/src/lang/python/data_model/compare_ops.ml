@@ -81,8 +81,8 @@ module Domain = struct
               ~felse:(man.eval ~route:(Semantic "Python") (mk_py_bool (O_eq <> op) range))
           | _ ->
             Format.fprintf Format.str_formatter "'%s' not supported between instances of '%a' and '%a'" op_fun pp_addr_kind (akind @@ fst cls1) pp_addr_kind (akind @@ fst cls2);
-            let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow in
-            Eval.empty_singleton flow
+            man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow >>%
+            Eval.empty_singleton
             in
         let check_reverse flow =
           if not checked_reverse then

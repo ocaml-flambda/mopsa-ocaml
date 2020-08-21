@@ -66,7 +66,7 @@ struct
         let addr = match ekind eaddr with
           | E_addr a -> a
           | _ -> assert false in
-        man.exec ~route:(Semantic "Python") (mk_add eaddr range) flow |>
+        man.exec ~route:(Semantic "Python") (mk_add eaddr range) flow >>%
         Eval.singleton (mk_py_object (addr, oe) range)
       )
 
@@ -89,10 +89,10 @@ struct
                       | E_addr a -> a
                       | _ -> assert false in
                     let obj = mk_py_object (addr, None) range in
-                    man.exec ~route:(Semantic "Python") (mk_add eaddr range) flow |>
-                    man.exec ~route:(Semantic "Python") (mk_assign (mk_py_attr obj "start" range) start range) |>
-                    man.exec ~route:(Semantic "Python") (mk_assign (mk_py_attr obj "stop" range) stop range) |>
-                    man.exec ~route:(Semantic "Python") (mk_assign (mk_py_attr obj "step" range) step range) |>
+                    man.exec ~route:(Semantic "Python") (mk_add eaddr range) flow >>%
+                    man.exec ~route:(Semantic "Python") (mk_assign (mk_py_attr obj "start" range) start range) >>%
+                    man.exec ~route:(Semantic "Python") (mk_assign (mk_py_attr obj "stop" range) stop range) >>%
+                    man.exec ~route:(Semantic "Python") (mk_assign (mk_py_attr obj "step" range) step range) >>%
                     Eval.singleton obj
                   )
               )
@@ -165,7 +165,7 @@ struct
           let adjust__start = adjust_st (mk_var _start range) in
           let adjust__stop = adjust_st (mk_var _stop range) in
 
-          man.exec ~route:(Semantic "Python") (mk_block [unpack__step; unpack__start; unpack__stop; adjust__start; adjust__stop] range) flow |>
+          man.exec ~route:(Semantic "Python") (mk_block [unpack__step; unpack__start; unpack__stop; adjust__start; adjust__stop] range) flow >>%
             man.eval ~route:(Semantic "Python") (mk_expr (E_py_tuple [mk_var _start range;
                                                                             mk_var _stop range;
                                                                             mk_var _step range]) range) |>
@@ -202,10 +202,10 @@ struct
                        | E_addr a -> a
                        | _ -> assert false in
                      let obj = mk_py_object (addr, None) range in
-                     man.exec ~route:(Semantic "Python")  (mk_add eaddr range) flow |>
-                     man.exec ~route:(Semantic "Python") (mk_assign (mk_py_attr obj "start" range) start range) |>
-                     man.exec ~route:(Semantic "Python") (mk_assign (mk_py_attr obj "stop" range) stop range) |>
-                     man.exec ~route:(Semantic "Python") (mk_assign (mk_py_attr obj "step" range) step range) |>
+                     man.exec ~route:(Semantic "Python")  (mk_add eaddr range) flow >>%
+                     man.exec ~route:(Semantic "Python") (mk_assign (mk_py_attr obj "start" range) start range) >>%
+                     man.exec ~route:(Semantic "Python") (mk_assign (mk_py_attr obj "stop" range) stop range) >>%
+                     man.exec ~route:(Semantic "Python") (mk_assign (mk_py_attr obj "step" range) step range) >>%
                      Eval.singleton obj
                    )
               )
@@ -245,11 +245,11 @@ struct
                let obj = mk_py_object (addr, None) range in
                (* FIXME: replace stop by length which should be computed, see rangeobject.c:197 *)
                flow |>
-               man.exec ~route:(Semantic "Python")  (mk_add eaddr range) |>
-               man.exec ~route:(Semantic "Python") (mk_assign (mk_py_attr obj "start" range) (mk_py_attr range_obj "start" range) range) |>
-               man.exec ~route:(Semantic "Python") (mk_assign (mk_py_attr obj "stop" range) (mk_py_attr range_obj "stop" range) range) |>
-               man.exec ~route:(Semantic "Python") (mk_assign (mk_py_attr obj "step" range) (mk_py_attr range_obj "step" range) range) |>
-               man.exec ~route:(Semantic "Python") (mk_assign (mk_py_attr obj "index" range) (mk_int 0 ~typ:T_int range) range) |>
+               man.exec ~route:(Semantic "Python")  (mk_add eaddr range) >>%
+               man.exec ~route:(Semantic "Python") (mk_assign (mk_py_attr obj "start" range) (mk_py_attr range_obj "start" range) range) >>%
+               man.exec ~route:(Semantic "Python") (mk_assign (mk_py_attr obj "stop" range) (mk_py_attr range_obj "stop" range) range) >>%
+               man.exec ~route:(Semantic "Python") (mk_assign (mk_py_attr obj "step" range) (mk_py_attr range_obj "step" range) range) >>%
+               man.exec ~route:(Semantic "Python") (mk_assign (mk_py_attr obj "index" range) (mk_int 0 ~typ:T_int range) range) >>%
                (* FIXME: rangeobject:874: no stop but a len field. These are CPython fields and not attributes too *)
                Eval.singleton obj)
         )
@@ -304,8 +304,8 @@ struct
                  Cases.add_cleaners [mk_assign index (mk_binop index O_plus (mk_int 1 ~typ:T_int range) range) range]
                )
              ~felse:(fun flow ->
-                   man.exec (Utils.mk_builtin_raise "StopIteration" range) flow
-                   |> Eval.empty_singleton
+                   man.exec (Utils.mk_builtin_raise "StopIteration" range) flow >>%
+                   Eval.empty_singleton
                )
         )
       |> OptionExt.return
@@ -367,8 +367,8 @@ struct
                  (mk_nop range) range
              in
              assume (mk_binop step O_gt (mk_zero range) range) man flow
-               ~fthen:(fun flow -> man.exec (gen_stmt O_lt) flow |> Post.return)
-               ~felse:(fun flow -> man.exec (gen_stmt O_gt) flow |> Post.return)
+               ~fthen:(fun flow -> man.exec (gen_stmt O_lt) flow >>% Post.return)
+               ~felse:(fun flow -> man.exec (gen_stmt O_gt) flow >>% Post.return)
          )
        |> OptionExt.return
 

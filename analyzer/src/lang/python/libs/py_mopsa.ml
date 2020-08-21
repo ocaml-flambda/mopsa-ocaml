@@ -30,8 +30,8 @@ open Alarms
 
 
 let check man cond range flow =
-  let flow = man.exec (mk_assert cond range) flow in
-  man.eval (mk_py_none range) flow
+  man.exec (mk_assert cond range) flow >>%
+  man.eval (mk_py_none range)
 
 
 (*==========================================================================*)
@@ -79,10 +79,9 @@ module Domain =
               let tmp = mktmp () in
               let l = Utils.mk_builtin_call "int" [l] range in
               let u = Utils.mk_builtin_call "int" [u] range in
-              let flow = man.exec (mk_assign (mk_var tmp range) (mk_top T_int range) range) flow |>
-                           man.exec (mk_assume (mk_py_in (mk_var tmp range) l u range) range)
-              in
-              man.eval (mk_var tmp range) flow |>
+              man.exec (mk_assign (mk_var tmp range) (mk_top T_int range) range) flow >>%
+              man.exec (mk_assume (mk_py_in (mk_var tmp range) l u range) range) >>%
+              man.eval (mk_var tmp range) |>
               Cases.add_cleaners [mk_remove_var tmp range] |>
               OptionExt.return
 
@@ -97,10 +96,10 @@ module Domain =
               let tmp = mktmp () in
               let l = Utils.mk_builtin_call "float" [l] range in
               let u = Utils.mk_builtin_call "float" [u] range in
-              let flow = man.exec (mk_assign (mk_var tmp range) (mk_top (T_float F_DOUBLE) range) range) flow |>
-                           man.exec (mk_assume (mk_py_in (mk_var tmp range) l u range) range)
-              in
-              man.eval (mk_var tmp range) flow |> Cases.add_cleaners [mk_remove_var tmp range]
+              man.exec (mk_assign (mk_var tmp range) (mk_top (T_float F_DOUBLE) range) range) flow >>%
+              man.exec (mk_assume (mk_py_in (mk_var tmp range) l u range) range) >>%
+              man.eval (mk_var tmp range) |>
+              Cases.add_cleaners [mk_remove_var tmp range]
          end
          |> OptionExt.return
 
@@ -118,8 +117,8 @@ module Domain =
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.assert_exists", _))}, _)}, [cond], [])  ->
          let stmt = {skind = S_satisfy(cond); srange = exp.erange} in
-         let flow = man.exec stmt flow in
-         Eval.singleton (mk_py_true exp.erange) flow
+         man.exec stmt flow >>%
+         Eval.singleton (mk_py_true exp.erange)
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.assert_safe", _))}, _)}, [], [])  ->
@@ -144,7 +143,7 @@ module Domain =
              let stmt = mk_assert (cond exp.erange) exp.erange in
              let cur = Flow.get T_cur man.lattice flow in
              let flow = Flow.set T_cur man.lattice.top man.lattice flow |>
-                          man.exec stmt |>
+                          man.exec stmt |> post_to_flow man |>
                           Flow.set T_cur cur man.lattice
              in
              debug "Flow is now %a@\n" (Flow.print man.lattice.print) flow;
@@ -174,7 +173,7 @@ module Domain =
              let stmt = mk_assert (cond exp.erange) exp.erange in
              let cur = Flow.get T_cur man.lattice flow in
              let flow = Flow.set T_cur man.lattice.top man.lattice flow |>
-                        man.exec stmt |>
+                        man.exec stmt |> post_to_flow man |>
                         Flow.filter (fun tk _ -> match tk with T_py_exception _ -> false | _ -> true) |>
                         Flow.set T_cur cur man.lattice
              in
@@ -191,7 +190,7 @@ module Domain =
             | T_py_exception (exn, _, _) ->
               let flow1 = Flow.bottom ctx alarms in
               let flow1 = Flow.set T_cur env man.lattice flow1 in
-              let flow2 = man.exec (mk_assume (mk_py_isinstance exn assert_exn range) range) flow1 in
+              let flow2 = man.exec (mk_assume (mk_py_isinstance exn assert_exn range) range) flow1 |> post_to_flow man in
               if not @@ (Flow.get T_cur man.lattice flow2 |> man.lattice.is_bottom) then
                 man.lattice.join (Flow.get_unit_ctx flow2) acc_env env, exn :: acc_good_exn
               else
@@ -209,7 +208,7 @@ module Domain =
         let stmt = mk_assert (cond exp.erange) exp.erange in
         let cur = Flow.get T_cur man.lattice flow in
         let flow = Flow.set T_cur man.lattice.top man.lattice flow in
-        let flow = man.exec stmt flow |>
+        let flow = man.exec stmt flow |> post_to_flow man |>
                    Flow.filter (fun tk _ -> match tk with T_py_exception (exn, _, _) when List.mem exn good_exns -> debug "Foundit@\n"; false | _ -> true) |>
                    Flow.set T_cur cur man.lattice
         in
@@ -226,7 +225,7 @@ module Domain =
              | T_py_exception (exn, _, _) ->
                let flow1 = Flow.bottom ctx alarms |> Flow.set T_cur env man.lattice in
                debug "assert_exn = %a, exn = %a" pp_expr assert_exn pp_expr exn;
-               let flow2 = man.exec (mk_assume (mk_py_isinstance exn assert_exn range) range) flow1 in
+               let flow2 = man.exec (mk_assume (mk_py_isinstance exn assert_exn range) range) flow1 |> post_to_flow man in
                debug "flow2 = %a" (Flow.print man.lattice.print) flow2;
                if Flow.get T_cur man.lattice flow2 |> man.lattice.is_bottom then
                  Flow.set tk env man.lattice acc
@@ -245,7 +244,7 @@ module Domain =
             | T_py_exception (exn, _, _) ->
               let flow1 = Flow.bottom ctx alarms in
               let flow1 = Flow.set T_cur env man.lattice flow1 in
-              let flow2 = man.exec (mk_assume (mk_py_isinstance exn assert_exn range) range) flow1 in
+              let flow2 = man.exec (mk_assume (mk_py_isinstance exn assert_exn range) range) flow1 |> post_to_flow man in
               if not @@ (Flow.get T_cur man.lattice flow2 |> man.lattice.is_bottom) then
                 man.lattice.join (Flow.get_unit_ctx flow) acc env
               else acc
@@ -256,7 +255,7 @@ module Domain =
         let stmt = mk_assert cond range in
         let cur = Flow.get T_cur man.lattice flow in
         let flow = Flow.set T_cur man.lattice.top man.lattice flow |>
-                   man.exec stmt |> Flow.set T_cur cur man.lattice in
+                   man.exec stmt |> post_to_flow man |> Flow.set T_cur cur man.lattice in
         debug "flow = %a" (Flow.print man.lattice.print) flow;
         man.eval (mk_py_true exp.erange) flow
         |> OptionExt.return

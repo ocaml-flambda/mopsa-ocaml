@@ -81,7 +81,7 @@ module Domain =
                                     man.eval ~route:(Semantic "Python") (mk_py_top (T_float F_DOUBLE) range) flow)
                                 ~felse:(fun flow ->
                                   let msg = Format.asprintf "float() argument must be a string or a number, not '%a'" pp_expr el in
-                                    man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow |>
+                                    man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>%
                                     Eval.empty_singleton)
                                 man flow)
                           man flow
@@ -129,7 +129,7 @@ module Domain =
                 )
               ~felse:(fun flow ->
                 let msg = Format.asprintf "descriptor '%s' requires a 'float' object but received '%a'" f pp_expr e1 in
-                man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow |> Eval.empty_singleton)
+                man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>% Eval.empty_singleton)
           )
         |>  OptionExt.return
 
@@ -153,7 +153,7 @@ module Domain =
                          assume (mk_binop (if is_reverse_operator f then e1 else e2) O_eq (mk_zero range) range)
                            man flow
                            ~fthen:(fun flow ->
-                             man.exec (Utils.mk_builtin_raise_msg "ZeroDivisionError" "float division by zero" range) flow |> Eval.empty_singleton
+                             man.exec (Utils.mk_builtin_raise_msg "ZeroDivisionError" "float division by zero" range) flow >>% Eval.empty_singleton
                            )
                            ~felse:res
                        else
@@ -174,8 +174,8 @@ module Domain =
                    )
                  ~felse:(fun false_flow ->
                    let msg = Format.asprintf "descriptor '%s' requires a 'float' object but received '%a'" f pp_expr e1 in
-                   let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow in
-                   Eval.empty_singleton flow)
+                   man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow >>%
+                   Eval.empty_singleton)
              )
          |>  OptionExt.return
 

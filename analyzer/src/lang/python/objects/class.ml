@@ -44,7 +44,7 @@ struct
   let init _ _ flow = flow
 
 
-  let rec eval  exp man flow =
+  let rec eval  exp man (flow: 'a flow) =
     let range = erange exp in
     match ekind exp with
     (* 𝔼⟦ C() | isinstance(C, type) ⟧ *)
@@ -55,17 +55,18 @@ struct
       debug "class call  %a@\n@\n" pp_expr exp;
       (* FIXME: this is actually type.__call__(cls) *)
       (* Call __new__ and __init__ *)
-      let rec bind args vars flow f =
+      let rec bind args vars (flow: 'a post) f =
         match args with
         | [] ->
            f (List.rev vars) flow
         | hd :: tl ->
-           man.eval hd ~route:(Semantic "Python") flow >>$
+           flow >>%
+           man.eval hd ~route:(Semantic "Python") >>$
              (fun ehd flow ->
                  let cs = Flow.get_callstack flow in
                  let tmp = mk_range_attr_var hd.erange (Format.asprintf "%a%xd" pp_expr ecls (Hashtbl.hash_param 30 100 cs)) T_any in
                  bind tl (tmp::vars) (man.exec ~route:(Semantic "Python") (mk_assign (mk_var tmp hd.erange) ehd range) flow) f) in
-      bind args [] flow
+      bind args [] (Post.return flow)
         (fun vars flow ->
           let tmps = List.map (fun v ->
                          match vkind v with
@@ -73,7 +74,8 @@ struct
                          | _ -> assert false) vars in
           let new_call = mk_py_kall (mk_py_object_attr cls "__new__" range) ((mk_py_object cls range)
                                                                              :: tmps) kwargs range in
-          man.eval ~route:(Semantic "Python") new_call flow |>
+          flow >>%
+            man.eval ~route:(Semantic "Python") new_call |>
             Cases.add_cleaners (List.map (fun x -> match ekind x with
                                                   | E_var (x, _) -> mk_remove_var x range
                                                   | _ -> assert false) tmps) >>$
@@ -89,8 +91,8 @@ struct
                             ~fthen:(fun flow -> man.eval  ~route:(Semantic "Python") inst flow)
                             ~felse:(fun flow ->
                               let msg = Format.asprintf "__init__() should return None, not %a" pp_expr r in
-                              let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow in
-                              Eval.empty_singleton flow
+                              man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>%
+                              Eval.empty_singleton
                             )
                             man flow
                   ))
@@ -118,13 +120,13 @@ struct
           if Libs.Py_mopsa.is_builtin_clsdec cls then
             let name = Libs.Py_mopsa.builtin_clsdec_name cls in
             create_builtin_class (C_builtin name) name cls bases' range;
-            man.exec cls.py_cls_body flow |>
+            man.exec cls.py_cls_body flow >>%
             Post.return
           else
           if Libs.Py_mopsa.is_unsupported_clsdec cls then
             let name = get_orig_vname cls.py_cls_var in
             create_builtin_class (C_unsupported name) name cls bases' range;
-            man.exec cls.py_cls_body flow |>
+            man.exec cls.py_cls_body flow >>%
             Post.return
           else
             try
@@ -138,9 +140,9 @@ struct
               eval_alloc man (A_py_class (C_user cls, mro)) stmt.srange flow |>
               bind_some (fun addr flow ->
                   let obj = (addr, None) in
-                  let flow = man.exec (mk_assign (mk_var cls.py_cls_var range) (mk_py_object obj range) range) flow in
+                  man.exec (mk_assign (mk_var cls.py_cls_var range) (mk_py_object obj range) range) flow >>% fun flow ->
                   debug "Body of class is %a@\n" pp_stmt cls.py_cls_body;
-                  let flow = man.exec cls.py_cls_body flow in
+                  man.exec cls.py_cls_body flow >>% fun flow ->
                   let parent = List.hd @@ List.tl mro in
                   man.eval (mk_py_call (mk_py_object_attr parent "__init_subclass__" range) [mk_py_object obj range] range) flow >>$
                     (fun _ flow -> Post.return flow)
@@ -148,7 +150,7 @@ struct
             with C3_lin_failure ->
               Exceptions.warn "C3 linearization failure during class declaration %a@\n" pp_var cls.py_cls_var;
               man.exec (Utils.mk_builtin_raise_msg "TypeError" "Cannot create a consistent method resolution order (MRO)" range) flow
-              |> Post.return
+              >>% Post.return
         )
       |> OptionExt.return
 

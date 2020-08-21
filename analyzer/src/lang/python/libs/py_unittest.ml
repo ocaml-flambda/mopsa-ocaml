@@ -92,7 +92,7 @@ module Domain =
            (cls_decl.py_cls_var.vname ^ "'s tests", stmt) :: other_tests
          ) [] test_cases in
        debug "|tests| = %d" (List.length tests);
-       man.exec (mk_stmt (Universal.Ast.S_unit_tests tests) range) flow |>
+       man.exec (mk_stmt (Universal.Ast.S_unit_tests tests) range) flow >>%
        man.eval (mk_py_none range)
        |> OptionExt.return
 

@@ -119,6 +119,7 @@ struct
       let in_flow = flow in
       let in_flow_cur, in_flow_other = split_cur_from_others man in_flow in
       let params, locals, body, in_flow_cur = init_fun_params func args range man in_flow_cur in
+      let in_flow_cur = post_to_flow man in_flow_cur in
       begin match find_signature man func.fun_uniq_name in_flow_cur with
         | None ->
            let ret = Common.mk_return_var exp in

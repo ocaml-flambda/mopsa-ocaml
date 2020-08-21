@@ -137,7 +137,7 @@ struct
              mk_expand_var (mk_addr_attr a attr T_any) (addrs_attrs attr) range :: stmts
            ) attrs [] in
        set_env T_cur ncur man flow |>
-         man.exec (mk_block expand_stmts range) |> Post.return |> OptionExt.return
+         man.exec (mk_block expand_stmts range) |> OptionExt.return
 
 
     | S_fold ({ekind = E_addr ({addr_kind = A_py_instance _} as a)}, addrs) ->
@@ -156,7 +156,7 @@ struct
              | _ -> assert false
            ) (old_a, cur, []) addrs in
        set_env T_cur (add a newa ncur) man flow |>
-         man.exec (mk_block fold_stmts range) |> Post.return |> OptionExt.return
+         man.exec (mk_block fold_stmts range) |> OptionExt.return
 
 
     | S_rename ({ekind = E_addr ({addr_kind = A_py_instance _ } as a)}, {ekind = E_addr a'}) ->
@@ -178,7 +178,6 @@ struct
         add a' new_va' in
       let flow = set_env T_cur ncur man flow in
       man.exec to_rename_stmt flow |>
-      Post.return |>
         OptionExt.return
 
     | S_invalidate {ekind = E_addr ({addr_kind = A_py_instance _} as a)}
@@ -191,7 +190,7 @@ struct
                 mk_remove_var (mk_addr_attr a attr T_any) range :: removes) old_a []) range in
        let ncur = remove a cur in
        let flow = set_env T_cur ncur man flow in
-       man.exec ~route:(Semantic "Python") to_remove_stmt flow |> Post.return |> OptionExt.return
+       man.exec ~route:(Semantic "Python") to_remove_stmt flow |> OptionExt.return
 
     | S_add ({ekind = E_addr a}) ->
       debug "S_add";
@@ -362,9 +361,9 @@ struct
       | E_py_object ({addr_kind = A_py_class (C_user c, b)}, _ ), _ when List.exists (fun v -> get_orig_vname v = attr) c.py_cls_static_attributes ->
          let var = List.find (fun v -> get_orig_vname v = attr) c.py_cls_static_attributes in
          let () = debug "using c.py_cls_static_attributes with var = %a" pp_var var in
-         man.exec (mk_assign (mk_var var range) rval range) flow
-         |> man.eval ~route:(Semantic "Python") (mk_py_none range)
-         |> OptionExt.return
+         man.exec (mk_assign (mk_var var range) rval range) flow >>%
+         man.eval ~route:(Semantic "Python") (mk_py_none range) |>
+         OptionExt.return
       | E_py_object ({addr_kind = A_py_class (_)}, _ ), E_py_object (arval, _) ->
          Exceptions.panic_at range "Attr assignment on non user-defined classes not supported yet.@\n"
       | E_py_object (alval, _), _ ->
@@ -381,9 +380,9 @@ struct
          let flow = set_env T_cur cur man flow in
          (* now we create an attribute var *)
          let attr_var = mk_addr_attr alval attr T_any in
-         man.exec ~route:(Semantic "Python") (mk_assign (mk_var attr_var range) rval range) flow
-         |> man.eval ~route:(Semantic "Python") (mk_py_none range)
-         |> OptionExt.return
+         man.exec ~route:(Semantic "Python") (mk_assign (mk_var attr_var range) rval range) flow >>%
+         man.eval ~route:(Semantic "Python") (mk_py_none range) |>
+         OptionExt.return
 
         | _ -> assert false
       end

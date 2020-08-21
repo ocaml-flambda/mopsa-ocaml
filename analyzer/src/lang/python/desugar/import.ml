@@ -58,7 +58,7 @@ module Domain =
             | None -> vroot
             | Some v -> v
           in
-          man.exec (mk_assign (mk_var v range) (mk_py_object obj range) range) flow |>
+          man.exec (mk_assign (mk_var v range) (mk_py_object obj range) range) flow >>%
           Post.return |>
           OptionExt.return
         with Module_not_found m ->
@@ -66,7 +66,7 @@ module Domain =
             (Utils.mk_builtin_raise_msg "ModuleNotFoundError" (
                  Format.asprintf "No module named '%s'" m
                ) range)
-            flow |> Post.return |> OptionExt.return
+            flow >>% Post.return |> OptionExt.return
         end
 
       | S_py_import_from(modul, name, _, vmodul) ->
@@ -93,7 +93,7 @@ module Domain =
                 let stmt = mk_assign (mk_var vmodul range) (mk_var v range) range in
                 man.exec stmt flow
             end
-            |> Post.return |> OptionExt.return
+            >>% Post.return |> OptionExt.return
           | _ -> assert false
         else
          let e =
@@ -112,7 +112,7 @@ module Domain =
          in
          let stmt = mk_assign (mk_var vmodul range) e range in
          let () = debug "assign %a!" pp_stmt stmt in
-         man.exec stmt flow |>
+         man.exec stmt flow >>%
          Post.return |>
          OptionExt.return
 
@@ -164,7 +164,7 @@ module Domain =
                   (addr, None), body, false, flow in
               let flow' = man.exec body flow in
               Hashtbl.add imported_modules name ((a, e), is_stub);
-              (a, e), flow', is_stub
+              (a, e), post_to_flow man flow', is_stub
             end
         in
         (addr, expr), flow, is_stub
@@ -263,7 +263,7 @@ module Domain =
         | S_py_import (s, _, _)
         | S_py_import_from (s, _, _, _) ->
           debug "hum, maybe we should import %s first" s;
-          {stmt with skind = S_block ([], [])}, globals, man.exec stmt flow
+          {stmt with skind = S_block ([], [])}, globals, man.exec stmt flow |> post_to_flow man
 
 
         | S_py_annot _

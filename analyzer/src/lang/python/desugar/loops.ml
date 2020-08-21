@@ -51,7 +51,7 @@ module Domain =
                body
                range
             ) flow
-                  |> Post.return
+                  >>% Post.return
                   |> OptionExt.return in
         Debug.debug ~channel:"profiling" "while loop at range %a: %.4f" pp_range range (Timing.stop start);
         res
@@ -65,8 +65,8 @@ module Domain =
                (Utils.mk_builtin_call "bool" [test] range)
                body
                range
-            ) flow in
-        let res = Flow.join man.lattice res (man.exec orelse res) in
+            ) flow |> post_to_flow man in
+        let res = Flow.join man.lattice res (man.exec orelse res |> post_to_flow man) in
         Debug.debug ~channel:"profiling" "while loop at range %a: %.4f" pp_range range (Timing.stop start);
         res |> Post.return |> OptionExt.return
 
@@ -116,7 +116,7 @@ module Domain =
                    inner_block
                    range
                in
-               man.exec stmt flow |>
+               man.exec stmt flow >>%
                  Post.return
              )
          in
@@ -129,7 +129,7 @@ module Domain =
              | _ -> true ->
                 man.eval iterable flow
                 |> bind_some
-                     (fun iterable flow -> man.exec {stmt with skind = S_py_for(target, iterable, body, orelse)} flow |> Post.return)
+                     (fun iterable flow -> man.exec {stmt with skind = S_py_for(target, iterable, body, orelse)} flow >>% Post.return)
                 |> OptionExt.return
 
       | _ -> None

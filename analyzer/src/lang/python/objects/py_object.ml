@@ -73,7 +73,7 @@ struct
           match args with
           | [] ->
             debug "Error during creation of a new instance@\n";
-            man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton
+            man.exec (Utils.mk_builtin_raise "TypeError" range) flow >>% Eval.empty_singleton
           | cls :: tl ->
             let c = fst @@ object_of_expr cls in
             man.eval  ~route:(Semantic "U/Heap") (mk_alloc_addr (A_py_instance c) range) flow >>$
@@ -81,7 +81,7 @@ struct
                 let addr = match ekind eaddr with
                   | E_addr a -> a
                   | _ -> assert false in
-                man.exec ~route:(Semantic "Python") (mk_add eaddr range) flow |>
+                man.exec ~route:(Semantic "Python") (mk_add eaddr range) flow >>%
                 Eval.singleton (mk_py_object (addr, None) range)
               )
         )
@@ -124,7 +124,7 @@ struct
                         Eval.singleton meta_attribute flow
                       | None, None ->
                          let msg = Format.asprintf "type object '%a' has no attribute '%s'" pp_expr ptype (match ekind attribute with | E_constant (C_string attr) -> attr | _ -> assert false) in
-                        man.exec (Utils.mk_builtin_raise_msg "AttributeError" msg range) flow |>
+                        man.exec (Utils.mk_builtin_raise_msg "AttributeError" msg range) flow >>%
                         Eval.empty_singleton
                     )
                   range mro_ptype flow
@@ -203,7 +203,7 @@ struct
                    | E_constant (C_string attr) -> attr
                    | E_py_object ({addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "str", _)}}, Some {ekind = E_constant (C_string attr)}) -> attr
                    | _ -> assert false) in
-                man.exec (Utils.mk_builtin_raise_msg "AttributeError" msg range) flow |>
+                man.exec (Utils.mk_builtin_raise_msg "AttributeError" msg range) flow >>%
                 Eval.empty_singleton)
               )
             range mro flow

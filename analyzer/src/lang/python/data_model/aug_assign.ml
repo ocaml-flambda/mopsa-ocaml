@@ -59,12 +59,12 @@ module Domain = struct
                      man
                      ~fthen:(fun true_flow ->
                        let stmt = mk_assign x0 (mk_py_call (mk_py_object_attr cls op_fun range) [x; e] range) range in
-                       man.exec stmt true_flow |> Post.return
+                       man.exec stmt true_flow >>% Post.return
                      )
                      ~felse:(fun false_flow ->
                        debug "Fallback on default assignment@\n";
                        let default_assign = mk_assign x0 (mk_binop x op e range) range in
-                       man.exec default_assign flow |> Post.return
+                       man.exec default_assign flow >>% Post.return
                      )
                      flow
                  )

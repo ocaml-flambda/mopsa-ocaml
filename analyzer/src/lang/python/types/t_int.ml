@@ -159,8 +159,8 @@ struct
                 )
               ~felse:(fun false_flow ->
                   Format.fprintf Format.str_formatter "descriptor '%s' requires a 'int' object but received '%a'" f pp_expr e1;
-                  let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) false_flow in
-                  Eval.empty_singleton flow)
+                  man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) false_flow >>%
+                  Eval.empty_singleton)
               man flow
         )
       |>  OptionExt.return
@@ -183,7 +183,7 @@ struct
                            (mk_binop (if is_reverse_operator f then e1 else e2) O_eq (mk_zero range) range)
                            man true_flow
                            ~fthen:(fun flow ->
-                             man.exec (Utils.mk_builtin_raise_msg "ZeroDivisionError" "division by zero" range) flow |> Eval.empty_singleton
+                             man.exec (Utils.mk_builtin_raise_msg "ZeroDivisionError" "division by zero" range) flow >>% Eval.empty_singleton
                            )
                            ~felse:(fun flow ->
                              if is_reverse_operator f then
@@ -205,7 +205,7 @@ struct
                          if is_arith_div_fun "int" f then
                            assume (mk_binop (if is_reverse_operator f then e1 else e2) O_eq (mk_zero range) range) man flow
                              ~fthen:(fun flow ->
-                               man.exec (Utils.mk_builtin_raise_msg "ZeroDivisionError" "integer division or modulo by zero" range) flow |> Eval.empty_singleton
+                               man.exec (Utils.mk_builtin_raise_msg "ZeroDivisionError" "integer division or modulo by zero" range) flow >>% Eval.empty_singleton
                              )
                              ~felse:res
                          else res flow
@@ -218,8 +218,8 @@ struct
               )
             ~felse:(fun false_flow ->
                 Format.fprintf Format.str_formatter "descriptor '%s' requires a 'int' object but received '%a'" f pp_expr e1;
-                let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) false_flow in
-                Eval.empty_singleton flow)
+                man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) false_flow >>%
+                Eval.empty_singleton)
             man flow
         )
       |>  OptionExt.return
@@ -275,7 +275,7 @@ struct
             man.eval ~route:(Semantic "U/Float") (mk_unop O_cast  ~etyp:(T_float F_DOUBLE) (Utils.extract_oobject @@ List.hd e) range) flow >>$
  (fun e flow -> Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_float, Some e) range) flow))
           ~felse:(fun flow ->
-            man.exec (Utils.mk_builtin_raise_msg "OverflowError" "int too large to convert to float" range) flow |> Eval.empty_singleton)
+            man.exec (Utils.mk_builtin_raise_msg "OverflowError" "int too large to convert to float" range) flow >>% Eval.empty_singleton)
         ) |> OptionExt.return
     | _ -> None
 

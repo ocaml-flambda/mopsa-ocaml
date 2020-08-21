@@ -125,8 +125,9 @@ module Domain =
                                  (mk_block [] range)
                                )) range
                              in
-                             let flow = man.exec stmt true_flow in
-                             man.eval (mk_var v range) flow |> Cases.add_cleaners [mk_remove_var v range]
+                             man.exec stmt true_flow >>%
+                             man.eval (mk_var v range) |>
+                             Cases.add_cleaners [mk_remove_var v range]
                            )
                          ~felse:(fun false_flow ->
                              assume
@@ -136,8 +137,8 @@ module Domain =
                                  )
                                ~felse:(fun false_flow ->
                                  let msg = Format.asprintf "argument of type '%a' is not iterable" pp_addr_kind (akind @@ fst @@ object_of_expr cls2) in
-                                 let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow in
-                                 Eval.empty_singleton flow
+                                 man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow >>%
+                                 Eval.empty_singleton
                                )
                                man false_flow
                            )

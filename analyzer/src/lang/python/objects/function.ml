@@ -158,7 +158,7 @@ module Domain =
           (fun eaddr_list flow ->
             let addr_func = addr_of_expr eaddr_list in
             let func_var = var_of_addr addr_func in
-            man.exec (mk_assign (mk_var func_var range) func range) flow |>
+            man.exec (mk_assign (mk_var func_var range) func range) flow >>%
             Eval.singleton (mk_py_object (addr_func, None) range)
           )
         |> OptionExt.return
@@ -213,7 +213,7 @@ module Domain =
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("property.__init__", _))}, _)}, [self; getter; setter; deleter; doc], []) ->
         let assignments = [("fget", getter); ("fset", setter); ("fdel", deleter); ("__doc__", doc)] in
-        man.exec (mk_block (List.map (fun (field, arg) -> mk_assign (mk_py_attr self field range) arg range)  assignments) range) flow |>
+        man.exec (mk_block (List.map (fun (field, arg) -> mk_assign (mk_py_attr self field range) arg range)  assignments) range) flow >>%
         man.eval ~route:(Semantic "Python") (mk_py_none range) |>
         OptionExt.return
 
@@ -244,20 +244,16 @@ module Domain =
             debug "Too few arguments!@\n";
             let missing = List.length nondefault_args - List.length pyfundec.py_func_parameters in
             let msg = Format.asprintf "%s() missing %d required positional argument%s" pyfundec.py_func_var.vname missing (if missing > 1 then "s" else "") in
-            let flow =
-              man.exec (Utils.mk_builtin_raise_msg "TypeError" msg exp.erange) flow
-            in
-            Eval.empty_singleton flow
+            man.exec (Utils.mk_builtin_raise_msg "TypeError" msg exp.erange) flow >>%
+            Eval.empty_singleton
           )
         else
         if List.length args > (List.length pyfundec.py_func_parameters) then
           (
             debug "Too many arguments!@\n";
             let msg = Format.asprintf "%s() takes %d positional arguments but %d were given" pyfundec.py_func_var.vname (List.length pyfundec.py_func_parameters) (List.length args) in
-            let flow =
-              man.exec (Utils.mk_builtin_raise_msg "TypeError" msg exp.erange) flow
-            in
-            Eval.empty_singleton flow
+            man.exec (Utils.mk_builtin_raise_msg "TypeError" msg exp.erange) flow >>%
+            Eval.empty_singleton
           )
         else
           (
@@ -304,16 +300,14 @@ module Domain =
               (
                 debug "The number of arguments is not good@\n";
                 let msg = Format.asprintf "%s() has too few arguments" pyfundec.py_func_var.vname in
-                let flow =
-                  man.exec (Utils.mk_builtin_raise_msg "TypeError" msg exp.erange) flow
-                in
-                Eval.empty_singleton flow
+                man.exec (Utils.mk_builtin_raise_msg "TypeError" msg exp.erange) flow >>%
+                Eval.empty_singleton
               )
             else
               (* Initialize local variables to undefined value and give the call to {!Universal} *)
               (
                 let flow =
-                  if pyfundec.py_func_locals = [] then flow else
+                  if pyfundec.py_func_locals = [] then Post.return flow else
                     man.exec
                       (mk_block (List.mapi (fun i v ->
                            let e =
@@ -336,8 +330,8 @@ module Domain =
                   fun_return_var = pyfundec.py_func_ret_var;
                   fun_range = pyfundec.py_func_range;
                 } in
-
-                man.eval (mk_call fundec args exp.erange) flow >>$
+                flow >>%
+                man.eval (mk_call fundec args exp.erange) >>$
                   (fun res flow -> man.eval res flow)
               )
           )
@@ -383,7 +377,7 @@ module Domain =
                   (List.fold_left (fun acc decor -> mk_py_call decor [acc] range) (mk_py_object obj range) (decors_to_call func))
                   range
                ) flow
-             |> Post.return
+             >>% Post.return
            )
          |> OptionExt.return
       | _ ->

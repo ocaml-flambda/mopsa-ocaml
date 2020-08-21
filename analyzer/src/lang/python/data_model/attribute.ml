@@ -43,7 +43,7 @@ module Domain =
         match mro with
         | [] ->
            let msg = Format.asprintf "'%s' object has no attribute '%s'" c attr in
-           man.exec (Utils.mk_builtin_raise_msg "AttributeError" msg range) flow |>
+           man.exec (Utils.mk_builtin_raise_msg "AttributeError" msg range) flow >>%
              Eval.empty_singleton
         | cls::tl ->
            if is_builtin_attribute cls attr then

@@ -107,9 +107,10 @@ module Domain =
              (mk_block [] srange)
              srange
          in
-         man.exec stmt flow |>
-         man.exec (mk_remove_var tmpexn srange) |>
-         man.exec (mk_remove_var tmpret srange) |>
+         flow >>%
+         man.exec stmt >>%
+         man.exec (mk_remove_var tmpexn srange) >>%
+         man.exec (mk_remove_var tmpret srange) >>%
          Post.return |>
          OptionExt.return
 

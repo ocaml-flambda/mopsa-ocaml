@@ -59,8 +59,8 @@ struct
                   )
                 ~felse:(fun false_flow ->
                   let msg = Format.asprintf "'%a' object is not subscriptable" pp_addr_kind (akind @@ fst @@ object_of_expr cls) in
-                    let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow in
-                    Eval.empty_singleton flow
+                  man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow >>%
+                    Eval.empty_singleton
                   )
             )
         )
@@ -84,8 +84,8 @@ struct
                   )
                 ~felse:(fun false_flow ->
                   let msg = Format.asprintf "'%a' object is not subscriptable" pp_addr_kind (akind @@ fst @@ object_of_expr cls) in
-                    let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow in
-                    Eval.empty_singleton flow
+                  man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow >>%
+                    Eval.empty_singleton
                   )
             )
         )
@@ -110,11 +110,11 @@ struct
                  ~fthen:(fun true_flow ->
                    (* we need to keep the unevaluated index here to improve the precision *)
                      let exp' = mk_py_call (mk_py_attr cls "__setitem__" range) [obj; index; exp] range in
-                     man.exec {stmt with skind = S_expression(exp')} true_flow |> Post.return
+                     man.exec {stmt with skind = S_expression(exp')} true_flow >>% Post.return
                    )
                  ~felse:(fun false_flow ->
                    let msg = Format.asprintf "'%a' object does not support item assignment" pp_addr_kind (akind @@ fst @@ object_of_expr cls) in
-                   man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow |> Post.return
+                   man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow >>% Post.return
                    )
              )
         )
@@ -133,12 +133,12 @@ struct
                     man.eval ~route:(Semantic "Python") (Utils.mk_builtin_call "slice" [start; stop; step] range) true_flow |>
                     bind_some (fun slice flow ->
                         let exp' = mk_py_call (mk_py_attr cls "__setitem__" range) [eobj; slice; exp] range in
-                        man.exec {stmt with skind = S_expression(exp')} flow |> Post.return
+                        man.exec {stmt with skind = S_expression(exp')} flow >>% Post.return
                       )
                   )
                 ~felse:(fun false_flow ->
                   let msg = Format.asprintf "'%a' object does not support item assignment" pp_addr_kind (akind @@ fst @@ object_of_expr cls) in
-                  man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow |> Post.return
+                  man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow >>% Post.return
                   )
             )
         )

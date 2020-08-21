@@ -44,9 +44,9 @@ module Domain =
       | S_py_assert (e, msg)->
          Flow.join
            man.lattice
-           (man.exec (mk_assume e range) flow)
-           (man.exec (mk_assume (mk_py_not e range) range) flow |>
-              man.exec (Utils.mk_builtin_raise "AssertionError" range))
+           (man.exec (mk_assume e range) flow |> post_to_flow man)
+           (man.exec (mk_assume (mk_py_not e range) range) flow >>%
+              man.exec (Utils.mk_builtin_raise "AssertionError" range) |> post_to_flow man)
          |> Post.return
          |> OptionExt.return
 

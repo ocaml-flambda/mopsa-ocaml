@@ -201,8 +201,8 @@ struct
                       mk_expr (E_py_check_annot (arg, nant)) range
                     | _ ->
                       mk_expr (E_py_check_annot (arg, ant)) range in
-                  man.exec (mk_assume e range) flow_in,
-                  Flow.join man.lattice (man.exec (mk_assume (mk_py_not e range) range) flow_in) flow_notin
+                  post_to_flow man (man.exec (mk_assume e range) flow_in),
+                  Flow.join man.lattice (post_to_flow man (man.exec (mk_assume (mk_py_not e range) range) flow_in)) flow_notin
               )  (flow, Flow.bottom_from flow) in_args in_types in
           let apply_sig flow signature =
             debug "[%a] apply_sig %a" pp_var pyannot.py_funca_var pp_py_func_sig signature;
@@ -272,7 +272,7 @@ struct
                      | _ -> VisitParts expr)
                   (fun stmt -> VisitParts stmt)
                   e in
-              man.exec (mk_add_var ret_var range) flow_ok |>
+              man.exec (mk_add_var ret_var range) flow_ok >>%
               man.exec (mk_stmt (S_py_annot (mk_var ret_var range,
                                              mk_expr (E_py_annot annot_out) range))
                           range), flow_notok, new_typevars, ret_var
@@ -282,7 +282,7 @@ struct
           let msg = Format.asprintf "%a(%a) does not match any signature provided in the stubs" pp_var pyannot.py_funca_var (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ") pp_expr) args in
           Eval.join_list ~empty:(
             fun () ->
-              man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow |> Eval.empty_singleton)
+              man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>% Eval.empty_singleton)
             (let evals, remaining =
                (List.fold_left (fun (acc, remaining_flow) sign ->
                     let is_noreturn =
@@ -291,6 +291,7 @@ struct
                       | _ -> false in
                     try
                       let nflow, flow_notok, ntypevars, ret_var = apply_sig remaining_flow sign in
+                      let nflow = post_to_flow man nflow in
                       debug "nflow after apply_sig = %a@\n" (Flow.print man.lattice.print) nflow;
                       let cur = get_env T_cur man nflow in
                       let ncur = TVMap.filter (fun tyvar _ -> not (TVMap.mem tyvar ntypevars && match tyvar with | Global _ -> true | Class _ -> false)) cur in
@@ -299,7 +300,7 @@ struct
                       if Flow.is_bottom man.lattice nflow then (acc, flow_notok)
                       else
                         let raised_exn = List.map (fun exn ->
-                            man.exec (mk_stmt (S_py_raise (Some exn)) range) flow |>
+                            man.exec (mk_stmt (S_py_raise (Some exn)) range) flow >>%
                             Eval.empty_singleton
                           ) sign.py_funcs_exceptions in
                         let () = debug "raised_exn %d" (List.length sign.py_funcs_exceptions) in
@@ -312,7 +313,7 @@ struct
                     with Invalid_sig ->
                       (acc, remaining_flow)
                   ) ([], flow) sigs) in
-             (man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) remaining |> Eval.empty_singleton) :: evals)
+             (man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) remaining >>% Eval.empty_singleton) :: evals)
         )
       |> OptionExt.return
 
@@ -376,7 +377,7 @@ struct
               match ekind ee with
               | E_py_object (addr, _) ->
                 debug "coucou";
-                man.exec (mk_stmt (S_py_annot (mk_var (mk_addr_attr addr "typ" T_any) range, (mk_expr (E_py_annot i) range))) range) flow |>
+                man.exec (mk_stmt (S_py_annot (mk_var (mk_addr_attr addr "typ" T_any) range, (mk_expr (E_py_annot i) range))) range) flow >>%
                 Eval.singleton ee
               | _ -> assert false
             )
@@ -659,7 +660,7 @@ struct
                   man.exec (mk_assume {exp with ekind = E_py_check_annot(e, typ)} range) flow :: flows_caught
                 ) types [] in
               Eval.join_list ~empty:(fun () -> man.eval (mk_py_false range) flow)
-                (List.map (man.eval (mk_py_true range)) flows_ok) |> OptionExt.return
+                (List.map (fun f -> f >>% man.eval (mk_py_true range)) flows_ok) |> OptionExt.return
             | None -> assert false
           end
 
@@ -681,7 +682,7 @@ struct
                 man.exec (mk_assume {exp with ekind = E_py_check_annot (e, typ)} range) flow :: flows_caught)
               [] types in
           Eval.join_list ~empty:(fun () -> man.eval (mk_py_false range) flow)
-            (List.map (man.eval (mk_py_true range)) flows_ok) |> OptionExt.return
+            (List.map (fun f -> f >>% man.eval (mk_py_true range)) flows_ok) |> OptionExt.return
 
         | _ -> Exceptions.panic_at range "E_py_check_annot: %a not supported" pp_expr annot
       end

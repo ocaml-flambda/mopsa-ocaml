@@ -76,7 +76,7 @@ module Domain =
          let stmt, tmp_acc = unfold_comprehension [expr] comprehensions (mk_expr (E_py_list []) (tag_range range "acc")) listappend range in
          let acc_var = mk_var tmp_acc range in
          debug "Rewriting %a into %a@\n" pp_expr exp pp_stmt stmt;
-         man.exec stmt flow |>
+         man.exec stmt flow >>%
            man.eval acc_var |>
            Cases.add_cleaners [mk_remove_var tmp_acc range] |>
            OptionExt.return
@@ -88,7 +88,7 @@ module Domain =
          let stmt, tmp_acc = unfold_comprehension [expr] comprehensions emptyset setadd range in
          let acc_var = mk_var tmp_acc range in
          debug "Rewriting %a into %a@\n" pp_expr exp pp_stmt stmt;
-         man.exec stmt flow |>
+         man.exec stmt flow >>%
            man.eval acc_var |>
            Cases.add_cleaners [mk_remove_var tmp_acc range] |>
            OptionExt.return
@@ -100,7 +100,7 @@ module Domain =
          let stmt, tmp_acc = unfold_comprehension (key::value::[]) comprehensions emptydict dictset range in
          let acc_var = mk_var tmp_acc range in
          debug "Rewriting %a into %a@\n" pp_expr exp pp_stmt stmt;
-         man.exec stmt flow |>
+         man.exec stmt flow >>%
            man.eval acc_var |>
            Cases.add_cleaners [mk_remove_var tmp_acc range] |>
            OptionExt.return

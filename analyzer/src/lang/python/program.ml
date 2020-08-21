@@ -47,7 +47,7 @@ struct
 
   let eval _ _ _ = None
 
-  let init_globals man globals range flow =
+  let init_globals man globals range (flow: 'a flow) : 'a post =
     (* Initialize global variables with C_py_undefined constant *)
     let stmt =
       mk_block
@@ -62,7 +62,7 @@ struct
         )
         range
     in
-    let flow1 = man.exec stmt flow in
+    man.exec stmt flow >>% fun flow1 ->
 
     (** Initialize special variable __name__ *)
     let v = Frontend.from_var {name="__name__"; uid=140} in
@@ -73,7 +73,7 @@ struct
         (mk_constant (Universal.Ast.C_string "__main__") ~etyp:Universal.Ast.T_string range)
         range
     in
-    let flow2 = man.exec stmt flow1 in
+    man.exec stmt flow1 >>% fun flow2 ->
 
     (** Initialize special variable __file__ *)
     let v = Frontend.from_var {name="__file__"; uid=141} in
@@ -84,9 +84,9 @@ struct
           (mk_constant (Universal.Ast.C_string (get_range_file range)) ~etyp:Universal.Ast.T_string range)
           range
     in
-    let flow3 = man.exec stmt flow2 in
+    man.exec stmt flow2 >>% fun flow3 ->
 
-    flow3
+    Post.return flow3
 
 
   let get_function_name fundec = get_orig_vname fundec.py_func_var
@@ -120,7 +120,7 @@ struct
     tag_range prog_range "unprecise exception range"
 
   let collect_uncaught_exceptions man prog_range flow =
-    Flow.fold (fun acc tk env ->
+    Post.return @@ Flow.fold (fun acc tk env ->
         match tk with
         | Alarms.T_py_exception (e, s, k) ->
           let a = Alarms.A_py_uncaught_exception_msg (e,s) in
@@ -137,31 +137,30 @@ struct
       ) flow flow
 
 
-  let exec stmt man flow  =
+  let exec stmt man (flow: 'a flow) : 'a post option  =
     match skind stmt with
     | S_program ({ prog_kind = Py_program(_, globals, body); prog_range }, _)
       when !Universal.Iterators.Unittest.unittest_flag ->
       (* Initialize global variables *)
-      let flow1 = init_globals man  globals (srange stmt) flow in
+       OptionExt.return begin
+         init_globals man  globals (srange stmt) flow >>% fun flow1 ->
 
-      (* Execute the body *)
-      let flow2 = man.exec body flow1 in
+         (* Execute the body *)
+         man.exec body flow1 >>% fun flow2 ->
 
-      (* Collect test functions *)
-      let tests = get_test_functions body in
-      let stmt = mk_py_unit_tests tests (srange stmt) in
-      man.exec stmt flow2 |>
-      collect_uncaught_exceptions man prog_range |>
-      Post.return |>
-      OptionExt.return
+         (* Collect test functions *)
+         let tests = get_test_functions body in
+         let stmt = mk_py_unit_tests tests (srange stmt) in
+         man.exec stmt flow2 >>%
+         collect_uncaught_exceptions man prog_range
+         end
 
     | S_program ({ prog_kind = Py_program(_, globals, body); prog_range }, _) ->
       (* Initialize global variables *)
-      init_globals man globals (srange stmt) flow |>
+      init_globals man globals (srange stmt) flow >>%
       (* Execute the body *)
-      man.exec body |>
+      man.exec body >>%
       collect_uncaught_exceptions man prog_range |>
-      Post.return |>
       OptionExt.return
 
     | _ -> None
