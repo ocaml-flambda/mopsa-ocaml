@@ -54,6 +54,12 @@ struct
     in
     OptionExt.return post'
 
+  let eval exp man flow =
+    let evl = man.eval exp flow ~route:(BelowOf name) in
+    (* Collapse partitions with the same expression *)
+    let evl' = Cases.remove_duplicates (Compare.option compare_expr) man.lattice evl in
+    OptionExt.return evl'
+
 end
 
 let () =
