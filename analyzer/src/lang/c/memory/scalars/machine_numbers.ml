@@ -27,7 +27,6 @@ open Universal.Ast
 open Stubs.Ast
 open Ast
 open Common.Alarms
-open Common.Points_to
 module Itv = Universal.Numeric.Values.Intervals.Integer.Value
 
 
@@ -366,7 +365,8 @@ struct
       OptionExt.return
 
 
-    | E_c_cast(e,_) when is_c_bool_type exp.etyp ->
+    | E_c_cast(e,_) when is_c_bool_type exp.etyp &&
+                         is_c_int_type e.etyp ->
       assume e man flow
         ~fthen:(Eval.singleton (mk_true exp.erange))
         ~felse:(Eval.singleton (mk_false exp.erange))
@@ -398,19 +398,6 @@ struct
       Eval.singleton exp' flow |>
       OptionExt.return
 
-    (* 𝔼⟦ (int)ptr ⟧ *)
-    | E_c_cast(p, _) when exp |> etyp |> is_c_int_type &&
-                          p   |> etyp |> is_c_pointer_type ->
-      resolve_pointer p man flow >>$? fun pt flow ->
-      let exp' =
-        match pt with
-        | P_null -> mk_zero exp.erange
-        | _ ->
-          let l,u = rangeof exp.etyp in
-          mk_z_interval l u exp.erange
-      in
-      Eval.singleton exp' flow |>
-      OptionExt.return
 
     (* 𝔼⟦ (int)int ⟧ *)
     | E_c_cast(e, _) when exp |> etyp |> is_c_int_type &&

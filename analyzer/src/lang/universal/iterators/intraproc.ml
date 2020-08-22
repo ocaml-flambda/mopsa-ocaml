@@ -70,7 +70,9 @@ struct
     match ekind ee with
     | E_constant (C_bool true) -> ftrue flow
     | E_constant (C_bool false) -> ffalse flow
+    | E_constant (C_int n) -> if Z.(n <> zero) then ftrue flow else ffalse flow
     | E_constant (C_top T_bool) -> fboth flow
+    | E_constant (C_top T_int) -> fboth flow
     | E_unop(O_log_not,ee) -> eval_bool_expr ee ~ftrue:ffalse ~ffalse:ftrue ~fboth range man flow
     | _ ->
       assume (to_bool_expr ee) man flow ~route:Below

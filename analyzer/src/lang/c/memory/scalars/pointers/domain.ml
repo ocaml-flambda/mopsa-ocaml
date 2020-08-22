@@ -234,154 +234,6 @@ struct
 
 
 
-
-  (** {2 Pointer evaluation} *)
-  (** ====================== *)
-
-  (** Evaluation a pointer expression into a points-to expression *)
-  let eval_points_to exp man flow =
-    man.eval exp flow >>$? fun exp flow ->
-    Static_points_to.eval_opt exp |> OptionExt.lift @@ fun ptr ->
-    match ptr with
-    | AddrOf (base, offset, mode) ->
-      Cases.singleton (mk_c_points_to_bloc base offset mode) flow
-
-    | Eval (p, mode, offset) ->
-      let offset' = mk_binop (mk_offset p mode exp.erange) O_plus offset ~etyp:T_int exp.erange in
-      let a = get_env T_cur man flow in
-      let values = Map.find p a in
-      let evals = PointerSet.fold_points_to (fun v pt acc ->
-          let flow = set_env T_cur (Map.set p v a) man flow in
-          Cases.singleton pt flow :: acc
-        ) values offset' []
-      in
-      Cases.join_list evals ~empty:(fun () -> Cases.empty_singleton flow)
-
-    | Fun f ->
-      Cases.singleton (mk_c_points_to_fun f) flow
-
-    | Null ->
-      Cases.singleton mk_c_points_to_null flow
-
-    | Invalid ->
-      Cases.singleton mk_c_points_to_invalid flow
-
-    | Top ->
-      Cases.singleton mk_c_points_to_top flow
-
-
-  (** 𝔼⟦ p - q ⟧ *)
-  let eval_diff p q range man flow =
-    man.eval p flow >>$ fun p flow ->
-    man.eval q flow >>$ fun q flow ->
-    (* p1 and p2 should point to the same type *)
-    let elem_size_p = under_type p.etyp |> void_to_char |> sizeof_type in
-    let elem_size_q = under_type q.etyp |> void_to_char |> sizeof_type in
-    (* FIXME: do we need to check the sign also? *)
-    if not @@ Z.equal elem_size_p elem_size_q
-    then panic_at range
-        "%a - %a: pointers do not point to the same type"
-        pp_expr p pp_expr q
-    ;
-
-    (* Evaluate the pointed bases symbolically *)
-    let v1, o1, p1 = Static_points_to.eval p |>
-                     eval_static_points_to man flow
-    in
-    let v2, o2, p2 = Static_points_to.eval q |>
-                     eval_static_points_to man flow
-    in
-
-    (* Size of a pointed element *)
-    let elem_size = elem_size_p in
-
-    (* Case 1 : same base => return difference of offset *)
-    let case1 =
-      let v = PointerSet.meet v1 v2 in
-      if PointerSet.is_bottom v
-      then []
-      else
-        let flow = set_value_opt p1 v man flow |>
-                   set_value_opt p2 v man
-        in
-        let ee =
-          mk_offset_opt p1 v o1 range |> OptionExt.bind @@ fun o1 ->
-          mk_offset_opt p2 v o2 range |> OptionExt.bind @@ fun o2 ->
-          let e = sub o1 o2 range in
-          if Z.equal elem_size Z.one
-          then Some e
-          else Some (div e (mk_z elem_size range) range)
-        in
-        match ee with
-        | None -> [man.eval (mk_top T_int range) flow] (* FIXME: why not return 0? *)
-        | Some e -> [man.eval e flow]
-    in
-
-    (* Case 2: different base => undefined behavior *)
-    let case2 =
-      let v1 = PointerSet.diff v1 v2 in
-      let v2 = PointerSet.diff v2 v1 in
-      if PointerSet.is_bottom v1 || PointerSet.is_bottom v2
-      then []
-      else
-        let flow = set_value_opt p1 v1 man flow |>
-                   set_value_opt p2 v2 man
-        in
-        let flow = raise_c_invalid_pointer_sub p q range man flow in
-        [Eval.empty_singleton flow]
-    in
-
-    Eval.join_list (case1 @ case2) ~empty:(fun () -> Eval.empty_singleton flow)
-
-
-
-
-  (** Entry point of abstraction evaluations *)
-  let eval exp man flow =
-    match ekind exp with
-    (* 𝔼⟦ (t)p - (t)q | t is a numeric type ⟧ *)
-    | E_binop(O_minus, { ekind = E_c_cast(p, _); etyp = t1 }, { ekind = E_c_cast(q, _); etyp = t2 })
-      when is_c_pointer_type p.etyp &&
-           is_c_pointer_type q.etyp &&
-           is_c_int_type t1 &&
-           compare_typ t1 t2 = 0
-      ->
-      (* (t)p - (t) q is transformed into (t)(p - q) * |t0|,
-         where |t0| is the size the type pointed by p
-      *)
-      let diff = mk_c_cast (sub p q ~typ:s32 exp.erange) t1 exp.erange in
-      let exp' =
-        match under_type p.etyp |> remove_typedef_qual with
-        | T_c_void -> diff
-        | tt -> mul (mk_z (sizeof_type tt) ~typ:t1 exp.erange) diff ~typ:t1 exp.erange
-      in
-      man.eval exp' flow |>
-      OptionExt.return
-
-    (* 𝔼⟦ p1 - p2 ⟧ *)
-    | E_binop(O_minus, p1, p2)
-      when is_c_pointer_type p1.etyp &&
-           is_c_pointer_type p2.etyp
-      ->
-      eval_diff p1 p2 exp.erange man flow |>
-      OptionExt.return
-
-    | E_c_address_of lval ->
-      begin match ekind @@ remove_casts lval with
-        | E_var _ ->
-          Eval.singleton exp flow |>
-          OptionExt.return
-
-        | E_c_deref p ->
-          man.eval p flow |>
-          OptionExt.return
-
-        | _ -> None
-      end
-
-    | _ -> None
-
-
   (** {2 Computation of post-conditions} *)
   (** ================================== *)
 
@@ -828,111 +680,248 @@ struct
       exec_fold_bases (of_c_block_object e) (List.map of_c_block_object el) stmt.srange man flow |>
       OptionExt.return
 
-    (* S⟦ ?(p == q) ⟧ *)
-    | S_assume({ ekind = E_binop(O_eq, p, q) })
-    | S_assume({ ekind = E_unop(O_log_not, {ekind = E_binop(O_ne, p, q)}) })
+    | _ -> None
+
+
+
+  (** {2 Pointer evaluation} *)
+  (** ====================== *)
+
+  (** Evaluation a pointer expression into a points-to expression *)
+  let eval_points_to exp man flow =
+    man.eval exp flow >>$? fun exp flow ->
+    Static_points_to.eval_opt exp |> OptionExt.lift @@ fun ptr ->
+    match ptr with
+    | AddrOf (base, offset, mode) ->
+      Cases.singleton (mk_c_points_to_bloc base offset mode) flow
+
+    | Eval (p, mode, offset) ->
+      let offset' = mk_binop (mk_offset p mode exp.erange) O_plus offset ~etyp:T_int exp.erange in
+      let a = get_env T_cur man flow in
+      let values = Map.find p a in
+      let evals = PointerSet.fold_points_to (fun v pt acc ->
+          let flow = set_env T_cur (Map.set p v a) man flow in
+          Cases.singleton pt flow :: acc
+        ) values offset' []
+      in
+      Cases.join_list evals ~empty:(fun () -> Cases.empty_singleton flow)
+
+    | Fun f ->
+      Cases.singleton (mk_c_points_to_fun f) flow
+
+    | Null ->
+      Cases.singleton mk_c_points_to_null flow
+
+    | Invalid ->
+      Cases.singleton mk_c_points_to_invalid flow
+
+    | Top ->
+      Cases.singleton mk_c_points_to_top flow
+
+
+  (** 𝔼⟦ p - q ⟧ *)
+  let eval_diff p q range man flow =
+    man.eval p flow >>$ fun p flow ->
+    man.eval q flow >>$ fun q flow ->
+    (* p1 and p2 should point to the same type *)
+    let elem_size_p = under_type p.etyp |> void_to_char |> sizeof_type in
+    let elem_size_q = under_type q.etyp |> void_to_char |> sizeof_type in
+    (* FIXME: do we need to check the sign also? *)
+    if not @@ Z.equal elem_size_p elem_size_q
+    then panic_at range
+        "%a - %a: pointers do not point to the same type"
+        pp_expr p pp_expr q
+    ;
+
+    (* Evaluate the pointed bases symbolically *)
+    let v1, o1, p1 = Static_points_to.eval p |>
+                     eval_static_points_to man flow
+    in
+    let v2, o2, p2 = Static_points_to.eval q |>
+                     eval_static_points_to man flow
+    in
+
+    (* Size of a pointed element *)
+    let elem_size = elem_size_p in
+
+    (* Case 1 : same base => return difference of offset *)
+    let case1 =
+      let v = PointerSet.meet v1 v2 in
+      if PointerSet.is_bottom v
+      then []
+      else
+        let flow = set_value_opt p1 v man flow |>
+                   set_value_opt p2 v man
+        in
+        let ee =
+          mk_offset_opt p1 v o1 range |> OptionExt.bind @@ fun o1 ->
+          mk_offset_opt p2 v o2 range |> OptionExt.bind @@ fun o2 ->
+          let e = sub o1 o2 range in
+          if Z.equal elem_size Z.one
+          then Some e
+          else Some (div e (mk_z elem_size range) range)
+        in
+        match ee with
+        | None -> [man.eval (mk_top T_int range) flow] (* FIXME: why not return 0? *)
+        | Some e -> [man.eval e flow]
+    in
+
+    (* Case 2: different base => undefined behavior *)
+    let case2 =
+      let v1 = PointerSet.diff v1 v2 in
+      let v2 = PointerSet.diff v2 v1 in
+      if PointerSet.is_bottom v1 || PointerSet.is_bottom v2
+      then []
+      else
+        let flow = set_value_opt p1 v1 man flow |>
+                   set_value_opt p2 v2 man
+        in
+        let flow = raise_c_invalid_pointer_sub p q range man flow in
+        [Eval.empty_singleton flow]
+    in
+
+    Eval.join_list (case1 @ case2) ~empty:(fun () -> Eval.empty_singleton flow)
+
+
+
+
+  (** Entry point of abstraction evaluations *)
+  let eval exp man flow =
+    match ekind exp with
+    (* 𝔼⟦ (t)p - (t)q | t is a numeric type ⟧ *)
+    | E_binop(O_minus, { ekind = E_c_cast(p, _); etyp = t1 }, { ekind = E_c_cast(q, _); etyp = t2 })
+      when is_c_pointer_type p.etyp &&
+           is_c_pointer_type q.etyp &&
+           is_c_int_type t1 &&
+           compare_typ t1 t2 = 0
+      ->
+      (* (t)p - (t) q is transformed into (t)(p - q) * |t0|,
+         where |t0| is the size the type pointed by p
+      *)
+      let diff = mk_c_cast (sub p q ~typ:s32 exp.erange) t1 exp.erange in
+      let exp' =
+        match under_type p.etyp |> remove_typedef_qual with
+        | T_c_void -> diff
+        | tt -> mul (mk_z (sizeof_type tt) ~typ:t1 exp.erange) diff ~typ:t1 exp.erange
+      in
+      man.eval exp' flow |>
+      OptionExt.return
+
+    (* 𝔼⟦ p1 - p2 ⟧ *)
+    | E_binop(O_minus, p1, p2)
+      when is_c_pointer_type p1.etyp &&
+           is_c_pointer_type p2.etyp
+      ->
+      eval_diff p1 p2 exp.erange man flow |>
+      OptionExt.return
+
+    | E_c_address_of lval ->
+      begin match ekind @@ remove_casts lval with
+        | E_var _ ->
+          Eval.singleton exp flow |>
+          OptionExt.return
+
+        | E_c_deref p ->
+          man.eval p flow |>
+          OptionExt.return
+
+        | _ -> None
+      end
+
+      (* 𝔼⟦ p == q ⟧ *)
+    | E_binop(O_eq, p, q)
+    | E_unop(O_log_not, {ekind = E_binop(O_ne, p, q)})
       when is_c_pointer_type p.etyp ||
            is_c_pointer_type q.etyp
       ->
-      assume_eq p q stmt.srange man flow |>
+      let evl1 = assume_eq p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_true exp.erange) flow in
+      let evl2 = assume_ne p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_false exp.erange) flow in
+      Eval.join evl1 evl2 |>
       OptionExt.return
 
-    (* S⟦ ?(p != q) ⟧ *)
-    | S_assume ({ ekind = E_binop(O_ne, p, q) })
-    | S_assume ({ ekind = E_unop(O_log_not, {ekind = E_binop(O_eq, p, q)}) })
+    (* 𝔼⟦ ?(p != q) ⟧ *)
+    | E_binop(O_ne, p, q)
+    | E_unop(O_log_not, {ekind = E_binop(O_eq, p, q)})
       when is_c_pointer_type p.etyp ||
            is_c_pointer_type q.etyp
       ->
-      assume_ne p q stmt.srange man flow |>
+      let evl1 = assume_ne p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_true exp.erange) flow in
+      let evl2 = assume_eq p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_false exp.erange) flow in
+      Eval.join evl1 evl2 |>
       OptionExt.return
 
 
-    (* S⟦ ?(p op q) | op ∈ {<, <=, >, >=} ⟧ *)
-    | S_assume ({ ekind = E_binop((O_lt | O_le | O_gt | O_ge) as op, p, q) })
+    (* 𝔼⟦ p op q | op ∈ {<, <=, >, >=} ⟧ *)
+    | E_binop((O_lt | O_le | O_gt | O_ge) as op, p, q)
       when is_c_pointer_type p.etyp &&
            is_c_pointer_type q.etyp
       ->
-      assume_order op p q stmt.srange man flow |>
+      let evl1 = assume_order op p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_true exp.erange) flow in
+      let evl2 = assume_order (negate_comparison_op op) p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_false exp.erange) flow in
+      Eval.join evl1 evl2 |>
       OptionExt.return
 
     (* S⟦ ?!(p op q) | op ∈ {<, <=, >, >=} ⟧ *)
-    | S_assume ({ ekind = E_unop (O_log_not, { ekind = E_binop((O_lt | O_le | O_gt | O_ge) as op, p, q) })})
+    | E_unop (O_log_not, { ekind = E_binop((O_lt | O_le | O_gt | O_ge) as op, p, q) })
       when is_c_pointer_type p.etyp &&
            is_c_pointer_type q.etyp
       ->
-      assume_order (negate_comparison_op op) p q stmt.srange man flow |>
-      OptionExt.return
-
-    (* S⟦ ?NULL ⟧ *)
-    | S_assume ({ ekind = E_c_cast({ ekind = E_constant (C_int n) } as exp, _) })
-      when is_c_pointer_type exp.etyp &&
-           Z.equal n Z.zero ->
-      Flow.set T_cur man.lattice.bottom man.lattice flow |>
-      Post.return |>
-      OptionExt.return
-
-    (* S⟦ ?NULL ⟧ *)
-    | S_assume ({ ekind = E_unop (O_log_not, { ekind = E_c_cast({ ekind = E_constant (C_int n) } as exp, _) }) })
-      when is_c_pointer_type exp.etyp &&
-           Z.equal n Z.zero ->
-      Post.return flow |>
-      OptionExt.return
-
-    (* S⟦ ?INVALID ⟧ *)
-    (* S⟦ ?!INVALID ⟧ *)
-    | S_assume ({ ekind = E_constant (C_c_invalid) })
-    | S_assume ({ ekind = E_unop (O_log_not, { ekind = E_constant (C_c_invalid) }) }) ->
-      Post.return flow |>
-      OptionExt.return
-
-    (* S⟦ ?⊤ ⟧ *)
-    (* S⟦ ?!⊤ ⟧ *)
-    | S_assume ({ ekind = E_constant (C_top t) })
-    | S_assume ({ ekind = E_unop (O_log_not, { ekind = E_constant (C_top t) }) })
-      when is_c_pointer_type t ->
-      Post.return flow |>
-      OptionExt.return
-
-    (* S⟦ ?p ⟧ *)
-    | S_assume (lval)
-      when is_c_pointer_type lval.etyp &&
-           is_c_lval (remove_casts lval) ->
-      assume_ne lval (mk_zero stmt.srange ~typ:(T_c_pointer T_c_void)) stmt.srange man flow |>
-      OptionExt.return
-
-    (* S⟦ ?!p ⟧ *)
-    | S_assume ({ ekind = E_unop (O_log_not, lval) })
-      when is_c_pointer_type lval.etyp &&
-           is_c_lval (remove_casts lval) ->
-      assume_eq lval (mk_zero stmt.srange ~typ:(T_c_pointer T_c_void)) stmt.srange man flow |>
+      let evl1 = assume_order (negate_comparison_op op) p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_true exp.erange) flow in
+      let evl2 = assume_order op p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_false exp.erange) flow in
+      Eval.join evl1 evl2 |>
       OptionExt.return
 
 
-    (* S⟦ ?"..." ⟧ *)
-    | S_assume ({ ekind = E_constant (C_c_string _) }) ->
-      Post.return flow |>
-      OptionExt.return
+    (* 𝔼⟦ (bool)ptr ⟧ *)
+    | E_c_cast(p, _) when exp |> etyp |> is_c_int_type &&
+                          p   |> etyp |> is_c_pointer_type ->
+      eval_points_to p man flow |> OptionExt.lift (fun evl ->
+          evl >>$ fun pt flow ->
+          match pt with
+          | P_null ->
+            Eval.singleton (mk_false exp.erange) flow
+          | P_top | P_invalid ->
+            Eval.singleton (mk_top T_bool exp.erange) flow
+          | P_block _ | P_fun _ ->
+            Eval.singleton (mk_true exp.erange) flow
+        )
 
-    (* S⟦ ?!"..." ⟧ *)
-    | S_assume ({ ekind = E_unop(O_log_not, ({ekind = E_constant (C_c_string _)})) }) ->
-      Flow.set T_cur man.lattice.bottom man.lattice flow |>
-      Post.return |>
-      OptionExt.return
+    (* 𝔼⟦ (int)ptr ⟧ *)
+    | E_c_cast(p, _) when exp |> etyp |> is_c_int_type &&
+                          p   |> etyp |> is_c_pointer_type ->
+      eval_points_to p man flow |> OptionExt.lift (fun evl ->
+          evl >>$ fun pt flow ->
+          match pt with
+          | P_null ->
+            Eval.singleton (mk_zero exp.erange) flow
+          | P_top | P_invalid ->
+            let l,u = rangeof exp.etyp in
+            Eval.singleton (mk_z_interval l u exp.erange) flow
+          | P_block _ | P_fun _ ->
+            let l,u = rangeof exp.etyp in
+            if is_c_signed_int_type exp.etyp then
+              Eval.join
+                (Eval.singleton (mk_z_interval l Z.(of_int (-1)) exp.erange) flow)
+                (Eval.singleton (mk_z_interval Z.one u exp.erange) flow)
+            else
+              Eval.singleton (mk_z_interval l u exp.erange) flow
+        )
 
-    (* S⟦ (t)p ⟧ *)
-    | S_assume ({ ekind = E_c_cast(p, _) })
-      when is_c_pointer_type p.etyp ->
-      man.exec (mk_assume p stmt.srange) flow |>
-      OptionExt.return
+    (* 𝔼⟦ !ptr ⟧ *)
+    | E_unop(O_log_not, p) when p |> etyp |> is_c_pointer_type ->
+      eval_points_to p man flow |> OptionExt.lift (fun evl ->
+          evl >>$ fun pt flow ->
+          match pt with
+          | P_null ->
+            Eval.singleton (mk_one exp.erange) flow
+          | P_top | P_invalid ->
+            Eval.singleton (mk_int_interval 0 1 exp.erange) flow
+          | P_block _ | P_fun _ ->
+            Eval.singleton (mk_zero exp.erange) flow
+        )
 
-    (* S⟦ !(t)p ⟧ *)
-    | S_assume ({ ekind = E_unop (O_log_not, ({ ekind = E_c_cast(p, _) })) })
-      when is_c_pointer_type p.etyp ->
-      man.exec (mk_assume (mk_not p stmt.srange) stmt.srange) flow |>
-      OptionExt.return
 
     | _ -> None
-
 
 
   (** {2 Handler of queries} *)
