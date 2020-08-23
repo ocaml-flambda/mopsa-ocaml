@@ -680,12 +680,12 @@ struct
       exec_fold_bases (of_c_block_object e) (List.map of_c_block_object el) stmt.srange man flow |>
       OptionExt.return
 
-    | S_assume(p) when is_c_pointer_type p.etyp ->
-      assume_ne p (mk_c_null stmt.srange) stmt.srange man flow |>
-      OptionExt.return
-
     | S_assume({ekind = E_unop(O_log_not, p)}) when is_c_pointer_type p.etyp ->
       assume_eq p (mk_c_null stmt.srange) stmt.srange man flow |>
+      OptionExt.return
+
+    | S_assume(p) when is_c_pointer_type p.etyp ->
+      assume_ne p (mk_c_null stmt.srange) stmt.srange man flow |>
       OptionExt.return
 
     | _ -> None
