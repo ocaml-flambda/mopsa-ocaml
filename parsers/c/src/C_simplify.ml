@@ -107,18 +107,16 @@ let rec expr_one target range (t:typ) =
   - E_comma
   - E_increment
   - E_compound_literal
-  - shortcut operators &&, || (TODO)
-
  *)
 
 let simplify_func ctx (f:func) =
 
   (* simplify an expression
      we return triples:
-     - statements to execute before evaluating ( temp variable declaration, etc.)
+     - statements to execute before evaluating (tmp variable declaration, etc.)
      - simplified expression
      - statements to execute after evaluating
-     - if call=true, assign the reult of function calls to temporaries
+     - if call=true, assign the result of function calls to temporaries
        (necessary in some cases to ensure that the side-effect is only
         evaluated once)
    *)
@@ -186,7 +184,7 @@ let simplify_func ctx (f:func) =
 
     (* e1 op= e2 -> e1 = e1 op e2; <e1> *)
     | E_compound_assign (e1,t1,op,e2,t2) ->
-       (* force temporary for function call as e1 is used twice *)
+       (* force temporaries for function calls as e1 is used twice *)
        let before1, e1, after1 = simplify_expr true e1 in
        let before2, e2, after2 = simplify_expr call e2 in
        let before = before1@before2 and after = after2@after1 in
