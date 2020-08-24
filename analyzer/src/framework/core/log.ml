@@ -155,8 +155,8 @@ let join_log log1 log2 =
     (fun stmts1 -> stmts1)
     (fun stmts2 -> stmts2)
     (fun stmts1 stmts2 ->
-       if stmts1 = [] || stmts2 = []
-       then stmts1 @ stmts2
+       if stmts1 = [] || stmts2 = [] then stmts1 @ stmts2 else
+       if Compare.list compare_stmt stmts1 stmts2 = 0 then stmts1
        else [mk_ndet stmts1 stmts2 join_range]
     )
     log1 log2
