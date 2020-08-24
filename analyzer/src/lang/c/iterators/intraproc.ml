@@ -153,11 +153,11 @@ struct
       assume e1
         ~fthen:(fun flow ->
             assume e2 man flow
-              ~fthen:(Eval.singleton (mk_true exp.erange))
-              ~felse:(Eval.singleton (mk_false exp.erange))
+              ~fthen:(Eval.singleton (mk_one exp.erange))
+              ~felse:(Eval.singleton (mk_zero exp.erange))
           )
         ~felse:(fun flow ->
-            Eval.singleton (mk_false exp.erange) flow
+            Eval.singleton (mk_zero exp.erange) flow
           )
         man flow |>
       OptionExt.return
@@ -165,15 +165,21 @@ struct
     | E_binop(O_c_or, e1, e2) ->
       assume e1
         ~fthen:(fun flow ->
-            Eval.singleton (mk_true exp.erange) flow
+            Eval.singleton (mk_one exp.erange) flow
           )
         ~felse:(fun flow ->
             assume e2 man flow
-              ~fthen:(Eval.singleton (mk_true exp.erange))
-              ~felse:(Eval.singleton (mk_false exp.erange))
+              ~fthen:(Eval.singleton (mk_one exp.erange))
+              ~felse:(Eval.singleton (mk_zero exp.erange))
           )
         man flow |>
       OptionExt.return
+
+    | E_unop(O_log_not, e) when is_c_int_type exp.etyp ->
+      assume e man flow
+        ~fthen:(Eval.singleton (mk_zero exp.erange))
+        ~felse:(Eval.singleton (mk_one exp.erange))
+      |> OptionExt.return
 
     | E_c_assign(lval, rval) ->
       man.eval rval flow >>$? fun rval flow ->
