@@ -221,6 +221,12 @@ let set_log log (r:('a,'r) cases) : ('a,'r) cases =
         case_log = log }
     )
 
+let clear_log (r:('a,'r) cases) : ('a,'r) cases =
+  r |> map_cases (fun case ->
+      { case with
+        case_log = empty_log }
+    )
+
 let concat_cases_log (log:log) (r:('a,'r) cases) : ('a,'r) cases =
   r |> map_cases (fun case ->
       { case with

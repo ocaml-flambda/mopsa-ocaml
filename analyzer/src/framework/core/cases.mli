@@ -100,6 +100,9 @@ val map_log : (log -> log) -> ('a,'r) cases -> ('a,'r) cases
 val set_log : log -> ('a,'r) cases -> ('a,'r) cases
 (** Set the logs of cases *)
 
+val clear_log : ('a,'r) cases -> ('a,'r) cases
+(** Remove logs *)
+
 val apply : ('r option -> 'a flow -> 'b) -> ('b -> 'b -> 'b) -> ('b -> 'b -> 'b) -> ('a,'r) cases -> 'b
 (** [apply f join meet c] collapses cases [c] to a single value by
     applying [f] on each case [ci] in [c] and merging outputs using
