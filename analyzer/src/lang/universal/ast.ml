@@ -240,8 +240,15 @@ let addr_partitioning_pp_chain : (Format.formatter -> addr_partitioning -> unit)
       | _ -> Format.pp_print_string fmt "*"
     )
 
-let pp_addr_partitioning fmt ak =
-  !addr_partitioning_pp_chain fmt ak
+(** Command line option to use hashes as address format *)
+let opt_hash_addr = ref false
+let () = register_builtin_option {
+    key = "-heap-use-hash-format";
+    category = "Heap";
+    doc = "  format heap addresses with their hash";
+    spec = ArgExt.Set opt_hash_addr;
+    default = "false";
+  }
 
 let pp_addr_partitioning_hash fmt (g:addr_partitioning) =
   Format.fprintf fmt "%xd"
@@ -251,6 +258,12 @@ let pp_addr_partitioning_hash fmt (g:addr_partitioning) =
        likely to happen.
     *)
     (Hashtbl.hash_param 50 150 g)
+
+let pp_addr_partitioning fmt ak =
+  if !opt_hash_addr
+  then pp_addr_partitioning_hash fmt ak
+  else !addr_partitioning_pp_chain fmt ak
+
 
 
 let compare_addr_partitioning a1 a2 =

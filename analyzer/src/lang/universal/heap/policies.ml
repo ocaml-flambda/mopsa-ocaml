@@ -46,8 +46,8 @@ let () =
       print = (fun next fmt g ->
         match g with
         | G_range r -> pp_range fmt r
-        | G_stack_range(cs, r) -> pp_addr_partitioning_hash fmt g
-        | G_stack(cs) -> pp_addr_partitioning_hash fmt g
+        | G_stack_range(cs, r) -> Format.fprintf fmt "%a:%a" pp_callstack_short cs pp_range r
+        | G_stack(cs) -> pp_callstack_short fmt cs
         | _ -> next fmt g
       );
     }
@@ -80,7 +80,7 @@ let register_mk_addr f = mk_addr_chain := f !mk_addr_chain
 let register_option (opt: string ref) (domain_name: string) (key: string) (descr: string) f =
   register_domain_option domain_name {
       key;
-      category = "Allocation Policy";
+      category = "Heap";
       doc = Format.asprintf " allocation policy used %s" descr;
       spec = ArgExt.Symbol (["all"; "range"; "callstack"; "range_callstack"],
                             (function s -> opt := s));
