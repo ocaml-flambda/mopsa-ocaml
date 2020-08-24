@@ -233,60 +233,55 @@ struct
       else Post.return flow
 
 
-
   (** {2 Computation of post-conditions} *)
   (** ================================== *)
 
-  let remove_offset o mode range man flow =
-    if mode = STRONG then
-      man.exec ~route:numeric (mk_remove o range) flow
-    else
-      Post.return flow
+  let update_offset o vold vnew range man flow =
+    match PointerSet.is_valid vold, PointerSet.is_valid vnew with
+    | true, true -> Post.return flow
+    | false, false -> Post.return flow
+    | false, true -> man.exec ~route:numeric (mk_add o range) flow
+    | true, false -> man.exec ~route:numeric (mk_remove o range) flow
 
 
   (** Assignment abstract transformer *)
   let assign p q mode range man flow =
     man.eval q flow >>$ fun q flow ->
-    let o = mk_offset p mode range in
-    match Static_points_to.eval q with
-    | AddrOf (b, offset, mode') ->
-      let flow' = map_env T_cur (add p (PointerSet.base b) mode) man flow in
+    let a = get_env T_cur man flow in
+    let vnew, onew =
+      match Static_points_to.eval q with
+      | AddrOf (b, offset, mode') ->
+        PointerSet.base b, Some offset
 
-      man.eval offset flow' >>$ fun offset flow' ->
-      man.exec ~route:numeric (mk_assign o offset range) flow'
-
-    | Eval (q, mode', offset) ->
-      let flow' = map_env T_cur (fun a ->
-          add p (Map.find q a) mode a
-        ) man flow
-      in
-      (* Assign offset only if q points to a valid block *)
-      let a = get_env T_cur man flow in
-      if Map.find q a |> PointerSet.is_valid
-      then
+      | Eval (q, mode', offset) ->
         let qo = mk_offset q mode' range in
         let offset' = mk_binop qo O_plus offset ~etyp:T_int range in
+        let vq = Map.find q a in
+        vq, if PointerSet.is_valid vq then Some offset' else None
 
-        man.eval offset' flow' >>$ fun offset' flow ->
-        man.exec ~route:numeric (mk_assign o offset' range) flow'
-      else
-        remove_offset o (var_mode p mode) range man flow'
+      | Fun f ->
+        PointerSet.cfun f, None
 
-    | Fun f ->
-      map_env T_cur (add p (PointerSet.cfun f) mode) man flow |>
-      remove_offset o (var_mode p mode) range man
+      | Invalid ->
+        PointerSet.invalid, None
 
-    | Invalid ->
-      map_env T_cur (add p PointerSet.invalid mode) man flow  |>
-      remove_offset o (var_mode p mode) range man
+      | Null ->
+        PointerSet.null, None
 
-    | Null ->
-      map_env T_cur (add p PointerSet.null mode) man flow |>
-      remove_offset o (var_mode p mode) range man
-
-    | Top ->
-      map_env T_cur (add p PointerSet.top mode) man flow |>
-      man.exec ~route:numeric (mk_assign o (mk_top T_int range) range)
+      | Top ->
+        PointerSet.top, Some (mk_top T_int range)
+    in
+    let vold = Map.find p a in
+    let a' = add p vnew mode a in
+    let flow = set_env T_cur a' man flow in
+    let vnew = Map.find p a' in
+    let o = mk_offset p mode range in
+    update_offset o vold vnew range man flow >>% fun flow ->
+    match onew with
+    | None -> Post.return flow
+    | Some offset ->
+      man.eval offset flow >>$ fun offset flow ->
+      man.exec ~route:numeric (mk_assign o offset range) flow
 
 
 
@@ -704,12 +699,15 @@ struct
       Cases.singleton (mk_c_points_to_bloc base offset mode) flow
 
     | Eval (p, mode, offset) ->
-      let offset' = mk_binop (mk_offset p mode exp.erange) O_plus offset ~etyp:T_int exp.erange in
+      let o = mk_offset p mode exp.erange in
+      let offset' = mk_binop o O_plus offset ~etyp:T_int exp.erange in
       let a = get_env T_cur man flow in
       let values = Map.find p a in
       let evals = PointerSet.fold_points_to (fun v pt acc ->
           let flow = set_env T_cur (Map.set p v a) man flow in
-          Cases.singleton pt flow :: acc
+          ( update_offset o values v exp.erange man flow >>%
+            Cases.singleton pt )
+          :: acc
         ) values offset' []
       in
       Cases.join_list evals ~empty:(fun () -> Cases.empty_singleton flow)
