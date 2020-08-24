@@ -335,18 +335,8 @@ struct
           match field.c_field_type |> remove_typedef_qual with
 
           | T_c_array(t,C_array_length_cst n) ->
-            (* In case of an array we need to copy cell by cell *)
-            let rec aux i acc =
-              if Z.equal i n
-              then acc
-              else
-                let lval'' = mk_c_subscript_access lval' (mk_z i range) range in
-                let rval'' = mk_c_subscript_access rval' (mk_z i range) range in
-                let stmt = mk_assign lval'' rval'' range in
-                acc >>% man.exec stmt |>
-                aux (Z.succ i)
-            in
-            aux Z.zero acc
+            (* Copying cell-by-cell maybe expensive, so use memcpy instead *)
+            acc >>% memcpy lval' rval' zero (mk_z Z.(n * sizeof_type t - one) range) range man
 
           | T_c_array _ ->
             (* Flexible array members are not copied (CC99 6.7.2.1.22) *)
