@@ -150,10 +150,6 @@ struct
         ~felse:(fun flow -> man.eval e2 flow)
       |> OptionExt.return
 
-    | E_unop (O_log_not, { ekind = E_unop (O_log_not, e) }) ->
-      man.eval e flow |>
-      OptionExt.return
-
     | E_unop (O_log_not, { ekind = E_binop (O_log_and, e1, e2) }) ->
       man.eval (mk_log_or (mk_not e1 e1.erange) (mk_not e2 e2.erange) exp.erange) flow |>
       OptionExt.return
