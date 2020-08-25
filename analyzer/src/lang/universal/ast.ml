@@ -908,7 +908,6 @@ let mk_fold_addr a al range =
   mk_fold (mk_addr a range) (List.map (fun aa -> mk_addr aa range) al) range
 
 let rec expr_to_const e : constant option =
-  Debug.debug ~channel:"hoo" "expr_to_const: %a" pp_expr e;
   if not (is_numeric_type e.etyp) then None else 
   match ekind e with
   | E_constant c -> Some c
@@ -940,7 +939,6 @@ let rec expr_to_const e : constant option =
 
       | O_eq, Some (C_int n), Some (C_int_interval (a,b))
       | O_eq, Some (C_int_interval (a,b)), Some (C_int n) ->
-        Debug.debug ~channel:"hoo" "aa";
         let c = if Z.(a <= n && n <= b) then C_top T_bool else C_bool false in
         Some c
 

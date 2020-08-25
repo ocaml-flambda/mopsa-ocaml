@@ -445,7 +445,7 @@ struct
   let pp_action : type a. Toplevel.t flow -> formatter -> a action -> unit = fun flow fmt action ->
     if !print_welcome then (
       print_welcome := false;
-      fprintf fmt "%a@.Type '%a' to get the list of commands.@."
+      fprintf fmt "@.%a@.Type '%a' to get the list of commands.@.@."
         (Debug.bold pp_print_string) "Welcome to Mopsa v1.0!"
         (Debug.bold pp_print_string) "help"
     )
