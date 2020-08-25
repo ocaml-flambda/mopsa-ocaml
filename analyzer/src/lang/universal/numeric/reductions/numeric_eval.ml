@@ -34,12 +34,21 @@ struct
   let reduce exp man rman pre results flow =
     if not @@ List.exists (fun e -> is_numeric_type e.etyp) results then None
     else
-    (* Simplify some boolean expressions *)
+    (* Simplify constant expressions *)
     let results' =
-      results |> List.map (fun e ->
+      results
+      |> List.map (fun e ->
           match expr_to_const e with
           | Some c -> { e with ekind = E_constant c }
           | None -> e
+        )
+      (* Convert boolean values to numeric values to simplify reduction *)
+      |> List.map (fun e ->
+          match ekind e with
+          | E_constant (C_bool true) -> { e with ekind = E_constant (C_int Z.one) }
+          | E_constant (C_bool false) -> { e with ekind = E_constant (C_int Z.zero) }
+          | E_constant (C_top T_bool) -> { e with ekind = E_constant (C_int_interval (Z.zero, Z.one)) }
+          | _ -> e
         )
     in
     match results' with
@@ -49,7 +58,7 @@ struct
         (* Iterate over the list of result expressions and accumulate the most precise one *)
         let rec iter acc flow = function
           | [] -> Eval.singleton acc flow
-          | hd::tl ->       
+          | hd::tl ->
             match ekind acc, ekind hd with
             (* Top rules *)
             | _, E_constant (C_top _) ->
@@ -57,17 +66,6 @@ struct
 
             | E_constant (C_top _), _ ->
               iter hd flow tl
-
-            (* Boolean expressions *)
-            | E_constant (C_bool true), E_constant (C_bool false)
-            | E_constant (C_bool false), E_constant (C_bool true) ->
-              Eval.empty_singleton (Flow.remove T_cur flow)
-
-            | E_constant (C_bool _), _ ->
-              iter hd flow tl
-
-            | _, E_constant (C_bool _) ->
-              iter acc flow tl
 
             (* Integer expressions *)
             | E_constant (C_int a), E_constant (C_int b) ->
@@ -83,6 +81,7 @@ struct
               let lo = Z.max a c and hi = Z.min b d in
               if Z.(lo <= hi) then iter (mk_z_interval lo hi exp.erange) flow tl else Eval.empty_singleton (Flow.remove T_cur flow)
 
+            (* Variables *)
             | E_var (v1,mode1), E_var (v2,mode2) ->
               (* Ensure that both variables are equal *)
               man.exec (mk_assume (eq acc hd exp.erange) exp.erange) flow >>% fun flow' ->
@@ -90,7 +89,8 @@ struct
               let precise = if var_mode v1 mode1 = STRONG then acc else hd in
               iter precise flow' tl
 
-            | E_var _, _ | _, E_var _ ->
+            | E_var _, _
+            | _, E_var _ ->
               (* Ensure that variable is equal the other expression *)
               man.exec (mk_assume (eq acc hd exp.erange) exp.erange) flow >>% fun flow' ->
               (* Keep the variable as the most precise expression *)
@@ -100,6 +100,14 @@ struct
                 | _ -> acc
               in
               iter precise flow' tl
+
+            (* Other constants *)
+            | E_constant (C_bool _), _ ->
+              iter hd flow tl
+
+            | _, E_constant (C_bool _) ->
+              iter acc flow tl
+
 
             | _ -> iter acc flow tl
         in
