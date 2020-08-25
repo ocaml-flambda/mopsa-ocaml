@@ -311,6 +311,13 @@ struct
       Eval.singleton exp' flow |>
       OptionExt.return
 
+    (* 𝔼⟦ ~ e ⟧, type(e) = unsigned *)
+    | E_unop(O_bit_invert, e) when exp |> etyp |> is_c_int_type
+                                && not (exp |> etyp |> is_c_signed_int_type) ->
+      man.eval e flow >>$? fun e flow ->
+      let _,hi = rangeof exp.etyp in
+      Eval.singleton (sub (mk_z hi exp.erange) e exp.erange) flow |>
+      OptionExt.return
 
     (* 𝔼⟦ ⋄ e ⟧ *)
     | E_unop(op, e) when exp |> etyp |> is_c_num_type ->
