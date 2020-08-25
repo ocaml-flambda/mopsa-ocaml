@@ -118,6 +118,10 @@ struct
     | Some init -> panic_at range "unsupported scalar initializer %a for type %a" Pp.pp_c_init init pp_typ typ;
 
   and flatten_array_init init offset typ range =
+    if is_c_no_length_array_type typ
+    || is_c_variable_length_array_type typ
+    then [],[] else
+
     let n = get_array_constant_length typ in
     let under_typ = under_array_type typ in
     match init with
