@@ -64,11 +64,24 @@ end
 (*==========================================================================*)
 
 
+(** Instrument transfer functions with some useful pre/post processing *)
+module Instrument(D:STATELESS) : STATELESS =
+struct
+  include D
+
+  (* Remove duplicate evaluations *)
+  let eval exp man flow =
+    D.eval exp man flow |>
+    OptionExt.lift @@ Eval.remove_duplicates man.lattice
+
+end
+
 
 let domains : (module STATELESS) list ref = ref []
 
 let register_stateless_domain dom =
-  domains := dom :: !domains
+  let module D = (val dom : STATELESS) in
+  domains := (module Instrument(D)) :: !domains
 
 let find_stateless_domain name =
   List.find (fun dom ->

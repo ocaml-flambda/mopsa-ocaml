@@ -43,6 +43,8 @@ struct
 
   let ask query man flow = None
 
+  let eval exp man flow = None
+
   let exec stmt man flow =
     let post = man.exec stmt flow ~route:(Below name) in
     let post' =
@@ -53,12 +55,6 @@ struct
       Post.return flow
     in
     OptionExt.return post'
-
-  let eval exp man flow =
-    let evl = man.eval exp flow ~route:(Below name) in
-    (* Collapse partitions with the same expression *)
-    let evl' = Cases.remove_duplicates (Compare.option compare_expr) man.lattice evl in
-    OptionExt.return evl'
 
 end
 

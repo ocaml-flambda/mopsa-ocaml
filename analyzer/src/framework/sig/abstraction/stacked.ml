@@ -121,6 +121,7 @@ struct
     else D.merge pre (a1,log1) (a2,log2)
 
 
+  (* Add stmt to the logs of the domain *)
   let exec stmt man flow =
     D.exec stmt man flow |>
     OptionExt.lift @@ fun res ->
@@ -129,6 +130,11 @@ struct
           man.get_log log |> Log.add_stmt_to_log stmt
         ) log
       ) res
+
+  (* Remove duplicate evaluations *)
+  let eval exp man flow =
+    D.eval exp man flow |>
+    OptionExt.lift @@ Eval.remove_duplicates man.lattice
 
 end
 
