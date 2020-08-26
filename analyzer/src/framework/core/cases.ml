@@ -41,7 +41,7 @@ type ('a,'r) case = {
   case_flow     : 'a TokenMap.t; (** Token map of abstract states *)
   case_alarms   : AlarmSet.t;    (** Collected alarms *)
   case_log      : log;           (** Journal of statements log *)
-  case_cleaners : block;         (** Cleaner statements *)
+  case_cleaners : StmtSet.t;     (** Cleaner statements *)
 }
 
 (** Multiple cases encoded as a DNF *)
@@ -66,7 +66,7 @@ let mk_case
     case_flow = Flow.get_token_map flow;
     case_alarms = Flow.get_alarms flow;
     case_log = log;
-    case_cleaners = cleaners;
+    case_cleaners = StmtSet.of_list cleaners;
   }
 
 
@@ -165,9 +165,11 @@ let map_opt (f:'r -> 's option option) (r:('a,'r) cases) : ('a,'s) cases =
   | Some c -> { r with cases_dnf = c }
   | None -> Exceptions.panic ~loc:__LOC__ "map_opt: empty result"
 
+let concat_cleaners c1 c2 = StmtSet.union (StmtSet.of_list c1) (StmtSet.of_list c2) |>
+                            StmtSet.elements
 
 let add_cleaners_case cleaners c =
-  { c with case_cleaners = c.case_cleaners @ cleaners }
+  { c with case_cleaners = StmtSet.union (StmtSet.of_list cleaners) c.case_cleaners }
 
 
 let add_cleaners cleaners r =
@@ -177,7 +179,7 @@ let add_cleaners cleaners r =
 let apply_full f join meet r =
   Dnf.apply (fun case ->
       let flow = Flow.create r.cases_ctx case.case_alarms case.case_flow in
-      f case.case_result flow case.case_log case.case_cleaners
+      f case.case_result flow case.case_log (StmtSet.elements case.case_cleaners)
     ) join meet r.cases_dnf
 
 
@@ -260,7 +262,7 @@ let map_fold_conjunctions
           tl |> List.fold_left (fun (flow, log, cleaners) case ->
               let flow' = Flow.create ctx case.case_alarms case.case_flow in
               let flow = f (flow,log) (flow',case.case_log) in
-              flow, concat_log log case.case_log, cleaners @ case.case_cleaners
+              flow, concat_log log case.case_log, StmtSet.union cleaners case.case_cleaners
             ) (Flow.create ctx hd.case_alarms hd.case_flow, hd.case_log, hd.case_cleaners)
         in
         hd :: tl |> List.map (fun case -> {
@@ -402,7 +404,7 @@ let bind_full_opt
   let ctx, ret = Dnf.fold_apply
       (fun ctx case ->
          let flow' = Flow.create ctx case.case_alarms case.case_flow in
-         let r' = f case.case_result flow' case.case_log case.case_cleaners in
+         let r' = f case.case_result flow' case.case_log (StmtSet.elements case.case_cleaners) in
          let ctx = OptionExt.apply get_ctx ctx r' in
          (ctx,r')
       )
@@ -527,7 +529,7 @@ let remove_duplicates compare lattice r =
               let case'' = {
                 case_result = case.case_result;
                 case_flow = flow;
-                case_cleaners = case.case_cleaners @ case'.case_cleaners;
+                case_cleaners = StmtSet.union case.case_cleaners case'.case_cleaners;
                 case_alarms = AlarmSet.inter case.case_alarms case'.case_alarms;
                 case_log = meet_log case.case_log  case'.case_log |>
                            real_log flow;
@@ -546,7 +548,7 @@ let remove_duplicates compare lattice r =
         {
           case_result = case.case_result;
           case_flow = TokenMap.join lattice (Context.get_unit ctx) case.case_flow case'.case_flow;
-          case_cleaners = case.case_cleaners @ case'.case_cleaners;
+          case_cleaners = StmtSet.union case.case_cleaners case'.case_cleaners;
           case_alarms = AlarmSet.union case.case_alarms case'.case_alarms;
           case_log = join_log
               (real_log case.case_flow case.case_log)

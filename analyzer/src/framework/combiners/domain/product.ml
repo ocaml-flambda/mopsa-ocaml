@@ -254,7 +254,7 @@ struct
                merge the post-states of any shared sub-abstraction *)
             let flow = merge_flows ~merge_alarms:AlarmSet.union man pre (flow,log) (after_flow,after_log) in
             let log = Log.meet_log log after_log in
-            let cleaners = cleaners @ after_cleaners in
+            let cleaners = Cases.concat_cleaners cleaners after_cleaners in
             Cases.return (Some (Some rr :: after)) flow ~cleaners ~log
           else
             (* Next domains returned no answer, so no merging *)

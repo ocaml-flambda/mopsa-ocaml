@@ -76,6 +76,8 @@ val copy_ctx : ('a,'r) cases -> ('a,'s) cases -> ('a,'s) cases
 val opt_clean_cur_only : bool ref
 (** Option to apply cleaners on T_cur only *)
 
+val concat_cleaners : block -> block -> block
+(** Concatenate two cleaners *)
 
 val add_cleaners : block -> ('a,'r) cases -> ('a,'r) cases
 (** [add_cleaners block c] adds cleaner statements [block] to cases [c]. *)
