@@ -25,8 +25,6 @@
 
 module StringSet = SetExt.StringSet
 
-let ctx_mutex = Mutex.create ()
-
 (* if only_parse is true, only parses the file without tranlating it to
    C AST nor adding the result to the context
  *)
@@ -72,15 +70,10 @@ let parse_file
           | _ -> ()
         ) r.parse_diag;
     if only_parse then ()
-    else (
-      Mutex.lock ctx_mutex;
-      (try
-         Clang_to_C.add_translation_unit
-           ctx (Filename.basename file)
-           r.parse_decl r.parse_files r.parse_comments r.parse_macros;
-       with x -> Mutex.unlock ctx_mutex; raise x);
-      Mutex.unlock ctx_mutex
-    )
+    else
+      Clang_to_C.add_translation_unit
+        ctx (Filename.basename file)
+        r.parse_decl r.parse_files r.parse_comments r.parse_macros;
   )
   else
     let errors =

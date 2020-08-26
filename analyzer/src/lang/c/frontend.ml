@@ -47,9 +47,6 @@ let opt_make_target = ref ""
 let opt_without_libc = ref false
 (** Disable stubs of the standard library *)
 
-let nb_clang_threads = ref 4
-(** How many instances of the Clang parsers to spwan in parallel. *)
-
 let opt_enable_cache = ref true
 (** Enable the parser cache. *)
 
@@ -87,13 +84,6 @@ let () =
     doc = " disable stubs of the standard C library.";
     spec = ArgExt.Set opt_without_libc;
     default = "false";
-  };
-  register_language_option "c" {
-    key = "-clang-threads";
-    category = "C";
-    doc = " how many parallel instances of Clang parser to use.";
-    spec = ArgExt.Set_int nb_clang_threads;
-    default = "4";
   };
   register_language_option "c" {
     key = "-disable-parser-cache";
@@ -202,8 +192,6 @@ let find_stubs_of_header header stubs =
 
 exception StubAliasFound of string
 
-let frontend_mutex = Mutex.create ()
-
 let rec parse_program (files: string list) =
   let open Clang_parser in
   let open Clang_to_C in
@@ -214,8 +202,7 @@ let rec parse_program (files: string list) =
   let ctx = Clang_to_C.create_context "project" target in
   let nb = List.length files in
   input_files := [];
-  ListExt.par_iteri
-    !nb_clang_threads
+  ListExt.iteri
     (fun i file ->
        match file, Filename.extension file with
        | _, (".c" | ".h") -> parse_file "clang" ~nb:(i,nb) [] file false false ctx
@@ -258,8 +245,7 @@ and parse_db (dbfile: string) ctx : unit =
   let nb = List.length srcs in
   input_files := [];
   let cwd = Sys.getcwd() in
-  ListExt.par_iteri
-    !nb_clang_threads
+  ListExt.iteri
     (fun i src ->
        match src.source_kind with
        | SOURCE_C | SOURCE_CXX ->
@@ -275,8 +261,6 @@ and parse_db (dbfile: string) ctx : unit =
 
 and parse_file (cmd: string) ?nb (opts: string list) (file: string) enable_cache ignore ctx =
   if not (Sys.file_exists file) then panic "file %s not found" file;
-  Mutex.lock frontend_mutex;
-  Mutex.unlock frontend_mutex;
   debug "parsing file %s" file;
   let opts' = ("-I" ^ (Paths.resolve_stub "c" "mopsa")) ::
               ("-include" ^ "mopsa.h") ::
