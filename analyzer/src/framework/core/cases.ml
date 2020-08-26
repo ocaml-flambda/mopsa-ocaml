@@ -230,7 +230,16 @@ let clear_log (r:('a,'r) cases) : ('a,'r) cases =
 let concat_cases_log (log:log) (r:('a,'r) cases) : ('a,'r) cases =
   r |> map_cases (fun case ->
       { case with
-        case_log = concat_log case.case_log log }
+        case_log =
+          (* Add logs of non-empty environments only *)
+          (* FIXME: Since are always called from the binders, we can't
+             require having the lattice manager. So we can't test if
+             T_cur is ⊥ or not! For the moment, we rely on empty flow
+             maps, but this is not always sufficient.
+          *)
+          if TokenMap.is_empty case.case_flow
+          then log
+          else concat_log case.case_log log }
     )
 
 
@@ -529,7 +538,17 @@ let remove_duplicates compare lattice r =
           case_flow = TokenMap.join lattice (Context.get_unit ctx) case.case_flow case'.case_flow;
           case_cleaners = case.case_cleaners @ case'.case_cleaners;
           case_alarms = AlarmSet.union case.case_alarms case'.case_alarms;
-          case_log = join_log case.case_log case'.case_log;
+          case_log = (
+            (* Add logs of non-empty environments only *)
+            let real_log flow log =
+              if lattice.is_bottom (TokenMap.get T_cur lattice flow)
+              then empty_log
+              else log
+            in
+            join_log
+              (real_log case.case_flow case.case_log)
+              (real_log case'.case_flow case'.case_log)
+          );
         }
       )
   in
