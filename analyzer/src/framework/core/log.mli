@@ -98,8 +98,8 @@ val add_stmt_to_log : stmt -> log -> log
 val merge_log : (stmt list -> stmt list) -> (stmt list -> stmt list) -> (stmt list -> stmt list -> stmt list) -> log -> log -> log
 (** [merge_log f1 f2 f log1 log2] combines [log1] and [log2] *)
 
-val concat_log : log -> log -> log
-(** [concat_log log1 log2] merges [log1] and [log2] by concatenating logged statements *)
+val concat_log : old:log -> recent:log -> log
+(** [concat_log old recent] puts statements in [old] before those in [recent] *)
 
 val meet_log : log -> log -> log
 (** [merge_log log1 log2] computes the logs of two intersected post-states *)
@@ -110,8 +110,14 @@ val join_log : log -> log -> log
 val generic_domain_merge : add:(var->'b->'a->'a) -> find:(var->'a->'b) -> remove:(var->'a->'a) -> ('a*block) -> ('a*block) -> 'a*'a
 (** Generic merge operator *)
 
-type stmt_kind += S_ndet of stmt list * stmt list
-(** Non-deterministic statement combining two blocks of statements (used in [join_log]) *)
+type stmt_kind +=
+  | S_join of stmt list * stmt list
+  (** Statement combining two logs of joined post-states *)
+  | S_meet of stmt list * stmt list
+  (** Statement combining two logs of intersected post-states *)
 
-val mk_ndet : stmt list -> stmt list -> range -> stmt
-(** Creates a non-deterministic statement *)
+val mk_join_stmt : stmt list -> stmt list -> range -> stmt
+(** Creates an S_join statement *)
+
+val mk_meet_stmt : stmt list -> stmt list -> range -> stmt
+(** Creates an S_meet statement *)
