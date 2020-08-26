@@ -102,18 +102,20 @@ let parse cmd tgt file opts : parse_result =
   let from_cache : parse_result option =
     try
       (* try cache file *)
-      let cache = open_in file_cache in
+      let f = Unix.openfile file_cache [Unix.O_RDONLY] 0o666 in
+      Unix.lockf f F_LOCK 0;
+      let cache = Unix.in_channel_of_descr f in
       let v = Marshal.from_channel cache in
-      if v <> version then (
-        if !debug then Printf.printf "Clang_parser_cache: incompatible version\n";
-        None
-      )
-      else
-        let signature : signature = Marshal.from_channel cache in
-        let check =
-          try check_signature cmd tgt opts signature with _ -> false
-        in
-        let r = 
+      let r = 
+        if v <> version then (
+          if !debug then Printf.printf "Clang_parser_cache: incompatible version\n";
+          None
+        )
+        else
+          let signature : signature = Marshal.from_channel cache in
+          let check =
+            try check_signature cmd tgt opts signature with _ -> false
+          in
           if check then  (
             (* correct signature -> use cache *)
             if !debug then Printf.printf "Clang_parser_cache: found\n";
@@ -124,9 +126,11 @@ let parse cmd tgt file opts : parse_result =
             if !debug then Printf.printf "Clang_parser_cache: incompatible signature\n";
             None
           )
-        in
-        close_in cache;
-        r
+      in
+      ignore (Unix.lseek f 0 SEEK_SET);
+      Unix.lockf f F_ULOCK 0;
+      close_in cache;
+      r
     with _ ->
       (* cache file not available *)
       if !debug then Printf.printf "Clang_parser_cache: cache file not found\n";
@@ -143,10 +147,16 @@ let parse cmd tgt file opts : parse_result =
      let c = get_signature cmd tgt opts files in
      (* store signature & parse result *)
      if !debug then Printf.printf "Clang_parser_cache: storing cache to %s\n" file_cache;
-    let cache = open_out file_cache in
+
+     let f = Unix.openfile file_cache [Unix.O_WRONLY;Unix.O_CREAT;Unix.O_TRUNC] 0o666 in
+     let cache = Unix.out_channel_of_descr f in
+     Unix.lockf f F_LOCK 0;
      Marshal.to_channel cache version [];
      Marshal.to_channel cache c [];
      Marshal.to_channel cache r [];
+     flush cache;
+     ignore (Unix.lseek f 0 SEEK_SET);
+     Unix.lockf f F_ULOCK 0;
      close_out cache;
      r
 
