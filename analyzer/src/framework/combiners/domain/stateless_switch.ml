@@ -37,20 +37,20 @@ struct
 
   let name = D1.name ^ " ; " ^ D2.name
 
-  let domains = D1.domains @ D2.domains
+  let domains = DomainSet.union D1.domains D2.domains
 
-  let semantics = D1.semantics @ D2.semantics
+  let semantics = SemanticSet.union D1.semantics D2.semantics
 
   let routing_table =
-    let t1 = List.fold_left
-        (fun acc d1 -> add_routes (Below d1) D2.domains acc)
-        (join_routing_table D1.routing_table D2.routing_table)
+    let t1 = DomainSet.fold
+        (fun d1 acc -> add_routes (Below d1) (DomainSet.elements D2.domains) acc)
         D1.domains
+        (join_routing_table D1.routing_table D2.routing_table)
     in
-    let t2 = List.fold_left
-        (fun acc s1 -> add_routes (Semantic s1) D2.domains acc)
-        t1
+    let t2 = SemanticSet.fold
+        (fun s1 acc -> add_routes (Semantic s1) (DomainSet.elements D2.domains) acc)
         D1.semantics
+        t1
     in
     t2
 

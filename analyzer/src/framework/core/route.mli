@@ -63,3 +63,6 @@ val join_routing_table : routing_table -> routing_table -> routing_table
 
 val pp_routing_table : Format.formatter -> routing_table -> unit
 (** Print a routing table *)
+
+module DomainSet : SetExtSig.S with type elt = domain
+(** Set of domains *)

@@ -82,7 +82,7 @@ let () = register_id {
 
 (** [sat_targets ~domains ~targets] checks whether a combiner containing [domains] satisifies some route [targets] *)
 let sat_targets ~targets ~domains =
-  targets = [] || List.exists (fun t -> List.mem t domains) targets
+  targets = [] || List.exists (fun t -> DomainSet.mem t domains) targets
 
 
 (** Manager of the left argument in a pair of domains *)

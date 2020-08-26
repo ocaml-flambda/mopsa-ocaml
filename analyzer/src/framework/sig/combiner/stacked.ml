@@ -27,8 +27,8 @@ open Abstraction.Stacked
 module type STACKED_COMBINER =
 sig
   include STACKED
-  val domains : domain list
-  val semantics : semantic list
+  val domains : DomainSet.t
+  val semantics : SemanticSet.t
   val routing_table : routing_table
   val exec : domain list -> stmt -> ('a,t) man -> 'a flow -> 'a post option
   val eval : domain list -> expr -> ('a,t) man -> 'a flow -> 'a eval option
@@ -39,8 +39,8 @@ end
 module StackedToCombiner(D:STACKED) : STACKED_COMBINER with type t = D.t =
 struct
   include D
-  let domains = [D.name]
-  let semantics = []
+  let domains = DomainSet.singleton D.name
+  let semantics = SemanticSet.empty
   let routing_table = empty_routing_table
   let exec targets = D.exec
   let eval targets = D.eval
