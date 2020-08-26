@@ -236,13 +236,6 @@ struct
   (** {2 Computation of post-conditions} *)
   (** ================================== *)
 
-  let update_offset o vold vnew range man flow =
-    match PointerSet.is_valid vold, PointerSet.is_valid vnew with
-    | true, true -> Post.return flow
-    | false, false -> Post.return flow
-    | false, true -> man.exec ~route:numeric (mk_add o range) flow
-    | true, false -> man.exec ~route:numeric (mk_remove o range) flow
-
 
   (** Assignment abstract transformer *)
   let assign p q mode range man flow =
@@ -276,12 +269,24 @@ struct
     let flow = set_env T_cur a' man flow in
     let vnew = Map.find p a' in
     let o = mk_offset p mode range in
-    update_offset o vold vnew range man flow >>% fun flow ->
-    match onew with
-    | None -> Post.return flow
-    | Some offset ->
+    match PointerSet.is_valid vold, PointerSet.is_valid vnew, onew with
+    | false, false, _ -> Post.return flow
+
+    | true, true, Some offset ->
       man.eval offset flow >>$ fun offset flow ->
       man.exec ~route:numeric (mk_assign o offset range) flow
+
+    | true, true, None -> Post.return flow
+
+    | false, true, Some offset ->
+      man.exec ~route:numeric (mk_add o range) flow >>% fun flow ->
+      man.eval offset flow >>$ fun offset flow ->
+      man.exec ~route:numeric (mk_assign (strongify_var_expr o) offset range) flow
+
+    | true, false, _ -> man.exec ~route:numeric (mk_remove o range) flow
+
+    | _ -> assert false
+
 
 
 
@@ -705,9 +710,18 @@ struct
       let values = Map.find p a in
       let evals = PointerSet.fold_points_to (fun v pt acc ->
           let flow = set_env T_cur (Map.set p v a) man flow in
-          ( update_offset o values v exp.erange man flow >>%
-            Cases.singleton pt )
-          :: acc
+          (
+            ( match PointerSet.is_valid values, PointerSet.is_valid v with
+              | false, false -> Post.return flow
+              | true, true -> Post.return flow
+              | false, true ->
+                man.exec ~route:numeric (mk_add o exp.erange) flow >>% fun flow ->
+                man.eval offset flow >>$ fun offset flow ->
+                man.exec ~route:numeric (mk_assign (strongify_var_expr o) offset exp.erange) flow
+              | true, false -> man.exec ~route:numeric (mk_remove o exp.erange) flow
+            ) >>% fun flow ->
+            Cases.singleton pt flow
+          ) :: acc
         ) values offset' []
       in
       Cases.join_list evals ~empty:(fun () -> Cases.empty_singleton flow)
