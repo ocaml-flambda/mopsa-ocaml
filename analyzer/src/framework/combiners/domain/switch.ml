@@ -50,7 +50,7 @@ struct
 
   let routing_table =
     let t1 = List.fold_left
-        (fun acc d1 -> add_routes (BelowOf d1) D2.domains acc)
+        (fun acc d1 -> add_routes (Below d1) D2.domains acc)
         (join_routing_table D1.routing_table D2.routing_table)
         D1.domains
     in

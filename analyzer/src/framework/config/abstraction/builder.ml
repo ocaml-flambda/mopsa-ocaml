@@ -61,7 +61,7 @@ let rec is_simplified_domain d =
   |  _                           -> false
 
 let rec make_simplified_product (domains:domain list) (reductions:domain_reduction list) : (module SIMPLIFIED_COMBINER) =
-  Combiners.Domain.Optimized.Simplified_product.make
+  Combiners.Domain.Simplified_product.make
     (List.map make_simplified_domain domains)
     (List.fold_left
        (fun acc -> function DR_simplified r -> r :: acc | _ -> acc)
@@ -108,7 +108,7 @@ let rec is_stateless_domain d =
 let rec make_stateless_domain_without_semantic (domain:domain) : (module STATELESS_COMBINER) =
   match domain.domain_kind with
   | D_stateless d -> (module StatelessToCombiner(val d))
-  | D_switch dl -> Combiners.Domain.Optimized.Stateless_switch.make (List.map make_stateless_domain dl)
+  | D_switch dl -> Combiners.Domain.Stateless_switch.make (List.map make_stateless_domain dl)
   | _ -> Exceptions.panic "Invalid configuration of stateless domain: %a" pp_domain domain
 
 and make_stateless_domain (domain:domain) : (module STATELESS_COMBINER) =

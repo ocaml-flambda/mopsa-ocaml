@@ -75,7 +75,7 @@ struct
     | E_constant (C_top T_int) -> fboth flow
     | E_unop(O_log_not,ee) -> eval_bool_expr ee ~ftrue:ffalse ~ffalse:ftrue ~fboth range man flow
     | _ ->
-      assume (to_bool_expr ee) man flow ~route:Below
+      assume (to_bool_expr ee) man flow ~route:(Below name)
         ~fthen:ftrue
         ~felse:ffalse
 
@@ -88,7 +88,7 @@ struct
 
     | S_assign(x,e) ->
       man.eval e flow >>$? fun e flow ->
-      man.exec (mk_assign x e stmt.srange) flow ~route:Below |>
+      man.exec (mk_assign x e stmt.srange) flow ~route:(Below name) |>
       OptionExt.return
 
     | S_assume{ekind = E_constant (C_bool true)}
@@ -159,7 +159,7 @@ struct
       OptionExt.return
 
     | E_binop(op,e1,e2) when is_comparison_op op ->
-      man.eval exp ~route:Below flow >>$? fun exp flow ->
+      man.eval exp ~route:(Below name) flow >>$? fun exp flow ->
       eval_bool_expr exp exp.erange man flow
         ~ftrue:(fun flow -> Eval.singleton (mk_true exp.erange) flow)
         ~ffalse:(fun flow -> Eval.singleton (mk_false exp.erange) flow)
@@ -167,7 +167,7 @@ struct
       OptionExt.return
 
     | E_unop(op,ee) when is_predicate_op op ->
-      man.eval exp ~route:Below flow >>$? fun exp flow ->
+      man.eval exp ~route:(Below name) flow >>$? fun exp flow ->
       eval_bool_expr exp exp.erange man flow
         ~ftrue:(fun flow -> Eval.singleton (mk_true exp.erange) flow)
         ~ffalse:(fun flow -> Eval.singleton (mk_false exp.erange) flow)

@@ -184,7 +184,7 @@ struct
     let unprimed = mk_base_expr base range in
     let primed = mk_primed_base_expr base range in
     let stmt = mk_rename primed unprimed range in
-    let post1 = man.exec stmt ~route:Below flow in
+    let post1 = man.exec stmt ~route:(Below name) flow in
     (* If this is a weak base, we need to restore the old values. *)
     (* To do that, we remove the primed base from the flow and we join with post1 *)
     if base_mode base = STRONG then

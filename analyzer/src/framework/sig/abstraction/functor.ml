@@ -50,12 +50,7 @@ struct
 
     include D
 
-    let init prog man flow =
-      let man = resolve_below_alias D.name man in
-      D.init prog man flow
-
     let exec stmt man flow =
-      let man = resolve_below_alias D.name man in 
       D.exec stmt man flow |>
       OptionExt.lift @@ fun res ->
       Cases.map_log (fun log ->
@@ -63,14 +58,6 @@ struct
             man.get_log log |> Log.add_stmt_to_log stmt
           ) log
         ) res
-
-  let eval exp man flow =
-    let man = resolve_below_alias D.name man in
-    D.eval exp man flow
-
-  let ask query man flow =
-    let man = resolve_below_alias D.name man in
-    D.ask query man flow
   
   end
 end

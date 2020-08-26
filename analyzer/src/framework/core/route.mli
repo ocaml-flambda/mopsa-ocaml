@@ -28,8 +28,7 @@ type domain = string
 
 (** Routes *)
 type route =
-  | Below                (** Sub-tree below the currently active domain *)
-  | BelowOf of domain    (** Sub-tree below a given domain *)
+  | Below    of domain   (** Sub-tree below a domain *)
   | Semantic of semantic (** Sub-tree identified by a semantic *)
 
 val compare_route : route -> route -> int

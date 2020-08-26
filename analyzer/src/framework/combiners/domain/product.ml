@@ -291,7 +291,7 @@ struct
        defined for user domains only *)
     let member = List.find (function [domain] -> true | _ -> false) Pool.members |>
                  List.hd in
-    BelowOf member
+    Below member
 
 
   (** Get the context of a pointwise result *)

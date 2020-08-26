@@ -120,13 +120,8 @@ struct
     if Log.is_empty_log log2 then a1 else
     if (Log.compare_log log1 log2 = 0) then a1
     else D.merge pre (a1,log1) (a2,log2)
-
-  let init prog man flow =
-    let man = resolve_below_alias D.name man in
-    D.init prog man flow
   
   let exec stmt man flow =
-    let man = resolve_below_alias D.name man in 
     D.exec stmt man flow |>
     OptionExt.lift @@ fun res ->
     Cases.map_log (fun log ->
@@ -134,14 +129,6 @@ struct
           man.get_log log |> Log.add_stmt_to_log stmt
         ) log
       ) res
-
-  let eval exp man flow =
-    let man = resolve_below_alias D.name man in
-    D.eval exp man flow
-
-  let ask query man flow =
-    let man = resolve_below_alias D.name man in
-    D.ask query man flow
   
 end
 

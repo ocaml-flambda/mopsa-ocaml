@@ -56,33 +56,33 @@ struct
   (** ========================== *)
 
   let exec_add b range man flow =
-    man.exec ~route:Below (mk_add b range) flow
+    man.exec ~route:(Below name) (mk_add b range) flow
 
   let exec_remove b range man flow =
-    man.exec ~route:Below (mk_remove b range) flow >>%
-    man.exec ~route:Below (mk_invalidate b range)
+    man.exec ~route:(Below name) (mk_remove b range) flow >>%
+    man.exec ~route:(Below name) (mk_invalidate b range)
 
   let exec_rename b1 b2 range man flow =
-    man.exec ~route:Below (mk_rename b1 b2 range) flow >>% fun flow ->
+    man.exec ~route:(Below name) (mk_rename b1 b2 range) flow >>% fun flow ->
     let bb1 = to_c_block_object b1 in
     let bb2 = to_c_block_object b2 in
-    man.exec ~route:Below (mk_rename bb1 bb2 range) flow
+    man.exec ~route:(Below name) (mk_rename bb1 bb2 range) flow
 
   let exec_forget b range man flow =
-    man.exec ~route:Below (mk_forget b range) flow
+    man.exec ~route:(Below name) (mk_forget b range) flow
 
   let exec_expand b bl range man flow =
-    man.exec ~route:Below (mk_expand b bl range) flow >>% fun flow ->
+    man.exec ~route:(Below name) (mk_expand b bl range) flow >>% fun flow ->
     let bb = to_c_block_object b in
     let bbl = List.map to_c_block_object bl in
-    man.exec ~route:Below (mk_expand bb bbl range) flow
+    man.exec ~route:(Below name) (mk_expand bb bbl range) flow
 
 
   let exec_fold b bl range man flow =
-    man.exec ~route:Below (mk_fold b bl range) flow >>% fun flow ->
+    man.exec ~route:(Below name) (mk_fold b bl range) flow >>% fun flow ->
     let bb = to_c_block_object b in
     let bbl = List.map to_c_block_object bl in
-    man.exec ~route:Below (mk_fold bb bbl range) flow
+    man.exec ~route:(Below name) (mk_fold bb bbl range) flow
 
   
   let exec stmt man flow =

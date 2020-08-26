@@ -232,25 +232,3 @@ let env_exec (f:'a flow -> 'a post) ctx (man:('a,'t) man) (a:'a) : 'a =
 let sub_env_exec (f:'a flow -> 'a post) ctx (man:('a,'t) man) (sman:('a,'s) stack_man) (a:'t) (s:'s) : 't * 's =
   let aa = env_exec f ctx man (man.lattice.top |> man.set a |> sman.set_sub s) in
   man.get aa, sman.get_sub aa
-
-
-(** Resolve route [Below] to [BelowOf domain]. This is necessary
-    because the toplevel domain resolve absolute routes only. *)
-let resolve_below_alias domain man =
-  { man with
-    exec = (fun ?(route=toplevel) stmt flow ->
-        match route with
-        | Below -> man.exec ~route:(BelowOf domain) stmt flow
-        | _ -> man.exec ~route stmt flow
-      );
-    eval = (fun ?(route=toplevel) exp flow ->
-        match route with
-        | Below -> man.eval ~route:(BelowOf domain) exp flow
-        | _ -> man.eval ~route exp flow
-      );
-    ask = (fun ?(route=toplevel) query flow ->
-        match route with
-        | Below -> man.ask ~route:(BelowOf domain) query flow
-        | _ -> man.ask ~route query flow
-      );
-  }
