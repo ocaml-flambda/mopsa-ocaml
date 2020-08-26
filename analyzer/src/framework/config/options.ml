@@ -188,13 +188,19 @@ let () =
 
 
 (** Debug channels *)
+
+(* Activate "print" channel by default *)
+let () = Debug.parse "print"
 let () =
   register_builtin_option {
     key = "-debug";
     category = "Debugging";
     doc = " select active debug channels. (syntax: <c1>,<c2>,...,<cn> and '_' can be used as a wildcard)";
-    spec = ArgExt.String (fun s -> Debug.parse s);
-    default = "";
+    spec = ArgExt.String (fun s ->
+        (* Always keep "print" channel *)
+        Debug.parse ("print," ^ s)
+      );
+    default = "print";
   };
   register_builtin_option {
     key = "-no-color";
