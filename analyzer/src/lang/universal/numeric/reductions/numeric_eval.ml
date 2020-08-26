@@ -45,9 +45,8 @@ struct
       (* Convert boolean values to numeric values to simplify reduction *)
       |> List.map (fun e ->
           match ekind e with
-          | E_constant (C_bool true) -> { e with ekind = E_constant (C_int Z.one) }
-          | E_constant (C_bool false) -> { e with ekind = E_constant (C_int Z.zero) }
-          | E_constant (C_top T_bool) -> { e with ekind = E_constant (C_int_interval (Z.zero, Z.one)) }
+          | E_constant (C_bool true) -> { e with ekind = E_constant (C_int Z.one); etyp = T_int }
+          | E_constant (C_bool false) -> { e with ekind = E_constant (C_int Z.zero); etyp = T_int }
           | _ -> e
         )
     in
@@ -101,11 +100,25 @@ struct
               in
               iter precise flow' tl
 
-            (* Other constants *)
-            | E_constant (C_bool _), _ ->
+            (* Logic expressions *)
+            | E_binop(op1,_,_), E_binop(op2,_,_) when (is_comparison_op op1 || is_logic_op op1)
+                                                   && (is_comparison_op op2 || is_logic_op op2) ->
+              (* Transform as a conjunction *)
+              iter (mk_log_and acc hd exp.erange) flow tl
+
+            (* constant AND compare : keep compare *)
+            | E_constant (C_int n), E_binop(op,_,_)
+            | E_binop(op,_,_), E_constant (C_int n) when (is_comparison_op op || is_logic_op op) ->
+              let precise =
+                match ekind hd with E_binop _ -> hd | _ -> acc
+              in
+              iter precise flow tl
+
+            (* Keep other constants *)
+            | E_constant _, _ ->
               iter hd flow tl
 
-            | _, E_constant (C_bool _) ->
+            | _, E_constant _ ->
               iter acc flow tl
 
 
