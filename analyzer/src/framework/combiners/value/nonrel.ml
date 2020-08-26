@@ -422,10 +422,11 @@ struct
             | _ -> assert false
           ) vars
       in
-      VarMap.fold (fun v _ acc ->
-          if List.exists (fun v' -> compare_var v v' = 0) vars then acc else VarMap.remove v acc
-        ) map map |>
-      OptionExt.return
+      List.fold_left
+        (fun acc v ->
+           add ctx v (find v map) acc
+        ) empty vars
+      |> OptionExt.return
 
     | S_rename ({ ekind = E_var (var1, _) }, { ekind = E_var (var2, _) }) ->
       let v = find var1 map in
