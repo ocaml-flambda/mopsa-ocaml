@@ -638,8 +638,7 @@ struct
         )
       ~felse:(fun flow ->
           (* Unsafe case *)
-          Flow.set_bottom T_cur flow |>
-          Eval.empty_singleton
+          Eval.empty_singleton flow
         ) man flow
 
 

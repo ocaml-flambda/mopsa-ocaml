@@ -94,9 +94,9 @@ let singleton
 
 
 
-let empty_singleton (flow:'a flow) : ('a,'r) cases =
-  Flow.remove T_cur flow |>
-  return None
+let empty_singleton ?(bottom=true) (flow:'a flow) : ('a,'r) cases =
+  let flow = if bottom then Flow.remove T_cur flow else flow in
+  return None flow
 
 
 let opt_clean_cur_only = ref false

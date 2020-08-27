@@ -53,7 +53,7 @@ val singleton : ?cleaners:block -> 'r -> 'a flow -> ('a,'r) cases
 (** Create a singleton non-empty cas.e *)
 
 
-val empty_singleton : 'a flow -> ('a,'r) cases
+val empty_singleton : ?bottom:bool -> 'a flow -> ('a,'r) cases
 (** Create a singleton empty case. *)
 
 

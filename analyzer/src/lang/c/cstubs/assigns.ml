@@ -173,7 +173,7 @@ struct
 
     | P_top ->
       Soundness.warn_at range "ignoring assigns on ⊤ pointer %a" pp_expr (get_orig_expr ptr);
-      Cases.empty_singleton flow
+      Cases.empty_singleton ~bottom:false flow
 
     | _ -> assert false
 
@@ -260,7 +260,7 @@ struct
 
     | P_top ->
       Soundness.warn_at range "ignoring prime of ⊤ pointer %a" pp_expr (get_orig_expr ptr);
-      Cases.empty_singleton flow
+      Cases.empty_singleton ~bottom:false flow
 
     | _ -> assert false
 

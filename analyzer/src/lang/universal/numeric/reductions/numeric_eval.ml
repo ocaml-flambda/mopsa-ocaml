@@ -68,17 +68,17 @@ struct
 
             (* Integer expressions *)
             | E_constant (C_int a), E_constant (C_int b) ->
-              if Z.(a = b) then iter acc flow tl else Eval.empty_singleton (Flow.remove T_cur flow)
+              if Z.(a = b) then iter acc flow tl else Eval.empty_singleton flow
 
             | E_constant (C_int_interval(a,b)), E_constant(C_int c) ->
-              if Z.(a <= c && c <= b) then iter hd flow tl else Eval.empty_singleton (Flow.remove T_cur flow)
+              if Z.(a <= c && c <= b) then iter hd flow tl else Eval.empty_singleton flow
 
             | E_constant(C_int c), E_constant (C_int_interval(a,b)) ->
-              if Z.(a <= c && c <= b) then iter acc flow tl else Eval.empty_singleton (Flow.remove T_cur flow)
+              if Z.(a <= c && c <= b) then iter acc flow tl else Eval.empty_singleton flow
 
             | E_constant(C_int_interval (a,b)), E_constant (C_int_interval(c,d)) ->
               let lo = Z.max a c and hi = Z.min b d in
-              if Z.(lo <= hi) then iter (mk_z_interval lo hi exp.erange) flow tl else Eval.empty_singleton (Flow.remove T_cur flow)
+              if Z.(lo <= hi) then iter (mk_z_interval lo hi exp.erange) flow tl else Eval.empty_singleton flow
 
             (* Variables *)
             | E_var (v1,mode1), E_var (v2,mode2) ->
