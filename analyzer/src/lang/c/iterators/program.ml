@@ -385,10 +385,14 @@ struct
     let arg_weak = weaken_addr_expr arg in
     man.exec (mk_rename arg arg_weak range) flow >>% fun flow ->
 
-    (* Put the symbolic argument in argv[0 : argc-1] *)
+    (* Initialize argv[0] *)
+    let first = mk_c_subscript_access argv zero range in
+    man.exec (mk_assign first arg_weak range) flow >>% fun flow ->
+
+    (* Put the symbolic argument in argv[1 : argc-1] *)
     let i = mktmp ~typ:s32 () in
     let ii = mk_var i range in
-    let l = mk_zero range in
+    let l = mk_one range in
     let u = sub argc (mk_one range) range in
     man.exec (mk_add ii range) flow >>% fun flow ->
     man.exec (mk_assign ii (mk_c_builtin_call "_mopsa_range_s32" [l;u] s32 range) range) flow >>% fun flow ->
