@@ -22,17 +22,17 @@
             "universal.iterators.loops",
             "universal.iterators.unittest",
 
-            "python.libs.mopsa",
-            "python.libs.stdlib",
-            "python.libs.math",
-            "python.libs.unittest",
-            "python.libs.typing",
-
             "universal.heap.recency",
             {
                 "compose": [
                     { "semantic": "Python",
                       "switch": [
+                          "python.libs.mopsa",
+                          "python.libs.stdlib",
+                          "python.libs.math",
+                          "python.libs.unittest",
+                          "python.libs.typing",
+
 
                           "python.objects.class",
                           "python.objects.lambda",
