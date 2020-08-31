@@ -89,19 +89,19 @@ struct
   let init (prog:program) man flow = flow
 
   let kvar_of_addr a = match akind a with
-    | A_py_dict -> mk_addr_attr a "dict_key" T_any
+    | A_py_dict -> mk_addr_attr a "dict_key" T_py
     | _ -> assert false
 
   let vvar_of_addr a = match akind a with
-    | A_py_dict -> mk_addr_attr a "dict_val" T_any
+    | A_py_dict -> mk_addr_attr a "dict_val" T_py
     | _ -> assert false
 
   let var_of_addr a = match akind a with
-    | A_py_dict -> mk_addr_attr a "dict_key" T_any,
-                     mk_addr_attr a "dict_val" T_any
+    | A_py_dict -> mk_addr_attr a "dict_key" T_py,
+                     mk_addr_attr a "dict_val" T_py
     | _ -> assert false
 
-  let viewseq_of_addr a = mk_addr_attr a "view_seq" T_any
+  let viewseq_of_addr a = mk_addr_attr a "view_seq" T_py
 
   let addr_of_expr exp = match ekind exp with
     | E_addr a -> a
@@ -114,8 +114,8 @@ struct
   let extract_vars dictobj =
     match ekind dictobj with
     | E_py_object ({addr_kind = A_py_dict} as addr, _) ->
-      mk_addr_attr addr "dict_key" T_any,
-      mk_addr_attr addr "dict_val" T_any
+      mk_addr_attr addr "dict_key" T_py,
+      mk_addr_attr addr "dict_val" T_py
     | _ -> assert false
 
 
@@ -132,8 +132,8 @@ struct
           let els_keys, els_vals = var_of_addr addr_dict in
           let flow = List.fold_left2 (fun acc key valu ->
               acc >>%
-              man.exec ~route:(Semantic "Python") (mk_assign (mk_var ~mode:(Some WEAK) els_keys range) key range) >>%
-              man.exec ~route:(Semantic "Python") (mk_assign (mk_var ~mode:(Some WEAK) els_vals range) valu range)
+              man.exec   (mk_assign (mk_var ~mode:(Some WEAK) els_keys range) key range) >>%
+              man.exec   (mk_assign (mk_var ~mode:(Some WEAK) els_vals range) valu range)
             ) (Post.return flow) ks vs in
           flow >>% Eval.singleton (mk_py_object (addr_dict, None) range)
         )
@@ -141,7 +141,7 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.__new__", _))}, _)}, cls :: _, []) ->
       Utils.new_wrapper man range flow "dict" cls
-        ~fthennew:(man.eval (mk_expr (E_py_dict ([],[])) range))
+        ~fthennew:(man.eval (mk_expr ~etyp:T_py (E_py_dict ([],[])) range))
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.__init__" as f, _))}, _)}, args, [])
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.update" as f, _))}, _)}, args, []) ->
@@ -174,7 +174,7 @@ struct
       Utils.check_instances f man flow range args ["dict"]
         (fun args flow ->
            let var_k, var_v = extract_vars (List.hd args) in
-           man.eval (mk_expr (E_py_dict ([mk_var ~mode:(Some WEAK) var_k range], [mk_var ~mode:(Some WEAK) var_v range])) range) flow
+           man.eval (mk_expr ~etyp:T_py (E_py_dict ([mk_var ~mode:(Some WEAK) var_k range], [mk_var ~mode:(Some WEAK) var_v range])) range) flow
         )
       |> OptionExt.return
 
@@ -198,7 +198,7 @@ struct
            let keyerror = Eval.empty_singleton keyerror_f in
 
            let flow = Flow.copy_ctx keyerror_f flow in
-           let evals = man.eval ~route:(Semantic "Python") (mk_var var_v range) flow in
+           let evals = man.eval   (mk_var var_v range) flow in
 
            Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (evals :: Cases.copy_ctx evals keyerror :: [])
         )
@@ -215,8 +215,8 @@ struct
            debug "at range %a, flow = %a@\n" pp_range range (Flow.print man.lattice.print) flow;
            let var_k, var_v = extract_vars (List.hd args) in
 
-           let eval_r = man.eval ~route:(Semantic "Python") (mk_var var_v range) flow in
-           let default = man.eval ~route:(Semantic "Python") (List.nth args 2) flow  in
+           let eval_r = man.eval   (mk_var var_v range) flow in
+           let default = man.eval   (List.nth args 2) flow  in
 
            Eval.join default eval_r
         )
@@ -227,7 +227,7 @@ struct
         (fun args flow ->
            let var_k, var_v = extract_vars (List.hd args) in
 
-           let eval_r = man.eval ~route:(Semantic "Python") (mk_expr (E_py_tuple [mk_var var_k range; mk_var var_v range]) range) flow in
+           let eval_r = man.eval   (mk_expr ~etyp:T_py (E_py_tuple [mk_var var_k range; mk_var var_v range]) range) flow in
 
            let flow = Flow.set_ctx (Cases.get_ctx eval_r) flow in
 
@@ -251,7 +251,7 @@ struct
            man.eval   a flow >>$
  (fun addr_it flow ->
                  let addr_it = match ekind addr_it with E_addr a -> a | _ -> assert false in
-                 man.exec ~route:(Semantic "Python") (mk_assign (mk_var (Py_list.Domain.itseq_of_addr addr_it) range) dict range) flow >>%
+                 man.exec   (mk_assign (mk_var (Py_list.Domain.itseq_of_addr addr_it) range) dict range) flow >>%
                    Eval.singleton (mk_py_object (addr_it, None) range)
              )
         )
@@ -288,7 +288,7 @@ struct
            man.eval   a flow >>$
  (fun addr_it flow ->
                let addr_it = match ekind addr_it with E_addr a -> a | _ -> assert false in
-               man.exec ~route:(Semantic "Python") (mk_assign (mk_var (viewseq_of_addr addr_it) range) dict range) flow >>%
+               man.exec   (mk_assign (mk_var (viewseq_of_addr addr_it) range) dict range) flow >>%
                Eval.singleton (mk_py_object (addr_it, None) range)
              )
         )
@@ -304,13 +304,13 @@ struct
         | _ -> assert false in
       Utils.check_instances n man flow range args [case]
         (fun args flow ->
-          man.eval ~route:(Semantic "Python") (mk_var (viewseq_of_addr @@ addr_of_eobj @@ List.hd args) range) flow >>$
+          man.eval   (mk_var (viewseq_of_addr @@ addr_of_eobj @@ List.hd args) range) flow >>$
  (fun dict_eobj flow ->
                 let a = mk_alloc_addr (Py_list.A_py_iterator (itname, None)) range in
                 man.eval   a flow >>$
  (fun addr_it flow ->
                       let addr_it = match ekind addr_it with E_addr a -> a | _ -> assert false in
-                      man.exec ~route:(Semantic "Python") (mk_assign (mk_var (Py_list.Domain.itseq_of_addr addr_it) range) dict_eobj range) flow >>%
+                      man.exec   (mk_assign (mk_var (Py_list.Domain.itseq_of_addr addr_it) range) dict_eobj range) flow >>%
                         Eval.singleton (mk_py_object (addr_it, None) range)
                     )
               )
@@ -321,7 +321,7 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict_keyiterator.__next__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args ["dict_keyiterator"]
         (fun args flow ->
-          man.eval ~route:(Semantic "Python") (mk_var (Py_list.Domain.itseq_of_eobj @@ List.hd args) range) flow >>$
+          man.eval   (mk_var (Py_list.Domain.itseq_of_eobj @@ List.hd args) range) flow >>$
  (fun dict_eobj flow ->
                 let var_k = kvar_of_addr @@ addr_of_eobj dict_eobj in
                 let els = man.eval (mk_var var_k ~mode:(Some WEAK) range) flow in
@@ -336,7 +336,7 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict_valueiterator.__next__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args ["dict_valueiterator"]
         (fun args flow ->
-          man.eval ~route:(Semantic "Python") (mk_var (Py_list.Domain.itseq_of_eobj @@ List.hd args) range) flow >>$
+          man.eval   (mk_var (Py_list.Domain.itseq_of_eobj @@ List.hd args) range) flow >>$
  (fun dict_eobj flow ->
                 let var_v = vvar_of_addr @@ addr_of_eobj dict_eobj in
                 let els = man.eval (mk_var var_v ~mode:(Some WEAK) range) flow in
@@ -351,10 +351,10 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict_itemiterator.__next__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args ["dict_itemiterator"]
         (fun args flow ->
-          man.eval ~route:(Semantic "Python") (mk_var (Py_list.Domain.itseq_of_eobj @@ List.hd args) range) flow >>$
+          man.eval   (mk_var (Py_list.Domain.itseq_of_eobj @@ List.hd args) range) flow >>$
  (fun dict_eobj flow ->
                 let var_k, var_v = var_of_addr @@ addr_of_eobj dict_eobj in
-                let els = man.eval (mk_expr (E_py_tuple [mk_var var_k ~mode:(Some WEAK) range;
+                let els = man.eval (mk_expr ~etyp:T_py (E_py_tuple [mk_var var_k ~mode:(Some WEAK) range;
                                                          mk_var var_v ~mode:(Some WEAK) range]) range) flow in
                 let flow = Flow.set_ctx (Cases.get_ctx els) flow in
                 let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty_singleton in
@@ -388,7 +388,7 @@ struct
       Utils.check_instances f man flow range args
         ["dict"]
         (fun args flow ->
-           man.eval ~route:(Semantic "Python") (mk_py_top T_int range) flow
+           man.eval   (mk_py_top T_int range) flow
         )
       |> OptionExt.return
 
@@ -396,7 +396,7 @@ struct
       Utils.check_instances f man flow range args
         ["dict_items"]
         (fun args flow ->
-           man.eval ~route:(Semantic "Python") (mk_py_top T_int range) flow
+           man.eval   (mk_py_top T_int range) flow
         )
       |> OptionExt.return
 
@@ -404,7 +404,7 @@ struct
       Utils.check_instances f man flow range args
         ["dict_keys"]
         (fun args flow ->
-           man.eval ~route:(Semantic "Python") (mk_py_top T_int range) flow
+           man.eval   (mk_py_top T_int range) flow
         )
       |> OptionExt.return
 
@@ -423,10 +423,10 @@ struct
               List.map (fun (var, annot) ->
                   mk_stmt (S_py_annot
                              (mk_var ~mode:(Some WEAK) var range,
-                              mk_expr (E_py_annot annot) range)
+                              mk_expr ~etyp:T_py (E_py_annot annot) range)
                           ) range
                 ) [(keys_var, ty_key); (values_var, ty_value)]) range in
-          man.exec ~route:(Semantic "Python") stmts flow >>%
+          man.exec   stmts flow >>%
           Eval.singleton (mk_py_object (addr_dict, None) range)
         )
       |> OptionExt.return
@@ -441,9 +441,9 @@ struct
       let kva, vva = var_of_addr a in
       let kva', vva' = var_of_addr a' in
       debug "renaming %a into %a@\n" pp_var kva pp_var kva';
-      let flow = man.exec ~route:(Semantic "Python") (mk_rename_var kva kva' range) flow  in
+      let flow = man.exec   (mk_rename_var kva kva' range) flow  in
       debug "renaming %a into %a@\n" pp_var vva pp_var vva';
-      flow >>% man.exec ~route:(Semantic "Python") (mk_rename_var vva vva' range)
+      flow >>% man.exec   (mk_rename_var vva vva' range)
       |> OptionExt.return
 
     | S_fold ({ekind = E_addr ({addr_kind = A_py_dict} as a)}, addrs) ->
@@ -452,8 +452,8 @@ struct
                                       | E_addr ({addr_kind = A_py_dict} as a') -> var_of_addr a'
                                       | _ -> assert false) addrs in
        flow |>
-         man.exec ~route:(Semantic "Python") (mk_fold_var kva kvas range) >>%
-         man.exec ~route:(Semantic "Python") (mk_fold_var vva vvas range) |>
+         man.exec   (mk_fold_var kva kvas range) >>%
+         man.exec   (mk_fold_var vva vvas range) |>
          OptionExt.return
 
     | S_expand ({ekind = E_addr ({addr_kind = A_py_dict} as a)}, addrs) ->
@@ -462,39 +462,39 @@ struct
                                                            | E_addr ({addr_kind = A_py_dict} as a') -> var_of_addr a'
                                                            | _ -> assert false) addrs in
        flow |>
-         man.exec ~route:(Semantic "Python") (mk_expand_var kva kvas range) >>%
-         man.exec ~route:(Semantic "Python") (mk_expand_var vva vvas range) |>
+         man.exec   (mk_expand_var kva kvas range) >>%
+         man.exec   (mk_expand_var vva vvas range) |>
          OptionExt.return
 
     | S_remove {ekind = E_addr ({addr_kind = A_py_dict} as a)} ->
        let kva, vva = var_of_addr a in
        flow |>
-         man.exec ~route:(Semantic "Python") (mk_remove_var kva range) >>%
-         man.exec ~route:(Semantic "Python") (mk_remove_var vva range) |>
+         man.exec   (mk_remove_var kva range) >>%
+         man.exec   (mk_remove_var vva range) |>
          OptionExt.return
 
     | S_invalidate {ekind = E_addr ({addr_kind = A_py_dict} as a)} ->
        let kva, vva = var_of_addr a in
        flow |>
-         man.exec ~route:(Semantic "Python") (mk_remove_var kva range) >>%
-         man.exec ~route:(Semantic "Python") (mk_remove_var vva range) |>
+         man.exec   (mk_remove_var kva range) >>%
+         man.exec   (mk_remove_var vva range) |>
          OptionExt.return
 
     | S_remove {ekind = E_addr ({addr_kind = A_py_dict_view _} as a)} ->
        let va = viewseq_of_addr a in
-       flow |> man.exec ~route:(Semantic "Python") (mk_remove_var va range) |> OptionExt.return
+       flow |> man.exec   (mk_remove_var va range) |> OptionExt.return
 
     | S_rename ({ekind = E_addr ({addr_kind = A_py_dict_view _} as a)}, {ekind = E_addr a'}) ->
        let va = viewseq_of_addr a in
        let va' = viewseq_of_addr a' in
-       man.exec ~route:(Semantic "Python") (mk_rename_var va va' range) flow |> OptionExt.return
+       man.exec   (mk_rename_var va va' range) flow |> OptionExt.return
 
     | S_fold ({ekind = E_addr ({addr_kind = A_py_dict_view _} as a)}, addrs) ->
        let va = viewseq_of_addr a in
        let vas = List.map (fun ea' -> match ekind ea' with
                                       | E_addr ({addr_kind = A_py_dict_view _} as a') -> viewseq_of_addr a'
                                       | _ -> assert false) addrs in
-       man.exec ~route:(Semantic "Python") (mk_fold_var va vas range) flow |> OptionExt.return
+       man.exec   (mk_fold_var va vas range) flow |> OptionExt.return
 
 
     | S_expand ({ekind = E_addr ({addr_kind = A_py_dict_view _} as a)}, addrs) ->
@@ -502,11 +502,11 @@ struct
        let vas = List.map (fun ea' -> match ekind ea' with
                                       | E_addr ({addr_kind = A_py_dict_view _} as a') -> viewseq_of_addr a'
                                       | _ -> assert false) addrs in
-       man.exec ~route:(Semantic "Python") (mk_expand_var va vas range) flow |> OptionExt.return
+       man.exec   (mk_expand_var va vas range) flow |> OptionExt.return
 
     | S_invalidate {ekind = E_addr ({addr_kind = A_py_dict_view _} as a)} ->
        let va = viewseq_of_addr a in
-       man.exec ~route:(Semantic "Python") (mk_remove_var va range) flow |> OptionExt.return
+       man.exec   (mk_remove_var va range) flow |> OptionExt.return
 
 
     | _ -> None

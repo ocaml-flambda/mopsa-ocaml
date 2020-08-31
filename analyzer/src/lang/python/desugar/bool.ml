@@ -42,9 +42,9 @@ module Domain =
       let range = erange exp in
       match ekind exp with
       | E_unop(O_py_not, e) ->
-        man.eval ~route:(Semantic "Python") (Utils.mk_builtin_call "bool" [e] range) flow >>$
+        man.eval   (Utils.mk_builtin_call "bool" [e] range) flow >>$
           (fun ee flow ->
-            man.eval ~route:(Semantic "Python") (mk_not ee range) flow)
+            man.eval   (mk_not ee range) flow)
         |> OptionExt.return
 
         (* E⟦ e1 and e2 ⟧ *)

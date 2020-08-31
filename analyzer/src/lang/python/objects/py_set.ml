@@ -80,7 +80,7 @@ struct
   let init (prog:program) man flow = flow
 
   let var_of_addr a = match akind a with
-    | A_py_set -> mk_addr_attr a "set" T_any
+    | A_py_set -> mk_addr_attr a "set" T_py
     | _ -> assert false
 
   let var_of_eobj e = match ekind e with
@@ -103,7 +103,7 @@ struct
           let addr_set = addr_of_expr eaddr_set in
           let els_var = var_of_addr addr_set in
           let flow = List.fold_left (fun acc el ->
-                         acc >>% man.exec ~route:(Semantic "Python") (mk_assign (mk_var ~mode:(Some WEAK) els_var range) el range)) (Post.return flow) ls in
+                         acc >>% man.exec   (mk_assign (mk_var ~mode:(Some WEAK) els_var range) el range)) (Post.return flow) ls in
           flow >>% Eval.singleton (mk_py_object (addr_set, None) range)
         )
       |> OptionExt.return
@@ -111,7 +111,7 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__new__", _))}, _)}, cls::args, []) ->
       Utils.new_wrapper man range flow "set" cls
-        ~fthennew:(man.eval (mk_expr (E_py_set []) range))
+        ~fthennew:(man.eval (mk_expr ~etyp:T_py (E_py_set []) range))
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__init__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args
@@ -161,7 +161,7 @@ struct
            man.eval   a flow >>$
  (fun eaddr_it flow ->
                let addr_it = match ekind eaddr_it with | E_addr a -> a | _ -> assert false in
-               man.exec ~route:(Semantic "Python") (mk_assign (mk_var (Py_list.Domain.itseq_of_addr addr_it) range) set range) flow >>%
+               man.exec   (mk_assign (mk_var (Py_list.Domain.itseq_of_addr addr_it) range) set range) flow >>%
                Eval.singleton (mk_py_object (addr_it, None) range)
              )
         )
@@ -169,9 +169,9 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set_iterator.__next__", _))}, _)}, [iterator], []) ->
       (* todo: checks ? *)
-       man.eval  ~route:(Semantic "Python") iterator flow >>$
+       man.eval    iterator flow >>$
  (fun iterator flow ->
-             man.eval ~route:(Semantic "Python") (mk_var (Py_list.Domain.itseq_of_eobj iterator) range) flow >>$
+             man.eval   (mk_var (Py_list.Domain.itseq_of_eobj iterator) range) flow >>$
  (fun set_eobj flow ->
                    let var_els = var_of_eobj set_eobj in
                    let els = man.eval (mk_var var_els ~mode:(Some WEAK) range) flow in
@@ -185,13 +185,13 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set_iterator.__iter__", _))}, _)}, [iterator], []) ->
       (* todo: checks ? *)
-      man.eval ~route:(Semantic "Python") iterator flow |> OptionExt.return
+      man.eval   iterator flow |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__len__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args
         ["set"]
         (fun args flow ->
-           man.eval ~route:(Semantic "Python") (mk_py_top T_int range) flow
+           man.eval   (mk_py_top T_int range) flow
         )
       |> OptionExt.return
 
@@ -232,13 +232,13 @@ struct
     | S_remove {ekind = E_addr ({addr_kind = A_py_set} as a)} ->
        let va = var_of_addr a in
        flow |>
-         man.exec ~route:(Semantic "Python") (mk_remove_var va range) |>
+         man.exec   (mk_remove_var va range) |>
          OptionExt.return
 
     | S_invalidate {ekind = E_addr ({addr_kind = A_py_set} as a)} ->
        let va = var_of_addr a in
        flow |>
-         man.exec ~route:(Semantic "Python") (mk_remove_var va range) |>
+         man.exec   (mk_remove_var va range) |>
          OptionExt.return
 
     | S_fold ({ekind = E_addr ({addr_kind = A_py_set} as a)}, addrs) ->
@@ -246,21 +246,21 @@ struct
        let vas = List.map (fun ea' -> match ekind ea' with
                                       | E_addr ({addr_kind = A_py_set} as a') -> var_of_addr a'
                                       | _ -> assert false) addrs in
-       man.exec ~route:(Semantic "Python") (mk_fold_var va vas range) flow |>  OptionExt.return
+       man.exec   (mk_fold_var va vas range) flow |>  OptionExt.return
 
     | S_expand ({ekind = E_addr ({addr_kind = A_py_set} as a)}, addrs) ->
        let va = var_of_addr a in
        let vas = List.map (fun ea' -> match ekind ea' with
                                       | E_addr ({addr_kind = A_py_set} as a') -> var_of_addr a'
                                       | _ -> assert false) addrs in
-       man.exec ~route:(Semantic "Python") (mk_expand_var va vas range) flow |> OptionExt.return
+       man.exec   (mk_expand_var va vas range) flow |> OptionExt.return
 
 
     | S_rename ({ekind = E_addr ({addr_kind = A_py_set} as a)}, {ekind = E_addr a'}) ->
       let va = var_of_addr a in
       let va' = var_of_addr a' in
       debug "renaming %a into %a@\n" pp_var va pp_var va';
-      man.exec ~route:(Semantic "Python") (mk_rename_var va va' range) flow
+      man.exec   (mk_rename_var va va' range) flow
       |> OptionExt.return
 
     | _ -> None

@@ -41,6 +41,7 @@ type constant +=
 
 (** Python-specific types *)
 type typ +=
+  | T_py
   | T_py_not_implemented
   | T_py_complex
   | T_py_none
@@ -482,23 +483,23 @@ let mk_raise exc range =
   mk_stmt (S_py_raise (Some exc)) range
 
 let mk_py_call func args range =
-  mk_expr (E_py_call (func, args, [])) range
+  mk_expr ~etyp:T_py (E_py_call (func, args, [])) range
 
 let mk_py_kall func args kwargs range =
   (* call with kwargs *)
-  mk_expr (E_py_call (func, args, kwargs)) range
+  mk_expr ~etyp:T_py (E_py_call (func, args, kwargs)) range
 
-let mk_py_attr obj attr ?(etyp=T_any) range =
+let mk_py_attr obj attr ?(etyp=T_py) range =
   mk_expr (E_py_attribute (obj, attr)) ~etyp range
 
 let mk_py_object (addr, e) range =
-  mk_expr (E_py_object (addr, e)) range
+  mk_expr ~etyp:T_py (E_py_object (addr, e)) range
 
-let mk_py_object_attr obj attr ?(etyp=T_any) range =
+let mk_py_object_attr obj attr ?(etyp=T_py) range =
   mk_py_attr (mk_py_object obj range) attr ~etyp range
 
 let mk_py_bool b range =
-  mk_constant (C_bool b) ~etyp:T_bool range
+  mk_constant (C_bool b) ~etyp:T_py range
 
 let mk_py_true = mk_py_bool true
 

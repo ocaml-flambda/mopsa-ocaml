@@ -49,7 +49,7 @@ module Domain =
         let start = Timing.start () in
         debug "Calling %a from %a" pp_expr exp pp_range exp.erange;
         let res =
-          man.eval ~route:(Semantic "Python") f flow >>$
+          man.eval   f flow >>$
             (fun f flow ->
                debug "f is now %a" pp_expr f;
                match ekind f with
@@ -66,14 +66,14 @@ module Domain =
                | E_py_object ({addr_kind = A_py_method _}, _)
                | E_py_object ({addr_kind = A_py_module _}, _) ->
                  let exp = {exp with ekind = E_py_call(f, args, kwargs)} in
-                 man.eval  ~route:(Semantic "Python") exp flow
+                 man.eval    exp flow
 
                | _ ->
                  (* if f has attribute call, restart with that *)
                  assume
                    (mk_py_hasattr f "__call__" range)
                    ~fthen:(fun flow ->
-                       man.eval  ~route:(Semantic "Python") (mk_py_kall (mk_py_attr f "__call__" range) args kwargs range) flow)
+                       man.eval    (mk_py_kall (mk_py_attr f "__call__" range) args kwargs range) flow)
                    ~felse:(fun flow ->
                        panic_at range "callable/E_py_call, on %a, exp=%a@\n" pp_expr f pp_expr exp
                      )

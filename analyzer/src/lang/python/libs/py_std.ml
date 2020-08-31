@@ -166,7 +166,7 @@ struct
          let msg = Format.asprintf "input expected at most 1 arguments, got %d" (List.length args) in
          man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>% Eval.empty_singleton in
        if List.length args <= 1 then
-        man.eval ~route:(Semantic "Python") (mk_py_top T_string range) flow |> OptionExt.return
+        man.eval   (mk_py_top T_string range) flow |> OptionExt.return
       else
         tyerror flow |> OptionExt.return
 
@@ -176,9 +176,9 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("sum", _))}, _)}, [ els; start ], [])  ->
       (* let's desugar sum into tmp = 0; for x in els: tmp = tmp + x; tmp *)
-      let counter = mk_range_attr_var range "counter" T_any in
+      let counter = mk_range_attr_var range "counter" T_py in
       let counter_var = mk_var counter range in
-      let target = mk_range_attr_var range "target" T_any in
+      let target = mk_range_attr_var range "target" T_py in
       let target_var = mk_var target range in
       let assign = mk_assign counter_var (mk_constant ~etyp:T_int (C_int (Z.of_int 0)) range) range in
       let pass = mk_block [] range in
@@ -195,7 +195,7 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (s, _))}, _)}, [e1; e2], []) when s = "max" || s = "min" ->
       (* desugaring max(e1, e2) into e1 if e1 > e2 else e2 *)
       let comp_op = if s = "max" then O_gt else O_lt in
-      man.eval ~route:(Semantic "Python") (mk_expr
+      man.eval   (mk_expr ~etyp:T_py
                                                    (E_py_if
                                                       (mk_binop e1 comp_op e2 range,
                                                        e1,
@@ -211,11 +211,11 @@ struct
        *        if target_var > maxi_var:
        *            maxi_var = target_var *)
       let comp_op = if s = "max" then O_gt else if s = "min" then O_lt else assert false in
-      let iter = mk_range_attr_var range "iter" T_any in
+      let iter = mk_range_attr_var range "iter" T_py in
       let iter_var = mk_var iter range in
-      let maxi = mk_range_attr_var range "extrema" T_any in
+      let maxi = mk_range_attr_var range "extrema" T_py in
       let maxi_var = mk_var maxi range in
-      let target = mk_range_attr_var range "target" T_any in
+      let target = mk_range_attr_var range "target" T_py in
       let target_var = mk_var target range in
 
       let cleaners = List.map (fun x -> mk_remove_var x range) [iter; maxi; target] in
@@ -242,7 +242,7 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("max", _))}, _)}, [e1; e2], []) ->
       (* desugaring max(e1, e2) into if e1 > e2 then e1 else e2 *)
-      let expr = mk_expr (E_py_if (mk_binop e1 O_gt e2 range, e1, e2)) range in
+      let expr = mk_expr ~etyp:T_py (E_py_if (mk_binop e1 O_gt e2 range, e1, e2)) range in
       debug "Rewriting %a into %a@\n" pp_expr exp pp_expr expr;
       man.eval expr flow |> OptionExt.return
 
@@ -251,7 +251,7 @@ struct
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("print", _))}, _)}, objs, [])  ->
-      bind_list objs (man.eval ~route:(Semantic "Python")) flow |>
+      bind_list objs (man.eval  ) flow |>
       bind_some (fun eobj flow -> man.eval (mk_py_none range) flow)
       |> OptionExt.return
 
@@ -268,13 +268,13 @@ struct
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("repr", _))}, _)}, [v], [])  ->
-      man.eval ~route:(Semantic "Python") (mk_py_type v range) flow >>$
+      man.eval   (mk_py_type v range) flow >>$
       (fun etype flow ->
           assume
             (mk_py_hasattr etype "__repr__" range)
             man flow
             ~fthen:(fun flow ->
-                man.eval ~route:(Semantic "Python") (mk_py_call (mk_py_attr etype "__repr__" range) [] range) flow >>$
+                man.eval   (mk_py_call (mk_py_attr etype "__repr__" range) [] range) flow >>$
                   (fun repro flow ->
                     assume (mk_py_isinstance_builtin repro "str" range) man flow
                       ~fthen:(Eval.singleton repro)
@@ -283,7 +283,7 @@ struct
               )
             ~felse:(
               (* there is a default implementation saying "<%s object at %p>" % (name(type(v)), v as addr I guess *)
-              man.eval ~route:(Semantic "Python") (mk_py_top T_string range)
+              man.eval   (mk_py_top T_string range)
             )
         )
       |> OptionExt.return
@@ -297,7 +297,7 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("sorted", _))}, _)}, [obj], [])  ->
       (* todo: call list on obj first *)
-      let seq = mk_range_attr_var range "sorted" T_any in
+      let seq = mk_range_attr_var range "sorted" T_py in
       man.exec (mk_assign (mk_var seq range) obj range) flow >>%
       man.eval (Utils.mk_builtin_call "list.sort" [mk_var seq range] range) >>$
         (fun _ flow ->
@@ -308,7 +308,7 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_class (C_builtin "reversed", _)}, _)}, args, [])  ->
       (* FIXME: reversed_new_impl *)
-      man.eval ~route:(Semantic "Python") (mk_py_call (mk_py_attr (List.hd args) "__reversed__" range) [] range) flow
+      man.eval   (mk_py_call (mk_py_attr (List.hd args) "__reversed__" range) [] range) flow
       (* man.eval (Utils.mk_builtin_call "list.__reversed__" args range) flow *)
       |> OptionExt.return
 
@@ -320,8 +320,8 @@ struct
            let flow = if List.length args = 1 then flow else
                         man.exec (mk_assign
                                     (mk_py_attr exc "args" range)
-                           (mk_expr (E_py_tuple (List.tl args)) range) range) flow |> post_to_flow man in
-              man.eval ~route:(Semantic "Python") (mk_py_none range) flow
+                           (mk_expr ~etyp:T_py (E_py_tuple (List.tl args)) range) range) flow |> post_to_flow man in
+              man.eval   (mk_py_none range) flow
         )
       |> OptionExt.return
 
@@ -374,10 +374,10 @@ struct
             assume (mk_py_isinstance_builtin argl "int" range) man flow
               ~fthen:(fun flow ->
                   assume (mk_py_isinstance_builtin argr "int" range) man flow
-                    ~fthen:(man.eval (mk_expr (E_py_tuple [mk_py_top T_int range; mk_py_top T_int range]) range))
+                    ~fthen:(man.eval (mk_expr ~etyp:T_py (E_py_tuple [mk_py_top T_int range; mk_py_top T_int range]) range))
                     ~felse:(fun flow ->
                         assume (mk_py_isinstance_builtin argr "float" range) man flow
-                          ~fthen:(man.eval (mk_expr (E_py_tuple [mk_py_top (T_float F_DOUBLE) range; mk_py_top (T_float F_DOUBLE) range]) range))
+                          ~fthen:(man.eval (mk_expr ~etyp:T_py (E_py_tuple [mk_py_top (T_float F_DOUBLE) range; mk_py_top (T_float F_DOUBLE) range]) range))
                           ~felse:tyerror
                       )
                 )
@@ -385,10 +385,10 @@ struct
                   assume (mk_py_isinstance_builtin argl "float" range) man flow
                     ~fthen:(fun flow ->
                         assume (mk_py_isinstance_builtin argr "int" range) man flow
-                          ~fthen:(man.eval (mk_expr (E_py_tuple [mk_py_top (T_float F_DOUBLE) range; mk_py_top (T_float F_DOUBLE) range]) range))
+                          ~fthen:(man.eval (mk_expr ~etyp:T_py (E_py_tuple [mk_py_top (T_float F_DOUBLE) range; mk_py_top (T_float F_DOUBLE) range]) range))
                           ~felse:(fun flow ->
                               assume (mk_py_isinstance_builtin argr "float" range) man flow
-                                ~fthen:(man.eval (mk_expr (E_py_tuple [mk_py_top (T_float F_DOUBLE) range; mk_py_top (T_float F_DOUBLE) range]) range))
+                                ~fthen:(man.eval (mk_expr ~etyp:T_py (E_py_tuple [mk_py_top (T_float F_DOUBLE) range; mk_py_top (T_float F_DOUBLE) range]) range))
                                 ~felse:tyerror
                             )
 

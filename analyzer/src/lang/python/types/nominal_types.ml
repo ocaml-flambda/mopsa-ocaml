@@ -52,7 +52,7 @@ struct
     let range = erange exp in
     match ekind exp with
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_class (C_builtin "type", _)}, _)}, [arg], []) ->
-      man.eval ~route:(Semantic "Python") arg flow >>$
+      man.eval   arg flow >>$
 
         (fun earg flow ->
            let proceed s = Eval.singleton (mk_py_object (find_builtin s) range) flow in
@@ -78,20 +78,20 @@ struct
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("issubclass", _))}, _)}, [cls; cls'], []) ->
-      bind_list [cls; cls'] (man.eval  ~route:(Semantic "Python")) flow |>
+      bind_list [cls; cls'] (man.eval   ) flow |>
       bind_some (fun evals flow ->
           let cls, cls' = match evals with [e1; e2] -> e1, e2 | _ -> assert false in
           let addr_cls = match ekind cls with | E_py_object (a, _) -> a | _ -> assert false in
           let addr_cls' = match ekind cls' with | E_py_object (a, _) -> a | _ -> assert false in
           match akind addr_cls, akind addr_cls' with
           | A_py_class (c, mro), A_py_class (c', mro') ->
-             man.eval ~route:(Semantic "Python") (mk_py_bool (class_le (c, mro) (c', mro')) range) flow
+             man.eval   (mk_py_bool (class_le (c, mro) (c', mro')) range) flow
           | _ -> panic_at range "%a, cls=%a, cls'=%a" pp_expr exp pp_expr cls pp_expr cls')
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("isinstance", _))}, _)}, [obj; attr], []) ->
       (* TODO: if v is a class inheriting from protocol we should check the attributes *)
-      bind_list [obj; attr] (man.eval  ~route:(Semantic "Python")) flow |>
+      bind_list [obj; attr] (man.eval   ) flow |>
       bind_some (fun evals flow ->
           let eobj, eattr = match evals with [e1; e2] -> e1, e2 | _ -> assert false in
           debug "now isinstance(%a, %a) at range %a@\n" pp_expr eobj pp_expr eattr pp_range range (*(Flow.print man.lattice.print) flow*);
@@ -149,9 +149,9 @@ struct
           | ak, A_py_class (c, b) ->
              let n_ak = addr_kind_find_nominal_type ak in
              begin match c with
-             | C_builtin n when n = n_ak -> man.eval ~route:(Semantic "Python") (mk_py_true range) flow
+             | C_builtin n when n = n_ak -> man.eval   (mk_py_true range) flow
              | _ ->
-                man.eval ~route:(Semantic "Python") (mk_py_issubclass_builtin_l n_ak eattr range) flow
+                man.eval   (mk_py_issubclass_builtin_l n_ak eattr range) flow
              end
 
           | _ -> assert false

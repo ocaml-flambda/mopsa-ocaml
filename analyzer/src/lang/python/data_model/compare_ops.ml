@@ -49,7 +49,7 @@ module Domain = struct
         let not_implemented_type = mk_py_object (find_builtin "NotImplementedType") range in
         mk_py_isinstance x not_implemented_type range in
 
-      bind_list [e1; e2] (man.eval  ~route:(Semantic "Python")) flow |>
+      bind_list [e1; e2] (man.eval   ) flow |>
       bind_some (fun el flow ->
       let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
 
@@ -64,10 +64,10 @@ module Domain = struct
         | _ -> assert false
       in
 
-      man.eval ~route:(Semantic "Python") (mk_py_type e1 range) flow >>$
+      man.eval   (mk_py_type e1 range) flow >>$
  (fun ocls1 flow ->
       let cls1 = object_of_expr ocls1 in
-      man.eval ~route:(Semantic "Python") (mk_py_type e2 range) flow >>$
+      man.eval   (mk_py_type e2 range) flow >>$
  (fun ocls2 flow ->
       let cls2 = object_of_expr ocls2 in
       let is_same_type = compare_py_object cls1 cls2 = 0 in
@@ -76,9 +76,9 @@ module Domain = struct
         let switch flow =
           match op with
           | O_eq | O_ne ->
-            assume (mk_expr (E_binop(O_py_is, e1, e2)) range) man flow
-              ~fthen:(man.eval ~route:(Semantic "Python") (mk_py_bool (O_eq =  op) range))
-              ~felse:(man.eval ~route:(Semantic "Python") (mk_py_bool (O_eq <> op) range))
+            assume (mk_expr ~etyp:T_py (E_binop(O_py_is, e1, e2)) range) man flow
+              ~fthen:(man.eval   (mk_py_bool (O_eq =  op) range))
+              ~felse:(man.eval   (mk_py_bool (O_eq <> op) range))
           | _ ->
             Format.fprintf Format.str_formatter "'%s' not supported between instances of '%a' and '%a'" op_fun pp_addr_kind (akind @@ fst cls1) pp_addr_kind (akind @@ fst cls2);
             man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow >>%
@@ -89,7 +89,7 @@ module Domain = struct
             assume (mk_py_hasattr ocls2 rop_fun range)
               man flow
               ~fthen:(fun flow ->
-                  man.eval ~route:(Semantic "Python")
+                  man.eval  
                     (mk_py_call (mk_py_object_attr cls2 rop_fun range) [e2; e1] range) flow >>$
  (fun cmp flow ->
                       assume (is_notimplemented cmp) man flow
@@ -103,7 +103,7 @@ module Domain = struct
         assume (mk_py_hasattr ocls1 op_fun range)
           man flow
           ~fthen:(fun flow ->
-              man.eval ~route:(Semantic "Python")
+              man.eval  
                 (mk_py_call (mk_py_object_attr cls1 op_fun range) [e1; e2] range) flow >>$
  (fun cmp flow ->
                   assume (is_notimplemented cmp)
@@ -122,7 +122,7 @@ module Domain = struct
               (mk_py_hasattr ocls2 rop_fun range) range) range)
         man flow
         ~fthen:(fun flow ->
-            man.eval ~route:(Semantic "Python")
+            man.eval  
               (mk_py_call (mk_py_object_attr cls2 rop_fun range) [e2; e1] range) flow >>$
  (fun cmp flow ->
                 assume (is_notimplemented cmp)

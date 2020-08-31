@@ -56,13 +56,13 @@ module Domain =
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("float.__new__", _))}, _)}, [cls], []) ->
         Utils.new_wrapper man range flow "float" cls
-          ~fthennew:(man.eval ~route:(Semantic "Python") (mk_py_top (T_float F_DOUBLE) range))
+          ~fthennew:(man.eval   (mk_py_top (T_float F_DOUBLE) range))
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("float.__new__", _))}, _)}, [cls; arg], []) ->
          debug "exp = %a" pp_expr exp;
         Utils.new_wrapper man range flow "float" cls
           ~fthennew:(fun flow ->
-              man.eval ~route:(Semantic "Python") arg flow >>$
+              man.eval   arg flow >>$
  (fun el flow ->
                   assume
                     (mk_py_isinstance_builtin el "float" range)
@@ -78,7 +78,7 @@ module Domain =
                               assume
                                 (mk_py_isinstance_builtin el "str" range)
                                 ~fthen:(fun flow ->
-                                    man.eval ~route:(Semantic "Python") (mk_py_top (T_float F_DOUBLE) range) flow)
+                                    man.eval   (mk_py_top (T_float F_DOUBLE) range) flow)
                                 ~felse:(fun flow ->
                                   let msg = Format.asprintf "float() argument must be a string or a number, not '%a'" pp_expr el in
                                     man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>%
@@ -93,7 +93,7 @@ module Domain =
       (* 𝔼⟦ float.__op__(e1, e2) | op ∈ {==, !=, <, ...} ⟧ *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, [e1; e2], [])
         when is_compare_op_fun "float" f ->
-        bind_list [e1; e2] (man.eval ~route:(Semantic "Python")) flow |>
+        bind_list [e1; e2] (man.eval  ) flow |>
         bind_some (fun el flow ->
             let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
             assume (mk_py_isinstance_builtin e1 "float" range) man flow
@@ -123,7 +123,7 @@ module Domain =
                           ~felse:(fun flow ->
                               debug "compare: %a at %a@\n" pp_expr exp pp_range exp.erange;
                               let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
-                              man.eval ~route:(Semantic "Python") expr flow)
+                              man.eval   expr flow)
                       )
                     (* ) *)
                 )
@@ -135,7 +135,7 @@ module Domain =
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, [e1; e2], [])
            when is_arith_binop_fun "float" f ->
-         bind_list [e1; e2] (man.eval ~route:(Semantic "Python")) flow |>
+         bind_list [e1; e2] (man.eval  ) flow |>
            bind_some (fun el flow ->
                let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
                assume
@@ -169,7 +169,7 @@ module Domain =
                            )
                          ~felse:(fun flow ->
                            let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
-                           man.eval ~route:(Semantic "Python") expr flow)
+                           man.eval   expr flow)
                        )
                    )
                  ~felse:(fun false_flow ->
@@ -181,7 +181,7 @@ module Domain =
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, [e], [])
            when is_arith_unop_fun f ->
-         man.eval ~route:(Semantic "Python") e flow >>$
+         man.eval   e flow >>$
  (fun el flow ->
                assume
                  (mk_py_isinstance_builtin e "float" range)
@@ -190,7 +190,7 @@ module Domain =
                    )
                  ~felse:(fun false_flow ->
                    let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
-                   man.eval ~route:(Semantic "Python") expr false_flow)
+                   man.eval   expr false_flow)
                  man flow
              )
          |> OptionExt.return

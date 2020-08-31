@@ -60,8 +60,8 @@ struct
            man.eval hd >>$
              (fun ehd flow ->
                  let cs = Flow.get_callstack flow in
-                 let tmp = mk_range_attr_var hd.erange (Format.asprintf "%a%xd" pp_expr ecls (Hashtbl.hash_param 30 100 cs)) T_any in
-                 bind tl (tmp::vars) (man.exec ~route:(Semantic "Python") (mk_assign (mk_var tmp hd.erange) ehd range) flow) f) in
+                 let tmp = mk_range_attr_var hd.erange (Format.asprintf "%a%xd" pp_expr ecls (Hashtbl.hash_param 30 100 cs)) T_py in
+                 bind tl (tmp::vars) (man.exec   (mk_assign (mk_var tmp hd.erange) ehd range) flow) f) in
       bind args [] (Post.return flow)
         (fun vars flow ->
           let tmps = List.map (fun v ->
@@ -71,7 +71,7 @@ struct
           let new_call = mk_py_kall (mk_py_object_attr cls "__new__" range) ((mk_py_object cls range)
                                                                              :: tmps) kwargs range in
           flow >>%
-            man.eval ~route:(Semantic "Python") new_call |>
+            man.eval   new_call |>
             Cases.add_cleaners (List.map (fun x -> match ekind x with
                                                   | E_var (x, _) -> mk_remove_var x range
                                                   | _ -> assert false) tmps) >>$
@@ -80,11 +80,11 @@ struct
                   (mk_py_isinstance inst ecls range)
                   ~fthen:(fun flow ->
                     debug "init!@\n";
-                    man.eval ~route:(Semantic "Python") (mk_py_kall (mk_py_object_attr cls "__init__" range) (inst :: tmps) kwargs range) flow >>$
+                    man.eval   (mk_py_kall (mk_py_object_attr cls "__init__" range) (inst :: tmps) kwargs range) flow >>$
                       (fun r flow ->
                           assume
                             (mk_py_isinstance_builtin r "NoneType" range)
-                            ~fthen:(fun flow -> man.eval  ~route:(Semantic "Python") inst flow)
+                            ~fthen:(fun flow -> man.eval    inst flow)
                             ~felse:(fun flow ->
                               let msg = Format.asprintf "__init__() should return None, not %a" pp_expr r in
                               man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>%
@@ -106,7 +106,7 @@ struct
     (* 𝕊⟦ class cls: body ⟧ *)
     | S_py_class cls ->
       debug "definition of class %a" pp_var cls.py_cls_var;
-      bind_list cls.py_cls_bases (man.eval ~route:(Semantic "Python")) flow |>
+      bind_list cls.py_cls_bases (man.eval  ) flow |>
       bind_some (fun bases flow ->
           let bases' =
             match bases with

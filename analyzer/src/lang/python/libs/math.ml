@@ -103,7 +103,7 @@ module Domain =
         Utils.check_instances f man flow range args
           ["float"]
           (fun args flow ->
-             man.eval (mk_expr (E_py_tuple
+             man.eval (mk_expr ~etyp:T_py (E_py_tuple
                                   [mk_py_top (T_float F_DOUBLE) range; mk_py_top T_int range]
                                ) range)  flow
           )
@@ -115,7 +115,7 @@ module Domain =
         Utils.check_instances f man flow range args
           ["float"]
           (fun args flow ->
-             man.eval (mk_expr (E_py_tuple
+             man.eval (mk_expr ~etyp:T_py (E_py_tuple
                                   [mk_py_top (T_float F_DOUBLE) range; mk_py_top (T_float F_DOUBLE) range]
                                ) range)  flow
           )

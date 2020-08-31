@@ -208,7 +208,7 @@ struct
 
     (* S⟦ v = e ⟧ *)
     | S_assign(({ekind = E_var (v, mode)} as evar), e) ->
-       man.eval ~route:(Semantic "Python") e flow |>
+       man.eval   e flow |>
          bind_some
            (fun e flow ->
              match ekind e with
@@ -236,7 +236,7 @@ struct
                    Post.return flow
                 end
 
-             | E_constant (C_top T_any) ->
+             | E_constant (C_top T_py) ->
                 let cur = get_env T_cur man flow in
                 let aset = ASet.top in
                 set_env T_cur (add v aset cur) man flow
@@ -251,7 +251,7 @@ struct
        (* need to make e E_py_annot here or on the frontend *)
        (* then handle E_py_annot in typing, to perform an allocation? *)
        (* what about non builtins? *)
-       man.eval ~route:(Semantic "Python") e flow |>
+       man.eval   e flow |>
          bind_some (fun e flow -> match ekind e with
                                   | E_py_object (addr, _) ->
                                      begin match akind addr with
@@ -278,7 +278,7 @@ struct
          | V_uniq _ when not (Hashtbl.mem type_aliases v) ->
             (* FIXME: "remove var, assign to E_py_undefined?"; *)
             (* if the variable maps to a list, we should remove the temporary variable associated, ONLY if it's not used by another list *)
-            let flow = man.exec (mk_assign var (mk_expr (E_py_undefined true) range) range) flow in
+            let flow = man.exec (mk_assign var (mk_expr ~etyp:T_py (E_py_undefined true) range) range) flow in
             flow
 
          | _ ->
@@ -288,7 +288,7 @@ struct
        |> OptionExt.return
 
     | S_assume e ->
-       man.eval ~route:(Semantic "Python") e flow |>
+       man.eval   e flow |>
          bind_some (fun expr flow ->
              match ekind expr with
              | E_constant (C_top T_bool)
@@ -389,12 +389,12 @@ struct
        begin match akind a with
        | A_py_instance {addr_kind = A_py_class (C_annot _, _)} ->
           let skind = S_expand ({e1 with ekind = E_py_annot e1}, addrs) in
-          man.exec ~route:(Semantic "Python") stmt flow >>%
-            man.exec ~route:(Semantic "Python") {stmt with skind}
+          man.exec   stmt flow >>%
+            man.exec   {stmt with skind}
        | A_py_instance _ ->
-          man.exec ~route:(Semantic "Python") stmt flow
+          man.exec   stmt flow
        | ak when Objects.Data_container_utils.is_data_container ak ->
-          man.exec ~route:(Semantic "Python") stmt flow
+          man.exec   stmt flow
        | _ -> Post.return flow
        end
        |> OptionExt.return
@@ -426,7 +426,7 @@ struct
             | S_rename _ -> S_rename ({e1 with ekind = E_py_annot e1}, e2)
             | _ -> assert false in
           man.exec ~route:Below stmt flow >>%
-            man.exec ~route:(Semantic "Python") {stmt with skind}
+            man.exec   {stmt with skind}
        | A_py_instance _ ->
           debug "instance encountered, renaming methods too";
           (* FIXME: PERF: in function.ml, store inst -> method binding and use it here? / ask function.ml to perform the stmt? *)
@@ -440,7 +440,7 @@ struct
                               | S_rename _ -> S_rename ({e1 with ekind = E_addr addr}, {e2 with ekind = E_addr addr'})
                               | _ -> assert false
                             in
-                            flow >>% man.exec ~route:(Semantic "Python") {stmt with skind}
+                            flow >>% man.exec   {stmt with skind}
                          | _ -> flow
                        ) (Post.return flow) aaddr in
           flow >>% man.exec ~route:Below stmt
@@ -451,7 +451,7 @@ struct
 
     | S_py_delete {ekind = E_var (v, _)} ->
        Soundness.warn_at range "%a not properly supported" pp_stmt stmt;
-       man.exec ~route:(Semantic "Python") (mk_remove_var v range) flow |> OptionExt.return
+       man.exec   (mk_remove_var v range) flow |> OptionExt.return
 
     | S_py_delete _ ->
        Soundness.warn_at range "%a not supported, ignored" pp_stmt stmt;
@@ -468,9 +468,9 @@ struct
        let flow = set_env T_cur ncur man flow in
        begin match akind a with
        | A_py_instance _ ->
-          man.exec ~route:(Semantic "Python") stmt flow
+          man.exec   stmt flow
        | ak when Objects.Data_container_utils.is_data_container ak ->
-          man.exec ~route:(Semantic "Python") stmt flow
+          man.exec   stmt flow
        | _ -> Post.return flow
        end |> OptionExt.return
 
@@ -504,14 +504,14 @@ struct
         let addr = match ekind eaddr with
           | E_addr a -> a
           | _ -> assert false in
-        man.exec ~route:(Semantic "Python") (mk_add eaddr range) flow >>%
+        man.exec   (mk_add eaddr range) flow >>%
         Eval.singleton (mk_py_object (addr, oe) range)
       )
 
   let eval exp man flow =
     let range = erange exp in
     match ekind exp with
-    | E_var (v, mode) ->
+    | E_var (v, mode) when etyp exp = T_py ->
       let cur = get_env T_cur man flow in
       if AMap.mem v cur then
         let aset = AMap.find v cur in
@@ -604,7 +604,7 @@ struct
 
     | E_unop(O_log_not, e') ->
       (* bool is called in desugar/bool *)
-      man.eval ~route:(Semantic "Python") e' flow >>$
+      man.eval   e' flow >>$
 
         (fun ee' flow ->
            match ekind ee' with
@@ -616,9 +616,9 @@ struct
            | E_constant (C_bool false) ->
              Eval.singleton (mk_py_true range) flow
            | E_py_object (a, _) when compare_addr a (OptionExt.none_to_exn !addr_true) = 0 ->
-             man.eval ~route:(Semantic "Python") (mk_py_false range) flow
+             man.eval   (mk_py_false range) flow
            | E_py_object (a, _) when compare_addr a (OptionExt.none_to_exn !addr_false) = 0 ->
-             man.eval ~route:(Semantic "Python") (mk_py_true range) flow
+             man.eval   (mk_py_true range) flow
            | E_py_object (a, _) when compare_addr a (OptionExt.none_to_exn !addr_bool_top) = 0 ->
              Eval.singleton ee' flow
            | _ ->
@@ -627,7 +627,7 @@ struct
       |> OptionExt.return
 
     | E_binop(O_py_is, e1, e2) ->
-      bind_list [e1;e2] (man.eval ~route:(Semantic "Python")) flow |>
+      bind_list [e1;e2] (man.eval  ) flow |>
       bind_some (fun evals flow ->
           let e1, e2 = match evals with [e1;e2] -> e1, e2 | _ -> assert false in
           begin match ekind e1, ekind e2 with

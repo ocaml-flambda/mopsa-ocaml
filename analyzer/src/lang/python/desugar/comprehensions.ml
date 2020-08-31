@@ -41,7 +41,7 @@ module Domain =
     let alarms = []
 
     let unfold_comprehension expr comprehensions base append range =
-         let tmp_acc = mk_range_attr_var range "tmp_acc" T_any in
+         let tmp_acc = mk_range_attr_var range "tmp_acc" T_py in
          let acc_var = mk_var tmp_acc range in
          let rec unfold_lc aux_compr = match aux_compr with
            | [] ->
@@ -73,7 +73,7 @@ module Domain =
       | E_py_list_comprehension (expr, comprehensions) ->
          let list = find_builtin "list" in
          let listappend = mk_py_object (find_builtin_attribute list "append") range in
-         let stmt, tmp_acc = unfold_comprehension [expr] comprehensions (mk_expr (E_py_list []) (tag_range range "acc")) listappend range in
+         let stmt, tmp_acc = unfold_comprehension [expr] comprehensions (mk_expr ~etyp:T_py (E_py_list []) (tag_range range "acc")) listappend range in
          let acc_var = mk_var tmp_acc range in
          debug "Rewriting %a into %a@\n" pp_expr exp pp_stmt stmt;
          man.exec stmt flow >>%
@@ -84,7 +84,7 @@ module Domain =
       | E_py_set_comprehension (expr, comprehensions) ->
          let set = find_builtin "set" in
          let setadd = mk_py_object (find_builtin_attribute set "add") range in
-         let emptyset = mk_expr (E_py_set []) range in
+         let emptyset = mk_expr ~etyp:T_py (E_py_set []) range in
          let stmt, tmp_acc = unfold_comprehension [expr] comprehensions emptyset setadd range in
          let acc_var = mk_var tmp_acc range in
          debug "Rewriting %a into %a@\n" pp_expr exp pp_stmt stmt;
@@ -96,7 +96,7 @@ module Domain =
       | E_py_dict_comprehension (key, value, comprehensions) ->
          let dict = find_builtin "dict" in
          let dictset = mk_py_object (find_builtin_attribute dict "__setitem__") range in
-         let emptydict = mk_expr (E_py_dict ([], [])) range in
+         let emptydict = mk_expr ~etyp:T_py (E_py_dict ([], [])) range in
          let stmt, tmp_acc = unfold_comprehension (key::value::[]) comprehensions emptydict dictset range in
          let acc_var = mk_var tmp_acc range in
          debug "Rewriting %a into %a@\n" pp_expr exp pp_stmt stmt;

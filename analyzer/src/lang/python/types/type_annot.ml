@@ -80,7 +80,7 @@ struct
                    | None ->
                      Keys.Global s
                    | Some {ekind = E_py_object (addr, _)} ->
-                     Keys.Class (mk_addr_attr addr s T_any)
+                     Keys.Class (mk_addr_attr addr s T_py)
                    | _ -> assert false in
                  begin match TVMap.find_opt var acc with
                    | None ->
@@ -143,7 +143,7 @@ struct
                 let cur = get_env T_cur man flow in
                 let ncur = List.fold_left (fun cur (tyname, types) ->
                     let etypes = ESet.of_list types in
-                    let tyvar = mk_addr_attr addr_eobj tyname T_any in
+                    let tyvar = mk_addr_attr addr_eobj tyname T_py in
                     match TVMap.find_opt (Class tyvar) cur with
                     | None ->
                       begin match TVMap.find_opt (Global tyname) cur with
@@ -194,13 +194,13 @@ struct
                                                        (mk_var
                                                           (mk_addr_attr (match ekind @@ List.hd args with
                                                                | E_py_object (a, _) -> a
-                                                               | _ -> assert false) s T_any)
+                                                               | _ -> assert false) s T_py)
                                                           range)::types
                                                       , [])}
                         else ant in
-                      mk_expr (E_py_check_annot (arg, nant)) range
+                      mk_expr ~etyp:T_py (E_py_check_annot (arg, nant)) range
                     | _ ->
-                      mk_expr (E_py_check_annot (arg, ant)) range in
+                      mk_expr ~etyp:T_py (E_py_check_annot (arg, ant)) range in
                   post_to_flow man (man.exec (mk_assume e range) flow_in),
                   Flow.join man.lattice (post_to_flow man (man.exec (mk_assume (mk_py_not e range) range) flow_in)) flow_notin
               )  (flow, Flow.bottom_from flow) in_args in_types in
@@ -255,7 +255,7 @@ struct
               filter signature.py_funcs_parameters signature.py_funcs_types_in signature.py_funcs_defaults args ([], [])
             in
             let flow_ok, flow_notok = filter_sig in_types in_args flow in
-            let ret_var = mk_range_attr_var range "ret_var" T_any in
+            let ret_var = mk_range_attr_var range "ret_var" T_py in
             begin match signature.py_funcs_type_out with
               | Some e ->
                 debug "out = %a" pp_expr e;
@@ -266,7 +266,7 @@ struct
                            mk_var
                              (mk_addr_attr (match ekind @@ List.hd args with
                                   | E_py_object (a, _) -> a
-                                  | _ -> assert false) s T_any)
+                                  | _ -> assert false) s T_py)
                              range
                          )::types, [])}
                      | _ -> VisitParts expr)
@@ -274,7 +274,7 @@ struct
                   e in
               man.exec (mk_add_var ret_var range) flow_ok >>%
               man.exec (mk_stmt (S_py_annot (mk_var ret_var range,
-                                             mk_expr (E_py_annot annot_out) range))
+                                             mk_expr ~etyp:T_py (E_py_annot annot_out) range))
                           range), flow_notok, new_typevars, ret_var
               | None -> assert false
             end
@@ -336,7 +336,7 @@ struct
                Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_none, None) range) flow
             (* | "Any" ->
              *   warn_at range "any annot";
-             *   (\* FIXME man.eval ~route:(Semantic "Python") (mk_py_top T_any range) flow *\)
+             *   (\* FIXME man.eval   (mk_py_top T_any range) flow *\)
              *   Addr_env.Domain.allocate_builtin ~mode:WEAK man range flow "object" (Some e) *)
             | "object" ->
               warn_at range "Any transformed into object here";
@@ -351,9 +351,9 @@ struct
           begin try
               let e = Hashtbl.find type_aliases v in
               debug "found type alias, replacing %a by %a" pp_var v pp_expr e;
-              man.eval ~route:(Semantic "Python") (mk_expr (E_py_annot e) range) flow |> OptionExt.return
+              man.eval   (mk_expr ~etyp:T_py (E_py_annot e) range) flow |> OptionExt.return
             with Not_found ->
-              man.eval ~route:(Semantic "Python") (mk_py_call e [] range) flow |> OptionExt.return
+              man.eval   (mk_py_call e [] range) flow |> OptionExt.return
           end
 
         | E_py_attribute ({ekind = E_var (v, _)}, s) ->
@@ -363,21 +363,21 @@ struct
               (* FIXME ouch, not found in man.eval would also get caught... *)
               (* FIXME: this also means that if a.pyi defines alias b and b.pyi too, we'll encounter some trouble *)
               let r = find_type_alias_by_name s in
-              man.eval ~route:(Semantic "Python") (mk_expr (E_py_annot r) range) flow |> OptionExt.return
+              man.eval   (mk_expr ~etyp:T_py (E_py_annot r) range) flow |> OptionExt.return
             with Not_found ->
               debug "not found, trying usual evaluation";
-              man.eval ~route:(Semantic "Python") e flow |> OptionExt.return
+              man.eval   e flow |> OptionExt.return
           end
 
         | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)} as e, i) when get_orig_vname c.py_cls_a_var = "Pattern" ->
           debug "Pattern!";
-          man.eval ~route:(Semantic "Python") (mk_py_call e [] range) flow
+          man.eval   (mk_py_call e [] range) flow
           >>$
  (fun ee flow ->
               match ekind ee with
               | E_py_object (addr, _) ->
                 debug "coucou";
-                man.exec (mk_stmt (S_py_annot (mk_var (mk_addr_attr addr "typ" T_any) range, (mk_expr (E_py_annot i) range))) range) flow >>%
+                man.exec (mk_stmt (S_py_annot (mk_var (mk_addr_attr addr "typ" T_py) range, (mk_expr ~etyp:T_py (E_py_annot i) range))) range) flow >>%
                 Eval.singleton ee
               | _ -> assert false
             )
@@ -386,8 +386,8 @@ struct
         | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)}, i) when get_orig_vname c.py_cls_a_var = "Optional" ->
           Eval.join_list
             ~empty:(fun () -> assert false)
-            (List.map (fun e -> man.eval ~route:(Semantic "Python") e flow)
-               [mk_expr (E_py_annot i) range;
+            (List.map (fun e -> man.eval   e flow)
+               [mk_expr ~etyp:T_py (E_py_annot i) range;
                 mk_py_none range])
           |> OptionExt.return
 
@@ -398,12 +398,12 @@ struct
           Eval.join_list
             ~empty:(fun () -> panic_at range "Union[]")
             (List.map
-               (fun e -> man.eval ~route:(Semantic "Python") (mk_expr (E_py_annot e) range) flow)
+               (fun e -> man.eval   (mk_expr ~etyp:T_py (E_py_annot e) range) flow)
                is)
           |> OptionExt.return
 
         | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)}, i) when get_orig_vname c.py_cls_a_var = "Type" ->
-          man.eval ~route:(Semantic "Python") i flow
+          man.eval   i flow
           |> OptionExt.return
 
         | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)} as e, i) when
@@ -453,7 +453,7 @@ struct
                                  match vkind vname with
                                  (* FIXME: ugly fix to handle:             (* issue: if object.__new__(e) renames addresses used in i, this is not caught... *) *)
                                  | V_addr_attr ({addr_kind = A_py_instance {addr_kind = A_py_class (C_annot c', _)}} as addr, attr) when compare_var c.py_cls_a_var c'.py_cls_a_var = 0 ->
-                                   OptionExt.default (ESet.singleton expr) (TVMap.find_opt (Class (mk_addr_attr {addr with addr_mode = WEAK} attr T_any)) (get_env T_cur man flow))
+                                   OptionExt.default (ESet.singleton expr) (TVMap.find_opt (Class (mk_addr_attr {addr with addr_mode = WEAK} attr T_py)) (get_env T_cur man flow))
                                  | _ -> ESet.singleton expr
                              with Not_found -> expr)
                          | _ -> VisitParts expr
@@ -469,7 +469,7 @@ struct
                       [] else types in
                   let flow =
                     List.fold_left2 (fun flow tname ctype  ->
-                        set_env T_cur (TVMap.add (Class (mk_addr_attr addr tname T_any))
+                        set_env T_cur (TVMap.add (Class (mk_addr_attr addr tname T_py))
                                          (match TVMap.find_opt (Global tname) (get_env T_cur man flow) with
                                           | None ->
                                             debug "tname(%s) not found in cur" tname;
@@ -491,9 +491,9 @@ struct
           None
 
         | E_py_index_subscript (e1, e2) ->
-          man.eval ~route:(Semantic "Python") e1 flow |>
+          man.eval   e1 flow |>
           bind_some (fun e1 flow ->
-              man.eval ~route:(Semantic "Python") {exp with ekind = E_py_annot {e with ekind = E_py_index_subscript(e1, e2)}} flow
+              man.eval   {exp with ekind = E_py_annot {e with ekind = E_py_index_subscript(e1, e2)}} flow
             )
           |> OptionExt.return
 
@@ -508,7 +508,7 @@ struct
           else
             let () = assert (ESet.cardinal tycur = 1) in
             let ty = ESet.choose tycur in
-            man.eval ~route:(Semantic "Python") {exp with ekind = E_py_annot ty} flow
+            man.eval   {exp with ekind = E_py_annot ty} flow
             |> OptionExt.return
 
         | E_py_call ({ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)}, {ekind = E_constant (C_string s)}::types, []) ->
@@ -523,11 +523,11 @@ struct
               | _ ->
                 assert (ESet.cardinal tycur = 1);
                 let ty = ESet.choose tycur in
-                man.eval ~route:(Semantic "Python") {exp with ekind = E_py_annot ty} flow
+                man.eval   {exp with ekind = E_py_annot ty} flow
             end
           | _ ->
             Eval.join_list ~empty:(fun () -> assert false)
-              (List.map (fun t -> man.eval ~route:(Semantic "Python") {exp with ekind = E_py_annot t} flow) types)
+              (List.map (fun t -> man.eval   {exp with ekind = E_py_annot t} flow) types)
           end |> OptionExt.return
 
         | E_py_call ({ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)}, {ekind = E_var (v, _)}::types, []) ->
@@ -545,7 +545,7 @@ struct
               (List.map
                  (fun t ->
                     let flow = set_env T_cur (TVMap.add (Class v) (ESet.singleton t) cur) man flow in
-                    man.eval ~route:(Semantic "Python") {exp with ekind = E_py_annot t} flow)
+                    man.eval   {exp with ekind = E_py_annot t} flow)
                  (ESet.elements tycur))
           end |> OptionExt.return
 
@@ -553,7 +553,7 @@ struct
            Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_none, None) range) flow |> OptionExt.return
 
         | E_py_object ({addr_kind = A_py_class _}, _) ->
-          man.eval ~route:(Semantic "Python") (mk_py_call e [] range) flow
+          man.eval   (mk_py_call e [] range) flow
           |> OptionExt.return
 
         | _ ->
@@ -579,10 +579,10 @@ struct
               List.fold_left (fun acc el -> mk_binop (mk_py_hasattr e (get_orig_vname el) range) O_py_and acc range)
                 (mk_py_hasattr e (get_orig_vname (List.hd c.py_cls_a_static_attributes)) range)
                 (List.tl c.py_cls_a_static_attributes) in
-          man.eval ~route:(Semantic "Python") attrs_check_expr flow |> OptionExt.return
+          man.eval   attrs_check_expr flow |> OptionExt.return
 
         | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)}, i) when get_orig_vname c.py_cls_a_var = "Type" ->
-          man.eval ~route:(Semantic "Python") e flow >>$
+          man.eval   e flow >>$
  (fun ee flow ->
               match ekind ee with
               | E_py_object ({addr_kind = A_py_class _}, _) ->
@@ -605,14 +605,14 @@ struct
           |> OptionExt.return
 
         | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)} as pattern, i) when get_orig_vname c.py_cls_a_var = "Pattern" ->
-          man.eval ~route:(Semantic "Python") e flow >>$
+          man.eval   e flow >>$
  (fun ee flow ->
               assume (mk_py_isinstance ee pattern range) man flow
                 ~fthen:(fun flow ->
                     let ee_addr = match ekind ee with
                       | E_py_object (a, _) -> a
                       | _ -> assert false in
-                    man.eval ~route:(Semantic "Python") (mk_expr (E_py_check_annot (mk_var (mk_addr_attr ee_addr "typ" T_any) range, i)) range) flow
+                    man.eval   (mk_expr ~etyp:T_py (E_py_check_annot (mk_var (mk_addr_attr ee_addr "typ" T_py) range, i)) range) flow
                   )
                 ~felse:(fun flow ->
                     Eval.empty_singleton (Flow.bottom_from flow))
@@ -628,21 +628,21 @@ struct
           let conds = List.fold_left (fun acc elu ->
               mk_or acc (mk_cannot elu)
             ) (mk_cannot @@ List.hd types) (List.tl types) in
-          man.eval ~route:(Semantic "Python") conds flow
+          man.eval   conds flow
           |> OptionExt.return
           (* big disjunction on check_annot(e, t) for t in types *)
 
         | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)}, i) when get_orig_vname c.py_cls_a_var = "Optional" ->
           let mk_cannot a = {exp with ekind = E_py_check_annot(e, a)} in
-          man.eval ~route:(Semantic "Python") (mk_binop (mk_cannot i) O_py_or (mk_cannot (mk_py_none range)) range) flow |> OptionExt.return
+          man.eval   (mk_binop (mk_cannot i) O_py_or (mk_cannot (mk_py_none range)) range) flow |> OptionExt.return
 
         | E_py_index_subscript ({ekind = E_py_object _}, e2) ->
           None
 
         | E_py_index_subscript (e1, e2) ->
-          man.eval ~route:(Semantic "Python") e1 flow |>
+          man.eval   e1 flow |>
           bind_some (fun e1 flow ->
-              man.eval ~route:(Semantic "Python") ({exp with ekind = E_py_check_annot (e, {annot with ekind = E_py_index_subscript (e1, e2)})}) flow
+              man.eval   ({exp with ekind = E_py_check_annot (e, {annot with ekind = E_py_index_subscript (e1, e2)})}) flow
             )
           |> OptionExt.return
 
@@ -699,7 +699,7 @@ struct
         let abasedaddr, other = TVMap.fold (fun k v (acc_a, acc_nota) ->
             match k with
             | Class ({vkind = V_addr_attr (av, s)}) when compare_addr av a = 0 ->
-              (TVMap.add (Class (mk_addr_attr a' s T_any)) v acc_a, acc_nota)
+              (TVMap.add (Class (mk_addr_attr a' s T_py)) v acc_a, acc_nota)
             | _ ->
               (acc_a, TVMap.add k v acc_nota)
           ) cur (TVMap.empty, TVMap.empty) in

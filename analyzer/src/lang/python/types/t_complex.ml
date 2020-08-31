@@ -45,7 +45,7 @@ module Domain =
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("complex.__new__", _))}, _)}, [cls], []) ->
         Utils.new_wrapper man range flow "complex" cls
-          ~fthennew:(man.eval ~route:(Semantic "Python") (mk_py_top T_py_complex range))
+          ~fthennew:(man.eval   (mk_py_top T_py_complex range))
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("complex.__new__" as f, _))}, _)}, [cls; arg], []) ->
         Utils.check_instances_disj f man flow range [arg] [["float"; "int"; "str"]] (fun _ -> man.eval (mk_py_top T_py_complex range))

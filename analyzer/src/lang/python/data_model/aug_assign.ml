@@ -46,12 +46,12 @@ module Domain = struct
     match skind stmt with
     | S_py_aug_assign(x, op, e) ->
        let x0 = x in
-       bind_list [e; x] (man.eval  ~route:(Semantic "Python")) flow |>
+       bind_list [e; x] (man.eval   ) flow |>
        bind_some (fun el flow ->
              let e, x = match el with [e; x] -> e, x | _ -> assert false in
 
              let op_fun = Operators.binop_to_incr_fun op in
-             man.eval  ~route:(Semantic "Python")  (mk_py_type x range) flow |>
+             man.eval     (mk_py_type x range) flow |>
              bind_some (fun cls flow ->
                    let cls = object_of_expr cls in
                    assume

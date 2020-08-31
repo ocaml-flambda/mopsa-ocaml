@@ -104,19 +104,19 @@ struct
 
   let itindex_var_of_addr a =
     let v = match akind a with
-    | A_py_iterator ("list_iterator", _) -> mk_addr_attr a "it_index" T_any
-    | A_py_iterator ("list_reverseiterator", _) -> mk_addr_attr a "it_index" T_any
+    | A_py_iterator ("list_iterator", _) -> mk_addr_attr a "it_index" T_py
+    | A_py_iterator ("list_reverseiterator", _) -> mk_addr_attr a "it_index" T_py
     | _ -> assert false in
     Utils.change_var_type T_int v
 
-  let itseq_of_addr a = mk_addr_attr a "it_seq" T_any
+  let itseq_of_addr a = mk_addr_attr a "it_seq" T_py
 
   let itseq_of_eobj e = match ekind e with
     | E_py_object (a, _) -> itseq_of_addr a
     | _ -> assert false
 
   (* FIXME: ugly fix for zip  iterators *)
-  let itseq2_of_addr a = mk_addr_attr a "it_seq2" T_any
+  let itseq2_of_addr a = mk_addr_attr a "it_seq2" T_py
 
   let itseq2_of_eobj e = match ekind e with
     | E_py_object (a, _) -> itseq2_of_addr a
@@ -125,12 +125,12 @@ struct
 
   let length_var_of_addr a = match akind a with
     | A_py_list ->
-       mk_addr_attr a "list_length" T_any |> Utils.change_var_type T_int
+       mk_addr_attr a "list_length" T_py |> Utils.change_var_type T_int
     | _ -> assert false
 
   let var_of_addr a = match akind a with
     | A_py_list ->
-       {(mk_addr_attr a "list" T_any) with vmode = WEAK}
+       {(mk_addr_attr a "list" T_py) with vmode = WEAK}
     | _ -> assert false
 
   let var_of_eobj e = match ekind e with
@@ -162,7 +162,7 @@ struct
             let els_var = var_of_addr addr_list in
             let flow = List.fold_left (fun acc el ->
                            let stmt = mk_assign (mk_var els_var range) el range in
-                           acc >>% man.exec ~route:(Semantic "Python") stmt) (Post.return flow) ls in
+                           acc >>% man.exec   stmt) (Post.return flow) ls in
             flow >>%
             man.exec ~route:(Semantic "U/Numeric") (mk_assign (mk_var (length_var_of_addr addr_list) range) (mk_int (List.length ls) ~typ:T_int range) range) >>%
               Eval.singleton (mk_py_object (addr_list, None) range)
@@ -177,7 +177,7 @@ struct
              ~fthen:(fun flow ->
                assume (mk_py_isinstance_builtin index "int" range) man flow
                  ~fthen:(fun flow ->
-                   Cases.bind_list eargs (man.eval ~route:(Semantic "Python")) flow |>
+                   Cases.bind_list eargs (man.eval  ) flow |>
                      Cases.bind_some (fun eargs flow ->
                          let list, index = match eargs with [l; i] -> l, i | _ -> assert false in
                          let var_els = var_of_eobj list in
@@ -190,7 +190,7 @@ struct
                               range
                            )
                            ~route:(Semantic "U/Numeric") man flow
-                           ~fthen:(man.eval ~route:(Semantic "Python") (mk_var var_els range))
+                           ~fthen:(man.eval   (mk_var var_els range))
                            ~felse:(fun flow ->
                              man.exec (Utils.mk_builtin_raise "IndexError" range) flow >>%
                                Eval.empty_singleton
@@ -206,13 +206,13 @@ struct
                          (fun eaddr_list flow ->
                              let addr_list = addr_of_expr eaddr_list in
                              let slicedlist_var = var_of_addr addr_list in
-                             man.eval list ~route:(Semantic "Python") flow >>$
+                             man.eval list   flow >>$
                                (fun list flow ->
-                                   man.eval (mk_py_call (mk_py_attr index "indices" range) [mk_py_call (mk_py_attr list "__len__" range) [] range] range) ~route:(Semantic "Python") flow >>$
+                                   man.eval (mk_py_call (mk_py_attr index "indices" range) [mk_py_call (mk_py_attr list "__len__" range) [] range] range)   flow >>$
                                      (fun tuple_indices flow ->
                                          let get_nth n =
                                            mk_py_call (mk_py_attr tuple_indices "__getitem__" range) [mk_int n range] range in
-                                          Cases.bind_list [get_nth 0; get_nth 1; get_nth 2] (man.eval ~route:(Semantic "Python")) flow |>
+                                          Cases.bind_list [get_nth 0; get_nth 1; get_nth 2] (man.eval  ) flow |>
                                            Cases.bind_some (fun sss flow ->
                                                  let start, stop, step = match List.map Utils.extract_oobject sss with
                                                    | [a;b;c] -> a, b, c
@@ -220,7 +220,7 @@ struct
                                                  let var_els = var_of_eobj list in
                                                  let new_length = mk_var (length_var_of_addr addr_list) range in
                                                  flow |>
-                                                   man.exec ~route:(Semantic "Python") (mk_assign (mk_var slicedlist_var range) (mk_var var_els range) range) >>%
+                                                   man.exec   (mk_assign (mk_var slicedlist_var range) (mk_var var_els range) range) >>%
                                                    switch
                                                      [
                                                        [
@@ -291,7 +291,7 @@ struct
                            )
                      )
                      ~felse:(fun flow ->
-                       man.eval index ~route:(Semantic "Python") flow >>$
+                       man.eval index   flow >>$
                          (fun index flow ->
                              let msg = Format.asprintf "list indices must be integers or slices, not %a" pp_addr_kind (akind @@ fst @@ object_of_expr index) in
                              man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>%
@@ -322,7 +322,7 @@ struct
                      let alist_addr = addr_of_expr list_addr in
                      let els_res_var = var_of_addr alist_addr in
                      let els_res_length = length_var_of_addr alist_addr in
-                     Cases.bind_list evargs (man.eval ~route:(Semantic "Python")) flow |>
+                     Cases.bind_list evargs (man.eval  ) flow |>
                        Cases.bind_some (fun exprs flow ->
                            let listl, listr = match exprs with [l; r] -> l, r | _ -> assert false in
                            let elsl_var = var_of_eobj listl in
@@ -331,7 +331,7 @@ struct
                            let elsr_length = length_var_of_eobj listr in
 
                            let flow = List.fold_left (fun acc el ->
-                                          acc >>% man.exec ~route:(Semantic "Python") (mk_assign (mk_var els_res_var range) el range) )
+                                          acc >>% man.exec   (mk_assign (mk_var els_res_var range) el range) )
                                         (Post.return flow) [mk_var elsl_var range;
                                                             mk_var elsr_var range] in
                            flow >>%
@@ -346,9 +346,9 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.__iadd__", _))}, _)}, args, []) ->
       (* let's rewrite list.__iadd__(s, t) into list.extend(s, t) && return s *)
-      man.eval ~route:(Semantic "Python") (mk_py_call (mk_py_object (find_builtin "list.extend") range) args range) flow
+      man.eval   (mk_py_call (mk_py_object (find_builtin "list.extend") range) args range) flow
       >>$ (fun nonety flow ->
-          man.eval ~route:(Semantic "Python") (List.hd args) flow
+          man.eval   (List.hd args) flow
         )
       |> OptionExt.return
 
@@ -370,7 +370,7 @@ struct
                    )
                    ~route:(Semantic "U/Numeric") man flow
                    ~fthen:(fun flow ->
-                       man.exec ~route:(Semantic "Python") (mk_assign (mk_var var_els range) value range) flow >>% man.eval ~route:(Semantic "Python") (mk_py_none range)
+                       man.exec   (mk_assign (mk_var var_els range) value range) flow >>% man.eval   (mk_py_none range)
                      )
                    ~felse:(fun flow ->
                        man.exec (Utils.mk_builtin_raise_msg "IndexError" "list assignment index out of range" range) flow >>%
@@ -417,13 +417,13 @@ struct
                      let addr_list = addr_of_expr eaddr_list in
                      let els_var = var_of_addr addr_list in
                      let els_len = length_var_of_addr addr_list in
-                     Cases.bind_list evargs (man.eval ~route:(Semantic "Python")) flow |>
+                     Cases.bind_list evargs (man.eval  ) flow |>
                        Cases.bind_some (fun exprs flow ->
                            let list, int = match exprs with [l; r] -> l, r | _ -> assert false in
                            let els_list = var_of_eobj list in
                            let len_list = length_var_of_eobj list in
 
-                           man.exec ~route:(Semantic "Python") (mk_assign (mk_var els_var range) (mk_var els_list range) range) flow >>%
+                           man.exec   (mk_assign (mk_var els_var range) (mk_var els_list range) range) flow >>%
                            man.exec ~route:(Semantic "U/Numeric") (mk_assign (mk_var els_len range)
                                                                     (mk_binop (mk_var len_list range) O_mult (Utils.extract_oobject int) ~etyp:T_int range) range) >>%
                              Eval.singleton (mk_py_object (addr_list, None) range)
@@ -443,7 +443,7 @@ struct
            let list, element = match args with | [l; e] -> l, e | _ -> assert false in
            let var_els = var_of_eobj list in
            let len_els = length_var_of_eobj list in
-           man.exec ~route:(Semantic "Python") (mk_assign (mk_var var_els range) element range) flow >>%
+           man.exec   (mk_assign (mk_var var_els range) element range) flow >>%
            man.exec ~route:(Semantic "U/Numeric") (mk_assign (mk_var len_els range)
                                        (mk_binop (mk_var len_els range) O_plus (mk_int 1 range) ~etyp:T_int range) range) >>%
            man.eval (mk_py_none range))
@@ -457,7 +457,7 @@ struct
            let var_els = var_of_eobj list in
            let len_els = length_var_of_eobj list in
            flow |>
-           man.exec ~route:(Semantic "Python") (mk_assign (mk_var var_els range) element range) >>%
+           man.exec   (mk_assign (mk_var var_els range) element range) >>%
            man.exec ~route:(Semantic "U/Numeric") (mk_assign (mk_var len_els range)
                                        (mk_binop (mk_var len_els range) O_plus (mk_int 1 range) ~etyp:T_int range) range) >>%
            man.eval (mk_py_none range))
@@ -465,7 +465,7 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.__new__", _))}, _)}, cls::args, []) ->
       Utils.new_wrapper man range flow "list" cls
-        ~fthennew:(man.eval (mk_expr (E_py_list []) range))
+        ~fthennew:(man.eval (mk_expr ~etyp:T_py (E_py_list []) range))
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.__init__" as f, _))}, _)}, args, [])
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.extend" as f, _))}, _)}, args, []) ->
@@ -481,7 +481,7 @@ struct
                  let var_sndels = var_of_eobj other in
                  let len_sndels = length_var_of_eobj other in
                  flow |>
-                 man.exec ~route:(Semantic "Python") (mk_assign (mk_var var_els range) (mk_var var_sndels range) range) >>%
+                 man.exec   (mk_assign (mk_var var_els range) (mk_var var_sndels range) range) >>%
                  man.exec ~route:(Semantic "U/Numeric") (mk_assign (mk_var len_els range)
                              (mk_binop (mk_var len_els range) O_plus (mk_var len_sndels range) ~etyp:T_int range) range) >>%
                  man.eval (mk_py_none range)
@@ -494,29 +494,29 @@ struct
                      let ra a = mk_py_attr other a range in
                      let flow =
                        flow |>
-                         man.exec ~route:(Semantic "Python") (mk_assign (mk_var var_els range) (mk_py_top T_int range) range) >>%
-                         man.exec ~route:(Semantic "Python") (mk_assume (mk_binop
+                         man.exec   (mk_assign (mk_var var_els range) (mk_py_top T_int range) range) >>%
+                         man.exec   (mk_assume (mk_binop
                                                 (mk_binop (ra "start") O_le (mk_var var_els range) range)
                                                 O_py_and
                                                 (mk_binop (mk_var var_els range) O_lt (ra "stop") range) range) range) in
                      flow >>%
-                     man.eval ~route:(Semantic "Python")
+                     man.eval  
                        (mk_py_call (mk_py_object (find_builtin_function "len") range) [other] range) >>$
                        (fun len flow ->
                            man.exec ~route:(Semantic "U/Numeric") (mk_assign (mk_var len_els range) (Utils.extract_oobject len) range) flow >>%
-                             man.eval ~route:(Semantic "Python") (mk_py_none range)
+                             man.eval   (mk_py_none range)
                          )
                      )
                    (* TODO: if object has iter field call it and then call next *)
                    ~felse:(fun flow ->
                        assume (mk_py_isinstance_builtin other "list_reverseiterator" range) man flow
                          ~fthen:(fun flow ->
-                           man.eval ~route:(Semantic "Python") (mk_var (itseq_of_eobj other) range) flow >>$
+                           man.eval   (mk_var (itseq_of_eobj other) range) flow >>$
                              (fun list_eobj flow ->
                                  let var_sndels = var_of_eobj list_eobj in
                                  let len_sndels = length_var_of_eobj list_eobj in
                                  flow |>
-                                   man.exec ~route:(Semantic "Python") (mk_assign (mk_var var_els range) (mk_var var_sndels range) range) >>%
+                                   man.exec   (mk_assign (mk_var var_els range) (mk_var var_sndels range) range) >>%
                                    man.exec ~route:(Semantic "U/Numeric") (mk_assign (mk_var len_els range)
                                                                             (mk_binop (mk_var len_els range) O_plus (mk_var len_sndels range) ~etyp:T_int range) range) >>%
                                    man.eval (mk_py_none range)
@@ -525,16 +525,16 @@ struct
                          ~felse:(fun flow ->
                              assume (mk_py_isinstance_builtin other "zip" range) man flow
                                ~fthen:(fun flow ->
-                                 man.eval ~route:(Semantic "Python") (mk_var (itseq_of_eobj other) range) flow >>$
+                                 man.eval   (mk_var (itseq_of_eobj other) range) flow >>$
  (fun l1_eobj flow ->
-                                       man.eval ~route:(Semantic "Python") (mk_var (itseq2_of_eobj other) range) flow >>$
+                                       man.eval   (mk_var (itseq2_of_eobj other) range) flow >>$
  (fun l2_eobj flow ->
                                              let var_l1 = var_of_eobj l1_eobj in
                                              let len_l1 = length_var_of_eobj l1_eobj in
                                              let var_l2 = var_of_eobj l2_eobj in
                                              let len_l2 = length_var_of_eobj l2_eobj in
                                              flow |>
-                                               man.exec (mk_assign (mk_var var_els range) (mk_expr (E_py_tuple [mk_var var_l1 range; mk_var var_l2 range]) range) range) >>%
+                                               man.exec (mk_assign (mk_var var_els range) (mk_expr ~etyp:T_py (E_py_tuple [mk_var var_l1 range; mk_var var_l2 range]) range) range) >>%
                                                man.exec (mk_assign (mk_var len_els range)
                                                            (mk_py_call (mk_py_object (find_builtin "min") range) [mk_var len_l1 range; mk_var len_l2 range] range)
                                                            range) >>%
@@ -565,7 +565,7 @@ struct
            let var_els = var_of_eobj list in
            let len_els = length_var_of_eobj list in
            flow |>
-           man.exec ~route:(Semantic "Python") (mk_remove_var var_els range) >>%
+           man.exec   (mk_remove_var var_els range) >>%
            man.exec ~route:(Semantic "U/Numeric") (mk_assign (mk_var len_els range) (mk_int 0 range) range) >>%
            man.eval (mk_py_none range)
         )
@@ -657,7 +657,7 @@ struct
  (fun eaddr_it flow ->
                  let addr_it = match ekind eaddr_it with | E_addr a -> a | _ -> assert false in
                  flow |>
-                   man.exec ~route:(Semantic "Python") (mk_assign (mk_var (itseq_of_addr addr_it) range) list range) >>%
+                   man.exec   (mk_assign (mk_var (itseq_of_addr addr_it) range) list range) >>%
                    man.exec ~route:(Semantic "U/Numeric") (mk_assign (mk_var (itindex_var_of_addr addr_it) range) (mk_int 0 range) range) >>%
                    Eval.singleton (mk_py_object (addr_it, None) range)
              )
@@ -668,9 +668,9 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list_iterator.__next__", _))}, _)}, [iterator], []) ->
        (* it_pos in reverse iterator + value analysis? *)
       (* todo: checks ? *)
-      man.eval  ~route:(Semantic "Python") iterator flow >>$
+      man.eval    iterator flow >>$
  (fun iterator flow ->
-            man.eval ~route:(Semantic "Python") (mk_var (itseq_of_eobj iterator) range) flow >>$
+            man.eval   (mk_var (itseq_of_eobj iterator) range) flow >>$
  (fun list_eobj flow ->
                   let list_addr = match ekind list_eobj with
                     | E_py_object (a, _) -> a
@@ -707,7 +707,7 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list_reverseiterator.__iter__", _))}, _)}, [iterator], [])
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list_iterator.__iter__", _))}, _)}, [iterator], []) ->
       (* todo: checks ? *)
-      man.eval ~route:(Semantic "Python") iterator flow |> OptionExt.return
+      man.eval   iterator flow |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.__reversed__" as f, _))}, _)}, args, []) ->
        (* FIXME: values *)
@@ -721,7 +721,7 @@ struct
                (* FIXME list_reverseiterator index *)
                let addr_it = match ekind eaddr_it with | E_addr a -> a | _ -> assert false in
                flow |>
-                 man.exec ~route:(Semantic "Python") (mk_assign (mk_var (itseq_of_addr addr_it) range) list range) >>%
+                 man.exec   (mk_assign (mk_var (itseq_of_addr addr_it) range) list range) >>%
                  man.exec ~route:(Semantic "U/Numeric") (mk_assign (mk_var (itindex_var_of_addr addr_it) range) (mk_int 0 range) range) >>%
                Eval.singleton (mk_py_object (addr_it, None) range)
              )
@@ -733,7 +733,7 @@ struct
       Utils.check_instances f man flow range args
         ["list"]
         (fun args flow ->
-          man.eval ~route:(Semantic "Python") (mk_py_top T_int range) flow >>$
+          man.eval   (mk_py_top T_int range) flow >>$
  (fun eint flow ->
                 match ekind eint with
                 | E_py_object (addr, _) ->
@@ -749,9 +749,9 @@ struct
           assume
             (mk_binop (mk_var (var_of_eobj list) range) O_eq el range)
             man flow
-            ~route:(Semantic "Python")
-            ~fthen:(man.eval ~route:(Semantic "Python") (mk_py_true range))
-            ~felse:(man.eval ~route:(Semantic "Python") (mk_py_false range))
+             
+            ~fthen:(man.eval   (mk_py_true range))
+            ~felse:(man.eval   (mk_py_false range))
         )
       |> OptionExt.return
 
@@ -794,7 +794,7 @@ struct
            man.eval   a flow >>$
  (fun eaddr_it flow ->
                let addr_it = match ekind eaddr_it with | E_addr a -> a | _ -> assert false in
-               man.exec ~route:(Semantic "Python") (mk_assign (mk_var (itseq_of_addr addr_it) range) list range) flow >>%
+               man.exec   (mk_assign (mk_var (itseq_of_addr addr_it) range) list range) flow >>%
                Eval.singleton (mk_py_object (addr_it, None) range)
              )
         )
@@ -809,12 +809,12 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("enumerate.__next__", _))}, _)}, [iterator], []) ->
        (* FIXME: new py_iterator + values *)
-      man.eval ~route:(Semantic "Python") iterator flow >>$
+      man.eval   iterator flow >>$
  (fun iterator flow ->
-            man.eval ~route:(Semantic "Python") (mk_var (itseq_of_eobj iterator) range) flow >>$
+            man.eval   (mk_var (itseq_of_eobj iterator) range) flow >>$
  (fun list_eobj flow ->
                   let var_els = var_of_eobj list_eobj in
-                  let els = man.eval (mk_expr (E_py_tuple [mk_top T_int range;
+                  let els = man.eval (mk_expr ~etyp:T_py (E_py_tuple [mk_top T_int range;
                                                            mk_var var_els range]) range) flow in
                   let flow = Flow.set_ctx (Cases.get_ctx els) flow in
                   let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty_singleton in
@@ -836,8 +836,8 @@ struct
                  | E_addr a -> a
                  | _ -> assert false in
                flow |>
-                 man.exec ~route:(Semantic "Python") (mk_assign (mk_var (itseq_of_addr  addr_it) range) list1 range) >>%
-                 man.exec ~route:(Semantic "Python") (mk_assign (mk_var (itseq2_of_addr addr_it) range) list2 range) >>%
+                 man.exec   (mk_assign (mk_var (itseq_of_addr  addr_it) range) list1 range) >>%
+                 man.exec   (mk_assign (mk_var (itseq2_of_addr addr_it) range) list2 range) >>%
                Eval.singleton (mk_py_object (addr_it, None) range)
              )
         )
@@ -851,15 +851,15 @@ struct
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("zip.__next__", _))}, _)}, [iterator], []) ->
-      man.eval ~route:(Semantic "Python") iterator flow >>$
+      man.eval   iterator flow >>$
  (fun iterator flow ->
             Cases.bind_list (List.map (fun x -> mk_var x range) [itseq_of_eobj iterator; itseq2_of_eobj iterator])
-              (man.eval ~route:(Semantic "Python")) flow |>
+              (man.eval  ) flow |>
               Cases.bind_some (fun its flow ->
                   let list1_eobj, list2_eobj = match its with [a; b] -> a, b | _ -> assert false in
                   let var_els1 = var_of_eobj list1_eobj in
                   let var_els2 = var_of_eobj list2_eobj in
-                  let els = man.eval (mk_expr (E_py_tuple [mk_var var_els1 range;
+                  let els = man.eval (mk_expr ~etyp:T_py (E_py_tuple [mk_var var_els1 range;
                                                            mk_var var_els2 range]) range) flow in
                   let flow = Flow.set_ctx (Cases.get_ctx els) flow in
                   let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty_singleton in
@@ -887,7 +887,7 @@ struct
         ["str"; "str"; "int"]
         (fun eargs flow ->
            (* FIXME: notok, as one strong element. Fixed by adding to tops, but terrible *)
-           man.eval (mk_expr (E_py_list [mk_py_top T_string range; mk_py_top T_string range]) range) flow
+           man.eval (mk_expr ~etyp:T_py (E_py_list [mk_py_top T_string range; mk_py_top T_string range]) range) flow
         )
       |> OptionExt.return
 
@@ -909,7 +909,7 @@ struct
         ["bytes"; "bytes"; "int"]
         (fun eargs flow ->
            (* FIXME: notok, as one strong element. Fixed by adding to tops, but terrible *)
-           man.eval (mk_expr (E_py_list [mk_py_top T_py_bytes range; mk_py_top T_py_bytes range]) range) flow
+           man.eval (mk_expr ~etyp:T_py (E_py_list [mk_py_top T_py_bytes range; mk_py_top T_py_bytes range]) range) flow
         )
       |> OptionExt.return
 
@@ -918,14 +918,14 @@ struct
       Utils.check_instances f man flow range args
         ["str"]
         (fun eargs flow ->
-           man.eval (mk_expr (E_py_list [mk_py_top T_string range]) range) flow
+           man.eval (mk_expr ~etyp:T_py (E_py_list [mk_py_top T_string range]) range) flow
         )
       |> OptionExt.return
 
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dir" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args []
-        (fun _ -> man.eval (mk_expr (E_py_list [mk_py_top T_string range]) range))
+        (fun _ -> man.eval (mk_expr ~etyp:T_py (E_py_list [mk_py_top T_string range]) range))
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.assert_list_of", _))}, _)}, args, []) ->
@@ -950,9 +950,9 @@ struct
           let addr_list = addr_of_expr eaddr_list in
           let els_var = var_of_addr addr_list in
           let len_var = length_var_of_addr addr_list in
-          let stmt = mk_stmt (S_py_annot (mk_var els_var range, mk_expr (E_py_annot i) range)) range in
+          let stmt = mk_stmt (S_py_annot (mk_var els_var range, mk_expr ~etyp:T_py (E_py_annot i) range)) range in
           flow |>
-            man.exec ~route:(Semantic "Python") stmt >>%
+            man.exec   stmt >>%
             man.exec ~route:(Semantic "U/Numeric") (mk_assign (mk_var len_var range) (mk_py_top T_int range) range) >>%
             Eval.singleton (mk_py_object (addr_list, None) range)
         )
@@ -962,17 +962,17 @@ struct
       debug "s_py_check_annot list";
       assume (mk_py_isinstance_builtin tocheck "list" range) man flow
         ~fthen:(fun flow ->
-            man.eval ~route:(Semantic "Python") tocheck flow |>
+            man.eval   tocheck flow |>
             bind_some (fun iterator flow ->
                 let list_addr = match ekind iterator with
                   | E_py_object ({addr_kind = A_py_list} as a, _) -> a
                   | _ -> Exceptions.panic "should be a list: %a@\nflow = %a@\n" pp_expr iterator (Flow.print man.lattice.print) flow in
                 let var_els = var_of_addr list_addr in
-                man.eval (mk_expr (E_py_check_annot (mk_var var_els range, i)) range) flow
+                man.eval (mk_expr ~etyp:T_py (E_py_check_annot (mk_var var_els range, i)) range) flow
               )
           )
         ~felse:(fun flow ->
-            man.eval ~route:(Semantic "Python") (mk_py_false range) flow
+            man.eval   (mk_py_false range) flow
           )
       |> OptionExt.return
 
@@ -987,13 +987,13 @@ struct
        let va = var_of_addr a in
        let la = length_var_of_addr a in
        flow |>
-         man.exec ~route:(Semantic "Python") (mk_remove_var va range) >>%
+         man.exec   (mk_remove_var va range) >>%
          man.exec ~route:(Semantic "U/Numeric") (mk_remove_var la range) >>%
          Post.return |> OptionExt.return
 
     | S_remove {ekind = E_addr ({addr_kind = A_py_iterator (kind, _)} as a)} ->
        let va = itseq_of_addr a in
-       let flow = man.exec ~route:(Semantic "Python") (mk_remove_var va range) flow in
+       let flow = man.exec   (mk_remove_var va range) flow in
        flow >>%
          (
            if kind = "list_iterator" || kind = "list_reverseiterator" then
@@ -1013,12 +1013,12 @@ struct
            else
              (fun x -> Post.return x)
          ) >>%
-         man.exec ~route:(Semantic "Python") (mk_rename_var va va' range) |> OptionExt.return
+         man.exec   (mk_rename_var va va' range) |> OptionExt.return
 
     | S_invalidate {ekind = E_addr ({addr_kind = A_py_iterator (kind, _)} as a)} ->
        let va = itseq_of_addr a in
        flow |>
-         man.exec ~route:(Semantic "Python") (mk_remove_var va range) >>%
+         man.exec   (mk_remove_var va range) >>%
          (
            if kind = "list_iterator" || kind = "list_reverseiterator" then
              man.exec ~route:(Semantic "U/Numeric") (mk_remove_var (itindex_var_of_addr a) range)
@@ -1039,7 +1039,7 @@ struct
                      | E_addr ({addr_kind = A_py_iterator (kind', _)} as a') when kind = kind' -> itseq_of_addr a'
                      | _ -> assert false) addrs in
        flow |>
-         man.exec ~route:(Semantic "Python") (mk_stmt va vas range) >>%
+         man.exec   (mk_stmt va vas range) >>%
          ( if kind = "list_iterator" || kind = "list_reverseiterator" then
              man.exec ~route:(Semantic "U/Numeric")
                (mk_stmt (itindex_var_of_addr a)
@@ -1056,7 +1056,7 @@ struct
        let va = var_of_addr a in
        let la = length_var_of_addr a in
        flow |>
-         man.exec ~route:(Semantic "Python") (mk_remove_var va range) >>%
+         man.exec   (mk_remove_var va range) >>%
          man.exec ~route:(Semantic "U/Numeric") (mk_remove_var la range) |>
          OptionExt.return
 
@@ -1074,7 +1074,7 @@ struct
                                       | E_addr ({addr_kind = A_py_list} as a') -> var_of_addr a', length_var_of_addr a'
                                       | _ -> assert false) addrs in
        flow |>
-         man.exec ~route:(Semantic "Python") (mk_stmt va vas range) >>%
+         man.exec   (mk_stmt va vas range) >>%
          man.exec ~route:(Semantic "U/Numeric") (mk_stmt la las range) |>
          OptionExt.return
 
@@ -1087,7 +1087,7 @@ struct
       let la' = length_var_of_addr a' in
       debug "renaming %a into %a@\n" pp_var va pp_var va';
       flow |>
-      man.exec ~route:(Semantic "Python") (mk_rename_var va va' range) >>%
+      man.exec   (mk_rename_var va va' range) >>%
       man.exec ~route:(Semantic "U/Numeric") (mk_rename_var la la' range) |>
       OptionExt.return
       (* FIXME: now we need to do the same for iterators based on this address, but it's complicated *)

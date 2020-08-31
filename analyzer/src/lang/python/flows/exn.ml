@@ -122,7 +122,7 @@ module Domain =
 
       | S_py_raise(Some exp) ->
         debug "Raising %a@\n" pp_expr exp;
-        (man.eval ~route:(Semantic "Python") exp flow |>
+        (man.eval   exp flow |>
          bind_full (fun exp flow log cleaners ->
              match exp with
              | None -> Cases.return None flow ~log ~cleaners
@@ -206,7 +206,7 @@ module Domain =
                 debug "T_cur now matches tk %a@\n" pp_token tk;
                 let flow = Flow.set T_cur env man.lattice flow0 in
                 let flow' =
-                  man.eval ~route:(Semantic "Python") e flow |>
+                  man.eval   e flow |>
                   bind_some (fun e flow ->
                       match ekind e with
                       | E_py_object obj ->
@@ -265,7 +265,7 @@ module Domain =
               (* Evaluate e in env to check if it corresponds to exn *)
               let flow = Flow.set T_cur env man.lattice flow0 in
               let flow' =
-                man.eval ~route:(Semantic "Python") e flow |>
+                man.eval   e flow |>
                 bind_some (fun e flow ->
                     match ekind e with
                     | E_py_object obj ->

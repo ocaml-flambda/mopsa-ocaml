@@ -30,16 +30,16 @@ open Alarms
 
 
 let mk_py_ll_hasattr instance attr range =
-  mk_expr (E_py_ll_hasattr(instance, attr)) range
+  mk_expr ~etyp:T_py (E_py_ll_hasattr(instance, attr)) range
 
 let mk_py_ll_getattr instance attr range =
-  mk_expr (E_py_ll_getattr(instance, attr)) range
+  mk_expr ~etyp:T_py (E_py_ll_getattr(instance, attr)) range
 
 let mk_py_ll_setattr instance attr valu range =
-  mk_expr (E_py_ll_setattr(instance, attr, Some valu)) range
+  mk_expr ~etyp:T_py (E_py_ll_setattr(instance, attr, Some valu)) range
 
 let mk_py_ll_delattr instance attr range =
-  mk_expr (E_py_ll_setattr(instance, attr, None)) range
+  mk_expr ~etyp:T_py (E_py_ll_setattr(instance, attr, None)) range
 
 
 module Domain =
@@ -68,7 +68,7 @@ struct
     match ekind exp with
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("type.__new__", _))}, _)}, args, kwargs)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__new__", _))}, _)}, args, kwargs) ->
-      bind_list args (man.eval  ~route:(Semantic "Python")) flow |>
+      bind_list args (man.eval   ) flow |>
       bind_some (fun args flow ->
           match args with
           | [] ->
@@ -81,25 +81,25 @@ struct
                 let addr = match ekind eaddr with
                   | E_addr a -> a
                   | _ -> assert false in
-                man.exec ~route:(Semantic "Python") (mk_add eaddr range) flow >>%
+                man.exec   (mk_add eaddr range) flow >>%
                 Eval.singleton (mk_py_object (addr, None) range)
               )
         )
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__init__", _))}, _)}, args, []) ->
-      man.eval  ~route:(Semantic "Python") (mk_py_none range) flow |> OptionExt.return
+      man.eval    (mk_py_none range) flow |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("type.__getattribute__", _))}, _)}, [ptype; attribute], []) ->
-      man.eval ~route:(Semantic "Python") (mk_py_type ptype range) flow >>$
+      man.eval   (mk_py_type ptype range) flow >>$
         (fun metatype flow ->
           let lookintype o_meta_attribute o_meta_get flow =
-            man.eval ~route:(Semantic "Python") ptype flow >>$
+            man.eval   ptype flow >>$
               (fun ptype flow ->
                 let mro_ptype = mro (object_of_expr ptype) in
                 search_mro man attribute
                   ~cls_found:(fun cls flow ->
-                      man.eval ~route:(Semantic "Python")
+                      man.eval  
                         (mk_py_ll_getattr (mk_py_object cls range) attribute range) flow >>$
                         (fun attribute flow ->
                           assume (mk_py_hasattr (mk_py_type attribute range) "__get__" range)
@@ -134,7 +134,7 @@ struct
           let mro_metatype = mro (object_of_expr metatype) in
           search_mro man attribute
             ~cls_found:(fun cls flow ->
-                man.eval ~route:(Semantic "Python")
+                man.eval  
                   (mk_py_ll_getattr (mk_py_object cls range) attribute range)
                   flow >>$
  (fun meta_attribute flow ->
@@ -142,7 +142,7 @@ struct
                       (mk_py_hasattr (mk_py_type meta_attribute range) "__get__" range)
                       man flow
                       ~fthen:(fun flow ->
-                          man.eval ~route:(Semantic "Python")
+                          man.eval  
                             (mk_py_attr (mk_py_type meta_attribute range) "__get__" range)
                             flow >>$
  (fun meta_get flow ->
@@ -164,17 +164,17 @@ struct
 
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__getattribute__", _))}, _)}, [instance; attribute], []) ->
-      man.eval ~route:(Semantic "Python") (mk_py_type instance range) flow >>$
+      man.eval   (mk_py_type instance range) flow >>$
  (fun class_of_exp flow ->
           let mro = mro (object_of_expr class_of_exp) in
           debug "mro of %a: %a" pp_expr class_of_exp (Format.pp_print_list (fun fmt (a, _) -> pp_addr fmt a)) mro;
           let tryinstance ~fother flow =
             assume (mk_py_ll_hasattr instance attribute range) man flow
-              ~fthen:(man.eval ~route:(Semantic "Python") (mk_py_ll_getattr instance attribute range))
+              ~fthen:(man.eval   (mk_py_ll_getattr instance attribute range))
               ~felse:fother in
           search_mro man attribute
             ~cls_found:(fun cls flow ->
-                man.eval ~route:(Semantic "Python")
+                man.eval  
                   (mk_py_ll_getattr (mk_py_object cls range) attribute range)
                   flow >>$
  (fun descr flow ->
@@ -212,12 +212,12 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("type.__setattr__", _))}, _)}, [lval; attr; rval], [])
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__setattr__", _))}, _)}, [lval; attr; rval], []) ->
-      man.eval ~route:(Semantic "Python") (mk_py_type lval range) flow >>$
+      man.eval   (mk_py_type lval range) flow >>$
  (fun class_of_lval flow ->
           let mro = mro (object_of_expr class_of_lval) in
           search_mro man attr
             ~cls_found:(fun cls flow ->
-                man.eval ~route:(Semantic "Python") (mk_py_ll_getattr (mk_py_object cls range) attr range) flow >>$
+                man.eval   (mk_py_ll_getattr (mk_py_object cls range) attr range) flow >>$
  (fun obj' flow ->
                     assume (mk_py_hasattr obj' "__set__" range)
                       man flow
@@ -225,12 +225,12 @@ struct
                           man.eval (mk_py_call (mk_py_attr obj' "__set__" range) [lval; rval] range) flow
                         )
                       ~felse:(
-                        man.eval ~route:(Semantic "Python")
+                        man.eval  
                           (mk_py_ll_setattr lval attr rval range)
                       )
                   )
               )
-            ~nothing_found:(man.eval ~route:(Semantic "Python")
+            ~nothing_found:(man.eval  
                               (mk_py_ll_setattr lval attr rval range))
             range mro flow
         )
@@ -238,12 +238,12 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("type.__delattr__", _))}, _)}, [lval; attr], [])
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__delattr__", _))}, _)}, [lval; attr], []) ->
-      man.eval ~route:(Semantic "Python") (mk_py_type lval range) flow >>$
+      man.eval   (mk_py_type lval range) flow >>$
  (fun class_of_lval flow ->
           let mro = mro (object_of_expr class_of_lval) in
           search_mro man attr
             ~cls_found:(fun cls flow ->
-                man.eval ~route:(Semantic "Python")
+                man.eval  
                   (mk_py_ll_getattr (mk_py_object cls range) attr range) flow >>$
  (fun obj' flow ->
                     assume (mk_py_hasattr obj' "__delete__" range)
@@ -252,19 +252,19 @@ struct
                           man.eval (mk_py_call (mk_py_attr obj' "__delete__" range) [lval] range) flow
                         )
                       ~felse:(
-                        man.eval ~route:(Semantic "Python")
+                        man.eval  
                           (mk_py_ll_delattr lval attr range)
                       )
                   )
               )
-            ~nothing_found:(man.eval ~route:(Semantic "Python")
+            ~nothing_found:(man.eval  
                               (mk_py_ll_delattr lval attr range))
             range mro flow
         )
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__init_subclass__", _))}, _)}, cls::args, []) ->
-      man.eval ~route:(Semantic "Python") (mk_py_none range) flow |> OptionExt.return
+      man.eval   (mk_py_none range) flow |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__repr__" as f, _))}, _)}, args, [])
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__str__" as f, _))}, _)}, args, []) ->

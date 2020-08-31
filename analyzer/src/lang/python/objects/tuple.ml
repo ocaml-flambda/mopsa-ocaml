@@ -83,7 +83,7 @@ struct
     | A_py_tuple s ->
        let rec process i aux =
          if i = -1 then aux
-         else process (i-1) ((mk_addr_attr a ("tuple[" ^ string_of_int i ^ "]") T_any)::aux)
+         else process (i-1) ((mk_addr_attr a ("tuple[" ^ string_of_int i ^ "]") T_py)::aux)
        in process (s-1) []
     | _ -> assert false
 
@@ -107,7 +107,7 @@ struct
           let els_vars = var_of_addr addr_tuple in
           debug "els_vars = %a@.els = %a" (Format.pp_print_list pp_var) els_vars (Format.pp_print_list pp_expr) els;
           let flow = List.fold_left2 (fun acc vari eli ->
-              acc >>% man.exec ~route:(Semantic "Python")
+              acc >>% man.exec  
                 (mk_assign (mk_var ~mode:(Some STRONG) vari range) eli range)) (Post.return flow) els_vars els in
           flow >>% Eval.singleton (mk_py_object (addr_tuple, None) range)
         )
@@ -122,12 +122,12 @@ struct
            let tuple_vars = var_of_eobj tuple in
            let mk_comp var = mk_binop (mk_var ~mode:(Some STRONG) var range) O_eq isin range in
            if List.length tuple_vars = 0 then
-             man.eval ~route:(Semantic "Python") (mk_py_false range) flow
+             man.eval   (mk_py_false range) flow
            else
              let or_expr = List.fold_left (fun acc var ->
                  mk_binop acc O_py_or (mk_comp var) range
                ) (mk_comp (List.hd tuple_vars)) (List.tl tuple_vars) in
-           man.eval ~route:(Semantic "Python") or_expr flow
+           man.eval   or_expr flow
         )
       |> OptionExt.return
 
@@ -143,15 +143,15 @@ struct
                | E_constant (C_int z) -> Z.to_int z
                | _ -> raise Nonconstantinteger in
              if 0 <= pos && pos < List.length tuple_vars then
-               man.eval ~route:(Semantic "Python") (mk_var ~mode:(Some STRONG) (List.nth tuple_vars pos) range) flow
+               man.eval   (mk_var ~mode:(Some STRONG) (List.nth tuple_vars pos) range) flow
              else
-               man.exec ~route:(Semantic "Python") (Utils.mk_builtin_raise_msg "IndexError" "tuple index out of range" range) flow >>%
+               man.exec   (Utils.mk_builtin_raise_msg "IndexError" "tuple index out of range" range) flow >>%
                Eval.empty_singleton
            with Nonconstantinteger ->
              Eval.join_list ~empty:(fun () -> assert false)
-               ((man.exec ~route:(Semantic "Python") (Utils.mk_builtin_raise_msg "IndexError" "tuple index out of range" range) flow >>%
+               ((man.exec   (Utils.mk_builtin_raise_msg "IndexError" "tuple index out of range" range) flow >>%
                  Eval.empty_singleton)
-                :: (List.map (fun var -> man.eval ~route:(Semantic "Python") (mk_var ~mode:(Some STRONG) var range) flow) tuple_vars))
+                :: (List.map (fun var -> man.eval   (mk_var ~mode:(Some STRONG) var range) flow) tuple_vars))
         )
       |> OptionExt.return
 
@@ -166,7 +166,7 @@ struct
                let addr_it = match ekind addr_it with
                  | E_addr a -> a
                  | _ -> assert false in
-               man.exec ~route:(Semantic "Python") (mk_assign (mk_var (Py_list.Domain.itseq_of_addr addr_it) range) tuple range) flow >>%
+               man.exec   (mk_assign (mk_var (Py_list.Domain.itseq_of_addr addr_it) range) tuple range) flow >>%
                Eval.singleton (mk_py_object (addr_it, None) range)
              )
         )
@@ -175,22 +175,22 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("tuple_iterator.__next__", _))}, _)}, [iterator], []) ->
       (* todo: checks? *)
       (* ugly assign iterator = iterator at pos+1... *)
-      man.eval ~route:(Semantic "Python") iterator flow >>$
+      man.eval   iterator flow >>$
  (fun eiterator flow ->
           let tuple_it_addr, tuple_pos = match ekind eiterator with
             | E_py_object ({addr_kind = Py_list.A_py_iterator (s, d)} as addr, _) when s = "tuple_iterator" -> addr, d
             | _ -> assert false in
-          man.eval ~route:(Semantic "Python") (mk_var (Py_list.Domain.itseq_of_eobj eiterator) range) flow >>$
+          man.eval   (mk_var (Py_list.Domain.itseq_of_eobj eiterator) range) flow >>$
  (fun tuple_eobj flow ->
                 let vars_els = var_of_eobj tuple_eobj in
                 match tuple_pos with
                 | Some d when d < List.length vars_els ->
-                   man.exec ~route:(Semantic "Python")
+                   man.exec  
                                 (mk_rename (mk_addr tuple_it_addr range)
                                    (mk_addr {tuple_it_addr with addr_kind = Py_list.A_py_iterator ("tuple_iterator", Some (d+1))} range) range) flow >>%
                    man.eval (mk_var ~mode:(Some STRONG) (List.nth vars_els d) range)
                 | _ ->
-                   man.exec ~route:(Semantic "Python") (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty_singleton
+                   man.exec   (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty_singleton
               )
         )
       |> OptionExt.return
@@ -205,8 +205,8 @@ struct
           let addr_tuple = addr_of_expr eaddr_tuple in
           let els_var = var_of_addr addr_tuple in
           let flow = List.fold_left2 (fun flow vari eli ->
-                         flow >>% man.exec ~route:(Semantic "Python")
-                (mk_stmt (S_py_annot (mk_var ~mode:(Some STRONG) vari range, mk_expr (E_py_annot eli) range)) range)
+                         flow >>% man.exec  
+                (mk_stmt (S_py_annot (mk_var ~mode:(Some STRONG) vari range, mk_expr ~etyp:T_py (E_py_annot eli) range)) range)
             ) (Post.return flow) els_var i in
           flow >>% Eval.singleton (mk_py_object (addr_tuple, None) range)
         )
@@ -220,17 +220,17 @@ struct
     match skind stmt with
     | S_remove {ekind = E_addr ({addr_kind = A_py_tuple _} as a)} ->
        let vas = var_of_addr a in
-       List.fold_left (fun flow v -> flow >>% man.exec ~route:(Semantic "Python") (mk_remove_var v range)) (Post.return flow) vas |> OptionExt.return
+       List.fold_left (fun flow v -> flow >>% man.exec   (mk_remove_var v range)) (Post.return flow) vas |> OptionExt.return
 
     | S_invalidate {ekind = E_addr ({addr_kind = A_py_tuple _} as a)} ->
        let vas = var_of_addr a in
-       List.fold_left (fun flow v -> flow >>% man.exec ~route:(Semantic "Python") (mk_remove_var v range)) (Post.return flow) vas |> OptionExt.return
+       List.fold_left (fun flow v -> flow >>% man.exec   (mk_remove_var v range)) (Post.return flow) vas |> OptionExt.return
 
     | S_rename ({ekind = E_addr ({addr_kind = A_py_tuple _} as a)}, {ekind = E_addr a'}) ->
       let vas = var_of_addr a in
       let vas' = var_of_addr a' in
       List.fold_left2 (fun flow v v' ->
-          flow >>% man.exec ~route:(Semantic "Python") (mk_rename_var v v' range) )
+          flow >>% man.exec   (mk_rename_var v v' range) )
         (Post.return flow) vas vas'
       |> OptionExt.return
 
@@ -238,7 +238,7 @@ struct
       let vas = var_of_addr a in
       let vas' = var_of_addr a' in
       List.fold_left2 (fun flow v v' ->
-          flow >>% man.exec ~route:(Semantic "Python") (mk_fold_var v [v'] range))
+          flow >>% man.exec   (mk_fold_var v [v'] range))
         (Post.return flow) vas vas'
       |> OptionExt.return
 
@@ -246,7 +246,7 @@ struct
       let vas = var_of_addr a in
       let vas' = var_of_addr a' in
       List.fold_left2 (fun flow v v' ->
-          flow >>% man.exec ~route:(Semantic "Python") (mk_expand_var v [v'] range))
+          flow >>% man.exec   (mk_expand_var v [v'] range))
         (Post.return flow) vas vas'
       |> OptionExt.return
 
@@ -265,7 +265,7 @@ struct
                           | V_addr_attr (_, attr) -> (attr, man.ask (Q_debug_variable_value var) flow)
                           | _ -> assert false) vars_tuple in
        Some {var_value = None;
-             var_value_type = T_any;
+             var_value_type = T_py;
              var_sub_value = Some (Named_sub_value contents)}
 
     | _ -> None

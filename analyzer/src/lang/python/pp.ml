@@ -51,6 +51,7 @@ let () =
     );
   register_typ_pp (fun default fmt typ ->
     match typ with
+    | T_py -> pp_print_string fmt "py"
     | T_py_not_implemented -> pp_print_string fmt "notimplemented"
     | T_py_none -> pp_print_string fmt "none"
     | T_py_complex -> pp_print_string fmt "complex"

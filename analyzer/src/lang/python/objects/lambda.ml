@@ -45,7 +45,7 @@ module Domain =
       | E_py_lambda l ->
         let lname = Format.asprintf "λ%a" pp_range range in
         let fun_addr = F_user
-            { py_func_var = mk_range_attr_var range lname T_any;
+            { py_func_var = mk_range_attr_var range lname T_py;
               py_func_parameters = l.py_lambda_parameters;
               py_func_defaults = l.py_lambda_defaults;
               py_func_vararg = None;
@@ -60,7 +60,7 @@ module Domain =
               py_func_types_in = [];
               py_func_type_out = None;
               py_func_range = range;
-              py_func_ret_var = mk_range_attr_var range ("ret "^lname) T_any;
+              py_func_ret_var = mk_range_attr_var range ("ret "^lname) T_py;
             } in
         eval_alloc man (A_py_function fun_addr) range flow |>
         bind_some (fun addr flow ->

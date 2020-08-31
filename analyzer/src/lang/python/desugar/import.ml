@@ -303,7 +303,7 @@ module Domain =
                   | _ -> (expr::b, ab)
                 ) ([], []) c.py_cls_bases in
               let bases, abases = List.rev bases, List.rev abases in
-              let r = bind_list bases (man.eval ~route:(Semantic "Python")) flow |>
+              let r = bind_list bases (man.eval  ) flow |>
                       bind_some (fun ebases flow ->
                           (* FIXME: won't work with Generic[T] I guess *)
                           let obases = match ebases with

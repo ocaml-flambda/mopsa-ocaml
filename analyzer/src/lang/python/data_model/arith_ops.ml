@@ -50,17 +50,17 @@ module Domain =
            let not_implemented_type = mk_py_object (find_builtin "NotImplementedType") range in
            mk_py_isinstance x not_implemented_type range in
 
-         bind_list [e1; e2] (man.eval ~route:(Semantic "Python")) flow |>
+         bind_list [e1; e2] (man.eval  ) flow |>
            bind_some
              (fun el flow ->
                let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
                let op_fun = binop_to_fun op in
                let rop_fun = binop_to_rev_fun op in
 
-               man.eval ~route:(Semantic "Python") (mk_py_type e1 range) flow >>$
+               man.eval   (mk_py_type e1 range) flow >>$
  (fun ocls1 flow ->
                      let cls1 = object_of_expr ocls1 in
-                     man.eval ~route:(Semantic "Python") (mk_py_type e2 range) flow >>$
+                     man.eval   (mk_py_type e2 range) flow >>$
  (fun ocls2 flow ->
                            let cls2 = object_of_expr ocls2 in
 
@@ -75,7 +75,7 @@ module Domain =
                                (if ocondtocheck = None then hasradd else (mk_binop hasradd O_py_and (OptionExt.none_to_exn ocondtocheck) range))
                                man flow
                                ~fthen:(fun flow ->
-                                 man.eval ~route:(Semantic "Python") (mk_py_call (mk_py_object_attr cls2 rop_fun range) [e2; e1] range) flow >>$
+                                 man.eval   (mk_py_call (mk_py_object_attr cls2 rop_fun range) [e2; e1] range) flow >>$
  (fun r flow ->
                                        assume
                                          (is_notimplemented r)
@@ -91,7 +91,7 @@ module Domain =
                              man flow
                              ~fthen:(fun flow ->
                                let call_add flow =
-                                 man.eval ~route:(Semantic "Python") (mk_py_call (mk_py_object_attr cls1 op_fun range) [e1; e2] range) flow >>$
+                                 man.eval   (mk_py_call (mk_py_object_attr cls1 op_fun range) [e1; e2] range) flow >>$
  (fun r flow ->
                                        assume (is_notimplemented r)
                                          man flow
@@ -116,17 +116,17 @@ module Domain =
 
       | E_unop(op, e) when is_arith_op op ->
          debug "Resolving unary operator %a" pp_operator op;
-         man.eval ~route:(Semantic "Python") e flow >>$
+         man.eval   e flow >>$
  (fun e flow ->
                debug "Subexpression evaluated to %a(%a)" pp_expr e pp_typ e.etyp;
                let op_fun = unop_to_fun op in
-               man.eval ~route:(Semantic "Python") (mk_py_type e range) flow >>$
+               man.eval   (mk_py_type e range) flow >>$
  (fun cls flow ->
                      let cls = object_of_expr cls in
                      assume
                        (Utils.mk_object_hasattr cls op_fun range)
                        ~fthen:(fun true_flow ->
-                         man.eval ~route:(Semantic "Python") (mk_py_call (mk_py_object_attr cls op_fun range) [e] range) true_flow
+                         man.eval   (mk_py_call (mk_py_object_attr cls op_fun range) [e] range) true_flow
                        )
                        ~felse:(fun false_flow ->
                          let msg = Format.asprintf "bad operand type for unary '%s': '%a'" op_fun pp_addr_kind (akind @@ fst cls) in
