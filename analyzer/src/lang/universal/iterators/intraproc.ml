@@ -87,23 +87,23 @@ struct
       man.exec (mk_assign x e stmt.srange) flow ~route:Below |>
       OptionExt.return
 
-    | S_assume{ekind = E_constant (C_bool true)}
-    | S_assume{ekind = E_unop(O_log_not, {ekind = E_constant (C_bool false)})} ->
-      Post.return flow |>
-      OptionExt.return
-
-    | S_assume{ekind = E_constant (C_bool false)}
-    | S_assume{ekind = E_unop(O_log_not, {ekind = E_constant (C_bool true)})} ->
-      Post.return (Flow.remove T_cur flow) |>
-      OptionExt.return
-
-    | S_assume e ->
-      man.eval e flow >>$? fun e flow ->
-      eval_bool_expr e stmt.srange man flow
-        ~ftrue:(fun flow -> Post.return flow)
-        ~ffalse:(fun flow -> Post.return (Flow.remove T_cur flow))
-        ~fboth:(fun flow -> Post.return flow) |>
-      OptionExt.return
+    (* | S_assume{ekind = E_constant (C_bool true)}
+     * | S_assume{ekind = E_unop(O_log_not, {ekind = E_constant (C_bool false)})} ->
+     *   Post.return flow |>
+     *   OptionExt.return
+     *
+     * | S_assume{ekind = E_constant (C_bool false)}
+     * | S_assume{ekind = E_unop(O_log_not, {ekind = E_constant (C_bool true)})} ->
+     *   Post.return (Flow.remove T_cur flow) |>
+     *   OptionExt.return
+     *
+     * | S_assume e ->
+     *   man.eval e flow >>$? fun e flow ->
+     *   eval_bool_expr e stmt.srange man flow
+     *     ~ftrue:(fun flow -> Post.return flow)
+     *     ~ffalse:(fun flow -> Post.return (Flow.remove T_cur flow))
+     *     ~fboth:(fun flow -> Post.return flow) |>
+     *   OptionExt.return *)
 
     | S_block(block,local_vars) ->
       Some (
@@ -158,21 +158,21 @@ struct
       man.eval (mk_log_and (mk_not e1 e1.erange) (mk_not e2 e2.erange) exp.erange) flow |>
       OptionExt.return
 
-    | E_binop(op,e1,e2) when is_comparison_op op ->
-      man.eval exp ~route:Below flow >>$? fun exp flow ->
-      eval_bool_expr exp exp.erange man flow
-        ~ftrue:(fun flow -> Eval.singleton (mk_true exp.erange) flow)
-        ~ffalse:(fun flow -> Eval.singleton (mk_false exp.erange) flow)
-        ~fboth:(fun flow -> Eval.singleton (mk_top T_bool exp.erange) flow) |>
-      OptionExt.return
-
-    | E_unop(op,ee) when is_predicate_op op ->
-      man.eval exp ~route:Below flow >>$? fun exp flow ->
-      eval_bool_expr exp exp.erange man flow
-        ~ftrue:(fun flow -> Eval.singleton (mk_true exp.erange) flow)
-        ~ffalse:(fun flow -> Eval.singleton (mk_false exp.erange) flow)
-        ~fboth:(fun flow -> Eval.singleton (mk_top T_bool exp.erange) flow) |>
-      OptionExt.return
+    (* | E_binop(op,e1,e2) when is_comparison_op op ->
+     *   man.eval exp ~route:Below flow >>$? fun exp flow ->
+     *   eval_bool_expr exp exp.erange man flow
+     *     ~ftrue:(fun flow -> Eval.singleton (mk_true exp.erange) flow)
+     *     ~ffalse:(fun flow -> Eval.singleton (mk_false exp.erange) flow)
+     *     ~fboth:(fun flow -> Eval.singleton (mk_top T_bool exp.erange) flow) |>
+     *   OptionExt.return
+     *
+     * | E_unop(op,ee) when is_predicate_op op ->
+     *   man.eval exp ~route:Below flow >>$? fun exp flow ->
+     *   eval_bool_expr exp exp.erange man flow
+     *     ~ftrue:(fun flow -> Eval.singleton (mk_true exp.erange) flow)
+     *     ~ffalse:(fun flow -> Eval.singleton (mk_false exp.erange) flow)
+     *     ~fboth:(fun flow -> Eval.singleton (mk_top T_bool exp.erange) flow) |>
+     *   OptionExt.return *)
 
     | _ -> None
 

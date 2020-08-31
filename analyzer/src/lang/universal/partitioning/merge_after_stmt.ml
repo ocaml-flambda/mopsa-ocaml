@@ -38,7 +38,7 @@ struct
   let alarms = []
 
   let init prog man flow = flow
-    
+
   let eval exp man flow = None
 
   let ask query man flow = None

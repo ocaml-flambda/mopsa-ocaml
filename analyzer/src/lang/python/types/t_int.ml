@@ -65,7 +65,7 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bool.__new__", _))}, _)}, [_; arg], []) ->
       (* According to the documentation: By default, an object is
          considered true unless its class defines either a __bool__()
-         method that returns False or a __l en__() method that returns
+         method that returns False or a __len__() method that returns
          zero, when called with the object.  *)
       man.eval arg flow >>$
  (fun earg flow ->
