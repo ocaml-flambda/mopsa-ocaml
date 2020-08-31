@@ -28,10 +28,6 @@ open Addr
 open Universal.Ast
 
 
-
-
-
-
 module Domain =
 struct
 
@@ -61,7 +57,7 @@ struct
            f (List.rev vars) flow
         | hd :: tl ->
            flow >>%
-           man.eval hd ~route:(Semantic "Python") >>$
+           man.eval hd >>$
              (fun ehd flow ->
                  let cs = Flow.get_callstack flow in
                  let tmp = mk_range_attr_var hd.erange (Format.asprintf "%a%xd" pp_expr ecls (Hashtbl.hash_param 30 100 cs)) T_any in

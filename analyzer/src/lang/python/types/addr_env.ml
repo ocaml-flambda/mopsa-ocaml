@@ -163,7 +163,6 @@ struct
 
 
   let rec exec stmt man flow =
-    debug "exec %a@\n" pp_stmt stmt;
     let range = srange stmt in
     match skind stmt with
     | S_add ({ekind = E_var (v, mode)}) ->
@@ -402,7 +401,7 @@ struct
 
 
     | S_fold (({ekind = E_addr a'} as e2), [{ekind = E_addr a} as e1])
-    | S_rename (({ekind = E_addr a} as e1), ({ekind = E_addr a'} as e2)) ->
+      | S_rename (({ekind = E_addr a} as e1), ({ekind = E_addr a'} as e2)) ->
        let cur = get_env T_cur man flow in
        let rename addr = if PyAddr.compare addr (PyAddr.Def a) = 0 then PyAddr.Def a' else addr in
        let ncur = AMap.map (ASet.map rename) cur in
@@ -421,31 +420,33 @@ struct
          else
            flow in
        begin match akind a with
-      | A_py_instance {addr_kind = A_py_class (C_annot _, _)} ->
-         let skind = match skind stmt with
-           | S_fold _ -> S_fold ({e2 with ekind = E_py_annot e2}, [e1])
-           | S_rename _ -> S_rename ({e1 with ekind = E_py_annot e1}, e2)
-           | _ -> assert false in
-          man.exec ~route:(Semantic "Python") stmt flow >>%
-          man.exec ~route:(Semantic "Python") {stmt with skind}
-      | A_py_instance _ ->
-         (* FIXME: PERF: in function.ml, store inst -> method binding and use it here? / ask function.ml to perform the stmt? *)
-         let aaddr = man.ask Universal.Heap.Recency.Q_allocated_addresses flow in
-         let flow = List.fold_left (fun flow addr ->
-                        match akind addr with
-                        | A_py_method(func, ({ekind = E_py_object(ainst, oe)} as inst), mclass) when compare_addr a ainst = 0 ->
-                           let addr' = {addr with addr_kind = A_py_method(func, {inst with ekind = E_py_object(a', oe)}, mclass)} in
-                           let skind = match skind stmt with
-                                           | S_fold _ -> S_fold ({e2 with ekind = E_addr addr'}, [{e1 with ekind = E_addr addr}])
-                                           | S_rename _ -> S_rename ({e1 with ekind = E_addr addr}, {e2 with ekind = E_addr addr'})
-                                           | _ -> assert false
-                           in
-                           flow >>% man.exec ~route:(Semantic "Python") {stmt with skind}
-                        | _ -> flow) (Post.return flow) aaddr in
-         flow >>% man.exec ~route:(Semantic "Python") stmt
-      | ak when Objects.Data_container_utils.is_data_container ak ->
-         man.exec ~route:(Semantic "Python") stmt flow
-      | _ -> Post.return flow
+       | A_py_instance {addr_kind = A_py_class (C_annot _, _)} ->
+          let skind = match skind stmt with
+            | S_fold _ -> S_fold ({e2 with ekind = E_py_annot e2}, [e1])
+            | S_rename _ -> S_rename ({e1 with ekind = E_py_annot e1}, e2)
+            | _ -> assert false in
+          man.exec ~route:Below stmt flow >>%
+            man.exec ~route:(Semantic "Python") {stmt with skind}
+       | A_py_instance _ ->
+          debug "instance encountered, renaming methods too";
+          (* FIXME: PERF: in function.ml, store inst -> method binding and use it here? / ask function.ml to perform the stmt? *)
+          let aaddr = man.ask Universal.Heap.Recency.Q_allocated_addresses flow in
+          let flow = List.fold_left (fun flow addr ->
+                         match akind addr with
+                         | A_py_method(func, ({ekind = E_py_object(ainst, oe)} as inst), mclass) when compare_addr a ainst = 0 ->
+                            let addr' = {addr with addr_kind = A_py_method(func, {inst with ekind = E_py_object(a', oe)}, mclass)} in
+                            let skind = match skind stmt with
+                              | S_fold _ -> S_fold ({e2 with ekind = E_addr addr'}, [{e1 with ekind = E_addr addr}])
+                              | S_rename _ -> S_rename ({e1 with ekind = E_addr addr}, {e2 with ekind = E_addr addr'})
+                              | _ -> assert false
+                            in
+                            flow >>% man.exec ~route:(Semantic "Python") {stmt with skind}
+                         | _ -> flow
+                       ) (Post.return flow) aaddr in
+          flow >>% man.exec ~route:Below stmt
+       | ak when Objects.Data_container_utils.is_data_container ak ->
+          man.exec ~route:Below stmt flow
+       | _ -> Post.return flow
        end |> OptionExt.return
 
     | S_py_delete {ekind = E_var (v, _)} ->

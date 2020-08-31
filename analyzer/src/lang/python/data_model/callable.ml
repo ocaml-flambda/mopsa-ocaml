@@ -50,7 +50,6 @@ module Domain =
         debug "Calling %a from %a" pp_expr exp pp_range exp.erange;
         let res =
           man.eval ~route:(Semantic "Python") f flow >>$
-
             (fun f flow ->
                debug "f is now %a" pp_expr f;
                match ekind f with

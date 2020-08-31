@@ -28,17 +28,17 @@
             "python.libs.unittest",
             "python.libs.typing",
 
-            "python.objects.class",
-            "python.objects.lambda",
-            "python.objects.function",
-            "python.objects.range",
-            "python.objects.object",
-
             "universal.heap.recency",
             {
                 "compose": [
                     { "semantic": "Python",
                       "switch": [
+
+                          "python.objects.class",
+                          "python.objects.lambda",
+                          "python.objects.function",
+                          "python.objects.range",
+                          "python.objects.object",
 
                           "python.data_model.attribute",
                           "python.data_model.subscript",
