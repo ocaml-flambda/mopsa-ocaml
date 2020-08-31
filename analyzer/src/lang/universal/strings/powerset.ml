@@ -247,8 +247,15 @@ struct
         )
       |> OptionExt.return
 
-    | _ -> None
-
+    | _ ->
+       let cur = get_env T_cur man flow in
+       if etyp expr = T_string then
+         Option.bind (Nonrel.eval expr cur) (fun (_, value) ->
+             Eval.join_list ~empty:(fun () -> assert false)
+               (Value.fold (fun s acc -> (Eval.singleton (mk_string s range) flow) :: acc) value [])
+             |> OptionExt.return
+           )
+       else None
 
   let ask : type r. ('a, r) query -> ('a, t) man -> 'a flow -> r option =
     fun query man flow ->
