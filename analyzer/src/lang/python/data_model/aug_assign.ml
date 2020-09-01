@@ -63,7 +63,7 @@ module Domain = struct
                      )
                      ~felse:(fun false_flow ->
                        debug "Fallback on default assignment@\n";
-                       let default_assign = mk_assign x0 (mk_binop x op e range) range in
+                       let default_assign = mk_assign x0 (mk_binop ~etyp:(T_py None) x op e range) range in
                        man.exec default_assign flow >>% Post.return
                      )
                      flow

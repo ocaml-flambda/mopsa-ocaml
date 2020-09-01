@@ -80,7 +80,7 @@ struct
   let init (prog:program) man flow = flow
 
   let var_of_addr a = match akind a with
-    | A_py_set -> mk_addr_attr a "set" T_py
+    | A_py_set -> mk_addr_attr a "set" (T_py None)
     | _ -> assert false
 
   let var_of_eobj e = match ekind e with
@@ -111,7 +111,7 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__new__", _))}, _)}, cls::args, []) ->
       Utils.new_wrapper man range flow "set" cls
-        ~fthennew:(man.eval (mk_expr ~etyp:T_py (E_py_set []) range))
+        ~fthennew:(man.eval (mk_expr ~etyp:(T_py None) (E_py_set []) range))
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__init__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args
@@ -134,7 +134,7 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__contains__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f ~arguments_after_check:1 man flow range args ["set"]
         (fun args flow ->
-           man.eval (mk_py_top T_bool range) flow)
+           man.eval (mk_py_top (T_py (Some Bool)) range) flow)
       |> OptionExt.return
 
 
@@ -144,9 +144,9 @@ struct
         (fun eargs flow ->
            let e1, e2 = match args with [l; r] -> l, r | _ -> assert false in
            assume (mk_py_isinstance_builtin e2 "set" range) man flow
-             ~fthen:(man.eval (mk_py_top T_bool range))
+             ~fthen:(man.eval (mk_py_top (T_py (Some Bool)) range))
              ~felse:(fun flow ->
-                 let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
+                 let expr = mk_constant ~etyp:(T_py (Some NotImplemented)) C_py_not_implemented range in
                  man.eval expr flow)
         )
       |> OptionExt.return

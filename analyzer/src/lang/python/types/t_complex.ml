@@ -40,19 +40,19 @@ module Domain =
     let eval exp man flow =
       let range = erange exp in
       match ekind exp with
-      | E_constant (C_top T_py_complex) ->
+      | E_constant (C_top (T_py (Some Complex))) ->
         T_string.Domain.allocate_builtin man range flow "complex" (Some exp) |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("complex.__new__", _))}, _)}, [cls], []) ->
         Utils.new_wrapper man range flow "complex" cls
-          ~fthennew:(man.eval   (mk_py_top T_py_complex range))
+          ~fthennew:(man.eval (mk_py_top (T_py (Some Complex)) range))
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("complex.__new__" as f, _))}, _)}, [cls; arg], []) ->
-        Utils.check_instances_disj f man flow range [arg] [["float"; "int"; "str"]] (fun _ -> man.eval (mk_py_top T_py_complex range))
+        Utils.check_instances_disj f man flow range [arg] [["float"; "int"; "str"]] (fun _ -> man.eval (mk_py_top (T_py (Some Complex)) range))
         |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("complex.__new__" as f, _))}, _)}, [cls; arg1; arg2], []) ->
-        Utils.check_instances_disj f man flow range [arg1; arg2] [["float"; "int"; "str"]; ["float"; "int"; "str"]] (fun _ -> man.eval (mk_py_top T_py_complex range))
+        Utils.check_instances_disj f man flow range [arg1; arg2] [["float"; "int"; "str"]; ["float"; "int"; "str"]] (fun _ -> man.eval (mk_py_top (T_py (Some Complex)) range))
         |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("complex.__new__", _))}, _)}, args, []) ->

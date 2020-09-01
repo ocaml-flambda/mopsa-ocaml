@@ -60,7 +60,7 @@ struct
            man.eval hd >>$
              (fun ehd flow ->
                  let cs = Flow.get_callstack flow in
-                 let tmp = mk_range_attr_var hd.erange (Format.asprintf "%a%xd" pp_expr ecls (Hashtbl.hash_param 30 100 cs)) T_py in
+                 let tmp = mk_range_attr_var hd.erange (Format.asprintf "%a%xd" pp_expr ecls (Hashtbl.hash_param 30 100 cs)) (T_py None) in
                  bind tl (tmp::vars) (man.exec   (mk_assign (mk_var tmp hd.erange) ehd range) flow) f) in
       bind args [] (Post.return flow)
         (fun vars flow ->

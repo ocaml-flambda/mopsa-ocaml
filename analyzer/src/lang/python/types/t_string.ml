@@ -39,13 +39,13 @@ module Domain =
 
     let add_signature funname in_args out_type db =
       let out_type = match out_type with
-        | "bool" -> T_bool
-        | "int" -> T_int
-        | "float" -> T_float F_DOUBLE
-        | "str" -> T_string
-        | "bytes" -> T_py_bytes
-        | "NoneType" -> T_py_none
-        | "NotImplementedType" -> T_py_not_implemented
+        | "bool" -> T_py (Some Bool)
+        | "int" -> T_py (Some Int)
+        | "float" -> T_py (Some (Float F_DOUBLE))
+        | "str" -> T_py (Some Str)
+        | "bytes" -> T_py (Some Bytes)
+        | "NoneType" -> T_py (Some NoneType)
+        | "NotImplementedType" -> T_py (Some NotImplemented)
         | _ -> assert false in
       StringMap.add funname {in_args; out_type} db
 
@@ -133,10 +133,10 @@ module Domain =
       let range = erange exp in
       match ekind exp with
       | E_constant (C_string _)
-      | E_constant (C_top T_string) ->
+      | E_constant (C_top (T_py (Some Str))) ->
          Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_strings, Some {exp with etyp=T_string}) range) flow |> OptionExt.return
 
-      | E_constant (C_top T_py_bytes)
+      | E_constant (C_top (T_py (Some Bytes)))
       | E_py_bytes _ ->
         allocate_builtin man range flow "bytes" (Some exp) |> OptionExt.return
 
@@ -198,10 +198,10 @@ module Domain =
                           ~fthen:(fun flow -> man.eval (mk_py_true range) flow)
                           ~felse:(fun flow -> man.eval (mk_py_false range) flow)
                         (* |> T_int.Domain.merge_tf_top man range *)
-                    (* man.eval   (mk_py_top T_bool range) true_flow *)
+                    (* man.eval   (mk_py_top T_py_bool range) true_flow *)
                     )
                     ~felse:(fun false_flow ->
-                        let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
+                        let expr = mk_constant ~etyp:(T_py (Some NotImplemented)) C_py_not_implemented range in
                         man.eval   expr false_flow)
                     man true_flow
                 )
@@ -236,7 +236,7 @@ module Domain =
                           )
                       )
                     ~felse:(fun false_flow ->
-                        let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
+                        let expr = mk_constant ~etyp:(T_py (Some NotImplemented)) C_py_not_implemented range in
                         man.eval   expr false_flow)
                     man true_flow
                 )
@@ -299,7 +299,7 @@ module Domain =
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bytes.__getitem__" as f, _))}, _)}, args, []) ->
         Utils.check_instances_disj f man flow range args
           [["bytes"]; ["int"; "slice"]]
-          (fun _ flow -> man.eval (mk_py_top T_py_bytes range) flow)
+          (fun _ flow -> man.eval (mk_py_top (T_py (Some Bytes)) range) flow)
         |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__iter__" as f, _))}, _)}, args, []) ->
@@ -340,10 +340,10 @@ module Domain =
           ["str"; "str"]
           (fun eargs flow ->
             let earg, eencoding = match eargs with [e1;e2] -> e1, e2 | _ -> assert false in
-            assume (mk_binop eencoding O_eq (mk_string "utf-8" range) range) man flow
-               
+            assume (mk_binop ~etyp:(T_py None) eencoding O_eq (mk_string "utf-8" range) range) man flow
+
               ~fthen:(fun flow ->
-                man.eval   (mk_expr ~etyp:T_py (E_constant (C_top T_py_bytes)) range) flow
+                man.eval   (mk_expr ~etyp:(T_py None) (E_constant (C_top (T_py (Some Bytes)))) range) flow
               )
               ~felse:(fun flow ->
                 let msg = Format.asprintf "unknown encoding: %a" pp_expr eencoding in
@@ -359,10 +359,10 @@ module Domain =
           ["bytes"; "str"]
           (fun eargs flow ->
             let earg, eencoding = match eargs with [e1;e2] -> e1, e2 | _ -> assert false in
-            assume (mk_binop eencoding O_eq (mk_string "utf-8" range) range) man flow
-               
+            assume (mk_binop ~etyp:(T_py None) eencoding O_eq (mk_string "utf-8" range) range) man flow
+
               ~fthen:(fun flow ->
-                man.eval   (mk_expr ~etyp:T_py (E_constant (C_top T_string)) range) flow)
+                man.eval   (mk_expr ~etyp:(T_py None) (E_constant (C_top T_string)) range) flow)
               ~felse:(fun flow ->
                 let msg = Format.asprintf "unknown encoding: %a" pp_expr eencoding in
                 man.exec (Utils.mk_builtin_raise_msg "LookupError" msg range) flow >>%
@@ -373,7 +373,7 @@ module Domain =
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bytes.strip" as f, _))}, _)}, args, []) ->
         Utils.check_instances f man flow range args
           ["bytes"]
-          (fun eargs flow -> man.eval   (mk_py_top T_py_bytes range) flow)
+          (fun eargs flow -> man.eval   (mk_py_top (T_py (Some Bytes)) range) flow)
         |> OptionExt.return
 
 
@@ -409,7 +409,7 @@ module Domain =
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__len__" as f, _))}, _)}, args, []) ->
         Utils.check_instances f man flow range args ["str"]
           (fun eargs flow ->
-             man.eval ~route:(Semantic "U/String") (mk_expr ~etyp:T_py (E_len (extract_oobject @@ List.hd eargs)) range) flow >>$
+             man.eval ~route:(Semantic "U/String") (mk_expr ~etyp:(T_py None) (E_len (extract_oobject @@ List.hd eargs)) range) flow >>$
  (fun l flow -> man.eval   l flow)
           )
         |> OptionExt.return

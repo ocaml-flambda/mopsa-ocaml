@@ -208,7 +208,7 @@ struct
 
     (* S⟦ v = e ⟧ *)
     | S_assign(({ekind = E_var (v, mode)} as evar), e) ->
-       man.eval   e flow |>
+       man.eval e flow |>
          bind_some
            (fun e flow ->
              match ekind e with
@@ -236,7 +236,7 @@ struct
                    Post.return flow
                 end
 
-             | E_constant (C_top T_py) ->
+             | E_constant (C_top (T_py None)) ->
                 let cur = get_env T_cur man flow in
                 let aset = ASet.top in
                 set_env T_cur (add v aset cur) man flow
@@ -278,7 +278,7 @@ struct
          | V_uniq _ when not (Hashtbl.mem type_aliases v) ->
             (* FIXME: "remove var, assign to E_py_undefined?"; *)
             (* if the variable maps to a list, we should remove the temporary variable associated, ONLY if it's not used by another list *)
-            let flow = man.exec (mk_assign var (mk_expr ~etyp:T_py (E_py_undefined true) range) range) flow in
+            let flow = man.exec (mk_assign var (mk_expr ~etyp:(T_py None) (E_py_undefined true) range) range) flow in
             flow
 
          | _ ->
@@ -287,11 +287,11 @@ struct
        end)
        |> OptionExt.return
 
-    | S_assume e ->
-       man.eval   e flow |>
+    | S_assume e when etyp e = (T_py None) ->
+       man.eval e flow |>
          bind_some (fun expr flow ->
              match ekind expr with
-             | E_constant (C_top T_bool)
+             | E_constant (C_top (T_py (Some Bool)))
                | E_constant (C_bool true)
                -> Post.return flow
              | E_py_object (a, _) when compare_addr a (OptionExt.none_to_exn !addr_true) = 0 || compare_addr a (OptionExt.none_to_exn !addr_bool_top) = 0
@@ -511,7 +511,7 @@ struct
   let eval exp man flow =
     let range = erange exp in
     match ekind exp with
-    | E_var (v, mode) when etyp exp = T_py ->
+    | E_var (v, mode) when etyp exp = (T_py None) ->
       let cur = get_env T_cur man flow in
       if AMap.mem v cur then
         let aset = AMap.find v cur in
@@ -602,14 +602,14 @@ struct
     | E_constant C_py_not_implemented ->
       Eval.singleton (mk_py_object (OptionExt.none_to_exn !addr_notimplemented, None) range) flow |> OptionExt.return
 
-    | E_unop(O_log_not, e') ->
+    | E_unop(O_log_not, e') when match etyp exp with T_py _ -> true | _ -> false ->
       (* bool is called in desugar/bool *)
       man.eval   e' flow >>$
 
         (fun ee' flow ->
            match ekind ee' with
            (* FIXME: weird cases *)
-           | E_constant (C_top T_bool) ->
+           | E_constant (C_top (T_py (Some Bool))) ->
              Eval.singleton ee' flow
            | E_constant (C_bool true) ->
              Eval.singleton (mk_py_false range) flow
@@ -638,7 +638,7 @@ struct
               man.eval (mk_py_true range) flow
             | E_py_object (a1, _), E_py_object (a2, _) when compare_addr_kind (akind a1) (akind a2) <> 0 ->
               man.eval (mk_py_false range) flow
-            | _ -> man.eval (mk_py_top T_bool range) flow
+            | _ -> man.eval (mk_py_top (T_py (Some Bool)) range) flow
           end
         )
       |> OptionExt.return

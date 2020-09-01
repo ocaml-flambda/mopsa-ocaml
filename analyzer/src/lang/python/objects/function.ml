@@ -71,7 +71,7 @@ module Domain =
       end)
 
     let var_of_addr a = match akind a with
-      | A_py_staticmethod | A_py_classmethod -> mk_addr_attr a "__func__" T_py
+      | A_py_staticmethod | A_py_classmethod -> mk_addr_attr a "__func__" (T_py None)
       | _ -> assert false
 
     let var_of_eobj e = match ekind e with
@@ -313,7 +313,7 @@ module Domain =
                            let e =
                              (* Initialize locals with the same name of a builtin with its address *)
                              if is_builtin_var v then (mk_py_object (find_builtin (get_orig_vname v)) range)
-                             else mk_expr ~etyp:T_py (E_py_undefined false) range
+                             else mk_expr ~etyp:(T_py None) (E_py_undefined false) range
                            in
                            mk_assign (mk_var v range) e range
                          ) pyfundec.py_func_locals) range)
@@ -326,7 +326,7 @@ module Domain =
                   fun_parameters = pyfundec.py_func_parameters;
                   fun_locvars = pyfundec.py_func_locals;
                   fun_body = pyfundec.py_func_body;
-                  fun_return_type = Some T_py;
+                  fun_return_type = Some (T_py None);
                   fun_return_var = pyfundec.py_func_ret_var;
                   fun_range = pyfundec.py_func_range;
                 } in

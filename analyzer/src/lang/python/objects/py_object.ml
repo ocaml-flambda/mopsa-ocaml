@@ -30,16 +30,16 @@ open Alarms
 
 
 let mk_py_ll_hasattr instance attr range =
-  mk_expr ~etyp:T_py (E_py_ll_hasattr(instance, attr)) range
+  mk_expr ~etyp:(T_py None) (E_py_ll_hasattr(instance, attr)) range
 
 let mk_py_ll_getattr instance attr range =
-  mk_expr ~etyp:T_py (E_py_ll_getattr(instance, attr)) range
+  mk_expr ~etyp:(T_py None) (E_py_ll_getattr(instance, attr)) range
 
 let mk_py_ll_setattr instance attr valu range =
-  mk_expr ~etyp:T_py (E_py_ll_setattr(instance, attr, Some valu)) range
+  mk_expr ~etyp:(T_py None) (E_py_ll_setattr(instance, attr, Some valu)) range
 
 let mk_py_ll_delattr instance attr range =
-  mk_expr ~etyp:T_py (E_py_ll_setattr(instance, attr, None)) range
+  mk_expr ~etyp:(T_py None) (E_py_ll_setattr(instance, attr, None)) range
 
 
 module Domain =
@@ -99,7 +99,7 @@ struct
                 let mro_ptype = mro (object_of_expr ptype) in
                 search_mro man attribute
                   ~cls_found:(fun cls flow ->
-                      man.eval  
+                      man.eval
                         (mk_py_ll_getattr (mk_py_object cls range) attribute range) flow >>$
                         (fun attribute flow ->
                           assume (mk_py_hasattr (mk_py_type attribute range) "__get__" range)
@@ -134,7 +134,7 @@ struct
           let mro_metatype = mro (object_of_expr metatype) in
           search_mro man attribute
             ~cls_found:(fun cls flow ->
-                man.eval  
+                man.eval
                   (mk_py_ll_getattr (mk_py_object cls range) attribute range)
                   flow >>$
  (fun meta_attribute flow ->
@@ -142,7 +142,7 @@ struct
                       (mk_py_hasattr (mk_py_type meta_attribute range) "__get__" range)
                       man flow
                       ~fthen:(fun flow ->
-                          man.eval  
+                          man.eval
                             (mk_py_attr (mk_py_type meta_attribute range) "__get__" range)
                             flow >>$
  (fun meta_get flow ->
@@ -174,7 +174,7 @@ struct
               ~felse:fother in
           search_mro man attribute
             ~cls_found:(fun cls flow ->
-                man.eval  
+                man.eval
                   (mk_py_ll_getattr (mk_py_object cls range) attribute range)
                   flow >>$
  (fun descr flow ->
@@ -189,7 +189,7 @@ struct
                       (* hasattr is bad but needed for inheritance, to see *)
                       man flow
                       ~fthen:(fun flow ->
-                        assume (mk_binop (mk_py_hasattr (mk_py_type descr range) "__set__" range) O_py_or (mk_py_hasattr (mk_py_type descr range) "__del__" range) range) man flow
+                        assume (mk_binop ~etyp:(T_py None) (mk_py_hasattr (mk_py_type descr range) "__set__" range) O_py_or (mk_py_hasattr (mk_py_type descr range) "__del__" range) range) man flow
                             ~fthen:(man.eval (mk_py_call (mk_py_attr (mk_py_type descr range) "__get__" range) [descr; instance; class_of_exp] range))
                             ~felse:(tryinstance ~fother:(man.eval (mk_py_call (mk_py_attr (mk_py_type descr range) "__get__" range) [descr; instance; class_of_exp] range)))
                         )
@@ -225,12 +225,12 @@ struct
                           man.eval (mk_py_call (mk_py_attr obj' "__set__" range) [lval; rval] range) flow
                         )
                       ~felse:(
-                        man.eval  
+                        man.eval
                           (mk_py_ll_setattr lval attr rval range)
                       )
                   )
               )
-            ~nothing_found:(man.eval  
+            ~nothing_found:(man.eval
                               (mk_py_ll_setattr lval attr rval range))
             range mro flow
         )
@@ -243,7 +243,7 @@ struct
           let mro = mro (object_of_expr class_of_lval) in
           search_mro man attr
             ~cls_found:(fun cls flow ->
-                man.eval  
+                man.eval
                   (mk_py_ll_getattr (mk_py_object cls range) attr range) flow >>$
  (fun obj' flow ->
                     assume (mk_py_hasattr obj' "__delete__" range)
@@ -252,12 +252,12 @@ struct
                           man.eval (mk_py_call (mk_py_attr obj' "__delete__" range) [lval] range) flow
                         )
                       ~felse:(
-                        man.eval  
+                        man.eval
                           (mk_py_ll_delattr lval attr range)
                       )
                   )
               )
-            ~nothing_found:(man.eval  
+            ~nothing_found:(man.eval
                               (mk_py_ll_delattr lval attr range))
             range mro flow
         )

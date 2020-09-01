@@ -71,7 +71,7 @@ struct
                                let vars_tuple = Tuple.Domain.var_of_eobj iterable in
                                let assume_all =
                                  List.fold_left (fun acc var ->
-                                     mk_binop acc O_py_and (mk_py_isinstance_builtin (mk_var ~mode:(Some WEAK) var range) "str" range) range) (mk_py_true range) vars_tuple in
+                                     mk_binop ~etyp:(T_py None) acc O_py_and (mk_py_isinstance_builtin (mk_var ~mode:(Some WEAK) var range) "str" range) range) (mk_py_true range) vars_tuple in
                                assume assume_all man flow
                                  ~fthen:(man.eval (mk_py_top T_string range))
                                  ~felse:(fun flow ->

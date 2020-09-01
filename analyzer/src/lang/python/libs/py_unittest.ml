@@ -73,7 +73,7 @@ module Domain =
 
        let tests = List.rev @@ List.fold_left (fun other_tests (cls_addr, cls_decl) ->
            (* create tmp, alloc class in tmp, run tests, delete tmp *)
-           let tmp = mktmp () in
+           let tmp = mktmp ~typ:(T_py None) () in
            let tmpvar = mk_var tmp range in
            let assign_alloc = mk_assign tmpvar (mk_py_call (mk_var cls_decl.py_cls_var range) [] range) range in
            let test_calls =
@@ -98,12 +98,12 @@ module Domain =
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertEqual", _))}, _)}, [test; arg1; arg2; _], [])
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertEqual", _))}, _)}, [test; arg1; arg2], []) ->
-         Py_mopsa.check man (mk_binop arg1 O_eq arg2 range) range flow
+         Py_mopsa.check man (mk_binop ~etyp:(T_py None) arg1 O_eq arg2 range) range flow
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertGreater", _))}, _)}, [test; arg1; arg2; _], [])
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertGreater", _))}, _)}, [test; arg1; arg2], []) ->
-         Py_mopsa.check man (mk_binop arg1 O_ge arg2 range) range flow
+         Py_mopsa.check man (mk_binop ~etyp:(T_py None) arg1 O_ge arg2 range) range flow
          |> OptionExt.return
 
 
@@ -124,19 +124,19 @@ module Domain =
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertIs", _))}, _)}, [test; arg1; arg2], []) ->
-         Py_mopsa.check man (mk_binop arg1 O_py_is arg2 range) range flow
+         Py_mopsa.check man (mk_binop ~etyp:(T_py None) arg1 O_py_is arg2 range) range flow
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertIsNot", _))}, _)}, [test; arg1; arg2], []) ->
-         Py_mopsa.check man (mk_binop arg1 O_py_is_not arg2 range) range flow
+         Py_mopsa.check man (mk_binop ~etyp:(T_py None) arg1 O_py_is_not arg2 range) range flow
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertIn", _))}, _)}, [test; arg1; arg2], []) ->
-         Py_mopsa.check man (mk_binop arg1 O_py_in arg2 range) range flow
+         Py_mopsa.check man (mk_binop ~etyp:(T_py None) arg1 O_py_in arg2 range) range flow
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertNotIn", _))}, _)}, [test; arg1; arg2], []) ->
-         Py_mopsa.check man (mk_binop arg1 O_py_not_in arg2 range) range flow
+         Py_mopsa.check man (mk_binop ~etyp:(T_py None) arg1 O_py_not_in arg2 range) range flow
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertIsInstance", _))}, _)}, [test; arg1; arg2], []) ->
@@ -177,12 +177,12 @@ module Domain =
        *    man.eval exp' flow |> OptionExt.return *)
 
       (* | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertRaises", _))}, _)}, _, _) ->
-       *    Py_mopsa.check man (mk_py_top T_bool range) range flow
+       *    Py_mopsa.check man (mk_py_top T_py_bool range) range flow
        *    |> OptionExt.return *)
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.ExceptionContext.__exit__", _))}, _)},[self; typ; exn; trace], []) ->
          assume
-           (mk_binop exn O_eq (mk_py_none range) range)
+           (mk_binop ~etyp:(T_py None) exn O_eq (mk_py_none range) range)
            ~fthen:(fun true_flow ->
              debug "Assertion failed!";
              (* No exception raised => assertion failed *)

@@ -104,19 +104,19 @@ struct
 
   let itindex_var_of_addr a =
     let v = match akind a with
-    | A_py_iterator ("list_iterator", _) -> mk_addr_attr a "it_index" T_py
-    | A_py_iterator ("list_reverseiterator", _) -> mk_addr_attr a "it_index" T_py
+    | A_py_iterator ("list_iterator", _) -> mk_addr_attr a "it_index" (T_py None)
+    | A_py_iterator ("list_reverseiterator", _) -> mk_addr_attr a "it_index" (T_py None)
     | _ -> assert false in
     Utils.change_var_type T_int v
 
-  let itseq_of_addr a = mk_addr_attr a "it_seq" T_py
+  let itseq_of_addr a = mk_addr_attr a "it_seq" (T_py None)
 
   let itseq_of_eobj e = match ekind e with
     | E_py_object (a, _) -> itseq_of_addr a
     | _ -> assert false
 
   (* FIXME: ugly fix for zip  iterators *)
-  let itseq2_of_addr a = mk_addr_attr a "it_seq2" T_py
+  let itseq2_of_addr a = mk_addr_attr a "it_seq2" (T_py None)
 
   let itseq2_of_eobj e = match ekind e with
     | E_py_object (a, _) -> itseq2_of_addr a
@@ -125,12 +125,12 @@ struct
 
   let length_var_of_addr a = match akind a with
     | A_py_list ->
-       mk_addr_attr a "list_length" T_py |> Utils.change_var_type T_int
+       mk_addr_attr a "list_length" (T_py None) |> Utils.change_var_type T_int
     | _ -> assert false
 
   let var_of_addr a = match akind a with
     | A_py_list ->
-       {(mk_addr_attr a "list" T_py) with vmode = WEAK}
+       {(mk_addr_attr a "list" (T_py None)) with vmode = WEAK}
     | _ -> assert false
 
   let var_of_eobj e = match ekind e with
@@ -183,10 +183,10 @@ struct
                          let var_els = var_of_eobj list in
                          let length_list = length_var_of_eobj list in
                          assume
-                           (mk_binop
-                              (mk_binop (Utils.extract_oobject index) O_lt (mk_var length_list range) range)
+                           (mk_binop ~etyp:T_int
+                              (mk_binop ~etyp:T_int (Utils.extract_oobject index) O_lt (mk_var length_list range) range)
                               O_log_and
-                              (mk_binop (mk_unop O_minus (mk_var length_list range) ~etyp:T_int range) O_le (Utils.extract_oobject index)  range)
+                              (mk_binop ~etyp:T_int (mk_unop O_minus (mk_var length_list range) ~etyp:T_int range) O_le (Utils.extract_oobject index)  range)
                               range
                            )
                            ~route:(Semantic "U/Numeric") man flow
@@ -211,7 +211,7 @@ struct
                                    man.eval (mk_py_call (mk_py_attr index "indices" range) [mk_py_call (mk_py_attr list "__len__" range) [] range] range)   flow >>$
                                      (fun tuple_indices flow ->
                                          let get_nth n =
-                                           mk_py_call (mk_py_attr tuple_indices "__getitem__" range) [mk_int n range] range in
+                                           mk_py_call (mk_py_attr tuple_indices "__getitem__" range) [mk_int ~typ:(T_py None) n range] range in
                                           Cases.bind_list [get_nth 0; get_nth 1; get_nth 2] (man.eval  ) flow |>
                                            Cases.bind_some (fun sss flow ->
                                                  let start, stop, step = match List.map Utils.extract_oobject sss with
@@ -272,10 +272,10 @@ struct
                                                              range) flow
                                                        );
 
-                                                       [mk_binop
-                                                          (mk_binop (mk_binop ~etyp:T_int step O_lt (mk_zero ~typ:T_int range) range) O_log_and (mk_not (mk_binop ~etyp:T_int stop O_lt start range) range) range)
+                                                       [mk_binop ~etyp:(T_py None)
+                                                          (mk_binop ~etyp:(T_py None) (mk_binop ~etyp:T_int step O_lt (mk_zero ~typ:T_int range) range) O_log_and (mk_not (mk_binop ~etyp:T_int stop O_lt start range) range) range)
                                                           O_log_or
-                                                          (mk_binop (mk_not (mk_binop ~etyp:T_int step O_lt (mk_zero ~typ:T_int range) range) range) O_log_and (mk_not (mk_binop ~etyp:T_int start O_lt stop range) range) range)
+                                                          (mk_binop ~etyp:(T_py None) (mk_not (mk_binop ~etyp:T_int step O_lt (mk_zero ~typ:T_int range) range) range) O_log_and (mk_not (mk_binop ~etyp:T_int start O_lt stop range) range) range)
                                                           range
                                                        ],
                                                        (fun flow -> man.exec ~route:(Semantic "U/Numeric")
@@ -397,9 +397,9 @@ struct
         (fun eargs flow ->
            let e1, e2 = match args with [l; r] -> l, r | _ -> assert false in
            assume (mk_py_isinstance_builtin e2 "list" range) man flow
-             ~fthen:(man.eval (mk_py_top T_bool range))
+             ~fthen:(man.eval (mk_py_top (T_py (Some Bool)) range))
              ~felse:(fun flow ->
-                 let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
+                 let expr = mk_constant ~etyp:(T_py (Some NotImplemented)) C_py_not_implemented range in
                  man.eval expr flow)
         )
       |> OptionExt.return
@@ -465,7 +465,7 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.__new__", _))}, _)}, cls::args, []) ->
       Utils.new_wrapper man range flow "list" cls
-        ~fthennew:(man.eval (mk_expr ~etyp:T_py (E_py_list []) range))
+        ~fthennew:(man.eval (mk_expr ~etyp:(T_py None) (E_py_list []) range))
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.__init__" as f, _))}, _)}, args, [])
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.extend" as f, _))}, _)}, args, []) ->
@@ -495,12 +495,12 @@ struct
                      let flow =
                        flow |>
                          man.exec   (mk_assign (mk_var var_els range) (mk_py_top T_int range) range) >>%
-                         man.exec   (mk_assume (mk_binop
-                                                (mk_binop (ra "start") O_le (mk_var var_els range) range)
+                         man.exec   (mk_assume (mk_binop ~etyp:(T_py None)
+                                                (mk_binop ~etyp:(T_py None) (ra "start") O_le (mk_var var_els range) range)
                                                 O_py_and
-                                                (mk_binop (mk_var var_els range) O_lt (ra "stop") range) range) range) in
+                                                (mk_binop ~etyp:(T_py None) (mk_var var_els range) O_lt (ra "stop") range) range) range) in
                      flow >>%
-                     man.eval  
+                     man.eval
                        (mk_py_call (mk_py_object (find_builtin_function "len") range) [other] range) >>$
                        (fun len flow ->
                            man.exec ~route:(Semantic "U/Numeric") (mk_assign (mk_var len_els range) (Utils.extract_oobject len) range) flow >>%
@@ -534,7 +534,7 @@ struct
                                              let var_l2 = var_of_eobj l2_eobj in
                                              let len_l2 = length_var_of_eobj l2_eobj in
                                              flow |>
-                                               man.exec (mk_assign (mk_var var_els range) (mk_expr ~etyp:T_py (E_py_tuple [mk_var var_l1 range; mk_var var_l2 range]) range) range) >>%
+                                               man.exec (mk_assign (mk_var var_els range) (mk_expr ~etyp:(T_py None) (E_py_tuple [mk_var var_l1 range; mk_var var_l2 range]) range) range) >>%
                                                man.exec (mk_assign (mk_var len_els range)
                                                            (mk_py_call (mk_py_object (find_builtin "min") range) [mk_var len_l1 range; mk_var len_l2 range] range)
                                                            range) >>%
@@ -584,7 +584,7 @@ struct
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.pop", _))}, _)} as call, [arg], []) ->
-      let args' = arg :: (mk_int (-1) range) :: [] in
+      let args' = arg :: (mk_int ~typ:T_int (-1) range) :: [] in
       man.eval {exp with ekind = E_py_call(call, args', [])} flow
       |> OptionExt.return
 
@@ -631,7 +631,7 @@ struct
            let eval_verror = Eval.empty_singleton eval_verror_f in
            let flow = Flow.copy_ctx eval_verror_f flow in
            let eval_none =
-             man.exec (mk_assign len_list (mk_binop len_list O_minus (mk_int 1 range) range) range) flow >>%
+             man.exec (mk_assign len_list (mk_binop ~etyp:(T_py None) len_list O_minus (mk_int ~typ:(T_py None) 1 range) range) range) flow >>%
              man.eval (mk_py_none range) in
            Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (eval_none :: eval_verror :: [])
         )
@@ -747,9 +747,9 @@ struct
         (fun args flow ->
           let list, el = match args with a::b::[] -> a, b | _ -> assert false in
           assume
-            (mk_binop (mk_var (var_of_eobj list) range) O_eq el range)
+            (mk_binop ~etyp:(T_py None) (mk_var (var_of_eobj list) range) O_eq el range)
             man flow
-             
+
             ~fthen:(man.eval   (mk_py_true range))
             ~felse:(man.eval   (mk_py_false range))
         )
@@ -814,7 +814,7 @@ struct
             man.eval   (mk_var (itseq_of_eobj iterator) range) flow >>$
  (fun list_eobj flow ->
                   let var_els = var_of_eobj list_eobj in
-                  let els = man.eval (mk_expr ~etyp:T_py (E_py_tuple [mk_top T_int range;
+                  let els = man.eval (mk_expr ~etyp:(T_py None) (E_py_tuple [mk_top T_int range;
                                                            mk_var var_els range]) range) flow in
                   let flow = Flow.set_ctx (Cases.get_ctx els) flow in
                   let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty_singleton in
@@ -859,7 +859,7 @@ struct
                   let list1_eobj, list2_eobj = match its with [a; b] -> a, b | _ -> assert false in
                   let var_els1 = var_of_eobj list1_eobj in
                   let var_els2 = var_of_eobj list2_eobj in
-                  let els = man.eval (mk_expr ~etyp:T_py (E_py_tuple [mk_var var_els1 range;
+                  let els = man.eval (mk_expr ~etyp:(T_py None) (E_py_tuple [mk_var var_els1 range;
                                                            mk_var var_els2 range]) range) flow in
                   let flow = Flow.set_ctx (Cases.get_ctx els) flow in
                   let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty_singleton in
@@ -871,14 +871,14 @@ struct
     (* the last case of str.split uses this list abstraction so every case is here... *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.split", _))}, _)} as call, [str], []) ->
       (* rewrite into str.split(str, " ", -1) *)
-      let args' = (mk_constant ~etyp:T_string (C_string " ") range) :: (mk_constant ~etyp:T_int (C_int (Z.of_int 1)) range) :: [] in
+      let args' = (mk_constant ~etyp:T_string (C_string " ") range) :: (mk_int (-1) ~typ:(T_py None) range) :: [] in
       man.eval {exp with ekind = E_py_call(call, str :: args', [])} flow
       |> OptionExt.return
 
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.split", _))}, _)} as call , [str; split], []) ->
       (* rewrite into str.split(str, split, -1) *)
-      let args' = (mk_constant ~etyp:T_int (C_int (Z.of_int 1)) range) :: [] in
+      let args' = (mk_int (-1) ~typ:(T_py None) range) :: [] in
       man.eval {exp with ekind = E_py_call(call, str :: split :: args', [])} flow
       |> OptionExt.return
 
@@ -887,20 +887,20 @@ struct
         ["str"; "str"; "int"]
         (fun eargs flow ->
            (* FIXME: notok, as one strong element. Fixed by adding to tops, but terrible *)
-           man.eval (mk_expr ~etyp:T_py (E_py_list [mk_py_top T_string range; mk_py_top T_string range]) range) flow
+           man.eval (mk_expr ~etyp:(T_py None) (E_py_list [mk_py_top T_string range; mk_py_top T_string range]) range) flow
         )
       |> OptionExt.return
 
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bytes.split", _))}, _)} as call, [str], []) ->
       (* rewrite into str.split(str, " ", -1) *)
-      let args' = (mk_py_top T_py_bytes range) :: (mk_constant ~etyp:T_int (C_int (Z.of_int 1)) range) :: [] in
+      let args' = (mk_py_top (T_py (Some Bytes)) range) :: (mk_int (-1) ~typ:T_int range) :: [] in
       man.eval {exp with ekind = E_py_call(call, str :: args', [])} flow
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bytes.split", _))}, _)} as call , [str; split], []) ->
       (* rewrite into str.split(str, split, -1) *)
-      let args' = (mk_constant ~etyp:T_int (C_int (Z.of_int 1)) range) :: [] in
+      let args' = (mk_int (-1) ~typ:T_int range) :: [] in
       man.eval {exp with ekind = E_py_call(call, str :: split :: args', [])} flow
       |> OptionExt.return
 
@@ -909,7 +909,7 @@ struct
         ["bytes"; "bytes"; "int"]
         (fun eargs flow ->
            (* FIXME: notok, as one strong element. Fixed by adding to tops, but terrible *)
-           man.eval (mk_expr ~etyp:T_py (E_py_list [mk_py_top T_py_bytes range; mk_py_top T_py_bytes range]) range) flow
+           man.eval (mk_expr ~etyp:(T_py None) (E_py_list [mk_py_top (T_py (Some Bytes)) range; mk_py_top (T_py (Some Bytes)) range]) range) flow
         )
       |> OptionExt.return
 
@@ -918,14 +918,14 @@ struct
       Utils.check_instances f man flow range args
         ["str"]
         (fun eargs flow ->
-           man.eval (mk_expr ~etyp:T_py (E_py_list [mk_py_top T_string range]) range) flow
+           man.eval (mk_expr ~etyp:(T_py None) (E_py_list [mk_py_top T_string range]) range) flow
         )
       |> OptionExt.return
 
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dir" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args []
-        (fun _ -> man.eval (mk_expr ~etyp:T_py (E_py_list [mk_py_top T_string range]) range))
+        (fun _ -> man.eval (mk_expr ~etyp:(T_py None) (E_py_list [mk_py_top T_string range]) range))
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.assert_list_of", _))}, _)}, args, []) ->
@@ -950,7 +950,7 @@ struct
           let addr_list = addr_of_expr eaddr_list in
           let els_var = var_of_addr addr_list in
           let len_var = length_var_of_addr addr_list in
-          let stmt = mk_stmt (S_py_annot (mk_var els_var range, mk_expr ~etyp:T_py (E_py_annot i) range)) range in
+          let stmt = mk_stmt (S_py_annot (mk_var els_var range, mk_expr ~etyp:(T_py None) (E_py_annot i) range)) range in
           flow |>
             man.exec   stmt >>%
             man.exec ~route:(Semantic "U/Numeric") (mk_assign (mk_var len_var range) (mk_py_top T_int range) range) >>%
@@ -968,7 +968,7 @@ struct
                   | E_py_object ({addr_kind = A_py_list} as a, _) -> a
                   | _ -> Exceptions.panic "should be a list: %a@\nflow = %a@\n" pp_expr iterator (Flow.print man.lattice.print) flow in
                 let var_els = var_of_addr list_addr in
-                man.eval (mk_expr ~etyp:T_py (E_py_check_annot (mk_var var_els range, i)) range) flow
+                man.eval (mk_expr ~etyp:(T_py None) (E_py_check_annot (mk_var var_els range, i)) range) flow
               )
           )
         ~felse:(fun flow ->

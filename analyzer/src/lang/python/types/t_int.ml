@@ -47,18 +47,18 @@ struct
   let eval exp man flow =
     let range = erange exp in
     match ekind exp, etyp exp with
-    | E_constant (C_top T_bool), T_py ->
+    | E_constant (C_top (T_py (Some Bool))), T_py _ ->
       Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_bool_top, Some (mk_top T_int range)) range) flow |> OptionExt.return
 
-    | E_constant (C_bool true), T_py ->
+    | E_constant (C_bool true), T_py _ ->
       Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_true, Some (mk_int 1 ~typ:T_int range)) range) flow |> OptionExt.return
 
-    | E_constant (C_bool false), T_py ->
+    | E_constant (C_bool false), T_py _ ->
       Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_false, Some (mk_int 0 ~typ:T_int range)) range) flow |> OptionExt.return
 
-    | E_constant (C_top T_int), T_py
-    | E_constant (C_int _), T_py
-    | E_constant (C_int_interval _), T_py ->
+    | E_constant (C_top (T_py (Some Int))), T_py _
+    | E_constant (C_int _), T_py _
+    | E_constant (C_int_interval _), T_py _ ->
       Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_integers, Some {exp with etyp=T_int}) range) flow |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_class (C_builtin "bool", _)}, _)}, [arg], []), _
@@ -83,7 +83,7 @@ struct
                         (mk_py_hasattr earg "__len__" range)
                         ~fthen:(fun flow ->
                             let attr = mk_py_attr earg "__len__" range in
-                            let comp = mk_binop (mk_py_call attr [] range) O_ne (mk_zero range) range in
+                            let comp = mk_binop ~etyp:(T_py None) (mk_py_call attr [] range) O_ne (mk_zero ~typ:(T_py None) range) range in
                             man.eval comp flow)
                         ~felse:(fun flow ->
                             man.eval (mk_py_true range) flow)
@@ -153,7 +153,7 @@ struct
                           ~felse:(fun flow -> man.eval (mk_py_false range) flow)
                       )
                     ~felse:(fun false_flow ->
-                        let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
+                        let expr = mk_constant ~etyp:(T_py (Some NotImplemented)) C_py_not_implemented range in
                         man.eval   expr false_flow)
                     man true_flow
                 )
@@ -180,7 +180,7 @@ struct
                       | "int.__truediv__"
                       | "int.__rtruediv__" ->
                          assume
-                           (mk_binop (if is_reverse_operator f then e1 else e2) O_eq (mk_zero range) range)
+                           (mk_binop ~etyp:(T_py None) (if is_reverse_operator f then e1 else e2) O_eq (mk_zero ~typ:(T_py None) range) range)
                            man true_flow
                            ~fthen:(fun flow ->
                              man.exec (Utils.mk_builtin_raise_msg "ZeroDivisionError" "division by zero" range) flow >>% Eval.empty_singleton
@@ -203,7 +203,7 @@ struct
                                                                                                                                                      | O_py_floor_div -> O_div
                                                                                                                                                      | x -> x) (Utils.extract_oobject e2) range ~etyp:T_int)) range) flow in
                          if is_arith_div_fun "int" f then
-                           assume (mk_binop (if is_reverse_operator f then e1 else e2) O_eq (mk_zero range) range) man flow
+                           assume (mk_binop ~etyp:(T_py None) (if is_reverse_operator f then e1 else e2) O_eq (mk_zero ~typ:(T_py None) range) range) man flow
                              ~fthen:(fun flow ->
                                man.exec (Utils.mk_builtin_raise_msg "ZeroDivisionError" "integer division or modulo by zero" range) flow >>% Eval.empty_singleton
                              )
@@ -212,7 +212,7 @@ struct
 
                   )
                   ~felse:(fun false_flow ->
-                      let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
+                      let expr = mk_constant ~etyp:(T_py (Some NotImplemented)) C_py_not_implemented range in
                       man.eval   expr false_flow)
                   man true_flow
               )
@@ -233,7 +233,7 @@ struct
             ~fthen:(fun true_flow ->
                 Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_integers, Some (mk_unop (Operators.methfun_to_unop f) (Utils.extract_oobject el) range ~etyp:T_int)) range) true_flow)
             ~felse:(fun false_flow ->
-                let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
+                let expr = mk_constant ~etyp:(T_py (Some NotImplemented)) C_py_not_implemented range in
                 man.eval   expr false_flow)
             man flow
         )
@@ -265,10 +265,10 @@ struct
         (fun e flow ->
           let max_intfloat = mk_constant (C_int (Z.of_string "179769313486231580793728971405303415079934132710037826936173778980444968292764750946649017977587207096330286416692887910946555547851940402630657488671505820681908902000708383676273854845817711531764475730270069855571366959622842914819860834936475292719074168444365510704342711559699508093042880177904174497791")) ~etyp:T_int range in
           assume ~route:(Semantic "U/Numeric")
-            (mk_binop
+            (mk_binop ~etyp:T_int
                (mk_binop (mk_unop O_minus max_intfloat ~etyp:T_int range) O_le  (Utils.extract_oobject @@ List.hd e) range)
                O_log_and
-               (mk_binop (Utils.extract_oobject @@ List.hd e) O_le max_intfloat range)
+               (mk_binop ~etyp:T_int (Utils.extract_oobject @@ List.hd e) O_le max_intfloat range)
                range)
             man flow
           ~fthen:(fun flow ->

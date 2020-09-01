@@ -51,11 +51,15 @@ let () =
     );
   register_typ_pp (fun default fmt typ ->
     match typ with
-    | T_py -> pp_print_string fmt "py"
-    | T_py_not_implemented -> pp_print_string fmt "notimplemented"
-    | T_py_none -> pp_print_string fmt "none"
-    | T_py_complex -> pp_print_string fmt "complex"
-    | T_py_bytes -> pp_print_string fmt "bytes"
+    | T_py None -> pp_print_string fmt "py"
+    | T_py (Some Bool) -> pp_print_string fmt "py-bool"
+    | T_py (Some NotImplemented) -> pp_print_string fmt "py-notimplemented"
+    | T_py (Some NoneType) -> pp_print_string fmt "py-none"
+    | T_py (Some Complex) -> pp_print_string fmt "py-complex"
+    | T_py (Some Bytes) -> pp_print_string fmt "py-bytes"
+    | T_py (Some Str) -> pp_print_string fmt "py-str"
+    | T_py (Some (Float _)) -> pp_print_string fmt "py-float"
+    | T_py (Some Int) -> pp_print_string fmt "py-int"
     | _ -> default fmt typ
     );
   register_constant_pp (fun default fmt -> function

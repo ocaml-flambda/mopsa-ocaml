@@ -43,7 +43,7 @@ module Domain = struct
   let eval exp man flow =
     let range = erange exp in
     match ekind exp with
-    | E_binop(op, e1, e2) when is_comp_op op ->
+    | E_binop(op, e1, e2) when is_comp_op op && etyp exp = (T_py None) ->
       (* CPython: object.c, function do_richcompare *)
       let is_notimplemented x =
         let not_implemented_type = mk_py_object (find_builtin "NotImplementedType") range in
@@ -76,7 +76,7 @@ module Domain = struct
         let switch flow =
           match op with
           | O_eq | O_ne ->
-            assume (mk_expr ~etyp:T_py (E_binop(O_py_is, e1, e2)) range) man flow
+            assume (mk_expr ~etyp:(T_py None) (E_binop(O_py_is, e1, e2)) range) man flow
               ~fthen:(man.eval   (mk_py_bool (O_eq =  op) range))
               ~felse:(man.eval   (mk_py_bool (O_eq <> op) range))
           | _ ->
@@ -89,7 +89,7 @@ module Domain = struct
             assume (mk_py_hasattr ocls2 rop_fun range)
               man flow
               ~fthen:(fun flow ->
-                  man.eval  
+                  man.eval
                     (mk_py_call (mk_py_object_attr cls2 rop_fun range) [e2; e1] range) flow >>$
  (fun cmp flow ->
                       assume (is_notimplemented cmp) man flow
@@ -103,7 +103,7 @@ module Domain = struct
         assume (mk_py_hasattr ocls1 op_fun range)
           man flow
           ~fthen:(fun flow ->
-              man.eval  
+              man.eval
                 (mk_py_call (mk_py_object_attr cls1 op_fun range) [e1; e2] range) flow >>$
  (fun cmp flow ->
                   assume (is_notimplemented cmp)
@@ -117,12 +117,12 @@ module Domain = struct
       in
 
       assume
-        (mk_binop (mk_py_bool is_same_type range) O_py_and
-           (mk_binop (mk_py_issubclass ocls2 ocls1 range) O_py_and
+        (mk_binop ~etyp:(T_py None) (mk_py_bool is_same_type range) O_py_and
+           (mk_binop ~etyp:(T_py None) (mk_py_issubclass ocls2 ocls1 range) O_py_and
               (mk_py_hasattr ocls2 rop_fun range) range) range)
         man flow
         ~fthen:(fun flow ->
-            man.eval  
+            man.eval
               (mk_py_call (mk_py_object_attr cls2 rop_fun range) [e2; e1] range) flow >>$
  (fun cmp flow ->
                 assume (is_notimplemented cmp)

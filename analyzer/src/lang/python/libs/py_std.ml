@@ -42,14 +42,14 @@ struct
   type stub_db = stub_signature StringMap.t
 
   let add_signature funname in_args out_type db =
-    let out_type = match out_type with
-      | "bool" -> T_bool
-      | "int" -> T_int
-      | "float" -> T_float F_DOUBLE
-      | "str" -> T_string
-      | "NoneType" -> T_py_none
-      | "NotImplementedType" -> T_py_not_implemented
-      | _ -> assert false in
+      let out_type = match out_type with
+        | "bool" -> T_py (Some Bool)
+        | "int" -> T_py (Some Int)
+        | "float" -> T_py (Some (Float F_DOUBLE))
+        | "str" -> T_py (Some Str)
+        | "NoneType" -> T_py (Some NoneType)
+        | "NotImplementedType" -> T_py (Some NotImplemented)
+        | _ -> assert false in
     StringMap.add funname {in_args; out_type} db
 
   let stub_base =
@@ -171,19 +171,19 @@ struct
         tyerror flow |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("sum", _))}, _)} as call, [els], [])  ->
-      let args' = els :: (mk_constant ~etyp:T_int (C_int (Z.of_int 0)) range) :: [] in
+      let args' = els :: (mk_zero ~typ:(T_py None) range) :: [] in
       man.eval {exp with ekind = E_py_call(call, args', [])} flow |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("sum", _))}, _)}, [ els; start ], [])  ->
       (* let's desugar sum into tmp = 0; for x in els: tmp = tmp + x; tmp *)
-      let counter = mk_range_attr_var range "counter" T_py in
+      let counter = mk_range_attr_var range "counter" (T_py None) in
       let counter_var = mk_var counter range in
-      let target = mk_range_attr_var range "target" T_py in
+      let target = mk_range_attr_var range "target" (T_py None) in
       let target_var = mk_var target range in
-      let assign = mk_assign counter_var (mk_constant ~etyp:T_int (C_int (Z.of_int 0)) range) range in
+      let assign = mk_assign counter_var (mk_zero ~typ:(T_py None) range) range in
       let pass = mk_block [] range in
       let for_loop = mk_stmt (S_py_for (target_var, els,
-                                        mk_assign counter_var (mk_binop counter_var O_plus target_var range) range,
+                                        mk_assign counter_var (mk_binop ~etyp:(T_py None) counter_var O_plus target_var range) range,
                                         pass)) range in
       let stmt = mk_block (assign :: for_loop :: []) range in
       debug "Rewriting %a into %a@\n" pp_expr exp pp_stmt stmt;
@@ -195,9 +195,9 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (s, _))}, _)}, [e1; e2], []) when s = "max" || s = "min" ->
       (* desugaring max(e1, e2) into e1 if e1 > e2 else e2 *)
       let comp_op = if s = "max" then O_gt else O_lt in
-      man.eval   (mk_expr ~etyp:T_py
+      man.eval   (mk_expr ~etyp:(T_py None)
                                                    (E_py_if
-                                                      (mk_binop e1 comp_op e2 range,
+                                                      (mk_binop ~etyp:(T_py None) e1 comp_op e2 range,
                                                        e1,
                                                        e2)
                                                    ) range) flow |>
@@ -211,11 +211,11 @@ struct
        *        if target_var > maxi_var:
        *            maxi_var = target_var *)
       let comp_op = if s = "max" then O_gt else if s = "min" then O_lt else assert false in
-      let iter = mk_range_attr_var range "iter" T_py in
+      let iter = mk_range_attr_var range "iter" (T_py None) in
       let iter_var = mk_var iter range in
-      let maxi = mk_range_attr_var range "extrema" T_py in
+      let maxi = mk_range_attr_var range "extrema" (T_py None) in
       let maxi_var = mk_var maxi range in
-      let target = mk_range_attr_var range "target" T_py in
+      let target = mk_range_attr_var range "target" (T_py None) in
       let target_var = mk_var target range in
 
       let cleaners = List.map (fun x -> mk_remove_var x range) [iter; maxi; target] in
@@ -229,7 +229,7 @@ struct
           (Utils.mk_builtin_raise_msg "ValueError" msg range)
           range in
       let for_stmt = mk_stmt (S_py_for (target_var, iter_var,
-                                        mk_if (mk_binop target_var comp_op maxi_var range)
+                                        mk_if (mk_binop ~etyp:(T_py None) target_var comp_op maxi_var range)
                                           (mk_assign maxi_var target_var range)
                                           pass range
                                        , pass)) range in
@@ -242,7 +242,7 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("max", _))}, _)}, [e1; e2], []) ->
       (* desugaring max(e1, e2) into if e1 > e2 then e1 else e2 *)
-      let expr = mk_expr ~etyp:T_py (E_py_if (mk_binop e1 O_gt e2 range, e1, e2)) range in
+      let expr = mk_expr ~etyp:(T_py None) (E_py_if (mk_binop ~etyp:(T_py None) e1 O_gt e2 range, e1, e2)) range in
       debug "Rewriting %a into %a@\n" pp_expr exp pp_expr expr;
       man.eval expr flow |> OptionExt.return
 
@@ -297,7 +297,7 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("sorted", _))}, _)}, [obj], [])  ->
       (* todo: call list on obj first *)
-      let seq = mk_range_attr_var range "sorted" T_py in
+      let seq = mk_range_attr_var range "sorted" (T_py None) in
       man.exec (mk_assign (mk_var seq range) obj range) flow >>%
       man.eval (Utils.mk_builtin_call "list.sort" [mk_var seq range] range) >>$
         (fun _ flow ->
@@ -320,7 +320,7 @@ struct
            let flow = if List.length args = 1 then flow else
                         man.exec (mk_assign
                                     (mk_py_attr exc "args" range)
-                           (mk_expr ~etyp:T_py (E_py_tuple (List.tl args)) range) range) flow |> post_to_flow man in
+                           (mk_expr ~etyp:(T_py None) (E_py_tuple (List.tl args)) range) range) flow |> post_to_flow man in
               man.eval   (mk_py_none range) flow
         )
       |> OptionExt.return
@@ -340,13 +340,17 @@ struct
             let v = List.hd eargs in
             assume (mk_py_isinstance_builtin v "int" range) man flow
               ~fthen:(fun flow ->
-                  assume (mk_binop v O_ge (mk_int 0 ~typ:T_int range) range) man flow
+                  assume (mk_binop ~etyp:(T_py None) v O_ge (mk_int 0 ~typ:(T_py None) range) range) man flow
                     ~fthen:(fun flow -> man.eval v flow)
-                    ~felse:(fun flow -> man.eval (mk_unop O_minus v range) flow)
+                    ~felse:(fun flow -> man.eval (mk_unop ~etyp:(T_py None) O_minus v range) flow)
                 )
               ~felse:(fun flow ->
                   assume (mk_py_isinstance_builtin v "float" range) man flow
-                    ~fthen:(man.eval (mk_py_top (T_float F_DOUBLE) range))
+                    ~fthen:(fun flow ->
+                      assume (mk_binop ~etyp:(T_py None) v O_ge {(mk_float 0. range) with etyp=(T_py (Some (Float F_DOUBLE)))} range) man flow
+                        ~fthen:(fun flow -> man.eval v flow)
+                        ~felse:(fun flow -> man.eval (mk_unop O_minus v range) flow)
+                    )
                     ~felse:(fun flow ->
                       let msg = Format.asprintf "bad operand type for abs()" in  (* FIXME *)
                         man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>%
@@ -357,7 +361,7 @@ struct
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("all" as f, _))}, _)}, args, []) ->
-      Utils.check_instances f man flow range args ["list"] (fun _ -> man.eval (mk_py_top T_bool range))
+      Utils.check_instances f man flow range args ["list"] (fun _ -> man.eval (mk_py_top (T_py (Some Bool)) range))
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("round" as f, _))}, _)}, args, []) ->
@@ -374,10 +378,10 @@ struct
             assume (mk_py_isinstance_builtin argl "int" range) man flow
               ~fthen:(fun flow ->
                   assume (mk_py_isinstance_builtin argr "int" range) man flow
-                    ~fthen:(man.eval (mk_expr ~etyp:T_py (E_py_tuple [mk_py_top T_int range; mk_py_top T_int range]) range))
+                    ~fthen:(man.eval (mk_expr ~etyp:(T_py None) (E_py_tuple [mk_py_top T_int range; mk_py_top T_int range]) range))
                     ~felse:(fun flow ->
                         assume (mk_py_isinstance_builtin argr "float" range) man flow
-                          ~fthen:(man.eval (mk_expr ~etyp:T_py (E_py_tuple [mk_py_top (T_float F_DOUBLE) range; mk_py_top (T_float F_DOUBLE) range]) range))
+                          ~fthen:(man.eval (mk_expr ~etyp:(T_py None) (E_py_tuple [mk_py_top (T_float F_DOUBLE) range; mk_py_top (T_float F_DOUBLE) range]) range))
                           ~felse:tyerror
                       )
                 )
@@ -385,10 +389,10 @@ struct
                   assume (mk_py_isinstance_builtin argl "float" range) man flow
                     ~fthen:(fun flow ->
                         assume (mk_py_isinstance_builtin argr "int" range) man flow
-                          ~fthen:(man.eval (mk_expr ~etyp:T_py (E_py_tuple [mk_py_top (T_float F_DOUBLE) range; mk_py_top (T_float F_DOUBLE) range]) range))
+                          ~fthen:(man.eval (mk_expr ~etyp:(T_py None) (E_py_tuple [mk_py_top (T_float F_DOUBLE) range; mk_py_top (T_float F_DOUBLE) range]) range))
                           ~felse:(fun flow ->
                               assume (mk_py_isinstance_builtin argr "float" range) man flow
-                                ~fthen:(man.eval (mk_expr ~etyp:T_py (E_py_tuple [mk_py_top (T_float F_DOUBLE) range; mk_py_top (T_float F_DOUBLE) range]) range))
+                                ~fthen:(man.eval (mk_expr ~etyp:(T_py None) (E_py_tuple [mk_py_top (T_float F_DOUBLE) range; mk_py_top (T_float F_DOUBLE) range]) range))
                                 ~felse:tyerror
                             )
 

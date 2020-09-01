@@ -59,13 +59,13 @@ module Domain =
       let range = erange exp in
       match ekind exp with
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.random_bool", _))}, _)}, [], []) ->
-         man.eval (mk_py_top T_bool range) flow |> OptionExt.return
+         man.eval (mk_py_top (T_py (Some Bool)) range) flow |> OptionExt.return
 
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.random_float", _))}, _)}, [], []) ->
-         man.eval (mk_py_top (T_float F_DOUBLE) range) flow |> OptionExt.return
+         man.eval (mk_py_top (T_py (Some (Float F_DOUBLE))) range) flow |> OptionExt.return
 
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.random_string", _))}, _)}, [], []) ->
-         man.eval (mk_py_top T_string range) flow |> OptionExt.return
+         man.eval (mk_py_top (T_py (Some Str)) range) flow |> OptionExt.return
 
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.random_int", _))}, _)}, [], []) ->
          man.eval (mk_py_top T_int range) flow |> OptionExt.return
@@ -76,7 +76,7 @@ module Domain =
          man.eval (mk_py_z_interval l u range) flow |> OptionExt.return
 
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.random_int", _))}, _)}, [l; u], []) ->
-              let tmp = mktmp () in
+              let tmp = mktmp ~typ:(T_py None) () in
               let l = Utils.mk_builtin_call "int" [l] range in
               let u = Utils.mk_builtin_call "int" [u] range in
               man.exec (mk_assign (mk_var tmp range) (mk_top T_int range) range) flow >>%
@@ -93,7 +93,7 @@ module Domain =
            | E_constant (C_int l), E_constant (C_float u) -> man.eval (mk_py_float_interval (Z.to_float l) u range) flow
            | E_constant (C_int l), E_constant (C_int u) -> man.eval (mk_py_float_interval (Z.to_float l) (Z.to_float u) range) flow
            | _ ->
-              let tmp = mktmp () in
+              let tmp = mktmp ~typ:(T_py None) () in
               let l = Utils.mk_builtin_call "float" [l] range in
               let u = Utils.mk_builtin_call "float" [u] range in
               man.exec (mk_assign (mk_var tmp range) (mk_top (T_float F_DOUBLE) range) range) flow >>%
@@ -106,7 +106,7 @@ module Domain =
       (* Calls to mopsa.assert_equal function *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.assert_equal", _))}, _)}, [x; y], []) ->
          let range = erange exp in
-         check man (mk_binop x O_eq y (tag_range range "eq")) range flow
+         check man (mk_binop ~etyp:(T_py None) x O_eq y (tag_range range "eq")) range flow
          |> OptionExt.return
 
       (* Calls to mopsa assert function *)
@@ -140,7 +140,8 @@ module Domain =
                | false, false -> mk_top T_bool
                | true, true -> raise BottomFound
              in
-             let stmt = mk_assert (cond exp.erange) exp.erange in
+             let conde = {(cond exp.erange) with etyp=T_bool} in
+             let stmt = mk_assert conde exp.erange in
              let cur = Flow.get T_cur man.lattice flow in
              let flow = Flow.set T_cur man.lattice.top man.lattice flow |>
                           man.exec stmt |> post_to_flow man |>
@@ -170,7 +171,8 @@ module Domain =
                | false, false -> mk_top T_bool
                | true, true -> raise BottomFound
              in
-             let stmt = mk_assert (cond exp.erange) exp.erange in
+             let conde = {(cond exp.erange) with etyp = T_bool} in
+             let stmt = mk_assert conde exp.erange in
              let cur = Flow.get T_cur man.lattice flow in
              let flow = Flow.set T_cur man.lattice.top man.lattice flow |>
                         man.exec stmt |> post_to_flow man |>
@@ -205,7 +207,8 @@ module Domain =
           | _, true -> mk_py_false
           | false, false ->  mk_top T_bool
         in
-        let stmt = mk_assert (cond exp.erange) exp.erange in
+        let conde = {(cond exp.erange) with etyp = T_bool} in
+        let stmt = mk_assert conde exp.erange in
         let cur = Flow.get T_cur man.lattice flow in
         let flow = Flow.set T_cur man.lattice.top man.lattice flow in
         let flow = man.exec stmt flow |> post_to_flow man |>
@@ -251,8 +254,9 @@ module Domain =
             | _ -> acc
           ) man.lattice.bottom flow in
         debug "error_env = %a" man.lattice.print error_env;
-        let cond = mk_py_bool (not (man.lattice.is_bottom error_env)) range in
-        let stmt = mk_assert cond range in
+        let cond = mk_bool (not (man.lattice.is_bottom error_env)) range in
+        let conde = {cond with etyp = T_bool} in
+        let stmt = mk_assert conde exp.erange in
         let cur = Flow.get T_cur man.lattice flow in
         let flow = Flow.set T_cur man.lattice.top man.lattice flow |>
                    man.exec stmt |> post_to_flow man |> Flow.set T_cur cur man.lattice in

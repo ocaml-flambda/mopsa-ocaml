@@ -178,7 +178,7 @@ struct
 
   let exec stmt (man: ('a, t) Framework.Core.Manager.man) (flow: 'a flow) : 'a post option =
     match skind stmt with
-    | S_assign (x, e) ->
+    | S_assign (x, e) when etyp e = T_string ->
       debug "ok";
       man.eval ~route:(Semantic "U/String") e flow |>
       bind_some_opt (fun ee flow ->
@@ -191,7 +191,7 @@ struct
               OptionExt.return @@ Post.return flow)
         )
 
-    | _ ->
+    | S_remove e | S_add e | S_rename (e, _) | S_forget e | S_expand(e, _) | S_fold(e, _) | S_project (e::_) | S_assume e when etyp e = T_string ->
        let cur = get_env T_cur man flow in
        let uctx = Flow.get_unit_ctx flow in
        let ocur = Nonrel.exec stmt man uctx cur in
@@ -199,7 +199,8 @@ struct
            let flow = set_env T_cur (Option.get ocur) man flow in
            OptionExt.return (Post.return flow)
          )
-  (* dans le cas de assign/assume: evaluer e en chaine via eval, puis appeler Lifted.exec *)
+
+    | _ -> None
 
   let rec repeat s nb =
     if nb = 0 then ""
@@ -252,7 +253,8 @@ struct
        if etyp expr = T_string then
          Option.bind (Nonrel.eval expr cur) (fun (_, value) ->
              Eval.join_list ~empty:(fun () -> assert false)
-               (Value.fold (fun s acc -> (Eval.singleton (mk_string s range) flow) :: acc) value [])
+               (if Value.is_top value then [Eval.singleton (mk_top T_string range) flow]
+                else Value.fold (fun s acc -> (Eval.singleton (mk_string s range) flow) :: acc) value [])
              |> OptionExt.return
            )
        else None

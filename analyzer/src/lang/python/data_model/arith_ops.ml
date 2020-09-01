@@ -43,7 +43,7 @@ module Domain =
     let eval exp man flow =
       let range = erange exp in
       match ekind exp with
-      | E_binop(op, e1, e2) when is_arith_op op ->
+      | E_binop(op, e1, e2) when is_arith_op op && etyp exp = (T_py None) ->
          (* CPython's equivalent code is located in abstract.c,
             binary_op1 and typeobject.c, SLOT1BINFULL *)
          let is_notimplemented x =
@@ -72,7 +72,7 @@ module Domain =
                            let call_radd man ocondtocheck flow ~felseradd =
                              let hasradd = Utils.mk_object_hasattr cls2 rop_fun range in
                              assume
-                               (if ocondtocheck = None then hasradd else (mk_binop hasradd O_py_and (OptionExt.none_to_exn ocondtocheck) range))
+                               (if ocondtocheck = None then hasradd else (mk_binop ~etyp:(T_py None) hasradd O_py_and (OptionExt.none_to_exn ocondtocheck) range))
                                man flow
                                ~fthen:(fun flow ->
                                  man.eval   (mk_py_call (mk_py_object_attr cls2 rop_fun range) [e2; e1] range) flow >>$
@@ -114,7 +114,7 @@ module Domain =
              )
          |> OptionExt.return
 
-      | E_unop(op, e) when is_arith_op op ->
+      | E_unop(op, e) when is_arith_op op && etyp exp = (T_py None) ->
          debug "Resolving unary operator %a" pp_operator op;
          man.eval   e flow >>$
  (fun e flow ->

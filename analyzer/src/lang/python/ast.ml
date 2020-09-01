@@ -39,14 +39,12 @@ type constant +=
                            (** {2 Types} *)
 (*==========================================================================*)
 
+type py_type =
+  | Bool | NotImplemented | Complex | NoneType | Bytes | Str | Int | Float of float_prec
+
 (** Python-specific types *)
 type typ +=
-  | T_py
-  | T_py_not_implemented
-  | T_py_complex
-  | T_py_none
-  | T_py_bytes
-
+   | T_py of py_type option
 
 (*==========================================================================*)
                            (** {2 Expressions} *)
@@ -431,31 +429,31 @@ let mk_py_in ?(strict = false) ?(left_strict = false) ?(right_strict = false) v 
   match strict, left_strict, right_strict with
   | true, _, _
   | false, true, true ->
-    mk_binop
-      (mk_binop e1 O_lt v erange)
+    mk_binop ~etyp:(T_py None)
+      (mk_binop ~etyp:(T_py None) e1 O_lt v erange)
       O_py_and
-      (mk_binop v O_lt e2 erange)
+      (mk_binop ~etyp:(T_py None) v O_lt e2 erange)
       erange
 
   | false, true, false ->
-    mk_binop
-      (mk_binop e1 O_lt v erange)
+    mk_binop ~etyp:(T_py None)
+      (mk_binop ~etyp:(T_py None) e1 O_lt v erange)
       O_py_and
-      (mk_binop v O_le e2 erange)
+      (mk_binop ~etyp:(T_py None) v O_le e2 erange)
       erange
 
   | false, false, true ->
-    mk_binop
-      (mk_binop e1 O_le v erange)
+    mk_binop ~etyp:(T_py None)
+      (mk_binop ~etyp:(T_py None) e1 O_le v erange)
       O_py_and
-      (mk_binop v O_lt e2 erange)
+      (mk_binop ~etyp:(T_py None) v O_lt e2 erange)
       erange
 
   | false, false, false ->
-    mk_binop
-      (mk_binop e1 O_le v erange)
+    mk_binop ~etyp:(T_py None)
+      (mk_binop ~etyp:(T_py None) e1 O_le v erange)
       O_py_and
-      (mk_binop v O_le e2 erange)
+      (mk_binop ~etyp:(T_py None) v O_le e2 erange)
       erange
 
 let mk_py_not exp range =
@@ -483,29 +481,36 @@ let mk_raise exc range =
   mk_stmt (S_py_raise (Some exc)) range
 
 let mk_py_call func args range =
-  mk_expr ~etyp:T_py (E_py_call (func, args, [])) range
+  mk_expr ~etyp:(T_py None) (E_py_call (func, args, [])) range
 
 let mk_py_kall func args kwargs range =
   (* call with kwargs *)
-  mk_expr ~etyp:T_py (E_py_call (func, args, kwargs)) range
+  mk_expr ~etyp:(T_py None) (E_py_call (func, args, kwargs)) range
 
-let mk_py_attr obj attr ?(etyp=T_py) range =
+let mk_py_attr obj attr ?(etyp=(T_py None)) range =
   mk_expr (E_py_attribute (obj, attr)) ~etyp range
 
 let mk_py_object (addr, e) range =
-  mk_expr ~etyp:T_py (E_py_object (addr, e)) range
+  mk_expr ~etyp:(T_py None) (E_py_object (addr, e)) range
 
-let mk_py_object_attr obj attr ?(etyp=T_py) range =
+let mk_py_object_attr obj attr ?(etyp=(T_py None)) range =
   mk_py_attr (mk_py_object obj range) attr ~etyp range
 
 let mk_py_bool b range =
-  mk_constant (C_bool b) ~etyp:T_py range
+  mk_constant (C_bool b) ~etyp:(T_py None) range
 
 let mk_py_true = mk_py_bool true
 
 let mk_py_false = mk_py_bool false
 
 let mk_py_top t range =
+  let t = match t with
+    | T_py _ -> t
+    | T_int -> T_py (Some Int)
+    | T_float f -> T_py (Some (Float f))
+    | T_bool -> T_py (Some Bool)
+    | T_string -> T_py (Some Str)
+    | _ -> assert false in
   mk_constant (C_top t) ~etyp:t range
 
 let object_of_expr e =
@@ -514,4 +519,4 @@ let object_of_expr e =
   | _ -> assert false
 
 let mk_py_none range =
-  mk_constant ~etyp:T_py_none C_py_none range
+  mk_constant ~etyp:(T_py (Some NoneType)) C_py_none range

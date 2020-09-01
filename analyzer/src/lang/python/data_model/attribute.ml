@@ -78,7 +78,7 @@ module Domain =
               man.eval (mk_py_attr e attr range) flow
             | _ ->
               assume (mk_py_isinstance_builtin eattr "str" range) man flow
-                ~fthen:(fun flow -> man.eval (mk_py_top T_py range) flow)
+                ~fthen:(fun flow -> man.eval (mk_py_top (T_py None) range) flow)
                 ~felse:(fun flow ->
                     panic_at range "getattr with attr=%a" pp_expr eattr)
           )
@@ -117,8 +117,8 @@ module Domain =
                        | [] -> assert false
                        | cls::tl ->
                          assume
-                           (mk_expr ~etyp:T_py (E_py_ll_hasattr (mk_py_object cls range, mk_string "__getattribute__" range)) range)
-                           ~fthen:(fun flow -> man.eval (mk_expr ~etyp:T_py (E_py_ll_getattr (mk_py_object cls range, mk_string "__getattribute__" range)) range) flow)
+                           (mk_expr ~etyp:(T_py None) (E_py_ll_hasattr (mk_py_object cls range, mk_string "__getattribute__" range)) range)
+                           ~fthen:(fun flow -> man.eval (mk_expr ~etyp:(T_py None) (E_py_ll_getattr (mk_py_object cls range, mk_string "__getattribute__" range)) range) flow)
                            ~felse:(fun flow -> search_mro flow tl)
                            man flow in
                      search_mro flow mro >>$
@@ -179,7 +179,7 @@ module Domain =
                      search_mro tl in
                search_mro mro
              | _ ->
-               assume (mk_expr ~etyp:T_py (E_py_ll_hasattr (eobj, attr)) range)
+               assume (mk_expr ~etyp:(T_py None) (E_py_ll_hasattr (eobj, attr)) range)
                  ~fthen:(fun flow -> man.eval (mk_py_true range) flow)
                  ~felse:(fun flow ->
                    (* test with ll_hasattr and search in the MRO otherwise *)
@@ -187,7 +187,7 @@ module Domain =
                      | [] -> man.eval (mk_py_false range) flow
                      | cls::tl ->
                         assume
-                          (mk_expr ~etyp:T_py (E_py_ll_hasattr (mk_py_object cls range, attr)) range)
+                          (mk_expr ~etyp:(T_py None) (E_py_ll_hasattr (mk_py_object cls range, attr)) range)
                           ~fthen:(fun flow ->
                             man.eval (mk_py_true range) flow)
                           ~felse:(fun flow -> search_mro flow tl)
@@ -225,7 +225,7 @@ module Domain =
       let range = stmt.srange in
       match skind stmt with
       | S_assign({ekind = E_py_attribute(lval, attr)}, rval) ->
-        man.eval   (mk_py_call (mk_py_attr (mk_py_type lval range) "__setattr__" range) [lval; mk_constant ~etyp:T_py (C_string attr) range; rval] range) flow
+        man.eval   (mk_py_call (mk_py_attr (mk_py_type lval range) "__setattr__" range) [lval; mk_constant ~etyp:(T_py None) (C_string attr) range; rval] range) flow
         >>$
  (fun e flow -> Post.return flow)
         |> OptionExt.return

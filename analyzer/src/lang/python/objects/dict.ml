@@ -89,19 +89,19 @@ struct
   let init (prog:program) man flow = flow
 
   let kvar_of_addr a = match akind a with
-    | A_py_dict -> mk_addr_attr a "dict_key" T_py
+    | A_py_dict -> mk_addr_attr a "dict_key" (T_py None)
     | _ -> assert false
 
   let vvar_of_addr a = match akind a with
-    | A_py_dict -> mk_addr_attr a "dict_val" T_py
+    | A_py_dict -> mk_addr_attr a "dict_val" (T_py None)
     | _ -> assert false
 
   let var_of_addr a = match akind a with
-    | A_py_dict -> mk_addr_attr a "dict_key" T_py,
-                     mk_addr_attr a "dict_val" T_py
+    | A_py_dict -> mk_addr_attr a "dict_key" (T_py None),
+                     mk_addr_attr a "dict_val" (T_py None)
     | _ -> assert false
 
-  let viewseq_of_addr a = mk_addr_attr a "view_seq" T_py
+  let viewseq_of_addr a = mk_addr_attr a "view_seq" (T_py None)
 
   let addr_of_expr exp = match ekind exp with
     | E_addr a -> a
@@ -114,8 +114,8 @@ struct
   let extract_vars dictobj =
     match ekind dictobj with
     | E_py_object ({addr_kind = A_py_dict} as addr, _) ->
-      mk_addr_attr addr "dict_key" T_py,
-      mk_addr_attr addr "dict_val" T_py
+      mk_addr_attr addr "dict_key" (T_py None),
+      mk_addr_attr addr "dict_val" (T_py None)
     | _ -> assert false
 
 
@@ -141,7 +141,7 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.__new__", _))}, _)}, cls :: _, []) ->
       Utils.new_wrapper man range flow "dict" cls
-        ~fthennew:(man.eval (mk_expr ~etyp:T_py (E_py_dict ([],[])) range))
+        ~fthennew:(man.eval (mk_expr ~etyp:(T_py None) (E_py_dict ([],[])) range))
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.__init__" as f, _))}, _)}, args, [])
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.update" as f, _))}, _)}, args, []) ->
@@ -174,7 +174,7 @@ struct
       Utils.check_instances f man flow range args ["dict"]
         (fun args flow ->
            let var_k, var_v = extract_vars (List.hd args) in
-           man.eval (mk_expr ~etyp:T_py (E_py_dict ([mk_var ~mode:(Some WEAK) var_k range], [mk_var ~mode:(Some WEAK) var_v range])) range) flow
+           man.eval (mk_expr ~etyp:(T_py None) (E_py_dict ([mk_var ~mode:(Some WEAK) var_k range], [mk_var ~mode:(Some WEAK) var_v range])) range) flow
         )
       |> OptionExt.return
 
@@ -227,7 +227,7 @@ struct
         (fun args flow ->
            let var_k, var_v = extract_vars (List.hd args) in
 
-           let eval_r = man.eval   (mk_expr ~etyp:T_py (E_py_tuple [mk_var var_k range; mk_var var_v range]) range) flow in
+           let eval_r = man.eval   (mk_expr ~etyp:(T_py None) (E_py_tuple [mk_var var_k range; mk_var var_v range]) range) flow in
 
            let flow = Flow.set_ctx (Cases.get_ctx eval_r) flow in
 
@@ -240,7 +240,7 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.__contains__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f ~arguments_after_check:1 man flow range args ["dict"]
         (fun args flow ->
-           man.eval (mk_py_top T_bool range) flow)
+           man.eval (mk_py_top (T_py (Some Bool)) range) flow)
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.__iter__" as f, _))}, _)}, args, []) ->
@@ -354,7 +354,7 @@ struct
           man.eval   (mk_var (Py_list.Domain.itseq_of_eobj @@ List.hd args) range) flow >>$
  (fun dict_eobj flow ->
                 let var_k, var_v = var_of_addr @@ addr_of_eobj dict_eobj in
-                let els = man.eval (mk_expr ~etyp:T_py (E_py_tuple [mk_var var_k ~mode:(Some WEAK) range;
+                let els = man.eval (mk_expr ~etyp:(T_py None) (E_py_tuple [mk_var var_k ~mode:(Some WEAK) range;
                                                          mk_var var_v ~mode:(Some WEAK) range]) range) flow in
                 let flow = Flow.set_ctx (Cases.get_ctx els) flow in
                 let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty_singleton in
@@ -372,7 +372,7 @@ struct
                 let var_k, var_v = extract_vars dict in
                 Libs.Py_mopsa.check man
                   (Utils.mk_builtin_call "bool" [
-                      (mk_binop
+                      (mk_binop ~etyp:(T_py None)
                          (mk_py_isinstance (mk_var ~mode:(Some WEAK) var_k range) type_k range)
                          O_py_and
                          (mk_py_isinstance (mk_var ~mode:(Some WEAK) var_v range) type_v range)
@@ -423,7 +423,7 @@ struct
               List.map (fun (var, annot) ->
                   mk_stmt (S_py_annot
                              (mk_var ~mode:(Some WEAK) var range,
-                              mk_expr ~etyp:T_py (E_py_annot annot) range)
+                              mk_expr ~etyp:(T_py None) (E_py_annot annot) range)
                           ) range
                 ) [(keys_var, ty_key); (values_var, ty_value)]) range in
           man.exec   stmts flow >>%

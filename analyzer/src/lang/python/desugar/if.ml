@@ -41,7 +41,7 @@ module Domain =
       let range = erange exp in
       match ekind exp with
       | E_py_if(test, body, orelse) ->
-         let tmp = mktmp () in
+         let tmp = mktmp ~typ:(T_py None) () in
          let flow = man.exec
                       (mk_if
                          (Utils.mk_builtin_call "bool" [test] range)

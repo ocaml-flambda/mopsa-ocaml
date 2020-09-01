@@ -80,7 +80,7 @@ struct
                    | None ->
                      Keys.Global s
                    | Some {ekind = E_py_object (addr, _)} ->
-                     Keys.Class (mk_addr_attr addr s T_py)
+                     Keys.Class (mk_addr_attr addr s (T_py None))
                    | _ -> assert false in
                  begin match TVMap.find_opt var acc with
                    | None ->
@@ -143,7 +143,7 @@ struct
                 let cur = get_env T_cur man flow in
                 let ncur = List.fold_left (fun cur (tyname, types) ->
                     let etypes = ESet.of_list types in
-                    let tyvar = mk_addr_attr addr_eobj tyname T_py in
+                    let tyvar = mk_addr_attr addr_eobj tyname (T_py None) in
                     match TVMap.find_opt (Class tyvar) cur with
                     | None ->
                       begin match TVMap.find_opt (Global tyname) cur with
@@ -194,13 +194,13 @@ struct
                                                        (mk_var
                                                           (mk_addr_attr (match ekind @@ List.hd args with
                                                                | E_py_object (a, _) -> a
-                                                               | _ -> assert false) s T_py)
+                                                               | _ -> assert false) s (T_py None))
                                                           range)::types
                                                       , [])}
                         else ant in
-                      mk_expr ~etyp:T_py (E_py_check_annot (arg, nant)) range
+                      mk_expr ~etyp:(T_py None) (E_py_check_annot (arg, nant)) range
                     | _ ->
-                      mk_expr ~etyp:T_py (E_py_check_annot (arg, ant)) range in
+                      mk_expr ~etyp:(T_py None) (E_py_check_annot (arg, ant)) range in
                   post_to_flow man (man.exec (mk_assume e range) flow_in),
                   Flow.join man.lattice (post_to_flow man (man.exec (mk_assume (mk_py_not e range) range) flow_in)) flow_notin
               )  (flow, Flow.bottom_from flow) in_args in_types in
@@ -255,7 +255,7 @@ struct
               filter signature.py_funcs_parameters signature.py_funcs_types_in signature.py_funcs_defaults args ([], [])
             in
             let flow_ok, flow_notok = filter_sig in_types in_args flow in
-            let ret_var = mk_range_attr_var range "ret_var" T_py in
+            let ret_var = mk_range_attr_var range "ret_var" (T_py None) in
             begin match signature.py_funcs_type_out with
               | Some e ->
                 debug "out = %a" pp_expr e;
@@ -266,7 +266,7 @@ struct
                            mk_var
                              (mk_addr_attr (match ekind @@ List.hd args with
                                   | E_py_object (a, _) -> a
-                                  | _ -> assert false) s T_py)
+                                  | _ -> assert false) s (T_py None))
                              range
                          )::types, [])}
                      | _ -> VisitParts expr)
@@ -274,7 +274,7 @@ struct
                   e in
               man.exec (mk_add_var ret_var range) flow_ok >>%
               man.exec (mk_stmt (S_py_annot (mk_var ret_var range,
-                                             mk_expr ~etyp:T_py (E_py_annot annot_out) range))
+                                             mk_expr ~etyp:(T_py None) (E_py_annot annot_out) range))
                           range), flow_notok, new_typevars, ret_var
               | None -> assert false
             end
@@ -351,7 +351,7 @@ struct
           begin try
               let e = Hashtbl.find type_aliases v in
               debug "found type alias, replacing %a by %a" pp_var v pp_expr e;
-              man.eval   (mk_expr ~etyp:T_py (E_py_annot e) range) flow |> OptionExt.return
+              man.eval   (mk_expr ~etyp:(T_py None) (E_py_annot e) range) flow |> OptionExt.return
             with Not_found ->
               man.eval   (mk_py_call e [] range) flow |> OptionExt.return
           end
@@ -363,7 +363,7 @@ struct
               (* FIXME ouch, not found in man.eval would also get caught... *)
               (* FIXME: this also means that if a.pyi defines alias b and b.pyi too, we'll encounter some trouble *)
               let r = find_type_alias_by_name s in
-              man.eval   (mk_expr ~etyp:T_py (E_py_annot r) range) flow |> OptionExt.return
+              man.eval   (mk_expr ~etyp:(T_py None) (E_py_annot r) range) flow |> OptionExt.return
             with Not_found ->
               debug "not found, trying usual evaluation";
               man.eval   e flow |> OptionExt.return
@@ -377,7 +377,7 @@ struct
               match ekind ee with
               | E_py_object (addr, _) ->
                 debug "coucou";
-                man.exec (mk_stmt (S_py_annot (mk_var (mk_addr_attr addr "typ" T_py) range, (mk_expr ~etyp:T_py (E_py_annot i) range))) range) flow >>%
+                man.exec (mk_stmt (S_py_annot (mk_var (mk_addr_attr addr "typ" (T_py None)) range, (mk_expr ~etyp:(T_py None) (E_py_annot i) range))) range) flow >>%
                 Eval.singleton ee
               | _ -> assert false
             )
@@ -387,7 +387,7 @@ struct
           Eval.join_list
             ~empty:(fun () -> assert false)
             (List.map (fun e -> man.eval   e flow)
-               [mk_expr ~etyp:T_py (E_py_annot i) range;
+               [mk_expr ~etyp:(T_py None) (E_py_annot i) range;
                 mk_py_none range])
           |> OptionExt.return
 
@@ -398,7 +398,7 @@ struct
           Eval.join_list
             ~empty:(fun () -> panic_at range "Union[]")
             (List.map
-               (fun e -> man.eval   (mk_expr ~etyp:T_py (E_py_annot e) range) flow)
+               (fun e -> man.eval   (mk_expr ~etyp:(T_py None) (E_py_annot e) range) flow)
                is)
           |> OptionExt.return
 
@@ -453,7 +453,7 @@ struct
                                  match vkind vname with
                                  (* FIXME: ugly fix to handle:             (* issue: if object.__new__(e) renames addresses used in i, this is not caught... *) *)
                                  | V_addr_attr ({addr_kind = A_py_instance {addr_kind = A_py_class (C_annot c', _)}} as addr, attr) when compare_var c.py_cls_a_var c'.py_cls_a_var = 0 ->
-                                   OptionExt.default (ESet.singleton expr) (TVMap.find_opt (Class (mk_addr_attr {addr with addr_mode = WEAK} attr T_py)) (get_env T_cur man flow))
+                                   OptionExt.default (ESet.singleton expr) (TVMap.find_opt (Class (mk_addr_attr {addr with addr_mode = WEAK} attr (T_py None))) (get_env T_cur man flow))
                                  | _ -> ESet.singleton expr
                              with Not_found -> expr)
                          | _ -> VisitParts expr
@@ -469,7 +469,7 @@ struct
                       [] else types in
                   let flow =
                     List.fold_left2 (fun flow tname ctype  ->
-                        set_env T_cur (TVMap.add (Class (mk_addr_attr addr tname T_py))
+                        set_env T_cur (TVMap.add (Class (mk_addr_attr addr tname (T_py None)))
                                          (match TVMap.find_opt (Global tname) (get_env T_cur man flow) with
                                           | None ->
                                             debug "tname(%s) not found in cur" tname;
@@ -612,7 +612,7 @@ struct
                     let ee_addr = match ekind ee with
                       | E_py_object (a, _) -> a
                       | _ -> assert false in
-                    man.eval   (mk_expr ~etyp:T_py (E_py_check_annot (mk_var (mk_addr_attr ee_addr "typ" T_py) range, i)) range) flow
+                    man.eval   (mk_expr ~etyp:(T_py None) (E_py_check_annot (mk_var (mk_addr_attr ee_addr "typ" (T_py None)) range, i)) range) flow
                   )
                 ~felse:(fun flow ->
                     Eval.empty_singleton (Flow.bottom_from flow))
@@ -699,7 +699,7 @@ struct
         let abasedaddr, other = TVMap.fold (fun k v (acc_a, acc_nota) ->
             match k with
             | Class ({vkind = V_addr_attr (av, s)}) when compare_addr av a = 0 ->
-              (TVMap.add (Class (mk_addr_attr a' s T_py)) v acc_a, acc_nota)
+              (TVMap.add (Class (mk_addr_attr a' s (T_py None))) v acc_a, acc_nota)
             | _ ->
               (acc_a, TVMap.add k v acc_nota)
           ) cur (TVMap.empty, TVMap.empty) in

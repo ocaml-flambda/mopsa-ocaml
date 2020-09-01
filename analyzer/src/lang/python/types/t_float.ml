@@ -49,7 +49,7 @@ module Domain =
     let eval exp man flow =
       let range = erange exp in
       match ekind exp with
-      | E_constant (C_top (T_float _))
+      | E_constant (C_top (T_py (Some Float _)))
       | E_constant (C_float _)
       | E_constant (C_float_interval _) ->
         Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_float, Some {exp with etyp=(T_float F_DOUBLE)}) range) flow |> OptionExt.return
@@ -103,7 +103,7 @@ module Domain =
                     man flow
                     ~fthen:(fun flow ->
                         assume
-                          (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) ~etyp:(T_float F_DOUBLE) range) man flow
+                          (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) ~etyp:(T_py (Some (Float F_DOUBLE))) range) man flow
                           ~route:(Semantic "U/Numeric")
                           ~fthen:(fun flow -> man.eval (mk_py_true range) flow)
                           ~felse:(fun flow -> man.eval (mk_py_false range) flow)
@@ -122,7 +122,7 @@ module Domain =
                             )
                           ~felse:(fun flow ->
                               debug "compare: %a at %a@\n" pp_expr exp pp_range exp.erange;
-                              let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
+                              let expr = mk_constant ~etyp:(T_py (Some NotImplemented)) C_py_not_implemented range in
                               man.eval   expr flow)
                       )
                     (* ) *)
@@ -150,7 +150,7 @@ module Domain =
                          else
                            Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_float, Some (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) range ~etyp:(T_float F_DOUBLE))) range) flow in
                        if is_arith_div_fun "float" f then
-                         assume (mk_binop (if is_reverse_operator f then e1 else e2) O_eq (mk_zero range) range)
+                         assume (mk_binop ~etyp:(T_py None) (if is_reverse_operator f then e1 else e2) O_eq (mk_zero range) range)
                            man flow
                            ~fthen:(fun flow ->
                              man.exec (Utils.mk_builtin_raise_msg "ZeroDivisionError" "float division by zero" range) flow >>% Eval.empty_singleton
@@ -168,7 +168,7 @@ module Domain =
                                  Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_float, Some (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) range ~etyp:(T_float F_DOUBLE))) range) flow)
                            )
                          ~felse:(fun flow ->
-                           let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
+                           let expr = mk_constant ~etyp:(T_py (Some NotImplemented)) C_py_not_implemented range in
                            man.eval   expr flow)
                        )
                    )
@@ -189,7 +189,7 @@ module Domain =
                      Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_float, Some (mk_unop (Operators.methfun_to_unop f) (extract_oobject el) range ~etyp:(T_float F_DOUBLE))) range) true_flow
                    )
                  ~felse:(fun false_flow ->
-                   let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
+                   let expr = mk_constant ~etyp:(T_py (Some NotImplemented)) C_py_not_implemented range in
                    man.eval   expr false_flow)
                  man flow
              )

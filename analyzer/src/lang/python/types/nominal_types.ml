@@ -52,8 +52,7 @@ struct
     let range = erange exp in
     match ekind exp with
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_class (C_builtin "type", _)}, _)}, [arg], []) ->
-      man.eval   arg flow >>$
-
+      man.eval arg flow >>$
         (fun earg flow ->
            let proceed s = Eval.singleton (mk_py_object (find_builtin s) range) flow in
            match ekind earg with
@@ -122,7 +121,7 @@ struct
                              | _ -> false) mro with
             | Some ({addr_kind = A_py_class (C_annot c_proto, _)}, _) ->
               debug "Protocol case!";
-              let mk_and conds = List.fold_left (fun acc cond -> mk_binop acc O_py_and cond range) (List.hd conds) (List.tl conds) in
+              let mk_and conds = List.fold_left (fun acc cond -> mk_binop ~etyp:(T_py None) acc O_py_and cond range) (List.hd conds) (List.tl conds) in
               let conds = List.map (fun x -> mk_py_hasattr eobj (get_orig_vname x) range) (match c with
                   | C_user c -> c.py_cls_static_attributes
                   | C_annot c -> c.py_cls_a_static_attributes

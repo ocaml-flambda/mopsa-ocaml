@@ -45,12 +45,12 @@ module Domain =
 
     let add_signature funname in_args out_type db =
       let out_type = match out_type with
-        | "bool" -> T_bool
-        | "int" -> T_int
-        | "float" -> T_float F_DOUBLE
-        | "str" -> T_string
-        | "NoneType" -> T_py_none
-        | "NotImplementedType" -> T_py_not_implemented
+        | "bool" -> T_py (Some Bool)
+        | "int" -> T_py (Some Int)
+        | "float" -> T_py (Some (Float F_DOUBLE))
+        | "str" -> T_py (Some Str)
+        | "NoneType" -> T_py (Some NoneType)
+        | "NotImplementedType" -> T_py (Some NotImplemented)
         | _ -> assert false in
       StringMap.add funname {in_args; out_type} db
 
@@ -103,7 +103,7 @@ module Domain =
         Utils.check_instances f man flow range args
           ["float"]
           (fun args flow ->
-             man.eval (mk_expr ~etyp:T_py (E_py_tuple
+             man.eval (mk_expr ~etyp:(T_py None) (E_py_tuple
                                   [mk_py_top (T_float F_DOUBLE) range; mk_py_top T_int range]
                                ) range)  flow
           )
@@ -115,7 +115,7 @@ module Domain =
         Utils.check_instances f man flow range args
           ["float"]
           (fun args flow ->
-             man.eval (mk_expr ~etyp:T_py (E_py_tuple
+             man.eval (mk_expr ~etyp:(T_py None) (E_py_tuple
                                   [mk_py_top (T_float F_DOUBLE) range; mk_py_top (T_float F_DOUBLE) range]
                                ) range)  flow
           )

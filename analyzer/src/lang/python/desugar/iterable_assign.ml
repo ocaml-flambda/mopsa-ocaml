@@ -49,7 +49,7 @@ module Domain =
       | _ -> None
 
     and assign_iter man el exp range flow =
-      let tmp = mktmp () in
+      let tmp = mktmp ~typ:(T_py None) () in
       let assign_iterable = mk_assign (mk_var tmp range) (Utils.mk_builtin_call "iter" [exp] range) range in
       let stmtl =
         List.fold_left (fun acc e ->

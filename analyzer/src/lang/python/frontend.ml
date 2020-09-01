@@ -74,7 +74,7 @@ and from_var (v:Py_parser.Ast.var) =
    *     Exceptions.panic "%d is already %s, conflict with current %s@\n" v.uid (Hashtbl.find tmp v.uid) v.name
    *   else
    *     Hashtbl.add tmp v.uid v.name in *)
-  mk_uniq_var v.name v.uid T_py
+  mk_uniq_var v.name v.uid (T_py None)
 
 (** Translation of a Python statement *)
 and from_stmt (stmt: Py_parser.Ast.stmt) : stmt =
@@ -147,7 +147,7 @@ and from_stmt (stmt: Py_parser.Ast.stmt) : stmt =
         py_func_types_in = List.map from_exp_option f.func_types_in;
         py_func_type_out = from_exp_option f.func_type_out;
         py_func_ret_var =
-          mk_fresh_uniq_var ("ret_" ^ f.func_var.name) T_py ()
+          mk_fresh_uniq_var ("ret_" ^ f.func_var.name) (T_py None) ()
       }
 
     | S_class cls ->
@@ -227,50 +227,50 @@ and from_exp exp =
   let ekind, etyp = match exp.ekind with
     | E_ellipsis ->
       E_constant (C_py_ellipsis),
-      T_py
+      (T_py None)
 
     | E_true ->
       E_constant (Universal.Ast.C_bool true),
-      Universal.Ast.T_bool
+      (T_py None)
 
     | E_false ->
       E_constant (Universal.Ast.C_bool false),
-      Universal.Ast.T_bool
+      (T_py None)
 
     | E_none ->
       E_constant (C_py_none),
-      T_py_none
+      (T_py (Some NoneType))
 
     | E_notimplemented ->
       E_constant (C_py_not_implemented),
-      T_py_not_implemented
+      (T_py (Some NotImplemented))
 
     | E_num (Py_parser.Cst.Int i) ->
       E_constant (Universal.Ast.C_int i),
-      T_py
+      (T_py None)
 
     | E_num (Py_parser.Cst.Float f) ->
       E_constant (Universal.Ast.C_float f),
-      T_py
+      (T_py (Some (Float F_DOUBLE)))
 
     | E_num (Py_parser.Cst.Imag j) ->
       ignore (Str.string_match (Str.regexp "\\(.*\\)j") j 0);
       let j = Str.matched_group 1 j in
       let j = float_of_string j in
       E_constant (Ast.C_py_imag j),
-      T_py_complex
+      (T_py (Some Complex))
 
     | E_str s ->
        E_constant (Universal.Ast.C_string s),
-       T_py
+       (T_py None)
 
     | E_attr (obj, attr) ->
       E_py_attribute (from_exp obj, attr),
-      T_py
+      (T_py None)
 
     | E_id v ->
       E_var (from_var v, None),
-      T_py
+      (T_py None)
 
     | E_binop (left, op, right) ->
       E_binop (
@@ -278,14 +278,14 @@ and from_exp exp =
         from_exp left,
         from_exp right
       ),
-      T_py
+      (T_py None)
 
     | E_unop (op, operand) ->
       E_unop (
         from_unop op,
         from_exp operand
       ),
-      T_py
+      (T_py None)
 
     | E_call (f, args, keywords) ->
       E_py_call (
@@ -293,29 +293,29 @@ and from_exp exp =
         List.map from_exp args,
         List.map (fun (k, v) -> (k, from_exp v)) keywords
       ),
-      T_py
+      (T_py None)
 
     | E_list elts ->
       E_py_list (
         List.map from_exp elts
       ),
-      T_py
+      (T_py None)
 
     | E_index_subscript (obj, index) ->
       E_py_index_subscript (from_exp obj, from_exp index),
-      T_py
+      (T_py None)
 
     | E_slice_subscript (obj,a,b,s) ->
       E_py_slice_subscript(from_exp obj, from_exp a, from_exp b, from_exp s),
-      T_py
+      (T_py None)
 
     | E_yield e ->
       E_py_yield(from_exp e),
-      T_py
+      (T_py None)
 
     | E_yield_from e ->
       E_py_yield_from(from_exp e),
-      T_py
+      (T_py None)
 
     | E_if(test, body, orelse) ->
       E_py_if(
@@ -323,11 +323,11 @@ and from_exp exp =
         from_exp body,
         from_exp orelse
       ),
-      T_py
+      (T_py None)
 
     | E_tuple el ->
       E_py_tuple(List.map from_exp el),
-      T_py
+      (T_py None)
 
     | E_list_comp (e, comprhs) ->
       Ast.E_py_list_comprehension (
@@ -336,14 +336,14 @@ and from_exp exp =
             (from_exp target, from_exp iter, List.map from_exp conds)
           )
       ),
-      T_py
+      (T_py None)
 
     | E_dict (keys, values) ->
       Ast.E_py_dict(
         List.map from_exp keys,
         List.map from_exp values
       ),
-      T_py
+      (T_py None)
 
     | E_lambda l ->
       E_py_lambda {
@@ -351,13 +351,13 @@ and from_exp exp =
         py_lambda_parameters = List.map from_var l.lambda_parameters;
         py_lambda_defaults = List.map from_exp_option l.lambda_defaults;
       },
-      T_py
+      (T_py None)
 
     | E_bytes s ->
-      E_py_bytes s, T_py
+      E_py_bytes s, (T_py None)
 
     | E_set el ->
-      E_py_set(List.map from_exp el), T_py
+      E_py_set(List.map from_exp el), (T_py None)
 
     | E_generator_comp (e,comprhs) ->
       E_py_generator_comprehension (
@@ -366,7 +366,7 @@ and from_exp exp =
             (from_exp target, from_exp iter, List.map from_exp conds)
           )
       ),
-      T_py
+      (T_py None)
 
     | E_set_comp (e,comprhs) ->
       E_py_set_comprehension (
@@ -375,7 +375,7 @@ and from_exp exp =
             (from_exp target, from_exp iter, List.map from_exp conds)
           )
       ),
-      T_py
+      (T_py None)
 
     | E_dict_comp (k,v,comprhs) ->
       E_py_dict_comprehension (
@@ -385,7 +385,7 @@ and from_exp exp =
             (from_exp target, from_exp iter, List.map from_exp conds)
           )
       ),
-      T_py
+      (T_py None)
 
     | E_multi_compare(left, ops, rights) ->
       E_py_multi_compare (
@@ -393,7 +393,7 @@ and from_exp exp =
         List.map from_binop ops,
         List.map from_exp rights
       ),
-      T_py
+      (T_py None)
 
 
   in

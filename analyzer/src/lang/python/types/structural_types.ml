@@ -127,14 +127,14 @@ struct
                                           | E_addr a -> a
                                           | _ -> assert false) addrs in
        let addrs_attrs =
-         fun attr -> List.map (fun addr -> mk_addr_attr addr attr T_py) addrs in
+         fun attr -> List.map (fun addr -> mk_addr_attr addr attr (T_py None)) addrs in
        let ncur = List.fold_left (fun cur addr ->
                       AMap.add addr
                         attrs
                         cur) cur addrs in
        let expand_stmts =
          AttrSet.fold_u (fun attr stmts ->
-             mk_expand_var (mk_addr_attr a attr T_py) (addrs_attrs attr) range :: stmts
+             mk_expand_var (mk_addr_attr a attr (T_py None)) (addrs_attrs attr) range :: stmts
            ) attrs [] in
        set_env T_cur ncur man flow |>
          man.exec (mk_block expand_stmts range) |> OptionExt.return
@@ -151,7 +151,7 @@ struct
                  | None -> newa, remove a' cur, stmts
                  | Some va' ->
                     AttrSet.join newa va', remove a' cur,
-                    AttrSet.fold_u (fun attr stmts -> mk_fold_var (mk_addr_attr a attr T_py) [mk_addr_attr a' attr T_py] range :: stmts) va' stmts
+                    AttrSet.fold_u (fun attr stmts -> mk_fold_var (mk_addr_attr a attr (T_py None)) [mk_addr_attr a' attr (T_py None)] range :: stmts) va' stmts
                 end
              | _ -> assert false
            ) (old_a, cur, []) addrs in
@@ -164,8 +164,8 @@ struct
       let old_a = find a cur in
       let to_rename_stmt = mk_block (AttrSet.fold_u (fun attr renames ->
           mk_rename_var
-                      (mk_addr_attr a attr T_py)
-                      (mk_addr_attr a' attr T_py)
+                      (mk_addr_attr a attr (T_py None))
+                      (mk_addr_attr a' attr (T_py None))
                       range
           :: renames
         ) old_a []) range in
@@ -187,7 +187,7 @@ struct
        let to_remove_stmt =
          mk_block
            (AttrSet.fold_u (fun attr removes ->
-                mk_remove_var (mk_addr_attr a attr T_py) range :: removes) old_a []) range in
+                mk_remove_var (mk_addr_attr a attr (T_py None)) range :: removes) old_a []) range in
        let ncur = remove a cur in
        let flow = set_env T_cur ncur man flow in
        man.exec   to_remove_stmt flow |> OptionExt.return
@@ -334,18 +334,18 @@ struct
             | Some f ->
               man.eval   (mk_var f range) flow
             | None ->
-              let attr_var = mk_addr_attr addr attr T_py in
+              let attr_var = mk_addr_attr addr attr (T_py None) in
               man.eval   (mk_var attr_var range) flow
           end
 
         | A_py_instance _ ->
           (* there should be a positive hasattr before, so we just evaluate the addr_attr var *)
-          let attr_var = mk_addr_attr addr attr T_py in
+          let attr_var = mk_addr_attr addr attr (T_py None) in
           man.eval   (mk_var attr_var range) flow
 
         | ak when addr_kind_find_structural_type ak attr ->
           (* there should be a positive hasattr before, so we just evaluate the addr_attr var *)
-          let attr_var = mk_addr_attr addr attr T_py in
+          let attr_var = mk_addr_attr addr attr (T_py None) in
           man.eval   (mk_var attr_var range) flow
 
         | _ -> Exceptions.panic_at range "ll_getattr: todo %a, attr=%s in@\n%a" pp_addr addr attr (Flow.print man.lattice.print) flow
@@ -379,7 +379,7 @@ struct
          let cur = AMap.add alval ((if alval.addr_mode = STRONG then AttrSet.add_u else AttrSet.add_o) attr old_inst) cur in
          let flow = set_env T_cur cur man flow in
          (* now we create an attribute var *)
-         let attr_var = mk_addr_attr alval attr T_py in
+         let attr_var = mk_addr_attr alval attr (T_py None) in
          man.exec   (mk_assign (mk_var attr_var range) rval range) flow >>%
          man.eval   (mk_py_none range) |>
          OptionExt.return
@@ -435,7 +435,7 @@ struct
           in
           let message =
             if AttrSet.mem_o "args" (match AMap.find_opt iaddr cur with None -> AttrSet.empty | Some x -> x) then
-              man.eval   (mk_var (mk_addr_attr iaddr "args" T_py) range) flow |>
+              man.eval (mk_var (mk_addr_attr iaddr "args" (T_py None)) range) flow |>
               (* FIXME *)
               Eval.apply (fun etuple flow ->
                   let var = List.hd @@ Objects.Tuple.Domain.var_of_eobj etuple in
@@ -463,11 +463,11 @@ struct
                                    if not @@ AttrSet.mem_u attr attrset then
                                      attr ^ " (optional)"
                                    else attr in
-                                 let attr_var = mk_addr_attr addr attr T_py in
+                                 let attr_var = mk_addr_attr addr attr (T_py None) in
                                  debug "asking for var %a" pp_var attr_var;
                                  let value_attr = man.ask (Q_debug_variable_value attr_var) flow in
                                  (attr, value_attr) :: acc) attrset [] in
-           Some {var_value = None; var_value_type = T_py; var_sub_value = Some (Named_sub_value attrs_descr)}
+           Some {var_value = None; var_value_type = (T_py None); var_sub_value = Some (Named_sub_value attrs_descr)}
 
       | _ -> None
 

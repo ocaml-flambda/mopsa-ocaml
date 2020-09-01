@@ -49,13 +49,15 @@ module Domain =
         | S_forget { ekind = E_var _ }
         | S_assign ({ ekind= E_var _ }, _)
         | S_expand ({ekind = E_var _ }, _)
-        | S_fold ({ekind = E_var _}, _)
-        | S_assume _ ->
+        | S_fold ({ekind = E_var _}, _) ->
+         Some (Post.return flow)
+
+      | S_assume e when match etyp e with | T_int | T_float _ -> true | _ -> false ->
          Some (Post.return flow)
 
       | _ -> None
 
-    let eval _ _ _ = None
+    let eval exp man flow = None
 
     let ask : type r. ('a, r) query -> ('a, unit) man -> 'a flow -> r option =
       fun query man flow ->

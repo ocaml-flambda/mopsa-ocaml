@@ -83,7 +83,7 @@ struct
     | A_py_tuple s ->
        let rec process i aux =
          if i = -1 then aux
-         else process (i-1) ((mk_addr_attr a ("tuple[" ^ string_of_int i ^ "]") T_py)::aux)
+         else process (i-1) ((mk_addr_attr a ("tuple[" ^ string_of_int i ^ "]") (T_py None))::aux)
        in process (s-1) []
     | _ -> assert false
 
@@ -107,7 +107,7 @@ struct
           let els_vars = var_of_addr addr_tuple in
           debug "els_vars = %a@.els = %a" (Format.pp_print_list pp_var) els_vars (Format.pp_print_list pp_expr) els;
           let flow = List.fold_left2 (fun acc vari eli ->
-              acc >>% man.exec  
+              acc >>% man.exec
                 (mk_assign (mk_var ~mode:(Some STRONG) vari range) eli range)) (Post.return flow) els_vars els in
           flow >>% Eval.singleton (mk_py_object (addr_tuple, None) range)
         )
@@ -120,12 +120,12 @@ struct
            let tuple = List.hd eargs in
            let isin = List.hd (List.tl eargs) in
            let tuple_vars = var_of_eobj tuple in
-           let mk_comp var = mk_binop (mk_var ~mode:(Some STRONG) var range) O_eq isin range in
+           let mk_comp var = mk_binop ~etyp:(T_py None) (mk_var ~mode:(Some STRONG) var range) O_eq isin range in
            if List.length tuple_vars = 0 then
              man.eval   (mk_py_false range) flow
            else
              let or_expr = List.fold_left (fun acc var ->
-                 mk_binop acc O_py_or (mk_comp var) range
+                 mk_binop ~etyp:(T_py None) acc O_py_or (mk_comp var) range
                ) (mk_comp (List.hd tuple_vars)) (List.tl tuple_vars) in
            man.eval   or_expr flow
         )
@@ -185,7 +185,7 @@ struct
                 let vars_els = var_of_eobj tuple_eobj in
                 match tuple_pos with
                 | Some d when d < List.length vars_els ->
-                   man.exec  
+                   man.exec
                                 (mk_rename (mk_addr tuple_it_addr range)
                                    (mk_addr {tuple_it_addr with addr_kind = Py_list.A_py_iterator ("tuple_iterator", Some (d+1))} range) range) flow >>%
                    man.eval (mk_var ~mode:(Some STRONG) (List.nth vars_els d) range)
@@ -205,8 +205,8 @@ struct
           let addr_tuple = addr_of_expr eaddr_tuple in
           let els_var = var_of_addr addr_tuple in
           let flow = List.fold_left2 (fun flow vari eli ->
-                         flow >>% man.exec  
-                (mk_stmt (S_py_annot (mk_var ~mode:(Some STRONG) vari range, mk_expr ~etyp:T_py (E_py_annot eli) range)) range)
+                         flow >>% man.exec
+                (mk_stmt (S_py_annot (mk_var ~mode:(Some STRONG) vari range, mk_expr ~etyp:(T_py None) (E_py_annot eli) range)) range)
             ) (Post.return flow) els_var i in
           flow >>% Eval.singleton (mk_py_object (addr_tuple, None) range)
         )
@@ -265,7 +265,7 @@ struct
                           | V_addr_attr (_, attr) -> (attr, man.ask (Q_debug_variable_value var) flow)
                           | _ -> assert false) vars_tuple in
        Some {var_value = None;
-             var_value_type = T_py;
+             var_value_type = (T_py None);
              var_sub_value = Some (Named_sub_value contents)}
 
     | _ -> None

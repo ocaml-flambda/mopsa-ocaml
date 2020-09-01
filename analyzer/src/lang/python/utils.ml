@@ -109,7 +109,7 @@ let check_instances_disj ?(arguments_after_check=0) funname man flow range exprs
     | e::es, i::is ->
       let mk_onecond = fun i -> Addr.mk_py_isinstance_builtin e i range in
       let cond = List.fold_left (fun acc el ->
-          mk_binop acc O_py_or (mk_onecond el) range)
+          mk_binop ~etyp:(T_py None) acc O_py_or (mk_onecond el) range)
           (mk_onecond @@ List.hd i) (List.tl i) in
       assume cond man flow
         ~fthen:(aux (pos+1) iexprs es is)
@@ -157,7 +157,7 @@ let bind_list_args ?(cleaners=true) man args flow range (f: var list -> 'b flow 
   let module RangeSet = SetExt.Make(struct type t = range let compare = compare_range end) in
   let stmt, vars, _ = List.fold_left (fun (stmts, vars, argranges) arg ->
                           assert(not @@ RangeSet.mem arg.erange argranges);
-                          let tmp = mk_range_attr_var arg.erange (Format.asprintf "%xd(bla)" (Hashtbl.hash_param 30 100 cs)) T_py in
+                          let tmp = mk_range_attr_var arg.erange (Format.asprintf "%xd(bla)" (Hashtbl.hash_param 30 100 cs)) (T_py None) in
                           (mk_assign (mk_var tmp arg.erange) arg arg.erange) :: stmts, tmp :: vars, RangeSet.add arg.erange argranges
                         ) ([], [], RangeSet.empty) (List.rev args) in
   let stmt = Universal.Ast.mk_block stmt range in

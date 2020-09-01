@@ -55,7 +55,7 @@ struct
              let e =
                (* Initialize globals with the same name of a builtin with its address *)
                if is_builtin_var v then (mk_py_object (find_builtin @@ get_orig_vname v) range)
-               else mk_expr ~etyp:T_py (E_py_undefined true) range
+               else mk_expr ~etyp:(T_py None) (E_py_undefined true) range
              in
              mk_assign (mk_var v range) e range
            ) globals

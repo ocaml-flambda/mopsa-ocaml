@@ -40,6 +40,7 @@ module Domain =
 
     let eval exp man flow =
       let range = erange exp in
+      if etyp exp = (T_py None) then
       match ekind exp with
       | E_unop(O_py_not, e) ->
         man.eval   (Utils.mk_builtin_call "bool" [e] range) flow >>$
@@ -93,7 +94,7 @@ module Domain =
 
       (* E⟦ e1 is not e2 ⟧ *)
       | E_binop(O_py_is_not, e1, e2) ->
-         man.eval (mk_not (mk_binop e1 O_py_is e2 range) range) flow |> OptionExt.return
+         man.eval (mk_not (mk_binop ~etyp:(T_py None) e1 O_py_is e2 range) range) flow |> OptionExt.return
 
       (* E⟦ e1 in e2 ⟧ *)
       | E_binop(O_py_in, e1, e2) ->
@@ -113,12 +114,12 @@ module Domain =
                        assume
                          (Utils.mk_hasattr cls2 "__iter__" range)
                          ~fthen:(fun true_flow ->
-                             let v = mktmp () in
+                             let v = mktmp ~typ:(T_py None) () in
                              let stmt = mk_stmt (S_py_for (
                                  mk_var v range,
                                  e2,
                                  mk_if
-                                   (mk_binop (mk_var v range) O_eq e1 range)
+                                   (mk_binop ~etyp:(T_py None) (mk_var v range) O_eq e1 range)
                                    (mk_stmt S_break range)
                                    (mk_block [] range)
                                    range,
@@ -150,7 +151,7 @@ module Domain =
 
       (* E⟦ e1 in e2 ⟧ *)
       | E_binop(O_py_not_in, e1, e2) ->
-         man.eval (mk_not (mk_binop e1 O_py_in e2 range) range) flow |> OptionExt.return
+         man.eval (mk_not (mk_binop ~etyp:(T_py None) e1 O_py_in e2 range) range) flow |> OptionExt.return
 
       (* E⟦ e1 op e2 op e3 ... ⟧ *)
       | E_py_multi_compare(left, ops, rights) ->
@@ -168,7 +169,7 @@ module Domain =
                  man.eval right flow >>$
                    (fun right flow ->
                      assume
-                       (mk_binop left op right range)
+                       (mk_binop ~etyp:(T_py None) left op right range)
                        ~fthen:(fun true_flow -> aux right true_flow tl)
                        ~felse:(fun false_flow -> Eval.singleton (mk_py_false range) flow)
                        man flow
@@ -178,7 +179,7 @@ module Domain =
            ) |> OptionExt.return
 
       | _ -> None
-
+      else None
 
     let exec _ _ _ = None
 
