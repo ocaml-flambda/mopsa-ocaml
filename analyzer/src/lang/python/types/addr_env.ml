@@ -207,7 +207,7 @@ struct
        |> OptionExt.return
 
     (* S⟦ v = e ⟧ *)
-    | S_assign(({ekind = E_var (v, mode)} as evar), e) ->
+    | S_assign(({ekind = E_var (v, mode)} as evar), e) when match etyp e with T_py _ -> true | _ -> false ->
        man.eval e flow |>
          bind_some
            (fun e flow ->

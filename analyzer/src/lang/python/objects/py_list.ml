@@ -362,10 +362,10 @@ struct
                  let var_els = var_of_eobj list in
                  let length_els = length_var_of_eobj list in
                  assume
-                   (mk_binop
-                      (mk_binop (Utils.extract_oobject index) O_lt (mk_var length_els range) range)
+                   (mk_binop ~etyp:T_int
+                      (mk_binop ~etyp:T_int (Utils.extract_oobject index) O_lt (mk_var length_els range) range)
                       O_log_and
-                      (mk_binop (mk_unop O_minus (mk_var length_els range) ~etyp:T_int range) O_le (Utils.extract_oobject index) range)
+                      (mk_binop ~etyp:T_int (mk_unop O_minus (mk_var length_els range) range) O_le (Utils.extract_oobject index) range)
                       range
                    )
                    ~route:(Semantic "U/Numeric") man flow
@@ -584,7 +584,7 @@ struct
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.pop", _))}, _)} as call, [arg], []) ->
-      let args' = arg :: (mk_int ~typ:T_int (-1) range) :: [] in
+      let args' = arg :: (mk_int ~typ:(T_py (Some Int)) (-1) range) :: [] in
       man.eval {exp with ekind = E_py_call(call, args', [])} flow
       |> OptionExt.return
 
@@ -596,21 +596,21 @@ struct
            let var_els = var_of_eobj list in
            let len_els = length_var_of_eobj list in
            assume
-             (mk_binop
-                (mk_binop (Utils.extract_oobject popindex) O_lt (mk_var len_els range) range)
+             (mk_binop ~etyp:T_int
+                (mk_binop ~etyp:T_int (Utils.extract_oobject popindex) O_lt (mk_var len_els range) range)
                 O_log_and
-                (mk_binop (mk_unop O_minus (mk_var len_els range) ~etyp:T_int range) O_le (Utils.extract_oobject popindex)  range)
+                (mk_binop ~etyp:T_int (mk_unop O_minus (mk_var len_els range)  range) O_le (Utils.extract_oobject popindex)  range)
                 range
              )
              ~route:(Semantic "U/Numeric") man flow
              ~fthen:(fun flow ->
                  flow |>
                  man.exec ~route:(Semantic "U/Numeric") (mk_assign (mk_var len_els range)
-                                             (mk_binop (mk_var len_els range) O_minus (mk_int 1 range) ~etyp:T_int range) range) >>%
+                                             (mk_binop  ~etyp:T_int (mk_var len_els range) O_minus (mk_int 1 range)range) range) >>%
                  man.eval (mk_var var_els range)
                )
              ~felse:(fun flow ->
-               assume (mk_binop (mk_var len_els range) O_eq (mk_int 0 range) range)
+               assume (mk_binop ~etyp:T_int (mk_var len_els range) O_eq (mk_int 0 range) range)
                  ~route:(Semantic "U/Numeric")
                    man flow
                    ~fthen:(fun flow ->
@@ -631,7 +631,7 @@ struct
            let eval_verror = Eval.empty_singleton eval_verror_f in
            let flow = Flow.copy_ctx eval_verror_f flow in
            let eval_none =
-             man.exec (mk_assign len_list (mk_binop ~etyp:(T_py None) len_list O_minus (mk_int ~typ:(T_py None) 1 range) range) range) flow >>%
+             man.exec (mk_assign len_list (mk_binop ~etyp:T_int len_list O_minus (mk_int ~typ:T_int 1 range) range) range) flow >>%
              man.eval (mk_py_none range) in
            Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (eval_none :: eval_verror :: [])
         )
@@ -814,7 +814,7 @@ struct
             man.eval   (mk_var (itseq_of_eobj iterator) range) flow >>$
  (fun list_eobj flow ->
                   let var_els = var_of_eobj list_eobj in
-                  let els = man.eval (mk_expr ~etyp:(T_py None) (E_py_tuple [mk_top T_int range;
+                  let els = man.eval (mk_expr ~etyp:(T_py None) (E_py_tuple [mk_py_top T_int range;
                                                            mk_var var_els range]) range) flow in
                   let flow = Flow.set_ctx (Cases.get_ctx els) flow in
                   let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty_singleton in

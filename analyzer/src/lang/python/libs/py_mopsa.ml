@@ -79,7 +79,7 @@ module Domain =
               let tmp = mktmp ~typ:(T_py None) () in
               let l = Utils.mk_builtin_call "int" [l] range in
               let u = Utils.mk_builtin_call "int" [u] range in
-              man.exec (mk_assign (mk_var tmp range) (mk_top T_int range) range) flow >>%
+              man.exec (mk_assign (mk_var tmp range) (mk_py_top T_int range) range) flow >>%
               man.exec (mk_assume (mk_py_in (mk_var tmp range) l u range) range) >>%
               man.eval (mk_var tmp range) |>
               Cases.add_cleaners [mk_remove_var tmp range] |>
@@ -96,7 +96,7 @@ module Domain =
               let tmp = mktmp ~typ:(T_py None) () in
               let l = Utils.mk_builtin_call "float" [l] range in
               let u = Utils.mk_builtin_call "float" [u] range in
-              man.exec (mk_assign (mk_var tmp range) (mk_top (T_float F_DOUBLE) range) range) flow >>%
+              man.exec (mk_assign (mk_var tmp range) (mk_py_top (T_float F_DOUBLE) range) range) flow >>%
               man.exec (mk_assume (mk_py_in (mk_var tmp range) l u range) range) >>%
               man.eval (mk_var tmp range) |>
               Cases.add_cleaners [mk_remove_var tmp range]

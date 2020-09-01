@@ -196,7 +196,7 @@ module Domain =
                     ~fthen:(fun true_flow ->
                       (* FIXME: best way? *)
                         assume
-                          (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) ~etyp:T_int range) man true_flow
+                          (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) ~etyp:T_string range) man true_flow
                           ~route:(Semantic "U/String")
                           ~fthen:(fun flow -> man.eval (mk_py_true range) flow)
                           ~felse:(fun flow -> man.eval (mk_py_false range) flow)
