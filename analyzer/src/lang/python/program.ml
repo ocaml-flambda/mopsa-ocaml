@@ -70,7 +70,7 @@ struct
       let range = tag_range range "__name__ assignment" in
       mk_assign
         (mk_var v range)
-        (mk_constant (Universal.Ast.C_string "__main__") ~etyp:Universal.Ast.T_string range)
+        (mk_constant (Universal.Ast.C_string "__main__") ~etyp:(T_py (Some Str)) range)
         range
     in
     man.exec stmt flow1 >>% fun flow2 ->
@@ -81,7 +81,7 @@ struct
       let range = tag_range range "__file__ assignment" in
         mk_assign
           (mk_var v range)
-          (mk_constant (Universal.Ast.C_string (get_range_file range)) ~etyp:Universal.Ast.T_string range)
+          (mk_constant (Universal.Ast.C_string (get_range_file range)) ~etyp:(T_py (Some Str)) range)
           range
     in
     man.exec stmt flow2 >>% fun flow3 ->

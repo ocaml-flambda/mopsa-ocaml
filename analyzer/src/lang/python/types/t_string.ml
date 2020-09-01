@@ -127,10 +127,13 @@ module Domain =
         )
 
 
-
+    let is_py_exp e = match etyp e with
+      | T_py _ -> true
+      | _ -> false
 
     let rec eval exp man flow =
-      let range = erange exp in
+      if is_py_exp exp then
+        let range = erange exp in
       match ekind exp with
       | E_constant (C_string _)
       | E_constant (C_top (T_py (Some Str))) ->
@@ -409,12 +412,13 @@ module Domain =
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__len__" as f, _))}, _)}, args, []) ->
         Utils.check_instances f man flow range args ["str"]
           (fun eargs flow ->
-             man.eval ~route:(Semantic "U/String") (mk_expr ~etyp:(T_py None) (E_len (extract_oobject @@ List.hd eargs)) range) flow >>$
- (fun l flow -> man.eval   l flow)
+             man.eval ~route:(Semantic "U/String") (mk_expr ~etyp:T_string (E_len (extract_oobject @@ List.hd eargs)) range) flow >>$
+ (fun l flow -> man.eval   {l with etyp=(T_py (Some Int))} flow)
           )
         |> OptionExt.return
 
       | _ -> None
+      else None
 
     let exec _ _ _ = None
     let ask _ _ _ = None
