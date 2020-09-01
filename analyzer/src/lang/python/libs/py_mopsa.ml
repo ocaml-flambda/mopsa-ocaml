@@ -106,13 +106,18 @@ module Domain =
       (* Calls to mopsa.assert_equal function *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.assert_equal", _))}, _)}, [x; y], []) ->
          let range = erange exp in
-         check man (mk_binop ~etyp:(T_py None) x O_eq y (tag_range range "eq")) range flow
+         assume (mk_binop ~etyp:(T_py None) x O_eq y (tag_range range "eq"))
+           man flow
+           ~fthen:(check man (mk_true range) range)
+           ~felse:(check man (mk_false range) range)
          |> OptionExt.return
 
       (* Calls to mopsa assert function *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.massert", _))}, _)}, [x], []) ->
          let range = erange exp in
-         check man x range flow
+         assume x man flow
+           ~fthen:(check man (mk_true range) range)
+           ~felse:(check man (mk_false range) range)
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.assert_exists", _))}, _)}, [cond], [])  ->
