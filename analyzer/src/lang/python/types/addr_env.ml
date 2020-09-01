@@ -468,9 +468,9 @@ struct
        let flow = set_env T_cur ncur man flow in
        begin match akind a with
        | A_py_instance _ ->
-          man.exec   stmt flow
+          man.exec ~route:Below stmt flow
        | ak when Objects.Data_container_utils.is_data_container ak ->
-          man.exec   stmt flow
+          man.exec ~route:Below stmt flow
        | _ -> Post.return flow
        end |> OptionExt.return
 

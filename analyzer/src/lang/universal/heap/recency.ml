@@ -163,7 +163,7 @@ struct
       let old = { addr with addr_mode = WEAK } in
       let pool = get_env T_cur man flow in
       (* Inform domains to remove addr *)
-      man.exec (mk_remove_addr addr stmt.srange) flow >>%? fun flow' -> 
+      man.exec (mk_remove_addr addr stmt.srange) flow >>%? fun flow' ->
       if not (Pool.mem old pool) then
         (* only recent is present : remove it from the pool and return *)
         map_env T_cur (Pool.remove addr) man flow' |>
