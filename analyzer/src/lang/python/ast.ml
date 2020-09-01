@@ -497,7 +497,7 @@ let mk_py_object_attr obj attr ?(etyp=(T_py None)) range =
   mk_py_attr (mk_py_object obj range) attr ~etyp range
 
 let mk_py_bool b range =
-  mk_constant (C_bool b) ~etyp:(T_py None) range
+  mk_constant (C_bool b) ~etyp:(T_py (Some Bool)) range
 
 let mk_py_true = mk_py_bool true
 

@@ -38,14 +38,19 @@ module Domain =
 
     let init _ _ flow = flow
 
+    let is_py_exp e =
+      match etyp e with
+      | T_py _ -> true
+      | _ -> false
+
     let eval exp man flow =
       let range = erange exp in
-      if etyp exp = (T_py None) then
+      if is_py_exp exp then
       match ekind exp with
       | E_unop(O_py_not, e) ->
         man.eval   (Utils.mk_builtin_call "bool" [e] range) flow >>$
           (fun ee flow ->
-            man.eval   (mk_not ee range) flow)
+            man.eval (mk_not {ee with etyp=(T_py (Some Bool))} range) flow)
         |> OptionExt.return
 
         (* E⟦ e1 and e2 ⟧ *)

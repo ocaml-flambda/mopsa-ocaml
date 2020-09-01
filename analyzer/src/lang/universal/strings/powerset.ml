@@ -98,10 +98,13 @@ struct
                 ) a2 acc) a1 empty
       end
     | O_mult -> assert false
-    | _  -> failwith "todo"
+    | O_eq | O_lt | O_le | O_ge | O_gt ->
+       Top.TOP
+    | _  ->
+       failwith "todo binop"
 
-  let filter b t a =
-      failwith "todo"
+  let filter b t a = if t = T_string then a else assert false
+      (* failwith "todo filter" *)
 
   let bwd_unop _ _ _ _ = failwith "ni"
   let bwd_binop _ _ _ _  = failwith "ni"
@@ -229,7 +232,7 @@ struct
                          Value.add (repeat str (Z.to_int nb)) acc
                     ) acc (ItvUtils.IntItv.to_list @@ Bot.bot_to_exn itv_e2)
                 ) strings_e1 Value.empty in
-            Eval.join_list ~empty:(fun () -> failwith "todo")
+            Eval.join_list ~empty:(fun () -> failwith "emptycase binop")
               (Value.fold (fun s acc -> (Eval.singleton (mk_string s range) flow) :: acc) results [])
           else
             Eval.singleton (mk_top T_string range) flow
@@ -241,7 +244,7 @@ struct
         (fun e flow ->
           let cur = get_env T_cur man flow in
           let strings_e = Nonrel.eval e cur |> OptionExt.none_to_exn |> snd in
-          Eval.join_list ~empty:(fun () -> failwith "todo")
+          Eval.join_list ~empty:(fun () -> failwith "empty length")
             (if Value.is_top strings_e then
                man.eval ~route:(Semantic "U/Numeric") (mk_top T_int range) flow :: []
              else Value.fold (fun s acc -> (man.eval ~route:(Semantic "U/Numeric") (mk_int (String.length s) range) flow) :: acc) strings_e [])

@@ -220,7 +220,7 @@ struct
                                                  let var_els = var_of_eobj list in
                                                  let new_length = mk_var (length_var_of_addr addr_list) range in
                                                  flow |>
-                                                   man.exec   (mk_assign (mk_var slicedlist_var range) (mk_var var_els range) range) >>%
+                                                   man.exec (mk_assign (mk_var slicedlist_var range) (mk_var var_els range) range) >>%
                                                    switch
                                                      [
                                                        [
@@ -272,10 +272,10 @@ struct
                                                              range) flow
                                                        );
 
-                                                       [mk_binop ~etyp:(T_py None)
-                                                          (mk_binop ~etyp:(T_py None) (mk_binop ~etyp:T_int step O_lt (mk_zero ~typ:T_int range) range) O_log_and (mk_not (mk_binop ~etyp:T_int stop O_lt start range) range) range)
+                                                       [mk_binop ~etyp:T_int
+                                                          (mk_binop ~etyp:T_int (mk_binop ~etyp:T_int step O_lt (mk_zero ~typ:T_int range) range) O_log_and (mk_not (mk_binop ~etyp:T_int stop O_lt start range) range) range)
                                                           O_log_or
-                                                          (mk_binop ~etyp:(T_py None) (mk_not (mk_binop ~etyp:T_int step O_lt (mk_zero ~typ:T_int range) range) range) O_log_and (mk_not (mk_binop ~etyp:T_int start O_lt stop range) range) range)
+                                                          (mk_binop ~etyp:T_int (mk_not (mk_binop ~etyp:T_int step O_lt (mk_zero ~typ:T_int range) range) range) O_log_and (mk_not (mk_binop ~etyp:T_int start O_lt stop range) range) range)
                                                           range
                                                        ],
                                                        (fun flow -> man.exec ~route:(Semantic "U/Numeric")

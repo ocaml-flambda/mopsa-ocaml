@@ -511,7 +511,7 @@ struct
   let eval exp man flow =
     let range = erange exp in
     match ekind exp with
-    | E_var (v, mode) when etyp exp = (T_py None) ->
+    | E_var (v, mode) when match etyp exp with T_py _ -> true | _ -> false ->
       let cur = get_env T_cur man flow in
       if AMap.mem v cur then
         let aset = AMap.find v cur in
@@ -605,16 +605,15 @@ struct
     | E_unop(O_log_not, e') when match etyp exp with T_py _ -> true | _ -> false ->
       (* bool is called in desugar/bool *)
       man.eval   e' flow >>$
-
         (fun ee' flow ->
            match ekind ee' with
            (* FIXME: weird cases *)
            | E_constant (C_top (T_py (Some Bool))) ->
              Eval.singleton ee' flow
-           | E_constant (C_bool true) ->
-             Eval.singleton (mk_py_false range) flow
-           | E_constant (C_bool false) ->
-             Eval.singleton (mk_py_true range) flow
+           (* | E_constant (C_bool true) ->
+            *   Eval.singleton (mk_py_false range) flow
+            * | E_constant (C_bool false) ->
+            *   Eval.singleton (mk_py_true range) flow *)
            | E_py_object (a, _) when compare_addr a (OptionExt.none_to_exn !addr_true) = 0 ->
              man.eval   (mk_py_false range) flow
            | E_py_object (a, _) when compare_addr a (OptionExt.none_to_exn !addr_false) = 0 ->
