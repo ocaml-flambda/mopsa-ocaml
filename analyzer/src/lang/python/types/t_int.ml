@@ -186,10 +186,12 @@ struct
                              man.exec (Utils.mk_builtin_raise_msg "ZeroDivisionError" "division by zero" range) flow >>% Eval.empty_singleton
                            )
                            ~felse:(fun flow ->
+                             let casted_e1 = mk_unop ~etyp:(T_float F_DOUBLE) O_cast (Utils.extract_oobject e1) range in
+                             let casted_e2 = mk_unop ~etyp:(T_float F_DOUBLE) O_cast (Utils.extract_oobject e2) range in
                              if is_reverse_operator f then
-                               Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_float, Some (mk_binop (Utils.extract_oobject e2) (Operators.methfun_to_binop f) (Utils.extract_oobject e1) range ~etyp:(T_float F_DOUBLE))) range) flow
+                               Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_float, Some (mk_binop casted_e2 (Operators.methfun_to_binop f) casted_e1 range ~etyp:(T_float F_DOUBLE))) range) flow
                              else
-                               Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_float, Some (mk_binop (Utils.extract_oobject e1) (Operators.methfun_to_binop f) (Utils.extract_oobject e2) range ~etyp:(T_float F_DOUBLE))) range) flow
+                               Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_float, Some (mk_binop casted_e1 (Operators.methfun_to_binop f) casted_e2 range ~etyp:(T_float F_DOUBLE))) range) flow
                            )
                       | _ ->
                          let res =
