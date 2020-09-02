@@ -287,7 +287,7 @@ struct
        end)
        |> OptionExt.return
 
-    | S_assume e when etyp e = (T_py None) ->
+    | S_assume e when match etyp e with T_py _ -> true | _ -> false ->
        man.eval e flow |>
          bind_some (fun expr flow ->
              match ekind expr with
@@ -389,12 +389,12 @@ struct
        begin match akind a with
        | A_py_instance {addr_kind = A_py_class (C_annot _, _)} ->
           let skind = S_expand ({e1 with ekind = E_py_annot e1}, addrs) in
-          man.exec   stmt flow >>%
+          man.exec ~route:Below stmt flow >>%
             man.exec   {stmt with skind}
        | A_py_instance _ ->
-          man.exec   stmt flow
+          man.exec ~route:Below stmt flow
        | ak when Objects.Data_container_utils.is_data_container ak ->
-          man.exec   stmt flow
+          man.exec ~route:Below stmt flow
        | _ -> Post.return flow
        end
        |> OptionExt.return
@@ -603,27 +603,34 @@ struct
       Eval.singleton (mk_py_object (OptionExt.none_to_exn !addr_notimplemented, None) range) flow |> OptionExt.return
 
     | E_unop(O_log_not, e') when match etyp exp with T_py _ -> true | _ -> false ->
-      (* bool is called in desugar/bool *)
-      man.eval   e' flow >>$
-        (fun ee' flow ->
+      begin match ekind e' with
+      | E_constant (C_top (T_py (Some Bool))) ->
+         Eval.singleton e' flow |> OptionExt.return
+      | E_py_object (a, _) when compare_addr a (OptionExt.none_to_exn !addr_true) = 0 ->
+         Eval.singleton (mk_py_object (OptionExt.none_to_exn !addr_false, Some (mk_int 0 ~typ:T_int range)) range) flow |> OptionExt.return
+      | E_py_object (a, _) when compare_addr a (OptionExt.none_to_exn !addr_false) = 0 ->
+         Eval.singleton (mk_py_object (OptionExt.none_to_exn !addr_true, Some (mk_int 1 ~typ:T_int range)) range) flow |> OptionExt.return
+      | E_py_object (a, _) when compare_addr a (OptionExt.none_to_exn !addr_bool_top) = 0 ->
+         Eval.singleton e' flow |> OptionExt.return
+      | _ ->
+       (* bool is called in desugar/bool *)
+       man.eval e' flow >>$
+         (fun ee' flow ->
            match ekind ee' with
            (* FIXME: weird cases *)
            | E_constant (C_top (T_py (Some Bool))) ->
-             Eval.singleton ee' flow
-           (* | E_constant (C_bool true) ->
-            *   Eval.singleton (mk_py_false range) flow
-            * | E_constant (C_bool false) ->
-            *   Eval.singleton (mk_py_true range) flow *)
+              Eval.singleton ee' flow
            | E_py_object (a, _) when compare_addr a (OptionExt.none_to_exn !addr_true) = 0 ->
-             man.eval   (mk_py_false range) flow
+              Eval.singleton (mk_py_object (OptionExt.none_to_exn !addr_false, Some (mk_int 0 ~typ:T_int range)) range) flow
            | E_py_object (a, _) when compare_addr a (OptionExt.none_to_exn !addr_false) = 0 ->
-             man.eval   (mk_py_true range) flow
+              Eval.singleton (mk_py_object (OptionExt.none_to_exn !addr_true, Some (mk_int 1 ~typ:T_int range)) range) flow
            | E_py_object (a, _) when compare_addr a (OptionExt.none_to_exn !addr_bool_top) = 0 ->
-             Eval.singleton ee' flow
+              Eval.singleton ee' flow
            | _ ->
-             panic_at range "o_log_not ni on %a" pp_expr ee'
-        )
-      |> OptionExt.return
+              panic_at range "o_log_not ni on %a" pp_expr ee'
+         )
+       |> OptionExt.return
+      end
 
     | E_binop(O_py_is, e1, e2) ->
       bind_list [e1;e2] (man.eval  ) flow |>

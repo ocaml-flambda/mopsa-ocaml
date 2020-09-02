@@ -90,9 +90,10 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("isinstance", _))}, _)}, [obj; attr], []) ->
       (* TODO: if v is a class inheriting from protocol we should check the attributes *)
-      bind_list [obj; attr] (man.eval   ) flow |>
+      (* optim: obj may point to different things, but attr usually doesn't, so we evaluate it first *)
+      bind_list [attr; obj] (man.eval) flow |>
       bind_some (fun evals flow ->
-          let eobj, eattr = match evals with [e1; e2] -> e1, e2 | _ -> assert false in
+          let eattr, eobj= match evals with [e1; e2] -> e1, e2 | _ -> assert false in
           debug "now isinstance(%a, %a) at range %a@\n" pp_expr eobj pp_expr eattr pp_range range (*(Flow.print man.lattice.print) flow*);
           let addr_obj = addr_of_eobject eobj in
           let addr_attr = addr_of_eobject eattr in
