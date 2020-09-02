@@ -894,13 +894,13 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bytes.split", _))}, _)} as call, [str], []) ->
       (* rewrite into str.split(str, " ", -1) *)
-      let args' = (mk_py_top (T_py (Some Bytes)) range) :: (mk_int (-1) ~typ:T_int range) :: [] in
+      let args' = (mk_py_top (T_py (Some Bytes)) range) :: (mk_int (-1) ~typ:(T_py (Some Int)) range) :: [] in
       man.eval {exp with ekind = E_py_call(call, str :: args', [])} flow
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bytes.split", _))}, _)} as call , [str; split], []) ->
       (* rewrite into str.split(str, split, -1) *)
-      let args' = (mk_int (-1) ~typ:T_int range) :: [] in
+      let args' = (mk_int (-1) ~typ:(T_py (Some Int)) range) :: [] in
       man.eval {exp with ekind = E_py_call(call, str :: split :: args', [])} flow
       |> OptionExt.return
 

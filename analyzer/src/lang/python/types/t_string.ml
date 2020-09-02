@@ -50,7 +50,14 @@ module Domain =
       StringMap.add funname {in_args; out_type} db
 
   let extract_oobject e = match ekind e with
-    | E_py_object (_, Some a) -> a
+    | E_py_object (_, Some a) ->
+       begin match ekind a with
+       | E_constant (C_top (T_py (Some Str))) -> {a with ekind = E_constant (C_top T_string)}
+       | E_constant (C_top (T_py (Some Int))) -> {a with ekind = E_constant (C_top T_int)}
+       | E_constant (C_top (T_py (Some Bool))) -> {a with ekind = E_constant (C_top T_bool)}
+       | E_constant (C_top (T_py (Some Float f))) -> {a with ekind = E_constant (C_top (T_float f))}
+       | _ -> a
+       end
     | _ -> assert false
 
   let stub_base =
@@ -365,7 +372,7 @@ module Domain =
             assume (mk_binop ~etyp:(T_py None) eencoding O_eq {(mk_string "utf-8" range) with etyp=(T_py (Some Str))} range) man flow
 
               ~fthen:(fun flow ->
-                man.eval   (mk_expr ~etyp:(T_py None) (E_constant (C_top T_string)) range) flow)
+                man.eval   (mk_expr ~etyp:(T_py None) (E_constant (C_top (T_py (Some Str)))) range) flow)
               ~felse:(fun flow ->
                 let msg = Format.asprintf "unknown encoding: %a" pp_expr eencoding in
                 man.exec (Utils.mk_builtin_raise_msg "LookupError" msg range) flow >>%
