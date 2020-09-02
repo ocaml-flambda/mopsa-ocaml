@@ -269,7 +269,7 @@ struct
                [mk_py_call (mk_py_object (find_builtin "range") range)
                   [ mk_binop ~etyp:(T_py None) (mk_binop ~etyp:(T_py None) start O_minus step range) O_plus (mk_binop ~etyp:(T_py None) len O_mult step range) range;
                     mk_binop ~etyp:(T_py None) start O_minus step range;
-                    mk_unop O_minus step range
+                    mk_unop ~etyp:(T_py None) O_minus step range
                   ]
                   range]
                range) flow
