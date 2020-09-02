@@ -87,7 +87,7 @@ module Domain =
       (* Other attributes *)
       | E_py_attribute (e, attr) ->
          debug "%a@\n" pp_expr expr;
-         let c_attr = mk_constant ~etyp:T_string (C_string attr) range in
+         let c_attr = mk_constant ~etyp:(T_py (Some Str)) (C_string attr) range in
          man.eval e   flow >>$
  (fun exp flow ->
              match ekind exp with

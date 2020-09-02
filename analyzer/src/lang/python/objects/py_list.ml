@@ -871,7 +871,7 @@ struct
     (* the last case of str.split uses this list abstraction so every case is here... *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.split", _))}, _)} as call, [str], []) ->
       (* rewrite into str.split(str, " ", -1) *)
-      let args' = (mk_constant ~etyp:T_string (C_string " ") range) :: (mk_int (-1) ~typ:(T_py None) range) :: [] in
+      let args' = (mk_constant ~etyp:(T_py (Some Str)) (C_string " ") range) :: (mk_int (-1) ~typ:(T_py None) range) :: [] in
       man.eval {exp with ekind = E_py_call(call, str :: args', [])} flow
       |> OptionExt.return
 

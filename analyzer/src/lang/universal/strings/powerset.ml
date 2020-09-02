@@ -98,12 +98,15 @@ struct
                 ) a2 acc) a1 empty
       end
     | O_mult -> assert false
-    | O_eq | O_lt | O_le | O_ge | O_gt ->
+    | O_eq | O_lt | O_le | O_ge | O_gt | O_ne ->
+       debug "binop %a %a %a %a" pp_operator op pp_typ t StringPower.print a1 StringPower.print a2;
        Top.TOP
     | _  ->
-       failwith "todo binop"
+       panic "todo binop %a" pp_operator op
 
-  let filter b t a = if t = T_string then a else assert false
+  let filter b t a =
+    debug "filter %b %a %a" b pp_typ t StringPower.print a;
+    if t = T_string then a else assert false
       (* failwith "todo filter" *)
 
   let bwd_unop _ _ _ _ = failwith "ni"
@@ -182,10 +185,8 @@ struct
   let exec stmt (man: ('a, t) Framework.Core.Manager.man) (flow: 'a flow) : 'a post option =
     match skind stmt with
     | S_assign (x, e) when etyp e = T_string ->
-      debug "ok";
       man.eval ~route:(Semantic "U/String") e flow |>
       bind_some_opt (fun ee flow ->
-          debug "ee = %a" pp_expr ee;
           let cur = get_env T_cur man flow in
           let uctx = Flow.get_unit_ctx flow in
           let ocur = Nonrel.exec {stmt with skind = S_assign(x, ee)} man uctx cur in
@@ -268,7 +269,6 @@ struct
     | _ ->
        let cur = get_env T_cur man flow in
        if etyp expr = T_string then
-         let () = debug "expr = %a" pp_expr expr in
          Option.bind (Nonrel.eval expr cur) (fun (_, value) ->
              Eval.join_list ~empty:(fun () -> assert false)
                (if Value.is_top value then [Eval.singleton (mk_top T_string range) flow]

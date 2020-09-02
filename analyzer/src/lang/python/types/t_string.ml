@@ -413,7 +413,11 @@ module Domain =
         Utils.check_instances f man flow range args ["str"]
           (fun eargs flow ->
              man.eval ~route:(Semantic "U/String") (mk_expr ~etyp:T_string (E_len (extract_oobject @@ List.hd eargs)) range) flow >>$
- (fun l flow -> man.eval   {l with etyp=(T_py (Some Int))} flow)
+               (fun l flow -> match ekind l with
+                              | E_constant (C_top T_int) ->
+                                 man.eval {l with ekind = E_constant (C_top (T_py (Some Int))); etyp=(T_py (Some (Int)))} flow
+                              | _ ->
+                                 man.eval {l with etyp=(T_py (Some Int))} flow)
           )
         |> OptionExt.return
 
