@@ -70,10 +70,10 @@ module Domain = struct
       in
 
       man.eval   (mk_py_type e1 range) flow >>$
- (fun ocls1 flow ->
+      (fun ocls1 flow ->
       let cls1 = object_of_expr ocls1 in
       man.eval   (mk_py_type e2 range) flow >>$
- (fun ocls2 flow ->
+      (fun ocls2 flow ->
       let cls2 = object_of_expr ocls2 in
       let is_same_type = compare_py_object cls1 cls2 = 0 in
 

@@ -334,7 +334,7 @@ module Domain =
 
       | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.encode", _))}, _)}) as caller, [arg], [])
       | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bytes.decode", _))}, _)}) as caller, [arg], []) ->
-        let encoding = mk_string "utf-8" range in
+        let encoding = {(mk_string "utf-8" range) with etyp=(T_py (Some Str))} in
         eval {exp with ekind = E_py_call(caller, [arg; encoding], [])} man flow
 
       | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.encode" as f, _))}, _)}), [arg; encoding], []) ->
@@ -343,7 +343,7 @@ module Domain =
           ["str"; "str"]
           (fun eargs flow ->
             let earg, eencoding = match eargs with [e1;e2] -> e1, e2 | _ -> assert false in
-            assume (mk_binop ~etyp:(T_py None) eencoding O_eq (mk_string "utf-8" range) range) man flow
+            assume (mk_binop ~etyp:(T_py None) eencoding O_eq {(mk_string "utf-8" range) with etyp=(T_py (Some Str))} range) man flow
 
               ~fthen:(fun flow ->
                 man.eval   (mk_expr ~etyp:(T_py None) (E_constant (C_top (T_py (Some Bytes)))) range) flow
@@ -362,7 +362,7 @@ module Domain =
           ["bytes"; "str"]
           (fun eargs flow ->
             let earg, eencoding = match eargs with [e1;e2] -> e1, e2 | _ -> assert false in
-            assume (mk_binop ~etyp:(T_py None) eencoding O_eq (mk_string "utf-8" range) range) man flow
+            assume (mk_binop ~etyp:(T_py None) eencoding O_eq {(mk_string "utf-8" range) with etyp=(T_py (Some Str))} range) man flow
 
               ~fthen:(fun flow ->
                 man.eval   (mk_expr ~etyp:(T_py None) (E_constant (C_top T_string)) range) flow)

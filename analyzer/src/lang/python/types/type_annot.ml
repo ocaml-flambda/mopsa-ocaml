@@ -576,7 +576,7 @@ struct
                 | _ -> false) cmro ->
           let attrs_check_expr =
             if c.py_cls_a_static_attributes = [] then mk_py_true range else
-              List.fold_left (fun acc el -> mk_binop (mk_py_hasattr e (get_orig_vname el) range) O_py_and acc range)
+              List.fold_left (fun acc el -> mk_binop ~etyp:(T_py (Some Bool)) (mk_py_hasattr e (get_orig_vname el) range) O_py_and acc range)
                 (mk_py_hasattr e (get_orig_vname (List.hd c.py_cls_a_static_attributes)) range)
                 (List.tl c.py_cls_a_static_attributes) in
           man.eval   attrs_check_expr flow |> OptionExt.return
@@ -624,7 +624,7 @@ struct
             | E_py_tuple t -> t
             | _ -> assert false in
           let mk_cannot a = {exp with ekind = E_py_check_annot(e, a)} in
-          let mk_or e1 e2 = mk_binop e1 O_py_or e2 range in
+          let mk_or e1 e2 = mk_binop ~etyp:(T_py (Some Bool)) e1 O_py_or e2 range in
           let conds = List.fold_left (fun acc elu ->
               mk_or acc (mk_cannot elu)
             ) (mk_cannot @@ List.hd types) (List.tl types) in
@@ -634,7 +634,7 @@ struct
 
         | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)}, i) when get_orig_vname c.py_cls_a_var = "Optional" ->
           let mk_cannot a = {exp with ekind = E_py_check_annot(e, a)} in
-          man.eval   (mk_binop (mk_cannot i) O_py_or (mk_cannot (mk_py_none range)) range) flow |> OptionExt.return
+          man.eval   (mk_binop ~etyp:(T_py (Some Bool)) (mk_cannot i) O_py_or (mk_cannot (mk_py_none range)) range) flow |> OptionExt.return
 
         | E_py_index_subscript ({ekind = E_py_object _}, e2) ->
           None

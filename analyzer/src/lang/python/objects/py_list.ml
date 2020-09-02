@@ -190,7 +190,7 @@ struct
                               range
                            )
                            ~route:(Semantic "U/Numeric") man flow
-                           ~fthen:(man.eval   (mk_var var_els range))
+                           ~fthen:(man.eval (mk_var var_els range))
                            ~felse:(fun flow ->
                              man.exec (Utils.mk_builtin_raise "IndexError" range) flow >>%
                                Eval.empty_singleton
@@ -365,7 +365,7 @@ struct
                    (mk_binop ~etyp:T_int
                       (mk_binop ~etyp:T_int (Utils.extract_oobject index) O_lt (mk_var length_els range) range)
                       O_log_and
-                      (mk_binop ~etyp:T_int (mk_unop O_minus (mk_var length_els range) range) O_le (Utils.extract_oobject index) range)
+                      (mk_binop ~etyp:T_int (mk_unop ~etyp:T_int O_minus (mk_var length_els range) range) O_le (Utils.extract_oobject index) range)
                       range
                    )
                    ~route:(Semantic "U/Numeric") man flow
@@ -599,7 +599,7 @@ struct
              (mk_binop ~etyp:T_int
                 (mk_binop ~etyp:T_int (Utils.extract_oobject popindex) O_lt (mk_var len_els range) range)
                 O_log_and
-                (mk_binop ~etyp:T_int (mk_unop O_minus (mk_var len_els range)  range) O_le (Utils.extract_oobject popindex)  range)
+                (mk_binop ~etyp:T_int (mk_unop ~etyp:T_int O_minus (mk_var len_els range)  range) O_le (Utils.extract_oobject popindex)  range)
                 range
              )
              ~route:(Semantic "U/Numeric") man flow
@@ -953,7 +953,7 @@ struct
           let stmt = mk_stmt (S_py_annot (mk_var els_var range, mk_expr ~etyp:(T_py None) (E_py_annot i) range)) range in
           flow |>
             man.exec   stmt >>%
-            man.exec ~route:(Semantic "U/Numeric") (mk_assign (mk_var len_var range) (mk_py_top T_int range) range) >>%
+            man.exec ~route:(Semantic "U/Numeric") (mk_assign (mk_var len_var range) (mk_top T_int range) range) >>%
             Eval.singleton (mk_py_object (addr_list, None) range)
         )
       |> OptionExt.return

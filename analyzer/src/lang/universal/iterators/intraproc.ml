@@ -82,7 +82,7 @@ struct
       Post.return flow |>
       OptionExt.return
 
-    | S_assign(x,e) ->
+    | S_assign(x,e) when is_numeric_type (etyp e) ->
       man.eval e flow >>$? fun e flow ->
       man.exec (mk_assign x e stmt.srange) flow ~route:Below |>
       OptionExt.return

@@ -357,6 +357,7 @@ struct
         | E_constant (C_string s) -> s
         | E_py_object (_, Some {ekind = E_constant (C_string s)}) -> s
         | _ -> assert false in
+      debug "lval=%a, rval=%a" pp_expr lval pp_expr rval;
       begin match ekind lval, ekind rval with
       | E_py_object ({addr_kind = A_py_class (C_user c, b)}, _ ), _ when List.exists (fun v -> get_orig_vname v = attr) c.py_cls_static_attributes ->
          let var = List.find (fun v -> get_orig_vname v = attr) c.py_cls_static_attributes in
@@ -364,8 +365,6 @@ struct
          man.exec (mk_assign (mk_var var range) rval range) flow >>%
          man.eval   (mk_py_none range) |>
          OptionExt.return
-      | E_py_object ({addr_kind = A_py_class (_)}, _ ), E_py_object (arval, _) ->
-         Exceptions.panic_at range "Attr assignment on non user-defined classes not supported yet.@\n"
       | E_py_object (alval, _), _ ->
          debug "in here!@\n";
          let cur = get_env T_cur man flow in
@@ -407,8 +406,8 @@ struct
       end
 
     | E_py_ll_setattr(e, attr, o) ->
-      man.eval   e flow >>$
- (fun e flow -> man.eval {exp with ekind = E_py_ll_setattr(e, attr, o)} flow) |> OptionExt.return
+      man.eval e flow >>$
+        (fun e flow -> man.eval {exp with ekind = E_py_ll_setattr(e, attr, o)} flow) |> OptionExt.return
 
     | _ ->
       None

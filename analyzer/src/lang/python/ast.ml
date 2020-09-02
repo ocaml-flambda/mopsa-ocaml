@@ -457,7 +457,7 @@ let mk_py_in ?(strict = false) ?(left_strict = false) ?(right_strict = false) v 
       erange
 
 let mk_py_not exp range =
-  mk_unop O_py_not exp range
+  mk_unop ~etyp:(T_py (Some Bool)) O_py_not exp range
 
 let mk_except typ name body =
   {

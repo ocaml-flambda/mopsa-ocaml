@@ -254,7 +254,7 @@ let mk_py_z_interval l u range =
   mk_z_interval l u range
 
 let mk_py_float_interval l u range =
-  mk_float_interval l u range
+  {(mk_float_interval l u range) with etyp=(T_py (Some (Float F_DOUBLE)))}
 
 let mk_py_issubclass e1 e2 range =
   mk_py_call (mk_py_object (find_builtin "issubclass") range) [e1; e2] range
