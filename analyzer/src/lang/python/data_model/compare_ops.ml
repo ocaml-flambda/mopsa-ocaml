@@ -40,10 +40,15 @@ module Domain = struct
 
   let init _ _ flow = flow
 
+    let is_py_exp e = match etyp e with
+      | T_py _ -> true
+      | _ -> false
+
   let eval exp man flow =
     let range = erange exp in
+    if is_py_exp exp then
     match ekind exp with
-    | E_binop(op, e1, e2) when is_comp_op op && etyp exp = (T_py None) ->
+    | E_binop(op, e1, e2) when is_comp_op op ->
       (* CPython: object.c, function do_richcompare *)
       let is_notimplemented x =
         let not_implemented_type = mk_py_object (find_builtin "NotImplementedType") range in
@@ -136,6 +141,7 @@ module Domain = struct
       |> OptionExt.return
 
     | _ -> None
+    else None
 
   let exec _ _ _ = None
   let ask _ _ _ = None

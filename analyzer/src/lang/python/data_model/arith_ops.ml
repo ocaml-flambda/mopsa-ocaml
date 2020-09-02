@@ -40,10 +40,15 @@ module Domain =
 
     let init _ _ flow = flow
 
+    let is_py_exp e = match etyp e with
+      | T_py _ -> true
+      | _ -> false
+
     let eval exp man flow =
+      if is_py_exp exp then
       let range = erange exp in
       match ekind exp with
-      | E_binop(op, e1, e2) when is_arith_op op && etyp exp = (T_py None) ->
+      | E_binop(op, e1, e2) when is_arith_op op ->
          (* CPython's equivalent code is located in abstract.c,
             binary_op1 and typeobject.c, SLOT1BINFULL *)
          let is_notimplemented x =
@@ -114,7 +119,7 @@ module Domain =
              )
          |> OptionExt.return
 
-      | E_unop(op, e) when is_arith_op op && etyp exp = (T_py None) ->
+      | E_unop(op, e) when is_arith_op op ->
          debug "Resolving unary operator %a" pp_operator op;
          man.eval   e flow >>$
  (fun e flow ->
@@ -138,6 +143,7 @@ module Domain =
              )
          |> OptionExt.return
       | _ -> None
+      else None
 
     let exec _ _ _ = None
     let ask _ _ _ = None
