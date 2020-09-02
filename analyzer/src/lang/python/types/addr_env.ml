@@ -251,17 +251,17 @@ struct
        (* need to make e E_py_annot here or on the frontend *)
        (* then handle E_py_annot in typing, to perform an allocation? *)
        (* what about non builtins? *)
-       man.eval   e flow |>
+       man.eval e flow |>
          bind_some (fun e flow -> match ekind e with
                                   | E_py_object (addr, _) ->
                                      begin match akind addr with
                                      | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} ->
-                                        man.exec ~route:(Semantic "U/String") (mk_assign (Utils.change_evar_type T_string evar) (mk_py_top T_string range) range) flow
+                                        man.exec ~route:(Semantic "U/String") (mk_assign (Utils.change_evar_type T_string evar) (mk_top T_string range) range) flow
                                      | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}
                                        | A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)} ->
-                                        man.exec ~route:(Semantic "U/Numeric") (mk_assign (Utils.change_evar_type T_int evar) (mk_py_top T_int range) range) flow
+                                        man.exec ~route:(Semantic "U/Numeric") (mk_assign (Utils.change_evar_type T_int evar) (mk_top T_int range) range) flow
                                      | A_py_instance {addr_kind = A_py_class (C_builtin "float", _)} ->
-                                        man.exec ~route:(Semantic "U/Numeric") (mk_assign (Utils.change_evar_type (T_float F_DOUBLE) evar) (mk_py_top (T_float F_DOUBLE) range) range) flow
+                                        man.exec ~route:(Semantic "U/Numeric") (mk_assign (Utils.change_evar_type (T_float F_DOUBLE) evar) (mk_top (T_float F_DOUBLE) range) range) flow
                                      | _ ->
                                         Post.return flow
                                      end >>% fun flow ->
@@ -516,30 +516,30 @@ struct
       if AMap.mem v cur then
         let aset = AMap.find v cur in
         let evals, annot = ASet.fold (fun a (acc, annots) ->
-            let flow = set_env T_cur (AMap.add v (ASet.singleton a) cur) man flow in
+            let flow = if v.vmode = WEAK then flow else set_env T_cur (AMap.add v (ASet.singleton a) cur) man flow in
             let flow = Flow.set_ctx annots flow in
             match a with
             | Undef_global when is_builtin_var v ->
-              (Eval.singleton (mk_py_object (find_builtin (get_orig_vname v)) range) flow :: acc, annots)
+              Eval.singleton (mk_py_object (find_builtin (get_orig_vname v)) range) flow :: acc, annots
 
             | Undef_local when is_builtin_var v ->
-              (Eval.singleton (mk_py_object (find_builtin @@ get_orig_vname v) range) flow :: acc, annots)
+              Eval.singleton (mk_py_object (find_builtin @@ get_orig_vname v) range) flow :: acc, annots
 
             | Undef_global ->
               debug "Incoming NameError, on var %a, range %a, cs = %a @\n" pp_var v pp_range range pp_callstack (Flow.get_callstack flow);
               let msg = Format.asprintf "name '%a' is not defined" pp_var v in
               let flow = post_to_flow man (man.exec (Utils.mk_builtin_raise_msg "NameError" msg range) flow) in
-              (Eval.empty_singleton flow :: acc, Flow.get_ctx flow)
+              Eval.empty_singleton flow :: acc, Flow.get_ctx flow
 
             | Undef_local ->
               debug "Incoming UnboundLocalError, on var %a, range %a, cs = %a @\ncur = %a@\n" pp_var v pp_range range pp_callstack (Flow.get_callstack flow) man.lattice.print (Flow.get T_cur man.lattice flow);
               let msg = Format.asprintf "local variable '%a' referenced before assignment" pp_var v in
               let flow = post_to_flow man (man.exec (Utils.mk_builtin_raise_msg "UnboundLocalError" msg range) flow) in
-              (Eval.empty_singleton flow :: acc, Flow.get_ctx flow)
+              Eval.empty_singleton flow :: acc, Flow.get_ctx flow
 
             | Def addr ->
               (* first, let's clean numerical/string variables from other addrs *)
-              let flow = ASet.fold (fun a' flow ->
+              let flow = if v.vmode = WEAK then flow else ASet.fold (fun a' flow ->
                   match a' with
                   | Def addr' when compare_addr_kind (akind addr) (akind addr') <> 0 -> (* only the kind. If two str addrs, we can't remove anything *)
                     debug "removing other numerical vars";
