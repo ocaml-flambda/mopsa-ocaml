@@ -199,8 +199,8 @@ struct
        let uctx = Flow.get_unit_ctx flow in
        let ocur = Nonrel.exec stmt man uctx cur in
        Option.bind ocur (fun cur ->
-           let flow = set_env T_cur (Option.get ocur) man flow in
-           OptionExt.return (Post.return flow)
+           let flow = set_env T_cur cur man flow in
+           OptionExt.return @@ Post.return flow
          )
 
     | _ -> None
@@ -239,6 +239,20 @@ struct
         )
       |> OptionExt.return
 
+    | E_binop (O_plus, e1, e2) when etyp e1 = T_string && etyp e2 = T_string ->
+       (man.eval e1 flow >>$?
+        fun e1 flow ->
+        man.eval e2 flow >>$?
+        fun e2 flow ->
+        let cur = get_env T_cur man flow in
+        Option.bind (Nonrel.eval {expr with ekind = E_binop(O_plus, e1, e2)} cur) (fun (_, value) ->
+            Eval.join_list ~empty:(fun () -> assert false)
+              (if Value.is_top value then [Eval.singleton (mk_top T_string range) flow]
+               else Value.fold (fun s acc -> (Eval.singleton (mk_string s range) flow) :: acc) value [])
+            |> OptionExt.return
+          )
+       )
+
     | E_len e when etyp e = T_string ->
       man.eval ~route:(Semantic "U/String") e flow >>$
         (fun e flow ->
@@ -254,6 +268,7 @@ struct
     | _ ->
        let cur = get_env T_cur man flow in
        if etyp expr = T_string then
+         let () = debug "expr = %a" pp_expr expr in
          Option.bind (Nonrel.eval expr cur) (fun (_, value) ->
              Eval.join_list ~empty:(fun () -> assert false)
                (if Value.is_top value then [Eval.singleton (mk_top T_string range) flow]
