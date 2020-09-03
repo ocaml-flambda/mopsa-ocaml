@@ -184,7 +184,16 @@ struct
 
   let exec stmt (man: ('a, t) Framework.Core.Manager.man) (flow: 'a flow) : 'a post option =
     match skind stmt with
-    | S_assign (_, e) | S_remove e | S_add e | S_rename (e, _) | S_forget e | S_expand(e, _) | S_fold(e, _) | S_project (e::_) | S_assume e when etyp e = T_string ->
+    | S_assign (_, e) | S_remove e | S_add e | S_rename (e, _) | S_forget e | S_expand(e, _) | S_fold(e, _) | S_project (e::_) when etyp e = T_string ->
+       let cur = get_env T_cur man flow in
+       let uctx = Flow.get_unit_ctx flow in
+       let ocur = Nonrel.exec stmt man uctx cur in
+       Option.bind ocur (fun cur ->
+           let flow = set_env T_cur cur man flow in
+           OptionExt.return @@ Post.return flow
+         )
+
+    | S_assume e when etyp e = T_bool ->
        let cur = get_env T_cur man flow in
        let uctx = Flow.get_unit_ctx flow in
        let ocur = Nonrel.exec stmt man uctx cur in

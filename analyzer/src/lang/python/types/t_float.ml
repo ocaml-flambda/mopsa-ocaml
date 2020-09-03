@@ -104,7 +104,7 @@ module Domain =
                     man flow
                     ~fthen:(fun flow ->
                         assume
-                          (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) ~etyp:(T_float F_DOUBLE) range) man flow
+                          (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) ~etyp:T_bool range) man flow
 
                           ~fthen:(fun flow -> man.eval (mk_py_true range) flow)
                           ~felse:(fun flow -> man.eval (mk_py_false range) flow)
@@ -115,7 +115,7 @@ module Domain =
                               man.eval (mk_py_call (mk_py_attr e2 "__float__" range) [] range) flow >>$
  (fun e2 flow ->
                                   assume
-                                    (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) ~etyp:(T_float F_DOUBLE) range) man flow
+                                    (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) ~etyp:T_bool range) man flow
 
                                     ~fthen:(fun flow -> man.eval (mk_py_true range) flow)
                                     ~felse:(fun flow -> man.eval (mk_py_false range) flow)
@@ -206,7 +206,7 @@ module Domain =
           (fun e flow ->
              (* FIXME: best way? *)
              assume
-               (mk_binop (extract_oobject @@ List.hd e) O_eq (mk_float 0. range) ~etyp:(T_float F_DOUBLE) range)
+               (mk_binop (extract_oobject @@ List.hd e) O_eq (mk_float 0. range) ~etyp:T_bool range)
                man flow
 
                ~fthen:(fun flow -> man.eval (mk_py_false range) flow)

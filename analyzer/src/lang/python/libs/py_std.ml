@@ -349,7 +349,7 @@ struct
                     ~fthen:(fun flow ->
                       assume (mk_binop ~etyp:(T_py None) v O_ge {(mk_float 0. range) with etyp=(T_py (Some (Float F_DOUBLE)))} range) man flow
                         ~fthen:(fun flow -> man.eval v flow)
-                        ~felse:(fun flow -> man.eval (mk_unop O_minus v range) flow)
+                        ~felse:(fun flow -> man.eval (mk_unop ~etyp:(T_py None) O_minus v range) flow)
                     )
                     ~felse:(fun flow ->
                       let msg = Format.asprintf "bad operand type for abs()" in  (* FIXME *)

@@ -183,10 +183,10 @@ struct
                          let var_els = var_of_eobj list in
                          let length_list = length_var_of_eobj list in
                          assume
-                           (mk_binop ~etyp:T_int
-                              (mk_binop ~etyp:T_int (Utils.extract_oobject index) O_lt (mk_var length_list range) range)
+                           (mk_binop ~etyp:T_bool
+                              (mk_binop ~etyp:T_bool (Utils.extract_oobject index) O_lt (mk_var length_list range) range)
                               O_log_and
-                              (mk_binop ~etyp:T_int (mk_unop O_minus (mk_var length_list range) ~etyp:T_int range) O_le (Utils.extract_oobject index)  range)
+                              (mk_binop ~etyp:T_bool (mk_unop O_minus (mk_var length_list range) ~etyp:T_int range) O_le (Utils.extract_oobject index)  range)
                               range
                            )
                            man flow
@@ -224,10 +224,10 @@ struct
                                                    switch
                                                      [
                                                        [
-                                                         mk_binop ~etyp:T_int step O_lt (mk_zero ~typ:T_int range) range;
-                                                         mk_binop ~etyp:T_int stop O_lt start range
+                                                         mk_binop ~etyp:T_bool step O_lt (mk_zero ~typ:T_int range) range;
+                                                         mk_binop ~etyp:T_bool stop O_lt start range
                                                        ],
-                                                       (fun flow -> man.exec  
+                                                       (fun flow -> man.exec
                                                           (mk_assign new_length (mk_binop ~etyp:T_int
                                                                                    (
                                                                                      mk_binop ~etyp:T_int
@@ -246,10 +246,10 @@ struct
                                                              ) range) flow);
 
                                                        [
-                                                         mk_not (mk_binop ~etyp:T_int step O_lt (mk_zero ~typ:T_int range) range) range;
-                                                         mk_binop ~etyp:T_int start O_lt stop range
+                                                         mk_not (mk_binop ~etyp:T_bool step O_lt (mk_zero ~typ:T_int range) range) range;
+                                                         mk_binop ~etyp:T_bool start O_lt stop range
                                                        ],
-                                                       (fun flow -> man.exec  
+                                                       (fun flow -> man.exec
                                                           (mk_assign new_length (mk_binop ~etyp:T_int
                                                                                    (
                                                                                      mk_binop ~etyp:T_int
@@ -272,13 +272,13 @@ struct
                                                              range) flow
                                                        );
 
-                                                       [mk_binop ~etyp:T_int
-                                                          (mk_binop ~etyp:T_int (mk_binop ~etyp:T_int step O_lt (mk_zero ~typ:T_int range) range) O_log_and (mk_not (mk_binop ~etyp:T_int stop O_lt start range) range) range)
+                                                       [mk_binop ~etyp:T_bool
+                                                          (mk_binop ~etyp:T_bool (mk_binop ~etyp:T_bool step O_lt (mk_zero ~typ:T_int range) range) O_log_and (mk_not (mk_binop ~etyp:T_bool stop O_lt start range) range) range)
                                                           O_log_or
-                                                          (mk_binop ~etyp:T_int (mk_not (mk_binop ~etyp:T_int step O_lt (mk_zero ~typ:T_int range) range) range) O_log_and (mk_not (mk_binop ~etyp:T_int start O_lt stop range) range) range)
+                                                          (mk_binop ~etyp:T_bool (mk_not (mk_binop ~etyp:T_bool step O_lt (mk_zero ~typ:T_int range) range) range) O_log_and (mk_not (mk_binop ~etyp:T_bool start O_lt stop range) range) range)
                                                           range
                                                        ],
-                                                       (fun flow -> man.exec  
+                                                       (fun flow -> man.exec
                                                            (mk_assign new_length (mk_zero ~typ:T_int range) range) flow
                                                        )
                                                      ]
@@ -362,10 +362,10 @@ struct
                  let var_els = var_of_eobj list in
                  let length_els = length_var_of_eobj list in
                  assume
-                   (mk_binop ~etyp:T_int
-                      (mk_binop ~etyp:T_int (Utils.extract_oobject index) O_lt (mk_var length_els range) range)
+                   (mk_binop ~etyp:T_bool
+                      (mk_binop ~etyp:T_bool (Utils.extract_oobject index) O_lt (mk_var length_els range) range)
                       O_log_and
-                      (mk_binop ~etyp:T_int (mk_unop ~etyp:T_int O_minus (mk_var length_els range) range) O_le (Utils.extract_oobject index) range)
+                      (mk_binop ~etyp:T_bool (mk_unop ~etyp:T_int O_minus (mk_var length_els range) range) O_le (Utils.extract_oobject index) range)
                       range
                    )
                     man flow
@@ -596,10 +596,10 @@ struct
            let var_els = var_of_eobj list in
            let len_els = length_var_of_eobj list in
            assume
-             (mk_binop ~etyp:T_int
-                (mk_binop ~etyp:T_int (Utils.extract_oobject popindex) O_lt (mk_var len_els range) range)
+             (mk_binop ~etyp:T_bool
+                (mk_binop ~etyp:T_bool (Utils.extract_oobject popindex) O_lt (mk_var len_els range) range)
                 O_log_and
-                (mk_binop ~etyp:T_int (mk_unop ~etyp:T_int O_minus (mk_var len_els range)  range) O_le (Utils.extract_oobject popindex)  range)
+                (mk_binop ~etyp:T_bool (mk_unop ~etyp:T_int O_minus (mk_var len_els range)  range) O_le (Utils.extract_oobject popindex)  range)
                 range
              )
               man flow
@@ -610,8 +610,8 @@ struct
                  man.eval (mk_var var_els range)
                )
              ~felse:(fun flow ->
-               assume (mk_binop ~etyp:T_int (mk_var len_els range) O_eq (mk_int 0 range) range)
-                  
+               assume (mk_binop ~etyp:T_bool (mk_var len_els range) O_eq (mk_int 0 range) range)
+
                    man flow
                    ~fthen:(fun flow ->
                        man.exec (Utils.mk_builtin_raise_msg "IndexError" "pop from empty list" range) flow >>% Eval.empty_singleton)
@@ -678,7 +678,7 @@ struct
                   let var_els = var_of_addr list_addr in
                   let len_els = length_var_of_addr list_addr in
                   let it_pos = itindex_var_of_eobj iterator in
-                  assume (mk_binop (mk_var it_pos range) O_lt (mk_var len_els range) ~etyp:T_int range)
+                  assume (mk_binop ~etyp:T_bool (mk_var it_pos range) O_lt (mk_var len_els range) range)
                      man flow
                     ~fthen:(fun flow ->
                       let els = man.eval (mk_var var_els range) flow in
@@ -690,7 +690,7 @@ struct
                                                         man.exec (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty_singleton
 
                                                      | Some e ->
-                                                        man.exec  
+                                                        man.exec
                                                           (mk_assign (mk_var it_pos range)
                                                              (mk_binop (mk_var it_pos range) O_plus (mk_int 1 range) ~etyp:T_int range) range) flow >>%
                                                           Eval.singleton e
@@ -1041,7 +1041,7 @@ struct
        flow |>
          man.exec   (mk_stmt va vas range) >>%
          ( if kind = "list_iterator" || kind = "list_reverseiterator" then
-             man.exec  
+             man.exec
                (mk_stmt (itindex_var_of_addr a)
                   (List.map (fun ea' ->
                      match ekind ea' with

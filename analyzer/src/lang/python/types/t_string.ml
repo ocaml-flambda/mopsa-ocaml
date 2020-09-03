@@ -198,7 +198,7 @@ module Domain =
                     ~fthen:(fun true_flow ->
                       (* FIXME: best way? *)
                         assume
-                          (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) ~etyp:T_string range) man true_flow
+                          (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) ~etyp:T_bool range) man true_flow
 
                           ~fthen:(fun flow -> man.eval (mk_py_true range) flow)
                           ~felse:(fun flow -> man.eval (mk_py_false range) flow)
@@ -346,7 +346,6 @@ module Domain =
           (fun eargs flow ->
             let earg, eencoding = match eargs with [e1;e2] -> e1, e2 | _ -> assert false in
             assume (mk_binop ~etyp:(T_py None) eencoding O_eq {(mk_string "utf-8" range) with etyp=(T_py (Some Str))} range) man flow
-
               ~fthen:(fun flow ->
                 man.eval   (mk_expr ~etyp:(T_py None) (E_constant (C_top (T_py (Some Bytes)))) range) flow
               )
