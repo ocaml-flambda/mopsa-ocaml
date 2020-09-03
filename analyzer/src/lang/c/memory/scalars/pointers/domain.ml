@@ -58,6 +58,7 @@ struct
   let print fmt a =
     Format.fprintf fmt "pointers: %a@\n" Map.print a
 
+  let scalar  = Semantic "C/Scalar"
   let numeric = Semantic "U/Numeric"
 
   let alarms = [ A_c_invalid_pointer_compare;
@@ -677,8 +678,8 @@ struct
 
     | P_block ({ base_kind = Var v}, offset, mode) when compare_typ ctype v.vtyp = 0 ->
       assume (eq offset zero range)
-        ~fthen:(man.exec (mk_assign (mk_var v ~mode range) e range))
-        ~felse:(man.exec (mk_forget (mk_var v ~mode range) range))
+        ~fthen:(man.exec ~route:scalar (mk_assign (mk_var v ~mode range) e range))
+        ~felse:(man.exec ~route:scalar (mk_forget (mk_var v ~mode range) range))
         man flow
 
     | P_block _ ->
@@ -697,7 +698,7 @@ struct
     eval_points_to ptr man flow |> OptionExt.none_to_exn >>$ fun pt flow ->
     match pt with
     | P_block ({ base_kind = Var v}, offset, mode) ->
-      man.exec (mk_forget (mk_var v ~mode range) range) flow
+      man.exec ~route:scalar (mk_forget (mk_var v ~mode range) range) flow
 
     | _ ->
       Post.return flow
@@ -881,13 +882,13 @@ struct
       Eval.empty
 
     | P_block ({ base_kind = Var v}, offset, mode) when compare_typ ctype v.vtyp = 0 ->
-      assume (eq offset zero range)
-        ~fthen:(man.eval (mk_var v ~mode range))
-        ~felse:(man.eval (mk_top ctype range))
+      assume (eq offset zero range) ~route:scalar
+        ~fthen:(man.eval ~route:scalar (mk_var v ~mode range))
+        ~felse:(man.eval ~route:scalar (mk_top ctype range))
         man flow
 
     | P_block _ ->
-      man.eval (mk_top ctype range) flow
+      man.eval ~route:scalar (mk_top ctype range) flow
 
     | P_top ->
       warn_at range "dereferencing ⊤ pointer %a" pp_expr ptr;
@@ -895,7 +896,7 @@ struct
                  raise_c_invalid_deref_wo_info_alarm ~bottom:false range man |>
                  raise_c_use_after_free_wo_info_alarm ~bottom:false range man |>
                  raise_c_dangling_deref_wo_info_alarm ~bottom:false range man in
-      man.eval (mk_top ctype range) flow
+      man.eval ~route:scalar (mk_top ctype range) flow
 
     | P_fun _ ->
       assert false
