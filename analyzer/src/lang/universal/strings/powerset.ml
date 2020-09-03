@@ -184,18 +184,7 @@ struct
 
   let exec stmt (man: ('a, t) Framework.Core.Manager.man) (flow: 'a flow) : 'a post option =
     match skind stmt with
-    | S_assign (x, e) when etyp e = T_string ->
-      man.eval e flow |>
-      bind_some_opt (fun ee flow ->
-          let cur = get_env T_cur man flow in
-          let uctx = Flow.get_unit_ctx flow in
-          let ocur = Nonrel.exec {stmt with skind = S_assign(x, ee)} man uctx cur in
-          Option.bind ocur (fun cur ->
-              let flow = set_env T_cur cur man flow in
-              OptionExt.return @@ Post.return flow)
-        )
-
-    | S_remove e | S_add e | S_rename (e, _) | S_forget e | S_expand(e, _) | S_fold(e, _) | S_project (e::_) | S_assume e when etyp e = T_string ->
+    | S_assign (_, e) | S_remove e | S_add e | S_rename (e, _) | S_forget e | S_expand(e, _) | S_fold(e, _) | S_project (e::_) | S_assume e when etyp e = T_string ->
        let cur = get_env T_cur man flow in
        let uctx = Flow.get_unit_ctx flow in
        let ocur = Nonrel.exec stmt man uctx cur in
@@ -267,15 +256,7 @@ struct
       |> OptionExt.return
 
     | _ ->
-       let cur = get_env T_cur man flow in
-       if etyp expr = T_string then
-         Option.bind (Nonrel.eval expr cur) (fun (_, value) ->
-             Eval.join_list ~empty:(fun () -> assert false)
-               (if Value.is_top value then [Eval.singleton (mk_top T_string range) flow]
-                else Value.fold (fun s acc -> (Eval.singleton (mk_string s range) flow) :: acc) value [])
-             |> OptionExt.return
-           )
-       else None
+         None
 
   let ask : type r. ('a, r) query -> ('a, t) man -> 'a flow -> r option =
     fun query man flow ->
