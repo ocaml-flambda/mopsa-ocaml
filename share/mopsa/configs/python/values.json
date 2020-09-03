@@ -26,52 +26,47 @@
             "universal.iterators.unittest",
 
             "universal.heap.recency",
-            { "semantic": "Python",
-              "switch": [
-                  "python.libs.mopsa",
-                  "python.libs.stdlib",
-                  "python.libs.math",
-                  "python.libs.unittest",
-                  "python.libs.typing",
+            "python.libs.mopsa",
+            "python.libs.stdlib",
+            "python.libs.math",
+            "python.libs.unittest",
+            "python.libs.typing",
 
-                  "python.objects.class",
-                  "python.objects.lambda",
-                  "python.objects.function",
-                  "python.objects.range",
-                  "python.objects.object",
+            "python.objects.class",
+            "python.objects.lambda",
+            "python.objects.function",
+            "python.objects.range",
+            "python.objects.object",
 
-                  "python.data_model.attribute",
-                  "python.data_model.subscript",
-                  "python.data_model.arith_ops",
-                  "python.data_model.compare_ops",
-                  "python.data_model.aug_assign",
-                  "python.data_model.callable",
+            "python.data_model.attribute",
+            "python.data_model.subscript",
+            "python.data_model.arith_ops",
+            "python.data_model.compare_ops",
+            "python.data_model.aug_assign",
+            "python.data_model.callable",
 
-                  "python.types.t_string",
-                  "python.types.t_int",
-                  "python.types.t_float",
-                  "python.types.t_complex",
+            "python.types.t_string",
+            "python.types.t_int",
+            "python.types.t_float",
+            "python.types.t_complex",
 
-                  "python.types.addr_env",
-                  "python.types.nominal_types",
-                  "python.types.structural_types",
-                  "python.types.type_annot",
-                  "python.objects.list",
-                  "python.objects.tuple",
-                  "python.objects.dict",
-                  "python.objects.set",
-                  "python.objects.iterable"
-              ]
-            },
-            { "semantic": "U/String",
-              "domain": "universal.strings.powerset" },
-            { "semantic": "U/Numeric",
-              "nonrel":
-              {
-                  "union":
-                  [ "universal.numeric.values.intervals.integer",
-                    "universal.numeric.values.intervals.float" ]
-              }
+            "python.types.addr_env",
+            "python.types.nominal_types",
+            "python.types.structural_types",
+            "python.types.type_annot",
+            "python.objects.list",
+            "python.objects.tuple",
+            "python.objects.dict",
+            "python.objects.set",
+            "python.objects.iterable",
+            "universal.strings.powerset",
+            {
+                "nonrel":
+                {
+                    "union":
+                    [ "universal.numeric.values.intervals.integer",
+                      "universal.numeric.values.intervals.float" ]
+                }
             }
         ]
     }

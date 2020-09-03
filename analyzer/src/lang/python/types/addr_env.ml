@@ -157,15 +157,16 @@ struct
        let intb = check_baddr addr_integers || check_baddr addr_true || check_baddr addr_false || check_baddr addr_bool_top in
        let float = check_baddr addr_float in
        let str = check_baddr addr_strings in
-       (if str then man.exec ~route:(Semantic "U/String") (fstmt T_string) flow  else Post.return flow) >>% fun flow ->
-       (if intb then man.exec ~route:(Semantic "U/Numeric") (fstmt T_int) flow else Post.return flow) >>% fun flow ->
-       (if float then man.exec ~route:(Semantic "U/Numeric") (fstmt (T_float F_DOUBLE)) flow else Post.return flow)
+       (if str then let () = debug "processing %a for strings" pp_stmt (fstmt T_string) in man.exec   (fstmt T_string) flow  else Post.return flow) >>% fun flow ->
+       (if intb then let () = debug "processing %a for int/bools" pp_stmt (fstmt T_int) in man.exec  (fstmt T_int) flow else Post.return flow) >>% fun flow ->
+       (if float then let ()  = debug "processing %a for floats" pp_stmt (fstmt (T_float F_DOUBLE)) in man.exec  (fstmt (T_float F_DOUBLE)) flow else Post.return flow)
 
+  let is_py_exp e = match etyp e with | T_py _ -> true | _ -> false
 
   let rec exec stmt man flow =
     let range = srange stmt in
     match skind stmt with
-    | S_add ({ekind = E_var (v, mode)}) ->
+    | S_add ({ekind = E_var (v, mode)} as e) when is_py_exp e ->
        let cur = get_env T_cur man flow in
        if mem v cur then
          flow |> Post.return |> OptionExt.return
@@ -176,7 +177,7 @@ struct
          let () = debug "flow is now %a@\n" (Flow.print man.lattice.print) flow in
          flow |> Post.return |> OptionExt.return
 
-    | S_assign(({ekind = E_var (v, vmode)} as vl), ({ekind = E_var (w, wmode)} as wl)) when var_mode v vmode = WEAK && var_mode w wmode = WEAK ->
+    | S_assign(({ekind = E_var (v, vmode)} as vl), ({ekind = E_var (w, wmode)} as wl)) when is_py_exp vl && var_mode v vmode = WEAK && var_mode w wmode = WEAK ->
        let cur = get_env T_cur man flow in
        begin match AMap.find_opt w cur with
        | None -> Post.return flow
@@ -187,12 +188,12 @@ struct
                          let cstmt = fun t -> {stmt with skind = S_assign(Utils.change_evar_type t vl, Utils.change_evar_type t wl)} in
                          match pyaddr with
                          | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "str", _)}} ->
-                            flow >>% man.exec ~route:(Semantic "U/String") (cstmt T_string)
+                            flow >>% man.exec   (cstmt T_string)
                          | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)}}
                            | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}} ->
-                            flow >>% man.exec ~route:(Semantic "U/Numeric") (cstmt T_int)
+                            flow >>% man.exec  (cstmt T_int)
                          | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "float", _)}}  ->
-                            flow >>% man.exec ~route:(Semantic "U/Numeric") (cstmt (T_float F_DOUBLE))
+                            flow >>% man.exec  (cstmt (T_float F_DOUBLE))
                          | _ -> flow
                        ) aset (Post.return flow) in
           flow >>% fun flow ->
@@ -207,7 +208,7 @@ struct
        |> OptionExt.return
 
     (* S⟦ v = e ⟧ *)
-    | S_assign(({ekind = E_var (v, mode)} as evar), e) when match etyp e with T_py _ -> true | _ -> false ->
+    | S_assign(({ekind = E_var (v, mode)} as evar), e) when is_py_exp e ->
        man.eval e flow |>
          bind_some
            (fun e flow ->
@@ -226,12 +227,12 @@ struct
                 debug "calling values for %a" pp_addr addr;
                 begin match akind addr with
                 | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} ->
-                   man.exec ~route:(Semantic "U/String") (mk_assign (Utils.change_evar_type T_string evar) expr range) flow
+                   man.exec   (mk_assign (Utils.change_evar_type T_string evar) expr range) flow
                 | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}
                   | A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)} ->
-                   man.exec ~route:(Semantic "U/Numeric") (mk_assign (Utils.change_evar_type T_int evar) expr range) flow
+                   man.exec  (mk_assign (Utils.change_evar_type T_int evar) expr range) flow
                 | A_py_instance {addr_kind = A_py_class (C_builtin "float", _)} ->
-                   man.exec ~route:(Semantic "U/Numeric") (mk_assign (Utils.change_evar_type (T_float F_DOUBLE) evar) expr range) flow
+                   man.exec  (mk_assign (Utils.change_evar_type (T_float F_DOUBLE) evar) expr range) flow
                 | _ ->
                    Post.return flow
                 end
@@ -256,12 +257,12 @@ struct
                                   | E_py_object (addr, _) ->
                                      begin match akind addr with
                                      | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} ->
-                                        man.exec ~route:(Semantic "U/String") (mk_assign (Utils.change_evar_type T_string evar) (mk_top T_string range) range) flow
+                                        man.exec   (mk_assign (Utils.change_evar_type T_string evar) (mk_top T_string range) range) flow
                                      | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}
                                        | A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)} ->
-                                        man.exec ~route:(Semantic "U/Numeric") (mk_assign (Utils.change_evar_type T_int evar) (mk_top T_int range) range) flow
+                                        man.exec  (mk_assign (Utils.change_evar_type T_int evar) (mk_top T_int range) range) flow
                                      | A_py_instance {addr_kind = A_py_class (C_builtin "float", _)} ->
-                                        man.exec ~route:(Semantic "U/Numeric") (mk_assign (Utils.change_evar_type (T_float F_DOUBLE) evar) (mk_top (T_float F_DOUBLE) range) range) flow
+                                        man.exec  (mk_assign (Utils.change_evar_type (T_float F_DOUBLE) evar) (mk_top (T_float F_DOUBLE) range) range) flow
                                      | _ ->
                                         Post.return flow
                                      end >>% fun flow ->
@@ -269,7 +270,7 @@ struct
                                   | _ -> Exceptions.panic_at range "%a@\n" pp_expr e)
        |> OptionExt.return
 
-    | S_remove ({ekind = E_var (v, _)} as var) ->
+    | S_remove ({ekind = E_var (v, _)} as var) when is_py_exp var ->
        (fold_intfloatstr man v flow (fun t -> mk_remove_var (Utils.change_var_type t v) range) >>% fun flow ->
        begin
          let cur = get_env T_cur man flow in
@@ -287,7 +288,7 @@ struct
        end)
        |> OptionExt.return
 
-    | S_assume e when match etyp e with T_py _ -> true | _ -> false ->
+    | S_assume e when is_py_exp e ->
        man.eval e flow |>
          bind_some (fun expr flow ->
              match ekind expr with
@@ -305,13 +306,14 @@ struct
            )
        |> OptionExt.return
 
-    | S_rename (({ekind = E_var (v, mode)} as l), ({ekind = E_var (v', mode')} as r)) ->
+    | S_rename (({ekind = E_var (v, mode)} as l), ({ekind = E_var (v', mode')} as r)) when is_py_exp l ->
        (* FIXME: modes, rename in weak shouldn't erase the old v'? *)
        (fold_intfloatstr man v flow (fun t ->
                       {stmt with skind = S_rename (Utils.change_evar_type t l,
                                                    Utils.change_evar_type t r)}) >>% fun flow ->
        begin
          let cur = get_env T_cur man flow in
+         debug "after fold, flow = %a" (Flow.print man.lattice.print) flow;
          begin match AMap.find_opt v cur with
          | Some aset ->
             set_env T_cur (AMap.rename v v' cur) man flow |> Post.return
@@ -325,7 +327,7 @@ struct
          end
        end) |> OptionExt.return
 
-    | S_fold ({ekind = E_var (v, mode)}, vars) ->
+    | S_fold (({ekind = E_var (v, mode)} as l), vars) when is_py_exp l ->
        let cur = get_env T_cur man flow in
        let av = OptionExt.default ASet.empty (AMap.find_opt v cur) in
        let new_av, flow = List.fold_left (fun (av, flow) ev' ->
@@ -348,7 +350,7 @@ struct
          else map_env T_cur (AMap.add v new_av) man flow in
        flow |> Post.return |> OptionExt.return
 
-    | S_expand (({ekind = E_var (v, mode)}), vars) ->
+    | S_expand (({ekind = E_var (v, mode)} as l), vars) when is_py_exp l ->
        let cur = get_env T_cur man flow in
        begin match AMap.find_opt v cur with
        | None -> warn_at range "weird expand on %a" pp_var v; Post.return flow
@@ -461,8 +463,8 @@ struct
     | S_remove {ekind = E_addr {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin s, _)}}} when List.mem s ["int"; "float"; "bool"; "NoneType"; "NotImplementedType"; "str"] ->
        flow |> Post.return |> OptionExt.return
 
-    | S_invalidate {ekind = E_addr a}
-    | S_remove {ekind = E_addr a} ->
+    | S_invalidate ({ekind = E_addr a} as e)
+    | S_remove ({ekind = E_addr a} as e) ->
        let cur = get_env T_cur man flow in
        let ncur = AMap.map (ASet.remove (Def a)) cur in
        let flow = set_env T_cur ncur man flow in
@@ -545,7 +547,7 @@ struct
                     debug "removing other numerical vars";
                     let f = begin match akind addr' with
                       | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} ->
-                        man.exec ~route:(Semantic "U/String") (mk_remove_var (Utils.change_var_type T_string v) range) flow
+                        man.exec   (mk_remove_var (Utils.change_var_type T_string v) range) flow
                       | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}
                       | A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)} ->
                          begin match akind addr with
@@ -553,10 +555,10 @@ struct
                            | A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)} ->
                             Post.return flow
                          | _ ->
-                            man.exec ~route:(Semantic "U/Numeric") (mk_remove_var (Utils.change_var_type T_int v) range) flow
+                            man.exec  (mk_remove_var (Utils.change_var_type T_int v) range) flow
                          end
                       | A_py_instance {addr_kind = A_py_class (C_builtin "float", _)} ->
-                        man.exec ~route:(Semantic "U/String") (mk_remove_var (Utils.change_var_type (T_float F_DOUBLE) v) range) flow
+                        man.exec   (mk_remove_var (Utils.change_var_type (T_float F_DOUBLE) v) range) flow
                       | _ ->
                         Post.return flow
                     end in

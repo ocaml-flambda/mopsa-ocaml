@@ -204,7 +204,7 @@ module Domain =
                       (* FIXME: best way? *)
                         assume
                           (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) ~etyp:T_string range) man true_flow
-                          ~route:(Semantic "U/String")
+                           
                           ~fthen:(fun flow -> man.eval (mk_py_true range) flow)
                           ~felse:(fun flow -> man.eval (mk_py_false range) flow)
                         (* |> T_int.Domain.merge_tf_top man range *)
@@ -419,7 +419,7 @@ module Domain =
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__len__" as f, _))}, _)}, args, []) ->
         Utils.check_instances f man flow range args ["str"]
           (fun eargs flow ->
-             man.eval ~route:(Semantic "U/String") (mk_expr ~etyp:T_string (E_len (extract_oobject @@ List.hd eargs)) range) flow >>$
+             man.eval   (mk_expr ~etyp:T_string (E_len (extract_oobject @@ List.hd eargs)) range) flow >>$
                (fun l flow -> match ekind l with
                               | E_constant (C_top T_int) ->
                                  man.eval {l with ekind = E_constant (C_top (T_py (Some Int))); etyp=(T_py (Some (Int)))} flow
