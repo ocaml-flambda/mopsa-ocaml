@@ -133,11 +133,6 @@ module Domain =
           Eval.singleton (mk_py_object (addr, oe) range)
         )
 
-
-    let is_py_exp e = match etyp e with
-      | T_py _ -> true
-      | _ -> false
-
     let rec eval exp man flow =
       if is_py_exp exp then
         let range = erange exp in
@@ -204,7 +199,7 @@ module Domain =
                       (* FIXME: best way? *)
                         assume
                           (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) ~etyp:T_string range) man true_flow
-                           
+
                           ~fthen:(fun flow -> man.eval (mk_py_true range) flow)
                           ~felse:(fun flow -> man.eval (mk_py_false range) flow)
                         (* |> T_int.Domain.merge_tf_top man range *)

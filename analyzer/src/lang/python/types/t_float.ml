@@ -46,10 +46,6 @@ module Domain =
       | E_py_object (_, Some a) -> a
       | _ -> assert false
 
-    let is_py_exp e = match etyp e with
-      | T_py _ -> true
-      | _ -> false
-
     let eval exp man flow =
       if is_py_exp exp then
       let range = erange exp in
@@ -109,7 +105,7 @@ module Domain =
                     ~fthen:(fun flow ->
                         assume
                           (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) ~etyp:(T_float F_DOUBLE) range) man flow
-                           
+
                           ~fthen:(fun flow -> man.eval (mk_py_true range) flow)
                           ~felse:(fun flow -> man.eval (mk_py_false range) flow)
                       )
@@ -120,7 +116,7 @@ module Domain =
  (fun e2 flow ->
                                   assume
                                     (mk_binop (extract_oobject e1) (Operators.methfun_to_binop f) (extract_oobject e2) ~etyp:(T_float F_DOUBLE) range) man flow
-                                     
+
                                     ~fthen:(fun flow -> man.eval (mk_py_true range) flow)
                                     ~felse:(fun flow -> man.eval (mk_py_false range) flow)
                                 )
@@ -212,7 +208,7 @@ module Domain =
              assume
                (mk_binop (extract_oobject @@ List.hd e) O_eq (mk_float 0. range) ~etyp:(T_float F_DOUBLE) range)
                man flow
-                
+
                ~fthen:(fun flow -> man.eval (mk_py_false range) flow)
                ~felse:(fun flow -> man.eval (mk_py_true range) flow)
           )

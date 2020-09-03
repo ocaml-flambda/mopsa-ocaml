@@ -161,8 +161,6 @@ struct
        (if intb then let () = debug "processing %a for int/bools" pp_stmt (fstmt T_int) in man.exec  (fstmt T_int) flow else Post.return flow) >>% fun flow ->
        (if float then let ()  = debug "processing %a for floats" pp_stmt (fstmt (T_float F_DOUBLE)) in man.exec  (fstmt (T_float F_DOUBLE)) flow else Post.return flow)
 
-  let is_py_exp e = match etyp e with | T_py _ -> true | _ -> false
-
   let rec exec stmt man flow =
     let range = srange stmt in
     match skind stmt with
@@ -513,7 +511,7 @@ struct
   let eval exp man flow =
     let range = erange exp in
     match ekind exp with
-    | E_var (v, mode) when match etyp exp with T_py _ -> true | _ -> false ->
+    | E_var (v, mode) when is_py_exp exp ->
       let cur = get_env T_cur man flow in
       if AMap.mem v cur then
         let aset = AMap.find v cur in
@@ -604,7 +602,7 @@ struct
     | E_constant C_py_not_implemented ->
       Eval.singleton (mk_py_object (OptionExt.none_to_exn !addr_notimplemented, None) range) flow |> OptionExt.return
 
-    | E_unop(O_log_not, e') when match etyp exp with T_py _ -> true | _ -> false ->
+    | E_unop(O_log_not, e') when is_py_exp exp ->
       begin match ekind e' with
       | E_constant (C_top (T_py (Some Bool))) ->
          Eval.singleton e' flow |> OptionExt.return

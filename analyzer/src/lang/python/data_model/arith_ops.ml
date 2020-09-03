@@ -40,10 +40,6 @@ module Domain =
 
     let init _ _ flow = flow
 
-    let is_py_exp e = match etyp e with
-      | T_py _ -> true
-      | _ -> false
-
     let eval exp man flow =
       if is_py_exp exp then
       let range = erange exp in

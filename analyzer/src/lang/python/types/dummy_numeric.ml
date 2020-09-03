@@ -52,7 +52,7 @@ module Domain =
         | S_fold ({ekind = E_var _}, _) ->
          Some (Post.return flow)
 
-      | S_assume e when match etyp e with | T_int | T_float _ -> true | _ -> false ->
+      | S_assume e when is_numeric_type @@ etyp e ->
          Some (Post.return flow)
 
       | _ -> None
