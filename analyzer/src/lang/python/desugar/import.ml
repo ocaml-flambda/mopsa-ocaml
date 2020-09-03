@@ -246,7 +246,7 @@ module Domain =
         | Py_program(_, g, b) -> g, b
         | _ -> assert false in
       let rec parse basename stmt globals flow : stmt * var list * 'a flow  =
-        debug "parse (basename=%a) %a" (OptionExt.print Format.pp_print_string) basename pp_stmt stmt;
+        debug "parse (basename=%a) %a %a" (OptionExt.print Format.pp_print_string) basename pp_stmt stmt (Flow.print man.lattice.print) flow;
         let range = srange stmt in
         match skind stmt with
         | S_assign ({ekind = E_var (v, _)}, e) ->
@@ -303,8 +303,8 @@ module Domain =
                   | _ -> (expr::b, ab)
                 ) ([], []) c.py_cls_bases in
               let bases, abases = List.rev bases, List.rev abases in
-              let r = bind_list bases (man.eval  ) flow |>
-                      bind_some (fun ebases flow ->
+              let r = bind_list bases man.eval flow |>
+                        bind_some (fun ebases flow ->
                           (* FIXME: won't work with Generic[T] I guess *)
                           let obases = match ebases with
                             | [] -> [find_builtin "object"]
@@ -314,7 +314,7 @@ module Domain =
                             | _ -> ebases in
                           let name = mk_dot_name basename (get_orig_vname c.py_cls_var) in
                           let py_cls_a_body, globals, flow = parse (Some name) c.py_cls_body globals flow in
-                          debug "body of %s: %a" name pp_stmt py_cls_a_body;
+                          debug "body of %s: %a, flow = %a" name pp_stmt py_cls_a_body (Flow.print man.lattice.print) flow;
                           let newc =
                             { py_cls_a_var = set_orig_vname name c.py_cls_var;
                               py_cls_a_body;
@@ -332,10 +332,10 @@ module Domain =
                           let addr = {addr with addr_kind = A_py_class (C_annot newc, mro)} in
                           debug "add_typed %a" pp_addr addr;
                           let () = add_typed (addr, None) in
-                          Cases.empty_singleton flow
+                          Cases.return (Some ()) flow
                         )
               in
-              let flow = Cases.apply (fun _ f -> f) (Flow.join man.lattice) (Flow.meet man.lattice) r in
+              let flow = post_to_flow man r in
               {stmt with skind = S_block ([], [])}, globals, flow
 
 
