@@ -56,15 +56,15 @@ let eval_format_string wide format range man flow =
   match pt with
   | P_null ->
     raise_c_null_deref_alarm format man flow |>
-    Cases.empty_singleton
+    Cases.empty
 
   | P_invalid ->
     raise_c_invalid_deref_alarm format man flow |>
-    Cases.empty_singleton
+    Cases.empty
 
   | P_block ({ base_kind = Addr addr; base_valid = false; base_invalidation_range = Some r}, _, _) ->
     raise_c_use_after_free_alarm format r man flow |>
-    Cases.empty_singleton
+    Cases.empty
 
   | P_block ({ base_kind = String (fmt,C_char_ascii,_) }, offset, _) when not wide ->
     if is_c_expr_equals_z offset Z.zero then
@@ -86,18 +86,18 @@ let eval_format_string wide format range man flow =
 
   | P_block ({ base_kind = String (fmt,C_char_ascii,_) }, offset, _) when wide ->
     Soundness.warn_at range "unsupported format string: wide string expected";
-    Cases.empty_singleton flow
+    Cases.empty flow
 
   | P_block ({ base_kind = String (fmt,C_char_wide,t) }, offset, _) when not wide ->
     Soundness.warn_at range "unsupported format string: non-wide string expected";
-    Cases.empty_singleton flow
+    Cases.empty flow
 
   | P_block _ ->
     Cases.singleton None flow
 
   | _ ->
     Soundness.warn_at range "unsupported format string";
-    Cases.empty_singleton ~bottom:false flow
+    Cases.empty ~bottom:false flow
 
 
 (** Parse a format according to parser *)

@@ -114,16 +114,17 @@ struct
        condition and jump to case body *)
     let rec iter cases flow =
       match cases with
-      | [] -> flow
+      | [] -> Post.return flow
       | (e',r) :: tl ->
         (* Filter the environments *)
         let cond = mk_binop e O_eq e' ~etyp:u8 e.erange in
-        assume_flow cond
+        assume cond
           ~fthen:(fun flow ->
               (* Case reachable, so save cur in the flow of the case before removing cur *)
               let cur = Flow.get T_cur man.lattice flow in
               Flow.set (T_c_switch_case (e',r)) cur man.lattice flow |>
-              Flow.remove T_cur
+              Flow.remove T_cur |>
+              Post.return
             )
           ~felse:(fun flow ->
               (* Case unreachable, so check the next cases *)
@@ -132,7 +133,7 @@ struct
           man flow
     in
 
-    let flow = iter cases flow in
+    iter cases flow >>% fun flow ->
 
     (* Put the remaining cur environments in the flow of the default case. If
        no default case is present, save cur in no_default. *)

@@ -204,14 +204,30 @@ struct
               pp_stmt stmt
               pp_route route
 
-        | Some post -> post
+        | Some post ->
+          (* Check that all cases were handled *)
+          let handled, not_handled = Cases.partition (fun c flow -> match c with NotHandled -> false | _ -> true) post in
+          match not_handled with
+          | None -> post
+          | Some x ->
+            let post' =
+              x >>= fun _ flow ->
+              (* Not handled cases with empty flows are OK *)
+              if Flow.is_bottom man.lattice flow
+              then Post.return flow
+              else
+                Exceptions.panic_at stmt.srange
+                  "unable to analyze statement %a in %a"
+                  pp_stmt stmt
+                  pp_route route
+            in
+            match handled with
+            | None -> post'
+            | Some y -> Post.join x post'
       in
       let clean_post =
-        post |> Cases.bind_full
-          (fun ret flow log cleaners ->
-             apply_cleaners cleaners man flow |>
-             Cases.set_log log
-          )
+        post >>= fun case flow ->
+        apply_cleaners (Cases.get_case_cleaners case) man flow
       in
       let ctx = Hook.on_after_exec route stmt man flow clean_post in
       Cases.set_ctx ctx clean_post
@@ -278,24 +294,37 @@ struct
     in
     let evl =
       (* Ask domains to perform the evaluation *) 
-      match Cache.eval feval route exp man flow with
-      | Some evl -> evl
+      let ret = Cache.eval feval route exp man flow in
+      (* Check whether there are not-handled cases *)
+      let handled, not_handled =
+        match ret with
+        | None   -> None, Some (Cases.not_handled flow)
+        | Some x -> Cases.partition (fun c flow -> match c with NotHandled -> false | _ -> true) x
+      in
+      let not_handled_ret =
+        match not_handled with
+        | None -> None
+        | Some evl ->
+          (* Evaluate sub-expressions of the not-handled cases *)
+          let evl = Eval.remove_duplicates man.lattice evl in
+          Some (
+            evl >>= fun _ flow ->
+            (* No answer, so try to visit sub-expressions *)
+            let parts, builder = structure_of_expr exp in
+            match parts with
+            | {exprs; stmts = []} ->
+              (* Iterate over sub-expressions *)
+              Cases.bind_list exprs (fun e flow -> man.eval e flow) flow >>$ fun exprs' f' ->
+              (* Rebuild the expression from its evaluated parts *)
+              let e' = builder {exprs = exprs'; stmts = []} in
+              Cases.singleton e' f'
 
-      | None ->
-        (* No answer, so try to visit sub-expressions *)
-        let parts, builder = structure_of_expr exp in
-        begin match parts with
-          | {exprs; stmts = []} ->
-            (* Iterate over sub-expressions *)
-            Cases.bind_list exprs (fun e flow -> man.eval e flow) flow >>$ fun exprs' f' ->
-            (* Rebuild the expression from its evaluated parts *)
-            let e' = builder {exprs = exprs'; stmts = []} in
-            Cases.singleton e' f'
-
-          (* XXX sub-statements are not handled for the moment *)
-          | _ -> Cases.singleton exp flow
-        end
-
+            (* XXX sub-statements are not handled for the moment *)
+            | _ -> Cases.singleton exp flow
+          )
+      in
+      OptionExt.neutral2 Cases.join handled not_handled_ret |>
+      OptionExt.none_to_exn
     in
 
     (* Updates the expression transformation lineage *)

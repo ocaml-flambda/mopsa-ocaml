@@ -182,7 +182,7 @@ struct
       let rmin, rmax = rangeof typ in
       let ritv = Itv.of_z rmin rmax in
       let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query nexp) flow in
-      if Itv.is_bottom itv then Eval.empty_singleton flow else
+      if Itv.is_bottom itv then Eval.empty flow else
       if Itv.subset itv ritv then Eval.singleton nexp flow else
         let nexp' = wrap_expr nexp (rmin, rmax) range in
         let flow' =
@@ -226,7 +226,7 @@ struct
         )
       ~felse:(fun fflow ->
           let flow = raise_c_divide_by_zero_alarm denominator range man fflow in
-          Eval.empty_singleton flow
+          Eval.empty flow
         )
       ~route:numeric man flow
 
@@ -251,7 +251,7 @@ struct
         )
       ~felse:(fun fflow ->
           let flow' = raise_c_invalid_shift_alarm exp n man flow fflow in
-          Eval.empty_singleton flow'
+          Eval.empty flow'
         )
       ~route:numeric man flow
 

@@ -105,82 +105,56 @@ let rec exec_stmt_on_all_flows stmt man flow =
   Post.return
 
 
-and apply_cleaners block man flow =
+and apply_cleaners cleaners man flow =
   let exec stmt flow =
     if !Cases.opt_clean_cur_only then
       man.exec stmt flow
     else
       exec_stmt_on_all_flows stmt man flow
   in
-  List.fold_left (fun acc stmt ->
+  StmtSet.fold (fun stmt acc ->
       acc >>% exec stmt
-    ) (Post.return flow) block
+    ) cleaners (Post.return flow)
 
 and post_to_flow man post =
   let to_flow f post =
-    Cases.apply_full f
-      (Flow.join man.lattice)
-      (Flow.meet man.lattice)
+    Cases.reduce f
+      ~join:(Flow.join man.lattice)
+      ~meet:(Flow.meet man.lattice)
       post
   in
   to_flow
-    (fun _ flow _ cleaners ->
+    (fun case flow ->
+       let cleaners = Cases.get_case_cleaners case in
        apply_cleaners cleaners man flow |>
        to_flow
-         (fun _ flow _ _ -> flow)
+         (fun _ flow -> flow)
     )
     post
 
 let assume
     cond ?(route=toplevel)
     ~fthen ~felse
+    ?(fboth=(fun then_flow else_flow ->
+        Cases.join
+          (fthen then_flow)
+          (felse else_flow)
+      ))
     man flow
   =
   man.eval cond flow ~route >>$ fun cond flow ->
   let then_post = man.exec ~route (mk_assume cond cond.erange) flow in
   let flow = Flow.set_ctx (Cases.get_ctx then_post) flow in
   let else_post = man.exec ~route (mk_assume (mk_not cond cond.erange) cond.erange) flow in
-
-  let then_res = then_post >>%? fun then_flow ->
-    if man.lattice.is_bottom (Flow.get T_cur man.lattice then_flow)
-       && Alarm.AlarmSet.subset (Flow.get_alarms then_flow) (Flow.get_alarms flow)
-    then None
-    else Some (fthen then_flow)
-  in
-
-  let else_res = else_post >>%? fun else_flow ->
-    if man.lattice.is_bottom (Flow.get T_cur man.lattice else_flow)
-       && Alarm.AlarmSet.subset (Flow.get_alarms else_flow) (Flow.get_alarms flow)
-    then None
-    else Some (felse else_flow)
-  in
-
-  match OptionExt.neutral2 Cases.join then_res else_res with
-  | None -> Cases.empty_singleton flow
-  | Some r -> r
-
-
-let assume_flow
-    ?(route=toplevel) cond
-    ~fthen ~felse
-    ?(negate=mk_not cond cond.erange)
-    man flow
-  =
-  let then_flow = man.exec ~route (mk_assume cond cond.erange) flow |> post_to_flow man in
-  let flow = Flow.set_ctx (Flow.get_ctx then_flow) flow in
-  let else_flow = man.exec ~route (mk_assume negate cond.erange) flow |> post_to_flow man in
-
+  then_post >>% fun then_flow ->
+  else_post >>% fun else_flow ->
   match man.lattice.is_bottom (Flow.get T_cur man.lattice then_flow),
         man.lattice.is_bottom (Flow.get T_cur man.lattice else_flow)
   with
-  | false, true -> fthen then_flow
-  | true, false -> felse else_flow
-  | true, true -> Flow.join man.lattice then_flow else_flow
-  | false, false ->
-    let then_res = fthen then_flow in
-    let else_flow' = Flow.copy_ctx then_res else_flow in
-    let else_res = felse else_flow' in
-    Flow.join man.lattice then_res else_res
+  | false,true  -> fthen then_flow
+  | true,false  -> felse else_flow
+  | true,true   -> Cases.empty (Flow.join man.lattice then_flow else_flow)
+  | false,false -> fboth then_flow else_flow 
 
 
 let switch
@@ -197,7 +171,7 @@ let switch
       let s = mk_assume x x.erange in
       man.exec ~route s acc' >>% fun acc'' ->
       if Flow.get T_cur man.lattice acc'' |> man.lattice.is_bottom then
-        Cases.empty_singleton acc''
+        Cases.empty acc''
       else
         one tl acc'' f
   in

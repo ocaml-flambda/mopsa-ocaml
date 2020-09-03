@@ -29,353 +29,295 @@ open Token
 open Log
 open Context
 open Alarm
+open Lattice
 
+type cleaners = StmtSet.t
 
-(****************************************************************************)
-(**                           {2 Definition}                                *)
-(****************************************************************************)
+(** Single case of a computation *)
+type 'r case =
+  | Result of 'r * log * cleaners
+  | Empty
+  | NotHandled
 
-(** Single case *)
-type ('a,'r) case = {
-  case_result   : 'r option;     (** Case result *)
-  case_flow     : 'a TokenMap.t; (** Token map of abstract states *)
-  case_alarms   : AlarmSet.t;    (** Collected alarms *)
-  case_log      : log;           (** Journal of statements log *)
-  case_cleaners : StmtSet.t;     (** Cleaner statements *)
-}
+(** Multiple cases of a computation, encoded as a DNF *)
+type ('a,'r) cases = ('r case * 'a flow) Dnf.t
 
-(** Multiple cases encoded as a DNF *)
-type ('a,'r) cases = {
-  cases_dnf : ('a,'r) case Dnf.t; (** DNF of cases *)
-  cases_ctx : 'a ctx;             (** Flow-insensitive context *)
-}
+let case (case:'r case) flow : ('a,'r) cases = Dnf.singleton (case,flow)
 
+let return ?(log=empty_log) ?(cleaners=[]) (res:'r) (flow:'a flow) =
+  case (Result (res,log,StmtSet.of_list cleaners)) flow
 
-(****************************************************************************)
-(**                      {2 Utility functions}                              *)
-(****************************************************************************)
+let singleton = return
 
-let mk_case
-    ?(cleaners=[])
-    ?(log=empty_log)
-    (result:'r option)
-    (flow:'a flow)
-  : ('a,'r) case =
-  {
-    case_result = result;
-    case_flow = Flow.get_token_map flow;
-    case_alarms = Flow.get_alarms flow;
-    case_log = log;
-    case_cleaners = StmtSet.of_list cleaners;
-  }
-
-
-let return
-    ?(cleaners=[])
-    ?(log=empty_log)
-    (output:'r option)
-    (flow:'a flow)
-  : ('a,'r) cases
-  =
-  {
-    cases_dnf = Dnf.singleton (mk_case output flow ~log ~cleaners);
-    cases_ctx = Flow.get_ctx flow;
-  }
-
-
-
-let singleton
-    ?(cleaners=[])
-    (output:'r)
-    (flow:'a flow)
-  : ('a,'r) cases
-  =
-  return (Some output) flow ~cleaners
-
-
-
-let empty_singleton ?(bottom=true) (flow:'a flow) : ('a,'r) cases =
+let empty ?(bottom=true) (flow:'a flow) : ('a,'r) cases =
   let flow = if bottom then Flow.remove T_cur flow else flow in
-  return None flow
+  case Empty flow
+
+let not_handled (flow:'a flow) : ('a,'r) cases =
+  case NotHandled flow
 
 
 let opt_clean_cur_only = ref false
 
 
-let get_ctx r = r.cases_ctx
+let get_ctx cases =
+  match Dnf.choose cases with
+  | None             -> assert false
+  | Some (case,flow) -> Flow.get_ctx flow
 
-
-let set_ctx ctx r =
-  if ctx == r.cases_ctx then r else { r with cases_ctx = ctx }
-
+let set_ctx ctx cases =
+  Dnf.map
+    (fun (case,flow) -> (case, Flow.set_ctx ctx flow))
+    cases
 
 let copy_ctx src dst =
   set_ctx (get_ctx src) dst
 
+let get_most_recent_ctx cases =
+  Dnf.fold
+    (fun acc (case,flow) -> Context.get_most_recent acc (Flow.get_ctx flow))
+    (get_ctx cases) cases
+
+let normalize_ctx cases =
+  let ctx = get_most_recent_ctx cases in
+  set_ctx ctx cases
 
 let get_callstack r =
   get_ctx r |>
   Context.find_unit Context.callstack_ctx_key
 
+let get_case_cleaners (case:'r case) : StmtSet.t =
+  match case with
+  | Result(_,_,cleaners) -> cleaners
+  | Empty | NotHandled   -> StmtSet.empty
 
-let map_cases
-    (f:('a,'r) case -> ('a,'s) case)
-    (r:('a,'r) cases)
+let set_case_cleaners (cleaners:StmtSet.t) (case:'r case) : 'r case =
+  match case with
+  | Result(r,log,_) -> Result(r,log,cleaners)
+  | _ -> case
+
+let get_case_log (case:'r case) : log =
+  match case with
+  | Result(_,log,_)    -> log
+  | Empty | NotHandled -> empty_log
+
+let set_case_log (log:log) (case:'r case) : 'r case =
+  match case with
+  | Result(r,_,cleaners) -> Result(r,log,cleaners)
+  | _ -> case
+
+
+let map
+    (f:'r case -> 'a flow -> 's case * 'a flow)
+    (cases:('a,'r) cases)
   : ('a,'s) cases =
-  {
-    cases_dnf = r.cases_dnf |> Dnf.map f;
-    cases_ctx = r.cases_ctx;
-  }
+  Dnf.map (fun (case,flow) -> f case flow) cases |>
+  normalize_ctx
 
 
-let map (f:'r->'s) (r:('a,'r) cases) : ('a,'s) cases =
-  map_cases (fun case ->
-      let output = match case.case_result with
-        | Some o -> Some (f o)
-        | None -> None
+let map_result
+    (f:'r->'s)
+    (cases:('a,'r) cases)
+  : ('a,'s) cases =
+  map (fun case flow ->
+      let case' =
+        match case with
+        | Result (r,log,cleaners) -> Result (f r,log,cleaners)
+        | Empty                   -> Empty
+        | NotHandled              -> NotHandled
       in
-      {
-        case_result = output;
-        case_flow = case.case_flow;
-        case_alarms = case.case_alarms;
-        case_log = case.case_log;
-        case_cleaners = case.case_cleaners;
-      }
-    ) r
+      (case',flow)
+    ) cases
+
+let map_conjunction
+    (f:('r case * 'a flow) list -> ('s case * 'a flow) list)
+    (cases:('a,'r) cases)
+  : ('a,'s) cases =
+  Dnf.map_conjunction f cases |>
+  normalize_ctx
+
+let map_disjunction
+    (f:('r case * 'a flow) list -> ('s case * 'a flow) list)
+    (cases:('a,'r) cases)
+  : ('a,'s) cases =
+  Dnf.map_disjunction f cases |>
+  normalize_ctx
 
 
+let reduce
+    (f:'r case -> 'a flow -> 'b)
+    ~(join:'b -> 'b -> 'b)
+    ~(meet:'b -> 'b -> 'b)
+    (cases:('a,'r) cases)
+  : 'b =
+  Dnf.reduce (fun (case,flow) -> f case flow) ~join ~meet cases
 
-(** Map each case with with function [f] if the return value is
-    non-empty, otherwise remove the case *)
-let map_opt (f:'r -> 's option option) (r:('a,'r) cases) : ('a,'s) cases =
-  let cases =
-    Dnf.apply
-      (fun case ->
-         match case.case_result with
-         | None -> Some (Dnf.singleton { case with case_result = None })
-         | Some o ->
-           match f o with
-           | None -> None
-           | Some rr -> Some (Dnf.singleton { case with case_result = rr })
-      )
-      (OptionExt.neutral2 Dnf.mk_or) (OptionExt.neutral2 Dnf.mk_and)
-      r.cases_dnf
-  in
-  match cases with
-  | Some c -> { r with cases_dnf = c }
-  | None -> Exceptions.panic ~loc:__LOC__ "map_opt: empty result"
-
-let concat_cleaners c1 c2 = StmtSet.union (StmtSet.of_list c1) (StmtSet.of_list c2) |>
-                            StmtSet.elements
-
-let add_cleaners_case cleaners c =
-  { c with case_cleaners = StmtSet.union (StmtSet.of_list cleaners) c.case_cleaners }
+let reduce_result
+    (f:'r -> 'a flow -> 'b)
+    ~(join:'b -> 'b -> 'b)
+    ~(meet:'b -> 'b -> 'b)
+    ~(bottom:'b)
+    (cases:('a,'r) cases)
+  : 'b =
+  reduce
+    (fun case flow ->
+       match case with
+       | Result (r,log,cleaners) -> f r flow
+       | Empty | NotHandled      -> bottom)
+    ~join ~meet cases
 
 
-let add_cleaners cleaners r =
-  r |> map_cases (add_cleaners_case cleaners)
+let print pp fmt cases =
+  Dnf.print (fun fmt (case,flow) -> pp fmt case flow) fmt cases
 
 
-let apply_full f join meet r =
-  Dnf.apply (fun case ->
-      let flow = Flow.create r.cases_ctx case.case_alarms case.case_flow in
-      f case.case_result flow case.case_log (StmtSet.elements case.case_cleaners)
-    ) join meet r.cases_dnf
-
-
-let apply f join meet r =
-  apply_full (fun out flow _ _ -> f out flow) join meet r
-
-let apply_some f join meet bot r =
-  apply (fun out flow ->
-      match out with
-      | None -> bot
-      | Some o -> f o flow)
-    join meet r
-
-
-let print pp fmt r =
-  Dnf.print (fun fmt case ->
-      let flow = Flow.create r.cases_ctx case.case_alarms case.case_flow in
-      pp fmt case.case_result flow
+let print_result pp fmt cases =
+  print (fun fmt case flow ->
+      match case with
+      | Result (r,_,_) -> pp fmt r flow
+      | Empty          -> Format.fprintf fmt "ε"
+      | NotHandled     -> Format.fprintf fmt "✗"
     )
-    fmt r.cases_dnf
+    fmt cases
 
 
-let print_some pp fmt r =
-  print (fun fmt oo flow ->
-      match oo with
-      | None -> Format.fprintf fmt "ε"
-      | Some o -> pp fmt o flow
-    )
-    fmt r
+let map_log
+    (f:log -> log)
+    (cases:('a,'r) cases)
+  : ('a,'r) cases =
+  map
+    (fun case flow ->
+       match case with
+       | Result(r,log,cleaners) -> Result(r,f log,cleaners), flow
+       | _                      -> case, flow
+    ) cases
+
+let set_log
+    (log:log)
+    (cases:('a,'r) cases)
+  : ('a,'r) cases =
+  map
+    (fun case flow ->
+       match case with
+       | Result(r,_,cleaners) -> Result(r,log,cleaners), flow
+       | _                    -> case, flow
+    ) cases
 
 
-let map_log (f:log -> log) (r:('a,'r) cases) : ('a,'r) cases =
-  r |> map_cases (fun case ->
-      {
-        case with case_log = f case.case_log;
-      }
-    )
+let concat_log
+    (old:log)
+    (cases:('a,'r) cases)
+  : ('a,'r) cases =
+  map
+    (fun case flow ->
+       match case with
+       | Result(r,recent,cleaners) ->
+         (* Add logs of non-empty environments only *)
+         (* FIXME: Since are always called from the binders, we can't
+              require having the lattice manager. So we can't test if
+              T_cur is ⊥ or not! For the moment, we rely on empty flow
+              maps, but this is not always sufficient.
+         *)
+         if Flow.mem T_cur flow then
+           Result(r, Log.concat_log ~old ~recent, cleaners), flow
+         else
+           case, flow
+       | _ -> case, flow
+    ) cases
 
-let set_log log (r:('a,'r) cases) : ('a,'r) cases =
-  r |> map_cases (fun case ->
-      { case with
-        case_log = log }
-    )
-
-let clear_log (r:('a,'r) cases) : ('a,'r) cases =
-  r |> map_cases (fun case ->
-      { case with
-        case_log = empty_log }
-    )
-
-let concat_cases_log (old:log) (recent:('a,'r) cases) : ('a,'r) cases =
-  recent |> map_cases (fun recent ->
-      { recent with
-        case_log =
-          (* Add logs of non-empty environments only *)
-          (* FIXME: Since are always called from the binders, we can't
-             require having the lattice manager. So we can't test if
-             T_cur is ⊥ or not! For the moment, we rely on empty flow
-             maps, but this is not always sufficient.
-          *)
-          if TokenMap.is_empty recent.case_flow
-          then old
-          else concat_log ~old ~recent:recent.case_log }
-    )
-
-
-let map_fold_conjunctions
-    (f: 'a flow * log -> 'a flow * log -> 'a flow)
-    (r:('a,'r) cases)
-    : ('a,'r) cases
-  =
-  let l = Dnf.to_list r.cases_dnf in
-  let ctx = r.cases_ctx in
-  let l' = List.map (fun conj ->
-      match conj with
-      | [] -> assert false
-      | [x] -> [x]
-      | hd :: tl ->
-        let flow,log,cleaners =
-          tl |> List.fold_left (fun (flow, log, cleaners) case ->
-              let flow' = Flow.create ctx case.case_alarms case.case_flow in
-              let flow = f (flow,log) (flow',case.case_log) in
-              flow, concat_log log case.case_log, StmtSet.union cleaners case.case_cleaners
-            ) (Flow.create ctx hd.case_alarms hd.case_flow, hd.case_log, hd.case_cleaners)
-        in
-        hd :: tl |> List.map (fun case -> {
-              case_result = case.case_result;
-              case_flow = Flow.get_token_map flow;
-              case_alarms = Flow.get_alarms flow;
-              case_log = log;
-              case_cleaners = cleaners
-            }
-          )
-    ) l
-  in
-  { r with cases_dnf = Dnf.from_list l' }
-
+let add_cleaners
+    (cleaners:stmt list)
+    (cases:('a,'r) cases)
+  : ('a,'r) cases =
+  let cleaners = StmtSet.of_list cleaners in
+  map
+    (fun case flow ->
+       match case with
+       | Result(r,log,cleaners') -> Result(r,log,StmtSet.union cleaners' cleaners), flow
+       | _ -> case, flow
+    ) cases
 
 let fold
-    (f:'r option -> 'a flow -> 'b -> 'b)
-    (c:('a,'r) cases)
+    (f:'b -> 'r case -> 'a flow -> 'b)
     (init:'b)
+    (cases:('a,'r) cases)
   : 'b =
-  let flat_cases = Dnf.to_list c.cases_dnf |>
-                   List.flatten
-  in
-  List.fold_left (fun acc case ->
-      let flow = Flow.create c.cases_ctx case.case_alarms case.case_flow in
-      f case.case_result flow acc
-    ) init flat_cases
+  Dnf.fold (fun acc (case,flow) -> f acc case flow) init cases
 
 
-let fold_some
-    (f:'r -> 'a flow -> 'b -> 'b)
-    (c:('a,'r) cases)
+let fold_result
+    (f:'b -> 'r -> 'a flow -> 'b)
     (init:'b)
+    (cases:('a,'r) cases)
   : 'b =
-  fold (fun r flow acc ->
-      match r with
-      | None -> acc
-      | Some rr -> f rr flow acc
-    ) c init
+  fold
+    (fun acc case flow ->
+       match case with
+       | Result (r,_,_)     -> f acc r flow
+       | Empty | NotHandled -> acc
+    ) init cases
+
+let partition
+    (f:'r case -> 'a flow -> bool)
+    (cases:('a,'r) cases)
+  : ('a,'r) cases option * ('a,'r) cases option =
+  let dnf1, dnf2 = Dnf.partition (fun (case,flow) -> f case flow) cases in
+  let c1 = if Dnf.is_empty dnf1 then None else Some dnf1 in
+  let c2 = if Dnf.is_empty dnf2 then None else Some dnf2 in
+  c1, c2
+
+
+let flatten (cases:('a,'r) cases) : ('r case * 'a flow) list =
+  Dnf.to_list cases |>
+  List.flatten
 
 let for_all
-    (f:'r option -> 'a flow -> bool)
-    (c:('a,'r) cases)
+    (f:'r case -> 'a flow -> bool)
+    (cases:('a,'r) cases)
   : bool =
-  let flat_cases = Dnf.to_list c.cases_dnf |>
-                   List.flatten
-  in
-  List.for_all (fun case ->
-      let flow = Flow.create c.cases_ctx case.case_alarms case.case_flow in
-      f case.case_result flow
-    ) flat_cases
+  flatten cases |>
+  List.for_all (fun (case,flow) -> f case flow)
 
-let for_all_some
+let for_all_result
     (f:'r -> 'a flow -> bool)
-    (c:('a,'r) cases)
+    (cases:('a,'r) cases)
   : bool =
-  for_all (fun r flow ->
-      match r with
-      | None -> true
-      | Some rr -> f rr flow
-    ) c
+  for_all
+    (fun case flow ->
+      match case with
+      | Result (r,_,_)     -> f r flow
+      | Empty | NotHandled -> true
+    ) cases
+
 
 let exists
-    (f:'r option -> 'a flow -> bool)
-    (c:('a,'r) cases)
+    (f:'r case -> 'a flow -> bool)
+    (cases:('a,'r) cases)
   : bool =
-  let flat_cases = Dnf.to_list c.cases_dnf |>
-                   List.flatten
-  in
-  List.exists (fun case ->
-      let flow = Flow.create c.cases_ctx case.case_alarms case.case_flow in
-      f case.case_result flow
-    ) flat_cases
+  flatten cases |>
+  List.exists (fun (case,flow) -> f case flow)
 
-let exists_some
+let exists_result
     (f:'r -> 'a flow -> bool)
-    (c:('a,'r) cases)
+    (cases:('a,'r) cases)
   : bool =
-  exists (fun r flow ->
-      match r with
-      | None -> false
-      | Some rr -> f rr flow
-    ) c
+  exists
+    (fun case flow ->
+      match case with
+      | Result (r,_,_)     -> f r flow
+      | Empty | NotHandled -> false
+    ) cases
 
-(****************************************************************************)
-(**                       {2 Lattice operators}                             *)
-(****************************************************************************)
-
-let is_empty (r:('a,'r) cases) : bool =
-  Dnf.to_list r.cases_dnf |>
-  List.for_all (
-    List.for_all (fun case -> AlarmSet.is_empty case.case_alarms &&
-                              TokenMap.is_empty case.case_flow
-                 )
-  )
 
 (** Join two results *)
-let join (r1:('a,'r) cases) (r2:('a,'r) cases) : ('a,'r) cases =
-  if is_empty r1 then r2
-  else if is_empty r2 then r1
-  else
-  {
-    cases_dnf = Dnf.mk_or r1.cases_dnf r2.cases_dnf;
-    cases_ctx = Context.get_most_recent r1.cases_ctx r2.cases_ctx;
-  }
-
+let join (cases1:('a,'r) cases) (cases2:('a,'r) cases) : ('a,'r) cases =
+  Dnf.mk_or cases1 cases2 |>
+  normalize_ctx
 
 (** Meet two results *)
-let meet (r1:('a,'r) cases) (r2:('a,'r) cases) : ('a,'r) cases =
-  {
-    cases_dnf = Dnf.mk_and r1.cases_dnf r2.cases_dnf;
-    cases_ctx = Context.get_most_recent r1.cases_ctx r2.cases_ctx;
-  }
+let meet (cases1:('a,'r) cases) (cases2:('a,'r) cases) : ('a,'r) cases =
+  Dnf.mk_or cases1 cases2 |>
+  normalize_ctx
 
 
 (** Join a list of results *)
@@ -392,86 +334,221 @@ let meet_list ~empty (l: ('a,'r) cases list) : ('a,'r) cases =
   | hd :: tl -> List.fold_left meet hd tl
 
 
+let remove_duplicates compare_case lattice cases =
+  (* Logs of empty environments should be ignored.
+     This function returns an empty log when T_cur environment is empty. *)
+  let real_log flow log =
+    if lattice.Lattice.is_bottom (Flow.get T_cur lattice flow)
+    then empty_log
+    else log
+  in
+  (* Remove duplicates of a case in a conjunction *)
+  let rec remove_case_duplicates_in_conj case flow conj =
+    match conj with
+    | [] -> case, flow, []
+    | (case',flow') :: tl' ->
+      let case'', flow'', tl'' = remove_case_duplicates_in_conj case flow tl' in
+      match compare_case case case' with
+        | 0 ->
+          let flow = Flow.meet lattice flow' flow'' in
+          let case = set_case_cleaners (StmtSet.union (get_case_cleaners case') (get_case_cleaners case'')) case'' |>
+                     set_case_log (meet_log (get_case_log case') (get_case_log case'') |> real_log flow) in
+          case,flow,tl''
+        | _ -> case'', flow'', (case',flow')::tl''
+  in
+  (* Remove all duplicates in a conjunction *)
+  let rec remove_duplicates_in_conj conj =
+    match conj with
+    | [] | [(_,_)] -> conj
+    | (case,flow) :: tl ->
+      (* Remove duplicates of case from tl *)
+      let case', flow', tl' = remove_case_duplicates_in_conj case flow tl in
+      (case',flow') :: remove_duplicates_in_conj tl'
+  in
+  (* Remove all duplicates in all conjunctions *)
+  let cases = map_conjunction remove_duplicates_in_conj cases in
+  (* Remove duplicates of a conjunction in a disjunction *)
+  let rec remove_conj_duplicates_in_disj conj disj =
+    match disj with
+    | [] -> conj, []
+    | conj'::tl ->
+      let conj'', tl' = remove_conj_duplicates_in_disj conj tl in
+      match Compare.list (fun (c,_) (c',_) -> compare_case c c') conj' conj'' with
+      | 0 ->
+        let conj =
+          List.combine conj' conj'' |>
+          List.map
+            (fun ((case,flow), (case',flow')) ->
+               let flow = Flow.join lattice flow flow' in
+               let case = set_case_cleaners (StmtSet.union (get_case_cleaners case) (get_case_cleaners case')) case |>
+                          set_case_log (join_log (get_case_log case) (get_case_log case') |> real_log flow) in
+               case,flow
+            )
+        in
+        conj,tl'
+      | _ ->
+        conj'',conj'::tl'
+  in
+  let rec remove_duplicates_in_disj = function
+    | [] -> []
+    | conj::tl ->
+      let conj',tl' = remove_conj_duplicates_in_disj conj tl in
+      conj'::remove_duplicates_in_disj tl'
+  in
+  Dnf.from_list (remove_duplicates_in_disj (Dnf.to_list cases))
+
+let remove_duplicate_results compare_results lattice cases =
+  remove_duplicates
+    (fun case case' ->
+       match case, case' with
+       | Result(r,_,_), Result(r',_,_) -> compare_results r r'
+       | _                             -> compare case case'
+    ) lattice cases
+
+
+let cardinal cases = Dnf.cardinal cases
+
 
 (****************************************************************************)
 (**                        {2 Monadic binders}                              *)
 (****************************************************************************)
 
-let bind_full_opt
-    (f: 'r option -> 'a flow -> log -> stmt list -> ('a,'s) cases option )
-    (r: ('a,'r) cases)
-  : ('a,'s) cases option =
-  let ctx, ret = Dnf.fold_apply
-      (fun ctx case ->
-         let flow' = Flow.create ctx case.case_alarms case.case_flow in
-         let r' = f case.case_result flow' case.case_log (StmtSet.elements case.case_cleaners) in
-         let ctx = OptionExt.apply get_ctx ctx r' in
-         (ctx,r')
-      )
-      (OptionExt.neutral2 join)
-      (OptionExt.neutral2 meet)
-      (get_ctx r) r.cases_dnf
-  in
-  OptionExt.lift (set_ctx ctx) ret
-
-
-let (>>*?) r f = bind_full_opt f r
-
-
-
-let bind_full f r =
-  bind_full_opt (fun e flow log cleaners -> Some (f e flow log cleaners)) r |>
-  OptionExt.none_to_exn
-
-let (>>*) r f = bind_full f r
-
-
-
 let bind_opt
-    (f: 'r option -> 'a flow -> ('a,'s) cases option )
-    (r: ('a,'r) cases)
+    (f: 'r case -> 'a flow -> ('a,'s) cases option )
+    (cases: ('a,'r) cases)
   : ('a,'s) cases option =
-  r |> bind_full_opt (fun r flow log cleaners ->
-      f r flow |>
-      OptionExt.lift (add_cleaners cleaners) |>
-      OptionExt.lift (concat_cases_log log)
-    )
+  Dnf.bind
+    (fun (case,flow) ->
+       let cases' =
+         match f case flow with
+           | None   -> not_handled flow
+           | Some c -> c
+         in
+         add_cleaners (get_case_cleaners case |> StmtSet.elements) cases' |>
+         concat_log (get_case_log case)
+      )
+      cases
+  |> normalize_ctx
+  |> OptionExt.return
 
 
-let (>>=?) r f = bind_opt f r
+let (>>=?) cases f = bind_opt f cases
 
-
-let bind f r =
-  bind_opt (fun e flow -> Some (f e flow)) r |>
+let bind f cases =
+  bind_opt (fun case flow -> Some (f case flow)) cases |>
   OptionExt.none_to_exn
 
-let (>>=) r f = bind f r
+let (>>=) cases f = bind f cases
 
 
-let bind_some_opt
+let bind_result_opt
     (f:'r -> 'a flow -> ('a,'s) cases option)
-    (r:('a,'r) cases)
+    (cases:('a,'r) cases)
   : ('a,'s) cases option
   =
-  r |> bind_opt @@ fun r flow ->
-  match r with
-  | None -> Some (empty_singleton flow)
-  | Some rr -> f rr flow
+  bind_opt
+    (fun case flow ->
+       match case with
+       | Result (r,_,_)   -> f r flow
+       | Empty            -> Some (empty flow)
+       | NotHandled       -> Some (not_handled flow)
+    ) cases
 
 
-let (>>$?) r f = bind_some_opt f r
+let (>>$?) r f = bind_result_opt f r
 
 
-let bind_some
+let bind_result
     (f:'r -> 'a flow -> ('a,'s) cases)
-    (r:('a,'r) cases)
+    (cases:('a,'r) cases)
   : ('a,'s) cases
   =
-  bind_some_opt (fun r flow -> Some (f r flow)) r |>
+  bind_result_opt (fun r flow -> Some (f r flow)) cases |>
   OptionExt.none_to_exn
 
 
-let (>>$) r f = bind_some f r
+let (>>$) r f = bind_result f r
+
+
+let bind_conjunction
+    (f:('r case * 'a flow) list -> ('a,'s) cases)
+    (cases:('a,'r) cases)
+  : ('a,'s) cases =
+  Dnf.bind_conjunction f cases |>
+  normalize_ctx
+
+let bind_conjunction_result
+    (f:'r list -> 'a flow -> ('a,'s) cases)
+    (lattice:'a lattice)
+    (cases:('a,'r) cases)
+  : ('a,'s) cases =
+  bind_conjunction
+    (fun conj ->
+       (* Separate cases actual results from empty and not-handled cases *)
+       let handled,others = List.partition (fun (case,flow) -> match case with Result _ -> true | _ -> false) conj in
+       (* This is a hack to change the type of others from 'r case to 's case *)
+       let others = List.map (fun (case,flow) -> match case with NotHandled -> NotHandled,flow | Empty -> Empty,flow | _ -> assert false) others in
+       if handled = [] then
+         meet_list (List.map (fun (c,flow) -> case c flow) others) ~empty:(fun () -> assert false)
+       else
+         let cl,fl = List.split handled in
+         let flow = List.fold_left (Flow.meet lattice) (List.hd fl) (List.tl fl) in
+         let rl,log,cleaners =
+           List.fold_left
+             (fun (acc1,acc2,acc3) case ->
+                match case with
+                | Result(r,log,cleaners) -> r::acc1,meet_log acc2 log,StmtSet.union acc3 cleaners
+                | _ -> assert false
+             ) ([],empty_log,StmtSet.empty) cl in
+         let handled_res = f rl flow |>
+                           add_cleaners (StmtSet.elements cleaners) |>
+                           concat_log log in
+         if others = [] then
+           handled_res
+         else
+           meet_list (List.map (fun (c,flow) -> case c flow) others) ~empty:(fun () -> assert false) |>
+           meet handled_res
+    ) cases
+
+let bind_disjunction
+    (f:('r case * 'a flow) list -> ('a,'s) cases)
+    (cases:('a,'r) cases)
+  : ('a,'s) cases =
+  Dnf.bind_disjunction f cases |>
+  normalize_ctx
+
+let bind_disjunction_result
+    (f:'r list -> 'a flow -> ('a,'s) cases)
+    (lattice:'a lattice)
+    (cases:('a,'r) cases)
+  : ('a,'s) cases =
+  bind_disjunction
+    (fun disj ->
+       (* Separate cases actual results from empty and not-handled cases *)
+       let handled,others = List.partition (fun (case,flow) -> match case with Result _ -> true | _ -> false) disj in
+       (* This is a hack to change the type of others from 'r case to 's case *)
+       let others = List.map (fun (case,flow) -> match case with NotHandled -> NotHandled,flow | Empty -> Empty,flow | _ -> assert false) others in
+       if handled = [] then
+         join_list (List.map (fun (c,flow) -> case c flow) others) ~empty:(fun () -> assert false)
+       else
+         let cl,fl = List.split handled in
+         let flow = List.fold_left (Flow.join lattice) (List.hd fl) (List.tl fl) in
+         let rl,log,cleaners =
+           List.fold_left
+             (fun (acc1,acc2,acc3) case ->
+                match case with
+                | Result(r,log,cleaners) -> r::acc1,join_log acc2 log,StmtSet.union acc3 cleaners
+                | _ -> assert false
+             ) ([],empty_log,StmtSet.empty) cl in
+         let handled_res = f rl flow |>
+                           add_cleaners (StmtSet.elements cleaners) |>
+                           concat_log log in
+         if others = [] then
+           handled_res
+         else
+           join_list (List.map (fun (c,flow) -> case c flow) others) ~empty:(fun () -> assert false) |>
+           join handled_res
+    ) cases
 
 
 let bind_list_opt
@@ -484,14 +561,14 @@ let bind_list_opt
     match l with
     | e :: tl ->
       f e flow |>
-      OptionExt.absorb @@ bind_some_opt @@ fun e' flow ->
+      OptionExt.absorb @@ bind_result_opt @@ fun e' flow ->
       aux tl flow |>
-      OptionExt.lift @@ bind_some @@ fun tl' flow ->
-      singleton (e'::tl') flow
+      OptionExt.lift @@ bind_result @@ fun tl' flow ->
+      return (e'::tl') flow
 
 
     | [] ->
-      singleton [] flow |>
+      return [] flow |>
       OptionExt.return
   in
   aux l flow
@@ -500,85 +577,3 @@ let bind_list_opt
 let bind_list l f flow =
   bind_list_opt l (fun e flow -> Some (f e flow)) flow |>
   OptionExt.none_to_exn
-
-
-let remove_duplicates compare lattice r =
-  let ctx = r.cases_ctx in
-  let compare_case case case' = compare case.case_result case'.case_result in
-  (* Logs of empty environments should be ignored.
-     This function returns an empty log when T_cur environment is empty. *)
-  let real_log flow log =
-    if lattice.Lattice.is_bottom (TokenMap.get T_cur lattice flow)
-    then empty_log
-    else log
-  in
-  let rec simplify_conj conj =
-    match conj with
-    | [] -> conj
-    | [case] -> [case]
-    | case :: tl ->
-      (* Remove duplicates of case from tl *)
-      let case', tl' =
-        let rec aux = function
-          | [] -> case, []
-          | case' :: tl' ->
-            let case, tl'' = aux tl' in
-            match compare_case case case' with
-            | 0 ->
-              let flow = TokenMap.meet lattice (Context.get_unit ctx) case.case_flow case'.case_flow in
-              let case'' = {
-                case_result = case.case_result;
-                case_flow = flow;
-                case_cleaners = StmtSet.union case.case_cleaners case'.case_cleaners;
-                case_alarms = AlarmSet.inter case.case_alarms case'.case_alarms;
-                case_log = meet_log case.case_log  case'.case_log |>
-                           real_log flow;
-              }
-              in
-              case'', tl''
-            | _ -> case, case' :: tl''
-        in
-        aux tl
-      in
-      case' :: simplify_conj tl'
-  in
-  let join_conj conj conj' =
-    List.combine conj conj' |>
-    List.map (fun (case, case') ->
-        {
-          case_result = case.case_result;
-          case_flow = TokenMap.join lattice (Context.get_unit ctx) case.case_flow case'.case_flow;
-          case_cleaners = StmtSet.union case.case_cleaners case'.case_cleaners;
-          case_alarms = AlarmSet.union case.case_alarms case'.case_alarms;
-          case_log = join_log
-              (real_log case.case_flow case.case_log)
-              (real_log case'.case_flow case'.case_log);
-        }
-      )
-  in
-  let rec simplify_disj disj =
-    match disj with
-    | [] -> disj
-    | conj :: tl ->
-      let conj = simplify_conj conj in
-      (* Remove duplicates of conj from tl *)
-      let conj', tl' =
-        let rec aux = function
-          | [] -> conj, []
-          | conj' :: tl' ->
-            let conj, tl'' = aux tl' in
-            match Compare.list compare_case conj conj' with
-            | 0 -> join_conj conj conj', tl''
-            | _ -> conj, conj' :: tl''
-        in
-        aux tl
-      in
-      conj' :: simplify_disj tl'
-  in
-  { r with cases_dnf = Dnf.from_list (simplify_disj (Dnf.to_list r.cases_dnf)) }
-
-let remove_duplicates_some compare lattice r =
-  remove_duplicates (OptionExt.compare compare) lattice r
-
-
-let cardinal r = Dnf.cardinal r.cases_dnf

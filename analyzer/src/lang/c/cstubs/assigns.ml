@@ -69,12 +69,12 @@ struct
           | _ -> assign.assign_target
         in
         let pp = resolve_pointer ptr man flow in
-        Cases.fold_some (fun p flow acc ->
+        Cases.fold_result (fun acc p flow ->
             match p with
             | P_block ({ base_valid = true; base_kind = Var _ | Addr _ } as base, _, _) ->
               BaseSet.add base acc
             | _ -> acc
-          ) pp acc
+          ) acc pp
       ) BaseSet.empty assigns
 
   (** Expand base to a primed copy *)
@@ -150,30 +150,30 @@ struct
     match p with
     | P_null ->
       raise_c_null_deref_alarm ptr man flow |>
-      Cases.empty_singleton
+      Cases.empty
 
     | P_invalid ->
       raise_c_invalid_deref_alarm ptr man flow |>
-      Cases.empty_singleton
+      Cases.empty
 
     | P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset, _) ->
       raise_c_use_after_free_alarm ptr r man flow |>
-      Cases.empty_singleton
+      Cases.empty
 
     | P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset, _) ->
       raise_c_dangling_deref_alarm ptr v r man flow |>
-      Cases.empty_singleton
+      Cases.empty
 
     | P_block (base, offset, _) when is_base_readonly base ->
       raise_c_modify_read_only_alarm ptr base man flow |>
-      Cases.empty_singleton
+      Cases.empty
 
     | P_block (base, offset, mode)  ->
       exec_assign_base base offset mode target.etyp assigned_indices range man flow
 
     | P_top ->
       Soundness.warn_at range "ignoring assigns on ⊤ pointer %a" pp_expr (get_orig_expr ptr);
-      Cases.empty_singleton ~bottom:false flow
+      Cases.empty ~bottom:false flow
 
     | _ -> assert false
 
@@ -237,30 +237,30 @@ struct
     match p with
     | P_null ->
       raise_c_null_deref_alarm ptr man flow |>
-      Cases.empty_singleton
+      Cases.empty
 
     | P_invalid ->
       raise_c_invalid_deref_alarm ptr man flow |>
-      Cases.empty_singleton
+      Cases.empty
 
     | P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset, _) ->
       raise_c_use_after_free_alarm ptr r man flow |>
-      Cases.empty_singleton
+      Cases.empty
 
     | P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset, _) ->
       raise_c_dangling_deref_alarm ptr v r man flow |>
-      Cases.empty_singleton
+      Cases.empty
 
     | P_block (base, offset, _) when is_base_readonly base ->
       raise_c_modify_read_only_alarm ptr base man flow |>
-      Cases.empty_singleton
+      Cases.empty
 
     | P_block (base, offset, mode)  ->
       eval_primed_base base offset mode e.etyp range man flow
 
     | P_top ->
       Soundness.warn_at range "ignoring prime of ⊤ pointer %a" pp_expr (get_orig_expr ptr);
-      Cases.empty_singleton ~bottom:false flow
+      Cases.empty ~bottom:false flow
 
     | _ -> assert false
 

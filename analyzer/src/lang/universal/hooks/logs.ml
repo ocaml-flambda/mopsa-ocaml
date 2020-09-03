@@ -191,7 +191,7 @@ struct
   let on_after_eval route exp man flow evl =
     let time = get_timing () in
     let pp_evl_with_type fmt evl =
-      Cases.print_some (
+      Cases.print_result (
         fun fmt e flow ->
           Format.fprintf fmt "%a : %a" pp_expr e pp_typ e.etyp
       ) fmt evl

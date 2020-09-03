@@ -61,7 +61,11 @@ struct
   let numeric = Semantic "U/Numeric"
 
   let alarms = [ A_c_invalid_pointer_compare;
-                 A_c_invalid_pointer_sub ]
+                 A_c_invalid_pointer_sub;
+                 A_c_null_deref;
+                 A_c_dangling_pointer_deref;
+                 A_c_invalid_deref;
+                 A_c_use_after_free ]
 
   (** {2 Lattice operators} *)
   (** ===================== *)
@@ -231,6 +235,49 @@ struct
       if PointerSet.is_valid v && not (PointerSet.is_valid v')
       then man.exec ~route:numeric (mk_remove (mk_offset p mode range) range) flow
       else Post.return flow
+
+  (** Evaluation a pointer expression into a points-to expression *)
+  let eval_points_to exp man flow =
+    man.eval exp flow >>$? fun exp flow ->
+    Static_points_to.eval_opt exp |> OptionExt.lift @@ fun ptr ->
+    match ptr with
+    | AddrOf (base, offset, mode) ->
+      Cases.singleton (mk_c_points_to_bloc base offset mode) flow
+
+    | Eval (p, mode, offset) ->
+      let o = mk_offset p mode exp.erange in
+      let offset' = mk_binop o O_plus offset ~etyp:T_int exp.erange in
+      let a = get_env T_cur man flow in
+      let values = Map.find p a in
+      let evals = PointerSet.fold_points_to (fun v pt acc ->
+          let flow = set_env T_cur (Map.set p v a) man flow in
+          (
+            ( match PointerSet.is_valid values, PointerSet.is_valid v with
+              | false, false -> Post.return flow
+              | true, true -> Post.return flow
+              | false, true ->
+                man.exec ~route:numeric (mk_add o exp.erange) flow >>% fun flow ->
+                man.eval offset flow >>$ fun offset flow ->
+                man.exec ~route:numeric (mk_assign (strongify_var_expr o) offset exp.erange) flow
+              | true, false -> man.exec ~route:numeric (mk_remove o exp.erange) flow
+            ) >>% fun flow ->
+            Cases.singleton pt flow
+          ) :: acc
+        ) values offset' []
+      in
+      Cases.join_list evals ~empty:(fun () -> Cases.empty flow)
+
+    | Fun f ->
+      Cases.singleton (mk_c_points_to_fun f) flow
+
+    | Null ->
+      Cases.singleton mk_c_points_to_null flow
+
+    | Invalid ->
+      Cases.singleton mk_c_points_to_invalid flow
+
+    | Top ->
+      Cases.singleton mk_c_points_to_top flow
 
 
   (** {2 Computation of post-conditions} *)
@@ -608,8 +655,52 @@ struct
     in
     man.exec stmt ~route:numeric flow
 
+  let assign_deref ptr e range man flow =
+    let ctype = under_type ptr.etyp in
+    eval_points_to ptr man flow |> OptionExt.none_to_exn >>$ fun pt flow ->
+    match pt with
+    | P_null ->
+      raise_c_null_deref_alarm ptr man flow |>
+      Post.return
+
+    | P_invalid ->
+      raise_c_invalid_deref_alarm ptr man flow |>
+      Post.return
+
+    | P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset, _) ->
+      raise_c_use_after_free_alarm ptr r man flow |>
+      Post.return
+
+    | P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset, _) ->
+      raise_c_dangling_deref_alarm ptr v r man flow |>
+      Post.return
+
+    | P_block ({ base_kind = Var v}, offset, mode) when compare_typ ctype v.vtyp = 0 ->
+      assume (eq offset zero range)
+        ~fthen:(man.exec (mk_assign (mk_var v ~mode range) e range))
+        ~felse:(man.exec (mk_forget (mk_var v ~mode range) range))
+        man flow
+
+    | P_block _ ->
+      Post.return flow
+
+    | P_top ->
+      Soundness.warn_at range "ignoring assignment to ⊤ pointer %a" pp_expr ptr;
+      Post.return flow
+
+    | P_fun _ ->
+      assert false
 
 
+  (** Forget the value of *ptr *)
+  let forget_deref ptr range man flow =
+    eval_points_to ptr man flow |> OptionExt.none_to_exn >>$ fun pt flow ->
+    match pt with
+    | P_block ({ base_kind = Var v}, offset, mode) ->
+      man.exec (mk_forget (mk_var v ~mode range) range) flow
+
+    | _ ->
+      Post.return flow
 
   (** Entry point of abstract transformers *)
   let exec stmt man flow =
@@ -622,6 +713,10 @@ struct
     | S_assign({ekind = E_var(p, mode)}, q)
       when is_c_pointer_type p.vtyp ->
       assign p q mode stmt.srange man flow |>
+      OptionExt.return
+
+    | S_assign({ekind = E_c_deref p} as x, e) when is_c_scalar_type x.etyp ->
+      assign_deref p e stmt.srange man flow |>
       OptionExt.return
 
     | S_add { ekind = E_var (p, _) }
@@ -651,7 +746,7 @@ struct
       expand_pointer_var v vl stmt.srange man flow |>
       OptionExt.return
 
-     | S_fold({ekind = E_var(v,_)} as p, ql)
+    | S_fold({ekind = E_var(v,_)} as p, ql)
       when is_c_pointer_type p.etyp &&
            List.for_all (function { ekind = E_var(q,_) } -> is_c_pointer_type q.vtyp | _ -> false) ql
       ->
@@ -659,10 +754,14 @@ struct
       fold_pointer_var v vl stmt.srange man flow |>
       OptionExt.return
 
-     | S_forget({ekind = E_var(v,_)} as p)
-       when is_c_pointer_type p.etyp ->
-       forget_pointer_var v stmt.srange man flow |>
-       OptionExt.return
+    | S_forget({ekind = E_var(v,_)} as p)
+      when is_c_pointer_type p.etyp ->
+      forget_pointer_var v stmt.srange man flow |>
+      OptionExt.return
+
+    | S_forget ({ekind = E_c_deref p} as x) when is_c_scalar_type x.etyp ->
+      forget_deref p stmt.srange man flow |>
+      OptionExt.return
 
     | S_invalidate e when is_c_type e.etyp  ->
       exec_invalidate_base e stmt.srange man flow |>
@@ -694,49 +793,6 @@ struct
 
   (** {2 Pointer evaluation} *)
   (** ====================== *)
-
-  (** Evaluation a pointer expression into a points-to expression *)
-  let eval_points_to exp man flow =
-    man.eval exp flow >>$? fun exp flow ->
-    Static_points_to.eval_opt exp |> OptionExt.lift @@ fun ptr ->
-    match ptr with
-    | AddrOf (base, offset, mode) ->
-      Cases.singleton (mk_c_points_to_bloc base offset mode) flow
-
-    | Eval (p, mode, offset) ->
-      let o = mk_offset p mode exp.erange in
-      let offset' = mk_binop o O_plus offset ~etyp:T_int exp.erange in
-      let a = get_env T_cur man flow in
-      let values = Map.find p a in
-      let evals = PointerSet.fold_points_to (fun v pt acc ->
-          let flow = set_env T_cur (Map.set p v a) man flow in
-          (
-            ( match PointerSet.is_valid values, PointerSet.is_valid v with
-              | false, false -> Post.return flow
-              | true, true -> Post.return flow
-              | false, true ->
-                man.exec ~route:numeric (mk_add o exp.erange) flow >>% fun flow ->
-                man.eval offset flow >>$ fun offset flow ->
-                man.exec ~route:numeric (mk_assign (strongify_var_expr o) offset exp.erange) flow
-              | true, false -> man.exec ~route:numeric (mk_remove o exp.erange) flow
-            ) >>% fun flow ->
-            Cases.singleton pt flow
-          ) :: acc
-        ) values offset' []
-      in
-      Cases.join_list evals ~empty:(fun () -> Cases.empty_singleton flow)
-
-    | Fun f ->
-      Cases.singleton (mk_c_points_to_fun f) flow
-
-    | Null ->
-      Cases.singleton mk_c_points_to_null flow
-
-    | Invalid ->
-      Cases.singleton mk_c_points_to_invalid flow
-
-    | Top ->
-      Cases.singleton mk_c_points_to_top flow
 
 
   (** 𝔼⟦ p - q ⟧ *)
@@ -797,10 +853,52 @@ struct
                    set_value_opt p2 v2 man
         in
         let flow = raise_c_invalid_pointer_sub p q range man flow in
-        [Eval.empty_singleton flow]
+        [Eval.empty flow]
     in
 
-    Eval.join_list (case1 @ case2) ~empty:(fun () -> Eval.empty_singleton flow)
+    Eval.join_list (case1 @ case2) ~empty:(fun () -> Eval.empty flow)
+
+
+  (** 𝔼⟦ *ptr ⟧ *)
+  let eval_deref ptr range man flow =
+    let ctype = under_type ptr.etyp in
+    eval_points_to ptr man flow |> OptionExt.none_to_exn >>$ fun pt flow ->
+    match pt with
+    | P_null ->
+      raise_c_null_deref_alarm ptr man flow |>
+      Eval.empty
+
+    | P_invalid ->
+      raise_c_invalid_deref_alarm ptr man flow |>
+      Eval.empty
+
+    | P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset, _) ->
+      raise_c_use_after_free_alarm ptr r man flow |>
+      Eval.empty
+
+    | P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset, _) ->
+      raise_c_dangling_deref_alarm ptr v r man flow |>
+      Eval.empty
+
+    | P_block ({ base_kind = Var v}, offset, mode) when compare_typ ctype v.vtyp = 0 ->
+      assume (eq offset zero range)
+        ~fthen:(man.eval (mk_var v ~mode range))
+        ~felse:(man.eval (mk_top ctype range))
+        man flow
+
+    | P_block _ ->
+      man.eval (mk_top ctype range) flow
+
+    | P_top ->
+      warn_at range "dereferencing ⊤ pointer %a" pp_expr ptr;
+      let flow = raise_c_null_deref_wo_info_alarm ~bottom:false range man flow |>
+                 raise_c_invalid_deref_wo_info_alarm ~bottom:false range man |>
+                 raise_c_use_after_free_wo_info_alarm ~bottom:false range man |>
+                 raise_c_dangling_deref_wo_info_alarm ~bottom:false range man in
+      man.eval (mk_top ctype range) flow
+
+    | P_fun _ ->
+      assert false
 
 
 
@@ -939,6 +1037,11 @@ struct
           | P_block _ | P_fun _ ->
             Eval.singleton (mk_zero exp.erange) flow
         )
+
+    (* 𝔼⟦ *p ⟧ *)
+    | E_c_deref p when is_c_scalar_type exp.etyp ->
+      eval_deref p exp.erange man flow |>
+      OptionExt.return
 
 
     | _ -> None

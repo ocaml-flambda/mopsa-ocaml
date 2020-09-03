@@ -419,7 +419,7 @@ struct
     if Z.(s = one) then true
     else
       man.eval ~route e flow |>
-      Cases.for_all_some (fun ee flow ->
+      Cases.for_all_result (fun ee flow ->
           (* Compute the step-interval of ee *)
           let _, c = man.ask (Universal.Numeric.Common.Q_int_congr_interval ee) flow in
           let c' = (s,Z.zero) in
@@ -632,7 +632,7 @@ struct
     | P_invalid
     | P_block ({ base_valid = false }, _, _)
     | P_top ->
-      Cases.empty_singleton flow
+      Cases.empty flow
 
     | P_block (base, offset, mode) ->
       Cases.singleton (base, offset, mode) flow

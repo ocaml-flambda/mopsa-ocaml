@@ -121,75 +121,11 @@ struct
     D2.init prog (snd_pair_man man)
 
   (** Execution of statements *)
-  let exec targets =
-    match sat_targets ~targets ~domains:D1.domains,
-          sat_targets ~targets ~domains:D2.domains
-    with
-    | false, false ->
-      (* Both operands do not provide an [exec] for such targets *)
-      raise Not_found
-
-    | true, false ->
-      (* Only [D1] provides an [exec] for such targets *)
-      let f = D1.exec targets in
-      (fun stmt man flow ->
-         f stmt (fst_pair_man man) flow
-      )
-
-    | false, true ->
-      (* Only [D2] provides an [exec] for such targets *)
-      let f = D2.exec targets in
-      (fun stmt man flow ->
-         f stmt (snd_pair_man man) flow
-      )
-
-    | true, true ->
-      (* Both [D1] and [D2] provide an [exec] for such targets *)
-      let f1 = D1.exec targets in
-      let f2 = D2.exec targets in
-      (fun stmt man flow ->
-         match f1 stmt (fst_pair_man man) flow with
-         | Some post ->
-           OptionExt.return post
-
-         | None ->
-           f2 stmt (snd_pair_man man) flow
-      )
+  let exec targets = cascade_call targets D1.exec D1.domains D2.exec D2.domains
 
 
   (** Evaluation of expressions *)
-  let eval targets =
-    match sat_targets ~targets ~domains:D1.domains,
-          sat_targets ~targets ~domains:D2.domains
-    with
-    | false, false ->
-      (* Both operands do not provide an [eval] for such targets *)
-      raise Not_found
-
-    | true, false ->
-      (* Only [D1] provides an [eval] for such targets *)
-      let f = D1.eval targets in
-      (fun exp man flow ->
-         f exp (fst_pair_man man) flow
-      )
-
-    | false, true ->
-      (* Only [D2] provides an [eval] for such targets *)
-      let f = D2.eval targets in
-      (fun exp man flow ->
-         f exp (snd_pair_man man) flow
-      )
-
-    | true, true ->
-      (* Both [D1] and [D2] provide an [eval] for such targets *)
-      let f1 = D1.eval targets in
-      let f2 = D2.eval targets in
-      (fun exp man flow ->
-         match f1 exp (fst_pair_man man) flow with
-         | Some evl -> Some evl
-
-         | None -> f2 exp (snd_pair_man man) flow
-      )
+  let eval targets = cascade_call targets D1.eval D1.domains D2.eval D2.domains
 
 
   (** Query handler *)

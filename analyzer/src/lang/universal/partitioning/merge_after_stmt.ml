@@ -48,8 +48,15 @@ struct
   let exec stmt man flow =
     let post = man.exec stmt flow ~route:(Below name) in
     let post' =
-      (* Collapse all partitions *)
-      Cases.remove_duplicates (fun _ _ -> 0) man.lattice post >>% fun flow ->
+      (* Collapse all partitions except NotHandled*)
+      Cases.remove_duplicates
+        (fun case case' ->
+          match case,case' with
+          | NotHandled,NotHandled -> 0
+          | _,NotHandled -> 1
+          | NotHandled,_ -> 2
+          | _ -> 0
+        ) man.lattice post >>% fun flow ->
       (* Since partitions can be tagged with [Some ()] or [None], we
          add this bind to ensure that final result is [Some ()] *)
       Post.return flow

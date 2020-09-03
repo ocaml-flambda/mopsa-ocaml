@@ -27,12 +27,17 @@ open Ast.Stmt
 open Ast.Expr
 open Cases
 open Semantic
+open Log
+
 
 type 'a eval = ('a,expr) cases
 
-val singleton : ?cleaners:stmt list -> expr -> 'a flow -> 'a eval
+val return : ?log:log -> ?cleaners:stmt list -> expr -> 'a flow -> 'a eval
+val singleton : ?log:log -> ?cleaners:stmt list -> expr -> 'a flow -> 'a eval
 
-val empty_singleton : ?bottom:bool -> 'a flow -> 'a eval
+val empty : ?bottom:bool -> 'a flow -> 'a eval
+
+val not_handled : 'a flow -> 'a eval
 
 val join : 'a eval -> 'a eval -> 'a eval
 

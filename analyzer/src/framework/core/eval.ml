@@ -36,6 +36,6 @@ type 'a eval  = ('a,expr) cases
 include Cases
 
 let print fmt (evl: 'a eval) : unit =
-  Cases.print_some (fun fmt e flow -> pp_expr fmt e) fmt evl
+  Cases.print_result (fun fmt e flow -> pp_expr fmt e) fmt evl
 
-let remove_duplicates lattice evl = Cases.remove_duplicates_some compare_expr lattice evl
+let remove_duplicates lattice evl = Cases.remove_duplicate_results compare_expr lattice evl

@@ -36,17 +36,27 @@ type 'a post = ('a, unit) cases
 
 include Cases
 
-let return ?(log=empty_log) ?(cleaners=[]) flow : 'a post =
-  Cases.return (Some ()) ~log ~cleaners flow
-
+let return ?(cleaners=[]) flow : 'a post =
+  Cases.return () ~cleaners flow
 
 let print pp fmt post =
   Cases.print (fun fmt _ flow ->
       Flow.print pp fmt flow
     ) fmt post
 
-let bind f post = post >>= fun _ flow -> f flow
+let bind_opt f post =
+  Cases.bind_opt
+    (fun case flow ->
+       match case with
+       | Result _ | Empty -> f flow
+       | NotHandled       -> Some (not_handled flow)
+    ) post
+
+let (>>%?) post f = bind_opt f post
+
+let bind f post =
+  post |> bind_opt (fun flow -> Some (f flow)) |>
+  OptionExt.none_to_exn
 
 let (>>%) post f = bind f post
 
-let (>>%?) post f = post >>=? fun _ flow -> f flow
