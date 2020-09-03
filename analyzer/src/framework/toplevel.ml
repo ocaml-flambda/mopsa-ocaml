@@ -276,9 +276,6 @@ struct
       try RouteMap.find route eval_map
       with Not_found -> Exceptions.panic_at exp.erange "eval for %a not found" pp_route route
     in
-    let feval = fun e man flow -> match feval e man flow with
-                                  | None -> None
-                                  | Some evl -> Some (Eval.remove_duplicates man.lattice evl) in
     let evl =
       (* Ask domains to perform the evaluation *)
       match Cache.eval feval route exp man flow with
