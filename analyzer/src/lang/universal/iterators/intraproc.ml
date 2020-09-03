@@ -86,7 +86,7 @@ struct
       Post.return flow |>
       OptionExt.return
 
-    | S_assign(x,e) when is_numeric_type (etyp e) ->
+    | S_assign(x,e) when is_universal_type (etyp e) ->
       man.eval e flow >>$? fun e flow ->
       man.exec (mk_assign x e stmt.srange) flow ~route:(Below name) |>
       OptionExt.return
@@ -101,7 +101,7 @@ struct
       Post.return (Flow.remove T_cur flow) |>
       OptionExt.return
 
-    | S_assume e when is_numeric_type (etyp e) ->
+    | S_assume e when is_universal_type (etyp e) ->
       man.eval e flow >>$? fun e flow ->
       eval_bool_expr e stmt.srange man flow
         ~ftrue:(fun flow -> Post.return flow)
@@ -137,29 +137,34 @@ struct
 
 
   let eval exp man flow =
-    if is_numeric_type @@ etyp exp then
     match ekind exp with
-    | E_binop (O_log_and, e1, e2) ->
+    | E_binop (O_log_and, e1, e2)
+      when is_universal_type exp.etyp ->
       assume e1 man flow
         ~fthen:(fun flow -> man.eval e2 flow)
         ~felse:(fun flow -> Eval.singleton (mk_false exp.erange) flow)
       |> OptionExt.return
 
-    | E_binop (O_log_or, e1, e2) ->
+    | E_binop (O_log_or, e1, e2)
+      when is_universal_type exp.etyp ->
       assume e1 man flow
         ~fthen:(fun flow -> Eval.singleton (mk_true exp.erange) flow)
         ~felse:(fun flow -> man.eval e2 flow)
       |> OptionExt.return
 
-    | E_unop (O_log_not, { ekind = E_binop (O_log_and, e1, e2) }) ->
+    | E_unop (O_log_not, { ekind = E_binop (O_log_and, e1, e2) })
+      when is_universal_type exp.etyp ->
       man.eval (mk_log_or (mk_not e1 e1.erange) (mk_not e2 e2.erange) exp.erange) flow |>
       OptionExt.return
 
-    | E_unop (O_log_not, { ekind = E_binop (O_log_or, e1, e2) }) ->
+    | E_unop (O_log_not, { ekind = E_binop (O_log_or, e1, e2) })
+      when is_universal_type exp.etyp ->
       man.eval (mk_log_and (mk_not e1 e1.erange) (mk_not e2 e2.erange) exp.erange) flow |>
       OptionExt.return
 
-    | E_binop(op,e1,e2) when is_comparison_op op ->
+    | E_binop(op,e1,e2)
+      when is_comparison_op op  &&
+           is_universal_type exp.etyp ->
       man.eval exp ~route:(Below name) flow >>$? fun exp flow ->
       eval_bool_expr exp exp.erange man flow
         ~ftrue:(fun flow -> Eval.singleton (mk_true exp.erange) flow)
@@ -167,7 +172,8 @@ struct
         ~fboth:(fun flow -> Eval.singleton (mk_top T_bool exp.erange) flow) |>
       OptionExt.return
 
-    | E_unop(op,ee) when is_predicate_op op ->
+    | E_unop(op,ee) when is_predicate_op op  &&
+                         is_universal_type exp.etyp ->
       man.eval exp ~route:(Below name) flow >>$? fun exp flow ->
       eval_bool_expr exp exp.erange man flow
         ~ftrue:(fun flow -> Eval.singleton (mk_true exp.erange) flow)
@@ -176,7 +182,7 @@ struct
       OptionExt.return
 
     | _ -> None
-    else None
+
 
   let ask query man flow = None
 
