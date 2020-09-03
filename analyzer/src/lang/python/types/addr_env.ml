@@ -389,12 +389,12 @@ struct
        begin match akind a with
        | A_py_instance {addr_kind = A_py_class (C_annot _, _)} ->
           let skind = S_expand ({e1 with ekind = E_py_annot e1}, addrs) in
-          man.exec ~route:Below stmt flow >>%
+          man.exec ~route:(Below name) stmt flow >>%
             man.exec   {stmt with skind}
        | A_py_instance _ ->
-          man.exec ~route:Below stmt flow
+          man.exec ~route:(Below name) stmt flow
        | ak when Objects.Data_container_utils.is_data_container ak ->
-          man.exec ~route:Below stmt flow
+          man.exec ~route:(Below name) stmt flow
        | _ -> Post.return flow
        end
        |> OptionExt.return
@@ -425,7 +425,7 @@ struct
             | S_fold _ -> S_fold ({e2 with ekind = E_py_annot e2}, [e1])
             | S_rename _ -> S_rename ({e1 with ekind = E_py_annot e1}, e2)
             | _ -> assert false in
-          man.exec ~route:Below stmt flow >>%
+          man.exec ~route:(Below name) stmt flow >>%
             man.exec   {stmt with skind}
        | A_py_instance _ ->
           debug "instance encountered, renaming methods too";
@@ -443,9 +443,9 @@ struct
                             flow >>% man.exec   {stmt with skind}
                          | _ -> flow
                        ) (Post.return flow) aaddr in
-          flow >>% man.exec ~route:Below stmt
+          flow >>% man.exec ~route:(Below name) stmt
        | ak when Objects.Data_container_utils.is_data_container ak ->
-          man.exec ~route:Below stmt flow
+          man.exec ~route:(Below name) stmt flow
        | _ -> Post.return flow
        end |> OptionExt.return
 
@@ -468,9 +468,9 @@ struct
        let flow = set_env T_cur ncur man flow in
        begin match akind a with
        | A_py_instance _ ->
-          man.exec ~route:Below stmt flow
+          man.exec ~route:(Below name) stmt flow
        | ak when Objects.Data_container_utils.is_data_container ak ->
-          man.exec ~route:Below stmt flow
+          man.exec ~route:(Below name) stmt flow
        | _ -> Post.return flow
        end |> OptionExt.return
 
