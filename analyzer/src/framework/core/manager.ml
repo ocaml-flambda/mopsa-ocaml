@@ -86,16 +86,21 @@ let map_env (tk:token) (f:'t -> 't) (man:('a,'t) man) (flow:'a flow) : 'a flow =
 let rec exec_stmt_on_all_flows stmt man flow =
   man.exec stmt flow >>% fun flow ->
   Flow.fold (fun acc tk env ->
-      (* Put env in T_cur token of flow and remove others *)
-      let annot = Flow.get_ctx flow in
-      let flow' = Flow.singleton annot T_cur env in
+      match tk with
+      (* Skip T_cur since the statement was executed at the beginning
+         of the function *)
+      | T_cur -> acc
+      | _ ->
+        (* Put env in T_cur token of flow and remove others *)
+        let annot = Flow.get_ctx flow in
+        let flow' = Flow.singleton annot T_cur env in
 
-      (* Execute the cleaner *)
-      let flow'' = man.exec stmt flow' |> post_to_flow man in
+        (* Execute the cleaner *)
+        let flow'' = man.exec stmt flow' |> post_to_flow man in
 
-      (* Restore T_cur in tk *)
-      Flow.copy T_cur tk man.lattice flow'' flow |>
-      Flow.copy_ctx flow''
+        (* Restore T_cur in tk *)
+        Flow.copy T_cur tk man.lattice flow'' flow |>
+        Flow.copy_ctx flow''
     ) flow flow |>
   Post.return
 
@@ -227,25 +232,3 @@ let env_exec (f:'a flow -> 'a post) ctx (man:('a,'t) man) (a:'a) : 'a =
 let sub_env_exec (f:'a flow -> 'a post) ctx (man:('a,'t) man) (sman:('a,'s) stack_man) (a:'t) (s:'s) : 't * 's =
   let aa = env_exec f ctx man (man.lattice.top |> man.set a |> sman.set_sub s) in
   man.get aa, sman.get_sub aa
-
-
-(** Resolve route [Below] to [BelowOf domain]. This is necessary
-    because the toplevel domain resolve absolute routes only. *)
-let resolve_below_alias domain man =
-  { man with
-    exec = (fun ?(route=toplevel) stmt flow ->
-        match route with
-        | Below -> man.exec ~route:(BelowOf domain) stmt flow
-        | _ -> man.exec ~route stmt flow
-      );
-    eval = (fun ?(route=toplevel) exp flow ->
-        match route with
-        | Below -> man.eval ~route:(BelowOf domain) exp flow
-        | _ -> man.eval ~route exp flow
-      );
-    ask = (fun ?(route=toplevel) query flow ->
-        match route with
-        | Below -> man.ask ~route:(BelowOf domain) query flow
-        | _ -> man.ask ~route query flow
-      );
-  }

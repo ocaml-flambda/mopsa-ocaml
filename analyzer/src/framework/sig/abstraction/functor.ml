@@ -50,27 +50,20 @@ struct
 
     include D
 
-    let init prog man flow =
-      let man = resolve_below_alias D.name man in
-      D.init prog man flow
+  (* Add stmt to the logs of the domain *)
+  let exec stmt man flow =
+    D.exec stmt man flow |>
+    OptionExt.lift @@ fun res ->
+    Cases.map_log (fun log ->
+        man.set_log (
+          man.get_log log |> Log.add_stmt_to_log stmt
+        ) log
+      ) res
 
-    let exec stmt man flow =
-      let man = resolve_below_alias D.name man in 
-      D.exec stmt man flow |>
-      OptionExt.lift @@ fun res ->
-      Cases.map_log (fun log ->
-          man.set_log (
-            man.get_log log |> Log.add_stmt_to_log stmt
-          ) log
-        ) res
-
+  (* Remove duplicate evaluations *)
   let eval exp man flow =
-    let man = resolve_below_alias D.name man in
-    D.eval exp man flow
-
-  let ask query man flow =
-    let man = resolve_below_alias D.name man in
-    D.ask query man flow
+    D.eval exp man flow |>
+    OptionExt.lift @@ Eval.remove_duplicates man.lattice
   
   end
 end

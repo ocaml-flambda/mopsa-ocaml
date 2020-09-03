@@ -85,24 +85,24 @@ struct
     let bytes1 = mk_bytes_var addr1 in
     let bytes2 = mk_bytes_var addr2 in
     man.exec (mk_rename_var bytes1 bytes2 stmt.srange) flow >>%
-    man.exec ~route:Below stmt
+    man.exec ~route:(Below name) stmt
 
   let exec_stub_remove_resource addr stmt man flow =
     let bytes = mk_bytes_var addr in
     man.exec (mk_remove_var bytes stmt.srange) flow >>%
-    man.exec ~route:Below stmt
+    man.exec ~route:(Below name) stmt
 
   let exec_stub_expand_resource addr addrl stmt man flow =
     let bytes = mk_bytes_var addr in
     let bytesl = List.map mk_bytes_var addrl in
     man.exec (mk_expand_var bytes bytesl stmt.srange) flow >>%
-    man.exec ~route:Below stmt
+    man.exec ~route:(Below name) stmt
 
   let exec_stub_fold_resource addr addrl stmt man flow =
     let bytes = mk_bytes_var addr in
     let bytesl = List.map mk_bytes_var addrl in
     man.exec (mk_fold_var bytes bytesl stmt.srange) flow>>%
-    man.exec ~route:Below stmt
+    man.exec ~route:(Below name) stmt
 
   let is_resouce_addr addr =
     match addr.addr_kind with

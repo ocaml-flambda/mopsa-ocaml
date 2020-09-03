@@ -104,60 +104,74 @@ let rec merge_log f1 f2 f log1 log2 =
   | Node(stmts,left,right), Empty -> Node (f2 stmts, left, right)
   | Node(stmts1,left1,right1), Node(stmts2,left2,right2) -> Node (f stmts1 stmts2, merge_log f1 f2 f left1 left2, merge_log f1 f2 f right1 right2)
 
-let concat_log log1 log2 =
+let concat_log ~old ~recent =
   merge_log
-    (fun stmts1 -> stmts1)
-    (fun stmts2 -> stmts2)
-    (fun stmts1 stmts2 -> stmts1 @ stmts2)
-    log1 log2
-
-let meet_log log1 log2 =
-  (* When intersecting two post-states, logs are simply
-     concatenated. The reason is that intersections are used in
-     reduced products and the domains in the reduced product *must*
-     modify distinct dimensions in the shared underlying
-     domain. Therefore, statements are not in conflict and can be
-     executed in sequence *)
-  concat_log log1 log2
+    (fun old -> old)
+    (fun recent -> recent)
+    (fun old recent -> recent @ old)
+    old recent
 
 
-(* When joining two post-states, statements in logs can not be
-   concatenated because joins are performed within the same domain. We
-   need to introduce a new statement for expressing non-deterministic
-   executions *)
-type stmt_kind += S_ndet of stmt list * stmt list
+(* When joining/intersecting two post-states, statements in logs can not be
+   concatenated, since the order in logs statements is important while joining/intersecting doesn't induce an execution order.
+   We introduce new statements for expressing such effects *)
+type stmt_kind +=
+  | S_join of stmt list * stmt list
+  | S_meet of stmt list * stmt list
 
 let () = register_stmt {
     print = (fun next fmt s ->
         match skind s with
-        | S_ndet (s1,s2) ->
-          Format.fprintf fmt "%a ⁠‖ %a"
+        | S_join (s1,s2) ->
+          Format.fprintf fmt "%a ⁠∪ %a"
+            pp_log_entries s1
+            pp_log_entries s2
+        | S_meet (s1,s2) ->
+          Format.fprintf fmt "%a ⁠∩ %a"
             pp_log_entries s1
             pp_log_entries s2
         | _ -> next fmt s
       );
     compare = (fun next s s' ->
         match skind s, skind s' with
-        | S_ndet(s1,s2), S_ndet(s1',s2') ->
+        | S_join(s1,s2), S_join(s1',s2')
+        | S_meet(s1,s2), S_meet(s1',s2') ->
           Compare.pair (Compare.list compare_stmt) (Compare.list compare_stmt)
             (s1,s2) (s1',s2')
         | _ -> next s s'
       );
   }
 
-let mk_ndet stmts1 stmts2 range =
-  mk_stmt (S_ndet (stmts1,stmts2)) range
-
 let join_range = Location.(tag_range (mk_fresh_range ()) "log-join")
+let meet_range = Location.(tag_range (mk_fresh_range ()) "log-meet")
+
+let mk_join_stmt stmts1 stmts2 range =
+  mk_stmt (S_join (stmts1,stmts2)) range
+
+let mk_meet_stmt stmts1 stmts2 range =
+  mk_stmt (S_join (stmts1,stmts2)) range
+
+
+let meet_log log1 log2 =
+  merge_log
+    (fun stmts1 -> stmts1)
+    (fun stmts2 -> stmts2)
+    (fun stmts1 stmts2 ->
+       if stmts1 = [] || stmts2 = [] then stmts1 @ stmts2 else
+       if Compare.list compare_stmt stmts1 stmts2 = 0 then stmts1
+       else [mk_meet_stmt stmts1 stmts2 meet_range]
+    )
+    log1 log2
+
 
 let join_log log1 log2 =
   merge_log
     (fun stmts1 -> stmts1)
     (fun stmts2 -> stmts2)
     (fun stmts1 stmts2 ->
-       if stmts1 = [] || stmts2 = []
-       then stmts1 @ stmts2
-       else [mk_ndet stmts1 stmts2 join_range]
+       if stmts1 = [] || stmts2 = [] then stmts1 @ stmts2 else
+       if Compare.list compare_stmt stmts1 stmts2 = 0 then stmts1
+       else [mk_join_stmt stmts1 stmts2 join_range]
     )
     log1 log2
 
@@ -206,7 +220,13 @@ let rec get_stmt_effect stmt : effect =
     { modified = VarSet.singleton var;
       removed = VarSet.empty }
 
-  | S_ndet(e1,e2) ->
+  | S_join(e1,e2) ->
+    let effect1 = get_entries_effect e1
+    and effect2 = get_entries_effect e2 in
+    { modified = VarSet.union effect1.modified effect2.modified;
+      removed = VarSet.union (VarSet.diff effect1.removed effect2.modified) (VarSet.diff effect2.removed effect1.modified); }
+
+  | S_meet(e1,e2) ->
     let effect1 = get_entries_effect e1
     and effect2 = get_entries_effect e2 in
     { modified = VarSet.union effect1.modified effect2.modified;
@@ -217,6 +237,8 @@ let rec get_stmt_effect stmt : effect =
 
 (** Get the effect of a log *)
 and get_entries_effect (entries:stmt list) : effect =
+  (* Fold from the right because logs are stored in reverse order
+     (head of the list is the last recorded statement) *)
   List.fold_right
     (fun stmt acc ->
       let effect = get_stmt_effect stmt in
@@ -228,33 +250,46 @@ and get_entries_effect (entries:stmt list) : effect =
 (** Apply the effect of a log on an abstract element *)
 let apply_effect effect ~add ~remove ~find (other:'a) (this:'a) : 'a =
   let a = VarSet.fold (fun v acc ->
-      add v (find v other) acc
+      try add v (find v other) acc
+      with _ -> Exceptions.panic "generic merge: error while adding variable %a" pp_var v
     ) effect.modified this
   in
   VarSet.fold (fun v acc ->
-      remove v acc
+      try remove v acc
+      with _ -> Exceptions.panic "generic merge: error while removing variable %a" pp_var v
     ) effect.removed a
   
 
 (** Generic merge operator for non-relational domains *)
 let generic_domain_merge ~add ~find ~remove (a1, log1) (a2, log2) =
   (* Clean logs by removing successive duplicates *)
-  let rec clean = function
+  let rec remove_successive_duplicates = function
     | [] -> []
     | hd::tl ->
       let tl' = doit hd tl in
-      hd::clean tl'
+      hd::remove_successive_duplicates tl'
   and doit stmt = function
     | [] -> []
     | (hd::tl) as l -> if compare_stmt stmt hd = 0 then doit stmt tl else l
   in
-  let log1 = clean log1 and log2 = clean log2 in
-  let () = Debug.debug ~channel:"framework.core.log" "generic merge:@\nlog1 = @[%a@]@\nlog2 = @[%a@]" pp_log_entries log1 pp_log_entries log2 in
+  (* Remove common parts of the logs *)
+  let remove_common_tail log1 log2 =
+    let rec doit rev_log1 rev_log2 =
+      match rev_log1, rev_log2 with
+      | s1::tl1, s2::tl2 ->
+        if compare_stmt s1 s2 = 0 then doit tl1 tl2
+        else rev_log1, rev_log2
+      | _ -> rev_log1, rev_log2
+    in
+    let rev_log1', rev_log2' = doit (List.rev log1) (List.rev log2) in
+    List.rev rev_log1', List.rev rev_log2'
+  in
+  let log1 = remove_successive_duplicates log1 and log2 = remove_successive_duplicates log2 in
+  let log1, log2 = remove_common_tail log1 log2 in
   if log1 = [] then a2,a2 else
   if log2 = [] then a1,a1 else
-  if Compare.list compare_stmt log1 log2 = 0 then a1,a2 else
   let e1 = get_entries_effect log1 in
-  let a2' = apply_effect e1 a1 a2 ~add ~remove ~find in
   let e2 = get_entries_effect log2 in
+  let a2' = apply_effect e1 a1 a2 ~add ~remove ~find in
   let a1' = apply_effect e2 a2 a1 ~add ~remove ~find in
   a1',a2'

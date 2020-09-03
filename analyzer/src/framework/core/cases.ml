@@ -41,7 +41,7 @@ type ('a,'r) case = {
   case_flow     : 'a TokenMap.t; (** Token map of abstract states *)
   case_alarms   : AlarmSet.t;    (** Collected alarms *)
   case_log      : log;           (** Journal of statements log *)
-  case_cleaners : block;         (** Cleaner statements *)
+  case_cleaners : StmtSet.t;     (** Cleaner statements *)
 }
 
 (** Multiple cases encoded as a DNF *)
@@ -66,7 +66,7 @@ let mk_case
     case_flow = Flow.get_token_map flow;
     case_alarms = Flow.get_alarms flow;
     case_log = log;
-    case_cleaners = cleaners;
+    case_cleaners = StmtSet.of_list cleaners;
   }
 
 
@@ -94,7 +94,8 @@ let singleton
 
 
 
-let empty_singleton (flow:'a flow) : ('a,'r) cases =
+let empty_singleton ?(bottom=true) (flow:'a flow) : ('a,'r) cases =
+  let flow = if bottom then Flow.remove T_cur flow else flow in
   return None flow
 
 
@@ -164,9 +165,11 @@ let map_opt (f:'r -> 's option option) (r:('a,'r) cases) : ('a,'s) cases =
   | Some c -> { r with cases_dnf = c }
   | None -> Exceptions.panic ~loc:__LOC__ "map_opt: empty result"
 
+let concat_cleaners c1 c2 = StmtSet.union (StmtSet.of_list c1) (StmtSet.of_list c2) |>
+                            StmtSet.elements
 
 let add_cleaners_case cleaners c =
-  { c with case_cleaners = c.case_cleaners @ cleaners }
+  { c with case_cleaners = StmtSet.union (StmtSet.of_list cleaners) c.case_cleaners }
 
 
 let add_cleaners cleaners r =
@@ -176,7 +179,7 @@ let add_cleaners cleaners r =
 let apply_full f join meet r =
   Dnf.apply (fun case ->
       let flow = Flow.create r.cases_ctx case.case_alarms case.case_flow in
-      f case.case_result flow case.case_log case.case_cleaners
+      f case.case_result flow case.case_log (StmtSet.elements case.case_cleaners)
     ) join meet r.cases_dnf
 
 
@@ -221,10 +224,25 @@ let set_log log (r:('a,'r) cases) : ('a,'r) cases =
         case_log = log }
     )
 
-let concat_cases_log (log:log) (r:('a,'r) cases) : ('a,'r) cases =
+let clear_log (r:('a,'r) cases) : ('a,'r) cases =
   r |> map_cases (fun case ->
       { case with
-        case_log = concat_log case.case_log log }
+        case_log = empty_log }
+    )
+
+let concat_cases_log (old:log) (recent:('a,'r) cases) : ('a,'r) cases =
+  recent |> map_cases (fun recent ->
+      { recent with
+        case_log =
+          (* Add logs of non-empty environments only *)
+          (* FIXME: Since are always called from the binders, we can't
+             require having the lattice manager. So we can't test if
+             T_cur is ⊥ or not! For the moment, we rely on empty flow
+             maps, but this is not always sufficient.
+          *)
+          if TokenMap.is_empty recent.case_flow
+          then old
+          else concat_log ~old ~recent:recent.case_log }
     )
 
 
@@ -244,7 +262,7 @@ let map_fold_conjunctions
           tl |> List.fold_left (fun (flow, log, cleaners) case ->
               let flow' = Flow.create ctx case.case_alarms case.case_flow in
               let flow = f (flow,log) (flow',case.case_log) in
-              flow, concat_log log case.case_log, cleaners @ case.case_cleaners
+              flow, concat_log log case.case_log, StmtSet.union cleaners case.case_cleaners
             ) (Flow.create ctx hd.case_alarms hd.case_flow, hd.case_log, hd.case_cleaners)
         in
         hd :: tl |> List.map (fun case -> {
@@ -386,7 +404,7 @@ let bind_full_opt
   let ctx, ret = Dnf.fold_apply
       (fun ctx case ->
          let flow' = Flow.create ctx case.case_alarms case.case_flow in
-         let r' = f case.case_result flow' case.case_log case.case_cleaners in
+         let r' = f case.case_result flow' case.case_log (StmtSet.elements case.case_cleaners) in
          let ctx = OptionExt.apply get_ctx ctx r' in
          (ctx,r')
       )
@@ -487,6 +505,13 @@ let bind_list l f flow =
 let remove_duplicates compare lattice r =
   let ctx = r.cases_ctx in
   let compare_case case case' = compare case.case_result case'.case_result in
+  (* Logs of empty environments should be ignored.
+     This function returns an empty log when T_cur environment is empty. *)
+  let real_log flow log =
+    if lattice.Lattice.is_bottom (TokenMap.get T_cur lattice flow)
+    then empty_log
+    else log
+  in
   let rec simplify_conj conj =
     match conj with
     | [] -> conj
@@ -500,12 +525,14 @@ let remove_duplicates compare lattice r =
             let case, tl'' = aux tl' in
             match compare_case case case' with
             | 0 ->
+              let flow = TokenMap.meet lattice (Context.get_unit ctx) case.case_flow case'.case_flow in
               let case'' = {
                 case_result = case.case_result;
-                case_flow = TokenMap.meet lattice (Context.get_unit ctx) case.case_flow case'.case_flow;
-                case_cleaners = case.case_cleaners @ case'.case_cleaners;
+                case_flow = flow;
+                case_cleaners = StmtSet.union case.case_cleaners case'.case_cleaners;
                 case_alarms = AlarmSet.inter case.case_alarms case'.case_alarms;
-                case_log = meet_log case.case_log case'.case_log;
+                case_log = meet_log case.case_log  case'.case_log |>
+                           real_log flow;
               }
               in
               case'', tl''
@@ -521,9 +548,11 @@ let remove_duplicates compare lattice r =
         {
           case_result = case.case_result;
           case_flow = TokenMap.join lattice (Context.get_unit ctx) case.case_flow case'.case_flow;
-          case_cleaners = case.case_cleaners @ case'.case_cleaners;
+          case_cleaners = StmtSet.union case.case_cleaners case'.case_cleaners;
           case_alarms = AlarmSet.union case.case_alarms case'.case_alarms;
-          case_log = join_log case.case_log case'.case_log;
+          case_log = join_log
+              (real_log case.case_flow case.case_log)
+              (real_log case'.case_flow case'.case_log);
         }
       )
   in

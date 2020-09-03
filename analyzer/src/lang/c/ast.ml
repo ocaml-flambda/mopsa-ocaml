@@ -729,6 +729,10 @@ let is_c_signed_int_type (t:typ) =
   | T_c_integer (C_unsigned_char | C_unsigned_short | C_unsigned_int | C_unsigned_int128 | C_unsigned_long | C_unsigned_long_long) -> false
   | _ -> false
 
+let is_c_bool_type (t:typ) =
+  match remove_typedef_qual t with
+  | T_c_bool -> true
+  | _ -> false
 
 (** [is_c_int_type t] tests whether [t] is a floating point type *)
 let is_c_float_type ( t : typ) =

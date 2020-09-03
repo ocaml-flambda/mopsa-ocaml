@@ -113,22 +113,6 @@ module Instrument(D:STACKED) : STACKED with type t = D.t =
 struct
   include D
 
-  let subset man sman x y =
-    let man = resolve_below_alias D.name man in
-    D.subset man sman x y    
-
-  let join man sman x y =
-    let man = resolve_below_alias D.name man in
-    D.join man sman x y    
-
-  let meet man sman x y =
-    let man = resolve_below_alias D.name man in
-    D.meet man sman x y    
-
-  let widen man sman x y =
-    let man = resolve_below_alias D.name man in
-    D.widen man sman x y    
-
   let merge pre (a1,log1) (a2,log2) =
     if a1 == a2 then a1 else
     if Log.is_empty_log log1 then a2 else
@@ -136,12 +120,9 @@ struct
     if (Log.compare_log log1 log2 = 0) then a1
     else D.merge pre (a1,log1) (a2,log2)
 
-  let init prog man flow =
-    let man = resolve_below_alias D.name man in
-    D.init prog man flow
 
+  (* Add stmt to the logs of the domain *)
   let exec stmt man flow =
-    let man = resolve_below_alias D.name man in 
     D.exec stmt man flow |>
     OptionExt.lift @@ fun res ->
     Cases.map_log (fun log ->
@@ -150,13 +131,10 @@ struct
         ) log
       ) res
 
+  (* Remove duplicate evaluations *)
   let eval exp man flow =
-    let man = resolve_below_alias D.name man in
-    D.eval exp man flow
-
-  let ask query man flow =
-    let man = resolve_below_alias D.name man in
-    D.ask query man flow
+    D.eval exp man flow |>
+    OptionExt.lift @@ Eval.remove_duplicates man.lattice
 
 end
 

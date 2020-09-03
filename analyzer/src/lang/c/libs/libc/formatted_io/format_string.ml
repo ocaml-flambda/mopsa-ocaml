@@ -97,7 +97,7 @@ let eval_format_string wide format range man flow =
 
   | _ ->
     Soundness.warn_at range "unsupported format string";
-    Cases.empty_singleton flow
+    Cases.empty_singleton ~bottom:false flow
 
 
 (** Parse a format according to parser *)

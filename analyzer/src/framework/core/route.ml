@@ -24,20 +24,17 @@ open Semantic
 type domain = string
 
 type route =
-  | Below
-  | BelowOf of domain
+  | Below of domain
   | Semantic of semantic
 
 let compare_route r1 r2 =
   match r1, r2 with
-  | Below, Below -> 0
-  | BelowOf dom1, BelowOf dom2 -> String.compare dom1 dom2
+  | Below dom1, Below dom2 -> String.compare dom1 dom2
   | Semantic sem1, Semantic sem2 -> String.compare sem1 sem2
   | _ -> compare r1 r2
 
 let pp_route fmt = function
-  | Below        -> Format.fprintf fmt "below"
-  | BelowOf dom  -> Format.fprintf fmt "below(%s)" dom
+  | Below dom    -> Format.fprintf fmt "below(%s)" dom
   | Semantic sem -> pp_semantic fmt sem
 
 
@@ -84,3 +81,4 @@ let pp_routing_table fmt m =
             ) (Map.bindings m)
          )
                        
+module DomainSet = SetExt.StringSet

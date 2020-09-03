@@ -240,8 +240,15 @@ let addr_partitioning_pp_chain : (Format.formatter -> addr_partitioning -> unit)
       | _ -> Format.pp_print_string fmt "*"
     )
 
-let pp_addr_partitioning fmt ak =
-  !addr_partitioning_pp_chain fmt ak
+(** Command line option to use hashes as address format *)
+let opt_hash_addr = ref false
+let () = register_builtin_option {
+    key = "-heap-use-hash-format";
+    category = "Heap";
+    doc = "  format heap addresses with their hash";
+    spec = ArgExt.Set opt_hash_addr;
+    default = "false";
+  }
 
 let pp_addr_partitioning_hash fmt (g:addr_partitioning) =
   Format.fprintf fmt "%xd"
@@ -251,6 +258,12 @@ let pp_addr_partitioning_hash fmt (g:addr_partitioning) =
        likely to happen.
     *)
     (Hashtbl.hash_param 50 150 g)
+
+let pp_addr_partitioning fmt ak =
+  if !opt_hash_addr
+  then pp_addr_partitioning_hash fmt ak
+  else !addr_partitioning_pp_chain fmt ak
+
 
 
 let compare_addr_partitioning a1 a2 =
@@ -895,7 +908,6 @@ let mk_fold_addr a al range =
   mk_fold (mk_addr a range) (List.map (fun aa -> mk_addr aa range) al) range
 
 let rec expr_to_const e : constant option =
-  Debug.debug ~channel:"hoo" "expr_to_const: %a" pp_expr e;
   if not (is_numeric_type e.etyp) then None else 
   match ekind e with
   | E_constant c -> Some c
@@ -927,7 +939,6 @@ let rec expr_to_const e : constant option =
 
       | O_eq, Some (C_int n), Some (C_int_interval (a,b))
       | O_eq, Some (C_int_interval (a,b)), Some (C_int n) ->
-        Debug.debug ~channel:"hoo" "aa";
         let c = if Z.(a <= n && n <= b) then C_top T_bool else C_bool false in
         Some c
 

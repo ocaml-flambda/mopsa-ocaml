@@ -32,3 +32,5 @@ val compare_semantic : semantic -> semantic -> int
 val pp_semantic : Format.formatter -> semantic -> unit
 
 val toplevel_semantic : semantic
+
+module SemanticSet : SetExtSig.S with type elt = semantic

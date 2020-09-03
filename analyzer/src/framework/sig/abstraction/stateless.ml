@@ -67,27 +67,14 @@ end
 (** Instrument transfer functions with some useful pre/post processing *)
 module Instrument(D:STATELESS) : STATELESS =
 struct
-
   include D
 
-  let init prog man flow =
-    let man = resolve_below_alias D.name man in
-    D.init prog man flow
-
-  let exec stmt man flow =
-    let man = resolve_below_alias D.name man in 
-    D.exec stmt man flow
-
+  (* Remove duplicate evaluations *)
   let eval exp man flow =
-    let man = resolve_below_alias D.name man in
-    D.eval exp man flow
-
-  let ask query man flow =
-    let man = resolve_below_alias D.name man in
-    D.ask query man flow
+    D.eval exp man flow |>
+    OptionExt.lift @@ Eval.remove_duplicates man.lattice
 
 end
-
 
 
 let domains : (module STATELESS) list ref = ref []

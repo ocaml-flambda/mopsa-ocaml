@@ -118,6 +118,10 @@ struct
     | Some init -> panic_at range "unsupported scalar initializer %a for type %a" Pp.pp_c_init init pp_typ typ;
 
   and flatten_array_init init offset typ range =
+    if is_c_no_length_array_type typ
+    || is_c_variable_length_array_type typ
+    then [],[] else
+
     let n = get_array_constant_length typ in
     let under_typ = under_array_type typ in
     match init with
@@ -335,18 +339,8 @@ struct
           match field.c_field_type |> remove_typedef_qual with
 
           | T_c_array(t,C_array_length_cst n) ->
-            (* In case of an array we need to copy cell by cell *)
-            let rec aux i acc =
-              if Z.equal i n
-              then acc
-              else
-                let lval'' = mk_c_subscript_access lval' (mk_z i range) range in
-                let rval'' = mk_c_subscript_access rval' (mk_z i range) range in
-                let stmt = mk_assign lval'' rval'' range in
-                acc >>% man.exec stmt |>
-                aux (Z.succ i)
-            in
-            aux Z.zero acc
+            (* Copying cell-by-cell maybe expensive, so use memcpy instead *)
+            acc >>% memcpy lval' rval' zero (mk_z Z.(n * sizeof_type t - one) range) range man
 
           | T_c_array _ ->
             (* Flexible array members are not copied (CC99 6.7.2.1.22) *)

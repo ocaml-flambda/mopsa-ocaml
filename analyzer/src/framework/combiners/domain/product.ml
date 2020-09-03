@@ -47,9 +47,9 @@ struct
   type t = unit
   let id = C_empty
   let name = "()"
-  let domains = []
+  let domains = DomainSet.empty
   let members = []
-  let semantics = []
+  let semantics = SemanticSet.empty
   let routing_table = empty_routing_table
   let alarms = [[]]
   let bottom = ()
@@ -73,9 +73,9 @@ module MakePairPool(S:STACKED_COMBINER)(P:POOL) : POOL with type t = S.t * P.t =
 struct
   type t = S.t * P.t
   let id = C_pair(Product,S.id,P.id)
-  let domains = S.domains @ P.domains
-  let members = S.domains :: P.members
-  let semantics = S.semantics @ P.semantics
+  let domains = DomainSet.union S.domains P.domains
+  let members = DomainSet.elements S.domains :: P.members
+  let semantics = SemanticSet.union S.semantics P.semantics
   let routing_table = join_routing_table S.routing_table P.routing_table
   let alarms = S.alarms :: P.alarms
   let name = S.name ^ " ∧ " ^ P.name
@@ -254,7 +254,7 @@ struct
                merge the post-states of any shared sub-abstraction *)
             let flow = merge_flows ~merge_alarms:AlarmSet.union man pre (flow,log) (after_flow,after_log) in
             let log = Log.meet_log log after_log in
-            let cleaners = cleaners @ after_cleaners in
+            let cleaners = Cases.concat_cleaners cleaners after_cleaners in
             Cases.return (Some (Some rr :: after)) flow ~cleaners ~log
           else
             (* Next domains returned no answer, so no merging *)
@@ -291,7 +291,7 @@ struct
        defined for user domains only *)
     let member = List.find (function [domain] -> true | _ -> false) Pool.members |>
                  List.hd in
-    BelowOf member
+    Below member
 
 
   (** Get the context of a pointwise result *)

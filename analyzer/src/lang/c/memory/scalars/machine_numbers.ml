@@ -27,7 +27,6 @@ open Universal.Ast
 open Stubs.Ast
 open Ast
 open Common.Alarms
-open Common.Points_to
 module Itv = Universal.Numeric.Values.Intervals.Integer.Value
 
 
@@ -312,6 +311,13 @@ struct
       Eval.singleton exp' flow |>
       OptionExt.return
 
+    (* 𝔼⟦ ~ e ⟧, type(e) = unsigned *)
+    | E_unop(O_bit_invert, e) when exp |> etyp |> is_c_int_type
+                                && not (exp |> etyp |> is_c_signed_int_type) ->
+      man.eval e flow >>$? fun e flow ->
+      let _,hi = rangeof exp.etyp in
+      Eval.singleton (sub (mk_z hi exp.erange) e exp.erange) flow |>
+      OptionExt.return
 
     (* 𝔼⟦ ⋄ e ⟧ *)
     | E_unop(op, e) when exp |> etyp |> is_c_num_type ->
@@ -365,6 +371,16 @@ struct
       Eval.singleton exp' flow |>
       OptionExt.return
 
+
+    | E_c_cast(e,_) when is_c_bool_type exp.etyp &&
+                         is_c_int_type e.etyp ->
+      assume e man flow
+        ~fthen:(Eval.singleton (mk_true exp.erange))
+        ~felse:(Eval.singleton (mk_false exp.erange))
+      |>
+      OptionExt.return
+
+
     (* 𝔼⟦ (float)int ⟧ *)
     | E_c_cast(e, _) when exp |> etyp |> is_c_float_type &&
                           e   |> etyp |> is_c_int_type ->
@@ -389,19 +405,6 @@ struct
       Eval.singleton exp' flow |>
       OptionExt.return
 
-    (* 𝔼⟦ (int)ptr ⟧ *)
-    | E_c_cast(p, _) when exp |> etyp |> is_c_int_type &&
-                          p   |> etyp |> is_c_pointer_type ->
-      resolve_pointer p man flow >>$? fun pt flow ->
-      let exp' =
-        match pt with
-        | P_null -> mk_zero exp.erange
-        | _ ->
-          let l,u = rangeof exp.etyp in
-          mk_z_interval l u exp.erange
-      in
-      Eval.singleton exp' flow |>
-      OptionExt.return
 
     (* 𝔼⟦ (int)int ⟧ *)
     | E_c_cast(e, _) when exp |> etyp |> is_c_int_type &&
@@ -535,8 +538,14 @@ struct
 
     | S_forget ({ekind = E_var _} as v) when is_c_num_type v.etyp ->
       let vv = mk_num_var_expr v in
-      let lo,hi = rangeof v.etyp in
-      man.exec (mk_assign vv (mk_z_interval lo hi stmt.srange) stmt.srange) ~route:numeric flow |>
+      let top =
+        if is_c_int_type v.etyp then
+          let lo,hi = rangeof v.etyp in
+          mk_z_interval lo hi stmt.srange
+        else
+          mk_top vv.etyp stmt.srange
+      in
+      man.exec (mk_assign vv top stmt.srange) ~route:numeric flow |>
       OptionExt.return
 
     | _ -> None

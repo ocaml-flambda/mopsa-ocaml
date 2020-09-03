@@ -27,8 +27,8 @@ open Abstraction.Simplified
 module type SIMPLIFIED_COMBINER =
 sig
   include SIMPLIFIED
-  val domains : domain list
-  val semantics : semantic list
+  val domains : DomainSet.t
+  val semantics : SemanticSet.t
   val routing_table : routing_table
   val exec : domain list -> stmt -> ('a,t) simplified_man -> uctx -> t -> t option
   val ask  : domain list -> ('a,'r) query -> ('a,t) simplified_man -> uctx -> t -> 'r option
@@ -39,8 +39,8 @@ end
 module SimplifiedToCombiner(D:SIMPLIFIED) : SIMPLIFIED_COMBINER with type t = D.t =
 struct
   include D
-  let domains = [D.name]
-  let semantics = []
+  let domains = DomainSet.singleton D.name
+  let semantics = SemanticSet.empty
   let routing_table = empty_routing_table
   let exec domains = D.exec
   let ask domains  = D.ask

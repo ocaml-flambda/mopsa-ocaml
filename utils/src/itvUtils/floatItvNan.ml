@@ -688,8 +688,8 @@ let to_int_itv (r:t) : II.t with_bot =
   | BOT -> if is_bot r then BOT else Nb II.minf_inf
   | Nb i ->
      II.of_bound_bot
-       (if r.minf then B.MINF else B.Finite (Z.of_float i.lo))
-       (if r.pinf then B.PINF else B.Finite (Z.of_float i.up))
+       (if r.minf || Float.is_infinite i.lo then B.MINF else B.Finite (Z.of_float i.lo))
+       (if r.pinf || Float.is_infinite i.up then B.PINF else B.Finite (Z.of_float i.up))
 (** Conversion to integer interval with truncation. Handles infinities. *)
 
   

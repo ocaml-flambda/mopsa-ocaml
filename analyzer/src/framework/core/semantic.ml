@@ -29,3 +29,5 @@ let compare_semantic = String.compare
 let pp_semantic = Format.pp_print_string
 
 let toplevel_semantic = "*"
+
+module SemanticSet = SetExt.StringSet

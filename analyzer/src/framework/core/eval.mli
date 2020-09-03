@@ -32,7 +32,7 @@ type 'a eval = ('a,expr) cases
 
 val singleton : ?cleaners:stmt list -> expr -> 'a flow -> 'a eval
 
-val empty_singleton : 'a flow -> 'a eval
+val empty_singleton : ?bottom:bool -> 'a flow -> 'a eval
 
 val join : 'a eval -> 'a eval -> 'a eval
 

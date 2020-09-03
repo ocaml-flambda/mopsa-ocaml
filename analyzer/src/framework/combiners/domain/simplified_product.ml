@@ -39,9 +39,9 @@ struct
 
   let name = D1.name ^ " ∧ " ^ D2.name
 
-  let domains = D1.domains @ D2.domains
+  let domains = DomainSet.union D1.domains D2.domains
 
-  let semantics = D1.semantics @ D2.semantics
+  let semantics = SemanticSet.union D1.semantics D2.semantics
 
   let routing_table = join_routing_table D1.routing_table D2.routing_table
 

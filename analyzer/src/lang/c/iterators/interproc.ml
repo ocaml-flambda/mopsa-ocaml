@@ -148,7 +148,7 @@ struct
         if is_recursive_call fundec flow then (
           Soundness.warn_at range "ignoring recursive call of function %s in %a" fundec.c_func_org_name pp_range range;
           if is_c_void_type fundec.c_func_return then
-            Eval.empty_singleton flow
+            Eval.singleton (mk_unit range) flow
           else
             man.eval (mk_top fundec.c_func_return range) flow
         )
@@ -175,11 +175,11 @@ struct
           }
           in
           let exp' = mk_call fundec' args range in
-          man.eval exp' flow ~route:Below
+          man.eval exp' flow ~route:(Below name)
 
         | {c_func_variadic = true} ->
           let exp' = mk_c_call fundec args range in
-          man.eval exp' flow ~route:Below
+          man.eval exp' flow ~route:(Below name)
 
         | {c_func_stub = Some stub} ->
           let exp' = Stubs.Ast.mk_stub_call stub args range in
@@ -188,7 +188,7 @@ struct
         | {c_func_body = None; c_func_org_name; c_func_return} ->
           Soundness.warn_at range "ignoring side effects of calling undefined function %s" c_func_org_name;
           if is_c_void_type c_func_return then
-            Eval.empty_singleton flow
+            Eval.singleton (mk_unit range) flow
           else
             man.eval (mk_top c_func_return range) flow
       in

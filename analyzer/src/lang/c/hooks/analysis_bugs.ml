@@ -112,6 +112,8 @@ struct
                     "_mopsa_error";
                     "_mopsa_error_at_line";
                     "sigreturn";
+                    "error";
+                    "error_at_line";
                   ]
 
 

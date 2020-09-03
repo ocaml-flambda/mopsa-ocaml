@@ -72,7 +72,7 @@ struct
       man.eval (mk_bytes addr mode range) flow
 
     | _ ->
-      eval_base_size ~route:Below base range man flow
+      eval_base_size ~route:(Below name) base range man flow
 
 
   let byte_to_element t bytes range =

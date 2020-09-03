@@ -93,7 +93,11 @@ struct
         | None -> None
         | Some _ -> Some (mk_return_var exp)
       in
-      Some (post >>% inline f params locals body ret range man)
+      Some (
+        let post' = post >>% inline f params locals body ret range man in
+        (* FIXME: we keep logs intra-procedural for the moment *)
+        Cases.clear_log post'
+      )
 
     | _ -> None
 

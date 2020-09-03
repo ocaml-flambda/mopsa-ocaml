@@ -437,21 +437,32 @@ struct
     | Eval(exp,_)  -> exp.erange
 
 
+  (** Flag to print welcome message at the beginning *)
+  let print_welcome = ref true
+
+
   (** Print an action *)
   let pp_action : type a. Toplevel.t flow -> formatter -> a action -> unit = fun flow fmt action ->
-    fprintf fmt "%a@." (Debug.color "fushia" pp_range) (action_range action);
-    match action with
-    | Exec(stmt,route) ->
-      fprintf fmt "@[<v 4>S[ %a@] ] in %a@."
-        pp_stmt stmt
-        pp_route route
+    if !print_welcome then (
+      print_welcome := false;
+      fprintf fmt "@.%a@.Type '%a' to get the list of commands.@.@."
+        (Debug.bold pp_print_string) "Welcome to Mopsa v1.0!"
+        (Debug.bold pp_print_string) "help"
+    )
+    else (
+      fprintf fmt "%a@." (Debug.color "fushia" pp_range) (action_range action);
+      match action with
+      | Exec(stmt,route) ->
+        fprintf fmt "@[<v 4>S[ %a@] ] in %a@."
+          pp_stmt stmt
+          pp_route route
 
-    | Eval(exp,route) ->
-      fprintf fmt "@[<v 4>E[ %a@] : %a ] in %a@."
-        pp_expr exp
-        pp_typ (etyp exp)
-        pp_route route
-
+      | Eval(exp,route) ->
+        fprintf fmt "@[<v 4>E[ %a@] : %a ] in %a@."
+          pp_expr exp
+          pp_typ (etyp exp)
+          pp_route route
+    )
 
   (** Check that an action is atomic *)
   let is_atomic_action: type a. a action -> bool = fun action ->

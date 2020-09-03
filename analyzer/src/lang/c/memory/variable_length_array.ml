@@ -121,7 +121,7 @@ struct
   (** 𝕊⟦ remove arr; ⟧ *)
   let exec_remove arr range man flow =
     (* Remove the base arr from the underlying memory abstraction *)
-    man.exec ~route:Below (mk_remove_var arr range) flow >>% fun flow ->
+    man.exec ~route:(Below name) (mk_remove_var arr range) flow >>% fun flow ->
 
     (* Remove the length variable from the environment *)
     let len = mk_variable_length_var arr in

@@ -617,11 +617,11 @@ struct
       (fun flow ->
          match c_expr_to_z n with
          | Some n when Z.(n = zero) -> Post.return flow
-         | Some n -> Cases.empty_singleton (Flow.remove T_cur flow)
+         | Some n -> Cases.empty_singleton flow
          | None ->
            assume (eq n zero range)
              ~fthen:(fun flow -> Post.return flow)
-             ~felse:(fun flow -> Cases.empty_singleton (Flow.remove T_cur flow))
+             ~felse:(fun flow -> Cases.empty_singleton flow)
              man flow
       );
 
@@ -630,7 +630,7 @@ struct
       *)
       [ le min (pred length range) range;
         le length max range ],
-      (fun flow -> Cases.empty_singleton (Flow.remove T_cur flow));
+      (fun flow -> Cases.empty_singleton flow);
 
       (*     min       max    length   
          |----|nnnnnnnnn|-------0------>
@@ -678,7 +678,7 @@ struct
            |------|------0--------|------>
         *)
         [ mk_in length min max range ],
-        (fun flow -> Cases.empty_singleton (Flow.remove T_cur flow));
+        (fun flow -> Cases.empty_singleton flow);
 
         (*       length   min    max
            |------0--------|------|------>
@@ -755,10 +755,10 @@ struct
             (fun flow -> Post.return flow);
 
             [ log_and before1 cover2 range ],
-            (fun flow -> Cases.empty_singleton (Flow.remove T_cur flow));
+            (fun flow -> Cases.empty_singleton flow);
 
             [ log_and cover1 before2 range ],
-            (fun flow -> Cases.empty_singleton (Flow.remove T_cur flow));
+            (fun flow -> Cases.empty_singleton flow);
 
             [ log_and cover1 cover2 range ],
             (fun flow -> man.exec (mk_assume (eq (sub length1 min1 range) (sub length2 min2 range) range) range) ~route:numeric flow);

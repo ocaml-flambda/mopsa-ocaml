@@ -53,7 +53,7 @@ val singleton : ?cleaners:block -> 'r -> 'a flow -> ('a,'r) cases
 (** Create a singleton non-empty cas.e *)
 
 
-val empty_singleton : 'a flow -> ('a,'r) cases
+val empty_singleton : ?bottom:bool -> 'a flow -> ('a,'r) cases
 (** Create a singleton empty case. *)
 
 
@@ -76,6 +76,8 @@ val copy_ctx : ('a,'r) cases -> ('a,'s) cases -> ('a,'s) cases
 val opt_clean_cur_only : bool ref
 (** Option to apply cleaners on T_cur only *)
 
+val concat_cleaners : block -> block -> block
+(** Concatenate two cleaners *)
 
 val add_cleaners : block -> ('a,'r) cases -> ('a,'r) cases
 (** [add_cleaners block c] adds cleaner statements [block] to cases [c]. *)
@@ -99,6 +101,9 @@ val map_log : (log -> log) -> ('a,'r) cases -> ('a,'r) cases
 
 val set_log : log -> ('a,'r) cases -> ('a,'r) cases
 (** Set the logs of cases *)
+
+val clear_log : ('a,'r) cases -> ('a,'r) cases
+(** Remove logs *)
 
 val apply : ('r option -> 'a flow -> 'b) -> ('b -> 'b -> 'b) -> ('b -> 'b -> 'b) -> ('a,'r) cases -> 'b
 (** [apply f join meet c] collapses cases [c] to a single value by

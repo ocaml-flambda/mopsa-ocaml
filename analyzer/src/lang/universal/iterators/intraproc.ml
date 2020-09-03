@@ -48,19 +48,20 @@ struct
     | E_binop(O_log_and,e1,e2) -> mk_log_or (negate_bool_expr e1) (negate_bool_expr e2) e.erange
     | E_binop(O_log_or,e1,e2) -> mk_log_and (negate_bool_expr e1) (negate_bool_expr e2) e.erange
     | E_binop(op,e1,e2) when is_comparison_op op -> mk_binop e1 (negate_comparison_op op) e2 e.erange ~etyp:T_bool
-    | _ -> assert false
+    | _ -> mk_not e e.erange
 
   let rec to_bool_expr e =
     match ekind e with
     | E_constant (C_bool _) -> e
     | E_constant (C_top T_bool) -> e
+    | E_var _ -> e
     | E_unop(O_log_not,e) -> negate_bool_expr (to_bool_expr e)
     | E_unop(op,e) when is_predicate_op op -> e
     | E_binop(op,_,_) when is_comparison_op op -> e
     | E_binop(op,e1,e2) when is_logic_op op -> mk_binop (to_bool_expr e1) op (to_bool_expr e2) e.erange ~etyp:T_bool
     | _ -> ne e zero e.erange
 
-  let eval_bool_expr e ~ftrue ~ffalse ~fboth range man flow =
+  let rec eval_bool_expr e ~ftrue ~ffalse ~fboth range man flow =
     let ee =
       match expr_to_const e with
       | Some c -> { e with ekind = E_constant c }
@@ -69,9 +70,12 @@ struct
     match ekind ee with
     | E_constant (C_bool true) -> ftrue flow
     | E_constant (C_bool false) -> ffalse flow
+    | E_constant (C_int n) -> if Z.(n <> zero) then ftrue flow else ffalse flow
     | E_constant (C_top T_bool) -> fboth flow
+    | E_constant (C_top T_int) -> fboth flow
+    | E_unop(O_log_not,ee) -> eval_bool_expr ee ~ftrue:ffalse ~ffalse:ftrue ~fboth range man flow
     | _ ->
-      assume (to_bool_expr e) man flow ~route:Below
+      assume (to_bool_expr ee) man flow ~route:(Below name)
         ~fthen:ftrue
         ~felse:ffalse
 
@@ -84,7 +88,7 @@ struct
 
     | S_assign(x,e) when is_numeric_type (etyp e) ->
       man.eval e flow >>$? fun e flow ->
-      man.exec (mk_assign x e stmt.srange) flow ~route:Below |>
+      man.exec (mk_assign x e stmt.srange) flow ~route:(Below name) |>
       OptionExt.return
 
     | S_assume{ekind = E_constant (C_bool true)}
@@ -147,10 +151,6 @@ struct
         ~felse:(fun flow -> man.eval e2 flow)
       |> OptionExt.return
 
-    | E_unop (O_log_not, { ekind = E_unop (O_log_not, e) }) ->
-      man.eval e flow |>
-      OptionExt.return
-
     | E_unop (O_log_not, { ekind = E_binop (O_log_and, e1, e2) }) ->
       man.eval (mk_log_or (mk_not e1 e1.erange) (mk_not e2 e2.erange) exp.erange) flow |>
       OptionExt.return
@@ -160,7 +160,7 @@ struct
       OptionExt.return
 
     | E_binop(op,e1,e2) when is_comparison_op op ->
-      man.eval exp ~route:Below flow >>$? fun exp flow ->
+      man.eval exp ~route:(Below name) flow >>$? fun exp flow ->
       eval_bool_expr exp exp.erange man flow
         ~ftrue:(fun flow -> Eval.singleton (mk_true exp.erange) flow)
         ~ffalse:(fun flow -> Eval.singleton (mk_false exp.erange) flow)
@@ -168,7 +168,7 @@ struct
       OptionExt.return
 
     | E_unop(op,ee) when is_predicate_op op ->
-      man.eval exp ~route:Below flow >>$? fun exp flow ->
+      man.eval exp ~route:(Below name) flow >>$? fun exp flow ->
       eval_bool_expr exp exp.erange man flow
         ~ftrue:(fun flow -> Eval.singleton (mk_true exp.erange) flow)
         ~ffalse:(fun flow -> Eval.singleton (mk_false exp.erange) flow)
