@@ -340,8 +340,9 @@ struct
               target = target - step```
            (It seems that in the case of the else statement, the usual desugar is sometimes better, so we keep it).
         *)
+       let start = Timing.start () in
        let ra s = mk_py_attr rangeobj s (tag_range range "%s" s) in
-       Utils.bind_list_args man [ra "start"; ra "stop"; ra "step"] flow range
+       let res = Utils.bind_list_args man [ra "start"; ra "stop"; ra "step"] flow range
          (fun vars flow ->
              let start, stop, step = match List.map (fun x -> mk_var x range) vars with
                | [a;b;c] -> a, b, c
@@ -370,7 +371,10 @@ struct
                ~fthen:(fun flow -> man.exec (gen_stmt O_lt) flow >>% Post.return)
                ~felse:(fun flow -> man.exec (gen_stmt O_gt) flow >>% Post.return)
          )
-       |> OptionExt.return
+                 |> OptionExt.return in
+       Debug.debug ~channel:"profiling" "for loop at range %a: %.4f" pp_range range (Timing.stop start);
+       res
+
 
        | _ -> None
 
