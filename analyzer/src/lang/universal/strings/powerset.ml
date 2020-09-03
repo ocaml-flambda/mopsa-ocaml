@@ -185,7 +185,7 @@ struct
   let exec stmt (man: ('a, t) Framework.Core.Manager.man) (flow: 'a flow) : 'a post option =
     match skind stmt with
     | S_assign (x, e) when etyp e = T_string ->
-      man.eval ~route:(Semantic "U/String") e flow |>
+      man.eval e flow |>
       bind_some_opt (fun ee flow ->
           let cur = get_env T_cur man flow in
           let uctx = Flow.get_unit_ctx flow in
@@ -217,7 +217,7 @@ struct
     let range = erange expr in
     match ekind expr with
     | E_binop (O_mult, e1, e2) when etyp e1 = T_string && etyp e2 = T_int->
-      man.eval ~route:(Semantic "U/String") e1 flow >>$
+      man.eval e1 flow >>$
         (fun e1 flow ->
           let cur = get_env T_cur man flow in
           let strings_e1 = Nonrel.eval e1 cur |> OptionExt.none_to_exn |> snd in
@@ -255,14 +255,14 @@ struct
        )
 
     | E_len e when etyp e = T_string ->
-      man.eval ~route:(Semantic "U/String") e flow >>$
+      man.eval e flow >>$
         (fun e flow ->
           let cur = get_env T_cur man flow in
           let strings_e = Nonrel.eval e cur |> OptionExt.none_to_exn |> snd in
           Eval.join_list ~empty:(fun () -> failwith "empty length")
             (if Value.is_top strings_e then
-               man.eval ~route:(Semantic "U/Numeric") (mk_top T_int range) flow :: []
-             else Value.fold (fun s acc -> (man.eval ~route:(Semantic "U/Numeric") (mk_int (String.length s) range) flow) :: acc) strings_e [])
+               man.eval (mk_top T_int range) flow :: []
+             else Value.fold (fun s acc -> (man.eval (mk_int (String.length s) range) flow) :: acc) strings_e [])
         )
       |> OptionExt.return
 
@@ -281,7 +281,7 @@ struct
     fun query man flow ->
     match query with
     | Q_strings_powerset e ->
-      man.eval ~route:(Semantic "U/String") e flow |>
+      man.eval e flow |>
       Cases.apply
         (fun oe flow ->
            let cur = get_env T_cur man flow in
