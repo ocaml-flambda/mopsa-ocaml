@@ -203,6 +203,18 @@ let set_log
        | _                    -> case, flow
     ) cases
 
+let set_cleaners
+    (cleaners:stmt list)
+    (cases:('a,'r) cases)
+  : ('a,'r) cases =
+  let cleaners = StmtSet.of_list cleaners in
+  map
+    (fun case flow ->
+       match case with
+       | Result(r,log,_) -> Result(r,log,cleaners), flow
+       | _               -> case, flow
+    ) cases
+
 
 let concat_log
     (old:log)

@@ -158,17 +158,20 @@ struct
 
   let on_after_exec route stmt man flow post =
     let time = get_timing () in
+    let nb = Cases.cardinal post in
     if Options.short then
-      indent "%a done in semantic %a [%.4fs]"
+      indent "%a done in semantic %a [%.4fs, %d case%a]"
         pp_S stmt
         pp_route route
         time
+        nb Debug.plurial_int nb
         ~symbol:END
     else
-      indent "%a done in semantic %a [%.4fs]@ -->  %a"
+      indent "%a done in semantic %a [%.4fs, %d case%a]@ -->  %a"
         pp_S stmt
         pp_route route
         time
+        nb Debug.plurial_int nb
         (Post.print man.lattice.print) post
         ~symbol:END
 
@@ -196,18 +199,21 @@ struct
           Format.fprintf fmt "%a : %a" pp_expr e pp_typ e.etyp
       ) fmt evl
     in
+    let nb = Cases.cardinal evl in
     if Options.short then
-      indent "%a = %a done in semantic %a [%.4fs]"
+      indent "%a = %a done in semantic %a [%.4fs, %d case%a]"
         pp_E exp
         pp_evl_with_type evl
         pp_route route
         time
+        nb Debug.plurial_int nb
         ~symbol:END
     else
-      indent "%a done in semantic %a [%.4fs]@ -->  %a"
+      indent "%a done in semantic %a [%.4fs, %d case%a]@ -->  %a"
         pp_E exp
         pp_route route
         time
+        nb Debug.plurial_int nb
         pp_evl_with_type evl
         ~symbol:END
 

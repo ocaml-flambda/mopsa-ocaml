@@ -89,6 +89,8 @@ val get_case_cleaners : 'r case -> cleaners
 val set_case_cleaners : cleaners -> 'r case -> 'r case
 (** Set the set of cleaners attached to a case *)
 
+val set_cleaners : stmt list -> ('a,'r) cases -> ('a,'r) cases
+(** Set the same cleaners for all cases *)
 
 (** {1 Context} *)
 (** *********** *)

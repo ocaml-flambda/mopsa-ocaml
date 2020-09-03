@@ -20,9 +20,9 @@
 (****************************************************************************)
 
 (** Toplevel abstraction
- 
+
     There are two main differences with domains. First, transfer functions are
-    indexed by zones to enable a faster access. Second, transfer functions are 
+    indexed by zones to enable a faster access. Second, transfer functions are
     not partial functions and return always a result.
 *)
 
@@ -226,8 +226,11 @@ struct
             | Some y -> Post.join x post'
       in
       let clean_post =
-        post >>= fun case flow ->
-        apply_cleaners (Cases.get_case_cleaners case) man flow
+        (* Apply cleaners *)
+        ( post >>= fun case flow ->
+          apply_cleaners (Cases.get_case_cleaners case) man flow )
+        (* Now that post is clean, remove all cleaners *)
+        |> Cases.set_cleaners []
       in
       let ctx = Hook.on_after_exec route stmt man flow clean_post in
       Cases.set_ctx ctx clean_post
@@ -293,7 +296,7 @@ struct
       with Not_found -> Exceptions.panic_at exp.erange "eval for %a not found" pp_route route
     in
     let evl =
-      (* Ask domains to perform the evaluation *) 
+      (* Ask domains to perform the evaluation *)
       let ret = Cache.eval feval route exp man flow in
       (* Check whether there are not-handled cases *)
       let handled, not_handled =
