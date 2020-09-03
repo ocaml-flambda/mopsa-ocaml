@@ -148,7 +148,7 @@ struct
                     ~fthen:(fun true_flow ->
                       assume
                           (mk_binop (Utils.extract_oobject e1) (Operators.methfun_to_binop f) (Utils.extract_oobject e2) ~etyp:T_int range) man true_flow
-                           
+
                           ~fthen:(fun flow -> man.eval (mk_py_true range) flow)
                           ~felse:(fun flow -> man.eval (mk_py_false range) flow)
                       )
@@ -247,7 +247,7 @@ struct
         (fun e flow ->
            assume
              (mk_binop (Utils.extract_oobject @@ List.hd e) O_eq (mk_int 0 ~typ:T_int range) ~etyp:T_int range) man flow
-              
+
              ~fthen:(fun flow -> man.eval (mk_py_false range) flow)
              ~felse:(fun flow -> man.eval (mk_py_true range) flow)
         )
@@ -266,9 +266,9 @@ struct
         ["int"]
         (fun e flow ->
           let max_intfloat = mk_constant (C_int (Z.of_string "179769313486231580793728971405303415079934132710037826936173778980444968292764750946649017977587207096330286416692887910946555547851940402630657488671505820681908902000708383676273854845817711531764475730270069855571366959622842914819860834936475292719074168444365510704342711559699508093042880177904174497791")) ~etyp:T_int range in
-          assume  
+          assume
             (mk_binop ~etyp:T_int
-               (mk_binop (mk_unop O_minus max_intfloat ~etyp:T_int range) O_le  (Utils.extract_oobject @@ List.hd e) range)
+               (mk_binop ~etyp:T_int (mk_unop O_minus max_intfloat ~etyp:T_int range) O_le  (Utils.extract_oobject @@ List.hd e) range)
                O_log_and
                (mk_binop ~etyp:T_int (Utils.extract_oobject @@ List.hd e) O_le max_intfloat range)
                range)
