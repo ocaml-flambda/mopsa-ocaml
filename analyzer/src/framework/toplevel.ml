@@ -185,16 +185,14 @@ struct
       ) map
 
   (** Hooks should not be activated within hooks exec/eval.
-      To determine whether the analyzer is inside a hook, the toplevel maintains
-      the variable [hook_depth], that represents the depth of interpreter,
-      relative to the first encountered hook.
-      When [hook_depth] is not null, the analyzer is excuting/evaluating inside
-      a hook body.
+      The flag [inside_hook_flag] is set whenever the analyzer emits a hook
+      event, in order to prevent subsequent exec/eval (i.e. called inside
+      the hook) to emit hook events.
   *)
-  let hook_depth = ref 0
-  let inside_hook () = !hook_depth > 0
-  let enter_hook () = incr hook_depth
-  let exit_hook () = decr hook_depth
+  let inside_hook_flag = ref false
+  let inside_hook () = !inside_hook_flag
+  let enter_hook () = assert(not (inside_hook())); inside_hook_flag := true
+  let exit_hook () = assert(inside_hook ()); inside_hook_flag := false
 
   let exec ?(route = toplevel) (stmt: stmt) man (flow: Domain.t flow) : Domain.t post =
     let flow =
