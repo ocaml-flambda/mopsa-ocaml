@@ -84,7 +84,7 @@ struct
     let bbl = List.map to_c_block_object bl in
     man.exec ~route:(Below name) (mk_fold bb bbl range) flow
 
-  
+
   let exec stmt man flow =
     match skind stmt with
     | S_add b when is_c_type b.etyp ->
@@ -111,6 +111,11 @@ struct
       exec_fold b bl stmt.srange man flow |>
       OptionExt.return
 
+    | S_assign(x,e) when is_c_type (etyp e) ->
+      man.eval e flow >>$? fun e flow ->
+      man.exec (mk_assign x e stmt.srange) flow ~route:(Below name) |>
+      OptionExt.return
+
     | S_assume { ekind = E_binop (O_c_and, e1, e2) } ->
       man.exec (mk_assume e1 stmt.srange) flow >>%? fun flow ->
       man.exec (mk_assume e2 stmt.srange) flow |>
@@ -128,6 +133,11 @@ struct
 
     | S_assume { ekind = E_unop (O_log_not, { ekind = E_binop (O_c_or, e1, e2); etyp }); erange } ->
       man.exec (mk_assume (mk_binop (mk_not e1 e1.erange) O_c_and (mk_not e2 e2.erange) ~etyp erange) stmt.srange) flow |>
+      OptionExt.return
+
+    | S_assume e when is_c_type e.etyp ->
+      man.eval e flow >>$? fun e flow ->
+      man.exec (mk_assume e stmt.srange) ~route:(Below name) flow |>
       OptionExt.return
 
     | _ -> None
@@ -204,7 +214,6 @@ struct
     | E_c_statement {skind = S_expression e} ->
       man.eval e flow |>
       OptionExt.return
-
 
     | _ -> None
 

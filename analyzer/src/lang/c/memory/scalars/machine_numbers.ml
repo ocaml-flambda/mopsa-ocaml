@@ -368,9 +368,11 @@ struct
                    ekind = E_binop(op, e, e');
                    etyp = to_num_type exp.etyp }
       in
-      Eval.singleton exp' flow |>
+      (* Re-evaluate the numeric expression, in case Universal wants to
+         transform it (e.g. comparison expressions can be transformed into
+         booleans *)
+      man.eval exp' flow |>
       OptionExt.return
-
 
     | E_c_cast(e,_) when is_c_bool_type exp.etyp &&
                          is_c_int_type e.etyp ->
