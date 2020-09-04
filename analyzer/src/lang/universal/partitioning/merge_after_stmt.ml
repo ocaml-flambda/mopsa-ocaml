@@ -38,7 +38,7 @@ struct
   let alarms = []
 
   let init prog man flow = flow
-    
+
   let eval exp man flow = None
 
   let ask query man flow = None
@@ -47,20 +47,7 @@ struct
 
   let exec stmt man flow =
     let post = man.exec stmt flow ~route:(Below name) in
-    let post' =
-      (* Collapse all partitions except NotHandled*)
-      Cases.remove_duplicates
-        (fun case case' ->
-          match case,case' with
-          | NotHandled,NotHandled -> 0
-          | _,NotHandled -> 1
-          | NotHandled,_ -> 2
-          | _ -> 0
-        ) man.lattice post >>% fun flow ->
-      (* Since partitions can be tagged with [Some ()] or [None], we
-         add this bind to ensure that final result is [Some ()] *)
-      Post.return flow
-    in
+    let post' = Post.remove_duplicates man.lattice post in
     OptionExt.return post'
 
 end

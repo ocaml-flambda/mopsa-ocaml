@@ -133,7 +133,10 @@ struct
           man flow
     in
 
-    iter cases flow >>% fun flow ->
+    iter cases flow |>
+    (* Merge all cases in one, so that we will execute the body only once *)
+    Post.remove_duplicates man.lattice
+    >>% fun flow ->
 
     (* Put the remaining cur environments in the flow of the default case. If
        no default case is present, save cur in no_default. *)

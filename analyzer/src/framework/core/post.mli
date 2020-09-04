@@ -46,7 +46,9 @@ val return : ?cleaners:block -> 'a flow -> 'a post
 val print : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a post -> unit
 
 val bind : ('a flow -> ('a,'r) cases) -> 'a post -> ('a,'r) cases
-val (>>%) : 'a post -> ('a flow -> ('a,'r) cases) -> ('a,'r) cases 
+val (>>%) : 'a post -> ('a flow -> ('a,'r) cases) -> ('a,'r) cases
 
 val bind_opt : ('a flow -> ('a,'r) cases option) -> 'a post -> ('a,'r) cases option
-val (>>%?) : 'a post -> ('a flow -> ('a,'r) cases option) -> ('a,'r) cases option 
+val (>>%?) : 'a post -> ('a flow -> ('a,'r) cases option) -> ('a,'r) cases option
+
+val remove_duplicates : 'a lattice -> 'a post -> 'a post
