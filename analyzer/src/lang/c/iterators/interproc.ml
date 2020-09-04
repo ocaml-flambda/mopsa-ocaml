@@ -141,9 +141,24 @@ struct
       (* save the alloca resources of the caller before resetting it *)
       let caller_alloca_addrs = get_env T_cur man flow in
       let flow = set_env T_cur empty man flow in
+      (* Assign arguments to temporary variables to get rid of side-effects *)
+      let post,args_tmps,_ =
+        List.fold_left
+          (fun (post,tmps,i) arg ->
+             let tmp = mk_range_attr_var arg.erange Format.(asprintf "arg%d" i) arg.etyp in
+             let etmp = mk_var tmp arg.erange in
+             let etmp = { etmp with eprev = Some arg } in
+             let post' =
+               post
+               >>% man.exec (mk_add etmp arg.erange)
+               >>% man.exec (mk_assign (mk_var tmp arg.erange) arg arg.erange) in
+             post',etmp::tmps,i+1
+          ) (Post.return flow,[],0) args
+      in
+      (* Reverse args_tmps *)
+      let args_tmps = List.rev args_tmps in
       let ret =
-        (* Evaluate arguments *)
-        bind_list args man.eval flow >>$ fun args flow ->
+        post >>% fun flow ->
         (* We don't support recursive functions yet! *)
         if is_recursive_call fundec flow then (
           Soundness.warn_at range "ignoring recursive call of function %s in %a" fundec.c_func_org_name pp_range range;
@@ -174,15 +189,15 @@ struct
             fun_range = fundec.c_func_range;
           }
           in
-          let exp' = mk_call fundec' args range in
+          let exp' = mk_call fundec' args_tmps range in
           man.eval exp' flow ~route:(Below name)
 
         | {c_func_variadic = true} ->
-          let exp' = mk_c_call fundec args range in
+          let exp' = mk_c_call fundec args_tmps range in
           man.eval exp' flow ~route:(Below name)
 
         | {c_func_stub = Some stub} ->
-          let exp' = Stubs.Ast.mk_stub_call stub args range in
+          let exp' = Stubs.Ast.mk_stub_call stub args_tmps range in
           man.eval exp' flow
 
         | {c_func_body = None; c_func_org_name; c_func_return} ->
@@ -200,7 +215,9 @@ struct
         (fun addr acc -> acc >>% man.exec (mk_stub_free (mk_addr addr range) range))
         callee_alloca_addrs (Post.return flow)
       >>% fun flow ->
-      Eval.singleton e flow
+      Eval.singleton e flow |>
+      (* Clean temporary variables *)
+      Cases.add_cleaners (List.map (fun v -> mk_remove v range) args_tmps)
 
   (* 𝔼⟦ *p ⟧ where p is a pointer to a function *)
   let eval_deref_function_pointer p range man flow =
