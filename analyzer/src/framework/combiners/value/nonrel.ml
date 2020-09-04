@@ -246,7 +246,7 @@ struct
           with Not_found ->
             eval e map |>
             OptionExt.default (A_unsupported,Value.top) |>
-            snd         
+            snd
       );
     ask = (fun q -> match Value.ask (value_man ev map) q with Some r -> r | _ -> raise Not_found);
   }
@@ -258,9 +258,10 @@ struct
   and eval (e:expr) (a:t) : (aexpr * Value.t) option =
     match ekind e with
     | E_var(var, mode) ->
-      let v = find var a in
-      (A_var v, v) |>
-      OptionExt.return
+       let ov = find_opt var a in
+       OptionExt.bind (fun v ->
+           (A_var v, v) |>
+             OptionExt.return) ov
 
     | E_constant(c) ->
       Value.constant e.etyp c |> OptionExt.lift @@ fun v ->

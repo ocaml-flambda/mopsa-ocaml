@@ -41,7 +41,7 @@ let mk_builtin_raise_args exn args range =
 
 let mk_builtin_raise_msg exn msg range =
   let open Universal.Ast in
-  mk_builtin_raise_args exn [mk_constant ~etyp:T_string (C_string msg) range] range
+  mk_builtin_raise_args exn [mk_constant ~etyp:(T_py (Some Str)) (C_string msg) range] range
 
 let mk_builtin_call f params range =
   mk_py_call (mk_py_object (Addr.find_builtin f) range) params range
@@ -54,7 +54,6 @@ let mk_object_hasattr obj attr range =
 
 let mk_addr_hasattr obj attr range =
   mk_hasattr (Universal.Ast.mk_addr obj range) attr range
-
 
 let mk_try_stopiteration body except range =
   mk_try
@@ -77,19 +76,19 @@ let check_instances ?(arguments_after_check=0) funname man flow range exprs inst
         processing iexprs flow
       else
         let msg = Format.asprintf "%s: too many arguments: %d given, %d expected" funname (List.length exprs) (arguments_after_check + List.length instances) in
-        man.exec (mk_builtin_raise_msg "TypeError" msg range) flow
-        |> Eval.empty_singleton
+        man.exec (mk_builtin_raise_msg "TypeError" msg range) flow >>%
+          Eval.empty_singleton
     | e::es, i::is ->
       assume (Addr.mk_py_isinstance_builtin e i range) man flow
         ~fthen:(aux (pos+1) iexprs es is)
         ~felse:(fun flow ->
           let msg = Format.asprintf "%s: expected instance of '%s', but found %a at argument #%d" funname i pp_expr e pos in
-            man.exec (mk_builtin_raise_msg "TypeError" msg range) flow |>
+          man.exec (mk_builtin_raise_msg "TypeError" msg range) flow >>%
             Eval.empty_singleton
           )
     | [], _ ->
        let msg = Format.asprintf "%s: too few arguments: %d given, %d expected" funname (List.length exprs) (arguments_after_check + List.length instances) in
-       man.exec (mk_builtin_raise_msg "TypeError" msg range) flow |>
+       man.exec (mk_builtin_raise_msg "TypeError" msg range) flow >>%
          Eval.empty_singleton
   in
   Cases.bind_list exprs man.eval flow |>
@@ -105,12 +104,12 @@ let check_instances_disj ?(arguments_after_check=0) funname man flow range exprs
         processing iexprs flow
       else
         let msg = Format.asprintf "%s: too many arguments: %d given, %d expected" funname (List.length exprs) (arguments_after_check + List.length instances) in
-        man.exec (mk_builtin_raise_msg "TypeError" msg range) flow
-        |> Eval.empty_singleton
+        man.exec (mk_builtin_raise_msg "TypeError" msg range) flow >>%
+          Eval.empty_singleton
     | e::es, i::is ->
       let mk_onecond = fun i -> Addr.mk_py_isinstance_builtin e i range in
       let cond = List.fold_left (fun acc el ->
-          mk_binop acc O_py_or (mk_onecond el) range)
+          mk_binop ~etyp:(T_py None) acc O_py_or (mk_onecond el) range)
           (mk_onecond @@ List.hd i) (List.tl i) in
       assume cond man flow
         ~fthen:(aux (pos+1) iexprs es is)
@@ -120,12 +119,12 @@ let check_instances_disj ?(arguments_after_check=0) funname man flow range exprs
               (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") Format.pp_print_string) i
               pp_expr e
               pos in
-            man.exec (mk_builtin_raise_msg "TypeError" msg range) flow |>
-            Eval.empty_singleton
+            man.exec (mk_builtin_raise_msg "TypeError" msg range) flow >>%
+              Eval.empty_singleton
           )
     | _ ->
        let msg = Format.asprintf "%s: too few arguments: %d given, %d expected" funname (List.length exprs) (arguments_after_check + List.length instances) in
-      man.exec (mk_builtin_raise_msg "TypeError" msg range) flow |>
+      man.exec (mk_builtin_raise_msg "TypeError" msg range) flow >>%
       Eval.empty_singleton
   in
   Cases.bind_list exprs man.eval flow |>
@@ -140,29 +139,29 @@ let strip_object (e:expr) =
   {e with ekind}
 
 let new_wrapper man range flow newcls argcls ~fthennew =
-  man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) argcls flow |>
-  Eval.bind (fun ecls flow ->
+  man.eval argcls flow >>$
+    (fun ecls flow ->
       assume
         (Addr.mk_py_issubclass_builtin_r argcls newcls range)
         man flow
         ~fthen:fthennew
         ~felse:(fun flow ->
           let msg = Format.asprintf "%s.__new__(%a): %a is not a subtype of int" newcls pp_expr argcls pp_expr ecls in
-          man.exec (mk_builtin_raise_msg "TypeError" msg range) flow |>
+          man.exec (mk_builtin_raise_msg "TypeError" msg range) flow >>%
             Eval.empty_singleton)
     )
   |> OptionExt.return
 
-let bind_list_args ?(cleaners=true) man args flow range zone (f: var list -> 'b flow -> ('b, 'c) Cases.cases) =
+let bind_list_args ?(cleaners=true) man args flow range (f: var list -> 'b flow -> ('b, 'c) Cases.cases) =
   let cs = Flow.get_callstack flow in
   let module RangeSet = SetExt.Make(struct type t = range let compare = compare_range end) in
   let stmt, vars, _ = List.fold_left (fun (stmts, vars, argranges) arg ->
                           assert(not @@ RangeSet.mem arg.erange argranges);
-                          let tmp = mk_range_attr_var arg.erange (Format.asprintf "%xd(bla)" (Hashtbl.hash_param 30 100 cs)) T_any in
+                          let tmp = mk_range_attr_var arg.erange (Format.asprintf "%xd(bla)" (Hashtbl.hash_param 30 100 cs)) (T_py None) in
                           (mk_assign (mk_var tmp arg.erange) arg arg.erange) :: stmts, tmp :: vars, RangeSet.add arg.erange argranges
                         ) ([], [], RangeSet.empty) (List.rev args) in
   let stmt = Universal.Ast.mk_block stmt range in
-  let cases = f vars (man.exec ~zone:zone stmt flow) in
+  let cases = f vars (man.exec stmt flow |> post_to_flow man) in
   if cleaners then
     Cases.add_cleaners (List.map (fun x -> mk_remove_var x range) vars) cases
   else cases

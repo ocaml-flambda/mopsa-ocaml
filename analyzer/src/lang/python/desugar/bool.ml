@@ -26,8 +26,6 @@ open Sig.Abstraction.Stateless
 open Ast
 open Addr
 open Universal.Ast
-open Zone
-
 
 module Domain =
   struct
@@ -36,22 +34,18 @@ module Domain =
         let name = "python.desugar.bool"
       end)
 
-    let interface = {
-      iexec = {provides = []; uses = []};
-      ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
-    }
-
     let alarms = []
 
     let init _ _ flow = flow
 
-    let eval zs exp (man:('a, unit, 's) man) (flow:'a flow) =
+    let eval exp man flow =
       let range = erange exp in
+      if is_py_exp exp then
       match ekind exp with
       | E_unop(O_py_not, e) ->
-        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (Utils.mk_builtin_call "bool" [e] range) flow |>
-        Eval.bind (fun ee flow ->
-            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_not ee range) flow)
+        man.eval   (Utils.mk_builtin_call "bool" [e] range) flow >>$
+          (fun ee flow ->
+            man.eval (mk_not {ee with etyp=(T_py (Some Bool))} range) flow)
         |> OptionExt.return
 
         (* E⟦ e1 and e2 ⟧ *)
@@ -62,31 +56,31 @@ module Domain =
          Eval.singleton (mk_py_false range) flow |> OptionExt.return
 
       | E_binop(O_py_and, e1, e2) ->
-        man.eval (Utils.mk_builtin_call "bool" [e1] range) flow |>
-        Eval.bind (fun be1 flow1 ->
-            assume be1 man
-              ~fthen:(fun true_flow -> man.eval e2 true_flow)
-              ~felse:(fun false_flow -> man.eval e1 false_flow)
-              flow1
-          )
-        |> OptionExt.return
-
-      (* | E_binop(O_py_or, {ekind = E_constant (C_bool true)}, e2) ->
-       *    Eval.singleton (mk_py_true range) flow |> OptionExt.return
-       *
-       * | E_binop(O_py_or, {ekind = E_constant (C_bool false)}, e2) ->
-       *    man.eval e2 flow |> OptionExt.return *)
+         man.eval e1 flow >>$
+           (fun ee1 flow ->
+           man.eval (Utils.mk_builtin_call "bool" [ee1] range) flow >>$
+           (fun be1 flow1 ->
+             assume be1 man
+               ~fthen:(fun true_flow -> man.eval e2 true_flow)
+               ~felse:(fun false_flow -> Eval.singleton ee1 false_flow)
+               flow1
+             )
+           )
+         |> OptionExt.return
 
       (* E⟦ e1 or e2 ⟧ *)
       | E_binop(O_py_or, e1, e2) ->
-         man.eval (Utils.mk_builtin_call "bool" [e1] range) flow |>
-           Eval.bind (fun be1 flow1 ->
-               assume be1
-                 ~fthen:(fun true_flow ->
-                     man.eval e1 true_flow)
-                 ~felse:(fun false_flow ->
-                     man.eval e2 false_flow)
-                 man flow1)
+         man.eval e1 flow >>$
+         (fun ee1 flow ->
+           man.eval (Utils.mk_builtin_call "bool" [ee1] range) flow >>$
+           (fun be1 flow1 ->
+             assume be1
+               ~fthen:(fun true_flow ->
+                 Eval.singleton ee1 true_flow)
+               ~felse:(fun false_flow ->
+                 man.eval e2 false_flow)
+               man flow1)
+         )
          |> OptionExt.return
 
       | E_binop(O_log_or, e1, e2) ->
@@ -100,7 +94,7 @@ module Domain =
 
       (* E⟦ e1 is not e2 ⟧ *)
       | E_binop(O_py_is_not, e1, e2) ->
-         man.eval (mk_not (mk_binop e1 O_py_is e2 range) range) flow |> OptionExt.return
+         man.eval (mk_not (mk_binop ~etyp:(T_py None) e1 O_py_is e2 range) range) flow |> OptionExt.return
 
       (* E⟦ e1 in e2 ⟧ *)
       | E_binop(O_py_in, e1, e2) ->
@@ -108,8 +102,8 @@ module Domain =
          bind_some_opt (fun el flow ->
              let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
 
-             man.eval (mk_py_type e2 range) flow |>
-             Eval.bind (fun cls2 flow ->
+             man.eval (mk_py_type e2 range) flow >>$
+               (fun cls2 flow ->
                  assume
                    (Utils.mk_hasattr cls2 "__contains__" range)
                    ~fthen:(fun true_flow ->
@@ -120,20 +114,21 @@ module Domain =
                        assume
                          (Utils.mk_hasattr cls2 "__iter__" range)
                          ~fthen:(fun true_flow ->
-                             let v = mktmp () in
+                             let v = mktmp ~typ:(T_py None) () in
                              let stmt = mk_stmt (S_py_for (
                                  mk_var v range,
                                  e2,
                                  mk_if
-                                   (mk_binop (mk_var v range) O_eq e1 range)
+                                   (mk_binop ~etyp:(T_py None) (mk_var v range) O_eq e1 range)
                                    (mk_stmt S_break range)
                                    (mk_block [] range)
                                    range,
                                  (mk_block [] range)
                                )) range
                              in
-                             let flow = man.exec stmt true_flow in
-                             man.eval (mk_var v range) flow |> Eval.add_cleaners [mk_remove_var v range]
+                             man.exec stmt true_flow >>%
+                             man.eval (mk_var v range) |>
+                             Cases.add_cleaners [mk_remove_var v range]
                            )
                          ~felse:(fun false_flow ->
                              assume
@@ -143,8 +138,8 @@ module Domain =
                                  )
                                ~felse:(fun false_flow ->
                                  let msg = Format.asprintf "argument of type '%a' is not iterable" pp_addr_kind (akind @@ fst @@ object_of_expr cls2) in
-                                 let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow in
-                                 Eval.empty_singleton flow
+                                 man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow >>%
+                                 Eval.empty_singleton
                                )
                                man false_flow
                            )
@@ -156,14 +151,14 @@ module Domain =
 
       (* E⟦ e1 in e2 ⟧ *)
       | E_binop(O_py_not_in, e1, e2) ->
-         man.eval (mk_not (mk_binop e1 O_py_in e2 range) range) flow |> OptionExt.return
+         man.eval (mk_not (mk_binop ~etyp:(T_py None) e1 O_py_in e2 range) range) flow |> OptionExt.return
 
       (* E⟦ e1 op e2 op e3 ... ⟧ *)
       | E_py_multi_compare(left, ops, rights) ->
          debug "multi compare";
          let range = erange exp in
-         man.eval left flow |>
-         Eval.bind (fun left flow ->
+         man.eval left flow >>$
+           (fun left flow ->
              debug "left evaluated";
              let rec aux left flow = function
                | [] ->
@@ -171,10 +166,10 @@ module Domain =
                  Eval.singleton (mk_py_true range) flow
 
                | (op, right) :: tl ->
-                 man.eval right flow |>
-                 Eval.bind (fun right flow ->
+                 man.eval right flow >>$
+                   (fun right flow ->
                      assume
-                       (mk_binop left op right range)
+                       (mk_binop ~etyp:(T_py None) left op right range)
                        ~fthen:(fun true_flow -> aux right true_flow tl)
                        ~felse:(fun false_flow -> Eval.singleton (mk_py_false range) flow)
                        man flow
@@ -184,9 +179,9 @@ module Domain =
            ) |> OptionExt.return
 
       | _ -> None
+      else None
 
-
-    let exec _ _ _ _ = None
+    let exec _ _ _ = None
 
     let ask _ _ _ = None
 

@@ -35,17 +35,12 @@ struct
       let name = "python.objects.iterable"
     end)
 
-  let interface = {
-    iexec = {provides = []; uses = []};
-    ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
-  }
-
   let alarms = []
 
   let init (prog:program) man flow =
     flow
 
-  let rec eval zones exp man flow =
+  let eval exp man flow =
     let range = erange exp in
     match ekind exp with
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.join" as f, _))}, _)}, args, []) ->
@@ -54,7 +49,7 @@ struct
         (fun eargs flow ->
            if List.length eargs <> 2 then
              let msg = Format.asprintf "%s: too %s arguments: %d given, %d expected" f (if List.length eargs < 2 then "few" else "many") (List.length args) 2 in
-             man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow |>
+             man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>%
              Eval.empty_singleton
            else
              let self, iterable = match eargs with a :: b :: [] -> a, b | _ -> assert false in
@@ -66,7 +61,7 @@ struct
                          assume (mk_py_isinstance_builtin (mk_var ~mode:(Some WEAK) var_iterable range) "str" range) man flow
                            ~fthen:(man.eval (mk_py_top T_string range))
                            ~felse:(fun flow ->
-                               man.exec (Utils.mk_builtin_raise_msg "TypeError" "sequence item: expected str instance" range) flow |>
+                               man.exec (Utils.mk_builtin_raise_msg "TypeError" "sequence item: expected str instance" range) flow >>%
                                Eval.empty_singleton
                              )
                        )
@@ -76,23 +71,23 @@ struct
                                let vars_tuple = Tuple.Domain.var_of_eobj iterable in
                                let assume_all =
                                  List.fold_left (fun acc var ->
-                                     mk_binop acc O_py_and (mk_py_isinstance_builtin (mk_var ~mode:(Some WEAK) var range) "str" range) range) (mk_py_true range) vars_tuple in
+                                     mk_binop ~etyp:(T_py None) acc O_py_and (mk_py_isinstance_builtin (mk_var ~mode:(Some WEAK) var range) "str" range) range) (mk_py_true range) vars_tuple in
                                assume assume_all man flow
                                  ~fthen:(man.eval (mk_py_top T_string range))
                                  ~felse:(fun flow ->
-                                     man.exec (Utils.mk_builtin_raise_msg "TypeError" "sequence item: expected str instance" range) flow |>
+                                     man.exec (Utils.mk_builtin_raise_msg "TypeError" "sequence item: expected str instance" range) flow >>%
                                      Eval.empty_singleton
                                    )
                              )
                            ~felse:(fun flow ->
-                               man.exec (Utils.mk_builtin_raise_msg "TypeError" "can only join an iterable" range) flow |>
+                               man.exec (Utils.mk_builtin_raise_msg "TypeError" "can only join an iterable" range) flow >>%
                                Eval.empty_singleton
                              )
                        )
                  )
                ~felse:(fun flow ->
                  let msg = Format.asprintf "descriptor 'join' requires a 'str' object but received a '%a'" pp_expr self in
-                   man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow |>
+                   man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>%
                    Eval.empty_singleton
                  )
         )
@@ -101,7 +96,7 @@ struct
     | _ -> None
 
 
-  let exec zone stmt man flow = None
+  let exec stmt man flow = None
 
   let ask _ _ _ = None
 end

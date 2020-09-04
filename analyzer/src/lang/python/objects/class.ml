@@ -28,10 +28,6 @@ open Addr
 open Universal.Ast
 
 
-
-
-
-
 module Domain =
 struct
 
@@ -39,17 +35,12 @@ struct
       let name = "python.objects.class"
     end)
 
-  let interface = {
-    iexec = {provides = [Zone.Z_py]; uses = []};
-    ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
-  }
-
   let alarms = []
 
   let init _ _ flow = flow
 
 
-  let rec eval zones exp man flow =
+  let rec eval  exp man (flow: 'a flow) =
     let range = erange exp in
     match ekind exp with
     (* 𝔼⟦ C() | isinstance(C, type) ⟧ *)
@@ -58,18 +49,20 @@ struct
 
     | E_py_call({ekind = E_py_object (({addr_kind=A_py_class _}, _) as cls)} as ecls, args, kwargs) ->
       debug "class call  %a@\n@\n" pp_expr exp;
-      (* Call __new__ *)
-      let rec bind args vars flow f =
+      (* FIXME: this is actually type.__call__(cls) *)
+      (* Call __new__ and __init__ *)
+      let rec bind args vars (flow: 'a post) f =
         match args with
         | [] ->
            f (List.rev vars) flow
         | hd :: tl ->
-           man.eval hd ~zone:(Zone.Z_py, Zone.Z_py_obj) flow |>
-             Eval.bind (fun ehd flow ->
+           flow >>%
+           man.eval hd >>$
+             (fun ehd flow ->
                  let cs = Flow.get_callstack flow in
-                 let tmp = mk_range_attr_var hd.erange (Format.asprintf "%a%xd" pp_expr ecls (Hashtbl.hash_param 30 100 cs)) T_any in
-                 bind tl (tmp::vars) (man.exec ~zone:Zone.Z_py (mk_assign (mk_var tmp hd.erange) ehd range) flow) f) in
-      bind args [] flow
+                 let tmp = mk_range_attr_var hd.erange (Format.asprintf "%a%xd" pp_expr ecls (Hashtbl.hash_param 30 100 cs)) (T_py None) in
+                 bind tl (tmp::vars) (man.exec   (mk_assign (mk_var tmp hd.erange) ehd range) flow) f) in
+      bind args [] (Post.return flow)
         (fun vars flow ->
           let tmps = List.map (fun v ->
                          match vkind v with
@@ -77,24 +70,25 @@ struct
                          | _ -> assert false) vars in
           let new_call = mk_py_kall (mk_py_object_attr cls "__new__" range) ((mk_py_object cls range)
                                                                              :: tmps) kwargs range in
-          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) new_call flow |>
-            Eval.add_cleaners (List.map (fun x -> match ekind x with
+          flow >>%
+            man.eval   new_call |>
+            Cases.add_cleaners (List.map (fun x -> match ekind x with
                                                   | E_var (x, _) -> mk_remove_var x range
-                                                  | _ -> assert false) tmps) |>
-            Eval.bind (fun inst flow ->
+                                                  | _ -> assert false) tmps) >>$
+            (fun inst flow ->
                 assume
                   (mk_py_isinstance inst ecls range)
                   ~fthen:(fun flow ->
                     debug "init!@\n";
-                    man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_kall (mk_py_object_attr cls "__init__" range) (inst :: tmps) kwargs range) flow |>
-                      Eval.bind (fun r flow ->
+                    man.eval   (mk_py_kall (mk_py_object_attr cls "__init__" range) (inst :: tmps) kwargs range) flow >>$
+                      (fun r flow ->
                           assume
                             (mk_py_isinstance_builtin r "NoneType" range)
-                            ~fthen:(fun flow -> man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) inst flow)
+                            ~fthen:(fun flow -> man.eval    inst flow)
                             ~felse:(fun flow ->
                               let msg = Format.asprintf "__init__() should return None, not %a" pp_expr r in
-                              let flow = man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow in
-                              Eval.empty_singleton flow
+                              man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>%
+                              Eval.empty_singleton
                             )
                             man flow
                   ))
@@ -106,13 +100,13 @@ struct
 
     | _ -> None
 
-  let rec exec zone stmt (man:('a, unit, 's) man) (flow:'a flow) : 'a post option =
+  let rec exec stmt man flow =
     let range = srange stmt in
     match skind stmt with
     (* 𝕊⟦ class cls: body ⟧ *)
     | S_py_class cls ->
       debug "definition of class %a" pp_var cls.py_cls_var;
-      bind_list cls.py_cls_bases (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+      bind_list cls.py_cls_bases (man.eval  ) flow |>
       bind_some (fun bases flow ->
           let bases' =
             match bases with
@@ -122,13 +116,13 @@ struct
           if Libs.Py_mopsa.is_builtin_clsdec cls then
             let name = Libs.Py_mopsa.builtin_clsdec_name cls in
             create_builtin_class (C_builtin name) name cls bases' range;
-            man.exec cls.py_cls_body flow |>
+            man.exec cls.py_cls_body flow >>%
             Post.return
           else
           if Libs.Py_mopsa.is_unsupported_clsdec cls then
             let name = get_orig_vname cls.py_cls_var in
             create_builtin_class (C_unsupported name) name cls bases' range;
-            man.exec cls.py_cls_body flow |>
+            man.exec cls.py_cls_body flow >>%
             Post.return
           else
             try
@@ -142,17 +136,17 @@ struct
               eval_alloc man (A_py_class (C_user cls, mro)) stmt.srange flow |>
               bind_some (fun addr flow ->
                   let obj = (addr, None) in
-                  let flow = man.exec (mk_assign (mk_var cls.py_cls_var range) (mk_py_object obj range) range) flow in
+                  man.exec (mk_assign (mk_var cls.py_cls_var range) (mk_py_object obj range) range) flow >>% fun flow ->
                   debug "Body of class is %a@\n" pp_stmt cls.py_cls_body;
-                  let flow = man.exec cls.py_cls_body flow in
+                  man.exec cls.py_cls_body flow >>% fun flow ->
                   let parent = List.hd @@ List.tl mro in
-                  man.eval (mk_py_call (mk_py_object_attr parent "__init_subclass__" range) [mk_py_object obj range] range) flow |>
-                  Eval.bind (fun _ flow -> Post.return flow)
+                  man.eval (mk_py_call (mk_py_object_attr parent "__init_subclass__" range) [mk_py_object obj range] range) flow >>$
+                    (fun _ flow -> Post.return flow)
                 )
             with C3_lin_failure ->
               Exceptions.warn "C3 linearization failure during class declaration %a@\n" pp_var cls.py_cls_var;
               man.exec (Utils.mk_builtin_raise_msg "TypeError" "Cannot create a consistent method resolution order (MRO)" range) flow
-              |> Post.return
+              >>% Post.return
         )
       |> OptionExt.return
 

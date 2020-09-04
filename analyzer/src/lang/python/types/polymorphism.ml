@@ -105,24 +105,19 @@ struct
       let name = "python.types.polymorphism"
     end)
 
-  let interface = {
-    iexec = { provides = [Zone.Z_py]; uses = [Zone.Z_py; Zone.Z_py_obj]; };
-    ieval = { provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]; }
-  }
-
   let alarms = []
 
   let merge _ _ _ = assert false
 
   let init prog man flow = set_env T_cur (Partitions.empty) man flow
 
-  let rec exec zone stmt man flow =
+  let exec stmt man flow =
     match skind stmt with
     | S_assign ({ekind = E_var (v, _)}, {ekind = E_py_undefined _}) -> None
     | S_assign ({ekind = E_var (v, _)}, _) -> OptionExt.return @@ Post.return flow
     | _ -> None
 
-  let rec eval zones exp man flow = None
+  let rec eval exp man flow = None
 
   let ask _ _ _ = None
 
@@ -174,7 +169,7 @@ struct
         ) addrs poly
 
 
-  let reduce (stmt:stmt) man (rman:('a, 's) Sig.Reduction.Exec.exec_reduction_man) flow_pre flow_post =
+  let reduce stmt man rman pre post =
     assert false
     (* let man_addrs = man.get_man addrenv in
      * let man_poly = man.get_man polymorphism in

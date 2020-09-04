@@ -20,9 +20,9 @@
 (****************************************************************************)
 
 (** Toplevel abstraction
- 
+
     There are two main differences with domains. First, transfer functions are
-    indexed by zones to enable a faster access. Second, transfer functions are 
+    indexed by zones to enable a faster access. Second, transfer functions are
     not partial functions and return always a result.
 *)
 
@@ -277,7 +277,7 @@ struct
       with Not_found -> Exceptions.panic_at exp.erange "eval for %a not found" pp_route route
     in
     let evl =
-      (* Ask domains to perform the evaluation *) 
+      (* Ask domains to perform the evaluation *)
       match Cache.eval feval route exp man flow with
       | Some evl -> evl
 

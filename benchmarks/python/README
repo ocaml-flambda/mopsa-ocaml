@@ -1,0 +1,3 @@
+We use additional benchmarks (in different repos to reduce the CI cost):
+- pyperformance benchmarks: https://gitlab.com/mopsa/pyperformance-benchmarks
+- analysis a small real-world utility called Pathpicker: https://gitlab.com/mopsa/pathpicker-analysis

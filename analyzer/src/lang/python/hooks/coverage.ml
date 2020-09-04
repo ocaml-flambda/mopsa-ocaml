@@ -20,20 +20,17 @@
 (****************************************************************************)
 
 (* A prototype hook for displaying analysis coverage. Currently a POC *)
+(*  FIXME: better treatment of else/try... *)
 
 open Location
 open Mopsa
 open Format
 open Ast
-open Zone
-
 
 module Hook =
 struct
 
-  let name = "coverage"
-  let exec_zones = [Z_any]
-  let eval_zones = [Z_py,Z_any]
+  let name = "py.coverage"
 
   let compare_stmt_andrange s1 s2 =
     Compare.compose
@@ -60,7 +57,11 @@ struct
   let table : (string, entry) Hashtbl.t = Hashtbl.create 1
 
   let add_file filename body =
-    (* when adding a file, we collect all leaf statements (ie statements not containing stmts themselves), and toplevel expressions defined in those statements. We will then work only on those collected statements (except for a few hacks in on_after_eval *)
+    (* when adding a file, we collect all leaf statements (ie
+       statements not containing stmts themselves), and toplevel
+       expressions defined in those statements. We will then work only
+       on those collected statements (except for a few hacks in
+       on_after_eval *)
     let init_exprs, init_stmts =
       Visitor.fold_stmt
         (fun acc e -> VisitParts acc)
@@ -78,9 +79,6 @@ struct
              Keep (ExprSet.union exprs acce, StmtSet.add s accs)
         )
         (ExprSet.empty, StmtSet.empty) body in
-    (* Debug.debug ~channel:"coverage" "init_exprs = @[%a@]@.init_stmts = @[%a@]@."
-     *   (ExprSet.fprint SetExt.printer_default pp_expr_with_range) init_exprs
-     *   (StmtSet.fprint SetExt.printer_default pp_stmt_with_range) init_stmts; *)
     Hashtbl.add table filename
       {never_analyzed_exprs = init_exprs;
        never_analyzed_stmts = init_stmts;
@@ -199,14 +197,13 @@ struct
           try
             let l = input_line file in
             if is_comment l || l = "" || List.mem (String.trim l) ["else:"; "try:"]  then
-              (*  FIXME: better treatment of else/try... *)
               let () = incr covered_lines in
               Format.fprintf ocf "%s@." l
-            else if StmtSet.exists search_stmt entry.reachable_stmts then (* okay, statement reached *)
+            else if StmtSet.exists search_stmt entry.reachable_stmts then
+              (* okay, statement reached *)
               let () = incr covered_lines in
               Format.fprintf ocf "\027[38;5;%dm%s\027[0m@." (List.assoc "green" Debug.colors) l
             else if StmtSet.exists search_stmt entry.always_bottom_stmts then
-              (* let () = Format.printf "always bottom: %a" pp_stmt_with_range (StmtSet.choose @@ StmtSet.filter search_stmt entry.always_bottom_stmts) in *)
               let () = incr covered_lines in
               Format.fprintf ocf "\027[38;5;%dm%s\027[0m@." (List.assoc "yellow" Debug.colors) l
             else
@@ -227,7 +224,6 @@ struct
               | None ->
                 begin match ExprSet.choose_opt @@ ExprSet.filter search_expr entry.always_bottom_exprs with
                   | Some e ->
-                    (* let () = Format.printf "always bottom: %a" pp_expr_with_range e in *)
                     let () = incr covered_lines in
                     let n = String.length l in
                     let cols, cole = 0, n
