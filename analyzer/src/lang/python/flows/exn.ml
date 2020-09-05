@@ -92,7 +92,7 @@ module Domain =
                                                           let open Universal.Iterators.Interproc.Common in
                                                           Flow.fold (fun acc tk env ->
                                                               match tk with
-                                                              | T_break | T_continue | T_return _ | T_py_exception _ ->
+                                                              | T_cur | T_break | T_continue | T_return _ | T_py_exception _ ->
                                                                  Flow.singleton (Flow.get_ctx acc) T_cur env |>
                                                                    man.exec finally |> post_to_flow man |>
                                                                    Flow.rename T_cur tk man.lattice |>
