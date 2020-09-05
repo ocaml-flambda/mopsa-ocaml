@@ -105,7 +105,6 @@ struct
  (fun eaddr_tuple flow ->
           let addr_tuple = addr_of_expr eaddr_tuple in
           let els_vars = var_of_addr addr_tuple in
-          debug "els_vars = %a@.els = %a" (Format.pp_print_list pp_var) els_vars (Format.pp_print_list pp_expr) els;
           let flow = List.fold_left2 (fun acc vari eli ->
               acc >>% man.exec
                 (mk_assign (mk_var ~mode:(Some STRONG) vari range) eli range)) (Post.return flow) els_vars els in
@@ -139,11 +138,15 @@ struct
            let tuple = List.hd eargs in
            let tuple_vars = var_of_eobj tuple in
            try
+             debug "expr = %a" pp_expr (List.hd (List.tl args));
              let pos = match ekind (List.hd (List.tl args)) with
                | E_constant (C_int z) -> Z.to_int z
+               | E_unop (O_minus, {ekind=E_constant (C_int z)}) -> - Z.to_int z
                | _ -> raise Nonconstantinteger in
              if 0 <= pos && pos < List.length tuple_vars then
                man.eval   (mk_var ~mode:(Some STRONG) (List.nth tuple_vars pos) range) flow
+             else if 0 > pos && pos >= - List.length tuple_vars then
+               man.eval (mk_var ~mode:(Some STRONG) (List.nth tuple_vars (List.length tuple_vars + pos)) range) flow
              else
                man.exec   (Utils.mk_builtin_raise_msg "IndexError" "tuple index out of range" range) flow >>%
                Eval.empty_singleton
