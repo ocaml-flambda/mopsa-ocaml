@@ -260,6 +260,7 @@ struct
         )
       |> OptionExt.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bool.__str__" as f, _))}, _)}, args, []), _
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("int.__str__" as f, _))}, _)}, args, []), _
     (* todo: weird, tp_str set to 0 in longobject.c *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("int.__repr__" as f, _))}, _)}, args, []), _ ->

@@ -461,8 +461,8 @@ struct
     | S_remove {ekind = E_addr {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin s, _)}}} when List.mem s ["int"; "float"; "bool"; "NoneType"; "NotImplementedType"; "str"] ->
        flow |> Post.return |> OptionExt.return
 
-    | S_invalidate ({ekind = E_addr a} as e)
-    | S_remove ({ekind = E_addr a} as e) ->
+    | S_invalidate ({ekind = E_addr a})
+    | S_remove ({ekind = E_addr a}) ->
        let cur = get_env T_cur man flow in
        let ncur = AMap.map (ASet.remove (Def a)) cur in
        let flow = set_env T_cur ncur man flow in
