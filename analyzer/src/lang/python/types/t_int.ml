@@ -166,7 +166,8 @@ struct
       |>  OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, [e1; e2], []), _
-      when is_arith_binop_fun "int" f ->
+         when is_arith_binop_fun "int" f ->
+       (* FIXME: negative powers, 0 ** -1 *)
       bind_list [e1; e2] (man.eval ) flow |>
       bind_some (fun el flow ->
           let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
@@ -239,6 +240,12 @@ struct
                 man.eval   expr false_flow)
             man flow
         )
+      |> OptionExt.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("int.__index__" as f, _))}, _)}, args, []), _ ->
+      Utils.check_instances f man flow range args
+        ["int"]
+        (fun e flow -> man.eval (List.hd e) flow)
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("int.__bool__" as f, _))}, _)}, args, []), _ ->
