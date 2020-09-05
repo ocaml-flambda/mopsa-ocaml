@@ -639,12 +639,13 @@ struct
           begin match ekind e1, ekind e2 with
             | E_py_object (a1, _), E_py_object (a2, _) when
                 compare_addr a1 a2 = 0 &&
-                (compare_addr a1 (OptionExt.none_to_exn !addr_notimplemented) = 0 || compare_addr a1 (OptionExt.none_to_exn !addr_none) = 0 ||
-                 compare_addr a2 (OptionExt.none_to_exn !addr_notimplemented) = 0 || compare_addr a2 (OptionExt.none_to_exn !addr_none) = 0) ->
+                  (compare_addr a1 (OptionExt.none_to_exn !addr_notimplemented) = 0 || compare_addr a1 (OptionExt.none_to_exn !addr_none) = 0 || a1.addr_mode = STRONG) ->
               man.eval (mk_py_true range) flow
             | E_py_object (a1, _), E_py_object (a2, _) when compare_addr_kind (akind a1) (akind a2) <> 0 ->
               man.eval (mk_py_false range) flow
-            | _ -> man.eval (mk_py_top (T_py (Some Bool)) range) flow
+            | _ ->
+               debug "e1 = %a, e2 = %a" pp_expr e1 pp_expr e2;
+               man.eval (mk_py_top (T_py (Some Bool)) range) flow
           end
         )
       |> OptionExt.return
