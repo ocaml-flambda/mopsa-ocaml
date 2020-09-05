@@ -112,6 +112,11 @@ struct
         )
       |> OptionExt.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("tuple.__new__", _))}, _)}, cls::args, []) ->
+      Utils.new_wrapper man range flow "tuple" cls
+        ~fthennew:(man.eval (mk_expr ~etyp:(T_py None) (E_py_tuple []) range))
+
+
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("tuple.__contains__" as f, _))}, _)}, args, []) ->
       Utils.check_instances ~arguments_after_check:1 f man flow range args
         ["tuple"]
@@ -134,6 +139,7 @@ struct
       Utils.check_instances f man flow range args
         ["tuple"; "int"]
         (fun eargs flow ->
+          (* FIXME: ask the intervals rather than do this hack *)
            let exception Nonconstantinteger  in
            let tuple = List.hd eargs in
            let tuple_vars = var_of_eobj tuple in
@@ -157,6 +163,17 @@ struct
                 :: (List.map (fun var -> man.eval   (mk_var ~mode:(Some STRONG) var range) flow) tuple_vars))
         )
       |> OptionExt.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("tuple.__len__" as f, _))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args
+        ["tuple"]
+        (fun eargs flow ->
+          let tuple = List.hd eargs in
+          let tuple_vars = var_of_eobj tuple in
+          man.eval (mk_int ~typ:(T_py (Some Int)) (List.length tuple_vars) range) flow
+        )
+      |> OptionExt.return
+
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("tuple.__iter__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args
