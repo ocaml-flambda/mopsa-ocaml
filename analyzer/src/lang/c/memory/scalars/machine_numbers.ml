@@ -501,14 +501,6 @@ struct
     | S_remove ({ekind = E_var _} as v) when is_c_num_type v.etyp ->
       let vv = mk_num_var_expr v in
       man.exec ~route:numeric (mk_remove vv stmt.srange) flow |>
-      Post.bind (fun flow ->
-          if is_c_int_type v.etyp then
-            let vv = match ekind vv with E_var (vv,_) -> vv | _ -> assert false in
-            Framework.Combiners.Value.Nonrel.remove_var_bounds_flow vv flow |>
-            Post.return
-          else
-            Post.return flow
-        ) |>
       OptionExt.return
 
     | S_rename(({ekind = E_var _} as v1), ({ekind = E_var _} as v2))
