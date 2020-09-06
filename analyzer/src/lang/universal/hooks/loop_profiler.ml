@@ -62,11 +62,16 @@ struct
 
   (** Print statistics table *)
   let print fmt () =
-    Format.fprintf fmt "Loops iterations:@.";
+    Format.fprintf fmt "Loops profiling:@.";
     LoopMap.iter
       (fun loop iterations ->
-         Format.fprintf fmt "  %a: %a@."
+         let sum = List.fold_left (+) (0) iterations in
+         let nb = List.length iterations in
+         let avg = (float_of_int sum) /. (float_of_int nb) in
+         Format.fprintf fmt "  %a: %d time%a, %.2f avg. iterations (%a)@."
            pp_relative_range loop.range
+           nb Debug.plurial_int nb
+           avg
            Format.(pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_print_int) iterations
       ) !stats
 
