@@ -6,7 +6,7 @@ class B:
 def factory():
     b = B()
     return b
-    
+
 b1 = factory()
 b1.z = 1
 

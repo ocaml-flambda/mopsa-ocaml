@@ -19,7 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Definition of python functions and evaluation of their calls. *)
+(** Inlining of anonymous functions defined through lambda *)
 
 open Mopsa
 open Sig.Abstraction.Stateless
@@ -35,22 +35,17 @@ module Domain =
         let name = "python.objects.lambda"
       end)
 
-    let interface = {
-      iexec = {provides = [Zone.Z_py]; uses = []};
-      ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
-    }
-
     let alarms = []
 
     let init _ _ flow = flow
 
-    let eval zs exp man flow =
+    let eval exp man flow =
       let range = erange exp in
       match ekind exp with
       | E_py_lambda l ->
         let lname = Format.asprintf "λ%a" pp_range range in
         let fun_addr = F_user
-            { py_func_var = mk_range_attr_var range lname T_any;
+            { py_func_var = mk_range_attr_var range lname (T_py None);
               py_func_parameters = l.py_lambda_parameters;
               py_func_defaults = l.py_lambda_defaults;
               py_func_vararg = None;
@@ -65,17 +60,17 @@ module Domain =
               py_func_types_in = [];
               py_func_type_out = None;
               py_func_range = range;
-              py_func_ret_var = mk_range_attr_var range ("ret "^lname) T_any;
+              py_func_ret_var = mk_range_attr_var range ("ret "^lname) (T_py None);
             } in
         eval_alloc man (A_py_function fun_addr) range flow |>
-        bind_some (fun addr flow ->
+        bind_result (fun addr flow ->
             Eval.singleton (mk_py_object (addr, None) range) flow)
         |> OptionExt.return
 
 
       | _ -> None
 
-    let exec zone stmt man flow = None
+    let exec stmt man flow = None
 
     let ask _ _ _ = None
 

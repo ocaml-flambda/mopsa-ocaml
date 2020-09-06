@@ -9,7 +9,7 @@ def range():
     yield k
     i = i + 1
 
-l1 = [rand2[0]] * n    
+l1 = [rand2[0]] * n
 g = range()
 l2 = []
 
@@ -18,5 +18,3 @@ while j < n:
   x = next(g)
   j = j + 1
   pass
-
-

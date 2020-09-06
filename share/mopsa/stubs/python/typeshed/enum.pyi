@@ -4,7 +4,6 @@ from typing import Any, Dict, Iterator, List, Mapping, Type, TypeVar, Union
 
 
 _T = TypeVar('_T')
-_S = TypeVar('_S', bound=Type[Enum])
 
 # Note: EnumMeta actually subclasses type directly, not ABCMeta.
 # This is a temporary workaround to allow multiple creation of enums with builtins
@@ -51,6 +50,8 @@ class Enum:
     def __hash__(self) -> Any: ...
     def __reduce_ex__(self, proto: object) -> Any: ...
 
+_S = TypeVar('_S', bound=Type[Enum])
+
 class IntEnum(int, Enum):
     value: int
 
@@ -58,10 +59,6 @@ def unique(enumeration: _S) -> _S: ...
 
 # if sys.version_info >= (3, 6):
 _auto_null: Any
-
-# subclassing IntFlag so it picks up all implemented base functions, best modeling behavior of enum.auto()
-class auto(IntFlag):
-    value: Any
 
 class Flag(Enum):
     def __contains__(self: _T, other: _T) -> bool: ...
@@ -82,3 +79,7 @@ class IntFlag(int, Flag):  # type: ignore
     __ror__ = __or__
     __rand__ = __and__
     __rxor__ = __xor__
+
+# subclassing IntFlag so it picks up all implemented base functions, best modeling behavior of enum.auto()
+class auto(IntFlag):
+    value: Any

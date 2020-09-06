@@ -22,9 +22,6 @@
 /*
   Floating-point arithmetics and interval arthmetics with rounding.
 
-  This relies on x86_64 assembly, using GCC asm instructions.
-  Assumes that float arithmetic is compiled to SSE instructions.
-
   To minimize rounding mode changes, we simulate rounding downwards
   as rounding upwards the negation of the expected result, when possible.
   Thus, we expect that, in practice, we will only switch between
@@ -38,8 +35,11 @@
 #include <caml/memory.h>
 #include <caml/alloc.h>
 
+#include <stdio.h>
+#include <stdlib.h>
 #include <math.h>
 #include <float.h>
+#include <fenv.h>
 
 
 
@@ -60,17 +60,22 @@
 #endif
 
 
+/* Set rounding direction (internal) */
+/* ********************************* */
 
-/* MXCSR manipulation */
-/* ****************** */
+
+#if defined(__x86_64__) && defined(__GNUC__)
 
 /*
+  Specific path for x86-64 with GCC inline assembly.
+
   We are trying to be more efficient by directly storing a constant
   into MSCSR instead of using the usual load-modify-store.
   As a consquence, we not only change the rounding mode, but also reset
   other bits (including exception masks and flags, flush-to-zero and
   denormal-are-zero).
-  Is that OK?
+  Assumes that float arithmetic is compiled to SSE instructions and does
+  not change the x87 FPU.
 */
 
 static const unsigned mxcsr_near = 0x1f80;
@@ -89,6 +94,32 @@ static const unsigned mxcsr_zero = 0x7f80;
 
 #define ROUND_DOWN                              \
   asm ("ldmxcsr %0" : : "m" (*&mxcsr_down))
+
+#else
+
+/*
+  Generic path using fesetround.
+
+  This should work for any C99 compiler.
+*/
+
+#define FESETROUND(X)                           \
+  if (fesetround((X))) { fprintf(stderr,"Could not set FPU rounding direction: fesetround failed.\n"); exit(1); }
+
+#define ROUND_NEAR                              \
+  FESETROUND(FE_TONEAREST)
+
+#define ROUND_ZERO                              \
+  FESETROUND(FE_TOWARDZERO)
+
+#define ROUND_UP                                \
+  FESETROUND(FE_UPWARD)
+
+#define ROUND_DOWN                              \
+  FESETROUND(FE_DOWNWARD)
+
+
+#endif
 
 
 

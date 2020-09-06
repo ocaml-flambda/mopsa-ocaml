@@ -184,9 +184,26 @@ struct
           RouteMap.add route (Domain.exec domains) map
       ) map
 
+  (** Hooks should not be activated within hooks exec/eval.
+      The flag [inside_hook_flag] is set whenever the analyzer emits a hook
+      event, in order to prevent subsequent exec/eval (i.e. called inside
+      the hook) to emit hook events.
+  *)
+  let inside_hook_flag = ref false
+  let inside_hook () = !inside_hook_flag
+  let enter_hook () = assert(not (inside_hook())); inside_hook_flag := true
+  let exit_hook () = assert(inside_hook ()); inside_hook_flag := false
+
   let exec ?(route = toplevel) (stmt: stmt) man (flow: Domain.t flow) : Domain.t post =
-    let ctx = Hook.on_before_exec route stmt man flow in
-    let flow = Flow.set_ctx ctx flow in
+    let flow =
+      if inside_hook () then
+        flow
+      else
+        let () = enter_hook() in
+        let ctx = Hook.on_before_exec route stmt man flow in
+        let () = exit_hook() in
+        Flow.set_ctx ctx flow
+    in
 
     let fexec =
       try RouteMap.find route exec_map
@@ -232,8 +249,13 @@ struct
         (* Now that post is clean, remove all cleaners *)
         |> Cases.set_cleaners []
       in
-      let ctx = Hook.on_after_exec route stmt man flow clean_post in
-      Cases.set_ctx ctx clean_post
+      if inside_hook () then
+        clean_post
+      else
+        let () = enter_hook() in
+        let ctx = Hook.on_after_exec route stmt man flow clean_post in
+        let () = exit_hook () in
+        Cases.set_ctx ctx clean_post
     with
     | Exceptions.Panic(msg, line) ->
       Printexc.raise_with_backtrace
@@ -274,9 +296,15 @@ struct
 
   (** Evaluation of expressions. *)
   let eval ?(route=toplevel) exp man flow =
-    let ctx = Hook.on_before_eval route exp man flow in
-    let flow = Flow.set_ctx ctx flow in
-
+    let flow =
+      if inside_hook () then
+        flow
+      else
+        let () = enter_hook() in
+        let ctx = Hook.on_before_eval route exp man flow in
+        let () = exit_hook() in
+        Flow.set_ctx ctx flow
+    in
 
     (* Get the actual route of the expression in case of a
        variable, since variable can have an intrinsic semantic *)
@@ -336,8 +364,13 @@ struct
       if exp == exp' then Cases.singleton exp' flow' else Cases.singleton { exp' with eprev = Some exp } flow'
     in
 
-    let ctx = Hook.on_after_eval route exp man flow ret in
-    Cases.set_ctx ctx ret
+    if inside_hook () then
+        ret
+    else
+      let () = enter_hook() in
+      let ctx = Hook.on_after_eval route exp man flow ret in
+      let () = exit_hook () in
+      Cases.set_ctx ctx ret
 
 
   (** {2 Handler of queries} *)

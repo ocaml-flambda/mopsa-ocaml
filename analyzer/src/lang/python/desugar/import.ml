@@ -37,16 +37,11 @@ module Domain =
 
     let imported_modules = Hashtbl.create 100
 
-    let interface = {
-      iexec = {provides = [Zone.Z_py]; uses = []};
-      ieval = {provides = []; uses = []}
-    }
-
     exception Module_not_found of string
 
     let alarms = []
 
-    let rec exec zone stmt man flow =
+    let rec exec stmt man flow =
       let range = srange stmt in
       match skind stmt with
       | S_py_import(modul, _, _) when String.contains modul '.'->
@@ -63,7 +58,7 @@ module Domain =
             | None -> vroot
             | Some v -> v
           in
-          man.exec (mk_assign (mk_var v range) (mk_py_object obj range) range) flow |>
+          man.exec (mk_assign (mk_var v range) (mk_py_object obj range) range) flow >>%
           Post.return |>
           OptionExt.return
         with Module_not_found m ->
@@ -71,7 +66,7 @@ module Domain =
             (Utils.mk_builtin_raise_msg "ModuleNotFoundError" (
                  Format.asprintf "No module named '%s'" m
                ) range)
-            flow |> Post.return |> OptionExt.return
+            flow >>% Post.return |> OptionExt.return
         end
 
       | S_py_import_from(modul, name, _, vmodul) ->
@@ -79,7 +74,6 @@ module Domain =
         debug "importing %s from module %s" name modul;
         let obj, flow, ispyi = import_module man modul range flow in
         debug "import ok, adding a few eq";
-        (* FIXME: terrible disjunction *)
         if ispyi then
           match kind_of_object obj with
           | A_py_module (M_user (_, globals)) ->
@@ -99,7 +93,7 @@ module Domain =
                 let stmt = mk_assign (mk_var vmodul range) (mk_var v range) range in
                 man.exec stmt flow
             end
-            |> Post.return |> OptionExt.return
+            >>% Post.return |> OptionExt.return
           | _ -> assert false
         else
          let e =
@@ -118,7 +112,7 @@ module Domain =
          in
          let stmt = mk_assign (mk_var vmodul range) e range in
          let () = debug "assign %a!" pp_stmt stmt in
-         man.exec stmt flow |>
+         man.exec stmt flow >>%
          Post.return |>
          OptionExt.return
 
@@ -170,7 +164,7 @@ module Domain =
                   (addr, None), body, false, flow in
               let flow' = man.exec body flow in
               Hashtbl.add imported_modules name ((a, e), is_stub);
-              (a, e), flow', is_stub
+              (a, e), post_to_flow man flow', is_stub
             end
         in
         (addr, expr), flow, is_stub
@@ -189,9 +183,7 @@ module Domain =
         match (Frontend.parse_program [path]).prog_kind with
         | Ast.Py_program (_, _, b) -> b
         | _ -> assert false in
-      (* FIXME: pour les fonctions récursives, ça marche ça ? *)
-      (* pour les variables globales : collecter les variables globales, puis faire des man.exec dessus ? *)
-      (* et pour les modules normaux, il y a aussi un pb sur les noms de variables, non ? *)
+      (* FIXME: does this work for recursive functions? *)
       let rec parse base stmt =
         match skind stmt with
         | S_py_class(cls) ->
@@ -254,17 +246,15 @@ module Domain =
         | Py_program(_, g, b) -> g, b
         | _ -> assert false in
       let rec parse basename stmt globals flow : stmt * var list * 'a flow  =
-        debug "parse (basename=%a) %a" (OptionExt.print Format.pp_print_string) basename pp_stmt stmt;
+        debug "parse (basename=%a) %a %a" (OptionExt.print Format.pp_print_string) basename pp_stmt stmt (Flow.print man.lattice.print) flow;
         let range = srange stmt in
         match skind stmt with
         | S_assign ({ekind = E_var (v, _)}, e) ->
-          (* let v = set_orig_vname (mk_dot_name (Some name) (get_orig_vname v)) v in *)
           debug "%s: adding alias %a[%s] = %a" base pp_var v v.vname pp_expr e;
           let ee = Visitor.map_expr (fun exp -> match ekind exp with
               | E_var (v, m) -> begin try Keep (Hashtbl.find type_aliases v) with Not_found -> Keep exp end
               | _ -> VisitParts exp) (fun s -> VisitParts s) e in
           add_type_alias v ee;
-          (* add to map *)
           {stmt with skind = S_block ([], [])},
           List.filter (fun var -> compare_var var v <> 0) globals,
           flow
@@ -273,7 +263,7 @@ module Domain =
         | S_py_import (s, _, _)
         | S_py_import_from (s, _, _, _) ->
           debug "hum, maybe we should import %s first" s;
-          {stmt with skind = S_block ([], [])}, globals, man.exec stmt flow
+          {stmt with skind = S_block ([], [])}, globals, man.exec stmt flow |> post_to_flow man
 
 
         | S_py_annot _
@@ -300,8 +290,8 @@ module Domain =
               | _ -> VisitParts e) (fun s -> VisitParts s) stmt
           in
           let is_typingoverload_fundec = function
-            | {py_func_decors = [{ekind = E_py_attribute({ekind = E_var( {vkind = V_uniq ("typing",_)}, _)}, "overload")}]} -> true
             (* FIXME *)
+            | {py_func_decors = [{ekind = E_py_attribute({ekind = E_var( {vkind = V_uniq ("typing",_)}, _)}, "overload")}]} -> true
             | {py_func_decors = [{ekind = E_var( {vkind = V_uniq ("overload",_)}, _)}]} -> true
             | _ -> false in
           begin match skind stmt with
@@ -313,8 +303,8 @@ module Domain =
                   | _ -> (expr::b, ab)
                 ) ([], []) c.py_cls_bases in
               let bases, abases = List.rev bases, List.rev abases in
-              let r = bind_list bases (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
-                      bind_some (fun ebases flow ->
+              let r = bind_list bases man.eval flow |>
+                        bind_result (fun ebases flow ->
                           (* FIXME: won't work with Generic[T] I guess *)
                           let obases = match ebases with
                             | [] -> [find_builtin "object"]
@@ -324,7 +314,7 @@ module Domain =
                             | _ -> ebases in
                           let name = mk_dot_name basename (get_orig_vname c.py_cls_var) in
                           let py_cls_a_body, globals, flow = parse (Some name) c.py_cls_body globals flow in
-                          debug "body of %s: %a" name pp_stmt py_cls_a_body;
+                          debug "body of %s: %a, flow = %a" name pp_stmt py_cls_a_body (Flow.print man.lattice.print) flow;
                           let newc =
                             { py_cls_a_var = set_orig_vname name c.py_cls_var;
                               py_cls_a_body;
@@ -342,10 +332,10 @@ module Domain =
                           let addr = {addr with addr_kind = A_py_class (C_annot newc, mro)} in
                           debug "add_typed %a" pp_addr addr;
                           let () = add_typed (addr, None) in
-                          Cases.empty_singleton flow
+                          Cases.return () flow
                         )
               in
-              let flow = Cases.apply (fun _ f -> f) (Flow.join man.lattice) (Flow.meet man.lattice) r in
+              let flow = post_to_flow man r in
               {stmt with skind = S_block ([], [])}, globals, flow
 
 
@@ -415,10 +405,9 @@ module Domain =
     let init prog man flow =
       import_builtin_module (Some "mopsa") "mopsa";
       import_builtin_module None "stdlib";
-      (* import_builtin_module (Some "math") "math"; *)
       flow
 
-    let eval _ _ _ _ = None
+    let eval _ _ _ = None
     let ask _ _ _ = None
   end
 

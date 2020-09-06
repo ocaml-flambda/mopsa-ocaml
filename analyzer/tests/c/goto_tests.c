@@ -11,7 +11,7 @@ void test_backward_goto() {
   goto label;
 
  exit:
-  _mopsa_assert_exists(a==11);
+  _mopsa_assert(a==10);
 }
 
 int f0(int x) {

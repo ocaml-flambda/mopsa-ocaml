@@ -38,11 +38,6 @@ struct
       let name = "python.program"
     end)
 
-  let interface = {
-    iexec = {provides = [Zone.Z_py]; uses = []};
-    ieval = {provides = []; uses = []}
-  }
-
   let alarms = []
 
   let init prog man flow =
@@ -50,9 +45,9 @@ struct
     | Py_program (name, globals, body) -> set_py_program (name, globals, body) flow
     | _ -> flow
 
-  let eval _ _ _ _ = None
+  let eval _ _ _ = None
 
-  let init_globals man globals range flow =
+  let init_globals man globals range (flow: 'a flow) : 'a post =
     (* Initialize global variables with C_py_undefined constant *)
     let stmt =
       mk_block
@@ -60,49 +55,46 @@ struct
              let e =
                (* Initialize globals with the same name of a builtin with its address *)
                if is_builtin_var v then (mk_py_object (find_builtin @@ get_orig_vname v) range)
-               else mk_expr (E_py_undefined true) range
+               else mk_expr ~etyp:(T_py None) (E_py_undefined true) range
              in
              mk_assign (mk_var v range) e range
            ) globals
         )
         range
     in
-    let flow1 = man.exec stmt flow in
+    man.exec stmt flow >>% fun flow1 ->
 
     (** Initialize special variable __name__ *)
-    (* TODO: FIXME: __name__/__file__ is in gc, but not globals, so we're a bit stuck here. 140/141 seems to be the right constants **for now** *)
     let v = Frontend.from_var {name="__name__"; uid=140} in
-    (* mkfresh (fun uid -> "__name__" ^ (string_of_int uid)) T_any () in *)
     let stmt =
       let range = tag_range range "__name__ assignment" in
       mk_assign
         (mk_var v range)
-        (mk_constant (Universal.Ast.C_string "__main__") ~etyp:Universal.Ast.T_string range)
+        (mk_constant (Universal.Ast.C_string "__main__") ~etyp:(T_py (Some Str)) range)
         range
     in
-    let flow2 = man.exec stmt flow1 in
+    man.exec stmt flow1 >>% fun flow2 ->
 
     (** Initialize special variable __file__ *)
-    (* let v = mkfresh (fun uid -> "__file__" ^ (string_of_int uid)) T_any () in *)
     let v = Frontend.from_var {name="__file__"; uid=141} in
     let stmt =
       let range = tag_range range "__file__ assignment" in
         mk_assign
           (mk_var v range)
-          (mk_constant (Universal.Ast.C_string (get_range_file range)) ~etyp:Universal.Ast.T_string range)
+          (mk_constant (Universal.Ast.C_string (get_range_file range)) ~etyp:(T_py (Some Str)) range)
           range
     in
-    let flow3 = man.exec stmt flow2 in
+    man.exec stmt flow2 >>% fun flow3 ->
 
-    flow3
+    Post.return flow3
 
 
   let get_function_name fundec = get_orig_vname fundec.py_func_var
 
   let is_test fundec =
     let name = get_function_name fundec in
-    if String.length name < 5 then false
-    else String.sub name 0 4 = "test"
+    String.length name >= 5 &&
+      String.sub name 0 4 = "test"
 
   let get_test_functions body =
     Visitor.fold_stmt
@@ -128,7 +120,7 @@ struct
     tag_range prog_range "unprecise exception range"
 
   let collect_uncaught_exceptions man prog_range flow =
-    Flow.fold (fun acc tk env ->
+    Post.return @@ Flow.fold (fun acc tk env ->
         match tk with
         | Alarms.T_py_exception (e, s, k) ->
           let a = Alarms.A_py_uncaught_exception_msg (e,s) in
@@ -145,34 +137,31 @@ struct
       ) flow flow
 
 
-  let exec zone stmt man flow  =
+  let exec stmt man (flow: 'a flow) : 'a post option  =
     match skind stmt with
     | S_program ({ prog_kind = Py_program(_, globals, body); prog_range }, _)
       when !Universal.Iterators.Unittest.unittest_flag ->
       (* Initialize global variables *)
-      let flow1 = init_globals man  globals (srange stmt) flow in
+       OptionExt.return begin
+         init_globals man  globals (srange stmt) flow >>% fun flow1 ->
 
-      (* Execute the body *)
-      let flow2 = man.exec body flow1 in
+         (* Execute the body *)
+         man.exec body flow1 >>% fun flow2 ->
 
-      (* Collect test functions *)
-      let tests = get_test_functions body in
-      let stmt = mk_py_unit_tests tests (srange stmt) in
-      man.exec stmt flow2 |>
-      collect_uncaught_exceptions man prog_range |>
-      Post.return |>
-      OptionExt.return
+         (* Collect test functions *)
+         let tests = get_test_functions body in
+         let stmt = mk_py_unit_tests tests (srange stmt) in
+         man.exec stmt flow2 >>%
+         collect_uncaught_exceptions man prog_range
+         end
 
     | S_program ({ prog_kind = Py_program(_, globals, body); prog_range }, _) ->
       (* Initialize global variables *)
-      init_globals man globals (srange stmt) flow |>
+      init_globals man globals (srange stmt) flow >>%
       (* Execute the body *)
-      man.exec body |>
+      man.exec body >>%
       collect_uncaught_exceptions man prog_range |>
-      Post.return |>
       OptionExt.return
-
-
 
     | _ -> None
 
@@ -187,7 +176,7 @@ struct
            | _ -> VisitParts (acc)
         ) [] prog
 
-  let ask : type r. r query -> _ man -> _ flow -> r option =
+  let ask : type r. ('a, r) query -> _ man -> _ flow -> r option =
     fun query man flow ->
     let open Framework.Engines.Interactive in
     match query with

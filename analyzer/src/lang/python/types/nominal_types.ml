@@ -33,11 +33,6 @@ struct
       let name = "python.types.nominal_types"
     end)
 
-  let interface = {
-    iexec = { provides = []; uses = []; };
-    ieval = { provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]; }
-  }
-
   let alarms = []
 
   let init _ _ flow = flow
@@ -53,12 +48,11 @@ struct
     | _ -> assert false
 
 
-  let eval zs exp man flow =
+  let eval exp man flow =
     let range = erange exp in
     match ekind exp with
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_class (C_builtin "type", _)}, _)}, [arg], []) ->
-      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) arg flow |>
-      Eval.bind
+      man.eval arg flow >>$
         (fun earg flow ->
            let proceed s = Eval.singleton (mk_py_object (find_builtin s) range) flow in
            match ekind earg with
@@ -83,22 +77,23 @@ struct
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("issubclass", _))}, _)}, [cls; cls'], []) ->
-      bind_list [cls; cls'] (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
-      bind_some (fun evals flow ->
+      bind_list [cls; cls'] (man.eval   ) flow |>
+      bind_result (fun evals flow ->
           let cls, cls' = match evals with [e1; e2] -> e1, e2 | _ -> assert false in
           let addr_cls = match ekind cls with | E_py_object (a, _) -> a | _ -> assert false in
           let addr_cls' = match ekind cls' with | E_py_object (a, _) -> a | _ -> assert false in
           match akind addr_cls, akind addr_cls' with
           | A_py_class (c, mro), A_py_class (c', mro') ->
-             man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_bool (class_le (c, mro) (c', mro')) range) flow
+             man.eval   (mk_py_bool (class_le (c, mro) (c', mro')) range) flow
           | _ -> panic_at range "%a, cls=%a, cls'=%a" pp_expr exp pp_expr cls pp_expr cls')
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("isinstance", _))}, _)}, [obj; attr], []) ->
       (* TODO: if v is a class inheriting from protocol we should check the attributes *)
-      bind_list [obj; attr] (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
-      bind_some (fun evals flow ->
-          let eobj, eattr = match evals with [e1; e2] -> e1, e2 | _ -> assert false in
+      (* optim: obj may point to different things, but attr usually doesn't, so we evaluate it first *)
+      bind_list [attr; obj] (man.eval) flow |>
+      bind_result (fun evals flow ->
+          let eattr, eobj= match evals with [e1; e2] -> e1, e2 | _ -> assert false in
           debug "now isinstance(%a, %a) at range %a@\n" pp_expr eobj pp_expr eattr pp_range range (*(Flow.print man.lattice.print) flow*);
           let addr_obj = addr_of_eobject eobj in
           let addr_attr = addr_of_eobject eattr in
@@ -127,7 +122,7 @@ struct
                              | _ -> false) mro with
             | Some ({addr_kind = A_py_class (C_annot c_proto, _)}, _) ->
               debug "Protocol case!";
-              let mk_and conds = List.fold_left (fun acc cond -> mk_binop acc O_py_and cond range) (List.hd conds) (List.tl conds) in
+              let mk_and conds = List.fold_left (fun acc cond -> mk_binop ~etyp:(T_py None) acc O_py_and cond range) (List.hd conds) (List.tl conds) in
               let conds = List.map (fun x -> mk_py_hasattr eobj (get_orig_vname x) range) (match c with
                   | C_user c -> c.py_cls_static_attributes
                   | C_annot c -> c.py_cls_a_static_attributes
@@ -154,12 +149,9 @@ struct
           | ak, A_py_class (c, b) ->
              let n_ak = addr_kind_find_nominal_type ak in
              begin match c with
-             | C_builtin n when n = n_ak -> man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_true range) flow
+             | C_builtin n when n = n_ak -> man.eval   (mk_py_true range) flow
              | _ ->
-                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_issubclass_builtin_l n_ak eattr range) flow
-                  (* ~zone:Zone.Z_py
-                   * ~fthen:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_true range))
-                   * ~felse:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_false range)) *)
+                man.eval   (mk_py_issubclass_builtin_l n_ak eattr range) flow
              end
 
           | _ -> assert false
@@ -169,7 +161,7 @@ struct
     | _ -> None
 
 
-  let exec _ _ _ _ = None
+  let exec _ _ _ = None
   let ask _ _ _ = None
 
 end

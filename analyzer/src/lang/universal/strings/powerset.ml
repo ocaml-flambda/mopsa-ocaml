@@ -35,24 +35,24 @@ module StringPower = Framework.Lattices.Powerset.Make
       let print = Format.pp_print_string
     end)
 
-type _ query +=
-  | Q_strings_powerset : expr -> StringPower.t query
+type ('a, _) query +=
+  | Q_strings_powerset : expr -> ('a, StringPower.t) query
 
 let () =
   register_query {
     join = (
-      let f : type r. query_pool -> r query -> r -> r -> r =
-        fun next query a b ->
+      let f : type a r. query_operator -> (a, r) query -> (a->a->a) -> r -> r -> r =
+        fun next query join a b ->
           match query with
           | Q_strings_powerset _ -> StringPower.join a b
-          | _ -> next.join_query query a b in f
+          | _ -> next.apply query join a b in f
     );
     meet = (
-      let f : type r. query_pool -> r query -> r -> r -> r =
-        fun next query a b ->
+      let f : type a r. query_operator -> (a, r) query -> (a->a->a) -> r -> r -> r =
+        fun next query meet a b ->
           match query with
           | Q_strings_powerset _ -> StringPower.meet a b
-          | _ -> next.meet_query query a b in f
+          | _ -> next.apply query meet a b in f
     );
   }
 
@@ -64,7 +64,7 @@ struct
 
   include GenValueId(struct
       type nonrec t = t
-      let name = "universal.strings.powerset"
+      let name = "universal.strings.powerset_value"
       let display = "strings"
             end)
 
@@ -98,10 +98,16 @@ struct
                 ) a2 acc) a1 empty
       end
     | O_mult -> assert false
-    | _  -> failwith "todo"
+    | O_eq | O_lt | O_le | O_ge | O_gt | O_ne ->
+       debug "binop %a %a %a %a" pp_operator op pp_typ t StringPower.print a1 StringPower.print a2;
+       Top.TOP
+    | _  ->
+       panic "todo binop %a" pp_operator op
 
   let filter b t a =
-      failwith "todo"
+    debug "filter %b %a %a" b pp_typ t StringPower.print a;
+    if t = T_string then a else assert false
+      (* failwith "todo filter" *)
 
   let bwd_unop _ _ _ _ = failwith "ni"
   let bwd_binop _ _ _ _  = failwith "ni"
@@ -138,7 +144,7 @@ struct
 
   (** {2 Query handlers} *)
 
-  let ask : type r. t value_man -> r query -> r option =
+  let ask : type r. ('a, t) value_man -> ('a, r) query -> r option =
     fun man q ->
     match q with
     (* TODO: query de values.py_string *)
@@ -149,31 +155,54 @@ end
 module Domain =
 struct
 
-  module Nonrel = Framework.Abstraction.Combiners.Value.Nonrel.Make(Value)
-  module Lifted = Sig.Abstraction.Simplified.MakeDomain(Nonrel)
-  include Lifted
+  module Nonrel = Framework.Combiners.Value.Nonrel.Make(Value)
+  type t = Nonrel.t
+  let top = Nonrel.top
+  let bottom = Nonrel.bottom
+  let is_bottom = Nonrel.is_bottom
+  let meet = Nonrel.meet
+  let join = Nonrel.join
+  let subset = Nonrel.subset
+  let print = Nonrel.print
+  let widen = Nonrel.widen
 
-  let interface = {
-    iexec = { provides = [Zone.Z_u_string]; uses = []; };
-    ieval = { provides = [Zone.Z_u, Zone.Z_u_string];           uses = [Zone.Z_u, Zone.Z_u_string; Zone.Z_u, Zone.Z_u_int]; }
-  }
+  include Framework.Core.Id.GenDomainId(struct
+              type nonrec t = t
+              let name = "universal.strings.powerset"
+            end)
+
+  let merge _ _ _ = assert false
+
+  let init prog man flow =
+    set_env T_cur (Nonrel.init prog) man flow
+
+  let routing_table = empty_routing_table
+
+  let alarms = []
 
   let debug fmt = Debug.debug ~channel:name fmt
 
-
-  let exec zone stmt (man: ('a, t, 's) man) (flow: 'a flow) : 'a post option =
+  let exec stmt (man: ('a, t) Framework.Core.Manager.man) (flow: 'a flow) : 'a post option =
     match skind stmt with
-    | S_assign (x, e) ->
-      debug "ok";
-      man.eval ~zone:(Zone.Z_u, Zone.Z_u_string) e flow |>
-      bind_some_opt (fun ee flow ->
-          debug "ee = %a" pp_expr ee;
-          Lifted.exec zone {stmt with skind = S_assign(x, ee)} man flow
-        )
+    | S_assign (_, e) | S_remove e | S_add e | S_rename (e, _) | S_forget e | S_expand(e, _) | S_fold(e, _) | S_project (e::_) when etyp e = T_string ->
+       let cur = get_env T_cur man flow in
+       let uctx = Flow.get_unit_ctx flow in
+       let ocur = Nonrel.exec stmt man uctx cur in
+       Option.bind ocur (fun cur ->
+           let flow = set_env T_cur cur man flow in
+           OptionExt.return @@ Post.return flow
+         )
 
-    | _ ->
-      Lifted.exec zone stmt man flow
-  (* dans le cas de assign/assume: evaluer e en chaine via eval, puis appeler Lifted.exec *)
+    | S_assume e when etyp e = T_bool ->
+       let cur = get_env T_cur man flow in
+       let uctx = Flow.get_unit_ctx flow in
+       let ocur = Nonrel.exec stmt man uctx cur in
+       Option.bind ocur (fun cur ->
+           let flow = set_env T_cur cur man flow in
+           OptionExt.return @@ Post.return flow
+         )
+
+    | _ -> None
 
   let rec repeat s nb =
     if nb = 0 then ""
@@ -182,17 +211,17 @@ struct
       if nb mod 2 = 0 then a^a
       else a^a^s
 
-  let eval zones expr (man: ('a, t, 's) man) flow =
+  let eval expr (man: ('a, t) Framework.Core.Manager.man) (flow: 'a flow) : 'a eval option =
     let range = erange expr in
     match ekind expr with
     | E_binop (O_mult, e1, e2) when etyp e1 = T_string && etyp e2 = T_int->
-      man.eval ~zone:(Zone.Z_u, Zone.Z_u_string) e1 flow |>
-      Eval.bind (fun e1 flow ->
+      man.eval e1 flow >>$
+        (fun e1 flow ->
           let cur = get_env T_cur man flow in
           let strings_e1 = Nonrel.eval e1 cur |> OptionExt.none_to_exn |> snd in
           let itv_e2 = man.ask (Numeric.Common.Q_int_interval e2) flow in
           (* FIXME: arbitrary constants... *)
-          if ItvUtils.IntItv.is_bounded @@ Bot.bot_to_exn itv_e2 && ItvUtils.IntItv.size @@ Bot.bot_to_exn itv_e2 <= (Z.of_int 5) && Value.cardinal strings_e1 <= 3 then
+          if ItvUtils.IntItv.is_bounded @@ Bot.bot_to_exn itv_e2 && ItvUtils.IntItv.size @@ Bot.bot_to_exn itv_e2 <= (Z.of_int 5) && not @@ Value.is_top strings_e1 && Value.cardinal strings_e1 <= 3 then
             let results =
               Value.fold (fun str acc ->
                   List.fold_left (fun acc nb ->
@@ -202,43 +231,62 @@ struct
                          Value.add (repeat str (Z.to_int nb)) acc
                     ) acc (ItvUtils.IntItv.to_list @@ Bot.bot_to_exn itv_e2)
                 ) strings_e1 Value.empty in
-            Eval.join_list ~empty:(fun () -> failwith "todo")
+            Eval.join_list ~empty:(fun () -> failwith "emptycase binop")
               (Value.fold (fun s acc -> (Eval.singleton (mk_string s range) flow) :: acc) results [])
           else
             Eval.singleton (mk_top T_string range) flow
         )
       |> OptionExt.return
 
+    | E_binop (O_plus, e1, e2) when etyp e1 = T_string && etyp e2 = T_string ->
+       (man.eval e1 flow >>$?
+        fun e1 flow ->
+        man.eval e2 flow >>$?
+        fun e2 flow ->
+        let cur = get_env T_cur man flow in
+        Option.bind (Nonrel.eval {expr with ekind = E_binop(O_plus, e1, e2)} cur) (fun (_, value) ->
+            Eval.join_list ~empty:(fun () -> assert false)
+              (if Value.is_top value then [Eval.singleton (mk_top T_string range) flow]
+               else Value.fold (fun s acc -> (Eval.singleton (mk_string s range) flow) :: acc) value [])
+            |> OptionExt.return
+          )
+       )
+
     | E_len e when etyp e = T_string ->
-      man.eval ~zone:(Zone.Z_u, Zone.Z_u_string) e flow |>
-      Eval.bind (fun e flow ->
+      man.eval e flow >>$
+        (fun e flow ->
           let cur = get_env T_cur man flow in
           let strings_e = Nonrel.eval e cur |> OptionExt.none_to_exn |> snd in
-          Eval.join_list ~empty:(fun () -> failwith "todo")
+          Eval.join_list ~empty:(fun () -> failwith "empty length")
             (if Value.is_top strings_e then
-               man.eval ~zone:(Zone.Z_u, Zone.Z_u_int) (mk_top T_int range) flow :: []
-             else Value.fold (fun s acc -> (man.eval ~zone:(Zone.Z_u, Zone.Z_u_int) (mk_int (String.length s) range) flow) :: acc) strings_e [])
+               man.eval (mk_top T_int range) flow :: []
+             else Value.fold (fun s acc -> (man.eval (mk_int (String.length s) range) flow) :: acc) strings_e [])
         )
       |> OptionExt.return
 
-    | _ -> None
+    | _ ->
+         None
 
-
-  let ask : type r. r query -> ('a, t, 's) man -> 'a flow -> r option =
+  let ask : type r. ('a, r) query -> ('a, t) man -> 'a flow -> r option =
     fun query man flow ->
     match query with
     | Q_strings_powerset e ->
-      man.eval ~zone:(Zone.Z_u, Zone.Z_u_string) e flow |>
-      Cases.apply
-        (fun oe flow ->
+      man.eval e flow |>
+      Cases.reduce_result
+        (fun e flow ->
            let cur = get_env T_cur man flow in
-           Nonrel.eval (OptionExt.none_to_exn oe) cur |> OptionExt.lift snd
+           Nonrel.eval e cur |> OptionExt.lift snd
+        )
+        ~join:(OptionExt.lift2 StringPower.join)
+        ~meet:(OptionExt.lift2 StringPower.meet)
+        ~bottom:(Some StringPower.bottom)
 
-        ) (OptionExt.lift2 StringPower.join) (OptionExt.lift2 StringPower.meet)
-
-    | _ -> Lifted.ask query man flow
+    | _ ->
+       let uctx = Flow.get_unit_ctx flow in
+       let cur = get_env T_cur man flow in
+       Nonrel.ask query man uctx cur
 
 end
 
 let () =
-  register_standard_domain (module Domain)
+  Sig.Abstraction.Domain.register_standard_domain (module Domain)

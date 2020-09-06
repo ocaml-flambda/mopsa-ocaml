@@ -34,33 +34,22 @@ module Domain =
         let name = "python.desugar.iterable_assign"
       end)
 
-    let interface = {
-      iexec = {provides = [Zone.Z_py]; uses = [Zone.Z_py]};
-      ieval = {provides = []; uses = [Zone.Z_py, Zone.Z_py_obj]}
-    }
-
     let alarms = []
 
     let init _ _ flow = flow
 
-    let rec exec zone stmt man flow =
+    let rec exec stmt man flow =
       let range = srange stmt in
       match skind stmt with
       | S_assign({ekind = E_py_tuple(el)}, exp)
       | S_assign({ekind = E_py_list(el)}, exp) ->
         debug "iterable assign@\n";
-         (* man.eval (Utils.mk_builtin_call "iter" [exp] range) flow |>
-          *   Post.bind man
-          *     (fun iter flow -> *)
-               assign_iter man el exp range flow
-             (*   |> Post.of_flow
-              * ) *)
-         (* |> OptionExt.xt.return *)
+        assign_iter man el exp range flow
 
       | _ -> None
 
     and assign_iter man el exp range flow =
-      let tmp = mktmp () in
+      let tmp = mktmp ~typ:(T_py None) () in
       let assign_iterable = mk_assign (mk_var tmp range) (Utils.mk_builtin_call "iter" [exp] range) range in
       let stmtl =
         List.fold_left (fun acc e ->
@@ -86,13 +75,13 @@ module Domain =
           (tag_range range "try next")
       in
       let stmt = mk_block [assign_iterable; stmt_itera] range in
-      man.exec stmt flow |>
-      exec_stmt_on_all_flows (mk_remove_var tmp range) man |>
+      man.exec stmt flow >>%
+      exec_stmt_on_all_flows (mk_remove_var tmp range) man >>%
       Post.return |>
       OptionExt.return
 
 
-    let eval _ _ _ _ = None
+    let eval _ _ _ = None
     let ask _ _ _ = None
 
   end

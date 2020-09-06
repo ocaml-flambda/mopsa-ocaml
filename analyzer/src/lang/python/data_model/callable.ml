@@ -34,18 +34,13 @@ module Domain =
         let name = "python.data_model.callable"
       end)
 
-    let interface = {
-      iexec = {provides = []; uses = []};
-      ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
-    }
-
     let alarms = []
 
     let init _ _ flow = flow
 
-    let exec _ _ _ _ = None
+    let exec _ _ _ = None
 
-    let eval zs exp man flow =
+    let eval exp man flow =
       let range = erange exp in
       match ekind exp with
       | E_py_call({ekind = E_py_object _}, _, _) -> None
@@ -54,8 +49,7 @@ module Domain =
         let start = Timing.start () in
         debug "Calling %a from %a" pp_expr exp pp_range exp.erange;
         let res =
-          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) f flow |>
-          Eval.bind
+          man.eval   f flow >>$
             (fun f flow ->
                debug "f is now %a" pp_expr f;
                match ekind f with
@@ -63,8 +57,8 @@ module Domain =
                | E_var _ | E_constant _ ->
                  let msg = Format.asprintf "object is not callable" in
                  let stmt = Utils.mk_builtin_raise_msg "TypeError" msg range in
-                 let flow = man.exec stmt flow in
-                 Eval.empty_singleton flow
+                 man.exec stmt flow >>%
+                 Eval.empty
 
                (* Calls on other kinds of addresses is handled by other domains *)
                | E_py_object ({addr_kind = A_py_class _}, _)
@@ -72,14 +66,14 @@ module Domain =
                | E_py_object ({addr_kind = A_py_method _}, _)
                | E_py_object ({addr_kind = A_py_module _}, _) ->
                  let exp = {exp with ekind = E_py_call(f, args, kwargs)} in
-                 man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) exp flow
+                 man.eval    exp flow
 
                | _ ->
                  (* if f has attribute call, restart with that *)
                  assume
                    (mk_py_hasattr f "__call__" range)
                    ~fthen:(fun flow ->
-                       man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_kall (mk_py_attr f "__call__" range) args kwargs range) flow)
+                       man.eval    (mk_py_kall (mk_py_attr f "__call__" range) args kwargs range) flow)
                    ~felse:(fun flow ->
                        panic_at range "callable/E_py_call, on %a, exp=%a@\n" pp_expr f pp_expr exp
                      )

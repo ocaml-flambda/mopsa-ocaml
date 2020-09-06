@@ -5,5 +5,3 @@ l2.append(1)
 l2.append("ok")
 res1 = l1[1]
 res2 = l2[1]
-
-

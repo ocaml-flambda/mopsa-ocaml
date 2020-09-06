@@ -38,15 +38,10 @@ module Domain =
         let name = "python.desugar.comprehensions"
       end)
 
-    let interface = {
-      iexec = {provides = []; uses = [Zone.Z_py]};
-      ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
-    }
-
     let alarms = []
 
     let unfold_comprehension expr comprehensions base append range =
-         let tmp_acc = mk_range_attr_var range "tmp_acc" T_any in
+         let tmp_acc = mk_range_attr_var range "tmp_acc" (T_py None) in
          let acc_var = mk_var tmp_acc range in
          let rec unfold_lc aux_compr = match aux_compr with
            | [] ->
@@ -72,42 +67,42 @@ module Domain =
 
 
     let init _ _ flow = flow
-    let eval zs exp man flow =
+    let eval exp man flow =
       let range = erange exp in
       match ekind exp with
       | E_py_list_comprehension (expr, comprehensions) ->
          let list = find_builtin "list" in
          let listappend = mk_py_object (find_builtin_attribute list "append") range in
-         let stmt, tmp_acc = unfold_comprehension [expr] comprehensions (mk_expr (E_py_list []) (tag_range range "acc")) listappend range in
+         let stmt, tmp_acc = unfold_comprehension [expr] comprehensions (mk_expr ~etyp:(T_py None) (E_py_list []) (tag_range range "acc")) listappend range in
          let acc_var = mk_var tmp_acc range in
          debug "Rewriting %a into %a@\n" pp_expr exp pp_stmt stmt;
-         man.exec stmt flow |>
+         man.exec stmt flow >>%
            man.eval acc_var |>
-           Eval.add_cleaners [mk_remove_var tmp_acc range] |>
+           Cases.add_cleaners [mk_remove_var tmp_acc range] |>
            OptionExt.return
 
       | E_py_set_comprehension (expr, comprehensions) ->
          let set = find_builtin "set" in
          let setadd = mk_py_object (find_builtin_attribute set "add") range in
-         let emptyset = mk_expr (E_py_set []) range in
+         let emptyset = mk_expr ~etyp:(T_py None) (E_py_set []) range in
          let stmt, tmp_acc = unfold_comprehension [expr] comprehensions emptyset setadd range in
          let acc_var = mk_var tmp_acc range in
          debug "Rewriting %a into %a@\n" pp_expr exp pp_stmt stmt;
-         man.exec stmt flow |>
+         man.exec stmt flow >>%
            man.eval acc_var |>
-           Eval.add_cleaners [mk_remove_var tmp_acc range] |>
+           Cases.add_cleaners [mk_remove_var tmp_acc range] |>
            OptionExt.return
 
       | E_py_dict_comprehension (key, value, comprehensions) ->
          let dict = find_builtin "dict" in
          let dictset = mk_py_object (find_builtin_attribute dict "__setitem__") range in
-         let emptydict = mk_expr (E_py_dict ([], [])) range in
+         let emptydict = mk_expr ~etyp:(T_py None) (E_py_dict ([], [])) range in
          let stmt, tmp_acc = unfold_comprehension (key::value::[]) comprehensions emptydict dictset range in
          let acc_var = mk_var tmp_acc range in
          debug "Rewriting %a into %a@\n" pp_expr exp pp_stmt stmt;
-         man.exec stmt flow |>
+         man.exec stmt flow >>%
            man.eval acc_var |>
-           Eval.add_cleaners [mk_remove_var tmp_acc range] |>
+           Cases.add_cleaners [mk_remove_var tmp_acc range] |>
            OptionExt.return
 
       | E_py_generator_comprehension (expr, comprehensions) ->
@@ -115,7 +110,7 @@ module Domain =
 
       | _ -> None
 
-    let exec _ _ _ _ = None
+    let exec _ _ _ = None
 
     let ask _ _ _ = None
 

@@ -37,26 +37,24 @@ let () =
         match a with
         | A_py_uncaught_exception -> Format.fprintf fmt "Uncaught Python exception"
         | _ -> default fmt a
-      );
+    );
   register_alarm_message {
-    classifier = (fun next -> function
-        | A_py_uncaught_exception_msg _ -> A_py_uncaught_exception
-        | a -> next a
-      );
-    compare = (fun default a a' ->
+      classifier = (fun next -> function
+                     | A_py_uncaught_exception_msg _ -> A_py_uncaught_exception
+                     | a -> next a
+                   );
+      compare = (fun default a a' ->
         match a, a' with
         | A_py_uncaught_exception_msg (e, s), A_py_uncaught_exception_msg (e', s') ->
-          compare_expr e e'
+           compare_expr e e'
         | _ -> default a a'
       );
-    print = (fun default fmt a ->
+      print = (fun default fmt a ->
         match a with
         | A_py_uncaught_exception_msg (e, s) -> Format.fprintf fmt "Uncaught Python exception: %s@." s
         | _ -> default fmt a
       );
     }
-
-
 
 (** Flow token for exceptions *)
 type py_exc_kind =
