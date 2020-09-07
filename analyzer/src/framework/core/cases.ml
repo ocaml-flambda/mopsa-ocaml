@@ -86,6 +86,12 @@ let get_callstack r =
   get_ctx r |>
   Context.find_unit Context.callstack_ctx_key
 
+let set_callstack cs r =
+  set_ctx (
+    get_ctx r |>
+    Context.add_unit Context.callstack_ctx_key cs
+  ) r
+
 let get_case_cleaners (case:'r case) : StmtSet.t =
   match case with
   | Result(_,_,cleaners) -> cleaners
@@ -430,18 +436,21 @@ let bind_opt
     (f: 'r case -> 'a flow -> ('a,'s) cases option )
     (cases: ('a,'r) cases)
   : ('a,'s) cases option =
+  let last_ctx = ref (get_ctx cases) in
   Dnf.bind
     (fun (case,flow) ->
+       let flow = Flow.set_ctx !last_ctx flow in
        let cases' =
          match f case flow with
            | None   -> not_handled flow
            | Some c -> c
        in
+       last_ctx := Context.get_most_recent !last_ctx (get_ctx cases');
        add_cleaners (get_case_cleaners case |> StmtSet.elements) cases' |>
        concat_log (get_case_log case)
     )
     cases
-  |> normalize_ctx
+  |> set_ctx !last_ctx
   |> OptionExt.return
 
 
@@ -487,8 +496,15 @@ let bind_conjunction
     (f:('r case * 'a flow) list -> ('a,'s) cases)
     (cases:('a,'r) cases)
   : ('a,'s) cases =
-  Dnf.bind_conjunction f cases |>
-  normalize_ctx
+  let last_ctx = ref (get_ctx cases) in
+  Dnf.bind_conjunction
+    (fun conj ->
+       let conj' = List.map (fun (case,flow) -> (case,Flow.set_ctx !last_ctx flow)) conj in
+       let cases' = f conj' in
+       last_ctx := Context.get_most_recent !last_ctx (get_ctx cases');
+       cases'
+    ) cases |>
+  set_ctx !last_ctx
 
 let bind_conjunction_result
     (f:'r list -> 'a flow -> ('a,'s) cases)
@@ -527,8 +543,15 @@ let bind_disjunction
     (f:('r case * 'a flow) list -> ('a,'s) cases)
     (cases:('a,'r) cases)
   : ('a,'s) cases =
-  Dnf.bind_disjunction f cases |>
-  normalize_ctx
+  let last_ctx = ref (get_ctx cases) in
+  Dnf.bind_disjunction
+    (fun disj ->
+       let disj' = List.map (fun (case,flow) -> (case,Flow.set_ctx !last_ctx flow)) disj in
+       let cases' = f disj' in
+       last_ctx := Context.get_most_recent !last_ctx (get_ctx cases');
+       cases'
+    ) cases |>
+  set_ctx !last_ctx
 
 let bind_disjunction_result
     (f:'r list -> 'a flow -> ('a,'s) cases)

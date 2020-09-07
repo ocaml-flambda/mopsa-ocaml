@@ -107,6 +107,9 @@ val copy_ctx : ('a,'r) cases -> ('a,'s) cases -> ('a,'s) cases
 val get_callstack: ('a,'r) cases -> callstack
 (** [get_callstack c] returns the callstack of cases [c]. *)
 
+val set_callstack: callstack-> ('a,'r) cases -> ('a,'r) cases
+(** [set_callstack cs c] returns a copy of [c] with callstack [cs]. *)
+
 
 (** {1 Logs} *)
 (** ******** *)
