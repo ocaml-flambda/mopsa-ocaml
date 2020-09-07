@@ -242,13 +242,7 @@ struct
             | None -> post'
             | Some y -> Post.join x post'
       in
-      let clean_post =
-        (* Apply cleaners *)
-        ( post >>= fun case flow ->
-          apply_cleaners (Cases.get_case_cleaners case) man flow )
-        (* Now that post is clean, remove all cleaners *)
-        |> Cases.set_cleaners []
-      in
+      let clean_post = exec_cleaners man post in
       if inside_hook () then
         clean_post
       else

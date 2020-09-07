@@ -403,6 +403,7 @@ let remove_duplicates compare_case lattice cases =
   in
   let rec remove_duplicates_in_disj = function
     | [] -> []
+    | [conj] -> [conj]
     | conj::tl ->
       let conj',tl' = remove_conj_duplicates_in_disj conj tl in
       conj'::remove_duplicates_in_disj tl'
@@ -435,11 +436,11 @@ let bind_opt
          match f case flow with
            | None   -> not_handled flow
            | Some c -> c
-         in
-         add_cleaners (get_case_cleaners case |> StmtSet.elements) cases' |>
-         concat_log (get_case_log case)
-      )
-      cases
+       in
+       add_cleaners (get_case_cleaners case |> StmtSet.elements) cases' |>
+       concat_log (get_case_log case)
+    )
+    cases
   |> normalize_ctx
   |> OptionExt.return
 

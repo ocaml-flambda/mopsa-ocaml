@@ -83,54 +83,50 @@ let map_env (tk:token) (f:'t -> 't) (man:('a,'t) man) (flow:'a flow) : 'a flow =
   set_env tk (f (get_env tk man flow)) man flow
 
 
-let rec exec_stmt_on_all_flows stmt man flow =
-  man.exec stmt flow >>% fun flow ->
-  Flow.fold (fun acc tk env ->
-      match tk with
-      (* Skip T_cur since the statement was executed at the beginning
-         of the function *)
-      | T_cur -> acc
-      | _ ->
-        (* Put env in T_cur token of flow and remove others *)
-        let annot = Flow.get_ctx flow in
-        let flow' = Flow.singleton annot T_cur env in
+let rec exec_cleaner stmt man flow =
+  let post = man.exec stmt flow in
+  if !Cases.opt_clean_cur_only then
+    post
+  else
+    post >>% fun flow ->
+    Flow.fold (fun acc tk env ->
+        match tk with
+        (* Skip T_cur since the statement was executed at the beginning
+           of the function *)
+        | T_cur -> acc
+        | _ ->
+          (* Put env in T_cur token of flow and remove others *)
+          let annot = Flow.get_ctx flow in
+          let flow' = Flow.singleton annot T_cur env in
 
-        (* Execute the cleaner *)
-        let flow'' = man.exec stmt flow' |> post_to_flow man in
+          (* Execute the cleaner *)
+          let flow'' = man.exec stmt flow' |> post_to_flow man in
 
-        (* Restore T_cur in tk *)
-        Flow.copy T_cur tk man.lattice flow'' flow |>
-        Flow.copy_ctx flow''
-    ) flow flow |>
-  Post.return
+          (* Restore T_cur in tk *)
+          Flow.copy T_cur tk man.lattice flow'' flow |>
+          Flow.copy_ctx flow''
+      ) flow flow |>
+    Post.return
 
-
-and apply_cleaners cleaners man flow =
-  let exec stmt flow =
-    if !Cases.opt_clean_cur_only then
-      man.exec stmt flow
-    else
-      exec_stmt_on_all_flows stmt man flow
+and exec_cleaners man post =
+  let post' =
+    post >>= fun case flow ->
+    let cleaners = Cases.get_case_cleaners case in
+    StmtSet.fold
+      (fun stmt acc ->
+         acc >>% exec_cleaner stmt man
+      ) cleaners (Post.return flow)
   in
-  StmtSet.fold (fun stmt acc ->
-      acc >>% exec stmt
-    ) cleaners (Post.return flow)
+  (* Now that post is clean, remove all cleaners *)
+  Cases.set_cleaners [] post'
 
 and post_to_flow man post =
-  let to_flow f post =
-    Cases.reduce f
-      ~join:(Flow.join man.lattice)
-      ~meet:(Flow.meet man.lattice)
-      post
-  in
-  to_flow
-    (fun case flow ->
-       let cleaners = Cases.get_case_cleaners case in
-       apply_cleaners cleaners man flow |>
-       to_flow
-         (fun _ flow -> flow)
-    )
-    post
+  let clean = exec_cleaners man post in
+  Cases.reduce
+    (fun _ flow -> flow)
+    ~join:(Flow.join man.lattice)
+    ~meet:(Flow.meet man.lattice)
+    clean
 
 let assume
     cond ?(route=toplevel)
@@ -142,10 +138,22 @@ let assume
       ))
     man flow
   =
-  man.eval cond flow ~route >>$ fun cond flow ->
-  let then_post = man.exec ~route (mk_assume cond cond.erange) flow in
-  let flow = Flow.set_ctx (Cases.get_ctx then_post) flow in
-  let else_post = man.exec ~route (mk_assume (mk_not cond cond.erange) cond.erange) flow in
+  (* First, evaluate the condition *)
+  let evl = man.eval cond flow ~route in
+  (* Filter flows that satisfy the condition *)
+  let then_post = ( evl >>$ fun cond flow -> man.exec (mk_assume cond cond.erange) flow ~route ) |>
+                  (* Execute the cleaners of the evaluation here *)
+                  exec_cleaners man |>
+                  Post.remove_duplicates man.lattice
+  in
+  (* Propagate the flow-insensitive context to the other branch *)
+  let then_ctx = Cases.get_ctx then_post in
+  let evl' = Cases.set_ctx then_ctx evl in
+  let else_post = ( evl' >>$ fun cond flow -> man.exec (mk_assume (mk_not cond cond.erange) cond.erange) flow ~route ) |>
+                  (* Execute the cleaners of the evaluation here *)
+                  exec_cleaners man |>
+                  Post.remove_duplicates man.lattice
+  in
   then_post >>% fun then_flow ->
   else_post >>% fun else_flow ->
   match man.lattice.is_bottom (Flow.get T_cur man.lattice then_flow),
@@ -154,7 +162,7 @@ let assume
   | false,true  -> fthen then_flow
   | true,false  -> felse else_flow
   | true,true   -> Cases.empty (Flow.join man.lattice then_flow else_flow)
-  | false,false -> fboth then_flow else_flow 
+  | false,false -> fboth then_flow else_flow
 
 
 let switch
@@ -167,13 +175,12 @@ let switch
     match cond with
     | [] -> f acc
     | x :: tl ->
-      man.eval ~route x acc >>$ fun x acc' ->
       let s = mk_assume x x.erange in
-      man.exec ~route s acc' >>% fun acc'' ->
-      if Flow.get T_cur man.lattice acc'' |> man.lattice.is_bottom then
-        Cases.empty acc''
+      man.exec ~route s acc >>% fun acc' ->
+      if Flow.get T_cur man.lattice acc' |> man.lattice.is_bottom then
+        Cases.empty acc'
       else
-        one tl acc'' f
+        one tl acc' f
   in
   let rec aux cases =
     match cases with

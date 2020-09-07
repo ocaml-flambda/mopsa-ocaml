@@ -130,7 +130,8 @@ struct
               (* Case unreachable, so check the next cases *)
               iter tl flow
             )
-          man flow
+          man flow |>
+        Post.remove_duplicates man.lattice
     in
 
     iter cases flow |>
