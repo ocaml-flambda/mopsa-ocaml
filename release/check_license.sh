@@ -1,4 +1,4 @@
-# @configure_input@
+#!/bin/bash
 
 ##############################################################################
 #                                                                            #
@@ -22,27 +22,31 @@
 ##############################################################################
 
 
-# Targets
-TARGET_CLIBS = utils
+# Check that the files in the source tree contain the License text
 
+# keyword that must occur in the source file at least once
+KEY="GNU \(Lesser\|Library\) General Public License"
 
-# Packs
-utils = bot compare location callstack debug exceptions optionExt dnf setExt \
-	setExtSig setP listExt mapExtSig mapExt mapExtPoly invRelation \
-	invRelationSig equiv mapPolyHet mapP relation relationSig valueSig \
-	timing top bot_top itvUtils congUtils bitfields graphSig graph argExt \
-	lineEdit typeExt eq version
-itvUtils = float intBound intItv floatItv floatItvNan
+# files to check
+MLFILES=`find .. -name \*.ml\*`
+CFILES=`find .. -name \*.c`
+HFILES=`find .. -name \*.h`
+CCFILES=`find .. -name \*.cc`
+PYFILES=`find .. -name \*.py | grep -v tests | grep -v benchmarks`
+SHELLFILES=`find .. -name \*.sh`
+MAKEFILES="`find .. -name \*.mk` `find .. -name \*.in | grep -v META.in` `find .. -name \*.ac` `find .. -name Makefile` ../configure.ac"
+ALL="$MLFILES $CFILES $HFILES $CCFILES $PYFILES $MAKEFILES $SHELLFILES"
+FILES=`echo "$ALL" | grep -v /parsers/python/ | grep -v /_build/ | grep -v /lib/ | grep -v /benchmarks/ | grep -v /tests/ | grep -v /ci/`
+echo "Looking for files missing the text '$KEY'."
+echo "Checking" `echo $FILES | wc -w` "file(s)."
 
+OUT=`grep -L "$KEY" $FILES`
 
-# C files
-C_SRC = itvUtils/floats_round.c
+if test $? != 1
+then
+    echo "ERROR: some files are missing the License text."
+    echo "$OUT"
+    exit 1
+fi
 
-
-# External packages, as given to ocamlfind
-PKGS = str gmp zarith camlidl threads
-
-
-# MOPSA make rules
-MOPSAROOT = @top_srcdir@
-include $(MOPSAROOT)/make/main.mk
+echo "OK, all your files have the License text."

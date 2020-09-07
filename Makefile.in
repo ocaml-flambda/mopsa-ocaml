@@ -21,7 +21,6 @@
 #                                                                            #
 ##############################################################################
 
-TARGET = mopsa
 
 .PHONY: all tests clean distclean
 
@@ -55,29 +54,37 @@ endif
 	$(MAKE) -C analyzer clean
 
 
+MLFILES_TO_INSTALL = $(foreach dir,@libs_to_install@,$(wildcard $(dir)/lib/*.cm* $(dir)/lib/*.a $(dir)/lib/*.so))
 
 install:
 	$(MAKE) -C analyzer install
 ifneq (@disable_c@,yes)
 	$(MAKE) -C parsers/c install
 endif
-
-
+	@echo -e "$(INSTALLMSG)     mopsa library"
+	$(QUIET)@$(OCAMLFIND) install mopsa META $(MLFILES_TO_INSTALL)
 
 uninstall:
 	$(MAKE) -C analyzer uninstall
 ifneq (@disable_c@,yes)
 	$(MAKE) -C parsers/c uninstall
 endif
-
+	@echo -e "$(UINSTALLMSG)     mopsa library"
+	$(QUIET)@$(OCAMLFIND) remove mopsa
 
 
 distclean: clean
 	rm -f 	Makefile			\
 		make/constants.mk               \
+		make/targets.mk			\
+		make/version.mk			\
 		utils/Makefile			\
+		utils/src/version.ml		\
 		parsers/universal/Makefile	\
 		parsers/c/Makefile	 	\
 		parsers/c_stubs/Makefile 	\
 		parsers/python/Makefile		\
-		analyzer/Makefile
+		analyzer/Makefile		\
+		META
+
+include make/constants.mk

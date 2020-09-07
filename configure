@@ -584,6 +584,8 @@ PACKAGE_URL=''
 
 ac_subst_vars='LTLIBOBJS
 LIBOBJS
+libs_to_install
+meta_analyzer_requires
 enable_byte
 disable_python
 disable_c
@@ -608,6 +610,8 @@ CPPFLAGS
 LDFLAGS
 CFLAGS
 CC
+dev_version
+version
 target_alias
 host_alias
 build_alias
@@ -1797,7 +1801,35 @@ ac_compiler_gnu=$ac_cv_c_compiler_gnu
 
 
 
-ac_config_files="$ac_config_files Makefile make/constants.mk make/target.mk utils/Makefile parsers/universal/Makefile parsers/c/Makefile parsers/c_stubs/Makefile parsers/python/Makefile analyzer/Makefile"
+ac_config_files="$ac_config_files Makefile make/constants.mk make/target.mk utils/Makefile parsers/universal/Makefile parsers/c/Makefile parsers/c_stubs/Makefile parsers/python/Makefile analyzer/Makefile utils/src/version.ml META"
+
+
+# Version
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for Mopsa's version" >&5
+$as_echo_n "checking for Mopsa's version... " >&6; }
+VERSION=`cat VERSION`
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $VERSION" >&5
+$as_echo "$VERSION" >&6; }
+version=$VERSION
+
+
+# Git revision
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for Mopsa's development version" >&5
+$as_echo_n "checking for Mopsa's development version... " >&6; }
+if test -d .git; then
+   # has .git, assuming a development version
+   GIT_COMMIT=`git -P log -1 --format=%h`
+   GIT_DATE=`git -P log -1 --format=%ai`
+   GIT_BRANCH=`git -P branch --show-current`
+   GIT_TAG=`git describe --abbrev=0`
+   DEV_VERSION="git branch:$GIT_BRANCH tag:$GIT_TAG commit:$GIT_COMMIT commit-date:$GIT_DATE"
+else
+   # no .git, assuming a release version from a tarball
+   DEV_VERSION="release"
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $DEV_VERSION" >&5
+$as_echo "$DEV_VERSION" >&6; }
+dev_version=$DEV_VERSION
 
 
 
@@ -3878,25 +3910,33 @@ fi
 # Deactivation of C analysis
 # Check whether --enable-c was given.
 if test "${enable_c+set}" = set; then :
-  enableval=$enable_c; disable_c=yes
-
+  enableval=$enable_c; DISABLE_C=yes
 fi
 
 
 # Deactive C if llvm-config was not found
 if test "x$LLVMCONFIG" = "x"; then
+ DISABLE_C=yes
+fi
+
+if test "x$DISABLE_C" != "x"; then
  disable_c=yes
 
 fi
 
 
+
 # Deactivation of Python analysis
 # Check whether --enable-python was given.
 if test "${enable_python+set}" = set; then :
-  enableval=$enable_python; disable_python=yes
-
+  enableval=$enable_python; DISABLE_PYTHON=yes
 fi
 
+
+if test "x$DISABLE_PYTHON" != "x"; then
+ disable_python=yes
+
+fi
 
 
 # Activation of byte compilation
@@ -3907,6 +3947,25 @@ if test "${enable_byte+set}" = set; then :
 fi
 
 
+
+# OCamlfind's META
+
+LIBS_TO_INSTALL="utils parsers/universal analyzer"
+META_ANALYZER_REQUIRES="mopsa.utils mopsa.universal_parser"
+
+if test "x$DISABLE_C" = "x"; then
+  LIBS_TO_INSTALL="$LIBS_TO_INSTALL parsers/c parsers/c_stubs"
+  META_ANALYZER_REQUIRES="$META_ANALYZER_REQUIRES mopsa.clang_parser mopsa.cstub_parser"
+fi
+
+if test "x$DISABLE_PYTHON" = "x"; then
+  LIBS_TO_INSTALL="$LIBS_TO_INSTALL parsers/python"
+  META_ANALYZER_REQUIRES="$META_ANALYZER_REQUIRES mopsa.python_parser"
+fi
+
+meta_analyzer_requires=$META_ANALYZER_REQUIRES
+
+libs_to_install=$LIBS_TO_INSTALL
 
 
 cat >confcache <<\_ACEOF
@@ -4623,6 +4682,8 @@ do
     "parsers/c_stubs/Makefile") CONFIG_FILES="$CONFIG_FILES parsers/c_stubs/Makefile" ;;
     "parsers/python/Makefile") CONFIG_FILES="$CONFIG_FILES parsers/python/Makefile" ;;
     "analyzer/Makefile") CONFIG_FILES="$CONFIG_FILES analyzer/Makefile" ;;
+    "utils/src/version.ml") CONFIG_FILES="$CONFIG_FILES utils/src/version.ml" ;;
+    "META") CONFIG_FILES="$CONFIG_FILES META" ;;
 
   *) as_fn_error $? "invalid argument: \`$ac_config_target'" "$LINENO" 5;;
   esac
