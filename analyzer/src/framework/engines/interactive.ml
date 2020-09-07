@@ -818,20 +818,22 @@ struct
       interact action flow
 
 
-
   (** Interact with the user input or apply the action *)
   and interact_or_apply_action : type a. a action -> Location.range -> Toplevel.t flow -> a =
     fun action range flow ->
-    on_pre_action action flow;
-    let ret =
-      if is_interaction_point action then (
-        pp_action flow std_formatter action;
-        interact action flow
-      ) else
-        apply_action action flow
-    in
-    on_post_action action;
-    ret
+    try
+      on_pre_action action flow;
+      let ret =
+        if is_interaction_point action then (
+          pp_action flow std_formatter action;
+          interact action flow
+        ) else
+          apply_action action flow
+      in
+      on_post_action action;
+      ret
+    with Sys.Break ->
+      interact action flow
 
 
   and init prog =
