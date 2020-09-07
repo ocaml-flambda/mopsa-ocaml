@@ -36,6 +36,8 @@
 /config.log
 /config.status
 /Makefile
+/META
+/utils/src/version.ml
 
 *.native
 *.byte

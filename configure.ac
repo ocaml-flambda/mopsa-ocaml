@@ -33,7 +33,31 @@ AC_CONFIG_FILES([
  parsers/c_stubs/Makefile
  parsers/python/Makefile
  analyzer/Makefile
+ utils/src/version.ml
+ META
 ])
+
+# Version
+AC_MSG_CHECKING([for Mopsa's version])
+VERSION=`cat VERSION`
+AC_MSG_RESULT($VERSION)
+AC_SUBST(version,$VERSION)
+
+# Git revision
+AC_MSG_CHECKING([for Mopsa's development version])
+if test -d .git; then
+   # has .git, assuming a development version
+   GIT_COMMIT=`git -P log -1 --format=%h`
+   GIT_DATE=`git -P log -1 --format=%ai`
+   GIT_BRANCH=`git -P branch --show-current`
+   GIT_TAG=`git describe --abbrev=0`
+   DEV_VERSION="git branch:$GIT_BRANCH tag:$GIT_TAG commit:$GIT_COMMIT commit-date:$GIT_DATE"
+else
+   # no .git, assuming a release version from a tarball
+   DEV_VERSION="release"
+fi
+AC_MSG_RESULT($DEV_VERSION)
+AC_SUBST(dev_version,$DEV_VERSION)
 
 
 # Checking for C/C++ compilers
@@ -165,19 +189,28 @@ fi
 AC_ARG_ENABLE(
   [c],
   [AS_HELP_STRING([--disable-c], [Turn off C analysis])],
-  [AC_SUBST(disable_c,yes)], [])
+  [DISABLE_C=yes], [])
 
 # Deactive C if llvm-config was not found
 if test "x$LLVMCONFIG" = "x"; then
+ DISABLE_C=yes
+fi
+
+if test "x$DISABLE_C" != "x"; then
  AC_SUBST(disable_c,yes)
 fi
+
 
 
 # Deactivation of Python analysis
 AC_ARG_ENABLE(
   [python],
   [AS_HELP_STRING([--disable-python], [Turn off Python analysis])],
-  [AC_SUBST(disable_python,yes)], [])
+  [DISABLE_PYTHON=yes], [])
+
+if test "x$DISABLE_PYTHON" != "x"; then
+ AC_SUBST(disable_python,yes)
+fi
 
 
 # Activation of byte compilation
@@ -187,5 +220,22 @@ AC_ARG_ENABLE(
   [AC_SUBST(enable_byte,yes)], [])
 
 
+# OCamlfind's META
+
+LIBS_TO_INSTALL="utils parsers/universal analyzer"
+META_ANALYZER_REQUIRES="mopsa.utils mopsa.universal_parser"
+
+if test "x$DISABLE_C" = "x"; then
+  LIBS_TO_INSTALL="$LIBS_TO_INSTALL parsers/c parsers/c_stubs"
+  META_ANALYZER_REQUIRES="$META_ANALYZER_REQUIRES mopsa.clang_parser mopsa.cstub_parser"
+fi
+
+if test "x$DISABLE_PYTHON" = "x"; then
+  LIBS_TO_INSTALL="$LIBS_TO_INSTALL parsers/python"
+  META_ANALYZER_REQUIRES="$META_ANALYZER_REQUIRES mopsa.python_parser"
+fi
+
+AC_SUBST(meta_analyzer_requires,$META_ANALYZER_REQUIRES)
+AC_SUBST(libs_to_install,$LIBS_TO_INSTALL)
 
 AC_OUTPUT

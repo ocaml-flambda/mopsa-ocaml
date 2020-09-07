@@ -131,6 +131,7 @@ let to_arg () =
 (** {2 Built-in options} *)
 (** ******************** *)
 
+
 (** Path to share directory *)
 let () =
   register_builtin_option {
@@ -210,7 +211,7 @@ let () =
     key = "-list";
     category = "Help";
     doc = " list available domains; if a configuration is specified, only used domains are listed";
-    spec = ArgExt.Unit_delayed (fun () ->
+    spec = ArgExt.Unit_exit (fun () ->
         let domains = Abstraction.Parser.(domains !opt_config) in
         Output.Factory.list_domains domains
       );
@@ -223,7 +224,7 @@ let () =
     key = "-alarms";
     category = "Help";
     doc = " list the alarms captured by the selected configuration";
-    spec = ArgExt.Unit_delayed (fun () ->
+    spec = ArgExt.Unit_exit (fun () ->
         let abstraction = Abstraction.Parser.(parse !opt_config) in
         let domain = Abstraction.Builder.make abstraction in
         let module Domain = (val domain) in
@@ -238,7 +239,7 @@ let () =
     key = "-hooks";
     category = "Help";
     doc = " list the available hooks";
-    spec = ArgExt.Unit_delayed (fun () ->
+    spec = ArgExt.Unit_exit (fun () ->
         let d =
           List.map
             (fun (h:(module Core.Hook.HOOK)) ->
@@ -338,29 +339,40 @@ let help () =
   let args = List.map opt_to_arg options in
   Output.Factory.help args
 
-let print_help_and_exit () =
-  help ();
-  exit 0
-
 let () =
   register_builtin_option {
     key  = "-help";
     category = "Help";
     doc  = " display the list of options";
-    spec = ArgExt.Unit_delayed print_help_and_exit;
+    spec = ArgExt.Unit_exit help;
     default = "";
   };
   register_builtin_option {
     key  = "--help";
     category = "Help";
     doc  = " display the list of options";
-    spec = ArgExt.Unit_delayed print_help_and_exit;
+    spec = ArgExt.Unit_exit help;
     default = "";
   };
   register_builtin_option {
     key  = "-h";
     category = "Help";
     doc  = " display the list of options";
-    spec = ArgExt.Unit_delayed print_help_and_exit;
+    spec = ArgExt.Unit_exit help;
+    default = "";
+  }
+
+
+(** Version *)
+
+let print_version () =
+  Printf.printf "%s (%s)\n" Version.version Version.dev_version
+
+let () =
+  register_builtin_option {
+    key = "-v";
+    category = "Configuration";
+    doc = " Mopsa version";
+    spec = ArgExt.Unit_exit print_version;
     default = "";
   }
