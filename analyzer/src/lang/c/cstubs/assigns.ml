@@ -173,7 +173,7 @@ struct
 
     | P_top ->
       Soundness.warn_at range "ignoring assigns on ⊤ pointer %a" pp_expr (get_orig_expr ptr);
-      Cases.empty ~bottom:false flow
+      Post.return flow
 
     | _ -> assert false
 
@@ -260,7 +260,7 @@ struct
 
     | P_top ->
       Soundness.warn_at range "ignoring prime of ⊤ pointer %a" pp_expr (get_orig_expr ptr);
-      Cases.empty ~bottom:false flow
+      man.eval (mk_top e.etyp range) flow
 
     | _ -> assert false
 

@@ -35,7 +35,7 @@ type 'a eval = ('a,expr) cases
 val return : ?log:log -> ?cleaners:stmt list -> expr -> 'a flow -> 'a eval
 val singleton : ?log:log -> ?cleaners:stmt list -> expr -> 'a flow -> 'a eval
 
-val empty : ?bottom:bool -> 'a flow -> 'a eval
+val empty : 'a flow -> 'a eval
 
 val not_handled : 'a flow -> 'a eval
 

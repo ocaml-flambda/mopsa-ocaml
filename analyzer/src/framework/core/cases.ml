@@ -49,8 +49,8 @@ let return ?(log=empty_log) ?(cleaners=[]) (res:'r) (flow:'a flow) =
 
 let singleton = return
 
-let empty ?(bottom=true) (flow:'a flow) : ('a,'r) cases =
-  let flow = if bottom then Flow.remove T_cur flow else flow in
+let empty (flow:'a flow) : ('a,'r) cases =
+  let flow = Flow.remove T_cur flow in
   case Empty flow
 
 let not_handled (flow:'a flow) : ('a,'r) cases =

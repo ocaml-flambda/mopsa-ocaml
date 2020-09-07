@@ -60,7 +60,7 @@ val return : ?log:log -> ?cleaners:stmt list -> 'r -> 'a flow -> ('a,'r) cases
 val singleton : ?log:log -> ?cleaners:stmt list -> 'r -> 'a flow -> ('a,'r) cases
 (** Create a case with a single non-empty result. *)
 
-val empty : ?bottom:bool -> 'a flow -> ('a,'r) cases
+val empty : 'a flow -> ('a,'r) cases
 (** Create a case with an empty case. *)
 
 val not_handled : 'a flow -> ('a,'r) cases
