@@ -26,7 +26,7 @@ unsigned int strlen(unsigned char*s);
 
 void main() {
   unsigned char *s = (unsigned char *) malloc(10);
-  unsigned int n = _mopsa_rand_int(0, 9), i;
+  unsigned int n = _mopsa_range_int(0, 9), i;
 
   for(i = 0; i < n; i ++) {
     s[i] = 'a';
