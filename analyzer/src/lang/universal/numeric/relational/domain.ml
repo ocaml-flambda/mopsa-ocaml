@@ -243,7 +243,7 @@ struct
                    remove_tmp l
           in
           Some (a', bnd)
-        with UnsupportedOperator -> exec (mk_remove_var var stmt.srange) man ctx (a,bnd)
+        with ImpreciseExpression -> exec (mk_forget_var var stmt.srange) man ctx (a,bnd)
            | UnsupportedExpression -> None
       end
 
@@ -310,7 +310,7 @@ struct
             remove_tmp l
           in
           Some (a', bnd)
-        with UnsupportedOperator -> Some (a,bnd)
+        with ImpreciseExpression -> Some (a,bnd)
            | UnsupportedExpression -> None
       end
 
@@ -343,7 +343,7 @@ struct
         Apron.Abstract1.bound_texpr ApronManager.man abs e |>
         Values.Intervals.Integer.Value.of_apron |>
         OptionExt.return
-      with UnsupportedOperator -> Some (Values.Intervals.Integer.Value.top)
+      with ImpreciseExpression -> Some (Values.Intervals.Integer.Value.top)
          | UnsupportedExpression -> None
 
 
