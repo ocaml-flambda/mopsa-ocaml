@@ -202,9 +202,9 @@ struct
         flow
       else
         let () = enter_hook() in
-        let ctx = Hook.on_before_exec route stmt man flow in
+        let x = Hook.on_before_exec route stmt man flow in
         let () = exit_hook() in
-        Flow.set_ctx ctx flow
+        match x with None -> flow | Some ctx -> Flow.set_ctx ctx flow
     in
 
     let fexec =
@@ -249,9 +249,9 @@ struct
         clean_post
       else
         let () = enter_hook() in
-        let ctx = Hook.on_after_exec route stmt man flow clean_post in
+        let x = Hook.on_after_exec route stmt man flow clean_post in
         let () = exit_hook () in
-        Cases.set_ctx ctx clean_post
+        match x with None -> clean_post | Some ctx -> Cases.set_ctx ctx clean_post
     with
     | Exceptions.Panic(msg, line) ->
       Printexc.raise_with_backtrace
@@ -297,9 +297,9 @@ struct
         flow
       else
         let () = enter_hook() in
-        let ctx = Hook.on_before_eval route exp man flow in
+        let x = Hook.on_before_eval route exp man flow in
         let () = exit_hook() in
-        Flow.set_ctx ctx flow
+        match x with None -> flow | Some ctx -> Flow.set_ctx ctx flow
     in
 
     (* Get the actual route of the expression in case of a
@@ -364,9 +364,9 @@ struct
         ret
     else
       let () = enter_hook() in
-      let ctx = Hook.on_after_eval route exp man flow ret in
+      let x = Hook.on_after_eval route exp man flow ret in
       let () = exit_hook () in
-      Cases.set_ctx ctx ret
+      match x with None -> ret | Some ctx -> Cases.set_ctx ctx ret
 
 
   (** {2 Handler of queries} *)

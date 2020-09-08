@@ -45,16 +45,16 @@ sig
   val init : 'a ctx -> 'a ctx
   (** Initialization of the hook *)
 
-  val on_before_exec : route -> stmt -> ('a,'a) man  -> 'a flow -> 'a ctx
+  val on_before_exec : route -> stmt -> ('a,'a) man  -> 'a flow -> 'a ctx option
   (** Event fired before an exec is performed *)
 
-  val on_after_exec : route -> stmt -> ('a,'a) man -> 'a flow -> 'a post -> 'a ctx
+  val on_after_exec : route -> stmt -> ('a,'a) man -> 'a flow -> 'a post -> 'a ctx option
   (** Event fired after an exec is performed *)
 
-  val on_before_eval : route -> expr -> ('a,'a) man -> 'a flow -> 'a ctx
+  val on_before_eval : route -> expr -> ('a,'a) man -> 'a flow -> 'a ctx option
   (** Event fired before an eval is performed *)
 
-  val on_after_eval : route -> expr -> ('a,'a) man -> 'a flow -> 'a eval -> 'a ctx
+  val on_after_eval : route -> expr -> ('a,'a) man -> 'a flow -> 'a eval -> 'a ctx option
   (** Event fired after an eval is performed *)
 
   val on_finish : ('a,'a) man -> 'a flow -> unit
@@ -117,16 +117,16 @@ val init_hook : string -> 'a ctx -> 'a ctx
 val init_active_hooks : 'a ctx -> 'a ctx
 (** Initialize all active hooks *)
 
-val on_before_exec : route -> stmt -> ('a,'a) man -> 'a flow -> 'a ctx
+val on_before_exec : route -> stmt -> ('a,'a) man -> 'a flow -> 'a ctx option
 (** Call [on_before_exec] on all active hooks *)
 
-val on_after_exec : route -> stmt -> ('a,'a) man -> 'a flow -> 'a post -> 'a ctx
+val on_after_exec : route -> stmt -> ('a,'a) man -> 'a flow -> 'a post -> 'a ctx option
 (** Call [on_after_exec] on all active hooks *)
 
-val on_before_eval : route -> expr -> ('a,'a) man -> 'a flow -> 'a ctx
+val on_before_eval : route -> expr -> ('a,'a) man -> 'a flow -> 'a ctx option
 (** Call [on_before_eval] on all active hooks *)
 
-val on_after_eval : route -> expr -> ('a,'a) man -> 'a flow -> 'a eval -> 'a ctx
+val on_after_eval : route -> expr -> ('a,'a) man -> 'a flow -> 'a eval -> 'a ctx option
 (** Call [on_after_eval] on all active hooks *)
 
 val on_finish : ('a,'a) man -> 'a flow -> unit
