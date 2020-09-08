@@ -56,7 +56,25 @@ struct
 
   let meet (a1:t) (a2:t) : t = I.meet_bot a1 a2
 
-  let widen ctx (a1:t) (a2:t) : t = I.widen_bot a1 a2
+  let widen ctx (a1:t) (a2:t) : t =
+    (* Retrieve thresholds if any *)
+    match find_ctx_opt Common.widening_thresholds_ctx_key ctx with
+    | None -> I.widen_bot a1 a2
+    | Some thresholds ->
+      bot_neutral2
+        (fun (a,b) (c,d) ->
+           (* Translate constants to bounds *)
+           let thresholds = SetExt.ZSet.elements thresholds |>
+                            List.map (fun n -> I.B.Finite n) in
+           (* Apply the definition of the widening with thresholds *)
+           (if I.B.leq a c then a
+            else List.filter (I.B.geq c) thresholds |>
+                 List.fold_left I.B.max I.B.MINF),
+           (if I.B.geq b d then b
+            else List.filter (I.B.leq d) thresholds |>
+                 List.fold_left I.B.min I.B.PINF)
+        )
+        a1 a2
 
   let print fmt (a:t) = I.fprint_bot fmt a
 
