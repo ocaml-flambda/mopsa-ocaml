@@ -334,7 +334,7 @@ let join (cases1:('a,'r) cases) (cases2:('a,'r) cases) : ('a,'r) cases =
 
 (** Meet two results *)
 let meet (cases1:('a,'r) cases) (cases2:('a,'r) cases) : ('a,'r) cases =
-  Dnf.mk_or cases1 cases2 |>
+  Dnf.mk_and cases1 cases2 |>
   normalize_ctx
 
 
