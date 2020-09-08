@@ -51,13 +51,13 @@ sig
   (** {2 Lattice operators} *)
   (** ********************* *)
 
-  val subset: (t, t) man -> uctx -> t -> t -> bool
+  val subset: (t, t) man -> t ctx -> t -> t -> bool
 
-  val join: (t, t) man -> uctx -> t -> t -> t
+  val join: (t, t) man -> t ctx -> t -> t -> t
 
-  val meet: (t, t) man -> uctx -> t -> t -> t
+  val meet: (t, t) man -> t ctx -> t -> t -> t
 
-  val widen: (t, t) man -> uctx -> t -> t -> t
+  val widen: (t, t) man -> t ctx -> t -> t -> t
 
   val merge : t -> t * log -> t * log -> t
 
@@ -150,8 +150,10 @@ struct
 
   let init prog man : Domain.t flow =
     (* Initialize the context with an empty callstack *)
-    let ctx = Context.empty |>
-              Context.add_unit Context.callstack_ctx_key Callstack.empty_callstack
+    let ctx =
+      singleton_ctx
+        Context.callstack_ctx_key
+        Callstack.empty_callstack
     in
 
     (* The initial flow is a singleton ⊤ environment *)

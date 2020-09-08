@@ -56,51 +56,50 @@ let () =
 (** {2 Variable bounds} *)
 (** ******************* *)
 
+module VarBoundsKey = GenContextKey(struct
+    type 'a t = constant VarMap.t
+    let print pp fmt m =
+      Format.fprintf fmt "variables bounds: %a"
+        (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
+           (fun fmt (v,b) -> Format.fprintf fmt "%a: %a" pp_var v pp_constant b)
+        ) (VarMap.bindings m)
+  end)
+
 (** Context for saving invariants of variables bounds *)
-let var_bounds_ctx =
-  let module K = Context.GenUnitKey(struct
-      type t = constant VarMap.t
-      let print fmt m =
-        Format.fprintf fmt "variables bounds: %a"
-          (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
-             (fun fmt (v,b) -> Format.fprintf fmt "%a: %a" pp_var v pp_constant b)
-          ) (VarMap.bindings m)
-    end)
-  in
-  K.key
+let var_bounds_ctx = VarBoundsKey.key
 
 
 (** Add the bounds of a variable to context *)
-let add_var_bounds_ctx v b uctx =
-  let m = try Context.ufind var_bounds_ctx uctx with Not_found -> VarMap.empty in
-  Context.uadd var_bounds_ctx (VarMap.add v b m) uctx
+let add_var_bounds_ctx v b ctx =
+  let m = try find_ctx var_bounds_ctx ctx with Not_found -> VarMap.empty in
+  add_ctx var_bounds_ctx (VarMap.add v b m) ctx
 
 
 (** Add the bounds of a variable to flow *)
 let add_var_bounds_flow v b flow =
-  let ctx = add_var_bounds_ctx v b (Flow.get_unit_ctx flow) in
-  Flow.set_unit_ctx ctx flow
+  let ctx = add_var_bounds_ctx v b (Flow.get_ctx flow) in
+  Flow.set_ctx ctx flow
 
 
 (** Remove the bounds of a variable from context *)
 let remove_var_bounds_ctx v ctx =
   try
-    let m = Context.ufind var_bounds_ctx ctx in
+    let m = find_ctx var_bounds_ctx ctx in
     let mm = VarMap.remove v m in
-    Context.uadd var_bounds_ctx mm ctx
+    add_ctx var_bounds_ctx mm ctx
   with Not_found -> ctx
 
 
 (** Remove the bounds of a variable from flow *)
 let remove_var_bounds_flow v flow =
-  let ctx = remove_var_bounds_ctx v (Flow.get_unit_ctx flow) in
-  Flow.set_unit_ctx ctx flow
+  let ctx = remove_var_bounds_ctx v (Flow.get_ctx flow) in
+  Flow.set_ctx ctx flow
 
 
 (** Find the bounds of a variable in context *)
-let find_var_bounds_ctx_opt v uctx =
+let find_var_bounds_ctx_opt v ctx =
   try
-    let m = Context.ufind var_bounds_ctx uctx in
+    let m = find_ctx var_bounds_ctx ctx in
     try Some (VarMap.find v m)
     with Not_found -> None
   with Not_found -> None
@@ -155,7 +154,7 @@ struct
       | None    -> v
       | Some vv -> Value.meet v vv
 
-  let widen uctx a1 a2 =
+  let widen ctx a1 a2 =
     let open Bot_top in
     if a1 == a2 then a1 else
       match a1, a2 with
@@ -169,7 +168,7 @@ struct
             (fun var v1 v2 ->
                let w = Value.widen v1 v2 in
                (* Apply the bounds constraints*)
-               meet_with_bound_constraints uctx var w
+               meet_with_bound_constraints ctx var w
             )
             m1 m2
         )

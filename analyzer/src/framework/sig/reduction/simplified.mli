@@ -50,7 +50,7 @@ type ('a,'b) simplified_reduction_man = {
   set_value : 't. 't id -> var -> 't -> 'b -> 'b;
   (** Set the value of a variable in some value abstraction *)
 
-  ask : 'r. ('a,'r) query -> uctx -> 'b -> 'r;
+  ask : 'r. ('a,'r) query -> 'a ctx -> 'b -> 'r;
   (** Perform a query *)
 }
 
@@ -64,7 +64,7 @@ sig
   val name   : string
   (** Name of the reduction rule *)
 
-  val reduce : stmt -> ('a,'b) simplified_reduction_man -> uctx -> 'b -> 'b -> 'b
+  val reduce : stmt -> ('a,'b) simplified_reduction_man -> 'a ctx -> 'b -> 'b -> 'b
   (** [reduce s man ctx input output] applies a reduction rule on post-state
       [output] that resulted from executing statement [s] on pre-state [input] *)
 end

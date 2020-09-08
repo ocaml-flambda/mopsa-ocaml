@@ -39,9 +39,8 @@ end
 include Alarm
 module Alarm = Alarm
 
+include Context
 module Context = Context
-type uctx = Context.uctx
-type 'a ctx = 'a Context.ctx
 
 module Cases = Cases
 

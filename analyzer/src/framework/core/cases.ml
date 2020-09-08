@@ -75,7 +75,7 @@ let copy_ctx src dst =
 
 let get_most_recent_ctx cases =
   Dnf.fold
-    (fun acc (case,flow) -> Context.get_most_recent acc (Flow.get_ctx flow))
+    (fun acc (case,flow) -> most_recent_ctx acc (Flow.get_ctx flow))
     (get_ctx cases) cases
 
 let normalize_ctx cases =
@@ -84,12 +84,12 @@ let normalize_ctx cases =
 
 let get_callstack r =
   get_ctx r |>
-  Context.find_unit Context.callstack_ctx_key
+  find_ctx Context.callstack_ctx_key
 
 let set_callstack cs r =
   set_ctx (
     get_ctx r |>
-    Context.add_unit Context.callstack_ctx_key cs
+    add_ctx Context.callstack_ctx_key cs
   ) r
 
 let get_case_cleaners (case:'r case) : StmtSet.t =
@@ -445,7 +445,7 @@ let bind_opt
            | None   -> not_handled flow
            | Some c -> c
        in
-       last_ctx := Context.get_most_recent !last_ctx (get_ctx cases');
+       last_ctx := most_recent_ctx !last_ctx (get_ctx cases');
        add_cleaners (get_case_cleaners case |> StmtSet.elements) cases' |>
        concat_log (get_case_log case)
     )
@@ -501,7 +501,7 @@ let bind_conjunction
     (fun conj ->
        let conj' = List.map (fun (case,flow) -> (case,Flow.set_ctx !last_ctx flow)) conj in
        let cases' = f conj' in
-       last_ctx := Context.get_most_recent !last_ctx (get_ctx cases');
+       last_ctx := most_recent_ctx !last_ctx (get_ctx cases');
        cases'
     ) cases |>
   set_ctx !last_ctx
@@ -548,7 +548,7 @@ let bind_disjunction
     (fun disj ->
        let disj' = List.map (fun (case,flow) -> (case,Flow.set_ctx !last_ctx flow)) disj in
        let cases' = f disj' in
-       last_ctx := Context.get_most_recent !last_ctx (get_ctx cases');
+       last_ctx := most_recent_ctx !last_ctx (get_ctx cases');
        cases'
     ) cases |>
   set_ctx !last_ctx

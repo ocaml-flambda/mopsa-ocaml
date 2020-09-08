@@ -29,7 +29,7 @@ TARGET_CLIBS = utils
 # Packs
 utils = bot compare location callstack debug exceptions optionExt dnf setExt \
 	setExtSig setP listExt mapExtSig mapExt mapExtPoly invRelation \
-	invRelationSig equiv mapPolyHet mapP relation relationSig valueSig \
+	invRelationSig equiv mapP relation relationSig valueSig \
 	timing top bot_top itvUtils congUtils bitfields graphSig graph argExt \
 	lineEdit typeExt eq
 itvUtils = float intBound intItv floatItv floatItvNan

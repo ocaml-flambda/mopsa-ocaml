@@ -73,13 +73,13 @@ sig
   (** {2 Lattice operators} *)
   (** ********************* *)
 
-  val subset: ('a,t) man -> ('a,'s) stack_man -> uctx -> t * 's -> t * 's -> bool * 's * 's
+  val subset: ('a,t) man -> ('a,'s) stack_man -> 'a ctx -> t * 's -> t * 's -> bool * 's * 's
 
-  val join  : ('a,t) man -> ('a,'s) stack_man -> uctx -> t * 's -> t * 's -> t * 's * 's
+  val join  : ('a,t) man -> ('a,'s) stack_man -> 'a ctx -> t * 's -> t * 's -> t * 's * 's
 
-  val meet  : ('a,t) man -> ('a,'s) stack_man -> uctx -> t * 's -> t * 's -> t * 's * 's
+  val meet  : ('a,t) man -> ('a,'s) stack_man -> 'a ctx -> t * 's -> t * 's -> t * 's * 's
 
-  val widen : ('a,t) man -> ('a,'s) stack_man -> uctx -> t * 's -> t * 's -> t * 's * 's * bool
+  val widen : ('a,t) man -> ('a,'s) stack_man -> 'a ctx -> t * 's -> t * 's -> t * 's * 's * bool
 
   val merge : t -> t * log -> t * log -> t
   (** [merge pre (post1, log1) (post2, log2)] synchronizes two divergent

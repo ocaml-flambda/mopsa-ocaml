@@ -126,7 +126,7 @@ struct
 
   let join = AMap.join
   let meet = AMap.meet
-  let widen uctx = AMap.widen
+  let widen ctx = AMap.widen
 
   let alarms = []
 

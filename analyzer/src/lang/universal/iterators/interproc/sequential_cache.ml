@@ -56,7 +56,7 @@ struct
 
   let debug fmt = Debug.debug ~channel:name fmt
 
-  module Fctx = Context.GenPolyKey(
+  module Fctx = GenContextKey(
     struct
       type 'a t = ('a flow * expr option * 'a flow * stmt list) list StringMap.t
       let print p fmt ctx = Format.fprintf fmt "Function cache context (py): %a@\n"
@@ -80,7 +80,7 @@ struct
 
   let find_signature man funname in_flow =
     try
-      let cache = Context.find_poly Fctx.key (Flow.get_ctx in_flow) in
+      let cache = find_ctx Fctx.key (Flow.get_ctx in_flow) in
       let flows = StringMap.find funname cache in
       Some (List.find (fun (flow_in, _, _, _) ->
           Flow.subset man.lattice in_flow flow_in
@@ -89,17 +89,17 @@ struct
 
 
   let store_signature funname in_flow eval_res out_flow cleaners =
-    let old_ctx = try Context.find_poly Fctx.key (Flow.get_ctx out_flow) with Not_found -> StringMap.empty in
+    let old_ctx = try find_ctx Fctx.key (Flow.get_ctx out_flow) with Not_found -> StringMap.empty in
     let old_sig = try StringMap.find funname old_ctx with Not_found -> [] in
     let new_sig =
       if List.length old_sig < !opt_universal_modular_interproc_cache_size then (in_flow, eval_res, out_flow, cleaners)::old_sig
       else (in_flow, eval_res, out_flow, cleaners) :: (List.rev @@ List.tl @@ List.rev old_sig) in
     let new_ctx = StringMap.add funname new_sig old_ctx in
-    Flow.set_ctx (Context.add_poly Fctx.key new_ctx (Flow.get_ctx out_flow)) out_flow
+    Flow.set_ctx (add_ctx Fctx.key new_ctx (Flow.get_ctx out_flow)) out_flow
 
 
   let init prog flow =
-    Flow.map_ctx (Context.init_poly Fctx.init)
+    Flow.map_ctx (add_ctx Fctx.key StringMap.empty)
 
   let split_cur_from_others man flow =
     let bot = Flow.bottom (Flow.get_ctx flow) (Flow.get_alarms flow) in

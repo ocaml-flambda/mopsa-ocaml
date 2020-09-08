@@ -347,7 +347,7 @@ struct
          | UnsupportedExpression -> None
 
 
-  let ask : type r. ('a,r) query -> ('a,t) simplified_man -> uctx -> t -> r option =
+  let ask : type r. ('a,r) query -> ('a,t) simplified_man -> 'a ctx -> t -> r option =
     fun query man ctx (abs,bnd) ->
       match query with
       | Common.Q_int_interval e ->

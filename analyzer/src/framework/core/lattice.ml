@@ -81,10 +81,10 @@ type 'a lattice = {
   bottom:    'a;
   top:       'a;
   is_bottom: 'a -> bool;
-  subset:    uctx -> 'a -> 'a -> bool;
-  join:      uctx -> 'a -> 'a -> 'a;
-  meet:      uctx -> 'a -> 'a -> 'a;
-  widen:     uctx -> 'a -> 'a -> 'a;
+  subset:    'a ctx -> 'a -> 'a -> bool;
+  join:      'a ctx -> 'a -> 'a -> 'a;
+  meet:      'a ctx -> 'a -> 'a -> 'a;
+  widen:     'a ctx -> 'a -> 'a -> 'a;
   merge:     'a -> 'a * log -> 'a * log -> 'a;
   print:     Format.formatter -> 'a -> unit;
 }

@@ -94,7 +94,7 @@ struct
       let old = Flow.get (T_cfg_node nid) man.lattice flow in
       let vs = if weak then old::vs else vs in
       (* join *)
-      let ctx = Flow.get_unit_ctx flow in
+      let ctx = Flow.get_ctx flow in
       let v = List.fold_left (man.lattice.join ctx) man.lattice.bottom vs in
       debug "update node value %a: abs = @[%a@]@."
         pp_node_as_id node man.lattice.print v;
@@ -169,7 +169,7 @@ struct
       analyze_component true lst flow >>% fun flow ->
       let v = Flow.get (T_cfg_node wid) man.lattice flow in
       (* check stability *)
-      if man.lattice.subset (Flow.get_unit_ctx flow) v old
+      if man.lattice.subset (Flow.get_ctx flow) v old
       then (
         debug "component head stable %a" pp_node_id wid;
         refine_component 0 lst flow
@@ -179,7 +179,7 @@ struct
         let widened =
           if count < !Universal.Iterators.Loops.opt_loop_widening_delay
           then v
-          else man.lattice.widen (Flow.get_unit_ctx flow) old v
+          else man.lattice.widen (Flow.get_ctx flow) old v
         in
         debug "component head not stable %a" pp_node_id wid;
         let flow = Flow.set (T_cfg_node wid) widened man.lattice flow in

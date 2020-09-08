@@ -73,7 +73,7 @@ sig
   val meet :t -> t -> t
   (** Intersect to sets of partial maps. *)
 
-  val widen : uctx -> t -> t -> t
+  val widen : 'a ctx -> t -> t -> t
   (** Widening operator *)
 
   val find : key -> t -> ValueSet.t with_top

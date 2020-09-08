@@ -52,52 +52,51 @@ struct
   (** Flow-insensitive annotations *)
   (** ============================ *)
 
-  let unnamed_args_ctx =
-    let module C = Context.GenUnitKey(
-      struct
-        type v = var (** last named parameter *) *
-                 var list (** unnamed parameters *)
+  module C = GenContextKey(
+    struct
+      type v = var (** last named parameter *) *
+               var list (** unnamed parameters *)
 
-        type t = v list
+      type 'a t = v list
 
-        let print fmt stack =
-          Format.fprintf fmt "@[<v 2>unnamed args:@,%a@]"
-            (Format.pp_print_list
-               ~pp_sep:(fun fmt () -> Format.pp_print_string fmt "@,")
-               (fun fmt (named,unnamed) ->
-                  Format.pp_print_list
-                    ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ")
-                    pp_var
-                    fmt unnamed
-               )
-            ) stack
-      end
-      )
-    in
-    C.key
+      let print pp fmt stack =
+        Format.fprintf fmt "@[<v 2>unnamed args:@,%a@]"
+          (Format.pp_print_list
+             ~pp_sep:(fun fmt () -> Format.pp_print_string fmt "@,")
+             (fun fmt (named,unnamed) ->
+                Format.pp_print_list
+                  ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ")
+                  pp_var
+                  fmt unnamed
+             )
+          ) stack
+    end
+    )
+
+  let unnamed_args_ctx = C.key
 
   let get_unnamed_args flow =
-    Flow.get_ctx flow |> Context.find_unit unnamed_args_ctx |> List.hd
+    Flow.get_ctx flow |> find_ctx unnamed_args_ctx |> List.hd
 
   let push_unnamed_args (last, unnamed) flow =
     Flow.map_ctx (fun ctx ->
         let stack =
-          try Context.find_unit unnamed_args_ctx ctx
+          try find_ctx unnamed_args_ctx ctx
           with Not_found -> []
         in
-      Context.add_unit unnamed_args_ctx ((last, unnamed) :: stack) ctx
+      add_ctx unnamed_args_ctx ((last, unnamed) :: stack) ctx
     ) flow
 
   let pop_unnamed_args flow =
     Flow.map_ctx (fun ctx ->
         let stack =
           try
-            let stack = Context.find_unit unnamed_args_ctx ctx in
+            let stack = find_ctx unnamed_args_ctx ctx in
             List.tl stack
           with Not_found ->
             []
         in
-        Context.add_unit unnamed_args_ctx stack ctx
+        add_ctx unnamed_args_ctx stack ctx
     ) flow
 
 
