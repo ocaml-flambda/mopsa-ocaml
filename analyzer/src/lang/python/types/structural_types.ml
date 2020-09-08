@@ -81,8 +81,6 @@ struct
     Format.fprintf fmt "attributes: @[%a@]@\n"
       AMap.print d
 
-  let widen ctx = widen
-
   let merge pre (a, log) (a', log') =
     if a == a' then a
     else if Log.is_empty_log log' then a

@@ -219,7 +219,7 @@ struct
       | None, Partial _ | Partial _, None -> None
       | None, Full ts | Full ts, None -> Bot
 
-    let widen = join
+    let widen ctx = join
 
     let apply f = function
       | Bot        -> Bot

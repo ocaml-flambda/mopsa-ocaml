@@ -193,7 +193,7 @@ struct
       with Z.Overflow -> TOP
 
 
-  let widen (a1:t) (a2:t) : t =
+  let widen ctx (a1:t) (a2:t) : t =
     (*if subset a2 a1 then a1 else TOP*)
     join a1 a2
 

@@ -148,7 +148,7 @@ struct
   let subset () () = true
   let join () () = ()
   let meet () () = ()
-  let widen () () = ()
+  let widen ctx () () = ()
   let constant t c = None
   let cast man t e = None
   let unop op t () = ()

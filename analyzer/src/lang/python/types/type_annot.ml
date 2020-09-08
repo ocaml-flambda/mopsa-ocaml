@@ -51,8 +51,6 @@ struct
 
   include TVMap
 
-  let widen ctx = widen
-
   let print fmt m =
     Format.fprintf fmt "TypeVar annotations: @[%a@]@\n" TVMap.print m
 
