@@ -102,7 +102,7 @@ let parse cmd tgt file opts : parse_result =
   let from_cache : parse_result option =
     try
       (* try cache file *)
-      let f = Unix.openfile file_cache [Unix.O_RDONLY] 0o666 in
+      let f = Unix.openfile file_cache [Unix.O_RDWR] 0o666 in
       Unix.lockf f F_LOCK 0;
       let cache = Unix.in_channel_of_descr f in
       let v = Marshal.from_channel cache in
