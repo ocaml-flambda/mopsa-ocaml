@@ -90,6 +90,11 @@ struct
           ) (Cases.get_ctx post) cmps in
       Some ctx
 
+    | S_remove {ekind = E_var(v,_); etyp = T_int} ->
+      let ctx = Cases.get_ctx post |>
+                Numeric.Common.remove_widening_thresholds v in
+      Some ctx
+
     | _ -> None
 
   let on_before_eval route exp man flow = None

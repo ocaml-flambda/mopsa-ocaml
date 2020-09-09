@@ -215,7 +215,7 @@ module K = GenContextKey
     (struct
       type 'a t = SetExt.ZSet.t
       let print pp fmt s =
-        Format.fprintf fmt "widening thresholds: %a"
+        Format.fprintf fmt "widening thresholds: @[%a@]"
           (SetExt.ZSet.fprint
              SetExtSig.{
                print_empty = "∅";
@@ -238,3 +238,7 @@ let add_widening_threshold var n ctx =
   in
   add_var_ctx var widening_thresholds_ctx_key
     (SetExt.ZSet.add n thresholds) ctx
+
+(** Remove all widening thresholds of a variable *)
+let remove_widening_thresholds var ctx =
+  remove_var_ctx var widening_thresholds_ctx_key ctx

@@ -59,7 +59,7 @@ let () =
 module K = GenContextKey(struct
     type 'a t = 'a ctx VarMap.t
     let print pp fmt m =
-      Format.fprintf fmt "variables contexts:@, @[@<v>%a@]"
+      Format.fprintf fmt "variables contexts:@, @[<v>%a@]"
         (Format.pp_print_list
            ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,")
            (fun fmt (v,c) -> Format.fprintf fmt "%a: %a" pp_var v (pp_ctx pp) c)
