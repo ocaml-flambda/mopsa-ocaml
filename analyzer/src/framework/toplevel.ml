@@ -223,13 +223,7 @@ struct
 
         | Some post -> post
       in
-      let clean_post =
-        post |> Cases.bind_full
-          (fun ret flow log cleaners ->
-             apply_cleaners cleaners man flow |>
-             Cases.set_log log
-          )
-      in
+      let clean_post = exec_cleaners man post in
       if inside_hook () then
         clean_post
       else

@@ -117,14 +117,27 @@ struct
       )
 
     | S_if(cond, s1, s2) ->
-      man.eval cond flow >>$? fun cond flow ->
-      let then_post = man.exec (mk_assume cond cond.erange) flow >>%
-                      man.exec s1
+      (* First, evaluate the condition *)
+      let evl = man.eval cond flow in
+      (* Filter flows that satisfy the condition.
+         Note that cleaners returned by the evaluation should be removed just after
+         applying the filter and before executing the body of the branch. *)
+      let then_post = ( evl >>$ fun cond flow ->
+                        man.exec (mk_assume cond cond.erange) flow
+                      ) |>
+                      (* Execute the cleaners of the evaluation here *)
+                      exec_cleaners man >>%
+        man.exec s1
       in
+      (* Propagate the flow-insensitive context to the other branch *)
       let then_ctx = Cases.get_ctx then_post in
-      let else_post = Flow.set_ctx then_ctx flow |>
-                      man.exec (mk_assume (mk_not cond cond.erange) cond.erange) >>%
-                      man.exec s2
+      let evl' = Cases.set_ctx then_ctx evl in
+      let else_post = ( evl' >>$ fun cond flow ->
+                        man.exec (mk_assume (mk_not cond cond.erange) cond.erange) flow
+                      ) |>
+                      (* Execute the cleaners of the evaluation here *)
+                      exec_cleaners man >>%
+        man.exec s2
       in
       Post.join then_post else_post |>
       OptionExt.return

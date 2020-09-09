@@ -105,42 +105,52 @@ let rec exec_stmt_on_all_flows stmt man flow =
   Post.return
 
 
-and apply_cleaners block man flow =
+and exec_cleaners man post =
   let exec stmt flow =
     if !Cases.opt_clean_cur_only then
       man.exec stmt flow
     else
       exec_stmt_on_all_flows stmt man flow
   in
-  List.fold_left (fun acc stmt ->
-      acc >>% exec stmt
-    ) (Post.return flow) block
+  post >>* fun r flow log cleaners ->
+  Cases.return r ~cleaners:[] ~log flow >>% fun flow ->
+  List.fold_left
+    (fun acc stmt ->
+       acc >>% exec stmt
+    ) (Post.return flow) cleaners
 
 and post_to_flow man post =
-  let to_flow f post =
-    Cases.apply_full f
-      (Flow.join man.lattice)
-      (Flow.meet man.lattice)
-      post
-  in
-  to_flow
-    (fun _ flow _ cleaners ->
-       apply_cleaners cleaners man flow |>
-       to_flow
-         (fun _ flow _ _ -> flow)
-    )
-    post
+  let clean = exec_cleaners man post in
+  Cases.apply
+    (fun _ flow -> flow)
+    (Flow.join man.lattice)
+    (Flow.meet man.lattice)
+    clean
 
 let assume
     cond ?(route=toplevel)
     ~fthen ~felse
     man flow
   =
-  man.eval cond flow ~route >>$ fun cond flow ->
-  let then_post = man.exec ~route (mk_assume cond cond.erange) flow in
-  let flow = Flow.set_ctx (Cases.get_ctx then_post) flow in
-  let else_post = man.exec ~route (mk_assume (mk_not cond cond.erange) cond.erange) flow in
-
+  let evl = man.eval cond flow ~route in
+  (* Filter flows that satisfy the condition *)
+  let then_post = ( evl >>$ fun cond flow ->
+                    man.exec (mk_assume cond cond.erange) flow ~route ) |>
+                  (* Execute the cleaners of the evaluation here *)
+                  exec_cleaners man |>
+                  Cases.remove_duplicates (fun _ _ -> 0) man.lattice >>% fun flow ->
+                  Post.return flow
+  in
+  (* Propagate the flow-insensitive context to the other branch *)
+  let then_ctx = Cases.get_ctx then_post in
+  let evl' = Cases.set_ctx then_ctx evl in
+  let else_post = ( evl' >>$ fun cond flow ->
+                    man.exec (mk_assume (mk_not cond cond.erange) cond.erange) flow ~route ) |>
+                  (* Execute the cleaners of the evaluation here *)
+                  exec_cleaners man |>
+                  Cases.remove_duplicates (fun _ _ -> 0) man.lattice >>% fun flow ->
+                  Post.return flow
+  in
   let then_res = then_post >>%? fun then_flow ->
     if man.lattice.is_bottom (Flow.get T_cur man.lattice then_flow)
        && Alarm.AlarmSet.subset (Flow.get_alarms then_flow) (Flow.get_alarms flow)
