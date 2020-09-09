@@ -19,7 +19,12 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Hook to profile time spent in analyzing function calls *)
+(** Hook to collect widening thresholds.
+
+    The heuristic is simple: the hook tracks all comparisons between a
+    numeric variable and a constant. It then adds the constant to the
+    context of thresholds associated to the variable.
+*)
 
 open Mopsa
 open Hook
@@ -45,8 +50,8 @@ struct
     Visitor.exists_expr
       (fun ee ->
          match ekind ee with
-         | E_binop(op, {ekind = E_var _}, {ekind = E_constant (C_int _)})
-         | E_binop(op, {ekind = E_constant (C_int _)}, {ekind = E_var _})
+         | E_binop(op, {ekind = E_var _; etyp = T_int}, {ekind = E_constant (C_int _)})
+         | E_binop(op, {ekind = E_constant (C_int _)}, {ekind = E_var _; etyp = T_int})
            when is_comparison_op op ->
            true
          | _ -> false
@@ -58,8 +63,8 @@ struct
     Visitor.fold_expr
       (fun acc ee ->
          match ekind ee with
-         | E_binop(op, {ekind = E_var (v,_)}, {ekind = E_constant (C_int n)})
-         | E_binop(op, {ekind = E_constant (C_int n)}, {ekind = E_var (v,_)})
+         | E_binop(op, {ekind = E_var (v,_); etyp = T_int}, {ekind = E_constant (C_int n)})
+         | E_binop(op, {ekind = E_constant (C_int n)}, {ekind = E_var (v,_); etyp = T_int})
            when is_comparison_op op ->
            Keep ((v,n) :: acc)
          | _ -> VisitParts acc
