@@ -381,14 +381,13 @@ let remove_duplicates compare_case lattice cases =
   (* Remove all duplicates in a conjunction *)
   let rec remove_duplicates_in_conj conj =
     match conj with
-    | [] | [(_,_)] -> conj
+    | [] -> []
+    | [(case,flow)] -> conj
     | (case,flow) :: tl ->
       (* Remove duplicates of case from tl *)
       let case', flow', tl' = remove_case_duplicates_in_conj case flow tl in
       (case',flow') :: remove_duplicates_in_conj tl'
   in
-  (* Remove all duplicates in all conjunctions *)
-  let cases = map_conjunction remove_duplicates_in_conj cases in
   (* Remove duplicates of a conjunction in a disjunction *)
   let rec remove_conj_duplicates_in_disj conj disj =
     match disj with
@@ -413,8 +412,10 @@ let remove_duplicates compare_case lattice cases =
   in
   let rec remove_duplicates_in_disj = function
     | [] -> []
-    | [conj] -> [conj]
+    | [[e]] as x -> x
+    | [conj] -> [remove_duplicates_in_conj conj]
     | conj::tl ->
+      let conj = remove_duplicates_in_conj conj in
       let conj',tl' = remove_conj_duplicates_in_disj conj tl in
       conj'::remove_duplicates_in_disj tl'
   in
