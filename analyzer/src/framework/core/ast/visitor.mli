@@ -162,6 +162,13 @@ val fold_map_stmt :
 (** Combination of map and fold for statements *)
 
 
+val exists_expr : (expr -> bool) -> (stmt -> bool) -> expr -> bool
+val for_all_expr : (expr -> bool) -> (stmt -> bool) -> expr -> bool
+
+val exists_stmt : (expr -> bool) -> (stmt -> bool) -> stmt -> bool
+val for_all_stmt : (expr -> bool) -> (stmt -> bool) -> stmt -> bool
+
+
 (****************************************************************************)
 (**                         {1 Utility functions}                           *)
 (****************************************************************************)
