@@ -48,7 +48,7 @@ define NATIVE_template =
 
  $$(TARGET_$(1)): $$(TOP_CMX_$(1))
 	@echo -e "$(LNKMSG)	$$@"
-	$$(QUIET)$$(OCAMLFIND) ocamlopt $$(OCAMLFLAGS) -cclib "$$(LDFLAGS)" -package "$$(PKGS)" -linkpkg  $$(LIBCMXA) $$+ -o $$@
+	$$(QUIET)$$(OCAMLFIND) ocamlopt $$(OCAMLFLAGS) -cclib "$$(LDFLAGS)" -package "$$(PKGS)" -linkpkg $$(LIBCMXA) $$+ -o $$@
 endef
 
 
@@ -71,8 +71,7 @@ define CLIB_template =
 
  $$(TARGET_$(1)): $$(TOP_CMX_$(1)) $$(C_OBJ) $$(CC_OBJ)
 	@echo -e "$(LNKMSG)	$$@"
-	$$(QUIET)$$(OCAMLMKLIB) -o $$(TARGET_BASE_$(1)) -ocamlc "$$(OCAMLC)" -ocamlopt "$$(OCAMLOPT)" $$(LDFLAGS) $$(CCLIBS) $$(TOP_CMX_$(1))
-	$$(QUIET)$$(OCAMLMKLIB) -o $$(TARGET_BASE_$(1)) -ocamlc "$$(OCAMLC)" -ocamlopt "$$(OCAMLOPT)" $$(LDFLAGS) $$(CCLIBS) $$(C_OBJ) $$(CC_OBJ)
+	$$(QUIET)$$(OCAMLFIND) ocamlmklib -o $$(TARGET_BASE_$(1)) -ocamloptflags "$$(OCAMLFLAGS)" $$(LDFLAGS) -package "$$(PKGS)" $$(CCLIBS) $$(TOP_CMX_$(1)) $$(C_OBJ) $$(CC_OBJ)
 	@mkdir -p $$(LIB)
 	@cp $$(BUILD)/*.*  $$(LIB)
 
@@ -108,12 +107,11 @@ define BYTECLIB_template =
  TARGET_BASE_$(1) = $$(BUILD)/$(1)
 
 # compiling the bytecode version requires compiling the native version, for the .a / .so
-# TODO: allow compiling bytecode only (or native only)
  $$(CTARGET_$(1)): $$(TARGET_$(1))
 
  $$(TARGET_$(1)): $$(TOP_CMO_$(1)) $$(C_OBJ) $$(CC_OBJ)
 	@echo -e "$(LNKMSG)	$$@"
-	$$(QUIET)$$(OCAMLMKLIB) -o $$(TARGET_BASE_$(1)) -ocamlc "$$(OCAMLC)" -ocamlopt "$$(OCAMLOPT)" $$(LDFLAGS) $$(CCLIBS) $$(TOP_CMO_$(1))
+	$$(QUIET)$$(OCAMLFIND) ocamlmklib -o $$(TARGET_BASE_$(1)) -ocamlcflags "$$(OCAMLFLAGS)" $$(LDFLAGS) -package "$$(PKGS)" $$(CCLIBS) $$(TOP_CMO_$(1)) $$(C_OBJ) $$(CC_OBJ)
 	@mkdir -p $$(LIB)
 	@cp $$(BUILD)/*.*  $$(LIB)
 
