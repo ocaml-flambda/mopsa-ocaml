@@ -29,7 +29,6 @@
     access to the non-relational abstraction (if any).
  *)
 
-open Ast.All
 open Core.All
 
 
@@ -38,20 +37,20 @@ open Core.All
 (*==========================================================================*)
 
 (** Manager used by simplified reduction rules *)
-type 'a simplified_reduction_man = {
-  get_env : 't. 't id -> 'a -> 't;
+type ('a,'b) simplified_reduction_man = {
+  get_env : 't. 't id -> 'b -> 't;
   (** Get the environment of some domain *)
 
-  set_env : 't. 't id -> 't -> 'a -> 'a;
+  set_env : 't. 't id -> 't -> 'b -> 'b;
   (** Set the environment of some domain *)
 
-  get_value : 't. 't id -> var -> 'a -> 't;
+  get_value : 't. 't id -> var -> 'b -> 't;
   (** Get the value of a variable in some value abstraction *)
 
-  set_value : 't. 't id -> var -> 't -> 'a -> 'a;
+  set_value : 't. 't id -> var -> 't -> 'b -> 'b;
   (** Set the value of a variable in some value abstraction *)
 
-  ask : 'r. 'r query -> 'a -> 'r;
+  ask : 'r. ('a,'r) query -> uctx -> 'b -> 'r;
   (** Perform a query *)
 }
 
@@ -65,7 +64,7 @@ sig
   val name   : string
   (** Name of the reduction rule *)
 
-  val reduce : stmt -> 'a simplified_reduction_man -> uctx -> 'a -> 'a -> 'a
+  val reduce : stmt -> ('a,'b) simplified_reduction_man -> uctx -> 'b -> 'b -> 'b
   (** [reduce s man ctx input output] applies a reduction rule on post-state
       [output] that resulted from executing statement [s] on pre-state [input] *)
 end

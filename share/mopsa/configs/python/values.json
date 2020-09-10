@@ -1,7 +1,10 @@
 {
     "language": "python",
     "domain": {
-        "seq": [
+        "switch": [
+	    // Partitioning
+	    "universal.partitioning.merge_after_stmt",
+
             "python.program",
 
             "python.desugar.bool",
@@ -22,6 +25,7 @@
             "universal.iterators.loops",
             "universal.iterators.unittest",
 
+            "universal.heap.recency",
             "python.libs.mopsa",
             "python.libs.stdlib",
             "python.libs.math",
@@ -46,7 +50,6 @@
             "python.types.t_float",
             "python.types.t_complex",
 
-            "universal.heap.recency",
             "python.types.addr_env",
             "python.types.nominal_types",
             "python.types.structural_types",
@@ -57,12 +60,13 @@
             "python.objects.set",
             "python.objects.iterable",
             "universal.strings.powerset",
-            { "nonrel":
-              {
-                  "union":
-                  [ "universal.numeric.values.intervals.integer",
-                    "universal.numeric.values.intervals.float" ]
-              }
+            {
+                "nonrel":
+                {
+                    "union":
+                    [ "universal.numeric.values.intervals.integer",
+                      "universal.numeric.values.intervals.float" ]
+                }
             }
         ]
     }

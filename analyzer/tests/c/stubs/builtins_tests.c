@@ -11,7 +11,6 @@ int sizeof_int(int x);
 void test_sizeof_int() {
   int x;
   int s = sizeof_int(x);
-  _mopsa_print();
   _mopsa_assert(s == sizeof(x));
 }
 

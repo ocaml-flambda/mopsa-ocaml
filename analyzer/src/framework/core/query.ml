@@ -24,33 +24,32 @@
 *)
 
 
-type _ query = ..
+type ('a,_) query = ..
 
 
-type query_pool = {
-  join_query : 'r. 'r query -> 'r -> 'r -> 'r;
-  meet_query : 'r. 'r query -> 'r -> 'r -> 'r;
+type query_operator = {
+  apply : 'a 'r.  ('a,'r) query -> ('a -> 'a -> 'a) -> 'r -> 'r -> 'r;
 }
 
-let chain = ref {
-  join_query = (fun _ _ _ -> Exceptions.panic "unknown query");
-  meet_query = (fun _ _ _ -> Exceptions.panic "unknown query");
-}
+let join_chain = ref {
+    apply = (fun _ _ _ _ -> Exceptions.panic "query_join: unknown query");
+  }
 
-let join_query : type r. r query -> r -> r -> r = fun q a b ->
-  !chain.join_query q a b
+let meet_chain = ref {
+    apply = (fun _ _ _ _ -> Exceptions.panic "query_meet: unknown query");
+  }
 
-let meet_query : type r. r query -> r -> r -> r = fun q a b ->
-  !chain.meet_query q a b
+let join_query q ~join a b = !join_chain.apply q join a b
+
+let meet_query q ~meet a b = !meet_chain.apply q meet a b
 
 type query_info = {
-  join : 'r. query_pool -> 'r query -> 'r -> 'r -> 'r;
-  meet : 'r. query_pool -> 'r query -> 'r -> 'r -> 'r;
+  join : 'a 'r. query_operator -> ('a,'r) query -> ('a->'a->'a) -> 'r -> 'r -> 'r;
+  meet : 'a 'r. query_operator -> ('a,'r) query -> ('a->'a->'a) -> 'r -> 'r -> 'r;
 }
 
 let register_query info =
-  let next = !chain in
-  chain := {
-    join_query = (fun q a b -> info.join next q a b);
-    meet_query = (fun q a b -> info.meet next q a b);
-  }
+  let old_join = !join_chain in
+  let old_meet = !meet_chain in
+  join_chain := { apply = (fun q join a b -> info.join old_join q join a b) };
+  meet_chain := { apply = (fun q meet a b -> info.meet old_meet q meet a b) }

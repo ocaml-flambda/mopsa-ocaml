@@ -171,6 +171,13 @@ let () =
           | _ -> assert false
         )
 
+      | E_c_block_object ee -> 
+        {exprs = [ee]; stmts = []},
+        (function
+          | {exprs = [ee]} -> {exp with ekind = E_c_block_object(ee)}
+          | _ -> assert false
+        )
+
       | _ -> default exp
     );
 

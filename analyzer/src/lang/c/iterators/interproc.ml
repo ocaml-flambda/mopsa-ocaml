@@ -26,8 +26,6 @@ open Sig.Abstraction.Domain
 open Universal.Ast
 open Stubs.Ast
 open Ast
-open Universal.Zone
-open Zone
 open Common.Points_to
 open Common.Scope_update
 open Common.Builtins
@@ -55,24 +53,8 @@ struct
       let name = "c.iterators.interproc"
     end)
 
-
-  let interface = {
-    iexec = {
-      provides = [Z_c];
-      uses = [Z_u]
-    };
-
-    ieval = {
-      provides = [Z_c, Z_c_low_level];
-      uses = [
-        Z_c, Z_c_points_to;
-        Z_u, any_zone;
-        Stubs.Zone.Z_stubs, Z_any
-      ]
-    }
-  }
-
   let alarms = []
+
 
   (** {2 Lattice operators} *)
   (** ********************* *)
@@ -97,16 +79,16 @@ struct
   (** {2 Computation of post-conditions} *)
   (** ================================== *)
 
-  let exec zone stmt man flow =
+  let exec stmt man flow =
     match skind stmt with
     | S_c_return (r,upd) ->
       (* Let first Universal manage the return flow *)
-      man.post (mk_stmt (S_return r) stmt.srange) ~zone:Z_u flow >>$? fun () flow ->
+      man.exec (mk_stmt (S_return r) stmt.srange) flow >>%? fun flow ->
       (* Now clean the post-state using scope updater *)
       (* To do that, first move the return environment to cur *)
       let flow = Flow.copy (T_return stmt.srange) T_cur man.lattice flow flow in
       (* Now clean cur *)
-      let flow = update_scope upd stmt.srange man flow in
+      update_scope upd stmt.srange man flow >>%? fun flow ->
       (* Finally, move cur to return flow *)
       let cur = Flow.get T_cur man.lattice flow in
       Flow.set (T_return (stmt.srange)) cur man.lattice flow |>
@@ -135,13 +117,35 @@ struct
       (* add the resource to local state *)
       let flow = map_env T_cur (add addr) man flow in
       (* add the address to memory state *)
-      man.post (mk_add e range) flow >>$ fun () flow ->
+      man.exec (mk_add e range) flow >>% fun flow ->
       (* set the size of the resource *)
       let cond = mk_binop (mk_stub_builtin_call BYTES e ~etyp:ul range) O_eq size ~etyp:T_bool range in
-      man.post (mk_assume cond range) flow >>$ fun () flow ->
+      man.exec (mk_assume cond range) flow >>% fun flow ->
       Eval.singleton e flow
 
     | _ -> assert false
+
+
+  (** Evaluate arguments containing function calls *)
+  let rec eval_calls_in_args args man flow =
+    match args with
+    | [] -> Cases.singleton [] flow
+    | arg::tl ->
+      if Visitor.exists_expr
+          (fun e -> match ekind e with E_call _ -> true | _ -> false)
+          (fun s -> false) arg
+      then
+        (* Evaluating arguments may result in disjunctions.
+           To avoid calling the function several times, we assign the call
+           to a temporary variable *)
+        let tmp = mk_range_attr_var arg.erange "arg" arg.etyp in
+        man.exec (mk_add_var tmp arg.erange) flow >>%
+        man.exec (mk_assign (mk_var tmp arg.erange) arg arg.erange) >>%
+        eval_calls_in_args tl man >>$ fun tl flow ->
+        Cases.singleton (mk_var tmp arg.erange :: tl) ~cleaners:[mk_remove_var tmp arg.erange] flow
+      else
+        eval_calls_in_args tl man flow >>$ fun tl flow ->
+        Cases.singleton (arg::tl) flow
 
 
   (** Eval a function call *)
@@ -154,25 +158,26 @@ struct
     if is_builtin_function fundec.c_func_org_name
     then
       let exp' = mk_expr (E_c_builtin_call(fundec.c_func_org_name, args)) ~etyp:fundec.c_func_return range in
-      man.eval ~zone:(Z_c, Z_c_low_level) exp' flow
+      man.eval exp' flow
     else
       (* save the alloca resources of the caller before resetting it *)
       let caller_alloca_addrs = get_env T_cur man flow in
       let flow = set_env T_cur empty man flow in
       let ret =
-        (* Evaluate arguments *)
-        bind_list args (man.eval ~zone:(Z_c,Z_c_low_level)) flow >>$ fun args flow ->
+        (* Process arguments by evaluating function calls *)
+        eval_calls_in_args args man flow >>$ fun args flow ->
         (* We don't support recursive functions yet! *)
         if is_recursive_call fundec flow then (
           Soundness.warn_at range "ignoring recursive call of function %s in %a" fundec.c_func_org_name pp_range range;
           if is_c_void_type fundec.c_func_return then
-            Eval.empty_singleton flow
+            Eval.singleton (mk_unit range) flow
           else
-            Eval.singleton (mk_top fundec.c_func_return range) flow
+            man.eval (mk_top fundec.c_func_return range) flow
         )
         else
          match fundec with
          | {c_func_body = Some body; c_func_stub = None; c_func_variadic = false} ->
+           debug "call function %a" (Flow.print man.lattice.print) flow;
           let open Universal.Ast in
           let ret_var = mktmp ~typ:fundec.c_func_return () in
           let fundec' = {
@@ -193,36 +198,46 @@ struct
           }
           in
           let exp' = mk_call fundec' args range in
-          (* Universal will evaluate the call into a temporary variable containing the returned value *)
-          man.eval ~zone:(Z_u, any_zone) exp' flow
+          man.eval exp' flow ~route:(Below name)
 
         | {c_func_variadic = true} ->
           let exp' = mk_c_call fundec args range in
-          man.eval ~zone:(Z_c, Z_c_low_level) exp' flow
+          man.eval exp' flow ~route:(Below name)
 
         | {c_func_stub = Some stub} ->
           let exp' = Stubs.Ast.mk_stub_call stub args range in
-          man.eval ~zone:(Stubs.Zone.Z_stubs, any_zone) exp' flow
+          man.eval exp' flow
 
         | {c_func_body = None; c_func_org_name; c_func_return} ->
           Soundness.warn_at range "ignoring side effects of calling undefined function %s" c_func_org_name;
           if is_c_void_type c_func_return then
-            Eval.empty_singleton flow
+            Eval.singleton (mk_unit range) flow
           else
-            Eval.singleton (mk_top c_func_return range) flow
+            man.eval (mk_top c_func_return range) flow
       in
       (* free alloca addresses *)
       ret >>$ fun e flow ->
       let callee_alloca_addrs = get_env T_cur man flow in
       let flow = set_env T_cur caller_alloca_addrs man flow in
       AddrSet.fold
-        (fun addr acc -> Post.bind (man.post (mk_stub_free (mk_addr addr range) range)) acc)
+        (fun addr acc -> acc >>% man.exec (mk_stub_free (mk_addr addr range) range))
         callee_alloca_addrs (Post.return flow)
-      >>$ fun () flow ->
+      >>% fun flow ->
       Eval.singleton e flow
 
+  (* 𝔼⟦ *p ⟧ where p is a pointer to a function *)
+  let eval_deref_function_pointer p range man flow =
+    resolve_pointer p man flow >>$ fun pt flow ->
+    match pt with
+    | P_fun f ->
+      Eval.singleton (mk_expr (E_c_function f) ~etyp:(under_type p.etyp) range) flow
 
-  let eval zone exp man flow =
+    | _ -> panic_at range
+             "deref_function_pointer: pointer %a points to a non-function object %a"
+             pp_expr p
+             pp_points_to pt
+
+  let eval exp man flow =
     match ekind exp with
     | E_call({ ekind = E_c_function { c_func_variadic = true}}, args) ->
       None
@@ -232,10 +247,10 @@ struct
       OptionExt.return
 
     | E_call(f, args) ->
-      man.eval ~zone:(Z_c, Z_c_points_to) f flow >>$? fun ff flow ->
+      resolve_pointer f man flow >>$? fun ff flow ->
 
-      begin match ekind ff with
-        | E_c_points_to (P_fun f) ->
+      begin match ff with
+        | P_fun f ->
           eval_call f args exp.erange man flow |>
           OptionExt.return
 
@@ -245,12 +260,17 @@ struct
             pp_expr f
           ;
           if is_c_void_type exp.etyp then
-            Eval.empty_singleton flow |>
+            Eval.singleton (mk_unit exp.erange) flow |>
             OptionExt.return
           else
-            Eval.singleton (mk_top exp.etyp exp.erange) flow |>
+            man.eval (mk_top exp.etyp exp.erange) flow |>
             OptionExt.return
       end
+
+    | E_c_deref p when under_type p.etyp |> is_c_function_type
+      ->
+      eval_deref_function_pointer p exp.erange man flow |>
+      OptionExt.return
 
     | _ -> None
 

@@ -22,9 +22,8 @@
 (** Main handler of Universal programs. *)
 
 open Mopsa
-open Framework.Sig.Abstraction.Stateless
+open Sig.Abstraction.Stateless
 open Ast
-open Zone
 
 module Domain =
 struct
@@ -33,26 +32,19 @@ struct
       let name = "universal.iterators.program"
     end)
 
-  let interface = {
-    iexec = { provides = [Z_u]; uses = [] };
-    ieval = { provides = []; uses = [] };
-  }
 
   let alarms = []
 
   let init prog man flow = flow
 
-
-  let eval zone exp man flow = None
-
+  let eval exp man flow = None
 
   let ask query man flow = None
-
 
   (** Execute tests in a unit test program *)
   let exec_tests main fundecs range man flow =
     (* Execute main body *)
-    let flow = man.exec main flow in
+    man.exec main flow >>% fun flow ->
 
     (* Search for test functions *)
     let tests = List.filter (fun f ->
@@ -73,18 +65,16 @@ struct
     
   
 
-  let exec zone stmt man flow =
+  let exec stmt man flow =
     match skind stmt with
     | S_program ({ prog_kind = P_universal{universal_main} }, _)
       when not !Unittest.unittest_flag ->
       man.exec universal_main flow |>
-      Post.return |>
       OptionExt.return
 
     | S_program ({ prog_kind = P_universal{universal_main; universal_fundecs} }, _)
       when !Unittest.unittest_flag ->
       exec_tests universal_main universal_fundecs stmt.srange man flow |>
-      Post.return |>
       OptionExt.return
 
     | _ -> None

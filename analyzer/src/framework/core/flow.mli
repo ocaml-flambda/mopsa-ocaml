@@ -33,6 +33,7 @@ open Lattice
 open Token
 open Alarm
 open Callstack
+open Log
 
 
 type 'a flow
@@ -53,6 +54,8 @@ val is_bottom : 'a lattice -> 'a flow -> bool
 
 val is_top : 'a lattice -> 'a flow -> bool
 (** top test *)
+
+val is_empty : 'a flow -> bool
 
 val subset : 'a lattice -> 'a flow -> 'a flow -> bool
 (** Inclusion test *)
@@ -103,6 +106,8 @@ val rename : token -> token -> 'a lattice -> 'a flow -> 'a flow
 val remove : token -> 'a flow -> 'a flow
 (** [remove tk flow] removes token [tk] from the map of [flow] *)
 
+val mem: token -> 'a flow -> bool
+
 val filter : (token -> 'a -> bool) -> 'a flow -> 'a flow
 (** [filter f flow] keeps in [flow] all tokens [tk] verifying [f tk = true] *)
 
@@ -112,16 +117,12 @@ val map : (token -> 'a -> 'a) -> 'a flow -> 'a flow
 
 val fold : ('b -> token -> 'a -> 'b)  -> 'b -> 'a flow -> 'b
 
-val merge :
-  (token -> 'a option -> 'a option -> 'a option) ->
-  (AlarmSet.t -> AlarmSet.t -> AlarmSet.t) ->
-  'a lattice ->
-  'a flow -> 'a flow -> 'a flow
-
 val map2zo :
   (token -> 'a -> 'a) -> (token -> 'a -> 'a) -> (token -> 'a -> 'a -> 'a) ->
   (AlarmSet.t -> AlarmSet.t -> AlarmSet.t) ->
   'a flow -> 'a flow -> 'a flow
+
+val merge : 'a lattice -> merge_alarms:(AlarmSet.t -> AlarmSet.t -> AlarmSet.t) -> 'a flow -> 'a flow * log -> 'a flow * log -> 'a flow
 
 val get_ctx : 'a flow -> 'a ctx
 (** [get_all_ctx flow] retrieves the context pool from [flow] *)

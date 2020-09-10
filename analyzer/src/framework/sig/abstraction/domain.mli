@@ -28,7 +28,6 @@
  *)
 
 
-open Ast.All
 open Core.All
 
 
@@ -51,9 +50,6 @@ sig
 
   val name : string
   (** Name of the domain *)
-
-  val interface : interface
-  (** Interface of the domain *)
 
   val alarms : alarm_class list
   (** List of alarms detected by the domain *)
@@ -104,16 +100,16 @@ sig
   (** {2 Transfer functions} *)
   (** ********************** *)
 
-  val init : program -> ('a, t, 's) man -> 'a flow -> 'a flow
+  val init : program -> ('a, t) man -> 'a flow -> 'a flow
   (** Initialization function *)
 
-  val exec : zone -> stmt -> ('a, t, 's) man -> 'a flow -> 'a post option
+  val exec : stmt -> ('a, t) man -> 'a flow -> 'a post option
   (** Post-state of statements *)
 
-  val eval : (zone * zone) -> expr -> ('a, t, 's) man -> 'a flow -> 'a eval option
+  val eval : expr -> ('a, t) man -> 'a flow -> 'a eval option
   (** Evaluation of expressions *)
 
-  val ask  : 'r query -> ('a, t, 's) man -> 'a flow -> 'r option
+  val ask  : ('a,'r) query -> ('a, t) man -> 'a flow -> 'r option
   (** Handler of queries *)
 
 end
@@ -137,12 +133,3 @@ val mem_standard_domain : string -> bool
  
 val standard_domain_names : unit -> string list
 (** Return the names of registered standard domains *) 
-
-
-(*==========================================================================*)
-(**                   {1 Casts to other signatures}                         *)
-(*==========================================================================*)
-
-(** Cast a standard domain into a stacked domain *)
-module MakeStacked(D:DOMAIN) : Stacked.STACKED with type t = D.t
-

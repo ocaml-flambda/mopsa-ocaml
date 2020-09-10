@@ -24,7 +24,6 @@
     not accessible.
 *)
 
-open Ast.All
 open Core.All
 
 
@@ -37,9 +36,9 @@ open Core.All
 (** Simplified domains are given a simplified manager providing access to
     queries on the pre-condition only 
 *)
-type 'a simplified_man = {
-  exec : stmt -> 'a;
-  ask  : 'r. 'r query -> 'r;
+type ('a,'t) simplified_man = {
+  exec : stmt -> 't;
+  ask  : 'r. ('a,'r) query -> 'r;
 }
 
 
@@ -59,9 +58,6 @@ sig
 
   val name : string
   (** Domain name *)
-
-  val zones : zone list
-  (** Zones of the provided transfer functions *)
 
   val bottom: t
   (** Least abstract element of the lattice. *)
@@ -116,77 +112,14 @@ sig
   val init : program -> t
   (** Initial abstract element *)
 
-  val exec : stmt -> t simplified_man -> uctx -> t -> t option
+  val exec : stmt -> ('a,t) simplified_man -> uctx -> t -> t option
   (** Computation of post-conditions *)
 
-  val ask : 'r query -> t simplified_man -> t -> 'r option
+  val ask : ('a,'r) query -> ('a,t) simplified_man -> uctx -> t -> 'r option
   (** Handler of queries *)
 
 
 end
-
-
-(** Create a standard domain from a simplified one. *)
-module MakeDomain(D: SIMPLIFIED) : Domain.DOMAIN with type t = D.t =
-struct
-
-  include D
-
-  let merge pre (post1, log1) (post2, log2) =
-    let stmts1 = Log.get_log_stmts log1
-    and stmts2 = Log.get_log_stmts log2 in
-    D.merge pre (post1, stmts1) (post2, stmts2)
-
-
-  let init prog man flow =
-    let a' = D.init prog in
-    set_env T_cur a' man flow
-
-
-  let interface = {
-    iexec = {
-      provides = D.zones;
-      uses = [];
-    };
-    ieval = {
-      provides = [];
-      uses = [];
-    }
-  }
-
-  let alarms = []
-
-  let simplified_man man flow = {
-    exec = (fun stmt -> man.Core.Manager.exec stmt flow |>
-                        get_env T_cur man
-           );
-    ask = (fun query -> man.Core.Manager.ask query flow);
-  }
-
-  let exec zone stmt man flow =
-    let a = get_env T_cur man flow in
-    if D.is_bottom a
-    then
-      Post.return flow |>
-      OptionExt.return
-    else
-      D.exec stmt (simplified_man man flow) (Flow.get_unit_ctx flow) a |>
-      OptionExt.lift @@ fun a' ->
-      set_env T_cur a' man flow |>
-      Post.return |>
-      Cases.map_log (fun log ->
-          man.set_log (
-            man.get_log log |> Log.add_stmt_to_log stmt
-          ) log
-        )
-
-  let eval zone exp man flow = None
-
-  let ask query man flow =
-    D.ask query (simplified_man man flow) (get_env T_cur man flow)
-
-end
-
 
 
 (*==========================================================================*)

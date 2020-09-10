@@ -27,13 +27,13 @@ open Yojson.Basic.Util
 
 
 type 'a visitor = {
-  leaf : string -> 'a;
-  sequence : Yojson.Basic.t list -> 'a;
-  compose : Yojson.Basic.t list -> 'a;
-  union : Yojson.Basic.t list -> 'a;
-  apply : string -> Yojson.Basic.t -> 'a;
-  nonrel : Yojson.Basic.t -> 'a;
-  product : Yojson.Basic.t list -> string list -> 'a;
+  leaf : string option -> string -> 'a;
+  switch : string option -> Yojson.Basic.t list -> 'a;
+  compose : string option -> Yojson.Basic.t list -> 'a;
+  union : string option -> Yojson.Basic.t list -> 'a;
+  apply : string option -> string -> Yojson.Basic.t -> 'a;
+  nonrel : string option -> Yojson.Basic.t -> 'a;
+  product : string option -> Yojson.Basic.t list -> string list -> 'a;
 }
 
 val visit : 'a visitor -> Yojson.Basic.t -> 'a

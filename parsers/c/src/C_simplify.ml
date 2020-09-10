@@ -203,10 +203,15 @@ let simplify_func ctx (f:func) =
          let tmp = make_temp ctx r f bool_type in
          let tmp_var = E_variable tmp, bool_type, r in
          let create = S_local_declaration tmp, r in
+         (* Since [e2] will be assigned to [tmp], add an implicit cast to _Bool if necessary *)
+         let e2' = match expr_type e2 |> resolve_typedef |> fst with
+           | T_bool -> e2
+           | _ -> (E_cast(e2,IMPLICIT),bool_type,r)
+         in
          let cond =
            S_if (e1,
                  [S_expression (E_assign (tmp_var, expr_bool_true r), t, r), r] |> make_block,
-                 before2@[S_expression (E_assign (tmp_var, e2), t, r), r]@after2 |> make_block), r
+                 before2@[S_expression (E_assign (tmp_var, e2'), t, r), r]@after2 |> make_block), r
          in
          before1@[create;cond], tmp_var, after1
 
@@ -219,9 +224,14 @@ let simplify_func ctx (f:func) =
          let tmp = make_temp ctx r f bool_type in
          let tmp_var = E_variable tmp, bool_type, r in
          let create = S_local_declaration tmp, r in
+         (* Since [e2] will be assigned to [tmp], add an implicit cast to _Bool if necessary *)
+         let e2' = match expr_type e2 |> resolve_typedef |> fst with
+           | T_bool -> e2
+           | _ -> (E_cast(e2,IMPLICIT),bool_type,r)
+         in
          let cond =
            S_if (e1,
-                 before2@[S_expression (E_assign (tmp_var, e2), t, r), r]@after2 |> make_block,
+                 before2@[S_expression (E_assign (tmp_var, e2'), t, r), r]@after2 |> make_block,
                  [S_expression (E_assign (tmp_var, expr_bool_false r), t, r), r] |> make_block), r
          in
          before1@[create;cond], tmp_var, after1

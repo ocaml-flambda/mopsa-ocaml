@@ -45,8 +45,6 @@ open Sig.Abstraction.Stateless
 open Universal.Ast
 open Stubs.Ast
 open Ast
-open Universal.Zone
-open Zone
 open Common.Base
 open Common.Points_to
 open Common.Alarms
@@ -62,25 +60,8 @@ struct
       let name = "c.memory.lowlevel.pointer_sentinel"
     end)
 
-  let interface = {
-    iexec = {
-      provides = [Z_c_low_level];
-      uses = [
-        Z_u_num;
-        Z_c_scalar
-      ];
-    };
-    ieval = {
-      provides = [Z_c_low_level, Z_c_scalar];
-      uses = [
-        Z_c_low_level, Z_u_num;
-        Z_c_scalar, Z_u_num;
-        Z_c_low_level, Z_c_scalar;
-        Z_c_low_level, Z_c_points_to;
-        Z_c_scalar, Z_c_points_to;
-      ];
-    }
-  }
+  let scalar = Semantic "C/Scalar"
+  let numeric = Semantic "U/Numeric"
 
   let alarms = []
 
@@ -133,7 +114,7 @@ struct
   (** Create the auxiliary variable sentinel(base) *)
   let mk_sentinel_pos_var base : var =
     let name = "sentinel-pos(" ^ (base_uniq_name base) ^ ")" in
-    mkv name (V_c_sentinel_pos (base)) T_int ~mode:(base_mode base)
+    mkv name (V_c_sentinel_pos (base)) T_int ~mode:(base_mode base) ~semantic:"U/Numeric"
 
 
   let mk_sentinel_pos_var_expr base ?(mode=None) range : expr =
@@ -143,7 +124,7 @@ struct
   (** Create the auxiliary variable before-sentinel(base) *)
   let mk_before_var base : var =
     let name = "before-sentinel(" ^ (base_uniq_name base) ^ ")" in
-    mkv name (V_c_before_sentinel (base)) (T_c_pointer T_c_void) ~mode:WEAK
+    mkv name (V_c_before_sentinel (base)) (T_c_pointer T_c_void) ~mode:WEAK ~semantic:"C/Scalar"
 
 
   let mk_before_var_expr base ?(mode=None) range : expr =
@@ -153,17 +134,16 @@ struct
   (** Create the auxiliary variable at-sentinel(base) *)
   let mk_sentinel_var base : var =
     let name = "sentinel(" ^ (base_uniq_name base) ^ ")" in
-    mkv name (V_c_sentinel (base)) (T_c_pointer T_c_void) ~mode:(base_mode base)
+    mkv name (V_c_sentinel (base)) (T_c_pointer T_c_void) ~mode:(base_mode base) ~semantic:"C/Scalar"
 
 
   let mk_sentinel_var_expr base ?(mode=None) range : expr =
     mk_var (mk_sentinel_var base) ~mode range
 
 
-
   (* Execute [exists] when the set of pointers before the sentinel is non-empty, [empty] otherwise *)
   let before_cases ~exists ~empty sentinel_pos range man flow =
-    assume ~zone:Z_u_num
+    assume ~route:numeric
       (mk_binop sentinel_pos O_eq (mk_zero range) range)
       ~fthen:empty
       ~felse:exists
@@ -172,7 +152,7 @@ struct
 
   (* Execute [exists] when the sentinel cell exits, [empty] otherwise. *)
   let sentinel_cases ~exists ~empty sentinel_pos size range man flow =
-    assume ~zone:Z_u_num
+    assume ~route:numeric
       (mk_binop sentinel_pos O_eq size range)
       ~fthen:empty
       ~felse:exists
@@ -193,18 +173,31 @@ struct
      dereferences, we ignore invalid pointers.
   *)
   let eval_pointed_base_offset ptr range man flow =
-    man.eval ptr ~zone:(Zone.Z_c_low_level, Z_c_points_to) flow >>$ fun pt flow ->
-    match ekind pt with
-    | E_c_points_to P_null
-    | E_c_points_to P_invalid
-    | E_c_points_to (P_block ({ base_valid = false }, _, _))
-    | E_c_points_to P_top ->
-      Cases.empty_singleton flow
+    resolve_pointer ptr man flow >>$ fun pt flow ->
+    match pt with
+    | P_null
+    | P_invalid
+    | P_block ({ base_valid = false }, _, _) ->
+      Cases.empty flow
 
-    | E_c_points_to (P_block (base, offset, mode)) ->
-      Cases.singleton (base, offset, mode) flow
+    | P_block (base, offset, mode) ->
+      Cases.singleton (Some (base, offset, mode)) flow
 
-    | _ -> assert false
+    | P_top ->
+      Cases.singleton None flow
+
+    | P_fun _ -> assert false
+
+
+  let rec is_scalar_base base =
+    match base with
+    | { base_kind = Var {vkind = Cstubs.Aux_vars.V_c_primed_base base}; base_valid = true } ->
+      is_scalar_base base
+
+    | { base_kind = Var v; base_valid = true } -> is_c_scalar_type v.vtyp
+
+    | _ -> false
+
 
   (** Predicate defining interesting bases for which the domain will
       track the sentinel position.
@@ -232,7 +225,7 @@ struct
 
 
   (** Partition [flow] depending whether e is a sentinel or not *)
-  let is_sentinel_expr ?(zone=Z_c_low_level) e man flow =
+  let is_sentinel_expr e man flow =
     (* Try static checks *)
     match ekind (remove_casts e) with
     | E_c_address_of _            -> Cases.singleton false flow
@@ -245,12 +238,11 @@ struct
       | Some e -> Cases.singleton (Z.equal e Z.zero) flow
       | None ->
         (* If the above heuristics fails, fall back to dynamic evaluations *)
-        man.eval e ~zone:(zone,Z_c_points_to) flow >>$ fun pt flow ->
-        match ekind pt with
-        | E_c_points_to P_top -> Cases.join (Cases.singleton true flow) (Cases.singleton false flow)
-        | E_c_points_to (P_null | P_invalid) -> Cases.singleton true flow
-        | E_c_points_to (P_block _ | P_fun _) -> Cases.singleton false flow
-        | _ -> assert false
+        resolve_pointer e man flow >>$ fun pt flow ->
+        match pt with
+        | P_top -> Cases.join (Cases.singleton true flow) (Cases.singleton false flow)
+        | P_null | P_invalid -> Cases.singleton true flow
+        | P_block _ | P_fun _ -> Cases.singleton false flow
 
 
   (** Add a base to the domain's dimensions *)
@@ -261,9 +253,9 @@ struct
       let sentinel_pos = mk_sentinel_pos_var base in
       let sentinel = mk_sentinel_var base in
       (* Put the sentinel at postion 0 with value ⊤ *)
-      man.post ~zone:Z_u_num (mk_add_var sentinel_pos range) flow >>$ fun _ flow ->
-      man.post ~zone:Z_u_num (mk_assign (mk_var sentinel_pos range) (mk_zero range) range) flow >>$ fun _ flow ->
-      man.post ~zone:Z_c_scalar (mk_add_var sentinel range) flow
+      man.exec ~route:numeric (mk_add_var sentinel_pos range) flow >>% fun flow ->
+      man.exec ~route:numeric (mk_assign (mk_var sentinel_pos range) (mk_zero range) range) flow >>% fun flow ->
+      man.exec ~route:scalar (mk_add_var sentinel range) flow
 
 
   (** Remove the auxiliary variables of a base *)
@@ -274,9 +266,9 @@ struct
       let sentinel_pos = mk_sentinel_pos_var base in
       let sentinel = mk_sentinel_var base in
       let before = mk_before_var base in
-      man.post ~zone:Z_u_num (mk_remove_var sentinel_pos range) flow >>$ fun _ flow ->
-      man.post ~zone:Z_c_scalar (mk_remove_var sentinel range) flow >>$ fun _ flow ->
-      man.post ~zone:Z_c_scalar (mk_remove_var before range) flow
+      man.exec ~route:numeric (mk_remove_var sentinel_pos range) flow >>% fun flow ->
+      man.exec ~route:scalar (mk_remove_var sentinel range) flow >>% fun flow ->
+      man.exec ~route:scalar (mk_remove_var before range) flow
 
 
   (** Rename the auxiliary variables associated to a base *)
@@ -291,17 +283,17 @@ struct
       let sentinel1 = mk_sentinel_var base1 in
       let sentinel2 = mk_sentinel_var base2 in
 
-      man.post ~zone:Z_u_num (mk_rename_var sentinel_pos1 sentinel_pos2 range) flow >>$ fun () flow ->
+      man.exec ~route:numeric (mk_rename_var sentinel_pos1 sentinel_pos2 range) flow >>% fun flow ->
       before_cases (mk_var sentinel_pos2 range) range man flow
         ~exists:(fun flow ->
-            man.post ~zone:Z_c_scalar (mk_rename_var before1 before2 range) flow
+            man.exec ~route:scalar (mk_rename_var before1 before2 range) flow
           )
         ~empty:(fun flow ->
-            man.post ~zone:Z_c_scalar (mk_remove_var before1 range) flow
+            man.exec ~route:scalar (mk_remove_var before1 range) flow
           )
-      >>$ fun _ flow ->
+      >>% fun flow ->
       (* FIXME: check if at-sentinel exists *)
-       man.post ~zone:Z_c_scalar (mk_rename_var sentinel1 sentinel2 range) flow
+      man.exec ~route:scalar (mk_rename_var sentinel1 sentinel2 range) flow
 
 
   (** Expand the auxiliary variables of a base *)
@@ -329,15 +321,15 @@ struct
       if sentinel_pos2 = [] then
         Post.return flow
       else
-        man.post ~zone:Z_u_num (mk_expand_var sentinel_pos1 sentinel_pos2 range) flow >>$ fun _ flow ->
+        man.exec ~route:numeric (mk_expand_var sentinel_pos1 sentinel_pos2 range) flow >>% fun flow ->
         before_cases (mk_var sentinel_pos1 range) range man flow
           ~exists:(fun flow ->
-              man.post ~zone:Z_c_scalar (mk_expand_var before1 before2 range) flow
+              man.exec ~route:scalar (mk_expand_var before1 before2 range) flow
             )
           ~empty:(fun flow -> Post.return flow)
         >>$ fun _ flow ->
         (* FIXME: check if sentinel exists *)
-        man.post ~zone:Z_c_scalar (mk_expand_var sentinel1 sentinel2 range) flow
+        man.exec ~route:scalar (mk_expand_var sentinel1 sentinel2 range) flow
 
 
   (** Fold the auxiliary variables of a set of bases *)
@@ -362,43 +354,48 @@ struct
       if sentinel_pos2 = [] then
         assert false
       else
-        man.post ~zone:Z_u_num (mk_fold_var sentinel_pos1 sentinel_pos2 range) flow >>$ fun _ flow ->
+        man.exec ~route:numeric (mk_fold_var sentinel_pos1 sentinel_pos2 range) flow >>% fun flow ->
         before_cases (mk_var sentinel_pos1 range) range man flow
           ~exists:(fun flow ->
-              man.post ~zone:Z_c_scalar (mk_fold_var before1 before2 range) flow
+              man.exec ~route:scalar (mk_fold_var before1 before2 range) flow
             )
           ~empty:(fun flow -> Post.return flow)
-        >>$ fun _ flow ->
+        >>% fun flow ->
         (* FIXME: check if sentinel exists *)
-        man.post ~zone:Z_c_scalar (mk_fold_var sentinel1 sentinel2 range) flow
+        man.exec ~route:scalar (mk_fold_var sentinel1 sentinel2 range) flow
 
-  
+
   (** Forget the value of auxiliary variables of a base *)
   let forget e range man flow =
-    (* Get the pointed base *)
-    let ptr = match ekind e with
-      | E_var _   -> mk_c_address_of e range
-      | E_c_deref(p) -> p
-      | _ -> assert false
-    in
-    man.eval ptr ~zone:(Z_c_low_level,Z_c_points_to) flow >>$ fun p flow ->
-    match ekind p with
-    | E_c_points_to(P_block(base,offset,mode)) when is_interesting_base base ->
+    let ptr = mk_c_address_of e range in
+    resolve_pointer ptr man flow >>$ fun p flow ->
+    match p with
+    | P_block(base,offset,mode) when is_interesting_base base && is_c_pointer_type e.etyp ->
       let sentinel_pos = mk_sentinel_pos_var_expr base ~mode range in
       let sentinel = mk_sentinel_var_expr base ~mode range in
-      man.post ~zone:Z_u_num (mk_assign sentinel_pos (mk_zero range) range) flow >>$ fun _ flow ->
-      man.post ~zone:Z_c_scalar (mk_forget sentinel range) flow
-
+      man.exec ~route:numeric (mk_assign sentinel_pos (mk_zero range) range) flow >>% fun flow ->
+      man.exec ~route:scalar (mk_forget sentinel range) flow
 
     | _ -> Post.return flow
 
 
+  let forget_quant quants e range man flow =
+    let ptr = mk_c_address_of e range in
+    resolve_pointer ptr man flow >>$ fun p flow ->
+    match p with
+    | P_block(base,offset,mode) when is_interesting_base base && is_c_pointer_type e.etyp ->
+      let sentinel_pos = mk_sentinel_pos_var_expr base ~mode range in
+      let sentinel = mk_sentinel_var_expr base ~mode range in
+      man.exec ~route:numeric (mk_assign sentinel_pos (mk_zero range) range) flow >>% fun flow ->
+      man.exec ~route:scalar (mk_forget sentinel range) flow
+
+    | _ -> Post.return flow
 
 
   (** Declaration of a C variable *)
   let declare_variable v scope range man flow =
     let base = mk_var_base v in
-    if not (is_interesting_base base)
+    if not (is_interesting_base base) || not (is_c_pointer_type v.vtyp)
     then Post.return flow
     else add_base base range man flow
 
@@ -407,11 +404,11 @@ struct
   (** Cases of the abstract transformer for 𝕊⟦ *p = rval; ⟧ *)
   let assign_cases base offset mode rval range man flow =
     eval_base_size base range man flow >>$ fun size flow ->
-    man.eval ~zone:(Z_c_scalar,Z_u_num) size flow  >>$ fun size flow ->
+    man.eval ~route:scalar size flow  >>$ fun size flow ->
 
     (* Safety condition: offset ∈ [0, size - pointer_size]. This test is
        optional as the domain does not raise out-of-bound alarms *)
-    assume ~zone:Z_u_num
+    assume ~route:numeric
       (mk_in offset (mk_zero range) (sub size (mk_z ptr_size range) range) range)
       ~fthen:(fun flow ->
           if not (is_interesting_base base)
@@ -423,7 +420,7 @@ struct
             let before = mk_before_var_expr base ~mode range in
             let ptr = mk_z ptr_size range in
 
-            switch ~zone:Z_u_num [
+            switch ~route:numeric [
               (* Case 1: set after
                                                      offset
                  -----|------------------#-------------?------|--->
@@ -448,7 +445,7 @@ struct
               ],
               (fun flow ->
                  (* Test if the rval is a sentinel *)
-                 is_sentinel_expr ~zone:Z_c_scalar rval man flow >>$ fun ok flow ->
+                 is_sentinel_expr rval man flow >>$ fun ok flow ->
                  if ok then
                    (* Case 2.1: set sentinel before
                                     offset
@@ -462,14 +459,14 @@ struct
                    *)
                    before_cases offset range man flow
                      ~exists:(fun flow -> Post.return flow)
-                     ~empty:(fun flow -> man.post ~zone:Z_c_scalar (mk_remove before range) flow)
-                   >>$ fun _ flow ->
+                     ~empty:(fun flow -> man.exec ~route:scalar (mk_remove before range) flow)
+                   >>% fun flow ->
                    sentinel_cases sentinel_pos size range man flow
                      ~exists:(fun flow -> Post.return flow)
-                     ~empty:(fun flow -> man.post ~zone:Z_c_scalar (mk_add sentinel range) flow)
-                   >>$ fun _ flow ->
-                   man.post ~zone:Z_u_num (mk_assign sentinel_pos offset range) flow >>$ fun _ flow ->
-                   man.post ~zone:Z_c_scalar (mk_assign sentinel rval range) flow
+                     ~empty:(fun flow -> man.exec ~route:scalar (mk_add sentinel range) flow)
+                   >>% fun flow ->
+                   man.exec ~route:numeric (mk_assign sentinel_pos offset range) flow >>% fun flow ->
+                   man.exec ~route:scalar (mk_assign sentinel rval range) flow
                  else
                    (* Case 2.2: set non-sentinel before
                                     offset
@@ -478,7 +475,7 @@ struct
                       rval condition: rval != SENTINEL
                       transformation: weak(before) = rval;
                    *)
-                   man.post ~zone:Z_c_scalar (mk_assign (weaken_var_expr before) rval range) flow
+                   man.exec ~route:scalar (mk_assign (weaken_var_expr before) rval range) flow
               );
 
               (* Case 3: set at sentinel
@@ -492,7 +489,7 @@ struct
               ],
               (fun flow ->
                  (* Test if the rval is a sentinel *)
-                 is_sentinel_expr ~zone:Z_c_scalar rval man flow >>$ fun ok flow ->
+                 is_sentinel_expr rval man flow >>$ fun ok flow ->
                  if ok then
                    (* Case 3: set sentinel at sentinel
                                                   offset
@@ -500,7 +497,7 @@ struct
                            0                      sentinel        size
                       offset condition: sentinel = rval
                    *)
-                   man.post ~zone:Z_c_scalar (mk_assign sentinel rval range) flow
+                   man.exec ~route:scalar (mk_assign sentinel rval range) flow
                  else
                    (* Case 2.2: set non-sentinel at sentinel
                                                   offset
@@ -512,13 +509,13 @@ struct
                                       if sentinel_pos = size then remove sentinel else sentinel = ⊤;
                    *)
                    before_cases sentinel_pos range man flow
-                     ~exists:(fun flow -> man.post ~zone:Z_c_scalar (mk_assign (weaken_var_expr before) rval range) flow)
-                     ~empty:(fun flow -> man.post ~zone:Z_c_scalar (mk_assign (strongify_var_expr before) rval range) flow)
-                   >>$ fun _ flow ->
-                   man.post ~zone:Z_u_num (mk_assign sentinel_pos (add sentinel_pos ptr range) range) flow >>$ fun _ flow ->
+                     ~exists:(fun flow -> man.exec ~route:scalar (mk_assign (weaken_var_expr before) rval range) flow)
+                     ~empty:(fun flow -> man.exec ~route:scalar (mk_assign (strongify_var_expr before) rval range) flow)
+                   >>% fun flow ->
+                   man.exec ~route:numeric (mk_assign sentinel_pos (add sentinel_pos ptr range) range) flow >>% fun flow ->
                    sentinel_cases sentinel_pos size range man flow
-                     ~exists:(fun flow -> man.post ~zone:Z_c_scalar (mk_assign sentinel (mk_top void_ptr range) range) flow)
-                     ~empty:(fun flow -> man.post ~zone:Z_c_scalar (mk_remove sentinel range) flow)
+                     ~exists:(fun flow -> man.exec ~route:scalar (mk_assign sentinel (mk_top void_ptr range) range) flow)
+                     ~empty:(fun flow -> man.exec ~route:scalar (mk_remove sentinel range) flow)
               );
 
 
@@ -532,31 +529,162 @@ struct
         ) man flow
 
 
-  (** Assignment abstract transformer for 𝕊⟦ *p = rval; ⟧ *)
-  let assign_deref p rval range man flow =
-    eval_pointed_base_offset p range man flow >>$ fun (base,offset,mode) flow ->
-    man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow >>$ fun offset flow ->
-    man.eval ~zone:(Z_c_low_level,Z_c_scalar) rval flow >>$ fun rval flow ->
-    assign_cases base offset mode rval range man flow
+  (** Assignment abstract transformer *)
+  let assign lval rval range man flow =
+    eval_pointed_base_offset (mk_c_address_of lval range) range man flow >>$ fun bo flow ->
+    match bo with
+    | None -> Post.return flow
+    | Some (base,offset,mode) ->
+      if is_scalar_base base then Cases.not_handled flow else
+      if not (is_interesting_base base) || not (is_c_pointer_type lval.etyp) then
+        Post.return flow
+      else
+        man.eval ~route:scalar offset flow >>$ fun offset flow ->
+        man.eval rval flow >>$ fun rval flow ->
+        assign_cases base offset mode rval range man flow
 
 
-  (** Cases of the transfer function of quantified tests 𝕊⟦ *(base + ∀offset) op q ⟧ *)
-  let assume_quantified_cases op base offset mode q range man flow =
+
+  (** Transformers entry point *)
+  let exec stmt man flow =
+    match skind stmt with
+    | S_c_declaration (v,None,scope) when not (is_c_scalar_type v.vtyp) ->
+      declare_variable v scope stmt.srange man flow |>
+      OptionExt.return
+
+    | S_add (e) when is_base_expr e && is_c_type e.etyp && not (is_var_base_expr e && is_c_scalar_type e.etyp) ->
+      add_base (expr_to_base e) stmt.srange man flow |>
+      OptionExt.return
+
+    | S_rename (e1,e2) when is_base_expr e1 && is_base_expr e2 && is_c_type e1.etyp && not (is_var_base_expr e1 && is_c_scalar_type e1.etyp) ->
+      rename_base (expr_to_base e1) (expr_to_base e2) stmt.srange man flow |>
+      OptionExt.return
+
+    | S_expand(e,el) when is_base_expr e && List.for_all is_base_expr el && is_c_type e.etyp && not (is_var_base_expr e && is_c_scalar_type e.etyp) ->
+      expand_base (expr_to_base e) (List.map expr_to_base el) stmt.srange man flow |>
+      OptionExt.return
+
+    | S_fold(e,el) when is_base_expr e && List.for_all is_base_expr el && is_c_type e.etyp && not (is_var_base_expr e && is_c_scalar_type e.etyp)->
+      fold_bases (expr_to_base e) (List.map expr_to_base el) stmt.srange man flow |>
+      OptionExt.return
+
+    | S_forget(e) when is_c_type e.etyp  ->
+      forget e stmt.srange man flow |>
+      OptionExt.return
+
+    | S_forget({ ekind = E_stub_quantified_formula(quants, e) }) when is_c_type e.etyp ->
+      forget_quant quants e stmt.srange man flow |>
+      OptionExt.return
+
+    | S_remove(e) when is_base_expr e && is_c_type e.etyp && not (is_c_scalar_type e.etyp) ->
+      remove_base (expr_to_base e) stmt.srange man flow |>
+      OptionExt.return
+
+    | S_assign(lval, rval) when is_c_scalar_type lval.etyp ->
+      assign lval rval stmt.srange man flow |>
+      OptionExt.return
+
+
+    | _ -> None
+
+
+  (** {2 Abstract evaluations} *)
+  (** ************************ *)
+
+  (** Cases of the abstraction evaluations *)
+  let eval_deref_cases base offset mode typ range man flow =
+    eval_base_size base range man flow >>$ fun size flow ->
+    man.eval ~route:scalar size flow  >>$ fun size flow ->
+
+    (* Safety condition: offset ∈ [0, size - pointer_size] *)
+    assume ~route:numeric
+      (mk_in offset (mk_zero range) (sub size (mk_z ptr_size range) range) range)
+      ~fthen:(fun flow ->
+          if is_scalar_base base then Cases.not_handled flow else
+          if not (is_interesting_base base) then Eval.singleton (mk_top typ range) flow
+          else
+            let sentinel_pos = mk_sentinel_pos_var_expr base ~mode range in
+            let before = mk_before_var_expr base ~mode range in
+            let sentinel = mk_sentinel_var_expr base ~mode range in
+            let ptr = mk_z ptr_size range in
+            let top = mk_top void_ptr range in
+
+
+            switch ~route:scalar [
+              (* Case 1: before sentinel
+                 Offset condition: offset <= sentinel_pos - |ptr|
+                 Transformation: weak(before)
+              *)
+              [
+                mk_binop offset O_le (sub sentinel_pos ptr range) range;
+              ],
+              (fun flow ->
+                 man.eval (weaken_var_expr before) ~route:scalar flow
+              );
+
+              (* Case 2: at sentinel
+                 Offset condition: offset == sentinel_pos
+                 Transformation: sentinel
+              *)
+              [
+                mk_binop offset O_eq sentinel_pos range;
+              ],
+              (fun flow ->
+                 man.eval sentinel ~route:scalar flow
+              );
+
+              (* Case 2: after sentinel
+                 Offset condition: offset >= sentinel_pos + |ptr|
+                 Transformation: sentinel
+              *)
+              [
+                mk_binop offset O_ge (add sentinel_pos ptr range) range;
+              ],
+              (fun flow ->
+                 Eval.singleton top flow
+              );
+
+            ] man flow
+
+        )
+      ~felse:(fun flow ->
+          (* Unsafe case *)
+          Eval.empty flow
+        ) man flow
+
+
+
+  (** Abstract evaluation of a dereference *)
+  let eval_deref p range man flow =
+    let ctype = under_pointer_type p.etyp in
+    eval_pointed_base_offset p range man flow >>$ fun  bo flow ->
+    match bo with
+    | None -> Eval.singleton (mk_top ctype range) flow
+    | Some (base,offset,mode) ->
+      if is_scalar_base base then Cases.not_handled flow else
+      if is_interesting_base base && is_c_pointer_type ctype
+      then
+        man.eval ~route:scalar offset flow >>$ fun offset flow ->
+        eval_deref_cases base offset mode ctype range man flow
+      else
+        Eval.singleton (mk_top ctype range) flow
+
+
+
+  (** Cases of the transfer function of quantified tests 𝕊⟦ ∀i ∈ [lo,hi]: *(base + i) op q ⟧ *)
+  let assume_forall_eq i lo hi base offset mode q range man flow =
     (** Get symbolic bounds of the offset *)
-    let min, max = Common.Quantified_offset.bound offset in
+    let min, max = Common.Quantified_offset.bound offset [FORALL,i,S_interval(lo,hi)] in
 
     eval_base_size base range man flow >>$ fun size flow ->
-    man.eval ~zone:(Z_c_scalar, Z_u_num) size flow >>$ fun size flow ->
-    man.eval ~zone:(Z_c_scalar, Z_u_num) min flow >>$ fun min flow ->
-    man.eval ~zone:(Z_c_scalar, Z_u_num) max flow >>$ fun max flow ->
+    man.eval ~route:scalar size flow >>$ fun size flow ->
+    man.eval ~route:scalar min flow >>$ fun min flow ->
+    man.eval ~route:scalar max flow >>$ fun max flow ->
 
     let sentinel_pos = mk_sentinel_pos_var_expr base ~mode range in
     let sentinel = mk_sentinel_var_expr base ~mode range in
     let before = mk_before_var_expr base ~mode range in
     let ptr = mk_z ptr_size range in
-
-    debug "min = %a, max = %a" pp_expr min pp_expr max;
-    debug "cur = %a" man.lattice.print (Flow.get T_cur man.lattice flow);
 
     (* Safety condition: [min, max] ⊆ [0, size - ptr [ *)
     assume
@@ -577,7 +705,6 @@ struct
                 mk_binop (add sentinel_pos ptr range) O_le min range
               ],
               (fun flow ->
-                 debug "case 1";
                  Post.return flow
               );
 
@@ -585,19 +712,17 @@ struct
                 mk_binop min O_eq sentinel_pos range
               ],
               (fun flow ->
-                 debug "case 2";
-                 man.post ~zone:Z_c_scalar (mk_assume (mk_binop sentinel O_eq q range) range) flow
+                 man.exec ~route:scalar (mk_assume (mk_binop sentinel O_eq q range) range) flow
               );
 
               [
                 mk_binop min O_le (sub sentinel_pos ptr range) range
               ],
               (fun flow ->
-                 debug "case 3";
                  Flow.set T_cur man.lattice.bottom man.lattice flow |>
                  Post.return
               )
-            ] ~zone:Z_u_num man flow
+            ] ~route:numeric man flow
 
           (* q is not a sentinel *)
           else
@@ -606,7 +731,6 @@ struct
                 mk_binop (add sentinel_pos ptr range) O_le min range
               ],
               (fun flow ->
-                 debug "case 4";
                  Post.return flow
               );
 
@@ -614,259 +738,95 @@ struct
                 mk_binop min O_eq sentinel_pos range
               ],
               (fun flow ->
-                 debug "case 5";
-                 man.post ~zone:Z_u_num (mk_assign sentinel_pos (add max ptr range) range) flow >>$ fun _ flow ->
+                 man.exec ~route:numeric (mk_assign sentinel_pos (add max ptr range) range) flow >>% fun flow ->
                  before_cases min range man flow
-                   ~exists:(fun flow -> man.post ~zone:Z_c_scalar (mk_assign (weaken_var_expr before) q range) flow)
-                   ~empty:(fun flow -> man.post ~zone:Z_c_scalar (mk_assign (strongify_var_expr before) q range) flow)
+                   ~exists:(fun flow -> man.exec ~route:scalar (mk_assign (weaken_var_expr before) q range) flow)
+                   ~empty:(fun flow -> man.exec ~route:scalar (mk_assign (strongify_var_expr before) q range) flow)
               );
 
               [
                 mk_binop max O_le (sub sentinel_pos ptr range) range
               ],
               (fun flow ->
-                 debug "case 6";
                  Post.return flow
               )
 
             ]
-              ~zone:Z_u_num man flow
+              ~route:numeric man flow
         )
       ~felse:(fun flow ->
           (* Unsafe case *)
           Flow.set_bottom T_cur flow |>
           Post.return
         )
-      ~zone:Z_u_num man flow
+      ~route:numeric man flow
+
+  let assume_exists_ne i lo hi base offset mode q range man flow =
+    Post.return flow
+
+  let assume_exists_eq i lo hi base offset mode q range man flow =
+    Post.return flow
+
+  let assume_forall_ne i lo hi base offset mode q range man flow =
+    Post.return flow
 
 
-  (** Entry point of the transfer function of quantified tests 𝕊⟦ *(p + ∀i) op q ⟧ *)
-  let assume_quantified op p q range man flow =
-    eval_pointed_base_offset (mk_c_address_of p range) range man flow >>$ fun (base,offset,mode) flow ->
-    man.eval q ~zone:(Z_c_low_level,Z_c_scalar) flow >>$ fun q flow ->
-    if is_interesting_base base then
-      assume_quantified_cases op base offset mode q range man flow
-    else
-      Post.return flow
+  let eval_forall_eq i lo hi p q range man flow =
+    eval_pointed_base_offset (mk_c_address_of p range) range man flow >>$ fun bo flow ->
+    man.eval q flow >>$ fun q flow ->
+    match bo with
+    | None -> Eval.singleton (mk_top T_bool range) flow
+    | Some (base,offset,mode) ->
+      if not (is_interesting_base base) then
+        Eval.singleton (mk_top T_bool range) flow
+      else
+        Eval.join
+          (assume_forall_eq i lo hi base offset mode q range man flow >>% fun flow -> Eval.singleton (mk_true range) flow)
+          (assume_exists_ne i lo hi base offset mode q range man flow >>% fun flow -> Eval.singleton (mk_false range) flow)
 
-
-
-  (** Transformers entry point *)
-  let exec zone stmt man flow =
-    match skind stmt with
-    | S_c_declaration (v,None,scope) when is_interesting_base (mk_var_base v) ->
-      declare_variable v scope stmt.srange man flow |>
-      OptionExt.return
-
-    | S_add (e) when is_base_expr e->
-      add_base (expr_to_base e) stmt.srange man flow |>
-      OptionExt.return
-
-    | S_rename (e1,e2) when is_base_expr e1 && is_base_expr e2 ->
-      rename_base (expr_to_base e1) (expr_to_base e2) stmt.srange man flow |>
-      OptionExt.return
-
-    | S_expand(e,el) when is_base_expr e && List.for_all is_base_expr el ->
-      expand_base (expr_to_base e) (List.map expr_to_base el) stmt.srange man flow |>
-      OptionExt.return
-
-    | S_fold(e,el) when is_base_expr e && List.for_all is_base_expr el ->
-      fold_bases (expr_to_base e) (List.map expr_to_base el) stmt.srange man flow |>
-      OptionExt.return
-
-    | S_forget(e) ->
-      forget e stmt.srange man flow |>
-      OptionExt.return
-
-    | S_remove(e) when is_base_expr e ->
-      remove_base (expr_to_base e) stmt.srange man flow |>
-      OptionExt.return
-
-    | S_assign({ ekind = E_c_deref p} as lval, rval) when is_c_pointer_type lval.etyp ->
-      assign_deref p rval stmt.srange man flow |>
-      OptionExt.return
-
-    (* 𝕊⟦ *(p + ∀i) = q ⟧ *)
-    | S_assume({ekind = E_binop(O_eq, lval, q)})
-    | S_assume({ekind = E_unop(O_log_not, {ekind = E_binop(O_ne, lval, q)})})
-      when is_c_pointer_type lval.etyp &&
-           is_lval_offset_forall_quantified lval &&
-           not (is_expr_forall_quantified q) &&
-           is_c_deref lval
-      ->
-      assume_quantified O_eq lval q stmt.srange man flow |>
-      OptionExt.return
-
-    (* 𝕊⟦ *(p + ∀i) != q ⟧ *)
-    | S_assume({ekind = E_binop(O_ne, lval, q)})
-    | S_assume({ekind = E_unop(O_log_not, {ekind = E_binop(O_eq, lval, q)})})
-      when is_c_pointer_type lval.etyp &&
-           is_lval_offset_forall_quantified lval &&
-           not (is_lval_offset_forall_quantified q) &&
-           is_c_deref lval
-      ->
-      assume_quantified O_ne lval q stmt.srange man flow |>
-      OptionExt.return
-
-
-    | _ -> None
-
-
-  (** {2 Abstract evaluations} *)
-  (** ************************ *)
-
-  (** Cases of the abstraction evaluations *)
-  let eval_deref_cases base offset mode typ range man flow =
-    eval_base_size base range man flow >>$ fun size flow ->
-    man.eval ~zone:(Z_c_scalar,Z_u_num) size flow  >>$ fun size flow ->
-
-    (* Safety condition: offset ∈ [0, size - pointer_size] *)
-    assume ~zone:Z_u_num
-      (mk_in offset (mk_zero range) (sub size (mk_z ptr_size range) range) range)
-      ~fthen:(fun flow ->
-          if not (is_interesting_base base)
-          then Eval.singleton (mk_top typ range) flow
-
-          else
-            let sentinel_pos = mk_sentinel_pos_var_expr base ~mode range in
-            let before = mk_before_var_expr base ~mode range in
-            let sentinel = mk_sentinel_var_expr base ~mode range in
-            let ptr = mk_z ptr_size range in
-            let top = mk_top void_ptr range in
-
-
-            switch ~zone:Z_c_scalar [
-              (* Case 1: before sentinel
-                 Offset condition: offset <= sentinel_pos - |ptr|
-                 Transformation: weak(before)
-              *)
-              [
-                mk_binop offset O_le (sub sentinel_pos ptr range) range;
-              ],
-              (fun flow ->
-                 Eval.singleton (weaken_var_expr before) flow
-              );
-
-              (* Case 2: at sentinel
-                 Offset condition: offset == sentinel_pos
-                 Transformation: sentinel
-              *)
-              [
-                mk_binop offset O_eq sentinel_pos range;
-              ],
-              (fun flow ->
-                 Eval.singleton sentinel flow
-              );
-
-              (* Case 2: after sentinel
-                 Offset condition: offset >= sentinel_pos + |ptr|
-                 Transformation: sentinel
-              *)
-              [
-                mk_binop offset O_ge (add sentinel_pos ptr range) range;
-              ],
-              (fun flow ->
-                 Eval.singleton top flow
-              );
-
-            ] man flow
-
-        )
-      ~felse:(fun flow ->
-          (* Unsafe case *)
-          Flow.set_bottom T_cur flow |>
-          Eval.empty_singleton
-        ) man flow
-
-
-
-  (** Cases of the abstraction evaluations of *(p + ∀i) *)
-  let eval_quantified_deref_cases base offset mode typ  range man flow =
-    eval_base_size base range man flow >>$ fun size flow ->
-    man.eval ~zone:(Z_c_scalar,Z_u_num) size flow  >>$ fun size flow ->
-
-    let min, max = Common.Quantified_offset.bound offset in
-
-    man.eval ~zone:(Z_c_scalar, Z_u_num) min flow >>$ fun min flow ->
-    man.eval ~zone:(Z_c_scalar, Z_u_num) max flow >>$ fun max flow ->
-
-    let ptr = mk_z ptr_size range in
-
-    (* Safety condition: [min, max] ⊆ [0, size - ptr [ *)
-    assume
-      (
-        mk_binop
-          (mk_in min (mk_zero range) (sub size ptr range) range)
-          O_log_and
-          (mk_in max (mk_zero range) (sub size ptr range) range)
-          range
-      )
-      ~fthen:(fun flow ->
-          let sentinel_pos = mk_sentinel_pos_var_expr base ~mode range in
-          let before = mk_before_var_expr base ~mode range in
-          let top = mk_top void_ptr range in
-
-          switch ~zone:Z_c_scalar [
-              (* Case 1: before sentinel
-                 Offset condition: max <= sentinel_pos - |ptr|
-                 Transformation: weak(before)
-              *)
-              [
-                mk_binop max O_le (sub sentinel_pos ptr range) range;
-              ],
-              (fun flow ->
-                 Eval.singleton (weaken_var_expr before) flow
-              );
-
-              (* Case 2: after sentinel
-                 Offset condition: max >= sentinel_pos
-                 Transformation: ⊤
-              *)
-              [
-                mk_binop max O_ge sentinel_pos range;
-              ],
-              (fun flow ->
-                 Eval.singleton top flow
-              );
-
-            ] man flow
-
-        )
-      ~felse:(fun flow ->
-          (* Unsafe case *)
-          Flow.set_bottom T_cur flow |>
-          Eval.empty_singleton
-        ) man flow
-
-
-
-  (** Abstract evaluation of a dereference *)
-  let eval_deref exp range man flow =
-    let p = match ekind exp with E_c_deref p -> p | _ -> assert false in
-    eval_pointed_base_offset p range man flow >>$ fun (base,offset,mode) flow ->
-    if is_interesting_base base &&
-       not (is_expr_forall_quantified offset)
-    then
-      man.eval ~zone:(Z_c_scalar, Z_u_num) offset flow |>
-      Eval.bind @@ fun offset flow ->
-      eval_deref_cases base offset mode (under_type p.etyp) range man flow
-    else if is_interesting_base base &&
-            is_expr_forall_quantified offset
-    then
-      eval_quantified_deref_cases base offset mode (under_type p.etyp) range man flow
-    else
-      Eval.singleton (mk_top (under_type p.etyp |> void_to_char) range) flow
-
+  let eval_forall_ne i lo hi p q range man flow =
+    eval_pointed_base_offset (mk_c_address_of p range) range man flow >>$ fun  bo flow ->
+    man.eval q flow >>$ fun q flow ->
+    match bo with
+    | None -> Eval.singleton (mk_top T_bool range) flow
+    | Some (base,offset,mode) ->
+      if not (is_interesting_base base) then
+        Eval.singleton (mk_top T_bool range) flow
+      else
+        Eval.join
+          (assume_forall_ne i lo hi base offset mode q range man flow >>% fun flow -> Eval.singleton (mk_true range) flow)
+          (assume_exists_eq i lo hi base offset mode q range man flow >>% fun flow -> Eval.singleton (mk_false range) flow)
 
 
   (** Evaluations entry point *)
-  let eval zone exp man flow =
+  let eval exp man flow =
     match ekind exp with
     | E_c_deref p
-      when is_c_pointer_type exp.etyp &&
-           under_type p.etyp |> void_to_char |> is_c_scalar_type
+      when under_type p.etyp |> void_to_char |> is_c_scalar_type
       ->
-      eval_deref exp exp.erange man flow |>
+      eval_deref p exp.erange man flow |>
+      OptionExt.return
+
+    (* 𝕊⟦ ∀i ∈ [a,b] : *(p + i) == q ⟧ *)
+    | E_stub_quantified_formula([FORALL,i,S_interval(a,b)], {ekind = E_binop(O_eq, lval, q)})
+    | E_stub_quantified_formula([FORALL,i,S_interval(a,b)], {ekind = E_unop(O_log_not, {ekind = E_binop(O_ne, lval, q)})})
+      when is_c_pointer_type lval.etyp &&
+           is_var_in_expr i lval &&
+           not (is_var_in_expr i q) &&
+           is_c_lval lval
+      ->
+      eval_forall_eq i a b lval q exp.erange man flow |>
+      OptionExt.return
+
+    (* 𝕊⟦ ∀i ∈ [a,b] : *(p + i) != q ⟧ *)
+    | E_stub_quantified_formula([FORALL,i,S_interval(a,b)], {ekind = E_binop(O_ne, lval, q)})
+    | E_stub_quantified_formula([FORALL,i,S_interval(a,b)], {ekind = E_unop(O_log_not, {ekind = E_binop(O_eq, lval, q)})})
+      when is_c_pointer_type lval.etyp &&
+           is_var_in_expr i lval &&
+           not (is_var_in_expr i q) &&
+           is_c_lval lval
+      ->
+      eval_forall_ne i a b lval q exp.erange man flow |>
       OptionExt.return
 
 

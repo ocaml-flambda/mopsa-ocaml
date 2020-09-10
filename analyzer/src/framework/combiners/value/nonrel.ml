@@ -23,7 +23,6 @@
     abstract domain of partial environments from variables to values.
 *)
 
-open Ast.All
 open Core.All
 open Sig.Abstraction.Value
 
@@ -32,6 +31,26 @@ open Sig.Abstraction.Value
 (** ****************************************** *)
 
 type _ id += D_nonrel : (module VALUE with type t = 'v) -> (var,'v) Lattices.Partial_map.map id
+
+let () =
+  let open Eq in
+  register_id {
+    eq = (
+      let f : type a b. witness -> a id -> b id -> (a, b) eq option = fun next id1 id2 ->
+        match id1, id2 with
+        | D_nonrel v1, D_nonrel v2 ->
+          begin
+            let module V1 = (val v1) in
+            let module V2 = (val v2) in
+            match equal_id V1.id V2.id with
+            | Some Eq -> Some Eq
+            | None -> None
+          end
+        | _ -> next.eq id1 id2
+      in
+      f
+    );
+  }
 
 
 (** {2 Variable bounds} *)
@@ -107,61 +126,7 @@ struct
 
   let id = D_nonrel (module Value)
 
-  let () =
-    let open Eq in
-    register_id {
-      eq = (
-        let f : type a. a id -> (a, t) eq option =
-          function
-          | D_nonrel v ->
-            begin
-              let module V = (val v) in
-              match equal_id V.id Value.id with
-              | Some Eq -> Some Eq
-              | None -> None
-            end
-          | _ -> None
-        in
-        f
-      );
-    }
-
-
-  let widen uctx a1 a2 =
-    let open Bot_top in
-    if a1 == a2 then a1 else
-    match a1, a2 with
-      | BOT, x | x, BOT -> x
-      | TOP, x | x, TOP -> TOP
-      | Nbt m1, Nbt m2 ->
-        Nbt (
-          MapExtPoly.map2zo
-            (fun _ v1 -> v1)
-            (fun _ v2 -> v2)
-            (fun var v1 v2 ->
-               let w = Value.widen v1 v2 in
-               (* In order to apply the bounds constraints of variable [var] on
-                  result [w], we need to ensure that both [v1] and [v2] are
-                  within these bounds. Otherwise, applying directly the
-                  constraints makes the widening unsound (the operands are
-                  not included in the result).
-               *)
-               match find_var_bounds_ctx_opt var uctx with
-               | None -> w
-               | Some bounds ->
-                 match Value.constant var.vtyp bounds with
-                 | None -> w
-                 | Some vv ->
-                   if Value.subset v1 vv && Value.subset v2 vv
-                   then Value.meet w vv
-                   else w
-            )
-            m1 m2
-        )
-
-
-
-  let name = Value.name
+  let name = "framework.abstraction.combiners.value.nonrel"
 
   let debug fmt = Debug.debug ~channel:name fmt
 
@@ -182,7 +147,7 @@ struct
 
 
   (* Constrain the value of a variable with its bounds *)
-  let add_bound_constraints ctx var v =
+  let meet_with_bound_constraints ctx var v =
     match find_var_bounds_ctx_opt var ctx with
     | None        -> v
     | Some bounds ->
@@ -190,9 +155,28 @@ struct
       | None    -> v
       | Some vv -> Value.meet v vv
 
+  let widen uctx a1 a2 =
+    let open Bot_top in
+    if a1 == a2 then a1 else
+      match a1, a2 with
+      | BOT, x | x, BOT -> x
+      | TOP, x | x, TOP -> TOP
+      | Nbt m1, Nbt m2 ->
+        Nbt (
+          MapExtPoly.map2zo
+            (fun _ v1 -> v1)
+            (fun _ v2 -> v2)
+            (fun var v1 v2 ->
+               let w = Value.widen v1 v2 in
+               (* Apply the bounds constraints*)
+               meet_with_bound_constraints uctx var w
+            )
+            m1 m2
+        )
+
 
   let add ctx var v a =
-    let vv = add_bound_constraints ctx var v in
+    let vv = meet_with_bound_constraints ctx var v in
     VarMap.add var vv a
 
 
@@ -222,7 +206,7 @@ struct
 
 
   (** Value manager *)
-  let rec value_man (ev:(expr*aexpr*Value.t) option) (map:t) : Value.t value_man = {
+  let rec value_man (ev:(expr*aexpr*Value.t) option) (map:t) : ('a,Value.t) value_man = {
     eval = (fun e ->
         (* check if expression e has been evaluated by searching withing the annotated value-expression ev *)
         match ev with
@@ -247,7 +231,7 @@ struct
           with Not_found ->
             eval e map |>
             OptionExt.default (A_unsupported,Value.top) |>
-            snd         
+            snd
       );
     ask = (fun q -> match Value.ask (value_man ev map) q with Some r -> r | _ -> raise Not_found);
   }
@@ -259,9 +243,10 @@ struct
   and eval (e:expr) (a:t) : (aexpr * Value.t) option =
     match ekind e with
     | E_var(var, mode) ->
-      let v = find var a in
-      (A_var v, v) |>
-      OptionExt.return
+       let ov = find_opt var a in
+       OptionExt.bind (fun v ->
+           (A_var v, v) |>
+             OptionExt.return) ov
 
     | E_constant(c) ->
       Value.constant e.etyp c |> OptionExt.lift @@ fun v ->
@@ -395,15 +380,13 @@ struct
       refine ctx e ae v r a |>
       OptionExt.return
 
-    | _ -> assert false
+    | _ -> None
 
 
   (** {2 Transfer functions} *)
   (** ********************** *)
 
   let init prog = empty
-
-  let zones = Value.zones
 
   let exec stmt man ctx (map:t) : t option =
     match skind stmt with
@@ -425,10 +408,11 @@ struct
             | _ -> assert false
           ) vars
       in
-      VarMap.fold (fun v _ acc ->
-          if List.exists (fun v' -> compare_var v v' = 0) vars then acc else VarMap.remove v acc
-        ) map map |>
-      OptionExt.return
+      List.fold_left
+        (fun acc v ->
+           add ctx v (find v map) acc
+        ) empty vars
+      |> OptionExt.return
 
     | S_rename ({ ekind = E_var (var1, _) }, { ekind = E_var (var2, _) }) ->
       let v = find var1 map in
@@ -494,7 +478,7 @@ struct
 
 
 
-  let ask query man map =
+  let ask query man ctx map =
     Value.ask (value_man None map) query
 
 

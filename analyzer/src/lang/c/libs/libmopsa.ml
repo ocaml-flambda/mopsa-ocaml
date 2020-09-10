@@ -25,8 +25,6 @@ open Mopsa
 open Sig.Abstraction.Stateless
 open Universal.Ast
 open Ast
-open Zone
-open Universal.Zone
 open Common.Points_to
 open Common.Base
 open Universal.Numeric.Common
@@ -42,23 +40,6 @@ struct
       let name = "c.libs.mopsalib"
     end)
 
-  (** Zoning definition *)
-  (** ================= *)
-
-  let interface = {
-    iexec = {
-      provides = [];
-      uses = []
-    };
-
-    ieval = {
-      provides = [Z_c, Z_c_low_level];
-      uses = [
-        Z_c, Z_u_num;
-        Z_c, Z_c_points_to
-      ]
-    }
-  }
 
   let alarms = [Universal.Iterators.Unittest.A_assert_fail]
 
@@ -93,10 +74,6 @@ struct
     | f -> panic "extract_rand_type: invalid argument %s" f
 
 
-  let mk_rand typ range man flow =
-    Eval.singleton (mk_top typ range) flow
-
-
   let is_range_function = function
     | "_mopsa_range_s8"
     | "_mopsa_range_u8"
@@ -127,15 +104,18 @@ struct
     | f -> panic "extract_range_type: invalid argument %s" f
 
 
-  let mk_range typ l u range man flow =
+  let eval_rand typ range man flow = man.eval (mk_top typ range) flow
+
+  let eval_range typ l u range man flow =
     let tmp = mktmp ~typ () in
     let v = mk_var tmp range in
-    let flow = man.exec (mk_block [
+    man.exec (mk_block [
         mk_add_var tmp range;
         mk_assume (mk_in v l u range) range
       ] range) flow
-    in
-    Eval.singleton v flow ~cleaners:[mk_remove_var tmp range]
+    >>%
+    man.eval v |>
+    Cases.add_cleaners [mk_remove_var tmp range]
 
 
 
@@ -149,10 +129,10 @@ struct
 
   (** Print the value of an integer expression *)
   let print_int_value exp ?(display=exp_to_str exp) man fmt flow =
-    let evl = man.eval ~zone:(Z_c,Z_u_num) exp flow in
+    let evl = man.eval exp flow in
     Format.fprintf fmt "%s = %a"
       display
-      (Cases.print_some (fun fmt e flow ->
+      (Cases.print_result (fun fmt e flow ->
            let itv = man.ask (mk_int_interval_query e) flow in
            pp_int_interval fmt itv
          )
@@ -160,10 +140,10 @@ struct
 
   (** Print the value of a float expression *)
   let print_float_value exp ?(display=exp_to_str exp) man fmt flow =
-    let evl = man.eval ~zone:(Z_c,Z_u_num) exp flow in
+    let evl = man.eval exp flow in
     Format.fprintf fmt "%s = %a"
       display
-      (Cases.print_some (fun fmt e flow ->
+      (Cases.print_result (fun fmt e flow ->
            let itv = man.ask (mk_float_interval_query e) flow in
            pp_float_interval fmt itv
          )
@@ -172,23 +152,22 @@ struct
 
   (** Print the value of a pointer expression *)
   let print_pointer_value exp ?(display=exp_to_str exp) man fmt flow =
-    let evl = man.eval ~zone:(Z_c,Z_c_points_to) exp flow in
+    let evl = resolve_pointer exp man flow in
     Format.fprintf fmt "%s ⇝ %a"
       display
-      (Cases.print_some (fun fmt e flow ->
-           match ekind e with
-           | E_c_points_to (P_block(base,offset,mode)) ->
-             let evl = man.eval ~zone:(Z_c_scalar,Z_u_num) offset flow in
+      (Cases.print_result (fun fmt pt flow ->
+           match pt with
+           | P_block(base,offset,mode) ->
+             let evl = man.eval offset flow in
              Format.fprintf fmt "&(%a%a)"
                pp_base base
-               (Cases.print_some (fun fmt e flow ->
+               (Cases.print_result (fun fmt e flow ->
                     let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query e) flow in
                     Universal.Numeric.Values.Intervals.Integer.Value.print fmt itv
                   )
                ) evl
 
-           | E_c_points_to p -> pp_points_to fmt p
-           | _ -> assert false
+           | p -> pp_points_to fmt p
          )
       ) evl
 
@@ -250,16 +229,16 @@ struct
 
   let init _ _ flow =  flow
 
-  let exec zone stmt man flow = None
+  let exec stmt man flow = None
 
-  let eval zone exp man flow =
+  let eval exp man flow =
     match ekind exp with
     | E_c_builtin_call(f, []) when is_rand_function f ->
-      mk_rand (extract_rand_type f) exp.erange man flow |>
+      eval_rand (extract_rand_type f) exp.erange man flow |>
       OptionExt.return
 
     | E_c_builtin_call(f, [l;u]) when is_range_function f ->
-      mk_range (extract_range_type f) l u exp.erange man flow |>
+      eval_range (extract_range_type f) l u exp.erange man flow |>
       OptionExt.return
 
     | E_c_builtin_call("_mopsa_invalid_pointer", []) ->
@@ -280,32 +259,32 @@ struct
 
     | E_c_builtin_call("_mopsa_print", []) ->
        Framework.Output.Factory.print (erange exp) (Flow.print man.lattice.print) flow;
-       Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
+       Eval.singleton (mk_int 0 exp.erange) flow |>
        OptionExt.return
 
     | E_c_builtin_call("_mopsa_print", args) ->
       Framework.Output.Factory.print (erange exp) (print_values args man) flow;
-      Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
+      Eval.singleton (mk_int 0 exp.erange) flow |>
       OptionExt.return
 
 
     | E_c_builtin_call("_mopsa_assume", [cond]) ->
       let stmt = mk_assume cond exp.erange in
-      let flow = man.exec stmt flow in
-      Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
+      man.exec stmt flow >>%? fun flow ->
+      Eval.singleton (mk_int 0 exp.erange) flow |>
       OptionExt.return
 
 
     | E_c_builtin_call("_mopsa_assert", [cond]) ->
       let stmt = mk_assert cond exp.erange in
-      let flow = man.exec stmt flow in
-      Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
+      man.exec stmt flow >>%? fun flow ->
+      Eval.singleton (mk_int 0 exp.erange) flow |>
       OptionExt.return
 
     | E_c_builtin_call("_mopsa_assert_exists", [cond]) ->
       let stmt = mk_satisfy cond exp.erange in
-      let flow = man.exec stmt flow in
-      Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
+      man.exec stmt flow >>%? fun flow ->
+      Eval.singleton (mk_int 0 exp.erange) flow |>
       OptionExt.return
 
 
@@ -316,7 +295,7 @@ struct
         then flow
         else Universal.Iterators.Unittest.raise_assert_fail exp man ~force:true flow
       in
-      Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
+      Eval.singleton (mk_int 0 exp.erange) flow |>
       OptionExt.return
 
     | E_c_builtin_call("_mopsa_assert_unsafe", []) ->
@@ -326,9 +305,24 @@ struct
         then Flow.remove_alarms flow
         else Universal.Iterators.Unittest.raise_assert_fail exp ~force:true man flow
       in
-      Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
+      Eval.singleton (mk_int 0 exp.erange) flow |>
       OptionExt.return
 
+    | E_c_builtin_call("_mopsa_assert_unreachable", []) ->
+      let b = man.lattice.is_bottom (Flow.get T_cur man.lattice flow) in
+      let cond = mk_bool b exp.erange in
+      let stmt = mk_assert cond exp.erange in
+      man.exec stmt flow >>%? fun flow ->
+      Eval.singleton (mk_int 0 exp.erange) flow |>
+      OptionExt.return
+
+    | E_c_builtin_call("_mopsa_assert_reachable", []) ->
+      let b = not (man.lattice.is_bottom (Flow.get T_cur man.lattice flow)) in
+      let cond = mk_bool b exp.erange in
+      let stmt = mk_assert cond exp.erange in
+      man.exec stmt flow >>%? fun flow ->
+      Eval.singleton (mk_int 0 exp.erange) flow |>
+      OptionExt.return
 
     | _ -> None
 

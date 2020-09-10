@@ -22,15 +22,14 @@
 (** Syntax tree of configuration files *)
 
 open Sig.Abstraction.Stacked
+open Sig.Abstraction.Stacked_functor
 open Sig.Abstraction.Domain
+open Sig.Abstraction.Functor
 open Sig.Abstraction.Simplified
+open Sig.Abstraction.Simplified_functor
 open Sig.Abstraction.Stateless
 open Sig.Abstraction.Value
-
-open Sig.Functor.Stacked
-open Sig.Functor.Domain
-open Sig.Functor.Simplified
-open Sig.Functor.Value
+open Sig.Abstraction.Value_functor
 
 open Sig.Reduction.Exec
 open Sig.Reduction.Eval
@@ -39,19 +38,25 @@ open Sig.Reduction.Simplified
 
 open Format
 
+
 type abstraction = {
   domain: domain;
   language : string;
 }
 
-and domain =
+and domain = {
+  domain_kind : domain_kind;
+  domain_semantic : string option;
+}
+
+and domain_kind =
   | D_stacked    of (module STACKED)
   | D_domain     of (module DOMAIN)
   | D_simplified of (module SIMPLIFIED)
   | D_stateless  of (module STATELESS)
   | D_functor    of domain_functor * domain
   | D_nonrel     of value
-  | D_sequence   of domain list
+  | D_switch   of domain list
   | D_compose    of domain list
   | D_product    of domain list * domain_reduction list
 
@@ -75,7 +80,7 @@ and domain_reduction =
 
 and value_reduction = (module VALUE_REDUCTION)
 
-
+let mk_domain ?(semantic=None) kind = { domain_kind = kind; domain_semantic = semantic } 
 
 let pp_value_reduction fmt (r:value_reduction) =
   let module R = (val r) in
@@ -141,7 +146,12 @@ let pp_domain_functor fmt = function
 
 
 
-let rec pp_domain fmt = function
+let rec pp_domain fmt d =
+  match d.domain_semantic with
+  | None -> pp_domain_kind fmt d.domain_kind
+  | Some semantic -> fprintf fmt "[%s] %a" semantic pp_domain_kind d.domain_kind
+
+and pp_domain_kind fmt = function
   | D_stacked d ->
     let module D = (val d) in
     pp_print_string fmt D.name
@@ -164,7 +174,7 @@ let rec pp_domain fmt = function
   | D_nonrel v ->
     fprintf fmt "nonrel(%a)" pp_value v
 
-  | D_sequence dl ->
+  | D_switch dl ->
     fprintf fmt "(%a)"
       (pp_print_list
          ~pp_sep:(fun fmt () -> pp_print_string fmt " ; ")

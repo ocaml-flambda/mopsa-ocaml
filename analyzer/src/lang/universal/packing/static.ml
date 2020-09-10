@@ -33,10 +33,9 @@
 *)
 
 open Mopsa
-open Sig.Functor.Simplified
+open Sig.Abstraction.Simplified_functor
 open Sig.Abstraction.Simplified
 open Ast
-open Zone
 open Format
 open Context
 open Bot_top
@@ -72,6 +71,29 @@ end
 
 (** Identifier of packed domains *)
 type _ id += D_static_packing : 'k id * 'a id -> ('k,'a) Framework.Lattices.Partial_map.map id
+
+
+let () =
+  let open Eq in
+  register_id {
+    eq = (
+      let f : type a b. witness -> a id -> b id -> (a, b) eq option =
+        fun next id1 id2 ->
+          match id1, id2 with
+          | D_static_packing(s1,d1), D_static_packing(s2,d2) ->
+            begin match equal_id s1 s2 with
+              | Some Eq ->
+                begin match equal_id d1 d2 with
+                  | Some Eq -> Some Eq
+                  | _ -> None
+                end
+              | _ -> None
+            end
+          | _ -> next.eq id1 id2
+      in
+      f
+    );
+  }
 
 
 (** Creation of a domain functor from a packing strategy *)
@@ -119,35 +141,11 @@ struct
     type t = Map.t
 
 
-    (** Id of the packing functor *)
-    let id = D_static_packing (Strategy.id, Domain.id)
-    let () =
-      let open Eq in
-      register_id {
-        eq = (
-          let f : type a. a id -> (a, t) eq option =
-            function
-            | D_static_packing(strategy,domain) ->
-              begin match equal_id strategy Strategy.id with
-                | Some Eq ->
-                  begin match equal_id domain Domain.id with
-                    | Some Eq -> Some Eq
-                    | _ -> None
-                  end
-                | _ -> None
-              end
-            | _ -> None
-          in
-          f
-        );
-      }
-
     (** The name of the domain is the name of the strategy *)
     let name = Strategy.name
 
-    (** Semantic zone of the functor, inherited from the domain *)
-    let zones = Domain.zones
-
+    (** Identifier of the functor *)
+    let id = D_static_packing (Strategy.id, Domain.id)
 
     (** Pretty printer *)
     let print fmt a =
@@ -300,7 +298,7 @@ struct
         s
 
     (** Get the manager of a pack *)
-    let pack_man pack (man:t simplified_man) : Domain.t simplified_man = {
+    let pack_man pack man : ('a,Domain.t) simplified_man = {
       man with
       exec = (fun stmt -> try man.exec stmt |> Map.find pack with Not_found -> Domain.top);
     }
@@ -328,13 +326,16 @@ struct
         | _ -> assert false
       in
       let packs = packs_of_var ctx v in
-      List.fold_left (fun acc pack ->
-          let aa = try Map.find pack acc with Not_found -> Domain.top in
-          let e' = resolve_expr_missing_vars pack man ctx e in
-          let stmt' = { stmt with skind = S_assign (lval, e') } in
-          let aa' = Domain.exec stmt' (pack_man pack man) ctx aa |> OptionExt.none_to_exn in
-          Map.add pack aa' acc
-        ) a packs
+      try
+        List.fold_left (fun acc pack ->
+            let aa = try Map.find pack acc with Not_found -> Domain.top in
+            let e' = resolve_expr_missing_vars pack man ctx e in
+            let stmt' = { stmt with skind = S_assign (lval, e') } in
+            let aa' = Domain.exec stmt' (pack_man pack man) ctx aa |> OptionExt.none_to_exn in
+            Map.add pack aa' acc
+          ) a packs
+        |> OptionExt.return
+      with OptionExt.Found_None -> None
 
 
     (** 𝕊⟦ expand/fold (v,vl) ⟧ *)
@@ -376,8 +377,7 @@ struct
         OptionExt.return
 
       | S_assign ({ekind = E_var _}, _) ->
-        exec_assign_var stmt man ctx a |>
-        OptionExt.return
+        exec_assign_var stmt man ctx a
 
       | S_expand( {ekind = E_var _}, _)
       | S_fold( {ekind = E_var _}, _) ->
@@ -422,18 +422,22 @@ struct
 
 
     (** Handler of queries *)
-    let ask q man a =
+    let ask q man ctx a =
       match a with
       | BOT | TOP -> None
       | Nbt m ->
-        let rep = PolyMap.mapi (fun pack aa -> Domain.ask q (pack_man pack man) aa) m |>
+        let rep = PolyMap.mapi (fun pack aa -> Domain.ask q (pack_man pack man) ctx aa) m |>
                   PolyMap.bindings |>
                   List.map snd
         in
         let rec loop = function
           | [] -> None
           | r :: tl ->
-            OptionExt.neutral2 (meet_query q) r (loop tl)
+            OptionExt.neutral2
+              (meet_query q
+                 ~meet:(fun _ _ -> panic "abstract query called from simplified domain"))
+              r
+              (loop tl)
         in
         loop rep
   end

@@ -34,18 +34,13 @@ module Domain =
         let name = "python.desugar.loops"
       end)
 
-    let interface = {
-      iexec = {provides = [Zone.Z_py]; uses = []};
-      ieval = {provides = []; uses = []}
-    }
-
     let alarms = []
 
     let init _ _ flow = flow
-    let eval _ _ _ _ = None
+    let eval _ _ _ = None
 
 
-    let exec zone stmt man flow =
+    let exec stmt man flow =
       let range = srange stmt in
       match skind stmt with
       | S_py_while (test, body, {skind = S_block ([], _)}) ->
@@ -56,7 +51,7 @@ module Domain =
                body
                range
             ) flow
-                  |> Post.return
+                  >>% Post.return
                   |> OptionExt.return in
         Debug.debug ~channel:"profiling" "while loop at range %a: %.4f" pp_range range (Timing.stop start);
         res
@@ -70,8 +65,8 @@ module Domain =
                (Utils.mk_builtin_call "bool" [test] range)
                body
                range
-            ) flow in
-        let res = Flow.join man.lattice res (man.exec orelse res) in
+            ) flow |> post_to_flow man in
+        let res = Flow.join man.lattice res (man.exec orelse res |> post_to_flow man) in
         Debug.debug ~channel:"profiling" "while loop at range %a: %.4f" pp_range range (Timing.stop start);
         res |> Post.return |> OptionExt.return
 
@@ -85,7 +80,7 @@ module Domain =
          (* same for next *)
          let start = Timing.start () in
          let res =
-           Utils.bind_list_args man [Utils.mk_builtin_call "iter" [iterable] iterable.erange] flow range Zone.Z_py
+           Utils.bind_list_args man [Utils.mk_builtin_call "iter" [iterable] iterable.erange] flow range
              (fun vars flow ->
                let tmp = mk_var (List.hd vars) range in
                let l_else =
@@ -121,7 +116,7 @@ module Domain =
                    inner_block
                    range
                in
-               man.exec stmt flow |>
+               man.exec stmt flow >>%
                  Post.return
              )
          in
@@ -133,8 +128,8 @@ module Domain =
              | E_py_object _ -> false
              | _ -> true ->
                 man.eval iterable flow
-                |> bind_some
-                     (fun iterable flow -> man.exec {stmt with skind = S_py_for(target, iterable, body, orelse)} flow |> Post.return)
+                |> bind_result
+                     (fun iterable flow -> man.exec {stmt with skind = S_py_for(target, iterable, body, orelse)} flow >>% Post.return)
                 |> OptionExt.return
 
       | _ -> None

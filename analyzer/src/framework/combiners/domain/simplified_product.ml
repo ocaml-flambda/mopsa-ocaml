@@ -19,66 +19,31 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Reduced product of (leaf) domains with n-ary simplified reduction rules *)
+(** Reduced product of simplified (leaf) domains *)
 
-open Ast.All
 open Core.All
-open Sig.Abstraction.Simplified
+open Common
 open Sig.Reduction.Simplified
+open Sig.Combiner.Simplified
 
 
-type _ id += D_empty_product: unit id
-type _ id += D_pair_product: 'a id * 'b id -> ('a*'b) id
-    
-module EmptyDomain : SIMPLIFIED =
-struct
-  type t = unit
-  let id = D_empty_product
-  let () =
-    let eq : type a. a id -> (a,unit) Eq.eq option = function
-      | D_empty_product -> Some Eq
-      | _ -> None
-    in register_id { eq }
-  let name = ""
-  let zones = []
-  let bottom = ()
-  let top = ()
-  let print fmt () = ()
-  let is_bottom () = false
-  let subset () () = true
-  let join () () = ()
-  let meet () () = ()
-  let widen ctx () () = ()
-  let merge () _ _ = ()
-  let init p = ()
-  let exec ctx stmt man () = None
-  let ask q man () = None
-end
 
-module MakeDomainPair(D1:SIMPLIFIED)(D2:SIMPLIFIED) : SIMPLIFIED =
+(** Create a product of two domains *)
+module MakeDomainPair(D1:SIMPLIFIED_COMBINER)(D2:SIMPLIFIED_COMBINER)
+  : SIMPLIFIED_COMBINER with type t = D1.t * D2.t =
 struct
 
   type t = D1.t * D2.t
   
-  let id = D_pair_product(D1.id,D2.id)
+  let id = C_pair(Product,D1.id,D2.id)
 
-  let () =
-    let eq : type a. a id -> (a,t) Eq.eq option = function
-      | D_pair_product(id1,id2) ->
-        begin match equal_id id1 D1.id with
-          | Some Eq ->
-            begin match equal_id id2 D2.id with
-              | Some Eq -> Some Eq
-              | None -> None
-            end
-          | None -> None
-        end
-      | _ -> None
-    in register_id { eq }
+  let name = D1.name ^ " ∧ " ^ D2.name
 
-  let name = ""
+  let domains = DomainSet.union D1.domains D2.domains
 
-  let zones = D1.zones @ D2.zones
+  let semantics = SemanticSet.union D1.semantics D2.semantics
+
+  let routing_table = join_routing_table D1.routing_table D2.routing_table
 
   let bottom : t = D1.bottom, D2.bottom
 
@@ -123,48 +88,89 @@ struct
 
   let print fmt (a1,a2) =
     match D2.id with
-    | D_empty_product -> D1.print fmt a1
+    | C_empty -> D1.print fmt a1
     | _ ->  Format.fprintf fmt "%a@\n%a" D1.print a1 D2.print a2
   
-  let hdman (man:t simplified_man) : (D1.t simplified_man) = {
+  let hdman (man:('a,t) Sig.Abstraction.Simplified.simplified_man) : (('a,D1.t) Sig.Abstraction.Simplified.simplified_man) = {
     man with
     exec = (fun stmt -> man.exec stmt |> fst);
   }
 
-  let tlman (man:t simplified_man) : (D2.t simplified_man) = {
+  let tlman (man:('a,t) Sig.Abstraction.Simplified.simplified_man) : (('a,D2.t) Sig.Abstraction.Simplified.simplified_man) = {
     man with
     exec = (fun stmt -> man.exec stmt |> snd);
   }
 
   let init prog = D1.init prog, D2.init prog
 
-  let exec stmt man ctx ((a1,a2) as a) =
-    match D1.exec stmt (hdman man) ctx a1, D2.exec stmt (tlman man) ctx a2 with
-    | None, None       -> None
-    | Some r1, None    -> if a1 == r1 then Some a else Some (r1,a2)
-    | None, Some r2    -> if a2 == r2 then Some a else Some (a1,r2)
-    | Some r1, Some r2 -> if r1 == a1 && r2 == a2 then Some a else Some (r1,r2)
+  let exec targets =
+    let recompose_pair ((a1,a2) as a) r1 r2 =
+      match r1, r2 with
+      | None, None       -> None
+      | Some r1, None    -> if a1 == r1 then Some a else Some (r1,a2)
+      | None, Some r2    -> if a2 == r2 then Some a else Some (a1,r2)
+      | Some r1, Some r2 -> if r1 == a1 && r2 == a2 then Some a else Some (r1,r2)
+    in
+    match sat_targets ~targets ~domains:D1.domains,
+          sat_targets ~targets ~domains:D1.domains
+    with
+    | false, false -> raise Not_found
+    | true, false ->
+      let f1 = D1.exec targets in
+      (fun stmt man ctx ((a1,a2) as a) -> recompose_pair a (f1 stmt (hdman man) ctx a1) None)
+    | false, true ->
+      let f2 = D2.exec targets in
+      (fun stmt man ctx ((a1,a2) as a) -> recompose_pair a None (f2 stmt (tlman man) ctx a2))
+    | true, true ->
+      let f1 = D1.exec targets in
+      let f2 = D2.exec targets in
+      (fun stmt man ctx ((a1,a2) as a) ->
+         recompose_pair a
+           (f1 stmt (hdman man) ctx a1)
+           (f2 stmt (tlman man) ctx a2))
     
-  let ask q man (a1,a2) =
-    OptionExt.neutral2
-      (meet_query q)
-      (D1.ask q (hdman man) a1)
-      (D2.ask q (tlman man) a2)    
+    
+  let ask targets =
+    match sat_targets ~targets ~domains:D1.domains,
+          sat_targets ~targets ~domains:D1.domains
+    with
+    | false, false -> raise Not_found
+    | true, false ->
+      let f1 = D1.ask targets in
+      (fun q man ctx (a1,_) -> f1 q (hdman man) ctx a1)
+    | false, true ->
+      let f2 = D2.ask targets in
+      (fun q man ctx (_,a2) -> f2 q (tlman man) ctx a2)
+    | true, true ->
+      let f1 = D1.ask targets in
+      let f2 = D2.ask targets in
+      (fun q man ctx (a1,a2) ->
+         OptionExt.neutral2
+           (meet_query q
+              ~meet:(fun _ _ -> Exceptions.panic "abstract queries called from simplified domains"))
+           (f1 q (hdman man) ctx a1)
+           (f2 q (tlman man) ctx a2))    
+
 end
 
 
-module Make(D:SIMPLIFIED)(R:sig val rules : (module SIMPLIFIED_REDUCTION) list end) : SIMPLIFIED with type t = D.t =
+(** Create a reduced product from a domain representing a product of
+    domains and a list of reduction rules *)
+module Make
+    (D:SIMPLIFIED_COMBINER)
+    (R:sig val rules : (module SIMPLIFIED_REDUCTION) list end)
+  : SIMPLIFIED_COMBINER with type t = D.t =
 struct
 
   include D
 
-  let reduction_man man : D.t simplified_reduction_man = {
+  let reduction_man man : ('a,D.t) simplified_reduction_man = {
     (* Get the abstract element of a domain *)
     get_env = (fun (type a) (idx:a id) (a:t) ->
         let rec aux : type b. b id -> b -> a = fun idy aa ->
           match idy, aa with
-          | D_empty_product, () -> raise Not_found
-          | D_pair_product(hd,tl), (ahd,atl) ->
+          | C_empty, () -> raise Not_found
+          | C_pair(_,hd,tl), (ahd,atl) ->
             begin match equal_id hd idx with
               | Some Eq -> ahd
               | None -> aux tl atl
@@ -182,8 +188,8 @@ struct
         let rec aux : type b. b id -> b -> b =
           fun idy aa ->
             match idy, aa with
-            | D_empty_product, () -> raise Not_found
-            | D_pair_product(hd,tl), (ahd,atl) ->
+            | C_empty, () -> raise Not_found
+            | C_pair(_,hd,tl), (ahd,atl) ->
               begin match equal_id hd idx with
                 | Some Eq -> x,atl
                 | None    -> ahd, aux tl atl
@@ -201,7 +207,6 @@ struct
         let open Value.Nonrel in
         let open Bot_top in
         let open Lattices.Partial_map in
-        let open Value.Common in
         let rec aux : type a. a id -> a -> v =
           fun idy aa ->
             match idy, aa with
@@ -232,7 +237,7 @@ struct
               in
               iter V.id v
 
-            | D_pair_product(hd,tl), (ahd,atl) ->
+            | C_pair(_,hd,tl), (ahd,atl) ->
               begin
                 try aux hd ahd
                 with Not_found -> aux tl atl
@@ -247,7 +252,6 @@ struct
         let open Value.Nonrel in
         let open Bot_top in
         let open Lattices.Partial_map in
-        let open Value.Common in
         let rec aux : type a. a id -> a -> a =
           fun idy aa ->
             match idy, aa with
@@ -283,7 +287,7 @@ struct
                 | Nbt map -> Nbt (PMap.add var update map)
               end
 
-            | D_pair_product(hd,tl), (ahd,atl) ->
+            | C_pair(_,hd,tl), (ahd,atl) ->
               begin
                 try aux hd ahd, atl
                 with Not_found -> ahd, aux tl atl
@@ -294,7 +298,7 @@ struct
         aux id a
       );
 
-    ask = (fun q a -> match D.ask q man a with None -> raise Not_found | Some r -> r);  
+    ask = (fun q ctx a -> match D.ask [] q man ctx a with None -> raise Not_found | Some r -> r);  
   }
 
   let reduce stmt man ctx pre post =
@@ -304,18 +308,20 @@ struct
         Rule.reduce stmt rman ctx pre acc
       ) post R.rules
 
-  let exec stmt man ctx a =
-    match exec stmt man ctx a with
-    | None -> None
-    | Some r -> Some (reduce stmt man ctx a r)
+  let exec targets =
+    let f = D.exec targets in
+    (fun stmt man ctx a ->
+       match f stmt man ctx a with
+       | None -> None
+       | Some r -> Some (reduce stmt man ctx a r))
   
 end
 
 
-let make (domains:(module SIMPLIFIED) list) (rules:(module SIMPLIFIED_REDUCTION) list) : (module SIMPLIFIED) =
+let make (domains:(module SIMPLIFIED_COMBINER) list) ~(rules:(module SIMPLIFIED_REDUCTION) list) : (module SIMPLIFIED_COMBINER) =
   let rec aux = function
     | [] -> assert false
     | [d] -> d
-    | hd::tl -> (module MakeDomainPair(val hd:SIMPLIFIED)(val (aux tl):SIMPLIFIED) : SIMPLIFIED)
+    | hd::tl -> (module MakeDomainPair(val hd:SIMPLIFIED_COMBINER)(val (aux tl):SIMPLIFIED_COMBINER) : SIMPLIFIED_COMBINER)
   in
-  (module Make(val (aux domains):SIMPLIFIED)(struct let rules = rules end))
+  (module Make(val (aux domains):SIMPLIFIED_COMBINER)(struct let rules = rules end))

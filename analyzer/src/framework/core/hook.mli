@@ -31,8 +31,7 @@ open Flow
 open Context
 open Post
 open Eval
-open Zone
-open Interface
+open Route
 open Manager
 
 
@@ -43,28 +42,22 @@ sig
   val name : string
   (** Name of the hook *)
 
-  val exec_zones : zone list
-  (** List of exec zones to capture *)
-
-  val eval_zones: (zone * zone) list
-  (** List of eval zones to capture *)
-
   val init : 'a ctx -> 'a ctx
   (** Initialization of the hook *)
 
-  val on_before_exec : zone -> stmt -> ('a,'a,unit) man  -> 'a flow -> 'a ctx
+  val on_before_exec : route -> stmt -> ('a,'a) man  -> 'a flow -> 'a ctx
   (** Event fired before an exec is performed *)
 
-  val on_after_exec : zone -> stmt -> ('a,'a,unit) man -> 'a flow -> 'a post -> 'a ctx
+  val on_after_exec : route -> stmt -> ('a,'a) man -> 'a flow -> 'a post -> 'a ctx
   (** Event fired after an exec is performed *)
 
-  val on_before_eval : (zone * zone) -> expr -> ('a,'a,unit) man -> 'a flow -> 'a ctx
+  val on_before_eval : route -> expr -> ('a,'a) man -> 'a flow -> 'a ctx
   (** Event fired before an eval is performed *)
 
-  val on_after_eval : (zone * zone) -> expr -> ('a,'a,unit) man -> 'a flow -> 'a eval -> 'a ctx
+  val on_after_eval : route -> expr -> ('a,'a) man -> 'a flow -> 'a eval -> 'a ctx
   (** Event fired after an eval is performed *)
 
-  val on_finish : ('a,'a,unit) man -> 'a flow -> unit
+  val on_finish : ('a,'a) man -> 'a flow -> unit
   (** Event fired after the analysis has terminated *)
 end
 
@@ -74,28 +67,22 @@ sig
   val name : string
   (** Name of the hook *)
 
-  val exec_zones : zone list
-  (** List of exec zones to capture *)
-
-  val eval_zones: (zone * zone) list
-  (** List of eval zones to capture *)
-
   val init : 'a ctx -> unit
   (** Initialization of the hook *)
 
-  val on_before_exec : zone -> stmt -> ('a,'a,unit) man  -> 'a flow -> unit
+  val on_before_exec : route -> stmt -> ('a,'a) man  -> 'a flow -> unit
   (** Event fired before an exec is performed *)
 
-  val on_after_exec : zone -> stmt -> ('a,'a,unit) man -> 'a flow -> 'a post -> unit
+  val on_after_exec : route -> stmt -> ('a,'a) man -> 'a flow -> 'a post -> unit
   (** Event fired after an exec is performed *)
 
-  val on_before_eval : (zone * zone) -> expr -> ('a,'a,unit) man -> 'a flow -> unit
+  val on_before_eval : route -> expr -> ('a,'a) man -> 'a flow -> unit
   (** Event fired before an eval is performed *)
 
-  val on_after_eval : (zone * zone) -> expr -> ('a,'a,unit) man -> 'a flow -> 'a eval -> unit
+  val on_after_eval : route -> expr -> ('a,'a) man -> 'a flow -> 'a eval -> unit
   (** Event fired after an eval is performed *)
 
-  val on_finish : ('a,'a,unit) man -> 'a flow -> unit
+  val on_finish : ('a,'a) man -> 'a flow -> unit
   (** Event fired after the analysis has terminated *)
 end
 
@@ -118,10 +105,10 @@ val mem_hook : string -> bool
 val list_hooks : unit -> (module HOOK) list
 (** List all existing hooks *)
 
-val deactivate_hook : string -> ('a,'a,unit) man -> 'a flow -> unit
+val deactivate_hook : string -> ('a,'a) man -> 'a flow -> unit
 (** Deactivate an active hook *)
 
-val init : interface -> unit
+val init : unit -> unit
 (** Initialize hooks manager *)
 
 val init_hook : string -> 'a ctx -> 'a ctx
@@ -130,17 +117,17 @@ val init_hook : string -> 'a ctx -> 'a ctx
 val init_active_hooks : 'a ctx -> 'a ctx
 (** Initialize all active hooks *)
 
-val on_before_exec : zone -> stmt -> ('a,'a,unit) man -> 'a flow -> 'a ctx
-(** Call [on_before_exec] on all hooks attached to [zone] *)
+val on_before_exec : route -> stmt -> ('a,'a) man -> 'a flow -> 'a ctx
+(** Call [on_before_exec] on all active hooks *)
 
-val on_after_exec : zone -> stmt -> ('a,'a,unit) man -> 'a flow -> 'a post -> 'a ctx
-(** Call [on_after_exec] on all hooks attached to [zone] *)
+val on_after_exec : route -> stmt -> ('a,'a) man -> 'a flow -> 'a post -> 'a ctx
+(** Call [on_after_exec] on all active hooks *)
 
-val on_before_eval : (zone * zone) -> expr -> ('a,'a,unit) man -> 'a flow -> 'a ctx
-(** Call [on_before_eval] on all hooks attached to [zone] *)
+val on_before_eval : route -> expr -> ('a,'a) man -> 'a flow -> 'a ctx
+(** Call [on_before_eval] on all active hooks *)
 
-val on_after_eval : (zone * zone) -> expr -> ('a,'a,unit) man -> 'a flow -> 'a eval -> 'a ctx
-(** Call [on_after_eval] on all hooks attached to [zone] *)
+val on_after_eval : route -> expr -> ('a,'a) man -> 'a flow -> 'a eval -> 'a ctx
+(** Call [on_after_eval] on all active hooks *)
 
-val on_finish : ('a,'a,unit) man -> 'a flow -> unit
+val on_finish : ('a,'a) man -> 'a flow -> unit
 (** Call [on_finish] on all active hooks *)

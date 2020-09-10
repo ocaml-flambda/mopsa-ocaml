@@ -22,7 +22,6 @@
 (** Signature of stacked domains *)
 
 
-open Ast.All
 open Core.All
 
 
@@ -45,9 +44,6 @@ sig
   val name : string
   (** Name of the domain *)
 
-  val interface : interface
-  (** Interface of the domain *)
-
   val alarms : alarm_class list
   (** List of alarms detected by the domain *)
 
@@ -67,13 +63,13 @@ sig
   (** {2 Lattice operators} *)
   (** ********************* *)
 
-  val subset: ('a,t,'s) man -> uctx -> t * 's -> t * 's -> bool * 's * 's
+  val subset: ('a,t) man -> ('a,'s) stack_man -> uctx -> t * 's -> t * 's -> bool * 's * 's
 
-  val join  : ('a,t,'s) man -> uctx -> t * 's -> t * 's -> t * 's * 's
+  val join  : ('a,t) man -> ('a,'s) stack_man -> uctx -> t * 's -> t * 's -> t * 's * 's
 
-  val meet  : ('a,t,'s) man -> uctx -> t * 's -> t * 's -> t * 's * 's
+  val meet  : ('a,t) man -> ('a,'s) stack_man -> uctx -> t * 's -> t * 's -> t * 's * 's
 
-  val widen : ('a,t,'s) man -> uctx -> t * 's -> t * 's -> t * 's * 's * bool
+  val widen : ('a,t) man -> ('a,'s) stack_man -> uctx -> t * 's -> t * 's -> t * 's * 's * bool
 
   val merge : t -> t * log -> t * log -> t
   (** [merge pre (post1, log1) (post2, log2)] synchronizes two divergent
@@ -91,16 +87,16 @@ sig
   (** {2 Transfer functions} *)
   (** ********************** *)
 
-  val init : program -> ('a,t,'s) man -> 'a flow -> 'a flow
+  val init : program -> ('a,t) man -> 'a flow -> 'a flow
   (** Initialization function *)
 
-  val exec : zone -> stmt -> ('a,t,'s) man -> 'a flow -> 'a post option
+  val exec : stmt -> ('a,t) man -> 'a flow -> 'a post option
   (** Post-state of statements *)
 
-  val eval : (zone * zone) -> expr -> ('a,t,'s) man -> 'a flow -> 'a eval option
+  val eval : expr -> ('a,t) man -> 'a flow -> 'a eval option
   (** Evaluation of expressions *)
 
-  val ask  : 'r query -> ('a,t,'s) man -> 'a flow -> 'r option
+  val ask  : ('a,'r) query -> ('a,t) man -> 'a flow -> 'r option
   (** Handler of queries *)
 
 end
@@ -112,8 +108,8 @@ end
 (*==========================================================================*)
 
 
-(** Auto-logger lifter used when registering a domain *)
-module AutoLogger(D:STACKED) : STACKED with type t = D.t =
+(** Instrument transfer functions with some useful pre/post processing *)
+module Instrument(D:STACKED) : STACKED with type t = D.t =
 struct
   include D
 
@@ -125,14 +121,21 @@ struct
     else D.merge pre (a1,log1) (a2,log2)
 
 
-  let exec zone stmt man flow =
-    D.exec zone stmt man flow |>
+  (* Add stmt to the logs of the domain *)
+  let exec stmt man flow =
+    D.exec stmt man flow |>
     OptionExt.lift @@ fun res ->
     Cases.map_log (fun log ->
         man.set_log (
           man.get_log log |> Log.add_stmt_to_log stmt
         ) log
       ) res
+
+  (* Remove duplicate evaluations *)
+  let eval exp man flow =
+    D.eval exp man flow |>
+    OptionExt.lift @@ Eval.remove_duplicates man.lattice
+
 end
 
 
@@ -140,7 +143,7 @@ let domains : (module STACKED) list ref = ref []
 
 let register_stacked_domain dom =
   let module D = (val dom : STACKED) in
-  domains := (module AutoLogger(D)) :: !domains
+  domains := (module Instrument(D)) :: !domains
 
 let find_stacked_domain name =
   List.find (fun dom ->

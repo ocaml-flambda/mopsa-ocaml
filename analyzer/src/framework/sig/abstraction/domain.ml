@@ -22,7 +22,6 @@
 (** Signature of standard domains *)
 
 
-open Ast.All
 open Core.All
 
 
@@ -40,9 +39,6 @@ sig
 
   val name : string
   (** Name of the domain *)
-
-  val interface : interface
-  (** Interface of the domain *)
 
   val alarms : alarm_class list
   (** List of alarms detected by the domain *)
@@ -93,81 +89,17 @@ sig
   (** {2 Transfer functions} *)
   (** ********************** *)
 
-  val init : program -> ('a, t, 's) man -> 'a flow -> 'a flow
+  val init : program -> ('a, t) man -> 'a flow -> 'a flow
   (** Initialization function *)
 
-  val exec : zone -> stmt -> ('a, t, 's) man -> 'a flow -> 'a post option
+  val exec : stmt -> ('a, t) man -> 'a flow -> 'a post option
   (** Post-state of statements *)
 
-  val eval : (zone * zone) -> expr -> ('a, t, 's) man -> 'a flow -> 'a eval option
+  val eval : expr -> ('a, t) man -> 'a flow -> 'a eval option
   (** Evaluation of expressions *)
 
-  val ask  : 'r query -> ('a, t, 's) man -> 'a flow -> 'r option
+  val ask  : ('a,'r) query -> ('a, t) man -> 'a flow -> 'r option
   (** Handler of queries *)
-
-end
-
-
-
-(** Cast a standard signature into a stacked signature *)
-module MakeStacked(D:DOMAIN) : Stacked.STACKED with type t = D.t =
-struct
-
-  (** {2 Domain header} *)
-  (** ***************** *)
-
-  type t = D.t
-
-  let id = D.id
-
-  let name = D.name
-
-  let interface = D.interface
-
-  let alarms = D.alarms
-
-  let bottom = D.bottom
-
-  let top = D.top
-
-  let is_bottom = D.is_bottom
-
-  let print = D.print
-
-
-  (** {2 Lattice operators} *)
-  (** ********************* *)
-
-  let subset man ctx (a,s) (a',s') =
-    if a == a' then true, s, s' else
-    D.subset a a', s, s'
-
-  let join man ctx (a,s) (a',s') =
-    if a == a' then a, s, s' else
-    D.join a a', s, s'
-
-  let meet man ctx (a,s) (a',s') =
-    if a == a' then a, s, s' else
-    D.meet a a', s, s'
-
-  let widen man ctx (a,s) (a',s') =
-    if a == a' then a, s, s', true else
-    D.widen ctx a a', s, s', true
-
-  let merge = D.merge
-
-
-  (** {2 Transfer functions} *)
-  (** ********************** *)
-
-  let init = D.init
-
-  let exec = D.exec
-
-  let eval = D.eval
-
-  let ask = D.ask
-
 
 end
 
@@ -177,8 +109,8 @@ end
 (*==========================================================================*)
 
 
-(** Auto-logger lifter used when registering a domain *)
-module AutoLogger(D:DOMAIN) : DOMAIN with type t = D.t =
+(** Instrument transfer functions with some useful pre/post processing *)
+module Instrument(D:DOMAIN) : DOMAIN with type t = D.t =
 struct
   include D
 
@@ -188,23 +120,30 @@ struct
     if Log.is_empty_log log2 then a1 else
     if (Log.compare_log log1 log2 = 0) then a1
     else D.merge pre (a1,log1) (a2,log2)
-
-
-  let exec zone stmt man flow =
-    D.exec zone stmt man flow |>
+  
+  (* Add stmt to the logs of the domain *)
+  let exec stmt man flow =
+    D.exec stmt man flow |>
     OptionExt.lift @@ fun res ->
     Cases.map_log (fun log ->
         man.set_log (
           man.get_log log |> Log.add_stmt_to_log stmt
         ) log
       ) res
+
+  (* Remove duplicate evaluations *)
+  let eval exp man flow =
+    D.eval exp man flow |>
+    OptionExt.lift @@ Eval.remove_duplicates man.lattice
+
+  
 end
 
 let domains : (module DOMAIN) list ref = ref []
 
 let register_standard_domain dom =
   let module D = (val dom : DOMAIN) in
-  domains := (module AutoLogger(D)) :: !domains
+  domains := (module Instrument(D)) :: !domains
 
 
 let find_standard_domain name =

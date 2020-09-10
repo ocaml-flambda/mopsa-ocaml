@@ -24,7 +24,7 @@
 open Mopsa
 open Ast
 open Bot
-open Framework.Sig.Abstraction.Value
+open Sig.Abstraction.Value
 open Common
 
 
@@ -42,8 +42,6 @@ struct
       let name = "universal.numeric.values.intervals.integer"
       let display = "int-itv"
     end)
-
-  let zones = [Zone.Z_u_num; Zone.Z_u_int]
 
   let bottom = BOT
 
@@ -229,7 +227,7 @@ struct
 
   (** {2 Query handlers} *)
 
-  let ask : type r. t value_man -> r query -> r option =
+  let ask : type r. ('a,t) value_man -> ('a,r) query -> r option =
     fun man q ->
     match q with
     | Common.Q_int_interval e ->

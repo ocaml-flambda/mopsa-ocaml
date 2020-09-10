@@ -23,7 +23,6 @@
     Only transfer functions need to be defined.
 *)
 
-open Ast.All
 open Core.All
 
 
@@ -39,53 +38,23 @@ sig
   val id : unit id
   (** Identifier of the domain *)
 
-  val interface : interface
-  (** Zoning interface *)
-
   val alarms : alarm_class list
   (** List of alarms detected by the domain *)
 
 
   (** {2 Transfer functions} *)
   (** ********************** *)
-  val init : program -> ('a, unit, 's) man -> 'a flow -> 'a flow
+  val init : program -> ('a, unit) man -> 'a flow -> 'a flow
   (** Initialization routine *)
 
-  val exec : zone -> stmt -> ('a, unit, 's) man -> 'a flow -> 'a post option
+  val exec : stmt -> ('a, unit) man -> 'a flow -> 'a post option
   (** Computation of post-conditions *)
 
-  val eval : zone * zone -> expr -> ('a, unit, 's) man -> 'a flow -> 'a eval option
+  val eval : expr -> ('a, unit) man -> 'a flow -> 'a eval option
   (** Evaluation of expressions *)
 
-  val ask  : 'r query -> ('a, unit, 's) man -> 'a flow -> 'r option
+  val ask  : ('a,'r) query -> ('a, unit) man -> 'a flow -> 'r option
   (** Handler of queries *)
-
-end
-
-module MakeDomain(S: STATELESS) : Domain.DOMAIN with type t = unit =
-struct
-
-  type t = unit
-  let name = S.name
-  let id = S.id
-  let bottom = ()
-  let top = ()
-  let is_bottom () = false
-  let merge _ _ _ = ()
-  let print _ _ = ()
-
-  let interface = S.interface
-  let alarms = S.alarms
-
-  let subset () () = true
-  let join () () = ()
-  let meet () () = ()
-  let widen _ () () = ()
-
-  let init = S.init
-  let exec = S.exec
-  let eval = S.eval
-  let ask = S.ask
 
 end
 
@@ -95,10 +64,24 @@ end
 (*==========================================================================*)
 
 
+(** Instrument transfer functions with some useful pre/post processing *)
+module Instrument(D:STATELESS) : STATELESS =
+struct
+  include D
+
+  (* Remove duplicate evaluations *)
+  let eval exp man flow =
+    D.eval exp man flow |>
+    OptionExt.lift @@ Eval.remove_duplicates man.lattice
+
+end
+
+
 let domains : (module STATELESS) list ref = ref []
 
 let register_stateless_domain dom =
-  domains := dom :: !domains
+  let module D = (val dom : STATELESS) in
+  domains := (module Instrument(D)) :: !domains
 
 let find_stateless_domain name =
   List.find (fun dom ->

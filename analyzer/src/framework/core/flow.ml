@@ -65,6 +65,9 @@ let is_bottom (lattice: 'a lattice) (flow: 'a flow) : bool =
 let is_top (lattice: 'a lattice) (flow: 'a flow) : bool =
   TokenMap.is_top lattice flow.tmap
 
+let is_empty (flow:'a flow) : bool =
+  TokenMap.is_empty flow.tmap && AlarmSet.is_empty flow.alarms
+
 let subset (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : bool =
   TokenMap.subset lattice (Context.get_unit flow2.ctx) flow1.tmap flow2.tmap
 
@@ -123,6 +126,63 @@ let widen (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
     }
 
 
+let get_ctx flow = flow.ctx
+
+let set_ctx ctx flow =
+  if ctx == flow.ctx then flow else {flow with ctx}
+
+let get_unit_ctx flow = Context.get_unit flow.ctx
+
+let set_unit_ctx ctx flow = { flow with ctx = Context.set_unit ctx flow.ctx }
+
+let map_ctx f flow = set_ctx (f @@ get_ctx flow) flow
+
+let copy_ctx flow1 flow2 =
+  let ctx = get_ctx flow1 in
+  set_ctx ctx flow2
+
+let get_alarms flow = flow.alarms
+
+let set_alarms alarms flow = { flow with alarms }
+
+let remove_alarms flow = { flow with alarms = AlarmSet.empty }
+
+let copy_alarms src dst = { dst with alarms = AlarmSet.union src.alarms dst.alarms }
+
+
+let create ctx alarms tmap = {
+  tmap;
+  ctx;
+  alarms;
+}
+
+let get_callstack flow =
+  get_ctx flow |>
+  Context.find_unit Context.callstack_ctx_key
+
+
+let set_callstack cs flow =
+  set_ctx (
+    get_ctx flow |>
+    Context.add_unit Context.callstack_ctx_key cs
+  ) flow
+
+let push_callstack fname ?(uniq=fname) range flow =
+  set_callstack (
+    get_callstack flow |>
+    push_callstack fname ~uniq range
+  ) flow
+
+let pop_callstack flow =
+  let hd, cs = get_callstack flow |>
+               pop_callstack
+  in
+  hd, set_callstack cs flow
+
+let bottom_from flow : 'a flow =
+  bottom (get_ctx flow) (get_alarms flow)
+
+
 let print (pp: Format.formatter -> 'a -> unit) fmt flow =
   Format.fprintf fmt "@[%a@\n|alarms| = %d@]"
     (TokenMap.print pp) flow.tmap
@@ -159,6 +219,8 @@ let rename (tki: token) (tko: token) (lattice: 'a lattice) (flow: 'a flow) : 'a 
   remove tki flow |>
   add tko ai lattice
 
+let mem (tk:token) (flow:'a flow) = TokenMap.mem tk flow.tmap
+
 let filter (f: token -> 'a -> bool) (flow: 'a flow) : 'a flow =
   { flow with tmap = TokenMap.filter f flow.tmap }
 
@@ -173,17 +235,6 @@ let map (f: token -> 'a -> 'a) (flow: 'a flow) : 'a flow =
 let fold (f: 'b -> token -> 'a -> 'b) (init: 'b) (flow: 'a flow) : 'b =
   TokenMap.fold f init flow.tmap
 
-let merge
-    (ftk: token -> 'a option -> 'a option -> 'a option)
-    (falarm: AlarmSet.t -> AlarmSet.t -> AlarmSet.t)
-    (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
-  let ctx = Context.get_most_recent flow1.ctx flow2.ctx in
-  {
-    tmap = TokenMap.merge ftk lattice flow1.tmap flow2.tmap;
-    ctx;
-    alarms = falarm flow1.alarms flow2.alarms;
-  }
-
 let map2zo
     (f1: token -> 'a -> 'a)
     (f2: token -> 'a -> 'a)
@@ -197,21 +248,24 @@ let map2zo
     alarms = falarm flow1.alarms flow2.alarms;
   }
 
+let merge lattice ~merge_alarms pre (flow1,log1) (flow2,log2) =
+  let ctx = Context.get_most_recent (get_ctx flow1) (get_ctx flow2) |>
+            Context.get_unit
+  in
+  map2zo
+    (fun _ a1 -> lattice.bottom)
+    (fun _ a2 -> lattice.bottom)
+    (fun tk a1 a2 ->
+       match tk with
+       (* Logs concern only cur environments *)
+       | T_cur ->
+         (* Merge the cur environments *)
+         let p = get T_cur lattice pre in
+         lattice.merge p (a1,log1) (a2,log2)
 
-let get_ctx flow = flow.ctx
-
-let set_ctx ctx flow =
-  if ctx == flow.ctx then flow else {flow with ctx}
-
-let get_unit_ctx flow = Context.get_unit flow.ctx
-
-let set_unit_ctx ctx flow = { flow with ctx = Context.set_unit ctx flow.ctx }
-
-let map_ctx f flow = set_ctx (f @@ get_ctx flow) flow
-
-let copy_ctx flow1 flow2 =
-  let ctx = get_ctx flow1 in
-  set_ctx ctx flow2
+       (* For the other tokens, compute the meet of the environments *)
+       | _ -> lattice.meet ctx a1 a2
+    ) merge_alarms flow1 flow2
 
 let get_token_map flow = flow.tmap
 
@@ -226,43 +280,3 @@ let raise_alarm ?(force=false) ?(bottom=false) alarm lattice flow =
   if not bottom
   then flow
   else set T_cur lattice.bottom lattice flow
-
-let get_alarms flow = flow.alarms
-
-let set_alarms alarms flow = { flow with alarms }
-
-let remove_alarms flow = { flow with alarms = AlarmSet.empty }
-
-let copy_alarms src dst = { dst with alarms = AlarmSet.union src.alarms dst.alarms }
-
-let create ctx alarms tmap = {
-  tmap;
-  ctx;
-  alarms;
-}
-
-let get_callstack flow =
-  get_ctx flow |>
-  Context.find_unit Context.callstack_ctx_key
-
-
-let set_callstack cs flow =
-  set_ctx (
-    get_ctx flow |>
-    Context.add_unit Context.callstack_ctx_key cs
-  ) flow
-
-let push_callstack fname ?(uniq=fname) range flow =
-  set_callstack (
-    get_callstack flow |>
-    push_callstack fname ~uniq range
-  ) flow
-
-let pop_callstack flow =
-  let hd, cs = get_callstack flow |>
-               pop_callstack
-  in
-  hd, set_callstack cs flow
-
-let bottom_from flow : 'a flow =
-  bottom (get_ctx flow) (get_alarms flow)

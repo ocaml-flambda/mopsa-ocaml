@@ -68,13 +68,10 @@ let () =
         | _ -> next a1 a2
       );
       print = (fun next fmt -> function
-        | A_stub_invalid_requires_condition e -> Format.fprintf fmt "invalid requirement '%a'" (Debug.bold pp_stub_quantified_expr) e
+        | A_stub_invalid_requires_condition e -> Format.fprintf fmt "invalid requirement '%a'" (Debug.bold pp_expr) e
         | a -> next fmt a
       );
   }
-
-
-
 
 
 type alarm_class   += A_stub_alarm

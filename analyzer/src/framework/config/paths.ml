@@ -42,3 +42,17 @@ let get_lang_stubs_dir lang () =
 
 let resolve_stub lang stub =
   Filename.concat (get_lang_stubs_dir lang ()) stub
+
+
+(** Return the path of the configuration file *)
+let resolve_config_file config =
+  let config =
+    try Sys.getenv "MOPSACONFIG"
+    with Not_found -> config
+  in
+  if Sys.file_exists config && not (Sys.is_directory config) then config
+  else
+    let file = Filename.concat (get_configs_dir ()) config in
+    if Sys.file_exists file && not (Sys.is_directory file) then file
+    else Exceptions.panic "unable to find configuration file %s" config
+

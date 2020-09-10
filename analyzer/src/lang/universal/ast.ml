@@ -240,8 +240,15 @@ let addr_partitioning_pp_chain : (Format.formatter -> addr_partitioning -> unit)
       | _ -> Format.pp_print_string fmt "*"
     )
 
-let pp_addr_partitioning fmt ak =
-  !addr_partitioning_pp_chain fmt ak
+(** Command line option to use hashes as address format *)
+let opt_hash_addr = ref false
+let () = register_builtin_option {
+    key = "-heap-use-hash-format";
+    category = "Heap";
+    doc = "  format heap addresses with their hash";
+    spec = ArgExt.Set opt_hash_addr;
+    default = "false";
+  }
 
 let pp_addr_partitioning_hash fmt (g:addr_partitioning) =
   Format.fprintf fmt "%xd"
@@ -250,7 +257,13 @@ let pp_addr_partitioning_hash fmt (g:addr_partitioning) =
        number of meaningful nodes to encounter, collisions are less
        likely to happen.
     *)
-    (Hashtbl.hash_param 30 100 g)
+    (Hashtbl.hash_param 50 150 g)
+
+let pp_addr_partitioning fmt ak =
+  if !opt_hash_addr
+  then pp_addr_partitioning_hash fmt ak
+  else !addr_partitioning_pp_chain fmt ak
+
 
 
 let compare_addr_partitioning a1 a2 =
@@ -287,12 +300,12 @@ let compare_addr a b =
       (fun () -> compare_mode a.addr_mode b.addr_mode);
     ]
 
-type _ query += Q_debug_addr_value : addr -> Framework.Engines.Interactive.var_value query
+type ('a,_) query += Q_debug_addr_value : addr -> ('a,Framework.Engines.Interactive.var_value) query
 
 let () =
   register_query {
-      join = (let doit : type r. query_pool -> r query -> r -> r -> r =
-          fun next query a b ->
+      join = (let doit : type a r. query_operator -> (a,r) query -> (a->a->a) -> r -> r -> r =
+          fun next query join a b ->
           match query with
           | Q_debug_addr_value addr ->
              let open Framework.Engines.Interactive in
@@ -306,17 +319,10 @@ let () =
                                  end in
              {var_value=None; var_value_type = T_any; var_sub_value}
 
-          | _ -> next.meet_query query a b
+          | _ -> next.apply query join a b
         in doit
       );
-      meet = (
-        let doit : type r. query_pool -> r query -> r -> r -> r =
-          fun next query a b ->
-          match query with
-          | Q_debug_addr_value addr -> assert false
-          | _ -> next.meet_query query a b
-               in doit
-      );
+      meet = (fun next q meet a b -> next.apply q meet a b);
     }
 
 
@@ -823,6 +829,18 @@ let mk_addr addr ?(etyp=T_addr) range = mk_expr ~etyp (E_addr addr) range
 let mk_alloc_addr ?(mode=STRONG) addr_kind range =
   mk_expr (E_alloc_addr (addr_kind, mode)) ~etyp:T_addr range
 
+let weaken_addr_expr e =
+  match ekind e with
+  | E_addr {addr_mode = WEAK} -> e
+  | E_addr addr -> {e with ekind = E_addr {addr with addr_mode = WEAK}}
+  | _ -> assert false
+
+let strongigy_addr_expr e =
+  match ekind e with
+  | E_addr {addr_mode = STRONG} -> e
+  | E_addr addr -> {e with ekind = E_addr {addr with addr_mode = STRONG}}
+  | _ -> assert false
+
 let is_int_type = function
   | T_int | T_bool -> true
   | _ -> false
@@ -839,6 +857,9 @@ let is_math_type = function
   | T_int | T_float _ | T_bool -> true
   | _ -> false
 
+let is_predicate_op = function
+  | O_float_class _ -> true
+  | _ -> false
 
 let mk_assert e range =
   mk_stmt (S_assert e) range
@@ -886,30 +907,128 @@ let mk_expand_addr a al range =
 let mk_fold_addr a al range =
   mk_fold (mk_addr a range) (List.map (fun aa -> mk_addr aa range) al) range
 
-
-let rec expr_to_z (e: expr) : Z.t option =
+let rec expr_to_const e : constant option =
+  if not (is_numeric_type e.etyp) then None else 
   match ekind e with
-  | E_constant (C_int n) -> Some n
+  | E_constant c -> Some c
+
+  | E_unop(O_log_not, ee) ->
+    begin
+      match expr_to_const ee with
+      | None -> None
+      | Some (C_bool b) ->
+        Some (C_bool (not b))
+      | Some (C_top T_bool) as x -> x
+      | _ -> None
+    end
+
   | E_unop (O_minus, e') ->
     begin
-      match expr_to_z e' with
+      match expr_to_const e' with
       | None -> None
-      | Some n -> Some (Z.neg n)
+      | Some (C_int n) -> Some (C_int (Z.neg n))
+      | Some (C_top T_int) as x -> x
+      | _ -> None
     end
-  | E_binop(op, e1, e2) ->
+
+  | E_binop(op, e1, e2) when is_comparison_op op ->
     begin
-      match expr_to_z e1, expr_to_z e2 with
-      | Some n1, Some n2 ->
+      match op, expr_to_const e1, expr_to_const e2 with
+      | O_eq, Some (C_int n1), Some (C_int n2) ->
+        Some (C_bool Z.(n1 = n2))
+
+      | O_eq, Some (C_int n), Some (C_int_interval (a,b))
+      | O_eq, Some (C_int_interval (a,b)), Some (C_int n) ->
+        let c = if Z.(a <= n && n <= b) then C_top T_bool else C_bool false in
+        Some c
+
+      | O_ne, Some (C_int n1), Some (C_int n2) ->
+        Some (C_bool Z.(n1 <> n2))
+
+      | O_ne, Some (C_int n), Some (C_int_interval (a,b))
+      | O_ne, Some (C_int_interval (a,b)), Some (C_int n) ->
+        let c = if Z.(a <= n && n <= b) then C_top T_bool else C_bool true in
+        Some c
+
+      | O_le, Some (C_int n1), Some (C_int n2)
+      | O_ge, Some (C_int n2), Some (C_int n1)  ->
+        Some (C_bool Z.(n1 <= n2))
+
+      | O_le, Some (C_int n), Some (C_int_interval (a,b))
+      | O_ge, Some (C_int_interval (a,b)), Some (C_int n) ->
+        let c = if Z.(n <= a) then C_bool true else if Z.(n > b) then C_bool false else C_top T_bool in
+        Some c
+
+      | O_le, Some (C_int_interval (a,b)), Some (C_int n)
+      | O_ge, Some (C_int n), Some (C_int_interval (a,b)) ->
+        let c = if Z.(b <= n) then C_bool true else if Z.(a > n) then C_bool false else C_top T_bool in
+        Some c
+
+      | O_lt, Some (C_int n1), Some (C_int n2)
+      | O_gt, Some (C_int n2), Some (C_int n1)  ->
+        Some (C_bool Z.(n1 < n2))
+
+      | O_lt, Some (C_int n), Some (C_int_interval (a,b))
+      | O_gt, Some (C_int_interval (a,b)), Some (C_int n) ->
+        let c = if Z.(n < a) then C_bool true else if Z.(n >= b) then C_bool false else C_top T_bool in
+        Some c
+
+      | O_lt, Some (C_int_interval (a,b)), Some (C_int n)
+      | O_gt, Some (C_int n), Some (C_int_interval (a,b)) ->
+        let c = if Z.(b < n) then C_bool true else if Z.(a >= n) then C_bool false else C_top T_bool in
+        Some c
+
+      | _ -> None
+    end
+
+  | E_binop(O_log_and, e1, e2) ->
+    begin
+      match expr_to_const e1, expr_to_const e2 with
+      | Some (C_bool b1), Some (C_bool b2) ->
+        Some (C_bool (b1 && b2))
+
+      | Some (C_top T_bool), x
+      | x, Some (C_top T_bool) ->
+        x
+
+      | _ -> None
+    end
+
+  | E_binop(O_log_or, e1, e2) ->
+    begin
+      match expr_to_const e1, expr_to_const e2 with
+      | Some (C_bool b1), Some (C_bool b2) ->
+        Some (C_bool (b1 || b2))
+
+      | Some (C_top T_bool), x
+      | x, Some (C_top T_bool) ->
+        Some (C_top T_bool)
+
+      | _ -> None
+    end
+
+  | E_binop(O_plus | O_minus | O_mult | O_div as op, e1, e2) ->
+    begin
+      match expr_to_const e1, expr_to_const e2 with
+      | Some (C_int n1), Some (C_int n2) ->
         begin
           match op with
-          | O_plus -> Some (Z.add n1 n2)
-          | O_minus -> Some (Z.sub n1 n2)
-          | O_mult -> Some (Z.mul n1 n2)
-          | O_div -> if Z.equal n2 Z.zero then None else Some (Z.div n1 n2)
+          | O_plus -> Some (C_int (Z.add n1 n2))
+          | O_minus -> Some (C_int (Z.sub n1 n2))
+          | O_mult -> Some (C_int (Z.mul n1 n2))
+          | O_div -> if Z.equal n2 Z.zero then None else Some (C_int (Z.div n1 n2))
           | _ -> None
         end
       | _ -> None
     end
+
+  | _ -> None
+
+let expr_to_z (e:expr) : Z.t option =
+  match expr_to_const e with
+  | Some (C_int n) -> Some n
+  | Some (C_bool true) -> Some Z.one
+  | Some (C_bool false) -> Some Z.zero
   | _ -> None
 
 module Addr =

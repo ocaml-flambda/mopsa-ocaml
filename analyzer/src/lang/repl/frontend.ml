@@ -29,7 +29,6 @@ open Sig.Abstraction.Stateless
 open Lexing
 open Universal.Ast
 open Universal.Frontend
-open Universal.Zone
 open Debug
 
 
@@ -217,14 +216,14 @@ let rec repl_loop ctx man flow =
          | Stmt ->
             let stmt = parse_stmt ctx str in
             pf "%s@[<v 4>X♯ ≜ 𝕊⟦%a@]⟧ =@]%s@." col_out pp_stmt stmt col_reset;
-            let flow = man.exec stmt flow in
+            let flow = man.exec stmt flow |> post_to_flow man in
             pf "%s@[<v 4>%a@]%s@." col_out (Flow.print man.lattice.print) flow col_reset;
             ctx, flow
 
          | VarDecl ->
             let ctx, stmts, vars = parse_vardec ctx str in
             let flow =
-              List.fold_left (fun flow stmt -> man.exec stmt flow) flow stmts
+              List.fold_left (fun flow stmt -> man.exec stmt flow |> post_to_flow man) flow stmts
             in
             List.iter (
                 fun v ->
@@ -301,23 +300,20 @@ module Domain = struct
     end)
 
 
-  let interface = {
-    iexec = {provides = [Z_u]; uses = []};
-    ieval = {provides = []; uses = []};
-  }
+  let dependencies = []
 
   let alarms = []
 
   let init prog man flow = flow
 
-  let exec zone stmt man flow =
+  let exec stmt man flow =
     match skind stmt with
     | S_program ({ prog_kind = P_REPL }, _) ->
        Some (Post.return (enter_repl man flow))
 
     | _ -> None
 
-  let eval zone exp man flow = None
+  let eval exp man flow = None
 
   let ask query man flow = None
 

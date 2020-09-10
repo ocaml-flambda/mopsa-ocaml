@@ -25,6 +25,7 @@
 */
 
 #include <time.h>
+#include <errno.h>
 #include "mopsa_libc_utils.h"
 
 

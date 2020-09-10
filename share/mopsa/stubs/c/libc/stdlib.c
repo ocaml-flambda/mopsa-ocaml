@@ -28,6 +28,7 @@
 #include <limits.h>
 #include <inttypes.h>
 #include <locale.h>
+#include <errno.h>
 #include "mopsa_libc_utils.h"
 
 

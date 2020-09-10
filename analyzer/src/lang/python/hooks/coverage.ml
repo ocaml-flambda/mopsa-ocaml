@@ -26,15 +26,11 @@ open Location
 open Mopsa
 open Format
 open Ast
-open Zone
-
 
 module Hook =
 struct
 
   let name = "py.coverage"
-  let exec_zones = [Z_any]
-  let eval_zones = [Z_py,Z_any]
 
   let compare_stmt_andrange s1 s2 =
     Compare.compose

@@ -25,6 +25,7 @@
 */
 #include <math.h>
 #include <stdint.h>
+#include <errno.h>
 #include "mopsa_libc_utils.h"
 
 

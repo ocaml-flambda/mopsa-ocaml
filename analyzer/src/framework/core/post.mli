@@ -33,20 +33,22 @@ open Callstack
 
 type 'a post = ('a, unit) cases
 
-val return : ?log:log -> ?cleaners:block -> 'a flow -> 'a post
-
-val print : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a post -> unit
-
 val join : 'a post -> 'a post -> 'a post
 
 val join_list : empty:(unit -> 'a post) -> 'a post list -> 'a post
 
 val meet : 'a post -> 'a post -> 'a post
 
-val get_ctx : 'a post -> 'a ctx
+val meet_list : empty:(unit -> 'a post) -> 'a post list -> 'a post
 
-val set_ctx : 'a ctx -> 'a post -> 'a post
+val return : ?cleaners:block -> 'a flow -> 'a post
 
-val get_callstack : 'a post -> callstack
+val print : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a post -> unit
 
-val bind : ('a flow -> 'a post) -> 'a post -> 'a post
+val bind : ('a flow -> ('a,'r) cases) -> 'a post -> ('a,'r) cases
+val (>>%) : 'a post -> ('a flow -> ('a,'r) cases) -> ('a,'r) cases
+
+val bind_opt : ('a flow -> ('a,'r) cases option) -> 'a post -> ('a,'r) cases option
+val (>>%?) : 'a post -> ('a flow -> ('a,'r) cases option) -> ('a,'r) cases option
+
+val remove_duplicates : 'a lattice -> 'a post -> 'a post

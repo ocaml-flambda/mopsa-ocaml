@@ -146,3 +146,22 @@ void test_int_of_double_cast() {
   int i = (int) f2;
   _mopsa_assert(i == 2);
 }
+
+void test_int_as_condition() {
+  int x = 0;
+  if (x) {
+    _mopsa_assert_unreachable();
+  } else {
+    _mopsa_assert_reachable();
+  }
+}
+
+void test_int_addition_as_condition() {
+  int x = 0;
+  int y = 1;
+  if (x + y) {
+    _mopsa_assert_reachable();
+  } else {
+    _mopsa_assert_unreachable();
+  }
+}

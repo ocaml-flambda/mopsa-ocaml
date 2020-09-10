@@ -22,7 +22,7 @@
 (** Interval abstraction of float values. *)
 
 open Mopsa
-open Framework.Sig.Abstraction.Value
+open Sig.Abstraction.Value
 open Rounding
 open Ast
 open Bot
@@ -48,8 +48,6 @@ struct
     end
     )
 
-
-  let zones = [Zone.Z_u_num; Zone.Z_u_float]
 
   let () =
     import_standalone_option Rounding.name ~into:name
@@ -212,7 +210,7 @@ struct
     | false, O_gt -> I.filter_gt_false  (prec p) a1 a2
     | _ -> a1,a2
 
-  let ask : type r. t value_man -> r query -> r option = fun man q ->
+  let ask : type r. ('a,t) value_man -> ('a,r) query -> r option = fun man q ->
     match q with
     | Common.Q_float_interval e ->
       man.eval e |>

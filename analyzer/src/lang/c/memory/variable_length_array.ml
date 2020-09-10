@@ -24,10 +24,8 @@
 open Mopsa
 open Sig.Abstraction.Stateless
 open Universal.Ast
-open Universal.Zone
 open Stubs.Ast
 open Ast
-open Zone
 
 
 module Domain =
@@ -39,23 +37,7 @@ struct
   include GenStatelessDomainId
       (struct let name = "c.memory.variable_length_array" end)
 
-  let interface = {
-    iexec = {
-      provides = [Z_c];
-      uses = [
-        Z_c_low_level;
-        Z_c_scalar;
-        Z_u_num
-      ];
-    };
-    ieval = {
-      provides = [Z_c_low_level, Z_c_scalar];
-      uses = [
-        Z_c,Z_c_scalar;
-        Z_c,Z_u_num
-      ];
-    }
-  }
+  let scalar = Semantic "C/Scalar"
 
   let alarms = []
 
@@ -99,7 +81,7 @@ struct
       let () = pp_variable_length Format.str_formatter arr in
       Format.flush_str_formatter ()
     in
-    mkv name (V_c_variable_length arr) ul
+    mkv name (V_c_variable_length arr) ul ~semantic:"C/Scalar"
 
 
 
@@ -122,31 +104,31 @@ struct
 
     (* Add the length variable to the environment *)
     let len = mk_variable_length_var arr in
-    man.post ~zone:Z_c_scalar (mk_add_var len range) flow >>$ fun () flow ->
+    man.exec (mk_add_var len range) ~route:scalar flow >>% fun flow ->
 
     (* Initialize it with the length expression *)
-    man.eval ~zone:(Z_c,Z_u_num) (get_array_length_expr arr) flow >>$ fun e flow ->
+    man.eval (get_array_length_expr arr) flow >>$ fun e flow ->
     let ee = mul e
         (under_array_type arr.vtyp |> void_to_char |> sizeof_type |> (fun z -> mk_z z range))
         range
     in
-    man.post ~zone:Z_c_scalar (mk_assign (mk_var len range) ee range) flow >>$ fun () flow ->
+    man.exec (mk_assign (mk_var len range) ee range) ~route:scalar flow >>% fun flow ->
 
     (* Add arr as a base in the underlying memory abstraction *)
-    man.post ~zone:Z_c_low_level (mk_add_var arr range) flow
+    man.exec (mk_add_var arr range) flow
 
 
   (** 𝕊⟦ remove arr; ⟧ *)
   let exec_remove arr range man flow =
     (* Remove the base arr from the underlying memory abstraction *)
-    man.post ~zone:Z_c_low_level (mk_remove_var arr range) flow >>$ fun () flow ->
+    man.exec ~route:(Below name) (mk_remove_var arr range) flow >>% fun flow ->
 
     (* Remove the length variable from the environment *)
     let len = mk_variable_length_var arr in
-    man.post ~zone:Z_c_scalar (mk_remove_var len range) flow
+    man.exec ~route:scalar (mk_remove_var len range) flow
 
 
-  let exec zone stmt man flow =
+  let exec stmt man flow =
     match skind stmt with
     | S_c_declaration(v,None,_) when is_c_variable_length_array_type v.vtyp ->
       exec_declare v stmt.srange man flow |>
@@ -165,10 +147,10 @@ struct
   (** 𝔼⟦ bytes(arr) ⟧ *)
   let eval_bytes arr range man flow =
     let len = mk_variable_length_var arr in
-    Eval.singleton (mk_var len range) flow
+    man.eval (mk_var len range) flow
 
 
-  let eval zone exp man flow =
+  let eval exp man flow =
     match ekind exp with
     | E_stub_builtin_call(BYTES, { ekind = E_var(v,_) }) when is_c_variable_length_array_type v.vtyp ->
       eval_bytes v exp.erange man flow |>

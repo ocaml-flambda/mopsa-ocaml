@@ -1,13 +1,15 @@
 {
     "language": "repl",
     "domain": {
-	"seq": [
+	"switch": [
+	    // Partitioning
+	    "universal.partitioning.merge_after_stmt",
+
 	    // Iterators
 	    "universal.repl",
 	    "universal.iterators.intraproc",
 	    "universal.iterators.loops",
             "universal.iterators.interproc.inlining",
-            "universal.iterators.scalar",
 
 	    // Numeric abstraction
             {

@@ -21,15 +21,8 @@
 
 (** Signature of an analysis engine *)
 
-open Ast.Program
-open Ast.Expr
-open Ast.Stmt
-open Core
-open Flow
-open Eval
-open Zone
+open Core.All
 open Toplevel
-open Manager
 
 module type ENGINE =
 sig
@@ -38,12 +31,12 @@ sig
 
   val init : program -> t flow
 
-  val exec : ?zone:zone -> stmt -> t flow -> t flow
+  val exec : ?route:route -> stmt -> t flow -> t post
 
-  val eval : ?zone:(zone * zone) -> ?via:zone -> expr -> t flow -> t eval
+  val eval : ?route:route -> expr -> t flow -> t eval
 
-  val ask : 'r Query.query -> t flow -> 'r
+  val ask : ?route:route -> (t,'r) query -> t flow -> 'r
 
-  val man : (t, t, unit) man
+  val man : (t, t) man
 
 end

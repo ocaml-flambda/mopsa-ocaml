@@ -35,16 +35,14 @@ struct
 
   let name = "gctest"
 
-  let exec_zones = [Z_any]
-  let eval_zones = [Z_any,Z_any]
 
   let init ctx = ()
 
 
-  let on_before_exec zone stmt man flow = ()
-  let on_after_exec zone stmt man flow post = ()
-  let on_before_eval zone exp man flow = ()
-  let on_after_eval zone exp man flow evl = ()
+  let on_before_exec route stmt man flow = ()
+  let on_after_exec route stmt man flow post = ()
+  let on_before_eval route exp man flow = ()
+  let on_after_eval route exp man flow evl = ()
 
   let on_finish man flow =
     let alladdr = man.ask Heap.Recency.Q_allocated_addresses flow in

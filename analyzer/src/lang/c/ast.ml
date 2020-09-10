@@ -157,6 +157,9 @@ type typ +=
   | T_c_qualified of c_qual * typ
   (** Qualified type. *)
 
+  | T_c_block_object of typ
+  (** Type of block objects.  *)  
+
 
 (** {2 Function descriptor} *)
 (** *********************** *)
@@ -328,6 +331,12 @@ type expr_kind +=
 
   | E_c_atomic of int (** operation *) * expr * expr
 
+  | E_c_block_object of expr
+  (** Block objects are useful to distinguish between operations on
+      the block itself and its content.  For, expanding the contents of
+      a block will duplicate every cell in the block, while expanding
+      the block object will update the pointers that point to the
+      block.  *)  
 
 
 
@@ -341,9 +350,6 @@ type c_scope_update = {
   c_scope_var_removed: var list;
 }
 (** Scope update information for jump statements *)
-
-
-
 
 
 (*==========================================================================*)
@@ -723,6 +729,10 @@ let is_c_signed_int_type (t:typ) =
   | T_c_integer (C_unsigned_char | C_unsigned_short | C_unsigned_int | C_unsigned_int128 | C_unsigned_long | C_unsigned_long_long) -> false
   | _ -> false
 
+let is_c_bool_type (t:typ) =
+  match remove_typedef_qual t with
+  | T_c_bool -> true
+  | _ -> false
 
 (** [is_c_int_type t] tests whether [t] is a floating point type *)
 let is_c_float_type ( t : typ) =
@@ -841,6 +851,7 @@ let is_c_type = function
   | T_c_record  _
   | T_c_enum _
   | T_c_qualified _ -> true
+  | T_addr -> true (* XXX is it safe to consider heap addresses as C objects? *)
   | _ -> false
 
 let is_c_function_parameter v =
@@ -901,6 +912,16 @@ let sll = T_c_integer(C_signed_long_long)
 let array_type typ size = T_c_array(typ,C_array_length_cst size)
 
 let type_of_string s = T_c_array(s8, C_array_length_cst (Z.of_int (1 + String.length s)))
+
+let is_c_block_object_type = function T_c_block_object _ -> true | _ -> false
+
+let to_c_block_object e = mk_expr (E_c_block_object e) e.erange ~etyp:(T_c_block_object e.etyp)
+
+let of_c_block_object e =
+  match ekind e with
+  | E_c_block_object ee -> ee
+  | _ -> assert false
+
 
 let mk_c_string ?(kind=C_char_ascii) s range =
   mk_constant (C_c_string (s, kind)) range ~etyp:(type_of_string s)
@@ -991,8 +1012,101 @@ let () =
           (fun () -> compare q1.c_qual_is_restrict q2.c_qual_is_restrict);
           (fun () -> compare_typ t1 t2)
         ]
+      | T_c_block_object tt1, T_c_block_object tt2 -> compare_typ tt1 tt2
       | _ -> next t1 t2
     )
+
+let () =
+  register_expr_compare
+    (fun next e1 e2 ->
+       match ekind e1, ekind e2 with
+       | E_c_conditional(cond1,then1,else1), E_c_conditional(cond2,then2,else2) ->
+         Compare.triple compare_expr compare_expr compare_expr
+           (cond1,then1,else1)
+           (cond2,then2,else2)
+
+       | E_c_array_subscript(a1,i1), E_c_array_subscript(a2,i2) ->
+         Compare.pair compare_expr compare_expr
+           (a1,i1)
+           (a2,i2)
+
+       | E_c_member_access(s1,i1,f1), E_c_member_access(s2,i2,f2) ->
+         Compare.triple compare_expr compare compare
+           (s1,i1,f1)
+           (s2,i2,f2)
+
+       | E_c_function(f1), E_c_function(f2) ->
+         compare f1.c_func_unique_name f2.c_func_unique_name
+
+       | E_c_builtin_function(f1), E_c_builtin_function(f2) ->
+         compare f1 f2
+
+       | E_c_builtin_call(f1,args1), E_c_builtin_call(f2,args2) ->
+         Compare.pair compare (Compare.list compare_expr)
+           (f1,args1)
+           (f2,args2)
+
+       | E_c_arrow_access(p1,i1,f1), E_c_arrow_access(p2,i2,f2) ->
+         Compare.triple compare_expr compare compare
+           (p1,i1,f1)
+           (p2,i2,f2)
+
+       | E_c_assign(x1,e1), E_c_assign(x2,e2) ->
+         Compare.pair compare_expr compare_expr
+           (x1,e1)
+           (x2,e2)
+
+       | E_c_compound_assign(lval1,t1,op1,rval1,tt1), E_c_compound_assign(lval2,t2,op2,rval2,tt2) ->
+         Compare.compose [
+           (fun () -> compare_expr lval1 lval2);
+           (fun () -> compare_typ t1 t2);
+           (fun () -> compare_operator op1 op2);
+           (fun () -> compare_expr rval1 rval2);
+           (fun () -> compare_typ tt1 tt2);
+         ]
+
+       | E_c_comma(e1,ee1), E_c_comma(e2,ee2) ->
+         Compare.pair compare_expr compare_expr
+           (e1,ee1)
+           (e2,ee2)
+
+       | E_c_increment(dir1,loc1,e1), E_c_increment(dir2,loc2,e2) ->
+         Compare.triple compare compare compare_expr
+           (dir1,loc1,e1)
+           (dir2,loc2,e2)
+
+       | E_c_address_of(e1), E_c_address_of(e2) ->
+         compare_expr e1 e2
+
+       | E_c_deref(e1), E_c_deref(e2) ->
+         compare_expr e1 e2
+
+       | E_c_cast(e1,b1), E_c_cast(e2,b2) ->
+         Compare.pair compare_expr compare
+           (e1,b1)
+           (e2,b2)
+
+       | E_c_statement(s1), E_c_statement(s2) ->
+         compare_stmt s1 s2
+
+       | E_c_predefined(s1), E_c_predefined(s2) ->
+         compare s1 s2
+
+       | E_c_var_args(e1), E_c_var_args(e2) ->
+         compare_expr e1 e2
+
+       | E_c_atomic(op1,e1,ee1), E_c_atomic(op2,e2,ee2) ->
+         Compare.triple compare compare_expr compare_expr
+           (op1,e1,ee1)
+           (op2,e2,ee2)
+
+       | E_c_block_object(e1), E_c_block_object(e2) ->
+         compare_expr e1 e2
+
+       | _ -> next e1 e2
+    )
+
+
 
 let range_cond e_mint rmin rmax range =
   let condle = mk_binop e_mint O_le (mk_z rmax range) ~etyp:T_bool range in
@@ -1079,6 +1193,11 @@ let is_c_constant e =
   | None -> false
   | Some _ -> true
 
+let rec is_c_lval e =
+  match ekind e with
+  | E_var _ | E_c_deref _ | E_c_array_subscript _ | E_c_member_access _ | E_c_arrow_access _ -> true
+  | Stubs.Ast.E_stub_primed ee -> is_c_lval ee
+  | _ -> false
 
 let is_c_deref e =
   match remove_casts e |> ekind with
@@ -1089,20 +1208,6 @@ let get_c_deref_type e =
   match remove_casts e |> ekind with
   | E_c_deref p -> under_type p.etyp
   | _ -> assert false
-
-let is_pointer_offset_forall_quantified p =
-  let open Stubs.Ast in
-  match remove_casts p |> ekind with
-  | E_binop(_,e1,e2) when is_c_pointer_type e1.etyp -> is_expr_forall_quantified e2
-  | E_binop(_,e1,e2) when is_c_pointer_type e2.etyp -> is_expr_forall_quantified e1
-  | _ -> false
-
-let is_lval_offset_forall_quantified e =
-  let open Stubs.Ast in
-  match remove_casts e |> ekind with
-  | E_c_deref(p) -> is_pointer_offset_forall_quantified p
-  | E_c_array_subscript(_,o) -> is_expr_forall_quantified o
-  | _ -> false
 
 (** Check if v is declared as a variable length array *)
 let is_c_variable_length_array_type t =
@@ -1125,84 +1230,84 @@ let find_c_fundec_by_name name flow =
 let assert_valid_string (p:expr) range man flow =
   let f = find_c_fundec_by_name "_mopsa_assert_valid_string" flow in
   let stmt = mk_c_call_stmt f [p] range in
-  man.post stmt flow
+  man.exec stmt flow
 
 (** Check if a pointer points to a nul-terminated wide char array *)
 let assert_valid_wide_string (p:expr) range man flow =
   let f = find_c_fundec_by_name "_mopsa_assert_valid_wide_string" flow in
   let stmt = mk_c_call_stmt f [p] range in
-  man.post stmt flow
+  man.exec stmt flow
 
 (** Check if a pointer points to a valid stream *)
 let assert_valid_stream (p:expr) range man flow =
   let f = find_c_fundec_by_name "_mopsa_assert_valid_stream" flow in
   let stmt = mk_c_call_stmt f [p] range in
-  man.post stmt flow
+  man.exec stmt flow
 
 (** Check if a pointer points to a valid file descriptor *)
 let assert_valid_file_descriptor (p:expr) range man flow =
   let f = find_c_fundec_by_name "_mopsa_assert_valid_file_descriptor" flow in
   let stmt = mk_c_call_stmt f [p] range in
-  man.post stmt flow
+  man.exec stmt flow
 
 
 (** Check if a pointer is valid *)
 let assert_valid_ptr (p:expr) range man flow =
   let f = find_c_fundec_by_name "_mopsa_assert_valid_ptr" flow in
   let stmt = mk_c_call_stmt f [p] range in
-  man.post stmt flow
+  man.exec stmt flow
 
 
 (** Randomize an entire array *)
 let memrand (p:expr) (i:expr) (j:expr) range man flow =
   let f = find_c_fundec_by_name "_mopsa_memrand" flow in
   let stmt = mk_c_call_stmt f [p; i; j] range in
-  man.post stmt flow
+  man.exec stmt flow
 
 (** Randomize a string *)
 let strrand (p:expr) range man flow =
   let f = find_c_fundec_by_name "_mopsa_strrand" flow in
   let stmt = mk_c_call_stmt f [p] range in
-  man.post stmt flow
+  man.exec stmt flow
 
 (** Randomize a substring *)
 let strnrand (p:expr) (n:expr) range man flow =
   let f = find_c_fundec_by_name "_mopsa_strnrand" flow in
   let stmt = mk_c_call_stmt f [p; n] range in
-  man.post stmt flow
+  man.exec stmt flow
 
 
 (** Randomize a wide substring *)
 let wcsnrand (p:expr) (n:expr) range man flow =
   let f = find_c_fundec_by_name "_mopsa_wcsnrand" flow in
   let stmt = mk_c_call_stmt f [p; n] range in
-  man.post stmt flow
+  man.exec stmt flow
 
 
 (** Set elements of an array with the same value [c] *)
 let memset (p:expr) (c:expr) (i:expr) (j:expr) range man flow =
   let f = find_c_fundec_by_name "_mopsa_memset" flow in
   let stmt = mk_c_call_stmt f [p; c; i; j] range in
-  man.post stmt flow
+  man.exec stmt flow
 
 
 (** Copy elements of an array *)
 let memcpy (dst:expr) (src:expr) (i:expr) (j:expr) range man flow =
   let f = find_c_fundec_by_name "_mopsa_memcpy" flow in
   let stmt = mk_c_call_stmt f [dst; src; i; j] range in
-  man.post stmt flow
+  man.exec stmt flow
 
 (** Exit if status is non-zero *)
 let error_error (p:expr) range man flow =
   let f = find_c_fundec_by_name "_mopsa_error" flow in
   let stmt = mk_c_call_stmt f [p] range in
-  man.post stmt flow
+  man.exec stmt flow
 
 (** Exit if status is non-zero *)
 let error_error_at_line (p:expr) (n:expr) range man flow =
   let f = find_c_fundec_by_name "_mopsa_error_at_line" flow in
   let stmt = mk_c_call_stmt f [p; n] range in
-  man.post stmt flow
+  man.exec stmt flow
 
 let asprintf_stub (dst:expr) range man flow =
   let f = find_c_fundec_by_name "_mopsa_asprintf" flow in

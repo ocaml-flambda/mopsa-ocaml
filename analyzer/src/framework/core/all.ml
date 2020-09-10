@@ -19,7 +19,25 @@
 (*                                                                          *)
 (****************************************************************************)
 
+include Ast.Constant
+include Ast.Expr
+include Ast.Stmt
+include Ast.Typ
+include Ast.Program
+include Ast.Frontend
+include Ast.Operator
+include Ast.Var
+include Ast.Visitor
+
+module Var =
+struct
+  type t = var
+  let compare = compare_var
+  let print = pp_var
+end
+
 include Alarm
+module Alarm = Alarm
 
 module Context = Context
 type uctx = Context.uctx
@@ -27,13 +45,8 @@ type 'a ctx = 'a Context.ctx
 
 module Cases = Cases
 
+type 'r case = 'r Cases.case
 type ('a,'r) cases = ('a,'r) Cases.cases
-
-let bind_full = Cases.bind_full
-let (>>*) = Cases.(>>*)
-
-let bind_full_opt = Cases.bind_full_opt
-let (>>*?) = Cases.(>>*?)
 
 let bind = Cases.bind
 let (>>=) = Cases.(>>=)
@@ -41,10 +54,10 @@ let (>>=) = Cases.(>>=)
 let bind_opt = Cases.bind_opt
 let (>>=?) = Cases.(>>=?)
 
-let bind_some = Cases.bind_some
+let bind_result = Cases.bind_result
 let (>>$) = Cases.(>>$)
 
-let bind_some_opt = Cases.bind_some_opt
+let bind_result_opt = Cases.bind_result_opt
 let (>>$?) = Cases.(>>$?)
 
 let bind_list = Cases.bind_list
@@ -59,6 +72,9 @@ type 'a flow = 'a Flow.flow
 module Post = Post
 type 'a post = 'a Post.post
 
+let (>>%) = Post.(>>%)
+let (>>%?) = Post.(>>%?)
+
 module Log = Log
 include Log
 
@@ -66,14 +82,13 @@ include Query
 
 include Token
 
-include Zone
+include Semantic
+
+include Route
 
 include Lattice
 
 include Id
-
-include Interface
-module Interface = Interface
 
 include Manager
 

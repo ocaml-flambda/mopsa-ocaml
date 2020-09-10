@@ -21,7 +21,6 @@
 
 (** Union of two value abstractions *)
 
-open Ast.All
 open Core.All
 open Sig.Abstraction.Value
 open Common
@@ -39,31 +38,7 @@ struct
 
   let id = V_pair(V1.id,V2.id)
 
-  let () =
-    let open Eq in
-    register_id {
-      eq = (
-        let f : type a. a id -> (a, t) eq option =
-          function
-          | V_pair (id1,id2) ->
-            begin
-              match equal_id id1 V1.id with
-              | Some Eq ->
-                begin match equal_id id2 V2.id with
-                  | Some Eq -> Some Eq
-                  | None -> None
-                end
-              | None -> None
-            end
-          | _ -> None
-        in
-        f
-      );
-    }
-
   let display = V1.display ^ " ∪ " ^ V2.display
-
-  let zones = V1.zones @ V2.zones
 
   let print fmt (v1,v2) =
     match V1.is_bottom v1, V2.is_bottom v2 with
@@ -82,12 +57,12 @@ struct
   (** {2 Value managers} *)
   (** ****************** *)
 
-  let v1_man (man:t value_man) : V1.t value_man = {
+  let v1_man (man:('a,t) value_man) : ('a,V1.t) value_man = {
     man with
     eval = (fun e -> man.eval e |> fst);
   }
 
-  let v2_man (man:t value_man) : V2.t value_man = {
+  let v2_man (man:('a,t) value_man) : ('a,V2.t) value_man = {
     man with
     eval = (fun e -> man.eval e |> snd);
   }
@@ -160,9 +135,11 @@ struct
   (** ***************** *)
 
   let ask man q =
-    let r1 = V1.ask (v1_man man) q in
-    let r2 = V2.ask (v2_man man) q in
-    OptionExt.neutral2 (join_query q) r1 r2
+    OptionExt.neutral2
+      (join_query q
+         ~join:(fun _ _ -> Exceptions.panic "abstract queries called from value abstraction"))
+      (V1.ask (v1_man man) q)
+      (V2.ask (v2_man man) q)
 
 
 

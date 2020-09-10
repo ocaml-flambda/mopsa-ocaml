@@ -55,29 +55,24 @@ struct
               let name = name
             end)
 
-  let interface = {
-    iexec = {provides = [Zone.Z_py]; uses = []};
-    ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
-  }
-
   let init _ _ flow = flow
 
   let allocate_builtin ?(mode=STRONG) man range flow bltin oe =
     (* allocate addr, and map this addr to inst bltin *)
     let range = tag_range range "alloc_%s" bltin in
     let cls = fst @@ find_builtin bltin in
-    man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr ~mode:mode (A_py_instance cls) range) flow |>
-    Eval.bind (fun eaddr flow ->
+    man.eval   (mk_alloc_addr ~mode:mode (A_py_instance cls) range) flow >>$
+      (fun eaddr flow ->
         let addr = match ekind eaddr with
           | E_addr a -> a
           | _ -> assert false in
-        man.exec ~zone:Zone.Z_py_obj (mk_add eaddr range) flow |>
+        man.exec   (mk_add eaddr range) flow >>%
         Eval.singleton (mk_py_object (addr, oe) range)
       )
 
   let alarms = []
 
-  let rec eval zs exp man flow =
+  let rec eval exp man flow =
     let range = exp.erange in
     match ekind exp with
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("slice.__new__" as f, _))}, _)}, cls :: args, []) ->
@@ -88,16 +83,16 @@ struct
               [intornone; intornone; intornone]
               (fun _ flow ->
                 let start, stop, step = match args with a::b::c::[] -> a,b,c | _ -> assert false in
-                man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr ~mode:STRONG (A_py_instance (fst @@ find_builtin "slice")) (tag_range range "alloc_slice")) flow |>
-                Eval.bind (fun eaddr flow ->
+                man.eval   (mk_alloc_addr ~mode:STRONG (A_py_instance (fst @@ find_builtin "slice")) (tag_range range "alloc_slice")) flow >>$
+                  (fun eaddr flow ->
                     let addr = match ekind eaddr with
                       | E_addr a -> a
                       | _ -> assert false in
                     let obj = mk_py_object (addr, None) range in
-                    man.exec ~zone:Zone.Z_py_obj (mk_add eaddr range) flow |>
-                    man.exec ~zone:Zone.Z_py (mk_assign (mk_py_attr obj "start" range) start range) |>
-                    man.exec ~zone:Zone.Z_py (mk_assign (mk_py_attr obj "stop" range) stop range) |>
-                    man.exec ~zone:Zone.Z_py (mk_assign (mk_py_attr obj "step" range) step range) |>
+                    man.exec   (mk_add eaddr range) flow >>%
+                    man.exec   (mk_assign (mk_py_attr obj "start" range) start range) >>%
+                    man.exec   (mk_assign (mk_py_attr obj "stop" range) stop range) >>%
+                    man.exec   (mk_assign (mk_py_attr obj "step" range) step range) >>%
                     Eval.singleton obj
                   )
               )
@@ -109,36 +104,36 @@ struct
         (fun eargs flow ->
           let slice, length = match eargs with a::b::[] -> a, b | _ -> assert false in
           (* assumes that _PySlice_GetLongIndices and PySlice_Unpack+PySlice_AdjustIndices carry the same meaning in sliceobject.c *)
-          let py_ssize_t_max (*FIXME. should be sys.maxsize *) = mk_z (Z.of_string "9223372036854775807") ?typ:(Some T_int) range in
-          let py_ssize_t_min = mk_binop (mk_unop O_minus py_ssize_t_max range) O_minus (mk_int 1 ?typ:(Some T_int) range) range in
+          let py_ssize_t_max (*FIXME. should be sys.maxsize *) = mk_z (Z.of_string "9223372036854775807") ?typ:(Some (T_py (Some Int))) range in
+          let py_ssize_t_min = mk_binop ~etyp:(T_py None) (mk_unop ~etyp:(T_py (Some Int)) O_minus py_ssize_t_max range) O_minus (mk_int 1 ?typ:(Some (T_py None)) range) range in
           (* fixme: potential overflow over int start/stop/step (in new or here?) *)
-          let _step = mk_range_attr_var range "step" T_any in
-          let _start = mk_range_attr_var range "start" T_any in
-          let _stop = mk_range_attr_var range "stop" T_any in
+          let _step = mk_range_attr_var range "step" (T_py None) in
+          let _start = mk_range_attr_var range "start" (T_py None) in
+          let _stop = mk_range_attr_var range "stop" (T_py None) in
 
           let step = mk_py_attr slice "step" range in
           let start = mk_py_attr slice "start" range in
           let stop = mk_py_attr slice "stop" range in
 
 
-          let zero = mk_int 0 range in
-          let one = mk_int 1 range in
-          let mone = mk_int (-1) range in
+          let zero = mk_int ~typ:(T_py None) 0 range in
+          let one = mk_int ~typ:(T_py None) 1 range in
+          let mone = mk_int ~typ:(T_py None) (-1) range in
 
-          let unpack__step = mk_assign (mk_var _step range) (mk_expr (E_py_if (mk_py_isinstance_builtin step "NoneType" range,
+          let unpack__step = mk_assign (mk_var _step range) (mk_expr ~etyp:(T_py None) (E_py_if (mk_py_isinstance_builtin step "NoneType" range,
                                                             one,
                                                             step)) range) range in
           let unpack__start = mk_assign (mk_var _start range)
-                             (mk_expr (E_py_if (mk_py_isinstance_builtin start "NoneType" range,
-                                                mk_expr (E_py_if (
-                                                             mk_binop (mk_var _step range) O_lt zero range,
+                             (mk_expr ~etyp:(T_py None) (E_py_if (mk_py_isinstance_builtin start "NoneType" range,
+                                                mk_expr ~etyp:(T_py None) (E_py_if (
+                                                             mk_binop ~etyp:(T_py None) (mk_var _step range) O_lt zero range,
                                                              py_ssize_t_max,
                                                              zero)) range,
                                                 start)) range) range in
           let unpack__stop = mk_assign (mk_var _stop range)
-                               (mk_expr (E_py_if (mk_py_isinstance_builtin stop "NoneType" range,
-                                                  mk_expr (E_py_if (
-                                                               mk_binop (mk_var _step range) O_lt zero range,
+                               (mk_expr ~etyp:(T_py None) (E_py_if (mk_py_isinstance_builtin stop "NoneType" range,
+                                                  mk_expr ~etyp:(T_py None) (E_py_if (
+                                                               mk_binop ~etyp:(T_py None) (mk_var _step range) O_lt zero range,
                                                                py_ssize_t_min,
                                                                py_ssize_t_max
                                                     )) range,
@@ -147,12 +142,12 @@ struct
 
           let adjust_st st =
             mk_if
-              (mk_binop st O_lt zero range)
+              (mk_binop ~etyp:(T_py None) st O_lt zero range)
               (mk_block
-                 [mk_assign st (mk_binop st O_plus length range) range;
+                 [mk_assign st (mk_binop ~etyp:(T_py None) st O_plus length range) range;
                   mk_if
-                    (mk_binop st O_lt zero range)
-                    (mk_assign st (mk_expr (E_py_if (mk_binop (mk_var _step range) O_lt zero range,
+                    (mk_binop ~etyp:(T_py None) st O_lt zero range)
+                    (mk_assign st (mk_expr ~etyp:(T_py None) (E_py_if (mk_binop ~etyp:(T_py None) (mk_var _step range) O_lt zero range,
                                                      mone,
                                                      zero)) range) range)
                     (mk_nop range)
@@ -160,9 +155,9 @@ struct
                  ]
                  range)
               (mk_if
-                 (mk_binop st O_ge length range)
-                 (mk_assign st (mk_expr (E_py_if (mk_binop (mk_var _step range) O_lt zero range,
-                                                  mk_binop length O_minus one range,
+                 (mk_binop ~etyp:(T_py None) st O_ge length range)
+                 (mk_assign st (mk_expr ~etyp:(T_py None) (E_py_if (mk_binop ~etyp:(T_py None) (mk_var _step range) O_lt zero range,
+                                                  mk_binop ~etyp:(T_py None) length O_minus one range,
                                                   length)) range) range)
                  (mk_nop range)
                  range) range
@@ -170,11 +165,11 @@ struct
           let adjust__start = adjust_st (mk_var _start range) in
           let adjust__stop = adjust_st (mk_var _stop range) in
 
-          man.exec ~zone:Zone.Z_py (mk_block [unpack__step; unpack__start; unpack__stop; adjust__start; adjust__stop] range) flow |>
-            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_tuple [mk_var _start range;
+          man.exec   (mk_block [unpack__step; unpack__start; unpack__stop; adjust__start; adjust__stop] range) flow >>%
+            man.eval   (mk_expr ~etyp:(T_py None) (E_py_tuple [mk_var _start range;
                                                                             mk_var _stop range;
                                                                             mk_var _step range]) range) |>
-            Eval.add_cleaners [mk_remove_var _step range;
+            Cases.add_cleaners [mk_remove_var _step range;
                                mk_remove_var _start range;
                                mk_remove_var _stop range]
 
@@ -184,12 +179,12 @@ struct
 
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range.__new__", _))}, _)} as call, cls :: [up], []) ->
-      let args' = (mk_constant ~etyp:T_int (C_int (Z.of_int 0)) range)::up::(mk_constant ~etyp:T_int (C_int (Z.of_int 1)) range)::[] in
-      man.eval {exp with ekind = E_py_call(call, cls :: args', [])} flow
+       let args' = [mk_int 0 ~typ:(T_py None) range; up; mk_int 1 ~typ:(T_py None) range] in
+       man.eval {exp with ekind = E_py_call(call, cls :: args', [])} flow
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range.__new__", _))}, _)} as call, cls :: [down; up], []) ->
-      let args' = down::up::(mk_constant ~etyp:T_int (C_int (Z.of_int 1)) range)::[] in
+      let args' = [down; up; mk_int 1 ~typ:(T_py None) range] in
       man.eval {exp with ekind = E_py_call(call, cls :: args', [])} flow
       |> OptionExt.return
 
@@ -201,16 +196,16 @@ struct
               (fun args flow ->
                  let start, stop, step = match args with a::b::c::[] -> a, b, c | _ -> assert false in
                  let alloc_range = tag_range range "alloc_%s" "range" in
-                 man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr ~mode:STRONG (A_py_instance (fst @@ find_builtin "range")) alloc_range) flow |>
-                 Eval.bind (fun eaddr flow ->
+                 man.eval   (mk_alloc_addr ~mode:STRONG (A_py_instance (fst @@ find_builtin "range")) alloc_range) flow >>$
+ (fun eaddr flow ->
                      let addr = match ekind eaddr with
                        | E_addr a -> a
                        | _ -> assert false in
                      let obj = mk_py_object (addr, None) range in
-                     man.exec ~zone:Zone.Z_py_obj (mk_add eaddr range) flow |>
-                     man.exec ~zone:Zone.Z_py (mk_assign (mk_py_attr obj "start" range) start range) |>
-                     man.exec ~zone:Zone.Z_py (mk_assign (mk_py_attr obj "stop" range) stop range) |>
-                     man.exec ~zone:Zone.Z_py (mk_assign (mk_py_attr obj "step" range) step range) |>
+                     man.exec    (mk_add eaddr range) flow >>%
+                     man.exec   (mk_assign (mk_py_attr obj "start" range) start range) >>%
+                     man.exec   (mk_assign (mk_py_attr obj "stop" range) stop range) >>%
+                     man.exec   (mk_assign (mk_py_attr obj "step" range) step range) >>%
                      Eval.singleton obj
                    )
               )
@@ -221,12 +216,12 @@ struct
       Exceptions.panic "todo: %a@\n" pp_expr exp
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range.__len__", _))}, _)}, [arg], []) ->
-      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) arg flow |>
-      Eval.bind (fun arg flow ->
+      man.eval   arg flow >>$
+ (fun arg flow ->
           let ra s = mk_py_attr arg s range in
-          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)
-            (mk_binop
-               (mk_binop
+          man.eval
+            (mk_binop ~etyp:(T_py None)
+               (mk_binop ~etyp:(T_py None)
                   (ra "stop")
                   O_minus
                   (ra "start")
@@ -242,19 +237,19 @@ struct
         (fun r flow ->
            let range_obj = List.hd r in
            let alloc_range = tag_range range "alloc_%s" "range" in
-           man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr ~mode:STRONG (A_py_instance (fst @@ find_builtin "range_iterator")) alloc_range) flow |>
-           Eval.bind (fun eaddr flow ->
+           man.eval   (mk_alloc_addr ~mode:STRONG (A_py_instance (fst @@ find_builtin "range_iterator")) alloc_range) flow >>$
+ (fun eaddr flow ->
                let addr = match ekind eaddr with
                  | E_addr a -> a
                  | _ -> assert false in
                let obj = mk_py_object (addr, None) range in
                (* FIXME: replace stop by length which should be computed, see rangeobject.c:197 *)
                flow |>
-               man.exec ~zone:Zone.Z_py_obj (mk_add eaddr range) |>
-               man.exec ~zone:Zone.Z_py (mk_assign (mk_py_attr obj "start" range) (mk_py_attr range_obj "start" range) range) |>
-               man.exec ~zone:Zone.Z_py (mk_assign (mk_py_attr obj "stop" range) (mk_py_attr range_obj "stop" range) range) |>
-               man.exec ~zone:Zone.Z_py (mk_assign (mk_py_attr obj "step" range) (mk_py_attr range_obj "step" range) range) |>
-               man.exec ~zone:Zone.Z_py (mk_assign (mk_py_attr obj "index" range) (mk_int 0 ~typ:T_int range) range) |>
+               man.exec    (mk_add eaddr range) >>%
+               man.exec   (mk_assign (mk_py_attr obj "start" range) (mk_py_attr range_obj "start" range) range) >>%
+               man.exec   (mk_assign (mk_py_attr obj "stop" range) (mk_py_attr range_obj "stop" range) range) >>%
+               man.exec   (mk_assign (mk_py_attr obj "step" range) (mk_py_attr range_obj "step" range) range) >>%
+               man.exec   (mk_assign (mk_py_attr obj "index" range) (mk_int 0 ~typ:(T_py None) range) range) >>%
                (* FIXME: rangeobject:874: no stop but a len field. These are CPython fields and not attributes too *)
                Eval.singleton obj)
         )
@@ -269,12 +264,12 @@ struct
           let start = mk_py_attr r "start" range in
           let step = mk_py_attr r "step" range in
           let len = mk_py_call (mk_py_object (find_builtin_function "range.__len__") range) [r] range in
-          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)
+          man.eval
             (mk_py_call (mk_py_object (find_builtin_function "range.__iter__") range)
                [mk_py_call (mk_py_object (find_builtin "range") range)
-                  [ mk_binop (mk_binop start O_minus step range) O_plus (mk_binop len O_mult step range) range;
-                    mk_binop start O_minus step range;
-                    mk_unop O_minus step range
+                  [ mk_binop ~etyp:(T_py None) (mk_binop ~etyp:(T_py None) start O_minus step range) O_plus (mk_binop ~etyp:(T_py None) len O_mult step range) range;
+                    mk_binop ~etyp:(T_py None) start O_minus step range;
+                    mk_unop ~etyp:(T_py None) O_minus step range
                   ]
                   range]
                range) flow
@@ -292,25 +287,25 @@ struct
            let index = mk_py_attr rangeit "index" range in
            let stop = mk_py_attr rangeit "stop" range in
            assume
-             (mk_binop
-               (mk_binop start O_plus (mk_binop index O_mult step range) range)
+             (mk_binop ~etyp:(T_py None)
+               (mk_binop ~etyp:(T_py None) start O_plus (mk_binop ~etyp:(T_py None) index O_mult step range) range)
                O_lt
                stop
                range
              )
-             ~zone:Zone.Z_py man flow
+               man flow
              ~fthen:(fun flow ->
-               man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_binop start O_plus (mk_binop index O_mult step range) range) flow |>
-                 (* add_cleaners is ugly, but a bind_some is incorrect
+               man.eval   (mk_binop ~etyp:(T_py None) start O_plus (mk_binop ~etyp:(T_py None) index O_mult step range) range) flow |>
+                 (* add_cleaners is ugly, but a bind_result is incorrect
                     (the return of eval will be something like <<int
                     :: start + index * step>>. If we update index
                     afterwards, it will change the value in the return
                     above too... *)
-                 Eval.add_cleaners [mk_assign index (mk_binop index O_plus (mk_int 1 ~typ:T_int range) range) range]
+                 Cases.add_cleaners [mk_assign index (mk_binop ~etyp:(T_py None) index O_plus (mk_int 1 ~typ:(T_py None) range) range) range]
                )
              ~felse:(fun flow ->
-                   man.exec (Utils.mk_builtin_raise "StopIteration" range) flow
-                   |> Eval.empty_singleton
+                   man.exec (Utils.mk_builtin_raise "StopIteration" range) flow >>%
+                   Eval.empty
                )
         )
       |> OptionExt.return
@@ -321,7 +316,7 @@ struct
 
     | _ -> None
 
-  let exec zone stmt man flow =
+  let exec stmt man flow =
     let range = srange stmt in
     match skind stmt with
     | S_py_for (target, ({ekind = E_py_object ({addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "range", _)}}, _)} as rangeobj), body, {skind = S_block ([], _)}) ->
@@ -345,8 +340,9 @@ struct
               target = target - step```
            (It seems that in the case of the else statement, the usual desugar is sometimes better, so we keep it).
         *)
+       let start = Timing.start () in
        let ra s = mk_py_attr rangeobj s (tag_range range "%s" s) in
-       Utils.bind_list_args man [ra "start"; ra "stop"; ra "step"] flow range Zone.Z_py
+       let res = Utils.bind_list_args man [ra "start"; ra "stop"; ra "step"] flow range
          (fun vars flow ->
              let start, stop, step = match List.map (fun x -> mk_var x range) vars with
                | [a;b;c] -> a, b, c
@@ -357,7 +353,7 @@ struct
                let old_body = match skind body with
                  | S_block (stmts, _) -> stmts
                  | _ -> [body] in
-               let targetostep o = mk_binop target o step range in
+               let targetostep o = mk_binop ~etyp:(T_py None) target o step range in
                let incr_target = mk_assign target (targetostep O_plus) range in
                let decr_target = mk_assign target (targetostep O_minus) range in
                (* let new_else = match skind orelse with
@@ -365,17 +361,20 @@ struct
                 *   | S_block (t, _) -> mk_block (decr_target :: t) range
                 *   | _ -> mk_block (decr_target :: orelse :: []) range in *)
                let while_stmt =
-                 mk_while (mk_binop target comp_op stop range)
+                 mk_while (mk_binop ~etyp:(T_py None) target comp_op stop range)
                    (mk_block (old_body @ [incr_target]) range) range in
-               mk_if (mk_binop start comp_op stop range)
+               mk_if (mk_binop ~etyp:(T_py None) start comp_op stop range)
                  (mk_block (assign_target :: while_stmt :: decr_target :: []) range)
                  (mk_nop range) range
              in
-             assume (mk_binop step O_gt (mk_zero range) range) man flow
-               ~fthen:(fun flow -> man.exec (gen_stmt O_lt) flow |> Post.return)
-               ~felse:(fun flow -> man.exec (gen_stmt O_gt) flow |> Post.return)
+             assume (mk_binop ~etyp:(T_py None) step O_gt (mk_zero ~typ:(T_py None) range) range) man flow
+               ~fthen:(fun flow -> man.exec (gen_stmt O_lt) flow >>% Post.return)
+               ~felse:(fun flow -> man.exec (gen_stmt O_gt) flow >>% Post.return)
          )
-       |> OptionExt.return
+                 |> OptionExt.return in
+       Debug.debug ~channel:"profiling" "for loop at range %a: %.4f" pp_range range (Timing.stop start);
+       res
+
 
        | _ -> None
 

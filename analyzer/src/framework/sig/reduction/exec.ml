@@ -21,14 +21,13 @@
 
 (** Reduction rules for abstract evaluations *)
 
-open Ast.All
 open Core.All
 
 
 
 (** Manager used by reduction rules *)
-type ('a,'s) exec_reduction_man = {
-  get_man : 't. 't id -> ('a, 't, 's) man;
+type 'a exec_reduction_man = {
+  get_man : 't. 't id -> ('a, 't) man;
 }
 
 
@@ -36,7 +35,7 @@ type ('a,'s) exec_reduction_man = {
 module type EXEC_REDUCTION =
 sig
   val name   : string
-  val reduce : stmt -> ('a,'b,'s) man -> ('a,'s) exec_reduction_man -> 'a flow -> 'a flow  -> 'a post
+  val reduce : stmt -> ('a,'b) man -> 'a exec_reduction_man -> 'a flow -> 'a flow  -> 'a post option
 end
 
 

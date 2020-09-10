@@ -28,6 +28,7 @@
 #include <limits.h>
 #include "mopsa_libc_utils.h"
 #include <fcntl.h> // for AT_FDCWD
+#include <errno.h>
 
 
 /*$

@@ -21,8 +21,7 @@
 
 (** Runner - main entry point of the analysis *)
 
-open Ast.All
-open Core
+open Core.All
 open Config.Options
 
 (** {2 Command-line options} *)
@@ -72,8 +71,9 @@ let parse_program lang files =
 let analyze_files (files:string list) (args:string list option) : int =
   let t = Timing.start () in
   try
-    let abstraction = Config.Abstraction.Parser.(parse !opt_config) in
-    let domain = Config.Abstraction.Builder.make abstraction in
+    let config = Config.Paths.resolve_config_file !Config.Abstraction.Parser.opt_config in
+    let abstraction = Config.Abstraction.Parser.parse config in
+    let domain = Config.Abstraction.Builder.from_json abstraction.domain in
 
     let prog = parse_program abstraction.language files in
 
@@ -95,7 +95,7 @@ let analyze_files (files:string list) (args:string list option) : int =
 
     let flow = Engine.init prog in
     let stmt = mk_stmt (S_program (prog, args)) prog.prog_range in
-    let res = Engine.exec stmt flow in
+    let res = Engine.exec stmt flow |> post_to_flow Engine.man in
     let t = Timing.stop t in
     Hook.on_finish Engine.man res;
     Output.Factory.report Engine.man res t files

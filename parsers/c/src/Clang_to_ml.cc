@@ -63,7 +63,6 @@
 #include <caml/custom.h>
 #include <caml/callback.h>
 #include <caml/gc.h>
-#include <caml/threads.h>
 
 #undef flush // to be able to use std::flush
 
@@ -4723,7 +4722,6 @@ public:
 
   virtual void HandleTranslationUnit(ASTContext &Context) {
     Decl* decl = Context.getTranslationUnitDecl();
-    caml_acquire_runtime_system();
     MLTreeBuilderVisitor Visitor(loc, &Context, src, com);
     *ret = Visitor.TranslateDecl(decl);
   }
@@ -4800,7 +4798,6 @@ CAML_EXPORT value mlclang_parse(value command, value target, value name, value a
   ci.createASTContext();
   ci.getDiagnosticClient().BeginSourceFile(ci.getLangOpts(), &pp);
   ASTContext& Context = ci.getASTContext();
-  caml_release_runtime_system(); // enabled back in AST consumer callback
   ParseAST(pp, &ci.getASTConsumer(), Context);
 
   // get disgnostics

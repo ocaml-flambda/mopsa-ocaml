@@ -4,6 +4,16 @@ from enum import IntEnum
 from typing import Any, Callable, Tuple, Union, Optional, Iterable, Set
 from types import FrameType
 
+class OSError(Exception):
+    errno: int
+    strerror: str
+    # filename, filename2 are actually Union[str, bytes, None]
+    filename: Any
+    filename2: Any
+
+EnvironmentError = OSError
+IOError = OSError
+
 class ItimerError(IOError): ...
 
 ITIMER_PROF: int

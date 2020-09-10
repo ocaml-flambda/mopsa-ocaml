@@ -24,7 +24,7 @@
 *)
 
 open Mopsa
-open Framework.Sig.Reduction.Simplified
+open Sig.Reduction.Simplified
 
 
 module Reduction =
@@ -37,11 +37,11 @@ struct
   module R = Relational.Domain
 
   (** Get a list of variables related numerically to [v] *)
-  let get_related_vars v man = man.ask (R.Q_related_vars v)
+  let get_related_vars v man ctx a = man.ask (R.Q_related_vars v) ctx a
 
 
   (** Get the list of modified variables *)
-  let get_modified_vars stmt man a =
+  let get_modified_vars stmt man ctx a =
     match skind stmt with
     | S_assign({ekind = E_var (v, _)}, _) -> [v]
 
@@ -49,7 +49,7 @@ struct
       (* In case of a filter, we search for the relations of the
          variables present in the expression *)
       let vars = Visitor.expr_vars e in
-      List.fold_left (fun acc v -> get_related_vars v man a @ acc) vars vars |>
+      List.fold_left (fun acc v -> get_related_vars v man ctx a @ acc) vars vars |>
       List.sort_uniq compare_var
 
     | _ -> []
@@ -57,9 +57,9 @@ struct
 
 
   (** Reduction operator *)
-  let reduce stmt (man: 'a simplified_reduction_man) ctx (pre:'a) (post:'a) : 'a =
+  let reduce stmt man ctx (pre:'a) (post:'a) : 'a =
     (* Get the modified variables *)
-    let vars = get_modified_vars stmt man pre in
+    let vars = get_modified_vars stmt man ctx pre in
 
     (* Refine the interval of each variable *)
     List.fold_left (fun post var ->
@@ -67,7 +67,7 @@ struct
         let itv = man.get_value I.id var post in
 
         (* Get the interval in all domain *)
-        let itv' = man.ask (Common.Q_int_interval (mk_var var stmt.srange)) post in
+        let itv' = man.ask (Common.Q_int_interval (mk_var var stmt.srange)) ctx post in
 
         (* Check if box is less precise *)
         if not (I.subset itv itv')

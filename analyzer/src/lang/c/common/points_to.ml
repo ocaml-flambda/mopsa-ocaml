@@ -26,7 +26,7 @@ open Universal.Ast
 open Base
 open Alarms
 
-(* Points-to results *)
+(* Points-to records *)
 (* ================= *)
 
 type points_to =
@@ -35,6 +35,16 @@ type points_to =
   | P_null
   | P_invalid
   | P_top
+
+let mk_c_points_to_bloc b o m = P_block (b, o, m)
+
+let mk_c_points_to_null = P_null
+
+let mk_c_points_to_invalid = P_invalid
+
+let mk_c_points_to_fun f = P_fun f
+
+let mk_c_points_to_top = P_top
 
 let pp_points_to fmt = function
   | P_fun f -> Format.fprintf fmt "(fp %s)" f.Ast.c_func_org_name
@@ -57,62 +67,31 @@ let compare_points_to p1 p2 =
   | _, _ -> Stdlib.compare p1 p2
 
 
+(* Points-to query *)
+(* =============== *)
 
-type expr_kind +=
-  | E_c_points_to of points_to  (* Reply to a points-to evaluation *)
+type ('a,_) query += Q_c_points_to : expr -> ('a,('a,points_to) cases) query
 
-
-let mk_c_points_to pt range =
-  mk_expr (E_c_points_to pt) range
-
-let mk_c_points_to_bloc b o m range =
-  mk_c_points_to (P_block (b, o, m)) range
-
-let mk_c_points_to_null range =
-  mk_c_points_to P_null range
-
-let mk_c_points_to_invalid range =
-  mk_c_points_to P_invalid range
-
-let mk_c_points_to_fun f range =
-  mk_c_points_to (P_fun f) range
-
-let mk_c_points_to_top range =
-  mk_c_points_to P_top range
-
-
-let () =
-  register_expr_with_visitor {
-    compare = (fun next e1 e2 ->
-        match ekind e1, ekind e2 with
-        | E_c_points_to p1, E_c_points_to p2 -> compare_points_to p1 p2
-
-        | _ -> next e1 e2
-      );
-    print = (fun next fmt e ->
-        match ekind e with
-        | E_c_points_to p -> Format.fprintf fmt "⇝ %a" pp_points_to p
-        | _ -> next fmt e
-      );
-    visit = (fun next e ->
-        match ekind e with
-        | E_c_points_to p -> leaf e (* FIXME: do we need to visit the offset expression? *)
-        | _ -> next e
-      )
-  };
-  ()
-
-type zone +=
-  | Z_c_points_to
-
-let () =
-  register_zone {
-    zone = Z_c_points_to;
-    zone_name = "C/Points-To";
-    zone_subset = None;
-    zone_eval = (fun exp ->
-        match ekind exp with
-        | E_c_points_to _ -> Keep
-        | _ -> Process
-      );
+let () = register_query {
+    join = (
+      let f : type a r. query_operator -> (a,r) query -> (a->a->a) -> r -> r -> r =
+        fun next query join a b ->
+          match query with
+          | Q_c_points_to _ -> Cases.join a b
+          | _ -> next.apply query join a b
+      in
+      f
+    );
+    meet = (
+      let f : type a r. query_operator -> (a,r) query -> (a->a->a) -> r -> r -> r =
+        fun next query meet a b ->
+          match query with
+          | Q_c_points_to _ -> Cases.meet a b
+          | _ -> next.apply query meet a b
+      in
+      f
+    );
   }
+
+
+let resolve_pointer p man flow = man.ask (Q_c_points_to p) flow

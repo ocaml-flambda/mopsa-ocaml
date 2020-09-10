@@ -25,7 +25,6 @@ open Mopsa
 open Sig.Abstraction.Stateless
 open Universal.Ast
 open Ast
-open Zone
 open Common.Points_to
 open Placeholder
 open Format_string
@@ -42,23 +41,6 @@ struct
     end)
 
 
-  (** Zoning definition *)
-  (** ================= *)
-
-  let interface = {
-    iexec = {
-      provides = [];
-      uses = [Z_c]
-    };
-    ieval = {
-      provides = [
-        Z_c, Z_c_low_level;
-        Z_c, Z_c_points_to
-      ];
-      uses = []
-    }
-  }
-
   let alarms = [
     A_c_insufficient_format_args;
     A_c_null_deref;
@@ -72,7 +54,7 @@ struct
 
   let init _ _ flow =  flow
 
-  let exec zone stmt man flow = None
+  let exec stmt man flow = None
 
 
   (** {2 Evaluation entry point} *)
@@ -90,8 +72,8 @@ struct
         else
           flow
       in
-      assert_valid_ptr arg range man flow >>$ fun () flow ->
-      man.post (mk_assign (mk_c_deref (mk_c_cast arg ptr range) range) (mk_top typ range) range) flow
+      assert_valid_ptr arg range man flow >>%
+      man.exec (mk_assign (mk_c_deref (mk_c_cast arg ptr range) range) (mk_top typ range) range)
 
     | Float t ->
       let typ = T_c_float t in
@@ -102,8 +84,8 @@ struct
         else
           flow
       in
-      assert_valid_ptr arg range man flow >>$ fun () flow ->
-      man.post (mk_assign (mk_c_deref (mk_c_cast arg ptr range) range) (mk_top typ range) range) flow
+      assert_valid_ptr arg range man flow >>%
+      man.exec (mk_assign (mk_c_deref (mk_c_cast arg ptr range) range) (mk_top typ range) range)
 
     | Pointer ->
       assert false
@@ -143,8 +125,8 @@ struct
         let rec iter placeholders args flow =
           match placeholders, args with
           | ph :: tlp, arg :: tla ->
-            assign_arg arg ph range man flow >>$ fun () flow ->
-            iter tlp tla flow
+            assign_arg arg ph range man flow >>%
+            iter tlp tla
           | _ -> Post.return flow
         in
         iter placeholders args flow
@@ -152,29 +134,28 @@ struct
 
 
   (** Evaluation entry point *)
-  let eval zone exp man flow =
+  let eval exp man flow =
     match ekind exp with
 
     (* 𝔼⟦ scanf ⟧ *)
     | E_c_builtin_call("scanf", format :: args) ->
-      assign_args format args exp.erange man flow >>$? fun () flow ->
-      Eval.singleton (mk_top s32 exp.erange) flow |>
+      assign_args format args exp.erange man flow >>%? fun flow ->
+      man.eval (mk_top s32 exp.erange) flow |>
       OptionExt.return
 
     (* 𝔼⟦ fscanf ⟧ *)
     | E_c_builtin_call("fscanf", stream :: format :: args) ->
-      assert_valid_stream stream exp.erange man flow >>$? fun () flow ->
-      assign_args format args exp.erange man flow >>$? fun () flow ->
-      Eval.singleton (mk_top s32 exp.erange) flow |>
+      assert_valid_stream stream exp.erange man flow >>%? fun flow ->
+      assign_args format args exp.erange man flow >>%? fun flow ->
+      man.eval (mk_top s32 exp.erange) flow |>
       OptionExt.return
 
       (* 𝔼⟦ sscanf ⟧ *)
     | E_c_builtin_call("sscanf", src :: format :: args) ->
-      assign_args format args exp.erange man flow >>$? fun () flow ->
-      assert_valid_string src exp.erange man flow >>$? fun () flow ->
-      Eval.singleton (mk_top s32 exp.erange) flow |>
+      assign_args format args exp.erange man flow >>%? fun flow ->
+      assert_valid_string src exp.erange man flow >>%? fun flow ->
+      man.eval (mk_top s32 exp.erange) flow |>
       OptionExt.return
-
 
     | _ -> None
 

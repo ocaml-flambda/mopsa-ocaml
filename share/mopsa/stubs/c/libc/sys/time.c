@@ -27,6 +27,8 @@
 #include <sys/time.h>
 #include "../mopsa_libc_utils.h"
 #include <fcntl.h> // for AT_FDCWD
+#include <errno.h>
+
 
 /*
   Starting from glibc 2.31, __timezone_ptr_t is replaced by void*

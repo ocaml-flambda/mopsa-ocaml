@@ -21,16 +21,8 @@
 
 (** Engine for an automatic analysis without user interaction *)
 
-open Ast.Stmt
-open Ast.Expr
-open Core
-open Lattice
-open Flow
-open Eval
-open Zone
-open Query
+open Core.All
 open Toplevel
-open Manager
 open Engine
 
 
@@ -42,18 +34,15 @@ struct
   let rec init prog =
     Toplevel.init prog man
 
-  and exec ?(zone=any_zone) stmt flow =
-    Toplevel.exec ~zone stmt man flow
+  and exec ?(route=toplevel)stmt flow =
+    Toplevel.exec ~route stmt man flow
 
-  and post ?(zone=any_zone) stmt flow =
-    Toplevel.post ~zone stmt man flow
+  and eval ?(route=toplevel) exp flow =
+    Toplevel.eval ~route exp man flow
 
-  and eval ?(zone=any_zone,any_zone) ?(via=any_zone) exp flow =
-    Toplevel.eval ~zone ~via exp man flow
-
-  and ask : type r. r query -> Toplevel.t flow -> r =
-    fun query flow ->
-      Toplevel.ask query man flow
+  and ask : type r. ?route:route -> (Toplevel.t,r) query -> Toplevel.t flow -> r =
+    fun ?(route=toplevel) query flow ->
+      Toplevel.ask ~route query man flow
 
   and lattice : Toplevel.t lattice = {
     bottom = Toplevel.bottom;
@@ -67,16 +56,13 @@ struct
     print = Toplevel.print;
   }
 
-  and man : (Toplevel.t, Toplevel.t, unit) man = {
+  and man : (Toplevel.t, Toplevel.t) man = {
     lattice;
     get = (fun a -> a);
     set = (fun a _ -> a);
-    get_sub = (fun _ -> ());
-    set_sub = (fun () a -> a);
     get_log = (fun log -> log);
     set_log = (fun log _ -> log);
     exec = exec;
-    post = post;
     eval = eval;
     ask = ask;
   }

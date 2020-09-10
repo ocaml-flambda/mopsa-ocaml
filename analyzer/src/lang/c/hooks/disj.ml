@@ -24,7 +24,7 @@
 open Mopsa
 open Hook
 open Ast
-open Zone
+
 
 let threshold = ref 8
 
@@ -36,9 +36,6 @@ struct
   (** *************** *)
 
   let name = "c.hooks.disj"
-
-  let exec_zones = [Z_any]
-  let eval_zones = [Z_any,Z_any]
 
   let init ctx = ()
 
@@ -54,7 +51,7 @@ struct
 
   let on_after_exec zone stmt man flow post =
     let nb = Cases.cardinal post in
-    let nb2 = Cases.fold_some (fun _ f i -> Flow.fold (fun i _ _ -> i + 1) i f) post 0 in
+    let nb2 = Cases.fold_result (fun i _ f -> Flow.fold (fun i _ _ -> i + 1) i f) 0 post in
     if nb2 >= !threshold then (      
       max_nb := max !max_nb nb2;
       Format.printf "exec: %i / %i (max=%i): %a %a@." nb nb2 !max_nb pp_range (srange stmt) pp_stmt stmt
@@ -71,7 +68,7 @@ struct
     if nb >= !threshold then (      
       max_nb := max !max_nb nb;
       Format.printf "eval: %i (max=%i): %a %a@." nb !max_nb pp_range (erange exp) pp_expr exp;
-      ignore (Cases.map (fun e -> Format.printf "  %a@." pp_expr e; e) eval)
+      ignore (Cases.map_result (fun e -> Format.printf "  %a@." pp_expr e; e) eval)
     )
   
   let on_finish man flow =

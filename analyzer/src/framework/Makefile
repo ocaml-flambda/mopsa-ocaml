@@ -21,26 +21,32 @@
 
 
 # Framework packs
-framework = ast core lattices sig combiners toplevel engines output config runner
-framework.ast = program frontend typ operator constant var expr stmt visitor all
-framework.core = query context zone alarm token log lattice soundness flow \
-		 cases eval post id interface manager hook cache all
+framework = core lattices sig combiners toplevel engines output config runner
+framework.core = semantic route ast query context alarm token log lattice \
+	 	 soundness flow cases eval post id manager hook cache all
+framework.core.ast = program frontend typ operator constant var expr stmt visitor
 framework.lattices = partial_map partial_inversible_map_sig \
 		     partial_inversible_map powerset_sig powerset \
 		     powersetwithunder pointwise pair
-framework.sig = abstraction functor reduction
-framework.sig.abstraction = stacked domain simplified stateless value
-framework.sig.functor = stacked domain simplified value
+framework.sig = abstraction combiner reduction
+framework.sig.abstraction = stacked stacked_functor \
+			    domain functor \
+			    simplified simplified_functor \
+			    stateless \
+			    value value_functor
+framework.sig.combiner = stacked stacked_functor \
+			 domain functor \
+			 simplified simplified_functor \
+			 stateless
 framework.sig.reduction = eval exec simplified value
-framework.combiners = value domain
-framework.combiners.value = common union product nonrel
-framework.combiners.domain = sequence compose product simplified_product \
-                             stateless_sequence
+framework.combiners = common value domain
+framework.combiners.value = union product nonrel
+framework.combiners.domain = switch compose product simplified_product stateless_switch
+framework.abstraction.json = syntax visitor parser
 framework.engines = engine automatic interactive
 framework.output = text json factory
-framework.config = paths abstraction options
+framework.config = abstraction paths options
 framework.config.abstraction = syntax visitor parser builder
-
 
 
 # Packages

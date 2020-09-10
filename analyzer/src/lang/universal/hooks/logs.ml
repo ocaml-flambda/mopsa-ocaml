@@ -41,9 +41,6 @@ struct
 
   let name = Options.name
 
-  let exec_zones = [Z_any]
-  let eval_zones = [Z_any,Z_any]
-
 
   (** {2 Initialization} *)
   (** ****************** *)
@@ -132,7 +129,7 @@ struct
     fprintf fmt "@[<v 3>S [| %a@] |]" pp_stmt stmt
 
   let pp_E fmt exp =
-    fprintf fmt "@[<v 3>E [| %a@] |]" pp_expr exp
+    fprintf fmt "@[<v 3>E [| %a : %a@] |]" pp_expr exp pp_typ exp.etyp
 
   let get_timing () =
     try Sys.time () -. Stack.pop stack
@@ -142,70 +139,82 @@ struct
   (** {2 Events handlers} *)
   (** ******************* *)
 
-  let on_before_exec zone stmt man flow =
+  let on_before_exec route stmt man flow =
     reach stmt.srange;
     if Options.short then
-      indent "%a in zone %a"
+      indent "%a in semantic %a"
         pp_S stmt
-        pp_zone zone
+        pp_route route
         ~symbol:BEGIN
     else
-      indent "%a @,in %a @,and zone %a"
+      indent "%a @,in %a @,and semantic %a"
         pp_S stmt
         (Flow.print man.lattice.print) flow
-        pp_zone zone
+        pp_route route
         ~symbol:BEGIN
     ;
     Stack.push (Sys.time ()) stack
 
 
-  let on_after_exec zone stmt man flow post =
+  let on_after_exec route stmt man flow post =
     let time = get_timing () in
+    let nb = Cases.cardinal post in
     if Options.short then
-      indent "%a done in zone %a [%.4fs]"
+      indent "%a done in semantic %a [%.4fs, %d case%a]"
         pp_S stmt
-        pp_zone zone
+        pp_route route
         time
+        nb Debug.plurial_int nb
         ~symbol:END
     else
-      indent "%a done in zone %a [%.4fs]@ -->  %a"
+      indent "%a done in semantic %a [%.4fs, %d case%a]@ -->  %a"
         pp_S stmt
-        pp_zone zone
+        pp_route route
         time
+        nb Debug.plurial_int nb
         (Post.print man.lattice.print) post
         ~symbol:END
 
 
-  let on_before_eval zone exp man flow =
+  let on_before_eval route exp man flow =
     if Options.short then
-      indent "%a in zone %a"
+      indent "%a in semantic %a"
         pp_E exp
-        pp_zone2 zone
+        pp_route route
         ~symbol:BEGIN
     else
-      indent "%a @,in %a @,and zone %a"
+      indent "%a @,in %a @,and semantic %a"
         pp_E exp
         (Flow.print man.lattice.print) flow
-        pp_zone2 zone
+        pp_route route
         ~symbol:BEGIN
     ;
       Stack.push (Sys.time ()) stack
 
-  let on_after_eval zone exp man flow evl =
+  let on_after_eval route exp man flow evl =
     let time = get_timing () in
+    let pp_evl_with_type fmt evl =
+      Cases.print_result (
+        fun fmt e flow ->
+          Format.fprintf fmt "%a : %a" pp_expr e pp_typ e.etyp
+      ) fmt evl
+    in
+    let nb = Cases.cardinal evl in
     if Options.short then
-      indent "%a = %a done in zone %a [%.4fs]"
+      indent "%a = %a done in semantic %a [%.4fs, %d case%a]"
         pp_E exp
-        Eval.print evl
-        pp_zone2 zone
+        pp_evl_with_type evl
+        pp_route route
         time
+        nb Debug.plurial_int nb
         ~symbol:END
     else
-      indent "%a done in zone %a [%.4fs]@ -->  %a"
+      indent "%a done in semantic %a [%.4fs, %d case%a]@ -->  %a"
         pp_E exp
-        pp_zone2 zone
+        pp_route route
         time
-        Eval.print evl
+        nb Debug.plurial_int nb
+        pp_evl_with_type evl
         ~symbol:END
 
   let on_finish man flow =

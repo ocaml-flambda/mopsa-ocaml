@@ -61,12 +61,11 @@ type addr_kind +=
 (** Allocate an object on the heap and return its address as an evaluation *)
 let eval_alloc ?(mode=STRONG) man kind range flow =
   let exp = mk_alloc_addr ~mode:mode kind range in
-  man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) exp flow |>
-  Eval.bind (fun exp flow ->
-      match ekind exp with
-      | E_addr (addr) -> Cases.singleton addr flow
-      | _ -> panic "eval_alloc: allocation returned a non-address express %a" pp_expr exp
-    )
+  man.eval exp flow >>$
+    fun exp flow ->
+    match ekind exp with
+    | E_addr (addr) -> Cases.singleton addr flow
+    | _ -> panic "eval_alloc: allocation returned a non-address express %a" pp_expr exp
 
 (*==========================================================================*)
 (**                           {2 Built-ins}                                 *)
@@ -255,7 +254,7 @@ let mk_py_z_interval l u range =
   mk_z_interval l u range
 
 let mk_py_float_interval l u range =
-  mk_float_interval l u range
+  {(mk_float_interval l u range) with etyp=(T_py (Some (Float F_DOUBLE)))}
 
 let mk_py_issubclass e1 e2 range =
   mk_py_call (mk_py_object (find_builtin "issubclass") range) [e1; e2] range

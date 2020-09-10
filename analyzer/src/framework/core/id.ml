@@ -32,75 +32,67 @@ type _ id += I_stateless_domain : 'a id -> 'a id
 type _ id += I_value : 'a id -> 'a id
 
 
-type 'a witness = {
-  eq :  'b. 'b id -> ('b,'a) eq option;
+type witness = {
+  eq :  'a 'b. 'a id -> 'b id -> ('a,'b) eq option;
 }
 
-(** Pool of witnesses *)
+type witness_chain = {
+  eq :  'a 'b. witness -> 'a id -> 'b id -> ('a,'b) eq option;
+}
+
+let empty_witness : witness = {
+  eq = (fun _ _ -> None)
+}
+
 type pool =
-  | [] :   pool
-  | (::) : 'a witness * pool -> pool
+  { mutable stateful : witness;
+    mutable stateless: witness;
+    mutable value: witness;
+    mutable others: witness; }
 
-type typed_pool =
-  { mutable stateful : pool;
-    mutable stateless: pool;
-    mutable value: pool;
-    mutable others: pool; }
-
-let typed_pool =
-  { stateful = [];
-    stateless = [];
-    value = [];
-    others = []; }
+let pool =
+  { stateful = empty_witness;
+    stateless = empty_witness;
+    value = empty_witness;
+    others = empty_witness; }
 
 
-let register_id (info:'a witness) =
-  typed_pool.others <- info :: typed_pool.others
+let register_id (w:witness_chain) =
+  let old = pool.others in
+  pool.others <- { eq = (fun (type a) (type b) (id1:a id) (id2:b id) -> w.eq old id1 id2) }
 
-let register_stateful_id (info:'a witness) =
-  typed_pool.stateful <- info :: typed_pool.stateful
+let register_stateful_id (w:witness_chain) =
+  let old = pool.stateful in
+  pool.stateful <- { eq = (fun (type a) (type b) (id1:a id) (id2:b id) -> w.eq old id1 id2) }
 
-let register_stateless_id (info:'a witness) =
-  typed_pool.stateless <- info :: typed_pool.stateless
+let register_stateless_id (w:witness_chain) =
+  let old = pool.stateless in
+  pool.stateless <- { eq = (fun (type a) (type b) (id1:a id) (id2:b id) -> w.eq old id1 id2) }
 
-let register_value_id (info:'a witness) =
-  typed_pool.value <- info :: typed_pool.value
-
-
-
-let rec find_witnesss : type a. a id -> pool -> a witness = fun id pool ->
-  match pool with
-  | [] -> raise Not_found
-  | info :: tl ->
-    match info.eq id with
-    | Some Eq -> info
-    | None -> find_witnesss id tl
+let register_value_id (w:witness_chain) =
+  let old = pool.value in
+  pool.value <- { eq = (fun (type a) (type b) (id1:a id) (id2:b id) -> w.eq old id1 id2) }
 
 
 (** Equality witness of domain identifiers *)
 let equal_id (id1:'a id) (id2:'b id) : ('a,'b) eq option =
   match id1, id2 with
   | I_stateful_domain i1, I_stateful_domain i2 ->
-    let witness = find_witnesss i2 typed_pool.stateful in
-    witness.eq i1
+    pool.stateful.eq i1 i2
 
   | I_stateful_domain _, _ | _, I_stateful_domain _ -> None
 
   | I_stateless_domain i1, I_stateless_domain i2 ->
-    let witness = find_witnesss i2 typed_pool.stateless in
-    witness.eq i1
+    pool.stateless.eq i1 i2
 
   | I_stateless_domain _, _ | _, I_stateless_domain _ -> None
 
   | I_value i1, I_value i2 ->
-    let witness = find_witnesss i2 typed_pool.value in
-    witness.eq i1
+    pool.value.eq i1 i2
 
   | I_value _, _ | _, I_value _ -> None
 
-  | _ ->
-    let witness = find_witnesss id2 typed_pool.others in
-    witness.eq id1
+  | _ -> pool.others.eq id1 id2
 
 
 (** Generator of a new identifier *)
@@ -114,13 +106,16 @@ struct
 
   let id = Id
 
-  let eq : type a. a id -> (a,Spec.t) eq option =
-    function
-    | Id -> Some Eq
-    | _ -> None
-
-  let () =
-    register_id { eq }
+  let () = register_id {
+      eq = (
+        let f : type a b. witness -> a id -> b id -> (a,b) eq option = fun next id1 id2 ->
+          match id1, id2 with
+          | Id, Id -> Some Eq
+          | _      -> next.eq id1 id2
+        in
+        f
+      );
+    }
 
 end
 
@@ -138,14 +133,16 @@ struct
 
   let debug fmt = Debug.debug ~channel:Spec.name fmt
 
-  let eq : type a. a id -> (a,Spec.t) eq option =
-    function
-    | Id -> Some Eq
-    | _ -> None
-
-  let () =
-    register_stateful_id { eq }
-
+  let () = register_stateful_id {
+      eq = (
+        let f : type a b. witness -> a id -> b id -> (a,b) eq option = fun next id1 id2 ->
+          match id1, id2 with
+          | Id, Id -> Some Eq
+          | _      -> next.eq id1 id2
+        in
+        f
+      );
+    }
 end
 
 
@@ -164,13 +161,16 @@ struct
 
   let debug fmt = Debug.debug ~channel:Spec.name fmt
 
-  let eq : type a. a id -> (a,unit) eq option =
-    function
-    | Id -> Some Eq
-    | _ -> None
-
-  let () =
-    register_stateless_id { eq }
+  let () = register_stateless_id {
+      eq = (
+        let f : type a b. witness -> a id -> b id -> (a,b) eq option = fun next id1 id2 ->
+          match id1, id2 with
+          | Id, Id -> Some Eq
+          | _      -> next.eq id1 id2
+        in
+        f
+      );
+    }
 
 end
 
@@ -193,12 +193,14 @@ struct
 
   let debug fmt = Debug.debug ~channel:Spec.name fmt
 
-  let eq : type a. a id -> (a,Spec.t) eq option =
-    function
-    | Id -> Some Eq
-    | _ -> None
-
-  let () =
-    register_value_id { eq }
-
+  let () = register_value_id {
+      eq = (
+        let f : type a b. witness -> a id -> b id -> (a,b) eq option = fun next id1 id2 ->
+          match id1, id2 with
+          | Id, Id -> Some Eq
+          | _      -> next.eq id1 id2
+        in
+        f
+      );
+    }
 end

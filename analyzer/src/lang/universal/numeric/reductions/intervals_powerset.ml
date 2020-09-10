@@ -22,7 +22,7 @@
 (** Reduction operator for intervals and powersets. *)
 
 open Mopsa
-open Framework.Sig.Reduction.Value
+open Sig.Reduction.Value
 
 
 

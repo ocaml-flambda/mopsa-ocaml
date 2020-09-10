@@ -25,7 +25,6 @@ open Mopsa
 open Sig.Abstraction.Stateless
 open Universal.Ast
 open Ast
-open Zone
 
 module Domain =
   struct
@@ -34,31 +33,26 @@ module Domain =
         let name = "python.desugar.assert"
       end)
 
-    let interface = {
-      iexec = {provides = [Zone.Z_py]; uses = [Zone.Z_py]};
-      ieval = {provides = []; uses = []}
-    }
-
     let alarms = []
 
     let init _ _ flow = flow
 
-    let exec zone stmt man flow =
+    let exec stmt man flow =
       let range = srange stmt in
       match skind stmt with
       (* S⟦ assert(e, msg) ⟧ *)
       | S_py_assert (e, msg)->
          Flow.join
            man.lattice
-           (man.exec (mk_assume e range) flow)
-           (man.exec (mk_assume (mk_py_not e range) range) flow |>
-              man.exec (Utils.mk_builtin_raise "AssertionError" range))
+           (man.exec (mk_assume e range) flow |> post_to_flow man)
+           (man.exec (mk_assume (mk_py_not e range) range) flow >>%
+              man.exec (Utils.mk_builtin_raise "AssertionError" range) |> post_to_flow man)
          |> Post.return
          |> OptionExt.return
 
       | _ -> None
 
-    let eval _ _ _ _ = None
+    let eval _ _ _ = None
 
 
     let ask _ _ _ = None

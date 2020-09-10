@@ -22,22 +22,19 @@
 (** Generic query mechanism for extracting information from domains. *)
 
 
-type _ query = ..
+type ('a,_) query = ..
 
-
-type query_pool = {
-  join_query : 'r. 'r query -> 'r -> 'r -> 'r;
-  meet_query : 'r. 'r query -> 'r -> 'r -> 'r;
+type query_operator = {
+  apply : 'a 'r.  ('a,'r) query -> ('a -> 'a -> 'a) -> 'r -> 'r -> 'r;
 }
 
 type query_info = {
-  join : 'r. query_pool -> 'r query -> 'r -> 'r -> 'r;
-  meet : 'r. query_pool -> 'r query -> 'r -> 'r -> 'r;
+  join : 'a 'r. query_operator -> ('a,'r) query -> ('a->'a->'a) -> 'r -> 'r -> 'r;
+  meet : 'a 'r. query_operator -> ('a,'r) query -> ('a->'a->'a) -> 'r -> 'r -> 'r;
 }
 
 val register_query : query_info -> unit
 
-val join_query : 'r query -> 'r -> 'r -> 'r
+val join_query : ('a,'r) query -> join:('a->'a->'a) -> 'r -> 'r -> 'r
 
-val meet_query : 'r query -> 'r -> 'r -> 'r
-
+val meet_query : ('a,'r) query -> meet:('a->'a->'a) -> 'r -> 'r -> 'r

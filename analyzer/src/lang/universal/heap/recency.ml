@@ -24,9 +24,9 @@
 
 
 open Mopsa
-open Framework.Sig.Abstraction.Domain
+open Sig.Abstraction.Domain
 open Ast
-open Zone
+
 (* open Policies *)
 
 module Pool = Framework.Lattices.Powerset.Make
@@ -36,32 +36,32 @@ module Pool = Framework.Lattices.Powerset.Make
       let print = pp_addr
     end)
 
-type _ query +=
-  | Q_allocated_addresses : addr list query
-  | Q_alive_addresses : addr list query
-  | Q_alive_addresses_aspset : Pool.t query
+type ('a,_) query +=
+  | Q_allocated_addresses : ('a,addr list) query
+  | Q_alive_addresses : ('a,addr list) query
+  | Q_alive_addresses_aspset : ('a,Pool.t) query
 
 let () =
   register_query {
     join = (
-      let f : type r. query_pool -> r query -> r -> r -> r =
-        fun next query a b ->
+      let f : type a r. query_operator -> (a,r) query -> (a->a->a) -> r -> r -> r =
+        fun next query join a b ->
           match query with
           | Q_allocated_addresses -> a @ b
           | Q_alive_addresses -> List.sort_uniq compare_addr (a @ b)
           | Q_alive_addresses_aspset -> Pool.join a b
-          | _ -> next.join_query query a b
+          | _ -> next.apply query join a b
       in f
     );
     meet = (
-      let f : type r. query_pool -> r query -> r -> r -> r =
-        fun next query a b ->
+      let f : type a r. query_operator -> (a,r) query -> (a->a->a) -> r -> r -> r =
+        fun next query meet a b ->
           match query with
           | Q_allocated_addresses ->
             assert false
           | Q_alive_addresses -> assert false
           | Q_alive_addresses_aspset -> Pool.meet a b
-          | _ -> next.meet_query query a b
+          | _ -> next.apply query meet a b
       in f
     );
   }
@@ -141,14 +141,6 @@ struct
   let merge pre (a,log) (a',log') =
     assert false
 
-  (** Zoning definition *)
-  (** ================= *)
-
-  let interface = {
-    iexec = {provides = [Z_u_heap]; uses = [Z_any]};
-    ieval = {provides = [Z_u_heap, Z_any]; uses = []};
-  }
-
 
   (** Initialization *)
   (** ============== *)
@@ -163,7 +155,7 @@ struct
 
   let is_old addr = addr.addr_mode = WEAK
 
-  let exec zone stmt man flow =
+  let exec stmt man flow =
     let range = srange stmt in
     match skind stmt with
     (* 𝕊⟦ free(recent); ⟧ *)
@@ -171,7 +163,7 @@ struct
       let old = { addr with addr_mode = WEAK } in
       let pool = get_env T_cur man flow in
       (* Inform domains to remove addr *)
-      let flow' = man.exec (mk_remove_addr addr stmt.srange) flow in
+      man.exec (mk_remove_addr addr stmt.srange) flow >>%? fun flow' ->
       if not (Pool.mem old pool) then
         (* only recent is present : remove it from the pool and return *)
         map_env T_cur (Pool.remove addr) man flow' |>
@@ -180,16 +172,14 @@ struct
       else
         (* old is present : expand it as the new recent *)
         man.exec (mk_expand_addr old [addr] stmt.srange) flow' |>
-        Post.return |>
         OptionExt.return
 
     (* 𝕊⟦ free(old); ⟧ *)
     | S_free addr when is_old addr ->
        (* Inform domains to invalidate addr *)
        map_env T_cur (Pool.remove addr) man flow |>
-         man.exec (mk_invalidate_addr addr stmt.srange)  |>
-         Post.return |>
-         OptionExt.return
+       man.exec (mk_invalidate_addr addr stmt.srange)  |>
+       OptionExt.return
 
     | S_perform_gc ->
        let startt = Sys.time () in
@@ -199,16 +189,16 @@ struct
        debug "at %a, |dead| = %d@.dead = %a" pp_range range (Pool.cardinal dead) Pool.print dead;
        let trange = tag_range range "agc" in
        let flow = set_env T_cur alive man flow in
-       let flow = Pool.fold (fun addr flow ->
+       let post = Pool.fold (fun addr acc ->
                       debug "free %a" pp_addr addr;
                       (* FIXME: free of a strong address will re-create the strong address, I'm not really happy with that *)
-                      man.exec (mk_stmt (S_free addr) trange) flow) dead flow in
+                      acc >>% man.exec (mk_stmt (S_free addr) trange)) dead (Post.return flow) in
        let delta = Sys.time () -. startt in
        gc_time := !gc_time +. delta;
        incr gc_nb_collections;
        gc_nb_addr_collected := !gc_nb_addr_collected + (Pool.cardinal dead);
        gc_max_heap_size := max !gc_max_heap_size (Pool.cardinal all);
-       flow |> Post.return |> OptionExt.return
+       post |> OptionExt.return
 
     | _ -> None
 
@@ -216,7 +206,7 @@ struct
   (** Evaluations *)
   (** *********** *)
 
-  let eval zone expr man flow =
+  let eval expr man flow =
     let range = erange expr in
     match ekind expr with
     | E_alloc_addr(addr_kind, STRONG) ->
@@ -234,13 +224,13 @@ struct
         if not (Pool.mem old_addr pool) then
           (* old address not present: rename the existing recent as old and return the new recent *)
           map_env T_cur (Pool.add old_addr) man flow |>
-          man.exec (mk_rename_addr recent_addr old_addr range) |>
-          Eval.singleton (mk_addr recent_addr range) |>
+          man.exec (mk_rename_addr recent_addr old_addr range) >>%? fun flow ->
+          Eval.singleton (mk_addr recent_addr range) flow |>
           OptionExt.return
         else
           (* old present : copy the content of the existing recent to old using `fold` statement *)
-          man.exec (mk_fold_addr old_addr [recent_addr] range) flow |>
-          Eval.singleton (mk_addr recent_addr range) |>
+          man.exec (mk_fold_addr old_addr [recent_addr] range) flow >>%? fun flow ->
+          Eval.singleton (mk_addr recent_addr range) flow |>
           OptionExt.return
 
     | E_alloc_addr(addr_kind, WEAK) ->
@@ -262,7 +252,7 @@ struct
   (** Queries *)
   (** ******* *)
 
-  let ask : type r. r query -> ('a, t, 's) man -> 'a flow -> r option =
+  let ask : type r. ('a,r) query -> ('a, t) man -> 'a flow -> r option =
     fun query man flow ->
     match query with
     | Q_allocated_addresses ->

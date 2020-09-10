@@ -52,19 +52,12 @@ module Domain =
         default = "";
       }
 
-
-
-    let interface = {
-      iexec = {provides = [Zone.Z_py]; uses = [Zone.Z_py]};
-      ieval = {provides = []; uses = [Zone.Z_py, Zone.Z_py_obj]}
-    }
-
     let alarms = []
 
     let init _ _ flow = flow
-    let eval _ _ _ _ = None
+    let eval _ _ _ = None
 
-    let rec exec (zone:zone) (stmt:stmt) (man:('a, unit, 's) man) (flow:'a flow) : 'a post option =
+    let rec exec stmt man flow =
       let range = srange stmt in
       match skind stmt with
       | S_py_try(body, excepts, orelse, finally) ->
@@ -75,71 +68,73 @@ module Domain =
             | _ -> fun _ -> true) flow in
 
         (* Execute try body *)
-        let try_flow = man.exec body flow0 in
-        debug "post try flow:@\n  @[%a@]" (Flow.print man.lattice.print) try_flow;
-        (* Execute handlers *)
-        let flow_caught, flow_uncaught =
-          List.fold_left (fun (acc_caught, acc_uncaught) excpt ->
-              let caught = exec_except man excpt range acc_uncaught in
-              let acc_uncaught = Flow.copy_ctx caught acc_uncaught in
-              let uncaught = escape_except man excpt range acc_uncaught in
-              let caught = Flow.copy_ctx uncaught caught in
-              Flow.join man.lattice acc_caught caught, uncaught)
-            (Flow.bottom (Flow.get_ctx try_flow) (Flow.get_alarms try_flow), try_flow)  excepts in
+        begin
+          man.exec body flow0 >>% fun try_flow ->
+                                  debug "post try flow:@\n  @[%a@]" (Flow.print man.lattice.print) try_flow;
+                                  (* Execute handlers *)
+                                  let flow_caught, flow_uncaught =
+                                    List.fold_left (fun (acc_caught, acc_uncaught) excpt ->
+                                        let caught = exec_except man excpt range acc_uncaught in
+                                        let acc_uncaught = Flow.copy_ctx caught acc_uncaught in
+                                        let uncaught = escape_except man excpt range acc_uncaught in
+                                        let caught = Flow.copy_ctx uncaught caught in
+                                        Flow.join man.lattice acc_caught caught, uncaught)
+                                      (Flow.bottom (Flow.get_ctx try_flow) (Flow.get_alarms try_flow), try_flow)  excepts in
 
-        (* Execute else body after removing all exceptions *)
-        let orelse_flow = Flow.filter (function
-            | T_py_exception _ -> fun _ -> false
-            | _ -> fun _ -> true) try_flow |>
-                          man.exec orelse
-        in
+                                  (* Execute else body after removing all exceptions *)
+                                  Flow.filter (function
+                                      | T_py_exception _ -> fun _ -> false
+                                      | _ -> fun _ -> true) try_flow |>
+                                    man.exec orelse >>% fun orelse_flow ->
 
-        let apply_finally finally flow =
-          let open Universal.Iterators.Loops in
-          let open Universal.Iterators.Interproc.Common in
-          Flow.fold (fun acc tk env ->
-              match tk with
-              | T_break | T_continue | T_return _ | T_py_exception _ ->
-                Flow.singleton (Flow.get_ctx acc) T_cur env |>
-                man.exec finally |>
-                Flow.rename T_cur tk man.lattice |>
-                Flow.join man.lattice acc
-              | _ ->
-                Flow.add tk env man.lattice acc
-            ) (Flow.bottom_from flow) flow in
+                                                        let apply_finally finally flow =
+                                                          let open Universal.Iterators.Loops in
+                                                          let open Universal.Iterators.Interproc.Common in
+                                                          Flow.fold (fun acc tk env ->
+                                                              match tk with
+                                                              | T_break | T_continue | T_return _ | T_py_exception _ ->
+                                                                 Flow.singleton (Flow.get_ctx acc) T_cur env |>
+                                                                   man.exec finally |> post_to_flow man |>
+                                                                   Flow.rename T_cur tk man.lattice |>
+                                                                   Flow.join man.lattice acc
+                                                              | _ ->
+                                                                 Flow.add tk env man.lattice acc
+                                                            ) (Flow.bottom_from flow) flow in
 
-        (* Execute finally body *)
-        let flow_caught_finally =
-          Flow.join man.lattice orelse_flow flow_caught |>
-          apply_finally finally in
+                                                        (* Execute finally body *)
+                                                        let flow_caught_finally =
+                                                          Flow.join man.lattice orelse_flow flow_caught |>
+                                                            apply_finally finally in
 
-        let flow_uncaught = Flow.copy_ctx flow_caught_finally flow_uncaught in
-        let flow_uncaught_finally =
-          apply_finally finally flow_uncaught in
+                                                        let flow_uncaught = Flow.copy_ctx flow_caught_finally flow_uncaught in
+                                                        let flow_uncaught_finally =
+                                                          apply_finally finally flow_uncaught in
 
-        let flow = Flow.join man.lattice flow_caught_finally flow_uncaught_finally in
+                                                        let flow = Flow.join man.lattice flow_caught_finally flow_uncaught_finally in
 
-        (* Restore old exceptions *)
-        Flow.fold (fun acc tk env ->
-            match tk with
-            | T_py_exception _ -> Flow.add tk env man.lattice acc
-            | _ -> acc
-          ) flow old_flow |>
-        Post.return |> OptionExt.return
+                                                        (* Restore old exceptions *)
+                                                        Post.return @@ Flow.fold (fun acc tk env ->
+                                                            match tk with
+                                                            | T_py_exception _ -> Flow.add tk env man.lattice acc
+                                                            | _ -> acc
+                                                          ) flow old_flow
+        end |> OptionExt.return
 
       | S_py_raise(Some exp) ->
         debug "Raising %a@\n" pp_expr exp;
-        (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) exp flow |>
-         bind_full (fun exp flow log cleaners ->
-             match exp with
-             | None -> Cases.return None flow ~log ~cleaners
-             | Some exp ->
+        (man.eval   exp flow |>
+         bind (fun case flow ->
+             match case with
+             | Empty -> Cases.empty flow
+             | NotHandled -> assert false
+             | Result(exp,_,cleaners) ->
              assume
                (mk_py_isinstance_builtin exp "BaseException" range)
                man
                ~fthen:(fun true_flow ->
                    debug "True flow, exp is %a@\n" pp_expr exp;
-                   let true_flow =  man.exec (mk_block cleaners range) true_flow in
+                   (* FIXME: remove cleaners after executing them *)
+                   man.exec (mk_block (StmtSet.elements cleaners) range) true_flow >>% fun true_flow ->
                    let cur = Flow.get T_cur man.lattice true_flow in
                    debug "asking...@\ntrue_flow = %a" (Flow.print man.lattice.print) true_flow;
                    let exc_str, exc_message = man.ask (Types.Structural_types.Q_exn_string_query exp) true_flow in
@@ -159,7 +154,7 @@ module Domain =
                    let flow' = Flow.add tk cur man.lattice true_flow |>
                                Flow.set T_cur man.lattice.bottom man.lattice
                    in
-                   Post.return flow' ~log)
+                   Post.return flow')
                ~felse:(fun false_flow ->
                    assume
                      (* isclass obj <=> isinstance(obj, type) *)
@@ -167,10 +162,10 @@ module Domain =
                      man
                      ~fthen:(fun true_flow ->
                          man.exec {stmt with skind = S_py_raise(Some (mk_py_call exp [] range))} true_flow
-                         |> Post.return ~log)
+                         >>% Post.return)
                      ~felse:(fun false_flow ->
                          man.exec (Utils.mk_builtin_raise_msg "TypeError" "exceptions must derive from BaseException" range) false_flow
-                         |> Post.return ~log)
+                         >>% Post.return)
                      false_flow
                  )
                flow
@@ -184,7 +179,7 @@ module Domain =
       | _ -> None
 
 
-    and exec_except (man:('a, unit, 's) man) excpt range (flow:'a flow) : 'a flow =
+    and exec_except man excpt range flow =
       debug "exec except on@ @[%a@]" (Flow.print man.lattice.print) flow;
       let flow0 = Flow.set T_cur man.lattice.bottom man.lattice flow in
       debug "flow_cur %a@\n" (Flow.print man.lattice.print) flow;
@@ -213,8 +208,8 @@ module Domain =
                 debug "T_cur now matches tk %a@\n" pp_token tk;
                 let flow = Flow.set T_cur env man.lattice flow0 in
                 let flow' =
-                  man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
-                  bind_some (fun e flow ->
+                  man.eval   e flow |>
+                  bind_result (fun e flow ->
                       match ekind e with
                       | E_py_object obj ->
                         assume
@@ -227,14 +222,14 @@ module Domain =
                                 ~fthen:(fun true_flow ->
                                     match excpt.py_excpt_name with
                                     | None -> Post.return true_flow
-                                    | Some v -> man.exec (mk_assign (mk_var v range) exn range) true_flow |> Post.return)
+                                    | Some v -> man.exec (mk_assign (mk_var v range) exn range) true_flow)
                                 ~felse:(fun false_flow ->
                                     Flow.set T_cur man.lattice.bottom man.lattice false_flow |> Post.return
                                   )
                                 true_flow
                             )
                           ~felse:(fun false_flow ->
-                              man.exec (Utils.mk_builtin_raise_msg "TypeError" "catching classes that do not inherit from BaseException is not allowed" range) flow |> Post.return)
+                              man.exec (Utils.mk_builtin_raise_msg "TypeError" "catching classes that do not inherit from BaseException is not allowed" range) flow)
                       | _ -> assert false
                     )
                 in
@@ -253,7 +248,7 @@ module Domain =
         | Some v -> mk_remove_var v (tag_range range "clean_except_var") in
       debug "except flow1 =@ @[%a@]" (Flow.print man.lattice.print) flow1;
       man.exec excpt.py_excpt_body flow1
-      |> man.exec clean_except_var
+      >>% man.exec clean_except_var |> post_to_flow man
 
 
     and escape_except man excpt range flow =
@@ -272,8 +267,8 @@ module Domain =
               (* Evaluate e in env to check if it corresponds to exn *)
               let flow = Flow.set T_cur env man.lattice flow0 in
               let flow' =
-                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
-                bind_some (fun e flow ->
+                man.eval   e flow |>
+                bind_result (fun e flow ->
                     match ekind e with
                     | E_py_object obj ->
                       assume

@@ -20,6 +20,7 @@
 (****************************************************************************)
 
 open Mopsa
+open Sig.Abstraction.Simplified
 
 module Octagon = Domain.Make(struct
   type t = Oct.t
@@ -53,15 +54,15 @@ let () =
         (function
           | "octagon"   ->
             opt_numeric := "octagon";
-            Framework.Sig.Abstraction.Simplified.register_simplified_domain (module Octagon)
+            register_simplified_domain (module Octagon)
 
           | "polyhedra" ->
             opt_numeric := "polyhedra";
-            Framework.Sig.Abstraction.Simplified.register_simplified_domain (module Polyhedra)
+            register_simplified_domain (module Polyhedra)
 
           | "lineq" ->
             opt_numeric := "lineq";
-            Framework.Sig.Abstraction.Simplified.register_simplified_domain (module LinEqualities)
+            register_simplified_domain (module LinEqualities)
 
           | _ -> assert false
         )
@@ -70,4 +71,4 @@ let () =
   }
 
 let () =
-  Framework.Sig.Abstraction.Simplified.register_simplified_domain (module Polyhedra)
+  register_simplified_domain (module Polyhedra)

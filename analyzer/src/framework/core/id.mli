@@ -29,13 +29,17 @@ type _ id = ..
 (** Identifiers *)
 
 
-type 'a witness = {
-  eq :  'b. 'b id -> ('b,'a) eq option;
+type witness = {
+  eq :  'a 'b. 'a id -> 'b id -> ('a,'b) eq option;
+}
+
+type witness_chain = {
+  eq :  'a 'b. witness -> 'a id -> 'b id -> ('a,'b) eq option;
 }
 (** Equality witness of an identifier *)
 
 
-val register_id : 'a witness -> unit
+val register_id : witness_chain -> unit
 (** Register a new descriptor *)
 
 

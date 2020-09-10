@@ -83,7 +83,7 @@ let rec eval_opt exp : static_points_to option =
   | E_addr (addr) ->
     AddrOf(mk_addr_base addr, mk_zero exp.erange, None) |> OptionExt.return
 
-  | x when is_c_int_type exp.etyp ->
+  | x when is_c_int_type exp.etyp || is_numeric_type exp.etyp ->
     Top |> OptionExt.return
 
   | E_c_deref { ekind = E_c_address_of e } ->

@@ -26,64 +26,16 @@ open Ast.Stmt
 open Ast.Expr
 open Token
 open Flow
-open Zone
 open Context
 open Cases
 open Log
+open Semantic
 
+type 'a eval  = ('a,expr) cases
 
-type 'a eval = ('a,expr) cases
-
-let return ?(cleaners=[]) ?(log=empty_log) e flow : 'a eval = Cases.return e flow ~cleaners ~log
-
-let singleton ?(cleaners=[]) e flow : 'a eval = Cases.singleton e flow ~cleaners
-
-let empty_singleton = empty_singleton
-
-let join (evl1:'a eval) (evl2:'a eval) : 'a eval =
-  Cases.join evl1 evl2
-
-let meet (evl1:'a eval) (evl2:'a eval) : 'a eval =
-  Cases.meet evl1 evl2
-
-let join_list ~(empty:unit -> 'a eval) (l:'a eval list) : 'a eval =
-  Cases.join_list ~empty l
-
-let meet_list ~(empty:unit -> 'a eval) (l:'a eval list) : 'a eval =
-  Cases.meet_list ~empty l
+include Cases
 
 let print fmt (evl: 'a eval) : unit =
-  Cases.print_some (fun fmt e flow ->
-      pp_expr fmt e
-    ) fmt evl
+  Cases.print_result (fun fmt e flow -> pp_expr fmt e) fmt evl
 
-let add_cleaners cleaners evl : 'a eval =
-  Cases.add_cleaners cleaners evl
-
-let get_ctx (evl:'a eval) : 'a ctx =
-  Cases.get_ctx evl
-
-let set_ctx (ctx:'a ctx) (evl:'a eval) : 'a eval =
-  Cases.set_ctx ctx evl
-
-let get_callstack = Cases.get_callstack
-
-let copy_ctx (src:'a eval) (dst:'a eval) : 'a eval =
-  Cases.copy_ctx src dst
-
-let bind = Cases.bind_some
-
-let apply f join meet empty evl =
-  Cases.apply
-    (fun oe flow ->
-       match oe with
-       | Some e -> f e flow
-       | None -> empty
-    )
-    join meet evl
-
-let map = Cases.map
-
-let remove_duplicates lattice evl = Cases.remove_duplicates compare_expr lattice evl
-
-let cardinal = Cases.cardinal
+let remove_duplicates lattice evl = Cases.remove_duplicate_results compare_expr lattice evl

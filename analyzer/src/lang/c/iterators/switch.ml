@@ -25,7 +25,6 @@ open Mopsa
 open Sig.Abstraction.Stateless
 open Universal.Iterators.Loops
 open Ast
-open Zone
 
 
 module Domain =
@@ -40,13 +39,6 @@ struct
     end)
 
 
-
-  let interface = {
-    iexec = {provides = [Z_c]; uses = []};
-    ieval = {provides = []; uses = []};
-  }
-
-
   let alarms = []
 
   (** {2 Initialization} *)
@@ -58,17 +50,20 @@ struct
   (** {2 Token for cases flows} *)
   (** ************************* *)
 
-  type token += T_c_switch_case of range
+  type token += T_c_switch_case of expr * range
+  type token += T_c_switch_default of range
 
   let () =
     register_token {
       print = (fun next fmt -> function
-          | T_c_switch_case range -> Format.fprintf fmt "switch-case(%a)" pp_range range
+          | T_c_switch_case (e,range) -> Format.fprintf fmt "switch-case(%a,%a)" pp_expr e pp_range range
+          | T_c_switch_default range -> Format.fprintf fmt "switch-default(%a)" pp_range range
           | t -> next fmt t
         );
       compare = (fun next t1 t2 ->
           match t1,t2 with
-          | T_c_switch_case r1, T_c_switch_case r2 -> compare_range r1 r2
+          | T_c_switch_case (e1,r1), T_c_switch_case (e2,r2) -> Compare.pair compare_expr compare_range (e1,r1) (e2,r2)
+          | T_c_switch_default r1, T_c_switch_default r2 -> compare_range r1 r2
           | _ -> next t1 t2
         );
     }
@@ -119,25 +114,30 @@ struct
        condition and jump to case body *)
     let rec iter cases flow =
       match cases with
-      | [] -> flow
+      | [] -> Post.return flow
       | (e',r) :: tl ->
         (* Filter the environments *)
         let cond = mk_binop e O_eq e' ~etyp:u8 e.erange in
-        assume_flow cond ~zone:Z_c
+        assume cond
           ~fthen:(fun flow ->
               (* Case reachable, so save cur in the flow of the case before removing cur *)
               let cur = Flow.get T_cur man.lattice flow in
-              Flow.set (T_c_switch_case r) cur man.lattice flow |>
-              Flow.remove T_cur
+              Flow.set (T_c_switch_case (e',r)) cur man.lattice flow |>
+              Flow.remove T_cur |>
+              Post.return
             )
           ~felse:(fun flow ->
               (* Case unreachable, so check the next cases *)
               iter tl flow
             )
-          man flow
+          man flow |>
+        Post.remove_duplicates man.lattice
     in
 
-    let flow = iter cases flow in
+    iter cases flow |>
+    (* Merge all cases in one, so that we will execute the body only once *)
+    Post.remove_duplicates man.lattice
+    >>% fun flow ->
 
     (* Put the remaining cur environments in the flow of the default case. If
        no default case is present, save cur in no_default. *)
@@ -148,14 +148,14 @@ struct
         let flow = Flow.remove T_cur flow in
         flow, cur
       | Some r ->
-        let flow = Flow.set (T_c_switch_case r) cur man.lattice flow |>
+        let flow = Flow.set (T_c_switch_default r) cur man.lattice flow |>
                    Flow.remove T_cur
         in
         flow, man.lattice.bottom
     in
 
     (* Execute the body of the switch statement *)
-    let flow = man.exec body flow in
+    man.exec body flow >>% fun flow ->
 
     (* Merge cur, break and no_default environments *)
     let flow = Flow.add T_cur no_default man.lattice flow |>
@@ -169,33 +169,33 @@ struct
 
 
   (* 𝕊⟦ case e: ⟧ *)
-  (* 𝕊⟦ default: ⟧ *)
-  let exec_case_or_default upd range man flow =
+  let exec_case upd e range man flow =
     (* Get the case environments and update their scope *)
-    let env = Flow.get (T_c_switch_case range) man.lattice flow in
-    let env' = Flow.singleton (Flow.get_ctx flow) T_cur env |>
-               Common.Scope_update.update_scope upd range man |>
-               Flow.get T_cur man.lattice
-    in
-    (* Merge them with cur *)
-    let flow = Flow.add T_cur env' man.lattice flow |>
-               Flow.remove (T_c_switch_case range)
-    in
-    Post.return flow
+    let env = Flow.get (T_c_switch_case (e,range)) man.lattice flow in
+    Flow.add T_cur env man.lattice flow |>
+    Flow.remove (T_c_switch_case (e,range)) |>
+    Common.Scope_update.update_scope upd range man
+
+  (* 𝕊⟦ default: ⟧ *)
+  let exec_default upd range man flow =
+    let env = Flow.get (T_c_switch_default range) man.lattice flow in
+    Flow.add T_cur env man.lattice flow |>
+    Flow.remove (T_c_switch_default range) |>
+    Common.Scope_update.update_scope upd range man
 
 
-  let exec zone stmt man flow =
+  let exec stmt man flow =
     match skind stmt with
     | S_c_switch(e, body) ->
       exec_switch e body stmt.srange man flow |>
       OptionExt.return
 
-    | S_c_switch_case(_,upd) ->
-      exec_case_or_default upd stmt.srange man flow |>
+    | S_c_switch_case(e,upd) ->
+      exec_case upd e stmt.srange man flow |>
       OptionExt.return
 
     | S_c_switch_default upd ->
-      exec_case_or_default upd stmt.srange man flow |>
+      exec_default upd stmt.srange man flow |>
       OptionExt.return
 
     | _ -> None
@@ -203,7 +203,7 @@ struct
   (** Evaluation of expressions *)
   (** ========================= *)
 
-  let eval zone exp man flow = None
+  let eval exp man flow = None
 
   (** Answer to queries *)
   (** ================= *)

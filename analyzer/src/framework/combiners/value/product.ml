@@ -21,7 +21,6 @@
 
 (** Reduced product of value abstractions with n-ary reduction rules *)
 
-open Ast.All
 open Core.All
 open Sig.Abstraction.Value
 open Sig.Reduction.Value
@@ -36,29 +35,6 @@ struct
 
   let id = V_pair(V1.id,V2.id)
 
-  let () =
-    let open Eq in
-    register_id {
-      eq = (
-        let f : type a. a id -> (a, t) eq option =
-          function
-          | V_pair(id1,id2) ->
-            begin
-              match equal_id id1 V1.id with
-              | Some Eq ->
-                begin match equal_id id2 V2.id with
-                  | Some Eq -> Some Eq
-                  | None -> None
-                end
-              | None -> None
-            end
-          | _ -> None
-        in
-        f
-      );
-    }
-
-
   let name = "framework.combiners.value.product"
 
   let display = 
@@ -66,20 +42,18 @@ struct
     | V_empty -> V1.display
     | _ ->  "(" ^ V1.display ^ " ∧ " ^ V2.display ^ ")"
 
-  let zones = V1.zones @ V2.zones
-
   let print fmt (v1,v2) =
     match V2.id with
     | V_empty -> V1.print fmt v1
     | _ ->  Format.fprintf fmt "%a ∧ %a" V1.print v1 V2.print v2
 
   
-  let hdman (man:t value_man) : (V1.t value_man) = {
+  let hdman (man:('a,t) value_man) : (('a,V1.t) value_man) = {
     man with
     eval = (fun exp -> man.eval exp |> fst);
   }
 
-  let tlman (man:t value_man) : (V2.t value_man) = {
+  let tlman (man:('a,t) value_man) : (('a,V2.t) value_man) = {
     man with
     eval = (fun exp -> man.eval exp |> snd);
   }
@@ -121,7 +95,9 @@ struct
     ((x1,x2),(y1,y2))
 
   let ask man q =
-    OptionExt.neutral2 (meet_query q)
+    OptionExt.neutral2
+      (meet_query q
+         ~meet:(fun _ _ -> Exceptions.panic "abstract queries called from value abstraction"))
       (V1.ask (hdman man) q)
       (V2.ask (tlman man) q)
     

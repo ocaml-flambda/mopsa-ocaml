@@ -34,47 +34,42 @@ open Log
 
 type 'a post = ('a, unit) cases
 
+include Cases
 
-let return ?(log=empty_log) ?(cleaners=[]) flow : 'a post =
-  Cases.return (Some ()) ~log ~cleaners flow
-
+let return ?(cleaners=[]) flow : 'a post =
+  Cases.return () ~cleaners flow
 
 let print pp fmt post =
   Cases.print (fun fmt _ flow ->
       Flow.print pp fmt flow
     ) fmt post
 
+let bind_opt f post =
+  Cases.bind_opt
+    (fun case flow ->
+       match case with
+       | Result _ | Empty -> f flow
+       | NotHandled       -> Some (not_handled flow)
+    ) post
 
-let join (p1:'a post) (p2:'a post) : 'a post =
-  Cases.join p1 p2
+let (>>%?) post f = bind_opt f post
 
-let join_list ~empty l =
-  Cases.join_list ~empty l
+let bind f post =
+  post |> bind_opt (fun flow -> Some (f flow)) |>
+  OptionExt.none_to_exn
 
+let (>>%) post f = bind f post
 
-let meet (p1:'a post) (p2:'a post) : 'a post =
-  Cases.meet p1 p2
-
-
-
-let join_list ~(empty:unit -> 'a post) (l:'a post list) : 'a post =
-  Cases.join_list ~empty l
-
-
-
-let meet_list ~(empty:unit -> 'a post) (l:'a post list) : 'a post =
-  Cases.join_list ~empty l
-
-
-let get_ctx (p:'a post) : 'a ctx =
-  Cases.get_ctx p
-
-
-let set_ctx (ctx:'a ctx) (p:'a post) : 'a post =
-  Cases.set_ctx ctx p
-
-
-let get_callstack = Cases.get_callstack
-
-
-let bind f post = Cases.bind (fun _ flow -> f flow) post
+let remove_duplicates lattice post =
+  (* Collapse all handled partitions *)
+  Cases.remove_duplicates
+    (fun case case' ->
+       match case,case' with
+       | NotHandled,NotHandled -> 0
+       | _,NotHandled -> 1
+       | NotHandled,_ -> 2
+       | _ -> 0
+    ) lattice post
+  >>% fun flow ->
+  (* This return has the effect of changing Empty to Result *)
+  return flow

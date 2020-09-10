@@ -27,8 +27,6 @@ open Sig.Abstraction.Stateless
 open Universal.Ast
 open Stubs.Ast
 open Ast
-open Zone
-open Universal.Zone
 open Common.Points_to
 open Common.Base
 open Universal.Numeric.Common
@@ -86,24 +84,6 @@ struct
     }
 
 
-
-  (** Zoning definition *)
-  (** ================= *)
-
-  let interface = {
-    iexec = {
-      provides= [Z_c];
-      uses = [Z_c;Z_c_scalar]
-    };
-
-    ieval = {
-      provides = [Z_c,Z_c_low_level];
-      uses = [Z_c,Z_c_scalar;
-              Z_c,Z_u_num;
-              Z_c,Z_c_points_to]
-    }
-  }
-
   let alarms = []
 
 
@@ -123,26 +103,26 @@ struct
   (** Initialize global variables *)
   let init_globals globals range man flow =
     globals |>
-    List.fold_left (fun flow (v, init) ->
+    List.fold_left (fun acc (v, init) ->
         let cvar =
           match v.vkind with
           | V_cvar cvar -> cvar
           | _ -> assert false
         in
-        if cvar.cvar_scope = Variable_extern then flow
+        if cvar.cvar_scope = Variable_extern then acc
         else
           let stmt = mk_c_declaration v init cvar.cvar_scope cvar.cvar_range in
-          man.exec stmt flow
-      ) flow
+          acc >>% man.exec stmt
+      ) (Post.return flow)
 
 
   (** Execute stub directives *)
   let exec_stub_directives directives range man flow =
     directives |>
-    List.fold_left (fun flow directive ->
+    List.fold_left (fun acc directive ->
         let stmt = mk_stub_directive directive directive.stub_directive_range in
-        man.exec stmt flow
-      ) flow
+        acc >>% man.exec stmt
+      ) (Post.return flow)
 
 
   (** Fund a function by name *)
@@ -170,13 +150,13 @@ struct
       else
         (* Resolve the pointed function *)
         let fp = mk_c_subscript_access buf (mk_z i range) range in
-        man.eval fp ~zone:(Z_c,Z_c_points_to) flow >>$ fun p flow ->
+        resolve_pointer fp man flow >>$ fun p flow ->
         let input = flow in
-        match ekind p with
-        | E_c_points_to (P_fun f) ->
+        match p with
+        | P_fun f ->
           (* Execute the function *)
           let stmt = mk_c_call_stmt f [] range in
-          man.post stmt flow >>$ fun () flow' ->
+          man.exec stmt flow >>% fun flow' ->
           (* Function to return the correct flow depending on the
              position in the array. If index [i] is above [a], this
              means that function [f] hasn't been registered in some
@@ -186,16 +166,16 @@ struct
           if man.lattice.is_bottom (Flow.get T_cur man.lattice flow') then
             Post.return (fix_flow flow')
           else
-            aux (Z.pred i) flow' >>$ fun () flow'' ->
+            aux (Z.pred i) flow' >>% fun flow'' ->
             Post.return (fix_flow flow'')
 
-        | E_c_points_to P_top ->
+        | P_top ->
           Soundness.warn "ignoring side-effects of ⊤ exit functions";
           Post.return flow
 
         | _ -> assert false
     in
-    aux (Z.pred b) flow >>$ fun () flow ->
+    aux (Z.pred b) flow >>% fun flow ->
     Post.return (Flow.remove T_cur flow)
 
 
@@ -207,12 +187,12 @@ struct
       let nb = mk_var (find_variable ("_next_"^name^"_fun_slot") prog.c_globals) range in
       let buf = mk_var (find_variable ("_"^name^"_fun_buf") prog.c_globals) range in
       let nb_itv =
-        let evl = man.eval nb ~zone:(Z_c,Z_u_num) flow in
-        Cases.fold_some
-          (fun nb flow acc ->
+        let evl = man.eval nb flow in
+        Cases.fold_result
+          (fun acc nb flow ->
              man.ask (mk_int_interval_query nb) flow |>
              I.join_bot acc
-          ) evl Bot.BOT
+          ) Bot.BOT evl
       in
       match nb_itv with
       | Bot.BOT ->
@@ -237,56 +217,33 @@ struct
     | Some stmt ->
       let f' = { f with c_func_parameters = [] } in
       let stmt = mk_c_call_stmt f' [] f.c_func_range in
-      man.post stmt flow
-
+      man.exec stmt flow
 
   
-  (** Create the address of the array pointed by argv *)
-  let mk_argv range =
-    mk_addr
-      {
-        addr_kind = Stubs.Ast.A_stub_resource "argv";
-        addr_partitioning = G_all;
-        addr_mode = STRONG;
-      }
-      ~etyp:(T_c_pointer (T_c_pointer s8))
-      range
-
-
-  (** Create a smash address for all arguments *)
-  let mk_arg_smash ~mode range =
-    mk_addr
-      {
-        addr_kind = Stubs.Ast.A_stub_resource "arg";
-        addr_partitioning = G_all;
-        addr_mode = mode;
-      }
-      ~etyp:(T_c_pointer s8)
-      range
-
   (** Allocate the argv array *)
   let alloc_argv range man flow =
     let arange = tag_range range "argv" in
-    man.eval (mk_alloc_addr (Stubs.Ast.A_stub_resource "argv") arange) flow >>$ fun addr flow ->
-    man.eval ~zone:(Z_c,Z_c_scalar) (mk_stub_builtin_call BYTES addr ~etyp:ul range) flow >>$ fun bytes flow ->
-    man.exec ~zone:Z_c_scalar (mk_add bytes range) flow |>
-    Eval.singleton { addr with etyp = T_c_pointer (T_c_pointer s8) }
+    man.eval (mk_stub_alloc_resource "argv" arange) flow >>$ fun addr flow ->
+    Eval.singleton { addr with etyp = T_c_pointer (T_c_pointer s8) } flow
 
 
   (** Allocate an address for a concrete argument *)
   let alloc_concrete_arg i range man flow =
     let irange = tag_range range "argv[%d]" i in
-    man.eval (mk_alloc_addr (Stubs.Ast.A_stub_resource "arg") irange) flow >>$ fun addr flow ->
-    man.eval ~zone:(Z_c,Z_c_scalar) (mk_stub_builtin_call BYTES addr ~etyp:ul range) flow >>$ fun bytes flow ->
-    man.exec ~zone:Z_c_scalar (mk_add bytes range) flow |>
-    Eval.singleton { addr with etyp =  T_c_pointer s8 }
+    man.eval (mk_stub_alloc_resource "arg" irange) flow >>$ fun addr flow ->
+    Eval.singleton { addr with etyp =  T_c_pointer s8 } flow
 
 
   (** Set the minimal size of the argument block *)
   let set_arg_min_size arg min range man flow =
     let max = snd (rangeof ul) in
-    man.exec (mk_assume (mk_in (mk_stub_builtin_call BYTES arg ~etyp:ul range) min (mk_z max range ) range) range) flow |>
-    Post.return
+    man.exec (mk_assume (mk_in (mk_stub_builtin_call BYTES arg ~etyp:ul range) min (mk_z max range ) range) range) flow
+
+  (** Allocate an address for a symbolic argument *)
+  let alloc_symbolic_arg range man flow =
+    let arange = tag_range range "arg" in
+    man.eval (mk_stub_alloc_resource "arg" arange) flow >>$ fun addr flow ->
+    Eval.singleton { addr with etyp =  T_c_pointer s8 } flow
 
 
   (** Initialize an argument with a concrete string *)
@@ -295,8 +252,9 @@ struct
     let rec aux i flow =
       let argi = mk_c_subscript_access arg (mk_int i range) range in
       if i = n then man.exec (mk_assign argi zero range) flow
-      else man.exec (mk_assign argi (mk_c_character (String.get str i) range) range) flow |>
-           aux (i + 1)
+      else
+        man.exec (mk_assign argi (mk_c_character (String.get str i) range) range) flow >>% fun flow ->
+        aux (i + 1) flow
     in
     aux 0 flow
 
@@ -311,21 +269,21 @@ struct
 
     (* Create the memory block pointed by argv. *)
     alloc_argv range man flow >>$ fun argv flow ->
-    let flow = man.exec (mk_add argv range) flow in
+    man.exec (mk_add argv range) flow >>% fun flow ->
 
     (* Initialize its size to (|args| + 2)*sizeof(ptr) *)
-    man.eval ~zone:(Z_c,Z_c_scalar) (mk_stub_builtin_call BYTES argv ~etyp:ul range) flow >>$ fun bytes flow ->
+    man.eval (mk_stub_builtin_call BYTES argv ~etyp:ul range) flow >>$ fun bytes flow ->
     let size = Z.mul (sizeof_type (T_c_pointer s8)) (Z.of_int (nargs + 2)) in 
-    let flow = man.exec ~zone:Z_c_scalar (mk_assign bytes (mk_z size range) range) flow in
+    man.exec (mk_assign bytes (mk_z size range) range) flow >>% fun flow ->
 
     (* Initialize argv[0] with the name of the program *)
     alloc_concrete_arg 0 range man flow >>$ fun arg flow ->
     let program_name = "a.out" in
-    set_arg_min_size arg (mk_int (String.length program_name + 1) range) range man flow >>$ fun () flow ->
-    let flow = man.exec (mk_add arg range) flow in
-    let flow = init_concrete_arg arg program_name range man flow in
+    set_arg_min_size arg (mk_int (String.length program_name + 1) range) range man flow >>% fun flow ->
+    man.exec (mk_add arg range) flow >>% fun flow ->
+    init_concrete_arg arg program_name range man flow >>% fun flow ->
     let argv0 = mk_c_subscript_access argv (mk_zero range) range in
-    let flow = man.exec (mk_assign argv0 arg range) flow in
+    man.exec (mk_assign argv0 arg range) flow >>% fun flow ->
 
     (* Initialize argv[i | 1 <= i < argc] with command-line arguments *)
     let rec iter i flow =
@@ -334,27 +292,27 @@ struct
       else
         let str = List.nth args (i-1) in
         alloc_concrete_arg i range man flow >>$ fun arg flow ->
-        set_arg_min_size arg (mk_int (String.length str + 1) range) range man flow >>$ fun () flow ->
-        let flow = man.exec (mk_add arg range) flow in
-        let flow = init_concrete_arg arg str range man flow in
+        set_arg_min_size arg (mk_int (String.length str + 1) range) range man flow >>% fun flow ->
+         man.exec (mk_add arg range) flow >>% fun flow ->
+        init_concrete_arg arg str range man flow >>% fun flow ->
         let argvi = mk_c_subscript_access argv (mk_int i range) range in
-        let flow = man.exec (mk_assign argvi arg range) flow in
+        man.exec (mk_assign argvi arg range) flow >>% fun flow ->
         iter (i + 1) flow
     in
-    iter 1 flow >>$ fun () flow ->
+    iter 1 flow >>% fun flow ->
 
     (* Put NULL in argv[argc + 1] *)
     let last = mk_c_subscript_access argv argc range in
-    let flow = man.exec (mk_assign last (mk_c_null range) range) flow in
+    man.exec (mk_assign last (mk_c_null range) range) flow >>% fun flow ->
 
     (* assign main parameters and call the body *)
     let argcv, argvv = match main.c_func_parameters with
       | [v1;v2] -> mk_var v1 range, mk_var v2 range
       | _ -> assert false
     in
-    man.exec (mk_assign argcv argc range) flow |>
-    man.exec (mk_assign argvv argv range) |>
-    exec_entry_body main man
+    man.exec (mk_assign argcv argc range) flow >>% fun flow ->
+    man.exec (mk_assign argvv argv range) flow >>% fun flow ->
+    exec_entry_body main man flow
 
 
 
@@ -380,7 +338,7 @@ struct
     *)
 
     let argc = mk_var argc_var range in
-    let flow = man.exec (mk_add argc range) flow in
+    man.exec (mk_add argc range) flow >>% fun flow ->
     let lo' = Z.succ lo in
     let hi' =
       match hi with
@@ -390,64 +348,63 @@ struct
     if Z.(lo' > hi') || Z.(hi' > int_max - one) then
       panic "incorrect argc value [%a,%a]" Z.pp_print lo' Z.pp_print hi'
     ;
-    let flow = man.exec (mk_assign argc (mk_z_interval lo' hi' range) range) flow in
+    man.exec (mk_assign argc (mk_z_interval lo' hi' range) range) flow >>% fun flow ->
 
 
     (* Create the memory block pointed by argv. *)
     alloc_argv range man flow >>$ fun argv flow ->
-    let argv = mk_argv range in
     let argvv = mk_var argv_var range in
-    let flow = man.exec (mk_add argvv range) flow |>
-               man.exec (mk_assign argvv argv range)
-    in
+    man.exec (mk_add argvv range) flow >>% fun flow ->
+    man.exec (mk_assign argvv argv range) flow >>% fun flow ->
 
     (* Initialize its size to argc + 1 *)
-    man.eval ~zone:(Z_c,Z_c_scalar) (mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, argv)) range ~etyp:ul) flow >>$ fun bytes flow ->
-    man.eval ~zone:(Z_c,Z_c_scalar) argc flow >>$ fun scalar_argc flow ->
-    let flow = man.exec ~zone:Z_c_scalar (mk_assign bytes (mul
-                                                             (mk_z (sizeof_type (T_c_pointer s8)) range)
-                                                             (add scalar_argc (mk_one range) range)
-                                                             range
-                                                          ) range) flow |>
-               man.exec (mk_add argv range)
-    in
+    man.eval (mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, argv)) range ~etyp:ul) flow >>$ fun bytes flow ->
+    man.eval argc flow >>$ fun scalar_argc flow ->
+    man.exec (mk_assign bytes (mul
+                                 (mk_z (sizeof_type (T_c_pointer s8)) range)
+                                 (add scalar_argc (mk_one range) range)
+                                 range
+                              ) range) flow
+    >>% fun flow ->
+    man.exec (mk_add argv range) flow >>% fun flow ->
 
     (* Create a symbolic argument *)
-    let arg = mk_arg_smash ~mode:STRONG range in
+    alloc_symbolic_arg range man flow >>$ fun arg flow ->
 
     (* Initialize the size of the argument *)
-    man.eval ~zone:(Z_c,Z_c_scalar) (mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, arg)) range ~etyp:ul) flow >>$ fun bytes flow ->
-    let flow = man.exec ~zone:Z_c_scalar (mk_add bytes range) flow |>
-               man.exec ~zone:Z_c_scalar (mk_assign bytes (mk_z (rangeof s32 |> snd) range) range) |>
-               man.exec (mk_add arg range)
-    in
+    man.eval (mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, arg)) range ~etyp:ul) flow >>$ fun bytes flow ->
+    man.exec (mk_assign bytes (mk_z (rangeof s32 |> snd) range) range) flow >>% fun flow ->
 
     (* Ensure that the argument is a valid string with at least one character *)
     let first_arg_cell = mk_c_subscript_access arg (mk_zero range) range in
-    let flow = man.exec (mk_assign first_arg_cell (mk_z_interval Z.one (rangeof s8 |> snd) range) range) flow in
+    man.exec (mk_assign first_arg_cell (mk_z_interval Z.one (rangeof s8 |> snd) range) range) flow >>% fun flow ->
     let some_arg_cell = mk_c_subscript_access arg (mk_z_interval Z.one (rangeof s32 |> snd |> Z.pred) range) range in
-    let flow = man.exec (mk_assign some_arg_cell (mk_zero range) range) flow in
+    man.exec (mk_assign some_arg_cell (mk_zero range) range) flow >>% fun flow ->
 
     (* Make the address weak *)
-    let arg_weak = mk_arg_smash ~mode:WEAK range in
-    let flow = man.exec (mk_rename arg arg_weak range) flow in
+    let arg_weak = weaken_addr_expr arg in
+    man.exec (mk_rename arg arg_weak range) flow >>% fun flow ->
 
-    (* Put the symbolic argument in argv[0 : argc-1] *)
+    (* Initialize argv[0] *)
+    let first = mk_c_subscript_access argv zero range in
+    man.exec (mk_assign first arg_weak range) flow >>% fun flow ->
+
+    (* Put the symbolic argument in argv[1 : argc-1] *)
     let i = mktmp ~typ:s32 () in
     let ii = mk_var i range in
-    let l = mk_zero range in
+    let l = mk_one range in
     let u = sub argc (mk_one range) range in
-    let flow = man.exec (mk_add ii range) flow |>
-               man.exec (mk_assign ii (mk_c_builtin_call "_mopsa_range_s32" [l;u] s32 range) range)
-    in
-    let every_argv_cell = mk_c_subscript_access argv (mk_stub_quantified FORALL i (S_interval(l,u)) range) range in
-    let flow = man.exec (mk_assume (mk_binop every_argv_cell O_eq arg_weak ~etyp:u8 range) range) flow |>
-               man.exec (mk_remove ii range)
-    in
+    man.exec (mk_add ii range) flow >>% fun flow ->
+    man.exec (mk_assign ii (mk_c_builtin_call "_mopsa_range_s32" [l;u] s32 range) range) flow >>% fun flow ->
+    man.exec (mk_assume (mk_stub_quantified_formula
+                           [FORALL,i,S_interval(l,u)]
+                           (mk_binop (mk_c_subscript_access argv (mk_var i range) range) O_eq arg_weak ~etyp:u8 range) range) range) flow
+    >>% fun flow ->
+    man.exec (mk_remove ii range) flow >>% fun flow ->
 
     (* Put the terminating NULL pointer in argv[argc] *)
     let last = mk_c_subscript_access argv argc range in
-    let flow = man.exec (mk_assign last (mk_c_null range) range) flow in
+    man.exec (mk_assign last (mk_c_null range) range) flow >>% fun flow ->
 
     (* Put the initial alarm set *)
     let flow = Flow.set_alarms alarms flow in
@@ -464,19 +421,19 @@ struct
       | Some(lo,hi), None       -> call_main_with_symbolic_args main lo hi functions man flow
       | Some(lo,hi), Some args  -> panic "-c-symbolic-main-args used with concrete arguments"
     else
-      exec_entry_body main man flow >>$ fun () flow ->
+      exec_entry_body main man flow >>% fun flow ->
       exec_exit_functions "exit" main.c_func_name_range man flow
 
 
-  let exec zone stmt man flow =
+  let exec stmt man flow =
     match skind stmt with
     | S_program ({ prog_kind = C_program {c_globals; c_functions; c_stub_directives} }, args)
       when not !Universal.Iterators.Unittest.unittest_flag ->
       (* Initialize global variables *)
-      let flow = init_globals c_globals (srange stmt) man flow in
+      init_globals c_globals (srange stmt) man flow >>%? fun flow ->
 
       (* Execute stub directives *)
-      let flow = exec_stub_directives c_stub_directives (srange stmt) man flow in
+      exec_stub_directives c_stub_directives (srange stmt) man flow >>%? fun flow ->
 
       (* Find entry function *)
       let entry =
@@ -501,10 +458,10 @@ struct
     | S_program ({ prog_kind = C_program{ c_globals; c_functions; c_stub_directives } }, _)
       when !Universal.Iterators.Unittest.unittest_flag ->
       (* Initialize global variables *)
-      let flow1 = init_globals c_globals (srange stmt) man flow in
+      init_globals c_globals (srange stmt) man flow >>%? fun flow1 ->
 
       (* Execute stub directives *)
-      let flow1 = exec_stub_directives c_stub_directives (srange stmt) man flow1 in
+      exec_stub_directives c_stub_directives (srange stmt) man flow1 >>%? fun flow1 ->
 
       let is_test fundec =
         let name = fundec.c_func_org_name in
@@ -530,7 +487,6 @@ struct
       let tests = get_test_functions c_functions in
       let stmt = mk_c_unit_tests tests in
       man.exec stmt flow1 |>
-      Post.return |>
       OptionExt.return
 
     | _ -> None
@@ -540,11 +496,11 @@ struct
   (** ========================= *)
 
   let eval_exit name code range man flow =
-    man.eval code ~zone:(Z_c,Z_u_num) flow >>$ fun _ flow ->
-    exec_exit_functions name range man flow >>$ fun () flow ->
+    man.eval code flow >>$ fun _ flow ->
+    exec_exit_functions name range man flow >>% fun flow ->
     Eval.singleton (mk_unit range) flow
 
-  let eval zone exp man flow =
+  let eval exp man flow =
     match ekind exp with
     | E_c_builtin_call("exit", [code]) ->
       eval_exit "exit" code exp.erange man flow |>
@@ -559,7 +515,7 @@ struct
   (** Handler of queries *)
   (** ================== *)
 
-  let ask : type r. r query -> _ man -> _ flow -> r option = fun query man flow ->
+  let ask : type r. ('a,r) query -> _ man -> _ flow -> r option = fun query man flow ->
     let open Framework.Engines.Interactive in
     match query with
     (* Get the list of variables in the current scope *)
@@ -592,13 +548,13 @@ struct
         else assert false
 
       (* Get the direct value of an integer expression *)
-      and int_value ?(zone=Z_c) e =
-        let evl = man.eval e ~zone:(zone,Z_u_num) flow in
-        let itv = Cases.fold_some
-            (fun ee flow acc ->
+      and int_value e =
+        let evl = man.eval e flow in
+        let itv = Cases.fold_result
+            (fun acc ee flow ->
               let itv = man.ask (mk_int_interval_query ~fast:false ee) flow in
               I.join_bot itv acc
-            ) evl Bot.BOT
+            ) Bot.BOT evl
         in
         match itv with
         | Bot.BOT -> None
@@ -607,12 +563,12 @@ struct
 
       (* Get the direct value of a float expression *)
       and float_value e =
-        let evl = man.eval e ~zone:(Z_c,Z_u_num) flow in
-        let itv = Cases.fold_some
-            (fun ee flow acc ->
+        let evl = man.eval e flow in
+        let itv = Cases.fold_result
+            (fun acc ee flow ->
                let itv = man.ask (mk_float_interval_query ee) flow in
                ItvUtils.FloatItvNan.join itv acc
-            ) evl ItvUtils.FloatItvNan.bot
+            ) ItvUtils.FloatItvNan.bot evl
         in
         if ItvUtils.FloatItvNan.is_bot itv then None
         else Some ItvUtils.FloatItvNan.(to_string dfl_fmt itv)
@@ -625,23 +581,22 @@ struct
 
       (* Get the direct value a pointer expression *)
       and pointer_value e =
-        let evl = man.eval e ~zone:(Z_c,Z_c_points_to) flow in
-        let l = Cases.fold_some
-            (fun pt flow acc ->
-               match ekind pt with
-               | E_c_points_to P_null -> "NULL" :: acc
-               | E_c_points_to P_invalid -> "INVALID" :: acc
-               | E_c_points_to P_block (base,offset,_) ->
-                 begin match int_value ~zone:Z_c_scalar offset with
+        let evl = resolve_pointer e man flow in
+        let l = Cases.fold_result
+            (fun acc pt flow ->
+               match pt with
+               | P_null -> "NULL" :: acc
+               | P_invalid -> "INVALID" :: acc
+               | P_block (base,offset,_) ->
+                 begin match int_value offset with
                    | None -> acc
                    | Some o ->
                      let v = Format.asprintf "&%a + %s" pp_base base o in
                      v :: acc
                  end
-               | E_c_points_to P_fun f -> f.c_func_org_name :: acc
-               | E_c_points_to P_top -> "⊤" :: acc
-               | _ -> assert false
-            ) evl []
+               | P_fun f -> f.c_func_org_name :: acc
+               | P_top -> "⊤" :: acc
+            ) [] evl
         in
         match l with
         | [x] -> Some x
@@ -697,18 +652,18 @@ struct
       (* Get the sub-values of a pointer *)
       and pointer_sub_value v e =
         if is_c_pointer_type e.etyp && is_c_void_type (under_pointer_type e.etyp) then None else
-        let evl = man.eval e ~zone:(Z_c,Z_c_points_to) flow in
-        let l = Cases.fold_some
-            (fun pt flow acc ->
-               match ekind pt with
-               | E_c_points_to P_block (base,offset,_) ->
+        let evl = resolve_pointer e man flow in
+        let l = Cases.fold_result
+            (fun acc pt flow ->
+               match pt with
+               | P_block (base,offset,_) ->
                  let vv = "*" ^ v in
                  begin match get_var_value vv (mk_c_deref e range) with
                    | {var_value = None; var_sub_value = None} -> acc
                    | x -> [Named_sub_value [vv,x]]
                  end
                | _ -> acc
-            ) evl []
+            ) [] evl
         in
         match l with
         | [] -> None

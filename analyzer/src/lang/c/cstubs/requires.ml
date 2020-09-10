@@ -28,8 +28,6 @@ open Universal.Ast
 open Stubs.Ast
 open Common.Points_to
 open Ast
-open Zone
-open Universal.Zone
 open Common.Alarms
 open Aux_vars
 
@@ -46,21 +44,6 @@ struct
       let name = "c.cstubs.requires"
     end)
 
-  let interface= {
-    iexec = {
-      provides = [ Z_c ];
-      uses     = [ Z_c;
-                   Z_u_num; ]
-    };
-
-    ieval = {
-      provides = [ ];
-      uses     = [ Z_c, Z_c_points_to;
-                   Z_c, Z_u_num;
-                   Z_c_scalar,Z_u_num; ]
-    }
-  }
-
   let alarms = [ A_c_out_of_bound;
                  A_c_null_deref;
                  A_c_use_after_free;
@@ -73,125 +56,110 @@ struct
   let init _ _ flow =  flow
 
 
-
-
-
   (** Computation of post-conditions *)
   (** ============================== *)
 
-  let exec_stub_requires_valid_ptr ptr range man flow =
-    man.eval ptr ~zone:(Z_c, Z_c_points_to) flow >>$ fun pt flow ->
-    match ekind pt with
-    | E_c_points_to P_null ->
+  let eval_base_offset ptr range man flow =
+    resolve_pointer ptr man flow >>$ fun pt flow ->
+    match pt with
+    | P_null ->
       raise_c_null_deref_alarm ptr ~range man flow |>
-      Cases.empty_singleton
+      Cases.empty
 
-    | E_c_points_to P_invalid ->
+    | P_invalid ->
       raise_c_invalid_deref_alarm ptr ~range man flow |>
-      Cases.empty_singleton
+      Cases.empty
 
-    | E_c_points_to (P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
+    | P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset, _) ->
       raise_c_use_after_free_alarm ptr r ~range man flow |>
-      Cases.empty_singleton
+      Cases.empty
 
-    | E_c_points_to (P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
+    | P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset, _) ->
       raise_c_dangling_deref_alarm ptr v r ~range man flow |>
-      Cases.empty_singleton
+      Cases.empty
 
-    | E_c_points_to P_top ->
+    | P_top ->
       let cond = mk_stub_builtin_call VALID_PTR ptr ~etyp:u8 range in
       let flow = Stubs.Alarms.raise_stub_invalid_requires ~bottom:false cond range man flow in
+      Cases.singleton None flow
+
+    | P_block (base, offset, _) ->
+      Cases.singleton (Some (base,offset)) flow
+
+    | P_fun _ -> assert false
+
+
+  let exec_stub_requires_valid_ptr ptr range man flow =
+    eval_base_offset ptr range man flow >>$ fun bo flow ->
+    match bo with
+    | None ->
+      (* Top pointer found *)
       Post.return flow
 
-    | E_c_points_to (P_block (base, offset, _)) ->
-      if is_expr_forall_quantified offset
-      then
-        Common.Base.eval_base_size base range man flow >>$ fun size flow ->
-        man.eval ~zone:(Z_c_scalar,Z_u_num) size flow >>$ fun size flow ->
-        let min, max = Common.Quantified_offset.bound offset in
-        man.eval ~zone:(Z_c_scalar, Z_u_num) min flow >>$ fun min flow ->
-        man.eval ~zone:(Z_c_scalar, Z_u_num) max flow >>$ fun max flow ->
-        let elm = under_type ptr.etyp |> void_to_char |> (fun t -> mk_z (sizeof_type t) range) in
-        let limit = sub size elm range in
-        let cond = mk_binop
-            (mk_in min (mk_zero range) limit range)
-            O_log_and
-            (mk_in max (mk_zero range) limit range)
-            range
-        in
-        assume cond
-          ~fthen:(fun flow -> Post.return flow)
-          ~felse:(fun eflow ->
-              raise_c_quantified_out_bound_alarm base size min max (under_type ptr.etyp) range man flow eflow |>
-              Post.return
-            )
-          ~zone:Z_u_num man flow
+    | Some (base,offset) ->
+      Common.Base.eval_base_size base range man flow >>$ fun size flow ->
+      man.eval size flow >>$ fun size flow ->
+      man.eval offset flow >>$ fun offset flow ->
+      let elm = under_type ptr.etyp |> void_to_char |> (fun t -> mk_z (sizeof_type t) range) in
+      let limit = sub size elm range in
+      let cond = mk_in offset (mk_zero range) limit range in
+      assume cond
+        ~fthen:(fun flow -> Post.return flow)
+        ~felse:(fun eflow ->
+            raise_c_out_bound_alarm base size offset (under_type ptr.etyp) range man flow eflow |>
+            Post.return
+          )
+        man flow
 
-      (* Valid base + non-quantified offset *)
-      else
-        Common.Base.eval_base_size base range man flow >>$ fun size flow ->
-        man.eval ~zone:(Z_c_scalar,Z_u_num) size flow >>$ fun size flow ->
-        man.eval ~zone:(Z_c_scalar,Z_u_num) offset flow >>$ fun offset flow ->
-        let elm = under_type ptr.etyp |> void_to_char |> (fun t -> mk_z (sizeof_type t) range) in
-        let limit = sub size elm range in
-        let cond = mk_in offset (mk_zero range) limit range in
-        assume cond
-          ~fthen:(fun flow -> Post.return flow)
-          ~felse:(fun eflow ->
-              raise_c_out_bound_alarm base size offset (under_type ptr.etyp) range man flow eflow |>
-              Post.return
-            )
-          ~zone:Z_u_num man flow
+  let exec_stub_requires_valid_ptr_quant i lo hi ptr range man flow =
+    eval_base_offset ptr range man flow >>$ fun bo flow ->
+    match bo with
+    | None ->
+      (* Top pointer found *)
+      Post.return flow
 
-    | _ -> assert false
+    | Some (base,offset) ->
+      Common.Base.eval_base_size base range man flow >>$ fun size flow ->
+      man.eval size flow >>$ fun size flow ->
+      let min, max = Common.Quantified_offset.bound offset [FORALL,i,S_interval(lo,hi)] in
+      man.eval min flow >>$ fun min flow ->
+      man.eval max flow >>$ fun max flow ->
+      let elm = under_type ptr.etyp |> void_to_char |> (fun t -> mk_z (sizeof_type t) range) in
+      let limit = sub size elm range in
+      let cond = mk_binop
+          (mk_in min (mk_zero range) limit range)
+          O_log_and
+          (mk_in max (mk_zero range) limit range)
+          range
+      in
+      assume cond
+        ~fthen:(fun flow -> Post.return flow)
+        ~felse:(fun eflow ->
+            raise_c_quantified_out_bound_alarm base size min max (under_type ptr.etyp) range man flow eflow |>
+            Post.return
+          )
+        man flow
 
-  
+
   let exec_stub_requires_float_class flt cls msg range man flow =
-    man.eval ~zone:(Z_c, Z_u_num) flt flow >>$ fun flt flow ->
+    man.eval flt flow >>$ fun flt flow ->
     let cond = mk_float_class cls flt range in
     assume cond
       ~fthen:(fun flow -> Post.return flow)
       ~felse:(fun eflow ->
           raise_c_invalid_float_class_alarm flt msg range man flow eflow |>
           Post.return
-        )
-      ~zone:Z_u_num man flow
+        ) man flow
 
 
-  (** 𝕊⟦ requires cond; ⟧ *)
-  let exec_stub_requires cond range man flow =
-    assume cond
-      ~fthen:(fun flow ->
-          Post.return flow
-        )
-      ~felse:(fun flow ->
-          Stubs.Alarms.raise_stub_invalid_requires cond range man flow |>
-          Post.return
-        )
-      ~negate:(fun e range ->
-          let ee = map_expr
-              (fun e ->
-                 match ekind e with
-                 | E_stub_quantified(FORALL, v, s) ->
-                   VisitParts { e with ekind = E_stub_quantified(EXISTS, v, s) }
-
-                 | E_stub_quantified(EXISTS, v, s) ->
-                   VisitParts { e with ekind = E_stub_quantified(FORALL, v, s) }
-
-                 | _ -> VisitParts e
-              )
-              (fun s -> VisitParts s)
-              e
-          in
-          mk_not ee range
-        )
-      ~zone:Z_c man flow
-
-
-  let exec zone stmt man flow  =
+  let exec stmt man flow  =
     match skind stmt with
     | S_stub_requires { ekind = E_stub_builtin_call(VALID_PTR, ptr) } ->
       exec_stub_requires_valid_ptr ptr stmt.srange man flow |>
+      OptionExt.return
+
+    | S_stub_requires { ekind = E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_stub_builtin_call(VALID_PTR, ptr) }) }  ->
+      exec_stub_requires_valid_ptr_quant i a b ptr stmt.srange man flow |>
       OptionExt.return
 
     | S_stub_requires { ekind = E_stub_builtin_call((VALID_FLOAT | FLOAT_INF | FLOAT_NAN) as op, flt) } ->
@@ -204,10 +172,6 @@ struct
       exec_stub_requires_float_class flt cls msg stmt.srange man flow |>
       OptionExt.return
 
-    | S_stub_requires e ->
-      exec_stub_requires e stmt.srange man flow |>
-      OptionExt.return
-
     | _ -> None
 
 
@@ -216,7 +180,7 @@ struct
   (** ========================= *)
 
 
-  let eval zone exp man flow = None
+  let eval exp man flow = None
 
   let ask _ _ _ = None
 

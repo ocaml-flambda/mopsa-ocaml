@@ -21,22 +21,8 @@
 
 (** Engine for interactive analysis sessions *)
 
-open Ast
-open Ast.Var
-open Ast.Stmt
-open Ast.Expr
-open Ast.Typ
-open Core
-open Lattice
-open Token
-open Flow
-open Eval
-open Post
-open Query
-open Zone
+open Core.All
 open Toplevel
-open Manager
-open Engine
 open Format
 open Location
 open Callstack
@@ -75,11 +61,11 @@ and var_sub_value =
 
 
 (** Query to retrieve the list of variables in the current scope *)
-type _ query += Q_debug_variables : var list query
+type ('a,_) query += Q_debug_variables : ('a,var list) query
 
 
 (** Query to retrieve the value of a given variable *)
-type _ query += Q_debug_variable_value : var -> var_value query
+type ('a,_) query += Q_debug_variable_value : var -> ('a,var_value) query
 
 
 (** Compare two var values *)
@@ -314,6 +300,9 @@ struct
     | Debug of string
     (** Set debug channels *)
 
+    | Save of string
+    (** Save the environment in a file *)
+
 
   (** Information sub-commands *)
   and info_command =
@@ -337,13 +326,14 @@ struct
     | Env         -> Format.pp_print_string fmt "env"
     | Where       -> Format.pp_print_string fmt "where"
     | LoadHook h  -> Format.fprintf fmt "hook %s" h
-    | UnloadHook h -> Format.fprintf fmt "unload %s" h
-    | Info Alarms -> Format.fprintf fmt "info alarms"
+    | UnloadHook h     -> Format.fprintf fmt "unload %s" h
+    | Info Alarms      -> Format.fprintf fmt "info alarms"
     | Info Breakpoints -> Format.fprintf fmt "info breakpoints"
-    | Info Tokens -> Format.fprintf fmt "info tokens"
-    | Info Variables -> Format.fprintf fmt "info variables"
+    | Info Tokens      -> Format.fprintf fmt "info tokens"
+    | Info Variables   -> Format.fprintf fmt "info variables"
     | Backtrace   -> Format.fprintf fmt "backtrace"
     | Debug ch    -> Format.fprintf fmt "debug %s" ch
+    | Save file   -> Format.fprintf fmt "save %s" file
 
 
   (** Print help message *)
@@ -369,6 +359,7 @@ struct
     printf "  i[info] b[reakpoints] print the list of breakpoints@.";
     printf "  i[info] t[okens]      print the list of flow tokens@.";
     printf "  i[info] v[ariables]   print the list of variables@.";
+    printf "  save <file>           save the abstract state in a file@.";
     printf "  help                  print this message@.";
     ()
 
@@ -427,6 +418,8 @@ struct
 
       | ["debug"  | "d"; channel] -> Debug channel
 
+      | ["save"; file] -> Save file
+
       | _ ->
         printf "Unknown command %s@." l;
         print_usage ();
@@ -441,44 +434,47 @@ struct
 
   (** Actions on abstract domain *)
   type _ action =
-    | Exec : stmt * zone -> Toplevel.t flow action
-    | Post : stmt * zone -> Toplevel.t post action
-    | Eval : expr * (zone * zone) * zone -> Toplevel.t eval action
+    | Exec : stmt * route -> Toplevel.t post action
+    | Eval : expr * route -> Toplevel.t eval action
 
 
   (** Get the program location related to an action *)
   let action_range : type a. a action -> range = function
     | Exec(stmt,_) -> stmt.srange
-    | Post(stmt,_) -> stmt.srange
-    | Eval(exp,_,_)  -> exp.erange
+    | Eval(exp,_)  -> exp.erange
+
+
+  (** Flag to print welcome message at the beginning *)
+  let print_welcome = ref true
 
 
   (** Print an action *)
   let pp_action : type a. Toplevel.t flow -> formatter -> a action -> unit = fun flow fmt action ->
-    fprintf fmt "%a@." (Debug.color "fushia" pp_range) (action_range action);
-    match action with
-    | Exec(stmt,zone) ->
-      fprintf fmt "@[<v 4>S[ %a@] ] in zone %a@."
-        pp_stmt stmt
-        pp_zone zone
+    if !print_welcome then (
+      print_welcome := false;
+      fprintf fmt "@.%a@.Type '%a' to get the list of commands.@.@."
+        (Debug.bold pp_print_string) "Welcome to Mopsa v1.0!"
+        (Debug.bold pp_print_string) "help"
+    )
+    else (
+      fprintf fmt "%a@." (Debug.color "fushia" pp_range) (action_range action);
+      match action with
+      | Exec(stmt,route) ->
+        fprintf fmt "@[<v 4>S[ %a@] ] in %a@."
+          pp_stmt stmt
+          pp_route route
 
-    | Post(stmt,zone) ->
-      fprintf fmt "@[<v 4>P[ %a@] ] in zone %a@."
-        pp_stmt stmt
-        pp_zone zone
-
-    | Eval(exp,zone,_) ->
-      fprintf fmt "@[<v 4>E[ %a@] : %a ] in zone %a@."
-        pp_expr exp
-        pp_typ (etyp exp)
-        pp_zone2 zone
-
+      | Eval(exp,route) ->
+        fprintf fmt "@[<v 4>E[ %a@] : %a ] in %a@."
+          pp_expr exp
+          pp_typ (etyp exp)
+          pp_route route
+    )
 
   (** Check that an action is atomic *)
   let is_atomic_action: type a. a action -> bool = fun action ->
     match action with
-    | Exec(stmt,_) -> is_orig_range stmt.srange && Visitor.is_atomic_stmt stmt
-    | Post(stmt,_) -> is_orig_range stmt.srange && Visitor.is_atomic_stmt stmt
+    | Exec(stmt,_) -> is_orig_range stmt.srange && is_atomic_stmt stmt
     | Eval _       -> false
 
 
@@ -689,9 +685,8 @@ struct
   let rec apply_action : type a. a action -> Toplevel.t flow -> a =
     fun action flow ->
     match action with
-    | Exec(stmt, zone)     -> Toplevel.exec ~zone stmt man flow
-    | Post(stmt, zone)     -> Toplevel.post ~zone stmt man flow
-    | Eval(exp, zone, via) -> Toplevel.eval ~zone ~via exp man flow
+    | Exec(stmt, route) -> Toplevel.exec ~route stmt man flow
+    | Eval(exp, route)  -> Toplevel.eval ~route exp man flow
 
 
   (** Wait for user input and process it *)
@@ -813,36 +808,45 @@ struct
       Debug.set_channels channel;
       interact action flow
 
+    | Save file ->
+      let ch = open_out file in
+      let file_fmt = formatter_of_out_channel ch in
+      Format.kasprintf (fun str ->
+          Format.fprintf file_fmt "%s%!" str
+        )  "%a" (Flow.print man.lattice.print) flow;
+      close_out ch;
+      interact action flow
+
 
   (** Interact with the user input or apply the action *)
   and interact_or_apply_action : type a. a action -> Location.range -> Toplevel.t flow -> a =
     fun action range flow ->
-    on_pre_action action flow;
-    let ret =
-      if is_interaction_point action then (
-        pp_action flow std_formatter action;
-        interact action flow
-      ) else
-        apply_action action flow
-    in
-    on_post_action action;
-    ret
+    try
+      on_pre_action action flow;
+      let ret =
+        if is_interaction_point action then (
+          pp_action flow std_formatter action;
+          interact action flow
+        ) else
+          apply_action action flow
+      in
+      on_post_action action;
+      ret
+    with Sys.Break ->
+      interact action flow
 
 
   and init prog =
     Toplevel.init prog man
 
-  and exec ?(zone=any_zone) stmt flow =
-    interact_or_apply_action (Exec (stmt, zone)) stmt.srange flow
+  and exec ?(route=toplevel) stmt flow =
+    interact_or_apply_action (Exec (stmt, route)) stmt.srange flow
 
-  and post ?(zone=any_zone) stmt flow =
-    interact_or_apply_action (Post (stmt,zone)) stmt.srange flow
+  and eval ?(route=toplevel)exp flow =
+    interact_or_apply_action (Eval (exp, route)) exp.erange flow
 
-  and eval ?(zone=(any_zone, any_zone)) ?(via=any_zone) exp flow =
-    interact_or_apply_action (Eval (exp, zone, via)) exp.erange flow
-
-  and ask : type r. r query -> Toplevel.t flow -> r =
-    fun query flow ->
+  and ask : type r. ?route:route -> (Toplevel.t,r) query -> Toplevel.t flow -> r =
+    fun ?(route=toplevel)query flow ->
       Toplevel.ask query man flow
 
   and lattice : Toplevel.t lattice = {
@@ -857,16 +861,13 @@ struct
     print = Toplevel.print;
   }
 
-  and man : (Toplevel.t, Toplevel.t, unit) man = {
+  and man : (Toplevel.t, Toplevel.t) man = {
     lattice;
     get = (fun a -> a);
     set = (fun a _ -> a);
-    get_sub = (fun _ -> ());
-    set_sub = (fun () a -> a);
     get_log = (fun log -> log);
     set_log = (fun log _ -> log);
     exec = exec;
-    post = post;
     eval = eval;
     ask = ask;
   }

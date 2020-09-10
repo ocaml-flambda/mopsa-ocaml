@@ -37,11 +37,6 @@ module Domain =
         let name = "python.libs.math"
       end)
 
-    let interface = {
-      iexec = { provides = []; uses = [] };
-      ieval = { provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [] }
-    }
-
     let alarms = []
 
     type stub_signature = {in_args: string list;
@@ -50,12 +45,12 @@ module Domain =
 
     let add_signature funname in_args out_type db =
       let out_type = match out_type with
-        | "bool" -> T_bool
-        | "int" -> T_int
-        | "float" -> T_float F_DOUBLE
-        | "str" -> T_string
-        | "NoneType" -> T_py_none
-        | "NotImplementedType" -> T_py_not_implemented
+        | "bool" -> T_py (Some Bool)
+        | "int" -> T_py (Some Int)
+        | "float" -> T_py (Some (Float F_DOUBLE))
+        | "str" -> T_py (Some Str)
+        | "NoneType" -> T_py (Some NoneType)
+        | "NotImplementedType" -> T_py (Some NotImplemented)
         | _ -> assert false in
       StringMap.add funname {in_args; out_type} db
 
@@ -93,9 +88,9 @@ module Domain =
     let init prog man flow =
       flow
 
-    let exec _ _ _ _ = None
+    let exec _ _ _ = None
 
-    let eval zones exp man flow =
+    let eval exp man flow =
       let range = erange exp in
       match ekind exp with
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f,_))}, _)}, args, []) when StringMap.mem f stub_base ->
@@ -108,7 +103,7 @@ module Domain =
         Utils.check_instances f man flow range args
           ["float"]
           (fun args flow ->
-             man.eval (mk_expr (E_py_tuple
+             man.eval (mk_expr ~etyp:(T_py None) (E_py_tuple
                                   [mk_py_top (T_float F_DOUBLE) range; mk_py_top T_int range]
                                ) range)  flow
           )
@@ -120,7 +115,7 @@ module Domain =
         Utils.check_instances f man flow range args
           ["float"]
           (fun args flow ->
-             man.eval (mk_expr (E_py_tuple
+             man.eval (mk_expr ~etyp:(T_py None) (E_py_tuple
                                   [mk_py_top (T_float F_DOUBLE) range; mk_py_top (T_float F_DOUBLE) range]
                                ) range)  flow
           )

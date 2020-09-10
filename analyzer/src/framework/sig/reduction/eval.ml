@@ -21,30 +21,22 @@
 
 (** Reduction rules for abstract evaluations *)
 
-open Ast.All
 open Core.All
 
 
-
-
-(** Product evaluations *)
-type prod_eval = expr option option list
-
-
 (** Manager used by reduction rules *)
-type ('a,'s) eval_reduction_man = {
-  get_man : 't. 't id -> ('a, 't, 's) man;
-  get_eval : 't. 't id -> prod_eval -> expr option;
-  del_eval : 't. 't id -> prod_eval -> prod_eval;
+type 'a eval_reduction_man = {
+  get_man : 't. 't id -> ('a, 't) man; (** Get the manger of a domain *)
 }
 
 
-
-(** Signature of a reduction rule for evaluations *)
 module type EVAL_REDUCTION =
 sig
   val name   : string
-  val reduce : expr -> ('a,'b,'s) man -> ('a,'s) eval_reduction_man -> 'a flow -> prod_eval -> ('a, prod_eval) cases
+  (** Name of the reduction rule *)
+
+  val reduce : expr -> ('a,'b) man -> 'a eval_reduction_man -> 'a flow -> expr list -> 'a flow -> 'a eval option
+  (** [reduce e results man input_flow output_flow] reduces a product evaluation *)
 end
 
 

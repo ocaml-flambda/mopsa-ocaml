@@ -25,6 +25,7 @@
 */
 
 #include <sys/sysinfo.h>
+#include <errno.h>
 #include "../mopsa_libc_utils.h"
 
 // TODO: fill-in __info and return reasonable values

@@ -25,7 +25,6 @@
     This can be useful for implementing iterators for example.
 *)
 
-open Ast.All
 open Core.All
 
 
@@ -46,25 +45,22 @@ sig
   val id : unit id
   (** Identifier of the domain *)
 
-  val interface : interface
-  (** Zoning interface *)
-
   val alarms : alarm_class list
   (** List of alarms detected by the domain *)
 
 
   (** {2 Transfer functions} *)
   (** ********************** *)
-  val init : program -> ('a, unit, 's) man -> 'a flow -> 'a flow
+  val init : program -> ('a, unit) man -> 'a flow -> 'a flow
   (** Initialization routine *)
 
-  val exec : zone -> stmt -> ('a, unit, 's) man -> 'a flow -> 'a post option
+  val exec : stmt -> ('a, unit) man -> 'a flow -> 'a post option
   (** Computation of post-conditions *)
 
-  val eval : zone * zone -> expr -> ('a, unit, 's) man -> 'a flow -> 'a eval option
+  val eval : expr -> ('a, unit) man -> 'a flow -> 'a eval option
   (** Evaluation of expressions *)
 
-  val ask  : 'r query -> ('a, unit, 's) man -> 'a flow -> 'r option
+  val ask  : ('a,'r) query -> ('a, unit) man -> 'a flow -> 'r option
   (** Handler of queries *)
 
 end
@@ -87,11 +83,3 @@ val mem_stateless_domain : string -> bool
  
 val stateless_domain_names : unit -> string list
 (** Return the names of registered stateless domains *) 
-
-
-(*==========================================================================*)
-(**                   {1 Casts to other signatures}                         *)
-(*==========================================================================*)
-
-(** Cast a stateless domain to a standard domain with type [unit] *)
-module MakeDomain(S: STATELESS) : Domain.DOMAIN with type t = unit

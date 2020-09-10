@@ -27,7 +27,6 @@ open Universal.Ast
 open Ast
 open Placeholder
 open Ast
-open Zone
 open Common.Points_to
 open Common.Alarms
 open Common.Base
@@ -53,52 +52,52 @@ let format_of_wide_format str t =
 
 (** Evaluate an expression of format string into a string *)
 let eval_format_string wide format range man flow =
-  man.eval ~zone:(Z_c,Z_c_points_to) format flow >>$ fun pt flow ->
-  match ekind pt with
-  | E_c_points_to P_null ->
+  resolve_pointer format man flow >>$ fun pt flow ->
+  match pt with
+  | P_null ->
     raise_c_null_deref_alarm format man flow |>
-    Cases.empty_singleton
+    Cases.empty
 
-  | E_c_points_to P_invalid ->
+  | P_invalid ->
     raise_c_invalid_deref_alarm format man flow |>
-    Cases.empty_singleton
+    Cases.empty
 
-  | E_c_points_to (P_block ({ base_kind = Addr addr; base_valid = false; base_invalidation_range = Some r}, _, _)) ->
+  | P_block ({ base_kind = Addr addr; base_valid = false; base_invalidation_range = Some r}, _, _) ->
     raise_c_use_after_free_alarm format r man flow |>
-    Cases.empty_singleton
+    Cases.empty
 
-  | E_c_points_to (P_block ({ base_kind = String (fmt,C_char_ascii,_) }, offset, _)) when not wide ->
+  | P_block ({ base_kind = String (fmt,C_char_ascii,_) }, offset, _) when not wide ->
     if is_c_expr_equals_z offset Z.zero then
       Cases.singleton (Some fmt) flow
     else
       assume (mk_binop offset O_eq (mk_zero (erange offset)) (erange offset))
         ~fthen:(fun flow -> Cases.singleton (Some fmt) flow)
         ~felse:(fun flow -> Cases.singleton None flow)
-        ~zone:Z_c_scalar man flow
+        man flow
 
-  | E_c_points_to (P_block ({ base_kind = String (fmt,C_char_wide,t) }, offset, _)) when wide ->
+  | P_block ({ base_kind = String (fmt,C_char_wide,t) }, offset, _) when wide ->
     if is_c_expr_equals_z offset Z.zero then
       Cases.singleton (Some (format_of_wide_format fmt t)) flow
     else
       assume (mk_binop offset O_eq (mk_zero (erange offset)) (erange offset))
         ~fthen:(fun flow -> Cases.singleton (Some fmt) flow)
         ~felse:(fun flow -> Cases.singleton None flow)
-        ~zone:Z_c_scalar man flow
+        man flow
 
-  | E_c_points_to (P_block ({ base_kind = String (fmt,C_char_ascii,_) }, offset, _)) when wide ->
+  | P_block ({ base_kind = String (fmt,C_char_ascii,_) }, offset, _) when wide ->
     Soundness.warn_at range "unsupported format string: wide string expected";
-    Cases.empty_singleton flow
+    Cases.empty flow
 
-  | E_c_points_to (P_block ({ base_kind = String (fmt,C_char_wide,t) }, offset, _)) when not wide ->
+  | P_block ({ base_kind = String (fmt,C_char_wide,t) }, offset, _) when not wide ->
     Soundness.warn_at range "unsupported format string: non-wide string expected";
-    Cases.empty_singleton flow
+    Cases.empty flow
 
-  | E_c_points_to (P_block _) ->
+  | P_block _ ->
     Cases.singleton None flow
 
   | _ ->
     Soundness.warn_at range "unsupported format string";
-    Cases.empty_singleton flow
+    Cases.singleton None flow
 
 
 (** Parse a format according to parser *)

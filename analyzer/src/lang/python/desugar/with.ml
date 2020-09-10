@@ -34,28 +34,23 @@ module Domain =
         let name = "python.desugar.with"
       end)
 
-    let interface = {
-      iexec = {provides = [Zone.Z_py]; uses = [Zone.Z_py]};
-      ieval = {provides = []; uses = [Zone.Z_py, Zone.Z_py_obj]}
-    }
-
     let alarms = []
 
     let init _ _ flow = flow
-    let eval _ _ _ _ = None
+    let eval _ _ _ = None
 
-    let exec zone stmt man flow =
+    let exec stmt man flow =
       match skind stmt with
       | S_py_with(context, target, body) ->
          let srange = stmt.srange in
          let erange = context.erange in
          (* Evaluate the context *)
          man.eval context flow |>
-         bind_some_opt @@ fun econtext flow ->
+         bind_result_opt @@ fun econtext flow ->
 
          (* Enter the context *)
          man.eval (mk_py_type econtext econtext.erange) flow |>
-         bind_some_opt @@ fun cls flow ->
+         bind_result_opt @@ fun cls flow ->
 
          let cls = object_of_expr cls in
          let eenter = mk_py_call (mk_py_object_attr cls "__enter__" erange) [econtext] erange in
@@ -66,8 +61,8 @@ module Domain =
          in
 
          (* Execute body *)
-         let tmpexn = mktmp () in
-         let tmpret = mktmp () in
+         let tmpexn = mktmp ~typ:(T_py None) () in
+         let tmpret = mktmp ~typ:(T_py None) () in
          let eexit e1 e2 e3 = mk_py_call (mk_py_object_attr cls "__exit__" erange) [econtext; e1; e2; e3] erange in
          let stmt =
            mk_try
@@ -112,9 +107,10 @@ module Domain =
              (mk_block [] srange)
              srange
          in
-         man.exec stmt flow |>
-         man.exec (mk_remove_var tmpexn srange) |>
-         man.exec (mk_remove_var tmpret srange) |>
+         flow >>%
+         man.exec stmt >>%
+         man.exec (mk_remove_var tmpexn srange) >>%
+         man.exec (mk_remove_var tmpret srange) >>%
          Post.return |>
          OptionExt.return
 

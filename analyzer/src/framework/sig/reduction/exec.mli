@@ -21,7 +21,6 @@
 
 (** Signature of reduction rules for product post-states *)
 
-open Ast.All
 open Core.All
 
 
@@ -30,8 +29,8 @@ open Core.All
 (*==========================================================================*)
 
 (** Manager used by reduction rules *)
-type ('a,'s) exec_reduction_man = {
-  get_man : 't. 't id -> ('a, 't, 's) man; (** Get the manger of a domain *)
+type 'a exec_reduction_man = {
+  get_man : 't. 't id -> ('a, 't) man; (** Get the manger of a domain *)
 }
 
 
@@ -44,8 +43,8 @@ sig
   val name   : string
   (** Name of the reduction rule *)
 
-  val reduce : stmt -> ('a,'b,'s) man -> ('a,'s) exec_reduction_man ->
-    'a flow -> 'a flow  -> 'a post
+  val reduce : stmt -> ('a,'b) man -> 'a exec_reduction_man ->
+    'a flow -> 'a flow  -> 'a post option
   (** [reduce s man erman input output] reduces post-state [output] that
       resulted from executing statement [s] on pre-state [input] *)
 end

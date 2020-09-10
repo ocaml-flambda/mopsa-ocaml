@@ -22,7 +22,7 @@
 (** Abstraction of zero and non-zero integer values. *)
 
 open Mopsa
-open Framework.Sig.Abstraction.Value
+open Sig.Abstraction.Value
 open Ast
 
 
@@ -42,8 +42,6 @@ struct
         let display = "zero"
     end
     )
-
-  let zones = [Zone.Z_u_num]
 
   let bottom = BOT
 

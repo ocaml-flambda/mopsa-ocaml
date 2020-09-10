@@ -20,15 +20,14 @@
 (****************************************************************************)
 
 (** Toplevel abstraction
- 
+
     There are two main differences with domains. First, transfer functions are
-    indexed by zones to enable a faster access. Second, transfer functions are 
+    indexed by zones to enable a faster access. Second, transfer functions are
     not partial functions and return always a result.
 *)
 
 open Core.All
-open Sig.Abstraction.Stacked
-open Ast.All
+open Sig.Combiner.Stacked
 
 
 (** Signature of the toplevel abstraction *)
@@ -52,13 +51,13 @@ sig
   (** {2 Lattice operators} *)
   (** ********************* *)
 
-  val subset: (t, t, unit) man -> uctx -> t -> t -> bool
+  val subset: (t, t) man -> uctx -> t -> t -> bool
 
-  val join: (t, t, unit) man -> uctx -> t -> t -> t
+  val join: (t, t) man -> uctx -> t -> t -> t
 
-  val meet: (t, t, unit) man -> uctx -> t -> t -> t
+  val meet: (t, t) man -> uctx -> t -> t -> t
 
-  val widen: (t, t, unit) man -> uctx -> t -> t -> t
+  val widen: (t, t) man -> uctx -> t -> t -> t
 
   val merge : t -> t * log -> t * log -> t
 
@@ -66,15 +65,13 @@ sig
   (** {2 Transfer functions} *)
   (** ********************** *)
 
-  val init : program -> (t, t, unit) man -> t flow
+  val init : program -> (t, t) man -> t flow
 
-  val exec : ?zone:zone -> stmt -> (t, t, unit) man -> t flow -> t flow
+  val exec : ?route:route -> stmt -> (t, t) man -> t flow -> t post
 
-  val post : ?zone:zone -> stmt -> (t, t, unit) man -> t flow -> t post
+  val eval : ?route:route -> expr -> (t, t) man -> t flow -> t eval
 
-  val eval : ?zone:(zone * zone) -> ?via:zone -> expr -> (t, t, unit) man -> t flow -> t eval
-
-  val ask  : 'r query -> (t, t, unit) man -> t flow -> 'r
+  val ask  : ?route:route -> (t,'r) query -> (t, t) man -> t flow -> 'r
 
 end
 
@@ -84,13 +81,15 @@ end
 (*==========================================================================*)
 
 
-let debug fmt = Debug.debug ~channel:"framework.core.abstraction" fmt
+let debug fmt = Debug.debug ~channel:"framework.abstraction.toplevel" fmt
 
 
 (** Encapsulate a domain into a top-level abstraction *)
-module Make(Domain:STACKED) : TOPLEVEL with type t = Domain.t
+module Make(Domain:STACKED_COMBINER) : TOPLEVEL with type t = Domain.t
 =
 struct
+
+  let () = debug "routing table:@,%a" pp_routing_table Domain.routing_table
 
   (** {2 Abstraction header} *)
   (** ********************** *)
@@ -108,43 +107,41 @@ struct
   (** {2 Lattice operators} *)
   (** ********************* *)
 
+  let sman : (t,unit) stack_man = {
+    get_sub = (fun _ -> ());
+    set_sub = (fun () a -> a);
+  }
+
   let subset man ctx a a' =
-    let b, (), () = Domain.subset man ctx (a,()) (a',()) in
+    let b, (), () = Domain.subset man sman ctx (a,()) (a',()) in
     b
 
   let join man ctx a a' =
-    let a, (), () = Domain.join man ctx (a,()) (a',()) in
+    let a, (), () = Domain.join man sman ctx (a,()) (a',()) in
     a
 
   let meet man ctx a a' =
-    let a, (), () = Domain.meet man ctx (a,()) (a',()) in
+    let a, (), () = Domain.meet man sman ctx (a,()) (a',()) in
     a
 
   let widen man ctx a a' =
-    let a, (), (), _ = Domain.widen man ctx (a,()) (a',()) in
+    let a, (), (), _ = Domain.widen man sman ctx (a,()) (a',()) in
     a
 
   let merge = Domain.merge
 
 
-  (** {2 Caches and zone maps} *)
-  (** ************************ *)
+  (** {2 Caches and route maps} *)
+  (** **************************** *)
 
   (* Cache of previous evaluations and post-conditions *)
   module Cache = Core.Cache.Make(struct type t = Domain.t end)
 
 
-  (** Map giving the [exec] transfer function of a zone *)
-  module ExecMap = MapExt.Make(struct
-      type t = zone
-      let compare = compare_zone
-    end)
-
-
-  (** Map giving the [eval] evaluation function of a zone path *)
-  module EvalMap = MapExt.Make(struct
-      type t = zone * zone
-      let compare = compare_zone2
+  (** Map giving transfer functions of each route *)
+  module RouteMap = MapExt.Make(struct
+      type t = route
+      let compare = compare_route
     end)
 
 
@@ -164,7 +161,7 @@ struct
     let res = Domain.init prog man flow0 in
 
     (* Initialize hooks *)
-    let () = Hook.init Domain.interface in
+    let () = Hook.init () in
     let ctx = Hook.init_active_hooks (Flow.get_ctx res) in
 
     Flow.set_ctx ctx res
@@ -174,36 +171,85 @@ struct
   (** *********************** *)
 
   (** Build the map of exec functions *)
-  let exec_map =
-    let required = Domain.interface.iexec.uses in
-    (* Add implicit import of Z_any *)
-    let map = ExecMap.singleton any_zone (Domain.exec any_zone) in
-    (* Iterate over the required zones of domain D *)
-    required |>
-    List.fold_left (fun map zone ->
-        if ExecMap.mem zone map
-        then map
-        else
-        if List.exists (fun z -> sat_zone z zone) Domain.interface.iexec.provides
-        then
-          ExecMap.add zone (Domain.exec zone) map
-        else
-          let () = Exceptions.warn "exec for %a not found" pp_zone zone in
+  let exec_map : (stmt -> (t,t) man -> t flow -> t post option) RouteMap.t =
+    (* Add the initial implicit binding for toplevel route *)
+    let map = RouteMap.singleton toplevel (Domain.exec []) in
+    (* Iterate over all routes *)
+    get_routes Domain.routing_table |>
+    List.fold_left (fun map route ->
+        if RouteMap.mem route map then
           map
+        else
+          let domains = resolve_route route Domain.routing_table in
+          RouteMap.add route (Domain.exec domains) map
       ) map
 
-  let post ?(zone = any_zone) (stmt: stmt) man (flow: Domain.t flow) : Domain.t post =
-    let ctx = Hook.on_before_exec zone stmt man flow in
-    let flow = Flow.set_ctx ctx flow in
+  (** Hooks should not be activated within hooks exec/eval.
+      The flag [inside_hook_flag] is set whenever the analyzer emits a hook
+      event, in order to prevent subsequent exec/eval (i.e. called inside
+      the hook) to emit hook events.
+  *)
+  let inside_hook_flag = ref false
+  let inside_hook () = !inside_hook_flag
+  let enter_hook () = assert(not (inside_hook())); inside_hook_flag := true
+  let exit_hook () = assert(inside_hook ()); inside_hook_flag := false
+
+  let exec ?(route = toplevel) (stmt: stmt) man (flow: Domain.t flow) : Domain.t post =
+    let flow =
+      if inside_hook () then
+        flow
+      else
+        let () = enter_hook() in
+        let ctx = Hook.on_before_exec route stmt man flow in
+        let () = exit_hook() in
+        Flow.set_ctx ctx flow
+    in
 
     let fexec =
-      try ExecMap.find zone exec_map
-      with Not_found -> Exceptions.panic_at stmt.srange "exec for %a not found" pp_zone zone
+      try RouteMap.find route exec_map
+      with Not_found -> Exceptions.panic_at stmt.srange "exec for %a not found" pp_route route
     in
     try
-      let post = Cache.exec fexec zone stmt man flow in
-      let ctx = Hook.on_after_exec zone stmt man flow post in
-      Post.set_ctx ctx post
+      let post =
+        match Cache.exec fexec route stmt man flow with
+        | None ->
+          if Flow.is_bottom man.lattice flow
+          then Post.return flow
+          else
+            Exceptions.panic_at stmt.srange
+              "unable to analyze statement %a in %a"
+              pp_stmt stmt
+              pp_route route
+
+        | Some post ->
+          (* Check that all cases were handled *)
+          let handled, not_handled = Cases.partition (fun c flow -> match c with NotHandled -> false | _ -> true) post in
+          match not_handled with
+          | None -> post
+          | Some x ->
+            let post' =
+              x >>= fun _ flow ->
+              (* Not handled cases with empty flows are OK *)
+              if Flow.is_bottom man.lattice flow
+              then Post.return flow
+              else
+                Exceptions.panic_at stmt.srange
+                  "unable to analyze statement %a in %a"
+                  pp_stmt stmt
+                  pp_route route
+            in
+            match handled with
+            | None -> post'
+            | Some y -> Post.join x post'
+      in
+      let clean_post = exec_cleaners man post in
+      if inside_hook () then
+        clean_post
+      else
+        let () = enter_hook() in
+        let ctx = Hook.on_after_exec route stmt man flow clean_post in
+        let () = exit_hook () in
+        Cases.set_ctx ctx clean_post
     with
     | Exceptions.Panic(msg, line) ->
       Printexc.raise_with_backtrace
@@ -223,214 +269,116 @@ struct
         (Printexc.get_raw_backtrace())
 
 
-  let exec ?(zone = any_zone) (stmt: stmt) man (flow: Domain.t flow) : Domain.t flow =
-    let post = post ~zone stmt man flow in
-    post_to_flow man post
-
 
   (** {2 Evaluation of expressions} *)
   (** ***************************** *)
 
-  let eval_graph = Core.Zone.build_eval_graph Domain.interface.ieval.provides
-
   (** Build the map of [eval] functions *)
-  let eval_map =
-    (* Add the implicit [* -> *] eval path that uses all domains *)
-    let map = EvalMap.singleton
-        (any_zone, any_zone)
-        [[(any_zone, any_zone, [any_zone, any_zone], Domain.eval (any_zone, any_zone))]]
-    in
+  let eval_map : (expr -> (t,t) man -> t flow -> t eval option) RouteMap.t =
+    (* Add the implicit eval for toplevel *)
+    let map = RouteMap.singleton toplevel (Domain.eval []) in
 
-    debug "eval graph:@\n @[%a@]" pp_graph eval_graph;
-
-    (* Iterate over the required zone paths of domain Domain *)
-    let required = Domain.interface.ieval.uses in
-    required |>
-    List.fold_left (fun acc (src, dst) ->
-        if EvalMap.mem (src, dst) acc then acc
+    (* Iterate over all routes *)
+    get_routes Domain.routing_table |>
+    List.fold_left (fun map route ->
+        if RouteMap.mem route map then
+          map
         else
-          begin
-            let paths = find_all_eval_paths src dst eval_graph in
-            if List.length paths = 0
-            then
-              let () = Exceptions.warn "eval for %a not found" pp_zone2 (src, dst) in
-              acc
-            else
-              (* Map each hop to an eval function *)
-              let () = debug "eval paths for %a" pp_zone2 (src, dst) in
-              let eval_paths = List.mapi (fun i path ->
-                  debug " path #%d: %a" i pp_eval_path path;
-                  let rec aux =
-                    function
-                    | [] -> []
-                    | (z1, z2) :: tl -> (z1, z2, path, Domain.eval (z1, z2)) :: aux tl
-                  in
-                  aux path
-                ) paths
-              in
-              EvalMap.add (src, dst) eval_paths acc
-          end
-      )
-      map
+          let domains = resolve_route route Domain.routing_table in
+          RouteMap.add route (Domain.eval domains) map
+      ) map
 
   (** Evaluation of expressions. *)
-  let rec eval ?(zone = (any_zone, any_zone)) ?(via=any_zone) exp man flow =
-    let ctx = Hook.on_before_eval zone exp man flow in
-    let flow = Flow.set_ctx ctx flow in
-
-    let ret =
-      (* Check whether exp is already in the desired zone *)
-      match sat_zone via (snd zone), eval_template exp (snd zone) with
-      | true, Keep -> Eval.singleton exp flow
-
-      | _, other_action ->
-        (* Try available eval paths in sequence *)
-        let paths =
-          try find_eval_paths_via zone via eval_map
-          with Not_found -> Exceptions.panic_at exp.erange "eval for %a not found" pp_zone2 zone
-        in
-
-        match eval_over_paths paths exp man flow with
-        | Some evl -> evl
-        | None ->
-          match other_action with
-          | Keep -> Eval.singleton exp flow
-
-          | Process ->
-            if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
-            then Eval.empty_singleton flow
-            else Exceptions.panic_at exp.erange
-                "unable to evaluate %a in zone %a"
-                pp_expr exp
-                pp_zone2 zone
-
-
-          | Visit ->
-            let open Ast.Visitor in
-            let parts, builder = structure_of_expr exp in
-            match parts with
-            | {exprs; stmts = []} ->
-              Cases.bind_list exprs
-                (fun exp flow ->
-                   match eval_over_paths paths exp man flow with
-                   | None ->
-                     if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
-                     then Eval.empty_singleton flow
-                     else Exceptions.panic_at exp.erange
-                         "unable to evaluate %a in zone %a"
-                         pp_expr exp
-                         pp_zone2 zone
-
-                   | Some evl -> evl
-                ) flow |>
-              bind_some @@ fun exprs flow ->
-              let exp = builder {exprs; stmts = []} in
-              Eval.singleton exp flow
-
-            | _ ->
-              if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
-              then Eval.empty_singleton flow
-              else Exceptions.panic_at exp.erange
-                  "unable to evaluate %a in zone %a"
-                  pp_expr exp
-                  pp_zone2 zone
-
+  let eval ?(route=toplevel) exp man flow =
+    let flow =
+      if inside_hook () then
+        flow
+      else
+        let () = enter_hook() in
+        let ctx = Hook.on_before_eval route exp man flow in
+        let () = exit_hook() in
+        Flow.set_ctx ctx flow
     in
-    let ctx = Hook.on_after_eval zone exp man flow ret in
-    Eval.set_ctx ctx ret
 
+    (* Get the actual route of the expression in case of a
+       variable, since variable can have an intrinsic semantic *)
+    let refine_route_with_var_semantic route e =
+      if compare_route route toplevel = 0 then
+        match ekind e with
+        | E_var (v,_) -> Semantic v.vsemantic
+        | _ -> route
+      else
+        route
+    in
 
-  and eval_over_paths paths exp man flow =
-    match paths with
-    | [] -> None
-    | path :: tl ->
-      debug "trying eval %a over path %a"
-        pp_expr exp
-        pp_eval_path (List.hd path |> (fun (_, _, path, _) -> path))
-      ;
-      match eval_over_path path man exp flow with
-      | None -> eval_over_paths tl exp man flow
-      | ret -> ret
+    let route = refine_route_with_var_semantic route exp in
 
-  and eval_over_path path man exp flow =
-    match path with
-    | [] -> None
+    let feval =
+      try RouteMap.find route eval_map
+      with Not_found -> Exceptions.panic_at exp.erange "eval for %a not found" pp_route route
+    in
+    let evl =
+      (* Ask domains to perform the evaluation *)
+      let ret = Cache.eval feval route exp man flow in
+      let eval_sub_expressions flow =
+        let parts, builder = structure_of_expr exp in
+        match parts with
+        | {exprs; stmts = []} ->
+          (* Iterate over sub-expressions *)
+          Cases.bind_list exprs (fun e flow -> man.eval e flow) flow >>$ fun exprs' f' ->
+          (* Rebuild the expression from its evaluated parts *)
+          let e' = builder {exprs = exprs'; stmts = []} in
+          Cases.singleton e' f'
 
-    | [(z1, z2, path, feval)] -> eval_hop z1 z2 feval man exp  flow
+        (* XXX sub-statements are not handled for the moment *)
+        | _ -> Cases.singleton exp flow
+      in
+      (* Check whether there are not-handled cases *)
+      match ret with
+      | None   -> eval_sub_expressions flow
+      | Some evl ->
+        let handled,not_handled = Cases.partition (fun c flow -> match c with NotHandled -> false | _ -> true) evl in
+        let not_handled_ret =
+          match not_handled with
+          | None -> None
+          | Some evl ->
+            (* Evaluate sub-expressions of the not-handled cases *)
+            let evl =
+              Eval.remove_duplicates man.lattice evl >>= fun _ flow ->
+              eval_sub_expressions flow
+            in
+            Some evl
+      in
+      OptionExt.neutral2 Cases.join handled not_handled_ret |>
+      OptionExt.none_to_exn
+    in
 
-    | (z1, z2, path, feval) :: tl ->
-      eval_hop z1 z2 feval man exp flow |>
-      OptionExt.bind @@ bind_some_opt @@ fun e flow ->
-      eval_over_path tl man e flow
+    (* Updates the expression transformation lineage *)
+    let ret =
+      evl >>$ fun exp' flow' ->
+      if exp == exp' then Cases.singleton exp' flow' else Cases.singleton { exp' with eprev = Some exp } flow'
+    in
 
-  and eval_hop z1 z2 feval man exp flow =
-    debug "trying eval %a in hop %a" pp_expr exp pp_zone2 (z1, z2);
-    match eval_template exp z2 with
-    | Keep ->
-      Eval.singleton exp flow |>
-      OptionExt.return
-
-    | other_action ->
-      match
-        Cache.eval (fun e man flow ->
-            match feval e man flow with
-            | None -> None
-            | Some evl ->
-              let evl' = Eval.remove_duplicates man.lattice evl in
-              (* Update the eprev field in returned expressions to indicate the
-                  previous form of the result *)
-              let evl'' = Eval.map (fun ee -> { ee with eprev = Some e }) evl' in
-              Some evl''
-          ) (z1, z2) exp man flow
-      with
-      | Some evl -> Some evl
-      | None ->
-        match other_action with
-        | Keep -> assert false
-
-
-        | Process ->
-          (* No answer from domains, so let's try other eval paths, if any. *)
-          debug "no answer";
-          None
-
-        | Visit ->
-          debug "visiting %a" pp_expr exp;
-          let open Ast.Visitor in
-          let parts, builder = structure_of_expr exp in
-          match parts with
-          | {exprs; stmts = []} ->
-            debug "eval parts of %a" pp_expr exp;
-            bind_list_opt exprs (eval_hop z1 z2 feval man) flow |>
-            OptionExt.lift @@ bind_some @@ fun exprs flow ->
-            let exp' = builder {exprs; stmts = []} in
-            debug "%a -> %a" pp_expr exp pp_expr exp';
-            (* Update the eprev field in returned expressions to
-               indicate the previous form of the result *)
-            let exp'' = { exp' with eprev = Some exp } in
-            Eval.singleton exp'' flow
-
-          | _ ->
-            debug "%a is a leaf expression" pp_expr exp;
-            None
-
-  (* Filter paths that pass through [via] zone *)
-  and find_eval_paths_via (src, dst) via map =
-    let paths = EvalMap.find (src, dst) map in
-    List.filter (fun path ->
-        List.exists (fun (z1, z2, _, _) -> sat_zone z1 via || sat_zone z2 via) path
-      ) paths
+    if inside_hook () then
+        ret
+    else
+      let () = enter_hook() in
+      let ctx = Hook.on_after_eval route exp man flow ret in
+      let () = exit_hook () in
+      Cases.set_ctx ctx ret
 
 
   (** {2 Handler of queries} *)
   (** ********************** *)
 
-  let ask : type r. r query -> (t,t,unit) man -> t flow -> r =
-    fun query man flow ->
-      match Domain.ask query man flow with
-      | None -> Exceptions.panic "query not handled"
-      | Some r -> r
 
+  let ask : type r. ?route:route -> (t,r) query -> (t,t) man -> t flow -> r =
+    fun ?(route=toplevel) query man flow ->
+    (* FIXME: the map of transfer functions indexed by routes is not constructed offline, due to the GADT query *)
+    let domains = if compare_route route toplevel = 0 then [] else resolve_route route Domain.routing_table in
+    match Domain.ask domains query man flow with
+    | None -> raise Not_found
+    | Some r -> r
 
 
 end

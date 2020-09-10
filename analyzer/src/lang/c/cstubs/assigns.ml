@@ -28,8 +28,6 @@ open Universal.Ast
 open Stubs.Ast
 open Common.Points_to
 open Ast
-open Zone
-open Universal.Zone
 open Common.Base
 open Common.Alarms
 open Common.Points_to
@@ -47,20 +45,9 @@ struct
       let name = "c.cstubs.assigns"
     end)
 
-  let interface= {
-    iexec = {
-      provides = [Z_c];
-      uses     = [Z_c_low_level];
-    };
-
-    ieval = {
-      provides = [Z_c,Z_c_low_level; Z_c_low_level, Z_c_scalar];
-      uses     = [Z_c,Z_c_low_level];
-    }
-  }
+  let lowlevel = Semantic "C/Lowlevel"
 
   let alarms = []
-
 
 
   (** Initialization of environments *)
@@ -81,19 +68,28 @@ struct
           | [] -> mk_c_address_of assign.assign_target range
           | _ -> assign.assign_target
         in
-        let pp = man.eval ptr ~zone:(Z_c,Z_c_points_to) flow in
-        Cases.fold_some (fun p flow acc ->
-            match ekind p with
-            | E_c_points_to(P_block ({ base_valid = true; base_kind = Var _ | Addr _ } as base, _, _)) ->
+        let pp = resolve_pointer ptr man flow in
+        Cases.fold_result (fun acc p flow ->
+            match p with
+            | P_block ({ base_valid = true; base_kind = Var _ | Addr _ } as base, _, _) ->
               BaseSet.add base acc
             | _ -> acc
-          ) pp acc
+          ) acc pp
       ) BaseSet.empty assigns
 
   (** Expand base to a primed copy *)
   let expand_primed_base base range man flow =
     let primed = mk_primed_base_expr base range in
-    man.post (mk_expand (mk_base_expr base range) [primed] range) ~zone:Z_c_low_level flow
+    (* XXX It is important to perform the expand on the lowlevel semantics that
+       abstracts the contents of the memory, which will have the effect of 
+       expanding the contents of the base. Otherwise, performing the expand 
+       on the toplevel abstraction will also update the pointers map so that
+       pointers pointing to base will point also to base', which is not what
+       we want.
+       Consequently, this domain should be placed *after* the toplevel C
+       abstraction (i.e. c.memory.blocks) in the configuration file.
+    *)
+    man.exec (mk_expand (mk_base_expr base range) [primed] range) ~route:lowlevel flow
 
 
   (** Prepare primed copies of assigned bases *)
@@ -112,14 +108,14 @@ struct
       (* Prime the target *)
       let primed_target = mk_primed_address base offset typ range in
       let lval = mk_c_deref primed_target range in
-      man.post (mk_forget lval range) ~zone:Z_c flow
+      man.exec (mk_forget lval range) flow
 
     | _ ->
 
       (* Convert the assigned indices to temporary quantified variables *)
       let quant_indices_with_tmps = List.map (fun (a,b) ->
           let tmp = mktmp ~typ:s32 () in
-          mk_stub_quantified FORALL tmp (S_interval(a,b)) range, tmp, a, b
+          (FORALL, tmp, S_interval(a,b)), tmp, a, b
         ) assigned_indices
       in
 
@@ -127,19 +123,20 @@ struct
       let primed_target = mk_primed_address base offset (under_type typ) range in
 
       (* Create the assigned lval *)
-      let adds, assumes, lval, cleaners = List.fold_left (fun (adds,assumes,acc,cleaners) (i,tmp,a,b) ->
+      let adds, assumes, quants, lval, cleaners = List.fold_left (fun (adds,assumes,quants,acc,cleaners) (q,tmp,a,b) ->
           mk_add_var tmp range :: adds,
           mk_assume (mk_in (mk_var tmp range) a b range) range :: assumes,
-          mk_c_subscript_access acc i range,
+          q::quants,
+          mk_c_subscript_access acc (mk_var tmp range) range,
           mk_remove_var tmp range :: cleaners
-        ) ([],[],primed_target,[]) quant_indices_with_tmps
+        ) ([],[],[],primed_target,[]) quant_indices_with_tmps
       in
 
       (* Execute `forget lval` *)
-      man.post (mk_block adds range) flow >>$ fun () flow ->
-      man.post (mk_block assumes range) flow >>$ fun () flow ->
-      man.post (mk_forget lval range) flow >>$ fun () flow ->
-      man.post (mk_block cleaners range) flow
+      man.exec (mk_block adds range) flow >>%
+      man.exec (mk_block assumes range) >>%
+      man.exec (mk_forget (mk_stub_quantified_formula quants lval range) range) >>%
+      man.exec (mk_block cleaners range)
 
 
 
@@ -149,34 +146,34 @@ struct
       | [] -> mk_c_address_of target range
       | _ -> target
     in
-    man.eval ptr ~zone:(Z_c,Z_c_points_to) flow >>$ fun p flow ->
-    match ekind p with
-    | E_c_points_to P_null ->
+    resolve_pointer ptr man flow >>$ fun p flow ->
+    match p with
+    | P_null ->
       raise_c_null_deref_alarm ptr man flow |>
-      Cases.empty_singleton
+      Cases.empty
 
-    | E_c_points_to P_invalid ->
+    | P_invalid ->
       raise_c_invalid_deref_alarm ptr man flow |>
-      Cases.empty_singleton
+      Cases.empty
 
-    | E_c_points_to (P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
+    | P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset, _) ->
       raise_c_use_after_free_alarm ptr r man flow |>
-      Cases.empty_singleton
+      Cases.empty
 
-    | E_c_points_to (P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
+    | P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset, _) ->
       raise_c_dangling_deref_alarm ptr v r man flow |>
-      Cases.empty_singleton
+      Cases.empty
 
-    | E_c_points_to (P_block (base, offset, _)) when is_base_readonly base ->
+    | P_block (base, offset, _) when is_base_readonly base ->
       raise_c_modify_read_only_alarm ptr base man flow |>
-      Cases.empty_singleton
+      Cases.empty
 
-    | E_c_points_to (P_block (base, offset, mode))  ->
+    | P_block (base, offset, mode)  ->
       exec_assign_base base offset mode target.etyp assigned_indices range man flow
 
-    | E_c_points_to P_top ->
+    | P_top ->
       Soundness.warn_at range "ignoring assigns on ⊤ pointer %a" pp_expr (get_orig_expr ptr);
-      Cases.empty_singleton flow
+      Post.return flow
 
     | _ -> assert false
 
@@ -187,13 +184,13 @@ struct
     let unprimed = mk_base_expr base range in
     let primed = mk_primed_base_expr base range in
     let stmt = mk_rename primed unprimed range in
-    let post1 = man.post stmt ~zone:Z_c_low_level flow in
+    let post1 = man.exec stmt ~route:(Below name) flow in
     (* If this is a weak base, we need to restore the old values. *)
     (* To do that, we remove the primed base from the flow and we join with post1 *)
     if base_mode base = STRONG then
       post1
     else
-      let post2 = man.post (mk_remove primed range) ~zone:Z_c_scalar flow in
+      let post2 = man.exec (mk_remove primed range) ~route:lowlevel flow in
       Post.join post1 post2
 
 
@@ -207,7 +204,7 @@ struct
 
 
 
-  let exec zone stmt man flow  =
+  let exec stmt man flow  =
     match skind stmt with
     | S_stub_prepare_all_assigns al ->
       exec_stub_prepare_all_assigns al stmt.srange man flow |>
@@ -231,47 +228,70 @@ struct
 
   let eval_primed_base base offset mode typ range man flow =
     let p = mk_primed_address base offset typ range in
-    Eval.singleton (mk_c_deref p range) flow
+    man.eval (mk_c_deref p range) flow
 
 
   let eval_stub_primed e range man flow =
     let ptr = mk_c_address_of e range in
-    man.eval ptr ~zone:(Z_c,Z_c_points_to) flow >>$ fun p flow ->
-    match ekind p with
-    | E_c_points_to P_null ->
+    resolve_pointer ptr man flow >>$ fun p flow ->
+    match p with
+    | P_null ->
       raise_c_null_deref_alarm ptr man flow |>
-      Cases.empty_singleton
+      Cases.empty
 
-    | E_c_points_to P_invalid ->
+    | P_invalid ->
       raise_c_invalid_deref_alarm ptr man flow |>
-      Cases.empty_singleton
+      Cases.empty
 
-    | E_c_points_to (P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
+    | P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset, _) ->
       raise_c_use_after_free_alarm ptr r man flow |>
-      Cases.empty_singleton
+      Cases.empty
 
-    | E_c_points_to (P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset, _)) ->
+    | P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset, _) ->
       raise_c_dangling_deref_alarm ptr v r man flow |>
-      Cases.empty_singleton
+      Cases.empty
 
-    | E_c_points_to (P_block (base, offset, _)) when is_base_readonly base ->
+    | P_block (base, offset, _) when is_base_readonly base ->
       raise_c_modify_read_only_alarm ptr base man flow |>
-      Cases.empty_singleton
+      Cases.empty
 
-    | E_c_points_to (P_block (base, offset, mode))  ->
+    | P_block (base, offset, mode)  ->
       eval_primed_base base offset mode e.etyp range man flow
 
-    | E_c_points_to P_top ->
+    | P_top ->
       Soundness.warn_at range "ignoring prime of ⊤ pointer %a" pp_expr (get_orig_expr ptr);
-      Cases.empty_singleton flow
+      man.eval (mk_top e.etyp range) flow
 
     | _ -> assert false
 
 
-  let eval zone exp man flow =
+  let eval_stub_primed_address e range man flow =
+    let ptr = mk_c_address_of e range in
+    resolve_pointer ptr man flow >>$ fun p flow ->
+    match p with
+    | P_null ->
+      Eval.singleton (mk_c_null range) flow
+
+    | P_invalid ->
+      Eval.singleton (mk_c_invalid_pointer range) flow
+
+    | P_block (base, offset, mode) ->
+      man.eval (mk_primed_address base offset e.etyp range) flow
+
+    | P_top ->
+      Eval.singleton (mk_top (T_c_pointer e.etyp) range) flow
+
+    | _ -> assert false
+
+
+  let eval exp man flow =
     match ekind exp with
     | E_stub_primed e ->
       eval_stub_primed e exp.erange man flow |>
+      OptionExt.return
+
+    | E_c_address_of {ekind = E_stub_primed e} ->
+      eval_stub_primed_address e exp.erange man flow |>
       OptionExt.return
 
     | E_stub_builtin_call(BYTES, { ekind = E_var({ vkind = V_c_primed_base base },_) }) ->

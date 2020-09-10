@@ -32,7 +32,6 @@
     provided that can be used to perform queries on the pre-state.
 *)
 
-open Ast.All
 open Core.All
 
 
@@ -45,9 +44,9 @@ open Core.All
 (** Simplified managers provide access to the pre-state and can be used to
     perform queries or execute statements. 
 *)
-type 'a simplified_man = {
-  exec : stmt -> 'a;          (** execute a statement on the pre-state *)
-  ask  : 'r. 'r query -> 'r;  (** ask a query on the pre-state *)
+type ('a,'t) simplified_man = {
+  exec : stmt -> 't;          (** execute a statement on the pre-state *)
+  ask  : 'r. ('a,'r) query -> 'r;  (** ask a query on the pre-state *)
 }
 
 
@@ -70,9 +69,6 @@ sig
 
   val name : string
   (** Domain name *)
-
-  val zones : zone list
-  (** Zones of the provided transfer functions *)
 
   val bottom: t
   (** Least abstract element of the lattice. *)
@@ -127,10 +123,10 @@ sig
   val init : program -> t
   (** Initial abstract element *)
 
-  val exec : stmt -> t simplified_man -> uctx -> t -> t option
+  val exec : stmt -> ('a,t) simplified_man -> uctx -> t -> t option
   (** Computation of post-conditions *)
 
-  val ask : 'r query -> t simplified_man -> t -> 'r option
+  val ask : ('a,'r) query -> ('a,t) simplified_man -> uctx -> t -> 'r option
   (** Handler of queries *)
 
 
@@ -154,11 +150,3 @@ val mem_simplified_domain : string -> bool
  
 val simplified_domain_names : unit -> string list
 (** Return the names of registered simplified domains *) 
-
-
-(*==========================================================================*)
-(**                   {1 Casts to other signatures}                         *)
-(*==========================================================================*)
-
-(** Cast a standard domain into a stacked domain *)
-module MakeDomain(D:SIMPLIFIED) : Domain.DOMAIN with type t = D.t
