@@ -65,6 +65,9 @@ let is_bottom (lattice: 'a lattice) (flow: 'a flow) : bool =
 let is_top (lattice: 'a lattice) (flow: 'a flow) : bool =
   TokenMap.is_top lattice flow.tmap
 
+let is_empty (flow:'a flow) : bool =
+  TokenMap.is_empty flow.tmap && AlarmSet.is_empty flow.alarms
+
 let subset (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : bool =
   let ctx = most_recent_ctx flow1.ctx flow2.ctx in
   TokenMap.subset lattice ctx flow1.tmap flow2.tmap

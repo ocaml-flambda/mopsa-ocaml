@@ -1,4 +1,4 @@
-# @configure_input@
+#!/bin/bash
 
 ##############################################################################
 #                                                                            #
@@ -22,69 +22,31 @@
 ##############################################################################
 
 
-.PHONY: all tests clean distclean
+# Check that the files in the source tree contain the License text
 
-all:
-	$(MAKE) -C utils
-ifneq (@disable_c@,yes)
-	$(MAKE) -C parsers/c
-	$(MAKE) -C parsers/c_stubs
-endif
-ifneq (@disable_python@,yes)
-	$(MAKE) -C parsers/python
-endif
-	$(MAKE) -C parsers/universal
-	$(MAKE) -C analyzer
+# keyword that must occur in the source file at least once
+KEY="GNU \(Lesser\|Library\) General Public License"
 
+# files to check
+MLFILES=`find .. -name \*.ml\*`
+CFILES=`find .. -name \*.c`
+HFILES=`find .. -name \*.h`
+CCFILES=`find .. -name \*.cc`
+PYFILES=`find .. -name \*.py | grep -v tests | grep -v benchmarks`
+SHELLFILES=`find .. -name \*.sh`
+MAKEFILES="`find .. -name \*.mk` `find .. -name \*.in | grep -v META.in` `find .. -name \*.ac` `find .. -name Makefile` ../configure.ac"
+ALL="$MLFILES $CFILES $HFILES $CCFILES $PYFILES $MAKEFILES $SHELLFILES"
+FILES=`echo "$ALL" | grep -v /parsers/python/ | grep -v /_build/ | grep -v /lib/ | grep -v /benchmarks/ | grep -v /tests/ | grep -v /ci/`
+echo "Looking for files missing the text '$KEY'."
+echo "Checking" `echo $FILES | wc -w` "file(s)."
 
-tests:
-	$(MAKE) -C analyzer tests
+OUT=`grep -L "$KEY" $FILES`
 
+if test $? != 1
+then
+    echo "ERROR: some files are missing the License text."
+    echo "$OUT"
+    exit 1
+fi
 
-clean:
-	$(MAKE) -C utils clean
-ifneq (@disable_c@,yes)
-	$(MAKE) -C parsers/c clean
-	$(MAKE) -C parsers/c_stubs clean
-endif
-ifneq (@disable_python@,yes)
-	$(MAKE) -C parsers/python clean
-endif
-	$(MAKE) -C parsers/universal clean
-	$(MAKE) -C analyzer clean
-
-
-MLFILES_TO_INSTALL = $(foreach dir,@libs_to_install@,$(wildcard $(dir)/lib/*.cm* $(dir)/lib/*.a $(dir)/lib/*.so))
-
-install:
-	$(MAKE) -C analyzer install
-ifneq (@disable_c@,yes)
-	$(MAKE) -C parsers/c install
-endif
-	@echo -e "$(INSTALLMSG)     mopsa library"
-	$(QUIET)@$(OCAMLFIND) install mopsa META $(MLFILES_TO_INSTALL)
-
-uninstall:
-	$(MAKE) -C analyzer uninstall
-ifneq (@disable_c@,yes)
-	$(MAKE) -C parsers/c uninstall
-endif
-	@echo -e "$(UINSTALLMSG)     mopsa library"
-	$(QUIET)@$(OCAMLFIND) remove mopsa
-
-
-distclean: clean
-	rm -f 	Makefile			\
-		make/constants.mk               \
-		make/targets.mk			\
-		make/version.mk			\
-		utils/Makefile			\
-		utils/src/version.ml		\
-		parsers/universal/Makefile	\
-		parsers/c/Makefile	 	\
-		parsers/c_stubs/Makefile 	\
-		parsers/python/Makefile		\
-		analyzer/Makefile		\
-		META
-
-include make/constants.mk
+echo "OK, all your files have the License text."

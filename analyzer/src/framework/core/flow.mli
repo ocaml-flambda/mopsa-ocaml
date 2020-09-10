@@ -55,6 +55,8 @@ val is_bottom : 'a lattice -> 'a flow -> bool
 val is_top : 'a lattice -> 'a flow -> bool
 (** top test *)
 
+val is_empty : 'a flow -> bool
+
 val subset : 'a lattice -> 'a flow -> 'a flow -> bool
 (** Inclusion test *)
 

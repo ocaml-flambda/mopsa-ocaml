@@ -32,22 +32,34 @@ let mk_true : 'a t = [[]]
 
 let mk_false : 'a t = []
 
+let is_true a = a = [[]]
+
+let is_false a = a = []
 
 let rec mk_and
     (a: 'a t) (b: 'a t) : 'a t
   =
-   List.fold_left (fun acc conj1 ->
-      List.fold_left (fun acc conj2 ->
-          let conj = conj1 @ conj2 in
-          mk_or acc [conj]
-        ) acc b
-    ) mk_false a
+  if a == b then a else
+  if is_true a then b else
+  if is_true b then a
+  else
+    List.fold_left
+      (fun acc conj1 ->
+         List.fold_left
+           (fun acc conj2 ->
+              let conj = conj1 @ conj2 in
+              mk_or acc [conj]
+           ) acc b
+      ) mk_false a
 
 
 and mk_or
     (a: 'a t) (b: 'a t) : 'a t
   =
-  a @ b
+  if a == b then a else
+  if is_false a then b else
+  if is_false b then a
+  else a @ b
 
 
 and mk_neg neg (a: 'a t) : 'a t =
@@ -59,10 +71,6 @@ and mk_neg neg (a: 'a t) : 'a t =
           ) []
       )
     ) [[]]
-
-let is_true a = a = [[]]
-
-let is_false a = a = []
 
 let is_empty a = is_false a || is_true a
 
@@ -127,6 +135,30 @@ let reduce
   in
   apply_disj dnf
 
+let fold_reduce
+    (f:'a -> 'b -> 'a * 'c)
+    ~(join:'c -> 'c -> 'c)
+    ~(meet:'c -> 'c -> 'c)
+    (init:'a)
+    (dnf:'b t) : 'a * 'c =
+  let rec apply_conj acc = function
+    | [e] -> f acc e
+    | e :: tl ->
+      let acc',x = f acc e in
+      let acc'',y = apply_conj acc' tl in
+      acc'',meet x y
+    | [] -> assert false
+  in
+  let rec apply_disj acc = function
+    | [conj] -> apply_conj acc conj
+    | conj :: tl ->
+      let acc',x = apply_conj acc conj in
+      let acc'',y = apply_disj acc' tl in
+      acc'',join x y
+    | _ -> assert false
+  in
+  apply_disj init dnf
+
 let reduce_conjunction
     (f: 'a list -> 'b)
     ~(join: 'b -> 'b -> 'b)
@@ -138,6 +170,22 @@ let reduce_conjunction
     | _ -> assert false
   in
   apply_disj dnf
+
+let fold_reduce_conjunction
+    (f: 'a -> 'b list -> 'a * 'c)
+    ~(join: 'c -> 'c -> 'c)
+    (init:'a)
+    (dnf: 'b t)
+  : 'a * 'c =
+  let rec apply_disj acc = function
+    | [conj] -> f acc conj
+    | conj :: tl ->
+      let acc',x = f acc conj in
+      let acc'',y = apply_disj acc' tl in
+      acc', join x y
+    | _ -> assert false
+  in
+  apply_disj init dnf
 
 let reduce_disjunction
     (f: 'a list -> 'b)
@@ -152,21 +200,55 @@ let reduce_disjunction
   in
   apply_conj cnf
 
+let fold_reduce_disjunction
+    (f: 'a -> 'b list -> 'a * 'c)
+    ~(meet: 'c -> 'c -> 'c)
+    (init:'a)
+    (dnf: 'b t)
+  : 'a * 'c =
+  let cnf = to_cnf dnf in
+  let rec apply_conj acc = function
+    | [disj] -> f acc disj
+    | disj::tl ->
+      let acc',x = f acc disj in
+      let acc'',y = apply_conj acc' tl in
+      acc', meet x y
+    | _ -> assert false
+  in
+  apply_conj init cnf
 
 let bind
     (f: 'a -> 'b t)
     (dnf: 'a t) : 'b t =
   reduce f ~join:mk_or ~meet:mk_and dnf
 
+let fold_bind
+    (f: 'a -> 'b -> 'a * 'c t)
+    (init:'a)
+    (dnf: 'b t) : 'a * 'c t =
+  fold_reduce f ~join:mk_or ~meet:mk_and init dnf
+
 let bind_conjunction
     (f: 'a list -> 'b t)
     (dnf: 'a t) : 'b t =
   reduce_conjunction f ~join:mk_or dnf
 
+let fold_bind_conjunction
+    (f: 'a -> 'b list -> 'a * 'c t)
+    (init:'a)
+    (dnf: 'b t) : 'a * 'c t =
+  fold_reduce_conjunction f ~join:mk_or init dnf
+
 let bind_disjunction
     (f: 'a list -> 'b t)
     (dnf: 'a t) : 'b t =
   reduce_disjunction f ~meet:mk_and dnf
+
+let fold_bind_disjunction
+    (f: 'a -> 'b list -> 'a * 'c t)
+    (init:'a)
+    (dnf: 'b t) : 'a * 'c t =
+  fold_reduce_disjunction f ~meet:mk_and init dnf
 
 let fold
     (f: 'b -> 'a -> 'b)
@@ -177,13 +259,17 @@ let fold
 
 
 let partition (f:'a -> bool) (a:'a t) =
-  List.fold_left
-    (fun (acc1,acc2) conj ->
-       let conj1,conj2 = List.partition f conj in
-       let acc1' = if conj1 = [] then acc1 else mk_or acc1 [conj1] in
-       let acc2' = if conj2 = [] then acc2 else mk_or acc2 [conj2] in
-       acc1',acc2'
-    ) (mk_false, mk_false) a
+  let r1,r2 =
+    List.fold_left
+      (fun (acc1,acc2) conj ->
+         let conj1,conj2 = List.partition f conj in
+         let acc1' = if conj1 = [] then acc1 else mk_or acc1 [conj1] in
+         let acc2' = if conj2 = [] then acc2 else mk_or acc2 [conj2] in
+         acc1',acc2'
+      ) (mk_false, mk_false) a in
+  if is_false r1 then None,Some a else
+  if is_false r2 then Some a, None
+  else Some r1, Some r2
 
 let choose (dnf: 'a t) : 'a option =
   match dnf with

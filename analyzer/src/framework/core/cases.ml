@@ -66,9 +66,12 @@ let get_ctx cases =
   | Some (case,flow) -> Flow.get_ctx flow
 
 let set_ctx ctx cases =
-  Dnf.map
-    (fun (case,flow) -> (case, Flow.set_ctx ctx flow))
+  if ctx == get_ctx cases then
     cases
+  else
+    Dnf.map
+      (fun (case,flow) -> (case, Flow.set_ctx ctx flow))
+      cases
 
 let copy_ctx src dst =
   set_ctx (get_ctx src) dst
@@ -109,7 +112,7 @@ let get_case_log (case:'r case) : log =
 
 let set_case_log (log:log) (case:'r case) : 'r case =
   match case with
-  | Result(r,_,cleaners) -> Result(r,log,cleaners)
+  | Result(r,old,cleaners) -> if old == log then case else Result(r,log,cleaners)
   | _ -> case
 
 
@@ -205,8 +208,8 @@ let set_log
   map
     (fun case flow ->
        match case with
-       | Result(r,_,cleaners) -> Result(r,log,cleaners), flow
-       | _                    -> case, flow
+       | Result(r,old,cleaners) -> if old == log then case,flow else Result(r,log,cleaners), flow
+       | _                      -> case, flow
     ) cases
 
 let set_cleaners
@@ -279,10 +282,7 @@ let partition
     (f:'r case -> 'a flow -> bool)
     (cases:('a,'r) cases)
   : ('a,'r) cases option * ('a,'r) cases option =
-  let dnf1, dnf2 = Dnf.partition (fun (case,flow) -> f case flow) cases in
-  let c1 = if Dnf.is_empty dnf1 then None else Some dnf1 in
-  let c2 = if Dnf.is_empty dnf2 then None else Some dnf2 in
-  c1, c2
+  Dnf.partition (fun (case,flow) -> f case flow) cases
 
 
 let flatten (cases:('a,'r) cases) : ('r case * 'a flow) list =
@@ -329,12 +329,16 @@ let exists_result
 
 (** Join two results *)
 let join (cases1:('a,'r) cases) (cases2:('a,'r) cases) : ('a,'r) cases =
-  Dnf.mk_or cases1 cases2 |>
-  normalize_ctx
+  if cases1 == cases2 then cases1 else
+  if for_all (fun _ flow -> Flow.is_empty flow) cases1 then cases2 else
+  if for_all (fun _ flow -> Flow.is_empty flow) cases2 then cases1
+  else
+    Dnf.mk_or cases1 cases2 |>
+    normalize_ctx
 
 (** Meet two results *)
 let meet (cases1:('a,'r) cases) (cases2:('a,'r) cases) : ('a,'r) cases =
-  Dnf.mk_or cases1 cases2 |>
+  Dnf.mk_and cases1 cases2 |>
   normalize_ctx
 
 
@@ -377,14 +381,13 @@ let remove_duplicates compare_case lattice cases =
   (* Remove all duplicates in a conjunction *)
   let rec remove_duplicates_in_conj conj =
     match conj with
-    | [] | [(_,_)] -> conj
+    | [] -> []
+    | [(case,flow)] -> conj
     | (case,flow) :: tl ->
       (* Remove duplicates of case from tl *)
       let case', flow', tl' = remove_case_duplicates_in_conj case flow tl in
       (case',flow') :: remove_duplicates_in_conj tl'
   in
-  (* Remove all duplicates in all conjunctions *)
-  let cases = map_conjunction remove_duplicates_in_conj cases in
   (* Remove duplicates of a conjunction in a disjunction *)
   let rec remove_conj_duplicates_in_disj conj disj =
     match disj with
@@ -409,8 +412,10 @@ let remove_duplicates compare_case lattice cases =
   in
   let rec remove_duplicates_in_disj = function
     | [] -> []
-    | [conj] -> [conj]
+    | [[e]] as x -> x
+    | [conj] -> [remove_duplicates_in_conj conj]
     | conj::tl ->
+      let conj = remove_duplicates_in_conj conj in
       let conj',tl' = remove_conj_duplicates_in_disj conj tl in
       conj'::remove_duplicates_in_disj tl'
   in
@@ -436,22 +441,23 @@ let bind_opt
     (f: 'r case -> 'a flow -> ('a,'s) cases option )
     (cases: ('a,'r) cases)
   : ('a,'s) cases option =
-  let last_ctx = ref (get_ctx cases) in
-  Dnf.bind
-    (fun (case,flow) ->
-       let flow = Flow.set_ctx !last_ctx flow in
-       let cases' =
-         match f case flow with
+  let ctx,ret =
+    Dnf.fold_bind
+      (fun ctx (case,flow) ->
+         let flow = Flow.set_ctx ctx flow in
+         let cases' =
+           match f case flow with
            | None   -> not_handled flow
            | Some c -> c
-       in
-       last_ctx := most_recent_ctx !last_ctx (get_ctx cases');
-       add_cleaners (get_case_cleaners case |> StmtSet.elements) cases' |>
-       concat_log (get_case_log case)
-    )
-    cases
-  |> set_ctx !last_ctx
-  |> OptionExt.return
+         in
+         let ctx' = get_ctx cases' in
+         let cases'' = add_cleaners (get_case_cleaners case |> StmtSet.elements) cases' |>
+                       concat_log (get_case_log case) in
+         ctx',cases''
+      )
+      (get_ctx cases) cases in
+  set_ctx ctx ret |>
+  OptionExt.return
 
 
 let (>>=?) cases f = bind_opt f cases
@@ -496,15 +502,15 @@ let bind_conjunction
     (f:('r case * 'a flow) list -> ('a,'s) cases)
     (cases:('a,'r) cases)
   : ('a,'s) cases =
-  let last_ctx = ref (get_ctx cases) in
-  Dnf.bind_conjunction
-    (fun conj ->
-       let conj' = List.map (fun (case,flow) -> (case,Flow.set_ctx !last_ctx flow)) conj in
-       let cases' = f conj' in
-       last_ctx := most_recent_ctx !last_ctx (get_ctx cases');
-       cases'
-    ) cases |>
-  set_ctx !last_ctx
+  let ctx,ret =
+    Dnf.fold_bind_conjunction
+      (fun ctx conj ->
+         let conj' = List.map (fun (case,flow) -> (case,Flow.set_ctx ctx flow)) conj in
+         let cases' = f conj' in
+         let ctx' = get_ctx cases' in
+         ctx',cases'
+      ) (get_ctx cases) cases in
+  set_ctx ctx ret
 
 let bind_conjunction_result
     (f:'r list -> 'a flow -> ('a,'s) cases)
@@ -543,15 +549,15 @@ let bind_disjunction
     (f:('r case * 'a flow) list -> ('a,'s) cases)
     (cases:('a,'r) cases)
   : ('a,'s) cases =
-  let last_ctx = ref (get_ctx cases) in
-  Dnf.bind_disjunction
-    (fun disj ->
-       let disj' = List.map (fun (case,flow) -> (case,Flow.set_ctx !last_ctx flow)) disj in
-       let cases' = f disj' in
-       last_ctx := most_recent_ctx !last_ctx (get_ctx cases');
-       cases'
-    ) cases |>
-  set_ctx !last_ctx
+  let ctx,ret =
+    Dnf.fold_bind_disjunction
+      (fun ctx disj ->
+         let disj' = List.map (fun (case,flow) -> (case,Flow.set_ctx ctx flow)) disj in
+         let cases' = f disj' in
+         let ctx' = get_ctx cases' in
+         ctx',cases'
+      ) (get_ctx cases) cases in
+  set_ctx ctx ret
 
 let bind_disjunction_result
     (f:'r list -> 'a flow -> ('a,'s) cases)

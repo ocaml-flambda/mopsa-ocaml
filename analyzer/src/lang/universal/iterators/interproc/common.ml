@@ -137,14 +137,6 @@ let check_nested_calls f cs =
 
 (** Initialize function parameters *)
 let init_fun_params f args range man flow =
-  (* Clear all return flows *)
-  let flow = Flow.filter (fun tk env ->
-      match tk with
-      | T_return _ -> false
-      | _ -> true
-    ) flow
-  in
-
   (* Update the call stack *)
   let flow = Flow.push_callstack f.fun_orig_name ~uniq:f.fun_uniq_name range flow in
 
@@ -214,9 +206,16 @@ let exec_fun_body f body ret range man flow =
       (try Some (find_ctx return_key (Flow.get_ctx flow)) with Not_found -> None),
       Flow.set_ctx (add_ctx return_key ret (Flow.get_ctx flow)) flow in
 
+  (* Clear all return flows *)
+  let flow2 = Flow.filter (fun tk env ->
+      match tk with
+      | T_return _ -> false
+      | _ -> true
+    ) flow1
+  in
 
   (* Execute the body of the function *)
-  let post2 = man.exec body flow1 in
+  let post2 = man.exec body flow2 in
 
   (* Restore return and callstack contexts *)
   let post3 = match oldreturn with
@@ -230,40 +229,39 @@ let exec_fun_body f body ret range man flow =
              Callstack.pop_callstack in
   let post4 = Cases.set_callstack cs post3 in
 
-  post4 >>% fun flow2 ->
+  post4 >>% fun flow3 ->
 
-  (* Copy the new context and alarms from flow2 to original flow flow1 *)
-  let flow3 = Flow.copy_ctx flow2 flow1 |> Flow.copy_alarms flow2 in
+  (* Copy the new context and alarms from flow3 to original flow flow1 *)
+  let flow4 = Flow.copy_ctx flow3 flow1 |> Flow.copy_alarms flow3 in
 
   (* Cut the T_cur flow *)
-  let flow3 = Flow.remove T_cur flow3 in
+  let flow4 = Flow.remove T_cur flow4 in
 
-  (* Retrieve non-cur/return flows in flow2 and put them in flow3 *)
-  let flow4 =
+  (* Retrieve non-cur/return flows in flow3 and put them in flow4 *)
+  let flow5 =
     Flow.fold
       (fun acc tk env ->
          match tk with
-         | T_cur      -> acc
-         | T_return _ -> acc
-         | _          -> Flow.add tk env man.lattice acc
+         | T_cur | T_return _ -> acc
+         | _                  -> Flow.add tk env man.lattice acc
       )
-      flow3 flow2
+      flow4 flow3
   in
 
-  (* Create a separate post-state for each return flow in flow2 *)
+  (* Create a separate post-state for each return flow in flow3 *)
   let postl =
     Flow.fold (fun acc tk env ->
         match tk with
         | T_cur | T_return _ ->
-          let flow = Flow.set T_cur env man.lattice flow4 in
+          let flow = Flow.set T_cur env man.lattice flow5 in
           Post.return flow :: acc
 
         | _ -> acc
       )
-      [] flow2
+      [] flow3
   in
 
-  Cases.join_list postl ~empty:(fun () -> Post.return flow4)
+  Cases.join_list postl ~empty:(fun () -> Post.return flow5)
 
 
 (** Inline a function call *)

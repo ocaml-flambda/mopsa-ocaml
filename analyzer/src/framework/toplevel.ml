@@ -322,33 +322,34 @@ struct
     let evl =
       (* Ask domains to perform the evaluation *)
       let ret = Cache.eval feval route exp man flow in
-      (* Check whether there are not-handled cases *)
-      let handled, not_handled =
-        match ret with
-        | None   -> None, Some (Cases.not_handled flow)
-        | Some x -> Cases.partition (fun c flow -> match c with NotHandled -> false | _ -> true) x
-      in
-      let not_handled_ret =
-        match not_handled with
-        | None -> None
-        | Some evl ->
-          (* Evaluate sub-expressions of the not-handled cases *)
-          let evl = Eval.remove_duplicates man.lattice evl in
-          Some (
-            evl >>= fun _ flow ->
-            (* No answer, so try to visit sub-expressions *)
-            let parts, builder = structure_of_expr exp in
-            match parts with
-            | {exprs; stmts = []} ->
-              (* Iterate over sub-expressions *)
-              Cases.bind_list exprs (fun e flow -> man.eval e flow) flow >>$ fun exprs' f' ->
-              (* Rebuild the expression from its evaluated parts *)
-              let e' = builder {exprs = exprs'; stmts = []} in
-              Cases.singleton e' f'
+      let eval_sub_expressions flow =
+        let parts, builder = structure_of_expr exp in
+        match parts with
+        | {exprs; stmts = []} ->
+          (* Iterate over sub-expressions *)
+          Cases.bind_list exprs (fun e flow -> man.eval e flow) flow >>$ fun exprs' f' ->
+          (* Rebuild the expression from its evaluated parts *)
+          let e' = builder {exprs = exprs'; stmts = []} in
+          Cases.singleton e' f'
 
-            (* XXX sub-statements are not handled for the moment *)
-            | _ -> Cases.singleton exp flow
-          )
+        (* XXX sub-statements are not handled for the moment *)
+        | _ -> Cases.singleton exp flow
+      in
+      (* Check whether there are not-handled cases *)
+      match ret with
+      | None   -> eval_sub_expressions flow
+      | Some evl ->
+        let handled,not_handled = Cases.partition (fun c flow -> match c with NotHandled -> false | _ -> true) evl in
+        let not_handled_ret =
+          match not_handled with
+          | None -> None
+          | Some evl ->
+            (* Evaluate sub-expressions of the not-handled cases *)
+            let evl =
+              Eval.remove_duplicates man.lattice evl >>= fun _ flow ->
+              eval_sub_expressions flow
+            in
+            Some evl
       in
       OptionExt.neutral2 Cases.join handled not_handled_ret |>
       OptionExt.none_to_exn

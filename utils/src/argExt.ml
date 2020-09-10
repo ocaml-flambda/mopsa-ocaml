@@ -29,7 +29,14 @@ type spec =
   | Unit_delayed of (unit -> unit)
   (** [Unit_delayed] functions are only executed after parsing all
       the arguments, in the order they appear on the command-line.
-   *)
+  *)
+
+  | Unit_exit of (unit -> unit)
+  (** As [Unit_delayed], but exit immediately after parsing the 
+      command-line and executing all the functions (including
+      [Unit_exit] and [Unit_delayed] options).
+      Useful for [-help].
+  *)               
 
   | Bool of (bool -> unit)
   | Set of bool ref
@@ -66,6 +73,8 @@ let parse (args:arg list) (handler:string -> unit) (rest:string list -> unit) (m
   in
   (* Unit_delayed actions are delayed into everything is parsed *)
   let delayed = ref [] in
+  (* Should we exit at the end of parse? *)
+  let exit_after = ref false in
   (* utilities *)
   let to_bool a v =
     try bool_of_string v with _ ->
@@ -128,6 +137,12 @@ let parse (args:arg list) (handler:string -> unit) (rest:string list -> unit) (m
            match arg.spec with
 
            | Unit_delayed f ->
+              noarg ();
+              delayed := (!delayed)@[f];
+              eat tl
+
+           | Unit_exit f ->
+              exit_after := true;
               noarg ();
               delayed := (!delayed)@[f];
               eat tl
@@ -204,4 +219,5 @@ let parse (args:arg list) (handler:string -> unit) (rest:string list -> unit) (m
   in
   eat opts;
   (* now execute all delayed actions *)
-  List.iter (fun f -> f ()) !delayed
+  List.iter (fun f -> f ()) !delayed;
+  if !exit_after then exit 0
